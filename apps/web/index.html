@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="ru" class="dark">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="theme-color" content="#212121" />
+    <meta
+      name="description"
+      content="Ketner AI — прототип AI-чата: диалоги, тарифы, подписка. Демонстрационная версия."
+    />
+    <title>Ketner AI</title>
+    <script>
+      // Тема применяется до первой отрисовки, чтобы не было вспышки светлого фона.
+      (function () {
+        try {
+          var stored = window.localStorage.getItem('ketner.theme');
+          var theme = stored === 'light' || stored === 'dark' ? stored : 'dark';
+          document.documentElement.classList.toggle('dark', theme === 'dark');
+        } catch (error) {
+          /* localStorage может быть недоступен — остаётся тёмная тема по умолчанию */
+        }
+      })();
+    </script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
