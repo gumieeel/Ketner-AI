@@ -58,6 +58,7 @@ export const config = {
     betterAuthSecret: process.env.BETTER_AUTH_SECRET ?? 'ketner-ai-better-auth-secret-key-32chars-minimum-safe',
     /** Базовый URL для Better Auth (включая редиректы OAuth). */
     betterAuthUrl: process.env.BETTER_AUTH_URL ??
+        process.env.RENDER_EXTERNAL_URL ??
         process.env.BASE_URL ??
         `http://localhost:${readNumber('PORT', 8787)}`,
     /** OAuth провайдеры (Better Auth). */

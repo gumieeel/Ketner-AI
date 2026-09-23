@@ -85,17 +85,25 @@ export function LoginPage() {
         return;
       }
       if (res?.error) {
-        await mockOAuth(provider);
-        navigate('/chat', { replace: true });
+        if (import.meta.env.MODE === 'test') {
+          await mockOAuth(provider);
+          navigate('/chat', { replace: true });
+          return;
+        }
+        setServerError(res.error.message || `Ошибка авторизации через ${provider}`);
         return;
       }
-    } catch {
-      try {
-        await mockOAuth(provider);
-        navigate('/chat', { replace: true });
-      } catch (error) {
-        setServerError(error instanceof Error ? error.message : 'Ошибка OAuth');
+    } catch (error) {
+      if (import.meta.env.MODE === 'test') {
+        try {
+          await mockOAuth(provider);
+          navigate('/chat', { replace: true });
+          return;
+        } catch {
+          // ignore
+        }
       }
+      setServerError(error instanceof Error ? error.message : 'Ошибка OAuth');
     } finally {
       setLoading(false);
     }

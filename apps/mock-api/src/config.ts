@@ -81,6 +81,7 @@ export const config = {
   /** Базовый URL для Better Auth (включая редиректы OAuth). */
   betterAuthUrl:
     process.env.BETTER_AUTH_URL ??
+    process.env.RENDER_EXTERNAL_URL ??
     process.env.BASE_URL ??
     `http://localhost:${readNumber('PORT', 8787)}`,
 
