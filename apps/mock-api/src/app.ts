@@ -60,9 +60,13 @@ export function createApp(overrides: Partial<AppDeps> = {}): Express {
 
   app.use('/api', createApiRouter(deps));
 
-  // Корень: браузеру с Accept: text/html отдаём веб-интерфейс, иначе — JSON-описание сервиса.
+  // Корень: браузеру отдаём веб-интерфейс, при явном Accept: application/json — описание сервиса.
   app.get('/', (request, response) => {
-    if (hasWebDist && request.headers.accept?.includes('text/html')) {
+    const wantsJson =
+      Boolean(request.headers.accept?.includes('application/json')) &&
+      !request.headers.accept?.includes('text/html');
+
+    if (hasWebDist && !wantsJson) {
       return response.sendFile(indexHtmlPath);
     }
     response.json({

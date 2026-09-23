@@ -44,7 +44,9 @@ test('GET / подсказывает, где открыть интерфейс',
 
   try {
     assert.ok(address && typeof address === 'object', 'сервер должен слушать порт');
-    const response = await fetch(`http://127.0.0.1:${address.port}/`);
+    const response = await fetch(`http://127.0.0.1:${address.port}/`, {
+      headers: { Accept: 'application/json' },
+    });
     const body = await readJson<{
       service: string;
       message: string;
