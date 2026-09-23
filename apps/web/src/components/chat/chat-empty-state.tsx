@@ -1,4 +1,3 @@
-import { SparkleIcon } from '@/components/icons';
 import { EXAMPLE_PROMPTS } from '@/features/chat/example-prompts';
 import { useChat } from '@/features/chat/chat-store';
 import { useTranslation } from '@/i18n';
@@ -15,9 +14,7 @@ export function ChatEmptyState() {
 
   return (
     <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-6 overflow-y-auto px-4 py-10 text-center">
-      <span className="grid size-12 place-items-center rounded-2xl bg-brand-500/15 text-2xl text-brand-600 dark:text-brand-300">
-        <SparkleIcon />
-      </span>
+      <img src="/logo-mark.png" alt="Ketner AI" className="size-16 object-contain drop-shadow-sm" />
       <h2 className="text-2xl font-semibold tracking-tight">{t('chat.emptyTitle')}</h2>
 
       <ul className="flex w-full max-w-2xl flex-col gap-2 sm:flex-row sm:flex-wrap sm:justify-center">

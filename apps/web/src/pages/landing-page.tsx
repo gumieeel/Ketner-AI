@@ -16,6 +16,11 @@ export function LandingPage() {
   return (
     <div className="mx-auto flex w-full max-w-5xl flex-1 flex-col gap-16 px-4 py-16 md:px-8">
       <section className="flex flex-col items-center gap-5 text-center">
+        <img
+          src="/logo-mark.png"
+          alt="Ketner AI"
+          className="size-24 object-contain drop-shadow-md md:size-28"
+        />
         <Badge tone="brand">{t('landing.mockBadge')}</Badge>
         <h1 className="text-4xl font-semibold tracking-tight md:text-5xl">{t('landing.title')}</h1>
         <p className="max-w-2xl text-lg text-zinc-600 dark:text-zinc-300">

@@ -1,5 +1,5 @@
 import { Suspense, lazy } from 'react';
-import { AlertIcon, RefreshIcon, SparkleIcon } from '@/components/icons';
+import { AlertIcon, RefreshIcon } from '@/components/icons';
 import { Button } from '@/components/ui/button';
 import { CopyButton } from '@/components/ui/copy-button';
 import { IconButton } from '@/components/ui/icon-button';
@@ -28,8 +28,8 @@ export function AssistantMessage({ message, canRegenerate }: AssistantMessagePro
 
   return (
     <article className="flex gap-3" aria-label={t('chat.assistant')}>
-      <span className="mt-0.5 grid size-8 shrink-0 place-items-center rounded-full bg-brand-500/15 text-brand-600 dark:text-brand-300">
-        <SparkleIcon />
+      <span className="mt-0.5 grid size-8 shrink-0 place-items-center rounded-full bg-brand-500/10 p-1 text-brand-600 dark:bg-brand-500/20 dark:text-brand-300">
+        <img src="/logo-mark.png" alt="Ketner AI" className="size-5 object-contain" />
       </span>
 
       <div className="min-w-0 flex-1">
