@@ -1,13 +1,22 @@
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { SparkleIcon } from '@/components/icons';
 import { Button } from '@/components/ui/button';
 import { Card, CardText, CardTitle } from '@/components/ui/card';
 import { EXAMPLE_PROMPTS } from '@/features/chat/example-prompts';
+import { useChat } from '@/features/chat/chat-store';
 import { useTranslation } from '@/i18n';
 
 /** Экран нового пользователя: приветствие и примеры запросов. */
 export function OnboardingPage() {
   const { t, language } = useTranslation();
+  const navigate = useNavigate();
+  const setDraft = useChat((state) => state.setDraft);
+
+  // Пример не отправляется сразу: он подставляется в поле ввода нового чата.
+  const startWith = (prompt: string): void => {
+    setDraft(prompt);
+    navigate('/chat');
+  };
 
   return (
     <div className="mx-auto flex w-full max-w-3xl flex-col gap-8 px-4 py-12">
@@ -26,10 +35,12 @@ export function OnboardingPage() {
         <ul className="grid gap-3">
           {EXAMPLE_PROMPTS[language].map((prompt) => (
             <li key={prompt}>
-              <Card className="p-4">
-                <CardTitle className="text-sm font-medium">{prompt}</CardTitle>
-                <CardText className="mt-1 text-xs">{t('common.soon')}</CardText>
-              </Card>
+              <button type="button" onClick={() => startWith(prompt)} className="w-full text-left">
+                <Card className="p-4 transition-colors hover:border-brand-500">
+                  <CardTitle className="text-sm font-medium">{prompt}</CardTitle>
+                  <CardText className="mt-1 text-xs">{t('onboarding.startWith')}</CardText>
+                </Card>
+              </button>
             </li>
           ))}
         </ul>

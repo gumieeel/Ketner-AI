@@ -9,7 +9,7 @@
     "build": "tsc -p tsconfig.build.json",
     "start": "node dist/server.js",
     "typecheck": "tsc --noEmit",
-    "test": "tsx --test src/health.test.ts"
+    "test": "tsx --test src/health.test.ts src/ai/answers.test.ts src/store/conversation-store.test.ts src/routes/conversations.test.ts src/routes/chat.test.ts"
   },
   "dependencies": {
     "cors": "^2.8.6",

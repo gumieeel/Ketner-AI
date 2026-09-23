@@ -1,9 +1,20 @@
+import { useEffect } from 'react';
 import { Outlet } from 'react-router-dom';
+import { useChat } from '@/features/chat/chat-store';
 import { Header } from './header';
 import { Sidebar } from './sidebar';
 
 /** Каркас авторизованной части продукта: список чатов, шапка, рабочая область. */
 export function AppShell() {
+  const loadConversations = useChat((state) => state.loadConversations);
+  const loadMeta = useChat((state) => state.loadMeta);
+
+  useEffect(() => {
+    // Список диалогов и каталог моделей нужны всем экранам рабочей области.
+    void loadConversations();
+    void loadMeta();
+  }, [loadConversations, loadMeta]);
+
   return (
     <div className="flex h-full overflow-hidden bg-white dark:bg-zinc-900">
       <Sidebar />

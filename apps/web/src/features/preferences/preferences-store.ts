@@ -8,15 +8,20 @@ interface PreferencesState {
   theme: Theme;
   language: Language;
   sidebarOpen: boolean;
+  /** Выбранная модель чата: переживает перезагрузку страницы. */
+  chatModelId: string;
   setTheme: (theme: Theme) => void;
   toggleTheme: () => void;
   setLanguage: (language: Language) => void;
   setSidebarOpen: (open: boolean) => void;
   toggleSidebar: () => void;
+  setChatModelId: (modelId: string) => void;
 }
 
 export const DEFAULT_THEME: Theme = 'dark';
 export const DEFAULT_LANGUAGE: Language = 'ru';
+/** Модель по умолчанию: совпадает с defaultModelId из GET /api/meta. */
+export const DEFAULT_MODEL_ID = 'ketner-mini';
 
 export function applyTheme(theme: Theme): void {
   const root = document.documentElement;
@@ -39,6 +44,10 @@ function readStoredLanguage(): Language {
   return stored === 'ru' || stored === 'en' ? stored : DEFAULT_LANGUAGE;
 }
 
+function readStoredModelId(): string {
+  return storage.get('model') ?? DEFAULT_MODEL_ID;
+}
+
 /**
  * Пользовательские настройки интерфейса.
  *
@@ -50,6 +59,7 @@ export const usePreferences = create<PreferencesState>((set, get) => ({
   theme: readStoredTheme(),
   language: readStoredLanguage(),
   sidebarOpen: false,
+  chatModelId: readStoredModelId(),
 
   setTheme: (theme) => {
     storage.set('theme', theme);
@@ -69,4 +79,9 @@ export const usePreferences = create<PreferencesState>((set, get) => ({
   setSidebarOpen: (sidebarOpen) => set({ sidebarOpen }),
 
   toggleSidebar: () => set((state) => ({ sidebarOpen: !state.sidebarOpen })),
+
+  setChatModelId: (chatModelId) => {
+    storage.set('model', chatModelId);
+    set({ chatModelId });
+  },
 }));

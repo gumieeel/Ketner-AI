@@ -1,0 +1,207 @@
+import { vi } from 'vitest';
+import type { ChatMeta, Conversation, ConversationSummary, Message } from '@/features/chat/types';
+
+export interface FakeApiOptions {
+  /** Ответ ассистента по умолчанию. */
+  reply?: string;
+  /** Ответы по очереди: i-й запрос берёт replies[i % length]. */
+  replies?: string[];
+  /** Задержка между порциями ответа, мс. */
+  chunkDelayMs?: number;
+  /** Сколько первых запросов завершить событием error. */
+  failTimes?: number;
+}
+
+export interface FakeApi {
+  /** Сколько раз запросили генерацию. */
+  completions: number;
+  /** Тела запросов на генерацию: так тесты проверяют контракт с сервером. */
+  completionBodies: Array<Record<string, unknown>>;
+  /** Добавляет диалог с историей, как будто он уже сохранён на сервере. */
+  seed: (input: { title: string; messages?: Message[]; updatedAt?: string }) => Conversation;
+}
+
+const META: ChatMeta = {
+  models: [
+    { id: 'ketner-mini', name: 'Ketner mini', contextMessages: 20 },
+    { id: 'ketner-pro', name: 'Ketner pro', contextMessages: 60 },
+  ],
+  defaultModelId: 'ketner-mini',
+  limits: {
+    free: { messagesPerDay: 10, contextMessages: 20 },
+    plus: { messagesPerDay: null, contextMessages: 60 },
+    pro: { messagesPerDay: null, contextMessages: 120 },
+  },
+};
+
+const DEFAULT_REPLY = 'Ответ демонстрационной модели.';
+
+function json(body: unknown, status = 200): Response {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { 'Content-Type': 'application/json' },
+  });
+}
+
+function notFound(): Response {
+  return json({ error: { code: 'conversation_not_found', message: 'Диалог не найден' } }, 404);
+}
+
+/** Готовит поток SSE: несколько порций текста и финальное событие. */
+function sseChunks(reply: string, fail: boolean): string[] {
+  if (fail) {
+    return [
+      `event: error\ndata: ${JSON.stringify({
+        code: 'upstream_error',
+        message: 'Модель недоступна',
+      })}\n\n`,
+    ];
+  }
+
+  const words = reply.split(' ');
+  const perChunk = Math.max(1, Math.ceil(words.length / 4));
+  const chunks: string[] = [];
+
+  for (let index = 0; index < words.length; index += perChunk) {
+    const isLast = index + perChunk >= words.length;
+    const text = words.slice(index, index + perChunk).join(' ') + (isLast ? '' : ' ');
+    chunks.push(`event: delta\ndata: ${JSON.stringify({ content: text })}\n\n`);
+  }
+
+  chunks.push(
+    `event: done\ndata: ${JSON.stringify({
+      messageId: 'assistant-1',
+      usage: { inputTokens: 12, outputTokens: 24 },
+    })}\n\n`,
+  );
+  return chunks;
+}
+
+function streamOf(chunks: string[], delayMs: number, signal: AbortSignal | null): ReadableStream {
+  const encoder = new TextEncoder();
+  let timer: ReturnType<typeof setTimeout> | null = null;
+  let index = 0;
+
+  return new ReadableStream<Uint8Array>({
+    start(controller) {
+      const push = (): void => {
+        if (signal?.aborted) {
+          return;
+        }
+        if (index >= chunks.length) {
+          controller.close();
+          return;
+        }
+        controller.enqueue(encoder.encode(chunks[index]));
+        index += 1;
+        timer = setTimeout(push, delayMs);
+      };
+
+      signal?.addEventListener('abort', () => {
+        if (timer !== null) {
+          clearTimeout(timer);
+        }
+        try {
+          controller.error(new DOMException('Aborted', 'AbortError'));
+        } catch {
+          // Поток уже закрыт — ничего страшного.
+        }
+      });
+
+      push();
+    },
+    cancel() {
+      if (timer !== null) {
+        clearTimeout(timer);
+      }
+    },
+  });
+}
+
+/**
+ * Подменяет fetch фейковым mock-API.
+ *
+ * Проверяет клиент целиком: REST-запросы, SSE-поток, отмену и ошибки.
+ */
+export function installFakeApi(options: FakeApiOptions = {}): FakeApi {
+  const delayMs = options.chunkDelayMs ?? 1;
+  const conversations = new Map<string, { conversation: Conversation; messages: Message[] }>();
+  const api: FakeApi = {
+    completions: 0,
+    completionBodies: [],
+    seed({ title, messages = [], updatedAt }) {
+      const now = updatedAt ?? new Date().toISOString();
+      const conversation: Conversation = {
+        id: `conversation-${conversations.size + 1}`,
+        userId: 'demo-user',
+        title,
+        createdAt: now,
+        updatedAt: now,
+      };
+      conversations.set(conversation.id, { conversation, messages });
+      return conversation;
+    },
+  };
+
+  vi.stubGlobal(
+    'fetch',
+    async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
+      const url = String(input);
+      const method = init?.method ?? 'GET';
+      const body =
+        typeof init?.body === 'string' ? (JSON.parse(init.body) as Record<string, unknown>) : {};
+
+      if (url === '/api/meta') {
+        return json(META);
+      }
+
+      if (url === '/api/conversations' && method === 'GET') {
+        const list: ConversationSummary[] = [...conversations.values()].map(
+          ({ conversation, messages }) => ({
+            ...conversation,
+            messageCount: messages.length,
+          }),
+        );
+        return json({ conversations: list });
+      }
+
+      if (url === '/api/conversations' && method === 'POST') {
+        return json({ conversation: api.seed({ title: String(body.title ?? '') }) }, 201);
+      }
+
+      const conversationId = /^\/api\/conversations\/(.+)$/.exec(url)?.[1];
+      if (conversationId !== undefined) {
+        const found = conversations.get(decodeURIComponent(conversationId));
+        if (!found) {
+          return notFound();
+        }
+        if (method === 'DELETE') {
+          conversations.delete(found.conversation.id);
+          return new Response(null, { status: 204 });
+        }
+        if (method === 'PATCH') {
+          found.conversation = { ...found.conversation, title: String(body.title ?? '') };
+          return json({ conversation: found.conversation });
+        }
+        return json(found);
+      }
+
+      if (url === '/api/chat/completions' && method === 'POST') {
+        const index = api.completions;
+        api.completions += 1;
+        api.completionBodies.push(body);
+        const fail = index < (options.failTimes ?? 0);
+        const reply =
+          options.replies?.[index % options.replies.length] ?? options.reply ?? DEFAULT_REPLY;
+        return new Response(streamOf(sseChunks(reply, fail), delayMs, init?.signal ?? null), {
+          status: 200,
+          headers: { 'Content-Type': 'text/event-stream' },
+        });
+      }
+
+      return json({ error: { code: 'not_found', message: `Нет обработчика для ${url}` } }, 404);
+    },
+  );
+
+  return api;
+}

@@ -45,3 +45,21 @@
     @apply outline-2 outline-offset-2 outline-brand-500;
   }
 }
+
+@layer components {
+  /* Курсор в конце стримящегося ответа: видно, что текст ещё идёт. */
+  .caret {
+    display: inline-block;
+    width: 0.5rem;
+    height: 1rem;
+    vertical-align: text-bottom;
+    background-color: currentColor;
+    animation: caret-blink 1s steps(2, start) infinite;
+  }
+}
+
+@keyframes caret-blink {
+  50% {
+    opacity: 0;
+  }
+}

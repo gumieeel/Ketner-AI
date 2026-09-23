@@ -8,13 +8,28 @@ export interface ApiErrorBody {
   };
 }
 
+/**
+ * Единая точка ответа с ошибкой.
+ *
+ * Без неё формат ответа неизбежно разъедется между роутерами, а на фронтенде
+ * его разбирает `ApiError` (apps/web/src/features/chat/api.ts).
+ */
+export function sendError(
+  response: Response<ApiErrorBody>,
+  status: number,
+  code: string,
+  message: string,
+): void {
+  response.status(status).json({ error: { code, message } });
+}
+
 export function notFoundHandler(request: Request, response: Response<ApiErrorBody>): void {
-  response.status(404).json({
-    error: {
-      code: 'not_found',
-      message: `Эндпоинт ${request.method} ${request.originalUrl} не найден`,
-    },
-  });
+  sendError(
+    response,
+    404,
+    'not_found',
+    `Эндпоинт ${request.method} ${request.originalUrl} не найден`,
+  );
 }
 
 export function errorHandler(
@@ -25,10 +40,5 @@ export function errorHandler(
 ): void {
   const message = error instanceof Error ? error.message : 'Неизвестная ошибка';
   console.error('[mock-api] необработанная ошибка:', error);
-  response.status(500).json({
-    error: {
-      code: 'internal_error',
-      message,
-    },
-  });
+  sendError(response, 500, 'internal_error', message);
 }

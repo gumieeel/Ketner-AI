@@ -1,71 +1,84 @@
-import { PaperclipIcon, SendIcon, SparkleIcon } from '@/components/icons';
-import { Badge } from '@/components/ui/badge';
-import { StubAction } from '@/components/ui/stub-action';
-import { EXAMPLE_PROMPTS } from '@/features/chat/example-prompts';
+import { useEffect } from 'react';
+import { useNavigate, useParams } from 'react-router-dom';
+import { ChatEmptyState } from '@/components/chat/chat-empty-state';
+import { Composer } from '@/components/chat/composer';
+import { MessageList } from '@/components/chat/message-list';
+import { AlertIcon } from '@/components/icons';
+import { Button } from '@/components/ui/button';
+import { Skeleton } from '@/components/ui/skeleton';
+import { useChat } from '@/features/chat/chat-store';
 import { useTranslation } from '@/i18n';
 
 /**
  * Экран чата.
  *
- * Этап 1: каркас — пустое состояние и нефункциональный композер, который
- * показывает будущую раскладку. Лента сообщений, стриминг и заглушка ИИ
- * появляются на этапе 2.
+ * Лента, композер и стриминг ответа. Адрес и активный диалог синхронизируются:
+ * новый чат получает `/chat/:id` сразу после первого сообщения.
  */
 export function ChatPage() {
-  const { t, language } = useTranslation();
+  const { t } = useTranslation();
+  const { conversationId } = useParams();
+  const navigate = useNavigate();
+  const activeId = useChat((state) => state.activeId);
+  const messages = useChat((state) => state.messages);
+  const messagesStatus = useChat((state) => state.messagesStatus);
+  const openConversation = useChat((state) => state.openConversation);
+
+  useEffect(() => {
+    void openConversation(conversationId);
+  }, [conversationId, openConversation]);
+
+  useEffect(() => {
+    if (conversationId === undefined && activeId !== null) {
+      navigate(`/chat/${activeId}`, { replace: true });
+    }
+  }, [activeId, conversationId, navigate]);
 
   return (
-    <div className="flex min-h-full flex-col">
-      <div className="mx-auto flex w-full max-w-3xl flex-1 flex-col items-center justify-center gap-6 px-4 py-10 text-center">
-        <span className="grid size-12 place-items-center rounded-2xl bg-brand-500/15 text-2xl text-brand-600 dark:text-brand-300">
-          <SparkleIcon />
-        </span>
-        <h2 className="text-2xl font-semibold tracking-tight">{t('chat.emptyTitle')}</h2>
+    <div className="flex h-full flex-col">
+      {messagesStatus === 'loading' ? <MessagesSkeleton /> : null}
 
-        <ul className="flex w-full flex-col gap-2 sm:flex-row sm:flex-wrap sm:justify-center">
-          {EXAMPLE_PROMPTS[language].map((prompt) => (
-            <li key={prompt}>
-              <Badge tone="outline" className="px-3 py-1.5 text-sm">
-                {prompt}
-              </Badge>
-            </li>
-          ))}
-        </ul>
-      </div>
-
-      <div className="sticky bottom-0 mx-auto w-full max-w-3xl px-4 pb-6">
-        <div className="rounded-2xl border border-zinc-300 bg-white p-3 shadow-sm dark:border-zinc-600 dark:bg-zinc-800">
-          <label htmlFor="composer" className="sr-only">
-            {t('chat.placeholder')}
-          </label>
-          <textarea
-            id="composer"
-            rows={1}
-            disabled
-            placeholder={t('chat.placeholder')}
-            className="max-h-40 min-h-11 w-full resize-none bg-transparent px-1 py-2 text-sm outline-none placeholder:text-zinc-400 disabled:cursor-not-allowed dark:placeholder:text-zinc-500"
-          />
-          <div className="flex items-center gap-1">
-            <StubAction label={t('chat.attach')} hint={t('chat.composerNotice')} size="sm">
-              <PaperclipIcon />
-            </StubAction>
-            <span className="ml-1 text-xs text-zinc-500 dark:text-zinc-400">
-              {t('chat.model')}: {t('chat.modelMini')}
-            </span>
-            <button
-              type="button"
-              disabled
-              aria-label={t('chat.send')}
-              title={t('chat.send')}
-              className="ml-auto inline-flex size-9 items-center justify-center rounded-lg bg-brand-600 text-lg text-white disabled:cursor-not-allowed disabled:opacity-50"
+      {messagesStatus === 'error' ? (
+        <div className="flex min-h-0 flex-1 items-center justify-center px-4">
+          <div className="max-w-md rounded-2xl border border-red-200 bg-red-50 p-4 text-center dark:border-red-900/60 dark:bg-red-950/40">
+            <p className="flex items-center justify-center gap-2 font-medium text-red-700 dark:text-red-300">
+              <AlertIcon />
+              {t('chat.loadError')}
+            </p>
+            <Button
+              variant="outline"
+              size="sm"
+              className="mt-3"
+              disabled={activeId === null}
+              onClick={() => void openConversation(activeId ?? undefined, true)}
             >
-              <SendIcon />
-            </button>
+              {t('common.retry')}
+            </Button>
           </div>
         </div>
-        <p className="mt-2 text-center text-xs text-zinc-500 dark:text-zinc-400">
-          {t('chat.composerNotice')}
-        </p>
+      ) : null}
+
+      {messagesStatus !== 'loading' && messagesStatus !== 'error' ? (
+        messages.length === 0 ? (
+          <ChatEmptyState />
+        ) : (
+          <MessageList />
+        )
+      ) : null}
+
+      <Composer />
+    </div>
+  );
+}
+
+/** Скелет ленты, пока диалог грузится: список в сайдбаре уже виден. */
+function MessagesSkeleton() {
+  return (
+    <div className="min-h-0 flex-1 overflow-hidden px-4 py-6">
+      <div className="mx-auto flex w-full max-w-3xl flex-col gap-6">
+        <Skeleton className="h-16 w-2/3 self-end rounded-2xl" />
+        <Skeleton className="h-24 w-full rounded-2xl" />
+        <Skeleton className="h-10 w-1/2 self-end rounded-2xl" />
       </div>
     </div>
   );
