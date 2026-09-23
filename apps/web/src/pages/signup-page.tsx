@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { EyeIcon, EyeOffIcon, GitHubIcon, GoogleIcon } from '@/components/icons';
 import { AuthShell } from '@/components/layout/auth-shell';
@@ -18,8 +18,15 @@ const MIN_PASSWORD_LENGTH = 8;
 export function SignupPage() {
   const { t } = useTranslation();
   const navigate = useNavigate();
+  const status = useAuth((state) => state.status);
   const signup = useAuth((state) => state.signup);
   const mockOAuth = useAuth((state) => state.mockOAuth);
+
+  useEffect(() => {
+    if (status === 'authenticated') {
+      navigate('/chat', { replace: true });
+    }
+  }, [status, navigate]);
 
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
@@ -67,7 +74,7 @@ export function SignupPage() {
     setLoading(true);
     try {
       await signup({ email: trimmedEmail, password, name: trimmedName });
-      navigate('/');
+      navigate('/chat', { replace: true });
     } catch (error) {
       setServerError(error instanceof Error ? error.message : 'Ошибка регистрации');
     } finally {
@@ -81,17 +88,21 @@ export function SignupPage() {
     try {
       const res = await authClient.signIn.social({
         provider,
-        callbackURL: window.location.origin,
+        callbackURL: window.location.origin + '/chat',
       });
+      if (res?.data?.url) {
+        window.location.href = res.data.url;
+        return;
+      }
       if (res?.error) {
         await mockOAuth(provider);
-        navigate('/');
+        navigate('/chat', { replace: true });
         return;
       }
     } catch {
       try {
         await mockOAuth(provider);
-        navigate('/');
+        navigate('/chat', { replace: true });
       } catch (error) {
         setServerError(error instanceof Error ? error.message : 'Ошибка OAuth');
       }

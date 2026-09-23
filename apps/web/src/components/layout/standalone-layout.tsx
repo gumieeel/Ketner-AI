@@ -1,5 +1,6 @@
 import { Link, Outlet } from 'react-router-dom';
 import { cn } from '@/lib/cn';
+import { useAuth } from '@/features/auth/auth-store';
 import { useTranslation } from '@/i18n';
 import { Brand } from './brand';
 import { ThemeToggle } from './theme-toggle';
@@ -10,6 +11,8 @@ const linkClasses =
 /** Каркас страниц вне приложения: лендинг, вход, тарифы, оформление подписки. */
 export function StandaloneLayout() {
   const { t } = useTranslation();
+  const status = useAuth((state) => state.status);
+  const user = useAuth((state) => state.user);
 
   return (
     <div className={cn('flex min-h-full flex-col bg-white dark:bg-zinc-900')}>
@@ -19,9 +22,15 @@ export function StandaloneLayout() {
           <Link to="/pricing" className={linkClasses}>
             {t('nav.pricing')}
           </Link>
-          <Link to="/login" className={linkClasses}>
-            {t('nav.login')}
-          </Link>
+          {status === 'authenticated' ? (
+            <Link to="/chat" className={linkClasses}>
+              {user?.name ? user.name.split(' ')[0] : 'В чат'}
+            </Link>
+          ) : (
+            <Link to="/login" className={linkClasses}>
+              {t('nav.login')}
+            </Link>
+          )}
           <ThemeToggle />
         </nav>
       </header>

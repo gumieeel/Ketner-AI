@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { EyeIcon, EyeOffIcon, GitHubIcon, GoogleIcon } from '@/components/icons';
 import { AuthShell } from '@/components/layout/auth-shell';
@@ -18,8 +18,15 @@ const MIN_PASSWORD_LENGTH = 8;
 export function LoginPage() {
   const { t } = useTranslation();
   const navigate = useNavigate();
+  const status = useAuth((state) => state.status);
   const login = useAuth((state) => state.login);
   const mockOAuth = useAuth((state) => state.mockOAuth);
+
+  useEffect(() => {
+    if (status === 'authenticated') {
+      navigate('/chat', { replace: true });
+    }
+  }, [status, navigate]);
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -57,7 +64,7 @@ export function LoginPage() {
     setLoading(true);
     try {
       await login({ email: trimmedEmail, password });
-      navigate('/');
+      navigate('/chat', { replace: true });
     } catch (error) {
       setServerError(error instanceof Error ? error.message : 'Ошибка входа');
     } finally {
@@ -71,17 +78,21 @@ export function LoginPage() {
     try {
       const res = await authClient.signIn.social({
         provider,
-        callbackURL: window.location.origin,
+        callbackURL: window.location.origin + '/chat',
       });
+      if (res?.data?.url) {
+        window.location.href = res.data.url;
+        return;
+      }
       if (res?.error) {
         await mockOAuth(provider);
-        navigate('/');
+        navigate('/chat', { replace: true });
         return;
       }
     } catch {
       try {
         await mockOAuth(provider);
-        navigate('/');
+        navigate('/chat', { replace: true });
       } catch (error) {
         setServerError(error instanceof Error ? error.message : 'Ошибка OAuth');
       }
