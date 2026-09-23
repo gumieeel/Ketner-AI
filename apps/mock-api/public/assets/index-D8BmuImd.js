@@ -18569,7 +18569,9 @@ var V = oa((e, t) => {
     },
     openConversation: async (n, r = !1) => {
       if (n === void 0) {
-        e({ activeId: null, messages: [], messagesStatus: `ready` });
+        (Za !== null && (Za.abort(), (Za = null)),
+          Qa !== null && (clearTimeout(Qa), (Qa = null)),
+          e({ activeId: null, messages: [], messagesStatus: `ready`, streaming: !1, draft: `` }));
         return;
       }
       if (r || t().activeId !== n) {
@@ -18985,23 +18987,25 @@ function Lo() {
 function Ro() {
   let { t: e } = B(),
     t = gr(),
-    n = pa((e) => e.toggleSidebar),
-    r = V((e) => e.activeId),
-    i = V((e) => e.conversations),
-    a = t.pathname.startsWith(`/chat`),
-    o = i.find((e) => e.id === r)?.title;
+    n = yr(),
+    r = pa((e) => e.toggleSidebar),
+    i = V((e) => e.activeId),
+    a = V((e) => e.conversations),
+    o = V((e) => e.openConversation),
+    s = t.pathname.startsWith(`/chat`),
+    c = a.find((e) => e.id === i)?.title;
   return (0, z.jsxs)(`header`, {
     className: `flex h-14 shrink-0 items-center gap-2 border-b border-zinc-200 px-2 dark:border-zinc-700`,
     children: [
       (0, z.jsx)(No, {
         label: e(`nav.openSidebar`),
         className: `md:hidden`,
-        onClick: n,
+        onClick: r,
         children: (0, z.jsx)(co, {}),
       }),
       (0, z.jsx)(`h1`, {
         className: `truncate text-sm font-medium text-zinc-800 dark:text-zinc-100`,
-        children: a ? o || e(`chat.title`) : e(`app.name`),
+        children: s ? c || e(`chat.title`) : e(`app.name`),
       }),
       (0, z.jsx)(jo, {
         tone: `outline`,
@@ -19011,11 +19015,23 @@ function Ro() {
       (0, z.jsxs)(`div`, {
         className: `ml-auto flex items-center gap-1`,
         children: [
-          a
-            ? (0, z.jsx)(Io, {
-                label: e(`chat.share`),
-                hint: e(`chat.composerNotice`),
-                children: (0, z.jsx)(po, {}),
+          s
+            ? (0, z.jsxs)(z.Fragment, {
+                children: [
+                  (0, z.jsx)(No, {
+                    label: e(`nav.newChat`),
+                    className: `md:hidden`,
+                    onClick: () => {
+                      (o(void 0), n(`/chat`));
+                    },
+                    children: (0, z.jsx)(oo, {}),
+                  }),
+                  (0, z.jsx)(Io, {
+                    label: e(`chat.share`),
+                    hint: e(`chat.composerNotice`),
+                    children: (0, z.jsx)(po, {}),
+                  }),
+                ],
               })
             : null,
           (0, z.jsx)(Lo, {}),
@@ -19185,7 +19201,11 @@ function Qo() {
     s = V((e) => e.search),
     c = V((e) => e.setSearch),
     l = V((e) => e.loadConversations),
-    u = () => r(!1);
+    u = V((e) => e.openConversation),
+    d = () => r(!1),
+    f = () => {
+      (u(void 0), d());
+    };
   (0, _.useEffect)(() => {
     if (!n) return;
     let e = (e) => {
@@ -19196,7 +19216,7 @@ function Qo() {
       () => document.removeEventListener(`keydown`, e)
     );
   }, [n, r]);
-  let d = (0, _.useMemo)(() => {
+  let p = (0, _.useMemo)(() => {
     let e = s.trim().toLowerCase(),
       t = e === `` ? i : i.filter((t) => t.title.toLowerCase().includes(e));
     return Yo.map((e) => ({ group: e, items: t.filter((t) => Go(t.updatedAt) === e) })).filter(
@@ -19208,7 +19228,7 @@ function Qo() {
       n
         ? (0, z.jsx)(`div`, {
             'aria-hidden': `true`,
-            onClick: u,
+            onClick: d,
             className: `fixed inset-0 z-30 bg-black/50 md:hidden`,
           })
         : null,
@@ -19229,7 +19249,7 @@ function Qo() {
                 label: e(`nav.closeSidebar`),
                 size: `sm`,
                 className: `ml-auto md:hidden`,
-                onClick: u,
+                onClick: d,
                 children: (0, z.jsx)(lo, {}),
               }),
             ],
@@ -19239,7 +19259,7 @@ function Qo() {
             children: [
               (0, z.jsxs)(Hi, {
                 to: `/chat`,
-                onClick: u,
+                onClick: f,
                 className: H(
                   `inline-flex h-10 items-center gap-2 rounded-lg px-3 text-sm font-medium transition-colors`,
                   `border border-zinc-300 text-zinc-800 hover:bg-zinc-100`,
@@ -19310,13 +19330,13 @@ function Qo() {
                     ],
                   })
                 : null,
-              a !== `loading` && a !== `error` && i.length > 0 && d.length === 0
+              a !== `loading` && a !== `error` && i.length > 0 && p.length === 0
                 ? (0, z.jsx)(`p`, {
                     className: `px-3 py-4 text-sm text-zinc-500 dark:text-zinc-400`,
                     children: e(`chat.searchEmpty`),
                   })
                 : null,
-              d.map(({ group: t, items: n }) =>
+              p.map(({ group: t, items: n }) =>
                 (0, z.jsxs)(
                   `section`,
                   {
@@ -19333,7 +19353,7 @@ function Qo() {
                             conversation: e,
                             active: e.id === o,
                             showDate: t === `earlier`,
-                            onNavigate: u,
+                            onNavigate: d,
                           },
                           e.id,
                         ),
@@ -19350,13 +19370,13 @@ function Qo() {
             children: [
               (0, z.jsxs)(Ui, {
                 to: `/settings`,
-                onClick: u,
+                onClick: d,
                 className: Zo,
                 children: [(0, z.jsx)(mo, { className: `text-lg` }), e(`nav.settings`)],
               }),
               (0, z.jsxs)(Ui, {
                 to: `/pricing`,
-                onClick: u,
+                onClick: d,
                 className: Zo,
                 children: [(0, z.jsx)(To, { className: `text-lg` }), e(`nav.upgrade`)],
               }),
@@ -19368,7 +19388,7 @@ function Qo() {
                         children: [
                           (0, z.jsx)(Hi, {
                             to: `/settings`,
-                            onClick: u,
+                            onClick: d,
                             className: `grid size-9 shrink-0 place-items-center rounded-full bg-brand-100 text-xs font-semibold text-brand-700 hover:opacity-80 dark:bg-brand-900/60 dark:text-brand-300`,
                             title: t.name,
                             children: t.name.slice(0, 2).toUpperCase(),
@@ -19378,7 +19398,7 @@ function Qo() {
                             children: [
                               (0, z.jsx)(Hi, {
                                 to: `/settings`,
-                                onClick: u,
+                                onClick: d,
                                 className: `block truncate text-sm font-medium text-zinc-800 hover:underline dark:text-zinc-100`,
                                 children: t.name,
                               }),
@@ -19406,7 +19426,7 @@ function Qo() {
                               }),
                               (0, z.jsx)(Hi, {
                                 to: `/login`,
-                                onClick: u,
+                                onClick: d,
                                 className: `text-xs text-brand-600 dark:text-brand-300`,
                                 children: e(`nav.login`),
                               }),
@@ -19877,7 +19897,7 @@ function ps({ value: e, label: t, size: n = `md`, className: r }) {
     })
   );
 }
-var ms = (0, _.lazy)(() => S(() => import(`./markdown-CpCXJkxD.js`), []));
+var ms = (0, _.lazy)(() => S(() => import(`./markdown-Co4IYKlo.js`), []));
 function hs({ message: e, canRegenerate: t }) {
   let { t: n } = B(),
     r = V((e) => e.regenerate),
@@ -20112,13 +20132,15 @@ function xs() {
     r = V((e) => e.activeId),
     i = V((e) => e.messages),
     a = V((e) => e.messagesStatus),
-    o = V((e) => e.openConversation);
+    o = V((e) => e.openConversation),
+    s = (0, _.useRef)(r);
   return (
     (0, _.useEffect)(() => {
       o(t);
     }, [t, o]),
     (0, _.useEffect)(() => {
-      t === void 0 && r !== null && n(`/chat/${r}`, { replace: !0 });
+      (t === void 0 && s.current === null && r !== null && n(`/chat/${r}`, { replace: !0 }),
+        (s.current = r));
     }, [r, t, n]),
     (0, z.jsxs)(`div`, {
       className: `flex h-full flex-col`,

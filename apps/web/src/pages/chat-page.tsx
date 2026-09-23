@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { ChatEmptyState } from '@/components/chat/chat-empty-state';
 import { Composer } from '@/components/chat/composer';
@@ -23,15 +23,19 @@ export function ChatPage() {
   const messages = useChat((state) => state.messages);
   const messagesStatus = useChat((state) => state.messagesStatus);
   const openConversation = useChat((state) => state.openConversation);
+  const prevActiveIdRef = useRef<string | null>(activeId);
 
   useEffect(() => {
     void openConversation(conversationId);
   }, [conversationId, openConversation]);
 
   useEffect(() => {
-    if (conversationId === undefined && activeId !== null) {
+    // Переход на /chat/:id нужен только когда пользователь находился на новом чате (/chat)
+    // и отправил первое сообщение (activeId сменился с null на созданный id диалога).
+    if (conversationId === undefined && prevActiveIdRef.current === null && activeId !== null) {
       navigate(`/chat/${activeId}`, { replace: true });
     }
+    prevActiveIdRef.current = activeId;
   }, [activeId, conversationId, navigate]);
 
   return (

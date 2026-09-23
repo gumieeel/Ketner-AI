@@ -1,5 +1,5 @@
-import { useLocation } from 'react-router-dom';
-import { MenuIcon, ShareIcon } from '@/components/icons';
+import { useLocation, useNavigate } from 'react-router-dom';
+import { MenuIcon, PlusIcon, ShareIcon } from '@/components/icons';
 import { Badge } from '@/components/ui/badge';
 import { IconButton } from '@/components/ui/icon-button';
 import { StubAction } from '@/components/ui/stub-action';
@@ -12,9 +12,11 @@ import { ThemeToggle } from './theme-toggle';
 export function Header() {
   const { t } = useTranslation();
   const location = useLocation();
+  const navigate = useNavigate();
   const toggleSidebar = usePreferences((state) => state.toggleSidebar);
   const activeId = useChat((state) => state.activeId);
   const conversations = useChat((state) => state.conversations);
+  const openConversation = useChat((state) => state.openConversation);
 
   const inChat = location.pathname.startsWith('/chat');
   const title = conversations.find((conversation) => conversation.id === activeId)?.title;
@@ -34,9 +36,21 @@ export function Header() {
 
       <div className="ml-auto flex items-center gap-1">
         {inChat ? (
-          <StubAction label={t('chat.share')} hint={t('chat.composerNotice')}>
-            <ShareIcon />
-          </StubAction>
+          <>
+            <IconButton
+              label={t('nav.newChat')}
+              className="md:hidden"
+              onClick={() => {
+                void openConversation(undefined);
+                navigate('/chat');
+              }}
+            >
+              <PlusIcon />
+            </IconButton>
+            <StubAction label={t('chat.share')} hint={t('chat.composerNotice')}>
+              <ShareIcon />
+            </StubAction>
+          </>
         ) : null}
         <ThemeToggle />
       </div>

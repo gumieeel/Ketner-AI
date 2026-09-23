@@ -117,4 +117,26 @@ describe('сайдбар: история диалогов', () => {
     expect(useChat.getState().activeId).toBe('conversation-1');
     expect(useChat.getState().messages).toHaveLength(2);
   });
+
+  it('клик на «Новый чат» сбрасывает активный диалог и возвращает на пустой экран', async () => {
+    const api = installFakeApi();
+    api.seed({
+      title: 'Активный чат',
+      messages: [message('user', 'Вопрос'), message('assistant', 'Ответ')],
+      updatedAt: isoDaysAgo(0),
+    });
+    const user = userEvent.setup();
+    renderRoute('/chat/conversation-1');
+
+    expect(await screen.findByText('Вопрос')).toBeInTheDocument();
+    expect(useChat.getState().activeId).toBe('conversation-1');
+
+    await user.click(screen.getByRole('link', { name: 'Новый чат' }));
+
+    expect(
+      await screen.findByRole('heading', { level: 2, name: 'Чем помочь сегодня?' }),
+    ).toBeInTheDocument();
+    expect(useChat.getState().activeId).toBeNull();
+    expect(useChat.getState().messages).toHaveLength(0);
+  });
 });

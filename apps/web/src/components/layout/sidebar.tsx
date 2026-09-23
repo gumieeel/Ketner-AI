@@ -55,7 +55,13 @@ export function Sidebar() {
   const search = useChat((state) => state.search);
   const setSearch = useChat((state) => state.setSearch);
   const loadConversations = useChat((state) => state.loadConversations);
+  const openConversation = useChat((state) => state.openConversation);
   const close = () => setOpen(false);
+
+  const handleNewChat = () => {
+    void openConversation(undefined);
+    close();
+  };
 
   useEffect(() => {
     if (!open) {
@@ -117,7 +123,7 @@ export function Sidebar() {
         <div className="flex flex-col gap-3 px-3">
           <Link
             to="/chat"
-            onClick={close}
+            onClick={handleNewChat}
             className={cn(
               'inline-flex h-10 items-center gap-2 rounded-lg px-3 text-sm font-medium transition-colors',
               'border border-zinc-300 text-zinc-800 hover:bg-zinc-100',

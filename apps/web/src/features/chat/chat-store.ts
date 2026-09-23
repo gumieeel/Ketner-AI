@@ -244,7 +244,21 @@ export const useChat = create<ChatState>((set, get) => {
 
     openConversation: async (id, force = false) => {
       if (id === undefined) {
-        set({ activeId: null, messages: [], messagesStatus: 'ready' });
+        if (abortController !== null) {
+          abortController.abort();
+          abortController = null;
+        }
+        if (flushTimer !== null) {
+          clearTimeout(flushTimer);
+          flushTimer = null;
+        }
+        set({
+          activeId: null,
+          messages: [],
+          messagesStatus: 'ready',
+          streaming: false,
+          draft: '',
+        });
         return;
       }
       // Диалог уже открыт: повторный запрос затёр бы стримингсящий ответ.
