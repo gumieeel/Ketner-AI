@@ -15,6 +15,7 @@
     "dev:web": "npm run dev --workspace @ketner/web",
     "dev:api": "npm run dev --workspace @ketner/mock-api",
     "build": "npm run build --workspaces --if-present",
+    "start": "node apps/mock-api/dist/server.js",
     "typecheck": "npm run typecheck --workspaces --if-present",
     "lint": "eslint .",
     "format": "prettier --write .",

@@ -62,3 +62,25 @@ test('GET / подсказывает, где открыть интерфейс',
     server.close();
   }
 });
+
+test('GET / и клиентские маршруты отдают HTML при наличии сборки web', async () => {
+  const server = createApp().listen(0);
+  const address = server.address();
+
+  try {
+    assert.ok(address && typeof address === 'object', 'сервер должен слушать порт');
+    const response = await fetch(`http://127.0.0.1:${address.port}/`, {
+      headers: { Accept: 'text/html,application/xhtml+xml' },
+    });
+    assert.equal(response.status, 200);
+    assert.match(response.headers.get('content-type') ?? '', /text\/html/);
+    const text = await response.text();
+    assert.match(text, /Ketner AI/);
+
+    const spaResponse = await fetch(`http://127.0.0.1:${address.port}/chat`);
+    assert.equal(spaResponse.status, 200);
+    assert.match(spaResponse.headers.get('content-type') ?? '', /text\/html/);
+  } finally {
+    server.close();
+  }
+});

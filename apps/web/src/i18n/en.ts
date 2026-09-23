@@ -17,6 +17,7 @@ export const en: Record<TranslationKey, string> = {
   'nav.upgrade': 'Upgrade plan',
   'nav.empty': 'No conversations yet',
   'nav.emptyHint': 'Start a new chat — it will show up here.',
+  'nav.skipToContent': 'Skip to main content',
 
   'landing.title': 'Ketner AI',
   'landing.subtitle': 'Clickable prototype of an AI chat product',

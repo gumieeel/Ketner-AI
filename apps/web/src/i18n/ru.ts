@@ -15,6 +15,7 @@ export const ru = {
   'nav.upgrade': 'Улучшить план',
   'nav.empty': 'История пока пуста',
   'nav.emptyHint': 'Начните новый чат — он появится здесь.',
+  'nav.skipToContent': 'Перейти к основному содержимому',
 
   'landing.title': 'Ketner AI',
   'landing.subtitle': 'Кликабельный прототип чата с искусственным интеллектом',

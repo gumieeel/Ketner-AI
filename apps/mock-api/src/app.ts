@@ -1,3 +1,6 @@
+import fs from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import cors from 'cors';
 import express, { type Express } from 'express';
 import { config } from './config.js';
@@ -45,10 +48,23 @@ export function createApp(overrides: Partial<AppDeps> = {}): Express {
   app.use(cors({ origin: config.corsOrigin }));
   app.use(express.json({ limit: '1mb' }));
 
+  // Если веб-интерфейс собран (в продакшене или на Render), отдаём его статику:
+  const currentDir = path.dirname(fileURLToPath(import.meta.url));
+  const webDistPath = path.resolve(currentDir, '../../web/dist');
+  const indexHtmlPath = path.join(webDistPath, 'index.html');
+  const hasWebDist = fs.existsSync(indexHtmlPath);
+
+  if (hasWebDist) {
+    app.use(express.static(webDistPath, { index: false }));
+  }
+
   app.use('/api', createApiRouter(deps));
 
-  // Корень API открывают в браузере по ошибке: объясняем, где интерфейс.
-  app.get('/', (_request, response) => {
+  // Корень: браузеру с Accept: text/html отдаём веб-интерфейс, иначе — JSON-описание сервиса.
+  app.get('/', (request, response) => {
+    if (hasWebDist && request.headers.accept?.includes('text/html')) {
+      return response.sendFile(indexHtmlPath);
+    }
     response.json({
       ...describeService(),
       message:
@@ -56,6 +72,16 @@ export function createApp(overrides: Partial<AppDeps> = {}): Express {
       webAppUrl: config.webAppUrl,
     });
   });
+
+  // SPA fallback для клиентских маршрутов (/chat, /pricing, /login, /settings и др.)
+  if (hasWebDist) {
+    app.use((request, response, next) => {
+      if (request.method !== 'GET' || request.path.startsWith('/api')) {
+        return next();
+      }
+      response.sendFile(indexHtmlPath);
+    });
+  }
 
   app.use(notFoundHandler);
   app.use(errorHandler);
