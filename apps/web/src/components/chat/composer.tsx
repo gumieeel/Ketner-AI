@@ -68,7 +68,7 @@ export function Composer() {
           {streaming ? (
             <IconButton
               label={t('chat.stop')}
-              onClick={stop}
+              onClick={() => stop()}
               className="ml-auto bg-zinc-800 text-white hover:bg-zinc-700 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-zinc-300"
             >
               <StopIcon />

@@ -189,4 +189,37 @@ describe('чат: отправка, стриминг и управление о�
     expect(await screen.findByText('Готово')).toBeInTheDocument();
     expect(api.completionBodies[0].modelId).toBe('ketner-pro');
   });
+
+  it('переход в другой диалог во время стриминга не прерывает генерацию, и ответ доступен при возврате', async () => {
+    const api = installFakeApi({ reply: 'Фоновый ответ без прерывания', chunkDelayMs: 15 });
+    api.seed({
+      title: 'Второй чат',
+      messages: [
+        {
+          id: 'u2',
+          conversationId: 'conversation-1',
+          role: 'user',
+          content: 'Сообщение во втором',
+          createdAt: new Date().toISOString(),
+          status: 'complete',
+        },
+      ],
+      updatedAt: new Date().toISOString(),
+    });
+    const user = setupChat();
+
+    await sendMessage(user, 'Начало генерации в первом');
+    // Не ждём полного ответа, а переключаемся на второй чат
+    await user.click(await screen.findByRole('link', { name: 'Второй чат' }));
+    expect(await screen.findByText('Сообщение во втором')).toBeInTheDocument();
+
+    // Ждём, пока первый диалог в фоне завершит генерацию
+    await waitFor(() =>
+      expect(Object.keys(useChat.getState().streamingConversations)).toHaveLength(0),
+    );
+
+    // Возвращаемся в первый диалог
+    await user.click(await screen.findByRole('link', { name: 'Начало генерации в первом' }));
+    expect(await screen.findByText('Фоновый ответ без прерывания')).toBeInTheDocument();
+  });
 });

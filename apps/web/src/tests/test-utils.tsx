@@ -39,6 +39,8 @@ export function resetChat(): void {
     messagesStatus: 'idle',
     meta: null,
     streaming: false,
+    streamingConversations: {},
+    conversationMessages: {},
     search: '',
     draft: '',
   });

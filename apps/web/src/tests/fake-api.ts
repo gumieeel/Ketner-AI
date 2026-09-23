@@ -338,6 +338,22 @@ export function installFakeApi(options: FakeApiOptions = {}): FakeApi {
         const fail = index < (options.failTimes ?? 0);
         const reply =
           options.replies?.[index % options.replies.length] ?? options.reply ?? DEFAULT_REPLY;
+        const convId = String(body.conversationId ?? '');
+        const found = conversations.get(convId);
+        if (found && !fail) {
+          const incoming = Array.isArray(body.messages) ? (body.messages as Message[]) : [];
+          found.messages = [
+            ...incoming,
+            {
+              id: `assistant-${index + 1}`,
+              conversationId: convId,
+              role: 'assistant',
+              content: reply,
+              createdAt: new Date().toISOString(),
+              status: 'complete',
+            },
+          ];
+        }
         return new Response(streamOf(sseChunks(reply, fail), delayMs, init?.signal ?? null), {
           status: 200,
           headers: { 'Content-Type': 'text/event-stream' },

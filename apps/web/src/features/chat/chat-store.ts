@@ -23,6 +23,8 @@ interface ChatState {
   messagesStatus: LoadStatus;
   meta: ChatMeta | null;
   streaming: boolean;
+  streamingConversations: Record<string, boolean>;
+  conversationMessages: Record<string, Message[]>;
   search: string;
   draft: string;
 
@@ -32,16 +34,16 @@ interface ChatState {
   setDraft: (draft: string) => void;
   loadMeta: () => Promise<void>;
   send: (text: string) => Promise<void>;
-  stop: () => void;
+  stop: (id?: string) => void;
   regenerate: () => Promise<void>;
   editMessage: (id: string, content: string) => Promise<void>;
   rename: (id: string, title: string) => Promise<void>;
   remove: (id: string) => Promise<void>;
 }
 
-/** Генерация одна на вкладку, поэтому контроллер и таймер живут в модуле. */
-let abortController: AbortController | null = null;
-let flushTimer: ReturnType<typeof setTimeout> | null = null;
+/** Контроллеры отмены и таймеры сброса буфера живут per-conversation. */
+const abortControllers = new Map<string, AbortController>();
+const flushTimers = new Map<string, ReturnType<typeof setTimeout>>();
 
 function createId(): string {
   return (
@@ -114,39 +116,78 @@ export const useChat = create<ChatState>((set, get) => {
     assistantId: string,
   ): Promise<void> {
     const controller = new AbortController();
-    abortController = controller;
-    set({ streaming: true });
+    abortControllers.set(conversationId, controller);
+
+    set((state) => ({
+      streamingConversations: { ...state.streamingConversations, [conversationId]: true },
+      streaming: state.activeId === conversationId ? true : state.streaming,
+    }));
 
     let buffer = '';
+
     const flush = (): void => {
-      if (flushTimer !== null) {
-        clearTimeout(flushTimer);
-        flushTimer = null;
+      const timer = flushTimers.get(conversationId);
+      if (timer) {
+        clearTimeout(timer);
+        flushTimers.delete(conversationId);
       }
       if (buffer === '') {
         return;
       }
       const chunk = buffer;
       buffer = '';
-      set((state) => ({
-        messages: state.messages.map((message) =>
+
+      set((state) => {
+        const existing =
+          state.conversationMessages[conversationId] ??
+          (state.activeId === conversationId ? state.messages : []);
+        const updated: Message[] = existing.map((message) =>
           message.id === assistantId
-            ? { ...message, content: message.content + chunk, status: 'streaming' }
+            ? { ...message, content: message.content + chunk, status: 'streaming' as const }
             : message,
-        ),
-      }));
+        );
+        const next: Partial<ChatState> = {
+          conversationMessages: {
+            ...state.conversationMessages,
+            [conversationId]: updated,
+          },
+        };
+        if (state.activeId === conversationId) {
+          next.messages = updated;
+        }
+        return next;
+      });
     };
+
     const scheduleFlush = (): void => {
-      if (flushTimer === null) {
-        flushTimer = setTimeout(flush, STREAM_FLUSH_MS);
+      // Во вкладках в фоне браузеры замедляют setTimeout — сбрасываем сразу
+      if (typeof document !== 'undefined' && (document.hidden || buffer.length >= 40)) {
+        flush();
+      } else if (!flushTimers.has(conversationId)) {
+        const timer = setTimeout(flush, STREAM_FLUSH_MS);
+        flushTimers.set(conversationId, timer);
       }
     };
+
     const updateAssistant = (patch: Partial<Message>): void => {
-      set((state) => ({
-        messages: state.messages.map((message) =>
+      set((state) => {
+        const existing =
+          state.conversationMessages[conversationId] ??
+          (state.activeId === conversationId ? state.messages : []);
+        const updated = existing.map((message) =>
           message.id === assistantId ? { ...message, ...patch } : message,
-        ),
-      }));
+        );
+        const next: Partial<ChatState> = {
+          conversationMessages: {
+            ...state.conversationMessages,
+            [conversationId]: updated,
+          },
+        };
+        if (state.activeId === conversationId) {
+          next.messages = updated;
+        }
+        return next;
+      });
     };
 
     try {
@@ -178,40 +219,69 @@ export const useChat = create<ChatState>((set, get) => {
         },
       );
 
-      // Поток закрылся без `done` — значит генерацию остановили: частичный текст
-      // остаётся в ленте, как и в сохранённом диалоге.
       flush();
-      set((state) => ({
-        messages: state.messages.map((message) =>
+      set((state) => {
+        const existing =
+          state.conversationMessages[conversationId] ??
+          (state.activeId === conversationId ? state.messages : []);
+        const updated: Message[] = existing.map((message) =>
           message.id === assistantId &&
           (message.status === 'pending' || message.status === 'streaming')
-            ? { ...message, status: 'complete' }
+            ? { ...message, status: 'complete' as const }
             : message,
-        ),
-      }));
+        );
+        const next: Partial<ChatState> = {
+          conversationMessages: {
+            ...state.conversationMessages,
+            [conversationId]: updated,
+          },
+        };
+        if (state.activeId === conversationId) {
+          next.messages = updated;
+        }
+        return next;
+      });
     } catch (error) {
       flush();
       if (isAbortError(error)) {
-        // Остановка — не ошибка: показываем то, что успело прийти.
-        set((state) => ({
-          messages: state.messages.map((message) =>
+        set((state) => {
+          const existing =
+            state.conversationMessages[conversationId] ??
+            (state.activeId === conversationId ? state.messages : []);
+          const updated: Message[] = existing.map((message) =>
             message.id === assistantId && message.status !== 'error'
-              ? { ...message, status: 'complete' }
+              ? { ...message, status: 'complete' as const }
               : message,
-          ),
-        }));
+          );
+          const next: Partial<ChatState> = {
+            conversationMessages: {
+              ...state.conversationMessages,
+              [conversationId]: updated,
+            },
+          };
+          if (state.activeId === conversationId) {
+            next.messages = updated;
+          }
+          return next;
+        });
       } else {
         updateAssistant({ status: 'error', error: describeError(error) });
       }
     } finally {
-      if (flushTimer !== null) {
-        clearTimeout(flushTimer);
-        flushTimer = null;
+      const timer = flushTimers.get(conversationId);
+      if (timer) {
+        clearTimeout(timer);
+        flushTimers.delete(conversationId);
       }
-      abortController = null;
-      set({ streaming: false });
-      // Заголовок и порядок в списке считает сервер: подтягиваем их молча,
-      // чтобы не показывать skeleton после каждого ответа.
+      abortControllers.delete(conversationId);
+      set((state) => {
+        const nextStreaming = { ...state.streamingConversations };
+        delete nextStreaming[conversationId];
+        return {
+          streamingConversations: nextStreaming,
+          streaming: state.activeId === conversationId ? false : state.streaming,
+        };
+      });
       void get().loadConversations(true);
     }
   }
@@ -224,6 +294,8 @@ export const useChat = create<ChatState>((set, get) => {
     messagesStatus: 'idle',
     meta: null,
     streaming: false,
+    streamingConversations: {},
+    conversationMessages: {},
     search: '',
     draft: '',
 
@@ -244,14 +316,7 @@ export const useChat = create<ChatState>((set, get) => {
 
     openConversation: async (id, force = false) => {
       if (id === undefined) {
-        if (abortController !== null) {
-          abortController.abort();
-          abortController = null;
-        }
-        if (flushTimer !== null) {
-          clearTimeout(flushTimer);
-          flushTimer = null;
-        }
+        // «Новый чат»: очищает только активный экран, НЕ прерывая генерации в других чатах!
         set({
           activeId: null,
           messages: [],
@@ -265,13 +330,55 @@ export const useChat = create<ChatState>((set, get) => {
       if (!force && get().activeId === id) {
         return;
       }
-      set({ activeId: id, messages: [], messagesStatus: 'loading' });
+
+      const cached = get().conversationMessages[id];
+      const isStreamingThis = !!get().streamingConversations[id];
+
+      if (cached && cached.length > 0) {
+        set({
+          activeId: id,
+          messages: cached,
+          messagesStatus: 'ready',
+          streaming: isStreamingThis,
+        });
+        // Если в этом диалоге прямо сейчас идёт генерация, не затираем её данными с сервера
+        if (isStreamingThis) {
+          return;
+        }
+      } else {
+        set({
+          activeId: id,
+          messages: [],
+          messagesStatus: 'loading',
+          streaming: isStreamingThis,
+        });
+      }
+
       try {
         const { messages } = await api.fetchConversation(id);
-        set({ messages, messagesStatus: 'ready' });
+        if (!get().streamingConversations[id]) {
+          set((state) => {
+            const currentCached = state.conversationMessages[id] ?? [];
+            const resolvedMessages =
+              messages.length >= currentCached.length ? messages : currentCached;
+            const next: Partial<ChatState> = {
+              conversationMessages: {
+                ...state.conversationMessages,
+                [id]: resolvedMessages,
+              },
+            };
+            if (state.activeId === id) {
+              next.messages = resolvedMessages;
+              next.messagesStatus = 'ready';
+            }
+            return next;
+          });
+        }
       } catch (error) {
-        console.error('[chat] диалог не загрузился:', error);
-        set({ messagesStatus: 'error' });
+        if (!cached) {
+          console.error('[chat] диалог не загрузился:', error);
+          set((state) => (state.activeId === id ? { messagesStatus: 'error' } : {}));
+        }
       }
     },
 
@@ -289,14 +396,18 @@ export const useChat = create<ChatState>((set, get) => {
 
     send: async (text) => {
       const content = text.trim();
-      if (content === '' || get().streaming) {
+      const currentActiveId = get().activeId;
+      if (content === '') {
+        return;
+      }
+      if (currentActiveId && get().streamingConversations[currentActiveId]) {
         return;
       }
 
       const modelId = usePreferences.getState().chatModelId;
       const userMessage: Message = {
         id: createId(),
-        conversationId: get().activeId ?? '',
+        conversationId: currentActiveId ?? '',
         role: 'user',
         content,
         createdAt: nowIso(),
@@ -304,7 +415,17 @@ export const useChat = create<ChatState>((set, get) => {
       };
       const assistant = createAssistantMessage(userMessage.conversationId, modelId);
 
-      set((state) => ({ messages: [...state.messages, userMessage, assistant], draft: '' }));
+      set((state) => {
+        const nextMessages = [...state.messages, userMessage, assistant];
+        const nextConvMessages = currentActiveId
+          ? { ...state.conversationMessages, [currentActiveId]: nextMessages }
+          : state.conversationMessages;
+        return {
+          messages: nextMessages,
+          conversationMessages: nextConvMessages,
+          draft: '',
+        };
+      });
 
       let conversationId = userMessage.conversationId;
       if (conversationId === '') {
@@ -312,14 +433,21 @@ export const useChat = create<ChatState>((set, get) => {
           // Диалог создаётся при первом сообщении: «Новый чат» ничего не пишет на сервер.
           const conversation = await api.createConversation(deriveTitle(content));
           conversationId = conversation.id;
-          set((state) => ({
-            activeId: conversation.id,
-            conversations: [{ ...conversation, messageCount: 1 }, ...state.conversations],
-            messages: state.messages.map((message) => ({
+          set((state) => {
+            const updatedMessages = state.messages.map((message) => ({
               ...message,
               conversationId: conversation.id,
-            })),
-          }));
+            }));
+            return {
+              activeId: conversation.id,
+              conversations: [{ ...conversation, messageCount: 1 }, ...state.conversations],
+              messages: updatedMessages,
+              conversationMessages: {
+                ...state.conversationMessages,
+                [conversation.id]: updatedMessages,
+              },
+            };
+          });
         } catch (error) {
           const message = describeError(error);
           set((state) => ({
@@ -335,17 +463,23 @@ export const useChat = create<ChatState>((set, get) => {
         }
       }
 
-      // История без заглушки ассистента: её ещё только предстоит наполнить.
-      await runTurn(conversationId, get().messages.slice(0, -1), assistant.id);
+      const historyToSend = (get().conversationMessages[conversationId] ?? get().messages).slice(
+        0,
+        -1,
+      );
+      await runTurn(conversationId, historyToSend, assistant.id);
     },
 
-    stop: () => {
-      abortController?.abort();
+    stop: (id?: string) => {
+      const targetId = id ?? get().activeId;
+      if (targetId && abortControllers.has(targetId)) {
+        abortControllers.get(targetId)?.abort();
+      }
     },
 
     regenerate: async () => {
-      const { activeId, messages, streaming } = get();
-      if (streaming || activeId === null) {
+      const { activeId, messages, streamingConversations } = get();
+      if (activeId === null || streamingConversations[activeId]) {
         return;
       }
       const index = lastAssistantIndex(messages);
@@ -355,15 +489,22 @@ export const useChat = create<ChatState>((set, get) => {
 
       const history = messages.slice(0, index);
       const assistant = createAssistantMessage(activeId, usePreferences.getState().chatModelId);
-      set({ messages: [...history, assistant] });
+      const nextMessages = [...history, assistant];
+      set((state) => ({
+        messages: nextMessages,
+        conversationMessages: {
+          ...state.conversationMessages,
+          [activeId]: nextMessages,
+        },
+      }));
       await runTurn(activeId, history, assistant.id);
     },
 
     editMessage: async (id, content) => {
-      const { activeId, messages, streaming } = get();
+      const { activeId, messages, streamingConversations } = get();
       const trimmed = content.trim();
       const index = messages.findIndex((message) => message.id === id);
-      if (streaming || activeId === null || trimmed === '' || index === -1) {
+      if (activeId === null || streamingConversations[activeId] || trimmed === '' || index === -1) {
         return;
       }
 
@@ -374,7 +515,14 @@ export const useChat = create<ChatState>((set, get) => {
         { ...messages[index], content: trimmed, createdAt: nowIso(), error: undefined },
       ];
       const assistant = createAssistantMessage(activeId, usePreferences.getState().chatModelId);
-      set({ messages: [...edited, assistant] });
+      const nextMessages = [...edited, assistant];
+      set((state) => ({
+        messages: nextMessages,
+        conversationMessages: {
+          ...state.conversationMessages,
+          [activeId]: nextMessages,
+        },
+      }));
       await runTurn(activeId, edited, assistant.id);
     },
 
@@ -396,15 +544,26 @@ export const useChat = create<ChatState>((set, get) => {
     },
 
     remove: async (id) => {
+      if (abortControllers.has(id)) {
+        abortControllers.get(id)?.abort();
+        abortControllers.delete(id);
+      }
       try {
         await api.deleteConversation(id);
         set((state) => {
+          const nextConvMessages = { ...state.conversationMessages };
+          delete nextConvMessages[id];
+          const nextStreaming = { ...state.streamingConversations };
+          delete nextStreaming[id];
           const next: Partial<ChatState> = {
             conversations: state.conversations.filter((item) => item.id !== id),
+            conversationMessages: nextConvMessages,
+            streamingConversations: nextStreaming,
           };
           if (state.activeId === id) {
             next.activeId = null;
             next.messages = [];
+            next.streaming = false;
           }
           return next;
         });

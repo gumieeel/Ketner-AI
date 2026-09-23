@@ -285,6 +285,7 @@ function ConversationRow({
   const navigate = useNavigate();
   const rename = useChat((state) => state.rename);
   const remove = useChat((state) => state.remove);
+  const isStreaming = useChat((state) => !!state.streamingConversations[conversation.id]);
   const [editing, setEditing] = useState(false);
   const [value, setValue] = useState(conversation.title);
   const [confirming, setConfirming] = useState(false);
@@ -367,6 +368,14 @@ function ConversationRow({
       >
         {conversation.title === '' ? t('chat.title') : conversation.title}
       </NavLink>
+
+      {isStreaming ? (
+        <span
+          className="size-2 shrink-0 rounded-full bg-brand-500 animate-pulse mr-1"
+          title={t('chat.thinking')}
+          aria-label={t('chat.thinking')}
+        />
+      ) : null}
 
       {showDate ? (
         <span className="shrink-0 text-[11px] text-zinc-400 md:group-hover:hidden dark:text-zinc-500">
