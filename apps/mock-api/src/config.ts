@@ -1,5 +1,24 @@
+import { existsSync } from 'node:fs';
+import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type { PlanId } from './types.js';
+
+// Загрузка .env файла (нативно в Node.js 20+)
+const envCandidates = [
+  join(process.cwd(), '.env'),
+  join(process.cwd(), 'apps/mock-api/.env'),
+  fileURLToPath(new URL('../.env', import.meta.url)),
+];
+for (const envPath of envCandidates) {
+  if (existsSync(envPath)) {
+    try {
+      process.loadEnvFile(envPath);
+      break;
+    } catch {
+      // Игнорируем ошибки
+    }
+  }
+}
 
 /**
  * Конфигурация mock-API.
@@ -59,6 +78,17 @@ export const config = {
   /** Секретный ключ Better Auth для подписи сессий и кук. */
   betterAuthSecret:
     process.env.BETTER_AUTH_SECRET ?? 'ketner-ai-better-auth-secret-key-32chars-minimum-safe',
+  /** Базовый URL для Better Auth (включая редиректы OAuth). */
+  betterAuthUrl:
+    process.env.BETTER_AUTH_URL ??
+    process.env.BASE_URL ??
+    `http://localhost:${readNumber('PORT', 8787)}`,
+
+  /** OAuth провайдеры (Better Auth). */
+  googleClientId: process.env.GOOGLE_CLIENT_ID || undefined,
+  googleClientSecret: process.env.GOOGLE_CLIENT_SECRET || undefined,
+  githubClientId: process.env.GITHUB_CLIENT_ID || undefined,
+  githubClientSecret: process.env.GITHUB_CLIENT_SECRET || undefined,
 
   ai: {
     thinkingMs: [

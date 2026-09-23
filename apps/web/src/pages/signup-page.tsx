@@ -4,6 +4,7 @@ import { EyeIcon, EyeOffIcon, GitHubIcon, GoogleIcon } from '@/components/icons'
 import { AuthShell } from '@/components/layout/auth-shell';
 import { Button } from '@/components/ui/button';
 import { Field, Input } from '@/components/ui/input';
+import { authClient } from '@/features/auth/auth-client';
 import { useAuth } from '@/features/auth/auth-store';
 import { useTranslation } from '@/i18n';
 
@@ -78,10 +79,22 @@ export function SignupPage() {
     setLoading(true);
     setServerError(null);
     try {
-      await mockOAuth(provider);
-      navigate('/');
-    } catch (error) {
-      setServerError(error instanceof Error ? error.message : 'Ошибка OAuth');
+      const res = await authClient.signIn.social({
+        provider,
+        callbackURL: window.location.origin,
+      });
+      if (res?.error) {
+        await mockOAuth(provider);
+        navigate('/');
+        return;
+      }
+    } catch {
+      try {
+        await mockOAuth(provider);
+        navigate('/');
+      } catch (error) {
+        setServerError(error instanceof Error ? error.message : 'Ошибка OAuth');
+      }
     } finally {
       setLoading(false);
     }

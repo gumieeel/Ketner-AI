@@ -56,7 +56,7 @@ export function createBetterAuth(options = {}) {
       "updatedAt" date not null
     );
   `);
-    const baseURL = options.baseURL ?? `http://localhost:${config.port}`;
+    const baseURL = options.baseURL ?? config.betterAuthUrl;
     const secret = options.secret ?? config.betterAuthSecret;
     const auth = betterAuth({
         baseURL,
@@ -65,6 +65,24 @@ export function createBetterAuth(options = {}) {
         emailAndPassword: {
             enabled: true,
             autoSignIn: true,
+        },
+        socialProviders: {
+            ...(config.googleClientId && config.googleClientSecret
+                ? {
+                    google: {
+                        clientId: config.googleClientId,
+                        clientSecret: config.googleClientSecret,
+                    },
+                }
+                : {}),
+            ...(config.githubClientId && config.githubClientSecret
+                ? {
+                    github: {
+                        clientId: config.githubClientId,
+                        clientSecret: config.githubClientSecret,
+                    },
+                }
+                : {}),
         },
         user: {
             additionalFields: {
@@ -83,7 +101,8 @@ export function createBetterAuth(options = {}) {
             if (origin.startsWith('http://localhost:') ||
                 origin.startsWith('http://127.0.0.1:') ||
                 origin.includes('ketner-ai') ||
-                origin.includes('onrender.com')) {
+                origin.includes('onrender.com') ||
+                origin.includes('google.com')) {
                 return [origin];
             }
             return [config.corsOrigin, baseURL];
