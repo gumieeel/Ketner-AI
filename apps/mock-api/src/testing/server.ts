@@ -6,6 +6,7 @@ import { createApp } from '../app.js';
 import type { AiConfig } from '../config.js';
 import { DEFAULT_MODEL_ID } from '../ai/models.js';
 import { createConversationStore } from '../store/conversation-store.js';
+import { createUserStore } from '../store/user-store.js';
 import type { Conversation, Message } from '../types.js';
 
 /** Задержки без пауз: тесты не должны ждать стриминг. */
@@ -23,8 +24,14 @@ export interface TestServer {
 
 /** Поднимает приложение на свободном порту с временным файлом хранилища. */
 export async function startTestServer(ai: Partial<AiConfig> = {}): Promise<TestServer> {
-  const storeFile = join(mkdtempSync(join(tmpdir(), 'ketner-mock-api-')), 'store.json');
-  const app = createApp({ store: createConversationStore(storeFile), ai: { ...FAST_AI, ...ai } });
+  const tempDir = mkdtempSync(join(tmpdir(), 'ketner-mock-api-'));
+  const storeFile = join(tempDir, 'store.json');
+  const userStoreFile = join(tempDir, 'users.json');
+  const app = createApp({
+    store: createConversationStore(storeFile),
+    userStore: createUserStore(userStoreFile),
+    ai: { ...FAST_AI, ...ai },
+  });
   const server = app.listen(0);
   await new Promise<void>((resolve) => server.once('listening', resolve));
 

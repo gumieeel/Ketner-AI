@@ -94,8 +94,9 @@ export function createChatRouter({ store, userId, ai }: ChatRouterDeps): Router 
     }
 
     const { conversationId, modelId, language, messages } = parsed.value;
+    const activeUserId = request.userId ?? userId;
 
-    if (!store.get(userId, conversationId)) {
+    if (!store.get(activeUserId, conversationId)) {
       sendError(response, 404, 'conversation_not_found', `Диалог ${conversationId} не найден`);
       return;
     }
@@ -130,7 +131,7 @@ export function createChatRouter({ store, userId, ai }: ChatRouterDeps): Router 
 
     const finishTurn = (content: string, status: MessageStatus): string | null => {
       const saved = store.saveTurn({
-        userId,
+        userId: activeUserId,
         conversationId,
         history: messages,
         assistant: { content, modelId: model.id, status },

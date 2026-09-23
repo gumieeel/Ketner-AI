@@ -4,8 +4,9 @@ import { config } from './config.js';
 import type { AiConfig } from './config.js';
 import { errorHandler, notFoundHandler } from './middleware/errors.js';
 import { createApiRouter, describeService } from './routes/index.js';
-import { conversationStore } from './store/index.js';
+import { conversationStore, userStore } from './store/index.js';
 import type { ConversationStore } from './store/conversation-store.js';
+import type { UserStore } from './store/user-store.js';
 
 /**
  * Зависимости приложения.
@@ -15,12 +16,14 @@ import type { ConversationStore } from './store/conversation-store.js';
  */
 export interface AppDeps {
   store: ConversationStore;
+  userStore: UserStore;
   ai: AiConfig;
   userId: string;
 }
 
 const defaultDeps: AppDeps = {
   store: conversationStore,
+  userStore,
   ai: config.ai,
   userId: config.demoUserId,
 };

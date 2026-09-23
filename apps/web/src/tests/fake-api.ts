@@ -155,6 +155,83 @@ export function installFakeApi(options: FakeApiOptions = {}): FakeApi {
         return json(META);
       }
 
+      if (url === '/api/auth/login' && method === 'POST') {
+        const email = String(body.email ?? '');
+        const password = String(body.password ?? '');
+        if (password === 'wrongPassword') {
+          return json({ error: { code: 'invalid_credentials', message: 'Неверный пароль' } }, 401);
+        }
+        return json({
+          user: {
+            id: 'demo-user',
+            email,
+            name: 'Демо Пользователь',
+            plan: 'free',
+            createdAt: new Date().toISOString(),
+          },
+          token: 'fake.jwt.token',
+          expiresAt: new Date(Date.now() + 86400000).toISOString(),
+        });
+      }
+
+      if (url === '/api/auth/signup' && method === 'POST') {
+        const email = String(body.email ?? '');
+        const name = String(body.name ?? 'Новый Пользователь');
+        return json(
+          {
+            user: {
+              id: 'new-user',
+              email,
+              name,
+              plan: 'free',
+              createdAt: new Date().toISOString(),
+            },
+            token: 'fake.jwt.token',
+            expiresAt: new Date(Date.now() + 86400000).toISOString(),
+          },
+          201,
+        );
+      }
+
+      if (url === '/api/auth/me' && method === 'GET') {
+        const authHeader =
+          init?.headers && 'Authorization' in init.headers
+            ? (init.headers as Record<string, string>)['Authorization']
+            : undefined;
+        if (!authHeader) {
+          return json({ error: { code: 'unauthorized', message: 'Требуется авторизация' } }, 401);
+        }
+        return json({
+          user: {
+            id: 'demo-user',
+            email: 'demo@ketner.ai',
+            name: 'Демо Пользователь',
+            plan: 'free',
+            createdAt: new Date().toISOString(),
+          },
+        });
+      }
+
+      if (url === '/api/auth/logout' && method === 'POST') {
+        return new Response(null, { status: 204 });
+      }
+
+      if (url.startsWith('/api/auth/oauth/')) {
+        const provider = url.split('/').pop();
+        return json({
+          user: {
+            id: 'oauth-user',
+            email: `user@${provider}.com`,
+            name: `${provider} User`,
+            plan: 'free',
+            createdAt: new Date().toISOString(),
+          },
+          token: 'fake.oauth.jwt.token',
+          expiresAt: new Date(Date.now() + 86400000).toISOString(),
+          provider,
+        });
+      }
+
       if (url === '/api/conversations' && method === 'GET') {
         const list: ConversationSummary[] = [...conversations.values()].map(
           ({ conversation, messages }) => ({

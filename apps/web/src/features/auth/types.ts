@@ -1,0 +1,28 @@
+export type PlanId = 'free' | 'plus' | 'pro';
+
+export interface User {
+  id: string;
+  email: string;
+  name: string;
+  plan: PlanId;
+  createdAt: string;
+}
+
+export interface AuthSession {
+  user: User;
+  token: string;
+  expiresAt: string;
+}
+
+export type AuthStatus = 'idle' | 'loading' | 'authenticated' | 'unauthenticated';
+
+export interface LoginPayload {
+  email: string;
+  password: string;
+}
+
+export interface SignupPayload {
+  email: string;
+  password: string;
+  name?: string;
+}

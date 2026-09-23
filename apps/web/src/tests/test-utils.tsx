@@ -1,6 +1,7 @@
 import { render } from '@testing-library/react';
 import { RouterProvider, createMemoryRouter } from 'react-router-dom';
 import { ThemeSync } from '@/app/theme-sync';
+import { useAuth } from '@/features/auth/auth-store';
 import { useChat } from '@/features/chat/chat-store';
 import { DEFAULT_MODEL_ID, usePreferences } from '@/features/preferences/preferences-store';
 import { routes } from '@/router/routes';
@@ -40,4 +41,15 @@ export function resetChat(): void {
     search: '',
     draft: '',
   });
+}
+
+/** Сбрасывает состояние авторизации к гостевому. */
+export function resetAuth(): void {
+  useAuth.setState({
+    user: null,
+    token: null,
+    status: 'unauthenticated',
+    error: null,
+  });
+  window.localStorage.clear();
 }

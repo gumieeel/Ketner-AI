@@ -1,3 +1,4 @@
+import { getAuthToken } from '../auth/auth-store';
 import { readSseStream } from './sse';
 import type { ChatMeta, Conversation, ConversationSummary, Language, Message } from './types';
 
@@ -32,9 +33,18 @@ async function toApiError(response: Response): Promise<ApiError> {
 }
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
+  const token = getAuthToken();
+  const headers: Record<string, string> = { ...JSON_HEADERS };
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`;
+  }
+  if (init?.headers) {
+    Object.assign(headers, init.headers);
+  }
+
   const response = await fetch(`${API_BASE}${path}`, {
     ...init,
-    headers: { ...JSON_HEADERS, ...init?.headers },
+    headers,
   });
 
   if (!response.ok) {
@@ -106,9 +116,15 @@ export async function streamCompletion(
   completion: CompletionRequest,
   handlers: CompletionHandlers,
 ): Promise<void> {
+  const token = getAuthToken();
+  const headers: Record<string, string> = { ...JSON_HEADERS };
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`;
+  }
+
   const response = await fetch(`${API_BASE}/chat/completions`, {
     method: 'POST',
-    headers: JSON_HEADERS,
+    headers,
     signal: completion.signal,
     body: JSON.stringify({
       conversationId: completion.conversationId,

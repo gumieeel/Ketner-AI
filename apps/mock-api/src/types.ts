@@ -7,6 +7,29 @@
 
 export type PlanId = 'free' | 'plus' | 'pro';
 
+export interface User {
+  id: string;
+  email: string;
+  name: string;
+  plan: PlanId;
+  createdAt: string;
+}
+
+export interface AuthSession {
+  user: User;
+  token: string;
+  expiresAt: string;
+}
+
+export interface AuthTokenPayload {
+  sub: string;
+  email: string;
+  name: string;
+  plan: PlanId;
+  iat: number;
+  exp: number;
+}
+
 export type Language = 'ru' | 'en';
 
 export type MessageRole = 'user' | 'assistant';

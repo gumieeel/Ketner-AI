@@ -46,8 +46,16 @@ export const en: Record<TranslationKey, string> = {
   'auth.toLogin': 'Already have an account? Log in',
   'auth.backToChat': 'Back to chat',
   'auth.demoNotice':
-    'Demo mode: the form looks real, but nothing is sent anywhere. Authentication ships in stage 3.',
-  'auth.oauthStub': 'OAuth will be connected later — for now it is a stub.',
+    'Demo mode: sign up and login persist your session in local storage and mock-API.',
+  'auth.oauthStub': 'OAuth stub: immediately creates a demo session with the selected provider.',
+  'auth.emailInvalid': 'Please enter a valid email address (e.g. you@example.com)',
+  'auth.passwordTooShort': 'Password must be at least 8 characters long',
+  'auth.nameRequired': 'Please enter your name',
+  'auth.demoQuickLogin': 'Quick login as demo user',
+  'auth.loggingIn': 'Logging in...',
+  'auth.signingUp': 'Signing up...',
+  'settings.loggedInAs': 'Logged in as',
+  'settings.registeredOn': 'Registered on',
 
   'pricing.title': 'Pricing',
   'pricing.subtitle': 'Start for free and upgrade when you need more.',

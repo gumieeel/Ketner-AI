@@ -1,7 +1,11 @@
 import { Router } from 'express';
 import { config } from '../config.js';
 import type { AiConfig } from '../config.js';
+import { createAuthMiddleware } from '../middleware/auth.js';
 import type { ConversationStore } from '../store/conversation-store.js';
+import { userStore as defaultUserStore } from '../store/index.js';
+import type { UserStore } from '../store/user-store.js';
+import { createAuthRouter } from './auth.js';
 import { createChatRouter } from './chat.js';
 import { createConversationsRouter } from './conversations.js';
 import { healthRouter } from './health.js';
@@ -10,6 +14,7 @@ import { createMetaRouter } from './meta.js';
 /** Зависимости роутеров: подменяются в тестах. */
 export interface ApiDeps {
   store: ConversationStore;
+  userStore?: UserStore;
   ai: AiConfig;
   userId: string;
 }
@@ -53,11 +58,11 @@ export const API_ENDPOINTS = [
   {
     method: 'POST',
     path: '/api/auth/signup',
-    status: 'planned',
+    status: 'ready',
     description: 'Регистрация (заглушка)',
   },
-  { method: 'POST', path: '/api/auth/login', status: 'planned', description: 'Вход (заглушка)' },
-  { method: 'GET', path: '/api/auth/me', status: 'planned', description: 'Текущий пользователь' },
+  { method: 'POST', path: '/api/auth/login', status: 'ready', description: 'Вход (заглушка)' },
+  { method: 'GET', path: '/api/auth/me', status: 'ready', description: 'Текущий пользователь' },
   { method: 'GET', path: '/api/plans', status: 'planned', description: 'Каталог тарифов' },
   {
     method: 'POST',
@@ -83,6 +88,9 @@ export function describeService() {
 
 export function createApiRouter(deps: ApiDeps): Router {
   const router = Router();
+  const activeUserStore = deps.userStore ?? defaultUserStore;
+
+  router.use(createAuthMiddleware(activeUserStore));
 
   router.get('/', (_request, response) => {
     response.json(describeService());
@@ -90,6 +98,7 @@ export function createApiRouter(deps: ApiDeps): Router {
 
   router.use(healthRouter);
   router.use(createMetaRouter());
+  router.use('/auth', createAuthRouter(activeUserStore));
   router.use(createConversationsRouter(deps.store, deps.userId));
   router.use('/chat', createChatRouter(deps));
 

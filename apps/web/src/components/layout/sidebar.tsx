@@ -14,6 +14,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { IconButton } from '@/components/ui/icon-button';
 import { Skeleton } from '@/components/ui/skeleton';
+import { useAuth } from '@/features/auth/auth-store';
 import { useChat } from '@/features/chat/chat-store';
 import type { ConversationSummary } from '@/features/chat/types';
 import { usePreferences } from '@/features/preferences/preferences-store';
@@ -45,6 +46,7 @@ const navLinkClasses = ({ isActive }: { isActive: boolean }) =>
 /** Сайдбар рабочей области: список диалогов, поиск, настройки и профиль. */
 export function Sidebar() {
   const { t } = useTranslation();
+  const user = useAuth((state) => state.user);
   const open = usePreferences((state) => state.sidebarOpen);
   const setOpen = usePreferences((state) => state.setSidebarOpen);
   const conversations = useChat((state) => state.conversations);
@@ -209,21 +211,48 @@ export function Sidebar() {
           </NavLink>
 
           <div className="flex items-center gap-2 rounded-lg px-1 py-1">
-            <span className="grid size-9 shrink-0 place-items-center rounded-full bg-zinc-200 text-zinc-500 dark:bg-zinc-700 dark:text-zinc-300">
-              <UserIcon className="text-lg" />
-            </span>
-            <div className="min-w-0 flex-1">
-              <p className="truncate text-sm font-medium text-zinc-800 dark:text-zinc-100">
-                {t('nav.guest')}
-              </p>
-              <Link
-                to="/login"
-                onClick={close}
-                className="text-xs text-brand-600 dark:text-brand-300"
-              >
-                {t('nav.login')}
-              </Link>
-            </div>
+            {user ? (
+              <>
+                <Link
+                  to="/settings"
+                  onClick={close}
+                  className="grid size-9 shrink-0 place-items-center rounded-full bg-brand-100 text-xs font-semibold text-brand-700 hover:opacity-80 dark:bg-brand-900/60 dark:text-brand-300"
+                  title={user.name}
+                >
+                  {user.name.slice(0, 2).toUpperCase()}
+                </Link>
+                <div className="min-w-0 flex-1">
+                  <Link
+                    to="/settings"
+                    onClick={close}
+                    className="block truncate text-sm font-medium text-zinc-800 hover:underline dark:text-zinc-100"
+                  >
+                    {user.name}
+                  </Link>
+                  <p className="truncate text-xs text-zinc-500 dark:text-zinc-400">
+                    {user.plan === 'free' ? t('pricing.free') : user.plan.toUpperCase()}
+                  </p>
+                </div>
+              </>
+            ) : (
+              <>
+                <span className="grid size-9 shrink-0 place-items-center rounded-full bg-zinc-200 text-zinc-500 dark:bg-zinc-700 dark:text-zinc-300">
+                  <UserIcon className="text-lg" />
+                </span>
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-sm font-medium text-zinc-800 dark:text-zinc-100">
+                    {t('nav.guest')}
+                  </p>
+                  <Link
+                    to="/login"
+                    onClick={close}
+                    className="text-xs text-brand-600 dark:text-brand-300"
+                  >
+                    {t('nav.login')}
+                  </Link>
+                </div>
+              </>
+            )}
             <ThemeToggle />
           </div>
 
