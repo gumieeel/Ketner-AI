@@ -18,8 +18,6 @@ const ALIGN_CLASSES: Record<TableAlign, string> = {
   right: 'text-right',
 };
 
-const CELL_BORDER = 'border-b border-zinc-200 px-2 py-1 dark:border-zinc-700';
-
 function toInlineNode(token: InlineToken): ReactNode {
   switch (token.kind) {
     case 'bold':
@@ -30,7 +28,7 @@ function toInlineNode(token: InlineToken): ReactNode {
       return <s>{token.text}</s>;
     case 'code':
       return (
-        <code className="rounded bg-zinc-100 px-1 py-0.5 font-mono text-[0.9em] dark:bg-zinc-700">
+        <code className="rounded-[4px] border border-stroke/20 bg-surface px-1 py-0.5 font-mono text-[0.9em] text-text">
           {token.text}
         </code>
       );
@@ -40,7 +38,7 @@ function toInlineNode(token: InlineToken): ReactNode {
           href={token.href}
           target="_blank"
           rel="noreferrer"
-          className="text-brand-700 underline dark:text-brand-300"
+          className="text-accent underline hover:opacity-80"
         >
           {token.text}
         </a>
@@ -86,7 +84,7 @@ export default function Markdown({ content }: { content: string }) {
   const blocks = useMemo(() => parseMarkdown(content), [content]);
 
   return (
-    <div className="text-sm leading-relaxed text-zinc-800 dark:text-zinc-100">
+    <div className="text-base leading-[27px] text-text">
       {blocks.map((block, index) => {
         switch (block.type) {
           case 'heading':
@@ -101,25 +99,24 @@ export default function Markdown({ content }: { content: string }) {
             return <MarkdownList key={index} ordered={block.ordered} items={block.items} />;
           case 'quote':
             return (
-              <blockquote
-                key={index}
-                className="my-2 border-l-2 border-zinc-300 pl-3 text-zinc-600 dark:border-zinc-600 dark:text-zinc-300"
-              >
+              <blockquote key={index} className="my-2 border-l-2 border-accent/50 pl-3 text-muted">
                 <Inline text={block.text} />
               </blockquote>
             );
           case 'table':
             return (
-              <div key={index} className="my-3 overflow-x-auto">
-                <table className="w-full border-collapse text-sm">
+              <div
+                key={index}
+                className="my-3 overflow-x-auto rounded-[10px] border border-stroke/20 bg-surface"
+              >
+                <table className="w-full border-collapse text-sm text-text">
                   <thead>
                     <tr>
                       {block.header.map((cell, cellIndex) => (
                         <th
                           key={cellIndex}
                           className={cn(
-                            CELL_BORDER,
-                            'font-semibold',
+                            'border-b border-stroke/20 px-3 py-2 font-semibold text-text',
                             ALIGN_CLASSES[block.align[cellIndex]],
                           )}
                         >
@@ -135,8 +132,7 @@ export default function Markdown({ content }: { content: string }) {
                           <td
                             key={cellIndex}
                             className={cn(
-                              CELL_BORDER,
-                              'align-top',
+                              'border-b border-stroke/15 px-3 py-2 align-top text-text',
                               ALIGN_CLASSES[block.align[cellIndex]],
                             )}
                           >
@@ -150,7 +146,7 @@ export default function Markdown({ content }: { content: string }) {
               </div>
             );
           case 'divider':
-            return <hr key={index} className="my-3 border-zinc-200 dark:border-zinc-700" />;
+            return <hr key={index} className="my-4 border-stroke/20" />;
           default:
             return (
               <p key={index} className="my-2 first:mt-0 last:mb-0">

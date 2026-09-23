@@ -10,12 +10,9 @@ export function Input({ invalid = false, className, ...props }: InputProps) {
     <input
       aria-invalid={invalid || undefined}
       className={cn(
-        'h-11 w-full rounded-lg border bg-white px-3 text-sm text-zinc-900 transition-colors',
-        'placeholder:text-zinc-400',
-        'dark:bg-zinc-800 dark:text-zinc-50 dark:placeholder:text-zinc-500',
-        invalid
-          ? 'border-red-500 dark:border-red-500'
-          : 'border-zinc-300 focus:border-brand-500 dark:border-zinc-600 dark:focus:border-brand-500',
+        'h-11 w-full rounded-[10px] border bg-surface px-3 text-sm leading-5 text-text transition-colors',
+        'placeholder:text-muted',
+        invalid ? 'border-red-500 dark:border-red-500' : 'border-stroke/60 focus:border-accent',
         'disabled:cursor-not-allowed disabled:opacity-60',
         className,
       )}

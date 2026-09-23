@@ -22,12 +22,12 @@ export function Header() {
   const title = conversations.find((conversation) => conversation.id === activeId)?.title;
 
   return (
-    <header className="flex h-14 shrink-0 items-center gap-2 border-b border-zinc-200 px-2 dark:border-zinc-700">
+    <header className="flex h-14 shrink-0 items-center gap-2 border-b border-stroke/20 bg-canvas px-3 text-text">
       <IconButton label={t('nav.openSidebar')} className="md:hidden" onClick={toggleSidebar}>
         <MenuIcon />
       </IconButton>
 
-      <h1 className="truncate text-sm font-medium text-zinc-800 dark:text-zinc-100">
+      <h1 className="truncate text-sm font-medium text-text">
         {inChat ? title || t('chat.title') : t('app.name')}
       </h1>
       <Badge tone="outline" className="hidden sm:inline-flex">

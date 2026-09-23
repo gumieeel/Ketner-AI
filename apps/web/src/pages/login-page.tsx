@@ -88,7 +88,7 @@ export function LoginPage() {
     <AuthShell
       title={t('auth.loginTitle')}
       footer={
-        <Link to="/signup" className="text-brand-600 hover:underline dark:text-brand-300">
+        <Link to="/signup" className="text-accent hover:underline">
           {t('auth.toSignup')}
         </Link>
       }
@@ -148,16 +148,16 @@ export function LoginPage() {
         <button
           type="button"
           onClick={handleDemoFill}
-          className="text-left text-xs text-brand-600 hover:underline dark:text-brand-400"
+          className="text-left text-xs text-accent hover:underline"
         >
           {t('auth.demoQuickLogin')}
         </button>
       </form>
 
-      <div className="my-5 flex items-center gap-3 text-xs text-zinc-400">
-        <span className="h-px flex-1 bg-zinc-200 dark:bg-zinc-700" />
+      <div className="my-5 flex items-center gap-3 text-xs text-muted">
+        <span className="h-px flex-1 bg-stroke/20" />
         {t('auth.orDivider')}
-        <span className="h-px flex-1 bg-zinc-200 dark:bg-zinc-700" />
+        <span className="h-px flex-1 bg-stroke/20" />
       </div>
 
       <div className="flex flex-col gap-2">

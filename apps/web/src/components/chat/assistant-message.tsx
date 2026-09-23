@@ -2,6 +2,7 @@ import { Suspense, lazy } from 'react';
 import { AlertIcon, RefreshIcon } from '@/components/icons';
 import { Button } from '@/components/ui/button';
 import { CopyButton } from '@/components/ui/copy-button';
+import { CornerMark } from '@/components/ui/corner-mark';
 import { IconButton } from '@/components/ui/icon-button';
 import { useChat } from '@/features/chat/chat-store';
 import type { Message } from '@/features/chat/types';
@@ -16,7 +17,7 @@ interface AssistantMessageProps {
   canRegenerate: boolean;
 }
 
-/** Ответ ассистента: markdown, состояние «думает», ошибка и действия. */
+/** Ответ ассистента: открытая лента без пузыря, ограничение строки 66ch, импульс маркера в начале. */
 export function AssistantMessage({ message, canRegenerate }: AssistantMessageProps) {
   const { t } = useTranslation();
   const regenerate = useChat((state) => state.regenerate);
@@ -28,37 +29,42 @@ export function AssistantMessage({ message, canRegenerate }: AssistantMessagePro
 
   return (
     <article className="flex gap-3" aria-label={t('chat.assistant')}>
-      <span className="mt-0.5 grid size-8 shrink-0 place-items-center rounded-full bg-brand-500/10 p-1 text-brand-600 dark:bg-brand-500/20 dark:text-brand-300">
+      <span className="mt-0.5 grid size-8 shrink-0 place-items-center rounded-[6px] bg-accent/15 p-1 text-accent">
         <img src="/logo-mark.png" alt="Ketner AI" className="size-5 object-contain" />
       </span>
 
       <div className="min-w-0 flex-1">
         {thinking ? (
-          <p
-            className="flex items-center gap-2 text-sm text-zinc-500 dark:text-zinc-400"
-            role="status"
-          >
-            <ThinkingDots />
+          <p className="flex items-center gap-2 text-sm leading-5 text-muted" role="status">
+            <CornerMark size={14} className="text-accent reply-marker-pulse" />
             {t('chat.thinking')}
           </p>
         ) : null}
 
         {hasContent ? (
-          <Suspense fallback={<p className="text-sm whitespace-pre-wrap">{message.content}</p>}>
-            <Markdown content={message.content} />
-          </Suspense>
+          <div className="text-base leading-[27px] text-text [&>*:not(pre):not(table):not(.code-block)]:max-w-[66ch]">
+            <Suspense
+              fallback={
+                <p className="text-base leading-[27px] whitespace-pre-wrap max-w-[66ch]">
+                  {message.content}
+                </p>
+              }
+            >
+              <Markdown content={message.content} />
+            </Suspense>
+          </div>
         ) : null}
-        {message.status === 'streaming' ? <span className="caret" aria-hidden="true" /> : null}
+        {message.status === 'streaming' ? (
+          <span className="caret text-accent ml-1" aria-hidden="true" />
+        ) : null}
 
         {failed ? (
-          <div className="mt-2 rounded-xl border border-red-200 bg-red-50 p-3 text-sm dark:border-red-900/60 dark:bg-red-950/40">
-            <p className="flex items-center gap-2 font-medium text-red-700 dark:text-red-300">
+          <div className="mt-2 rounded-[10px] border border-red-500/30 bg-red-500/10 p-3 text-sm leading-5 text-red-600 dark:text-red-400">
+            <p className="flex items-center gap-2 font-medium">
               <AlertIcon />
               {t('chat.errorTitle')}
             </p>
-            <p className="mt-1 text-red-700 dark:text-red-300">
-              {message.error ?? t('chat.errorText')}
-            </p>
+            <p className="mt-1">{message.error ?? t('chat.errorText')}</p>
             {canRegenerate ? (
               <Button
                 variant="outline"
@@ -75,7 +81,7 @@ export function AssistantMessage({ message, canRegenerate }: AssistantMessagePro
         ) : null}
 
         {hasContent && !thinking && !failed ? (
-          <div className="mt-1 flex items-center gap-1">
+          <div className="mt-2 flex items-center gap-1 text-muted">
             <CopyButton value={message.content} label={t('chat.copy')} size="sm" />
             {canRegenerate ? (
               <IconButton
@@ -91,20 +97,5 @@ export function AssistantMessage({ message, canRegenerate }: AssistantMessagePro
         ) : null}
       </div>
     </article>
-  );
-}
-
-/** Три точки вместо индикатора «думает…»: как в чатах, которые ждут модель. */
-function ThinkingDots() {
-  return (
-    <span className="flex items-center gap-1" aria-hidden="true">
-      {[0, 1, 2].map((index) => (
-        <span
-          key={index}
-          className="size-1.5 animate-bounce rounded-full bg-current"
-          style={{ animationDelay: `${index * 120}ms` }}
-        />
-      ))}
-    </span>
   );
 }

@@ -31,7 +31,7 @@ describe('тема и язык интерфейса', () => {
     await user.click(screen.getByRole('button', { name: 'EN' }));
 
     expect(
-      screen.getByRole('heading', { level: 2, name: 'What can I help with today?' }),
+      screen.getByRole('heading', { level: 2, name: 'What shall we work on?' }),
     ).toBeInTheDocument();
     expect(window.localStorage.getItem('ketner.language')).toBe('en');
   });

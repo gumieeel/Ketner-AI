@@ -29,9 +29,7 @@ export function PricingPage() {
               key={plan.id}
               className={cn(
                 'flex flex-col',
-                isCurrent
-                  ? 'border-brand-500 ring-1 ring-brand-500/50 dark:border-brand-400'
-                  : plan.popular && 'border-brand-500 dark:border-brand-500',
+                isCurrent ? 'border-accent ring-1 ring-accent/40' : plan.popular && 'border-accent',
               )}
             >
               <div className="flex items-center gap-2">
@@ -45,18 +43,13 @@ export function PricingPage() {
 
               <p className="mt-4 text-3xl font-semibold tracking-tight">
                 ${plan.priceMonthly}
-                <span className="ml-1 text-sm font-normal text-zinc-500 dark:text-zinc-400">
-                  {t('pricing.month')}
-                </span>
+                <span className="ml-1 text-sm font-normal text-muted">{t('pricing.month')}</span>
               </p>
 
               <ul className="mt-5 flex flex-1 flex-col gap-2">
                 {plan.bullets[language].map((bullet) => (
-                  <li
-                    key={bullet}
-                    className="flex items-start gap-2 text-sm text-zinc-600 dark:text-zinc-300"
-                  >
-                    <CheckIcon className="mt-0.5 shrink-0 text-base text-brand-600 dark:text-brand-300" />
+                  <li key={bullet} className="flex items-start gap-2 text-sm text-text/80">
+                    <CheckIcon className="mt-0.5 shrink-0 text-base text-accent" />
                     {bullet}
                   </li>
                 ))}

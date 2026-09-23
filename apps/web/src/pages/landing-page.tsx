@@ -14,7 +14,7 @@ export function LandingPage() {
       />
       <div className="flex flex-col items-center gap-2">
         <h1 className="text-4xl font-bold tracking-tight md:text-5xl">{t('landing.title')}</h1>
-        <p className="max-w-md text-lg text-zinc-600 dark:text-zinc-400">{t('landing.subtitle')}</p>
+        <p className="max-w-md text-lg text-muted">{t('landing.subtitle')}</p>
       </div>
       <div className="flex flex-wrap items-center justify-center gap-3 pt-2">
         <Link to="/chat">

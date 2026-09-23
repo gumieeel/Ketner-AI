@@ -44,7 +44,7 @@ export function SettingsPage() {
       <Card className="flex flex-wrap items-center justify-between gap-4">
         {user ? (
           <div className="flex items-center gap-3">
-            <span className="grid size-11 shrink-0 place-items-center rounded-full bg-brand-100 text-sm font-semibold text-brand-700 dark:bg-brand-900/60 dark:text-brand-300">
+            <span className="grid size-11 shrink-0 place-items-center rounded-full bg-accent/20 text-sm font-semibold text-accent">
               {user.name.slice(0, 2).toUpperCase()}
             </span>
             <div>
@@ -77,11 +77,9 @@ export function SettingsPage() {
           <CardText className="mt-1">{t('settings.appearanceText')}</CardText>
         </div>
         <div className="flex flex-wrap items-center gap-3">
-          <span className="text-sm text-zinc-600 dark:text-zinc-300">{t('settings.theme')}</span>
+          <span className="text-sm text-text">{t('settings.theme')}</span>
           <ThemeToggle />
-          <span className="ml-2 text-sm text-zinc-600 dark:text-zinc-300">
-            {t('settings.language')}
-          </span>
+          <span className="ml-2 text-sm text-text">{t('settings.language')}</span>
           <LanguageToggle />
         </div>
       </Card>

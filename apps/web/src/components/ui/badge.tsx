@@ -4,9 +4,9 @@ import { cn } from '@/lib/cn';
 type BadgeTone = 'neutral' | 'brand' | 'outline';
 
 const toneClasses: Record<BadgeTone, string> = {
-  neutral: 'bg-zinc-100 text-zinc-700 dark:bg-zinc-700 dark:text-zinc-200',
-  brand: 'bg-brand-500/15 text-brand-700 dark:text-brand-300',
-  outline: 'border border-zinc-300 text-zinc-600 dark:border-zinc-600 dark:text-zinc-300',
+  neutral: 'bg-stroke/15 text-text',
+  brand: 'bg-accent/15 text-accent font-medium',
+  outline: 'border border-stroke/30 text-muted',
 };
 
 export interface BadgeProps extends HTMLAttributes<HTMLSpanElement> {

@@ -4,11 +4,7 @@ interface SkeletonProps {
   className?: string;
 }
 
+/** Статичный скелетон без анимации (согласно направлению «Открытый контур»). */
 export function Skeleton({ className }: SkeletonProps) {
-  return (
-    <div
-      aria-hidden="true"
-      className={cn('animate-pulse rounded-md bg-zinc-200 dark:bg-zinc-700', className)}
-    />
-  );
+  return <div aria-hidden="true" className={cn('rounded-[6px] bg-stroke/15', className)} />;
 }

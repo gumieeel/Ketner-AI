@@ -7,20 +7,18 @@ type ButtonSize = 'sm' | 'md' | 'lg';
 
 const variantClasses: Record<ButtonVariant, string> = {
   primary:
-    'bg-brand-600 text-white hover:bg-brand-700 active:bg-brand-800 disabled:hover:bg-brand-600',
+    'bg-accent text-[var(--color-accent-text)] hover:opacity-90 active:opacity-100 disabled:opacity-50',
   secondary:
-    'bg-zinc-100 text-zinc-900 hover:bg-zinc-200 dark:bg-zinc-700 dark:text-zinc-50 dark:hover:bg-zinc-600',
-  outline:
-    'border border-zinc-300 text-zinc-900 hover:bg-zinc-100 dark:border-zinc-600 dark:text-zinc-100 dark:hover:bg-zinc-800',
-  ghost:
-    'text-zinc-700 hover:bg-zinc-100 dark:text-zinc-200 dark:hover:bg-zinc-800 dark:hover:text-zinc-50',
+    'bg-surface text-text border border-stroke/20 hover:border-stroke/40 dark:border-stroke/30',
+  outline: 'border border-stroke text-text hover:bg-surface/80 dark:border-stroke',
+  ghost: 'text-text hover:bg-surface hover:text-text',
   danger: 'bg-red-600 text-white hover:bg-red-700',
 };
 
 const sizeClasses: Record<ButtonSize, string> = {
-  sm: 'h-8 gap-1.5 px-3 text-sm',
-  md: 'h-10 gap-2 px-4 text-sm',
-  lg: 'h-12 gap-2 px-6 text-base',
+  sm: 'h-8 gap-1.5 px-3 text-sm leading-5',
+  md: 'h-10 gap-2 px-4 text-sm leading-5',
+  lg: 'h-12 gap-2 px-6 text-base leading-[27px]',
 };
 
 export interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
@@ -45,7 +43,7 @@ export function Button({
       disabled={disabled ?? loading}
       aria-busy={loading || undefined}
       className={cn(
-        'inline-flex items-center justify-center rounded-lg font-medium transition-colors',
+        'inline-flex items-center justify-center rounded-[10px] font-medium transition-colors',
         'disabled:cursor-not-allowed disabled:opacity-60',
         variantClasses[variant],
         sizeClasses[size],

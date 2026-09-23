@@ -9,8 +9,8 @@ import { renderRoute, resetChat, resetPreferences } from './test-utils';
 
 const COMPOSER = 'Спросите что-нибудь…';
 const SEND = 'Отправить';
-const STOP = 'Остановить генерацию';
-const EMPTY_TITLE = 'Чем помочь сегодня?';
+const STOP = 'Остановить';
+const EMPTY_TITLE = 'С чего начнём?';
 
 function setupChat(): UserEvent {
   const user = userEvent.setup();
@@ -91,7 +91,7 @@ describe('чат: отправка, стриминг и управление о�
     });
 
     const status = await screen.findByRole('status');
-    expect(status).toHaveTextContent('Ketner AI думает…');
+    expect(status).toHaveTextContent('Готовлю ответ…');
   });
 
   it('останавливает генерацию и сохраняет пришедшую часть ответа', async () => {

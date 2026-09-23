@@ -70,9 +70,8 @@ export function ModelPicker({ disabled = false }: { disabled?: boolean }) {
         disabled={disabled}
         onClick={() => setOpen((value) => !value)}
         className={cn(
-          'inline-flex items-center gap-1 rounded-lg px-2 py-1 text-xs text-zinc-500 transition-colors',
-          'hover:bg-zinc-100 hover:text-zinc-800 disabled:cursor-not-allowed disabled:opacity-60',
-          'dark:text-zinc-400 dark:hover:bg-zinc-700 dark:hover:text-zinc-100',
+          'inline-flex items-center gap-1 rounded-[6px] px-2 py-1 text-xs text-muted transition-colors',
+          'hover:bg-canvas hover:text-text disabled:cursor-not-allowed disabled:opacity-60',
         )}
       >
         {t('chat.model')}: {labelOf(current)}
@@ -83,7 +82,7 @@ export function ModelPicker({ disabled = false }: { disabled?: boolean }) {
         <ul
           role="listbox"
           aria-label={t('chat.modelMenu')}
-          className="absolute bottom-full left-0 z-20 mb-1 w-64 rounded-xl border border-zinc-200 bg-white p-1 shadow-lg dark:border-zinc-700 dark:bg-zinc-800"
+          className="absolute bottom-full left-0 z-20 mb-1 w-64 rounded-[16px] border border-stroke/30 bg-surface p-1 shadow-lg"
         >
           {models.map((model) => {
             const active = model.id === current.id;
@@ -98,20 +97,18 @@ export function ModelPicker({ disabled = false }: { disabled?: boolean }) {
                     setOpen(false);
                   }}
                   className={cn(
-                    'flex w-full items-start gap-2 rounded-lg px-2 py-2 text-left transition-colors',
+                    'flex w-full items-start gap-2 rounded-[8px] px-2 py-2 text-left transition-colors',
                     active
-                      ? 'bg-zinc-100 dark:bg-zinc-700'
-                      : 'hover:bg-zinc-100 dark:hover:bg-zinc-700',
+                      ? 'bg-accent/10 text-text'
+                      : 'hover:bg-canvas text-muted hover:text-text',
                   )}
                 >
-                  <span className="mt-0.5 text-sm text-brand-600 dark:text-brand-300">
+                  <span className="mt-0.5 text-sm text-accent">
                     {active ? <CheckIcon /> : null}
                   </span>
                   <span className="min-w-0">
-                    <span className="block text-sm font-medium text-zinc-800 dark:text-zinc-100">
-                      {labelOf(model)}
-                    </span>
-                    <span className="block text-xs text-zinc-500 dark:text-zinc-400">
+                    <span className="block text-sm font-medium text-text">{labelOf(model)}</span>
+                    <span className="block text-xs text-muted">
                       {t('chat.modelContext', { count: model.contextMessages })}
                     </span>
                   </span>

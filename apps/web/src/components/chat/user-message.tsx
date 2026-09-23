@@ -51,7 +51,7 @@ export function UserMessage({ message, editable }: UserMessageProps) {
               setEditing(false);
             }
           }}
-          className="w-full max-w-[85%] resize-none rounded-2xl border border-brand-500 bg-white px-4 py-2 text-sm outline-none dark:bg-zinc-800"
+          className="w-full max-w-[85%] resize-none rounded-[10px] border border-accent bg-surface px-4 py-2 text-base leading-[27px] text-text outline-none"
         />
         <div className="flex items-center gap-2">
           <Button variant="ghost" size="sm" onClick={() => setEditing(false)}>
@@ -67,7 +67,7 @@ export function UserMessage({ message, editable }: UserMessageProps) {
 
   return (
     <div className="group flex flex-col items-end gap-1">
-      <div className="max-w-[85%] rounded-2xl bg-zinc-100 px-4 py-2.5 text-sm whitespace-pre-wrap text-zinc-900 dark:bg-zinc-700 dark:text-zinc-50">
+      <div className="max-w-[85%] rounded-[10px] bg-surface border border-stroke/25 px-4 py-2.5 text-base leading-[27px] whitespace-pre-wrap text-text">
         {message.content}
       </div>
       {editable && !streaming ? (

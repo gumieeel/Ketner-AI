@@ -1,5 +1,6 @@
 import { useEffect, useRef, type KeyboardEvent } from 'react';
 import { PaperclipIcon, SendIcon, StopIcon } from '@/components/icons';
+import { CornerMark } from '@/components/ui/corner-mark';
 import { IconButton } from '@/components/ui/icon-button';
 import { StubAction } from '@/components/ui/stub-action';
 import { useChat } from '@/features/chat/chat-store';
@@ -45,8 +46,12 @@ export function Composer() {
   };
 
   return (
-    <div className="mx-auto w-full max-w-3xl shrink-0 px-4 pb-6">
-      <div className="rounded-2xl border border-zinc-300 bg-white p-2 shadow-sm focus-within:border-brand-500 dark:border-zinc-600 dark:bg-zinc-800">
+    <div className="mx-auto w-full max-w-[760px] shrink-0 px-4 pb-[max(1rem,env(safe-area-inset-bottom))] md:pb-6">
+      <div className="relative rounded-[16px] border border-stroke/40 bg-surface p-2.5 transition-colors focus-within:border-accent">
+        <CornerMark
+          size={13}
+          className="pointer-events-none absolute top-2.5 left-2.5 text-accent opacity-90"
+        />
         <label htmlFor="composer" className="sr-only">
           {t('chat.placeholder')}
         </label>
@@ -58,9 +63,9 @@ export function Composer() {
           onChange={(event) => setDraft(event.target.value)}
           onKeyDown={onKeyDown}
           placeholder={t('chat.placeholder')}
-          className="max-h-52 w-full resize-none bg-transparent px-2 py-2 text-sm outline-none placeholder:text-zinc-400 dark:placeholder:text-zinc-500"
+          className="max-h-52 w-full resize-none bg-transparent pr-2 pl-6 pt-0.5 text-sm leading-5 text-text outline-none placeholder:text-muted"
         />
-        <div className="flex items-center gap-1">
+        <div className="flex items-center gap-1.5 pt-1">
           <StubAction label={t('chat.attach')} hint={t('chat.attachHint')} size="sm">
             <PaperclipIcon />
           </StubAction>
@@ -69,23 +74,26 @@ export function Composer() {
             <IconButton
               label={t('chat.stop')}
               onClick={() => stop()}
-              className="ml-auto bg-zinc-800 text-white hover:bg-zinc-700 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-zinc-300"
+              size="sm"
+              className="ml-auto border border-stroke/30 bg-surface text-text hover:bg-canvas"
             >
               <StopIcon />
             </IconButton>
           ) : (
-            <IconButton
-              label={t('chat.send')}
+            <button
+              type="button"
+              aria-label={t('chat.send')}
+              title={t('chat.send')}
               onClick={submit}
               disabled={draft.trim() === ''}
-              className="ml-auto bg-brand-600 text-white hover:bg-brand-700 disabled:opacity-50"
+              className="ml-auto inline-flex size-8 shrink-0 items-center justify-center rounded-[6px] bg-accent text-[var(--color-accent-text)] transition-colors hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
             >
               <SendIcon />
-            </IconButton>
+            </button>
           )}
         </div>
       </div>
-      <p className="mt-2 text-center text-xs text-zinc-500 dark:text-zinc-400">
+      <p className="mt-2 text-center text-xs leading-[18px] text-muted">
         {t('chat.composerNotice')}
       </p>
     </div>

@@ -60,7 +60,7 @@ describe('сайдбар: история диалогов', () => {
 
     await user.clear(field);
     await user.type(field, 'такого диалога нет');
-    expect(screen.getByText('Ничего не найдено')).toBeInTheDocument();
+    expect(screen.getByText('Диалоги не найдены. Измените запрос.')).toBeInTheDocument();
   });
 
   it('переименовывает диалог через сервер', async () => {
@@ -134,7 +134,7 @@ describe('сайдбар: история диалогов', () => {
     await user.click(screen.getByRole('link', { name: 'Новый чат' }));
 
     expect(
-      await screen.findByRole('heading', { level: 2, name: 'Чем помочь сегодня?' }),
+      await screen.findByRole('heading', { level: 2, name: 'С чего начнём?' }),
     ).toBeInTheDocument();
     expect(useChat.getState().activeId).toBeNull();
     expect(useChat.getState().messages).toHaveLength(0);

@@ -88,27 +88,25 @@ export function CheckoutPage() {
   if (success) {
     return (
       <div className="mx-auto flex w-full max-w-lg flex-col items-center gap-6 px-4 py-16 text-center">
-        <div className="grid size-16 place-items-center rounded-full bg-green-100 text-green-600 dark:bg-green-950/60 dark:text-green-400">
+        <div className="grid size-16 place-items-center rounded-full bg-accent/20 text-accent">
           <CheckIcon className="text-3xl" />
         </div>
 
         <div className="flex flex-col gap-2">
-          <h1 className="text-2xl font-semibold tracking-tight">{t('checkout.successTitle')}</h1>
-          <p className="text-sm text-zinc-600 dark:text-zinc-300">{t('checkout.successMessage')}</p>
+          <h1 className="text-2xl font-semibold tracking-tight text-text">
+            {t('checkout.successTitle')}
+          </h1>
+          <p className="text-sm text-muted">{t('checkout.successMessage')}</p>
         </div>
 
         <Card className="flex w-full items-center justify-between text-left">
           <div>
             <CardTitle>{t(plan.nameKey)}</CardTitle>
-            <CardText className="mt-1 text-xs text-green-600 dark:text-green-400">
-              {t('settings.statusActive')}
-            </CardText>
+            <CardText className="mt-1 text-xs text-accent">{t('settings.statusActive')}</CardText>
           </div>
-          <p className="text-xl font-semibold">
+          <p className="text-xl font-semibold text-text">
             ${plan.priceMonthly}
-            <span className="ml-1 text-xs font-normal text-zinc-500 dark:text-zinc-400">
-              {t('pricing.month')}
-            </span>
+            <span className="ml-1 text-xs font-normal text-muted">{t('pricing.month')}</span>
           </p>
         </Card>
 
@@ -223,7 +221,7 @@ export function CheckoutPage() {
         </Button>
       </form>
 
-      <p className="text-xs text-zinc-500 dark:text-zinc-400">{t('checkout.notice')}</p>
+      <p className="text-xs text-muted">{t('checkout.notice')}</p>
     </div>
   );
 }

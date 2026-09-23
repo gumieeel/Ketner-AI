@@ -17,7 +17,7 @@ export function LanguageToggle({ className }: { className?: string }) {
       role="group"
       aria-label={t('settings.language')}
       className={cn(
-        'inline-flex items-center gap-0.5 rounded-lg bg-zinc-100 p-0.5 dark:bg-zinc-700',
+        'inline-flex items-center gap-0.5 rounded-[6px] border border-stroke/20 bg-canvas p-0.5',
         className,
       )}
     >
@@ -30,10 +30,8 @@ export function LanguageToggle({ className }: { className?: string }) {
             aria-pressed={active}
             onClick={() => setLanguage(option.value)}
             className={cn(
-              'rounded-md px-2.5 py-1 text-xs font-semibold transition-colors',
-              active
-                ? 'bg-white text-zinc-900 shadow-sm dark:bg-zinc-900 dark:text-zinc-50'
-                : 'text-zinc-500 hover:text-zinc-800 dark:text-zinc-400 dark:hover:text-zinc-100',
+              'rounded-[4px] px-2.5 py-1 text-xs font-medium transition-colors',
+              active ? 'bg-surface text-text' : 'text-muted hover:text-text',
             )}
           >
             {option.label}

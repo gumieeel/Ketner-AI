@@ -21,9 +21,7 @@ describe('маршрутизация и каркас экранов', () => {
 
     expect(screen.getByRole('complementary', { name: 'Чаты' })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Новый чат' })).toHaveAttribute('href', '/chat');
-    expect(
-      screen.getByRole('heading', { level: 2, name: 'Чем помочь сегодня?' }),
-    ).toBeInTheDocument();
+    expect(screen.getByRole('heading', { level: 2, name: 'С чего начнём?' })).toBeInTheDocument();
     expect(screen.getByPlaceholderText('Спросите что-нибудь…')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Отправить' })).toBeDisabled();
   });

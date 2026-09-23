@@ -13,7 +13,7 @@ export function Brand({ className, to = '/', iconOnly = false }: BrandProps) {
     <Link
       to={to}
       className={cn(
-        'inline-flex items-center gap-2.5 rounded-lg font-semibold text-zinc-900 dark:text-zinc-50',
+        'inline-flex items-center gap-2.5 rounded-[6px] font-semibold text-text',
         className,
       )}
     >
