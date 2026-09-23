@@ -36,6 +36,8 @@ export const config = {
   nodeEnv: process.env.NODE_ENV ?? 'development',
   /** Разрешённый origin для CORS. По умолчанию — dev-сервер Vite. */
   corsOrigin: process.env.CORS_ORIGIN ?? 'http://localhost:5173',
+  /** Адрес фронтенда: его подсказывает корень API, если порт открыли вручную. */
+  webAppUrl: process.env.WEB_APP_URL ?? 'http://localhost:5173',
 
   /** Пользователь и план заглушки: реальные аккаунты появятся на этапе 3. */
   demoUserId: 'demo-user',

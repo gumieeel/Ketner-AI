@@ -3,7 +3,7 @@ import express, { type Express } from 'express';
 import { config } from './config.js';
 import type { AiConfig } from './config.js';
 import { errorHandler, notFoundHandler } from './middleware/errors.js';
-import { createApiRouter } from './routes/index.js';
+import { createApiRouter, describeService } from './routes/index.js';
 import { conversationStore } from './store/index.js';
 import type { ConversationStore } from './store/conversation-store.js';
 
@@ -40,6 +40,16 @@ export function createApp(overrides: Partial<AppDeps> = {}): Express {
   app.use(express.json({ limit: '1mb' }));
 
   app.use('/api', createApiRouter(deps));
+
+  // Корень API открывают в браузере по ошибке: объясняем, где интерфейс.
+  app.get('/', (_request, response) => {
+    response.json({
+      ...describeService(),
+      message:
+        'Это mock-API прототипа: обработчики живут под /api. Интерфейс открывается отдельно.',
+      webAppUrl: config.webAppUrl,
+    });
+  });
 
   app.use(notFoundHandler);
   app.use(errorHandler);

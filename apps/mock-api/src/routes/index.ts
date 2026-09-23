@@ -21,7 +21,7 @@ export interface ApiDeps {
  * ready, остальные — как planned: они наполняются на этапах 3-4, при этом пути
  * и форматы ответов остаются неизменными при переходе на реальные сервисы.
  */
-const ENDPOINTS = [
+export const API_ENDPOINTS = [
   { method: 'GET', path: '/api/health', status: 'ready', description: 'Проверка живости' },
   { method: 'GET', path: '/api/meta', status: 'ready', description: 'Модели и лимиты' },
   {
@@ -67,15 +67,25 @@ const ENDPOINTS = [
   },
 ] as const;
 
+/**
+ * Описание сервиса.
+ *
+ * Одинаково отдаётся на `GET /api` и на `GET /`: корень API открывают в
+ * браузере по ошибке, и там уместнее подсказка, чем 404.
+ */
+export function describeService() {
+  return {
+    service: config.serviceName,
+    version: config.version,
+    endpoints: API_ENDPOINTS,
+  };
+}
+
 export function createApiRouter(deps: ApiDeps): Router {
   const router = Router();
 
   router.get('/', (_request, response) => {
-    response.json({
-      service: config.serviceName,
-      version: config.version,
-      endpoints: ENDPOINTS,
-    });
+    response.json(describeService());
   });
 
   router.use(healthRouter);
