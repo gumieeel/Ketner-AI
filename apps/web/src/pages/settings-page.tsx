@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { LogoutIcon, SparkleIcon } from '@/components/icons';
 import { LanguageToggle } from '@/components/layout/language-toggle';
@@ -6,6 +7,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardText, CardTitle } from '@/components/ui/card';
 import { useAuth } from '@/features/auth/auth-store';
+import { useBilling } from '@/features/billing/billing-store';
 import { useTranslation } from '@/i18n';
 import { formatShortDate } from '@/lib/format-date';
 
@@ -13,6 +15,27 @@ export function SettingsPage() {
   const { t, language } = useTranslation();
   const user = useAuth((state) => state.user);
   const logout = useAuth((state) => state.logout);
+  const subscription = useBilling((state) => state.subscription);
+  const loadSubscription = useBilling((state) => state.loadSubscription);
+  const cancel = useBilling((state) => state.cancel);
+
+  const [canceling, setCanceling] = useState(false);
+
+  useEffect(() => {
+    void loadSubscription();
+  }, [loadSubscription, user]);
+
+  const isPaid = user?.plan && user.plan !== 'free';
+  const isCanceled = subscription?.status === 'canceled';
+
+  const handleCancel = async () => {
+    setCanceling(true);
+    try {
+      await cancel();
+    } finally {
+      setCanceling(false);
+    }
+  };
 
   return (
     <div className="mx-auto flex w-full max-w-2xl flex-col gap-4 px-4 py-8">
@@ -63,25 +86,56 @@ export function SettingsPage() {
         </div>
       </Card>
 
-      <Card className="flex flex-wrap items-center justify-between gap-4">
-        <div>
-          <CardTitle>{t('settings.subscription')}</CardTitle>
-          <CardText className="mt-1">{t('settings.subscriptionText')}</CardText>
-        </div>
-        <div className="flex items-center gap-2">
-          <Badge tone="brand">
-            {user?.plan === 'pro'
-              ? t('pricing.pro')
-              : user?.plan === 'plus'
-                ? t('pricing.plus')
-                : t('pricing.free')}
-          </Badge>
-          <Link to="/pricing">
-            <Button variant="outline" size="sm">
-              <SparkleIcon className="text-base" />
-              {t('nav.upgrade')}
-            </Button>
-          </Link>
+      <Card className="flex flex-col gap-4">
+        <div className="flex flex-wrap items-center justify-between gap-4">
+          <div>
+            <div className="flex items-center gap-2">
+              <CardTitle>{t('settings.subscription')}</CardTitle>
+              <Badge tone="brand">
+                {user?.plan === 'pro'
+                  ? t('pricing.pro')
+                  : user?.plan === 'plus'
+                    ? t('pricing.plus')
+                    : t('pricing.free')}
+              </Badge>
+              {isPaid && (
+                <span className="text-xs text-zinc-500 dark:text-zinc-400">
+                  ({isCanceled ? t('settings.statusCanceled') : t('settings.statusActive')})
+                </span>
+              )}
+            </div>
+            <CardText className="mt-1">
+              {isPaid
+                ? isCanceled
+                  ? t('settings.canceledNotice')
+                  : `${t('settings.renewsAt')}: ${formatShortDate(
+                      subscription?.renewsAt ?? new Date().toISOString(),
+                      language,
+                    )}`
+                : t('settings.subscriptionText')}
+            </CardText>
+          </div>
+
+          <div className="flex items-center gap-2">
+            {isPaid && !isCanceled ? (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleCancel}
+                disabled={canceling}
+                className="text-zinc-600 hover:text-red-600 dark:text-zinc-400 dark:hover:text-red-400"
+              >
+                {canceling ? t('settings.canceling') : t('settings.cancelSubscription')}
+              </Button>
+            ) : (
+              <Link to="/pricing">
+                <Button variant="outline" size="sm">
+                  <SparkleIcon className="text-base" />
+                  {t('nav.upgrade')}
+                </Button>
+              </Link>
+            )}
+          </div>
         </div>
       </Card>
 

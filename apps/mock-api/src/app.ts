@@ -4,8 +4,9 @@ import { config } from './config.js';
 import type { AiConfig } from './config.js';
 import { errorHandler, notFoundHandler } from './middleware/errors.js';
 import { createApiRouter, describeService } from './routes/index.js';
-import { conversationStore, userStore } from './store/index.js';
+import { conversationStore, subscriptionStore, userStore } from './store/index.js';
 import type { ConversationStore } from './store/conversation-store.js';
+import type { SubscriptionStore } from './store/subscription-store.js';
 import type { UserStore } from './store/user-store.js';
 
 /**
@@ -17,6 +18,7 @@ import type { UserStore } from './store/user-store.js';
 export interface AppDeps {
   store: ConversationStore;
   userStore: UserStore;
+  subscriptionStore: SubscriptionStore;
   ai: AiConfig;
   userId: string;
 }
@@ -24,6 +26,7 @@ export interface AppDeps {
 const defaultDeps: AppDeps = {
   store: conversationStore,
   userStore,
+  subscriptionStore,
   ai: config.ai,
   userId: config.demoUserId,
 };

@@ -1,0 +1,194 @@
+import { fireEvent, screen, waitFor } from '@testing-library/react';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { useAuth } from '@/features/auth/auth-store';
+import { useBilling } from '@/features/billing/billing-store';
+import {
+  cleanDigits,
+  formatCardCvc,
+  formatCardExpiry,
+  formatCardNumber,
+  validateCardCvc,
+  validateCardExpiry,
+  validateCardNumber,
+} from '@/lib/card-mask';
+import { installFakeApi } from './fake-api';
+import { renderRoute, resetAuth, resetBilling, resetChat, resetPreferences } from './test-utils';
+
+describe('card-mask: утилиты форматирования и валидации карты', () => {
+  it('cleanDigits очищает любые нецифровые символы', () => {
+    expect(cleanDigits('4242-abcd-1234')).toBe('42421234');
+    expect(cleanDigits('   ')).toBe('');
+  });
+
+  it('formatCardNumber группирует по 4 цифры до 16 символов', () => {
+    expect(formatCardNumber('12345678')).toBe('1234 5678');
+    expect(formatCardNumber('12345678901234567890')).toBe('1234 5678 9012 3456');
+  });
+
+  it('formatCardExpiry форматирует месяц и год', () => {
+    expect(formatCardExpiry('12')).toBe('12');
+    expect(formatCardExpiry('1228')).toBe('12 / 28');
+  });
+
+  it('formatCardCvc ограничивает длину до 4 цифр', () => {
+    expect(formatCardCvc('12345')).toBe('1234');
+    expect(formatCardCvc('999')).toBe('999');
+  });
+
+  it('валидация номера карты, срока действия и CVC', () => {
+    expect(validateCardNumber('1234 5678 9012 3456')).toBe(true);
+    expect(validateCardNumber('1234 5678')).toBe(false);
+
+    expect(validateCardExpiry('12 / 30')).toBe(true);
+    expect(validateCardExpiry('13 / 30')).toBe(false); // некорректный месяц
+    expect(validateCardExpiry('01 / 20')).toBe(false); // прошедший год
+
+    expect(validateCardCvc('123')).toBe(true);
+    expect(validateCardCvc('1234')).toBe(true);
+    expect(validateCardCvc('12')).toBe(false);
+  });
+});
+
+describe('billing-flow: каталог тарифов, чекаут и управление подпиской', () => {
+  beforeEach(() => {
+    resetPreferences();
+    resetChat();
+    resetAuth();
+    resetBilling();
+    installFakeApi();
+  });
+
+  afterEach(() => {
+    resetPreferences();
+    resetChat();
+    resetAuth();
+    resetBilling();
+  });
+
+  it('страница тарифов отображает доступные планы и текущий статус', async () => {
+    // Вход как пользователь с бесплатным планом
+    useAuth.setState({
+      status: 'authenticated',
+      token: 'mock-token',
+      user: {
+        id: 'demo-user',
+        email: 'demo@ketner.ai',
+        name: 'Демо Пользователь',
+        plan: 'free',
+        createdAt: '2026-01-01T00:00:00.000Z',
+      },
+    });
+
+    renderRoute('/pricing');
+
+    expect(screen.getByRole('heading', { level: 1, name: 'Тарифы' })).toBeInTheDocument();
+    expect(screen.getByText('Plus')).toBeInTheDocument();
+    expect(screen.getByText('Pro')).toBeInTheDocument();
+
+    // Кнопка для бесплатного плана должна быть помечена как текущий план
+    expect(screen.getByRole('button', { name: /Текущий план/i })).toBeDisabled();
+
+    // Для Plus и Pro должны быть доступны кнопки выбора тарифа
+    const upgradeButtons = screen.getAllByText(/Выбрать план/i);
+    expect(upgradeButtons.length).toBeGreaterThan(0);
+  });
+
+  it('чекаут: отображение валидационных ошибок при пустых полях', async () => {
+    renderRoute('/checkout/plus');
+
+    expect(
+      screen.getByRole('heading', { level: 1, name: 'Оформление подписки' }),
+    ).toBeInTheDocument();
+    expect(screen.getByText('Plus')).toBeInTheDocument();
+
+    const payButton = screen.getByRole('button', { name: /Оформить подписку/i });
+    fireEvent.click(payButton);
+
+    expect(screen.getByText('Введите корректный 16-значный номер карты')).toBeInTheDocument();
+    expect(screen.getByText('Введите корректный срок действия (ММ/ГГ)')).toBeInTheDocument();
+    expect(screen.getByText('Введите 3-значный CVC/CVV код')).toBeInTheDocument();
+  });
+
+  it('чекаут: успешная оплата, обновление стора и показ экрана подтверждения', async () => {
+    useAuth.setState({
+      status: 'authenticated',
+      token: 'mock-token',
+      user: {
+        id: 'demo-user',
+        email: 'demo@ketner.ai',
+        name: 'Демо Пользователь',
+        plan: 'free',
+        createdAt: '2026-01-01T00:00:00.000Z',
+      },
+    });
+
+    renderRoute('/checkout/plus');
+
+    const cardInput = screen.getByLabelText(/Номер карты/i);
+    const expiryInput = screen.getByLabelText(/Срок действия/i);
+    const cvcInput = screen.getByLabelText(/CVC/i);
+    const payButton = screen.getByRole('button', { name: /Оформить подписку/i });
+
+    // Вводим валидные данные карты с проверкой авто-маски
+    fireEvent.change(cardInput, { target: { value: '4242424242424242' } });
+    expect((cardInput as HTMLInputElement).value).toBe('4242 4242 4242 4242');
+
+    fireEvent.change(expiryInput, { target: { value: '1229' } });
+    expect((expiryInput as HTMLInputElement).value).toBe('12 / 29');
+
+    fireEvent.change(cvcInput, { target: { value: '123' } });
+    expect((cvcInput as HTMLInputElement).value).toBe('123');
+
+    fireEvent.click(payButton);
+
+    await waitFor(() => {
+      expect(screen.getByText(/Подписка успешно оформлена/i)).toBeInTheDocument();
+      expect(screen.getByText(/Перейти в чат/i)).toBeInTheDocument();
+      expect(screen.getByText(/В настройки/i)).toBeInTheDocument();
+    });
+
+    // Проверяем, что в auth-store план пользователя синхронизирован с 'plus'
+    expect(useAuth.getState().user?.plan).toBe('plus');
+    expect(useBilling.getState().subscription?.plan).toBe('plus');
+  });
+
+  it('настройки: отображение платной подписки и отмена подписки', async () => {
+    useAuth.setState({
+      status: 'authenticated',
+      token: 'mock-token',
+      user: {
+        id: 'demo-user',
+        email: 'demo@ketner.ai',
+        name: 'Демо Пользователь',
+        plan: 'plus',
+        createdAt: '2026-01-01T00:00:00.000Z',
+      },
+    });
+
+    useBilling.setState({
+      subscription: {
+        userId: 'demo-user',
+        plan: 'plus',
+        status: 'active',
+        renewsAt: '2026-12-31T00:00:00.000Z',
+      },
+      plans: [],
+      loading: false,
+      error: null,
+    });
+
+    renderRoute('/settings');
+
+    expect(screen.getByText('Plus')).toBeInTheDocument();
+    const cancelButton = screen.getByRole('button', { name: /Отменить подписку/i });
+    expect(cancelButton).toBeInTheDocument();
+
+    fireEvent.click(cancelButton);
+
+    await waitFor(() => {
+      // План пользователя должен стать 'free'
+      expect(useAuth.getState().user?.plan).toBe('free');
+      expect(useBilling.getState().subscription?.status).toBe('canceled');
+    });
+  });
+});

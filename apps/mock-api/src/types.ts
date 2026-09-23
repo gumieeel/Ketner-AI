@@ -7,6 +7,23 @@
 
 export type PlanId = 'free' | 'plus' | 'pro';
 
+export type SubscriptionStatus = 'active' | 'trialing' | 'past_due' | 'canceled';
+
+export interface Subscription {
+  userId: string;
+  plan: PlanId;
+  status: SubscriptionStatus;
+  renewsAt: string | null;
+}
+
+export interface PlanItem {
+  id: PlanId;
+  nameKey: string;
+  priceMonthly: number;
+  popular?: boolean;
+  bullets: Record<Language, readonly string[]>;
+}
+
 export interface User {
   id: string;
   email: string;

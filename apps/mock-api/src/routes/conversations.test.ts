@@ -93,7 +93,7 @@ test('каталог моделей и описание контракта от�
       (endpoint) => endpoint.path === '/api/billing/checkout',
     );
     assert.ok(billing, 'биллинг описан в контракте');
-    assert.equal(billing.status, 'planned');
+    assert.equal(billing.status, 'ready');
   } finally {
     await server.close();
   }

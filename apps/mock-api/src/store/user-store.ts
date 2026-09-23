@@ -19,6 +19,7 @@ export interface UserStore {
   findByEmail(email: string): User | null;
   create(email: string, password: string, name?: string): User;
   verifyPassword(email: string, password: string): User | null;
+  updatePlan(id: string, plan: PlanId): User | null;
 }
 
 interface Snapshot {
@@ -146,6 +147,16 @@ export function createUserStore(file: string): UserStore {
       }
 
       return toPublicUser(stored);
+    },
+
+    updatePlan(id: string, plan: PlanId) {
+      const user = snapshot.users.find((candidate) => candidate.id === id);
+      if (!user) {
+        return null;
+      }
+      user.plan = plan;
+      persist();
+      return toPublicUser(user);
     },
   };
 }

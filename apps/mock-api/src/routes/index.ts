@@ -3,9 +3,14 @@ import { config } from '../config.js';
 import type { AiConfig } from '../config.js';
 import { createAuthMiddleware } from '../middleware/auth.js';
 import type { ConversationStore } from '../store/conversation-store.js';
-import { userStore as defaultUserStore } from '../store/index.js';
+import {
+  subscriptionStore as defaultSubscriptionStore,
+  userStore as defaultUserStore,
+} from '../store/index.js';
+import type { SubscriptionStore } from '../store/subscription-store.js';
 import type { UserStore } from '../store/user-store.js';
 import { createAuthRouter } from './auth.js';
+import { createBillingRouter } from './billing.js';
 import { createChatRouter } from './chat.js';
 import { createConversationsRouter } from './conversations.js';
 import { healthRouter } from './health.js';
@@ -15,6 +20,7 @@ import { createMetaRouter } from './meta.js';
 export interface ApiDeps {
   store: ConversationStore;
   userStore?: UserStore;
+  subscriptionStore?: SubscriptionStore;
   ai: AiConfig;
   userId: string;
 }
@@ -63,12 +69,24 @@ export const API_ENDPOINTS = [
   },
   { method: 'POST', path: '/api/auth/login', status: 'ready', description: 'Вход (заглушка)' },
   { method: 'GET', path: '/api/auth/me', status: 'ready', description: 'Текущий пользователь' },
-  { method: 'GET', path: '/api/plans', status: 'planned', description: 'Каталог тарифов' },
+  { method: 'GET', path: '/api/plans', status: 'ready', description: 'Каталог тарифов' },
+  {
+    method: 'GET',
+    path: '/api/billing/subscription',
+    status: 'ready',
+    description: 'Текущая подписка пользователя',
+  },
   {
     method: 'POST',
     path: '/api/billing/checkout',
-    status: 'planned',
+    status: 'ready',
     description: 'Оформление подписки (заглушка)',
+  },
+  {
+    method: 'POST',
+    path: '/api/billing/cancel',
+    status: 'ready',
+    description: 'Отмена подписки',
   },
 ] as const;
 
@@ -89,6 +107,7 @@ export function describeService() {
 export function createApiRouter(deps: ApiDeps): Router {
   const router = Router();
   const activeUserStore = deps.userStore ?? defaultUserStore;
+  const activeSubscriptionStore = deps.subscriptionStore ?? defaultSubscriptionStore;
 
   router.use(createAuthMiddleware(activeUserStore));
 
@@ -99,6 +118,13 @@ export function createApiRouter(deps: ApiDeps): Router {
   router.use(healthRouter);
   router.use(createMetaRouter());
   router.use('/auth', createAuthRouter(activeUserStore));
+  router.use(
+    createBillingRouter({
+      subscriptionStore: activeSubscriptionStore,
+      userStore: activeUserStore,
+      defaultUserId: deps.userId,
+    }),
+  );
   router.use(createConversationsRouter(deps.store, deps.userId));
   router.use('/chat', createChatRouter(deps));
 

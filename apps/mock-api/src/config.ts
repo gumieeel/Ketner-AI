@@ -49,6 +49,10 @@ export const config = {
   /** Хранилище пользователей: файл переживает перезапуск mock-API. */
   userStoreFile:
     process.env.USER_STORE_FILE ?? fileURLToPath(new URL('../data/users.json', import.meta.url)),
+  /** Хранилище подписок: файл переживает перезапуск mock-API. */
+  subscriptionStoreFile:
+    process.env.SUBSCRIPTION_STORE_FILE ??
+    fileURLToPath(new URL('../data/subscriptions.json', import.meta.url)),
 
   ai: {
     thinkingMs: [

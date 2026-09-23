@@ -6,6 +6,7 @@ import { createApp } from '../app.js';
 import type { AiConfig } from '../config.js';
 import { DEFAULT_MODEL_ID } from '../ai/models.js';
 import { createConversationStore } from '../store/conversation-store.js';
+import { createSubscriptionStore } from '../store/subscription-store.js';
 import { createUserStore } from '../store/user-store.js';
 import type { Conversation, Message } from '../types.js';
 
@@ -27,9 +28,11 @@ export async function startTestServer(ai: Partial<AiConfig> = {}): Promise<TestS
   const tempDir = mkdtempSync(join(tmpdir(), 'ketner-mock-api-'));
   const storeFile = join(tempDir, 'store.json');
   const userStoreFile = join(tempDir, 'users.json');
+  const subscriptionStoreFile = join(tempDir, 'subscriptions.json');
   const app = createApp({
     store: createConversationStore(storeFile),
     userStore: createUserStore(userStoreFile),
+    subscriptionStore: createSubscriptionStore(subscriptionStoreFile),
     ai: { ...FAST_AI, ...ai },
   });
   const server = app.listen(0);

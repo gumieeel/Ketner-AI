@@ -232,6 +232,74 @@ export function installFakeApi(options: FakeApiOptions = {}): FakeApi {
         });
       }
 
+      if (url === '/api/plans') {
+        return json({
+          plans: [
+            {
+              id: 'free',
+              nameKey: 'pricing.free',
+              priceMonthly: 0,
+              bullets: { ru: ['10 сообщений в день'], en: ['10 messages per day'] },
+            },
+            {
+              id: 'plus',
+              nameKey: 'pricing.plus',
+              priceMonthly: 20,
+              popular: true,
+              bullets: { ru: ['Безлимит сообщений'], en: ['Unlimited messages'] },
+            },
+            {
+              id: 'pro',
+              nameKey: 'pricing.pro',
+              priceMonthly: 40,
+              bullets: { ru: ['Всё из Plus'], en: ['Everything in Plus'] },
+            },
+          ],
+        });
+      }
+
+      if (url === '/api/billing/subscription' && method === 'GET') {
+        return json({
+          subscription: {
+            userId: 'demo-user',
+            plan: 'free',
+            status: 'active',
+            renewsAt: null,
+          },
+        });
+      }
+
+      if (url === '/api/billing/checkout' && method === 'POST') {
+        const planId = (body.planId as string) || 'plus';
+        return json({
+          subscription: {
+            userId: 'demo-user',
+            plan: planId,
+            status: 'active',
+            renewsAt: new Date(Date.now() + 86400000 * 30).toISOString(),
+          },
+          user: {
+            id: 'demo-user',
+            plan: planId,
+          },
+        });
+      }
+
+      if (url === '/api/billing/cancel' && method === 'POST') {
+        return json({
+          subscription: {
+            userId: 'demo-user',
+            plan: 'free',
+            status: 'canceled',
+            renewsAt: null,
+          },
+          user: {
+            id: 'demo-user',
+            plan: 'free',
+          },
+        });
+      }
+
       if (url === '/api/conversations' && method === 'GET') {
         const list: ConversationSummary[] = [...conversations.values()].map(
           ({ conversation, messages }) => ({

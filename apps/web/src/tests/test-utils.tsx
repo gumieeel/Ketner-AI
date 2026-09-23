@@ -2,6 +2,7 @@ import { render } from '@testing-library/react';
 import { RouterProvider, createMemoryRouter } from 'react-router-dom';
 import { ThemeSync } from '@/app/theme-sync';
 import { useAuth } from '@/features/auth/auth-store';
+import { useBilling } from '@/features/billing/billing-store';
 import { useChat } from '@/features/chat/chat-store';
 import { DEFAULT_MODEL_ID, usePreferences } from '@/features/preferences/preferences-store';
 import { routes } from '@/router/routes';
@@ -52,4 +53,13 @@ export function resetAuth(): void {
     error: null,
   });
   window.localStorage.clear();
+}
+
+/** Сбрасывает состояние биллинга к исходному. */
+export function resetBilling(): void {
+  useBilling.setState({
+    subscription: null,
+    loading: false,
+    error: null,
+  });
 }
