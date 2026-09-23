@@ -20,7 +20,7 @@ export const en: Record<TranslationKey, string> = {
   'nav.skipToContent': 'Skip to main content',
 
   'landing.title': 'Ketner AI',
-  'landing.subtitle': 'Clickable prototype of an AI chat product',
+  'landing.subtitle': 'Intelligent conversational assistant',
   'landing.cta': 'Start chatting',
   'landing.mockBadge': 'Demo version',
   'landing.aboutTitle': 'What it is',

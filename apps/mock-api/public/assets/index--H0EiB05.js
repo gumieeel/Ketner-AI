@@ -18136,7 +18136,7 @@ var qa = {
     'nav.emptyHint': `Начните новый чат — он появится здесь.`,
     'nav.skipToContent': `Перейти к основному содержимому`,
     'landing.title': `Ketner AI`,
-    'landing.subtitle': `Кликабельный прототип чата с искусственным интеллектом`,
+    'landing.subtitle': `Интеллектуальный диалоговый ассистент`,
     'landing.cta': `Начать чат`,
     'landing.mockBadge': `Демонстрационная версия`,
     'landing.aboutTitle': `Что это`,
@@ -18292,7 +18292,7 @@ var qa = {
     'nav.emptyHint': `Start a new chat — it will show up here.`,
     'nav.skipToContent': `Skip to main content`,
     'landing.title': `Ketner AI`,
-    'landing.subtitle': `Clickable prototype of an AI chat product`,
+    'landing.subtitle': `Intelligent conversational assistant`,
     'landing.cta': `Start chatting`,
     'landing.mockBadge': `Demo version`,
     'landing.aboutTitle': `What it is`,
@@ -19877,7 +19877,7 @@ function ps({ value: e, label: t, size: n = `md`, className: r }) {
     })
   );
 }
-var ms = (0, _.lazy)(() => S(() => import(`./markdown-D57nllrM.js`), []));
+var ms = (0, _.lazy)(() => S(() => import(`./markdown-CpCXJkxD.js`), []));
 function hs({ message: e, canRegenerate: t }) {
   let { t: n } = B(),
     r = V((e) => e.regenerate),
@@ -20606,76 +20606,38 @@ function Gs() {
       });
 }
 function Ks() {
-  let { t: e } = B(),
-    t = [
-      { title: e(`landing.feature1Title`), text: e(`landing.feature1Text`) },
-      { title: e(`landing.feature2Title`), text: e(`landing.feature2Text`) },
-      { title: e(`landing.feature3Title`), text: e(`landing.feature3Text`) },
-    ];
+  let { t: e } = B();
   return (0, z.jsxs)(`div`, {
-    className: `mx-auto flex w-full max-w-5xl flex-1 flex-col gap-16 px-4 py-16 md:px-8`,
+    className: `mx-auto flex w-full max-w-3xl flex-1 flex-col items-center justify-center gap-6 px-4 py-16 text-center`,
     children: [
-      (0, z.jsxs)(`section`, {
-        className: `flex flex-col items-center gap-5 text-center`,
+      (0, z.jsx)(`img`, {
+        src: `/logo-mark.png`,
+        alt: `Ketner AI`,
+        className: `size-24 object-contain drop-shadow-md md:size-28`,
+      }),
+      (0, z.jsxs)(`div`, {
+        className: `flex flex-col items-center gap-2`,
         children: [
-          (0, z.jsx)(`img`, {
-            src: `/logo-mark.png`,
-            alt: `Ketner AI`,
-            className: `size-24 object-contain drop-shadow-md md:size-28`,
-          }),
-          (0, z.jsx)(jo, { tone: `brand`, children: e(`landing.mockBadge`) }),
           (0, z.jsx)(`h1`, {
-            className: `text-4xl font-semibold tracking-tight md:text-5xl`,
+            className: `text-4xl font-bold tracking-tight md:text-5xl`,
             children: e(`landing.title`),
           }),
           (0, z.jsx)(`p`, {
-            className: `max-w-2xl text-lg text-zinc-600 dark:text-zinc-300`,
+            className: `max-w-md text-lg text-zinc-600 dark:text-zinc-400`,
             children: e(`landing.subtitle`),
-          }),
-          (0, z.jsxs)(`div`, {
-            className: `flex flex-wrap items-center justify-center gap-3`,
-            children: [
-              (0, z.jsx)(Hi, {
-                to: `/chat`,
-                children: (0, z.jsx)(W, { size: `lg`, children: e(`landing.cta`) }),
-              }),
-              (0, z.jsx)(Hi, {
-                to: `/login`,
-                children: (0, z.jsx)(W, {
-                  size: `lg`,
-                  variant: `outline`,
-                  children: e(`nav.login`),
-                }),
-              }),
-            ],
           }),
         ],
       }),
-      (0, z.jsxs)(`section`, {
-        className: `flex flex-col gap-6`,
+      (0, z.jsxs)(`div`, {
+        className: `flex flex-wrap items-center justify-center gap-3 pt-2`,
         children: [
-          (0, z.jsx)(`h2`, {
-            className: `text-2xl font-semibold tracking-tight`,
-            children: e(`landing.aboutTitle`),
+          (0, z.jsx)(Hi, {
+            to: `/chat`,
+            children: (0, z.jsx)(W, { size: `lg`, children: e(`landing.cta`) }),
           }),
-          (0, z.jsx)(`p`, {
-            className: `max-w-3xl text-base leading-relaxed text-zinc-600 dark:text-zinc-300`,
-            children: e(`landing.aboutText`),
-          }),
-          (0, z.jsx)(`div`, {
-            className: `grid gap-4 md:grid-cols-3`,
-            children: t.map((e) =>
-              (0, z.jsxs)(
-                Cs,
-                {
-                  children: [
-                    (0, z.jsx)(ws, { children: e.title }),
-                    (0, z.jsx)(Ts, { className: `mt-2`, children: e.text }),
-                  ],
-                },
-                e.title,
-              ),
-            ),
+          (0, z.jsx)(Hi, {
+            to: `/login`,
+            children: (0, z.jsx)(W, { size: `lg`, variant: `outline`, children: e(`nav.login`) }),
           }),
         ],
       }),

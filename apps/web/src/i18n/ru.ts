@@ -18,7 +18,7 @@ export const ru = {
   'nav.skipToContent': 'Перейти к основному содержимому',
 
   'landing.title': 'Ketner AI',
-  'landing.subtitle': 'Кликабельный прототип чата с искусственным интеллектом',
+  'landing.subtitle': 'Интеллектуальный диалоговый ассистент',
   'landing.cta': 'Начать чат',
   'landing.mockBadge': 'Демонстрационная версия',
   'landing.aboutTitle': 'Что это',
