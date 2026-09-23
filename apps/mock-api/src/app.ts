@@ -48,11 +48,30 @@ export function createApp(overrides: Partial<AppDeps> = {}): Express {
   app.use(cors({ origin: config.corsOrigin }));
   app.use(express.json({ limit: '1mb' }));
 
-  // Если веб-интерфейс собран (в продакшене или на Render), отдаём его статику:
+  // Поиск собранного веб-интерфейса во всех возможных путях (монорепо, Render, Docker):
   const currentDir = path.dirname(fileURLToPath(import.meta.url));
-  const webDistPath = path.resolve(currentDir, '../../web/dist');
-  const indexHtmlPath = path.join(webDistPath, 'index.html');
-  const hasWebDist = fs.existsSync(indexHtmlPath);
+  const candidateDirs = [
+    path.resolve(currentDir, '../../web/dist'),
+    path.resolve(currentDir, '../public'),
+    path.resolve(currentDir, 'public'),
+    path.resolve(process.cwd(), 'apps/web/dist'),
+    path.resolve(process.cwd(), '../web/dist'),
+    path.resolve(process.cwd(), 'public'),
+  ];
+
+  let webDistPath = '';
+  let indexHtmlPath = '';
+  let hasWebDist = false;
+
+  for (const dir of candidateDirs) {
+    const candidateHtml = path.join(dir, 'index.html');
+    if (fs.existsSync(candidateHtml)) {
+      webDistPath = dir;
+      indexHtmlPath = candidateHtml;
+      hasWebDist = true;
+      break;
+    }
+  }
 
   if (hasWebDist) {
     app.use(express.static(webDistPath, { index: false }));

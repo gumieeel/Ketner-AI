@@ -4,7 +4,6 @@ node_modules/
 .pnp.js
 
 # build output
-dist/
 dist-ssr/
 build/
 out/
