@@ -163,3 +163,44 @@ test('auth: привязка диалогов к авторизованному 
   const guestList = await readJson<{ conversations: unknown[] }>(guestListRes);
   assert.equal(guestList.conversations.length, 0);
 });
+
+test('auth: Better Auth нативные эндпоинты регистрации и сессии', async (t) => {
+  const server = await startTestServer();
+  t.after(() => server.close());
+
+  // 1. Регистрация через Better Auth /api/auth/sign-up/email
+  const signUpRes = await fetch(`${server.baseUrl}/api/auth/sign-up/email`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Origin: server.baseUrl,
+    },
+    body: JSON.stringify({
+      email: 'better-auth-user@example.com',
+      password: 'password123',
+      name: 'Better Auth User',
+    }),
+  });
+  assert.equal(signUpRes.status, 200);
+  const signUpData = await readJson<{ user: { email: string; name: string; plan: string } }>(
+    signUpRes,
+  );
+  assert.equal(signUpData.user.email, 'better-auth-user@example.com');
+  assert.equal(signUpData.user.name, 'Better Auth User');
+  assert.equal(signUpData.user.plan, 'free');
+
+  // Cookie better-auth.session_token возвращается в заголовках
+  const setCookie = signUpRes.headers.get('set-cookie');
+  assert.ok(setCookie && setCookie.includes('better-auth.session_token'));
+
+  // 2. Получение сессии через /api/auth/get-session с cookie
+  const sessionRes = await fetch(`${server.baseUrl}/api/auth/get-session`, {
+    headers: {
+      Origin: server.baseUrl,
+      Cookie: setCookie,
+    },
+  });
+  assert.equal(sessionRes.status, 200);
+  const sessionData = await readJson<{ user: { email: string } }>(sessionRes);
+  assert.equal(sessionData.user.email, 'better-auth-user@example.com');
+});

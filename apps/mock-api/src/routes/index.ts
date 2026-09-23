@@ -16,6 +16,8 @@ import { createConversationsRouter } from './conversations.js';
 import { healthRouter } from './health.js';
 import { createMetaRouter } from './meta.js';
 
+import type { defaultBetterAuth } from '../auth/better-auth.js';
+
 /** Зависимости роутеров: подменяются в тестах. */
 export interface ApiDeps {
   store: ConversationStore;
@@ -23,6 +25,7 @@ export interface ApiDeps {
   subscriptionStore?: SubscriptionStore;
   ai: AiConfig;
   userId: string;
+  betterAuth?: typeof defaultBetterAuth;
 }
 
 /**
@@ -109,7 +112,7 @@ export function createApiRouter(deps: ApiDeps): Router {
   const activeUserStore = deps.userStore ?? defaultUserStore;
   const activeSubscriptionStore = deps.subscriptionStore ?? defaultSubscriptionStore;
 
-  router.use(createAuthMiddleware(activeUserStore));
+  router.use(createAuthMiddleware(activeUserStore, deps.betterAuth));
 
   router.get('/', (_request, response) => {
     response.json(describeService());
@@ -117,7 +120,7 @@ export function createApiRouter(deps: ApiDeps): Router {
 
   router.use(healthRouter);
   router.use(createMetaRouter());
-  router.use('/auth', createAuthRouter(activeUserStore));
+  router.use('/auth', createAuthRouter(activeUserStore, deps.betterAuth));
   router.use(
     createBillingRouter({
       subscriptionStore: activeSubscriptionStore,

@@ -12,6 +12,7 @@
     "test": "tsx --test src/health.test.ts src/ai/answers.test.ts src/store/conversation-store.test.ts src/routes/conversations.test.ts src/routes/chat.test.ts src/routes/auth.test.ts src/routes/billing.test.ts"
   },
   "dependencies": {
+    "better-auth": "^1.7.5",
     "cors": "^2.8.6",
     "express": "^5.2.1"
   },

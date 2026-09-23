@@ -89,13 +89,13 @@ export function createApiRouter(deps) {
     const router = Router();
     const activeUserStore = deps.userStore ?? defaultUserStore;
     const activeSubscriptionStore = deps.subscriptionStore ?? defaultSubscriptionStore;
-    router.use(createAuthMiddleware(activeUserStore));
+    router.use(createAuthMiddleware(activeUserStore, deps.betterAuth));
     router.get('/', (_request, response) => {
         response.json(describeService());
     });
     router.use(healthRouter);
     router.use(createMetaRouter());
-    router.use('/auth', createAuthRouter(activeUserStore));
+    router.use('/auth', createAuthRouter(activeUserStore, deps.betterAuth));
     router.use(createBillingRouter({
         subscriptionStore: activeSubscriptionStore,
         userStore: activeUserStore,

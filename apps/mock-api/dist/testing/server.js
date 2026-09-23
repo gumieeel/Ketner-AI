@@ -1,6 +1,7 @@
 import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { createBetterAuth, initAuthDatabase } from '../auth/better-auth.js';
 import { createApp } from '../app.js';
 import { DEFAULT_MODEL_ID } from '../ai/models.js';
 import { createConversationStore } from '../store/conversation-store.js';
@@ -19,11 +20,15 @@ export async function startTestServer(ai = {}) {
     const storeFile = join(tempDir, 'store.json');
     const userStoreFile = join(tempDir, 'users.json');
     const subscriptionStoreFile = join(tempDir, 'subscriptions.json');
+    const authDbFile = join(tempDir, 'auth.sqlite');
+    const { auth: testBetterAuth, db: testAuthDb } = createBetterAuth({ dbPath: authDbFile });
+    await initAuthDatabase(testBetterAuth);
     const app = createApp({
         store: createConversationStore(storeFile),
         userStore: createUserStore(userStoreFile),
         subscriptionStore: createSubscriptionStore(subscriptionStoreFile),
         ai: { ...FAST_AI, ...ai },
+        betterAuth: testBetterAuth,
     });
     const server = app.listen(0);
     await new Promise((resolve) => server.once('listening', resolve));
@@ -31,6 +36,12 @@ export async function startTestServer(ai = {}) {
     return {
         baseUrl: `http://127.0.0.1:${address.port}`,
         close: () => new Promise((resolve, reject) => {
+            try {
+                testAuthDb.close();
+            }
+            catch {
+                // ignore
+            }
             server.close((error) => (error ? reject(error) : resolve()));
         }),
     };

@@ -1,11 +1,12 @@
 import { Router } from 'express';
+import { defaultBetterAuth } from '../auth/better-auth.js';
 import { createMockToken } from '../auth/jwt.js';
 import { sendError } from '../middleware/errors.js';
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const MIN_PASSWORD_LENGTH = 8;
-export function createAuthRouter(userStore) {
+export function createAuthRouter(userStore, betterAuthInstance = defaultBetterAuth) {
     const router = Router();
-    router.post('/signup', (request, response) => {
+    router.post('/signup', async (request, response) => {
         const rawEmail = request.body?.email;
         const rawPassword = request.body?.password;
         const rawName = request.body?.name;
@@ -26,9 +27,22 @@ export function createAuthRouter(userStore) {
         const name = typeof rawName === 'string' ? rawName.trim() : undefined;
         const user = userStore.create(email, rawPassword, name);
         const { token, expiresAt } = createMockToken(user);
+        // Синхронизируем пользователя с базой данных Better Auth
+        try {
+            await betterAuthInstance.api.signUpEmail({
+                body: {
+                    email,
+                    password: rawPassword,
+                    name: user.name,
+                },
+            });
+        }
+        catch {
+            // Игнорируем, если пользователь уже присутствует в базе Better Auth
+        }
         response.status(201).json({ user, token, expiresAt });
     });
-    router.post('/login', (request, response) => {
+    router.post('/login', async (request, response) => {
         const rawEmail = request.body?.email;
         const rawPassword = request.body?.password;
         if (typeof rawEmail !== 'string' || typeof rawPassword !== 'string') {
@@ -39,6 +53,18 @@ export function createAuthRouter(userStore) {
         if (!user) {
             sendError(response, 401, 'invalid_credentials', 'Неверный адрес почты или пароль');
             return;
+        }
+        // Синхронизируем сессию с Better Auth при необходимости
+        try {
+            await betterAuthInstance.api.signInEmail({
+                body: {
+                    email: rawEmail,
+                    password: rawPassword,
+                },
+            });
+        }
+        catch {
+            // Fallback: авторизация по локальному хранилищу
         }
         const { token, expiresAt } = createMockToken(user);
         response.json({ user, token, expiresAt });
@@ -53,7 +79,7 @@ export function createAuthRouter(userStore) {
     router.post('/logout', (_request, response) => {
         response.status(204).end();
     });
-    router.get('/oauth/:provider', (request, response) => {
+    router.get('/oauth/:provider', async (request, response) => {
         const provider = request.params.provider?.toLowerCase();
         if (provider !== 'google' && provider !== 'github') {
             sendError(response, 400, 'invalid_provider', 'Поддерживаются только google и github');
@@ -63,6 +89,18 @@ export function createAuthRouter(userStore) {
         let user = userStore.findByEmail(providerEmail);
         if (!user) {
             user = userStore.create(providerEmail, 'oauth-mock-secret-password-12345', provider === 'google' ? 'Google User' : 'GitHub User');
+            try {
+                await betterAuthInstance.api.signUpEmail({
+                    body: {
+                        email: providerEmail,
+                        password: 'oauth-mock-secret-password-12345',
+                        name: user.name,
+                    },
+                });
+            }
+            catch {
+                // Уже создан
+            }
         }
         const { token, expiresAt } = createMockToken(user);
         response.json({ user, token, expiresAt, provider });

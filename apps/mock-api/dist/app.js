@@ -3,6 +3,8 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import cors from 'cors';
 import express, {} from 'express';
+import { toNodeHandler } from 'better-auth/node';
+import { defaultBetterAuth } from './auth/better-auth.js';
 import { config } from './config.js';
 import { errorHandler, notFoundHandler } from './middleware/errors.js';
 import { createApiRouter, describeService } from './routes/index.js';
@@ -13,6 +15,7 @@ const defaultDeps = {
     subscriptionStore,
     ai: config.ai,
     userId: config.demoUserId,
+    betterAuth: defaultBetterAuth,
 };
 /**
  * Собирает приложение Express.
@@ -22,9 +25,25 @@ const defaultDeps = {
  */
 export function createApp(overrides = {}) {
     const deps = { ...defaultDeps, ...overrides };
+    const betterAuthInstance = deps.betterAuth ?? defaultBetterAuth;
     const app = express();
     app.disable('x-powered-by');
-    app.use(cors({ origin: config.corsOrigin }));
+    app.use(cors({ origin: config.corsOrigin, credentials: true }));
+    // Обработчик Better Auth для нативных эндпоинтов (sign-up, sign-in, get-session и т.д.):
+    app.use((request, response, next) => {
+        if (request.path === '/api/auth/signup' ||
+            request.path === '/api/auth/login' ||
+            request.path === '/api/auth/logout' ||
+            request.path === '/api/auth/me' ||
+            request.path === '/api/auth/demo' ||
+            request.path.startsWith('/api/auth/oauth')) {
+            return next();
+        }
+        if (request.path.startsWith('/api/auth')) {
+            return toNodeHandler(betterAuthInstance)(request, response);
+        }
+        next();
+    });
     app.use(express.json({ limit: '1mb' }));
     // Поиск собранного веб-интерфейса во всех возможных путях (монорепо, Render, Docker):
     const currentDir = path.dirname(fileURLToPath(import.meta.url));

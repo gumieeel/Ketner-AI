@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { storage } from '@/lib/storage';
+import { authClient } from './auth-client';
 import {
   fetchMe,
   login as apiLogin,
@@ -60,6 +61,33 @@ export const useAuth = create<AuthState>((set, get) => ({
   clearError: () => set({ error: null }),
 
   restoreSession: async () => {
+    // 1. Сначала пробуем восстановить сессию через Better Auth клиент
+    try {
+      set({ status: 'loading' });
+      const sessionResult = await authClient.getSession();
+      if (sessionResult?.data?.user) {
+        const bu = sessionResult.data.user;
+        const user: User = {
+          id: bu.id,
+          email: bu.email,
+          name: bu.name,
+          plan:
+            (bu as Record<string, unknown>).plan === 'pro'
+              ? 'pro'
+              : (bu as Record<string, unknown>).plan === 'plus'
+                ? 'plus'
+                : 'free',
+          createdAt: bu.createdAt ? new Date(bu.createdAt).toISOString() : new Date().toISOString(),
+        };
+        const token = sessionResult.data.session?.token || get().token || 'better-auth-session';
+        saveSession({ user, token, expiresAt: '' });
+        set({ user, token, status: 'authenticated', error: null });
+        return;
+      }
+    } catch {
+      // Игнорируем и пробуем fallback по токену
+    }
+
     const { token } = get();
     if (!token) {
       set({ status: 'unauthenticated', user: null });
@@ -67,7 +95,6 @@ export const useAuth = create<AuthState>((set, get) => ({
     }
 
     try {
-      set({ status: 'loading' });
       const user = await fetchMe(token);
       saveSession({ user, token, expiresAt: '' });
       set({ user, status: 'authenticated', error: null });
@@ -80,26 +107,101 @@ export const useAuth = create<AuthState>((set, get) => ({
   login: async (payload: LoginPayload) => {
     set({ status: 'loading', error: null });
     try {
-      const session = await apiLogin(payload);
-      saveSession(session);
-      set({ user: session.user, token: session.token, status: 'authenticated', error: null });
-    } catch (error) {
-      const message = error instanceof Error ? error.message : 'Ошибка входа';
-      set({ status: 'unauthenticated', error: message });
-      throw error;
+      // Пробуем нативный вход через Better Auth
+      const res = await authClient.signIn.email({
+        email: payload.email,
+        password: payload.password,
+      });
+
+      if (res?.data?.user) {
+        const bu = res.data.user;
+        const user: User = {
+          id: bu.id,
+          email: bu.email,
+          name: bu.name,
+          plan:
+            (bu as Record<string, unknown>).plan === 'pro'
+              ? 'pro'
+              : (bu as Record<string, unknown>).plan === 'plus'
+                ? 'plus'
+                : 'free',
+          createdAt: bu.createdAt ? new Date(bu.createdAt).toISOString() : new Date().toISOString(),
+        };
+        const token =
+          ((res.data as Record<string, unknown>).token as string) || 'better-auth-session';
+        saveSession({ user, token, expiresAt: '' });
+        set({ user, token, status: 'authenticated', error: null });
+        return;
+      }
+
+      if (res?.error) {
+        throw new Error(res.error.message || 'Неверный адрес почты или пароль');
+      }
+    } catch (betterAuthError) {
+      // Fallback на REST API (для fake-api в тестах и обратной совместимости)
+      try {
+        const session = await apiLogin(payload);
+        saveSession(session);
+        set({ user: session.user, token: session.token, status: 'authenticated', error: null });
+        return;
+      } catch {
+        const message =
+          betterAuthError instanceof Error
+            ? betterAuthError.message
+            : 'Неверный адрес почты или пароль';
+        set({ status: 'unauthenticated', error: message });
+        throw betterAuthError;
+      }
     }
   },
 
   signup: async (payload: SignupPayload) => {
     set({ status: 'loading', error: null });
     try {
-      const session = await apiSignup(payload);
-      saveSession(session);
-      set({ user: session.user, token: session.token, status: 'authenticated', error: null });
-    } catch (error) {
-      const message = error instanceof Error ? error.message : 'Ошибка регистрации';
-      set({ status: 'unauthenticated', error: message });
-      throw error;
+      // Пробуем нативную регистрацию через Better Auth
+      const res = await authClient.signUp.email({
+        email: payload.email,
+        password: payload.password,
+        name: payload.name || payload.email.split('@')[0],
+      });
+
+      if (res?.data?.user) {
+        const bu = res.data.user;
+        const user: User = {
+          id: bu.id,
+          email: bu.email,
+          name: bu.name,
+          plan:
+            (bu as Record<string, unknown>).plan === 'pro'
+              ? 'pro'
+              : (bu as Record<string, unknown>).plan === 'plus'
+                ? 'plus'
+                : 'free',
+          createdAt: bu.createdAt ? new Date(bu.createdAt).toISOString() : new Date().toISOString(),
+        };
+        const token =
+          ((res.data as Record<string, unknown>).token as string) || 'better-auth-session';
+        saveSession({ user, token, expiresAt: '' });
+        set({ user, token, status: 'authenticated', error: null });
+        return;
+      }
+
+      if (res?.error) {
+        throw new Error(res.error.message || 'Ошибка регистрации');
+      }
+    } catch (betterAuthError) {
+      // Fallback на REST API (для fake-api в тестах и обратной совместимости)
+      try {
+        const session = await apiSignup(payload);
+        saveSession(session);
+        set({ user: session.user, token: session.token, status: 'authenticated', error: null });
+        return;
+      } catch {
+        const message =
+          betterAuthError instanceof Error ? betterAuthError.message : 'Ошибка регистрации';
+        set({ status: 'unauthenticated', error: message });
+        throw betterAuthError;
+      }
     }
   },
 
@@ -118,6 +220,11 @@ export const useAuth = create<AuthState>((set, get) => ({
 
   logout: async () => {
     const { token } = get();
+    try {
+      await authClient.signOut();
+    } catch {
+      // Игнорируем сетевые ошибки при выходе
+    }
     saveSession(null);
     set({ user: null, token: null, status: 'unauthenticated', error: null });
     if (token) {

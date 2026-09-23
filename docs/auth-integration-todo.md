@@ -2,26 +2,33 @@
 
 ## Что есть сейчас (Этап 3 — завершён)
 
-- **Mock-API (`apps/mock-api`)**:
-  - Хранилище пользователей `UserStore` с хешированием паролей (PBKDF2-SHA256) и файловой персистентностью.
-  - Начальный демо-пользователь: `demo@ketner.ai` / `password123`.
-  - Генерация и проверка mock-JWT (`createMockToken`, `verifyMockToken`).
-  - Реализованные эндпоинты: `POST /api/auth/signup`, `POST /api/auth/login`, `GET /api/auth/me`, `POST /api/auth/logout`, `GET /api/auth/oauth/:provider`, `POST /api/auth/demo`.
-  - Middleware аутентификации `createAuthMiddleware`, привязка диалогов к `req.userId`.
+- **Better Auth & Mock-API (`apps/mock-api`)**:
+  - Интеграция [Better Auth](https://www.better-auth.com/) (`better-auth`) на базе встроенной SQLite Node 24 (`node:sqlite`, `DatabaseSync`).
+  - Файл базы данных: `apps/mock-api/data/auth.sqlite` с автоматическими миграциями таблиц (`user`, `session`, `account`, `verification`) и сидом демо-пользователя `demo@ketner.ai` / `password123`.
+  - Нативные эндпоинты Better Auth смонтированы на `/api/auth/*` (`/api/auth/sign-up/email`, `/api/auth/sign-in/email`, `/api/auth/get-session`, `/api/auth/sign-out`).
+  - Хранилище пользователей `UserStore` с хешированием паролей (PBKDF2-SHA256) и файловой персистентностью в полной совместимости с Better Auth.
+  - Обратная совместимость для всех легаси эндпоинтов: `POST /api/auth/signup`, `POST /api/auth/login`, `GET /api/auth/me`, `POST /api/auth/logout`, `GET /api/auth/oauth/:provider`, `POST /api/auth/demo`.
+  - Middleware аутентификации `createAuthMiddleware`: бесшовная проверка сессии Better Auth (через cookies/headers) с прозрачным фоллбэком на Bearer mock-JWT.
   - Автотесты маршрутов в `apps/mock-api/src/routes/auth.test.ts`.
 
 - **Frontend (`apps/web`)**:
-  - Zustand-стор `useAuth` с сохранением сессии в `localStorage` (`ketner.session`, `ketner.user`) и восстановлением при загрузке `restoreSession()`.
-  - Формы входа (`/login`) и регистрации (`/signup`) с клиентской валидацией (email, пароль от 8 символов, имя), серверными ошибками и быстрым демо-входом.
+  - Клиент Better Auth (`createAuthClient`) в `apps/web/src/features/auth/auth-client.ts`.
+  - Zustand-стор `useAuth` с прямой поддержкой Better Auth сессий и токенов, сохранением в `localStorage` и восстановлением при загрузке.
+  - Формы входа (`/login`) и регистрации (`/signup`) с клиентской валидацией, переключателем видимости пароля (глаз / иконка) и поддержкой нативного Better Auth.
   - Mock-OAuth кнопки (Google, GitHub) с мгновенным созданием сессии.
   - Сайдбар: отображение аватара с инициалами, имени пользователя, бейджа плана и ссылки на настройки; гостевой режим.
   - Настройки (`/settings`): отображение профиля, даты регистрации и кнопка выхода.
-  - Автоматическая передача `Authorization: Bearer <token>` во все API-запросы и SSE-стриминг чата.
+  - Автоматическая передача сессии / токена во все API-запросы и SSE-стриминг чата.
   - Тесты сценариев авторизации в `apps/web/src/tests/auth-flow.test.tsx`.
 
-## План перехода на продакшн
+## Архитектура Better Auth
 
-Целевая система — **Supabase Auth**: даёт email/пароль, OAuth (Google, GitHub) и JWT из коробки, не требуя собственного сервиса. Альтернативы: Auth0 (больше возможностей корпоративного уровня) или собственная реализация на мок-JWT, если нужно избежать внешних зависимостей.
+В качестве основной системы аутентификации используется **Better Auth**. Она предоставляет:
+
+1. Полноценное управление сессиями через cookie `better-auth.session_token`.
+2. Встроенную SQLite-базу на нативном движке Node.js 24 (`node:sqlite`).
+3. Готовые клиенты для React / TypeScript (`createAuthClient`).
+4. Поддержку расширений: двухфакторная аутентификация (2FA), социальные провайдеры (OAuth), magic links и организация команд/организаций.
 
 ## Что должно остаться неизменным
 

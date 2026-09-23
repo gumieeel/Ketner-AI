@@ -53,6 +53,12 @@ export const config = {
   subscriptionStoreFile:
     process.env.SUBSCRIPTION_STORE_FILE ??
     fileURLToPath(new URL('../data/subscriptions.json', import.meta.url)),
+  /** База данных Better Auth (SQLite). */
+  authDbFile:
+    process.env.AUTH_DB_FILE ?? fileURLToPath(new URL('../data/auth.sqlite', import.meta.url)),
+  /** Секретный ключ Better Auth для подписи сессий и кук. */
+  betterAuthSecret:
+    process.env.BETTER_AUTH_SECRET ?? 'ketner-ai-better-auth-secret-key-32chars-minimum-safe',
 
   ai: {
     thinkingMs: [

@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { GitHubIcon, GoogleIcon } from '@/components/icons';
+import { EyeIcon, EyeOffIcon, GitHubIcon, GoogleIcon } from '@/components/icons';
 import { AuthShell } from '@/components/layout/auth-shell';
 import { Button } from '@/components/ui/button';
 import { Field, Input } from '@/components/ui/input';
@@ -22,6 +22,7 @@ export function LoginPage() {
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [emailError, setEmailError] = useState<string | null>(null);
   const [passwordError, setPasswordError] = useState<string | null>(null);
   const [serverError, setServerError] = useState<string | null>(null);
@@ -124,20 +125,36 @@ export function LoginPage() {
 
         <Field id="login-password" label={t('auth.password')} error={passwordError ?? undefined}>
           {({ id, invalid, 'aria-describedby': describedBy }) => (
-            <Input
-              id={id}
-              invalid={invalid}
-              aria-describedby={describedBy}
-              type="password"
-              autoComplete="current-password"
-              placeholder="••••••••"
-              value={password}
-              onChange={(e) => {
-                setPassword(e.target.value);
-                if (passwordError) setPasswordError(null);
-              }}
-              disabled={loading}
-            />
+            <div className="relative flex items-center">
+              <Input
+                id={id}
+                invalid={invalid}
+                aria-describedby={describedBy}
+                type={showPassword ? 'text' : 'password'}
+                autoComplete="current-password"
+                placeholder="••••••••"
+                value={password}
+                className="pr-10"
+                onChange={(e) => {
+                  setPassword(e.target.value);
+                  if (passwordError) setPasswordError(null);
+                }}
+                disabled={loading}
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword(!showPassword)}
+                className="absolute right-2.5 flex size-8 items-center justify-center rounded-[6px] text-muted hover:text-text transition-colors"
+                aria-label={showPassword ? 'Скрыть' : 'Показать'}
+                tabIndex={-1}
+              >
+                {showPassword ? (
+                  <EyeOffIcon className="text-base" />
+                ) : (
+                  <EyeIcon className="text-base" />
+                )}
+              </button>
+            </div>
           )}
         </Field>
 
