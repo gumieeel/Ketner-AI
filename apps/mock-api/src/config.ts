@@ -96,6 +96,11 @@ export const config = {
   telegramBotUsername: process.env.TELEGRAM_BOT_USERNAME ?? 'KetnerAIBot',
   telegramPaymentProviderToken: process.env.TELEGRAM_PAYMENT_PROVIDER_TOKEN ?? '',
 
+  /** OpenRouter LLM провайдер. */
+  openRouterApiKey: process.env.OPENROUTER_API_KEY ?? '',
+  openRouterBaseUrl: process.env.OPENROUTER_BASE_URL ?? 'https://openrouter.ai/api/v1',
+  openRouterModel: process.env.OPENROUTER_MODEL ?? 'nex-agi/nex-n2.5-mini:free',
+
   ai: {
     thinkingMs: [
       readNumber('MOCK_AI_THINKING_MIN_MS', 350),

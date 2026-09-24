@@ -1,7 +1,9 @@
 import { Router } from 'express';
 import { ERROR_MESSAGES, pickAnswer } from '../ai/answers.js';
 import { canAccessModel, DEFAULT_MODEL_ID, resolveModel } from '../ai/models.js';
+import { streamOpenRouter } from '../ai/openrouter.js';
 import { delay, randomBetween, streamText } from '../ai/stream.js';
+import { config } from '../config.js';
 import { sendError } from '../middleware/errors.js';
 const MAX_MESSAGES = 200;
 const MAX_CONTENT_LENGTH = 8000;
@@ -132,16 +134,37 @@ export function createChatRouter({ store, userId, ai, subscriptionStore, userSto
                 response.end();
                 return;
             }
-            await streamText(pickAnswer(prompt, language, ai.random), {
-                thinkingMs: ai.thinkingMs,
-                chunkMs: ai.chunkMs,
-                random: ai.random,
-                isCancelled: () => cancelled,
-                onDelta: (delta) => {
-                    content += delta;
-                    writeEvent('delta', { content: delta });
-                },
-            });
+            let streamed = false;
+            const isTestEnv = process.env.NODE_ENV === 'test' ||
+                ai.failureRate > 0 ||
+                (ai.thinkingMs[0] === 0 && ai.thinkingMs[1] === 0 && ai.chunkMs[0] === 0 && ai.chunkMs[1] === 0);
+            // При наличии ключа OpenRouter отправляем запрос в живую нейросеть
+            if (!isTestEnv && config.openRouterApiKey) {
+                streamed = await streamOpenRouter({
+                    apiKey: config.openRouterApiKey,
+                    baseUrl: config.openRouterBaseUrl,
+                    model: config.openRouterModel,
+                    messages,
+                    isCancelled: () => cancelled,
+                    onDelta: (delta) => {
+                        content += delta;
+                        writeEvent('delta', { content: delta });
+                    },
+                });
+            }
+            // Если ключ не задан или запрос не удался — используем встроенные шаблоны
+            if (!streamed && !cancelled) {
+                await streamText(pickAnswer(prompt, language, ai.random), {
+                    thinkingMs: ai.thinkingMs,
+                    chunkMs: ai.chunkMs,
+                    random: ai.random,
+                    isCancelled: () => cancelled,
+                    onDelta: (delta) => {
+                        content += delta;
+                        writeEvent('delta', { content: delta });
+                    },
+                });
+            }
             // Остановленный на середине ответ сохраняется: после перезагрузки страницы
             // пользователь увидит тот же текст.
             const messageId = finishTurn(content, 'complete');

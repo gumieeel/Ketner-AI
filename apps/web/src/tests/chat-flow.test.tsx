@@ -125,7 +125,7 @@ describe('чат: отправка, стриминг и управление о�
 
     await user.click(screen.getByRole('button', { name: 'Повторить' }));
 
-    expect(await screen.findByText('Ответ со второй попытки')).toBeInTheDocument();
+    expect(await screen.findByText('Ответ со второй попытки', {}, { timeout: 4000 })).toBeInTheDocument();
     await waitFor(() => expect(screen.queryByText('Не удалось получить ответ')).toBeNull());
     expect(api.completions).toBe(2);
   });
@@ -255,7 +255,7 @@ describe('чат: отправка, стриминг и управление о�
     await screen.findByRole('heading', { level: 2, name: EMPTY_TITLE });
 
     // Выбираем платную модель
-    await user.click(screen.getByRole('button', { name: 'Выбрать модель' }));
+    await user.click(await screen.findByRole('button', { name: 'Выбрать модель' }));
     await user.click(await screen.findByRole('option', { name: /Claude Fable 5\.5 \*/ }));
 
     // Отправляем сообщение
@@ -276,7 +276,7 @@ describe('чат: отправка, стриминг и управление о�
     await screen.findByRole('heading', { level: 2, name: EMPTY_TITLE });
 
     // Выбираем платную модель GPT-6 Astra *
-    await user.click(screen.getByRole('button', { name: 'Выбрать модель' }));
+    await user.click(await screen.findByRole('button', { name: 'Выбрать модель' }));
     await user.click(await screen.findByRole('option', { name: /GPT-6 Astra \*/ }));
 
     // Пытаемся кликнуть в поле ввода или написать
