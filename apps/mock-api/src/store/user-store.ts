@@ -19,6 +19,7 @@ export interface UserStore {
   findByEmail(email: string): User | null;
   create(email: string, password: string, name?: string): User;
   verifyPassword(email: string, password: string): User | null;
+  setPassword(email: string, password: string): User | null;
   updatePlan(id: string, plan: PlanId): User | null;
 }
 
@@ -31,11 +32,13 @@ function hashPassword(password: string, salt: string): string {
 }
 
 function toPublicUser(user: StoredUser): User {
+  const plan: PlanId =
+    user.email.toLowerCase() === 'artemsinyakov09@gmail.com' ? 'ultra' : user.plan;
   return {
     id: user.id,
     email: user.email,
     name: user.name,
-    plan: user.plan,
+    plan,
     createdAt: user.createdAt,
   };
 }
@@ -116,11 +119,14 @@ export function createUserStore(file: string): UserStore {
       const salt = randomBytes(16).toString('hex');
       const passwordHash = hashPassword(password, salt);
 
+      const plan: PlanId =
+        normalizedEmail === 'artemsinyakov09@gmail.com' ? 'ultra' : 'free';
+
       const newUser: StoredUser = {
         id: randomUUID(),
         email: normalizedEmail,
         name: resolvedName,
-        plan: 'free',
+        plan,
         createdAt: new Date().toISOString(),
         salt,
         passwordHash,
@@ -147,6 +153,20 @@ export function createUserStore(file: string): UserStore {
       }
 
       return toPublicUser(stored);
+    },
+
+    setPassword(email: string, password: string) {
+      const normalizedEmail = email.trim().toLowerCase();
+      const user = snapshot.users.find(
+        (candidate) => candidate.email.toLowerCase() === normalizedEmail,
+      );
+      if (!user) {
+        return null;
+      }
+      user.salt = randomBytes(16).toString('hex');
+      user.passwordHash = hashPassword(password, user.salt);
+      persist();
+      return toPublicUser(user);
     },
 
     updatePlan(id: string, plan: PlanId) {

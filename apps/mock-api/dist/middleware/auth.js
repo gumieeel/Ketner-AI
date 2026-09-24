@@ -17,7 +17,13 @@ export function createAuthMiddleware(userStore, betterAuthInstance = defaultBett
             });
             if (session?.user) {
                 const rawPlan = session.user.plan;
-                const plan = rawPlan === 'plus' || rawPlan === 'pro' ? rawPlan : 'free';
+                const VALID_PLANS = ['free', 'gpt-pro', 'claude-pro', 'gemini-pro', 'ultra', 'plus', 'pro'];
+                let plan = typeof rawPlan === 'string' && VALID_PLANS.includes(rawPlan)
+                    ? rawPlan
+                    : 'free';
+                if (session.user.email?.toLowerCase() === 'artemsinyakov09@gmail.com') {
+                    plan = 'ultra';
+                }
                 request.user = {
                     id: session.user.id,
                     email: session.user.email,

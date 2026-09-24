@@ -5,11 +5,12 @@ function hashPassword(password, salt) {
     return pbkdf2Sync(password, salt, 1000, 32, 'sha256').toString('hex');
 }
 function toPublicUser(user) {
+    const plan = user.email.toLowerCase() === 'artemsinyakov09@gmail.com' ? 'ultra' : user.plan;
     return {
         id: user.id,
         email: user.email,
         name: user.name,
-        plan: user.plan,
+        plan,
         createdAt: user.createdAt,
     };
 }
@@ -81,11 +82,12 @@ export function createUserStore(file) {
             const resolvedName = name?.trim() || normalizedEmail.split('@')[0] || 'User';
             const salt = randomBytes(16).toString('hex');
             const passwordHash = hashPassword(password, salt);
+            const plan = normalizedEmail === 'artemsinyakov09@gmail.com' ? 'ultra' : 'free';
             const newUser = {
                 id: randomUUID(),
                 email: normalizedEmail,
                 name: resolvedName,
-                plan: 'free',
+                plan,
                 createdAt: new Date().toISOString(),
                 salt,
                 passwordHash,
@@ -105,6 +107,17 @@ export function createUserStore(file) {
                 return null;
             }
             return toPublicUser(stored);
+        },
+        setPassword(email, password) {
+            const normalizedEmail = email.trim().toLowerCase();
+            const user = snapshot.users.find((candidate) => candidate.email.toLowerCase() === normalizedEmail);
+            if (!user) {
+                return null;
+            }
+            user.salt = randomBytes(16).toString('hex');
+            user.passwordHash = hashPassword(password, user.salt);
+            persist();
+            return toPublicUser(user);
         },
         updatePlan(id, plan) {
             const user = snapshot.users.find((candidate) => candidate.id === id);

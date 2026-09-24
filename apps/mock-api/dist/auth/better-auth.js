@@ -133,5 +133,11 @@ export async function initAuthDatabase(authInstance) {
     catch {
         // Демо-пользователь уже существует
     }
+    try {
+        defaultAuthDb.prepare('UPDATE user SET plan = ? WHERE email = ?').run('ultra', 'artemsinyakov09@gmail.com');
+    }
+    catch {
+        // База данных может быть in-memory в тестах
+    }
 }
 export const { auth: defaultBetterAuth, db: defaultAuthDb } = createBetterAuth();
