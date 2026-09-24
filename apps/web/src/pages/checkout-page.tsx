@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
-import { Link, useParams } from 'react-router-dom';
+import { Link, useNavigate, useParams } from 'react-router-dom';
+import { useAuth } from '@/features/auth/auth-store';
 import {
   ArrowLeftIcon,
   CheckIcon,
@@ -51,10 +52,21 @@ function calculateStars(priceRub: number): number {
  */
 export function CheckoutPage() {
   const { t } = useTranslation();
+  const navigate = useNavigate();
   const { planId } = useParams<{ planId: string }>();
+  const authStatus = useAuth((state) => state.status);
+  const user = useAuth((state) => state.user);
   const plan = getPlan(planId);
   const checkout = useBilling((state) => state.checkout);
   const setSubscription = useBilling((state) => state.setSubscription);
+
+  // Редирект неавторизованных пользователей на страницу регистрации
+  useEffect(() => {
+    if (authStatus !== 'loading' && (!user || authStatus === 'unauthenticated')) {
+      const targetPlan = planId || 'gpt-pro';
+      navigate(`/signup?redirect=${encodeURIComponent(`/checkout/${targetPlan}`)}`, { replace: true });
+    }
+  }, [authStatus, user, planId, navigate]);
 
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('card');
 
@@ -163,6 +175,19 @@ export function CheckoutPage() {
       }
     };
   }, [paymentMethod, sbpInvoice, starsInvoice, success, t]);
+
+  if (authStatus === 'loading') {
+    return (
+      <div className="mx-auto flex w-full max-w-lg items-center justify-center px-4 py-20 text-muted">
+        <span className="size-5 animate-spin rounded-full border-2 border-accent border-t-transparent mr-2" />
+        <span>Загрузка...</span>
+      </div>
+    );
+  }
+
+  if (authStatus === 'unauthenticated' || !user) {
+    return null;
+  }
 
   if (!plan) {
     return (

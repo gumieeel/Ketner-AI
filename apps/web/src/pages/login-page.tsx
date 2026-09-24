@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { EyeIcon, EyeOffIcon, GitHubIcon, GoogleIcon } from '@/components/icons';
 import { AuthShell } from '@/components/layout/auth-shell';
 import { Button } from '@/components/ui/button';
@@ -18,15 +18,19 @@ const MIN_PASSWORD_LENGTH = 8;
 export function LoginPage() {
   const { t } = useTranslation();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const rawRedirect = searchParams.get('redirect');
+  const isSafeRedirect = Boolean(rawRedirect && rawRedirect.startsWith('/') && !rawRedirect.startsWith('//'));
+  const redirectUrl = isSafeRedirect && rawRedirect ? rawRedirect : '/chat';
   const status = useAuth((state) => state.status);
   const login = useAuth((state) => state.login);
   const mockOAuth = useAuth((state) => state.mockOAuth);
 
   useEffect(() => {
     if (status === 'authenticated') {
-      navigate('/chat', { replace: true });
+      navigate(redirectUrl, { replace: true });
     }
-  }, [status, navigate]);
+  }, [status, navigate, redirectUrl]);
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -64,7 +68,7 @@ export function LoginPage() {
     setLoading(true);
     try {
       await login({ email: trimmedEmail, password });
-      navigate('/chat', { replace: true });
+      navigate(redirectUrl, { replace: true });
     } catch (error) {
       setServerError(error instanceof Error ? error.message : 'Ошибка входа');
     } finally {
@@ -78,7 +82,7 @@ export function LoginPage() {
     try {
       const res = await authClient.signIn.social({
         provider,
-        callbackURL: window.location.origin + '/chat',
+        callbackURL: window.location.origin + redirectUrl,
       });
       if (res?.data?.url) {
         window.location.href = res.data.url;
@@ -87,7 +91,7 @@ export function LoginPage() {
       if (res?.error) {
         if (import.meta.env.MODE === 'test') {
           await mockOAuth(provider);
-          navigate('/chat', { replace: true });
+          navigate(redirectUrl, { replace: true });
           return;
         }
         setServerError(res.error.message || `Ошибка авторизации через ${provider}`);
@@ -97,7 +101,7 @@ export function LoginPage() {
       if (import.meta.env.MODE === 'test') {
         try {
           await mockOAuth(provider);
-          navigate('/chat', { replace: true });
+          navigate(redirectUrl, { replace: true });
           return;
         } catch {
           // ignore
@@ -121,11 +125,25 @@ export function LoginPage() {
     <AuthShell
       title={t('auth.loginTitle')}
       footer={
-        <Link to="/signup" className="text-accent hover:underline">
+        <Link
+          to={isSafeRedirect ? `/signup?redirect=${encodeURIComponent(redirectUrl)}` : '/signup'}
+          className="text-accent hover:underline"
+        >
           {t('auth.toSignup')}
         </Link>
       }
     >
+      {redirectUrl.startsWith('/checkout') && (
+        <div
+          role="status"
+          className="mb-4 rounded-xl border border-accent/30 bg-accent/10 p-3 text-xs text-text font-medium flex items-center gap-2"
+        >
+          <span className="text-base" aria-hidden="true">
+            ✨
+          </span>
+          <span>{t('auth.checkoutSignupNotice')}</span>
+        </div>
+      )}
       <form className="flex flex-col gap-4" onSubmit={handleSubmit} noValidate>
         {serverError ? (
           <div

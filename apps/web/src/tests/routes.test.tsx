@@ -1,6 +1,7 @@
 import { screen } from '@testing-library/react';
 import { beforeEach, describe, expect, it } from 'vitest';
-import { renderRoute, resetPreferences } from './test-utils';
+import { useAuth } from '@/features/auth/auth-store';
+import { renderRoute, resetAuth, resetPreferences } from './test-utils';
 
 describe('маршрутизация и каркас экранов', () => {
   beforeEach(() => {
@@ -88,6 +89,18 @@ describe('маршрутизация и каркас экранов', () => {
   });
 
   it('оформление подписки показывает выбранный план', () => {
+    useAuth.setState({
+      status: 'authenticated',
+      token: 'mock-token',
+      user: {
+        id: 'test-user',
+        email: 'test@ketner.ai',
+        name: 'Тест',
+        plan: 'free',
+        createdAt: '2026-01-01T00:00:00.000Z',
+      },
+    });
+
     renderRoute('/checkout/plus');
 
     expect(
@@ -97,7 +110,31 @@ describe('маршрутизация и каркас экранов', () => {
     expect(screen.getByLabelText('Номер карты')).toBeInTheDocument();
   });
 
+  it('неавторизованный пользователь при попытке оформления подписки перенаправляется на регистрацию', () => {
+    resetAuth();
+    renderRoute('/checkout/gpt-pro');
+
+    expect(
+      screen.getByRole('heading', { level: 1, name: 'Создание аккаунта' }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText('Для оформления подписки необходимо сначала войти или создать аккаунт.'),
+    ).toBeInTheDocument();
+  });
+
   it('неизвестный тариф на оформлении приводит к экрану «не найдено»', () => {
+    useAuth.setState({
+      status: 'authenticated',
+      token: 'mock-token',
+      user: {
+        id: 'test-user',
+        email: 'test@ketner.ai',
+        name: 'Тест',
+        plan: 'free',
+        createdAt: '2026-01-01T00:00:00.000Z',
+      },
+    });
+
     renderRoute('/checkout/unknown-plan');
 
     expect(

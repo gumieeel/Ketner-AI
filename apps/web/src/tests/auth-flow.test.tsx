@@ -161,4 +161,28 @@ describe('auth-flow: сценарии авторизации и сессии', (
     expect(isFreeLimitReached('user-2')).toBe(false);
     expect(getFreeUsage('user-2').remaining).toBe(3);
   });
+
+  it('регистрация с параметром ?redirect=/checkout/gpt-pro перенаправляет обратно на чекаут и показывает уведомление', async () => {
+    renderRoute('/signup?redirect=%2Fcheckout%2Fgpt-pro');
+
+    expect(
+      screen.getByText('Для оформления подписки необходимо сначала войти или создать аккаунт.'),
+    ).toBeInTheDocument();
+
+    const nameInput = screen.getByLabelText(/Имя/i);
+    const emailInput = screen.getByLabelText(/Email/i);
+    const passwordInput = screen.getByLabelText(/Пароль/i);
+    const submitButton = screen.getByRole('button', { name: 'Зарегистрироваться' });
+
+    fireEvent.change(nameInput, { target: { value: 'Покупатель' } });
+    fireEvent.change(emailInput, { target: { value: 'buyer@example.com' } });
+    fireEvent.change(passwordInput, { target: { value: 'secretPassword123' } });
+    fireEvent.click(submitButton);
+
+    await waitFor(() => {
+      expect(useAuth.getState().status).toBe('authenticated');
+      expect(screen.getByRole('heading', { level: 1, name: 'Оформление подписки' })).toBeInTheDocument();
+      expect(screen.getByText('GPT Pro')).toBeInTheDocument();
+    });
+  });
 });

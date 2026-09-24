@@ -57,6 +57,7 @@ export const en: Record<TranslationKey, string> = {
   'auth.demoQuickLogin': 'Quick login as demo user',
   'auth.loggingIn': 'Logging in...',
   'auth.signingUp': 'Signing up...',
+  'auth.checkoutSignupNotice': 'Please sign in or create an account to complete your subscription.',
   'settings.loggedInAs': 'Logged in as',
   'settings.registeredOn': 'Registered on',
 

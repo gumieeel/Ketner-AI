@@ -55,6 +55,7 @@ export const ru = {
   'auth.demoQuickLogin': 'Быстрый вход как демо-пользователь',
   'auth.loggingIn': 'Вход...',
   'auth.signingUp': 'Регистрация...',
+  'auth.checkoutSignupNotice': 'Для оформления подписки необходимо сначала войти или создать аккаунт.',
   'settings.loggedInAs': 'Вы вошли как',
   'settings.registeredOn': 'Дата регистрации',
 

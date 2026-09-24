@@ -2,6 +2,7 @@ import { useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { CloseIcon } from '@/components/icons';
 import { CornerMark } from '@/components/ui/corner-mark';
+import { useAuth } from '@/features/auth/auth-store';
 import { useUpgradeModal } from '@/features/billing/upgrade-modal-store';
 import { DEFAULT_MODEL_ID, usePreferences } from '@/features/preferences/preferences-store';
 import { useTranslation } from '@/i18n';
@@ -63,6 +64,7 @@ export function UpgradeModal() {
   const requiredPlan = useUpgradeModal((state) => state.requiredPlan);
   const close = useUpgradeModal((state) => state.close);
   const setChatModelId = usePreferences((state) => state.setChatModelId);
+  const user = useAuth((state) => state.user);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -88,7 +90,11 @@ export function UpgradeModal() {
 
   const handleSelectPlan = (planId: string) => {
     close();
-    navigate(`/checkout/${planId}`);
+    if (!user) {
+      navigate(`/signup?redirect=${encodeURIComponent(`/checkout/${planId}`)}`);
+    } else {
+      navigate(`/checkout/${planId}`);
+    }
   };
 
   return (

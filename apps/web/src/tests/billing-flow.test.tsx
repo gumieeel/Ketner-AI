@@ -95,7 +95,29 @@ describe('billing-flow: каталог тарифов, чекаут и упра�
     expect(upgradeButtons.length).toBeGreaterThan(0);
   });
 
+  it('чекаут: неавторизованный пользователь перенаправляется на регистрацию', async () => {
+    resetAuth();
+    renderRoute('/checkout/plus');
+
+    expect(screen.getByRole('heading', { level: 1, name: 'Создание аккаунта' })).toBeInTheDocument();
+    expect(
+      screen.getByText('Для оформления подписки необходимо сначала войти или создать аккаунт.'),
+    ).toBeInTheDocument();
+  });
+
   it('чекаут: отображение валидационных ошибок при пустых полях', async () => {
+    useAuth.setState({
+      status: 'authenticated',
+      token: 'mock-token',
+      user: {
+        id: 'demo-user',
+        email: 'demo@ketner.ai',
+        name: 'Демо Пользователь',
+        plan: 'free',
+        createdAt: '2026-01-01T00:00:00.000Z',
+      },
+    });
+
     renderRoute('/checkout/plus');
 
     expect(
