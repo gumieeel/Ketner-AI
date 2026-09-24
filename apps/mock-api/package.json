@@ -13,14 +13,12 @@
     "test": "tsx --test src/health.test.ts src/ai/answers.test.ts src/store/conversation-store.test.ts src/routes/conversations.test.ts src/routes/chat.test.ts src/routes/auth.test.ts src/routes/billing.test.ts src/routes/telegram.test.ts"
   },
   "dependencies": {
-    "better-auth": "^1.7.5",
-    "cors": "^2.8.6",
-    "express": "^5.2.1"
-  },
-  "devDependencies": {
     "@types/cors": "^2.8.19",
     "@types/express": "^5.0.6",
     "@types/node": "^26.6.2",
+    "better-auth": "^1.7.5",
+    "cors": "^2.8.6",
+    "express": "^5.2.1",
     "tsx": "^4.23.15",
     "typescript": "^6.0.3"
   }

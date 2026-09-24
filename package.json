@@ -24,6 +24,9 @@
     "format:check": "prettier --check .",
     "test": "npm run test --workspaces --if-present"
   },
+  "dependencies": {
+    "typescript": "^6.0.3"
+  },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
     "concurrently": "^10.0.5",
