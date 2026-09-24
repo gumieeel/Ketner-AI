@@ -1,4 +1,4 @@
-import { Router } from 'express';
+import { Router, type Request, type Response } from 'express';
 import { defaultBetterAuth } from '../auth/better-auth.js';
 import { createMockToken } from '../auth/jwt.js';
 import { sendError } from '../middleware/errors.js';
@@ -13,7 +13,7 @@ export function createAuthRouter(
 ): Router {
   const router = Router();
 
-  router.post('/signup', async (request, response) => {
+  router.post('/signup', async (request: Request, response: Response) => {
     const rawEmail: unknown = request.body?.email;
     const rawPassword: unknown = request.body?.password;
     const rawName: unknown = request.body?.name;
@@ -78,7 +78,7 @@ export function createAuthRouter(
     response.status(201).json({ user, token, expiresAt });
   });
 
-  router.post('/login', async (request, response) => {
+  router.post('/login', async (request: Request, response: Response) => {
     const rawEmail: unknown = request.body?.email;
     const rawPassword: unknown = request.body?.password;
 
@@ -109,7 +109,7 @@ export function createAuthRouter(
     response.json({ user, token, expiresAt });
   });
 
-  router.get('/me', (request, response) => {
+  router.get('/me', (request: Request, response: Response) => {
     if (!request.user) {
       sendError(response, 401, 'unauthorized', 'Сессия не найдена или истекла');
       return;
@@ -118,12 +118,13 @@ export function createAuthRouter(
     response.json({ user: request.user });
   });
 
-  router.post('/logout', (_request, response) => {
+  router.post('/logout', (_request: Request, response: Response) => {
     response.status(204).end();
   });
 
-  router.get('/oauth/:provider', async (request, response) => {
-    const provider = request.params.provider?.toLowerCase();
+  router.get('/oauth/:provider', async (request: Request, response: Response) => {
+    const rawProvider = request.params.provider;
+    const provider = (Array.isArray(rawProvider) ? rawProvider[0] : rawProvider)?.toLowerCase();
     if (provider !== 'google' && provider !== 'github') {
       sendError(response, 400, 'invalid_provider', 'Поддерживаются только google и github');
       return;

@@ -4,7 +4,7 @@
     "module": "NodeNext",
     "moduleResolution": "NodeNext",
     "lib": ["ES2023"],
-    "types": ["node"],
+    "types": ["node", "express", "cors"],
     "rootDir": "src",
     "outDir": "dist",
     "noEmit": false

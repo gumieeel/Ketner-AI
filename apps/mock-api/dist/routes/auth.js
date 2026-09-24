@@ -99,7 +99,8 @@ export function createAuthRouter(userStore, betterAuthInstance = defaultBetterAu
         response.status(204).end();
     });
     router.get('/oauth/:provider', async (request, response) => {
-        const provider = request.params.provider?.toLowerCase();
+        const rawProvider = request.params.provider;
+        const provider = (Array.isArray(rawProvider) ? rawProvider[0] : rawProvider)?.toLowerCase();
         if (provider !== 'google' && provider !== 'github') {
             sendError(response, 400, 'invalid_provider', 'Поддерживаются только google и github');
             return;

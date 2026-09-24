@@ -1,4 +1,4 @@
-import { Router } from 'express';
+import { Router, type Request, type Response } from 'express';
 import { sendError } from '../middleware/errors.js';
 import type { ConversationStore } from '../store/conversation-store.js';
 
@@ -13,29 +13,36 @@ export function createConversationsRouter(store: ConversationStore, defaultUserI
 
   const getUserId = (request: { userId?: string }): string => request.userId ?? defaultUserId;
 
-  router.get('/conversations', (request, response) => {
+  router.get('/conversations', (request: Request, response: Response) => {
     const userId = getUserId(request);
     response.json({ conversations: store.list(userId) });
   });
 
-  router.post('/conversations', (request, response) => {
+  router.post('/conversations', (request: Request, response: Response) => {
     const userId = getUserId(request);
     const title = typeof request.body?.title === 'string' ? request.body.title : '';
     response.status(201).json({ conversation: store.create(userId, title) });
   });
 
-  router.get('/conversations/:id', (request, response) => {
+  const getParamId = (req: Request): string => {
+    const raw = req.params.id;
+    return (Array.isArray(raw) ? raw[0] : raw) ?? '';
+  };
+
+  router.get('/conversations/:id', (request: Request, response: Response) => {
     const userId = getUserId(request);
-    const found = store.get(userId, request.params.id);
+    const id = getParamId(request);
+    const found = store.get(userId, id);
     if (!found) {
-      sendError(response, 404, 'conversation_not_found', `Диалог ${request.params.id} не найден`);
+      sendError(response, 404, 'conversation_not_found', `Диалог ${id} не найден`);
       return;
     }
     response.json(found);
   });
 
-  router.patch('/conversations/:id', (request, response) => {
+  router.patch('/conversations/:id', (request: Request, response: Response) => {
     const userId = getUserId(request);
+    const id = getParamId(request);
     const rawTitle: unknown = request.body?.title;
     const title = typeof rawTitle === 'string' ? rawTitle.trim() : '';
     if (!title) {
@@ -43,18 +50,19 @@ export function createConversationsRouter(store: ConversationStore, defaultUserI
       return;
     }
 
-    const conversation = store.rename(userId, request.params.id, title);
+    const conversation = store.rename(userId, id, title);
     if (!conversation) {
-      sendError(response, 404, 'conversation_not_found', `Диалог ${request.params.id} не найден`);
+      sendError(response, 404, 'conversation_not_found', `Диалог ${id} не найден`);
       return;
     }
     response.json({ conversation });
   });
 
-  router.delete('/conversations/:id', (request, response) => {
+  router.delete('/conversations/:id', (request: Request, response: Response) => {
     const userId = getUserId(request);
-    if (!store.remove(userId, request.params.id)) {
-      sendError(response, 404, 'conversation_not_found', `Диалог ${request.params.id} не найден`);
+    const id = getParamId(request);
+    if (!store.remove(userId, id)) {
+      sendError(response, 404, 'conversation_not_found', `Диалог ${id} не найден`);
       return;
     }
     response.status(204).end();

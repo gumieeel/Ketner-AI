@@ -1,4 +1,4 @@
-import { Router } from 'express';
+import { Router, type Request, type Response } from 'express';
 import { config } from '../config.js';
 import type { AiConfig } from '../config.js';
 import { createAuthMiddleware } from '../middleware/auth.js';
@@ -119,7 +119,7 @@ export function createApiRouter(deps: ApiDeps): Router {
 
   router.use(createAuthMiddleware(activeUserStore, deps.betterAuth));
 
-  router.get('/', (_request, response) => {
+  router.get('/', (_request: Request, response: Response) => {
     response.json(describeService());
   });
 

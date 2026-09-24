@@ -1,4 +1,4 @@
-import { Router } from 'express';
+import { Router, type Request, type Response } from 'express';
 import { ERROR_MESSAGES, pickAnswer } from '../ai/answers.js';
 import { canAccessModel, DEFAULT_MODEL_ID, resolveModel } from '../ai/models.js';
 import { streamOpenRouter } from '../ai/openrouter.js';
@@ -97,7 +97,7 @@ export function createChatRouter({
 }: ChatRouterDeps): Router {
   const router = Router();
 
-  router.post('/completions', async (request, response) => {
+  router.post('/completions', async (request: Request, response: Response): Promise<void> => {
     const parsed = parseCompletionRequest(request.body);
     if (!parsed.ok) {
       sendError(response, 400, 'invalid_request', parsed.message);

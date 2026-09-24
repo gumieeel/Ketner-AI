@@ -18,34 +18,41 @@ export function createConversationsRouter(store, defaultUserId) {
         const title = typeof request.body?.title === 'string' ? request.body.title : '';
         response.status(201).json({ conversation: store.create(userId, title) });
     });
+    const getParamId = (req) => {
+        const raw = req.params.id;
+        return (Array.isArray(raw) ? raw[0] : raw) ?? '';
+    };
     router.get('/conversations/:id', (request, response) => {
         const userId = getUserId(request);
-        const found = store.get(userId, request.params.id);
+        const id = getParamId(request);
+        const found = store.get(userId, id);
         if (!found) {
-            sendError(response, 404, 'conversation_not_found', `Диалог ${request.params.id} не найден`);
+            sendError(response, 404, 'conversation_not_found', `Диалог ${id} не найден`);
             return;
         }
         response.json(found);
     });
     router.patch('/conversations/:id', (request, response) => {
         const userId = getUserId(request);
+        const id = getParamId(request);
         const rawTitle = request.body?.title;
         const title = typeof rawTitle === 'string' ? rawTitle.trim() : '';
         if (!title) {
             sendError(response, 400, 'invalid_request', 'Поле title обязательно');
             return;
         }
-        const conversation = store.rename(userId, request.params.id, title);
+        const conversation = store.rename(userId, id, title);
         if (!conversation) {
-            sendError(response, 404, 'conversation_not_found', `Диалог ${request.params.id} не найден`);
+            sendError(response, 404, 'conversation_not_found', `Диалог ${id} не найден`);
             return;
         }
         response.json({ conversation });
     });
     router.delete('/conversations/:id', (request, response) => {
         const userId = getUserId(request);
-        if (!store.remove(userId, request.params.id)) {
-            sendError(response, 404, 'conversation_not_found', `Диалог ${request.params.id} не найден`);
+        const id = getParamId(request);
+        if (!store.remove(userId, id)) {
+            sendError(response, 404, 'conversation_not_found', `Диалог ${id} не найден`);
             return;
         }
         response.status(204).end();

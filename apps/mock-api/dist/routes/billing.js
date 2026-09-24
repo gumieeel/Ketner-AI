@@ -180,8 +180,12 @@ export function createBillingRouter({ subscriptionStore, userStore, invoiceStore
         const invoice = activeInvoiceStore.createSbpInvoice(userId, plan.id, plan.priceMonthly);
         response.json({ invoice });
     });
+    const getParamInvoiceId = (req) => {
+        const raw = req.params.invoiceId;
+        return (Array.isArray(raw) ? raw[0] : raw) ?? '';
+    };
     router.get('/billing/sbp/status/:invoiceId', (request, response) => {
-        const { invoiceId } = request.params;
+        const invoiceId = getParamInvoiceId(request);
         const invoice = activeInvoiceStore.getSbpInvoice(invoiceId);
         if (!invoice) {
             sendError(response, 404, 'invoice_not_found', 'Счёт СБП не найден');
@@ -193,7 +197,7 @@ export function createBillingRouter({ subscriptionStore, userStore, invoiceStore
         });
     });
     router.post('/billing/sbp/confirm/:invoiceId', (request, response) => {
-        const { invoiceId } = request.params;
+        const invoiceId = getParamInvoiceId(request);
         const invoice = activeInvoiceStore.getSbpInvoice(invoiceId);
         if (!invoice) {
             sendError(response, 404, 'invoice_not_found', 'Счёт СБП не найден');
@@ -224,7 +228,7 @@ export function createBillingRouter({ subscriptionStore, userStore, invoiceStore
         response.json({ invoice });
     });
     router.get('/billing/telegram-stars/status/:invoiceId', (request, response) => {
-        const { invoiceId } = request.params;
+        const invoiceId = getParamInvoiceId(request);
         const invoice = activeInvoiceStore.getTelegramStarsInvoice(invoiceId);
         if (!invoice) {
             sendError(response, 404, 'invoice_not_found', 'Счёт Telegram Stars не найден');
@@ -236,7 +240,7 @@ export function createBillingRouter({ subscriptionStore, userStore, invoiceStore
         });
     });
     router.post('/billing/telegram-stars/confirm/:invoiceId', (request, response) => {
-        const { invoiceId } = request.params;
+        const invoiceId = getParamInvoiceId(request);
         const invoice = activeInvoiceStore.getTelegramStarsInvoice(invoiceId);
         if (!invoice) {
             sendError(response, 404, 'invoice_not_found', 'Счёт Telegram Stars не найден');

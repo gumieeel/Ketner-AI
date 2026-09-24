@@ -55,7 +55,7 @@ export async function startTestServer(ai: Partial<AiConfig> = {}): Promise<TestS
         } catch {
           // ignore
         }
-        server.close((error) => (error ? reject(error) : resolve()));
+        server.close((error?: Error | null) => (error ? reject(error) : resolve()));
       }),
   };
 }

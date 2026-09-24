@@ -1,4 +1,4 @@
-import { Router } from 'express';
+import { Router, type Request, type Response } from 'express';
 import { sendError } from '../middleware/errors.js';
 import { TelegramBotService, type TelegramBotDeps, type TelegramUpdate } from '../telegram/bot.js';
 import type { PlanId } from '../types.js';
@@ -10,7 +10,7 @@ export function createTelegramRouter(deps: TelegramBotDeps): Router {
   /**
    * Статус Telegram-бота.
    */
-  router.get('/telegram/status', (_request, response) => {
+  router.get('/telegram/status', (_request: Request, response: Response) => {
     response.json({
       configured: botService.isConfigured,
       botUsername: botService.botUsername,
@@ -21,7 +21,7 @@ export function createTelegramRouter(deps: TelegramBotDeps): Router {
   /**
    * Официальный Webhook для Telegram Bot API.
    */
-  router.post('/telegram/webhook', async (request, response) => {
+  router.post('/telegram/webhook', async (request: Request, response: Response): Promise<void> => {
     const update = request.body as TelegramUpdate;
     if (!update || typeof update !== 'object') {
       sendError(response, 400, 'invalid_update', 'Некорректное тело обновления Telegram');
@@ -40,7 +40,7 @@ export function createTelegramRouter(deps: TelegramBotDeps): Router {
   /**
    * Эмуляция оплаты через Telegram Stars (для локального тестирования и демо без реальных денег).
    */
-  router.post('/telegram/simulate-payment', async (request, response) => {
+  router.post('/telegram/simulate-payment', async (request: Request, response: Response): Promise<void> => {
     const planId = (request.body?.planId || 'gpt-pro') as PlanId;
     const userId = (request.body?.userId || 'demo-user') as string;
 

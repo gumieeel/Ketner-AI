@@ -1,4 +1,4 @@
-import { Router } from 'express';
+import { Router, type Request, type Response } from 'express';
 import { config } from '../config.js';
 import { sendError } from '../middleware/errors.js';
 import { invoiceStore as defaultInvoiceStore, type InvoiceStore } from '../store/index.js';
@@ -149,11 +149,11 @@ export function createBillingRouter({
     return PLANS.find((p) => p.id === rawPlanId);
   };
 
-  router.get('/plans', (_request, response) => {
+  router.get('/plans', (_request: Request, response: Response) => {
     response.json({ plans: PLANS });
   });
 
-  router.get('/billing/subscription', (request, response) => {
+  router.get('/billing/subscription', (request: Request, response: Response) => {
     const userId = getUserId(request);
     let subscription = subscriptionStore.get(userId);
     const user = userStore.findById(userId);
@@ -171,7 +171,7 @@ export function createBillingRouter({
     response.json({ subscription });
   });
 
-  router.post('/billing/checkout', (request, response) => {
+  router.post('/billing/checkout', (request: Request, response: Response) => {
     const rawPlanId: unknown = request.body?.planId;
     const validPlanIds = ['gpt-pro', 'claude-pro', 'gemini-pro', 'ultra', 'plus', 'pro'];
     if (!validPlanIds.includes(rawPlanId as string)) {
@@ -196,7 +196,7 @@ export function createBillingRouter({
     });
   });
 
-  router.post('/billing/cancel', (request, response) => {
+  router.post('/billing/cancel', (request: Request, response: Response) => {
     const userId = getUserId(request);
 
     const subscription = subscriptionStore.cancel(userId);
@@ -210,7 +210,7 @@ export function createBillingRouter({
 
   // --- СБП (Система быстрых платежей) ---
 
-  router.post('/billing/sbp/create-invoice', (request, response) => {
+  router.post('/billing/sbp/create-invoice', (request: Request, response: Response) => {
     const rawPlanId: unknown = request.body?.planId;
     const plan = findPlan(rawPlanId);
     if (!plan || plan.priceMonthly <= 0) {
@@ -224,8 +224,13 @@ export function createBillingRouter({
     response.json({ invoice });
   });
 
-  router.get('/billing/sbp/status/:invoiceId', (request, response) => {
-    const { invoiceId } = request.params;
+  const getParamInvoiceId = (req: Request): string => {
+    const raw = req.params.invoiceId;
+    return (Array.isArray(raw) ? raw[0] : raw) ?? '';
+  };
+
+  router.get('/billing/sbp/status/:invoiceId', (request: Request, response: Response) => {
+    const invoiceId = getParamInvoiceId(request);
     const invoice = activeInvoiceStore.getSbpInvoice(invoiceId);
     if (!invoice) {
       sendError(response, 404, 'invoice_not_found', 'Счёт СБП не найден');
@@ -238,8 +243,8 @@ export function createBillingRouter({
     });
   });
 
-  router.post('/billing/sbp/confirm/:invoiceId', (request, response) => {
-    const { invoiceId } = request.params;
+  router.post('/billing/sbp/confirm/:invoiceId', (request: Request, response: Response) => {
+    const invoiceId = getParamInvoiceId(request);
     const invoice = activeInvoiceStore.getSbpInvoice(invoiceId);
     if (!invoice) {
       sendError(response, 404, 'invoice_not_found', 'Счёт СБП не найден');
@@ -262,7 +267,7 @@ export function createBillingRouter({
 
   // --- Telegram Stars (⭐️ XTR) ---
 
-  router.post('/billing/telegram-stars/create-invoice', (request, response) => {
+  router.post('/billing/telegram-stars/create-invoice', (request: Request, response: Response) => {
     const rawPlanId: unknown = request.body?.planId;
     const plan = findPlan(rawPlanId);
     if (!plan || plan.priceMonthly <= 0) {
@@ -288,8 +293,8 @@ export function createBillingRouter({
     response.json({ invoice });
   });
 
-  router.get('/billing/telegram-stars/status/:invoiceId', (request, response) => {
-    const { invoiceId } = request.params;
+  router.get('/billing/telegram-stars/status/:invoiceId', (request: Request, response: Response) => {
+    const invoiceId = getParamInvoiceId(request);
     const invoice = activeInvoiceStore.getTelegramStarsInvoice(invoiceId);
     if (!invoice) {
       sendError(response, 404, 'invoice_not_found', 'Счёт Telegram Stars не найден');
@@ -302,8 +307,8 @@ export function createBillingRouter({
     });
   });
 
-  router.post('/billing/telegram-stars/confirm/:invoiceId', (request, response) => {
-    const { invoiceId } = request.params;
+  router.post('/billing/telegram-stars/confirm/:invoiceId', (request: Request, response: Response) => {
+    const invoiceId = getParamInvoiceId(request);
     const invoice = activeInvoiceStore.getTelegramStarsInvoice(invoiceId);
     if (!invoice) {
       sendError(response, 404, 'invoice_not_found', 'Счёт Telegram Stars не найден');
