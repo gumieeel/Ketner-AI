@@ -108,6 +108,7 @@ export function createApiRouter(deps) {
         subscriptionStore: activeSubscriptionStore,
         userStore: activeUserStore,
         invoiceStore: activeInvoiceStore,
+        botService: deps.botService,
     }));
     router.use(createConversationsRouter(deps.store, deps.userId));
     router.use('/chat', createChatRouter({

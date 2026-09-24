@@ -3,9 +3,11 @@ import { sendError } from '../middleware/errors.js';
 import { TelegramBotService, type TelegramBotDeps, type TelegramUpdate } from '../telegram/bot.js';
 import type { PlanId } from '../types.js';
 
-export function createTelegramRouter(deps: TelegramBotDeps): Router {
+export function createTelegramRouter(
+  deps: TelegramBotDeps & { botService?: TelegramBotService },
+): Router {
   const router = Router();
-  const botService = new TelegramBotService(deps);
+  const botService = deps.botService ?? new TelegramBotService(deps);
 
   /**
    * Статус Telegram-бота.

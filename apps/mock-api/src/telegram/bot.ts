@@ -3,6 +3,11 @@ import { PLANS } from '../routes/billing.js';
 import type { InvoiceStore } from '../store/invoice-store.js';
 import type { SubscriptionStore } from '../store/subscription-store.js';
 import type { UserStore } from '../store/user-store.js';
+import {
+  invoiceStore as defaultInvoiceStore,
+  subscriptionStore as defaultSubscriptionStore,
+  userStore as defaultUserStore,
+} from '../store/index.js';
 import type { PlanId, PlanItem } from '../types.js';
 
 export function calculateStars(priceRub: number): number {
@@ -83,11 +88,13 @@ export class TelegramBotService {
   private token: string;
   private username: string;
   private deps: TelegramBotDeps;
+  private chatToUserId = new Map<string | number, string>();
+  private isPolling = false;
 
   constructor(deps: TelegramBotDeps) {
     this.deps = deps;
     this.token = deps.botToken || config.telegramBotToken || '';
-    this.username = (deps.botUsername || config.telegramBotUsername || 'KetnerAIBot').replace(
+    this.username = (deps.botUsername || config.telegramBotUsername || 'Robo_kassa_bot').replace(
       /^@/,
       '',
     );
@@ -99,6 +106,96 @@ export class TelegramBotService {
 
   get isConfigured(): boolean {
     return Boolean(this.token && this.token.length > 10);
+  }
+
+  /**
+   * Инициализирует Telegram-бота при старте приложения:
+   * 1. Проверяет getMe (валидирует токен)
+   * 2. Устанавливает команды /start, /plans, /status, /help
+   * 3. Устанавливает описание бота
+   * 4. Настраивает Webhook (если HTTPS / Render) или запускает Long Polling (если локально)
+   */
+  async initRuntime(publicBaseUrl?: string): Promise<void> {
+    if (!this.isConfigured) {
+      console.log('🤖 [TelegramBot] Бот не сконфигурирован (нет токена), режим заглушки');
+      return;
+    }
+
+    try {
+      const me = await this.callApi<{ id: number; username: string }>('getMe', {});
+      if (me?.username) {
+        this.username = me.username;
+        console.log(`🤖 [TelegramBot] Авторизован бот: @${this.username}`);
+      }
+
+      await this.callApi('setMyCommands', {
+        commands: [
+          { command: 'start', description: 'Запустить бота и оформить подписку' },
+          { command: 'plans', description: 'Каталог тарифов и оплата (Stars ⭐️ / СБП)' },
+          { command: 'status', description: 'Проверить статус вашей подписки' },
+          { command: 'help', description: 'Помощь и контакты поддержки' },
+        ],
+      });
+
+      await this.callApi('setMyDescription', {
+        description:
+          '🤖 Официальный платёжный сервис Ketner AI.\n\nМгновенная оплата подписок на флагманские модели ИИ (GPT-6, Claude 5.5, Gemini 3.8 Pro, Qwen 2.5 Max) через Telegram Stars (⭐️) и СБП (0% комиссии).',
+      });
+
+      const effectiveBaseUrl =
+        config.telegramWebhookUrl ||
+        process.env.RENDER_EXTERNAL_URL ||
+        publicBaseUrl ||
+        config.betterAuthUrl;
+
+      if (effectiveBaseUrl && effectiveBaseUrl.startsWith('https://')) {
+        const webhookUrl = `${effectiveBaseUrl.replace(/\/$/, '')}/api/telegram/webhook`;
+        const res = await this.callApi<{ ok: boolean; description?: string }>('setWebhook', {
+          url: webhookUrl,
+          allowed_updates: ['message', 'callback_query', 'pre_checkout_query'],
+          drop_pending_updates: false,
+        });
+        console.log(`✅ [TelegramBot] Webhook зарегистрирован на: ${webhookUrl}`, res);
+      } else {
+        console.log('⚡ [TelegramBot] Локальное окружение: запуск фонового long-polling...');
+        await this.callApi('deleteWebhook', { drop_pending_updates: false });
+        this.startPolling();
+      }
+    } catch (error) {
+      console.error('⚠️ [TelegramBot] Ошибка инициализации бота:', error);
+    }
+  }
+
+  startPolling(): void {
+    if (this.isPolling) return;
+    this.isPolling = true;
+
+    (async () => {
+      let offset = 0;
+      while (this.isPolling) {
+        try {
+          const res = await this.callApi<TelegramUpdate[]>('getUpdates', {
+            offset,
+            timeout: 20,
+            allowed_updates: ['message', 'callback_query', 'pre_checkout_query'],
+          });
+          if (Array.isArray(res)) {
+            for (const update of res) {
+              offset = update.update_id + 1;
+              await this.processUpdate(update);
+            }
+          }
+        } catch {
+          await new Promise((resolve) => setTimeout(resolve, 3000));
+        }
+      }
+    })().catch((err) => {
+      console.error('[TelegramBot] Polling loop error:', err);
+    });
+  }
+
+  stopPolling(): void {
+    this.isPolling = false;
   }
 
   /**
@@ -204,19 +301,37 @@ export class TelegramBotService {
       }
 
       if (data.startsWith('pay_stars:')) {
-        const [, planId, userId] = data.split(':');
+        const [, planId, userId, invoiceId] = data.split(':');
         const plan = getPlanItem(planId) ?? getPlanItem('gpt-pro')!;
         const stars = calculateStars(plan.priceMonthly);
 
         await this.answerCallbackQuery(cb.id, `Создаём счёт на ${stars} ⭐️`);
         await this.sendInvoice(chatId, {
           title: `Подписка Ketner AI: ${plan.id.toUpperCase()}`,
-          description: `Месячная подписка на флагманские модели ИИ (${plan.modelsHighlight})`,
-          payload: JSON.stringify({ planId: plan.id, userId: userId || config.demoUserId }),
+          description: `Месячная подписка на 30 дней: ${plan.modelsHighlight}`,
+          payload: JSON.stringify({
+            planId: plan.id,
+            userId: userId || config.demoUserId,
+            invoiceId: invoiceId || undefined,
+          }),
           currency: 'XTR',
           prices: [{ label: `Подписка ${plan.id.toUpperCase()}`, amount: stars }],
         });
         return { handled: true, action: 'invoice_stars_sent' };
+      }
+
+      if (data === 'cmd_plans') {
+        await this.answerCallbackQuery(cb.id);
+        const targetUserId = this.chatToUserId.get(chatId) || config.demoUserId;
+        await this.sendPlansMessage(chatId, targetUserId);
+        return { handled: true, action: 'cmd_plans_handled' };
+      }
+
+      if (data === 'cmd_status') {
+        await this.answerCallbackQuery(cb.id);
+        const targetUserId = this.chatToUserId.get(chatId) || config.demoUserId;
+        await this.sendStatusMessage(chatId, targetUserId);
+        return { handled: true, action: 'cmd_status_handled' };
       }
 
       if (data.startsWith('pay_sbp:')) {
@@ -301,18 +416,28 @@ export class TelegramBotService {
       if (msg.successful_payment) {
         const pay = msg.successful_payment;
         let planId: PlanId = 'gpt-pro';
-        let userId: string = config.demoUserId;
+        let userId: string = this.chatToUserId.get(chatId) || config.demoUserId;
+        let invoiceId: string | undefined;
 
         try {
-          const payload = JSON.parse(pay.invoice_payload) as { planId?: PlanId; userId?: string };
+          const payload = JSON.parse(pay.invoice_payload) as {
+            planId?: PlanId;
+            userId?: string;
+            invoiceId?: string;
+          };
           if (payload.planId) planId = payload.planId;
           if (payload.userId) userId = payload.userId;
+          if (payload.invoiceId) invoiceId = payload.invoiceId;
         } catch {
           // Игнорируем ошибку парсинга
         }
 
         this.deps.subscriptionStore.checkout(userId, planId);
         this.deps.userStore.updatePlan(userId, planId);
+
+        if (invoiceId) {
+          this.deps.invoiceStore.markTelegramStarsPaid(invoiceId);
+        }
 
         const successText = [
           '🎉 *Оплата Telegram Stars успешно завершена!*',
@@ -333,12 +458,26 @@ export class TelegramBotService {
 
       const text = msg.text?.trim() ?? '';
 
-      // Команда /start с deep-link параметром: /start pay_gpt-pro_demo-user
+      // Команда /start с deep-link параметром: /start pay_gpt-pro__demo-user__stars123
       if (text.startsWith('/start pay_')) {
         const payload = text.replace('/start pay_', '');
-        const parts = payload.split('_');
-        const planId = (parts[0] || 'gpt-pro') as PlanId;
-        const userId = parts.slice(1).join('_') || config.demoUserId;
+        let planId: PlanId = 'gpt-pro';
+        let userId: string = config.demoUserId;
+        let invoiceId: string | undefined;
+
+        if (payload.includes('__')) {
+          const [p, u, inv] = payload.split('__');
+          planId = (p || 'gpt-pro') as PlanId;
+          userId = u || config.demoUserId;
+          invoiceId = inv || undefined;
+        } else {
+          const parts = payload.split('_');
+          planId = (parts[0] || 'gpt-pro') as PlanId;
+          userId = parts[1] || config.demoUserId;
+          invoiceId = parts.slice(2).join('_') || undefined;
+        }
+
+        this.chatToUserId.set(chatId, userId);
         const plan = getPlanItem(planId) ?? getPlanItem('gpt-pro')!;
         const stars = calculateStars(plan.priceMonthly);
 
@@ -362,7 +501,7 @@ export class TelegramBotService {
               [
                 {
                   text: `⭐️ Оплатить ${stars} ⭐️ Stars`,
-                  callback_data: `pay_stars:${plan.id}:${userId}`,
+                  callback_data: `pay_stars:${plan.id}:${userId}:${invoiceId ?? ''}`,
                 },
               ],
               [
@@ -401,7 +540,8 @@ export class TelegramBotService {
         await this.sendMessage(chatId, welcomeText, {
           reply_markup: {
             inline_keyboard: [
-              [{ text: '💳 Каталог тарифов', callback_data: 'cmd_plans' }],
+              [{ text: '💎 Каталог тарифов и оплата', callback_data: 'cmd_plans' }],
+              [{ text: '📊 Моя подписка', callback_data: 'cmd_status' }],
               [{ text: '🌐 Перейти на сайт Ketner AI', url: config.webAppUrl }],
             ],
           },
@@ -410,59 +550,16 @@ export class TelegramBotService {
       }
 
       // /plans
-      if (text === '/plans' || text === 'cmd_plans') {
-        const premiumPlans = PLANS.filter((p) => p.priceMonthly > 0);
-        let plansText = '💎 *Тарифные планы Ketner AI:*\n\n';
-
-        for (const p of premiumPlans) {
-          const stars = calculateStars(p.priceMonthly);
-          plansText += `🔹 *${p.id.toUpperCase()}*\n`;
-          plansText += `   Цена: *${p.priceMonthly} ₽/мес* или *${stars} ⭐️*\n`;
-          plansText += `   Модели: ${p.modelsHighlight}\n`;
-          plansText += `   Лимит: ${p.limitBadge?.ru}\n\n`;
-        }
-
-        plansText += 'Нажмите кнопку ниже для быстрого оформления:';
-
-        const buttons = premiumPlans.map((p) => [
-          {
-            text: `Оформить ${p.id.toUpperCase()} (${calculateStars(p.priceMonthly)} ⭐️ / ${p.priceMonthly} ₽)`,
-            callback_data: `pay_stars:${p.id}:${config.demoUserId}`,
-          },
-        ]);
-
-        await this.sendMessage(chatId, plansText, {
-          reply_markup: {
-            inline_keyboard: buttons,
-          },
-        });
+      if (text === '/plans') {
+        const targetUserId = this.chatToUserId.get(chatId) || config.demoUserId;
+        await this.sendPlansMessage(chatId, targetUserId);
         return { handled: true, action: 'plans_handled' };
       }
 
       // /status
       if (text === '/status') {
-        const sub = this.deps.subscriptionStore.get(config.demoUserId);
-        const plan = getPlanItem(sub.plan) ?? getPlanItem('free')!;
-        const statusText = [
-          '📊 *Статус вашей подписки Ketner AI:*',
-          '',
-          `Текущий план: *${plan.id.toUpperCase()}*`,
-          `Статус: *${sub.status === 'active' ? '✅ Активна' : '❌ Отменена'}*`,
-          sub.renewsAt
-            ? `Дата продления: *${new Date(sub.renewsAt).toLocaleDateString('ru-RU')}*`
-            : '',
-        ]
-          .filter(Boolean)
-          .join('\n');
-
-        await this.sendMessage(chatId, statusText, {
-          reply_markup: {
-            inline_keyboard: [
-              [{ text: '⚡ Улучшить тариф', callback_data: 'cmd_plans' }],
-              [{ text: '🌐 Открыть настройки на сайте', url: `${config.webAppUrl}/settings` }],
-            ],
-          },
-        });
+        const targetUserId = this.chatToUserId.get(chatId) || config.demoUserId;
+        await this.sendStatusMessage(chatId, targetUserId);
         return { handled: true, action: 'status_handled' };
       }
 
@@ -474,7 +571,7 @@ export class TelegramBotService {
           'Официальный сайт: https://ketner.ai',
           'По вопросам оплаты и подписок:',
           '• Поддержка: support@ketner.ai',
-          '• Способы оплаты: СБП (0% комиссия), Telegram Stars ⭐️, Карты МИР/Visa/Mastercard',
+          '• Способы оплаты: Telegram Stars ⭐️, СБП (0% комиссия)',
         ].join('\n');
 
         await this.sendMessage(chatId, helpText);
@@ -491,4 +588,67 @@ export class TelegramBotService {
 
     return { handled: false };
   }
+
+  async sendPlansMessage(chatId: number | string, userId: string): Promise<void> {
+    const premiumPlans = PLANS.filter((p) => p.priceMonthly > 0);
+    let plansText = '💎 *Тарифные планы Ketner AI:*\n\n';
+
+    for (const p of premiumPlans) {
+      const stars = calculateStars(p.priceMonthly);
+      plansText += `🔹 *${p.id.toUpperCase()}*\n`;
+      plansText += `   Цена: *${p.priceMonthly} ₽/мес* или *${stars} ⭐️*\n`;
+      plansText += `   Модели: ${p.modelsHighlight}\n`;
+      plansText += `   Лимит: ${p.limitBadge?.ru}\n\n`;
+    }
+
+    plansText += 'Нажмите кнопку ниже для быстрой оплаты в Telegram Stars:';
+
+    const buttons = premiumPlans.map((p) => [
+      {
+        text: `⭐️ Оплатить ${p.id.toUpperCase()} (${calculateStars(p.priceMonthly)} ⭐️)`,
+        callback_data: `pay_stars:${p.id}:${userId}:`,
+      },
+    ]);
+
+    await this.sendMessage(chatId, plansText, {
+      reply_markup: {
+        inline_keyboard: buttons,
+      },
+    });
+  }
+
+  async sendStatusMessage(chatId: number | string, userId: string): Promise<void> {
+    const sub = this.deps.subscriptionStore.get(userId);
+    const plan = getPlanItem(sub?.plan || 'free') ?? getPlanItem('free')!;
+    const statusText = [
+      '📊 *Статус вашей подписки Ketner AI:*',
+      '',
+      `Текущий план: *${plan.id.toUpperCase()}*`,
+      `Статус: *${sub?.status === 'active' ? '✅ Активна' : '❌ Бесплатный тариф'}*`,
+      sub?.renewsAt
+        ? `Дата продления: *${new Date(sub.renewsAt).toLocaleDateString('ru-RU')}*`
+        : '',
+    ]
+      .filter(Boolean)
+      .join('\n');
+
+    await this.sendMessage(chatId, statusText, {
+      reply_markup: {
+        inline_keyboard: [
+          [{ text: '⚡ Выбрать тариф', callback_data: 'cmd_plans' }],
+          [{ text: '🌐 Открыть настройки на сайте', url: `${config.webAppUrl}/settings` }],
+        ],
+      },
+    });
+  }
 }
+
+export const telegramBotService = new TelegramBotService({
+  subscriptionStore: defaultSubscriptionStore,
+  userStore: defaultUserStore,
+  invoiceStore: defaultInvoiceStore,
+  botToken: config.telegramBotToken,
+  botUsername: config.telegramBotUsername,
+});
+
+

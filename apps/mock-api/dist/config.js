@@ -67,9 +67,10 @@ export const config = {
     githubClientId: process.env.GITHUB_CLIENT_ID || undefined,
     githubClientSecret: process.env.GITHUB_CLIENT_SECRET || undefined,
     /** Telegram Bot для приёма оплаты (Telegram Stars и СБП). */
-    telegramBotToken: process.env.TELEGRAM_BOT_TOKEN ?? '',
-    telegramBotUsername: process.env.TELEGRAM_BOT_USERNAME ?? 'KetnerAIBot',
-    telegramPaymentProviderToken: process.env.TELEGRAM_PAYMENT_PROVIDER_TOKEN ?? '',
+    telegramBotToken: process.env.TELEGRAM_BOT_TOKEN || '8950856076:AAF6Id66Vc0IHWBWByV1DArttb6cs8go2DM',
+    telegramBotUsername: process.env.TELEGRAM_BOT_USERNAME || 'Robo_kassa_bot',
+    telegramPaymentProviderToken: process.env.TELEGRAM_PAYMENT_PROVIDER_TOKEN || '',
+    telegramWebhookUrl: process.env.TELEGRAM_WEBHOOK_URL || '',
     /** OpenRouter LLM провайдер. */
     openRouterApiKey: process.env.OPENROUTER_API_KEY ||
         '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',

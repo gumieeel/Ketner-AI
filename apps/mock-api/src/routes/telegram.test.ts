@@ -14,7 +14,7 @@ test('telegram: статус бота GET /api/telegram/status', async (t) => {
     response,
   );
   assert.equal(typeof data.configured, 'boolean');
-  assert.ok(data.botUsername.includes('Ketner'));
+  assert.ok(data.botUsername.length > 0);
   assert.ok(data.botUrl.includes('t.me/'));
 });
 

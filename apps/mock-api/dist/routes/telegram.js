@@ -3,7 +3,7 @@ import { sendError } from '../middleware/errors.js';
 import { TelegramBotService } from '../telegram/bot.js';
 export function createTelegramRouter(deps) {
     const router = Router();
-    const botService = new TelegramBotService(deps);
+    const botService = deps.botService ?? new TelegramBotService(deps);
     /**
      * Статус Telegram-бота.
      */

@@ -303,10 +303,10 @@ export function CheckoutPage() {
   }
 
   const starsAmount = calculateStars(plan.priceMonthly);
-  const botUsername = starsInvoice?.botUsername || 'KetnerAIBot';
+  const botUsername = starsInvoice?.botUsername || 'Robo_kassa_bot';
   const botDeepLink =
     starsInvoice?.botDeepLink ||
-    `https://t.me/${botUsername}?start=pay_${plan.id}_${user?.id || 'demo-user'}`;
+    `https://t.me/${botUsername}?start=pay_${plan.id}__${user?.id || 'demo-user'}`;
 
   return (
     <div className="mx-auto flex w-full max-w-xl flex-col gap-6 px-4 py-10 animate-fade-in">

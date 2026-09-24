@@ -19,6 +19,7 @@ import { healthRouter } from './health.js';
 import { createMetaRouter } from './meta.js';
 import { createTelegramRouter } from './telegram.js';
 
+import type { TelegramBotService } from '../telegram/bot.js';
 import type { defaultBetterAuth } from '../auth/better-auth.js';
 
 /** Зависимости роутеров: подменяются в тестах. */
@@ -27,6 +28,7 @@ export interface ApiDeps {
   userStore?: UserStore;
   subscriptionStore?: SubscriptionStore;
   invoiceStore?: InvoiceStore;
+  botService?: TelegramBotService;
   ai: AiConfig;
   userId: string;
   betterAuth?: typeof defaultBetterAuth;
@@ -139,6 +141,7 @@ export function createApiRouter(deps: ApiDeps): Router {
       subscriptionStore: activeSubscriptionStore,
       userStore: activeUserStore,
       invoiceStore: activeInvoiceStore,
+      botService: deps.botService,
     }),
   );
   router.use(createConversationsRouter(deps.store, deps.userId));
