@@ -301,21 +301,25 @@ export class TelegramBotService {
       }
 
       if (data.startsWith('pay_stars:')) {
-        const [, planId, userId, invoiceId] = data.split(':');
+        const parts = data.split(':');
+        const planId = (parts[1] || 'gpt-pro') as PlanId;
+        const storedUser = this.chatToUserId.get(chatId);
+        const userId = parts[2] || storedUser || config.demoUserId;
+        const invoiceId = parts[3] || undefined;
         const plan = getPlanItem(planId) ?? getPlanItem('gpt-pro')!;
         const stars = calculateStars(plan.priceMonthly);
 
-        await this.answerCallbackQuery(cb.id, `Создаём счёт на ${stars} ⭐️`);
+        await this.answerCallbackQuery(cb.id, `Выставляем счёт на ${stars} ⭐️`);
         await this.sendInvoice(chatId, {
-          title: `Подписка Ketner AI: ${plan.id.toUpperCase()}`,
-          description: `Месячная подписка на 30 дней: ${plan.modelsHighlight}`,
+          title: `Ketner AI: ${plan.id.toUpperCase()}`,
+          description: `Месячная подписка на 30 дней: ${plan.modelsHighlight}. Мгновенная активация.`,
           payload: JSON.stringify({
             planId: plan.id,
-            userId: userId || config.demoUserId,
-            invoiceId: invoiceId || undefined,
+            userId,
+            invoiceId,
           }),
           currency: 'XTR',
-          prices: [{ label: `Подписка ${plan.id.toUpperCase()}`, amount: stars }],
+          prices: [{ label: `Тариф ${plan.id.toUpperCase()}`, amount: stars }],
         });
         return { handled: true, action: 'invoice_stars_sent' };
       }
@@ -458,52 +462,79 @@ export class TelegramBotService {
 
       const text = msg.text?.trim() ?? '';
 
-      // Команда /start с deep-link параметром: /start pay_gpt-pro__demo-user__stars123
-      if (text.startsWith('/start pay_')) {
-        const payload = text.replace('/start pay_', '');
+      // Команда /start с deep-link параметром: /start pay_stars_12345 или /start pay_ultra
+      if (text.startsWith('/start pay_') || text.startsWith('/start stars_')) {
+        const rawPayload = text.startsWith('/start pay_')
+          ? text.replace('/start pay_', '').trim()
+          : text.replace('/start ', '').trim();
+
         let planId: PlanId = 'gpt-pro';
-        let userId: string = config.demoUserId;
+        let userId: string = this.chatToUserId.get(chatId) || config.demoUserId;
         let invoiceId: string | undefined;
 
-        if (payload.includes('__')) {
-          const [p, u, inv] = payload.split('__');
-          planId = (p || 'gpt-pro') as PlanId;
-          userId = u || config.demoUserId;
-          invoiceId = inv || undefined;
-        } else {
-          const parts = payload.split('_');
+        if (rawPayload.startsWith('stars_')) {
+          invoiceId = rawPayload;
+          const inv = this.deps.invoiceStore.getTelegramStarsInvoice(invoiceId);
+          if (inv) {
+            planId = inv.planId;
+            userId = inv.userId;
+          }
+        } else if (rawPayload.includes('__')) {
+          const parts = rawPayload.split('__');
           planId = (parts[0] || 'gpt-pro') as PlanId;
-          userId = parts[1] || config.demoUserId;
+          if (parts[1]?.startsWith('stars_')) {
+            invoiceId = parts[1];
+            const inv = this.deps.invoiceStore.getTelegramStarsInvoice(invoiceId);
+            if (inv) {
+              planId = inv.planId;
+              userId = inv.userId;
+            }
+          } else {
+            userId = parts[1] || userId;
+            invoiceId = parts[2] || undefined;
+          }
+        } else if (rawPayload.includes('_')) {
+          const parts = rawPayload.split('_');
+          planId = (parts[0] || 'gpt-pro') as PlanId;
+          userId = parts[1] || userId;
           invoiceId = parts.slice(2).join('_') || undefined;
+        } else if (rawPayload) {
+          planId = rawPayload as PlanId;
         }
 
         this.chatToUserId.set(chatId, userId);
         const plan = getPlanItem(planId) ?? getPlanItem('gpt-pro')!;
         const stars = calculateStars(plan.priceMonthly);
 
+        // 1. АВТОМАТИЧЕСКИ выставляем нативный счёт на оплату в Telegram Stars (sendInvoice)
+        await this.sendInvoice(chatId, {
+          title: `Ketner AI: ${plan.id.toUpperCase()}`,
+          description: `Месячная подписка на 30 дней: ${plan.modelsHighlight}. Активируется мгновенно на ваш аккаунт.`,
+          payload: JSON.stringify({
+            planId: plan.id,
+            userId,
+            invoiceId,
+          }),
+          currency: 'XTR',
+          prices: [{ label: `Тариф ${plan.id.toUpperCase()}`, amount: stars }],
+        });
+
+        // 2. Дополнительно отправляем карточку с описанием возможностей тарифа
         const bulletsText = plan.bullets.ru.map((b) => `• ${b}`).join('\n');
         const planText = [
-          '🤖 *Ketner AI Billing*',
+          `💎 *Тариф ${plan.id.toUpperCase()}*`,
           '',
-          `Вы выбрали тариф: *${plan.id.toUpperCase()}*`,
-          `💰 Стоимость: *${plan.priceMonthly} ₽* или *${stars} ⭐️ (Telegram Stars)*`,
-          `Лимит: *${plan.limitBadge?.ru ?? 'Без лимита'}*`,
+          `⭐️ Счёт на *${stars} Stars* выставлен выше. Нажмите нативную кнопку **Заплатить** для оплаты в Telegram.`,
           '',
           '✨ *Включено в подписку:*',
           bulletsText,
           '',
-          'Выберите удобный способ оплаты:',
+          '💡 _Или оплатите через СБП:_',
         ].join('\n');
 
         await this.sendMessage(chatId, planText, {
           reply_markup: {
             inline_keyboard: [
-              [
-                {
-                  text: `⭐️ Оплатить ${stars} ⭐️ Stars`,
-                  callback_data: `pay_stars:${plan.id}:${userId}:${invoiceId ?? ''}`,
-                },
-              ],
               [
                 {
                   text: `⚡ Оплатить через СБП (${plan.priceMonthly} ₽)`,
@@ -589,7 +620,7 @@ export class TelegramBotService {
     return { handled: false };
   }
 
-  async sendPlansMessage(chatId: number | string, userId: string): Promise<void> {
+  async sendPlansMessage(chatId: number | string, _userId?: string): Promise<void> {
     const premiumPlans = PLANS.filter((p) => p.priceMonthly > 0);
     let plansText = '💎 *Тарифные планы Ketner AI:*\n\n';
 
@@ -606,7 +637,7 @@ export class TelegramBotService {
     const buttons = premiumPlans.map((p) => [
       {
         text: `⭐️ Оплатить ${p.id.toUpperCase()} (${calculateStars(p.priceMonthly)} ⭐️)`,
-        callback_data: `pay_stars:${p.id}:${userId}:`,
+        callback_data: `pay_stars:${p.id}`,
       },
     ]);
 

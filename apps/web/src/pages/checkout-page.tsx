@@ -12,7 +12,6 @@ import { Button } from '@/components/ui/button';
 import { Card, CardText, CardTitle } from '@/components/ui/card';
 import { Field, Input } from '@/components/ui/input';
 import { QrCode } from '@/components/ui/qr-code';
-import { useAuth } from '@/features/auth/auth-store';
 import {
   confirmSbpPayment,
   confirmTelegramStarsPayment,
@@ -56,7 +55,6 @@ export function CheckoutPage() {
   const plan = getPlan(planId);
   const checkout = useBilling((state) => state.checkout);
   const setSubscription = useBilling((state) => state.setSubscription);
-  const user = useAuth((state) => state.user);
 
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('card');
 
@@ -306,7 +304,7 @@ export function CheckoutPage() {
   const botUsername = starsInvoice?.botUsername || 'Robo_kassa_bot';
   const botDeepLink =
     starsInvoice?.botDeepLink ||
-    `https://t.me/${botUsername}?start=pay_${plan.id}__${user?.id || 'demo-user'}`;
+    `https://t.me/${botUsername}?start=pay_${plan.id}`;
 
   return (
     <div className="mx-auto flex w-full max-w-xl flex-col gap-6 px-4 py-10 animate-fade-in">

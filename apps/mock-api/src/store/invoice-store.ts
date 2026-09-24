@@ -64,10 +64,10 @@ export function createInvoiceStore(): InvoiceStore {
       starsAmount: number,
       botUsername: string,
     ): TelegramStarsInvoice {
-      const id = `stars_${Date.now()}_${crypto.randomBytes(4).toString('hex')}`;
+      const id = `stars_${Date.now()}_${crypto.randomBytes(3).toString('hex')}`;
       const expiresAt = new Date(Date.now() + 30 * 60 * 1000).toISOString();
       const cleanUsername = botUsername.replace(/^@/, '');
-      const botDeepLink = `https://t.me/${cleanUsername}?start=pay_${planId}__${userId}__${id}`;
+      const botDeepLink = `https://t.me/${cleanUsername}?start=pay_${planId}__${id}`;
 
       const invoice: TelegramStarsInvoice = {
         id,
