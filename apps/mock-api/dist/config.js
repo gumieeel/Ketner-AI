@@ -66,6 +66,10 @@ export const config = {
     googleClientSecret: process.env.GOOGLE_CLIENT_SECRET || undefined,
     githubClientId: process.env.GITHUB_CLIENT_ID || undefined,
     githubClientSecret: process.env.GITHUB_CLIENT_SECRET || undefined,
+    /** Telegram Bot для приёма оплаты (Telegram Stars и СБП). */
+    telegramBotToken: process.env.TELEGRAM_BOT_TOKEN ?? '',
+    telegramBotUsername: process.env.TELEGRAM_BOT_USERNAME ?? 'KetnerAIBot',
+    telegramPaymentProviderToken: process.env.TELEGRAM_PAYMENT_PROVIDER_TOKEN ?? '',
     ai: {
         thinkingMs: [
             readNumber('MOCK_AI_THINKING_MIN_MS', 350),

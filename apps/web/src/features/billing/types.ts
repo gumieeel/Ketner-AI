@@ -21,3 +21,27 @@ export interface Plan {
   modelsHighlight?: string;
   bullets: Record<Language, readonly string[]>;
 }
+
+export type PaymentMethod = 'card' | 'sbp' | 'stars';
+
+export interface SbpInvoice {
+  id: string;
+  planId: PlanId;
+  amount: number;
+  currency: 'RUB';
+  status: 'pending' | 'paid' | 'expired';
+  qrPayload: string;
+  deepLink: string;
+  expiresAt: string;
+}
+
+export interface TelegramStarsInvoice {
+  id: string;
+  planId: PlanId;
+  priceRub: number;
+  starsAmount: number;
+  botUsername: string;
+  botDeepLink: string;
+  status: 'pending' | 'paid';
+  expiresAt: string;
+}

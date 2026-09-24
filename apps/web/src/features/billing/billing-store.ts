@@ -12,6 +12,7 @@ interface BillingState {
   loadSubscription: () => Promise<void>;
   checkout: (planId: PlanId) => Promise<void>;
   cancel: () => Promise<void>;
+  setSubscription: (subscription: Subscription, userPlan: PlanId) => void;
 }
 
 export const useBilling = create<BillingState>((set) => ({
@@ -19,6 +20,19 @@ export const useBilling = create<BillingState>((set) => ({
   plans: [...PLANS],
   loading: false,
   error: null,
+
+  setSubscription: (subscription: Subscription, userPlan: PlanId) => {
+    set({ subscription, loading: false });
+    const currentUser = useAuth.getState().user;
+    if (currentUser) {
+      useAuth.setState({
+        user: {
+          ...currentUser,
+          plan: userPlan,
+        },
+      });
+    }
+  },
 
   loadSubscription: async () => {
     try {

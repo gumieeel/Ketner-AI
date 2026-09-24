@@ -1,13 +1,14 @@
 import { Router } from 'express';
 import { config } from '../config.js';
 import { createAuthMiddleware } from '../middleware/auth.js';
-import { subscriptionStore as defaultSubscriptionStore, userStore as defaultUserStore, } from '../store/index.js';
+import { invoiceStore as defaultInvoiceStore, subscriptionStore as defaultSubscriptionStore, userStore as defaultUserStore, } from '../store/index.js';
 import { createAuthRouter } from './auth.js';
 import { createBillingRouter } from './billing.js';
 import { createChatRouter } from './chat.js';
 import { createConversationsRouter } from './conversations.js';
 import { healthRouter } from './health.js';
 import { createMetaRouter } from './meta.js';
+import { createTelegramRouter } from './telegram.js';
 /**
  * Описание контракта API.
  *
@@ -89,6 +90,7 @@ export function createApiRouter(deps) {
     const router = Router();
     const activeUserStore = deps.userStore ?? defaultUserStore;
     const activeSubscriptionStore = deps.subscriptionStore ?? defaultSubscriptionStore;
+    const activeInvoiceStore = deps.invoiceStore ?? defaultInvoiceStore;
     router.use(createAuthMiddleware(activeUserStore, deps.betterAuth));
     router.get('/', (_request, response) => {
         response.json(describeService());
@@ -99,7 +101,13 @@ export function createApiRouter(deps) {
     router.use(createBillingRouter({
         subscriptionStore: activeSubscriptionStore,
         userStore: activeUserStore,
+        invoiceStore: activeInvoiceStore,
         defaultUserId: deps.userId,
+    }));
+    router.use(createTelegramRouter({
+        subscriptionStore: activeSubscriptionStore,
+        userStore: activeUserStore,
+        invoiceStore: activeInvoiceStore,
     }));
     router.use(createConversationsRouter(deps.store, deps.userId));
     router.use('/chat', createChatRouter(deps));

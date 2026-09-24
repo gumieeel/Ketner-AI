@@ -10,8 +10,8 @@ import type { ModelCatalog, ModelInfo, PlanId, PlanLimits } from '../types.js';
 export const DEFAULT_MODEL_ID = 'ketner-mini';
 
 export const MODELS: readonly ModelInfo[] = [
-  { id: DEFAULT_MODEL_ID, name: 'Ketner mini', contextMessages: 20 },
-  { id: 'ketner-pro', name: 'Ketner pro', contextMessages: 60 },
+  { id: DEFAULT_MODEL_ID, name: 'Qwen 2.5 Coder', contextMessages: 20 },
+  { id: 'ketner-pro', name: 'Qwen 2.5 Max', contextMessages: 60 },
 ];
 
 export const PLAN_LIMITS: Record<PlanId, PlanLimits> = {

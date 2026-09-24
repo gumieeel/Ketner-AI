@@ -8,3 +8,5 @@ export const conversationStore = createConversationStore(config.storeFile);
 export const userStore = createUserStore(config.userStoreFile);
 /** Хранилище подписок по умолчанию: файл из `config.subscriptionStoreFile`. */
 export const subscriptionStore = createSubscriptionStore(config.subscriptionStoreFile);
+/** Хранилище счетов (СБП, Telegram Stars). */
+export { invoiceStore, createInvoiceStore } from './invoice-store.js';

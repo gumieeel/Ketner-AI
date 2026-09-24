@@ -105,3 +105,29 @@ export interface ModelCatalog {
   defaultModelId: string;
   limits: Record<PlanId, PlanLimits>;
 }
+
+export interface SbpInvoice {
+  id: string;
+  userId: string;
+  planId: PlanId;
+  amount: number;
+  currency: 'RUB';
+  status: 'pending' | 'paid' | 'expired';
+  qrPayload: string;
+  deepLink: string;
+  expiresAt: string;
+  createdAt: string;
+}
+
+export interface TelegramStarsInvoice {
+  id: string;
+  userId: string;
+  planId: PlanId;
+  priceRub: number;
+  starsAmount: number;
+  botUsername: string;
+  botDeepLink: string;
+  status: 'pending' | 'paid';
+  expiresAt: string;
+  createdAt: string;
+}

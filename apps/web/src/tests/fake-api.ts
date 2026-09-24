@@ -23,8 +23,8 @@ export interface FakeApi {
 
 const META: ChatMeta = {
   models: [
-    { id: 'ketner-mini', name: 'Ketner mini', contextMessages: 20 },
-    { id: 'ketner-pro', name: 'Ketner pro', contextMessages: 60 },
+    { id: 'ketner-mini', name: 'Qwen 2.5 Coder', contextMessages: 20 },
+    { id: 'ketner-pro', name: 'Qwen 2.5 Max', contextMessages: 60 },
   ],
   defaultModelId: 'ketner-mini',
   limits: {
@@ -129,6 +129,7 @@ function streamOf(chunks: string[], delayMs: number, signal: AbortSignal | null)
  */
 export function installFakeApi(options: FakeApiOptions = {}): FakeApi {
   const delayMs = options.chunkDelayMs ?? 1;
+  let currentPlan = 'free';
   const conversations = new Map<string, { conversation: Conversation; messages: Message[] }>();
   const api: FakeApi = {
     completions: 0,
@@ -210,7 +211,7 @@ export function installFakeApi(options: FakeApiOptions = {}): FakeApi {
             id: 'demo-user',
             email: 'demo@ketner.ai',
             name: 'Демо Пользователь',
-            plan: 'free',
+            plan: currentPlan,
             createdAt: new Date().toISOString(),
           },
         });
@@ -287,6 +288,7 @@ export function installFakeApi(options: FakeApiOptions = {}): FakeApi {
 
       if (url === '/api/billing/checkout' && method === 'POST') {
         const planId = (body.planId as string) || 'plus';
+        currentPlan = planId;
         return json({
           subscription: {
             userId: 'demo-user',
@@ -302,6 +304,7 @@ export function installFakeApi(options: FakeApiOptions = {}): FakeApi {
       }
 
       if (url === '/api/billing/cancel' && method === 'POST') {
+        currentPlan = 'free';
         return json({
           subscription: {
             userId: 'demo-user',
@@ -312,6 +315,124 @@ export function installFakeApi(options: FakeApiOptions = {}): FakeApi {
           user: {
             id: 'demo-user',
             plan: 'free',
+          },
+        });
+      }
+
+      if (url === '/api/billing/sbp/create-invoice' && method === 'POST') {
+        const planId = (body.planId as string) || 'gpt-pro';
+        return json({
+          invoice: {
+            id: 'sbp_mock_123',
+            planId,
+            amount: 1199,
+            currency: 'RUB',
+            status: 'pending',
+            qrPayload: 'https://qr.nspk.ru/AD10000KETNERAI_sbp_mock_123',
+            deepLink: 'https://qr.nspk.ru/AD10000KETNERAI_sbp_mock_123',
+            expiresAt: new Date(Date.now() + 900000).toISOString(),
+          },
+        });
+      }
+
+      if (url.startsWith('/api/billing/sbp/status/') && method === 'GET') {
+        return json({
+          status: 'pending',
+          invoice: {
+            id: 'sbp_mock_123',
+            planId: 'gpt-pro',
+            amount: 1199,
+            currency: 'RUB',
+            status: 'pending',
+            qrPayload: 'https://qr.nspk.ru/AD10000KETNERAI_sbp_mock_123',
+            deepLink: 'https://qr.nspk.ru/AD10000KETNERAI_sbp_mock_123',
+            expiresAt: new Date(Date.now() + 900000).toISOString(),
+          },
+        });
+      }
+
+      if (url.startsWith('/api/billing/sbp/confirm/') && method === 'POST') {
+        currentPlan = 'gpt-pro';
+        return json({
+          success: true,
+          subscription: {
+            userId: 'demo-user',
+            plan: 'gpt-pro',
+            status: 'active',
+            renewsAt: new Date(Date.now() + 86400000 * 30).toISOString(),
+          },
+          user: {
+            id: 'demo-user',
+            plan: 'gpt-pro',
+          },
+          invoice: {
+            id: 'sbp_mock_123',
+            planId: 'gpt-pro',
+            amount: 1199,
+            currency: 'RUB',
+            status: 'paid',
+            qrPayload: 'https://qr.nspk.ru/AD10000KETNERAI_sbp_mock_123',
+            deepLink: 'https://qr.nspk.ru/AD10000KETNERAI_sbp_mock_123',
+            expiresAt: new Date(Date.now() + 900000).toISOString(),
+          },
+        });
+      }
+
+      if (url === '/api/billing/telegram-stars/create-invoice' && method === 'POST') {
+        const planId = (body.planId as string) || 'gpt-pro';
+        return json({
+          invoice: {
+            id: 'stars_mock_123',
+            planId,
+            priceRub: 1199,
+            starsAmount: 650,
+            botUsername: 'KetnerAIBot',
+            botDeepLink: `https://t.me/KetnerAIBot?start=pay_${planId}_demo-user`,
+            status: 'pending',
+            expiresAt: new Date(Date.now() + 1800000).toISOString(),
+          },
+        });
+      }
+
+      if (url.startsWith('/api/billing/telegram-stars/status/') && method === 'GET') {
+        return json({
+          status: 'pending',
+          invoice: {
+            id: 'stars_mock_123',
+            planId: 'gpt-pro',
+            priceRub: 1199,
+            starsAmount: 650,
+            botUsername: 'KetnerAIBot',
+            botDeepLink: 'https://t.me/KetnerAIBot?start=pay_gpt-pro_demo-user',
+            status: 'pending',
+            expiresAt: new Date(Date.now() + 1800000).toISOString(),
+          },
+        });
+      }
+
+      if (url.startsWith('/api/billing/telegram-stars/confirm/') && method === 'POST') {
+        currentPlan = 'gpt-pro';
+        return json({
+          success: true,
+          subscription: {
+            userId: 'demo-user',
+            plan: 'gpt-pro',
+            status: 'active',
+            renewsAt: new Date(Date.now() + 86400000 * 30).toISOString(),
+          },
+          user: {
+            id: 'demo-user',
+            plan: 'gpt-pro',
+          },
+          invoice: {
+            id: 'stars_mock_123',
+            planId: 'gpt-pro',
+            priceRub: 1199,
+            starsAmount: 650,
+            botUsername: 'KetnerAIBot',
+            botDeepLink: 'https://t.me/KetnerAIBot?start=pay_gpt-pro_demo-user',
+            status: 'paid',
+            expiresAt: new Date(Date.now() + 1800000).toISOString(),
           },
         });
       }

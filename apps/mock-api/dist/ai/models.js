@@ -7,8 +7,8 @@
  */
 export const DEFAULT_MODEL_ID = 'ketner-mini';
 export const MODELS = [
-    { id: DEFAULT_MODEL_ID, name: 'Ketner mini', contextMessages: 20 },
-    { id: 'ketner-pro', name: 'Ketner pro', contextMessages: 60 },
+    { id: DEFAULT_MODEL_ID, name: 'Qwen 2.5 Coder', contextMessages: 20 },
+    { id: 'ketner-pro', name: 'Qwen 2.5 Max', contextMessages: 60 },
 ];
 export const PLAN_LIMITS = {
     free: { messagesPerDay: 10, contextMessages: 20 },

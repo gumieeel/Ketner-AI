@@ -182,8 +182,10 @@ describe('чат: отправка, стриминг и управление о�
     await screen.findByRole('heading', { level: 2, name: EMPTY_TITLE });
 
     await user.click(screen.getByRole('button', { name: 'Выбрать модель' }));
-    await user.click(await screen.findByRole('option', { name: /Ketner pro/ }));
-    expect(screen.getByRole('button', { name: 'Выбрать модель' })).toHaveTextContent('Ketner pro');
+    await user.click(await screen.findByRole('option', { name: /Qwen 2\.5 Max/ }));
+    expect(screen.getByRole('button', { name: 'Выбрать модель' })).toHaveTextContent(
+      'Qwen 2.5 Max',
+    );
 
     await sendMessage(user, 'Вопрос');
     expect(await screen.findByText('Готово')).toBeInTheDocument();

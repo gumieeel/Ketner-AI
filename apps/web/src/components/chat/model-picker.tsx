@@ -16,7 +16,7 @@ const MODEL_NAME_KEYS: Record<string, TranslationKey> = {
 /** Модель по умолчанию: используется, пока каталог не загрузился или недоступен. */
 const FALLBACK_MODEL: ModelInfo = {
   id: DEFAULT_MODEL_ID,
-  name: 'Ketner mini',
+  name: 'Qwen 2.5 Coder',
   contextMessages: 20,
 };
 

@@ -1,6 +1,6 @@
 import { getAuthToken } from '../auth/auth-store';
 import { ApiError } from '../chat/api';
-import type { Plan, PlanId, Subscription } from './types';
+import type { Plan, PlanId, SbpInvoice, Subscription, TelegramStarsInvoice } from './types';
 
 const API_BASE = '/api';
 const JSON_HEADERS = { 'Content-Type': 'application/json' };
@@ -67,6 +67,72 @@ export async function cancelSubscription(): Promise<{
   user: { plan: PlanId };
 }> {
   return request<{ subscription: Subscription; user: { plan: PlanId } }>('/billing/cancel', {
+    method: 'POST',
+  });
+}
+
+// --- СБП ---
+
+export async function createSbpInvoice(planId: PlanId): Promise<{ invoice: SbpInvoice }> {
+  return request<{ invoice: SbpInvoice }>('/billing/sbp/create-invoice', {
+    method: 'POST',
+    body: JSON.stringify({ planId }),
+  });
+}
+
+export async function getSbpInvoiceStatus(
+  invoiceId: string,
+): Promise<{ status: string; invoice: SbpInvoice }> {
+  return request<{ status: string; invoice: SbpInvoice }>(`/billing/sbp/status/${invoiceId}`);
+}
+
+export async function confirmSbpPayment(invoiceId: string): Promise<{
+  success: boolean;
+  subscription: Subscription;
+  user: { plan: PlanId };
+  invoice: SbpInvoice;
+}> {
+  return request<{
+    success: boolean;
+    subscription: Subscription;
+    user: { plan: PlanId };
+    invoice: SbpInvoice;
+  }>(`/billing/sbp/confirm/${invoiceId}`, {
+    method: 'POST',
+  });
+}
+
+// --- Telegram Stars ---
+
+export async function createTelegramStarsInvoice(
+  planId: PlanId,
+): Promise<{ invoice: TelegramStarsInvoice }> {
+  return request<{ invoice: TelegramStarsInvoice }>('/billing/telegram-stars/create-invoice', {
+    method: 'POST',
+    body: JSON.stringify({ planId }),
+  });
+}
+
+export async function getTelegramStarsStatus(
+  invoiceId: string,
+): Promise<{ status: string; invoice: TelegramStarsInvoice }> {
+  return request<{ status: string; invoice: TelegramStarsInvoice }>(
+    `/billing/telegram-stars/status/${invoiceId}`,
+  );
+}
+
+export async function confirmTelegramStarsPayment(invoiceId: string): Promise<{
+  success: boolean;
+  subscription: Subscription;
+  user: { plan: PlanId };
+  invoice: TelegramStarsInvoice;
+}> {
+  return request<{
+    success: boolean;
+    subscription: Subscription;
+    user: { plan: PlanId };
+    invoice: TelegramStarsInvoice;
+  }>(`/billing/telegram-stars/confirm/${invoiceId}`, {
     method: 'POST',
   });
 }

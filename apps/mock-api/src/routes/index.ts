@@ -4,9 +4,11 @@ import type { AiConfig } from '../config.js';
 import { createAuthMiddleware } from '../middleware/auth.js';
 import type { ConversationStore } from '../store/conversation-store.js';
 import {
+  invoiceStore as defaultInvoiceStore,
   subscriptionStore as defaultSubscriptionStore,
   userStore as defaultUserStore,
 } from '../store/index.js';
+import type { InvoiceStore } from '../store/invoice-store.js';
 import type { SubscriptionStore } from '../store/subscription-store.js';
 import type { UserStore } from '../store/user-store.js';
 import { createAuthRouter } from './auth.js';
@@ -15,6 +17,7 @@ import { createChatRouter } from './chat.js';
 import { createConversationsRouter } from './conversations.js';
 import { healthRouter } from './health.js';
 import { createMetaRouter } from './meta.js';
+import { createTelegramRouter } from './telegram.js';
 
 import type { defaultBetterAuth } from '../auth/better-auth.js';
 
@@ -23,6 +26,7 @@ export interface ApiDeps {
   store: ConversationStore;
   userStore?: UserStore;
   subscriptionStore?: SubscriptionStore;
+  invoiceStore?: InvoiceStore;
   ai: AiConfig;
   userId: string;
   betterAuth?: typeof defaultBetterAuth;
@@ -111,6 +115,7 @@ export function createApiRouter(deps: ApiDeps): Router {
   const router = Router();
   const activeUserStore = deps.userStore ?? defaultUserStore;
   const activeSubscriptionStore = deps.subscriptionStore ?? defaultSubscriptionStore;
+  const activeInvoiceStore = deps.invoiceStore ?? defaultInvoiceStore;
 
   router.use(createAuthMiddleware(activeUserStore, deps.betterAuth));
 
@@ -125,7 +130,15 @@ export function createApiRouter(deps: ApiDeps): Router {
     createBillingRouter({
       subscriptionStore: activeSubscriptionStore,
       userStore: activeUserStore,
+      invoiceStore: activeInvoiceStore,
       defaultUserId: deps.userId,
+    }),
+  );
+  router.use(
+    createTelegramRouter({
+      subscriptionStore: activeSubscriptionStore,
+      userStore: activeUserStore,
+      invoiceStore: activeInvoiceStore,
     }),
   );
   router.use(createConversationsRouter(deps.store, deps.userId));
