@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { LogoutIcon, SparkleIcon } from '@/components/icons';
+import { LogoutIcon, SparkleIcon, TerminalIcon } from '@/components/icons';
 import { LanguageToggle } from '@/components/layout/language-toggle';
 import { ThemeToggle } from '@/components/layout/theme-toggle';
 import { Badge } from '@/components/ui/badge';
@@ -134,6 +134,27 @@ export function SettingsPage() {
               </Link>
             )}
           </div>
+        </div>
+      </Card>
+
+      <Card className="flex flex-col gap-4">
+        <div className="flex flex-wrap items-center justify-between gap-4">
+          <div>
+            <div className="flex items-center gap-2">
+              <CardTitle>{t('nav.apiDocs')}</CardTitle>
+              <Badge tone="brand">CLI & MCP</Badge>
+            </div>
+            <CardText className="mt-1">
+              Управление секретными API-ключами и руководство по подключению агента к вашему
+              терминалу, IDE и MCP.
+            </CardText>
+          </div>
+          <Link to="/api-docs">
+            <Button variant="outline" size="sm">
+              <TerminalIcon className="text-base" />
+              {t('nav.apiDocs')} →
+            </Button>
+          </Link>
         </div>
       </Card>
 

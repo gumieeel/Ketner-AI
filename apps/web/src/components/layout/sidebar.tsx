@@ -9,6 +9,7 @@ import {
   SearchIcon,
   SettingsIcon,
   SparkleIcon,
+  TerminalIcon,
   TrashIcon,
   UserIcon,
 } from '@/components/icons';
@@ -210,18 +211,22 @@ export function Sidebar() {
           ))}
         </div>
 
-        <div className="mt-auto flex flex-col gap-2 border-t border-stroke/15 p-3">
-          <NavLink to="/settings" onClick={close} className={navLinkClasses}>
-            <SettingsIcon className="text-lg" />
-            {t('nav.settings')}
+        <div className="mt-auto flex flex-col gap-1.5 border-t border-stroke/15 p-3">
+          <NavLink to="/api-docs" onClick={close} className={navLinkClasses}>
+            <TerminalIcon className="text-lg" />
+            {t('nav.apiDocs')}
+          </NavLink>
+          <NavLink to="/docs" onClick={close} className={navLinkClasses}>
+            <BookOpenIcon className="text-lg" />
+            {t('nav.docs')}
           </NavLink>
           <NavLink to="/pricing" onClick={close} className={navLinkClasses}>
             <SparkleIcon className="text-lg" />
             {t('nav.upgrade')}
           </NavLink>
-          <NavLink to="/docs" onClick={close} className={navLinkClasses}>
-            <BookOpenIcon className="text-lg" />
-            {t('nav.docs')}
+          <NavLink to="/settings" onClick={close} className={navLinkClasses}>
+            <SettingsIcon className="text-lg" />
+            {t('nav.settings')}
           </NavLink>
 
           <div className="flex items-center gap-2 pt-1">

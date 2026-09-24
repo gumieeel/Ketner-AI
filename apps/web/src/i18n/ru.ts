@@ -14,6 +14,7 @@ export const ru = {
   'nav.guest': 'Гость',
   'nav.upgrade': 'Улучшить план',
   'nav.docs': 'Документация',
+  'nav.apiDocs': 'API & Агенты',
   'nav.empty': 'История пока пуста',
   'nav.emptyHint': 'Начните новый чат — он появится здесь.',
   'nav.skipToContent': 'Перейти к основному содержимому',
@@ -198,6 +199,22 @@ export const ru = {
   'onboarding.text': 'Задайте вопрос или начните с одного из примеров ниже.',
   'onboarding.examples': 'Примеры запросов',
   'onboarding.startWith': 'Открыть в чате',
+
+  'apiDocs.title': 'API & Подключение AI-агентов к машине',
+  'apiDocs.subtitle':
+    'Полное руководство по интеграции: подключите модели Ketner AI к вашему терминалу, кодовой базе, IDE (Cursor, VS Code, Windsurf) и через протокол MCP.',
+  'apiDocs.keysTitle': 'Секретные API-ключи',
+  'apiDocs.keysDesc':
+    'Используйте API-ключи для авторизации запросов локальных агентов, CLI и внешних IDE.',
+  'apiDocs.createKey': 'Создать API-ключ',
+  'apiDocs.keyNamePlaceholder': 'Название ключа (например, MacBook Agent)',
+  'apiDocs.revoke': 'Отозвать',
+  'apiDocs.keyActive': 'Активен',
+  'apiDocs.tabCli': '🖥️ Ketner CLI & Агент',
+  'apiDocs.tabIde': '🔌 Cursor & VS Code',
+  'apiDocs.tabMcp': '🧩 MCP Серверы',
+  'apiDocs.tabSdk': '🐍 Python & Node SDK',
+  'apiDocs.tabSecurity': '🛡️ Безопасность на машине',
 
   'common.loading': 'Загрузка…',
   'common.soon': 'Скоро',

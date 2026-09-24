@@ -1,6 +1,7 @@
 import type { RouteObject } from 'react-router-dom';
 import { AppShell } from '@/components/layout/app-shell';
 import { StandaloneLayout } from '@/components/layout/standalone-layout';
+import { ApiDocsPage } from '@/pages/api-docs-page';
 import { ChatPage } from '@/pages/chat-page';
 import { CheckoutPage } from '@/pages/checkout-page';
 import { DocumentationPage } from '@/pages/documentation-page';
@@ -30,6 +31,7 @@ export const routes: RouteObject[] = [
       { path: 'pricing', element: <PricingPage /> },
       { path: 'docs', element: <DocumentationPage /> },
       { path: 'docs/plans/:planId', element: <DocumentationPage /> },
+      { path: 'docs/api', element: <ApiDocsPage /> },
       { path: 'checkout/:planId', element: <CheckoutPage /> },
       { path: '*', element: <NotFoundPage /> },
     ],
@@ -48,6 +50,18 @@ export const routes: RouteObject[] = [
     element: <AppShell />,
     errorElement: <RouteErrorPage />,
     children: [{ index: true, element: <SettingsPage /> }],
+  },
+  {
+    path: 'api-docs',
+    element: <AppShell />,
+    errorElement: <RouteErrorPage />,
+    children: [{ index: true, element: <ApiDocsPage /> }],
+  },
+  {
+    path: 'developers',
+    element: <AppShell />,
+    errorElement: <RouteErrorPage />,
+    children: [{ index: true, element: <ApiDocsPage /> }],
   },
   {
     path: 'onboarding',

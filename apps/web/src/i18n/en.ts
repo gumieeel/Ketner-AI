@@ -16,6 +16,7 @@ export const en: Record<TranslationKey, string> = {
   'nav.guest': 'Guest',
   'nav.upgrade': 'Upgrade plan',
   'nav.docs': 'Documentation',
+  'nav.apiDocs': 'API & Agents',
   'nav.empty': 'No conversations yet',
   'nav.emptyHint': 'Start a new chat — it will show up here.',
   'nav.skipToContent': 'Skip to main content',
@@ -198,6 +199,22 @@ export const en: Record<TranslationKey, string> = {
   'onboarding.text': 'Ask a question, or start with one of the examples below.',
   'onboarding.examples': 'Example prompts',
   'onboarding.startWith': 'Open in chat',
+
+  'apiDocs.title': 'API & Local Machine Agent Integration',
+  'apiDocs.subtitle':
+    'Complete integration guide: connect Ketner AI models to your local terminal, project codebase, IDEs (Cursor, VS Code, Windsurf), and via MCP.',
+  'apiDocs.keysTitle': 'Secret API Keys',
+  'apiDocs.keysDesc':
+    'Use API keys to authenticate requests from your local agents, CLI, and IDEs.',
+  'apiDocs.createKey': 'Create API Key',
+  'apiDocs.keyNamePlaceholder': 'Key name (e.g. MacBook Agent)',
+  'apiDocs.revoke': 'Revoke',
+  'apiDocs.keyActive': 'Active',
+  'apiDocs.tabCli': '🖥️ Ketner CLI & Agent',
+  'apiDocs.tabIde': '🔌 Cursor & VS Code',
+  'apiDocs.tabMcp': '🧩 MCP Servers',
+  'apiDocs.tabSdk': '🐍 Python & Node SDK',
+  'apiDocs.tabSecurity': '🛡️ Machine Security',
 
   'common.loading': 'Loading…',
   'common.soon': 'Soon',

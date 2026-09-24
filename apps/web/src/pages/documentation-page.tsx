@@ -1,6 +1,6 @@
 import { useEffect } from 'react';
 import { Link, useLocation, useParams } from 'react-router-dom';
-import { ArrowLeftIcon, CheckIcon, SparkleIcon } from '@/components/icons';
+import { ArrowLeftIcon, CheckIcon, SparkleIcon, TerminalIcon } from '@/components/icons';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardText, CardTitle } from '@/components/ui/card';
@@ -211,16 +211,31 @@ export function DocumentationPage() {
             </p>
           </div>
 
-          <Link to="/pricing">
-            <Button variant="primary" size="md">
-              <SparkleIcon className="text-base" />
-              {t('nav.upgrade')}
-            </Button>
-          </Link>
+          <div className="flex items-center gap-2">
+            <Link to="/api-docs">
+              <Button variant="outline" size="md">
+                <TerminalIcon className="text-base" />
+                {t('nav.apiDocs')}
+              </Button>
+            </Link>
+            <Link to="/pricing">
+              <Button variant="primary" size="md">
+                <SparkleIcon className="text-base" />
+                {t('nav.upgrade')}
+              </Button>
+            </Link>
+          </div>
         </div>
 
         {/* Быстрая навигация */}
         <div className="mt-4 flex flex-wrap gap-2 pt-2">
+          <Link
+            to="/api-docs"
+            className="rounded-lg px-3 py-1.5 text-xs font-semibold border border-accent/40 bg-accent/10 text-accent hover:opacity-90 transition-all flex items-center gap-1.5"
+          >
+            <TerminalIcon className="text-xs" />
+            Подключение агента к машине (API)
+          </Link>
           {PLAN_DETAILS.map((p) => (
             <a
               key={p.id}

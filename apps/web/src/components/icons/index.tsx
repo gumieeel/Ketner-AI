@@ -354,3 +354,40 @@ export function CreditCardIcon(props: IconProps) {
     </SvgIcon>
   );
 }
+
+export function TerminalIcon(props: IconProps) {
+  return (
+    <SvgIcon {...props}>
+      <polyline points="4 17 10 11 4 5" />
+      <line x1="12" y1="19" x2="20" y2="19" />
+    </SvgIcon>
+  );
+}
+
+export function KeyIcon(props: IconProps) {
+  return (
+    <SvgIcon {...props}>
+      <circle cx="7.5" cy="15.5" r="4.5" />
+      <path d="m11 12 8-8 3 3-1.5 1.5-2-2-1.5 1.5 1 1-1.5 1.5-2-2L13 10" />
+    </SvgIcon>
+  );
+}
+
+export function CpuIcon(props: IconProps) {
+  return (
+    <SvgIcon {...props}>
+      <rect x="4" y="4" width="16" height="16" rx="2" />
+      <rect x="9" y="9" width="6" height="6" />
+      <path d="M9 1v3M15 1v3M9 20v3M15 20v3M20 9h3M20 14h3M1 9h3M1 14h3" />
+    </SvgIcon>
+  );
+}
+
+export function CodeIcon(props: IconProps) {
+  return (
+    <SvgIcon {...props}>
+      <polyline points="16 18 22 12 16 6" />
+      <polyline points="8 6 2 12 8 18" />
+    </SvgIcon>
+  );
+}

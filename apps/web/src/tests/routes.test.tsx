@@ -58,6 +58,16 @@ describe('маршрутизация и каркас экранов', () => {
     expect(screen.getByText('Тарифные планы и лимиты')).toBeInTheDocument();
   });
 
+  it('страница API и подключения агентов открывается по /api-docs', () => {
+    renderRoute('/api-docs');
+
+    expect(
+      screen.getByRole('heading', { level: 1, name: /API & Подключение AI-агентов к машине/ }),
+    ).toBeInTheDocument();
+    expect(screen.getByText('Секретные API-ключи')).toBeInTheDocument();
+    expect(screen.getByText('Base URL (OpenAI V1)')).toBeInTheDocument();
+  });
+
   it('страница входа показывает форму и кнопки OAuth-заглушек', () => {
     renderRoute('/login');
 

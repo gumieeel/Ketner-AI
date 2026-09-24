@@ -1,6 +1,12 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { ArrowRightIcon, BookOpenIcon, CheckIcon, SparkleIcon } from '@/components/icons';
+import {
+  ArrowRightIcon,
+  BookOpenIcon,
+  CheckIcon,
+  SparkleIcon,
+  TerminalIcon,
+} from '@/components/icons';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
@@ -429,10 +435,16 @@ export function LandingPage() {
           ))}
         </div>
 
-        <div className="flex flex-wrap items-center justify-center gap-4 pt-2">
+        <div className="flex flex-wrap items-center justify-center gap-3 pt-2">
           <Link to="/pricing">
             <Button variant="primary" size="md">
               Сравнить все тарифы детально →
+            </Button>
+          </Link>
+          <Link to="/api-docs">
+            <Button variant="outline" size="md" className="flex items-center gap-1.5">
+              <TerminalIcon className="text-base text-accent" />
+              API & Агенты
             </Button>
           </Link>
           <Link to="/docs">
