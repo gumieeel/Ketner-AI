@@ -103,7 +103,10 @@ export function createUserStore(file: string): UserStore {
     },
 
     findById(id: string) {
-      const user = snapshot.users.find((candidate) => candidate.id === id);
+      const normalized = id.trim().toLowerCase();
+      const user = snapshot.users.find(
+        (candidate) => candidate.id === id || candidate.email.toLowerCase() === normalized,
+      );
       return user ? toPublicUser(user) : null;
     },
 
@@ -170,7 +173,10 @@ export function createUserStore(file: string): UserStore {
     },
 
     updatePlan(id: string, plan: PlanId) {
-      const user = snapshot.users.find((candidate) => candidate.id === id);
+      const normalized = id.trim().toLowerCase();
+      const user = snapshot.users.find(
+        (candidate) => candidate.id === id || candidate.email.toLowerCase() === normalized,
+      );
       if (!user) {
         return null;
       }

@@ -69,7 +69,8 @@ export function createUserStore(file) {
             return snapshot.users.map(toPublicUser);
         },
         findById(id) {
-            const user = snapshot.users.find((candidate) => candidate.id === id);
+            const normalized = id.trim().toLowerCase();
+            const user = snapshot.users.find((candidate) => candidate.id === id || candidate.email.toLowerCase() === normalized);
             return user ? toPublicUser(user) : null;
         },
         findByEmail(email) {
@@ -120,7 +121,8 @@ export function createUserStore(file) {
             return toPublicUser(user);
         },
         updatePlan(id, plan) {
-            const user = snapshot.users.find((candidate) => candidate.id === id);
+            const normalized = id.trim().toLowerCase();
+            const user = snapshot.users.find((candidate) => candidate.id === id || candidate.email.toLowerCase() === normalized);
             if (!user) {
                 return null;
             }

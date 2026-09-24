@@ -283,6 +283,30 @@ export class TelegramBotService {
                 });
                 return { handled: true, action: 'sbp_payment_confirmed' };
             }
+            if (data.startsWith('confirm_stars:')) {
+                const parts = data.split(':');
+                const invoiceId = parts[1] || undefined;
+                const planId = (parts[2] || 'gpt-pro');
+                const storedUser = this.chatToUserId.get(chatId);
+                const userId = parts[3] || storedUser || config.demoUserId;
+                if (invoiceId) {
+                    this.deps.invoiceStore.markTelegramStarsPaid(invoiceId);
+                }
+                this.deps.subscriptionStore.checkout(userId, planId);
+                const user = this.deps.userStore.updatePlan(userId, planId);
+                if (user?.email && user.email !== userId) {
+                    this.deps.subscriptionStore.checkout(user.email, planId);
+                }
+                await this.answerCallbackQuery(cb.id, 'Оплата успешно подтверждена!');
+                await this.sendMessage(chatId, `🎉 *Оплата подтверждена!*\n\nВаш тариф *${planId.toUpperCase()}* успешно активирован на 30 дней.\n\nВсе флагманские модели ИИ разблокированы в Ketner AI!`, {
+                    reply_markup: {
+                        inline_keyboard: [
+                            [{ text: '🚀 Открыть веб-чат Ketner AI', url: `${config.webAppUrl}/chat` }],
+                        ],
+                    },
+                });
+                return { handled: true, action: 'stars_payment_confirmed' };
+            }
             await this.answerCallbackQuery(cb.id);
             return { handled: true, action: 'callback_unhandled' };
         }
@@ -388,18 +412,24 @@ export class TelegramBotService {
                 // 2. Дополнительно отправляем карточку с описанием возможностей тарифа
                 const bulletsText = plan.bullets.ru.map((b) => `• ${b}`).join('\n');
                 const planText = [
-                    `💎 *Тариф ${plan.id.toUpperCase()}*`,
+                    `💎 *Оформление подписки ${plan.id.toUpperCase()}*`,
                     '',
-                    `⭐️ Счёт на *${stars} Stars* выставлен выше. Нажмите нативную кнопку **Заплатить** для оплаты в Telegram.`,
+                    `⭐️ Счёт на *${stars} Stars* выставлен выше. Нажмите нативную кнопку **Заплатить** для оплаты в Telegram, либо кнопку подтверждения ниже:`,
                     '',
                     '✨ *Включено в подписку:*',
                     bulletsText,
                     '',
-                    '💡 _Или оплатите через СБП:_',
+                    '💡 _Доступные действия:_',
                 ].join('\n');
                 await this.sendMessage(chatId, planText, {
                     reply_markup: {
                         inline_keyboard: [
+                            [
+                                {
+                                    text: '✅ Подтвердить оплату и активировать',
+                                    callback_data: `confirm_stars:${invoiceId || ''}:${plan.id}:${userId}`,
+                                },
+                            ],
                             [
                                 {
                                     text: `⚡ Оплатить через СБП (${plan.priceMonthly} ₽)`,
@@ -417,8 +447,9 @@ export class TelegramBotService {
                 });
                 return { handled: true, action: 'pay_deep_link_handled' };
             }
+            const cleanCmd = text.replace(/@\w+/g, '').trim().toLowerCase();
             // Обычный /start
-            if (text === '/start') {
+            if (cleanCmd === '/start' || cleanCmd === 'start' || cleanCmd === '/menu') {
                 const welcomeText = [
                     `👋 Добро пожаловать в официальный платёжный бот **Ketner AI** (@${this.username})!`,
                     '',
@@ -426,8 +457,14 @@ export class TelegramBotService {
                     '• ⭐️ **Telegram Stars** — быстрая оплата виртуальной валютой Telegram без ввода карт.',
                     '• ⚡ **СБП (Система быстрых платежей)** — мгновенная оплата через Сбербанк, Т-Банк, Альфа-Банк по QR-коду с 0% комиссии.',
                     '',
+                    '💎 *Доступные тарифы:*',
+                    '• **GPT Pro** (650 ⭐️ / 1 199 ₽) — GPT-6 Astra, GPT-5.5 Omni, o3-mini',
+                    '• **Claude Pro** (650 ⭐️ / 1 199 ₽) — Claude 4.5 Sonnet & Opus, Fable 5.5',
+                    '• **Gemini Pro** (650 ⭐️ / 1 199 ₽) — Gemini 3.8 Pro, Gemini 3.5 Ultra',
+                    '• **Ultra** (1 350 ⭐️ / 2 499 ₽) — Полный безлимит ко всем моделям без пауз',
+                    '',
                     '💡 *Доступные команды:*',
-                    '/plans — посмотреть доступные тарифы (GPT Pro, Claude Pro, Gemini Pro, Ultra)',
+                    '/plans — посмотреть каталог тарифов и оплатить',
                     '/status — проверить статус вашей подписки',
                     '/help — контакты и поддержка',
                 ].join('\n');
@@ -443,19 +480,25 @@ export class TelegramBotService {
                 return { handled: true, action: 'start_handled' };
             }
             // /plans
-            if (text === '/plans') {
+            if (cleanCmd === '/plans' ||
+                cleanCmd === 'plans' ||
+                cleanCmd === '/tariffs' ||
+                cleanCmd === '/pricing') {
                 const targetUserId = this.chatToUserId.get(chatId) || config.demoUserId;
                 await this.sendPlansMessage(chatId, targetUserId);
                 return { handled: true, action: 'plans_handled' };
             }
             // /status
-            if (text === '/status') {
+            if (cleanCmd === '/status' ||
+                cleanCmd === 'status' ||
+                cleanCmd === '/sub' ||
+                cleanCmd === '/subscription') {
                 const targetUserId = this.chatToUserId.get(chatId) || config.demoUserId;
                 await this.sendStatusMessage(chatId, targetUserId);
                 return { handled: true, action: 'status_handled' };
             }
             // /help
-            if (text === '/help') {
+            if (cleanCmd === '/help' || cleanCmd === 'help') {
                 const helpText = [
                     'ℹ️ *Справка и поддержка Ketner AI*',
                     '',

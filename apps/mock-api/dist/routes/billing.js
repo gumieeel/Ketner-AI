@@ -256,6 +256,12 @@ export function createBillingRouter({ subscriptionStore, userStore, invoiceStore
         const userId = getUserId(request) || invoice.userId;
         const subscription = subscriptionStore.checkout(userId, invoice.planId);
         const user = userStore.updatePlan(userId, invoice.planId);
+        if (user?.email && user.email !== userId) {
+            subscriptionStore.checkout(user.email, invoice.planId);
+        }
+        if (user?.id && user.id !== userId) {
+            subscriptionStore.checkout(user.id, invoice.planId);
+        }
         response.json({
             success: true,
             subscription,

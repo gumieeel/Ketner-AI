@@ -30,7 +30,8 @@ export function createSubscriptionStore(file) {
     const persist = () => writeSnapshot(file, snapshot);
     return {
         get(userId) {
-            const existing = snapshot.subscriptions.find((sub) => sub.userId === userId);
+            const normalized = userId.trim().toLowerCase();
+            const existing = snapshot.subscriptions.find((sub) => sub.userId === userId || sub.userId.toLowerCase() === normalized);
             if (existing) {
                 return existing;
             }
@@ -43,7 +44,8 @@ export function createSubscriptionStore(file) {
         },
         checkout(userId, plan) {
             const renewsAt = new Date(Date.now() + 30 * 24 * 3600 * 1000).toISOString();
-            const existingIndex = snapshot.subscriptions.findIndex((sub) => sub.userId === userId);
+            const normalized = userId.trim().toLowerCase();
+            const existingIndex = snapshot.subscriptions.findIndex((sub) => sub.userId === userId || sub.userId.toLowerCase() === normalized);
             const updated = {
                 userId,
                 plan,
