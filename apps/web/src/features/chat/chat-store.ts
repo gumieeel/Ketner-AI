@@ -429,11 +429,11 @@ export const useChat = create<ChatState>((set, get) => {
       }
 
       if (isFree) {
-        if (isFreeLimitReached()) {
+        if (isFreeLimitReached(authUser?.id)) {
           useUpgradeModal.getState().open({ reason: 'free_limit' });
           return;
         }
-        incrementFreeUsage();
+        incrementFreeUsage(authUser?.id);
       }
 
       const userMessage: Message = {
@@ -526,7 +526,7 @@ export const useChat = create<ChatState>((set, get) => {
           requiredPlan: getRequiredPlanName(currentModel),
         });
       }
-      if (isFree && isFreeLimitReached()) {
+      if (isFree && isFreeLimitReached(authUser?.id)) {
         useUpgradeModal.getState().open({ reason: 'free_limit' });
         return;
       }
@@ -569,7 +569,7 @@ export const useChat = create<ChatState>((set, get) => {
           requiredPlan: getRequiredPlanName(currentModel),
         });
       }
-      if (isFree && isFreeLimitReached()) {
+      if (isFree && isFreeLimitReached(authUser?.id)) {
         useUpgradeModal.getState().open({ reason: 'free_limit' });
         return;
       }

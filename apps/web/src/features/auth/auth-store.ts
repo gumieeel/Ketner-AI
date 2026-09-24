@@ -8,6 +8,8 @@ import {
   oauthLogin,
   signup as apiSignup,
 } from './api';
+import { refreshAccountLimit } from '../billing/free-usage';
+import { useUpgradeModal } from '../billing/upgrade-modal-store';
 import type { AuthSession, AuthStatus, LoginPayload, PlanId, SignupPayload, User } from './types';
 
 interface AuthState {
@@ -131,6 +133,8 @@ export const useAuth = create<AuthState>((set, get) => ({
         const token =
           ((res.data as Record<string, unknown>).token as string) || 'better-auth-session';
         saveSession({ user, token, expiresAt: '' });
+        refreshAccountLimit(user.id);
+        useUpgradeModal.getState().close();
         set({ user, token, status: 'authenticated', error: null });
         return;
       }
@@ -143,6 +147,8 @@ export const useAuth = create<AuthState>((set, get) => ({
       try {
         const session = await apiLogin(payload);
         saveSession(session);
+        refreshAccountLimit(session.user.id);
+        useUpgradeModal.getState().close();
         set({ user: session.user, token: session.token, status: 'authenticated', error: null });
         return;
       } catch {
@@ -178,6 +184,8 @@ export const useAuth = create<AuthState>((set, get) => ({
         const token =
           ((res.data as Record<string, unknown>).token as string) || 'better-auth-session';
         saveSession({ user, token, expiresAt: '' });
+        refreshAccountLimit(user.id);
+        useUpgradeModal.getState().close();
         set({ user, token, status: 'authenticated', error: null });
         return;
       }
@@ -190,6 +198,8 @@ export const useAuth = create<AuthState>((set, get) => ({
       try {
         const session = await apiSignup(payload);
         saveSession(session);
+        refreshAccountLimit(session.user.id);
+        useUpgradeModal.getState().close();
         set({ user: session.user, token: session.token, status: 'authenticated', error: null });
         return;
       } catch {
@@ -206,6 +216,8 @@ export const useAuth = create<AuthState>((set, get) => ({
     try {
       const session = await oauthLogin(provider);
       saveSession(session);
+      refreshAccountLimit(session.user.id);
+      useUpgradeModal.getState().close();
       set({ user: session.user, token: session.token, status: 'authenticated', error: null });
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Ошибка авторизации через соцсеть';
@@ -222,6 +234,7 @@ export const useAuth = create<AuthState>((set, get) => ({
       // Игнорируем сетевые ошибки при выходе
     }
     saveSession(null);
+    useUpgradeModal.getState().close();
     set({ user: null, token: null, status: 'unauthenticated', error: null });
     if (token) {
       await apiLogout(token);

@@ -1,6 +1,7 @@
 import { fireEvent, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { useAuth } from '@/features/auth/auth-store';
+import { getFreeUsage, incrementFreeUsage, isFreeLimitReached } from '@/features/billing/free-usage';
 import { installFakeApi } from './fake-api';
 import { renderRoute, resetAuth, resetChat, resetPreferences } from './test-utils';
 
@@ -122,5 +123,42 @@ describe('auth-flow: сценарии авторизации и сессии', (
       expect(useAuth.getState().status).toBe('unauthenticated');
       expect(useAuth.getState().user).toBeNull();
     });
+  });
+
+  it('при входе в аккаунт лимит обновляется и у каждого аккаунта свои независимые лимиты', async () => {
+    // 1. Гость тратит 3 сообщения и исчерпывает лимит
+    incrementFreeUsage('guest');
+    incrementFreeUsage('guest');
+    incrementFreeUsage('guest');
+    expect(isFreeLimitReached('guest')).toBe(true);
+
+    // 2. Входим под аккаунтом demo@ketner.ai
+    renderRoute('/login');
+    const emailInput = screen.getByLabelText(/Email/i);
+    const passwordInput = screen.getByLabelText(/Пароль/i);
+    const submitButton = screen.getByRole('button', { name: 'Войти' });
+
+    fireEvent.change(emailInput, { target: { value: 'demo@ketner.ai' } });
+    fireEvent.change(passwordInput, { target: { value: 'password123' } });
+    fireEvent.click(submitButton);
+
+    await waitFor(() => {
+      expect(useAuth.getState().status).toBe('authenticated');
+    });
+
+    const activeUser = useAuth.getState().user!;
+    // Лимит для аккаунта обновился / свежий (не заблокирован гостевым лимитом)
+    expect(isFreeLimitReached(activeUser.id)).toBe(false);
+    expect(getFreeUsage(activeUser.id).remaining).toBe(3);
+
+    // 3. Аккаунт 1 тратит свои сообщения
+    incrementFreeUsage(activeUser.id);
+    incrementFreeUsage(activeUser.id);
+    incrementFreeUsage(activeUser.id);
+    expect(isFreeLimitReached(activeUser.id)).toBe(true);
+
+    // 4. Другой аккаунт 'user-2' имеет свой независимый лимит
+    expect(isFreeLimitReached('user-2')).toBe(false);
+    expect(getFreeUsage('user-2').remaining).toBe(3);
   });
 });
