@@ -11,11 +11,14 @@ test('billing: каталог тарифов GET /api/plans', async (t) => {
   assert.equal(response.status, 200);
 
   const { plans } = await readJson<{ plans: PlanItem[] }>(response);
-  assert.equal(plans.length, 3);
+  assert.equal(plans.length, 5);
   assert.equal(plans[0]?.id, 'free');
-  assert.equal(plans[1]?.id, 'plus');
-  assert.equal(plans[2]?.id, 'pro');
-  assert.equal(plans[1]?.priceMonthly, 20);
+  assert.equal(plans[1]?.id, 'gpt-pro');
+  assert.equal(plans[2]?.id, 'claude-pro');
+  assert.equal(plans[3]?.id, 'gemini-pro');
+  assert.equal(plans[4]?.id, 'ultra');
+  assert.equal(plans[1]?.priceMonthly, 1199);
+  assert.equal(plans[4]?.priceMonthly, 2499);
 });
 
 test('billing: получение подписки и оформление checkout', async (t) => {
@@ -47,11 +50,11 @@ test('billing: получение подписки и оформление check
       'Content-Type': 'application/json',
       Authorization: `Bearer ${token}`,
     },
-    body: JSON.stringify({ planId: 'ultra' }),
+    body: JSON.stringify({ planId: 'invalid-nonexistent-plan' }),
   });
   assert.equal(badCheckout.status, 400);
 
-  // Оформляем Plus
+  // Оформляем Plus / GPT Pro
   const checkoutRes = await fetch(`${server.baseUrl}/api/billing/checkout`, {
     method: 'POST',
     headers: {

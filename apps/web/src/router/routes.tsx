@@ -3,6 +3,7 @@ import { AppShell } from '@/components/layout/app-shell';
 import { StandaloneLayout } from '@/components/layout/standalone-layout';
 import { ChatPage } from '@/pages/chat-page';
 import { CheckoutPage } from '@/pages/checkout-page';
+import { DocumentationPage } from '@/pages/documentation-page';
 import { LandingPage } from '@/pages/landing-page';
 import { LoginPage } from '@/pages/login-page';
 import { NotFoundPage } from '@/pages/not-found-page';
@@ -27,6 +28,8 @@ export const routes: RouteObject[] = [
       { path: 'login', element: <LoginPage /> },
       { path: 'signup', element: <SignupPage /> },
       { path: 'pricing', element: <PricingPage /> },
+      { path: 'docs', element: <DocumentationPage /> },
+      { path: 'docs/plans/:planId', element: <DocumentationPage /> },
       { path: 'checkout/:planId', element: <CheckoutPage /> },
       { path: '*', element: <NotFoundPage /> },
     ],

@@ -6,7 +6,7 @@ import type { Language } from '@/features/preferences/preferences-store';
  */
 export type { Language };
 
-export type PlanId = 'free' | 'plus' | 'pro';
+export type PlanId = 'free' | 'gpt-pro' | 'claude-pro' | 'gemini-pro' | 'ultra' | 'plus' | 'pro';
 export type MessageRole = 'user' | 'assistant';
 
 /** `pending` и `streaming` живут только на клиенте во время генерации. */

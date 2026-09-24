@@ -105,7 +105,7 @@ export function CheckoutPage() {
             <CardText className="mt-1 text-xs text-accent">{t('settings.statusActive')}</CardText>
           </div>
           <p className="text-xl font-semibold text-text">
-            ${plan.priceMonthly}
+            {plan.priceMonthly.toLocaleString('ru-RU')} ₽
             <span className="ml-1 text-xs font-normal text-muted">{t('pricing.month')}</span>
           </p>
         </Card>
@@ -125,7 +125,7 @@ export function CheckoutPage() {
   }
 
   return (
-    <div className="mx-auto flex w-full max-w-lg flex-col gap-6 px-4 py-12">
+    <div className="mx-auto flex w-full max-w-lg flex-col gap-6 px-4 py-12 animate-fade-in">
       <h1 className="text-2xl font-semibold tracking-tight">{t('checkout.title')}</h1>
 
       <Card className="flex items-center justify-between gap-4">
@@ -134,7 +134,7 @@ export function CheckoutPage() {
           <CardText className="mt-1">{t('checkout.selectedPlan')}</CardText>
         </div>
         <p className="text-2xl font-semibold">
-          ${plan.priceMonthly}
+          {plan.priceMonthly.toLocaleString('ru-RU')} ₽
           <span className="ml-1 text-sm font-normal text-zinc-500 dark:text-zinc-400">
             {t('pricing.month')}
           </span>

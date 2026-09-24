@@ -32,19 +32,30 @@ describe('маршрутизация и каркас экранов', () => {
     expect(screen.getByRole('complementary', { name: 'Чаты' })).toBeInTheDocument();
   });
 
-  it('страница тарифов перечисляет три плана и ведёт на оформление', () => {
+  it('страница тарифов перечисляет пять планов и ведёт на оформление', () => {
     renderRoute('/pricing');
 
     expect(screen.getByRole('heading', { level: 1, name: 'Тарифы' })).toBeInTheDocument();
-    for (const plan of ['Free', 'Plus', 'Pro']) {
+    for (const plan of ['Free', 'GPT Pro', 'Claude Pro', 'Gemini Pro', 'Ultra']) {
       expect(screen.getByRole('heading', { level: 2, name: plan })).toBeInTheDocument();
     }
 
     const paidLinks = screen.getAllByRole('link', { name: 'Выбрать план' });
     expect(paidLinks.map((link) => link.getAttribute('href'))).toEqual([
-      '/checkout/plus',
-      '/checkout/pro',
+      '/checkout/gpt-pro',
+      '/checkout/claude-pro',
+      '/checkout/gemini-pro',
+      '/checkout/ultra',
     ]);
+  });
+
+  it('страница документации открывается по /docs', () => {
+    renderRoute('/docs');
+
+    expect(
+      screen.getByRole('heading', { level: 1, name: 'Документация Ketner AI' }),
+    ).toBeInTheDocument();
+    expect(screen.getByText('Тарифные планы и лимиты')).toBeInTheDocument();
   });
 
   it('страница входа показывает форму и кнопки OAuth-заглушек', () => {

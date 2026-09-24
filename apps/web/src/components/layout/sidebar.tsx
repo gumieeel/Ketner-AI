@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, NavLink, useNavigate } from 'react-router-dom';
 import {
+  BookOpenIcon,
   CheckIcon,
   CloseIcon,
   EditIcon,
@@ -218,6 +219,10 @@ export function Sidebar() {
             <SparkleIcon className="text-lg" />
             {t('nav.upgrade')}
           </NavLink>
+          <NavLink to="/docs" onClick={close} className={navLinkClasses}>
+            <BookOpenIcon className="text-lg" />
+            {t('nav.docs')}
+          </NavLink>
 
           <div className="flex items-center gap-2 pt-1">
             {user ? (
@@ -239,7 +244,17 @@ export function Sidebar() {
                     {user.name}
                   </Link>
                   <p className="truncate text-xs text-muted">
-                    {user.plan === 'free' ? t('pricing.free') : user.plan.toUpperCase()}
+                    {user.plan === 'ultra'
+                      ? 'Ultra'
+                      : user.plan === 'gpt-pro'
+                        ? 'GPT Pro'
+                        : user.plan === 'claude-pro'
+                          ? 'Claude Pro'
+                          : user.plan === 'gemini-pro'
+                            ? 'Gemini Pro'
+                            : user.plan === 'free'
+                              ? t('pricing.free')
+                              : user.plan.toUpperCase()}
                   </p>
                 </div>
               </>

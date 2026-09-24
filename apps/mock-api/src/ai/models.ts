@@ -16,6 +16,10 @@ export const MODELS: readonly ModelInfo[] = [
 
 export const PLAN_LIMITS: Record<PlanId, PlanLimits> = {
   free: { messagesPerDay: 10, contextMessages: 20 },
+  'gpt-pro': { messagesPerDay: null, contextMessages: 120 },
+  'claude-pro': { messagesPerDay: null, contextMessages: 120 },
+  'gemini-pro': { messagesPerDay: null, contextMessages: 120 },
+  ultra: { messagesPerDay: null, contextMessages: 500 },
   plus: { messagesPerDay: null, contextMessages: 60 },
   pro: { messagesPerDay: null, contextMessages: 120 },
 };

@@ -1,4 +1,4 @@
-export type PlanId = 'free' | 'plus' | 'pro';
+export type PlanId = 'free' | 'gpt-pro' | 'claude-pro' | 'gemini-pro' | 'ultra' | 'plus' | 'pro';
 
 export interface User {
   id: string;

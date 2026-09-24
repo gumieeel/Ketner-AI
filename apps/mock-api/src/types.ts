@@ -5,7 +5,7 @@
  * провайдера ИИ меняется источник данных, а не структуры.
  */
 
-export type PlanId = 'free' | 'plus' | 'pro';
+export type PlanId = 'free' | 'gpt-pro' | 'claude-pro' | 'gemini-pro' | 'ultra' | 'plus' | 'pro';
 
 export type SubscriptionStatus = 'active' | 'trialing' | 'past_due' | 'canceled';
 
@@ -21,6 +21,8 @@ export interface PlanItem {
   nameKey: string;
   priceMonthly: number;
   popular?: boolean;
+  limitBadge?: Record<Language, string>;
+  modelsHighlight?: string;
   bullets: Record<Language, readonly string[]>;
 }
 

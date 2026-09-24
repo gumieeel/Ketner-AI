@@ -7,12 +7,12 @@ type ButtonSize = 'sm' | 'md' | 'lg';
 
 const variantClasses: Record<ButtonVariant, string> = {
   primary:
-    'bg-accent text-[var(--color-accent-text)] hover:opacity-90 active:opacity-100 disabled:opacity-50',
+    'bg-accent text-[var(--color-accent-text)] hover:brightness-105 hover:shadow-md hover:shadow-accent/25 active:opacity-100 disabled:opacity-50',
   secondary:
-    'bg-surface text-text border border-stroke/20 hover:border-stroke/40 dark:border-stroke/30',
+    'bg-surface text-text border border-stroke/20 hover:border-stroke/40 hover:bg-canvas/50 dark:border-stroke/30',
   outline: 'border border-stroke text-text hover:bg-surface/80 dark:border-stroke',
   ghost: 'text-text hover:bg-surface hover:text-text',
-  danger: 'bg-red-600 text-white hover:bg-red-700',
+  danger: 'bg-red-600 text-white hover:bg-red-700 hover:shadow-md hover:shadow-red-600/25',
 };
 
 const sizeClasses: Record<ButtonSize, string> = {
@@ -43,8 +43,8 @@ export function Button({
       disabled={disabled ?? loading}
       aria-busy={loading || undefined}
       className={cn(
-        'inline-flex items-center justify-center rounded-[10px] font-medium transition-colors',
-        'disabled:cursor-not-allowed disabled:opacity-60',
+        'inline-flex items-center justify-center rounded-[10px] font-medium transition-all duration-150 ease-out active:scale-[0.98]',
+        'disabled:cursor-not-allowed disabled:opacity-60 disabled:active:scale-100',
         variantClasses[variant],
         sizeClasses[size],
         className,

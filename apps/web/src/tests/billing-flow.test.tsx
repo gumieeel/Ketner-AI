@@ -82,8 +82,10 @@ describe('billing-flow: каталог тарифов, чекаут и упра�
     renderRoute('/pricing');
 
     expect(screen.getByRole('heading', { level: 1, name: 'Тарифы' })).toBeInTheDocument();
-    expect(screen.getByText('Plus')).toBeInTheDocument();
-    expect(screen.getByText('Pro')).toBeInTheDocument();
+    expect(screen.getByText('GPT Pro')).toBeInTheDocument();
+    expect(screen.getByText('Claude Pro')).toBeInTheDocument();
+    expect(screen.getByText('Gemini Pro')).toBeInTheDocument();
+    expect(screen.getByText('Ultra')).toBeInTheDocument();
 
     // Кнопка для бесплатного плана должна быть помечена как текущий план
     expect(screen.getByRole('button', { name: /Текущий план/i })).toBeDisabled();

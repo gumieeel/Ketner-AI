@@ -22,6 +22,9 @@ export function StandaloneLayout() {
           <Link to="/pricing" className={linkClasses}>
             {t('nav.pricing')}
           </Link>
+          <Link to="/docs" className={linkClasses}>
+            {t('nav.docs')}
+          </Link>
           {status === 'authenticated' ? (
             <Link to="/chat" className={linkClasses}>
               {user?.name ? user.name.split(' ')[0] : 'В чат'}
@@ -39,8 +42,14 @@ export function StandaloneLayout() {
         <Outlet />
       </main>
 
-      <footer className="px-4 py-6 text-center text-xs text-zinc-500 md:px-8 dark:text-zinc-400">
-        {t('app.name')} — {t('landing.mockBadge')}
+      <footer className="flex flex-wrap items-center justify-center gap-3 px-4 py-6 text-center text-xs text-zinc-500 md:px-8 dark:text-zinc-400">
+        <span>
+          {t('app.name')} — {t('landing.mockBadge')}
+        </span>
+        <span>•</span>
+        <Link to="/docs" className="underline hover:text-text transition-colors">
+          {t('nav.docs')}
+        </Link>
       </footer>
     </div>
   );
