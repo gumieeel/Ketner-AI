@@ -14,7 +14,7 @@ export function PricingPage() {
   const currentPlan = user?.plan ?? 'free';
 
   return (
-    <div className="relative mx-auto flex w-full max-w-7xl flex-col gap-10 px-4 py-12 md:px-6 lg:px-8 animate-fade-in bg-ambient-mesh">
+    <div className="relative mx-auto flex w-full max-w-7xl flex-col gap-10 px-4 py-12 md:px-6 lg:px-8 animate-fade-in">
       {/* Заголовок страницы */}
       <div className="flex flex-col items-center gap-3 text-center animate-slide-up">
         <div className="inline-flex items-center gap-1.5 rounded-full border border-accent/30 bg-accent/10 px-3 py-1 text-xs font-medium text-accent">

@@ -6,7 +6,7 @@ import { Brand } from './brand';
 import { ThemeToggle } from './theme-toggle';
 
 const linkClasses =
-  'rounded-lg px-3 py-2 text-sm text-zinc-600 transition-colors hover:bg-zinc-100 hover:text-zinc-900 dark:text-zinc-300 dark:hover:bg-zinc-800 dark:hover:text-zinc-50';
+  'rounded-lg px-3 py-2 text-sm text-muted font-medium transition-colors hover:bg-surface hover:text-text';
 
 /** Каркас страниц вне приложения: лендинг, вход, тарифы, оформление подписки. */
 export function StandaloneLayout() {
@@ -15,8 +15,11 @@ export function StandaloneLayout() {
   const user = useAuth((state) => state.user);
 
   return (
-    <div className={cn('flex min-h-full flex-col bg-white dark:bg-zinc-900')}>
-      <header className="flex h-16 shrink-0 items-center gap-2 px-4 md:px-8">
+    <div className={cn('relative flex min-h-full flex-col bg-canvas text-text')}>
+      {/* Полноэкранный фоновый градиент без швов и обрезки */}
+      <div className="pointer-events-none fixed inset-0 z-0 bg-ambient-mesh opacity-90 transition-opacity" />
+
+      <header className="relative z-20 flex h-16 shrink-0 items-center gap-2 border-b border-stroke/15 bg-canvas/80 px-4 backdrop-blur-md md:px-8">
         <Brand />
         <nav className="ml-auto flex items-center gap-1">
           <Link to="/pricing" className={linkClasses}>
@@ -38,17 +41,21 @@ export function StandaloneLayout() {
         </nav>
       </header>
 
-      <main className="flex flex-1 flex-col">
+      <main className="relative z-10 flex flex-1 flex-col">
         <Outlet />
       </main>
 
-      <footer className="flex flex-wrap items-center justify-center gap-3 px-4 py-6 text-center text-xs text-zinc-500 md:px-8 dark:text-zinc-400">
+      <footer className="relative z-10 flex flex-wrap items-center justify-center gap-3 border-t border-stroke/10 bg-canvas/50 px-4 py-6 text-center text-xs text-muted backdrop-blur-sm md:px-8">
         <span>
           {t('app.name')} — {t('landing.mockBadge')}
         </span>
         <span>•</span>
         <Link to="/docs" className="underline hover:text-text transition-colors">
           {t('nav.docs')}
+        </Link>
+        <span>•</span>
+        <Link to="/pricing" className="underline hover:text-text transition-colors">
+          {t('nav.pricing')}
         </Link>
       </footer>
     </div>
