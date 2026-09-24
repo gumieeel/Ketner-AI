@@ -269,4 +269,75 @@ describe('чат: отправка, стриминг и управление о�
       '/pricing',
     );
   });
+
+  it('при попытке написать с платной моделью весь экран затемняется и появляется модалка перехода на PRO', async () => {
+    installFakeApi();
+    const user = setupChat();
+    await screen.findByRole('heading', { level: 2, name: EMPTY_TITLE });
+
+    // Выбираем платную модель GPT-6 Astra *
+    await user.click(screen.getByRole('button', { name: 'Выбрать модель' }));
+    await user.click(await screen.findByRole('option', { name: /GPT-6 Astra \*/ }));
+
+    // Пытаемся кликнуть в поле ввода или написать
+    const field = await screen.findByLabelText(COMPOSER);
+    await user.click(field);
+
+    // Весь экран затемняется: появляется модальное окно с ролью dialog и затемняющим фоном
+    const modal = await screen.findByRole('dialog');
+    expect(modal).toBeInTheDocument();
+    expect(modal).toHaveClass('backdrop-blur-md');
+    expect(within(modal).getAllByText(/Модель GPT-6 Astra \* доступна на PRO/).length).toBeGreaterThan(0);
+    expect(within(modal).getAllByText(/GPT Pro/).length).toBeGreaterThan(0);
+    expect(within(modal).getAllByText(/Ultra/).length).toBeGreaterThan(0);
+
+    // Кнопка переключения на бесплатную модель Qwen 2.5 Coder
+    const switchBtn = within(modal).getByRole('button', {
+      name: /Переключиться на бесплатную Qwen 2\.5 Coder/,
+    });
+    await user.click(switchBtn);
+
+    // Модалка закрылась, активной стала бесплатная модель
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+    expect(screen.getByRole('button', { name: 'Выбрать модель' })).toHaveTextContent(
+      'Qwen 2.5 Coder',
+    );
+  });
+
+  it('после 3 сообщений на бесплатном плане весь экран затемняется и выскакивает модалка исчерпания лимита', async () => {
+    installFakeApi({ reply: 'Ответ модели' });
+    const user = setupChat();
+    await screen.findByRole('heading', { level: 2, name: EMPTY_TITLE });
+
+    // Отправляем 1-е сообщение
+    await sendMessage(user, 'Первое сообщение');
+    expect(await screen.findAllByText('Первое сообщение')).not.toHaveLength(0);
+    await waitFor(() => expect(useChat.getState().streaming).toBe(false));
+
+    // Отправляем 2-е сообщение
+    await sendMessage(user, 'Второе сообщение');
+    expect(await screen.findAllByText('Второе сообщение')).not.toHaveLength(0);
+    await waitFor(() => expect(useChat.getState().streaming).toBe(false));
+
+    // Отправляем 3-е сообщение
+    await sendMessage(user, 'Третье сообщение');
+    expect(await screen.findAllByText('Третье сообщение')).not.toHaveLength(0);
+    await waitFor(() => expect(useChat.getState().streaming).toBe(false));
+
+    // После 3-го сообщения весь экран затемняется и открывается модалка лимита
+    const modal = await screen.findByRole('dialog');
+    expect(modal).toBeInTheDocument();
+    expect(modal).toHaveClass('backdrop-blur-md');
+    expect(within(modal).getByText('Лимит бесплатного плана исчерпан')).toBeInTheDocument();
+    expect(within(modal).getByText('3 из 3 сообщений использовано')).toBeInTheDocument();
+
+    // Закрываем модалку по кнопке закрытия
+    await user.click(within(modal).getAllByRole('button', { name: 'Закрыть' })[0]);
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+
+    // Пытаемся отправить 4-е сообщение — поле блокируется, модалка снова открывается
+    const field = screen.getByLabelText(COMPOSER);
+    await user.click(field);
+    expect(await screen.findByRole('dialog')).toBeInTheDocument();
+  });
 });

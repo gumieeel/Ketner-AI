@@ -5,7 +5,9 @@ import { CornerMark } from '@/components/ui/corner-mark';
 import { IconButton } from '@/components/ui/icon-button';
 import { StubAction } from '@/components/ui/stub-action';
 import { useAuth } from '@/features/auth/auth-store';
-import { canAccessModel, getRequiredPlanName } from '@/features/chat/can-access-model';
+import { isFreeLimitReached } from '@/features/billing/free-usage';
+import { useUpgradeModal } from '@/features/billing/upgrade-modal-store';
+import { canAccessModel, findModel, getRequiredPlanName } from '@/features/chat/can-access-model';
 import { useChat } from '@/features/chat/chat-store';
 import type { ModelInfo } from '@/features/chat/types';
 import { usePreferences } from '@/features/preferences/preferences-store';
@@ -37,46 +39,28 @@ export function Composer() {
   const user = useAuth((state) => state.user);
   const fieldRef = useRef<HTMLTextAreaElement | null>(null);
 
-  const models =
-    meta && meta.models.length > 0
-      ? meta.models
-      : [
-          { id: 'ketner-mini', name: 'Qwen 2.5 Coder', contextMessages: 20, isPro: false },
-          {
-            id: 'gpt-6-astra',
-            name: 'GPT-6 Astra *',
-            contextMessages: 120,
-            isPro: true,
-            requiredPlan: 'gpt-pro' as const,
-          },
-          {
-            id: 'claude-fable',
-            name: 'Claude Fable 5.5 *',
-            contextMessages: 120,
-            isPro: true,
-            requiredPlan: 'claude-pro' as const,
-          },
-          {
-            id: 'gemini-pro',
-            name: 'Gemini 3.8 Pro *',
-            contextMessages: 120,
-            isPro: true,
-            requiredPlan: 'gemini-pro' as const,
-          },
-          {
-            id: 'ketner-pro',
-            name: 'Qwen 2.5 Max *',
-            contextMessages: 60,
-            isPro: true,
-            requiredPlan: 'ultra' as const,
-          },
-        ];
-  const currentModel = models.find((m) => m.id === selectedModelId) ?? models[0];
+  const currentModel = findModel(meta?.models, selectedModelId);
   const hasAccess = canAccessModel(user?.plan, currentModel);
+  const isFree = !user || !user.plan || user.plan === 'free';
+  const freeLimitReached = isFree && isFreeLimitReached();
 
   const labelOf = (model: ModelInfo): string => {
     const key = MODEL_NAME_KEYS[model.id];
     return key ? t(key) : model.name;
+  };
+
+  const handlePaidModelAttempt = () => {
+    useUpgradeModal.getState().open({
+      reason: 'paid_model',
+      modelName: labelOf(currentModel),
+      requiredPlan: getRequiredPlanName(currentModel),
+    });
+  };
+
+  const handleFreeLimitAttempt = () => {
+    useUpgradeModal.getState().open({
+      reason: 'free_limit',
+    });
   };
 
   // Поле растёт под текст до предела, дальше включается прокрутка.
@@ -90,7 +74,17 @@ export function Composer() {
   }, [draft]);
 
   const submit = (): void => {
-    if (streaming || draft.trim() === '') {
+    if (streaming) {
+      return;
+    }
+    if (freeLimitReached) {
+      handleFreeLimitAttempt();
+      return;
+    }
+    if (!hasAccess) {
+      handlePaidModelAttempt();
+    }
+    if (draft.trim() === '') {
       return;
     }
     void send(draft);
@@ -104,9 +98,38 @@ export function Composer() {
     }
   };
 
+  const onFocusOrClick = (): void => {
+    if (!hasAccess) {
+      handlePaidModelAttempt();
+    } else if (freeLimitReached) {
+      handleFreeLimitAttempt();
+    }
+  };
+
   return (
     <div className="mx-auto w-full max-w-[760px] shrink-0 px-4 pb-[max(1rem,env(safe-area-inset-bottom))] md:pb-6">
-      {!hasAccess ? (
+      {freeLimitReached ? (
+        <div
+          role="alert"
+          className="mb-2.5 flex flex-wrap items-center justify-between gap-3 rounded-[12px] border border-amber-500/30 bg-amber-500/10 px-3.5 py-2.5 text-xs text-amber-700 dark:text-amber-300 shadow-sm"
+        >
+          <div className="flex items-center gap-2">
+            <span className="text-sm select-none" aria-hidden="true">
+              ⏳
+            </span>
+            <span className="font-medium">
+              {t('chat.freeLimitDesc')}
+            </span>
+          </div>
+          <Link
+            to="/pricing"
+            onClick={handleFreeLimitAttempt}
+            className="inline-flex items-center gap-1 shrink-0 rounded-[6px] bg-accent px-3 py-1.5 text-xs font-semibold text-[var(--color-accent-text)] transition hover:opacity-90 shadow-sm"
+          >
+            {t('chat.upgradeButton')} →
+          </Link>
+        </div>
+      ) : !hasAccess ? (
         <div
           role="alert"
           className="mb-2.5 flex flex-wrap items-center justify-between gap-3 rounded-[12px] border border-amber-500/30 bg-amber-500/10 px-3.5 py-2.5 text-xs text-amber-700 dark:text-amber-300 shadow-sm"
@@ -124,13 +147,17 @@ export function Composer() {
           </div>
           <Link
             to="/pricing"
+            onClick={handlePaidModelAttempt}
             className="inline-flex items-center gap-1 shrink-0 rounded-[6px] bg-accent px-3 py-1.5 text-xs font-semibold text-[var(--color-accent-text)] transition hover:opacity-90 shadow-sm"
           >
             {t('chat.upgradeButton')} →
           </Link>
         </div>
       ) : null}
-      <div className="relative rounded-[16px] border border-stroke/40 bg-surface p-2.5 transition-colors focus-within:border-accent">
+      <div
+        onClick={onFocusOrClick}
+        className="relative rounded-[16px] border border-stroke/40 bg-surface p-2.5 transition-colors focus-within:border-accent"
+      >
         <CornerMark
           size={13}
           className="pointer-events-none absolute top-2.5 left-2.5 text-accent opacity-90"
@@ -143,7 +170,17 @@ export function Composer() {
           ref={fieldRef}
           rows={1}
           value={draft}
-          onChange={(event) => setDraft(event.target.value)}
+          onClick={onFocusOrClick}
+          onFocus={onFocusOrClick}
+          onChange={(event) => {
+            if (!hasAccess) {
+              handlePaidModelAttempt();
+            } else if (freeLimitReached) {
+              handleFreeLimitAttempt();
+              return;
+            }
+            setDraft(event.target.value);
+          }}
           onKeyDown={onKeyDown}
           placeholder={t('chat.placeholder')}
           className="max-h-52 w-full resize-none bg-transparent pr-2 pl-6 pt-0.5 text-sm leading-5 text-text outline-none placeholder:text-muted"

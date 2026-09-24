@@ -3,6 +3,8 @@ import { RouterProvider, createMemoryRouter } from 'react-router-dom';
 import { ThemeSync } from '@/app/theme-sync';
 import { useAuth } from '@/features/auth/auth-store';
 import { useBilling } from '@/features/billing/billing-store';
+import { resetFreeUsage } from '@/features/billing/free-usage';
+import { useUpgradeModal } from '@/features/billing/upgrade-modal-store';
 import { useChat } from '@/features/chat/chat-store';
 import { DEFAULT_MODEL_ID, usePreferences } from '@/features/preferences/preferences-store';
 import { routes } from '@/router/routes';
@@ -31,6 +33,8 @@ export function resetPreferences(): void {
 
 /** Возвращает стор чата к исходному состоянию: он живёт на уровне модуля. */
 export function resetChat(): void {
+  useUpgradeModal.getState().close();
+  resetFreeUsage();
   useChat.setState({
     conversations: [],
     conversationsStatus: 'idle',

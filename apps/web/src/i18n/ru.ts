@@ -160,6 +160,17 @@ export const ru = {
     'Для общения с {model} требуется тариф {plan} или Ultra. Улучшите ваш план, чтобы продолжить.',
   'chat.upgradeBanner': 'Модель {model} доступна на тарифе {plan} или Ultra.',
   'chat.upgradeButton': 'Улучшить план',
+  'chat.freeLimitTitle': 'Лимит бесплатного плана исчерпан',
+  'chat.freeLimitBadge': '3 из 3 сообщений использовано',
+  'chat.freeLimitDesc':
+    'На бесплатном тарифе доступно 3 сообщения в час. Перейдите на PRO или Ultra, чтобы общаться без ограничений.',
+  'chat.paidModelTitle': 'Модель {model} доступна на PRO',
+  'chat.paidModelBadge': '★ PRO Модель',
+  'chat.paidModelDesc':
+    'Для общения с {model} требуется тариф {plan} или Ultra. Перейдите на PRO или переключитесь на бесплатную модель.',
+  'chat.switchToFreeModel': 'Переключиться на бесплатную Qwen 2.5 Coder',
+  'chat.viewPlans': 'Перейти к тарифам',
+  'chat.close': 'Закрыть',
   'chat.proBadge': 'PRO',
   'chat.modelMenu': 'Выбрать модель',
   'chat.modelContext': 'Контекст: {count} сообщений',

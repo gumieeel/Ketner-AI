@@ -86,7 +86,7 @@ function notFound(): Response {
 }
 
 /** Готовит поток SSE: несколько порций текста и финальное событие. */
-function sseChunks(reply: string, fail: boolean): string[] {
+function sseChunks(reply: string, fail: boolean, messageId = 'assistant-1'): string[] {
   if (fail) {
     return [
       `event: error\ndata: ${JSON.stringify({
@@ -108,7 +108,7 @@ function sseChunks(reply: string, fail: boolean): string[] {
 
   chunks.push(
     `event: done\ndata: ${JSON.stringify({
-      messageId: 'assistant-1',
+      messageId,
       usage: { inputTokens: 12, outputTokens: 24 },
     })}\n\n`,
   );
@@ -549,10 +549,13 @@ export function installFakeApi(options: FakeApiOptions = {}): FakeApi {
             },
           ];
         }
-        return new Response(streamOf(sseChunks(reply, fail), delayMs, init?.signal ?? null), {
-          status: 200,
-          headers: { 'Content-Type': 'text/event-stream' },
-        });
+        return new Response(
+          streamOf(sseChunks(reply, fail, `assistant-${index + 1}`), delayMs, init?.signal ?? null),
+          {
+            status: 200,
+            headers: { 'Content-Type': 'text/event-stream' },
+          },
+        );
       }
 
       return json({ error: { code: 'not_found', message: `Нет обработчика для ${url}` } }, 404);

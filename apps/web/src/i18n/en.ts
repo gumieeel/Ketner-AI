@@ -161,6 +161,17 @@ export const en: Record<TranslationKey, string> = {
     'Access to {model} requires {plan} or Ultra plan. Please upgrade your plan to continue.',
   'chat.upgradeBanner': 'Model {model} is available on {plan} or Ultra plan.',
   'chat.upgradeButton': 'Upgrade plan',
+  'chat.freeLimitTitle': 'Free plan limit reached',
+  'chat.freeLimitBadge': '3 of 3 messages used',
+  'chat.freeLimitDesc':
+    'Free plan includes 3 messages per hour. Upgrade to PRO or Ultra to chat without limits.',
+  'chat.paidModelTitle': 'Model {model} requires PRO',
+  'chat.paidModelBadge': '★ PRO Model',
+  'chat.paidModelDesc':
+    'Access to {model} requires {plan} or Ultra plan. Upgrade to PRO or switch back to the free model.',
+  'chat.switchToFreeModel': 'Switch to free Qwen 2.5 Coder',
+  'chat.viewPlans': 'View plans',
+  'chat.close': 'Close',
   'chat.proBadge': 'PRO',
   'chat.modelMenu': 'Choose a model',
   'chat.modelContext': 'Context: {count} messages',

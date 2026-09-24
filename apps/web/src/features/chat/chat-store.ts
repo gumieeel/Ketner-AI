@@ -1,6 +1,10 @@
 import { create } from 'zustand';
 import { translate } from '@/i18n';
 import { usePreferences } from '@/features/preferences/preferences-store';
+import { useAuth } from '@/features/auth/auth-store';
+import { incrementFreeUsage, isFreeLimitReached } from '@/features/billing/free-usage';
+import { useUpgradeModal } from '@/features/billing/upgrade-modal-store';
+import { canAccessModel, findModel, getRequiredPlanName } from './can-access-model';
 import * as api from './api';
 import { ApiError } from './api';
 import { deriveTitle } from './derive-title';
@@ -242,6 +246,12 @@ export const useChat = create<ChatState>((set, get) => {
         }
         return next;
       });
+
+      const authUser = useAuth.getState().user;
+      const isFree = !authUser || !authUser.plan || authUser.plan === 'free';
+      if (isFree && isFreeLimitReached()) {
+        useUpgradeModal.getState().open({ reason: 'free_limit' });
+      }
     } catch (error) {
       flush();
       if (isAbortError(error)) {
@@ -405,7 +415,27 @@ export const useChat = create<ChatState>((set, get) => {
         return;
       }
 
+      const authUser = useAuth.getState().user;
       const modelId = usePreferences.getState().chatModelId;
+      const currentModel = findModel(get().meta?.models, modelId);
+      const isFree = !authUser || !authUser.plan || authUser.plan === 'free';
+
+      if (!canAccessModel(authUser?.plan, currentModel)) {
+        useUpgradeModal.getState().open({
+          reason: 'paid_model',
+          modelName: currentModel.name,
+          requiredPlan: getRequiredPlanName(currentModel),
+        });
+      }
+
+      if (isFree) {
+        if (isFreeLimitReached()) {
+          useUpgradeModal.getState().open({ reason: 'free_limit' });
+          return;
+        }
+        incrementFreeUsage();
+      }
+
       const userMessage: Message = {
         id: createId(),
         conversationId: currentActiveId ?? '',
@@ -483,6 +513,24 @@ export const useChat = create<ChatState>((set, get) => {
       if (activeId === null || streamingConversations[activeId]) {
         return;
       }
+
+      const authUser = useAuth.getState().user;
+      const modelId = usePreferences.getState().chatModelId;
+      const currentModel = findModel(get().meta?.models, modelId);
+      const isFree = !authUser || !authUser.plan || authUser.plan === 'free';
+
+      if (!canAccessModel(authUser?.plan, currentModel)) {
+        useUpgradeModal.getState().open({
+          reason: 'paid_model',
+          modelName: currentModel.name,
+          requiredPlan: getRequiredPlanName(currentModel),
+        });
+      }
+      if (isFree && isFreeLimitReached()) {
+        useUpgradeModal.getState().open({ reason: 'free_limit' });
+        return;
+      }
+
       const index = lastAssistantIndex(messages);
       if (index < 1) {
         return;
@@ -506,6 +554,23 @@ export const useChat = create<ChatState>((set, get) => {
       const trimmed = content.trim();
       const index = messages.findIndex((message) => message.id === id);
       if (activeId === null || streamingConversations[activeId] || trimmed === '' || index === -1) {
+        return;
+      }
+
+      const authUser = useAuth.getState().user;
+      const modelId = usePreferences.getState().chatModelId;
+      const currentModel = findModel(get().meta?.models, modelId);
+      const isFree = !authUser || !authUser.plan || authUser.plan === 'free';
+
+      if (!canAccessModel(authUser?.plan, currentModel)) {
+        useUpgradeModal.getState().open({
+          reason: 'paid_model',
+          modelName: currentModel.name,
+          requiredPlan: getRequiredPlanName(currentModel),
+        });
+      }
+      if (isFree && isFreeLimitReached()) {
+        useUpgradeModal.getState().open({ reason: 'free_limit' });
         return;
       }
 

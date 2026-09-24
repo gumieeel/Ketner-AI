@@ -24,3 +24,40 @@ export function getRequiredPlanName(model: ModelInfo): string {
   if (model.requiredPlan === 'ultra') return 'Ultra';
   return 'PRO';
 }
+
+export const DEFAULT_MODELS: ModelInfo[] = [
+  { id: 'ketner-mini', name: 'Qwen 2.5 Coder', contextMessages: 20, isPro: false },
+  {
+    id: 'gpt-6-astra',
+    name: 'GPT-6 Astra *',
+    contextMessages: 120,
+    isPro: true,
+    requiredPlan: 'gpt-pro',
+  },
+  {
+    id: 'claude-fable',
+    name: 'Claude Fable 5.5 *',
+    contextMessages: 120,
+    isPro: true,
+    requiredPlan: 'claude-pro',
+  },
+  {
+    id: 'gemini-pro',
+    name: 'Gemini 3.8 Pro *',
+    contextMessages: 120,
+    isPro: true,
+    requiredPlan: 'gemini-pro',
+  },
+  {
+    id: 'ketner-pro',
+    name: 'Qwen 2.5 Max *',
+    contextMessages: 60,
+    isPro: true,
+    requiredPlan: 'ultra',
+  },
+];
+
+export function findModel(models: ModelInfo[] | undefined, modelId: string): ModelInfo {
+  const list = models && models.length > 0 ? models : DEFAULT_MODELS;
+  return list.find((m) => m.id === modelId) ?? DEFAULT_MODELS[0];
+}

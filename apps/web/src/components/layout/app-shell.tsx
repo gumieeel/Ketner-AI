@@ -3,6 +3,7 @@ import { Outlet } from 'react-router-dom';
 import { useAuth } from '@/features/auth/auth-store';
 import { useChat } from '@/features/chat/chat-store';
 import { useTranslation } from '@/i18n';
+import { UpgradeModal } from '@/components/chat/upgrade-modal';
 import { Header } from './header';
 import { Sidebar } from './sidebar';
 
@@ -44,6 +45,7 @@ export function AppShell() {
           <Outlet />
         </main>
       </div>
+      <UpgradeModal />
     </div>
   );
 }
