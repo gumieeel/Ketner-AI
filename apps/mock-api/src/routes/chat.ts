@@ -1,11 +1,13 @@
 import { Router } from 'express';
 import { ERROR_MESSAGES, pickAnswer } from '../ai/answers.js';
-import { DEFAULT_MODEL_ID, resolveModel } from '../ai/models.js';
+import { canAccessModel, DEFAULT_MODEL_ID, resolveModel } from '../ai/models.js';
 import { delay, randomBetween, streamText } from '../ai/stream.js';
 import type { AiConfig } from '../config.js';
 import { sendError } from '../middleware/errors.js';
 import type { ConversationStore } from '../store/conversation-store.js';
-import type { IncomingMessage, Language, MessageStatus } from '../types.js';
+import type { SubscriptionStore } from '../store/subscription-store.js';
+import type { UserStore } from '../store/user-store.js';
+import type { IncomingMessage, Language, MessageStatus, PlanId } from '../types.js';
 
 const MAX_MESSAGES = 200;
 const MAX_CONTENT_LENGTH = 8000;
@@ -75,6 +77,8 @@ export interface ChatRouterDeps {
   store: ConversationStore;
   userId: string;
   ai: AiConfig;
+  subscriptionStore?: SubscriptionStore;
+  userStore?: UserStore;
 }
 
 /**
@@ -83,7 +87,13 @@ export interface ChatRouterDeps {
  * Событий ровно три (`delta`, `done`, `error`) — столько же разбирает фронтенд.
  * При подключении реального провайдера меняется только начинка обработчика.
  */
-export function createChatRouter({ store, userId, ai }: ChatRouterDeps): Router {
+export function createChatRouter({
+  store,
+  userId,
+  ai,
+  subscriptionStore,
+  userStore,
+}: ChatRouterDeps): Router {
   const router = Router();
 
   router.post('/completions', async (request, response) => {
@@ -102,6 +112,34 @@ export function createChatRouter({ store, userId, ai }: ChatRouterDeps): Router 
     }
 
     const model = resolveModel(modelId);
+
+    // Проверка доступа к платным моделям (помеченным звёздочкой)
+    if (model.isPro) {
+      const currentSub = subscriptionStore?.get(activeUserId);
+      const currentUser = userStore?.findById(activeUserId);
+      const userPlan: PlanId =
+        request.user?.plan ?? currentSub?.plan ?? currentUser?.plan ?? 'free';
+
+      if (!canAccessModel(userPlan, model)) {
+        response.writeHead(200, {
+          'Content-Type': 'text/event-stream; charset=utf-8',
+          'Cache-Control': 'no-cache, no-transform',
+          Connection: 'keep-alive',
+        });
+        const requiredName = model.requiredPlan ? model.requiredPlan.toUpperCase() : 'PRO';
+        const errorMsg =
+          language === 'en'
+            ? `Access to ${model.name} requires an active subscription (${requiredName} or Ultra). Please upgrade your plan.`
+            : `Для доступа к модели ${model.name} требуется подписка (${requiredName} или Ultra). Пожалуйста, улучшите ваш тариф (Upgrade your plan).`;
+
+        response.write(
+          `event: error\ndata: ${JSON.stringify({ code: 'upgrade_required', message: errorMsg })}\n\n`,
+        );
+        response.end();
+        return;
+      }
+    }
+
     // В модель уходит только хвост истории: так же будет вести себя реальный провайдер.
     const context = messages.slice(-model.contextMessages);
     const prompt =

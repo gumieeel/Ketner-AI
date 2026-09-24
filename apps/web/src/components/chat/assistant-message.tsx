@@ -1,4 +1,5 @@
 import { Suspense, lazy } from 'react';
+import { Link } from 'react-router-dom';
 import { AlertIcon, RefreshIcon } from '@/components/icons';
 import { Button } from '@/components/ui/button';
 import { CopyButton } from '@/components/ui/copy-button';
@@ -7,6 +8,7 @@ import { IconButton } from '@/components/ui/icon-button';
 import { useChat } from '@/features/chat/chat-store';
 import type { Message } from '@/features/chat/types';
 import { useTranslation } from '@/i18n';
+import { cn } from '@/lib/cn';
 
 /** Тяжёлый рендер markdown подключается при первом ответе, а не при загрузке чата. */
 const Markdown = lazy(() => import('@/features/chat/markdown/markdown'));
@@ -26,6 +28,11 @@ export function AssistantMessage({ message, canRegenerate }: AssistantMessagePro
   const thinking = message.status === 'pending';
   const failed = message.status === 'error';
   const hasContent = message.content !== '';
+  const isUpgradeError =
+    message.errorCode === 'upgrade_required' ||
+    (typeof message.error === 'string' &&
+      (message.error.toLowerCase().includes('upgrade') ||
+        message.error.toLowerCase().includes('подписк')));
 
   return (
     <article className="flex gap-3" aria-label={t('chat.assistant')}>
@@ -59,13 +66,35 @@ export function AssistantMessage({ message, canRegenerate }: AssistantMessagePro
         ) : null}
 
         {failed ? (
-          <div className="mt-2 rounded-[10px] border border-red-500/30 bg-red-500/10 p-3 text-sm leading-5 text-red-600 dark:text-red-400">
+          <div
+            className={cn(
+              'mt-2 rounded-[12px] p-3.5 text-sm leading-5 transition-all',
+              isUpgradeError
+                ? 'border border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-300'
+                : 'border border-red-500/30 bg-red-500/10 text-red-600 dark:text-red-400',
+            )}
+          >
             <p className="flex items-center gap-2 font-medium">
-              <AlertIcon />
-              {t('chat.errorTitle')}
+              {isUpgradeError ? (
+                <span className="text-base select-none" aria-hidden="true">
+                  ⭐
+                </span>
+              ) : (
+                <AlertIcon />
+              )}
+              {isUpgradeError ? t('chat.upgradeRequired') : t('chat.errorTitle')}
             </p>
-            <p className="mt-1">{message.error ?? t('chat.errorText')}</p>
-            {canRegenerate ? (
+            <p className="mt-1 text-text/85">{message.error ?? t('chat.errorText')}</p>
+            {isUpgradeError ? (
+              <div className="mt-3">
+                <Link
+                  to="/pricing"
+                  className="inline-flex items-center gap-1.5 rounded-[6px] bg-accent px-3 py-1.5 text-xs font-semibold text-[var(--color-accent-text)] transition hover:opacity-90 shadow-sm"
+                >
+                  ⭐ {t('chat.upgradeButton')}
+                </Link>
+              </div>
+            ) : canRegenerate ? (
               <Button
                 variant="outline"
                 size="sm"

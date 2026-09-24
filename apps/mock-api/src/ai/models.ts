@@ -10,8 +10,40 @@ import type { ModelCatalog, ModelInfo, PlanId, PlanLimits } from '../types.js';
 export const DEFAULT_MODEL_ID = 'ketner-mini';
 
 export const MODELS: readonly ModelInfo[] = [
-  { id: DEFAULT_MODEL_ID, name: 'Qwen 2.5 Coder', contextMessages: 20 },
-  { id: 'ketner-pro', name: 'Qwen 2.5 Max', contextMessages: 60 },
+  {
+    id: DEFAULT_MODEL_ID,
+    name: 'Qwen 2.5 Coder',
+    contextMessages: 20,
+    isPro: false,
+  },
+  {
+    id: 'gpt-6-astra',
+    name: 'GPT-6 Astra *',
+    contextMessages: 120,
+    isPro: true,
+    requiredPlan: 'gpt-pro',
+  },
+  {
+    id: 'claude-fable',
+    name: 'Claude Fable 5.5 *',
+    contextMessages: 120,
+    isPro: true,
+    requiredPlan: 'claude-pro',
+  },
+  {
+    id: 'gemini-pro',
+    name: 'Gemini 3.8 Pro *',
+    contextMessages: 120,
+    isPro: true,
+    requiredPlan: 'gemini-pro',
+  },
+  {
+    id: 'ketner-pro',
+    name: 'Qwen 2.5 Max *',
+    contextMessages: 60,
+    isPro: true,
+    requiredPlan: 'ultra',
+  },
 ];
 
 export const PLAN_LIMITS: Record<PlanId, PlanLimits> = {
@@ -29,6 +61,16 @@ export const MODEL_CATALOG: ModelCatalog = {
   defaultModelId: DEFAULT_MODEL_ID,
   limits: PLAN_LIMITS,
 };
+
+/** Проверка доступности модели по текущему тарифу пользователя. */
+export function canAccessModel(userPlan: PlanId | undefined, model: ModelInfo): boolean {
+  if (!model.isPro) return true;
+  if (!userPlan || userPlan === 'free') return false;
+  if (userPlan === 'ultra') return true;
+  if (model.requiredPlan && userPlan === model.requiredPlan) return true;
+  if (model.id === 'ketner-pro' && (userPlan === 'plus' || userPlan === 'pro')) return true;
+  return false;
+}
 
 /** Неизвестный идентификатор модели не ломает запрос: берём модель по умолчанию. */
 export function resolveModel(modelId: string | undefined): ModelInfo {

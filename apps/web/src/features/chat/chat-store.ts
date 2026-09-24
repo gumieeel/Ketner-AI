@@ -208,12 +208,13 @@ export const useChat = create<ChatState>((set, get) => {
             flush();
             updateAssistant({ id: messageId === '' ? assistantId : messageId, status: 'complete' });
           },
-          onError: ({ message }) => {
+          onError: ({ code, message }) => {
             flush();
-            console.error('[chat] ошибка генерации:', message);
+            console.error('[chat] ошибка генерации:', code, message);
             updateAssistant({
               status: 'error',
-              error: translate(usePreferences.getState().language, 'chat.errorText'),
+              error: message || translate(usePreferences.getState().language, 'chat.errorText'),
+              errorCode: code,
             });
           },
         },

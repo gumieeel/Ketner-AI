@@ -148,3 +148,27 @@ test('генерация для неизвестного диалога отве
     await server.close();
   }
 });
+
+test('генерация на платной модели без подписки возвращает событие ошибки upgrade_required', async () => {
+  const server = await startTestServer();
+
+  try {
+    const conversation = await createConversation(server.baseUrl, 'Платная модель');
+    const response = await postCompletion(server.baseUrl, {
+      conversationId: conversation.id,
+      modelId: 'gpt-6-astra',
+      language: 'ru',
+      messages: [{ role: 'user', content: 'Привет' }],
+    });
+
+    assert.equal(response.status, 200);
+    const events = await readSseEvents(response);
+    const errorEvent = events.find((e) => e.event === 'error');
+    assert.ok(errorEvent, 'должно прийти событие error');
+    const data = JSON.parse(errorEvent.data) as { code: string; message: string };
+    assert.equal(data.code, 'upgrade_required');
+    assert.match(data.message, /Upgrade your plan|подписка|GPT-6 Astra/i);
+  } finally {
+    await server.close();
+  }
+});

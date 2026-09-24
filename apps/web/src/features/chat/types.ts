@@ -34,12 +34,15 @@ export interface Message {
   modelId?: string;
   /** Только на клиенте: текст ошибки для сообщения со статусом `error`. */
   error?: string;
+  errorCode?: string;
 }
 
 export interface ModelInfo {
   id: string;
   name: string;
   contextMessages: number;
+  isPro?: boolean;
+  requiredPlan?: PlanId;
 }
 
 export interface PlanLimits {

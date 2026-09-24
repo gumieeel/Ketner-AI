@@ -10,6 +10,8 @@ export interface FakeApiOptions {
   chunkDelayMs?: number;
   /** Сколько первых запросов завершить событием error. */
   failTimes?: number;
+  /** Проверять ли доступность моделей по тарифу. */
+  enforcePlans?: boolean;
 }
 
 export interface FakeApi {
@@ -23,8 +25,40 @@ export interface FakeApi {
 
 const META: ChatMeta = {
   models: [
-    { id: 'ketner-mini', name: 'Qwen 2.5 Coder', contextMessages: 20 },
-    { id: 'ketner-pro', name: 'Qwen 2.5 Max', contextMessages: 60 },
+    {
+      id: 'ketner-mini',
+      name: 'Qwen 2.5 Coder',
+      contextMessages: 20,
+      isPro: false,
+    },
+    {
+      id: 'gpt-6-astra',
+      name: 'GPT-6 Astra *',
+      contextMessages: 120,
+      isPro: true,
+      requiredPlan: 'gpt-pro',
+    },
+    {
+      id: 'claude-fable',
+      name: 'Claude Fable 5.5 *',
+      contextMessages: 120,
+      isPro: true,
+      requiredPlan: 'claude-pro',
+    },
+    {
+      id: 'gemini-pro',
+      name: 'Gemini 3.8 Pro *',
+      contextMessages: 120,
+      isPro: true,
+      requiredPlan: 'gemini-pro',
+    },
+    {
+      id: 'ketner-pro',
+      name: 'Qwen 2.5 Max *',
+      contextMessages: 60,
+      isPro: true,
+      requiredPlan: 'ultra',
+    },
   ],
   defaultModelId: 'ketner-mini',
   limits: {
@@ -472,6 +506,30 @@ export function installFakeApi(options: FakeApiOptions = {}): FakeApi {
         const index = api.completions;
         api.completions += 1;
         api.completionBodies.push(body);
+
+        const modelId = String(body.modelId ?? 'ketner-mini');
+        const targetModel = META.models.find((m) => m.id === modelId) ?? META.models[0];
+        const isUpgradeFail =
+          Boolean(options.enforcePlans) &&
+          Boolean(targetModel.isPro) &&
+          (currentPlan === 'free' ||
+            (targetModel.requiredPlan &&
+              currentPlan !== targetModel.requiredPlan &&
+              currentPlan !== 'ultra'));
+
+        if (isUpgradeFail) {
+          const upgradeChunks = [
+            `event: error\ndata: ${JSON.stringify({
+              code: 'upgrade_required',
+              message: `Для доступа к ${targetModel.name} требуется тариф ${targetModel.requiredPlan ?? 'PRO'} или Ultra. Пожалуйста, улучшите ваш тарифный план (Upgrade your plan).`,
+            })}\n\n`,
+          ];
+          return new Response(streamOf(upgradeChunks, delayMs, init?.signal ?? null), {
+            status: 200,
+            headers: { 'Content-Type': 'text/event-stream' },
+          });
+        }
+
         const fail = index < (options.failTimes ?? 0);
         const reply =
           options.replies?.[index % options.replies.length] ?? options.reply ?? DEFAULT_REPLY;

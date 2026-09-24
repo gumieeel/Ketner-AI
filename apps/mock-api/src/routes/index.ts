@@ -142,7 +142,14 @@ export function createApiRouter(deps: ApiDeps): Router {
     }),
   );
   router.use(createConversationsRouter(deps.store, deps.userId));
-  router.use('/chat', createChatRouter(deps));
+  router.use(
+    '/chat',
+    createChatRouter({
+      ...deps,
+      subscriptionStore: activeSubscriptionStore,
+      userStore: activeUserStore,
+    }),
+  );
 
   return router;
 }

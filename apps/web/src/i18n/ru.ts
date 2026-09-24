@@ -150,7 +150,16 @@ export const ru = {
   'chat.attachHint': 'Вложения появятся на этапе 5 — пока это заглушка.',
   'chat.model': 'Модель',
   'chat.modelMini': 'Qwen 2.5 Coder',
-  'chat.modelPro': 'Qwen 2.5 Max',
+  'chat.modelPro': 'Qwen 2.5 Max *',
+  'chat.modelGptAstra': 'GPT-6 Astra *',
+  'chat.modelClaudeFable': 'Claude Fable 5.5 *',
+  'chat.modelGeminiPro': 'Gemini 3.8 Pro *',
+  'chat.upgradeRequired': 'Требуется подписка (Upgrade your plan)',
+  'chat.upgradeRequiredDesc':
+    'Для общения с {model} требуется тариф {plan} или Ultra. Улучшите ваш план, чтобы продолжить.',
+  'chat.upgradeBanner': 'Модель {model} доступна на тарифе {plan} или Ultra.',
+  'chat.upgradeButton': 'Улучшить план',
+  'chat.proBadge': 'PRO',
   'chat.modelMenu': 'Выбрать модель',
   'chat.modelContext': 'Контекст: {count} сообщений',
   'chat.composerNotice':

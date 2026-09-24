@@ -224,4 +224,49 @@ describe('чат: отправка, стриминг и управление о�
     await user.click(await screen.findByRole('link', { name: 'Начало генерации в первом' }));
     expect(await screen.findByText('Фоновый ответ без прерывания')).toBeInTheDocument();
   });
+
+  it('показывает список моделей со звёздочками у платных и плашку апгрейда при выборе платной модели', async () => {
+    installFakeApi();
+    const user = setupChat();
+    await screen.findByRole('heading', { level: 2, name: EMPTY_TITLE });
+
+    await user.click(screen.getByRole('button', { name: 'Выбрать модель' }));
+    // Проверяем наличие всех моделей, платные со звёздочкой
+    expect(await screen.findByRole('option', { name: /Qwen 2\.5 Coder/ })).toBeInTheDocument();
+    expect(screen.getByRole('option', { name: /GPT-6 Astra \*/ })).toBeInTheDocument();
+    expect(screen.getByRole('option', { name: /Claude Fable 5\.5 \*/ })).toBeInTheDocument();
+    expect(screen.getByRole('option', { name: /Gemini 3\.8 Pro \*/ })).toBeInTheDocument();
+    expect(screen.getByRole('option', { name: /Qwen 2\.5 Max \*/ })).toBeInTheDocument();
+
+    // Выбираем платную модель GPT-6 Astra *
+    await user.click(screen.getByRole('option', { name: /GPT-6 Astra \*/ }));
+
+    // Появляется плашка с предупреждением об апгрейде и ссылкой на тарифы
+    const alert = await screen.findByRole('alert');
+    expect(alert).toHaveTextContent(/GPT-6 Astra \*/);
+    expect(alert).toHaveTextContent(/GPT Pro/);
+    const upgradeLink = within(alert).getByRole('link', { name: /Улучшить план/ });
+    expect(upgradeLink).toHaveAttribute('href', '/pricing');
+  });
+
+  it('при попытке генерации на платной модели без подписки показывает ошибку апгрейда со ссылкой на тарифы', async () => {
+    installFakeApi({ enforcePlans: true });
+    const user = setupChat();
+    await screen.findByRole('heading', { level: 2, name: EMPTY_TITLE });
+
+    // Выбираем платную модель
+    await user.click(screen.getByRole('button', { name: 'Выбрать модель' }));
+    await user.click(await screen.findByRole('option', { name: /Claude Fable 5\.5 \*/ }));
+
+    // Отправляем сообщение
+    await sendMessage(user, 'Тест платной модели');
+
+    // Проверяем, что появилось сообщение об ошибке с требованием апгрейда
+    expect(await screen.findByText('Требуется подписка (Upgrade your plan)')).toBeInTheDocument();
+    expect(screen.getAllByText(/Claude Fable 5\.5 \*/).length).toBeGreaterThan(0);
+    expect(screen.getAllByRole('link', { name: /Улучшить план/ })[0]).toHaveAttribute(
+      'href',
+      '/pricing',
+    );
+  });
 });

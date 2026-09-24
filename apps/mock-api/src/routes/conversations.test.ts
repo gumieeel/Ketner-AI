@@ -74,7 +74,7 @@ test('каталог моделей и описание контракта от�
       limits: { free: { messagesPerDay: number | null }; plus: { messagesPerDay: number | null } };
     }>(await fetch(`${server.baseUrl}/api/meta`));
     assert.equal(meta.defaultModelId, 'ketner-mini');
-    assert.equal(meta.models.length, 2);
+    assert.equal(meta.models.length, 5);
     assert.equal(meta.limits.free.messagesPerDay, 10);
     assert.equal(meta.limits.plus.messagesPerDay, null);
 

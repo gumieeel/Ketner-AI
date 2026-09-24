@@ -92,6 +92,10 @@ export interface ModelInfo {
   name: string;
   /** Сколько последних сообщений диалога уходит в модель. */
   contextMessages: number;
+  /** Является ли модель платной (PRO). */
+  isPro?: boolean;
+  /** Требуемый тариф для доступа. */
+  requiredPlan?: PlanId;
 }
 
 export interface PlanLimits {
