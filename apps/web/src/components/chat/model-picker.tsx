@@ -9,6 +9,7 @@ import type { TranslationKey } from '@/i18n';
 
 /** Названия моделей живут в словаре; `name` от сервера — запасной вариант. */
 const MODEL_NAME_KEYS: Record<string, TranslationKey> = {
+  auto: 'chat.modelAuto',
   'ketner-mini': 'chat.modelMini',
   'gpt-6-astra': 'chat.modelGptAstra',
   'claude-fable': 'chat.modelClaudeFable',
@@ -18,6 +19,12 @@ const MODEL_NAME_KEYS: Record<string, TranslationKey> = {
 
 /** Модели по умолчанию: используются, пока каталог не загрузился или недоступен. */
 const FALLBACK_MODELS: readonly ModelInfo[] = [
+  {
+    id: 'auto',
+    name: '✨ Auto (Smart Router)',
+    contextMessages: 120,
+    isPro: false,
+  },
   {
     id: DEFAULT_MODEL_ID,
     name: 'Qwen 2.5 Coder',

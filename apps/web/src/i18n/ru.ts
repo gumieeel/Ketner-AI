@@ -151,6 +151,7 @@ export const ru = {
   'chat.attach': 'Прикрепить файл',
   'chat.attachHint': 'Вложения появятся на этапе 5 — пока это заглушка.',
   'chat.model': 'Модель',
+  'chat.modelAuto': '✨ Auto (Умный выбор)',
   'chat.modelMini': 'Qwen 2.5 Coder',
   'chat.modelPro': 'Qwen 2.5 Max *',
   'chat.modelGptAstra': 'GPT-6 Astra *',

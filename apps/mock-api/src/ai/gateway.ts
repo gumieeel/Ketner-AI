@@ -13,6 +13,7 @@
 
 import { ERROR_MESSAGES, pickAnswer } from './answers.js';
 import { AutoRouter } from './auto-router.js';
+import { semanticCache } from './cache.js';
 import { ContextOptimizer } from './context.js';
 import type {
   GatewayRequest,
@@ -141,6 +142,41 @@ export class AIGateway {
         },
       );
 
+      // 5.1. Проверка семантического кэша (Semantic & Query Caching)
+      const cachedHit = semanticCache.get(targetModel.id, language, prompt);
+      if (cachedHit && !isCancelled()) {
+        await streamText(cachedHit.response, {
+          thinkingMs: [5, 10],
+          chunkMs: [5, 10],
+          random: this.aiConfig.random,
+          isCancelled,
+          onDelta: callbacks.onDelta,
+        });
+
+        const latencyMs = Date.now() - startTime;
+        this.usageStore.recordUsage({
+          userId: activeUserId,
+          conversationId: req.conversationId,
+          modelId: targetModel.id,
+          provider: targetModel.provider,
+          inputTokens: cachedHit.inputTokens,
+          outputTokens: cachedHit.outputTokens,
+          cachedTokens: cachedHit.inputTokens,
+          estimatedCost: 0,
+          actualCost: 0,
+          latencyMs,
+          status: 'success',
+        });
+
+        if (!isCancelled()) {
+          callbacks.onDone({
+            inputTokens: cachedHit.inputTokens,
+            outputTokens: cachedHit.outputTokens,
+          });
+        }
+        return;
+      }
+
       // 6. Попытка генерации через провайдер с поддержкой Failover
       const modelsToTry = this.registry.getFallbackChain(targetModel.id);
       let success = false;
@@ -251,6 +287,12 @@ export class AIGateway {
       });
 
       if (!isCancelled()) {
+        if (streamedResponse?.content) {
+          semanticCache.set(targetModel.id, language, prompt, streamedResponse.content, {
+            inputTokens,
+            outputTokens,
+          });
+        }
         callbacks.onDone({
           inputTokens,
           outputTokens,

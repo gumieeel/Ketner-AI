@@ -44,12 +44,35 @@ export class ContextOptimizer {
             chosenMessages.unshift(msg);
             currentTokens += msgTokens;
         }
-        // 4. Формируем итоговый список сообщений
-        for (const msg of chosenMessages) {
+        // 4. Формируем итоговый список сообщений с возможным сжатием ранней истории
+        if (chosenMessages.length > 8) {
+            // Сжимаем первые несколько сообщений в сводный контекстный блок
+            const toCompress = chosenMessages.slice(0, chosenMessages.length - 4);
+            const recent = chosenMessages.slice(chosenMessages.length - 4);
+            const summarySnippets = toCompress
+                .map((m) => `${m.role === 'user' ? 'Пользователь' : 'ИИ'}: ${m.content.slice(0, 100)}...`)
+                .join(' ');
+            const prefix = options.language === 'en'
+                ? `[Summary of earlier discussion: ${summarySnippets}]`
+                : `[Краткий контекст предыдущей беседы: ${summarySnippets}]`;
             result.push({
-                role: msg.role,
-                content: msg.content.trim(),
+                role: 'system',
+                content: prefix,
             });
+            for (const msg of recent) {
+                result.push({
+                    role: msg.role,
+                    content: msg.content.trim(),
+                });
+            }
+        }
+        else {
+            for (const msg of chosenMessages) {
+                result.push({
+                    role: msg.role,
+                    content: msg.content.trim(),
+                });
+            }
         }
         return result;
     }

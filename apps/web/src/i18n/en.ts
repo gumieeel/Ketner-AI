@@ -152,6 +152,7 @@ export const en: Record<TranslationKey, string> = {
   'chat.attach': 'Attach a file',
   'chat.attachHint': 'Attachments arrive in stage 5 — for now it is a stub.',
   'chat.model': 'Model',
+  'chat.modelAuto': '✨ Auto (Smart Router)',
   'chat.modelMini': 'Qwen 2.5 Coder',
   'chat.modelPro': 'Qwen 2.5 Max *',
   'chat.modelGptAstra': 'GPT-6 Astra *',

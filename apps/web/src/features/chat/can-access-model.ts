@@ -6,6 +6,7 @@ import type { ModelInfo, PlanId } from './types';
  * - Платные модели (со звёздочкой) требуют соответствующего тарифа или тарифа Ultra.
  */
 export function canAccessModel(userPlan: PlanId | undefined, model: ModelInfo): boolean {
+  if (model.id === 'auto') return true;
   if (!model.isPro) return true;
   if (!userPlan || userPlan === 'free') return false;
   if (userPlan === 'ultra') return true;
@@ -27,6 +28,7 @@ export function getRequiredPlanName(model: ModelInfo): string {
 
 export const DEFAULT_MODELS: ModelInfo[] = [
   { id: 'ketner-mini', name: 'Qwen 2.5 Coder', contextMessages: 20, isPro: false },
+  { id: 'auto', name: '✨ Auto (Smart Router)', contextMessages: 120, isPro: false },
   {
     id: 'gpt-6-astra',
     name: 'GPT-6 Astra *',

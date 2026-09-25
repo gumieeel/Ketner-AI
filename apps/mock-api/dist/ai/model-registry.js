@@ -47,6 +47,32 @@ function makePricing(input, output, cached = input * 0.5) {
  */
 const DEFAULT_REGISTRY_ENTRIES = [
     {
+        id: 'auto',
+        name: '✨ Auto (Smart Router)',
+        provider: 'openrouter',
+        providerModelId: 'auto',
+        enabled: true,
+        tier: 'free',
+        capabilities: makeCapabilities({
+            coding: true,
+            reasoning: true,
+            math: true,
+            creative: true,
+            translation: true,
+            research: true,
+        }),
+        contextWindow: 128000,
+        maxOutputTokens: 8192,
+        pricing: makePricing(0, 0, 0),
+        requiredPlan: null,
+        contextMessages: 120,
+        isPro: false,
+        fallbackModelId: 'ketner-mini',
+        defaultSystemPrompt: DEFAULT_SYSTEM_PROMPT,
+        createdAt: now(),
+        updatedAt: now(),
+    },
+    {
         id: 'ketner-mini',
         name: 'Qwen 2.5 Coder',
         provider: 'openrouter',
@@ -195,10 +221,13 @@ export class ModelRegistry {
         }
         return this.getDefault();
     }
-    /** Модель по умолчанию — первая бесплатная. */
+    /** Модель по умолчанию — ketner-mini (или первая бесплатная). */
     getDefault() {
+        const mini = this.entries.get('ketner-mini');
+        if (mini && mini.enabled)
+            return mini;
         for (const entry of this.entries.values()) {
-            if (entry.enabled && !entry.isPro)
+            if (entry.enabled && !entry.isPro && entry.id !== 'auto')
                 return entry;
         }
         return this.entries.values().next().value;
@@ -277,7 +306,9 @@ export class ModelRegistry {
     // ────────── Обратная совместимость ──────────
     /** Конвертация в legacy ModelInfo формат (для /api/meta). */
     toLegacyModelInfo() {
-        return this.getAll().map((e) => ({
+        return this.getAll()
+            .filter((e) => e.id !== 'auto')
+            .map((e) => ({
             id: e.id,
             name: e.isPro ? `${e.name} *` : e.name,
             contextMessages: e.contextMessages,

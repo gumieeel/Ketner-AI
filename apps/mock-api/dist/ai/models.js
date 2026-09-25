@@ -58,6 +58,8 @@ export const MODEL_CATALOG = {
 };
 /** Проверка доступности модели по текущему тарифу пользователя. */
 export function canAccessModel(userPlan, model) {
+    if (model.id === 'auto')
+        return true;
     if (!model.isPro)
         return true;
     if (!userPlan || userPlan === 'free')
@@ -72,5 +74,13 @@ export function canAccessModel(userPlan, model) {
 }
 /** Неизвестный идентификатор модели не ломает запрос: берём модель по умолчанию. */
 export function resolveModel(modelId) {
+    if (modelId === 'auto') {
+        return {
+            id: 'auto',
+            name: '✨ Auto (Smart Router)',
+            contextMessages: 120,
+            isPro: false,
+        };
+    }
     return MODELS.find((model) => model.id === modelId) ?? MODELS[0];
 }
