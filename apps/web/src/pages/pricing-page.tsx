@@ -29,8 +29,8 @@ export function PricingPage() {
         </p>
       </div>
 
-      {/* Сетка из 5 карточек */}
-      <div className="grid grid-cols-1 gap-5 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
+      {/* Сетка из 4 карточек тарифов: Free, Plus, Pro, Ultra */}
+      <div className="grid grid-cols-1 gap-5 md:grid-cols-2 lg:grid-cols-4">
         {PLANS.map((plan) => {
           const isCurrent = plan.id === currentPlan;
           const isUltra = plan.id === 'ultra';
