@@ -6,9 +6,10 @@ import { StubAction } from '@/components/ui/stub-action';
 import { useChat } from '@/features/chat/chat-store';
 import { usePreferences } from '@/features/preferences/preferences-store';
 import { useTranslation } from '@/i18n';
+import { LanguageToggle } from './language-toggle';
 import { ThemeToggle } from './theme-toggle';
 
-/** Шапка рабочей области: название диалога, демо-пометка, «Поделиться» и тема. */
+/** Шапка рабочей области: название диалога, демо-пометка, «Поделиться», язык и тема. */
 export function Header() {
   const { t } = useTranslation();
   const location = useLocation();
@@ -52,6 +53,7 @@ export function Header() {
             </StubAction>
           </>
         ) : null}
+        <LanguageToggle />
         <ThemeToggle />
       </div>
     </header>

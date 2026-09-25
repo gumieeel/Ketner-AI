@@ -19,7 +19,7 @@ export function PricingPage() {
       <div className="flex flex-col items-center gap-3 text-center animate-slide-up">
         <div className="inline-flex items-center gap-1.5 rounded-full border border-accent/30 bg-accent/10 px-3 py-1 text-xs font-medium text-accent">
           <SparkleIcon className="text-sm" />
-          <span>Тарифы нового поколения</span>
+          <span>{t('pricing.nextGenBadge')}</span>
         </div>
         <h1 className="text-3xl font-bold tracking-tight text-text md:text-4xl">
           {t('pricing.title')}
@@ -52,18 +52,26 @@ export function PricingPage() {
                   {isCurrent ? (
                     <Badge tone="brand">{t('pricing.currentPlan')}</Badge>
                   ) : isUltra ? (
-                    <Badge tone="brand">Всё включено</Badge>
+                    <Badge tone="brand">{t('pricing.allInclusive')}</Badge>
                   ) : plan.popular ? (
                     <Badge tone="brand">{t('pricing.popular')}</Badge>
                   ) : null}
                 </div>
 
-                {/* Цена в рублях */}
+                {/* Цена */}
                 <div className="mt-4 flex items-baseline gap-1">
                   <span className="text-3xl font-extrabold tracking-tight text-text">
-                    {plan.priceMonthly === 0
-                      ? '0 ₽'
-                      : `${plan.priceMonthly.toLocaleString('ru-RU')} ₽`}
+                    {language === 'ru'
+                      ? plan.priceMonthly === 0
+                        ? '0 ₽'
+                        : `${plan.priceMonthly.toLocaleString('ru-RU')} ₽`
+                      : plan.id === 'free'
+                        ? '$0'
+                        : plan.id === 'plus'
+                          ? '$9.99'
+                          : plan.id === 'pro'
+                            ? '$19.99'
+                            : '$39.99'}
                   </span>
                   <span className="text-xs text-muted font-normal">{t('pricing.month')}</span>
                 </div>
@@ -72,7 +80,9 @@ export function PricingPage() {
                 <div className="mt-3 flex flex-col gap-1.5">
                   {plan.modelsHighlight && (
                     <span className="inline-block text-[11px] font-semibold text-accent uppercase tracking-wide">
-                      {plan.modelsHighlight}
+                      {typeof plan.modelsHighlight === 'string'
+                        ? plan.modelsHighlight
+                        : plan.modelsHighlight[language]}
                     </span>
                   )}
                   {plan.limitBadge && (
@@ -138,7 +148,7 @@ export function PricingPage() {
       <div className="flex flex-col items-center gap-2 text-center text-xs text-zinc-500 dark:text-zinc-400">
         <p>{t('pricing.notice')}</p>
         <Link to="/docs" className="text-accent underline hover:opacity-80 transition-opacity">
-          Ознакомиться с детальной документацией по моделям и лимитам →
+          {t('pricing.docsLink')}
         </Link>
       </div>
     </div>

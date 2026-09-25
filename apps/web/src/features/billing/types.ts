@@ -18,7 +18,7 @@ export interface Plan {
   priceMonthly: number;
   popular?: boolean;
   limitBadge?: Record<Language, string>;
-  modelsHighlight?: string;
+  modelsHighlight?: Record<Language, string> | string;
   bullets: Record<Language, readonly string[]>;
 }
 

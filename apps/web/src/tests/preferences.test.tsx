@@ -30,7 +30,7 @@ describe('тема и язык интерфейса', () => {
     const user = userEvent.setup();
     renderRoute('/chat');
 
-    await user.click(screen.getByRole('button', { name: 'EN' }));
+    await user.click(screen.getAllByRole('button', { name: 'EN' })[0]);
 
     expect(
       screen.getByRole('heading', { level: 2, name: 'What shall we work on?' }),

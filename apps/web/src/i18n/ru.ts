@@ -100,6 +100,9 @@ export const ru = {
   'pricing.viewDocs': 'Подробнее в документации',
   'pricing.limitsBadge': 'Лимит',
   'pricing.modelsBadge': 'Модели',
+  'pricing.nextGenBadge': 'Тарифы нового поколения',
+  'pricing.allInclusive': 'Всё включено',
+  'pricing.docsLink': 'Ознакомиться с детальной документацией по моделям и лимитам →',
   'pricing.notice':
     'Оплата ещё не подключена: кнопки ведут на демонстрационную форму. Реальный провайдер появится на этапе 4.',
 
@@ -145,6 +148,11 @@ export const ru = {
   'checkout.starsPayInBot': 'Оплатить через Telegram (@KetnerAIBot)',
   'checkout.starsQrHint': 'Или отсканируйте QR-код для перехода в бота',
   'checkout.starsConfirm': 'Подтвердить оплату Stars',
+  'checkout.starsOfficial': 'Официальная платёжная система Telegram',
+  'checkout.starsChecking': 'Проверка транзакции Stars...',
+  'checkout.starsNotice':
+    'Платёж списывается мгновенно с баланса вашего Telegram аккаунта. Подписка активируется сразу после подтверждения.',
+  'checkout.starsPeriodNotice': '{price} за 30 дней подписки на {plan}',
   'pricing.currentPlanBadge': 'Ваш текущий план',
   'settings.cancelSubscription': 'Отменить подписку',
   'settings.canceling': 'Отмена...',
@@ -175,7 +183,7 @@ export const ru = {
   'chat.attach': 'Прикрепить файл',
   'chat.attachHint': 'Вложения появятся на этапе 5 — пока это заглушка.',
   'chat.model': 'Модель',
-  'chat.modelAuto': 'Best AI (Auto)',
+  'chat.modelAuto': 'Лучший AI (Авто)',
   'chat.modelMini': 'Qwen 2.5 Coder',
   'chat.modelPro': 'Qwen 2.5 Max *',
   'chat.modelGptAstra': 'GPT-6 Astra *',

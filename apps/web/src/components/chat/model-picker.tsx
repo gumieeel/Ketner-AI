@@ -119,7 +119,7 @@ export function ModelPicker({ disabled = false }: { disabled?: boolean }) {
           {current.id === 'auto' ? (
             <>
               <span className="size-1.5 rounded-full bg-accent animate-pulse" />
-              <strong className="font-medium text-text">Best AI (Auto)</strong>
+              <strong className="font-medium text-text">{t('chat.modelAuto')}</strong>
             </>
           ) : (
             <span>

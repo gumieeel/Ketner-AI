@@ -102,6 +102,9 @@ export const en: Record<TranslationKey, string> = {
   'pricing.viewDocs': 'View documentation',
   'pricing.limitsBadge': 'Limit',
   'pricing.modelsBadge': 'Models',
+  'pricing.nextGenBadge': 'Next-generation plans',
+  'pricing.allInclusive': 'All-in-one',
+  'pricing.docsLink': 'Read detailed documentation on models and architecture →',
   'pricing.notice':
     'Payments are not connected yet: buttons lead to a demo form. The real provider arrives in stage 4.',
 
@@ -146,6 +149,11 @@ export const en: Record<TranslationKey, string> = {
   'checkout.starsPayInBot': 'Pay in Telegram (@KetnerAIBot)',
   'checkout.starsQrHint': 'Or scan QR code to open Telegram Bot',
   'checkout.starsConfirm': 'Confirm Stars payment',
+  'checkout.starsOfficial': 'Official Telegram payment method',
+  'checkout.starsChecking': 'Checking Stars transaction...',
+  'checkout.starsNotice':
+    'Payment is debited instantly from your Telegram account balance. Subscription activates immediately upon confirmation.',
+  'checkout.starsPeriodNotice': '{price} for 30 days of {plan}',
   'pricing.currentPlanBadge': 'Your current plan',
   'settings.cancelSubscription': 'Cancel subscription',
   'settings.canceling': 'Canceling...',

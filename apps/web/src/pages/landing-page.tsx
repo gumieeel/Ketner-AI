@@ -64,15 +64,19 @@ const HOW_STEPS: HowStep[] = [
   },
 ];
 
+import type { Language } from '@/features/preferences/preferences-store';
+
 interface TierPlan {
   id: string;
   name: string;
-  price: string;
-  period: string;
-  speed: string;
-  priority: string;
-  context: string;
+  price: Record<Language, string>;
+  period: Record<Language, string>;
+  speed: Record<Language, string>;
+  priority: Record<Language, string>;
+  context: Record<Language, string>;
   popular?: boolean;
+  popularBadge?: Record<Language, string>;
+  buttonText?: Record<Language, string>;
   href: string;
 }
 
@@ -80,48 +84,53 @@ const TIER_PLANS: TierPlan[] = [
   {
     id: 'free',
     name: 'Free',
-    price: '$0',
-    period: '/ month',
-    speed: 'Standard response speed',
-    priority: 'Standard queue priority',
-    context: 'Standard context window',
+    price: { ru: '0 ₽', en: '$0' },
+    period: { ru: '/ месяц', en: '/ month' },
+    speed: { ru: 'Базовая скорость ответов', en: 'Standard response speed' },
+    priority: { ru: 'Стандартная очередь', en: 'Standard queue priority' },
+    context: { ru: 'Стандартный контекст диалога', en: 'Standard context window' },
+    buttonText: { ru: 'Начать чат', en: 'Start chatting' },
     href: '/chat',
   },
   {
     id: 'plus',
     name: 'Plus',
-    price: '$9.99',
-    period: '/ month',
-    speed: 'Fast response speed',
-    priority: 'Enhanced queue priority',
-    context: 'Extended conversation context',
+    price: { ru: '990 ₽', en: '$9.99' },
+    period: { ru: '/ месяц', en: '/ month' },
+    speed: { ru: 'Быстрая скорость генерации', en: 'Fast response speed' },
+    priority: { ru: 'Повышенный приоритет очереди', en: 'Enhanced queue priority' },
+    context: { ru: 'Расширенный контекст', en: 'Extended conversation context' },
+    buttonText: { ru: 'Выбрать Plus', en: 'Get Plus' },
     href: '/checkout/plus',
   },
   {
     id: 'pro',
     name: 'Pro',
-    price: '$19.99',
-    period: '/ month',
-    speed: 'Ultra-fast flagship speed',
-    priority: 'High priority processing',
-    context: 'Deep multi-turn context (all flagship AIs)',
+    price: { ru: '1 990 ₽', en: '$19.99' },
+    period: { ru: '/ месяц', en: '/ month' },
+    speed: { ru: 'Сверхбыстрый отклик флагманов', en: 'Ultra-fast flagship speed' },
+    priority: { ru: 'Высокий приоритет без ожидания', en: 'High priority processing' },
+    context: { ru: 'Глубокий контекст (все флагманы AI)', en: 'Deep multi-turn context (all flagship AIs)' },
     popular: true,
+    popularBadge: { ru: 'Популярный', en: 'Most Popular' },
+    buttonText: { ru: 'Выбрать Pro', en: 'Get Pro' },
     href: '/checkout/pro',
   },
   {
     id: 'ultra',
     name: 'Ultra',
-    price: '$39.99',
-    period: '/ month',
-    speed: 'Maximum processing speed',
-    priority: 'Dedicated VIP priority',
-    context: 'Massive context for full project work',
+    price: { ru: '2 499 ₽', en: '$39.99' },
+    period: { ru: '/ месяц', en: '/ month' },
+    speed: { ru: 'Максимальная скорость серверов', en: 'Maximum processing speed' },
+    priority: { ru: 'Выделенный VIP-приоритет', en: 'Dedicated VIP priority' },
+    context: { ru: 'Огромный контекст для проектов', en: 'Massive context for full project work' },
+    buttonText: { ru: 'Выбрать Ultra', en: 'Get Ultra' },
     href: '/checkout/ultra',
   },
 ];
 
 export function LandingPage() {
-  const { t } = useTranslation();
+  const { t, language } = useTranslation();
   const status = useAuth((state) => state.status);
   const user = useAuth((state) => state.user);
 
@@ -184,17 +193,19 @@ export function LandingPage() {
             </div>
             <div className="flex items-center gap-1.5 rounded-full bg-accent/10 border border-accent/25 px-2.5 py-0.5 text-[11px] font-semibold text-accent">
               <span className="size-1.5 rounded-full bg-accent animate-pulse" />
-              <span>Best AI (Auto)</span>
+              <span>{language === 'ru' ? 'Лучший AI (Авто)' : 'Best AI (Auto)'}</span>
             </div>
           </div>
 
           <div className="flex flex-col gap-3.5 p-5 text-left text-sm">
             <div className="flex items-start gap-3">
               <span className="grid size-7 shrink-0 place-items-center rounded-full bg-accent/15 text-xs font-bold text-accent">
-                You
+                {language === 'ru' ? 'Вы' : 'You'}
               </span>
               <div className="rounded-xl bg-canvas/80 px-4 py-2 text-text border border-stroke/15">
-                Explain the difference between quantum computing and classical computing in 2 sentences.
+                {language === 'ru'
+                  ? 'Объясни разницу между квантовыми и классическими вычислениями в 2 предложениях.'
+                  : 'Explain the difference between quantum computing and classical computing in 2 sentences.'}
               </div>
             </div>
 
@@ -204,13 +215,19 @@ export function LandingPage() {
               </span>
               <div className="flex flex-1 flex-col gap-2 rounded-xl bg-canvas/40 p-4 border border-stroke/15">
                 <div className="flex items-center justify-between text-xs text-muted border-b border-stroke/10 pb-1.5">
-                  <span className="font-semibold text-text">✨ Routed via Auto Mode → GPT-6 Astra</span>
-                  <span className="text-[11px] text-accent">Instant stream</span>
+                  <span className="font-semibold text-text">
+                    {language === 'ru'
+                      ? '✨ Авто-маршрутизация → GPT-6 Astra'
+                      : '✨ Routed via Auto Mode → GPT-6 Astra'}
+                  </span>
+                  <span className="text-[11px] text-accent">
+                    {language === 'ru' ? 'Мгновенный стриминг' : 'Instant stream'}
+                  </span>
                 </div>
                 <p className="text-text/90 leading-relaxed text-xs sm:text-sm">
-                  Classical computers process information sequentially using binary bits that are either 0 or 1.
-                  In contrast, quantum computers leverage qubits and superposition to evaluate vast combinations
-                  simultaneously, solving complex optimization problems exponentially faster.
+                  {language === 'ru'
+                    ? 'Классические компьютеры обрабатывают данные последовательно с помощью бинарных битов (0 или 1). Квантовые компьютеры задействуют кубиты и суперпозицию для анализа множества состояний одновременно, решая сложнейшие задачи оптимизации в разы быстрее.'
+                    : 'Classical computers process information sequentially using binary bits that are either 0 or 1. In contrast, quantum computers leverage qubits and superposition to evaluate vast combinations simultaneously, solving complex optimization problems exponentially faster.'}
                 </p>
               </div>
             </div>
@@ -301,29 +318,29 @@ export function LandingPage() {
             >
               {plan.popular && (
                 <div className="absolute -top-2.5 right-4 rounded-full bg-accent px-2 py-0.5 text-[10px] font-bold text-[var(--color-accent-text)] uppercase tracking-wide">
-                  Most Popular
+                  {plan.popularBadge ? plan.popularBadge[language] : (language === 'ru' ? 'Популярный' : 'Most Popular')}
                 </div>
               )}
 
               <div>
                 <h3 className="text-lg font-bold text-text">{plan.name}</h3>
                 <div className="mt-2 flex items-baseline gap-1">
-                  <span className="text-3xl font-extrabold text-text">{plan.price}</span>
-                  <span className="text-xs text-muted">{plan.period}</span>
+                  <span className="text-3xl font-extrabold text-text">{plan.price[language]}</span>
+                  <span className="text-xs text-muted">{plan.period[language]}</span>
                 </div>
 
                 <div className="mt-5 flex flex-col gap-2.5 border-t border-stroke/15 pt-4 text-xs">
                   <div className="flex items-start gap-2">
                     <CheckIcon className="size-4 shrink-0 text-accent mt-0.5" />
-                    <span className="text-text/90 font-medium">{plan.speed}</span>
+                    <span className="text-text/90 font-medium">{plan.speed[language]}</span>
                   </div>
                   <div className="flex items-start gap-2">
                     <CheckIcon className="size-4 shrink-0 text-accent mt-0.5" />
-                    <span className="text-text/90 font-medium">{plan.priority}</span>
+                    <span className="text-text/90 font-medium">{plan.priority[language]}</span>
                   </div>
                   <div className="flex items-start gap-2">
                     <CheckIcon className="size-4 shrink-0 text-accent mt-0.5" />
-                    <span className="text-text/90 font-medium">{plan.context}</span>
+                    <span className="text-text/90 font-medium">{plan.context[language]}</span>
                   </div>
                 </div>
               </div>
@@ -335,7 +352,7 @@ export function LandingPage() {
                     size="md"
                     className="w-full font-semibold text-xs"
                   >
-                    {plan.id === 'free' ? t('landing.cta') : `Get ${plan.name}`}
+                    {plan.buttonText ? plan.buttonText[language] : (plan.id === 'free' ? t('landing.cta') : `Get ${plan.name}`)}
                   </Button>
                 </Link>
               </div>

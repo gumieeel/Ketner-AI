@@ -64,7 +64,10 @@ export const PLANS: readonly Plan[] = [
       ru: 'Все флагманы AI',
       en: 'All Flagship AIs',
     },
-    modelsHighlight: 'GPT-6 Astra, Claude Fable, Gemini Pro',
+    modelsHighlight: {
+      ru: 'GPT-6 Astra, Claude Fable, Gemini Pro',
+      en: 'GPT-6 Astra, Claude Fable, Gemini Pro',
+    },
     bullets: {
       ru: [
         'Сверхбыстрая скорость флагманских моделей',
@@ -88,7 +91,10 @@ export const PLANS: readonly Plan[] = [
       ru: 'Максимум · VIP приоритет',
       en: 'Maximum · VIP priority',
     },
-    modelsHighlight: 'Максимальный контекст + 8 параллельных потоков',
+    modelsHighlight: {
+      ru: 'Максимальный контекст + 8 параллельных потоков',
+      en: 'Maximum context + 8 concurrent streams',
+    },
     bullets: {
       ru: [
         'Максимальная скорость с выделенными ресурсами',

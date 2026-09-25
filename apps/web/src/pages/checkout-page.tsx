@@ -51,7 +51,7 @@ function calculateStars(priceRub: number): number {
  * - Telegram Stars (⭐️ XTR) с оплатой через Telegram-бота @KetnerAIBot
  */
 export function CheckoutPage() {
-  const { t } = useTranslation();
+  const { t, language } = useTranslation();
   const navigate = useNavigate();
   const { planId } = useParams<{ planId: string }>();
   const authStatus = useAuth((state) => state.status);
@@ -356,14 +356,20 @@ export function CheckoutPage() {
             {t('checkout.selectedPlan')}
           </span>
           <CardTitle className="text-xl mt-0.5">{t(plan.nameKey)}</CardTitle>
-          <p className="text-xs text-muted mt-1">{plan.modelsHighlight}</p>
+          <p className="text-xs text-muted mt-1">
+            {typeof plan.modelsHighlight === 'string'
+              ? plan.modelsHighlight
+              : plan.modelsHighlight?.[language]}
+          </p>
         </div>
         <div className="text-right">
           <p className="text-2xl font-bold text-text">
             {plan.priceMonthly.toLocaleString('ru-RU')} ₽
             <span className="ml-1 text-xs font-normal text-muted">{t('pricing.month')}</span>
           </p>
-          <p className="text-xs font-medium text-amber-500 mt-0.5">или {starsAmount} ⭐️ Stars</p>
+          <p className="text-xs font-medium text-amber-500 mt-0.5">
+            {language === 'ru' ? `или ${starsAmount} ⭐️ Stars` : `or ${starsAmount} ⭐️ Stars`}
+          </p>
         </div>
       </Card>
 
@@ -579,7 +585,7 @@ export function CheckoutPage() {
         <div className="flex flex-col items-center gap-5 rounded-3xl border border-stroke/40 bg-surface/90 p-6 text-center shadow-lg backdrop-blur-md animate-fade-in">
           <div className="flex items-center gap-2 rounded-full bg-amber-500/10 px-3.5 py-1 text-xs font-semibold text-amber-600 dark:text-amber-400">
             <StarIcon className="text-amber-400 text-sm" />
-            Официальная платёжная система Telegram
+            {t('checkout.starsOfficial')}
           </div>
 
           {/* Плашка со звёздами */}
@@ -590,7 +596,7 @@ export function CheckoutPage() {
               <span className="text-xl font-normal text-muted">Stars</span>
             </div>
             <p className="text-xs text-muted">
-              {plan.priceMonthly} ₽ за 30 дней подписки на {t(plan.nameKey)}
+              {t('checkout.starsPeriodNotice', { price: `${plan.priceMonthly} ₽`, plan: t(plan.nameKey) })}
             </p>
           </div>
 
@@ -600,7 +606,7 @@ export function CheckoutPage() {
             <div className="p-2 rounded-3xl bg-canvas border border-stroke/30 shadow-inner">
               {starsLoading ? (
                 <div className="size-44 flex items-center justify-center text-sm text-muted">
-                  Подготовка бота...
+                  {language === 'ru' ? 'Подготовка бота...' : 'Preparing bot...'}
                 </div>
               ) : (
                 <QrCode
@@ -625,7 +631,7 @@ export function CheckoutPage() {
               className="w-full inline-flex items-center justify-center gap-2.5 rounded-xl bg-[#24A1DE] px-4 py-3 text-sm font-semibold text-white shadow-md hover:bg-[#208fcf] transition-colors"
             >
               <TelegramIcon className="text-lg" />
-              Оплатить в Telegram (@{botUsername})
+              {language === 'ru' ? `Оплатить в Telegram (@${botUsername})` : `Pay in Telegram (@${botUsername})`}
             </a>
 
             <Button
@@ -635,13 +641,12 @@ export function CheckoutPage() {
               disabled={submitting}
               onClick={handleStarsConfirm}
             >
-              {submitting ? 'Проверка транзакции Stars...' : t('checkout.starsConfirm')}
+              {submitting ? t('checkout.starsChecking') : t('checkout.starsConfirm')}
             </Button>
           </div>
 
           <p className="text-xs text-muted max-w-sm">
-            Платёж списывается мгновенно с баланса вашего Telegram аккаунта. Подписка
-            синхронизируется автоматически.
+            {t('checkout.starsNotice')}
           </p>
         </div>
       )}
