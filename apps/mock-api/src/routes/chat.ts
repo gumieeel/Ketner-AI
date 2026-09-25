@@ -172,12 +172,16 @@ export function createChatRouter({
       response.write(`event: ${event}\ndata: ${JSON.stringify(payload)}\n\n`);
     };
 
-    const finishTurn = (content: string, status: MessageStatus): string | null => {
+    const finishTurn = (
+      content: string,
+      status: MessageStatus,
+      assistantModelId = model.id,
+    ): string | null => {
       const saved = store.saveTurn({
         userId: activeUserId,
         conversationId,
         history: messages,
-        assistant: { content, modelId: model.id, status },
+        assistant: { content, modelId: assistantModelId, status },
       });
       return saved?.assistant.id ?? null;
     };
@@ -212,12 +216,18 @@ export function createChatRouter({
             content += delta;
             writeEvent('delta', { content: delta });
           },
-          onDone: (usage) => {
-            const messageId = finishTurn(content, 'complete');
+          onDone: (result) => {
+            const actualModelId = result.selectedModel?.id ?? model.id;
+            const messageId = finishTurn(content, 'complete', actualModelId);
             if (messageId) {
               writeEvent('done', {
                 messageId,
-                usage,
+                selectedModel: result.selectedModel,
+                routingReason: result.routingReason,
+                usage: {
+                  inputTokens: result.inputTokens,
+                  outputTokens: result.outputTokens,
+                },
               });
             }
           },

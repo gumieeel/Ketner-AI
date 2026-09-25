@@ -13,84 +13,61 @@ export const PLANS: readonly PlanItem[] = [
     nameKey: 'pricing.free',
     priceMonthly: 0,
     limitBadge: {
-      ru: '3 сообщения в час',
-      en: '3 messages / hour',
+      ru: 'Базовый доступ',
+      en: 'Basic access',
     },
-    modelsHighlight: 'Gemini 3.8 Flash',
+    modelsHighlight: 'Ketner Mini + Auto Mode',
     bullets: {
-      ru: ['3 сообщения в час', 'Gemini 3.8 Flash', 'Базовые функции и история чатов'],
-      en: ['3 messages per hour', 'Gemini 3.8 Flash', 'Basic features & chat history'],
+      ru: ['Ketner Mini (быстрая модель)', 'Интеллектуальный Auto Mode', 'Базовые функции и история чатов'],
+      en: ['Ketner Mini (fast model)', 'Intelligent Auto Mode', 'Basic features & chat history'],
     },
   },
   {
-    id: 'gpt-pro',
-    nameKey: 'pricing.gptPro',
-    priceMonthly: 1199,
+    id: 'plus',
+    nameKey: 'pricing.plus',
+    priceMonthly: 990,
     limitBadge: {
-      ru: '5-часовой лимит',
-      en: '5-hour limit',
+      ru: 'Plus · 2 параллельных',
+      en: 'Plus · 2 concurrent',
     },
-    modelsHighlight: 'GPT-6 Astra, Luna, 5.5 Omni',
+    modelsHighlight: 'Ketner Pro & Mini + Auto Mode',
     bullets: {
       ru: [
-        '5-часовой плавающий лимит',
-        'GPT-6 Astra, GPT-6 Luna, GPT-5.5 Omni',
-        'Рассуждающие модели o3-mini',
-        'Приоритет в часы пиковой нагрузки',
+        'Стандартные и продвинутые модели',
+        'Auto Mode с оптимизацией себестоимости',
+        'Контекст до 60 сообщений',
+        '2 параллельных запроса',
       ],
       en: [
-        '5-hour rolling limit',
-        'GPT-6 Astra, GPT-6 Luna, GPT-5.5 Omni',
-        'o3-mini reasoning models',
-        'Priority access during peak hours',
-      ],
-    },
-  },
-  {
-    id: 'claude-pro',
-    nameKey: 'pricing.claudePro',
-    priceMonthly: 1199,
-    limitBadge: {
-      ru: '5-часовой лимит',
-      en: '5-hour limit',
-    },
-    modelsHighlight: 'Claude 4.5 Sonnet & Opus, Fable',
-    bullets: {
-      ru: [
-        '5-часовой плавающий лимит',
-        'Claude 4.5 Sonnet, Claude 4.5 Opus',
-        'Семейство Fable 5.5, Fable 5.1 Haiku',
-        'Глубокий анализ кода и сложных текстов',
-      ],
-      en: [
-        '5-hour rolling limit',
-        'Claude 4.5 Sonnet, Claude 4.5 Opus',
-        'Fable 5.5, Fable 5.1 Haiku family',
-        'Advanced code analysis & writing',
+        'Standard and advanced models',
+        'Auto Mode with cost optimization',
+        'Up to 60 context messages',
+        '2 concurrent requests',
       ],
     },
   },
   {
-    id: 'gemini-pro',
-    nameKey: 'pricing.geminiPro',
-    priceMonthly: 1199,
+    id: 'pro',
+    nameKey: 'pricing.pro',
+    priceMonthly: 1990,
+    popular: true,
     limitBadge: {
-      ru: '5-часовой лимит',
-      en: '5-hour limit',
+      ru: 'Все флагманы AI',
+      en: 'All Flagship AIs',
     },
-    modelsHighlight: 'Gemini 3.8 Pro & 3.5 Ultra',
+    modelsHighlight: 'GPT-6 Astra, Claude Fable, Gemini Pro',
     bullets: {
       ru: [
-        '5-часовой плавающий лимит',
-        'Gemini 3.8 Pro, Gemini 3.5 Ultra',
-        'Gemini Flash Thinking 2.5',
-        'Огромное контекстное окно до 2M токенов',
+        'Доступ ко ВСЕМ флагманским моделям (GPT, Claude, Gemini)',
+        'Без раздельных подписок на каждого провайдера',
+        'Контекст до 120 сообщений',
+        '4 параллельных запроса и повышенный приоритет',
       ],
       en: [
-        '5-hour rolling limit',
-        'Gemini 3.8 Pro, Gemini 3.5 Ultra',
-        'Gemini Flash Thinking 2.5',
-        'Massive context window up to 2M tokens',
+        'Access to ALL flagship models (GPT, Claude, Gemini)',
+        'No separate subscriptions per AI provider',
+        'Up to 120 context messages',
+        '4 concurrent requests & higher priority',
       ],
     },
   },
@@ -98,25 +75,60 @@ export const PLANS: readonly PlanItem[] = [
     id: 'ultra',
     nameKey: 'pricing.ultra',
     priceMonthly: 2499,
-    popular: true,
     limitBadge: {
-      ru: 'Без лимитов · Бесконечный кодинг',
-      en: 'No limits · Endless coding',
+      ru: 'Без ограничений · Высший приоритет',
+      en: 'No limits · Highest priority',
     },
-    modelsHighlight: 'Все флагманы GPT, Claude, Gemini',
+    modelsHighlight: 'Максимальный контекст + 8 параллельных потоков',
     bullets: {
       ru: [
-        'Всё включено: GPT-6, Claude 4.5, Gemini 3.8',
-        'Без лимитов: бесконечный кодинг без пауз',
-        'Максимальный размер контекста для репозиториев',
-        'Высший приоритет серверов и мгновенный отклик',
+        'Всё из Pro с максимальным лимитом Fair Use',
+        'До 500 сообщений контекста для больших файлов',
+        '8 параллельных запросов',
+        'Максимальная скорость и мгновенный отклик',
       ],
       en: [
-        'All-in-one: GPT-6, Claude 4.5, Gemini 3.8',
-        'No limits: non-stop continuous coding',
-        'Maximum context window for repositories',
-        'Highest server priority & instant response',
+        'Everything in Pro with highest Fair Use limits',
+        'Up to 500 context messages for large codebases',
+        '8 concurrent requests',
+        'Maximum processing speed & instant response',
       ],
+    },
+  },
+];
+
+export const LEGACY_PLANS: readonly PlanItem[] = [
+  {
+    id: 'gpt-pro',
+    nameKey: 'pricing.gptPro',
+    priceMonthly: 1199,
+    limitBadge: { ru: 'Legacy Pro', en: 'Legacy Pro' },
+    modelsHighlight: 'GPT-6 Astra + All Pro Models',
+    bullets: {
+      ru: ['Устаревший тариф (включает все возможности Pro)'],
+      en: ['Legacy plan (includes all Pro features)'],
+    },
+  },
+  {
+    id: 'claude-pro',
+    nameKey: 'pricing.claudePro',
+    priceMonthly: 1199,
+    limitBadge: { ru: 'Legacy Pro', en: 'Legacy Pro' },
+    modelsHighlight: 'Claude Fable + All Pro Models',
+    bullets: {
+      ru: ['Устаревший тариф (включает все возможности Pro)'],
+      en: ['Legacy plan (includes all Pro features)'],
+    },
+  },
+  {
+    id: 'gemini-pro',
+    nameKey: 'pricing.geminiPro',
+    priceMonthly: 1199,
+    limitBadge: { ru: 'Legacy Pro', en: 'Legacy Pro' },
+    modelsHighlight: 'Gemini Pro + All Pro Models',
+    bullets: {
+      ru: ['Устаревший тариф (включает все возможности Pro)'],
+      en: ['Legacy plan (includes all Pro features)'],
     },
   },
 ];
@@ -146,10 +158,17 @@ export function createBillingRouter({
   };
 
   const findPlan = (rawPlanId: unknown): PlanItem | undefined => {
-    return PLANS.find((p) => p.id === rawPlanId);
+    return (
+      PLANS.find((p) => p.id === rawPlanId) ??
+      LEGACY_PLANS.find((p) => p.id === rawPlanId)
+    );
   };
 
-  router.get('/plans', (_request: Request, response: Response) => {
+  router.get('/plans', (request: Request, response: Response) => {
+    if (request.query.includeLegacy === 'true') {
+      response.json({ plans: [...PLANS, ...LEGACY_PLANS] });
+      return;
+    }
     response.json({ plans: PLANS });
   });
 
@@ -173,13 +192,13 @@ export function createBillingRouter({
 
   router.post('/billing/checkout', (request: Request, response: Response) => {
     const rawPlanId: unknown = request.body?.planId;
-    const validPlanIds = ['gpt-pro', 'claude-pro', 'gemini-pro', 'ultra', 'plus', 'pro'];
+    const validPlanIds = ['plus', 'pro', 'ultra', 'gpt-pro', 'claude-pro', 'gemini-pro'];
     if (!validPlanIds.includes(rawPlanId as string)) {
       sendError(
         response,
         400,
         'invalid_plan',
-        'Допустимые тарифы для оплаты: gpt-pro, claude-pro, gemini-pro, ultra',
+        'Допустимые тарифы для оплаты: plus, pro, ultra',
       );
       return;
     }

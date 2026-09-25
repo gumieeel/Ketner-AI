@@ -1,5 +1,5 @@
 import { config } from '../config.js';
-import { PLANS } from '../routes/billing.js';
+import { LEGACY_PLANS, PLANS } from '../routes/billing.js';
 import { invoiceStore as defaultInvoiceStore, subscriptionStore as defaultSubscriptionStore, userStore as defaultUserStore, } from '../store/index.js';
 export function calculateStars(priceRub) {
     if (priceRub <= 0)
@@ -8,14 +8,14 @@ export function calculateStars(priceRub) {
         return 650;
     if (priceRub === 2499)
         return 1350;
-    if (priceRub === 999)
+    if (priceRub === 999 || priceRub === 990)
         return 550;
-    if (priceRub === 1999)
+    if (priceRub === 1999 || priceRub === 1990)
         return 1100;
     return Math.round(priceRub / 1.84);
 }
 export function getPlanItem(planId) {
-    return PLANS.find((p) => p.id === planId);
+    return PLANS.find((p) => p.id === planId) ?? LEGACY_PLANS.find((p) => p.id === planId);
 }
 export class TelegramBotService {
     token;

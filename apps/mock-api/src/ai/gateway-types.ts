@@ -202,7 +202,12 @@ export interface GatewayRequest {
 /** Callback'и для стримингового ответа. */
 export interface GatewayStreamCallbacks {
   onDelta: (content: string) => void;
-  onDone: (usage: { inputTokens: number; outputTokens: number }) => void;
+  onDone: (result: {
+    inputTokens: number;
+    outputTokens: number;
+    selectedModel?: { id: string; name: string };
+    routingReason?: string;
+  }) => void;
   onError: (error: { code: string; message: string }) => void;
 }
 

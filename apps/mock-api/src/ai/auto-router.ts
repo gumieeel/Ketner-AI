@@ -144,45 +144,99 @@ export class AutoRouter {
   }
 
   /**
-   * Выбрать наилучшую модель из доступных пользователю.
+   * Выбрать наилучшую модель из доступных пользователю с объяснением причины выбора.
    */
-  static route(prompt: string, availableModels: ModelRegistryEntry[]): ModelRegistryEntry {
+  static routeWithReason(
+    prompt: string,
+    availableModels: ModelRegistryEntry[],
+  ): { model: ModelRegistryEntry; reason: string } {
     if (availableModels.length === 0) {
       throw new Error('No models available for routing');
     }
 
     if (availableModels.length === 1) {
-      return availableModels[0];
+      return {
+        model: availableModels[0],
+        reason: `Default plan model (${availableModels[0].name})`,
+      };
     }
 
     const classification = this.classify(prompt);
+
+    // Cost-aware routing:
+    // Если задача простая, короткая или общая разговорная (например, приветствие или короткий вопрос),
+    // отдаём предпочтение легкой/быстрой модели для снижения затрат на токены и низкой задержки.
+    const isCasualOrSimple =
+      classification.category === 'general' &&
+      classification.complexity === 'simple' &&
+      prompt.trim().length < 200;
+
+    if (isCasualOrSimple) {
+      const fastModel =
+        availableModels.find((m) => m.tier === 'free' || m.id === 'ketner-mini') ??
+        availableModels.find((m) => m.tier === 'standard') ??
+        availableModels[0];
+      return {
+        model: fastModel,
+        reason: `Cost-optimized fast routing for casual conversation (${fastModel.name})`,
+      };
+    }
 
     // Оцениваем каждую модель на соответствие задаче
     const scored = availableModels.map((model) => {
       let score = 0;
 
       // Очки за соответствие категории
-      if (classification.category === 'coding' && model.capabilities.coding) score += 10;
-      if (classification.category === 'math' && model.capabilities.math) score += 10;
-      if (classification.category === 'reasoning' && model.capabilities.reasoning) score += 10;
-      if (classification.category === 'creative' && model.capabilities.creative) score += 8;
-      if (classification.category === 'translation' && model.capabilities.translation) score += 8;
+      if (classification.category === 'coding' && model.capabilities.coding) score += 12;
+      if (classification.category === 'math' && model.capabilities.math) score += 12;
+      if (classification.category === 'reasoning' && model.capabilities.reasoning) score += 12;
+      if (classification.category === 'creative' && model.capabilities.creative) score += 10;
+      if (classification.category === 'translation' && model.capabilities.translation) score += 10;
 
       // Сложные задачи направляем на flagship / premium модели
       if (classification.complexity === 'complex') {
-        if (model.tier === 'flagship') score += 5;
+        if (model.tier === 'flagship') score += 6;
         if (model.tier === 'premium') score += 3;
+      } else {
+        // Для простых задач экономим: +2 очка моделям standard/free
+        if (model.tier === 'standard') score += 2;
+        if (model.tier === 'free') score += 1;
       }
 
       // Длинный контекст
       if (classification.requiresLongContext && model.contextWindow >= 100_000) {
-        score += 6;
+        score += 8;
       }
 
       return { model, score };
     });
 
     scored.sort((a, b) => b.score - a.score);
-    return scored[0].model;
+    const chosen = scored[0].model;
+
+    // Формируем понятное объяснение выбора
+    let reason = `Auto-routed to ${chosen.name}`;
+    if (classification.category === 'coding') {
+      reason = `Selected ${chosen.name} for code analysis and programming task`;
+    } else if (classification.category === 'math') {
+      reason = `Selected ${chosen.name} for advanced mathematical reasoning`;
+    } else if (classification.category === 'reasoning') {
+      reason = `Selected ${chosen.name} for deep analytical reasoning`;
+    } else if (classification.category === 'translation') {
+      reason = `Selected ${chosen.name} for multilingual translation optimization`;
+    } else if (classification.category === 'creative') {
+      reason = `Selected ${chosen.name} for creative writing and content generation`;
+    } else if (classification.requiresLongContext) {
+      reason = `Selected ${chosen.name} for high-capacity context window`;
+    }
+
+    return { model: chosen, reason };
+  }
+
+  /**
+   * Выбрать наилучшую модель из доступных пользователю.
+   */
+  static route(prompt: string, availableModels: ModelRegistryEntry[]): ModelRegistryEntry {
+    return this.routeWithReason(prompt, availableModels).model;
   }
 }

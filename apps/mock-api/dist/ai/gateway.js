@@ -42,13 +42,17 @@ export class AIGateway {
         const effectivePlan = EntitlementService.resolveEffectivePlan(req.userPlan);
         // 2. Резолвинг модели (включая Auto Mode)
         let targetModel;
+        let routingReason;
         const prompt = [...req.messages].reverse().find((m) => m.role === 'user')?.content ?? '';
         if (req.modelId === 'auto') {
             const allowed = this.registry.getForPlan(effectivePlan);
-            targetModel = AutoRouter.route(prompt, allowed);
+            const routed = AutoRouter.routeWithReason(prompt, allowed);
+            targetModel = routed.model;
+            routingReason = routed.reason;
         }
         else {
             targetModel = this.registry.resolve(req.modelId);
+            routingReason = `Explicit user model selection (${targetModel.name})`;
         }
         // 3. Проверка прав доступа (Entitlement Check)
         const accessCheck = EntitlementService.checkModelAccess(targetModel, effectivePlan);
@@ -127,6 +131,8 @@ export class AIGateway {
                     callbacks.onDone({
                         inputTokens: cachedHit.inputTokens,
                         outputTokens: cachedHit.outputTokens,
+                        selectedModel: { id: targetModel.id, name: targetModel.name },
+                        routingReason: `${routingReason} (Semantic Cache Hit)`,
                     });
                 }
                 return;
@@ -230,6 +236,8 @@ export class AIGateway {
                 callbacks.onDone({
                     inputTokens,
                     outputTokens,
+                    selectedModel: { id: usedModel.id, name: usedModel.name },
+                    routingReason,
                 });
             }
         }

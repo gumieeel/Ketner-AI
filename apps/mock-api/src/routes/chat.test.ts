@@ -172,3 +172,100 @@ test('генерация на платной модели без подписк�
     await server.close();
   }
 });
+
+test('генерация возвращает selectedModel, routingReason и usage в событии done', async () => {
+  const server = await startTestServer();
+
+  try {
+    const conversation = await createConversation(server.baseUrl, 'Метаданные ответа');
+    const response = await postCompletion(server.baseUrl, {
+      conversationId: conversation.id,
+      modelId: 'auto',
+      language: 'ru',
+      messages: [{ role: 'user', content: 'Привет, как дела?' }],
+    });
+
+    assert.equal(response.status, 200);
+    const events = await readSseEvents(response);
+    const done = events.find((e) => e.event === 'done');
+    assert.ok(done, 'должно прийти событие done');
+
+    const payload = JSON.parse(done.data) as {
+      messageId: string;
+      selectedModel: { id: string; name: string };
+      routingReason: string;
+      usage: { inputTokens: number; outputTokens: number };
+    };
+
+    assert.ok(payload.messageId);
+    assert.ok(payload.selectedModel?.id);
+    assert.ok(payload.selectedModel?.name);
+    assert.ok(payload.routingReason);
+    assert.ok(payload.usage.inputTokens > 0);
+    assert.ok(payload.usage.outputTokens > 0);
+  } finally {
+    await server.close();
+  }
+});
+
+test('пользователь с тарифом Pro имеет доступ ко всем премиум моделям (нет per-model paywall)', async () => {
+  const server = await startTestServer();
+
+  try {
+    // Регистрация и оформление Pro тарифа
+    const regRes = await fetch(`${server.baseUrl}/api/auth/signup`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: 'pro-user@example.com', password: 'password123', name: 'Pro User' }),
+    });
+    const { token } = (await regRes.json()) as { token: string };
+
+    const checkoutRes = await fetch(`${server.baseUrl}/api/billing/checkout`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({ planId: 'pro' }),
+    });
+    assert.equal(checkoutRes.status, 200);
+
+    // Создаём диалог от имени Pro пользователя
+    const createConvRes = await fetch(`${server.baseUrl}/api/conversations`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({ title: 'Pro GPT-6 Test' }),
+    });
+    const { conversation } = (await createConvRes.json()) as { conversation: { id: string } };
+
+    // Запрос к флагманской модели GPT-6 Astra
+    const gptResponse = await fetch(`${server.baseUrl}/api/chat/completions`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({
+        conversationId: conversation.id,
+        modelId: 'gpt-6-astra',
+        language: 'ru',
+        messages: [{ role: 'user', content: 'Тестируем флагманскую модель GPT-6' }],
+      }),
+    });
+
+    assert.equal(gptResponse.status, 200);
+    const events = await readSseEvents(gptResponse);
+    const errorEvent = events.find((e) => e.event === 'error');
+    assert.equal(errorEvent, undefined, 'Pro пользователь не должен получать ошибку доступа');
+
+    const doneEvent = events.find((e) => e.event === 'done');
+    assert.ok(doneEvent, 'должен успешно завершиться со статусом done');
+    const doneData = JSON.parse(doneEvent.data) as { selectedModel: { id: string } };
+    assert.equal(doneData.selectedModel.id, 'gpt-6-astra');
+  } finally {
+    await server.close();
+  }
+});

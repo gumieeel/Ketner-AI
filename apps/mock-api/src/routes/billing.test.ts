@@ -11,14 +11,14 @@ test('billing: каталог тарифов GET /api/plans', async (t) => {
   assert.equal(response.status, 200);
 
   const { plans } = await readJson<{ plans: PlanItem[] }>(response);
-  assert.equal(plans.length, 5);
+  assert.equal(plans.length, 4);
   assert.equal(plans[0]?.id, 'free');
-  assert.equal(plans[1]?.id, 'gpt-pro');
-  assert.equal(plans[2]?.id, 'claude-pro');
-  assert.equal(plans[3]?.id, 'gemini-pro');
-  assert.equal(plans[4]?.id, 'ultra');
-  assert.equal(plans[1]?.priceMonthly, 1199);
-  assert.equal(plans[4]?.priceMonthly, 2499);
+  assert.equal(plans[1]?.id, 'plus');
+  assert.equal(plans[2]?.id, 'pro');
+  assert.equal(plans[3]?.id, 'ultra');
+  assert.equal(plans[1]?.priceMonthly, 990);
+  assert.equal(plans[2]?.priceMonthly, 1990);
+  assert.equal(plans[3]?.priceMonthly, 2499);
 });
 
 test('billing: получение подписки и оформление checkout', async (t) => {

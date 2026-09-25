@@ -64,11 +64,20 @@ export function canAccessModel(userPlan, model) {
         return true;
     if (!userPlan || userPlan === 'free')
         return false;
-    if (userPlan === 'ultra')
+    // Tier-based доступ: Pro и Ultra получают доступ ко ВСЕМ моделям
+    if (userPlan === 'ultra' || userPlan === 'pro')
         return true;
+    // Plus получает доступ к Ketner Mini и Ketner Pro
+    if (userPlan === 'plus') {
+        return model.id === 'ketner-mini' || model.id === 'ketner-pro';
+    }
+    // Обратная совместимость с legacy планами (gpt-pro, claude-pro, gemini-pro)
+    if (userPlan === 'gpt-pro' ||
+        userPlan === 'claude-pro' ||
+        userPlan === 'gemini-pro') {
+        return true;
+    }
     if (model.requiredPlan && userPlan === model.requiredPlan)
-        return true;
-    if (model.id === 'ketner-pro' && (userPlan === 'plus' || userPlan === 'pro'))
         return true;
     return false;
 }

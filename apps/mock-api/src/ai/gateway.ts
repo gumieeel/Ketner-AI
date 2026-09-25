@@ -67,14 +67,18 @@ export class AIGateway {
 
     // 2. Резолвинг модели (включая Auto Mode)
     let targetModel: ModelRegistryEntry;
+    let routingReason: string;
     const prompt =
       [...req.messages].reverse().find((m) => m.role === 'user')?.content ?? '';
 
     if (req.modelId === 'auto') {
       const allowed = this.registry.getForPlan(effectivePlan);
-      targetModel = AutoRouter.route(prompt, allowed);
+      const routed = AutoRouter.routeWithReason(prompt, allowed);
+      targetModel = routed.model;
+      routingReason = routed.reason;
     } else {
       targetModel = this.registry.resolve(req.modelId);
+      routingReason = `Explicit user model selection (${targetModel.name})`;
     }
 
     // 3. Проверка прав доступа (Entitlement Check)
@@ -172,6 +176,8 @@ export class AIGateway {
           callbacks.onDone({
             inputTokens: cachedHit.inputTokens,
             outputTokens: cachedHit.outputTokens,
+            selectedModel: { id: targetModel.id, name: targetModel.name },
+            routingReason: `${routingReason} (Semantic Cache Hit)`,
           });
         }
         return;
@@ -296,6 +302,8 @@ export class AIGateway {
         callbacks.onDone({
           inputTokens,
           outputTokens,
+          selectedModel: { id: usedModel.id, name: usedModel.name },
+          routingReason,
         });
       }
     } catch (error) {
