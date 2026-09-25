@@ -16,6 +16,9 @@ import type { UserStore } from './store/user-store.js';
 
 import type { TelegramBotService } from './telegram/bot.js';
 
+import type { UsageStore } from './store/usage-store.js';
+import { usageStore as defaultUsageStore } from './store/index.js';
+
 /**
  * Зависимости приложения.
  *
@@ -26,6 +29,7 @@ export interface AppDeps {
   store: ConversationStore;
   userStore: UserStore;
   subscriptionStore: SubscriptionStore;
+  usageStore?: UsageStore;
   ai: AiConfig;
   userId: string;
   betterAuth?: typeof defaultBetterAuth;
@@ -36,6 +40,7 @@ const defaultDeps: AppDeps = {
   store: conversationStore,
   userStore,
   subscriptionStore,
+  usageStore: defaultUsageStore,
   ai: config.ai,
   userId: config.demoUserId,
   betterAuth: defaultBetterAuth,

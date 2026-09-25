@@ -9,6 +9,8 @@ import { DEFAULT_MODEL_ID } from '../ai/models.js';
 import { createConversationStore } from '../store/conversation-store.js';
 import { createSubscriptionStore } from '../store/subscription-store.js';
 import { createUserStore } from '../store/user-store.js';
+import { UsageStore } from '../store/usage-store.js';
+import { semanticCache } from '../ai/cache.js';
 import type { Conversation, Message } from '../types.js';
 
 /** Задержки без пауз: тесты не должны ждать стриминг. */
@@ -35,10 +37,14 @@ export async function startTestServer(ai: Partial<AiConfig> = {}): Promise<TestS
   const { auth: testBetterAuth, db: testAuthDb } = createBetterAuth({ dbPath: authDbFile });
   await initAuthDatabase(testBetterAuth);
 
+  const usageStoreFile = join(tempDir, 'usage.json');
+  semanticCache.clear();
+
   const app = createApp({
     store: createConversationStore(storeFile),
     userStore: createUserStore(userStoreFile),
     subscriptionStore: createSubscriptionStore(subscriptionStoreFile),
+    usageStore: new UsageStore(usageStoreFile),
     ai: { ...FAST_AI, ...ai },
     betterAuth: testBetterAuth,
   });

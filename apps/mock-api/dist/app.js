@@ -9,10 +9,12 @@ import { config } from './config.js';
 import { errorHandler, notFoundHandler } from './middleware/errors.js';
 import { createApiRouter, describeService } from './routes/index.js';
 import { conversationStore, subscriptionStore, userStore } from './store/index.js';
+import { usageStore as defaultUsageStore } from './store/index.js';
 const defaultDeps = {
     store: conversationStore,
     userStore,
     subscriptionStore,
+    usageStore: defaultUsageStore,
     ai: config.ai,
     userId: config.demoUserId,
     betterAuth: defaultBetterAuth,

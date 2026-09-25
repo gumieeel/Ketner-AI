@@ -274,9 +274,18 @@ export class ModelRegistry {
   canAccess(userPlan: PlanId | undefined, entry: ModelRegistryEntry): boolean {
     if (!entry.isPro) return true;
     if (!userPlan || userPlan === 'free') return false;
-    if (userPlan === 'ultra') return true;
+    if (userPlan === 'ultra' || userPlan === 'pro') return true;
+    if (userPlan === 'plus') {
+      return entry.id === 'ketner-mini' || entry.id === 'ketner-pro';
+    }
+    if (
+      userPlan === 'gpt-pro' ||
+      userPlan === 'claude-pro' ||
+      userPlan === 'gemini-pro'
+    ) {
+      return true;
+    }
     if (entry.requiredPlan && userPlan === entry.requiredPlan) return true;
-    if (entry.id === 'ketner-pro' && (userPlan === 'plus' || userPlan === 'pro')) return true;
     return false;
   }
 

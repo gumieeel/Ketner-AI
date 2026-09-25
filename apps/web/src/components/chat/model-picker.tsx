@@ -115,10 +115,19 @@ export function ModelPicker({ disabled = false }: { disabled?: boolean }) {
           'hover:bg-canvas hover:text-text disabled:cursor-not-allowed disabled:opacity-60',
         )}
       >
-        <span>
-          {t('chat.model')}: <strong className="font-medium text-text">{labelOf(current)}</strong>
+        <span className="flex items-center gap-1.5">
+          {current.id === 'auto' ? (
+            <>
+              <span className="size-1.5 rounded-full bg-accent animate-pulse" />
+              <strong className="font-medium text-text">Best AI (Auto)</strong>
+            </>
+          ) : (
+            <span>
+              {t('chat.model')}: <strong className="font-medium text-text">{labelOf(current)}</strong>
+            </span>
+          )}
         </span>
-        <ChevronDownIcon className="text-sm" />
+        <ChevronDownIcon className="text-xs opacity-70" />
       </button>
 
       {open ? (
