@@ -6,6 +6,7 @@ export interface SubscriptionStore {
   get(userId: string): Subscription;
   checkout(userId: string, plan: PlanId): Subscription;
   cancel(userId: string): Subscription;
+  set(subscription: Subscription): Subscription;
 }
 
 interface Snapshot {
@@ -107,6 +108,22 @@ export function createSubscriptionStore(file: string): SubscriptionStore {
 
       persist();
       return updated;
+    },
+
+    set(subscription: Subscription): Subscription {
+      const normalized = subscription.userId.trim().toLowerCase();
+      const existingIndex = snapshot.subscriptions.findIndex(
+        (sub) => sub.userId === subscription.userId || sub.userId.toLowerCase() === normalized,
+      );
+
+      if (existingIndex >= 0) {
+        snapshot.subscriptions[existingIndex] = subscription;
+      } else {
+        snapshot.subscriptions.push(subscription);
+      }
+
+      persist();
+      return subscription;
     },
   };
 }

@@ -18,6 +18,9 @@ import { createConversationsRouter } from './conversations.js';
 import { healthRouter } from './health.js';
 import { createMetaRouter } from './meta.js';
 import { createTelegramRouter } from './telegram.js';
+import { createAdminRouter } from './admin.js';
+import { createWebhookRouter } from './webhooks.js';
+import { usageStore as defaultUsageStore, type UsageStore } from '../store/index.js';
 
 import type { TelegramBotService } from '../telegram/bot.js';
 import type { defaultBetterAuth } from '../auth/better-auth.js';
@@ -28,6 +31,7 @@ export interface ApiDeps {
   userStore?: UserStore;
   subscriptionStore?: SubscriptionStore;
   invoiceStore?: InvoiceStore;
+  usageStore?: UsageStore;
   botService?: TelegramBotService;
   ai: AiConfig;
   userId: string;
@@ -118,6 +122,7 @@ export function createApiRouter(deps: ApiDeps): Router {
   const activeUserStore = deps.userStore ?? defaultUserStore;
   const activeSubscriptionStore = deps.subscriptionStore ?? defaultSubscriptionStore;
   const activeInvoiceStore = deps.invoiceStore ?? defaultInvoiceStore;
+  const activeUsageStore = deps.usageStore ?? defaultUsageStore;
 
   router.use(createAuthMiddleware(activeUserStore, deps.betterAuth));
 
@@ -144,6 +149,19 @@ export function createApiRouter(deps: ApiDeps): Router {
       botService: deps.botService,
     }),
   );
+  router.use(
+    '/webhooks',
+    createWebhookRouter({
+      subscriptionStore: activeSubscriptionStore,
+      userStore: activeUserStore,
+    }),
+  );
+  router.use(
+    '/admin',
+    createAdminRouter({
+      usageStore: activeUsageStore,
+    }),
+  );
   router.use(createConversationsRouter(deps.store, deps.userId));
   router.use(
     '/chat',
@@ -151,6 +169,7 @@ export function createApiRouter(deps: ApiDeps): Router {
       ...deps,
       subscriptionStore: activeSubscriptionStore,
       userStore: activeUserStore,
+      usageStore: activeUsageStore,
     }),
   );
 

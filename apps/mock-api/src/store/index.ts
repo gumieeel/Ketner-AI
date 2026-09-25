@@ -15,3 +15,9 @@ export const subscriptionStore = createSubscriptionStore(config.subscriptionStor
 /** Хранилище счетов (СБП, Telegram Stars). */
 export { invoiceStore, createInvoiceStore } from './invoice-store.js';
 export type { InvoiceStore } from './invoice-store.js';
+
+/** Хранилище использования AI и себестоимости. */
+import { UsageStore } from './usage-store.js';
+export { UsageStore } from './usage-store.js';
+export const usageStore = new UsageStore(config.usageStoreFile);
+

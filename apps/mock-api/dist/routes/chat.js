@@ -1,10 +1,11 @@
 import { Router } from 'express';
-import { ERROR_MESSAGES, pickAnswer } from '../ai/answers.js';
+import { ERROR_MESSAGES } from '../ai/answers.js';
+import { AIGateway } from '../ai/gateway.js';
 import { canAccessModel, DEFAULT_MODEL_ID, resolveModel } from '../ai/models.js';
-import { streamOpenRouter } from '../ai/openrouter.js';
-import { delay, randomBetween, streamText } from '../ai/stream.js';
-import { config } from '../config.js';
+import { delay, randomBetween } from '../ai/stream.js';
+import {} from '../config.js';
 import { sendError } from '../middleware/errors.js';
+import { usageStore as defaultUsageStore } from '../store/index.js';
 const MAX_MESSAGES = 200;
 const MAX_CONTENT_LENGTH = 8000;
 function parseCompletionRequest(body) {
@@ -48,18 +49,18 @@ function parseCompletionRequest(body) {
         },
     };
 }
-/** Оценка токенов без токенизатора: примерно четыре символа на токен. */
-function estimateTokens(text) {
-    return Math.max(1, Math.round(text.length / 4));
-}
 /**
- * Ответ ИИ потоком.
+ * Ответ ИИ потоком через AI Gateway.
  *
  * Событий ровно три (`delta`, `done`, `error`) — столько же разбирает фронтенд.
- * При подключении реального провайдера меняется только начинка обработчика.
  */
-export function createChatRouter({ store, userId, ai, subscriptionStore, userStore, }) {
+export function createChatRouter({ store, userId, ai, subscriptionStore, userStore, usageStore = defaultUsageStore, gateway, }) {
     const router = Router();
+    const aiGateway = gateway ??
+        new AIGateway({
+            usageStore,
+            aiConfig: ai,
+        });
     router.post('/completions', async (request, response) => {
         const parsed = parseCompletionRequest(request.body);
         if (!parsed.ok) {
@@ -73,33 +74,29 @@ export function createChatRouter({ store, userId, ai, subscriptionStore, userSto
             return;
         }
         const model = resolveModel(modelId);
-        // Проверка доступа к платным моделям (помеченным звёздочкой)
-        if (model.isPro) {
-            const currentSub = subscriptionStore?.get(activeUserId);
-            const currentUser = userStore?.findById(activeUserId);
-            let userPlan = request.user?.plan ?? currentSub?.plan ?? currentUser?.plan ?? 'free';
-            if (request.user?.email?.toLowerCase() === 'artemsinyakov09@gmail.com' ||
-                currentUser?.email?.toLowerCase() === 'artemsinyakov09@gmail.com') {
-                userPlan = 'ultra';
-            }
-            if (!canAccessModel(userPlan, model)) {
-                response.writeHead(200, {
-                    'Content-Type': 'text/event-stream; charset=utf-8',
-                    'Cache-Control': 'no-cache, no-transform',
-                    Connection: 'keep-alive',
-                });
-                const requiredName = model.requiredPlan ? model.requiredPlan.toUpperCase() : 'PRO';
-                const errorMsg = language === 'en'
-                    ? `Access to ${model.name} requires an active subscription (${requiredName} or Ultra). Please upgrade your plan.`
-                    : `Для доступа к модели ${model.name} требуется подписка (${requiredName} или Ultra). Пожалуйста, улучшите ваш тариф (Upgrade your plan).`;
-                response.write(`event: error\ndata: ${JSON.stringify({ code: 'upgrade_required', message: errorMsg })}\n\n`);
-                response.end();
-                return;
-            }
+        // Определение текущего тарифа пользователя
+        const currentSub = subscriptionStore?.get(activeUserId);
+        const currentUser = userStore?.findById(activeUserId);
+        let userPlan = request.user?.plan ?? currentSub?.plan ?? currentUser?.plan ?? 'free';
+        if (request.user?.email?.toLowerCase() === 'artemsinyakov09@gmail.com' ||
+            currentUser?.email?.toLowerCase() === 'artemsinyakov09@gmail.com') {
+            userPlan = 'ultra';
         }
-        // В модель уходит только хвост истории: так же будет вести себя реальный провайдер.
-        const context = messages.slice(-model.contextMessages);
-        const prompt = [...messages].reverse().find((message) => message.role === 'user')?.content ?? '';
+        // Проверка доступа к платным моделям
+        if (model.isPro && !canAccessModel(userPlan, model)) {
+            response.writeHead(200, {
+                'Content-Type': 'text/event-stream; charset=utf-8',
+                'Cache-Control': 'no-cache, no-transform',
+                Connection: 'keep-alive',
+            });
+            const requiredName = model.requiredPlan ? model.requiredPlan.toUpperCase() : 'PRO';
+            const errorMsg = language === 'en'
+                ? `Access to ${model.name} requires an active subscription (${requiredName} or Ultra). Please upgrade your plan.`
+                : `Для доступа к модели ${model.name} требуется подписка (${requiredName} или Ultra). Пожалуйста, улучшите ваш тариф (Upgrade your plan).`;
+            response.write(`event: error\ndata: ${JSON.stringify({ code: 'upgrade_required', message: errorMsg })}\n\n`);
+            response.end();
+            return;
+        }
         response.writeHead(200, {
             'Content-Type': 'text/event-stream; charset=utf-8',
             'Cache-Control': 'no-cache, no-transform',
@@ -108,7 +105,6 @@ export function createChatRouter({ store, userId, ai, subscriptionStore, userSto
         });
         response.flushHeaders();
         let cancelled = false;
-        // Закрытие соединения останавливает генерацию: кнопка «Стоп» не имитация.
         const onClientClose = () => {
             cancelled = true;
         };
@@ -138,48 +134,39 @@ export function createChatRouter({ store, userId, ai, subscriptionStore, userSto
                 response.end();
                 return;
             }
-            let streamed = false;
-            const isTestEnv = process.env.NODE_ENV === 'test' ||
-                ai.failureRate > 0 ||
-                (ai.thinkingMs[0] === 0 && ai.thinkingMs[1] === 0 && ai.chunkMs[0] === 0 && ai.chunkMs[1] === 0);
-            // При наличии ключа OpenRouter отправляем запрос в живую нейросеть
-            if (!isTestEnv && config.openRouterApiKey) {
-                streamed = await streamOpenRouter({
-                    apiKey: config.openRouterApiKey,
-                    baseUrl: config.openRouterBaseUrl,
-                    model: config.openRouterModel,
-                    messages,
-                    isCancelled: () => cancelled,
-                    onDelta: (delta) => {
-                        content += delta;
-                        writeEvent('delta', { content: delta });
-                    },
-                });
-            }
-            // Если ключ не задан или запрос не удался — используем встроенные шаблоны
-            if (!streamed && !cancelled) {
-                await streamText(pickAnswer(prompt, language, ai.random), {
-                    thinkingMs: ai.thinkingMs,
-                    chunkMs: ai.chunkMs,
-                    random: ai.random,
-                    isCancelled: () => cancelled,
-                    onDelta: (delta) => {
-                        content += delta;
-                        writeEvent('delta', { content: delta });
-                    },
-                });
-            }
-            // Остановленный на середине ответ сохраняется: после перезагрузки страницы
-            // пользователь увидит тот же текст.
-            const messageId = finishTurn(content, 'complete');
-            if (messageId) {
-                writeEvent('done', {
-                    messageId,
-                    usage: {
-                        inputTokens: estimateTokens(context.map((message) => message.content).join(' ')),
-                        outputTokens: estimateTokens(content),
-                    },
-                });
+            await aiGateway.stream({
+                userId: activeUserId,
+                userPlan,
+                conversationId,
+                modelId: model.id,
+                messages: messages.map((m) => ({
+                    role: m.role,
+                    content: m.content,
+                })),
+                language,
+                stream: true,
+            }, {
+                onDelta: (delta) => {
+                    content += delta;
+                    writeEvent('delta', { content: delta });
+                },
+                onDone: (usage) => {
+                    const messageId = finishTurn(content, 'complete');
+                    if (messageId) {
+                        writeEvent('done', {
+                            messageId,
+                            usage,
+                        });
+                    }
+                },
+                onError: (err) => {
+                    finishTurn(content, 'error');
+                    writeEvent('error', err);
+                },
+            }, () => cancelled);
+            // В случае остановки клиентом на середине сохраняем частичный результат
+            if (cancelled && content.length > 0) {
+                finishTurn(content, 'complete');
             }
             response.end();
         }

@@ -52,6 +52,9 @@ export const config = {
     /** Хранилище подписок: файл переживает перезапуск mock-API. */
     subscriptionStoreFile: process.env.SUBSCRIPTION_STORE_FILE ??
         fileURLToPath(new URL('../data/subscriptions.json', import.meta.url)),
+    /** Хранилище использования AI (usage & cost): файл переживает перезапуск. */
+    usageStoreFile: process.env.USAGE_STORE_FILE ??
+        fileURLToPath(new URL('../data/usage.json', import.meta.url)),
     /** База данных Better Auth (SQLite). */
     authDbFile: process.env.AUTH_DB_FILE ?? fileURLToPath(new URL('../data/auth.sqlite', import.meta.url)),
     /** Секретный ключ Better Auth для подписи сессий и кук. */
@@ -71,11 +74,23 @@ export const config = {
     telegramBotUsername: process.env.TELEGRAM_BOT_USERNAME || 'Robo_kassa_bot',
     telegramPaymentProviderToken: process.env.TELEGRAM_PAYMENT_PROVIDER_TOKEN || '',
     telegramWebhookUrl: process.env.TELEGRAM_WEBHOOK_URL || '',
-    /** OpenRouter LLM провайдер. */
+    /** AI Providers: OpenRouter */
     openRouterApiKey: process.env.OPENROUTER_API_KEY ||
         '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',
     openRouterBaseUrl: process.env.OPENROUTER_BASE_URL || 'https://openrouter.ai/api/v1',
     openRouterModel: process.env.OPENROUTER_MODEL || 'nex-agi/nex-n2.5-mini:free',
+    /** AI Providers: OpenAI */
+    openaiApiKey: process.env.OPENAI_API_KEY || '',
+    openaiBaseUrl: process.env.OPENAI_BASE_URL || 'https://api.openai.com/v1',
+    /** AI Providers: Anthropic */
+    anthropicApiKey: process.env.ANTHROPIC_API_KEY || '',
+    anthropicBaseUrl: process.env.ANTHROPIC_BASE_URL || 'https://api.anthropic.com/v1',
+    /** AI Providers: Google Gemini */
+    googleApiKey: process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY || '',
+    googleBaseUrl: process.env.GOOGLE_BASE_URL || 'https://generativelanguage.googleapis.com/v1beta',
+    /** Секреты для Webhooks и Admin API */
+    webhookSecret: process.env.WEBHOOK_SECRET || 'ketner-ai-webhook-secret-dev',
+    adminApiKey: process.env.ADMIN_API_KEY || 'ketner-ai-admin-key-dev',
     ai: {
         thinkingMs: [
             readNumber('MOCK_AI_THINKING_MIN_MS', 350),

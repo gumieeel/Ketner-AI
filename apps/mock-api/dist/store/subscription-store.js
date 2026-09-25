@@ -84,5 +84,17 @@ export function createSubscriptionStore(file) {
             persist();
             return updated;
         },
+        set(subscription) {
+            const normalized = subscription.userId.trim().toLowerCase();
+            const existingIndex = snapshot.subscriptions.findIndex((sub) => sub.userId === subscription.userId || sub.userId.toLowerCase() === normalized);
+            if (existingIndex >= 0) {
+                snapshot.subscriptions[existingIndex] = subscription;
+            }
+            else {
+                snapshot.subscriptions.push(subscription);
+            }
+            persist();
+            return subscription;
+        },
     };
 }

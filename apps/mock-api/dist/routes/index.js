@@ -9,6 +9,9 @@ import { createConversationsRouter } from './conversations.js';
 import { healthRouter } from './health.js';
 import { createMetaRouter } from './meta.js';
 import { createTelegramRouter } from './telegram.js';
+import { createAdminRouter } from './admin.js';
+import { createWebhookRouter } from './webhooks.js';
+import { usageStore as defaultUsageStore } from '../store/index.js';
 /**
  * Описание контракта API.
  *
@@ -91,6 +94,7 @@ export function createApiRouter(deps) {
     const activeUserStore = deps.userStore ?? defaultUserStore;
     const activeSubscriptionStore = deps.subscriptionStore ?? defaultSubscriptionStore;
     const activeInvoiceStore = deps.invoiceStore ?? defaultInvoiceStore;
+    const activeUsageStore = deps.usageStore ?? defaultUsageStore;
     router.use(createAuthMiddleware(activeUserStore, deps.betterAuth));
     router.get('/', (_request, response) => {
         response.json(describeService());
@@ -110,11 +114,19 @@ export function createApiRouter(deps) {
         invoiceStore: activeInvoiceStore,
         botService: deps.botService,
     }));
+    router.use('/webhooks', createWebhookRouter({
+        subscriptionStore: activeSubscriptionStore,
+        userStore: activeUserStore,
+    }));
+    router.use('/admin', createAdminRouter({
+        usageStore: activeUsageStore,
+    }));
     router.use(createConversationsRouter(deps.store, deps.userId));
     router.use('/chat', createChatRouter({
         ...deps,
         subscriptionStore: activeSubscriptionStore,
         userStore: activeUserStore,
+        usageStore: activeUsageStore,
     }));
     return router;
 }
