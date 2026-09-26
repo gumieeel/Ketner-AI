@@ -49,24 +49,14 @@ const navLinkClasses = ({ isActive }: { isActive: boolean }) =>
 export function Sidebar() {
   const { t } = useTranslation();
   const user = useAuth((state) => state.user);
-  const [hasAdminKey, setHasAdminKey] = useState<boolean>(() => {
-    return typeof window !== 'undefined' && Boolean(localStorage.getItem('ketner_admin_key'));
-  });
-
-  useEffect(() => {
-    const checkKey = () => {
-      setHasAdminKey(Boolean(localStorage.getItem('ketner_admin_key')));
-    };
-    window.addEventListener('storage', checkKey);
-    return () => window.removeEventListener('storage', checkKey);
-  }, []);
 
   const hasAdminAccess = Boolean(
-    user?.isAdmin ||
-    user?.email?.toLowerCase() === 'artemsinyakov09@gmail.com' ||
-    user?.email?.toLowerCase().startsWith('admin@') ||
-    user?.email?.toLowerCase().startsWith('admin.') ||
-    hasAdminKey
+    user && (
+      user.isAdmin ||
+      user.email?.toLowerCase() === 'artemsinyakov09@gmail.com' ||
+      user.email?.toLowerCase().startsWith('admin@') ||
+      user.email?.toLowerCase().startsWith('admin.')
+    )
   );
 
   const open = usePreferences((state) => state.sidebarOpen);
