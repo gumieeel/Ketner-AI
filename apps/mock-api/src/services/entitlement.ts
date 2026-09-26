@@ -27,6 +27,25 @@ const ALL_MODELS = [
   'auto',
 ];
 
+/** Общие параметры для устаревших legacy-планов (gpt-pro, claude-pro, gemini-pro). */
+const LEGACY_PRO_BASE: Omit<PlanEntitlements, 'planId'> = {
+  allowedModels: ALL_MODELS,
+  maxConcurrency: 4,
+  priority: 2,
+  fairUseLevel: 2,
+  requestsPerMinute: 40,
+  requestsPerHour: 300,
+  requestsPerDay: 1500,
+  tokensPerHour: 1_500_000,
+  tokensPerDay: 6_000_000,
+  maxContextMessages: 120,
+  contextLimit: 120,
+  maxTokens: 8192,
+  streamingEnabled: true,
+  maxDailyCost: 0.60,
+  costBudget: 5.00,
+};
+
 export const PLAN_ENTITLEMENTS: Record<PlanId, PlanEntitlements> = {
   free: {
     planId: 'free',
@@ -130,61 +149,10 @@ export const PLAN_ENTITLEMENTS: Record<PlanId, PlanEntitlements> = {
     maxDailyCost: 1.50,
     costBudget: 11.50,
   },
-  // Legacy alias для обратной совместимости (цена 1199₽ ~ $12.62, costBudget $5.00 ~ 39.6%)
-  'gpt-pro': {
-    planId: 'gpt-pro',
-    allowedModels: ALL_MODELS,
-    maxConcurrency: 4,
-    priority: 2,
-    fairUseLevel: 2,
-    requestsPerMinute: 40,
-    requestsPerHour: 300,
-    requestsPerDay: 1500,
-    tokensPerHour: 1_500_000,
-    tokensPerDay: 6_000_000,
-    maxContextMessages: 120,
-    contextLimit: 120,
-    maxTokens: 8192,
-    streamingEnabled: true,
-    maxDailyCost: 0.60,
-    costBudget: 5.00,
-  },
-  'claude-pro': {
-    planId: 'claude-pro',
-    allowedModels: ALL_MODELS,
-    maxConcurrency: 4,
-    priority: 2,
-    fairUseLevel: 2,
-    requestsPerMinute: 40,
-    requestsPerHour: 300,
-    requestsPerDay: 1500,
-    tokensPerHour: 1_500_000,
-    tokensPerDay: 6_000_000,
-    maxContextMessages: 120,
-    contextLimit: 120,
-    maxTokens: 8192,
-    streamingEnabled: true,
-    maxDailyCost: 0.60,
-    costBudget: 5.00,
-  },
-  'gemini-pro': {
-    planId: 'gemini-pro',
-    allowedModels: ALL_MODELS,
-    maxConcurrency: 4,
-    priority: 2,
-    fairUseLevel: 2,
-    requestsPerMinute: 40,
-    requestsPerHour: 300,
-    requestsPerDay: 1500,
-    tokensPerHour: 1_500_000,
-    tokensPerDay: 6_000_000,
-    maxContextMessages: 120,
-    contextLimit: 120,
-    maxTokens: 8192,
-    streamingEnabled: true,
-    maxDailyCost: 0.60,
-    costBudget: 5.00,
-  },
+  // ── Legacy-планы для обратной совместимости (цена 1199₽ ~ $12.62, costBudget $5.00 ~ 39.6%) ──
+  'gpt-pro': { planId: 'gpt-pro', ...LEGACY_PRO_BASE },
+  'claude-pro': { planId: 'claude-pro', ...LEGACY_PRO_BASE },
+  'gemini-pro': { planId: 'gemini-pro', ...LEGACY_PRO_BASE },
 };
 
 export class EntitlementService {

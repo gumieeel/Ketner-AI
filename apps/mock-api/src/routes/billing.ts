@@ -98,40 +98,34 @@ export const PLANS: readonly PlanItem[] = [
   },
 ];
 
+/**
+ * Устаревшие тарифные планы (Legacy Plans).
+ * Сохранены для пользователей со старыми подписками (цена 1199 ₽/мес ~ $12.62).
+ * Функционально эквивалентны тарифу Pro. Скрыты из публичного каталога по умолчанию,
+ * доступны при запросе с query-параметром includeLegacy=true.
+ */
+function createLegacyPlan(
+  id: 'gpt-pro' | 'claude-pro' | 'gemini-pro',
+  nameKey: string,
+  modelsHighlight: string,
+): PlanItem {
+  return {
+    id,
+    nameKey,
+    priceMonthly: 1199,
+    limitBadge: { ru: 'Legacy Pro', en: 'Legacy Pro' },
+    modelsHighlight,
+    bullets: {
+      ru: ['Устаревший тариф (включает все возможности Pro)'],
+      en: ['Legacy plan (includes all Pro features)'],
+    },
+  };
+}
+
 export const LEGACY_PLANS: readonly PlanItem[] = [
-  {
-    id: 'gpt-pro',
-    nameKey: 'pricing.gptPro',
-    priceMonthly: 1199,
-    limitBadge: { ru: 'Legacy Pro', en: 'Legacy Pro' },
-    modelsHighlight: 'GPT-6 Astra + All Pro Models',
-    bullets: {
-      ru: ['Устаревший тариф (включает все возможности Pro)'],
-      en: ['Legacy plan (includes all Pro features)'],
-    },
-  },
-  {
-    id: 'claude-pro',
-    nameKey: 'pricing.claudePro',
-    priceMonthly: 1199,
-    limitBadge: { ru: 'Legacy Pro', en: 'Legacy Pro' },
-    modelsHighlight: 'Claude Fable + All Pro Models',
-    bullets: {
-      ru: ['Устаревший тариф (включает все возможности Pro)'],
-      en: ['Legacy plan (includes all Pro features)'],
-    },
-  },
-  {
-    id: 'gemini-pro',
-    nameKey: 'pricing.geminiPro',
-    priceMonthly: 1199,
-    limitBadge: { ru: 'Legacy Pro', en: 'Legacy Pro' },
-    modelsHighlight: 'Gemini Pro + All Pro Models',
-    bullets: {
-      ru: ['Устаревший тариф (включает все возможности Pro)'],
-      en: ['Legacy plan (includes all Pro features)'],
-    },
-  },
+  createLegacyPlan('gpt-pro', 'pricing.gptPro', 'GPT-6 Astra + All Pro Models'),
+  createLegacyPlan('claude-pro', 'pricing.claudePro', 'Claude Fable + All Pro Models'),
+  createLegacyPlan('gemini-pro', 'pricing.geminiPro', 'Gemini Pro + All Pro Models'),
 ];
 
 export interface BillingRouterDeps {
