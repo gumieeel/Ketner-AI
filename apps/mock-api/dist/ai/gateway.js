@@ -276,10 +276,12 @@ export class AIGateway {
                     }
                 }
             }
-            // 7. Если провайдеры недоступны или в режиме тестирования — запускаем качественный fallback генератор
             let fallbackContent = '';
             if (!success && !isCancelled()) {
-                const templateAnswer = pickAnswer(prompt, language, this.aiConfig.random);
+                const effectiveModelName = req.modelId && req.modelId !== 'auto'
+                    ? (targetModel?.name ?? 'DeepSeek V4.1 Flash')
+                    : 'DeepSeek V4.1 Flash';
+                const templateAnswer = pickAnswer(prompt, language, this.aiConfig.random, effectiveModelName);
                 await streamText(templateAnswer, {
                     thinkingMs: this.aiConfig.thinkingMs,
                     chunkMs: this.aiConfig.chunkMs,

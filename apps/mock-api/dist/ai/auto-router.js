@@ -47,6 +47,7 @@ const MODEL_PROFILES = {
     'gemini-2.5-flash': { quality: 0.68, speed: 0.95, cost: 0.04 },
     'claude-3-haiku': { quality: 0.62, speed: 0.90, cost: 0.08 },
     // ─ Средние ─
+    'gpt-4o': { quality: 0.88, speed: 0.82, cost: 0.35 },
     'ketner-pro': { quality: 0.78, speed: 0.80, cost: 0.09 },
     // ─ Флагманы (ядро продукта) ─
     'gpt-6-astra': { quality: 1.0, speed: 0.70, cost: 0.69 },

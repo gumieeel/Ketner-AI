@@ -21,8 +21,8 @@ const PLANS_PREVIEW: PlanPreview[] = [
     id: 'plus',
     name: 'Plus',
     price: '990 ₽',
-    highlight: '2 потока',
-    models: 'Ketner Pro, DeepSeek, Flash',
+    highlight: 'GPT-4o, DeepSeek Flash',
+    models: 'GPT-4o mini, GPT-4o, DeepSeek V4.1 Flash',
   },
   {
     id: 'pro',
@@ -30,7 +30,7 @@ const PLANS_PREVIEW: PlanPreview[] = [
     price: '1 990 ₽',
     badge: 'Популярный',
     highlight: 'Все флагманы',
-    models: 'GPT-6 Astra, Claude 3.5, Gemini Pro',
+    models: 'GPT-6 Astra, Claude Fable 5.5, Gemini 2.5 Pro',
   },
   {
     id: 'gpt-pro',
@@ -45,7 +45,7 @@ const PLANS_PREVIEW: PlanPreview[] = [
     price: '2 499 ₽',
     badge: 'Все включено',
     highlight: 'Без лимитов',
-    models: 'Все модели GPT, Claude, Gemini, Qwen',
+    models: 'Все модели GPT, Claude, Gemini',
   },
 ];
 

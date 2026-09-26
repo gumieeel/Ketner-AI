@@ -64,7 +64,7 @@ describe('чат: отправка, стриминг и управление о�
     expect(api.completions).toBe(1);
     const body = api.completionBodies[0];
     expect(body.conversationId).toBe('conversation-1');
-    expect(body.modelId).toBe('ketner-mini');
+    expect(body.modelId).toBe('auto');
     expect(body.language).toBe('ru');
     expect((body.messages as Message[]).map((message) => message.content)).toEqual(['Как дела?']);
   });

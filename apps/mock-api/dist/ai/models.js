@@ -5,20 +5,19 @@
  * На реальном провайдере этот список заменится ответом `GET /api/meta`
  * (см. docs/ai-integration-todo.md).
  */
-export const DEFAULT_MODEL_ID = 'ketner-mini';
+export const DEFAULT_MODEL_ID = 'auto';
 export const MODELS = [
-    // 1. Базовые модели (Тариф Free)
+    // Plus (990 ₽) — стандартные модели
     {
-        id: DEFAULT_MODEL_ID,
-        name: 'Ketner Mini · Qwen 2.5 Coder',
-        contextMessages: 20,
-        isPro: false,
-        requiredPlan: 'free',
+        id: 'gpt-4o-mini',
+        name: 'GPT-4o mini',
+        contextMessages: 40,
+        isPro: true,
+        requiredPlan: 'plus',
     },
-    // 2. Стандартные и продвинутые модели (Тариф Plus)
     {
-        id: 'ketner-pro',
-        name: 'Ketner Pro · Qwen 2.5 Max *',
+        id: 'gpt-4o',
+        name: 'GPT-4o',
         contextMessages: 60,
         isPro: true,
         requiredPlan: 'plus',
@@ -30,52 +29,10 @@ export const MODELS = [
         isPro: true,
         requiredPlan: 'plus',
     },
-    {
-        id: 'gpt-4o-mini',
-        name: 'GPT-4o mini',
-        contextMessages: 40,
-        isPro: false,
-        requiredPlan: 'free',
-    },
-    {
-        id: 'gemini-2.5-flash',
-        name: 'Gemini 2.5 Flash',
-        contextMessages: 40,
-        isPro: true,
-        requiredPlan: 'plus',
-    },
-    {
-        id: 'claude-3-haiku',
-        name: 'Claude 3 Haiku',
-        contextMessages: 40,
-        isPro: true,
-        requiredPlan: 'plus',
-    },
-    {
-        id: 'glm-5.3-flash',
-        name: 'GLM 5.3 Flash',
-        contextMessages: 40,
-        isPro: true,
-        requiredPlan: 'plus',
-    },
-    {
-        id: 'nemotron-ultra',
-        name: 'Nemotron 3 Ultra',
-        contextMessages: 30,
-        isPro: true,
-        requiredPlan: 'plus',
-    },
-    // 3. Флагманские модели (Тарифы Pro и Ultra)
+    // Pro (1 990 ₽) — флагманские модели
     {
         id: 'gpt-6-astra',
         name: 'GPT-6 Astra *',
-        contextMessages: 120,
-        isPro: true,
-        requiredPlan: 'pro',
-    },
-    {
-        id: 'claude-3.5-sonnet',
-        name: 'Claude 3.5 Sonnet *',
         contextMessages: 120,
         isPro: true,
         requiredPlan: 'pro',
@@ -94,18 +51,17 @@ export const MODELS = [
         isPro: true,
         requiredPlan: 'pro',
     },
-    {
-        id: 'gemini-pro',
-        name: 'Gemini 3.8 Pro *',
-        contextMessages: 120,
-        isPro: true,
-        requiredPlan: 'pro',
-    },
 ];
 import { getPlanLimits } from '../services/entitlement.js';
 export const PLAN_LIMITS = getPlanLimits();
+export const AUTO_MODEL = {
+    id: 'auto',
+    name: '✨ Auto (Smart Router)',
+    contextMessages: 120,
+    isPro: false,
+};
 export const MODEL_CATALOG = {
-    models: [...MODELS],
+    models: [AUTO_MODEL, ...MODELS],
     defaultModelId: DEFAULT_MODEL_ID,
     limits: PLAN_LIMITS,
 };
@@ -134,13 +90,8 @@ export function canAccessModel(userPlan, model) {
 }
 /** Неизвестный идентификатор модели не ломает запрос: берём модель по умолчанию. */
 export function resolveModel(modelId) {
-    if (modelId === 'auto') {
-        return {
-            id: 'auto',
-            name: '✨ Auto (Smart Router)',
-            contextMessages: 120,
-            isPro: false,
-        };
+    if (modelId === 'auto' || !modelId) {
+        return AUTO_MODEL;
     }
-    return MODELS.find((model) => model.id === modelId) ?? MODELS[0];
+    return MODELS.find((model) => model.id === modelId) ?? AUTO_MODEL;
 }

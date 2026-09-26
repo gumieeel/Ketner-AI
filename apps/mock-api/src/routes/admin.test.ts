@@ -398,7 +398,7 @@ test('admin: GET /api/admin/users/:id — детальная карточка п
       },
       body: JSON.stringify({
         conversationId: convData.conversation.id,
-        modelId: 'gpt-4o-mini',
+        modelId: 'auto',
         language: 'ru',
         messages: [{ role: 'user', content: 'Привет' }],
       }),

@@ -21,7 +21,7 @@ interface PreferencesState {
 export const DEFAULT_THEME: Theme = 'dark';
 export const DEFAULT_LANGUAGE: Language = 'ru';
 /** Модель по умолчанию: совпадает с defaultModelId из GET /api/meta. */
-export const DEFAULT_MODEL_ID = 'ketner-mini';
+export const DEFAULT_MODEL_ID = 'auto';
 
 export function applyTheme(theme: Theme): void {
   const root = document.documentElement;

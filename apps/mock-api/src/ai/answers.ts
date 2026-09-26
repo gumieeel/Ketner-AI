@@ -19,8 +19,8 @@ const KEYWORD_TEMPLATES: readonly AnswerTemplate[] = [
     id: 'greeting',
     triggers: ['привет', 'здравствуй', 'добрый день', 'добрый вечер', 'hello', 'hi ', 'hey'],
     ru: [
-      'Привет! Я встроенная модель **Qwen 2.5 Coder** в Ketner AI — интеллектуальный ассистент',
-      'для написания и анализа кода, проектирования архитектуры и решения инженерных задач.',
+      'Привет! Я — **Ketner AI**, интеллектуальный ассистент для написания и анализа кода,',
+      'проектирования архитектуры и решения инженерных задач.',
       '',
       'Что уже работает в интерфейсе:',
       '',
@@ -32,8 +32,8 @@ const KEYWORD_TEMPLATES: readonly AnswerTemplate[] = [
       'Спросите меня о чём угодно: напишите функцию, сделайте рефакторинг или разберите архитектурный вопрос.',
     ],
     en: [
-      'Hello! I am the built-in **Qwen 2.5 Coder** model in Ketner AI — an intelligent assistant',
-      'designed for software engineering, code synthesis, architecture design, and problem solving.',
+      'Hello! I am **Ketner AI** — an intelligent assistant designed for software engineering,',
+      'code synthesis, architecture design, and problem solving.',
       '',
       'What already works in the interface:',
       '',
@@ -47,9 +47,21 @@ const KEYWORD_TEMPLATES: readonly AnswerTemplate[] = [
   },
   {
     id: 'qwen',
-    triggers: ['qwen', 'квен', 'модель', 'кто ты', 'что за модель', 'who are you'],
+    triggers: [
+      'qwen',
+      'квен',
+      'модель',
+      'кто ты',
+      'что за модель',
+      'какая модель',
+      'какая ты модель',
+      'какую модель используешь',
+      'who are you',
+      'what model',
+      'which model',
+    ],
     ru: [
-      'Я — **Qwen 2.5 Coder**, флагманская открытая языковая модель нового поколения, встроенная в Ketner AI.',
+      'Я работаю на базе модели **{model}** в Ketner AI — интеллектуальном ассистенте для анализа кода, архитектуры и решения инженерных задач.',
       '',
       '### Специализация:',
       '- ⚡ **Продвинутое программирование**: TypeScript, JavaScript, Python, Go, Rust, C++, SQL.',
@@ -60,7 +72,7 @@ const KEYWORD_TEMPLATES: readonly AnswerTemplate[] = [
       'Задайте мне любую задачу по коду или алгоритмам!',
     ],
     en: [
-      'I am **Qwen 2.5 Coder**, the next-generation open weights coding foundation model built into Ketner AI.',
+      'I am powered by the **{model}** model in Ketner AI — an intelligent assistant designed for software engineering and problem solving.',
       '',
       '### Core competencies:',
       '- ⚡ **Advanced programming**: TypeScript, JavaScript, Python, Go, Rust, C++, SQL, and more.',
@@ -510,7 +522,12 @@ const GENERIC_TEMPLATES: readonly AnswerTemplate[] = [
 ];
 
 /** Выбирает ответ: сначала по ключевым словам, иначе — случайный общий. */
-export function pickAnswer(prompt: string, language: Language, random: () => number): string {
+export function pickAnswer(
+  prompt: string,
+  language: Language,
+  random: () => number,
+  selectedModelName?: string,
+): string {
   const text = prompt.toLowerCase();
   const matched = KEYWORD_TEMPLATES.find((template) =>
     template.triggers.some((trigger) => text.includes(trigger)),
@@ -518,7 +535,11 @@ export function pickAnswer(prompt: string, language: Language, random: () => num
 
   const pool = matched ? [matched] : GENERIC_TEMPLATES;
   const index = Math.min(pool.length - 1, Math.floor(random() * pool.length));
-  return pool[index][language].join('\n');
+  let answer = pool[index][language].join('\n');
+
+  const modelDisplay = selectedModelName || 'DeepSeek V4.1 Flash';
+  answer = answer.replace(/\{model\}/g, modelDisplay);
+  return answer;
 }
 
 /** Текст ошибки заглушки: интерфейс показывает его в сообщении ассистента. */
