@@ -98,7 +98,7 @@ export class AnthropicProvider {
         const decoder = new TextDecoder('utf-8');
         let buffer = '';
         let accumulatedContent = '';
-        let finalUsage = {
+        const finalUsage = {
             inputTokens: 0,
             outputTokens: 0,
             cachedTokens: undefined,

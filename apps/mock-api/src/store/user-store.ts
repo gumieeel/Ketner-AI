@@ -24,6 +24,8 @@ export interface UserStore {
   verifyPassword(email: string, password: string): User | null;
   setPassword(email: string, password: string): User | null;
   updatePlan(id: string, plan: PlanId): User | null;
+  setVip(id: string, isVip: boolean): User | null;
+  setAdmin(id: string, isAdmin: boolean): User | null;
 }
 
 interface Snapshot {
@@ -190,6 +192,32 @@ export function createUserStore(file: string): UserStore {
         return null;
       }
       user.plan = plan;
+      persist();
+      return toPublicUser(user);
+    },
+
+    setVip(id: string, isVip: boolean) {
+      const normalized = id.trim().toLowerCase();
+      const user = snapshot.users.find(
+        (candidate) => candidate.id === id || candidate.email.toLowerCase() === normalized,
+      );
+      if (!user) {
+        return null;
+      }
+      user.isVip = isVip;
+      persist();
+      return toPublicUser(user);
+    },
+
+    setAdmin(id: string, isAdmin: boolean) {
+      const normalized = id.trim().toLowerCase();
+      const user = snapshot.users.find(
+        (candidate) => candidate.id === id || candidate.email.toLowerCase() === normalized,
+      );
+      if (!user) {
+        return null;
+      }
+      user.isAdmin = isAdmin;
       persist();
       return toPublicUser(user);
     },

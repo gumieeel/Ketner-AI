@@ -223,6 +223,15 @@ export function Sidebar() {
             <SettingsIcon className="text-lg" />
             {t('nav.settings')}
           </NavLink>
+          {user?.isAdmin || user?.email?.toLowerCase() === 'artemsinyakov09@gmail.com' ? (
+            <NavLink to="/admin" onClick={close} className={navLinkClasses}>
+              <UserIcon className="text-lg text-accent" />
+              <span className="flex-1 font-semibold text-accent">Admin Panel</span>
+              <span className="rounded bg-accent/20 px-1.5 py-0.5 text-[10px] font-bold text-accent">
+                ADMIN
+              </span>
+            </NavLink>
+          ) : null}
 
           <div className="flex items-center gap-2 pt-1">
             {user ? (

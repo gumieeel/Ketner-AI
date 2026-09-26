@@ -25,6 +25,7 @@ interface UsageStoreData {
 export class UsageStore {
   private filePath: string;
   private records: UsageRecord[] = [];
+  private userIndex = new Map<string, UsageRecord[]>();
   private activeConcurrency = new Map<string, number>();
 
   constructor(filePath: string) {
@@ -32,9 +33,22 @@ export class UsageStore {
     this.load();
   }
 
+  private rebuildIndex(): void {
+    this.userIndex.clear();
+    for (const record of this.records) {
+      let list = this.userIndex.get(record.userId);
+      if (!list) {
+        list = [];
+        this.userIndex.set(record.userId, list);
+      }
+      list.push(record);
+    }
+  }
+
   private load(): void {
     if (!existsSync(this.filePath)) {
       this.records = [];
+      this.rebuildIndex();
       return;
     }
 
@@ -45,6 +59,7 @@ export class UsageStore {
     } catch {
       this.records = [];
     }
+    this.rebuildIndex();
   }
 
   private persist(): void {
@@ -96,10 +111,17 @@ export class UsageStore {
     };
 
     this.records.push(record);
+    let userRecords = this.userIndex.get(record.userId);
+    if (!userRecords) {
+      userRecords = [];
+      this.userIndex.set(record.userId, userRecords);
+    }
+    userRecords.push(record);
 
     // Ограничиваем историю в памяти/файле (последние 50,000 записей)
     if (this.records.length > 50000) {
       this.records = this.records.slice(-50000);
+      this.rebuildIndex();
     }
 
     try {
@@ -141,6 +163,21 @@ export class UsageStore {
    * Сформировать мгновенный снимок активности пользователя для Fair Use проверки.
    */
   getFairUseSnapshot(userId: string): FairUseSnapshot {
+    const userRecords = this.userIndex.get(userId) ?? [];
+    if (userRecords.length === 0) {
+      return {
+        userId,
+        requestsLastMinute: 0,
+        requestsLastHour: 0,
+        requestsLastDay: 0,
+        tokensLastHour: 0,
+        tokensLastDay: 0,
+        estimatedCostLastDay: 0,
+        estimatedCostLastMonth: 0,
+        activeConcurrentRequests: this.getActiveConcurrency(userId),
+      };
+    }
+
     const now = Date.now();
     const oneMinuteAgo = now - 60 * 1000;
     const oneHourAgo = now - 60 * 60 * 1000;
@@ -155,10 +192,8 @@ export class UsageStore {
     let estimatedCostLastDay = 0;
     let estimatedCostLastMonth = 0;
 
-    for (let i = this.records.length - 1; i >= 0; i--) {
-      const rec = this.records[i];
-      if (rec.userId !== userId) continue;
-
+    for (let i = userRecords.length - 1; i >= 0; i--) {
+      const rec = userRecords[i];
       const time = new Date(rec.createdAt).getTime();
       if (time < oneMonthAgo) break;
 
@@ -196,17 +231,16 @@ export class UsageStore {
    * Получить последние записи использования для пользователя.
    */
   getByUser(userId: string, limit = 50): UsageRecord[] {
-    return this.records
-      .filter((r) => r.userId === userId)
-      .slice(-limit)
-      .reverse();
+    const userRecords = this.userIndex.get(userId) ?? [];
+    return userRecords.slice(-limit).reverse();
   }
 
   /**
    * Общая статистика по пользователю.
    */
   getUserStats(userId: string): UsageStats {
-    return this.aggregateStats(this.records.filter((r) => r.userId === userId));
+    const userRecords = this.userIndex.get(userId) ?? [];
+    return this.aggregateStats(userRecords);
   }
 
   /**

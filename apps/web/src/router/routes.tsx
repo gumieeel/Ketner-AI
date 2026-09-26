@@ -13,6 +13,7 @@ import { PricingPage } from '@/pages/pricing-page';
 import { RouteErrorPage } from '@/pages/route-error-page';
 import { SettingsPage } from '@/pages/settings-page';
 import { SignupPage } from '@/pages/signup-page';
+import { AdminPage } from '@/pages/admin-page';
 
 /**
  * Маршруты приложения.
@@ -68,5 +69,11 @@ export const routes: RouteObject[] = [
     element: <AppShell />,
     errorElement: <RouteErrorPage />,
     children: [{ index: true, element: <OnboardingPage /> }],
+  },
+  {
+    path: 'admin',
+    element: <AppShell />,
+    errorElement: <RouteErrorPage />,
+    children: [{ index: true, element: <AdminPage /> }],
   },
 ];

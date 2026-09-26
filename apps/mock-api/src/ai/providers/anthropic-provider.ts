@@ -144,7 +144,7 @@ export class AnthropicProvider implements AIProvider {
     const decoder = new TextDecoder('utf-8');
     let buffer = '';
     let accumulatedContent = '';
-    let finalUsage = {
+    const finalUsage = {
       inputTokens: 0,
       outputTokens: 0,
       cachedTokens: undefined as number | undefined,

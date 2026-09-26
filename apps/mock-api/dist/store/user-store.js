@@ -139,5 +139,25 @@ export function createUserStore(file) {
             persist();
             return toPublicUser(user);
         },
+        setVip(id, isVip) {
+            const normalized = id.trim().toLowerCase();
+            const user = snapshot.users.find((candidate) => candidate.id === id || candidate.email.toLowerCase() === normalized);
+            if (!user) {
+                return null;
+            }
+            user.isVip = isVip;
+            persist();
+            return toPublicUser(user);
+        },
+        setAdmin(id, isAdmin) {
+            const normalized = id.trim().toLowerCase();
+            const user = snapshot.users.find((candidate) => candidate.id === id || candidate.email.toLowerCase() === normalized);
+            if (!user) {
+                return null;
+            }
+            user.isAdmin = isAdmin;
+            persist();
+            return toPublicUser(user);
+        },
     };
 }
