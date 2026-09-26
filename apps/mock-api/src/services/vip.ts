@@ -1,0 +1,23 @@
+import { config } from '../config.js';
+import type { User } from '../types.js';
+
+/**
+ * Проверка, является ли email VIP / Ultra адресом.
+ * Сверяется со списком config.vipEmails (по умолчанию artemsinyakov09@gmail.com,
+ * переопределяется через переменную окружения VIP_EMAILS).
+ */
+export function isVipEmail(email?: string | null): boolean {
+  if (!email) return false;
+  return config.vipEmails.includes(email.trim().toLowerCase());
+}
+
+/**
+ * Проверка, является ли пользователь VIP пользователем (по флагу или email).
+ */
+export function isVipUser(
+  user?: Partial<User> | { email?: string; isVip?: boolean; role?: string } | null,
+): boolean {
+  if (!user) return false;
+  if (user.isVip) return true;
+  return isVipEmail(user.email);
+}

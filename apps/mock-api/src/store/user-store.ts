@@ -2,6 +2,7 @@ import { pbkdf2Sync, randomBytes, randomUUID } from 'node:crypto';
 import { mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
 import { dirname } from 'node:path';
 import type { PlanId, User } from '../types.js';
+import { isVipEmail } from '../services/vip.js';
 
 export interface StoredUser {
   id: string;
@@ -11,6 +12,7 @@ export interface StoredUser {
   createdAt: string;
   salt: string;
   passwordHash: string;
+  isVip?: boolean;
 }
 
 export interface UserStore {
@@ -32,14 +34,15 @@ function hashPassword(password: string, salt: string): string {
 }
 
 function toPublicUser(user: StoredUser): User {
-  const plan: PlanId =
-    user.email.toLowerCase() === 'artemsinyakov09@gmail.com' ? 'ultra' : user.plan;
+  const isVip = user.isVip ?? isVipEmail(user.email);
+  const plan: PlanId = isVip ? 'ultra' : user.plan;
   return {
     id: user.id,
     email: user.email,
     name: user.name,
     plan,
     createdAt: user.createdAt,
+    isVip,
   };
 }
 
@@ -122,8 +125,8 @@ export function createUserStore(file: string): UserStore {
       const salt = randomBytes(16).toString('hex');
       const passwordHash = hashPassword(password, salt);
 
-      const plan: PlanId =
-        normalizedEmail === 'artemsinyakov09@gmail.com' ? 'ultra' : 'free';
+      const isVip = isVipEmail(normalizedEmail);
+      const plan: PlanId = isVip ? 'ultra' : 'free';
 
       const newUser: StoredUser = {
         id: randomUUID(),
@@ -133,6 +136,7 @@ export function createUserStore(file: string): UserStore {
         createdAt: new Date().toISOString(),
         salt,
         passwordHash,
+        isVip,
       };
 
       snapshot.users.push(newUser);

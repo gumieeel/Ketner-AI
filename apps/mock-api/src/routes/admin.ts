@@ -21,6 +21,7 @@ import type { UserStore } from '../store/user-store.js';
 import type { ModelPricing } from '../ai/gateway-types.js';
 import { CurrencyService } from '../services/currency.js';
 import { PLANS, LEGACY_PLANS } from './billing.js';
+import { isVipUser } from '../services/vip.js';
 
 export interface AdminRouterDeps {
   registry?: ModelRegistry;
@@ -44,7 +45,7 @@ export function createAdminRouter({
       return next();
     }
 
-    if (req.user?.email?.toLowerCase() === 'artemsinyakov09@gmail.com') {
+    if (isVipUser(req.user)) {
       return next();
     }
 

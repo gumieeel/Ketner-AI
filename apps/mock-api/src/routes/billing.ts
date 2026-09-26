@@ -6,6 +6,7 @@ import type { SubscriptionStore } from '../store/subscription-store.js';
 import type { UserStore } from '../store/user-store.js';
 import { calculateStars } from '../telegram/bot.js';
 import type { PlanId, PlanItem } from '../types.js';
+import { isVipUser } from '../services/vip.js';
 
 export const PLANS: readonly PlanItem[] = [
   {
@@ -176,10 +177,7 @@ export function createBillingRouter({
     const userId = getUserId(request);
     let subscription = subscriptionStore.get(userId);
     const user = userStore.findById(userId);
-    if (
-      request.user?.email?.toLowerCase() === 'artemsinyakov09@gmail.com' ||
-      user?.email?.toLowerCase() === 'artemsinyakov09@gmail.com'
-    ) {
+    if (isVipUser(request.user) || isVipUser(user)) {
       subscription = {
         userId,
         plan: 'ultra',

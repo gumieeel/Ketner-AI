@@ -32,6 +32,7 @@ export interface User {
   name: string;
   plan: PlanId;
   createdAt: string;
+  isVip?: boolean;
 }
 
 export interface AuthSession {

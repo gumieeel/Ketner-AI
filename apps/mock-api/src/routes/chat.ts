@@ -10,6 +10,7 @@ import { usageStore as defaultUsageStore, type UsageStore } from '../store/index
 import type { SubscriptionStore } from '../store/subscription-store.js';
 import type { UserStore } from '../store/user-store.js';
 import type { IncomingMessage, Language, MessageStatus, PlanId } from '../types.js';
+import { isVipUser } from '../services/vip.js';
 
 const MAX_MESSAGES = 200;
 const MAX_CONTENT_LENGTH = 8000;
@@ -124,10 +125,7 @@ export function createChatRouter({
     const currentUser = userStore?.findById(activeUserId);
     let userPlan: PlanId =
       request.user?.plan ?? currentSub?.plan ?? currentUser?.plan ?? 'free';
-    if (
-      request.user?.email?.toLowerCase() === 'artemsinyakov09@gmail.com' ||
-      currentUser?.email?.toLowerCase() === 'artemsinyakov09@gmail.com'
-    ) {
+    if (isVipUser(request.user) || isVipUser(currentUser)) {
       userPlan = 'ultra';
     }
 

@@ -61,6 +61,12 @@ export const config = {
   /** Обменный курс USD к RUB для расчёта экономики тарифов и маржинальности. */
   usdToRubRate: readNumber('USD_TO_RUB_RATE', 95),
 
+  /** Список email адресов с VIP / Ultra доступом. Настраивается через переменную VIP_EMAILS. */
+  vipEmails: (process.env.VIP_EMAILS ?? 'artemsinyakov09@gmail.com')
+    .split(',')
+    .map((e) => e.trim().toLowerCase())
+    .filter(Boolean),
+
   /** Пользователь и план заглушки: реальные аккаунты появятся на этапе 3. */
   demoUserId: 'demo-user',
   demoPlan: 'free' as PlanId,

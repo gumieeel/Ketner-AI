@@ -190,7 +190,9 @@ export async function initAuthDatabase(
   }
 
   try {
-    defaultAuthDb?.prepare?.('UPDATE user SET plan = ? WHERE email = ?')?.run?.('ultra', 'artemsinyakov09@gmail.com');
+    for (const vipEmail of config.vipEmails) {
+      defaultAuthDb?.prepare?.('UPDATE user SET plan = ? WHERE email = ?')?.run?.('ultra', vipEmail);
+    }
   } catch {
     // База данных может быть in-memory в тестах или без sqlite
   }

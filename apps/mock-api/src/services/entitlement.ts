@@ -8,6 +8,7 @@
 import type { PlanId, PlanLimits } from '../types.js';
 import type { PlanEntitlements } from '../ai/gateway-types.js';
 import type { ModelRegistryEntry } from '../ai/gateway-types.js';
+import { isVipEmail } from './vip.js';
 
 const ALL_MODELS = [
   'ketner-mini',
@@ -189,10 +190,10 @@ export const PLAN_ENTITLEMENTS: Record<PlanId, PlanEntitlements> = {
 export class EntitlementService {
   /**
    * Разрешить эффективный план пользователя.
-   * VIP аккаунты (artemsinyakov09@gmail.com) получают тариф 'ultra'.
+   * VIP аккаунты получают тариф 'ultra' (по флагу isVip или email из config.vipEmails).
    */
-  static resolveEffectivePlan(userPlan?: PlanId, userEmail?: string): PlanId {
-    if (userEmail && userEmail.toLowerCase() === 'artemsinyakov09@gmail.com') {
+  static resolveEffectivePlan(userPlan?: PlanId, userEmail?: string, isVip?: boolean): PlanId {
+    if (isVip || isVipEmail(userEmail)) {
       return 'ultra';
     }
     return userPlan ?? 'free';
@@ -220,8 +221,9 @@ export class EntitlementService {
     model: ModelRegistryEntry,
     userPlan: PlanId,
     userEmail?: string,
+    isVip?: boolean,
   ): { allowed: boolean; reason?: string; requiredPlan?: string } {
-    const effectivePlan = this.resolveEffectivePlan(userPlan, userEmail);
+    const effectivePlan = this.resolveEffectivePlan(userPlan, userEmail, isVip);
 
     if (!model.isPro) {
       return { allowed: true };
