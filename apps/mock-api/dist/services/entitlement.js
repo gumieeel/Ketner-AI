@@ -6,6 +6,9 @@
  */
 const ALL_MODELS = [
     'ketner-mini',
+    'nemotron-ultra',
+    'glm-5.3-flash',
+    'deepseek-v4.1-flash',
     'gpt-4o-mini',
     'gemini-2.5-flash',
     'claude-3-haiku',
@@ -20,7 +23,16 @@ const ALL_MODELS = [
 export const PLAN_ENTITLEMENTS = {
     free: {
         planId: 'free',
-        allowedModels: ['ketner-mini', 'gpt-4o-mini', 'gemini-2.5-flash', 'claude-3-haiku', 'auto'],
+        allowedModels: [
+            'ketner-mini',
+            'nemotron-ultra',
+            'glm-5.3-flash',
+            'deepseek-v4.1-flash',
+            'gpt-4o-mini',
+            'gemini-2.5-flash',
+            'claude-3-haiku',
+            'auto',
+        ],
         maxConcurrency: 1,
         priority: 0,
         fairUseLevel: 0,

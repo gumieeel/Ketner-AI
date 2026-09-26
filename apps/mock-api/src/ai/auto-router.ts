@@ -91,21 +91,24 @@ interface ModelProfile {
  * quality и speed — экспертная оценка производительности.
  */
 const MODEL_PROFILES: Record<string, ModelProfile> = {
-  // ─ Дешёвые модели ─
-  'ketner-mini':     { quality: 0.55, speed: 0.95, cost: 0.01 },
-  'gpt-4o-mini':     { quality: 0.65, speed: 0.90, cost: 0.04 },
-  'gemini-2.5-flash':{ quality: 0.68, speed: 0.95, cost: 0.04 },
-  'claude-3-haiku':  { quality: 0.62, speed: 0.90, cost: 0.08 },
+  // ─ Дешёвые модели (включая бесплатные OpenRouter) ─
+  'ketner-mini':        { quality: 0.75, speed: 0.95, cost: 0.00 }, // Qwen 3.8 27B Free (OpenRouter)
+  'nemotron-ultra':     { quality: 0.85, speed: 1.00, cost: 0.00 }, // NVIDIA Nemotron 3 Ultra Free (OpenRouter)
+  'glm-5.3-flash':      { quality: 0.86, speed: 0.92, cost: 0.03 }, // Z.ai GLM 5.3 Flash (OpenRouter)
+  'deepseek-v4.1-flash': { quality: 0.90, speed: 0.90, cost: 0.04 }, // DeepSeek V4.1 Flash (OpenRouter)
+  'gpt-4o-mini':        { quality: 0.65, speed: 0.90, cost: 0.04 },
+  'gemini-2.5-flash':   { quality: 0.68, speed: 0.95, cost: 0.04 },
+  'claude-3-haiku':     { quality: 0.62, speed: 0.90, cost: 0.08 },
 
   // ─ Средние ─
-  'ketner-pro':      { quality: 0.78, speed: 0.80, cost: 0.09 },
+  'ketner-pro':         { quality: 0.78, speed: 0.80, cost: 0.09 },
 
   // ─ Флагманы (ядро продукта) ─
-  'gpt-6-astra':     { quality: 1.0,  speed: 0.70, cost: 0.69 },
-  'claude-3.5-sonnet':{ quality: 0.97, speed: 0.65, cost: 1.00 },
-  'claude-fable':    { quality: 0.97, speed: 0.65, cost: 1.00 },
-  'gemini-2.5-pro':  { quality: 0.93, speed: 0.60, cost: 0.63 },
-  'gemini-pro':      { quality: 0.93, speed: 0.60, cost: 0.63 },
+  'gpt-6-astra':        { quality: 1.0,  speed: 0.70, cost: 0.69 },
+  'claude-3.5-sonnet':  { quality: 0.97, speed: 0.65, cost: 1.00 },
+  'claude-fable':       { quality: 0.97, speed: 0.65, cost: 1.00 },
+  'gemini-2.5-pro':     { quality: 0.93, speed: 0.60, cost: 0.63 },
+  'gemini-pro':         { quality: 0.93, speed: 0.60, cost: 0.63 },
 };
 
 /** Возвращает профиль модели (с fallback для неизвестных). */
@@ -368,17 +371,34 @@ export class AutoRouter {
     const monthlyBudget = options?.monthlyBudget ?? 1; // avoid division by zero
     const isBudgetExceeded = options?.budgetExceeded ?? false;
 
-    // ── HARD GUARD 1: Budget exceeded → только дешёвые модели ──
+    // ── HARD GUARD 1: Бюджет исчерпан → бесплатный Qwen 3.8 27B (OpenRouter) ──
     if (isBudgetExceeded || monthlyCost >= monthlyBudget * 0.95) {
-      const cheapModels = availableModels.filter(
-        (m) => m.tier === 'free' || m.id === 'ketner-mini' || m.id === 'gpt-4o-mini',
-      );
-      const pool = cheapModels.length > 0 ? cheapModels : availableModels;
-      // Даже среди дешёвых моделей выбираем по скорингу
-      return this._scoreAndPick(
-        prompt, pool, userPlan, 1.5, // budgetRatio > 1 → максимальный штраф
-        'Cost protection: switched to economical model',
-      );
+      const qwenModel =
+        availableModels.find((m) => m.id === 'ketner-mini') ??
+        availableModels.find((m) => m.tier === 'free') ??
+        availableModels[0];
+      return {
+        model: qwenModel,
+        reason: `Budget exhausted: switched to Qwen 3.8 27B Free (${qwenModel.name}) via OpenRouter`,
+      };
+    }
+
+    const classification = this.classify(prompt);
+
+    // ── LIGHT REQUESTS: NVIDIA Nemotron 3 Ultra (Free via OpenRouter) ──
+    const isLightRequest =
+      classification.complexity === 'simple' &&
+      prompt.trim().length < 400 &&
+      (classification.category === 'general' ||
+       classification.category === 'translation' ||
+       classification.category === 'creative');
+
+    const nemotron = availableModels.find((m) => m.id === 'nemotron-ultra');
+    if (isLightRequest && nemotron) {
+      return {
+        model: nemotron,
+        reason: `Light query optimization: routed to NVIDIA Nemotron 3 Ultra (Free, OpenRouter)`,
+      };
     }
 
     // ── HARD GUARD 2: Free plan — ограничить пул дешёвыми моделями ──

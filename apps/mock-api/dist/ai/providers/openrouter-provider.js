@@ -5,10 +5,10 @@
  * пула бесплатных fallback-моделей и потоковой генерации.
  */
 const DEFAULT_CANDIDATES = [
-    'nex-agi/nex-n2.5-mini:free',
-    'nex-agi/nex-n2.5-pro:free',
+    'nvidia/nemotron-3-ultra-550b-a55b:free',
     'qwen/qwen3.8-27b:free',
-    'google/gemma-4-26b-a4b-it:free',
+    'deepseek/deepseek-v4.1-flash',
+    'z-ai/glm-5.3-flash',
     'openrouter/free',
 ];
 export class OpenRouterProvider {
@@ -20,7 +20,7 @@ export class OpenRouterProvider {
     constructor(config) {
         this.apiKey = config.apiKey.trim();
         this.baseUrl = (config.baseUrl ?? 'https://openrouter.ai/api/v1').replace(/\/+$/, '');
-        this.defaultModel = config.defaultModel ?? 'nex-agi/nex-n2.5-mini:free';
+        this.defaultModel = config.defaultModel ?? 'nvidia/nemotron-3-ultra-550b-a55b:free';
     }
     isAvailable() {
         return this.apiKey.length > 0;
@@ -129,6 +129,7 @@ export class OpenRouterProvider {
                 let finishReason = 'stop';
                 let promptTokens = 0;
                 let completionTokens = 0;
+                let reasoningTokens = null;
                 while (true) {
                     if (callbacks.isCancelled()) {
                         try {
@@ -169,6 +170,11 @@ export class OpenRouterProvider {
                             if (parsed.usage) {
                                 promptTokens = parsed.usage.prompt_tokens ?? promptTokens;
                                 completionTokens = parsed.usage.completion_tokens ?? completionTokens;
+                                const rTokens = parsed.usage.completion_tokens_details?.reasoning_tokens ??
+                                    parsed.usage.completionTokensDetails?.reasoningTokens;
+                                if (typeof rTokens === 'number') {
+                                    reasoningTokens = rTokens;
+                                }
                             }
                         }
                         catch {
@@ -185,6 +191,7 @@ export class OpenRouterProvider {
                         usage: {
                             inputTokens: promptTokens,
                             outputTokens: completionTokens,
+                            reasoningTokens: reasoningTokens ?? undefined,
                         },
                         finishReason,
                     };

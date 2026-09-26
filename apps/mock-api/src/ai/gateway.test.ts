@@ -62,34 +62,35 @@ test('AutoRouter: классификация задач и выбор подхо
   assert.ok(result.scores!.length > 0, 'scores не должны быть пустыми');
   assert.ok(result.scores![0].score > result.scores![result.scores!.length - 1].score, 'scores отсортированы по убыванию');
 
-  // Budget pressure: при исчерпании бюджета выбирается дешёвая модель
+  // Budget pressure: при исчерпании бюджета выбирается бесплатный Qwen 3.8 27B (ketner-mini)
   const budgetResult = AutoRouter.routeWithReason(codingPrompt, ultraModels, {
     userPlan: 'ultra',
     budgetExceeded: true,
     monthlyCost: 50,
     monthlyBudget: 40,
   });
+  assert.equal(budgetResult.model.id, 'ketner-mini', 'при исчерпании бюджета должен выбираться Qwen 3.8 27B');
   assert.ok(!budgetResult.model.isPro, 'при исчерпании бюджета должна быть дешёвая модель');
+
+  // Light queries: для легких запросов выбирается NVIDIA Nemotron 3 Ultra (Free)
+  const lightResult = AutoRouter.routeWithReason('Привет, как дела?', ultraModels, {
+    userPlan: 'ultra',
+  });
+  assert.equal(lightResult.model.id, 'nemotron-ultra', 'для легких запросов должен выбираться Nemotron 3 Ultra');
+
+  // Проверка регистрации новых моделей (GLM 5.3 Flash, DeepSeek V4.1 Flash)
+  const glm = registry.resolve('glm-5.3-flash');
+  assert.equal(glm.id, 'glm-5.3-flash');
+  assert.equal(glm.providerModelId, 'z-ai/glm-5.3-flash');
+
+  const deepseek = registry.resolve('deepseek-v4.1-flash');
+  assert.equal(deepseek.id, 'deepseek-v4.1-flash');
+  assert.equal(deepseek.providerModelId, 'deepseek/deepseek-v4.1-flash');
 
   // Free tier: никогда не выбирает флагман
   const freeModels = registry.getForPlan('free');
   const freeResult = AutoRouter.route('Напиши код на Python', freeModels, { userPlan: 'free' });
   assert.equal(freeResult.isPro, false, 'Free пользователь не должен получать Pro модель');
-
-  // Простой запрос на Pro: должна быть быстрая модель (не самая дорогая)
-  const simplePrompt = 'Привет';
-  const proModels = registry.getForPlan('pro');
-  const simpleResult = AutoRouter.routeWithReason(simplePrompt, proModels, {
-    userPlan: 'pro',
-    monthlyCost: 0,
-    monthlyBudget: 15,
-  });
-  // Для простого привета дешёвая модель должна набрать больше баллов
-  // (у неё высокий speed, низкий cost), чем флагман с дорогим cost
-  assert.ok(
-    simpleResult.model.tier === 'free' || simpleResult.model.tier === 'standard' || simpleResult.model.tier === 'premium',
-    `для короткого простого запроса ожидается экономная модель, но выбрана: ${simpleResult.model.id} (tier=${simpleResult.model.tier})`,
-  );
 });
 
 test('ContextOptimizer: оценка токенов и скользящее окно истории', () => {

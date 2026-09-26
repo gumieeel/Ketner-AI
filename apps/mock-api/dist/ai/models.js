@@ -10,8 +10,26 @@ export const MODELS = [
     // Дешёвые модели (для Free и fallback)
     {
         id: DEFAULT_MODEL_ID,
-        name: 'Ketner Mini (Qwen 2.5)',
+        name: 'Ketner Mini (Qwen 3.8)',
         contextMessages: 20,
+        isPro: false,
+    },
+    {
+        id: 'nemotron-ultra',
+        name: 'Nemotron 3 Ultra',
+        contextMessages: 30,
+        isPro: false,
+    },
+    {
+        id: 'glm-5.3-flash',
+        name: 'GLM 5.3 Flash',
+        contextMessages: 40,
+        isPro: false,
+    },
+    {
+        id: 'deepseek-v4.1-flash',
+        name: 'DeepSeek V4.1 Flash',
+        contextMessages: 40,
         isPro: false,
     },
     {
