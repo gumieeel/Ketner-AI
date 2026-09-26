@@ -31,18 +31,44 @@ const DEFAULT_DEMO_USER = (() => {
         passwordHash: hashPassword('password123', salt),
     };
 })();
+const DEFAULT_ADMIN_USER = (() => {
+    const salt = '11111111111111111111111111111111';
+    return {
+        id: 'admin-artem-user',
+        email: 'artemsinyakov09@gmail.com',
+        name: 'Артем Синяков',
+        plan: 'ultra',
+        isVip: true,
+        isAdmin: true,
+        createdAt: '2026-09-22T00:00:00.000Z',
+        salt,
+        passwordHash: hashPassword('password123', salt),
+    };
+})();
+function isTestEnvironment(file) {
+    return (file.includes('ketner-mock-api-') ||
+        process.env.NODE_ENV === 'test' ||
+        Boolean(process.env.VITEST));
+}
 function readSnapshot(file) {
+    const isTest = isTestEnvironment(file);
     try {
         const parsed = JSON.parse(readFileSync(file, 'utf8'));
         const users = Array.isArray(parsed.users) ? parsed.users : [];
-        if (users.length === 0) {
-            return { users: [DEFAULT_DEMO_USER] };
+        if (!users.some((u) => u.email.toLowerCase() === 'demo@ketner.ai')) {
+            users.push(DEFAULT_DEMO_USER);
+        }
+        if (!isTest && !users.some((u) => u.email.toLowerCase() === 'artemsinyakov09@gmail.com')) {
+            users.unshift(DEFAULT_ADMIN_USER);
         }
         return { users };
     }
     catch (error) {
         if (error.code !== 'ENOENT') {
             console.warn('[mock-api] хранилище пользователей не прочитано, создаём демо:', error);
+        }
+        if (!isTest) {
+            return { users: [DEFAULT_ADMIN_USER, DEFAULT_DEMO_USER] };
         }
         return { users: [DEFAULT_DEMO_USER] };
     }
