@@ -4,10 +4,23 @@
  * Определяет правила доступа к моделям, лимиты контекста, параллелизма и
  * допустимые объёмы использования для каждого тарифного плана.
  */
+const ALL_MODELS = [
+    'ketner-mini',
+    'gpt-4o-mini',
+    'gemini-2.5-flash',
+    'claude-3-haiku',
+    'gpt-6-astra',
+    'claude-3.5-sonnet',
+    'claude-fable',
+    'gemini-2.5-pro',
+    'gemini-pro',
+    'ketner-pro',
+    'auto',
+];
 export const PLAN_ENTITLEMENTS = {
     free: {
         planId: 'free',
-        allowedModels: ['ketner-mini', 'auto'],
+        allowedModels: ['ketner-mini', 'gpt-4o-mini', 'gemini-2.5-flash', 'claude-3-haiku', 'auto'],
         maxConcurrency: 1,
         priority: 0,
         fairUseLevel: 0,
@@ -17,12 +30,15 @@ export const PLAN_ENTITLEMENTS = {
         tokensPerHour: 50_000,
         tokensPerDay: 150_000,
         maxContextMessages: 20,
+        contextLimit: 20,
+        maxTokens: 1024,
         streamingEnabled: true,
         maxDailyCost: 0.1,
+        costBudget: 0.5,
     },
     plus: {
         planId: 'plus',
-        allowedModels: ['ketner-mini', 'ketner-pro', 'auto'],
+        allowedModels: ALL_MODELS,
         maxConcurrency: 2,
         priority: 1,
         fairUseLevel: 1,
@@ -32,12 +48,15 @@ export const PLAN_ENTITLEMENTS = {
         tokensPerHour: 300_000,
         tokensPerDay: 1_500_000,
         maxContextMessages: 60,
+        contextLimit: 60,
+        maxTokens: 4096,
         streamingEnabled: true,
         maxDailyCost: 3.0,
+        costBudget: 6.0,
     },
     pro: {
         planId: 'pro',
-        allowedModels: ['ketner-mini', 'ketner-pro', 'gpt-6-astra', 'claude-fable', 'gemini-pro', 'auto'],
+        allowedModels: ALL_MODELS,
         maxConcurrency: 4,
         priority: 2,
         fairUseLevel: 2,
@@ -47,12 +66,15 @@ export const PLAN_ENTITLEMENTS = {
         tokensPerHour: 1_500_000,
         tokensPerDay: 6_000_000,
         maxContextMessages: 120,
+        contextLimit: 120,
+        maxTokens: 8192,
         streamingEnabled: true,
         maxDailyCost: 10.0,
+        costBudget: 15.0,
     },
     ultra: {
         planId: 'ultra',
-        allowedModels: ['ketner-mini', 'gpt-6-astra', 'claude-fable', 'gemini-pro', 'ketner-pro', 'auto'],
+        allowedModels: ALL_MODELS,
         maxConcurrency: 8,
         priority: 3,
         fairUseLevel: 3,
@@ -62,13 +84,16 @@ export const PLAN_ENTITLEMENTS = {
         tokensPerHour: 4_000_000,
         tokensPerDay: 20_000_000,
         maxContextMessages: 500,
+        contextLimit: 500,
+        maxTokens: 16384,
         streamingEnabled: true,
         maxDailyCost: 30.0,
+        costBudget: 40.0,
     },
     // Legacy alias для обратной совместимости (получают права уровня Pro)
     'gpt-pro': {
         planId: 'gpt-pro',
-        allowedModels: ['ketner-mini', 'ketner-pro', 'gpt-6-astra', 'claude-fable', 'gemini-pro', 'auto'],
+        allowedModels: ALL_MODELS,
         maxConcurrency: 4,
         priority: 2,
         fairUseLevel: 2,
@@ -78,12 +103,15 @@ export const PLAN_ENTITLEMENTS = {
         tokensPerHour: 1_500_000,
         tokensPerDay: 6_000_000,
         maxContextMessages: 120,
+        contextLimit: 120,
+        maxTokens: 8192,
         streamingEnabled: true,
         maxDailyCost: 10.0,
+        costBudget: 15.0,
     },
     'claude-pro': {
         planId: 'claude-pro',
-        allowedModels: ['ketner-mini', 'ketner-pro', 'gpt-6-astra', 'claude-fable', 'gemini-pro', 'auto'],
+        allowedModels: ALL_MODELS,
         maxConcurrency: 4,
         priority: 2,
         fairUseLevel: 2,
@@ -93,12 +121,15 @@ export const PLAN_ENTITLEMENTS = {
         tokensPerHour: 1_500_000,
         tokensPerDay: 6_000_000,
         maxContextMessages: 120,
+        contextLimit: 120,
+        maxTokens: 8192,
         streamingEnabled: true,
         maxDailyCost: 10.0,
+        costBudget: 15.0,
     },
     'gemini-pro': {
         planId: 'gemini-pro',
-        allowedModels: ['ketner-mini', 'ketner-pro', 'gpt-6-astra', 'claude-fable', 'gemini-pro', 'auto'],
+        allowedModels: ALL_MODELS,
         maxConcurrency: 4,
         priority: 2,
         fairUseLevel: 2,
@@ -108,8 +139,11 @@ export const PLAN_ENTITLEMENTS = {
         tokensPerHour: 1_500_000,
         tokensPerDay: 6_000_000,
         maxContextMessages: 120,
+        contextLimit: 120,
+        maxTokens: 8192,
         streamingEnabled: true,
         maxDailyCost: 10.0,
+        costBudget: 15.0,
     },
 };
 export class EntitlementService {
@@ -137,23 +171,13 @@ export class EntitlementService {
         if (!model.isPro) {
             return { allowed: true };
         }
-        if (effectivePlan === 'ultra') {
+        if (effectivePlan !== 'free') {
             return { allowed: true };
         }
-        const entitlements = this.getEntitlements(effectivePlan);
-        if (entitlements.allowedModels.includes(model.id)) {
-            return { allowed: true };
-        }
-        if (model.requiredPlan && effectivePlan === model.requiredPlan) {
-            return { allowed: true };
-        }
-        if (model.id === 'ketner-pro' && (effectivePlan === 'plus' || effectivePlan === 'pro')) {
-            return { allowed: true };
-        }
-        const requiredName = model.requiredPlan ? model.requiredPlan.toUpperCase() : 'PRO';
+        const requiredName = 'Plus';
         return {
             allowed: false,
-            reason: `Доступ к модели ${model.name} требует подписки (${requiredName} или Ultra).`,
+            reason: `Доступ к модели ${model.name} требует подписки (Plus, Pro или Ultra).`,
             requiredPlan: requiredName,
         };
     }

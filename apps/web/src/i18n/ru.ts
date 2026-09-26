@@ -207,6 +207,8 @@ export const ru = {
   'chat.close': 'Закрыть',
   'chat.proBadge': 'PRO',
   'chat.modelMenu': 'Выбрать модель',
+  'chat.modelAutoSubtitle': 'Система подбирает лучшую модель под задачу',
+  'chat.manualSelection': 'Ручной выбор модели',
   'chat.modelContext': 'Контекст: {count} сообщений',
   'chat.composerNotice':
     'Демо-режим: ответы собираются по шаблонам, реальная модель появится позже.',

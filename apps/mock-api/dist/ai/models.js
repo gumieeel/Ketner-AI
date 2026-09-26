@@ -7,39 +7,73 @@
  */
 export const DEFAULT_MODEL_ID = 'ketner-mini';
 export const MODELS = [
+    // Дешёвые модели (для Free и fallback)
     {
         id: DEFAULT_MODEL_ID,
-        name: 'Qwen 2.5 Coder',
+        name: 'Ketner Mini (Qwen 2.5)',
         contextMessages: 20,
         isPro: false,
     },
+    {
+        id: 'gpt-4o-mini',
+        name: 'GPT-4o mini',
+        contextMessages: 40,
+        isPro: false,
+    },
+    {
+        id: 'gemini-2.5-flash',
+        name: 'Gemini 2.5 Flash',
+        contextMessages: 40,
+        isPro: false,
+    },
+    {
+        id: 'claude-3-haiku',
+        name: 'Claude 3 Haiku',
+        contextMessages: 40,
+        isPro: false,
+    },
+    // Топовые модели (ядро продукта)
     {
         id: 'gpt-6-astra',
         name: 'GPT-6 Astra *',
         contextMessages: 120,
         isPro: true,
-        requiredPlan: 'gpt-pro',
+        requiredPlan: 'plus',
+    },
+    {
+        id: 'claude-3.5-sonnet',
+        name: 'Claude 3.5 Sonnet *',
+        contextMessages: 120,
+        isPro: true,
+        requiredPlan: 'plus',
     },
     {
         id: 'claude-fable',
         name: 'Claude Fable 5.5 *',
         contextMessages: 120,
         isPro: true,
-        requiredPlan: 'claude-pro',
+        requiredPlan: 'plus',
+    },
+    {
+        id: 'gemini-2.5-pro',
+        name: 'Gemini 2.5 Pro *',
+        contextMessages: 120,
+        isPro: true,
+        requiredPlan: 'plus',
     },
     {
         id: 'gemini-pro',
         name: 'Gemini 3.8 Pro *',
         contextMessages: 120,
         isPro: true,
-        requiredPlan: 'gemini-pro',
+        requiredPlan: 'plus',
     },
     {
         id: 'ketner-pro',
         name: 'Qwen 2.5 Max *',
         contextMessages: 60,
         isPro: true,
-        requiredPlan: 'ultra',
+        requiredPlan: 'plus',
     },
 ];
 export const PLAN_LIMITS = {
@@ -64,22 +98,7 @@ export function canAccessModel(userPlan, model) {
         return true;
     if (!userPlan || userPlan === 'free')
         return false;
-    // Tier-based доступ: Pro и Ultra получают доступ ко ВСЕМ моделям
-    if (userPlan === 'ultra' || userPlan === 'pro')
-        return true;
-    // Plus получает доступ к Ketner Mini и Ketner Pro
-    if (userPlan === 'plus') {
-        return model.id === 'ketner-mini' || model.id === 'ketner-pro';
-    }
-    // Обратная совместимость с legacy планами (gpt-pro, claude-pro, gemini-pro)
-    if (userPlan === 'gpt-pro' ||
-        userPlan === 'claude-pro' ||
-        userPlan === 'gemini-pro') {
-        return true;
-    }
-    if (model.requiredPlan && userPlan === model.requiredPlan)
-        return true;
-    return false;
+    return true;
 }
 /** Неизвестный идентификатор модели не ломает запрос: берём модель по умолчанию. */
 export function resolveModel(modelId) {

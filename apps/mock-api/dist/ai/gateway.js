@@ -38,21 +38,36 @@ export class AIGateway {
         const startTime = Date.now();
         const activeUserId = req.userId;
         const language = req.language;
-        // 1. Определение эффективного плана
+        // 1. Определение эффективного плана и лимитов
         const effectivePlan = EntitlementService.resolveEffectivePlan(req.userPlan);
-        // 2. Резолвинг модели (включая Auto Mode)
+        const entitlements = EntitlementService.getEntitlements(effectivePlan);
+        const snapshot = this.usageStore.getFairUseSnapshot(activeUserId);
+        // Проверка превышения бюджета себестоимости (адаптивный даунгрейд вместо жесткого блока)
+        const isBudgetExceeded = entitlements.costBudget > 0 &&
+            snapshot.estimatedCostLastMonth >= entitlements.costBudget;
+        // 2. Резолвинг модели (включая Auto Mode и адаптивную защиту)
         let targetModel;
         let routingReason;
         const prompt = [...req.messages].reverse().find((m) => m.role === 'user')?.content ?? '';
         if (req.modelId === 'auto') {
             const allowed = this.registry.getForPlan(effectivePlan);
-            const routed = AutoRouter.routeWithReason(prompt, allowed);
+            const routed = AutoRouter.routeWithReason(prompt, allowed, {
+                userPlan: effectivePlan,
+                budgetExceeded: isBudgetExceeded,
+            });
             targetModel = routed.model;
             routingReason = routed.reason;
         }
         else {
-            targetModel = this.registry.resolve(req.modelId);
-            routingReason = `Explicit user model selection (${targetModel.name})`;
+            const resolved = this.registry.resolve(req.modelId);
+            if (isBudgetExceeded && resolved.tier === 'flagship') {
+                targetModel = this.registry.resolve('ketner-mini');
+                routingReason = `Budget protection: dynamically routed to ${targetModel.name} for fair usage`;
+            }
+            else {
+                targetModel = resolved;
+                routingReason = `Explicit user model selection (${targetModel.name})`;
+            }
         }
         // 3. Проверка прав доступа (Entitlement Check)
         const accessCheck = EntitlementService.checkModelAccess(targetModel, effectivePlan);
@@ -67,7 +82,6 @@ export class AIGateway {
             return;
         }
         // 4. Проверка Fair Use и захват concurrency слота
-        const snapshot = this.usageStore.getFairUseSnapshot(activeUserId);
         const decision = FairUseEngine.evaluate(snapshot, effectivePlan, language);
         if (decision.action === 'deny') {
             this.usageStore.recordUsage({
@@ -93,14 +107,17 @@ export class AIGateway {
         const releaseSlot = this.usageStore.acquireConcurrencySlot(activeUserId);
         try {
             // 5. Оптимизация контекста
-            const entitlements = EntitlementService.getEntitlements(effectivePlan);
-            const maxContextMessages = Math.min(targetModel.contextMessages, entitlements.maxContextMessages);
+            const maxContextMessages = Math.min(targetModel.contextMessages, entitlements.maxContextMessages, entitlements.contextLimit);
+            const baseSystemPrompt = targetModel.defaultSystemPrompt[language];
+            const systemPrompt = isBudgetExceeded
+                ? `${baseSystemPrompt} ${language === 'en' ? 'Keep responses concise and direct.' : 'Отвечай максимально кратко и по существу.'}`
+                : baseSystemPrompt;
             const optimizedMessages = ContextOptimizer.optimize(req.messages.map((m) => ({
                 role: m.role,
                 content: m.content,
             })), {
                 maxMessages: maxContextMessages,
-                systemPrompt: targetModel.defaultSystemPrompt[language],
+                systemPrompt,
                 language,
             });
             // 5.1. Проверка семантического кэша (Semantic & Query Caching)
@@ -162,7 +179,9 @@ export class AIGateway {
                             model: candidateModel.providerModelId,
                             messages: optimizedMessages,
                             stream: true,
-                            maxTokens: candidateModel.maxOutputTokens,
+                            maxTokens: isBudgetExceeded
+                                ? Math.min(candidateModel.maxOutputTokens, entitlements.maxTokens, 1024)
+                                : Math.min(candidateModel.maxOutputTokens, entitlements.maxTokens),
                         }, {
                             onDelta: callbacks.onDelta,
                             isCancelled,

@@ -114,10 +114,16 @@ export interface PlanEntitlements {
   tokensPerDay: number | null;
   /** Макс. размер контекста в сообщениях. */
   maxContextMessages: number;
+  /** Лимит контекста (синоним maxContextMessages). */
+  contextLimit: number;
+  /** Максимальное количество токенов в ответе. */
+  maxTokens: number;
   /** Разрешён ли streaming. */
   streamingEnabled: boolean;
   /** Макс. estimated cost в день в $ (null = без ограничений). */
   maxDailyCost: number | null;
+  /** Месячный бюджет на пользователя в $ (для adaptive cost control). */
+  costBudget: number;
 }
 
 // ─────────────────────────────────────────────────────────────

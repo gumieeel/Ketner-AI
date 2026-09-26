@@ -10,6 +10,11 @@
 
 import type { ModelRegistryEntry, TaskCategory, TaskClassification } from './gateway-types.js';
 
+export interface AutoRouterOptions {
+  userPlan?: string;
+  budgetExceeded?: boolean;
+}
+
 export class AutoRouter {
   /**
    * Классифицировать задачу по тексту промпта.
@@ -127,7 +132,7 @@ export class AutoRouter {
     else if (isTranslation) category = 'translation';
     else if (isCreative) category = 'creative';
 
-    const isComplex = prompt.length > 1500 || (isCode && prompt.length > 500) || isReasoning;
+    const isComplex = prompt.length > 800 || (isCode && prompt.length > 300) || (isMath && prompt.length > 150) || isReasoning;
 
     return {
       category,
@@ -149,6 +154,7 @@ export class AutoRouter {
   static routeWithReason(
     prompt: string,
     availableModels: ModelRegistryEntry[],
+    options?: AutoRouterOptions,
   ): { model: ModelRegistryEntry; reason: string } {
     if (availableModels.length === 0) {
       throw new Error('No models available for routing');
@@ -161,82 +167,138 @@ export class AutoRouter {
       };
     }
 
-    const classification = this.classify(prompt);
+    const isBudgetExceeded = options?.budgetExceeded ?? false;
+    const userPlan = options?.userPlan ?? 'free';
 
-    // Cost-aware routing:
-    // Если задача простая, короткая или общая разговорная (например, приветствие или короткий вопрос),
-    // отдаём предпочтение легкой/быстрой модели для снижения затрат на токены и низкой задержки.
-    const isCasualOrSimple =
-      classification.category === 'general' &&
-      classification.complexity === 'simple' &&
-      prompt.trim().length < 200;
-
-    if (isCasualOrSimple) {
-      const fastModel =
-        availableModels.find((m) => m.tier === 'free' || m.id === 'ketner-mini') ??
-        availableModels.find((m) => m.tier === 'standard') ??
-        availableModels[0];
+    // 1. АДАПТИВНЫЙ ДАУНГРЕЙД ПРИ ПРЕВЫШЕНИИ МЕСЯЧНОГО БЮДЖЕТА
+    if (isBudgetExceeded) {
+      const cheapModels = availableModels.filter(
+        (m) => m.tier === 'free' || m.id === 'ketner-mini' || m.id === 'gpt-4o-mini' || m.id === 'gemini-2.5-flash' || m.id === 'claude-3-haiku',
+      );
+      const chosen = cheapModels[0] ?? availableModels[0];
       return {
-        model: fastModel,
-        reason: `Cost-optimized fast routing for casual conversation (${fastModel.name})`,
+        model: chosen,
+        reason: `Adaptive cost control: switched to economical model (${chosen.name})`,
       };
     }
 
-    // Оцениваем каждую модель на соответствие задаче
-    const scored = availableModels.map((model) => {
-      let score = 0;
+    const classification = this.classify(prompt);
 
-      // Очки за соответствие категории
-      if (classification.category === 'coding' && model.capabilities.coding) score += 12;
-      if (classification.category === 'math' && model.capabilities.math) score += 12;
-      if (classification.category === 'reasoning' && model.capabilities.reasoning) score += 12;
-      if (classification.category === 'creative' && model.capabilities.creative) score += 10;
-      if (classification.category === 'translation' && model.capabilities.translation) score += 10;
+    // 2. ДЛЯ FREE ПЛАНА — ТОЛЬКО ДЕШЁВЫЕ МОДЕЛИ
+    if (userPlan === 'free') {
+      const cheapModels = availableModels.filter(
+        (m) => m.tier === 'free' || !m.isPro,
+      );
+      const targetPool = cheapModels.length > 0 ? cheapModels : availableModels;
 
-      // Сложные задачи направляем на flagship / premium модели
-      if (classification.complexity === 'complex') {
-        if (model.tier === 'flagship') score += 6;
-        if (model.tier === 'premium') score += 3;
+      let chosen = targetPool[0];
+      if (classification.category === 'coding') {
+        chosen = targetPool.find((m) => m.id === 'ketner-mini' || m.id === 'gpt-4o-mini') ?? targetPool[0];
+      } else if (classification.category === 'creative' || classification.category === 'translation') {
+        chosen = targetPool.find((m) => m.id === 'claude-3-haiku' || m.id === 'gpt-4o-mini') ?? targetPool[0];
       } else {
-        // Для простых задач экономим: +2 очка моделям standard/free
-        if (model.tier === 'standard') score += 2;
-        if (model.tier === 'free') score += 1;
+        chosen = targetPool.find((m) => m.id === 'gemini-2.5-flash' || m.id === 'gpt-4o-mini') ?? targetPool[0];
       }
 
-      // Длинный контекст
-      if (classification.requiresLongContext && model.contextWindow >= 100_000) {
-        score += 8;
-      }
-
-      return { model, score };
-    });
-
-    scored.sort((a, b) => b.score - a.score);
-    const chosen = scored[0].model;
-
-    // Формируем понятное объяснение выбора
-    let reason = `Auto-routed to ${chosen.name}`;
-    if (classification.category === 'coding') {
-      reason = `Selected ${chosen.name} for code analysis and programming task`;
-    } else if (classification.category === 'math') {
-      reason = `Selected ${chosen.name} for advanced mathematical reasoning`;
-    } else if (classification.category === 'reasoning') {
-      reason = `Selected ${chosen.name} for deep analytical reasoning`;
-    } else if (classification.category === 'translation') {
-      reason = `Selected ${chosen.name} for multilingual translation optimization`;
-    } else if (classification.category === 'creative') {
-      reason = `Selected ${chosen.name} for creative writing and content generation`;
-    } else if (classification.requiresLongContext) {
-      reason = `Selected ${chosen.name} for high-capacity context window`;
+      return {
+        model: chosen,
+        reason: `Free tier auto-routed to ${chosen.name}`,
+      };
     }
 
-    return { model: chosen, reason };
+    // 3. ДЛЯ PLUS ПЛАНА:
+    // Простые и средние задачи -> дешёвые/средние модели (экономия себестоимости).
+    // Дорогие флагманы — только для действительно сложных задач.
+    if (userPlan === 'plus') {
+      if (classification.complexity === 'simple') {
+        const midModel =
+          availableModels.find((m) => m.id === 'gpt-4o-mini') ??
+          availableModels.find((m) => m.id === 'gemini-2.5-flash') ??
+          availableModels.find((m) => m.id === 'claude-3-haiku') ??
+          availableModels.find((m) => m.tier === 'free') ??
+          availableModels[0];
+
+        return {
+          model: midModel,
+          reason: `Fast & cost-optimized routing for everyday request (${midModel.name})`,
+        };
+      }
+
+      // Для сложных задач на тарифе Plus — подключаем флагманы
+      let flagshipModel =
+        availableModels.find((m) => m.id === 'gpt-6-astra') ??
+        availableModels.find((m) => m.id === 'claude-3.5-sonnet' || m.id === 'claude-fable') ??
+        availableModels.find((m) => m.id === 'gemini-2.5-pro' || m.id === 'gemini-pro') ??
+        availableModels[0];
+
+      if (classification.category === 'coding') {
+        flagshipModel =
+          availableModels.find((m) => m.id === 'claude-3.5-sonnet' || m.id === 'claude-fable') ??
+          availableModels.find((m) => m.id === 'gpt-6-astra') ??
+          flagshipModel;
+      } else if (classification.category === 'reasoning' || classification.category === 'math') {
+        flagshipModel =
+          availableModels.find((m) => m.id === 'gpt-6-astra') ??
+          availableModels.find((m) => m.id === 'gemini-2.5-pro' || m.id === 'gemini-pro') ??
+          flagshipModel;
+      }
+
+      return {
+        model: flagshipModel,
+        reason: `Selected flagship ${flagshipModel.name} for complex task`,
+      };
+    }
+
+    // 4. ДЛЯ PRO И ULTRA ТАРИФОВ:
+    // Флагманы используются с максимальным приоритетом и глубиной
+    const isCasualSimple =
+      classification.category === 'general' &&
+      classification.complexity === 'simple' &&
+      prompt.trim().length < 150;
+
+    if (isCasualSimple) {
+      const fastModel =
+        availableModels.find((m) => m.id === 'gpt-4o-mini') ??
+        availableModels.find((m) => m.id === 'gemini-2.5-flash') ??
+        availableModels[0];
+      return {
+        model: fastModel,
+        reason: `Ultra-fast instant response for quick inquiry (${fastModel.name})`,
+      };
+    }
+
+    let topModel =
+      availableModels.find((m) => m.id === 'gpt-6-astra') ??
+      availableModels.find((m) => m.id === 'claude-3.5-sonnet' || m.id === 'claude-fable') ??
+      availableModels.find((m) => m.id === 'gemini-2.5-pro' || m.id === 'gemini-pro') ??
+      availableModels[0];
+
+    if (classification.category === 'coding') {
+      topModel =
+        availableModels.find((m) => m.id === 'claude-3.5-sonnet' || m.id === 'claude-fable') ??
+        availableModels.find((m) => m.id === 'gpt-6-astra') ??
+        topModel;
+    } else if (classification.category === 'reasoning' || classification.category === 'math') {
+      topModel =
+        availableModels.find((m) => m.id === 'gpt-6-astra') ??
+        availableModels.find((m) => m.id === 'gemini-2.5-pro' || m.id === 'gemini-pro') ??
+        topModel;
+    }
+
+    return {
+      model: topModel,
+      reason: `Flagship routing via ${topModel.name} for ${userPlan.toUpperCase()} subscriber`,
+    };
   }
 
   /**
    * Выбрать наилучшую модель из доступных пользователю.
    */
-  static route(prompt: string, availableModels: ModelRegistryEntry[]): ModelRegistryEntry {
-    return this.routeWithReason(prompt, availableModels).model;
+  static route(
+    prompt: string,
+    availableModels: ModelRegistryEntry[],
+    options?: AutoRouterOptions,
+  ): ModelRegistryEntry {
+    return this.routeWithReason(prompt, availableModels, options).model;
   }
 }

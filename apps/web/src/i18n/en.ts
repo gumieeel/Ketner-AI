@@ -208,6 +208,8 @@ export const en: Record<TranslationKey, string> = {
   'chat.close': 'Close',
   'chat.proBadge': 'PRO',
   'chat.modelMenu': 'Choose a model',
+  'chat.modelAutoSubtitle': 'We choose the best model for your task',
+  'chat.manualSelection': 'Manual model selection',
   'chat.modelContext': 'Context: {count} messages',
   'chat.composerNotice': 'Demo mode: answers come from templates, the real model arrives later.',
   'chat.emptyTitle': 'What shall we work on?',
