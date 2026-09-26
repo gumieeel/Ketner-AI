@@ -21,10 +21,9 @@ export interface OpenRouterProviderConfig {
 }
 
 const DEFAULT_CANDIDATES = [
-  'nvidia/nemotron-3-ultra-550b-a55b:free',
+  'openai/gpt-4o-mini',
+  'deepseek/deepseek-chat',
   'qwen/qwen3.8-27b:free',
-  'deepseek/deepseek-v4.1-flash',
-  'z-ai/glm-5.3-flash',
   'openrouter/free',
 ];
 
@@ -80,7 +79,7 @@ export class OpenRouterProvider implements AIProvider {
             model: targetModel,
             messages,
             stream: false,
-            max_tokens: options.maxTokens ?? 2048,
+            max_tokens: Math.min(options.maxTokens ?? 2048, 2048),
           }),
           signal: options.signal,
         });
@@ -147,7 +146,7 @@ export class OpenRouterProvider implements AIProvider {
             model: targetModel,
             messages,
             stream: true,
-            max_tokens: options.maxTokens ?? 2048,
+            max_tokens: Math.min(options.maxTokens ?? 2048, 2048),
           }),
           signal: options.signal,
         });

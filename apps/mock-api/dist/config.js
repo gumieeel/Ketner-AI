@@ -87,10 +87,9 @@ export const config = {
     telegramPaymentProviderToken: process.env.TELEGRAM_PAYMENT_PROVIDER_TOKEN || '',
     telegramWebhookUrl: process.env.TELEGRAM_WEBHOOK_URL || '',
     /** AI Providers: OpenRouter */
-    openRouterApiKey: process.env.OPENROUTER_API_KEY ||
-        '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',
+    openRouterApiKey: process.env.OPENROUTER_API_KEY || '',
     openRouterBaseUrl: process.env.OPENROUTER_BASE_URL || 'https://openrouter.ai/api/v1',
-    openRouterModel: process.env.OPENROUTER_MODEL || 'nex-agi/nex-n2.5-mini:free',
+    openRouterModel: process.env.OPENROUTER_MODEL || 'openai/gpt-4o-mini',
     /** AI Providers: OpenAI */
     openaiApiKey: process.env.OPENAI_API_KEY || '',
     openaiBaseUrl: process.env.OPENAI_BASE_URL || 'https://api.openai.com/v1',

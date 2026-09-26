@@ -20,6 +20,31 @@ import { CostCalculator } from '../services/cost.js';
 import { EntitlementService } from '../services/entitlement.js';
 import { FairUseEngine } from '../services/fair-use.js';
 import { TierPipelineEngine, computeDynamicMaxTokens, } from './tier-pipeline.js';
+export function toOpenRouterModelId(model) {
+    if (model.id === 'gpt-4o-mini')
+        return 'openai/gpt-4o-mini';
+    if (model.id === 'gpt-4o')
+        return 'openai/gpt-4o';
+    if (model.id === 'gpt-6-astra')
+        return 'openai/gpt-4o';
+    if (model.id === 'claude-fable' || model.id === 'claude-3.5-sonnet')
+        return 'anthropic/claude-fable-5.1';
+    if (model.id === 'claude-3-haiku')
+        return 'anthropic/claude-haiku-4.5';
+    if (model.id === 'gemini-2.5-pro' || model.id === 'gemini-pro')
+        return 'google/gemini-2.5-pro';
+    if (model.id === 'gemini-2.5-flash')
+        return 'google/gemini-2.5-flash';
+    if (model.id === 'deepseek-v4.1-flash')
+        return 'deepseek/deepseek-chat';
+    if (model.provider === 'openai')
+        return `openai/${model.providerModelId}`;
+    if (model.provider === 'anthropic')
+        return `anthropic/${model.providerModelId}`;
+    if (model.provider === 'google')
+        return `google/${model.providerModelId}`;
+    return model.providerModelId;
+}
 export class AIGateway {
     registry;
     providers;
@@ -201,13 +226,29 @@ export class AIGateway {
                 !isTestEnv) {
                 const draftModel = this.registry.resolve(pipelineStrategy.draftModelId ?? 'deepseek-v4.1-flash');
                 const enhancerModel = this.registry.resolve(pipelineStrategy.enhancerModelId ?? targetModel.id);
-                const draftProvider = this.providers.get(draftModel.provider);
-                const enhancerProvider = this.providers.get(enhancerModel.provider);
+                let draftProvider = this.providers.get(draftModel.provider);
+                let draftModelId = draftModel.providerModelId;
+                if (!draftProvider || !draftProvider.isAvailable()) {
+                    const openRouterProvider = this.providers.get('openrouter');
+                    if (openRouterProvider?.isAvailable()) {
+                        draftProvider = openRouterProvider;
+                        draftModelId = toOpenRouterModelId(draftModel);
+                    }
+                }
+                let enhancerProvider = this.providers.get(enhancerModel.provider);
+                let enhancerModelId = enhancerModel.providerModelId;
+                if (!enhancerProvider || !enhancerProvider.isAvailable()) {
+                    const openRouterProvider = this.providers.get('openrouter');
+                    if (openRouterProvider?.isAvailable()) {
+                        enhancerProvider = openRouterProvider;
+                        enhancerModelId = toOpenRouterModelId(enhancerModel);
+                    }
+                }
                 if (draftProvider?.isAvailable() && enhancerProvider?.isAvailable()) {
                     try {
                         // Шаг 1: Быстрый черновик от дешёвой модели
                         const draftRes = await draftProvider.generateText({
-                            model: draftModel.providerModelId,
+                            model: draftModelId,
                             messages: optimizedMessages,
                             stream: false,
                             maxTokens: Math.min(draftModel.maxOutputTokens, 250),
@@ -224,7 +265,7 @@ export class AIGateway {
                             const enhanceInstruction = `${modText}${draftRes.content}`;
                             usedModel = enhancerModel;
                             streamedResponse = await enhancerProvider.streamText({
-                                model: enhancerModel.providerModelId,
+                                model: enhancerModelId,
                                 messages: [
                                     ...optimizedMessages.slice(0, -1),
                                     { role: 'user', content: enhanceInstruction },
@@ -251,14 +292,22 @@ export class AIGateway {
                 for (const candidateModel of modelsToTry) {
                     if (isCancelled())
                         break;
-                    const provider = this.providers.get(candidateModel.provider);
+                    let provider = this.providers.get(candidateModel.provider);
+                    let modelToRequest = candidateModel.providerModelId;
                     if (!provider || !provider.isAvailable()) {
-                        continue;
+                        const openRouterProvider = this.providers.get('openrouter');
+                        if (openRouterProvider && openRouterProvider.isAvailable()) {
+                            provider = openRouterProvider;
+                            modelToRequest = toOpenRouterModelId(candidateModel);
+                        }
+                        else {
+                            continue;
+                        }
                     }
                     try {
                         usedModel = candidateModel;
                         streamedResponse = await provider.streamText({
-                            model: candidateModel.providerModelId,
+                            model: modelToRequest,
                             messages: optimizedMessages,
                             stream: true,
                             maxTokens: Math.min(candidateModel.maxOutputTokens, entitlements.maxTokens, dynamicMaxTokens),
