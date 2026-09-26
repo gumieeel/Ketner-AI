@@ -50,7 +50,17 @@ export const PLAN_ENTITLEMENTS = {
     },
     plus: {
         planId: 'plus',
-        allowedModels: ALL_MODELS,
+        allowedModels: [
+            'ketner-mini',
+            'nemotron-ultra',
+            'glm-5.3-flash',
+            'deepseek-v4.1-flash',
+            'gpt-4o-mini',
+            'gemini-2.5-flash',
+            'claude-3-haiku',
+            'ketner-pro',
+            'auto',
+        ],
         maxConcurrency: 2,
         priority: 1,
         fairUseLevel: 1,
@@ -183,14 +193,31 @@ export class EntitlementService {
         if (!model.isPro) {
             return { allowed: true };
         }
+        // Флагманские модели (GPT-6 Astra, Claude 3.5 Sonnet, Claude Fable, Gemini 2.5 Pro)
+        // требуют тарифа Pro или Ultra
+        if (model.tier === 'flagship') {
+            const isProOrUltra = effectivePlan === 'pro' ||
+                effectivePlan === 'ultra' ||
+                effectivePlan === 'gpt-pro' ||
+                effectivePlan === 'claude-pro' ||
+                effectivePlan === 'gemini-pro';
+            if (isProOrUltra) {
+                return { allowed: true };
+            }
+            return {
+                allowed: false,
+                reason: `Доступ к флагманской модели ${model.name} требует подписки Pro или Ultra.`,
+                requiredPlan: 'Pro',
+            };
+        }
+        // Для остальных Pro-моделей (например Qwen 2.5 Max) достаточно тарифа Plus
         if (effectivePlan !== 'free') {
             return { allowed: true };
         }
-        const requiredName = 'Plus';
         return {
             allowed: false,
             reason: `Доступ к модели ${model.name} требует подписки (Plus, Pro или Ultra).`,
-            requiredPlan: requiredName,
+            requiredPlan: 'Plus',
         };
     }
 }

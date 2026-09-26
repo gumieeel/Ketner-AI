@@ -26,6 +26,7 @@ test('ModelRegistry: получение, разрешение и проверк�
   // Проверка доступа
   assert.equal(registry.canAccess('free', def), true);
   assert.equal(registry.canAccess('free', gpt), false);
+  assert.equal(registry.canAccess('plus', gpt), false); // Флагманы GPT/Claude только для Pro/Ultra
   assert.equal(registry.canAccess('gpt-pro', gpt), true);
   assert.equal(registry.canAccess('ultra', gpt), true);
 
@@ -196,4 +197,85 @@ test('EntitlementService & FairUseEngine: лимиты и защита от зл
   };
   const decision3 = FairUseEngine.evaluate(normalSnapshot, 'free', 'ru');
   assert.equal(decision3.action, 'allow');
+});
+
+test('TierPipelineEngine & Output Control: экономика токенов по тарифам', async () => {
+  const { TierPipelineEngine, computeDynamicMaxTokens } = await import('./tier-pipeline.js');
+
+  // 1. Dynamic output tokens formula
+  // maxTokens = Math.floor(baseTokens * tierMultiplier * (1 - budgetPressure))
+  const freeTokens = computeDynamicMaxTokens({ userPlan: 'free', monthlyCost: 0, monthlyBudget: 1 });
+  assert.equal(freeTokens, Math.floor(300 * 0.7)); // 210
+
+  const plusTokens = computeDynamicMaxTokens({ userPlan: 'plus', monthlyCost: 0, monthlyBudget: 6 });
+  assert.equal(plusTokens, 300); // 300 * 1.0
+
+  const proTokens = computeDynamicMaxTokens({ userPlan: 'pro', monthlyCost: 0, monthlyBudget: 15 });
+  assert.equal(proTokens, 450); // 300 * 1.5
+
+  const ultraTokens = computeDynamicMaxTokens({ userPlan: 'ultra', monthlyCost: 0, monthlyBudget: 40 });
+  assert.equal(ultraTokens, 750); // 300 * 2.5
+
+  // 2. Бюджетный триггер: при расходе > 80% лимита жесткий лимит 200 токенов
+  const overBudgetTokens = computeDynamicMaxTokens({ userPlan: 'plus', monthlyCost: 5.5, monthlyBudget: 6 });
+  assert.equal(overBudgetTokens, 200);
+
+  // 3. FREE стратегия: 100% дешёвые модели, max 200 токенов
+  const freeStrat = TierPipelineEngine.resolveStrategy('Привет', { userPlan: 'free' });
+  assert.equal(freeStrat.tier, 'free');
+  assert.equal(freeStrat.maxOutputTokens, 200);
+  assert.ok(freeStrat.targetModelId === 'nemotron-ultra' || freeStrat.targetModelId === 'deepseek-v4.1-flash');
+
+  // 4. PLUS стратегия:
+  // 5% burst GPT
+  const plusGpt = TierPipelineEngine.resolveStrategy('Привет', {
+    userPlan: 'plus',
+    random: () => 0.02, // < 0.05 -> GPT burst
+  });
+  assert.equal(plusGpt.mode, 'gpt_short');
+  assert.equal(plusGpt.maxOutputTokens, 150);
+  assert.equal(plusGpt.targetModelId, 'gpt-6-astra');
+
+  // 15% cheap improve (double pass)
+  const plusDouble = TierPipelineEngine.resolveStrategy('Привет', {
+    userPlan: 'plus',
+    random: () => 0.10, // 0.05..0.20 -> cheap improve
+  });
+  assert.equal(plusDouble.mode, 'cheap_improve');
+  assert.equal(plusDouble.targetModelId, 'deepseek-v4.1-flash');
+
+  // 80% cheap direct
+  const plusDirect = TierPipelineEngine.resolveStrategy('Привет', {
+    userPlan: 'plus',
+    random: () => 0.50, // >= 0.20 -> cheap direct
+  });
+  assert.equal(plusDirect.mode, 'cheap_direct');
+
+  // 5. PRO стратегия:
+  // 50% GPT improve (double pass)
+  const proDouble = TierPipelineEngine.resolveStrategy('Привет', {
+    userPlan: 'pro',
+    random: () => 0.25, // < 0.50 -> gpt_improve
+  });
+  assert.equal(proDouble.mode, 'gpt_improve');
+  assert.equal(proDouble.targetModelId, 'gpt-6-astra');
+
+  // 30% direct GPT
+  const proDirect = TierPipelineEngine.resolveStrategy('Привет', {
+    userPlan: 'pro',
+    random: () => 0.65, // 0.50..0.80 -> gpt_full
+  });
+  assert.equal(proDirect.mode, 'gpt_full');
+  assert.equal(proDirect.targetModelId, 'gpt-6-astra');
+
+  // 6. ULTRA стратегия: прямой флагман (max 800)
+  const ultraStrat = TierPipelineEngine.resolveStrategy('Привет', { userPlan: 'ultra' });
+  assert.equal(ultraStrat.tier, 'ultra');
+  assert.equal(ultraStrat.mode, 'gpt_full');
+  assert.ok(ultraStrat.maxOutputTokens <= 800);
+
+  // 7. Context post-process compression
+  const longText = 'A '.repeat(500); // 1000 chars = 250 tokens
+  const compressed = ContextOptimizer.compressText(longText, 50); // max 50 tokens = 200 chars
+  assert.ok(compressed.length <= 200);
 });

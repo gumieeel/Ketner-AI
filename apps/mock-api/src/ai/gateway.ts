@@ -12,7 +12,6 @@
  */
 
 import { ERROR_MESSAGES, pickAnswer } from './answers.js';
-import { AutoRouter } from './auto-router.js';
 import { semanticCache } from './cache.js';
 import { ContextOptimizer } from './context.js';
 import type {
@@ -29,6 +28,11 @@ import { CostCalculator } from '../services/cost.js';
 import { EntitlementService } from '../services/entitlement.js';
 import { FairUseEngine } from '../services/fair-use.js';
 import type { UsageStore } from '../store/usage-store.js';
+import {
+  TierPipelineEngine,
+  computeDynamicMaxTokens,
+  type PipelineStrategy,
+} from './tier-pipeline.js';
 
 export interface AIGatewayDeps {
   registry?: ModelRegistry;
@@ -72,22 +76,23 @@ export class AIGateway {
       entitlements.costBudget > 0 &&
       snapshot.estimatedCostLastMonth >= entitlements.costBudget;
 
-    // 2. Резолвинг модели (включая Auto Mode и адаптивную защиту)
+    // 2. Резолвинг модели и выбор стратегии исполнения (Token Economics & Tier Pipelines)
     let targetModel: ModelRegistryEntry;
     let routingReason: string;
+    let pipelineStrategy: PipelineStrategy | null = null;
     const prompt =
       [...req.messages].reverse().find((m) => m.role === 'user')?.content ?? '';
 
     if (req.modelId === 'auto') {
-      const allowed = this.registry.getForPlan(effectivePlan);
-      const routed = AutoRouter.routeWithReason(prompt, allowed, {
+      pipelineStrategy = TierPipelineEngine.resolveStrategy(prompt, {
         userPlan: effectivePlan,
-        budgetExceeded: isBudgetExceeded,
         monthlyCost: snapshot.estimatedCostLastMonth,
         monthlyBudget: entitlements.costBudget,
+        random: this.aiConfig.random,
       });
-      targetModel = routed.model;
-      routingReason = routed.reason;
+
+      targetModel = this.registry.resolve(pipelineStrategy.targetModelId);
+      routingReason = pipelineStrategy.reason;
     } else {
       const resolved = this.registry.resolve(req.modelId);
       if (isBudgetExceeded && resolved.tier === 'flagship') {
@@ -211,6 +216,21 @@ export class AIGateway {
       let streamedResponse: ProviderResponse | null = null;
       let usedModel = targetModel;
 
+      const dynamicMaxTokens = computeDynamicMaxTokens({
+        userPlan: effectivePlan,
+        monthlyCost: snapshot.estimatedCostLastMonth,
+        monthlyBudget: entitlements.costBudget,
+        baseTokens: pipelineStrategy?.maxOutputTokens ?? 300,
+      });
+
+      // Если режим gpt_short — инструктируем модель отвечать кратко (<150 токенов)
+      if (pipelineStrategy?.mode === 'gpt_short' && pipelineStrategy.promptModifier) {
+        const lastMsg = optimizedMessages[optimizedMessages.length - 1];
+        if (lastMsg && lastMsg.role === 'user') {
+          lastMsg.content = `${pipelineStrategy.promptModifier}${lastMsg.content}`;
+        }
+      }
+
       const isTestEnv =
         process.env.NODE_ENV === 'test' ||
         this.aiConfig.failureRate > 0 ||
@@ -219,7 +239,60 @@ export class AIGateway {
           this.aiConfig.chunkMs[0] === 0 &&
           this.aiConfig.chunkMs[1] === 0);
 
-      if (!isTestEnv) {
+      // 6.0. Двухпроходный пайплайн улучшения (Double Pass Enhancer: cheap draft -> GPT/cheap refine)
+      if (
+        pipelineStrategy &&
+        (pipelineStrategy.mode === 'gpt_improve' || pipelineStrategy.mode === 'cheap_improve') &&
+        !isTestEnv
+      ) {
+        const draftModel = this.registry.resolve(pipelineStrategy.draftModelId ?? 'deepseek-v4.1-flash');
+        const enhancerModel = this.registry.resolve(pipelineStrategy.enhancerModelId ?? targetModel.id);
+        const draftProvider = this.providers.get(draftModel.provider);
+        const enhancerProvider = this.providers.get(enhancerModel.provider);
+
+        if (draftProvider?.isAvailable() && enhancerProvider?.isAvailable()) {
+          try {
+            // Шаг 1: Быстрый черновик от дешёвой модели
+            const draftRes = await draftProvider.generateText({
+              model: draftModel.providerModelId,
+              messages: optimizedMessages,
+              stream: false,
+              maxTokens: Math.min(draftModel.maxOutputTokens, 250),
+            });
+
+            if (draftRes.content && !isCancelled()) {
+              // Шаг 2: Стриминг отполированного ответа пользователю
+              const enhanceInstruction = `${pipelineStrategy.promptModifier ?? 'Improve this answer. Make it clearer, structured and concise:\n\n'}${draftRes.content}`;
+              usedModel = enhancerModel;
+              streamedResponse = await enhancerProvider.streamText(
+                {
+                  model: enhancerModel.providerModelId,
+                  messages: [
+                    ...optimizedMessages.slice(0, -1),
+                    { role: 'user', content: enhanceInstruction },
+                  ],
+                  stream: true,
+                  maxTokens: Math.min(enhancerModel.maxOutputTokens, dynamicMaxTokens),
+                },
+                {
+                  onDelta: callbacks.onDelta,
+                  isCancelled,
+                },
+              );
+
+              if (streamedResponse && streamedResponse.content.length > 0) {
+                streamedResponse.usage.inputTokens += draftRes.usage.inputTokens;
+                success = true;
+              }
+            }
+          } catch (err) {
+            console.warn('[ai-gateway] Double-pass failed, falling back to direct stream:', err);
+          }
+        }
+      }
+
+      // 6.1. Прямой стриминг модели (если double-pass не применялся или не удался)
+      if (!isTestEnv && !success) {
         for (const candidateModel of modelsToTry) {
           if (isCancelled()) break;
 
@@ -235,9 +308,11 @@ export class AIGateway {
                 model: candidateModel.providerModelId,
                 messages: optimizedMessages,
                 stream: true,
-                maxTokens: isBudgetExceeded
-                  ? Math.min(candidateModel.maxOutputTokens, entitlements.maxTokens, 1024)
-                  : Math.min(candidateModel.maxOutputTokens, entitlements.maxTokens),
+                maxTokens: Math.min(
+                  candidateModel.maxOutputTokens,
+                  entitlements.maxTokens,
+                  dynamicMaxTokens,
+                ),
               },
               {
                 onDelta: callbacks.onDelta,

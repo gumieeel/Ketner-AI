@@ -255,7 +255,7 @@ const DEFAULT_REGISTRY_ENTRIES = [
         contextWindow: 128000,
         maxOutputTokens: 16384,
         pricing: makePricing(2.5, 10, 1.25),
-        requiredPlan: 'plus',
+        requiredPlan: 'pro',
         contextMessages: 120,
         isPro: true,
         fallbackModelId: 'ketner-mini',
@@ -281,7 +281,7 @@ const DEFAULT_REGISTRY_ENTRIES = [
         contextWindow: 200000,
         maxOutputTokens: 16384,
         pricing: makePricing(3.0, 15.0, 0.75),
-        requiredPlan: 'plus',
+        requiredPlan: 'pro',
         contextMessages: 120,
         isPro: true,
         fallbackModelId: 'claude-3-haiku',
@@ -307,7 +307,7 @@ const DEFAULT_REGISTRY_ENTRIES = [
         contextWindow: 200000,
         maxOutputTokens: 16384,
         pricing: makePricing(3.0, 15.0, 0.75),
-        requiredPlan: 'plus',
+        requiredPlan: 'pro',
         contextMessages: 120,
         isPro: true,
         fallbackModelId: 'claude-3-haiku',
@@ -334,7 +334,7 @@ const DEFAULT_REGISTRY_ENTRIES = [
         contextWindow: 1048576,
         maxOutputTokens: 32768,
         pricing: makePricing(1.25, 10.0, 0.315),
-        requiredPlan: 'plus',
+        requiredPlan: 'pro',
         contextMessages: 120,
         isPro: true,
         fallbackModelId: 'gemini-2.5-flash',
@@ -361,7 +361,7 @@ const DEFAULT_REGISTRY_ENTRIES = [
         contextWindow: 1048576,
         maxOutputTokens: 32768,
         pricing: makePricing(1.25, 10.0, 0.315),
-        requiredPlan: 'plus',
+        requiredPlan: 'pro',
         contextMessages: 120,
         isPro: true,
         fallbackModelId: 'gemini-2.5-flash',
@@ -446,12 +446,19 @@ export class ModelRegistry {
     getByProvider(provider) {
         return this.getAll().filter((e) => e.provider === provider);
     }
-    /** Проверка доступа (обратная совместимость с canAccessModel). */
+    /** Проверка доступа: флагманы (GPT-6, Claude 3.5, Gemini Pro) доступны только Pro/Ultra. */
     canAccess(userPlan, entry) {
         if (!entry.isPro)
             return true;
         if (!userPlan || userPlan === 'free')
             return false;
+        if (entry.tier === 'flagship') {
+            return (userPlan === 'pro' ||
+                userPlan === 'ultra' ||
+                userPlan === 'gpt-pro' ||
+                userPlan === 'claude-pro' ||
+                userPlan === 'gemini-pro');
+        }
         return true;
     }
     /** Добавить или обновить модель. */

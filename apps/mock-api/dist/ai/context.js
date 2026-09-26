@@ -44,17 +44,18 @@ export class ContextOptimizer {
             chosenMessages.unshift(msg);
             currentTokens += msgTokens;
         }
-        // 4. Формируем итоговый список сообщений с возможным сжатием ранней истории
-        if (chosenMessages.length > 8) {
-            // Сжимаем первые несколько сообщений в сводный контекстный блок
-            const toCompress = chosenMessages.slice(0, chosenMessages.length - 4);
-            const recent = chosenMessages.slice(chosenMessages.length - 4);
+        // 4. Формируем итоговый список сообщений с агрессивным сжатием контекста (> 6 сообщений)
+        // Длинный контекст = смерть экономики. Модель получает summary + последние сообщения.
+        if (chosenMessages.length > 6) {
+            const recentCount = 3;
+            const toCompress = chosenMessages.slice(0, chosenMessages.length - recentCount);
+            const recent = chosenMessages.slice(chosenMessages.length - recentCount);
             const summarySnippets = toCompress
-                .map((m) => `${m.role === 'user' ? 'Пользователь' : 'ИИ'}: ${m.content.slice(0, 100)}...`)
-                .join(' ');
+                .map((m) => `${m.role === 'user' ? 'User' : 'Assistant'}: ${m.content.slice(0, 80).replace(/\s+/g, ' ')}...`)
+                .join(' | ');
             const prefix = options.language === 'en'
-                ? `[Summary of earlier discussion: ${summarySnippets}]`
-                : `[Краткий контекст предыдущей беседы: ${summarySnippets}]`;
+                ? `[Context summary: ${summarySnippets}]`
+                : `[Краткий контекст беседы: ${summarySnippets}]`;
             result.push({
                 role: 'system',
                 content: prefix,
@@ -75,5 +76,22 @@ export class ContextOptimizer {
             }
         }
         return result;
+    }
+    /**
+     * Пост-процессинг: обрезка и сжатие избыточного текста для контроля выходных токенов.
+     */
+    static compressText(text, maxTokens) {
+        if (!maxTokens || text.length === 0)
+            return text;
+        const maxChars = maxTokens * 4;
+        if (text.length <= maxChars)
+            return text;
+        // Обрезаем по последнему законченному предложению
+        const sliced = text.slice(0, maxChars);
+        const lastPunctuation = Math.max(sliced.lastIndexOf('.'), sliced.lastIndexOf('!'), sliced.lastIndexOf('?'), sliced.lastIndexOf('\n'));
+        if (lastPunctuation > maxChars * 0.7) {
+            return sliced.slice(0, lastPunctuation + 1).trim();
+        }
+        return sliced.trim();
     }
 }
