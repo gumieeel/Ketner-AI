@@ -7,50 +7,65 @@
  */
 export const DEFAULT_MODEL_ID = 'ketner-mini';
 export const MODELS = [
-    // Дешёвые модели (для Free и fallback)
+    // 1. Базовые модели (Тариф Free)
     {
         id: DEFAULT_MODEL_ID,
-        name: 'Ketner Mini (Qwen 3.8)',
+        name: 'Ketner Mini · Qwen 2.5 Coder',
         contextMessages: 20,
         isPro: false,
+        requiredPlan: 'free',
     },
+    // 2. Стандартные и продвинутые модели (Тариф Plus)
     {
-        id: 'nemotron-ultra',
-        name: 'Nemotron 3 Ultra',
-        contextMessages: 30,
-        isPro: false,
-    },
-    {
-        id: 'glm-5.3-flash',
-        name: 'GLM 5.3 Flash',
-        contextMessages: 40,
-        isPro: false,
+        id: 'ketner-pro',
+        name: 'Ketner Pro · Qwen 2.5 Max *',
+        contextMessages: 60,
+        isPro: true,
+        requiredPlan: 'plus',
     },
     {
         id: 'deepseek-v4.1-flash',
         name: 'DeepSeek V4.1 Flash',
         contextMessages: 40,
-        isPro: false,
+        isPro: true,
+        requiredPlan: 'plus',
     },
     {
         id: 'gpt-4o-mini',
         name: 'GPT-4o mini',
         contextMessages: 40,
         isPro: false,
+        requiredPlan: 'free',
     },
     {
         id: 'gemini-2.5-flash',
         name: 'Gemini 2.5 Flash',
         contextMessages: 40,
-        isPro: false,
+        isPro: true,
+        requiredPlan: 'plus',
     },
     {
         id: 'claude-3-haiku',
         name: 'Claude 3 Haiku',
         contextMessages: 40,
-        isPro: false,
+        isPro: true,
+        requiredPlan: 'plus',
     },
-    // Топовые модели (ядро продукта)
+    {
+        id: 'glm-5.3-flash',
+        name: 'GLM 5.3 Flash',
+        contextMessages: 40,
+        isPro: true,
+        requiredPlan: 'plus',
+    },
+    {
+        id: 'nemotron-ultra',
+        name: 'Nemotron 3 Ultra',
+        contextMessages: 30,
+        isPro: true,
+        requiredPlan: 'plus',
+    },
+    // 3. Флагманские модели (Тарифы Pro и Ultra)
     {
         id: 'gpt-6-astra',
         name: 'GPT-6 Astra *',
@@ -86,13 +101,6 @@ export const MODELS = [
         isPro: true,
         requiredPlan: 'pro',
     },
-    {
-        id: 'ketner-pro',
-        name: 'Qwen 2.5 Max *',
-        contextMessages: 60,
-        isPro: true,
-        requiredPlan: 'plus',
-    },
 ];
 import { getPlanLimits } from '../services/entitlement.js';
 export const PLAN_LIMITS = getPlanLimits();
@@ -109,7 +117,20 @@ export function canAccessModel(userPlan, model) {
         return true;
     if (!userPlan || userPlan === 'free')
         return false;
-    return true;
+    if (userPlan === 'ultra')
+        return true;
+    if (model.requiredPlan === 'plus') {
+        return userPlan === 'plus' || userPlan === 'pro';
+    }
+    if (model.requiredPlan === 'pro') {
+        return (userPlan === 'pro' ||
+            userPlan === 'gpt-pro' ||
+            userPlan === 'claude-pro' ||
+            userPlan === 'gemini-pro');
+    }
+    if (model.requiredPlan && userPlan === model.requiredPlan)
+        return true;
+    return false;
 }
 /** Неизвестный идентификатор модели не ломает запрос: берём модель по умолчанию. */
 export function resolveModel(modelId) {

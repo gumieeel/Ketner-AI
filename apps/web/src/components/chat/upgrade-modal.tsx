@@ -18,25 +18,26 @@ interface PlanPreview {
 
 const PLANS_PREVIEW: PlanPreview[] = [
   {
+    id: 'plus',
+    name: 'Plus',
+    price: '990 ₽',
+    highlight: '2 потока',
+    models: 'Ketner Pro, DeepSeek, Flash',
+  },
+  {
+    id: 'pro',
+    name: 'Pro',
+    price: '1 990 ₽',
+    badge: 'Популярный',
+    highlight: 'Все флагманы',
+    models: 'GPT-6 Astra, Claude 3.5, Gemini Pro',
+  },
+  {
     id: 'gpt-pro',
     name: 'GPT Pro',
     price: '1 199 ₽',
-    highlight: '5-часовой лимит',
-    models: 'GPT-6 Astra, Luna, 4.5',
-  },
-  {
-    id: 'claude-pro',
-    name: 'Claude Pro',
-    price: '1 199 ₽',
-    highlight: '5-часовой лимит',
-    models: 'Claude Fable 5.5, 5.1, Sonnet',
-  },
-  {
-    id: 'gemini-pro',
-    name: 'Gemini Pro',
-    price: '1 199 ₽',
-    highlight: '5-часовой лимит',
-    models: 'Gemini 3.8 Pro, 3.5 Flash',
+    highlight: 'GPT флагманы',
+    models: 'GPT-6 Astra, GPT-4o',
   },
   {
     id: 'ultra',
