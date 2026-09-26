@@ -13,7 +13,7 @@
 import { ERROR_MESSAGES, pickAnswer } from './answers.js';
 import { semanticCache } from './cache.js';
 import { ContextOptimizer } from './context.js';
-import { modelRegistry } from './model-registry.js';
+import { modelRegistry, ECONOMY_SYSTEM_PROMPT, DEFAULT_SYSTEM_PROMPT, } from './model-registry.js';
 import { providerManager } from './providers/provider-factory.js';
 import { delay, streamText } from './stream.js';
 import { CostCalculator } from '../services/cost.js';
@@ -56,6 +56,7 @@ export class AIGateway {
                 monthlyCost: snapshot.estimatedCostLastMonth,
                 monthlyBudget: entitlements.costBudget,
                 random: this.aiConfig.random,
+                registry: this.registry,
             });
             targetModel = this.registry.resolve(pipelineStrategy.targetModelId);
             routingReason = pipelineStrategy.reason;
@@ -110,7 +111,14 @@ export class AIGateway {
         try {
             // 5. Оптимизация контекста
             const maxContextMessages = Math.min(targetModel.contextMessages, entitlements.maxContextMessages, entitlements.contextLimit);
-            const baseSystemPrompt = targetModel.defaultSystemPrompt[language];
+            // Дифференциация системных промптов по тарифам и Brand Protection:
+            // Free / Plus -> ECONOMY_SYSTEM_PROMPT (максимально краткие ответы)
+            // Pro / Ultra -> DEFAULT_SYSTEM_PROMPT (глубокие ответы с рассуждениями)
+            const isEconomyTier = effectivePlan === 'free' || effectivePlan === 'plus';
+            const promptMap = isEconomyTier
+                ? ECONOMY_SYSTEM_PROMPT
+                : (targetModel.defaultSystemPrompt ?? DEFAULT_SYSTEM_PROMPT);
+            const baseSystemPrompt = promptMap[language];
             const systemPrompt = isBudgetExceeded
                 ? `${baseSystemPrompt} ${language === 'en' ? 'Keep responses concise and direct.' : 'Отвечай максимально кратко и по существу.'}`
                 : baseSystemPrompt;
@@ -171,7 +179,10 @@ export class AIGateway {
             if (pipelineStrategy?.mode === 'gpt_short' && pipelineStrategy.promptModifier) {
                 const lastMsg = optimizedMessages[optimizedMessages.length - 1];
                 if (lastMsg && lastMsg.role === 'user') {
-                    lastMsg.content = `${pipelineStrategy.promptModifier}${lastMsg.content}`;
+                    const modText = typeof pipelineStrategy.promptModifier === 'string'
+                        ? pipelineStrategy.promptModifier
+                        : pipelineStrategy.promptModifier[language];
+                    lastMsg.content = `${modText}${lastMsg.content}`;
                 }
             }
             const isTestEnv = process.env.NODE_ENV === 'test' ||
@@ -198,8 +209,15 @@ export class AIGateway {
                             maxTokens: Math.min(draftModel.maxOutputTokens, 250),
                         });
                         if (draftRes.content && !isCancelled()) {
-                            // Шаг 2: Стриминг отполированного ответа пользователю
-                            const enhanceInstruction = `${pipelineStrategy.promptModifier ?? 'Improve this answer. Make it clearer, structured and concise:\n\n'}${draftRes.content}`;
+                            // Шаг 2: Стриминг отполированного ответа пользователю (локализованная инструкция)
+                            const modText = pipelineStrategy.promptModifier
+                                ? typeof pipelineStrategy.promptModifier === 'string'
+                                    ? pipelineStrategy.promptModifier
+                                    : pipelineStrategy.promptModifier[language]
+                                : (language === 'ru'
+                                    ? 'Улучши этот ответ. Сделай его более чётким, структурированным и лаконичным:\n\n'
+                                    : 'Improve this answer. Make it clearer, structured and concise:\n\n');
+                            const enhanceInstruction = `${modText}${draftRes.content}`;
                             usedModel = enhancerModel;
                             streamedResponse = await enhancerProvider.streamText({
                                 model: enhancerModel.providerModelId,

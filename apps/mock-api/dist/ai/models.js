@@ -94,15 +94,8 @@ export const MODELS = [
         requiredPlan: 'plus',
     },
 ];
-export const PLAN_LIMITS = {
-    free: { messagesPerDay: 10, contextMessages: 20 },
-    'gpt-pro': { messagesPerDay: null, contextMessages: 120 },
-    'claude-pro': { messagesPerDay: null, contextMessages: 120 },
-    'gemini-pro': { messagesPerDay: null, contextMessages: 120 },
-    ultra: { messagesPerDay: null, contextMessages: 500 },
-    plus: { messagesPerDay: null, contextMessages: 60 },
-    pro: { messagesPerDay: null, contextMessages: 120 },
-};
+import { getPlanLimits } from '../services/entitlement.js';
+export const PLAN_LIMITS = getPlanLimits();
 export const MODEL_CATALOG = {
     models: [...MODELS],
     defaultModelId: DEFAULT_MODEL_ID,

@@ -6,6 +6,7 @@ import { delay, randomBetween } from '../ai/stream.js';
 import {} from '../config.js';
 import { sendError } from '../middleware/errors.js';
 import { usageStore as defaultUsageStore } from '../store/index.js';
+import { isVipUser } from '../services/vip.js';
 const MAX_MESSAGES = 200;
 const MAX_CONTENT_LENGTH = 8000;
 function parseCompletionRequest(body) {
@@ -78,8 +79,7 @@ export function createChatRouter({ store, userId, ai, subscriptionStore, userSto
         const currentSub = subscriptionStore?.get(activeUserId);
         const currentUser = userStore?.findById(activeUserId);
         let userPlan = request.user?.plan ?? currentSub?.plan ?? currentUser?.plan ?? 'free';
-        if (request.user?.email?.toLowerCase() === 'artemsinyakov09@gmail.com' ||
-            currentUser?.email?.toLowerCase() === 'artemsinyakov09@gmail.com') {
+        if (isVipUser(request.user) || isVipUser(currentUser)) {
             userPlan = 'ultra';
         }
         // Проверка доступа к платным моделям

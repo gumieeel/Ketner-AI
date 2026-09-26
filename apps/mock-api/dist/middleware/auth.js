@@ -2,6 +2,7 @@ import { fromNodeHeaders } from 'better-auth/node';
 import { defaultBetterAuth } from '../auth/better-auth.js';
 import { verifyMockToken } from '../auth/jwt.js';
 import { sendError } from './errors.js';
+import { isVipEmail } from '../services/vip.js';
 /**
  * Middleware для аутентификации.
  * Проверяет сессию Better Auth (через cookie или сессионный токен),
@@ -21,7 +22,8 @@ export function createAuthMiddleware(userStore, betterAuthInstance = defaultBett
                 let plan = typeof rawPlan === 'string' && VALID_PLANS.includes(rawPlan)
                     ? rawPlan
                     : 'free';
-                if (session.user.email?.toLowerCase() === 'artemsinyakov09@gmail.com') {
+                const isVip = isVipEmail(session.user.email);
+                if (isVip) {
                     plan = 'ultra';
                 }
                 request.user = {
@@ -32,6 +34,7 @@ export function createAuthMiddleware(userStore, betterAuthInstance = defaultBett
                     createdAt: session.user.createdAt
                         ? new Date(session.user.createdAt).toISOString()
                         : new Date().toISOString(),
+                    isVip,
                 };
                 request.userId = session.user.id;
                 next();

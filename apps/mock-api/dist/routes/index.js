@@ -120,6 +120,8 @@ export function createApiRouter(deps) {
     }));
     router.use('/admin', createAdminRouter({
         usageStore: activeUsageStore,
+        subscriptionStore: activeSubscriptionStore,
+        userStore: activeUserStore,
     }));
     router.use(createConversationsRouter(deps.store, deps.userId));
     router.use('/chat', createChatRouter({

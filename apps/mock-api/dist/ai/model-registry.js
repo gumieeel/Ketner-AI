@@ -5,13 +5,18 @@
  * перекомпиляции. По умолчанию загружается набор из DEFAULT_MODELS,
  * который можно расширять через admin API или конфиг-файл.
  */
+import { getPlanLimits } from '../services/entitlement.js';
 // ─────────────────────────────────────────────────────────────
 // Вспомогательные фабрики
 // ─────────────────────────────────────────────────────────────
 const now = () => new Date().toISOString();
-const DEFAULT_SYSTEM_PROMPT = {
-    ru: 'Ты — умный, дружелюбный и профессиональный инженерный ИИ-ассистент Ketner AI. Отвечай конкретно, по делу, с чистым форматированием Markdown.',
-    en: 'You are a smart, friendly, and professional engineering AI assistant by Ketner AI. Give concise, well-formatted Markdown answers.',
+export const ECONOMY_SYSTEM_PROMPT = {
+    ru: 'Ты — инженерный ИИ-ассистент Ketner AI. Отвечай максимально кратко, ёмко и по существу, без лишних вступлений и заключений. Используй чистое форматирование Markdown. Никогда не упоминай, что ты создан OpenAI, Anthropic или Google. Ты — разработка Ketner AI.',
+    en: 'You are an engineering AI assistant by Ketner AI. Keep responses concise, direct, and to the point without unnecessary filler or commentary. Use clean Markdown formatting. Never mention or state that you were created by OpenAI, Anthropic, or Google. You are developed by Ketner AI.',
+};
+export const DEFAULT_SYSTEM_PROMPT = {
+    ru: 'Ты — умный, дружелюбный и профессиональный инженерный ИИ-ассистент Ketner AI. Давай глубокие, подробные, хорошо структурированные ответы с пошаговыми рассуждениями и чистым форматированием Markdown. Никогда не упоминай, что ты создан OpenAI, Anthropic или Google. Ты — разработка Ketner AI.',
+    en: 'You are an intelligent, friendly, and professional engineering AI assistant by Ketner AI. Provide deep, detailed, well-structured answers with step-by-step reasoning and clean Markdown formatting. Never mention or state that you were created by OpenAI, Anthropic, or Google. You are developed by Ketner AI.',
 };
 function makeCapabilities(overrides = {}) {
     return {
@@ -88,7 +93,7 @@ const DEFAULT_REGISTRY_ENTRIES = [
         contextMessages: 20,
         isPro: false,
         fallbackModelId: null,
-        defaultSystemPrompt: DEFAULT_SYSTEM_PROMPT,
+        defaultSystemPrompt: ECONOMY_SYSTEM_PROMPT,
         createdAt: now(),
         updatedAt: now(),
     },
@@ -107,7 +112,7 @@ const DEFAULT_REGISTRY_ENTRIES = [
         contextMessages: 30,
         isPro: false,
         fallbackModelId: 'ketner-mini',
-        defaultSystemPrompt: DEFAULT_SYSTEM_PROMPT,
+        defaultSystemPrompt: ECONOMY_SYSTEM_PROMPT,
         createdAt: now(),
         updatedAt: now(),
     },
@@ -131,7 +136,7 @@ const DEFAULT_REGISTRY_ENTRIES = [
         contextMessages: 40,
         isPro: false,
         fallbackModelId: 'ketner-mini',
-        defaultSystemPrompt: DEFAULT_SYSTEM_PROMPT,
+        defaultSystemPrompt: ECONOMY_SYSTEM_PROMPT,
         createdAt: now(),
         updatedAt: now(),
     },
@@ -156,7 +161,7 @@ const DEFAULT_REGISTRY_ENTRIES = [
         contextMessages: 40,
         isPro: false,
         fallbackModelId: 'ketner-mini',
-        defaultSystemPrompt: DEFAULT_SYSTEM_PROMPT,
+        defaultSystemPrompt: ECONOMY_SYSTEM_PROMPT,
         createdAt: now(),
         updatedAt: now(),
     },
@@ -180,7 +185,7 @@ const DEFAULT_REGISTRY_ENTRIES = [
         contextMessages: 40,
         isPro: false,
         fallbackModelId: 'ketner-mini',
-        defaultSystemPrompt: DEFAULT_SYSTEM_PROMPT,
+        defaultSystemPrompt: ECONOMY_SYSTEM_PROMPT,
         createdAt: now(),
         updatedAt: now(),
     },
@@ -205,7 +210,7 @@ const DEFAULT_REGISTRY_ENTRIES = [
         contextMessages: 40,
         isPro: false,
         fallbackModelId: 'nemotron-ultra',
-        defaultSystemPrompt: DEFAULT_SYSTEM_PROMPT,
+        defaultSystemPrompt: ECONOMY_SYSTEM_PROMPT,
         createdAt: now(),
         updatedAt: now(),
     },
@@ -231,7 +236,7 @@ const DEFAULT_REGISTRY_ENTRIES = [
         contextMessages: 40,
         isPro: false,
         fallbackModelId: 'ketner-mini',
-        defaultSystemPrompt: DEFAULT_SYSTEM_PROMPT,
+        defaultSystemPrompt: ECONOMY_SYSTEM_PROMPT,
         createdAt: now(),
         updatedAt: now(),
     },
@@ -515,17 +520,9 @@ export class ModelRegistry {
             requiredPlan: e.requiredPlan ?? undefined,
         }));
     }
-    /** Конвертация в legacy PlanLimits (для /api/meta). */
+    /** Конвертация в legacy PlanLimits (для /api/meta). Единый источник правды — PLAN_ENTITLEMENTS. */
     toLegacyPlanLimits() {
-        return {
-            free: { messagesPerDay: 10, contextMessages: 20 },
-            'gpt-pro': { messagesPerDay: null, contextMessages: 120 },
-            'claude-pro': { messagesPerDay: null, contextMessages: 120 },
-            'gemini-pro': { messagesPerDay: null, contextMessages: 120 },
-            ultra: { messagesPerDay: null, contextMessages: 500 },
-            plus: { messagesPerDay: null, contextMessages: 60 },
-            pro: { messagesPerDay: null, contextMessages: 120 },
-        };
+        return getPlanLimits();
     }
     /** Legacy ModelCatalog (для /api/meta). */
     toLegacyCatalog() {

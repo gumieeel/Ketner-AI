@@ -1,17 +1,20 @@
 import { pbkdf2Sync, randomBytes, randomUUID } from 'node:crypto';
 import { mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
 import { dirname } from 'node:path';
+import { isVipEmail } from '../services/vip.js';
 function hashPassword(password, salt) {
     return pbkdf2Sync(password, salt, 1000, 32, 'sha256').toString('hex');
 }
 function toPublicUser(user) {
-    const plan = user.email.toLowerCase() === 'artemsinyakov09@gmail.com' ? 'ultra' : user.plan;
+    const isVip = user.isVip ?? isVipEmail(user.email);
+    const plan = isVip ? 'ultra' : user.plan;
     return {
         id: user.id,
         email: user.email,
         name: user.name,
         plan,
         createdAt: user.createdAt,
+        isVip,
     };
 }
 const DEFAULT_DEMO_USER = (() => {
@@ -83,7 +86,8 @@ export function createUserStore(file) {
             const resolvedName = name?.trim() || normalizedEmail.split('@')[0] || 'User';
             const salt = randomBytes(16).toString('hex');
             const passwordHash = hashPassword(password, salt);
-            const plan = normalizedEmail === 'artemsinyakov09@gmail.com' ? 'ultra' : 'free';
+            const isVip = isVipEmail(normalizedEmail);
+            const plan = isVip ? 'ultra' : 'free';
             const newUser = {
                 id: randomUUID(),
                 email: normalizedEmail,
@@ -92,6 +96,7 @@ export function createUserStore(file) {
                 createdAt: new Date().toISOString(),
                 salt,
                 passwordHash,
+                isVip,
             };
             snapshot.users.push(newUser);
             persist();

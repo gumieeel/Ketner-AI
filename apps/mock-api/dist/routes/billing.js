@@ -3,6 +3,7 @@ import { config } from '../config.js';
 import { sendError } from '../middleware/errors.js';
 import { invoiceStore as defaultInvoiceStore } from '../store/index.js';
 import { calculateStars } from '../telegram/bot.js';
+import { isVipUser } from '../services/vip.js';
 export const PLANS = [
     {
         id: 'free',
@@ -92,40 +93,29 @@ export const PLANS = [
         },
     },
 ];
+/**
+ * Устаревшие тарифные планы (Legacy Plans).
+ * Сохранены для пользователей со старыми подписками (цена 1199 ₽/мес ~ $12.62).
+ * Функционально эквивалентны тарифу Pro. Скрыты из публичного каталога по умолчанию,
+ * доступны при запросе с query-параметром includeLegacy=true.
+ */
+function createLegacyPlan(id, nameKey, modelsHighlight) {
+    return {
+        id,
+        nameKey,
+        priceMonthly: 1199,
+        limitBadge: { ru: 'Legacy Pro', en: 'Legacy Pro' },
+        modelsHighlight,
+        bullets: {
+            ru: ['Устаревший тариф (включает все возможности Pro)'],
+            en: ['Legacy plan (includes all Pro features)'],
+        },
+    };
+}
 export const LEGACY_PLANS = [
-    {
-        id: 'gpt-pro',
-        nameKey: 'pricing.gptPro',
-        priceMonthly: 1199,
-        limitBadge: { ru: 'Legacy Pro', en: 'Legacy Pro' },
-        modelsHighlight: 'GPT-6 Astra + All Pro Models',
-        bullets: {
-            ru: ['Устаревший тариф (включает все возможности Pro)'],
-            en: ['Legacy plan (includes all Pro features)'],
-        },
-    },
-    {
-        id: 'claude-pro',
-        nameKey: 'pricing.claudePro',
-        priceMonthly: 1199,
-        limitBadge: { ru: 'Legacy Pro', en: 'Legacy Pro' },
-        modelsHighlight: 'Claude Fable + All Pro Models',
-        bullets: {
-            ru: ['Устаревший тариф (включает все возможности Pro)'],
-            en: ['Legacy plan (includes all Pro features)'],
-        },
-    },
-    {
-        id: 'gemini-pro',
-        nameKey: 'pricing.geminiPro',
-        priceMonthly: 1199,
-        limitBadge: { ru: 'Legacy Pro', en: 'Legacy Pro' },
-        modelsHighlight: 'Gemini Pro + All Pro Models',
-        bullets: {
-            ru: ['Устаревший тариф (включает все возможности Pro)'],
-            en: ['Legacy plan (includes all Pro features)'],
-        },
-    },
+    createLegacyPlan('gpt-pro', 'pricing.gptPro', 'GPT-6 Astra + All Pro Models'),
+    createLegacyPlan('claude-pro', 'pricing.claudePro', 'Claude Fable + All Pro Models'),
+    createLegacyPlan('gemini-pro', 'pricing.geminiPro', 'Gemini Pro + All Pro Models'),
 ];
 export function createBillingRouter({ subscriptionStore, userStore, invoiceStore: activeInvoiceStore = defaultInvoiceStore, defaultUserId, }) {
     const router = Router();
@@ -148,8 +138,7 @@ export function createBillingRouter({ subscriptionStore, userStore, invoiceStore
         const userId = getUserId(request);
         let subscription = subscriptionStore.get(userId);
         const user = userStore.findById(userId);
-        if (request.user?.email?.toLowerCase() === 'artemsinyakov09@gmail.com' ||
-            user?.email?.toLowerCase() === 'artemsinyakov09@gmail.com') {
+        if (isVipUser(request.user) || isVipUser(user)) {
             subscription = {
                 userId,
                 plan: 'ultra',
