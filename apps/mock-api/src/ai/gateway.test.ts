@@ -51,8 +51,45 @@ test('AutoRouter: классификация задач и выбор подхо
 
   const registry = new ModelRegistry();
   const ultraModels = registry.getForPlan('ultra');
+
+  // Score-based routing: для кода должна выбраться модель с coding capability
   const chosenModel = AutoRouter.route(codingPrompt, ultraModels);
   assert.ok(chosenModel.capabilities.coding, 'выбранная модель должна уметь кодить');
+
+  // Score-based routing: результат содержит breakdown для каждой модели
+  const result = AutoRouter.routeWithReason(codingPrompt, ultraModels, { userPlan: 'ultra' });
+  assert.ok(result.scores, 'routeWithReason должен возвращать scores для дебага');
+  assert.ok(result.scores!.length > 0, 'scores не должны быть пустыми');
+  assert.ok(result.scores![0].score > result.scores![result.scores!.length - 1].score, 'scores отсортированы по убыванию');
+
+  // Budget pressure: при исчерпании бюджета выбирается дешёвая модель
+  const budgetResult = AutoRouter.routeWithReason(codingPrompt, ultraModels, {
+    userPlan: 'ultra',
+    budgetExceeded: true,
+    monthlyCost: 50,
+    monthlyBudget: 40,
+  });
+  assert.ok(!budgetResult.model.isPro, 'при исчерпании бюджета должна быть дешёвая модель');
+
+  // Free tier: никогда не выбирает флагман
+  const freeModels = registry.getForPlan('free');
+  const freeResult = AutoRouter.route('Напиши код на Python', freeModels, { userPlan: 'free' });
+  assert.equal(freeResult.isPro, false, 'Free пользователь не должен получать Pro модель');
+
+  // Простой запрос на Pro: должна быть быстрая модель (не самая дорогая)
+  const simplePrompt = 'Привет';
+  const proModels = registry.getForPlan('pro');
+  const simpleResult = AutoRouter.routeWithReason(simplePrompt, proModels, {
+    userPlan: 'pro',
+    monthlyCost: 0,
+    monthlyBudget: 15,
+  });
+  // Для простого привета дешёвая модель должна набрать больше баллов
+  // (у неё высокий speed, низкий cost), чем флагман с дорогим cost
+  assert.ok(
+    simpleResult.model.tier === 'free' || simpleResult.model.tier === 'standard' || simpleResult.model.tier === 'premium',
+    `для короткого простого запроса ожидается экономная модель, но выбрана: ${simpleResult.model.id} (tier=${simpleResult.model.tier})`,
+  );
 });
 
 test('ContextOptimizer: оценка токенов и скользящее окно истории', () => {

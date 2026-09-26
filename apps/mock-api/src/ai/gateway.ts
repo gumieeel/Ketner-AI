@@ -83,6 +83,8 @@ export class AIGateway {
       const routed = AutoRouter.routeWithReason(prompt, allowed, {
         userPlan: effectivePlan,
         budgetExceeded: isBudgetExceeded,
+        monthlyCost: snapshot.estimatedCostLastMonth,
+        monthlyBudget: entitlements.costBudget,
       });
       targetModel = routed.model;
       routingReason = routed.reason;
