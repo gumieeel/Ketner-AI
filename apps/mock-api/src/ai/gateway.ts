@@ -20,7 +20,12 @@ import type {
   ModelRegistryEntry,
   ProviderResponse,
 } from './gateway-types.js';
-import { modelRegistry, type ModelRegistry } from './model-registry.js';
+import {
+  modelRegistry,
+  type ModelRegistry,
+  ECONOMY_SYSTEM_PROMPT,
+  DEFAULT_SYSTEM_PROMPT,
+} from './model-registry.js';
 import { providerManager, type ProviderManager } from './providers/provider-factory.js';
 import { delay, streamText } from './stream.js';
 import type { AiConfig } from '../config.js';
@@ -157,7 +162,14 @@ export class AIGateway {
         entitlements.contextLimit,
       );
 
-      const baseSystemPrompt = targetModel.defaultSystemPrompt[language];
+      // Дифференциация системных промптов по тарифам и Brand Protection:
+      // Free / Plus -> ECONOMY_SYSTEM_PROMPT (максимально краткие ответы)
+      // Pro / Ultra -> DEFAULT_SYSTEM_PROMPT (глубокие ответы с рассуждениями)
+      const isEconomyTier = effectivePlan === 'free' || effectivePlan === 'plus';
+      const promptMap = isEconomyTier
+        ? ECONOMY_SYSTEM_PROMPT
+        : (targetModel.defaultSystemPrompt ?? DEFAULT_SYSTEM_PROMPT);
+      const baseSystemPrompt = promptMap[language];
       const systemPrompt = isBudgetExceeded
         ? `${baseSystemPrompt} ${language === 'en' ? 'Keep responses concise and direct.' : 'Отвечай максимально кратко и по существу.'}`
         : baseSystemPrompt;

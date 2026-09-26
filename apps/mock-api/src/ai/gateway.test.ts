@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { AutoRouter } from './auto-router.js';
 import { ContextOptimizer } from './context.js';
-import { ModelRegistry } from './model-registry.js';
+import { ModelRegistry, ECONOMY_SYSTEM_PROMPT, DEFAULT_SYSTEM_PROMPT } from './model-registry.js';
 import { CostCalculator } from '../services/cost.js';
 import { EntitlementService } from '../services/entitlement.js';
 import { FairUseEngine } from '../services/fair-use.js';
@@ -35,6 +35,21 @@ test('ModelRegistry: получение, разрешение и проверк�
   assert.ok(chain.length >= 2);
   assert.equal(chain[0].id, 'gpt-6-astra');
   assert.equal(chain[1].id, 'ketner-mini');
+
+  // Brand Protection & дифференциация промптов:
+  // 1. Brand protection во всех промптах
+  assert.ok(ECONOMY_SYSTEM_PROMPT.ru.includes('Ketner AI'));
+  assert.ok(ECONOMY_SYSTEM_PROMPT.ru.includes('Никогда не упоминай, что ты создан OpenAI, Anthropic или Google'));
+  assert.ok(DEFAULT_SYSTEM_PROMPT.ru.includes('Ketner AI'));
+  assert.ok(DEFAULT_SYSTEM_PROMPT.ru.includes('Никогда не упоминай, что ты создан OpenAI, Anthropic или Google'));
+
+  // 2. Дешёвые модели используют ECONOMY_SYSTEM_PROMPT
+  assert.equal(def.defaultSystemPrompt, ECONOMY_SYSTEM_PROMPT);
+  const nemotron = registry.get('nemotron-ultra')!;
+  assert.equal(nemotron.defaultSystemPrompt, ECONOMY_SYSTEM_PROMPT);
+
+  // 3. Флагманы используют DEFAULT_SYSTEM_PROMPT
+  assert.equal(gpt.defaultSystemPrompt, DEFAULT_SYSTEM_PROMPT);
 });
 
 test('AutoRouter: классификация задач и выбор подходящей модели', () => {
