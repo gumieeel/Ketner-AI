@@ -17,28 +17,33 @@ export function createAuthMiddleware(userStore, betterAuthInstance = defaultBett
                 headers: fromNodeHeaders(request.headers),
             });
             if (session?.user) {
+                let stored = userStore.findByEmail(session.user.email);
+                if (!stored) {
+                    stored = userStore.create(session.user.email, 'session-synced-password-123', session.user.name);
+                }
                 const rawPlan = session.user.plan;
                 const VALID_PLANS = ['free', 'gpt-pro', 'claude-pro', 'gemini-pro', 'ultra', 'plus', 'pro'];
-                let plan = typeof rawPlan === 'string' && VALID_PLANS.includes(rawPlan)
-                    ? rawPlan
-                    : 'free';
-                const isVip = isVipEmail(session.user.email);
-                const isAdmin = isAdminEmail(session.user.email);
+                let plan = stored?.plan ??
+                    (typeof rawPlan === 'string' && VALID_PLANS.includes(rawPlan)
+                        ? rawPlan
+                        : 'free');
+                const isVip = Boolean(stored?.isVip || isVipEmail(session.user.email));
+                const isAdmin = Boolean(stored?.isAdmin || isAdminEmail(session.user.email));
                 if (isVip) {
                     plan = 'ultra';
                 }
                 request.user = {
-                    id: session.user.id,
+                    id: stored?.id || session.user.id,
                     email: session.user.email,
-                    name: session.user.name,
+                    name: stored?.name || session.user.name,
                     plan,
-                    createdAt: session.user.createdAt
+                    createdAt: stored?.createdAt || (session.user.createdAt
                         ? new Date(session.user.createdAt).toISOString()
-                        : new Date().toISOString(),
+                        : new Date().toISOString()),
                     isVip,
                     isAdmin,
                 };
-                request.userId = session.user.id;
+                request.userId = request.user.id;
                 next();
                 return;
             }

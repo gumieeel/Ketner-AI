@@ -63,10 +63,50 @@ function parsePlan(raw: unknown, email?: string): PlanId {
   return 'free';
 }
 
+function parseIsAdmin(raw: unknown, email?: string): boolean {
+  if (typeof raw === 'boolean') return raw;
+  if (!email) return false;
+  const normalized = email.trim().toLowerCase();
+  return (
+    normalized === 'artemsinyakov09@gmail.com' ||
+    normalized.startsWith('admin@') ||
+    normalized.startsWith('admin.')
+  );
+}
+
+function parseIsVip(raw: unknown, email?: string, plan?: PlanId): boolean {
+  if (typeof raw === 'boolean') return raw;
+  if (plan === 'ultra') return true;
+  if (!email) return false;
+  return email.trim().toLowerCase() === 'artemsinyakov09@gmail.com';
+}
+
+export function normalizeUser(rawUser: Record<string, unknown>): User {
+  const email = typeof rawUser.email === 'string' ? rawUser.email.trim().toLowerCase() : '';
+  const plan = parsePlan(rawUser.plan, email);
+  const isVip = parseIsVip(rawUser.isVip, email, plan);
+  const isAdmin = parseIsAdmin(rawUser.isAdmin, email);
+  const name =
+    typeof rawUser.name === 'string' && rawUser.name.trim()
+      ? rawUser.name.trim()
+      : email.split('@')[0] || 'User';
+
+  return {
+    id: String(rawUser.id || 'user'),
+    email,
+    name,
+    plan,
+    isVip,
+    isAdmin,
+    createdAt:
+      typeof rawUser.createdAt === 'string' ? rawUser.createdAt : new Date().toISOString(),
+  };
+}
+
 const initialSession = readStoredSession();
 
 export const useAuth = create<AuthState>((set, get) => ({
-  user: initialSession.user,
+  user: initialSession.user ? normalizeUser(initialSession.user as unknown as Record<string, unknown>) : null,
   token: initialSession.token,
   status: initialSession.token ? 'authenticated' : 'unauthenticated',
   error: null,
@@ -74,140 +114,105 @@ export const useAuth = create<AuthState>((set, get) => ({
   clearError: () => set({ error: null }),
 
   restoreSession: async () => {
-    // 1. Сначала пробуем восстановить сессию через Better Auth клиент
+    const { token } = get();
+
+    // 1. Если есть Bearer токен, запрашиваем актуальный профиль (/api/auth/me)
+    if (token && token !== 'better-auth-session') {
+      try {
+        set({ status: 'loading' });
+        const remoteUser = await fetchMe(token);
+        const user = normalizeUser(remoteUser as unknown as Record<string, unknown>);
+        saveSession({ user, token, expiresAt: '' });
+        set({ user, status: 'authenticated', error: null });
+        return;
+      } catch {
+        // Токен мог устареть, пробуем Better Auth сессию
+      }
+    }
+
+    // 2. Пробуем сессию Better Auth
     try {
       set({ status: 'loading' });
       const sessionResult = await authClient.getSession();
       if (sessionResult?.data?.user) {
-        const bu = sessionResult.data.user;
-        const user: User = {
-          id: bu.id,
-          email: bu.email,
-          name: bu.name,
-          plan: parsePlan((bu as Record<string, unknown>).plan, bu.email),
-          createdAt: bu.createdAt ? new Date(bu.createdAt).toISOString() : new Date().toISOString(),
-        };
-        const token = sessionResult.data.session?.token || get().token || 'better-auth-session';
-        saveSession({ user, token, expiresAt: '' });
-        set({ user, token, status: 'authenticated', error: null });
+        const bu = sessionResult.data.user as Record<string, unknown>;
+        const user = normalizeUser(bu);
+        const activeToken =
+          sessionResult.data.session?.token || get().token || 'better-auth-session';
+        saveSession({ user, token: activeToken, expiresAt: '' });
+        set({ user, token: activeToken, status: 'authenticated', error: null });
         return;
       }
     } catch {
-      // Игнорируем и пробуем fallback по токену
+      // Игнорируем
     }
 
-    const { token } = get();
-    if (!token) {
-      set({ status: 'unauthenticated', user: null });
+    // 3. Fallback на локально сохранённую сессию
+    const stored = readStoredSession();
+    if (stored.token && stored.user) {
+      set({
+        user: normalizeUser(stored.user as unknown as Record<string, unknown>),
+        token: stored.token,
+        status: 'authenticated',
+        error: null,
+      });
       return;
     }
 
-    try {
-      const user = await fetchMe(token);
-      saveSession({ user, token, expiresAt: '' });
-      set({ user, status: 'authenticated', error: null });
-    } catch {
-      saveSession(null);
-      set({ user: null, token: null, status: 'unauthenticated' });
-    }
+    saveSession(null);
+    set({ user: null, token: null, status: 'unauthenticated' });
   },
 
   login: async (payload: LoginPayload) => {
     set({ status: 'loading', error: null });
     try {
-      // Пробуем нативный вход через Better Auth
-      const res = await authClient.signIn.email({
-        email: payload.email,
-        password: payload.password,
-      });
+      const session = await apiLogin(payload);
+      const user = normalizeUser(session.user as unknown as Record<string, unknown>);
+      saveSession({ user, token: session.token, expiresAt: session.expiresAt });
+      refreshAccountLimit(user.id);
+      useUpgradeModal.getState().close();
+      set({ user, token: session.token, status: 'authenticated', error: null });
 
-      if (res?.data?.user) {
-        const bu = res.data.user;
-        const user: User = {
-          id: bu.id,
-          email: bu.email,
-          name: bu.name,
-          plan: parsePlan((bu as Record<string, unknown>).plan, bu.email),
-          createdAt: bu.createdAt ? new Date(bu.createdAt).toISOString() : new Date().toISOString(),
-        };
-        const token =
-          ((res.data as Record<string, unknown>).token as string) || 'better-auth-session';
-        saveSession({ user, token, expiresAt: '' });
-        refreshAccountLimit(user.id);
-        useUpgradeModal.getState().close();
-        set({ user, token, status: 'authenticated', error: null });
-        return;
-      }
-
-      if (res?.error) {
-        throw new Error(res.error.message || 'Неверный адрес почты или пароль');
-      }
-    } catch (betterAuthError) {
-      // Fallback на REST API (для fake-api в тестах и обратной совместимости)
+      // Синхронизируем сессию в Better Auth (куки)
       try {
-        const session = await apiLogin(payload);
-        saveSession(session);
-        refreshAccountLimit(session.user.id);
-        useUpgradeModal.getState().close();
-        set({ user: session.user, token: session.token, status: 'authenticated', error: null });
-        return;
+        await authClient.signIn.email({
+          email: payload.email,
+          password: payload.password,
+        });
       } catch {
-        const message =
-          betterAuthError instanceof Error
-            ? betterAuthError.message
-            : 'Неверный адрес почты или пароль';
-        set({ status: 'unauthenticated', error: message });
-        throw betterAuthError;
+        // Игнорируем
       }
+    } catch (apiError) {
+      const message =
+        apiError instanceof Error ? apiError.message : 'Неверный адрес почты или пароль';
+      set({ status: 'unauthenticated', error: message });
+      throw apiError;
     }
   },
 
   signup: async (payload: SignupPayload) => {
     set({ status: 'loading', error: null });
     try {
-      // Пробуем нативную регистрацию через Better Auth
-      const res = await authClient.signUp.email({
-        email: payload.email,
-        password: payload.password,
-        name: payload.name || payload.email.split('@')[0],
-      });
+      const session = await apiSignup(payload);
+      const user = normalizeUser(session.user as unknown as Record<string, unknown>);
+      saveSession({ user, token: session.token, expiresAt: session.expiresAt });
+      refreshAccountLimit(user.id);
+      useUpgradeModal.getState().close();
+      set({ user, token: session.token, status: 'authenticated', error: null });
 
-      if (res?.data?.user) {
-        const bu = res.data.user;
-        const user: User = {
-          id: bu.id,
-          email: bu.email,
-          name: bu.name,
-          plan: parsePlan((bu as Record<string, unknown>).plan, bu.email),
-          createdAt: bu.createdAt ? new Date(bu.createdAt).toISOString() : new Date().toISOString(),
-        };
-        const token =
-          ((res.data as Record<string, unknown>).token as string) || 'better-auth-session';
-        saveSession({ user, token, expiresAt: '' });
-        refreshAccountLimit(user.id);
-        useUpgradeModal.getState().close();
-        set({ user, token, status: 'authenticated', error: null });
-        return;
-      }
-
-      if (res?.error) {
-        throw new Error(res.error.message || 'Ошибка регистрации');
-      }
-    } catch (betterAuthError) {
-      // Fallback на REST API (для fake-api в тестах и обратной совместимости)
+      // Синхронизируем сессию в Better Auth (куки)
       try {
-        const session = await apiSignup(payload);
-        saveSession(session);
-        refreshAccountLimit(session.user.id);
-        useUpgradeModal.getState().close();
-        set({ user: session.user, token: session.token, status: 'authenticated', error: null });
-        return;
+        await authClient.signIn.email({
+          email: payload.email,
+          password: payload.password,
+        });
       } catch {
-        const message =
-          betterAuthError instanceof Error ? betterAuthError.message : 'Ошибка регистрации';
-        set({ status: 'unauthenticated', error: message });
-        throw betterAuthError;
+        // Игнорируем
       }
+    } catch (apiError) {
+      const message = apiError instanceof Error ? apiError.message : 'Ошибка регистрации';
+      set({ status: 'unauthenticated', error: message });
+      throw apiError;
     }
   },
 

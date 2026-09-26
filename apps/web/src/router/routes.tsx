@@ -34,7 +34,6 @@ export const routes: RouteObject[] = [
       { path: 'docs/plans/:planId', element: <DocumentationPage /> },
       { path: 'docs/api', element: <ApiDocsPage /> },
       { path: 'checkout/:planId', element: <CheckoutPage /> },
-      { path: '*', element: <NotFoundPage /> },
     ],
   },
   {
@@ -75,5 +74,10 @@ export const routes: RouteObject[] = [
     element: <AppShell />,
     errorElement: <RouteErrorPage />,
     children: [{ index: true, element: <AdminPage /> }],
+  },
+  {
+    path: '*',
+    element: <StandaloneLayout />,
+    children: [{ path: '*', element: <NotFoundPage /> }],
   },
 ];

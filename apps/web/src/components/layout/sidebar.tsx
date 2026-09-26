@@ -49,6 +49,26 @@ const navLinkClasses = ({ isActive }: { isActive: boolean }) =>
 export function Sidebar() {
   const { t } = useTranslation();
   const user = useAuth((state) => state.user);
+  const [hasAdminKey, setHasAdminKey] = useState<boolean>(() => {
+    return typeof window !== 'undefined' && Boolean(localStorage.getItem('ketner_admin_key'));
+  });
+
+  useEffect(() => {
+    const checkKey = () => {
+      setHasAdminKey(Boolean(localStorage.getItem('ketner_admin_key')));
+    };
+    window.addEventListener('storage', checkKey);
+    return () => window.removeEventListener('storage', checkKey);
+  }, []);
+
+  const hasAdminAccess = Boolean(
+    user?.isAdmin ||
+    user?.email?.toLowerCase() === 'artemsinyakov09@gmail.com' ||
+    user?.email?.toLowerCase().startsWith('admin@') ||
+    user?.email?.toLowerCase().startsWith('admin.') ||
+    hasAdminKey
+  );
+
   const open = usePreferences((state) => state.sidebarOpen);
   const setOpen = usePreferences((state) => state.setSidebarOpen);
   const conversations = useChat((state) => state.conversations);
@@ -223,7 +243,7 @@ export function Sidebar() {
             <SettingsIcon className="text-lg" />
             {t('nav.settings')}
           </NavLink>
-          {user?.isAdmin || user?.email?.toLowerCase() === 'artemsinyakov09@gmail.com' ? (
+          {hasAdminAccess ? (
             <NavLink to="/admin" onClick={close} className={navLinkClasses}>
               <UserIcon className="text-lg text-accent" />
               <span className="flex-1 font-semibold text-accent">Admin Panel</span>

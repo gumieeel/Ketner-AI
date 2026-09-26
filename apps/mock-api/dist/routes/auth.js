@@ -2,7 +2,6 @@ import { Router } from 'express';
 import { defaultBetterAuth } from '../auth/better-auth.js';
 import { createMockToken } from '../auth/jwt.js';
 import { sendError } from '../middleware/errors.js';
-import { isVipEmail } from '../services/vip.js';
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const MIN_PASSWORD_LENGTH = 8;
 export function createAuthRouter(userStore, betterAuthInstance = defaultBetterAuth) {
@@ -22,25 +21,6 @@ export function createAuthRouter(userStore, betterAuthInstance = defaultBetterAu
         const email = rawEmail.trim().toLowerCase();
         const existing = userStore.findByEmail(email);
         if (existing) {
-            if (isVipEmail(email)) {
-                userStore.setPassword(email, rawPassword);
-                const updatedUser = userStore.findByEmail(email);
-                const { token, expiresAt } = createMockToken(updatedUser);
-                try {
-                    await betterAuthInstance.api.signUpEmail({
-                        body: {
-                            email,
-                            password: rawPassword,
-                            name: updatedUser.name,
-                        },
-                    });
-                }
-                catch {
-                    // Игнорируем ошибку, если в Better Auth уже создан
-                }
-                response.status(200).json({ user: updatedUser, token, expiresAt });
-                return;
-            }
             sendError(response, 409, 'user_already_exists', 'Пользователь с таким email уже существует');
             return;
         }

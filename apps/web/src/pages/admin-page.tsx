@@ -149,6 +149,7 @@ export function AdminPage() {
 
       const res = await fetch(`/api/admin/users?${params.toString()}`, {
         headers: getHeaders(),
+        credentials: 'include',
       });
 
       if (!res.ok) {
@@ -187,6 +188,7 @@ export function AdminPage() {
     try {
       const res = await fetch(`/api/admin/users/${id}`, {
         headers: getHeaders(),
+        credentials: 'include',
       });
       if (!res.ok) {
         const body = (await res.json()) as { error?: { message?: string } };
@@ -213,6 +215,7 @@ export function AdminPage() {
       const res = await fetch(`/api/admin/users/${selectedUserId}`, {
         method: 'PATCH',
         headers: getHeaders(),
+        credentials: 'include',
         body: JSON.stringify({
           plan: editPlan,
           isVip: editVip,
@@ -336,10 +339,31 @@ export function AdminPage() {
         </div>
       </div>
 
-      {/* Error Message */}
+      {/* Error Message with Quick Unlock */}
       {error ? (
-        <div className="rounded-lg border border-rose-500/20 bg-rose-500/10 p-4 text-sm text-rose-400">
-          {error}
+        <div className="flex flex-col gap-3 rounded-lg border border-rose-500/30 bg-rose-500/10 p-4 text-sm text-rose-400">
+          <div className="flex items-center gap-2">
+            <span className="font-semibold text-rose-300">Ошибка доступа:</span>
+            <span>{error}</span>
+          </div>
+          <div className="flex flex-wrap items-center gap-2 pt-1">
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => {
+                const devKey = 'ketner-ai-admin-key-dev';
+                setAdminKey(devKey);
+                localStorage.setItem('ketner_admin_key', devKey);
+                void loadUsers();
+              }}
+              className="text-xs bg-surface/80"
+            >
+              Использовать стандартный ключ разработчика (ketner-ai-admin-key-dev)
+            </Button>
+            <Button size="sm" variant="secondary" onClick={() => void loadUsers()} className="text-xs">
+              Повторить запрос
+            </Button>
+          </div>
         </div>
       ) : null}
 

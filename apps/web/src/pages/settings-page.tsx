@@ -20,6 +20,18 @@ export function SettingsPage() {
   const cancel = useBilling((state) => state.cancel);
 
   const [canceling, setCanceling] = useState(false);
+  const [adminKey, setAdminKey] = useState<string>(
+    () => (typeof window !== 'undefined' ? localStorage.getItem('ketner_admin_key') || '' : ''),
+  );
+  const [adminKeySaved, setAdminKeySaved] = useState(false);
+
+  const handleSaveAdminKey = (keyToSave: string) => {
+    localStorage.setItem('ketner_admin_key', keyToSave.trim());
+    setAdminKey(keyToSave.trim());
+    setAdminKeySaved(true);
+    window.dispatchEvent(new Event('storage'));
+    setTimeout(() => setAdminKeySaved(false), 3000);
+  };
 
   useEffect(() => {
     void loadSubscription();
@@ -133,6 +145,61 @@ export function SettingsPage() {
                 </Button>
               </Link>
             )}
+          </div>
+        </div>
+      </Card>
+
+      {/* Секция администрирования и контроля аккаунтов */}
+      <Card className="flex flex-col gap-4 border-accent/30 bg-accent/5">
+        <div className="flex flex-wrap items-center justify-between gap-4">
+          <div>
+            <div className="flex items-center gap-2">
+              <CardTitle>Панель администратора (Admin Control)</CardTitle>
+              {user?.isAdmin ? (
+                <Badge tone="brand">ADMIN</Badge>
+              ) : adminKey ? (
+                <Badge tone="neutral">DEV KEY АКТИВЕН</Badge>
+              ) : null}
+            </div>
+            <CardText className="mt-1">
+              Управление аккаунтами пользователей, изменение тарифов, лимиты расхода и маржинальность.
+            </CardText>
+          </div>
+          <Link to="/admin">
+            <Button variant="primary" size="sm">
+              Открыть панель →
+            </Button>
+          </Link>
+        </div>
+
+        <div className="flex flex-col gap-2 rounded-lg border border-stroke/20 bg-canvas/60 p-3">
+          <label htmlFor="admin-key-input" className="text-xs font-medium text-text">
+            Ключ доступа к Admin API (x-admin-key):
+          </label>
+          <div className="flex flex-wrap items-center gap-2">
+            <input
+              id="admin-key-input"
+              type="password"
+              placeholder="ketner-ai-admin-key-dev"
+              value={adminKey}
+              onChange={(e) => setAdminKey(e.target.value)}
+              className="h-9 min-w-[220px] flex-1 rounded-md border border-stroke/30 bg-surface px-3 text-xs text-text outline-none focus:border-accent font-mono"
+            />
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => handleSaveAdminKey(adminKey)}
+            >
+              {adminKeySaved ? 'Сохранено ✓' : 'Сохранить ключ'}
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => handleSaveAdminKey('ketner-ai-admin-key-dev')}
+              className="text-xs text-muted hover:text-text"
+            >
+              Вставить дефолтный dev-ключ
+            </Button>
           </div>
         </div>
       </Card>

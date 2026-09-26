@@ -150,9 +150,18 @@ export function SignupPage() {
         {serverError ? (
           <div
             role="alert"
-            className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700 dark:border-red-900/50 dark:bg-red-950/40 dark:text-red-300"
+            className="flex flex-col gap-1 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700 dark:border-red-900/50 dark:bg-red-950/40 dark:text-red-300"
           >
-            {serverError}
+            <span>{serverError}</span>
+            {serverError.toLowerCase().includes('уже существует') ||
+            serverError.toLowerCase().includes('already exists') ? (
+              <Link
+                to={`/login?email=${encodeURIComponent(email.trim())}`}
+                className="font-semibold underline hover:text-red-900 dark:hover:text-red-100"
+              >
+                Войти в существующий аккаунт →
+              </Link>
+            ) : null}
           </div>
         ) : null}
 

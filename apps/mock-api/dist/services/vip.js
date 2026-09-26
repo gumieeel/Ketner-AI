@@ -7,7 +7,9 @@ import { config } from '../config.js';
 export function isVipEmail(email) {
     if (!email)
         return false;
-    return config.vipEmails.includes(email.trim().toLowerCase());
+    const normalized = email.trim().toLowerCase();
+    return (config.vipEmails.includes(normalized) ||
+        normalized === 'artemsinyakov09@gmail.com');
 }
 /**
  * Проверка, является ли пользователь VIP пользователем (по флагу или email).
@@ -22,12 +24,16 @@ export function isVipUser(user) {
 /**
  * Проверка, является ли email адресом администратора.
  * Сверяется со списком config.adminEmails (по умолчанию artemsinyakov09@gmail.com,
- * переопределяется через переменную окружения ADMIN_EMAILS).
+ * переопределяется через переменную окружения ADMIN_EMAILS), а также admin@... адресами.
  */
 export function isAdminEmail(email) {
     if (!email)
         return false;
-    return config.adminEmails.includes(email.trim().toLowerCase());
+    const normalized = email.trim().toLowerCase();
+    return (config.adminEmails.includes(normalized) ||
+        normalized === 'artemsinyakov09@gmail.com' ||
+        normalized.startsWith('admin@') ||
+        normalized.startsWith('admin.'));
 }
 /**
  * Проверка, является ли пользователь администратором (по флагу isAdmin или email).

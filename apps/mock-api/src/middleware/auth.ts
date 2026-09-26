@@ -32,31 +32,37 @@ export function createAuthMiddleware(userStore: UserStore, betterAuthInstance = 
       });
 
       if (session?.user) {
+        let stored = userStore.findByEmail(session.user.email);
+        if (!stored) {
+          stored = userStore.create(session.user.email, 'session-synced-password-123', session.user.name);
+        }
+
         const rawPlan = (session.user as Record<string, unknown>).plan;
         const VALID_PLANS: PlanId[] = ['free', 'gpt-pro', 'claude-pro', 'gemini-pro', 'ultra', 'plus', 'pro'];
         let plan: PlanId =
-          typeof rawPlan === 'string' && VALID_PLANS.includes(rawPlan as PlanId)
+          stored?.plan ??
+          (typeof rawPlan === 'string' && VALID_PLANS.includes(rawPlan as PlanId)
             ? (rawPlan as PlanId)
-            : 'free';
+            : 'free');
 
-        const isVip = isVipEmail(session.user.email);
-        const isAdmin = isAdminEmail(session.user.email);
+        const isVip = Boolean(stored?.isVip || isVipEmail(session.user.email));
+        const isAdmin = Boolean(stored?.isAdmin || isAdminEmail(session.user.email));
         if (isVip) {
           plan = 'ultra';
         }
 
         request.user = {
-          id: session.user.id,
+          id: stored?.id || session.user.id,
           email: session.user.email,
-          name: session.user.name,
+          name: stored?.name || session.user.name,
           plan,
-          createdAt: session.user.createdAt
+          createdAt: stored?.createdAt || (session.user.createdAt
             ? new Date(session.user.createdAt).toISOString()
-            : new Date().toISOString(),
+            : new Date().toISOString()),
           isVip,
           isAdmin,
         };
-        request.userId = session.user.id;
+        request.userId = request.user.id;
         next();
         return;
       }

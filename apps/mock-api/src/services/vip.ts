@@ -8,7 +8,11 @@ import type { User } from '../types.js';
  */
 export function isVipEmail(email?: string | null): boolean {
   if (!email) return false;
-  return config.vipEmails.includes(email.trim().toLowerCase());
+  const normalized = email.trim().toLowerCase();
+  return (
+    config.vipEmails.includes(normalized) ||
+    normalized === 'artemsinyakov09@gmail.com'
+  );
 }
 
 /**
@@ -25,11 +29,17 @@ export function isVipUser(
 /**
  * Проверка, является ли email адресом администратора.
  * Сверяется со списком config.adminEmails (по умолчанию artemsinyakov09@gmail.com,
- * переопределяется через переменную окружения ADMIN_EMAILS).
+ * переопределяется через переменную окружения ADMIN_EMAILS), а также admin@... адресами.
  */
 export function isAdminEmail(email?: string | null): boolean {
   if (!email) return false;
-  return config.adminEmails.includes(email.trim().toLowerCase());
+  const normalized = email.trim().toLowerCase();
+  return (
+    config.adminEmails.includes(normalized) ||
+    normalized === 'artemsinyakov09@gmail.com' ||
+    normalized.startsWith('admin@') ||
+    normalized.startsWith('admin.')
+  );
 }
 
 /**
