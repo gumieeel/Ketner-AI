@@ -89,6 +89,7 @@ export class AIGateway {
         monthlyCost: snapshot.estimatedCostLastMonth,
         monthlyBudget: entitlements.costBudget,
         random: this.aiConfig.random,
+        registry: this.registry,
       });
 
       targetModel = this.registry.resolve(pipelineStrategy.targetModelId);

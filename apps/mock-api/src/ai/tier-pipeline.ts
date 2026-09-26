@@ -11,6 +11,7 @@
  */
 
 import { AutoRouter } from './auto-router.js';
+import { modelRegistry, type ModelRegistry } from './model-registry.js';
 import type { TaskClassification } from './gateway-types.js';
 
 export type PipelineMode =
@@ -37,6 +38,7 @@ export interface PipelineOptions {
   monthlyCost?: number;
   monthlyBudget?: number;
   random?: () => number;
+  registry?: ModelRegistry;
 }
 
 /**
@@ -117,6 +119,21 @@ export class TierPipelineEngine {
       monthlyBudget,
     });
 
+    const registry = options?.registry ?? modelRegistry;
+    const cheapCandidates = registry
+      .getForPlan('free')
+      .filter((m) => m.id !== 'auto');
+    const flagshipCandidates = registry
+      .getAll()
+      .filter(
+        (m) =>
+          (m.tier === 'flagship' ||
+            m.id === 'gpt-6-astra' ||
+            m.id === 'claude-3.5-sonnet' ||
+            m.id === 'gemini-2.5-pro') &&
+          m.id !== 'auto',
+      );
+
     // ── БЮДЖЕТНЫЙ ТРИГГЕР: расход > 80% бюджета ──
     if (forceCheapMode) {
       return {
@@ -132,19 +149,23 @@ export class TierPipelineEngine {
     // ── 🟢 FREE ТАРИФ ──
     // 100% дешёвые модели, короткие ответы (max 200 токенов), агрессивное сжатие
     if (tier === 'free') {
-      const cheapModel = classification.category === 'coding' ? 'deepseek-v4.1-flash' : 'nemotron-ultra';
+      const routed = AutoRouter.routeWithReason(prompt, cheapCandidates, {
+        userPlan: 'free',
+        monthlyCost,
+        monthlyBudget,
+      });
       return {
         tier: 'free',
         mode: 'cheap_direct',
-        targetModelId: cheapModel,
+        targetModelId: routed.model.id,
         maxOutputTokens: 200,
-        reason: `Free tier: cost-optimized via ${cheapModel} (max 200 tokens)`,
+        reason: `Free tier: ${routed.reason} (max 200 tokens)`,
         forceCheapMode: false,
       };
     }
 
     // ── 🔵 PLUS ТАРИФ ($9.99) ──
-    // 80% DeepSeek / Qwen
+    // 80% DeepSeek / Qwen / Nemotron (score-based cheap pool)
     // 15% DeepSeek + cheap improvement (cheap++)
     // 5% случайный короткий GPT burst
     if (tier === 'plus') {
@@ -152,13 +173,18 @@ export class TierPipelineEngine {
 
       // 5% GPT burst (короткий ответ под 150 токенов)
       if (roll < 0.05) {
+        const burstModel = AutoRouter.routeWithReason(prompt, flagshipCandidates, {
+          userPlan: 'plus',
+          monthlyCost,
+          monthlyBudget,
+        });
         return {
           tier: 'plus',
           mode: 'gpt_short',
-          targetModelId: 'gpt-6-astra',
+          targetModelId: burstModel.model.id,
           maxOutputTokens: 150,
           promptModifier: 'Answer briefly and clearly in under 150 tokens:\n',
-          reason: 'Plus tier (5% burst): accelerated flagship GPT-6 Astra short answer',
+          reason: `Plus tier (5% burst): accelerated flagship ${burstModel.model.name} short answer`,
           forceCheapMode: false,
         };
       }
@@ -178,32 +204,40 @@ export class TierPipelineEngine {
         };
       }
 
-      // 80% Прямой дешёвый ответ (DeepSeek / Nemotron)
-      const primary = classification.category === 'coding' ? 'deepseek-v4.1-flash' : 'nemotron-ultra';
+      // 80% Прямой дешёвый ответ (DeepSeek / Nemotron / GLM) по скорингу
+      const routed = AutoRouter.routeWithReason(prompt, cheapCandidates, {
+        userPlan: 'plus',
+        monthlyCost,
+        monthlyBudget,
+      });
       return {
         tier: 'plus',
         mode: 'cheap_direct',
-        targetModelId: primary,
+        targetModelId: routed.model.id,
         maxOutputTokens: dynamicMax,
-        reason: `Plus tier (80% primary): high-speed response via ${primary}`,
+        reason: `Plus tier (80% primary): ${routed.reason}`,
         forceCheapMode: false,
       };
     }
 
     // ── 🟣 PRO ТАРИФ ($19.99) ──
     // 50% cheap + GPT улучшение (gptImprove, max 200)
-    // 30% GPT напрямую (короткий: 300 токенов)
+    // 30% GPT напрямую (короткий: 350 токенов)
     // 20% cheap
     if (tier === 'pro') {
-      // Для сложных задач — 30% GPT напрямую
+      // Для сложных задач — GPT/Claude напрямую через скоринг флагманов
       if (classification.complexity === 'complex') {
-        const flagship = classification.category === 'coding' ? 'claude-3.5-sonnet' : 'gpt-6-astra';
+        const routedFlagship = AutoRouter.routeWithReason(prompt, flagshipCandidates, {
+          userPlan: 'pro',
+          monthlyCost,
+          monthlyBudget,
+        });
         return {
           tier: 'pro',
           mode: 'gpt_full',
-          targetModelId: flagship,
+          targetModelId: routedFlagship.model.id,
           maxOutputTokens: Math.min(dynamicMax, 400),
-          reason: `Pro tier (direct flagship): ${flagship} for complex ${classification.category} task`,
+          reason: `Pro tier (direct flagship): ${routedFlagship.reason}`,
           forceCheapMode: false,
         };
       }
@@ -212,51 +246,70 @@ export class TierPipelineEngine {
 
       // 50% cheap draft + GPT improve
       if (roll < 0.50) {
+        const routedFlagship = AutoRouter.routeWithReason(prompt, flagshipCandidates, {
+          userPlan: 'pro',
+          monthlyCost,
+          monthlyBudget,
+        });
         return {
           tier: 'pro',
           mode: 'gpt_improve',
-          targetModelId: 'gpt-6-astra',
+          targetModelId: routedFlagship.model.id,
           draftModelId: 'deepseek-v4.1-flash',
-          enhancerModelId: 'gpt-6-astra',
+          enhancerModelId: routedFlagship.model.id,
           maxOutputTokens: 200,
           promptModifier: 'Improve this answer. Make it clearer, structured and concise:\n\n',
-          reason: 'Pro tier (50% optimizer): DeepSeek draft + GPT-6 Astra polish',
+          reason: `Pro tier (50% optimizer): DeepSeek draft + ${routedFlagship.model.name} polish`,
           forceCheapMode: false,
         };
       }
 
-      // 30% GPT напрямую
+      // 30% GPT напрямую по скорингу флагманов
       if (roll < 0.80) {
+        const routedFlagship = AutoRouter.routeWithReason(prompt, flagshipCandidates, {
+          userPlan: 'pro',
+          monthlyCost,
+          monthlyBudget,
+        });
         return {
           tier: 'pro',
           mode: 'gpt_full',
-          targetModelId: 'gpt-6-astra',
+          targetModelId: routedFlagship.model.id,
           maxOutputTokens: Math.min(dynamicMax, 350),
-          reason: 'Pro tier (30% direct): GPT-6 Astra direct generation',
+          reason: `Pro tier (30% direct): ${routedFlagship.reason}`,
           forceCheapMode: false,
         };
       }
 
-      // 20% Fast flash
+      // 20% Fast flash по скорингу дешёвых моделей
+      const routedCheap = AutoRouter.routeWithReason(prompt, cheapCandidates, {
+        userPlan: 'pro',
+        monthlyCost,
+        monthlyBudget,
+      });
       return {
         tier: 'pro',
         mode: 'cheap_direct',
-        targetModelId: 'deepseek-v4.1-flash',
+        targetModelId: routedCheap.model.id,
         maxOutputTokens: dynamicMax,
-        reason: 'Pro tier (20% flash): DeepSeek V4.1 Flash fast delivery',
+        reason: `Pro tier (20% flash): ${routedCheap.reason}`,
         forceCheapMode: false,
       };
     }
 
     // ── 🔴 ULTRA ТАРИФ ($39.99) ──
-    // Почти всегда GPT / Claude напрямую с динамическим контролем токенов (до 800)
-    const ultraModel = classification.category === 'coding' ? 'claude-3.5-sonnet' : 'gpt-6-astra';
+    // Флагман напрямую со скорингом лучших моделей под задачу
+    const routedUltra = AutoRouter.routeWithReason(prompt, flagshipCandidates, {
+      userPlan: 'ultra',
+      monthlyCost,
+      monthlyBudget,
+    });
     return {
       tier: 'ultra',
       mode: 'gpt_full',
-      targetModelId: ultraModel,
+      targetModelId: routedUltra.model.id,
       maxOutputTokens: Math.min(dynamicMax, 800),
-      reason: `Ultra tier: full power flagship ${ultraModel} (token-optimized)`,
+      reason: `Ultra tier: ${routedUltra.reason}`,
       forceCheapMode: false,
     };
   }
