@@ -67,6 +67,12 @@ export const config = {
     .map((e) => e.trim().toLowerCase())
     .filter(Boolean),
 
+  /** Список email адресов администраторов с доступом к Admin API. Настраивается через переменную ADMIN_EMAILS. */
+  adminEmails: (process.env.ADMIN_EMAILS ?? 'artemsinyakov09@gmail.com')
+    .split(',')
+    .map((e) => e.trim().toLowerCase())
+    .filter(Boolean),
+
   /** Пользователь и план заглушки: реальные аккаунты появятся на этапе 3. */
   demoUserId: 'demo-user',
   demoPlan: 'free' as PlanId,

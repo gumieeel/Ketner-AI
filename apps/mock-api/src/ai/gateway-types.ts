@@ -200,6 +200,8 @@ export type FairUseDecision =
 export interface GatewayRequest {
   userId: string;
   userPlan: PlanId;
+  userEmail?: string;
+  isVip?: boolean;
   conversationId: string;
   modelId: string;
   messages: Array<{ role: 'user' | 'assistant' | 'system'; content: string }>;

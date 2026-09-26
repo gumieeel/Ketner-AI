@@ -5,7 +5,7 @@ import { verifyMockToken } from '../auth/jwt.js';
 import type { UserStore } from '../store/user-store.js';
 import type { PlanId, User } from '../types.js';
 import { sendError } from './errors.js';
-import { isVipEmail } from '../services/vip.js';
+import { isVipEmail, isAdminEmail } from '../services/vip.js';
 
 declare global {
   // eslint-disable-next-line @typescript-eslint/no-namespace
@@ -40,6 +40,7 @@ export function createAuthMiddleware(userStore: UserStore, betterAuthInstance = 
             : 'free';
 
         const isVip = isVipEmail(session.user.email);
+        const isAdmin = isAdminEmail(session.user.email);
         if (isVip) {
           plan = 'ultra';
         }
@@ -53,6 +54,7 @@ export function createAuthMiddleware(userStore: UserStore, betterAuthInstance = 
             ? new Date(session.user.createdAt).toISOString()
             : new Date().toISOString(),
           isVip,
+          isAdmin,
         };
         request.userId = session.user.id;
         next();

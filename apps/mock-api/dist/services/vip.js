@@ -19,3 +19,23 @@ export function isVipUser(user) {
         return true;
     return isVipEmail(user.email);
 }
+/**
+ * Проверка, является ли email адресом администратора.
+ * Сверяется со списком config.adminEmails (по умолчанию artemsinyakov09@gmail.com,
+ * переопределяется через переменную окружения ADMIN_EMAILS).
+ */
+export function isAdminEmail(email) {
+    if (!email)
+        return false;
+    return config.adminEmails.includes(email.trim().toLowerCase());
+}
+/**
+ * Проверка, является ли пользователь администратором (по флагу isAdmin или email).
+ */
+export function isAdminUser(user) {
+    if (!user)
+        return false;
+    if (user.isAdmin)
+        return true;
+    return isAdminEmail(user.email);
+}

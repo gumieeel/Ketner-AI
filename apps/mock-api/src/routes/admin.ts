@@ -3,7 +3,7 @@
  *
  * Доступ защищён:
  * 1. Заголовком `x-admin-key: <ADMIN_API_KEY>`
- * 2. Или авторизацией под администраторским email `artemsinyakov09@gmail.com`
+ * 2. Или авторизацией под администраторским email из config.adminEmails (ADMIN_EMAILS)
  */
 
 import { Router, type Request, type Response, type NextFunction } from 'express';
@@ -21,7 +21,7 @@ import type { UserStore } from '../store/user-store.js';
 import type { ModelPricing } from '../ai/gateway-types.js';
 import { CurrencyService } from '../services/currency.js';
 import { PLANS, LEGACY_PLANS } from './billing.js';
-import { isVipUser } from '../services/vip.js';
+import { isAdminUser } from '../services/vip.js';
 
 export interface AdminRouterDeps {
   registry?: ModelRegistry;
@@ -45,7 +45,7 @@ export function createAdminRouter({
       return next();
     }
 
-    if (isVipUser(req.user)) {
+    if (isAdminUser(req.user)) {
       return next();
     }
 

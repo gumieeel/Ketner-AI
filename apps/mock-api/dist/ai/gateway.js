@@ -39,7 +39,11 @@ export class AIGateway {
         const activeUserId = req.userId;
         const language = req.language;
         // 1. Определение эффективного плана и лимитов
-        const effectivePlan = EntitlementService.resolveEffectivePlan(req.userPlan);
+        // Примечание: req.userPlan предварительно резолвится с учётом VIP-элевации (isVipUser -> 'ultra')
+        // upstream в chat.ts перед вызовом gateway.stream().
+        // EntitlementService.resolveEffectivePlan повторно валидирует план, учитывая переданные
+        // req.userEmail и req.isVip, и обеспечивает надёжный fallback на 'free'.
+        const effectivePlan = EntitlementService.resolveEffectivePlan(req.userPlan, req.userEmail, req.isVip);
         const entitlements = EntitlementService.getEntitlements(effectivePlan);
         const snapshot = this.usageStore.getFairUseSnapshot(activeUserId);
         // Проверка превышения бюджета себестоимости (адаптивный даунгрейд вместо жесткого блока)

@@ -200,6 +200,8 @@ export function createChatRouter({
         {
           userId: activeUserId,
           userPlan,
+          userEmail: request.user?.email ?? currentUser?.email,
+          isVip: isVipUser(request.user) || isVipUser(currentUser),
           conversationId,
           modelId: model.id,
           messages: messages.map((m) => ({

@@ -3,7 +3,7 @@
  *
  * Доступ защищён:
  * 1. Заголовком `x-admin-key: <ADMIN_API_KEY>`
- * 2. Или авторизацией под администраторским email `artemsinyakov09@gmail.com`
+ * 2. Или авторизацией под администраторским email из config.adminEmails (ADMIN_EMAILS)
  */
 import { Router } from 'express';
 import { config } from '../config.js';
@@ -12,7 +12,7 @@ import { modelRegistry } from '../ai/model-registry.js';
 import { usageStore as defaultUsageStore, subscriptionStore as defaultSubscriptionStore, userStore as defaultUserStore, } from '../store/index.js';
 import { CurrencyService } from '../services/currency.js';
 import { PLANS, LEGACY_PLANS } from './billing.js';
-import { isVipUser } from '../services/vip.js';
+import { isAdminUser } from '../services/vip.js';
 export function createAdminRouter({ registry = modelRegistry, usageStore = defaultUsageStore, subscriptionStore = defaultSubscriptionStore, userStore = defaultUserStore, } = {}) {
     const router = Router();
     // Middleware проверки прав администратора
@@ -21,7 +21,7 @@ export function createAdminRouter({ registry = modelRegistry, usageStore = defau
         if (adminKey && adminKey === config.adminApiKey) {
             return next();
         }
-        if (isVipUser(req.user)) {
+        if (isAdminUser(req.user)) {
             return next();
         }
         sendError(res, 403, 'admin_access_denied', 'Требуются права администратора');

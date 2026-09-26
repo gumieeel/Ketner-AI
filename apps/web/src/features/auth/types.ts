@@ -6,6 +6,8 @@ export interface User {
   name: string;
   plan: PlanId;
   createdAt: string;
+  isVip?: boolean;
+  isAdmin?: boolean;
 }
 
 export interface AuthSession {

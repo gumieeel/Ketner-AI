@@ -109,3 +109,89 @@ test('admin: метрики провайдеров, статистика и ре
     await server.close();
   }
 });
+
+test('admin: доступ по роли пользователя — VIP изолирован от Admin', async () => {
+  const vipList = config.vipEmails as unknown as string[];
+  const testVipEmail = 'vip-tester-no-admin@example.com';
+  vipList.push(testVipEmail);
+
+  const server = await startTestServer();
+
+  try {
+    // 1. Создаём пользователя-администратора (artemsinyakov09@gmail.com входит в config.adminEmails)
+    const adminSignupRes = await fetch(`${server.baseUrl}/api/auth/signup`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        email: 'artemsinyakov09@gmail.com',
+        password: 'password123',
+        name: 'Artem Admin',
+      }),
+    });
+    // Может быть 200 (если VIP перезапись) или 201
+    assert.ok(adminSignupRes.status === 200 || adminSignupRes.status === 201);
+    const { token: adminToken } = (await adminSignupRes.json()) as { token: string };
+
+    // Проверяем доступ админа по Bearer токену без x-admin-key -> 200
+    const adminAccess = await fetch(`${server.baseUrl}/api/admin/models`, {
+      headers: {
+        Authorization: `Bearer ${adminToken}`,
+      },
+    });
+    assert.equal(adminAccess.status, 200);
+
+    // 2. Создаём VIP-пользователя (входит в vipEmails, но НЕ в adminEmails)
+    const vipSignupRes = await fetch(`${server.baseUrl}/api/auth/signup`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        email: testVipEmail,
+        password: 'password123',
+        name: 'VIP User Only',
+      }),
+    });
+    assert.ok(vipSignupRes.status === 200 || vipSignupRes.status === 201);
+    const { token: vipToken, user: vipUser } = (await vipSignupRes.json()) as {
+      token: string;
+      user: { plan: string; isVip?: boolean; isAdmin?: boolean };
+    };
+    // VIP статус получен (Ultra-план)
+    assert.equal(vipUser.plan, 'ultra');
+    assert.equal(vipUser.isVip, true);
+    assert.equal(vipUser.isAdmin, false);
+
+    // Но доступ к Admin API запрещён -> 403
+    const vipAccess = await fetch(`${server.baseUrl}/api/admin/models`, {
+      headers: {
+        Authorization: `Bearer ${vipToken}`,
+      },
+    });
+    assert.equal(vipAccess.status, 403);
+    const vipDeniedBody = (await vipAccess.json()) as { error: { code: string } };
+    assert.equal(vipDeniedBody.error.code, 'admin_access_denied');
+
+    // 3. Обычный пользователь без VIP и Admin -> 403
+    const normalSignupRes = await fetch(`${server.baseUrl}/api/auth/signup`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        email: 'regular-user@example.com',
+        password: 'password123',
+      }),
+    });
+    assert.equal(normalSignupRes.status, 201);
+    const { token: normalToken } = (await normalSignupRes.json()) as { token: string };
+
+    const normalAccess = await fetch(`${server.baseUrl}/api/admin/models`, {
+      headers: {
+        Authorization: `Bearer ${normalToken}`,
+      },
+    });
+    assert.equal(normalAccess.status, 403);
+  } finally {
+    const idx = vipList.indexOf(testVipEmail);
+    if (idx !== -1) vipList.splice(idx, 1);
+    await server.close();
+  }
+});
+
