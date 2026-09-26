@@ -240,7 +240,11 @@ export class AIGateway {
       if (pipelineStrategy?.mode === 'gpt_short' && pipelineStrategy.promptModifier) {
         const lastMsg = optimizedMessages[optimizedMessages.length - 1];
         if (lastMsg && lastMsg.role === 'user') {
-          lastMsg.content = `${pipelineStrategy.promptModifier}${lastMsg.content}`;
+          const modText =
+            typeof pipelineStrategy.promptModifier === 'string'
+              ? pipelineStrategy.promptModifier
+              : pipelineStrategy.promptModifier[language];
+          lastMsg.content = `${modText}${lastMsg.content}`;
         }
       }
 
@@ -274,8 +278,16 @@ export class AIGateway {
             });
 
             if (draftRes.content && !isCancelled()) {
-              // Шаг 2: Стриминг отполированного ответа пользователю
-              const enhanceInstruction = `${pipelineStrategy.promptModifier ?? 'Improve this answer. Make it clearer, structured and concise:\n\n'}${draftRes.content}`;
+              // Шаг 2: Стриминг отполированного ответа пользователю (локализованная инструкция)
+              const modText =
+                pipelineStrategy.promptModifier
+                  ? typeof pipelineStrategy.promptModifier === 'string'
+                    ? pipelineStrategy.promptModifier
+                    : pipelineStrategy.promptModifier[language]
+                  : (language === 'ru'
+                      ? 'Улучши этот ответ. Сделай его более чётким, структурированным и лаконичным:\n\n'
+                      : 'Improve this answer. Make it clearer, structured and concise:\n\n');
+              const enhanceInstruction = `${modText}${draftRes.content}`;
               usedModel = enhancerModel;
               streamedResponse = await enhancerProvider.streamText(
                 {

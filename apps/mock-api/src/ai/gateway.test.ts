@@ -250,6 +250,9 @@ test('TierPipelineEngine & Output Control: экономика токенов п�
   assert.equal(plusGpt.mode, 'gpt_short');
   assert.equal(plusGpt.maxOutputTokens, 150);
   assert.equal(plusGpt.targetModelId, 'gpt-6-astra');
+  assert.ok(typeof plusGpt.promptModifier === 'object');
+  assert.ok((plusGpt.promptModifier as Record<string, string>).ru.includes('150 токенов'));
+  assert.ok((plusGpt.promptModifier as Record<string, string>).en.includes('150 tokens'));
 
   // 15% cheap improve (double pass)
   const plusDouble = TierPipelineEngine.resolveStrategy('Привет', {
@@ -274,6 +277,9 @@ test('TierPipelineEngine & Output Control: экономика токенов п�
   });
   assert.equal(proDouble.mode, 'gpt_improve');
   assert.equal(proDouble.targetModelId, 'gpt-6-astra');
+  assert.ok(typeof proDouble.promptModifier === 'object');
+  assert.ok((proDouble.promptModifier as Record<string, string>).ru.includes('Улучши этот ответ'));
+  assert.ok((proDouble.promptModifier as Record<string, string>).en.includes('Improve this answer'));
 
   // 30% direct GPT
   const proDirect = TierPipelineEngine.resolveStrategy('Привет', {

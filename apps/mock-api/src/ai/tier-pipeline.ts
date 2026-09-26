@@ -13,6 +13,17 @@
 import { AutoRouter } from './auto-router.js';
 import { modelRegistry, type ModelRegistry } from './model-registry.js';
 import type { TaskClassification } from './gateway-types.js';
+import type { Language } from '../types.js';
+
+export const SHORT_ANSWER_PROMPT: Record<Language, string> = {
+  ru: 'Ответь кратко и чётко (до 150 токенов):\n',
+  en: 'Answer briefly and clearly in under 150 tokens:\n',
+};
+
+export const REFINE_ANSWER_PROMPT: Record<Language, string> = {
+  ru: 'Улучши этот ответ. Сделай его более чётким, структурированным и лаконичным:\n\n',
+  en: 'Improve this answer. Make it clearer, structured and concise:\n\n',
+};
 
 export type PipelineMode =
   | 'cheap_direct'
@@ -28,7 +39,7 @@ export interface PipelineStrategy {
   draftModelId?: string;
   enhancerModelId?: string;
   maxOutputTokens: number;
-  promptModifier?: string;
+  promptModifier?: Record<Language, string> | string;
   reason: string;
   forceCheapMode: boolean;
 }
@@ -183,7 +194,7 @@ export class TierPipelineEngine {
           mode: 'gpt_short',
           targetModelId: burstModel.model.id,
           maxOutputTokens: 150,
-          promptModifier: 'Answer briefly and clearly in under 150 tokens:\n',
+          promptModifier: SHORT_ANSWER_PROMPT,
           reason: `Plus tier (5% burst): accelerated flagship ${burstModel.model.name} short answer`,
           forceCheapMode: false,
         };
@@ -198,7 +209,7 @@ export class TierPipelineEngine {
           draftModelId: 'ketner-mini',
           enhancerModelId: 'deepseek-v4.1-flash',
           maxOutputTokens: 300,
-          promptModifier: 'Improve this answer. Make it clearer, structured and concise:\n\n',
+          promptModifier: REFINE_ANSWER_PROMPT,
           reason: 'Plus tier (15% enhancer): two-pass Qwen draft + DeepSeek V4.1 refinement',
           forceCheapMode: false,
         };
@@ -258,7 +269,7 @@ export class TierPipelineEngine {
           draftModelId: 'deepseek-v4.1-flash',
           enhancerModelId: routedFlagship.model.id,
           maxOutputTokens: 200,
-          promptModifier: 'Improve this answer. Make it clearer, structured and concise:\n\n',
+          promptModifier: REFINE_ANSWER_PROMPT,
           reason: `Pro tier (50% optimizer): DeepSeek draft + ${routedFlagship.model.name} polish`,
           forceCheapMode: false,
         };
