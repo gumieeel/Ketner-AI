@@ -10,7 +10,7 @@
     "start": "node dist/server.js",
     "bot": "tsx src/telegram/runner.ts",
     "typecheck": "tsc --noEmit",
-    "test": "tsx --test src/health.test.ts src/ai/answers.test.ts src/ai/gateway.test.ts src/store/conversation-store.test.ts src/routes/conversations.test.ts src/routes/chat.test.ts src/routes/auth.test.ts src/routes/billing.test.ts src/routes/telegram.test.ts src/routes/admin.test.ts src/routes/webhooks.test.ts"
+    "test": "tsx --test src/health.test.ts src/ai/answers.test.ts src/ai/gateway.test.ts src/services/currency.test.ts src/store/conversation-store.test.ts src/routes/conversations.test.ts src/routes/chat.test.ts src/routes/auth.test.ts src/routes/billing.test.ts src/routes/telegram.test.ts src/routes/admin.test.ts src/routes/webhooks.test.ts"
   },
   "dependencies": {
     "@types/cors": "^2.8.19",

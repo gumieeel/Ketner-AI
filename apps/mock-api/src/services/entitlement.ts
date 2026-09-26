@@ -51,8 +51,9 @@ export const PLAN_ENTITLEMENTS: Record<PlanId, PlanEntitlements> = {
     contextLimit: 20,
     maxTokens: 1024,
     streamingEnabled: true,
-    maxDailyCost: 0.1,
-    costBudget: 0.5,
+    // Free: цена 0₽ ($0). Субсидируемый буфер для ознакомления ($0.20/мес, $0.05/день).
+    maxDailyCost: 0.05,
+    costBudget: 0.20,
   },
   plus: {
     planId: 'plus',
@@ -79,8 +80,11 @@ export const PLAN_ENTITLEMENTS: Record<PlanId, PlanEntitlements> = {
     contextLimit: 60,
     maxTokens: 4096,
     streamingEnabled: true,
-    maxDailyCost: 3.0,
-    costBudget: 6.0,
+    // Plus: цена 990₽ (~$10.42 при курсе 95).
+    // Формула: costBudget <= priceMonthly_USD * 0.40 -> $10.42 * 0.384 = $4.00
+    // Оставляет 61.6% на маржу, налоги, инфраструктуру и комиссию эквайринга.
+    maxDailyCost: 0.40,
+    costBudget: 4.00,
   },
   pro: {
     planId: 'pro',
@@ -97,8 +101,11 @@ export const PLAN_ENTITLEMENTS: Record<PlanId, PlanEntitlements> = {
     contextLimit: 120,
     maxTokens: 8192,
     streamingEnabled: true,
-    maxDailyCost: 10.0,
-    costBudget: 15.0,
+    // Pro: цена 1990₽ (~$20.95 при курсе 95).
+    // Формула: costBudget <= priceMonthly_USD * 0.45 -> $20.95 * 0.405 = $8.50
+    // Оставляет 59.5% на маржу, налоги, инфраструктуру и комиссию эквайринга.
+    maxDailyCost: 1.00,
+    costBudget: 8.50,
   },
   ultra: {
     planId: 'ultra',
@@ -115,10 +122,13 @@ export const PLAN_ENTITLEMENTS: Record<PlanId, PlanEntitlements> = {
     contextLimit: 500,
     maxTokens: 16384,
     streamingEnabled: true,
-    maxDailyCost: 30.0,
-    costBudget: 40.0,
+    // Ultra: цена 2499₽ (~$26.31 при курсе 95).
+    // Формула: costBudget <= priceMonthly_USD * 0.45 -> $26.31 * 0.437 = $11.50 (снижено с убыточных $40!)
+    // Оставляет 56.3% на маржу, налоги, инфраструктуру и комиссию эквайринга.
+    maxDailyCost: 1.50,
+    costBudget: 11.50,
   },
-  // Legacy alias для обратной совместимости (получают права уровня Pro)
+  // Legacy alias для обратной совместимости (цена 1199₽ ~ $12.62, costBudget $5.00 ~ 39.6%)
   'gpt-pro': {
     planId: 'gpt-pro',
     allowedModels: ALL_MODELS,
@@ -134,8 +144,8 @@ export const PLAN_ENTITLEMENTS: Record<PlanId, PlanEntitlements> = {
     contextLimit: 120,
     maxTokens: 8192,
     streamingEnabled: true,
-    maxDailyCost: 10.0,
-    costBudget: 15.0,
+    maxDailyCost: 0.60,
+    costBudget: 5.00,
   },
   'claude-pro': {
     planId: 'claude-pro',
@@ -152,8 +162,8 @@ export const PLAN_ENTITLEMENTS: Record<PlanId, PlanEntitlements> = {
     contextLimit: 120,
     maxTokens: 8192,
     streamingEnabled: true,
-    maxDailyCost: 10.0,
-    costBudget: 15.0,
+    maxDailyCost: 0.60,
+    costBudget: 5.00,
   },
   'gemini-pro': {
     planId: 'gemini-pro',
@@ -170,8 +180,8 @@ export const PLAN_ENTITLEMENTS: Record<PlanId, PlanEntitlements> = {
     contextLimit: 120,
     maxTokens: 8192,
     streamingEnabled: true,
-    maxDailyCost: 10.0,
-    costBudget: 15.0,
+    maxDailyCost: 0.60,
+    costBudget: 5.00,
   },
 };
 

@@ -12,6 +12,7 @@ import { sendError } from '../middleware/errors.js';
 import { modelRegistry, type ModelRegistry } from '../ai/model-registry.js';
 import { usageStore as defaultUsageStore, type UsageStore } from '../store/index.js';
 import type { ModelPricing } from '../ai/gateway-types.js';
+import { CurrencyService } from '../services/currency.js';
 
 export interface AdminRouterDeps {
   registry?: ModelRegistry;
@@ -114,6 +115,27 @@ export function createAdminRouter({
 
     const logs = usageStore.getByUser(userId, limit);
     res.json({ usage: logs });
+  });
+
+  // 7. Обменный курс валют USD/RUB
+  router.get('/exchange-rate', (_req: Request, res: Response): void => {
+    res.json({
+      usdToRubRate: CurrencyService.getUsdToRubRate(),
+    });
+  });
+
+  router.patch('/exchange-rate', (req: Request, res: Response): void => {
+    const rate = Number(req.body?.rate ?? req.body?.usdToRubRate);
+    if (!Number.isFinite(rate) || rate <= 0) {
+      sendError(res, 400, 'invalid_rate', 'Поле rate должно быть положительным числом');
+      return;
+    }
+
+    CurrencyService.setUsdToRubRate(rate);
+    res.json({
+      success: true,
+      usdToRubRate: CurrencyService.getUsdToRubRate(),
+    });
   });
 
   return router;

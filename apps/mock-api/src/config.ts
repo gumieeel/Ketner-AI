@@ -58,6 +58,9 @@ export const config = {
   /** Адрес фронтенда: его подсказывает корень API, если порт открыли вручную. */
   webAppUrl: process.env.WEB_APP_URL ?? 'http://localhost:5173',
 
+  /** Обменный курс USD к RUB для расчёта экономики тарифов и маржинальности. */
+  usdToRubRate: readNumber('USD_TO_RUB_RATE', 95),
+
   /** Пользователь и план заглушки: реальные аккаунты появятся на этапе 3. */
   demoUserId: 'demo-user',
   demoPlan: 'free' as PlanId,
