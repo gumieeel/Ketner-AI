@@ -108,6 +108,8 @@ export interface PlanEntitlements {
   requestsPerHour: number | null;
   /** Макс. сообщений в день (null = без ограничений). */
   requestsPerDay: number | null;
+  /** Пользовательский лимит сообщений в день (для /api/meta и UI). */
+  userFacingDailyMessages?: number | null;
   /** Макс. токенов в час (null = без ограничений). */
   tokensPerHour: number | null;
   /** Макс. токенов в день (null = без ограничений). */

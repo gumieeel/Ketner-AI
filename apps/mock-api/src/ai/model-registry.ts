@@ -8,6 +8,7 @@
 
 import type { PlanId, Language, ModelInfo, PlanLimits } from '../types.js';
 import type { ModelRegistryEntry, AIProviderType, ModelCapabilities, ModelPricing } from './gateway-types.js';
+import { getPlanLimits } from '../services/entitlement.js';
 
 // ─────────────────────────────────────────────────────────────
 // Вспомогательные фабрики
@@ -542,17 +543,9 @@ export class ModelRegistry {
       }));
   }
 
-  /** Конвертация в legacy PlanLimits (для /api/meta). */
+  /** Конвертация в legacy PlanLimits (для /api/meta). Единый источник правды — PLAN_ENTITLEMENTS. */
   toLegacyPlanLimits(): Record<PlanId, PlanLimits> {
-    return {
-      free: { messagesPerDay: 10, contextMessages: 20 },
-      'gpt-pro': { messagesPerDay: null, contextMessages: 120 },
-      'claude-pro': { messagesPerDay: null, contextMessages: 120 },
-      'gemini-pro': { messagesPerDay: null, contextMessages: 120 },
-      ultra: { messagesPerDay: null, contextMessages: 500 },
-      plus: { messagesPerDay: null, contextMessages: 60 },
-      pro: { messagesPerDay: null, contextMessages: 120 },
-    };
+    return getPlanLimits();
   }
 
   /** Legacy ModelCatalog (для /api/meta). */

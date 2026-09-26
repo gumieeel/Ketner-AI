@@ -5,7 +5,7 @@
  * допустимые объёмы использования для каждого тарифного плана.
  */
 
-import type { PlanId } from '../types.js';
+import type { PlanId, PlanLimits } from '../types.js';
 import type { PlanEntitlements } from '../ai/gateway-types.js';
 import type { ModelRegistryEntry } from '../ai/gateway-types.js';
 
@@ -45,6 +45,7 @@ export const PLAN_ENTITLEMENTS: Record<PlanId, PlanEntitlements> = {
     requestsPerMinute: 5,
     requestsPerHour: 20,
     requestsPerDay: 50,
+    userFacingDailyMessages: 10,
     tokensPerHour: 50_000,
     tokensPerDay: 150_000,
     maxContextMessages: 20,
@@ -205,6 +206,14 @@ export class EntitlementService {
   }
 
   /**
+   * Динамическое получение лимитов планов для обратной совместимости и /api/meta.
+   * PLAN_ENTITLEMENTS является единственным источником правды.
+   */
+  static getPlanLimits(): Record<PlanId, PlanLimits> {
+    return getPlanLimits();
+  }
+
+  /**
    * Проверить, имеет ли пользователь доступ к модели.
    */
   static checkModelAccess(
@@ -250,4 +259,18 @@ export class EntitlementService {
       requiredPlan: 'Plus',
     };
   }
+}
+
+/**
+ * Формирование PlanLimits динамически на основе PLAN_ENTITLEMENTS (Single Source of Truth).
+ */
+export function getPlanLimits(): Record<PlanId, PlanLimits> {
+  const result = {} as Record<PlanId, PlanLimits>;
+  for (const [planId, ent] of Object.entries(PLAN_ENTITLEMENTS) as [PlanId, PlanEntitlements][]) {
+    result[planId] = {
+      contextMessages: ent.maxContextMessages,
+      messagesPerDay: ent.userFacingDailyMessages !== undefined ? ent.userFacingDailyMessages : null,
+    };
+  }
+  return result;
 }
