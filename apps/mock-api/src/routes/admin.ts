@@ -10,18 +10,30 @@ import { Router, type Request, type Response, type NextFunction } from 'express'
 import { config } from '../config.js';
 import { sendError } from '../middleware/errors.js';
 import { modelRegistry, type ModelRegistry } from '../ai/model-registry.js';
-import { usageStore as defaultUsageStore, type UsageStore } from '../store/index.js';
+import {
+  usageStore as defaultUsageStore,
+  subscriptionStore as defaultSubscriptionStore,
+  userStore as defaultUserStore,
+  type UsageStore,
+} from '../store/index.js';
+import type { SubscriptionStore } from '../store/subscription-store.js';
+import type { UserStore } from '../store/user-store.js';
 import type { ModelPricing } from '../ai/gateway-types.js';
 import { CurrencyService } from '../services/currency.js';
+import { PLANS, LEGACY_PLANS } from './billing.js';
 
 export interface AdminRouterDeps {
   registry?: ModelRegistry;
   usageStore?: UsageStore;
+  subscriptionStore?: SubscriptionStore;
+  userStore?: UserStore;
 }
 
 export function createAdminRouter({
   registry = modelRegistry,
   usageStore = defaultUsageStore,
+  subscriptionStore = defaultSubscriptionStore,
+  userStore = defaultUserStore,
 }: AdminRouterDeps = {}): Router {
   const router = Router();
 
@@ -102,10 +114,34 @@ export function createAdminRouter({
   // 5. Рентабельность пользователя (Profitability)
   router.get('/profitability/:userId', (req: Request, res: Response): void => {
     const userId = String(req.params.userId);
-    const planPrice = typeof req.query.planPrice === 'string' ? parseFloat(req.query.planPrice) : 20.0;
+
+    // 1. Определение реального тарифа пользователя
+    const currentSub = subscriptionStore.get(userId);
+    const currentUser = userStore.findById(userId);
+    const userPlan = currentSub?.plan ?? currentUser?.plan ?? 'free';
+
+    // 2. Получение цены тарифа в рублях из каталога
+    const planItem = [...PLANS, ...LEGACY_PLANS].find((p) => p.id === userPlan);
+    const priceRub = planItem?.priceMonthly ?? 0;
+
+    // 3. Автоматическая конвертация в USD по актуальному курсу
+    const autoPlanPriceUsd = CurrencyService.rubToUsd(priceRub);
+
+    // 4. Опциональный ручной override через query.planPrice для тестирования
+    const planPrice =
+      typeof req.query.planPrice === 'string' && req.query.planPrice.trim() !== ''
+        ? parseFloat(req.query.planPrice)
+        : autoPlanPriceUsd;
 
     const report = usageStore.getUserProfitability(userId, planPrice);
-    res.json({ profitability: report });
+    res.json({
+      profitability: {
+        ...report,
+        plan: userPlan,
+        priceRub,
+        usdToRubRate: CurrencyService.getUsdToRubRate(),
+      },
+    });
   });
 
   // 6. Детальные логи запросов пользователя

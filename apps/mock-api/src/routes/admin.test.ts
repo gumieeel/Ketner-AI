@@ -81,17 +81,30 @@ test('admin: метрики провайдеров, статистика и ре
     const usageBody = (await usageRes.json()) as { stats: { totalRequests: number } };
     assert.ok(typeof usageBody.stats.totalRequests === 'number');
 
-    // Profitability
+    // Profitability with manual override
     const profRes = await fetch(`${server.baseUrl}/api/admin/profitability/demo-user?planPrice=39.99`, {
       headers,
     });
     assert.equal(profRes.status, 200);
     const profBody = (await profRes.json()) as {
-      profitability: { userId: string; subscriptionRevenue: number; status: string };
+      profitability: { userId: string; subscriptionRevenue: number; status: string; plan: string };
     };
     assert.equal(profBody.profitability.userId, 'demo-user');
     assert.equal(profBody.profitability.subscriptionRevenue, 39.99);
     assert.ok(profBody.profitability.status);
+
+    // Profitability with automatic resolution (demo-user is free -> $0)
+    const autoProfRes = await fetch(`${server.baseUrl}/api/admin/profitability/demo-user`, {
+      headers,
+    });
+    assert.equal(autoProfRes.status, 200);
+    const autoProfBody = (await autoProfRes.json()) as {
+      profitability: { userId: string; subscriptionRevenue: number; plan: string; priceRub: number };
+    };
+    assert.equal(autoProfBody.profitability.userId, 'demo-user');
+    assert.equal(autoProfBody.profitability.plan, 'free');
+    assert.equal(autoProfBody.profitability.priceRub, 0);
+    assert.equal(autoProfBody.profitability.subscriptionRevenue, 0);
   } finally {
     await server.close();
   }

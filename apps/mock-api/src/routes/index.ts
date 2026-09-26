@@ -160,6 +160,8 @@ export function createApiRouter(deps: ApiDeps): Router {
     '/admin',
     createAdminRouter({
       usageStore: activeUsageStore,
+      subscriptionStore: activeSubscriptionStore,
+      userStore: activeUserStore,
     }),
   );
   router.use(createConversationsRouter(deps.store, deps.userId));
