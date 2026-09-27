@@ -5,12 +5,9 @@ import { useTranslation } from '@/i18n';
 import { Brand } from './brand';
 import { ThemeToggle } from './theme-toggle';
 
-const linkClasses =
-  'rounded-lg px-3 py-2 text-sm text-muted font-medium transition-colors hover:bg-surface hover:text-text';
-
 /** Каркас страниц вне приложения: лендинг, вход, тарифы, оформление подписки. */
 export function StandaloneLayout() {
-  const { t } = useTranslation();
+  const { t, language } = useTranslation();
   const status = useAuth((state) => state.status);
   const user = useAuth((state) => state.user);
 
@@ -21,21 +18,47 @@ export function StandaloneLayout() {
 
       <header className="relative z-20 flex h-16 shrink-0 items-center gap-2 border-b border-stroke/15 bg-canvas/80 px-4 backdrop-blur-md md:px-8">
         <Brand />
-        <nav className="ml-auto flex items-center gap-1">
-          <Link to="/pricing" className={linkClasses}>
+        <nav className="ml-auto flex items-center gap-2 sm:gap-4">
+          <a
+            href="#models"
+            className="rounded-lg px-2.5 py-1.5 text-xs sm:text-sm font-medium text-slate-300 hover:text-white transition-colors"
+          >
+            {language === 'ru' ? 'Модели' : 'Models'}
+          </a>
+          <Link
+            to="/pricing"
+            className="rounded-lg px-2.5 py-1.5 text-xs sm:text-sm font-medium text-slate-300 hover:text-white transition-colors"
+          >
             {t('nav.pricing')}
           </Link>
-          <Link to="/docs" className={linkClasses}>
+          <Link
+            to="/docs"
+            className="rounded-lg px-2.5 py-1.5 text-xs sm:text-sm font-medium text-slate-300 hover:text-white transition-colors"
+          >
             {t('nav.docs')}
           </Link>
           {status === 'authenticated' ? (
-            <Link to="/chat" className={linkClasses}>
-              {user?.name ? user.name.split(' ')[0] : 'В чат'}
+            <Link
+              to="/chat"
+              className="rounded-lg bg-emerald-400 px-3.5 py-1.5 text-xs font-semibold text-slate-950 hover:bg-emerald-300 transition-colors shadow-sm"
+            >
+              {user?.name ? user.name.split(' ')[0] : (language === 'ru' ? 'В чат' : 'Chat')}
             </Link>
           ) : (
-            <Link to="/login" className={linkClasses}>
-              {t('nav.login')}
-            </Link>
+            <div className="flex items-center gap-2">
+              <Link
+                to="/login"
+                className="rounded-lg border border-slate-700/60 bg-surface/50 px-3 py-1.5 text-xs font-medium text-slate-200 hover:bg-surface hover:text-white transition-colors"
+              >
+                {t('nav.login')}
+              </Link>
+              <Link
+                to="/login"
+                className="rounded-lg bg-emerald-400 px-3.5 py-1.5 text-xs font-semibold text-slate-950 hover:bg-emerald-300 transition-colors shadow-sm"
+              >
+                {language === 'ru' ? 'Начать' : 'Start'}
+              </Link>
+            </div>
           )}
           <ThemeToggle />
         </nav>
