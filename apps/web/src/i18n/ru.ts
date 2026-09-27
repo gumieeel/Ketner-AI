@@ -183,7 +183,7 @@ export const ru = {
   'chat.attach': 'Прикрепить файл',
   'chat.attachHint': 'Вложения появятся на этапе 5 — пока это заглушка.',
   'chat.model': 'Модель',
-  'chat.modelAuto': 'Лучший AI (Авто)',
+  'chat.modelAuto': 'Auto',
   'chat.modelMini': 'Ketner Mini · Qwen 2.5 Coder',
   'chat.modelPro': 'Ketner Pro · Qwen 2.5 Max *',
   'chat.modelGptAstra': 'GPT-6 Astra',

@@ -199,48 +199,15 @@ export function ModelPicker({ disabled = false }: { disabled?: boolean }) {
           aria-label={t('chat.modelMenu')}
           className="absolute bottom-full left-0 z-20 mb-1 w-80 sm:w-92 max-h-[460px] overflow-y-auto rounded-[16px] border border-stroke/30 bg-surface/95 p-2 shadow-2xl backdrop-blur-md"
         >
-          {/* 1. Free Group / Auto Router */}
+          {/* 1. Standart Group */}
           <div className="mb-2">
             <div className="flex items-center justify-between px-2.5 py-1 text-[10px] font-bold text-emerald-600 dark:text-emerald-400 uppercase tracking-wider">
               <span>{t('chat.tierFree')}</span>
             </div>
-
-            {autoModel ? (
-              <button
-                type="button"
-                role="option"
-                aria-selected={autoModel.id === current.id}
-                onClick={() => {
-                  setModelId('auto');
-                  setOpen(false);
-                }}
-                className={cn(
-                  'flex w-full items-start gap-2.5 rounded-[12px] p-2.5 text-left transition-all border',
-                  autoModel.id === current.id
-                    ? 'bg-accent/15 border-accent/40 shadow-sm'
-                    : 'border-stroke/30 hover:bg-canvas hover:border-stroke/60',
-                )}
-              >
-                <span className="mt-1 flex size-2 shrink-0 rounded-full bg-accent animate-pulse" />
-                <span className="min-w-0 flex-1">
-                  <span className="flex items-center justify-between">
-                    <span className="text-sm font-semibold text-text">
-                      {labelOf(autoModel)}
-                    </span>
-                    {autoModel.id === current.id ? <CheckIcon className="text-accent text-sm" /> : null}
-                  </span>
-                  <span className="mt-0.5 block text-xs text-muted leading-relaxed">
-                    {t('chat.modelAutoSubtitle')}
-                  </span>
-                </span>
-              </button>
-            ) : null}
-
-            {freeModels.length > 0 ? (
-              <ul className="mt-1 space-y-0.5">
-                {freeModels.map(renderModelItem)}
-              </ul>
-            ) : null}
+            <ul className="mt-1 space-y-0.5">
+              {autoModel ? renderModelItem(autoModel) : null}
+              {freeModels.map(renderModelItem)}
+            </ul>
           </div>
 
           {/* 2. Plus Group */}
