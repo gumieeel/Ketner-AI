@@ -7,6 +7,7 @@ import { CostCalculator } from '../services/cost.js';
 import { EntitlementService } from '../services/entitlement.js';
 import { FairUseEngine } from '../services/fair-use.js';
 import type { FairUseSnapshot } from './gateway-types.js';
+import { resolveAstraEngine, toOpenRouterModelId } from './gateway.js';
 
 test('ModelRegistry: получение, разрешение и проверка доступа', () => {
   const registry = new ModelRegistry();
@@ -299,4 +300,38 @@ test('TierPipelineEngine & Output Control: экономика токенов п�
   const longText = 'A '.repeat(500); // 1000 chars = 250 tokens
   const compressed = ContextOptimizer.compressText(longText, 50); // max 50 tokens = 200 chars
   assert.ok(compressed.length <= 200);
+});
+
+test('OpenRouter routing: адаптивный выбор модели по сложности и поддержка Opus/Sol/Luna', () => {
+  const registry = new ModelRegistry();
+  const astraModel = registry.get('gpt-6-astra')!;
+  const claudeModel = registry.get('claude-fable')!;
+
+  // 1. Лёгкий вопрос -> DeepSeek Chat
+  const lightAstra = toOpenRouterModelId(astraModel, 'Привет, как дела?');
+  assert.equal(lightAstra, 'deepseek/deepseek-chat');
+
+  // 2. Умеренный вопрос -> OpenAI GPT-6 Luna Pro
+  const modAstra = toOpenRouterModelId(astraModel, 'Напиши короткий текст для рассылки клиентам');
+  assert.equal(modAstra, 'openai/gpt-6-luna-pro');
+
+  // 3. Сложный вопрос (код / глубокие рассуждения) -> OpenAI GPT-6 Sol Pro
+  const hardAstra = toOpenRouterModelId(
+    astraModel,
+    'Напиши микросервис на TypeScript с реализацией алгоритма Дейкстры для поиска кратчайшего пути в графе',
+  );
+  assert.equal(hardAstra, 'openai/gpt-6-sol-pro');
+
+  // 4. Claude Fable 5.5 -> Claude Opus 5.5
+  const claudeOpus = toOpenRouterModelId(claudeModel, 'Привет');
+  assert.equal(claudeOpus, 'anthropic/claude-opus-5.5');
+
+  // 5. Проверка resolveAstraEngine
+  const resLight = resolveAstraEngine('Привет!');
+  assert.equal(resLight.level, 'simple');
+  assert.equal(resLight.modelId, 'deepseek/deepseek-chat');
+
+  const resHard = resolveAstraEngine('Архитектура распределенных баз данных: Paxos против Raft');
+  assert.equal(resHard.level, 'complex');
+  assert.equal(resHard.modelId, 'openai/gpt-6-sol-pro');
 });

@@ -19,16 +19,73 @@ import { delay, streamText } from './stream.js';
 import { CostCalculator } from '../services/cost.js';
 import { EntitlementService } from '../services/entitlement.js';
 import { FairUseEngine } from '../services/fair-use.js';
+import { AutoRouter } from './auto-router.js';
 import { TierPipelineEngine, computeDynamicMaxTokens, } from './tier-pipeline.js';
-export function toOpenRouterModelId(model) {
+/**
+ * Интеллектуальный выбор движка для GPT-6 Astra по уровню сложности задачи:
+ * - Лёгкие/бытовые вопросы -> DeepSeek Chat (Light & Fast)
+ * - Средние/стандартные вопросы -> OpenAI: GPT-6 Luna Pro
+ * - Сложные/глубокие задачи (код, математика, архитектура) -> OpenAI: GPT-6 Sol Pro
+ */
+export function resolveAstraEngine(prompt) {
+    if (!prompt || !prompt.trim()) {
+        return {
+            modelId: 'openai/gpt-6-sol-pro',
+            engineName: 'OpenAI: GPT-6 Sol Pro',
+            level: 'complex',
+        };
+    }
+    const classification = AutoRouter.classify(prompt);
+    const trimmed = prompt.trim();
+    // 1. "Прям лёгкие вопросы": приветствия, благодарности, подтверждения, короткие реплики
+    const isGreetingOrChitChat = /^(привет|хай|здравствуй|добр(ое|ый|ый день|ое утро|ый вечер)|hello|hi|hey|как дела|кто ты|что ты умеешь|спасибо|благодарю|ок|ok|ясно|понятно)[\s!?,.]*$/i.test(trimmed);
+    const isTrivialGeneral = trimmed.length < 50 &&
+        classification.complexity === 'simple' &&
+        classification.category === 'general' &&
+        !/(напиши|составь|придумай|объясни|расскажи|переведи|write|explain|translate)/i.test(trimmed);
+    const isVeryLight = isGreetingOrChitChat || isTrivialGeneral;
+    if (isVeryLight) {
+        return {
+            modelId: 'deepseek/deepseek-chat',
+            engineName: 'DeepSeek Chat (Light Fast)',
+            level: 'simple',
+        };
+    }
+    // 2. Сложные задачи:
+    // Программирование, глубокий анализ, математика, архитектура, системный дизайн, длинные формулировки (>500 символов)
+    const isComplex = classification.complexity === 'complex' ||
+        classification.category === 'coding' ||
+        classification.category === 'math' ||
+        classification.category === 'reasoning' ||
+        classification.category === 'research' ||
+        trimmed.length > 500;
+    if (isComplex) {
+        return {
+            modelId: 'openai/gpt-6-sol-pro',
+            engineName: 'OpenAI: GPT-6 Sol Pro',
+            level: 'complex',
+        };
+    }
+    // 3. Умеренные / стандартные запросы:
+    return {
+        modelId: 'openai/gpt-6-luna-pro',
+        engineName: 'OpenAI: GPT-6 Luna Pro',
+        level: 'moderate',
+    };
+}
+export function toOpenRouterModelId(model, prompt) {
     if (model.id === 'gpt-4o-mini')
         return 'openai/gpt-4o-mini';
     if (model.id === 'gpt-4o')
         return 'openai/gpt-4o';
-    if (model.id === 'gpt-6-astra')
-        return 'openai/gpt-4o';
-    if (model.id === 'claude-fable' || model.id === 'claude-3.5-sonnet')
-        return 'anthropic/claude-fable-5.1';
+    // GPT-6 Astra: адаптивный роутинг по сложности (GPT-6 Sol Pro / Luna Pro / DeepSeek)
+    if (model.id === 'gpt-6-astra') {
+        return resolveAstraEngine(prompt).modelId;
+    }
+    // Claude Fable 5.5 / 5.1 -> Claude Opus 5.5
+    if (model.id === 'claude-fable' || model.id === 'claude-3.5-sonnet') {
+        return 'anthropic/claude-opus-5.5';
+    }
     if (model.id === 'claude-3-haiku')
         return 'anthropic/claude-haiku-4.5';
     if (model.id === 'gemini-2.5-pro' || model.id === 'gemini-pro')
@@ -98,7 +155,16 @@ export class AIGateway {
             }
             else {
                 targetModel = resolved;
-                routingReason = `Explicit user model selection (${targetModel.name})`;
+                if (targetModel.id === 'gpt-6-astra') {
+                    const astra = resolveAstraEngine(prompt);
+                    routingReason = `GPT-6 Astra: ${astra.level} query routed to ${astra.engineName}`;
+                }
+                else if (targetModel.id === 'claude-fable') {
+                    routingReason = `Claude Fable 5.5: routed to Claude Opus 5.5`;
+                }
+                else {
+                    routingReason = `Explicit user model selection (${targetModel.name})`;
+                }
             }
         }
         // 3. Проверка прав доступа (Entitlement Check)
@@ -232,7 +298,7 @@ export class AIGateway {
                     const openRouterProvider = this.providers.get('openrouter');
                     if (openRouterProvider?.isAvailable()) {
                         draftProvider = openRouterProvider;
-                        draftModelId = toOpenRouterModelId(draftModel);
+                        draftModelId = toOpenRouterModelId(draftModel, prompt);
                     }
                 }
                 let enhancerProvider = this.providers.get(enhancerModel.provider);
@@ -241,7 +307,7 @@ export class AIGateway {
                     const openRouterProvider = this.providers.get('openrouter');
                     if (openRouterProvider?.isAvailable()) {
                         enhancerProvider = openRouterProvider;
-                        enhancerModelId = toOpenRouterModelId(enhancerModel);
+                        enhancerModelId = toOpenRouterModelId(enhancerModel, prompt);
                     }
                 }
                 if (draftProvider?.isAvailable() && enhancerProvider?.isAvailable()) {
@@ -298,7 +364,7 @@ export class AIGateway {
                         const openRouterProvider = this.providers.get('openrouter');
                         if (openRouterProvider && openRouterProvider.isAvailable()) {
                             provider = openRouterProvider;
-                            modelToRequest = toOpenRouterModelId(candidateModel);
+                            modelToRequest = toOpenRouterModelId(candidateModel, prompt);
                         }
                         else {
                             continue;

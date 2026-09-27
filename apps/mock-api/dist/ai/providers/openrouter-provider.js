@@ -27,7 +27,17 @@ export class OpenRouterProvider {
     getCandidateModels(requestedModel) {
         const list = [];
         if (requestedModel && requestedModel.trim()) {
-            list.push(requestedModel.trim());
+            const clean = requestedModel.trim();
+            list.push(clean);
+            if (clean.includes('gpt-6-sol')) {
+                list.push('openai/gpt-6-luna-pro', 'openai/gpt-4o');
+            }
+            else if (clean.includes('gpt-6-luna')) {
+                list.push('openai/gpt-4o-mini', 'deepseek/deepseek-chat');
+            }
+            else if (clean.includes('claude-opus')) {
+                list.push('anthropic/claude-fable-5.1', 'anthropic/claude-3.5-sonnet');
+            }
         }
         else if (this.defaultModel) {
             list.push(this.defaultModel);
@@ -207,5 +217,56 @@ export class OpenRouterProvider {
             }
         }
         throw new Error('All OpenRouter streaming candidate models failed');
+    }
+    /**
+     * OpenRouter Batch API (POST /api/v1/batches):
+     * Отправка пакета задач для фоновой обработки со скидкой до 50%
+     */
+    async createBatch(model, requests) {
+        const response = await fetch(`${this.baseUrl}/batches`, {
+            method: 'POST',
+            headers: {
+                Authorization: `Bearer ${this.apiKey}`,
+                'Content-Type': 'application/json',
+                'HTTP-Referer': 'https://ketner.ai',
+                'X-Title': 'Ketner AI',
+            },
+            body: JSON.stringify({
+                endpoint: '/v1/chat/completions',
+                model,
+                requests: requests.map((r) => ({
+                    custom_id: r.customId,
+                    body: {
+                        model,
+                        messages: r.messages,
+                        max_tokens: r.maxTokens ?? 2048,
+                    },
+                })),
+            }),
+        });
+        if (!response.ok) {
+            const err = await response.text();
+            throw new Error(`OpenRouter Batch creation failed (${response.status}): ${err}`);
+        }
+        const data = (await response.json());
+        return { id: data.id, status: data.status, raw: data };
+    }
+    /**
+     * OpenRouter Batch API (GET /api/v1/batches/:id):
+     * Проверка состояния пакета и получение завершённых результатов
+     */
+    async getBatch(batchId) {
+        const response = await fetch(`${this.baseUrl}/batches/${batchId}`, {
+            headers: {
+                Authorization: `Bearer ${this.apiKey}`,
+                'Content-Type': 'application/json',
+            },
+        });
+        if (!response.ok) {
+            const err = await response.text();
+            throw new Error(`OpenRouter Batch query failed (${response.status}): ${err}`);
+        }
+        const data = (await response.json());
+        return { id: data.id, status: data.status, results: data.results, raw: data };
     }
 }
