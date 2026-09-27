@@ -29,8 +29,8 @@ const FALLBACK_MODELS: readonly ModelInfo[] = [
   },
   // Plus (990 ₽) — стандартные модели
   {
-    id: 'gpt-4o-mini',
-    name: 'GPT-4o mini',
+    id: 'claude-3-haiku',
+    name: 'Claude Haiku 4.5',
     contextMessages: 40,
     isPro: true,
     requiredPlan: 'plus',
@@ -52,28 +52,28 @@ const FALLBACK_MODELS: readonly ModelInfo[] = [
   // Pro (1 990 ₽) — флагманские модели
   {
     id: 'gpt-6-astra',
-    name: 'GPT-6 Astra *',
+    name: 'GPT-6 Astra',
     contextMessages: 120,
     isPro: true,
     requiredPlan: 'pro',
   },
   {
     id: 'claude-fable',
-    name: 'Claude Fable 5.5 *',
+    name: 'Claude Fable 5.5',
     contextMessages: 120,
     isPro: true,
     requiredPlan: 'pro',
   },
   {
     id: 'gemini-2.5-pro',
-    name: 'Gemini 3.8 Flash *',
+    name: 'Gemini 3.8 Flash',
     contextMessages: 120,
     isPro: true,
     requiredPlan: 'pro',
   },
   {
     id: 'grok-4.7',
-    name: 'Grok 4.7 *',
+    name: 'Grok 4.7',
     contextMessages: 120,
     isPro: true,
     requiredPlan: 'pro',
@@ -137,8 +137,6 @@ export function ModelPicker({ disabled = false }: { disabled?: boolean }) {
 
   const renderModelItem = (model: ModelInfo) => {
     const active = model.id === current.id;
-    const isPlus = isPlusModel(model);
-    const isPro = isProModel(model);
 
     return (
       <li key={model.id}>
@@ -154,26 +152,13 @@ export function ModelPicker({ disabled = false }: { disabled?: boolean }) {
             'flex w-full items-center gap-2 rounded-[8px] px-2.5 py-1.5 text-left text-xs transition-colors',
             active
               ? 'bg-accent/10 text-text font-medium'
-              : 'hover:bg-canvas text-muted hover:text-text',
+              : 'hover:bg-canvas text-text hover:bg-accent/5',
           )}
         >
           <span className="size-3.5 flex items-center justify-center text-accent">
             {active ? <CheckIcon /> : null}
           </span>
           <span className="flex-1 truncate">{labelOf(model)}</span>
-          {isPlus ? (
-            <span className="shrink-0 rounded bg-sky-500/15 border border-sky-500/30 px-1.5 py-0.5 text-[9px] font-bold text-sky-600 dark:text-sky-400 uppercase tracking-wider">
-              {t('chat.plusBadge')}
-            </span>
-          ) : isPro ? (
-            <span className="shrink-0 rounded bg-accent/20 border border-accent/30 px-1.5 py-0.5 text-[9px] font-bold text-accent uppercase tracking-wider">
-              {t('chat.proBadge')}
-            </span>
-          ) : (
-            <span className="shrink-0 rounded bg-zinc-500/10 border border-zinc-500/20 px-1.5 py-0.5 text-[9px] font-bold text-zinc-500 dark:text-zinc-400 uppercase tracking-wider">
-              {t('chat.freeBadge')}
-            </span>
-          )}
         </button>
       </li>
     );
@@ -218,7 +203,6 @@ export function ModelPicker({ disabled = false }: { disabled?: boolean }) {
           <div className="mb-2">
             <div className="flex items-center justify-between px-2.5 py-1 text-[10px] font-bold text-emerald-600 dark:text-emerald-400 uppercase tracking-wider">
               <span>{t('chat.tierFree')}</span>
-              <span className="text-[10px] text-muted font-normal">0 ₽</span>
             </div>
 
             {autoModel ? (
@@ -265,9 +249,6 @@ export function ModelPicker({ disabled = false }: { disabled?: boolean }) {
               <div>
                 <div className="flex items-center justify-between px-2.5 py-1 text-[10px] font-bold text-sky-600 dark:text-sky-400 uppercase tracking-wider">
                   <span>{t('chat.tierPlus')}</span>
-                  <span className="rounded bg-sky-500/15 px-1.5 py-0.2 text-[9px] font-bold text-sky-600 dark:text-sky-400">
-                    990 ₽
-                  </span>
                 </div>
                 <ul className="space-y-0.5">
                   {plusModels.map(renderModelItem)}
@@ -280,9 +261,6 @@ export function ModelPicker({ disabled = false }: { disabled?: boolean }) {
               <div className="border-t border-stroke/15 pt-1.5">
                 <div className="flex items-center justify-between px-2.5 py-1 text-[10px] font-bold text-accent uppercase tracking-wider">
                   <span>{t('chat.tierPro')}</span>
-                  <span className="rounded bg-accent/20 px-1.5 py-0.2 text-[9px] font-bold text-accent">
-                    1 990 ₽
-                  </span>
                 </div>
                 <ul className="space-y-0.5">
                   {proModels.map(renderModelItem)}
