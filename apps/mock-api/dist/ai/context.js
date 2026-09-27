@@ -12,6 +12,20 @@ export class ContextOptimizer {
         return Math.max(1, Math.ceil(text.length / 4));
     }
     /**
+     * Нормализация и очистка текста для максимальной экономии токенов:
+     * убирает избыточные пробелы, пустые строки и невидимые символы.
+     */
+    static cleanText(text) {
+        if (!text)
+            return '';
+        return text
+            .replace(/\r\n/g, '\n')
+            .replace(/[ \t]*\n[ \t]*/g, '\n')
+            .replace(/\n{3,}/g, '\n\n')
+            .replace(/[ \t]+/g, ' ')
+            .trim();
+    }
+    /**
      * Подготовить и оптимизировать историю сообщений для отправки в модель.
      */
     static optimize(messages, options) {
@@ -20,7 +34,7 @@ export class ContextOptimizer {
         if (options.systemPrompt && options.systemPrompt.trim()) {
             result.push({
                 role: 'system',
-                content: options.systemPrompt.trim(),
+                content: this.cleanText(options.systemPrompt),
             });
         }
         if (messages.length === 0) {
@@ -36,12 +50,13 @@ export class ContextOptimizer {
         // Идём с конца (самые свежие сообщения наиболее важны)
         for (let i = windowed.length - 1; i >= 0; i--) {
             const msg = windowed[i];
-            const msgTokens = this.estimateTokens(msg.content);
+            const cleaned = this.cleanText(msg.content);
+            const msgTokens = this.estimateTokens(cleaned);
             if (chosenMessages.length > 0 && currentTokens + msgTokens > maxTokens) {
                 // Контекст исчерпан, прекращаем добавление старых сообщений
                 break;
             }
-            chosenMessages.unshift(msg);
+            chosenMessages.unshift({ ...msg, content: cleaned });
             currentTokens += msgTokens;
         }
         // 4. Формируем итоговый список сообщений с агрессивным сжатием контекста (> 6 сообщений)
@@ -63,7 +78,7 @@ export class ContextOptimizer {
             for (const msg of recent) {
                 result.push({
                     role: msg.role,
-                    content: msg.content.trim(),
+                    content: this.cleanText(msg.content),
                 });
             }
         }
@@ -71,7 +86,7 @@ export class ContextOptimizer {
             for (const msg of chosenMessages) {
                 result.push({
                     role: msg.role,
-                    content: msg.content.trim(),
+                    content: this.cleanText(msg.content),
                 });
             }
         }

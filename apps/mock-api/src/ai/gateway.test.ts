@@ -322,16 +322,35 @@ test('OpenRouter routing: адаптивный выбор модели по сл
   );
   assert.equal(hardAstra, 'openai/gpt-6-sol-pro');
 
-  // 4. Claude Fable 5.5 -> Claude Opus 5.5
-  const claudeOpus = toOpenRouterModelId(claudeModel, 'Привет');
-  assert.equal(claudeOpus, 'anthropic/claude-opus-5.5');
+  // 4. Claude Fable 5.5:
+  // - лёгкий -> DeepSeek Chat
+  const claudeLight = toOpenRouterModelId(claudeModel, 'Привет, как дела?');
+  assert.equal(claudeLight, 'deepseek/deepseek-chat');
 
-  // 5. Проверка resolveAstraEngine
-  const resLight = resolveAstraEngine('Привет!');
-  assert.equal(resLight.level, 'simple');
-  assert.equal(resLight.modelId, 'deepseek/deepseek-chat');
+  // - средний -> Claude Haiku 4.5
+  const claudeMod = toOpenRouterModelId(claudeModel, 'Напиши короткий слоган для продукта');
+  assert.equal(claudeMod, 'anthropic/claude-haiku-4.5');
 
-  const resHard = resolveAstraEngine('Архитектура распределенных баз данных: Paxos против Raft');
-  assert.equal(resHard.level, 'complex');
-  assert.equal(resHard.modelId, 'openai/gpt-6-sol-pro');
+  // - сложный -> Claude Opus 5.5
+  const claudeHard = toOpenRouterModelId(claudeModel, 'Архитектура микросервисов: паттерны саги и транзакций');
+  assert.equal(claudeHard, 'anthropic/claude-opus-5.5');
+
+  // 5. Gemini 3.8 Flash:
+  const geminiModel = registry.get('gemini-2.5-pro')!;
+  assert.equal(toOpenRouterModelId(geminiModel, 'Привет'), 'deepseek/deepseek-chat');
+  assert.equal(toOpenRouterModelId(geminiModel, 'Напиши эссе по истории'), 'google/gemini-3.8-flash');
+
+  // 6. Grok 4.7:
+  const grokModel = registry.get('grok-4.7')!;
+  assert.ok(grokModel);
+  assert.equal(toOpenRouterModelId(grokModel, 'Привет'), 'deepseek/deepseek-chat');
+  assert.equal(toOpenRouterModelId(grokModel, 'Напиши сложный парсер AST'), 'x-ai/grok-4.7');
+
+  // 7. Проверка resolveAstraEngine
+  assert.equal(resolveAstraEngine('Привет').level, 'simple');
+  assert.equal(resolveAstraEngine('Код микросервиса').level, 'complex');
+
+  // 8. Context cleanText: устранение лишних пробелов и пустых строк
+  const dirty = '  Привет \r\n\r\n\r\n   мир   ';
+  assert.equal(ContextOptimizer.cleanText(dirty), 'Привет\n\nмир');
 });

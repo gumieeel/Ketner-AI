@@ -16,6 +16,7 @@ const MODEL_NAME_KEYS: Record<string, TranslationKey> = {
   'claude-fable': 'chat.modelClaudeFable',
   'gemini-pro': 'chat.modelGeminiPro',
   'gemini-2.5-pro': 'chat.modelGeminiPro',
+  'grok-4.7': 'chat.modelGrok',
 };
 
 /** Модели по умолчанию: используются, пока каталог не загрузился. */
@@ -65,7 +66,14 @@ const FALLBACK_MODELS: readonly ModelInfo[] = [
   },
   {
     id: 'gemini-2.5-pro',
-    name: 'Gemini 2.5 Pro *',
+    name: 'Gemini 3.8 Flash *',
+    contextMessages: 120,
+    isPro: true,
+    requiredPlan: 'pro',
+  },
+  {
+    id: 'grok-4.7',
+    name: 'Grok 4.7 *',
     contextMessages: 120,
     isPro: true,
     requiredPlan: 'pro',

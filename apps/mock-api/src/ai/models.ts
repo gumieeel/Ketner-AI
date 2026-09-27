@@ -49,7 +49,14 @@ export const MODELS: readonly ModelInfo[] = [
   },
   {
     id: 'gemini-2.5-pro',
-    name: 'Gemini 2.5 Pro *',
+    name: 'Gemini 3.8 Flash *',
+    contextMessages: 120,
+    isPro: true,
+    requiredPlan: 'pro',
+  },
+  {
+    id: 'grok-4.7',
+    name: 'Grok 4.7 *',
     contextMessages: 120,
     isPro: true,
     requiredPlan: 'pro',

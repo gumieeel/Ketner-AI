@@ -235,7 +235,7 @@ describe('чат: отправка, стриминг и управление о�
     expect(await screen.findByRole('option', { name: /Qwen 2\.5 Coder/ })).toBeInTheDocument();
     expect(screen.getByRole('option', { name: /GPT-6 Astra \*/ })).toBeInTheDocument();
     expect(screen.getByRole('option', { name: /Claude Fable 5\.5 \*/ })).toBeInTheDocument();
-    expect(screen.getByRole('option', { name: /Gemini 3\.8 Pro \*/ })).toBeInTheDocument();
+    expect(screen.getByRole('option', { name: /Gemini 3\.8 (Flash|Pro) \*/ })).toBeInTheDocument();
     expect(screen.getByRole('option', { name: /Qwen 2\.5 Max \*/ })).toBeInTheDocument();
 
     // Выбираем платную модель GPT-6 Astra *

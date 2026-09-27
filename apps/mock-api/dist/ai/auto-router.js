@@ -173,6 +173,7 @@ export class AutoRouter {
             'баг', 'ошибка', 'код', 'функци', 'скрипт', 'рефакторинг', 'тест',
             'напиши код', 'исправь', 'debug', 'refactor', 'api', 'endpoint',
             'component', 'hook', 'query', 'mutation', 'migration',
+            'алгоритм', 'algorithm', 'golang', 'rust', ' c++', ' java', 'линтер',
         ];
         const isCode = codeKeywords.some((kw) => text.includes(kw)) || prompt.includes('```');
         // 2. Математика

@@ -21,19 +21,9 @@ import { EntitlementService } from '../services/entitlement.js';
 import { FairUseEngine } from '../services/fair-use.js';
 import { AutoRouter } from './auto-router.js';
 import { TierPipelineEngine, computeDynamicMaxTokens, } from './tier-pipeline.js';
-/**
- * Интеллектуальный выбор движка для GPT-6 Astra по уровню сложности задачи:
- * - Лёгкие/бытовые вопросы -> DeepSeek Chat (Light & Fast)
- * - Средние/стандартные вопросы -> OpenAI: GPT-6 Luna Pro
- * - Сложные/глубокие задачи (код, математика, архитектура) -> OpenAI: GPT-6 Sol Pro
- */
-export function resolveAstraEngine(prompt) {
+export function classifyPromptComplexity(prompt) {
     if (!prompt || !prompt.trim()) {
-        return {
-            modelId: 'openai/gpt-6-sol-pro',
-            engineName: 'OpenAI: GPT-6 Sol Pro',
-            level: 'complex',
-        };
+        return { level: 'complex', category: 'general' };
     }
     const classification = AutoRouter.classify(prompt);
     const trimmed = prompt.trim();
@@ -42,17 +32,11 @@ export function resolveAstraEngine(prompt) {
     const isTrivialGeneral = trimmed.length < 50 &&
         classification.complexity === 'simple' &&
         classification.category === 'general' &&
-        !/(напиши|составь|придумай|объясни|расскажи|переведи|write|explain|translate)/i.test(trimmed);
-    const isVeryLight = isGreetingOrChitChat || isTrivialGeneral;
-    if (isVeryLight) {
-        return {
-            modelId: 'deepseek/deepseek-chat',
-            engineName: 'DeepSeek Chat (Light Fast)',
-            level: 'simple',
-        };
+        !/(напиши|составь|придумай|объясни|расскажи|переведи|write|explain|translate|код|функци)/i.test(trimmed);
+    if (isGreetingOrChitChat || isTrivialGeneral) {
+        return { level: 'simple', category: classification.category };
     }
-    // 2. Сложные задачи:
-    // Программирование, глубокий анализ, математика, архитектура, системный дизайн, длинные формулировки (>500 символов)
+    // 2. Сложные задачи: глубокий код, математика, архитектура, системный дизайн, длинные формулировки (>500 символов)
     const isComplex = classification.complexity === 'complex' ||
         classification.category === 'coding' ||
         classification.category === 'math' ||
@@ -60,40 +44,92 @@ export function resolveAstraEngine(prompt) {
         classification.category === 'research' ||
         trimmed.length > 500;
     if (isComplex) {
-        return {
-            modelId: 'openai/gpt-6-sol-pro',
-            engineName: 'OpenAI: GPT-6 Sol Pro',
-            level: 'complex',
-        };
+        return { level: 'complex', category: classification.category };
     }
-    // 3. Умеренные / стандартные запросы:
-    return {
-        modelId: 'openai/gpt-6-luna-pro',
-        engineName: 'OpenAI: GPT-6 Luna Pro',
-        level: 'moderate',
-    };
+    // 3. Умеренные / стандартные задачи
+    return { level: 'moderate', category: classification.category };
+}
+/**
+ * Интеллектуальный роутер движков OpenRouter для флагманских Pro-моделей:
+ * 1. GPT-6 Astra:
+ *    - лёгкие: deepseek/deepseek-chat
+ *    - средние: openai/gpt-6-luna-pro
+ *    - сложные: openai/gpt-6-sol-pro
+ * 2. Claude Fable (5.1 / 5.5):
+ *    - лёгкие: deepseek/deepseek-chat
+ *    - средние: anthropic/claude-haiku-4.5
+ *    - сложные: anthropic/claude-opus-5.5
+ * 3. Gemini 3.8 Flash (ранее gemini-2.5-pro / gemini-pro):
+ *    - лёгкие: deepseek/deepseek-chat
+ *    - средние и сложные: google/gemini-3.8-flash
+ * 4. Grok 4.7:
+ *    - лёгкие: deepseek/deepseek-chat
+ *    - средние и сложные: x-ai/grok-4.7
+ */
+export function resolveEngineForModel(modelId, prompt) {
+    const { level } = classifyPromptComplexity(prompt);
+    // 1. GPT-6 Astra
+    if (modelId === 'gpt-6-astra') {
+        if (level === 'simple') {
+            return { modelId: 'deepseek/deepseek-chat', engineName: 'DeepSeek Chat (Light Fast)', level };
+        }
+        if (level === 'moderate') {
+            return { modelId: 'openai/gpt-6-luna-pro', engineName: 'OpenAI: GPT-6 Luna Pro', level };
+        }
+        return { modelId: 'openai/gpt-6-sol-pro', engineName: 'OpenAI: GPT-6 Sol Pro', level };
+    }
+    // 2. Claude Fable (5.1 / 5.5)
+    if (modelId === 'claude-fable' || modelId === 'claude-3.5-sonnet') {
+        if (level === 'simple') {
+            return { modelId: 'deepseek/deepseek-chat', engineName: 'DeepSeek Chat (Light Fast)', level };
+        }
+        if (level === 'moderate') {
+            return { modelId: 'anthropic/claude-haiku-4.5', engineName: 'Anthropic: Claude Haiku 4.5', level };
+        }
+        return { modelId: 'anthropic/claude-opus-5.5', engineName: 'Anthropic: Claude Opus 5.5', level };
+    }
+    // 3. Gemini 3.8 Flash
+    if (modelId === 'gemini-2.5-pro' ||
+        modelId === 'gemini-pro' ||
+        modelId === 'gemini-3.8-flash') {
+        if (level === 'simple') {
+            return { modelId: 'deepseek/deepseek-chat', engineName: 'DeepSeek Chat (Light Fast)', level };
+        }
+        return { modelId: 'google/gemini-3.8-flash', engineName: 'Google: Gemini 3.8 Flash', level };
+    }
+    // 4. Grok 4.7
+    if (modelId === 'grok-4.7' || modelId === 'grok') {
+        if (level === 'simple') {
+            return { modelId: 'deepseek/deepseek-chat', engineName: 'DeepSeek Chat (Light Fast)', level };
+        }
+        return { modelId: 'x-ai/grok-4.7', engineName: 'SpaceXAI: Grok 4.7', level };
+    }
+    // Прочие модели:
+    if (modelId === 'gpt-4o-mini') {
+        return { modelId: 'openai/gpt-4o-mini', engineName: 'OpenAI: GPT-4o mini', level };
+    }
+    if (modelId === 'gpt-4o') {
+        return { modelId: 'openai/gpt-4o', engineName: 'OpenAI: GPT-4o', level };
+    }
+    if (modelId === 'deepseek-v4.1-flash') {
+        return { modelId: 'deepseek/deepseek-chat', engineName: 'DeepSeek V4.1 Flash', level };
+    }
+    if (modelId === 'gemini-2.5-flash') {
+        return { modelId: 'google/gemini-2.5-flash', engineName: 'Google: Gemini 2.5 Flash', level };
+    }
+    if (modelId === 'claude-3-haiku') {
+        return { modelId: 'anthropic/claude-haiku-4.5', engineName: 'Anthropic: Claude Haiku 4.5', level };
+    }
+    return { modelId, engineName: modelId, level };
+}
+export function resolveAstraEngine(prompt) {
+    return resolveEngineForModel('gpt-6-astra', prompt);
 }
 export function toOpenRouterModelId(model, prompt) {
-    if (model.id === 'gpt-4o-mini')
-        return 'openai/gpt-4o-mini';
-    if (model.id === 'gpt-4o')
-        return 'openai/gpt-4o';
-    // GPT-6 Astra: адаптивный роутинг по сложности (GPT-6 Sol Pro / Luna Pro / DeepSeek)
-    if (model.id === 'gpt-6-astra') {
-        return resolveAstraEngine(prompt).modelId;
+    const resolution = resolveEngineForModel(model.id, prompt);
+    if (resolution.modelId !== model.id) {
+        return resolution.modelId;
     }
-    // Claude Fable 5.5 / 5.1 -> Claude Opus 5.5
-    if (model.id === 'claude-fable' || model.id === 'claude-3.5-sonnet') {
-        return 'anthropic/claude-opus-5.5';
-    }
-    if (model.id === 'claude-3-haiku')
-        return 'anthropic/claude-haiku-4.5';
-    if (model.id === 'gemini-2.5-pro' || model.id === 'gemini-pro')
-        return 'google/gemini-2.5-pro';
-    if (model.id === 'gemini-2.5-flash')
-        return 'google/gemini-2.5-flash';
-    if (model.id === 'deepseek-v4.1-flash')
-        return 'deepseek/deepseek-chat';
     if (model.provider === 'openai')
         return `openai/${model.providerModelId}`;
     if (model.provider === 'anthropic')
@@ -155,12 +191,17 @@ export class AIGateway {
             }
             else {
                 targetModel = resolved;
-                if (targetModel.id === 'gpt-6-astra') {
-                    const astra = resolveAstraEngine(prompt);
-                    routingReason = `GPT-6 Astra: ${astra.level} query routed to ${astra.engineName}`;
-                }
-                else if (targetModel.id === 'claude-fable') {
-                    routingReason = `Claude Fable 5.5: routed to Claude Opus 5.5`;
+                const resolution = resolveEngineForModel(targetModel.id, prompt);
+                if ([
+                    'gpt-6-astra',
+                    'claude-fable',
+                    'claude-3.5-sonnet',
+                    'gemini-2.5-pro',
+                    'gemini-pro',
+                    'gemini-3.8-flash',
+                    'grok-4.7',
+                ].includes(targetModel.id)) {
+                    routingReason = `${targetModel.name}: ${resolution.level} query routed to ${resolution.engineName}`;
                 }
                 else {
                     routingReason = `Explicit user model selection (${targetModel.name})`;
