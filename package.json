@@ -20,12 +20,10 @@
     "bot": "npm run bot --workspace @ketner/mock-api",
     "typecheck": "npm run typecheck --workspaces --if-present",
     "lint": "eslint .",
+    "lint:workspaces": "npm run lint --workspaces --if-present",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "test": "npm run test --workspaces --if-present"
-  },
-  "dependencies": {
-    "typescript": "^6.0.3"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",

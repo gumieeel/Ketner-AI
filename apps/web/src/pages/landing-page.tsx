@@ -14,7 +14,7 @@ import { cn } from '@/lib/cn';
 function OpenAiIcon({ className = 'size-4' }: { className?: string }) {
   return (
     <svg viewBox="0 0 24 24" fill="currentColor" className={className}>
-      <path d="M22.28 9.5a5.98 5.98 0 0 0-.52-4.92 6.05 6.05 0 0 0-6.51-2.9A6.07 6.07 0 0 0 10.5 0a6.05 6.05 0 0 0-5.76 4.2 6.07 6.07 0 0 0-4.14 3 6.04 6.04 0 0 0 .75 7.14 5.98 5.98 0 0 0 .52 4.92[...]
+      <path d="M22.28 9.5a5.98 5.98 0 0 0-.52-4.92 6.05 6.05 0 0 0-6.51-2.9A6.07 6.07 0 0 0 10.5 0a6.05 6.05 0 0 0-5.76 4.2 6.07 6.07 0 0 0-4.14 3 6.04 6.04 0 0 0 .75 7.14 5.98 5.98 0 0 0 .52 4.92 6.05 6.05 0 0 0 6.51 2.9A6.07 6.07 0 0 0 13.5 24a6.05 6.05 0 0 0 5.76-4.2 6.07 6.07 0 0 0 4.14-3 6.04 6.04 0 0 0-.75-7.14l-.37-.16zM13.5 22.5a4.5 4.5 0 0 1-2.89-1.05l.14-.08 4.8-2.77a.77.77 0 0 0 .39-.68v-6.77l2.03 1.17a.07.07 0 0 1 .04.05v5.6a4.51 4.51 0 0 1-4.51 4.53zm-9.7-4.13a4.5 4.5 0 0 1-.54-3.02l.14.09 4.8 2.77a.78.78 0 0 0 .78 0l5.86-3.38v2.34a.07.07 0 0 1-.03.06L9.97 20.5a4.51 4.51 0 0 1-6.17-2.13zm-1.26-10.4a4.5 4.5 0 0 1 2.35-1.98v5.7a.77.77 0 0 0 .39.67l5.86 3.38-2.03 1.17a.07.07 0 0 1-.07 0L4.7 13.6a4.51 4.51 0 0 1-2.16-5.63zm16.66 3.87L13.34 8.4l2.03-1.17a.07.07 0 0 1 .07 0l4.33 2.5a4.51 4.51 0 0 1-.7 8.13v-5.7a.77.77 0 0 0-.39-.67zm2.02-3.04-.14-.09-4.8-2.77a.78.78 0 0 0-.78 0L9.74 9.82V7.48a.07.07 0 0 1 .03-.06l4.33-2.5a4.51 4.51 0 0 1 6.18 2.13l-.07.25zM8.7 12.84 6.67 11.67a.07.07 0 0 1-.04-.05V6.03a4.51 4.51 0 0 1 7.4-3.46l-.14.08-4.8 2.77a.77.77 0 0 0-.39.68v6.74zm1.1-2.37 2.61-1.51 2.61 1.5v3.01l-2.61 1.51-2.61-1.5V10.47z" />
     </svg>
   );
 }
@@ -22,7 +22,7 @@ function OpenAiIcon({ className = 'size-4' }: { className?: string }) {
 function ClaudeIcon({ className = 'size-4' }: { className?: string }) {
   return (
     <svg viewBox="0 0 24 24" fill="currentColor" className={className}>
-      <path d="M12 2a1.5 1.5 0 0 0-1.5 1.5v2.2A1.5 1.5 0 0 0 12 7.2a1.5 1.5 0 0 0 1.5-1.5V3.5A1.5 1.5 0 0 0 12 2Zm6.7 3.3a1.5 1.5 0 0 0-2.1.2 1.5 1.5 0 0 0 .2 2.1l1.6 1.3a1.5 1.5 0 0 0 2.1-.2 1.5 [...]
+      <path d="M12 2a1.5 1.5 0 0 0-1.5 1.5v2.2A1.5 1.5 0 0 0 12 7.2a1.5 1.5 0 0 0 1.5-1.5V3.5A1.5 1.5 0 0 0 12 2Zm6.7 3.3a1.5 1.5 0 0 0-2.1.2 1.5 1.5 0 0 0 .2 2.1l1.6 1.3a1.5 1.5 0 0 0 2.1-.2 1.5 1.5 0 0 0-.2-2.1L18.7 5.3Zm-13.4 0-1.6 1.3a1.5 1.5 0 0 0-.2 2.1 1.5 1.5 0 0 0 2.1.2l1.6-1.3a1.5 1.5 0 0 0 .2-2.1 1.5 1.5 0 0 0-2.1-.2ZM2 10.5A1.5 1.5 0 0 0 .5 12 1.5 1.5 0 0 0 2 13.5h2.2A1.5 1.5 0 0 0 5.7 12a1.5 1.5 0 0 0-1.5-1.5H2Zm15.6 0A1.5 1.5 0 0 0 16 12a1.5 1.5 0 0 0 1.5 1.5H20a1.5 1.5 0 0 0 1.5-1.5A1.5 1.5 0 0 0 20 10.5h-2.4Zm-9.4 5.5-1.6 1.3a1.5 1.5 0 0 0-.2 2.1 1.5 1.5 0 0 0 2.1.2l1.6-1.3a1.5 1.5 0 0 0 .2-2.1 1.5 1.5 0 0 0-2.1-.2Zm7.6 0a1.5 1.5 0 0 0-2.1.2 1.5 1.5 0 0 0 .2 2.1l1.6 1.3a1.5 1.5 0 0 0 2.1-.2 1.5 1.5 0 0 0-.2-2.1L15.8 16ZM12 16.8a1.5 1.5 0 0 0-1.5 1.5v2.2A1.5 1.5 0 0 0 12 22a1.5 1.5 0 0 0 1.5-1.5v-2.2A1.5 1.5 0 0 0 12 16.8Z" />
     </svg>
   );
 }
@@ -38,7 +38,7 @@ function GeminiIcon({ className = 'size-4' }: { className?: string }) {
 function DeepSeekIcon({ className = 'size-4' }: { className?: string }) {
   return (
     <svg viewBox="0 0 24 24" fill="currentColor" className={className}>
-      <path d="M21.5 12c0 4.14-3.58 7.5-8 7.5a9.2 9.2 0 0 1-5.18-1.57C6.1 19.38 3.5 20 2 20c1.2-1.5 1.8-3.1 1.7-4.44A7.28 7.28 0 0 1 2.5 12C2.5 7.86 6.08 4.5 10.5 4.5S18.5 7.86 18.5 12v.5a1 1 0 0 [...]
+      <path d="M21.5 12c0 4.14-3.58 7.5-8 7.5a9.2 9.2 0 0 1-5.18-1.57C6.1 19.38 3.5 20 2 20c1.2-1.5 1.8-3.1 1.7-4.44A7.28 7.28 0 0 1 2.5 12C2.5 7.86 6.08 4.5 10.5 4.5S18.5 7.86 18.5 12v.5a1 1 0 0 0 1 1 1 1 0 0 0 1-1V12a2 2 0 0 1 1 0zm-11 1a1 1 0 1 0 0-2 1 1 0 0 0 0 2zm3.5 0a1 1 0 1 0 0-2 1 1 0 0 0 0 2zm3.5 0a1 1 0 1 0 0-2 1 1 0 0 0 0 2z" />
     </svg>
   );
 }
@@ -149,7 +149,7 @@ export function LandingPage() {
           </svg>
 
           {/* Central Ketner Hub Circle */}
-          <div className="relative z-10 size-28 sm:size-32 rounded-full border-2 border-cyan-400/70 bg-gradient-to-b from-[#0c2331] to-[#061118] p-3 shadow-[0_0_35px_rgba(6,182,212,0.4)] flex fle[...]
+          <div className="relative z-10 size-28 sm:size-32 rounded-full border-2 border-cyan-400/70 bg-gradient-to-b from-[#0c2331] to-[#061118] p-3 shadow-[0_0_35px_rgba(6,182,212,0.4)] flex fle">
             <img src="/logo-mark.png" alt="Ketner AI" className="size-9 sm:size-10 object-contain drop-shadow-[0_0_12px_rgba(6,182,212,0.8)]" />
             <span className="mt-1.5 text-[10px] sm:text-[11px] font-extrabold tracking-wider text-cyan-300 uppercase">
               Ketner AI
@@ -157,7 +157,7 @@ export function LandingPage() {
           </div>
 
           {/* 1. TOP: GPT-6 Astra */}
-          <div className="absolute top-0 left-1/2 -translate-x-1/2 z-20 flex items-center gap-2.5 rounded-2xl border border-cyan-500/30 bg-[#0C1520]/95 px-3.5 py-2 shadow-xl backdrop-blur-md hove[...]
+          <div className="absolute top-0 left-1/2 -translate-x-1/2 z-20 flex items-center gap-2.5 rounded-2xl border border-cyan-500/30 bg-[#0C1520]/95 px-3.5 py-2 shadow-xl backdrop-blur-md hove">
             <div className="grid size-7 place-items-center rounded-lg bg-emerald-500/10 text-emerald-400">
               <OpenAiIcon className="size-4" />
             </div>
@@ -173,7 +173,7 @@ export function LandingPage() {
           </div>
 
           {/* 2. TOP RIGHT: Gemini Pro */}
-          <div className="absolute top-10 right-0 z-20 flex items-center gap-2.5 rounded-2xl border border-cyan-500/30 bg-[#0C1520]/95 px-3.5 py-2 shadow-xl backdrop-blur-md hover:border-cyan-400[...]
+          <div className="absolute top-10 right-0 z-20 flex items-center gap-2.5 rounded-2xl border border-cyan-500/30 bg-[#0C1520]/95 px-3.5 py-2 shadow-xl backdrop-blur-md hover:border-cyan-400">
             <div className="grid size-7 place-items-center rounded-lg bg-blue-500/10 text-blue-400">
               <GeminiIcon className="size-4" />
             </div>
@@ -189,7 +189,7 @@ export function LandingPage() {
           </div>
 
           {/* 3. BOTTOM RIGHT: DeepSeek R1 */}
-          <div className="absolute bottom-10 right-0 z-20 flex items-center gap-2.5 rounded-2xl border border-cyan-500/30 bg-[#0C1520]/95 px-3.5 py-2 shadow-xl backdrop-blur-md hover:border-cyan-[...]
+          <div className="absolute bottom-10 right-0 z-20 flex items-center gap-2.5 rounded-2xl border border-cyan-500/30 bg-[#0C1520]/95 px-3.5 py-2 shadow-xl backdrop-blur-md hover:border-cyan-">
             <div className="grid size-7 place-items-center rounded-lg bg-sky-500/10 text-sky-400">
               <DeepSeekIcon className="size-4" />
             </div>
@@ -205,7 +205,7 @@ export function LandingPage() {
           </div>
 
           {/* 4. BOTTOM: Qwen Max */}
-          <div className="absolute bottom-0 left-1/2 -translate-x-1/2 z-20 flex items-center gap-2.5 rounded-2xl border border-cyan-500/30 bg-[#0C1520]/95 px-3.5 py-2 shadow-xl backdrop-blur-md h[...]
+          <div className="absolute bottom-0 left-1/2 -translate-x-1/2 z-20 flex items-center gap-2.5 rounded-2xl border border-cyan-500/30 bg-[#0C1520]/95 px-3.5 py-2 shadow-xl backdrop-blur-md h">
             <div className="grid size-7 place-items-center rounded-lg bg-purple-500/10 text-purple-400">
               <QwenIcon className="size-4" />
             </div>
@@ -221,7 +221,7 @@ export function LandingPage() {
           </div>
 
           {/* 5. BOTTOM LEFT: Grok 3 */}
-          <div className="absolute bottom-10 left-0 z-20 flex items-center gap-2.5 rounded-2xl border border-cyan-500/30 bg-[#0C1520]/95 px-3.5 py-2 shadow-xl backdrop-blur-md hover:border-cyan-4[...]
+          <div className="absolute bottom-10 left-0 z-20 flex items-center gap-2.5 rounded-2xl border border-cyan-500/30 bg-[#0C1520]/95 px-3.5 py-2 shadow-xl backdrop-blur-md hover:border-cyan-4">
             <div className="grid size-7 place-items-center rounded-lg bg-slate-800 text-slate-200">
               <GrokIcon className="size-4" />
             </div>
@@ -237,7 +237,7 @@ export function LandingPage() {
           </div>
 
           {/* 6. TOP LEFT: Claude Opus */}
-          <div className="absolute top-10 left-0 z-20 flex items-center gap-2.5 rounded-2xl border border-cyan-500/30 bg-[#0C1520]/95 px-3.5 py-2 shadow-xl backdrop-blur-md hover:border-cyan-400/[...]
+          <div className="absolute top-10 left-0 z-20 flex items-center gap-2.5 rounded-2xl border border-cyan-500/30 bg-[#0C1520]/95 px-3.5 py-2 shadow-xl backdrop-blur-md hover:border-cyan-400/">
             <div className="grid size-7 place-items-center rounded-lg bg-orange-500/10 text-orange-400">
               <ClaudeIcon className="size-4" />
             </div>
@@ -282,15 +282,13 @@ export function LandingPage() {
           <div className="flex flex-wrap items-center gap-4 pt-1">
             <Link
               to="/chat"
-              className="inline-flex items-center justify-center gap-2 rounded-xl bg-emerald-400 px-7 py-3.5 text-sm font-bold text-slate-950 hover:bg-emerald-300 transition-all shadow-lg shadow-[...]
-            >
+              className="inline-flex items-center justify-center gap-2 rounded-xl bg-emerald-400 px-7 py-3.5 text-sm font-bold text-slate-950 hover:bg-emerald-300 transition-all shadow-lg">
               <span>{t('landing.cta')}</span>
               <span className="text-base font-bold">→</span>
             </Link>
             <Link
               to="/pricing"
-              className="inline-flex items-center justify-center gap-2 rounded-xl border border-emerald-500/40 bg-emerald-950/20 px-6 py-3.5 text-sm font-medium text-emerald-300 hover:bg-emerald-[...]
-            >
+              className="inline-flex items-center justify-center gap-2 rounded-xl border border-emerald-500/40 bg-emerald-950/20 px-6 py-3.5 text-sm font-medium text-emerald-300 hover:bg-emerald-400/10 transition-all">
               <span>{t('landing.viewPlans')}</span>
             </Link>
           </div>
@@ -468,8 +466,8 @@ export function LandingPage() {
                     </div>
                     <p className="text-slate-300 text-xs leading-relaxed">
                       {language === 'ru'
-                        ? 'Классические компьютеры обрабатывают данные последовательно с помощью бинарных битов (0 ил[...]
-                        : 'Classical computers process data sequentially using binary bits (0 or 1). Quantum computers utilize qubits and superposition to evaluate multiple states simultaneously,[...]
+                        ? 'Классические компьютеры обрабатывают данные последовательно с помощью бинарных битов (0 или 1). Квантовые компьютеры используют кубиты и суперпозицию для одновременной обработки множества состояний.'
+                        : 'Classical computers process data sequentially using binary bits (0 or 1). Quantum computers utilize qubits and superposition to evaluate multiple states simultaneously.'}
                     </p>
                   </div>
                 </div>

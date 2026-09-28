@@ -10,15 +10,18 @@
     "start": "node dist/server.js",
     "bot": "tsx src/telegram/runner.ts",
     "typecheck": "tsc --noEmit",
-    "test": "tsx --test src/health.test.ts src/ai/answers.test.ts src/ai/gateway.test.ts src/services/currency.test.ts src/services/vip.test.ts src/store/conversation-store.test.ts src/routes/conversations.test.ts src/routes/chat.test.ts src/routes/auth.test.ts src/routes/billing.test.ts src/routes/telegram.test.ts src/routes/admin.test.ts src/routes/webhooks.test.ts"
+    "test": "cross-env BETTER_AUTH_SECRET=test-secret-for-ci-at-least-32-chars-long tsx --test \"src/**/*.test.ts\""
   },
   "dependencies": {
+    "better-auth": "^1.7.5",
+    "cors": "^2.8.6",
+    "express": "^5.2.1"
+  },
+  "devDependencies": {
     "@types/cors": "^2.8.19",
     "@types/express": "^5.0.6",
     "@types/node": "^26.6.2",
-    "better-auth": "^1.7.5",
-    "cors": "^2.8.6",
-    "express": "^5.2.1",
+    "cross-env": "^7.0.3",
     "tsx": "^4.23.15",
     "typescript": "^6.0.3"
   }
