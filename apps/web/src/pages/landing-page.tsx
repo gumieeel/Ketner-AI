@@ -5,6 +5,7 @@ import {
 } from '@/components/icons';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/features/auth/auth-store';
+import { PLANS } from '@/features/billing/plans';
 import { useTranslation } from '@/i18n';
 import type { Language } from '@/features/preferences/preferences-store';
 import { cn } from '@/lib/cn';
@@ -13,7 +14,7 @@ import { cn } from '@/lib/cn';
 function OpenAiIcon({ className = 'size-4' }: { className?: string }) {
   return (
     <svg viewBox="0 0 24 24" fill="currentColor" className={className}>
-      <path d="M22.28 9.5a5.98 5.98 0 0 0-.52-4.92 6.05 6.05 0 0 0-6.51-2.9A6.07 6.07 0 0 0 10.5 0a6.05 6.05 0 0 0-5.76 4.2 6.07 6.07 0 0 0-4.14 3 6.04 6.04 0 0 0 .75 7.14 5.98 5.98 0 0 0 .52 4.92 6.05 6.05 0 0 0 6.51 2.9A6.07 6.07 0 0 0 13.5 24a6.05 6.05 0 0 0 5.76-4.2 6.07 6.07 0 0 0 4.14-3 6.04 6.04 0 0 0-.75-7.14l-.37-.16ZM13.5 22.45a4.5 4.5 0 0 1-2.9-1.06l.15-.09 4.8-2.77a.8.8 0 0 0 .4-.68v-6.76l2.03 1.17a.08.08 0 0 1 .05.07v5.6a4.52 4.52 0 0 1-4.53 4.52Zm-8.7-3.92a4.48 4.48 0 0 1-.6-3.04l.15.1 4.8 2.76a.79.79 0 0 0 .78 0l5.86-3.38v2.35a.08.08 0 0 1-.04.07l-4.85 2.8a4.52 4.52 0 0 1-6.1-1.66Zm-2.32-9.14a4.49 4.49 0 0 1 2.3-1.98v5.72a.8.8 0 0 0 .4.69l5.86 3.38-2.03 1.18a.08.08 0 0 1-.08 0l-4.85-2.8a4.52 4.52 0 0 1-1.6-6.19Zm14.24 1.7-5.86-3.38 2.03-1.18a.08.08 0 0 1 .08 0l4.85 2.8a4.52 4.52 0 0 1 1.6 6.19 4.49 4.49 0 0 1-2.3 1.98v-5.72a.8.8 0 0 0-.4-.69Zm3.14-2.82-.15-.1-4.8-2.76a.79.79 0 0 0-.78 0l-5.86 3.38V6.54a.08.08 0 0 1 .04-.07l4.85-2.8a4.52 4.52 0 0 1 6.1 1.66 4.48 4.48 0 0 1 .6 3.04l-.07-.1-.01-.01ZM8.08 13.06l-2.03-1.17a.08.08 0 0 1-.05-.07v-5.6a4.52 4.52 0 0 1 7.43-3.46l-.15.09-4.8 2.77a.8.8 0 0 0-.4.68v6.76Zm1.47-2.61 2.45-1.42 2.45 1.42v2.83l-2.45 1.42-2.45-1.42V10.45Z" />
+      <path d="M22.28 9.5a5.98 5.98 0 0 0-.52-4.92 6.05 6.05 0 0 0-6.51-2.9A6.07 6.07 0 0 0 10.5 0a6.05 6.05 0 0 0-5.76 4.2 6.07 6.07 0 0 0-4.14 3 6.04 6.04 0 0 0 .75 7.14 5.98 5.98 0 0 0 .52 4.92[...]
     </svg>
   );
 }
@@ -21,7 +22,7 @@ function OpenAiIcon({ className = 'size-4' }: { className?: string }) {
 function ClaudeIcon({ className = 'size-4' }: { className?: string }) {
   return (
     <svg viewBox="0 0 24 24" fill="currentColor" className={className}>
-      <path d="M12 2a1.5 1.5 0 0 0-1.5 1.5v2.2A1.5 1.5 0 0 0 12 7.2a1.5 1.5 0 0 0 1.5-1.5V3.5A1.5 1.5 0 0 0 12 2Zm6.7 3.3a1.5 1.5 0 0 0-2.1.2 1.5 1.5 0 0 0 .2 2.1l1.6 1.3a1.5 1.5 0 0 0 2.1-.2 1.5 1.5 0 0 0-.2-2.1l-1.6-1.3ZM5.3 5.5a1.5 1.5 0 0 0-.2 2.1l1.6 1.3a1.5 1.5 0 0 0 2.1-.2 1.5 1.5 0 0 0-.2-2.1L7 5.3a1.5 1.5 0 0 0-1.7.2ZM12 8.5a3.5 3.5 0 1 0 0 7 3.5 3.5 0 0 0 0-7ZM3.5 10.5a1.5 1.5 0 0 0-1.5 1.5 1.5 1.5 0 0 0 1.5 1.5h2.2a1.5 1.5 0 0 0 1.5-1.5 1.5 1.5 0 0 0-1.5-1.5H3.5Zm17 0a1.5 1.5 0 0 0-1.5 1.5 1.5 1.5 0 0 0 1.5 1.5h2.2a1.5 1.5 0 0 0 1.5-1.5 1.5 1.5 0 0 0-1.5-1.5h-2.2Zm-13.8 6a1.5 1.5 0 0 0-2.1.2l-1.3 1.6a1.5 1.5 0 0 0 .2 2.1 1.5 1.5 0 0 0 2.1-.2l1.3-1.6a1.5 1.5 0 0 0-.2-2.1Zm10.6 0a1.5 1.5 0 0 0-.2 2.1l1.3 1.6a1.5 1.5 0 0 0 2.1.2 1.5 1.5 0 0 0 .2-2.1l-1.3-1.6a1.5 1.5 0 0 0-2.1-.2ZM12 16.8a1.5 1.5 0 0 0-1.5 1.5v2.2a1.5 1.5 0 0 0 3 0v-2.2a1.5 1.5 0 0 0-1.5-1.5Z" />
+      <path d="M12 2a1.5 1.5 0 0 0-1.5 1.5v2.2A1.5 1.5 0 0 0 12 7.2a1.5 1.5 0 0 0 1.5-1.5V3.5A1.5 1.5 0 0 0 12 2Zm6.7 3.3a1.5 1.5 0 0 0-2.1.2 1.5 1.5 0 0 0 .2 2.1l1.6 1.3a1.5 1.5 0 0 0 2.1-.2 1.5 [...]
     </svg>
   );
 }
@@ -37,7 +38,7 @@ function GeminiIcon({ className = 'size-4' }: { className?: string }) {
 function DeepSeekIcon({ className = 'size-4' }: { className?: string }) {
   return (
     <svg viewBox="0 0 24 24" fill="currentColor" className={className}>
-      <path d="M21.5 12c0 4.14-3.58 7.5-8 7.5a9.2 9.2 0 0 1-5.18-1.57C6.1 19.38 3.5 20 2 20c1.2-1.5 1.8-3.1 1.7-4.44A7.28 7.28 0 0 1 2.5 12C2.5 7.86 6.08 4.5 10.5 4.5S18.5 7.86 18.5 12v.5a1 1 0 0 0 2 0V12c0-5.25-4.48-9.5-10-9.5S.5 6.75.5 12c0 2.05.68 3.96 1.85 5.52C2 19.8 0 21 0 21c2.8 0 5.6-.9 7.6-2.25 1.8.48 3.8.75 5.9.75 5.52 0 10-4.25 10-9.5a1 1 0 0 0-2 0Z" />
+      <path d="M21.5 12c0 4.14-3.58 7.5-8 7.5a9.2 9.2 0 0 1-5.18-1.57C6.1 19.38 3.5 20 2 20c1.2-1.5 1.8-3.1 1.7-4.44A7.28 7.28 0 0 1 2.5 12C2.5 7.86 6.08 4.5 10.5 4.5S18.5 7.86 18.5 12v.5a1 1 0 0 [...]
     </svg>
   );
 }
@@ -61,7 +62,7 @@ function GrokIcon({ className = 'size-4' }: { className?: string }) {
 interface TierPlan {
   id: string;
   name: string;
-  price: Record<Language, string>;
+  price: string;
   period: Record<Language, string>;
   speed: Record<Language, string>;
   priority: Record<Language, string>;
@@ -72,59 +73,49 @@ interface TierPlan {
   href: string;
 }
 
-const TIER_PLANS: TierPlan[] = [
-  {
-    id: 'free',
-    name: 'Free',
-    price: { ru: '0 ₽', en: '$0' },
-    period: { ru: '/ месяц', en: '/ month' },
-    speed: { ru: 'Базовая скорость ответов', en: 'Standard response speed' },
-    priority: { ru: 'Стандартная очередь', en: 'Standard queue priority' },
-    context: { ru: 'Стандартный контекст диалога', en: 'Standard context window' },
-    buttonText: { ru: 'Начать чат', en: 'Start chatting' },
-    href: '/chat',
-  },
-  {
-    id: 'plus',
-    name: 'Plus',
-    price: { ru: '990 ₽', en: '$9.99' },
-    period: { ru: '/ месяц', en: '/ month' },
-    speed: { ru: 'Быстрая скорость генерации', en: 'Fast response speed' },
-    priority: { ru: 'Повышенный приоритет очереди', en: 'Enhanced queue priority' },
-    context: { ru: 'Расширенный контекст', en: 'Extended conversation context' },
-    buttonText: { ru: 'Выбрать Plus', en: 'Get Plus' },
-    href: '/checkout/plus',
-  },
-  {
-    id: 'pro',
-    name: 'Pro',
-    price: { ru: '1 990 ₽', en: '$19.99' },
-    period: { ru: '/ месяц', en: '/ month' },
-    speed: { ru: 'Сверхбыстрый отклик флагманов', en: 'Ultra-fast flagship speed' },
-    priority: { ru: 'Высокий приоритет без ожидания', en: 'High priority processing' },
-    context: { ru: 'Глубокий контекст (все флагманы AI)', en: 'Deep multi-turn context (all flagship AIs)' },
-    popular: true,
-    popularBadge: { ru: 'Популярный', en: 'Most Popular' },
-    buttonText: { ru: 'Выбрать Pro', en: 'Get Pro' },
-    href: '/checkout/pro',
-  },
-  {
-    id: 'ultra',
-    name: 'Ultra',
-    price: { ru: '2 499 ₽', en: '$39.99' },
-    period: { ru: '/ месяц', en: '/ month' },
-    speed: { ru: 'Максимальная скорость серверов', en: 'Maximum processing speed' },
-    priority: { ru: 'Выделенный VIP-приоритет', en: 'Dedicated VIP priority' },
-    context: { ru: 'Огромный контекст для проектов', en: 'Massive context for full project work' },
-    buttonText: { ru: 'Выбрать Ultra', en: 'Get Ultra' },
-    href: '/checkout/ultra',
-  },
-];
-
 export function LandingPage() {
   const { t, language } = useTranslation();
   const status = useAuth((state) => state.status);
   const user = useAuth((state) => state.user);
+
+  // Динамически создаём TIER_PLANS из PLANS
+  const TIER_PLANS: TierPlan[] = PLANS.map((plan) => ({
+    id: plan.id,
+    name: plan.id.charAt(0).toUpperCase() + plan.id.slice(1),
+    price: plan.priceMonthly === 0 ? '$0' : `$${plan.priceMonthly}`,
+    period: { ru: '/ месяц', en: '/ month' },
+    speed:
+      plan.id === 'free'
+        ? { ru: 'Базовая скорость ответов', en: 'Standard response speed' }
+        : plan.id === 'plus'
+          ? { ru: 'Быстрая скорость генерации', en: 'Fast response speed' }
+          : plan.id === 'pro'
+            ? { ru: 'Средняя скорость обработки', en: 'Standard processing speed' }
+            : { ru: 'Максимальная скорость обработки', en: 'Maximum processing speed' },
+    priority:
+      plan.id === 'free'
+        ? { ru: 'Стандартная очередь', en: 'Standard queue priority' }
+        : plan.id === 'plus'
+          ? { ru: 'Повышенный приоритет очереди', en: 'Enhanced queue priority' }
+          : plan.id === 'pro'
+            ? { ru: 'Высокий приоритет без ожидания', en: 'High priority processing' }
+            : { ru: 'Выделенный VIP-приоритет', en: 'Dedicated VIP priority' },
+    context:
+      plan.id === 'free'
+        ? { ru: 'Стандартный контекст диалога', en: 'Standard context window' }
+        : { ru: 'Безлимитный контекст диалога', en: 'Unlimited conversation context' },
+    popular: plan.popular,
+    popularBadge: plan.popular ? { ru: 'Популярный', en: 'Most Popular' } : undefined,
+    buttonText:
+      plan.id === 'free'
+        ? { ru: 'Начать чат', en: 'Start chatting' }
+        : plan.id === 'plus'
+          ? { ru: 'Выбрать Plus', en: 'Get Plus' }
+          : plan.id === 'pro'
+            ? { ru: 'Выбрать Pro', en: 'Get Pro' }
+            : { ru: 'Выбрать Ultra', en: 'Get Ultra' },
+    href: plan.id === 'free' ? '/chat' : `/checkout/${plan.id}`,
+  }));
 
   return (
     <div className="mx-auto flex w-full max-w-7xl flex-col items-center gap-24 px-4 py-8 md:px-8 lg:py-12 animate-fade-in text-center selection:bg-emerald-500/20 selection:text-emerald-300">
@@ -158,7 +149,7 @@ export function LandingPage() {
           </svg>
 
           {/* Central Ketner Hub Circle */}
-          <div className="relative z-10 size-28 sm:size-32 rounded-full border-2 border-cyan-400/70 bg-gradient-to-b from-[#0c2331] to-[#061118] p-3 shadow-[0_0_35px_rgba(6,182,212,0.4)] flex flex-col items-center justify-center text-center">
+          <div className="relative z-10 size-28 sm:size-32 rounded-full border-2 border-cyan-400/70 bg-gradient-to-b from-[#0c2331] to-[#061118] p-3 shadow-[0_0_35px_rgba(6,182,212,0.4)] flex fle[...]
             <img src="/logo-mark.png" alt="Ketner AI" className="size-9 sm:size-10 object-contain drop-shadow-[0_0_12px_rgba(6,182,212,0.8)]" />
             <span className="mt-1.5 text-[10px] sm:text-[11px] font-extrabold tracking-wider text-cyan-300 uppercase">
               Ketner AI
@@ -166,7 +157,7 @@ export function LandingPage() {
           </div>
 
           {/* 1. TOP: GPT-6 Astra */}
-          <div className="absolute top-0 left-1/2 -translate-x-1/2 z-20 flex items-center gap-2.5 rounded-2xl border border-cyan-500/30 bg-[#0C1520]/95 px-3.5 py-2 shadow-xl backdrop-blur-md hover:border-cyan-400/60 transition-all">
+          <div className="absolute top-0 left-1/2 -translate-x-1/2 z-20 flex items-center gap-2.5 rounded-2xl border border-cyan-500/30 bg-[#0C1520]/95 px-3.5 py-2 shadow-xl backdrop-blur-md hove[...]
             <div className="grid size-7 place-items-center rounded-lg bg-emerald-500/10 text-emerald-400">
               <OpenAiIcon className="size-4" />
             </div>
@@ -182,7 +173,7 @@ export function LandingPage() {
           </div>
 
           {/* 2. TOP RIGHT: Gemini Pro */}
-          <div className="absolute top-10 right-0 z-20 flex items-center gap-2.5 rounded-2xl border border-cyan-500/30 bg-[#0C1520]/95 px-3.5 py-2 shadow-xl backdrop-blur-md hover:border-cyan-400/60 transition-all">
+          <div className="absolute top-10 right-0 z-20 flex items-center gap-2.5 rounded-2xl border border-cyan-500/30 bg-[#0C1520]/95 px-3.5 py-2 shadow-xl backdrop-blur-md hover:border-cyan-400[...]
             <div className="grid size-7 place-items-center rounded-lg bg-blue-500/10 text-blue-400">
               <GeminiIcon className="size-4" />
             </div>
@@ -198,7 +189,7 @@ export function LandingPage() {
           </div>
 
           {/* 3. BOTTOM RIGHT: DeepSeek R1 */}
-          <div className="absolute bottom-10 right-0 z-20 flex items-center gap-2.5 rounded-2xl border border-cyan-500/30 bg-[#0C1520]/95 px-3.5 py-2 shadow-xl backdrop-blur-md hover:border-cyan-400/60 transition-all">
+          <div className="absolute bottom-10 right-0 z-20 flex items-center gap-2.5 rounded-2xl border border-cyan-500/30 bg-[#0C1520]/95 px-3.5 py-2 shadow-xl backdrop-blur-md hover:border-cyan-[...]
             <div className="grid size-7 place-items-center rounded-lg bg-sky-500/10 text-sky-400">
               <DeepSeekIcon className="size-4" />
             </div>
@@ -214,7 +205,7 @@ export function LandingPage() {
           </div>
 
           {/* 4. BOTTOM: Qwen Max */}
-          <div className="absolute bottom-0 left-1/2 -translate-x-1/2 z-20 flex items-center gap-2.5 rounded-2xl border border-cyan-500/30 bg-[#0C1520]/95 px-3.5 py-2 shadow-xl backdrop-blur-md hover:border-cyan-400/60 transition-all">
+          <div className="absolute bottom-0 left-1/2 -translate-x-1/2 z-20 flex items-center gap-2.5 rounded-2xl border border-cyan-500/30 bg-[#0C1520]/95 px-3.5 py-2 shadow-xl backdrop-blur-md h[...]
             <div className="grid size-7 place-items-center rounded-lg bg-purple-500/10 text-purple-400">
               <QwenIcon className="size-4" />
             </div>
@@ -230,7 +221,7 @@ export function LandingPage() {
           </div>
 
           {/* 5. BOTTOM LEFT: Grok 3 */}
-          <div className="absolute bottom-10 left-0 z-20 flex items-center gap-2.5 rounded-2xl border border-cyan-500/30 bg-[#0C1520]/95 px-3.5 py-2 shadow-xl backdrop-blur-md hover:border-cyan-400/60 transition-all">
+          <div className="absolute bottom-10 left-0 z-20 flex items-center gap-2.5 rounded-2xl border border-cyan-500/30 bg-[#0C1520]/95 px-3.5 py-2 shadow-xl backdrop-blur-md hover:border-cyan-4[...]
             <div className="grid size-7 place-items-center rounded-lg bg-slate-800 text-slate-200">
               <GrokIcon className="size-4" />
             </div>
@@ -246,7 +237,7 @@ export function LandingPage() {
           </div>
 
           {/* 6. TOP LEFT: Claude Opus */}
-          <div className="absolute top-10 left-0 z-20 flex items-center gap-2.5 rounded-2xl border border-cyan-500/30 bg-[#0C1520]/95 px-3.5 py-2 shadow-xl backdrop-blur-md hover:border-cyan-400/60 transition-all">
+          <div className="absolute top-10 left-0 z-20 flex items-center gap-2.5 rounded-2xl border border-cyan-500/30 bg-[#0C1520]/95 px-3.5 py-2 shadow-xl backdrop-blur-md hover:border-cyan-400/[...]
             <div className="grid size-7 place-items-center rounded-lg bg-orange-500/10 text-orange-400">
               <ClaudeIcon className="size-4" />
             </div>
@@ -291,14 +282,14 @@ export function LandingPage() {
           <div className="flex flex-wrap items-center gap-4 pt-1">
             <Link
               to="/chat"
-              className="inline-flex items-center justify-center gap-2 rounded-xl bg-emerald-400 px-7 py-3.5 text-sm font-bold text-slate-950 hover:bg-emerald-300 transition-all shadow-lg shadow-emerald-500/20"
+              className="inline-flex items-center justify-center gap-2 rounded-xl bg-emerald-400 px-7 py-3.5 text-sm font-bold text-slate-950 hover:bg-emerald-300 transition-all shadow-lg shadow-[...]
             >
               <span>{t('landing.cta')}</span>
               <span className="text-base font-bold">→</span>
             </Link>
             <Link
               to="/pricing"
-              className="inline-flex items-center justify-center gap-2 rounded-xl border border-emerald-500/40 bg-emerald-950/20 px-6 py-3.5 text-sm font-medium text-emerald-300 hover:bg-emerald-900/30 transition-all"
+              className="inline-flex items-center justify-center gap-2 rounded-xl border border-emerald-500/40 bg-emerald-950/20 px-6 py-3.5 text-sm font-medium text-emerald-300 hover:bg-emerald-[...]
             >
               <span>{t('landing.viewPlans')}</span>
             </Link>
@@ -477,8 +468,8 @@ export function LandingPage() {
                     </div>
                     <p className="text-slate-300 text-xs leading-relaxed">
                       {language === 'ru'
-                        ? 'Классические компьютеры обрабатывают данные последовательно с помощью бинарных битов (0 или 1). Квантовые компьютеры задействуют кубиты и суперпозицию для анализа множества состояний одновременно, решая сложнейшие задачи оптимизации в разы быстрее.'
-                        : 'Classical computers process data sequentially using binary bits (0 or 1). Quantum computers utilize qubits and superposition to evaluate multiple states simultaneously, solving complex optimization problems exponentially faster.'}
+                        ? 'Классические компьютеры обрабатывают данные последовательно с помощью бинарных битов (0 ил[...]
+                        : 'Classical computers process data sequentially using binary bits (0 or 1). Quantum computers utilize qubits and superposition to evaluate multiple states simultaneously,[...]
                     </p>
                   </div>
                 </div>
@@ -537,7 +528,7 @@ export function LandingPage() {
               <div>
                 <h3 className="text-lg font-bold text-white">{plan.name}</h3>
                 <div className="mt-2 flex items-baseline gap-1">
-                  <span className="text-3xl font-extrabold text-white">{plan.price[language]}</span>
+                  <span className="text-3xl font-extrabold text-white">{plan.price}</span>
                   <span className="text-xs text-slate-400">{plan.period[language]}</span>
                 </div>
 
