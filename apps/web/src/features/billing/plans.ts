@@ -4,7 +4,7 @@ export type { Plan, PlanId };
 
 /**
  * Каталог тарифов Ketner AI.
- * 5 специализированных тарифов: Free, GPT Pro, Claude Pro, Gemini Pro, Ultra.
+ * 4 тарифа: Free, Plus ($9), Pro ($29), Ultra (максимум).
  */
 export const PLANS: readonly Plan[] = [
   {
@@ -34,82 +34,88 @@ export const PLANS: readonly Plan[] = [
   {
     id: 'plus',
     nameKey: 'pricing.plus',
-    priceMonthly: 990,
+    priceMonthly: 9,
     limitBadge: {
-      ru: 'Безлимитный AI',
-      en: 'Unlimited AI',
+      ru: 'Стандартный AI',
+      en: 'Standard AI',
     },
     modelsHighlight: {
-      ru: 'Все модели через Auto Mode',
-      en: 'All models via Auto Mode',
+      ru: 'DeepSeek v4.1 Flash, Claude 3.5 Haiku, GPT-4o',
+      en: 'DeepSeek v4.1 Flash, Claude 3.5 Haiku, GPT-4o',
     },
     bullets: {
       ru: [
-        'Безлимитный доступ к AI',
-        'Доступ ко всем моделям через Auto Mode',
-        'Обычная скорость генерации',
-        'Расширенный контекст диалога',
+        'Стандартные быстрые модели: DeepSeek v4.1 Flash, Claude 3.5 Haiku, GPT-4o',
+        'Быстрая скорость ответа',
+        'Расширенный контекст диалога (8K токенов)',
+        'Доступ через Auto Mode или ручной выбор модели',
       ],
       en: [
-        'Unlimited AI access',
-        'Access to all models via Auto Mode',
-        'Normal response generation speed',
-        'Extended conversation context',
+        'Standard fast models: DeepSeek v4.1 Flash, Claude 3.5 Haiku, GPT-4o',
+        'Fast response speed',
+        'Extended conversation context (8K tokens)',
+        'Access via Auto Mode or manual model selection',
       ],
     },
   },
   {
     id: 'pro',
     nameKey: 'pricing.pro',
-    priceMonthly: 1990,
+    priceMonthly: 29,
     popular: true,
     limitBadge: {
-      ru: 'Быстрее и умнее',
-      en: 'Faster & smarter',
+      ru: 'Топовые модели',
+      en: 'Top models',
     },
     modelsHighlight: {
-      ru: 'GPT-6 Astra, Claude 3.5 Sonnet, Gemini Pro',
-      en: 'GPT-6 Astra, Claude 3.5 Sonnet, Gemini Pro',
+      ru: 'GPT-4o, Claude 3.5 Sonnet, Gemini 2.0 Pro',
+      en: 'GPT-4o, Claude 3.5 Sonnet, Gemini 2.0 Pro',
     },
     bullets: {
       ru: [
-        'Все топовые модели: GPT-6 Astra, Claude 3.5, Gemini',
-        'Повышенная скорость и приоритет серверов',
-        'Глубокий контекст для сложных рассуждений',
-        'Ручной выбор любой флагманской модели',
+        'Топовые модели: GPT-4o, Claude 3.5 Sonnet, Gemini 2.0 Pro',
+        'Пониженный контекст для оптимизации (32K токенов)',
+        'Повышенная скорость обработки',
+        'Все возможности из тарифа Plus',
+        'Ручной выбор любой топовой модели',
       ],
       en: [
-        'All flagship models: GPT-6 Astra, Claude 3.5, Gemini',
-        'Higher speed and queue priority',
-        'Deep multi-turn context for complex reasoning',
-        'Manual selection of any flagship model',
+        'Top models: GPT-4o, Claude 3.5 Sonnet, Gemini 2.0 Pro',
+        'Optimized context window (32K tokens)',
+        'Higher processing speed',
+        'All Plus tier features included',
+        'Manual selection of any top model',
       ],
     },
   },
   {
     id: 'ultra',
     nameKey: 'pricing.ultra',
-    priceMonthly: 2499,
+    priceMonthly: 49,
     limitBadge: {
       ru: 'Максимальная мощность',
-      en: 'Maximum performance',
+      en: 'Maximum power',
     },
     modelsHighlight: {
-      ru: 'Выделенный VIP приоритет + Огромный контекст',
-      en: 'Dedicated VIP priority + Massive context',
+      ru: 'Все топовые модели + максимальный контекст (200K)',
+      en: 'All top models + max context (200K)',
     },
     bullets: {
       ru: [
-        'Максимальная скорость с выделенными ресурсами',
+        'Все топовые модели: GPT-4o, GPT-4 Turbo, Claude 3.5 Sonnet, Gemini 2.0 Pro, o1-preview',
+        'Максимальный контекст (200K токенов) для больших документов и кода',
+        'Использование моделей на 100% без ограничений',
         'Выделенный VIP-приоритет обработки запросов',
-        'Огромный контекст для кода и больших документов',
         'Параллельные запросы без задержек',
+        'Все возможности из тарифа Pro',
       ],
       en: [
-        'Maximum speed with dedicated resources',
+        'All top models: GPT-4o, GPT-4 Turbo, Claude 3.5 Sonnet, Gemini 2.0 Pro, o1-preview',
+        'Maximum context window (200K tokens) for large documents and code',
+        'Full model usage at 100% without limitations',
         'Dedicated VIP queue priority',
-        'Massive context for code and large documents',
         'Parallel concurrent requests without delays',
+        'All Pro tier features included',
       ],
     },
   },
@@ -119,7 +125,7 @@ const LEGACY_PLANS: readonly Plan[] = [
   {
     id: 'gpt-pro',
     nameKey: 'pricing.gptPro',
-    priceMonthly: 1199,
+    priceMonthly: 20,
     bullets: {
       ru: ['Устаревший тариф (включает Pro)'],
       en: ['Legacy plan (includes Pro)'],
@@ -128,7 +134,7 @@ const LEGACY_PLANS: readonly Plan[] = [
   {
     id: 'claude-pro',
     nameKey: 'pricing.claudePro',
-    priceMonthly: 1199,
+    priceMonthly: 20,
     bullets: {
       ru: ['Устаревший тариф (включает Pro)'],
       en: ['Legacy plan (includes Pro)'],
@@ -137,7 +143,7 @@ const LEGACY_PLANS: readonly Plan[] = [
   {
     id: 'gemini-pro',
     nameKey: 'pricing.geminiPro',
-    priceMonthly: 1199,
+    priceMonthly: 20,
     bullets: {
       ru: ['Устаревший тариф (включает Pro)'],
       en: ['Legacy plan (includes Pro)'],
