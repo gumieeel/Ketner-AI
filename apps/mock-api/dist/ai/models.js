@@ -9,8 +9,8 @@ export const DEFAULT_MODEL_ID = 'auto';
 export const MODELS = [
     // Plus (990 ₽) — стандартные модели
     {
-        id: 'gpt-4o-mini',
-        name: 'GPT-4o mini',
+        id: 'claude-3-haiku',
+        name: 'Claude Haiku 4.5',
         contextMessages: 40,
         isPro: true,
         requiredPlan: 'plus',
@@ -32,28 +32,28 @@ export const MODELS = [
     // Pro (1 990 ₽) — флагманские модели
     {
         id: 'gpt-6-astra',
-        name: 'GPT-6 Astra *',
+        name: 'GPT-6 Astra',
         contextMessages: 120,
         isPro: true,
         requiredPlan: 'pro',
     },
     {
         id: 'claude-fable',
-        name: 'Claude Fable 5.5 *',
+        name: 'Claude Fable 5.5',
         contextMessages: 120,
         isPro: true,
         requiredPlan: 'pro',
     },
     {
         id: 'gemini-2.5-pro',
-        name: 'Gemini 3.8 Flash *',
+        name: 'Gemini 3.8 Flash',
         contextMessages: 120,
         isPro: true,
         requiredPlan: 'pro',
     },
     {
         id: 'grok-4.7',
-        name: 'Grok 4.7 *',
+        name: 'Grok 4.7',
         contextMessages: 120,
         isPro: true,
         requiredPlan: 'pro',

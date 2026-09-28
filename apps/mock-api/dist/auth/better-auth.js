@@ -1,6 +1,7 @@
 import { mkdirSync } from 'node:fs';
 import { dirname } from 'node:path';
 import { betterAuth } from 'better-auth';
+import { dash } from '@better-auth/infra';
 import { getMigrations } from 'better-auth/db/migration';
 import { config } from '../config.js';
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -123,6 +124,11 @@ export function createBetterAuth(options = {}) {
                 },
             },
         },
+        plugins: [
+            dash({
+                apiKey: options.apiKey ?? (config.betterAuthApiKey || process.env.BETTER_AUTH_API_KEY),
+            }),
+        ],
         trustedOrigins: (request) => {
             const origin = request?.headers?.get('origin');
             if (!origin) {
@@ -132,7 +138,8 @@ export function createBetterAuth(options = {}) {
                 origin.startsWith('http://127.0.0.1:') ||
                 origin.includes('ketner-ai') ||
                 origin.includes('onrender.com') ||
-                origin.includes('google.com')) {
+                origin.includes('google.com') ||
+                origin.includes('better-auth.com')) {
                 return [origin];
             }
             return [config.corsOrigin, baseURL];

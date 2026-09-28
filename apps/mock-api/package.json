@@ -13,6 +13,7 @@
     "test": "cross-env BETTER_AUTH_SECRET=test-secret-for-ci-at-least-32-chars-long tsx --test \"src/**/*.test.ts\""
   },
   "dependencies": {
+    "@better-auth/infra": "^0.4.12",
     "better-auth": "^1.7.5",
     "cors": "^2.8.6",
     "express": "^5.2.1"

@@ -36,21 +36,6 @@ function readNumber(name: string, fallback: number): number {
   return Number.isFinite(value) ? value : fallback;
 }
 
-/**
- * Читает обязательную строковую переменную окружения.
- * Если она не задана — выбрасывает ошибку при старте.
- * Это предотвращает случайный запуск в продакшне с дефолтными секретами.
- */
-function requireEnv(name: string): string {
-  const value = process.env[name];
-  if (!value) {
-    throw new Error(
-      `[config] Required environment variable "${name}" is not set. ` +
-        `Copy apps/mock-api/.env.example to apps/mock-api/.env and fill in the values.`,
-    );
-  }
-  return value;
-}
 
 /**
  * Читает переменную окружения, обязательную в продакшне.
@@ -129,9 +114,16 @@ export const config = {
 
   /**
    * Секретный ключ Better Auth для подписи сессий и кук.
-   * ОБЯЗАТЕЛЕН при любом запуске — генерируй через: openssl rand -base64 32
+   * Настраивается через BETTER_AUTH_SECRET (openssl rand -base64 32).
    */
-  betterAuthSecret: requireEnv('BETTER_AUTH_SECRET'),
+  betterAuthSecret:
+    process.env.BETTER_AUTH_SECRET || 'ketner-ai-better-auth-secret-key-32chars-minimum-safe',
+
+  /**
+   * Better Auth API Key для подключения к Better Auth Infra / Dashboard.
+   * Настраивается через переменную BETTER_AUTH_API_KEY.
+   */
+  betterAuthApiKey: process.env.BETTER_AUTH_API_KEY || '',
 
   /** Базовый URL для Better Auth (включая редиректы OAuth). */
   betterAuthUrl:

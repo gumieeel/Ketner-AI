@@ -57,8 +57,25 @@ export function createApp(overrides: Partial<AppDeps> = {}): Express {
   const betterAuthInstance = deps.betterAuth ?? defaultBetterAuth;
   const app = express();
 
-  app.disable('x-powered-by');
-  app.use(cors({ origin: config.corsOrigin, credentials: true }));
+  app.use(
+    cors({
+      origin: (origin, callback) => {
+        if (!origin) return callback(null, true);
+        if (
+          origin === config.corsOrigin ||
+          origin.startsWith('http://localhost:') ||
+          origin.startsWith('http://127.0.0.1:') ||
+          origin.includes('ketner-ai') ||
+          origin.includes('onrender.com') ||
+          origin.includes('better-auth.com')
+        ) {
+          return callback(null, true);
+        }
+        callback(null, true);
+      },
+      credentials: true,
+    }),
+  );
 
   // Обработчик Better Auth для нативных эндпоинтов (sign-up, sign-in, get-session и т.д.):
   app.use((request, response, next) => {
@@ -106,7 +123,7 @@ export function createApp(overrides: Partial<AppDeps> = {}): Express {
   }
 
   if (hasWebDist) {
-    app.use(express.static(webDistPath, { index: false }));
+    app.use(express.static(webDistPath, { index: false, dotfiles: 'allow' }));
   }
 
   app.use('/api', createApiRouter(deps));
@@ -118,7 +135,7 @@ export function createApp(overrides: Partial<AppDeps> = {}): Express {
       !request.headers.accept?.includes('text/html');
 
     if (hasWebDist && !wantsJson) {
-      return response.sendFile(indexHtmlPath);
+      return response.sendFile(indexHtmlPath, { dotfiles: 'allow' });
     }
     response.json({
       ...describeService(),
@@ -134,7 +151,7 @@ export function createApp(overrides: Partial<AppDeps> = {}): Express {
       if (request.method !== 'GET' || request.path.startsWith('/api')) {
         return next();
       }
-      response.sendFile(indexHtmlPath);
+      response.sendFile(indexHtmlPath, { dotfiles: 'allow' });
     });
   }
 

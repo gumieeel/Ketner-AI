@@ -33,6 +33,20 @@ function readNumber(name, fallback) {
     const value = Number(raw);
     return Number.isFinite(value) ? value : fallback;
 }
+/**
+ * Читает переменную окружения, обязательную в продакшне.
+ * В dev-режиме возвращает fallback (с пометкой в имени, что значение нужно заменить).
+ */
+function devOnlyFallback(name, fallback) {
+    const value = process.env[name];
+    if (value)
+        return value;
+    const env = process.env.NODE_ENV ?? 'development';
+    if (env === 'production') {
+        throw new Error(`[config] Environment variable "${name}" is required in production but is not set.`);
+    }
+    return fallback;
+}
 export const config = {
     serviceName: 'ketner-mock-api',
     version: '0.1.0',
@@ -45,12 +59,12 @@ export const config = {
     /** Обменный курс USD к RUB для расчёта экономики тарифов и маржинальности. */
     usdToRubRate: readNumber('USD_TO_RUB_RATE', 95),
     /** Список email адресов с VIP / Ultra доступом. Настраивается через переменную VIP_EMAILS. */
-    vipEmails: (process.env.VIP_EMAILS ?? 'artemsinyakov09@gmail.com')
+    vipEmails: (process.env.VIP_EMAILS ?? '')
         .split(',')
         .map((e) => e.trim().toLowerCase())
         .filter(Boolean),
     /** Список email адресов администраторов с доступом к Admin API. Настраивается через переменную ADMIN_EMAILS. */
-    adminEmails: (process.env.ADMIN_EMAILS ?? 'artemsinyakov09@gmail.com')
+    adminEmails: (process.env.ADMIN_EMAILS ?? '')
         .split(',')
         .map((e) => e.trim().toLowerCase())
         .filter(Boolean),
@@ -69,8 +83,16 @@ export const config = {
         fileURLToPath(new URL('../data/usage.json', import.meta.url)),
     /** База данных Better Auth (SQLite). */
     authDbFile: process.env.AUTH_DB_FILE ?? fileURLToPath(new URL('../data/auth.sqlite', import.meta.url)),
-    /** Секретный ключ Better Auth для подписи сессий и кук. */
-    betterAuthSecret: process.env.BETTER_AUTH_SECRET ?? 'ketner-ai-better-auth-secret-key-32chars-minimum-safe',
+    /**
+     * Секретный ключ Better Auth для подписи сессий и кук.
+     * Настраивается через BETTER_AUTH_SECRET (openssl rand -base64 32).
+     */
+    betterAuthSecret: process.env.BETTER_AUTH_SECRET || 'ketner-ai-better-auth-secret-key-32chars-minimum-safe',
+    /**
+     * Better Auth API Key для подключения к Better Auth Infra / Dashboard.
+     * Настраивается через переменную BETTER_AUTH_API_KEY.
+     */
+    betterAuthApiKey: process.env.BETTER_AUTH_API_KEY || '',
     /** Базовый URL для Better Auth (включая редиректы OAuth). */
     betterAuthUrl: process.env.BETTER_AUTH_URL ??
         process.env.RENDER_EXTERNAL_URL ??
@@ -82,8 +104,8 @@ export const config = {
     githubClientId: process.env.GITHUB_CLIENT_ID || undefined,
     githubClientSecret: process.env.GITHUB_CLIENT_SECRET || undefined,
     /** Telegram Bot для приёма оплаты (Telegram Stars и СБП). */
-    telegramBotToken: process.env.TELEGRAM_BOT_TOKEN || '8950856076:AAF6Id66Vc0IHWBWByV1DArttb6cs8go2DM',
-    telegramBotUsername: process.env.TELEGRAM_BOT_USERNAME || 'Robo_kassa_bot',
+    telegramBotToken: process.env.TELEGRAM_BOT_TOKEN || '',
+    telegramBotUsername: process.env.TELEGRAM_BOT_USERNAME || '',
     telegramPaymentProviderToken: process.env.TELEGRAM_PAYMENT_PROVIDER_TOKEN || '',
     telegramWebhookUrl: process.env.TELEGRAM_WEBHOOK_URL || '',
     /** AI Providers: OpenRouter */
@@ -99,9 +121,16 @@ export const config = {
     /** AI Providers: Google Gemini */
     googleApiKey: process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY || '',
     googleBaseUrl: process.env.GOOGLE_BASE_URL || 'https://generativelanguage.googleapis.com/v1beta',
-    /** Секреты для Webhooks и Admin API */
-    webhookSecret: process.env.WEBHOOK_SECRET || 'ketner-ai-webhook-secret-dev',
-    adminApiKey: process.env.ADMIN_API_KEY || 'ketner-ai-admin-key-dev',
+    /**
+     * Секрет для проверки подписи webhook-запросов.
+     * В продакшне ОБЯЗАТЕЛЕН — генерируй через: openssl rand -hex 32
+     */
+    webhookSecret: devOnlyFallback('WEBHOOK_SECRET', 'dev-webhook-secret-change-in-production'),
+    /**
+     * Ключ доступа к Admin API.
+     * В продакшне ОБЯЗАТЕЛЕН — генерируй через: openssl rand -hex 32
+     */
+    adminApiKey: devOnlyFallback('ADMIN_API_KEY', 'dev-admin-key-change-in-production'),
     ai: {
         thinkingMs: [
             readNumber('MOCK_AI_THINKING_MIN_MS', 350),
