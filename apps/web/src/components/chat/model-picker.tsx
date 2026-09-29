@@ -21,6 +21,9 @@ const MODEL_NAME_KEYS: Record<string, TranslationKey> = {
   'gemini-pro': 'chat.modelGeminiPro',
   'gemini-2.5-pro': 'chat.modelGeminiPro',
   'grok-4.7': 'chat.modelGrok',
+  'deepseek-v4.1-flash': 'chat.modelDeepSeek',
+  'claude-3-haiku': 'chat.modelHaiku',
+  'gpt-4o': 'chat.modelGpt4o',
 };
 
 /** Модели по умолчанию: используются, пока каталог не загрузился. */
@@ -31,7 +34,14 @@ const FALLBACK_MODELS: readonly ModelInfo[] = [
     contextMessages: 120,
     isPro: false,
   },
-  // Plus (990 ₽) — стандартные модели
+  // Plus ($9) — стандартные быстрые модели
+  {
+    id: 'deepseek-v4.1-flash',
+    name: 'DeepSeek v4.1 Flash',
+    contextMessages: 40,
+    isPro: true,
+    requiredPlan: 'plus',
+  },
   {
     id: 'claude-3-haiku',
     name: 'Claude Haiku 4.5',
@@ -46,14 +56,7 @@ const FALLBACK_MODELS: readonly ModelInfo[] = [
     isPro: true,
     requiredPlan: 'plus',
   },
-  {
-    id: 'deepseek-v4.1-flash',
-    name: 'DeepSeek V4.1 Flash',
-    contextMessages: 40,
-    isPro: true,
-    requiredPlan: 'plus',
-  },
-  // Pro (1 990 ₽) — флагманские модели
+  // Pro ($29) — топовые флагманские модели
   {
     id: 'gpt-6-astra',
     name: 'GPT-6 Astra',
@@ -63,14 +66,14 @@ const FALLBACK_MODELS: readonly ModelInfo[] = [
   },
   {
     id: 'claude-fable',
-    name: 'Claude Fable 5.5',
+    name: 'Claude Fable 5.1',
     contextMessages: 120,
     isPro: true,
     requiredPlan: 'pro',
   },
   {
     id: 'gemini-2.5-pro',
-    name: 'Gemini 3.8 Flash',
+    name: 'Gemini Flash 3.8',
     contextMessages: 120,
     isPro: true,
     requiredPlan: 'pro',
@@ -78,6 +81,13 @@ const FALLBACK_MODELS: readonly ModelInfo[] = [
   {
     id: 'grok-4.7',
     name: 'Grok 4.7',
+    contextMessages: 120,
+    isPro: true,
+    requiredPlan: 'pro',
+  },
+  {
+    id: 'ketner-pro',
+    name: 'Qwen 3.8 Max',
     contextMessages: 120,
     isPro: true,
     requiredPlan: 'pro',

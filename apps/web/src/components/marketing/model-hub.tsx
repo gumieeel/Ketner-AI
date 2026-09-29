@@ -38,7 +38,7 @@ const NODES: ModelNode[] = [
   {
     id: 'gemini',
     name: 'Gemini',
-    tag: 'Pro',
+    tag: 'Flash 3.8',
     desc: 'Multimodal · Search',
     x: 400,
     y: 80,
@@ -50,7 +50,7 @@ const NODES: ModelNode[] = [
   {
     id: 'deepseek',
     name: 'DeepSeek',
-    tag: 'R1',
+    tag: 'v4.1 Flash',
     desc: 'Reasoning · Coding',
     x: 400,
     y: 370,
@@ -62,7 +62,7 @@ const NODES: ModelNode[] = [
   {
     id: 'qwen',
     name: 'Qwen',
-    tag: 'Max',
+    tag: '3.8 Max',
     desc: 'Coding · Open source',
     x: 240,
     y: 410,
@@ -74,7 +74,7 @@ const NODES: ModelNode[] = [
   {
     id: 'grok',
     name: 'Grok',
-    tag: '3',
+    tag: '4.7',
     desc: 'Reasoning · Real-time',
     x: 80,
     y: 370,
@@ -86,7 +86,7 @@ const NODES: ModelNode[] = [
   {
     id: 'claude',
     name: 'Claude',
-    tag: 'Opus',
+    tag: 'Fable 5.1',
     desc: 'Writing · Analysis',
     x: 80,
     y: 80,

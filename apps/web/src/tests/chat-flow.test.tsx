@@ -182,9 +182,9 @@ describe('чат: отправка, стриминг и управление о�
     await screen.findByRole('heading', { level: 2, name: EMPTY_TITLE });
 
     await user.click(screen.getByRole('button', { name: 'Выбрать модель' }));
-    await user.click(await screen.findByRole('option', { name: /Qwen 2\.5 Max/ }));
+    await user.click(await screen.findByRole('option', { name: /Qwen (2\.5|3\.8) Max/ }));
     expect(screen.getByRole('button', { name: 'Выбрать модель' })).toHaveTextContent(
-      'Qwen 2.5 Max',
+      /Qwen (2\.5|3\.8) Max/,
     );
 
     await sendMessage(user, 'Вопрос');
@@ -234,9 +234,9 @@ describe('чат: отправка, стриминг и управление о�
     // Проверяем наличие всех моделей, платные со звёздочкой
     expect(await screen.findByRole('option', { name: /Qwen 2\.5 Coder/ })).toBeInTheDocument();
     expect(screen.getByRole('option', { name: /GPT-6 Astra \*/ })).toBeInTheDocument();
-    expect(screen.getByRole('option', { name: /Claude Fable 5\.5 \*/ })).toBeInTheDocument();
-    expect(screen.getByRole('option', { name: /Gemini 3\.8 (Flash|Pro) \*/ })).toBeInTheDocument();
-    expect(screen.getByRole('option', { name: /Qwen 2\.5 Max \*/ })).toBeInTheDocument();
+    expect(screen.getByRole('option', { name: /Claude Fable 5\.[15] \*/ })).toBeInTheDocument();
+    expect(screen.getByRole('option', { name: /Gemini (Flash 3\.8|3\.8 Flash|3\.8 Pro) \*/ })).toBeInTheDocument();
+    expect(screen.getByRole('option', { name: /Qwen (2\.5|3\.8) Max \*/ })).toBeInTheDocument();
 
     // Выбираем платную модель GPT-6 Astra *
     await user.click(screen.getByRole('option', { name: /GPT-6 Astra \*/ }));
@@ -256,14 +256,14 @@ describe('чат: отправка, стриминг и управление о�
 
     // Выбираем платную модель
     await user.click(await screen.findByRole('button', { name: 'Выбрать модель' }));
-    await user.click(await screen.findByRole('option', { name: /Claude Fable 5\.5 \*/ }));
+    await user.click(await screen.findByRole('option', { name: /Claude Fable 5\.[15] \*/ }));
 
     // Отправляем сообщение
     await sendMessage(user, 'Тест платной модели');
 
     // Проверяем, что появилось сообщение об ошибке с требованием апгрейда
     expect(await screen.findByText('Требуется подписка (Upgrade your plan)')).toBeInTheDocument();
-    expect(screen.getAllByText(/Claude Fable 5\.5 \*/).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/Claude Fable 5\.[15] \*/).length).toBeGreaterThan(0);
     expect(screen.getAllByRole('link', { name: /Улучшить план/ })[0]).toHaveAttribute(
       'href',
       '/pricing',

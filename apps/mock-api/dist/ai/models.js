@@ -39,14 +39,14 @@ export const MODELS = [
     },
     {
         id: 'claude-fable',
-        name: 'Claude Fable 5.5',
+        name: 'Claude Fable 5.1',
         contextMessages: 120,
         isPro: true,
         requiredPlan: 'pro',
     },
     {
         id: 'gemini-2.5-pro',
-        name: 'Gemini 3.8 Flash',
+        name: 'Gemini Flash 3.8',
         contextMessages: 120,
         isPro: true,
         requiredPlan: 'pro',

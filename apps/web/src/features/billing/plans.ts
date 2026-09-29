@@ -95,20 +95,20 @@ export const PLANS: readonly Plan[] = [
       en: 'Top models',
     },
     modelsHighlight: {
-      ru: 'Все из Plus + GPT-6 Astra, Claude Fable 5.5, Gemini 3.8 Pro, Grok 4.7',
-      en: 'All Plus + GPT-6 Astra, Claude Fable 5.5, Gemini 3.8 Pro, Grok 4.7',
+      ru: 'Все из Plus + GPT-6 Astra, Claude Fable 5.1, Gemini Flash 3.8, Grok 4.7',
+      en: 'All Plus + GPT-6 Astra, Claude Fable 5.1, Gemini Flash 3.8, Grok 4.7',
     },
     bullets: {
       ru: [
         'Все, что входит в тариф Plus',
-        'Топовые модели: GPT-6 Astra, Claude Fable 5.5, Gemini 3.8 Pro, Grok 4.7',
+        'Топовые модели: GPT-6 Astra, Claude Fable 5.1, Gemini Flash 3.8, Grok 4.7',
         'Пониженный контекст и скорость по сравнению с Ultra',
         'Высокий приоритет обработки запросов',
         'Ручной выбор любой топовой модели',
       ],
       en: [
         'All Plus tier features included',
-        'Top models: GPT-6 Astra, Claude Fable 5.5, Gemini 3.8 Pro, Grok 4.7',
+        'Top models: GPT-6 Astra, Claude Fable 5.1, Gemini Flash 3.8, Grok 4.7',
         'Reduced context and speed compared to Ultra',
         'High request processing priority',
         'Manual selection of any top model',
@@ -142,7 +142,7 @@ export const PLANS: readonly Plan[] = [
     bullets: {
       ru: [
         'Все, что входит в тариф Pro',
-        'Все топовые модели: GPT-6 Astra, Claude Fable 5.5, Gemini 3.8 Pro, Grok 4.7, Ketner Next',
+        'Все топовые модели: GPT-6 Astra, Claude Fable 5.1, Gemini Flash 3.8, Grok 4.7, Ketner Next',
         'Максимальный контекст диалога (до 2M токенов)',
         'Использование моделей на 100% без ограничений скорости и контекста',
         'Наивысший VIP-приоритет обработки запросов без ожидания',
@@ -150,7 +150,7 @@ export const PLANS: readonly Plan[] = [
       ],
       en: [
         'All Pro tier features included',
-        'All top models: GPT-6 Astra, Claude Fable 5.5, Gemini 3.8 Pro, Grok 4.7, Ketner Next',
+        'All top models: GPT-6 Astra, Claude Fable 5.1, Gemini Flash 3.8, Grok 4.7, Ketner Next',
         'Maximum conversation context (up to 2M tokens)',
         '100% model usage without speed or context limitations',
         'Top VIP queue priority with zero waiting',

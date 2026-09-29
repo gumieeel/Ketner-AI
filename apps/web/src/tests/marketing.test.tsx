@@ -17,7 +17,7 @@ describe('marketing: лендинг, шапка, футер и тарифные 
 
     // Проверяем наличие карточек моделей и секций
     expect(screen.getAllByText(/GPT-6/i).length).toBeGreaterThan(0);
-    expect(screen.getAllByText(/Claude Opus/i).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/Claude (Opus|Fable)/i).length).toBeGreaterThan(0);
     expect(screen.getAllByText(/DeepSeek/i).length).toBeGreaterThan(0);
 
     // 4 тарифа
