@@ -1,0 +1,17 @@
+node_modules
+apps/*/node_modules
+dist
+apps/*/dist
+.git
+.github
+.gemini
+.vscode
+.idea
+*.log
+npm-debug.log*
+.env
+apps/*/.env
+.env.local
+.DS_Store
+Thumbs.db
+coverage

@@ -13,6 +13,7 @@ import type { SubscriptionStore } from '../store/subscription-store.js';
 import type { UserStore } from '../store/user-store.js';
 import type { PlanId } from '../types.js';
 import type { WebhookEventType } from '../ai/gateway-types.js';
+import { stripeService } from '../services/stripe.js';
 
 export interface WebhookRouterDeps {
   subscriptionStore: SubscriptionStore;
@@ -123,6 +124,27 @@ export function createWebhookRouter({
     } catch (err) {
       console.error('[webhook] Ошибка обработки:', err);
       sendError(response, 500, 'webhook_processing_failed', 'Ошибка обработки события вебхука');
+    }
+  });
+
+  router.post('/stripe', async (request: Request, response: Response): Promise<void> => {
+    const sig = request.headers['stripe-signature'];
+    if (!sig || typeof sig !== 'string') {
+      sendError(response, 400, 'missing_signature', 'Отсутствует stripe-signature заголовок');
+      return;
+    }
+
+    const rawBody =
+      (request as unknown as { rawBody?: Buffer }).rawBody ?? JSON.stringify(request.body);
+
+    try {
+      const event = stripeService.constructEvent(rawBody, sig);
+      const result = await stripeService.handleWebhookEvent(event);
+      response.status(200).json({ received: true, ...result });
+    } catch (err: unknown) {
+      const errorMsg = (err as Error)?.message || 'Неизвестная ошибка Stripe Webhook';
+      console.error('[Stripe Webhook] Error:', errorMsg);
+      sendError(response, 400, 'webhook_error', `Ошибка валидации или обработки Stripe: ${errorMsg}`);
     }
   });
 

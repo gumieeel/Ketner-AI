@@ -12,6 +12,7 @@
     "typecheck": "tsc --noEmit",
     "test": "cross-env BETTER_AUTH_SECRET=test-secret-for-ci-at-least-32-chars-long tsx --test \"src/**/*.test.ts\"",
     "migrate": "tsx src/scripts/migrate.ts",
+    "migrate:data": "tsx src/scripts/migrate-data.ts",
     "migrate:generate": "drizzle-kit generate",
     "migrate:push": "drizzle-kit push",
     "db:studio": "drizzle-kit studio",
@@ -24,7 +25,8 @@
     "cors": "^2.8.6",
     "drizzle-orm": "^0.45.3",
     "express": "^5.2.1",
-    "postgres": "^3.4.9"
+    "postgres": "^3.4.9",
+    "stripe": "^22.6.2"
   },
   "devDependencies": {
     "@types/cors": "^2.8.19",

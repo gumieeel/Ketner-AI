@@ -7,6 +7,7 @@ import type { UserStore } from '../store/user-store.js';
 import { calculateStars } from '../telegram/bot.js';
 import type { PlanId, PlanItem } from '../types.js';
 import { isVipUser } from '../services/vip.js';
+import { stripeService } from '../services/stripe.js';
 
 export const PLANS: readonly PlanItem[] = [
   {
@@ -218,6 +219,56 @@ export function createBillingRouter({
       user: user ?? { id: userId, plan: 'free' },
     });
   });
+
+  // --- Stripe Checkout ---
+
+  router.post(
+    '/billing/stripe/create-checkout',
+    async (request: Request, response: Response): Promise<void> => {
+      const rawPlanId: unknown = request.body?.planId;
+      const validPlanIds = ['plus', 'pro', 'ultra', 'gpt-pro', 'claude-pro', 'gemini-pro'];
+      if (!validPlanIds.includes(rawPlanId as string)) {
+        sendError(
+          response,
+          400,
+          'invalid_plan',
+          'Допустимые тарифы для оплаты: plus, pro, ultra',
+        );
+        return;
+      }
+
+      const planId = rawPlanId as PlanId;
+      const userId = getUserId(request);
+      const user = userStore.findById(userId);
+
+      if (!stripeService.isAvailable()) {
+        const subscription = subscriptionStore.checkout(userId, planId);
+        const updatedUser = userStore.updatePlan(userId, planId);
+        response.json({
+          mock: true,
+          subscription,
+          user: updatedUser ?? { id: userId, plan: planId },
+          url: `${config.webAppUrl}/chat?billing_success=true&plan=${planId}`,
+        });
+        return;
+      }
+
+      try {
+        const session = await stripeService.createCheckoutSession({
+          userId,
+          userEmail: user?.email,
+          planId,
+          successUrl: `${config.webAppUrl}/chat?session_id={CHECKOUT_SESSION_ID}&billing_success=true`,
+          cancelUrl: `${config.webAppUrl}/pricing?canceled=true`,
+        });
+
+        response.json({ url: session.url, sessionId: session.sessionId });
+      } catch (err: unknown) {
+        const msg = (err as Error)?.message || 'Ошибка создания сессии Stripe';
+        sendError(response, 500, 'stripe_checkout_failed', msg);
+      }
+    },
+  );
 
   // --- СБП (Система быстрых платежей) ---
 

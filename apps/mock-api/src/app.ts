@@ -95,7 +95,14 @@ export function createApp(overrides: Partial<AppDeps> = {}): Express {
     next();
   });
 
-  app.use(express.json({ limit: '1mb' }));
+  app.use(
+    express.json({
+      limit: '1mb',
+      verify: (req: any, _res, buf) => {
+        req.rawBody = buf;
+      },
+    }),
+  );
 
   // Поиск собранного веб-интерфейса во всех возможных путях (монорепо, Render, Docker):
   const currentDir = path.dirname(fileURLToPath(import.meta.url));

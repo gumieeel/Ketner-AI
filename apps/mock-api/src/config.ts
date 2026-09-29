@@ -180,6 +180,15 @@ export const config = {
    */
   adminApiKey: envWithFallback('ADMIN_API_KEY', 'ketner-ai-admin-key-dev'),
 
+  /**
+   * Stripe Billing Credentials & Price IDs
+   */
+  stripeSecretKey: process.env.STRIPE_SECRET_KEY || '',
+  stripeWebhookSecret: process.env.STRIPE_WEBHOOK_SECRET || '',
+  stripePricePlus: process.env.STRIPE_PRICE_PLUS || '',
+  stripePricePro: process.env.STRIPE_PRICE_PRO || '',
+  stripePriceUltra: process.env.STRIPE_PRICE_ULTRA || '',
+
   ai: {
     thinkingMs: [
       readNumber('MOCK_AI_THINKING_MIN_MS', 350),
