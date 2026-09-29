@@ -89,26 +89,13 @@ export function ModelStrip() {
                     </span>
 
                     {/* Выпадающая карточка с кратким описанием модели при наведении (открывается ВВЕРХ) */}
-                    <div className="pointer-events-none absolute left-1/2 bottom-full mb-3 z-40 w-72 md:w-80 -translate-x-1/2 opacity-0 group-hover/item:opacity-100 group-hover/item:pointer-events-auto transition-all duration-200 ease-out transform translate-y-1.5 group-hover/item:translate-y-0">
-                      <div className="relative rounded-lg border border-stroke-strong bg-surface/95 p-3.5 shadow-2xl backdrop-blur-xl text-left ring-1 ring-white/5">
+                    <div className="pointer-events-none absolute left-1/2 bottom-full mb-2.5 z-40 w-64 md:w-72 -translate-x-1/2 opacity-0 group-hover/item:opacity-100 group-hover/item:pointer-events-auto transition-all duration-200 ease-out transform translate-y-1.5 group-hover/item:translate-y-0">
+                      <div className="relative rounded-lg border border-stroke-strong bg-surface/95 px-3.5 py-2.5 shadow-2xl backdrop-blur-xl text-left ring-1 ring-white/5">
                         {/* Стрелочка-указатель вниз */}
                         <div className="absolute -bottom-1.5 left-1/2 -translate-x-1/2 size-3 rotate-45 border-b border-r border-stroke-strong bg-surface" />
 
-                        {/* Шапка менюшки */}
-                        <div className="relative z-10 flex items-center justify-between gap-2 border-b border-stroke/60 pb-2 mb-2">
-                          <div className="flex items-center gap-2">
-                            <div className="grid size-5 place-items-center rounded bg-surface-2 text-accent">
-                              <Icon className="size-3.5" />
-                            </div>
-                            <span className="text-xs font-semibold text-text">{item.name}</span>
-                          </div>
-                          <span className="font-mono text-[10px] text-muted uppercase tracking-wider">
-                            {item.provider}
-                          </span>
-                        </div>
-
                         {/* Текст описания */}
-                        <p className="relative z-10 text-[11px] leading-relaxed text-muted font-normal">
+                        <p className="relative z-10 text-xs leading-relaxed text-zinc-300 font-normal">
                           {language === 'ru' ? item.descRu : item.descEn}
                         </p>
                       </div>
@@ -133,26 +120,13 @@ export function ModelStrip() {
                     </span>
 
                     {/* Выпадающая карточка с кратким описанием модели при наведении (открывается ВВЕРХ) */}
-                    <div className="pointer-events-none absolute left-1/2 bottom-full mb-3 z-40 w-72 md:w-80 -translate-x-1/2 opacity-0 group-hover/item:opacity-100 group-hover/item:pointer-events-auto transition-all duration-200 ease-out transform translate-y-1.5 group-hover/item:translate-y-0">
-                      <div className="relative rounded-lg border border-stroke-strong bg-surface/95 p-3.5 shadow-2xl backdrop-blur-xl text-left ring-1 ring-white/5">
+                    <div className="pointer-events-none absolute left-1/2 bottom-full mb-2.5 z-40 w-64 md:w-72 -translate-x-1/2 opacity-0 group-hover/item:opacity-100 group-hover/item:pointer-events-auto transition-all duration-200 ease-out transform translate-y-1.5 group-hover/item:translate-y-0">
+                      <div className="relative rounded-lg border border-stroke-strong bg-surface/95 px-3.5 py-2.5 shadow-2xl backdrop-blur-xl text-left ring-1 ring-white/5">
                         {/* Стрелочка-указатель вниз */}
                         <div className="absolute -bottom-1.5 left-1/2 -translate-x-1/2 size-3 rotate-45 border-b border-r border-stroke-strong bg-surface" />
 
-                        {/* Шапка менюшки */}
-                        <div className="relative z-10 flex items-center justify-between gap-2 border-b border-stroke/60 pb-2 mb-2">
-                          <div className="flex items-center gap-2">
-                            <div className="grid size-5 place-items-center rounded bg-surface-2 text-accent">
-                              <Icon className="size-3.5" />
-                            </div>
-                            <span className="text-xs font-semibold text-text">{item.name}</span>
-                          </div>
-                          <span className="font-mono text-[10px] text-muted uppercase tracking-wider">
-                            {item.provider}
-                          </span>
-                        </div>
-
                         {/* Текст описания */}
-                        <p className="relative z-10 text-[11px] leading-relaxed text-muted font-normal">
+                        <p className="relative z-10 text-xs leading-relaxed text-zinc-300 font-normal">
                           {language === 'ru' ? item.descRu : item.descEn}
                         </p>
                       </div>
