@@ -261,8 +261,7 @@
 
   /* Один мягкий градиент акцента сверху — только для hero и auth */
   .hero-glow,
-  .bg-hero-glow,
-  .bg-ambient-mesh {
+  .bg-hero-glow {
     background-image: radial-gradient(ellipse 70% 50% at 50% -10%, var(--glow), transparent 70%);
   }
 
@@ -307,24 +306,11 @@
     right: -5px;
   }
 
-  /* Спокойный hover карточек: только граница и фон, без подъёма и свечения */
-  .card-interactive {
-    transition:
-      border-color 120ms ease-out,
-      background-color 120ms ease-out;
-  }
-  .card-interactive:hover {
-    border-color: var(--stroke-strong);
-    background-color: var(--surface-2);
-  }
-
   /* 1px граница-градиент акцента через mask-composite: exclude */
-  .gradient-border,
-  .ultra-glow {
+  .gradient-border {
     position: relative;
   }
-  .gradient-border::before,
-  .ultra-glow::before {
+  .gradient-border::before {
     content: '';
     position: absolute;
     inset: -1px;
@@ -415,10 +401,6 @@
   }
   .animate-slide-up {
     animation: slideUp 240ms var(--ease-out-expo) both;
-  }
-  /* Устаревшее «плавание» отключено: класс оставлен, чтобы не ломать разметку */
-  .animate-float {
-    animation: none;
   }
 }
 

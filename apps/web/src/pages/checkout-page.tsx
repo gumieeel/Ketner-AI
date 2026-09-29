@@ -1,4 +1,4 @@
-﻿import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { useAuth } from '@/features/auth/auth-store';
 import {
@@ -6,11 +6,14 @@ import {
   CheckIcon,
   CreditCardIcon,
   SbpIcon,
+  ShieldIcon,
   StarIcon,
   TelegramIcon,
 } from '@/components/icons';
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Card, CardText, CardTitle } from '@/components/ui/card';
+import { Card } from '@/components/ui/card';
+import { Callout } from '@/components/docs/callout';
 import { Field, Input } from '@/components/ui/input';
 import { QrCode } from '@/components/ui/qr-code';
 import {
@@ -25,6 +28,7 @@ import { useBilling } from '@/features/billing/billing-store';
 import { getPlan } from '@/features/billing/plans';
 import type { PaymentMethod, SbpInvoice, TelegramStarsInvoice } from '@/features/billing/types';
 import { useTranslation } from '@/i18n';
+import { cn } from '@/lib/cn';
 import {
   formatCardCvc,
   formatCardExpiry,
@@ -43,13 +47,6 @@ function calculateStars(priceRub: number): number {
   return Math.round(priceRub / 1.84);
 }
 
-/**
- * Оформление подписки.
- * Поддерживает:
- * - Банковские карты (МИР, Visa, Mastercard)
- * - СБП (Система быстрых платежей) с динамическим QR и банковскими диплинками
- * - Telegram Stars (⭐️ XTR) с оплатой через Telegram-бота @KetnerAIBot
- */
 export function CheckoutPage() {
   const { t, language } = useTranslation();
   const navigate = useNavigate();
@@ -60,7 +57,6 @@ export function CheckoutPage() {
   const checkout = useBilling((state) => state.checkout);
   const setSubscription = useBilling((state) => state.setSubscription);
 
-  // Редирект неавторизованных пользователей на страницу регистрации
   useEffect(() => {
     if (authStatus !== 'loading' && (!user || authStatus === 'unauthenticated')) {
       const targetPlan = planId || 'gpt-pro';
@@ -106,7 +102,7 @@ export function CheckoutPage() {
     return () => clearInterval(interval);
   }, [paymentMethod, sbpInvoice]);
 
-  // Загрузка инвойса СБП при выборе вкладки
+  // Загрузка инвойса СБП
   useEffect(() => {
     if (paymentMethod === 'sbp' && !sbpInvoice && plan && plan.priceMonthly > 0) {
       setSbpLoading(true);
@@ -122,7 +118,7 @@ export function CheckoutPage() {
     }
   }, [paymentMethod, sbpInvoice, plan]);
 
-  // Загрузка инвойса Telegram Stars при выборе вкладки
+  // Загрузка инвойса Telegram Stars
   useEffect(() => {
     if (paymentMethod === 'stars' && !starsInvoice && plan && plan.priceMonthly > 0) {
       setStarsLoading(true);
@@ -137,7 +133,7 @@ export function CheckoutPage() {
     }
   }, [paymentMethod, starsInvoice, plan]);
 
-  // Автоматический опрос статуса инвойса (polling)
+  // Polling статуса инвойса
   useEffect(() => {
     if (success) return;
 
@@ -151,7 +147,7 @@ export function CheckoutPage() {
             setSuccess(true);
           }
         } catch {
-          // Игнорируем сетевые сбои опроса
+          // ignore network polling errors
         }
       }, 3000);
     } else if (paymentMethod === 'stars' && starsInvoice && starsInvoice.status !== 'paid') {
@@ -164,7 +160,7 @@ export function CheckoutPage() {
             setSuccess(true);
           }
         } catch {
-          // Игнорируем сетевые сбои опроса
+          // ignore network polling errors
         }
       }, 3000);
     }
@@ -192,8 +188,8 @@ export function CheckoutPage() {
   if (!plan) {
     return (
       <div className="mx-auto flex w-full max-w-lg flex-col items-center gap-4 px-4 py-16 text-center">
-        <h1 className="text-xl font-semibold">{t('notFound.title')}</h1>
-        <p className="text-sm text-zinc-600 dark:text-zinc-300">{t('notFound.text')}</p>
+        <h1 className="text-xl font-semibold text-text">{t('notFound.title')}</h1>
+        <p className="text-sm text-muted">{t('notFound.text')}</p>
         <Link to="/pricing">
           <Button variant="outline">{t('pricing.title')}</Button>
         </Link>
@@ -237,7 +233,7 @@ export function CheckoutPage() {
     }
   };
 
-  // Ручное подтверждение СБП
+  // Подтверждение СБП
   const handleSbpConfirm = async () => {
     const invoiceId = sbpInvoice?.id || `sbp_${plan.id}`;
     setSubmitting(true);
@@ -253,7 +249,7 @@ export function CheckoutPage() {
     }
   };
 
-  // Ручное подтверждение Telegram Stars
+  // Подтверждение Telegram Stars
   const handleStarsConfirm = async () => {
     const invoiceId = starsInvoice?.id || `stars_${plan.id}`;
     setSubmitting(true);
@@ -278,8 +274,8 @@ export function CheckoutPage() {
   if (success) {
     return (
       <div className="mx-auto flex w-full max-w-lg flex-col items-center gap-6 px-4 py-16 text-center animate-fade-in">
-        <div className="grid size-20 place-items-center rounded-3xl bg-accent/15 text-accent shadow-inner ring-1 ring-accent/30 animate-scale-up">
-          <CheckIcon className="text-4xl text-accent" />
+        <div className="grid size-16 place-items-center rounded-2xl bg-surface-2 border border-stroke text-accent shadow-xs">
+          <CheckIcon className="size-8 text-accent" />
         </div>
 
         <div className="flex flex-col gap-2">
@@ -292,31 +288,33 @@ export function CheckoutPage() {
           </p>
         </div>
 
-        <Card className="flex w-full items-center justify-between text-left p-5 border-stroke-strong bg-surface/80 backdrop-blur-md">
+        <Card className="flex w-full items-center justify-between text-left p-5 border-stroke bg-surface">
           <div>
-            <CardTitle>{t(plan.nameKey)}</CardTitle>
-            <CardText className="mt-1 flex items-center gap-1.5 text-xs text-accent font-medium">
-              <span className="size-2 rounded-full bg-accent animate-pulse" />
+            <h2 className="text-lg font-semibold text-text">{t(plan.nameKey)}</h2>
+            <p className="mt-1 flex items-center gap-1.5 text-xs text-accent font-medium">
+              <span className="size-2 rounded-full bg-accent" />
               {t('settings.statusActive')} (30 дней)
-            </CardText>
+            </p>
           </div>
           <div className="text-right">
             <p className="text-xl font-semibold text-text">
               {plan.priceMonthly.toLocaleString('ru-RU')} ₽
               <span className="ml-1 text-xs font-normal text-muted">{t('pricing.month')}</span>
             </p>
-            <p className="text-xs text-amber-500 font-medium mt-0.5">
-              или {calculateStars(plan.priceMonthly)} ⭐️ Stars
+            <p className="text-xs text-muted mt-0.5 font-mono">
+              или {calculateStars(plan.priceMonthly)} Stars
             </p>
           </div>
         </Card>
 
         <div className="flex w-full gap-3 pt-2">
           <Link to="/chat" className="flex-1">
-            <Button className="w-full h-11 text-base">{t('checkout.goToChat')}</Button>
+            <Button variant="primary" className="w-full h-10 text-sm">
+              {t('checkout.goToChat')}
+            </Button>
           </Link>
           <Link to="/settings" className="flex-1">
-            <Button variant="outline" className="w-full h-11 text-base">
+            <Button variant="outline" className="w-full h-10 text-sm">
               {t('checkout.goToSettings')}
             </Button>
           </Link>
@@ -332,326 +330,379 @@ export function CheckoutPage() {
     `https://t.me/${botUsername}?start=pay_${plan.id}`;
 
   return (
-    <div className="mx-auto flex w-full max-w-xl flex-col gap-6 px-4 py-10 animate-fade-in">
-      <div className="flex items-center gap-3">
+    <div className="mx-auto flex w-full max-w-5xl flex-col gap-8 px-4 py-10 animate-fade-in text-text">
+      {/* Шапка страницы */}
+      <div className="flex items-center gap-3 border-b border-stroke pb-6">
         <Link
           to="/pricing"
-          className="inline-flex size-9 items-center justify-center rounded-xl border border-stroke-strong text-muted hover:border-stroke hover:text-text transition-colors"
+          className="inline-flex size-9 items-center justify-center rounded-lg border border-stroke text-muted hover:border-stroke-strong hover:text-text transition-colors"
           title="Назад к тарифам"
         >
-          <ArrowLeftIcon className="text-base" />
+          <ArrowLeftIcon className="text-sm" />
         </Link>
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight text-text">{t('checkout.title')}</h1>
-          <p className="text-xs text-muted">
+          <h1 className="text-2xl font-semibold tracking-tight text-text">
+            {t('checkout.title')}
+          </h1>
+          <p className="text-xs text-muted mt-0.5">
             Безопасная оплата подписки на передовые ИИ модели Ketner AI
           </p>
         </div>
       </div>
 
-      {/* Карточка выбранного тарифа */}
-      <Card className="flex items-center justify-between gap-4 p-5 border-stroke-strong bg-gradient-to-r from-surface via-surface to-accent/5 backdrop-blur-md">
-        <div>
-          <span className="text-xs font-semibold uppercase tracking-wider text-accent">
-            {t('checkout.selectedPlan')}
-          </span>
-          <CardTitle className="text-xl mt-0.5">{t(plan.nameKey)}</CardTitle>
-          <p className="text-xs text-muted mt-1">
-            {typeof plan.modelsHighlight === 'string'
-              ? plan.modelsHighlight
-              : plan.modelsHighlight?.[language]}
-          </p>
-        </div>
-        <div className="text-right">
-          <p className="text-2xl font-semibold text-text">
-            {plan.priceMonthly.toLocaleString('ru-RU')} ₽
-            <span className="ml-1 text-xs font-normal text-muted">{t('pricing.month')}</span>
-          </p>
-          <p className="text-xs font-medium text-amber-500 mt-0.5">
-            {language === 'ru' ? `или ${starsAmount} ⭐️ Stars` : `or ${starsAmount} ⭐️ Stars`}
-          </p>
-        </div>
-      </Card>
-
-      {/* Выбор способа оплаты: Карты, СБП, Telegram Stars */}
-      <div className="flex flex-col gap-2">
-        <label className="text-xs font-semibold uppercase tracking-wider text-muted px-1">
-          {t('checkout.methodTitle')}
-        </label>
-        <div className="grid grid-cols-3 gap-2 p-1.5 rounded-2xl bg-surface border border-stroke-strong shadow-xs">
-          <button
-            type="button"
-            onClick={() => setPaymentMethod('card')}
-            className={`flex flex-col items-center gap-1.5 rounded-xl py-3 px-2 text-center transition-all ${
-              paymentMethod === 'card'
-                ? 'bg-accent text-white shadow-sm font-semibold scale-[1.02]'
-                : 'text-muted hover:text-text hover:bg-canvas/50 font-medium'
-            }`}
-          >
-            <CreditCardIcon className="text-xl" />
-            <span className="text-xs leading-none">Банковская карта</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => setPaymentMethod('sbp')}
-            className={`flex flex-col items-center gap-1.5 rounded-xl py-3 px-2 text-center transition-all relative ${
-              paymentMethod === 'sbp'
-                ? 'bg-accent text-white shadow-sm font-semibold scale-[1.02]'
-                : 'text-muted hover:text-text hover:bg-canvas/50 font-medium'
-            }`}
-          >
-            <span className="absolute -top-2 right-1 rounded-full bg-emerald-500 text-white text-[10px] font-semibold px-1.5 py-0.2 shadow-xs">
-              0%
-            </span>
-            <SbpIcon className="text-xl" />
-            <span className="text-xs leading-none">СБП по QR</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => setPaymentMethod('stars')}
-            className={`flex flex-col items-center gap-1.5 rounded-xl py-3 px-2 text-center transition-all ${
-              paymentMethod === 'stars'
-                ? 'bg-accent text-white shadow-sm font-semibold scale-[1.02]'
-                : 'text-muted hover:text-text hover:bg-canvas/50 font-medium'
-            }`}
-          >
-            <StarIcon className="text-xl text-amber-400" />
-            <span className="text-xs leading-none">Telegram Stars</span>
-          </button>
-        </div>
-      </div>
-
-      {/* --- СПОСОБ 1: КАРТА (Сохранённая форма для 100% совместимости с тестами) --- */}
-      <div className={paymentMethod === 'card' ? 'block' : 'hidden'}>
-        <form className="flex flex-col gap-4" onSubmit={handleCardSubmit} noValidate>
-          {cardErrors.general ? (
-            <div
-              role="alert"
-              className="rounded-xl border border-red-500/20 bg-red-500/10 p-3 text-sm text-red-600 dark:text-red-400"
-            >
-              {cardErrors.general}
+      {/* Двухколоночный макет: форма слева, сводка справа */}
+      <div className="grid grid-cols-1 lg:grid-cols-[1fr_360px] gap-8 items-start">
+        {/* Левая колонка: шаги и форма оплаты */}
+        <div className="flex flex-col gap-6">
+          {/* Индикатор шагов */}
+          <div className="flex items-center gap-3 text-xs font-mono border-b border-stroke pb-4">
+            <div className="flex items-center gap-1.5 text-muted">
+              <span className="grid size-5 place-items-center rounded-full bg-surface-2 border border-stroke text-[11px] font-semibold text-muted">
+                01
+              </span>
+              <span>Выбор тарифа</span>
             </div>
-          ) : null}
-
-          <Field id="card-number" label={t('checkout.cardNumber')} error={cardErrors.cardNumber}>
-            {({ id, invalid, 'aria-describedby': describedBy }) => (
-              <Input
-                id={id}
-                invalid={invalid}
-                aria-describedby={describedBy}
-                inputMode="numeric"
-                autoComplete="cc-number"
-                placeholder="4242 4242 4242 4242"
-                value={cardNumber}
-                disabled={submitting}
-                onChange={(e) => {
-                  setCardNumber(formatCardNumber(e.target.value));
-                  if (cardErrors.cardNumber) {
-                    setCardErrors((prev) => ({ ...prev, cardNumber: undefined }));
-                  }
-                }}
-              />
-            )}
-          </Field>
-
-          <div className="grid grid-cols-2 gap-4">
-            <Field id="card-expiry" label={t('checkout.expiry')} error={cardErrors.expiry}>
-              {({ id, invalid, 'aria-describedby': describedBy }) => (
-                <Input
-                  id={id}
-                  invalid={invalid}
-                  aria-describedby={describedBy}
-                  inputMode="numeric"
-                  autoComplete="cc-exp"
-                  placeholder="12 / 28"
-                  value={expiry}
-                  disabled={submitting}
-                  onChange={(e) => {
-                    setExpiry(formatCardExpiry(e.target.value));
-                    if (cardErrors.expiry) {
-                      setCardErrors((prev) => ({ ...prev, expiry: undefined }));
-                    }
-                  }}
-                />
-              )}
-            </Field>
-
-            <Field id="card-cvc" label={t('checkout.cvc')} error={cardErrors.cvc}>
-              {({ id, invalid, 'aria-describedby': describedBy }) => (
-                <Input
-                  id={id}
-                  invalid={invalid}
-                  aria-describedby={describedBy}
-                  inputMode="numeric"
-                  autoComplete="cc-csc"
-                  placeholder="123"
-                  value={cvc}
-                  disabled={submitting}
-                  onChange={(e) => {
-                    setCvc(formatCardCvc(e.target.value));
-                    if (cardErrors.cvc) {
-                      setCardErrors((prev) => ({ ...prev, cvc: undefined }));
-                    }
-                  }}
-                />
-              )}
-            </Field>
+            <span className="text-muted">/</span>
+            <div className="flex items-center gap-1.5 text-accent font-semibold">
+              <span className="grid size-5 place-items-center rounded-full bg-accent text-accent-text text-[11px] font-semibold">
+                02
+              </span>
+              <span className="text-text">Оплата</span>
+            </div>
           </div>
 
-          <Button type="submit" size="lg" className="w-full mt-2" disabled={submitting}>
-            {submitting ? t('checkout.processing') : t('checkout.pay')}
-          </Button>
-        </form>
-      </div>
-
-      {/* --- СПОСОБ 2: СБП (Система быстрых платежей) --- */}
-      {paymentMethod === 'sbp' && (
-        <div className="flex flex-col items-center gap-5 rounded-3xl border border-stroke-strong bg-surface/90 p-6 text-center shadow-lg backdrop-blur-md animate-fade-in">
-          <div className="flex items-center gap-2 rounded-full bg-emerald-500/10 px-3 py-1 text-xs font-semibold text-emerald-600 dark:text-emerald-400">
-            <span className="size-2 rounded-full bg-emerald-500 animate-pulse" />
-            Оплата через СБП · 0% комиссии
-          </div>
-
-          <div className="flex flex-col items-center">
-            <p className="text-base font-semibold text-text">{t('checkout.sbpScanQr')}</p>
-            <p className="text-xs text-muted mt-0.5">
-              Поддерживаются Т-Банк, СберБанк, Альфа-Банк, ВТБ и 150+ других банков
-            </p>
-          </div>
-
-          {/* QR код */}
-          <div className="relative p-2 rounded-3xl bg-canvas border border-stroke-strong shadow-inner">
-            {sbpLoading ? (
-              <div className="size-48 flex items-center justify-center text-sm text-muted">
-                Генерация QR-кода СБП...
-              </div>
-            ) : (
-              <QrCode
-                value={
-                  sbpInvoice?.qrPayload ||
-                  `https://qr.nspk.ru/AD10000KETNERAI_${plan.id}?amount=${plan.priceMonthly}`
-                }
-                size={180}
-                badge={
-                  <div className="size-7 flex items-center justify-center rounded-lg bg-white shadow-xs">
-                    <SbpIcon className="size-5" />
-                  </div>
-                }
-              />
-            )}
-          </div>
-
-          {/* Таймер действия */}
-          <div className="flex items-center gap-2 text-xs font-medium text-muted">
-            <span>Действителен в течение:</span>
-            <span className="font-mono font-semibold text-accent">
-              {formatTimer(sbpSecondsLeft)}
-            </span>
-          </div>
-
-          {/* Кнопка открытия диплинка на мобильном */}
-          <div className="flex flex-col w-full gap-2.5">
-            {sbpInvoice?.deepLink && (
-              <a
-                href={sbpInvoice.deepLink}
-                target="_blank"
-                rel="noreferrer"
-                className="w-full inline-flex items-center justify-center gap-2 rounded-xl bg-accent px-4 py-3 text-sm font-semibold text-white shadow-sm hover:opacity-95 transition-opacity"
+          {/* Выбор способа оплаты */}
+          <div className="flex flex-col gap-2.5">
+            <label className="text-xs font-semibold uppercase tracking-wider text-muted font-mono">
+              {t('checkout.methodTitle')}
+            </label>
+            <div aria-label={t('checkout.methodTitle')} className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+              <button
+                type="button"
+                aria-pressed={paymentMethod === 'card'}
+                onClick={() => setPaymentMethod('card')}
+                className={cn(
+                  'flex flex-col items-start gap-2 rounded-xl p-3.5 border transition-all text-left',
+                  paymentMethod === 'card'
+                    ? 'border-accent bg-surface-2 shadow-xs'
+                    : 'border-stroke bg-surface hover:border-stroke-strong hover:bg-surface-2/50',
+                )}
               >
-                <SbpIcon className="text-lg" />
-                {t('checkout.sbpOpenBank')} ({plan.priceMonthly} ₽)
-              </a>
-            )}
-
-            <Button
-              type="button"
-              variant="outline"
-              className="w-full"
-              disabled={submitting}
-              onClick={handleSbpConfirm}
-            >
-              {submitting ? t('checkout.sbpChecking') : t('checkout.sbpConfirm')}
-            </Button>
-          </div>
-
-          <p className="text-xs text-muted max-w-sm">{t('checkout.sbpNotice')}</p>
-        </div>
-      )}
-
-      {/* --- СПОСОБ 3: TELEGRAM STARS (⭐️ XTR) --- */}
-      {paymentMethod === 'stars' && (
-        <div className="flex flex-col items-center gap-5 rounded-3xl border border-stroke-strong bg-surface/90 p-6 text-center shadow-lg backdrop-blur-md animate-fade-in">
-          <div className="flex items-center gap-2 rounded-full bg-amber-500/10 px-3.5 py-1 text-xs font-semibold text-amber-600 dark:text-amber-400">
-            <StarIcon className="text-amber-400 text-sm" />
-            {t('checkout.starsOfficial')}
-          </div>
-
-          {/* Плашка со звёздами */}
-          <div className="flex flex-col items-center gap-2 p-5 rounded-2xl bg-gradient-to-b from-amber-500/10 to-amber-500/5 border border-amber-500/20 w-full">
-            <div className="flex items-center justify-center gap-2 text-4xl font-extrabold text-amber-500">
-              <StarIcon className="text-amber-400" />
-              <span>{starsAmount}</span>
-              <span className="text-xl font-normal text-muted">Stars</span>
-            </div>
-            <p className="text-xs text-muted">
-              {t('checkout.starsPeriodNotice', { price: `${plan.priceMonthly} ₽`, plan: t(plan.nameKey) })}
-            </p>
-          </div>
-
-          {/* QR код для перехода в Telegram-бота со смартфона */}
-          <div className="flex flex-col items-center gap-2">
-            <p className="text-xs font-medium text-muted">{t('checkout.starsQrHint')}</p>
-            <div className="p-2 rounded-3xl bg-canvas border border-stroke-strong shadow-inner">
-              {starsLoading ? (
-                <div className="size-44 flex items-center justify-center text-sm text-muted">
-                  {language === 'ru' ? 'Подготовка бота...' : 'Preparing bot...'}
+                <div className="flex items-center justify-between w-full">
+                  <CreditCardIcon className="text-lg text-accent" />
+                  <Badge tone="outline" className="text-[10px] py-0 px-1 font-mono">МИР / Visa</Badge>
                 </div>
-              ) : (
-                <QrCode
-                  value={botDeepLink}
-                  size={160}
-                  badge={
-                    <div className="size-7 flex items-center justify-center rounded-lg bg-[#24A1DE] text-white shadow-xs">
-                      <TelegramIcon className="size-4" />
-                    </div>
-                  }
-                />
-              )}
+                <div>
+                  <span className="text-xs font-semibold text-text block">Банковская карта</span>
+                  <span className="text-[11px] text-muted block mt-0.5">МИР, Visa, MC</span>
+                </div>
+              </button>
+
+              <button
+                type="button"
+                aria-pressed={paymentMethod === 'sbp'}
+                onClick={() => setPaymentMethod('sbp')}
+                className={cn(
+                  'flex flex-col items-start gap-2 rounded-xl p-3.5 border transition-all text-left relative',
+                  paymentMethod === 'sbp'
+                    ? 'border-accent bg-surface-2 shadow-xs'
+                    : 'border-stroke bg-surface hover:border-stroke-strong hover:bg-surface-2/50',
+                )}
+              >
+                <div className="flex items-center justify-between w-full">
+                  <SbpIcon className="text-lg text-accent" />
+                  <Badge tone="brand" className="text-[10px] py-0 px-1 font-mono">0%</Badge>
+                </div>
+                <div>
+                  <span className="text-xs font-semibold text-text block">СБП по QR</span>
+                  <span className="text-[11px] text-muted block mt-0.5">Без комиссии</span>
+                </div>
+              </button>
+
+              <button
+                type="button"
+                aria-pressed={paymentMethod === 'stars'}
+                onClick={() => setPaymentMethod('stars')}
+                className={cn(
+                  'flex flex-col items-start gap-2 rounded-xl p-3.5 border transition-all text-left',
+                  paymentMethod === 'stars'
+                    ? 'border-accent bg-surface-2 shadow-xs'
+                    : 'border-stroke bg-surface hover:border-stroke-strong hover:bg-surface-2/50',
+                )}
+              >
+                <div className="flex items-center justify-between w-full">
+                  <StarIcon className="text-lg text-accent" />
+                  <Badge tone="neutral" className="text-[10px] py-0 px-1 font-mono">Telegram</Badge>
+                </div>
+                <div>
+                  <span className="text-xs font-semibold text-text block">Telegram Stars</span>
+                  <span className="text-[11px] text-muted block mt-0.5">В боте Telegram</span>
+                </div>
+              </button>
             </div>
           </div>
 
-          {/* Кнопка открытия Telegram-бота */}
-          <div className="flex flex-col w-full gap-2.5">
-            <a
-              href={botDeepLink}
-              target="_blank"
-              rel="noreferrer"
-              className="w-full inline-flex items-center justify-center gap-2.5 rounded-xl bg-[#24A1DE] px-4 py-3 text-sm font-semibold text-white shadow-md hover:bg-[#208fcf] transition-colors"
-            >
-              <TelegramIcon className="text-lg" />
-              {language === 'ru' ? `Оплатить в Telegram (@${botUsername})` : `Pay in Telegram (@${botUsername})`}
-            </a>
+          {/* СПОСОБ 1: КАРТА */}
+          <div className={paymentMethod === 'card' ? 'block' : 'hidden'}>
+            <form className="flex flex-col gap-4 rounded-xl border border-stroke bg-surface p-5 shadow-xs" onSubmit={handleCardSubmit} noValidate>
+              {cardErrors.general ? (
+                <Callout tone="danger" title="Ошибка">{cardErrors.general}</Callout>
+              ) : null}
 
-            <Button
-              type="button"
-              variant="outline"
-              className="w-full"
-              disabled={submitting}
-              onClick={handleStarsConfirm}
-            >
-              {submitting ? t('checkout.starsChecking') : t('checkout.starsConfirm')}
-            </Button>
+              <Field id="card-number" label={t('checkout.cardNumber')} error={cardErrors.cardNumber}>
+                {({ id, invalid, 'aria-describedby': describedBy }) => (
+                  <Input
+                    id={id}
+                    invalid={invalid}
+                    aria-describedby={describedBy}
+                    inputMode="numeric"
+                    autoComplete="cc-number"
+                    placeholder="4242 4242 4242 4242"
+                    value={cardNumber}
+                    disabled={submitting}
+                    onChange={(e) => {
+                      setCardNumber(formatCardNumber(e.target.value));
+                      if (cardErrors.cardNumber) {
+                        setCardErrors((prev) => ({ ...prev, cardNumber: undefined }));
+                      }
+                    }}
+                  />
+                )}
+              </Field>
+
+              <div className="grid grid-cols-2 gap-4">
+                <Field id="card-expiry" label={t('checkout.expiry')} error={cardErrors.expiry}>
+                  {({ id, invalid, 'aria-describedby': describedBy }) => (
+                    <Input
+                      id={id}
+                      invalid={invalid}
+                      aria-describedby={describedBy}
+                      inputMode="numeric"
+                      autoComplete="cc-exp"
+                      placeholder="12 / 28"
+                      value={expiry}
+                      disabled={submitting}
+                      onChange={(e) => {
+                        setExpiry(formatCardExpiry(e.target.value));
+                        if (cardErrors.expiry) {
+                          setCardErrors((prev) => ({ ...prev, expiry: undefined }));
+                        }
+                      }}
+                    />
+                  )}
+                </Field>
+
+                <Field id="card-cvc" label={t('checkout.cvc')} error={cardErrors.cvc}>
+                  {({ id, invalid, 'aria-describedby': describedBy }) => (
+                    <Input
+                      id={id}
+                      invalid={invalid}
+                      aria-describedby={describedBy}
+                      inputMode="numeric"
+                      autoComplete="cc-csc"
+                      placeholder="123"
+                      value={cvc}
+                      disabled={submitting}
+                      onChange={(e) => {
+                        setCvc(formatCardCvc(e.target.value));
+                        if (cardErrors.cvc) {
+                          setCardErrors((prev) => ({ ...prev, cvc: undefined }));
+                        }
+                      }}
+                    />
+                  )}
+                </Field>
+              </div>
+
+              <Button type="submit" variant="primary" size="lg" className="w-full mt-2 font-medium" disabled={submitting}>
+                {submitting ? t('checkout.processing') : t('checkout.pay')}
+              </Button>
+            </form>
           </div>
 
-          <p className="text-xs text-muted max-w-sm">
-            {t('checkout.starsNotice')}
+          {/* СПОСОБ 2: СБП */}
+          {paymentMethod === 'sbp' && (
+            <div className="flex flex-col items-center gap-5 rounded-xl border border-stroke bg-surface p-6 text-center shadow-xs animate-fade-in">
+              <Callout tone="success" title="Оплата через СБП · 0% комиссии" className="w-full text-left">
+                Перевод выполняется по защищённому протоколу НСПК без комиссии со стороны банка.
+              </Callout>
+
+              <div className="flex flex-col items-center">
+                <p className="text-sm font-semibold text-text">{t('checkout.sbpScanQr')}</p>
+                <p className="text-xs text-muted mt-0.5">
+                  Т-Банк, СберБанк, Альфа-Банк, ВТБ и 150+ других банков
+                </p>
+              </div>
+
+              {/* QR код */}
+              <div className="relative p-2 rounded-xl bg-canvas border border-stroke">
+                {sbpLoading ? (
+                  <div className="size-48 flex items-center justify-center text-xs text-muted font-mono">
+                    Генерация QR-кода СБП...
+                  </div>
+                ) : (
+                  <QrCode
+                    value={
+                      sbpInvoice?.qrPayload ||
+                      `https://qr.nspk.ru/AD10000KETNERAI_${plan.id}?amount=${plan.priceMonthly}`
+                    }
+                    size={180}
+                    badge={
+                      <div className="size-7 flex items-center justify-center rounded-lg bg-white shadow-xs">
+                        <SbpIcon className="size-5" />
+                      </div>
+                    }
+                  />
+                )}
+              </div>
+
+              {/* Таймер */}
+              <div className="flex items-center gap-2 text-xs font-mono text-muted">
+                <span>Действителен:</span>
+                <span className="font-semibold text-accent">
+                  {formatTimer(sbpSecondsLeft)}
+                </span>
+              </div>
+
+              <div className="flex flex-col w-full gap-2.5">
+                {sbpInvoice?.deepLink && (
+                  <a
+                    href={sbpInvoice.deepLink}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="w-full inline-flex items-center justify-center gap-2 rounded-md bg-accent px-4 py-2.5 text-xs font-medium text-accent-text hover:bg-accent-hover transition-colors"
+                  >
+                    <SbpIcon className="text-base" />
+                    {t('checkout.sbpOpenBank')} ({plan.priceMonthly} ₽)
+                  </a>
+                )}
+
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="w-full"
+                  disabled={submitting}
+                  onClick={handleSbpConfirm}
+                >
+                  {submitting ? t('checkout.sbpChecking') : t('checkout.sbpConfirm')}
+                </Button>
+              </div>
+
+              <p className="text-[11px] text-muted max-w-sm">{t('checkout.sbpNotice')}</p>
+            </div>
+          )}
+
+          {/* СПОСОБ 3: TELEGRAM STARS */}
+          {paymentMethod === 'stars' && (
+            <div className="flex flex-col items-center gap-5 rounded-xl border border-stroke bg-surface p-6 text-center shadow-xs animate-fade-in">
+              <Callout tone="info" title={t('checkout.starsOfficial')} className="w-full text-left">
+                {t('checkout.starsNotice')}
+              </Callout>
+
+              <div className="flex flex-col items-center gap-2 p-5 rounded-xl bg-surface-2 border border-stroke w-full">
+                <div className="flex items-center justify-center gap-2 text-3xl font-mono font-bold text-accent">
+                  <StarIcon className="text-accent" />
+                  <span>{starsAmount}</span>
+                  <span className="text-lg font-normal text-muted font-sans">Stars</span>
+                </div>
+                <p className="text-xs text-muted">
+                  {t('checkout.starsPeriodNotice', { price: `${plan.priceMonthly} ₽`, plan: t(plan.nameKey) })}
+                </p>
+              </div>
+
+              <div className="flex flex-col items-center gap-2">
+                <p className="text-xs font-medium text-muted">{t('checkout.starsQrHint')}</p>
+                <div className="p-2 rounded-xl bg-canvas border border-stroke">
+                  {starsLoading ? (
+                    <div className="size-44 flex items-center justify-center text-xs text-muted font-mono">
+                      {language === 'ru' ? 'Подготовка бота...' : 'Preparing bot...'}
+                    </div>
+                  ) : (
+                    <QrCode
+                      value={botDeepLink}
+                      size={160}
+                      badge={
+                        <div className="size-7 flex items-center justify-center rounded-lg bg-[#24A1DE] text-white shadow-xs">
+                          <TelegramIcon className="size-4" />
+                        </div>
+                      }
+                    />
+                  )}
+                </div>
+              </div>
+
+              <div className="flex flex-col w-full gap-2.5">
+                <a
+                  href={botDeepLink}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="w-full inline-flex items-center justify-center gap-2 rounded-md bg-accent px-4 py-2.5 text-xs font-medium text-accent-text hover:bg-accent-hover transition-colors"
+                >
+                  <TelegramIcon className="text-base" />
+                  {language === 'ru' ? `Оплатить в Telegram (@${botUsername})` : `Pay in Telegram (@${botUsername})`}
+                </a>
+
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="w-full"
+                  disabled={submitting}
+                  onClick={handleStarsConfirm}
+                >
+                  {submitting ? t('checkout.starsChecking') : t('checkout.starsConfirm')}
+                </Button>
+              </div>
+            </div>
+          )}
+
+          <p className="text-[11px] text-muted text-center leading-relaxed">
+            {t('checkout.notice')}
           </p>
         </div>
-      )}
 
-      <p className="text-xs text-muted text-center px-4">{t('checkout.notice')}</p>
+        {/* Правая колонка: сводка заказа (Sticky) */}
+        <aside className="lg:sticky lg:top-20 flex flex-col gap-4">
+          <Card className="flex flex-col gap-4 p-5 border-stroke bg-surface">
+            <div className="flex items-center justify-between border-b border-stroke pb-3">
+              <span className="text-xs font-mono font-semibold uppercase tracking-wider text-muted">
+                {t('checkout.selectedPlan')}
+              </span>
+              <Badge tone="brand">30 дней</Badge>
+            </div>
+
+            <div>
+              <h2 className="text-xl font-semibold tracking-tight text-text">
+                {t(plan.nameKey)}
+              </h2>
+              <p className="text-xs text-muted mt-1 leading-relaxed">
+                {typeof plan.modelsHighlight === 'string'
+                  ? plan.modelsHighlight
+                  : plan.modelsHighlight?.[language]}
+              </p>
+            </div>
+
+            <div className="flex flex-col gap-2 rounded-lg bg-canvas p-3 border border-stroke text-xs text-muted">
+              <div className="flex items-center justify-between">
+                <span>Стоимость тарифа</span>
+                <span className="font-mono text-text font-medium">{plan.priceMonthly.toLocaleString('ru-RU')} ₽</span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span>Комиссия платёжной системы</span>
+                <span className="font-mono text-accent font-medium">0 ₽</span>
+              </div>
+              <div className="border-t border-stroke pt-2 flex items-center justify-between text-sm font-semibold text-text">
+                <span>Итого к оплате</span>
+                <span className="font-mono text-accent">{plan.priceMonthly.toLocaleString('ru-RU')} ₽</span>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2 text-[11px] text-muted">
+              <ShieldIcon className="text-accent shrink-0 text-sm" />
+              <span>Безопасное соединение TLS 1.3 · Данные карты не сохраняются</span>
+            </div>
+          </Card>
+        </aside>
+      </div>
     </div>
   );
 }

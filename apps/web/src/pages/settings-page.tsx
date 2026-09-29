@@ -1,6 +1,6 @@
-﻿import { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { LogoutIcon, SparkleIcon } from '@/components/icons';
+import { KeyIcon, LogoutIcon, SparkleIcon, UserIcon } from '@/components/icons';
 import { LanguageToggle } from '@/components/layout/language-toggle';
 import { ThemeToggle } from '@/components/layout/theme-toggle';
 import { Badge } from '@/components/ui/badge';
@@ -58,169 +58,274 @@ export function SettingsPage() {
     }
   };
 
+  const planLabel =
+    user?.plan === 'pro'
+      ? t('pricing.pro')
+      : user?.plan === 'plus'
+        ? t('pricing.plus')
+        : user?.plan === 'ultra'
+          ? 'Ultra'
+          : t('pricing.free');
+
   return (
-    <div className="mx-auto flex w-full max-w-2xl flex-col gap-4 px-4 py-8">
-      <h1 className="text-2xl font-semibold tracking-tight">{t('settings.title')}</h1>
+    <div className="mx-auto flex w-full max-w-4xl flex-col gap-8 px-4 py-8 md:px-8 text-text">
+      {/* Шапка настроек */}
+      <div className="border-b border-stroke pb-5">
+        <h1 className="text-2xl md:text-3xl font-semibold tracking-tight text-text">
+          {t('settings.title')}
+        </h1>
+        <p className="text-xs md:text-sm text-muted mt-1">
+          Управление профилем, внешним видом и параметрами тарифного плана
+        </p>
+      </div>
 
-      <Card className="flex flex-wrap items-center justify-between gap-4">
-        {user ? (
-          <div className="flex items-center gap-3">
-            <span className="grid size-11 shrink-0 place-items-center rounded-full bg-accent/20 text-sm font-semibold text-accent">
-              {user.name.slice(0, 2).toUpperCase()}
-            </span>
-            <div>
-              <CardTitle>{user.name}</CardTitle>
-              <CardText className="mt-0.5">
-                {user.email} · {t('settings.registeredOn')}:{' '}
-                {formatShortDate(user.createdAt, language)}
-              </CardText>
-            </div>
-          </div>
-        ) : (
-          <div>
-            <CardTitle>{t('settings.account')}</CardTitle>
-            <CardText className="mt-1">
-              {t('settings.guestTitle')}. {t('settings.guestText')}
-            </CardText>
-          </div>
-        )}
-
-        {!user ? (
-          <Link to="/login">
-            <Button variant="outline">{t('nav.login')}</Button>
-          </Link>
-        ) : null}
-      </Card>
-
-      <Card className="flex flex-col gap-4">
-        <div>
-          <CardTitle>{t('settings.appearance')}</CardTitle>
-          <CardText className="mt-1">{t('settings.appearanceText')}</CardText>
-        </div>
-        <div className="flex flex-wrap items-center gap-3">
-          <span className="text-sm text-text">{t('settings.theme')}</span>
-          <ThemeToggle />
-          <span className="ml-2 text-sm text-text">{t('settings.language')}</span>
-          <LanguageToggle />
-        </div>
-      </Card>
-
-      <Card className="flex flex-col gap-4">
-        <div className="flex flex-wrap items-center justify-between gap-4">
-          <div>
-            <div className="flex items-center gap-2">
-              <CardTitle>{t('settings.subscription')}</CardTitle>
-              <Badge tone="brand">
-                {user?.plan === 'pro'
-                  ? t('pricing.pro')
-                  : user?.plan === 'plus'
-                    ? t('pricing.plus')
-                    : t('pricing.free')}
-              </Badge>
-              {isPaid && (
-                <span className="text-xs text-zinc-500 dark:text-zinc-400">
-                  ({isCanceled ? t('settings.statusCanceled') : t('settings.statusActive')})
-                </span>
-              )}
-            </div>
-            <CardText className="mt-1">
-              {isPaid
-                ? isCanceled
-                  ? t('settings.canceledNotice')
-                  : `${t('settings.renewsAt')}: ${formatShortDate(
-                      subscription?.renewsAt ?? new Date().toISOString(),
-                      language,
-                    )}`
-                : t('settings.subscriptionText')}
-            </CardText>
-          </div>
-
-          <div className="flex items-center gap-2">
-            {isPaid && !isCanceled ? (
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={handleCancel}
-                disabled={canceling}
-                className="text-zinc-600 hover:text-red-600 dark:text-zinc-400 dark:hover:text-red-400"
-              >
-                {canceling ? t('settings.canceling') : t('settings.cancelSubscription')}
-              </Button>
-            ) : (
-              <Link to="/pricing">
-                <Button variant="outline" size="sm">
-                  <SparkleIcon className="text-base" />
-                  {t('nav.upgrade')}
-                </Button>
-              </Link>
-            )}
-          </div>
-        </div>
-      </Card>
-
-      {/* Секция администрирования — видна только администраторам */}
-      {hasAdminAccess ? (
-        <Card className="flex flex-col gap-4 border-accent/30 bg-accent/5">
-          <div className="flex flex-wrap items-center justify-between gap-4">
-            <div>
-              <div className="flex items-center gap-2">
-                <CardTitle>Панель администратора (Admin Control)</CardTitle>
-                <Badge tone="brand">ADMIN</Badge>
-              </div>
-              <CardText className="mt-1">
-                Управление аккаунтами пользователей, изменение тарифов, лимиты расхода и маржинальность.
-              </CardText>
-            </div>
-            <Link to="/admin">
-              <Button variant="primary" size="sm">
-                Открыть панель →
-              </Button>
-            </Link>
-          </div>
-
-          <div className="flex flex-col gap-2 rounded-lg border border-stroke bg-canvas/60 p-3">
-            <label htmlFor="admin-key-input" className="text-xs font-medium text-text">
-              Ключ доступа к Admin API (x-admin-key):
-            </label>
-            <div className="flex flex-wrap items-center gap-2">
-              <input
-                id="admin-key-input"
-                type="password"
-                placeholder="ketner-ai-admin-key-dev"
-                value={adminKey}
-                onChange={(e) => setAdminKey(e.target.value)}
-                className="h-9 min-w-[220px] flex-1 rounded-md border border-stroke-strong bg-surface px-3 text-xs text-text outline-none focus:border-accent font-mono"
-              />
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => handleSaveAdminKey(adminKey)}
-              >
-                {adminKeySaved ? 'Сохранено ✓' : 'Сохранить ключ'}
-              </Button>
-            </div>
-          </div>
-        </Card>
-      ) : null}
-
-      {user ? (
-        <Card className="flex items-center justify-between">
-          <div>
-            <CardTitle>{t('settings.logout')}</CardTitle>
-            <CardText className="mt-1">
-              {t('settings.loggedInAs')} {user.email}
-            </CardText>
-          </div>
-          <Button
-            variant="outline"
-            onClick={() => void logout()}
-            className="text-red-600 hover:border-red-300 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-950/30"
+      <div className="grid grid-cols-1 md:grid-cols-[200px_1fr] gap-8 items-start">
+        {/* Боковая навигация по разделам */}
+        <nav className="flex md:flex-col gap-1 overflow-x-auto text-xs font-mono text-muted">
+          <a
+            href="#account"
+            className="rounded-md px-3 py-2 text-text font-medium bg-surface border border-stroke"
           >
-            <LogoutIcon className="text-lg" />
-            {t('settings.logout')}
-          </Button>
-        </Card>
-      ) : null}
+            {t('settings.account')}
+          </a>
+          <a
+            href="#appearance"
+            className="rounded-md px-3 py-2 hover:text-text hover:bg-surface/50 transition-colors"
+          >
+            {t('settings.appearance')}
+          </a>
+          <a
+            href="#subscription"
+            className="rounded-md px-3 py-2 hover:text-text hover:bg-surface/50 transition-colors"
+          >
+            {t('settings.subscription')}
+          </a>
+          {hasAdminAccess ? (
+            <a
+              href="#admin"
+              className="rounded-md px-3 py-2 hover:text-text hover:bg-surface/50 transition-colors"
+            >
+              Admin API
+            </a>
+          ) : null}
+          {user ? (
+            <a
+              href="#danger"
+              className="rounded-md px-3 py-2 text-danger hover:bg-danger/10 transition-colors"
+            >
+              {t('settings.logout')}
+            </a>
+          ) : null}
+        </nav>
+
+        {/* Основной стек настроек */}
+        <div className="flex flex-col gap-6">
+          {/* 1. Аккаунт */}
+          <section id="account">
+            <Card className="flex flex-col gap-4 p-5 md:p-6 border-stroke bg-surface">
+              <div className="flex items-center justify-between border-b border-stroke pb-4">
+                <div className="flex items-center gap-3">
+                  {user ? (
+                    <span className="grid size-11 shrink-0 place-items-center rounded-xl bg-surface-2 border border-stroke text-sm font-mono font-semibold text-accent">
+                      {user.name.slice(0, 2).toUpperCase()}
+                    </span>
+                  ) : (
+                    <div className="grid size-11 shrink-0 place-items-center rounded-xl bg-surface-2 border border-stroke text-muted">
+                      <UserIcon className="text-xl" />
+                    </div>
+                  )}
+                  <div>
+                    <CardTitle className="text-base font-semibold text-text">
+                      {user ? user.name : t('settings.account')}
+                    </CardTitle>
+                    <CardText className="text-xs text-muted mt-0.5">
+                      {user
+                        ? `${user.email} · ${t('settings.registeredOn')}: ${formatShortDate(user.createdAt, language)}`
+                        : `${t('settings.guestTitle')}. ${t('settings.guestText')}`}
+                    </CardText>
+                  </div>
+                </div>
+
+                {!user ? (
+                  <Link to="/login">
+                    <Button variant="outline" size="sm">
+                      {t('nav.login')}
+                    </Button>
+                  </Link>
+                ) : null}
+              </div>
+
+              {user ? (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+                  <div className="rounded-lg bg-canvas p-3 border border-stroke">
+                    <span className="text-muted block text-[11px] font-mono">User ID</span>
+                    <span className="font-mono text-text text-xs select-all mt-0.5 block truncate">
+                      {user.id}
+                    </span>
+                  </div>
+                  <div className="rounded-lg bg-canvas p-3 border border-stroke">
+                    <span className="text-muted block text-[11px] font-mono">Email</span>
+                    <span className="text-text text-xs mt-0.5 block truncate">{user.email}</span>
+                  </div>
+                </div>
+              ) : null}
+            </Card>
+          </section>
+
+          {/* 2. Внешний вид */}
+          <section id="appearance">
+            <Card className="flex flex-col gap-4 p-5 md:p-6 border-stroke bg-surface">
+              <div className="border-b border-stroke pb-3">
+                <CardTitle className="text-base font-semibold text-text">
+                  {t('settings.appearance')}
+                </CardTitle>
+                <CardText className="text-xs text-muted mt-0.5">
+                  {t('settings.appearanceText')}
+                </CardText>
+              </div>
+
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <div className="flex items-center gap-3">
+                  <span className="text-xs font-medium text-text">{t('settings.theme')}</span>
+                  <ThemeToggle />
+                </div>
+                <div className="flex items-center gap-3">
+                  <span className="text-xs font-medium text-text">{t('settings.language')}</span>
+                  <LanguageToggle />
+                </div>
+              </div>
+            </Card>
+          </section>
+
+          {/* 3. Подписка */}
+          <section id="subscription">
+            <Card className="flex flex-col gap-4 p-5 md:p-6 border-stroke bg-surface">
+              <div className="flex flex-wrap items-center justify-between gap-3 border-b border-stroke pb-4">
+                <div className="flex items-center gap-2.5">
+                  <CardTitle className="text-base font-semibold text-text">
+                    {t('settings.subscription')}
+                  </CardTitle>
+                  <Badge tone="brand" className="font-mono text-xs">
+                    {planLabel}
+                  </Badge>
+                  {isPaid && (
+                    <span className="text-xs text-muted font-mono">
+                      ({isCanceled ? t('settings.statusCanceled') : t('settings.statusActive')})
+                    </span>
+                  )}
+                </div>
+
+                <div className="flex items-center gap-2">
+                  {isPaid && !isCanceled ? (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={handleCancel}
+                      disabled={canceling}
+                      className="text-xs text-danger hover:bg-danger/10 hover:border-danger/40"
+                    >
+                      {canceling ? t('settings.canceling') : t('settings.cancelSubscription')}
+                    </Button>
+                  ) : (
+                    <Link to="/pricing">
+                      <Button variant="primary" size="sm" className="gap-1.5 text-xs">
+                        <SparkleIcon className="text-xs" />
+                        {t('nav.upgrade')}
+                      </Button>
+                    </Link>
+                  )}
+                </div>
+              </div>
+
+              <CardText className="text-xs text-muted leading-relaxed">
+                {isPaid
+                  ? isCanceled
+                    ? t('settings.canceledNotice')
+                    : `${t('settings.renewsAt')}: ${formatShortDate(
+                        subscription?.renewsAt ?? new Date().toISOString(),
+                        language,
+                      )}`
+                  : t('settings.subscriptionText')}
+              </CardText>
+            </Card>
+          </section>
+
+          {/* 4. Администрирование (только для админов) */}
+          {hasAdminAccess ? (
+            <section id="admin">
+              <Card className="flex flex-col gap-4 p-5 md:p-6 border-accent/40 bg-surface">
+                <div className="flex flex-wrap items-center justify-between gap-3 border-b border-stroke pb-3">
+                  <div className="flex items-center gap-2.5">
+                    <KeyIcon className="text-accent text-lg" />
+                    <div>
+                      <CardTitle className="text-sm font-semibold text-text">
+                        Панель администратора
+                      </CardTitle>
+                      <CardText className="text-xs text-muted mt-0.5">
+                        Управление пользователями, лимиты, маржинальность
+                      </CardText>
+                    </div>
+                  </div>
+                  <Link to="/admin">
+                    <Button variant="primary" size="sm" className="text-xs">
+                      Открыть панель →
+                    </Button>
+                  </Link>
+                </div>
+
+                <div className="flex flex-col gap-2 rounded-lg border border-stroke bg-canvas p-3">
+                  <label htmlFor="admin-key-input" className="text-xs font-mono text-muted">
+                    Admin API Key (x-admin-key):
+                  </label>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <input
+                      id="admin-key-input"
+                      type="password"
+                      placeholder="ketner-ai-admin-key-dev"
+                      value={adminKey}
+                      onChange={(e) => setAdminKey(e.target.value)}
+                      className="h-8 min-w-[200px] flex-1 rounded-md border border-stroke bg-surface px-3 text-xs text-text outline-none focus:border-accent font-mono"
+                    />
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => handleSaveAdminKey(adminKey)}
+                      className="text-xs"
+                    >
+                      {adminKeySaved ? 'Сохранено ✓' : 'Сохранить ключ'}
+                    </Button>
+                  </div>
+                </div>
+              </Card>
+            </section>
+          ) : null}
+
+          {/* 5. Опасная зона: Выход */}
+          {user ? (
+            <section id="danger">
+              <Card className="flex items-center justify-between gap-4 p-5 border-danger/30 bg-surface">
+                <div>
+                  <CardTitle className="text-sm font-semibold text-danger">
+                    {t('settings.logout')}
+                  </CardTitle>
+                  <CardText className="text-xs text-muted mt-0.5">
+                    {t('settings.loggedInAs')} {user.email}
+                  </CardText>
+                </div>
+                <Button
+                  variant="danger"
+                  size="sm"
+                  onClick={() => void logout()}
+                  className="gap-1.5 text-xs"
+                >
+                  <LogoutIcon className="text-sm" />
+                  {t('settings.logout')}
+                </Button>
+              </Card>
+            </section>
+          ) : null}
+        </div>
+      </div>
     </div>
   );
 }

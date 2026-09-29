@@ -11,7 +11,7 @@ export interface CardProps extends HTMLAttributes<HTMLDivElement> {
 
 const variantClasses: Record<CardVariant, string> = {
   default: 'border-stroke bg-surface',
-  interactive: 'border-stroke bg-surface card-interactive cursor-pointer',
+  interactive: 'border-stroke bg-surface hover:border-stroke-strong hover:bg-surface-2 cursor-pointer',
   highlight: 'border-stroke-strong bg-surface-2',
   dashed: 'border-stroke-strong border-dashed bg-surface',
 };

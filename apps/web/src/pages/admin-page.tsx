@@ -1,10 +1,12 @@
-﻿import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { useAuth } from '@/features/auth/auth-store';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
+import { Divider } from '@/components/ui/divider';
 import { Input } from '@/components/ui/input';
 import { Spinner } from '@/components/ui/spinner';
+import { StatusDot } from '@/components/ui/status-dot';
 import { SearchIcon, CloseIcon, EditIcon, CheckIcon } from '@/components/icons';
 import type { PlanId } from '@/features/auth/types';
 
@@ -124,6 +126,18 @@ export function AdminPage() {
   const [saveSuccess, setSaveSuccess] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
 
+  // Esc key listener to close modal
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && selectedUserId) {
+        setSelectedUserId(null);
+        setDetailUser(null);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [selectedUserId]);
+
   const getHeaders = useCallback((): HeadersInit => {
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',
@@ -241,12 +255,14 @@ export function AdminPage() {
   const isSelf = detailUser && currentUser && (currentUser.id === detailUser.id || currentUser.email.toLowerCase() === detailUser.email.toLowerCase());
 
   return (
-    <div className="mx-auto flex w-full max-w-7xl flex-col gap-6 px-4 py-8">
+    <div className="mx-auto flex w-full max-w-7xl flex-col gap-6 px-4 py-8 text-text">
       {/* Header */}
       <div className="flex flex-wrap items-center justify-between gap-4 border-b border-stroke pb-5">
         <div>
           <div className="flex items-center gap-2.5">
-            <h1 className="text-2xl font-semibold tracking-tight">Обзорная панель администратора</h1>
+            <h1 className="text-2xl font-semibold tracking-tight text-text">
+              Обзорная панель администратора
+            </h1>
             <Badge tone="brand">Admin</Badge>
           </div>
           <p className="mt-1 text-sm text-muted">
@@ -255,7 +271,7 @@ export function AdminPage() {
         </div>
 
         {/* Admin Key Switcher */}
-        <div className="flex items-center gap-2 rounded-lg bg-surface p-2 text-xs">
+        <div className="flex items-center gap-2 rounded-lg bg-surface p-2 text-xs border border-stroke">
           <span className="text-muted">Ключ доступа:</span>
           <input
             type="password"
@@ -265,7 +281,7 @@ export function AdminPage() {
               localStorage.setItem('ketner_admin_key', e.target.value);
             }}
             placeholder="x-admin-key"
-            className="w-48 rounded bg-canvas px-2 py-1 text-text border border-stroke-strong font-mono text-xs"
+            className="w-48 rounded bg-canvas px-2.5 py-1 text-text border border-stroke font-mono text-xs outline-none focus:border-accent"
           />
           <Button size="sm" variant="secondary" onClick={() => void loadUsers()}>
             Обновить
@@ -275,25 +291,25 @@ export function AdminPage() {
 
       {/* KPI Cards */}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <Card className="p-4">
-          <p className="text-xs font-medium text-muted">Всего пользователей</p>
-          <p className="mt-1 text-2xl font-semibold">{total}</p>
+        <Card className="p-4 border-stroke bg-surface">
+          <p className="text-[11px] font-mono text-muted uppercase tracking-wider">Всего пользователей</p>
+          <p className="mt-1 text-2xl font-semibold font-mono text-text">{total}</p>
         </Card>
-        <Card className="p-4">
-          <p className="text-xs font-medium text-muted">Запросов сегодня</p>
-          <p className="mt-1 text-2xl font-semibold text-accent">
+        <Card className="p-4 border-stroke bg-surface">
+          <p className="text-[11px] font-mono text-muted uppercase tracking-wider">Запросов сегодня</p>
+          <p className="mt-1 text-2xl font-semibold font-mono text-accent">
             {users.reduce((sum, u) => sum + (u.usage?.requestsToday || 0), 0)}
           </p>
         </Card>
-        <Card className="p-4">
-          <p className="text-xs font-medium text-muted">Токенов сегодня</p>
-          <p className="mt-1 text-2xl font-semibold">
+        <Card className="p-4 border-stroke bg-surface">
+          <p className="text-[11px] font-mono text-muted uppercase tracking-wider">Токенов сегодня</p>
+          <p className="mt-1 text-2xl font-semibold font-mono text-text">
             {users.reduce((sum, u) => sum + (u.usage?.tokensToday || 0), 0).toLocaleString()}
           </p>
         </Card>
-        <Card className="p-4">
-          <p className="text-xs font-medium text-muted">Расход за месяц</p>
-          <p className="mt-1 text-2xl font-semibold text-emerald-500">
+        <Card className="p-4 border-stroke bg-surface">
+          <p className="text-[11px] font-mono text-muted uppercase tracking-wider">Расход за месяц</p>
+          <p className="mt-1 text-2xl font-semibold font-mono text-accent">
             ${users.reduce((sum, u) => sum + (u.usage?.costThisMonth || 0), 0).toFixed(2)}
           </p>
         </Card>
@@ -303,7 +319,7 @@ export function AdminPage() {
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex flex-wrap items-center gap-3">
           <div className="relative w-64 sm:w-80">
-            <SearchIcon className="absolute left-3 top-1/2 -translate-y-1/2 text-muted" />
+            <SearchIcon className="absolute left-3 top-1/2 -translate-y-1/2 text-muted text-sm" />
             <Input
               value={search}
               onChange={(e) => {
@@ -311,7 +327,7 @@ export function AdminPage() {
                 setPage(1);
               }}
               placeholder="Поиск по email или имени..."
-              className="pl-9 text-sm"
+              className="pl-9 text-xs"
             />
           </div>
 
@@ -321,7 +337,7 @@ export function AdminPage() {
               setPlanFilter(e.target.value);
               setPage(1);
             }}
-            className="rounded-lg border border-stroke-strong bg-surface px-3 py-2 text-sm text-text outline-none"
+            className="rounded-md border border-stroke bg-surface px-3 py-1.5 text-xs text-text outline-none focus:border-accent"
           >
             <option value="">Все тарифы</option>
             <option value="free">Free</option>
@@ -334,16 +350,16 @@ export function AdminPage() {
           </select>
         </div>
 
-        <div className="flex items-center gap-2 text-xs text-muted">
-          Сортировка по умолчанию: <span className="font-semibold text-text">% Бюджета (убывание)</span>
+        <div className="flex items-center gap-2 text-xs text-muted font-mono">
+          Сортировка: <span className="font-semibold text-text">% Бюджета (убывание)</span>
         </div>
       </div>
 
       {/* Error Message with Quick Unlock */}
       {error ? (
-        <div className="flex flex-col gap-3 rounded-lg border border-rose-500/30 bg-rose-500/10 p-4 text-sm text-rose-400">
+        <div className="flex flex-col gap-3 rounded-lg border border-danger/30 bg-danger/10 p-4 text-xs text-danger">
           <div className="flex items-center gap-2">
-            <span className="font-semibold text-rose-300">Ошибка доступа:</span>
+            <span className="font-semibold">Ошибка доступа:</span>
             <span>{error}</span>
           </div>
           <div className="flex flex-wrap items-center gap-2 pt-1">
@@ -356,7 +372,7 @@ export function AdminPage() {
                 localStorage.setItem('ketner_admin_key', devKey);
                 void loadUsers();
               }}
-              className="text-xs bg-surface/80"
+              className="text-xs"
             >
               Использовать стандартный ключ разработчика (ketner-ai-admin-key-dev)
             </Button>
@@ -368,153 +384,154 @@ export function AdminPage() {
       ) : null}
 
       {/* Users Table */}
-      <Card className="overflow-hidden p-0">
-        <div className="overflow-x-auto">
-          <table className="w-full text-left text-sm">
-            <thead className="border-b border-stroke bg-surface/50 text-xs font-semibold uppercase tracking-wider text-muted">
+      <div className="overflow-x-auto rounded-lg border border-stroke bg-surface">
+        <table className="w-full text-left text-xs">
+          <thead className="sticky top-0 z-10 border-b border-stroke bg-surface-2 text-[11px] font-mono uppercase tracking-wider text-muted">
+            <tr>
+              <th className="px-4 py-3">Пользователь</th>
+              <th className="px-4 py-3">Тариф / Роль</th>
+              <th className="px-4 py-3">Запросы (сегодня)</th>
+              <th className="px-4 py-3">Токены (сегодня)</th>
+              <th className="px-4 py-3">Бюджет (мес)</th>
+              <th className="px-4 py-3">Остаток токенов</th>
+              <th className="px-4 py-3 text-right">Действие</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-stroke">
+            {loading ? (
               <tr>
-                <th className="px-4 py-3">Пользователь</th>
-                <th className="px-4 py-3">Тариф / Роль</th>
-                <th className="px-4 py-3">Запросы (сегодня)</th>
-                <th className="px-4 py-3">Токены (сегодня)</th>
-                <th className="px-4 py-3">Бюджет (мес)</th>
-                <th className="px-4 py-3">Остаток токенов</th>
-                <th className="px-4 py-3 text-right">Действие</th>
+                <td colSpan={7} className="py-12 text-center">
+                  <Spinner className="mx-auto size-6 text-accent" />
+                </td>
               </tr>
-            </thead>
-            <tbody className="divide-y divide-stroke">
-              {loading ? (
-                <tr>
-                  <td colSpan={7} className="py-12 text-center">
-                    <Spinner className="mx-auto size-6 text-accent" />
+            ) : users.length === 0 ? (
+              <tr>
+                <td colSpan={7} className="py-12 text-center text-muted">
+                  Пользователи не найдены
+                </td>
+              </tr>
+            ) : (
+              users.map((u) => (
+                <tr
+                  key={u.id}
+                  className="hover:bg-surface-2/60 cursor-pointer transition-colors"
+                  onClick={() => void loadUserDetail(u.id)}
+                >
+                  <td className="px-4 py-3">
+                    <div className="font-medium text-text">{u.name || 'Без имени'}</div>
+                    <div className="text-[11px] text-muted font-mono">{u.email}</div>
                   </td>
-                </tr>
-              ) : users.length === 0 ? (
-                <tr>
-                  <td colSpan={7} className="py-12 text-center text-muted">
-                    Пользователи не найдены
-                  </td>
-                </tr>
-              ) : (
-                users.map((u) => (
-                  <tr
-                    key={u.id}
-                    className="hover:bg-surface/40 cursor-pointer transition-colors"
-                    onClick={() => void loadUserDetail(u.id)}
-                  >
-                    <td className="px-4 py-3">
-                      <div className="font-medium text-text">{u.name || 'Без имени'}</div>
-                      <div className="text-xs text-muted font-mono">{u.email}</div>
-                    </td>
-                    <td className="px-4 py-3">
-                      <div className="flex flex-wrap items-center gap-1.5">
-                        <Badge
-                          tone={
-                            u.plan === 'ultra'
-                              ? 'brand'
-                              : u.plan === 'pro'
-                                ? 'neutral'
-                                : 'outline'
-                          }
-                        >
-                          {u.plan.toUpperCase()}
-                        </Badge>
-                        {u.isVip ? (
-                          <span className="rounded bg-amber-500/20 px-1.5 py-0.5 text-[10px] font-semibold text-amber-400">
-                            VIP
-                          </span>
-                        ) : null}
-                        {u.isAdmin ? (
-                          <span className="rounded bg-rose-500/20 px-1.5 py-0.5 text-[10px] font-semibold text-rose-400">
-                            ADMIN
-                          </span>
-                        ) : null}
-                      </div>
-                    </td>
-                    <td className="px-4 py-3">
-                      <span className="font-semibold text-text">{u.usage.requestsToday}</span>
-                      {u.limits.requestsPerDay !== null ? (
-                        <span className="text-xs text-muted"> / {u.limits.requestsPerDay}</span>
-                      ) : (
-                        <span className="text-xs text-muted"> / ∞</span>
-                      )}
-                    </td>
-                    <td className="px-4 py-3 font-mono text-xs">
-                      {u.usage.tokensToday.toLocaleString()}
-                    </td>
-                    <td className="px-4 py-3">
-                      <div className="flex items-center gap-2">
-                        <div className="h-1.5 w-16 overflow-hidden rounded-full bg-surface border border-stroke">
-                          <div
-                            className={`h-full ${
-                              u.budgetUsedPct >= 90
-                                ? 'bg-rose-500'
-                                : u.budgetUsedPct >= 50
-                                  ? 'bg-amber-500'
-                                  : 'bg-accent'
-                            }`}
-                            style={{ width: `${Math.min(100, u.budgetUsedPct)}%` }}
-                          />
-                        </div>
-                        <span className="text-xs font-semibold">{u.budgetUsedPct}%</span>
-                        <span className="text-xs text-muted">
-                          (${u.usage.costThisMonth} / ${u.limits.costBudget ?? 0})
-                        </span>
-                      </div>
-                    </td>
-                    <td className="px-4 py-3 text-xs">
-                      {u.remaining.tokensToday !== null ? (
-                        <span
-                          className={
-                            u.remaining.tokensToday < 0
-                              ? 'font-semibold text-rose-400'
-                              : 'text-text'
-                          }
-                        >
-                          {u.remaining.tokensToday.toLocaleString()}
-                        </span>
-                      ) : (
-                        <span className="text-muted">Безлимит</span>
-                      )}
-                    </td>
-                    <td className="px-4 py-3 text-right">
-                      <Button
-                        size="sm"
-                        variant="secondary"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          void loadUserDetail(u.id);
-                        }}
+                  <td className="px-4 py-3">
+                    <div className="flex flex-wrap items-center gap-1.5 font-mono">
+                      <Badge
+                        tone={
+                          u.plan === 'ultra'
+                            ? 'brand'
+                            : u.plan === 'pro'
+                              ? 'neutral'
+                              : 'outline'
+                        }
+                        className="text-[10px] py-0 px-1.5"
                       >
-                        Детали
-                      </Button>
-                    </td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        </div>
-      </Card>
+                        {u.plan.toUpperCase()}
+                      </Badge>
+                      {u.isVip ? (
+                        <span className="rounded bg-surface-2 border border-stroke px-1.5 py-0.5 text-[10px] font-semibold text-accent">
+                          VIP
+                        </span>
+                      ) : null}
+                      {u.isAdmin ? (
+                        <span className="rounded bg-danger/10 border border-danger/30 px-1.5 py-0.5 text-[10px] font-semibold text-danger">
+                          ADMIN
+                        </span>
+                      ) : null}
+                    </div>
+                  </td>
+                  <td className="px-4 py-3 font-mono">
+                    <span className="font-semibold text-text">{u.usage.requestsToday}</span>
+                    {u.limits.requestsPerDay !== null ? (
+                      <span className="text-muted"> / {u.limits.requestsPerDay}</span>
+                    ) : (
+                      <span className="text-muted"> / ∞</span>
+                    )}
+                  </td>
+                  <td className="px-4 py-3 font-mono">
+                    {u.usage.tokensToday.toLocaleString()}
+                  </td>
+                  <td className="px-4 py-3">
+                    <div className="flex items-center gap-2">
+                      <div className="h-1.5 w-16 overflow-hidden rounded-full bg-surface-3 border border-stroke">
+                        <div
+                          className={`h-full ${
+                            u.budgetUsedPct >= 90
+                              ? 'bg-danger'
+                              : u.budgetUsedPct >= 50
+                                ? 'bg-warning'
+                                : 'bg-accent'
+                          }`}
+                          style={{ width: `${Math.min(100, u.budgetUsedPct)}%` }}
+                        />
+                      </div>
+                      <span className="font-mono text-[11px] font-semibold">{u.budgetUsedPct}%</span>
+                      <span className="text-[11px] text-muted font-mono">
+                        (${u.usage.costThisMonth} / ${u.limits.costBudget ?? 0})
+                      </span>
+                    </div>
+                  </td>
+                  <td className="px-4 py-3 font-mono">
+                    {u.remaining.tokensToday !== null ? (
+                      <span
+                        className={
+                          u.remaining.tokensToday < 0
+                            ? 'font-semibold text-danger'
+                            : 'text-text'
+                        }
+                      >
+                        {u.remaining.tokensToday.toLocaleString()}
+                      </span>
+                    ) : (
+                      <span className="text-muted font-sans">Безлимит</span>
+                    )}
+                  </td>
+                  <td className="px-4 py-3 text-right">
+                    <Button
+                      size="sm"
+                      variant="secondary"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        void loadUserDetail(u.id);
+                      }}
+                      className="text-xs"
+                    >
+                      Детали
+                    </Button>
+                  </td>
+                </tr>
+              ))
+            )}
+          </tbody>
+        </table>
+      </div>
 
       {/* User Details & Edit Modal */}
       {selectedUserId ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
-          <div className="flex max-h-[90vh] w-full max-w-4xl flex-col rounded-xl border border-stroke-strong bg-surface shadow-2xl overflow-hidden">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm animate-fade-in">
+          <div className="flex max-h-[90vh] w-full max-w-4xl flex-col rounded-xl border border-stroke bg-surface shadow-2xl overflow-hidden text-text">
             {/* Modal Header */}
-            <div className="flex items-center justify-between border-b border-stroke px-6 py-4">
+            <div className="flex items-center justify-between border-b border-stroke px-6 py-4 bg-surface-2">
               <div>
-                <h2 className="text-lg font-semibold">Карточка пользователя</h2>
-                <p className="text-xs text-muted">ID: {selectedUserId}</p>
+                <h2 className="text-base font-semibold text-text">Карточка пользователя</h2>
+                <p className="text-xs font-mono text-muted mt-0.5">ID: {selectedUserId}</p>
               </div>
               <button
                 onClick={() => {
                   setSelectedUserId(null);
                   setDetailUser(null);
                 }}
-                className="rounded-lg p-1 text-muted hover:bg-canvas hover:text-text"
+                className="rounded-md p-1.5 text-muted hover:bg-surface hover:text-text transition-colors"
+                title="Закрыть (Esc)"
               >
-                <CloseIcon />
+                <CloseIcon className="text-sm" />
               </button>
             </div>
 
@@ -525,7 +542,7 @@ export function AdminPage() {
                   <Spinner className="mx-auto size-8 text-accent" />
                 </div>
               ) : detailError ? (
-                <div className="rounded-lg bg-rose-500/10 p-4 text-sm text-rose-400">
+                <div className="rounded-lg bg-danger/10 border border-danger/30 p-4 text-xs text-danger">
                   {detailError}
                 </div>
               ) : detailUser ? (
@@ -533,50 +550,54 @@ export function AdminPage() {
                   {/* Profile & Edit Section */}
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     {/* User Info */}
-                    <div className="rounded-lg border border-stroke bg-canvas/50 p-4 space-y-2">
-                      <h3 className="font-semibold text-sm">Профиль</h3>
-                      <div className="text-xs space-y-1">
+                    <div className="rounded-lg border border-stroke bg-canvas p-4 space-y-2.5">
+                      <h3 className="font-semibold text-xs uppercase font-mono tracking-wider text-muted">
+                        Профиль
+                      </h3>
+                      <div className="text-xs space-y-1.5">
                         <div>
                           <span className="text-muted">Email:</span>{' '}
-                          <span className="font-medium text-text">{detailUser.email}</span>
+                          <span className="font-mono text-text">{detailUser.email}</span>
                         </div>
                         <div>
                           <span className="text-muted">Имя:</span>{' '}
                           <span className="font-medium text-text">{detailUser.name}</span>
                         </div>
                         <div>
-                          <span className="text-muted">Дата регистрации:</span>{' '}
-                          <span className="font-medium text-text">
+                          <span className="text-muted">Регистрация:</span>{' '}
+                          <span className="font-mono text-text">
                             {new Date(detailUser.createdAt).toLocaleString()}
                           </span>
                         </div>
                         <div>
-                          <span className="text-muted">Текущий тариф:</span>{' '}
-                          <span className="font-semibold text-accent">{detailUser.plan}</span>
+                          <span className="text-muted">Тариф:</span>{' '}
+                          <Badge tone="brand" className="font-mono text-[10px] ml-1">
+                            {detailUser.plan}
+                          </Badge>
                         </div>
                       </div>
                     </div>
 
                     {/* Quick Edit Form */}
-                    <div className="rounded-lg border border-stroke bg-canvas/50 p-4 space-y-3">
+                    <div className="rounded-lg border border-stroke bg-canvas p-4 space-y-3">
                       <div className="flex items-center justify-between">
-                        <h3 className="font-semibold text-sm flex items-center gap-1.5">
-                          <EditIcon className="size-4 text-accent" /> Управление правами
+                        <h3 className="font-semibold text-xs uppercase font-mono tracking-wider text-muted flex items-center gap-1.5">
+                          <EditIcon className="size-3.5 text-accent" /> Управление правами
                         </h3>
                         {isSelf ? (
-                          <span className="text-[10px] text-amber-400 bg-amber-500/10 px-1.5 py-0.5 rounded">
-                            Это ваш аккаунт
+                          <span className="text-[10px] text-accent bg-surface-2 border border-stroke px-1.5 py-0.5 rounded font-mono">
+                            Ваш аккаунт
                           </span>
                         ) : null}
                       </div>
 
                       <div className="grid grid-cols-2 gap-3 text-xs">
                         <div>
-                          <label className="block text-muted mb-1">Сменить тариф</label>
+                          <label className="block text-muted mb-1 text-[11px]">Сменить тариф</label>
                           <select
                             value={editPlan}
                             onChange={(e) => setEditPlan(e.target.value as PlanId)}
-                            className="w-full rounded border border-stroke-strong bg-surface px-2 py-1 text-xs"
+                            className="w-full rounded border border-stroke bg-surface px-2.5 py-1 text-xs text-text outline-none focus:border-accent"
                           >
                             <option value="free">free</option>
                             <option value="plus">plus</option>
@@ -588,24 +609,24 @@ export function AdminPage() {
                           </select>
                         </div>
 
-                        <div className="space-y-2 pt-4">
-                          <label className="flex items-center gap-2 cursor-pointer">
+                        <div className="space-y-2 pt-3">
+                          <label className="flex items-center gap-2 cursor-pointer text-xs">
                             <input
                               type="checkbox"
                               checked={editVip}
                               onChange={(e) => setEditVip(e.target.checked)}
-                              className="rounded border-stroke-strong text-accent"
+                              className="rounded border-stroke text-accent"
                             />
                             <span>VIP статус (Ultra)</span>
                           </label>
 
-                          <label className="flex items-center gap-2 cursor-pointer">
+                          <label className="flex items-center gap-2 cursor-pointer text-xs">
                             <input
                               type="checkbox"
                               checked={editAdmin}
                               disabled={Boolean(isSelf)}
                               onChange={(e) => setEditAdmin(e.target.checked)}
-                              className="rounded border-stroke-strong text-accent disabled:opacity-50"
+                              className="rounded border-stroke text-accent disabled:opacity-50"
                             />
                             <span>Права администратора</span>
                           </label>
@@ -613,10 +634,10 @@ export function AdminPage() {
                       </div>
 
                       {saveError ? (
-                        <p className="text-xs text-rose-400 font-medium">{saveError}</p>
+                        <p className="text-xs text-danger font-medium">{saveError}</p>
                       ) : null}
                       {saveSuccess ? (
-                        <p className="text-xs text-emerald-400 font-medium flex items-center gap-1">
+                        <p className="text-xs text-accent font-medium flex items-center gap-1 font-mono">
                           <CheckIcon className="size-3" /> Сохранено успешно!
                         </p>
                       ) : null}
@@ -626,19 +647,23 @@ export function AdminPage() {
                         variant="primary"
                         onClick={() => void handleSaveUser()}
                         disabled={saving}
-                        className="w-full"
+                        className="w-full text-xs font-medium"
                       >
                         {saving ? 'Сохранение...' : 'Применить изменения'}
                       </Button>
                     </div>
                   </div>
 
+                  <Divider />
+
                   {/* Hourly & Daily Limits Comparison */}
-                  <div className="rounded-lg border border-stroke bg-canvas/50 p-4 space-y-3">
-                    <h3 className="font-semibold text-sm">Лимиты и текущий расход</h3>
+                  <div className="rounded-lg border border-stroke bg-canvas p-4 space-y-3">
+                    <h3 className="font-semibold text-xs uppercase font-mono tracking-wider text-muted">
+                      Лимиты и текущий расход
+                    </h3>
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-xs">
-                      <div className="rounded border border-stroke bg-surface p-2.5">
-                        <span className="text-muted">Запросы за час</span>
+                      <div className="rounded-lg border border-stroke bg-surface p-3 font-mono">
+                        <span className="text-[11px] text-muted block">Запросы за час</span>
                         <p className="text-base font-semibold mt-1">
                           {detailUser.usage.requestsLastHour}{' '}
                           <span className="text-xs font-normal text-muted">
@@ -647,8 +672,8 @@ export function AdminPage() {
                         </p>
                       </div>
 
-                      <div className="rounded border border-stroke bg-surface p-2.5">
-                        <span className="text-muted">Запросы за день</span>
+                      <div className="rounded-lg border border-stroke bg-surface p-3 font-mono">
+                        <span className="text-[11px] text-muted block">Запросы за день</span>
                         <p className="text-base font-semibold mt-1">
                           {detailUser.usage.requestsToday}{' '}
                           <span className="text-xs font-normal text-muted">
@@ -657,21 +682,21 @@ export function AdminPage() {
                         </p>
                       </div>
 
-                      <div className="rounded border border-stroke bg-surface p-2.5">
-                        <span className="text-muted">Токены за час</span>
-                        <p className="text-base font-semibold mt-1 font-mono">
+                      <div className="rounded-lg border border-stroke bg-surface p-3 font-mono">
+                        <span className="text-[11px] text-muted block">Токены за час</span>
+                        <p className="text-base font-semibold mt-1">
                           {detailUser.usage.tokensLastHour.toLocaleString()}{' '}
-                          <span className="text-xs font-normal text-muted font-sans">
+                          <span className="text-xs font-normal text-muted">
                             / {detailUser.limits.tokensPerHour?.toLocaleString() ?? '∞'}
                           </span>
                         </p>
                       </div>
 
-                      <div className="rounded border border-stroke bg-surface p-2.5">
-                        <span className="text-muted">Токены за день</span>
-                        <p className="text-base font-semibold mt-1 font-mono">
+                      <div className="rounded-lg border border-stroke bg-surface p-3 font-mono">
+                        <span className="text-[11px] text-muted block">Токены за день</span>
+                        <p className="text-base font-semibold mt-1">
                           {detailUser.usage.tokensToday.toLocaleString()}{' '}
-                          <span className="text-xs font-normal text-muted font-sans">
+                          <span className="text-xs font-normal text-muted">
                             / {detailUser.limits.tokensPerDay?.toLocaleString() ?? '∞'}
                           </span>
                         </p>
@@ -679,93 +704,97 @@ export function AdminPage() {
                     </div>
                   </div>
 
+                  <Divider />
+
                   {/* Profitability Card */}
-                  <div className="rounded-lg border border-stroke bg-canvas/50 p-4 space-y-2">
-                    <h3 className="font-semibold text-sm">Рентабельность подписки (30 дней)</h3>
-                    <div className="flex flex-wrap items-center gap-6 text-xs">
+                  <div className="rounded-lg border border-stroke bg-canvas p-4 space-y-3">
+                    <div className="flex items-center justify-between">
+                      <h3 className="font-semibold text-xs uppercase font-mono tracking-wider text-muted">
+                        Рентабельность подписки (30 дней)
+                      </h3>
+                      <div className="flex items-center gap-1.5 font-mono text-xs">
+                        <StatusDot
+                          tone={
+                            detailUser.profitability.status === 'profitable'
+                              ? 'success'
+                              : detailUser.profitability.status === 'low_margin'
+                                ? 'warning'
+                                : 'danger'
+                          }
+                        />
+                        <span className="capitalize">{detailUser.profitability.status}</span>
+                      </div>
+                    </div>
+                    <div className="flex flex-wrap items-center gap-6 text-xs font-mono">
                       <div>
-                        <span className="text-muted">Выручка (цена тарифа):</span>{' '}
-                        <span className="font-semibold">
-                          ${detailUser.profitability.subscriptionRevenue.toFixed(2)} (
-                          {detailUser.profitability.priceRub} ₽)
+                        <span className="text-muted font-sans">Выручка:</span>{' '}
+                        <span className="font-semibold text-text">
+                          ${detailUser.profitability.subscriptionRevenue.toFixed(2)} ({detailUser.profitability.priceRub} ₽)
                         </span>
                       </div>
                       <div>
-                        <span className="text-muted">Затраты на AI:</span>{' '}
-                        <span className="font-semibold text-rose-400">
+                        <span className="text-muted font-sans">Затраты на AI:</span>{' '}
+                        <span className="font-semibold text-danger">
                           ${detailUser.profitability.aiCost.toFixed(2)}
                         </span>
                       </div>
                       <div>
-                        <span className="text-muted">Маржинальный доход:</span>{' '}
+                        <span className="text-muted font-sans">Маржинальный доход:</span>{' '}
                         <span
                           className={`font-semibold ${
                             detailUser.profitability.contributionMargin >= 0
-                              ? 'text-emerald-400'
-                              : 'text-rose-400'
+                              ? 'text-accent'
+                              : 'text-danger'
                           }`}
                         >
                           ${detailUser.profitability.contributionMargin.toFixed(2)}
                         </span>
                       </div>
-                      <div>
-                        <span className="text-muted">Статус:</span>{' '}
-                        <Badge
-                          tone={
-                            detailUser.profitability.status === 'profitable'
-                              ? 'brand'
-                              : detailUser.profitability.status === 'low_margin'
-                                ? 'neutral'
-                                : 'outline'
-                          }
-                        >
-                          {detailUser.profitability.status}
-                        </Badge>
-                      </div>
                     </div>
                   </div>
 
+                  <Divider />
+
                   {/* Recent 20 Requests */}
-                  <div className="rounded-lg border border-stroke bg-canvas/50 p-4 space-y-2">
-                    <h3 className="font-semibold text-sm">
+                  <div className="rounded-lg border border-stroke bg-canvas p-4 space-y-3">
+                    <h3 className="font-semibold text-xs uppercase font-mono tracking-wider text-muted">
                       Последние 20 запросов ({detailUser.recentRequests.length})
                     </h3>
                     <div className="max-h-60 overflow-y-auto">
                       {detailUser.recentRequests.length === 0 ? (
                         <p className="text-xs text-muted py-4 text-center">Запросов пока нет</p>
                       ) : (
-                        <table className="w-full text-left text-xs">
-                          <thead className="border-b border-stroke text-muted uppercase">
+                        <table className="w-full text-left text-xs font-mono">
+                          <thead className="border-b border-stroke text-muted uppercase text-[10px]">
                             <tr>
-                              <th className="py-1">Время</th>
-                              <th className="py-1">Модель</th>
-                              <th className="py-1">Провайдер</th>
-                              <th className="py-1">Токены</th>
-                              <th className="py-1">Стоимость</th>
-                              <th className="py-1">Задержка</th>
-                              <th className="py-1">Статус</th>
+                              <th className="py-1.5">Время</th>
+                              <th className="py-1.5">Модель</th>
+                              <th className="py-1.5">Провайдер</th>
+                              <th className="py-1.5">Токены</th>
+                              <th className="py-1.5">Стоимость</th>
+                              <th className="py-1.5">Задержка</th>
+                              <th className="py-1.5">Статус</th>
                             </tr>
                           </thead>
-                          <tbody className="divide-y divide-stroke font-mono">
+                          <tbody className="divide-y divide-stroke">
                             {detailUser.recentRequests.map((r) => (
                               <tr key={r.id}>
-                                <td className="py-1 text-muted">
+                                <td className="py-1.5 text-muted">
                                   {new Date(r.createdAt).toLocaleTimeString()}
                                 </td>
-                                <td className="py-1 font-sans">{r.modelId}</td>
-                                <td className="py-1 text-muted font-sans">{r.provider}</td>
-                                <td className="py-1">
-                                  {r.inputTokens + r.outputTokens} (in:{r.inputTokens} / out:
-                                  {r.outputTokens})
+                                <td className="py-1.5 font-sans font-medium text-text">{r.modelId}</td>
+                                <td className="py-1.5 text-muted font-sans">{r.provider}</td>
+                                <td className="py-1.5">
+                                  {r.inputTokens + r.outputTokens}
                                 </td>
-                                <td className="py-1">${r.estimatedCost.toFixed(5)}</td>
-                                <td className="py-1 text-muted">{r.latencyMs}ms</td>
-                                <td className="py-1">
+                                <td className="py-1.5">${r.estimatedCost.toFixed(5)}</td>
+                                <td className="py-1.5 text-muted">{r.latencyMs}ms</td>
+                                <td className="py-1.5">
                                   <span
                                     className={
                                       r.status === 'success'
-                                        ? 'text-emerald-400 font-sans'
-                                        : 'text-rose-400 font-sans'
+                                        ? 'text-accent font-sans'
+                                        : 'text-danger font-sans'
                                     }
                                   >
                                     {r.status}
