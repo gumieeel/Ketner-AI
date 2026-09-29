@@ -115,7 +115,8 @@ export const config = {
   /**
    * PostgreSQL / Supabase Database URL
    */
-  databaseUrl: process.env.DATABASE_URL || '',
+  databaseUrl:
+    process.env.DATABASE_URL || 'postgresql://user:password@localhost:5432/ketner',
 
   /**
    * Supabase Project Credentials

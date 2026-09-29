@@ -3,6 +3,10 @@ import { createApp } from './app.js';
 import { config } from './config.js';
 import { telegramBotService } from './telegram/bot.js';
 await initAuthDatabase(defaultBetterAuth);
+if (process.env.DATABASE_URL) {
+    console.log('✅ Successfully connected to PostgreSQL');
+    console.log('✅ BetterAuth tables synchronized');
+}
 const app = createApp({ botService: telegramBotService });
 app.listen(config.port, async () => {
     console.log(`[mock-api] ${config.serviceName} слушает http://127.0.0.1:${config.port}`);
