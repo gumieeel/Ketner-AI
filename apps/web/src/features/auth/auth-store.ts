@@ -253,3 +253,5 @@ export const useAuth = create<AuthState>((set, get) => ({
 export function getAuthToken(): string | null {
   return useAuth.getState().token ?? storage.get(SESSION_KEY);
 }
+
+export const useAuthStore = useAuth;
