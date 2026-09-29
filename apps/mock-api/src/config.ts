@@ -115,8 +115,7 @@ export const config = {
   /**
    * PostgreSQL / Supabase Database URL
    */
-  databaseUrl:
-    process.env.DATABASE_URL || 'postgresql://user:password@localhost:5432/ketner',
+  databaseUrl: process.env.DATABASE_URL?.trim() || '',
 
   /**
    * Supabase Project Credentials
@@ -137,9 +136,9 @@ export const config = {
 
   /** Базовый URL для Better Auth (включая редиректы OAuth). */
   betterAuthUrl:
-    process.env.BETTER_AUTH_URL ??
-    process.env.RENDER_EXTERNAL_URL ??
-    process.env.BASE_URL ??
+    process.env.BETTER_AUTH_URL?.trim() ||
+    process.env.RENDER_EXTERNAL_URL?.trim() ||
+    process.env.BASE_URL?.trim() ||
     `http://localhost:${readNumber('PORT', 8787)}`,
 
   /** OAuth провайдеры (Better Auth). */

@@ -44,7 +44,7 @@ export async function generateChatResponse(
         .where(eq(schema.messages.conversationId, conversationId))
         .orderBy(asc(schema.messages.createdAt));
 
-      messages = history.map((m) => ({
+      messages = history.map((m: any) => ({
         role: (m.role === 'assistant' ? 'assistant' : 'user') as 'user' | 'assistant',
         content: m.content,
       }));
@@ -120,7 +120,7 @@ export async function streamChatResponse(
         .where(eq(schema.messages.conversationId, conversationId))
         .orderBy(asc(schema.messages.createdAt));
 
-      messages = history.map((m) => ({
+      messages = history.map((m: any) => ({
         role: (m.role === 'assistant' ? 'assistant' : 'user') as 'user' | 'assistant',
         content: m.content,
       }));

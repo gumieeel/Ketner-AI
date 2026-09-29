@@ -9,19 +9,12 @@ import postgres from 'postgres';
 import * as schema from './schema.js';
 import { config } from '../config.js';
 
-// Создаём подключение к PostgreSQL
 const connectionString =
   config.databaseUrl ||
   process.env.DATABASE_URL ||
   'postgresql://postgres:postgres@localhost:5432/ketner';
 
-if (!connectionString) {
-  throw new Error(
-    'DATABASE_URL не установлена. Проверь .env файл или переменные окружения.',
-  );
-}
-
-// Используем postgres.js для подключения (экспортируем для graceful shutdown в скриптах)
+// Используем postgres.js для подключения
 export const queryClient = postgres(connectionString, {
   max: 10, // pool size
   idle_timeout: 30, // закрывать неиспользуемые подключения

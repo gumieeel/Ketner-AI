@@ -17,6 +17,17 @@ try {
 catch {
     DatabaseSyncClass = null;
 }
+function normalizeBaseUrl(rawUrl) {
+    let url = (rawUrl || '').trim();
+    url = url.replace(/\/+$/, '');
+    if (url.endsWith('/api/auth')) {
+        url = url.slice(0, -9);
+    }
+    else if (url.endsWith('/api')) {
+        url = url.slice(0, -4);
+    }
+    return url || 'http://localhost:8787';
+}
 export function createBetterAuth(options = {}) {
     const dbPath = options.dbPath ?? config.authDbFile;
     const isMemory = dbPath === ':memory:';
@@ -90,13 +101,18 @@ export function createBetterAuth(options = {}) {
             close: () => { },
         };
     }
-    const baseURL = options.baseURL ?? config.betterAuthUrl;
+    const baseURL = normalizeBaseUrl(options.baseURL ?? config.betterAuthUrl);
     const secret = options.secret ?? config.betterAuthSecret;
-    const usePostgres = options.usePostgres ?? Boolean(config.databaseUrl && !options.dbPath);
+    const usePostgres = options.usePostgres ??
+        Boolean(config.databaseUrl &&
+            config.databaseUrl.trim() !== '' &&
+            !config.databaseUrl.includes('user:password@localhost') &&
+            !options.dbPath);
+    const dashApiKey = options.apiKey ?? (config.betterAuthApiKey || process.env.BETTER_AUTH_API_KEY);
     const auth = betterAuth({
         baseURL,
         secret,
-        ...(usePostgres
+        ...(usePostgres && pgDb
             ? {
                 database: drizzleAdapter(pgDb, {
                     provider: 'pg',
@@ -143,24 +159,15 @@ export function createBetterAuth(options = {}) {
             },
         },
         plugins: [
-            dash({
-                apiKey: options.apiKey ?? (config.betterAuthApiKey || process.env.BETTER_AUTH_API_KEY),
-            }),
+            ...(dashApiKey ? [dash({ apiKey: dashApiKey })] : []),
         ],
         trustedOrigins: (request) => {
             const origin = request?.headers?.get('origin');
-            if (!origin) {
-                return [baseURL, config.corsOrigin];
+            const trusted = [baseURL, config.corsOrigin, config.webAppUrl].filter(Boolean);
+            if (origin) {
+                trusted.push(origin);
             }
-            if (origin.startsWith('http://localhost:') ||
-                origin.startsWith('http://127.0.0.1:') ||
-                origin.includes('ketner-ai') ||
-                origin.includes('onrender.com') ||
-                origin.includes('google.com') ||
-                origin.includes('better-auth.com')) {
-                return [origin];
-            }
-            return [config.corsOrigin, baseURL];
+            return trusted;
         },
     });
     return { auth, db };
