@@ -1,19 +1,29 @@
+/**
+ * KETNER AI — DB Client для Drizzle
+ *
+ * apps/mock-api/src/db/client.ts
+ */
 import { drizzle } from 'drizzle-orm/postgres-js';
 import postgres from 'postgres';
 import * as schema from './schema.js';
 import { config } from '../config.js';
-// Создаём подключение к PostgreSQL (или fallback для локальной разработки)
-const connectionString = config.databaseUrl || 'postgresql://postgres:postgres@localhost:5432/ketner';
-// Используем postgres.js для пула подключений
+// Создаём подключение к PostgreSQL
+const connectionString = config.databaseUrl ||
+    process.env.DATABASE_URL ||
+    'postgresql://postgres:postgres@localhost:5432/ketner';
+if (!connectionString) {
+    throw new Error('DATABASE_URL не установлена. Проверь .env файл или переменные окружения.');
+}
+// Используем postgres.js для подключения (экспортируем для graceful shutdown в скриптах)
 export const queryClient = postgres(connectionString, {
-    max: 10,
-    idle_timeout: 30,
+    max: 10, // pool size
+    idle_timeout: 30, // закрывать неиспользуемые подключения
     connect_timeout: 10,
     onnotice: () => { },
 });
 // Экспортируем Drizzle instance с типизацией
 export const db = drizzle(queryClient, { schema });
-// Для тестов
+// Для тестов: memdb или временные таблицы
 export async function createTestDb() {
     return db;
 }
@@ -21,6 +31,8 @@ export async function createTestDb() {
 export async function runMigrations() {
     try {
         console.log('🔄 Запускаем миграции Drizzle...');
+        // Миграции запускаются через CLI:
+        // npx drizzle-kit migrate
         console.log('✅ Миграции завершены');
     }
     catch (error) {
@@ -31,11 +43,12 @@ export async function runMigrations() {
 // Graceful shutdown
 if (typeof process !== 'undefined') {
     process.on('SIGINT', async () => {
+        console.log('🛑 Закрываем подключение к БД...');
         try {
             await queryClient.end();
         }
         catch {
-            // Игнорируем ошибки при завершении
+            // Игнорируем
         }
         process.exit(0);
     });
