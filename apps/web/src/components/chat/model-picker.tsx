@@ -206,6 +206,8 @@ export function ModelPicker({ disabled = false }: { disabled?: boolean }) {
     const accessible = canAccessModel(user?.plan, model);
     const index = allModels.findIndex((m) => m.id === model.id);
     const isFocused = focusedIndex === index;
+    const isPlus = isPlusModel(model);
+    const isPro = isProModel(model);
 
     return (
       <li key={model.id} role="none">
@@ -215,9 +217,14 @@ export function ModelPicker({ disabled = false }: { disabled?: boolean }) {
           }}
           type="button"
           role="option"
-          tabIndex={isFocused ? 0 : -1}
+          tabIndex={isFocused && accessible ? 0 : -1}
           aria-selected={active}
+          aria-disabled={!accessible}
+          disabled={!accessible}
           onClick={() => {
+            if (!accessible) {
+              return;
+            }
             setModelId(model.id);
             setOpen(false);
             triggerRef.current?.focus();
@@ -227,16 +234,28 @@ export function ModelPicker({ disabled = false }: { disabled?: boolean }) {
             active
               ? 'bg-accent-soft text-text font-medium'
               : 'text-text hover:bg-surface-2 focus-visible:bg-surface-2',
-            isFocused && !active && 'bg-surface-2',
+            isFocused && !active && accessible && 'bg-surface-2',
+            !accessible && 'opacity-40 cursor-not-allowed hover:bg-transparent focus-visible:bg-transparent',
           )}
         >
           <span className="size-3.5 flex items-center justify-center text-accent shrink-0">
             {active ? <CheckIcon className="size-3.5" /> : null}
           </span>
           <span className="flex-1 truncate">{labelOf(model)}</span>
-          {!accessible ? (
-            <LockIcon className="size-3 text-subtle shrink-0" aria-hidden="true" />
-          ) : null}
+          <div className="flex items-center gap-1.5 shrink-0 ml-auto">
+            {isPlus ? (
+              <span className="font-mono text-[10px] font-semibold text-sky-400 lowercase tracking-wider px-1.5 py-0.5 rounded bg-sky-400/10 border border-sky-400/25">
+                plus
+              </span>
+            ) : isPro ? (
+              <span className="font-mono text-[10px] font-semibold text-purple-400 lowercase tracking-wider px-1.5 py-0.5 rounded bg-purple-400/10 border border-purple-400/25">
+                pro
+              </span>
+            ) : null}
+            {!accessible ? (
+              <LockIcon className="size-3 text-subtle shrink-0 opacity-60" aria-hidden="true" />
+            ) : null}
+          </div>
         </button>
       </li>
     );

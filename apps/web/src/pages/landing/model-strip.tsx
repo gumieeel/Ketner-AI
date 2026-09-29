@@ -72,7 +72,7 @@ export function ModelStrip() {
         </span>
 
         {/* Плавная бегущая строка слева направо с мягким затуханием по краям */}
-        <div className="relative w-full overflow-hidden pb-24 pt-3 [mask-image:linear-gradient(to_right,transparent,black_8%,black_92%,transparent)]">
+        <div className="relative w-full overflow-hidden pt-28 pb-4 [mask-image:linear-gradient(to_right,transparent,black_8%,black_92%,transparent)]">
           <div className="group/marquee animate-marquee-ltr flex items-center gap-10">
             {/* Первый набор */}
             <div className="flex items-center gap-10 shrink-0">
@@ -88,11 +88,11 @@ export function ModelStrip() {
                       {item.name}
                     </span>
 
-                    {/* Выпадающая карточка с кратким описанием модели при наведении */}
-                    <div className="pointer-events-none absolute left-1/2 top-full mt-2.5 z-40 w-72 md:w-80 -translate-x-1/2 opacity-0 group-hover/item:opacity-100 group-hover/item:pointer-events-auto transition-all duration-200 ease-out transform -translate-y-1.5 group-hover/item:translate-y-0">
+                    {/* Выпадающая карточка с кратким описанием модели при наведении (открывается ВВЕРХ) */}
+                    <div className="pointer-events-none absolute left-1/2 bottom-full mb-3 z-40 w-72 md:w-80 -translate-x-1/2 opacity-0 group-hover/item:opacity-100 group-hover/item:pointer-events-auto transition-all duration-200 ease-out transform translate-y-1.5 group-hover/item:translate-y-0">
                       <div className="relative rounded-lg border border-stroke-strong bg-surface/95 p-3.5 shadow-2xl backdrop-blur-xl text-left ring-1 ring-white/5">
-                        {/* Стрелочка-указатель вверх */}
-                        <div className="absolute -top-1.5 left-1/2 -translate-x-1/2 size-3 rotate-45 border-t border-l border-stroke-strong bg-surface" />
+                        {/* Стрелочка-указатель вниз */}
+                        <div className="absolute -bottom-1.5 left-1/2 -translate-x-1/2 size-3 rotate-45 border-b border-r border-stroke-strong bg-surface" />
 
                         {/* Шапка менюшки */}
                         <div className="relative z-10 flex items-center justify-between gap-2 border-b border-stroke/60 pb-2 mb-2">
@@ -132,11 +132,11 @@ export function ModelStrip() {
                       {item.name}
                     </span>
 
-                    {/* Выпадающая карточка с кратким описанием модели при наведении */}
-                    <div className="pointer-events-none absolute left-1/2 top-full mt-2.5 z-40 w-72 md:w-80 -translate-x-1/2 opacity-0 group-hover/item:opacity-100 group-hover/item:pointer-events-auto transition-all duration-200 ease-out transform -translate-y-1.5 group-hover/item:translate-y-0">
+                    {/* Выпадающая карточка с кратким описанием модели при наведении (открывается ВВЕРХ) */}
+                    <div className="pointer-events-none absolute left-1/2 bottom-full mb-3 z-40 w-72 md:w-80 -translate-x-1/2 opacity-0 group-hover/item:opacity-100 group-hover/item:pointer-events-auto transition-all duration-200 ease-out transform translate-y-1.5 group-hover/item:translate-y-0">
                       <div className="relative rounded-lg border border-stroke-strong bg-surface/95 p-3.5 shadow-2xl backdrop-blur-xl text-left ring-1 ring-white/5">
-                        {/* Стрелочка-указатель вверх */}
-                        <div className="absolute -top-1.5 left-1/2 -translate-x-1/2 size-3 rotate-45 border-t border-l border-stroke-strong bg-surface" />
+                        {/* Стрелочка-указатель вниз */}
+                        <div className="absolute -bottom-1.5 left-1/2 -translate-x-1/2 size-3 rotate-45 border-b border-r border-stroke-strong bg-surface" />
 
                         {/* Шапка менюшки */}
                         <div className="relative z-10 flex items-center justify-between gap-2 border-b border-stroke/60 pb-2 mb-2">

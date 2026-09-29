@@ -98,10 +98,8 @@ export function Composer() {
     }
   };
 
-  const onFocusOrClick = (): void => {
-    if (!hasAccess) {
-      handlePaidModelAttempt();
-    } else if (freeLimitReached) {
+  const onFieldClick = (): void => {
+    if (freeLimitReached) {
       handleFreeLimitAttempt();
     }
   };
@@ -151,7 +149,7 @@ export function Composer() {
         </div>
       ) : null}
       <div
-        onClick={onFocusOrClick}
+        onClick={onFieldClick}
         className="relative rounded-lg border border-stroke bg-surface p-2.5 transition-colors focus-within:border-accent focus-within:ring-3 focus-within:ring-accent-soft"
       >
         <CornerMark
@@ -166,12 +164,10 @@ export function Composer() {
           ref={fieldRef}
           rows={1}
           value={draft}
-          onClick={onFocusOrClick}
-          onFocus={onFocusOrClick}
+          onClick={onFieldClick}
+          onFocus={onFieldClick}
           onChange={(event) => {
-            if (!hasAccess) {
-              handlePaidModelAttempt();
-            } else if (freeLimitReached) {
+            if (freeLimitReached) {
               handleFreeLimitAttempt();
               return;
             }

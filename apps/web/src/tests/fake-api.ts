@@ -12,6 +12,8 @@ export interface FakeApiOptions {
   failTimes?: number;
   /** Проверять ли доступность моделей по тарифу. */
   enforcePlans?: boolean;
+  /** Начальный тариф пользователя. */
+  plan?: string;
 }
 
 export interface FakeApi {
@@ -163,7 +165,7 @@ function streamOf(chunks: string[], delayMs: number, signal: AbortSignal | null)
  */
 export function installFakeApi(options: FakeApiOptions = {}): FakeApi {
   const delayMs = options.chunkDelayMs ?? 1;
-  let currentPlan = 'free';
+  let currentPlan = options.plan ?? 'free';
   const conversations = new Map<string, { conversation: Conversation; messages: Message[] }>();
   const api: FakeApi = {
     completions: 0,

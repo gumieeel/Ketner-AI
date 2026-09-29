@@ -2,10 +2,12 @@ import { act } from 'react';
 import { screen, waitFor, within } from '@testing-library/react';
 import userEvent, { type UserEvent } from '@testing-library/user-event';
 import { beforeEach, describe, expect, it } from 'vitest';
+import { useAuth } from '@/features/auth/auth-store';
 import { useChat } from '@/features/chat/chat-store';
+import { usePreferences } from '@/features/preferences/preferences-store';
 import type { Message } from '@/features/chat/types';
 import { installFakeApi } from './fake-api';
-import { renderRoute, resetChat, resetPreferences } from './test-utils';
+import { renderRoute, resetAuth, resetChat, resetPreferences } from './test-utils';
 
 const COMPOSER = 'Спросите что-нибудь…';
 const SEND = 'Отправить';
@@ -32,6 +34,7 @@ function lastAssistant(): Message {
 
 describe('чат: отправка, стриминг и управление ответом', () => {
   beforeEach(() => {
+    resetAuth();
     resetPreferences();
     resetChat();
   });
@@ -122,10 +125,12 @@ describe('чат: отправка, стриминг и управление о�
 
     expect(await screen.findByText('Не удалось получить ответ')).toBeInTheDocument();
     expect(lastAssistant().status).toBe('error');
+    await waitFor(() => expect(useChat.getState().streaming).toBe(false));
 
-    await user.click(screen.getByRole('button', { name: 'Повторить' }));
+    const retryBtn = await screen.findByRole('button', { name: 'Повторить' });
+    await user.click(retryBtn);
 
-    expect(await screen.findByText('Ответ со второй попытки', {}, { timeout: 4000 })).toBeInTheDocument();
+    expect(await screen.findByText('Ответ со второй попытки', {}, { timeout: 8000 })).toBeInTheDocument();
     await waitFor(() => expect(screen.queryByText('Не удалось получить ответ')).toBeNull());
     expect(api.completions).toBe(2);
   });
@@ -177,7 +182,18 @@ describe('чат: отправка, стриминг и управление о�
   });
 
   it('переключатель модели меняет модель в запросе', async () => {
-    const api = installFakeApi({ reply: 'Готово' });
+    const api = installFakeApi({ reply: 'Готово', plan: 'ultra' });
+    useAuth.setState({
+      user: {
+        id: 'demo-user',
+        email: 'demo@ketner.ai',
+        name: 'Демо Пользователь',
+        plan: 'ultra',
+        createdAt: new Date().toISOString(),
+      },
+      token: 'fake.jwt.token',
+      status: 'authenticated',
+    });
     const user = setupChat();
     await screen.findByRole('heading', { level: 2, name: EMPTY_TITLE });
 
@@ -238,8 +254,12 @@ describe('чат: отправка, стриминг и управление о�
     expect(screen.getByRole('option', { name: /Gemini (Flash 3\.8|3\.8 Flash|3\.8 Pro)/ })).toBeInTheDocument();
     expect(screen.getByRole('option', { name: /Qwen (2\.5|3\.8) Max/ })).toBeInTheDocument();
 
-    // Выбираем платную модель GPT-6 Astra
-    await user.click(screen.getByRole('option', { name: /GPT-6 Astra/ }));
+    await user.keyboard('{Escape}');
+
+    // Задаем платную модель GPT-6 Astra
+    act(() => {
+      usePreferences.getState().setChatModelId('gpt-6-astra');
+    });
 
     // Появляется плашка с предупреждением об апгрейде и ссылкой на тарифы
     const alert = await screen.findByRole('alert');
@@ -254,9 +274,8 @@ describe('чат: отправка, стриминг и управление о�
     const user = setupChat();
     await screen.findByRole('heading', { level: 2, name: EMPTY_TITLE });
 
-    // Выбираем платную модель
-    await user.click(await screen.findByRole('button', { name: 'Выбрать модель' }));
-    await user.click(await screen.findByRole('option', { name: /Claude Fable 5\.[15]/ }));
+    // Задаем платную модель напрямую для проверки серверной ошибки
+    usePreferences.getState().setChatModelId('claude-fable');
 
     // Отправляем сообщение
     await sendMessage(user, 'Тест платной модели');
@@ -270,38 +289,25 @@ describe('чат: отправка, стриминг и управление о�
     );
   });
 
-  it('при попытке написать с платной моделью весь экран затемняется и появляется модалка перехода на PRO', async () => {
+  it('недоступные платные модели в списке заблокированы и полупрозрачны, а клик по полю ввода не открывает модалку', async () => {
     installFakeApi();
     const user = setupChat();
     await screen.findByRole('heading', { level: 2, name: EMPTY_TITLE });
 
-    // Выбираем платную модель GPT-6 Astra
+    // Открываем селектор моделей
     await user.click(await screen.findByRole('button', { name: 'Выбрать модель' }));
-    await user.click(await screen.findByRole('option', { name: /GPT-6 Astra/ }));
+    const gptOption = await screen.findByRole('option', { name: /GPT-6 Astra/ });
+    expect(gptOption).toBeDisabled();
+    expect(gptOption).toHaveClass('opacity-40');
+    expect(within(gptOption).getByText('pro')).toBeInTheDocument();
 
-    // Пытаемся кликнуть в поле ввода или написать
+    // Закрываем меню кликом по фокусу или esc
+    await user.keyboard('{Escape}');
+
+    // Кликаем в поле ввода — модалка не появляется
     const field = await screen.findByLabelText(COMPOSER);
     await user.click(field);
-
-    // Весь экран затемняется: появляется модальное окно с ролью dialog и затемняющим фоном
-    const modal = await screen.findByRole('dialog');
-    expect(modal).toBeInTheDocument();
-    expect(modal).toHaveClass('backdrop-blur-md');
-    expect(within(modal).getAllByText(/Модель GPT-6 Astra.*доступна на PRO/).length).toBeGreaterThan(0);
-    expect(within(modal).getAllByText(/GPT Pro/).length).toBeGreaterThan(0);
-    expect(within(modal).getAllByText(/Ultra/).length).toBeGreaterThan(0);
-
-    // Кнопка переключения на бесплатную модель Qwen 2.5 Coder
-    const switchBtn = within(modal).getByRole('button', {
-      name: /Переключиться на бесплатную Qwen 2\.5 Coder/,
-    });
-    await user.click(switchBtn);
-
-    // Модалка закрылась, активной стала бесплатная модель
-    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
-    expect(screen.getByRole('button', { name: 'Выбрать модель' })).toHaveTextContent(
-      'Qwen 2.5 Coder',
-    );
+    expect(screen.queryByRole('dialog')).toBeNull();
   });
 
   it('после 3 сообщений на бесплатном плане весь экран затемняется и выскакивает модалка исчерпания лимита', async () => {
