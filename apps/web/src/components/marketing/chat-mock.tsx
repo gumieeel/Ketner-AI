@@ -38,7 +38,7 @@ const CHAT_MODELS: ChatModel[] = [
   {
     id: 'claude',
     name: 'Claude',
-    tag: 'Opus',
+    tag: 'Fable 5.1',
     icon: ClaudeIcon,
     iconColor: 'text-orange-400',
     responseRu:
@@ -49,7 +49,7 @@ const CHAT_MODELS: ChatModel[] = [
   {
     id: 'gemini',
     name: 'Gemini',
-    tag: 'Pro',
+    tag: 'Flash 3.8',
     icon: GeminiIcon,
     iconColor: 'text-blue-500',
     responseRu:
@@ -60,7 +60,7 @@ const CHAT_MODELS: ChatModel[] = [
   {
     id: 'grok',
     name: 'Grok',
-    tag: '3',
+    tag: '4.7',
     icon: GrokIcon,
     iconColor: 'text-zinc-200',
     responseRu:
@@ -71,7 +71,7 @@ const CHAT_MODELS: ChatModel[] = [
   {
     id: 'qwen',
     name: 'Qwen',
-    tag: 'Max',
+    tag: '3.8 Max',
     icon: QwenIcon,
     iconColor: 'text-purple-400',
     responseRu:
@@ -82,7 +82,7 @@ const CHAT_MODELS: ChatModel[] = [
   {
     id: 'deepseek',
     name: 'DeepSeek',
-    tag: 'R1',
+    tag: 'v4.1 Flash',
     icon: DeepSeekIcon,
     iconColor: 'text-sky-400',
     responseRu:

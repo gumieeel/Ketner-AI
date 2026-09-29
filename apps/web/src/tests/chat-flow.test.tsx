@@ -231,19 +231,19 @@ describe('чат: отправка, стриминг и управление о�
     await screen.findByRole('heading', { level: 2, name: EMPTY_TITLE });
 
     await user.click(screen.getByRole('button', { name: 'Выбрать модель' }));
-    // Проверяем наличие всех моделей, платные со звёздочкой
+    // Проверяем наличие всех моделей
     expect(await screen.findByRole('option', { name: /Qwen 2\.5 Coder/ })).toBeInTheDocument();
-    expect(screen.getByRole('option', { name: /GPT-6 Astra \*/ })).toBeInTheDocument();
-    expect(screen.getByRole('option', { name: /Claude Fable 5\.[15] \*/ })).toBeInTheDocument();
-    expect(screen.getByRole('option', { name: /Gemini (Flash 3\.8|3\.8 Flash|3\.8 Pro) \*/ })).toBeInTheDocument();
-    expect(screen.getByRole('option', { name: /Qwen (2\.5|3\.8) Max \*/ })).toBeInTheDocument();
+    expect(screen.getByRole('option', { name: /GPT-6 Astra/ })).toBeInTheDocument();
+    expect(screen.getByRole('option', { name: /Claude Fable 5\.[15]/ })).toBeInTheDocument();
+    expect(screen.getByRole('option', { name: /Gemini (Flash 3\.8|3\.8 Flash|3\.8 Pro)/ })).toBeInTheDocument();
+    expect(screen.getByRole('option', { name: /Qwen (2\.5|3\.8) Max/ })).toBeInTheDocument();
 
-    // Выбираем платную модель GPT-6 Astra *
-    await user.click(screen.getByRole('option', { name: /GPT-6 Astra \*/ }));
+    // Выбираем платную модель GPT-6 Astra
+    await user.click(screen.getByRole('option', { name: /GPT-6 Astra/ }));
 
     // Появляется плашка с предупреждением об апгрейде и ссылкой на тарифы
     const alert = await screen.findByRole('alert');
-    expect(alert).toHaveTextContent(/GPT-6 Astra \*/);
+    expect(alert).toHaveTextContent(/GPT-6 Astra/);
     expect(alert).toHaveTextContent(/GPT Pro/);
     const upgradeLink = within(alert).getByRole('link', { name: /Улучшить план/ });
     expect(upgradeLink).toHaveAttribute('href', '/pricing');
@@ -256,14 +256,14 @@ describe('чат: отправка, стриминг и управление о�
 
     // Выбираем платную модель
     await user.click(await screen.findByRole('button', { name: 'Выбрать модель' }));
-    await user.click(await screen.findByRole('option', { name: /Claude Fable 5\.[15] \*/ }));
+    await user.click(await screen.findByRole('option', { name: /Claude Fable 5\.[15]/ }));
 
     // Отправляем сообщение
     await sendMessage(user, 'Тест платной модели');
 
     // Проверяем, что появилось сообщение об ошибке с требованием апгрейда
     expect(await screen.findByText('Требуется подписка (Upgrade your plan)')).toBeInTheDocument();
-    expect(screen.getAllByText(/Claude Fable 5\.[15] \*/).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/Claude Fable 5\.[15]/).length).toBeGreaterThan(0);
     expect(screen.getAllByRole('link', { name: /Улучшить план/ })[0]).toHaveAttribute(
       'href',
       '/pricing',
@@ -275,9 +275,9 @@ describe('чат: отправка, стриминг и управление о�
     const user = setupChat();
     await screen.findByRole('heading', { level: 2, name: EMPTY_TITLE });
 
-    // Выбираем платную модель GPT-6 Astra *
+    // Выбираем платную модель GPT-6 Astra
     await user.click(await screen.findByRole('button', { name: 'Выбрать модель' }));
-    await user.click(await screen.findByRole('option', { name: /GPT-6 Astra \*/ }));
+    await user.click(await screen.findByRole('option', { name: /GPT-6 Astra/ }));
 
     // Пытаемся кликнуть в поле ввода или написать
     const field = await screen.findByLabelText(COMPOSER);
@@ -287,7 +287,7 @@ describe('чат: отправка, стриминг и управление о�
     const modal = await screen.findByRole('dialog');
     expect(modal).toBeInTheDocument();
     expect(modal).toHaveClass('backdrop-blur-md');
-    expect(within(modal).getAllByText(/Модель GPT-6 Astra \* доступна на PRO/).length).toBeGreaterThan(0);
+    expect(within(modal).getAllByText(/Модель GPT-6 Astra.*доступна на PRO/).length).toBeGreaterThan(0);
     expect(within(modal).getAllByText(/GPT Pro/).length).toBeGreaterThan(0);
     expect(within(modal).getAllByText(/Ultra/).length).toBeGreaterThan(0);
 
