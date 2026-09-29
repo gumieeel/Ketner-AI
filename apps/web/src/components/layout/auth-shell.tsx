@@ -85,8 +85,8 @@ export function AuthShell({
             <div className="flex flex-col gap-2">
               <span className="text-base font-semibold tracking-tight text-text">
                 {language === 'ru'
-                  ? 'Все AI-модели. Один интерфейс.'
-                  : 'All AI Models. One Interface.'}
+                  ? 'Все AI-модели. Одна подписка.'
+                  : 'All AI Models. One Subscription.'}
               </span>
               <span className="font-mono text-xs text-muted tracking-wider uppercase">
                 GPT · Claude · Gemini · Grok · Qwen · DeepSeek

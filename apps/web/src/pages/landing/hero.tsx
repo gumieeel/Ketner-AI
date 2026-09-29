@@ -52,7 +52,7 @@ export function LandingHero() {
             >
               <span className="block text-text">{language === 'ru' ? 'Все AI-модели.' : 'All AI Models.'}</span>
               <span className="block text-muted">
-                {language === 'ru' ? 'Один интерфейс.' : 'One Interface.'}
+                {language === 'ru' ? 'Одна подписка.' : 'One Subscription.'}
               </span>
             </h1>
 
@@ -71,6 +71,21 @@ export function LandingHero() {
                   {t('landing.viewPlans')}
                 </Button>
               </Link>
+            </div>
+
+            {/* Social proof */}
+            <div className="flex flex-wrap items-center gap-2.5 pt-1">
+              <span className="text-[13px] text-muted">
+                {t('landing.socialProof')}
+              </span>
+              <div className="flex items-center -space-x-1.5" aria-hidden="true">
+                <div className="flex size-6 sm:size-7 items-center justify-center rounded-full border border-stroke bg-surface-2 text-[11px] font-semibold text-text shadow-sm ring-2 ring-canvas select-none">
+                  K
+                </div>
+                <div className="flex size-6 sm:size-7 items-center justify-center rounded-full border border-stroke bg-surface-3 text-[11px] font-semibold text-text shadow-sm ring-2 ring-canvas select-none">
+                  A
+                </div>
+              </div>
             </div>
 
             {/* Micro facts */}
