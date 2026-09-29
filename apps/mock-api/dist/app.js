@@ -84,7 +84,7 @@ export function createApp(overrides = {}) {
         }
     }
     if (hasWebDist) {
-        app.use(express.static(webDistPath, { index: false }));
+        app.use(express.static(webDistPath, { index: false, dotfiles: 'allow' }));
     }
     app.use('/api', createApiRouter(deps));
     // Корень: браузеру отдаём веб-интерфейс, при явном Accept: application/json — описание сервиса.
@@ -92,7 +92,7 @@ export function createApp(overrides = {}) {
         const wantsJson = Boolean(request.headers.accept?.includes('application/json')) &&
             !request.headers.accept?.includes('text/html');
         if (hasWebDist && !wantsJson) {
-            return response.sendFile(indexHtmlPath);
+            return response.sendFile(indexHtmlPath, { dotfiles: 'allow' });
         }
         response.json({
             ...describeService(),
@@ -106,7 +106,7 @@ export function createApp(overrides = {}) {
             if (request.method !== 'GET' || request.path.startsWith('/api')) {
                 return next();
             }
-            response.sendFile(indexHtmlPath);
+            response.sendFile(indexHtmlPath, { dotfiles: 'allow' });
         });
     }
     app.use(notFoundHandler);
