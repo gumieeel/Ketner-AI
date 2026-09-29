@@ -84,6 +84,15 @@ export const config = {
      */
     betterAuthSecret: process.env.BETTER_AUTH_SECRET || 'ketner-ai-better-auth-secret-key-32chars-minimum-safe',
     /**
+     * PostgreSQL / Supabase Database URL
+     */
+    databaseUrl: process.env.DATABASE_URL || '',
+    /**
+     * Supabase Project Credentials
+     */
+    supabaseUrl: process.env.SUPABASE_URL || '',
+    supabaseAnonKey: process.env.SUPABASE_ANON_KEY || '',
+    /**
      * Better Auth API Key для подключения к Better Auth Infra / Dashboard.
      * Настраивается через переменную BETTER_AUTH_API_KEY.
      */
