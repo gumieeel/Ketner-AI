@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+﻿import { useEffect, useRef } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { ChatEmptyState } from '@/components/chat/chat-empty-state';
 import { Composer } from '@/components/chat/composer';
@@ -44,7 +44,7 @@ export function ChatPage() {
 
       {messagesStatus === 'error' ? (
         <div className="flex min-h-0 flex-1 items-center justify-center px-4">
-          <div className="max-w-md rounded-[10px] border border-red-500/30 bg-red-500/10 p-4 text-center">
+          <div className="max-w-md rounded-md border border-red-500/30 bg-red-500/10 p-4 text-center">
             <p className="flex items-center justify-center gap-2 font-medium text-red-600 dark:text-red-400">
               <AlertIcon />
               {t('chat.loadError')}
@@ -80,9 +80,9 @@ function MessagesSkeleton() {
   return (
     <div className="min-h-0 flex-1 overflow-hidden px-4 py-6">
       <div className="mx-auto flex w-full max-w-[760px] flex-col gap-6 md:gap-8">
-        <Skeleton className="h-16 w-2/3 self-end rounded-[10px]" />
-        <Skeleton className="h-24 w-full rounded-[10px]" />
-        <Skeleton className="h-10 w-1/2 self-end rounded-[10px]" />
+        <Skeleton className="h-16 w-2/3 self-end rounded-md" />
+        <Skeleton className="h-24 w-full rounded-md" />
+        <Skeleton className="h-10 w-1/2 self-end rounded-md" />
       </div>
     </div>
   );

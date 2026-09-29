@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+﻿import { useEffect, useRef, useState } from 'react';
 import { CheckIcon, ChevronDownIcon } from '@/components/icons';
 import { useChat } from '@/features/chat/chat-store';
 import type { ModelInfo } from '@/features/chat/types';
@@ -149,7 +149,7 @@ export function ModelPicker({ disabled = false }: { disabled?: boolean }) {
             setOpen(false);
           }}
           className={cn(
-            'flex w-full items-center gap-2 rounded-[8px] px-2.5 py-1.5 text-left text-xs transition-colors',
+            'flex w-full items-center gap-2 rounded-md px-2.5 py-1.5 text-left text-xs transition-colors',
             active
               ? 'bg-accent/10 text-text font-medium'
               : 'hover:bg-canvas text-text hover:bg-accent/5',
@@ -174,7 +174,7 @@ export function ModelPicker({ disabled = false }: { disabled?: boolean }) {
         disabled={disabled}
         onClick={() => setOpen((value) => !value)}
         className={cn(
-          'inline-flex items-center gap-1.5 rounded-[6px] px-2 py-1 text-xs text-muted transition-colors',
+          'inline-flex items-center gap-1.5 rounded-sm px-2 py-1 text-xs text-muted transition-colors',
           'hover:bg-canvas hover:text-text disabled:cursor-not-allowed disabled:opacity-60',
         )}
       >
@@ -197,11 +197,11 @@ export function ModelPicker({ disabled = false }: { disabled?: boolean }) {
         <div
           role="listbox"
           aria-label={t('chat.modelMenu')}
-          className="absolute bottom-full left-0 z-20 mb-1 w-80 sm:w-92 max-h-[460px] overflow-y-auto rounded-[16px] border border-stroke/30 bg-surface/95 p-2 shadow-2xl backdrop-blur-md"
+          className="absolute bottom-full left-0 z-20 mb-1 w-80 sm:w-92 max-h-[460px] overflow-y-auto rounded-lg border border-stroke-strong bg-surface/95 p-2 shadow-2xl backdrop-blur-md"
         >
           {/* 1. Standart Group */}
           <div className="mb-2">
-            <div className="flex items-center justify-between px-2.5 py-1 text-[10px] font-bold text-emerald-600 dark:text-emerald-400 uppercase tracking-wider">
+            <div className="flex items-center justify-between px-2.5 py-1 text-[10px] font-semibold text-emerald-600 dark:text-emerald-400 uppercase tracking-wider">
               <span>{t('chat.tierFree')}</span>
             </div>
             <ul className="mt-1 space-y-0.5">
@@ -211,10 +211,10 @@ export function ModelPicker({ disabled = false }: { disabled?: boolean }) {
           </div>
 
           {/* 2. Plus Group */}
-          <div className="border-t border-stroke/20 pt-1.5 space-y-2.5">
+          <div className="border-t border-stroke pt-1.5 space-y-2.5">
             {plusModels.length > 0 ? (
               <div>
-                <div className="flex items-center justify-between px-2.5 py-1 text-[10px] font-bold text-sky-600 dark:text-sky-400 uppercase tracking-wider">
+                <div className="flex items-center justify-between px-2.5 py-1 text-[10px] font-semibold text-sky-600 dark:text-sky-400 uppercase tracking-wider">
                   <span>{t('chat.tierPlus')}</span>
                 </div>
                 <ul className="space-y-0.5">
@@ -225,8 +225,8 @@ export function ModelPicker({ disabled = false }: { disabled?: boolean }) {
 
             {/* 3. Pro / Ultra Group */}
             {proModels.length > 0 ? (
-              <div className="border-t border-stroke/15 pt-1.5">
-                <div className="flex items-center justify-between px-2.5 py-1 text-[10px] font-bold text-accent uppercase tracking-wider">
+              <div className="border-t border-stroke pt-1.5">
+                <div className="flex items-center justify-between px-2.5 py-1 text-[10px] font-semibold text-accent uppercase tracking-wider">
                   <span>{t('chat.tierPro')}</span>
                 </div>
                 <ul className="space-y-0.5">

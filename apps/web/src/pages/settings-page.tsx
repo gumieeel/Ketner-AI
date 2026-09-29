@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+﻿import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { LogoutIcon, SparkleIcon } from '@/components/icons';
 import { LanguageToggle } from '@/components/layout/language-toggle';
@@ -178,7 +178,7 @@ export function SettingsPage() {
             </Link>
           </div>
 
-          <div className="flex flex-col gap-2 rounded-lg border border-stroke/20 bg-canvas/60 p-3">
+          <div className="flex flex-col gap-2 rounded-lg border border-stroke bg-canvas/60 p-3">
             <label htmlFor="admin-key-input" className="text-xs font-medium text-text">
               Ключ доступа к Admin API (x-admin-key):
             </label>
@@ -189,7 +189,7 @@ export function SettingsPage() {
                 placeholder="ketner-ai-admin-key-dev"
                 value={adminKey}
                 onChange={(e) => setAdminKey(e.target.value)}
-                className="h-9 min-w-[220px] flex-1 rounded-md border border-stroke/30 bg-surface px-3 text-xs text-text outline-none focus:border-accent font-mono"
+                className="h-9 min-w-[220px] flex-1 rounded-md border border-stroke-strong bg-surface px-3 text-xs text-text outline-none focus:border-accent font-mono"
               />
               <Button
                 variant="outline"

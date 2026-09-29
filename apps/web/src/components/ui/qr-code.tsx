@@ -1,4 +1,5 @@
 import React, { useMemo } from 'react';
+import { cn } from '@/lib/cn';
 
 interface QrCodeProps {
   value: string;
@@ -100,7 +101,10 @@ export function QrCode({ value, size = 192, className = '', badge }: QrCodeProps
 
   return (
     <div
-      className={`relative inline-flex items-center justify-center rounded-2xl bg-white p-3 shadow-md ring-1 ring-black/5 dark:bg-white dark:ring-white/10 ${className}`}
+      className={cn(
+        'relative inline-flex items-center justify-center rounded-lg bg-white p-3 shadow-popover border border-stroke',
+        className,
+      )}
       style={{ width: size + 24, height: size + 24 }}
     >
       <svg
@@ -122,7 +126,7 @@ export function QrCode({ value, size = 192, className = '', badge }: QrCodeProps
                 y={y * cellSize}
                 width={cellSize + 0.3}
                 height={cellSize + 0.3}
-                fill="#0f172a"
+                fill="#09090b"
                 rx={cellSize * 0.15}
               />
             );
@@ -132,7 +136,7 @@ export function QrCode({ value, size = 192, className = '', badge }: QrCodeProps
 
       {badge ? (
         <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-          <div className="rounded-xl bg-white p-1.5 shadow-md ring-1 ring-black/10 dark:bg-white">
+          <div className="rounded-md bg-white p-1.5 border border-stroke shadow-sm">
             {badge}
           </div>
         </div>

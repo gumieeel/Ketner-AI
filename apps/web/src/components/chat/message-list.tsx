@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+﻿import { useEffect, useRef, useState } from 'react';
 import { ChevronDownIcon } from '@/components/icons';
 import { useChat } from '@/features/chat/chat-store';
 import type { Message } from '@/features/chat/types';
@@ -79,7 +79,7 @@ export function MessageList() {
         <button
           type="button"
           onClick={() => scrollToBottom('smooth')}
-          className="absolute bottom-4 left-1/2 flex -translate-x-1/2 items-center gap-1 rounded-[10px] border border-stroke/30 bg-surface px-3 py-1.5 text-xs text-text shadow-md transition-colors hover:bg-canvas"
+          className="absolute bottom-4 left-1/2 flex -translate-x-1/2 items-center gap-1 rounded-md border border-stroke-strong bg-surface px-3 py-1.5 text-xs text-text shadow-md transition-colors hover:bg-canvas"
         >
           <ChevronDownIcon />
           {t('chat.jumpToLatest')}

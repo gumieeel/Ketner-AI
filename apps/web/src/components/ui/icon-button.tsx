@@ -1,7 +1,7 @@
 import type { ButtonHTMLAttributes } from 'react';
 import { cn } from '@/lib/cn';
 
-type IconButtonSize = 'sm' | 'md';
+export type IconButtonSize = 'sm' | 'md';
 
 const sizeClasses: Record<IconButtonSize, string> = {
   sm: 'size-8 text-base',
@@ -28,9 +28,10 @@ export function IconButton({
       aria-label={label}
       title={label}
       className={cn(
-        'inline-flex shrink-0 items-center justify-center rounded-[6px] transition-colors',
-        'text-muted hover:bg-surface hover:text-text',
+        'relative inline-flex shrink-0 items-center justify-center rounded-md transition-colors',
+        'text-muted hover:bg-surface-2 hover:text-text',
         'disabled:cursor-not-allowed disabled:opacity-50',
+        'after:absolute after:-inset-1.5 after:content-[""] max-md:after:block md:after:hidden',
         sizeClasses[size],
         className,
       )}

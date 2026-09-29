@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+﻿import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import {
   ArrowLeftIcon,
@@ -65,7 +65,7 @@ function CodeSnippet({
   };
 
   return (
-    <div className="relative my-3 rounded-[12px] border border-stroke/30 bg-[#141414] text-[#ececec] overflow-hidden shadow-md">
+    <div className="relative my-3 rounded-lg border border-stroke-strong bg-[#141414] text-[#ececec] overflow-hidden shadow-md">
       <div className="flex items-center justify-between border-b border-white/10 px-3.5 py-1.5 bg-[#1b1b1b] text-xs">
         <div className="flex items-center gap-2">
           <span className="flex gap-1.5">
@@ -80,7 +80,7 @@ function CodeSnippet({
         <button
           type="button"
           onClick={handleCopy}
-          className="inline-flex items-center gap-1 rounded-[6px] bg-white/10 hover:bg-white/20 px-2 py-0.5 text-[11px] text-white/90 transition-colors"
+          className="inline-flex items-center gap-1 rounded-sm bg-white/10 hover:bg-white/20 px-2 py-0.5 text-[11px] text-white/90 transition-colors"
         >
           {copied ? (
             <>
@@ -193,7 +193,7 @@ export function ApiDocsPage() {
   return (
     <div className="mx-auto flex w-full max-w-5xl flex-col gap-10 px-4 py-8 md:px-8 animate-fade-in text-text">
       {/* Шапка и навигация */}
-      <div className="flex flex-col gap-4 border-b border-stroke/20 pb-6">
+      <div className="flex flex-col gap-4 border-b border-stroke pb-6">
         <div className="flex items-center gap-2 text-xs font-medium text-muted">
           <Link to="/docs" className="hover:text-text transition-colors flex items-center gap-1">
             <ArrowLeftIcon className="text-sm" />
@@ -205,7 +205,7 @@ export function ApiDocsPage() {
 
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div>
-            <h1 className="text-2xl md:text-3xl font-bold tracking-tight text-text flex items-center gap-2.5">
+            <h1 className="text-2xl md:text-3xl font-semibold tracking-tight text-text flex items-center gap-2.5">
               <TerminalIcon className="text-accent text-3xl" />
               {t('apiDocs.title')}
             </h1>
@@ -223,10 +223,10 @@ export function ApiDocsPage() {
       </div>
 
       {/* БЛОК 1: Управление API-ключами */}
-      <section className="flex flex-col gap-4 rounded-[16px] border border-stroke/30 bg-surface p-5 md:p-6 shadow-sm">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-stroke/20 pb-4">
+      <section className="flex flex-col gap-4 rounded-lg border border-stroke-strong bg-surface p-5 md:p-6 shadow-sm">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-stroke pb-4">
           <div className="flex items-center gap-2.5">
-            <div className="grid size-9 place-items-center rounded-[8px] bg-accent/15 text-accent">
+            <div className="grid size-9 place-items-center rounded-md bg-accent/15 text-accent">
               <KeyIcon className="text-xl" />
             </div>
             <div>
@@ -249,7 +249,7 @@ export function ApiDocsPage() {
         {showKeyForm ? (
           <form
             onSubmit={handleCreateKey}
-            className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 rounded-[12px] border border-accent/30 bg-accent/5 p-3 animate-fade-in"
+            className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 rounded-lg border border-accent/30 bg-accent/5 p-3 animate-fade-in"
           >
             <input
               type="text"
@@ -257,7 +257,7 @@ export function ApiDocsPage() {
               value={newKeyName}
               onChange={(e) => setNewKeyName(e.target.value)}
               placeholder={t('apiDocs.keyNamePlaceholder')}
-              className="flex-1 rounded-[8px] border border-stroke/30 bg-canvas px-3 py-1.5 text-xs text-text outline-none focus:border-accent"
+              className="flex-1 rounded-md border border-stroke-strong bg-canvas px-3 py-1.5 text-xs text-text outline-none focus:border-accent"
             />
             <div className="flex items-center gap-2">
               <Button type="submit" variant="primary" size="sm">
@@ -287,7 +287,7 @@ export function ApiDocsPage() {
             return (
               <div
                 key={k.id}
-                className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 rounded-[10px] border border-stroke/20 bg-canvas p-3 transition-colors hover:border-stroke/40"
+                className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 rounded-md border border-stroke bg-canvas p-3 transition-colors hover:border-stroke-strong"
               >
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-2">
@@ -300,7 +300,7 @@ export function ApiDocsPage() {
                     </span>
                   </div>
                   <div className="mt-1 flex items-center gap-2 font-mono text-xs text-text/90">
-                    <span className="rounded bg-surface px-2 py-0.5 border border-stroke/20 select-all">
+                    <span className="rounded bg-surface px-2 py-0.5 border border-stroke select-all">
                       {displayKey}
                     </span>
                     <button
@@ -362,11 +362,11 @@ export function ApiDocsPage() {
 
       {/* БЛОК 2: Базовые параметры API */}
       <section className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <div className="rounded-[14px] border border-stroke/20 bg-surface p-4">
+        <div className="rounded-lg border border-stroke bg-surface p-4">
           <p className="text-xs font-semibold uppercase tracking-wider text-muted">
             Base URL (OpenAI V1)
           </p>
-          <div className="mt-2 flex items-center justify-between gap-2 rounded-[8px] bg-canvas px-2.5 py-1.5 font-mono text-xs border border-stroke/20">
+          <div className="mt-2 flex items-center justify-between gap-2 rounded-md bg-canvas px-2.5 py-1.5 font-mono text-xs border border-stroke">
             <span className="truncate text-accent">https://api.ketner.ai/v1</span>
             <button
               type="button"
@@ -382,21 +382,21 @@ export function ApiDocsPage() {
           </p>
         </div>
 
-        <div className="rounded-[14px] border border-stroke/20 bg-surface p-4">
+        <div className="rounded-lg border border-stroke bg-surface p-4">
           <p className="text-xs font-semibold uppercase tracking-wider text-muted">
             Поддерживаемые модели
           </p>
           <div className="mt-2 flex flex-wrap gap-1">
-            <span className="rounded bg-canvas border border-stroke/20 px-2 py-0.5 font-mono text-[11px] text-text">
+            <span className="rounded bg-canvas border border-stroke px-2 py-0.5 font-mono text-[11px] text-text">
               gpt-6-astra
             </span>
-            <span className="rounded bg-canvas border border-stroke/20 px-2 py-0.5 font-mono text-[11px] text-text">
+            <span className="rounded bg-canvas border border-stroke px-2 py-0.5 font-mono text-[11px] text-text">
               claude-fable-5.5
             </span>
-            <span className="rounded bg-canvas border border-stroke/20 px-2 py-0.5 font-mono text-[11px] text-text">
+            <span className="rounded bg-canvas border border-stroke px-2 py-0.5 font-mono text-[11px] text-text">
               gemini-3.8-pro
             </span>
-            <span className="rounded bg-canvas border border-stroke/20 px-2 py-0.5 font-mono text-[11px] text-text">
+            <span className="rounded bg-canvas border border-stroke px-2 py-0.5 font-mono text-[11px] text-text">
               qwen-2.5-coder
             </span>
           </div>
@@ -405,7 +405,7 @@ export function ApiDocsPage() {
           </p>
         </div>
 
-        <div className="rounded-[14px] border border-stroke/20 bg-surface p-4">
+        <div className="rounded-lg border border-stroke bg-surface p-4">
           <p className="text-xs font-semibold uppercase tracking-wider text-muted">
             Протокол агента
           </p>
@@ -417,16 +417,16 @@ export function ApiDocsPage() {
       </section>
 
       {/* БЛОК 3: Интерактивное руководство по интеграции */}
-      <section className="flex flex-col gap-6 rounded-[16px] border border-stroke/30 bg-surface p-5 md:p-7 shadow-sm">
+      <section className="flex flex-col gap-6 rounded-lg border border-stroke-strong bg-surface p-5 md:p-7 shadow-sm">
         {/* Переключатель табов */}
-        <div className="flex flex-col gap-3 border-b border-stroke/20 pb-4">
+        <div className="flex flex-col gap-3 border-b border-stroke pb-4">
           <div className="flex items-center justify-between flex-wrap gap-3">
-            <div className="flex flex-wrap items-center gap-1.5 p-1 rounded-[12px] bg-canvas border border-stroke/20">
+            <div className="flex flex-wrap items-center gap-1.5 p-1 rounded-lg bg-canvas border border-stroke">
               <button
                 type="button"
                 onClick={() => setActiveTab('cli')}
                 className={cn(
-                  'rounded-[8px] px-3 py-1.5 text-xs font-medium transition-colors',
+                  'rounded-md px-3 py-1.5 text-xs font-medium transition-colors',
                   activeTab === 'cli'
                     ? 'bg-accent text-[var(--color-accent-text)] font-semibold shadow-sm'
                     : 'text-muted hover:text-text',
@@ -438,7 +438,7 @@ export function ApiDocsPage() {
                 type="button"
                 onClick={() => setActiveTab('ide')}
                 className={cn(
-                  'rounded-[8px] px-3 py-1.5 text-xs font-medium transition-colors',
+                  'rounded-md px-3 py-1.5 text-xs font-medium transition-colors',
                   activeTab === 'ide'
                     ? 'bg-accent text-[var(--color-accent-text)] font-semibold shadow-sm'
                     : 'text-muted hover:text-text',
@@ -450,7 +450,7 @@ export function ApiDocsPage() {
                 type="button"
                 onClick={() => setActiveTab('mcp')}
                 className={cn(
-                  'rounded-[8px] px-3 py-1.5 text-xs font-medium transition-colors',
+                  'rounded-md px-3 py-1.5 text-xs font-medium transition-colors',
                   activeTab === 'mcp'
                     ? 'bg-accent text-[var(--color-accent-text)] font-semibold shadow-sm'
                     : 'text-muted hover:text-text',
@@ -462,7 +462,7 @@ export function ApiDocsPage() {
                 type="button"
                 onClick={() => setActiveTab('sdk')}
                 className={cn(
-                  'rounded-[8px] px-3 py-1.5 text-xs font-medium transition-colors',
+                  'rounded-md px-3 py-1.5 text-xs font-medium transition-colors',
                   activeTab === 'sdk'
                     ? 'bg-accent text-[var(--color-accent-text)] font-semibold shadow-sm'
                     : 'text-muted hover:text-text',
@@ -474,7 +474,7 @@ export function ApiDocsPage() {
                 type="button"
                 onClick={() => setActiveTab('security')}
                 className={cn(
-                  'rounded-[8px] px-3 py-1.5 text-xs font-medium transition-colors',
+                  'rounded-md px-3 py-1.5 text-xs font-medium transition-colors',
                   activeTab === 'security'
                     ? 'bg-accent text-[var(--color-accent-text)] font-semibold shadow-sm'
                     : 'text-muted hover:text-text',
@@ -493,7 +493,7 @@ export function ApiDocsPage() {
                   type="button"
                   onClick={() => setOs(osKey)}
                   className={cn(
-                    'rounded-[6px] px-2.5 py-1 capitalize transition-colors font-medium',
+                    'rounded-sm px-2.5 py-1 capitalize transition-colors font-medium',
                     os === osKey
                       ? 'bg-surface border border-accent text-accent'
                       : 'text-muted hover:text-text border border-transparent',
@@ -510,7 +510,7 @@ export function ApiDocsPage() {
         {activeTab === 'cli' && (
           <div className="flex flex-col gap-6 animate-fade-in">
             <div>
-              <h3 className="text-xl font-bold text-text flex items-center gap-2">
+              <h3 className="text-xl font-semibold text-text flex items-center gap-2">
                 <TerminalIcon className="text-accent" />
                 Ketner CLI: Запуск автономного агента в вашем терминале
               </h3>
@@ -524,7 +524,7 @@ export function ApiDocsPage() {
             {/* Шаг 1 */}
             <div className="flex flex-col gap-2">
               <h4 className="text-sm font-semibold text-text flex items-center gap-2">
-                <span className="grid size-5 place-items-center rounded-full bg-accent/20 text-accent text-xs font-bold">
+                <span className="grid size-5 place-items-center rounded-full bg-accent/20 text-accent text-xs font-semibold">
                   1
                 </span>
                 Установка Ketner CLI на компьютер
@@ -571,7 +571,7 @@ npm install -g @ketner/agent-cli`}
             {/* Шаг 2 */}
             <div className="flex flex-col gap-2">
               <h4 className="text-sm font-semibold text-text flex items-center gap-2">
-                <span className="grid size-5 place-items-center rounded-full bg-accent/20 text-accent text-xs font-bold">
+                <span className="grid size-5 place-items-center rounded-full bg-accent/20 text-accent text-xs font-semibold">
                   2
                 </span>
                 Авторизация агента через ваш API-ключ
@@ -607,7 +607,7 @@ source ~/.zshrc`}
             {/* Шаг 3 */}
             <div className="flex flex-col gap-2">
               <h4 className="text-sm font-semibold text-text flex items-center gap-2">
-                <span className="grid size-5 place-items-center rounded-full bg-accent/20 text-accent text-xs font-bold">
+                <span className="grid size-5 place-items-center rounded-full bg-accent/20 text-accent text-xs font-semibold">
                   3
                 </span>
                 Запуск агента в папке вашего проекта
@@ -633,7 +633,7 @@ ketner agent start --port 4040 --workspace .`}
             </div>
 
             {/* Возможности */}
-            <div className="rounded-[12px] border border-stroke/20 bg-canvas p-4">
+            <div className="rounded-lg border border-stroke bg-canvas p-4">
               <h5 className="text-xs font-semibold uppercase tracking-wider text-muted mb-2">
                 Что агент может делать на вашей машине:
               </h5>
@@ -675,7 +675,7 @@ ketner agent start --port 4040 --workspace .`}
         {activeTab === 'ide' && (
           <div className="flex flex-col gap-6 animate-fade-in">
             <div>
-              <h3 className="text-xl font-bold text-text flex items-center gap-2">
+              <h3 className="text-xl font-semibold text-text flex items-center gap-2">
                 <CpuIcon className="text-accent" />
                 Интеграция с Cursor, VS Code (Cline / Continue) и Windsurf
               </h3>
@@ -687,7 +687,7 @@ ketner agent start --port 4040 --workspace .`}
             </div>
 
             {/* Cursor */}
-            <div className="rounded-[14px] border border-stroke/20 bg-canvas p-4.5 flex flex-col gap-3">
+            <div className="rounded-lg border border-stroke bg-canvas p-4.5 flex flex-col gap-3">
               <div className="flex items-center justify-between">
                 <h4 className="font-semibold text-sm text-text flex items-center gap-2">
                   <span className="size-2 rounded-full bg-accent" />
@@ -721,7 +721,7 @@ ketner agent start --port 4040 --workspace .`}
             </div>
 
             {/* VS Code: Cline / Roo Code / Continue */}
-            <div className="rounded-[14px] border border-stroke/20 bg-canvas p-4.5 flex flex-col gap-3">
+            <div className="rounded-lg border border-stroke bg-canvas p-4.5 flex flex-col gap-3">
               <div className="flex items-center justify-between">
                 <h4 className="font-semibold text-sm text-text flex items-center gap-2">
                   <span className="size-2 rounded-full bg-emerald-500" />
@@ -770,7 +770,7 @@ ketner agent start --port 4040 --workspace .`}
         {activeTab === 'mcp' && (
           <div className="flex flex-col gap-6 animate-fade-in">
             <div>
-              <h3 className="text-xl font-bold text-text flex items-center gap-2">
+              <h3 className="text-xl font-semibold text-text flex items-center gap-2">
                 <SparkleIcon className="text-accent" />
                 MCP (Model Context Protocol): Подключение системных инструментов
               </h3>
@@ -782,7 +782,7 @@ ketner agent start --port 4040 --workspace .`}
             </div>
 
             {/* Пути к конфигу */}
-            <div className="rounded-[12px] border border-stroke/20 bg-canvas p-3.5 text-xs text-muted">
+            <div className="rounded-lg border border-stroke bg-canvas p-3.5 text-xs text-muted">
               <span className="font-semibold text-text">Где находится файл конфигурации MCP:</span>
               <ul className="mt-1.5 flex flex-col gap-1 font-mono text-[11px]">
                 <li>
@@ -842,7 +842,7 @@ ketner agent start --port 4040 --workspace .`}
               />
             </div>
 
-            <div className="rounded-[12px] border border-amber-500/30 bg-amber-500/10 p-3.5 text-xs text-amber-700 dark:text-amber-300">
+            <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 p-3.5 text-xs text-amber-700 dark:text-amber-300">
               <p className="font-semibold flex items-center gap-1.5">
                 <span>💡</span> Как проверить работу MCP:
               </p>
@@ -859,7 +859,7 @@ ketner agent start --port 4040 --workspace .`}
         {activeTab === 'sdk' && (
           <div className="flex flex-col gap-6 animate-fade-in">
             <div>
-              <h3 className="text-xl font-bold text-text flex items-center gap-2">
+              <h3 className="text-xl font-semibold text-text flex items-center gap-2">
                 <TerminalIcon className="text-accent" />
                 Программный доступ: Python, Node.js и cURL
               </h3>
@@ -971,7 +971,7 @@ main().catch(console.error);
         {activeTab === 'security' && (
           <div className="flex flex-col gap-6 animate-fade-in">
             <div>
-              <h3 className="text-xl font-bold text-text flex items-center gap-2">
+              <h3 className="text-xl font-semibold text-text flex items-center gap-2">
                 <span>🛡️</span>
                 Политика безопасности и контроль доступа на локальной машине
               </h3>
@@ -983,7 +983,7 @@ main().catch(console.error);
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="rounded-[14px] border border-stroke/20 bg-canvas p-4.5 flex flex-col gap-2">
+              <div className="rounded-lg border border-stroke bg-canvas p-4.5 flex flex-col gap-2">
                 <h4 className="font-semibold text-sm text-text flex items-center gap-2">
                   <span>✋</span> Режим подтверждения (Human-in-the-loop)
                 </h4>
@@ -992,11 +992,11 @@ main().catch(console.error);
                   вашего подтверждения в терминале. При попытке выполнить операции вроде{' '}
                   <code className="text-text">git push</code>, <code className="text-text">rm</code>{' '}
                   или установку глобальных пакетов терминал запрашивает подтверждение клавишей{' '}
-                  <kbd className="text-text font-bold">Y</kbd>.
+                  <kbd className="text-text font-semibold">Y</kbd>.
                 </p>
               </div>
 
-              <div className="rounded-[14px] border border-stroke/20 bg-canvas p-4.5 flex flex-col gap-2">
+              <div className="rounded-lg border border-stroke bg-canvas p-4.5 flex flex-col gap-2">
                 <h4 className="font-semibold text-sm text-text flex items-center gap-2">
                   <span>🔒</span> Защита секретов и токенов
                 </h4>
@@ -1010,7 +1010,7 @@ main().catch(console.error);
                 </p>
               </div>
 
-              <div className="rounded-[14px] border border-stroke/20 bg-canvas p-4.5 flex flex-col gap-2">
+              <div className="rounded-lg border border-stroke bg-canvas p-4.5 flex flex-col gap-2">
                 <h4 className="font-semibold text-sm text-text flex items-center gap-2">
                   <span>🐳</span> Изоляция через Docker / Dev Containers
                 </h4>
@@ -1024,7 +1024,7 @@ main().catch(console.error);
                 </p>
               </div>
 
-              <div className="rounded-[14px] border border-stroke/20 bg-canvas p-4.5 flex flex-col gap-2">
+              <div className="rounded-lg border border-stroke bg-canvas p-4.5 flex flex-col gap-2">
                 <h4 className="font-semibold text-sm text-text flex items-center gap-2">
                   <span>🚫</span> Чёрный список команд (Blacklist)
                 </h4>
@@ -1039,8 +1039,8 @@ main().catch(console.error);
       </section>
 
       {/* БЛОК 4: Интерактивный тест API */}
-      <section className="flex flex-col gap-4 rounded-[16px] border border-stroke/30 bg-surface p-5 md:p-6 shadow-sm">
-        <div className="flex items-center justify-between border-b border-stroke/20 pb-3">
+      <section className="flex flex-col gap-4 rounded-lg border border-stroke-strong bg-surface p-5 md:p-6 shadow-sm">
+        <div className="flex items-center justify-between border-b border-stroke pb-3">
           <div className="flex items-center gap-2">
             <SparkleIcon className="text-accent text-lg" />
             <h3 className="font-semibold text-sm text-text">
@@ -1056,7 +1056,7 @@ main().catch(console.error);
             <select
               value={testModel}
               onChange={(e) => setTestModel(e.target.value)}
-              className="w-full rounded-[8px] border border-stroke/30 bg-canvas px-2.5 py-1.5 text-xs text-text outline-none focus:border-accent"
+              className="w-full rounded-md border border-stroke-strong bg-canvas px-2.5 py-1.5 text-xs text-text outline-none focus:border-accent"
             >
               <option value="gpt-6-astra">GPT-6 Astra * (Флагман OpenAI)</option>
               <option value="claude-fable-5.5">Claude Fable 5.5 * (Код & Архитектура)</option>
@@ -1072,7 +1072,7 @@ main().catch(console.error);
                 type="text"
                 value={testPrompt}
                 onChange={(e) => setTestPrompt(e.target.value)}
-                className="w-full rounded-[8px] border border-stroke/30 bg-canvas px-3 py-1.5 text-xs text-text outline-none focus:border-accent"
+                className="w-full rounded-md border border-stroke-strong bg-canvas px-3 py-1.5 text-xs text-text outline-none focus:border-accent"
               />
             </div>
             <Button
@@ -1098,7 +1098,7 @@ main().catch(console.error);
         </div>
 
         {testResponse !== null && (
-          <div className="mt-2 rounded-[10px] border border-stroke/20 bg-[#121212] p-3 text-xs font-mono text-emerald-400 whitespace-pre-wrap leading-relaxed animate-fade-in shadow-inner">
+          <div className="mt-2 rounded-md border border-stroke bg-[#121212] p-3 text-xs font-mono text-emerald-400 whitespace-pre-wrap leading-relaxed animate-fade-in shadow-inner">
             {testResponse}
             {testLoading && (
               <span className="inline-block size-2 bg-emerald-400 animate-pulse ml-1" />
@@ -1108,7 +1108,7 @@ main().catch(console.error);
       </section>
 
       {/* Футер страницы со ссылкой в чат и к тарифам */}
-      <div className="flex flex-col sm:flex-row items-center justify-between gap-4 border-t border-stroke/20 pt-6 pb-4 text-xs text-muted">
+      <div className="flex flex-col sm:flex-row items-center justify-between gap-4 border-t border-stroke pt-6 pb-4 text-xs text-muted">
         <span>Ketner AI Developer Hub · OpenAI-Compatible Platform</span>
         <div className="flex items-center gap-4">
           <Link to="/chat" className="hover:text-text transition-colors">

@@ -1,4 +1,4 @@
-import { Link, Outlet } from 'react-router-dom';
+﻿import { Link, Outlet } from 'react-router-dom';
 import { cn } from '@/lib/cn';
 import { useAuth } from '@/features/auth/auth-store';
 import { useTranslation } from '@/i18n';
@@ -16,7 +16,7 @@ export function StandaloneLayout() {
       {/* Полноэкранный фоновый градиент без швов и обрезки */}
       <div className="pointer-events-none fixed inset-0 z-0 bg-ambient-mesh opacity-90 transition-opacity" />
 
-      <header className="relative z-20 flex h-16 shrink-0 items-center gap-2 border-b border-stroke/15 bg-canvas/80 px-4 backdrop-blur-md md:px-8">
+      <header className="relative z-20 flex h-16 shrink-0 items-center gap-2 border-b border-stroke bg-canvas/80 px-4 backdrop-blur-md md:px-8">
         <Brand />
         <nav className="ml-auto flex items-center gap-2 sm:gap-4">
           <a
@@ -68,7 +68,7 @@ export function StandaloneLayout() {
         <Outlet />
       </main>
 
-      <footer className="relative z-10 flex flex-wrap items-center justify-center gap-3 border-t border-stroke/10 bg-canvas/50 px-4 py-6 text-center text-xs text-muted backdrop-blur-sm md:px-8">
+      <footer className="relative z-10 flex flex-wrap items-center justify-center gap-3 border-t border-stroke bg-canvas/50 px-4 py-6 text-center text-xs text-muted backdrop-blur-sm md:px-8">
         <span>
           {t('app.name')} — {t('landing.mockBadge')}
         </span>

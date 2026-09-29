@@ -1,4 +1,4 @@
-import { CornerMark } from '@/components/ui/corner-mark';
+﻿import { CornerMark } from '@/components/ui/corner-mark';
 import { EXAMPLE_PROMPTS } from '@/features/chat/example-prompts';
 import { useChat } from '@/features/chat/chat-store';
 import { useTranslation } from '@/i18n';
@@ -27,7 +27,7 @@ export function ChatEmptyState() {
           <p className="mt-1 text-sm leading-5 text-muted max-w-[58ch]">{t('chat.emptyHint')}</p>
         </div>
 
-        <div className="mt-4 w-full flex flex-col divide-y divide-stroke/15 border-y border-stroke/15">
+        <div className="mt-4 w-full flex flex-col divide-y divide-stroke border-y border-stroke">
           {EXAMPLE_PROMPTS[language].map((prompt) => (
             <button
               key={prompt}

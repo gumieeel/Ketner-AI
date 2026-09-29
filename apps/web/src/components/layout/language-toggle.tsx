@@ -1,4 +1,4 @@
-import { cn } from '@/lib/cn';
+﻿import { cn } from '@/lib/cn';
 import { usePreferences, type Language } from '@/features/preferences/preferences-store';
 import { useTranslation } from '@/i18n';
 
@@ -17,7 +17,7 @@ export function LanguageToggle({ className }: { className?: string }) {
       role="group"
       aria-label={t('settings.language')}
       className={cn(
-        'inline-flex items-center gap-0.5 rounded-[6px] border border-stroke/20 bg-canvas p-0.5',
+        'inline-flex items-center gap-0.5 rounded-sm border border-stroke bg-canvas p-0.5',
         className,
       )}
     >
@@ -30,7 +30,7 @@ export function LanguageToggle({ className }: { className?: string }) {
             aria-pressed={active}
             onClick={() => setLanguage(option.value)}
             className={cn(
-              'rounded-[4px] px-2.5 py-1 text-xs font-medium transition-colors',
+              'rounded-sm px-2.5 py-1 text-xs font-medium transition-colors',
               active ? 'bg-surface text-text' : 'text-muted hover:text-text',
             )}
           >

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+﻿import { useEffect, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { EyeIcon, EyeOffIcon, GitHubIcon, GoogleIcon } from '@/components/icons';
 import { AuthShell } from '@/components/layout/auth-shell';
@@ -224,7 +224,7 @@ export function SignupPage() {
               <button
                 type="button"
                 onClick={() => setShowPassword(!showPassword)}
-                className="absolute right-2.5 flex size-8 items-center justify-center rounded-[6px] text-muted hover:text-text transition-colors"
+                className="absolute right-2.5 flex size-8 items-center justify-center rounded-sm text-muted hover:text-text transition-colors"
                 aria-label={showPassword ? 'Скрыть' : 'Показать'}
                 tabIndex={-1}
               >
@@ -244,9 +244,9 @@ export function SignupPage() {
       </form>
 
       <div className="my-5 flex items-center gap-3 text-xs text-muted">
-        <span className="h-px flex-1 bg-stroke/20" />
+        <span className="h-px flex-1 bg-surface-2" />
         {t('auth.orDivider')}
-        <span className="h-px flex-1 bg-stroke/20" />
+        <span className="h-px flex-1 bg-surface-2" />
       </div>
 
       <div className="flex flex-col gap-2">

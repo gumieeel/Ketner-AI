@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+﻿import { useMemo } from 'react';
 import { CopyButton } from '@/components/ui/copy-button';
 import { useTranslation } from '@/i18n';
 import { highlight, type TokenKind } from './highlight';
@@ -24,8 +24,8 @@ export function CodeBlock({ code, language }: CodeBlockProps) {
   const tokens = useMemo(() => highlight(code, language), [code, language]);
 
   return (
-    <div className="my-3 overflow-hidden rounded-[10px] border border-stroke/25 bg-surface">
-      <div className="flex items-center justify-between gap-2 border-b border-stroke/20 px-3 py-1.5">
+    <div className="my-3 overflow-hidden rounded-md border border-stroke bg-surface">
+      <div className="flex items-center justify-between gap-2 border-b border-stroke px-3 py-1.5">
         <span className="text-xs text-muted">{language ?? t('chat.codePlain')}</span>
         <CopyButton value={code} label={t('chat.copyCode')} size="sm" />
       </div>

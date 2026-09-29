@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+﻿import { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { useAuth } from '@/features/auth/auth-store';
 import {
@@ -283,7 +283,7 @@ export function CheckoutPage() {
         </div>
 
         <div className="flex flex-col gap-2">
-          <h1 className="text-2xl font-bold tracking-tight text-text">
+          <h1 className="text-2xl font-semibold tracking-tight text-text">
             {t('checkout.successTitle')}
           </h1>
           <p className="text-sm text-muted">
@@ -292,7 +292,7 @@ export function CheckoutPage() {
           </p>
         </div>
 
-        <Card className="flex w-full items-center justify-between text-left p-5 border-stroke/40 bg-surface/80 backdrop-blur-md">
+        <Card className="flex w-full items-center justify-between text-left p-5 border-stroke-strong bg-surface/80 backdrop-blur-md">
           <div>
             <CardTitle>{t(plan.nameKey)}</CardTitle>
             <CardText className="mt-1 flex items-center gap-1.5 text-xs text-accent font-medium">
@@ -301,7 +301,7 @@ export function CheckoutPage() {
             </CardText>
           </div>
           <div className="text-right">
-            <p className="text-xl font-bold text-text">
+            <p className="text-xl font-semibold text-text">
               {plan.priceMonthly.toLocaleString('ru-RU')} ₽
               <span className="ml-1 text-xs font-normal text-muted">{t('pricing.month')}</span>
             </p>
@@ -336,13 +336,13 @@ export function CheckoutPage() {
       <div className="flex items-center gap-3">
         <Link
           to="/pricing"
-          className="inline-flex size-9 items-center justify-center rounded-xl border border-stroke/30 text-muted hover:border-stroke hover:text-text transition-colors"
+          className="inline-flex size-9 items-center justify-center rounded-xl border border-stroke-strong text-muted hover:border-stroke hover:text-text transition-colors"
           title="Назад к тарифам"
         >
           <ArrowLeftIcon className="text-base" />
         </Link>
         <div>
-          <h1 className="text-2xl font-bold tracking-tight text-text">{t('checkout.title')}</h1>
+          <h1 className="text-2xl font-semibold tracking-tight text-text">{t('checkout.title')}</h1>
           <p className="text-xs text-muted">
             Безопасная оплата подписки на передовые ИИ модели Ketner AI
           </p>
@@ -350,7 +350,7 @@ export function CheckoutPage() {
       </div>
 
       {/* Карточка выбранного тарифа */}
-      <Card className="flex items-center justify-between gap-4 p-5 border-stroke/40 bg-gradient-to-r from-surface via-surface to-accent/5 backdrop-blur-md">
+      <Card className="flex items-center justify-between gap-4 p-5 border-stroke-strong bg-gradient-to-r from-surface via-surface to-accent/5 backdrop-blur-md">
         <div>
           <span className="text-xs font-semibold uppercase tracking-wider text-accent">
             {t('checkout.selectedPlan')}
@@ -363,7 +363,7 @@ export function CheckoutPage() {
           </p>
         </div>
         <div className="text-right">
-          <p className="text-2xl font-bold text-text">
+          <p className="text-2xl font-semibold text-text">
             {plan.priceMonthly.toLocaleString('ru-RU')} ₽
             <span className="ml-1 text-xs font-normal text-muted">{t('pricing.month')}</span>
           </p>
@@ -378,7 +378,7 @@ export function CheckoutPage() {
         <label className="text-xs font-semibold uppercase tracking-wider text-muted px-1">
           {t('checkout.methodTitle')}
         </label>
-        <div className="grid grid-cols-3 gap-2 p-1.5 rounded-2xl bg-surface border border-stroke/30 shadow-xs">
+        <div className="grid grid-cols-3 gap-2 p-1.5 rounded-2xl bg-surface border border-stroke-strong shadow-xs">
           <button
             type="button"
             onClick={() => setPaymentMethod('card')}
@@ -401,7 +401,7 @@ export function CheckoutPage() {
                 : 'text-muted hover:text-text hover:bg-canvas/50 font-medium'
             }`}
           >
-            <span className="absolute -top-2 right-1 rounded-full bg-emerald-500 text-white text-[10px] font-bold px-1.5 py-0.2 shadow-xs">
+            <span className="absolute -top-2 right-1 rounded-full bg-emerald-500 text-white text-[10px] font-semibold px-1.5 py-0.2 shadow-xs">
               0%
             </span>
             <SbpIcon className="text-xl" />
@@ -508,7 +508,7 @@ export function CheckoutPage() {
 
       {/* --- СПОСОБ 2: СБП (Система быстрых платежей) --- */}
       {paymentMethod === 'sbp' && (
-        <div className="flex flex-col items-center gap-5 rounded-3xl border border-stroke/40 bg-surface/90 p-6 text-center shadow-lg backdrop-blur-md animate-fade-in">
+        <div className="flex flex-col items-center gap-5 rounded-3xl border border-stroke-strong bg-surface/90 p-6 text-center shadow-lg backdrop-blur-md animate-fade-in">
           <div className="flex items-center gap-2 rounded-full bg-emerald-500/10 px-3 py-1 text-xs font-semibold text-emerald-600 dark:text-emerald-400">
             <span className="size-2 rounded-full bg-emerald-500 animate-pulse" />
             Оплата через СБП · 0% комиссии
@@ -522,7 +522,7 @@ export function CheckoutPage() {
           </div>
 
           {/* QR код */}
-          <div className="relative p-2 rounded-3xl bg-canvas border border-stroke/30 shadow-inner">
+          <div className="relative p-2 rounded-3xl bg-canvas border border-stroke-strong shadow-inner">
             {sbpLoading ? (
               <div className="size-48 flex items-center justify-center text-sm text-muted">
                 Генерация QR-кода СБП...
@@ -582,7 +582,7 @@ export function CheckoutPage() {
 
       {/* --- СПОСОБ 3: TELEGRAM STARS (⭐️ XTR) --- */}
       {paymentMethod === 'stars' && (
-        <div className="flex flex-col items-center gap-5 rounded-3xl border border-stroke/40 bg-surface/90 p-6 text-center shadow-lg backdrop-blur-md animate-fade-in">
+        <div className="flex flex-col items-center gap-5 rounded-3xl border border-stroke-strong bg-surface/90 p-6 text-center shadow-lg backdrop-blur-md animate-fade-in">
           <div className="flex items-center gap-2 rounded-full bg-amber-500/10 px-3.5 py-1 text-xs font-semibold text-amber-600 dark:text-amber-400">
             <StarIcon className="text-amber-400 text-sm" />
             {t('checkout.starsOfficial')}
@@ -603,7 +603,7 @@ export function CheckoutPage() {
           {/* QR код для перехода в Telegram-бота со смартфона */}
           <div className="flex flex-col items-center gap-2">
             <p className="text-xs font-medium text-muted">{t('checkout.starsQrHint')}</p>
-            <div className="p-2 rounded-3xl bg-canvas border border-stroke/30 shadow-inner">
+            <div className="p-2 rounded-3xl bg-canvas border border-stroke-strong shadow-inner">
               {starsLoading ? (
                 <div className="size-44 flex items-center justify-center text-sm text-muted">
                   {language === 'ru' ? 'Подготовка бота...' : 'Preparing bot...'}

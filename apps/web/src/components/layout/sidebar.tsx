@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+﻿import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, NavLink, useNavigate } from 'react-router-dom';
 import {
   BookOpenIcon,
@@ -39,7 +39,7 @@ const GROUP_LABELS: Record<DateGroup, TranslationKey> = {
 
 const navLinkClasses = ({ isActive }: { isActive: boolean }) =>
   cn(
-    'flex min-h-[44px] md:min-h-[36px] items-center gap-2 rounded-[6px] px-3 py-2 text-sm leading-5 transition-colors',
+    'flex min-h-[44px] md:min-h-[36px] items-center gap-2 rounded-sm px-3 py-2 text-sm leading-5 transition-colors',
     isActive
       ? 'bg-accent/10 font-medium text-text'
       : 'text-muted hover:bg-surface/80 hover:text-text',
@@ -120,7 +120,7 @@ export function Sidebar() {
         aria-hidden={!open ? undefined : false}
         className={cn(
           'fixed inset-y-0 left-0 z-40 flex w-[min(288px,calc(100vw-48px))] md:w-[264px] flex-col',
-          'border-r border-stroke/20 bg-surface text-text',
+          'border-r border-stroke bg-surface text-text',
           'transition-transform duration-[180ms] ease-out md:static md:z-auto md:translate-x-0',
           open ? 'translate-x-0 shadow-lg md:shadow-none' : '-translate-x-full',
         )}
@@ -133,7 +133,7 @@ export function Sidebar() {
             aria-label={t('nav.closeSidebar')}
             title={t('nav.closeSidebar')}
             onClick={close}
-            className="ml-auto inline-flex size-9 min-h-[44px] min-w-[44px] md:min-h-0 md:min-w-0 md:size-8 items-center justify-center rounded-[6px] text-muted hover:bg-canvas hover:text-text md:hidden"
+            className="ml-auto inline-flex size-9 min-h-[44px] min-w-[44px] md:min-h-0 md:min-w-0 md:size-8 items-center justify-center rounded-sm text-muted hover:bg-canvas hover:text-text md:hidden"
           >
             <CloseIcon />
           </button>
@@ -144,8 +144,8 @@ export function Sidebar() {
             to="/chat"
             onClick={handleNewChat}
             className={cn(
-              'inline-flex min-h-[44px] md:min-h-[40px] items-center gap-2 rounded-[10px] px-3 text-sm leading-5 font-medium transition-colors',
-              'border border-stroke/40 text-text hover:bg-canvas',
+              'inline-flex min-h-[44px] md:min-h-[40px] items-center gap-2 rounded-md px-3 text-sm leading-5 font-medium transition-colors',
+              'border border-stroke-strong text-text hover:bg-canvas',
             )}
           >
             <PlusIcon className="text-lg" />
@@ -161,7 +161,7 @@ export function Sidebar() {
               aria-label={t('nav.searchChats')}
               placeholder={t('nav.searchChats')}
               className={cn(
-                'h-10 md:h-9 w-full rounded-[10px] border border-stroke/30 bg-canvas pr-3 pl-9 text-sm leading-5 text-text',
+                'h-10 md:h-9 w-full rounded-md border border-stroke-strong bg-canvas pr-3 pl-9 text-sm leading-5 text-text',
                 'placeholder:text-muted focus:border-accent outline-none transition-colors',
               )}
             />
@@ -174,7 +174,7 @@ export function Sidebar() {
           {status === 'loading' ? <ConversationsSkeleton /> : null}
 
           {status === 'error' ? (
-            <div className="rounded-[10px] border border-red-500/30 px-3 py-4 text-center">
+            <div className="rounded-md border border-red-500/30 px-3 py-4 text-center">
               <p className="text-sm text-red-600 dark:text-red-400">{t('chats.loadError')}</p>
               <Button
                 variant="outline"
@@ -188,7 +188,7 @@ export function Sidebar() {
           ) : null}
 
           {status !== 'loading' && status !== 'error' && conversations.length === 0 ? (
-            <div className="rounded-[10px] border border-dashed border-stroke/30 px-3 py-6 text-center">
+            <div className="rounded-md border border-dashed border-stroke-strong px-3 py-6 text-center">
               <SparkleIcon className="mx-auto mb-2 text-xl text-muted" />
               <p className="text-sm text-muted">{t('nav.empty')}</p>
               <p className="mt-1 text-xs text-muted/80">{t('nav.emptyHint')}</p>
@@ -220,7 +220,7 @@ export function Sidebar() {
           ))}
         </div>
 
-        <div className="mt-auto flex flex-col gap-1.5 border-t border-stroke/15 p-3">
+        <div className="mt-auto flex flex-col gap-1.5 border-t border-stroke p-3">
           <NavLink to="/docs" onClick={close} className={navLinkClasses}>
             <BookOpenIcon className="text-lg" />
             {t('nav.docs')}
@@ -237,7 +237,7 @@ export function Sidebar() {
             <NavLink to="/admin" onClick={close} className={navLinkClasses}>
               <UserIcon className="text-lg text-accent" />
               <span className="flex-1 font-semibold text-accent">Admin Panel</span>
-              <span className="rounded bg-accent/20 px-1.5 py-0.5 text-[10px] font-bold text-accent">
+              <span className="rounded bg-accent/20 px-1.5 py-0.5 text-[10px] font-semibold text-accent">
                 ADMIN
               </span>
             </NavLink>
@@ -279,7 +279,7 @@ export function Sidebar() {
               </>
             ) : (
               <>
-                <span className="grid size-9 shrink-0 place-items-center rounded-full bg-stroke/20 text-muted">
+                <span className="grid size-9 shrink-0 place-items-center rounded-full bg-surface-2 text-muted">
                   <UserIcon className="text-lg" />
                 </span>
                 <div className="min-w-0 flex-1">
@@ -344,7 +344,7 @@ function ConversationRow({
               setEditing(false);
             }
           }}
-          className="h-8 min-w-0 flex-1 rounded-[6px] border border-accent bg-canvas px-2 text-sm text-text outline-none"
+          className="h-8 min-w-0 flex-1 rounded-sm border border-accent bg-canvas px-2 text-sm text-text outline-none"
         />
         <IconButton label={t('common.save')} size="sm" type="submit">
           <CheckIcon />
@@ -358,7 +358,7 @@ function ConversationRow({
 
   if (confirming) {
     return (
-      <div className="flex min-h-[44px] md:min-h-[36px] items-center gap-1 rounded-[6px] bg-red-500/10 px-2 py-1 text-red-600 dark:text-red-300">
+      <div className="flex min-h-[44px] md:min-h-[36px] items-center gap-1 rounded-sm bg-red-500/10 px-2 py-1 text-red-600 dark:text-red-300">
         <span className="min-w-0 flex-1 truncate text-xs">{t('chats.deleteConfirm')}</span>
         <button
           type="button"
@@ -369,7 +369,7 @@ function ConversationRow({
               navigate('/chat', { replace: true });
             }
           }}
-          className="rounded-[6px] px-2 py-1 text-xs font-medium text-red-600 hover:bg-red-500/20 dark:text-red-300"
+          className="rounded-sm px-2 py-1 text-xs font-medium text-red-600 hover:bg-red-500/20 dark:text-red-300"
         >
           {t('chats.deleteYes')}
         </button>
@@ -383,7 +383,7 @@ function ConversationRow({
   return (
     <div
       className={cn(
-        'group flex min-h-[44px] md:min-h-[36px] items-center gap-1 rounded-[6px] pr-1 transition-colors',
+        'group flex min-h-[44px] md:min-h-[36px] items-center gap-1 rounded-sm pr-1 transition-colors',
         active ? 'bg-accent/10 text-text' : 'hover:bg-canvas text-muted hover:text-text',
       )}
     >
@@ -394,7 +394,7 @@ function ConversationRow({
         onClick={onNavigate}
         title={conversation.title}
         className={cn(
-          'min-w-0 flex-1 truncate rounded-[6px] px-2.5 py-1.5 text-sm leading-5',
+          'min-w-0 flex-1 truncate rounded-sm px-2.5 py-1.5 text-sm leading-5',
           active ? 'font-medium text-text' : 'text-text/80 hover:text-text',
         )}
       >

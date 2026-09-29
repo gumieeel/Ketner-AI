@@ -391,3 +391,116 @@ export function CodeIcon(props: IconProps) {
     </SvgIcon>
   );
 }
+
+export function LockIcon(props: IconProps) {
+  return (
+    <SvgIcon {...props}>
+      <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
+      <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+    </SvgIcon>
+  );
+}
+
+export function InfoIcon(props: IconProps) {
+  return (
+    <SvgIcon {...props}>
+      <circle cx="12" cy="12" r="10" />
+      <line x1="12" y1="16" x2="12" y2="12" />
+      <line x1="12" y1="8" x2="12.01" y2="8" />
+    </SvgIcon>
+  );
+}
+
+export function ChevronRightIcon(props: IconProps) {
+  return (
+    <SvgIcon {...props}>
+      <polyline points="9 18 15 12 9 6" />
+    </SvgIcon>
+  );
+}
+
+export function ArrowUpRightIcon(props: IconProps) {
+  return (
+    <SvgIcon {...props}>
+      <line x1="7" y1="17" x2="17" y2="7" />
+      <polyline points="7 7 17 7 17 17" />
+    </SvgIcon>
+  );
+}
+
+export function HashIcon(props: IconProps) {
+  return (
+    <SvgIcon {...props}>
+      <line x1="4" y1="9" x2="20" y2="9" />
+      <line x1="4" y1="15" x2="20" y2="15" />
+      <line x1="10" y1="3" x2="8" y2="21" />
+      <line x1="16" y1="3" x2="14" y2="21" />
+    </SvgIcon>
+  );
+}
+
+export function BoltIcon(props: IconProps) {
+  return (
+    <SvgIcon {...props}>
+      <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" />
+    </SvgIcon>
+  );
+}
+
+export function GlobeIcon(props: IconProps) {
+  return (
+    <SvgIcon {...props}>
+      <circle cx="12" cy="12" r="10" />
+      <line x1="2" y1="12" x2="22" y2="12" />
+      <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" />
+    </SvgIcon>
+  );
+}
+
+export function ShieldIcon(props: IconProps) {
+  return (
+    <SvgIcon {...props}>
+      <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+    </SvgIcon>
+  );
+}
+
+export function ImageIcon(props: IconProps) {
+  return (
+    <SvgIcon {...props}>
+      <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
+      <circle cx="8.5" cy="8.5" r="1.5" />
+      <polyline points="21 15 16 10 5 21" />
+    </SvgIcon>
+  );
+}
+
+export function ChartIcon(props: IconProps) {
+  return (
+    <SvgIcon {...props}>
+      <line x1="18" y1="20" x2="18" y2="10" />
+      <line x1="12" y1="20" x2="12" y2="4" />
+      <line x1="6" y1="20" x2="6" y2="14" />
+    </SvgIcon>
+  );
+}
+
+export function RocketIcon(props: IconProps) {
+  return (
+    <SvgIcon {...props}>
+      <path d="M4.5 16.5c-1.5 1.26-2 5-2 5s3.74-.5 5-2c.71-.84.7-2.13-.09-2.91a2.18 2.18 0 0 0-2.91-.09z" />
+      <path d="m12 15-3-3a22 22 0 0 1 2-3.95A12.88 12.88 0 0 1 22 2c0 2.72-.78 7.5-6 11a22.35 22.35 0 0 1-4 2z" />
+      <path d="M9 12H4s.55-3.03 2-4c1.62-1.08 5 0 5 0" />
+      <path d="M12 15v5s3.03-.55 4-2c1.08-1.62 0-5 0-5" />
+    </SvgIcon>
+  );
+}
+
+export function MessagesIcon(props: IconProps) {
+  return (
+    <SvgIcon {...props}>
+      <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+    </SvgIcon>
+  );
+}
+

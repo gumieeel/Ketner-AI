@@ -10,10 +10,10 @@ export function Input({ invalid = false, className, ...props }: InputProps) {
     <input
       aria-invalid={invalid || undefined}
       className={cn(
-        'h-11 w-full rounded-[10px] border bg-surface px-3 text-sm leading-5 text-text transition-colors',
-        'placeholder:text-muted',
-        invalid ? 'border-red-500 dark:border-red-500' : 'border-stroke/60 focus:border-accent',
+        'h-10 w-full rounded-md border border-stroke bg-surface px-3 text-sm text-text placeholder:text-subtle transition-colors',
+        'hover:border-stroke-strong focus:border-accent focus:outline-none focus:ring-3 focus:ring-accent-soft',
         'disabled:cursor-not-allowed disabled:opacity-60',
+        invalid && 'border-danger focus:border-danger focus:ring-danger-soft',
         className,
       )}
       {...props}
@@ -45,17 +45,17 @@ export function Field({ label, id, error, hint, children }: FieldProps) {
 
   return (
     <div className="flex flex-col gap-1.5">
-      <label htmlFor={id} className="text-sm font-medium text-zinc-700 dark:text-zinc-200">
+      <label htmlFor={id} className="text-[13px] font-medium text-text">
         {label}
       </label>
       {children({ id, invalid: Boolean(error), 'aria-describedby': messageId })}
       {error ? (
-        <p id={`${id}-error`} role="alert" className="text-sm text-red-600 dark:text-red-400">
+        <p id={`${id}-error`} role="alert" className="text-[13px] text-danger">
           {error}
         </p>
       ) : null}
       {!error && hint ? (
-        <p id={`${id}-hint`} className="text-sm text-zinc-500 dark:text-zinc-400">
+        <p id={`${id}-hint`} className="text-[13px] text-muted">
           {hint}
         </p>
       ) : null}

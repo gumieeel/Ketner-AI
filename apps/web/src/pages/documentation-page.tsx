@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+﻿import { useEffect } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { ArrowLeftIcon, CheckIcon, SparkleIcon } from '@/components/icons';
 import { Badge } from '@/components/ui/badge';
@@ -210,7 +210,7 @@ export function DocumentationPage() {
   return (
     <div className="mx-auto flex w-full max-w-5xl flex-col gap-14 px-4 py-8 md:px-8">
       {/* Шапка */}
-      <div className="flex flex-col gap-4 border-b border-stroke/20 pb-8">
+      <div className="flex flex-col gap-4 border-b border-stroke pb-8">
         <Link
           to="/chat"
           className="inline-flex items-center gap-1.5 text-xs text-muted hover:text-text transition-colors"
@@ -220,7 +220,7 @@ export function DocumentationPage() {
         </Link>
         <div className="flex flex-wrap items-center justify-between gap-4">
           <div>
-            <h1 className="text-3xl font-bold tracking-tight text-text">
+            <h1 className="text-3xl font-semibold tracking-tight text-text">
               {isEn ? 'Ketner AI Documentation' : 'Документация Ketner AI'}
             </h1>
             <p className="mt-1 text-sm text-muted">
@@ -241,31 +241,31 @@ export function DocumentationPage() {
         <div className="flex flex-wrap gap-2 pt-2">
           <a
             href="#what-is-ketner"
-            className="rounded-lg px-3 py-1.5 text-xs font-medium border border-stroke/20 bg-surface text-muted hover:border-accent hover:text-accent transition-all"
+            className="rounded-lg px-3 py-1.5 text-xs font-medium border border-stroke bg-surface text-muted hover:border-accent hover:text-accent transition-all"
           >
             {isEn ? '✨ What is Ketner' : '✨ Что такое Ketner'}
           </a>
           <a
             href="#how-it-works"
-            className="rounded-lg px-3 py-1.5 text-xs font-medium border border-stroke/20 bg-surface text-muted hover:border-accent hover:text-accent transition-all"
+            className="rounded-lg px-3 py-1.5 text-xs font-medium border border-stroke bg-surface text-muted hover:border-accent hover:text-accent transition-all"
           >
             {isEn ? '⚡ How it works' : '⚡ Как это работает'}
           </a>
           <a
             href="#plans"
-            className="rounded-lg px-3 py-1.5 text-xs font-medium border border-stroke/20 bg-surface text-muted hover:border-accent hover:text-accent transition-all"
+            className="rounded-lg px-3 py-1.5 text-xs font-medium border border-stroke bg-surface text-muted hover:border-accent hover:text-accent transition-all"
           >
             {isEn ? '💎 Plans & Speeds' : '💎 Тарифные планы и лимиты'}
           </a>
           <a
             href="#fair-use"
-            className="rounded-lg px-3 py-1.5 text-xs font-medium border border-stroke/20 bg-surface text-muted hover:border-accent hover:text-accent transition-all"
+            className="rounded-lg px-3 py-1.5 text-xs font-medium border border-stroke bg-surface text-muted hover:border-accent hover:text-accent transition-all"
           >
             {isEn ? '🛡️ Fair Use' : '🛡️ Честное использование (Fair Use)'}
           </a>
           <a
             href="#faq"
-            className="rounded-lg px-3 py-1.5 text-xs font-medium border border-stroke/20 bg-surface text-muted hover:border-accent hover:text-accent transition-all"
+            className="rounded-lg px-3 py-1.5 text-xs font-medium border border-stroke bg-surface text-muted hover:border-accent hover:text-accent transition-all"
           >
             {isEn ? '❓ FAQ' : '❓ Часто задаваемые вопросы'}
           </a>
@@ -276,11 +276,11 @@ export function DocumentationPage() {
       <section id="what-is-ketner" className="scroll-mt-20 flex flex-col gap-4">
         <div className="flex items-center gap-2">
           <span className="text-lg">✨</span>
-          <h2 className="text-2xl font-bold tracking-tight text-text">
+          <h2 className="text-2xl font-semibold tracking-tight text-text">
             {isEn ? 'What is Ketner' : 'Что такое Ketner'}
           </h2>
         </div>
-        <Card className="p-6 md:p-8 bg-surface border-stroke/30">
+        <Card className="p-6 md:p-8 bg-surface border-stroke-strong">
           <p className="text-lg md:text-xl font-medium text-text leading-relaxed">
             {isEn
               ? 'One service instead of dozens of subscriptions. Access the world’s best AI models in a single place.'
@@ -298,13 +298,13 @@ export function DocumentationPage() {
       <section id="how-it-works" className="scroll-mt-20 flex flex-col gap-4">
         <div className="flex items-center gap-2">
           <span className="text-lg">⚡</span>
-          <h2 className="text-2xl font-bold tracking-tight text-text">
+          <h2 className="text-2xl font-semibold tracking-tight text-text">
             {isEn ? 'How it works' : 'Как это работает'}
           </h2>
         </div>
         <div className="grid gap-4 md:grid-cols-3">
-          <Card className="flex flex-col gap-2 p-6 border-stroke/25">
-            <div className="flex size-8 items-center justify-center rounded-full bg-accent/15 text-sm font-bold text-accent">
+          <Card className="flex flex-col gap-2 p-6 border-stroke">
+            <div className="flex size-8 items-center justify-center rounded-full bg-accent/15 text-sm font-semibold text-accent">
               1
             </div>
             <CardTitle className="text-base text-text">
@@ -317,8 +317,8 @@ export function DocumentationPage() {
             </CardText>
           </Card>
 
-          <Card className="flex flex-col gap-2 p-6 border-stroke/25">
-            <div className="flex size-8 items-center justify-center rounded-full bg-accent/15 text-sm font-bold text-accent">
+          <Card className="flex flex-col gap-2 p-6 border-stroke">
+            <div className="flex size-8 items-center justify-center rounded-full bg-accent/15 text-sm font-semibold text-accent">
               2
             </div>
             <CardTitle className="text-base text-text">
@@ -331,8 +331,8 @@ export function DocumentationPage() {
             </CardText>
           </Card>
 
-          <Card className="flex flex-col gap-2 p-6 border-stroke/25">
-            <div className="flex size-8 items-center justify-center rounded-full bg-accent/15 text-sm font-bold text-accent">
+          <Card className="flex flex-col gap-2 p-6 border-stroke">
+            <div className="flex size-8 items-center justify-center rounded-full bg-accent/15 text-sm font-semibold text-accent">
               3
             </div>
             <CardTitle className="text-base text-text">
@@ -352,7 +352,7 @@ export function DocumentationPage() {
         <div>
           <div className="flex items-center gap-2">
             <span className="text-lg">💎</span>
-            <h2 className="text-2xl font-bold tracking-tight text-text">
+            <h2 className="text-2xl font-semibold tracking-tight text-text">
               {isEn ? 'Plans & Speeds' : 'Тарифные планы и лимиты'}
             </h2>
           </div>
@@ -371,18 +371,18 @@ export function DocumentationPage() {
                 'flex flex-col justify-between p-6 transition-all',
                 plan.popular
                   ? 'border-accent bg-gradient-to-b from-accent/5 via-surface to-surface shadow-md'
-                  : 'border-stroke/25',
+                  : 'border-stroke',
               )}
             >
               <div>
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
-                    <CardTitle className="text-xl font-bold text-text">{plan.name}</CardTitle>
+                    <CardTitle className="text-xl font-semibold text-text">{plan.name}</CardTitle>
                     <Badge tone={plan.popular ? 'brand' : 'neutral'}>
                       {plan.badge[language]}
                     </Badge>
                   </div>
-                  <span className="text-lg font-bold text-text">{plan.price}</span>
+                  <span className="text-lg font-semibold text-text">{plan.price}</span>
                 </div>
 
                 <p className="mt-2 text-xs md:text-sm text-muted leading-relaxed">
@@ -390,13 +390,13 @@ export function DocumentationPage() {
                 </p>
 
                 <div className="mt-4 flex flex-wrap gap-2 text-xs">
-                  <span className="rounded bg-canvas px-2.5 py-1 text-text/90 border border-stroke/20">
+                  <span className="rounded bg-canvas px-2.5 py-1 text-text/90 border border-stroke">
                     ⚡ {plan.speed[language]}
                   </span>
-                  <span className="rounded bg-canvas px-2.5 py-1 text-text/90 border border-stroke/20">
+                  <span className="rounded bg-canvas px-2.5 py-1 text-text/90 border border-stroke">
                     🚀 {plan.priority[language]}
                   </span>
-                  <span className="rounded bg-canvas px-2.5 py-1 text-text/90 border border-stroke/20">
+                  <span className="rounded bg-canvas px-2.5 py-1 text-text/90 border border-stroke">
                     🧠 {plan.context[language]}
                   </span>
                 </div>
@@ -411,7 +411,7 @@ export function DocumentationPage() {
                 </ul>
               </div>
 
-              <div className="mt-6 pt-4 border-t border-stroke/15">
+              <div className="mt-6 pt-4 border-t border-stroke">
                 <Link to={plan.id === 'free' ? '/chat' : `/checkout/${plan.id}`}>
                   <Button
                     variant={plan.popular ? 'primary' : 'outline'}
@@ -437,18 +437,18 @@ export function DocumentationPage() {
       <section id="fair-use" className="scroll-mt-20 flex flex-col gap-4">
         <div className="flex items-center gap-2">
           <span className="text-lg">🛡️</span>
-          <h2 className="text-2xl font-bold tracking-tight text-text">
+          <h2 className="text-2xl font-semibold tracking-tight text-text">
             {isEn ? 'Fair Use Policy' : 'Честное использование (Fair Use)'}
           </h2>
         </div>
-        <Card className="p-6 md:p-8 bg-surface border-stroke/30">
+        <Card className="p-6 md:p-8 bg-surface border-stroke-strong">
           <p className="text-base md:text-lg font-medium text-text leading-relaxed">
             {isEn
               ? '“Unlimited” means normal human usage without restrictions.'
               : '«Безлимит» означает нормальное использование человеком без искусственных рамок.'}
           </p>
           <div className="mt-4 grid gap-4 md:grid-cols-3">
-            <div className="rounded-xl bg-canvas p-4 border border-stroke/20">
+            <div className="rounded-xl bg-canvas p-4 border border-stroke">
               <h4 className="font-semibold text-sm text-text">
                 {isEn ? '1. For real people' : '1. Для реальных людей'}
               </h4>
@@ -458,7 +458,7 @@ export function DocumentationPage() {
                   : 'Общайтесь столько, сколько требуется для вашей работы, учёбы и проектов.'}
               </p>
             </div>
-            <div className="rounded-xl bg-canvas p-4 border border-stroke/20">
+            <div className="rounded-xl bg-canvas p-4 border border-stroke">
               <h4 className="font-semibold text-sm text-text">
                 {isEn ? '2. Protection from bots' : '2. Защита от спам-ботов'}
               </h4>
@@ -468,7 +468,7 @@ export function DocumentationPage() {
                   : 'Правила защищают серверы от автоматического парсинга, спам-ботов и перегрузок.'}
               </p>
             </div>
-            <div className="rounded-xl bg-canvas p-4 border border-stroke/20">
+            <div className="rounded-xl bg-canvas p-4 border border-stroke">
               <h4 className="font-semibold text-sm text-text">
                 {isEn ? '3. Invisible and smooth' : '3. Без внезапных блокировок'}
               </h4>
@@ -486,13 +486,13 @@ export function DocumentationPage() {
       <section id="faq" className="scroll-mt-20 flex flex-col gap-4 pb-12">
         <div className="flex items-center gap-2">
           <span className="text-lg">❓</span>
-          <h2 className="text-2xl font-bold tracking-tight text-text">
+          <h2 className="text-2xl font-semibold tracking-tight text-text">
             {isEn ? 'Frequently Asked Questions' : 'Часто задаваемые вопросы (FAQ)'}
           </h2>
         </div>
         <div className="grid gap-4 md:grid-cols-2">
           {FAQ_LIST.map((item) => (
-            <Card key={item.q.en} className="flex flex-col gap-2 p-5 border-stroke/25">
+            <Card key={item.q.en} className="flex flex-col gap-2 p-5 border-stroke">
               <CardTitle className="text-sm md:text-base font-semibold text-text">
                 {item.q[language]}
               </CardTitle>

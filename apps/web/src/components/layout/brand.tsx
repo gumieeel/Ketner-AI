@@ -1,4 +1,4 @@
-import { Link } from 'react-router-dom';
+﻿import { Link } from 'react-router-dom';
 import { cn } from '@/lib/cn';
 
 interface BrandProps {
@@ -13,12 +13,12 @@ export function Brand({ className, to = '/', iconOnly = false }: BrandProps) {
     <Link
       to={to}
       className={cn(
-        'inline-flex items-center gap-2.5 rounded-[6px] font-semibold text-text',
+        'inline-flex items-center gap-2.5 rounded-sm font-semibold text-text',
         className,
       )}
     >
       <img src="/logo-mark.png" alt="Ketner AI" className="size-8 shrink-0 object-contain" />
-      <span className={cn('text-base font-bold tracking-tight', iconOnly && 'sr-only')}>
+      <span className={cn('text-base font-semibold tracking-tight', iconOnly && 'sr-only')}>
         Ketner AI
       </span>
     </Link>

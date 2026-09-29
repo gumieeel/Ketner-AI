@@ -1,4 +1,4 @@
-import { useEffect, useRef, type KeyboardEvent } from 'react';
+﻿import { useEffect, useRef, type KeyboardEvent } from 'react';
 import { Link } from 'react-router-dom';
 import { PaperclipIcon, SendIcon, StopIcon } from '@/components/icons';
 import { CornerMark } from '@/components/ui/corner-mark';
@@ -111,7 +111,7 @@ export function Composer() {
       {freeLimitReached ? (
         <div
           role="alert"
-          className="mb-2.5 flex flex-wrap items-center justify-between gap-3 rounded-[12px] border border-amber-500/30 bg-amber-500/10 px-3.5 py-2.5 text-xs text-amber-700 dark:text-amber-300 shadow-sm"
+          className="mb-2.5 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3.5 py-2.5 text-xs text-amber-700 dark:text-amber-300 shadow-sm"
         >
           <div className="flex items-center gap-2">
             <span className="text-sm select-none" aria-hidden="true">
@@ -124,7 +124,7 @@ export function Composer() {
           <Link
             to="/pricing"
             onClick={handleFreeLimitAttempt}
-            className="inline-flex items-center gap-1 shrink-0 rounded-[6px] bg-accent px-3 py-1.5 text-xs font-semibold text-[var(--color-accent-text)] transition hover:opacity-90 shadow-sm"
+            className="inline-flex items-center gap-1 shrink-0 rounded-sm bg-accent px-3 py-1.5 text-xs font-semibold text-[var(--color-accent-text)] transition hover:opacity-90 shadow-sm"
           >
             {t('chat.upgradeButton')} →
           </Link>
@@ -132,7 +132,7 @@ export function Composer() {
       ) : !hasAccess ? (
         <div
           role="alert"
-          className="mb-2.5 flex flex-wrap items-center justify-between gap-3 rounded-[12px] border border-amber-500/30 bg-amber-500/10 px-3.5 py-2.5 text-xs text-amber-700 dark:text-amber-300 shadow-sm"
+          className="mb-2.5 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3.5 py-2.5 text-xs text-amber-700 dark:text-amber-300 shadow-sm"
         >
           <div className="flex items-center gap-2">
             <span className="text-sm select-none" aria-hidden="true">
@@ -148,7 +148,7 @@ export function Composer() {
           <Link
             to="/pricing"
             onClick={handlePaidModelAttempt}
-            className="inline-flex items-center gap-1 shrink-0 rounded-[6px] bg-accent px-3 py-1.5 text-xs font-semibold text-[var(--color-accent-text)] transition hover:opacity-90 shadow-sm"
+            className="inline-flex items-center gap-1 shrink-0 rounded-sm bg-accent px-3 py-1.5 text-xs font-semibold text-[var(--color-accent-text)] transition hover:opacity-90 shadow-sm"
           >
             {t('chat.upgradeButton')} →
           </Link>
@@ -156,7 +156,7 @@ export function Composer() {
       ) : null}
       <div
         onClick={onFocusOrClick}
-        className="relative rounded-[16px] border border-stroke/40 bg-surface p-2.5 transition-colors focus-within:border-accent"
+        className="relative rounded-lg border border-stroke-strong bg-surface p-2.5 transition-colors focus-within:border-accent"
       >
         <CornerMark
           size={13}
@@ -195,7 +195,7 @@ export function Composer() {
               label={t('chat.stop')}
               onClick={() => stop()}
               size="sm"
-              className="ml-auto border border-stroke/30 bg-surface text-text hover:bg-canvas"
+              className="ml-auto border border-stroke-strong bg-surface text-text hover:bg-canvas"
             >
               <StopIcon />
             </IconButton>
@@ -206,7 +206,7 @@ export function Composer() {
               title={t('chat.send')}
               onClick={submit}
               disabled={draft.trim() === ''}
-              className="ml-auto inline-flex size-8 shrink-0 items-center justify-center rounded-[6px] bg-accent text-[var(--color-accent-text)] transition-colors hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
+              className="ml-auto inline-flex size-8 shrink-0 items-center justify-center rounded-sm bg-accent text-[var(--color-accent-text)] transition-colors hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
             >
               <SendIcon />
             </button>

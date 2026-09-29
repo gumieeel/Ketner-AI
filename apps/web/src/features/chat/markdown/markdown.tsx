@@ -1,4 +1,4 @@
-import { Fragment, useMemo, type ReactNode } from 'react';
+﻿import { Fragment, useMemo, type ReactNode } from 'react';
 import { cn } from '@/lib/cn';
 import { CodeBlock } from './code-block';
 import { parseInline, parseMarkdown, type InlineToken, type TableAlign } from './parse';
@@ -28,7 +28,7 @@ function toInlineNode(token: InlineToken): ReactNode {
       return <s>{token.text}</s>;
     case 'code':
       return (
-        <code className="rounded-[4px] border border-stroke/20 bg-surface px-1 py-0.5 font-mono text-[0.9em] text-text">
+        <code className="rounded-sm border border-stroke bg-surface px-1 py-0.5 font-mono text-[0.9em] text-text">
           {token.text}
         </code>
       );
@@ -107,7 +107,7 @@ export default function Markdown({ content }: { content: string }) {
             return (
               <div
                 key={index}
-                className="my-3 overflow-x-auto rounded-[10px] border border-stroke/20 bg-surface"
+                className="my-3 overflow-x-auto rounded-md border border-stroke bg-surface"
               >
                 <table className="w-full border-collapse text-sm text-text">
                   <thead>
@@ -116,7 +116,7 @@ export default function Markdown({ content }: { content: string }) {
                         <th
                           key={cellIndex}
                           className={cn(
-                            'border-b border-stroke/20 px-3 py-2 font-semibold text-text',
+                            'border-b border-stroke px-3 py-2 font-semibold text-text',
                             ALIGN_CLASSES[block.align[cellIndex]],
                           )}
                         >
@@ -132,7 +132,7 @@ export default function Markdown({ content }: { content: string }) {
                           <td
                             key={cellIndex}
                             className={cn(
-                              'border-b border-stroke/15 px-3 py-2 align-top text-text',
+                              'border-b border-stroke px-3 py-2 align-top text-text',
                               ALIGN_CLASSES[block.align[cellIndex]],
                             )}
                           >
@@ -146,7 +146,7 @@ export default function Markdown({ content }: { content: string }) {
               </div>
             );
           case 'divider':
-            return <hr key={index} className="my-4 border-stroke/20" />;
+            return <hr key={index} className="my-4 border-stroke" />;
           default:
             return (
               <p key={index} className="my-2 first:mt-0 last:mb-0">

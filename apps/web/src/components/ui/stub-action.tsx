@@ -24,8 +24,7 @@ const HINT_TIMEOUT_MS = 2500;
 
 /**
  * Кнопка-заглушка: полноценная по виду и доступности, но вместо действия
- * показывает пояснение. Такие кнопки отмечают места будущих интеграций
- * (шаринг, вложения, OAuth, выход) — их перечень ведётся в docs/*-integration-todo.md.
+ * показывает пояснение. Такие кнопки отмечают места будущих интеграций.
  */
 export function StubAction({
   label,
@@ -53,9 +52,8 @@ export function StubAction({
           timerRef.current = window.setTimeout(() => setVisible(false), HINT_TIMEOUT_MS);
         }}
         className={cn(
-          'inline-flex items-center rounded-lg transition-colors',
-          'text-zinc-600 hover:bg-zinc-100 hover:text-zinc-900',
-          'dark:text-zinc-300 dark:hover:bg-zinc-700 dark:hover:text-zinc-50',
+          'inline-flex items-center rounded-md transition-colors',
+          'text-muted hover:bg-surface-2 hover:text-text',
           block ? 'h-10 w-full justify-start gap-2 px-3 text-sm' : sizeClasses[size],
           className,
         )}
@@ -65,7 +63,7 @@ export function StubAction({
       {visible ? (
         <span
           role="status"
-          className="absolute bottom-full right-0 z-20 mb-1 w-60 rounded-lg border border-zinc-200 bg-white p-2 text-xs text-zinc-600 shadow-lg dark:border-zinc-600 dark:bg-zinc-800 dark:text-zinc-300"
+          className="absolute bottom-full right-0 z-[var(--z-dropdown)] mb-1 w-60 rounded-md border border-stroke-strong bg-surface-2 p-2 text-xs text-muted shadow-popover"
         >
           {hint ?? t('common.soon')}
         </span>

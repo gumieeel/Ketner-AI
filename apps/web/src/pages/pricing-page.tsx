@@ -1,4 +1,4 @@
-import { Link } from 'react-router-dom';
+﻿import { Link } from 'react-router-dom';
 import { BookOpenIcon, CheckIcon, SparkleIcon } from '@/components/icons';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -21,7 +21,7 @@ export function PricingPage() {
           <SparkleIcon className="text-sm" />
           <span>{t('pricing.nextGenBadge')}</span>
         </div>
-        <h1 className="text-3xl font-bold tracking-tight text-text md:text-4xl">
+        <h1 className="text-3xl font-semibold tracking-tight text-text md:text-4xl">
           {t('pricing.title')}
         </h1>
         <p className="max-w-2xl text-sm md:text-base leading-relaxed text-zinc-600 dark:text-zinc-300">
@@ -48,7 +48,7 @@ export function PricingPage() {
               <div>
                 {/* Заголовок и статус */}
                 <div className="flex items-center justify-between gap-2">
-                  <h2 className="text-lg font-bold tracking-tight text-text">{t(plan.nameKey)}</h2>
+                  <h2 className="text-lg font-semibold tracking-tight text-text">{t(plan.nameKey)}</h2>
                   {isCurrent ? (
                     <Badge tone="brand">{t('pricing.currentPlan')}</Badge>
                   ) : isUltra ? (
@@ -86,7 +86,7 @@ export function PricingPage() {
                     </span>
                   )}
                   {plan.limitBadge && (
-                    <span className="inline-flex items-center self-start rounded-md bg-canvas px-2 py-0.5 text-[11px] font-medium text-text border border-stroke/20">
+                    <span className="inline-flex items-center self-start rounded-md bg-canvas px-2 py-0.5 text-[11px] font-medium text-text border border-stroke">
                       ⏱️ {plan.limitBadge[language]}
                     </span>
                   )}
@@ -107,7 +107,7 @@ export function PricingPage() {
               </div>
 
               {/* Ссылка на доку и кнопка действия */}
-              <div className="mt-6 flex flex-col gap-3 pt-2 border-t border-stroke/10">
+              <div className="mt-6 flex flex-col gap-3 pt-2 border-t border-stroke">
                 <Link
                   to={`/docs#plan-${plan.id}`}
                   className="inline-flex items-center gap-1.5 text-xs text-accent font-medium hover:underline transition-colors"

@@ -47,7 +47,7 @@ export function CopyButton({ value, label, size = 'md', className }: CopyButtonP
       className={className}
       onClick={onClick}
     >
-      {copied ? <CheckIcon className="text-brand-600 dark:text-brand-300" /> : <CopyIcon />}
+      {copied ? <CheckIcon className="text-accent" /> : <CopyIcon />}
     </IconButton>
   );
 }

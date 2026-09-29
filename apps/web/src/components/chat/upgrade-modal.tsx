@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+﻿import { useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { CloseIcon } from '@/components/icons';
 import { CornerMark } from '@/components/ui/corner-mark';
@@ -107,7 +107,7 @@ export function UpgradeModal() {
       onClick={close}
     >
       <div
-        className="relative w-full max-w-lg overflow-hidden rounded-2xl border border-stroke/70 bg-surface p-6 shadow-2xl backdrop-blur-xl sm:p-7"
+        className="relative w-full max-w-lg overflow-hidden rounded-2xl border border-stroke-strong bg-surface p-6 shadow-2xl backdrop-blur-xl sm:p-7"
         onClick={(e) => e.stopPropagation()}
       >
         <CornerMark size={14} className="pointer-events-none absolute top-3 left-3 text-accent" />
@@ -139,7 +139,7 @@ export function UpgradeModal() {
             </div>
           )}
 
-          <h2 id="upgrade-modal-title" className="text-xl font-bold text-text tracking-tight">
+          <h2 id="upgrade-modal-title" className="text-xl font-semibold text-text tracking-tight">
             {reason === 'free_limit'
               ? t('chat.freeLimitTitle')
               : t('chat.paidModelTitle', { model: modelName || 'PRO' })}
@@ -162,17 +162,17 @@ export function UpgradeModal() {
               key={plan.id}
               type="button"
               onClick={() => handleSelectPlan(plan.id)}
-              className="group relative flex flex-col text-left rounded-xl border border-stroke/50 bg-canvas/60 p-3 transition-all hover:border-accent hover:bg-canvas"
+              className="group relative flex flex-col text-left rounded-xl border border-stroke-strong bg-canvas/60 p-3 transition-all hover:border-accent hover:bg-canvas"
             >
               {plan.badge ? (
-                <span className="absolute top-2 right-2 rounded bg-accent/20 px-1.5 py-0.5 text-[10px] font-bold text-accent uppercase tracking-wider">
+                <span className="absolute top-2 right-2 rounded bg-accent/20 px-1.5 py-0.5 text-[10px] font-semibold text-accent uppercase tracking-wider">
                   {plan.badge}
                 </span>
               ) : null}
               <span className="text-xs font-semibold text-text group-hover:text-accent transition-colors">
                 {plan.name}
               </span>
-              <span className="mt-1 text-sm font-bold text-text">{plan.price}</span>
+              <span className="mt-1 text-sm font-semibold text-text">{plan.price}</span>
               <span className="text-[11px] text-muted">{plan.highlight}</span>
               <span className="mt-1.5 line-clamp-1 text-[10px] text-muted/80">{plan.models}</span>
             </button>
@@ -194,7 +194,7 @@ export function UpgradeModal() {
             <button
               type="button"
               onClick={handleSwitchToFree}
-              className="inline-flex w-full sm:flex-1 items-center justify-center rounded-xl border border-stroke/60 bg-surface px-4 py-2.5 text-xs font-medium text-text hover:bg-canvas transition-colors text-center"
+              className="inline-flex w-full sm:flex-1 items-center justify-center rounded-xl border border-stroke-strong bg-surface px-4 py-2.5 text-xs font-medium text-text hover:bg-canvas transition-colors text-center"
             >
               {t('chat.switchToFreeModel')}
             </button>
@@ -202,7 +202,7 @@ export function UpgradeModal() {
             <button
               type="button"
               onClick={close}
-              className="inline-flex w-full sm:w-auto items-center justify-center rounded-xl border border-stroke/60 bg-surface px-4 py-2.5 text-xs font-medium text-muted hover:text-text hover:bg-canvas transition-colors"
+              className="inline-flex w-full sm:w-auto items-center justify-center rounded-xl border border-stroke-strong bg-surface px-4 py-2.5 text-xs font-medium text-muted hover:text-text hover:bg-canvas transition-colors"
             >
               {t('chat.close')}
             </button>

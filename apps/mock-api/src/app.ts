@@ -98,7 +98,7 @@ export function createApp(overrides: Partial<AppDeps> = {}): Express {
   app.use(
     express.json({
       limit: '1mb',
-      verify: (req: any, _res, buf) => {
+      verify: (req: express.Request & { rawBody?: Buffer }, _res, buf) => {
         req.rawBody = buf;
       },
     }),

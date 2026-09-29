@@ -1,4 +1,4 @@
-import { Link } from 'react-router-dom';
+﻿import { Link } from 'react-router-dom';
 import {
   CheckIcon,
   SparkleIcon,
@@ -163,8 +163,8 @@ export function LandingPage() {
             </div>
             <div className="text-left">
               <div className="flex items-center gap-1.5">
-                <span className="text-xs font-bold text-white">GPT-6</span>
-                <span className="rounded-full bg-cyan-500/15 border border-cyan-500/30 px-1.5 py-0.2 text-[9px] font-bold text-cyan-300">
+                <span className="text-xs font-semibold text-white">GPT-6</span>
+                <span className="rounded-full bg-cyan-500/15 border border-cyan-500/30 px-1.5 py-0.2 text-[9px] font-semibold text-cyan-300">
                   Astra
                 </span>
               </div>
@@ -179,8 +179,8 @@ export function LandingPage() {
             </div>
             <div className="text-left">
               <div className="flex items-center gap-1.5">
-                <span className="text-xs font-bold text-white">Gemini</span>
-                <span className="rounded-full bg-blue-500/15 border border-blue-500/30 px-1.5 py-0.2 text-[9px] font-bold text-blue-300">
+                <span className="text-xs font-semibold text-white">Gemini</span>
+                <span className="rounded-full bg-blue-500/15 border border-blue-500/30 px-1.5 py-0.2 text-[9px] font-semibold text-blue-300">
                   Pro
                 </span>
               </div>
@@ -195,8 +195,8 @@ export function LandingPage() {
             </div>
             <div className="text-left">
               <div className="flex items-center gap-1.5">
-                <span className="text-xs font-bold text-white">DeepSeek</span>
-                <span className="rounded-full bg-sky-500/15 border border-sky-500/30 px-1.5 py-0.2 text-[9px] font-bold text-sky-300">
+                <span className="text-xs font-semibold text-white">DeepSeek</span>
+                <span className="rounded-full bg-sky-500/15 border border-sky-500/30 px-1.5 py-0.2 text-[9px] font-semibold text-sky-300">
                   R1
                 </span>
               </div>
@@ -211,8 +211,8 @@ export function LandingPage() {
             </div>
             <div className="text-left">
               <div className="flex items-center gap-1.5">
-                <span className="text-xs font-bold text-white">Qwen</span>
-                <span className="rounded-full bg-purple-500/15 border border-purple-500/30 px-1.5 py-0.2 text-[9px] font-bold text-purple-300">
+                <span className="text-xs font-semibold text-white">Qwen</span>
+                <span className="rounded-full bg-purple-500/15 border border-purple-500/30 px-1.5 py-0.2 text-[9px] font-semibold text-purple-300">
                   Max
                 </span>
               </div>
@@ -227,8 +227,8 @@ export function LandingPage() {
             </div>
             <div className="text-left">
               <div className="flex items-center gap-1.5">
-                <span className="text-xs font-bold text-white">Grok</span>
-                <span className="rounded-full bg-slate-700/40 border border-slate-600/40 px-1.5 py-0.2 text-[9px] font-bold text-slate-300">
+                <span className="text-xs font-semibold text-white">Grok</span>
+                <span className="rounded-full bg-slate-700/40 border border-slate-600/40 px-1.5 py-0.2 text-[9px] font-semibold text-slate-300">
                   3
                 </span>
               </div>
@@ -243,8 +243,8 @@ export function LandingPage() {
             </div>
             <div className="text-left">
               <div className="flex items-center gap-1.5">
-                <span className="text-xs font-bold text-white">Claude</span>
-                <span className="rounded-full bg-orange-500/15 border border-orange-500/30 px-1.5 py-0.2 text-[9px] font-bold text-orange-300">
+                <span className="text-xs font-semibold text-white">Claude</span>
+                <span className="rounded-full bg-orange-500/15 border border-orange-500/30 px-1.5 py-0.2 text-[9px] font-semibold text-orange-300">
                   Opus
                 </span>
               </div>
@@ -283,9 +283,9 @@ export function LandingPage() {
           <div className="flex flex-wrap items-center gap-4 pt-1">
             <Link
               to="/chat"
-              className="inline-flex items-center justify-center gap-2 rounded-xl bg-emerald-400 px-7 py-3.5 text-sm font-bold text-slate-950 hover:bg-emerald-300 transition-all shadow-lg">
+              className="inline-flex items-center justify-center gap-2 rounded-xl bg-emerald-400 px-7 py-3.5 text-sm font-semibold text-slate-950 hover:bg-emerald-300 transition-all shadow-lg">
               <span>{t('landing.cta')}</span>
-              <span aria-hidden="true" className="text-base font-bold">→</span>
+              <span aria-hidden="true" className="text-base font-semibold">→</span>
             </Link>
             <Link
               to="/pricing"
@@ -329,7 +329,7 @@ export function LandingPage() {
                 ⚡
               </div>
               <div>
-                <h3 className="text-sm font-bold text-white">
+                <h3 className="text-sm font-semibold text-white">
                   {language === 'ru' ? 'Тексты и контент' : 'Writing & Content'}
                 </h3>
                 <p className="text-xs text-slate-400">
@@ -342,11 +342,11 @@ export function LandingPage() {
 
             {/* 2. Программирование */}
             <div className="flex items-center gap-4 rounded-xl p-2.5 transition-colors hover:bg-surface/30">
-              <div className="grid size-12 shrink-0 place-items-center rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-sm font-mono font-bold">
+              <div className="grid size-12 shrink-0 place-items-center rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-sm font-mono font-semibold">
                 &lt;/&gt;
               </div>
               <div>
-                <h3 className="text-sm font-bold text-white">
+                <h3 className="text-sm font-semibold text-white">
                   {language === 'ru' ? 'Программирование' : 'Software Engineering'}
                 </h3>
                 <p className="text-xs text-slate-400">
@@ -363,7 +363,7 @@ export function LandingPage() {
                 🖼
               </div>
               <div>
-                <h3 className="text-sm font-bold text-white">
+                <h3 className="text-sm font-semibold text-white">
                   {language === 'ru' ? 'Изображения' : 'Image Generation'}
                 </h3>
                 <p className="text-xs text-slate-400">
@@ -380,7 +380,7 @@ export function LandingPage() {
                 📈
               </div>
               <div>
-                <h3 className="text-sm font-bold text-white">
+                <h3 className="text-sm font-semibold text-white">
                   {language === 'ru' ? 'Анализ и исследования' : 'Analysis & Research'}
                 </h3>
                 <p className="text-xs text-slate-400">
@@ -445,7 +445,7 @@ export function LandingPage() {
               <div className="flex flex-col gap-3">
                 {/* User Message */}
                 <div className="flex items-start gap-2.5">
-                  <span className="grid size-6 shrink-0 place-items-center rounded-full bg-slate-800 text-[10px] font-bold text-slate-300">
+                  <span className="grid size-6 shrink-0 place-items-center rounded-full bg-slate-800 text-[10px] font-semibold text-slate-300">
                     {language === 'ru' ? 'Вы' : 'You'}
                   </span>
                   <div className="rounded-xl bg-[#142232] px-3.5 py-2 text-xs text-slate-200 border border-slate-700/40 leading-relaxed">
@@ -499,7 +499,7 @@ export function LandingPage() {
       {/* 3. PRICING SECTION */}
       <section className="flex w-full flex-col items-center gap-8 pt-12 border-t border-slate-800/60">
         <div className="flex flex-col items-center gap-2">
-          <h2 className="text-2xl font-bold tracking-tight text-white sm:text-3xl">
+          <h2 className="text-2xl font-semibold tracking-tight text-white sm:text-3xl">
             {t('landing.pricingTitle')}
           </h2>
           <p className="text-sm text-slate-400 max-w-md text-balance">
@@ -519,13 +519,13 @@ export function LandingPage() {
               )}
             >
               {plan.popular && (
-                <div className="absolute -top-2.5 right-4 rounded-full bg-emerald-400 px-2 py-0.5 text-[10px] font-bold text-slate-950 uppercase tracking-wide">
+                <div className="absolute -top-2.5 right-4 rounded-full bg-emerald-400 px-2 py-0.5 text-[10px] font-semibold text-slate-950 uppercase tracking-wide">
                   {plan.popularBadge ? plan.popularBadge[language] : (language === 'ru' ? 'Популярный' : 'Most Popular')}
                 </div>
               )}
 
               <div>
-                <h3 className="text-lg font-bold text-white">{plan.name}</h3>
+                <h3 className="text-lg font-semibold text-white">{plan.name}</h3>
                 <div className="mt-2 flex items-baseline gap-1">
                   <span className="text-3xl font-extrabold text-white">{plan.price}</span>
                   <span className="text-xs text-slate-400">{plan.period[language]}</span>
@@ -566,7 +566,7 @@ export function LandingPage() {
       {/* 4. FINAL CALL TO ACTION */}
       <section className="flex w-full flex-col items-center gap-4 rounded-2xl border border-emerald-500/30 bg-emerald-500/10 p-8 md:p-12">
         <SparkleIcon className="text-3xl text-emerald-400" />
-        <h2 className="text-2xl sm:text-3xl font-bold tracking-tight text-white">
+        <h2 className="text-2xl sm:text-3xl font-semibold tracking-tight text-white">
           {t('landing.heroTitle')}
         </h2>
         <p className="text-sm text-slate-400 max-w-md">

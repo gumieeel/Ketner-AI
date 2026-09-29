@@ -1,4 +1,4 @@
-import { useLocation, useNavigate } from 'react-router-dom';
+﻿import { useLocation, useNavigate } from 'react-router-dom';
 import { MenuIcon, PlusIcon, ShareIcon } from '@/components/icons';
 import { Badge } from '@/components/ui/badge';
 import { IconButton } from '@/components/ui/icon-button';
@@ -23,7 +23,7 @@ export function Header() {
   const title = conversations.find((conversation) => conversation.id === activeId)?.title;
 
   return (
-    <header className="flex h-14 shrink-0 items-center gap-2 border-b border-stroke/20 bg-canvas px-3 text-text">
+    <header className="flex h-14 shrink-0 items-center gap-2 border-b border-stroke bg-canvas px-3 text-text">
       <IconButton label={t('nav.openSidebar')} className="md:hidden" onClick={toggleSidebar}>
         <MenuIcon />
       </IconButton>

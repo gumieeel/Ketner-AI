@@ -1,4 +1,4 @@
-import { Suspense, lazy } from 'react';
+﻿import { Suspense, lazy } from 'react';
 import { Link } from 'react-router-dom';
 import { AlertIcon, RefreshIcon } from '@/components/icons';
 import { Button } from '@/components/ui/button';
@@ -36,7 +36,7 @@ export function AssistantMessage({ message, canRegenerate }: AssistantMessagePro
 
   return (
     <article className="flex gap-3" aria-label={t('chat.assistant')}>
-      <span className="mt-0.5 grid size-8 shrink-0 place-items-center rounded-[6px] bg-accent/15 p-1 text-accent">
+      <span className="mt-0.5 grid size-8 shrink-0 place-items-center rounded-sm bg-accent/15 p-1 text-accent">
         <img src="/logo-mark.png" alt="Ketner AI" className="size-5 object-contain" />
       </span>
 
@@ -68,7 +68,7 @@ export function AssistantMessage({ message, canRegenerate }: AssistantMessagePro
         {failed ? (
           <div
             className={cn(
-              'mt-2 rounded-[12px] p-3.5 text-sm leading-5 transition-all',
+              'mt-2 rounded-lg p-3.5 text-sm leading-5 transition-all',
               isUpgradeError
                 ? 'border border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-300'
                 : 'border border-red-500/30 bg-red-500/10 text-red-600 dark:text-red-400',
@@ -89,7 +89,7 @@ export function AssistantMessage({ message, canRegenerate }: AssistantMessagePro
               <div className="mt-3">
                 <Link
                   to="/pricing"
-                  className="inline-flex items-center gap-1.5 rounded-[6px] bg-accent px-3 py-1.5 text-xs font-semibold text-[var(--color-accent-text)] transition hover:opacity-90 shadow-sm"
+                  className="inline-flex items-center gap-1.5 rounded-sm bg-accent px-3 py-1.5 text-xs font-semibold text-[var(--color-accent-text)] transition hover:opacity-90 shadow-sm"
                 >
                   ⭐ {t('chat.upgradeButton')}
                 </Link>

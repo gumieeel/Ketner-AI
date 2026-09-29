@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from 'react';
+﻿import { useEffect, useState, useCallback } from 'react';
 import { useAuth } from '@/features/auth/auth-store';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -243,10 +243,10 @@ export function AdminPage() {
   return (
     <div className="mx-auto flex w-full max-w-7xl flex-col gap-6 px-4 py-8">
       {/* Header */}
-      <div className="flex flex-wrap items-center justify-between gap-4 border-b border-stroke/20 pb-5">
+      <div className="flex flex-wrap items-center justify-between gap-4 border-b border-stroke pb-5">
         <div>
           <div className="flex items-center gap-2.5">
-            <h1 className="text-2xl font-bold tracking-tight">Обзорная панель администратора</h1>
+            <h1 className="text-2xl font-semibold tracking-tight">Обзорная панель администратора</h1>
             <Badge tone="brand">Admin</Badge>
           </div>
           <p className="mt-1 text-sm text-muted">
@@ -265,7 +265,7 @@ export function AdminPage() {
               localStorage.setItem('ketner_admin_key', e.target.value);
             }}
             placeholder="x-admin-key"
-            className="w-48 rounded bg-canvas px-2 py-1 text-text border border-stroke/30 font-mono text-xs"
+            className="w-48 rounded bg-canvas px-2 py-1 text-text border border-stroke-strong font-mono text-xs"
           />
           <Button size="sm" variant="secondary" onClick={() => void loadUsers()}>
             Обновить
@@ -277,23 +277,23 @@ export function AdminPage() {
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <Card className="p-4">
           <p className="text-xs font-medium text-muted">Всего пользователей</p>
-          <p className="mt-1 text-2xl font-bold">{total}</p>
+          <p className="mt-1 text-2xl font-semibold">{total}</p>
         </Card>
         <Card className="p-4">
           <p className="text-xs font-medium text-muted">Запросов сегодня</p>
-          <p className="mt-1 text-2xl font-bold text-accent">
+          <p className="mt-1 text-2xl font-semibold text-accent">
             {users.reduce((sum, u) => sum + (u.usage?.requestsToday || 0), 0)}
           </p>
         </Card>
         <Card className="p-4">
           <p className="text-xs font-medium text-muted">Токенов сегодня</p>
-          <p className="mt-1 text-2xl font-bold">
+          <p className="mt-1 text-2xl font-semibold">
             {users.reduce((sum, u) => sum + (u.usage?.tokensToday || 0), 0).toLocaleString()}
           </p>
         </Card>
         <Card className="p-4">
           <p className="text-xs font-medium text-muted">Расход за месяц</p>
-          <p className="mt-1 text-2xl font-bold text-emerald-500">
+          <p className="mt-1 text-2xl font-semibold text-emerald-500">
             ${users.reduce((sum, u) => sum + (u.usage?.costThisMonth || 0), 0).toFixed(2)}
           </p>
         </Card>
@@ -321,7 +321,7 @@ export function AdminPage() {
               setPlanFilter(e.target.value);
               setPage(1);
             }}
-            className="rounded-lg border border-stroke/30 bg-surface px-3 py-2 text-sm text-text outline-none"
+            className="rounded-lg border border-stroke-strong bg-surface px-3 py-2 text-sm text-text outline-none"
           >
             <option value="">Все тарифы</option>
             <option value="free">Free</option>
@@ -371,7 +371,7 @@ export function AdminPage() {
       <Card className="overflow-hidden p-0">
         <div className="overflow-x-auto">
           <table className="w-full text-left text-sm">
-            <thead className="border-b border-stroke/20 bg-surface/50 text-xs font-semibold uppercase tracking-wider text-muted">
+            <thead className="border-b border-stroke bg-surface/50 text-xs font-semibold uppercase tracking-wider text-muted">
               <tr>
                 <th className="px-4 py-3">Пользователь</th>
                 <th className="px-4 py-3">Тариф / Роль</th>
@@ -382,7 +382,7 @@ export function AdminPage() {
                 <th className="px-4 py-3 text-right">Действие</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-stroke/15">
+            <tbody className="divide-y divide-stroke">
               {loading ? (
                 <tr>
                   <td colSpan={7} className="py-12 text-center">
@@ -444,7 +444,7 @@ export function AdminPage() {
                     </td>
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-2">
-                        <div className="h-1.5 w-16 overflow-hidden rounded-full bg-surface border border-stroke/20">
+                        <div className="h-1.5 w-16 overflow-hidden rounded-full bg-surface border border-stroke">
                           <div
                             className={`h-full ${
                               u.budgetUsedPct >= 90
@@ -467,7 +467,7 @@ export function AdminPage() {
                         <span
                           className={
                             u.remaining.tokensToday < 0
-                              ? 'font-bold text-rose-400'
+                              ? 'font-semibold text-rose-400'
                               : 'text-text'
                           }
                         >
@@ -500,11 +500,11 @@ export function AdminPage() {
       {/* User Details & Edit Modal */}
       {selectedUserId ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
-          <div className="flex max-h-[90vh] w-full max-w-4xl flex-col rounded-xl border border-stroke/30 bg-surface shadow-2xl overflow-hidden">
+          <div className="flex max-h-[90vh] w-full max-w-4xl flex-col rounded-xl border border-stroke-strong bg-surface shadow-2xl overflow-hidden">
             {/* Modal Header */}
-            <div className="flex items-center justify-between border-b border-stroke/20 px-6 py-4">
+            <div className="flex items-center justify-between border-b border-stroke px-6 py-4">
               <div>
-                <h2 className="text-lg font-bold">Карточка пользователя</h2>
+                <h2 className="text-lg font-semibold">Карточка пользователя</h2>
                 <p className="text-xs text-muted">ID: {selectedUserId}</p>
               </div>
               <button
@@ -533,7 +533,7 @@ export function AdminPage() {
                   {/* Profile & Edit Section */}
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     {/* User Info */}
-                    <div className="rounded-lg border border-stroke/20 bg-canvas/50 p-4 space-y-2">
+                    <div className="rounded-lg border border-stroke bg-canvas/50 p-4 space-y-2">
                       <h3 className="font-semibold text-sm">Профиль</h3>
                       <div className="text-xs space-y-1">
                         <div>
@@ -552,13 +552,13 @@ export function AdminPage() {
                         </div>
                         <div>
                           <span className="text-muted">Текущий тариф:</span>{' '}
-                          <span className="font-bold text-accent">{detailUser.plan}</span>
+                          <span className="font-semibold text-accent">{detailUser.plan}</span>
                         </div>
                       </div>
                     </div>
 
                     {/* Quick Edit Form */}
-                    <div className="rounded-lg border border-stroke/20 bg-canvas/50 p-4 space-y-3">
+                    <div className="rounded-lg border border-stroke bg-canvas/50 p-4 space-y-3">
                       <div className="flex items-center justify-between">
                         <h3 className="font-semibold text-sm flex items-center gap-1.5">
                           <EditIcon className="size-4 text-accent" /> Управление правами
@@ -576,7 +576,7 @@ export function AdminPage() {
                           <select
                             value={editPlan}
                             onChange={(e) => setEditPlan(e.target.value as PlanId)}
-                            className="w-full rounded border border-stroke/30 bg-surface px-2 py-1 text-xs"
+                            className="w-full rounded border border-stroke-strong bg-surface px-2 py-1 text-xs"
                           >
                             <option value="free">free</option>
                             <option value="plus">plus</option>
@@ -594,7 +594,7 @@ export function AdminPage() {
                               type="checkbox"
                               checked={editVip}
                               onChange={(e) => setEditVip(e.target.checked)}
-                              className="rounded border-stroke/30 text-accent"
+                              className="rounded border-stroke-strong text-accent"
                             />
                             <span>VIP статус (Ultra)</span>
                           </label>
@@ -605,7 +605,7 @@ export function AdminPage() {
                               checked={editAdmin}
                               disabled={Boolean(isSelf)}
                               onChange={(e) => setEditAdmin(e.target.checked)}
-                              className="rounded border-stroke/30 text-accent disabled:opacity-50"
+                              className="rounded border-stroke-strong text-accent disabled:opacity-50"
                             />
                             <span>Права администратора</span>
                           </label>
@@ -634,12 +634,12 @@ export function AdminPage() {
                   </div>
 
                   {/* Hourly & Daily Limits Comparison */}
-                  <div className="rounded-lg border border-stroke/20 bg-canvas/50 p-4 space-y-3">
+                  <div className="rounded-lg border border-stroke bg-canvas/50 p-4 space-y-3">
                     <h3 className="font-semibold text-sm">Лимиты и текущий расход</h3>
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-xs">
-                      <div className="rounded border border-stroke/15 bg-surface p-2.5">
+                      <div className="rounded border border-stroke bg-surface p-2.5">
                         <span className="text-muted">Запросы за час</span>
-                        <p className="text-base font-bold mt-1">
+                        <p className="text-base font-semibold mt-1">
                           {detailUser.usage.requestsLastHour}{' '}
                           <span className="text-xs font-normal text-muted">
                             / {detailUser.limits.requestsPerHour ?? '∞'}
@@ -647,9 +647,9 @@ export function AdminPage() {
                         </p>
                       </div>
 
-                      <div className="rounded border border-stroke/15 bg-surface p-2.5">
+                      <div className="rounded border border-stroke bg-surface p-2.5">
                         <span className="text-muted">Запросы за день</span>
-                        <p className="text-base font-bold mt-1">
+                        <p className="text-base font-semibold mt-1">
                           {detailUser.usage.requestsToday}{' '}
                           <span className="text-xs font-normal text-muted">
                             / {detailUser.limits.requestsPerDay ?? '∞'}
@@ -657,9 +657,9 @@ export function AdminPage() {
                         </p>
                       </div>
 
-                      <div className="rounded border border-stroke/15 bg-surface p-2.5">
+                      <div className="rounded border border-stroke bg-surface p-2.5">
                         <span className="text-muted">Токены за час</span>
-                        <p className="text-base font-bold mt-1 font-mono">
+                        <p className="text-base font-semibold mt-1 font-mono">
                           {detailUser.usage.tokensLastHour.toLocaleString()}{' '}
                           <span className="text-xs font-normal text-muted font-sans">
                             / {detailUser.limits.tokensPerHour?.toLocaleString() ?? '∞'}
@@ -667,9 +667,9 @@ export function AdminPage() {
                         </p>
                       </div>
 
-                      <div className="rounded border border-stroke/15 bg-surface p-2.5">
+                      <div className="rounded border border-stroke bg-surface p-2.5">
                         <span className="text-muted">Токены за день</span>
-                        <p className="text-base font-bold mt-1 font-mono">
+                        <p className="text-base font-semibold mt-1 font-mono">
                           {detailUser.usage.tokensToday.toLocaleString()}{' '}
                           <span className="text-xs font-normal text-muted font-sans">
                             / {detailUser.limits.tokensPerDay?.toLocaleString() ?? '∞'}
@@ -680,26 +680,26 @@ export function AdminPage() {
                   </div>
 
                   {/* Profitability Card */}
-                  <div className="rounded-lg border border-stroke/20 bg-canvas/50 p-4 space-y-2">
+                  <div className="rounded-lg border border-stroke bg-canvas/50 p-4 space-y-2">
                     <h3 className="font-semibold text-sm">Рентабельность подписки (30 дней)</h3>
                     <div className="flex flex-wrap items-center gap-6 text-xs">
                       <div>
                         <span className="text-muted">Выручка (цена тарифа):</span>{' '}
-                        <span className="font-bold">
+                        <span className="font-semibold">
                           ${detailUser.profitability.subscriptionRevenue.toFixed(2)} (
                           {detailUser.profitability.priceRub} ₽)
                         </span>
                       </div>
                       <div>
                         <span className="text-muted">Затраты на AI:</span>{' '}
-                        <span className="font-bold text-rose-400">
+                        <span className="font-semibold text-rose-400">
                           ${detailUser.profitability.aiCost.toFixed(2)}
                         </span>
                       </div>
                       <div>
                         <span className="text-muted">Маржинальный доход:</span>{' '}
                         <span
-                          className={`font-bold ${
+                          className={`font-semibold ${
                             detailUser.profitability.contributionMargin >= 0
                               ? 'text-emerald-400'
                               : 'text-rose-400'
@@ -726,7 +726,7 @@ export function AdminPage() {
                   </div>
 
                   {/* Recent 20 Requests */}
-                  <div className="rounded-lg border border-stroke/20 bg-canvas/50 p-4 space-y-2">
+                  <div className="rounded-lg border border-stroke bg-canvas/50 p-4 space-y-2">
                     <h3 className="font-semibold text-sm">
                       Последние 20 запросов ({detailUser.recentRequests.length})
                     </h3>
@@ -735,7 +735,7 @@ export function AdminPage() {
                         <p className="text-xs text-muted py-4 text-center">Запросов пока нет</p>
                       ) : (
                         <table className="w-full text-left text-xs">
-                          <thead className="border-b border-stroke/15 text-muted uppercase">
+                          <thead className="border-b border-stroke text-muted uppercase">
                             <tr>
                               <th className="py-1">Время</th>
                               <th className="py-1">Модель</th>
@@ -746,7 +746,7 @@ export function AdminPage() {
                               <th className="py-1">Статус</th>
                             </tr>
                           </thead>
-                          <tbody className="divide-y divide-stroke/10 font-mono">
+                          <tbody className="divide-y divide-stroke font-mono">
                             {detailUser.recentRequests.map((r) => (
                               <tr key={r.id}>
                                 <td className="py-1 text-muted">
