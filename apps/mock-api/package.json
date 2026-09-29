@@ -19,6 +19,7 @@
     "db:test": "tsx src/scripts/test-db.ts"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.129.0",
     "@better-auth/infra": "^0.4.12",
     "@supabase/supabase-js": "^2.117.2",
     "better-auth": "^1.7.5",
