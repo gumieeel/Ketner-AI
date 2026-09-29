@@ -2,14 +2,14 @@
  * ModelHub — Planetary Orbital Physics with Edge-to-Edge Frame Collisions
  *
  * Ketner AI sits in the center as the "Sun".
- * 6 model cards orbit around it on a circular track.
+ * 6 model cards orbit around it on an expanded circular track.
  *
  * Physics & Interactions:
  * - When cursor approaches the orbit, cards slide ALONG the circular orbit away from the cursor.
  * - Cards slide until their frames literally collide edge-to-edge (borders physically touch).
- * - On collision: realistic momentum transfer (domino chain reaction) and visual impact highlight on the borders.
- * - Multi-iteration constraint solver prevents penetration: cards can stack flush frame-to-frame without overlapping.
- * - Restorative spring smoothly returns all models to their home positions around the Sun when cursor leaves.
+ * - Smooth forward momentum transfer: the hitting card pushes the front card forward without violently rebounding backward.
+ * - Softer, highly damped home spring for a graceful, floating planetary return.
+ * - Multi-pass constraint solver prevents penetration: cards stack flush frame-to-frame without overlapping.
  */
 
 import { useEffect, useRef, useCallback } from 'react';
@@ -26,11 +26,11 @@ import { cn } from '@/lib/cn';
 
 // ─── Geometry ────────────────────────────────────────────────────────────────
 
-const SVG_W   = 540;
-const SVG_H   = 480;
-const CX      = SVG_W / 2;   // 270
-const CY      = SVG_H / 2;   // 240
-const ORBIT_R = 195;
+const SVG_W   = 580;
+const SVG_H   = 520;
+const CX      = SVG_W / 2;   // 290
+const CY      = SVG_H / 2;   // 260
+const ORBIT_R = 220;         // Expanded, spacious orbit radius
 
 // Exact physical card dimensions (rendered px)
 const CARD_W    = 156;
@@ -39,19 +39,19 @@ const CORNER_R  = 12;
 
 // ─── Orbital Physics Constants ───────────────────────────────────────────────
 
-/** Home angular spring pull (restores cards to home slots) */
-const K_HOME_SPRING = 0.045;
-/** Angular velocity damping per frame */
-const ANG_DAMPING   = 0.86;
-/** Maximum angular velocity (radians / frame) */
-const MAX_ANG_VEL   = 0.06;
+/** Gentle, smooth home angular spring pull (no aggressive snapback) */
+const K_HOME_SPRING = 0.024;
+/** High angular velocity damping per frame (prevents recoil/oscillations) */
+const ANG_DAMPING   = 0.91;
+/** Capped maximum angular velocity (radians / frame) */
+const MAX_ANG_VEL   = 0.042;
 
 /** Cursor repulsion along the orbit */
-const CURSOR_REPEL_RADIUS = 165; // px
-const CURSOR_ANG_FORCE    = 0.044;
+const CURSOR_REPEL_RADIUS = 175; // px
+const CURSOR_ANG_FORCE    = 0.034;
 
 /** Radial outward compliance when cursor enters orbital axis */
-const MAX_RADIAL_PUSH = 16; // px
+const MAX_RADIAL_PUSH = 15; // px
 
 // ─── Angle math helpers ──────────────────────────────────────────────────────
 
@@ -143,10 +143,10 @@ export function ModelHub({ className }: { className?: string }) {
   const rafId        = useRef<number>(0);
 
   // Unwrapped angles for each model
-  const anglesRef          = useRef<number[]>([...HOME_ANGLES]);
-  const angVelRef          = useRef<number[]>(MODELS.map(() => 0));
-  const radiusRef          = useRef<number[]>(MODELS.map(() => ORBIT_R));
-  const collisionTimeRef   = useRef<number[]>(MODELS.map(() => 0));
+  const anglesRef        = useRef<number[]>([...HOME_ANGLES]);
+  const angVelRef        = useRef<number[]>(MODELS.map(() => 0));
+  const radiusRef        = useRef<number[]>(MODELS.map(() => ORBIT_R));
+  const collisionTimeRef = useRef<number[]>(MODELS.map(() => 0));
 
   // Cursor state in client viewport px
   const cursorRef = useRef<{ x: number; y: number } | null>(null);
@@ -187,7 +187,7 @@ export function ModelHub({ className }: { className?: string }) {
       const th = angles[i];
       let netForce = 0;
 
-      // A) Restorative spring to home slot
+      // A) Gentle restorative spring to home slot (smooth, non-violent return)
       const homeDelta = HOME_ANGLES[i] - th;
       netForce += homeDelta * K_HOME_SPRING;
 
@@ -199,7 +199,7 @@ export function ModelHub({ className }: { className?: string }) {
       let targetRadius = ORBIT_R;
 
       // B) Cursor repulsion along orbit & radial push
-      if (mx !== null && my !== null && mAngle !== null && mDistCenter > 40 && mDistCenter < 360) {
+      if (mx !== null && my !== null && mAngle !== null && mDistCenter > 45 && mDistCenter < 380) {
         const distToCursor = Math.hypot(cardX - mx, cardY - my);
 
         if (distToCursor < CURSOR_REPEL_RADIUS && distToCursor > 0.5) {
@@ -219,20 +219,20 @@ export function ModelHub({ className }: { className?: string }) {
       } else {
         // C) Idle orbital harmonic drift (gentle breathing)
         const phase = (i * 2 * Math.PI) / N;
-        netForce += Math.sin(time * 0.7 + phase) * 0.0016;
+        netForce += Math.sin(time * 0.65 + phase) * 0.0014;
       }
 
       // Smooth radial spring
-      radii[i] += (targetRadius - radii[i]) * 0.14;
+      radii[i] += (targetRadius - radii[i]) * 0.12;
 
-      // Integrate angular velocity
+      // Integrate angular velocity with high damping (prevents harsh rebound)
       angVel[i] = (angVel[i] + netForce) * ANG_DAMPING;
       angVel[i] = Math.max(-MAX_ANG_VEL, Math.min(MAX_ANG_VEL, angVel[i]));
       angles[i] += angVel[i];
     }
 
-    // ── 2. Exact Edge-to-Edge Frame Collision & Impulse Response ─────────────
-    // Run 4 relaxation iterations per frame so multi-card chains resolve completely
+    // ── 2. Exact Edge-to-Edge Frame Collision & Forward Push ──────────────────
+    // Run 4 relaxation iterations per frame so multi-card chains resolve smoothly
     for (let iter = 0; iter < 4; iter++) {
       for (let i = 0; i < N; i++) {
         const nextIdx = (i + 1) % N;
@@ -246,18 +246,18 @@ export function ModelHub({ className }: { className?: string }) {
 
         if (colliding && penetration > 0) {
           // Angular correction needed to separate the frames exactly at the boundary
-          const angCorrection = (penetration / ORBIT_R) + 0.003;
+          const angCorrection = (penetration / ORBIT_R) + 0.002;
 
-          angles[i]       -= angCorrection * 0.5;
-          angles[nextIdx] += angCorrection * 0.5;
+          // Most of the separation pushes the front card forward (80% forward, 20% back)
+          // so the hitting card doesn't get kicked backward!
+          angles[i]       -= angCorrection * 0.20;
+          angles[nextIdx] += angCorrection * 0.80;
 
-          // Momentum transfer / elastic impulse
+          // Forward momentum transfer: front card is pushed forward, rear card settles smoothly
           const vRel = angVel[i] - angVel[nextIdx];
           if (vRel > 0) {
-            const restitution = 0.35; // tactile bounce
-            const impulse = vRel * (1 + restitution) * 0.5;
-            angVel[i]       -= impulse;
-            angVel[nextIdx] += impulse;
+            angVel[nextIdx] += vRel * 0.70; // Push front card forward
+            angVel[i]       *= 0.25;         // Smoothly dampen rear card without bouncing back
           }
 
           // Register collision timestamp for visual frame border impact highlight
@@ -282,7 +282,7 @@ export function ModelHub({ className }: { className?: string }) {
 
         // Is this card currently colliding edge-to-edge?
         const isColliding = (now - collisionTime[i]) < 180;
-        const scale = isColliding ? 'scale(1.025)' : 'scale(1)';
+        const scale = isColliding ? 'scale(1.015)' : 'scale(1)';
 
         card.style.transform = `translate(-50%, -50%) translate(${domOffsetX.toFixed(2)}px, ${domOffsetY.toFixed(2)}px) ${scale}`;
 
@@ -369,7 +369,7 @@ export function ModelHub({ className }: { className?: string }) {
       {/* ── Desktop: Planetary Orbital Hub ─────────────────────────────────── */}
       <div
         ref={containerRef}
-        className="relative hidden sm:block w-full max-w-[540px]"
+        className="relative hidden sm:block w-full max-w-[560px]"
         style={{ aspectRatio: `${SVG_W} / ${SVG_H}` }}
       >
         {/* SVG background: orbital track + radial connector rays */}
@@ -381,7 +381,7 @@ export function ModelHub({ className }: { className?: string }) {
           style={{ overflow: 'visible' }}
         >
           {/* Gravitational halo glow around Sun */}
-          <circle cx={CX} cy={CY} r={85} fill="rgba(16,185,129,0.05)" />
+          <circle cx={CX} cy={CY} r={95} fill="rgba(16,185,129,0.05)" />
 
           {/* Primary circular orbit track */}
           <circle
@@ -397,7 +397,7 @@ export function ModelHub({ className }: { className?: string }) {
           <circle
             cx={CX}
             cy={CY}
-            r={ORBIT_R + 24}
+            r={ORBIT_R + 26}
             stroke="rgba(16,185,129,0.04)"
             strokeWidth={1}
             strokeDasharray="2 8"
@@ -436,8 +436,8 @@ export function ModelHub({ className }: { className?: string }) {
           <div
             className="relative flex flex-col items-center justify-center select-none"
             style={{
-              width: 100,
-              height: 100,
+              width: 104,
+              height: 104,
               borderRadius: '50%',
               background: 'radial-gradient(circle at 40% 35%, #1d2a22, #0b110d)',
               border: '1px solid rgba(16,185,129,0.28)',
