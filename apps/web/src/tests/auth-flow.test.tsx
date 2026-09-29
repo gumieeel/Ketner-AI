@@ -185,4 +185,27 @@ describe('auth-flow: сценарии авторизации и сессии', (
       expect(screen.getByText('GPT Pro')).toBeInTheDocument();
     });
   });
+
+  it('на странице /login виден h1, две OAuth-кнопки и переключатель видимости пароля', () => {
+    renderRoute('/login');
+
+    expect(screen.getByRole('heading', { level: 1, name: 'Вход в Ketner AI' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Продолжить с Google' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Продолжить с GitHub' })).toBeInTheDocument();
+
+    const passwordInput = screen.getByLabelText(/Пароль/i) as HTMLInputElement;
+    expect(passwordInput.type).toBe('password');
+
+    const toggleButton = screen.getByRole('button', { name: /Показать/i });
+    expect(toggleButton).toHaveAttribute('aria-pressed', 'false');
+
+    fireEvent.click(toggleButton);
+    expect(passwordInput.type).toBe('text');
+    expect(toggleButton).toHaveAttribute('aria-pressed', 'true');
+
+    fireEvent.click(toggleButton);
+    expect(passwordInput.type).toBe('password');
+    expect(toggleButton).toHaveAttribute('aria-pressed', 'false');
+  });
 });
+

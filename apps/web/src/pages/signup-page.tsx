@@ -1,26 +1,39 @@
-﻿import { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
-import { EyeIcon, EyeOffIcon, GitHubIcon, GoogleIcon } from '@/components/icons';
+import {
+  AlertIcon,
+  CheckIcon,
+  EyeIcon,
+  EyeOffIcon,
+  GitHubIcon,
+  GoogleIcon,
+  SparkleIcon,
+} from '@/components/icons';
 import { AuthShell } from '@/components/layout/auth-shell';
 import { Button } from '@/components/ui/button';
+import { Divider } from '@/components/ui/divider';
+import { IconButton } from '@/components/ui/icon-button';
 import { Field, Input } from '@/components/ui/input';
 import { authClient } from '@/features/auth/auth-client';
 import { useAuth } from '@/features/auth/auth-store';
 import { useTranslation } from '@/i18n';
+import { cn } from '@/lib/cn';
 
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const MIN_PASSWORD_LENGTH = 8;
 
 /**
  * Страница регистрации.
- * Клиентская валидация, сохранение сессии и создание аккаунта.
+ * Клиентская валидация, индикатор требований пароля и сохранение сессии.
  */
 export function SignupPage() {
-  const { t } = useTranslation();
+  const { t, language } = useTranslation();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const rawRedirect = searchParams.get('redirect');
-  const isSafeRedirect = Boolean(rawRedirect && rawRedirect.startsWith('/') && !rawRedirect.startsWith('//'));
+  const isSafeRedirect = Boolean(
+    rawRedirect && rawRedirect.startsWith('/') && !rawRedirect.startsWith('//'),
+  );
   const redirectUrl = isSafeRedirect && rawRedirect ? rawRedirect : '/chat';
   const status = useAuth((state) => state.status);
   const signup = useAuth((state) => state.signup);
@@ -128,153 +141,215 @@ export function SignupPage() {
       title={t('auth.signupTitle')}
       footer={
         <Link
-          to={isSafeRedirect ? `/login?redirect=${encodeURIComponent(redirectUrl)}` : '/login'}
+          to={
+            isSafeRedirect
+              ? `/login?redirect=${encodeURIComponent(redirectUrl)}`
+              : '/login'
+          }
           className="text-accent hover:underline"
         >
           {t('auth.toLogin')}
         </Link>
       }
     >
-      {redirectUrl.startsWith('/checkout') && (
-        <div
-          role="status"
-          className="mb-4 rounded-xl border border-accent/30 bg-accent/10 p-3 text-xs text-text font-medium flex items-center gap-2"
-        >
-          <span className="text-base" aria-hidden="true">
-            ✨
-          </span>
-          <span>{t('auth.checkoutSignupNotice')}</span>
-        </div>
-      )}
-      <form className="flex flex-col gap-4" onSubmit={handleSubmit} noValidate>
-        {serverError ? (
+      <div className="flex flex-col gap-6">
+        {/* 1. Уведомление об оформлении checkout */}
+        {redirectUrl.startsWith('/checkout') && (
+          <div
+            role="status"
+            className="rounded-md border border-accent/30 bg-accent-soft p-3 text-[13px] text-text font-medium flex items-center gap-2.5"
+          >
+            <SparkleIcon className="size-4 shrink-0 text-accent" />
+            <span>{t('auth.checkoutSignupNotice')}</span>
+          </div>
+        )}
+
+        {/* 2. Серверная ошибка */}
+        {serverError && (
           <div
             role="alert"
-            className="flex flex-col gap-1 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700 dark:border-red-900/50 dark:bg-red-950/40 dark:text-red-300"
+            className="flex flex-col gap-1 rounded-md border border-danger/30 bg-danger-soft p-3 text-[13px] text-danger"
           >
-            <span>{serverError}</span>
-            {serverError.toLowerCase().includes('уже существует') ||
-            serverError.toLowerCase().includes('already exists') ? (
+            <div className="flex items-center gap-2">
+              <AlertIcon className="size-4 shrink-0" />
+              <span>{serverError}</span>
+            </div>
+            {(serverError.toLowerCase().includes('уже существует') ||
+              serverError.toLowerCase().includes('already exists')) && (
               <Link
                 to={`/login?email=${encodeURIComponent(email.trim())}`}
-                className="font-semibold underline hover:text-red-900 dark:hover:text-red-100"
+                className="font-semibold underline hover:opacity-85 text-xs ml-6"
               >
-                Войти в существующий аккаунт →
+                {language === 'ru'
+                  ? 'Войти в существующий аккаунт →'
+                  : 'Log into existing account →'}
               </Link>
-            ) : null}
+            )}
           </div>
-        ) : null}
+        )}
 
-        <Field id="signup-name" label={t('auth.name')} error={nameError ?? undefined}>
-          {({ id, invalid, 'aria-describedby': describedBy }) => (
-            <Input
-              id={id}
-              invalid={invalid}
-              aria-describedby={describedBy}
-              type="text"
-              autoComplete="name"
-              placeholder="Иван"
-              value={name}
-              onChange={(e) => {
-                setName(e.target.value);
-                if (nameError) setNameError(null);
-              }}
-              disabled={loading}
-            />
-          )}
-        </Field>
+        {/* 3. OAuth Кнопки */}
+        <div className="grid grid-cols-2 gap-3">
+          <Button
+            variant="outline"
+            size="lg"
+            fullWidth
+            disabled={loading}
+            onClick={() => void handleOAuth('google')}
+            aria-label={t('auth.continueGoogle')}
+            title={t('auth.oauthStub')}
+            className="font-medium text-xs gap-2"
+          >
+            <GoogleIcon className="size-4 text-text shrink-0" />
+            <span>Google</span>
+          </Button>
 
-        <Field id="signup-email" label={t('auth.email')} error={emailError ?? undefined}>
-          {({ id, invalid, 'aria-describedby': describedBy }) => (
-            <Input
-              id={id}
-              invalid={invalid}
-              aria-describedby={describedBy}
-              type="email"
-              autoComplete="email"
-              placeholder="you@example.com"
-              value={email}
-              onChange={(e) => {
-                setEmail(e.target.value);
-                if (emailError) setEmailError(null);
-              }}
-              disabled={loading}
-            />
-          )}
-        </Field>
+          <Button
+            variant="outline"
+            size="lg"
+            fullWidth
+            disabled={loading}
+            onClick={() => void handleOAuth('github')}
+            aria-label={t('auth.continueGitHub')}
+            title={t('auth.oauthStub')}
+            className="font-medium text-xs gap-2"
+          >
+            <GitHubIcon className="size-4 text-text shrink-0" />
+            <span>GitHub</span>
+          </Button>
+        </div>
 
-        <Field id="signup-password" label={t('auth.password')} error={passwordError ?? undefined}>
-          {({ id, invalid, 'aria-describedby': describedBy }) => (
-            <div className="relative flex items-center">
+        {/* 4. Разделитель */}
+        <Divider variant="dashed" label={t('auth.orDivider')} className="my-1" />
+
+        {/* 5. Форма: Имя, Email и Пароль */}
+        <form className="flex flex-col gap-4" onSubmit={handleSubmit} noValidate>
+          <Field id="signup-name" label={t('auth.name')} error={nameError ?? undefined}>
+            {({ id, invalid, 'aria-describedby': describedBy }) => (
               <Input
                 id={id}
                 invalid={invalid}
                 aria-describedby={describedBy}
-                type={showPassword ? 'text' : 'password'}
-                autoComplete="new-password"
-                placeholder="••••••••"
-                value={password}
-                className="pr-10"
+                type="text"
+                autoComplete="name"
+                placeholder="Иван"
+                value={name}
                 onChange={(e) => {
-                  setPassword(e.target.value);
-                  if (passwordError) setPasswordError(null);
+                  setName(e.target.value);
+                  if (nameError) setNameError(null);
                 }}
                 disabled={loading}
               />
-              <button
-                type="button"
-                onClick={() => setShowPassword(!showPassword)}
-                className="absolute right-2.5 flex size-8 items-center justify-center rounded-sm text-muted hover:text-text transition-colors"
-                aria-label={showPassword ? 'Скрыть' : 'Показать'}
-                tabIndex={-1}
-              >
-                {showPassword ? (
-                  <EyeOffIcon className="text-base" />
-                ) : (
-                  <EyeIcon className="text-base" />
-                )}
-              </button>
-            </div>
-          )}
-        </Field>
+            )}
+          </Field>
 
-        <Button type="submit" className="w-full" disabled={loading}>
-          {loading ? t('auth.signingUp') : t('auth.signup')}
-        </Button>
-      </form>
+          <Field id="signup-email" label={t('auth.email')} error={emailError ?? undefined}>
+            {({ id, invalid, 'aria-describedby': describedBy }) => (
+              <Input
+                id={id}
+                invalid={invalid}
+                aria-describedby={describedBy}
+                type="email"
+                autoComplete="email"
+                placeholder="you@example.com"
+                value={email}
+                onChange={(e) => {
+                  setEmail(e.target.value);
+                  if (emailError) setEmailError(null);
+                }}
+                disabled={loading}
+              />
+            )}
+          </Field>
 
-      <div className="my-5 flex items-center gap-3 text-xs text-muted">
-        <span className="h-px flex-1 bg-surface-2" />
-        {t('auth.orDivider')}
-        <span className="h-px flex-1 bg-surface-2" />
+          <Field
+            id="signup-password"
+            label={t('auth.password')}
+            error={passwordError ?? undefined}
+          >
+            {({ id, invalid, 'aria-describedby': describedBy }) => (
+              <div className="flex flex-col gap-2">
+                <div className="relative flex items-center">
+                  <Input
+                    id={id}
+                    invalid={invalid}
+                    aria-describedby={describedBy}
+                    type={showPassword ? 'text' : 'password'}
+                    autoComplete="new-password"
+                    placeholder="••••••••"
+                    value={password}
+                    className="pr-10"
+                    onChange={(e) => {
+                      setPassword(e.target.value);
+                      if (passwordError) setPasswordError(null);
+                    }}
+                    disabled={loading}
+                  />
+                  <div className="absolute right-1 flex items-center">
+                    <IconButton
+                      size="sm"
+                      label={
+                        showPassword
+                          ? language === 'ru'
+                            ? 'Скрыть'
+                            : 'Hide'
+                          : language === 'ru'
+                            ? 'Показать'
+                            : 'Show'
+                      }
+                      aria-pressed={showPassword}
+                      onClick={() => setShowPassword(!showPassword)}
+                      tabIndex={-1}
+                    >
+                      {showPassword ? (
+                        <EyeOffIcon className="size-4" />
+                      ) : (
+                        <EyeIcon className="size-4" />
+                      )}
+                    </IconButton>
+                  </div>
+                </div>
+
+                {/* Индикатор требований пароля */}
+                <div className="flex items-center gap-1.5 text-xs pt-0.5">
+                  <CheckIcon
+                    className={cn(
+                      'size-3.5',
+                      password.length >= MIN_PASSWORD_LENGTH
+                        ? 'text-success'
+                        : 'text-subtle',
+                    )}
+                  />
+                  <span
+                    className={
+                      password.length >= MIN_PASSWORD_LENGTH
+                        ? 'text-muted'
+                        : 'text-subtle'
+                    }
+                  >
+                    {t('auth.passwordRequirement')}
+                  </span>
+                </div>
+              </div>
+            )}
+          </Field>
+
+          {/* 6. Кнопка «Зарегистрироваться» */}
+          <Button
+            size="lg"
+            fullWidth
+            loading={loading}
+            type="submit"
+            className="mt-2"
+          >
+            {loading ? t('auth.signingUp') : t('auth.signup')}
+          </Button>
+        </form>
+
+        <p role="status" className="text-center font-mono text-[11px] text-muted">
+          {t('auth.demoNotice')}
+        </p>
       </div>
-
-      <div className="flex flex-col gap-2">
-        <Button
-          variant="outline"
-          className="w-full"
-          disabled={loading}
-          onClick={() => void handleOAuth('google')}
-          title={t('auth.oauthStub')}
-        >
-          <GoogleIcon className="text-lg" />
-          {t('auth.continueGoogle')}
-        </Button>
-        <Button
-          variant="outline"
-          className="w-full"
-          disabled={loading}
-          onClick={() => void handleOAuth('github')}
-          title={t('auth.oauthStub')}
-        >
-          <GitHubIcon className="text-lg" />
-          {t('auth.continueGitHub')}
-        </Button>
-      </div>
-
-      <p role="status" className="mt-4 text-xs text-zinc-500 dark:text-zinc-400">
-        {t('auth.demoNotice')}
-      </p>
     </AuthShell>
   );
 }

@@ -77,6 +77,7 @@ export const en: Record<TranslationKey, string> = {
   'auth.oauthStub': 'OAuth stub: immediately creates a demo session with the selected provider.',
   'auth.emailInvalid': 'Please enter a valid email address (e.g. you@example.com)',
   'auth.passwordTooShort': 'Password must be at least 8 characters long',
+  'auth.passwordRequirement': 'At least 8 characters',
   'auth.nameRequired': 'Please enter your name',
   'auth.demoQuickLogin': 'Quick login as demo user',
   'auth.loggingIn': 'Logging in...',

@@ -75,6 +75,7 @@ export const ru = {
   'auth.oauthStub': 'OAuth-заглушка: мгновенно создаёт сессию с выбранным провайдером.',
   'auth.emailInvalid': 'Введите корректный email (например, you@example.com)',
   'auth.passwordTooShort': 'Пароль должен содержать не менее 8 символов',
+  'auth.passwordRequirement': 'Не менее 8 символов',
   'auth.nameRequired': 'Пожалуйста, укажите имя',
   'auth.demoQuickLogin': 'Быстрый вход как демо-пользователь',
   'auth.loggingIn': 'Вход...',
