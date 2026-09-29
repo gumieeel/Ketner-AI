@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from 'react';
 import { CheckIcon, ChevronDownIcon, LockIcon } from '@/components/icons';
-import { Badge } from '@/components/ui/badge';
 import { StatusDot } from '@/components/ui/status-dot';
 import { useAuth } from '@/features/auth/auth-store';
 import { canAccessModel } from '@/features/chat/can-access-model';
@@ -320,9 +319,8 @@ export function ModelPicker({ disabled = false }: { disabled?: boolean }) {
           {/* 2. Plus Group */}
           {plusModels.length > 0 ? (
             <div className="border-t border-stroke pt-1.5 mb-2">
-              <div className="flex items-center justify-between px-2.5 py-1 text-[11px] font-mono font-medium text-subtle uppercase tracking-[0.06em]">
-                <span>{t('chat.tierPlus')}</span>
-                <Badge tone="info" className="text-[10px] py-0 px-1.5">PLUS</Badge>
+              <div className="px-2.5 py-1 text-[11px] font-mono font-medium text-subtle uppercase tracking-[0.06em]">
+                {t('chat.tierPlus')}
               </div>
               <ul className="mt-1 space-y-0.5" role="none">
                 {plusModels.map(renderModelItem)}
@@ -333,9 +331,8 @@ export function ModelPicker({ disabled = false }: { disabled?: boolean }) {
           {/* 3. Pro / Ultra Group */}
           {proModels.length > 0 ? (
             <div className="border-t border-stroke pt-1.5">
-              <div className="flex items-center justify-between px-2.5 py-1 text-[11px] font-mono font-medium text-subtle uppercase tracking-[0.06em]">
-                <span>{t('chat.tierPro')}</span>
-                <Badge tone="brand" className="text-[10px] py-0 px-1.5">PRO</Badge>
+              <div className="px-2.5 py-1 text-[11px] font-mono font-medium text-subtle uppercase tracking-[0.06em]">
+                {t('chat.tierPro')}
               </div>
               <ul className="mt-1 space-y-0.5" role="none">
                 {proModels.map(renderModelItem)}
