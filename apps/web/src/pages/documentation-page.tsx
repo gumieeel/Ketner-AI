@@ -23,7 +23,7 @@ import { cn } from '@/lib/cn';
 interface PlanCardInfo {
   id: string;
   name: string;
-  price: string;
+  price: { ru: string; en: string };
   badge: { ru: string; en: string };
   desc: { ru: string; en: string };
   speed: { ru: string; en: string };
@@ -37,10 +37,10 @@ const PLANS_DATA: PlanCardInfo[] = [
   {
     id: 'free',
     name: 'Free',
-    price: '0 ₽ / $0',
+    price: { ru: '$0', en: '$0' },
     badge: { ru: 'Попробуйте AI', en: 'Try AI' },
     desc: {
-      ru: 'Идеально для первого знакомства, быстрых вопросов и повседневных задач.',
+      ru: 'Идеально для первого знакомства, быстрых вопросов и простых задач.',
       en: 'Ideal for trying out the platform, fast questions, and everyday queries.',
     },
     speed: { ru: 'Стандартная скорость', en: 'Standard response speed' },
@@ -64,82 +64,88 @@ const PLANS_DATA: PlanCardInfo[] = [
   {
     id: 'plus',
     name: 'Plus',
-    price: '990 ₽ / $9.99',
-    badge: { ru: 'Безлимитный AI', en: 'Unlimited AI' },
+    price: { ru: '$9 / мес', en: '$9 / mo' },
+    badge: { ru: 'Быстрые модели', en: 'Fast models' },
     desc: {
-      ru: 'Безлимитное общение с AI для повседневной работы, учёбы и генерации текстов.',
-      en: 'Unlimited AI chat for daily workflows, study, and text generation.',
+      ru: 'Стандартные быстрые модели для комфортной ежедневной работы и учебы.',
+      en: 'Standard fast models for smooth daily work and study.',
     },
-    speed: { ru: 'Обычная скорость', en: 'Normal generation speed' },
+    speed: { ru: 'Быстрая скорость', en: 'Fast generation speed' },
     priority: { ru: 'Повышенный приоритет', en: 'Enhanced queue priority' },
-    context: { ru: 'Расширенный контекст', en: 'Extended context' },
+    context: { ru: 'Стандартный контекст', en: 'Standard context' },
     features: {
       ru: [
-        'Безлимитный доступ ко всем моделям через Auto',
+        'Стандартные быстрые модели: DeepSeek v4.1 Flash, Claude Haiku 4.5, GPT-4o',
+        'Быстрая скорость ответа',
+        'Безлимитный доступ через режим Auto или ручной выбор',
         'Отсутствие поминутных ограничений',
-        'Автоматический выбор оптимальной модели',
-        'Расширенное окно памяти для длинных диалогов',
       ],
       en: [
-        'Unlimited access to all models via Auto',
-        'No per-minute interruptions',
-        'Automatic selection of the best model',
-        'Extended memory window for long conversations',
+        'Standard fast models: DeepSeek v4.1 Flash, Claude Haiku 4.5, GPT-4o',
+        'Fast response speed',
+        'Unlimited access via Auto mode or manual selection',
+        'No per-minute limits',
       ],
     },
   },
   {
     id: 'pro',
     name: 'Pro',
-    price: '1 990 ₽ / $19.99',
-    badge: { ru: 'Быстрее и умнее', en: 'Faster & smarter' },
+    price: { ru: '$29 / мес', en: '$29 / mo' },
+    badge: { ru: 'Топовые модели', en: 'Top models' },
     desc: {
-      ru: 'Все мировые флагманы в одной подписке. Для разработчиков, аналитиков и авторов.',
-      en: 'All world flagship models in one subscription. For developers, analysts, and creators.',
+      ru: 'Топовые мировые флагманы (пониженный контекст и скорость по сравнению с Ultra). Включает всё из Plus.',
+      en: 'World-class top flagship models (reduced context and speed compared to Ultra). Includes all Plus features.',
     },
-    speed: { ru: 'Высокая скорость', en: 'High generation speed' },
+    speed: { ru: 'Средняя скорость (пониженная)', en: 'Standard speed (reduced)' },
     priority: { ru: 'Высокий приоритет', en: 'High server priority' },
-    context: { ru: 'Глубокий контекст', en: 'Deep multi-turn context' },
+    context: { ru: 'Пониженный контекст', en: 'Reduced context' },
     popular: true,
     features: {
       ru: [
-        'Все флагманы: GPT-6 Astra, Claude 3.5 Sonnet, Gemini Pro',
+        'Все, что входит в тариф Plus',
+        'Топовые модели: GPT-6 Astra, Claude Fable 5.5, Gemini 3.8 Pro, Grok 4.7',
+        'Пониженный контекст и скорость по сравнению с Ultra',
+        'Высокий серверный приоритет обработки запросов',
         'Ручной выбор конкретной модели без ограничений',
-        'Высокий серверный приоритет даже в часы пик',
-        'Глубокий анализ кода, логики и сложных концепций',
       ],
       en: [
-        'All flagships: GPT-6 Astra, Claude 3.5 Sonnet, Gemini Pro',
+        'All Plus tier features included',
+        'Top models: GPT-6 Astra, Claude Fable 5.5, Gemini 3.8 Pro, Grok 4.7',
+        'Reduced context and speed compared to Ultra tier',
+        'High server request priority',
         'Manual model selection without restrictions',
-        'High server priority even during peak hours',
-        'Deep multi-turn context analysis',
       ],
     },
   },
   {
     id: 'ultra',
     name: 'Ultra',
-    price: '2 499 ₽ / $24.99',
+    price: { ru: '$39 / мес', en: '$39 / mo' },
     badge: { ru: 'Максимум возможностей', en: 'Maximum power' },
     desc: {
-      ru: 'Максимальные квоты, самый длинный контекст и приоритетное подключение к новейшим моделям.',
-      en: 'Highest quotas, longest context window, and first access to new models.',
+      ru: 'Все топовые модели на 100% мощности, максимальный контекст до 2M токенов и наивысший VIP-приоритет.',
+      en: 'All top models at 100% capacity, maximum context up to 2M tokens, and top VIP priority.',
     },
-    speed: { ru: 'Максимальная скорость', en: 'Maximum generation speed' },
-    priority: { ru: 'Наивысший приоритет', en: 'Highest queue priority' },
-    context: { ru: 'Максимальный контекст', en: 'Maximum context window' },
+    speed: { ru: 'Максимальная скорость (100%)', en: 'Maximum speed (100%)' },
+    priority: { ru: 'Наивысший VIP-приоритет', en: 'Highest VIP priority' },
+    context: { ru: 'Максимальный контекст (до 2M токенов)', en: 'Maximum context (up to 2M tokens)' },
     features: {
       ru: [
-        'Все модели без компромиссов: GPT-6, Claude Opus, Gemini 2.5',
-        'Наивысший приоритет запросов без ожидания',
-        'Максимальное контекстное окно для гигантских документов',
-        'Первоочередной доступ ко всем будущим релизам',
+        'Все, что входит в тариф Pro',
+        'Все топовые модели: GPT-6 Astra, Claude Fable 5.5, Gemini 3.8 Pro, Grok 4.7, Ketner Next',
+        'Максимальный контекст диалога до 2M токенов',
+        'Использование моделей на 100% без ограничений скорости и контекста',
+        'Наивысший VIP-приоритет запросов без ожидания',
+        'Параллельные запросы без задержек',
       ],
       en: [
-        'All models without compromise: GPT-6, Claude Opus, Gemini 2.5',
-        'Top priority routing with zero queuing',
-        'Maximum context window for huge documents',
-        'Instant access to newly released flagship models',
+        'All Pro tier features included',
+        'All top models: GPT-6 Astra, Claude Fable 5.5, Gemini 3.8 Pro, Grok 4.7, Ketner Next',
+        'Maximum conversation context up to 2M tokens',
+        '100% model usage without speed or context limitations',
+        'Top VIP queue priority with zero waiting',
+        'Parallel concurrent requests without delays',
       ],
     },
   },
@@ -347,7 +353,7 @@ export function DocumentationPage() {
                         {plan.badge[language]}
                       </Badge>
                     </div>
-                    <span className="font-mono text-sm font-semibold text-text">{plan.price}</span>
+                    <span className="font-mono text-sm font-semibold text-text">{plan.price[language]}</span>
                   </div>
 
                   <p className="mt-2 text-xs text-muted leading-relaxed">

@@ -86,7 +86,7 @@ export const ru = {
 
   'pricing.title': 'Тарифы',
   'pricing.subtitle': 'Начните бесплатно и перейдите на платный план, когда понадобится больше.',
-  'pricing.month': 'в месяц',
+  'pricing.month': 'мес',
   'pricing.popular': 'Популярный',
   'pricing.currentPlan': 'Текущий план',
   'pricing.choosePlan': 'Выбрать план',

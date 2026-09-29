@@ -38,13 +38,13 @@ import {
   validateCardNumber,
 } from '@/lib/card-mask';
 
-function calculateStars(priceRub: number): number {
-  if (priceRub <= 0) return 0;
-  if (priceRub === 1199 || priceRub === 20 || priceRub === 29) return 650;
-  if (priceRub === 2499 || priceRub === 39 || priceRub === 49) return 1350;
-  if (priceRub === 999 || priceRub === 9) return 550;
-  if (priceRub === 1999) return 1100;
-  return Math.round(priceRub / 1.84);
+function calculateStars(price: number): number {
+  if (price <= 0) return 0;
+  if (price === 39 || price === 2499 || price === 49) return 1350;
+  if (price === 29 || price === 1199 || price === 20) return 650;
+  if (price === 9 || price === 999) return 550;
+  if (price === 1999) return 1100;
+  return Math.round(price * 35);
 }
 
 export function CheckoutPage() {
@@ -298,8 +298,8 @@ export function CheckoutPage() {
           </div>
           <div className="text-right">
             <p className="text-xl font-semibold text-text">
-              {plan.priceMonthly.toLocaleString('ru-RU')} ₽
-              <span className="ml-1 text-xs font-normal text-muted">{t('pricing.month')}</span>
+              ${plan.priceMonthly}
+              <span className="ml-1 text-xs font-normal text-muted">/{t('pricing.month')}</span>
             </p>
             <p className="text-xs text-muted mt-0.5 font-mono">
               или {calculateStars(plan.priceMonthly)} Stars
@@ -573,7 +573,7 @@ export function CheckoutPage() {
                     className="w-full inline-flex items-center justify-center gap-2 rounded-md bg-accent px-4 py-2.5 text-xs font-medium text-accent-text hover:bg-accent-hover transition-colors"
                   >
                     <SbpIcon className="text-base" />
-                    {t('checkout.sbpOpenBank')} ({plan.priceMonthly} ₽)
+                    {t('checkout.sbpOpenBank')} (${plan.priceMonthly})
                   </a>
                 )}
 
@@ -606,7 +606,7 @@ export function CheckoutPage() {
                   <span className="text-lg font-normal text-muted font-sans">Stars</span>
                 </div>
                 <p className="text-xs text-muted">
-                  {t('checkout.starsPeriodNotice', { price: `${plan.priceMonthly} ₽`, plan: t(plan.nameKey) })}
+                  {t('checkout.starsPeriodNotice', { price: `$${plan.priceMonthly}`, plan: t(plan.nameKey) })}
                 </p>
               </div>
 
@@ -683,16 +683,16 @@ export function CheckoutPage() {
 
             <div className="flex flex-col gap-2 rounded-lg bg-canvas p-3 border border-stroke text-xs text-muted">
               <div className="flex items-center justify-between">
-                <span>Стоимость тарифа</span>
-                <span className="font-mono text-text font-medium">{plan.priceMonthly.toLocaleString('ru-RU')} ₽</span>
+                <span>{language === 'ru' ? 'Стоимость тарифа' : 'Plan price'}</span>
+                <span className="font-mono text-text font-medium">${plan.priceMonthly}</span>
               </div>
               <div className="flex items-center justify-between">
-                <span>Комиссия платёжной системы</span>
-                <span className="font-mono text-accent font-medium">0 ₽</span>
+                <span>{language === 'ru' ? 'Комиссия платёжной системы' : 'Processing fee'}</span>
+                <span className="font-mono text-accent font-medium">$0</span>
               </div>
               <div className="border-t border-stroke pt-2 flex items-center justify-between text-sm font-semibold text-text">
-                <span>Итого к оплате</span>
-                <span className="font-mono text-accent">{plan.priceMonthly.toLocaleString('ru-RU')} ₽</span>
+                <span>{language === 'ru' ? 'Итого к оплате' : 'Total due'}</span>
+                <span className="font-mono text-accent">${plan.priceMonthly}</span>
               </div>
             </div>
 

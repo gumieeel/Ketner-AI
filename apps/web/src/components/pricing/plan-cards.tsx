@@ -37,18 +37,7 @@ export function PlanCards({ variant = 'compact', className }: PlanCardsProps) {
             ? plan.highlights[language]
             : plan.bullets[language];
 
-        const priceDisplay =
-          language === 'ru'
-            ? plan.priceMonthly === 0
-              ? '0 ₽'
-              : `${plan.priceMonthly.toLocaleString('ru-RU')} ₽`
-            : plan.id === 'free'
-              ? '$0'
-              : plan.id === 'plus'
-                ? '$9.99'
-                : plan.id === 'pro'
-                  ? '$19.99'
-                  : '$39.99';
+        const priceDisplay = plan.priceMonthly === 0 ? '$0' : `$${plan.priceMonthly}`;
 
         return (
           <Card

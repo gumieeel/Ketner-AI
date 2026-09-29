@@ -265,20 +265,18 @@
     background-image: radial-gradient(ellipse 70% 50% at 50% -10%, var(--glow), transparent 70%);
   }
 
-  /* Сетка 64px, затухающая к краям */
+  /* Сетка 64px */
   .bg-grid {
     background-image:
       linear-gradient(to right, var(--grid-line) 1px, transparent 1px),
       linear-gradient(to bottom, var(--grid-line) 1px, transparent 1px);
     background-size: 64px 64px;
-    mask-image: radial-gradient(ellipse 70% 60% at 50% 0%, #000 30%, transparent 75%);
   }
 
   /* Точечная разметка 20x20 */
   .bg-dots {
     background-image: radial-gradient(var(--grid-line) 1px, transparent 1px);
     background-size: 20px 20px;
-    mask-image: radial-gradient(ellipse 70% 60% at 50% 0%, #000 30%, transparent 75%);
   }
 
   /* Пунктирный разделитель секций с крестиками на концах */

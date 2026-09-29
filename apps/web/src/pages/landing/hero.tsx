@@ -14,7 +14,13 @@ export function LandingHero() {
   const user = useAuth((state) => state.user);
 
   return (
-    <div className="relative w-full overflow-hidden rounded-lg border border-stroke bg-canvas py-12 md:py-20 px-6 md:px-12 bg-grid hero-glow">
+    <div className="relative w-full overflow-hidden rounded-lg border border-stroke bg-canvas py-12 md:py-20 px-6 md:px-12 hero-glow">
+      {/* Background grid overlay with soft radial fade */}
+      <div
+        className="pointer-events-none absolute inset-0 bg-grid [mask-image:radial-gradient(ellipse_80%_70%_at_50%_0%,#000_40%,transparent_100%)] opacity-70"
+        aria-hidden="true"
+      />
+
       {/* 4 Corner marks */}
       <CornerMark size={12} className="absolute top-2 left-2 text-stroke-strong" />
       <CornerMark size={12} className="absolute top-2 right-2 text-stroke-strong rotate-90" />
@@ -22,7 +28,7 @@ export function LandingHero() {
       <CornerMark size={12} className="absolute bottom-2 left-2 text-stroke-strong -rotate-90" />
 
       <Reveal>
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-12 lg:gap-8 items-center text-left">
+        <div className="relative z-10 grid grid-cols-1 lg:grid-cols-12 gap-12 lg:gap-8 items-center text-left">
           {/* Left Column (7/12) */}
           <div className="lg:col-span-7 flex flex-col items-start gap-6">
             <div className="flex flex-wrap items-center gap-2">
@@ -42,11 +48,10 @@ export function LandingHero() {
 
             <h1
               aria-label="Ketner AI"
-              className="text-[40px] leading-[44px] md:text-[64px] md:leading-[68px] font-semibold tracking-[-0.035em] text-balance text-text"
+              className="text-[36px] sm:text-[46px] md:text-[60px] lg:text-[64px] leading-[1.08] font-semibold tracking-[-0.035em] text-text"
             >
-              <span>{language === 'ru' ? 'Все AI-модели.' : 'All AI Models.'}</span>
-              <br />
-              <span className="text-muted">
+              <span className="block text-text">{language === 'ru' ? 'Все AI-модели.' : 'All AI Models.'}</span>
+              <span className="block text-muted">
                 {language === 'ru' ? 'Один интерфейс.' : 'One Interface.'}
               </span>
             </h1>

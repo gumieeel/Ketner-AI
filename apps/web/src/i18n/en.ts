@@ -88,7 +88,7 @@ export const en: Record<TranslationKey, string> = {
 
   'pricing.title': 'Pricing',
   'pricing.subtitle': 'Start for free and upgrade when you need more.',
-  'pricing.month': 'per month',
+  'pricing.month': 'mo',
   'pricing.popular': 'Popular',
   'pricing.currentPlan': 'Current plan',
   'pricing.choosePlan': 'Choose plan',
