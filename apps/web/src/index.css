@@ -2,95 +2,161 @@
 
 @custom-variant dark (&:where(.dark, .dark *));
 
-/* Локальные шрифты Golos Text (кириллица + латиница, веса 400-600, font-display: swap) */
-@font-face {
-  font-family: 'Golos Text';
-  font-style: normal;
-  font-weight: 400 600;
-  font-display: swap;
-  src: url('/fonts/golos-text/golos-text-cyrillic.woff2') format('woff2');
-  unicode-range: U+0301, U+0400-045F, U+0490-0491, U+04B0-04B1, U+2116;
-}
-
-@font-face {
-  font-family: 'Golos Text';
-  font-style: normal;
-  font-weight: 400 600;
-  font-display: swap;
-  src: url('/fonts/golos-text/golos-text-cyrillic-ext.woff2') format('woff2');
-  unicode-range: U+0460-052F, U+1C80-1C8A, U+20B4, U+2DE0-2DFF, U+A640-A69F, U+FE2E-FE2F;
-}
-
-@font-face {
-  font-family: 'Golos Text';
-  font-style: normal;
-  font-weight: 400 600;
-  font-display: swap;
-  src: url('/fonts/golos-text/golos-text-latin.woff2') format('woff2');
-  unicode-range:
-    U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329,
-    U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
-}
-
-@font-face {
-  font-family: 'Golos Text';
-  font-style: normal;
-  font-weight: 400 600;
-  font-display: swap;
-  src: url('/fonts/golos-text/golos-text-latin-ext.woff2') format('woff2');
-  unicode-range:
-    U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329,
-    U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F,
-    U+A720-A7FF;
-}
+/*
+ * Дизайн-система Ketner AI.
+ *
+ * Семантические переменные (--canvas, --surface, --accent …) задаются в :root
+ * (светлая тема) и .dark (тёмная); @theme inline отображает их в утилиты
+ * Tailwind (bg-canvas, text-muted, border-stroke …) — без самоссылок.
+ * Шрифты Inter Variable и JetBrains Mono Variable подключаются в main.tsx.
+ */
 
 @theme {
-  --font-sans: 'Golos Text', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
-  --font-mono: Consolas, 'Courier New', monospace;
+  --font-sans:
+    'Inter Variable', 'Golos Text', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --font-mono:
+    'JetBrains Mono Variable', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
 
-  /* Семантические токены направления «Открытый контур» */
-  --color-canvas: var(--color-canvas);
-  --color-surface: var(--color-surface);
-  --color-text: var(--color-text);
-  --color-muted: var(--color-muted);
-  --color-stroke: var(--color-stroke);
-  --color-accent: var(--color-accent);
-  --color-accent-text: var(--color-accent-text);
+  /* Радиусы: 6 / 8 / 12 + круг для аватаров и статус-точек */
+  --radius-xs: 6px;
+  --radius-sm: 6px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  /* Страховка для старой разметки: крупные радиусы не выходят за шкалу */
+  --radius-xl: 12px;
+  --radius-2xl: 12px;
+  --radius-3xl: 12px;
 
-  /* Приглушённый минерально-зелёный акцент для совместимости с существующими стилями */
-  --color-brand-50: #eef7f4;
-  --color-brand-100: #d6ede5;
-  --color-brand-200: #b0ddd0;
-  --color-brand-300: #73bbaa;
-  --color-brand-400: #499d8b;
-  --color-brand-500: #2c806e;
-  --color-brand-600: #216a5a;
-  --color-brand-700: #1b564a;
-  --color-brand-800: #17453c;
-  --color-brand-900: #133932;
+  --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
+
+  /* Бренд-шкала от оттенка логотипа; brand-* оставлены для совместимости */
+  --color-brand-50: #e9fdf5;
+  --color-brand-100: #c9f9e6;
+  --color-brand-200: #96f2d0;
+  --color-brand-300: #5dedba;
+  --color-brand-400: #2ee6a6;
+  --color-brand-500: #14c98c;
+  --color-brand-600: #0e9a70;
+  --color-brand-700: #0b7a5a;
+  --color-brand-800: #0a5e46;
+  --color-brand-900: #084a38;
+}
+
+@theme inline {
+  --color-canvas: var(--canvas);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-surface-3: var(--surface-3);
+  --color-stroke: var(--stroke);
+  --color-stroke-strong: var(--stroke-strong);
+  --color-text: var(--text);
+  --color-muted: var(--muted);
+  --color-subtle: var(--subtle);
+  --color-accent: var(--accent);
+  --color-accent-hover: var(--accent-hover);
+  --color-accent-soft: var(--accent-soft);
+  --color-accent-text: var(--accent-text);
+  --color-danger: var(--danger);
+  --color-danger-soft: var(--danger-soft);
+  --color-danger-solid: var(--danger-solid);
+  --color-danger-solid-hover: var(--danger-solid-hover);
+  --color-danger-solid-text: var(--danger-solid-text);
+  --color-warning: var(--warning);
+  --color-warning-soft: var(--warning-soft);
+  --color-success: var(--success);
+  --color-success-soft: var(--success-soft);
+  --color-info: var(--info);
+  --color-info-soft: var(--info-soft);
+  --color-overlay: var(--overlay);
+  --color-grid-line: var(--grid-line);
+
+  --shadow-popover: var(--popover-shadow);
+  --shadow-highlight: var(--highlight-shadow);
 }
 
 @layer base {
   :root {
     color-scheme: light;
-    --color-canvas: #edf2f5;
-    --color-surface: #fafcfd;
-    --color-text: #24343f;
-    --color-muted: #516675;
-    --color-stroke: #6f8795;
-    --color-accent: #216a5a;
-    --color-accent-text: #fafcfd;
+
+    --canvas: #fafafa;
+    --surface: #ffffff;
+    --surface-2: #f4f4f5;
+    --surface-3: #e9e9ec;
+    --stroke: rgba(9, 9, 11, 0.1);
+    --stroke-strong: rgba(9, 9, 11, 0.2);
+    --text: #09090b;
+    --muted: #52525b;
+    --subtle: #71717a;
+    --accent: #0b7a5a;
+    --accent-hover: #09694e;
+    --accent-soft: rgba(11, 122, 90, 0.1);
+    --accent-text: #ffffff;
+    --danger: #c81e1e;
+    --danger-soft: rgba(200, 30, 30, 0.08);
+    --danger-solid: #c81e1e;
+    --danger-solid-hover: #a91818;
+    --danger-solid-text: #ffffff;
+    --warning: #a15c07;
+    --warning-soft: rgba(217, 119, 6, 0.1);
+    --success: #15803d;
+    --success-soft: rgba(21, 128, 61, 0.08);
+    --info: #1d4ed8;
+    --info-soft: rgba(29, 78, 216, 0.08);
+    --overlay: rgba(9, 9, 11, 0.4);
+    --grid-line: rgba(9, 9, 11, 0.06);
+    --glow: rgba(11, 122, 90, 0.07);
+    --highlight-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.6);
+    --popover-shadow: 0 12px 32px -8px rgba(9, 9, 11, 0.16), 0 2px 6px -2px rgba(9, 9, 11, 0.08);
+
+    /* Шкала слоёв */
+    --z-header: 30;
+    --z-dropdown: 40;
+    --z-drawer: 45;
+    --z-modal: 50;
+    --z-toast: 60;
+
+    /* Алиасы старых имён для разметки вида var(--color-accent-text) */
+    --color-canvas: var(--canvas);
+    --color-surface: var(--surface);
+    --color-text: var(--text);
+    --color-muted: var(--muted);
+    --color-stroke: var(--stroke);
+    --color-accent: var(--accent);
+    --color-accent-text: var(--accent-text);
   }
 
   .dark {
     color-scheme: dark;
-    --color-canvas: #1c2530;
-    --color-surface: #25323d;
-    --color-text: #eff3f5;
-    --color-muted: #b2bec7;
-    --color-stroke: #748896;
-    --color-accent: #73bbaa;
-    --color-accent-text: #1c2530;
+
+    --canvas: #09090b;
+    --surface: #101013;
+    --surface-2: #16161a;
+    --surface-3: #1d1d22;
+    --stroke: rgba(255, 255, 255, 0.08);
+    --stroke-strong: rgba(255, 255, 255, 0.16);
+    --text: #f4f4f5;
+    --muted: #a1a1aa;
+    --subtle: #71717a;
+    --accent: #2ee6a6;
+    --accent-hover: #5dedba;
+    --accent-soft: rgba(46, 230, 166, 0.12);
+    --accent-text: #04140e;
+    --danger: #f87171;
+    --danger-soft: rgba(248, 113, 113, 0.1);
+    --danger-solid: #dc2626;
+    --danger-solid-hover: #ef4444;
+    --danger-solid-text: #ffffff;
+    --warning: #fbbf24;
+    --warning-soft: rgba(251, 191, 36, 0.1);
+    --success: #4ade80;
+    --success-soft: rgba(74, 222, 128, 0.1);
+    --info: #60a5fa;
+    --info-soft: rgba(96, 165, 250, 0.1);
+    --overlay: rgba(0, 0, 0, 0.6);
+    --grid-line: rgba(255, 255, 255, 0.05);
+    --glow: rgba(46, 230, 166, 0.1);
+    --highlight-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+    --popover-shadow: 0 16px 40px -12px rgba(0, 0, 0, 0.7), 0 0 0 1px rgba(255, 255, 255, 0.06);
   }
 
   html,
@@ -100,16 +166,37 @@
   }
 
   body {
-    background-color: var(--color-canvas);
-    color: var(--color-text);
+    background-color: var(--canvas);
+    color: var(--text);
     font-family: var(--font-sans);
+    font-size: 15px;
+    line-height: 1.6;
+    font-feature-settings: 'cv11', 'ss01';
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
   }
 
+  ::selection {
+    background-color: var(--accent-soft);
+    color: var(--text);
+  }
+
   :focus-visible {
-    outline: 2px solid var(--color-accent);
+    outline: 2px solid var(--accent);
     outline-offset: 2px;
+  }
+
+  code,
+  kbd,
+  pre,
+  samp {
+    font-family: var(--font-mono);
+    font-feature-settings: normal;
+  }
+
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: var(--stroke-strong) transparent;
   }
 }
 
@@ -149,78 +236,188 @@
     transition: transform 180ms ease-out;
   }
 
-  /* Живой фоновый полноэкранный градиентный меш */
+  /* Один мягкий градиент акцента сверху — только для hero и auth */
+  .bg-hero-glow,
   .bg-ambient-mesh {
-    background-image:
-      radial-gradient(ellipse 90% 55% at 50% -15%, rgba(33, 106, 90, 0.16), transparent 70%),
-      radial-gradient(ellipse 65% 45% at 95% 45%, rgba(115, 187, 170, 0.1), transparent 60%),
-      radial-gradient(ellipse 60% 45% at 5% 85%, rgba(33, 106, 90, 0.1), transparent 60%);
+    background-image: radial-gradient(ellipse 70% 50% at 50% -10%, var(--glow), transparent 70%);
   }
 
-  .dark .bg-ambient-mesh {
+  /* Сетка 64px, затухающая к краям */
+  .bg-grid {
     background-image:
-      radial-gradient(ellipse 90% 55% at 50% -10%, rgba(115, 187, 170, 0.22), transparent 70%),
-      radial-gradient(ellipse 65% 50% at 95% 40%, rgba(44, 128, 110, 0.18), transparent 65%),
-      radial-gradient(ellipse 60% 50% at 5% 85%, rgba(115, 187, 170, 0.14), transparent 65%);
+      linear-gradient(to right, var(--grid-line) 1px, transparent 1px),
+      linear-gradient(to bottom, var(--grid-line) 1px, transparent 1px);
+    background-size: 64px 64px;
+    mask-image: radial-gradient(ellipse 80% 70% at 50% 30%, #000 40%, transparent 100%);
   }
 
-  /* Интерактивные карточки с парением и неоновым откликом */
+  /* Точечная разметка */
+  .bg-dots {
+    background-image: radial-gradient(var(--grid-line) 1px, transparent 1px);
+    background-size: 16px 16px;
+    mask-image: radial-gradient(ellipse 80% 70% at 50% 50%, #000 30%, transparent 100%);
+  }
+
+  /* Пунктирный разделитель секций с крестиками на концах */
+  .section-rule {
+    position: relative;
+    height: 1px;
+    background-image: linear-gradient(to right, var(--stroke-strong) 50%, transparent 50%);
+    background-size: 8px 1px;
+  }
+  .section-rule::before,
+  .section-rule::after {
+    content: '';
+    position: absolute;
+    top: -5px;
+    width: 11px;
+    height: 11px;
+    background:
+      linear-gradient(var(--stroke-strong), var(--stroke-strong)) center / 1px 100% no-repeat,
+      linear-gradient(var(--stroke-strong), var(--stroke-strong)) center / 100% 1px no-repeat;
+  }
+  .section-rule::before {
+    left: -5px;
+  }
+  .section-rule::after {
+    right: -5px;
+  }
+
+  /* Спокойный hover карточек: только граница и фон, без подъёма и свечения */
   .card-interactive {
     transition:
-      transform 240ms cubic-bezier(0.16, 1, 0.3, 1),
-      box-shadow 240ms cubic-bezier(0.16, 1, 0.3, 1),
-      border-color 240ms ease-out;
+      border-color 120ms ease-out,
+      background-color 120ms ease-out;
   }
-
   .card-interactive:hover {
-    transform: translateY(-4px);
-    box-shadow:
-      0 14px 32px -6px rgba(0, 0, 0, 0.1),
-      0 0 0 1px var(--color-accent);
+    border-color: var(--stroke-strong);
+    background-color: var(--surface-2);
   }
 
-  .dark .card-interactive:hover {
-    box-shadow:
-      0 18px 40px -8px rgba(0, 0, 0, 0.5),
-      0 0 24px -2px rgba(115, 187, 170, 0.28),
-      0 0 0 1px var(--color-accent);
-  }
-
-  /* Сияющий стиль Ultra-карточки */
+  /* Тонкий градиентный блик по границе — одна акцентная карточка */
+  .gradient-border,
   .ultra-glow {
     position: relative;
   }
+  .gradient-border::before,
   .ultra-glow::before {
     content: '';
     position: absolute;
     inset: -1px;
     border-radius: inherit;
     padding: 1px;
-    background: linear-gradient(
-      135deg,
-      rgba(115, 187, 170, 0.8),
-      rgba(44, 128, 110, 0.4),
-      rgba(214, 237, 229, 0.6)
+    background: conic-gradient(
+      from var(--border-angle, 0deg),
+      transparent 0deg,
+      var(--accent) 60deg,
+      transparent 140deg,
+      transparent 360deg
     );
+    opacity: 0.7;
     mask:
-      linear-gradient(#fff 0 0) content-box,
-      linear-gradient(#fff 0 0);
+      linear-gradient(#000 0 0) content-box,
+      linear-gradient(#000 0 0);
     mask-composite: exclude;
     pointer-events: none;
-    animation: glow-pulse 3.5s ease-in-out infinite alternate;
+    animation: border-sweep 6s linear infinite;
   }
 
-  /* Утилиты анимаций */
+  /* Появление секции: fade + 6px (класс вешает хук useReveal) */
+  .reveal {
+    opacity: 0;
+    transform: translateY(6px);
+    transition:
+      opacity 240ms var(--ease-out-expo),
+      transform 240ms var(--ease-out-expo);
+  }
+  .reveal[data-visible='true'] {
+    opacity: 1;
+    transform: none;
+  }
+
+  /* Бегущий пунктир по линиям схемы хаба */
+  .flow-line {
+    stroke-dasharray: 3 5;
+    animation: flow-dash 1.6s linear infinite;
+  }
+
+  /* Мягкая пульсация статус-точки — единственная бесконечная анимация */
+  .status-pulse {
+    animation: status-pulse 2.4s ease-in-out infinite;
+  }
+
+  /* Shimmer скелетона */
+  .skeleton-shimmer {
+    background: linear-gradient(
+      90deg,
+      var(--surface-2) 0%,
+      var(--surface-3) 50%,
+      var(--surface-2) 100%
+    );
+    background-size: 200% 100%;
+    animation: shimmer 1.2s linear infinite;
+  }
+
+  /* Моно-лейбл: 11px, uppercase, разрядка */
+  .mono-label {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    line-height: 16px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+
+  .tabular {
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* Утилиты появления */
   .animate-fade-in {
-    animation: fadeIn 280ms cubic-bezier(0.16, 1, 0.3, 1) forwards;
+    animation: fadeIn 240ms var(--ease-out-expo) both;
   }
-
   .animate-slide-up {
-    animation: slideUp 320ms cubic-bezier(0.16, 1, 0.3, 1) forwards;
+    animation: slideUp 240ms var(--ease-out-expo) both;
   }
-
+  /* Устаревшее «плавание» отключено: класс оставлен, чтобы не ломать разметку */
   .animate-float {
-    animation: floatSlow 4s ease-in-out infinite alternate;
+    animation: none;
+  }
+}
+
+@property --border-angle {
+  syntax: '<angle>';
+  inherits: false;
+  initial-value: 0deg;
+}
+
+@keyframes border-sweep {
+  to {
+    --border-angle: 360deg;
+  }
+}
+
+@keyframes flow-dash {
+  to {
+    stroke-dashoffset: -16;
+  }
+}
+
+@keyframes status-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.45;
+  }
+}
+
+@keyframes shimmer {
+  from {
+    background-position: 200% 0;
+  }
+  to {
+    background-position: -200% 0;
   }
 }
 
@@ -236,31 +433,11 @@
 @keyframes slideUp {
   from {
     opacity: 0;
-    transform: translateY(12px);
+    transform: translateY(6px);
   }
   to {
     opacity: 1;
     transform: translateY(0);
-  }
-}
-
-@keyframes floatSlow {
-  from {
-    transform: translateY(0);
-  }
-  to {
-    transform: translateY(-4px);
-  }
-}
-
-@keyframes glow-pulse {
-  0% {
-    opacity: 0.6;
-    filter: drop-shadow(0 0 4px rgba(115, 187, 170, 0.2));
-  }
-  100% {
-    opacity: 1;
-    filter: drop-shadow(0 0 12px rgba(115, 187, 170, 0.5));
   }
 }
 
@@ -278,5 +455,10 @@
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
     scroll-behavior: auto !important;
+  }
+
+  .reveal {
+    opacity: 1;
+    transform: none;
   }
 }

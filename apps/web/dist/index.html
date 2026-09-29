@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-    <meta name="theme-color" content="#1C2530" />
+    <meta name="theme-color" content="#09090b" />
     <meta
       name="description"
       content="Ketner AI — прототип AI-чата: диалоги, тарифы, подписка. Демонстрационная версия."
@@ -18,13 +18,16 @@
           var stored = window.localStorage.getItem('ketner.theme');
           var theme = stored === 'light' || stored === 'dark' ? stored : 'dark';
           document.documentElement.classList.toggle('dark', theme === 'dark');
+          document.documentElement.style.colorScheme = theme;
+          var meta = document.querySelector('meta[name="theme-color"]');
+          if (meta) meta.setAttribute('content', theme === 'dark' ? '#09090b' : '#fafafa');
         } catch (error) {
           /* localStorage может быть недоступен — остаётся тёмная тема по умолчанию */
         }
       })();
     </script>
-    <script type="module" crossorigin src="/assets/index-VVShOZEa.js"></script>
-    <link rel="stylesheet" crossorigin href="/assets/index-CAMX2tXE.css">
+    <script type="module" crossorigin src="/assets/index-DpyEcPvW.js"></script>
+    <link rel="stylesheet" crossorigin href="/assets/index-DpZU3FiM.css">
   </head>
   <body>
     <div id="root"></div>

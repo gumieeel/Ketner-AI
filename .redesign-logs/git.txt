@@ -1,0 +1,7 @@
+main
+?? .redesign-logs/
+1d0beb7 feat(db): align db client with STARTER_CODE_DB_CLIENT.ts
+8f875e4 feat(db): verify Drizzle ORM configuration and add startup connection status logging
+94b491f feat(frontend): add model entitlements, streaming message component, and useAuthStore alias
+74feb94 feat(frontend): Production upgrade — Better Auth провайдер, centralized API, Stripe checkout и поддержка VITE_API_URL
+6f992a4 feat(ai): этап 6.4 — интеграция официального Anthropic SDK и AI сервиса

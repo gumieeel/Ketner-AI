@@ -23,6 +23,12 @@ export const DEFAULT_LANGUAGE: Language = 'ru';
 /** Модель по умолчанию: совпадает с defaultModelId из GET /api/meta. */
 export const DEFAULT_MODEL_ID = 'auto';
 
+/** Цвет системной панели браузера: совпадает с токеном --canvas каждой темы. */
+export const THEME_COLOR: Record<Theme, string> = {
+  dark: '#09090b',
+  light: '#fafafa',
+};
+
 export function applyTheme(theme: Theme): void {
   const root = document.documentElement;
   root.classList.toggle('dark', theme === 'dark');
@@ -30,7 +36,7 @@ export function applyTheme(theme: Theme): void {
 
   const meta = document.querySelector('meta[name="theme-color"]');
   if (meta) {
-    meta.setAttribute('content', theme === 'dark' ? '#212121' : '#ffffff');
+    meta.setAttribute('content', THEME_COLOR[theme]);
   }
 }
 
