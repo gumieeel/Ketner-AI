@@ -1,9 +1,15 @@
 /**
- * ModelHub — Orbital Particle Physics
+ * ModelHub — Planetary Orbital Physics
  *
- * Each card has a real SVG-space position that evolves each frame:
- *   F = spring-to-home + cursor-repulsion + card-card-repulsion
- * Velocity is integrated with damping. Cards return to orbit when cursor leaves.
+ * Ketner AI sits in the center as the "Sun".
+ * 6 model cards orbit around it on a circular track.
+ *
+ * Physics:
+ * - When cursor approaches the orbit, cards slide ALONG the circular orbit away from the cursor.
+ * - Cards also push each other along the orbit (domino chain reaction).
+ * - Hard angular collision constraint: models NEVER penetrate or get stuck inside each other.
+ * - Radial compliance: cards flex slightly outward when cursor enters their orbital axis.
+ * - Restorative spring smoothly returns all models to their home positions around the Sun when cursor leaves.
  */
 
 import { useEffect, useRef, useCallback } from 'react';
@@ -18,35 +24,46 @@ import {
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/cn';
 
-// ─── SVG canvas ──────────────────────────────────────────────────────────────
+// ─── Geometry ────────────────────────────────────────────────────────────────
 
-const SVG_W   = 520;
+const SVG_W   = 540;
 const SVG_H   = 480;
-const CX      = SVG_W / 2;
-const CY      = SVG_H / 2;
-const ORBIT_R = 200;
+const CX      = SVG_W / 2;   // 270
+const CY      = SVG_H / 2;   // 240
+const ORBIT_R = 195;
 
-// ─── Physics constants ───────────────────────────────────────────────────────
+// ─── Orbital Physics Constants ───────────────────────────────────────────────
 
-/** How strongly each card springs back to its home orbit position */
-const SPRING_K         = 0.055;
-/** Velocity damping per frame (closer to 1 = less damping = more floaty) */
-const DAMPING          = 0.90;
-/** Max speed a card can travel (SVG-px / frame) */
-const MAX_SPEED        = 7;
+/** Home angular spring pull (restores cards to home slots) */
+const K_HOME_SPRING = 0.042;
+/** Angular velocity damping per frame */
+const ANG_DAMPING   = 0.85;
+/** Maximum angular velocity (radians / frame) */
+const MAX_ANG_VEL   = 0.055;
 
-/** Cursor repulsion: radius in SVG-px and peak force scalar */
-const CURSOR_REPEL_R   = 240;
-const CURSOR_REPEL_STR = 700;
+/** Cursor repulsion along the orbit */
+const CURSOR_REPEL_RADIUS = 165; // px
+const CURSOR_ANG_FORCE    = 0.038;
 
-/** Card–card repulsion: radius in SVG-px and peak force scalar */
-const CARD_REPEL_R     = 115;
-const CARD_REPEL_STR   = 260;
+/** Card-card mutual repulsion cushion */
+const CUSHION_GAP   = 0.92; // rad (~52.7 deg)
+const CUSHION_FORCE = 0.016;
 
-/** Gentle idle drift force amplitude (applied when no cursor) */
-const IDLE_FORCE       = 0.28;
+/** Hard geometric collision barrier: models NEVER get closer than this */
+const MIN_ANGULAR_GAP = 0.72; // rad (~41.2 deg)
 
-// ─── Models ──────────────────────────────────────────────────────────────────
+/** Radial outward compliance when cursor enters orbital axis */
+const MAX_RADIAL_PUSH = 18; // px
+
+// ─── Angle math helpers ──────────────────────────────────────────────────────
+
+function wrapAngle(a: number): number {
+  while (a > Math.PI) a -= 2 * Math.PI;
+  while (a < -Math.PI) a += 2 * Math.PI;
+  return a;
+}
+
+// ─── Models Definitions ──────────────────────────────────────────────────────
 
 interface ModelDef {
   id: string;
@@ -55,34 +72,29 @@ interface ModelDef {
   desc: string;
   icon: React.ComponentType<{ className?: string }>;
   iconColor: string;
-  angleDeg: number;
 }
 
 const MODELS: ModelDef[] = [
-  { id: 'gpt',      name: 'GPT-6',    tag: 'Astra',    desc: 'Reasoning · Coding',     icon: OpenAiIcon,  iconColor: '#10b981', angleDeg: 0   },
-  { id: 'gemini',   name: 'Gemini',   tag: 'Flash 3.8',desc: 'Multimodal · Search',    icon: GeminiIcon,  iconColor: '#3b82f6', angleDeg: 60  },
-  { id: 'deepseek', name: 'DeepSeek', tag: 'v4.1 Flash',desc:'Reasoning · Coding',     icon: DeepSeekIcon,iconColor: '#38bdf8', angleDeg: 120 },
-  { id: 'qwen',     name: 'Qwen',     tag: '3.8 Max',  desc: 'Coding · Open source',   icon: QwenIcon,    iconColor: '#a78bfa', angleDeg: 180 },
-  { id: 'grok',     name: 'Grok',     tag: '4.7',      desc: 'Reasoning · Real-time',  icon: GrokIcon,    iconColor: '#d4d4d8', angleDeg: 240 },
-  { id: 'claude',   name: 'Claude',   tag: 'Fable 5.1',desc: 'Writing · Analysis',     icon: ClaudeIcon,  iconColor: '#fb923c', angleDeg: 300 },
+  { id: 'gpt',      name: 'GPT-6',    tag: 'Astra',     desc: 'Reasoning · Coding',    icon: OpenAiIcon,   iconColor: '#10b981' },
+  { id: 'gemini',   name: 'Gemini',   tag: 'Flash 3.8', desc: 'Multimodal · Search',   icon: GeminiIcon,   iconColor: '#3b82f6' },
+  { id: 'deepseek', name: 'DeepSeek', tag: 'v4.1 Flash',desc: 'Reasoning · Coding',    icon: DeepSeekIcon, iconColor: '#38bdf8' },
+  { id: 'qwen',     name: 'Qwen',     tag: '3.8 Max',   desc: 'Coding · Open source',  icon: QwenIcon,     iconColor: '#a78bfa' },
+  { id: 'grok',     name: 'Grok',     tag: '4.7',       desc: 'Reasoning · Real-time', icon: GrokIcon,     iconColor: '#d4d4d8' },
+  { id: 'claude',   name: 'Claude',   tag: 'Fable 5.1', desc: 'Writing · Analysis',    icon: ClaudeIcon,   iconColor: '#fb923c' },
 ];
 
-function orbitPos(angleDeg: number, r = ORBIT_R) {
-  const rad = ((angleDeg - 90) * Math.PI) / 180;
-  return { x: CX + r * Math.cos(rad), y: CY + r * Math.sin(rad) };
-}
+const N = MODELS.length;
 
-/** Pre-computed home positions in SVG space */
-const HOME = MODELS.map(m => orbitPos(m.angleDeg));
-
-// ─── Vec2 helpers ─────────────────────────────────────────────────────────────
-
-type Vec2 = { x: number; y: number };
-const len  = (v: Vec2) => Math.sqrt(v.x * v.x + v.y * v.y);
-const clampSpeed = (v: Vec2, max: number): Vec2 => {
-  const s = len(v);
-  return s > max ? { x: v.x / s * max, y: v.y / s * max } : v;
-};
+/**
+ * 6 home slots evenly spaced around the circle (unwrapped radians):
+ * Slot 0: Top (-pi/2)
+ * Slot 1: Top-Right (-pi/6)
+ * Slot 2: Bottom-Right (+pi/6)
+ * Slot 3: Bottom (+pi/2)
+ * Slot 4: Bottom-Left (+5pi/6)
+ * Slot 5: Top-Left (+7pi/6)
+ */
+const HOME_ANGLES = MODELS.map((_, i) => -Math.PI / 2 + (i * 2 * Math.PI) / N);
 
 // ─── Component ───────────────────────────────────────────────────────────────
 
@@ -92,111 +104,168 @@ export function ModelHub({ className }: { className?: string }) {
   const svgRef       = useRef<SVGSVGElement>(null);
   const rafId        = useRef<number>(0);
 
-  // Physics state — actual SVG-space positions and velocities
-  const pos = useRef<Vec2[]>(MODELS.map((_, i) => ({ ...HOME[i] })));
-  const vel = useRef<Vec2[]>(MODELS.map(() => ({ x: 0, y: 0 })));
+  // Unwrapped angles for each model
+  const anglesRef  = useRef<number[]>([...HOME_ANGLES]);
+  const angVelRef  = useRef<number[]>(MODELS.map(() => 0));
+  const radiusRef  = useRef<number[]>(MODELS.map(() => ORBIT_R));
 
-  // Cursor state in client-px (null = outside component)
-  const cursor = useRef<Vec2 | null>(null);
+  // Cursor state in client viewport px
+  const cursorRef  = useRef<{ x: number; y: number } | null>(null);
 
-  // ── Main physics + render loop ──────────────────────────────────────────────
+  // ── Physics + Render Loop ──────────────────────────────────────────────────
   const tick = useCallback((now: number) => {
     const container = containerRef.current;
-    if (!container) { rafId.current = requestAnimationFrame(tick); return; }
+    if (!container) {
+      rafId.current = requestAnimationFrame(tick);
+      return;
+    }
 
     const rect   = container.getBoundingClientRect();
     const scaleX = SVG_W / rect.width;
     const scaleY = SVG_H / rect.height;
-    const t      = now / 1000;
+    const time   = now * 0.001;
 
-    // Cursor in SVG space
-    const mx = cursor.current ? (cursor.current.x - rect.left) * scaleX : null;
-    const my = cursor.current ? (cursor.current.y - rect.top)  * scaleY : null;
+    // Convert cursor to SVG coordinates
+    let mx: number | null = null;
+    let my: number | null = null;
+    let mAngle: number | null = null;
+    let mDistCenter = 0;
 
-    // ── Physics ────────────────────────────────────────────────────────────────
-    for (let i = 0; i < MODELS.length; i++) {
-      const p = pos.current[i];
-      const v = vel.current[i];
-      const h = HOME[i];
+    if (cursorRef.current) {
+      mx = (cursorRef.current.x - rect.left) * scaleX;
+      my = (cursorRef.current.y - rect.top)  * scaleY;
+      mDistCenter = Math.hypot(mx - CX, my - CY);
+      mAngle = Math.atan2(my - CY, mx - CX);
+    }
 
-      // 1. Spring back to home orbit position
-      let fx = (h.x - p.x) * SPRING_K;
-      let fy = (h.y - p.y) * SPRING_K;
+    const angles = anglesRef.current;
+    const angVel = angVelRef.current;
+    const radii  = radiusRef.current;
 
-      // 2. Cursor repulsion
-      if (mx !== null && my !== null) {
-        const dx = p.x - mx;
-        const dy = p.y - my;
-        const d  = Math.sqrt(dx * dx + dy * dy);
-        if (d < CURSOR_REPEL_R && d > 1) {
-          const falloff = 1 - d / CURSOR_REPEL_R;
-          const str     = falloff * falloff * CURSOR_REPEL_STR / d;
-          fx += dx * str;
-          fy += dy * str;
+    // ── 1. Calculate Forces per Model ────────────────────────────────────────
+    for (let i = 0; i < N; i++) {
+      const th = angles[i];
+      let netForce = 0;
+
+      // A) Restorative spring to home slot
+      const homeDelta = HOME_ANGLES[i] - th;
+      netForce += homeDelta * K_HOME_SPRING;
+
+      // Current Cartesian position of card
+      const currR = radii[i];
+      const cardX = CX + currR * Math.cos(th);
+      const cardY = CY + currR * Math.sin(th);
+
+      let targetRadius = ORBIT_R;
+
+      // B) Cursor repulsion along orbit & radial push
+      if (mx !== null && my !== null && mAngle !== null && mDistCenter > 40 && mDistCenter < 360) {
+        const distToCursor = Math.hypot(cardX - mx, cardY - my);
+
+        if (distToCursor < CURSOR_REPEL_RADIUS && distToCursor > 0.5) {
+          const falloff = (1 - distToCursor / CURSOR_REPEL_RADIUS);
+          const pushIntensity = falloff * falloff;
+
+          // Angular separation along the circle
+          const angDiff = wrapAngle(th - mAngle);
+          // Push clockwise if card is CW of cursor, or counter-clockwise if CCW
+          const pushSign = angDiff >= 0 ? 1 : -1;
+
+          netForce += pushSign * pushIntensity * CURSOR_ANG_FORCE;
+
+          // Radial expansion: card flexes slightly outward as cursor enters orbit
+          targetRadius = ORBIT_R + pushIntensity * MAX_RADIAL_PUSH;
         }
       } else {
-        // Gentle idle drift when cursor absent
-        const phase = (i / MODELS.length) * Math.PI * 2;
-        fx += Math.sin(t * 0.45 + phase) * IDLE_FORCE;
-        fy += Math.cos(t * 0.35 + phase + 1.2) * IDLE_FORCE;
+        // C) Idle orbital harmonic drift (gentle breathing)
+        const phase = (i * 2 * Math.PI) / N;
+        netForce += Math.sin(time * 0.7 + phase) * 0.0018;
       }
 
-      // 3. Card–card repulsion
-      for (let j = 0; j < MODELS.length; j++) {
-        if (j === i) continue;
-        const o  = pos.current[j];
-        const dx = p.x - o.x;
-        const dy = p.y - o.y;
-        const d  = Math.sqrt(dx * dx + dy * dy);
-        if (d < CARD_REPEL_R && d > 1) {
-          const falloff = 1 - d / CARD_REPEL_R;
-          const str     = falloff * CARD_REPEL_STR / d;
-          fx += dx * str;
-          fy += dy * str;
+      // Smooth radial spring
+      radii[i] += (targetRadius - radii[i]) * 0.14;
+
+      // D) Soft mutual repulsion cushion with neighbors
+      const prevIdx = (i - 1 + N) % N;
+      const nextIdx = (i + 1) % N;
+
+      // Distance to next neighbor
+      const nextDiff = (i === N - 1)
+        ? (angles[0] + 2 * Math.PI) - th
+        : angles[nextIdx] - th;
+
+      if (nextDiff < CUSHION_GAP) {
+        const cushion = (1 - nextDiff / CUSHION_GAP) * CUSHION_FORCE;
+        netForce -= cushion;
+      }
+
+      // Distance to prev neighbor
+      const prevDiff = (i === 0)
+        ? th - (angles[N - 1] - 2 * Math.PI)
+        : th - angles[prevIdx];
+
+      if (prevDiff < CUSHION_GAP) {
+        const cushion = (1 - prevDiff / CUSHION_GAP) * CUSHION_FORCE;
+        netForce += cushion;
+      }
+
+      // Integrate angular velocity
+      angVel[i] = (angVel[i] + netForce) * ANG_DAMPING;
+      angVel[i] = Math.max(-MAX_ANG_VEL, Math.min(MAX_ANG_VEL, angVel[i]));
+      angles[i] += angVel[i];
+    }
+
+    // ── 2. Hard Geometric Collision Constraint (Non-penetration) ─────────────
+    // Run 3 constraint solver iterations to prevent any model from penetrating another
+    for (let iter = 0; iter < 3; iter++) {
+      for (let i = 0; i < N; i++) {
+        const nextIdx = (i + 1) % N;
+        const nextAngle = (i === N - 1) ? angles[0] + 2 * Math.PI : angles[nextIdx];
+        const gap = nextAngle - angles[i];
+
+        if (gap < MIN_ANGULAR_GAP) {
+          const penetration = (MIN_ANGULAR_GAP - gap) * 0.5;
+          angles[i] -= penetration;
+          if (i === N - 1) {
+            angles[0] += penetration;
+          } else {
+            angles[nextIdx] += penetration;
+          }
+
+          // Inelastic impulse dampens relative closing speed
+          angVel[i] *= 0.6;
+          angVel[nextIdx] *= 0.6;
         }
       }
-
-      // 4. Integrate velocity with damping
-      v.x = (v.x + fx) * DAMPING;
-      v.y = (v.y + fy) * DAMPING;
-
-      // 5. Clamp speed
-      const clamped = clampSpeed(v, MAX_SPEED);
-      v.x = clamped.x;
-      v.y = clamped.y;
-
-      // 6. Update position
-      p.x += v.x;
-      p.y += v.y;
     }
 
-    // ── DOM writes ─────────────────────────────────────────────────────────────
-    for (let i = 0; i < MODELS.length; i++) {
+    // ── 3. DOM Transforms & SVG Line Updates ──────────────────────────────────
+    for (let i = 0; i < N; i++) {
       const card = cardRefs.current[i];
-      if (!card) continue;
+      const th = angles[i];
+      const r  = radii[i];
 
-      const p = pos.current[i];
-      const h = HOME[i];
+      const x = CX + r * Math.cos(th);
+      const y = CY + r * Math.sin(th);
 
-      // Offset from home in DOM px
-      const ox = (p.x - h.x) / scaleX;
-      const oy = (p.y - h.y) / scaleY;
+      if (card) {
+        const domOffsetX = (x - CX) / scaleX;
+        const domOffsetY = (y - CY) / scaleY;
 
-      card.style.transform = `translate(-50%, -50%) translate(${ox.toFixed(2)}px, ${oy.toFixed(2)}px)`;
-    }
+        card.style.transform = `translate(-50%, -50%) translate(${domOffsetX.toFixed(2)}px, ${domOffsetY.toFixed(2)}px)`;
+      }
 
-    // ── SVG lines follow card positions ────────────────────────────────────────
-    if (svgRef.current) {
-      const lines = svgRef.current.querySelectorAll<SVGLineElement>('[data-line]');
-      lines.forEach((line, i) => {
-        const p = pos.current[i];
-        line.setAttribute('x1', p.x.toFixed(1));
-        line.setAttribute('y1', p.y.toFixed(1));
-      });
+      // Update connecting ray from Sun (CX, CY) to Model planet (x, y)
+      if (svgRef.current) {
+        const line = svgRef.current.querySelector<SVGLineElement>(`[data-line="${MODELS[i].id}"]`);
+        if (line) {
+          line.setAttribute('x1', x.toFixed(1));
+          line.setAttribute('y1', y.toFixed(1));
+        }
+      }
     }
 
     rafId.current = requestAnimationFrame(tick);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
@@ -204,26 +273,29 @@ export function ModelHub({ className }: { className?: string }) {
     return () => cancelAnimationFrame(rafId.current);
   }, [tick]);
 
-  // ── Mouse events ───────────────────────────────────────────────────────────
-  const onMove  = useCallback((e: MouseEvent) => { cursor.current = { x: e.clientX, y: e.clientY }; }, []);
-  const onLeave = useCallback(() => { cursor.current = null; }, []);
+  // ── Mouse Listeners ────────────────────────────────────────────────────────
+  const onMouseMove = useCallback((e: MouseEvent) => {
+    cursorRef.current = { x: e.clientX, y: e.clientY };
+  }, []);
+
+  const onMouseLeave = useCallback(() => {
+    cursorRef.current = null;
+  }, []);
 
   useEffect(() => {
     const el = containerRef.current;
     if (!el) return;
-    el.addEventListener('mousemove', onMove);
-    el.addEventListener('mouseleave', onLeave);
+    el.addEventListener('mousemove', onMouseMove);
+    el.addEventListener('mouseleave', onMouseLeave);
     return () => {
-      el.removeEventListener('mousemove', onMove);
-      el.removeEventListener('mouseleave', onLeave);
+      el.removeEventListener('mousemove', onMouseMove);
+      el.removeEventListener('mouseleave', onMouseLeave);
     };
-  }, [onMove, onLeave]);
+  }, [onMouseMove, onMouseLeave]);
 
-  // ── Render ─────────────────────────────────────────────────────────────────
   return (
     <div className={cn('w-full flex items-center justify-center', className)}>
-
-      {/* Mobile: 2×3 grid */}
+      {/* ── Mobile: 2×3 card grid fallback ─────────────────────────────────── */}
       <div className="grid grid-cols-2 gap-2.5 w-full sm:hidden">
         {MODELS.map((m) => {
           const Icon = m.icon;
@@ -232,7 +304,10 @@ export function ModelHub({ className }: { className?: string }) {
               key={m.id}
               className="flex items-center gap-2.5 rounded-lg border border-stroke bg-surface p-2.5 transition-colors hover:border-stroke-strong"
             >
-              <div className="grid size-7 shrink-0 place-items-center rounded-md bg-surface-2" style={{ color: m.iconColor }}>
+              <div
+                className="grid size-7 shrink-0 place-items-center rounded-md bg-surface-2"
+                style={{ color: m.iconColor }}
+              >
                 <Icon className="size-3.5" />
               </div>
               <div className="min-w-0 text-left">
@@ -247,13 +322,13 @@ export function ModelHub({ className }: { className?: string }) {
         })}
       </div>
 
-      {/* Desktop: physics hub */}
+      {/* ── Desktop: Planetary Orbital Hub ─────────────────────────────────── */}
       <div
         ref={containerRef}
-        className="relative hidden sm:block w-full max-w-[520px]"
+        className="relative hidden sm:block w-full max-w-[540px]"
         style={{ aspectRatio: `${SVG_W} / ${SVG_H}` }}
       >
-        {/* SVG: decorative rings + lines */}
+        {/* SVG background: orbital track + radial connector rays */}
         <svg
           ref={svgRef}
           className="absolute inset-0 size-full pointer-events-none"
@@ -261,93 +336,146 @@ export function ModelHub({ className }: { className?: string }) {
           fill="none"
           style={{ overflow: 'visible' }}
         >
-          {/* Soft centre glow */}
-          <circle cx={CX} cy={CY} r={80} fill="rgba(16,185,129,0.04)" />
+          {/* Gravitational halo glow around Sun */}
+          <circle cx={CX} cy={CY} r={85} fill="rgba(16,185,129,0.05)" />
 
-          {/* Decorative orbit rings */}
-          <circle cx={CX} cy={CY} r={ORBIT_R + 18} stroke="rgba(255,255,255,0.05)" strokeWidth={1} strokeDasharray="3 7" />
-          <circle cx={CX} cy={CY} r={ORBIT_R - 28} stroke="rgba(255,255,255,0.03)" strokeWidth={1} strokeDasharray="1 9" />
+          {/* Primary circular orbit track */}
+          <circle
+            cx={CX}
+            cy={CY}
+            r={ORBIT_R}
+            stroke="rgba(255,255,255,0.08)"
+            strokeWidth={1}
+            strokeDasharray="4 6"
+          />
 
-          {/* Lines from each card to centre — x1/y1 updated by rAF */}
-          {MODELS.map((m, i) => (
-            <line
-              key={m.id}
-              data-line
-              x1={HOME[i].x}
-              y1={HOME[i].y}
-              x2={CX}
-              y2={CY}
-              stroke="rgba(255,255,255,0.15)"
-              strokeWidth={1}
-              strokeDasharray="3 6"
-            />
-          ))}
+          {/* Subtle outer orbit ring */}
+          <circle
+            cx={CX}
+            cy={CY}
+            r={ORBIT_R + 24}
+            stroke="rgba(16,185,129,0.04)"
+            strokeWidth={1}
+            strokeDasharray="2 8"
+          />
+
+          {/* Rays from Sun (CX, CY) to Model planets */}
+          {MODELS.map((m, i) => {
+            const th = HOME_ANGLES[i];
+            const initX = CX + ORBIT_R * Math.cos(th);
+            const initY = CY + ORBIT_R * Math.sin(th);
+            return (
+              <line
+                key={m.id}
+                data-line={m.id}
+                x1={initX}
+                y1={initY}
+                x2={CX}
+                y2={CY}
+                stroke="rgba(255,255,255,0.16)"
+                strokeWidth={1}
+                strokeDasharray="3 5"
+              />
+            );
+          })}
         </svg>
 
-        {/* Central hub — static */}
+        {/* ── The Sun: Ketner AI Core Hub (Fixed in the Center) ──────────────── */}
         <div
           className="absolute z-10"
-          style={{ left: `${(CX / SVG_W) * 100}%`, top: `${(CY / SVG_H) * 100}%`, transform: 'translate(-50%, -50%)' }}
+          style={{
+            left: `${(CX / SVG_W) * 100}%`,
+            top:  `${(CY / SVG_H) * 100}%`,
+            transform: 'translate(-50%, -50%)',
+          }}
         >
           <div
             className="relative flex flex-col items-center justify-center select-none"
             style={{
-              width: 96, height: 96,
+              width: 100,
+              height: 100,
               borderRadius: '50%',
-              background: 'radial-gradient(circle at 40% 35%, #1c2820, #101510)',
-              border: '1px solid rgba(16,185,129,0.22)',
-              boxShadow: '0 0 0 1px rgba(16,185,129,0.07) inset',
+              background: 'radial-gradient(circle at 40% 35%, #1d2a22, #0b110d)',
+              border: '1px solid rgba(16,185,129,0.28)',
+              boxShadow: '0 0 35px rgba(16,185,129,0.14), inset 0 0 16px rgba(16,185,129,0.08)',
             }}
           >
-            <img src="/logo-mark.png" alt="Ketner AI" className="size-8 object-contain"
-              style={{ filter: 'drop-shadow(0 0 5px rgba(16,185,129,0.5))' }}
+            {/* Subtle inner orbital halo ring */}
+            <div
+              style={{
+                position: 'absolute',
+                inset: 3,
+                borderRadius: '50%',
+                border: '1px dashed rgba(16,185,129,0.15)',
+                pointerEvents: 'none',
+              }}
             />
-            <span className="mt-1 font-mono uppercase"
-              style={{ fontSize: 7.5, color: 'rgba(16,185,129,0.60)', letterSpacing: '0.11em' }}
+            <img
+              src="/logo-mark.png"
+              alt="Ketner AI"
+              className="size-8 object-contain"
+              style={{ filter: 'drop-shadow(0 0 6px rgba(16,185,129,0.55))' }}
+            />
+            <span
+              className="mt-1 font-mono uppercase"
+              style={{ fontSize: 7.5, color: 'rgba(16,185,129,0.7)', letterSpacing: '0.12em' }}
             >
               KETNER AI
             </span>
           </div>
         </div>
 
-        {/* Model cards — left/top anchored at HOME, transform moved by rAF */}
+        {/* ── Model Planets: Orbiting along the Circular Track ────────────────── */}
         {MODELS.map((m, i) => {
           const Icon = m.icon;
+          const th = HOME_ANGLES[i];
+          const initX = CX + ORBIT_R * Math.cos(th);
+          const initY = CY + ORBIT_R * Math.sin(th);
+
           return (
             <div
               key={m.id}
               ref={(el) => { cardRefs.current[i] = el; }}
-              className="absolute z-20"
+              className="absolute z-20 pointer-events-none"
               style={{
-                left: `${(HOME[i].x / SVG_W) * 100}%`,
-                top:  `${(HOME[i].y / SVG_H) * 100}%`,
-                transform: 'translate(-50%, -50%)',
+                left: `${(CX / SVG_W) * 100}%`,
+                top:  `${(CY / SVG_H) * 100}%`,
+                transform: `translate(-50%, -50%) translate(${(initX - CX).toFixed(2)}px, ${(initY - CY).toFixed(2)}px)`,
                 transformOrigin: 'center center',
                 willChange: 'transform',
               }}
             >
               <div
-                className="flex items-center gap-2.5 rounded-xl px-3 py-2 whitespace-nowrap select-none"
+                className="flex items-center gap-2.5 rounded-xl px-3 py-2 whitespace-nowrap select-none pointer-events-auto transition-colors"
                 style={{
-                  background: 'rgba(13, 20, 15, 0.72)',
+                  background: 'rgba(12, 18, 14, 0.78)',
                   backdropFilter: 'blur(14px)',
                   WebkitBackdropFilter: 'blur(14px)',
                   border: '1px solid rgba(255,255,255,0.08)',
-                  boxShadow: '0 2px 14px rgba(0,0,0,0.5)',
+                  boxShadow: '0 4px 18px rgba(0,0,0,0.5)',
                 }}
               >
                 <div
                   className="grid size-7 shrink-0 place-items-center rounded-lg"
-                  style={{ background: `${m.iconColor}12`, color: m.iconColor, border: `1px solid ${m.iconColor}28` }}
+                  style={{
+                    background: `${m.iconColor}14`,
+                    color: m.iconColor,
+                    border: `1px solid ${m.iconColor}28`,
+                  }}
                 >
                   <Icon className="size-4" />
                 </div>
+
                 <div className="text-left">
                   <div className="flex items-center gap-1.5">
                     <span className="text-xs font-semibold text-text">{m.name}</span>
                     <span
                       className="font-mono text-[10px] px-1.5 rounded"
-                      style={{ color: m.iconColor, background: `${m.iconColor}14`, border: `1px solid ${m.iconColor}24` }}
+                      style={{
+                        color: m.iconColor,
+                        background: `${m.iconColor}14`,
+                        border: `1px solid ${m.iconColor}24`,
+                      }}
                     >
                       {m.tag}
                     </span>
