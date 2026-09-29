@@ -40,13 +40,13 @@ describe('чат: отправка, стриминг и управление о�
   });
 
   it('отправляет сообщение, создаёт диалог и показывает потоковый ответ', async () => {
-    const api = installFakeApi({ reply: 'Привет из демо-модели' });
+    const api = installFakeApi({ reply: 'Привет от Ketner AI' });
     const user = setupChat();
 
     await sendMessage(user, 'Как дела?');
 
     expect(await screen.findAllByText('Как дела?')).not.toHaveLength(0);
-    expect(await screen.findByText('Привет из демо-модели')).toBeInTheDocument();
+    expect(await screen.findByText('Привет от Ketner AI')).toBeInTheDocument();
     // Ответ получает идентификатор с сервера: сохранённое сообщение и то, что
     // видно в ленте, — одна и та же сущность.
     expect(lastAssistant().id).toBe('assistant-1');

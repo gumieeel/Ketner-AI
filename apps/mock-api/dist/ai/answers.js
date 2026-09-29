@@ -514,8 +514,8 @@ export function pickAnswer(prompt, language, random, selectedModelName) {
     answer = answer.replace(/\{model\}/g, modelDisplay);
     return answer;
 }
-/** Текст ошибки заглушки: интерфейс показывает его в сообщении ассистента. */
+/** Текст ошибки: интерфейс показывает его в сообщении ассистента. */
 export const ERROR_MESSAGES = {
-    ru: 'Демонстрационная модель не ответила. Попробуйте отправить сообщение ещё раз.',
-    en: 'The demo model did not answer. Please send the message again.',
+    ru: 'Модель не ответила на запрос. Попробуйте отправить сообщение ещё раз.',
+    en: 'The AI model did not answer. Please try sending the message again.',
 };

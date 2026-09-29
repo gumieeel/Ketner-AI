@@ -1,6 +1,5 @@
 import { useLocation, useNavigate } from 'react-router-dom';
 import { MenuIcon, PlusIcon, ShareIcon } from '@/components/icons';
-import { Badge } from '@/components/ui/badge';
 import { IconButton } from '@/components/ui/icon-button';
 import { StubAction } from '@/components/ui/stub-action';
 import { useChat } from '@/features/chat/chat-store';
@@ -9,7 +8,7 @@ import { useTranslation } from '@/i18n';
 import { LanguageToggle } from './language-toggle';
 import { ThemeToggle } from './theme-toggle';
 
-/** Шапка рабочей области: название диалога, демо-пометка, «Поделиться», язык и тема. */
+/** Шапка рабочей области: название диалога, «Поделиться», язык и тема. */
 export function Header() {
   const { t } = useTranslation();
   const location = useLocation();
@@ -31,9 +30,6 @@ export function Header() {
       <h1 className="truncate text-sm font-medium text-text">
         {inChat ? title || t('chat.title') : t('app.name')}
       </h1>
-      <Badge tone="warning" className="hidden sm:inline-flex font-mono text-[11px]">
-        {t('common.mock')}
-      </Badge>
 
       <div className="ml-auto flex items-center gap-1.5">
         {inChat ? (

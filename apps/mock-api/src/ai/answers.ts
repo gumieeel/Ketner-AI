@@ -542,8 +542,8 @@ export function pickAnswer(
   return answer;
 }
 
-/** Текст ошибки заглушки: интерфейс показывает его в сообщении ассистента. */
+/** Текст ошибки: интерфейс показывает его в сообщении ассистента. */
 export const ERROR_MESSAGES: Record<Language, string> = {
-  ru: 'Демонстрационная модель не ответила. Попробуйте отправить сообщение ещё раз.',
-  en: 'The demo model did not answer. Please send the message again.',
+  ru: 'Модель не ответила на запрос. Попробуйте отправить сообщение ещё раз.',
+  en: 'The AI model did not answer. Please try sending the message again.',
 };

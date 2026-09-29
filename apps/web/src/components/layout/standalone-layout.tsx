@@ -1,7 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link, Outlet, useLocation } from 'react-router-dom';
 import { CloseIcon, MenuIcon } from '@/components/icons';
-import { Badge } from '@/components/ui/badge';
 import { IconButton } from '@/components/ui/icon-button';
 import { useAuth } from '@/features/auth/auth-store';
 import { useTranslation } from '@/i18n';
@@ -318,10 +317,6 @@ export function StandaloneLayout() {
           <div className="flex flex-wrap items-center justify-between gap-4 pt-6 border-t border-stroke text-xs text-muted">
             <div className="flex flex-wrap items-center gap-3">
               <span>© {new Date().getFullYear()} Ketner AI</span>
-              <span>·</span>
-              <Badge tone="warning">
-                {t('landing.mockBadge')}
-              </Badge>
             </div>
 
             <div className="flex items-center gap-3">

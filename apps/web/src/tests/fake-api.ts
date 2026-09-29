@@ -74,7 +74,7 @@ const META: ChatMeta = {
   },
 };
 
-const DEFAULT_REPLY = 'Ответ демонстрационной модели.';
+const DEFAULT_REPLY = 'Ответ модели Ketner AI.';
 
 function json(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), {

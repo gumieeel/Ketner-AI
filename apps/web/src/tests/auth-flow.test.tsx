@@ -50,7 +50,7 @@ describe('auth-flow: сценарии авторизации и сессии', (
   it('быстрый демо-вход по ссылке', async () => {
     renderRoute('/login');
 
-    const quickFill = screen.getByText(/Быстрый вход как демо-пользователь/i);
+    const quickFill = screen.getByText(/Быстрый вход/i);
     fireEvent.click(quickFill);
 
     const emailInput = screen.getByLabelText(/Email/i) as HTMLInputElement;
