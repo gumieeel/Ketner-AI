@@ -186,9 +186,9 @@ export const ru = {
   'chat.modelAuto': 'Auto',
   'chat.modelMini': 'Ketner Mini · Qwen 2.5 Coder',
   'chat.modelPro': 'Ketner Pro · Qwen 2.5 Max *',
-  'chat.modelGptAstra': 'GPT-6 Astra',
-  'chat.modelClaudeFable': 'Claude Fable 5.5',
-  'chat.modelGeminiPro': 'Gemini 3.8 Flash',
+  'chat.modelGptAstra': 'GPT-6 Astra *',
+  'chat.modelClaudeFable': 'Claude Fable 5.5 *',
+  'chat.modelGeminiPro': 'Gemini 3.8 Flash *',
   'chat.modelGrok': 'Grok 4.7',
   'chat.upgradeRequired': 'Требуется подписка (Upgrade your plan)',
   'chat.upgradeRequiredDesc':

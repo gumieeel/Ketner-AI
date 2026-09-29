@@ -1,7 +1,7 @@
 import { ApiError } from '../chat/api';
+import { API_BASE } from '@/lib/api-config';
 import type { AuthSession, LoginPayload, SignupPayload, User } from './types';
 
-const API_BASE = '/api';
 const JSON_HEADERS = { 'Content-Type': 'application/json' };
 
 async function toApiError(response: Response): Promise<ApiError> {

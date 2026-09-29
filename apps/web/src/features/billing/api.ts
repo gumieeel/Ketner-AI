@@ -1,8 +1,8 @@
 import { getAuthToken } from '../auth/auth-store';
 import { ApiError } from '../chat/api';
+import { API_BASE } from '@/lib/api-config';
 import type { Plan, PlanId, SbpInvoice, Subscription, TelegramStarsInvoice } from './types';
 
-const API_BASE = '/api';
 const JSON_HEADERS = { 'Content-Type': 'application/json' };
 
 async function toApiError(response: Response): Promise<ApiError> {
@@ -135,4 +135,18 @@ export async function confirmTelegramStarsPayment(invoiceId: string): Promise<{
   }>(`/billing/telegram-stars/confirm/${invoiceId}`, {
     method: 'POST',
   });
+}
+
+// --- Stripe ---
+
+export async function createStripeCheckout(
+  planId: PlanId,
+): Promise<{ url: string; sessionId?: string; mock?: boolean }> {
+  return request<{ url: string; sessionId?: string; mock?: boolean }>(
+    '/billing/stripe/create-checkout',
+    {
+      method: 'POST',
+      body: JSON.stringify({ planId }),
+    },
+  );
 }

@@ -262,7 +262,8 @@ export function LandingPage() {
           </div>
 
           {/* Big Headline */}
-          <h1 className="text-4xl sm:text-5xl lg:text-6xl font-extrabold tracking-tight text-white leading-[1.12]">
+          <h1 aria-label="Ketner AI" className="text-4xl sm:text-5xl lg:text-6xl font-extrabold tracking-tight text-white leading-[1.12]">
+            <span className="sr-only">Ketner AI — </span>
             Все AI-модели.<br />
             Один интерфейс.
           </h1>
@@ -284,7 +285,7 @@ export function LandingPage() {
               to="/chat"
               className="inline-flex items-center justify-center gap-2 rounded-xl bg-emerald-400 px-7 py-3.5 text-sm font-bold text-slate-950 hover:bg-emerald-300 transition-all shadow-lg">
               <span>{t('landing.cta')}</span>
-              <span className="text-base font-bold">→</span>
+              <span aria-hidden="true" className="text-base font-bold">→</span>
             </Link>
             <Link
               to="/pricing"

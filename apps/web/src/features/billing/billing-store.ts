@@ -1,6 +1,11 @@
 import { create } from 'zustand';
 import { useAuth } from '../auth/auth-store';
-import { cancelSubscription as apiCancel, checkout as apiCheckout, fetchSubscription } from './api';
+import {
+  cancelSubscription as apiCancel,
+  checkout as apiCheckout,
+  createStripeCheckout,
+  fetchSubscription,
+} from './api';
 import { PLANS } from './plans';
 import type { Plan, PlanId, Subscription } from './types';
 
@@ -11,6 +16,7 @@ interface BillingState {
   error: string | null;
   loadSubscription: () => Promise<void>;
   checkout: (planId: PlanId) => Promise<void>;
+  startStripeCheckout: (planId: PlanId) => Promise<void>;
   cancel: () => Promise<void>;
   setSubscription: (subscription: Subscription, userPlan: PlanId) => void;
 }
@@ -62,6 +68,21 @@ export const useBilling = create<BillingState>((set) => ({
       }
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Ошибка оформления подписки';
+      set({ loading: false, error: message });
+      throw error;
+    }
+  },
+
+  startStripeCheckout: async (planId: PlanId) => {
+    set({ loading: true, error: null });
+    try {
+      const result = await createStripeCheckout(planId);
+      set({ loading: false });
+      if (result.url && typeof window !== 'undefined') {
+        window.location.href = result.url;
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Ошибка создания Stripe Checkout';
       set({ loading: false, error: message });
       throw error;
     }

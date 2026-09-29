@@ -408,12 +408,14 @@ export function installFakeApi(options: FakeApiOptions = {}): FakeApi {
 
       if (url === '/api/billing/telegram-stars/create-invoice' && method === 'POST') {
         const planId = (body.planId as string) || 'gpt-pro';
+        const priceRub = planId === 'ultra' ? 2499 : planId === 'pro' ? 1990 : 1199;
+        const starsAmount = planId === 'ultra' ? 1350 : planId === 'pro' ? 1100 : 650;
         return json({
           invoice: {
             id: 'stars_mock_123',
             planId,
-            priceRub: 1199,
-            starsAmount: 650,
+            priceRub,
+            starsAmount,
             botUsername: 'KetnerAIBot',
             botDeepLink: `https://t.me/KetnerAIBot?start=pay_${planId}_demo-user`,
             status: 'pending',

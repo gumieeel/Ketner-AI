@@ -1,8 +1,8 @@
 import { getAuthToken } from '../auth/auth-store';
 import { readSseStream } from './sse';
+import { API_BASE } from '@/lib/api-config';
 import type { ChatMeta, Conversation, ConversationSummary, Language, Message } from './types';
 
-const API_BASE = '/api';
 const JSON_HEADERS = { 'Content-Type': 'application/json' };
 
 /** Ошибка API: код и текст приходят от сервера в едином формате. */
