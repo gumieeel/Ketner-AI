@@ -1,154 +1,154 @@
-﻿import { Link } from 'react-router-dom';
-import { BookOpenIcon, CheckIcon, SparkleIcon } from '@/components/icons';
-import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
-import { Card } from '@/components/ui/card';
-import { useAuth } from '@/features/auth/auth-store';
-import { PLANS } from '@/features/billing/plans';
+import { Link } from 'react-router-dom';
+import { ArrowRightIcon, SparkleIcon } from '@/components/icons';
+import { PlanCards } from '@/components/pricing/plan-cards';
 import { useTranslation } from '@/i18n';
-import { cn } from '@/lib/cn';
+
+interface ComparisonRow {
+  feature: { ru: string; en: string };
+  free: { ru: string; en: string };
+  plus: { ru: string; en: string };
+  pro: { ru: string; en: string };
+  ultra: { ru: string; en: string };
+}
+
+const COMPARISON_ROWS: ComparisonRow[] = [
+  {
+    feature: { ru: 'Доступные модели', en: 'Available models' },
+    free: { ru: 'Ketner Mini (Qwen)', en: 'Ketner Mini (Qwen)' },
+    plus: { ru: 'Ketner Pro, Claude 3.5', en: 'Ketner Pro, Claude 3.5' },
+    pro: { ru: 'Все топ-модели (GPT-6, Claude, Gemini)', en: 'All top models (GPT-6, Claude, Gemini)' },
+    ultra: { ru: 'Все модели + Экспериментальные', en: 'All models + Experimental preview' },
+  },
+  {
+    feature: { ru: 'Лимит сообщений', en: 'Message limits' },
+    free: { ru: '3 сообщ. / час', en: '3 msgs / hour' },
+    plus: { ru: '50 сообщ. / 3 часа', en: '50 msgs / 3 hours' },
+    pro: { ru: 'Безлимитно для человека', en: 'Unlimited human usage' },
+    ultra: { ru: 'Безлимитно + Макс. квоты', en: 'Unlimited + Max quotas' },
+  },
+  {
+    feature: { ru: 'Скорость генерации', en: 'Generation speed' },
+    free: { ru: 'Базовая', en: 'Standard' },
+    plus: { ru: 'Быстрая', en: 'Fast' },
+    pro: { ru: 'Турбо (выделенная очередь)', en: 'Turbo (dedicated queue)' },
+    ultra: { ru: 'Максимальный приоритет', en: 'Maximum priority' },
+  },
+  {
+    feature: { ru: 'Размер контекста', en: 'Context window' },
+    free: { ru: '8K токенов', en: '8K tokens' },
+    plus: { ru: '32K токенов', en: '32K tokens' },
+    pro: { ru: '128K токенов', en: '128K tokens' },
+    ultra: { ru: '200K+ токенов', en: '200K+ tokens' },
+  },
+  {
+    feature: { ru: 'История и поиск чатов', en: 'Chat history & search' },
+    free: { ru: 'Локально', en: 'Local' },
+    plus: { ru: 'Синхронизация', en: 'Cloud sync' },
+    pro: { ru: 'Полная история и экспорт', en: 'Full history & export' },
+    ultra: { ru: 'Неограниченный архив', en: 'Unlimited archive' },
+  },
+  {
+    feature: { ru: 'API & Доступ для агентов', en: 'API & Agent access' },
+    free: { ru: '—', en: '—' },
+    plus: { ru: '—', en: '—' },
+    pro: { ru: 'Доступно по ключу', en: 'API key included' },
+    ultra: { ru: 'Высокие лимиты API + MCP', en: 'High limits API + MCP' },
+  },
+];
 
 export function PricingPage() {
   const { t, language } = useTranslation();
-  const user = useAuth((state) => state.user);
-  const currentPlan = user?.plan ?? 'free';
 
   return (
-    <div className="relative mx-auto flex w-full max-w-7xl flex-col gap-10 px-4 py-12 md:px-6 lg:px-8 animate-fade-in">
+    <div className="relative mx-auto flex w-full max-w-7xl flex-col gap-16 px-4 py-12 md:px-6 lg:px-8 animate-fade-in text-center">
       {/* Заголовок страницы */}
-      <div className="flex flex-col items-center gap-3 text-center animate-slide-up">
-        <div className="inline-flex items-center gap-1.5 rounded-full border border-accent/30 bg-accent/10 px-3 py-1 text-xs font-medium text-accent">
-          <SparkleIcon className="text-sm" />
+      <div className="flex flex-col items-center gap-3">
+        <div className="inline-flex items-center gap-2 rounded-sm border border-stroke bg-surface-2 px-2.5 py-1 font-mono text-[11px] font-semibold text-accent uppercase tracking-wider">
+          <SparkleIcon className="size-3 text-accent" />
           <span>{t('pricing.nextGenBadge')}</span>
         </div>
-        <h1 className="text-3xl font-semibold tracking-tight text-text md:text-4xl">
+        <h1 className="text-3xl md:text-5xl font-semibold tracking-[-0.03em] text-text">
           {t('pricing.title')}
         </h1>
-        <p className="max-w-2xl text-sm md:text-base leading-relaxed text-zinc-600 dark:text-zinc-300">
+        <p className="max-w-2xl text-sm md:text-base leading-relaxed text-muted">
           {t('pricing.subtitle')}
         </p>
       </div>
 
-      {/* Сетка из 4 карточек тарифов: Free, Plus, Pro, Ultra */}
-      <div className="grid grid-cols-1 gap-5 md:grid-cols-2 lg:grid-cols-4">
-        {PLANS.map((plan) => {
-          const isCurrent = plan.id === currentPlan;
-          const isUltra = plan.id === 'ultra';
+      {/* 4 Карточки тарифов */}
+      <PlanCards variant="full" />
 
-          return (
-            <Card
-              key={plan.id}
-              className={cn(
-                'card-interactive relative flex flex-col justify-between p-5 transition-all duration-200',
-                isCurrent && 'border-accent ring-2 ring-accent/30',
-                isUltra &&
-                  'ultra-glow border-accent/60 bg-gradient-to-b from-accent/5 via-surface to-surface shadow-md',
-              )}
-            >
-              <div>
-                {/* Заголовок и статус */}
-                <div className="flex items-center justify-between gap-2">
-                  <h2 className="text-lg font-semibold tracking-tight text-text">{t(plan.nameKey)}</h2>
-                  {isCurrent ? (
-                    <Badge tone="brand">{t('pricing.currentPlan')}</Badge>
-                  ) : isUltra ? (
-                    <Badge tone="brand">{t('pricing.allInclusive')}</Badge>
-                  ) : plan.popular ? (
-                    <Badge tone="brand">{t('pricing.popular')}</Badge>
-                  ) : null}
-                </div>
+      {/* Таблица сравнения */}
+      <div className="flex flex-col gap-6 w-full text-left">
+        <div className="flex flex-col gap-1">
+          <h2 className="text-xl font-semibold tracking-tight text-text">
+            {t('pricing.compare')}
+          </h2>
+          <p className="text-sm text-muted">
+            {language === 'ru'
+              ? 'Подробный обзор возможностей каждого тарифа'
+              : 'Detailed feature matrix across plans'}
+          </p>
+        </div>
 
-                {/* Цена */}
-                <div className="mt-4 flex items-baseline gap-1">
-                  <span className="text-3xl font-extrabold tracking-tight text-text">
-                    {language === 'ru'
-                      ? plan.priceMonthly === 0
-                        ? '0 ₽'
-                        : `${plan.priceMonthly.toLocaleString('ru-RU')} ₽`
-                      : plan.id === 'free'
-                        ? '$0'
-                        : plan.id === 'plus'
-                          ? '$9.99'
-                          : plan.id === 'pro'
-                            ? '$19.99'
-                            : '$39.99'}
-                  </span>
-                  <span className="text-xs text-muted font-normal">{t('pricing.month')}</span>
-                </div>
-
-                {/* Модели и плавающий лимит */}
-                <div className="mt-3 flex flex-col gap-1.5">
-                  {plan.modelsHighlight && (
-                    <span className="inline-block text-[11px] font-semibold text-accent uppercase tracking-wide">
-                      {typeof plan.modelsHighlight === 'string'
-                        ? plan.modelsHighlight
-                        : plan.modelsHighlight[language]}
-                    </span>
-                  )}
-                  {plan.limitBadge && (
-                    <span className="inline-flex items-center self-start rounded-md bg-canvas px-2 py-0.5 text-[11px] font-medium text-text border border-stroke">
-                      ⏱️ {plan.limitBadge[language]}
-                    </span>
-                  )}
-                </div>
-
-                {/* Пункты преимуществ */}
-                <ul className="mt-4 flex flex-col gap-2.5">
-                  {plan.bullets[language].map((bullet) => (
-                    <li
-                      key={bullet}
-                      className="flex items-start gap-2 text-xs leading-relaxed text-text/85"
-                    >
-                      <CheckIcon className="mt-0.5 shrink-0 text-sm text-accent" />
-                      <span>{bullet}</span>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-
-              {/* Ссылка на доку и кнопка действия */}
-              <div className="mt-6 flex flex-col gap-3 pt-2 border-t border-stroke">
-                <Link
-                  to={`/docs#plan-${plan.id}`}
-                  className="inline-flex items-center gap-1.5 text-xs text-accent font-medium hover:underline transition-colors"
+        <div className="overflow-x-auto rounded-lg border border-stroke bg-surface-1">
+          <table className="w-full border-collapse text-sm">
+            <thead>
+              <tr className="border-b border-stroke bg-surface-2/60 text-xs font-mono uppercase tracking-wider text-muted">
+                <th className="sticky left-0 bg-surface-2 p-4 text-left font-semibold text-text z-10 min-w-[200px]">
+                  {language === 'ru' ? 'Функция' : 'Feature'}
+                </th>
+                <th className="p-4 text-left font-semibold text-text min-w-[140px]">
+                  {language === 'ru' ? 'Тариф Free' : 'Free Plan'}
+                </th>
+                <th className="p-4 text-left font-semibold text-text min-w-[150px]">
+                  {language === 'ru' ? 'Тариф Plus' : 'Plus Plan'}
+                </th>
+                <th className="p-4 text-left font-semibold text-accent min-w-[180px]">
+                  {language === 'ru' ? 'Тариф Pro' : 'Pro Plan'}
+                </th>
+                <th className="p-4 text-left font-semibold text-text min-w-[180px]">
+                  {language === 'ru' ? 'Тариф Ultra' : 'Ultra Plan'}
+                </th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-stroke/60">
+              {COMPARISON_ROWS.map((row, idx) => (
+                <tr
+                  key={idx}
+                  className="transition-colors hover:bg-surface-2/40"
                 >
-                  <BookOpenIcon className="text-sm shrink-0" />
-                  <span>{t('pricing.viewDocs')}</span>
-                </Link>
-
-                <div>
-                  {isCurrent ? (
-                    <Button variant="outline" disabled className="w-full opacity-70 text-xs">
-                      {t('pricing.currentPlanBadge')}
-                    </Button>
-                  ) : plan.id === 'free' ? (
-                    <Link to="/chat" className="block w-full">
-                      <Button variant="outline" className="w-full text-xs">
-                        {t('landing.cta')}
-                      </Button>
-                    </Link>
-                  ) : (
-                    <Link to={`/checkout/${plan.id}`} className="block w-full">
-                      <Button
-                        variant={isUltra || plan.popular ? 'primary' : 'outline'}
-                        className="w-full text-xs"
-                      >
-                        {t('pricing.choosePlan')}
-                      </Button>
-                    </Link>
-                  )}
-                </div>
-              </div>
-            </Card>
-          );
-        })}
+                  <td className="sticky left-0 bg-surface-1 p-4 font-medium text-text z-10">
+                    {row.feature[language]}
+                  </td>
+                  <td className="p-4 text-muted text-xs">
+                    {row.free[language]}
+                  </td>
+                  <td className="p-4 text-muted text-xs">
+                    {row.plus[language]}
+                  </td>
+                  <td className="p-4 text-text text-xs font-medium">
+                    {row.pro[language]}
+                  </td>
+                  <td className="p-4 text-text text-xs font-medium">
+                    {row.ultra[language]}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       </div>
 
-      {/* Нижняя сноска со ссылкой на документацию */}
-      <div className="flex flex-col items-center gap-2 text-center text-xs text-zinc-500 dark:text-zinc-400">
+      {/* Нижняя сноска */}
+      <div className="flex flex-col items-center gap-3 text-center text-xs text-muted pt-4 border-t border-stroke">
         <p>{t('pricing.notice')}</p>
-        <Link to="/docs" className="text-accent underline hover:opacity-80 transition-opacity">
-          {t('pricing.docsLink')}
+        <Link
+          to="/docs"
+          className="inline-flex items-center gap-1.5 text-accent font-medium hover:underline transition-colors font-mono uppercase tracking-wider text-[11px]"
+        >
+          <span>{t('pricing.docsLink')}</span>
+          <ArrowRightIcon className="size-3" />
         </Link>
       </div>
     </div>

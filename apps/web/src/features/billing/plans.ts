@@ -30,6 +30,18 @@ export const PLANS: readonly Plan[] = [
         'Intelligent Best AI (Auto) mode',
       ],
     },
+    highlights: {
+      ru: [
+        'Базовая скорость ответов',
+        'Стандартная очередь',
+        'Стандартный контекст диалога',
+      ],
+      en: [
+        'Standard response speed',
+        'Standard queue priority',
+        'Standard context window',
+      ],
+    },
   },
   {
     id: 'plus',
@@ -55,6 +67,18 @@ export const PLANS: readonly Plan[] = [
         'Fast response speed',
         'Unlimited conversation context',
         'Access via Auto Mode or manual model selection',
+      ],
+    },
+    highlights: {
+      ru: [
+        'Быстрая скорость генерации',
+        'Повышенный приоритет очереди',
+        'Безлимитный контекст диалога',
+      ],
+      en: [
+        'Fast response speed',
+        'Enhanced queue priority',
+        'Unlimited conversation context',
       ],
     },
   },
@@ -85,6 +109,18 @@ export const PLANS: readonly Plan[] = [
         'Standard processing speed',
         'Unlimited conversation context',
         'Manual selection of any top model',
+      ],
+    },
+    highlights: {
+      ru: [
+        'Средняя скорость обработки',
+        'Высокий приоритет без ожидания',
+        'Безлимитный контекст диалога',
+      ],
+      en: [
+        'Standard processing speed',
+        'High priority processing',
+        'Unlimited conversation context',
       ],
     },
   },
@@ -118,6 +154,18 @@ export const PLANS: readonly Plan[] = [
         'Full model usage at 100% without limitations',
         'Dedicated VIP queue priority',
         'Parallel concurrent requests without delays',
+      ],
+    },
+    highlights: {
+      ru: [
+        'Максимальная скорость обработки',
+        'Выделенный VIP-приоритет',
+        'Безлимитный контекст диалога',
+      ],
+      en: [
+        'Maximum processing speed',
+        'Dedicated VIP priority',
+        'Unlimited conversation context',
       ],
     },
   },

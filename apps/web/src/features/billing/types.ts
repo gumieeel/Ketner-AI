@@ -20,6 +20,7 @@ export interface Plan {
   limitBadge?: Record<Language, string>;
   modelsHighlight?: Record<Language, string> | string;
   bullets: Record<Language, readonly string[]>;
+  highlights?: Record<Language, readonly string[]>;
 }
 
 export type PaymentMethod = 'card' | 'sbp' | 'stars';
