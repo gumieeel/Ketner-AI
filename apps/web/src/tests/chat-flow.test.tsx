@@ -340,4 +340,25 @@ describe('чат: отправка, стриминг и управление о�
     await user.click(field);
     expect(await screen.findByRole('dialog')).toBeInTheDocument();
   });
+
+  it('поддерживает навигацию с клавиатуры в ModelPicker и закрытие по Esc', async () => {
+    installFakeApi();
+    const user = setupChat();
+    await screen.findByRole('heading', { level: 2, name: EMPTY_TITLE });
+
+    const trigger = screen.getByRole('button', { name: 'Выбрать модель' });
+    await user.click(trigger);
+
+    const listbox = await screen.findByRole('listbox');
+    expect(listbox).toBeInTheDocument();
+
+    const options = screen.getAllByRole('option');
+    expect(options.length).toBeGreaterThan(1);
+
+    await user.keyboard('{ArrowDown}');
+    await user.keyboard('{Escape}');
+    await waitFor(() => expect(screen.queryByRole('listbox')).toBeNull());
+    expect(trigger).toHaveFocus();
+  });
 });
+

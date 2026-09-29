@@ -1,16 +1,16 @@
-﻿import { useMemo } from 'react';
+import { useMemo } from 'react';
 import { CopyButton } from '@/components/ui/copy-button';
 import { useTranslation } from '@/i18n';
 import { highlight, type TokenKind } from './highlight';
 
 const TOKEN_CLASSES: Record<TokenKind, string> = {
   plain: '',
-  keyword: 'text-violet-700 dark:text-violet-300',
-  string: 'text-emerald-700 dark:text-emerald-300',
-  comment: 'text-zinc-500 italic dark:text-zinc-400',
-  number: 'text-sky-700 dark:text-sky-300',
-  function: 'text-brand-700 dark:text-brand-300',
-  punctuation: 'text-zinc-500 dark:text-zinc-400',
+  keyword: 'text-[color:var(--syn-keyword)]',
+  string: 'text-[color:var(--syn-string)]',
+  comment: 'text-[color:var(--syn-comment)] italic',
+  number: 'text-[color:var(--syn-number)]',
+  function: 'text-[color:var(--syn-function)]',
+  punctuation: 'text-[color:var(--syn-punct)]',
 };
 
 interface CodeBlockProps {
@@ -24,13 +24,15 @@ export function CodeBlock({ code, language }: CodeBlockProps) {
   const tokens = useMemo(() => highlight(code, language), [code, language]);
 
   return (
-    <div className="my-3 overflow-hidden rounded-md border border-stroke bg-surface">
-      <div className="flex items-center justify-between gap-2 border-b border-stroke px-3 py-1.5">
-        <span className="text-xs text-muted">{language ?? t('chat.codePlain')}</span>
+    <div className="my-3 overflow-hidden rounded-lg border border-stroke bg-surface">
+      <div className="h-9 border-b border-stroke bg-surface-2 px-3 flex items-center justify-between gap-2">
+        <span className="font-mono text-xs text-muted">
+          {language ?? t('chat.codePlain')}
+        </span>
         <CopyButton value={code} label={t('chat.copyCode')} size="sm" />
       </div>
-      <pre className="overflow-x-auto p-3 text-sm leading-[22px] text-text">
-        <code className="font-mono">
+      <pre className="overflow-x-auto p-3 font-mono text-[13px] leading-[22px] text-text">
+        <code>
           {tokens.map((token, index) => (
             <span key={index} className={TOKEN_CLASSES[token.kind]}>
               {token.text}

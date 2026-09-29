@@ -1,6 +1,6 @@
-﻿import { useEffect, useRef, type KeyboardEvent } from 'react';
+import { useEffect, useRef, type KeyboardEvent } from 'react';
 import { Link } from 'react-router-dom';
-import { PaperclipIcon, SendIcon, StopIcon } from '@/components/icons';
+import { AlertIcon, PaperclipIcon, SendIcon, SparkleIcon, StopIcon } from '@/components/icons';
 import { CornerMark } from '@/components/ui/corner-mark';
 import { IconButton } from '@/components/ui/icon-button';
 import { StubAction } from '@/components/ui/stub-action';
@@ -111,12 +111,10 @@ export function Composer() {
       {freeLimitReached ? (
         <div
           role="alert"
-          className="mb-2.5 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3.5 py-2.5 text-xs text-amber-700 dark:text-amber-300 shadow-sm"
+          className="mb-2.5 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-warning/30 bg-warning-soft px-3.5 py-2.5 text-xs text-warning shadow-sm"
         >
           <div className="flex items-center gap-2">
-            <span className="text-sm select-none" aria-hidden="true">
-              ⏳
-            </span>
+            <AlertIcon className="size-4 shrink-0 text-warning" aria-hidden="true" />
             <span className="font-medium">
               {t('chat.freeLimitDesc')}
             </span>
@@ -124,7 +122,7 @@ export function Composer() {
           <Link
             to="/pricing"
             onClick={handleFreeLimitAttempt}
-            className="inline-flex items-center gap-1 shrink-0 rounded-sm bg-accent px-3 py-1.5 text-xs font-semibold text-[var(--color-accent-text)] transition hover:opacity-90 shadow-sm"
+            className="inline-flex items-center gap-1 shrink-0 rounded-md bg-accent px-3 py-1.5 text-xs font-semibold text-accent-text transition hover:opacity-90 shadow-sm"
           >
             {t('chat.upgradeButton')} →
           </Link>
@@ -132,12 +130,10 @@ export function Composer() {
       ) : !hasAccess ? (
         <div
           role="alert"
-          className="mb-2.5 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3.5 py-2.5 text-xs text-amber-700 dark:text-amber-300 shadow-sm"
+          className="mb-2.5 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-warning/30 bg-warning-soft px-3.5 py-2.5 text-xs text-warning shadow-sm"
         >
           <div className="flex items-center gap-2">
-            <span className="text-sm select-none" aria-hidden="true">
-              ⭐
-            </span>
+            <SparkleIcon className="size-4 shrink-0 text-warning" aria-hidden="true" />
             <span className="font-medium">
               {t('chat.upgradeBanner', {
                 model: labelOf(currentModel),
@@ -148,7 +144,7 @@ export function Composer() {
           <Link
             to="/pricing"
             onClick={handlePaidModelAttempt}
-            className="inline-flex items-center gap-1 shrink-0 rounded-sm bg-accent px-3 py-1.5 text-xs font-semibold text-[var(--color-accent-text)] transition hover:opacity-90 shadow-sm"
+            className="inline-flex items-center gap-1 shrink-0 rounded-md bg-accent px-3 py-1.5 text-xs font-semibold text-accent-text transition hover:opacity-90 shadow-sm"
           >
             {t('chat.upgradeButton')} →
           </Link>
@@ -156,10 +152,10 @@ export function Composer() {
       ) : null}
       <div
         onClick={onFocusOrClick}
-        className="relative rounded-lg border border-stroke-strong bg-surface p-2.5 transition-colors focus-within:border-accent"
+        className="relative rounded-lg border border-stroke bg-surface p-2.5 transition-colors focus-within:border-accent focus-within:ring-3 focus-within:ring-accent-soft"
       >
         <CornerMark
-          size={13}
+          size={12}
           className="pointer-events-none absolute top-2.5 left-2.5 text-accent opacity-90"
         />
         <label htmlFor="composer" className="sr-only">
@@ -195,7 +191,7 @@ export function Composer() {
               label={t('chat.stop')}
               onClick={() => stop()}
               size="sm"
-              className="ml-auto border border-stroke-strong bg-surface text-text hover:bg-canvas"
+              className="ml-auto border border-stroke bg-surface text-text hover:bg-surface-2"
             >
               <StopIcon />
             </IconButton>
@@ -206,14 +202,14 @@ export function Composer() {
               title={t('chat.send')}
               onClick={submit}
               disabled={draft.trim() === ''}
-              className="ml-auto inline-flex size-8 shrink-0 items-center justify-center rounded-sm bg-accent text-[var(--color-accent-text)] transition-colors hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
+              className="ml-auto inline-flex size-8 shrink-0 items-center justify-center rounded-md bg-accent text-accent-text transition-colors hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
             >
               <SendIcon />
             </button>
           )}
         </div>
       </div>
-      <p className="mt-2 text-center text-xs leading-[18px] text-muted">
+      <p className="mt-2 text-center text-xs leading-[18px] text-subtle">
         {t('chat.composerNotice')}
       </p>
     </div>

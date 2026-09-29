@@ -1,4 +1,4 @@
-﻿import { useLocation, useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { MenuIcon, PlusIcon, ShareIcon } from '@/components/icons';
 import { Badge } from '@/components/ui/badge';
 import { IconButton } from '@/components/ui/icon-button';
@@ -23,19 +23,19 @@ export function Header() {
   const title = conversations.find((conversation) => conversation.id === activeId)?.title;
 
   return (
-    <header className="flex h-14 shrink-0 items-center gap-2 border-b border-stroke bg-canvas px-3 text-text">
+    <header className="flex h-12 shrink-0 items-center gap-2 border-b border-stroke bg-canvas px-3 text-text">
       <IconButton label={t('nav.openSidebar')} className="md:hidden" onClick={toggleSidebar}>
-        <MenuIcon />
+        <MenuIcon className="size-4" />
       </IconButton>
 
       <h1 className="truncate text-sm font-medium text-text">
         {inChat ? title || t('chat.title') : t('app.name')}
       </h1>
-      <Badge tone="outline" className="hidden sm:inline-flex">
+      <Badge tone="warning" className="hidden sm:inline-flex font-mono text-[11px]">
         {t('common.mock')}
       </Badge>
 
-      <div className="ml-auto flex items-center gap-1">
+      <div className="ml-auto flex items-center gap-1.5">
         {inChat ? (
           <>
             <IconButton
@@ -46,10 +46,10 @@ export function Header() {
                 navigate('/chat');
               }}
             >
-              <PlusIcon />
+              <PlusIcon className="size-4" />
             </IconButton>
             <StubAction label={t('chat.share')} hint={t('chat.composerNotice')}>
-              <ShareIcon />
+              <ShareIcon className="size-4" />
             </StubAction>
           </>
         ) : null}

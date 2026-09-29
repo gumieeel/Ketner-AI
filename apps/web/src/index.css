@@ -28,18 +28,6 @@
   --radius-3xl: 12px;
 
   --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
-
-  /* Бренд-шкала от оттенка логотипа; brand-* оставлены для совместимости */
-  --color-brand-50: #e9fdf5;
-  --color-brand-100: #c9f9e6;
-  --color-brand-200: #96f2d0;
-  --color-brand-300: #5dedba;
-  --color-brand-400: #2ee6a6;
-  --color-brand-500: #14c98c;
-  --color-brand-600: #0e9a70;
-  --color-brand-700: #0b7a5a;
-  --color-brand-800: #0a5e46;
-  --color-brand-900: #084a38;
 }
 
 @theme inline {
@@ -123,6 +111,14 @@
     --z-modal: 50;
     --z-toast: 60;
 
+    /* Подсветка синтаксиса */
+    --syn-keyword: #6d28d9;
+    --syn-string: #047857;
+    --syn-comment: #66666f;
+    --syn-number: #0369a1;
+    --syn-function: #087f5b;
+    --syn-punct: #52525b;
+
     /* Алиасы старых имён для разметки вида var(--color-accent-text) */
     --color-canvas: var(--canvas);
     --color-surface: var(--surface);
@@ -166,6 +162,14 @@
     --glow: rgba(46, 230, 166, 0.09);
     --highlight-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
     --popover-shadow: 0 16px 40px -12px rgba(0, 0, 0, 0.7), 0 0 0 1px rgba(255, 255, 255, 0.06);
+
+    /* Подсветка синтаксиса */
+    --syn-keyword: #c4b5fd;
+    --syn-string: #6ee7b7;
+    --syn-comment: #71717a;
+    --syn-number: #7dd3fc;
+    --syn-function: #2ee6a6;
+    --syn-punct: #a1a1aa;
 
     /* Алиасы старых имён для разметки вида var(--color-accent-text) */
     --color-canvas: var(--canvas);

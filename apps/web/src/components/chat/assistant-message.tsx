@@ -1,10 +1,11 @@
-﻿import { Suspense, lazy } from 'react';
+import { Suspense, lazy } from 'react';
 import { Link } from 'react-router-dom';
-import { AlertIcon, RefreshIcon } from '@/components/icons';
+import { AlertIcon, RefreshIcon, SparkleIcon } from '@/components/icons';
 import { Button } from '@/components/ui/button';
 import { CopyButton } from '@/components/ui/copy-button';
 import { CornerMark } from '@/components/ui/corner-mark';
 import { IconButton } from '@/components/ui/icon-button';
+import { findModel } from '@/features/chat/can-access-model';
 import { useChat } from '@/features/chat/chat-store';
 import type { Message } from '@/features/chat/types';
 import { useTranslation } from '@/i18n';
@@ -24,6 +25,7 @@ export function AssistantMessage({ message, canRegenerate }: AssistantMessagePro
   const { t } = useTranslation();
   const regenerate = useChat((state) => state.regenerate);
   const streaming = useChat((state) => state.streaming);
+  const meta = useChat((state) => state.meta);
 
   const thinking = message.status === 'pending';
   const failed = message.status === 'error';
@@ -34,13 +36,25 @@ export function AssistantMessage({ message, canRegenerate }: AssistantMessagePro
       (message.error.toLowerCase().includes('upgrade') ||
         message.error.toLowerCase().includes('подписк')));
 
+  const foundModel = message.modelId ? findModel(meta?.models, message.modelId) : null;
+  const modelName =
+    message.modelId && foundModel?.id === message.modelId
+      ? foundModel.name.replace(/^✨\s*/, '')
+      : null;
+
   return (
     <article className="flex gap-3" aria-label={t('chat.assistant')}>
-      <span className="mt-0.5 grid size-8 shrink-0 place-items-center rounded-sm bg-accent/15 p-1 text-accent">
-        <img src="/logo-mark.png" alt="Ketner AI" className="size-5 object-contain" />
+      <span className="mt-0.5 grid size-7 shrink-0 place-items-center rounded-md bg-surface-2 p-1 text-text">
+        <img src="/logo-mark.png" alt="Ketner AI" className="size-4.5 object-contain" />
       </span>
 
       <div className="min-w-0 flex-1">
+        {modelName ? (
+          <div className="mb-1 font-mono text-[11px] uppercase tracking-[0.06em] text-subtle">
+            {modelName}
+          </div>
+        ) : null}
+
         {thinking ? (
           <p className="flex items-center gap-2 text-sm leading-5 text-muted" role="status">
             <CornerMark size={14} className="text-accent reply-marker-pulse" />
@@ -49,10 +63,10 @@ export function AssistantMessage({ message, canRegenerate }: AssistantMessagePro
         ) : null}
 
         {hasContent ? (
-          <div className="text-base leading-[27px] text-text [&>*:not(pre):not(table):not(.code-block)]:max-w-[66ch]">
+          <div className="text-[15px] leading-[26px] text-text [&>*:not(pre):not(table):not(.code-block)]:max-w-[66ch]">
             <Suspense
               fallback={
-                <p className="text-base leading-[27px] whitespace-pre-wrap max-w-[66ch]">
+                <p className="text-[15px] leading-[26px] whitespace-pre-wrap max-w-[66ch]">
                   {message.content}
                 </p>
               }
@@ -70,15 +84,13 @@ export function AssistantMessage({ message, canRegenerate }: AssistantMessagePro
             className={cn(
               'mt-2 rounded-lg p-3.5 text-sm leading-5 transition-all',
               isUpgradeError
-                ? 'border border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-300'
-                : 'border border-red-500/30 bg-red-500/10 text-red-600 dark:text-red-400',
+                ? 'border border-warning/30 bg-warning-soft text-warning'
+                : 'border border-danger/30 bg-danger-soft text-danger',
             )}
           >
             <p className="flex items-center gap-2 font-medium">
               {isUpgradeError ? (
-                <span className="text-base select-none" aria-hidden="true">
-                  ⭐
-                </span>
+                <SparkleIcon className="size-4 text-warning" aria-hidden="true" />
               ) : (
                 <AlertIcon />
               )}
@@ -89,9 +101,9 @@ export function AssistantMessage({ message, canRegenerate }: AssistantMessagePro
               <div className="mt-3">
                 <Link
                   to="/pricing"
-                  className="inline-flex items-center gap-1.5 rounded-sm bg-accent px-3 py-1.5 text-xs font-semibold text-[var(--color-accent-text)] transition hover:opacity-90 shadow-sm"
+                  className="inline-flex items-center gap-1.5 rounded-md bg-accent px-3 py-1.5 text-xs font-semibold text-accent-text transition hover:opacity-90 shadow-sm"
                 >
-                  ⭐ {t('chat.upgradeButton')}
+                  {t('chat.upgradeButton')}
                 </Link>
               </div>
             ) : canRegenerate ? (

@@ -1,4 +1,4 @@
-import type { ButtonHTMLAttributes } from 'react';
+import { forwardRef, type ButtonHTMLAttributes } from 'react';
 import { cn } from '@/lib/cn';
 
 export type IconButtonSize = 'sm' | 'md';
@@ -14,16 +14,20 @@ export interface IconButtonProps extends ButtonHTMLAttributes<HTMLButtonElement>
   size?: IconButtonSize;
 }
 
-export function IconButton({
-  label,
-  size = 'md',
-  className,
-  children,
-  type = 'button',
-  ...props
-}: IconButtonProps) {
+export const IconButton = forwardRef<HTMLButtonElement, IconButtonProps>(function IconButton(
+  {
+    label,
+    size = 'md',
+    className,
+    children,
+    type = 'button',
+    ...props
+  },
+  ref,
+) {
   return (
     <button
+      ref={ref}
       type={type}
       aria-label={label}
       title={label}
@@ -40,4 +44,4 @@ export function IconButton({
       {children}
     </button>
   );
-}
+});

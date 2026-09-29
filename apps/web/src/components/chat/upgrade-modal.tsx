@@ -1,6 +1,6 @@
-﻿import { useEffect } from 'react';
+import { useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { CloseIcon } from '@/components/icons';
+import { AlertIcon, CloseIcon, SparkleIcon } from '@/components/icons';
 import { CornerMark } from '@/components/ui/corner-mark';
 import { useAuth } from '@/features/auth/auth-store';
 import { useUpgradeModal } from '@/features/billing/upgrade-modal-store';
@@ -107,7 +107,7 @@ export function UpgradeModal() {
       onClick={close}
     >
       <div
-        className="relative w-full max-w-lg overflow-hidden rounded-2xl border border-stroke-strong bg-surface p-6 shadow-2xl backdrop-blur-xl sm:p-7"
+        className="relative w-full max-w-lg overflow-hidden rounded-xl border border-stroke bg-surface p-6 shadow-2xl sm:p-7"
         onClick={(e) => e.stopPropagation()}
       >
         <CornerMark size={14} className="pointer-events-none absolute top-3 left-3 text-accent" />
@@ -120,7 +120,7 @@ export function UpgradeModal() {
           type="button"
           onClick={close}
           aria-label={t('chat.close')}
-          className="absolute top-4 right-4 rounded-lg p-1.5 text-muted hover:bg-canvas hover:text-text transition-colors"
+          className="absolute top-4 right-4 rounded-md p-1.5 text-muted hover:bg-surface-2 hover:text-text transition-colors"
         >
           <CloseIcon />
         </button>
@@ -128,13 +128,13 @@ export function UpgradeModal() {
         {/* Badge & Title */}
         <div className="mb-4">
           {reason === 'free_limit' ? (
-            <div className="inline-flex items-center gap-1.5 rounded-full border border-amber-500/30 bg-amber-500/10 px-3 py-1 text-xs font-semibold text-amber-600 dark:text-amber-400 mb-2.5">
-              <span aria-hidden="true">⏳</span>
+            <div className="inline-flex items-center gap-1.5 rounded-full border border-warning/30 bg-warning-soft px-3 py-1 text-xs font-semibold text-warning mb-2.5">
+              <AlertIcon className="size-3.5 text-warning" aria-hidden="true" />
               <span>{t('chat.freeLimitBadge')}</span>
             </div>
           ) : (
-            <div className="inline-flex items-center gap-1.5 rounded-full border border-accent/40 bg-accent/10 px-3 py-1 text-xs font-semibold text-accent mb-2.5">
-              <span aria-hidden="true">⭐</span>
+            <div className="inline-flex items-center gap-1.5 rounded-full border border-accent/40 bg-accent-soft px-3 py-1 text-xs font-semibold text-accent mb-2.5">
+              <SparkleIcon className="size-3.5 text-accent" aria-hidden="true" />
               <span>{t('chat.paidModelBadge')}</span>
             </div>
           )}
@@ -162,19 +162,19 @@ export function UpgradeModal() {
               key={plan.id}
               type="button"
               onClick={() => handleSelectPlan(plan.id)}
-              className="group relative flex flex-col text-left rounded-xl border border-stroke-strong bg-canvas/60 p-3 transition-all hover:border-accent hover:bg-canvas"
+              className="group relative flex flex-col text-left rounded-lg border border-stroke bg-canvas p-3 transition-all hover:border-stroke-strong hover:bg-surface-2"
             >
               {plan.badge ? (
-                <span className="absolute top-2 right-2 rounded bg-accent/20 px-1.5 py-0.5 text-[10px] font-semibold text-accent uppercase tracking-wider">
+                <span className="absolute top-2 right-2 rounded-sm bg-accent-soft px-1.5 py-0.5 font-mono text-[10px] font-semibold text-accent uppercase tracking-wider">
                   {plan.badge}
                 </span>
               ) : null}
               <span className="text-xs font-semibold text-text group-hover:text-accent transition-colors">
                 {plan.name}
               </span>
-              <span className="mt-1 text-sm font-semibold text-text">{plan.price}</span>
+              <span className="mt-1 text-sm font-semibold text-text font-mono">{plan.price}</span>
               <span className="text-[11px] text-muted">{plan.highlight}</span>
-              <span className="mt-1.5 line-clamp-1 text-[10px] text-muted/80">{plan.models}</span>
+              <span className="mt-1.5 line-clamp-1 text-[10px] text-subtle">{plan.models}</span>
             </button>
           ))}
         </div>
@@ -184,7 +184,7 @@ export function UpgradeModal() {
           <Link
             to="/pricing"
             onClick={close}
-            className="inline-flex w-full sm:flex-1 items-center justify-center gap-1.5 rounded-xl bg-accent px-4 py-2.5 text-sm font-semibold text-[var(--color-accent-text)] shadow-md transition hover:opacity-90 text-center"
+            className="inline-flex w-full sm:flex-1 items-center justify-center gap-1.5 rounded-md bg-accent px-4 py-2.5 text-sm font-semibold text-accent-text shadow-sm transition hover:opacity-90 text-center"
           >
             <span>{t('chat.viewPlans')}</span>
             <span aria-hidden="true">→</span>
@@ -194,7 +194,7 @@ export function UpgradeModal() {
             <button
               type="button"
               onClick={handleSwitchToFree}
-              className="inline-flex w-full sm:flex-1 items-center justify-center rounded-xl border border-stroke-strong bg-surface px-4 py-2.5 text-xs font-medium text-text hover:bg-canvas transition-colors text-center"
+              className="inline-flex w-full sm:flex-1 items-center justify-center rounded-md border border-stroke bg-surface px-4 py-2.5 text-xs font-medium text-text hover:bg-surface-2 transition-colors text-center"
             >
               {t('chat.switchToFreeModel')}
             </button>
@@ -202,15 +202,15 @@ export function UpgradeModal() {
             <button
               type="button"
               onClick={close}
-              className="inline-flex w-full sm:w-auto items-center justify-center rounded-xl border border-stroke-strong bg-surface px-4 py-2.5 text-xs font-medium text-muted hover:text-text hover:bg-canvas transition-colors"
+              className="inline-flex w-full sm:w-auto items-center justify-center rounded-md border border-stroke bg-surface px-4 py-2.5 text-xs font-medium text-muted hover:text-text hover:bg-surface-2 transition-colors"
             >
               {t('chat.close')}
             </button>
           )}
         </div>
 
-        <p className="mt-3 text-center text-[11px] text-muted">
-          СБП • Банковские карты • Telegram Stars ⭐️
+        <p className="mt-3 text-center text-[11px] text-subtle">
+          СБП • Банковские карты • Telegram Stars
         </p>
       </div>
     </div>

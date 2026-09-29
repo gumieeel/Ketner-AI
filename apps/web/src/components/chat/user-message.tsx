@@ -1,4 +1,4 @@
-﻿import { useState } from 'react';
+import { useState } from 'react';
 import { EditIcon } from '@/components/icons';
 import { Button } from '@/components/ui/button';
 import { IconButton } from '@/components/ui/icon-button';
@@ -51,7 +51,7 @@ export function UserMessage({ message, editable }: UserMessageProps) {
               setEditing(false);
             }
           }}
-          className="w-full max-w-[85%] resize-none rounded-md border border-accent bg-surface px-4 py-2 text-base leading-[27px] text-text outline-none"
+          className="w-full max-w-[85%] resize-none rounded-lg border border-accent bg-surface px-4 py-2.5 text-[15px] leading-[26px] text-text outline-none focus:ring-3 focus:ring-accent-soft"
         />
         <div className="flex items-center gap-2">
           <Button variant="ghost" size="sm" onClick={() => setEditing(false)}>
@@ -67,7 +67,7 @@ export function UserMessage({ message, editable }: UserMessageProps) {
 
   return (
     <div className="group flex flex-col items-end gap-1">
-      <div className="max-w-[85%] rounded-md bg-surface border border-stroke px-4 py-2.5 text-base leading-[27px] whitespace-pre-wrap text-text">
+      <div className="max-w-[85%] rounded-lg bg-surface-2 px-4 py-2.5 text-[15px] leading-[26px] whitespace-pre-wrap text-text">
         {message.content}
       </div>
       {editable && !streaming ? (

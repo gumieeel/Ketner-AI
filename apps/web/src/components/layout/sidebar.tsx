@@ -1,4 +1,4 @@
-﻿import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, NavLink, useNavigate } from 'react-router-dom';
 import {
   BookOpenIcon,
@@ -12,10 +12,12 @@ import {
   TrashIcon,
   UserIcon,
 } from '@/components/icons';
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { CornerMark } from '@/components/ui/corner-mark';
 import { IconButton } from '@/components/ui/icon-button';
 import { Skeleton } from '@/components/ui/skeleton';
+import { StatusDot } from '@/components/ui/status-dot';
 import { useAuth } from '@/features/auth/auth-store';
 import { useChat } from '@/features/chat/chat-store';
 import type { ConversationSummary } from '@/features/chat/types';
@@ -39,10 +41,10 @@ const GROUP_LABELS: Record<DateGroup, TranslationKey> = {
 
 const navLinkClasses = ({ isActive }: { isActive: boolean }) =>
   cn(
-    'flex min-h-[44px] md:min-h-[36px] items-center gap-2 rounded-sm px-3 py-2 text-sm leading-5 transition-colors',
+    'flex h-9 items-center gap-2.5 rounded-md px-2.5 text-sm transition-colors',
     isActive
-      ? 'bg-accent/10 font-medium text-text'
-      : 'text-muted hover:bg-surface/80 hover:text-text',
+      ? 'bg-surface-2 font-medium text-text'
+      : 'text-muted hover:bg-surface-2 hover:text-text',
   );
 
 /** Сайдбар рабочей области: список диалогов, поиск, настройки и профиль. */
@@ -97,7 +99,9 @@ export function Sidebar() {
     const visible =
       query === ''
         ? conversations
-        : conversations.filter((conversation) => conversation.title.toLowerCase().includes(query));
+        : conversations.filter((conversation) =>
+            conversation.title.toLowerCase().includes(query),
+          );
 
     return GROUP_ORDER.map((group) => ({
       group,
@@ -111,7 +115,7 @@ export function Sidebar() {
         <div
           aria-hidden="true"
           onClick={close}
-          className="fixed inset-0 z-30 bg-black/40 backdrop-blur-[1px] md:hidden"
+          className="fixed inset-0 z-30 bg-black/60 backdrop-blur-[1px] md:hidden"
         />
       ) : null}
 
@@ -122,60 +126,50 @@ export function Sidebar() {
           'fixed inset-y-0 left-0 z-40 flex w-[min(288px,calc(100vw-48px))] md:w-[264px] flex-col',
           'border-r border-stroke bg-surface text-text',
           'transition-transform duration-[180ms] ease-out md:static md:z-auto md:translate-x-0',
-          open ? 'translate-x-0 shadow-lg md:shadow-none' : '-translate-x-full',
+          open ? 'translate-x-0 shadow-xl md:shadow-none' : '-translate-x-full',
         )}
       >
-        <div className="flex h-14 items-center gap-2 px-3">
+        <div className="flex h-12 items-center justify-between px-3 border-b border-stroke">
           <Brand />
-          <button
+          <IconButton
             ref={closeButtonRef}
-            type="button"
-            aria-label={t('nav.closeSidebar')}
-            title={t('nav.closeSidebar')}
+            label={t('nav.closeSidebar')}
             onClick={close}
-            className="ml-auto inline-flex size-9 min-h-[44px] min-w-[44px] md:min-h-0 md:min-w-0 md:size-8 items-center justify-center rounded-sm text-muted hover:bg-canvas hover:text-text md:hidden"
+            className="md:hidden"
           >
-            <CloseIcon />
-          </button>
+            <CloseIcon className="size-4" />
+          </IconButton>
         </div>
 
-        <div className="flex flex-col gap-3 px-3">
+        <div className="flex flex-col gap-2.5 p-3">
           <Link
             to="/chat"
             onClick={handleNewChat}
-            className={cn(
-              'inline-flex min-h-[44px] md:min-h-[40px] items-center gap-2 rounded-md px-3 text-sm leading-5 font-medium transition-colors',
-              'border border-stroke-strong text-text hover:bg-canvas',
-            )}
+            className="flex h-9 w-full items-center justify-center gap-2 rounded-md border border-stroke bg-surface-2 px-3 text-sm font-medium text-text transition-colors hover:border-stroke-strong hover:bg-surface-3"
           >
-            <PlusIcon className="text-lg" />
-            {t('nav.newChat')}
+            <PlusIcon className="size-4" />
+            <span>{t('nav.newChat')}</span>
           </Link>
 
           <div className="relative">
-            <SearchIcon className="pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-base text-muted" />
+            <SearchIcon className="pointer-events-none absolute top-1/2 left-2.5 -translate-y-1/2 size-4 text-muted" />
             <input
               type="search"
               value={search}
               onChange={(event) => setSearch(event.target.value)}
               aria-label={t('nav.searchChats')}
               placeholder={t('nav.searchChats')}
-              className={cn(
-                'h-10 md:h-9 w-full rounded-md border border-stroke-strong bg-canvas pr-3 pl-9 text-sm leading-5 text-text',
-                'placeholder:text-muted focus:border-accent outline-none transition-colors',
-              )}
+              className="h-9 w-full rounded-md border border-stroke bg-canvas pr-3 pl-8 text-sm text-text placeholder:text-muted focus:border-stroke-strong outline-none transition-colors"
             />
           </div>
         </div>
 
-        <div className="mt-4 flex min-h-0 flex-1 flex-col gap-1 overflow-y-auto px-3 pb-2">
-          <p className="px-3 py-1 text-xs font-medium text-muted">{t('nav.chats')}</p>
-
+        <div className="flex min-h-0 flex-1 flex-col gap-1 overflow-y-auto px-2 pb-2">
           {status === 'loading' ? <ConversationsSkeleton /> : null}
 
           {status === 'error' ? (
-            <div className="rounded-md border border-red-500/30 px-3 py-4 text-center">
-              <p className="text-sm text-red-600 dark:text-red-400">{t('chats.loadError')}</p>
+            <div className="rounded-md border border-danger/30 bg-danger-soft p-3 text-center">
+              <p className="text-xs text-danger">{t('chats.loadError')}</p>
               <Button
                 variant="outline"
                 size="sm"
@@ -188,10 +182,10 @@ export function Sidebar() {
           ) : null}
 
           {status !== 'loading' && status !== 'error' && conversations.length === 0 ? (
-            <div className="rounded-md border border-dashed border-stroke-strong px-3 py-6 text-center">
-              <SparkleIcon className="mx-auto mb-2 text-xl text-muted" />
-              <p className="text-sm text-muted">{t('nav.empty')}</p>
-              <p className="mt-1 text-xs text-muted/80">{t('nav.emptyHint')}</p>
+            <div className="rounded-md border border-dashed border-stroke p-4 text-center my-auto">
+              <SparkleIcon className="mx-auto mb-2 size-5 text-subtle" />
+              <p className="text-xs font-medium text-text">{t('nav.empty')}</p>
+              <p className="mt-1 text-[11px] text-muted">{t('nav.emptyHint')}</p>
             </div>
           ) : null}
 
@@ -199,14 +193,14 @@ export function Sidebar() {
           status !== 'error' &&
           conversations.length > 0 &&
           groups.length === 0 ? (
-            <p className="px-3 py-4 text-sm text-muted">{t('chat.searchEmpty')}</p>
+            <p className="px-3 py-4 text-xs text-muted text-center">{t('chat.searchEmpty')}</p>
           ) : null}
 
           {groups.map(({ group, items }) => (
-            <section key={group} className="flex flex-col gap-1">
-              <p className="px-3 pt-3 pb-1 text-xs font-medium text-muted">
+            <section key={group} className="flex flex-col gap-0.5">
+              <span className="px-2 pt-3 pb-1 font-mono text-[11px] uppercase tracking-[0.08em] text-subtle font-semibold">
                 {t(GROUP_LABELS[group])}
-              </p>
+              </span>
               {items.map((conversation) => (
                 <ConversationRow
                   key={conversation.id}
@@ -220,80 +214,76 @@ export function Sidebar() {
           ))}
         </div>
 
-        <div className="mt-auto flex flex-col gap-1.5 border-t border-stroke p-3">
+        <div className="mt-auto flex flex-col gap-1 border-t border-stroke p-2">
           <NavLink to="/docs" onClick={close} className={navLinkClasses}>
-            <BookOpenIcon className="text-lg" />
-            {t('nav.docs')}
+            <BookOpenIcon className="size-4 shrink-0" />
+            <span>{t('nav.docs')}</span>
           </NavLink>
           <NavLink to="/pricing" onClick={close} className={navLinkClasses}>
-            <SparkleIcon className="text-lg" />
-            {t('nav.upgrade')}
+            <SparkleIcon className="size-4 shrink-0" />
+            <span>{t('nav.upgrade')}</span>
           </NavLink>
           <NavLink to="/settings" onClick={close} className={navLinkClasses}>
-            <SettingsIcon className="text-lg" />
-            {t('nav.settings')}
+            <SettingsIcon className="size-4 shrink-0" />
+            <span>{t('nav.settings')}</span>
           </NavLink>
           {hasAdminAccess ? (
             <NavLink to="/admin" onClick={close} className={navLinkClasses}>
-              <UserIcon className="text-lg text-accent" />
+              <UserIcon className="size-4 shrink-0 text-accent" />
               <span className="flex-1 font-semibold text-accent">Admin Panel</span>
-              <span className="rounded bg-accent/20 px-1.5 py-0.5 text-[10px] font-semibold text-accent">
-                ADMIN
-              </span>
+              <Badge tone="brand">ADMIN</Badge>
             </NavLink>
           ) : null}
 
-          <div className="flex items-center gap-2 pt-1">
+          <div className="flex items-center justify-between gap-2 pt-2 mt-1 border-t border-stroke px-1">
             {user ? (
-              <>
+              <div className="flex items-center gap-2 min-w-0 flex-1">
                 <Link
                   to="/settings"
                   onClick={close}
-                  className="grid size-9 shrink-0 place-items-center rounded-full bg-accent/20 text-xs font-semibold text-accent hover:opacity-80"
+                  className="grid size-8 shrink-0 place-items-center rounded-full bg-accent-soft text-accent text-xs font-semibold hover:opacity-85 transition-opacity"
                   title={user.name}
                 >
-                  {user.name.slice(0, 2).toUpperCase()}
+                  {user.name ? user.name.slice(0, 2).toUpperCase() : 'U'}
                 </Link>
                 <div className="min-w-0 flex-1">
                   <Link
                     to="/settings"
                     onClick={close}
-                    className="block truncate text-sm font-medium text-text hover:underline"
+                    className="block truncate text-xs font-medium text-text hover:underline"
                   >
                     {user.name}
                   </Link>
-                  <p className="truncate text-xs text-muted">
-                    {user.plan === 'ultra'
-                      ? 'Ultra'
-                      : user.plan === 'gpt-pro'
-                        ? 'GPT Pro'
-                        : user.plan === 'claude-pro'
-                          ? 'Claude Pro'
-                          : user.plan === 'gemini-pro'
-                            ? 'Gemini Pro'
-                            : user.plan === 'free'
-                              ? t('pricing.free')
-                              : user.plan.toUpperCase()}
-                  </p>
+                  <div className="pt-0.5">
+                    <Badge tone="brand" className="font-mono text-[9px] px-1 py-0 uppercase">
+                      {user.plan}
+                    </Badge>
+                  </div>
                 </div>
-              </>
+              </div>
             ) : (
-              <>
-                <span className="grid size-9 shrink-0 place-items-center rounded-full bg-surface-2 text-muted">
-                  <UserIcon className="text-lg" />
+              <div className="flex items-center gap-2 min-w-0 flex-1">
+                <span className="grid size-8 shrink-0 place-items-center rounded-full bg-surface-2 text-muted">
+                  <UserIcon className="size-4" />
                 </span>
                 <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm font-medium text-text">{t('nav.guest')}</p>
-                  <Link to="/login" onClick={close} className="text-xs text-accent hover:underline">
+                  <p className="truncate text-xs font-medium text-text">{t('nav.guest')}</p>
+                  <Link
+                    to="/login"
+                    onClick={close}
+                    className="text-xs text-accent hover:underline font-mono"
+                  >
                     {t('nav.login')}
                   </Link>
                 </div>
-              </>
+              </div>
             )}
             <ThemeToggle />
           </div>
 
-          <LanguageToggle className="self-start" />
+          <div className="pt-1 px-1">
+            <LanguageToggle className="w-full justify-center" />
+          </div>
         </div>
       </aside>
     </>
@@ -329,7 +319,7 @@ function ConversationRow({
           void rename(conversation.id, value);
           setEditing(false);
         }}
-        className="flex min-h-[44px] md:min-h-[36px] items-center gap-1 px-1"
+        className="flex h-9 items-center gap-1 px-1"
       >
         <label htmlFor={`rename-${conversation.id}`} className="sr-only">
           {t('chats.rename')}
@@ -344,13 +334,13 @@ function ConversationRow({
               setEditing(false);
             }
           }}
-          className="h-8 min-w-0 flex-1 rounded-sm border border-accent bg-canvas px-2 text-sm text-text outline-none"
+          className="h-7 min-w-0 flex-1 rounded-sm border border-accent bg-canvas px-2 text-xs text-text outline-none"
         />
         <IconButton label={t('common.save')} size="sm" type="submit">
-          <CheckIcon />
+          <CheckIcon className="size-3.5" />
         </IconButton>
         <IconButton label={t('common.cancel')} size="sm" onClick={() => setEditing(false)}>
-          <CloseIcon />
+          <CloseIcon className="size-3.5" />
         </IconButton>
       </form>
     );
@@ -358,7 +348,7 @@ function ConversationRow({
 
   if (confirming) {
     return (
-      <div className="flex min-h-[44px] md:min-h-[36px] items-center gap-1 rounded-sm bg-red-500/10 px-2 py-1 text-red-600 dark:text-red-300">
+      <div className="flex h-9 items-center gap-1.5 rounded-md border border-danger/30 bg-danger-soft px-2 text-danger">
         <span className="min-w-0 flex-1 truncate text-xs">{t('chats.deleteConfirm')}</span>
         <button
           type="button"
@@ -369,12 +359,12 @@ function ConversationRow({
               navigate('/chat', { replace: true });
             }
           }}
-          className="rounded-sm px-2 py-1 text-xs font-medium text-red-600 hover:bg-red-500/20 dark:text-red-300"
+          className="rounded-sm px-2 py-0.5 text-xs font-medium text-danger hover:bg-danger/20 transition-colors"
         >
           {t('chats.deleteYes')}
         </button>
         <IconButton label={t('common.cancel')} size="sm" onClick={() => setConfirming(false)}>
-          <CloseIcon />
+          <CloseIcon className="size-3.5 text-danger" />
         </IconButton>
       </div>
     );
@@ -383,39 +373,41 @@ function ConversationRow({
   return (
     <div
       className={cn(
-        'group flex min-h-[44px] md:min-h-[36px] items-center gap-1 rounded-sm pr-1 transition-colors',
-        active ? 'bg-accent/10 text-text' : 'hover:bg-canvas text-muted hover:text-text',
+        'group relative flex h-9 items-center gap-1.5 rounded-md px-2 text-sm transition-colors',
+        active
+          ? 'bg-surface-3 text-text font-medium'
+          : 'text-muted hover:bg-surface-2 hover:text-text',
       )}
     >
-      {active ? <CornerMark size={11} className="shrink-0 ml-2.5 text-accent" /> : null}
+      {active ? (
+        <CornerMark size={10} className="shrink-0 text-accent mr-0.5" />
+      ) : null}
 
       <NavLink
         to={`/chat/${conversation.id}`}
         onClick={onNavigate}
         title={conversation.title}
-        className={cn(
-          'min-w-0 flex-1 truncate rounded-sm px-2.5 py-1.5 text-sm leading-5',
-          active ? 'font-medium text-text' : 'text-text/80 hover:text-text',
-        )}
+        className="min-w-0 flex-1 truncate text-xs"
       >
         {conversation.title === '' ? t('chat.title') : conversation.title}
       </NavLink>
 
       {isStreaming ? (
-        <span
-          className="size-2 shrink-0 rounded-full bg-accent animate-pulse mr-1"
-          title={t('chat.thinking')}
+        <StatusDot
+          tone="brand"
+          pulse
+          className="mr-1"
           aria-label={t('chat.thinking')}
         />
       ) : null}
 
       {showDate ? (
-        <span className="shrink-0 text-[11px] leading-[18px] text-muted md:group-hover:hidden">
+        <span className="shrink-0 font-mono text-[10px] text-muted md:group-hover:hidden">
           {formatShortDate(conversation.updatedAt, language)}
         </span>
       ) : null}
 
-      <div className="flex shrink-0 items-center md:opacity-0 md:transition-opacity md:group-focus-within:opacity-100 md:group-hover:opacity-100">
+      <div className="flex shrink-0 items-center gap-0.5 md:opacity-0 md:transition-opacity md:group-focus-within:opacity-100 md:group-hover:opacity-100">
         <IconButton
           label={t('chats.rename')}
           size="sm"
@@ -424,10 +416,14 @@ function ConversationRow({
             setEditing(true);
           }}
         >
-          <EditIcon />
+          <EditIcon className="size-3.5" />
         </IconButton>
-        <IconButton label={t('chats.delete')} size="sm" onClick={() => setConfirming(true)}>
-          <TrashIcon />
+        <IconButton
+          label={t('chats.delete')}
+          size="sm"
+          onClick={() => setConfirming(true)}
+        >
+          <TrashIcon className="size-3.5" />
         </IconButton>
       </div>
     </div>
@@ -438,7 +434,7 @@ function ConversationsSkeleton() {
   return (
     <div className="flex flex-col gap-2 px-1">
       {[0, 1, 2, 3].map((index) => (
-        <Skeleton key={index} className="h-8 w-full" />
+        <Skeleton key={index} className="h-7 w-full" />
       ))}
     </div>
   );
