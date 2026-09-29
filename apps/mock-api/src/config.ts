@@ -120,14 +120,19 @@ export const config = {
   /**
    * Supabase Project Credentials
    */
-  supabaseUrl: process.env.SUPABASE_URL || '',
-  supabaseAnonKey: process.env.SUPABASE_ANON_KEY || '',
+  supabaseUrl: process.env.SUPABASE_URL || 'https://gwioimhpfulpjxzsuesy.supabase.co',
+  supabaseAnonKey:
+    process.env.SUPABASE_PUBLISHABLE_KEY || process.env.SUPABASE_ANON_KEY || '',
+  supabaseSecretKey: process.env.SUPABASE_SECRET_KEY || '',
+  supabaseJwksUrl:
+    process.env.SUPABASE_JWKS_URL ||
+    'https://gwioimhpfulpjxzsuesy.supabase.co/auth/v1/.well-known/jwks.json',
 
   /**
    * Better Auth API Key для подключения к Better Auth Infra / Dashboard.
    * Настраивается через переменную BETTER_AUTH_API_KEY.
    */
-  betterAuthApiKey: process.env.BETTER_AUTH_API_KEY || 'ba_67ofjkcyjuwj619jkzrk9gryaclht1mx',
+  betterAuthApiKey: process.env.BETTER_AUTH_API_KEY || '',
 
   /** Базовый URL для Better Auth (включая редиректы OAuth). */
   betterAuthUrl:

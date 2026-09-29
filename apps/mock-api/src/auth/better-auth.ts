@@ -1,9 +1,12 @@
 import { mkdirSync } from 'node:fs';
 import { dirname } from 'node:path';
 import { betterAuth } from 'better-auth';
+import { drizzleAdapter } from 'better-auth/adapters/drizzle';
 import { dash } from '@better-auth/infra';
 import { getMigrations } from 'better-auth/db/migration';
 import { config } from '../config.js';
+import { db as pgDb } from '../db/client.js';
+import * as pgSchema from '../db/schema.js';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 let DatabaseSyncClass: any = null;
@@ -20,6 +23,7 @@ export interface BetterAuthInstanceOptions {
   baseURL?: string;
   secret?: string;
   apiKey?: string;
+  usePostgres?: boolean;
 }
 
 export interface BetterAuthDb {
@@ -107,11 +111,27 @@ export function createBetterAuth(options: BetterAuthInstanceOptions = {}) {
 
   const baseURL = options.baseURL ?? config.betterAuthUrl;
   const secret = options.secret ?? config.betterAuthSecret;
+  const usePostgres =
+    options.usePostgres ?? Boolean(config.databaseUrl && !options.dbPath);
 
   const auth = betterAuth({
     baseURL,
     secret,
-    ...(DatabaseSyncClass ? { database: db } : {}),
+    ...(usePostgres
+      ? {
+          database: drizzleAdapter(pgDb, {
+            provider: 'pg',
+            schema: {
+              user: pgSchema.betterAuthUser,
+              session: pgSchema.betterAuthSession,
+              account: pgSchema.betterAuthAccount,
+              verification: pgSchema.betterAuthVerification,
+            },
+          }),
+        }
+      : DatabaseSyncClass
+        ? { database: db }
+        : {}),
     emailAndPassword: {
       enabled: true,
       autoSignIn: true,
