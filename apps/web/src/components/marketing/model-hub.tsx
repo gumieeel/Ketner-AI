@@ -27,10 +27,10 @@ import { cn } from '@/lib/cn';
 // ─── Geometry ────────────────────────────────────────────────────────────────
 
 const SVG_W   = 580;
-const SVG_H   = 480;
+const SVG_H   = 520;
 const CX      = SVG_W / 2;   // 290
-const CY      = 225;         // Lifted center to ensure bottom models have generous clearance
-const ORBIT_R = 175;         // Balanced orbit radius with room on all sides
+const CY      = SVG_H / 2;   // 260
+const ORBIT_R = 220;         // Expanded, spacious orbit radius
 
 // Exact physical card dimensions (rendered px)
 const CARD_W    = 156;
@@ -47,11 +47,11 @@ const ANG_DAMPING   = 0.91;
 const MAX_ANG_VEL   = 0.042;
 
 /** Cursor repulsion along the orbit */
-const CURSOR_REPEL_RADIUS = 150; // px
+const CURSOR_REPEL_RADIUS = 175; // px
 const CURSOR_ANG_FORCE    = 0.034;
 
 /** Radial outward compliance when cursor enters orbital axis */
-const MAX_RADIAL_PUSH = 12; // px
+const MAX_RADIAL_PUSH = 15; // px
 
 // ─── Angle math helpers ──────────────────────────────────────────────────────
 
@@ -197,7 +197,7 @@ export function ModelHub({ className }: { className?: string }) {
       let targetRadius = ORBIT_R;
 
       // B) Cursor repulsion along orbit & radial push
-      if (mx !== null && my !== null && mAngle !== null && mDistCenter > 40 && mDistCenter < 330) {
+      if (mx !== null && my !== null && mAngle !== null && mDistCenter > 45 && mDistCenter < 380) {
         const distToCursor = Math.hypot(cardX - mx, cardY - my);
 
         if (distToCursor < CURSOR_REPEL_RADIUS && distToCursor > 0.5) {
@@ -358,7 +358,7 @@ export function ModelHub({ className }: { className?: string }) {
           style={{ overflow: 'visible' }}
         >
           {/* Gravitational halo glow around Sun */}
-          <circle cx={CX} cy={CY} r={80} fill="rgba(16,185,129,0.05)" />
+          <circle cx={CX} cy={CY} r={95} fill="rgba(16,185,129,0.05)" />
 
           {/* Primary circular orbit track */}
           <circle
@@ -374,7 +374,7 @@ export function ModelHub({ className }: { className?: string }) {
           <circle
             cx={CX}
             cy={CY}
-            r={ORBIT_R + 22}
+            r={ORBIT_R + 26}
             stroke="rgba(16,185,129,0.04)"
             strokeWidth={1}
             strokeDasharray="2 8"

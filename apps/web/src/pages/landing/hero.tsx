@@ -14,7 +14,7 @@ export function LandingHero() {
   const user = useAuth((state) => state.user);
 
   return (
-    <div className="relative w-full overflow-hidden rounded-lg border border-stroke bg-canvas py-12 md:py-20 px-6 md:px-12 hero-glow">
+    <div className="relative w-full overflow-hidden rounded-lg border border-stroke bg-canvas py-10 md:py-16 px-6 md:px-12 hero-glow">
       {/* Background grid overlay with soft radial fade */}
       <div
         className="pointer-events-none absolute inset-0 bg-grid [mask-image:radial-gradient(ellipse_80%_70%_at_50%_0%,#000_40%,transparent_100%)] opacity-70"
@@ -106,7 +106,7 @@ export function LandingHero() {
           </div>
 
           {/* Right Column (5/12) */}
-          <div className="lg:col-span-5 flex items-center justify-center -translate-y-2 lg:-translate-y-4">
+          <div className="lg:col-span-5 flex items-center justify-center">
             <ModelHub />
           </div>
         </div>

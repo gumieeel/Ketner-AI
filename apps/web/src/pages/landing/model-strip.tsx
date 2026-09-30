@@ -65,14 +65,14 @@ export function ModelStrip() {
   const { t, language } = useTranslation();
 
   return (
-    <div id="models" className="w-full scroll-mt-20 py-8 border-y border-stroke overflow-hidden">
-      <div className="flex flex-col gap-4">
+    <div id="models" className="w-full scroll-mt-20 py-3.5 md:py-4 border-y border-stroke">
+      <div className="flex flex-col gap-2.5">
         <span className="font-mono text-xs uppercase tracking-[0.08em] text-muted text-left">
           {t('landing.availableModels')}
         </span>
 
         {/* Плавная бегущая строка слева направо с мягким затуханием по краям */}
-        <div className="relative w-full overflow-hidden pt-28 pb-4 [mask-image:linear-gradient(to_right,transparent,black_8%,black_92%,transparent)]">
+        <div className="relative w-full overflow-x-clip overflow-y-visible py-1.5 [mask-image:linear-gradient(to_right,transparent,black_8%,black_92%,transparent)]">
           <div className="group/marquee animate-marquee-ltr flex items-center gap-10">
             {/* Первый набор */}
             <div className="flex items-center gap-10 shrink-0">
