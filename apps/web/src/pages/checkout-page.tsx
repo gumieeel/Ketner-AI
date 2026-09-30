@@ -7,6 +7,7 @@ import {
   CheckIcon,
   CopyIcon,
   CryptoIcon,
+  ExternalLinkIcon,
   SbpIcon,
   ShieldIcon,
   StarIcon,
@@ -780,6 +781,49 @@ export function CheckoutPage() {
                 <div className="flex items-center gap-2 text-xs font-mono rounded-xl bg-canvas border border-stroke/70 px-3 py-1.5 self-start sm:self-auto">
                   <span className="text-muted">Фиксация курса:</span>
                   <span className="font-bold text-accent">{formatTimer(cryptoSecondsLeft)}</span>
+                </div>
+              </div>
+
+              {/* CryptoCloud Gateway */}
+              <div className="relative overflow-hidden rounded-2xl border border-accent/40 bg-gradient-to-r from-accent/10 via-surface-2 to-accent/5 p-4 sm:p-5 shadow-xs">
+                <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                  <div className="flex items-center gap-3">
+                    <div className="size-10 rounded-xl bg-accent/20 border border-accent/30 flex items-center justify-center shrink-0">
+                      <CryptoIcon className="size-5 text-accent" />
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm font-bold text-text">CryptoCloud Gateway</span>
+                        <span className="rounded bg-accent/20 px-1.5 py-0.5 text-[10px] font-bold text-accent font-mono">
+                          Автоподтверждение
+                        </span>
+                      </div>
+                      <p className="text-xs text-muted mt-0.5">
+                        Моментальная оплата в 1 клик через платёжный шлюз (USDT, TON, BTC, банковские карты)
+                      </p>
+                    </div>
+                  </div>
+                  {cryptoInvoice?.cryptoCloudUrl ? (
+                    <a
+                      href={cryptoInvoice.cryptoCloudUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-2 rounded-xl bg-accent px-4 py-2.5 text-xs font-bold text-accent-text hover:bg-accent/90 transition-all shadow-md shrink-0 self-stretch sm:self-auto justify-center"
+                    >
+                      <span>Оплатить в CryptoCloud</span>
+                      <ExternalLinkIcon className="size-3.5" />
+                    </a>
+                  ) : null}
+                </div>
+              </div>
+
+              {/* Разделитель */}
+              <div className="relative flex items-center justify-center -my-1">
+                <div className="absolute inset-0 flex items-center">
+                  <div className="w-full border-t border-stroke/60" />
+                </div>
+                <div className="relative bg-surface px-3 text-[10px] font-bold text-muted uppercase tracking-wider font-mono">
+                  Или прямой перевод на кошелёк
                 </div>
               </div>
 

@@ -40,6 +40,8 @@ export interface CryptoInvoice {
   status: 'pending' | 'confirming' | 'paid' | 'expired';
   expiresAt: string;
   network: string;
+  cryptoCloudUrl?: string;
+  cryptoCloudInvoiceId?: string;
 }
 
 export interface SbpInvoice {

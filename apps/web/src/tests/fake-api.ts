@@ -499,6 +499,7 @@ export function installFakeApi(options: FakeApiOptions = {}): FakeApi {
             status: 'pending',
             expiresAt: new Date(Date.now() + 1800000).toISOString(),
             network: currency === 'USDT_TRC20' ? 'TRC-20' : currency === 'BTC' ? 'Bitcoin' : 'TON',
+            cryptoCloudUrl: 'https://cryptocloud.plus/pay/INV-DEMO123',
           },
         });
       }
@@ -517,6 +518,7 @@ export function installFakeApi(options: FakeApiOptions = {}): FakeApi {
             status: 'pending',
             expiresAt: new Date(Date.now() + 1800000).toISOString(),
             network: 'TRC-20',
+            cryptoCloudUrl: 'https://cryptocloud.plus/pay/INV-DEMO123',
           },
         });
       }

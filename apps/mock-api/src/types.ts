@@ -155,5 +155,7 @@ export interface CryptoInvoice {
   expiresAt: string;
   createdAt: string;
   network: string;
+  cryptoCloudUrl?: string;
+  cryptoCloudInvoiceId?: string;
 }
 

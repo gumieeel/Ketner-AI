@@ -173,6 +173,11 @@ export const config = {
     ? Number(process.env.SUPPORT_ADMIN_CHAT_ID)
     : undefined,
 
+  /** CryptoCloud: Приём платежей в криптовалюте */
+  cryptoCloudApiKey: process.env.CRYPTOCLOUD_API_KEY || '',
+  cryptoCloudShopId: process.env.CRYPTOCLOUD_SHOP_ID || '',
+  cryptoCloudSecretKey: process.env.CRYPTOCLOUD_SECRET_KEY || '',
+
   /** AI Providers: OpenRouter */
   openRouterApiKey: process.env.OPENROUTER_API_KEY || '',
   openRouterBaseUrl: process.env.OPENROUTER_BASE_URL || 'https://openrouter.ai/api/v1',

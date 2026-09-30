@@ -8,6 +8,7 @@ import { calculateStars } from '../telegram/bot.js';
 import type { CryptoCurrency, PlanId, PlanItem } from '../types.js';
 import { isVipUser } from '../services/vip.js';
 import { stripeService } from '../services/stripe.js';
+import { cryptoCloudService } from '../services/cryptocloud.js';
 
 export const PLANS: readonly PlanItem[] = [
   {
@@ -404,9 +405,9 @@ export function createBillingRouter({
     });
   });
 
-  // --- Crypto ---
+  // --- Crypto & CryptoCloud ---
 
-  router.post('/billing/crypto/create-invoice', (request: Request, response: Response) => {
+  router.post('/billing/crypto/create-invoice', async (request: Request, response: Response) => {
     const rawPlanId: unknown = request.body?.planId;
     const plan = findPlan(rawPlanId);
     if (!plan || plan.priceMonthly <= 0) {
@@ -415,23 +416,64 @@ export function createBillingRouter({
     }
 
     const userId = getUserId(request);
+    const user = userStore.findById(userId) || userStore.findByEmail(userId);
     const currency: CryptoCurrency = request.body?.currency || 'USDT_TRC20';
+
+    // Тарифы в долларах: Plus $10, Pro $20, Ultra $30
+    const amountUsd = plan.id === 'ultra' ? 30 : plan.id === 'pro' ? 20 : 10;
+    const tempOrderId = `crypto_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+
+    let ccResult;
+    try {
+      ccResult = await cryptoCloudService.createInvoice({
+        orderId: tempOrderId,
+        amountUsd,
+        planId: plan.id,
+        userId,
+        userEmail: user?.email,
+      });
+    } catch (err) {
+      console.warn('[billing] Ошибка создания CryptoCloud счёта:', err);
+    }
+
     const invoice = activeInvoiceStore.createCryptoInvoice(
       userId,
       plan.id,
       currency,
-      plan.priceMonthly,
+      amountUsd,
+      ccResult?.link,
+      ccResult?.invoiceId,
     );
 
     response.json({ invoice });
   });
 
-  router.get('/billing/crypto/status/:invoiceId', (request: Request, response: Response) => {
+  router.get('/billing/crypto/status/:invoiceId', async (request: Request, response: Response) => {
     const invoiceId = getParamInvoiceId(request);
-    const invoice = activeInvoiceStore.getCryptoInvoice(invoiceId);
+    let invoice = activeInvoiceStore.getCryptoInvoice(invoiceId);
     if (!invoice) {
       sendError(response, 404, 'invoice_not_found', 'Крипто-счёт не найден');
       return;
+    }
+
+    // Если счёт в ожидании и привязан к CryptoCloud — проверяем статус в шлюзе
+    if (invoice.status === 'pending' && invoice.cryptoCloudInvoiceId) {
+      try {
+        const ccStatus = await cryptoCloudService.checkInvoiceStatus(invoice.cryptoCloudInvoiceId);
+        if (ccStatus === 'paid' || ccStatus === 'success') {
+          invoice = activeInvoiceStore.markCryptoPaid(invoiceId) ?? invoice;
+          subscriptionStore.checkout(invoice.userId, invoice.planId);
+          const user = userStore.updatePlan(invoice.userId, invoice.planId);
+          if (user?.email && user.email !== invoice.userId) {
+            subscriptionStore.checkout(user.email, invoice.planId);
+          }
+          if (user?.id && user.id !== invoice.userId) {
+            subscriptionStore.checkout(user.id, invoice.planId);
+          }
+        }
+      } catch (err) {
+        console.warn('[billing] Ошибка проверки статуса CryptoCloud:', err);
+      }
     }
 
     response.json({
@@ -466,6 +508,33 @@ export function createBillingRouter({
       user: user ?? { id: userId, plan: invoice.planId },
       invoice: updated,
     });
+  });
+
+  // Webhook от CryptoCloud
+  router.post('/billing/cryptocloud/webhook', (request: Request, response: Response) => {
+    const status = String(request.body?.status || '').toLowerCase();
+    const orderId = String(request.body?.order_id || request.body?.orderId || '');
+    const invoiceUuid = String(request.body?.invoice_id || '');
+
+    console.log('[cryptocloud] Получен webhook:', { status, orderId, invoiceUuid });
+
+    if (status === 'success' || status === 'paid') {
+      const invoice = orderId ? activeInvoiceStore.getCryptoInvoice(orderId) : undefined;
+      if (invoice) {
+        activeInvoiceStore.markCryptoPaid(invoice.id);
+        subscriptionStore.checkout(invoice.userId, invoice.planId);
+        const user = userStore.updatePlan(invoice.userId, invoice.planId);
+        if (user?.email && user.email !== invoice.userId) {
+          subscriptionStore.checkout(user.email, invoice.planId);
+        }
+        if (user?.id && user.id !== invoice.userId) {
+          subscriptionStore.checkout(user.id, invoice.planId);
+        }
+        console.log(`[cryptocloud] Подписка ${invoice.planId} активирована для ${invoice.userId}`);
+      }
+    }
+
+    response.json({ status: 'ok' });
   });
 
   return router;

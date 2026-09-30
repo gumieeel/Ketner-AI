@@ -119,7 +119,7 @@ export function createInvoiceStore(file) {
             persist();
             return updated;
         },
-        createCryptoInvoice(userId, planId, currency, amountUsd) {
+        createCryptoInvoice(userId, planId, currency, amountUsd, cryptoCloudUrl, cryptoCloudInvoiceId) {
             const id = `crypto_${Date.now()}_${crypto.randomBytes(4).toString('hex')}`;
             const expiresAt = new Date(Date.now() + 30 * 60 * 1000).toISOString();
             const amount = currency === 'TON'
@@ -151,6 +151,8 @@ export function createInvoiceStore(file) {
                 expiresAt,
                 createdAt: new Date().toISOString(),
                 network,
+                cryptoCloudUrl,
+                cryptoCloudInvoiceId,
             };
             cryptoInvoices.set(id, invoice);
             persist();

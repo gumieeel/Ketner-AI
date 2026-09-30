@@ -24,6 +24,8 @@ export interface InvoiceStore {
     planId: PlanId,
     currency: CryptoCurrency,
     amountUsd: number,
+    cryptoCloudUrl?: string,
+    cryptoCloudInvoiceId?: string,
   ): CryptoInvoice;
   getCryptoInvoice(id: string): CryptoInvoice | undefined;
   markCryptoPaid(id: string): CryptoInvoice | undefined;
@@ -170,6 +172,8 @@ export function createInvoiceStore(file?: string): InvoiceStore {
       planId: PlanId,
       currency: CryptoCurrency,
       amountUsd: number,
+      cryptoCloudUrl?: string,
+      cryptoCloudInvoiceId?: string,
     ): CryptoInvoice {
       const id = `crypto_${Date.now()}_${crypto.randomBytes(4).toString('hex')}`;
       const expiresAt = new Date(Date.now() + 30 * 60 * 1000).toISOString();
@@ -210,6 +214,8 @@ export function createInvoiceStore(file?: string): InvoiceStore {
         expiresAt,
         createdAt: new Date().toISOString(),
         network,
+        cryptoCloudUrl,
+        cryptoCloudInvoiceId,
       };
 
       cryptoInvoices.set(id, invoice);
