@@ -164,11 +164,14 @@ export const config = {
 
   /** Telegram Support Bot для приёма жалоб и поддержки пользователей. */
   telegramSupportBotToken:
-    process.env.TELEGRAM_SUPPORT_BOT_TOKEN || '767965681:AAFkLbcszHQe7-XIZ8-y8Q-vebuoJXBSFGo',
+    process.env.TELEGRAM_SUPPORT_BOT_TOKEN || '8767965681:AAFkLbcszHQe7-XIZ8-y8Q-vebuoJXBSFGo',
   telegramSupportBotUsername:
     process.env.TELEGRAM_SUPPORT_BOT_USERNAME || 'ketner_support_bot',
   supportAdminUsername:
     (process.env.SUPPORT_ADMIN_USERNAME || 'gumieeel').replace(/^@/, '').toLowerCase(),
+  supportAdminChatId: process.env.SUPPORT_ADMIN_CHAT_ID
+    ? Number(process.env.SUPPORT_ADMIN_CHAT_ID)
+    : undefined,
 
   /** AI Providers: OpenRouter */
   openRouterApiKey: process.env.OPENROUTER_API_KEY || '',

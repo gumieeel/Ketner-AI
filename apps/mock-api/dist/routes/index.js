@@ -114,6 +114,7 @@ export function createApiRouter(deps) {
         invoiceStore: activeInvoiceStore,
         botService: deps.botService,
         supportBotService: deps.supportBotService,
+        supportStore: deps.supportStore,
     }));
     router.use('/webhooks', createWebhookRouter({
         subscriptionStore: activeSubscriptionStore,

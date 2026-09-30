@@ -13,6 +13,9 @@ import { UsageStore } from '../store/usage-store.js';
 import { semanticCache } from '../ai/cache.js';
 import type { Conversation, Message } from '../types.js';
 
+import { createSupportStore } from '../store/support-store.js';
+import { TelegramSupportBotService } from '../telegram/support-bot.js';
+
 /** Задержки без пауз: тесты не должны ждать стриминг. */
 export const FAST_AI: AiConfig = {
   thinkingMs: [0, 0],
@@ -33,6 +36,7 @@ export async function startTestServer(ai: Partial<AiConfig> = {}): Promise<TestS
   const userStoreFile = join(tempDir, 'users.json');
   const subscriptionStoreFile = join(tempDir, 'subscriptions.json');
   const authDbFile = join(tempDir, 'auth.sqlite');
+  const supportStoreFile = join(tempDir, 'support.json');
 
   const { auth: testBetterAuth, db: testAuthDb } = createBetterAuth({ dbPath: authDbFile });
   await initAuthDatabase(testBetterAuth);
@@ -40,11 +44,19 @@ export async function startTestServer(ai: Partial<AiConfig> = {}): Promise<TestS
   const usageStoreFile = join(tempDir, 'usage.json');
   semanticCache.clear();
 
+  const testSupportStore = createSupportStore(supportStoreFile);
+  const testSupportBotService = new TelegramSupportBotService({
+    supportStore: testSupportStore,
+    botToken: '', // mock mode for fast and isolated test execution
+  });
+
   const app = createApp({
     store: createConversationStore(storeFile),
     userStore: createUserStore(userStoreFile),
     subscriptionStore: createSubscriptionStore(subscriptionStoreFile),
     usageStore: new UsageStore(usageStoreFile),
+    supportStore: testSupportStore,
+    supportBotService: testSupportBotService,
     ai: { ...FAST_AI, ...ai },
     betterAuth: testBetterAuth,
   });

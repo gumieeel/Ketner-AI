@@ -49,6 +49,12 @@ export interface TelegramUpdate {
       username?: string;
     };
     text?: string;
+    caption?: string;
+    photo?: Array<{ file_id: string; file_size?: number; width: number; height: number }>;
+    document?: { file_id: string; file_name?: string; mime_type?: string; file_size?: number };
+    voice?: { file_id: string; duration: number };
+    video?: { file_id: string; duration: number };
+    sticker?: { file_id: string };
     date: number;
     reply_to_message?: {
       message_id: number;
@@ -59,6 +65,7 @@ export interface TelegramUpdate {
         username?: string;
       };
       text?: string;
+      caption?: string;
     };
     successful_payment?: {
       currency: string;

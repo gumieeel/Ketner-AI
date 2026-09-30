@@ -16,6 +16,7 @@ import type { UserStore } from './store/user-store.js';
 
 import type { TelegramBotService } from './telegram/bot.js';
 import type { TelegramSupportBotService } from './telegram/support-bot.js';
+import type { SupportStore } from './store/support-store.js';
 
 import type { UsageStore } from './store/usage-store.js';
 import { usageStore as defaultUsageStore } from './store/index.js';
@@ -36,6 +37,7 @@ export interface AppDeps {
   betterAuth?: typeof defaultBetterAuth;
   botService?: TelegramBotService;
   supportBotService?: TelegramSupportBotService;
+  supportStore?: SupportStore;
 }
 
 const defaultDeps: AppDeps = {

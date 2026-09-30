@@ -27,6 +27,10 @@ export class TelegramSupportBotService {
     this.adminUsername = (deps.adminUsername || config.supportAdminUsername || 'gumieeel')
       .replace(/^@/, '')
       .toLowerCase();
+
+    if (config.supportAdminChatId && !this.store.getAdminChatId()) {
+      this.store.setAdminChatId(config.supportAdminChatId);
+    }
   }
 
   get botUsername(): string {
@@ -74,6 +78,32 @@ export class TelegramSupportBotService {
     });
   }
 
+  async copyMessage(
+    targetChatId: number | string,
+    fromChatId: number | string,
+    messageId: number,
+    extra: Record<string, unknown> = {},
+  ): Promise<{ message_id: number } | null> {
+    return this.callApi<{ message_id: number }>('copyMessage', {
+      chat_id: targetChatId,
+      from_chat_id: fromChatId,
+      message_id: messageId,
+      ...extra,
+    });
+  }
+
+  async forwardMessage(
+    targetChatId: number | string,
+    fromChatId: number | string,
+    messageId: number,
+  ): Promise<{ message_id: number } | null> {
+    return this.callApi<{ message_id: number }>('forwardMessage', {
+      chat_id: targetChatId,
+      from_chat_id: fromChatId,
+      message_id: messageId,
+    });
+  }
+
   /**
    * Инициализация support бота: проверка токена, установка команд, вебхук / long-polling.
    */
@@ -102,13 +132,14 @@ export class TelegramSupportBotService {
           { command: 'start', description: 'Связаться с поддержкой Ketner AI' },
           { command: 'tickets', description: 'Список обращений (администратор)' },
           { command: 'close', description: 'Закрыть текущее обращение' },
+          { command: 'status', description: 'Статус моего обращения' },
           { command: 'help', description: 'Помощь и контакты' },
         ],
       });
 
       await this.callApi('setMyDescription', {
         description:
-          '💬 Официальная служба поддержки Ketner AI.\n\nЗадайте любой вопрос, отправьте жалобу или предложение — наш администратор ответит вам прямо в этом чате.',
+          '💬 Официальная служба поддержки Ketner AI.\n\nЗадайте любой вопрос, отправьте жалобу, скриншот или предложение — наш администратор оперативно ответит вам прямо в этом чате.',
       });
 
       const effectiveBaseUrl =
@@ -121,15 +152,21 @@ export class TelegramSupportBotService {
 
       if (isHttps) {
         const webhookUrl = `${effectiveBaseUrl.replace(/\/$/, '')}/api/telegram/support/webhook`;
-        const res = await this.callApi('setWebhook', {
+        const res = await this.callApi<{ ok: boolean }>('setWebhook', {
           url: webhookUrl,
           allowed_updates: ['message', 'callback_query'],
         });
-        console.log(`✅ [SupportBot] Webhook зарегистрирован на: ${webhookUrl}`, res);
-      } else {
-        console.log('⚡ [SupportBot] Локальное окружение: запуск фонового long-polling...');
-        this.startLongPolling();
+        if (res) {
+          console.log(`✅ [SupportBot] Webhook успешно зарегистрирован на: ${webhookUrl}`);
+          return;
+        }
+        console.warn('⚠️ [SupportBot] Не удалось установить Webhook, переключаемся на long-polling...');
       }
+
+      console.log('⚡ [SupportBot] Запуск фонового long-polling...');
+      // Удаляем старый вебхук перед началом getUpdates, чтобы избежать 409 Conflict
+      await this.callApi('deleteWebhook', { drop_pending_updates: false });
+      this.startLongPolling();
     } catch (error) {
       console.error('⚠️ [SupportBot] Ошибка инициализации support бота:', error);
     }
@@ -175,16 +212,38 @@ export class TelegramSupportBotService {
 
     const msg = update.message;
     const chatId = msg.chat.id;
-    const text = msg.text?.trim() ?? '';
     const fromUser = msg.from;
     const fromUsername = fromUser?.username?.toLowerCase().replace(/^@/, '');
-    const isAdmin = Boolean(fromUsername && fromUsername === this.adminUsername);
+
+    const hasMedia = Boolean(
+      msg.photo || msg.document || msg.video || msg.voice || msg.sticker,
+    );
+    const mediaTypeLabel = msg.photo
+      ? '📷 [Фотография / Скриншот]'
+      : msg.document
+      ? `📎 [Файл: ${msg.document.file_name || 'документ'}]`
+      : msg.voice
+      ? '🎤 [Голосовое сообщение]'
+      : msg.video
+      ? '📹 [Видео]'
+      : msg.sticker
+      ? '🎨 [Стикер]'
+      : '';
+
+    const text = (msg.text || msg.caption || mediaTypeLabel).trim();
+
+    // Проверяем, является ли отправитель администратором
+    const isConfiguredAdmin = Boolean(fromUsername && fromUsername === this.adminUsername);
+    const isSavedAdmin = Boolean(
+      this.store.getAdminChatId() && String(this.store.getAdminChatId()) === String(chatId),
+    );
+    const isAdmin = isConfiguredAdmin || isSavedAdmin;
 
     // -------------------------------------------------------------
     // А. ОБРАБОТКА СООБЩЕНИЙ ОТ АДМИНИСТРАТОРА (@gumieeel)
     // -------------------------------------------------------------
     if (isAdmin) {
-      // 1. Автоматически сохраняем chatId администратора
+      // Автоматически фиксируем/обновляем chatId администратора
       if (String(this.store.getAdminChatId()) !== String(chatId)) {
         this.store.setAdminChatId(chatId);
       }
@@ -195,22 +254,40 @@ export class TelegramSupportBotService {
         const welcomeAdmin = [
           `👑 <b>Здравствуйте, администратор @${this.adminUsername}!</b>`,
           '',
-          'Вы успешно авторизованы в качестве оператора службы поддержки <b>Ketner AI</b>.',
-          'Сюда будут поступать все сообщения, вопросы и жалобы от пользователей.',
+          'Вы успешно авторизованы в качестве главного оператора поддержки <b>Ketner AI</b>.',
+          'Сюда поступают все сообщения, вопросы, чеки и жалобы от пользователей.',
           '',
           `📋 <b>Открытых обращений:</b> ${openTickets.length}`,
           '',
           '✍️ <b>Как отвечать пользователю:</b>',
-          '• <b>Reply (Ответить)</b>: просто сделайте нативный свайп/Reply на сообщение с тикетом в этом чате.',
-          '• Либо напишите команду: <code>/reply &lt;ID&gt; &lt;текст ответа&gt;</code>',
+          '• <b>Reply (Ответить)</b>: просто сделайте ответ на сообщение бота с тикетом в этом чате.',
+          '• <b>Команда</b>: <code>/reply &lt;ID&gt; &lt;текст&gt;</code>',
           '',
-          '💡 <b>Команды:</b>',
+          '💡 <b>Команды оператора:</b>',
           '/tickets — список открытых обращений',
           '/close &lt;ID&gt; — закрыть обращение',
+          '/status — системная информация',
         ].join('\n');
 
         await this.sendMessage(chatId, welcomeAdmin);
         return { handled: true, action: 'admin_welcome_sent' };
+      }
+
+      // Команда /status
+      if (text === '/status') {
+        const openTickets = this.store.listOpenTickets();
+        const allTickets = this.store.listAllTickets();
+        const statusMsg = [
+          '⚙️ <b>Статус поддержки Ketner AI:</b>',
+          `• Бот: @${this.username}`,
+          `• Админ: @${this.adminUsername}`,
+          `• Chat ID админа: <code>${chatId}</code>`,
+          `• Открытых тикетов: <b>${openTickets.length}</b>`,
+          `• Всего обращений: <b>${allTickets.length}</b>`,
+        ].join('\n');
+
+        await this.sendMessage(chatId, statusMsg);
+        return { handled: true, action: 'admin_status_sent' };
       }
 
       // Команда /tickets — список открытых обращений
@@ -226,7 +303,7 @@ export class TelegramSupportBotService {
           const lastMsg = t.messages[t.messages.length - 1];
           const userHandle = t.userUsername ? `@${t.userUsername}` : t.userFirstName || 'Аноним';
           const preview = lastMsg?.text ? lastMsg.text.slice(0, 80) : '—';
-          ticketsList += `🔹 <b>Тикет #${t.id}</b> от ${userHandle}\n`;
+          ticketsList += `🔹 <b>Тикет #${t.id}</b> от ${userHandle} (ID: <code>${t.userChatId}</code>)\n`;
           ticketsList += `   <i>«${escapeHtml(preview)}»</i>\n`;
           ticketsList += `   👉 Ответить: <code>/reply ${t.id} текст</code>\n\n`;
         }
@@ -247,7 +324,10 @@ export class TelegramSupportBotService {
         }
 
         if (!ticket) {
-          await this.sendMessage(chatId, '❌ Укажите ID тикета: <code>/close T-1001</code> или сделайте Reply на сообщение тикета.');
+          await this.sendMessage(
+            chatId,
+            '❌ Укажите ID тикета: <code>/close T-1001</code> или сделайте Reply на сообщение тикета.',
+          );
           return { handled: true, action: 'admin_close_not_found' };
         }
 
@@ -257,7 +337,7 @@ export class TelegramSupportBotService {
         // Уведомляем пользователя о закрытии тикета
         await this.sendMessage(
           ticket.userChatId,
-          `ℹ️ Ваше обращение <b>#${ticket.id}</b> отмечено как решённое администратором.\nЕсли у вас возникнут новые вопросы, просто напишите сообщение в этот чат!`,
+          `ℹ️ Ваше обращение <b>#${ticket.id}</b> отмечено как решённое оператором.\nЕсли у вас возникнут новые вопросы, просто напишите сообщение в этот чат!`,
         );
         return { handled: true, action: 'admin_ticket_closed' };
       }
@@ -286,7 +366,7 @@ export class TelegramSupportBotService {
           return { handled: true, action: 'admin_reply_ticket_not_found' };
         }
 
-        return this.deliverAdminReply(ticket, replyText, chatId);
+        return this.deliverAdminReply(ticket, replyText, chatId, msg);
       }
 
       // Нативный Reply администратора на сообщение тикета
@@ -295,7 +375,7 @@ export class TelegramSupportBotService {
         const ticket = this.store.getTicketByAdminMessageId(repliedMsgId);
 
         if (ticket) {
-          return this.deliverAdminReply(ticket, text, chatId);
+          return this.deliverAdminReply(ticket, text, chatId, msg);
         }
       }
 
@@ -314,9 +394,9 @@ export class TelegramSupportBotService {
       const userGreeting = [
         `👋 <b>Здравствуйте, ${escapeHtml(fromUser?.first_name || 'друг')}!</b>`,
         '',
-        'Это официальная служба поддержки сервиса <b>Ketner AI</b>.',
+        'Это официальная служба поддержки <b>Ketner AI</b>.',
         '',
-        'Напишите ваш вопрос, предложение или жалобу прямо в этот чат. Наш администратор оперативно получит сообщение и ответит вам прямо сюда.',
+        'Опишите вашу проблему, задайте вопрос или отправьте скриншот прямо в этот чат. Наш администратор оперативно получит ваше обращение и ответит вам прямо сюда.',
       ].join('\n');
 
       await this.sendMessage(chatId, userGreeting);
@@ -326,12 +406,41 @@ export class TelegramSupportBotService {
     if (text === '/help') {
       await this.sendMessage(
         chatId,
-        'ℹ️ <b>Служба поддержки Ketner AI</b>\n\nПросто отправьте любое текстовое сообщение с описанием вашей проблемы, и оператор ответит вам в этом диалоге.',
+        'ℹ️ <b>Служба поддержки Ketner AI</b>\n\nПросто отправьте текстовое сообщение или файл с описанием вашей ситуации, и оператор ответит вам в этом диалоге.\n\nКоманда /close — закрыть текущее обращение.',
       );
       return { handled: true, action: 'user_help_sent' };
     }
 
-    if (!text) {
+    if (text === '/status') {
+      const activeTicket = this.store.getActiveTicketForUser(chatId);
+      if (!activeTicket) {
+        await this.sendMessage(chatId, 'У вас нет активных обращений. Напишите ваш вопрос, чтобы создать новое!');
+      } else {
+        await this.sendMessage(
+          chatId,
+          `📋 Ваше текущее обращение: <b>#${activeTicket.id}</b> (статус: <b>В обработке</b>).\nСообщений в диалоге: ${activeTicket.messages.length}`,
+        );
+      }
+      return { handled: true, action: 'user_status_sent' };
+    }
+
+    if (text === '/close') {
+      const activeTicket = this.store.getActiveTicketForUser(chatId);
+      if (!activeTicket) {
+        await this.sendMessage(chatId, 'У вас нет активных обращений.');
+        return { handled: true, action: 'user_close_none' };
+      }
+      this.store.closeTicket(activeTicket.id);
+      await this.sendMessage(chatId, `✅ Ваше обращение <b>#${activeTicket.id}</b> успешно закрыто. Если появятся вопросы — пишите!`);
+
+      const adminChatId = this.store.getAdminChatId();
+      if (adminChatId) {
+        await this.sendMessage(adminChatId, `ℹ️ Пользователь закрыл обращение <b>#${activeTicket.id}</b>.`);
+      }
+      return { handled: true, action: 'user_ticket_closed' };
+    }
+
+    if (!text && !hasMedia) {
       return { handled: false };
     }
 
@@ -387,9 +496,17 @@ export class TelegramSupportBotService {
       if (sentMsg?.message_id) {
         this.store.linkAdminNotification(ticket.id, sentMsg.message_id);
       }
+
+      // Если пользователь прислал медиафайл (фото, чек, скриншот, документ), дублируем его админу
+      if (hasMedia) {
+        const copied = await this.copyMessage(adminChatId, chatId, msg.message_id);
+        if (copied?.message_id) {
+          this.store.linkAdminNotification(ticket.id, copied.message_id);
+        }
+      }
     } else {
       console.log(
-        `[SupportBot] Обращение #${ticket.id} сохранено, но adminChatId для @${this.adminUsername} ещё не зафиксирован (администратор ещё не нажимал /start в боте).`,
+        `[SupportBot] Обращение #${ticket.id} сохранено, но adminChatId для @${this.adminUsername} ещё не зафиксирован (нажмите /start в боте с аккаунта @${this.adminUsername}).`,
       );
     }
 
@@ -403,6 +520,7 @@ export class TelegramSupportBotService {
     ticket: SupportTicket,
     replyText: string,
     adminChatId: number | string,
+    adminMsg?: TelegramUpdate['message'],
   ): Promise<{ handled: boolean; action: string }> {
     // Сохраняем в истории тикета
     this.store.addMessageToTicket(ticket.id, {
@@ -411,16 +529,31 @@ export class TelegramSupportBotService {
       text: replyText,
     });
 
-    // Отправляем пользователю
-    const userMessage = [
-      '💬 <b>Ответ службы поддержки Ketner AI:</b>',
-      '',
-      escapeHtml(replyText),
-      '',
-      '<i>(Вы можете продолжить диалог, просто ответив в этот чат)</i>',
-    ].join('\n');
+    const hasMedia = Boolean(
+      adminMsg && (adminMsg.photo || adminMsg.document || adminMsg.video || adminMsg.voice),
+    );
 
-    await this.sendMessage(ticket.userChatId, userMessage);
+    // Если админ ответил медиафайлом (скриншот, документ), копируем его пользователю
+    if (adminMsg && hasMedia) {
+      await this.copyMessage(ticket.userChatId, adminChatId, adminMsg.message_id);
+      if (replyText && !replyText.startsWith('📷') && !replyText.startsWith('📎')) {
+        await this.sendMessage(
+          ticket.userChatId,
+          `💬 <b>Ответ оператора Ketner AI:</b>\n\n${escapeHtml(replyText)}`,
+        );
+      }
+    } else {
+      // Отправляем текстовое сообщение пользователю
+      const userMessage = [
+        '💬 <b>Ответ службы поддержки Ketner AI:</b>',
+        '',
+        escapeHtml(replyText),
+        '',
+        '<i>(Вы можете продолжить диалог, просто ответив в этот чат)</i>',
+      ].join('\n');
+
+      await this.sendMessage(ticket.userChatId, userMessage);
+    }
 
     // Подтверждаем администратору
     const userDisplay = ticket.userUsername ? `@${ticket.userUsername}` : `ID ${ticket.userChatId}`;

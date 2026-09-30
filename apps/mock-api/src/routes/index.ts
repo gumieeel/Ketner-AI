@@ -24,6 +24,7 @@ import { usageStore as defaultUsageStore, type UsageStore } from '../store/index
 
 import type { TelegramBotService } from '../telegram/bot.js';
 import type { TelegramSupportBotService } from '../telegram/support-bot.js';
+import type { SupportStore } from '../store/support-store.js';
 import type { defaultBetterAuth } from '../auth/better-auth.js';
 
 /** Зависимости роутеров: подменяются в тестах. */
@@ -35,6 +36,7 @@ export interface ApiDeps {
   usageStore?: UsageStore;
   botService?: TelegramBotService;
   supportBotService?: TelegramSupportBotService;
+  supportStore?: SupportStore;
   ai: AiConfig;
   userId: string;
   betterAuth?: typeof defaultBetterAuth;
@@ -150,6 +152,7 @@ export function createApiRouter(deps: ApiDeps): Router {
       invoiceStore: activeInvoiceStore,
       botService: deps.botService,
       supportBotService: deps.supportBotService,
+      supportStore: deps.supportStore,
     }),
   );
   router.use(
