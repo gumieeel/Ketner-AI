@@ -106,7 +106,7 @@ export function LandingHero() {
           </div>
 
           {/* Right Column (5/12) */}
-          <div className="lg:col-span-5 flex items-center justify-center">
+          <div className="lg:col-span-5 flex items-center justify-center -translate-y-2 lg:-translate-y-4">
             <ModelHub />
           </div>
         </div>
