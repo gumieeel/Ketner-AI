@@ -488,14 +488,14 @@ export function installFakeApi(options: FakeApiOptions = {}): FakeApi {
             amountUsd,
             address:
               currency === 'USDT_TRC20'
-                ? 'TXwKetnerAI78Qz99Trc20DepositXyZ9'
+                ? 'TDyeGqX4ranC94g7RMw6cGsCPvRQ7XAtQP'
                 : currency === 'BTC'
-                  ? 'bc1qketnerai99depositbtcsecured88zz'
-                  : 'EQBKetnerAITonUsdtWalletDeposit88xY',
+                  ? 'bc1qa27xsypxy7pstvh2yrmzrlwev36qrr5az3vr7h'
+                  : 'UQA6ebFQPlulDzarfUtQJX8T61BHknM76VVYZ-3j-8eLnbyS',
             qrPayload:
               currency === 'USDT_TRC20'
-                ? `tron:TXwKetnerAI78Qz99Trc20DepositXyZ9?amount=${amount}`
-                : `ton://transfer/EQBKetnerAITonUsdtWalletDeposit88xY?amount=${amount}`,
+                ? `tron:TDyeGqX4ranC94g7RMw6cGsCPvRQ7XAtQP?amount=${amount}`
+                : `ton://transfer/UQA6ebFQPlulDzarfUtQJX8T61BHknM76VVYZ-3j-8eLnbyS?amount=${amount}`,
             status: 'pending',
             expiresAt: new Date(Date.now() + 1800000).toISOString(),
             network: currency === 'USDT_TRC20' ? 'TRC-20' : currency === 'BTC' ? 'Bitcoin' : 'TON',
@@ -512,8 +512,8 @@ export function installFakeApi(options: FakeApiOptions = {}): FakeApi {
             currency: 'USDT_TRC20',
             amount: 10,
             amountUsd: 10,
-            address: 'TXwKetnerAI78Qz99Trc20DepositXyZ9',
-            qrPayload: 'tron:TXwKetnerAI78Qz99Trc20DepositXyZ9?amount=10',
+            address: 'TDyeGqX4ranC94g7RMw6cGsCPvRQ7XAtQP',
+            qrPayload: 'tron:TDyeGqX4ranC94g7RMw6cGsCPvRQ7XAtQP?amount=10',
             status: 'pending',
             expiresAt: new Date(Date.now() + 1800000).toISOString(),
             network: 'TRC-20',
@@ -541,8 +541,8 @@ export function installFakeApi(options: FakeApiOptions = {}): FakeApi {
             currency: 'USDT_TRC20',
             amount: 10,
             amountUsd: 10,
-            address: 'TXwKetnerAI78Qz99Trc20DepositXyZ9',
-            qrPayload: 'tron:TXwKetnerAI78Qz99Trc20DepositXyZ9?amount=10',
+            address: 'TDyeGqX4ranC94g7RMw6cGsCPvRQ7XAtQP',
+            qrPayload: 'tron:TDyeGqX4ranC94g7RMw6cGsCPvRQ7XAtQP?amount=10',
             status: 'paid',
             expiresAt: new Date(Date.now() + 1800000).toISOString(),
             network: 'TRC-20',

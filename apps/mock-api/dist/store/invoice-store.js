@@ -128,10 +128,10 @@ export function createInvoiceStore(file) {
                     ? +(amountUsd / 95000).toFixed(6)
                     : amountUsd;
             const address = currency === 'USDT_TRC20'
-                ? 'TXwKetnerAI78Qz99Trc20DepositXyZ9'
+                ? 'TDyeGqX4ranC94g7RMw6cGsCPvRQ7XAtQP'
                 : currency === 'BTC'
-                    ? 'bc1qketnerai99depositbtcsecured88zz'
-                    : 'EQBKetnerAITonUsdtWalletDeposit88xY';
+                    ? 'bc1qa27xsypxy7pstvh2yrmzrlwev36qrr5az3vr7h'
+                    : 'UQA6ebFQPlulDzarfUtQJX8T61BHknM76VVYZ-3j-8eLnbyS';
             const network = currency === 'USDT_TRC20' ? 'TRC-20' : currency === 'BTC' ? 'Bitcoin' : 'TON';
             const qrPayload = currency === 'USDT_TRC20'
                 ? `tron:${address}?amount=${amount}`

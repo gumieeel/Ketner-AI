@@ -152,7 +152,7 @@ describe('billing-flow: каталог тарифов, чекаут и упра�
     // Должны появиться заголовок криптовалюты, сеть и адрес кошелька
     expect(await screen.findByText(/Оплата криптовалютой/i)).toBeInTheDocument();
     expect(screen.getByText(/USDT \(TRC-20\)/i)).toBeInTheDocument();
-    expect(screen.getByText(/TXwKetnerAI78Qz99Trc20DepositXyZ9/i)).toBeInTheDocument();
+    expect(screen.getByText(/TDyeGqX4ranC94g7RMw6cGsCPvRQ7XAtQP/i)).toBeInTheDocument();
 
     const confirmCryptoButton = screen.getByRole('button', {
       name: /Подтвердить оплату криптовалютой/i,

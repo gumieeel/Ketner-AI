@@ -78,7 +78,7 @@ const CRYPTO_OPTIONS: readonly CryptoOption[] = [
     icon: UsdtIcon,
     calcAmount: (usd) => usd,
     formatAmount: (usd) => `${usd.toFixed(2)} USDT`,
-    defaultAddress: 'TXwKetnerAI78Qz99Trc20DepositXyZ9',
+    defaultAddress: 'TDyeGqX4ranC94g7RMw6cGsCPvRQ7XAtQP',
   },
   {
     id: 'USDT_TON',
@@ -88,7 +88,7 @@ const CRYPTO_OPTIONS: readonly CryptoOption[] = [
     icon: TonIcon,
     calcAmount: (usd) => usd,
     formatAmount: (usd) => `${usd.toFixed(2)} USDT`,
-    defaultAddress: 'EQBKetnerAITonUsdtWalletDeposit88xY',
+    defaultAddress: 'UQA6ebFQPlulDzarfUtQJX8T61BHknM76VVYZ-3j-8eLnbyS',
   },
   {
     id: 'TON',
@@ -98,7 +98,7 @@ const CRYPTO_OPTIONS: readonly CryptoOption[] = [
     icon: TonIcon,
     calcAmount: (usd) => +(usd / 5.4).toFixed(2),
     formatAmount: (usd) => `${(usd / 5.4).toFixed(2)} TON`,
-    defaultAddress: 'EQCKetnerAITonNativeWalletDeposit77zW',
+    defaultAddress: 'UQA6ebFQPlulDzarfUtQJX8T61BHknM76VVYZ-3j-8eLnbyS',
   },
   {
     id: 'BTC',
@@ -108,7 +108,7 @@ const CRYPTO_OPTIONS: readonly CryptoOption[] = [
     icon: BitcoinIcon,
     calcAmount: (usd) => +(usd / 95000).toFixed(6),
     formatAmount: (usd) => `${(usd / 95000).toFixed(6)} BTC`,
-    defaultAddress: 'bc1qketnerai99depositbtcsecured88zz',
+    defaultAddress: 'bc1qa27xsypxy7pstvh2yrmzrlwev36qrr5az3vr7h',
   },
 ];
 

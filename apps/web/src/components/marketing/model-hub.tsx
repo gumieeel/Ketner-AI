@@ -132,7 +132,7 @@ const N = MODELS.length;
  * Slot 4: Bottom-Left (+5pi/6)
  * Slot 5: Top-Left (+7pi/6)
  */
-const HOME_ANGLES = MODELS.map((_, i) => -Math.PI / 2 + (i * 2 * Math.PI) / N);
+const HOME_ANGLES = MODELS.map((_, i) => wrapAngle(-Math.PI / 2 + (i * 2 * Math.PI) / N));
 
 // ─── Component ───────────────────────────────────────────────────────────────
 
@@ -142,11 +142,10 @@ export function ModelHub({ className }: { className?: string }) {
   const svgRef       = useRef<SVGSVGElement>(null);
   const rafId        = useRef<number>(0);
 
-  // Unwrapped angles for each model
-  const anglesRef        = useRef<number[]>([...HOME_ANGLES]);
-  const angVelRef        = useRef<number[]>(MODELS.map(() => 0));
-  const radiusRef        = useRef<number[]>(MODELS.map(() => ORBIT_R));
-  const collisionTimeRef = useRef<number[]>(MODELS.map(() => 0));
+  // Angles for each model
+  const anglesRef = useRef<number[]>([...HOME_ANGLES]);
+  const angVelRef = useRef<number[]>(MODELS.map(() => 0));
+  const radiusRef = useRef<number[]>(MODELS.map(() => ORBIT_R));
 
   // Cursor state in client viewport px
   const cursorRef = useRef<{ x: number; y: number } | null>(null);
@@ -177,18 +176,17 @@ export function ModelHub({ className }: { className?: string }) {
       mAngle = Math.atan2(my - CY, mx - CX);
     }
 
-    const angles        = anglesRef.current;
-    const angVel        = angVelRef.current;
-    const radii         = radiusRef.current;
-    const collisionTime = collisionTimeRef.current;
+    const angles = anglesRef.current;
+    const angVel = angVelRef.current;
+    const radii  = radiusRef.current;
 
     // ── 1. Calculate Forces per Model ────────────────────────────────────────
     for (let i = 0; i < N; i++) {
       const th = angles[i];
       let netForce = 0;
 
-      // A) Gentle restorative spring to home slot (smooth, non-violent return)
-      const homeDelta = HOME_ANGLES[i] - th;
+      // A) Gentle restorative spring to home slot (shortest circular arc)
+      const homeDelta = wrapAngle(HOME_ANGLES[i] - th);
       netForce += homeDelta * K_HOME_SPRING;
 
       // Current Cartesian position of card
@@ -203,7 +201,7 @@ export function ModelHub({ className }: { className?: string }) {
         const distToCursor = Math.hypot(cardX - mx, cardY - my);
 
         if (distToCursor < CURSOR_REPEL_RADIUS && distToCursor > 0.5) {
-          const falloff = (1 - distToCursor / CURSOR_REPEL_RADIUS);
+          const falloff = 1 - distToCursor / CURSOR_REPEL_RADIUS;
           const pushIntensity = falloff * falloff;
 
           // Angular separation along the circle
@@ -228,46 +226,41 @@ export function ModelHub({ className }: { className?: string }) {
       // Integrate angular velocity with high damping (prevents harsh rebound)
       angVel[i] = (angVel[i] + netForce) * ANG_DAMPING;
       angVel[i] = Math.max(-MAX_ANG_VEL, Math.min(MAX_ANG_VEL, angVel[i]));
-      angles[i] += angVel[i];
+      angles[i] = wrapAngle(angles[i] + angVel[i]);
     }
 
-    // ── 2. Exact Edge-to-Edge Frame Collision & Forward Push ──────────────────
-    // Run 4 relaxation iterations per frame so multi-card chains resolve smoothly
-    for (let iter = 0; iter < 4; iter++) {
+    // ── 2. All-Pairs Exact Frame Collision Resolution ────────────────────────
+    // Multi-pass constraint solver ensures no two cards ever overlap
+    for (let iter = 0; iter < 5; iter++) {
       for (let i = 0; i < N; i++) {
-        const nextIdx = (i + 1) % N;
+        for (let j = i + 1; j < N; j++) {
+          const x1 = CX + radii[i] * Math.cos(angles[i]);
+          const y1 = CY + radii[i] * Math.sin(angles[i]);
+          const x2 = CX + radii[j] * Math.cos(angles[j]);
+          const y2 = CY + radii[j] * Math.sin(angles[j]);
 
-        const x1 = CX + radii[i] * Math.cos(angles[i]);
-        const y1 = CY + radii[i] * Math.sin(angles[i]);
-        const x2 = CX + radii[nextIdx] * Math.cos(angles[nextIdx]);
-        const y2 = CY + radii[nextIdx] * Math.sin(angles[nextIdx]);
+          const { colliding, penetration } = checkFrameCollision(x1, y1, x2, y2);
 
-        const { colliding, penetration } = checkFrameCollision(x1, y1, x2, y2);
+          if (colliding && penetration > 0) {
+            // Find direction from card i to card j along circular orbit
+            const angDiff = wrapAngle(angles[j] - angles[i]);
+            const dir = angDiff >= 0 ? 1 : -1;
+            const angCorrection = (penetration / ORBIT_R) + 0.005;
 
-        if (colliding && penetration > 0) {
-          // Angular correction needed to separate the frames exactly at the boundary
-          const angCorrection = (penetration / ORBIT_R) + 0.002;
+            // Push cards apart in opposite directions along orbit
+            angles[j] = wrapAngle(angles[j] + dir * angCorrection * 0.5);
+            angles[i] = wrapAngle(angles[i] - dir * angCorrection * 0.5);
 
-          // Most of the separation pushes the front card forward (80% forward, 20% back)
-          // so the hitting card doesn't get kicked backward!
-          angles[i]       -= angCorrection * 0.20;
-          angles[nextIdx] += angCorrection * 0.80;
-
-          // Forward momentum transfer: front card is pushed forward, rear card settles smoothly
-          const vRel = angVel[i] - angVel[nextIdx];
-          if (vRel > 0) {
-            angVel[nextIdx] += vRel * 0.70; // Push front card forward
-            angVel[i]       *= 0.25;         // Smoothly dampen rear card without bouncing back
+            // Equalize and dampen velocities on contact to prevent sticking
+            const avgVel = (angVel[i] + angVel[j]) * 0.5;
+            angVel[i] = avgVel * 0.6;
+            angVel[j] = avgVel * 0.6;
           }
-
-          // Register collision timestamp for visual frame border impact highlight
-          collisionTime[i]       = now;
-          collisionTime[nextIdx] = now;
         }
       }
     }
 
-    // ── 3. DOM Transforms, Border Highlights & SVG Line Updates ───────────────
+    // ── 3. DOM Transforms & SVG Line Updates ─────────────────────────────────
     for (let i = 0; i < N; i++) {
       const card = cardRefs.current[i];
       const th = angles[i];
@@ -280,23 +273,7 @@ export function ModelHub({ className }: { className?: string }) {
         const domOffsetX = (x - CX) / scaleX;
         const domOffsetY = (y - CY) / scaleY;
 
-        // Is this card currently colliding edge-to-edge?
-        const isColliding = (now - collisionTime[i]) < 180;
-        const scale = isColliding ? 'scale(1.015)' : 'scale(1)';
-
-        card.style.transform = `translate(-50%, -50%) translate(${domOffsetX.toFixed(2)}px, ${domOffsetY.toFixed(2)}px) ${scale}`;
-
-        // Visual frame border highlight when frames hit edge-to-edge
-        const innerBox = card.firstElementChild as HTMLElement | null;
-        if (innerBox) {
-          if (isColliding) {
-            innerBox.style.borderColor = 'rgba(16, 185, 129, 0.75)';
-            innerBox.style.boxShadow   = '0 0 16px rgba(16, 185, 129, 0.35), 0 4px 18px rgba(0,0,0,0.5)';
-          } else {
-            innerBox.style.borderColor = 'rgba(255, 255, 255, 0.08)';
-            innerBox.style.boxShadow   = '0 4px 18px rgba(0, 0, 0, 0.5)';
-          }
-        }
+        card.style.transform = `translate(-50%, -50%) translate(${domOffsetX.toFixed(2)}px, ${domOffsetY.toFixed(2)}px)`;
       }
 
       // Update connecting ray from Sun (CX, CY) to Model planet (x, y)
@@ -490,7 +467,7 @@ export function ModelHub({ className }: { className?: string }) {
               }}
             >
               <div
-                className="flex items-center gap-2.5 rounded-xl px-3 py-2 whitespace-nowrap select-none pointer-events-auto transition-[border-color,box-shadow]"
+                className="flex items-center gap-2.5 rounded-xl px-3 py-2 whitespace-nowrap select-none pointer-events-auto"
                 style={{
                   background: 'rgba(12, 18, 14, 0.82)',
                   backdropFilter: 'blur(14px)',
