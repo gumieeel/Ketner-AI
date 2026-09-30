@@ -64,7 +64,7 @@ const PLANS_DATA: PlanCardInfo[] = [
   {
     id: 'plus',
     name: 'Plus',
-    price: { ru: '$9 / мес', en: '$9 / mo' },
+    price: { ru: '$10 / мес', en: '$10 / mo' },
     badge: { ru: 'Быстрые модели', en: 'Fast models' },
     desc: {
       ru: 'Стандартные быстрые модели для комфортной ежедневной работы и учебы.',
@@ -91,7 +91,7 @@ const PLANS_DATA: PlanCardInfo[] = [
   {
     id: 'pro',
     name: 'Pro',
-    price: { ru: '$29 / мес', en: '$29 / mo' },
+    price: { ru: '$20 / мес', en: '$20 / mo' },
     badge: { ru: 'Топовые модели', en: 'Top models' },
     desc: {
       ru: 'Топовые мировые флагманы (пониженный контекст и скорость по сравнению с Ultra). Включает всё из Plus.',
@@ -121,7 +121,7 @@ const PLANS_DATA: PlanCardInfo[] = [
   {
     id: 'ultra',
     name: 'Ultra',
-    price: { ru: '$39 / мес', en: '$39 / mo' },
+    price: { ru: '$30 / мес (скидка вместо $40)', en: '$30 / mo (discount from $40)' },
     badge: { ru: 'Максимум возможностей', en: 'Maximum power' },
     desc: {
       ru: 'Все топовые модели на 100% мощности, максимальный контекст до 2M токенов и наивысший VIP-приоритет.',

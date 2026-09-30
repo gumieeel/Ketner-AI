@@ -346,6 +346,76 @@ export function SbpIcon(props: IconProps) {
   );
 }
 
+export function CryptoIcon(props: IconProps) {
+  return (
+    <SvgIcon {...props}>
+      <circle cx="12" cy="12" r="9" />
+      <path d="M9 8h4.5a2.5 2.5 0 0 1 0 5H9m0 0h5a2.5 2.5 0 0 1 0 5H9m0-10v10" />
+      <path d="M12 6v2m0 8v2" />
+    </SvgIcon>
+  );
+}
+
+export function UsdtIcon(props: IconProps) {
+  return (
+    <svg
+      viewBox="0 0 32 32"
+      width="1em"
+      height="1em"
+      fill="none"
+      aria-hidden="true"
+      focusable="false"
+      {...props}
+    >
+      <circle cx="16" cy="16" r="16" fill="#26A17B" />
+      <path
+        d="M17.9 16.5c-.1 0-.7.1-1.9.1-1 0-1.7-.1-1.9-.1-4.2-.2-7.3-.9-7.3-1.8s3.1-1.6 7.3-1.8v2.7c.2 0 .9.1 1.9.1 1.2 0 1.8-.1 1.9-.1v-2.7c4.2.2 7.3.9 7.3 1.8s-3.1 1.6-7.3 1.8zm0-2.3v-2h5.6V9.4H8.5v2.8h5.6v2c-4.7.2-8.2 1.1-8.2 2.2s3.5 2 8.2 2.2v8h3.8v-8c4.7-.2 8.2-1.1 8.2-2.2s-3.5-2-8.2-2.2z"
+        fill="#FFF"
+      />
+    </svg>
+  );
+}
+
+export function TonIcon(props: IconProps) {
+  return (
+    <svg
+      viewBox="0 0 32 32"
+      width="1em"
+      height="1em"
+      fill="none"
+      aria-hidden="true"
+      focusable="false"
+      {...props}
+    >
+      <circle cx="16" cy="16" r="16" fill="#0098EA" />
+      <path
+        d="M22.5 10.5H9.5c-.8 0-1.3.8-.9 1.5l6.5 11.2c.4.7 1.4.7 1.8 0l6.5-11.2c.4-.7-.1-1.5-.9-1.5zm-6.5 9.7l-4.5-7.7h9l-4.5 7.7z"
+        fill="#FFF"
+      />
+    </svg>
+  );
+}
+
+export function BitcoinIcon(props: IconProps) {
+  return (
+    <svg
+      viewBox="0 0 32 32"
+      width="1em"
+      height="1em"
+      fill="none"
+      aria-hidden="true"
+      focusable="false"
+      {...props}
+    >
+      <circle cx="16" cy="16" r="16" fill="#F7931A" />
+      <path
+        d="M21.5 14.2c.3-1.8-.8-2.8-2.6-3.3l.5-2.1-1.3-.3-.5 2c-.3-.1-.7-.2-1.1-.3l.5-2.1-1.3-.3-.5 2.1c-.3-.1-.6-.2-.9-.2v-.1l-1.8-.4-.4 1.4s1 .2.9.2c.5.1.6.4.6.7l-.6 2.5c0 0 .1 0 .2.1l-.2-.1-.9 3.5c-.1.2-.3.4-.6.3 0 0-.9-.2-.9-.2l-.6 1.5 1.7.4c.3.1.6.2.9.2l-.5 2.2 1.3.3.5-2.1c.4.1.7.2 1.1.3l-.5 2.1 1.3.3.5-2.1c2.2.4 3.9.2 4.6-1.7.6-1.5 0-2.4-1.1-3 .8-.4 1.3-1 1.1-2.1zm-2 4.4c-.4 1.6-3.1.7-4 .5l.7-2.9c.9.2 3.7.7 3.3 2.4zm.4-4.5c-.4 1.5-2.6.7-3.4.5l.6-2.6c.8.2 3.1.6 2.8 2.1z"
+        fill="#FFF"
+      />
+    </svg>
+  );
+}
+
 export function CreditCardIcon(props: IconProps) {
   return (
     <SvgIcon {...props}>

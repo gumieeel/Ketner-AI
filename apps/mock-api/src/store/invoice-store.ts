@@ -1,5 +1,5 @@
 import crypto from 'node:crypto';
-import type { PlanId, SbpInvoice, TelegramStarsInvoice } from '../types.js';
+import type { CryptoCurrency, CryptoInvoice, PlanId, SbpInvoice, TelegramStarsInvoice } from '../types.js';
 
 export interface InvoiceStore {
   createSbpInvoice(userId: string, planId: PlanId, amount: number): SbpInvoice;
@@ -15,11 +15,21 @@ export interface InvoiceStore {
   ): TelegramStarsInvoice;
   getTelegramStarsInvoice(id: string): TelegramStarsInvoice | undefined;
   markTelegramStarsPaid(id: string): TelegramStarsInvoice | undefined;
+
+  createCryptoInvoice(
+    userId: string,
+    planId: PlanId,
+    currency: CryptoCurrency,
+    amountUsd: number,
+  ): CryptoInvoice;
+  getCryptoInvoice(id: string): CryptoInvoice | undefined;
+  markCryptoPaid(id: string): CryptoInvoice | undefined;
 }
 
 export function createInvoiceStore(): InvoiceStore {
   const sbpInvoices = new Map<string, SbpInvoice>();
   const starsInvoices = new Map<string, TelegramStarsInvoice>();
+  const cryptoInvoices = new Map<string, CryptoInvoice>();
 
   return {
     createSbpInvoice(userId: string, planId: PlanId, amount: number): SbpInvoice {
@@ -97,7 +107,71 @@ export function createInvoiceStore(): InvoiceStore {
       starsInvoices.set(id, updated);
       return updated;
     },
+
+    createCryptoInvoice(
+      userId: string,
+      planId: PlanId,
+      currency: CryptoCurrency,
+      amountUsd: number,
+    ): CryptoInvoice {
+      const id = `crypto_${Date.now()}_${crypto.randomBytes(4).toString('hex')}`;
+      const expiresAt = new Date(Date.now() + 30 * 60 * 1000).toISOString();
+      const amount =
+        currency === 'TON'
+          ? +(amountUsd / 5.4).toFixed(2)
+          : currency === 'BTC'
+            ? +(amountUsd / 95000).toFixed(6)
+            : amountUsd;
+
+      const address =
+        currency === 'USDT_TRC20'
+          ? 'TXwKetnerAI78Qz99Trc20DepositXyZ9'
+          : currency === 'BTC'
+            ? 'bc1qketnerai99depositbtcsecured88zz'
+            : 'EQBKetnerAITonUsdtWalletDeposit88xY';
+
+      const network =
+        currency === 'USDT_TRC20' ? 'TRC-20' : currency === 'BTC' ? 'Bitcoin' : 'TON';
+
+      const qrPayload =
+        currency === 'USDT_TRC20'
+          ? `tron:${address}?amount=${amount}`
+          : currency === 'BTC'
+            ? `bitcoin:${address}?amount=${amount}`
+            : `ton://transfer/${address}?amount=${amount}`;
+
+      const invoice: CryptoInvoice = {
+        id,
+        userId,
+        planId,
+        currency,
+        amount,
+        amountUsd,
+        address,
+        qrPayload,
+        status: 'pending',
+        expiresAt,
+        createdAt: new Date().toISOString(),
+        network,
+      };
+
+      cryptoInvoices.set(id, invoice);
+      return invoice;
+    },
+
+    getCryptoInvoice(id: string): CryptoInvoice | undefined {
+      return cryptoInvoices.get(id);
+    },
+
+    markCryptoPaid(id: string): CryptoInvoice | undefined {
+      const invoice = cryptoInvoices.get(id);
+      if (!invoice) return undefined;
+      const updated: CryptoInvoice = { ...invoice, status: 'paid' };
+      cryptoInvoices.set(id, updated);
+      return updated;
+    },
   };
 }
 
 export const invoiceStore = createInvoiceStore();
+

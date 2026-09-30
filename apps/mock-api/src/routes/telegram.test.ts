@@ -177,8 +177,8 @@ test('billing: Telegram Stars (создание счёта в ⭐️ XTR и по
 
   assert.ok(invoice.id.startsWith('stars_'));
   assert.equal(invoice.planId, 'ultra');
-  assert.equal(invoice.priceRub, 2499);
-  assert.equal(invoice.starsAmount, 1350); // 1350 ⭐️ для 2499 ₽
+  assert.equal(invoice.priceRub, 2990);
+  assert.equal(invoice.starsAmount, 1600); // 1600 ⭐️ для 2990 ₽
   assert.ok(invoice.botDeepLink.includes('t.me/'));
   assert.ok(invoice.botDeepLink.includes('pay_ultra'));
 

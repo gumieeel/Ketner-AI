@@ -4,7 +4,7 @@ export type { Plan, PlanId };
 
 /**
  * Каталог тарифов Ketner AI.
- * 4 тарифа: Free, Plus ($9), Pro ($29), Ultra ($39).
+ * 4 тарифа: Free, Plus ($10), Pro ($20), Ultra ($30).
  */
 export const PLANS: readonly Plan[] = [
   {
@@ -49,7 +49,7 @@ export const PLANS: readonly Plan[] = [
   {
     id: 'plus',
     nameKey: 'pricing.plus',
-    priceMonthly: 9,
+    priceMonthly: 10,
     limitBadge: {
       ru: 'Быстрые модели',
       en: 'Fast models',
@@ -88,7 +88,7 @@ export const PLANS: readonly Plan[] = [
   {
     id: 'pro',
     nameKey: 'pricing.pro',
-    priceMonthly: 29,
+    priceMonthly: 20,
     popular: true,
     limitBadge: {
       ru: 'Топовые модели',
@@ -130,7 +130,12 @@ export const PLANS: readonly Plan[] = [
   {
     id: 'ultra',
     nameKey: 'pricing.ultra',
-    priceMonthly: 39,
+    priceMonthly: 30,
+    originalPriceMonthly: 40,
+    discountBadge: {
+      ru: '🔥 Скидка 25%',
+      en: '🔥 25% OFF',
+    },
     limitBadge: {
       ru: 'Максимум мощности',
       en: 'Maximum power',
@@ -176,7 +181,7 @@ const LEGACY_PLANS: readonly Plan[] = [
   {
     id: 'gpt-pro',
     nameKey: 'pricing.gptPro',
-    priceMonthly: 29,
+    priceMonthly: 20,
     bullets: {
       ru: ['Устаревший тариф (включает Pro)'],
       en: ['Legacy plan (includes Pro)'],
@@ -185,7 +190,7 @@ const LEGACY_PLANS: readonly Plan[] = [
   {
     id: 'claude-pro',
     nameKey: 'pricing.claudePro',
-    priceMonthly: 29,
+    priceMonthly: 20,
     bullets: {
       ru: ['Устаревший тариф (включает Pro)'],
       en: ['Legacy plan (includes Pro)'],
@@ -194,7 +199,7 @@ const LEGACY_PLANS: readonly Plan[] = [
   {
     id: 'gemini-pro',
     nameKey: 'pricing.geminiPro',
-    priceMonthly: 29,
+    priceMonthly: 20,
     bullets: {
       ru: ['Устаревший тариф (включает Pro)'],
       en: ['Legacy plan (includes Pro)'],

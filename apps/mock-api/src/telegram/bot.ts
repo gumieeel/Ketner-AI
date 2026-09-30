@@ -13,7 +13,7 @@ import type { PlanId, PlanItem } from '../types.js';
 export function calculateStars(priceRub: number): number {
   if (priceRub <= 0) return 0;
   if (priceRub === 1199) return 650;
-  if (priceRub === 2499) return 1350;
+  if (priceRub === 2499 || priceRub === 2990) return 1600;
   if (priceRub === 999 || priceRub === 990) return 550;
   if (priceRub === 1999 || priceRub === 1990) return 1100;
   return Math.round(priceRub / 1.84);

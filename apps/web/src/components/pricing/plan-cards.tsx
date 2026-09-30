@@ -76,13 +76,23 @@ export function PlanCards({ variant = 'compact', className }: PlanCardsProps) {
                 )}
               </div>
 
-              <div className="mt-3 flex items-baseline gap-1.5">
+              <div className="mt-3 flex items-baseline gap-1.5 flex-wrap">
                 <span className="text-3xl font-semibold tabular text-text">
                   {priceDisplay}
                 </span>
                 <span className="font-mono text-xs text-muted">
                   /{t('pricing.month')}
                 </span>
+                {plan.originalPriceMonthly ? (
+                  <span className="ml-1 text-sm font-normal text-muted line-through">
+                    ${plan.originalPriceMonthly}
+                  </span>
+                ) : null}
+                {plan.discountBadge ? (
+                  <span className="ml-1 rounded-sm bg-accent/15 border border-accent/30 px-1.5 py-0.5 text-[10px] font-bold text-accent">
+                    {plan.discountBadge[language]}
+                  </span>
+                ) : null}
               </div>
 
               {plan.modelsHighlight && (

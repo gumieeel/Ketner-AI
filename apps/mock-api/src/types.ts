@@ -137,3 +137,21 @@ export interface TelegramStarsInvoice {
   expiresAt: string;
   createdAt: string;
 }
+
+export type CryptoCurrency = 'USDT_TRC20' | 'USDT_TON' | 'TON' | 'BTC';
+
+export interface CryptoInvoice {
+  id: string;
+  userId: string;
+  planId: PlanId;
+  currency: CryptoCurrency;
+  amount: number;
+  amountUsd: number;
+  address: string;
+  qrPayload: string;
+  status: 'pending' | 'confirming' | 'paid' | 'expired';
+  expiresAt: string;
+  createdAt: string;
+  network: string;
+}
+

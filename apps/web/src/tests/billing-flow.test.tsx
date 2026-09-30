@@ -105,7 +105,7 @@ describe('billing-flow: каталог тарифов, чекаут и упра�
     ).toBeInTheDocument();
   });
 
-  it('чекаут: отображение валидационных ошибок при пустых полях', async () => {
+  it('чекаут: по умолчанию отображается СБП с суммой в рублях и кнопкой подтверждения', async () => {
     useAuth.setState({
       status: 'authenticated',
       token: 'mock-token',
@@ -124,16 +124,13 @@ describe('billing-flow: каталог тарифов, чекаут и упра�
       screen.getByRole('heading', { level: 1, name: 'Оформление подписки' }),
     ).toBeInTheDocument();
     expect(screen.getByText('Plus')).toBeInTheDocument();
+    expect(screen.getAllByText(/990 ₽/i).length).toBeGreaterThan(0);
 
-    const payButton = screen.getByRole('button', { name: /Оформить подписку/i });
-    fireEvent.click(payButton);
-
-    expect(screen.getByText('Введите корректный 16-значный номер карты')).toBeInTheDocument();
-    expect(screen.getByText('Введите корректный срок действия (ММ/ГГ)')).toBeInTheDocument();
-    expect(screen.getByText('Введите 3-значный CVC/CVV код')).toBeInTheDocument();
+    const confirmSbp = screen.getByRole('button', { name: /Подтвердить оплату через СБП/i });
+    expect(confirmSbp).toBeInTheDocument();
   });
 
-  it('чекаут: успешная оплата, обновление стора и показ экрана подтверждения', async () => {
+  it('чекаут: выбор способа оплаты Криптовалюта отображает реквизиты и подтверждает транзакцию', async () => {
     useAuth.setState({
       status: 'authenticated',
       token: 'mock-token',
@@ -148,22 +145,19 @@ describe('billing-flow: каталог тарифов, чекаут и упра�
 
     renderRoute('/checkout/plus');
 
-    const cardInput = screen.getByLabelText(/Номер карты/i);
-    const expiryInput = screen.getByLabelText(/Срок действия/i);
-    const cvcInput = screen.getByLabelText(/CVC/i);
-    const payButton = screen.getByRole('button', { name: /Оформить подписку/i });
+    // Кликаем по способу оплаты «Криптовалюта»
+    const cryptoTab = screen.getByRole('button', { name: /Криптовалюта/i });
+    fireEvent.click(cryptoTab);
 
-    // Вводим валидные данные карты с проверкой авто-маски
-    fireEvent.change(cardInput, { target: { value: '4242424242424242' } });
-    expect((cardInput as HTMLInputElement).value).toBe('4242 4242 4242 4242');
+    // Должны появиться заголовок криптовалюты, сеть и адрес кошелька
+    expect(await screen.findByText(/Оплата криптовалютой/i)).toBeInTheDocument();
+    expect(screen.getByText(/USDT \(TRC-20\)/i)).toBeInTheDocument();
+    expect(screen.getByText(/TXwKetnerAI78Qz99Trc20DepositXyZ9/i)).toBeInTheDocument();
 
-    fireEvent.change(expiryInput, { target: { value: '1229' } });
-    expect((expiryInput as HTMLInputElement).value).toBe('12 / 29');
-
-    fireEvent.change(cvcInput, { target: { value: '123' } });
-    expect((cvcInput as HTMLInputElement).value).toBe('123');
-
-    fireEvent.click(payButton);
+    const confirmCryptoButton = screen.getByRole('button', {
+      name: /Подтвердить оплату криптовалютой/i,
+    });
+    fireEvent.click(confirmCryptoButton);
 
     await waitFor(() => {
       expect(screen.getByText(/Подписка успешно оформлена/i)).toBeInTheDocument();

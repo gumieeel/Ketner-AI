@@ -16,6 +16,8 @@ export interface Plan {
   id: PlanId;
   nameKey: TranslationKey;
   priceMonthly: number;
+  originalPriceMonthly?: number;
+  discountBadge?: Record<Language, string>;
   popular?: boolean;
   limitBadge?: Record<Language, string>;
   modelsHighlight?: Record<Language, string> | string;
@@ -23,7 +25,22 @@ export interface Plan {
   highlights?: Record<Language, readonly string[]>;
 }
 
-export type PaymentMethod = 'card' | 'sbp' | 'stars';
+export type PaymentMethod = 'sbp' | 'crypto' | 'stars' | 'card';
+
+export type CryptoCurrency = 'USDT_TRC20' | 'USDT_TON' | 'TON' | 'BTC';
+
+export interface CryptoInvoice {
+  id: string;
+  planId: PlanId;
+  currency: CryptoCurrency;
+  amount: number;
+  amountUsd: number;
+  address: string;
+  qrPayload: string;
+  status: 'pending' | 'confirming' | 'paid' | 'expired';
+  expiresAt: string;
+  network: string;
+}
 
 export interface SbpInvoice {
   id: string;

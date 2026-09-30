@@ -1,7 +1,15 @@
 import { getAuthToken } from '../auth/auth-store';
 import { ApiError } from '../chat/api';
 import { API_BASE } from '@/lib/api-config';
-import type { Plan, PlanId, SbpInvoice, Subscription, TelegramStarsInvoice } from './types';
+import type {
+  CryptoCurrency,
+  CryptoInvoice,
+  Plan,
+  PlanId,
+  SbpInvoice,
+  Subscription,
+  TelegramStarsInvoice,
+} from './types';
 
 const JSON_HEADERS = { 'Content-Type': 'application/json' };
 
@@ -134,6 +142,46 @@ export async function confirmTelegramStarsPayment(invoiceId: string): Promise<{
     invoice: TelegramStarsInvoice;
   }>(`/billing/telegram-stars/confirm/${invoiceId}`, {
     method: 'POST',
+  });
+}
+
+// --- Crypto ---
+
+export async function createCryptoInvoice(
+  planId: PlanId,
+  currency: CryptoCurrency = 'USDT_TRC20',
+): Promise<{ invoice: CryptoInvoice }> {
+  return request<{ invoice: CryptoInvoice }>('/billing/crypto/create-invoice', {
+    method: 'POST',
+    body: JSON.stringify({ planId, currency }),
+  });
+}
+
+export async function getCryptoInvoiceStatus(
+  invoiceId: string,
+): Promise<{ status: string; invoice: CryptoInvoice }> {
+  return request<{ status: string; invoice: CryptoInvoice }>(
+    `/billing/crypto/status/${invoiceId}`,
+  );
+}
+
+export async function confirmCryptoPayment(
+  invoiceId: string,
+  txHash?: string,
+): Promise<{
+  success: boolean;
+  subscription: Subscription;
+  user: { plan: PlanId };
+  invoice: CryptoInvoice;
+}> {
+  return request<{
+    success: boolean;
+    subscription: Subscription;
+    user: { plan: PlanId };
+    invoice: CryptoInvoice;
+  }>(`/billing/crypto/confirm/${invoiceId}`, {
+    method: 'POST',
+    body: JSON.stringify({ txHash }),
   });
 }
 

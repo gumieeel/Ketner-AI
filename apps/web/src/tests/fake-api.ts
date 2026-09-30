@@ -298,7 +298,7 @@ export function installFakeApi(options: FakeApiOptions = {}): FakeApi {
             {
               id: 'ultra',
               nameKey: 'pricing.ultra',
-              priceMonthly: 2499,
+              priceMonthly: 2990,
               bullets: { ru: ['Максимум · VIP'], en: ['Maximum · VIP'] },
             },
           ],
@@ -465,6 +465,87 @@ export function installFakeApi(options: FakeApiOptions = {}): FakeApi {
             botDeepLink: 'https://t.me/KetnerAIBot?start=pay_gpt-pro_demo-user',
             status: 'paid',
             expiresAt: new Date(Date.now() + 1800000).toISOString(),
+          },
+        });
+      }
+
+      if (url === '/api/billing/crypto/create-invoice' && method === 'POST') {
+        const planId = (body.planId as string) || 'plus';
+        const currency = (body.currency as string) || 'USDT_TRC20';
+        const amountUsd = planId === 'ultra' ? 30 : planId === 'pro' ? 20 : 10;
+        const amount =
+          currency === 'TON'
+            ? +(amountUsd / 5.4).toFixed(2)
+            : currency === 'BTC'
+              ? +(amountUsd / 95000).toFixed(6)
+              : amountUsd;
+        return json({
+          invoice: {
+            id: 'crypto_mock_123',
+            planId,
+            currency,
+            amount,
+            amountUsd,
+            address:
+              currency === 'USDT_TRC20'
+                ? 'TXwKetnerAI78Qz99Trc20DepositXyZ9'
+                : currency === 'BTC'
+                  ? 'bc1qketnerai99depositbtcsecured88zz'
+                  : 'EQBKetnerAITonUsdtWalletDeposit88xY',
+            qrPayload:
+              currency === 'USDT_TRC20'
+                ? `tron:TXwKetnerAI78Qz99Trc20DepositXyZ9?amount=${amount}`
+                : `ton://transfer/EQBKetnerAITonUsdtWalletDeposit88xY?amount=${amount}`,
+            status: 'pending',
+            expiresAt: new Date(Date.now() + 1800000).toISOString(),
+            network: currency === 'USDT_TRC20' ? 'TRC-20' : currency === 'BTC' ? 'Bitcoin' : 'TON',
+          },
+        });
+      }
+
+      if (url.startsWith('/api/billing/crypto/status/') && method === 'GET') {
+        return json({
+          status: 'pending',
+          invoice: {
+            id: 'crypto_mock_123',
+            planId: 'plus',
+            currency: 'USDT_TRC20',
+            amount: 10,
+            amountUsd: 10,
+            address: 'TXwKetnerAI78Qz99Trc20DepositXyZ9',
+            qrPayload: 'tron:TXwKetnerAI78Qz99Trc20DepositXyZ9?amount=10',
+            status: 'pending',
+            expiresAt: new Date(Date.now() + 1800000).toISOString(),
+            network: 'TRC-20',
+          },
+        });
+      }
+
+      if (url.startsWith('/api/billing/crypto/confirm/') && method === 'POST') {
+        currentPlan = 'plus';
+        return json({
+          success: true,
+          subscription: {
+            userId: 'demo-user',
+            plan: 'plus',
+            status: 'active',
+            renewsAt: new Date(Date.now() + 86400000 * 30).toISOString(),
+          },
+          user: {
+            id: 'demo-user',
+            plan: 'plus',
+          },
+          invoice: {
+            id: 'crypto_mock_123',
+            planId: 'plus',
+            currency: 'USDT_TRC20',
+            amount: 10,
+            amountUsd: 10,
+            address: 'TXwKetnerAI78Qz99Trc20DepositXyZ9',
+            qrPayload: 'tron:TXwKetnerAI78Qz99Trc20DepositXyZ9?amount=10',
+            status: 'paid',
+            expiresAt: new Date(Date.now() + 1800000).toISOString(),
+            network: 'TRC-20',
           },
         });
       }

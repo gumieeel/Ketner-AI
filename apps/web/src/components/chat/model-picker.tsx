@@ -33,7 +33,7 @@ const FALLBACK_MODELS: readonly ModelInfo[] = [
     contextMessages: 120,
     isPro: false,
   },
-  // Plus ($9) — стандартные быстрые модели
+  // Plus ($10) — стандартные быстрые модели
   {
     id: 'deepseek-v4.1-flash',
     name: 'DeepSeek v4.1 Flash',
@@ -55,7 +55,7 @@ const FALLBACK_MODELS: readonly ModelInfo[] = [
     isPro: true,
     requiredPlan: 'plus',
   },
-  // Pro ($29) — топовые флагманские модели
+  // Pro ($20) — топовые флагманские модели
   {
     id: 'gpt-6-astra',
     name: 'GPT-6 Astra',

@@ -72,7 +72,7 @@ export const PLANS = [
     {
         id: 'ultra',
         nameKey: 'pricing.ultra',
-        priceMonthly: 2499,
+        priceMonthly: 2990,
         limitBadge: {
             ru: 'Без ограничений · Высший приоритет',
             en: 'No limits · Highest priority',
@@ -296,6 +296,55 @@ export function createBillingRouter({ subscriptionStore, userStore, invoiceStore
             return;
         }
         const updated = activeInvoiceStore.markTelegramStarsPaid(invoiceId) ?? invoice;
+        const userId = getUserId(request) || invoice.userId;
+        const subscription = subscriptionStore.checkout(userId, invoice.planId);
+        const user = userStore.updatePlan(userId, invoice.planId);
+        if (user?.email && user.email !== userId) {
+            subscriptionStore.checkout(user.email, invoice.planId);
+        }
+        if (user?.id && user.id !== userId) {
+            subscriptionStore.checkout(user.id, invoice.planId);
+        }
+        response.json({
+            success: true,
+            subscription,
+            user: user ?? { id: userId, plan: invoice.planId },
+            invoice: updated,
+        });
+    });
+    // --- Crypto ---
+    router.post('/billing/crypto/create-invoice', (request, response) => {
+        const rawPlanId = request.body?.planId;
+        const plan = findPlan(rawPlanId);
+        if (!plan || plan.priceMonthly <= 0) {
+            sendError(response, 400, 'invalid_plan', 'Некорректный тариф для оплаты криптовалютой');
+            return;
+        }
+        const userId = getUserId(request);
+        const currency = request.body?.currency || 'USDT_TRC20';
+        const invoice = activeInvoiceStore.createCryptoInvoice(userId, plan.id, currency, plan.priceMonthly);
+        response.json({ invoice });
+    });
+    router.get('/billing/crypto/status/:invoiceId', (request, response) => {
+        const invoiceId = getParamInvoiceId(request);
+        const invoice = activeInvoiceStore.getCryptoInvoice(invoiceId);
+        if (!invoice) {
+            sendError(response, 404, 'invoice_not_found', 'Крипто-счёт не найден');
+            return;
+        }
+        response.json({
+            status: invoice.status,
+            invoice,
+        });
+    });
+    router.post('/billing/crypto/confirm/:invoiceId', (request, response) => {
+        const invoiceId = getParamInvoiceId(request);
+        const invoice = activeInvoiceStore.getCryptoInvoice(invoiceId);
+        if (!invoice) {
+            sendError(response, 404, 'invoice_not_found', 'Крипто-счёт не найден');
+            return;
+        }
+        const updated = activeInvoiceStore.markCryptoPaid(invoiceId) ?? invoice;
         const userId = getUserId(request) || invoice.userId;
         const subscription = subscriptionStore.checkout(userId, invoice.planId);
         const user = userStore.updatePlan(userId, invoice.planId);

@@ -20,32 +20,25 @@ const PLANS_PREVIEW: PlanPreview[] = [
   {
     id: 'plus',
     name: 'Plus',
-    price: '990 ₽',
+    price: '$10 (990 ₽)',
     highlight: 'GPT-4o, DeepSeek Flash',
-    models: 'GPT-4o mini, GPT-4o, DeepSeek V4.1 Flash',
+    models: 'GPT-4o, Claude Haiku 4.5, DeepSeek V4.1 Flash',
   },
   {
     id: 'pro',
     name: 'Pro',
-    price: '1 990 ₽',
+    price: '$20 (1 990 ₽)',
     badge: 'Популярный',
     highlight: 'Все флагманы',
-    models: 'GPT-6 Astra, Claude Fable 5.5, Gemini 2.5 Pro',
-  },
-  {
-    id: 'gpt-pro',
-    name: 'GPT Pro',
-    price: '1 199 ₽',
-    highlight: 'GPT флагманы',
-    models: 'GPT-6 Astra, GPT-4o',
+    models: 'GPT-6 Astra, Claude Fable, Gemini Flash, Grok',
   },
   {
     id: 'ultra',
     name: 'Ultra',
-    price: '2 499 ₽',
+    price: '$30 (скидка вместо $40)',
     badge: 'Все включено',
     highlight: 'Без лимитов',
-    models: 'Все модели GPT, Claude, Gemini',
+    models: 'Все топовые модели на 100% + VIP-приоритет',
   },
 ];
 

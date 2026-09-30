@@ -6,8 +6,8 @@ export function calculateStars(priceRub) {
         return 0;
     if (priceRub === 1199)
         return 650;
-    if (priceRub === 2499)
-        return 1350;
+    if (priceRub === 2499 || priceRub === 2990)
+        return 1600;
     if (priceRub === 999 || priceRub === 990)
         return 550;
     if (priceRub === 1999 || priceRub === 1990)
