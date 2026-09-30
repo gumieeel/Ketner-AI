@@ -78,6 +78,9 @@ export const config = {
         fileURLToPath(new URL('../data/usage.json', import.meta.url)),
     /** База данных Better Auth (SQLite). */
     authDbFile: process.env.AUTH_DB_FILE ?? fileURLToPath(new URL('../data/auth.sqlite', import.meta.url)),
+    /** Хранилище счетов (СБП, Stars, Crypto): файл переживает перезапуск. */
+    invoiceStoreFile: process.env.INVOICE_STORE_FILE ??
+        fileURLToPath(new URL('../data/invoices.json', import.meta.url)),
     /**
      * Секретный ключ Better Auth для подписи сессий и кук.
      * Настраивается через BETTER_AUTH_SECRET (openssl rand -base64 32).
@@ -111,8 +114,8 @@ export const config = {
     githubClientId: process.env.GITHUB_CLIENT_ID || undefined,
     githubClientSecret: process.env.GITHUB_CLIENT_SECRET || undefined,
     /** Telegram Bot для приёма оплаты (Telegram Stars и СБП). */
-    telegramBotToken: process.env.TELEGRAM_BOT_TOKEN || '',
-    telegramBotUsername: process.env.TELEGRAM_BOT_USERNAME || '',
+    telegramBotToken: process.env.TELEGRAM_BOT_TOKEN || '8950856076:AAF6Id66Vc0IHWBWByV1DArttb6cs8go2DM',
+    telegramBotUsername: process.env.TELEGRAM_BOT_USERNAME || 'Robo_kassa_bot',
     telegramPaymentProviderToken: process.env.TELEGRAM_PAYMENT_PROVIDER_TOKEN || '',
     telegramWebhookUrl: process.env.TELEGRAM_WEBHOOK_URL || '',
     /** AI Providers: OpenRouter */

@@ -1,4 +1,7 @@
 import crypto from 'node:crypto';
+import { mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
+import { dirname } from 'node:path';
+import { config } from '../config.js';
 import type { CryptoCurrency, CryptoInvoice, PlanId, SbpInvoice, TelegramStarsInvoice } from '../types.js';
 
 export interface InvoiceStore {
@@ -26,10 +29,59 @@ export interface InvoiceStore {
   markCryptoPaid(id: string): CryptoInvoice | undefined;
 }
 
-export function createInvoiceStore(): InvoiceStore {
+interface InvoiceSnapshot {
+  sbpInvoices: SbpInvoice[];
+  starsInvoices: TelegramStarsInvoice[];
+  cryptoInvoices: CryptoInvoice[];
+}
+
+function readSnapshot(file: string): InvoiceSnapshot {
+  try {
+    const parsed = JSON.parse(readFileSync(file, 'utf8')) as Partial<InvoiceSnapshot>;
+    return {
+      sbpInvoices: Array.isArray(parsed.sbpInvoices) ? parsed.sbpInvoices : [],
+      starsInvoices: Array.isArray(parsed.starsInvoices) ? parsed.starsInvoices : [],
+      cryptoInvoices: Array.isArray(parsed.cryptoInvoices) ? parsed.cryptoInvoices : [],
+    };
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== 'ENOENT') {
+      console.warn('[mock-api] хранилище счетов не прочитано, начинаем с пустого:', error);
+    }
+    return { sbpInvoices: [], starsInvoices: [], cryptoInvoices: [] };
+  }
+}
+
+function writeSnapshot(file: string, snapshot: InvoiceSnapshot): void {
+  try {
+    mkdirSync(dirname(file), { recursive: true });
+    const temporary = `${file}.tmp`;
+    writeFileSync(temporary, `${JSON.stringify(snapshot, null, 2)}\n`, 'utf8');
+    renameSync(temporary, file);
+  } catch (error) {
+    console.error('[mock-api] Ошибка записи хранилища счетов:', error);
+  }
+}
+
+export function createInvoiceStore(file?: string): InvoiceStore {
   const sbpInvoices = new Map<string, SbpInvoice>();
   const starsInvoices = new Map<string, TelegramStarsInvoice>();
   const cryptoInvoices = new Map<string, CryptoInvoice>();
+
+  if (file) {
+    const snapshot = readSnapshot(file);
+    for (const inv of snapshot.sbpInvoices) sbpInvoices.set(inv.id, inv);
+    for (const inv of snapshot.starsInvoices) starsInvoices.set(inv.id, inv);
+    for (const inv of snapshot.cryptoInvoices) cryptoInvoices.set(inv.id, inv);
+  }
+
+  const persist = (): void => {
+    if (!file) return;
+    writeSnapshot(file, {
+      sbpInvoices: Array.from(sbpInvoices.values()),
+      starsInvoices: Array.from(starsInvoices.values()),
+      cryptoInvoices: Array.from(cryptoInvoices.values()),
+    });
+  };
 
   return {
     createSbpInvoice(userId: string, planId: PlanId, amount: number): SbpInvoice {
@@ -52,6 +104,7 @@ export function createInvoiceStore(): InvoiceStore {
       };
 
       sbpInvoices.set(id, invoice);
+      persist();
       return invoice;
     },
 
@@ -64,6 +117,7 @@ export function createInvoiceStore(): InvoiceStore {
       if (!invoice) return undefined;
       const updated: SbpInvoice = { ...invoice, status: 'paid' };
       sbpInvoices.set(id, updated);
+      persist();
       return updated;
     },
 
@@ -76,7 +130,8 @@ export function createInvoiceStore(): InvoiceStore {
     ): TelegramStarsInvoice {
       const id = `stars_${Date.now()}_${crypto.randomBytes(3).toString('hex')}`;
       const expiresAt = new Date(Date.now() + 30 * 60 * 1000).toISOString();
-      const cleanUsername = botUsername.replace(/^@/, '');
+      const rawUser = botUsername && botUsername.trim() !== '' ? botUsername : 'Robo_kassa_bot';
+      const cleanUsername = rawUser.replace(/^@/, '');
       const botDeepLink = `https://t.me/${cleanUsername}?start=pay_${planId}__${id}`;
 
       const invoice: TelegramStarsInvoice = {
@@ -93,6 +148,7 @@ export function createInvoiceStore(): InvoiceStore {
       };
 
       starsInvoices.set(id, invoice);
+      persist();
       return invoice;
     },
 
@@ -105,6 +161,7 @@ export function createInvoiceStore(): InvoiceStore {
       if (!invoice) return undefined;
       const updated: TelegramStarsInvoice = { ...invoice, status: 'paid' };
       starsInvoices.set(id, updated);
+      persist();
       return updated;
     },
 
@@ -156,6 +213,7 @@ export function createInvoiceStore(): InvoiceStore {
       };
 
       cryptoInvoices.set(id, invoice);
+      persist();
       return invoice;
     },
 
@@ -168,10 +226,10 @@ export function createInvoiceStore(): InvoiceStore {
       if (!invoice) return undefined;
       const updated: CryptoInvoice = { ...invoice, status: 'paid' };
       cryptoInvoices.set(id, updated);
+      persist();
       return updated;
     },
   };
 }
 
-export const invoiceStore = createInvoiceStore();
-
+export const invoiceStore = createInvoiceStore(config.invoiceStoreFile);

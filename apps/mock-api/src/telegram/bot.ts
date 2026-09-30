@@ -468,7 +468,13 @@ export class TelegramBotService {
         }
 
         this.deps.subscriptionStore.checkout(userId, planId);
-        this.deps.userStore.updatePlan(userId, planId);
+        const updatedUser = this.deps.userStore.updatePlan(userId, planId);
+        if (updatedUser?.email && updatedUser.email !== userId) {
+          this.deps.subscriptionStore.checkout(updatedUser.email, planId);
+        }
+        if (updatedUser?.id && updatedUser.id !== userId) {
+          this.deps.subscriptionStore.checkout(updatedUser.id, planId);
+        }
 
         if (invoiceId) {
           this.deps.invoiceStore.markTelegramStarsPaid(invoiceId);
@@ -499,7 +505,7 @@ export class TelegramBotService {
           ? text.replace('/start pay_', '').trim()
           : text.replace('/start ', '').trim();
 
-        let planId: PlanId = 'gpt-pro';
+        let planId: PlanId = 'plus';
         let userId: string = this.chatToUserId.get(chatId) || config.demoUserId;
         let invoiceId: string | undefined;
 
@@ -512,7 +518,7 @@ export class TelegramBotService {
           }
         } else if (rawPayload.includes('__')) {
           const parts = rawPayload.split('__');
-          planId = (parts[0] || 'gpt-pro') as PlanId;
+          planId = (parts[0] || 'plus') as PlanId;
           if (parts[1]?.startsWith('stars_')) {
             invoiceId = parts[1];
             const inv = this.deps.invoiceStore.getTelegramStarsInvoice(invoiceId);
@@ -523,18 +529,34 @@ export class TelegramBotService {
           } else {
             userId = parts[1] || userId;
             invoiceId = parts[2] || undefined;
+            if (invoiceId) {
+              const inv = this.deps.invoiceStore.getTelegramStarsInvoice(invoiceId);
+              if (inv) {
+                planId = inv.planId;
+                userId = inv.userId;
+              }
+            }
           }
         } else if (rawPayload.includes('_')) {
-          const parts = rawPayload.split('_');
-          planId = (parts[0] || 'gpt-pro') as PlanId;
-          userId = parts[1] || userId;
-          invoiceId = parts.slice(2).join('_') || undefined;
+          const firstUnderscore = rawPayload.indexOf('_');
+          planId = (rawPayload.slice(0, firstUnderscore) || 'plus') as PlanId;
+          const remainder = rawPayload.slice(firstUnderscore + 1);
+          if (remainder.startsWith('stars_')) {
+            invoiceId = remainder;
+            const inv = this.deps.invoiceStore.getTelegramStarsInvoice(invoiceId);
+            if (inv) {
+              planId = inv.planId;
+              userId = inv.userId;
+            }
+          } else {
+            userId = remainder || userId;
+          }
         } else if (rawPayload) {
           planId = rawPayload as PlanId;
         }
 
         this.chatToUserId.set(chatId, userId);
-        const plan = getPlanItem(planId) ?? getPlanItem('gpt-pro')!;
+        const plan = getPlanItem(planId) ?? getPlanItem('plus') ?? PLANS[1];
         const stars = calculateStars(plan.priceMonthly);
 
         // 1. АВТОМАТИЧЕСКИ выставляем нативный счёт на оплату в Telegram Stars (sendInvoice)
@@ -602,10 +624,9 @@ export class TelegramBotService {
           '• ⚡ **СБП (Система быстрых платежей)** — мгновенная оплата через Сбербанк, Т-Банк, Альфа-Банк по QR-коду с 0% комиссии.',
           '',
           '💎 *Доступные тарифы:*',
-          '• **GPT Pro** (650 ⭐️ / 1 199 ₽) — GPT-6 Astra, GPT-5.5 Omni, o3-mini',
-          '• **Claude Pro** (650 ⭐️ / 1 199 ₽) — Claude 4.5 Sonnet & Opus, Fable 5.5',
-          '• **Gemini Pro** (650 ⭐️ / 1 199 ₽) — Gemini 3.8 Pro, Gemini 3.5 Ultra',
-          '• **Ultra** (1 350 ⭐️ / 2 499 ₽) — Полный безлимит ко всем моделям без пауз',
+          '• **Plus** (550 ⭐️ / 990 ₽) — GPT-4o mini, GPT-4o, DeepSeek V4.1 Flash',
+          '• **Pro** (1 100 ⭐️ / 1 990 ₽) — GPT-6 Astra, Claude Fable 5.5, Gemini 2.5 Pro',
+          '• **Ultra** (1 600 ⭐️ / 2 990 ₽) — Полный контекст + безлимит Fair Use',
           '',
           '💡 *Доступные команды:*',
           '/plans — посмотреть каталог тарифов и оплатить',

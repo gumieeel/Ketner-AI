@@ -176,7 +176,7 @@ export const ru = {
   'checkout.sbpCopySum': 'Копировать сумму',
   'checkout.sbpAmountRub': 'К оплате в рублях',
   'checkout.sbpBanksTitle': 'Быстрый переход в банк',
-  'checkout.starsPayInBot': 'Оплатить через Telegram (@KetnerAIBot)',
+  'checkout.starsPayInBot': 'Оплатить через Telegram (@Robo_kassa_bot)',
   'checkout.starsQrHint': 'Или отсканируйте QR-код для перехода в бота',
   'checkout.starsConfirm': 'Подтвердить оплату Stars',
   'checkout.starsOfficial': 'Официальная платёжная система Telegram',

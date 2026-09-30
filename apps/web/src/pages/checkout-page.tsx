@@ -372,9 +372,23 @@ export function CheckoutPage() {
 
   const rubAmount = calculateRubPrice(plan.priceMonthly);
   const starsAmount = calculateStars(plan.priceMonthly);
-  const botUsername = starsInvoice?.botUsername || 'KetnerAIBot';
-  const botDeepLink =
-    starsInvoice?.botDeepLink || `https://t.me/${botUsername}?start=pay_${plan.id}_${user.id}`;
+  const rawBot = starsInvoice?.botUsername;
+  const botUsername =
+    rawBot && rawBot.trim() !== '' && rawBot !== 'KetnerAIBot'
+      ? rawBot.replace(/^@/, '')
+      : 'Robo_kassa_bot';
+  const startParam = starsInvoice?.id
+    ? `pay_${plan.id}__${starsInvoice.id}`
+    : `pay_${plan.id}_${user.id}`;
+  let botDeepLink = `https://t.me/${botUsername}?start=${startParam}`;
+  if (
+    starsInvoice?.botDeepLink &&
+    !starsInvoice.botDeepLink.includes('t.me/?') &&
+    !starsInvoice.botDeepLink.includes('t.me//') &&
+    !starsInvoice.botDeepLink.includes('KetnerAIBot')
+  ) {
+    botDeepLink = starsInvoice.botDeepLink;
+  }
 
   const currentCrypto =
     CRYPTO_OPTIONS.find((c) => c.id === cryptoCurrency) || CRYPTO_OPTIONS[0];

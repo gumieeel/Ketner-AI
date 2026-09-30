@@ -1,8 +1,56 @@
 import crypto from 'node:crypto';
-export function createInvoiceStore() {
+import { mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
+import { dirname } from 'node:path';
+import { config } from '../config.js';
+function readSnapshot(file) {
+    try {
+        const parsed = JSON.parse(readFileSync(file, 'utf8'));
+        return {
+            sbpInvoices: Array.isArray(parsed.sbpInvoices) ? parsed.sbpInvoices : [],
+            starsInvoices: Array.isArray(parsed.starsInvoices) ? parsed.starsInvoices : [],
+            cryptoInvoices: Array.isArray(parsed.cryptoInvoices) ? parsed.cryptoInvoices : [],
+        };
+    }
+    catch (error) {
+        if (error.code !== 'ENOENT') {
+            console.warn('[mock-api] хранилище счетов не прочитано, начинаем с пустого:', error);
+        }
+        return { sbpInvoices: [], starsInvoices: [], cryptoInvoices: [] };
+    }
+}
+function writeSnapshot(file, snapshot) {
+    try {
+        mkdirSync(dirname(file), { recursive: true });
+        const temporary = `${file}.tmp`;
+        writeFileSync(temporary, `${JSON.stringify(snapshot, null, 2)}\n`, 'utf8');
+        renameSync(temporary, file);
+    }
+    catch (error) {
+        console.error('[mock-api] Ошибка записи хранилища счетов:', error);
+    }
+}
+export function createInvoiceStore(file) {
     const sbpInvoices = new Map();
     const starsInvoices = new Map();
     const cryptoInvoices = new Map();
+    if (file) {
+        const snapshot = readSnapshot(file);
+        for (const inv of snapshot.sbpInvoices)
+            sbpInvoices.set(inv.id, inv);
+        for (const inv of snapshot.starsInvoices)
+            starsInvoices.set(inv.id, inv);
+        for (const inv of snapshot.cryptoInvoices)
+            cryptoInvoices.set(inv.id, inv);
+    }
+    const persist = () => {
+        if (!file)
+            return;
+        writeSnapshot(file, {
+            sbpInvoices: Array.from(sbpInvoices.values()),
+            starsInvoices: Array.from(starsInvoices.values()),
+            cryptoInvoices: Array.from(cryptoInvoices.values()),
+        });
+    };
     return {
         createSbpInvoice(userId, planId, amount) {
             const id = `sbp_${Date.now()}_${crypto.randomBytes(4).toString('hex')}`;
@@ -22,6 +70,7 @@ export function createInvoiceStore() {
                 createdAt: new Date().toISOString(),
             };
             sbpInvoices.set(id, invoice);
+            persist();
             return invoice;
         },
         getSbpInvoice(id) {
@@ -33,12 +82,14 @@ export function createInvoiceStore() {
                 return undefined;
             const updated = { ...invoice, status: 'paid' };
             sbpInvoices.set(id, updated);
+            persist();
             return updated;
         },
         createTelegramStarsInvoice(userId, planId, priceRub, starsAmount, botUsername) {
             const id = `stars_${Date.now()}_${crypto.randomBytes(3).toString('hex')}`;
             const expiresAt = new Date(Date.now() + 30 * 60 * 1000).toISOString();
-            const cleanUsername = botUsername.replace(/^@/, '');
+            const rawUser = botUsername && botUsername.trim() !== '' ? botUsername : 'Robo_kassa_bot';
+            const cleanUsername = rawUser.replace(/^@/, '');
             const botDeepLink = `https://t.me/${cleanUsername}?start=pay_${planId}__${id}`;
             const invoice = {
                 id,
@@ -53,6 +104,7 @@ export function createInvoiceStore() {
                 createdAt: new Date().toISOString(),
             };
             starsInvoices.set(id, invoice);
+            persist();
             return invoice;
         },
         getTelegramStarsInvoice(id) {
@@ -64,6 +116,7 @@ export function createInvoiceStore() {
                 return undefined;
             const updated = { ...invoice, status: 'paid' };
             starsInvoices.set(id, updated);
+            persist();
             return updated;
         },
         createCryptoInvoice(userId, planId, currency, amountUsd) {
@@ -100,6 +153,7 @@ export function createInvoiceStore() {
                 network,
             };
             cryptoInvoices.set(id, invoice);
+            persist();
             return invoice;
         },
         getCryptoInvoice(id) {
@@ -111,8 +165,9 @@ export function createInvoiceStore() {
                 return undefined;
             const updated = { ...invoice, status: 'paid' };
             cryptoInvoices.set(id, updated);
+            persist();
             return updated;
         },
     };
 }
-export const invoiceStore = createInvoiceStore();
+export const invoiceStore = createInvoiceStore(config.invoiceStoreFile);

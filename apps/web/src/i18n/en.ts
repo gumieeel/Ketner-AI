@@ -177,7 +177,7 @@ export const en: Record<TranslationKey, string> = {
   'checkout.sbpCopySum': 'Copy amount',
   'checkout.sbpAmountRub': 'Amount in RUB',
   'checkout.sbpBanksTitle': 'Quick bank launcher',
-  'checkout.starsPayInBot': 'Pay in Telegram (@KetnerAIBot)',
+  'checkout.starsPayInBot': 'Pay in Telegram (@Robo_kassa_bot)',
   'checkout.starsQrHint': 'Or scan QR code to open Telegram Bot',
   'checkout.starsConfirm': 'Confirm Stars payment',
   'checkout.starsOfficial': 'Official Telegram payment method',
