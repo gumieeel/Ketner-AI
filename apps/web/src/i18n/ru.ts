@@ -204,6 +204,10 @@ export const ru = {
   'settings.language': 'Язык интерфейса',
   'settings.subscription': 'Подписка',
   'settings.subscriptionText': 'Управление планом и лимитами.',
+  'settings.support': 'Служба поддержки',
+  'settings.supportDesc': 'Оперативная связь с администратором по подпискам, платежам и работе моделей.',
+  'settings.supportContactBtn': 'Написать в Telegram (@ketner_support_bot)',
+  'settings.supportBotHint': 'Задайте вопрос или отправьте обращение — администратор ответит вам прямо в чате бота.',
   'settings.logout': 'Выйти из аккаунта',
 
   'chat.title': 'Новый чат',

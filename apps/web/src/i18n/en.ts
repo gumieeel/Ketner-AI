@@ -205,6 +205,10 @@ export const en: Record<TranslationKey, string> = {
   'settings.language': 'Interface language',
   'settings.subscription': 'Subscription',
   'settings.subscriptionText': 'Manage your plan and limits.',
+  'settings.support': 'Customer Support',
+  'settings.supportDesc': 'Direct communication with administrators regarding subscriptions, billing, and AI models.',
+  'settings.supportContactBtn': 'Contact on Telegram (@ketner_support_bot)',
+  'settings.supportBotHint': 'Submit your ticket or question — our administrator will reply directly in the Telegram chat.',
   'settings.logout': 'Log out',
 
   'chat.title': 'New chat',

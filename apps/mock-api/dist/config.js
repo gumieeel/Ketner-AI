@@ -81,6 +81,9 @@ export const config = {
     /** Хранилище счетов (СБП, Stars, Crypto): файл переживает перезапуск. */
     invoiceStoreFile: process.env.INVOICE_STORE_FILE ??
         fileURLToPath(new URL('../data/invoices.json', import.meta.url)),
+    /** Хранилище тикетов поддержки: файл переживает перезапуск mock-API. */
+    supportStoreFile: process.env.SUPPORT_STORE_FILE ??
+        fileURLToPath(new URL('../data/support.json', import.meta.url)),
     /**
      * Секретный ключ Better Auth для подписи сессий и кук.
      * Настраивается через BETTER_AUTH_SECRET (openssl rand -base64 32).
@@ -118,6 +121,10 @@ export const config = {
     telegramBotUsername: process.env.TELEGRAM_BOT_USERNAME || 'Robo_kassa_bot',
     telegramPaymentProviderToken: process.env.TELEGRAM_PAYMENT_PROVIDER_TOKEN || '',
     telegramWebhookUrl: process.env.TELEGRAM_WEBHOOK_URL || '',
+    /** Telegram Support Bot для приёма жалоб и поддержки пользователей. */
+    telegramSupportBotToken: process.env.TELEGRAM_SUPPORT_BOT_TOKEN || '767965681:AAFkLbcszHQe7-XIZ8-y8Q-vebuoJXBSFGo',
+    telegramSupportBotUsername: process.env.TELEGRAM_SUPPORT_BOT_USERNAME || 'ketner_support_bot',
+    supportAdminUsername: (process.env.SUPPORT_ADMIN_USERNAME || 'gumieeel').replace(/^@/, '').toLowerCase(),
     /** AI Providers: OpenRouter */
     openRouterApiKey: process.env.OPENROUTER_API_KEY || '',
     openRouterBaseUrl: process.env.OPENROUTER_BASE_URL || 'https://openrouter.ai/api/v1',

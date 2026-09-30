@@ -23,6 +23,7 @@ import { createWebhookRouter } from './webhooks.js';
 import { usageStore as defaultUsageStore, type UsageStore } from '../store/index.js';
 
 import type { TelegramBotService } from '../telegram/bot.js';
+import type { TelegramSupportBotService } from '../telegram/support-bot.js';
 import type { defaultBetterAuth } from '../auth/better-auth.js';
 
 /** Зависимости роутеров: подменяются в тестах. */
@@ -33,6 +34,7 @@ export interface ApiDeps {
   invoiceStore?: InvoiceStore;
   usageStore?: UsageStore;
   botService?: TelegramBotService;
+  supportBotService?: TelegramSupportBotService;
   ai: AiConfig;
   userId: string;
   betterAuth?: typeof defaultBetterAuth;
@@ -147,6 +149,7 @@ export function createApiRouter(deps: ApiDeps): Router {
       userStore: activeUserStore,
       invoiceStore: activeInvoiceStore,
       botService: deps.botService,
+      supportBotService: deps.supportBotService,
     }),
   );
   router.use(

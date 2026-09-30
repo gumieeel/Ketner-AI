@@ -148,7 +148,7 @@ export const PLANS: readonly Plan[] = [
       ru: [
         'Все, что входит в тариф Pro',
         'Все топовые модели: GPT-6 Astra, Claude Fable 5.1, Gemini Flash 3.8, Grok 4.7, Ketner Next',
-        'Максимальный контекст диалога (до 2M токенов)',
+        'Максимальный контекст диалога',
         'Использование моделей на 100% без ограничений скорости и контекста',
         'Наивысший VIP-приоритет обработки запросов без ожидания',
         'Параллельные запросы без задержек',
@@ -156,7 +156,7 @@ export const PLANS: readonly Plan[] = [
       en: [
         'All Pro tier features included',
         'All top models: GPT-6 Astra, Claude Fable 5.1, Gemini Flash 3.8, Grok 4.7, Ketner Next',
-        'Maximum conversation context (up to 2M tokens)',
+        'Maximum conversation context',
         '100% model usage without speed or context limitations',
         'Top VIP queue priority with zero waiting',
         'Parallel concurrent requests without delays',
@@ -165,12 +165,12 @@ export const PLANS: readonly Plan[] = [
     highlights: {
       ru: [
         'Все топовые модели на 100%',
-        'Максимальный контекст (до 2M токенов)',
+        'Максимальный контекст диалога',
         'VIP-приоритет и максимальная скорость',
       ],
       en: [
         'All top models at 100%',
-        'Maximum context (up to 2M tokens)',
+        'Maximum conversation context',
         'VIP priority & maximum speed',
       ],
     },

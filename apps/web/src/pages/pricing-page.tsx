@@ -28,10 +28,10 @@ const COMPARISON_ROWS: ComparisonRow[] = [
   },
   {
     feature: { ru: 'Размер контекста', en: 'Context window' },
-    free: { ru: 'Базовый контекст (8K)', en: 'Basic context (8K)' },
-    plus: { ru: 'Стандартный (32K)', en: 'Standard (32K)' },
-    pro: { ru: 'Пониженный контекст (64K)', en: 'Reduced context (64K)' },
-    ultra: { ru: 'Максимальный контекст (до 2M токенов)', en: 'Maximum context (up to 2M tokens)' },
+    free: { ru: 'Базовый контекст', en: 'Basic context' },
+    plus: { ru: 'Стандартный', en: 'Standard' },
+    pro: { ru: 'Повышенный контекст', en: 'Extended context' },
+    ultra: { ru: 'Максимальный контекст', en: 'Maximum context' },
   },
   {
     feature: { ru: 'Использование моделей', en: 'Model capacity usage' },

@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { KeyIcon, LogoutIcon, SparkleIcon, UserIcon } from '@/components/icons';
+import { KeyIcon, LogoutIcon, SparkleIcon, TelegramIcon, UserIcon } from '@/components/icons';
 import { LanguageToggle } from '@/components/layout/language-toggle';
 import { ThemeToggle } from '@/components/layout/theme-toggle';
 import { Badge } from '@/components/ui/badge';
@@ -99,6 +99,12 @@ export function SettingsPage() {
             className="rounded-md px-3 py-2 hover:text-text hover:bg-surface/50 transition-colors"
           >
             {t('settings.subscription')}
+          </a>
+          <a
+            href="#support"
+            className="rounded-md px-3 py-2 hover:text-text hover:bg-surface/50 transition-colors"
+          >
+            {t('settings.support')}
           </a>
           {hasAdminAccess ? (
             <a
@@ -247,6 +253,53 @@ export function SettingsPage() {
                       )}`
                   : t('settings.subscriptionText')}
               </CardText>
+            </Card>
+          </section>
+
+          {/* 4. Служба поддержки и помощь */}
+          <section id="support">
+            <Card className="flex flex-col gap-4 p-5 md:p-6 border-stroke bg-surface">
+              <div className="flex flex-wrap items-center justify-between gap-4 border-b border-stroke pb-4">
+                <div className="flex items-center gap-3">
+                  <div className="grid size-10 shrink-0 place-items-center rounded-xl bg-[#24A1DE]/15 text-[#24A1DE]">
+                    <TelegramIcon className="size-5" />
+                  </div>
+                  <div>
+                    <CardTitle className="text-base font-semibold text-text">
+                      {t('settings.support')}
+                    </CardTitle>
+                    <CardText className="text-xs text-muted mt-0.5">
+                      {t('settings.supportDesc')}
+                    </CardText>
+                  </div>
+                </div>
+
+                <a
+                  href="https://t.me/ketner_support_bot"
+                  target="_blank"
+                  rel="noreferrer"
+                  className="inline-flex items-center gap-2 rounded-lg bg-[#24A1DE] hover:bg-[#1E96D1] px-4 py-2.5 text-xs font-semibold text-white transition-colors shadow-xs"
+                >
+                  <TelegramIcon className="size-4" />
+                  <span>{t('settings.supportContactBtn')}</span>
+                </a>
+              </div>
+
+              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-xs bg-canvas p-3 rounded-lg border border-stroke">
+                <div className="flex flex-col gap-0.5">
+                  <span className="font-medium text-text">
+                    Официальный бот поддержки: <a href="https://t.me/ketner_support_bot" target="_blank" rel="noreferrer" className="text-accent hover:underline font-mono">@ketner_support_bot</a>
+                  </span>
+                  <span className="text-[11px] text-muted">
+                    {t('settings.supportBotHint')}
+                  </span>
+                </div>
+                {user ? (
+                  <div className="font-mono text-[11px] text-muted bg-surface px-2.5 py-1 rounded border border-stroke/60 shrink-0">
+                    User ID: {user.id}
+                  </div>
+                ) : null}
+              </div>
             </Card>
           </section>
 

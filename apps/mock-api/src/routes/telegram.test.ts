@@ -223,3 +223,94 @@ test('telegram: симуляция оплаты POST /api/telegram/simulate-paym
   assert.equal(data.subscription.plan, 'claude-pro');
   assert.equal(data.subscription.status, 'active');
 });
+
+test('telegram support bot: создание тикета, отправка админу gumieeel и ответ пользователю', async (t) => {
+  const server = await startTestServer();
+  t.after(() => server.close());
+
+  // 1. Статус Support бота
+  const statusRes = await fetch(`${server.baseUrl}/api/telegram/support/status`);
+  assert.equal(statusRes.status, 200);
+  const statusData = await readJson<{ botUsername: string; configured: boolean }>(statusRes);
+  assert.equal(statusData.botUsername, 'ketner_support_bot');
+
+  // 2. Администратор @gumieeel активирует своего бота (/start)
+  const adminChatId = 777888999;
+  const adminStartUpdate = {
+    update_id: 2001,
+    message: {
+      message_id: 10,
+      chat: { id: adminChatId, type: 'private' },
+      from: { id: adminChatId, is_bot: false, first_name: 'Artem', username: 'gumieeel' },
+      date: Math.floor(Date.now() / 1000),
+      text: '/start',
+    },
+  };
+  const adminRes = await fetch(`${server.baseUrl}/api/telegram/support/webhook`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(adminStartUpdate),
+  });
+  assert.equal(adminRes.status, 200);
+  const adminBody = await readJson<{ ok: boolean; result: { handled: boolean; action: string } }>(adminRes);
+  assert.equal(adminBody.result.action, 'admin_welcome_sent');
+
+  // 3. Обычный пользователь отправляет жалобу в бот
+  const userChatId = 12345678;
+  const userMsgUpdate = {
+    update_id: 2002,
+    message: {
+      message_id: 50,
+      chat: { id: userChatId, type: 'private' },
+      from: { id: userChatId, is_bot: false, first_name: 'Ivan', username: 'ivan_client' },
+      date: Math.floor(Date.now() / 1000),
+      text: 'Не могу переключить модель на GPT-4o, помогите пожалуйста!',
+    },
+  };
+  const userRes = await fetch(`${server.baseUrl}/api/telegram/support/webhook`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(userMsgUpdate),
+  });
+  assert.equal(userRes.status, 200);
+  const userBody = await readJson<{ ok: boolean; result: { handled: boolean; action: string } }>(userRes);
+  assert.equal(userBody.result.action, 'user_ticket_message_processed');
+
+  // 4. Проверяем список тикетов
+  const ticketsRes = await fetch(`${server.baseUrl}/api/telegram/support/tickets`);
+  assert.equal(ticketsRes.status, 200);
+  const ticketsData = await readJson<{ openTickets: Array<{ id: string; userChatId: number; messages: Array<{ text: string }> }> }>(ticketsRes);
+  assert.equal(ticketsData.openTickets.length, 1);
+  const ticket = ticketsData.openTickets[0];
+  assert.equal(ticket.userChatId, userChatId);
+  assert.ok(ticket.messages[0].text.includes('Не могу переключить модель'));
+
+  // 5. Администратор gumieeel отвечает на тикет через /reply <ticketId> <ответ>
+  const adminReplyUpdate = {
+    update_id: 2003,
+    message: {
+      message_id: 11,
+      chat: { id: adminChatId, type: 'private' },
+      from: { id: adminChatId, is_bot: false, first_name: 'Artem', username: 'gumieeel' },
+      date: Math.floor(Date.now() / 1000),
+      text: `/reply ${ticket.id} Здравствуйте! Проблема решена, доступ к модели открыт.`,
+    },
+  };
+  const replyRes = await fetch(`${server.baseUrl}/api/telegram/support/webhook`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(adminReplyUpdate),
+  });
+  assert.equal(replyRes.status, 200);
+  const replyBody = await readJson<{ ok: boolean; result: { handled: boolean; action: string } }>(replyRes);
+  assert.equal(replyBody.result.action, 'admin_reply_delivered');
+
+  // 6. Проверяем, что в истории тикета появился ответ администратора
+  const updatedTicketsRes = await fetch(`${server.baseUrl}/api/telegram/support/tickets`);
+  const updatedTickets = await readJson<{ openTickets: Array<{ id: string; messages: Array<{ from: string; text: string }> }> }>(updatedTicketsRes);
+  const updatedTicket = updatedTickets.openTickets[0];
+  assert.equal(updatedTicket.messages.length, 2);
+  assert.equal(updatedTicket.messages[1].from, 'admin');
+  assert.ok(updatedTicket.messages[1].text.includes('Проблема решена'));
+});
+

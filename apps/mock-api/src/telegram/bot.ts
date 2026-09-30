@@ -39,6 +39,7 @@ export interface TelegramUpdate {
       id: number;
       is_bot: boolean;
       first_name: string;
+      last_name?: string;
       username?: string;
     };
     chat: {
@@ -49,6 +50,16 @@ export interface TelegramUpdate {
     };
     text?: string;
     date: number;
+    reply_to_message?: {
+      message_id: number;
+      from?: {
+        id: number;
+        is_bot: boolean;
+        first_name: string;
+        username?: string;
+      };
+      text?: string;
+    };
     successful_payment?: {
       currency: string;
       total_amount: number;

@@ -14,3 +14,5 @@ export { invoiceStore, createInvoiceStore } from './invoice-store.js';
 import { UsageStore } from './usage-store.js';
 export { UsageStore } from './usage-store.js';
 export const usageStore = new UsageStore(config.usageStoreFile);
+/** Хранилище обращений в службу поддержки (Telegram Support Bot). */
+export { supportStore, createSupportStore } from './support-store.js';

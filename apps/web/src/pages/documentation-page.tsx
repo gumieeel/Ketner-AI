@@ -124,17 +124,17 @@ const PLANS_DATA: PlanCardInfo[] = [
     price: { ru: '$30 / мес (скидка вместо $40)', en: '$30 / mo (discount from $40)' },
     badge: { ru: 'Максимум возможностей', en: 'Maximum power' },
     desc: {
-      ru: 'Все топовые модели на 100% мощности, максимальный контекст до 2M токенов и наивысший VIP-приоритет.',
-      en: 'All top models at 100% capacity, maximum context up to 2M tokens, and top VIP priority.',
+      ru: 'Все топовые модели на 100% мощности, максимальный контекст диалога и наивысший VIP-приоритет.',
+      en: 'All top models at 100% capacity, maximum conversation context, and top VIP priority.',
     },
     speed: { ru: 'Максимальная скорость (100%)', en: 'Maximum speed (100%)' },
     priority: { ru: 'Наивысший VIP-приоритет', en: 'Highest VIP priority' },
-    context: { ru: 'Максимальный контекст (до 2M токенов)', en: 'Maximum context (up to 2M tokens)' },
+    context: { ru: 'Максимальный контекст', en: 'Maximum context' },
     features: {
       ru: [
         'Все, что входит в тариф Pro',
         'Все топовые модели: GPT-6 Astra, Claude Fable 5.1, Gemini Flash 3.8, Grok 4.7, Ketner Next',
-        'Максимальный контекст диалога до 2M токенов',
+        'Максимальный контекст диалога',
         'Использование моделей на 100% без ограничений скорости и контекста',
         'Наивысший VIP-приоритет запросов без ожидания',
         'Параллельные запросы без задержек',
@@ -142,7 +142,7 @@ const PLANS_DATA: PlanCardInfo[] = [
       en: [
         'All Pro tier features included',
         'All top models: GPT-6 Astra, Claude Fable 5.1, Gemini Flash 3.8, Grok 4.7, Ketner Next',
-        'Maximum conversation context up to 2M tokens',
+        'Maximum conversation context',
         '100% model usage without speed or context limitations',
         'Top VIP queue priority with zero waiting',
         'Parallel concurrent requests without delays',
