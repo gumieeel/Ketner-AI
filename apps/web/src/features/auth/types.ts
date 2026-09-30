@@ -8,6 +8,8 @@ export interface User {
   createdAt: string;
   isVip?: boolean;
   isAdmin?: boolean;
+  telegramChatId?: number | string;
+  telegramUsername?: string;
 }
 
 export interface AuthSession {

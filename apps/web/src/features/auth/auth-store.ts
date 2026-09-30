@@ -22,6 +22,7 @@ interface AuthState {
   mockOAuth: (provider: 'google' | 'github') => Promise<void>;
   logout: () => Promise<void>;
   restoreSession: () => Promise<void>;
+  setUser: (user: User | null) => void;
   clearError: () => void;
 }
 
@@ -243,6 +244,13 @@ export const useAuth = create<AuthState>((set, get) => ({
     set({ user: null, token: null, status: 'unauthenticated', error: null });
     if (token) {
       await apiLogout(token);
+    }
+  },
+
+  setUser: (user: User | null) => {
+    set({ user });
+    if (user) {
+      storage.set(USER_KEY, JSON.stringify(user));
     }
   },
 }));

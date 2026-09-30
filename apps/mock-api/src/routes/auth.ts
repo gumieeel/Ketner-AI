@@ -4,6 +4,8 @@ import { createMockToken } from '../auth/jwt.js';
 import { sendError } from '../middleware/errors.js';
 import type { UserStore } from '../store/user-store.js';
 
+import { config } from '../config.js';
+
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const MIN_PASSWORD_LENGTH = 8;
 
@@ -98,6 +100,29 @@ export function createAuthRouter(
     }
 
     response.json({ user: request.user });
+  });
+
+  router.get('/telegram-link', (request: Request, response: Response) => {
+    if (!request.user) {
+      sendError(response, 401, 'unauthorized', 'Сессия не найдена или истекла');
+      return;
+    }
+    const botUser = config.telegramBotUsername.replace(/^@/, '');
+    response.json({
+      botUsername: botUser,
+      linkUrl: `https://t.me/${botUser}?start=link_${request.user.id}`,
+      isLinked: Boolean(request.user.telegramChatId),
+      telegramUsername: request.user.telegramUsername,
+    });
+  });
+
+  router.post('/telegram-unlink', (request: Request, response: Response) => {
+    if (!request.user) {
+      sendError(response, 401, 'unauthorized', 'Сессия не найдена или истекла');
+      return;
+    }
+    const updated = userStore.unlinkTelegram(request.user.id);
+    response.json({ success: true, user: updated ?? request.user });
   });
 
   router.post('/logout', (_request: Request, response: Response) => {

@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { readJson, startTestServer } from '../testing/server.js';
 import type { SbpInvoice, Subscription, TelegramStarsInvoice, User } from '../types.js';
+import { calculateStars } from '../telegram/bot.js';
 
 test('telegram: статус бота GET /api/telegram/status', async (t) => {
   const server = await startTestServer();
@@ -178,7 +179,7 @@ test('billing: Telegram Stars (создание счёта в ⭐️ XTR и по
   assert.ok(invoice.id.startsWith('stars_'));
   assert.equal(invoice.planId, 'ultra');
   assert.equal(invoice.priceRub, 2990);
-  assert.equal(invoice.starsAmount, 1600); // 1600 ⭐️ для 2990 ₽
+  assert.equal(invoice.starsAmount, 1350); // 1350 ⭐️ для 2990 ₽ (соответствует сайту)
   assert.ok(invoice.botDeepLink.includes('t.me/'));
   assert.ok(invoice.botDeepLink.includes('pay_ultra'));
 
@@ -313,4 +314,106 @@ test('telegram support bot: создание тикета, отправка ад
   assert.equal(updatedTicket.messages[1].from, 'admin');
   assert.ok(updatedTicket.messages[1].text.includes('Проблема решена'));
 });
+
+test('telegram: расчёт звёзд calculateStars в точности совпадает со значениями на сайте', () => {
+  // Plus
+  assert.equal(calculateStars(990), 550);
+  assert.equal(calculateStars(10), 550);
+  // Pro
+  assert.equal(calculateStars(1990), 650);
+  assert.equal(calculateStars(20), 650);
+  // Ultra
+  assert.equal(calculateStars(2990), 1350);
+  assert.equal(calculateStars(30), 1350);
+});
+
+test('telegram: привязка аккаунта через /start link_<userId>, проверка /status и отвязка', async (t) => {
+  const server = await startTestServer();
+  t.after(() => server.close());
+
+  // 1. Создаем пользователя на сайте
+  const signupRes = await fetch(`${server.baseUrl}/api/auth/signup`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      email: 'link_user_test@ketner.ai',
+      password: 'password123',
+      name: 'Linked Tester',
+    }),
+  });
+  assert.equal(signupRes.status, 201);
+  const { user, token } = await readJson<{ user: User; token: string }>(signupRes);
+
+  // 2. Отправляем в бота deep-link привязки: /start link_<userId>
+  const tgChatId = 99887766;
+  const linkUpdate = {
+    update_id: 3001,
+    message: {
+      message_id: 101,
+      chat: { id: tgChatId, type: 'private' },
+      from: { id: tgChatId, is_bot: false, first_name: 'Tester', username: 'tester_tg' },
+      date: Math.floor(Date.now() / 1000),
+      text: `/start link_${user.id}`,
+    },
+  };
+
+  const linkRes = await fetch(`${server.baseUrl}/api/telegram/webhook`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(linkUpdate),
+  });
+  assert.equal(linkRes.status, 200);
+  const linkBody = await readJson<{ ok: boolean; result: { handled: boolean; action: string } }>(linkRes);
+  assert.equal(linkBody.result.action, 'account_linked_deep_link');
+
+  // 3. Проверяем в GET /api/auth/me, что telegramChatId и username привязались
+  const meRes = await fetch(`${server.baseUrl}/api/auth/me`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  assert.equal(meRes.status, 200);
+  const meData = await readJson<{ user: User }>(meRes);
+  assert.equal(meData.user.telegramChatId, tgChatId);
+  assert.equal(meData.user.telegramUsername, 'tester_tg');
+
+  // 4. Пользователь отправляет команду /status в бота
+  const statusUpdate = {
+    update_id: 3002,
+    message: {
+      message_id: 102,
+      chat: { id: tgChatId, type: 'private' },
+      from: { id: tgChatId, is_bot: false, first_name: 'Tester', username: 'tester_tg' },
+      date: Math.floor(Date.now() / 1000),
+      text: '/status',
+    },
+  };
+  const statusRes = await fetch(`${server.baseUrl}/api/telegram/webhook`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(statusUpdate),
+  });
+  assert.equal(statusRes.status, 200);
+  const statusBody = await readJson<{ ok: boolean; result: { handled: boolean; action: string } }>(statusRes);
+  assert.equal(statusBody.result.action, 'status_handled');
+
+  // 5. Отвязка аккаунта через /unlink в боте
+  const unlinkUpdate = {
+    update_id: 3003,
+    message: {
+      message_id: 103,
+      chat: { id: tgChatId, type: 'private' },
+      from: { id: tgChatId, is_bot: false, first_name: 'Tester', username: 'tester_tg' },
+      date: Math.floor(Date.now() / 1000),
+      text: '/unlink',
+    },
+  };
+  const unlinkRes = await fetch(`${server.baseUrl}/api/telegram/webhook`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(unlinkUpdate),
+  });
+  assert.equal(unlinkRes.status, 200);
+  const unlinkBody = await readJson<{ ok: boolean; result: { handled: boolean; action: string } }>(unlinkRes);
+  assert.equal(unlinkBody.result.action, 'unlink_handled');
+});
+
 

@@ -7,6 +7,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardText, CardTitle } from '@/components/ui/card';
 import { useAuth } from '@/features/auth/auth-store';
+import { unlinkTelegram } from '@/features/auth/api';
 import { useBilling } from '@/features/billing/billing-store';
 import { useTranslation } from '@/i18n';
 import { formatShortDate } from '@/lib/format-date';
@@ -14,12 +15,28 @@ import { formatShortDate } from '@/lib/format-date';
 export function SettingsPage() {
   const { t, language } = useTranslation();
   const user = useAuth((state) => state.user);
+  const setUser = useAuth((state) => state.setUser);
+  const token = useAuth((state) => state.token);
   const logout = useAuth((state) => state.logout);
   const subscription = useBilling((state) => state.subscription);
   const loadSubscription = useBilling((state) => state.loadSubscription);
   const cancel = useBilling((state) => state.cancel);
 
   const [canceling, setCanceling] = useState(false);
+  const [unlinkingTelegram, setUnlinkingTelegram] = useState(false);
+
+  const handleUnlinkTelegram = async () => {
+    if (!token) return;
+    setUnlinkingTelegram(true);
+    try {
+      const updated = await unlinkTelegram(token);
+      setUser(updated);
+    } catch {
+      // ignore
+    } finally {
+      setUnlinkingTelegram(false);
+    }
+  };
   const [adminKey, setAdminKey] = useState<string>(
     () => (typeof window !== 'undefined' ? localStorage.getItem('ketner_admin_key') || '' : ''),
   );
@@ -99,6 +116,12 @@ export function SettingsPage() {
             className="rounded-md px-3 py-2 hover:text-text hover:bg-surface/50 transition-colors"
           >
             {t('settings.subscription')}
+          </a>
+          <a
+            href="#telegram"
+            className="rounded-md px-3 py-2 hover:text-text hover:bg-surface/50 transition-colors"
+          >
+            Telegram
           </a>
           <a
             href="#support"
@@ -253,6 +276,96 @@ export function SettingsPage() {
                       )}`
                   : t('settings.subscriptionText')}
               </CardText>
+            </Card>
+          </section>
+
+          {/* Telegram аккаунт и платежи */}
+          <section id="telegram">
+            <Card className="flex flex-col gap-4 p-5 md:p-6 border-stroke bg-surface">
+              <div className="flex flex-wrap items-center justify-between gap-4 border-b border-stroke pb-4">
+                <div className="flex items-center gap-3">
+                  <div className="grid size-10 shrink-0 place-items-center rounded-xl bg-[#24A1DE]/15 text-[#24A1DE]">
+                    <TelegramIcon className="size-5" />
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <CardTitle className="text-base font-semibold text-text">
+                        Telegram аккаунт и платежи
+                      </CardTitle>
+                      {user?.telegramChatId || user?.telegramUsername ? (
+                        <Badge tone="success" className="text-[10px]">Подключён</Badge>
+                      ) : (
+                        <Badge tone="neutral" className="text-[10px]">Не привязан</Badge>
+                      )}
+                    </div>
+                    <CardText className="text-xs text-muted mt-0.5">
+                      Синхронизация с ботом @Robo_kassa_bot для оплаты через Stars и управления подпиской
+                    </CardText>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  {user?.telegramChatId || user?.telegramUsername ? (
+                    <>
+                      <a
+                        href="https://t.me/Robo_kassa_bot"
+                        target="_blank"
+                        rel="noreferrer"
+                        className="inline-flex items-center gap-1.5 rounded-lg bg-[#24A1DE] hover:bg-[#1E96D1] px-3.5 py-2 text-xs font-semibold text-white transition-colors shadow-xs"
+                      >
+                        <TelegramIcon className="size-3.5" />
+                        <span>Открыть бот</span>
+                      </a>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={handleUnlinkTelegram}
+                        disabled={unlinkingTelegram}
+                        className="text-xs text-danger hover:bg-danger/10 hover:border-danger/40"
+                      >
+                        {unlinkingTelegram ? 'Отвязка...' : 'Отвязать'}
+                      </Button>
+                    </>
+                  ) : (
+                    <a
+                      href={`https://t.me/Robo_kassa_bot?start=link_${user?.id || 'demo'}`}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="inline-flex items-center gap-1.5 rounded-lg bg-[#24A1DE] hover:bg-[#1E96D1] px-4 py-2.5 text-xs font-semibold text-white transition-colors shadow-xs"
+                    >
+                      <TelegramIcon className="size-4" />
+                      <span>Подключить Telegram</span>
+                    </a>
+                  )}
+                </div>
+              </div>
+
+              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-xs bg-canvas p-3 rounded-lg border border-stroke">
+                <div className="flex flex-col gap-0.5">
+                  {user?.telegramChatId || user?.telegramUsername ? (
+                    <>
+                      <span className="font-medium text-text">
+                        Привязан Telegram:{' '}
+                        <strong className="text-accent font-mono">
+                          {user.telegramUsername ? `@${user.telegramUsername}` : `ID: ${user.telegramChatId}`}
+                        </strong>
+                      </span>
+                      <span className="text-[11px] text-muted">
+                        Вы можете отправить команду /status в боте @Robo_kassa_bot для проверки тарифа и продлевать подписку через Stars.
+                      </span>
+                    </>
+                  ) : (
+                    <>
+                      <span className="font-medium text-text">
+                        Привяжите Telegram для оплаты в 1 клик
+                      </span>
+                      <span className="text-[11px] text-muted">
+                        Нажмите «Подключить Telegram», чтобы привязать ваш аккаунт к платёжному боту @Robo_kassa_bot.
+                      </span>
+                    </>
+                  )}
+                </div>
+              </div>
             </Card>
           </section>
 

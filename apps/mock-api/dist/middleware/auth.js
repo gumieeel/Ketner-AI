@@ -42,6 +42,8 @@ export function createAuthMiddleware(userStore, betterAuthInstance = defaultBett
                         : new Date().toISOString()),
                     isVip,
                     isAdmin,
+                    telegramChatId: stored?.telegramChatId,
+                    telegramUsername: stored?.telegramUsername,
                 };
                 request.userId = request.user.id;
                 next();

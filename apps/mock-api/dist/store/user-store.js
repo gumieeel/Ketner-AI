@@ -17,6 +17,8 @@ function toPublicUser(user) {
         createdAt: user.createdAt,
         isVip,
         isAdmin,
+        telegramChatId: user.telegramChatId,
+        telegramUsername: user.telegramUsername,
     };
 }
 const DEFAULT_DEMO_USER = (() => {
@@ -182,6 +184,35 @@ export function createUserStore(file) {
                 return null;
             }
             user.isAdmin = isAdmin;
+            persist();
+            return toPublicUser(user);
+        },
+        findByTelegramChatId(chatId) {
+            const target = String(chatId);
+            const user = snapshot.users.find((candidate) => candidate.telegramChatId !== undefined && String(candidate.telegramChatId) === target);
+            return user ? toPublicUser(user) : null;
+        },
+        linkTelegram(id, chatId, username) {
+            const normalized = id.trim().toLowerCase();
+            const user = snapshot.users.find((candidate) => candidate.id === id || candidate.email.toLowerCase() === normalized);
+            if (!user) {
+                return null;
+            }
+            user.telegramChatId = chatId;
+            if (username) {
+                user.telegramUsername = username.replace(/^@/, '');
+            }
+            persist();
+            return toPublicUser(user);
+        },
+        unlinkTelegram(id) {
+            const normalized = id.trim().toLowerCase();
+            const user = snapshot.users.find((candidate) => candidate.id === id || candidate.email.toLowerCase() === normalized);
+            if (!user) {
+                return null;
+            }
+            delete user.telegramChatId;
+            delete user.telegramUsername;
             persist();
             return toPublicUser(user);
         },

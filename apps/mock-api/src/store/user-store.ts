@@ -14,18 +14,23 @@ export interface StoredUser {
   passwordHash: string;
   isVip?: boolean;
   isAdmin?: boolean;
+  telegramChatId?: number | string;
+  telegramUsername?: string;
 }
 
 export interface UserStore {
   list(): User[];
   findById(id: string): User | null;
   findByEmail(email: string): User | null;
+  findByTelegramChatId(chatId: number | string): User | null;
   create(email: string, password: string, name?: string): User;
   verifyPassword(email: string, password: string): User | null;
   setPassword(email: string, password: string): User | null;
   updatePlan(id: string, plan: PlanId): User | null;
   setVip(id: string, isVip: boolean): User | null;
   setAdmin(id: string, isAdmin: boolean): User | null;
+  linkTelegram(id: string, chatId: number | string, username?: string): User | null;
+  unlinkTelegram(id: string): User | null;
 }
 
 interface Snapshot {
@@ -48,6 +53,8 @@ function toPublicUser(user: StoredUser): User {
     createdAt: user.createdAt,
     isVip,
     isAdmin,
+    telegramChatId: user.telegramChatId,
+    telegramUsername: user.telegramUsername,
   };
 }
 
@@ -248,6 +255,45 @@ export function createUserStore(file: string): UserStore {
         return null;
       }
       user.isAdmin = isAdmin;
+      persist();
+      return toPublicUser(user);
+    },
+
+    findByTelegramChatId(chatId: number | string) {
+      const target = String(chatId);
+      const user = snapshot.users.find(
+        (candidate) =>
+          candidate.telegramChatId !== undefined && String(candidate.telegramChatId) === target,
+      );
+      return user ? toPublicUser(user) : null;
+    },
+
+    linkTelegram(id: string, chatId: number | string, username?: string) {
+      const normalized = id.trim().toLowerCase();
+      const user = snapshot.users.find(
+        (candidate) => candidate.id === id || candidate.email.toLowerCase() === normalized,
+      );
+      if (!user) {
+        return null;
+      }
+      user.telegramChatId = chatId;
+      if (username) {
+        user.telegramUsername = username.replace(/^@/, '');
+      }
+      persist();
+      return toPublicUser(user);
+    },
+
+    unlinkTelegram(id: string) {
+      const normalized = id.trim().toLowerCase();
+      const user = snapshot.users.find(
+        (candidate) => candidate.id === id || candidate.email.toLowerCase() === normalized,
+      );
+      if (!user) {
+        return null;
+      }
+      delete user.telegramChatId;
+      delete user.telegramUsername;
       persist();
       return toPublicUser(user);
     },

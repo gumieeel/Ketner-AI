@@ -68,3 +68,12 @@ export async function logout(token?: string): Promise<void> {
 export async function oauthLogin(provider: 'google' | 'github'): Promise<AuthSession> {
   return request<AuthSession>(`/auth/oauth/${provider}`);
 }
+
+export async function unlinkTelegram(token?: string): Promise<User> {
+  const body = await request<{ user: User }>('/auth/telegram-unlink', {
+    method: 'POST',
+    headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+  });
+  return body.user;
+}
+
