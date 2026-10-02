@@ -366,7 +366,13 @@ export function createBillingRouter({
 
     if (invoice.status === 'pending') {
       const sub = subscriptionStore.get(invoice.userId);
-      if (sub && sub.status === 'active' && sub.plan === invoice.planId) {
+      const user = userStore.findById(invoice.userId) || (invoice.userId.includes('@') ? userStore.findByEmail(invoice.userId) : null);
+      const userTgSub = user?.telegramChatId ? subscriptionStore.get(String(user.telegramChatId)) : null;
+
+      if (
+        (sub && sub.status === 'active' && sub.plan === invoice.planId) ||
+        (userTgSub && userTgSub.status === 'active' && userTgSub.plan === invoice.planId)
+      ) {
         invoice = activeInvoiceStore.markTelegramStarsPaid(invoiceId) ?? invoice;
       }
     }
@@ -443,6 +449,7 @@ export function createBillingRouter({
       amountUsd,
       ccResult?.link,
       ccResult?.invoiceId,
+      tempOrderId,
     );
 
     response.json({ invoice });
@@ -450,7 +457,9 @@ export function createBillingRouter({
 
   router.get('/billing/crypto/status/:invoiceId', async (request: Request, response: Response) => {
     const invoiceId = getParamInvoiceId(request);
-    let invoice = activeInvoiceStore.getCryptoInvoice(invoiceId);
+    let invoice =
+      activeInvoiceStore.findCryptoInvoice?.(invoiceId) ??
+      activeInvoiceStore.getCryptoInvoice(invoiceId);
     if (!invoice) {
       sendError(response, 404, 'invoice_not_found', 'Крипто-счёт не найден');
       return;
@@ -460,8 +469,8 @@ export function createBillingRouter({
     if (invoice.status === 'pending' && invoice.cryptoCloudInvoiceId) {
       try {
         const ccStatus = await cryptoCloudService.checkInvoiceStatus(invoice.cryptoCloudInvoiceId);
-        if (ccStatus === 'paid' || ccStatus === 'success') {
-          invoice = activeInvoiceStore.markCryptoPaid(invoiceId) ?? invoice;
+        if (ccStatus === 'paid' || ccStatus === 'success' || ccStatus === 'overpaid') {
+          invoice = activeInvoiceStore.markCryptoPaid(invoice.id) ?? invoice;
           subscriptionStore.checkout(invoice.userId, invoice.planId);
           const user = userStore.updatePlan(invoice.userId, invoice.planId);
           if (user?.email && user.email !== invoice.userId) {
@@ -470,6 +479,7 @@ export function createBillingRouter({
           if (user?.id && user.id !== invoice.userId) {
             subscriptionStore.checkout(user.id, invoice.planId);
           }
+          console.log(`[billing:crypto] Счёт ${invoice.id} оплачен через CryptoCloud. План ${invoice.planId} активирован.`);
         }
       } catch (err) {
         console.warn('[billing] Ошибка проверки статуса CryptoCloud:', err);
@@ -482,15 +492,34 @@ export function createBillingRouter({
     });
   });
 
-  router.post('/billing/crypto/confirm/:invoiceId', (request: Request, response: Response) => {
+  router.post('/billing/crypto/confirm/:invoiceId', async (request: Request, response: Response) => {
     const invoiceId = getParamInvoiceId(request);
-    const invoice = activeInvoiceStore.getCryptoInvoice(invoiceId);
+    let invoice =
+      activeInvoiceStore.findCryptoInvoice?.(invoiceId) ??
+      activeInvoiceStore.getCryptoInvoice(invoiceId);
     if (!invoice) {
       sendError(response, 404, 'invoice_not_found', 'Крипто-счёт не найден');
       return;
     }
 
-    const updated = activeInvoiceStore.markCryptoPaid(invoiceId) ?? invoice;
+    const txHash =
+      typeof request.body?.txHash === 'string' && request.body.txHash.trim().length > 0
+        ? request.body.txHash.trim()
+        : undefined;
+
+    // Если указан TxID или в CryptoCloud статус paid, либо подтверждение
+    if (invoice.status === 'pending' && invoice.cryptoCloudInvoiceId && !txHash) {
+      try {
+        const ccStatus = await cryptoCloudService.checkInvoiceStatus(invoice.cryptoCloudInvoiceId);
+        if (ccStatus === 'paid' || ccStatus === 'success' || ccStatus === 'overpaid') {
+          invoice = activeInvoiceStore.markCryptoPaid(invoice.id) ?? invoice;
+        }
+      } catch {
+        // ignore
+      }
+    }
+
+    const updated = activeInvoiceStore.markCryptoPaid(invoice.id, txHash) ?? invoice;
     const userId = getUserId(request) || invoice.userId;
 
     const subscription = subscriptionStore.checkout(userId, invoice.planId);
@@ -514,12 +543,15 @@ export function createBillingRouter({
   router.post('/billing/cryptocloud/webhook', (request: Request, response: Response) => {
     const status = String(request.body?.status || '').toLowerCase();
     const orderId = String(request.body?.order_id || request.body?.orderId || '');
-    const invoiceUuid = String(request.body?.invoice_id || '');
+    const invoiceUuid = String(request.body?.invoice_id || request.body?.uuid || '');
 
     console.log('[cryptocloud] Получен webhook:', { status, orderId, invoiceUuid });
 
-    if (status === 'success' || status === 'paid') {
-      const invoice = orderId ? activeInvoiceStore.getCryptoInvoice(orderId) : undefined;
+    if (status === 'success' || status === 'paid' || status === 'overpaid') {
+      const invoice =
+        (orderId ? activeInvoiceStore.findCryptoInvoice?.(orderId) ?? activeInvoiceStore.getCryptoInvoice(orderId) : undefined) ||
+        (invoiceUuid ? activeInvoiceStore.findCryptoInvoice?.(invoiceUuid) : undefined);
+
       if (invoice) {
         activeInvoiceStore.markCryptoPaid(invoice.id);
         subscriptionStore.checkout(invoice.userId, invoice.planId);
@@ -531,6 +563,8 @@ export function createBillingRouter({
           subscriptionStore.checkout(user.id, invoice.planId);
         }
         console.log(`[cryptocloud] Подписка ${invoice.planId} активирована для ${invoice.userId}`);
+      } else {
+        console.warn('[cryptocloud] Не найден инвойс для webhook:', { orderId, invoiceUuid });
       }
     }
 

@@ -76,26 +76,37 @@ export class CryptoCloudService {
     }
     /**
      * Проверяет статус счета через CryptoCloud API v2.
+     * Endpoint: POST https://api.cryptocloud.plus/v2/invoice/merchant/info
      */
     async checkInvoiceStatus(invoiceId) {
         if (!this.isConfigured()) {
             return 'pending';
         }
         try {
-            const response = await fetch(`https://api.cryptocloud.plus/v2/invoice/info?uuid=${encodeURIComponent(invoiceId)}`, {
+            const response = await fetch('https://api.cryptocloud.plus/v2/invoice/merchant/info', {
+                method: 'POST',
                 headers: {
                     Authorization: `Token ${this.apiKey}`,
+                    'Content-Type': 'application/json',
                 },
+                body: JSON.stringify({ uuids: [invoiceId] }),
             });
-            if (!response.ok)
+            if (!response.ok) {
+                console.warn(`[cryptocloud] checkInvoiceStatus HTTP ${response.status} for ${invoiceId}`);
                 return 'pending';
+            }
             const data = (await response.json());
-            if (data.status === 'success' && data.result?.status) {
-                return data.result.status; // 'created', 'paid', 'canceled', etc.
+            if (data.status === 'success' && Array.isArray(data.result)) {
+                const item = data.result.find((inv) => inv.uuid === invoiceId);
+                if (item?.status) {
+                    const rawStatus = item.status.toLowerCase();
+                    return rawStatus; // 'paid', 'created', 'partial', 'overpaid', 'canceled'
+                }
             }
             return 'pending';
         }
-        catch {
+        catch (err) {
+            console.warn('[cryptocloud] checkInvoiceStatus network error:', err);
             return 'pending';
         }
     }

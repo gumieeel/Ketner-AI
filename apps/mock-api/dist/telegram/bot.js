@@ -87,6 +87,7 @@ export class TelegramBotService {
                     { command: 'start', description: 'Личный кабинет и оформление подписки' },
                     { command: 'plans', description: 'Каталог тарифов (Stars ⭐️ / СБП)' },
                     { command: 'status', description: 'Статус моей подписки и доступные модели' },
+                    { command: 'check', description: 'Проверить статус оплаты счёта' },
                     { command: 'link', description: 'Привязать аккаунт на сайте' },
                     { command: 'unlink', description: 'Отвязать текущий аккаунт' },
                     { command: 'help', description: 'Помощь и контакты поддержки' },
@@ -198,10 +199,11 @@ export class TelegramBotService {
             error_message: errorMessage,
         });
     }
-    async answerCallbackQuery(callbackQueryId, text) {
+    async answerCallbackQuery(callbackQueryId, text, showAlert = false) {
         return this.callApi('answerCallbackQuery', {
             callback_query_id: callbackQueryId,
             text,
+            show_alert: showAlert,
         });
     }
     /**
@@ -259,6 +261,13 @@ export class TelegramBotService {
                 const user = this.resolveUser(chatId);
                 await this.sendStatusMessage(chatId, user?.id);
                 return { handled: true, action: 'cmd_status_handled' };
+            }
+            // Проверка оплаты через callback
+            if (data === 'cmd_check') {
+                await this.answerCallbackQuery(cb.id, 'Проверка оплаты...');
+                const user = this.resolveUser(chatId);
+                await this.sendCheckPaymentMessage(chatId, user?.id);
+                return { handled: true, action: 'cmd_check_handled' };
             }
             // Меню выбора СБП
             if (data === 'cmd_sbp') {
@@ -350,6 +359,41 @@ export class TelegramBotService {
                     },
                 });
                 return { handled: true, action: 'sbp_payment_confirmed' };
+            }
+            // Проверка оплаты Stars (без принудительной активации, если не оплачено)
+            if (data.startsWith('check_stars:') || data.startsWith('check_payment:')) {
+                const parts = data.split(':');
+                const invoiceId = parts[1] || undefined;
+                const planId = (parts[2] || 'plus');
+                const linkedUser = this.resolveUser(chatId);
+                const userId = parts[3] || linkedUser?.id || this.chatToUserId.get(chatId) || config.demoUserId;
+                let isPaid = false;
+                if (invoiceId) {
+                    const inv = this.deps.invoiceStore.getTelegramStarsInvoice(invoiceId);
+                    if (inv && inv.status === 'paid') {
+                        isPaid = true;
+                    }
+                }
+                const sub = this.deps.subscriptionStore.get(userId);
+                if (sub && sub.status === 'active' && (sub.plan === planId || sub.plan === 'ultra')) {
+                    isPaid = true;
+                }
+                if (isPaid) {
+                    await this.answerCallbackQuery(cb.id, '✅ Оплата подтверждена!');
+                    await this.sendMessage(chatId, `🎉 <b>Оплата успешно подтверждена!</b>\n\nТариф <b>${planId.toUpperCase()}</b> активен на 30 дней.\nВсе модели разблокированы в аккаунте.`, {
+                        reply_markup: {
+                            inline_keyboard: [
+                                [{ text: '🚀 Открыть веб-чат Ketner AI', url: `${config.webAppUrl}/chat` }],
+                                [{ text: '📊 Статус подписки', callback_data: 'cmd_status' }],
+                            ],
+                        },
+                    });
+                    return { handled: true, action: 'stars_check_paid' };
+                }
+                else {
+                    await this.answerCallbackQuery(cb.id, '⏳ Платёж ещё не поступил. Оплатите счёт через кнопку «Заплатить ⭐️» выше и повторите проверку.', true);
+                    return { handled: true, action: 'stars_check_pending' };
+                }
             }
             // Подтверждение Stars оплаты
             if (data.startsWith('confirm_stars:')) {
@@ -571,7 +615,13 @@ export class TelegramBotService {
                         inline_keyboard: [
                             [
                                 {
-                                    text: '✅ Подтвердить оплату и активировать',
+                                    text: '🔄 Проверить оплату Stars',
+                                    callback_data: `check_stars:${invoiceId || ''}:${plan.id}:${userId}`,
+                                },
+                            ],
+                            [
+                                {
+                                    text: '✅ Подтвердить оплату (тест/активация)',
                                     callback_data: `confirm_stars:${invoiceId || ''}:${plan.id}:${userId}`,
                                 },
                             ],
@@ -707,6 +757,15 @@ export class TelegramBotService {
                 const user = this.resolveUser(chatId);
                 await this.sendStatusMessage(chatId, user?.id);
                 return { handled: true, action: 'status_handled' };
+            }
+            // /check
+            if (cleanCmd === '/check' ||
+                cleanCmd === 'check' ||
+                cleanCmd === '/check_payment' ||
+                cleanCmd === 'проверить') {
+                const user = this.resolveUser(chatId);
+                await this.sendCheckPaymentMessage(chatId, user?.id);
+                return { handled: true, action: 'check_payment_handled' };
             }
             // /help
             if (cleanCmd === '/help' || cleanCmd === 'help') {
@@ -851,6 +910,39 @@ export class TelegramBotService {
                         { text: '💬 Поддержка', url: 'https://t.me/ketner_support_bot' },
                         { text: '🔓 Отвязать аккаунт', callback_data: 'cmd_unlink' },
                     ],
+                ],
+            },
+        });
+    }
+    async sendCheckPaymentMessage(chatId, userId) {
+        const user = this.resolveUser(chatId) || (userId ? this.deps.userStore.findById(userId) : null);
+        const targetUserId = user?.id || userId || this.chatToUserId.get(chatId);
+        if (targetUserId) {
+            const sub = this.deps.subscriptionStore.get(targetUserId) ||
+                (user?.email ? this.deps.subscriptionStore.get(user.email) : undefined);
+            const isActive = (sub && sub.status === 'active' && sub.plan !== 'free') || user?.isVip;
+            if (isActive) {
+                const planName = (user?.isVip ? 'ultra' : sub?.plan || 'pro').toUpperCase();
+                const dateStr = sub?.renewsAt
+                    ? new Date(sub.renewsAt).toLocaleDateString('ru-RU')
+                    : 'активен бессрочно';
+                await this.sendMessage(chatId, `✅ <b>Оплата подтверждена!</b>\n\nТариф: <b>${planName}</b> (до <b>${dateStr}</b>)\nАккаунт: <b>${escapeHtml(user?.email || targetUserId)}</b>\n\nВсе флагманские модели доступны в веб-интерфейсе Ketner AI!`, {
+                    reply_markup: {
+                        inline_keyboard: [
+                            [{ text: '🚀 Открыть веб-чат Ketner AI', url: `${config.webAppUrl}/chat` }],
+                            [{ text: '📊 Детали подписки', callback_data: 'cmd_status' }],
+                        ],
+                    },
+                });
+                return;
+            }
+        }
+        await this.sendMessage(chatId, '⏳ <b>Статус оплаты счетов</b>\n\nПлатёж пока обрабатывается или не был инициирован.\nЕсли вы только что произвели оплату через <b>Telegram Stars</b> или <b>СБП</b>, зачисление обычно занимает 15–60 секунд.\n\nНажмите «Проверить снова» через минуту или выберите тариф:', {
+            reply_markup: {
+                inline_keyboard: [
+                    [{ text: '🔄 Проверить снова', callback_data: 'cmd_check' }],
+                    [{ text: '💎 Каталог тарифов (Stars / СБП)', callback_data: 'cmd_plans' }],
+                    [{ text: '💬 Поддержка @ketner_support_bot', url: 'https://t.me/ketner_support_bot' }],
                 ],
             },
         });

@@ -42,6 +42,7 @@ export interface CryptoInvoice {
   network: string;
   cryptoCloudUrl?: string;
   cryptoCloudInvoiceId?: string;
+  txHash?: string;
 }
 
 export interface SbpInvoice {

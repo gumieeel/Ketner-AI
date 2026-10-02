@@ -126,6 +126,7 @@ export function CheckoutPage() {
   const { planId } = useParams<{ planId: string }>();
   const authStatus = useAuth((state) => state.status);
   const user = useAuth((state) => state.user);
+  const setUser = useAuth((state) => state.setUser);
   const plan = getPlan(planId);
   const setSubscription = useBilling((state) => state.setSubscription);
 
@@ -159,6 +160,13 @@ export function CheckoutPage() {
   // Telegram Stars
   const [starsInvoice, setStarsInvoice] = useState<TelegramStarsInvoice | null>(null);
   const [starsLoading, setStarsLoading] = useState(false);
+
+  // Обратная связь при ручной проверке оплаты
+  const [checkFeedback, setCheckFeedback] = useState<{
+    method: PaymentMethod;
+    type: 'info' | 'warning' | 'success';
+    message: string;
+  } | null>(null);
 
   // Общий статус оформления
   const [submitting, setSubmitting] = useState(false);
@@ -241,7 +249,9 @@ export function CheckoutPage() {
         try {
           const res = await getSbpInvoiceStatus(sbpInvoice.id);
           if (res.status === 'paid') {
-            await confirmSbpPayment(sbpInvoice.id);
+            const conf = await confirmSbpPayment(sbpInvoice.id);
+            setSubscription(conf.subscription, conf.user.plan);
+            if (user) setUser({ ...user, plan: conf.user.plan });
             setPaidMethodName(t('checkout.methodSbp'));
             setSuccess(true);
           }
@@ -254,7 +264,9 @@ export function CheckoutPage() {
         try {
           const res = await getCryptoInvoiceStatus(cryptoInvoice.id);
           if (res.status === 'paid') {
-            await confirmCryptoPayment(cryptoInvoice.id);
+            const conf = await confirmCryptoPayment(cryptoInvoice.id);
+            setSubscription(conf.subscription, conf.user.plan);
+            if (user) setUser({ ...user, plan: conf.user.plan });
             setPaidMethodName(t('checkout.methodCrypto'));
             setSuccess(true);
           }
@@ -267,7 +279,9 @@ export function CheckoutPage() {
         try {
           const res = await getTelegramStarsStatus(starsInvoice.id);
           if (res.status === 'paid') {
-            await confirmTelegramStarsPayment(starsInvoice.id);
+            const conf = await confirmTelegramStarsPayment(starsInvoice.id);
+            setSubscription(conf.subscription, conf.user.plan);
+            if (user) setUser({ ...user, plan: conf.user.plan });
             setPaidMethodName(t('checkout.methodStars'));
             setSuccess(true);
           }
@@ -282,7 +296,7 @@ export function CheckoutPage() {
         clearInterval(pollingRef.current);
       }
     };
-  }, [paymentMethod, sbpInvoice, cryptoInvoice, starsInvoice, success, t]);
+  }, [paymentMethod, sbpInvoice, cryptoInvoice, starsInvoice, success, user, setUser, setSubscription, t]);
 
   if (authStatus === 'loading') {
     return (
@@ -313,13 +327,20 @@ export function CheckoutPage() {
   const handleSbpConfirm = async () => {
     const invoiceId = sbpInvoice?.id || `sbp_${plan.id}`;
     setSubmitting(true);
+    setCheckFeedback(null);
     try {
       const res = await confirmSbpPayment(invoiceId);
       setSubscription(res.subscription, res.user.plan);
+      if (user) setUser({ ...user, plan: res.user.plan });
       setPaidMethodName(t('checkout.methodSbp'));
       setSuccess(true);
     } catch (err) {
       console.error('Failed to confirm SBP payment:', err);
+      setCheckFeedback({
+        method: 'sbp',
+        type: 'warning',
+        message: 'Не удалось подтвердить перевод через СБП. Повторите попытку через несколько секунд.',
+      });
     } finally {
       setSubmitting(false);
     }
@@ -329,13 +350,20 @@ export function CheckoutPage() {
   const handleCryptoConfirm = async () => {
     const invoiceId = cryptoInvoice?.id || `crypto_${plan.id}`;
     setSubmitting(true);
+    setCheckFeedback(null);
     try {
       const res = await confirmCryptoPayment(invoiceId, txHashInput.trim() || undefined);
       setSubscription(res.subscription, res.user.plan);
+      if (user) setUser({ ...user, plan: res.user.plan });
       setPaidMethodName(t('checkout.methodCrypto'));
       setSuccess(true);
     } catch (err) {
       console.error('Failed to confirm Crypto payment:', err);
+      setCheckFeedback({
+        method: 'crypto',
+        type: 'warning',
+        message: 'Платёж пока обрабатывается сетью. Если вы перевели средства, вставьте TxID (хеш) выше или повторите проверку через 1–2 минуты.',
+      });
     } finally {
       setSubmitting(false);
     }
@@ -345,13 +373,20 @@ export function CheckoutPage() {
   const handleStarsConfirm = async () => {
     const invoiceId = starsInvoice?.id || `stars_${plan.id}`;
     setSubmitting(true);
+    setCheckFeedback(null);
     try {
       const res = await confirmTelegramStarsPayment(invoiceId);
       setSubscription(res.subscription, res.user.plan);
+      if (user) setUser({ ...user, plan: res.user.plan });
       setPaidMethodName(t('checkout.methodStars'));
       setSuccess(true);
     } catch (err) {
       console.error('Failed to confirm Stars payment:', err);
+      setCheckFeedback({
+        method: 'stars',
+        type: 'warning',
+        message: `Оплата Stars пока не поступила. Оплатите счёт в Telegram (@${botUsername}) и нажмите кнопку повторно.`,
+      });
     } finally {
       setSubmitting(false);
     }
@@ -528,7 +563,10 @@ export function CheckoutPage() {
               <button
                 type="button"
                 aria-pressed={paymentMethod === 'sbp'}
-                onClick={() => setPaymentMethod('sbp')}
+                onClick={() => {
+                  setPaymentMethod('sbp');
+                  setCheckFeedback(null);
+                }}
                 className={cn(
                   'group flex flex-col items-start gap-2.5 rounded-2xl p-4 border text-left transition-all relative overflow-hidden',
                   paymentMethod === 'sbp'
@@ -556,7 +594,10 @@ export function CheckoutPage() {
               <button
                 type="button"
                 aria-pressed={paymentMethod === 'crypto'}
-                onClick={() => setPaymentMethod('crypto')}
+                onClick={() => {
+                  setPaymentMethod('crypto');
+                  setCheckFeedback(null);
+                }}
                 className={cn(
                   'group flex flex-col items-start gap-2.5 rounded-2xl p-4 border text-left transition-all relative overflow-hidden',
                   paymentMethod === 'crypto'
@@ -584,7 +625,10 @@ export function CheckoutPage() {
               <button
                 type="button"
                 aria-pressed={paymentMethod === 'stars'}
-                onClick={() => setPaymentMethod('stars')}
+                onClick={() => {
+                  setPaymentMethod('stars');
+                  setCheckFeedback(null);
+                }}
                 className={cn(
                   'group flex flex-col items-start gap-2.5 rounded-2xl p-4 border text-left transition-all relative overflow-hidden',
                   paymentMethod === 'stars'
@@ -723,6 +767,26 @@ export function CheckoutPage() {
                 </div>
               </div>
 
+              {/* Статус проверки СБП */}
+              <div className="flex items-center justify-between px-3.5 py-2.5 rounded-xl bg-canvas border border-stroke/70 text-xs">
+                <div className="flex items-center gap-2">
+                  <span className="size-2 rounded-full bg-amber-500 animate-pulse" />
+                  <span className="text-muted">
+                    Статус: <strong className="text-text font-medium">Ожидание перевода в банке</strong>
+                  </span>
+                </div>
+                <span className="text-[11px] text-muted font-mono">
+                  Автопроверка каждые 3 сек
+                </span>
+              </div>
+
+              {checkFeedback && checkFeedback.method === 'sbp' && (
+                <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/30 text-xs text-amber-600 dark:text-amber-400 flex items-start gap-2">
+                  <span className="shrink-0 mt-0.5">ℹ️</span>
+                  <span>{checkFeedback.message}</span>
+                </div>
+              )}
+
               {/* Кнопки действий */}
               <div className="flex flex-col sm:flex-row gap-3 pt-2">
                 {sbpInvoice?.deepLink && (
@@ -741,9 +805,10 @@ export function CheckoutPage() {
                   type="button"
                   variant={sbpInvoice?.deepLink ? 'outline' : 'primary'}
                   className={cn(
-                    'h-11 rounded-xl font-semibold text-sm',
+                    'h-11 rounded-xl font-semibold text-sm shadow-sm transition-all',
                     sbpInvoice?.deepLink ? 'flex-1' : 'w-full',
                   )}
+                  aria-label={t('checkout.sbpConfirm')}
                   disabled={submitting}
                   onClick={handleSbpConfirm}
                 >
@@ -753,7 +818,11 @@ export function CheckoutPage() {
                       <span>{t('checkout.sbpChecking')}</span>
                     </span>
                   ) : (
-                    <span>{t('checkout.sbpConfirm')}</span>
+                    <span className="flex items-center gap-2">
+                      <span className="text-base leading-none">🔄</span>
+                      <span>Проверить оплату СБП</span>
+                      <span className="sr-only">{t('checkout.sbpConfirm')}</span>
+                    </span>
                   )}
                 </Button>
               </div>
@@ -1007,12 +1076,33 @@ export function CheckoutPage() {
                 />
               </div>
 
+              {/* Статус проверки Crypto */}
+              <div className="flex items-center justify-between px-3.5 py-2.5 rounded-xl bg-canvas border border-stroke/70 text-xs">
+                <div className="flex items-center gap-2">
+                  <span className="size-2 rounded-full bg-accent animate-pulse" />
+                  <span className="text-muted">
+                    Статус: <strong className="text-text font-medium">Ожидание депозита</strong>
+                  </span>
+                </div>
+                <span className="text-[11px] text-muted font-mono">
+                  CryptoCloud & Блокчейн
+                </span>
+              </div>
+
+              {checkFeedback && checkFeedback.method === 'crypto' && (
+                <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/30 text-xs text-amber-600 dark:text-amber-400 flex items-start gap-2">
+                  <span className="shrink-0 mt-0.5">ℹ️</span>
+                  <span>{checkFeedback.message}</span>
+                </div>
+              )}
+
               {/* Кнопка подтверждения */}
               <Button
                 type="button"
                 variant="primary"
                 size="lg"
-                className="w-full h-11 font-semibold text-sm rounded-xl shadow-sm"
+                className="w-full h-11 font-semibold text-sm rounded-xl shadow-sm transition-all"
+                aria-label={t('checkout.cryptoConfirm')}
                 disabled={submitting}
                 onClick={handleCryptoConfirm}
               >
@@ -1022,7 +1112,11 @@ export function CheckoutPage() {
                     <span>{t('checkout.cryptoChecking')}</span>
                   </span>
                 ) : (
-                  <span>{t('checkout.cryptoConfirm')}</span>
+                  <span className="flex items-center gap-2">
+                    <span className="text-base leading-none">🔄</span>
+                    <span>Проверить оплату криптовалютой</span>
+                    <span className="sr-only">{t('checkout.cryptoConfirm')}</span>
+                  </span>
                 )}
               </Button>
             </div>
@@ -1088,6 +1182,26 @@ export function CheckoutPage() {
                 </div>
               </div>
 
+              {/* Статус проверки Stars */}
+              <div className="flex items-center justify-between px-3.5 py-2.5 rounded-xl bg-canvas border border-stroke/70 text-xs">
+                <div className="flex items-center gap-2">
+                  <span className="size-2 rounded-full bg-amber-500 animate-pulse" />
+                  <span className="text-muted">
+                    Статус: <strong className="text-text font-medium">Ожидание оплаты в боте</strong>
+                  </span>
+                </div>
+                <span className="text-[11px] text-muted font-mono">
+                  Синхронизация с Telegram
+                </span>
+              </div>
+
+              {checkFeedback && checkFeedback.method === 'stars' && (
+                <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/30 text-xs text-amber-600 dark:text-amber-400 flex items-start gap-2">
+                  <span className="shrink-0 mt-0.5">ℹ️</span>
+                  <span>{checkFeedback.message}</span>
+                </div>
+              )}
+
               {/* Кнопки перехода в Telegram и подтверждения */}
               <div className="flex flex-col w-full gap-3 pt-2">
                 <a
@@ -1104,7 +1218,8 @@ export function CheckoutPage() {
                   type="button"
                   variant="outline"
                   size="lg"
-                  className="w-full h-11 font-semibold text-sm rounded-xl"
+                  className="w-full h-11 font-semibold text-sm rounded-xl border-accent/40 hover:bg-accent/10 transition-all"
+                  aria-label={t('checkout.starsConfirm')}
                   disabled={submitting}
                   onClick={handleStarsConfirm}
                 >
@@ -1114,7 +1229,11 @@ export function CheckoutPage() {
                       <span>{t('checkout.starsChecking')}</span>
                     </span>
                   ) : (
-                    <span>{t('checkout.starsConfirm')}</span>
+                    <span className="flex items-center gap-2">
+                      <span className="text-base leading-none">🔄</span>
+                      <span>Проверить оплату Stars</span>
+                      <span className="sr-only">{t('checkout.starsConfirm')}</span>
+                    </span>
                   )}
                 </Button>
               </div>

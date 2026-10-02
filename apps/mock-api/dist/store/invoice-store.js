@@ -119,8 +119,8 @@ export function createInvoiceStore(file) {
             persist();
             return updated;
         },
-        createCryptoInvoice(userId, planId, currency, amountUsd, cryptoCloudUrl, cryptoCloudInvoiceId) {
-            const id = `crypto_${Date.now()}_${crypto.randomBytes(4).toString('hex')}`;
+        createCryptoInvoice(userId, planId, currency, amountUsd, cryptoCloudUrl, cryptoCloudInvoiceId, customId) {
+            const id = customId || `crypto_${Date.now()}_${crypto.randomBytes(4).toString('hex')}`;
             const expiresAt = new Date(Date.now() + 30 * 60 * 1000).toISOString();
             const amount = currency === 'TON'
                 ? +(amountUsd / 5.4).toFixed(2)
@@ -161,12 +161,31 @@ export function createInvoiceStore(file) {
         getCryptoInvoice(id) {
             return cryptoInvoices.get(id);
         },
-        markCryptoPaid(id) {
-            const invoice = cryptoInvoices.get(id);
+        findCryptoInvoice(identifier) {
+            if (!identifier)
+                return undefined;
+            const direct = cryptoInvoices.get(identifier);
+            if (direct)
+                return direct;
+            for (const inv of cryptoInvoices.values()) {
+                if (inv.id === identifier ||
+                    inv.cryptoCloudInvoiceId === identifier ||
+                    (inv.cryptoCloudUrl && inv.cryptoCloudUrl.includes(identifier))) {
+                    return inv;
+                }
+            }
+            return undefined;
+        },
+        markCryptoPaid(id, txHash) {
+            const invoice = this.findCryptoInvoice(id) ?? cryptoInvoices.get(id);
             if (!invoice)
                 return undefined;
-            const updated = { ...invoice, status: 'paid' };
-            cryptoInvoices.set(id, updated);
+            const updated = {
+                ...invoice,
+                status: 'paid',
+                ...(txHash ? { txHash } : {}),
+            };
+            cryptoInvoices.set(invoice.id, updated);
             persist();
             return updated;
         },

@@ -26,9 +26,11 @@ export interface InvoiceStore {
     amountUsd: number,
     cryptoCloudUrl?: string,
     cryptoCloudInvoiceId?: string,
+    customId?: string,
   ): CryptoInvoice;
   getCryptoInvoice(id: string): CryptoInvoice | undefined;
-  markCryptoPaid(id: string): CryptoInvoice | undefined;
+  findCryptoInvoice(identifier: string): CryptoInvoice | undefined;
+  markCryptoPaid(id: string, txHash?: string): CryptoInvoice | undefined;
 }
 
 interface InvoiceSnapshot {
@@ -174,8 +176,9 @@ export function createInvoiceStore(file?: string): InvoiceStore {
       amountUsd: number,
       cryptoCloudUrl?: string,
       cryptoCloudInvoiceId?: string,
+      customId?: string,
     ): CryptoInvoice {
-      const id = `crypto_${Date.now()}_${crypto.randomBytes(4).toString('hex')}`;
+      const id = customId || `crypto_${Date.now()}_${crypto.randomBytes(4).toString('hex')}`;
       const expiresAt = new Date(Date.now() + 30 * 60 * 1000).toISOString();
       const amount =
         currency === 'TON'
@@ -227,11 +230,31 @@ export function createInvoiceStore(file?: string): InvoiceStore {
       return cryptoInvoices.get(id);
     },
 
-    markCryptoPaid(id: string): CryptoInvoice | undefined {
-      const invoice = cryptoInvoices.get(id);
+    findCryptoInvoice(identifier: string): CryptoInvoice | undefined {
+      if (!identifier) return undefined;
+      const direct = cryptoInvoices.get(identifier);
+      if (direct) return direct;
+      for (const inv of cryptoInvoices.values()) {
+        if (
+          inv.id === identifier ||
+          inv.cryptoCloudInvoiceId === identifier ||
+          (inv.cryptoCloudUrl && inv.cryptoCloudUrl.includes(identifier))
+        ) {
+          return inv;
+        }
+      }
+      return undefined;
+    },
+
+    markCryptoPaid(id: string, txHash?: string): CryptoInvoice | undefined {
+      const invoice = this.findCryptoInvoice(id) ?? cryptoInvoices.get(id);
       if (!invoice) return undefined;
-      const updated: CryptoInvoice = { ...invoice, status: 'paid' };
-      cryptoInvoices.set(id, updated);
+      const updated: CryptoInvoice = {
+        ...invoice,
+        status: 'paid',
+        ...(txHash ? { txHash } : {}),
+      };
+      cryptoInvoices.set(invoice.id, updated);
       persist();
       return updated;
     },
