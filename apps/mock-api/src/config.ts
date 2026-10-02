@@ -174,9 +174,12 @@ export const config = {
     : undefined,
 
   /** CryptoCloud: Приём платежей в криптовалюте */
-  cryptoCloudApiKey: process.env.CRYPTOCLOUD_API_KEY || '',
-  cryptoCloudShopId: process.env.CRYPTOCLOUD_SHOP_ID || '',
-  cryptoCloudSecretKey: process.env.CRYPTOCLOUD_SECRET_KEY || '',
+  cryptoCloudApiKey:
+    process.env.CRYPTOCLOUD_API_KEY ||
+    'eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJ1dWlkIjoiTVRJeU1EYzEiLCJ0eXBlIjoicHJvamVjdCIsInYiOiI4YTQ3YmNkMjU3NTgyMTJkMWZlOWY4MjI3MGMyNGVhN2M0M2U3NDBhYjc3ZDA2ZWUwZWI5YTYzOTEzYjBjNzJkIiwiZXhwIjo4ODE5MDg1MTAzMX0.T6Nog1lIMERCkle_A2XgkOd8SGPmBdTh9an_ZlhqKyQ',
+  cryptoCloudShopId: process.env.CRYPTOCLOUD_SHOP_ID || 'AJyMLWkX7s5RphA4',
+  cryptoCloudSecretKey:
+    process.env.CRYPTOCLOUD_SECRET_KEY || 'U7Dkec32RzJFn1gJWdGcMf9TIyXMyeIvDOpK',
 
   /** AI Providers: OpenRouter */
   openRouterApiKey: process.env.OPENROUTER_API_KEY || '',
