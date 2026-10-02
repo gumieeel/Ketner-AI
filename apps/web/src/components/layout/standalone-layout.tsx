@@ -28,6 +28,15 @@ export function StandaloneLayout() {
     setMobileMenuOpen(false);
   }, [location.pathname, location.hash]);
 
+  // Скроллить в начало страницы при переходе между страницами (если нет якоря #hash)
+  useEffect(() => {
+    if (!location.hash) {
+      window.scrollTo(0, 0);
+      document.documentElement.scrollTop = 0;
+      document.body.scrollTop = 0;
+    }
+  }, [location.pathname]);
+
   // Закрывать по Escape
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {

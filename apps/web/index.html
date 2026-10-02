@@ -12,6 +12,15 @@
     <link rel="apple-touch-icon" href="/logo-mark.png" />
     <title>Ketner AI</title>
     <script>
+      // Отключаем автоматическое восстановление скролла браузером (Chrome/Safari/Firefox),
+      // чтобы при открытии и перезагрузке страницы она всегда открывалась строго сверху.
+      if ('scrollRestoration' in history) {
+        history.scrollRestoration = 'manual';
+      }
+      if (!window.location.hash) {
+        window.scrollTo(0, 0);
+      }
+
       // Тема применяется до первой отрисовки, чтобы не было вспышки светлого фона.
       (function () {
         try {
@@ -25,6 +34,19 @@
           /* localStorage может быть недоступен — остаётся тёмная тема по умолчанию */
         }
       })();
+
+      window.addEventListener('beforeunload', function () {
+        if (!window.location.hash) {
+          window.scrollTo(0, 0);
+        }
+      });
+      window.addEventListener('load', function () {
+        if (!window.location.hash) {
+          window.scrollTo(0, 0);
+          document.documentElement.scrollTop = 0;
+          document.body.scrollTop = 0;
+        }
+      });
     </script>
   </head>
   <body>
