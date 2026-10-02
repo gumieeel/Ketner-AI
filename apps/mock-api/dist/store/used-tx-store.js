@@ -71,6 +71,10 @@ export function createUsedTxStore(file) {
         list() {
             return Array.from(map.values());
         },
+        clear() {
+            map.clear();
+            persist();
+        },
     };
 }
 export const usedTxStore = createUsedTxStore(config.usedTxStoreFile);

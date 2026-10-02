@@ -146,7 +146,7 @@ test('billing: верификация крипто-платежей отклон
   assert.equal(testInvalidRes.status, 400);
 
   // 3. Успешное подтверждение с валидным хешем
-  const validTxHash = 'TEST_VALID_TX_1234567890abcdef1234567890abcdef1234567890abcdef1234';
+  const validTxHash = `TEST_VALID_TX_${Date.now()}_${Math.random().toString(36).slice(2)}`;
   const validConfirmRes = await fetch(`${server.baseUrl}/api/billing/crypto/confirm/${invoice.id}`, {
     method: 'POST',
     headers: {

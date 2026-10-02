@@ -17,6 +17,7 @@ export interface UsedTxStore {
   recordUsedTx(record: UsedTxRecord): void;
   getUsedTx(txHash: string): UsedTxRecord | undefined;
   list(): UsedTxRecord[];
+  clear(): void;
 }
 
 function readSnapshot(file: string): UsedTxRecord[] {
@@ -90,6 +91,11 @@ export function createUsedTxStore(file?: string): UsedTxStore {
 
     list(): UsedTxRecord[] {
       return Array.from(map.values());
+    },
+
+    clear(): void {
+      map.clear();
+      persist();
     },
   };
 }
