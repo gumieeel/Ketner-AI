@@ -410,8 +410,8 @@ export function installFakeApi(options: FakeApiOptions = {}): FakeApi {
 
       if (url === '/api/billing/telegram-stars/create-invoice' && method === 'POST') {
         const planId = (body.planId as string) || 'gpt-pro';
-        const priceRub = planId === 'ultra' ? 2499 : planId === 'pro' ? 1990 : 1199;
-        const starsAmount = planId === 'ultra' ? 1350 : planId === 'pro' ? 1100 : 650;
+        const priceRub = planId === 'ultra' ? 4890 : planId === 'pro' ? 2490 : 890;
+        const starsAmount = planId === 'ultra' ? 2650 : planId === 'pro' ? 1350 : 500;
         return json({
           invoice: {
             id: 'stars_mock_123',
@@ -432,8 +432,8 @@ export function installFakeApi(options: FakeApiOptions = {}): FakeApi {
           invoice: {
             id: 'stars_mock_123',
             planId: 'gpt-pro',
-            priceRub: 1199,
-            starsAmount: 650,
+            priceRub: 2490,
+            starsAmount: 1350,
             botUsername: 'Robo_kassa_bot',
             botDeepLink: 'https://t.me/Robo_kassa_bot?start=pay_gpt-pro_demo-user',
             status: 'pending',
@@ -459,8 +459,8 @@ export function installFakeApi(options: FakeApiOptions = {}): FakeApi {
           invoice: {
             id: 'stars_mock_123',
             planId: 'gpt-pro',
-            priceRub: 1199,
-            starsAmount: 650,
+            priceRub: 2490,
+            starsAmount: 1350,
             botUsername: 'Robo_kassa_bot',
             botDeepLink: 'https://t.me/Robo_kassa_bot?start=pay_gpt-pro_demo-user',
             status: 'paid',
@@ -472,7 +472,7 @@ export function installFakeApi(options: FakeApiOptions = {}): FakeApi {
       if (url === '/api/billing/crypto/create-invoice' && method === 'POST') {
         const planId = (body.planId as string) || 'plus';
         const currency = (body.currency as string) || 'USDT_TRC20';
-        const amountUsd = planId === 'ultra' ? 30 : planId === 'pro' ? 20 : 10;
+        const amountUsd = planId === 'ultra' ? 49 : planId === 'pro' ? 25 : 9;
         const amount =
           currency === 'TON'
             ? +(amountUsd / 5.4).toFixed(2)

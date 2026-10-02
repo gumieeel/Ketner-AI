@@ -12,26 +12,47 @@ import type { PlanId, PlanItem, User } from '../types.js';
 
 /**
  * Расчёт стоимости в Telegram Stars (⭐️ XTR).
- * Точно соответствует расчёту на сайте Ketner AI:
- * - Plus (10 $ / 990 ₽) -> 550 ⭐️
- * - Pro (20 $ / 1 990 ₽) -> 650 ⭐️
- * - Ultra (30 $ / 2 990 ₽) -> 1 350 ⭐️
+ * Точно соответствует курсу $0.0185 за 1 звезду и тарифам на сайте Ketner AI:
+ * - Plus (9 $ / 890 ₽ / 990 ₽) -> 500 ⭐️
+ * - Pro (25 $ / 2 490 ₽ / 1 990 ₽) -> 1 350 ⭐️
+ * - Ultra (49 $ [скидка с $59] / 4 890 ₽ / 2 990 ₽) -> 2 650 ⭐️
  */
 export function calculateStars(price: number): number {
   if (price <= 0) return 0;
-  // Ultra ($30 / 2990 ₽ / 2499 ₽ / $40 / 49$)
-  if (price === 30 || price === 39 || price === 40 || price === 2499 || price === 2990 || price === 49) {
+  // Ultra ($49 / $59 / 4890 ₽ / 2990 ₽ / 2499 ₽ / $30 / $39 / $40)
+  if (
+    price === 49 ||
+    price === 59 ||
+    price === 4890 ||
+    price === 2990 ||
+    price === 2499 ||
+    price === 30 ||
+    price === 39 ||
+    price === 40
+  ) {
+    return 2650;
+  }
+  // Pro ($25 / 2490 ₽ / 1990 ₽ / 1999 ₽ / 1199 ₽ / $20 / $29)
+  if (
+    price === 25 ||
+    price === 2490 ||
+    price === 1990 ||
+    price === 1999 ||
+    price === 1199 ||
+    price === 20 ||
+    price === 29
+  ) {
     return 1350;
   }
-  // Pro ($20 / 1990 ₽ / 1199 ₽ / $29)
-  if (price === 20 || price === 29 || price === 1199 || price === 1990 || price === 1999) {
-    return 650;
+  // Plus ($9 / 890 ₽ / 990 ₽ / 999 ₽ / $10)
+  if (price === 9 || price === 890 || price === 990 || price === 999 || price === 10) {
+    return 500;
   }
-  // Plus ($10 / 990 ₽ / $9)
-  if (price === 10 || price === 9 || price === 990 || price === 999) {
-    return 550;
+  // Fallback: курс 0.0185 USD за 1 звезду (при ценах в рублях переводим по ~99 ₽/$)
+  if (price <= 100) {
+    return Math.round(price / 0.0185);
   }
-  return Math.round(price * 35);
+  return Math.round((price / 99) / 0.0185);
 }
 
 export function getPlanItem(planId: string): PlanItem | undefined {
@@ -878,9 +899,9 @@ export class TelegramBotService {
           '• ⚡ <b>СБП (Система быстрых платежей)</b> — моментальная оплата банковскими приложениями РФ по QR-коду с 0% комиссии.',
           '',
           '💎 <b>Актуальные тарифы:</b>',
-          '• <b>Plus</b> (<b>550 ⭐️</b> / 990 ₽) — быстрые модели GPT-4o mini, DeepSeek V4.1 Flash, Claude Haiku 4.5',
-          '• <b>Pro</b> (<b>650 ⭐️</b> / 1 990 ₽) — флагманы GPT-6 Astra, Claude Fable 5.1, Gemini 2.5 Pro',
-          '• <b>Ultra</b> (<b>1 350 ⭐️</b> / 2 990 ₽) — максимум скорости, VIP-приоритет, безлимит Fair Use',
+          '• <b>Plus</b> ($9 / <b>500 ⭐️</b> / 890 ₽) — быстрые модели GPT-4o mini, DeepSeek V4.1 Flash, Claude Haiku 4.5',
+          '• <b>Pro</b> ($25 / <b>1 350 ⭐️</b> / 2 490 ₽) — флагманы GPT-6 Astra, Claude Fable 5.1, Gemini 2.5 Pro',
+          '• <b>Ultra</b> ($49 [скидка] / <b>2 650 ⭐️</b> / 4 890 ₽) — максимум скорости, VIP-приоритет, безлимит Fair Use',
           '',
           '💡 <i>Чтобы привязать этот Telegram к вашему аккаунту на сайте, нажмите кнопку «Привязать аккаунт» ниже.</i>',
         ].join('\n');
@@ -1032,15 +1053,15 @@ export class TelegramBotService {
     const plansText = [
       '💎 <b>Тарифные планы Ketner AI</b>',
       '',
-      '1️⃣ <b>PLUS</b> — <b>990 ₽/мес</b> или <b>550 ⭐️</b>',
+      '1️⃣ <b>PLUS</b> — <b>$9/мес</b> (~890 ₽) или <b>500 ⭐️</b>',
       '• Модели: DeepSeek v4.1 Flash, Claude Haiku 4.5, GPT-4o',
       '• Быстрая скорость генерации и базовый контекст',
       '',
-      '2️⃣ <b>PRO</b> (⭐️ Популярный) — <b>1 990 ₽/мес</b> или <b>650 ⭐️</b>',
+      '2️⃣ <b>PRO</b> (⭐️ Популярный) — <b>$25/мес</b> (~2 490 ₽) или <b>1 350 ⭐️</b>',
       '• Модели: GPT-6 Astra, Claude Fable 5.1, Gemini 2.5 Pro, Grok 4.7',
       '• Все флагманские модели без отдельных подписок',
       '',
-      '3️⃣ <b>ULTRA</b> (🔥 Скидка 25%) — <b>2 990 ₽/мес</b> или <b>1 350 ⭐️</b>',
+      '3️⃣ <b>ULTRA</b> (🔥 Скидка $10 вместо $59) — <b>$49/мес</b> (~4 890 ₽) или <b>2 650 ⭐️</b>',
       '• Все топовые модели на 100% мощности без ограничений',
       '• Максимальный контекст диалога и высший VIP-приоритет',
       '',
@@ -1050,9 +1071,9 @@ export class TelegramBotService {
     await this.sendMessage(chatId, plansText, {
       reply_markup: {
         inline_keyboard: [
-          [{ text: '⭐️ Оплатить Plus (550 ⭐️)', callback_data: 'pay_stars:plus' }],
-          [{ text: '⭐️ Оплатить Pro (650 ⭐️)', callback_data: 'pay_stars:pro' }],
-          [{ text: '⭐️ Оплатить Ultra (1 350 ⭐️)', callback_data: 'pay_stars:ultra' }],
+          [{ text: '⭐️ Оплатить Plus (500 ⭐️)', callback_data: 'pay_stars:plus' }],
+          [{ text: '⭐️ Оплатить Pro (1 350 ⭐️)', callback_data: 'pay_stars:pro' }],
+          [{ text: '⭐️ Оплатить Ultra (2 650 ⭐️)', callback_data: 'pay_stars:ultra' }],
           [{ text: '⚡ Оплатить через СБП (0% комиссии)', callback_data: 'cmd_sbp' }],
           [{ text: '🌐 Оплатить на сайте (СБП / Крипта)', url: `${config.webAppUrl}/pricing` }],
         ],
@@ -1072,9 +1093,9 @@ export class TelegramBotService {
     await this.sendMessage(chatId, text, {
       reply_markup: {
         inline_keyboard: [
-          [{ text: '⚡ СБП: Plus — 990 ₽', callback_data: `pay_sbp:plus:${target}` }],
-          [{ text: '⚡ СБП: Pro — 1 990 ₽', callback_data: `pay_sbp:pro:${target}` }],
-          [{ text: '⚡ СБП: Ultra — 2 990 ₽', callback_data: `pay_sbp:ultra:${target}` }],
+          [{ text: '⚡ СБП: Plus — 890 ₽', callback_data: `pay_sbp:plus:${target}` }],
+          [{ text: '⚡ СБП: Pro — 2 490 ₽', callback_data: `pay_sbp:pro:${target}` }],
+          [{ text: '⚡ СБП: Ultra — 4 890 ₽', callback_data: `pay_sbp:ultra:${target}` }],
           [{ text: '« Назад к тарифам', callback_data: 'cmd_plans' }],
         ],
       },

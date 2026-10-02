@@ -46,10 +46,34 @@ import { cn } from '@/lib/cn';
 
 function calculateStars(price: number): number {
   if (price <= 0) return 0;
-  if (price === 30 || price === 39 || price === 2499 || price === 2990 || price === 49) return 1350;
-  if (price === 20 || price === 29 || price === 1199 || price === 1990 || price === 1999) return 650;
-  if (price === 10 || price === 9 || price === 990 || price === 999) return 550;
-  return Math.round(price * 35);
+  if (
+    price === 49 ||
+    price === 59 ||
+    price === 4890 ||
+    price === 2990 ||
+    price === 2499 ||
+    price === 30 ||
+    price === 39 ||
+    price === 40
+  ) {
+    return 2650;
+  }
+  if (
+    price === 25 ||
+    price === 2490 ||
+    price === 1990 ||
+    price === 1999 ||
+    price === 1199 ||
+    price === 20 ||
+    price === 29
+  ) {
+    return 1350;
+  }
+  if (price === 9 || price === 890 || price === 990 || price === 999 || price === 10) {
+    return 500;
+  }
+  if (price <= 100) return Math.round(price / 0.0185);
+  return Math.round((price / 99) / 0.0185);
 }
 
 function calculateRubPrice(priceUsd: number): number {

@@ -265,8 +265,8 @@ describe('billing-flow: каталог тарифов, чекаут и упра�
     const starsTab = screen.getByRole('button', { name: /Telegram Stars/i });
     fireEvent.click(starsTab);
 
-    // Должны появиться 1350 Stars и кнопка перехода в бота
-    expect(await screen.findByText('1350')).toBeInTheDocument();
+    // Должны появиться 2650 Stars и кнопка перехода в бота
+    expect(await screen.findByText('2650')).toBeInTheDocument();
     expect(screen.getByRole('link', { name: /Оплатить в Telegram/i })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Подтвердить оплату Stars/i })).toBeInTheDocument();
   });

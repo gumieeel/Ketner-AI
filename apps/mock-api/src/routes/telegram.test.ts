@@ -179,7 +179,7 @@ test('billing: Telegram Stars (создание счёта в ⭐️ XTR и по
   assert.ok(invoice.id.startsWith('stars_'));
   assert.equal(invoice.planId, 'ultra');
   assert.equal(invoice.priceRub, 2990);
-  assert.equal(invoice.starsAmount, 1350); // 1350 ⭐️ для 2990 ₽ (соответствует сайту)
+  assert.equal(invoice.starsAmount, 2650); // 2650 ⭐️ для Ultra (соответствует $49 по курсу $0.0185)
   assert.ok(invoice.botDeepLink.includes('t.me/'));
   assert.ok(invoice.botDeepLink.includes('pay_ultra'));
 
@@ -316,15 +316,21 @@ test('telegram support bot: создание тикета, отправка ад
 });
 
 test('telegram: расчёт звёзд calculateStars в точности совпадает со значениями на сайте', () => {
-  // Plus
-  assert.equal(calculateStars(990), 550);
-  assert.equal(calculateStars(10), 550);
-  // Pro
-  assert.equal(calculateStars(1990), 650);
-  assert.equal(calculateStars(20), 650);
-  // Ultra
-  assert.equal(calculateStars(2990), 1350);
-  assert.equal(calculateStars(30), 1350);
+  // Plus ($9 / 500 ⭐️)
+  assert.equal(calculateStars(9), 500);
+  assert.equal(calculateStars(890), 500);
+  assert.equal(calculateStars(990), 500);
+  assert.equal(calculateStars(10), 500);
+  // Pro ($25 / 1 350 ⭐️)
+  assert.equal(calculateStars(25), 1350);
+  assert.equal(calculateStars(2490), 1350);
+  assert.equal(calculateStars(1990), 1350);
+  assert.equal(calculateStars(20), 1350);
+  // Ultra ($49 / 2 650 ⭐️)
+  assert.equal(calculateStars(49), 2650);
+  assert.equal(calculateStars(4890), 2650);
+  assert.equal(calculateStars(2990), 2650);
+  assert.equal(calculateStars(30), 2650);
 });
 
 test('telegram: привязка аккаунта через /start link_<userId>, проверка /status и отвязка', async (t) => {
