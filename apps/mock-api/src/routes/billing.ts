@@ -526,8 +526,12 @@ export function createBillingRouter({
     });
   });
 
-  // Webhook от CryptoCloud
-  router.post('/billing/cryptocloud/webhook', (request: Request, response: Response) => {
+  // Webhook & Postback от CryptoCloud
+  const handleCryptoCloudWebhook = (request: Request, response: Response) => {
+    if (request.method === 'GET' || request.method === 'HEAD') {
+      response.json({ status: 'ok', service: 'cryptocloud-webhook' });
+      return;
+    }
     const status = String(request.body?.status || '').toLowerCase();
     const orderId = String(request.body?.order_id || request.body?.orderId || '');
     const invoiceUuid = String(request.body?.invoice_id || request.body?.uuid || '');
@@ -556,7 +560,17 @@ export function createBillingRouter({
     }
 
     response.json({ status: 'ok' });
-  });
+  };
+
+  router.use(
+    [
+      '/billing/cryptocloud/webhook',
+      '/billing/cryptocloud/callback',
+      '/billing/cryptocloud/postback',
+      '/billing/webhook',
+    ],
+    handleCryptoCloudWebhook,
+  );
 
   return router;
 }
