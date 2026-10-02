@@ -86,52 +86,97 @@ const KEYWORD_TEMPLATES: readonly AnswerTemplate[] = [
   {
     id: 'git-action-request',
     triggers: [
+      'как привязать',
+      'привязать репозиторий',
+      'как привязать репозитори',
+      'привязать репозитори',
+      'привязать папку',
+      'как привязать папку',
+      'как подключить репозитори',
+      'подключить репозитори',
+      'как подключить репозиторий',
+      'подключить репозиторий',
+      'как связать с github',
+      'как привязать гит',
+      'как привязать локальную папку',
+      'привязать локальную папку',
       'ты можешь привязать',
-      'а ты можешь привязать',
       'можешь привязать',
       'привяжи репозиторий',
-      'привяжи https',
-      'привяжи git',
-      'can you link repo',
+      'привяжи папку',
+      'как привязать проект',
+      'привязать проект',
+      'how to link repository',
+      'how to link folder',
+      'how to connect github',
+      'link repo',
+      'link folder',
     ],
     ru: [
-      'В Ketner AI теперь доступна **полная привязка локальных папок и Git-репозиториев**!',
+      '### Как привязать локальную папку или Git-репозиторий в Ketner AI',
       '',
-      'Нажмите на иконку скрепки 📎 или кнопку «Привязать папку / репо» над строкой ввода:',
+      'В Ketner AI встроен удобный инструмент **привязки проектов и кодовых баз** для совместной работы с ИИ:',
       '',
-      '1. **📁 Привязать локальную папку** — выберите любую директорию на вашем компьютере. Браузер прочитает файлы кода, а я проиндексирую структуру проекта.',
-      '2. **🐙 Привязать GitHub-репозиторий** — укажите ссылку на репозиторий GitHub (например, `https://github.com/facebook/react` или `owner/repo`).',
+      '**1. Где найти кнопку привязки:**',
+      'Прямо над строкой ввода сообщения нажмите на кнопку **«Привязать папку / репозиторий»** или значок скрепки 📎.',
       '',
-      'После привязки я буду видеть все файлы проекта, отвечать на вопросы по коду, искать нужные функции, компоненты и предлагать точные правки!',
+      '**2. Вариант 1: Локальная папка на вашем компьютере 📁**',
+      '- Перейдите на вкладку **«Локальная папка»**.',
+      '- Нажмите **«Выбрать локальную папку»** и укажите папку вашего проекта в проводнике Windows/Mac/Linux.',
+      '- Браузер безопасно прочитает структуру и файлы исходного кода (игнорируя тяжелые `node_modules` и бинарные файлы).',
+      '',
+      '**3. Вариант 2: GitHub-репозиторий 🐙**',
+      '- Перейдите на вкладку **«GitHub-репозиторий»**.',
+      '- Вставьте ссылку на репозиторий (например, `https://github.com/owner/repo` или `owner/repo`) и укажите ветку (`main`).',
+      '- Для приватных репозиториев можно ввести GitHub Personal Access Token.',
+      '- Нажмите кнопку **«Подключить репозиторий»**.',
+      '',
+      '**Что происходит после подключения:**',
+      'Над полем ввода появится зелёный бейдж с названием проекта и количеством проиндексированных файлов. ИИ получает доступ к дереву проекта и коду:',
+      '- 🔍 **Поиск по коду**: находит функции, компоненты, хуки и API-эндпоинты;',
+      '- 🛠️ **Разработка и рефакторинг**: пишет код с учётом ваших реальных зависимостей и архитектуры;',
+      '- 🏗️ **Анализ ошибок**: помогает отлаживать баги и проектировать новые модули.',
     ],
     en: [
-      'Ketner AI now features **full local folder and Git repository linking**!',
+      '### How to link a local folder or Git repository in Ketner AI',
       '',
-      'Click the paperclip 📎 icon or the "Link folder / repo" button above the input field:',
+      'Ketner AI includes native **workspace and codebase linking** for seamless collaboration with AI:',
       '',
-      '1. **📁 Link local folder** — select any directory on your computer to index codebase files.',
-      '2. **🐙 Link GitHub repository** — enter a GitHub repository link or owner/repo format.',
+      '**1. Where to find the link button:**',
+      'Click the **"Link folder / repo"** button or the paperclip 📎 icon directly above the message composer.',
       '',
-      'Once linked, I will have full project awareness: analyzing files, searching components, refactoring code, and answering architecture questions!',
+      '**2. Option 1: Local folder on your machine 📁**',
+      '- Select the **"Local folder"** tab.',
+      '- Click **"Select local folder"** and choose your project directory in the OS file browser.',
+      '- Your browser securely parses code files and directory tree while ignoring `node_modules` and build artifacts.',
+      '',
+      '**3. Option 2: GitHub repository 🐙**',
+      '- Select the **"GitHub repository"** tab.',
+      '- Paste the repository link (e.g. `https://github.com/owner/repo` or `owner/repo`) and branch (`main`).',
+      '- For private repos, you can supply a GitHub Personal Access Token.',
+      '- Click **"Connect repository"**.',
+      '',
+      '**Once linked:**',
+      'A badge appears above the composer showing the indexed project and file count. The AI has direct project context and can:',
+      '- 🔍 **Search code**: locate functions, components, API endpoints;',
+      '- 🛠️ **Refactor & code**: implement features tailored to your real types and dependencies;',
+      '- 🏗️ **Architectural analysis**: review design patterns, explain module flows, and fix bugs.',
     ],
   },
   {
-    id: 'git-repo',
+    id: 'git-terminal-guide',
     triggers: [
-      'как привязать репозитори',
-      'привязать репозитори',
-      'как привязать проект к git',
-      'подключить репозитори',
-      'как связать с github',
-      'как привязать гит',
-      'инструкция git',
-      'how to link repository',
-      'connect git repo',
+      'как сделать git init',
+      'команды git clone',
+      'как настроить git в терминале',
+      'команды терминала git',
+      'git remote add origin',
+      'how to git init',
     ],
     ru: [
-      '### Как привязать существующий проект к Git-репозиторию (GitHub / GitLab)',
+      '### Как инициализировать Git-репозиторий в терминале (команды Git)',
       '',
-      'Пошаговая инструкция для терминала:',
+      'Пошаговая инструкция для командной строки:',
       '',
       '**1. Перейдите в папку проекта и инициализируйте Git:**',
       '```bash',
@@ -167,7 +212,7 @@ const KEYWORD_TEMPLATES: readonly AnswerTemplate[] = [
       '💡 *Совет:* не забудьте создать файл `.gitignore`, чтобы исключить `node_modules/`, секретные файлы `.env` и артефакты сборки `dist/`.',
     ],
     en: [
-      '### How to link an existing project to a Git repository (GitHub / GitLab)',
+      '### How to initialize a Git repository in terminal (Git commands)',
       '',
       '**1. Initialize Git in your project folder:**',
       '```bash',
@@ -175,23 +220,23 @@ const KEYWORD_TEMPLATES: readonly AnswerTemplate[] = [
       'git init',
       '```',
       '',
-      '**2. Stage and commit your files:**',
+      '**2. Add files and make first commit:**',
       '```bash',
       'git add .',
       'git commit -m "Initial commit"',
       '```',
       '',
-      '**3. Set primary branch to `main`:**',
+      '**3. Set main branch:**',
       '```bash',
       'git branch -M main',
       '```',
       '',
-      '**4. Add remote origin:**',
+      '**4. Add remote repository:**',
       '```bash',
       'git remote add origin https://github.com/username/repository.git',
       '```',
       '',
-      '**5. Push code:**',
+      '**5. Push to remote:**',
       '```bash',
       'git push -u origin main',
       '```',
@@ -523,12 +568,97 @@ export function pickAnswer(
     files?: Array<{ path: string; size?: number; content?: string }>;
   },
 ): string {
-  // 1. Если привязана рабочая папка или репозиторий
+  const text = (prompt || '').toLowerCase();
+
+  // 1. Если пользователь спрашивает, как привязать репозиторий / папку:
+  const gitActionTemplate = KEYWORD_TEMPLATES.find((t) => t.id === 'git-action-request');
+  if (gitActionTemplate && gitActionTemplate.triggers.some((trigger) => text.includes(trigger))) {
+    return gitActionTemplate[language].join('\n');
+  }
+
+  // 2. Если привязана рабочая папка или репозиторий
   if (workspaceContext) {
     const isEn = language === 'en';
     const projName = workspaceContext.name;
     const count = workspaceContext.filesCount || (workspaceContext.files ? workspaceContext.files.length : 0);
-    const sampleFiles = workspaceContext.files?.slice(0, 8).map((f) => `- \`${f.path}\``).join('\n') || '';
+    const files = workspaceContext.files || [];
+
+    // Проверяем, спрашивает ли пользователь про конкретный файл
+    const matchedFile = files.find((f) => {
+      const baseName = f.path.split('/').pop()?.toLowerCase();
+      return (baseName && text.includes(baseName)) || text.includes(f.path.toLowerCase());
+    });
+
+    if (matchedFile && matchedFile.content) {
+      const snippet = matchedFile.content.slice(0, 1200);
+      if (isEn) {
+        return [
+          `### File Analysis: \`${matchedFile.path}\` (from workspace **${projName}**)`,
+          '',
+          '```',
+          snippet,
+          matchedFile.content.length > 1200 ? '\n// ... [truncated]' : '',
+          '```',
+          '',
+          `I reviewed \`${matchedFile.path}\`. How would you like me to refactor, debug, or extend this file?`,
+        ].filter(Boolean).join('\n');
+      }
+      return [
+        `### Анализ файла: \`${matchedFile.path}\` (из проекта **${projName}**)`,
+        '',
+        '```',
+        snippet,
+        matchedFile.content.length > 1200 ? '\n// ... [содержимое сокращено]' : '',
+        '```',
+        '',
+        `Я проанализировал файл \`${matchedFile.path}\`. Что именно требуется в нём доработать, исправить или протестировать?`,
+      ].filter(Boolean).join('\n');
+    }
+
+    // Проверяем, спрашивает ли пользователь про package.json или запуск / зависимости
+    const pkgFile = files.find((f) => f.path.toLowerCase().endsWith('package.json'));
+    if (
+      pkgFile &&
+      pkgFile.content &&
+      (text.includes('запуск') ||
+        text.includes('зависимост') ||
+        text.includes('скрипт') ||
+        text.includes('run') ||
+        text.includes('script') ||
+        text.includes('dependencies'))
+    ) {
+      try {
+        const parsed = JSON.parse(pkgFile.content);
+        const scripts = parsed.scripts
+          ? Object.entries(parsed.scripts)
+              .map(([k, v]) => `- \`npm run ${k}\`: \`${v}\``)
+              .join('\n')
+          : '';
+        const deps = parsed.dependencies ? Object.keys(parsed.dependencies).slice(0, 8).join(', ') : '';
+
+        if (isEn) {
+          return [
+            `### Project **${projName}** Configuration (\`package.json\`):`,
+            '',
+            scripts ? `**Available Scripts:**\n${scripts}\n` : '',
+            deps ? `**Key Dependencies:** ${deps}\n` : '',
+            'Ready to run, debug, or write commands for your project.',
+          ].filter(Boolean).join('\n');
+        }
+        return [
+          `### Конфигурация проекта **${projName}** (\`package.json\`):`,
+          '',
+          scripts ? `**Доступные команды запуска и сборки:**\n${scripts}\n` : '',
+          deps ? `**Ключевые зависимости:** ${deps}\n` : '',
+          'Готов запустить сценарии, оптимизировать зависимости или дописать код.',
+        ].filter(Boolean).join('\n');
+      } catch {
+        // fall through
+      }
+    }
+
+    // Общий ответ по привязанному проекту с деревом файлов
+    const sampleFiles = files.slice(0, 10).map((f) => `- \`${f.path}\``).join('\n') || '';
 
     if (isEn) {
       return [
@@ -536,7 +666,7 @@ export function pickAnswer(
         '',
         '### Project Context Loaded:',
         sampleFiles ? `${sampleFiles}\n` : '',
-        'I am analyzing your codebase and ready to assist you:',
+        'I have indexed your codebase and I am ready to work with your files:',
         '- **Code architecture & walkthrough**: explain dependencies and file structure',
         '- **Implementation & refactoring**: write idiomatic functions and fix errors',
         '- **Search**: locate classes, handlers, hooks, and endpoints across files',
@@ -591,7 +721,6 @@ export function pickAnswer(
     ].join('\n');
   }
 
-  const text = prompt.toLowerCase();
   const matched = KEYWORD_TEMPLATES.find((template) =>
     template.triggers.some((trigger) => text.includes(trigger)),
   );

@@ -26,6 +26,18 @@ function loadInitialWorkspace(): WorkspaceContext | null {
   }
 }
 
+function sanitizeWorkspaceForStorage(ws: WorkspaceContext): WorkspaceContext {
+  return {
+    ...ws,
+    files: (ws.files || []).map((f) => ({
+      path: f.path,
+      size: f.size,
+      language: f.language,
+      content: f.content && f.content.length > 4000 ? f.content.slice(0, 4000) : f.content,
+    })),
+  };
+}
+
 export const useWorkspace = create<WorkspaceStore>((set) => ({
   activeWorkspace: loadInitialWorkspace(),
   selectedFile: null,
@@ -35,7 +47,7 @@ export const useWorkspace = create<WorkspaceStore>((set) => ({
   setWorkspace: (workspace) => {
     try {
       if (workspace) {
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(workspace));
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(sanitizeWorkspaceForStorage(workspace)));
       } else {
         localStorage.removeItem(STORAGE_KEY);
       }

@@ -96,14 +96,15 @@ export interface WorkspaceFile {
 }
 
 export interface WorkspaceContext {
-  id: string;
+  id?: string;
   type: WorkspaceType;
   name: string;
-  pathOrUrl: string;
+  pathOrUrl?: string;
   branch?: string;
-  filesCount: number;
+  filesCount?: number;
   files?: WorkspaceFile[];
-  indexedAt: string;
+  summary?: string;
+  indexedAt?: string;
 }
 
 export interface Message {
@@ -115,12 +116,7 @@ export interface Message {
   status: MessageStatus;
   modelId?: string;
   attachments?: MessageAttachment[];
-  workspaceContext?: {
-    name: string;
-    type: WorkspaceType;
-    pathOrUrl?: string;
-    filesCount?: number;
-  };
+  workspaceContext?: WorkspaceContext;
 }
 
 /**
@@ -136,12 +132,7 @@ export interface IncomingMessage {
   content: string;
   createdAt?: string;
   attachments?: MessageAttachment[];
-  workspaceContext?: {
-    name: string;
-    type: WorkspaceType;
-    pathOrUrl?: string;
-    filesCount?: number;
-  };
+  workspaceContext?: WorkspaceContext;
 }
 
 export interface ModelInfo {

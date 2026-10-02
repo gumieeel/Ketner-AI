@@ -79,7 +79,10 @@ export interface Message {
     name: string;
     type: WorkspaceType;
     pathOrUrl?: string;
+    branch?: string;
     filesCount?: number;
+    files?: WorkspaceFile[];
+    summary?: string;
   };
 }
 

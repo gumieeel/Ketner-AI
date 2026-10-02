@@ -153,7 +153,11 @@ export function createChatRouter({ store, userId, ai, subscriptionStore, userSto
                 messages: messages.map((m) => ({
                     role: m.role,
                     content: m.content,
+                    attachments: m.attachments,
+                    workspaceContext: m.workspaceContext,
                 })),
+                attachments: messages[messages.length - 1]?.attachments,
+                workspaceContext: messages[messages.length - 1]?.workspaceContext,
                 language,
                 stream: true,
             }, {

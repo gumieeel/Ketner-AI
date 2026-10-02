@@ -8,7 +8,7 @@ import { canAccessModel, findModel, getRequiredPlanName } from './can-access-mod
 import * as api from './api';
 import { ApiError } from './api';
 import { deriveTitle } from './derive-title';
-import type { ChatMeta, ConversationSummary, Message, MessageAttachment } from './types';
+import type { ChatMeta, ConversationSummary, Message, MessageAttachment, WorkspaceContext, WorkspaceFile } from './types';
 import { useWorkspace } from './workspace-store';
 
 export type LoadStatus = 'idle' | 'loading' | 'ready' | 'error';
@@ -109,6 +109,42 @@ function lastAssistantIndex(messages: readonly Message[]): number {
     }
   }
   return -1;
+}
+
+function prepareWorkspaceForSending(ws: WorkspaceContext | null): Message['workspaceContext'] {
+  if (!ws) return undefined;
+
+  let totalChars = 0;
+  const MAX_TOTAL_CHARS = 300000;
+
+  const sanitizedFiles = (ws.files || []).map((file: WorkspaceFile) => {
+    let content = file.content;
+    if (content && content.length > 0) {
+      if (totalChars < MAX_TOTAL_CHARS) {
+        if (content.length > 25000) {
+          content = content.slice(0, 25000) + '\n... [truncated]';
+        }
+        totalChars += content.length;
+      } else {
+        content = undefined;
+      }
+    }
+    return {
+      path: file.path,
+      size: file.size,
+      language: file.language,
+      content,
+    };
+  });
+
+  return {
+    name: ws.name,
+    type: ws.type,
+    pathOrUrl: ws.pathOrUrl,
+    branch: ws.branch,
+    filesCount: ws.filesCount,
+    files: sanitizedFiles,
+  };
 }
 
 /**
@@ -463,14 +499,7 @@ export const useChat = create<ChatState>((set, get) => {
         createdAt: nowIso(),
         status: 'complete',
         attachments: attachmentsToSend.length > 0 ? [...attachmentsToSend] : undefined,
-        workspaceContext: activeWs
-          ? {
-              name: activeWs.name,
-              type: activeWs.type,
-              pathOrUrl: activeWs.pathOrUrl,
-              filesCount: activeWs.filesCount,
-            }
-          : undefined,
+        workspaceContext: prepareWorkspaceForSending(activeWs),
       };
       const assistant = createAssistantMessage(userMessage.conversationId, modelId);
 

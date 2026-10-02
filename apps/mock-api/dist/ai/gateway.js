@@ -138,6 +138,60 @@ export function toOpenRouterModelId(model, prompt) {
         return `google/${model.providerModelId}`;
     return model.providerModelId;
 }
+function buildWorkspaceContextBlock(ws, language) {
+    const isEn = language === 'en';
+    const typeLabel = ws.type === 'git_repo'
+        ? (isEn ? 'GitHub Repository' : 'GitHub-репозиторий')
+        : (isEn ? 'Local Project Folder' : 'Локальная папка проекта');
+    let block = isEn
+        ? `\n\n[ATTACHED WORKSPACE CONTEXT: ${typeLabel} "${ws.name}"]\nSource: ${ws.pathOrUrl || ws.name}${ws.branch ? ` (branch: ${ws.branch})` : ''}\nTotal Files Indexed: ${ws.filesCount || ws.files?.length || 0}\n`
+        : `\n\n[КОНТЕКСТ ПРИВЯЗАННОГО ПРОЕКТА: ${typeLabel} «${ws.name}»]\nИсточник: ${ws.pathOrUrl || ws.name}${ws.branch ? ` (ветка: ${ws.branch})` : ''}\nВсего проиндексировано файлов: ${ws.filesCount || ws.files?.length || 0}\n`;
+    if (Array.isArray(ws.files) && ws.files.length > 0) {
+        block += isEn ? '\nProject File Tree:\n' : '\nДерево файлов проекта:\n';
+        const treePreview = ws.files
+            .slice(0, 60)
+            .map((f) => `- ${f.path}${f.size ? ` (${Math.round((f.size / 1024) * 10) / 10} KB)` : ''}`)
+            .join('\n');
+        block += treePreview;
+        if (ws.files.length > 60) {
+            block += isEn ? `\n... and ${ws.files.length - 60} more files` : `\n... и ещё ${ws.files.length - 60} файлов`;
+        }
+        block += '\n';
+        const filesWithContent = ws.files.filter((f) => typeof f.content === 'string' && f.content.trim().length > 0);
+        if (filesWithContent.length > 0) {
+            block += isEn ? '\nKey Project Code & File Contents:\n' : '\nСодержимое ключевых файлов проекта:\n';
+            let totalContentLength = 0;
+            const MAX_TOTAL_CHARS = 120000;
+            for (const f of filesWithContent) {
+                if (totalContentLength > MAX_TOTAL_CHARS) {
+                    block += isEn ? '\n[Additional files omitted for length]\n' : '\n[Остальные файлы пропущены для экономии контекста]\n';
+                    break;
+                }
+                const snippet = f.content.slice(0, 15000);
+                block += `\n--- File: ${f.path} ---\n\`\`\`${f.language || ''}\n${snippet}\n\`\`\`\n`;
+                totalContentLength += snippet.length;
+            }
+        }
+    }
+    block += isEn
+        ? `\nINSTRUCTION: You have full access to this project workspace and its files. Answer questions about this project, provide code refactoring, bug fixes, feature implementations, and architecture explanations based on the actual codebase above. Never say you cannot access local files or repositories, as the files and structure are explicitly loaded above for you.`
+        : `\nИНСТРУКЦИЯ: Вы имеете полный доступ к этому проекту и его кодовой базе. Отвечайте на вопросы пользователя по этому проекту, пишите код, проводите рефакторинг, поиск багов и архитектурный анализ на основе реального кода выше. Никогда не говорите, что вы не имеете доступа к локальным файлам или репозиторию, так как файлы и структура проекта уже переданы вам выше.`;
+    return block;
+}
+function buildAttachmentsBlock(attachments, language) {
+    const isEn = language === 'en';
+    let block = isEn
+        ? `\n\n[USER ATTACHMENTS (${attachments.length} files)]:\n`
+        : `\n\n[ПРИКРЕПЛЁННЫЕ ПОЛЬЗОВАТЕЛЕМ ВЛОЖЕНИЯ (${attachments.length})]:\n`;
+    for (const a of attachments) {
+        block += `- **${a.name}** (${a.category.toUpperCase()}, ${Math.round(((a.size || 0) / 1024) * 10) / 10} KB)\n`;
+        if (a.contentPreview) {
+            const preview = a.contentPreview.slice(0, 20000);
+            block += `\`\`\`\n${preview}\n\`\`\`\n`;
+        }
+    }
+    return block;
+}
 export class AIGateway {
     registry;
     providers;
@@ -258,12 +312,23 @@ export class AIGateway {
             const systemPrompt = isBudgetExceeded
                 ? `${baseSystemPrompt} ${language === 'en' ? 'Keep responses concise and direct.' : 'Отвечай максимально кратко и по существу.'}`
                 : baseSystemPrompt;
+            const activeWorkspace = req.workspaceContext ??
+                req.messages.slice().reverse().find((m) => m.workspaceContext)?.workspaceContext;
+            const activeAttachments = req.attachments ??
+                req.messages.slice().reverse().find((m) => m.attachments && m.attachments.length > 0)?.attachments;
+            let effectiveSystemPrompt = systemPrompt;
+            if (activeWorkspace) {
+                effectiveSystemPrompt += buildWorkspaceContextBlock(activeWorkspace, language);
+            }
+            if (activeAttachments && activeAttachments.length > 0) {
+                effectiveSystemPrompt += buildAttachmentsBlock(activeAttachments, language);
+            }
             const optimizedMessages = ContextOptimizer.optimize(req.messages.map((m) => ({
                 role: m.role,
                 content: m.content,
             })), {
                 maxMessages: maxContextMessages,
-                systemPrompt,
+                systemPrompt: effectiveSystemPrompt,
                 language,
             });
             // 5.1. Проверка семантического кэша (Semantic & Query Caching)
@@ -437,8 +502,7 @@ export class AIGateway {
                 const effectiveModelName = req.modelId && req.modelId !== 'auto'
                     ? (targetModel?.name ?? 'DeepSeek V4.1 Flash')
                     : 'DeepSeek V4.1 Flash';
-                const lastUser = req.messages.filter((m) => m.role === 'user').pop();
-                const templateAnswer = pickAnswer(prompt, language, this.aiConfig.random, effectiveModelName, req.attachments ?? lastUser?.attachments, req.workspaceContext ?? lastUser?.workspaceContext);
+                const templateAnswer = pickAnswer(prompt, language, this.aiConfig.random, effectiveModelName, activeAttachments ?? req.attachments, (activeWorkspace ?? req.workspaceContext));
                 await streamText(templateAnswer, {
                     thinkingMs: this.aiConfig.thinkingMs,
                     chunkMs: this.aiConfig.chunkMs,
