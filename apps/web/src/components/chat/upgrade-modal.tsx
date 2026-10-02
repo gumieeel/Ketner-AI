@@ -20,14 +20,14 @@ const PLANS_PREVIEW: PlanPreview[] = [
   {
     id: 'plus',
     name: 'Plus',
-    price: '$10 (990 ₽)',
+    price: '$9',
     highlight: 'GPT-4o, DeepSeek Flash',
     models: 'GPT-4o, Claude Haiku 4.5, DeepSeek V4.1 Flash',
   },
   {
     id: 'pro',
     name: 'Pro',
-    price: '$20 (1 990 ₽)',
+    price: '$25',
     badge: 'Популярный',
     highlight: 'Все флагманы',
     models: 'GPT-6 Astra, Claude Fable, Gemini Flash, Grok',
@@ -35,7 +35,7 @@ const PLANS_PREVIEW: PlanPreview[] = [
   {
     id: 'ultra',
     name: 'Ultra',
-    price: '$30 (скидка вместо $40)',
+    price: '$49 (скидка вместо $59)',
     badge: 'Все включено',
     highlight: 'Без лимитов',
     models: 'Все топовые модели на 100% + VIP-приоритет',

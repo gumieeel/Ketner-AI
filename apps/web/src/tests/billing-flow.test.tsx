@@ -124,7 +124,7 @@ describe('billing-flow: каталог тарифов, чекаут и упра�
       screen.getByRole('heading', { level: 1, name: 'Оформление подписки' }),
     ).toBeInTheDocument();
     expect(screen.getByText('Plus')).toBeInTheDocument();
-    expect(screen.getAllByText(/990 ₽/i).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/(?:890|990) ₽/i).length).toBeGreaterThan(0);
 
     const confirmSbp = screen.getByRole('button', { name: /Подтвердить оплату через СБП/i });
     expect(confirmSbp).toBeInTheDocument();

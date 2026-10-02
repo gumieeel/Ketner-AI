@@ -412,8 +412,8 @@ export function createBillingRouter({
     const user = userStore.findById(userId) || userStore.findByEmail(userId);
     const currency: CryptoCurrency = request.body?.currency || 'USDT_TRC20';
 
-    // Тарифы в долларах: Plus $10, Pro $20, Ultra $30
-    const amountUsd = plan.id === 'ultra' ? 30 : plan.id === 'pro' ? 20 : 10;
+    // Тарифы в долларах: Plus $9, Pro $25, Ultra $49
+    const amountUsd = plan.id === 'ultra' ? 49 : plan.id === 'pro' ? 25 : 9;
     const tempOrderId = `crypto_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
 
     let ccResult;

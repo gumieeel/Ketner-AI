@@ -49,7 +49,7 @@ export const PLANS: readonly Plan[] = [
   {
     id: 'plus',
     nameKey: 'pricing.plus',
-    priceMonthly: 10,
+    priceMonthly: 9,
     limitBadge: {
       ru: 'Быстрые модели',
       en: 'Fast models',
@@ -88,7 +88,7 @@ export const PLANS: readonly Plan[] = [
   {
     id: 'pro',
     nameKey: 'pricing.pro',
-    priceMonthly: 20,
+    priceMonthly: 25,
     popular: true,
     limitBadge: {
       ru: 'Топовые модели',
@@ -130,11 +130,11 @@ export const PLANS: readonly Plan[] = [
   {
     id: 'ultra',
     nameKey: 'pricing.ultra',
-    priceMonthly: 30,
-    originalPriceMonthly: 40,
+    priceMonthly: 49,
+    originalPriceMonthly: 59,
     discountBadge: {
-      ru: '🔥 Скидка 25%',
-      en: '🔥 25% OFF',
+      ru: '🔥 Скидка $10',
+      en: '🔥 $10 OFF',
     },
     limitBadge: {
       ru: 'Максимум мощности',

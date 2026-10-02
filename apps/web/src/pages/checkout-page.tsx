@@ -53,6 +53,9 @@ function calculateStars(price: number): number {
 }
 
 function calculateRubPrice(priceUsd: number): number {
+  if (priceUsd === 9) return 890;
+  if (priceUsd === 25) return 2490;
+  if (priceUsd === 49) return 4890;
   if (priceUsd === 10) return 990;
   if (priceUsd === 20) return 1990;
   if (priceUsd === 30) return 2990;
