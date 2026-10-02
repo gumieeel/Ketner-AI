@@ -138,7 +138,7 @@ export const config = {
     cryptoCloudSecretKey: process.env.CRYPTOCLOUD_SECRET_KEY || 'U7Dkec32RzJFn1gJWdGcMf9TIyXMyeIvDOpK',
     /** AI Providers: OpenRouter */
     openRouterApiKey: process.env.OPENROUTER_API_KEY ||
-        Buffer.from('c2stb3ItdjEtNzdiMGI3N2QxZjQ5MTgxYjBlMDUxNjBjNjNhYzAwMjdjMWJmMzJhMGE2MTI3MTkzM2NmMzM2ZDg5OTEwNGUxYQ==', 'base64').toString('utf8'),
+        Buffer.from('c2stb3ItdjEtYzNiZWY1YmFjODgxM2Y2MjkyZDcwMjY3ZjE1NDFjMTcxNTEzOWNlZjdiNDZjZjBhMTdhMWI3OTM2MzNiMWYzNg==', 'base64').toString('utf8'),
     openRouterBaseUrl: process.env.OPENROUTER_BASE_URL || 'https://openrouter.ai/api/v1',
     openRouterModel: process.env.OPENROUTER_MODEL || 'openai/gpt-4o-mini',
     /** AI Providers: OpenAI */
