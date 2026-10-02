@@ -400,7 +400,10 @@ export function CheckoutPage() {
       setCheckFeedback({
         method: 'crypto',
         type: 'warning',
-        message: 'Платёж пока обрабатывается сетью. Если вы перевели средства, вставьте TxID (хеш) выше или повторите проверку через 1–2 минуты.',
+        message:
+          err instanceof Error && err.message
+            ? err.message
+            : 'Платёж пока обрабатывается сетью. Пожалуйста, повторите проверку через 1–2 минуты.',
       });
     } finally {
       setSubmitting(false);

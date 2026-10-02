@@ -390,16 +390,34 @@ export function createBillingRouter({ subscriptionStore, userStore, invoiceStore
         const txHash = typeof request.body?.txHash === 'string' && request.body.txHash.trim().length > 0
             ? request.body.txHash.trim()
             : undefined;
-        // Если указан TxID или в CryptoCloud статус paid, либо подтверждение
-        if (invoice.status === 'pending' && invoice.cryptoCloudInvoiceId && !txHash) {
-            try {
-                const ccStatus = await cryptoCloudService.checkInvoiceStatus(invoice.cryptoCloudInvoiceId);
-                if (ccStatus === 'paid' || ccStatus === 'success' || ccStatus === 'overpaid') {
-                    invoice = activeInvoiceStore.markCryptoPaid(invoice.id) ?? invoice;
+        // 1. Если счёт привязан к официальному шлюзу CryptoCloud:
+        if (invoice.cryptoCloudInvoiceId && cryptoCloudService.isConfigured()) {
+            let isPaid = invoice.status === 'paid';
+            if (!isPaid) {
+                try {
+                    const ccStatus = await cryptoCloudService.checkInvoiceStatus(invoice.cryptoCloudInvoiceId);
+                    if (ccStatus === 'paid' || ccStatus === 'success' || ccStatus === 'overpaid') {
+                        isPaid = true;
+                    }
+                }
+                catch (err) {
+                    console.warn('[billing] Ошибка проверки статуса счёта в CryptoCloud:', err);
                 }
             }
-            catch {
-                // ignore
+            if (!isPaid) {
+                sendError(response, 400, 'payment_not_received', 'Оплата ещё не подтверждена платёжной системой CryptoCloud. Пожалуйста, совершите перевод в окне TryBit и повторите проверку.');
+                return;
+            }
+        }
+        else if (!invoice.cryptoCloudInvoiceId) {
+            // 2. Прямой перевод на статический кошелёк без шлюза:
+            if (!txHash) {
+                sendError(response, 400, 'tx_hash_required', 'Для подтверждения прямого перевода необходимо указать TxID (хеш транзакции из вашего кошелька).');
+                return;
+            }
+            if (txHash.length < 20) {
+                sendError(response, 400, 'invalid_tx_hash', 'Указан некорректный TxID транзакции. Хеш блокчейна должен содержать не менее 20 символов.');
+                return;
             }
         }
         const updated = activeInvoiceStore.markCryptoPaid(invoice.id, txHash) ?? invoice;
