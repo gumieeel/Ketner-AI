@@ -184,6 +184,8 @@ export function createConversationStore(file: string): ConversationStore {
         createdAt: message.createdAt ?? now,
         // На бэкенде хранится только итоговый вариант сообщения.
         status: 'complete',
+        attachments: message.attachments,
+        workspaceContext: message.workspaceContext,
       }));
 
       const assistantMessage: Message = {

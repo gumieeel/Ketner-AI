@@ -46,13 +46,22 @@ function parseCompletionRequest(body: unknown): ParseResult {
     if (raw.role !== 'user' && raw.role !== 'assistant') {
       return { ok: false, message: 'Роль сообщения должна быть user или assistant' };
     }
-    if (typeof raw.content !== 'string' || raw.content.trim() === '') {
-      return { ok: false, message: 'У каждого сообщения должен быть непустой content' };
+    const hasAttachments = Array.isArray(raw.attachments) && raw.attachments.length > 0;
+    const content = typeof raw.content === 'string' ? raw.content : '';
+    if (!hasAttachments && content.trim() === '') {
+      return { ok: false, message: 'У каждого сообщения должен быть непустой content или вложения' };
     }
-    if (raw.content.length > MAX_CONTENT_LENGTH) {
+    if (content.length > MAX_CONTENT_LENGTH) {
       return { ok: false, message: `Сообщение длиннее ${MAX_CONTENT_LENGTH} символов` };
     }
-    messages.push({ id: raw.id, role: raw.role, content: raw.content, createdAt: raw.createdAt });
+    messages.push({
+      id: raw.id,
+      role: raw.role,
+      content,
+      createdAt: raw.createdAt,
+      attachments: Array.isArray(raw.attachments) ? raw.attachments : undefined,
+      workspaceContext: raw.workspaceContext,
+    });
   }
 
   const last = messages[messages.length - 1];

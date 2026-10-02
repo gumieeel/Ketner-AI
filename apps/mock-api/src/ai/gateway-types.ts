@@ -6,7 +6,7 @@
  * Usage Accounting и Fair Use Engine.
  */
 
-import type { PlanId, Language } from '../types.js';
+import type { PlanId, Language, MessageAttachment, WorkspaceContext } from '../types.js';
 
 // ─────────────────────────────────────────────────────────────
 // AI Provider & Model Registry
@@ -204,7 +204,14 @@ export interface GatewayRequest {
   isVip?: boolean;
   conversationId: string;
   modelId: string;
-  messages: Array<{ role: 'user' | 'assistant' | 'system'; content: string }>;
+  messages: Array<{
+    role: 'user' | 'assistant' | 'system';
+    content: string;
+    attachments?: MessageAttachment[];
+    workspaceContext?: WorkspaceContext;
+  }>;
+  attachments?: MessageAttachment[];
+  workspaceContext?: WorkspaceContext;
   language: Language;
   stream: boolean;
 }

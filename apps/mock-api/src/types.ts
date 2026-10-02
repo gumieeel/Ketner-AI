@@ -67,6 +67,45 @@ export interface Conversation {
   updatedAt: string;
 }
 
+export type AttachmentCategory =
+  | 'image'
+  | 'video'
+  | 'audio'
+  | 'document'
+  | 'code'
+  | 'archive'
+  | 'file';
+
+export interface MessageAttachment {
+  id: string;
+  name: string;
+  size: number;
+  type: string;
+  category: AttachmentCategory;
+  url?: string;
+  contentPreview?: string;
+}
+
+export type WorkspaceType = 'local_folder' | 'git_repo';
+
+export interface WorkspaceFile {
+  path: string;
+  size: number;
+  content?: string;
+  language?: string;
+}
+
+export interface WorkspaceContext {
+  id: string;
+  type: WorkspaceType;
+  name: string;
+  pathOrUrl: string;
+  branch?: string;
+  filesCount: number;
+  files?: WorkspaceFile[];
+  indexedAt: string;
+}
+
 export interface Message {
   id: string;
   conversationId: string;
@@ -75,6 +114,13 @@ export interface Message {
   createdAt: string;
   status: MessageStatus;
   modelId?: string;
+  attachments?: MessageAttachment[];
+  workspaceContext?: {
+    name: string;
+    type: WorkspaceType;
+    pathOrUrl?: string;
+    filesCount?: number;
+  };
 }
 
 /**
@@ -89,6 +135,13 @@ export interface IncomingMessage {
   role: MessageRole;
   content: string;
   createdAt?: string;
+  attachments?: MessageAttachment[];
+  workspaceContext?: {
+    name: string;
+    type: WorkspaceType;
+    pathOrUrl?: string;
+    filesCount?: number;
+  };
 }
 
 export interface ModelInfo {

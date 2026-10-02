@@ -8,7 +8,8 @@ import { canAccessModel, findModel, getRequiredPlanName } from './can-access-mod
 import * as api from './api';
 import { ApiError } from './api';
 import { deriveTitle } from './derive-title';
-import type { ChatMeta, ConversationSummary, Message } from './types';
+import type { ChatMeta, ConversationSummary, Message, MessageAttachment } from './types';
+import { useWorkspace } from './workspace-store';
 
 export type LoadStatus = 'idle' | 'loading' | 'ready' | 'error';
 
@@ -31,13 +32,18 @@ interface ChatState {
   conversationMessages: Record<string, Message[]>;
   search: string;
   draft: string;
+  attachedFiles: MessageAttachment[];
+
+  addAttachments: (files: MessageAttachment[]) => void;
+  removeAttachment: (id: string) => void;
+  clearAttachments: () => void;
 
   loadConversations: (silent?: boolean) => Promise<void>;
   openConversation: (id: string | undefined, force?: boolean) => Promise<void>;
   setSearch: (search: string) => void;
   setDraft: (draft: string) => void;
   loadMeta: () => Promise<void>;
-  send: (text: string) => Promise<void>;
+  send: (text?: string, attachmentsOverride?: MessageAttachment[]) => Promise<void>;
   stop: (id?: string) => void;
   regenerate: () => Promise<void>;
   editMessage: (id: string, content: string) => Promise<void>;
@@ -309,6 +315,15 @@ export const useChat = create<ChatState>((set, get) => {
     conversationMessages: {},
     search: '',
     draft: '',
+    attachedFiles: [],
+
+    addAttachments: (files) =>
+      set((state) => ({ attachedFiles: [...state.attachedFiles, ...files] })),
+
+    removeAttachment: (id) =>
+      set((state) => ({ attachedFiles: state.attachedFiles.filter((f) => f.id !== id) })),
+
+    clearAttachments: () => set({ attachedFiles: [] }),
 
     loadConversations: async (silent = false) => {
       if (!silent) {
@@ -405,10 +420,12 @@ export const useChat = create<ChatState>((set, get) => {
       }
     },
 
-    send: async (text) => {
+    send: async (text = '', attachmentsOverride?: MessageAttachment[]) => {
       const content = text.trim();
       const currentActiveId = get().activeId;
-      if (content === '') {
+      const attachmentsToSend = attachmentsOverride ?? get().attachedFiles;
+
+      if (content === '' && attachmentsToSend.length === 0) {
         return;
       }
       if (currentActiveId && get().streamingConversations[currentActiveId]) {
@@ -436,6 +453,8 @@ export const useChat = create<ChatState>((set, get) => {
         incrementFreeUsage(authUser?.id);
       }
 
+      const activeWs = useWorkspace.getState().activeWorkspace;
+
       const userMessage: Message = {
         id: createId(),
         conversationId: currentActiveId ?? '',
@@ -443,6 +462,15 @@ export const useChat = create<ChatState>((set, get) => {
         content,
         createdAt: nowIso(),
         status: 'complete',
+        attachments: attachmentsToSend.length > 0 ? [...attachmentsToSend] : undefined,
+        workspaceContext: activeWs
+          ? {
+              name: activeWs.name,
+              type: activeWs.type,
+              pathOrUrl: activeWs.pathOrUrl,
+              filesCount: activeWs.filesCount,
+            }
+          : undefined,
       };
       const assistant = createAssistantMessage(userMessage.conversationId, modelId);
 
@@ -455,6 +483,7 @@ export const useChat = create<ChatState>((set, get) => {
           messages: nextMessages,
           conversationMessages: nextConvMessages,
           draft: '',
+          attachedFiles: [],
         };
       });
 
@@ -462,7 +491,15 @@ export const useChat = create<ChatState>((set, get) => {
       if (conversationId === '') {
         try {
           // Диалог создаётся при первом сообщении: «Новый чат» ничего не пишет на сервер.
-          const conversation = await api.createConversation(deriveTitle(content));
+          const titleBasis =
+            content !== ''
+              ? content
+              : attachmentsToSend[0]?.name
+                ? `Файл: ${attachmentsToSend[0].name}`
+                : activeWs?.name
+                  ? `Проект: ${activeWs.name}`
+                  : 'Новый диалог';
+          const conversation = await api.createConversation(deriveTitle(titleBasis));
           conversationId = conversation.id;
           set((state) => {
             const updatedMessages = state.messages.map((message) => ({

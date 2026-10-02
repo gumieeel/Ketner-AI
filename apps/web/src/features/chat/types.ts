@@ -24,6 +24,45 @@ export interface ConversationSummary extends Conversation {
   messageCount: number;
 }
 
+export type AttachmentCategory =
+  | 'image'
+  | 'video'
+  | 'audio'
+  | 'document'
+  | 'code'
+  | 'archive'
+  | 'file';
+
+export interface MessageAttachment {
+  id: string;
+  name: string;
+  size: number;
+  type: string;
+  category: AttachmentCategory;
+  url: string;
+  contentPreview?: string;
+}
+
+export type WorkspaceType = 'local_folder' | 'git_repo';
+
+export interface WorkspaceFile {
+  path: string;
+  size: number;
+  content?: string;
+  language?: string;
+}
+
+export interface WorkspaceContext {
+  id: string;
+  type: WorkspaceType;
+  name: string;
+  pathOrUrl: string;
+  branch?: string;
+  filesCount: number;
+  files: WorkspaceFile[];
+  indexedAt: string;
+}
+
 export interface Message {
   id: string;
   conversationId: string;
@@ -35,6 +74,13 @@ export interface Message {
   /** Только на клиенте: текст ошибки для сообщения со статусом `error`. */
   error?: string;
   errorCode?: string;
+  attachments?: MessageAttachment[];
+  workspaceContext?: {
+    name: string;
+    type: WorkspaceType;
+    pathOrUrl?: string;
+    filesCount?: number;
+  };
 }
 
 export interface ModelInfo {

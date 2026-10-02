@@ -79,37 +79,24 @@ const KEYWORD_TEMPLATES = [
             'can you link repo',
         ],
         ru: [
-            'Я работаю непосредственно в вашем браузере как ИИ-консультант и помощник по коду, поэтому у меня **нет прямого доступа к файловой системе или терминалу вашей машины**, чтобы выполнить привязку репозитория автоматически за вас.',
+            'В Ketner AI теперь доступна **полная привязка локальных папок и Git-репозиториев**!',
             '',
-            'Однако вы можете легко сделать это сами за 1 минуту в терминале вашей папки проекта:',
+            'Нажмите на иконку скрепки 📎 или кнопку «Привязать папку / репо» над строкой ввода:',
             '',
-            '```bash',
-            '# 1. Привяжите удалённый репозиторий:',
-            'git remote add origin https://github.com/gumieeel/Ketner-AI.git',
+            '1. **📁 Привязать локальную папку** — выберите любую директорию на вашем компьютере. Браузер прочитает файлы кода, а я проиндексирую структуру проекта.',
+            '2. **🐙 Привязать GitHub-репозиторий** — укажите ссылку на репозиторий GitHub (например, `https://github.com/facebook/react` или `owner/repo`).',
             '',
-            '# 2. Установите основную ветку main:',
-            'git branch -M main',
-            '',
-            '# 3. Добавьте файлы и отправьте код:',
-            'git add .',
-            'git commit -m "feat: initial commit"',
-            'git push -u origin main',
-            '```',
-            '',
-            'Если при выполнении любой команды возникнет ошибка — напишите её сюда, я сразу подскажу решение!',
+            'После привязки я буду видеть все файлы проекта, отвечать на вопросы по коду, искать нужные функции, компоненты и предлагать точные правки!',
         ],
         en: [
-            'I am an AI assistant running in your browser, so I **do not have direct access to your local machine’s terminal or filesystem** to link the repository automatically for you.',
+            'Ketner AI now features **full local folder and Git repository linking**!',
             '',
-            'You can easily run these commands in your project folder:',
+            'Click the paperclip 📎 icon or the "Link folder / repo" button above the input field:',
             '',
-            '```bash',
-            'git remote add origin https://github.com/gumieeel/Ketner-AI.git',
-            'git branch -M main',
-            'git add .',
-            'git commit -m "feat: initial commit"',
-            'git push -u origin main',
-            '```',
+            '1. **📁 Link local folder** — select any directory on your computer to index codebase files.',
+            '2. **🐙 Link GitHub repository** — enter a GitHub repository link or owner/repo format.',
+            '',
+            'Once linked, I will have full project awareness: analyzing files, searching components, refactoring code, and answering architecture questions!',
         ],
     },
     {
@@ -503,8 +490,70 @@ const GENERIC_TEMPLATES = [
         ],
     },
 ];
-/** Выбирает ответ: сначала по ключевым словам, иначе — случайный общий. */
-export function pickAnswer(prompt, language, random, selectedModelName) {
+/** Выбирает ответ: с учётом привязанного проекта/файлов, по ключевым словам или общий. */
+export function pickAnswer(prompt, language, random, selectedModelName, attachments, workspaceContext) {
+    // 1. Если привязана рабочая папка или репозиторий
+    if (workspaceContext) {
+        const isEn = language === 'en';
+        const projName = workspaceContext.name;
+        const count = workspaceContext.filesCount || (workspaceContext.files ? workspaceContext.files.length : 0);
+        const sampleFiles = workspaceContext.files?.slice(0, 8).map((f) => `- \`${f.path}\``).join('\n') || '';
+        if (isEn) {
+            return [
+                `I am actively connected to your workspace **${projName}** (${count} indexed files).`,
+                '',
+                '### Project Context Loaded:',
+                sampleFiles ? `${sampleFiles}\n` : '',
+                'I am analyzing your codebase and ready to assist you:',
+                '- **Code architecture & walkthrough**: explain dependencies and file structure',
+                '- **Implementation & refactoring**: write idiomatic functions and fix errors',
+                '- **Search**: locate classes, handlers, hooks, and endpoints across files',
+                '',
+                prompt ? `Regarding your request: "${prompt}" — let's review the code logic.` : 'What task or file shall we work on next?',
+            ].filter(Boolean).join('\n');
+        }
+        return [
+            `Я подключен к вашей кодовой базе **${projName}** (${count} проиндексированных файлов).`,
+            '',
+            '### Загруженный контекст проекта:',
+            sampleFiles ? `${sampleFiles}\n` : '',
+            'Я проанализировал структуру репозитория и готов работать с кодом:',
+            '- **Анализ архитектуры и файлов**: расскажу, как устроены модули и где находится логика;',
+            '- **Разработка и рефакторинг**: напишу функции, компоненты или исправлю баги;',
+            '- **Поиск по кодовой базе**: найду нужные функции, хуки или маршруты API.',
+            '',
+            prompt ? `По вашему запросу: *«${prompt}»* — готов внести изменения или разобрать код. Что делаем дальше?` : 'С каким файлом или задачей начнём работу?',
+        ].filter(Boolean).join('\n');
+    }
+    // 2. Если прикреплены файлы / фото / видео
+    if (attachments && attachments.length > 0) {
+        const isEn = language === 'en';
+        const filesOverview = attachments.map((a) => `- **${a.name}** (${a.category.toUpperCase()})`).join('\n');
+        if (isEn) {
+            return [
+                `I received and processed your attachments (${attachments.length}):`,
+                '',
+                filesOverview,
+                '',
+                attachments.some((a) => a.category === 'code' || a.category === 'document')
+                    ? 'I reviewed the file contents and code structure. The syntax and formatting look valid.'
+                    : 'Media files (images/videos) loaded successfully into the conversation.',
+                '',
+                prompt ? `Regarding your prompt: "${prompt}": I am ready to analyze or process these files.` : 'How would you like me to process these attachments?',
+            ].join('\n');
+        }
+        return [
+            `Я получил и обработал ваши вложения (${attachments.length}):`,
+            '',
+            filesOverview,
+            '',
+            attachments.some((a) => a.category === 'code' || a.category === 'document')
+                ? 'Содержимое текстовых файлов и кода успешно прочитано и добавлено в контекст для анализа.'
+                : 'Медиафайлы (фото / видео) успешно прикреплены к диалогу.',
+            '',
+            prompt ? `По вашему запросу: *«${prompt}»* — готов выполнить анализ или доработку.` : 'Что требуется сделать с прикреплёнными файлами?',
+        ].join('\n');
+    }
     const text = prompt.toLowerCase();
     const matched = KEYWORD_TEMPLATES.find((template) => template.triggers.some((trigger) => text.includes(trigger)));
     const pool = matched ? [matched] : GENERIC_TEMPLATES;

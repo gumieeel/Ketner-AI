@@ -437,7 +437,8 @@ export class AIGateway {
                 const effectiveModelName = req.modelId && req.modelId !== 'auto'
                     ? (targetModel?.name ?? 'DeepSeek V4.1 Flash')
                     : 'DeepSeek V4.1 Flash';
-                const templateAnswer = pickAnswer(prompt, language, this.aiConfig.random, effectiveModelName);
+                const lastUser = req.messages.filter((m) => m.role === 'user').pop();
+                const templateAnswer = pickAnswer(prompt, language, this.aiConfig.random, effectiveModelName, req.attachments ?? lastUser?.attachments, req.workspaceContext ?? lastUser?.workspaceContext);
                 await streamText(templateAnswer, {
                     thinkingMs: this.aiConfig.thinkingMs,
                     chunkMs: this.aiConfig.chunkMs,

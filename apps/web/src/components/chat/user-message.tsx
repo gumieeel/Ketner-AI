@@ -1,10 +1,11 @@
 import { useState } from 'react';
-import { EditIcon } from '@/components/icons';
+import { EditIcon, FolderIcon, GitHubIcon } from '@/components/icons';
 import { Button } from '@/components/ui/button';
 import { IconButton } from '@/components/ui/icon-button';
 import { useChat } from '@/features/chat/chat-store';
 import type { Message } from '@/features/chat/types';
 import { useTranslation } from '@/i18n';
+import { MessageAttachments } from './message-attachments';
 
 interface UserMessageProps {
   message: Message;
@@ -12,7 +13,7 @@ interface UserMessageProps {
   editable: boolean;
 }
 
-/** Сообщение пользователя: реплика справа и правка по месту. */
+/** Сообщение пользователя: реплика справа, вложения и правка по месту. */
 export function UserMessage({ message, editable }: UserMessageProps) {
   const { t } = useTranslation();
   const editMessage = useChat((state) => state.editMessage);
@@ -66,10 +67,31 @@ export function UserMessage({ message, editable }: UserMessageProps) {
   }
 
   return (
-    <div className="group flex flex-col items-end gap-1">
-      <div className="max-w-[85%] rounded-lg bg-surface-2 px-4 py-2.5 text-[15px] leading-[26px] whitespace-pre-wrap text-text">
-        {message.content}
-      </div>
+    <div className="group flex flex-col items-end gap-1.5">
+      {message.workspaceContext ? (
+        <div className="flex items-center gap-1.5 rounded-full border border-stroke bg-surface px-2.5 py-0.5 text-[11px] text-muted shadow-sm">
+          {message.workspaceContext.type === 'git_repo' ? (
+            <GitHubIcon className="size-3 text-accent" />
+          ) : (
+            <FolderIcon className="size-3 text-accent" />
+          )}
+          <span className="font-medium text-text">{message.workspaceContext.name}</span>
+          <span>({message.workspaceContext.filesCount ?? 0} файлов)</span>
+        </div>
+      ) : null}
+
+      {message.attachments && message.attachments.length > 0 ? (
+        <div className="max-w-[85%]">
+          <MessageAttachments attachments={message.attachments} />
+        </div>
+      ) : null}
+
+      {message.content ? (
+        <div className="max-w-[85%] rounded-lg bg-surface-2 px-4 py-2.5 text-[15px] leading-[26px] whitespace-pre-wrap text-text">
+          {message.content}
+        </div>
+      ) : null}
+
       {editable && !streaming ? (
         <IconButton
           label={t('chat.edit')}

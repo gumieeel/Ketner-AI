@@ -137,6 +137,8 @@ export async function streamCompletion(
         role: message.role,
         content: message.content,
         createdAt: message.createdAt,
+        attachments: message.attachments,
+        workspaceContext: message.workspaceContext,
       })),
     }),
   });

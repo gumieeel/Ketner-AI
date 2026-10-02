@@ -124,6 +124,8 @@ export function createConversationStore(file) {
                 createdAt: message.createdAt ?? now,
                 // На бэкенде хранится только итоговый вариант сообщения.
                 status: 'complete',
+                attachments: message.attachments,
+                workspaceContext: message.workspaceContext,
             }));
             const assistantMessage = {
                 id: randomUUID(),

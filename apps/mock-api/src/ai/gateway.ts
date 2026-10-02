@@ -568,11 +568,14 @@ export class AIGateway {
           req.modelId && req.modelId !== 'auto'
             ? (targetModel?.name ?? 'DeepSeek V4.1 Flash')
             : 'DeepSeek V4.1 Flash';
+        const lastUser = req.messages.filter((m) => m.role === 'user').pop();
         const templateAnswer = pickAnswer(
           prompt,
           language,
           this.aiConfig.random,
           effectiveModelName,
+          req.attachments ?? lastUser?.attachments,
+          req.workspaceContext ?? (lastUser?.workspaceContext as any),
         );
         await streamText(templateAnswer, {
           thinkingMs: this.aiConfig.thinkingMs,
