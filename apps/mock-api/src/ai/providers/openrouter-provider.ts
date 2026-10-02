@@ -23,8 +23,8 @@ export interface OpenRouterProviderConfig {
 const DEFAULT_CANDIDATES = [
   'openai/gpt-4o-mini',
   'deepseek/deepseek-chat',
-  'qwen/qwen3.8-27b:free',
-  'openrouter/free',
+  'google/gemini-2.5-flash',
+  'deepseek/deepseek-v4.1-flash',
 ];
 
 export class OpenRouterProvider implements AIProvider {
