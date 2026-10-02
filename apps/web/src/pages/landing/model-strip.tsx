@@ -180,6 +180,7 @@ export function ModelStrip() {
         type="button"
         tabIndex={0}
         onMouseEnter={(e) => handlePillEnter(item, e.currentTarget)}
+        onTouchStart={(e) => handlePillEnter(item, e.currentTarget)}
         onMouseLeave={handlePillLeave}
         onFocus={(e) => handlePillEnter(item, e.currentTarget)}
         onBlur={handlePillLeave}

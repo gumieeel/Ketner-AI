@@ -41,9 +41,9 @@ const GROUP_LABELS: Record<DateGroup, TranslationKey> = {
 
 const navLinkClasses = ({ isActive }: { isActive: boolean }) =>
   cn(
-    'flex h-9 items-center gap-2.5 rounded-md px-2.5 text-sm transition-colors',
+    'flex min-h-[44px] py-4 items-center gap-2.5 rounded-md px-3 text-sm transition-colors',
     isActive
-      ? 'bg-surface-2 font-medium text-text'
+      ? 'bg-surface-2 font-medium text-text border-l-[3px] border-accent pl-[calc(0.75rem-3px)]'
       : 'text-muted hover:bg-surface-2 hover:text-text',
   );
 
@@ -63,6 +63,11 @@ export function Sidebar() {
 
   const open = usePreferences((state) => state.sidebarOpen);
   const setOpen = usePreferences((state) => state.setSidebarOpen);
+  useEffect(() => {
+    if (open && window.innerWidth < 768) document.body.style.overflow = 'hidden';
+    else document.body.style.overflow = '';
+    return () => { document.body.style.overflow = ''; };
+  }, [open]);
   const conversations = useChat((state) => state.conversations);
   const status = useChat((state) => state.conversationsStatus);
   const activeId = useChat((state) => state.activeId);
@@ -109,6 +114,12 @@ export function Sidebar() {
     })).filter((section) => section.items.length > 0);
   }, [conversations, search]);
 
+  const [startX, setStartX] = useState(0);
+  const handleTouchStart = (e: React.TouchEvent) => setStartX(e.touches[0].clientX);
+  const handleTouchEnd = (e: React.TouchEvent) => {
+    if (startX - e.changedTouches[0].clientX > 50) close();
+  };
+
   return (
     <>
       {open ? (
@@ -120,10 +131,12 @@ export function Sidebar() {
       ) : null}
 
       <aside
+        onTouchStart={handleTouchStart}
+        onTouchEnd={handleTouchEnd}
         aria-label={t('nav.chats')}
         aria-hidden={!open ? undefined : false}
         className={cn(
-          'fixed inset-y-0 left-0 z-40 flex w-[min(288px,calc(100vw-48px))] md:w-[264px] flex-col',
+          'fixed inset-y-0 left-0 z-40 flex w-[min(360px,85vw)] md:w-[264px] flex-col',
           'border-r border-stroke bg-surface text-text',
           'transition-transform duration-[180ms] ease-out md:static md:z-auto md:translate-x-0',
           open ? 'translate-x-0 shadow-xl md:shadow-none' : '-translate-x-full',
@@ -214,7 +227,7 @@ export function Sidebar() {
           ))}
         </div>
 
-        <div className="mt-auto flex flex-col gap-1 border-t border-stroke p-2">
+        <div className="mt-auto flex flex-col gap-1 border-t border-stroke p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
           <NavLink to="/docs" onClick={close} className={navLinkClasses}>
             <BookOpenIcon className="size-4 shrink-0" />
             <span>{t('nav.docs')}</span>

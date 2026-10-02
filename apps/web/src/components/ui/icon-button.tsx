@@ -4,8 +4,8 @@ import { cn } from '@/lib/cn';
 export type IconButtonSize = 'sm' | 'md';
 
 const sizeClasses: Record<IconButtonSize, string> = {
-  sm: 'size-8 text-base',
-  md: 'size-10 text-lg',
+  sm: 'size-[44px] text-base',
+  md: 'size-[44px] text-lg',
 };
 
 export interface IconButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {

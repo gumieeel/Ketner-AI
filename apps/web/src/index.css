@@ -189,6 +189,7 @@
   }
 
   body {
+    overflow-x: clip;
     background-color: var(--canvas);
     color: var(--text);
     font-family: var(--font-sans);

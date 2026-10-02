@@ -127,9 +127,9 @@ export function ChatMock({ className }: { className?: string }) {
       </div>
 
       {/* 2. Window Body: Left Sidebar + Right Chat Canvas */}
-      <div className="grid grid-cols-1 sm:grid-cols-[160px_1fr] h-[320px] md:h-[380px]">
+      <div className="grid grid-cols-1 sm:grid-cols-[160px_1fr] h-[360px] md:h-[380px] overflow-hidden">
         {/* Model Selection List */}
-        <div className="border-b sm:border-b-0 sm:border-r border-stroke bg-surface-2/40 p-2 flex sm:flex-col gap-1 overflow-x-auto sm:overflow-y-auto">
+        <div className="border-b sm:border-b-0 sm:border-r border-stroke bg-surface-2/40 p-2 flex sm:flex-col gap-2 overflow-x-auto sm:overflow-y-auto snap-x snap-mandatory scrollbar-none" style={{ scrollbarWidth: "none" }}>
           {CHAT_MODELS.map((model) => {
             const Icon = model.icon;
             const isSelected = model.id === selectedId;
@@ -138,7 +138,7 @@ export function ChatMock({ className }: { className?: string }) {
                 key={model.id}
                 type="button"
                 onClick={() => setSelectedId(model.id)}
-                className={cn(
+                className={cn('snap-start',
                   'flex items-center gap-2 rounded-md px-2.5 py-1.5 text-xs font-medium transition-colors whitespace-nowrap text-left w-full',
                   isSelected
                     ? 'bg-surface text-text border border-stroke shadow-xs'
@@ -155,7 +155,7 @@ export function ChatMock({ className }: { className?: string }) {
         </div>
 
         {/* Right Chat Canvas */}
-        <div className="p-4 flex flex-col justify-between gap-4 bg-surface overflow-hidden">
+        <div className="p-4 flex flex-col justify-between gap-4 bg-surface overflow-hidden h-full">
           <div className="flex flex-col gap-3.5 overflow-y-auto pr-1">
             {/* User message with bg-surface-2 */}
             <div className="flex items-start gap-2.5 self-end max-w-[90%]">

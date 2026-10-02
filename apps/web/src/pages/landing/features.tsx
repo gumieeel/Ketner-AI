@@ -23,7 +23,7 @@ export function LandingFeatures() {
           : 'Work with writing, code, graphics, and deep analytical research in a unified environment.'
       }
     >
-      <div className="grid grid-cols-1 md:grid-cols-6 gap-4 items-stretch">
+      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-6 gap-4 items-stretch">
         {/* Large Mock Chat Window (4 columns) */}
         <div className="md:col-span-4 flex flex-col">
           <ChatMock className="h-full" />
@@ -32,8 +32,8 @@ export function LandingFeatures() {
         {/* 2 Right Column Cards (2 columns) */}
         <div className="md:col-span-2 flex flex-col gap-4">
           {/* 1. Тексты и контент */}
-          <Card variant="interactive" corners className="flex flex-col gap-3 p-5 h-full">
-            <div className="grid size-10 place-items-center rounded-md bg-surface-2 text-accent">
+          <Card variant="interactive" corners className="flex sm:flex-col gap-4 sm:gap-3 p-5 h-full items-start">
+            <div className="grid size-[40px] shrink-0 place-items-center rounded-md bg-surface-2 text-accent">
               <EditIcon className="size-5" />
             </div>
             <div>
@@ -49,8 +49,8 @@ export function LandingFeatures() {
           </Card>
 
           {/* 2. Программирование */}
-          <Card variant="interactive" corners className="flex flex-col gap-3 p-5 h-full">
-            <div className="grid size-10 place-items-center rounded-md bg-surface-2 text-accent">
+          <Card variant="interactive" corners className="flex sm:flex-col gap-4 sm:gap-3 p-5 h-full items-start">
+            <div className="grid size-[40px] shrink-0 place-items-center rounded-md bg-surface-2 text-accent">
               <CodeIcon className="size-5" />
             </div>
             <div>
@@ -68,8 +68,8 @@ export function LandingFeatures() {
 
         {/* 3. Изображения (3 columns) */}
         <div className="md:col-span-3">
-          <Card variant="interactive" corners className="flex flex-col gap-3 p-5 h-full">
-            <div className="grid size-10 place-items-center rounded-md bg-surface-2 text-accent">
+          <Card variant="interactive" corners className="flex sm:flex-col gap-4 sm:gap-3 p-5 h-full items-start">
+            <div className="grid size-[40px] shrink-0 place-items-center rounded-md bg-surface-2 text-accent">
               <ImageIcon className="size-5" />
             </div>
             <div>
@@ -87,8 +87,8 @@ export function LandingFeatures() {
 
         {/* 4. Анализ и исследования (3 columns) */}
         <div className="md:col-span-3">
-          <Card variant="interactive" corners className="flex flex-col gap-3 p-5 h-full">
-            <div className="grid size-10 place-items-center rounded-md bg-surface-2 text-accent">
+          <Card variant="interactive" corners className="flex sm:flex-col gap-4 sm:gap-3 p-5 h-full items-start">
+            <div className="grid size-[40px] shrink-0 place-items-center rounded-md bg-surface-2 text-accent">
               <ChartIcon className="size-5" />
             </div>
             <div>

@@ -60,7 +60,7 @@ export function PricingPage() {
   const { t, language } = useTranslation();
 
   return (
-    <div className="relative mx-auto flex w-full max-w-7xl flex-col gap-16 px-4 py-12 md:px-6 lg:px-8 animate-fade-in text-center">
+    <div className="relative mx-auto flex w-full max-w-7xl flex-col gap-12 md:gap-16 px-4 sm:px-6 lg:px-8 py-12 animate-fade-in text-center">
       {/* Заголовок страницы */}
       <div className="flex flex-col items-center gap-3">
         <div className="inline-flex items-center gap-2 rounded-sm border border-stroke bg-surface-2 px-2.5 py-1 font-mono text-[11px] font-semibold text-accent uppercase tracking-wider">
@@ -91,7 +91,27 @@ export function PricingPage() {
           </p>
         </div>
 
-        <div className="overflow-x-auto rounded-lg border border-stroke bg-surface-1">
+        
+        {/* Mobile cards view */}
+        <div className="md:hidden flex overflow-x-auto snap-x snap-mandatory gap-4 pb-4 -mx-4 px-4 scrollbar-none" style={{scrollbarWidth: 'none'}}>
+          {['free', 'plus', 'pro', 'ultra'].map((planKey) => {
+            const planNames = { free: 'Free', plus: 'Plus', pro: 'Pro', ultra: 'Ultra' };
+            return (
+              <div key={planKey} className="snap-center shrink-0 w-[85vw] rounded-lg border border-stroke bg-surface-1 p-5 flex flex-col gap-4 text-left">
+                <h3 className="text-lg font-semibold text-text border-b border-stroke pb-2 mb-2">{planNames[planKey]}</h3>
+                {COMPARISON_ROWS.map((row, idx) => (
+                  <div key={idx} className="flex flex-col gap-1">
+                    <span className="text-xs text-muted font-medium uppercase tracking-wider">{row.feature[language]}</span>
+                    <span className="text-sm text-text">{row[planKey][language]}</span>
+                  </div>
+                ))}
+              </div>
+            );
+          })}
+        </div>
+
+        {/* Desktop table view */}
+        <div data-testid="pricing-table" className="hidden md:block overflow-x-auto rounded-lg border border-stroke bg-surface-1">
           <table className="w-full border-collapse text-sm">
             <thead>
               <tr className="border-b border-stroke bg-surface-2/60 text-xs font-mono uppercase tracking-wider text-muted">

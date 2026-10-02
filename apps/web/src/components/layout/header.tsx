@@ -22,7 +22,7 @@ export function Header() {
   const title = conversations.find((conversation) => conversation.id === activeId)?.title;
 
   return (
-    <header className="flex h-12 shrink-0 items-center gap-2 border-b border-stroke bg-canvas px-3 text-text">
+    <header className="sticky top-0 z-30 flex h-[56px] shrink-0 items-center gap-2 border-b border-stroke bg-canvas/80 backdrop-blur-md px-4 text-text">
       <IconButton label={t('nav.openSidebar')} className="md:hidden" onClick={toggleSidebar}>
         <MenuIcon className="size-4" />
       </IconButton>

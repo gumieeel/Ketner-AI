@@ -317,14 +317,11 @@ export function ModelHub({ className }: { className?: string }) {
   return (
     <div className={cn('w-full flex items-center justify-center', className)}>
       {/* ── Mobile: 2×3 card grid fallback ─────────────────────────────────── */}
-      <div className="grid grid-cols-2 gap-2.5 w-full sm:hidden">
+      <div className="grid grid-cols-1 min-[320px]:grid-cols-2 gap-3 w-full sm:hidden">
         {MODELS.map((m) => {
           const Icon = m.icon;
           return (
-            <div
-              key={m.id}
-              className="flex items-center gap-2.5 rounded-lg border border-stroke bg-surface p-2.5 transition-colors hover:border-stroke-strong"
-            >
+            <div key={m.id} className="flex flex-col min-[480px]:flex-row min-[480px]:items-center items-start gap-2.5 rounded-lg border border-stroke bg-surface p-3 transition-colors hover:border-stroke-strong h-full">
               <div
                 className="grid size-7 shrink-0 place-items-center rounded-md bg-surface-2"
                 style={{ color: m.iconColor }}
@@ -332,11 +329,11 @@ export function ModelHub({ className }: { className?: string }) {
                 <Icon className="size-3.5" />
               </div>
               <div className="min-w-0 text-left">
-                <div className="flex items-center gap-1.5">
-                  <span className="text-xs font-semibold text-text truncate">{m.name}</span>
-                  <Badge tone="neutral" className="text-[9px] px-1 py-0">{m.tag}</Badge>
+                <div className="flex flex-col gap-1">
+                  <span className="text-xs font-semibold text-text break-words">{m.name}</span>
+                  <Badge tone="neutral" className="text-[9px] px-1 py-0 whitespace-nowrap">{m.tag}</Badge>
                 </div>
-                <p className="text-[10px] text-subtle truncate">{m.desc}</p>
+                <p className="text-[10px] text-subtle line-clamp-1 hidden min-[380px]:block mt-1">{m.desc}</p>
               </div>
             </div>
           );

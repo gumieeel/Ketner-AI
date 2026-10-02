@@ -273,7 +273,7 @@ export function Composer() {
           }}
           onKeyDown={onKeyDown}
           placeholder={t('chat.placeholder')}
-          className="max-h-52 w-full resize-none bg-transparent pr-2 pl-6 pt-0.5 text-sm leading-5 text-text outline-none placeholder:text-muted"
+          className="max-h-[120px] w-full resize-none bg-transparent pr-2 pl-6 pt-0.5 text-sm leading-5 text-text outline-none placeholder:text-muted"
         />
 
         <div className="flex items-center gap-1.5 pt-1">
@@ -351,7 +351,7 @@ export function Composer() {
               title={t('chat.send')}
               onClick={submit}
               disabled={!canSubmit}
-              className="ml-auto inline-flex size-8 shrink-0 items-center justify-center rounded-md bg-accent text-accent-text transition-colors hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
+              className="ml-auto inline-flex size-[44px] shrink-0 items-center justify-center rounded-md bg-accent text-accent-text transition-colors hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
             >
               <SendIcon />
             </button>

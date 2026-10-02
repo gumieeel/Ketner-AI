@@ -34,10 +34,10 @@ export function Card({
     >
       {corners && (
         <>
-          <CornerMark size={10} className="absolute top-1.5 left-1.5 text-stroke-strong" />
-          <CornerMark size={10} className="absolute top-1.5 right-1.5 text-stroke-strong rotate-90" />
-          <CornerMark size={10} className="absolute bottom-1.5 right-1.5 text-stroke-strong rotate-180" />
-          <CornerMark size={10} className="absolute bottom-1.5 left-1.5 text-stroke-strong -rotate-90" />
+          <CornerMark size={8} className="absolute top-1.5 left-1.5 text-stroke-strong" />
+          <CornerMark size={8} className="absolute top-1.5 right-1.5 text-stroke-strong rotate-90" />
+          <CornerMark size={8} className="absolute bottom-1.5 right-1.5 text-stroke-strong rotate-180" />
+          <CornerMark size={8} className="absolute bottom-1.5 left-1.5 text-stroke-strong -rotate-90" />
         </>
       )}
       {children}
