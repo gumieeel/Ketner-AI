@@ -23,7 +23,7 @@ export function LandingFaq() {
         {FAQ_ITEMS.map((item) => (
           <details
             key={item.id}
-            className="group rounded-md border border-stroke bg-surface-1 transition-colors open:bg-surface-2"
+            className="group rounded-md border border-stroke bg-surface transition-colors open:bg-surface-2"
           >
             <summary className="flex cursor-pointer items-center justify-between gap-4 p-5 font-medium text-text select-none list-none [&::-webkit-details-marker]:hidden">
               <span className="text-base font-semibold">{item.q[language]}</span>

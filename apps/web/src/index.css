@@ -33,6 +33,7 @@
 @theme inline {
   --color-canvas: var(--canvas);
   --color-surface: var(--surface);
+  --color-surface-1: var(--surface);
   --color-surface-2: var(--surface-2);
   --color-surface-3: var(--surface-3);
   --color-stroke: var(--stroke);
@@ -365,6 +366,15 @@
     .animate-marquee-ltr {
       animation: none;
       transform: none;
+    }
+  }
+
+  @media (max-width: 767px) {
+    .hero-glow {
+      box-shadow: none !important;
+    }
+    .gradient-border-animated::before {
+      animation: none !important;
     }
   }
 

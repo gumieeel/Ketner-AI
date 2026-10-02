@@ -250,6 +250,7 @@ export function SignupPage() {
                 invalid={invalid}
                 aria-describedby={describedBy}
                 type="email"
+                inputMode="email"
                 autoComplete="email"
                 placeholder="you@example.com"
                 value={email}

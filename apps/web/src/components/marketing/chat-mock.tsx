@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import {
   OpenAiIcon,
@@ -95,10 +95,18 @@ const CHAT_MODELS: ChatModel[] = [
 export function ChatMock({ className }: { className?: string }) {
   const { language } = useTranslation();
   const [selectedId, setSelectedId] = useState('gpt');
+  const tabListRef = useRef<HTMLDivElement>(null);
 
   const activeModel =
     CHAT_MODELS.find((m) => m.id === selectedId) ?? CHAT_MODELS[0];
   const ActiveIcon = activeModel.icon;
+
+  useEffect(() => {
+    const activeEl = tabListRef.current?.querySelector(`[data-model-id="${selectedId}"]`);
+    if (activeEl && typeof activeEl.scrollIntoView === 'function') {
+      activeEl.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
+    }
+  }, [selectedId]);
 
   return (
     <div
@@ -128,30 +136,41 @@ export function ChatMock({ className }: { className?: string }) {
 
       {/* 2. Window Body: Left Sidebar + Right Chat Canvas */}
       <div className="grid grid-cols-1 sm:grid-cols-[160px_1fr] h-[360px] md:h-[380px] overflow-hidden">
-        {/* Model Selection List */}
-        <div className="border-b sm:border-b-0 sm:border-r border-stroke bg-surface-2/40 p-2 flex sm:flex-col gap-2 overflow-x-auto sm:overflow-y-auto snap-x snap-mandatory scrollbar-none" style={{ scrollbarWidth: "none" }}>
-          {CHAT_MODELS.map((model) => {
-            const Icon = model.icon;
-            const isSelected = model.id === selectedId;
-            return (
-              <button
-                key={model.id}
-                type="button"
-                onClick={() => setSelectedId(model.id)}
-                className={cn('snap-start',
-                  'flex items-center gap-2 rounded-md px-2.5 py-1.5 text-xs font-medium transition-colors whitespace-nowrap text-left w-full',
-                  isSelected
-                    ? 'bg-surface text-text border border-stroke shadow-xs'
-                    : 'text-muted hover:text-text hover:bg-surface-2',
-                )}
-              >
-                <span className={cn('shrink-0', model.iconColor)}>
-                  <Icon className="size-3.5" />
-                </span>
-                <span className="truncate">{model.name} {model.tag}</span>
-              </button>
-            );
-          })}
+        {/* Model Selection List with gradient edge hints */}
+        <div className="relative border-b sm:border-b-0 sm:border-r border-stroke bg-surface-2/40">
+          <div className="pointer-events-none absolute inset-y-0 left-0 w-4 bg-gradient-to-r from-surface-2/90 to-transparent sm:hidden z-10" />
+          <div className="pointer-events-none absolute inset-y-0 right-0 w-4 bg-gradient-to-l from-surface-2/90 to-transparent sm:hidden z-10" />
+
+          <div
+            ref={tabListRef}
+            className="p-2 flex sm:flex-col gap-2 overflow-x-auto sm:overflow-y-auto snap-x snap-mandatory scrollbar-none"
+            style={{ scrollbarWidth: 'none' }}
+          >
+            {CHAT_MODELS.map((model) => {
+              const Icon = model.icon;
+              const isSelected = model.id === selectedId;
+              return (
+                <button
+                  key={model.id}
+                  data-model-id={model.id}
+                  type="button"
+                  onClick={() => setSelectedId(model.id)}
+                  className={cn(
+                    'snap-center shrink-0 sm:shrink',
+                    'flex items-center gap-2 rounded-md px-2.5 py-2 text-xs font-medium transition-colors whitespace-nowrap text-left sm:w-full min-h-[36px]',
+                    isSelected
+                      ? 'bg-surface text-text border border-stroke shadow-xs'
+                      : 'text-muted hover:text-text hover:bg-surface-2',
+                  )}
+                >
+                  <span className={cn('shrink-0', model.iconColor)}>
+                    <Icon className="size-3.5" />
+                  </span>
+                  <span className="truncate">{model.name} {model.tag}</span>
+                </button>
+              );
+            })}
+          </div>
         </div>
 
         {/* Right Chat Canvas */}

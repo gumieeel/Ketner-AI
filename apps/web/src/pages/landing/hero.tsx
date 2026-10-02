@@ -88,18 +88,26 @@ export function LandingHero() {
               </div>
             </div>
 
-            {/* Micro facts */}
-            <div className="flex flex-col sm:flex-row sm:flex-wrap items-start sm:items-center gap-2 sm:gap-6 pt-2 font-mono text-[13px] text-muted leading-tight">
+            {/* Micro facts: 3 преимущества компактным списком */}
+            <div className="flex flex-col sm:flex-row sm:flex-wrap items-start sm:items-center gap-2 sm:gap-5 pt-2 font-mono text-[13px] md:text-[14px] text-muted leading-tight">
               <div className="flex items-center gap-2">
-                <BoltIcon className="size-4 text-accent" />
+                <BoltIcon className="size-4 shrink-0 text-accent" />
                 <span>{language === 'ru' ? 'Без токенов' : 'No tokens'}</span>
               </div>
               <div className="flex items-center gap-2">
-                <RefreshIcon className="size-4 text-accent" />
+                <RefreshIcon className="size-4 shrink-0 text-accent" />
                 <span>
                   {language === 'ru'
                     ? 'Без переключения между сервисами'
                     : 'No switching between services'}
+                </span>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="size-1.5 rounded-full bg-accent shrink-0" />
+                <span>
+                  {language === 'ru'
+                    ? 'Все флагманы в едином окне'
+                    : 'All top models in one window'}
                 </span>
               </div>
             </div>

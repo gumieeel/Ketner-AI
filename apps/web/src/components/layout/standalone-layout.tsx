@@ -18,6 +18,7 @@ export function StandaloneLayout() {
   const user = useAuth((state) => state.user);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const drawerRef = useRef<HTMLDivElement>(null);
+  const touchStartX = useRef<number | null>(null);
   const location = useLocation();
 
   useFocusTrap(drawerRef, mobileMenuOpen);
@@ -139,83 +140,119 @@ export function StandaloneLayout() {
             role="dialog"
             aria-modal="true"
             aria-label="Навигация"
-            className="fixed top-0 right-0 bottom-0 w-[280px] border-l border-stroke bg-canvas p-6 flex flex-col justify-between shadow-2xl z-50 animate-slide-in-right"
+            onTouchStart={(e) => {
+              touchStartX.current = e.touches[0].clientX;
+            }}
+            onTouchEnd={(e) => {
+              if (touchStartX.current !== null) {
+                const deltaX = e.changedTouches[0].clientX - touchStartX.current;
+                // Свайп влево закрывает меню
+                if (deltaX < -45) {
+                  setMobileMenuOpen(false);
+                }
+                touchStartX.current = null;
+              }
+            }}
+            className="fixed top-0 right-0 bottom-0 w-[min(85vw,360px)] border-l border-stroke bg-canvas p-6 flex flex-col shadow-2xl z-50 animate-slide-in-right overflow-y-auto"
           >
-            <div className="flex flex-col gap-6">
-              <div className="flex items-center justify-between pb-4 border-b border-stroke">
-                <Brand />
-                <IconButton
-                  label="Закрыть меню"
-                  onClick={() => setMobileMenuOpen(false)}
-                >
-                  <CloseIcon className="size-5" />
-                </IconButton>
-              </div>
+            {/* Шапка Drawer */}
+            <div className="flex items-center justify-between pb-4 border-b border-stroke shrink-0">
+              <Brand />
+              <IconButton
+                label="Закрыть меню"
+                size="md"
+                onClick={() => setMobileMenuOpen(false)}
+              >
+                <CloseIcon className="size-5" />
+              </IconButton>
+            </div>
 
-              <nav className="flex flex-col gap-4 font-mono text-sm uppercase tracking-wider text-muted">
-                <a
-                  href="/#models"
-                  onClick={() => setMobileMenuOpen(false)}
-                  className="transition-colors hover:text-text py-1"
-                >
-                  {language === 'ru' ? 'Модели' : 'Models'}
-                </a>
-                <Link
-                  to="/pricing"
-                  onClick={() => setMobileMenuOpen(false)}
-                  className="transition-colors hover:text-text py-1"
-                >
-                  {t('nav.pricing')}
-                </Link>
-                <Link
-                  to="/docs"
-                  onClick={() => setMobileMenuOpen(false)}
-                  className="transition-colors hover:text-text py-1"
-                >
-                  {t('nav.docs')}
-                </Link>
+            {/* Пункты меню: py-4, активный с левой полоской */}
+            <nav className="flex flex-col font-mono text-sm uppercase tracking-wider text-muted divide-y divide-stroke/30 my-4">
+              <a
+                href="/#models"
+                onClick={() => setMobileMenuOpen(false)}
+                className="py-4 pl-3.5 -ml-3.5 transition-colors hover:text-text border-l-2 border-transparent"
+              >
+                {language === 'ru' ? 'Модели' : 'Models'}
+              </a>
+              <Link
+                to="/pricing"
+                onClick={() => setMobileMenuOpen(false)}
+                className={`py-4 pl-3.5 -ml-3.5 transition-colors ${
+                  location.pathname === '/pricing'
+                    ? 'border-l-2 border-accent text-accent font-semibold bg-accent-soft/30'
+                    : 'border-l-2 border-transparent hover:text-text'
+                }`}
+              >
+                {t('nav.pricing')}
+              </Link>
+              <Link
+                to="/docs"
+                onClick={() => setMobileMenuOpen(false)}
+                className={`py-4 pl-3.5 -ml-3.5 transition-colors ${
+                  location.pathname === '/docs'
+                    ? 'border-l-2 border-accent text-accent font-semibold bg-accent-soft/30'
+                    : 'border-l-2 border-transparent hover:text-text'
+                }`}
+              >
+                {t('nav.docs')}
+              </Link>
+              <Link
+                to="/chat"
+                onClick={() => setMobileMenuOpen(false)}
+                className={`py-4 pl-3.5 -ml-3.5 transition-colors ${
+                  location.pathname === '/chat'
+                    ? 'border-l-2 border-accent text-accent font-semibold bg-accent-soft/30'
+                    : 'border-l-2 border-transparent text-accent font-semibold hover:opacity-85'
+                }`}
+              >
+                {language === 'ru' ? 'Чат' : 'Chat'}
+              </Link>
+            </nav>
+
+            {/* Блок действий, прижатый к низу с учетом safe-area */}
+            <div className="mt-auto pt-6 border-t border-stroke flex flex-col gap-4 pb-[max(1rem,env(safe-area-inset-bottom))] shrink-0">
+              {status === 'authenticated' && user ? (
                 <Link
                   to="/chat"
                   onClick={() => setMobileMenuOpen(false)}
-                  className="transition-colors hover:text-text py-1 text-accent font-semibold"
+                  className="inline-flex items-center justify-center whitespace-nowrap rounded-md font-medium text-sm h-11 px-4 bg-accent text-accent-text hover:bg-accent-hover transition-colors w-full shadow-sm"
                 >
-                  {language === 'ru' ? 'Чат' : 'Chat'}
+                  {language === 'ru' ? 'Перейти в чат' : 'Go to Chat'}
                 </Link>
-              </nav>
-
-              <div className="pt-4 border-t border-stroke flex flex-col gap-2">
-                {status === 'authenticated' && user ? (
+              ) : (
+                <div className="flex flex-col gap-2.5">
                   <Link
                     to="/chat"
                     onClick={() => setMobileMenuOpen(false)}
-                    className="inline-flex items-center justify-center whitespace-nowrap rounded-md font-medium text-sm h-9 px-3.5 bg-accent text-accent-text hover:bg-accent-hover transition-colors w-full"
+                    className="inline-flex items-center justify-center whitespace-nowrap rounded-md font-medium text-sm h-11 px-4 bg-accent text-accent-text hover:bg-accent-hover transition-colors w-full shadow-sm"
                   >
                     {language === 'ru' ? 'Перейти в чат' : 'Go to Chat'}
                   </Link>
-                ) : (
-                  <>
+                  <div className="grid grid-cols-2 gap-2">
                     <Link
                       to="/login"
                       onClick={() => setMobileMenuOpen(false)}
-                      className="inline-flex items-center justify-center whitespace-nowrap rounded-md font-medium text-sm h-9 px-3.5 border border-stroke-strong text-text hover:bg-surface-2 transition-colors w-full"
+                      className="inline-flex items-center justify-center whitespace-nowrap rounded-md font-medium text-xs h-10 px-3 border border-stroke text-text hover:bg-surface-2 transition-colors"
                     >
                       {t('nav.login')}
                     </Link>
                     <Link
                       to="/signup"
                       onClick={() => setMobileMenuOpen(false)}
-                      className="inline-flex items-center justify-center whitespace-nowrap rounded-md font-medium text-sm h-9 px-3.5 bg-accent text-accent-text hover:bg-accent-hover transition-colors w-full"
+                      className="inline-flex items-center justify-center whitespace-nowrap rounded-md font-medium text-xs h-10 px-3 bg-surface-2 text-text hover:bg-surface-3 transition-colors border border-stroke"
                     >
                       {language === 'ru' ? 'Регистрация' : 'Sign up'}
                     </Link>
-                  </>
-                )}
-              </div>
-            </div>
+                  </div>
+                </div>
+              )}
 
-            <div className="pt-6 border-t border-stroke flex items-center justify-between">
-              <LanguageToggle />
-              <ThemeToggle />
+              <div className="flex items-center justify-between pt-2">
+                <LanguageToggle />
+                <ThemeToggle />
+              </div>
             </div>
           </div>
         </div>

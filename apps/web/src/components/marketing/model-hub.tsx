@@ -21,7 +21,6 @@ import {
   QwenIcon,
   GrokIcon,
 } from '@/components/icons/brands';
-import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/cn';
 
 // ─── Geometry ────────────────────────────────────────────────────────────────
@@ -316,24 +315,40 @@ export function ModelHub({ className }: { className?: string }) {
 
   return (
     <div className={cn('w-full flex items-center justify-center', className)}>
-      {/* ── Mobile: 2×3 card grid fallback ─────────────────────────────────── */}
-      <div className="grid grid-cols-1 min-[320px]:grid-cols-2 gap-3 w-full sm:hidden">
+      {/* ── Mobile: 2×3 card grid fallback (1 col at 320px, 2 cols at 360px+) ─────────────────── */}
+      <div className="grid grid-cols-1 min-[360px]:grid-cols-2 gap-3 w-full sm:hidden items-stretch">
         {MODELS.map((m) => {
           const Icon = m.icon;
           return (
-            <div key={m.id} className="flex flex-col min-[480px]:flex-row min-[480px]:items-center items-start gap-2.5 rounded-lg border border-stroke bg-surface p-3 transition-colors hover:border-stroke-strong h-full">
+            <div
+              key={m.id}
+              className="flex items-start gap-2.5 rounded-lg border border-stroke bg-surface p-3 transition-colors hover:border-stroke-strong h-full"
+            >
               <div
-                className="grid size-7 shrink-0 place-items-center rounded-md bg-surface-2"
+                className="grid size-7 shrink-0 place-items-center rounded-md bg-surface-2 mt-0.5"
                 style={{ color: m.iconColor }}
               >
                 <Icon className="size-3.5" />
               </div>
-              <div className="min-w-0 text-left">
-                <div className="flex flex-col gap-1">
-                  <span className="text-xs font-semibold text-text break-words">{m.name}</span>
-                  <Badge tone="neutral" className="text-[9px] px-1 py-0 whitespace-nowrap">{m.tag}</Badge>
+              <div className="min-w-0 flex-1 text-left flex flex-col justify-between h-full">
+                <div>
+                  <span className="text-xs font-semibold text-text block">{m.name}</span>
+                  <div className="mt-1">
+                    <span
+                      className="font-mono text-[9px] px-1.5 py-0.5 rounded whitespace-nowrap inline-block font-medium uppercase tracking-wider"
+                      style={{
+                        color: m.iconColor,
+                        background: `${m.iconColor}14`,
+                        border: `1px solid ${m.iconColor}28`,
+                      }}
+                    >
+                      {m.tag}
+                    </span>
+                  </div>
                 </div>
-                <p className="text-[10px] text-subtle line-clamp-1 hidden min-[380px]:block mt-1">{m.desc}</p>
+                <p className="text-[10px] text-subtle line-clamp-1 hidden min-[380px]:block mt-1.5">
+                  {m.desc}
+                </p>
               </div>
             </div>
           );

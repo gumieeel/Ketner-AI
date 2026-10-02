@@ -27,7 +27,7 @@ export function AppShell() {
   const { t } = useTranslation();
 
   return (
-    <div className="flex h-full overflow-hidden bg-canvas text-text">
+    <div className="flex h-full h-[100dvh] overflow-hidden bg-canvas text-text">
       <a
         href="#main-content"
         className="sr-only focus:not-sr-only focus:fixed focus:top-3 focus:left-3 focus:z-50 focus:rounded-md focus:bg-accent focus:px-4 focus:py-2 focus:text-sm focus:font-medium focus:text-accent-text focus:shadow-lg focus:outline-none"

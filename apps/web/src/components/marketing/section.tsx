@@ -28,7 +28,7 @@ export function Section({
     <section
       id={id}
       className={cn(
-        'w-full py-20 md:py-28 scroll-mt-14',
+        'w-full py-12 md:py-28 scroll-mt-14',
         className,
       )}
     >
@@ -42,11 +42,11 @@ export function Section({
           {(index || label) && (
             <SectionLabel index={index}>{label}</SectionLabel>
           )}
-          <h2 className="text-2xl sm:text-3xl md:text-4xl font-semibold tracking-tight text-text">
+          <h2 className="text-2xl sm:text-3xl md:text-4xl font-semibold tracking-tight text-text text-balance">
             {title}
           </h2>
           {description && (
-            <p className="text-sm sm:text-base text-muted max-w-[64ch] text-balance">
+            <p className="text-[15px] sm:text-base text-muted max-w-[64ch] text-balance leading-relaxed">
               {description}
             </p>
           )}

@@ -88,6 +88,7 @@ export function ModelStrip() {
   const { t, language } = useTranslation();
   const containerRef = useRef<HTMLDivElement | null>(null);
   const [active, setActive] = useState<ActiveModelInfo | null>(null);
+  const [isTouchPaused, setIsTouchPaused] = useState(false);
   const closeTimerRef = useRef<number | null>(null);
 
   const handlePillEnter = (item: StripModelItem, el: HTMLElement) => {
@@ -215,14 +216,18 @@ export function ModelStrip() {
         </span>
 
         {/* Плавная бегущая строка слева направо с мягким затуханием по краям */}
-        <div className="relative w-full overflow-x-clip overflow-y-visible py-1.5">
+        <div
+          onTouchStart={() => setIsTouchPaused(true)}
+          onTouchEnd={() => setIsTouchPaused(false)}
+          className="relative w-full overflow-x-clip overflow-y-visible py-1.5 [mask-image:linear-gradient(to_right,transparent,black_10%,black_90%,transparent)] [-webkit-mask-image:linear-gradient(to_right,transparent,black_10%,black_90%,transparent)]"
+        >
           {/* Плавные градиенты затухания по краям */}
           <div className="pointer-events-none absolute inset-y-0 left-0 w-12 md:w-24 bg-gradient-to-r from-[var(--canvas)] to-transparent z-20" />
           <div className="pointer-events-none absolute inset-y-0 right-0 w-12 md:w-24 bg-gradient-to-l from-[var(--canvas)] to-transparent z-20" />
 
           <div
-            className="group/marquee animate-marquee-ltr flex items-center gap-10"
-            style={{ animationPlayState: active ? 'paused' : undefined }}
+            className="group/marquee animate-marquee-ltr motion-reduce:animate-none flex items-center gap-10"
+            style={{ animationPlayState: active || isTouchPaused ? 'paused' : undefined }}
           >
             {/* Первый набор */}
             <div className="flex items-center gap-10 shrink-0">

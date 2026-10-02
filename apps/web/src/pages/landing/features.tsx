@@ -32,7 +32,7 @@ export function LandingFeatures() {
         {/* 2 Right Column Cards (2 columns) */}
         <div className="md:col-span-2 flex flex-col gap-4">
           {/* 1. Тексты и контент */}
-          <Card variant="interactive" corners className="flex sm:flex-col gap-4 sm:gap-3 p-5 h-full items-start">
+          <Card variant="interactive" corners className="flex flex-row sm:flex-col gap-3.5 sm:gap-3 p-4 sm:p-5 h-auto sm:h-full items-start text-left">
             <div className="grid size-[40px] shrink-0 place-items-center rounded-md bg-surface-2 text-accent">
               <EditIcon className="size-5" />
             </div>
@@ -49,7 +49,7 @@ export function LandingFeatures() {
           </Card>
 
           {/* 2. Программирование */}
-          <Card variant="interactive" corners className="flex sm:flex-col gap-4 sm:gap-3 p-5 h-full items-start">
+          <Card variant="interactive" corners className="flex flex-row sm:flex-col gap-3.5 sm:gap-3 p-4 sm:p-5 h-auto sm:h-full items-start text-left">
             <div className="grid size-[40px] shrink-0 place-items-center rounded-md bg-surface-2 text-accent">
               <CodeIcon className="size-5" />
             </div>
@@ -68,7 +68,7 @@ export function LandingFeatures() {
 
         {/* 3. Изображения (3 columns) */}
         <div className="md:col-span-3">
-          <Card variant="interactive" corners className="flex sm:flex-col gap-4 sm:gap-3 p-5 h-full items-start">
+          <Card variant="interactive" corners className="flex flex-row sm:flex-col gap-3.5 sm:gap-3 p-4 sm:p-5 h-auto sm:h-full items-start text-left">
             <div className="grid size-[40px] shrink-0 place-items-center rounded-md bg-surface-2 text-accent">
               <ImageIcon className="size-5" />
             </div>
@@ -87,7 +87,7 @@ export function LandingFeatures() {
 
         {/* 4. Анализ и исследования (3 columns) */}
         <div className="md:col-span-3">
-          <Card variant="interactive" corners className="flex sm:flex-col gap-4 sm:gap-3 p-5 h-full items-start">
+          <Card variant="interactive" corners className="flex flex-row sm:flex-col gap-3.5 sm:gap-3 p-4 sm:p-5 h-auto sm:h-full items-start text-left">
             <div className="grid size-[40px] shrink-0 place-items-center rounded-md bg-surface-2 text-accent">
               <ChartIcon className="size-5" />
             </div>

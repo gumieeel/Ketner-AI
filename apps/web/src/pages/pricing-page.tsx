@@ -1,7 +1,9 @@
+import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { ArrowRightIcon, SparkleIcon } from '@/components/icons';
 import { PlanCards } from '@/components/pricing/plan-cards';
 import { useTranslation } from '@/i18n';
+import { cn } from '@/lib/cn';
 
 interface ComparisonRow {
   feature: { ru: string; en: string };
@@ -58,6 +60,7 @@ const COMPARISON_ROWS: ComparisonRow[] = [
 
 export function PricingPage() {
   const { t, language } = useTranslation();
+  const [activeMobilePlan, setActiveMobilePlan] = useState<'free' | 'plus' | 'pro' | 'ultra'>('pro');
 
   return (
     <div className="relative mx-auto flex w-full max-w-7xl flex-col gap-12 md:gap-16 px-4 sm:px-6 lg:px-8 py-12 animate-fade-in text-center">
@@ -91,31 +94,55 @@ export function PricingPage() {
           </p>
         </div>
 
-        
-        {/* Mobile cards view */}
-        <div className="md:hidden flex overflow-x-auto snap-x snap-mandatory gap-4 pb-4 -mx-4 px-4 scrollbar-none" style={{scrollbarWidth: 'none'}}>
-          {['free', 'plus', 'pro', 'ultra'].map((planKey) => {
-            const planNames = { free: 'Free', plus: 'Plus', pro: 'Pro', ultra: 'Ultra' };
-            return (
-              <div key={planKey} className="snap-center shrink-0 w-[85vw] rounded-lg border border-stroke bg-surface-1 p-5 flex flex-col gap-4 text-left">
-                <h3 className="text-lg font-semibold text-text border-b border-stroke pb-2 mb-2">{planNames[planKey]}</h3>
-                {COMPARISON_ROWS.map((row, idx) => (
-                  <div key={idx} className="flex flex-col gap-1">
-                    <span className="text-xs text-muted font-medium uppercase tracking-wider">{row.feature[language]}</span>
-                    <span className="text-sm text-text">{row[planKey][language]}</span>
-                  </div>
-                ))}
-              </div>
-            );
-          })}
+        {/* Mobile Plan Selector Tabs */}
+        <div className="md:hidden flex items-center p-1 rounded-lg border border-stroke bg-surface-2 gap-1 w-full">
+          {(['free', 'plus', 'pro', 'ultra'] as const).map((plan) => (
+            <button
+              key={plan}
+              type="button"
+              onClick={() => setActiveMobilePlan(plan)}
+              className={cn(
+                'flex-1 py-2 text-xs font-mono font-medium rounded-md uppercase tracking-wider transition-all min-h-[44px] flex items-center justify-center',
+                activeMobilePlan === plan
+                  ? 'bg-surface text-accent border border-stroke shadow-xs font-semibold'
+                  : 'text-muted hover:text-text',
+              )}
+            >
+              {plan === 'free' ? 'Free' : plan === 'plus' ? 'Plus' : plan === 'pro' ? 'Pro' : 'Ultra'}
+            </button>
+          ))}
+        </div>
+
+        {/* Mobile Single Active Card View */}
+        <div className="md:hidden w-full rounded-lg border border-stroke bg-surface p-5 flex flex-col gap-4 text-left shadow-sm">
+          <div className="flex items-center justify-between border-b border-stroke pb-3 mb-1">
+            <h3 className="text-base font-semibold text-text uppercase font-mono tracking-wide">
+              {activeMobilePlan.toUpperCase()}
+            </h3>
+            {activeMobilePlan === 'pro' && (
+              <span className="font-mono text-[10px] uppercase tracking-wider px-2 py-0.5 rounded bg-accent/15 text-accent border border-accent/30 font-semibold">
+                {language === 'ru' ? 'Популярный' : 'Popular'}
+              </span>
+            )}
+          </div>
+          {COMPARISON_ROWS.map((row, idx) => (
+            <div key={idx} className="flex flex-col gap-1 pb-3 border-b border-stroke/50 last:border-b-0 last:pb-0">
+              <span className="text-xs text-muted font-medium uppercase tracking-wider">
+                {row.feature[language]}
+              </span>
+              <span className="text-sm font-medium text-text">
+                {row[activeMobilePlan][language]}
+              </span>
+            </div>
+          ))}
         </div>
 
         {/* Desktop table view */}
-        <div data-testid="pricing-table" className="hidden md:block overflow-x-auto rounded-lg border border-stroke bg-surface-1">
+        <div data-testid="pricing-table" className="hidden md:block overflow-x-auto rounded-lg border border-stroke bg-surface">
           <table className="w-full border-collapse text-sm">
             <thead>
-              <tr className="border-b border-stroke bg-surface-2/60 text-xs font-mono uppercase tracking-wider text-muted">
-                <th className="sticky left-0 bg-surface-2 p-4 text-left font-semibold text-text z-10 min-w-[200px]">
+              <tr className="border-b border-stroke bg-surface-2/90 text-xs font-mono uppercase tracking-wider text-muted">
+                <th className="sticky left-0 bg-surface-2 p-4 text-left font-semibold text-text z-20 min-w-[200px] border-r border-stroke">
                   {language === 'ru' ? 'Функция' : 'Feature'}
                 </th>
                 <th className="p-4 text-left font-semibold text-text min-w-[140px]">
@@ -138,7 +165,7 @@ export function PricingPage() {
                   key={idx}
                   className="transition-colors hover:bg-surface-2/40"
                 >
-                  <td className="sticky left-0 bg-surface-1 p-4 font-medium text-text z-10">
+                  <td className="sticky left-0 bg-surface p-4 font-medium text-text z-10 border-r border-stroke">
                     {row.feature[language]}
                   </td>
                   <td className="p-4 text-muted text-xs">

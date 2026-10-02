@@ -34,8 +34,8 @@ const MODEL_NAME_KEYS: Record<string, TranslationKey> = {
   'ketner-pro': 'chat.modelPro',
 };
 
-/** Высота поля ввода, после которой появляется прокрутка. */
-const MAX_HEIGHT_PX = 200;
+/** Высота поля ввода (до 5 строк), после которой появляется прокрутка. */
+const MAX_HEIGHT_PX = 120;
 
 /** Поле ввода сообщения: отправка, вложения фото/видео/файлов, привязка папки/репо и переключатель модели. */
 export function Composer() {
