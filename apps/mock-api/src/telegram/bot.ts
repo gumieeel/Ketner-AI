@@ -523,8 +523,6 @@ export class TelegramBotService {
         const parts = data.split(':');
         const invoiceId = parts[1] || undefined;
         const planId = (parts[2] || 'plus') as PlanId;
-        const linkedUser = this.resolveUser(chatId);
-        const userId = parts[3] || linkedUser?.id || this.chatToUserId.get(chatId) || config.demoUserId;
 
         let isPaid = false;
         if (invoiceId) {
@@ -532,10 +530,6 @@ export class TelegramBotService {
           if (inv && inv.status === 'paid') {
             isPaid = true;
           }
-        }
-        const sub = this.deps.subscriptionStore.get(userId);
-        if (sub && sub.status === 'active' && (sub.plan === planId || sub.plan === 'ultra')) {
-          isPaid = true;
         }
 
         if (isPaid) {
@@ -814,12 +808,6 @@ export class TelegramBotService {
                 {
                   text: '🔄 Проверить оплату Stars',
                   callback_data: `check_stars:${invoiceId || ''}:${plan.id}:${userId}`,
-                },
-              ],
-              [
-                {
-                  text: '✅ Подтвердить оплату (тест/активация)',
-                  callback_data: `confirm_stars:${invoiceId || ''}:${plan.id}:${userId}`,
                 },
               ],
               [

@@ -369,23 +369,32 @@ export function CheckoutPage() {
     }
   };
 
-  // Подтверждение Telegram Stars
+  // Проверка и подтверждение Telegram Stars
   const handleStarsConfirm = async () => {
     const invoiceId = starsInvoice?.id || `stars_${plan.id}`;
     setSubmitting(true);
     setCheckFeedback(null);
     try {
-      const res = await confirmTelegramStarsPayment(invoiceId);
-      setSubscription(res.subscription, res.user.plan);
-      if (user) setUser({ ...user, plan: res.user.plan });
-      setPaidMethodName(t('checkout.methodStars'));
-      setSuccess(true);
+      const statusRes = await getTelegramStarsStatus(invoiceId);
+      if (statusRes.status === 'paid') {
+        const res = await confirmTelegramStarsPayment(invoiceId);
+        setSubscription(res.subscription, res.user.plan);
+        if (user) setUser({ ...user, plan: res.user.plan });
+        setPaidMethodName(t('checkout.methodStars'));
+        setSuccess(true);
+      } else {
+        setCheckFeedback({
+          method: 'stars',
+          type: 'warning',
+          message: `Оплата Stars пока не поступила. Пожалуйста, откройте Telegram (@${botUsername}), оплатите счёт и нажмите кнопку проверки снова.`,
+        });
+      }
     } catch (err) {
-      console.error('Failed to confirm Stars payment:', err);
+      console.error('Failed to check Stars payment:', err);
       setCheckFeedback({
         method: 'stars',
         type: 'warning',
-        message: `Оплата Stars пока не поступила. Оплатите счёт в Telegram (@${botUsername}) и нажмите кнопку повторно.`,
+        message: 'Не удалось проверить статус счёта. Повторите попытку через несколько секунд.',
       });
     } finally {
       setSubmitting(false);

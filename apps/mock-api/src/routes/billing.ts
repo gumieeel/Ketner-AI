@@ -358,23 +358,10 @@ export function createBillingRouter({
 
   router.get('/billing/telegram-stars/status/:invoiceId', (request: Request, response: Response) => {
     const invoiceId = getParamInvoiceId(request);
-    let invoice = activeInvoiceStore.getTelegramStarsInvoice(invoiceId);
+    const invoice = activeInvoiceStore.getTelegramStarsInvoice(invoiceId);
     if (!invoice) {
       sendError(response, 404, 'invoice_not_found', 'Счёт Telegram Stars не найден');
       return;
-    }
-
-    if (invoice.status === 'pending') {
-      const sub = subscriptionStore.get(invoice.userId);
-      const user = userStore.findById(invoice.userId) || (invoice.userId.includes('@') ? userStore.findByEmail(invoice.userId) : null);
-      const userTgSub = user?.telegramChatId ? subscriptionStore.get(String(user.telegramChatId)) : null;
-
-      if (
-        (sub && sub.status === 'active' && sub.plan === invoice.planId) ||
-        (userTgSub && userTgSub.status === 'active' && userTgSub.plan === invoice.planId)
-      ) {
-        invoice = activeInvoiceStore.markTelegramStarsPaid(invoiceId) ?? invoice;
-      }
     }
 
     response.json({
