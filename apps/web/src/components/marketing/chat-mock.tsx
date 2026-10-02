@@ -101,10 +101,18 @@ export function ChatMock({ className }: { className?: string }) {
     CHAT_MODELS.find((m) => m.id === selectedId) ?? CHAT_MODELS[0];
   const ActiveIcon = activeModel.icon;
 
+  const isFirstRender = useRef(true);
+
   useEffect(() => {
-    const activeEl = tabListRef.current?.querySelector(`[data-model-id="${selectedId}"]`);
-    if (activeEl && typeof activeEl.scrollIntoView === 'function') {
-      activeEl.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
+    if (isFirstRender.current) {
+      isFirstRender.current = false;
+      return;
+    }
+    const container = tabListRef.current;
+    const activeEl = container?.querySelector<HTMLElement>(`[data-model-id="${selectedId}"]`);
+    if (container && activeEl) {
+      const targetLeft = activeEl.offsetLeft - (container.clientWidth - activeEl.clientWidth) / 2;
+      container.scrollTo({ left: targetLeft, behavior: 'smooth' });
     }
   }, [selectedId]);
 
