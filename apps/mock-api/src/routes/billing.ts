@@ -1,7 +1,7 @@
 import { Router, type Request, type Response } from 'express';
 import { config } from '../config.js';
 import { sendError } from '../middleware/errors.js';
-import { invoiceStore as defaultInvoiceStore, type InvoiceStore } from '../store/index.js';
+import { invoiceStore as defaultInvoiceStore, usedTxStore, type InvoiceStore } from '../store/index.js';
 import type { SubscriptionStore } from '../store/subscription-store.js';
 import type { UserStore } from '../store/user-store.js';
 import { calculateStars } from '../telegram/bot.js';
@@ -9,6 +9,7 @@ import type { CryptoCurrency, PlanId, PlanItem } from '../types.js';
 import { isVipUser } from '../services/vip.js';
 import { stripeService } from '../services/stripe.js';
 import { cryptoCloudService } from '../services/cryptocloud.js';
+import { blockchainVerifier } from '../services/blockchain-verifier.js';
 
 export const PLANS: readonly PlanItem[] = [
   {
@@ -498,12 +499,78 @@ export function createBillingRouter({
       return;
     }
 
+    const rawTxHash = request.body?.txHash;
     const txHash =
-      typeof request.body?.txHash === 'string' && request.body.txHash.trim().length > 0
-        ? request.body.txHash.trim()
+      typeof rawTxHash === 'string' && rawTxHash.trim().length > 0
+        ? rawTxHash.trim()
         : undefined;
+    const rawMode = request.body?.mode;
+    const mode = rawMode === 'gateway' ? 'gateway' : rawMode === 'manual' || txHash ? 'manual' : 'gateway';
 
-    // 1. Если счёт привязан к официальному шлюзу CryptoCloud:
+    // 1. ПРЯМОЙ ПЕРЕВОД НА КОШЕЛЁК (MANUAL BLOCKCHAIN VERIFICATION)
+    if (mode === 'manual' || txHash) {
+      if (!txHash) {
+        sendError(
+          response,
+          400,
+          'tx_hash_required',
+          'Для подтверждения прямого перевода необходимо указать TxID (хеш транзакции из вашего кошелька).',
+        );
+        return;
+      }
+
+      const verification = await blockchainVerifier.verifyTransaction({
+        txHash,
+        currency: invoice.currency,
+        requiredUsd: invoice.amountUsd,
+        planId: invoice.planId,
+        userId: getUserId(request) || invoice.userId,
+      });
+
+      if (!verification.success) {
+        sendError(
+          response,
+          400,
+          verification.errorCode || 'blockchain_verification_failed',
+          verification.errorMessage || 'Не удалось подтвердить транзакцию в блокчейне.',
+        );
+        return;
+      }
+
+      // Защита от повторного использования: записываем хеш
+      usedTxStore.recordUsedTx({
+        txHash,
+        userId: getUserId(request) || invoice.userId,
+        planId: invoice.planId,
+        currency: invoice.currency,
+        amount: verification.transferredAmount ?? invoice.amount,
+        createdAt: new Date().toISOString(),
+        blockTimestamp: verification.blockTimestamp,
+      });
+
+      const updated = activeInvoiceStore.markCryptoPaid(invoice.id, txHash) ?? invoice;
+      const userId = getUserId(request) || invoice.userId;
+
+      const subscription = subscriptionStore.checkout(userId, invoice.planId);
+      const user = userStore.updatePlan(userId, invoice.planId);
+      if (user?.email && user.email !== userId) {
+        subscriptionStore.checkout(user.email, invoice.planId);
+      }
+      if (user?.id && user.id !== userId) {
+        subscriptionStore.checkout(user.id, invoice.planId);
+      }
+
+      response.json({
+        success: true,
+        subscription,
+        user: user ?? { id: userId, plan: invoice.planId },
+        invoice: updated,
+        verification,
+      });
+      return;
+    }
+
+    // 2. ОПЛАТА ЧЕРЕЗ ШЛЮЗ CRYPTOCLOUD / TRYBIT (GATEWAY VERIFICATION)
     if (invoice.cryptoCloudInvoiceId && cryptoCloudService.isConfigured()) {
       let isPaid = invoice.status === 'paid';
       if (!isPaid) {
@@ -526,48 +593,36 @@ export function createBillingRouter({
         );
         return;
       }
-    } else if (!invoice.cryptoCloudInvoiceId) {
-      // 2. Прямой перевод на статический кошелёк без шлюза:
-      if (!txHash) {
-        sendError(
-          response,
-          400,
-          'tx_hash_required',
-          'Для подтверждения прямого перевода необходимо указать TxID (хеш транзакции из вашего кошелька).',
-        );
-        return;
+
+      const updated = activeInvoiceStore.markCryptoPaid(invoice.id) ?? invoice;
+      const userId = getUserId(request) || invoice.userId;
+
+      const subscription = subscriptionStore.checkout(userId, invoice.planId);
+      const user = userStore.updatePlan(userId, invoice.planId);
+      if (user?.email && user.email !== userId) {
+        subscriptionStore.checkout(user.email, invoice.planId);
+      }
+      if (user?.id && user.id !== userId) {
+        subscriptionStore.checkout(user.id, invoice.planId);
       }
 
-      if (txHash.length < 20) {
-        sendError(
-          response,
-          400,
-          'invalid_tx_hash',
-          'Указан некорректный TxID транзакции. Хеш блокчейна должен содержать не менее 20 символов.',
-        );
-        return;
-      }
+      response.json({
+        success: true,
+        subscription,
+        user: user ?? { id: userId, plan: invoice.planId },
+        invoice: updated,
+      });
+      return;
     }
 
-    const updated = activeInvoiceStore.markCryptoPaid(invoice.id, txHash) ?? invoice;
-    const userId = getUserId(request) || invoice.userId;
-
-    const subscription = subscriptionStore.checkout(userId, invoice.planId);
-    const user = userStore.updatePlan(userId, invoice.planId);
-    if (user?.email && user.email !== userId) {
-      subscriptionStore.checkout(user.email, invoice.planId);
-    }
-    if (user?.id && user.id !== userId) {
-      subscriptionStore.checkout(user.id, invoice.planId);
-    }
-
-    response.json({
-      success: true,
-      subscription,
-      user: user ?? { id: userId, plan: invoice.planId },
-      invoice: updated,
-    });
+    sendError(
+      response,
+      400,
+      'payment_not_received',
+      'Оплата не подтверждена. Пожалуйста, совершите перевод и укажите TxID транзакции.',
+    );
   });
+
 
   // Webhook & Postback от CryptoCloud
   const handleCryptoCloudWebhook = (request: Request, response: Response) => {

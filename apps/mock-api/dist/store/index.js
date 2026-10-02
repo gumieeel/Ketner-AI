@@ -16,3 +16,5 @@ export { UsageStore } from './usage-store.js';
 export const usageStore = new UsageStore(config.usageStoreFile);
 /** Хранилище обращений в службу поддержки (Telegram Support Bot). */
 export { supportStore, createSupportStore } from './support-store.js';
+/** Хранилище использованных блокчейн-транзакций (защита от replay-атак). */
+export { usedTxStore, createUsedTxStore } from './used-tx-store.js';

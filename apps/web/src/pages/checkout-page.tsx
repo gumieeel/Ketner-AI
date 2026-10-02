@@ -5,7 +5,6 @@ import {
   ArrowLeftIcon,
   BitcoinIcon,
   CheckIcon,
-  ChevronDownIcon,
   CopyIcon,
   CryptoIcon,
   ExternalLinkIcon,
@@ -387,10 +386,26 @@ export function CheckoutPage() {
   // Подтверждение Криптовалюты
   const handleCryptoConfirm = async () => {
     const invoiceId = cryptoInvoice?.id || `crypto_${plan.id}`;
+    const cleanTx = txHashInput.trim();
+
+    if (cryptoTransferMode === 'manual' && !cleanTx) {
+      setCheckFeedback({
+        method: 'crypto',
+        type: 'warning',
+        message:
+          'Для проверки прямого перевода введите TxID (хеш транзакции из вашего кошелька или биржи).',
+      });
+      return;
+    }
+
     setSubmitting(true);
     setCheckFeedback(null);
     try {
-      const res = await confirmCryptoPayment(invoiceId, txHashInput.trim() || undefined);
+      const res = await confirmCryptoPayment(
+        invoiceId,
+        cleanTx || undefined,
+        cryptoTransferMode,
+      );
       setSubscription(res.subscription, res.user.plan);
       if (user) setUser({ ...user, plan: res.user.plan });
       setPaidMethodName(t('checkout.methodCrypto'));
@@ -1195,177 +1210,189 @@ export function CheckoutPage() {
                   </label>
                 </div>
 
-                {/* Главная кнопка перехода к оплате */}
-                <div className="flex flex-col gap-2.5 pt-1">
-                  {cryptoTransferMode === 'gateway' ? (
-                    <>
-                      {cryptoInvoice?.cryptoCloudUrl ? (
-                        <a
-                          href={cryptoInvoice.cryptoCloudUrl}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          onClick={() => setGatewayOpened(true)}
-                          className="w-full inline-flex items-center justify-center gap-2.5 rounded-xl bg-gradient-to-r from-accent via-purple-600 to-accent bg-[length:200%_auto] hover:opacity-95 p-3.5 text-sm font-bold text-white transition-all shadow-md active:scale-[0.99]"
-                        >
-                          <ShieldIcon className="size-4" />
-                          <span>Открыть шлюз TryBit · {cryptoAmountStr}</span>
-                          <ExternalLinkIcon className="size-4" />
-                        </a>
-                      ) : (
-                        <Button
-                          type="button"
-                          variant="primary"
-                          size="lg"
-                          className="w-full h-12 text-sm font-bold rounded-xl shadow-md"
-                          disabled={cryptoLoading}
-                          onClick={handleCryptoConfirm}
-                        >
-                          {cryptoLoading ? (
-                            <span className="flex items-center gap-2">
-                              <span className="size-4 animate-spin rounded-full border-2 border-white border-t-transparent" />
-                              <span>Создание счёта CryptoCloud...</span>
-                            </span>
-                          ) : (
-                            <span>Перейти к оплате · {cryptoAmountStr}</span>
-                          )}
-                        </Button>
-                      )}
-                      <p className="text-[11px] text-muted text-center leading-relaxed">
-                        💡 В открывшемся шлюзе TryBit нажмите кнопку <strong>«Перейти к оплате»</strong>, чтобы получить реквизиты или оплатить кошельком.
+                {/* БЛОК ВАРИАНТА 1: ШЛЮЗ TRYBIT / CRYPTOCLOUD */}
+                {cryptoTransferMode === 'gateway' ? (
+                  <div className="flex flex-col gap-4 pt-1">
+                    {/* Официальный адрес для пользователей и тестов */}
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 px-3.5 py-2.5 rounded-xl bg-surface-2/60 border border-stroke/60 text-xs">
+                      <span className="text-muted font-medium">Официальный кошелёк Ketner AI:</span>
+                      <span className="font-mono text-text font-bold select-all break-all">{cryptoAddress}</span>
+                    </div>
+
+                    {cryptoInvoice?.cryptoCloudUrl ? (
+                      <a
+                        href={cryptoInvoice.cryptoCloudUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        onClick={() => setGatewayOpened(true)}
+                        className="w-full inline-flex items-center justify-center gap-2.5 rounded-xl bg-gradient-to-r from-accent via-purple-600 to-accent bg-[length:200%_auto] hover:opacity-95 p-3.5 text-sm font-bold text-white transition-all shadow-md active:scale-[0.99]"
+                      >
+                        <ShieldIcon className="size-4" />
+                        <span>Открыть шлюз TryBit · {cryptoAmountStr}</span>
+                        <ExternalLinkIcon className="size-4" />
+                      </a>
+                    ) : (
+                      <Button
+                        type="button"
+                        variant="primary"
+                        size="lg"
+                        className="w-full h-12 text-sm font-bold rounded-xl shadow-md"
+                        disabled={cryptoLoading}
+                        onClick={handleCryptoConfirm}
+                      >
+                        {cryptoLoading ? (
+                          <span className="flex items-center gap-2">
+                            <span className="size-4 animate-spin rounded-full border-2 border-white border-t-transparent" />
+                            <span>Создание счёта CryptoCloud...</span>
+                          </span>
+                        ) : (
+                          <span>Перейти к оплате · {cryptoAmountStr}</span>
+                        )}
+                      </Button>
+                    )}
+
+                    <p className="text-[11px] text-muted text-center leading-relaxed">
+                      💡 В открывшемся шлюзе TryBit нажмите кнопку <strong>«Перейти к оплате»</strong>, чтобы выбрать удобный способ (Binance Pay, кошелёк, карту).
+                    </p>
+
+                    {gatewayOpened && (
+                      <div className="p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-xs text-emerald-600 dark:text-emerald-400 flex items-start justify-between gap-2">
+                        <div className="flex items-start gap-2">
+                          <CheckIcon className="size-4 shrink-0 mt-0.5" />
+                          <span>
+                            Окно оплаты открыто. После совершения перевода подписка активируется автоматически.
+                          </span>
+                        </div>
+                        {cryptoInvoice?.cryptoCloudUrl && (
+                          <a
+                            href={cryptoInvoice.cryptoCloudUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="font-bold underline shrink-0 hover:opacity-80"
+                          >
+                            Открыть повторно
+                          </a>
+                        )}
+                      </div>
+                    )}
+
+                    {/* Статус проверки шлюза */}
+                    <div className="flex flex-col gap-2 rounded-xl bg-canvas border border-stroke/70 p-3.5 text-xs">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <span className="size-2 rounded-full bg-accent animate-pulse" />
+                          <span className="text-muted">
+                            Статус: <strong className="text-text font-medium">Ожидание оплаты в шлюзе</strong>
+                          </span>
+                        </div>
+                        <span className="text-[11px] text-muted font-mono">
+                          Автопроверка каждые 3 сек
+                        </span>
+                      </div>
+                      <p className="text-[11px] text-muted leading-relaxed">
+                        Платёжный шлюз CryptoCloud зафиксирует поступление средств и активирует тариф автоматически.
                       </p>
-                    </>
-                  ) : (
+                    </div>
+
+                    {checkFeedback && checkFeedback.method === 'crypto' && (
+                      <div className="p-3.5 rounded-xl bg-amber-500/10 border border-amber-500/30 text-xs text-amber-700 dark:text-amber-300 flex items-start gap-2 leading-relaxed">
+                        <span className="shrink-0 mt-0.5">⚠️</span>
+                        <span>{checkFeedback.message}</span>
+                      </div>
+                    )}
+
+                    {/* Кнопка ручной проверки шлюза */}
                     <Button
                       type="button"
-                      variant="primary"
+                      variant="outline"
                       size="lg"
-                      className="w-full h-12 text-sm font-bold rounded-xl shadow-md"
+                      className="w-full h-11 font-semibold text-xs rounded-xl border-accent/40 hover:bg-accent/10 transition-all"
+                      aria-label={t('checkout.cryptoConfirm')}
                       disabled={submitting}
                       onClick={handleCryptoConfirm}
-                      aria-label={t('checkout.cryptoConfirm')}
                     >
                       {submitting ? (
                         <span className="flex items-center gap-2">
-                          <span className="size-4 animate-spin rounded-full border-2 border-white border-t-transparent" />
-                          <span>Проверка блокчейна...</span>
+                          <span className="size-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
+                          <span>{t('checkout.cryptoChecking')}</span>
                         </span>
                       ) : (
-                        <span>Я оплатил перевод · Подтвердить подписку</span>
+                        <span className="flex items-center gap-2">
+                          <span className="text-base leading-none">🔄</span>
+                          <span>Проверить оплату криптовалютой</span>
+                          <span className="sr-only">{t('checkout.cryptoConfirm')}</span>
+                        </span>
                       )}
                     </Button>
-                  )}
-
-                  {gatewayOpened && (
-                    <div className="p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-xs text-emerald-600 dark:text-emerald-400 flex items-start justify-between gap-2">
-                      <div className="flex items-start gap-2">
-                        <CheckIcon className="size-4 shrink-0 mt-0.5" />
-                        <span>
-                          Окно оплаты открыто. После совершения транзакции подписка активируется автоматически.
+                  </div>
+                ) : (
+                  /* БЛОК ВАРИАНТА 2: ПРЯМОЙ ПЕРЕВОД НА КОШЕЛЁК С РЕАЛЬНОЙ ВЕРИФИКАЦИЕЙ TXID */
+                  <div className="flex flex-col gap-4 pt-1 border-t border-stroke/50">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                      {/* Сумма */}
+                      <div className="flex flex-col justify-between p-3.5 rounded-xl bg-surface-2 border border-stroke/70">
+                        <span className="text-xs text-muted block font-medium">
+                          {t('checkout.cryptoAmount')}:
                         </span>
+                        <div className="flex items-baseline justify-between gap-2 mt-1.5">
+                          <span className="text-xl font-bold font-mono text-accent">
+                            {cryptoAmountStr}
+                          </span>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            className="h-8 gap-1.5 text-xs font-mono"
+                            onClick={() =>
+                              copyToClipboard(
+                                String(currentCrypto.calcAmount(plan.priceMonthly)),
+                                setCopiedCryptoAmount,
+                              )
+                            }
+                          >
+                            {copiedCryptoAmount ? (
+                              <>
+                                <CheckIcon className="size-3 text-accent" />
+                                <span>{t('checkout.cryptoCopied')}</span>
+                              </>
+                            ) : (
+                              <>
+                                <CopyIcon className="size-3 text-muted" />
+                                <span>{t('checkout.cryptoCopyAmount')}</span>
+                              </>
+                            )}
+                          </Button>
+                        </div>
                       </div>
-                      {cryptoInvoice?.cryptoCloudUrl && (
-                        <a
-                          href={cryptoInvoice.cryptoCloudUrl}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="font-bold underline shrink-0 hover:opacity-80"
-                        >
-                          Открыть повторно
-                        </a>
-                      )}
+
+                      {/* Сеть */}
+                      <div className="flex flex-col justify-between p-3.5 rounded-xl bg-surface-2 border border-stroke/70">
+                        <span className="text-xs text-muted block font-medium">Выбранная сеть:</span>
+                        <div className="mt-1.5 flex items-center justify-between">
+                          <span className="text-sm font-bold text-text font-mono">
+                            {currentCrypto.network}
+                          </span>
+                          <Badge tone="brand" className="text-[10px] font-mono">
+                            1 подтверждение
+                          </Badge>
+                        </div>
+                      </div>
                     </div>
-                  )}
-                </div>
 
-                {/* Статус проверки Crypto */}
-                <div className="flex flex-col gap-3 rounded-xl bg-canvas border border-stroke/70 p-3.5 text-xs">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <span className="size-2 rounded-full bg-accent animate-pulse" />
-                      <span className="text-muted">
-                        Статус: <strong className="text-text font-medium">Ожидание подтверждения</strong>
-                      </span>
-                    </div>
-                    <span className="text-[11px] text-muted font-mono">
-                      CryptoCloud & Блокчейн
-                    </span>
-                  </div>
-                  <p className="text-[11px] text-muted leading-relaxed">
-                    ⚡ Автоматическая проверка транзакции активна (каждые 3 сек). Как только блокчейн зафиксирует перевод, ваш аккаунт обновится.
-                  </p>
-                </div>
-
-                {checkFeedback && checkFeedback.method === 'crypto' && (
-                  <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/30 text-xs text-amber-600 dark:text-amber-400 flex items-start gap-2">
-                    <span className="shrink-0 mt-0.5">ℹ️</span>
-                    <span>{checkFeedback.message}</span>
-                  </div>
-                )}
-
-                {/* Кнопка ручной проверки */}
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="lg"
-                  className="w-full h-11 font-semibold text-xs rounded-xl border-accent/40 hover:bg-accent/10 transition-all"
-                  aria-label={t('checkout.cryptoConfirm')}
-                  disabled={submitting}
-                  onClick={handleCryptoConfirm}
-                >
-                  {submitting ? (
-                    <span className="flex items-center gap-2">
-                      <span className="size-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
-                      <span>{t('checkout.cryptoChecking')}</span>
-                    </span>
-                  ) : (
-                    <span className="flex items-center gap-2">
-                      <span className="text-base leading-none">🔄</span>
-                      <span>Проверить оплату криптовалютой</span>
-                      <span className="sr-only">{t('checkout.cryptoConfirm')}</span>
-                    </span>
-                  )}
-                </Button>
-              </div>
-
-              {/* Резервный способ: прямой перевод на статический кошелёк */}
-              <details
-                className="group rounded-2xl border border-stroke/70 bg-canvas/40 p-4 transition-all"
-                open={cryptoTransferMode === 'manual'}
-              >
-                <summary className="flex cursor-pointer items-center justify-between text-xs font-bold text-muted hover:text-text select-none list-none">
-                  <div className="flex items-center gap-2">
-                    <span className="font-mono uppercase tracking-wider">
-                      Резервный способ: прямой перевод на статический кошелёк (без комиссии шлюза)
-                    </span>
-                  </div>
-                  <ChevronDownIcon className="size-4 text-muted transition-transform duration-200 group-open:rotate-180" />
-                </summary>
-
-                <div className="mt-4 flex flex-col gap-4 border-t border-stroke/50 pt-4">
-                  {/* Сумма и адрес для перевода */}
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                    {/* Сумма */}
-                    <div className="flex flex-col justify-between p-4 rounded-xl bg-surface-2 border border-stroke/70">
-                      <span className="text-xs text-muted block font-medium">
-                        {t('checkout.cryptoAmount')}:
-                      </span>
-                      <div className="flex items-baseline justify-between gap-2 mt-2">
-                        <span className="text-xl font-bold font-mono text-accent">
-                          {cryptoAmountStr}
+                    {/* Адрес депозита */}
+                    <div className="flex flex-col gap-2 p-3.5 rounded-xl bg-canvas border border-stroke/80">
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-bold text-muted uppercase tracking-wider font-mono">
+                          {t('checkout.cryptoAddress')}
                         </span>
                         <Button
                           type="button"
-                          variant="ghost"
+                          variant="outline"
                           size="sm"
-                          className="h-8 gap-1.5 text-xs font-mono"
-                          onClick={() =>
-                            copyToClipboard(
-                              String(currentCrypto.calcAmount(plan.priceMonthly)),
-                              setCopiedCryptoAmount,
-                            )
-                          }
+                          className="h-7 text-xs font-mono gap-1.5"
+                          onClick={() => copyToClipboard(cryptoAddress, setCopiedCryptoAddress)}
                         >
-                          {copiedCryptoAmount ? (
+                          {copiedCryptoAddress ? (
                             <>
                               <CheckIcon className="size-3 text-accent" />
                               <span>{t('checkout.cryptoCopied')}</span>
@@ -1373,114 +1400,112 @@ export function CheckoutPage() {
                           ) : (
                             <>
                               <CopyIcon className="size-3 text-muted" />
-                              <span>{t('checkout.cryptoCopyAmount')}</span>
+                              <span>{t('checkout.cryptoCopyAddress')}</span>
                             </>
                           )}
                         </Button>
                       </div>
-                    </div>
-
-                    {/* Сеть */}
-                    <div className="flex flex-col justify-between p-4 rounded-xl bg-surface-2 border border-stroke/70">
-                      <span className="text-xs text-muted block font-medium">Выбранная сеть:</span>
-                      <div className="mt-2 flex items-center justify-between">
-                        <span className="text-sm font-bold text-text font-mono">
-                          {currentCrypto.network}
-                        </span>
-                        <Badge tone="brand" className="text-[10px] font-mono">
-                          1 подтверждение
-                        </Badge>
+                      <div className="rounded-lg bg-surface-2 p-2.5 border border-stroke/60 font-mono text-xs text-text break-all select-all font-bold">
+                        {cryptoAddress}
                       </div>
                     </div>
-                  </div>
 
-                  {/* Адрес депозита */}
-                  <div className="flex flex-col gap-2 p-4 rounded-xl bg-canvas border border-stroke/80">
-                    <div className="flex items-center justify-between">
-                      <span className="text-xs font-bold text-muted uppercase tracking-wider font-mono">
-                        {t('checkout.cryptoAddress')}
-                      </span>
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        className="h-7 text-xs font-mono gap-1.5"
-                        onClick={() => copyToClipboard(cryptoAddress, setCopiedCryptoAddress)}
-                      >
-                        {copiedCryptoAddress ? (
-                          <>
-                            <CheckIcon className="size-3 text-accent" />
-                            <span>{t('checkout.cryptoCopied')}</span>
-                          </>
+                    {/* QR-код */}
+                    <div className="flex flex-col sm:flex-row items-center gap-5 p-4 rounded-xl bg-surface-2 border border-stroke/70">
+                      <div className="relative p-2.5 rounded-xl bg-white shadow-xs shrink-0 border border-slate-200">
+                        {cryptoLoading ? (
+                          <div className="size-36 flex items-center justify-center text-xs text-slate-500 font-mono">
+                            <span className="size-4 animate-spin rounded-full border-2 border-slate-700 border-t-transparent" />
+                          </div>
                         ) : (
-                          <>
-                            <CopyIcon className="size-3 text-muted" />
-                            <span>{t('checkout.cryptoCopyAddress')}</span>
-                          </>
+                          <QrCode
+                            value={cryptoQr}
+                            size={144}
+                            badge={
+                              <div className="size-6 flex items-center justify-center rounded-md bg-white shadow-xs">
+                                {(() => {
+                                  const IconComp = currentCrypto.icon;
+                                  return <IconComp className="size-4" />;
+                                })()}
+                              </div>
+                            }
+                          />
                         )}
-                      </Button>
-                    </div>
-                    <div className="rounded-lg bg-surface-2 p-2.5 border border-stroke/60 font-mono text-xs text-text break-all select-all">
-                      {cryptoAddress}
-                    </div>
-                  </div>
+                      </div>
 
-                  {/* QR-код */}
-                  <div className="flex flex-col sm:flex-row items-center gap-5 p-4 rounded-xl bg-surface-2 border border-stroke/70">
-                    <div className="relative p-2.5 rounded-xl bg-white shadow-xs shrink-0 border border-slate-200">
-                      {cryptoLoading ? (
-                        <div className="size-36 flex items-center justify-center text-xs text-slate-500 font-mono">
-                          <span className="size-4 animate-spin rounded-full border-2 border-slate-700 border-t-transparent" />
-                        </div>
-                      ) : (
-                        <QrCode
-                          value={cryptoQr}
-                          size={144}
-                          badge={
-                            <div className="size-6 flex items-center justify-center rounded-md bg-white shadow-xs">
-                              {(() => {
-                                const IconComp = currentCrypto.icon;
-                                return <IconComp className="size-4" />;
-                              })()}
-                            </div>
-                          }
-                        />
-                      )}
+                      <div className="flex flex-col gap-2 text-left">
+                        <h4 className="text-xs font-bold text-text uppercase tracking-wider font-mono">
+                          {t('checkout.cryptoScanQr')}
+                        </h4>
+                        <p className="text-xs text-muted leading-relaxed">
+                          Отсканируйте код в приложении Trust Wallet, Tonkeeper, Telegram Wallet, Binance или Bybit для отправки точной суммы.
+                        </p>
+                        <p className="text-[11px] text-amber-500 dark:text-amber-400 font-medium">
+                          ⚠️ Внимание: перевод средств в неверной сети приведёт к безвозвратной потере.
+                        </p>
+                      </div>
                     </div>
 
-                    <div className="flex flex-col gap-2 text-left">
-                      <h4 className="text-xs font-bold text-text uppercase tracking-wider font-mono">
-                        {t('checkout.cryptoScanQr')}
-                      </h4>
-                      <p className="text-xs text-muted leading-relaxed">
-                        Отсканируйте код в любом кошельке (Trust Wallet, Telegram Wallet, Tonkeeper,
-                        Binance, Bybit) для автоматического заполнения адреса и суммы.
+                    {/* Поле ввода TxID (Хеш транзакции) */}
+                    <div className="flex flex-col gap-2 p-4 rounded-xl bg-canvas border border-accent/30 shadow-xs">
+                      <div className="flex items-center justify-between">
+                        <label
+                          htmlFor="crypto-tx-hash"
+                          className="text-xs font-bold text-text flex items-center gap-1.5 font-mono"
+                        >
+                          <span className="size-2 rounded-full bg-accent animate-pulse" />
+                          <span>{t('checkout.cryptoTxHash')}</span>
+                        </label>
+                        <span className="text-[10px] text-muted font-mono uppercase tracking-wider">
+                          Обязательно для прямого перевода
+                        </span>
+                      </div>
+                      <input
+                        id="crypto-tx-hash"
+                        type="text"
+                        placeholder={t('checkout.cryptoTxHashPlaceholder')}
+                        value={txHashInput}
+                        onChange={(e) => setTxHashInput(e.target.value)}
+                        className="h-11 w-full rounded-xl border border-stroke bg-surface px-3.5 text-xs font-mono text-text placeholder:text-muted/60 focus:border-accent focus:ring-1 focus:ring-accent focus:outline-none transition-all"
+                      />
+                      <p className="text-[11px] text-muted leading-relaxed">
+                        ⚡ Автоматический блокчейн-верификатор Ketner AI проверяет статус транзакции, адрес получателя и сумму в реальной сети. Повторный ввод или вымышленные TxID отклоняются автоматически.
                       </p>
-                      <p className="text-[11px] text-amber-500 dark:text-amber-400 font-medium">
-                        ⚠️ Важно: перевод средств в неверной сети приведет к безвозвратной потере.
-                      </p>
                     </div>
-                  </div>
 
-                  {/* Опциональный TxID */}
-                  <div className="flex flex-col gap-1.5">
-                    <label
-                      htmlFor="crypto-tx-hash"
-                      className="text-xs font-semibold text-muted font-mono"
+                    {checkFeedback && checkFeedback.method === 'crypto' && (
+                      <div className="p-3.5 rounded-xl bg-amber-500/10 border border-amber-500/30 text-xs text-amber-700 dark:text-amber-300 flex items-start gap-2 leading-relaxed">
+                        <span className="shrink-0 mt-0.5">⚠️</span>
+                        <span>{checkFeedback.message}</span>
+                      </div>
+                    )}
+
+                    {/* Главная кнопка подтверждения прямого перевода */}
+                    <Button
+                      type="button"
+                      variant="primary"
+                      size="lg"
+                      className="w-full h-12 text-sm font-bold rounded-xl shadow-md transition-all"
+                      disabled={submitting}
+                      onClick={handleCryptoConfirm}
+                      aria-label={t('checkout.cryptoConfirm')}
                     >
-                      {t('checkout.cryptoTxHash')}
-                    </label>
-                    <input
-                      id="crypto-tx-hash"
-                      type="text"
-                      placeholder={t('checkout.cryptoTxHashPlaceholder')}
-                      value={txHashInput}
-                      onChange={(e) => setTxHashInput(e.target.value)}
-                      className="h-10 w-full rounded-xl border border-stroke bg-canvas px-3 text-xs font-mono text-text placeholder:text-muted/60 focus:border-accent focus:outline-none transition-colors"
-                    />
+                      {submitting ? (
+                        <span className="flex items-center gap-2">
+                          <span className="size-4 animate-spin rounded-full border-2 border-white border-t-transparent" />
+                          <span>Проверка транзакции в блокчейне...</span>
+                        </span>
+                      ) : (
+                        <span className="flex items-center gap-2">
+                          <CheckIcon className="size-4" />
+                          <span>Я оплатил перевод · Подтвердить подписку</span>
+                          <span className="sr-only">{t('checkout.cryptoConfirm')}</span>
+                        </span>
+                      )}
+                    </Button>
                   </div>
-                </div>
-              </details>
+                )}
+              </div>
             </div>
           )}
 

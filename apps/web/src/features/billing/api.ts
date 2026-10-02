@@ -168,6 +168,7 @@ export async function getCryptoInvoiceStatus(
 export async function confirmCryptoPayment(
   invoiceId: string,
   txHash?: string,
+  mode?: 'gateway' | 'manual',
 ): Promise<{
   success: boolean;
   subscription: Subscription;
@@ -181,7 +182,7 @@ export async function confirmCryptoPayment(
     invoice: CryptoInvoice;
   }>(`/billing/crypto/confirm/${invoiceId}`, {
     method: 'POST',
-    body: JSON.stringify({ txHash }),
+    body: JSON.stringify({ txHash, mode }),
   });
 }
 

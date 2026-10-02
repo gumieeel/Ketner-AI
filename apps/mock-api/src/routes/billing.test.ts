@@ -91,3 +91,101 @@ test('billing: получение подписки и оформление check
   assert.equal(cancelData.subscription.status, 'canceled');
   assert.equal(cancelData.user.plan, 'free');
 });
+
+test('billing: верификация крипто-платежей отклоняет фейковые TxID и защищает от replay-атак', async (t) => {
+  const server = await startTestServer();
+  t.after(() => server.close());
+
+  // Регистрируем пользователя
+  const regRes = await fetch(`${server.baseUrl}/api/auth/signup`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email: 'crypto_tester@example.com', password: 'password123', name: 'Crypto Tester' }),
+  });
+  const { token, user } = await readJson<AuthSession>(regRes);
+  assert.equal(user.plan, 'free');
+
+  // Создаём крипто-счёт на тариф Plus
+  const createInvRes = await fetch(`${server.baseUrl}/api/billing/crypto/create-invoice`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify({ planId: 'plus', currency: 'USDT_TRC20' }),
+  });
+  assert.equal(createInvRes.status, 200);
+  const { invoice } = await readJson<{ invoice: { id: string; amountUsd: number; address: string } }>(createInvRes);
+  assert.ok(invoice.id);
+  assert.equal(invoice.amountUsd, 9);
+  assert.equal(invoice.address, 'TDyeGqX4ranC94g7RMw6cGsCPvRQ7XAtQP');
+
+  // 1. Попытка подтвердить прямой перевод с фейковым хешем из скриншота (VOXD7G4GPWE3R7KDJX7R)
+  const fakeConfirmRes = await fetch(`${server.baseUrl}/api/billing/crypto/confirm/${invoice.id}`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify({ txHash: 'VOXD7G4GPWE3R7KDJX7R', mode: 'manual' }),
+  });
+  assert.equal(fakeConfirmRes.status, 400);
+  const fakeData = await readJson<{ error: { code: string; message: string } }>(fakeConfirmRes);
+  assert.equal(fakeData.error.code, 'invalid_tx_format');
+  assert.ok(fakeData.error.message.includes('64'));
+
+  // 2. Попытка подтвердить с несуществующим 64-значным хешем (тестовая ошибка)
+  const testInvalidRes = await fetch(`${server.baseUrl}/api/billing/crypto/confirm/${invoice.id}`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify({ txHash: 'TEST_INVALID_TX_64CHARS_0000000000000000000000000000000000000000000', mode: 'manual' }),
+  });
+  assert.equal(testInvalidRes.status, 400);
+
+  // 3. Успешное подтверждение с валидным хешем
+  const validTxHash = 'TEST_VALID_TX_1234567890abcdef1234567890abcdef1234567890abcdef1234';
+  const validConfirmRes = await fetch(`${server.baseUrl}/api/billing/crypto/confirm/${invoice.id}`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify({ txHash: validTxHash, mode: 'manual' }),
+  });
+  assert.equal(validConfirmRes.status, 200);
+  const validData = await readJson<{ success: boolean; user: { plan: string }; subscription: Subscription }>(
+    validConfirmRes,
+  );
+  assert.equal(validData.success, true);
+  assert.equal(validData.user.plan, 'plus');
+  assert.equal(validData.subscription.plan, 'plus');
+  assert.equal(validData.subscription.status, 'active');
+
+  // 4. Защита от Replay Attack: попытка повторно использовать тот же TxID в новом счёте
+  const secondInvRes = await fetch(`${server.baseUrl}/api/billing/crypto/create-invoice`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify({ planId: 'pro', currency: 'USDT_TRC20' }),
+  });
+  const { invoice: invoice2 } = await readJson<{ invoice: { id: string } }>(secondInvRes);
+
+  const replayRes = await fetch(`${server.baseUrl}/api/billing/crypto/confirm/${invoice2.id}`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify({ txHash: validTxHash, mode: 'manual' }),
+  });
+  assert.equal(replayRes.status, 400);
+  const replayData = await readJson<{ error: { code: string; message: string } }>(replayRes);
+  assert.equal(replayData.error.code, 'tx_already_used');
+  assert.ok(replayData.error.message.includes('уже был использован'));
+});
+

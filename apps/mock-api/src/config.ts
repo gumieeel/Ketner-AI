@@ -108,6 +108,10 @@ export const config = {
   invoiceStoreFile:
     process.env.INVOICE_STORE_FILE ??
     fileURLToPath(new URL('../data/invoices.json', import.meta.url)),
+  /** Хранилище использованных блокчейн-транзакций (защита от повторного использования). */
+  usedTxStoreFile:
+    process.env.USED_TX_STORE_FILE ??
+    fileURLToPath(new URL('../data/used_transactions.json', import.meta.url)),
   /** Хранилище тикетов поддержки: файл переживает перезапуск mock-API. */
   supportStoreFile:
     process.env.SUPPORT_STORE_FILE ??
