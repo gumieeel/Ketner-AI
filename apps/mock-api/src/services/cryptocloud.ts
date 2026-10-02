@@ -7,6 +7,7 @@ export interface CryptoCloudCreateInvoiceOptions {
   planId: PlanId;
   userId: string;
   userEmail?: string;
+  cryptocurrency?: string;
 }
 
 export interface CryptoCloudInvoiceResult {
@@ -67,6 +68,7 @@ export class CryptoCloudService {
           currency: 'USD',
           order_id: options.orderId,
           email: options.userEmail || undefined,
+          cryptocurrency: options.cryptocurrency || undefined,
         }),
       });
 

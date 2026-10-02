@@ -416,6 +416,14 @@ export function createBillingRouter({
     const amountUsd = plan.id === 'ultra' ? 49 : plan.id === 'pro' ? 25 : 9;
     const tempOrderId = `crypto_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
 
+    const cryptoCodeMap: Record<string, string> = {
+      USDT_TRC20: 'USDT_TRC20',
+      USDT_TON: 'USDT_TON',
+      TON: 'TON',
+      BTC: 'BTC',
+    };
+    const cryptocurrency = cryptoCodeMap[currency] || 'USDT_TRC20';
+
     let ccResult;
     try {
       ccResult = await cryptoCloudService.createInvoice({
@@ -424,6 +432,7 @@ export function createBillingRouter({
         planId: plan.id,
         userId,
         userEmail: user?.email,
+        cryptocurrency,
       });
     } catch (err) {
       console.warn('[billing] Ошибка создания CryptoCloud счёта:', err);

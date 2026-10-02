@@ -46,6 +46,7 @@ export class CryptoCloudService {
                     currency: 'USD',
                     order_id: options.orderId,
                     email: options.userEmail || undefined,
+                    cryptocurrency: options.cryptocurrency || undefined,
                 }),
             });
             if (!response.ok) {

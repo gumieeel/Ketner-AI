@@ -1194,34 +1194,60 @@ export function CheckoutPage() {
 
                 {/* Главная кнопка перехода к оплате */}
                 <div className="flex flex-col gap-2.5 pt-1">
-                  {cryptoInvoice?.cryptoCloudUrl ? (
-                    <a
-                      href={cryptoInvoice.cryptoCloudUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      onClick={() => setGatewayOpened(true)}
-                      className="w-full inline-flex items-center justify-center gap-2.5 rounded-xl bg-gradient-to-r from-accent via-purple-600 to-accent bg-[length:200%_auto] hover:opacity-95 p-3.5 text-sm font-bold text-white transition-all shadow-md active:scale-[0.99]"
-                    >
-                      <ShieldIcon className="size-4" />
-                      <span>Перейти к оплате · {cryptoAmountStr}</span>
-                      <ExternalLinkIcon className="size-4" />
-                    </a>
+                  {cryptoTransferMode === 'gateway' ? (
+                    <>
+                      {cryptoInvoice?.cryptoCloudUrl ? (
+                        <a
+                          href={cryptoInvoice.cryptoCloudUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          onClick={() => setGatewayOpened(true)}
+                          className="w-full inline-flex items-center justify-center gap-2.5 rounded-xl bg-gradient-to-r from-accent via-purple-600 to-accent bg-[length:200%_auto] hover:opacity-95 p-3.5 text-sm font-bold text-white transition-all shadow-md active:scale-[0.99]"
+                        >
+                          <ShieldIcon className="size-4" />
+                          <span>Открыть шлюз TryBit · {cryptoAmountStr}</span>
+                          <ExternalLinkIcon className="size-4" />
+                        </a>
+                      ) : (
+                        <Button
+                          type="button"
+                          variant="primary"
+                          size="lg"
+                          className="w-full h-12 text-sm font-bold rounded-xl shadow-md"
+                          disabled={cryptoLoading}
+                          onClick={handleCryptoConfirm}
+                        >
+                          {cryptoLoading ? (
+                            <span className="flex items-center gap-2">
+                              <span className="size-4 animate-spin rounded-full border-2 border-white border-t-transparent" />
+                              <span>Создание счёта CryptoCloud...</span>
+                            </span>
+                          ) : (
+                            <span>Перейти к оплате · {cryptoAmountStr}</span>
+                          )}
+                        </Button>
+                      )}
+                      <p className="text-[11px] text-muted text-center leading-relaxed">
+                        💡 В открывшемся шлюзе TryBit нажмите кнопку <strong>«Перейти к оплате»</strong>, чтобы получить реквизиты или оплатить кошельком.
+                      </p>
+                    </>
                   ) : (
                     <Button
                       type="button"
                       variant="primary"
                       size="lg"
                       className="w-full h-12 text-sm font-bold rounded-xl shadow-md"
-                      disabled={cryptoLoading}
+                      disabled={submitting}
                       onClick={handleCryptoConfirm}
+                      aria-label={t('checkout.cryptoConfirm')}
                     >
-                      {cryptoLoading ? (
+                      {submitting ? (
                         <span className="flex items-center gap-2">
                           <span className="size-4 animate-spin rounded-full border-2 border-white border-t-transparent" />
-                          <span>Создание счёта CryptoCloud...</span>
+                          <span>Проверка блокчейна...</span>
                         </span>
                       ) : (
-                        <span>Перейти к оплате · {cryptoAmountStr}</span>
+                        <span>Я оплатил перевод · Подтвердить подписку</span>
                       )}
                     </Button>
                   )}
