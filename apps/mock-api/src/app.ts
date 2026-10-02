@@ -107,6 +107,7 @@ export function createApp(overrides: Partial<AppDeps> = {}): Express {
       },
     }),
   );
+  app.use(express.urlencoded({ extended: true, limit: '1mb' }));
 
   // Поиск собранного веб-интерфейса во всех возможных путях (монорепо, Render, Docker):
   const currentDir = path.dirname(fileURLToPath(import.meta.url));
