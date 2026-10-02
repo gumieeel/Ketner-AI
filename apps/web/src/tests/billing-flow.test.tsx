@@ -105,7 +105,7 @@ describe('billing-flow: каталог тарифов, чекаут и упра�
     ).toBeInTheDocument();
   });
 
-  it('чекаут: по умолчанию отображается СБП с суммой в рублях и кнопкой подтверждения', async () => {
+  it('чекаут: по умолчанию отображается криптовалюта как основной способ, а выбор СБП показывает реквизиты в рублях', async () => {
     useAuth.setState({
       status: 'authenticated',
       token: 'mock-token',
@@ -124,10 +124,18 @@ describe('billing-flow: каталог тарифов, чекаут и упра�
       screen.getByRole('heading', { level: 1, name: 'Оформление подписки' }),
     ).toBeInTheDocument();
     expect(screen.getByText('Plus')).toBeInTheDocument();
-    expect(screen.getAllByText(/(?:890|990) ₽/i).length).toBeGreaterThan(0);
+    expect(await screen.findByText(/Оплата криптовалютой/i)).toBeInTheDocument();
 
-    const confirmSbp = screen.getByRole('button', { name: /Подтвердить оплату через СБП/i });
-    expect(confirmSbp).toBeInTheDocument();
+    const confirmCrypto = screen.getByRole('button', { name: /Подтвердить оплату криптовалютой/i });
+    expect(confirmCrypto).toBeInTheDocument();
+
+    // Переключаемся на СБП
+    const sbpTab = screen.getByRole('button', { name: /СБП по QR/i });
+    fireEvent.click(sbpTab);
+
+    expect(await screen.findByText(/Оплата через СБП/i)).toBeInTheDocument();
+    expect(screen.getAllByText(/(?:890|990) ₽/i).length).toBeGreaterThan(0);
+    expect(screen.getByRole('button', { name: /Подтвердить оплату через СБП/i })).toBeInTheDocument();
   });
 
   it('чекаут: выбор способа оплаты Криптовалюта отображает реквизиты и подтверждает транзакцию', async () => {

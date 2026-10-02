@@ -5,6 +5,7 @@ import {
   ArrowLeftIcon,
   BitcoinIcon,
   CheckIcon,
+  ChevronDownIcon,
   CopyIcon,
   CryptoIcon,
   ExternalLinkIcon,
@@ -166,8 +167,18 @@ export function CheckoutPage() {
     }
   }, [authStatus, user, planId, navigate]);
 
-  // Выбранный способ оплаты: по умолчанию СБП
-  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('sbp');
+  // Выбранный способ оплаты: по умолчанию криптовалюта (TryBit / CryptoCloud Gateway)
+  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('crypto');
+  const [cryptoTransferMode, setCryptoTransferMode] = useState<'gateway' | 'manual'>('gateway');
+  const [payerEmail, setPayerEmail] = useState(user?.email || '');
+  const [sendReceiptEmail, setSendReceiptEmail] = useState(true);
+  const [gatewayOpened, setGatewayOpened] = useState(false);
+
+  useEffect(() => {
+    if (user?.email && !payerEmail) {
+      setPayerEmail(user.email);
+    }
+  }, [user?.email, payerEmail]);
 
   // СБП
   const [sbpInvoice, setSbpInvoice] = useState<SbpInvoice | null>(null);
@@ -595,38 +606,7 @@ export function CheckoutPage() {
               aria-label={t('checkout.methodTitle')}
               className="grid grid-cols-1 sm:grid-cols-3 gap-3"
             >
-              {/* СПОСОБ 1: СБП */}
-              <button
-                type="button"
-                aria-pressed={paymentMethod === 'sbp'}
-                onClick={() => {
-                  setPaymentMethod('sbp');
-                  setCheckFeedback(null);
-                }}
-                className={cn(
-                  'group flex flex-col items-start gap-2.5 rounded-2xl p-4 border text-left transition-all relative overflow-hidden',
-                  paymentMethod === 'sbp'
-                    ? 'border-accent bg-accent/5 ring-1 ring-accent/30 shadow-sm'
-                    : 'border-stroke bg-surface hover:border-stroke-strong hover:bg-surface-2/40',
-                )}
-              >
-                <div className="flex items-center justify-between w-full">
-                  <div className="size-8 rounded-xl bg-surface-2 border border-stroke flex items-center justify-center group-hover:scale-105 transition-transform">
-                    <SbpIcon className="size-4" />
-                  </div>
-                  <Badge tone="brand" className="text-[10px] px-1.5 py-0.5 font-bold">
-                    0% комиссия
-                  </Badge>
-                </div>
-                <div>
-                  <span className="text-sm font-bold text-text block">СБП по QR</span>
-                  <span className="text-[11px] text-muted block mt-0.5 leading-snug">
-                    Любой банк РФ · 0% комиссии
-                  </span>
-                </div>
-              </button>
-
-              {/* СПОСОБ 2: КРИПТОВАЛЮТА */}
+              {/* СПОСОБ 1: КРИПТОВАЛЮТА (ОСНОВНОЙ) */}
               <button
                 type="button"
                 aria-pressed={paymentMethod === 'crypto'}
@@ -645,14 +625,45 @@ export function CheckoutPage() {
                   <div className="size-8 rounded-xl bg-surface-2 border border-stroke flex items-center justify-center text-accent group-hover:scale-105 transition-transform">
                     <CryptoIcon className="size-4 text-accent" />
                   </div>
-                  <Badge tone="neutral" className="text-[10px] px-1.5 py-0.5 font-mono">
-                    USDT / TON
+                  <Badge tone="brand" className="text-[10px] px-1.5 py-0.5 font-bold">
+                    🔥 Основной
                   </Badge>
                 </div>
                 <div>
                   <span className="text-sm font-bold text-text block">Криптовалюта</span>
                   <span className="text-[11px] text-muted block mt-0.5 leading-snug">
-                    USDT, TON, Bitcoin
+                    USDT, TON, BTC · Шлюз
+                  </span>
+                </div>
+              </button>
+
+              {/* СПОСОБ 2: СБП */}
+              <button
+                type="button"
+                aria-pressed={paymentMethod === 'sbp'}
+                onClick={() => {
+                  setPaymentMethod('sbp');
+                  setCheckFeedback(null);
+                }}
+                className={cn(
+                  'group flex flex-col items-start gap-2.5 rounded-2xl p-4 border text-left transition-all relative overflow-hidden',
+                  paymentMethod === 'sbp'
+                    ? 'border-accent bg-accent/5 ring-1 ring-accent/30 shadow-sm'
+                    : 'border-stroke bg-surface hover:border-stroke-strong hover:bg-surface-2/40',
+                )}
+              >
+                <div className="flex items-center justify-between w-full">
+                  <div className="size-8 rounded-xl bg-surface-2 border border-stroke flex items-center justify-center group-hover:scale-105 transition-transform">
+                    <SbpIcon className="size-4" />
+                  </div>
+                  <Badge tone="neutral" className="text-[10px] px-1.5 py-0.5 font-bold">
+                    0% комиссия
+                  </Badge>
+                </div>
+                <div>
+                  <span className="text-sm font-bold text-text block">СБП по QR</span>
+                  <span className="text-[11px] text-muted block mt-0.5 leading-snug">
+                    Любой банк РФ · 0% комиссии
                   </span>
                 </div>
               </button>
@@ -677,7 +688,7 @@ export function CheckoutPage() {
                     <StarIcon className="size-4 fill-amber-400 text-amber-400" />
                   </div>
                   <Badge tone="neutral" className="text-[10px] px-1.5 py-0.5 font-bold">
-                    В боте
+                    ⭐️ XTR
                   </Badge>
                 </div>
                 <div>
@@ -869,292 +880,578 @@ export function CheckoutPage() {
             </div>
           )}
 
-          {/* ПАНЕЛЬ СПОСОБА 2: КРИПТОВАЛЮТА */}
+          {/* ПАНЕЛЬ СПОСОБА 1: КРИПТОВАЛЮТА (ОСНОВНОЙ ПЛАТЁЖНЫЙ ШЛЮЗ CRYPTOCLOUD / TRYBIT) */}
           {paymentMethod === 'crypto' && (
             <div className="flex flex-col gap-6 rounded-2xl border border-stroke bg-surface p-6 shadow-sm animate-fade-in">
+              {/* Шапка шлюза */}
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-stroke/60 pb-5">
                 <div>
-                  <h3 className="text-base font-bold text-text flex items-center gap-2">
-                    <CryptoIcon className="size-5 text-accent" />
-                    <span>Оплата криптовалютой</span>
-                  </h3>
+                  <div className="flex items-center gap-2">
+                    <span className="size-2 rounded-full bg-emerald-500 animate-pulse" />
+                    <h3 className="text-base font-bold text-text flex items-center gap-2">
+                      <CryptoIcon className="size-5 text-accent" />
+                      <span>Оплата криптовалютой</span>
+                    </h3>
+                    <Badge tone="brand" className="text-[10px] font-mono">
+                      TryBit / CryptoCloud
+                    </Badge>
+                  </div>
                   <p className="text-xs text-muted mt-1">
-                    USDT (TRC-20, TON), нативный TON или Bitcoin
+                    Официальный платёжный шлюз Ketner AI: USDT, TON, BTC или банковские карты
                   </p>
                 </div>
 
                 <div className="flex items-center gap-2 text-xs font-mono rounded-xl bg-canvas border border-stroke/70 px-3 py-1.5 self-start sm:self-auto">
-                  <span className="text-muted">Фиксация курса:</span>
+                  <span className="text-muted">Таймер фиксации:</span>
                   <span className="font-bold text-accent">{formatTimer(cryptoSecondsLeft)}</span>
                 </div>
               </div>
 
-              {/* CryptoCloud Gateway */}
-              <div className="relative overflow-hidden rounded-2xl border border-accent/40 bg-gradient-to-r from-accent/10 via-surface-2 to-accent/5 p-4 sm:p-5 shadow-xs">
-                <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-                  <div className="flex items-center gap-3">
-                    <div className="size-10 rounded-xl bg-accent/20 border border-accent/30 flex items-center justify-center shrink-0">
-                      <CryptoIcon className="size-5 text-accent" />
+              {/* Главная платёжная карточка в фирменном стиле TryBit */}
+              <div className="rounded-2xl border border-accent/40 bg-gradient-to-b from-accent/10 via-surface to-surface p-5 sm:p-6 shadow-sm flex flex-col gap-6 relative overflow-hidden">
+                {/* TryBit Brand Top Bar */}
+                <div className="flex items-center justify-between border-b border-stroke/50 pb-4">
+                  <div className="flex items-center gap-2.5">
+                    <div className="size-9 rounded-xl bg-gradient-to-tr from-accent to-purple-600 text-white flex items-center justify-center font-bold text-sm shadow-xs">
+                      K
                     </div>
                     <div>
-                      <div className="flex items-center gap-2">
-                        <span className="text-sm font-bold text-text">CryptoCloud Gateway</span>
-                        <span className="rounded bg-accent/20 px-1.5 py-0.5 text-[10px] font-bold text-accent font-mono">
-                          Автоподтверждение
-                        </span>
-                      </div>
-                      <p className="text-xs text-muted mt-0.5">
-                        Моментальная оплата в 1 клик через платёжный шлюз (USDT, TON, BTC, банковские карты)
-                      </p>
+                      <span className="text-sm font-bold text-text block leading-tight">Ketner AI</span>
+                      <span className="text-[11px] text-muted font-mono block">
+                        Счёт #{cryptoInvoice?.cryptoCloudInvoiceId || (cryptoInvoice ? `INV-${cryptoInvoice.id.slice(0, 8).toUpperCase()}` : 'INV-AI')}
+                      </span>
                     </div>
                   </div>
+                  <div className="flex items-center gap-1.5 rounded-lg bg-emerald-500/15 border border-emerald-500/30 px-2 py-1 text-[11px] font-semibold text-emerald-600 dark:text-emerald-400">
+                    <ShieldIcon className="size-3.5" />
+                    <span>Защищённый шлюз</span>
+                  </div>
+                </div>
+
+                {/* Amount display */}
+                <div className="flex flex-col sm:flex-row sm:items-baseline justify-between gap-2 p-4 rounded-xl bg-canvas/70 border border-stroke/70">
+                  <div>
+                    <span className="text-xs text-muted block font-medium uppercase tracking-wider font-mono">
+                      К оплате за подписку:
+                    </span>
+                    <div className="flex items-baseline gap-2 mt-1">
+                      <span className="text-3xl font-extrabold font-mono text-text">
+                        {cryptoAmountStr}
+                      </span>
+                      <span className="text-xs text-muted font-mono">
+                        ≈ ${plan.priceMonthly}.00 USD
+                      </span>
+                    </div>
+                  </div>
+                  <Badge tone="brand" className="self-start sm:self-auto font-mono text-xs px-2.5 py-1">
+                    Тариф {t(plan.nameKey)} · 30 дней
+                  </Badge>
+                </div>
+
+                {/* 1. Выбор валюты (Currency Selector) */}
+                <div className="flex flex-col gap-2.5">
+                  <div className="flex items-center justify-between">
+                    <label className="text-xs font-bold uppercase tracking-wider text-muted font-mono">
+                      1. Валюта для оплаты
+                    </label>
+                    <span className="text-[11px] text-muted">Выберите криптовалюту</span>
+                  </div>
+                  <div className="grid grid-cols-3 gap-2.5">
+                    {/* USDT */}
+                    <button
+                      type="button"
+                      onClick={() => setCryptoCurrency('USDT_TRC20')}
+                      className={cn(
+                        'flex flex-col items-start gap-1 p-3 rounded-xl border text-left transition-all',
+                        cryptoCurrency.startsWith('USDT')
+                          ? 'border-accent bg-accent/15 ring-1 ring-accent/40 shadow-xs'
+                          : 'border-stroke bg-surface-2 hover:border-stroke-strong hover:bg-surface-2/80',
+                      )}
+                    >
+                      <div className="flex items-center justify-between w-full">
+                        <UsdtIcon className="size-5" />
+                        <span
+                          className={cn(
+                            'text-[9px] font-bold px-1.5 py-0.5 rounded font-mono',
+                            cryptoCurrency.startsWith('USDT')
+                              ? 'bg-accent text-accent-text'
+                              : 'bg-canvas text-muted border border-stroke/60',
+                          )}
+                        >
+                          🔥 Топ
+                        </span>
+                      </div>
+                      <span className="text-xs font-bold text-text mt-1">USDT</span>
+                      <span className="text-[10px] text-muted">Tether USD</span>
+                    </button>
+
+                    {/* TON */}
+                    <button
+                      type="button"
+                      onClick={() => setCryptoCurrency('TON')}
+                      className={cn(
+                        'flex flex-col items-start gap-1 p-3 rounded-xl border text-left transition-all',
+                        cryptoCurrency === 'TON'
+                          ? 'border-accent bg-accent/15 ring-1 ring-accent/40 shadow-xs'
+                          : 'border-stroke bg-surface-2 hover:border-stroke-strong hover:bg-surface-2/80',
+                      )}
+                    >
+                      <div className="flex items-center justify-between w-full">
+                        <TonIcon className="size-5" />
+                        <span
+                          className={cn(
+                            'text-[9px] font-bold px-1.5 py-0.5 rounded font-mono',
+                            cryptoCurrency === 'TON'
+                              ? 'bg-accent text-accent-text'
+                              : 'bg-canvas text-muted border border-stroke/60',
+                          )}
+                        >
+                          Telegram
+                        </span>
+                      </div>
+                      <span className="text-xs font-bold text-text mt-1">TON</span>
+                      <span className="text-[10px] text-muted">The Open Network</span>
+                    </button>
+
+                    {/* BTC */}
+                    <button
+                      type="button"
+                      onClick={() => setCryptoCurrency('BTC')}
+                      className={cn(
+                        'flex flex-col items-start gap-1 p-3 rounded-xl border text-left transition-all',
+                        cryptoCurrency === 'BTC'
+                          ? 'border-accent bg-accent/15 ring-1 ring-accent/40 shadow-xs'
+                          : 'border-stroke bg-surface-2 hover:border-stroke-strong hover:bg-surface-2/80',
+                      )}
+                    >
+                      <div className="flex items-center justify-between w-full">
+                        <BitcoinIcon className="size-5" />
+                        <span
+                          className={cn(
+                            'text-[9px] font-bold px-1.5 py-0.5 rounded font-mono',
+                            cryptoCurrency === 'BTC'
+                              ? 'bg-accent text-accent-text'
+                              : 'bg-canvas text-muted border border-stroke/60',
+                          )}
+                        >
+                          Mainnet
+                        </span>
+                      </div>
+                      <span className="text-xs font-bold text-text mt-1">Bitcoin</span>
+                      <span className="text-[10px] text-muted">BTC Network</span>
+                    </button>
+                  </div>
+                </div>
+
+                {/* 2. Выбор сети (Network Selector) */}
+                <div className="flex flex-col gap-2.5">
+                  <div className="flex items-center justify-between">
+                    <label className="text-xs font-bold uppercase tracking-wider text-muted font-mono">
+                      2. {t('checkout.cryptoNetwork')}
+                    </label>
+                    <span className="text-[11px] text-muted">Выберите нужную сеть</span>
+                  </div>
+
+                  {cryptoCurrency.startsWith('USDT') ? (
+                    <div className="grid grid-cols-2 gap-2.5">
+                      <button
+                        type="button"
+                        onClick={() => setCryptoCurrency('USDT_TRC20')}
+                        className={cn(
+                          'flex items-center justify-between p-3 rounded-xl border text-left transition-all',
+                          cryptoCurrency === 'USDT_TRC20'
+                            ? 'border-accent bg-accent/15 ring-1 ring-accent/40 font-semibold'
+                            : 'border-stroke bg-surface-2 hover:border-stroke-strong',
+                        )}
+                      >
+                        <div className="flex flex-col">
+                          <span className="text-xs font-bold text-text">USDT (TRC-20)</span>
+                          <span className="text-[10px] text-muted">Tron Network · Рекомендуется</span>
+                        </div>
+                        <Badge tone="brand" className="text-[9px] font-mono">
+                          Быстро
+                        </Badge>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => setCryptoCurrency('USDT_TON')}
+                        className={cn(
+                          'flex items-center justify-between p-3 rounded-xl border text-left transition-all',
+                          cryptoCurrency === 'USDT_TON'
+                            ? 'border-accent bg-accent/15 ring-1 ring-accent/40 font-semibold'
+                            : 'border-stroke bg-surface-2 hover:border-stroke-strong',
+                        )}
+                      >
+                        <div className="flex flex-col">
+                          <span className="text-xs font-bold text-text">USDT (TON)</span>
+                          <span className="text-[10px] text-muted">TON Network · Telegram кошелёк</span>
+                        </div>
+                        <Badge tone="neutral" className="text-[9px] font-mono">
+                          ~$0.05
+                        </Badge>
+                      </button>
+                    </div>
+                  ) : cryptoCurrency === 'TON' ? (
+                    <div className="p-3 rounded-xl border border-accent bg-accent/10 flex items-center justify-between">
+                      <div className="flex flex-col">
+                        <span className="text-xs font-bold text-text">The Open Network (TON)</span>
+                        <span className="text-[10px] text-muted">Нативная сеть Telegram TON</span>
+                      </div>
+                      <Badge tone="brand" className="text-[9px] font-mono">
+                        Активна
+                      </Badge>
+                    </div>
+                  ) : (
+                    <div className="p-3 rounded-xl border border-accent bg-accent/10 flex items-center justify-between">
+                      <div className="flex flex-col">
+                        <span className="text-xs font-bold text-text">Bitcoin Mainnet (BTC)</span>
+                        <span className="text-[10px] text-muted">Нативная сеть Bitcoin</span>
+                      </div>
+                      <Badge tone="brand" className="text-[9px] font-mono">
+                        Активна
+                      </Badge>
+                    </div>
+                  )}
+                </div>
+
+                {/* 3. Способ проведения оплаты */}
+                <div className="flex flex-col gap-2.5">
+                  <label className="text-xs font-bold uppercase tracking-wider text-muted font-mono">
+                    3. Способ оплаты
+                  </label>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                    <button
+                      type="button"
+                      onClick={() => setCryptoTransferMode('gateway')}
+                      className={cn(
+                        'flex flex-col items-start gap-1 p-3.5 rounded-xl border text-left transition-all',
+                        cryptoTransferMode === 'gateway'
+                          ? 'border-accent bg-accent/15 ring-1 ring-accent/40 shadow-xs'
+                          : 'border-stroke bg-surface-2 hover:border-stroke-strong',
+                      )}
+                    >
+                      <div className="flex items-center justify-between w-full">
+                        <span className="text-xs font-bold text-text">TryBit / CryptoCloud</span>
+                        <Badge tone="brand" className="text-[9px] font-mono">
+                          🔥 Основной
+                        </Badge>
+                      </div>
+                      <span className="text-[11px] text-muted mt-1 leading-snug">
+                        Web3, Binance Pay, Tonkeeper, Trust Wallet или банковские карты
+                      </span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => setCryptoTransferMode('manual')}
+                      className={cn(
+                        'flex flex-col items-start gap-1 p-3.5 rounded-xl border text-left transition-all',
+                        cryptoTransferMode === 'manual'
+                          ? 'border-accent bg-accent/15 ring-1 ring-accent/40 shadow-xs'
+                          : 'border-stroke bg-surface-2 hover:border-stroke-strong',
+                      )}
+                    >
+                      <div className="flex items-center justify-between w-full">
+                        <span className="text-xs font-bold text-text">Прямой перевод на адрес</span>
+                        <Badge tone="neutral" className="text-[9px] font-mono">
+                          Кошелёк / QR
+                        </Badge>
+                      </div>
+                      <span className="text-[11px] text-muted mt-1 leading-snug">
+                        Перевод точной суммы по статическому адресу или QR-коду
+                      </span>
+                    </button>
+                  </div>
+                </div>
+
+                {/* Email для чека */}
+                <div className="flex flex-col gap-2 p-3.5 rounded-xl bg-canvas/70 border border-stroke/70">
+                  <label htmlFor="payer-email-crypto" className="text-xs font-semibold text-text flex items-center justify-between">
+                    <span>Email для чека об оплате</span>
+                    <span className="text-[10px] text-muted font-normal">Электронный чек с подтверждением</span>
+                  </label>
+                  <input
+                    id="payer-email-crypto"
+                    type="email"
+                    value={payerEmail}
+                    onChange={(e) => setPayerEmail(e.target.value)}
+                    placeholder="user@example.com"
+                    className="h-9 w-full rounded-lg border border-stroke bg-surface px-3 text-xs text-text placeholder:text-muted/60 focus:border-accent focus:outline-none transition-colors"
+                  />
+                  <label className="flex items-center gap-2 mt-0.5 cursor-pointer select-none">
+                    <input
+                      type="checkbox"
+                      checked={sendReceiptEmail}
+                      onChange={(e) => setSendReceiptEmail(e.target.checked)}
+                      className="size-3.5 rounded border-stroke text-accent focus:ring-accent accent-accent"
+                    />
+                    <span className="text-[11px] text-muted">
+                      Отправить официальную квитанцию об оплате на этот email
+                    </span>
+                  </label>
+                </div>
+
+                {/* Главная кнопка перехода к оплате */}
+                <div className="flex flex-col gap-2.5 pt-1">
                   {cryptoInvoice?.cryptoCloudUrl ? (
                     <a
                       href={cryptoInvoice.cryptoCloudUrl}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="inline-flex items-center gap-2 rounded-xl bg-accent px-4 py-2.5 text-xs font-bold text-accent-text hover:bg-accent/90 transition-all shadow-md shrink-0 self-stretch sm:self-auto justify-center"
+                      onClick={() => setGatewayOpened(true)}
+                      className="w-full inline-flex items-center justify-center gap-2.5 rounded-xl bg-gradient-to-r from-accent via-purple-600 to-accent bg-[length:200%_auto] hover:opacity-95 p-3.5 text-sm font-bold text-white transition-all shadow-md active:scale-[0.99]"
                     >
-                      <span>Оплатить в CryptoCloud</span>
-                      <ExternalLinkIcon className="size-3.5" />
+                      <ShieldIcon className="size-4" />
+                      <span>Перейти к оплате · {cryptoAmountStr}</span>
+                      <ExternalLinkIcon className="size-4" />
                     </a>
-                  ) : null}
-                </div>
-              </div>
-
-              {/* Разделитель */}
-              <div className="relative flex items-center justify-center -my-1">
-                <div className="absolute inset-0 flex items-center">
-                  <div className="w-full border-t border-stroke/60" />
-                </div>
-                <div className="relative bg-surface px-3 text-[10px] font-bold text-muted uppercase tracking-wider font-mono">
-                  Или прямой перевод на кошелёк
-                </div>
-              </div>
-
-              {/* Выбор монеты / сети */}
-              <div className="flex flex-col gap-2.5">
-                <label className="text-xs font-semibold uppercase tracking-wider text-muted font-mono">
-                  {t('checkout.cryptoNetwork')}
-                </label>
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-                  {CRYPTO_OPTIONS.map((opt) => {
-                    const active = cryptoCurrency === opt.id;
-                    const IconComp = opt.icon;
-                    return (
-                      <button
-                        key={opt.id}
-                        type="button"
-                        onClick={() => setCryptoCurrency(opt.id)}
-                        className={cn(
-                          'flex flex-col items-start gap-1.5 p-3 rounded-xl border text-left transition-all',
-                          active
-                            ? 'border-accent bg-accent/10 shadow-xs'
-                            : 'border-stroke bg-surface-2 hover:border-stroke-strong hover:bg-surface-2/80',
-                        )}
-                      >
-                        <div className="flex items-center justify-between w-full">
-                          <IconComp className="size-5" />
-                          <span
-                            className={cn(
-                              'text-[9px] font-bold px-1 py-0.5 rounded font-mono',
-                              active
-                                ? 'bg-accent text-accent-text'
-                                : 'bg-canvas text-muted border border-stroke/60',
-                            )}
-                          >
-                            {opt.id === 'USDT_TRC20' ? 'TRC20' : opt.id === 'USDT_TON' ? 'TON' : opt.id}
-                          </span>
-                        </div>
-                        <span className="text-xs font-bold text-text mt-1">{opt.name}</span>
-                        <span className="text-[10px] text-muted truncate w-full">{opt.badge}</span>
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-
-              {/* Сумма и адрес для перевода */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                {/* Сумма */}
-                <div className="flex flex-col justify-between p-4 rounded-xl bg-surface-2 border border-stroke/70">
-                  <span className="text-xs text-muted block font-medium">
-                    {t('checkout.cryptoAmount')}:
-                  </span>
-                  <div className="flex items-baseline justify-between gap-2 mt-2">
-                    <span className="text-xl font-bold font-mono text-accent">
-                      {cryptoAmountStr}
-                    </span>
+                  ) : (
                     <Button
                       type="button"
-                      variant="ghost"
-                      size="sm"
-                      className="h-8 gap-1.5 text-xs font-mono"
-                      onClick={() =>
-                        copyToClipboard(
-                          String(currentCrypto.calcAmount(plan.priceMonthly)),
-                          setCopiedCryptoAmount,
-                        )
-                      }
+                      variant="primary"
+                      size="lg"
+                      className="w-full h-12 text-sm font-bold rounded-xl shadow-md"
+                      disabled={cryptoLoading}
+                      onClick={handleCryptoConfirm}
                     >
-                      {copiedCryptoAmount ? (
-                        <>
-                          <CheckIcon className="size-3 text-accent" />
-                          <span>{t('checkout.cryptoCopied')}</span>
-                        </>
+                      {cryptoLoading ? (
+                        <span className="flex items-center gap-2">
+                          <span className="size-4 animate-spin rounded-full border-2 border-white border-t-transparent" />
+                          <span>Создание счёта CryptoCloud...</span>
+                        </span>
                       ) : (
-                        <>
-                          <CopyIcon className="size-3 text-muted" />
-                          <span>{t('checkout.cryptoCopyAmount')}</span>
-                        </>
+                        <span>Перейти к оплате · {cryptoAmountStr}</span>
                       )}
                     </Button>
-                  </div>
-                </div>
+                  )}
 
-                {/* Сеть */}
-                <div className="flex flex-col justify-between p-4 rounded-xl bg-surface-2 border border-stroke/70">
-                  <span className="text-xs text-muted block font-medium">Выбранная сеть:</span>
-                  <div className="mt-2 flex items-center justify-between">
-                    <span className="text-sm font-bold text-text font-mono">
-                      {currentCrypto.network}
-                    </span>
-                    <Badge tone="brand" className="text-[10px] font-mono">
-                      1 подтверждение
-                    </Badge>
-                  </div>
-                </div>
-              </div>
-
-              {/* Адрес депозита */}
-              <div className="flex flex-col gap-2 p-4 rounded-xl bg-canvas border border-stroke/80">
-                <div className="flex items-center justify-between">
-                  <span className="text-xs font-bold text-muted uppercase tracking-wider font-mono">
-                    {t('checkout.cryptoAddress')}
-                  </span>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    className="h-7 text-xs font-mono gap-1.5"
-                    onClick={() => copyToClipboard(cryptoAddress, setCopiedCryptoAddress)}
-                  >
-                    {copiedCryptoAddress ? (
-                      <>
-                        <CheckIcon className="size-3 text-accent" />
-                        <span>{t('checkout.cryptoCopied')}</span>
-                      </>
-                    ) : (
-                      <>
-                        <CopyIcon className="size-3 text-muted" />
-                        <span>{t('checkout.cryptoCopyAddress')}</span>
-                      </>
-                    )}
-                  </Button>
-                </div>
-                <div className="rounded-lg bg-surface-2 p-2.5 border border-stroke/60 font-mono text-xs text-text break-all select-all">
-                  {cryptoAddress}
-                </div>
-              </div>
-
-              {/* QR-код */}
-              <div className="flex flex-col sm:flex-row items-center gap-5 p-4 rounded-xl bg-surface-2 border border-stroke/70">
-                <div className="relative p-2.5 rounded-xl bg-white shadow-xs shrink-0 border border-slate-200">
-                  {cryptoLoading ? (
-                    <div className="size-36 flex items-center justify-center text-xs text-slate-500 font-mono">
-                      <span className="size-4 animate-spin rounded-full border-2 border-slate-700 border-t-transparent" />
+                  {gatewayOpened && (
+                    <div className="p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-xs text-emerald-600 dark:text-emerald-400 flex items-start justify-between gap-2">
+                      <div className="flex items-start gap-2">
+                        <CheckIcon className="size-4 shrink-0 mt-0.5" />
+                        <span>
+                          Окно оплаты открыто. После совершения транзакции подписка активируется автоматически.
+                        </span>
+                      </div>
+                      {cryptoInvoice?.cryptoCloudUrl && (
+                        <a
+                          href={cryptoInvoice.cryptoCloudUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="font-bold underline shrink-0 hover:opacity-80"
+                        >
+                          Открыть повторно
+                        </a>
+                      )}
                     </div>
-                  ) : (
-                    <QrCode
-                      value={cryptoQr}
-                      size={144}
-                      badge={
-                        <div className="size-6 flex items-center justify-center rounded-md bg-white shadow-xs">
-                          {(() => {
-                            const IconComp = currentCrypto.icon;
-                            return <IconComp className="size-4" />;
-                          })()}
-                        </div>
-                      }
-                    />
                   )}
                 </div>
 
-                <div className="flex flex-col gap-2 text-left">
-                  <h4 className="text-xs font-bold text-text uppercase tracking-wider font-mono">
-                    {t('checkout.cryptoScanQr')}
-                  </h4>
-                  <p className="text-xs text-muted leading-relaxed">
-                    Отсканируйте код в любом кошельке (Trust Wallet, Telegram Wallet, Tonkeeper,
-                    Binance, Bybit) для автоматического заполнения адреса и суммы.
+                {/* Статус проверки Crypto */}
+                <div className="flex flex-col gap-3 rounded-xl bg-canvas border border-stroke/70 p-3.5 text-xs">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <span className="size-2 rounded-full bg-accent animate-pulse" />
+                      <span className="text-muted">
+                        Статус: <strong className="text-text font-medium">Ожидание подтверждения</strong>
+                      </span>
+                    </div>
+                    <span className="text-[11px] text-muted font-mono">
+                      CryptoCloud & Блокчейн
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-muted leading-relaxed">
+                    ⚡ Автоматическая проверка транзакции активна (каждые 3 сек). Как только блокчейн зафиксирует перевод, ваш аккаунт обновится.
                   </p>
-                  <p className="text-[11px] text-amber-500 dark:text-amber-400 font-medium">
-                    ⚠️ Важно: перевод средств в неверной сети приведет к безвозвратной потере.
-                  </p>
                 </div>
-              </div>
 
-              {/* Опциональный TxID */}
-              <div className="flex flex-col gap-1.5">
-                <label
-                  htmlFor="crypto-tx-hash"
-                  className="text-xs font-semibold text-muted font-mono"
-                >
-                  {t('checkout.cryptoTxHash')}
-                </label>
-                <input
-                  id="crypto-tx-hash"
-                  type="text"
-                  placeholder={t('checkout.cryptoTxHashPlaceholder')}
-                  value={txHashInput}
-                  onChange={(e) => setTxHashInput(e.target.value)}
-                  className="h-10 w-full rounded-xl border border-stroke bg-canvas px-3 text-xs font-mono text-text placeholder:text-muted/60 focus:border-accent focus:outline-none transition-colors"
-                />
-              </div>
-
-              {/* Статус проверки Crypto */}
-              <div className="flex items-center justify-between px-3.5 py-2.5 rounded-xl bg-canvas border border-stroke/70 text-xs">
-                <div className="flex items-center gap-2">
-                  <span className="size-2 rounded-full bg-accent animate-pulse" />
-                  <span className="text-muted">
-                    Статус: <strong className="text-text font-medium">Ожидание депозита</strong>
-                  </span>
-                </div>
-                <span className="text-[11px] text-muted font-mono">
-                  CryptoCloud & Блокчейн
-                </span>
-              </div>
-
-              {checkFeedback && checkFeedback.method === 'crypto' && (
-                <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/30 text-xs text-amber-600 dark:text-amber-400 flex items-start gap-2">
-                  <span className="shrink-0 mt-0.5">ℹ️</span>
-                  <span>{checkFeedback.message}</span>
-                </div>
-              )}
-
-              {/* Кнопка подтверждения */}
-              <Button
-                type="button"
-                variant="primary"
-                size="lg"
-                className="w-full h-11 font-semibold text-sm rounded-xl shadow-sm transition-all"
-                aria-label={t('checkout.cryptoConfirm')}
-                disabled={submitting}
-                onClick={handleCryptoConfirm}
-              >
-                {submitting ? (
-                  <span className="flex items-center gap-2">
-                    <span className="size-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
-                    <span>{t('checkout.cryptoChecking')}</span>
-                  </span>
-                ) : (
-                  <span className="flex items-center gap-2">
-                    <span className="text-base leading-none">🔄</span>
-                    <span>Проверить оплату криптовалютой</span>
-                    <span className="sr-only">{t('checkout.cryptoConfirm')}</span>
-                  </span>
+                {checkFeedback && checkFeedback.method === 'crypto' && (
+                  <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/30 text-xs text-amber-600 dark:text-amber-400 flex items-start gap-2">
+                    <span className="shrink-0 mt-0.5">ℹ️</span>
+                    <span>{checkFeedback.message}</span>
+                  </div>
                 )}
-              </Button>
+
+                {/* Кнопка ручной проверки */}
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="lg"
+                  className="w-full h-11 font-semibold text-xs rounded-xl border-accent/40 hover:bg-accent/10 transition-all"
+                  aria-label={t('checkout.cryptoConfirm')}
+                  disabled={submitting}
+                  onClick={handleCryptoConfirm}
+                >
+                  {submitting ? (
+                    <span className="flex items-center gap-2">
+                      <span className="size-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
+                      <span>{t('checkout.cryptoChecking')}</span>
+                    </span>
+                  ) : (
+                    <span className="flex items-center gap-2">
+                      <span className="text-base leading-none">🔄</span>
+                      <span>Проверить оплату криптовалютой</span>
+                      <span className="sr-only">{t('checkout.cryptoConfirm')}</span>
+                    </span>
+                  )}
+                </Button>
+              </div>
+
+              {/* Резервный способ: прямой перевод на статический кошелёк */}
+              <details
+                className="group rounded-2xl border border-stroke/70 bg-canvas/40 p-4 transition-all"
+                open={cryptoTransferMode === 'manual'}
+              >
+                <summary className="flex cursor-pointer items-center justify-between text-xs font-bold text-muted hover:text-text select-none list-none">
+                  <div className="flex items-center gap-2">
+                    <span className="font-mono uppercase tracking-wider">
+                      Резервный способ: прямой перевод на статический кошелёк (без комиссии шлюза)
+                    </span>
+                  </div>
+                  <ChevronDownIcon className="size-4 text-muted transition-transform duration-200 group-open:rotate-180" />
+                </summary>
+
+                <div className="mt-4 flex flex-col gap-4 border-t border-stroke/50 pt-4">
+                  {/* Сумма и адрес для перевода */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    {/* Сумма */}
+                    <div className="flex flex-col justify-between p-4 rounded-xl bg-surface-2 border border-stroke/70">
+                      <span className="text-xs text-muted block font-medium">
+                        {t('checkout.cryptoAmount')}:
+                      </span>
+                      <div className="flex items-baseline justify-between gap-2 mt-2">
+                        <span className="text-xl font-bold font-mono text-accent">
+                          {cryptoAmountStr}
+                        </span>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          className="h-8 gap-1.5 text-xs font-mono"
+                          onClick={() =>
+                            copyToClipboard(
+                              String(currentCrypto.calcAmount(plan.priceMonthly)),
+                              setCopiedCryptoAmount,
+                            )
+                          }
+                        >
+                          {copiedCryptoAmount ? (
+                            <>
+                              <CheckIcon className="size-3 text-accent" />
+                              <span>{t('checkout.cryptoCopied')}</span>
+                            </>
+                          ) : (
+                            <>
+                              <CopyIcon className="size-3 text-muted" />
+                              <span>{t('checkout.cryptoCopyAmount')}</span>
+                            </>
+                          )}
+                        </Button>
+                      </div>
+                    </div>
+
+                    {/* Сеть */}
+                    <div className="flex flex-col justify-between p-4 rounded-xl bg-surface-2 border border-stroke/70">
+                      <span className="text-xs text-muted block font-medium">Выбранная сеть:</span>
+                      <div className="mt-2 flex items-center justify-between">
+                        <span className="text-sm font-bold text-text font-mono">
+                          {currentCrypto.network}
+                        </span>
+                        <Badge tone="brand" className="text-[10px] font-mono">
+                          1 подтверждение
+                        </Badge>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Адрес депозита */}
+                  <div className="flex flex-col gap-2 p-4 rounded-xl bg-canvas border border-stroke/80">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-bold text-muted uppercase tracking-wider font-mono">
+                        {t('checkout.cryptoAddress')}
+                      </span>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        className="h-7 text-xs font-mono gap-1.5"
+                        onClick={() => copyToClipboard(cryptoAddress, setCopiedCryptoAddress)}
+                      >
+                        {copiedCryptoAddress ? (
+                          <>
+                            <CheckIcon className="size-3 text-accent" />
+                            <span>{t('checkout.cryptoCopied')}</span>
+                          </>
+                        ) : (
+                          <>
+                            <CopyIcon className="size-3 text-muted" />
+                            <span>{t('checkout.cryptoCopyAddress')}</span>
+                          </>
+                        )}
+                      </Button>
+                    </div>
+                    <div className="rounded-lg bg-surface-2 p-2.5 border border-stroke/60 font-mono text-xs text-text break-all select-all">
+                      {cryptoAddress}
+                    </div>
+                  </div>
+
+                  {/* QR-код */}
+                  <div className="flex flex-col sm:flex-row items-center gap-5 p-4 rounded-xl bg-surface-2 border border-stroke/70">
+                    <div className="relative p-2.5 rounded-xl bg-white shadow-xs shrink-0 border border-slate-200">
+                      {cryptoLoading ? (
+                        <div className="size-36 flex items-center justify-center text-xs text-slate-500 font-mono">
+                          <span className="size-4 animate-spin rounded-full border-2 border-slate-700 border-t-transparent" />
+                        </div>
+                      ) : (
+                        <QrCode
+                          value={cryptoQr}
+                          size={144}
+                          badge={
+                            <div className="size-6 flex items-center justify-center rounded-md bg-white shadow-xs">
+                              {(() => {
+                                const IconComp = currentCrypto.icon;
+                                return <IconComp className="size-4" />;
+                              })()}
+                            </div>
+                          }
+                        />
+                      )}
+                    </div>
+
+                    <div className="flex flex-col gap-2 text-left">
+                      <h4 className="text-xs font-bold text-text uppercase tracking-wider font-mono">
+                        {t('checkout.cryptoScanQr')}
+                      </h4>
+                      <p className="text-xs text-muted leading-relaxed">
+                        Отсканируйте код в любом кошельке (Trust Wallet, Telegram Wallet, Tonkeeper,
+                        Binance, Bybit) для автоматического заполнения адреса и суммы.
+                      </p>
+                      <p className="text-[11px] text-amber-500 dark:text-amber-400 font-medium">
+                        ⚠️ Важно: перевод средств в неверной сети приведет к безвозвратной потере.
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Опциональный TxID */}
+                  <div className="flex flex-col gap-1.5">
+                    <label
+                      htmlFor="crypto-tx-hash"
+                      className="text-xs font-semibold text-muted font-mono"
+                    >
+                      {t('checkout.cryptoTxHash')}
+                    </label>
+                    <input
+                      id="crypto-tx-hash"
+                      type="text"
+                      placeholder={t('checkout.cryptoTxHashPlaceholder')}
+                      value={txHashInput}
+                      onChange={(e) => setTxHashInput(e.target.value)}
+                      className="h-10 w-full rounded-xl border border-stroke bg-canvas px-3 text-xs font-mono text-text placeholder:text-muted/60 focus:border-accent focus:outline-none transition-colors"
+                    />
+                  </div>
+                </div>
+              </details>
             </div>
           )}
 

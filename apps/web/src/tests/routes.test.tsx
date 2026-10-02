@@ -106,7 +106,7 @@ describe('маршрутизация и каркас экранов', () => {
       screen.getByRole('heading', { level: 1, name: 'Оформление подписки' }),
     ).toBeInTheDocument();
     expect(screen.getByRole('heading', { level: 2, name: 'Plus' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /Подтвердить оплату через СБП/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Подтвердить оплату криптовалютой/i })).toBeInTheDocument();
   });
 
   it('неавторизованный пользователь при попытке оформления подписки перенаправляется на регистрацию', () => {
