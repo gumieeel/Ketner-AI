@@ -67,7 +67,7 @@ export class ContextOptimizer {
       (sum, m) => sum + this.estimateTokens(m.content),
       0,
     );
-    const maxTokens = options.maxTokens ?? 32000;
+    const maxTokens = options.maxTokens ?? 120000;
 
     const chosenMessages: IncomingMessage[] = [];
 

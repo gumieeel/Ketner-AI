@@ -68,7 +68,7 @@ export class OpenRouterProvider {
                         model: targetModel,
                         messages,
                         stream: false,
-                        max_tokens: Math.min(options.maxTokens ?? 2048, 2048),
+                        max_tokens: Math.min(options.maxTokens ?? 4096, 8192),
                     }),
                     signal: options.signal,
                 });
@@ -129,7 +129,7 @@ export class OpenRouterProvider {
                         model: targetModel,
                         messages,
                         stream: true,
-                        max_tokens: Math.min(options.maxTokens ?? 2048, 2048),
+                        max_tokens: Math.min(options.maxTokens ?? 4096, 8192),
                     }),
                     signal: options.signal,
                 });

@@ -251,7 +251,7 @@ const DEFAULT_REGISTRY_ENTRIES: ModelRegistryEntry[] = [
     contextMessages: 40,
     isPro: false,
     fallbackModelId: 'ketner-mini',
-    defaultSystemPrompt: ECONOMY_SYSTEM_PROMPT,
+    defaultSystemPrompt: DEFAULT_SYSTEM_PROMPT,
     createdAt: now(),
     updatedAt: now(),
   },

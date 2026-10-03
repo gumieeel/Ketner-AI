@@ -45,7 +45,7 @@ export class ContextOptimizer {
         const windowed = messages.slice(-maxMsgs);
         // 3. Если задан лимит токенов, обрезаем с начала окна
         let currentTokens = result.reduce((sum, m) => sum + this.estimateTokens(m.content), 0);
-        const maxTokens = options.maxTokens ?? 32000;
+        const maxTokens = options.maxTokens ?? 120000;
         const chosenMessages = [];
         // Идём с конца (самые свежие сообщения наиболее важны)
         for (let i = windowed.length - 1; i >= 0; i--) {

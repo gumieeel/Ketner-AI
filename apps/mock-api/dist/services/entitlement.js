@@ -63,7 +63,7 @@ export const PLAN_ENTITLEMENTS = {
         tokensPerDay: 150_000,
         maxContextMessages: 20,
         contextLimit: 20,
-        maxTokens: 1024,
+        maxTokens: 2048,
         streamingEnabled: true,
         // Free: цена 0₽ ($0). Субсидируемый буфер для ознакомления ($0.20/мес, $0.05/день).
         maxDailyCost: 0.05,

@@ -239,10 +239,49 @@ function buildWorkspaceContextBlock(ws: any, language: Language): string {
   }
 
   block += isEn
-    ? `\nINSTRUCTION: You have full access to this project workspace and its files. Answer questions about this project, provide code refactoring, bug fixes, feature implementations, and architecture explanations based on the actual codebase above. Never say you cannot access local files or repositories, as the files and structure are explicitly loaded above for you.`
-    : `\nИНСТРУКЦИЯ: Вы имеете полный доступ к этому проекту и его кодовой базе. Отвечайте на вопросы пользователя по этому проекту, пишите код, проводите рефакторинг, поиск багов и архитектурный анализ на основе реального кода выше. Никогда не говорите, что вы не имеете доступа к локальным файлам или репозиторию, так как файлы и структура проекта уже переданы вам выше.`;
+    ? `\nIMPORTANT INSTRUCTIONS FOR WORKSPACE WORK:
+- You are acting as a full-fledged agentic coding assistant (like Antigravity / Cursor) connected directly to this codebase.
+- When asked to analyze the repository/workspace or when the user provides a request regarding this project, provide a thorough, structured, and complete technical response.
+- Cover: 1) Architecture & Tech Stack, 2) Directory structure & key modules, 3) Entry points & data flow, 4) Next steps and ready-to-use solutions.
+- Never truncate or cut off your answer. Use clean Markdown headers and code blocks.
+- If the user prompt is typed in an incorrect keyboard layout (e.g. "ghjfyfkbpbhqe htgjpbnjhbq" for "проанализируй репозиторий"), automatically recognize the intended meaning and respond in the appropriate language.
+- Never claim you cannot work with local files or repos, as the files and structure are loaded above for you.`
+    : `\nВАЖНЫЕ ИНСТРУКЦИИ ДЛЯ РАБОТЫ С ПРОЕКТОМ:
+- Ты работаешь в режиме полноценного инженерного AI-ассистента (как Antigravity / Cursor), напрямую подключенного к этой кодовой базе.
+- При запросе анализа репозитория или папки давай глубокий, структурированный и завершённый технический отчёт.
+- Освети: 1) Архитектуру и стек технологий проекта, 2) Назначение ключевых директорий и модулей, 3) Входные точки (entry points) и потоки данных, 4) Готовность писать код, вносить правки и решать задачи по проекту.
+- Никогда не обрывай ответ на полуслове. Используй качественное Markdown-форматирование, списки и блоки кода.
+- Если запрос пользователя набран в ошибочной раскладке (например, «ghjfyfkbpbhqe htgjpbnjhbq» вместо «проанализируй репозиторий»), автоматически распознай смысл и ответь на русском языке по существу.
+- Никогда не говори, что ты не имеешь доступа к локальным файлам или репозиторию, так как все файлы и структура проекта уже переданы тебе выше.`;
 
   return block;
+}
+
+const JCUKEN_MAP: Record<string, string> = {
+  q: 'й', w: 'ц', e: 'у', r: 'к', t: 'е', y: 'н', u: 'г', i: 'ш', o: 'щ', p: 'з', '[': 'х', ']': 'ъ',
+  a: 'ф', s: 'ы', d: 'в', f: 'а', g: 'п', h: 'р', j: 'о', k: 'л', l: 'д', ';': 'ж', "'": 'э',
+  z: 'я', x: 'ч', c: 'с', v: 'м', b: 'и', n: 'т', m: 'ь', ',': 'б', '.': 'ю', '`': 'ё',
+  Q: 'Й', W: 'Ц', E: 'У', R: 'К', T: 'Е', Y: 'Н', U: 'Г', I: 'Ш', O: 'Щ', P: 'З', '{': 'Х', '}': 'Ъ',
+  A: 'Ф', S: 'Ы', D: 'В', F: 'А', G: 'П', H: 'Р', J: 'О', K: 'Л', L: 'Д', ':': 'Ж', '"': 'Э',
+  Z: 'Я', X: 'Ч', C: 'С', V: 'М', B: 'И', N: 'Т', M: 'Ь', '<': 'Б', '>': 'Ю', '~': 'Ё',
+};
+
+export function convertLayoutIfInverted(input: string): string {
+  if (!input || input.trim().length === 0) return input;
+  const hasLatin = /[a-zA-Z]/.test(input);
+  const hasCyrillic = /[а-яА-ЯёЁ]/.test(input);
+  if (!hasLatin || hasCyrillic) return input;
+
+  const converted = input
+    .split('')
+    .map((ch) => JCUKEN_MAP[ch] ?? ch)
+    .join('');
+
+  const ruPatterns = /(анализ|репозитор|проект|файл|сдела|помог|напиш|объясн|ошибк|папк|ветк|функц|компонент|скрипт|привет|как|что|где|почему)/i;
+  if (ruPatterns.test(converted)) {
+    return converted;
+  }
+  return input;
 }
 
 function buildAttachmentsBlock(attachments: MessageAttachment[], language: Language): string {
@@ -316,8 +355,10 @@ export class AIGateway {
     let targetModel: ModelRegistryEntry;
     let routingReason: string;
     let pipelineStrategy: PipelineStrategy | null = null;
-    const prompt =
+    const rawPrompt =
       [...req.messages].reverse().find((m) => m.role === 'user')?.content ?? '';
+    const decodedPrompt = convertLayoutIfInverted(rawPrompt);
+    const prompt = decodedPrompt;
 
     if (req.modelId === 'auto') {
       pipelineStrategy = TierPipelineEngine.resolveStrategy(prompt, {
@@ -436,9 +477,12 @@ export class AIGateway {
       }
 
       const optimizedMessages = ContextOptimizer.optimize(
-        req.messages.map((m) => ({
+        req.messages.map((m, idx) => ({
           role: m.role as 'user' | 'assistant',
-          content: m.content,
+          content:
+            idx === req.messages.length - 1 && m.role === 'user' && decodedPrompt !== rawPrompt
+              ? decodedPrompt
+              : m.content,
         })),
         {
           maxMessages: maxContextMessages,
@@ -490,11 +534,18 @@ export class AIGateway {
       let streamedResponse: ProviderResponse | null = null;
       let usedModel = targetModel;
 
+      const hasWorkspaceOrAttachments = Boolean(
+        activeWorkspace ||
+        (activeAttachments && activeAttachments.length > 0)
+      );
+
       const dynamicMaxTokens = computeDynamicMaxTokens({
         userPlan: effectivePlan,
         monthlyCost: snapshot.estimatedCostLastMonth,
         monthlyBudget: entitlements.costBudget,
-        baseTokens: pipelineStrategy?.maxOutputTokens ?? 300,
+        baseTokens: hasWorkspaceOrAttachments
+          ? Math.max(entitlements.maxTokens, 4096)
+          : (pipelineStrategy?.maxOutputTokens ?? 1024),
       });
 
       // Если режим gpt_short — инструктируем модель отвечать кратко (<150 токенов)
@@ -577,7 +628,7 @@ export class AIGateway {
                     { role: 'user', content: enhanceInstruction },
                   ],
                   stream: true,
-                  maxTokens: Math.min(enhancerModel.maxOutputTokens, dynamicMaxTokens),
+                  maxTokens: Math.max(Math.min(enhancerModel.maxOutputTokens, entitlements.maxTokens), 2048),
                 },
                 {
                   onDelta: callbacks.onDelta,
@@ -616,16 +667,26 @@ export class AIGateway {
 
           try {
             usedModel = candidateModel;
+            // Лимит выходных токенов:
+            // 1. При привязанном проекте или сложной задаче (код, рассуждения) отдаём полный объём модели и тарифа.
+            // 2. Рассуждающие модели тратят до 1500 токенов только на <think>, поэтому лимит не может быть меньше 4096.
+            // 3. dynamicMaxTokens применяется ТОЛЬКО при жёстком превышении бюджета (isBudgetExceeded) на простых запросах.
+            let maxTokensToUse: number;
+            if (hasWorkspaceOrAttachments || candidateModel.capabilities.reasoning || candidateModel.capabilities.coding) {
+              maxTokensToUse = Math.min(candidateModel.maxOutputTokens, entitlements.maxTokens);
+            } else if (isBudgetExceeded) {
+              maxTokensToUse = dynamicMaxTokens;
+            } else {
+              maxTokensToUse = Math.min(candidateModel.maxOutputTokens, entitlements.maxTokens);
+            }
+            maxTokensToUse = Math.max(maxTokensToUse, 2048);
+
             streamedResponse = await provider.streamText(
               {
                 model: modelToRequest,
                 messages: optimizedMessages,
                 stream: true,
-                maxTokens: Math.min(
-                  candidateModel.maxOutputTokens,
-                  entitlements.maxTokens,
-                  dynamicMaxTokens,
-                ),
+                maxTokens: Math.min(candidateModel.maxOutputTokens, maxTokensToUse),
               },
               {
                 onDelta: callbacks.onDelta,
