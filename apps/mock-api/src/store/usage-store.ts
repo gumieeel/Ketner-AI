@@ -11,8 +11,14 @@ import { dirname } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import type {
   FairUseSnapshot,
+  GatewayMetrics,
+  LatencyBreakdown,
+  MetricAlert,
+  ModelMetric,
+  PlanCostMetric,
   ProviderStatus,
   ResponseSource,
+  SourceMetrics,
   UsageRecord,
   UsageStats,
   UsageStatus,
@@ -91,6 +97,7 @@ export class UsageStore {
     estimatedCost: number;
     actualCost?: number | null;
     latencyMs: number;
+    ttftMs?: number | null;
     status: UsageStatus;
     source?: ResponseSource;
   }): UsageRecord {
@@ -108,6 +115,7 @@ export class UsageStore {
       estimatedCost: params.estimatedCost,
       actualCost: params.actualCost ?? null,
       latencyMs: params.latencyMs,
+      ttftMs: params.ttftMs ?? null,
       status: params.status,
       source: params.source ?? 'provider',
       createdAt: new Date().toISOString(),
@@ -395,5 +403,250 @@ export class UsageStore {
     }
 
     return result;
+  }
+
+  /**
+   * Phase 4: Комплексные метрики шлюза для дашборда администратора (/api/admin/metrics).
+   * Включает:
+   * - Стоимость по источникам (cache vs provider vs template)
+   * - Стоимость по моделям
+   * - Cache hit rate (в процентах)
+   * - Задержки: средняя задержка, P95, средний TTFT и P95 TTFT
+   * - Распределение расходов по тарифам (Free, Plus, Pro, Ultra)
+   * - Алерты по отрицательной маржинальности (contributionMargin < 0)
+   */
+  getGatewayMetrics(params?: {
+    fromDate?: string;
+    toDate?: string;
+    users?: Array<{ id: string; email: string; plan: string; isVip?: boolean }>;
+    planPricesRub?: Record<string, number>;
+    planPricesUsd?: Record<string, number>;
+    rubToUsdRate?: number;
+  }): GatewayMetrics {
+    let records = this.records;
+    if (params?.fromDate) {
+      const from = new Date(params.fromDate).getTime();
+      records = records.filter((r) => new Date(r.createdAt).getTime() >= from);
+    }
+    if (params?.toDate) {
+      const to = new Date(params.toDate).getTime();
+      records = records.filter((r) => new Date(r.createdAt).getTime() <= to);
+    }
+
+    const totalRequests = records.length;
+    let totalCost = 0;
+
+    // 1. По источникам (provider, cache, template)
+    const sourceMap: Record<'provider' | 'cache' | 'template', SourceMetrics> = {
+      provider: { cost: 0, requests: 0, inputTokens: 0, outputTokens: 0 },
+      cache: { cost: 0, requests: 0, inputTokens: 0, outputTokens: 0 },
+      template: { cost: 0, requests: 0, inputTokens: 0, outputTokens: 0 },
+    };
+
+    // 2. По моделям
+    const modelMap = new Map<string, {
+      modelId: string;
+      cost: number;
+      requests: number;
+      inputTokens: number;
+      outputTokens: number;
+      totalLatency: number;
+    }>();
+
+    // 3. Задержки и TTFT
+    const latencies: number[] = [];
+    const ttfts: number[] = [];
+
+    // 4. Распределение по тарифам
+    const userPlanMap = new Map<string, string>();
+    if (params?.users) {
+      for (const u of params.users) {
+        userPlanMap.set(u.id, u.plan);
+      }
+    }
+
+    const planCostMap = new Map<string, {
+      plan: string;
+      totalCost: number;
+      userIds: Set<string>;
+      requests: number;
+      totalTokens: number;
+    }>();
+
+    for (const r of records) {
+      totalCost += r.estimatedCost;
+
+      const src = (r.source ?? 'provider') as 'provider' | 'cache' | 'template';
+      if (sourceMap[src]) {
+        sourceMap[src].cost += r.estimatedCost;
+        sourceMap[src].requests += 1;
+        sourceMap[src].inputTokens += r.inputTokens;
+        sourceMap[src].outputTokens += r.outputTokens;
+      }
+
+      let modelEntry = modelMap.get(r.modelId);
+      if (!modelEntry) {
+        modelEntry = {
+          modelId: r.modelId,
+          cost: 0,
+          requests: 0,
+          inputTokens: 0,
+          outputTokens: 0,
+          totalLatency: 0,
+        };
+        modelMap.set(r.modelId, modelEntry);
+      }
+      modelEntry.cost += r.estimatedCost;
+      modelEntry.requests += 1;
+      modelEntry.inputTokens += r.inputTokens;
+      modelEntry.outputTokens += r.outputTokens;
+      modelEntry.totalLatency += r.latencyMs;
+
+      latencies.push(r.latencyMs);
+      if (typeof r.ttftMs === 'number') {
+        ttfts.push(r.ttftMs);
+      }
+
+      const userPlan = userPlanMap.get(r.userId) ?? 'free';
+      let planEntry = planCostMap.get(userPlan);
+      if (!planEntry) {
+        planEntry = {
+          plan: userPlan,
+          totalCost: 0,
+          userIds: new Set(),
+          requests: 0,
+          totalTokens: 0,
+        };
+        planCostMap.set(userPlan, planEntry);
+      }
+      planEntry.totalCost += r.estimatedCost;
+      planEntry.userIds.add(r.userId);
+      planEntry.requests += 1;
+      planEntry.totalTokens += r.inputTokens + r.outputTokens;
+    }
+
+    // Округление сумм по источникам
+    const costBySource = {
+      provider: {
+        cost: Number(sourceMap.provider.cost.toFixed(4)),
+        requests: sourceMap.provider.requests,
+        inputTokens: sourceMap.provider.inputTokens,
+        outputTokens: sourceMap.provider.outputTokens,
+      },
+      cache: {
+        cost: Number(sourceMap.cache.cost.toFixed(4)),
+        requests: sourceMap.cache.requests,
+        inputTokens: sourceMap.cache.inputTokens,
+        outputTokens: sourceMap.cache.outputTokens,
+      },
+      template: {
+        cost: Number(sourceMap.template.cost.toFixed(4)),
+        requests: sourceMap.template.requests,
+        inputTokens: sourceMap.template.inputTokens,
+        outputTokens: sourceMap.template.outputTokens,
+      },
+    };
+
+    // Cache hit rate
+    const cacheHits = sourceMap.cache.requests;
+    const cacheHitRatePct =
+      totalRequests > 0 ? Number(((cacheHits / totalRequests) * 100).toFixed(2)) : 0;
+
+    // Сортировка моделей по затратам
+    const costByModel: ModelMetric[] = Array.from(modelMap.values())
+      .map((m) => ({
+        modelId: m.modelId,
+        cost: Number(m.cost.toFixed(4)),
+        requests: m.requests,
+        inputTokens: m.inputTokens,
+        outputTokens: m.outputTokens,
+        averageLatencyMs: m.requests > 0 ? Math.round(m.totalLatency / m.requests) : 0,
+      }))
+      .sort((a, b) => b.cost - a.cost);
+
+    // Задержки и TTFT
+    latencies.sort((a, b) => a - b);
+    ttfts.sort((a, b) => a - b);
+    const avgLatency =
+      latencies.length > 0 ? Math.round(latencies.reduce((a, b) => a + b, 0) / latencies.length) : 0;
+    const p95Latency =
+      latencies.length > 0
+        ? latencies[Math.floor(latencies.length * 0.95)] ?? latencies[latencies.length - 1]
+        : 0;
+    const avgTtft =
+      ttfts.length > 0 ? Math.round(ttfts.reduce((a, b) => a + b, 0) / ttfts.length) : null;
+    const p95Ttft =
+      ttfts.length > 0
+        ? ttfts[Math.floor(ttfts.length * 0.95)] ?? ttfts[ttfts.length - 1]
+        : null;
+
+    const latency: LatencyBreakdown = {
+      averageLatencyMs: avgLatency,
+      p95LatencyMs: p95Latency,
+      averageTtftMs: avgTtft,
+      p95TtftMs: p95Ttft,
+    };
+
+    // Распределение по тарифам
+    const costByPlan: PlanCostMetric[] = Array.from(planCostMap.values())
+      .map((p) => {
+        const usersCount = p.userIds.size;
+        return {
+          plan: p.plan,
+          totalCost: Number(p.totalCost.toFixed(4)),
+          usersCount,
+          requests: p.requests,
+          totalTokens: p.totalTokens,
+          averageCostPerUser:
+            usersCount > 0 ? Number((p.totalCost / usersCount).toFixed(4)) : 0,
+        };
+      })
+      .sort((a, b) => b.totalCost - a.totalCost);
+
+    // Алерты по отрицательной маржинальности
+    const alerts: MetricAlert[] = [];
+    const rubToUsd = params?.rubToUsdRate ?? 0.0105;
+
+    if (params?.users && (params?.planPricesUsd || params?.planPricesRub)) {
+      for (const u of params.users) {
+        if (u.plan === 'free') continue;
+        const revenueUsd =
+          params.planPricesUsd && params.planPricesUsd[u.plan] !== undefined
+            ? params.planPricesUsd[u.plan]
+            : (params.planPricesRub?.[u.plan] ?? 0) * rubToUsd;
+
+        const userRecs = this.userIndex.get(u.id) ?? [];
+        const userAiCost = userRecs.reduce((sum, r) => sum + r.estimatedCost, 0);
+        const margin = revenueUsd - userAiCost;
+
+        if (margin < 0) {
+          const alert: MetricAlert = {
+            type: 'negative_margin',
+            userId: u.id,
+            userEmail: u.email,
+            plan: u.plan,
+            contributionMargin: Number(margin.toFixed(2)),
+            aiCost: Number(userAiCost.toFixed(2)),
+            subscriptionRevenue: Number(revenueUsd.toFixed(2)),
+            message: `Отрицательная маржинальность (-$${Math.abs(margin).toFixed(2)}) у пользователя ${u.email} на тарифе ${u.plan}`,
+          };
+          alerts.push(alert);
+          console.warn(`[admin:alert] ${alert.message}`);
+        }
+      }
+    }
+
+    return {
+      totalRequests,
+      totalCost: Number(totalCost.toFixed(4)),
+      cacheHitRatePct,
+      cacheHits,
+      costBySource,
+      costByModel,
+      costByPlan,
+      latency,
+      alerts,
+      hasNegativeMarginAlert: alerts.length > 0,
+    };
   }
 }

@@ -536,4 +536,57 @@ test('admin: PATCH /api/admin/users/:id — обновление плана, VIP
   }
 });
 
+test('admin: метрики шлюза GET /api/admin/metrics (Фаза 4: дашборд, кэш, TTFT, тарифы и алерты)', async () => {
+  const server = await startTestServer();
+
+  try {
+    const headers = { 'x-admin-key': config.adminApiKey };
+
+    // 1. Проверка авторизации: без ключа -> 403
+    const denied = await fetch(`${server.baseUrl}/api/admin/metrics`);
+    assert.equal(denied.status, 403);
+
+    // 2. С валидным ключом -> 200
+    const res = await fetch(`${server.baseUrl}/api/admin/metrics`, { headers });
+    assert.equal(res.status, 200);
+    const body = (await res.json()) as {
+      metrics: {
+        totalRequests: number;
+        totalCost: number;
+        cacheHitRatePct: number;
+        cacheHits: number;
+        costBySource: {
+          provider: { cost: number; requests: number };
+          cache: { cost: number; requests: number };
+          template: { cost: number; requests: number };
+        };
+        costByModel: Array<{ modelId: string }>;
+        costByPlan: Array<{ plan: string }>;
+        latency: {
+          averageLatencyMs: number;
+          p95LatencyMs: number;
+          averageTtftMs: number | null;
+        };
+        alerts: Array<unknown>;
+        hasNegativeMarginAlert: boolean;
+      };
+      alerts: Array<unknown>;
+      hasNegativeMarginAlert: boolean;
+    };
+
+    assert.ok(typeof body.metrics.totalRequests === 'number');
+    assert.ok(typeof body.metrics.cacheHitRatePct === 'number');
+    assert.ok(body.metrics.costBySource.provider !== undefined);
+    assert.ok(body.metrics.costBySource.cache !== undefined);
+    assert.ok(body.metrics.costBySource.template !== undefined);
+    assert.ok(Array.isArray(body.metrics.costByModel));
+    assert.ok(Array.isArray(body.metrics.costByPlan));
+    assert.ok(typeof body.metrics.latency.averageLatencyMs === 'number');
+    assert.ok(Array.isArray(body.alerts));
+    assert.equal(typeof body.hasNegativeMarginAlert, 'boolean');
+  } finally {
+    await server.close();
+  }
+});
+
 

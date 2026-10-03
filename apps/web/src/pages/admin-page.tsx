@@ -96,6 +96,51 @@ interface UserDetail {
   }>;
 }
 
+interface GatewayMetricsData {
+  totalRequests: number;
+  totalCost: number;
+  cacheHitRatePct: number;
+  cacheHits: number;
+  costBySource: {
+    provider: { cost: number; requests: number; inputTokens: number; outputTokens: number };
+    cache: { cost: number; requests: number; inputTokens: number; outputTokens: number };
+    template: { cost: number; requests: number; inputTokens: number; outputTokens: number };
+  };
+  costByModel: Array<{
+    modelId: string;
+    cost: number;
+    requests: number;
+    inputTokens: number;
+    outputTokens: number;
+    averageLatencyMs: number;
+  }>;
+  costByPlan: Array<{
+    plan: string;
+    totalCost: number;
+    usersCount: number;
+    requests: number;
+    totalTokens: number;
+    averageCostPerUser: number;
+  }>;
+  latency: {
+    averageLatencyMs: number;
+    p95LatencyMs: number;
+    averageTtftMs: number | null;
+    p95TtftMs: number | null;
+  };
+  alerts: Array<{
+    type: string;
+    userId: string;
+    userEmail: string;
+    plan: string;
+    contributionMargin: number;
+    aiCost: number;
+    subscriptionRevenue: number;
+    message: string;
+  }>;
+  hasNegativeMarginAlert: boolean;
+}
+
 export function AdminPage() {
   const currentUser = useAuth((state) => state.user);
   const token = useAuth((state) => state.token);
@@ -104,6 +149,7 @@ export function AdminPage() {
     () => localStorage.getItem('ketner_admin_key') || 'ketner-ai-admin-key-dev',
   );
   const [users, setUsers] = useState<UserSummary[]>([]);
+  const [metrics, setMetrics] = useState<GatewayMetricsData | null>(null);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
   const [pageSize] = useState(50);
@@ -189,9 +235,25 @@ export function AdminPage() {
     }
   }, [search, planFilter, page, pageSize, getHeaders]);
 
+  const loadMetrics = useCallback(async () => {
+    try {
+      const res = await fetch('/api/admin/metrics', {
+        headers: getHeaders(),
+        credentials: 'include',
+      });
+      if (res.ok) {
+        const data = (await res.json()) as { metrics: GatewayMetricsData };
+        setMetrics(data.metrics);
+      }
+    } catch {
+      // ignore
+    }
+  }, [getHeaders]);
+
   useEffect(() => {
     void loadUsers();
-  }, [loadUsers]);
+    void loadMetrics();
+  }, [loadUsers, loadMetrics]);
 
   const loadUserDetail = async (id: string) => {
     setSelectedUserId(id);
@@ -283,7 +345,14 @@ export function AdminPage() {
             placeholder="x-admin-key"
             className="w-48 rounded bg-canvas px-2.5 py-1 text-text border border-stroke font-mono text-xs outline-none focus:border-accent"
           />
-          <Button size="sm" variant="secondary" onClick={() => void loadUsers()}>
+          <Button
+            size="sm"
+            variant="secondary"
+            onClick={() => {
+              void loadUsers();
+              void loadMetrics();
+            }}
+          >
             Обновить
           </Button>
         </div>
@@ -314,6 +383,109 @@ export function AdminPage() {
           </p>
         </Card>
       </div>
+
+      {/* Phase 4: Алерт отрицательной маржинальности */}
+      {metrics?.hasNegativeMarginAlert && (
+        <div className="flex flex-col gap-2 rounded-lg border border-danger/40 bg-danger/10 p-4 text-xs text-danger">
+          <div className="flex items-center gap-2 font-semibold text-sm">
+            <span className="flex h-2.5 w-2.5 rounded-full bg-danger animate-pulse" />
+            Внимание: обнаружена отрицательная маржинальность (Contribution Margin &lt; 0)
+          </div>
+          <p className="text-muted">
+            Себестоимость запросов превысила доход от подписки для следующих пользователей:
+          </p>
+          <div className="flex flex-col gap-1.5 mt-1">
+            {metrics.alerts.map((alert, idx) => (
+              <div
+                key={idx}
+                className="flex flex-wrap items-center justify-between gap-2 rounded bg-surface/80 px-3 py-1.5 border border-danger/20 font-mono text-[11px]"
+              >
+                <span>
+                  {alert.userEmail} <Badge tone="brand" size="sm">{alert.plan}</Badge>
+                </span>
+                <span className="text-danger font-semibold">
+                  Расход: ${alert.aiCost} · Доход: ${alert.subscriptionRevenue} (Маржа: ${alert.contributionMargin})
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Phase 4: Метрики шлюза (Cache Hit Rate, Latency, TTFT, Источники и Тарифы) */}
+      {metrics && (
+        <div className="flex flex-col gap-3 rounded-xl border border-stroke bg-surface/50 p-4">
+          <div className="flex items-center justify-between">
+            <h2 className="text-sm font-semibold tracking-tight text-text flex items-center gap-2">
+              <span>Экономика и производительность шлюза</span>
+              <Badge tone="default">Phase 4</Badge>
+            </h2>
+            <span className="font-mono text-xs text-muted">
+              Всего запросов: {metrics.totalRequests} · Себестоимость: ${metrics.totalCost}
+            </span>
+          </div>
+
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            <Card className="p-3 border-stroke bg-canvas">
+              <p className="text-[10px] font-mono text-muted uppercase tracking-wider">Semantic Cache Hit Rate</p>
+              <div className="mt-1 flex items-baseline gap-2">
+                <span className="text-xl font-bold font-mono text-accent">
+                  {metrics.cacheHitRatePct}%
+                </span>
+                <span className="text-xs text-muted font-mono">
+                  ({metrics.cacheHits} из {metrics.totalRequests})
+                </span>
+              </div>
+              <p className="text-[10px] text-muted mt-0.5">Экономия 100% затрат на хит</p>
+            </Card>
+
+            <Card className="p-3 border-stroke bg-canvas">
+              <p className="text-[10px] font-mono text-muted uppercase tracking-wider">Задержка и TTFT</p>
+              <div className="mt-1 flex items-baseline gap-2">
+                <span className="text-xl font-bold font-mono text-text">
+                  {metrics.latency.averageLatencyMs} ms
+                </span>
+                <span className="text-xs text-muted font-mono">
+                  (P95: {metrics.latency.p95LatencyMs} ms)
+                </span>
+              </div>
+              <p className="text-[10px] text-muted mt-0.5 font-mono">
+                TTFT: {metrics.latency.averageTtftMs ?? '-'} ms
+              </p>
+            </Card>
+
+            <Card className="p-3 border-stroke bg-canvas">
+              <p className="text-[10px] font-mono text-muted uppercase tracking-wider">Затраты по источникам</p>
+              <div className="mt-1 text-xs font-mono flex flex-col gap-0.5">
+                <div className="flex justify-between">
+                  <span className="text-muted">Провайдеры:</span>
+                  <span className="font-semibold text-text">${metrics.costBySource.provider.cost}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-muted">Кэш:</span>
+                  <span className="font-semibold text-accent">$0.00 ({metrics.costBySource.cache.requests} req)</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-muted">Шаблоны:</span>
+                  <span className="font-semibold text-muted">$0.00 ({metrics.costBySource.template.requests} req)</span>
+                </div>
+              </div>
+            </Card>
+
+            <Card className="p-3 border-stroke bg-canvas">
+              <p className="text-[10px] font-mono text-muted uppercase tracking-wider">Расход по тарифам</p>
+              <div className="mt-1 text-xs font-mono flex flex-col gap-0.5">
+                {metrics.costByPlan.slice(0, 3).map((p) => (
+                  <div key={p.plan} className="flex justify-between">
+                    <span className="capitalize text-muted">{p.plan}:</span>
+                    <span className="font-semibold text-text">${p.totalCost} ({p.requests} req)</span>
+                  </div>
+                ))}
+              </div>
+            </Card>
+          </div>
+        </div>
+      )}
 
       {/* Filter and Search Bar */}
       <div className="flex flex-wrap items-center justify-between gap-3">

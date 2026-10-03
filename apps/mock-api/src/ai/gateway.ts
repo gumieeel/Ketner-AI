@@ -553,12 +553,18 @@ export class AIGateway {
         : null;
 
       if (cachedHit && !isCancelled()) {
+        let cacheTtft: number | null = null;
         await streamText(cachedHit.response, {
           thinkingMs: [5, 10],
           chunkMs: [5, 10],
           random: this.aiConfig.random,
           isCancelled,
-          onDelta: callbacks.onDelta,
+          onDelta: (delta) => {
+            if (cacheTtft === null) {
+              cacheTtft = Date.now() - startTime;
+            }
+            callbacks.onDelta(delta);
+          },
         });
 
         const latencyMs = Date.now() - startTime;
@@ -573,6 +579,7 @@ export class AIGateway {
           estimatedCost: 0,
           actualCost: 0,
           latencyMs,
+          ttftMs: cacheTtft,
           status: 'success',
           source: 'cache',
         });
@@ -597,6 +604,7 @@ export class AIGateway {
       let streamedResponse: ProviderResponse | null = null;
       let usedModel = targetModel;
       let doublePassCost = 0;
+      let firstTokenMs: number | null = null;
 
       const hasWorkspaceOrAttachments = Boolean(
         activeWorkspace ||
@@ -701,7 +709,12 @@ export class AIGateway {
                   maxTokens: Math.max(Math.min(enhancerModel.maxOutputTokens, entitlements.maxTokens), 2048),
                 },
                 {
-                  onDelta: callbacks.onDelta,
+                  onDelta: (delta) => {
+                    if (firstTokenMs === null) {
+                      firstTokenMs = Date.now() - startTime;
+                    }
+                    callbacks.onDelta(delta);
+                  },
                   isCancelled,
                 },
               );
@@ -766,7 +779,12 @@ export class AIGateway {
                 maxTokens: Math.min(candidateModel.maxOutputTokens, maxTokensToUse),
               },
               {
-                onDelta: callbacks.onDelta,
+                onDelta: (delta) => {
+                  if (firstTokenMs === null) {
+                    firstTokenMs = Date.now() - startTime;
+                  }
+                  callbacks.onDelta(delta);
+                },
                 isCancelled,
               },
             );
@@ -829,6 +847,9 @@ export class AIGateway {
           random: this.aiConfig.random,
           isCancelled,
           onDelta: (delta) => {
+            if (firstTokenMs === null) {
+              firstTokenMs = Date.now() - startTime;
+            }
             fallbackContent += delta;
             callbacks.onDelta(delta);
           },
@@ -879,6 +900,7 @@ export class AIGateway {
         estimatedCost: totalEstimatedCost,
         actualCost: streamedResponse?.cost ?? null,
         latencyMs,
+        ttftMs: firstTokenMs,
         status: isCancelled() ? 'cancelled' : 'success',
         source: responseSource,
       });

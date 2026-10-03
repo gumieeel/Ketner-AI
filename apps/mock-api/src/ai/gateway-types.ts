@@ -160,6 +160,8 @@ export interface UsageRecord {
   actualCost: number | null;
   /** Задержка ответа в мс. */
   latencyMs: number;
+  /** Время до первого токена в мс (Time-to-first-token, Phase 4). */
+  ttftMs?: number | null;
   /** Статус запроса. */
   status: UsageStatus;
   /** Источник ответа: провайдер, кэш или шаблон. */
@@ -175,6 +177,72 @@ export interface UsageStats {
   totalEstimatedCost: number;
   totalActualCost: number;
   averageLatencyMs: number;
+}
+
+/** Phase 4: Метрики по источникам ответа (провайдер, кэш, шаблоны). */
+export interface SourceMetrics {
+  cost: number;
+  requests: number;
+  inputTokens: number;
+  outputTokens: number;
+}
+
+/** Phase 4: Метрики по моделям. */
+export interface ModelMetric {
+  modelId: string;
+  cost: number;
+  requests: number;
+  inputTokens: number;
+  outputTokens: number;
+  averageLatencyMs: number;
+}
+
+/** Phase 4: Распределение расходов по тарифам. */
+export interface PlanCostMetric {
+  plan: string;
+  totalCost: number;
+  usersCount: number;
+  requests: number;
+  totalTokens: number;
+  averageCostPerUser: number;
+}
+
+/** Phase 4: Разбивка задержек и TTFT. */
+export interface LatencyBreakdown {
+  averageLatencyMs: number;
+  p95LatencyMs: number;
+  averageTtftMs: number | null;
+  p95TtftMs: number | null;
+}
+
+/** Phase 4: Предупреждение об отрицательной маржинальности. */
+export interface MetricAlert {
+  type: 'negative_margin';
+  userId: string;
+  userEmail: string;
+  plan: string;
+  contributionMargin: number;
+  aiCost: number;
+  subscriptionRevenue: number;
+  message: string;
+}
+
+/** Phase 4: Комплексные метрики шлюза для дашборда администратора (/api/admin/metrics). */
+export interface GatewayMetrics {
+  totalRequests: number;
+  totalCost: number;
+  cacheHitRatePct: number;
+  cacheHits: number;
+  costBySource: {
+    provider: SourceMetrics;
+    cache: SourceMetrics;
+    template: SourceMetrics;
+  };
+  costByModel: ModelMetric[];
+  costByPlan: PlanCostMetric[];
+  latency: LatencyBreakdown;
+  alerts: MetricAlert[];
+  hasNegativeMarginAlert: boolean;
 }
 
 /** Статистика для Fair-Use анализа в скользящем окне. */

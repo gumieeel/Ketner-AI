@@ -114,6 +114,41 @@ export function createAdminRouter({
     res.json({ stats });
   });
 
+  // 4.1. Дашборд метрик шлюза (Phase 4: /api/admin/metrics)
+  router.get('/metrics', (req: Request, res: Response): void => {
+    const from = typeof req.query.from === 'string' ? req.query.from : undefined;
+    const to = typeof req.query.to === 'string' ? req.query.to : undefined;
+
+    const allUsers = userStore.list();
+    const planPricesUsd: Record<string, number> = {};
+    for (const plan of [...PLANS, ...LEGACY_PLANS]) {
+      planPricesUsd[plan.id] = CurrencyService.rubToUsd(plan.priceMonthly);
+    }
+
+    const metrics = usageStore.getGatewayMetrics({
+      fromDate: from,
+      toDate: to,
+      users: allUsers.map((u) => {
+        const sub = subscriptionStore.get(u.id);
+        const rawPlan = sub?.plan ?? u.plan ?? 'free';
+        const effectivePlan = EntitlementService.resolveEffectivePlan(rawPlan, u.email, u.isVip);
+        return {
+          id: u.id,
+          email: u.email,
+          plan: effectivePlan,
+          isVip: Boolean(u.isVip),
+        };
+      }),
+      planPricesUsd,
+    });
+
+    res.json({
+      metrics,
+      alerts: metrics.alerts,
+      hasNegativeMarginAlert: metrics.hasNegativeMarginAlert,
+    });
+  });
+
   // 5. Рентабельность пользователя (Profitability)
   router.get('/profitability/:userId', (req: Request, res: Response): void => {
     const userId = String(req.params.userId);

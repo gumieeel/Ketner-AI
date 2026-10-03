@@ -670,3 +670,125 @@ test('Фаза 3: Пересчёт эмпирического costBudget по р
   // Восстанавливаем исходный бюджет
   EntitlementService.updatePlanCostBudget('plus', initialBudget);
 });
+
+test('Фаза 4: UsageStore.getGatewayMetrics — полная аналитика, TTFT, источники и алерт отрицательной маржи', () => {
+  const tempDir = mkdtempSync(join(tmpdir(), 'ketner-metrics-test-'));
+  const usageFile = join(tempDir, 'usage.json');
+  const store = new UsageStore(usageFile);
+
+  // 1. Записываем запросы из разных источников (provider, cache, template)
+  // Провайдерный запрос
+  store.recordUsage({
+    userId: 'user-paid',
+    conversationId: 'c1',
+    modelId: 'gpt-6-astra',
+    provider: 'openai',
+    inputTokens: 1000,
+    outputTokens: 500,
+    estimatedCost: 0.05,
+    latencyMs: 1200,
+    ttftMs: 350,
+    status: 'success',
+    source: 'provider',
+  });
+
+  // Запрос из кэша (стоимость 0, быстрый TTFT)
+  store.recordUsage({
+    userId: 'user-paid',
+    conversationId: 'c1',
+    modelId: 'gpt-6-astra',
+    provider: 'openai',
+    inputTokens: 1000,
+    outputTokens: 500,
+    cachedTokens: 1000,
+    estimatedCost: 0,
+    latencyMs: 20,
+    ttftMs: 5,
+    status: 'success',
+    source: 'cache',
+  });
+
+  // Шаблонный запрос
+  store.recordUsage({
+    userId: 'user-free',
+    conversationId: 'c2',
+    modelId: 'ketner-mini',
+    provider: 'openrouter',
+    inputTokens: 200,
+    outputTokens: 100,
+    estimatedCost: 0,
+    latencyMs: 50,
+    ttftMs: 15,
+    status: 'success',
+    source: 'template',
+  });
+
+  // Запрос пользователя с превышением маржи (расход $50 при выручке тарифа plus ~$10.4)
+  store.recordUsage({
+    userId: 'user-loss-maker',
+    conversationId: 'c3',
+    modelId: 'claude-3.5-sonnet',
+    provider: 'anthropic',
+    inputTokens: 100000,
+    outputTokens: 50000,
+    estimatedCost: 50.0,
+    latencyMs: 2500,
+    ttftMs: 600,
+    status: 'success',
+    source: 'provider',
+  });
+
+  const users = [
+    { id: 'user-paid', email: 'paid@example.com', plan: 'pro' },
+    { id: 'user-free', email: 'free@example.com', plan: 'free' },
+    { id: 'user-loss-maker', email: 'loss@example.com', plan: 'plus' },
+  ];
+
+  const planPricesUsd = {
+    free: 0,
+    plus: 10.42,
+    pro: 20.95,
+    ultra: 31.47,
+  };
+
+  const metrics = store.getGatewayMetrics({
+    users,
+    planPricesUsd,
+  });
+
+  // Проверка общих счетчиков
+  assert.equal(metrics.totalRequests, 4);
+  assert.equal(metrics.totalCost, 50.05);
+
+  // Проверка источников
+  assert.equal(metrics.costBySource.provider.requests, 2);
+  assert.equal(metrics.costBySource.provider.cost, 50.05);
+  assert.equal(metrics.costBySource.cache.requests, 1);
+  assert.equal(metrics.costBySource.cache.cost, 0);
+  assert.equal(metrics.costBySource.template.requests, 1);
+
+  // Cache hit rate: 1 из 4 = 25%
+  assert.equal(metrics.cacheHits, 1);
+  assert.equal(metrics.cacheHitRatePct, 25.0);
+
+  // Проверка моделей
+  assert.ok(metrics.costByModel.some((m) => m.modelId === 'claude-3.5-sonnet' && m.cost === 50));
+  assert.ok(metrics.costByModel.some((m) => m.modelId === 'gpt-6-astra' && m.cost === 0.05));
+
+  // Проверка тарифов
+  assert.ok(metrics.costByPlan.some((p) => p.plan === 'plus' && p.totalCost === 50));
+  assert.ok(metrics.costByPlan.some((p) => p.plan === 'pro' && p.totalCost === 0.05));
+
+  // Проверка TTFT и задержек
+  assert.ok(typeof metrics.latency.averageLatencyMs === 'number');
+  assert.ok(typeof metrics.latency.averageTtftMs === 'number');
+  assert.ok(metrics.latency.averageTtftMs! > 0);
+
+  // Проверка алерта отрицательной маржинальности
+  assert.equal(metrics.hasNegativeMarginAlert, true);
+  assert.equal(metrics.alerts.length, 1);
+  assert.equal(metrics.alerts[0].userId, 'user-loss-maker');
+  assert.equal(metrics.alerts[0].plan, 'plus');
+  assert.ok(metrics.alerts[0].contributionMargin < 0);
+  assert.ok(metrics.alerts[0].message.includes('Отрицательная маржинальность'));
+});
