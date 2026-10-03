@@ -1,4 +1,4 @@
-import { getAuthToken } from '../auth/auth-store';
+import { getAuthToken, useAuth } from '../auth/auth-store';
 import { readSseStream } from './sse';
 import { API_BASE } from '@/lib/api-config';
 import type { ChatMeta, Conversation, ConversationSummary, Language, Message } from './types';
@@ -38,6 +38,16 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   if (token) {
     headers['Authorization'] = `Bearer ${token}`;
   }
+  const currentUser = useAuth.getState().user;
+  if (currentUser?.email) {
+    headers['X-User-Email'] = currentUser.email;
+  }
+  if (currentUser?.id) {
+    headers['X-User-Id'] = currentUser.id;
+  }
+  if (currentUser?.plan) {
+    headers['X-User-Plan'] = currentUser.plan;
+  }
   if (init?.headers) {
     Object.assign(headers, init.headers);
   }
@@ -45,6 +55,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await fetch(`${API_BASE}${path}`, {
     ...init,
     headers,
+    credentials: 'include',
   });
 
   if (!response.ok) {
@@ -121,10 +132,21 @@ export async function streamCompletion(
   if (token) {
     headers['Authorization'] = `Bearer ${token}`;
   }
+  const currentUser = useAuth.getState().user;
+  if (currentUser?.email) {
+    headers['X-User-Email'] = currentUser.email;
+  }
+  if (currentUser?.id) {
+    headers['X-User-Id'] = currentUser.id;
+  }
+  if (currentUser?.plan) {
+    headers['X-User-Plan'] = currentUser.plan;
+  }
 
   const response = await fetch(`${API_BASE}/chat/completions`, {
     method: 'POST',
     headers,
+    credentials: 'include',
     signal: completion.signal,
     body: JSON.stringify({
       conversationId: completion.conversationId,
@@ -132,6 +154,9 @@ export async function streamCompletion(
       // `language` — заглушечная замена системного промпта: у реального
       // провайдера язык ответа задаётся системным сообщением.
       language: completion.language,
+      userId: currentUser?.id,
+      userEmail: currentUser?.email,
+      userPlan: currentUser?.plan,
       messages: completion.messages.map((message) => ({
         id: message.id,
         role: message.role,

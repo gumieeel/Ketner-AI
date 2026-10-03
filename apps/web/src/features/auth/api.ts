@@ -21,6 +21,7 @@ async function toApiError(response: Response): Promise<ApiError> {
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await fetch(`${API_BASE}${path}`, {
     ...init,
+    credentials: 'include',
     headers: { ...JSON_HEADERS, ...init?.headers },
   });
 

@@ -6,7 +6,7 @@ import { delay, randomBetween } from '../ai/stream.js';
 import {} from '../config.js';
 import { sendError } from '../middleware/errors.js';
 import { usageStore as defaultUsageStore } from '../store/index.js';
-import { isVipUser } from '../services/vip.js';
+import { isVipUser, isVipEmail } from '../services/vip.js';
 const MAX_MESSAGES = 200;
 const MAX_CONTENT_LENGTH = 8000;
 function parseCompletionRequest(body) {
@@ -55,6 +55,9 @@ function parseCompletionRequest(body) {
             conversationId: candidate.conversationId,
             modelId: typeof candidate.modelId === 'string' ? candidate.modelId : DEFAULT_MODEL_ID,
             language: candidate.language === 'en' ? 'en' : 'ru',
+            userId: typeof candidate.userId === 'string' ? candidate.userId.trim() : undefined,
+            userEmail: typeof candidate.userEmail === 'string' ? candidate.userEmail.trim() : undefined,
+            userPlan: typeof candidate.userPlan === 'string' ? candidate.userPlan.trim() : undefined,
             messages,
         },
     };
@@ -77,8 +80,16 @@ export function createChatRouter({ store, userId, ai, subscriptionStore, userSto
             sendError(response, 400, 'invalid_request', parsed.message);
             return;
         }
-        const { conversationId, modelId, language, messages } = parsed.value;
-        const activeUserId = request.userId ?? userId;
+        const { conversationId, modelId, language, messages, userId: bodyUserId, userEmail: bodyEmail, userPlan: bodyPlan, } = parsed.value;
+        let activeUserId = request.userId ?? bodyUserId ?? userId;
+        if (!store.get(activeUserId, conversationId)) {
+            if (store.get(userId, conversationId)) {
+                activeUserId = userId;
+            }
+            else if (bodyUserId && store.get(bodyUserId, conversationId)) {
+                activeUserId = bodyUserId;
+            }
+        }
         if (!store.get(activeUserId, conversationId)) {
             sendError(response, 404, 'conversation_not_found', `Диалог ${conversationId} не найден`);
             return;
@@ -86,9 +97,19 @@ export function createChatRouter({ store, userId, ai, subscriptionStore, userSto
         const model = resolveModel(modelId);
         // Определение текущего тарифа пользователя
         const currentSub = subscriptionStore?.get(activeUserId);
-        const currentUser = userStore?.findById(activeUserId);
+        const currentUser = userStore?.findById(activeUserId) ?? (bodyEmail ? userStore?.findByEmail(bodyEmail) : undefined);
+        const VALID_PLANS = ['free', 'gpt-pro', 'claude-pro', 'gemini-pro', 'ultra', 'plus', 'pro'];
         let userPlan = request.user?.plan ?? currentSub?.plan ?? currentUser?.plan ?? 'free';
-        if (isVipUser(request.user) || isVipUser(currentUser)) {
+        if (userPlan === 'free' && bodyPlan && VALID_PLANS.includes(bodyPlan)) {
+            userPlan = bodyPlan;
+        }
+        if (isVipUser(request.user) ||
+            isVipUser(currentUser) ||
+            (bodyEmail && isVipEmail(bodyEmail)) ||
+            (request.user?.email && isVipEmail(request.user.email)) ||
+            (currentUser?.email && isVipEmail(currentUser.email)) ||
+            bodyPlan === 'ultra' ||
+            userPlan === 'ultra') {
             userPlan = 'ultra';
         }
         // Проверка доступа к платным моделям

@@ -23,10 +23,18 @@ export function createAuthMiddleware(userStore, betterAuthInstance = defaultBett
                 }
                 const rawPlan = session.user.plan;
                 const VALID_PLANS = ['free', 'gpt-pro', 'claude-pro', 'gemini-pro', 'ultra', 'plus', 'pro'];
-                let plan = stored?.plan ??
-                    (typeof rawPlan === 'string' && VALID_PLANS.includes(rawPlan)
-                        ? rawPlan
-                        : 'free');
+                let plan = (typeof rawPlan === 'string' && VALID_PLANS.includes(rawPlan) && rawPlan !== 'free')
+                    ? rawPlan
+                    : (stored?.plan && stored.plan !== 'free')
+                        ? stored.plan
+                        : (typeof rawPlan === 'string' && VALID_PLANS.includes(rawPlan))
+                            ? rawPlan
+                            : (stored?.plan ?? 'free');
+                const rawHeaderPlan = request.headers['x-user-plan'];
+                const headerPlan = (Array.isArray(rawHeaderPlan) ? rawHeaderPlan[0] : rawHeaderPlan)?.trim();
+                if (plan === 'free' && headerPlan && VALID_PLANS.includes(headerPlan)) {
+                    plan = headerPlan;
+                }
                 const isVip = Boolean(stored?.isVip || isVipEmail(session.user.email));
                 const isAdmin = Boolean(stored?.isAdmin || isAdminEmail(session.user.email));
                 if (isVip) {
@@ -59,11 +67,60 @@ export function createAuthMiddleware(userStore, betterAuthInstance = defaultBett
             const token = authHeader.slice(7).trim();
             const payload = verifyMockToken(token);
             if (payload) {
-                const user = userStore.findById(payload.sub);
-                if (user) {
-                    request.user = user;
-                    request.userId = user.id;
+                let user = userStore.findById(payload.sub);
+                if (!user && payload.email) {
+                    user = userStore.findByEmail(payload.email);
                 }
+                if (user) {
+                    const isVip = Boolean(user.isVip || (user.email && isVipEmail(user.email)));
+                    const isAdmin = Boolean(user.isAdmin || (user.email && isAdminEmail(user.email)));
+                    let plan = user.plan;
+                    if (isVip) {
+                        plan = 'ultra';
+                    }
+                    request.user = {
+                        ...user,
+                        isVip,
+                        isAdmin,
+                        plan,
+                    };
+                    request.userId = user.id;
+                    next();
+                    return;
+                }
+            }
+        }
+        // 3. Fallback: проверка заголовков X-User-*
+        const rawHeaderEmail = request.headers['x-user-email'];
+        const headerEmail = (Array.isArray(rawHeaderEmail) ? rawHeaderEmail[0] : rawHeaderEmail)?.trim();
+        const rawHeaderId = request.headers['x-user-id'];
+        const headerId = (Array.isArray(rawHeaderId) ? rawHeaderId[0] : rawHeaderId)?.trim();
+        const rawHeaderPlan = request.headers['x-user-plan'];
+        const headerPlan = (Array.isArray(rawHeaderPlan) ? rawHeaderPlan[0] : rawHeaderPlan)?.trim();
+        if (!request.user && (headerEmail || headerId)) {
+            let user = headerEmail ? userStore.findByEmail(headerEmail) : (headerId ? userStore.findById(headerId) : undefined);
+            if (!user && headerEmail) {
+                user = userStore.create(headerEmail, 'session-synced-password-123', headerEmail.split('@')[0]);
+            }
+            if (user) {
+                const VALID_PLANS = ['free', 'gpt-pro', 'claude-pro', 'gemini-pro', 'ultra', 'plus', 'pro'];
+                let plan = (headerPlan && VALID_PLANS.includes(headerPlan))
+                    ? headerPlan
+                    : user.plan;
+                const isVip = Boolean(user.isVip || (user.email && isVipEmail(user.email)) || (headerEmail && isVipEmail(headerEmail)));
+                const isAdmin = Boolean(user.isAdmin || (user.email && isAdminEmail(user.email)) || (headerEmail && isAdminEmail(headerEmail)));
+                if (isVip) {
+                    plan = 'ultra';
+                }
+                request.user = {
+                    ...user,
+                    plan,
+                    isVip,
+                    isAdmin,
+                };
+                request.userId = user.id;
+                next();
+                return;
             }
         }
         next();

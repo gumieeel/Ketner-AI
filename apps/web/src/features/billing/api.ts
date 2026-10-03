@@ -1,4 +1,4 @@
-import { getAuthToken } from '../auth/auth-store';
+import { getAuthToken, useAuth } from '../auth/auth-store';
 import { ApiError } from '../chat/api';
 import { API_BASE } from '@/lib/api-config';
 import type {
@@ -33,6 +33,16 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   if (token) {
     headers['Authorization'] = `Bearer ${token}`;
   }
+  const currentUser = useAuth.getState().user;
+  if (currentUser?.email) {
+    headers['X-User-Email'] = currentUser.email;
+  }
+  if (currentUser?.id) {
+    headers['X-User-Id'] = currentUser.id;
+  }
+  if (currentUser?.plan) {
+    headers['X-User-Plan'] = currentUser.plan;
+  }
   if (init?.headers) {
     Object.assign(headers, init.headers);
   }
@@ -40,6 +50,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await fetch(`${API_BASE}${path}`, {
     ...init,
     headers,
+    credentials: 'include',
   });
 
   if (!response.ok) {

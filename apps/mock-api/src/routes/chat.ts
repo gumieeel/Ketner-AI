@@ -10,7 +10,7 @@ import { usageStore as defaultUsageStore, type UsageStore } from '../store/index
 import type { SubscriptionStore } from '../store/subscription-store.js';
 import type { UserStore } from '../store/user-store.js';
 import type { IncomingMessage, Language, MessageStatus, PlanId } from '../types.js';
-import { isVipUser } from '../services/vip.js';
+import { isVipUser, isVipEmail } from '../services/vip.js';
 
 const MAX_MESSAGES = 200;
 const MAX_CONTENT_LENGTH = 8000;
@@ -21,6 +21,9 @@ export interface CompletionRequest {
   modelId: string;
   language: Language;
   messages: IncomingMessage[];
+  userId?: string;
+  userEmail?: string;
+  userPlan?: string;
 }
 
 type ParseResult = { ok: true; value: CompletionRequest } | { ok: false; message: string };
@@ -75,6 +78,9 @@ function parseCompletionRequest(body: unknown): ParseResult {
       conversationId: candidate.conversationId,
       modelId: typeof candidate.modelId === 'string' ? candidate.modelId : DEFAULT_MODEL_ID,
       language: candidate.language === 'en' ? 'en' : 'ru',
+      userId: typeof candidate.userId === 'string' ? candidate.userId.trim() : undefined,
+      userEmail: typeof candidate.userEmail === 'string' ? candidate.userEmail.trim() : undefined,
+      userPlan: typeof candidate.userPlan === 'string' ? candidate.userPlan.trim() : undefined,
       messages,
     },
   };
@@ -119,8 +125,24 @@ export function createChatRouter({
       return;
     }
 
-    const { conversationId, modelId, language, messages } = parsed.value;
-    const activeUserId = request.userId ?? userId;
+    const {
+      conversationId,
+      modelId,
+      language,
+      messages,
+      userId: bodyUserId,
+      userEmail: bodyEmail,
+      userPlan: bodyPlan,
+    } = parsed.value;
+    let activeUserId = request.userId ?? bodyUserId ?? userId;
+
+    if (!store.get(activeUserId, conversationId)) {
+      if (store.get(userId, conversationId)) {
+        activeUserId = userId;
+      } else if (bodyUserId && store.get(bodyUserId, conversationId)) {
+        activeUserId = bodyUserId;
+      }
+    }
 
     if (!store.get(activeUserId, conversationId)) {
       sendError(response, 404, 'conversation_not_found', `Диалог ${conversationId} не найден`);
@@ -131,10 +153,26 @@ export function createChatRouter({
 
     // Определение текущего тарифа пользователя
     const currentSub = subscriptionStore?.get(activeUserId);
-    const currentUser = userStore?.findById(activeUserId);
+    const currentUser =
+      userStore?.findById(activeUserId) ?? (bodyEmail ? userStore?.findByEmail(bodyEmail) : undefined);
+    const VALID_PLANS: PlanId[] = ['free', 'gpt-pro', 'claude-pro', 'gemini-pro', 'ultra', 'plus', 'pro'];
+
     let userPlan: PlanId =
       request.user?.plan ?? currentSub?.plan ?? currentUser?.plan ?? 'free';
-    if (isVipUser(request.user) || isVipUser(currentUser)) {
+
+    if (userPlan === 'free' && bodyPlan && VALID_PLANS.includes(bodyPlan as PlanId)) {
+      userPlan = bodyPlan as PlanId;
+    }
+
+    if (
+      isVipUser(request.user) ||
+      isVipUser(currentUser) ||
+      (bodyEmail && isVipEmail(bodyEmail)) ||
+      (request.user?.email && isVipEmail(request.user.email)) ||
+      (currentUser?.email && isVipEmail(currentUser.email)) ||
+      bodyPlan === 'ultra' ||
+      userPlan === 'ultra'
+    ) {
       userPlan = 'ultra';
     }
 
