@@ -82,9 +82,15 @@ function isAbortError(error: unknown): boolean {
 /** Текст для пользователя: технические детали сбоя уходят в консоль. */
 function describeError(error: unknown): string {
   const language = usePreferences.getState().language;
-  if (error instanceof ApiError && error.code === 'conversation_not_found') {
-    console.error('[chat] диалог не найден:', error);
-    return translate(language, 'chat.errorNotFound');
+  if (error instanceof ApiError) {
+    if (error.code === 'conversation_not_found') {
+      console.error('[chat] диалог не найден:', error);
+      return translate(language, 'chat.errorNotFound');
+    }
+    if (error.message && error.message !== 'unknown_error') {
+      console.error('[chat] ошибка API:', error);
+      return error.message;
+    }
   }
   console.error('[chat] сбой запроса:', error);
   return translate(language, 'chat.errorText');

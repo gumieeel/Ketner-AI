@@ -70,7 +70,14 @@ export function createConversationStore(file) {
             }));
         },
         get(userId, conversationId) {
-            const conversation = findConversation(userId, conversationId);
+            let conversation = findConversation(userId, conversationId);
+            if (!conversation) {
+                conversation = snapshot.conversations.find((c) => c.id === conversationId);
+                if (conversation && userId) {
+                    conversation.userId = userId;
+                    persist();
+                }
+            }
             if (!conversation) {
                 return null;
             }
@@ -111,9 +118,26 @@ export function createConversationStore(file) {
             return true;
         },
         saveTurn({ userId, conversationId, history, assistant }) {
-            const conversation = findConversation(userId, conversationId);
+            let conversation = findConversation(userId, conversationId);
             if (!conversation) {
-                return null;
+                conversation = snapshot.conversations.find((c) => c.id === conversationId);
+                if (conversation) {
+                    conversation.userId = userId;
+                }
+                else {
+                    const now = new Date().toISOString();
+                    const firstUserMsg = history.find((m) => m.role === 'user');
+                    const title = deriveTitle(firstUserMsg?.content || 'Новый диалог');
+                    conversation = {
+                        id: conversationId,
+                        userId,
+                        title,
+                        createdAt: now,
+                        updatedAt: now,
+                    };
+                    snapshot.conversations.push(conversation);
+                }
+                persist();
             }
             const now = new Date().toISOString();
             const restored = history.map((message) => ({

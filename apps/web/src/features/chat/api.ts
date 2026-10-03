@@ -157,14 +157,27 @@ export async function streamCompletion(
       userId: currentUser?.id,
       userEmail: currentUser?.email,
       userPlan: currentUser?.plan,
-      messages: completion.messages.map((message) => ({
-        id: message.id,
-        role: message.role,
-        content: message.content,
-        createdAt: message.createdAt,
-        attachments: message.attachments,
-        workspaceContext: message.workspaceContext,
-      })),
+      messages: completion.messages.map((message, idx) => {
+        const isLatest = idx === completion.messages.length - 1;
+        let wsContext = message.workspaceContext;
+        if (wsContext && !isLatest && wsContext.files) {
+          wsContext = {
+            name: wsContext.name,
+            type: wsContext.type,
+            pathOrUrl: wsContext.pathOrUrl,
+            branch: wsContext.branch,
+            filesCount: wsContext.filesCount,
+          };
+        }
+        return {
+          id: message.id,
+          role: message.role,
+          content: message.content,
+          createdAt: message.createdAt,
+          attachments: message.attachments,
+          workspaceContext: wsContext,
+        };
+      }),
     }),
   });
 

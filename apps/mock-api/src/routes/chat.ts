@@ -13,7 +13,7 @@ import type { IncomingMessage, Language, MessageStatus, PlanId } from '../types.
 import { isVipUser, isVipEmail } from '../services/vip.js';
 
 const MAX_MESSAGES = 200;
-const MAX_CONTENT_LENGTH = 8000;
+const MAX_CONTENT_LENGTH = 200000;
 
 /** Тело запроса на генерацию. Контракт зафиксирован в docs/ai-integration-todo.md. */
 export interface CompletionRequest {

@@ -8,7 +8,7 @@ import { sendError } from '../middleware/errors.js';
 import { usageStore as defaultUsageStore } from '../store/index.js';
 import { isVipUser, isVipEmail } from '../services/vip.js';
 const MAX_MESSAGES = 200;
-const MAX_CONTENT_LENGTH = 8000;
+const MAX_CONTENT_LENGTH = 200000;
 function parseCompletionRequest(body) {
     if (typeof body !== 'object' || body === null) {
         return { ok: false, message: 'Тело запроса должно быть объектом JSON' };

@@ -38,6 +38,16 @@ export class ContextOptimizer {
   }
 
   /**
+   * Удаление внутренних рассуждений (<think>...</think>) из истории ответов ассистента.
+   * Модели провайдеров (OpenRouter, DeepSeek и др.) отклоняют или ломаются при получении
+   * тегов <think> в сообщениях роли assistant в истории диалога.
+   */
+  static stripReasoning(text: string): string {
+    if (!text) return '';
+    return text.replace(/<think>[\s\S]*?<\/think>/gi, '').trim();
+  }
+
+  /**
    * Подготовить и оптимизировать историю сообщений для отправки в модель.
    */
   static optimize(
@@ -74,7 +84,8 @@ export class ContextOptimizer {
     // Идём с конца (самые свежие сообщения наиболее важны)
     for (let i = windowed.length - 1; i >= 0; i--) {
       const msg = windowed[i];
-      const cleaned = this.cleanText(msg.content);
+      const raw = msg.role === 'assistant' ? this.stripReasoning(msg.content) : msg.content;
+      const cleaned = this.cleanText(raw);
       const msgTokens = this.estimateTokens(cleaned);
 
       if (chosenMessages.length > 0 && currentTokens + msgTokens > maxTokens) {
