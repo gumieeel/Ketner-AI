@@ -9,8 +9,8 @@ import type { ConversationStore } from '../store/conversation-store.js';
 import { usageStore as defaultUsageStore, type UsageStore } from '../store/index.js';
 import type { SubscriptionStore } from '../store/subscription-store.js';
 import type { UserStore } from '../store/user-store.js';
-import type { IncomingMessage, Language, MessageStatus, PlanId } from '../types.js';
 import { isVipUser, isVipEmail } from '../services/vip.js';
+import { PayloadGuard } from '../ai/payload-guard.js';
 
 const MAX_MESSAGES = 200;
 const MAX_CONTENT_LENGTH = 200000;
@@ -125,6 +125,14 @@ export function createChatRouter({
       return;
     }
 
+    const guardResult = PayloadGuard.validate(parsed.value.messages, {
+      language: parsed.value.language,
+    });
+    if (!guardResult.valid) {
+      sendError(response, 400, guardResult.code ?? 'payload_too_large', guardResult.message ?? 'Payload too large');
+      return;
+    }
+
     const {
       conversationId,
       modelId,
@@ -205,8 +213,10 @@ export function createChatRouter({
     response.flushHeaders();
 
     let cancelled = false;
+    const clientAbortController = new AbortController();
     const onClientClose = (): void => {
       cancelled = true;
+      clientAbortController.abort();
     };
     response.on('close', onClientClose);
 
@@ -266,6 +276,7 @@ export function createChatRouter({
           language,
           stream: true,
           cachedSummary: existingConversation?.conversation.contextSummary,
+          signal: clientAbortController.signal,
         },
         {
           onDelta: (delta) => {

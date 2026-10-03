@@ -24,12 +24,14 @@ import { PLANS, LEGACY_PLANS } from './billing.js';
 import { isAdminUser } from '../services/vip.js';
 import { EntitlementService } from '../services/entitlement.js';
 import type { PlanId } from '../types.js';
+import { defaultCircuitBreaker, CircuitBreaker } from '../ai/circuit-breaker.js';
 
 export interface AdminRouterDeps {
   registry?: ModelRegistry;
   usageStore?: UsageStore;
   subscriptionStore?: SubscriptionStore;
   userStore?: UserStore;
+  circuitBreaker?: CircuitBreaker;
 }
 
 export function createAdminRouter({
@@ -37,6 +39,7 @@ export function createAdminRouter({
   usageStore = defaultUsageStore,
   subscriptionStore = defaultSubscriptionStore,
   userStore = defaultUserStore,
+  circuitBreaker = defaultCircuitBreaker,
 }: AdminRouterDeps = {}): Router {
   const router = Router();
 
@@ -99,10 +102,34 @@ export function createAdminRouter({
     res.json({ success: true, model: registry.get(modelId) });
   });
 
-  // 3. Провайдеры: мониторинг статуса, ошибок и задержек
+  // 3. Провайдеры: мониторинг статуса, ошибок и задержек + Circuit Breaker (Phase 5)
   router.get('/providers', (_req: Request, res: Response): void => {
     const stats = usageStore.getProviderStats();
-    res.json({ providers: stats });
+    const circuitBreakers = circuitBreaker.getAllStatuses();
+    res.json({
+      providers: stats.map((s) => {
+        const cb = circuitBreakers.find((c) => c.provider === s.provider);
+        return {
+          ...s,
+          circuitBreaker: cb ?? { state: 'closed', consecutiveFailures: 0 },
+        };
+      }),
+      circuitBreakers,
+    });
+  });
+
+  // 3.1. Circuit Breakers: мониторинг и сброс (Phase 5)
+  router.get('/circuit-breaker', (_req: Request, res: Response): void => {
+    res.json({ circuitBreakers: circuitBreaker.getAllStatuses() });
+  });
+
+  router.post('/circuit-breaker/reset', (req: Request, res: Response): void => {
+    const provider = typeof req.body?.provider === 'string' ? req.body.provider : undefined;
+    circuitBreaker.reset(provider);
+    res.json({
+      success: true,
+      message: provider ? `Circuit breaker для ${provider} сброшен` : 'Все circuit breakers сброшены',
+    });
   });
 
   // 4. Использование: общая статистика токенов и расходов

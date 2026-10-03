@@ -40,6 +40,8 @@ import {
   computeDynamicMaxTokens,
   type PipelineStrategy,
 } from './tier-pipeline.js';
+import { CircuitBreaker, defaultCircuitBreaker } from './circuit-breaker.js';
+import { PayloadGuard } from './payload-guard.js';
 
 export interface ComplexityContext {
   history?: Array<{ role: string; content: string }>;
@@ -345,6 +347,7 @@ export interface AIGatewayDeps {
   providers?: ProviderManager;
   usageStore: UsageStore;
   aiConfig: AiConfig;
+  circuitBreaker?: CircuitBreaker;
 }
 
 export class AIGateway {
@@ -352,12 +355,18 @@ export class AIGateway {
   private providers: ProviderManager;
   private usageStore: UsageStore;
   private aiConfig: AiConfig;
+  private circuitBreaker: CircuitBreaker;
 
   constructor(deps: AIGatewayDeps) {
     this.registry = deps.registry ?? modelRegistry;
     this.providers = deps.providers ?? providerManager;
     this.usageStore = deps.usageStore;
     this.aiConfig = deps.aiConfig;
+    this.circuitBreaker = deps.circuitBreaker ?? defaultCircuitBreaker;
+  }
+
+  getCircuitBreaker(): CircuitBreaker {
+    return this.circuitBreaker;
   }
 
   /**
@@ -371,6 +380,29 @@ export class AIGateway {
     const startTime = Date.now();
     const activeUserId = req.userId;
     const language = req.language;
+
+    // 0. Payload Guard (Phase 5: валидация размера сообщений и вложений)
+    const guardResult = PayloadGuard.validate(req.messages, {
+      language,
+      attachments: req.attachments,
+    });
+    if (!guardResult.valid) {
+      callbacks.onError({
+        code: (guardResult.code as any) ?? 'payload_too_large',
+        message: guardResult.message ?? ERROR_MESSAGES[language],
+      });
+      return;
+    }
+
+    const clientAbortController = new AbortController();
+    if (req.signal) {
+      if (req.signal.aborted) {
+        clientAbortController.abort();
+      } else {
+        req.signal.addEventListener('abort', () => clientAbortController.abort(), { once: true });
+      }
+    }
+    const combinedIsCancelled = () => isCancelled() || clientAbortController.signal.aborted;
 
     // 1. Определение эффективного плана и лимитов
     // Примечание: req.userPlan предварительно резолвится с учётом VIP-элевации (isVipUser -> 'ultra')
@@ -740,7 +772,7 @@ export class AIGateway {
       // 6.1. Прямой стриминг модели (если double-pass не применялся или не удался)
       if (!isTestEnv && !success) {
         for (const candidateModel of modelsToTry) {
-          if (isCancelled()) break;
+          if (combinedIsCancelled()) break;
 
           let provider = this.providers.get(candidateModel.provider);
           let modelToRequest = candidateModel.providerModelId;
@@ -753,6 +785,29 @@ export class AIGateway {
             } else {
               continue;
             }
+          }
+
+          const activeProviderType = provider.type;
+
+          // Phase 5: Проверка Circuit Breaker для провайдера
+          if (this.circuitBreaker.isOpen(activeProviderType)) {
+            console.warn(
+              `[ai-gateway] Circuit breaker OPEN для ${activeProviderType}, быстрый переход к следующему fallback`,
+            );
+            continue;
+          }
+
+          const providerTimeoutMs = req.providerTimeoutMs ?? 25_000;
+          const attemptController = new AbortController();
+          const timeoutId = setTimeout(() => {
+            attemptController.abort(new Error(`Timeout: provider ${activeProviderType} call timed out after ${providerTimeoutMs}ms`));
+          }, providerTimeoutMs);
+
+          const abortHandler = () => attemptController.abort();
+          if (clientAbortController.signal.aborted) {
+            attemptController.abort();
+          } else {
+            clientAbortController.signal.addEventListener('abort', abortHandler, { once: true });
           }
 
           try {
@@ -777,6 +832,7 @@ export class AIGateway {
                 messages: optimizedMessages,
                 stream: true,
                 maxTokens: Math.min(candidateModel.maxOutputTokens, maxTokensToUse),
+                signal: attemptController.signal,
               },
               {
                 onDelta: (delta) => {
@@ -785,17 +841,26 @@ export class AIGateway {
                   }
                   callbacks.onDelta(delta);
                 },
-                isCancelled,
+                isCancelled: () => combinedIsCancelled() || attemptController.signal.aborted,
               },
             );
 
+            clearTimeout(timeoutId);
+            clientAbortController.signal.removeEventListener('abort', abortHandler);
+
             if (streamedResponse && streamedResponse.content.length > 0) {
+              this.circuitBreaker.recordSuccess(activeProviderType);
               success = true;
               break;
+            } else {
+              this.circuitBreaker.recordFailure(activeProviderType, new Error('Empty response from provider'));
             }
           } catch (providerError) {
+            clearTimeout(timeoutId);
+            clientAbortController.signal.removeEventListener('abort', abortHandler);
+            this.circuitBreaker.recordFailure(activeProviderType, providerError);
             console.warn(
-              `[ai-gateway] Провайдер ${candidateModel.provider} (модель ${candidateModel.name}) вернул ошибку:`,
+              `[ai-gateway] Провайдер ${activeProviderType} (модель ${candidateModel.name}) вернул ошибку:`,
               providerError,
             );
           }

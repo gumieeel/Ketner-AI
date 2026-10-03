@@ -293,6 +293,10 @@ export interface GatewayRequest {
    * ContextOptimizer не перегенерирует её заново.
    */
   cachedSummary?: string;
+  /** Сигнал отмены от клиента (Phase 5). */
+  signal?: AbortSignal;
+  /** Таймаут на вызов провайдера в мс (Phase 5, по умолчанию 25_000). */
+  providerTimeoutMs?: number;
 }
 
 /** Результат завершения генерации (расширенный). */
@@ -452,6 +456,9 @@ export type AIErrorCode =
   | 'concurrency_limit'
   | 'provider_error'
   | 'context_too_large'
+  | 'payload_too_large'
+  | 'provider_timeout'
+  | 'circuit_breaker_open'
   | 'content_rejected'
   | 'payment_required'
   | 'fair_use_exceeded'

@@ -21,6 +21,8 @@ import { SemanticCache } from './cache.js';
 import { computeBaseTokensByCategory } from './tier-pipeline.js';
 import { AnthropicProvider } from './providers/anthropic-provider.js';
 import { UsageStore } from '../store/usage-store.js';
+import { CircuitBreaker } from './circuit-breaker.js';
+import { PayloadGuard } from './payload-guard.js';
 
 test('ModelRegistry: получение, разрешение и проверка доступа', () => {
   const registry = new ModelRegistry();
@@ -791,4 +793,96 @@ test('Фаза 4: UsageStore.getGatewayMetrics — полная аналитик
   assert.equal(metrics.alerts[0].plan, 'plus');
   assert.ok(metrics.alerts[0].contributionMargin < 0);
   assert.ok(metrics.alerts[0].message.includes('Отрицательная маржинальность'));
+});
+
+test('Фаза 5: CircuitBreaker — 3 сбоя открывают предохранитель, кулдаун переводит в half-open, успех сбрасывает', async () => {
+  const cb = new CircuitBreaker({ failureThreshold: 3, cooldownMs: 50 });
+
+  // 1. Изначально закрыт (готов к работе)
+  assert.equal(cb.isOpen('openai'), false);
+  assert.equal(cb.getStatus('openai').state, 'closed');
+
+  // 2. Первый и второй сбои не открывают предохранитель
+  cb.recordFailure('openai', new Error('Net error 1'));
+  assert.equal(cb.isOpen('openai'), false);
+  cb.recordFailure('openai', new Error('Net error 2'));
+  assert.equal(cb.isOpen('openai'), false);
+
+  // 3. Третий сбой подряд открывает предохранитель (OPEN)
+  cb.recordFailure('openai', new Error('Net error 3'));
+  assert.equal(cb.isOpen('openai'), true);
+  assert.equal(cb.getStatus('openai').state, 'open');
+
+  // 4. По истечении кулдауна (50 мс) переходит в half-open
+  await new Promise((resolve) => setTimeout(resolve, 60));
+  assert.equal(cb.isOpen('openai'), false); // Разрешает 1 пробный запрос
+  assert.equal(cb.getStatus('openai').state, 'half-open');
+
+  // 5. Успешный ответ восстанавливает статус closed
+  cb.recordSuccess('openai');
+  assert.equal(cb.isOpen('openai'), false);
+  assert.equal(cb.getStatus('openai').state, 'closed');
+  assert.equal(cb.getStatus('openai').consecutiveFailures, 0);
+
+  // 6. Метод reset() очищает все провайдеры
+  cb.recordFailure('anthropic', new Error('Err'));
+  cb.reset();
+  assert.equal(cb.getStatus('anthropic').consecutiveFailures, 0);
+});
+
+test('Фаза 5: PayloadGuard — защита от гигантских сообщений, суммарного payload и вложений', () => {
+  // 1. Нормальные сообщения проходят валидацию
+  const normalResult = PayloadGuard.validate([
+    { role: 'user', content: 'Привет! Напиши простой код на TypeScript.' },
+  ]);
+  assert.equal(normalResult.valid, true);
+
+  // 2. Слишком длинное отдельное сообщение (> maxMessageChars)
+  const hugeMsgResult = PayloadGuard.validate(
+    [{ role: 'user', content: 'A'.repeat(120_000) }],
+    { limits: { maxMessageChars: 100_000 } },
+  );
+  assert.equal(hugeMsgResult.valid, false);
+  assert.equal(hugeMsgResult.code, 'message_too_large');
+
+  // 3. Суммарный контекст слишком велик (> maxTotalChars)
+  const hugePayloadResult = PayloadGuard.validate(
+    [
+      { role: 'user', content: 'A'.repeat(60_000) },
+      { role: 'assistant', content: 'B'.repeat(60_000) },
+    ],
+    { limits: { maxTotalChars: 100_000, maxMessageChars: 70_000 } },
+  );
+  assert.equal(hugePayloadResult.valid, false);
+  assert.equal(hugePayloadResult.code, 'payload_too_large');
+
+  // 4. Слишком много вложений (> maxAttachmentsCount)
+  const tooManyAttachments = Array.from({ length: 12 }, (_, i) => ({
+    id: `att-${i}`,
+    name: `file-${i}.txt`,
+    category: 'code' as const,
+    size: 100,
+  }));
+  const attCountResult = PayloadGuard.validate(
+    [{ role: 'user', content: 'Посмотри файлы' }],
+    { attachments: tooManyAttachments, limits: { maxAttachmentsCount: 10 } },
+  );
+  assert.equal(attCountResult.valid, false);
+  assert.equal(attCountResult.code, 'too_many_attachments');
+
+  // 5. Вложение превышает лимит размера (> maxAttachmentBytes)
+  const hugeAttachment = [
+    {
+      id: 'big-file',
+      name: 'big.zip',
+      category: 'code' as const,
+      size: 25 * 1024 * 1024, // 25 MB
+    },
+  ];
+  const attSizeResult = PayloadGuard.validate(
+    [{ role: 'user', content: 'Вот архив' }],
+    { attachments: hugeAttachment, limits: { maxAttachmentBytes: 20 * 1024 * 1024 } },
+  );
+  assert.equal(attSizeResult.valid, false);
+  assert.equal(attSizeResult.code, 'attachment_too_large');
 });

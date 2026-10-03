@@ -589,4 +589,36 @@ test('admin: метрики шлюза GET /api/admin/metrics (Фаза 4: да�
   }
 });
 
+test('admin: circuit breaker мониторинг GET /api/admin/circuit-breaker и POST /reset (Фаза 5)', async () => {
+  const server = await startTestServer();
+
+  try {
+    const headers = {
+      'Content-Type': 'application/json',
+      'x-admin-key': config.adminApiKey,
+    };
+
+    // 1. Получение статусов предохранителей
+    const getRes = await fetch(`${server.baseUrl}/api/admin/circuit-breaker`, { headers });
+    assert.equal(getRes.status, 200);
+    const getBody = (await getRes.json()) as {
+      circuitBreakers: Array<{ provider: string; state: string; consecutiveFailures: number }>;
+    };
+    assert.ok(Array.isArray(getBody.circuitBreakers));
+    assert.ok(getBody.circuitBreakers.some((c) => c.provider === 'openai'));
+
+    // 2. Сброс предохранителя для конкретного провайдера
+    const resetRes = await fetch(`${server.baseUrl}/api/admin/circuit-breaker/reset`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ provider: 'openai' }),
+    });
+    assert.equal(resetRes.status, 200);
+    const resetBody = (await resetRes.json()) as { success: boolean };
+    assert.equal(resetBody.success, true);
+  } finally {
+    await server.close();
+  }
+});
+
 
