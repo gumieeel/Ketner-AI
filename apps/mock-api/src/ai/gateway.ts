@@ -520,6 +520,8 @@ export class AIGateway {
       // 6.0. Двухпроходный пайплайн улучшения (Double Pass Enhancer: cheap draft -> GPT/cheap refine)
       if (
         pipelineStrategy &&
+        !activeWorkspace &&
+        !activeAttachments?.length &&
         (pipelineStrategy.mode === 'gpt_improve' || pipelineStrategy.mode === 'cheap_improve') &&
         !isTestEnv
       ) {
@@ -552,7 +554,7 @@ export class AIGateway {
               model: draftModelId,
               messages: optimizedMessages,
               stream: false,
-              maxTokens: Math.min(draftModel.maxOutputTokens, 250),
+              maxTokens: Math.min(draftModel.maxOutputTokens, 1500),
             });
 
             if (draftRes.content && !isCancelled()) {

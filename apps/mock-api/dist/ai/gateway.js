@@ -394,6 +394,8 @@ export class AIGateway {
                     this.aiConfig.chunkMs[1] === 0);
             // 6.0. Двухпроходный пайплайн улучшения (Double Pass Enhancer: cheap draft -> GPT/cheap refine)
             if (pipelineStrategy &&
+                !activeWorkspace &&
+                !activeAttachments?.length &&
                 (pipelineStrategy.mode === 'gpt_improve' || pipelineStrategy.mode === 'cheap_improve') &&
                 !isTestEnv) {
                 const draftModel = this.registry.resolve(pipelineStrategy.draftModelId ?? 'deepseek-v4.1-flash');
@@ -423,7 +425,7 @@ export class AIGateway {
                             model: draftModelId,
                             messages: optimizedMessages,
                             stream: false,
-                            maxTokens: Math.min(draftModel.maxOutputTokens, 250),
+                            maxTokens: Math.min(draftModel.maxOutputTokens, 1500),
                         });
                         if (draftRes.content && !isCancelled()) {
                             // Шаг 2: Стриминг отполированного ответа пользователю (локализованная инструкция)

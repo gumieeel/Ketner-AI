@@ -1,15 +1,15 @@
-import { Suspense, lazy } from 'react';
+import { Suspense, lazy, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { AlertIcon, RefreshIcon, SparkleIcon } from '@/components/icons';
 import { Button } from '@/components/ui/button';
 import { CopyButton } from '@/components/ui/copy-button';
-import { CornerMark } from '@/components/ui/corner-mark';
 import { IconButton } from '@/components/ui/icon-button';
 import { findModel } from '@/features/chat/can-access-model';
 import { useChat } from '@/features/chat/chat-store';
 import type { Message } from '@/features/chat/types';
 import { useTranslation } from '@/i18n';
 import { cn } from '@/lib/cn';
+import { ThinkingBlock, parseThinking } from './thinking-block';
 
 /** Тяжёлый рендер markdown подключается при первом ответе, а не при загрузке чата. */
 const Markdown = lazy(() => import('@/features/chat/markdown/markdown'));
@@ -27,9 +27,13 @@ export function AssistantMessage({ message, canRegenerate }: AssistantMessagePro
   const streaming = useChat((state) => state.streaming);
   const meta = useChat((state) => state.meta);
 
-  const thinking = message.status === 'pending';
+  const parsed = useMemo(() => parseThinking(message.content), [message.content]);
+  const isPending = message.status === 'pending';
+  const isStreaming = message.status === 'streaming';
   const failed = message.status === 'error';
-  const hasContent = message.content !== '';
+  const hasThoughts = Boolean(parsed.thinking && parsed.thinking.length > 0);
+  const showThinkingBlock = isPending || hasThoughts || parsed.isThinking;
+  const hasContent = parsed.content !== '';
   const isUpgradeError =
     message.errorCode === 'upgrade_required' ||
     (typeof message.error === 'string' &&
@@ -55,11 +59,13 @@ export function AssistantMessage({ message, canRegenerate }: AssistantMessagePro
           </div>
         ) : null}
 
-        {thinking ? (
-          <p className="flex items-center gap-2 text-sm leading-5 text-muted" role="status">
-            <CornerMark size={14} className="text-accent reply-marker-pulse" />
-            {t('chat.thinking')}
-          </p>
+        {showThinkingBlock ? (
+          <ThinkingBlock
+            thinkingText={parsed.thinking}
+            isThinkingActive={parsed.isThinking && isStreaming}
+            isPending={isPending}
+            workspaceName={message.workspaceContext?.name}
+          />
         ) : null}
 
         {hasContent ? (
@@ -67,15 +73,15 @@ export function AssistantMessage({ message, canRegenerate }: AssistantMessagePro
             <Suspense
               fallback={
                 <p className="text-[15px] leading-[26px] whitespace-pre-wrap max-w-[66ch]">
-                  {message.content}
+                  {parsed.content}
                 </p>
               }
             >
-              <Markdown content={message.content} />
+              <Markdown content={parsed.content} />
             </Suspense>
           </div>
         ) : null}
-        {message.status === 'streaming' ? (
+        {isStreaming && !parsed.isThinking ? (
           <span className="caret text-accent ml-1" aria-hidden="true" />
         ) : null}
 
@@ -121,9 +127,9 @@ export function AssistantMessage({ message, canRegenerate }: AssistantMessagePro
           </div>
         ) : null}
 
-        {hasContent && !thinking && !failed ? (
+        {hasContent && !isPending && !failed ? (
           <div className="mt-2 flex items-center gap-1 text-muted">
-            <CopyButton value={message.content} label={t('chat.copy')} size="sm" />
+            <CopyButton value={parsed.content || message.content} label={t('chat.copy')} size="sm" />
             {canRegenerate ? (
               <IconButton
                 label={t('chat.regenerate')}

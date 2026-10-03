@@ -99,7 +99,12 @@ export class OpenRouterProvider implements AIProvider {
           usage?: { prompt_tokens?: number; completion_tokens?: number };
         };
 
-        const content = json.choices?.[0]?.message?.content ?? '';
+        const msg = json.choices?.[0]?.message as { content?: string; reasoning?: string; reasoning_content?: string } | undefined;
+        let content = msg?.content ?? '';
+        const reasoning = msg?.reasoning ?? msg?.reasoning_content;
+        if (reasoning && !content.includes('<think>')) {
+          content = `<think>\n${reasoning}\n</think>\n\n${content}`;
+        }
         return {
           content,
           usage: {
@@ -171,6 +176,8 @@ export class OpenRouterProvider implements AIProvider {
         let completionTokens = 0;
         let reasoningTokens: number | null = null;
 
+        let insideReasoning = false;
+
         while (true) {
           if (callbacks.isCancelled()) {
             try {
@@ -197,15 +204,32 @@ export class OpenRouterProvider implements AIProvider {
 
             try {
               const parsed = JSON.parse(dataStr);
-              const delta =
-                parsed.choices?.[0]?.delta?.content ??
+              const reasoningDelta =
                 parsed.choices?.[0]?.delta?.reasoning ??
+                parsed.choices?.[0]?.delta?.reasoning_content ??
                 '';
+              const contentDelta = parsed.choices?.[0]?.delta?.content ?? '';
 
-              if (delta) {
+              if (reasoningDelta) {
+                if (!insideReasoning) {
+                  insideReasoning = true;
+                  callbacks.onDelta('<think>\n');
+                  accumulatedContent += '<think>\n';
+                }
                 streamedAny = true;
-                accumulatedContent += delta;
-                callbacks.onDelta(delta);
+                accumulatedContent += reasoningDelta;
+                callbacks.onDelta(reasoningDelta);
+              }
+
+              if (contentDelta) {
+                if (insideReasoning) {
+                  insideReasoning = false;
+                  callbacks.onDelta('\n</think>\n\n');
+                  accumulatedContent += '\n</think>\n\n';
+                }
+                streamedAny = true;
+                accumulatedContent += contentDelta;
+                callbacks.onDelta(contentDelta);
               }
 
               if (parsed.choices?.[0]?.finish_reason === 'length') {
@@ -226,6 +250,12 @@ export class OpenRouterProvider implements AIProvider {
               // ignore parsing errors
             }
           }
+        }
+
+        if (insideReasoning) {
+          insideReasoning = false;
+          callbacks.onDelta('\n</think>\n\n');
+          accumulatedContent += '\n</think>\n\n';
         }
 
         if (streamedAny) {
