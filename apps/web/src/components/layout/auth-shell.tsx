@@ -31,7 +31,7 @@ export function AuthShell({
   const { t, language } = useTranslation();
 
   return (
-    <div className="min-h-full grid grid-cols-1 lg:grid-cols-2 bg-canvas">
+    <div className="min-h-screen grid grid-cols-1 lg:grid-cols-2 bg-canvas">
       {/* Левая колонка — форма */}
       <div className="flex flex-col justify-between min-h-screen lg:min-h-full px-6 py-8 sm:px-10">
         {/* Верхняя полоса формы */}

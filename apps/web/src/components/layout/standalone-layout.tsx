@@ -60,6 +60,16 @@ export function StandaloneLayout() {
     };
   }, [mobileMenuOpen]);
 
+  const isAuthPage = location.pathname === '/login' || location.pathname === '/signup';
+
+  if (isAuthPage) {
+    return (
+      <main className="min-h-screen bg-canvas text-text selection:bg-accent/20 selection:text-text">
+        <Outlet />
+      </main>
+    );
+  }
+
   return (
     <div className="relative flex min-h-screen flex-col bg-canvas text-text selection:bg-accent/20 selection:text-text">
       {/* Шапка */}
