@@ -90,6 +90,11 @@ export function classifyPromptComplexity(
       }),
   );
 
+  const hasCodeOrTechnicalSyntax =
+    /```|<pre>|SELECT\s+[\s\S]*?\s+FROM|INSERT\s+INTO|UPDATE\s+[\s\S]*?SET|CREATE\s+TABLE|function\s*\(|def\s+\w+\(|class\s+\w+|const\s+\w+\s*=|let\s+\w+\s*=|import\s+[\s\S]*?from|export\s+(default|const|class)|interface\s+\w+/i.test(
+      trimmed,
+    );
+
   // 1. "Прям лёгкие вопросы": приветствия, благодарности, подтверждения, короткие реплики
   const isGreetingOrChitChat =
     /^(привет|хай|здравствуй|добр(ое|ый|ый день|ое утро|ый вечер)|hello|hi|hey|как дела|кто ты|что ты умеешь|спасибо|благодарю|ок|ok|ясно|понятно)[\s!?,.]*$/i.test(
@@ -102,7 +107,7 @@ export function classifyPromptComplexity(
     classification.category === 'general' &&
     !/(напиши|составь|придумай|объясни|расскажи|переведи|write|explain|translate|код|функци)/i.test(trimmed);
 
-  if ((isGreetingOrChitChat || isTrivialGeneral) && !historyIsComplex) {
+  if ((isGreetingOrChitChat || isTrivialGeneral) && !historyIsComplex && !hasCodeOrTechnicalSyntax) {
     return { level: 'simple', category: classification.category };
   }
 
@@ -113,11 +118,12 @@ export function classifyPromptComplexity(
     classification.category === 'math' ||
     classification.category === 'reasoning' ||
     classification.category === 'research' ||
+    hasCodeOrTechnicalSyntax ||
     trimmed.length > 500 ||
     historyIsComplex;
 
   if (isComplex) {
-    return { level: 'complex', category: classification.category };
+    return { level: 'complex', category: hasCodeOrTechnicalSyntax ? 'coding' : classification.category };
   }
 
   // 3. Умеренные / стандартные задачи

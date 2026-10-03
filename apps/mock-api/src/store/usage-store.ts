@@ -343,4 +343,57 @@ export class UsageStore {
       averageLatencyMs: totalRequests > 0 ? Math.round(totalLatency / totalRequests) : 0,
     };
   }
+
+  /**
+   * Phase 3: Пересчёт эмпирического бюджета тарифа по реальным накопленным данным расходов.
+   * Возвращает агрегаты по тарифам и рекомендуемый costBudget на основе 95-го перцентиля расходов.
+   */
+  getEmpiricalPlanBudget(planUsers: Array<{ userId: string; plan: string }>): Record<string, {
+    userCount: number;
+    avgMonthlyCost: number;
+    p95MonthlyCost: number;
+    recommendedCostBudget: number;
+  }> {
+    const thirtyDaysAgo = Date.now() - 30 * 24 * 60 * 60 * 1000;
+    const planToUserCosts = new Map<string, number[]>();
+
+    for (const { userId, plan } of planUsers) {
+      const userRecs = (this.userIndex.get(userId) ?? []).filter(
+        (r) => new Date(r.createdAt).getTime() >= thirtyDaysAgo,
+      );
+      const userCost = userRecs.reduce((sum, r) => sum + r.estimatedCost, 0);
+      let list = planToUserCosts.get(plan);
+      if (!list) {
+        list = [];
+        planToUserCosts.set(plan, list);
+      }
+      list.push(userCost);
+    }
+
+    const result: Record<string, {
+      userCount: number;
+      avgMonthlyCost: number;
+      p95MonthlyCost: number;
+      recommendedCostBudget: number;
+    }> = {};
+
+    for (const [plan, costs] of planToUserCosts.entries()) {
+      costs.sort((a, b) => a - b);
+      const userCount = costs.length;
+      const sum = costs.reduce((a, b) => a + b, 0);
+      const avg = userCount > 0 ? sum / userCount : 0;
+      const p95Idx = Math.floor(userCount * 0.95);
+      const p95 = userCount > 0 ? (costs[p95Idx] ?? costs[costs.length - 1] ?? 0) : 0;
+      const recommended = Number(Math.max(avg * 1.5, p95).toFixed(2));
+
+      result[plan] = {
+        userCount,
+        avgMonthlyCost: Number(avg.toFixed(4)),
+        p95MonthlyCost: Number(p95.toFixed(4)),
+        recommendedCostBudget: recommended,
+      };
+    }
+
+    return result;
+  }
 }

@@ -9,6 +9,8 @@
  *     запросы с вложениями.
  */
 
+import { existsSync, mkdirSync, readFileSync, renameSync, unlinkSync, writeFileSync } from 'node:fs';
+import { dirname } from 'node:path';
 import type { ResponseSource } from './gateway-types.js';
 
 export interface CacheEntry {
@@ -26,10 +28,59 @@ export class SemanticCache {
   private cache = new Map<string, CacheEntry>();
   private maxEntries: number;
   private ttlMs: number;
+  private storagePath?: string;
 
-  constructor(maxEntries = 5000, ttlMs = 24 * 60 * 60 * 1000) {
+  constructor(
+    maxEntries = 5000,
+    ttlMs = 24 * 60 * 60 * 1000,
+    storagePath?: string,
+  ) {
     this.maxEntries = maxEntries;
     this.ttlMs = ttlMs;
+    this.storagePath = storagePath;
+    if (this.storagePath) {
+      this.load();
+    }
+  }
+
+  /**
+   * Phase 3: Загрузка кэша с диска при старте сервера с отсечением просроченных записей по TTL.
+   */
+  load(): void {
+    if (!this.storagePath || !existsSync(this.storagePath)) return;
+    try {
+      const raw = readFileSync(this.storagePath, 'utf-8');
+      const data = JSON.parse(raw) as CacheEntry[];
+      const now = Date.now();
+      if (Array.isArray(data)) {
+        for (const entry of data) {
+          if (entry.key && now - entry.createdAt <= this.ttlMs) {
+            this.cache.set(entry.key, entry);
+          }
+        }
+      }
+    } catch (err) {
+      console.warn('[semantic-cache] Ошибка загрузки персистентного кэша:', err);
+    }
+  }
+
+  /**
+   * Phase 3: Сохранение кэша на диск для переживания рестартов контейнера.
+   */
+  persist(): void {
+    if (!this.storagePath) return;
+    try {
+      const dir = dirname(this.storagePath);
+      if (!existsSync(dir)) {
+        mkdirSync(dir, { recursive: true });
+      }
+      const tmpPath = `${this.storagePath}.tmp`;
+      const entries = Array.from(this.cache.values());
+      writeFileSync(tmpPath, JSON.stringify(entries, null, 2), 'utf-8');
+      renameSync(tmpPath, this.storagePath);
+    } catch (err) {
+      console.warn('[semantic-cache] Ошибка сохранения персистентного кэша:', err);
+    }
   }
 
   /**
@@ -148,6 +199,8 @@ export class SemanticCache {
       createdAt: Date.now(),
       hits: 0,
     });
+
+    this.persist();
   }
 
   /**
@@ -155,6 +208,13 @@ export class SemanticCache {
    */
   clear(): void {
     this.cache.clear();
+    if (this.storagePath && existsSync(this.storagePath)) {
+      try {
+        unlinkSync(this.storagePath);
+      } catch {
+        // ignore
+      }
+    }
   }
 
   /**
@@ -169,4 +229,8 @@ export class SemanticCache {
   }
 }
 
-export const semanticCache = new SemanticCache();
+export const semanticCache = new SemanticCache(
+  5000,
+  24 * 60 * 60 * 1000,
+  process.env.SEMANTIC_CACHE_PATH ?? 'data/semantic-cache.json',
+);

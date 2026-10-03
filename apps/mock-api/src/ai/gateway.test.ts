@@ -1,8 +1,17 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import { mkdtempSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { AutoRouter } from './auto-router.js';
 import { ContextOptimizer } from './context.js';
-import { ModelRegistry, ECONOMY_SYSTEM_PROMPT, DEFAULT_SYSTEM_PROMPT } from './model-registry.js';
+import {
+  ModelRegistry,
+  ECONOMY_SYSTEM_PROMPT,
+  DEFAULT_SYSTEM_PROMPT,
+  COMMON_BRAND_SYSTEM_LAYER,
+  TIER_SYSTEM_MODIFIERS,
+} from './model-registry.js';
 import { CostCalculator } from '../services/cost.js';
 import { EntitlementService } from '../services/entitlement.js';
 import { FairUseEngine } from '../services/fair-use.js';
@@ -10,6 +19,8 @@ import type { FairUseSnapshot } from './gateway-types.js';
 import { resolveAstraEngine, toOpenRouterModelId, classifyPromptComplexity } from './gateway.js';
 import { SemanticCache } from './cache.js';
 import { computeBaseTokensByCategory } from './tier-pipeline.js';
+import { AnthropicProvider } from './providers/anthropic-provider.js';
+import { UsageStore } from '../store/usage-store.js';
 
 test('ModelRegistry: получение, разрешение и проверка доступа', () => {
   const registry = new ModelRegistry();
@@ -523,4 +534,139 @@ test('Фаза 2: computeBaseTokensByCategory — базовые токены п
   assert.equal(computeBaseTokensByCategory('creative'), 1500);
   assert.equal(computeBaseTokensByCategory('translation'), 1500);
   assert.equal(computeBaseTokensByCategory('general'), 300);
+});
+
+test('Фаза 3: Anthropic prompt caching payload & headers', () => {
+  const provider = new AnthropicProvider({ apiKey: 'test-anthropic-key' });
+
+  // 1. Проверка заголовка prompt caching
+  const headers = (provider as any).getHeaders();
+  assert.equal(headers['anthropic-beta'], 'prompt-caching-2024-07-31');
+
+  // 2. Системный промпт оборачивается в блок с cache_control: ephemeral
+  const payloadWithSystem = (provider as any).buildPayload(
+    {
+      model: 'claude-3-5-sonnet-20241022',
+      messages: [{ role: 'user', content: 'Привет' }],
+      systemPrompt: 'Ты Ketner AI',
+    },
+    false,
+  );
+  assert.ok(Array.isArray(payloadWithSystem.system), 'system должен быть массивом блоков');
+  assert.deepEqual(payloadWithSystem.system[0].cache_control, { type: 'ephemeral' });
+
+  // 3. Стабильная часть истории получает cache_control: ephemeral
+  const payloadWithHistory = (provider as any).buildPayload(
+    {
+      model: 'claude-3-5-sonnet-20241022',
+      messages: [
+        { role: 'user', content: 'Шаг 1' },
+        { role: 'assistant', content: 'Ответ 1' },
+        { role: 'user', content: 'Шаг 2' },
+      ],
+      systemPrompt: 'Системный промпт',
+    },
+    false,
+  );
+  // Сообщение с индексом 1 (assistant 'Ответ 1' перед последним запросом) должно иметь cache_control
+  const checkpoint = payloadWithHistory.messages[1];
+  assert.ok(Array.isArray(checkpoint.content), 'Чекпоинт истории должен быть массивом контента');
+  assert.deepEqual(checkpoint.content[0].cache_control, { type: 'ephemeral' });
+});
+
+test('Фаза 3: Системные промпты — общий слой бренда и однострочные модификаторы', () => {
+  // 1. Общий слой бренда защищает имя Ketner AI и скрывает внешние бренды
+  assert.ok(COMMON_BRAND_SYSTEM_LAYER.ru.includes('Ketner AI'));
+  assert.ok(COMMON_BRAND_SYSTEM_LAYER.ru.includes('Никогда не упоминай, что ты создан OpenAI, Anthropic или Google'));
+  assert.ok(COMMON_BRAND_SYSTEM_LAYER.en.includes('Never mention OpenAI, Anthropic, or Google'));
+
+  // 2. Тарифные модификаторы лаконичны (одна строка)
+  assert.ok(TIER_SYSTEM_MODIFIERS.economy.ru.includes('максимально кратко'));
+  assert.ok(TIER_SYSTEM_MODIFIERS.default.ru.includes('глубокие, подробные'));
+
+  // 3. Тарифные промпты скомпонованы без потерь
+  assert.ok(ECONOMY_SYSTEM_PROMPT.ru.includes(COMMON_BRAND_SYSTEM_LAYER.ru));
+  assert.ok(ECONOMY_SYSTEM_PROMPT.ru.includes(TIER_SYSTEM_MODIFIERS.economy.ru));
+  assert.ok(DEFAULT_SYSTEM_PROMPT.ru.includes(COMMON_BRAND_SYSTEM_LAYER.ru));
+  assert.ok(DEFAULT_SYSTEM_PROMPT.ru.includes(TIER_SYSTEM_MODIFIERS.default.ru));
+});
+
+test('Фаза 3: Персистентный SemanticCache переживает перезапуск инстанса', () => {
+  const tempDir = mkdtempSync(join(tmpdir(), 'ketner-cache-test-'));
+  const cacheFile = join(tempDir, 'cache.json');
+
+  // 1. Создаем первый экземпляр кэша и сохраняем запись
+  const cache1 = new SemanticCache(5000, 24 * 60 * 60 * 1000, cacheFile);
+  cache1.set(
+    'gpt-6-astra',
+    'ru',
+    'тестовый запрос для диска',
+    'ответ из дискового кэша',
+    { inputTokens: 10, outputTokens: 20 },
+    {
+      userScope: 'user-persist',
+      historyHash: 'hash-1',
+      source: 'provider',
+    },
+  );
+
+  // 2. Создаем второй экземпляр, имитируя перезапуск сервера
+  const cache2 = new SemanticCache(5000, 24 * 60 * 60 * 1000, cacheFile);
+  const restoredHit = cache2.get('gpt-6-astra', 'ru', 'тестовый запрос для диска', 'user-persist', 'hash-1');
+
+  assert.ok(restoredHit, 'Запись должна восстановиться после перезапуска');
+  assert.equal(restoredHit?.response, 'ответ из дискового кэша');
+
+  // 3. Очистка удаляет и файл с диска
+  cache2.clear();
+  assert.equal(cache2.get('gpt-6-astra', 'ru', 'тестовый запрос для диска', 'user-persist', 'hash-1'), null);
+});
+
+test('Фаза 3: Пересчёт эмпирического costBudget по реальным данным usage-store', () => {
+  const tempDir = mkdtempSync(join(tmpdir(), 'ketner-usage-budget-'));
+  const usageFile = join(tempDir, 'usage.json');
+  const store = new UsageStore(usageFile);
+
+  // Записываем несколько расходов для пользователей тарифа plus
+  store.recordUsage({
+    userId: 'user-plus-1',
+    conversationId: 'c1',
+    modelId: 'deepseek-v4.1-flash',
+    provider: 'openrouter',
+    inputTokens: 1000,
+    outputTokens: 500,
+    estimatedCost: 0.05,
+    latencyMs: 120,
+    status: 'success',
+  });
+
+  store.recordUsage({
+    userId: 'user-plus-2',
+    conversationId: 'c2',
+    modelId: 'deepseek-v4.1-flash',
+    provider: 'openrouter',
+    inputTokens: 2000,
+    outputTokens: 1000,
+    estimatedCost: 0.15,
+    latencyMs: 200,
+    status: 'success',
+  });
+
+  const empirical = store.getEmpiricalPlanBudget([
+    { userId: 'user-plus-1', plan: 'plus' },
+    { userId: 'user-plus-2', plan: 'plus' },
+  ]);
+
+  assert.ok(empirical.plus);
+  assert.equal(empirical.plus.userCount, 2);
+  assert.ok(empirical.plus.avgMonthlyCost > 0);
+  assert.ok(empirical.plus.recommendedCostBudget >= empirical.plus.avgMonthlyCost);
+
+  // Проверяем динамическое обновление бюджета тарифа
+  const initialBudget = EntitlementService.getEntitlements('plus').costBudget;
+  EntitlementService.updatePlanCostBudget('plus', empirical.plus.recommendedCostBudget);
+  assert.equal(EntitlementService.getEntitlements('plus').costBudget, empirical.plus.recommendedCostBudget);
+
+  // Восстанавливаем исходный бюджет
+  EntitlementService.updatePlanCostBudget('plus', initialBudget);
 });

@@ -96,7 +96,12 @@ export class OpenRouterProvider implements AIProvider {
 
         const json = (await response.json()) as {
           choices?: Array<{ message: { content?: string }; finish_reason?: string }>;
-          usage?: { prompt_tokens?: number; completion_tokens?: number };
+          usage?: {
+            prompt_tokens?: number;
+            completion_tokens?: number;
+            prompt_tokens_details?: { cached_tokens?: number };
+            native_tokens_cached?: number;
+          };
         };
 
         const msg = json.choices?.[0]?.message as { content?: string; reasoning?: string; reasoning_content?: string } | undefined;
@@ -105,11 +110,14 @@ export class OpenRouterProvider implements AIProvider {
         if (reasoning && !content.includes('<think>')) {
           content = `<think>\n${reasoning}\n</think>\n\n${content}`;
         }
+        const cachedTokens =
+          json.usage?.prompt_tokens_details?.cached_tokens ?? json.usage?.native_tokens_cached;
         return {
           content,
           usage: {
             inputTokens: json.usage?.prompt_tokens ?? Math.ceil(content.length / 4),
             outputTokens: json.usage?.completion_tokens ?? Math.ceil(content.length / 4),
+            cachedTokens: typeof cachedTokens === 'number' && cachedTokens > 0 ? cachedTokens : undefined,
           },
           finishReason: json.choices?.[0]?.finish_reason === 'length' ? 'length' : 'stop',
         };
@@ -175,6 +183,7 @@ export class OpenRouterProvider implements AIProvider {
         let promptTokens = 0;
         let completionTokens = 0;
         let reasoningTokens: number | null = null;
+        let cachedTokens: number | null = null;
 
         let insideReasoning = false;
 
@@ -245,6 +254,12 @@ export class OpenRouterProvider implements AIProvider {
                 if (typeof rTokens === 'number') {
                   reasoningTokens = rTokens;
                 }
+                const cTokens =
+                  parsed.usage.prompt_tokens_details?.cached_tokens ??
+                  parsed.usage.native_tokens_cached;
+                if (typeof cTokens === 'number') {
+                  cachedTokens = cTokens;
+                }
               }
             } catch {
               // ignore parsing errors
@@ -267,6 +282,7 @@ export class OpenRouterProvider implements AIProvider {
             usage: {
               inputTokens: promptTokens,
               outputTokens: completionTokens,
+              cachedTokens: typeof cachedTokens === 'number' && cachedTokens > 0 ? cachedTokens : undefined,
               reasoningTokens: reasoningTokens ?? undefined,
             },
             finishReason,

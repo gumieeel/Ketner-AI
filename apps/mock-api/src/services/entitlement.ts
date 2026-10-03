@@ -175,6 +175,15 @@ export class EntitlementService {
   }
 
   /**
+   * Phase 3: Динамический пересчёт или обновление costBudget тарифа по эмпирическим данным.
+   */
+  static updatePlanCostBudget(planId: PlanId, newBudget: number): void {
+    if (PLAN_ENTITLEMENTS[planId]) {
+      PLAN_ENTITLEMENTS[planId].costBudget = Math.max(0.01, newBudget);
+    }
+  }
+
+  /**
    * Динамическое получение лимитов планов для обратной совместимости и /api/meta.
    * PLAN_ENTITLEMENTS является единственным источником правды.
    */
