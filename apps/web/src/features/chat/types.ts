@@ -58,9 +58,42 @@ export interface WorkspaceContext {
   name: string;
   pathOrUrl: string;
   branch?: string;
+  gitToken?: string;
   filesCount: number;
   files: WorkspaceFile[];
   indexedAt: string;
+}
+
+export type FileActionType = 'write' | 'replace' | 'delete';
+
+export interface FileChangeItem {
+  action: FileActionType;
+  path: string;
+  description?: string;
+  content?: string;
+  targetContent?: string;
+  replacementContent?: string;
+  originalContent?: string;
+  modifiedContent?: string;
+  additions?: number;
+  deletions?: number;
+}
+
+export interface FileProposal {
+  id: string;
+  messageId: string;
+  summary?: string;
+  changes: FileChangeItem[];
+  status: 'pending' | 'applying' | 'applied' | 'discarded' | 'error';
+  error?: string;
+  appliedAt?: string;
+  gitResult?: {
+    type: 'commit' | 'pull_request';
+    url?: string;
+    branch?: string;
+    commitSha?: string;
+    prNumber?: number;
+  };
 }
 
 export interface Message {

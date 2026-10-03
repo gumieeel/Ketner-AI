@@ -1,5 +1,6 @@
 import type { WorkspaceContext, WorkspaceFile } from './types';
 import { getFileExtension } from './attachment-utils';
+import { registerDirectoryHandle } from './file-operations/local-writer';
 
 const IGNORED_NAMES = new Set([
   'node_modules', '.git', 'dist', 'build', '.next', 'out', 'target',
@@ -85,8 +86,16 @@ export async function pickFolderNative(): Promise<WorkspaceContext> {
     throw new Error('showDirectoryPicker_not_supported');
   }
 
-  // @ts-expect-error File System Access API
-  const rootHandle = await window.showDirectoryPicker({ mode: 'read' });
+  let rootHandle: any;
+  try {
+    // @ts-expect-error File System Access API
+    rootHandle = await window.showDirectoryPicker({ mode: 'readwrite' });
+  } catch (err: any) {
+    if (err?.name === 'AbortError') throw err;
+    // @ts-expect-error File System Access API
+    rootHandle = await window.showDirectoryPicker({ mode: 'read' });
+  }
+
   const folderName = rootHandle.name || 'Локальный проект';
   const collected: WorkspaceFile[] = [];
 
@@ -126,8 +135,11 @@ export async function pickFolderNative(): Promise<WorkspaceContext> {
 
   await scanDirectory(rootHandle, folderName);
 
+  const wsId = `folder-${Date.now()}`;
+  registerDirectoryHandle(wsId, rootHandle);
+
   return {
-    id: `folder-${Date.now()}`,
+    id: wsId,
     type: 'local_folder',
     name: folderName,
     pathOrUrl: folderName,

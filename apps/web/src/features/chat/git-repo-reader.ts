@@ -143,6 +143,7 @@ export async function fetchGitHubRepo(
     name: `${owner}/${repo}`,
     pathOrUrl: `https://github.com/${owner}/${repo}`,
     branch: targetBranch,
+    gitToken: token?.trim() || undefined,
     filesCount: collected.length,
     files: collected,
     indexedAt: new Date().toISOString(),

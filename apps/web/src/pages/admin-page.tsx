@@ -401,7 +401,7 @@ export function AdminPage() {
                 className="flex flex-wrap items-center justify-between gap-2 rounded bg-surface/80 px-3 py-1.5 border border-danger/20 font-mono text-[11px]"
               >
                 <span>
-                  {alert.userEmail} <Badge tone="brand" size="sm">{alert.plan}</Badge>
+                  {alert.userEmail} <Badge tone="brand">{alert.plan}</Badge>
                 </span>
                 <span className="text-danger font-semibold">
                   Расход: ${alert.aiCost} · Доход: ${alert.subscriptionRevenue} (Маржа: ${alert.contributionMargin})
@@ -418,7 +418,7 @@ export function AdminPage() {
           <div className="flex items-center justify-between">
             <h2 className="text-sm font-semibold tracking-tight text-text flex items-center gap-2">
               <span>Экономика и производительность шлюза</span>
-              <Badge tone="default">Phase 4</Badge>
+              <Badge tone="brand">Phase 4</Badge>
             </h2>
             <span className="font-mono text-xs text-muted">
               Всего запросов: {metrics.totalRequests} · Себестоимость: ${metrics.totalCost}

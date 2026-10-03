@@ -10,6 +10,9 @@ import type { Message } from '@/features/chat/types';
 import { useTranslation } from '@/i18n';
 import { cn } from '@/lib/cn';
 import { ThinkingBlock, parseThinking } from './thinking-block';
+import { useWorkspace } from '@/features/chat/workspace-store';
+import { parseFileProposals, stripFileActionBlocks } from '@/features/chat/file-operations';
+import { FileProposalCard } from './file-proposal-card';
 
 /** Тяжёлый рендер markdown подключается при первом ответе, а не при загрузке чата. */
 const Markdown = lazy(() => import('@/features/chat/markdown/markdown'));
@@ -33,7 +36,20 @@ export function AssistantMessage({ message, canRegenerate }: AssistantMessagePro
   const failed = message.status === 'error';
   const hasThoughts = Boolean(parsed.thinking && parsed.thinking.length > 0);
   const showThinkingBlock = isPending || hasThoughts || parsed.isThinking;
-  const hasContent = parsed.content !== '';
+  const activeWorkspace = useWorkspace((state) => state.activeWorkspace);
+  const fileProposal = useMemo(() => {
+    if (isPending) return null;
+    return parseFileProposals(parsed.content || message.content, message.id, activeWorkspace);
+  }, [parsed.content, message.content, message.id, activeWorkspace, isPending]);
+
+  const displayContent = useMemo(() => {
+    if (fileProposal) {
+      return stripFileActionBlocks(parsed.content);
+    }
+    return parsed.content;
+  }, [parsed.content, fileProposal]);
+
+  const hasContent = displayContent !== '' || Boolean(fileProposal);
   const isUpgradeError =
     message.errorCode === 'upgrade_required' ||
     (typeof message.error === 'string' &&
@@ -68,18 +84,22 @@ export function AssistantMessage({ message, canRegenerate }: AssistantMessagePro
           />
         ) : null}
 
-        {hasContent ? (
+        {displayContent ? (
           <div className="text-[15px] leading-[26px] text-text [&>*:not(pre):not(table):not(.code-block)]:max-w-[66ch]">
             <Suspense
               fallback={
                 <p className="text-[15px] leading-[26px] whitespace-pre-wrap max-w-[66ch]">
-                  {parsed.content}
+                  {displayContent}
                 </p>
               }
             >
-              <Markdown content={parsed.content} />
+              <Markdown content={displayContent} />
             </Suspense>
           </div>
+        ) : null}
+
+        {fileProposal ? (
+          <FileProposalCard proposal={fileProposal} workspace={activeWorkspace} />
         ) : null}
         {isStreaming && !parsed.isThinking ? (
           <span className="caret text-accent ml-1" aria-hidden="true" />
