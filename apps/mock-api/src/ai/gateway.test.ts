@@ -7,7 +7,9 @@ import { CostCalculator } from '../services/cost.js';
 import { EntitlementService } from '../services/entitlement.js';
 import { FairUseEngine } from '../services/fair-use.js';
 import type { FairUseSnapshot } from './gateway-types.js';
-import { resolveAstraEngine, toOpenRouterModelId } from './gateway.js';
+import { resolveAstraEngine, toOpenRouterModelId, classifyPromptComplexity } from './gateway.js';
+import { SemanticCache } from './cache.js';
+import { computeBaseTokensByCategory } from './tier-pipeline.js';
 
 test('ModelRegistry: получение, разрешение и проверка доступа', () => {
   const registry = new ModelRegistry();
@@ -353,4 +355,172 @@ test('OpenRouter routing: адаптивный выбор модели по сл
   // 8. Context cleanText: устранение лишних пробелов и пустых строк
   const dirty = '  Привет \r\n\r\n\r\n   мир   ';
   assert.equal(ContextOptimizer.cleanText(dirty), 'Привет\n\nмир');
+});
+
+test('Фаза 0 & 1: SemanticCache historyHash изоляция, userScope и фильтры', () => {
+  const cache = new SemanticCache();
+
+  // 1. Разные истории дают разный historyHash
+  const historyA = [
+    { role: 'user', content: 'Как написать быструю сортировку на Python?' },
+    { role: 'assistant', content: 'Вот код quicksort...' },
+  ];
+  const historyB = [
+    { role: 'user', content: 'Посоветуй книги по кулинарии' },
+    { role: 'assistant', content: 'Вот топ 5 книг...' },
+  ];
+  const hashA = SemanticCache.computeHistoryHash(historyA, 3);
+  const hashB = SemanticCache.computeHistoryHash(historyB, 3);
+  assert.notEqual(hashA, hashB, 'Хэши разных историй должны отличаться');
+
+  // 2. «Продолжи» в чате A не отдаёт кэш из чата B
+  cache.set(
+    'gpt-6-astra',
+    'ru',
+    'продолжи',
+    'Продолжение кода сортировки: def partition()...',
+    { inputTokens: 10, outputTokens: 50 },
+    {
+      userScope: 'user-1',
+      historyHash: hashA,
+      source: 'provider',
+    },
+  );
+
+  const hitInChatB = cache.get('gpt-6-astra', 'ru', 'продолжи', 'user-1', hashB);
+  assert.equal(hitInChatB, null, 'Кэш из чата A не должен попадать в чат B');
+
+  const hitInChatA = cache.get('gpt-6-astra', 'ru', 'продолжи', 'user-1', hashA);
+  assert.ok(hitInChatA, 'Кэш из чата A должен успешно находиться при том же хэше истории');
+  assert.equal(hitInChatA?.response, 'Продолжение кода сортировки: def partition()...');
+
+  // 3. Изоляция платных тарифов: пользовательский userScope
+  const hitUser2 = cache.get('gpt-6-astra', 'ru', 'продолжи', 'user-2', hashA);
+  assert.equal(hitUser2, null, 'Платный кэш другого пользователя изолирован');
+
+  // 4. Фильтры кэширования:
+  // Не кэшируем шаблонные ответы (source: template)
+  cache.set(
+    'gpt-6-astra',
+    'ru',
+    'что такое рекурсия',
+    'Шаблонный ответ заглушка...',
+    { inputTokens: 10, outputTokens: 20 },
+    {
+      userScope: 'shared',
+      historyHash: 'none',
+      source: 'template',
+    },
+  );
+  assert.equal(cache.get('gpt-6-astra', 'ru', 'что такое рекурсия', 'shared', 'none'), null);
+
+  // Не кэшируем обрезанные по длине ответы (finishReason: length)
+  cache.set(
+    'gpt-6-astra',
+    'ru',
+    'напиши длинную поэму',
+    'Обрубленный текст...',
+    { inputTokens: 10, outputTokens: 200 },
+    {
+      userScope: 'shared',
+      historyHash: 'none',
+      source: 'provider',
+      finishReason: 'length',
+    },
+  );
+  assert.equal(cache.get('gpt-6-astra', 'ru', 'напиши длинную поэму', 'shared', 'none'), null);
+
+  // Не кэшируем запросы с вложениями
+  cache.set(
+    'gpt-6-astra',
+    'ru',
+    'проанализируй этот файл',
+    'Анализ файла...',
+    { inputTokens: 50, outputTokens: 100 },
+    {
+      userScope: 'shared',
+      historyHash: 'none',
+      source: 'provider',
+      hasAttachments: true,
+    },
+  );
+  assert.equal(cache.get('gpt-6-astra', 'ru', 'проанализируй этот файл', 'shared', 'none'), null);
+});
+
+test('Фаза 1: контекстно-зависимая сложность (classifyPromptComplexity с историей)', () => {
+  // Обычное «да» без контекста -> simple
+  const plainYes = classifyPromptComplexity('да');
+  assert.equal(plainYes.level, 'simple');
+
+  // «да» в контексте сложного технического диалога с кодом -> complex
+  const yesInCodeThread = classifyPromptComplexity('да', {
+    history: [
+      { role: 'user', content: 'Как написать WebSocket сервер на TypeScript?' },
+      {
+        role: 'assistant',
+        content: 'import { WebSocketServer } from "ws";\nconst wss = new WebSocketServer({ port: 8080 });\nwss.on("connection", (ws) => { ... });',
+      },
+    ],
+  });
+  assert.equal(yesInCodeThread.level, 'complex', '«да» в техническом диалоге не должно падать на simple');
+
+  // Запрос с вложениями -> всегда complex
+  const withAttachments = classifyPromptComplexity('Посмотри', {
+    hasAttachments: true,
+  });
+  assert.equal(withAttachments.level, 'complex');
+});
+
+test('Фаза 2: ContextOptimizer — диалог из 30 сообщений, сводка и якорь', () => {
+  // Генерируем историю из 30 сообщений
+  const messages: Array<{ role: 'user' | 'assistant'; content: string }> = [];
+  for (let i = 1; i <= 30; i++) {
+    messages.push({
+      role: i % 2 === 1 ? 'user' : 'assistant',
+      content: i === 1 ? 'Начало диалога: обсуждаем архитектуру финтех-сервиса' : `Сообщение номер ${i} с техническими деталями`,
+    });
+  }
+
+  let capturedSummary: string | undefined;
+  const optimized = ContextOptimizer.optimize(messages, {
+    maxMessages: 20,
+    systemPrompt: 'Ты Ketner AI',
+    language: 'ru',
+    onSummaryGenerated: (s) => {
+      capturedSummary = s;
+    },
+  });
+
+  // 1. Системный промпт
+  assert.equal(optimized[0].role, 'system');
+  assert.equal(optimized[0].content, 'Ты Ketner AI');
+
+  // 2. Сводка старых сообщений присутствует
+  assert.equal(optimized[1].role, 'system');
+  assert.ok(optimized[1].content.includes('Краткий контекст беседы'));
+  assert.ok(capturedSummary, 'onSummaryGenerated должен быть вызван');
+
+  // 3. Первое сообщение (якорь темы) присутствует
+  assert.equal(optimized[2].role, 'user');
+  assert.ok(optimized[2].content.includes('Начало диалога: обсуждаем архитектуру'));
+
+  // 4. Последнее сообщение совпадает с последним из истории
+  assert.equal(optimized[optimized.length - 1].content, messages[messages.length - 1].content);
+
+  // 5. Токенизация кириллицы: кириллица дает больше токенов на символ (~2.5 символа на токен vs 4 для латиницы)
+  const cyrillicText = 'Привет мир! Это подробный текст на русском языке для токенизатора.'.repeat(5);
+  const latinText = 'Hello world! This is a detailed prompt in English language for tokenizer.'.repeat(5);
+  const cyrTokens = ContextOptimizer.estimateTokens(cyrillicText);
+  const latTokens = ContextOptimizer.estimateTokens(latinText);
+  assert.ok(cyrTokens > latTokens, 'Кириллический текст должен оцениваться с более плотным коэффициентом токенов');
+});
+
+test('Фаза 2: computeBaseTokensByCategory — базовые токены по классам задач', () => {
+  assert.equal(computeBaseTokensByCategory('coding'), 2500);
+  assert.equal(computeBaseTokensByCategory('reasoning'), 2500);
+  assert.equal(computeBaseTokensByCategory('math'), 3000);
+  assert.equal(computeBaseTokensByCategory('research'), 3000);
+  assert.equal(computeBaseTokensByCategory('creative'), 1500);
+  assert.equal(computeBaseTokensByCategory('translation'), 1500);
+  assert.equal(computeBaseTokensByCategory('general'), 300);
 });

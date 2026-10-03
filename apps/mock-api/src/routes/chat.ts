@@ -217,16 +217,20 @@ export function createChatRouter({
       response.write(`event: ${event}\ndata: ${JSON.stringify(payload)}\n\n`);
     };
 
+    const existingConversation = store.get(activeUserId, conversationId);
+
     const finishTurn = (
       content: string,
       status: MessageStatus,
       assistantModelId = model.id,
+      finishReason?: 'stop' | 'length' | 'cancelled' | 'error',
+      canContinue?: boolean,
     ): string | null => {
       const saved = store.saveTurn({
         userId: activeUserId,
         conversationId,
         history: messages,
-        assistant: { content, modelId: assistantModelId, status },
+        assistant: { content, modelId: assistantModelId, status, finishReason, canContinue },
       });
       return saved?.assistant.id ?? null;
     };
@@ -261,6 +265,7 @@ export function createChatRouter({
           workspaceContext: messages[messages.length - 1]?.workspaceContext,
           language,
           stream: true,
+          cachedSummary: existingConversation?.conversation.contextSummary,
         },
         {
           onDelta: (delta) => {
@@ -269,12 +274,24 @@ export function createChatRouter({
           },
           onDone: (result) => {
             const actualModelId = result.selectedModel?.id ?? model.id;
-            const messageId = finishTurn(content, 'complete', actualModelId);
+            const messageId = finishTurn(
+              content,
+              'complete',
+              actualModelId,
+              result.finishReason,
+              result.canContinue,
+            );
+            if (result.contextSummary) {
+              store.updateContextSummary(activeUserId, conversationId, result.contextSummary);
+            }
             if (messageId) {
               writeEvent('done', {
                 messageId,
                 selectedModel: result.selectedModel,
                 routingReason: result.routingReason,
+                source: result.source,
+                finishReason: result.finishReason,
+                canContinue: result.canContinue,
                 usage: {
                   inputTokens: result.inputTokens,
                   outputTokens: result.outputTokens,

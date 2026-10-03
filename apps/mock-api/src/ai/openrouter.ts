@@ -8,6 +8,7 @@ export interface StreamOpenRouterOptions {
   systemPrompt?: string;
   isCancelled: () => boolean;
   onDelta: (chunk: string) => void;
+  maxTokens?: number;
 }
 
 const DEFAULT_CANDIDATE_MODELS = [
@@ -79,7 +80,7 @@ export async function streamOpenRouter(options: StreamOpenRouterOptions): Promis
           model: targetModel,
           messages: payloadMessages,
           stream: true,
-          max_tokens: 2048,
+          max_tokens: options.maxTokens ?? 4096,
         }),
       });
 

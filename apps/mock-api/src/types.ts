@@ -65,6 +65,8 @@ export interface Conversation {
   title: string;
   createdAt: string;
   updatedAt: string;
+  /** Phase 2: Сохранённая сводка контекста для стабильного prefix caching */
+  contextSummary?: string;
 }
 
 export type AttachmentCategory =
@@ -117,6 +119,10 @@ export interface Message {
   modelId?: string;
   attachments?: MessageAttachment[];
   workspaceContext?: WorkspaceContext;
+  /** Phase 2: Причина завершения ответа */
+  finishReason?: 'stop' | 'length' | 'cancelled' | 'error';
+  /** Phase 2: Доступно ли продолжение генерации */
+  canContinue?: boolean;
 }
 
 /**

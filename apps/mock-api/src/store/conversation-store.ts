@@ -24,6 +24,10 @@ export interface SaveTurnInput {
     content: string;
     modelId: string;
     status: MessageStatus;
+    /** Phase 2: причина завершения генерации (для кнопки «Продолжить»). */
+    finishReason?: 'stop' | 'length' | 'cancelled' | 'error';
+    /** Phase 2: можно ли продолжить генерацию. */
+    canContinue?: boolean;
   };
 }
 
@@ -34,6 +38,11 @@ export interface ConversationStore {
   rename(userId: string, conversationId: string, title: string): Conversation | null;
   remove(userId: string, conversationId: string): boolean;
   saveTurn(input: SaveTurnInput): { conversation: Conversation; assistant: Message } | null;
+  /**
+   * Phase 2: сохранить сводку контекста для стабильного prefix caching.
+   * Вызывается шлюзом после генерации новой сводки.
+   */
+  updateContextSummary(userId: string, conversationId: string, summary: string): void;
 }
 
 interface Snapshot {
@@ -219,6 +228,8 @@ export function createConversationStore(file: string): ConversationStore {
         createdAt: now,
         status: assistant.status,
         modelId: assistant.modelId,
+        finishReason: assistant.finishReason,
+        canContinue: assistant.canContinue,
       };
 
       // История из запроса заменяет сохранённую: так работают правка сообщения,
@@ -239,6 +250,18 @@ export function createConversationStore(file: string): ConversationStore {
       persist();
 
       return { conversation: { ...conversation }, assistant: assistantMessage };
+    },
+
+    updateContextSummary(userId, conversationId, summary) {
+      let conversation = findConversation(userId, conversationId);
+      if (!conversation) {
+        conversation = snapshot.conversations.find((c) => c.id === conversationId);
+      }
+      if (conversation) {
+        conversation.contextSummary = summary;
+        conversation.updatedAt = new Date().toISOString();
+        persist();
+      }
     },
   };
 }

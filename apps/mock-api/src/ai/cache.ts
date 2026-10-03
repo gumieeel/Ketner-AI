@@ -1,9 +1,15 @@
 /**
  * Semantic & Query Cache для AI Gateway.
  *
- * Кэширует ответы на частые и повторяющиеся запросы, обеспечивая
- * мгновенный отклик (<50мс) и нулевую себестоимость для кэшированных запросов.
+ * Phase 0: добавлен source field в UsageRecord.
+ * Phase 1:
+ *   - Ключ кэша включает хэш последних 2–3 сообщений истории (изолирует «продолжи» в разных чатах).
+ *   - Платные тарифы получают пользовательский кэш (scope = userId), free — общий (scope = 'shared').
+ *   - Не кэшируем: шаблонные ответы (source === 'template'), обрывы (finishReason === 'length'),
+ *     запросы с вложениями.
  */
+
+import type { ResponseSource } from './gateway-types.js';
 
 export interface CacheEntry {
   key: string;
@@ -38,21 +44,50 @@ export class SemanticCache {
   }
 
   /**
-   * Сформировать ключ кэша на основе модели, языка и нормализованного промпта.
+   * Вычислить хэш последних N сообщений истории (djb2).
+   * Позволяет отличить «продолжи» в чате A от «продолжи» в чате B.
    */
-  makeKey(modelId: string, language: string, prompt: string): string {
+  static computeHistoryHash(history: Array<{ role: string; content: string }>, n = 3): string {
+    const tail = history.slice(-n);
+    const raw = tail.map((m) => `${m.role}:${m.content.slice(0, 120)}`).join('|');
+    let hash = 5381;
+    for (let i = 0; i < raw.length; i++) {
+      hash = ((hash << 5) + hash + raw.charCodeAt(i)) >>> 0;
+    }
+    return hash.toString(36);
+  }
+
+  /**
+   * Сформировать ключ кэша.
+   *
+   * Для paid-тарифов userScope = userId (изолированный кэш).
+   * Для free-тарифа userScope = 'shared' (общий пул).
+   */
+  makeKey(
+    modelId: string,
+    language: string,
+    prompt: string,
+    userScope: string,
+    historyHash: string,
+  ): string {
     const norm = SemanticCache.normalize(prompt);
-    return `${modelId}:${language}:${norm}`;
+    return `${userScope}:${modelId}:${language}:${historyHash}:${norm}`;
   }
 
   /**
    * Найти кэшированный ответ.
    */
-  get(modelId: string, language: string, prompt: string): CacheEntry | null {
+  get(
+    modelId: string,
+    language: string,
+    prompt: string,
+    userScope: string,
+    historyHash: string,
+  ): CacheEntry | null {
     // Не кэшируем слишком короткие запросы (< 4 символов)
     if (prompt.trim().length < 4) return null;
 
-    const key = this.makeKey(modelId, language, prompt);
+    const key = this.makeKey(modelId, language, prompt, userScope, historyHash);
     const entry = this.cache.get(key);
 
     if (!entry) return null;
@@ -69,6 +104,11 @@ export class SemanticCache {
 
   /**
    * Сохранить ответ в кэш.
+   *
+   * Не сохраняем:
+   *   - шаблонные ответы (source === 'template')
+   *   - обрезанные ответы (finishReason === 'length')
+   *   - запросы с вложениями (hasAttachments === true)
    */
   set(
     modelId: string,
@@ -76,8 +116,20 @@ export class SemanticCache {
     prompt: string,
     response: string,
     usage: { inputTokens: number; outputTokens: number },
+    options: {
+      userScope: string;
+      historyHash: string;
+      source: ResponseSource;
+      finishReason?: string;
+      hasAttachments?: boolean;
+    },
   ): void {
     if (prompt.trim().length < 4 || response.trim().length < 10) return;
+
+    // Phase 1: фильтры — не кэшировать шаблоны, обрывы и вложения
+    if (options.source === 'template') return;
+    if (options.finishReason === 'length') return;
+    if (options.hasAttachments) return;
 
     // LRU очистка при переполнении
     if (this.cache.size >= this.maxEntries) {
@@ -85,7 +137,7 @@ export class SemanticCache {
       if (oldestKey) this.cache.delete(oldestKey);
     }
 
-    const key = this.makeKey(modelId, language, prompt);
+    const key = this.makeKey(modelId, language, prompt, options.userScope, options.historyHash);
     this.cache.set(key, {
       key,
       normalizedQuery: SemanticCache.normalize(prompt),

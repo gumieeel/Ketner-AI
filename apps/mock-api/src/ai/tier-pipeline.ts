@@ -53,9 +53,38 @@ export interface PipelineOptions {
 }
 
 /**
+ * Phase 2: базовые токены по категории задачи.
+ *
+ * Краткость регулируется промптом; жёсткий лимит — предохранитель.
+ *   simple / general   → 300–400 токенов
+ *   creative / translation → 1500 токенов
+ *   coding / reasoning → 2500 токенов
+ *   math / research    → 3000 токенов
+ */
+export function computeBaseTokensByCategory(category: string): number {
+  switch (category) {
+    case 'coding':
+    case 'reasoning':
+      return 2500;
+    case 'math':
+    case 'research':
+      return 3000;
+    case 'creative':
+    case 'translation':
+      return 1500;
+    default:
+      return 300;
+  }
+}
+
+/**
  * 4. Динамический расчёт выходных токенов (Output Control).
  *
  * maxTokens = Math.floor(baseTokens * tierMultiplier * (1 - budgetPressure))
+ *
+ * Phase 2: baseTokens теперь приходит из computeBaseTokensByCategory,
+ * а не фиксированные 300. Это убирает ситуацию, когда ответ с кодом
+ * обрывался на 300 токенах.
  */
 export function computeDynamicMaxTokens(options: {
   userPlan: string;
@@ -124,10 +153,14 @@ export class TierPipelineEngine {
     const forceCheapMode = budgetRatio >= 0.8;
 
     const classification: TaskClassification = AutoRouter.classify(prompt);
+
+    // Phase 2: базовые токены по категории задачи
+    const baseTokens = computeBaseTokensByCategory(classification.category);
     const dynamicMax = computeDynamicMaxTokens({
       userPlan: tier,
       monthlyCost,
       monthlyBudget,
+      baseTokens,
     });
 
     const registry = options?.registry ?? modelRegistry;
@@ -176,9 +209,10 @@ export class TierPipelineEngine {
     }
 
     // ── 🔵 PLUS ТАРИФ ($9.99) ──
-    // 80% DeepSeek / Qwen / Nemotron (score-based cheap pool)
-    // 15% DeepSeek + cheap improvement (cheap++)
-    // 5% случайный короткий GPT burst
+    // Phase 2: детерминированное правило вместо random():
+    //   - код / reasoning / moderate → cheap_improve (DeepSeek черновик + улучшение)
+    //   - simple → cheap_direct
+    //   - 5% GPT burst оставляем только для explicit-запросов
     if (tier === 'plus') {
       const roll = random();
 
@@ -200,22 +234,33 @@ export class TierPipelineEngine {
         };
       }
 
-      // 15% DeepSeek + улучшение (cheap++)
-      if (roll < 0.20) {
+      // Phase 2: детерминированная маршрутизация по сложности
+      // Код, рассуждения, умеренные задачи → cheap_improve (двухпроходный)
+      const isComplexForPlus =
+        classification.complexity === 'complex' ||
+        classification.complexity === 'moderate' ||
+        classification.category === 'coding' ||
+        classification.category === 'reasoning' ||
+        classification.category === 'math' ||
+        classification.category === 'research';
+
+      if (roll < 0.20 || isComplexForPlus) {
         return {
           tier: 'plus',
           mode: 'cheap_improve',
           targetModelId: 'deepseek-v4.1-flash',
           draftModelId: 'ketner-mini',
           enhancerModelId: 'deepseek-v4.1-flash',
-          maxOutputTokens: 300,
+          maxOutputTokens: Math.min(dynamicMax, 800),
           promptModifier: REFINE_ANSWER_PROMPT,
-          reason: 'Plus tier (15% enhancer): two-pass Qwen draft + DeepSeek V4.1 refinement',
+          reason: isComplexForPlus
+            ? 'Plus tier (complex/moderate): two-pass Qwen draft + DeepSeek V4.1 refinement'
+            : 'Plus tier (15% enhancer): two-pass Qwen draft + DeepSeek V4.1 refinement',
           forceCheapMode: false,
         };
       }
 
-      // 80% Прямой дешёвый ответ (DeepSeek / Nemotron / GLM) по скорингу
+      // simple → cheap_direct (по скорингу)
       const routed = AutoRouter.routeWithReason(prompt, cheapCandidates, {
         userPlan: 'plus',
         monthlyCost,
@@ -226,7 +271,7 @@ export class TierPipelineEngine {
         mode: 'cheap_direct',
         targetModelId: routed.model.id,
         maxOutputTokens: dynamicMax,
-        reason: `Plus tier (80% primary): ${routed.reason}`,
+        reason: `Plus tier (simple): ${routed.reason}`,
         forceCheapMode: false,
       };
     }

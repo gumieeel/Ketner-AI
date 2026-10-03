@@ -12,7 +12,7 @@
  */
 
 import { ERROR_MESSAGES, pickAnswer } from './answers.js';
-import { semanticCache } from './cache.js';
+import { semanticCache, SemanticCache } from './cache.js';
 import { ContextOptimizer } from './context.js';
 import type {
   GatewayRequest,
@@ -41,6 +41,12 @@ import {
   type PipelineStrategy,
 } from './tier-pipeline.js';
 
+export interface ComplexityContext {
+  history?: Array<{ role: string; content: string }>;
+  hasAttachments?: boolean;
+  hasWorkspace?: boolean;
+}
+
 export interface EngineResolution {
   modelId: string;
   engineName: string;
@@ -49,7 +55,10 @@ export interface EngineResolution {
 
 export type AstraEngineResolution = EngineResolution;
 
-export function classifyPromptComplexity(prompt?: string): {
+export function classifyPromptComplexity(
+  prompt?: string,
+  context?: ComplexityContext,
+): {
   level: 'simple' | 'moderate' | 'complex';
   category: string;
 } {
@@ -57,8 +66,29 @@ export function classifyPromptComplexity(prompt?: string): {
     return { level: 'complex', category: 'general' };
   }
 
+  // Если есть вложения или проект — задача сразу переходит в категорию сложных
+  if (context?.hasAttachments || context?.hasWorkspace) {
+    return { level: 'complex', category: 'coding' };
+  }
+
   const classification = AutoRouter.classify(prompt);
   const trimmed = prompt.trim();
+
+  // Проверка истории: если в недавней истории был сложный контекст (код, длинные ответы, рассуждения),
+  // то короткая реплика («да», «продолжи», «ок») не должна сбрасывать сложность на deepseek
+  const historyIsComplex = Boolean(
+    context?.history &&
+      context.history.length > 0 &&
+      context.history.slice(-4).some((m) => {
+        const text = m.content || '';
+        return (
+          text.length > 250 ||
+          /```|function|class|interface|import|export|select|def |const |let |error|exception/i.test(
+            text,
+          )
+        );
+      }),
+  );
 
   // 1. "Прям лёгкие вопросы": приветствия, благодарности, подтверждения, короткие реплики
   const isGreetingOrChitChat =
@@ -72,7 +102,7 @@ export function classifyPromptComplexity(prompt?: string): {
     classification.category === 'general' &&
     !/(напиши|составь|придумай|объясни|расскажи|переведи|write|explain|translate|код|функци)/i.test(trimmed);
 
-  if (isGreetingOrChitChat || isTrivialGeneral) {
+  if ((isGreetingOrChitChat || isTrivialGeneral) && !historyIsComplex) {
     return { level: 'simple', category: classification.category };
   }
 
@@ -83,7 +113,8 @@ export function classifyPromptComplexity(prompt?: string): {
     classification.category === 'math' ||
     classification.category === 'reasoning' ||
     classification.category === 'research' ||
-    trimmed.length > 500;
+    trimmed.length > 500 ||
+    historyIsComplex;
 
   if (isComplex) {
     return { level: 'complex', category: classification.category };
@@ -113,8 +144,9 @@ export function classifyPromptComplexity(prompt?: string): {
 export function resolveEngineForModel(
   modelId: string,
   prompt?: string,
+  context?: ComplexityContext,
 ): EngineResolution {
-  const { level } = classifyPromptComplexity(prompt);
+  const { level } = classifyPromptComplexity(prompt, context);
 
   // 1. GPT-6 Astra
   if (modelId === 'gpt-6-astra') {
@@ -178,15 +210,16 @@ export function resolveEngineForModel(
   return { modelId, engineName: modelId, level };
 }
 
-export function resolveAstraEngine(prompt?: string): AstraEngineResolution {
-  return resolveEngineForModel('gpt-6-astra', prompt);
+export function resolveAstraEngine(prompt?: string, context?: ComplexityContext): AstraEngineResolution {
+  return resolveEngineForModel('gpt-6-astra', prompt, context);
 }
 
 export function toOpenRouterModelId(
   model: ModelRegistryEntry,
   prompt?: string,
+  context?: ComplexityContext,
 ): string {
-  const resolution = resolveEngineForModel(model.id, prompt);
+  const resolution = resolveEngineForModel(model.id, prompt, context);
   if (resolution.modelId !== model.id) {
     return resolution.modelId;
   }
@@ -360,6 +393,19 @@ export class AIGateway {
     const decodedPrompt = convertLayoutIfInverted(rawPrompt);
     const prompt = decodedPrompt;
 
+    const activeWorkspace =
+      req.workspaceContext ??
+      req.messages.slice().reverse().find((m) => m.workspaceContext)?.workspaceContext;
+    const activeAttachments =
+      req.attachments ??
+      req.messages.slice().reverse().find((m) => m.attachments && m.attachments.length > 0)?.attachments;
+
+    const complexityContext: ComplexityContext = {
+      history: req.messages.slice(0, -1),
+      hasAttachments: Boolean(activeAttachments && activeAttachments.length > 0),
+      hasWorkspace: Boolean(activeWorkspace),
+    };
+
     if (req.modelId === 'auto') {
       pipelineStrategy = TierPipelineEngine.resolveStrategy(prompt, {
         userPlan: effectivePlan,
@@ -378,7 +424,7 @@ export class AIGateway {
         routingReason = `Budget protection: dynamically routed to ${targetModel.name} for fair usage`;
       } else {
         targetModel = resolved;
-        const resolution = resolveEngineForModel(targetModel.id, prompt);
+        const resolution = resolveEngineForModel(targetModel.id, prompt, complexityContext);
         if (
           [
             'gpt-6-astra',
@@ -426,6 +472,7 @@ export class AIGateway {
         estimatedCost: 0,
         latencyMs: Date.now() - startTime,
         status: decision.code === 'concurrency_limit' ? 'concurrency_limited' : 'rate_limited',
+        source: 'provider',
       });
 
       callbacks.onError({
@@ -461,13 +508,6 @@ export class AIGateway {
         ? `${baseSystemPrompt} ${language === 'en' ? 'Keep responses concise and direct.' : 'Отвечай максимально кратко и по существу.'}`
         : baseSystemPrompt;
 
-      const activeWorkspace =
-        req.workspaceContext ??
-        req.messages.slice().reverse().find((m) => m.workspaceContext)?.workspaceContext;
-      const activeAttachments =
-        req.attachments ??
-        req.messages.slice().reverse().find((m) => m.attachments && m.attachments.length > 0)?.attachments;
-
       let effectiveSystemPrompt = systemPrompt;
       if (activeWorkspace) {
         effectiveSystemPrompt += buildWorkspaceContextBlock(activeWorkspace, language);
@@ -476,6 +516,7 @@ export class AIGateway {
         effectiveSystemPrompt += buildAttachmentsBlock(activeAttachments, language);
       }
 
+      let generatedSummary: string | undefined;
       const optimizedMessages = ContextOptimizer.optimize(
         req.messages.map((m, idx) => ({
           role: m.role as 'user' | 'assistant',
@@ -486,13 +527,25 @@ export class AIGateway {
         })),
         {
           maxMessages: maxContextMessages,
+          maxTokens: targetModel.contextWindow,
           systemPrompt: effectiveSystemPrompt,
           language,
+          existingSummary: req.cachedSummary,
+          onSummaryGenerated: (summary) => {
+            generatedSummary = summary;
+          },
         },
       );
 
       // 5.1. Проверка семантического кэша (Semantic & Query Caching)
-      const cachedHit = semanticCache.get(targetModel.id, language, prompt);
+      const userScope = effectivePlan === 'free' ? 'shared' : activeUserId;
+      const historyHash = SemanticCache.computeHistoryHash(req.messages, 3);
+      const hasAttachments = Boolean(activeAttachments && activeAttachments.length > 0);
+
+      const cachedHit = !hasAttachments
+        ? semanticCache.get(targetModel.id, language, prompt, userScope, historyHash)
+        : null;
+
       if (cachedHit && !isCancelled()) {
         await streamText(cachedHit.response, {
           thinkingMs: [5, 10],
@@ -515,6 +568,7 @@ export class AIGateway {
           actualCost: 0,
           latencyMs,
           status: 'success',
+          source: 'cache',
         });
 
         if (!isCancelled()) {
@@ -523,6 +577,9 @@ export class AIGateway {
             outputTokens: cachedHit.outputTokens,
             selectedModel: { id: targetModel.id, name: targetModel.name },
             routingReason: `${routingReason} (Semantic Cache Hit)`,
+            source: 'cache',
+            finishReason: 'stop',
+            canContinue: false,
           });
         }
         return;
@@ -533,6 +590,7 @@ export class AIGateway {
       let success = false;
       let streamedResponse: ProviderResponse | null = null;
       let usedModel = targetModel;
+      let doublePassCost = 0;
 
       const hasWorkspaceOrAttachments = Boolean(
         activeWorkspace ||
@@ -584,7 +642,7 @@ export class AIGateway {
           const openRouterProvider = this.providers.get('openrouter');
           if (openRouterProvider?.isAvailable()) {
             draftProvider = openRouterProvider;
-            draftModelId = toOpenRouterModelId(draftModel, prompt);
+            draftModelId = toOpenRouterModelId(draftModel, prompt, complexityContext);
           }
         }
 
@@ -594,7 +652,7 @@ export class AIGateway {
           const openRouterProvider = this.providers.get('openrouter');
           if (openRouterProvider?.isAvailable()) {
             enhancerProvider = openRouterProvider;
-            enhancerModelId = toOpenRouterModelId(enhancerModel, prompt);
+            enhancerModelId = toOpenRouterModelId(enhancerModel, prompt, complexityContext);
           }
         }
 
@@ -609,7 +667,8 @@ export class AIGateway {
             });
 
             if (draftRes.content && !isCancelled()) {
-              // Шаг 2: Стриминг отполированного ответа пользователю (локализованная инструкция)
+              // Шаг 2: Стриминг отполированного ответа пользователю
+              // Во втором проходе передаём и вопрос пользователя, и черновик (Phase 1)
               const modText =
                 pipelineStrategy.promptModifier
                   ? typeof pipelineStrategy.promptModifier === 'string'
@@ -618,7 +677,12 @@ export class AIGateway {
                   : (language === 'ru'
                       ? 'Улучши этот ответ. Сделай его более чётким, структурированным и лаконичным:\n\n'
                       : 'Improve this answer. Make it clearer, structured and concise:\n\n');
-              const enhanceInstruction = `${modText}${draftRes.content}`;
+
+              const enhanceInstruction =
+                language === 'ru'
+                  ? `Вопрос пользователя:\n${prompt}\n\nЧерновой ответ:\n${draftRes.content}\n\nИнструкция:\n${modText}`
+                  : `User query:\n${prompt}\n\nDraft answer:\n${draftRes.content}\n\nInstruction:\n${modText}`;
+
               usedModel = enhancerModel;
               streamedResponse = await enhancerProvider.streamText(
                 {
@@ -637,7 +701,14 @@ export class AIGateway {
               );
 
               if (streamedResponse && streamedResponse.content.length > 0) {
+                // Суммируем токены и себестоимость обоих проходов (Phase 1)
                 streamedResponse.usage.inputTokens += draftRes.usage.inputTokens;
+                streamedResponse.usage.outputTokens += draftRes.usage.outputTokens;
+                const draftCostResult = CostCalculator.calculate(
+                  draftRes.usage,
+                  draftModel.pricing,
+                );
+                doublePassCost = draftCostResult.totalCost;
                 success = true;
               }
             }
@@ -659,7 +730,7 @@ export class AIGateway {
             const openRouterProvider = this.providers.get('openrouter');
             if (openRouterProvider && openRouterProvider.isAvailable()) {
               provider = openRouterProvider;
-              modelToRequest = toOpenRouterModelId(candidateModel, prompt);
+              modelToRequest = toOpenRouterModelId(candidateModel, prompt, complexityContext);
             } else {
               continue;
             }
@@ -708,7 +779,32 @@ export class AIGateway {
       }
 
       let fallbackContent = '';
+      let responseSource: 'provider' | 'cache' | 'template' = 'provider';
+
       if (!success && !isCancelled()) {
+        if (!isTestEnv) {
+          // Phase 1: если все провайдеры упали в проде — честная ошибка, не списываем лимиты
+          callbacks.onError({
+            code: 'provider_error',
+            message: ERROR_MESSAGES[language],
+          });
+          this.usageStore.recordUsage({
+            userId: activeUserId,
+            conversationId: req.conversationId,
+            modelId: targetModel.id,
+            provider: targetModel.provider,
+            inputTokens: 0,
+            outputTokens: 0,
+            estimatedCost: 0,
+            latencyMs: Date.now() - startTime,
+            status: 'error',
+            source: 'provider',
+          });
+          return;
+        }
+
+        // В test / dev режиме используем шаблонный генератор
+        responseSource = 'template';
         const effectiveModelName =
           req.modelId && req.modelId !== 'auto'
             ? (targetModel?.name ?? 'DeepSeek V4.1 Flash')
@@ -759,6 +855,11 @@ export class AIGateway {
         },
         usedModel.pricing,
       );
+      const totalEstimatedCost = costResult.totalCost + doublePassCost;
+
+      const finishReason: 'stop' | 'length' | 'cancelled' | 'error' =
+        streamedResponse?.finishReason ?? (isCancelled() ? 'cancelled' : 'stop');
+      const canContinue = finishReason === 'length';
 
       this.usageStore.recordUsage({
         userId: activeUserId,
@@ -769,24 +870,42 @@ export class AIGateway {
         outputTokens,
         cachedTokens: streamedResponse?.usage.cachedTokens,
         reasoningTokens: streamedResponse?.usage.reasoningTokens,
-        estimatedCost: costResult.totalCost,
+        estimatedCost: totalEstimatedCost,
         actualCost: streamedResponse?.cost ?? null,
         latencyMs,
         status: isCancelled() ? 'cancelled' : 'success',
+        source: responseSource,
       });
 
       if (!isCancelled()) {
         if (streamedResponse?.content) {
-          semanticCache.set(targetModel.id, language, prompt, streamedResponse.content, {
-            inputTokens,
-            outputTokens,
-          });
+          semanticCache.set(
+            targetModel.id,
+            language,
+            prompt,
+            streamedResponse.content,
+            {
+              inputTokens,
+              outputTokens,
+            },
+            {
+              userScope,
+              historyHash,
+              source: responseSource,
+              finishReason,
+              hasAttachments,
+            },
+          );
         }
         callbacks.onDone({
           inputTokens,
           outputTokens,
           selectedModel: { id: usedModel.id, name: usedModel.name },
           routingReason,
+          source: responseSource,
+          finishReason,
+          canContinue,
+          contextSummary: generatedSummary,
         });
       }
     } catch (error) {

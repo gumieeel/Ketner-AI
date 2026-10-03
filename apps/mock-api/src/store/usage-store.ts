@@ -12,6 +12,7 @@ import { randomUUID } from 'node:crypto';
 import type {
   FairUseSnapshot,
   ProviderStatus,
+  ResponseSource,
   UsageRecord,
   UsageStats,
   UsageStatus,
@@ -91,6 +92,7 @@ export class UsageStore {
     actualCost?: number | null;
     latencyMs: number;
     status: UsageStatus;
+    source?: ResponseSource;
   }): UsageRecord {
     const record: UsageRecord = {
       id: randomUUID(),
@@ -107,6 +109,7 @@ export class UsageStore {
       actualCost: params.actualCost ?? null,
       latencyMs: params.latencyMs,
       status: params.status,
+      source: params.source ?? 'provider',
       createdAt: new Date().toISOString(),
     };
 

@@ -135,6 +135,9 @@ export interface PlanEntitlements {
 /** Статус учётной записи использования. */
 export type UsageStatus = 'success' | 'error' | 'cancelled' | 'rate_limited' | 'concurrency_limited';
 
+/** Источник ответа: реальный провайдер, кэш или шаблонная заглушка. */
+export type ResponseSource = 'provider' | 'cache' | 'template';
+
 /** Запись об использовании AI модели. */
 export interface UsageRecord {
   id: string;
@@ -159,6 +162,8 @@ export interface UsageRecord {
   latencyMs: number;
   /** Статус запроса. */
   status: UsageStatus;
+  /** Источник ответа: провайдер, кэш или шаблон. */
+  source: ResponseSource;
   createdAt: string;
 }
 
@@ -214,17 +219,34 @@ export interface GatewayRequest {
   workspaceContext?: WorkspaceContext;
   language: Language;
   stream: boolean;
+  /**
+   * Ранее сохранённая сводка контекста (Phase 2).
+   * Передаётся для стабильного prefix caching: при наличии сводки
+   * ContextOptimizer не перегенерирует её заново.
+   */
+  cachedSummary?: string;
+}
+
+/** Результат завершения генерации (расширенный). */
+export interface GatewayDoneResult {
+  inputTokens: number;
+  outputTokens: number;
+  selectedModel?: { id: string; name: string };
+  routingReason?: string;
+  /** Источник ответа: реальный провайдер, кэш или шаблон (Phase 0). */
+  source: ResponseSource;
+  /** Причина завершения генерации (Phase 2). */
+  finishReason: 'stop' | 'length' | 'cancelled' | 'error';
+  /** Можно ли продолжить генерацию (Phase 2). */
+  canContinue: boolean;
+  /** Обновлённая сводка контекста для сохранения в БД (Phase 2). */
+  contextSummary?: string;
 }
 
 /** Callback'и для стримингового ответа. */
 export interface GatewayStreamCallbacks {
   onDelta: (content: string) => void;
-  onDone: (result: {
-    inputTokens: number;
-    outputTokens: number;
-    selectedModel?: { id: string; name: string };
-    routingReason?: string;
-  }) => void;
+  onDone: (result: GatewayDoneResult) => void;
   onError: (error: { code: string; message: string }) => void;
 }
 
