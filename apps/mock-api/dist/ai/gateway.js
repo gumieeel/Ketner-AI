@@ -156,6 +156,25 @@ export function toOpenRouterModelId(model, prompt, context) {
         return `google/${model.providerModelId}`;
     return model.providerModelId;
 }
+function prioritizeWorkspaceFiles(files) {
+    const highPriority = [
+        /^package\.json$/i,
+        /^tsconfig.*\.json$/i,
+        /^(src\/|apps\/[^\/]+\/src\/)?(index|main|server|app)\.(ts|tsx|js|jsx)$/i,
+        /routes/i,
+        /(schema|models|store|service)/i,
+        /^README\.md$/i,
+    ];
+    return [...files].sort((a, b) => {
+        const aMatch = highPriority.some((p) => p.test(a.path));
+        const bMatch = highPriority.some((p) => p.test(b.path));
+        if (aMatch && !bMatch)
+            return -1;
+        if (!aMatch && bMatch)
+            return 1;
+        return (a.path || '').localeCompare(b.path || '');
+    });
+}
 function buildWorkspaceContextBlock(ws, language) {
     const isEn = language === 'en';
     const typeLabel = ws.type === 'git_repo'
@@ -167,15 +186,16 @@ function buildWorkspaceContextBlock(ws, language) {
     if (Array.isArray(ws.files) && ws.files.length > 0) {
         block += isEn ? '\nProject File Tree:\n' : '\nДерево файлов проекта:\n';
         const treePreview = ws.files
-            .slice(0, 60)
+            .slice(0, 80)
             .map((f) => `- ${f.path}${f.size ? ` (${Math.round((f.size / 1024) * 10) / 10} KB)` : ''}`)
             .join('\n');
         block += treePreview;
-        if (ws.files.length > 60) {
-            block += isEn ? `\n... and ${ws.files.length - 60} more files` : `\n... и ещё ${ws.files.length - 60} файлов`;
+        if (ws.files.length > 80) {
+            block += isEn ? `\n... and ${ws.files.length - 80} more files` : `\n... и ещё ${ws.files.length - 80} файлов`;
         }
         block += '\n';
-        const filesWithContent = ws.files.filter((f) => typeof f.content === 'string' && f.content.trim().length > 0);
+        const rawFilesWithContent = ws.files.filter((f) => typeof f.content === 'string' && f.content.trim().length > 0);
+        const filesWithContent = prioritizeWorkspaceFiles(rawFilesWithContent);
         if (filesWithContent.length > 0) {
             block += isEn ? '\nKey Project Code & File Contents:\n' : '\nСодержимое ключевых файлов проекта:\n';
             let totalContentLength = 0;
@@ -192,12 +212,17 @@ function buildWorkspaceContextBlock(ws, language) {
         }
     }
     block += isEn
-        ? `\nIMPORTANT INSTRUCTIONS FOR WORKSPACE WORK:
-- You are acting as a full-fledged agentic coding assistant (like Antigravity / Cursor) connected directly to this codebase.
-- When asked to analyze the repository/workspace or when the user provides a request regarding this project, provide a thorough, structured, and complete technical response.
-- Cover: 1) Architecture & Tech Stack, 2) Directory structure & key modules, 3) Entry points & data flow, 4) Next steps and ready-to-use solutions.
+        ? `\nIMPORTANT AGENTIC INSTRUCTIONS FOR WORKSPACE WORK:
+- You are acting as Ketner AI Engine — a senior autonomous full-stack software engineer directly embedded in this project.
+- YOU HAVE FULL ACCESS TO THIS CODEBASE. The file tree and source code are provided above.
+- NEVER SAY: "I cannot edit files", "I am only an AI text model", "I have no access to your filesystem or repository". Your environment has an automated file-action execution runtime that captures your \`\`\`file-actions blocks and applies them directly to the user's disk and GitHub!
+- NEVER HALLUCINATE: NEVER say "I already pushed to main" or make up fake commit URLs. Always state: "I have prepared the changes in the card below. Click [Apply to Project] or [Apply to GitHub] to commit them."
+- When asked to analyze the project, check readiness, or find bugs:
+  1) Base your analysis ONLY on the actual code, imports, and dependencies above. Do NOT invent libraries that do not exist in package.json.
+  2) Give deep, precise technical answers: reference exact file paths, line numbers, function names, and root causes of bugs.
+  3) If you find bugs or missing features, explain the problem and immediately provide complete, ready-to-use fixes.
 - When creating, modifying, editing, or replacing files in the workspace:
-  Always include structured \`\`\`file-actions blocks in your response so the client UI can render a visual Diff Viewer and allow the user to apply them directly to local disk or GitHub:
+  Always include structured \`\`\`file-actions blocks in your response so the client UI can render a visual Diff Viewer and apply them:
   \`\`\`file-actions
   [
     {
@@ -220,13 +245,18 @@ function buildWorkspaceContextBlock(ws, language) {
     }
   ]
   \`\`\`
+- Always provide COMPLETE, syntactically valid code. Never cut off code with comments like "// ... rest of code unchanged ...", because that breaks compilation.
 - Never truncate or cut off your answer. Use clean Markdown headers and code blocks.
-- If the user prompt is typed in an incorrect keyboard layout (e.g. "ghjfyfkbpbhqe htgjpbnjhbq" for "проанализируй репозиторий"), automatically recognize the intended meaning and respond in the appropriate language.
-- Never claim you cannot work with local files or repos, as the files and structure are loaded above for you.`
-        : `\nВАЖНЫЕ ИНСТРУКЦИИ ДЛЯ РАБОТЫ С ПРОЕКТОМ:
-- Ты работаешь в режиме полноценного инженерного AI-ассистента (как Antigravity / Cursor), напрямую подключенного к этой кодовой базе.
-- При запросе анализа репозитория или папки давай глубокий, структурированный и завершённый технический отчёт.
-- Освети: 1) Архитектуру и стек технологий проекта, 2) Назначение ключевых директорий и модулей, 3) Входные точки (entry points) и потоки данных, 4) Готовность писать код, вносить правки и решать задачи по проекту.
+- If the user prompt is typed in an incorrect keyboard layout (e.g. "ghjfyfkbpbhqe htgjpbnjhbq" for "проанализируй репозиторий"), automatically recognize the intended meaning and respond in the appropriate language.`
+        : `\nВАЖНЫЕ ИНЖЕНЕРНЫЕ ИНСТРУКЦИИ ДЛЯ РАБОТЫ С ПРОЕКТОМ:
+- Ты работаешь как Ketner AI Engine — ведущий инженерный AI-ассистент, напрямую подключённый к кодовой базе этого проекта.
+- У ТЕБЯ ЕСТЬ ПОЛНЫЙ ДОСТУП К ЭТОМУ ПРОЕКТУ. Все файлы и дерево проекта переданы тебе выше.
+- КАТЕГОРИЧЕСКИ ЗАПРЕЩЕНО писать: «у меня нет доступа к файлам», «я всего лишь языковая модель и не могу менять файлы», «я не могу запускать команды». Веб-интерфейс Ketner AI оснащён автоматическим движком записи: он перехватывает твои блоки \`\`\`file-actions и записывает их на диск или отправляет коммитом в GitHub! Ты ОБЯЗАН при любых просьбах изменить или создать код формировать блок \`\`\`file-actions!
+- КАТЕГОРИЧЕСКИ ЗАПРЕЩЕНО ВРАТЬ: никогда не говори «Я уже запушил изменения в main» и не выдумывай ссылки на несуществующие коммиты. Всегда говори правду: «Я подготовил изменения ниже. Нажмите [Применить к проекту] (или [Применить к GitHub]), чтобы сохранить их».
+- При запросе анализа проекта, готовности к продакшну или поиске ошибок:
+  1) Опирайся ИСКЛЮЧИТЕЛЬНО на реальный код и файлы из контекста выше (не выдумывай несуществующие базы или пакеты, которых нет в package.json).
+  2) Давай глубокий инженерный разбор: указывай точные пути файлов, названия функций, существующие роуты и коренные причины (root cause) ошибок.
+  3) Если находишь баг или недостающую логику — сразу предлагай готовое рабочее исправление в блоке \`\`\`file-actions.
 - При создании, перезаписи, модификации или редактировании файлов в проекте:
   Обязательно приводи изменения в виде структурированного блока \`\`\`file-actions, чтобы веб-интерфейс отобразил визуальный Diff Viewer и позволил пользователю применить правки на локальный диск или закоммитить/создать PR в GitHub в один клик:
   \`\`\`file-actions
@@ -251,9 +281,9 @@ function buildWorkspaceContextBlock(ws, language) {
     }
   ]
   \`\`\`
+- Всегда генерируй ПОЛНЫЙ, рабочий и компилируемый код без плейсхолдеров вроде «// ... остальной код без изменений ...», которые ломают проект.
 - Никогда не обрывай ответ на полуслове. Используй качественное Markdown-форматирование, списки и блоки кода.
-- Если запрос пользователя набран в ошибочной раскладке (например, «ghjfyfkbpbhqe htgjpbnjhbq» вместо «проанализируй репозиторий»), автоматически распознай смысл и ответь на русском языке по существу.
-- Никогда не говори, что ты не имеешь доступа к локальным файлам или репозиторию, так как все файлы и структура проекта уже переданы тебе выше.`;
+- Если запрос пользователя набран в ошибочной раскладке (например, «ghjfyfkbpbhqe htgjpbnjhbq» вместо «проанализируй репозиторий»), автоматически распознай смысл и ответь на русском языке по существу.`;
     return block;
 }
 const JCUKEN_MAP = {

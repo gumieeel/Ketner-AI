@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
   CheckIcon,
   CodeIcon,
@@ -11,6 +11,7 @@ import {
   applyLocalChanges,
 } from '@/features/chat/file-operations';
 import type { FileProposal, WorkspaceContext } from '@/features/chat/types';
+import { useWorkspace } from '@/features/chat/workspace-store';
 import { FileDiffModal } from './file-diff-modal';
 import { GitHubApplyModal } from './github-apply-modal';
 
@@ -20,6 +21,7 @@ interface FileProposalCardProps {
 }
 
 export function FileProposalCard({ proposal: initialProposal, workspace }: FileProposalCardProps) {
+  const autoApply = useWorkspace((state) => state.autoApply);
   const [proposal, setProposal] = useState<FileProposal>(initialProposal);
   const [isDiffOpen, setIsDiffOpen] = useState(false);
   const [isGitModalOpen, setIsGitModalOpen] = useState(false);
@@ -73,6 +75,12 @@ export function FileProposalCard({ proposal: initialProposal, workspace }: FileP
       }));
     }
   };
+
+  useEffect(() => {
+    if (autoApply && proposal.status === 'pending' && workspace?.type === 'local_folder') {
+      void handleApply();
+    }
+  }, [autoApply, proposal.status, workspace?.type]);
 
   const handleGitSuccess = (result: {
     type: 'commit' | 'pull_request';
@@ -219,7 +227,13 @@ export function FileProposalCard({ proposal: initialProposal, workspace }: FileP
 
         {/* Кнопки действий */}
         {proposal.status === 'pending' || proposal.status === 'error' ? (
-          <div className="flex items-center justify-between pt-2 border-t border-stroke/70">
+          <>
+            {proposal.status === 'pending' && !autoApply && (
+              <div className="mb-2 rounded-lg bg-surface/90 border border-stroke px-2.5 py-1.5 text-[11px] text-muted flex items-center justify-between">
+                <span>💡 Нажмите «Применить к проекту» ниже (или включите «⚡ Авто-запись» в шапке), чтобы сохранить файлы.</span>
+              </div>
+            )}
+            <div className="flex items-center justify-between pt-2 border-t border-stroke/70">
             <div className="text-[11px] text-muted">
               {workspace ? (
                 <span className="flex items-center gap-1">
@@ -261,7 +275,8 @@ export function FileProposalCard({ proposal: initialProposal, workspace }: FileP
               </Button>
             </div>
           </div>
-        ) : null}
+        </>
+      ) : null}
 
         {proposal.status === 'applying' && (
           <div className="flex items-center gap-2 text-xs text-accent pt-2">

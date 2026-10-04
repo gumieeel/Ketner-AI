@@ -2,21 +2,32 @@ import { create } from 'zustand';
 import type { WorkspaceContext, WorkspaceFile } from './types';
 
 const STORAGE_KEY = 'ketner.workspace';
+const AUTO_APPLY_KEY = 'ketner.workspace.auto_apply';
 
 interface WorkspaceStore {
   activeWorkspace: WorkspaceContext | null;
   selectedFile: WorkspaceFile | null;
   isLinking: boolean;
   linkError: string | null;
+  autoApply: boolean;
 
   setWorkspace: (workspace: WorkspaceContext | null) => void;
   unlinkWorkspace: () => void;
   selectFile: (file: WorkspaceFile | null) => void;
   setIsLinking: (isLinking: boolean) => void;
   setLinkError: (error: string | null) => void;
+  setAutoApply: (autoApply: boolean) => void;
   updateWorkspaceFiles: (updatedFiles: Array<{ path: string; content?: string }>) => void;
   removeWorkspaceFile: (path: string) => void;
   setGitToken: (token: string) => void;
+}
+
+function loadInitialAutoApply(): boolean {
+  try {
+    return localStorage.getItem(AUTO_APPLY_KEY) === 'true';
+  } catch {
+    return false;
+  }
 }
 
 function loadInitialWorkspace(): WorkspaceContext | null {
@@ -46,6 +57,16 @@ export const useWorkspace = create<WorkspaceStore>((set) => ({
   selectedFile: null,
   isLinking: false,
   linkError: null,
+  autoApply: loadInitialAutoApply(),
+
+  setAutoApply: (autoApply) => {
+    try {
+      localStorage.setItem(AUTO_APPLY_KEY, String(autoApply));
+    } catch {
+      // noop
+    }
+    set({ autoApply });
+  },
 
   setWorkspace: (workspace) => {
     try {
