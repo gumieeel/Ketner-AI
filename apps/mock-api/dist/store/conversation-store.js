@@ -140,17 +140,23 @@ export function createConversationStore(file) {
                 persist();
             }
             const now = new Date().toISOString();
-            const restored = history.map((message) => ({
-                id: message.id ?? randomUUID(),
-                conversationId,
-                role: message.role,
-                content: message.content,
-                createdAt: message.createdAt ?? now,
-                // На бэкенде хранится только итоговый вариант сообщения.
-                status: 'complete',
-                attachments: message.attachments,
-                workspaceContext: message.workspaceContext,
-            }));
+            const restored = history.map((message) => {
+                const existing = message.id
+                    ? snapshot.messages.find((m) => m.id === message.id && m.conversationId === conversationId)
+                    : undefined;
+                return {
+                    id: message.id ?? randomUUID(),
+                    conversationId,
+                    role: message.role,
+                    content: message.content,
+                    createdAt: message.createdAt ?? now,
+                    // На бэкенде хранится только итоговый вариант сообщения.
+                    status: 'complete',
+                    attachments: message.attachments,
+                    workspaceContext: message.workspaceContext,
+                    feedback: existing?.feedback,
+                };
+            });
             const assistantMessage = {
                 id: randomUUID(),
                 conversationId,
@@ -189,6 +195,23 @@ export function createConversationStore(file) {
                 conversation.updatedAt = new Date().toISOString();
                 persist();
             }
+        },
+        updateMessageFeedback(userId, conversationId, messageId, feedback) {
+            let conversation = findConversation(userId, conversationId);
+            if (!conversation) {
+                conversation = snapshot.conversations.find((c) => c.id === conversationId);
+            }
+            if (!conversation) {
+                return null;
+            }
+            const message = snapshot.messages.find((m) => m.id === messageId && m.conversationId === conversationId);
+            if (!message) {
+                return null;
+            }
+            message.feedback = feedback ?? undefined;
+            conversation.updatedAt = new Date().toISOString();
+            persist();
+            return { ...message };
         },
     };
 }

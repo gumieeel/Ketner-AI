@@ -13,6 +13,7 @@ import { ThinkingBlock, parseThinking } from './thinking-block';
 import { useWorkspace } from '@/features/chat/workspace-store';
 import { parseFileProposals, stripFileActionBlocks } from '@/features/chat/file-operations';
 import { FileProposalCard } from './file-proposal-card';
+import { FeedbackButtons } from './feedback-buttons';
 
 /** Тяжёлый рендер markdown подключается при первом ответе, а не при загрузке чата. */
 const Markdown = lazy(() => import('@/features/chat/markdown/markdown'));
@@ -160,6 +161,7 @@ export function AssistantMessage({ message, canRegenerate }: AssistantMessagePro
                 <RefreshIcon />
               </IconButton>
             ) : null}
+            <FeedbackButtons message={message} disabled={streaming} />
           </div>
         ) : null}
       </div>

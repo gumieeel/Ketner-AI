@@ -9,13 +9,13 @@ import { Router } from 'express';
 import { config } from '../config.js';
 import { sendError } from '../middleware/errors.js';
 import { modelRegistry } from '../ai/model-registry.js';
-import { usageStore as defaultUsageStore, subscriptionStore as defaultSubscriptionStore, userStore as defaultUserStore, } from '../store/index.js';
+import { usageStore as defaultUsageStore, subscriptionStore as defaultSubscriptionStore, userStore as defaultUserStore, feedbackStore as defaultFeedbackStore, } from '../store/index.js';
 import { CurrencyService } from '../services/currency.js';
 import { PLANS, LEGACY_PLANS } from './billing.js';
 import { isAdminUser } from '../services/vip.js';
 import { EntitlementService } from '../services/entitlement.js';
 import { defaultCircuitBreaker, CircuitBreaker } from '../ai/circuit-breaker.js';
-export function createAdminRouter({ registry = modelRegistry, usageStore = defaultUsageStore, subscriptionStore = defaultSubscriptionStore, userStore = defaultUserStore, circuitBreaker = defaultCircuitBreaker, } = {}) {
+export function createAdminRouter({ registry = modelRegistry, usageStore = defaultUsageStore, subscriptionStore = defaultSubscriptionStore, userStore = defaultUserStore, circuitBreaker = defaultCircuitBreaker, feedbackStore = defaultFeedbackStore, } = {}) {
     const router = Router();
     // Middleware проверки прав администратора
     const requireAdmin = (req, res, next) => {
@@ -116,11 +116,34 @@ export function createAdminRouter({ registry = modelRegistry, usageStore = defau
             }),
             planPricesUsd,
         });
+        const feedbackAnalytics = feedbackStore.getAnalytics({ from, to });
         res.json({
             metrics,
             alerts: metrics.alerts,
             hasNegativeMarginAlert: metrics.hasNegativeMarginAlert,
+            feedback: feedbackAnalytics,
+            escalation: feedbackAnalytics.escalation,
         });
+    });
+    // 4.2. Аналитика качества ответов и статус эскалации моделей
+    router.get('/feedback-analytics', (req, res) => {
+        const from = typeof req.query.from === 'string' ? req.query.from : undefined;
+        const to = typeof req.query.to === 'string' ? req.query.to : undefined;
+        res.json(feedbackStore.getAnalytics({ from, to }));
+    });
+    // 4.3. Ручное управление авто-эскалацией (override)
+    router.post('/escalation/override', (req, res) => {
+        const body = req.body;
+        if (body.active === null || typeof body.active === 'boolean') {
+            feedbackStore.setAutoEscalateOverride(body.active);
+            res.json({
+                success: true,
+                override: body.active,
+                status: feedbackStore.getAnalytics().escalation,
+            });
+            return;
+        }
+        sendError(res, 400, 'invalid_override_value', 'Поле active должно быть boolean или null');
     });
     // 5. Рентабельность пользователя (Profitability)
     router.get('/profitability/:userId', (req, res) => {

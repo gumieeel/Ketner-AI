@@ -584,6 +584,51 @@ test('admin: метрики шлюза GET /api/admin/metrics (Фаза 4: да�
     assert.ok(typeof body.metrics.latency.averageLatencyMs === 'number');
     assert.ok(Array.isArray(body.alerts));
     assert.equal(typeof body.hasNegativeMarginAlert, 'boolean');
+    assert.ok((body as any).feedback);
+    assert.ok((body as any).escalation);
+    assert.ok(typeof (body as any).escalation.autoEscalateActive === 'boolean');
+  } finally {
+    await server.close();
+  }
+});
+
+test('admin: feedback-analytics и ручное управление auto-escalation (POST /api/admin/escalation/override)', async () => {
+  const server = await startTestServer();
+
+  try {
+    const headers = {
+      'Content-Type': 'application/json',
+      'x-admin-key': config.adminApiKey,
+    };
+
+    // 1. GET /api/admin/feedback-analytics
+    const res = await fetch(`${server.baseUrl}/api/admin/feedback-analytics`, { headers });
+    assert.equal(res.status, 200);
+    const analytics = (await res.json()) as any;
+    assert.ok(analytics.summary);
+    assert.ok(analytics.escalation);
+
+    // 2. Включаем ручной override эскалации
+    const overrideRes = await fetch(`${server.baseUrl}/api/admin/escalation/override`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ active: true }),
+    });
+    assert.equal(overrideRes.status, 200);
+    const overrideData = (await overrideRes.json()) as any;
+    assert.equal(overrideData.success, true);
+    assert.equal(overrideData.override, true);
+    assert.equal(overrideData.status.autoEscalateActive, true);
+
+    // 3. Сбрасываем override на автоматический режим (null)
+    const resetRes = await fetch(`${server.baseUrl}/api/admin/escalation/override`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ active: null }),
+    });
+    assert.equal(resetRes.status, 200);
+    const resetData = (await resetRes.json()) as any;
+    assert.equal(resetData.override, null);
   } finally {
     await server.close();
   }

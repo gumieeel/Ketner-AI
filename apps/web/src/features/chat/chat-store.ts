@@ -49,6 +49,7 @@ interface ChatState {
   editMessage: (id: string, content: string) => Promise<void>;
   rename: (id: string, title: string) => Promise<void>;
   remove: (id: string) => Promise<void>;
+  sendFeedback: (messageId: string, rating: 'like' | 'dislike') => Promise<void>;
 }
 
 /** Контроллеры отмены и таймеры сброса буфера живут per-conversation. */
@@ -707,6 +708,42 @@ export const useChat = create<ChatState>((set, get) => {
         });
       } catch (error) {
         console.error('[chat] диалог не удалился:', error);
+      }
+    },
+
+    sendFeedback: async (messageId: string, rating: 'like' | 'dislike') => {
+      const state = get();
+      const conversationId = state.activeId;
+      if (!conversationId) return;
+
+      const targetMessage = state.messages.find((m) => m.id === messageId);
+      if (!targetMessage) return;
+
+      // Toggle: клик по уже активной оценке сбрасывает её
+      const newRating = targetMessage.feedback === rating ? null : rating;
+
+      set((s) => {
+        const updatedMessages = s.messages.map((m) =>
+          m.id === messageId ? { ...m, feedback: newRating ?? undefined } : m,
+        );
+        const updatedConvMessages = { ...s.conversationMessages };
+        if (updatedConvMessages[conversationId]) {
+          updatedConvMessages[conversationId] = updatedConvMessages[conversationId].map((m) =>
+            m.id === messageId ? { ...m, feedback: newRating ?? undefined } : m,
+          );
+        }
+        return { messages: updatedMessages, conversationMessages: updatedConvMessages };
+      });
+
+      try {
+        await api.sendFeedback({
+          conversationId,
+          messageId,
+          rating: newRating,
+          modelId: targetMessage.modelId,
+        });
+      } catch (error) {
+        console.error('[chat] сбой отправки фидбека:', error);
       }
     },
   };

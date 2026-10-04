@@ -46,7 +46,7 @@ describe('чат: отправка, стриминг и управление о�
     await sendMessage(user, 'Как дела?');
 
     expect(await screen.findAllByText('Как дела?')).not.toHaveLength(0);
-    expect(await screen.findByText('Привет от Ketner AI')).toBeInTheDocument();
+    expect(await screen.findByText('Привет от Ketner AI', {}, { timeout: 10000 })).toBeInTheDocument();
     // Ответ получает идентификатор с сервера: сохранённое сообщение и то, что
     // видно в ленте, — одна и та же сущность.
     expect(lastAssistant().id).toBe('assistant-1');

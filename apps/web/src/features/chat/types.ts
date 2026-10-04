@@ -117,6 +117,8 @@ export interface Message {
     files?: WorkspaceFile[];
     summary?: string;
   };
+  /** Пользовательская оценка ответа: лайк / дизлайк */
+  feedback?: 'like' | 'dislike';
 }
 
 export interface ModelInfo {

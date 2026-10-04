@@ -20,6 +20,7 @@ import { CostCalculator } from '../services/cost.js';
 import { EntitlementService } from '../services/entitlement.js';
 import { FairUseEngine } from '../services/fair-use.js';
 import { AutoRouter } from './auto-router.js';
+import { feedbackStore as defaultFeedbackStore } from '../store/index.js';
 import { TierPipelineEngine, computeDynamicMaxTokens, } from './tier-pipeline.js';
 import { CircuitBreaker, defaultCircuitBreaker } from './circuit-breaker.js';
 import { PayloadGuard } from './payload-guard.js';
@@ -84,11 +85,19 @@ export function classifyPromptComplexity(prompt, context) {
  *    - лёгкие: deepseek/deepseek-chat
  *    - средние и сложные: x-ai/grok-4.7
  */
-export function resolveEngineForModel(modelId, prompt, context) {
+export function resolveEngineForModel(modelId, prompt, context, feedbackStore) {
     const { level } = classifyPromptComplexity(prompt, context);
+    const shouldEscalate = feedbackStore?.shouldEscalateFromLightModel(modelId, level) ?? false;
     // 1. GPT-6 Astra
     if (modelId === 'gpt-6-astra') {
         if (level === 'simple') {
+            if (shouldEscalate) {
+                return {
+                    modelId: 'openai/gpt-6-luna-pro',
+                    engineName: 'OpenAI: GPT-6 Luna Pro (Escalated from Light)',
+                    level,
+                };
+            }
             return { modelId: 'deepseek/deepseek-chat', engineName: 'DeepSeek Chat (Light Fast)', level };
         }
         if (level === 'moderate') {
@@ -99,6 +108,13 @@ export function resolveEngineForModel(modelId, prompt, context) {
     // 2. Claude Fable (5.1 / 5.5)
     if (modelId === 'claude-fable' || modelId === 'claude-3.5-sonnet') {
         if (level === 'simple') {
+            if (shouldEscalate) {
+                return {
+                    modelId: 'anthropic/claude-haiku-4.5',
+                    engineName: 'Anthropic: Claude Haiku 4.5 (Escalated from Light)',
+                    level,
+                };
+            }
             return { modelId: 'deepseek/deepseek-chat', engineName: 'DeepSeek Chat (Light Fast)', level };
         }
         if (level === 'moderate') {
@@ -111,6 +127,13 @@ export function resolveEngineForModel(modelId, prompt, context) {
         modelId === 'gemini-pro' ||
         modelId === 'gemini-3.8-flash') {
         if (level === 'simple') {
+            if (shouldEscalate) {
+                return {
+                    modelId: 'google/gemini-3.8-flash',
+                    engineName: 'Google: Gemini 3.8 Flash (Escalated from Light)',
+                    level,
+                };
+            }
             return { modelId: 'deepseek/deepseek-chat', engineName: 'DeepSeek Chat (Light Fast)', level };
         }
         return { modelId: 'google/gemini-3.8-flash', engineName: 'Google: Gemini 3.8 Flash', level };
@@ -118,6 +141,13 @@ export function resolveEngineForModel(modelId, prompt, context) {
     // 4. Grok 4.7
     if (modelId === 'grok-4.7' || modelId === 'grok') {
         if (level === 'simple') {
+            if (shouldEscalate) {
+                return {
+                    modelId: 'x-ai/grok-4.7',
+                    engineName: 'SpaceXAI: Grok 4.7 (Escalated from Light)',
+                    level,
+                };
+            }
             return { modelId: 'deepseek/deepseek-chat', engineName: 'DeepSeek Chat (Light Fast)', level };
         }
         return { modelId: 'x-ai/grok-4.7', engineName: 'SpaceXAI: Grok 4.7', level };
@@ -140,11 +170,11 @@ export function resolveEngineForModel(modelId, prompt, context) {
     }
     return { modelId, engineName: modelId, level };
 }
-export function resolveAstraEngine(prompt, context) {
-    return resolveEngineForModel('gpt-6-astra', prompt, context);
+export function resolveAstraEngine(prompt, context, feedbackStore) {
+    return resolveEngineForModel('gpt-6-astra', prompt, context, feedbackStore);
 }
-export function toOpenRouterModelId(model, prompt, context) {
-    const resolution = resolveEngineForModel(model.id, prompt, context);
+export function toOpenRouterModelId(model, prompt, context, feedbackStore) {
+    const resolution = resolveEngineForModel(model.id, prompt, context, feedbackStore);
     if (resolution.modelId !== model.id) {
         return resolution.modelId;
     }
@@ -331,15 +361,20 @@ export class AIGateway {
     usageStore;
     aiConfig;
     circuitBreaker;
+    feedbackStore;
     constructor(deps) {
         this.registry = deps.registry ?? modelRegistry;
         this.providers = deps.providers ?? providerManager;
         this.usageStore = deps.usageStore;
         this.aiConfig = deps.aiConfig;
         this.circuitBreaker = deps.circuitBreaker ?? defaultCircuitBreaker;
+        this.feedbackStore = deps.feedbackStore ?? defaultFeedbackStore;
     }
     getCircuitBreaker() {
         return this.circuitBreaker;
+    }
+    getFeedbackStore() {
+        return this.feedbackStore;
     }
     /**
      * Стриминговая генерация ответа через AI Gateway.
@@ -416,7 +451,7 @@ export class AIGateway {
             }
             else {
                 targetModel = resolved;
-                const resolution = resolveEngineForModel(targetModel.id, prompt, complexityContext);
+                const resolution = resolveEngineForModel(targetModel.id, prompt, complexityContext, this.feedbackStore);
                 if ([
                     'gpt-6-astra',
                     'claude-fable',
@@ -613,7 +648,7 @@ export class AIGateway {
                     const openRouterProvider = this.providers.get('openrouter');
                     if (openRouterProvider?.isAvailable()) {
                         enhancerProvider = openRouterProvider;
-                        enhancerModelId = toOpenRouterModelId(enhancerModel, prompt, complexityContext);
+                        enhancerModelId = toOpenRouterModelId(enhancerModel, prompt, complexityContext, this.feedbackStore);
                     }
                 }
                 if (draftProvider?.isAvailable() && enhancerProvider?.isAvailable()) {
@@ -682,7 +717,7 @@ export class AIGateway {
                         const openRouterProvider = this.providers.get('openrouter');
                         if (openRouterProvider && openRouterProvider.isAvailable()) {
                             provider = openRouterProvider;
-                            modelToRequest = toOpenRouterModelId(candidateModel, prompt, complexityContext);
+                            modelToRequest = toOpenRouterModelId(candidateModel, prompt, complexityContext, this.feedbackStore);
                         }
                         else {
                             continue;

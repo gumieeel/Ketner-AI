@@ -27,3 +27,16 @@ export type { SupportStore, SupportTicket, SupportMessage } from './support-stor
 /** Хранилище использованных блокчейн-транзакций (защита от replay-атак). */
 export { usedTxStore, createUsedTxStore } from './used-tx-store.js';
 export type { UsedTxStore, UsedTxRecord } from './used-tx-store.js';
+
+/** Хранилище пользовательских оценок (лайки/дизлайки) и аналитика эскалации моделей. */
+import { FeedbackStore } from './feedback-store.js';
+export { FeedbackStore, createFeedbackStore } from './feedback-store.js';
+export type {
+  FeedbackRecord,
+  FeedbackSummary,
+  FeedbackAnalytics,
+  EscalationStatus,
+  PromptComplexityLevel,
+  RecordFeedbackInput,
+} from './feedback-store.js';
+export const feedbackStore = new FeedbackStore(config.feedbackStoreFile);

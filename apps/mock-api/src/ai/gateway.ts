@@ -35,6 +35,7 @@ import { EntitlementService } from '../services/entitlement.js';
 import { FairUseEngine } from '../services/fair-use.js';
 import { AutoRouter } from './auto-router.js';
 import type { UsageStore } from '../store/usage-store.js';
+import { feedbackStore as defaultFeedbackStore, type FeedbackStore } from '../store/index.js';
 import {
   TierPipelineEngine,
   computeDynamicMaxTokens,
@@ -153,12 +154,21 @@ export function resolveEngineForModel(
   modelId: string,
   prompt?: string,
   context?: ComplexityContext,
+  feedbackStore?: FeedbackStore,
 ): EngineResolution {
   const { level } = classifyPromptComplexity(prompt, context);
+  const shouldEscalate = feedbackStore?.shouldEscalateFromLightModel(modelId, level) ?? false;
 
   // 1. GPT-6 Astra
   if (modelId === 'gpt-6-astra') {
     if (level === 'simple') {
+      if (shouldEscalate) {
+        return {
+          modelId: 'openai/gpt-6-luna-pro',
+          engineName: 'OpenAI: GPT-6 Luna Pro (Escalated from Light)',
+          level,
+        };
+      }
       return { modelId: 'deepseek/deepseek-chat', engineName: 'DeepSeek Chat (Light Fast)', level };
     }
     if (level === 'moderate') {
@@ -170,6 +180,13 @@ export function resolveEngineForModel(
   // 2. Claude Fable (5.1 / 5.5)
   if (modelId === 'claude-fable' || modelId === 'claude-3.5-sonnet') {
     if (level === 'simple') {
+      if (shouldEscalate) {
+        return {
+          modelId: 'anthropic/claude-haiku-4.5',
+          engineName: 'Anthropic: Claude Haiku 4.5 (Escalated from Light)',
+          level,
+        };
+      }
       return { modelId: 'deepseek/deepseek-chat', engineName: 'DeepSeek Chat (Light Fast)', level };
     }
     if (level === 'moderate') {
@@ -185,6 +202,13 @@ export function resolveEngineForModel(
     modelId === 'gemini-3.8-flash'
   ) {
     if (level === 'simple') {
+      if (shouldEscalate) {
+        return {
+          modelId: 'google/gemini-3.8-flash',
+          engineName: 'Google: Gemini 3.8 Flash (Escalated from Light)',
+          level,
+        };
+      }
       return { modelId: 'deepseek/deepseek-chat', engineName: 'DeepSeek Chat (Light Fast)', level };
     }
     return { modelId: 'google/gemini-3.8-flash', engineName: 'Google: Gemini 3.8 Flash', level };
@@ -193,6 +217,13 @@ export function resolveEngineForModel(
   // 4. Grok 4.7
   if (modelId === 'grok-4.7' || modelId === 'grok') {
     if (level === 'simple') {
+      if (shouldEscalate) {
+        return {
+          modelId: 'x-ai/grok-4.7',
+          engineName: 'SpaceXAI: Grok 4.7 (Escalated from Light)',
+          level,
+        };
+      }
       return { modelId: 'deepseek/deepseek-chat', engineName: 'DeepSeek Chat (Light Fast)', level };
     }
     return { modelId: 'x-ai/grok-4.7', engineName: 'SpaceXAI: Grok 4.7', level };
@@ -218,16 +249,21 @@ export function resolveEngineForModel(
   return { modelId, engineName: modelId, level };
 }
 
-export function resolveAstraEngine(prompt?: string, context?: ComplexityContext): AstraEngineResolution {
-  return resolveEngineForModel('gpt-6-astra', prompt, context);
+export function resolveAstraEngine(
+  prompt?: string,
+  context?: ComplexityContext,
+  feedbackStore?: FeedbackStore,
+): AstraEngineResolution {
+  return resolveEngineForModel('gpt-6-astra', prompt, context, feedbackStore);
 }
 
 export function toOpenRouterModelId(
   model: ModelRegistryEntry,
   prompt?: string,
   context?: ComplexityContext,
+  feedbackStore?: FeedbackStore,
 ): string {
-  const resolution = resolveEngineForModel(model.id, prompt, context);
+  const resolution = resolveEngineForModel(model.id, prompt, context, feedbackStore);
   if (resolution.modelId !== model.id) {
     return resolution.modelId;
   }
@@ -427,6 +463,7 @@ export interface AIGatewayDeps {
   usageStore: UsageStore;
   aiConfig: AiConfig;
   circuitBreaker?: CircuitBreaker;
+  feedbackStore?: FeedbackStore;
 }
 
 export class AIGateway {
@@ -435,6 +472,7 @@ export class AIGateway {
   private usageStore: UsageStore;
   private aiConfig: AiConfig;
   private circuitBreaker: CircuitBreaker;
+  private feedbackStore: FeedbackStore;
 
   constructor(deps: AIGatewayDeps) {
     this.registry = deps.registry ?? modelRegistry;
@@ -442,10 +480,15 @@ export class AIGateway {
     this.usageStore = deps.usageStore;
     this.aiConfig = deps.aiConfig;
     this.circuitBreaker = deps.circuitBreaker ?? defaultCircuitBreaker;
+    this.feedbackStore = deps.feedbackStore ?? defaultFeedbackStore;
   }
 
   getCircuitBreaker(): CircuitBreaker {
     return this.circuitBreaker;
+  }
+
+  getFeedbackStore(): FeedbackStore {
+    return this.feedbackStore;
   }
 
   /**
@@ -541,7 +584,7 @@ export class AIGateway {
         routingReason = `Budget protection: dynamically routed to ${targetModel.name} for fair usage`;
       } else {
         targetModel = resolved;
-        const resolution = resolveEngineForModel(targetModel.id, prompt, complexityContext);
+        const resolution = resolveEngineForModel(targetModel.id, prompt, complexityContext, this.feedbackStore);
         if (
           [
             'gpt-6-astra',
@@ -777,7 +820,7 @@ export class AIGateway {
           const openRouterProvider = this.providers.get('openrouter');
           if (openRouterProvider?.isAvailable()) {
             enhancerProvider = openRouterProvider;
-            enhancerModelId = toOpenRouterModelId(enhancerModel, prompt, complexityContext);
+            enhancerModelId = toOpenRouterModelId(enhancerModel, prompt, complexityContext, this.feedbackStore);
           }
         }
 
@@ -860,7 +903,7 @@ export class AIGateway {
             const openRouterProvider = this.providers.get('openrouter');
             if (openRouterProvider && openRouterProvider.isAvailable()) {
               provider = openRouterProvider;
-              modelToRequest = toOpenRouterModelId(candidateModel, prompt, complexityContext);
+              modelToRequest = toOpenRouterModelId(candidateModel, prompt, complexityContext, this.feedbackStore);
             } else {
               continue;
             }

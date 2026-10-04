@@ -269,3 +269,50 @@ test('пользователь с тарифом Pro имеет доступ к�
     await server.close();
   }
 });
+
+test('POST /api/chat/feedback сохраняет оценку ответа и GET /api/chat/feedback/analytics отдаёт статистику', async () => {
+  const server = await startTestServer();
+
+  try {
+    const conversation = await createConversation(server.baseUrl, 'Тест фидбека');
+    const compResponse = await postCompletion(
+      server.baseUrl,
+      completionBody(conversation.id, 'Привет'),
+    );
+    const events = await readSseEvents(compResponse);
+    const done = events.find((e) => e.event === 'done');
+    const { messageId } = JSON.parse(done!.data) as { messageId: string };
+
+    // 1. Отправляем лайк
+    const likeRes = await fetch(`${server.baseUrl}/api/chat/feedback`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        conversationId: conversation.id,
+        messageId,
+        rating: 'like',
+        modelId: 'gpt-6-astra',
+      }),
+    });
+    assert.equal(likeRes.status, 200);
+    const likeData = (await likeRes.json()) as { success: boolean; rating: string };
+    assert.equal(likeData.success, true);
+    assert.equal(likeData.rating, 'like');
+
+    // Проверяем, что в диалоге сообщение получило feedback: 'like'
+    const convAfterLike = await fetchConversation(server.baseUrl, conversation.id);
+    const msg = convAfterLike.messages.find((m) => m.id === messageId);
+    assert.equal(msg?.feedback, 'like');
+
+    // 2. Получаем аналитику
+    const analyticsRes = await fetch(`${server.baseUrl}/api/chat/feedback/analytics`);
+    assert.equal(analyticsRes.status, 200);
+    const analytics = (await analyticsRes.json()) as any;
+    assert.equal(analytics.summary.likes >= 1, true);
+    assert.ok(analytics.escalation);
+    assert.ok(typeof analytics.escalation.autoEscalateActive === 'boolean');
+  } finally {
+    await server.close();
+  }
+});
+

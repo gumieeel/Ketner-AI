@@ -202,3 +202,20 @@ export async function streamCompletion(
     }
   });
 }
+
+export interface SendFeedbackParams {
+  conversationId: string;
+  messageId: string;
+  rating: 'like' | 'dislike' | null;
+  modelId?: string;
+  reason?: string;
+  comment?: string;
+}
+
+export function sendFeedback(params: SendFeedbackParams): Promise<{ success: boolean }> {
+  return request('/chat/feedback', {
+    method: 'POST',
+    body: JSON.stringify(params),
+  });
+}
+

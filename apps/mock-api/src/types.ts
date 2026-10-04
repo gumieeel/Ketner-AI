@@ -110,6 +110,8 @@ export interface WorkspaceContext {
   indexedAt?: string;
 }
 
+export type FeedbackRating = 'like' | 'dislike';
+
 export interface Message {
   id: string;
   conversationId: string;
@@ -124,6 +126,8 @@ export interface Message {
   finishReason?: 'stop' | 'length' | 'cancelled' | 'error';
   /** Phase 2: Доступно ли продолжение генерации */
   canContinue?: boolean;
+  /** Пользовательская оценка ответа: лайк / дизлайк */
+  feedback?: FeedbackRating;
 }
 
 /**

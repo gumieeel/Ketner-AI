@@ -1,11 +1,11 @@
 import { Router } from 'express';
 import { ERROR_MESSAGES } from '../ai/answers.js';
-import { AIGateway } from '../ai/gateway.js';
+import { AIGateway, classifyPromptComplexity } from '../ai/gateway.js';
 import { canAccessModel, DEFAULT_MODEL_ID, resolveModel } from '../ai/models.js';
 import { delay, randomBetween } from '../ai/stream.js';
 import {} from '../config.js';
 import { sendError } from '../middleware/errors.js';
-import { usageStore as defaultUsageStore } from '../store/index.js';
+import { usageStore as defaultUsageStore, feedbackStore as defaultFeedbackStore, } from '../store/index.js';
 import { isVipUser, isVipEmail } from '../services/vip.js';
 import { PayloadGuard } from '../ai/payload-guard.js';
 const MAX_MESSAGES = 200;
@@ -68,12 +68,13 @@ function parseCompletionRequest(body) {
  *
  * Событий ровно три (`delta`, `done`, `error`) — столько же разбирает фронтенд.
  */
-export function createChatRouter({ store, userId, ai, subscriptionStore, userStore, usageStore = defaultUsageStore, gateway, }) {
+export function createChatRouter({ store, userId, ai, subscriptionStore, userStore, usageStore = defaultUsageStore, gateway, feedbackStore = defaultFeedbackStore, }) {
     const router = Router();
     const aiGateway = gateway ??
         new AIGateway({
             usageStore,
             aiConfig: ai,
+            feedbackStore,
         });
     router.post('/completions', async (request, response) => {
         const parsed = parseCompletionRequest(request.body);
@@ -240,6 +241,78 @@ export function createChatRouter({ store, userId, ai, subscriptionStore, userSto
         finally {
             response.off('close', onClientClose);
         }
+    });
+    /**
+     * Сбор пользовательской оценки ответа (лайк / дизлайк).
+     * Сохраняет оценку в сообщении диалога и регистрирует в FeedbackStore для анализа роутинга.
+     */
+    router.post('/feedback', (request, response) => {
+        const body = request.body;
+        if (typeof body.conversationId !== 'string' || !body.conversationId.trim()) {
+            sendError(response, 400, 'invalid_conversation_id', 'Поле conversationId обязательно');
+            return;
+        }
+        if (typeof body.messageId !== 'string' || !body.messageId.trim()) {
+            sendError(response, 400, 'invalid_message_id', 'Поле messageId обязательно');
+            return;
+        }
+        if (body.rating !== 'like' && body.rating !== 'dislike' && body.rating !== null) {
+            sendError(response, 400, 'invalid_rating', 'Поле rating должно быть "like", "dislike" или null');
+            return;
+        }
+        const conversationId = body.conversationId.trim();
+        const messageId = body.messageId.trim();
+        const rating = body.rating;
+        const activeUserId = request.user?.id ?? userId;
+        // 1. Обновляем сообщение в хранилище диалогов
+        const updatedMsg = store.updateMessageFeedback(activeUserId, conversationId, messageId, rating);
+        if (!updatedMsg) {
+            sendError(response, 404, 'message_not_found', 'Сообщение не найдено в диалоге');
+            return;
+        }
+        // 2. Определяем сложность запроса для анализа эскалации
+        const convData = store.get(activeUserId, conversationId);
+        let complexityLevel = 'simple';
+        if (convData) {
+            const msgIndex = convData.messages.findIndex((m) => m.id === messageId);
+            const prevUserMsg = msgIndex > 0 ? convData.messages[msgIndex - 1] : undefined;
+            if (prevUserMsg && prevUserMsg.role === 'user') {
+                complexityLevel = classifyPromptComplexity(prevUserMsg.content).level;
+            }
+        }
+        // 3. Записываем в FeedbackStore, если rating задан
+        let feedbackRecord = null;
+        if (rating !== null) {
+            feedbackRecord = feedbackStore.recordFeedback({
+                messageId,
+                conversationId,
+                userId: activeUserId,
+                modelId: typeof body.modelId === 'string' && body.modelId.trim()
+                    ? body.modelId.trim()
+                    : (updatedMsg.modelId ?? 'unknown'),
+                engineModelId: updatedMsg.modelId,
+                complexityLevel,
+                rating,
+                reason: typeof body.reason === 'string' ? body.reason : undefined,
+                comment: typeof body.comment === 'string' ? body.comment : undefined,
+            });
+        }
+        response.json({
+            success: true,
+            messageId,
+            conversationId,
+            rating,
+            feedback: feedbackRecord,
+        });
+    });
+    /**
+     * Получение аналитики оценок и статуса авто-эскалации лёгких моделей.
+     */
+    router.get('/feedback/analytics', (request, response) => {
+        const from = typeof request.query.from === 'string' ? request.query.from : undefined;
+        const to = typeof request.query.to === 'string' ? request.query.to : undefined;
+        const analytics = feedbackStore.getAnalytics({ from, to });
+        response.json(analytics);
     });
     return router;
 }

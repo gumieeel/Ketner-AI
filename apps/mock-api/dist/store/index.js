@@ -18,3 +18,7 @@ export const usageStore = new UsageStore(config.usageStoreFile);
 export { supportStore, createSupportStore } from './support-store.js';
 /** Хранилище использованных блокчейн-транзакций (защита от replay-атак). */
 export { usedTxStore, createUsedTxStore } from './used-tx-store.js';
+/** Хранилище пользовательских оценок (лайки/дизлайки) и аналитика эскалации моделей. */
+import { FeedbackStore } from './feedback-store.js';
+export { FeedbackStore, createFeedbackStore } from './feedback-store.js';
+export const feedbackStore = new FeedbackStore(config.feedbackStoreFile);

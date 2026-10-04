@@ -14,7 +14,9 @@ import {
   usageStore as defaultUsageStore,
   subscriptionStore as defaultSubscriptionStore,
   userStore as defaultUserStore,
+  feedbackStore as defaultFeedbackStore,
   type UsageStore,
+  type FeedbackStore,
 } from '../store/index.js';
 import type { SubscriptionStore } from '../store/subscription-store.js';
 import type { UserStore } from '../store/user-store.js';
@@ -32,6 +34,7 @@ export interface AdminRouterDeps {
   subscriptionStore?: SubscriptionStore;
   userStore?: UserStore;
   circuitBreaker?: CircuitBreaker;
+  feedbackStore?: FeedbackStore;
 }
 
 export function createAdminRouter({
@@ -40,6 +43,7 @@ export function createAdminRouter({
   subscriptionStore = defaultSubscriptionStore,
   userStore = defaultUserStore,
   circuitBreaker = defaultCircuitBreaker,
+  feedbackStore = defaultFeedbackStore,
 }: AdminRouterDeps = {}): Router {
   const router = Router();
 
@@ -169,11 +173,37 @@ export function createAdminRouter({
       planPricesUsd,
     });
 
+    const feedbackAnalytics = feedbackStore.getAnalytics({ from, to });
+
     res.json({
       metrics,
       alerts: metrics.alerts,
       hasNegativeMarginAlert: metrics.hasNegativeMarginAlert,
+      feedback: feedbackAnalytics,
+      escalation: feedbackAnalytics.escalation,
     });
+  });
+
+  // 4.2. Аналитика качества ответов и статус эскалации моделей
+  router.get('/feedback-analytics', (req: Request, res: Response): void => {
+    const from = typeof req.query.from === 'string' ? req.query.from : undefined;
+    const to = typeof req.query.to === 'string' ? req.query.to : undefined;
+    res.json(feedbackStore.getAnalytics({ from, to }));
+  });
+
+  // 4.3. Ручное управление авто-эскалацией (override)
+  router.post('/escalation/override', (req: Request, res: Response): void => {
+    const body = req.body as { active?: unknown };
+    if (body.active === null || typeof body.active === 'boolean') {
+      feedbackStore.setAutoEscalateOverride(body.active);
+      res.json({
+        success: true,
+        override: body.active,
+        status: feedbackStore.getAnalytics().escalation,
+      });
+      return;
+    }
+    sendError(res, 400, 'invalid_override_value', 'Поле active должно быть boolean или null');
   });
 
   // 5. Рентабельность пользователя (Profitability)
