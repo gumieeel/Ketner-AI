@@ -50,6 +50,7 @@ function writeSnapshot(file, snapshot) {
  */
 export function createConversationStore(file) {
     const snapshot = readSnapshot(file);
+    let dbDriver = null;
     const persist = () => writeSnapshot(file, snapshot);
     const findConversation = (userId, conversationId) => snapshot.conversations.find((conversation) => conversation.id === conversationId && conversation.userId === userId);
     /**
@@ -76,6 +77,7 @@ export function createConversationStore(file) {
                 if (conversation && userId) {
                     conversation.userId = userId;
                     persist();
+                    dbDriver?.onConversationCreated?.({ ...conversation })?.catch?.((err) => console.error('[db] Error persisting assigned conversation:', err));
                 }
             }
             if (!conversation) {
@@ -94,6 +96,7 @@ export function createConversationStore(file) {
             };
             snapshot.conversations.push(conversation);
             persist();
+            dbDriver?.onConversationCreated?.({ ...conversation })?.catch?.((err) => console.error('[db] Error persisting created conversation:', err));
             return { ...conversation };
         },
         rename(userId, conversationId, title) {
@@ -104,6 +107,7 @@ export function createConversationStore(file) {
             conversation.title = deriveTitle(title);
             conversation.updatedAt = new Date().toISOString();
             persist();
+            dbDriver?.onConversationRenamed?.({ ...conversation })?.catch?.((err) => console.error('[db] Error persisting renamed conversation:', err));
             return { ...conversation };
         },
         remove(userId, conversationId) {
@@ -115,6 +119,7 @@ export function createConversationStore(file) {
             // Удаление диалога каскадно удаляет его сообщения.
             snapshot.messages = snapshot.messages.filter((message) => message.conversationId !== conversationId);
             persist();
+            dbDriver?.onConversationRemoved?.(userId, conversationId)?.catch?.((err) => console.error('[db] Error persisting removed conversation:', err));
             return true;
         },
         saveTurn({ userId, conversationId, history, assistant }) {
@@ -183,6 +188,7 @@ export function createConversationStore(file) {
             }
             conversation.updatedAt = now;
             persist();
+            dbDriver?.onTurnSaved?.({ ...conversation }, restored, { ...assistantMessage })?.catch?.((err) => console.error('[db] Error persisting turn:', err));
             return { conversation: { ...conversation }, assistant: assistantMessage };
         },
         updateContextSummary(userId, conversationId, summary) {
@@ -194,6 +200,7 @@ export function createConversationStore(file) {
                 conversation.contextSummary = summary;
                 conversation.updatedAt = new Date().toISOString();
                 persist();
+                dbDriver?.onContextSummaryUpdated?.(userId, conversationId, summary)?.catch?.((err) => console.error('[db] Error persisting context summary:', err));
             }
         },
         updateMessageFeedback(userId, conversationId, messageId, feedback) {
@@ -211,7 +218,43 @@ export function createConversationStore(file) {
             message.feedback = feedback ?? undefined;
             conversation.updatedAt = new Date().toISOString();
             persist();
+            dbDriver?.onMessageFeedbackUpdated?.(userId, conversationId, messageId, feedback)?.catch?.((err) => console.error('[db] Error persisting message feedback:', err));
             return { ...message };
+        },
+        loadExternalSnapshot(conversations, messages) {
+            for (const inc of conversations) {
+                const idx = snapshot.conversations.findIndex((c) => c.id === inc.id);
+                if (idx >= 0) {
+                    snapshot.conversations[idx] = inc;
+                }
+                else {
+                    snapshot.conversations.push(inc);
+                }
+            }
+            for (const msg of messages) {
+                const idx = snapshot.messages.findIndex((m) => m.id === msg.id);
+                if (idx >= 0) {
+                    snapshot.messages[idx] = msg;
+                }
+                else {
+                    snapshot.messages.push(msg);
+                }
+            }
+            try {
+                persist();
+            }
+            catch {
+                // ignore in memory/readonly environments
+            }
+        },
+        setDbDriver(driver) {
+            dbDriver = driver;
+        },
+        getAllSnapshot() {
+            return {
+                conversations: [...snapshot.conversations],
+                messages: [...snapshot.messages],
+            };
         },
     };
 }

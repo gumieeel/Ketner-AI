@@ -12,6 +12,7 @@ export const LIGHT_ENGINES = new Set([
 export class FeedbackStore {
     records = [];
     filePath;
+    dbDriver = null;
     /** Ручной override для тестов и администрирования */
     autoEscalateOverride = null;
     /** Порог дизлайков для эскалации (25%) */
@@ -23,6 +24,21 @@ export class FeedbackStore {
         if (filePath) {
             this.load();
         }
+    }
+    setDbDriver(driver) {
+        this.dbDriver = driver;
+    }
+    loadExternalFeedbacks(incoming) {
+        for (const inc of incoming) {
+            const idx = this.records.findIndex((r) => r.messageId === inc.messageId || r.id === inc.id);
+            if (idx >= 0) {
+                this.records[idx] = inc;
+            }
+            else {
+                this.records.push(inc);
+            }
+        }
+        this.persist();
     }
     load() {
         if (!this.filePath || !existsSync(this.filePath)) {
@@ -71,6 +87,7 @@ export class FeedbackStore {
             };
             this.records[existingIndex] = updated;
             this.persist();
+            this.dbDriver?.onFeedbackRecorded?.({ ...updated })?.catch?.((err) => console.error('[db] Error persisting updated feedback:', err));
             return updated;
         }
         const record = {
@@ -88,6 +105,7 @@ export class FeedbackStore {
         };
         this.records.push(record);
         this.persist();
+        this.dbDriver?.onFeedbackRecorded?.({ ...record })?.catch?.((err) => console.error('[db] Error persisting created feedback:', err));
         return record;
     }
     getFeedback(messageId) {

@@ -31,6 +31,29 @@ export interface UserStore {
   setAdmin(id: string, isAdmin: boolean): User | null;
   linkTelegram(id: string, chatId: number | string, username?: string): User | null;
   unlinkTelegram(id: string): User | null;
+  /** Загрузить пользователей из внешнего источника (БД). */
+  loadExternalUsers?(users: StoredUser[]): void;
+  /** Установить драйвер персистентности в БД. */
+  setDbDriver?(driver: UserDbDriver | null): void;
+  /** Получить всех сохранённых пользователей со всеми техническими полями. */
+  getAllStoredUsers?(): StoredUser[];
+}
+
+export interface UserDbDriver {
+  onUserCreated?: (user: StoredUser) => Promise<void> | void;
+  onPlanUpdated?: (userId: string, plan: PlanId) => Promise<void> | void;
+  onVipUpdated?: (userId: string, isVip: boolean) => Promise<void> | void;
+  onAdminUpdated?: (userId: string, isAdmin: boolean) => Promise<void> | void;
+  onTelegramUpdated?: (
+    userId: string,
+    chatId: number | string | null,
+    username?: string | null,
+  ) => Promise<void> | void;
+  onPasswordUpdated?: (
+    userId: string,
+    salt: string,
+    passwordHash: string,
+  ) => Promise<void> | void;
 }
 
 interface Snapshot {
@@ -132,6 +155,7 @@ function writeSnapshot(file: string, snapshot: Snapshot): void {
  */
 export function createUserStore(file: string): UserStore {
   const snapshot = readSnapshot(file);
+  let dbDriver: UserDbDriver | null = null;
 
   const persist = (): void => writeSnapshot(file, snapshot);
 
@@ -185,6 +209,9 @@ export function createUserStore(file: string): UserStore {
 
       snapshot.users.push(newUser);
       persist();
+      dbDriver?.onUserCreated?.({ ...newUser })?.catch?.((err) =>
+        console.error('[db] Error persisting created user:', err),
+      );
 
       return toPublicUser(newUser);
     },
@@ -217,6 +244,9 @@ export function createUserStore(file: string): UserStore {
       user.salt = randomBytes(16).toString('hex');
       user.passwordHash = hashPassword(password, user.salt);
       persist();
+      dbDriver?.onPasswordUpdated?.(user.id, user.salt, user.passwordHash)?.catch?.((err) =>
+        console.error('[db] Error persisting updated password:', err),
+      );
       return toPublicUser(user);
     },
 
@@ -230,6 +260,9 @@ export function createUserStore(file: string): UserStore {
       }
       user.plan = plan;
       persist();
+      dbDriver?.onPlanUpdated?.(user.id, plan)?.catch?.((err) =>
+        console.error('[db] Error persisting plan update:', err),
+      );
       return toPublicUser(user);
     },
 
@@ -243,6 +276,9 @@ export function createUserStore(file: string): UserStore {
       }
       user.isVip = isVip;
       persist();
+      dbDriver?.onVipUpdated?.(user.id, isVip)?.catch?.((err) =>
+        console.error('[db] Error persisting VIP update:', err),
+      );
       return toPublicUser(user);
     },
 
@@ -256,6 +292,9 @@ export function createUserStore(file: string): UserStore {
       }
       user.isAdmin = isAdmin;
       persist();
+      dbDriver?.onAdminUpdated?.(user.id, isAdmin)?.catch?.((err) =>
+        console.error('[db] Error persisting admin update:', err),
+      );
       return toPublicUser(user);
     },
 
@@ -281,6 +320,9 @@ export function createUserStore(file: string): UserStore {
         user.telegramUsername = username.replace(/^@/, '');
       }
       persist();
+      dbDriver?.onTelegramUpdated?.(user.id, chatId, user.telegramUsername)?.catch?.((err) =>
+        console.error('[db] Error persisting Telegram link:', err),
+      );
       return toPublicUser(user);
     },
 
@@ -295,7 +337,36 @@ export function createUserStore(file: string): UserStore {
       delete user.telegramChatId;
       delete user.telegramUsername;
       persist();
+      dbDriver?.onTelegramUpdated?.(user.id, null, null)?.catch?.((err) =>
+        console.error('[db] Error persisting Telegram unlink:', err),
+      );
       return toPublicUser(user);
+    },
+
+    loadExternalUsers(users) {
+      for (const inc of users) {
+        const idx = snapshot.users.findIndex(
+          (u) => u.id === inc.id || u.email.toLowerCase() === inc.email.toLowerCase(),
+        );
+        if (idx >= 0) {
+          snapshot.users[idx] = inc;
+        } else {
+          snapshot.users.push(inc);
+        }
+      }
+      try {
+        persist();
+      } catch {
+        // ignore in memory/readonly environments
+      }
+    },
+
+    setDbDriver(driver) {
+      dbDriver = driver;
+    },
+
+    getAllStoredUsers() {
+      return [...snapshot.users];
     },
   };
 }

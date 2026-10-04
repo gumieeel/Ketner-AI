@@ -3,12 +3,13 @@ import { createApp } from './app.js';
 import { config } from './config.js';
 import { telegramBotService } from './telegram/bot.js';
 import { telegramSupportBotService } from './telegram/support-bot.js';
+import { initDatabaseSync } from './db/sync.js';
 
+// 1. Синхронизируем базу данных Supabase / PostgreSQL и таблицы
+await initDatabaseSync();
+
+// 2. Инициализируем Better Auth
 await initAuthDatabase(defaultBetterAuth);
-if (process.env.DATABASE_URL) {
-  console.log('✅ Successfully connected to PostgreSQL');
-  console.log('✅ BetterAuth tables synchronized');
-}
 const app = createApp({
   botService: telegramBotService,
   supportBotService: telegramSupportBotService,

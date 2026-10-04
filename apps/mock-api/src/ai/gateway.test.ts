@@ -860,6 +860,7 @@ test('Фаза 5: PayloadGuard — защита от гигантских соо
   const tooManyAttachments = Array.from({ length: 12 }, (_, i) => ({
     id: `att-${i}`,
     name: `file-${i}.txt`,
+    type: 'text/plain',
     category: 'code' as const,
     size: 100,
   }));
@@ -875,6 +876,7 @@ test('Фаза 5: PayloadGuard — защита от гигантских соо
     {
       id: 'big-file',
       name: 'big.zip',
+      type: 'application/zip',
       category: 'code' as const,
       size: 25 * 1024 * 1024, // 25 MB
     },

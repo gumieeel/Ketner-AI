@@ -1,4 +1,5 @@
-import { pgTable, text, timestamp, integer, uuid, boolean, json, numeric, index, } from 'drizzle-orm/pg-core';
+import { randomUUID } from 'node:crypto';
+import { pgTable, text, timestamp, integer, boolean, json, numeric, index, } from 'drizzle-orm/pg-core';
 import { relations } from 'drizzle-orm';
 // ==================== BetterAuth Tables ====================
 // Автоматически создаются BetterAuth, но дублируем для типизации
@@ -60,12 +61,18 @@ export const betterAuthVerification = pgTable('verification', {
 }));
 // ==================== Ketner AI Tables ====================
 export const users = pgTable('ketner_users', {
-    id: uuid('id').primaryKey().defaultRandom(),
+    id: text('id').primaryKey().$defaultFn(() => randomUUID()),
     // Связь с BetterAuth user по email
     betterAuthId: text('better_auth_id').unique().references(() => betterAuthUser.id),
     email: text('email').unique().notNull(),
     name: text('name').notNull(),
     plan: text('plan').default('free').notNull(), // free, pro, ultra
+    passwordHash: text('password_hash'),
+    salt: text('salt'),
+    isVip: boolean('is_vip').default(false),
+    isAdmin: boolean('is_admin').default(false),
+    telegramChatId: text('telegram_chat_id'),
+    telegramUsername: text('telegram_username'),
     tokensUsedThisMonth: integer('tokens_used_this_month').default(0),
     totalTokensUsed: integer('total_tokens_used').default(0),
     totalCostUsd: numeric('total_cost_usd', { precision: 10, scale: 2 }).default('0'),
@@ -76,13 +83,12 @@ export const users = pgTable('ketner_users', {
     planIdx: index('idx_ketner_users_plan').on(table.plan),
 }));
 export const conversations = pgTable('conversations', {
-    id: uuid('id').primaryKey().defaultRandom(),
-    userId: uuid('user_id')
-        .notNull()
-        .references(() => users.id, { onDelete: 'cascade' }),
+    id: text('id').primaryKey().$defaultFn(() => randomUUID()),
+    userId: text('user_id').notNull(),
     title: text('title'),
     selectedModel: text('selected_model').default('claude-3-5-sonnet-20241022'),
     systemPrompt: text('system_prompt'),
+    contextSummary: text('context_summary'),
     archived: boolean('archived').default(false),
     metadata: json('metadata'),
     createdAt: timestamp('created_at').defaultNow().notNull(),
@@ -92,19 +98,21 @@ export const conversations = pgTable('conversations', {
     createdAtIdx: index('idx_conversations_created_at').on(table.createdAt),
 }));
 export const messages = pgTable('messages', {
-    id: uuid('id').primaryKey().defaultRandom(),
-    conversationId: uuid('conversation_id')
-        .notNull()
-        .references(() => conversations.id, { onDelete: 'cascade' }),
+    id: text('id').primaryKey().$defaultFn(() => randomUUID()),
+    conversationId: text('conversation_id').notNull(),
     role: text('role').notNull(), // 'user' | 'assistant'
     content: text('content').notNull(),
     model: text('model'), // какая модель обработала сообщение
+    status: text('status').default('complete'),
+    finishReason: text('finish_reason'),
+    canContinue: boolean('can_continue').default(false),
+    feedback: text('feedback'), // 'like' | 'dislike'
     tokensUsed: integer('tokens_used').default(0),
     tokensInput: integer('tokens_input').default(0),
     tokensOutput: integer('tokens_output').default(0),
     costUsd: numeric('cost_usd', { precision: 10, scale: 6 }).default('0'),
     // Для edit/regenerate функционала
-    parentMessageId: uuid('parent_message_id'),
+    parentMessageId: text('parent_message_id'),
     isEdited: boolean('is_edited').default(false),
     editedAt: timestamp('edited_at'),
     metadata: json('metadata'), // для доп. info (стриминг статус и т.д.)
@@ -115,10 +123,8 @@ export const messages = pgTable('messages', {
     createdAtIdx: index('idx_messages_created_at').on(table.createdAt),
 }));
 export const subscriptions = pgTable('subscriptions', {
-    id: uuid('id').primaryKey().defaultRandom(),
-    userId: uuid('user_id')
-        .notNull()
-        .references(() => users.id, { onDelete: 'cascade' }),
+    id: text('id').primaryKey().$defaultFn(() => randomUUID()),
+    userId: text('user_id').notNull(),
     plan: text('plan').notNull(), // 'free', 'pro', 'ultra'
     status: text('status').default('active').notNull(), // active, canceled, past_due, incomplete
     stripeCustomerId: text('stripe_customer_id').unique(),
@@ -127,6 +133,7 @@ export const subscriptions = pgTable('subscriptions', {
     stripePriceId: text('stripe_price_id'),
     currentPeriodStart: timestamp('current_period_start'),
     currentPeriodEnd: timestamp('current_period_end'),
+    renewsAt: timestamp('renews_at'),
     canceledAt: timestamp('canceled_at'),
     cancelAtPeriodEnd: boolean('cancel_at_period_end').default(false),
     metadata: json('metadata'),
@@ -136,11 +143,25 @@ export const subscriptions = pgTable('subscriptions', {
     userIdIdx: index('idx_subscriptions_user_id').on(table.userId),
     statusIdx: index('idx_subscriptions_status').on(table.status),
 }));
+export const feedbacks = pgTable('feedbacks', {
+    id: text('id').primaryKey().$defaultFn(() => randomUUID()),
+    messageId: text('message_id').unique().notNull(),
+    conversationId: text('conversation_id').notNull(),
+    userId: text('user_id'),
+    rating: text('rating').notNull(), // 'like' | 'dislike'
+    model: text('model'),
+    engine: text('engine'),
+    promptComplexity: text('prompt_complexity'),
+    reason: text('reason'),
+    comment: text('comment'),
+    createdAt: timestamp('created_at').defaultNow().notNull(),
+}, (table) => ({
+    messageIdIdx: index('idx_feedbacks_message_id').on(table.messageId),
+    conversationIdIdx: index('idx_feedbacks_conversation_id').on(table.conversationId),
+}));
 export const billingEvents = pgTable('billing_events', {
-    id: uuid('id').primaryKey().defaultRandom(),
-    userId: uuid('user_id')
-        .notNull()
-        .references(() => users.id, { onDelete: 'cascade' }),
+    id: text('id').primaryKey().$defaultFn(() => randomUUID()),
+    userId: text('user_id').notNull(),
     type: text('type').notNull(), // 'payment', 'refund', 'upgrade', 'downgrade', 'usage_overage'
     amountUsd: numeric('amount_usd', { precision: 10, scale: 2 }).notNull(),
     currency: text('currency').default('usd'),
@@ -154,13 +175,9 @@ export const billingEvents = pgTable('billing_events', {
     createdAtIdx: index('idx_billing_events_created_at').on(table.createdAt),
 }));
 export const usageMetrics = pgTable('usage_metrics', {
-    id: uuid('id').primaryKey().defaultRandom(),
-    userId: uuid('user_id')
-        .notNull()
-        .references(() => users.id, { onDelete: 'cascade' }),
-    conversationId: uuid('conversation_id').references(() => conversations.id, {
-        onDelete: 'set null',
-    }),
+    id: text('id').primaryKey().$defaultFn(() => randomUUID()),
+    userId: text('user_id').notNull(),
+    conversationId: text('conversation_id'),
     model: text('model').notNull(),
     tokensInput: integer('tokens_input').notNull(),
     tokensOutput: integer('tokens_output').notNull(),

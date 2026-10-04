@@ -27,6 +27,7 @@ function writeSnapshot(file, snapshot) {
  */
 export function createSubscriptionStore(file) {
     const snapshot = readSnapshot(file);
+    let dbDriver = null;
     const persist = () => writeSnapshot(file, snapshot);
     return {
         get(userId) {
@@ -59,6 +60,7 @@ export function createSubscriptionStore(file) {
                 snapshot.subscriptions.push(updated);
             }
             persist();
+            dbDriver?.onSubscriptionUpdated?.({ ...updated })?.catch?.((err) => console.error('[db] Error persisting subscription checkout:', err));
             return updated;
         },
         cancel(userId) {
@@ -82,6 +84,7 @@ export function createSubscriptionStore(file) {
                 snapshot.subscriptions.push(updated);
             }
             persist();
+            dbDriver?.onSubscriptionUpdated?.({ ...updated })?.catch?.((err) => console.error('[db] Error persisting subscription cancel:', err));
             return updated;
         },
         set(subscription) {
@@ -94,7 +97,31 @@ export function createSubscriptionStore(file) {
                 snapshot.subscriptions.push(subscription);
             }
             persist();
+            dbDriver?.onSubscriptionUpdated?.({ ...subscription })?.catch?.((err) => console.error('[db] Error persisting subscription update:', err));
             return subscription;
+        },
+        loadExternalSubscriptions(subs) {
+            for (const inc of subs) {
+                const idx = snapshot.subscriptions.findIndex((s) => s.userId === inc.userId || s.userId.toLowerCase() === inc.userId.toLowerCase());
+                if (idx >= 0) {
+                    snapshot.subscriptions[idx] = inc;
+                }
+                else {
+                    snapshot.subscriptions.push(inc);
+                }
+            }
+            try {
+                persist();
+            }
+            catch {
+                // ignore in memory/readonly environments
+            }
+        },
+        setDbDriver(driver) {
+            dbDriver = driver;
+        },
+        getAllSubscriptions() {
+            return [...snapshot.subscriptions];
         },
     };
 }

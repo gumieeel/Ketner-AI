@@ -75,9 +75,14 @@ export const LIGHT_ENGINES = new Set([
   'anthropic/claude-haiku-4.5',
 ]);
 
+export interface FeedbackDbDriver {
+  onFeedbackRecorded?: (record: FeedbackRecord) => Promise<void> | void;
+}
+
 export class FeedbackStore {
   private records: FeedbackRecord[] = [];
   private filePath?: string;
+  private dbDriver: FeedbackDbDriver | null = null;
   /** Ручной override для тестов и администрирования */
   private autoEscalateOverride: boolean | null = null;
   /** Порог дизлайков для эскалации (25%) */
@@ -90,6 +95,22 @@ export class FeedbackStore {
     if (filePath) {
       this.load();
     }
+  }
+
+  public setDbDriver(driver: FeedbackDbDriver | null): void {
+    this.dbDriver = driver;
+  }
+
+  public loadExternalFeedbacks(incoming: FeedbackRecord[]): void {
+    for (const inc of incoming) {
+      const idx = this.records.findIndex((r) => r.messageId === inc.messageId || r.id === inc.id);
+      if (idx >= 0) {
+        this.records[idx] = inc;
+      } else {
+        this.records.push(inc);
+      }
+    }
+    this.persist();
   }
 
   private load(): void {
@@ -141,6 +162,9 @@ export class FeedbackStore {
       };
       this.records[existingIndex] = updated;
       this.persist();
+      this.dbDriver?.onFeedbackRecorded?.({ ...updated })?.catch?.((err) =>
+        console.error('[db] Error persisting updated feedback:', err),
+      );
       return updated;
     }
 
@@ -160,6 +184,9 @@ export class FeedbackStore {
 
     this.records.push(record);
     this.persist();
+    this.dbDriver?.onFeedbackRecorded?.({ ...record })?.catch?.((err) =>
+      console.error('[db] Error persisting created feedback:', err),
+    );
     return record;
   }
 

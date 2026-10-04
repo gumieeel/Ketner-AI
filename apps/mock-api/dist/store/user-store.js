@@ -89,6 +89,7 @@ function writeSnapshot(file, snapshot) {
  */
 export function createUserStore(file) {
     const snapshot = readSnapshot(file);
+    let dbDriver = null;
     const persist = () => writeSnapshot(file, snapshot);
     // Если файл создаётся впервые или пустой, сохраняем дефолтного пользователя
     try {
@@ -132,6 +133,7 @@ export function createUserStore(file) {
             };
             snapshot.users.push(newUser);
             persist();
+            dbDriver?.onUserCreated?.({ ...newUser })?.catch?.((err) => console.error('[db] Error persisting created user:', err));
             return toPublicUser(newUser);
         },
         verifyPassword(email, password) {
@@ -155,6 +157,7 @@ export function createUserStore(file) {
             user.salt = randomBytes(16).toString('hex');
             user.passwordHash = hashPassword(password, user.salt);
             persist();
+            dbDriver?.onPasswordUpdated?.(user.id, user.salt, user.passwordHash)?.catch?.((err) => console.error('[db] Error persisting updated password:', err));
             return toPublicUser(user);
         },
         updatePlan(id, plan) {
@@ -165,6 +168,7 @@ export function createUserStore(file) {
             }
             user.plan = plan;
             persist();
+            dbDriver?.onPlanUpdated?.(user.id, plan)?.catch?.((err) => console.error('[db] Error persisting plan update:', err));
             return toPublicUser(user);
         },
         setVip(id, isVip) {
@@ -175,6 +179,7 @@ export function createUserStore(file) {
             }
             user.isVip = isVip;
             persist();
+            dbDriver?.onVipUpdated?.(user.id, isVip)?.catch?.((err) => console.error('[db] Error persisting VIP update:', err));
             return toPublicUser(user);
         },
         setAdmin(id, isAdmin) {
@@ -185,6 +190,7 @@ export function createUserStore(file) {
             }
             user.isAdmin = isAdmin;
             persist();
+            dbDriver?.onAdminUpdated?.(user.id, isAdmin)?.catch?.((err) => console.error('[db] Error persisting admin update:', err));
             return toPublicUser(user);
         },
         findByTelegramChatId(chatId) {
@@ -203,6 +209,7 @@ export function createUserStore(file) {
                 user.telegramUsername = username.replace(/^@/, '');
             }
             persist();
+            dbDriver?.onTelegramUpdated?.(user.id, chatId, user.telegramUsername)?.catch?.((err) => console.error('[db] Error persisting Telegram link:', err));
             return toPublicUser(user);
         },
         unlinkTelegram(id) {
@@ -214,7 +221,31 @@ export function createUserStore(file) {
             delete user.telegramChatId;
             delete user.telegramUsername;
             persist();
+            dbDriver?.onTelegramUpdated?.(user.id, null, null)?.catch?.((err) => console.error('[db] Error persisting Telegram unlink:', err));
             return toPublicUser(user);
+        },
+        loadExternalUsers(users) {
+            for (const inc of users) {
+                const idx = snapshot.users.findIndex((u) => u.id === inc.id || u.email.toLowerCase() === inc.email.toLowerCase());
+                if (idx >= 0) {
+                    snapshot.users[idx] = inc;
+                }
+                else {
+                    snapshot.users.push(inc);
+                }
+            }
+            try {
+                persist();
+            }
+            catch {
+                // ignore in memory/readonly environments
+            }
+        },
+        setDbDriver(driver) {
+            dbDriver = driver;
+        },
+        getAllStoredUsers() {
+            return [...snapshot.users];
         },
     };
 }

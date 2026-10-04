@@ -7,6 +7,16 @@ export interface SubscriptionStore {
   checkout(userId: string, plan: PlanId): Subscription;
   cancel(userId: string): Subscription;
   set(subscription: Subscription): Subscription;
+  /** Загрузить подписки из внешнего источника (БД). */
+  loadExternalSubscriptions?(subs: Subscription[]): void;
+  /** Установить драйвер персистентности в БД. */
+  setDbDriver?(driver: SubscriptionDbDriver | null): void;
+  /** Получить все подписки. */
+  getAllSubscriptions?(): Subscription[];
+}
+
+export interface SubscriptionDbDriver {
+  onSubscriptionUpdated?: (subscription: Subscription) => Promise<void> | void;
 }
 
 interface Snapshot {
@@ -41,6 +51,7 @@ function writeSnapshot(file: string, snapshot: Snapshot): void {
  */
 export function createSubscriptionStore(file: string): SubscriptionStore {
   const snapshot = readSnapshot(file);
+  let dbDriver: SubscriptionDbDriver | null = null;
 
   const persist = (): void => writeSnapshot(file, snapshot);
 
@@ -82,6 +93,9 @@ export function createSubscriptionStore(file: string): SubscriptionStore {
       }
 
       persist();
+      dbDriver?.onSubscriptionUpdated?.({ ...updated })?.catch?.((err) =>
+        console.error('[db] Error persisting subscription checkout:', err),
+      );
       return updated;
     },
 
@@ -107,6 +121,9 @@ export function createSubscriptionStore(file: string): SubscriptionStore {
       }
 
       persist();
+      dbDriver?.onSubscriptionUpdated?.({ ...updated })?.catch?.((err) =>
+        console.error('[db] Error persisting subscription cancel:', err),
+      );
       return updated;
     },
 
@@ -123,7 +140,36 @@ export function createSubscriptionStore(file: string): SubscriptionStore {
       }
 
       persist();
+      dbDriver?.onSubscriptionUpdated?.({ ...subscription })?.catch?.((err) =>
+        console.error('[db] Error persisting subscription update:', err),
+      );
       return subscription;
+    },
+
+    loadExternalSubscriptions(subs) {
+      for (const inc of subs) {
+        const idx = snapshot.subscriptions.findIndex(
+          (s) => s.userId === inc.userId || s.userId.toLowerCase() === inc.userId.toLowerCase(),
+        );
+        if (idx >= 0) {
+          snapshot.subscriptions[idx] = inc;
+        } else {
+          snapshot.subscriptions.push(inc);
+        }
+      }
+      try {
+        persist();
+      } catch {
+        // ignore in memory/readonly environments
+      }
+    },
+
+    setDbDriver(driver) {
+      dbDriver = driver;
+    },
+
+    getAllSubscriptions() {
+      return [...snapshot.subscriptions];
     },
   };
 }
