@@ -11,7 +11,7 @@
  * - Fallback & Failover (автоматическое переключение при сбоях провайдеров)
  */
 import { ERROR_MESSAGES, pickAnswer } from './answers.js';
-import { semanticCache } from './cache.js';
+import { semanticCache, SemanticCache } from './cache.js';
 import { ContextOptimizer } from './context.js';
 import { modelRegistry, ECONOMY_SYSTEM_PROMPT, DEFAULT_SYSTEM_PROMPT, } from './model-registry.js';
 import { providerManager } from './providers/provider-factory.js';
@@ -21,19 +21,35 @@ import { EntitlementService } from '../services/entitlement.js';
 import { FairUseEngine } from '../services/fair-use.js';
 import { AutoRouter } from './auto-router.js';
 import { TierPipelineEngine, computeDynamicMaxTokens, } from './tier-pipeline.js';
-export function classifyPromptComplexity(prompt) {
+import { CircuitBreaker, defaultCircuitBreaker } from './circuit-breaker.js';
+import { PayloadGuard } from './payload-guard.js';
+export function classifyPromptComplexity(prompt, context) {
     if (!prompt || !prompt.trim()) {
         return { level: 'complex', category: 'general' };
     }
+    // Если есть вложения или проект — задача сразу переходит в категорию сложных
+    if (context?.hasAttachments || context?.hasWorkspace) {
+        return { level: 'complex', category: 'coding' };
+    }
     const classification = AutoRouter.classify(prompt);
     const trimmed = prompt.trim();
+    // Проверка истории: если в недавней истории был сложный контекст (код, длинные ответы, рассуждения),
+    // то короткая реплика («да», «продолжи», «ок») не должна сбрасывать сложность на deepseek
+    const historyIsComplex = Boolean(context?.history &&
+        context.history.length > 0 &&
+        context.history.slice(-4).some((m) => {
+            const text = m.content || '';
+            return (text.length > 250 ||
+                /```|function|class|interface|import|export|select|def |const |let |error|exception/i.test(text));
+        }));
+    const hasCodeOrTechnicalSyntax = /```|<pre>|SELECT\s+[\s\S]*?\s+FROM|INSERT\s+INTO|UPDATE\s+[\s\S]*?SET|CREATE\s+TABLE|function\s*\(|def\s+\w+\(|class\s+\w+|const\s+\w+\s*=|let\s+\w+\s*=|import\s+[\s\S]*?from|export\s+(default|const|class)|interface\s+\w+/i.test(trimmed);
     // 1. "Прям лёгкие вопросы": приветствия, благодарности, подтверждения, короткие реплики
     const isGreetingOrChitChat = /^(привет|хай|здравствуй|добр(ое|ый|ый день|ое утро|ый вечер)|hello|hi|hey|как дела|кто ты|что ты умеешь|спасибо|благодарю|ок|ok|ясно|понятно)[\s!?,.]*$/i.test(trimmed);
     const isTrivialGeneral = trimmed.length < 50 &&
         classification.complexity === 'simple' &&
         classification.category === 'general' &&
         !/(напиши|составь|придумай|объясни|расскажи|переведи|write|explain|translate|код|функци)/i.test(trimmed);
-    if (isGreetingOrChitChat || isTrivialGeneral) {
+    if ((isGreetingOrChitChat || isTrivialGeneral) && !historyIsComplex && !hasCodeOrTechnicalSyntax) {
         return { level: 'simple', category: classification.category };
     }
     // 2. Сложные задачи: глубокий код, математика, архитектура, системный дизайн, длинные формулировки (>500 символов)
@@ -42,9 +58,11 @@ export function classifyPromptComplexity(prompt) {
         classification.category === 'math' ||
         classification.category === 'reasoning' ||
         classification.category === 'research' ||
-        trimmed.length > 500;
+        hasCodeOrTechnicalSyntax ||
+        trimmed.length > 500 ||
+        historyIsComplex;
     if (isComplex) {
-        return { level: 'complex', category: classification.category };
+        return { level: 'complex', category: hasCodeOrTechnicalSyntax ? 'coding' : classification.category };
     }
     // 3. Умеренные / стандартные задачи
     return { level: 'moderate', category: classification.category };
@@ -66,8 +84,8 @@ export function classifyPromptComplexity(prompt) {
  *    - лёгкие: deepseek/deepseek-chat
  *    - средние и сложные: x-ai/grok-4.7
  */
-export function resolveEngineForModel(modelId, prompt) {
-    const { level } = classifyPromptComplexity(prompt);
+export function resolveEngineForModel(modelId, prompt, context) {
+    const { level } = classifyPromptComplexity(prompt, context);
     // 1. GPT-6 Astra
     if (modelId === 'gpt-6-astra') {
         if (level === 'simple') {
@@ -122,11 +140,11 @@ export function resolveEngineForModel(modelId, prompt) {
     }
     return { modelId, engineName: modelId, level };
 }
-export function resolveAstraEngine(prompt) {
-    return resolveEngineForModel('gpt-6-astra', prompt);
+export function resolveAstraEngine(prompt, context) {
+    return resolveEngineForModel('gpt-6-astra', prompt, context);
 }
-export function toOpenRouterModelId(model, prompt) {
-    const resolution = resolveEngineForModel(model.id, prompt);
+export function toOpenRouterModelId(model, prompt, context) {
+    const resolution = resolveEngineForModel(model.id, prompt, context);
     if (resolution.modelId !== model.id) {
         return resolution.modelId;
     }
@@ -178,6 +196,30 @@ function buildWorkspaceContextBlock(ws, language) {
 - You are acting as a full-fledged agentic coding assistant (like Antigravity / Cursor) connected directly to this codebase.
 - When asked to analyze the repository/workspace or when the user provides a request regarding this project, provide a thorough, structured, and complete technical response.
 - Cover: 1) Architecture & Tech Stack, 2) Directory structure & key modules, 3) Entry points & data flow, 4) Next steps and ready-to-use solutions.
+- When creating, modifying, editing, or replacing files in the workspace:
+  Always include structured \`\`\`file-actions blocks in your response so the client UI can render a visual Diff Viewer and allow the user to apply them directly to local disk or GitHub:
+  \`\`\`file-actions
+  [
+    {
+      "action": "write",
+      "path": "path/to/file.ts",
+      "description": "Short summary of changes",
+      "content": "Full content of the file"
+    }
+  ]
+  \`\`\`
+  Or for targeted replacements in existing files:
+  \`\`\`file-actions
+  [
+    {
+      "action": "replace",
+      "path": "path/to/file.ts",
+      "description": "Short summary of replacement",
+      "targetContent": "exact existing code snippet to replace",
+      "replacementContent": "new replacement code snippet"
+    }
+  ]
+  \`\`\`
 - Never truncate or cut off your answer. Use clean Markdown headers and code blocks.
 - If the user prompt is typed in an incorrect keyboard layout (e.g. "ghjfyfkbpbhqe htgjpbnjhbq" for "проанализируй репозиторий"), automatically recognize the intended meaning and respond in the appropriate language.
 - Never claim you cannot work with local files or repos, as the files and structure are loaded above for you.`
@@ -185,6 +227,30 @@ function buildWorkspaceContextBlock(ws, language) {
 - Ты работаешь в режиме полноценного инженерного AI-ассистента (как Antigravity / Cursor), напрямую подключенного к этой кодовой базе.
 - При запросе анализа репозитория или папки давай глубокий, структурированный и завершённый технический отчёт.
 - Освети: 1) Архитектуру и стек технологий проекта, 2) Назначение ключевых директорий и модулей, 3) Входные точки (entry points) и потоки данных, 4) Готовность писать код, вносить правки и решать задачи по проекту.
+- При создании, перезаписи, модификации или редактировании файлов в проекте:
+  Обязательно приводи изменения в виде структурированного блока \`\`\`file-actions, чтобы веб-интерфейс отобразил визуальный Diff Viewer и позволил пользователю применить правки на локальный диск или закоммитить/создать PR в GitHub в один клик:
+  \`\`\`file-actions
+  [
+    {
+      "action": "write",
+      "path": "src/utils/example.ts",
+      "description": "Краткое описание создаваемого или перезаписываемого файла",
+      "content": "Полное новое содержимое файла"
+    }
+  ]
+  \`\`\`
+  Или для точечной замены блока кода в существующем файле:
+  \`\`\`file-actions
+  [
+    {
+      "action": "replace",
+      "path": "src/utils/example.ts",
+      "description": "Краткое описание замены",
+      "targetContent": "точный фрагмент существующего кода для замены",
+      "replacementContent": "новый фрагмент заменяющего кода"
+    }
+  ]
+  \`\`\`
 - Никогда не обрывай ответ на полуслове. Используй качественное Markdown-форматирование, списки и блоки кода.
 - Если запрос пользователя набран в ошибочной раскладке (например, «ghjfyfkbpbhqe htgjpbnjhbq» вместо «проанализируй репозиторий»), автоматически распознай смысл и ответь на русском языке по существу.
 - Никогда не говори, что ты не имеешь доступа к локальным файлам или репозиторию, так как все файлы и структура проекта уже переданы тебе выше.`;
@@ -234,11 +300,16 @@ export class AIGateway {
     providers;
     usageStore;
     aiConfig;
+    circuitBreaker;
     constructor(deps) {
         this.registry = deps.registry ?? modelRegistry;
         this.providers = deps.providers ?? providerManager;
         this.usageStore = deps.usageStore;
         this.aiConfig = deps.aiConfig;
+        this.circuitBreaker = deps.circuitBreaker ?? defaultCircuitBreaker;
+    }
+    getCircuitBreaker() {
+        return this.circuitBreaker;
     }
     /**
      * Стриминговая генерация ответа через AI Gateway.
@@ -247,6 +318,28 @@ export class AIGateway {
         const startTime = Date.now();
         const activeUserId = req.userId;
         const language = req.language;
+        // 0. Payload Guard (Phase 5: валидация размера сообщений и вложений)
+        const guardResult = PayloadGuard.validate(req.messages, {
+            language,
+            attachments: req.attachments,
+        });
+        if (!guardResult.valid) {
+            callbacks.onError({
+                code: guardResult.code ?? 'payload_too_large',
+                message: guardResult.message ?? ERROR_MESSAGES[language],
+            });
+            return;
+        }
+        const clientAbortController = new AbortController();
+        if (req.signal) {
+            if (req.signal.aborted) {
+                clientAbortController.abort();
+            }
+            else {
+                req.signal.addEventListener('abort', () => clientAbortController.abort(), { once: true });
+            }
+        }
+        const combinedIsCancelled = () => isCancelled() || clientAbortController.signal.aborted;
         // 1. Определение эффективного плана и лимитов
         // Примечание: req.userPlan предварительно резолвится с учётом VIP-элевации (isVipUser -> 'ultra')
         // upstream в chat.ts перед вызовом gateway.stream().
@@ -265,6 +358,15 @@ export class AIGateway {
         const rawPrompt = [...req.messages].reverse().find((m) => m.role === 'user')?.content ?? '';
         const decodedPrompt = convertLayoutIfInverted(rawPrompt);
         const prompt = decodedPrompt;
+        const activeWorkspace = req.workspaceContext ??
+            req.messages.slice().reverse().find((m) => m.workspaceContext)?.workspaceContext;
+        const activeAttachments = req.attachments ??
+            req.messages.slice().reverse().find((m) => m.attachments && m.attachments.length > 0)?.attachments;
+        const complexityContext = {
+            history: req.messages.slice(0, -1),
+            hasAttachments: Boolean(activeAttachments && activeAttachments.length > 0),
+            hasWorkspace: Boolean(activeWorkspace),
+        };
         if (req.modelId === 'auto') {
             pipelineStrategy = TierPipelineEngine.resolveStrategy(prompt, {
                 userPlan: effectivePlan,
@@ -284,7 +386,7 @@ export class AIGateway {
             }
             else {
                 targetModel = resolved;
-                const resolution = resolveEngineForModel(targetModel.id, prompt);
+                const resolution = resolveEngineForModel(targetModel.id, prompt, complexityContext);
                 if ([
                     'gpt-6-astra',
                     'claude-fable',
@@ -326,6 +428,7 @@ export class AIGateway {
                 estimatedCost: 0,
                 latencyMs: Date.now() - startTime,
                 status: decision.code === 'concurrency_limit' ? 'concurrency_limited' : 'rate_limited',
+                source: 'provider',
             });
             callbacks.onError({
                 code: decision.code,
@@ -351,10 +454,6 @@ export class AIGateway {
             const systemPrompt = isBudgetExceeded
                 ? `${baseSystemPrompt} ${language === 'en' ? 'Keep responses concise and direct.' : 'Отвечай максимально кратко и по существу.'}`
                 : baseSystemPrompt;
-            const activeWorkspace = req.workspaceContext ??
-                req.messages.slice().reverse().find((m) => m.workspaceContext)?.workspaceContext;
-            const activeAttachments = req.attachments ??
-                req.messages.slice().reverse().find((m) => m.attachments && m.attachments.length > 0)?.attachments;
             let effectiveSystemPrompt = systemPrompt;
             if (activeWorkspace) {
                 effectiveSystemPrompt += buildWorkspaceContextBlock(activeWorkspace, language);
@@ -362,6 +461,7 @@ export class AIGateway {
             if (activeAttachments && activeAttachments.length > 0) {
                 effectiveSystemPrompt += buildAttachmentsBlock(activeAttachments, language);
             }
+            let generatedSummary;
             const optimizedMessages = ContextOptimizer.optimize(req.messages.map((m, idx) => ({
                 role: m.role,
                 content: idx === req.messages.length - 1 && m.role === 'user' && decodedPrompt !== rawPrompt
@@ -369,18 +469,34 @@ export class AIGateway {
                     : m.content,
             })), {
                 maxMessages: maxContextMessages,
+                maxTokens: targetModel.contextWindow,
                 systemPrompt: effectiveSystemPrompt,
                 language,
+                existingSummary: req.cachedSummary,
+                onSummaryGenerated: (summary) => {
+                    generatedSummary = summary;
+                },
             });
             // 5.1. Проверка семантического кэша (Semantic & Query Caching)
-            const cachedHit = semanticCache.get(targetModel.id, language, prompt);
+            const userScope = effectivePlan === 'free' ? 'shared' : activeUserId;
+            const historyHash = SemanticCache.computeHistoryHash(req.messages, 3);
+            const hasAttachments = Boolean(activeAttachments && activeAttachments.length > 0);
+            const cachedHit = !hasAttachments
+                ? semanticCache.get(targetModel.id, language, prompt, userScope, historyHash)
+                : null;
             if (cachedHit && !isCancelled()) {
+                let cacheTtft = null;
                 await streamText(cachedHit.response, {
                     thinkingMs: [5, 10],
                     chunkMs: [5, 10],
                     random: this.aiConfig.random,
                     isCancelled,
-                    onDelta: callbacks.onDelta,
+                    onDelta: (delta) => {
+                        if (cacheTtft === null) {
+                            cacheTtft = Date.now() - startTime;
+                        }
+                        callbacks.onDelta(delta);
+                    },
                 });
                 const latencyMs = Date.now() - startTime;
                 this.usageStore.recordUsage({
@@ -394,7 +510,9 @@ export class AIGateway {
                     estimatedCost: 0,
                     actualCost: 0,
                     latencyMs,
+                    ttftMs: cacheTtft,
                     status: 'success',
+                    source: 'cache',
                 });
                 if (!isCancelled()) {
                     callbacks.onDone({
@@ -402,6 +520,9 @@ export class AIGateway {
                         outputTokens: cachedHit.outputTokens,
                         selectedModel: { id: targetModel.id, name: targetModel.name },
                         routingReason: `${routingReason} (Semantic Cache Hit)`,
+                        source: 'cache',
+                        finishReason: 'stop',
+                        canContinue: false,
                     });
                 }
                 return;
@@ -411,6 +532,8 @@ export class AIGateway {
             let success = false;
             let streamedResponse = null;
             let usedModel = targetModel;
+            let doublePassCost = 0;
+            let firstTokenMs = null;
             const hasWorkspaceOrAttachments = Boolean(activeWorkspace ||
                 (activeAttachments && activeAttachments.length > 0));
             const dynamicMaxTokens = computeDynamicMaxTokens({
@@ -451,7 +574,7 @@ export class AIGateway {
                     const openRouterProvider = this.providers.get('openrouter');
                     if (openRouterProvider?.isAvailable()) {
                         draftProvider = openRouterProvider;
-                        draftModelId = toOpenRouterModelId(draftModel, prompt);
+                        draftModelId = toOpenRouterModelId(draftModel, prompt, complexityContext);
                     }
                 }
                 let enhancerProvider = this.providers.get(enhancerModel.provider);
@@ -460,7 +583,7 @@ export class AIGateway {
                     const openRouterProvider = this.providers.get('openrouter');
                     if (openRouterProvider?.isAvailable()) {
                         enhancerProvider = openRouterProvider;
-                        enhancerModelId = toOpenRouterModelId(enhancerModel, prompt);
+                        enhancerModelId = toOpenRouterModelId(enhancerModel, prompt, complexityContext);
                     }
                 }
                 if (draftProvider?.isAvailable() && enhancerProvider?.isAvailable()) {
@@ -473,7 +596,8 @@ export class AIGateway {
                             maxTokens: Math.min(draftModel.maxOutputTokens, 1500),
                         });
                         if (draftRes.content && !isCancelled()) {
-                            // Шаг 2: Стриминг отполированного ответа пользователю (локализованная инструкция)
+                            // Шаг 2: Стриминг отполированного ответа пользователю
+                            // Во втором проходе передаём и вопрос пользователя, и черновик (Phase 1)
                             const modText = pipelineStrategy.promptModifier
                                 ? typeof pipelineStrategy.promptModifier === 'string'
                                     ? pipelineStrategy.promptModifier
@@ -481,7 +605,9 @@ export class AIGateway {
                                 : (language === 'ru'
                                     ? 'Улучши этот ответ. Сделай его более чётким, структурированным и лаконичным:\n\n'
                                     : 'Improve this answer. Make it clearer, structured and concise:\n\n');
-                            const enhanceInstruction = `${modText}${draftRes.content}`;
+                            const enhanceInstruction = language === 'ru'
+                                ? `Вопрос пользователя:\n${prompt}\n\nЧерновой ответ:\n${draftRes.content}\n\nИнструкция:\n${modText}`
+                                : `User query:\n${prompt}\n\nDraft answer:\n${draftRes.content}\n\nInstruction:\n${modText}`;
                             usedModel = enhancerModel;
                             streamedResponse = await enhancerProvider.streamText({
                                 model: enhancerModelId,
@@ -492,11 +618,20 @@ export class AIGateway {
                                 stream: true,
                                 maxTokens: Math.max(Math.min(enhancerModel.maxOutputTokens, entitlements.maxTokens), 2048),
                             }, {
-                                onDelta: callbacks.onDelta,
+                                onDelta: (delta) => {
+                                    if (firstTokenMs === null) {
+                                        firstTokenMs = Date.now() - startTime;
+                                    }
+                                    callbacks.onDelta(delta);
+                                },
                                 isCancelled,
                             });
                             if (streamedResponse && streamedResponse.content.length > 0) {
+                                // Суммируем токены и себестоимость обоих проходов (Phase 1)
                                 streamedResponse.usage.inputTokens += draftRes.usage.inputTokens;
+                                streamedResponse.usage.outputTokens += draftRes.usage.outputTokens;
+                                const draftCostResult = CostCalculator.calculate(draftRes.usage, draftModel.pricing);
+                                doublePassCost = draftCostResult.totalCost;
                                 success = true;
                             }
                         }
@@ -509,7 +644,7 @@ export class AIGateway {
             // 6.1. Прямой стриминг модели (если double-pass не применялся или не удался)
             if (!isTestEnv && !success) {
                 for (const candidateModel of modelsToTry) {
-                    if (isCancelled())
+                    if (combinedIsCancelled())
                         break;
                     let provider = this.providers.get(candidateModel.provider);
                     let modelToRequest = candidateModel.providerModelId;
@@ -517,11 +652,29 @@ export class AIGateway {
                         const openRouterProvider = this.providers.get('openrouter');
                         if (openRouterProvider && openRouterProvider.isAvailable()) {
                             provider = openRouterProvider;
-                            modelToRequest = toOpenRouterModelId(candidateModel, prompt);
+                            modelToRequest = toOpenRouterModelId(candidateModel, prompt, complexityContext);
                         }
                         else {
                             continue;
                         }
+                    }
+                    const activeProviderType = provider.type;
+                    // Phase 5: Проверка Circuit Breaker для провайдера
+                    if (this.circuitBreaker.isOpen(activeProviderType)) {
+                        console.warn(`[ai-gateway] Circuit breaker OPEN для ${activeProviderType}, быстрый переход к следующему fallback`);
+                        continue;
+                    }
+                    const providerTimeoutMs = req.providerTimeoutMs ?? 25_000;
+                    const attemptController = new AbortController();
+                    const timeoutId = setTimeout(() => {
+                        attemptController.abort(new Error(`Timeout: provider ${activeProviderType} call timed out after ${providerTimeoutMs}ms`));
+                    }, providerTimeoutMs);
+                    const abortHandler = () => attemptController.abort();
+                    if (clientAbortController.signal.aborted) {
+                        attemptController.abort();
+                    }
+                    else {
+                        clientAbortController.signal.addEventListener('abort', abortHandler, { once: true });
                     }
                     try {
                         usedModel = candidateModel;
@@ -545,22 +698,60 @@ export class AIGateway {
                             messages: optimizedMessages,
                             stream: true,
                             maxTokens: Math.min(candidateModel.maxOutputTokens, maxTokensToUse),
+                            signal: attemptController.signal,
                         }, {
-                            onDelta: callbacks.onDelta,
-                            isCancelled,
+                            onDelta: (delta) => {
+                                if (firstTokenMs === null) {
+                                    firstTokenMs = Date.now() - startTime;
+                                }
+                                callbacks.onDelta(delta);
+                            },
+                            isCancelled: () => combinedIsCancelled() || attemptController.signal.aborted,
                         });
+                        clearTimeout(timeoutId);
+                        clientAbortController.signal.removeEventListener('abort', abortHandler);
                         if (streamedResponse && streamedResponse.content.length > 0) {
+                            this.circuitBreaker.recordSuccess(activeProviderType);
                             success = true;
                             break;
                         }
+                        else {
+                            this.circuitBreaker.recordFailure(activeProviderType, new Error('Empty response from provider'));
+                        }
                     }
                     catch (providerError) {
-                        console.warn(`[ai-gateway] Провайдер ${candidateModel.provider} (модель ${candidateModel.name}) вернул ошибку:`, providerError);
+                        clearTimeout(timeoutId);
+                        clientAbortController.signal.removeEventListener('abort', abortHandler);
+                        this.circuitBreaker.recordFailure(activeProviderType, providerError);
+                        console.warn(`[ai-gateway] Провайдер ${activeProviderType} (модель ${candidateModel.name}) вернул ошибку:`, providerError);
                     }
                 }
             }
             let fallbackContent = '';
+            let responseSource = 'provider';
             if (!success && !isCancelled()) {
+                if (!isTestEnv) {
+                    // Phase 1: если все провайдеры упали в проде — честная ошибка, не списываем лимиты
+                    callbacks.onError({
+                        code: 'provider_error',
+                        message: ERROR_MESSAGES[language],
+                    });
+                    this.usageStore.recordUsage({
+                        userId: activeUserId,
+                        conversationId: req.conversationId,
+                        modelId: targetModel.id,
+                        provider: targetModel.provider,
+                        inputTokens: 0,
+                        outputTokens: 0,
+                        estimatedCost: 0,
+                        latencyMs: Date.now() - startTime,
+                        status: 'error',
+                        source: 'provider',
+                    });
+                    return;
+                }
+                // В test / dev режиме используем шаблонный генератор
+                responseSource = 'template';
                 const effectiveModelName = req.modelId && req.modelId !== 'auto'
                     ? (targetModel?.name ?? 'DeepSeek V4.1 Flash')
                     : 'DeepSeek V4.1 Flash';
@@ -571,6 +762,9 @@ export class AIGateway {
                     random: this.aiConfig.random,
                     isCancelled,
                     onDelta: (delta) => {
+                        if (firstTokenMs === null) {
+                            firstTokenMs = Date.now() - startTime;
+                        }
                         fallbackContent += delta;
                         callbacks.onDelta(delta);
                     },
@@ -596,6 +790,9 @@ export class AIGateway {
                 cachedTokens: streamedResponse?.usage.cachedTokens,
                 reasoningTokens: streamedResponse?.usage.reasoningTokens,
             }, usedModel.pricing);
+            const totalEstimatedCost = costResult.totalCost + doublePassCost;
+            const finishReason = streamedResponse?.finishReason ?? (isCancelled() ? 'cancelled' : 'stop');
+            const canContinue = finishReason === 'length';
             this.usageStore.recordUsage({
                 userId: activeUserId,
                 conversationId: req.conversationId,
@@ -605,16 +802,24 @@ export class AIGateway {
                 outputTokens,
                 cachedTokens: streamedResponse?.usage.cachedTokens,
                 reasoningTokens: streamedResponse?.usage.reasoningTokens,
-                estimatedCost: costResult.totalCost,
+                estimatedCost: totalEstimatedCost,
                 actualCost: streamedResponse?.cost ?? null,
                 latencyMs,
+                ttftMs: firstTokenMs,
                 status: isCancelled() ? 'cancelled' : 'success',
+                source: responseSource,
             });
             if (!isCancelled()) {
                 if (streamedResponse?.content) {
                     semanticCache.set(targetModel.id, language, prompt, streamedResponse.content, {
                         inputTokens,
                         outputTokens,
+                    }, {
+                        userScope,
+                        historyHash,
+                        source: responseSource,
+                        finishReason,
+                        hasAttachments,
                     });
                 }
                 callbacks.onDone({
@@ -622,6 +827,10 @@ export class AIGateway {
                     outputTokens,
                     selectedModel: { id: usedModel.id, name: usedModel.name },
                     routingReason,
+                    source: responseSource,
+                    finishReason,
+                    canContinue,
+                    contextSummary: generatedSummary,
                 });
             }
         }

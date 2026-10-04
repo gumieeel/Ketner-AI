@@ -19,7 +19,7 @@ export class AnthropicProvider {
         return this.apiKey.length > 0;
     }
     buildPayload(options, stream) {
-        let systemPrompt;
+        let systemPrompt = options.systemPrompt;
         const messages = [];
         for (const msg of options.messages) {
             if (msg.role === 'system') {
@@ -42,7 +42,31 @@ export class AnthropicProvider {
             stream,
         };
         if (systemPrompt) {
-            payload.system = systemPrompt;
+            // Phase 3: Prompt caching для системного промпта
+            payload.system = [
+                {
+                    type: 'text',
+                    text: systemPrompt,
+                    cache_control: { type: 'ephemeral' },
+                },
+            ];
+        }
+        // Phase 3: Prompt caching для стабильной части истории (сообщение перед последним вопросом)
+        if (messages.length > 2) {
+            const checkpointIndex = messages.length - 2;
+            const target = messages[checkpointIndex];
+            if (target && typeof target.content === 'string') {
+                messages[checkpointIndex] = {
+                    role: target.role,
+                    content: [
+                        {
+                            type: 'text',
+                            text: target.content,
+                            cache_control: { type: 'ephemeral' },
+                        },
+                    ],
+                };
+            }
         }
         if (options.temperature !== undefined) {
             payload.temperature = options.temperature;
@@ -54,6 +78,7 @@ export class AnthropicProvider {
             'Content-Type': 'application/json',
             'x-api-key': this.apiKey,
             'anthropic-version': this.apiVersion,
+            'anthropic-beta': 'prompt-caching-2024-07-31',
         };
     }
     async generateText(options) {
@@ -72,12 +97,14 @@ export class AnthropicProvider {
         const textBlocks = json.content?.filter((c) => c.type === 'text') ?? [];
         const content = textBlocks.map((b) => b.text ?? '').join('');
         const finishReason = json.stop_reason === 'max_tokens' ? 'length' : 'stop';
+        const cachedTokens = json.usage?.cache_read_input_tokens;
+        const baseInputTokens = json.usage?.input_tokens ?? Math.ceil(content.length / 4);
         return {
             content,
             usage: {
-                inputTokens: json.usage?.input_tokens ?? Math.ceil(content.length / 4),
+                inputTokens: baseInputTokens + (cachedTokens ?? 0),
                 outputTokens: json.usage?.output_tokens ?? Math.ceil(content.length / 4),
-                cachedTokens: json.usage?.cache_read_input_tokens,
+                cachedTokens: cachedTokens && cachedTokens > 0 ? cachedTokens : undefined,
             },
             finishReason,
         };
@@ -131,8 +158,9 @@ export class AnthropicProvider {
                         const parsed = JSON.parse(dataStr);
                         const type = parsed.type;
                         if (type === 'message_start' && parsed.message?.usage) {
-                            finalUsage.inputTokens = parsed.message.usage.input_tokens ?? 0;
-                            finalUsage.cachedTokens = parsed.message.usage.cache_read_input_tokens;
+                            const cached = parsed.message.usage.cache_read_input_tokens ?? 0;
+                            finalUsage.inputTokens = (parsed.message.usage.input_tokens ?? 0) + cached;
+                            finalUsage.cachedTokens = cached > 0 ? cached : undefined;
                         }
                         else if (type === 'content_block_delta' && parsed.delta?.text) {
                             const delta = parsed.delta.text;

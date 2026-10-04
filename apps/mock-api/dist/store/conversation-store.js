@@ -159,6 +159,8 @@ export function createConversationStore(file) {
                 createdAt: now,
                 status: assistant.status,
                 modelId: assistant.modelId,
+                finishReason: assistant.finishReason,
+                canContinue: assistant.canContinue,
             };
             // История из запроса заменяет сохранённую: так работают правка сообщения,
             // повторная генерация и остановка на середине ответа.
@@ -176,6 +178,17 @@ export function createConversationStore(file) {
             conversation.updatedAt = now;
             persist();
             return { conversation: { ...conversation }, assistant: assistantMessage };
+        },
+        updateContextSummary(userId, conversationId, summary) {
+            let conversation = findConversation(userId, conversationId);
+            if (!conversation) {
+                conversation = snapshot.conversations.find((c) => c.id === conversationId);
+            }
+            if (conversation) {
+                conversation.contextSummary = summary;
+                conversation.updatedAt = new Date().toISOString();
+                persist();
+            }
         },
     };
 }

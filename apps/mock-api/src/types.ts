@@ -86,6 +86,7 @@ export interface MessageAttachment {
   category: AttachmentCategory;
   url?: string;
   contentPreview?: string;
+  extractedText?: string;
 }
 
 export type WorkspaceType = 'local_folder' | 'git_repo';

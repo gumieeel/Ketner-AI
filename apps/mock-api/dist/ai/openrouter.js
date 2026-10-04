@@ -58,7 +58,7 @@ export async function streamOpenRouter(options) {
                     model: targetModel,
                     messages: payloadMessages,
                     stream: true,
-                    max_tokens: 2048,
+                    max_tokens: options.maxTokens ?? 4096,
                 }),
             });
             if (!response.ok || !response.body) {

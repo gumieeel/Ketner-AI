@@ -7,6 +7,7 @@ import {} from '../config.js';
 import { sendError } from '../middleware/errors.js';
 import { usageStore as defaultUsageStore } from '../store/index.js';
 import { isVipUser, isVipEmail } from '../services/vip.js';
+import { PayloadGuard } from '../ai/payload-guard.js';
 const MAX_MESSAGES = 200;
 const MAX_CONTENT_LENGTH = 200000;
 function parseCompletionRequest(body) {
@@ -80,6 +81,13 @@ export function createChatRouter({ store, userId, ai, subscriptionStore, userSto
             sendError(response, 400, 'invalid_request', parsed.message);
             return;
         }
+        const guardResult = PayloadGuard.validate(parsed.value.messages, {
+            language: parsed.value.language,
+        });
+        if (!guardResult.valid) {
+            sendError(response, 400, guardResult.code ?? 'payload_too_large', guardResult.message ?? 'Payload too large');
+            return;
+        }
         const { conversationId, modelId, language, messages, userId: bodyUserId, userEmail: bodyEmail, userPlan: bodyPlan, } = parsed.value;
         let activeUserId = request.userId ?? bodyUserId ?? userId;
         if (!store.get(activeUserId, conversationId)) {
@@ -135,8 +143,10 @@ export function createChatRouter({ store, userId, ai, subscriptionStore, userSto
         });
         response.flushHeaders();
         let cancelled = false;
+        const clientAbortController = new AbortController();
         const onClientClose = () => {
             cancelled = true;
+            clientAbortController.abort();
         };
         response.on('close', onClientClose);
         const writeEvent = (event, payload) => {
@@ -145,12 +155,13 @@ export function createChatRouter({ store, userId, ai, subscriptionStore, userSto
             }
             response.write(`event: ${event}\ndata: ${JSON.stringify(payload)}\n\n`);
         };
-        const finishTurn = (content, status, assistantModelId = model.id) => {
+        const existingConversation = store.get(activeUserId, conversationId);
+        const finishTurn = (content, status, assistantModelId = model.id, finishReason, canContinue) => {
             const saved = store.saveTurn({
                 userId: activeUserId,
                 conversationId,
                 history: messages,
-                assistant: { content, modelId: assistantModelId, status },
+                assistant: { content, modelId: assistantModelId, status, finishReason, canContinue },
             });
             return saved?.assistant.id ?? null;
         };
@@ -181,6 +192,8 @@ export function createChatRouter({ store, userId, ai, subscriptionStore, userSto
                 workspaceContext: messages[messages.length - 1]?.workspaceContext,
                 language,
                 stream: true,
+                cachedSummary: existingConversation?.conversation.contextSummary,
+                signal: clientAbortController.signal,
             }, {
                 onDelta: (delta) => {
                     content += delta;
@@ -188,12 +201,18 @@ export function createChatRouter({ store, userId, ai, subscriptionStore, userSto
                 },
                 onDone: (result) => {
                     const actualModelId = result.selectedModel?.id ?? model.id;
-                    const messageId = finishTurn(content, 'complete', actualModelId);
+                    const messageId = finishTurn(content, 'complete', actualModelId, result.finishReason, result.canContinue);
+                    if (result.contextSummary) {
+                        store.updateContextSummary(activeUserId, conversationId, result.contextSummary);
+                    }
                     if (messageId) {
                         writeEvent('done', {
                             messageId,
                             selectedModel: result.selectedModel,
                             routingReason: result.routingReason,
+                            source: result.source,
+                            finishReason: result.finishReason,
+                            canContinue: result.canContinue,
                             usage: {
                                 inputTokens: result.inputTokens,
                                 outputTokens: result.outputTokens,

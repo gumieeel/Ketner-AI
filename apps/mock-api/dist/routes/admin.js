@@ -14,7 +14,8 @@ import { CurrencyService } from '../services/currency.js';
 import { PLANS, LEGACY_PLANS } from './billing.js';
 import { isAdminUser } from '../services/vip.js';
 import { EntitlementService } from '../services/entitlement.js';
-export function createAdminRouter({ registry = modelRegistry, usageStore = defaultUsageStore, subscriptionStore = defaultSubscriptionStore, userStore = defaultUserStore, } = {}) {
+import { defaultCircuitBreaker, CircuitBreaker } from '../ai/circuit-breaker.js';
+export function createAdminRouter({ registry = modelRegistry, usageStore = defaultUsageStore, subscriptionStore = defaultSubscriptionStore, userStore = defaultUserStore, circuitBreaker = defaultCircuitBreaker, } = {}) {
     const router = Router();
     // Middleware проверки прав администратора
     const requireAdmin = (req, res, next) => {
@@ -56,10 +57,32 @@ export function createAdminRouter({ registry = modelRegistry, usageStore = defau
         registry.upsert(model);
         res.json({ success: true, model: registry.get(modelId) });
     });
-    // 3. Провайдеры: мониторинг статуса, ошибок и задержек
+    // 3. Провайдеры: мониторинг статуса, ошибок и задержек + Circuit Breaker (Phase 5)
     router.get('/providers', (_req, res) => {
         const stats = usageStore.getProviderStats();
-        res.json({ providers: stats });
+        const circuitBreakers = circuitBreaker.getAllStatuses();
+        res.json({
+            providers: stats.map((s) => {
+                const cb = circuitBreakers.find((c) => c.provider === s.provider);
+                return {
+                    ...s,
+                    circuitBreaker: cb ?? { state: 'closed', consecutiveFailures: 0 },
+                };
+            }),
+            circuitBreakers,
+        });
+    });
+    // 3.1. Circuit Breakers: мониторинг и сброс (Phase 5)
+    router.get('/circuit-breaker', (_req, res) => {
+        res.json({ circuitBreakers: circuitBreaker.getAllStatuses() });
+    });
+    router.post('/circuit-breaker/reset', (req, res) => {
+        const provider = typeof req.body?.provider === 'string' ? req.body.provider : undefined;
+        circuitBreaker.reset(provider);
+        res.json({
+            success: true,
+            message: provider ? `Circuit breaker для ${provider} сброшен` : 'Все circuit breakers сброшены',
+        });
     });
     // 4. Использование: общая статистика токенов и расходов
     router.get('/usage', (req, res) => {
@@ -67,6 +90,37 @@ export function createAdminRouter({ registry = modelRegistry, usageStore = defau
         const to = typeof req.query.to === 'string' ? req.query.to : undefined;
         const stats = usageStore.getGlobalStats(from, to);
         res.json({ stats });
+    });
+    // 4.1. Дашборд метрик шлюза (Phase 4: /api/admin/metrics)
+    router.get('/metrics', (req, res) => {
+        const from = typeof req.query.from === 'string' ? req.query.from : undefined;
+        const to = typeof req.query.to === 'string' ? req.query.to : undefined;
+        const allUsers = userStore.list();
+        const planPricesUsd = {};
+        for (const plan of [...PLANS, ...LEGACY_PLANS]) {
+            planPricesUsd[plan.id] = CurrencyService.rubToUsd(plan.priceMonthly);
+        }
+        const metrics = usageStore.getGatewayMetrics({
+            fromDate: from,
+            toDate: to,
+            users: allUsers.map((u) => {
+                const sub = subscriptionStore.get(u.id);
+                const rawPlan = sub?.plan ?? u.plan ?? 'free';
+                const effectivePlan = EntitlementService.resolveEffectivePlan(rawPlan, u.email, u.isVip);
+                return {
+                    id: u.id,
+                    email: u.email,
+                    plan: effectivePlan,
+                    isVip: Boolean(u.isVip),
+                };
+            }),
+            planPricesUsd,
+        });
+        res.json({
+            metrics,
+            alerts: metrics.alerts,
+            hasNegativeMarginAlert: metrics.hasNegativeMarginAlert,
+        });
     });
     // 5. Рентабельность пользователя (Profitability)
     router.get('/profitability/:userId', (req, res) => {

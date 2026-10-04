@@ -7,6 +7,7 @@
  */
 
 import type { PlanId, Language, MessageAttachment, WorkspaceContext } from '../types.js';
+export type { PlanId, Language, MessageAttachment, WorkspaceContext };
 
 // ─────────────────────────────────────────────────────────────
 // AI Provider & Model Registry
@@ -352,6 +353,7 @@ export interface ProviderMessage {
 export interface ProviderRequestOptions {
   model: string;
   messages: ProviderMessage[];
+  systemPrompt?: string;
   maxTokens?: number;
   temperature?: number;
   stream: boolean;

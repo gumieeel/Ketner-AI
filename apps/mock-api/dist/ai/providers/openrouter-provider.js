@@ -81,11 +81,13 @@ export class OpenRouterProvider {
                 if (reasoning && !content.includes('<think>')) {
                     content = `<think>\n${reasoning}\n</think>\n\n${content}`;
                 }
+                const cachedTokens = json.usage?.prompt_tokens_details?.cached_tokens ?? json.usage?.native_tokens_cached;
                 return {
                     content,
                     usage: {
                         inputTokens: json.usage?.prompt_tokens ?? Math.ceil(content.length / 4),
                         outputTokens: json.usage?.completion_tokens ?? Math.ceil(content.length / 4),
+                        cachedTokens: typeof cachedTokens === 'number' && cachedTokens > 0 ? cachedTokens : undefined,
                     },
                     finishReason: json.choices?.[0]?.finish_reason === 'length' ? 'length' : 'stop',
                 };
@@ -144,6 +146,7 @@ export class OpenRouterProvider {
                 let promptTokens = 0;
                 let completionTokens = 0;
                 let reasoningTokens = null;
+                let cachedTokens = null;
                 let insideReasoning = false;
                 while (true) {
                     if (callbacks.isCancelled()) {
@@ -206,6 +209,11 @@ export class OpenRouterProvider {
                                 if (typeof rTokens === 'number') {
                                     reasoningTokens = rTokens;
                                 }
+                                const cTokens = parsed.usage.prompt_tokens_details?.cached_tokens ??
+                                    parsed.usage.native_tokens_cached;
+                                if (typeof cTokens === 'number') {
+                                    cachedTokens = cTokens;
+                                }
                             }
                         }
                         catch {
@@ -227,6 +235,7 @@ export class OpenRouterProvider {
                         usage: {
                             inputTokens: promptTokens,
                             outputTokens: completionTokens,
+                            cachedTokens: typeof cachedTokens === 'number' && cachedTokens > 0 ? cachedTokens : undefined,
                             reasoningTokens: reasoningTokens ?? undefined,
                         },
                         finishReason,

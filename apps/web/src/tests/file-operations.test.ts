@@ -156,13 +156,6 @@ const mode = "production";
 
       const writtenData: Record<string, string> = {};
 
-      const mockWritable = {
-        write: vi.fn(async (data: string) => {
-          // capture write
-        }),
-        close: vi.fn(async () => {}),
-      };
-
       const mockFileHandle = {
         createWritable: vi.fn(async () => {
           return {

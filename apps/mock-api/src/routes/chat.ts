@@ -11,6 +11,7 @@ import type { SubscriptionStore } from '../store/subscription-store.js';
 import type { UserStore } from '../store/user-store.js';
 import { isVipUser, isVipEmail } from '../services/vip.js';
 import { PayloadGuard } from '../ai/payload-guard.js';
+import type { Language, IncomingMessage, PlanId, MessageStatus } from '../types.js';
 
 const MAX_MESSAGES = 200;
 const MAX_CONTENT_LENGTH = 200000;
