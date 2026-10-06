@@ -13,6 +13,8 @@ services:
         value: 8787
       - key: BETTER_AUTH_SECRET
         generateValue: true
+      - key: AUTH_JWT_SECRET
+        generateValue: true
       - key: DATABASE_URL
         sync: false
       - key: SUPABASE_URL
@@ -26,6 +28,16 @@ services:
       - key: ANTHROPIC_API_KEY
         sync: false
       - key: OPENROUTER_API_KEY
+        sync: false
+      - key: TELEGRAM_BOT_TOKEN
+        sync: false
+      - key: TELEGRAM_SUPPORT_BOT_TOKEN
+        sync: false
+      - key: CRYPTOCLOUD_API_KEY
+        sync: false
+      - key: CRYPTOCLOUD_SHOP_ID
+        sync: false
+      - key: CRYPTOCLOUD_SECRET_KEY
         sync: false
       - key: STRIPE_SECRET_KEY
         sync: false

@@ -1,3 +1,4 @@
+import { createHmac } from 'node:crypto';
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -36,15 +37,72 @@ function readNumber(name: string, fallback: number): number {
   return Number.isFinite(value) ? value : fallback;
 }
 
+const nodeEnv = process.env.NODE_ENV ?? 'development';
+
+/** В production любые dev-заглушки и значения по умолчанию для секретов запрещены. */
+export const isProduction = nodeEnv === 'production';
+
+const MIN_SECRET_LENGTH = 32;
 
 /**
- * Читает переменную окружения с безопасным fallback значением.
+ * Значения, которые когда-либо лежали в репозитории: считаются скомпрометированными
+ * и не принимаются в production, даже если их задали через переменные окружения.
  */
-function envWithFallback(name: string, fallback: string): string {
-  const value = process.env[name];
-  if (value && value.trim() !== '') return value;
-  return fallback;
+const COMPROMISED_SECRETS: ReadonlySet<string> = new Set([
+  'ketner-ai-better-auth-secret-key-32chars-minimum-safe',
+  'ketner-ai-webhook-secret-dev',
+  'ketner-ai-admin-key-dev',
+  'ketner-mock-jwt-secret',
+]);
+
+/** Необязательная переменная окружения: пустая строка, если не задана. */
+function optionalEnv(name: string): string {
+  return process.env[name]?.trim() ?? '';
 }
+
+/**
+ * Секрет приложения.
+ *
+ * В production значение обязательно, не короче 32 символов и не из списка
+ * скомпрометированных; приложение не стартует с небезопасной конфигурацией.
+ * Вне production допускается dev-значение по умолчанию (оно никогда не попадает в прод).
+ */
+function secretEnv(name: string, devFallback: string): string {
+  const value = optionalEnv(name);
+  if (!isProduction) {
+    return value || devFallback;
+  }
+  if (!value) {
+    throw new Error(`[config] Переменная окружения ${name} обязательна в production`);
+  }
+  if (value.length < MIN_SECRET_LENGTH) {
+    throw new Error(`[config] ${name} слишком короткий: нужно минимум ${MIN_SECRET_LENGTH} символов`);
+  }
+  if (COMPROMISED_SECRETS.has(value)) {
+    throw new Error(`[config] ${name} совпадает с ранее опубликованным значением: сгенерируйте новое`);
+  }
+  return value;
+}
+
+/** Производный ключ с доменным разделением: из одного корневого секрета разные подключи. */
+function deriveSecret(rootSecret: string, label: string): string {
+  return createHmac('sha256', rootSecret).update(label).digest('hex');
+}
+
+const betterAuthSecret = secretEnv(
+  'BETTER_AUTH_SECRET',
+  'dev-only-better-auth-secret-not-for-production-use',
+);
+
+/**
+ * Ключ подписи Bearer-токенов. Если AUTH_JWT_SECRET не задан, выводится из
+ * BETTER_AUTH_SECRET (HMAC с меткой), поэтому отдельного дефолта в коде нет.
+ */
+const authJwtSecret = optionalEnv('AUTH_JWT_SECRET')
+  ? secretEnv('AUTH_JWT_SECRET', '')
+  : deriveSecret(betterAuthSecret, 'ketner:auth-jwt:v1');
+
+const supabaseUrl = optionalEnv('SUPABASE_URL');
 
 /** Настройки заглушки ИИ: вынесены в тип, чтобы тесты могли подставить свои. */
 export interface AiConfig {
@@ -62,7 +120,7 @@ export const config = {
   serviceName: 'ketner-mock-api',
   version: '0.1.0',
   port: readNumber('PORT', 8787),
-  nodeEnv: process.env.NODE_ENV ?? 'development',
+  nodeEnv,
   /** Разрешённый origin для CORS. По умолчанию — dev-сервер Vite. */
   corsOrigin: process.env.CORS_ORIGIN ?? 'http://localhost:5173',
   /** Адрес фронтенда: его подсказывает корень API, если порт открыли вручную. */
@@ -125,8 +183,13 @@ export const config = {
    * Секретный ключ Better Auth для подписи сессий и кук.
    * Настраивается через BETTER_AUTH_SECRET (openssl rand -base64 32).
    */
-  betterAuthSecret:
-    process.env.BETTER_AUTH_SECRET || 'ketner-ai-better-auth-secret-key-32chars-minimum-safe',
+  betterAuthSecret,
+
+  /**
+   * Ключ подписи Bearer-токенов (HS256). Настраивается через AUTH_JWT_SECRET;
+   * без неё выводится из BETTER_AUTH_SECRET.
+   */
+  authJwtSecret,
 
   /**
    * PostgreSQL / Supabase Database URL
@@ -136,13 +199,12 @@ export const config = {
   /**
    * Supabase Project Credentials
    */
-  supabaseUrl: process.env.SUPABASE_URL || 'https://gwioimhpfulpjxzsuesy.supabase.co',
-  supabaseAnonKey:
-    process.env.SUPABASE_PUBLISHABLE_KEY || process.env.SUPABASE_ANON_KEY || '',
-  supabaseSecretKey: process.env.SUPABASE_SECRET_KEY || '',
+  supabaseUrl,
+  supabaseAnonKey: optionalEnv('SUPABASE_PUBLISHABLE_KEY') || optionalEnv('SUPABASE_ANON_KEY'),
+  supabaseSecretKey: optionalEnv('SUPABASE_SECRET_KEY'),
   supabaseJwksUrl:
-    process.env.SUPABASE_JWKS_URL ||
-    'https://gwioimhpfulpjxzsuesy.supabase.co/auth/v1/.well-known/jwks.json',
+    optionalEnv('SUPABASE_JWKS_URL') ||
+    (supabaseUrl ? `${supabaseUrl.replace(/\/+$/, '')}/auth/v1/.well-known/jwks.json` : ''),
 
   /**
    * Better Auth API Key для подключения к Better Auth Infra / Dashboard.
@@ -164,15 +226,13 @@ export const config = {
   githubClientSecret: process.env.GITHUB_CLIENT_SECRET || undefined,
 
   /** Telegram Bot для приёма оплаты (Telegram Stars и СБП). */
-  telegramBotToken:
-    process.env.TELEGRAM_BOT_TOKEN || '8950856076:AAF6Id66Vc0IHWBWByV1DArttb6cs8go2DM',
+  telegramBotToken: optionalEnv('TELEGRAM_BOT_TOKEN'),
   telegramBotUsername: process.env.TELEGRAM_BOT_USERNAME || 'Robo_kassa_bot',
   telegramPaymentProviderToken: process.env.TELEGRAM_PAYMENT_PROVIDER_TOKEN || '',
   telegramWebhookUrl: process.env.TELEGRAM_WEBHOOK_URL || '',
 
   /** Telegram Support Bot для приёма жалоб и поддержки пользователей. */
-  telegramSupportBotToken:
-    process.env.TELEGRAM_SUPPORT_BOT_TOKEN || '8767965681:AAFkLbcszHQe7-XIZ8-y8Q-vebuoJXBSFGo',
+  telegramSupportBotToken: optionalEnv('TELEGRAM_SUPPORT_BOT_TOKEN'),
   telegramSupportBotUsername:
     process.env.TELEGRAM_SUPPORT_BOT_USERNAME || 'ketner_support_bot',
   supportAdminUsername:
@@ -182,20 +242,12 @@ export const config = {
     : undefined,
 
   /** CryptoCloud: Приём платежей в криптовалюте */
-  cryptoCloudApiKey:
-    process.env.CRYPTOCLOUD_API_KEY ||
-    'eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJ1dWlkIjoiTVRJeU1EYzEiLCJ0eXBlIjoicHJvamVjdCIsInYiOiI4YTQ3YmNkMjU3NTgyMTJkMWZlOWY4MjI3MGMyNGVhN2M0M2U3NDBhYjc3ZDA2ZWUwZWI5YTYzOTEzYjBjNzJkIiwiZXhwIjo4ODE5MDg1MTAzMX0.T6Nog1lIMERCkle_A2XgkOd8SGPmBdTh9an_ZlhqKyQ',
-  cryptoCloudShopId: process.env.CRYPTOCLOUD_SHOP_ID || 'AJyMLWkX7s5RphA4',
-  cryptoCloudSecretKey:
-    process.env.CRYPTOCLOUD_SECRET_KEY || 'U7Dkec32RzJFn1gJWdGcMf9TIyXMyeIvDOpK',
+  cryptoCloudApiKey: optionalEnv('CRYPTOCLOUD_API_KEY'),
+  cryptoCloudShopId: optionalEnv('CRYPTOCLOUD_SHOP_ID'),
+  cryptoCloudSecretKey: optionalEnv('CRYPTOCLOUD_SECRET_KEY'),
 
   /** AI Providers: OpenRouter */
-  openRouterApiKey:
-    process.env.OPENROUTER_API_KEY ||
-    Buffer.from(
-      'c2stb3ItdjEtYzNiZWY1YmFjODgxM2Y2MjkyZDcwMjY3ZjE1NDFjMTcxNTEzOWNlZjdiNDZjZjBhMTdhMWI3OTM2MzNiMWYzNg==',
-      'base64',
-    ).toString('utf8'),
+  openRouterApiKey: optionalEnv('OPENROUTER_API_KEY'),
   openRouterBaseUrl: process.env.OPENROUTER_BASE_URL || 'https://openrouter.ai/api/v1',
   openRouterModel: process.env.OPENROUTER_MODEL || 'openai/gpt-4o-mini',
 
@@ -214,12 +266,12 @@ export const config = {
   /**
    * Секрет для проверки подписи webhook-запросов.
    */
-  webhookSecret: envWithFallback('WEBHOOK_SECRET', 'ketner-ai-webhook-secret-dev'),
+  webhookSecret: secretEnv('WEBHOOK_SECRET', 'dev-only-webhook-secret-not-for-production'),
 
   /**
    * Ключ доступа к Admin API.
    */
-  adminApiKey: envWithFallback('ADMIN_API_KEY', 'ketner-ai-admin-key-dev'),
+  adminApiKey: secretEnv('ADMIN_API_KEY', 'dev-only-admin-key-not-for-production'),
 
   /**
    * Stripe Billing Credentials & Price IDs

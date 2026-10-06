@@ -204,3 +204,81 @@ test('auth: Better Auth нативные эндпоинты регистраци
   const sessionData = await readJson<{ user: { email: string } }>(sessionRes);
   assert.equal(sessionData.user.email, 'better-auth-user@example.com');
 });
+
+test('auth (C2): заголовки X-User-* не определяют личность и не повышают тариф', async (t) => {
+  const server = await startTestServer();
+  t.after(() => server.close());
+
+  // 1. Без токена и сессии заголовки не дают доступа (в том числе от имени админа)
+  const spoofedAdmin = await fetch(`${server.baseUrl}/api/auth/me`, {
+    headers: {
+      'X-User-Email': 'artemsinyakov09@gmail.com',
+      'X-User-Id': 'admin-artem-user',
+      'X-User-Plan': 'ultra',
+    },
+  });
+  assert.equal(spoofedAdmin.status, 401);
+
+  // 2. Заголовок с email существующего пользователя тоже не работает
+  const spoofedDemo = await fetch(`${server.baseUrl}/api/auth/me`, {
+    headers: { 'X-User-Email': 'demo@ketner.ai' },
+  });
+  assert.equal(spoofedDemo.status, 401);
+
+  // 3. Админский API недоступен по спуфингу заголовков
+  const spoofedAdminApi = await fetch(`${server.baseUrl}/api/admin/models`, {
+    headers: { 'X-User-Email': 'artemsinyakov09@gmail.com' },
+  });
+  assert.equal(spoofedAdminApi.status, 403);
+
+  // 4. Реальный пользователь с free-тарифом не получает ultra через X-User-Plan
+  const signup = await fetch(`${server.baseUrl}/api/auth/signup`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email: 'c2-free@example.com', password: 'strongPassword123' }),
+  });
+  const { token } = await readJson<AuthSession>(signup);
+  const me = await fetch(`${server.baseUrl}/api/auth/me`, {
+    headers: { Authorization: `Bearer ${token}`, 'X-User-Plan': 'ultra' },
+  });
+  assert.equal(me.status, 200);
+  const meData = await readJson<{ user: User }>(me);
+  assert.equal(meData.user.plan, 'free');
+});
+
+test('auth (C3): токены с поддельной подписью отклоняются', async (t) => {
+  const server = await startTestServer();
+  t.after(() => server.close());
+
+  const b64 = (value: unknown): string =>
+    Buffer.from(JSON.stringify(value)).toString('base64url');
+  const header = b64({ alg: 'HS256', typ: 'JWT' });
+  const payload = b64({ sub: 'demo-user', exp: Math.floor(Date.now() / 1000) + 3600 });
+
+  const forgedTokens = [
+    `${header}.${payload}.mock_anything`, // бывший обход: префикс mock_
+    `${b64({ alg: 'none', typ: 'JWT' })}.${payload}.`, // alg=none
+    `${header}.${payload}.invalidsignature`,
+  ];
+
+  for (const forged of forgedTokens) {
+    const res = await fetch(`${server.baseUrl}/api/auth/me`, {
+      headers: { Authorization: `Bearer ${forged}` },
+    });
+    assert.equal(res.status, 401, `Поддельный токен не должен приниматься: ${forged.slice(-20)}`);
+  }
+
+  // Настоящий токен с подменённым payload (другой sub) тоже отклоняется
+  const login = await fetch(`${server.baseUrl}/api/auth/login`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email: 'demo@ketner.ai', password: 'password123' }),
+  });
+  const { token } = await readJson<AuthSession>(login);
+  const [realHeader, , realSignature] = token.split('.');
+  const tampered = `${realHeader}.${b64({ sub: 'admin-artem-user', exp: 9999999999 })}.${realSignature}`;
+  const tamperedRes = await fetch(`${server.baseUrl}/api/auth/me`, {
+    headers: { Authorization: `Bearer ${tampered}` },
+  });
+  assert.equal(tamperedRes.status, 401);
+});

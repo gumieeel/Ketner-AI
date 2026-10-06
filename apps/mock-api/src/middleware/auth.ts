@@ -1,3 +1,4 @@
+import { randomBytes } from 'node:crypto';
 import type { NextFunction, Request, Response } from 'express';
 import { fromNodeHeaders } from 'better-auth/node';
 import { defaultBetterAuth } from '../auth/better-auth.js';
@@ -34,7 +35,8 @@ export function createAuthMiddleware(userStore: UserStore, betterAuthInstance = 
       if (session?.user) {
         let stored = userStore.findByEmail(session.user.email);
         if (!stored) {
-          stored = userStore.create(session.user.email, 'session-synced-password-123', session.user.name);
+          // Пароль локальной копии не используется для входа: вход идёт через Better Auth.
+          stored = userStore.create(session.user.email, randomBytes(32).toString('hex'), session.user.name);
         }
 
         const rawPlan = (session.user as Record<string, unknown>).plan;
@@ -47,12 +49,6 @@ export function createAuthMiddleware(userStore: UserStore, betterAuthInstance = 
               : (typeof rawPlan === 'string' && VALID_PLANS.includes(rawPlan as PlanId))
                 ? (rawPlan as PlanId)
                 : (stored?.plan ?? 'free');
-
-        const rawHeaderPlan = request.headers['x-user-plan'];
-        const headerPlan = (Array.isArray(rawHeaderPlan) ? rawHeaderPlan[0] : rawHeaderPlan)?.trim();
-        if (plan === 'free' && headerPlan && VALID_PLANS.includes(headerPlan as PlanId)) {
-          plan = headerPlan as PlanId;
-        }
 
         const isVip = Boolean(stored?.isVip || isVipEmail(session.user.email));
         const isAdmin = Boolean(stored?.isAdmin || isAdminEmail(session.user.email));
@@ -111,41 +107,8 @@ export function createAuthMiddleware(userStore: UserStore, betterAuthInstance = 
       }
     }
 
-    // 3. Fallback: проверка заголовков X-User-*
-    const rawHeaderEmail = request.headers['x-user-email'];
-    const headerEmail = (Array.isArray(rawHeaderEmail) ? rawHeaderEmail[0] : rawHeaderEmail)?.trim();
-    const rawHeaderId = request.headers['x-user-id'];
-    const headerId = (Array.isArray(rawHeaderId) ? rawHeaderId[0] : rawHeaderId)?.trim();
-    const rawHeaderPlan = request.headers['x-user-plan'];
-    const headerPlan = (Array.isArray(rawHeaderPlan) ? rawHeaderPlan[0] : rawHeaderPlan)?.trim();
-
-    if (!request.user && (headerEmail || headerId)) {
-      let user = headerEmail ? userStore.findByEmail(headerEmail) : (headerId ? userStore.findById(headerId) : undefined);
-      if (!user && headerEmail) {
-        user = userStore.create(headerEmail, 'session-synced-password-123', headerEmail.split('@')[0]);
-      }
-      if (user) {
-        const VALID_PLANS: PlanId[] = ['free', 'gpt-pro', 'claude-pro', 'gemini-pro', 'ultra', 'plus', 'pro'];
-        let plan: PlanId = (headerPlan && VALID_PLANS.includes(headerPlan as PlanId))
-          ? (headerPlan as PlanId)
-          : user.plan;
-        const isVip = Boolean(user.isVip || (user.email && isVipEmail(user.email)) || (headerEmail && isVipEmail(headerEmail)));
-        const isAdmin = Boolean(user.isAdmin || (user.email && isAdminEmail(user.email)) || (headerEmail && isAdminEmail(headerEmail)));
-        if (isVip) {
-          plan = 'ultra';
-        }
-        request.user = {
-          ...user,
-          plan,
-          isVip,
-          isAdmin,
-        };
-        request.userId = user.id;
-        next();
-        return;
-      }
-    }
-
+    // Личность определяется только сессией Better Auth или подписанным Bearer-токеном.
+    // Заголовки X-User-* намеренно игнорируются: клиент не может сам назвать себя пользователем.
     next();
   };
 }

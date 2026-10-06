@@ -38,16 +38,6 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   if (token) {
     headers['Authorization'] = `Bearer ${token}`;
   }
-  const currentUser = useAuth.getState().user;
-  if (currentUser?.email) {
-    headers['X-User-Email'] = currentUser.email;
-  }
-  if (currentUser?.id) {
-    headers['X-User-Id'] = currentUser.id;
-  }
-  if (currentUser?.plan) {
-    headers['X-User-Plan'] = currentUser.plan;
-  }
   if (init?.headers) {
     Object.assign(headers, init.headers);
   }
@@ -132,16 +122,8 @@ export async function streamCompletion(
   if (token) {
     headers['Authorization'] = `Bearer ${token}`;
   }
+  // Поля userId/userEmail/userPlan в теле остаются до исправления C8 (сервер перестанет им доверять).
   const currentUser = useAuth.getState().user;
-  if (currentUser?.email) {
-    headers['X-User-Email'] = currentUser.email;
-  }
-  if (currentUser?.id) {
-    headers['X-User-Id'] = currentUser.id;
-  }
-  if (currentUser?.plan) {
-    headers['X-User-Plan'] = currentUser.plan;
-  }
 
   const response = await fetch(`${API_BASE}/chat/completions`, {
     method: 'POST',
