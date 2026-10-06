@@ -118,12 +118,12 @@ test('admin: доступ по роли пользователя — VIP изо�
   const server = await startTestServer();
 
   try {
-    // 1. Создаём пользователя-администратора (artemsinyakov09@gmail.com входит в config.adminEmails)
+    // 1. Создаём пользователя-администратора (test-admin@example.com входит в config.adminEmails)
     const adminSignupRes = await fetch(`${server.baseUrl}/api/auth/signup`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        email: 'artemsinyakov09@gmail.com',
+        email: 'test-admin@example.com',
         password: 'password123',
         name: 'Artem Admin',
       }),
@@ -496,7 +496,7 @@ test('admin: PATCH /api/admin/users/:id — обновление плана, VIP
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        email: 'artemsinyakov09@gmail.com',
+        email: 'test-admin@example.com',
         password: 'password123',
         name: 'Admin Self',
       }),

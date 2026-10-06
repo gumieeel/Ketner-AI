@@ -4,7 +4,8 @@ import { betterAuth } from 'better-auth';
 import { drizzleAdapter } from 'better-auth/adapters/drizzle';
 import { dash } from '@better-auth/infra';
 import { getMigrations } from 'better-auth/db/migration';
-import { config } from '../config.js';
+import { config, isProduction } from '../config.js';
+import { isAdminEmail, isVipEmail } from '../services/vip.js';
 import { db as pgDb } from '../db/client.js';
 import * as pgSchema from '../db/schema.js';
 
@@ -174,6 +175,25 @@ export function createBetterAuth(options: BetterAuthInstanceOptions = {}) {
           }
         : {}),
     },
+    databaseHooks: {
+      user: {
+        create: {
+          // Адреса из ADMIN_EMAILS / VIP_EMAILS получают повышенные права по самому email.
+          // В production их нельзя занять самостоятельной регистрацией по паролю:
+          // допускается только вход через провайдера, подтвердившего владение адресом.
+          before: async (user: { email?: string | null; emailVerified?: boolean | null }) => {
+            if (
+              isProduction &&
+              user.emailVerified !== true &&
+              (isAdminEmail(user.email) || isVipEmail(user.email))
+            ) {
+              return false;
+            }
+            return { data: user };
+          },
+        },
+      },
+    },
     user: {
       additionalFields: {
         plan: {
@@ -214,16 +234,18 @@ export async function initAuthDatabase(
     }
   }
 
-  try {
-    await authInstance.api.signUpEmail({
-      body: {
-        email: 'demo@ketner.ai',
-        password: 'password123',
-        name: 'Ketner Demo',
-      },
-    });
-  } catch {
-    // Демо-пользователь уже существует
+  if (config.enableDemoAccount) {
+    try {
+      await authInstance.api.signUpEmail({
+        body: {
+          email: 'demo@ketner.ai',
+          password: 'password123',
+          name: 'Ketner Demo',
+        },
+      });
+    } catch {
+      // Демо-пользователь уже существует
+    }
   }
 
   try {

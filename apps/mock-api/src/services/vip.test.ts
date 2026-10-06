@@ -4,9 +4,10 @@ import { isVipEmail, isVipUser, isAdminEmail, isAdminUser } from './vip.js';
 import { config } from '../config.js';
 
 test('vip: isVipEmail and isVipUser correctly recognize VIP accounts', () => {
-  // 1. Default VIP email
-  assert.equal(isVipEmail('artemsinyakov09@gmail.com'), true);
-  assert.equal(isVipEmail('  ARTEMSINYAKOV09@GMAIL.COM  '), true);
+  // 1. VIP email из окружения тестов (VIP_EMAILS)
+  assert.equal(isVipEmail('test-vip@example.com'), true);
+  assert.equal(isVipEmail('  TEST-VIP@EXAMPLE.COM  '), true);
+  assert.equal(isVipEmail('test-admin@example.com'), false);
   assert.equal(isVipEmail('stranger@example.com'), false);
   assert.equal(isVipEmail(''), false);
   assert.equal(isVipEmail(null), false);
@@ -16,7 +17,7 @@ test('vip: isVipEmail and isVipUser correctly recognize VIP accounts', () => {
   assert.equal(isVipUser({ isVip: true, email: 'stranger@example.com' }), true);
 
   // 3. User object with VIP email
-  assert.equal(isVipUser({ email: 'artemsinyakov09@gmail.com' }), true);
+  assert.equal(isVipUser({ email: 'test-vip@example.com' }), true);
 
   // 4. Regular user
   assert.equal(isVipUser({ email: 'user@example.com', isVip: false }), false);
@@ -25,9 +26,12 @@ test('vip: isVipEmail and isVipUser correctly recognize VIP accounts', () => {
 });
 
 test('vip: isAdminEmail and isAdminUser correctly isolate admin privileges', () => {
-  // 1. Default admin email
-  assert.equal(isAdminEmail('artemsinyakov09@gmail.com'), true);
-  assert.equal(isAdminEmail('  ARTEMSINYAKOV09@GMAIL.COM '), true);
+  // 1. Admin email из окружения тестов (ADMIN_EMAILS)
+  assert.equal(isAdminEmail('test-admin@example.com'), true);
+  assert.equal(isAdminEmail('  TEST-ADMIN@EXAMPLE.COM '), true);
+  // Префиксы admin@ / admin. больше не дают прав
+  assert.equal(isAdminEmail('admin@example.com'), false);
+  assert.equal(isAdminEmail('admin.someone@example.com'), false);
   assert.equal(isAdminEmail('vip-guest@example.com'), false);
   assert.equal(isAdminEmail(''), false);
   assert.equal(isAdminEmail(null), false);
@@ -37,7 +41,7 @@ test('vip: isAdminEmail and isAdminUser correctly isolate admin privileges', () 
   assert.equal(isAdminUser({ isAdmin: true, email: 'guest@example.com' }), true);
 
   // 3. User object with admin email
-  assert.equal(isAdminUser({ email: 'artemsinyakov09@gmail.com' }), true);
+  assert.equal(isAdminUser({ email: 'test-admin@example.com' }), true);
 
   // 4. Decoupling: a user with isVip=true is NOT an admin unless isAdmin=true or admin email matches
   const vipOnlyUser = {

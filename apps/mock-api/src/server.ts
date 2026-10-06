@@ -4,9 +4,13 @@ import { config } from './config.js';
 import { telegramBotService } from './telegram/bot.js';
 import { telegramSupportBotService } from './telegram/support-bot.js';
 import { initDatabaseSync } from './db/sync.js';
+import { userStore } from './store/index.js';
 
 // 1. Синхронизируем базу данных Supabase / PostgreSQL и таблицы
 await initDatabaseSync();
+
+// 1.1. Первичный администратор из SEED_ADMIN_* (после загрузки пользователей из БД)
+userStore.ensureSeedAdmin?.();
 
 // 2. Инициализируем Better Auth
 await initAuthDatabase(defaultBetterAuth);

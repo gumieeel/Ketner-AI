@@ -50,14 +50,7 @@ export function SettingsPage() {
     setTimeout(() => setAdminKeySaved(false), 3000);
   };
 
-  const hasAdminAccess = Boolean(
-    user && (
-      user.isAdmin ||
-      user.email?.toLowerCase() === 'artemsinyakov09@gmail.com' ||
-      user.email?.toLowerCase().startsWith('admin@') ||
-      user.email?.toLowerCase().startsWith('admin.')
-    )
-  );
+  const hasAdminAccess = Boolean(user?.isAdmin);
 
   useEffect(() => {
     void loadSubscription();

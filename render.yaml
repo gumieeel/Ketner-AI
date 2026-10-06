@@ -47,3 +47,11 @@ services:
         generateValue: true
       - key: ADMIN_API_KEY
         generateValue: true
+      - key: ADMIN_EMAILS
+        sync: false
+      - key: VIP_EMAILS
+        sync: false
+      - key: SEED_ADMIN_EMAIL
+        sync: false
+      - key: SEED_ADMIN_PASSWORD
+        sync: false

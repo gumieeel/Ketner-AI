@@ -53,10 +53,7 @@ function saveSession(session: AuthSession | null): void {
   storage.set(USER_KEY, JSON.stringify(session.user));
 }
 
-function parsePlan(raw: unknown, email?: string): PlanId {
-  if (email?.toLowerCase() === 'artemsinyakov09@gmail.com') {
-    return 'ultra';
-  }
+function parsePlan(raw: unknown): PlanId {
   const VALID_PLANS: PlanId[] = ['free', 'gpt-pro', 'claude-pro', 'gemini-pro', 'ultra', 'plus', 'pro'];
   if (typeof raw === 'string' && (VALID_PLANS as string[]).includes(raw)) {
     return raw as PlanId;
@@ -64,29 +61,22 @@ function parsePlan(raw: unknown, email?: string): PlanId {
   return 'free';
 }
 
-function parseIsAdmin(raw: unknown, email?: string): boolean {
-  if (typeof raw === 'boolean') return raw;
-  if (!email) return false;
-  const normalized = email.trim().toLowerCase();
-  return (
-    normalized === 'artemsinyakov09@gmail.com' ||
-    normalized.startsWith('admin@') ||
-    normalized.startsWith('admin.')
-  );
+// Права определяет только сервер (ADMIN_EMAILS / VIP_EMAILS и записи в БД).
+// Клиент не вычисляет их по email: это лишь отображение, доступ проверяется на API.
+function parseIsAdmin(raw: unknown): boolean {
+  return raw === true;
 }
 
-function parseIsVip(raw: unknown, email?: string, plan?: PlanId): boolean {
+function parseIsVip(raw: unknown, plan?: PlanId): boolean {
   if (typeof raw === 'boolean') return raw;
-  if (plan === 'ultra') return true;
-  if (!email) return false;
-  return email.trim().toLowerCase() === 'artemsinyakov09@gmail.com';
+  return plan === 'ultra';
 }
 
 export function normalizeUser(rawUser: Record<string, unknown>): User {
   const email = typeof rawUser.email === 'string' ? rawUser.email.trim().toLowerCase() : '';
-  const plan = parsePlan(rawUser.plan, email);
-  const isVip = parseIsVip(rawUser.isVip, email, plan);
-  const isAdmin = parseIsAdmin(rawUser.isAdmin, email);
+  const plan = parsePlan(rawUser.plan);
+  const isVip = parseIsVip(rawUser.isVip, plan);
+  const isAdmin = parseIsAdmin(rawUser.isAdmin);
   const name =
     typeof rawUser.name === 'string' && rawUser.name.trim()
       ? rawUser.name.trim()

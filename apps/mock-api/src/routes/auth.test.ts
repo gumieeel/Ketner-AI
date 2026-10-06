@@ -212,7 +212,7 @@ test('auth (C2): заголовки X-User-* не определяют личн�
   // 1. Без токена и сессии заголовки не дают доступа (в том числе от имени админа)
   const spoofedAdmin = await fetch(`${server.baseUrl}/api/auth/me`, {
     headers: {
-      'X-User-Email': 'artemsinyakov09@gmail.com',
+      'X-User-Email': 'test-admin@example.com',
       'X-User-Id': 'admin-artem-user',
       'X-User-Plan': 'ultra',
     },
@@ -227,7 +227,7 @@ test('auth (C2): заголовки X-User-* не определяют личн�
 
   // 3. Админский API недоступен по спуфингу заголовков
   const spoofedAdminApi = await fetch(`${server.baseUrl}/api/admin/models`, {
-    headers: { 'X-User-Email': 'artemsinyakov09@gmail.com' },
+    headers: { 'X-User-Email': 'test-admin@example.com' },
   });
   assert.equal(spoofedAdminApi.status, 403);
 

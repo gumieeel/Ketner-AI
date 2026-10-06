@@ -3,16 +3,12 @@ import type { User } from '../types.js';
 
 /**
  * Проверка, является ли email VIP / Ultra адресом.
- * Сверяется со списком config.vipEmails (по умолчанию artemsinyakov09@gmail.com,
- * переопределяется через переменную окружения VIP_EMAILS).
+ * Сверяется только со списком config.vipEmails (переменная окружения VIP_EMAILS).
  */
 export function isVipEmail(email?: string | null): boolean {
   if (!email) return false;
   const normalized = email.trim().toLowerCase();
-  return (
-    config.vipEmails.includes(normalized) ||
-    normalized === 'artemsinyakov09@gmail.com'
-  );
+  return config.vipEmails.includes(normalized);
 }
 
 /**
@@ -28,18 +24,13 @@ export function isVipUser(
 
 /**
  * Проверка, является ли email адресом администратора.
- * Сверяется со списком config.adminEmails (по умолчанию artemsinyakov09@gmail.com,
- * переопределяется через переменную окружения ADMIN_EMAILS), а также admin@... адресами.
+ * Сверяется только со списком config.adminEmails (переменная окружения ADMIN_EMAILS).
+ * Адреса вида admin@... админами не считаются: регистрация не подтверждает владение почтой.
  */
 export function isAdminEmail(email?: string | null): boolean {
   if (!email) return false;
   const normalized = email.trim().toLowerCase();
-  return (
-    config.adminEmails.includes(normalized) ||
-    normalized === 'artemsinyakov09@gmail.com' ||
-    normalized.startsWith('admin@') ||
-    normalized.startsWith('admin.')
-  );
+  return config.adminEmails.includes(normalized);
 }
 
 /**

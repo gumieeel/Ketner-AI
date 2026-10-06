@@ -188,8 +188,8 @@ test('EntitlementService & FairUseEngine: лимиты и защита от зл
   const ultraLimits = EntitlementService.getEntitlements('ultra');
   assert.equal(ultraLimits.maxConcurrency, 8);
 
-  // VIP email artemsinyakov09@gmail.com
-  const vipPlan = EntitlementService.resolveEffectivePlan('free', 'artemsinyakov09@gmail.com');
+  // VIP email из VIP_EMAILS тестового окружения
+  const vipPlan = EntitlementService.resolveEffectivePlan('free', 'test-vip@example.com');
   assert.equal(vipPlan, 'ultra');
 
   // FairUse: Concurrency Limit

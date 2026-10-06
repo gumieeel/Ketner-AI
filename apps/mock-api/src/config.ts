@@ -55,6 +55,14 @@ const COMPROMISED_SECRETS: ReadonlySet<string> = new Set([
   'ketner-mock-jwt-secret',
 ]);
 
+/** Список email через запятую: нормализуется, пустые элементы отбрасываются. */
+function parseEmailList(raw: string | undefined): string[] {
+  return (raw ?? '')
+    .split(',')
+    .map((e) => e.trim().toLowerCase())
+    .filter(Boolean);
+}
+
 /** Необязательная переменная окружения: пустая строка, если не задана. */
 function optionalEnv(name: string): string {
   return process.env[name]?.trim() ?? '';
@@ -129,17 +137,30 @@ export const config = {
   /** Обменный курс USD к RUB для расчёта экономики тарифов и маржинальности. */
   usdToRubRate: readNumber('USD_TO_RUB_RATE', 95),
 
-  /** Список email адресов с VIP / Ultra доступом. Настраивается через переменную VIP_EMAILS. */
-  vipEmails: (process.env.VIP_EMAILS || 'artemsinyakov09@gmail.com')
-    .split(',')
-    .map((e) => e.trim().toLowerCase())
-    .filter(Boolean),
+  /**
+   * Список email адресов с VIP / Ultra доступом (VIP_EMAILS через запятую).
+   * По умолчанию пуст: в коде нет ни одного зашитого адреса.
+   */
+  vipEmails: parseEmailList(process.env.VIP_EMAILS),
 
-  /** Список email адресов администраторов с доступом к Admin API. Настраивается через переменную ADMIN_EMAILS. */
-  adminEmails: (process.env.ADMIN_EMAILS || 'artemsinyakov09@gmail.com')
-    .split(',')
-    .map((e) => e.trim().toLowerCase())
-    .filter(Boolean),
+  /**
+   * Список email адресов администраторов (ADMIN_EMAILS через запятую).
+   * По умолчанию пуст. Права админа никогда не выводятся из «похожего» адреса (admin@...).
+   */
+  adminEmails: parseEmailList(process.env.ADMIN_EMAILS),
+
+  /**
+   * Первичный администратор для развёртывания: создаётся при старте, если заданы оба значения.
+   * Пароль не короче 12 символов. Без этих переменных админ-аккаунт не создаётся.
+   */
+  seedAdminEmail: optionalEnv('SEED_ADMIN_EMAIL').toLowerCase(),
+  seedAdminPassword: optionalEnv('SEED_ADMIN_PASSWORD'),
+
+  /**
+   * Публичный демо-аккаунт (demo@ketner.ai). Включён вне production;
+   * в production только при явном ENABLE_DEMO_ACCOUNT=true.
+   */
+  enableDemoAccount: !isProduction || optionalEnv('ENABLE_DEMO_ACCOUNT') === 'true',
 
   /** Пользователь и план заглушки: реальные аккаунты появятся на этапе 3. */
   demoUserId: 'demo-user',

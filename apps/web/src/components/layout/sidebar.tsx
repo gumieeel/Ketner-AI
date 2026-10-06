@@ -52,14 +52,7 @@ export function Sidebar() {
   const { t } = useTranslation();
   const user = useAuth((state) => state.user);
 
-  const hasAdminAccess = Boolean(
-    user && (
-      user.isAdmin ||
-      user.email?.toLowerCase() === 'artemsinyakov09@gmail.com' ||
-      user.email?.toLowerCase().startsWith('admin@') ||
-      user.email?.toLowerCase().startsWith('admin.')
-    )
-  );
+  const hasAdminAccess = Boolean(user?.isAdmin);
 
   const open = usePreferences((state) => state.sidebarOpen);
   const setOpen = usePreferences((state) => state.setSidebarOpen);
