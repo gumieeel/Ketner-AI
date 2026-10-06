@@ -142,7 +142,6 @@ export function createApiRouter(deps: ApiDeps): Router {
       subscriptionStore: activeSubscriptionStore,
       userStore: activeUserStore,
       invoiceStore: activeInvoiceStore,
-      defaultUserId: deps.userId,
     }),
   );
   router.use(

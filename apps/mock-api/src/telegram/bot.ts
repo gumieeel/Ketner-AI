@@ -144,6 +144,8 @@ export class TelegramBotService {
   private deps: TelegramBotDeps;
   private chatToUserId = new Map<string | number, string>();
   private isPolling = false;
+  /** Обработанные платежи Telegram (защита от повторной доставки одного и того же платежа). */
+  private processedCharges = new Set<string>();
 
   constructor(deps: TelegramBotDeps) {
     this.deps = deps;
@@ -229,6 +231,7 @@ export class TelegramBotService {
         const webhookUrl = `${effectiveBaseUrl.replace(/\/$/, '')}/api/telegram/webhook`;
         const res = await this.callApi<{ ok: boolean; description?: string }>('setWebhook', {
           url: webhookUrl,
+          secret_token: config.telegramWebhookSecret,
           allowed_updates: ['message', 'callback_query', 'pre_checkout_query'],
           drop_pending_updates: false,
         });
@@ -355,6 +358,42 @@ export class TelegramBotService {
       text,
       show_alert: showAlert,
     });
+  }
+
+  /**
+   * Проверка платежа Stars перед активацией тарифа.
+   *
+   * Подлинность самого обновления обеспечивает secret_token вебхука; здесь проверяется,
+   * что сумма, валюта и тариф соответствуют нашему счёту, и что платёж не обработан ранее.
+   */
+  private checkStarsPayment(
+    pay: { currency: string; total_amount: number; telegram_payment_charge_id: string },
+    claimedPlanId: string | undefined,
+    userId: string,
+    invoiceId: string | undefined,
+  ):
+    | { status: 'ok'; planId: PlanId }
+    | { status: 'duplicate' }
+    | { status: 'rejected'; reason: string } {
+    if (this.processedCharges.has(pay.telegram_payment_charge_id)) {
+      return { status: 'duplicate' };
+    }
+    const plan = claimedPlanId ? getPlanItem(claimedPlanId) : undefined;
+    if (!plan || plan.priceMonthly <= 0) return { status: 'rejected', reason: 'unknown_plan' };
+    if (!userId) return { status: 'rejected', reason: 'unknown_user' };
+    if (pay.currency !== 'XTR') return { status: 'rejected', reason: 'invalid_currency' };
+    if (pay.total_amount < calculateStars(plan.priceMonthly)) {
+      return { status: 'rejected', reason: 'insufficient_amount' };
+    }
+    if (invoiceId) {
+      const invoice = this.deps.invoiceStore.getTelegramStarsInvoice(invoiceId);
+      if (!invoice) return { status: 'rejected', reason: 'invoice_not_found' };
+      if (invoice.planId !== plan.id || invoice.userId !== userId) {
+        return { status: 'rejected', reason: 'invoice_mismatch' };
+      }
+      if (invoice.status === 'paid') return { status: 'duplicate' };
+    }
+    return { status: 'ok', planId: plan.id };
   }
 
   /**
@@ -510,6 +549,11 @@ export class TelegramBotService {
 
       // Подтверждение СБП оплаты
       if (data.startsWith('confirm_sbp:')) {
+        // Кнопка «Я оплатил» — заглушка без платёжного шлюза: в production тариф по ней не выдаётся.
+        if (!config.enableMockBilling) {
+          await this.answerCallbackQuery(cb.id, 'Подтверждение недоступно. Оплата СБП временно не принимается.', true);
+          return { handled: true, action: 'mock_payment_disabled' };
+        }
         const [, invoiceId, planId, customUserId] = data.split(':');
         const validPlan = (planId || 'plus') as PlanId;
         const linkedUser = this.resolveUser(chatId);
@@ -580,6 +624,11 @@ export class TelegramBotService {
 
       // Подтверждение Stars оплаты
       if (data.startsWith('confirm_stars:')) {
+        // Stars подтверждаются только сообщением successful_payment от Telegram, не кнопкой.
+        if (!config.enableMockBilling) {
+          await this.answerCallbackQuery(cb.id, 'Подтверждение недоступно: оплата определяется автоматически.', true);
+          return { handled: true, action: 'mock_payment_disabled' };
+        }
         const parts = data.split(':');
         const invoiceId = parts[1] || undefined;
         const planId = (parts[2] || 'plus') as PlanId;
@@ -627,22 +676,43 @@ export class TelegramBotService {
       // Успешный нативный платёж Telegram Stars
       if (msg.successful_payment) {
         const pay = msg.successful_payment;
-        let planId: PlanId = 'plus';
         const linkedUser = this.resolveUser(chatId);
-        let userId: string = linkedUser?.id || this.chatToUserId.get(chatId) || config.demoUserId;
+        let userId: string = linkedUser?.id || this.chatToUserId.get(chatId) || '';
+        let claimedPlanId: string | undefined;
         let invoiceId: string | undefined;
 
         try {
           const payload = JSON.parse(pay.invoice_payload) as {
-            planId?: PlanId;
+            planId?: string;
             userId?: string;
             invoiceId?: string;
           };
-          if (payload.planId) planId = payload.planId;
+          if (payload.planId) claimedPlanId = payload.planId;
           if (payload.userId) userId = payload.userId;
           if (payload.invoiceId) invoiceId = payload.invoiceId;
         } catch {
-          // Игнорируем ошибку парсинга
+          // Нечитаемый payload — платёж не привязать к тарифу, ниже он будет отклонён
+        }
+
+        const verdict = this.checkStarsPayment(pay, claimedPlanId, userId, invoiceId);
+        if (verdict.status === 'duplicate') {
+          return { handled: true, action: 'stars_payment_duplicate' };
+        }
+        if (verdict.status === 'rejected') {
+          console.warn(
+            `[TelegramBot] Платёж ${pay.telegram_payment_charge_id} отклонён: ${verdict.reason}`,
+          );
+          await this.sendMessage(
+            chatId,
+            `⚠️ Платёж получен, но тариф не удалось активировать автоматически. Напишите в поддержку и укажите номер платежа: <code>${escapeHtml(pay.telegram_payment_charge_id)}</code>.`,
+          );
+          return { handled: true, action: 'stars_payment_rejected' };
+        }
+        const planId: PlanId = verdict.planId;
+        this.processedCharges.add(pay.telegram_payment_charge_id);
+        if (this.processedCharges.size > 5000) {
+          const oldest = this.processedCharges.values().next().value;
+          if (oldest) this.processedCharges.delete(oldest);
         }
 
         this.deps.subscriptionStore.checkout(userId, planId);

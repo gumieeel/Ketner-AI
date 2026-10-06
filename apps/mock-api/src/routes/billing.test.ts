@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
+import { config } from '../config.js';
 import { readJson, startTestServer } from '../testing/server.js';
 import type { AuthSession, PlanItem, Subscription } from '../types.js';
 
@@ -189,3 +190,131 @@ test('billing: верификация крипто-платежей отклон
   assert.ok(replayData.error.message.includes('уже был использован'));
 });
 
+
+async function signup(baseUrl: string, email: string): Promise<{ token: string; id: string }> {
+  const res = await fetch(`${baseUrl}/api/auth/signup`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email, password: 'password123', name: email.split('@')[0] }),
+  });
+  const body = await readJson<AuthSession>(res);
+  return { token: body.token, id: body.user.id };
+}
+
+test('billing (C5): без входа биллинг недоступен, а заголовки X-User-* личность не задают', async (t) => {
+  const server = await startTestServer();
+  t.after(() => server.close());
+
+  const victim = await signup(server.baseUrl, 'c5-victim@example.com');
+
+  for (const [method, path] of [
+    ['GET', '/api/billing/subscription'],
+    ['POST', '/api/billing/checkout'],
+    ['POST', '/api/billing/cancel'],
+    ['POST', '/api/billing/crypto/create-invoice'],
+    ['POST', '/api/billing/telegram-stars/create-invoice'],
+  ] as const) {
+    const res = await fetch(`${server.baseUrl}${path}`, {
+      method,
+      headers: { 'Content-Type': 'application/json', 'X-User-Id': victim.id },
+      body: method === 'POST' ? JSON.stringify({ planId: 'plus' }) : undefined,
+    });
+    assert.equal(res.status, 401, `${method} ${path} должен требовать вход`);
+  }
+
+  // Каталог тарифов остаётся публичным
+  const plans = await fetch(`${server.baseUrl}/api/plans`);
+  assert.equal(plans.status, 200);
+});
+
+test('billing (C5): чужой счёт недоступен ни для статуса, ни для подтверждения', async (t) => {
+  const server = await startTestServer();
+  t.after(() => server.close());
+
+  const owner = await signup(server.baseUrl, 'c5-owner@example.com');
+  const stranger = await signup(server.baseUrl, 'c5-stranger@example.com');
+
+  const created = await fetch(`${server.baseUrl}/api/billing/telegram-stars/create-invoice`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${owner.token}` },
+    body: JSON.stringify({ planId: 'plus' }),
+  });
+  assert.equal(created.status, 200);
+  const { invoice } = await readJson<{ invoice: { id: string } }>(created);
+
+  const strangerHeaders = { Authorization: `Bearer ${stranger.token}` };
+  const status = await fetch(`${server.baseUrl}/api/billing/telegram-stars/status/${invoice.id}`, {
+    headers: strangerHeaders,
+  });
+  assert.equal(status.status, 404);
+  const confirm = await fetch(`${server.baseUrl}/api/billing/telegram-stars/confirm/${invoice.id}`, {
+    method: 'POST',
+    headers: strangerHeaders,
+  });
+  assert.equal(confirm.status, 404);
+
+  // Владелец своё видит
+  const own = await fetch(`${server.baseUrl}/api/billing/telegram-stars/status/${invoice.id}`, {
+    headers: { Authorization: `Bearer ${owner.token}` },
+  });
+  assert.equal(own.status, 200);
+
+  // Тариф у постороннего не изменился
+  const sub = await fetch(`${server.baseUrl}/api/billing/subscription`, { headers: strangerHeaders });
+  const { subscription } = await readJson<{ subscription: Subscription }>(sub);
+  assert.equal(subscription.plan, 'free');
+});
+
+test('billing (C5): в production заглушки оплаты выключены, тариф без платежа не выдаётся', async (t) => {
+  const server = await startTestServer();
+  t.after(() => server.close());
+  const user = await signup(server.baseUrl, 'c5-prod@example.com');
+  const headers = { 'Content-Type': 'application/json', Authorization: `Bearer ${user.token}` };
+
+  // Счёт Stars создаём заранее (создание счёта не заглушка), затем «включаем production».
+  const created = await fetch(`${server.baseUrl}/api/billing/telegram-stars/create-invoice`, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify({ planId: 'pro' }),
+  });
+  const { invoice } = await readJson<{ invoice: { id: string } }>(created);
+
+  const mutable = config as unknown as { enableMockBilling: boolean };
+  const previous = mutable.enableMockBilling;
+  mutable.enableMockBilling = false;
+  try {
+    const checkout = await fetch(`${server.baseUrl}/api/billing/checkout`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ planId: 'ultra' }),
+    });
+    assert.equal(checkout.status, 501);
+
+    const stripe = await fetch(`${server.baseUrl}/api/billing/stripe/create-checkout`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ planId: 'ultra' }),
+    });
+    assert.ok(stripe.status === 501 || stripe.status === 500);
+
+    const sbpCreate = await fetch(`${server.baseUrl}/api/billing/sbp/create-invoice`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ planId: 'plus' }),
+    });
+    assert.equal(sbpCreate.status, 501);
+
+    // Stars: подтверждение до реальной оплаты (successful_payment от Telegram) не проходит.
+    const confirm = await fetch(`${server.baseUrl}/api/billing/telegram-stars/confirm/${invoice.id}`, {
+      method: 'POST',
+      headers,
+    });
+    assert.equal(confirm.status, 402);
+  } finally {
+    mutable.enableMockBilling = previous;
+  }
+
+  const sub = await fetch(`${server.baseUrl}/api/billing/subscription`, { headers });
+  const { subscription } = await readJson<{ subscription: Subscription }>(sub);
+  assert.equal(subscription.plan, 'free');
+});

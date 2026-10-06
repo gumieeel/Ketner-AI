@@ -1,12 +1,59 @@
-import { Router, type Request, type Response } from 'express';
+import { timingSafeEqual } from 'node:crypto';
+import { Router, type NextFunction, type Request, type Response } from 'express';
+import { config } from '../config.js';
+import { requireAuth } from '../middleware/auth.js';
 import { sendError } from '../middleware/errors.js';
-import { TelegramBotService, type TelegramBotDeps, type TelegramUpdate } from '../telegram/bot.js';
+import {
+  TelegramBotService,
+  calculateStars,
+  getPlanItem,
+  type TelegramBotDeps,
+  type TelegramUpdate,
+} from '../telegram/bot.js';
 import {
   TelegramSupportBotService,
   telegramSupportBotService as defaultSupportBotService,
 } from '../telegram/support-bot.js';
 import { supportStore as defaultSupportStore, type SupportStore } from '../store/index.js';
+import { isAdminUser } from '../services/vip.js';
 import type { PlanId } from '../types.js';
+
+/** Сравнение секрета из заголовка с ожидаемым за постоянное время. */
+function secretMatches(provided: unknown, expected: string): boolean {
+  if (typeof provided !== 'string' || provided.length === 0 || expected.length === 0) return false;
+  const a = Buffer.from(provided);
+  const b = Buffer.from(expected);
+  return a.length === b.length && timingSafeEqual(a, b);
+}
+
+/** Вебхук принимается только от Telegram: заголовок secret_token обязателен. */
+function requireTelegramSecret(expected: string) {
+  return (request: Request, response: Response, next: NextFunction): void => {
+    if (!secretMatches(request.headers['x-telegram-bot-api-secret-token'], expected)) {
+      sendError(response, 401, 'invalid_webhook_secret', 'Неверный секрет вебхука');
+      return;
+    }
+    next();
+  };
+}
+
+/** Отладочные эндпоинты (симуляции) существуют только вне production. */
+function devOnly(_request: Request, response: Response, next: NextFunction): void {
+  if (!config.enableMockBilling) {
+    sendError(response, 404, 'not_found', 'Маршрут не найден');
+    return;
+  }
+  next();
+}
+
+/** Данные обращений поддержки — только администраторам. */
+function requireAdminUser(request: Request, response: Response, next: NextFunction): void {
+  if (!isAdminUser(request.user)) {
+    sendError(response, 403, 'admin_access_denied', 'Требуются права администратора');
+    return;
+  }
+  next();
+}
 
 export interface TelegramRouterDeps extends TelegramBotDeps {
   botService?: TelegramBotService;
@@ -38,7 +85,7 @@ export function createTelegramRouter(deps: TelegramRouterDeps): Router {
   /**
    * Официальный Webhook для Telegram Bot API (платежи).
    */
-  router.post('/telegram/webhook', async (request: Request, response: Response): Promise<void> => {
+  router.post('/telegram/webhook', requireTelegramSecret(config.telegramWebhookSecret), async (request: Request, response: Response): Promise<void> => {
     const update = request.body as TelegramUpdate;
     if (!update || typeof update !== 'object') {
       sendError(response, 400, 'invalid_update', 'Некорректное тело обновления Telegram');
@@ -57,9 +104,11 @@ export function createTelegramRouter(deps: TelegramRouterDeps): Router {
   /**
    * Эмуляция оплаты через Telegram Stars (для локального тестирования и демо без реальных денег).
    */
-  router.post('/telegram/simulate-payment', async (request: Request, response: Response): Promise<void> => {
+  router.post('/telegram/simulate-payment', devOnly, async (request: Request, response: Response): Promise<void> => {
     const planId = (request.body?.planId || 'plus') as PlanId;
     const userId = (request.body?.userId || 'demo-user') as string;
+    const planItem = getPlanItem(planId);
+    const stars = planItem ? calculateStars(planItem.priceMonthly) : 0;
 
     const fakeUpdate: TelegramUpdate = {
       update_id: Date.now(),
@@ -69,7 +118,7 @@ export function createTelegramRouter(deps: TelegramRouterDeps): Router {
         date: Math.floor(Date.now() / 1000),
         successful_payment: {
           currency: 'XTR',
-          total_amount: 550,
+          total_amount: stars,
           invoice_payload: JSON.stringify({ planId, userId }),
           telegram_payment_charge_id: `tg_charge_${Date.now()}`,
         },
@@ -101,7 +150,6 @@ export function createTelegramRouter(deps: TelegramRouterDeps): Router {
       botUsername: supportBot.botUsername,
       botUrl: `https://t.me/${supportBot.botUsername}`,
       adminConnected: Boolean(supportStore.getAdminChatId()),
-      adminChatId: supportStore.getAdminChatId(),
       openTickets: supportStore.listOpenTickets().length,
       totalTickets: supportStore.listAllTickets().length,
     });
@@ -110,7 +158,7 @@ export function createTelegramRouter(deps: TelegramRouterDeps): Router {
   /**
    * Официальный Webhook для Telegram Support Bot API.
    */
-  router.post('/telegram/support/webhook', async (request: Request, response: Response): Promise<void> => {
+  router.post('/telegram/support/webhook', requireTelegramSecret(config.telegramSupportWebhookSecret), async (request: Request, response: Response): Promise<void> => {
     const update = request.body as TelegramUpdate;
     if (!update || typeof update !== 'object') {
       sendError(response, 400, 'invalid_update', 'Некорректное тело обновления Telegram');
@@ -129,7 +177,7 @@ export function createTelegramRouter(deps: TelegramRouterDeps): Router {
   /**
    * Список обращений (тикеты).
    */
-  router.get('/telegram/support/tickets', (_request: Request, response: Response) => {
+  router.get('/telegram/support/tickets', requireAuth, requireAdminUser, (_request: Request, response: Response) => {
     response.json({
       openTickets: supportStore.listOpenTickets(),
       allTickets: supportStore.listAllTickets(),
@@ -139,7 +187,7 @@ export function createTelegramRouter(deps: TelegramRouterDeps): Router {
   /**
    * Эмуляция отправки сообщения в поддержку (для тестов).
    */
-  router.post('/telegram/support/simulate-message', async (request: Request, response: Response): Promise<void> => {
+  router.post('/telegram/support/simulate-message', devOnly, async (request: Request, response: Response): Promise<void> => {
     const text = (request.body?.text as string) || 'Тестовая жалоба от пользователя';
     const userChatId = Number(request.body?.chatId || 10000001);
     const username = (request.body?.username as string) || 'test_user';

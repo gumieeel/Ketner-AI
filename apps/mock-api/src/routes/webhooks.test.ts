@@ -1,80 +1,161 @@
 import assert from 'node:assert/strict';
+import { createHmac } from 'node:crypto';
 import test from 'node:test';
-import { startTestServer } from '../testing/server.js';
+import { config } from '../config.js';
+import { readJson, startTestServer } from '../testing/server.js';
+import type { AuthSession } from '../types.js';
 
-test('webhooks: активация подписки, отмена и идемпотентность', async () => {
+/** Подписывает тело так же, как это делает платёжный провайдер: HMAC-SHA256 по сырым байтам. */
+function signedWebhook(body: unknown, secret: string = config.webhookSecret) {
+  const raw = JSON.stringify(body);
+  return {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'x-webhook-signature': createHmac('sha256', secret).update(raw).digest('hex'),
+    },
+    body: raw,
+  };
+}
+
+async function signup(baseUrl: string, email: string): Promise<{ token: string; id: string }> {
+  const res = await fetch(`${baseUrl}/api/auth/signup`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email, password: 'password123', name: 'Webhook User' }),
+  });
+  const body = await readJson<AuthSession>(res);
+  return { token: body.token, id: body.user.id };
+}
+
+async function currentSubscription(baseUrl: string, token: string) {
+  const res = await fetch(`${baseUrl}/api/billing/subscription`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  return ((await res.json()) as { subscription: { plan: string; status: string } }).subscription;
+}
+
+test('webhooks: активация подписки, отмена и идемпотентность (с подписью)', async () => {
   const server = await startTestServer();
 
   try {
+    const user = await signup(server.baseUrl, 'webhook-user@example.com');
     const eventId = `evt_test_${Date.now()}`;
+    const paid = {
+      id: eventId,
+      type: 'invoice.paid',
+      data: { userId: user.id, planId: 'gpt-pro' },
+    };
 
-    // 1. Событие invoice.paid -> обновление плана на gpt-pro
-    const payRes = await fetch(`${server.baseUrl}/api/webhooks`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        id: eventId,
-        type: 'invoice.paid',
-        data: {
-          userId: 'demo-user',
-          planId: 'gpt-pro',
-        },
-      }),
-    });
-
+    // 1. invoice.paid -> план gpt-pro
+    const payRes = await fetch(`${server.baseUrl}/api/webhooks`, signedWebhook(paid));
     assert.equal(payRes.status, 200);
     const payBody = (await payRes.json()) as { received: boolean; status?: string };
     assert.equal(payBody.received, true);
     assert.equal(payBody.status, 'processed');
 
-    // Проверяем, что подписка действительно активировалась
-    const subRes = await fetch(`${server.baseUrl}/api/billing/subscription`, {
-      headers: { 'x-user-id': 'demo-user' },
-    });
-    assert.equal(subRes.status, 200);
-    const subBody = (await subRes.json()) as { subscription: { plan: string; status: string } };
-    assert.equal(subBody.subscription.plan, 'gpt-pro');
-    assert.equal(subBody.subscription.status, 'active');
+    const active = await currentSubscription(server.baseUrl, user.token);
+    assert.equal(active.plan, 'gpt-pro');
+    assert.equal(active.status, 'active');
 
-    // 2. Идемпотентность: повторная отправка того же события
-    const replayRes = await fetch(`${server.baseUrl}/api/webhooks`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        id: eventId,
-        type: 'invoice.paid',
-        data: {
-          userId: 'demo-user',
-          planId: 'gpt-pro',
-        },
-      }),
-    });
-
+    // 2. Идемпотентность: то же событие повторно
+    const replayRes = await fetch(`${server.baseUrl}/api/webhooks`, signedWebhook(paid));
     assert.equal(replayRes.status, 200);
     const replayBody = (await replayRes.json()) as { received: boolean; idempotentReplay?: boolean };
-    assert.equal(replayBody.received, true);
     assert.equal(replayBody.idempotentReplay, true);
 
-    // 3. Отмена подписки (subscription.deleted)
-    const cancelRes = await fetch(`${server.baseUrl}/api/webhooks`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
+    // 3. Отмена подписки
+    const cancelRes = await fetch(
+      `${server.baseUrl}/api/webhooks`,
+      signedWebhook({
         id: `evt_cancel_${Date.now()}`,
         type: 'subscription.deleted',
-        data: {
-          userId: 'demo-user',
-        },
+        data: { userId: user.id },
       }),
-    });
+    );
     assert.equal(cancelRes.status, 200);
 
-    const subCanceled = await fetch(`${server.baseUrl}/api/billing/subscription`, {
-      headers: { 'x-user-id': 'demo-user' },
+    const canceled = await currentSubscription(server.baseUrl, user.token);
+    assert.equal(canceled.plan, 'free');
+    assert.equal(canceled.status, 'canceled');
+  } finally {
+    await server.close();
+  }
+});
+
+test('webhooks (C6): запрос без подписи, с чужой подписью или с изменённым телом отклоняется', async () => {
+  const server = await startTestServer();
+
+  try {
+    const user = await signup(server.baseUrl, 'webhook-victim@example.com');
+    const event = {
+      id: `evt_forged_${Date.now()}`,
+      type: 'invoice.paid',
+      data: { userId: user.id, planId: 'ultra' },
+    };
+    const raw = JSON.stringify(event);
+
+    // Без подписи
+    const unsigned = await fetch(`${server.baseUrl}/api/webhooks`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: raw,
     });
-    const subCanceledBody = (await subCanceled.json()) as { subscription: { plan: string; status: string } };
-    assert.equal(subCanceledBody.subscription.plan, 'free');
-    assert.equal(subCanceledBody.subscription.status, 'canceled');
+    assert.equal(unsigned.status, 401);
+
+    // Старый публичный секрет и «тестовая» подпись
+    const wrongSecret = await fetch(
+      `${server.baseUrl}/api/webhooks`,
+      signedWebhook(event, 'ketner-ai-webhook-secret-dev'),
+    );
+    assert.equal(wrongSecret.status, 401);
+    const testSignature = await fetch(`${server.baseUrl}/api/webhooks`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-webhook-signature': 'test-signature' },
+      body: raw,
+    });
+    assert.equal(testSignature.status, 401);
+
+    // Подпись от одного тела, отправлено другое
+    const valid = signedWebhook(event);
+    const tampered = await fetch(`${server.baseUrl}/api/webhooks`, {
+      ...valid,
+      body: JSON.stringify({ ...event, data: { userId: user.id, planId: 'pro' } }),
+    });
+    assert.equal(tampered.status, 401);
+
+    const sub = await currentSubscription(server.baseUrl, user.token);
+    assert.equal(sub.plan, 'free');
+  } finally {
+    await server.close();
+  }
+});
+
+test('cryptocloud postback (C6): без валидного токена тариф не выдаётся', async () => {
+  const server = await startTestServer();
+
+  try {
+    const user = await signup(server.baseUrl, 'cc-victim@example.com');
+    const auth = { Authorization: `Bearer ${user.token}`, 'Content-Type': 'application/json' };
+
+    const created = await fetch(`${server.baseUrl}/api/billing/crypto/create-invoice`, {
+      method: 'POST',
+      headers: auth,
+      body: JSON.stringify({ planId: 'plus', currency: 'USDT_TRC20' }),
+    });
+    const { invoice } = await readJson<{ invoice: { id: string } }>(created);
+
+    for (const token of [undefined, 'garbage', 'a.b.c', config.adminApiKey]) {
+      const res = await fetch(`${server.baseUrl}/api/billing/cryptocloud/postback`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: 'success', order_id: invoice.id, invoice_id: invoice.id, token }),
+      });
+      assert.equal(res.status, 401);
+    }
+
+    const sub = await currentSubscription(server.baseUrl, user.token);
+    assert.equal(sub.plan, 'free');
   } finally {
     await server.close();
   }

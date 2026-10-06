@@ -6,7 +6,7 @@
  */
 
 import { Router, type Request, type Response } from 'express';
-import { createHmac } from 'node:crypto';
+import { createHmac, timingSafeEqual } from 'node:crypto';
 import { config } from '../config.js';
 import { sendError } from '../middleware/errors.js';
 import type { SubscriptionStore } from '../store/subscription-store.js';
@@ -29,23 +29,25 @@ export function createWebhookRouter({
   const router = Router();
   const processedEvents = new Set<string>();
 
-  /** Проверка подписи HMAC-SHA256. */
+  /**
+   * Проверка подписи HMAC-SHA256 по сырому телу запроса (не по перепакованному JSON).
+   * Подпись обязательна всегда; сравнение выполняется за постоянное время.
+   */
   function verifySignature(req: Request): boolean {
     const signature = req.headers['x-webhook-signature'];
-    if (!signature || typeof signature !== 'string') {
+    const rawBody = (req as unknown as { rawBody?: Buffer }).rawBody;
+    if (typeof signature !== 'string' || !rawBody) {
       return false;
     }
 
-    const payload = JSON.stringify(req.body);
-    const expected = createHmac('sha256', webhookSecret).update(payload).digest('hex');
-    return signature === expected;
+    const expected = createHmac('sha256', webhookSecret).update(rawBody).digest('hex');
+    const given = Buffer.from(signature, 'utf8');
+    const wanted = Buffer.from(expected, 'utf8');
+    return given.length === wanted.length && timingSafeEqual(given, wanted);
   }
 
   router.post('/', async (request: Request, response: Response): Promise<void> => {
-    // В dev/test режиме, если сигнатура не передана или равна 'test-signature', пропускаем
-    const isTest = process.env.NODE_ENV === 'test';
-    const sig = request.headers['x-webhook-signature'];
-    if (!isTest && sig && !verifySignature(request)) {
+    if (!verifySignature(request)) {
       sendError(response, 401, 'invalid_signature', 'Неверная подпись вебхука');
       return;
     }
@@ -134,8 +136,12 @@ export function createWebhookRouter({
       return;
     }
 
-    const rawBody =
-      (request as unknown as { rawBody?: Buffer }).rawBody ?? JSON.stringify(request.body);
+    // Подпись Stripe считается по байтам запроса: без сырого тела проверять нечего.
+    const rawBody = (request as unknown as { rawBody?: Buffer }).rawBody;
+    if (!rawBody) {
+      sendError(response, 400, 'missing_raw_body', 'Не удалось получить тело запроса для проверки подписи');
+      return;
+    }
 
     try {
       const event = stripeService.constructEvent(rawBody, sig);

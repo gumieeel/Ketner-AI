@@ -154,6 +154,7 @@ export class TelegramSupportBotService {
         const webhookUrl = `${effectiveBaseUrl.replace(/\/$/, '')}/api/telegram/support/webhook`;
         const res = await this.callApi<{ ok: boolean }>('setWebhook', {
           url: webhookUrl,
+          secret_token: config.telegramSupportWebhookSecret,
           allowed_updates: ['message', 'callback_query'],
         });
         if (res) {

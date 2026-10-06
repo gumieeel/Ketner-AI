@@ -172,6 +172,11 @@ export const config = {
    * Публичный демо-аккаунт (demo@ketner.ai). Включён вне production;
    * в production только при явном ENABLE_DEMO_ACCOUNT=true.
    */
+  /**
+   * Заглушки оплаты (активация тарифа без платежа: прямой checkout, СБП-«подтверждение»,
+   * Stripe без ключей). Только вне production — в production их нет совсем.
+   */
+  enableMockBilling: !isProduction,
   enableDemoAccount: !isProduction || optionalEnv('ENABLE_DEMO_ACCOUNT') === 'true',
 
   /** Пользователь и план заглушки: реальные аккаунты появятся на этапе 3. */
@@ -263,6 +268,12 @@ export const config = {
   telegramBotUsername: process.env.TELEGRAM_BOT_USERNAME || 'Robo_kassa_bot',
   telegramPaymentProviderToken: process.env.TELEGRAM_PAYMENT_PROVIDER_TOKEN || '',
   telegramWebhookUrl: process.env.TELEGRAM_WEBHOOK_URL || '',
+  /**
+   * secret_token для вебхуков Telegram: передаётся в setWebhook, Telegram присылает его в
+   * заголовке X-Telegram-Bot-Api-Secret-Token. Выводится из корневого секрета (hex, 64 символа).
+   */
+  telegramWebhookSecret: deriveSecret(betterAuthSecret, 'ketner:telegram-webhook:payments:v1'),
+  telegramSupportWebhookSecret: deriveSecret(betterAuthSecret, 'ketner:telegram-webhook:support:v1'),
 
   /** Telegram Support Bot для приёма жалоб и поддержки пользователей. */
   telegramSupportBotToken: optionalEnv('TELEGRAM_SUPPORT_BOT_TOKEN'),

@@ -1,8 +1,28 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
+import { config } from '../config.js';
 import { readJson, startTestServer } from '../testing/server.js';
-import type { SbpInvoice, Subscription, TelegramStarsInvoice, User } from '../types.js';
-import { calculateStars } from '../telegram/bot.js';
+import type { AuthSession, SbpInvoice, Subscription, TelegramStarsInvoice, User } from '../types.js';
+import { calculateStars, getPlanItem } from '../telegram/bot.js';
+
+/** Регистрирует администратора сайта (адрес из ADMIN_EMAILS) и возвращает заголовок авторизации. */
+async function signupAdmin(baseUrl: string): Promise<{ Authorization: string }> {
+  const email = 'tg-admin@example.com';
+  const admins = config.adminEmails as unknown as string[];
+  if (!admins.includes(email)) admins.push(email);
+  const res = await fetch(`${baseUrl}/api/auth/signup`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email, password: 'password123', name: 'TG Admin' }),
+  });
+  const body = await readJson<AuthSession>(res);
+  return { Authorization: `Bearer ${body.token}` };
+}
+
+const tgHeaders = {
+  'Content-Type': 'application/json',
+  'X-Telegram-Bot-Api-Secret-Token': config.telegramWebhookSecret,
+};
 
 test('telegram: статус бота GET /api/telegram/status', async (t) => {
   const server = await startTestServer();
@@ -35,7 +55,7 @@ test('telegram: обработка /start pay_<planId>_<userId> через webho
 
   const response = await fetch(`${server.baseUrl}/api/telegram/webhook`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', 'X-Telegram-Bot-Api-Secret-Token': config.telegramWebhookSecret },
     body: JSON.stringify(update),
   });
   assert.equal(response.status, 200);
@@ -67,7 +87,7 @@ test('telegram: callback_query для СБП генерирует инвойс',
 
   const response = await fetch(`${server.baseUrl}/api/telegram/webhook`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', 'X-Telegram-Bot-Api-Secret-Token': config.telegramWebhookSecret },
     body: JSON.stringify(update),
   });
   assert.equal(response.status, 200);
@@ -83,7 +103,15 @@ test('telegram: successful_payment активирует подписку', async
   const server = await startTestServer();
   t.after(() => server.close());
 
-  const targetUserId = 'tg-paid-user';
+  const reg = await fetch(`${server.baseUrl}/api/auth/signup`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email: 'tg-paid@example.com', password: 'password123', name: 'Paid' }),
+  });
+  const { token, user } = await readJson<AuthSession>(reg);
+
+  const ultraPrice = getPlanItem('ultra')?.priceMonthly ?? 0;
+  assert.ok(ultraPrice > 0);
 
   const update = {
     update_id: 1003,
@@ -93,8 +121,8 @@ test('telegram: successful_payment активирует подписку', async
       date: Math.floor(Date.now() / 1000),
       successful_payment: {
         currency: 'XTR',
-        total_amount: 1350,
-        invoice_payload: JSON.stringify({ planId: 'ultra', userId: targetUserId }),
+        total_amount: calculateStars(ultraPrice),
+        invoice_payload: JSON.stringify({ planId: 'ultra', userId: user.id }),
         telegram_payment_charge_id: 'ch_test_123',
       },
     },
@@ -102,7 +130,7 @@ test('telegram: successful_payment активирует подписку', async
 
   const response = await fetch(`${server.baseUrl}/api/telegram/webhook`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: tgHeaders,
     body: JSON.stringify(update),
   });
   assert.equal(response.status, 200);
@@ -114,10 +142,11 @@ test('telegram: successful_payment активирует подписку', async
 
   // Проверяем, что подписка пользователя обновилась на ultra
   const subRes = await fetch(`${server.baseUrl}/api/billing/subscription`, {
-    headers: { 'x-user-id': targetUserId },
+    headers: { Authorization: `Bearer ${token}` },
   });
   const subData = await readJson<{ subscription: Subscription }>(subRes);
   assert.equal(subData.subscription.plan, 'ultra');
+
   assert.equal(subData.subscription.status, 'active');
 });
 
@@ -125,10 +154,18 @@ test('billing: оплата по СБП (создание, статус и по�
   const server = await startTestServer();
   t.after(() => server.close());
 
+  const reg = await fetch(`${server.baseUrl}/api/auth/signup`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email: 'sbp-user@example.com', password: 'password123', name: 'Pay' }),
+  });
+  const { token } = await readJson<AuthSession>(reg);
+  const auth = { Authorization: `Bearer ${token}` };
+
   // 1. Создание инвойса СБП
   const createRes = await fetch(`${server.baseUrl}/api/billing/sbp/create-invoice`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', ...auth },
     body: JSON.stringify({ planId: 'gpt-pro' }),
   });
   assert.equal(createRes.status, 200);
@@ -142,7 +179,7 @@ test('billing: оплата по СБП (создание, статус и по�
   assert.ok(invoice.deepLink.startsWith('https://qr.nspk.ru/'));
 
   // 2. Проверка статуса
-  const statusRes = await fetch(`${server.baseUrl}/api/billing/sbp/status/${invoice.id}`);
+  const statusRes = await fetch(`${server.baseUrl}/api/billing/sbp/status/${invoice.id}`, { headers: auth });
   assert.equal(statusRes.status, 200);
   const statusData = await readJson<{ status: string; invoice: SbpInvoice }>(statusRes);
   assert.equal(statusData.status, 'pending');
@@ -150,6 +187,7 @@ test('billing: оплата по СБП (создание, статус и по�
   // 3. Подтверждение оплаты СБП
   const confirmRes = await fetch(`${server.baseUrl}/api/billing/sbp/confirm/${invoice.id}`, {
     method: 'POST',
+    headers: auth,
   });
   assert.equal(confirmRes.status, 200);
   const confirmData = await readJson<{
@@ -167,10 +205,18 @@ test('billing: Telegram Stars (создание счёта в ⭐️ XTR и по
   const server = await startTestServer();
   t.after(() => server.close());
 
+  const reg = await fetch(`${server.baseUrl}/api/auth/signup`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email: 'stars-user@example.com', password: 'password123', name: 'Pay' }),
+  });
+  const { token } = await readJson<AuthSession>(reg);
+  const auth = { Authorization: `Bearer ${token}` };
+
   // 1. Создание счёта Stars для тарифа Ultra
   const createRes = await fetch(`${server.baseUrl}/api/billing/telegram-stars/create-invoice`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', ...auth },
     body: JSON.stringify({ planId: 'ultra' }),
   });
   assert.equal(createRes.status, 200);
@@ -186,6 +232,7 @@ test('billing: Telegram Stars (создание счёта в ⭐️ XTR и по
   // 2. Статус
   const statusRes = await fetch(
     `${server.baseUrl}/api/billing/telegram-stars/status/${invoice.id}`,
+    { headers: auth },
   );
   assert.equal(statusRes.status, 200);
   const statusData = await readJson<{ status: string; invoice: TelegramStarsInvoice }>(statusRes);
@@ -196,6 +243,7 @@ test('billing: Telegram Stars (создание счёта в ⭐️ XTR и по
     `${server.baseUrl}/api/billing/telegram-stars/confirm/${invoice.id}`,
     {
       method: 'POST',
+      headers: auth,
     },
   );
   assert.equal(confirmRes.status, 200);
@@ -249,7 +297,7 @@ test('telegram support bot: создание тикета, отправка ад
   };
   const adminRes = await fetch(`${server.baseUrl}/api/telegram/support/webhook`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', 'X-Telegram-Bot-Api-Secret-Token': config.telegramSupportWebhookSecret },
     body: JSON.stringify(adminStartUpdate),
   });
   assert.equal(adminRes.status, 200);
@@ -270,15 +318,16 @@ test('telegram support bot: создание тикета, отправка ад
   };
   const userRes = await fetch(`${server.baseUrl}/api/telegram/support/webhook`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', 'X-Telegram-Bot-Api-Secret-Token': config.telegramSupportWebhookSecret },
     body: JSON.stringify(userMsgUpdate),
   });
   assert.equal(userRes.status, 200);
   const userBody = await readJson<{ ok: boolean; result: { handled: boolean; action: string } }>(userRes);
   assert.equal(userBody.result.action, 'user_ticket_message_processed');
 
-  // 4. Проверяем список тикетов
-  const ticketsRes = await fetch(`${server.baseUrl}/api/telegram/support/tickets`);
+  // 4. Проверяем список тикетов (доступен только администратору сайта)
+  const adminAuth = await signupAdmin(server.baseUrl);
+  const ticketsRes = await fetch(`${server.baseUrl}/api/telegram/support/tickets`, { headers: adminAuth });
   assert.equal(ticketsRes.status, 200);
   const ticketsData = await readJson<{ openTickets: Array<{ id: string; userChatId: number; messages: Array<{ text: string }> }> }>(ticketsRes);
   assert.equal(ticketsData.openTickets.length, 1);
@@ -299,7 +348,7 @@ test('telegram support bot: создание тикета, отправка ад
   };
   const replyRes = await fetch(`${server.baseUrl}/api/telegram/support/webhook`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', 'X-Telegram-Bot-Api-Secret-Token': config.telegramSupportWebhookSecret },
     body: JSON.stringify(adminReplyUpdate),
   });
   assert.equal(replyRes.status, 200);
@@ -307,7 +356,7 @@ test('telegram support bot: создание тикета, отправка ад
   assert.equal(replyBody.result.action, 'admin_reply_delivered');
 
   // 6. Проверяем, что в истории тикета появился ответ администратора
-  const updatedTicketsRes = await fetch(`${server.baseUrl}/api/telegram/support/tickets`);
+  const updatedTicketsRes = await fetch(`${server.baseUrl}/api/telegram/support/tickets`, { headers: adminAuth });
   const updatedTickets = await readJson<{ openTickets: Array<{ id: string; messages: Array<{ from: string; text: string }> }> }>(updatedTicketsRes);
   const updatedTicket = updatedTickets.openTickets[0];
   assert.equal(updatedTicket.messages.length, 2);
@@ -365,7 +414,7 @@ test('telegram: привязка аккаунта через /start link_<userId
 
   const linkRes = await fetch(`${server.baseUrl}/api/telegram/webhook`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', 'X-Telegram-Bot-Api-Secret-Token': config.telegramWebhookSecret },
     body: JSON.stringify(linkUpdate),
   });
   assert.equal(linkRes.status, 200);
@@ -394,7 +443,7 @@ test('telegram: привязка аккаунта через /start link_<userId
   };
   const statusRes = await fetch(`${server.baseUrl}/api/telegram/webhook`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', 'X-Telegram-Bot-Api-Secret-Token': config.telegramWebhookSecret },
     body: JSON.stringify(statusUpdate),
   });
   assert.equal(statusRes.status, 200);
@@ -414,7 +463,7 @@ test('telegram: привязка аккаунта через /start link_<userId
   };
   const unlinkRes = await fetch(`${server.baseUrl}/api/telegram/webhook`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', 'X-Telegram-Bot-Api-Secret-Token': config.telegramWebhookSecret },
     body: JSON.stringify(unlinkUpdate),
   });
   assert.equal(unlinkRes.status, 200);
@@ -423,3 +472,157 @@ test('telegram: привязка аккаунта через /start link_<userId
 });
 
 
+
+test('telegram (C6): вебхуки принимают только запросы с secret_token', async (t) => {
+  const server = await startTestServer();
+  t.after(() => server.close());
+
+  const update = { update_id: 1, message: { message_id: 1, chat: { id: 5, type: 'private' }, date: 1, text: '/start' } };
+  for (const path of ['/api/telegram/webhook', '/api/telegram/support/webhook']) {
+    for (const headers of [
+      { 'Content-Type': 'application/json' },
+      { 'Content-Type': 'application/json', 'X-Telegram-Bot-Api-Secret-Token': 'wrong' },
+      // секрет платёжного бота не подходит поддержке и наоборот
+      {
+        'Content-Type': 'application/json',
+        'X-Telegram-Bot-Api-Secret-Token':
+          path.includes('support') ? config.telegramWebhookSecret : config.telegramSupportWebhookSecret,
+      },
+    ]) {
+      const res = await fetch(`${server.baseUrl}${path}`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify(update),
+      });
+      assert.equal(res.status, 401, `${path} должен отклонять запрос`);
+    }
+  }
+});
+
+test('telegram (C6): платёж Stars с неверной суммой, валютой или тарифом не активирует подписку', async (t) => {
+  const server = await startTestServer();
+  t.after(() => server.close());
+
+  const victim = await fetch(`${server.baseUrl}/api/auth/signup`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email: 'stars-victim@example.com', password: 'password123', name: 'Stars' }),
+  });
+  const { token, user } = await readJson<AuthSession>(victim);
+
+  const pay = (payload: object, extra: { currency?: string; total?: number; charge?: string }) =>
+    fetch(`${server.baseUrl}/api/telegram/webhook`, {
+      method: 'POST',
+      headers: tgHeaders,
+      body: JSON.stringify({
+        update_id: Date.now(),
+        message: {
+          message_id: 1,
+          chat: { id: 424242, type: 'private' },
+          date: 1,
+          successful_payment: {
+            currency: extra.currency ?? 'XTR',
+            total_amount: extra.total ?? 5000,
+            invoice_payload: JSON.stringify(payload),
+            telegram_payment_charge_id: extra.charge ?? `charge_${Math.random()}`,
+          },
+        },
+      }),
+    });
+
+  const cases: Array<[string, Response]> = [
+    ['слишком маленькая сумма', await pay({ planId: 'ultra', userId: user.id }, { total: 1 })],
+    ['не та валюта', await pay({ planId: 'ultra', userId: user.id }, { currency: 'USD' })],
+    ['неизвестный тариф', await pay({ planId: 'nope', userId: user.id }, {})],
+    ['тариф free', await pay({ planId: 'free', userId: user.id }, {})],
+    ['несуществующий счёт', await pay({ planId: 'plus', userId: user.id, invoiceId: 'missing' }, {})],
+    ['мусор вместо payload', await pay({}, {})],
+  ];
+  for (const [name, res] of cases) {
+    const body = await readJson<{ result: { action: string } }>(res);
+    assert.equal(body.result.action, 'stars_payment_rejected', name);
+  }
+
+  const sub = await fetch(`${server.baseUrl}/api/billing/subscription`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  const { subscription } = await readJson<{ subscription: Subscription }>(sub);
+  assert.equal(subscription.plan, 'free');
+});
+
+test('telegram (C6): повторная доставка одного платежа обрабатывается один раз', async (t) => {
+  const server = await startTestServer();
+  t.after(() => server.close());
+
+  const created = await fetch(`${server.baseUrl}/api/auth/signup`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email: 'stars-dup@example.com', password: 'password123', name: 'Dup' }),
+  });
+  const { user } = await readJson<AuthSession>(created);
+  const stars = calculateStars(990);
+  const send = () =>
+    fetch(`${server.baseUrl}/api/telegram/webhook`, {
+      method: 'POST',
+      headers: tgHeaders,
+      body: JSON.stringify({
+        update_id: 1,
+        message: {
+          message_id: 1,
+          chat: { id: 515151, type: 'private' },
+          date: 1,
+          successful_payment: {
+            currency: 'XTR',
+            total_amount: stars,
+            invoice_payload: JSON.stringify({ planId: 'plus', userId: user.id }),
+            telegram_payment_charge_id: 'charge_dup_1',
+          },
+        },
+      }),
+    });
+
+  const first = await readJson<{ result: { action: string } }>(await send());
+  assert.equal(first.result.action, 'stars_payment_completed');
+  const second = await readJson<{ result: { action: string } }>(await send());
+  assert.equal(second.result.action, 'stars_payment_duplicate');
+});
+
+test('telegram (C6): отладочные эндпоинты закрыты в production, тикеты — только админам', async (t) => {
+  const server = await startTestServer();
+  t.after(() => server.close());
+
+  // Тикеты: без входа 401, обычный пользователь 403
+  const anon = await fetch(`${server.baseUrl}/api/telegram/support/tickets`);
+  assert.equal(anon.status, 401);
+  const reg = await fetch(`${server.baseUrl}/api/auth/signup`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email: 'plain-user@example.com', password: 'password123', name: 'Plain' }),
+  });
+  const { token } = await readJson<AuthSession>(reg);
+  const plain = await fetch(`${server.baseUrl}/api/telegram/support/tickets`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  assert.equal(plain.status, 403);
+
+  // Симуляции: в production их нет
+  const mutable = config as unknown as { enableMockBilling: boolean };
+  const previous = mutable.enableMockBilling;
+  mutable.enableMockBilling = false;
+  try {
+    const sim = await fetch(`${server.baseUrl}/api/telegram/simulate-payment`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ planId: 'ultra', userId: 'anyone' }),
+    });
+    assert.equal(sim.status, 404);
+    const simSupport = await fetch(`${server.baseUrl}/api/telegram/support/simulate-message`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text: 'x' }),
+    });
+    assert.equal(simSupport.status, 404);
+  } finally {
+    mutable.enableMockBilling = previous;
+  }
+});
