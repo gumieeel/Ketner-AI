@@ -119,6 +119,7 @@ const COMPROMISED_SALTS: ReadonlySet<string> = new Set([
 
 const DEMO_EMAIL = 'demo@ketner.ai';
 const MIN_SEED_PASSWORD_LENGTH = 12;
+const SEED_EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 function readSnapshot(file: string): Snapshot {
   const demo = config.enableDemoAccount ? [DEFAULT_DEMO_USER] : [];
@@ -376,6 +377,11 @@ export function createUserStore(file: string): UserStore {
       const email = config.seedAdminEmail;
       const password = config.seedAdminPassword;
       if (!email || !password) {
+        return;
+      }
+      if (!SEED_EMAIL_PATTERN.test(email)) {
+        // Значение намеренно не печатаем: при ошибке конфигурации там может оказаться пароль.
+        console.warn('[auth] SEED_ADMIN_EMAIL не похож на email: первичный администратор не создан');
         return;
       }
       if (password.length < MIN_SEED_PASSWORD_LENGTH) {
