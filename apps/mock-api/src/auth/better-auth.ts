@@ -181,7 +181,9 @@ export function createBetterAuth(options: BetterAuthInstanceOptions = {}) {
           // Адреса из ADMIN_EMAILS / VIP_EMAILS получают повышенные права по самому email.
           // В production их нельзя занять самостоятельной регистрацией по паролю:
           // допускается только вход через провайдера, подтвердившего владение адресом.
-          before: async (user: { email?: string | null; emailVerified?: boolean | null }) => {
+          // Тип параметра выводится из Better Auth: ручная аннотация расходилась с ним
+          // (email: string у библиотеки, string | null у нас) и ломала сборку.
+          before: async (user) => {
             if (
               isProduction &&
               user.emailVerified !== true &&
@@ -189,7 +191,7 @@ export function createBetterAuth(options: BetterAuthInstanceOptions = {}) {
             ) {
               return false;
             }
-            return { data: user };
+            return true;
           },
         },
       },

@@ -87,7 +87,19 @@ function secretEnv(name: string, devFallback: string): string {
     throw new Error(`[config] ${name} слишком короткий: нужно минимум ${MIN_SECRET_LENGTH} символов`);
   }
   if (COMPROMISED_SECRETS.has(value)) {
-    throw new Error(`[config] ${name} совпадает с ранее опубликованным значением: сгенерируйте новое`);
+    // Осознанное исключение владельца: ключ был опубликован в репозитории, поэтому
+    // любой, кто его видел, может подделать сессии. По умолчанию запуск запрещён.
+    if (process.env.ALLOW_COMPROMISED_SECRETS?.trim() === 'true') {
+      console.warn(
+        `[config] ВНИМАНИЕ: ${name} совпадает с ранее опубликованным значением ` +
+          '(ALLOW_COMPROMISED_SECRETS=true). Замените его при первой возможности.',
+      );
+      return value;
+    }
+    throw new Error(
+      `[config] ${name} совпадает с ранее опубликованным значением: сгенерируйте новое ` +
+        '(или временно задайте ALLOW_COMPROMISED_SECRETS=true на свой риск)',
+    );
   }
   return value;
 }
