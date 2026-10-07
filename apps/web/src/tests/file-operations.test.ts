@@ -203,7 +203,8 @@ const mode = "production";
   describe('local-writer: безопасность записи', () => {
     function makeRoot(initial: Record<string, string>) {
       const disk: Record<string, string> = { ...initial };
-      const dirFor = (prefix: string) => ({
+      // Явный `any`: фабрика рекурсивна (каталог возвращает вложенные каталоги), иначе TS7023.
+      const dirFor = (prefix: string): any => ({
         getDirectoryHandle: vi.fn(async (name: string) => dirFor(prefix ? `${prefix}/${name}` : name)),
         getFileHandle: vi.fn(async (name: string, opts?: { create?: boolean }) => {
           const path = prefix ? `${prefix}/${name}` : name;
