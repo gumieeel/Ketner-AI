@@ -15,6 +15,10 @@ export interface UsedTxRecord {
 export interface UsedTxStore {
   isTxUsed(txHash: string): boolean;
   recordUsedTx(record: UsedTxRecord): void;
+  /** Атомарно занимает TxID: false, если он уже занят. Проверка и запись — один синхронный шаг. */
+  reserveTx(record: UsedTxRecord): boolean;
+  /** Освобождает ранее занятый TxID (проверка не удалась — хеш можно подать снова). */
+  releaseTx(txHash: string): void;
   getUsedTx(txHash: string): UsedTxRecord | undefined;
   list(): UsedTxRecord[];
   clear(): void;
@@ -82,6 +86,26 @@ export function createUsedTxStore(file?: string): UsedTxStore {
         createdAt: record.createdAt || new Date().toISOString(),
       });
       persist();
+    },
+
+    reserveTx(record: UsedTxRecord): boolean {
+      if (!record.txHash) return false;
+      const key = record.txHash.toLowerCase().trim();
+      if (map.has(key)) return false;
+      map.set(key, {
+        ...record,
+        txHash: key,
+        createdAt: record.createdAt || new Date().toISOString(),
+      });
+      persist();
+      return true;
+    },
+
+    releaseTx(txHash: string): void {
+      if (!txHash) return;
+      if (map.delete(txHash.toLowerCase().trim())) {
+        persist();
+      }
     },
 
     getUsedTx(txHash: string): UsedTxRecord | undefined {

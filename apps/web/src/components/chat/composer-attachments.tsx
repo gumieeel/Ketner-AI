@@ -1,5 +1,5 @@
 import { CloseIcon, CodeIcon, FileTextIcon, VideoIcon } from '@/components/icons';
-import { formatFileSize, getFileExtension } from '@/features/chat/attachment-utils';
+import { attachmentHasText, formatFileSize, getFileExtension } from '@/features/chat/attachment-utils';
 import type { MessageAttachment } from '@/features/chat/types';
 
 interface ComposerAttachmentsProps {
@@ -16,6 +16,12 @@ export function ComposerAttachments({ attachments, onRemove }: ComposerAttachmen
     <div className="flex flex-wrap items-center gap-2 pb-2">
       {attachments.map((att) => {
         const ext = getFileExtension(att.name).toUpperCase() || 'FILE';
+        // Честно показываем, что именно увидит модель: текст есть не у каждого вложения.
+        const warning = attachmentHasText(att)
+          ? null
+          : att.category === 'image'
+            ? 'картинка не анализируется'
+            : 'текст не извлечён';
 
         return (
           <div
@@ -49,6 +55,11 @@ export function ComposerAttachments({ attachments, onRemove }: ComposerAttachmen
                 <span>•</span>
                 <span>{formatFileSize(att.size)}</span>
               </div>
+              {warning && (
+                <span className="truncate text-[10px] text-amber-500" title="Модель получит только название и размер файла">
+                  {warning}
+                </span>
+              )}
             </div>
 
             <button

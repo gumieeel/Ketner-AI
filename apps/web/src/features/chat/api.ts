@@ -1,4 +1,4 @@
-import { getAuthToken, useAuth } from '../auth/auth-store';
+import { getAuthToken } from '../auth/auth-store';
 import { readSseStream } from './sse';
 import { API_BASE } from '@/lib/api-config';
 import type { ChatMeta, Conversation, ConversationSummary, Language, Message } from './types';
@@ -94,7 +94,11 @@ export function fetchMeta(): Promise<ChatMeta> {
 
 export interface CompletionHandlers {
   onDelta: (content: string) => void;
-  onDone: (payload: { messageId: string }) => void;
+  onDone: (payload: {
+    messageId: string;
+    finishReason?: 'stop' | 'length' | 'cancelled' | 'error';
+    canContinue?: boolean;
+  }) => void;
   onError: (payload: { code: string; message: string }) => void;
 }
 
@@ -122,9 +126,7 @@ export async function streamCompletion(
   if (token) {
     headers['Authorization'] = `Bearer ${token}`;
   }
-  // Поля userId/userEmail/userPlan в теле остаются до исправления C8 (сервер перестанет им доверять).
-  const currentUser = useAuth.getState().user;
-
+  // Личность и тариф определяет сервер по сессии; клиент их не присылает.
   const response = await fetch(`${API_BASE}/chat/completions`, {
     method: 'POST',
     headers,
@@ -136,9 +138,6 @@ export async function streamCompletion(
       // `language` — заглушечная замена системного промпта: у реального
       // провайдера язык ответа задаётся системным сообщением.
       language: completion.language,
-      userId: currentUser?.id,
-      userEmail: currentUser?.email,
-      userPlan: currentUser?.plan,
       messages: completion.messages.map((message, idx) => {
         const isLatest = idx === completion.messages.length - 1;
         let wsContext = message.workspaceContext;
@@ -175,7 +174,15 @@ export async function streamCompletion(
     if (event.event === 'delta') {
       handlers.onDelta(typeof payload.content === 'string' ? payload.content : '');
     } else if (event.event === 'done') {
-      handlers.onDone({ messageId: String(payload.messageId ?? '') });
+      const reason = payload.finishReason;
+      handlers.onDone({
+        messageId: String(payload.messageId ?? ''),
+        finishReason:
+          reason === 'stop' || reason === 'length' || reason === 'cancelled' || reason === 'error'
+            ? reason
+            : undefined,
+        canContinue: payload.canContinue === true,
+      });
     } else if (event.event === 'error') {
       handlers.onError({
         code: String(payload.code ?? 'upstream_error'),

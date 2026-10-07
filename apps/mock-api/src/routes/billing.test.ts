@@ -318,3 +318,83 @@ test('billing (C5): в production заглушки оплаты выключен
   const { subscription } = await readJson<{ subscription: Subscription }>(sub);
   assert.equal(subscription.plan, 'free');
 });
+
+test('billing (C7): параллельные подтверждения одного TxID активируют тариф один раз', async (t) => {
+  const server = await startTestServer();
+  t.after(() => server.close());
+  const user = await signup(server.baseUrl, 'c7-race@example.com');
+  const headers = { 'Content-Type': 'application/json', Authorization: `Bearer ${user.token}` };
+
+  const makeInvoice = async (): Promise<string> => {
+    const res = await fetch(`${server.baseUrl}/api/billing/crypto/create-invoice`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ planId: 'plus', currency: 'USDT_TRC20' }),
+    });
+    return (await readJson<{ invoice: { id: string } }>(res)).invoice.id;
+  };
+  const [first, second] = [await makeInvoice(), await makeInvoice()];
+  const hash = `TEST_VALID_RACE_${Date.now()}`;
+
+  const confirm = (invoiceId: string) =>
+    fetch(`${server.baseUrl}/api/billing/crypto/confirm/${invoiceId}`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ txHash: hash, mode: 'manual' }),
+    });
+  const results = await Promise.all([confirm(first), confirm(second)]);
+  const statuses = results.map((r) => r.status).sort();
+  assert.deepEqual(statuses, [200, 400], 'один запрос проходит, второй — tx_already_used');
+});
+
+test('billing (C7): без шлюза и без ENABLE_MANUAL_CRYPTO крипто-счёт не создаётся', async (t) => {
+  const server = await startTestServer();
+  t.after(() => server.close());
+  const user = await signup(server.baseUrl, 'c7-prod@example.com');
+  const headers = { 'Content-Type': 'application/json', Authorization: `Bearer ${user.token}` };
+
+  const mutable = config as unknown as { enableMockBilling: boolean; manualCryptoEnabled: boolean };
+  const previous = { ...mutable };
+  mutable.enableMockBilling = false;
+  mutable.manualCryptoEnabled = false;
+  try {
+    const create = await fetch(`${server.baseUrl}/api/billing/crypto/create-invoice`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ planId: 'plus', currency: 'USDT_TRC20' }),
+    });
+    assert.equal(create.status, 501);
+
+    // Ручное подтверждение включено, но валюта не TRC-20: счёт не создаётся
+    mutable.manualCryptoEnabled = true;
+    const ton = await fetch(`${server.baseUrl}/api/billing/crypto/create-invoice`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ planId: 'plus', currency: 'TON' }),
+    });
+    assert.equal(ton.status, 400);
+
+    // TRC-20 доступен, а «тестовый» TxID в production — просто неверный формат
+    const ok = await fetch(`${server.baseUrl}/api/billing/crypto/create-invoice`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ planId: 'plus', currency: 'USDT_TRC20' }),
+    });
+    assert.equal(ok.status, 200);
+    const { invoice } = await readJson<{ invoice: { id: string } }>(ok);
+    const fake = await fetch(`${server.baseUrl}/api/billing/crypto/confirm/${invoice.id}`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ txHash: 'TEST_VALID_FREE_PLAN', mode: 'manual' }),
+    });
+    assert.equal(fake.status, 400);
+    const body = await readJson<{ error: { code: string } }>(fake);
+    assert.equal(body.error.code, 'invalid_tx_format');
+  } finally {
+    Object.assign(mutable, previous);
+  }
+
+  const sub = await fetch(`${server.baseUrl}/api/billing/subscription`, { headers });
+  const { subscription } = await readJson<{ subscription: Subscription }>(sub);
+  assert.equal(subscription.plan, 'free');
+});

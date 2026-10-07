@@ -1,5 +1,7 @@
 import type { FileChangeItem, WorkspaceContext } from '../types';
 import { useWorkspace } from '../workspace-store';
+import { sanitizeChangePath } from './path-safety';
+import { applyTextEdits } from './text-patch';
 
 // Реестр хэндлов папок в памяти сессии
 const handleRegistry = new Map<string, any>();
@@ -26,6 +28,34 @@ async function verifyPermission(fileHandle: any, readWrite: boolean): Promise<bo
   return false;
 }
 
+/** Путь внутри папки проекта; выход за её пределы (`..`) и служебные папки отклоняются. */
+function safeRelativeParts(relativePath: string): string[] {
+  const checked = sanitizeChangePath(relativePath);
+  if (!checked.ok) throw new Error(`Некорректный путь к файлу: ${checked.reason}`);
+  return checked.path.split('/');
+}
+
+async function resolveDirectory(rootHandle: any, parts: string[], create: boolean): Promise<any> {
+  let currentDir = rootHandle;
+  for (const part of parts) {
+    currentDir = await currentDir.getDirectoryHandle(part, { create });
+  }
+  return currentDir;
+}
+
+/**
+ * Читает текущее содержимое локального файла прямо с диска.
+ */
+export async function readLocalFile(rootHandle: any, relativePath: string): Promise<string> {
+  const parts = safeRelativeParts(relativePath);
+  const fileName = parts.pop();
+  if (!fileName) throw new Error('Некорректный путь к файлу');
+  const dir = await resolveDirectory(rootHandle, parts, false);
+  const fileHandle = await dir.getFileHandle(fileName, { create: false });
+  const file = await fileHandle.getFile();
+  return await file.text();
+}
+
 /**
  * Записывает или перезаписывает локальный файл по относительному пути внутри папки проекта.
  */
@@ -34,16 +64,11 @@ export async function writeLocalFile(
   relativePath: string,
   content: string,
 ): Promise<void> {
-  const normalized = relativePath.replace(/\\/g, '/').replace(/^\//, '');
-  const parts = normalized.split('/');
+  const parts = safeRelativeParts(relativePath);
   const fileName = parts.pop();
   if (!fileName) throw new Error('Некорректный путь к файлу');
 
-  let currentDir = rootHandle;
-  for (const part of parts) {
-    if (part === '.' || part === '') continue;
-    currentDir = await currentDir.getDirectoryHandle(part, { create: true });
-  }
+  const currentDir = await resolveDirectory(rootHandle, parts, true);
 
   const fileHandle = await currentDir.getFileHandle(fileName, { create: true });
   const writable = await fileHandle.createWritable();
@@ -58,17 +83,11 @@ export async function deleteLocalFile(
   rootHandle: any,
   relativePath: string,
 ): Promise<void> {
-  const normalized = relativePath.replace(/\\/g, '/').replace(/^\//, '');
-  const parts = normalized.split('/');
+  const parts = safeRelativeParts(relativePath);
   const fileName = parts.pop();
   if (!fileName) throw new Error('Некорректный путь к файлу');
 
-  let currentDir = rootHandle;
-  for (const part of parts) {
-    if (part === '.' || part === '') continue;
-    currentDir = await currentDir.getDirectoryHandle(part, { create: false });
-  }
-
+  const currentDir = await resolveDirectory(rootHandle, parts, false);
   await currentDir.removeEntry(fileName);
 }
 
@@ -103,7 +122,18 @@ export async function applyLocalChanges(
         useWorkspace.getState().removeWorkspaceFile(change.path);
         appliedCount++;
       } else {
-        const contentToWrite = change.modifiedContent ?? change.content ?? '';
+        let contentToWrite = change.modifiedContent ?? change.content ?? '';
+        if (change.action === 'replace' && change.edits && change.edits.length > 0) {
+          // Точечные правки применяются к тому, что лежит на диске сейчас, а не к снимку из памяти:
+          // файл мог измениться, а снимок — оказаться устаревшим или обрезанным.
+          const fresh = await readLocalFile(rootHandle, change.path);
+          const result = applyTextEdits(fresh, change.edits);
+          if (!result.ok) {
+            errors.push(`${change.path}: ${result.reason}. Файл не изменён.`);
+            continue;
+          }
+          contentToWrite = result.text;
+        }
         await writeLocalFile(rootHandle, change.path, contentToWrite);
         updatedFiles.push({ path: change.path, content: contentToWrite });
         appliedCount++;

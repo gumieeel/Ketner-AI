@@ -1,9 +1,10 @@
 import { Router, type Request, type Response } from 'express';
 import { ERROR_MESSAGES } from '../ai/answers.js';
 import { AIGateway, classifyPromptComplexity } from '../ai/gateway.js';
-import { canAccessModel, DEFAULT_MODEL_ID, resolveModel } from '../ai/models.js';
+import { DEFAULT_MODEL_ID } from '../ai/models.js';
+import { modelRegistry } from '../ai/model-registry.js';
 import { delay, randomBetween } from '../ai/stream.js';
-import { type AiConfig } from '../config.js';
+import { config, isProduction, type AiConfig } from '../config.js';
 import { sendError } from '../middleware/errors.js';
 import type { ConversationStore } from '../store/conversation-store.js';
 import {
@@ -15,9 +16,12 @@ import {
 } from '../store/index.js';
 import type { SubscriptionStore } from '../store/subscription-store.js';
 import type { UserStore } from '../store/user-store.js';
-import { isVipUser, isVipEmail } from '../services/vip.js';
+import { isAdminUser } from '../services/vip.js';
+import { safeEqualStrings } from '../auth/safe-equal.js';
+import { EntitlementService } from '../services/entitlement.js';
+import { resolveChatIdentity } from '../services/chat-identity.js';
 import { PayloadGuard } from '../ai/payload-guard.js';
-import type { Language, IncomingMessage, PlanId, MessageStatus, FeedbackRating } from '../types.js';
+import type { Language, IncomingMessage, MessageStatus, FeedbackRating } from '../types.js';
 
 const MAX_MESSAGES = 200;
 const MAX_CONTENT_LENGTH = 200000;
@@ -28,9 +32,6 @@ export interface CompletionRequest {
   modelId: string;
   language: Language;
   messages: IncomingMessage[];
-  userId?: string;
-  userEmail?: string;
-  userPlan?: string;
 }
 
 type ParseResult = { ok: true; value: CompletionRequest } | { ok: false; message: string };
@@ -85,9 +86,6 @@ function parseCompletionRequest(body: unknown): ParseResult {
       conversationId: candidate.conversationId,
       modelId: typeof candidate.modelId === 'string' ? candidate.modelId : DEFAULT_MODEL_ID,
       language: candidate.language === 'en' ? 'en' : 'ru',
-      userId: typeof candidate.userId === 'string' ? candidate.userId.trim() : undefined,
-      userEmail: typeof candidate.userEmail === 'string' ? candidate.userEmail.trim() : undefined,
-      userPlan: typeof candidate.userPlan === 'string' ? candidate.userPlan.trim() : undefined,
       messages,
     },
   };
@@ -102,6 +100,11 @@ export interface ChatRouterDeps {
   usageStore?: UsageStore;
   gateway?: AIGateway;
   feedbackStore?: FeedbackStore;
+  /**
+   * Разрешить анонимные вызовы через общий demo-user. По умолчанию — только вне production
+   * (config.allowAnonymousChat); в production чат без сессии отвечает 401.
+   */
+  allowAnonymous?: boolean;
 }
 
 /**
@@ -118,6 +121,7 @@ export function createChatRouter({
   usageStore = defaultUsageStore,
   gateway,
   feedbackStore = defaultFeedbackStore,
+  allowAnonymous = config.allowAnonymousChat,
 }: ChatRouterDeps): Router {
   const router = Router();
   const aiGateway =
@@ -137,65 +141,46 @@ export function createChatRouter({
 
     const guardResult = PayloadGuard.validate(parsed.value.messages, {
       language: parsed.value.language,
+      workspace: parsed.value.messages[parsed.value.messages.length - 1]?.workspaceContext,
     });
     if (!guardResult.valid) {
       sendError(response, 400, guardResult.code ?? 'payload_too_large', guardResult.message ?? 'Payload too large');
       return;
     }
 
-    const {
-      conversationId,
-      modelId,
-      language,
-      messages,
-      userId: bodyUserId,
-      userEmail: bodyEmail,
-      userPlan: bodyPlan,
-    } = parsed.value;
-    let activeUserId = request.userId ?? bodyUserId ?? userId;
+    const { conversationId, modelId, language, messages } = parsed.value;
 
-    if (!store.get(activeUserId, conversationId)) {
-      if (store.get(userId, conversationId)) {
-        activeUserId = userId;
-      } else if (bodyUserId && store.get(bodyUserId, conversationId)) {
-        activeUserId = bodyUserId;
-      }
+    // Личность и тариф — только из сессии и серверных хранилищ. Поля userId / userEmail / userPlan
+    // из тела запроса не читаются: клиент не вправе назваться другим пользователем или поднять тариф.
+    const sessionUser = request.user;
+    const identity = resolveChatIdentity({
+      sessionUser,
+      storedUser: sessionUser ? userStore?.findById(sessionUser.id) : undefined,
+      subscription: sessionUser ? subscriptionStore?.get(sessionUser.id) : undefined,
+      anonymousUserId: userId,
+      anonymousPlan: config.demoPlan,
+      allowAnonymous,
+    });
+    if (!identity.ok) {
+      sendError(response, identity.status, identity.code, identity.message);
+      return;
     }
+    const { userId: activeUserId, plan: userPlan, isVip } = identity;
 
+    // Диалог ищется строго среди диалогов этого пользователя: чужой id даёт 404.
     if (!store.get(activeUserId, conversationId)) {
       sendError(response, 404, 'conversation_not_found', `Диалог ${conversationId} не найден`);
       return;
     }
 
-    const model = resolveModel(modelId);
+    // Единый каталог: любая модель реестра выбирается как есть, неизвестная — это auto.
+    const requestedEntry = modelId === 'auto' ? undefined : modelRegistry.get(modelId);
+    const model =
+      requestedEntry && requestedEntry.enabled ? requestedEntry : modelRegistry.resolve('auto');
 
-    // Определение текущего тарифа пользователя
-    const currentSub = subscriptionStore?.get(activeUserId);
-    const currentUser =
-      userStore?.findById(activeUserId) ?? (bodyEmail ? userStore?.findByEmail(bodyEmail) : undefined);
-    const VALID_PLANS: PlanId[] = ['free', 'gpt-pro', 'claude-pro', 'gemini-pro', 'ultra', 'plus', 'pro'];
-
-    let userPlan: PlanId =
-      request.user?.plan ?? currentSub?.plan ?? currentUser?.plan ?? 'free';
-
-    if (userPlan === 'free' && bodyPlan && VALID_PLANS.includes(bodyPlan as PlanId)) {
-      userPlan = bodyPlan as PlanId;
-    }
-
-    if (
-      isVipUser(request.user) ||
-      isVipUser(currentUser) ||
-      (bodyEmail && isVipEmail(bodyEmail)) ||
-      (request.user?.email && isVipEmail(request.user.email)) ||
-      (currentUser?.email && isVipEmail(currentUser.email)) ||
-      bodyPlan === 'ultra' ||
-      userPlan === 'ultra'
-    ) {
-      userPlan = 'ultra';
-    }
-
-    // Проверка доступа к платным моделям
-    if (model.isPro && !canAccessModel(userPlan, model)) {
+    // Проверка доступа к платным моделям (то же правило, что применяет шлюз)
+    const access = EntitlementService.checkModelAccess(model, userPlan, identity.email, isVip);
+    if (!access.allowed) {
       response.writeHead(200, {
         'Content-Type': 'text/event-stream; charset=utf-8',
         'Cache-Control': 'no-cache, no-transform',
@@ -257,7 +242,8 @@ export function createChatRouter({
 
     let content = '';
     try {
-      const shouldFail = ai.failureRate > 0 && ai.random() < ai.failureRate;
+      // Имитация сбоев существует только вне production (в production failureRate всегда 0).
+      const shouldFail = !isProduction && ai.failureRate > 0 && ai.random() < ai.failureRate;
 
       if (shouldFail) {
         await delay(randomBetween(ai.thinkingMs, ai.random));
@@ -271,8 +257,8 @@ export function createChatRouter({
         {
           userId: activeUserId,
           userPlan,
-          userEmail: request.user?.email ?? currentUser?.email,
-          isVip: isVipUser(request.user) || isVipUser(currentUser),
+          userEmail: identity.email,
+          isVip,
           conversationId,
           modelId: model.id,
           messages: messages.map((m) => ({
@@ -374,6 +360,10 @@ export function createChatRouter({
     const conversationId = body.conversationId.trim();
     const messageId = body.messageId.trim();
     const rating = body.rating as FeedbackRating | null;
+    if (!request.user && !allowAnonymous) {
+      sendError(response, 401, 'unauthorized', 'Войдите в аккаунт, чтобы оценивать ответы');
+      return;
+    }
     const activeUserId = request.user?.id ?? userId;
 
     // 1. Обновляем сообщение в хранилище диалогов
@@ -425,6 +415,15 @@ export function createChatRouter({
    * Получение аналитики оценок и статуса авто-эскалации лёгких моделей.
    */
   router.get('/feedback/analytics', (request: Request, response: Response): void => {
+    // Аналитика маршрутизации — внутренние данные: только администратору.
+    const adminKey = request.headers['x-admin-key'];
+    const isAdmin =
+      isAdminUser(request.user) ||
+      (typeof adminKey === 'string' && safeEqualStrings(adminKey, config.adminApiKey));
+    if (!isAdmin) {
+      sendError(response, 403, 'admin_access_denied', 'Требуются права администратора');
+      return;
+    }
     const from = typeof request.query.from === 'string' ? request.query.from : undefined;
     const to = typeof request.query.to === 'string' ? request.query.to : undefined;
     const analytics = feedbackStore.getAnalytics({ from, to });

@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import { config } from '../config.js';
 import {
   completionBody,
   createConversation,
@@ -305,7 +306,12 @@ test('POST /api/chat/feedback сохраняет оценку ответа и GE
     assert.equal(msg?.feedback, 'like');
 
     // 2. Получаем аналитику
-    const analyticsRes = await fetch(`${server.baseUrl}/api/chat/feedback/analytics`);
+    // Аналитика маршрутизации — только для администратора
+    const anonymousAnalytics = await fetch(`${server.baseUrl}/api/chat/feedback/analytics`);
+    assert.equal(anonymousAnalytics.status, 403);
+    const analyticsRes = await fetch(`${server.baseUrl}/api/chat/feedback/analytics`, {
+      headers: { 'x-admin-key': config.adminApiKey },
+    });
     assert.equal(analyticsRes.status, 200);
     const analytics = (await analyticsRes.json()) as any;
     assert.equal(analytics.summary.likes >= 1, true);

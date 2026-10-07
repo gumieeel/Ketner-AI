@@ -128,7 +128,7 @@ export function createApiRouter(deps: ApiDeps): Router {
   const activeInvoiceStore = deps.invoiceStore ?? defaultInvoiceStore;
   const activeUsageStore = deps.usageStore ?? defaultUsageStore;
 
-  router.use(createAuthMiddleware(activeUserStore, deps.betterAuth));
+  router.use(createAuthMiddleware(activeUserStore, deps.betterAuth, activeSubscriptionStore));
 
   router.get('/', (_request: Request, response: Response) => {
     response.json(describeService());

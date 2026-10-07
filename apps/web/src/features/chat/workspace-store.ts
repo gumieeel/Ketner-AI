@@ -30,25 +30,50 @@ function loadInitialAutoApply(): boolean {
   }
 }
 
+/**
+ * Ранние версии хранили пути локальной папки вместе с именем корня (`my-app/src/a.ts`),
+ * из-за чего правки создавали вложенную копию `my-app/my-app/...`. Здесь такие проекты
+ * приводятся к путям относительно корня.
+ */
+export function normalizeWorkspacePaths(ws: WorkspaceContext): WorkspaceContext {
+  if (ws.type !== 'local_folder' || !ws.name || !Array.isArray(ws.files) || ws.files.length === 0) return ws;
+  const prefix = `${ws.name}/`;
+  if (!ws.files.every((f) => f.path.startsWith(prefix))) return ws;
+  return {
+    ...ws,
+    files: ws.files.map((f) => ({ ...f, path: f.path.slice(prefix.length) })),
+  };
+}
+
 function loadInitialWorkspace(): WorkspaceContext | null {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) return null;
-    return JSON.parse(raw) as WorkspaceContext;
+    return normalizeWorkspacePaths(JSON.parse(raw) as WorkspaceContext);
   } catch {
     return null;
   }
 }
 
+const STORED_CONTENT_LIMIT = 4000;
+
+/**
+ * В localStorage хранится только начало файлов (квота ~5 МБ). Такие файлы помечаются `truncated`,
+ * чтобы по обрезанной копии нельзя было ни «заменить фрагмент», ни показать её модели как целую.
+ */
 function sanitizeWorkspaceForStorage(ws: WorkspaceContext): WorkspaceContext {
   return {
     ...ws,
-    files: (ws.files || []).map((f) => ({
-      path: f.path,
-      size: f.size,
-      language: f.language,
-      content: f.content && f.content.length > 4000 ? f.content.slice(0, 4000) : f.content,
-    })),
+    files: (ws.files || []).map((f) => {
+      const cut = !!f.content && f.content.length > STORED_CONTENT_LIMIT;
+      return {
+        path: f.path,
+        size: f.size,
+        language: f.language,
+        content: cut ? f.content!.slice(0, STORED_CONTENT_LIMIT) : f.content,
+        ...(cut || f.truncated ? { truncated: true } : {}),
+      };
+    }),
   };
 }
 
@@ -120,6 +145,7 @@ export const useWorkspace = create<WorkspaceStore>((set) => ({
           currentFiles[idx] = {
             ...currentFiles[idx],
             content: update.content,
+            truncated: undefined,
             size: update.content ? new Blob([update.content]).size : currentFiles[idx].size,
           };
         } else {

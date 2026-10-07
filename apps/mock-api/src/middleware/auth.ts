@@ -4,6 +4,8 @@ import { fromNodeHeaders } from 'better-auth/node';
 import { defaultBetterAuth } from '../auth/better-auth.js';
 import { verifyMockToken } from '../auth/jwt.js';
 import type { UserStore } from '../store/user-store.js';
+import type { SubscriptionStore } from '../store/subscription-store.js';
+import { resolveBillingPlan } from '../services/plan-resolver.js';
 import type { PlanId, User } from '../types.js';
 import { sendError } from './errors.js';
 import { isVipEmail, isAdminEmail } from '../services/vip.js';
@@ -24,7 +26,27 @@ declare global {
  * либо извлекает Bearer-токен из заголовка Authorization.
  * Если пользователь найден, устанавливает req.user и req.userId.
  */
-export function createAuthMiddleware(userStore: UserStore, betterAuthInstance = defaultBetterAuth) {
+export function createAuthMiddleware(
+  userStore: UserStore,
+  betterAuthInstance = defaultBetterAuth,
+  subscriptionStore?: SubscriptionStore,
+) {
+  /**
+   * Срок подписки: если оплаченный период (и льготные сутки) закончился, тариф сводится к free
+   * и это сохраняется в профиле, чтобы интерфейс и лимиты видели одно и то же.
+   */
+  const applySubscriptionExpiry = (userId: string, plan: PlanId, isVip: boolean): PlanId => {
+    if (!subscriptionStore || isVip || plan === 'free') return plan;
+    const resolved = resolveBillingPlan({
+      storedPlan: plan,
+      subscription: subscriptionStore.get(userId),
+    });
+    if (resolved.expired) {
+      userStore.updatePlan(userId, 'free');
+    }
+    return resolved.plan;
+  };
+
   return async (request: Request, _response: Response, next: NextFunction): Promise<void> => {
     // 1. Проверяем сессию Better Auth через headers/cookies
     try {
@@ -54,6 +76,8 @@ export function createAuthMiddleware(userStore: UserStore, betterAuthInstance = 
         const isAdmin = Boolean(stored?.isAdmin || isAdminEmail(session.user.email));
         if (isVip) {
           plan = 'ultra';
+        } else if (stored) {
+          plan = applySubscriptionExpiry(stored.id, plan, false);
         }
 
         request.user = {
@@ -93,6 +117,8 @@ export function createAuthMiddleware(userStore: UserStore, betterAuthInstance = 
           let plan: PlanId = user.plan;
           if (isVip) {
             plan = 'ultra';
+          } else {
+            plan = applySubscriptionExpiry(user.id, plan, false);
           }
           request.user = {
             ...user,

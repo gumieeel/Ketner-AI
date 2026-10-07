@@ -10,6 +10,7 @@ import { ApiError } from './api';
 import { deriveTitle } from './derive-title';
 import type { ChatMeta, ConversationSummary, Message, MessageAttachment, WorkspaceContext, WorkspaceFile } from './types';
 import { useWorkspace } from './workspace-store';
+import { isSensitivePath } from './file-operations/path-safety';
 
 export type LoadStatus = 'idle' | 'loading' | 'ready' | 'error';
 
@@ -46,6 +47,8 @@ interface ChatState {
   send: (text?: string, attachmentsOverride?: MessageAttachment[]) => Promise<void>;
   stop: (id?: string) => void;
   regenerate: () => Promise<void>;
+  /** Просит модель дописать ответ, оборванный лимитом длины или таймаутом. */
+  continueReply: () => Promise<void>;
   editMessage: (id: string, content: string) => Promise<void>;
   rename: (id: string, title: string) => Promise<void>;
   remove: (id: string) => Promise<void>;
@@ -126,10 +129,15 @@ function prepareWorkspaceForSending(ws: WorkspaceContext | null): Message['works
 
   const sanitizedFiles = (ws.files || []).map((file: WorkspaceFile) => {
     let content = file.content;
-    if (content && content.length > 0) {
+    let truncated = file.truncated === true;
+    if (isSensitivePath(file.path)) {
+      // Секреты (.env, ключи) не покидают браузер.
+      content = undefined;
+    } else if (content && content.length > 0) {
       if (totalChars < MAX_TOTAL_CHARS) {
         if (content.length > 25000) {
-          content = content.slice(0, 25000) + '\n... [truncated]';
+          content = content.slice(0, 25000);
+          truncated = true;
         }
         totalChars += content.length;
       } else {
@@ -141,6 +149,7 @@ function prepareWorkspaceForSending(ws: WorkspaceContext | null): Message['works
       size: file.size,
       language: file.language,
       content,
+      ...(truncated && content !== undefined ? { truncated: true } : {}),
     };
   });
 
@@ -257,9 +266,14 @@ export const useChat = create<ChatState>((set, get) => {
             buffer += delta;
             scheduleFlush();
           },
-          onDone: ({ messageId }) => {
+          onDone: ({ messageId, finishReason, canContinue }) => {
             flush();
-            updateAssistant({ id: messageId === '' ? assistantId : messageId, status: 'complete' });
+            updateAssistant({
+              id: messageId === '' ? assistantId : messageId,
+              status: 'complete',
+              finishReason,
+              canContinue,
+            });
           },
           onError: ({ code, message }) => {
             flush();
@@ -620,6 +634,15 @@ export const useChat = create<ChatState>((set, get) => {
         },
       }));
       await runTurn(activeId, history, assistant.id);
+    },
+
+    continueReply: async () => {
+      const { activeId, streamingConversations } = get();
+      if (activeId === null || streamingConversations[activeId]) {
+        return;
+      }
+      // Вложения черновика к служебной реплике не прикрепляются.
+      await get().send(translate(usePreferences.getState().language, 'chat.continuePrompt'), []);
     },
 
     editMessage: async (id, content) => {

@@ -200,6 +200,102 @@ const mode = "production";
     });
   });
 
+  describe('local-writer: безопасность записи', () => {
+    function makeRoot(initial: Record<string, string>) {
+      const disk: Record<string, string> = { ...initial };
+      const dirFor = (prefix: string) => ({
+        getDirectoryHandle: vi.fn(async (name: string) => dirFor(prefix ? `${prefix}/${name}` : name)),
+        getFileHandle: vi.fn(async (name: string, opts?: { create?: boolean }) => {
+          const path = prefix ? `${prefix}/${name}` : name;
+          if (!(path in disk) && !opts?.create) throw new Error('NotFoundError');
+          return {
+            getFile: async () => ({ text: async () => disk[path] }),
+            createWritable: async () => ({
+              write: async (data: string) => {
+                disk[path] = data;
+              },
+              close: async () => {},
+            }),
+          };
+        }),
+        removeEntry: vi.fn(async (name: string) => {
+          delete disk[prefix ? `${prefix}/${name}` : name];
+        }),
+      });
+      const root = {
+        queryPermission: vi.fn(async () => 'granted'),
+        requestPermission: vi.fn(async () => 'granted'),
+        ...dirFor(''),
+      };
+      return { root, disk };
+    }
+
+    const workspace: WorkspaceContext = {
+      id: 'folder-safe',
+      type: 'local_folder',
+      name: 'demo',
+      pathOrUrl: 'demo',
+      filesCount: 1,
+      files: [{ path: 'src/a.ts', size: 10, content: 'const a = 1;\n' }],
+      indexedAt: new Date().toISOString(),
+    };
+
+    it('точечная правка применяется к актуальному содержимому диска, а не к снимку в памяти', async () => {
+      // Пока пользователь смотрел на карточку, он дописал строку в файл.
+      const { root, disk } = makeRoot({ 'src/a.ts': 'const a = 1;\nconst mine = true;\n' });
+      const res = await applyLocalChanges(
+        workspace,
+        [
+          {
+            action: 'replace',
+            path: 'src/a.ts',
+            edits: [{ targetContent: 'const a = 1;', replacementContent: 'const a = 2;' }],
+            modifiedContent: 'const a = 2;\n',
+          },
+        ],
+        root,
+      );
+      expect(res.success).toBe(true);
+      expect(disk['src/a.ts']).toBe('const a = 2;\nconst mine = true;\n');
+    });
+
+    it('если фрагмент на диске не найден — файл не меняется, а ошибка показывается', async () => {
+      const { root, disk } = makeRoot({ 'src/a.ts': 'совсем другой файл\n' });
+      const res = await applyLocalChanges(
+        workspace,
+        [
+          {
+            action: 'replace',
+            path: 'src/a.ts',
+            edits: [{ targetContent: 'const a = 1;', replacementContent: 'const a = 2;' }],
+            modifiedContent: 'const a = 2;\n',
+          },
+        ],
+        root,
+      );
+      expect(res.success).toBe(false);
+      expect(res.errors[0]).toContain('Файл не изменён');
+      expect(disk['src/a.ts']).toBe('совсем другой файл\n');
+    });
+
+    it('отказывается писать за пределы папки проекта', async () => {
+      const { root, disk } = makeRoot({});
+      const res = await applyLocalChanges(
+        workspace,
+        [
+          { action: 'write', path: '../evil.txt', modifiedContent: 'x' },
+          { action: 'write', path: '.git/config', modifiedContent: 'x' },
+          { action: 'delete', path: '../victim.txt' },
+        ],
+        root,
+      );
+      expect(res.success).toBe(false);
+      expect(res.appliedCount).toBe(0);
+      expect(res.errors).toHaveLength(3);
+      expect(Object.keys(disk)).toHaveLength(0);
+    });
+  });
+
   describe('git-writer: commitDirectlyToGitHub & createGitHubPullRequest', () => {
     it('создает коммит на GitHub через Git Data API', async () => {
       const mockWorkspace: WorkspaceContext = {
@@ -258,6 +354,106 @@ const mode = "production";
       // Проверяем обновление стора
       const updatedWs = useWorkspace.getState().activeWorkspace;
       expect(updatedWs?.files.find((f) => f.path === 'README.md')?.content).toBe('# Updated by AI');
+    });
+
+    it('точечная правка применяется к свежему файлу из репозитория, а не к снимку при привязке', async () => {
+      const mockWorkspace: WorkspaceContext = {
+        id: 'github-owner-fresh',
+        type: 'git_repo',
+        name: 'testowner/testrepo',
+        pathOrUrl: 'https://github.com/testowner/testrepo',
+        branch: 'main',
+        filesCount: 1,
+        files: [{ path: 'src/a.ts', size: 10, content: 'const a = 1;\n' }],
+        indexedAt: new Date().toISOString(),
+      };
+      useWorkspace.setState({ activeWorkspace: mockWorkspace });
+
+      let committedBlob = '';
+      global.fetch = vi.fn(async (url: any, opts?: any) => {
+        const u = url.toString();
+        if (u.includes('/git/ref/heads/main')) {
+          return { ok: true, json: async () => ({ object: { sha: 'base-sha' } }) } as any;
+        }
+        if (u.includes('/git/commits/base-sha')) {
+          return { ok: true, json: async () => ({ tree: { sha: 'base-tree' } }) } as any;
+        }
+        if (u.includes('/contents/src/a.ts?ref=base-sha')) {
+          // В репозитории файл уже изменился другим человеком.
+          return { ok: true, text: async () => 'const a = 1;\nconst teammate = 42;\n' } as any;
+        }
+        if (u.includes('/git/blobs')) {
+          committedBlob = JSON.parse(opts.body).content;
+          return { ok: true, json: async () => ({ sha: 'blob' }) } as any;
+        }
+        if (u.includes('/git/trees')) return { ok: true, json: async () => ({ sha: 'tree' }) } as any;
+        if (u.includes('/git/commits')) return { ok: true, json: async () => ({ sha: 'commit' }) } as any;
+        if (u.includes('/git/refs/heads/main')) return { ok: true, json: async () => ({}) } as any;
+        return { ok: false, status: 404 } as any;
+      });
+
+      await commitDirectlyToGitHub({
+        owner: 'testowner',
+        repo: 'testrepo',
+        branch: 'main',
+        token: 'ghp_fake_token',
+        changes: [
+          {
+            action: 'replace',
+            path: 'src/a.ts',
+            edits: [{ targetContent: 'const a = 1;', replacementContent: 'const a = 2;' }],
+            modifiedContent: 'const a = 2;\n',
+          },
+        ],
+      });
+
+      expect(committedBlob).toBe('const a = 2;\nconst teammate = 42;\n');
+      const synced = useWorkspace.getState().activeWorkspace;
+      expect(synced?.files.find((f) => f.path === 'src/a.ts')?.content).toBe(committedBlob);
+    });
+
+    it('не коммитит, если фрагмент в репозитории не найден', async () => {
+      useWorkspace.setState({
+        activeWorkspace: {
+          id: 'github-owner-miss',
+          type: 'git_repo',
+          name: 'testowner/testrepo',
+          pathOrUrl: 'https://github.com/testowner/testrepo',
+          branch: 'main',
+          filesCount: 0,
+          files: [],
+          indexedAt: new Date().toISOString(),
+        },
+      });
+      let blobCalls = 0;
+      global.fetch = vi.fn(async (url: any) => {
+        const u = url.toString();
+        if (u.includes('/git/ref/heads/main')) return { ok: true, json: async () => ({ object: { sha: 'base-sha' } }) } as any;
+        if (u.includes('/git/commits/base-sha')) return { ok: true, json: async () => ({ tree: { sha: 'base-tree' } }) } as any;
+        if (u.includes('/contents/')) return { ok: true, text: async () => 'совсем другое содержимое' } as any;
+        if (u.includes('/git/blobs')) {
+          blobCalls++;
+          return { ok: true, json: async () => ({ sha: 'blob' }) } as any;
+        }
+        return { ok: false, status: 404 } as any;
+      });
+
+      await expect(
+        commitDirectlyToGitHub({
+          owner: 'testowner',
+          repo: 'testrepo',
+          branch: 'main',
+          token: 'ghp_fake_token',
+          changes: [
+            {
+              action: 'replace',
+              path: 'src/a.ts',
+              edits: [{ targetContent: 'const a = 1;', replacementContent: 'const a = 2;' }],
+            },
+          ],
+        }),
+      ).rejects.toThrow();
+      expect(blobCalls).toBe(0);
     });
 
     it('создает Pull Request на GitHub', async () => {

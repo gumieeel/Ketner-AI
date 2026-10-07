@@ -1,6 +1,7 @@
 import type { WorkspaceContext, WorkspaceFile } from './types';
 import { getFileExtension } from './attachment-utils';
 import { registerDirectoryHandle } from './file-operations/local-writer';
+import { isSensitivePath } from './file-operations/path-safety';
 
 const IGNORED_NAMES = new Set([
   'node_modules', '.git', 'dist', 'build', '.next', 'out', 'target',
@@ -40,8 +41,12 @@ export async function readFolderFromFiles(fileList: FileList | File[]): Promise<
   for (const file of files) {
     if (collected.length >= MAX_TOTAL_FILES) break;
 
-    const relPath = file.webkitRelativePath || file.name;
-    const parts = relPath.split('/');
+    const fullPath = file.webkitRelativePath || file.name;
+    const allParts = fullPath.split('/');
+    // Пути хранятся относительно корня проекта: имя выбранной папки в путь не входит,
+    // иначе правки создавали бы вложенную копию `проект/проект/...`.
+    const parts = allParts.length > 1 ? allParts.slice(1) : allParts;
+    const relPath = parts.join('/');
 
     // Проверяем игнорируемые директории
     if (parts.some((p) => IGNORED_NAMES.has(p))) {
@@ -51,7 +56,8 @@ export async function readFolderFromFiles(fileList: FileList | File[]): Promise<
     const isText = isCodeFile(file.name);
     let content: string | undefined = undefined;
 
-    if (isText && file.size <= MAX_FILE_SIZE_BYTES) {
+    // Секреты (.env, ключи) в память и в запросы к модели не попадают вовсе.
+    if (isText && file.size <= MAX_FILE_SIZE_BYTES && !isSensitivePath(relPath)) {
       try {
         content = await file.text();
       } catch {
@@ -114,7 +120,7 @@ export async function pickFolderNative(): Promise<WorkspaceContext> {
           const isText = isCodeFile(file.name);
           let content: string | undefined = undefined;
 
-          if (isText && file.size <= MAX_FILE_SIZE_BYTES) {
+          if (isText && file.size <= MAX_FILE_SIZE_BYTES && !isSensitivePath(fullPath)) {
             content = await file.text();
           }
 
@@ -133,7 +139,8 @@ export async function pickFolderNative(): Promise<WorkspaceContext> {
     }
   }
 
-  await scanDirectory(rootHandle, folderName);
+  // Пути — относительно корня выбранной папки (без её имени).
+  await scanDirectory(rootHandle, '');
 
   const wsId = `folder-${Date.now()}`;
   registerDirectoryHandle(wsId, rootHandle);

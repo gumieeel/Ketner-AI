@@ -15,12 +15,14 @@ import { ERROR_MESSAGES, pickAnswer } from './answers.js';
 import { semanticCache, SemanticCache } from './cache.js';
 import { ContextOptimizer } from './context.js';
 import type {
+  AIProvider,
   GatewayRequest,
   GatewayStreamCallbacks,
   ModelRegistryEntry,
+  ProviderRequestOptions,
   ProviderResponse,
 } from './gateway-types.js';
-import type { Language, MessageAttachment } from '../types.js';
+import type { WatchdogLimits } from './stream-watchdog.js';
 import {
   modelRegistry,
   type ModelRegistry,
@@ -29,8 +31,7 @@ import {
 } from './model-registry.js';
 import { providerManager, type ProviderManager } from './providers/provider-factory.js';
 import { delay, streamText } from './stream.js';
-import type { AiConfig } from '../config.js';
-import { CostCalculator } from '../services/cost.js';
+import { isProduction, type AiConfig } from '../config.js';
 import { EntitlementService } from '../services/entitlement.js';
 import { FairUseEngine } from '../services/fair-use.js';
 import { AutoRouter } from './auto-router.js';
@@ -42,7 +43,15 @@ import {
   type PipelineStrategy,
 } from './tier-pipeline.js';
 import { CircuitBreaker, defaultCircuitBreaker } from './circuit-breaker.js';
+import { computeRequestCost } from './engine-pricing.js';
+import { createStreamWatchdog, DEFAULT_WATCHDOG_LIMITS } from './stream-watchdog.js';
+import { evaluateBudget } from '../services/budget-policy.js';
 import { PayloadGuard } from './payload-guard.js';
+import {
+  buildAttachmentsBlock,
+  buildWorkspaceContextBlock,
+  workspaceBudgetChars,
+} from './workspace-context.js';
 
 export interface ComplexityContext {
   history?: Array<{ role: string; content: string }>;
@@ -273,146 +282,6 @@ export function toOpenRouterModelId(
   return model.providerModelId;
 }
 
-function prioritizeWorkspaceFiles(files: any[]): any[] {
-  const highPriority = [
-    /^package\.json$/i,
-    /^tsconfig.*\.json$/i,
-    /^(src\/|apps\/[^\/]+\/src\/)?(index|main|server|app)\.(ts|tsx|js|jsx)$/i,
-    /routes/i,
-    /(schema|models|store|service)/i,
-    /^README\.md$/i,
-  ];
-
-  return [...files].sort((a, b) => {
-    const aMatch = highPriority.some((p) => p.test(a.path));
-    const bMatch = highPriority.some((p) => p.test(b.path));
-    if (aMatch && !bMatch) return -1;
-    if (!aMatch && bMatch) return 1;
-    return (a.path || '').localeCompare(b.path || '');
-  });
-}
-
-function buildWorkspaceContextBlock(ws: any, language: Language): string {
-  const isEn = language === 'en';
-  const typeLabel =
-    ws.type === 'git_repo'
-      ? (isEn ? 'GitHub Repository' : 'GitHub-репозиторий')
-      : (isEn ? 'Local Project Folder' : 'Локальная папка проекта');
-
-  let block = isEn
-    ? `\n\n[ATTACHED WORKSPACE CONTEXT: ${typeLabel} "${ws.name}"]\nSource: ${ws.pathOrUrl || ws.name}${ws.branch ? ` (branch: ${ws.branch})` : ''}\nTotal Files Indexed: ${ws.filesCount || ws.files?.length || 0}\n`
-    : `\n\n[КОНТЕКСТ ПРИВЯЗАННОГО ПРОЕКТА: ${typeLabel} «${ws.name}»]\nИсточник: ${ws.pathOrUrl || ws.name}${ws.branch ? ` (ветка: ${ws.branch})` : ''}\nВсего проиндексировано файлов: ${ws.filesCount || ws.files?.length || 0}\n`;
-
-  if (Array.isArray(ws.files) && ws.files.length > 0) {
-    block += isEn ? '\nProject File Tree:\n' : '\nДерево файлов проекта:\n';
-    const treePreview = ws.files
-      .slice(0, 80)
-      .map((f: any) => `- ${f.path}${f.size ? ` (${Math.round((f.size / 1024) * 10) / 10} KB)` : ''}`)
-      .join('\n');
-    block += treePreview;
-    if (ws.files.length > 80) {
-      block += isEn ? `\n... and ${ws.files.length - 80} more files` : `\n... и ещё ${ws.files.length - 80} файлов`;
-    }
-    block += '\n';
-
-    const rawFilesWithContent = ws.files.filter(
-      (f: any) => typeof f.content === 'string' && f.content.trim().length > 0,
-    );
-    const filesWithContent = prioritizeWorkspaceFiles(rawFilesWithContent);
-
-    if (filesWithContent.length > 0) {
-      block += isEn ? '\nKey Project Code & File Contents:\n' : '\nСодержимое ключевых файлов проекта:\n';
-      let totalContentLength = 0;
-      const MAX_TOTAL_CHARS = 120000;
-      for (const f of filesWithContent) {
-        if (totalContentLength > MAX_TOTAL_CHARS) {
-          block += isEn ? '\n[Additional files omitted for length]\n' : '\n[Остальные файлы пропущены для экономии контекста]\n';
-          break;
-        }
-        const snippet = f.content.slice(0, 15000);
-        block += `\n--- File: ${f.path} ---\n\`\`\`${f.language || ''}\n${snippet}\n\`\`\`\n`;
-        totalContentLength += snippet.length;
-      }
-    }
-  }
-
-  block += isEn
-    ? `\nIMPORTANT AGENTIC INSTRUCTIONS FOR WORKSPACE WORK:
-- You are acting as Ketner AI Engine — a senior autonomous full-stack software engineer directly embedded in this project.
-- YOU HAVE FULL ACCESS TO THIS CODEBASE. The file tree and source code are provided above.
-- NEVER SAY: "I cannot edit files", "I am only an AI text model", "I have no access to your filesystem or repository". Your environment has an automated file-action execution runtime that captures your \`\`\`file-actions blocks and applies them directly to the user's disk and GitHub!
-- NEVER HALLUCINATE: NEVER say "I already pushed to main" or make up fake commit URLs. Always state: "I have prepared the changes in the card below. Click [Apply to Project] or [Apply to GitHub] to commit them."
-- When asked to analyze the project, check readiness, or find bugs:
-  1) Base your analysis ONLY on the actual code, imports, and dependencies above. Do NOT invent libraries that do not exist in package.json.
-  2) Give deep, precise technical answers: reference exact file paths, line numbers, function names, and root causes of bugs.
-  3) If you find bugs or missing features, explain the problem and immediately provide complete, ready-to-use fixes.
-- When creating, modifying, editing, or replacing files in the workspace:
-  Always include structured \`\`\`file-actions blocks in your response so the client UI can render a visual Diff Viewer and apply them:
-  \`\`\`file-actions
-  [
-    {
-      "action": "write",
-      "path": "path/to/file.ts",
-      "description": "Short summary of changes",
-      "content": "Full content of the file"
-    }
-  ]
-  \`\`\`
-  Or for targeted replacements in existing files:
-  \`\`\`file-actions
-  [
-    {
-      "action": "replace",
-      "path": "path/to/file.ts",
-      "description": "Short summary of replacement",
-      "targetContent": "exact existing code snippet to replace",
-      "replacementContent": "new replacement code snippet"
-    }
-  ]
-  \`\`\`
-- Always provide COMPLETE, syntactically valid code. Never cut off code with comments like "// ... rest of code unchanged ...", because that breaks compilation.
-- Never truncate or cut off your answer. Use clean Markdown headers and code blocks.
-- If the user prompt is typed in an incorrect keyboard layout (e.g. "ghjfyfkbpbhqe htgjpbnjhbq" for "проанализируй репозиторий"), automatically recognize the intended meaning and respond in the appropriate language.`
-    : `\nВАЖНЫЕ ИНЖЕНЕРНЫЕ ИНСТРУКЦИИ ДЛЯ РАБОТЫ С ПРОЕКТОМ:
-- Ты работаешь как Ketner AI Engine — ведущий инженерный AI-ассистент, напрямую подключённый к кодовой базе этого проекта.
-- У ТЕБЯ ЕСТЬ ПОЛНЫЙ ДОСТУП К ЭТОМУ ПРОЕКТУ. Все файлы и дерево проекта переданы тебе выше.
-- КАТЕГОРИЧЕСКИ ЗАПРЕЩЕНО писать: «у меня нет доступа к файлам», «я всего лишь языковая модель и не могу менять файлы», «я не могу запускать команды». Веб-интерфейс Ketner AI оснащён автоматическим движком записи: он перехватывает твои блоки \`\`\`file-actions и записывает их на диск или отправляет коммитом в GitHub! Ты ОБЯЗАН при любых просьбах изменить или создать код формировать блок \`\`\`file-actions!
-- КАТЕГОРИЧЕСКИ ЗАПРЕЩЕНО ВРАТЬ: никогда не говори «Я уже запушил изменения в main» и не выдумывай ссылки на несуществующие коммиты. Всегда говори правду: «Я подготовил изменения ниже. Нажмите [Применить к проекту] (или [Применить к GitHub]), чтобы сохранить их».
-- При запросе анализа проекта, готовности к продакшну или поиске ошибок:
-  1) Опирайся ИСКЛЮЧИТЕЛЬНО на реальный код и файлы из контекста выше (не выдумывай несуществующие базы или пакеты, которых нет в package.json).
-  2) Давай глубокий инженерный разбор: указывай точные пути файлов, названия функций, существующие роуты и коренные причины (root cause) ошибок.
-  3) Если находишь баг или недостающую логику — сразу предлагай готовое рабочее исправление в блоке \`\`\`file-actions.
-- При создании, перезаписи, модификации или редактировании файлов в проекте:
-  Обязательно приводи изменения в виде структурированного блока \`\`\`file-actions, чтобы веб-интерфейс отобразил визуальный Diff Viewer и позволил пользователю применить правки на локальный диск или закоммитить/создать PR в GitHub в один клик:
-  \`\`\`file-actions
-  [
-    {
-      "action": "write",
-      "path": "src/utils/example.ts",
-      "description": "Краткое описание создаваемого или перезаписываемого файла",
-      "content": "Полное новое содержимое файла"
-    }
-  ]
-  \`\`\`
-  Или для точечной замены блока кода в существующем файле:
-  \`\`\`file-actions
-  [
-    {
-      "action": "replace",
-      "path": "src/utils/example.ts",
-      "description": "Краткое описание замены",
-      "targetContent": "точный фрагмент существующего кода для замены",
-      "replacementContent": "новый фрагмент заменяющего кода"
-    }
-  ]
-  \`\`\`
-- Всегда генерируй ПОЛНЫЙ, рабочий и компилируемый код без плейсхолдеров вроде «// ... остальной код без изменений ...», которые ломают проект.
-- Никогда не обрывай ответ на полуслове. Используй качественное Markdown-форматирование, списки и блоки кода.
-- Если запрос пользователя набран в ошибочной раскладке (например, «ghjfyfkbpbhqe htgjpbnjhbq» вместо «проанализируй репозиторий»), автоматически распознай смысл и ответь на русском языке по существу.`;
-
-  return block;
-}
-
 const JCUKEN_MAP: Record<string, string> = {
   q: 'й', w: 'ц', e: 'у', r: 'к', t: 'е', y: 'н', u: 'г', i: 'ш', o: 'щ', p: 'з', '[': 'х', ']': 'ъ',
   a: 'ф', s: 'ы', d: 'в', f: 'а', g: 'п', h: 'р', j: 'о', k: 'л', l: 'д', ';': 'ж', "'": 'э',
@@ -440,23 +309,6 @@ export function convertLayoutIfInverted(input: string): string {
   return input;
 }
 
-function buildAttachmentsBlock(attachments: MessageAttachment[], language: Language): string {
-  const isEn = language === 'en';
-  let block = isEn
-    ? `\n\n[USER ATTACHMENTS (${attachments.length} files)]:\n`
-    : `\n\n[ПРИКРЕПЛЁННЫЕ ПОЛЬЗОВАТЕЛЕМ ВЛОЖЕНИЯ (${attachments.length})]:\n`;
-
-  for (const a of attachments) {
-    block += `- **${a.name}** (${a.category.toUpperCase()}, ${Math.round(((a.size || 0) / 1024) * 10) / 10} KB)\n`;
-    if (a.contentPreview) {
-      const preview = a.contentPreview.slice(0, 20000);
-      block += `\`\`\`\n${preview}\n\`\`\`\n`;
-    }
-  }
-
-  return block;
-}
-
 export interface AIGatewayDeps {
   registry?: ModelRegistry;
   providers?: ProviderManager;
@@ -464,6 +316,11 @@ export interface AIGatewayDeps {
   aiConfig: AiConfig;
   circuitBreaker?: CircuitBreaker;
   feedbackStore?: FeedbackStore;
+  /**
+   * Принудительно включить (true) или выключить (false) шаблонный движок-заглушку.
+   * По умолчанию определяется окружением. В production игнорируется: заглушка там невозможна.
+   */
+  useMockEngine?: boolean;
 }
 
 export class AIGateway {
@@ -473,14 +330,84 @@ export class AIGateway {
   private aiConfig: AiConfig;
   private circuitBreaker: CircuitBreaker;
   private feedbackStore: FeedbackStore;
+  private useMockEngine?: boolean;
 
   constructor(deps: AIGatewayDeps) {
+    this.useMockEngine = deps.useMockEngine;
     this.registry = deps.registry ?? modelRegistry;
     this.providers = deps.providers ?? providerManager;
     this.usageStore = deps.usageStore;
     this.aiConfig = deps.aiConfig;
     this.circuitBreaker = deps.circuitBreaker ?? defaultCircuitBreaker;
     this.feedbackStore = deps.feedbackStore ?? defaultFeedbackStore;
+  }
+
+  /**
+   * Один проход стриминга со сторожем: сроки на первый токен, простой и общую длительность
+   * вместо единого таймера, обрывавшего любой длинный ответ.
+   */
+  private async streamWithWatchdog(
+    provider: AIProvider,
+    options: Pick<ProviderRequestOptions, 'model' | 'messages' | 'maxTokens'>,
+    hooks: {
+      onDelta: (delta: string) => void;
+      isCancelled: () => boolean;
+      clientSignal: AbortSignal;
+      providerTimeoutMs?: number;
+    },
+  ): Promise<{ response: ProviderResponse; timedOut: boolean }> {
+    const attempt = new AbortController();
+    const limits: WatchdogLimits = {
+      ...DEFAULT_WATCHDOG_LIMITS,
+      ...(hooks.providerTimeoutMs
+        ? {
+            firstTokenMs: hooks.providerTimeoutMs,
+            idleMs: hooks.providerTimeoutMs,
+            totalMs: Math.max(hooks.providerTimeoutMs, DEFAULT_WATCHDOG_LIMITS.totalMs),
+          }
+        : {}),
+    };
+    const watchdog = createStreamWatchdog(limits, (reason) => {
+      attempt.abort(new Error(`Timeout (${reason}) у провайдера ${provider.type}`));
+    });
+
+    const onClientAbort = (): void => attempt.abort();
+    if (hooks.clientSignal.aborted) {
+      attempt.abort();
+    } else {
+      hooks.clientSignal.addEventListener('abort', onClientAbort, { once: true });
+    }
+
+    try {
+      const response = await provider.streamText(
+        { ...options, stream: true, signal: attempt.signal },
+        {
+          onDelta: (delta) => {
+            watchdog.touch();
+            hooks.onDelta(delta);
+          },
+          isCancelled: () => hooks.isCancelled() || attempt.signal.aborted,
+        },
+      );
+      return { response, timedOut: watchdog.reason !== null };
+    } finally {
+      watchdog.stop();
+      hooks.clientSignal.removeEventListener('abort', onClientAbort);
+    }
+  }
+
+  /** Расхождение запрошенного и фактического движка — это почти всегда неверный ID модели. */
+  private readonly reportedMismatches = new Set<string>();
+  private noteEngineMismatch(requested: string, actual: string | undefined): void {
+    if (!actual || actual === requested) return;
+    const family = (id: string): string => id.split(':')[0].toLowerCase();
+    if (family(actual).startsWith(family(requested)) || family(requested).startsWith(family(actual))) return;
+    const key = `${requested}->${actual}`;
+    if (this.reportedMismatches.has(key)) return;
+    this.reportedMismatches.add(key);
+    console.warn(
+      `[ai-gateway] Запрошен движок ${requested}, ответил ${actual}. Проверьте ID модели в реестре.`,
+    );
   }
 
   getCircuitBreaker(): CircuitBreaker {
@@ -507,6 +434,7 @@ export class AIGateway {
     const guardResult = PayloadGuard.validate(req.messages, {
       language,
       attachments: req.attachments,
+      workspace: req.workspaceContext ?? req.messages[req.messages.length - 1]?.workspaceContext,
     });
     if (!guardResult.valid) {
       callbacks.onError({
@@ -539,10 +467,33 @@ export class AIGateway {
     const entitlements = EntitlementService.getEntitlements(effectivePlan);
     const snapshot = this.usageStore.getFairUseSnapshot(activeUserId);
 
-    // Проверка превышения бюджета себестоимости (адаптивный даунгрейд вместо жесткого блока)
-    const isBudgetExceeded =
-      entitlements.costBudget > 0 &&
-      snapshot.estimatedCostLastMonth >= entitlements.costBudget;
+    // Месячный бюджет себестоимости: soft (80%) → exhausted (100%, только дешёвые движки) →
+    // hard_stop (125%, запросы отклоняются). Без потолка «безлимит» мог уйти в убыток.
+    const budget = evaluateBudget(snapshot.estimatedCostLastMonth, entitlements.costBudget);
+    const isBudgetExceeded = budget.stage === 'exhausted' || budget.stage === 'hard_stop';
+
+    if (budget.stage === 'hard_stop') {
+      this.usageStore.recordUsage({
+        userId: activeUserId,
+        conversationId: req.conversationId,
+        modelId: req.modelId,
+        provider: 'openrouter',
+        inputTokens: 0,
+        outputTokens: 0,
+        estimatedCost: 0,
+        latencyMs: Date.now() - startTime,
+        status: 'rate_limited',
+        source: 'provider',
+      });
+      callbacks.onError({
+        code: 'fair_use_exceeded',
+        message:
+          language === 'en'
+            ? 'Your plan resource quota for this period is used up. It renews gradually; you can upgrade your plan for a higher quota.'
+            : 'Ресурсная квота вашего тарифа на этот период исчерпана. Она восстанавливается постепенно; для большей квоты можно повысить тариф.',
+      });
+      return;
+    }
 
     // 2. Резолвинг модели и выбор стратегии исполнения (Token Economics & Tier Pipelines)
     let targetModel: ModelRegistryEntry;
@@ -553,12 +504,18 @@ export class AIGateway {
     const decodedPrompt = convertLayoutIfInverted(rawPrompt);
     const prompt = decodedPrompt;
 
-    const activeWorkspace =
-      req.workspaceContext ??
-      req.messages.slice().reverse().find((m) => m.workspaceContext)?.workspaceContext;
+    // Проект берётся только из ПОСЛЕДНЕГО сообщения: клиент прикладывает его к каждой реплике, пока
+    // проект привязан. Раньше брался и более ранний «метаданный» контекст, и после отвязки проекта
+    // модель продолжала считать, что у неё есть полный доступ к нулевому набору файлов.
+    const lastMessage = req.messages[req.messages.length - 1];
+    const activeWorkspace = req.workspaceContext ?? lastMessage?.workspaceContext;
     const activeAttachments =
       req.attachments ??
-      req.messages.slice().reverse().find((m) => m.attachments && m.attachments.length > 0)?.attachments;
+      lastMessage?.attachments ??
+      req.messages
+        .slice(-8)
+        .reverse()
+        .find((m) => m.attachments && m.attachments.length > 0)?.attachments;
 
     const complexityContext: ComplexityContext = {
       history: req.messages.slice(0, -1),
@@ -579,7 +536,7 @@ export class AIGateway {
       routingReason = pipelineStrategy.reason;
     } else {
       const resolved = this.registry.resolve(req.modelId);
-      if (isBudgetExceeded && resolved.tier === 'flagship') {
+      if (isBudgetExceeded && resolved.tier !== 'free') {
         targetModel = this.registry.resolve('ketner-mini');
         routingReason = `Budget protection: dynamically routed to ${targetModel.name} for fair usage`;
       } else {
@@ -604,7 +561,13 @@ export class AIGateway {
     }
 
     // 3. Проверка прав доступа (Entitlement Check)
-    const accessCheck = EntitlementService.checkModelAccess(targetModel, effectivePlan);
+    // Разовая «вспышка» флагмана для Plus выбирается самим сервером (см. TierPipelineEngine) и
+    // сознательно выходит за рамки тарифа; без этого исключения 5% запросов Auto у Plus
+    // падали бы с ошибкой «нужна подписка Pro».
+    const accessCheck =
+      pipelineStrategy?.mode === 'gpt_short'
+        ? { allowed: true as const }
+        : EntitlementService.checkModelAccess(targetModel, effectivePlan);
     if (!accessCheck.allowed) {
       const msg =
         language === 'en'
@@ -668,12 +631,34 @@ export class AIGateway {
         ? `${baseSystemPrompt} ${language === 'en' ? 'Keep responses concise and direct.' : 'Отвечай максимально кратко и по существу.'}`
         : baseSystemPrompt;
 
+      // Бюджет проекта зависит от тарифа, окна и цены модели: большой контекст на дорогой модели —
+      // главный источник убытка в безлимите.
+      const workspaceChars = workspaceBudgetChars(
+        effectivePlan,
+        targetModel.contextWindow,
+        targetModel.pricing.inputPricePerMillion,
+      );
+
       let effectiveSystemPrompt = systemPrompt;
       if (activeWorkspace) {
-        effectiveSystemPrompt += buildWorkspaceContextBlock(activeWorkspace, language);
+        const { block, stats } = buildWorkspaceContextBlock(activeWorkspace, {
+          language,
+          query: prompt,
+          maxContentChars: workspaceChars,
+        });
+        effectiveSystemPrompt += block;
+        if (stats.filesWithContent === 0 && stats.filesListed > 0) {
+          console.warn(
+            `[ai-gateway] Проект «${activeWorkspace.name}»: ${stats.filesListed} файлов в списке, но ни у одного нет содержимого`,
+          );
+        }
       }
       if (activeAttachments && activeAttachments.length > 0) {
-        effectiveSystemPrompt += buildAttachmentsBlock(activeAttachments, language);
+        effectiveSystemPrompt += buildAttachmentsBlock(
+          activeAttachments,
+          language,
+          Math.floor(workspaceChars / 2),
+        );
       }
 
       let generatedSummary: string | undefined;
@@ -701,8 +686,11 @@ export class AIGateway {
       const userScope = effectivePlan === 'free' ? 'shared' : activeUserId;
       const historyHash = SemanticCache.computeHistoryHash(req.messages, 3);
       const hasAttachments = Boolean(activeAttachments && activeAttachments.length > 0);
+      // Ответ зависит от файлов проекта и вложений, а ключ кэша — только от текста вопроса:
+      // с проектом/вложениями кэш не читаем и не пишем (иначе чужой или устаревший ответ).
+      const cacheable = !hasAttachments && !activeWorkspace;
 
-      const cachedHit = !hasAttachments
+      const cachedHit = cacheable
         ? semanticCache.get(targetModel.id, language, prompt, userScope, historyHash)
         : null;
 
@@ -786,19 +774,34 @@ export class AIGateway {
         }
       }
 
+      // Шаблонные ответы-заглушки разрешены только вне production. В production любая из этих
+      // настроек не может подменить реальную модель выдуманным ответом.
       const isTestEnv =
-        process.env.NODE_ENV === 'test' ||
-        this.aiConfig.failureRate > 0 ||
-        (this.aiConfig.thinkingMs[0] === 0 &&
-          this.aiConfig.thinkingMs[1] === 0 &&
-          this.aiConfig.chunkMs[0] === 0 &&
-          this.aiConfig.chunkMs[1] === 0);
+        !isProduction &&
+        (this.useMockEngine ??
+          (process.env.NODE_ENV === 'test' ||
+            this.aiConfig.failureRate > 0 ||
+            (this.aiConfig.thinkingMs[0] === 0 &&
+              this.aiConfig.thinkingMs[1] === 0 &&
+              this.aiConfig.chunkMs[0] === 0 &&
+              this.aiConfig.chunkMs[1] === 0)));
 
-      // 6.0. Двухпроходный пайплайн улучшения (Double Pass Enhancer: cheap draft -> GPT/cheap refine)
+      let usedEngineId: string | undefined;
+      // Токены черновика считаются отдельно: они входят в квоту токенов, но их стоимость
+      // записывается по цене модели-черновика, а не удваивается ценой улучшающей модели.
+      let extraInputTokens = 0;
+      let extraOutputTokens = 0;
+      let watchdogTimedOut = false;
+
+      // 6.0. Двухпроходный пайплайн улучшения (Double Pass Enhancer: cheap draft -> GPT/cheap refine).
+      // Для кода он отключён: инструкция «сделай лаконичнее» ломает рабочий код, а второй проход
+      // удваивает задержку и стоимость без выигрыша в качестве.
+      const taskInfo = classifyPromptComplexity(prompt, complexityContext);
       if (
         pipelineStrategy &&
         !activeWorkspace &&
         !activeAttachments?.length &&
+        taskInfo.category !== 'coding' &&
         (pipelineStrategy.mode === 'gpt_improve' || pipelineStrategy.mode === 'cheap_improve') &&
         !isTestEnv
       ) {
@@ -826,17 +829,29 @@ export class AIGateway {
 
         if (draftProvider?.isAvailable() && enhancerProvider?.isAvailable()) {
           try {
-            // Шаг 1: Быстрый черновик от дешёвой модели
-            const draftRes = await draftProvider.generateText({
-              model: draftModelId,
-              messages: optimizedMessages,
-              stream: false,
-              maxTokens: Math.min(draftModel.maxOutputTokens, 1500),
-            });
+            // Шаг 1: быстрый черновик от дешёвой модели (с собственным таймаутом: раньше
+            // зависший провайдер держал запрос и слот параллелизма бесконечно)
+            const draftController = new AbortController();
+            const draftTimer = setTimeout(() => draftController.abort(), 20_000);
+            const abortDraft = (): void => draftController.abort();
+            clientAbortController.signal.addEventListener('abort', abortDraft, { once: true });
+            let draftRes: ProviderResponse;
+            try {
+              draftRes = await draftProvider.generateText({
+                model: draftModelId,
+                messages: optimizedMessages,
+                stream: false,
+                maxTokens: Math.min(draftModel.maxOutputTokens, 1500),
+                signal: draftController.signal,
+              });
+            } finally {
+              clearTimeout(draftTimer);
+              clientAbortController.signal.removeEventListener('abort', abortDraft);
+            }
 
             if (draftRes.content && !isCancelled()) {
-              // Шаг 2: Стриминг отполированного ответа пользователю
-              // Во втором проходе передаём и вопрос пользователя, и черновик (Phase 1)
+              // Шаг 2: стриминг отполированного ответа. Во втором проходе передаём и вопрос
+              // пользователя, и черновик.
               const modText =
                 pipelineStrategy.promptModifier
                   ? typeof pipelineStrategy.promptModifier === 'string'
@@ -852,14 +867,15 @@ export class AIGateway {
                   : `User query:\n${prompt}\n\nDraft answer:\n${draftRes.content}\n\nInstruction:\n${modText}`;
 
               usedModel = enhancerModel;
-              streamedResponse = await enhancerProvider.streamText(
+              usedEngineId = enhancerModelId;
+              const pass = await this.streamWithWatchdog(
+                enhancerProvider,
                 {
                   model: enhancerModelId,
                   messages: [
                     ...optimizedMessages.slice(0, -1),
                     { role: 'user', content: enhanceInstruction },
                   ],
-                  stream: true,
                   maxTokens: Math.max(Math.min(enhancerModel.maxOutputTokens, entitlements.maxTokens), 2048),
                 },
                 {
@@ -870,18 +886,22 @@ export class AIGateway {
                     callbacks.onDelta(delta);
                   },
                   isCancelled,
+                  clientSignal: clientAbortController.signal,
+                  providerTimeoutMs: req.providerTimeoutMs,
                 },
               );
+              streamedResponse = pass.response;
+              watchdogTimedOut = pass.timedOut;
 
               if (streamedResponse && streamedResponse.content.length > 0) {
-                // Суммируем токены и себестоимость обоих проходов (Phase 1)
-                streamedResponse.usage.inputTokens += draftRes.usage.inputTokens;
-                streamedResponse.usage.outputTokens += draftRes.usage.outputTokens;
-                const draftCostResult = CostCalculator.calculate(
-                  draftRes.usage,
-                  draftModel.pricing,
-                );
-                doublePassCost = draftCostResult.totalCost;
+                extraInputTokens = draftRes.usage.inputTokens;
+                extraOutputTokens = draftRes.usage.outputTokens;
+                doublePassCost = computeRequestCost({
+                  model: draftModel,
+                  engineId: draftModelId,
+                  tokens: draftRes.usage,
+                  providerCost: draftRes.cost,
+                }).usd;
                 success = true;
               }
             }
@@ -910,30 +930,21 @@ export class AIGateway {
           }
 
           const activeProviderType = provider.type;
+          // Предохранитель ведётся по паре «провайдер + движок»: раньше один лимитирующий 429
+          // от бесплатной модели OpenRouter отключал на 30 с все остальные модели OpenRouter.
+          const breakerKey = `${activeProviderType}:${modelToRequest}`;
 
-          // Phase 5: Проверка Circuit Breaker для провайдера
-          if (this.circuitBreaker.isOpen(activeProviderType)) {
+          // Phase 5: Проверка Circuit Breaker
+          if (this.circuitBreaker.isOpen(breakerKey)) {
             console.warn(
-              `[ai-gateway] Circuit breaker OPEN для ${activeProviderType}, быстрый переход к следующему fallback`,
+              `[ai-gateway] Circuit breaker OPEN для ${breakerKey}, быстрый переход к следующему fallback`,
             );
             continue;
           }
 
-          const providerTimeoutMs = req.providerTimeoutMs ?? 25_000;
-          const attemptController = new AbortController();
-          const timeoutId = setTimeout(() => {
-            attemptController.abort(new Error(`Timeout: provider ${activeProviderType} call timed out after ${providerTimeoutMs}ms`));
-          }, providerTimeoutMs);
-
-          const abortHandler = () => attemptController.abort();
-          if (clientAbortController.signal.aborted) {
-            attemptController.abort();
-          } else {
-            clientAbortController.signal.addEventListener('abort', abortHandler, { once: true });
-          }
-
           try {
             usedModel = candidateModel;
+            usedEngineId = modelToRequest;
             // Лимит выходных токенов:
             // 1. При привязанном проекте или сложной задаче (код, рассуждения) отдаём полный объём модели и тарифа.
             // 2. Рассуждающие модели тратят до 1500 токенов только на <think>, поэтому лимит не может быть меньше 4096.
@@ -948,13 +959,12 @@ export class AIGateway {
             }
             maxTokensToUse = Math.max(maxTokensToUse, 2048);
 
-            streamedResponse = await provider.streamText(
+            const pass = await this.streamWithWatchdog(
+              provider,
               {
                 model: modelToRequest,
                 messages: optimizedMessages,
-                stream: true,
                 maxTokens: Math.min(candidateModel.maxOutputTokens, maxTokensToUse),
-                signal: attemptController.signal,
               },
               {
                 onDelta: (delta) => {
@@ -963,24 +973,32 @@ export class AIGateway {
                   }
                   callbacks.onDelta(delta);
                 },
-                isCancelled: () => combinedIsCancelled() || attemptController.signal.aborted,
+                isCancelled: combinedIsCancelled,
+                clientSignal: clientAbortController.signal,
+                providerTimeoutMs: req.providerTimeoutMs,
               },
             );
-
-            clearTimeout(timeoutId);
-            clientAbortController.signal.removeEventListener('abort', abortHandler);
+            streamedResponse = pass.response;
+            watchdogTimedOut = pass.timedOut;
 
             if (streamedResponse && streamedResponse.content.length > 0) {
-              this.circuitBreaker.recordSuccess(activeProviderType);
+              if (pass.timedOut) {
+                // Ответ дошёл частично и оборвался по таймауту: пользователю он показан, но
+                // провайдер считается нестабильным.
+                this.circuitBreaker.recordFailure(breakerKey, new Error('Stream stalled'));
+              } else {
+                this.circuitBreaker.recordSuccess(breakerKey);
+              }
+              this.noteEngineMismatch(modelToRequest, streamedResponse.model);
               success = true;
               break;
+            } else if (!pass.timedOut && combinedIsCancelled()) {
+              break;
             } else {
-              this.circuitBreaker.recordFailure(activeProviderType, new Error('Empty response from provider'));
+              this.circuitBreaker.recordFailure(breakerKey, new Error('Empty response from provider'));
             }
           } catch (providerError) {
-            clearTimeout(timeoutId);
-            clientAbortController.signal.removeEventListener('abort', abortHandler);
-            this.circuitBreaker.recordFailure(activeProviderType, providerError);
+            this.circuitBreaker.recordFailure(breakerKey, providerError);
             console.warn(
               `[ai-gateway] Провайдер ${activeProviderType} (модель ${candidateModel.name}) вернул ошибку:`,
               providerError,
@@ -1055,24 +1073,36 @@ export class AIGateway {
 
       // 8. Подсчёт токенов, стоимости и запись в UsageStore
       const latencyMs = Date.now() - startTime;
-      const inputTokens = streamedResponse?.usage.inputTokens ?? ContextOptimizer.estimateTokens(prompt);
-      const outputTokens =
+      const passInputTokens =
+        streamedResponse?.usage.inputTokens ?? ContextOptimizer.estimateTokens(prompt);
+      const passOutputTokens =
         streamedResponse?.usage.outputTokens ??
         ContextOptimizer.estimateTokens(streamedResponse?.content ?? '');
+      // В квоту токенов входят оба прохода (черновик + улучшение), в стоимость — каждый по своей цене.
+      const inputTokens = passInputTokens + extraInputTokens;
+      const outputTokens = passOutputTokens + extraOutputTokens;
 
-      const costResult = CostCalculator.calculate(
-        {
-          inputTokens,
-          outputTokens,
+      // Цена приоритетно берётся из ответа провайдера (usage.cost), иначе — из таблицы с
+      // консервативной оценкой «бесплатных» движков, которые на деле платные.
+      const passCost = computeRequestCost({
+        model: usedModel,
+        engineId: usedEngineId,
+        tokens: {
+          inputTokens: passInputTokens,
+          outputTokens: passOutputTokens,
           cachedTokens: streamedResponse?.usage.cachedTokens,
           reasoningTokens: streamedResponse?.usage.reasoningTokens,
         },
-        usedModel.pricing,
-      );
-      const totalEstimatedCost = costResult.totalCost + doublePassCost;
+        providerCost: responseSource === 'provider' ? streamedResponse?.cost : undefined,
+      });
+      const totalEstimatedCost = Number((passCost.usd + doublePassCost).toFixed(6));
 
-      const finishReason: 'stop' | 'length' | 'cancelled' | 'error' =
+      // Остановка сторожем по таймауту — это обрыв, а не выбор пользователя: ответ можно продолжить.
+      let finishReason: 'stop' | 'length' | 'cancelled' | 'error' =
         streamedResponse?.finishReason ?? (isCancelled() ? 'cancelled' : 'stop');
+      if (watchdogTimedOut && !isCancelled() && finishReason !== 'stop') {
+        finishReason = 'length';
+      }
       const canContinue = finishReason === 'length';
 
       this.usageStore.recordUsage({
@@ -1085,7 +1115,8 @@ export class AIGateway {
         cachedTokens: streamedResponse?.usage.cachedTokens,
         reasoningTokens: streamedResponse?.usage.reasoningTokens,
         estimatedCost: totalEstimatedCost,
-        actualCost: streamedResponse?.cost ?? null,
+        actualCost:
+          typeof streamedResponse?.cost === 'number' ? Number((streamedResponse.cost + doublePassCost).toFixed(6)) : null,
         latencyMs,
         ttftMs: firstTokenMs,
         status: isCancelled() ? 'cancelled' : 'success',
@@ -1093,7 +1124,7 @@ export class AIGateway {
       });
 
       if (!isCancelled()) {
-        if (streamedResponse?.content) {
+        if (streamedResponse?.content && cacheable && finishReason === 'stop') {
           semanticCache.set(
             targetModel.id,
             language,
@@ -1108,7 +1139,7 @@ export class AIGateway {
               historyHash,
               source: responseSource,
               finishReason,
-              hasAttachments,
+              hasAttachments: !cacheable,
             },
           );
         }

@@ -27,6 +27,20 @@ const DEFAULT_CANDIDATES = [
   'deepseek/deepseek-v4.1-flash',
 ];
 
+/**
+ * Коротко и без секретов фиксирует отказ OpenRouter. Раньше такие ответы молча пропускались,
+ * и «модель не работает» невозможно было отличить от неверного ID, нулевого баланса или лимита.
+ */
+async function logUpstreamFailure(model: string, response: Response): Promise<void> {
+  let body = '';
+  try {
+    body = (await response.text()).replace(/\s+/g, ' ').slice(0, 300);
+  } catch {
+    // тело недоступно
+  }
+  console.warn(`[openrouter] ${model} -> HTTP ${response.status}${body ? `: ${body}` : ''}`);
+}
+
 export class OpenRouterProvider implements AIProvider {
   readonly type: AIProviderType = 'openrouter';
   readonly name = 'OpenRouter';
@@ -88,19 +102,25 @@ export class OpenRouterProvider implements AIProvider {
             messages,
             stream: false,
             max_tokens: Math.min(options.maxTokens ?? 4096, 8192),
+            usage: { include: true },
           }),
           signal: options.signal,
         });
 
-        if (!response.ok) continue;
+        if (!response.ok) {
+          await logUpstreamFailure(targetModel, response);
+          continue;
+        }
 
         const json = (await response.json()) as {
+          model?: string;
           choices?: Array<{ message: { content?: string }; finish_reason?: string }>;
           usage?: {
             prompt_tokens?: number;
             completion_tokens?: number;
             prompt_tokens_details?: { cached_tokens?: number };
             native_tokens_cached?: number;
+            cost?: number;
           };
         };
 
@@ -119,6 +139,8 @@ export class OpenRouterProvider implements AIProvider {
             outputTokens: json.usage?.completion_tokens ?? Math.ceil(content.length / 4),
             cachedTokens: typeof cachedTokens === 'number' && cachedTokens > 0 ? cachedTokens : undefined,
           },
+          cost: typeof json.usage?.cost === 'number' ? json.usage.cost : undefined,
+          model: json.model ?? targetModel,
           finishReason: json.choices?.[0]?.finish_reason === 'length' ? 'length' : 'stop',
         };
       } catch (err: unknown) {
@@ -154,6 +176,38 @@ export class OpenRouterProvider implements AIProvider {
         };
       }
 
+      // Состояние попытки живёт снаружи try: при обрыве посреди ответа то, что уже ушло
+      // пользователю, возвращается как есть, а не дописывается вторым ответом другой модели.
+      let accumulatedContent = '';
+      let streamedAny = false;
+      let insideReasoning = false;
+      let promptTokens = 0;
+      let completionTokens = 0;
+      let reasoningTokens: number | null = null;
+      let cachedTokens: number | null = null;
+      let costUsd: number | undefined;
+      let actualModel: string | undefined;
+
+      const partialResponse = (reason: 'cancelled' | 'error'): ProviderResponse => {
+        if (insideReasoning) {
+          insideReasoning = false;
+          callbacks.onDelta('\n</think>\n\n');
+          accumulatedContent += '\n</think>\n\n';
+        }
+        return {
+          content: accumulatedContent,
+          usage: {
+            inputTokens: promptTokens || 0,
+            outputTokens: completionTokens || Math.ceil(accumulatedContent.length / 4),
+            cachedTokens: typeof cachedTokens === 'number' && cachedTokens > 0 ? cachedTokens : undefined,
+            reasoningTokens: reasoningTokens ?? undefined,
+          },
+          cost: costUsd,
+          model: actualModel ?? targetModel,
+          finishReason: reason,
+        };
+      };
+
       try {
         const response = await fetch(`${this.baseUrl}/chat/completions`, {
           method: 'POST',
@@ -168,24 +222,20 @@ export class OpenRouterProvider implements AIProvider {
             messages,
             stream: true,
             max_tokens: Math.min(options.maxTokens ?? 4096, 8192),
+            usage: { include: true },
           }),
           signal: options.signal,
         });
 
-        if (!response.ok || !response.body) continue;
+        if (!response.ok || !response.body) {
+          await logUpstreamFailure(targetModel, response);
+          continue;
+        }
 
         const reader = response.body.getReader();
         const decoder = new TextDecoder('utf-8');
         let buffer = '';
-        let accumulatedContent = '';
-        let streamedAny = false;
         let finishReason: 'stop' | 'length' | 'cancelled' | 'error' = 'stop';
-        let promptTokens = 0;
-        let completionTokens = 0;
-        let reasoningTokens: number | null = null;
-        let cachedTokens: number | null = null;
-
-        let insideReasoning = false;
 
         while (true) {
           if (callbacks.isCancelled()) {
@@ -245,7 +295,14 @@ export class OpenRouterProvider implements AIProvider {
                 finishReason = 'length';
               }
 
+              if (typeof parsed.model === 'string') {
+                actualModel = parsed.model;
+              }
+
               if (parsed.usage) {
+                if (typeof parsed.usage.cost === 'number') {
+                  costUsd = parsed.usage.cost;
+                }
                 promptTokens = parsed.usage.prompt_tokens ?? promptTokens;
                 completionTokens = parsed.usage.completion_tokens ?? completionTokens;
                 const rTokens =
@@ -285,17 +342,26 @@ export class OpenRouterProvider implements AIProvider {
               cachedTokens: typeof cachedTokens === 'number' && cachedTokens > 0 ? cachedTokens : undefined,
               reasoningTokens: reasoningTokens ?? undefined,
             },
+            cost: costUsd,
+            model: actualModel ?? targetModel,
             finishReason,
           };
         }
       } catch (err: unknown) {
-        if ((err as Error)?.name === 'AbortError' || callbacks.isCancelled()) {
+        const aborted = (err as Error)?.name === 'AbortError' || callbacks.isCancelled();
+        if (streamedAny) {
+          return partialResponse(aborted ? 'cancelled' : 'error');
+        }
+        if (aborted) {
           return {
             content: '',
             usage: { inputTokens: 0, outputTokens: 0 },
             finishReason: 'cancelled',
           };
         }
+        console.warn(
+          `[openrouter] ${targetModel}: ошибка потока: ${err instanceof Error ? err.message : String(err)}`,
+        );
       }
     }
 

@@ -1,5 +1,6 @@
 import type { WorkspaceContext, WorkspaceFile } from './types';
-import { getFileExtension } from './attachment-utils';
+import { getFileExtension, isReadableTextPath } from './attachment-utils';
+import { isSensitivePath } from './file-operations/path-safety';
 
 export interface ParseRepoResult {
   owner: string;
@@ -45,7 +46,45 @@ export function parseGitHubUrl(input: string): ParseRepoResult | null {
   return null;
 }
 
-const MAX_REPO_FILES = 120;
+const MAX_REPO_FILES = 150;
+/** Сколько файлов загружать с содержимым и сколько символов суммарно — чтобы привязка была быстрой. */
+const MAX_FETCHED_FILES = 40;
+const MAX_FETCHED_TOTAL_BYTES = 600 * 1024;
+const MAX_FETCHED_FILE_BYTES = 128 * 1024;
+
+const SKIPPED_SEGMENTS = new Set([
+  'node_modules', '.git', 'dist', 'build', '.next', 'out', 'target', 'coverage',
+  '.turbo', '.cache', 'vendor', '__pycache__', 'venv',
+]);
+
+const NON_SOURCE_EXTENSIONS = new Set([
+  'png', 'jpg', 'jpeg', 'gif', 'webp', 'ico', 'avif', 'bmp', 'svg', 'pdf', 'zip', 'gz', 'tgz', 'rar', '7z',
+  'woff', 'woff2', 'ttf', 'eot', 'otf', 'mp3', 'mp4', 'mov', 'webm', 'wasm', 'exe', 'dll', 'so', 'bin',
+  'lock', 'map',
+]);
+
+function isUsefulRepoPath(path: string): boolean {
+  const segments = path.split('/');
+  if (segments.some((s) => SKIPPED_SEGMENTS.has(s))) return false;
+  if (path.endsWith('-lock.json') || path.endsWith('pnpm-lock.yaml') || path.endsWith('yarn.lock')) return false;
+  return !NON_SOURCE_EXTENSIONS.has(getFileExtension(path));
+}
+
+/** Чем выше балл, тем раньше файл попадает в контекст модели. */
+export function repoFileScore(path: string): number {
+  const depth = path.split('/').length - 1;
+  let score = 10;
+  if (/^package\.json$/i.test(path)) score = 100;
+  else if (/^readme(\.md)?$/i.test(path)) score = 90;
+  else if (/^tsconfig.*\.json$/i.test(path)) score = 80;
+  else if (/(^|\/)(pyproject\.toml|requirements\.txt|Cargo\.toml|go\.mod|pom\.xml|Gemfile|composer\.json)$/i.test(path)) score = 75;
+  else if (/(^|\/)(index|main|app|server)\.(ts|tsx|js|jsx|py|go|rs)$/i.test(path)) score = 70;
+  else if (/(^|\/)(Dockerfile|docker-compose\.ya?ml|vite\.config\.[jt]s|next\.config\.[jt]s)$/i.test(path)) score = 60;
+  else if (/(^|\/)package\.json$/i.test(path)) score = 55;
+  else if (/^(src|app|lib|apps|packages|server|api)\//i.test(path)) score = 40;
+  else if (/^(tests?|docs?)\//i.test(path)) score = 15;
+  return score - Math.min(depth, 6);
+}
 
 /**
  * Загружает дерево репозитория GitHub через публичный REST API.
@@ -92,35 +131,36 @@ export async function fetchGitHubRepo(
 
   const rawTree = data.tree || [];
   const codeFiles = rawTree
-    .filter((node) => node.type === 'blob')
-    .filter((node) => {
-      const path = node.path;
-      return (
-        !path.includes('node_modules/') &&
-        !path.startsWith('.git/') &&
-        !path.includes('dist/') &&
-        !path.includes('build/') &&
-        !path.endsWith('.lock') &&
-        !path.endsWith('-lock.json')
-      );
-    })
+    .filter((node) => node.type === 'blob' && isUsefulRepoPath(node.path))
+    .sort((x, y) => repoFileScore(y.path) - repoFileScore(x.path) || x.path.localeCompare(y.path))
     .slice(0, MAX_REPO_FILES);
 
-  // 2. Скачиваем содержимое ключевых файлов (package.json, README, tsconfig, etc.)
-  const priorityPatterns = [/package\.json$/i, /readme\.md$/i, /tsconfig.*\.json$/i, /src\/.*index\.[jt]sx?$/i, /main\.[a-z]+$/i];
-  const filesToFetch = codeFiles
-    .filter((f) => priorityPatterns.some((pattern) => pattern.test(f.path)))
-    .slice(0, 10);
+  // 2. Скачиваем содержимое самых важных текстовых файлов (в пределах лимитов).
+  let fetchedBytes = 0;
+  const filesToFetch = codeFiles.filter((f) => {
+    if (isSensitivePath(f.path) || !isReadableTextPath(f.path)) return false;
+    const size = f.size ?? 0;
+    if (size > MAX_FETCHED_FILE_BYTES) return false;
+    if (fetchedBytes + size > MAX_FETCHED_TOTAL_BYTES) return false;
+    fetchedBytes += size;
+    return true;
+  }).slice(0, MAX_FETCHED_FILES);
 
+  const encodePath = (path: string) => path.split('/').map(encodeURIComponent).join('/');
   const contentMap = new Map<string, string>();
   await Promise.all(
     filesToFetch.map(async (fileNode) => {
       try {
-        const rawUrl = `https://raw.githubusercontent.com/${owner}/${repo}/${targetBranch}/${fileNode.path}`;
-        const contentRes = await fetch(rawUrl);
+        // Для приватных репозиториев raw.githubusercontent.com без токена недоступен — идём через API.
+        const contentRes = token?.trim()
+          ? await fetch(
+              `https://api.github.com/repos/${owner}/${repo}/contents/${encodePath(fileNode.path)}?ref=${encodeURIComponent(targetBranch)}`,
+              { headers: { ...headers, Accept: 'application/vnd.github.raw+json' } },
+            )
+          : await fetch(`https://raw.githubusercontent.com/${owner}/${repo}/${targetBranch}/${encodePath(fileNode.path)}`);
         if (contentRes.ok) {
           const text = await contentRes.text();
-          if (text.length <= 128 * 1024) {
+          if (text.length <= MAX_FETCHED_FILE_BYTES) {
             contentMap.set(fileNode.path, text);
           }
         }

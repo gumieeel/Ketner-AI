@@ -193,6 +193,27 @@ export class StripeService {
         return { handled: true, message: 'Checkout session completed' };
       }
 
+      case 'customer.subscription.updated': {
+        // Автопродление Stripe: без этого срок подписки (renewsAt) истекал бы у платящего клиента.
+        const sub = event.data.object as Stripe.Subscription;
+        const userId = sub.metadata?.userId;
+        const periodEnd = (sub as unknown as { current_period_end?: number }).current_period_end;
+        if (userId && (sub.status === 'active' || sub.status === 'trialing') && periodEnd) {
+          const current = subscriptionStore.get(userId);
+          const planId = (sub.metadata?.planId as PlanId | undefined) ?? current.plan;
+          if (planId && planId !== 'free') {
+            subscriptionStore.set({
+              userId,
+              plan: planId,
+              status: 'active',
+              renewsAt: new Date(periodEnd * 1000).toISOString(),
+            });
+            userStore.updatePlan(userId, planId);
+          }
+        }
+        return { handled: true, message: 'Subscription updated' };
+      }
+
       case 'customer.subscription.deleted': {
         const sub = event.data.object as Stripe.Subscription;
         const userId = sub.metadata?.userId;

@@ -28,6 +28,7 @@ interface AssistantMessageProps {
 export function AssistantMessage({ message, canRegenerate }: AssistantMessageProps) {
   const { t } = useTranslation();
   const regenerate = useChat((state) => state.regenerate);
+  const continueReply = useChat((state) => state.continueReply);
   const streaming = useChat((state) => state.streaming);
   const meta = useChat((state) => state.meta);
 
@@ -38,19 +39,28 @@ export function AssistantMessage({ message, canRegenerate }: AssistantMessagePro
   const hasThoughts = Boolean(parsed.thinking && parsed.thinking.length > 0);
   const showThinkingBlock = isPending || hasThoughts || parsed.isThinking;
   const activeWorkspace = useWorkspace((state) => state.activeWorkspace);
+  // Правки файлов разбираются, когда ответ дописан: во время стрима блок ещё не закончен,
+  // а построение diff на каждую порцию текста впустую грузило бы процессор.
   const fileProposal = useMemo(() => {
-    if (isPending) return null;
+    if (isPending || isStreaming) return null;
     return parseFileProposals(parsed.content || message.content, message.id, activeWorkspace);
-  }, [parsed.content, message.content, message.id, activeWorkspace, isPending]);
+  }, [parsed.content, message.content, message.id, activeWorkspace, isPending, isStreaming]);
 
   const displayContent = useMemo(() => {
-    if (fileProposal) {
+    if (fileProposal || isStreaming) {
       return stripFileActionBlocks(parsed.content);
     }
     return parsed.content;
-  }, [parsed.content, fileProposal]);
+  }, [parsed.content, fileProposal, isStreaming]);
 
   const hasContent = displayContent !== '' || Boolean(fileProposal);
+  // Кнопка «Продолжить» — только у последнего ответа, оборванного по длине или времени.
+  const canContinue =
+    canRegenerate &&
+    !failed &&
+    !isPending &&
+    !isStreaming &&
+    (message.canContinue === true || message.finishReason === 'length');
   const isUpgradeError =
     message.errorCode === 'upgrade_required' ||
     (typeof message.error === 'string' &&
@@ -145,6 +155,15 @@ export function AssistantMessage({ message, canRegenerate }: AssistantMessagePro
                 {t('common.retry')}
               </Button>
             ) : null}
+          </div>
+        ) : null}
+
+        {canContinue ? (
+          <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-muted">
+            <span>{t('chat.truncatedNotice')}</span>
+            <Button variant="outline" size="sm" disabled={streaming} onClick={() => void continueReply()}>
+              {t('chat.continue')}
+            </Button>
           </div>
         ) : null}
 

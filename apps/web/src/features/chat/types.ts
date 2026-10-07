@@ -50,6 +50,8 @@ export interface WorkspaceFile {
   size: number;
   content?: string;
   language?: string;
+  /** Содержимое обрезано (например, при сохранении в localStorage): целиком файл перезаписывать нельзя. */
+  truncated?: boolean;
 }
 
 export interface WorkspaceContext {
@@ -66,6 +68,11 @@ export interface WorkspaceContext {
 
 export type FileActionType = 'write' | 'replace' | 'delete';
 
+export interface FileReplaceEdit {
+  targetContent: string;
+  replacementContent: string;
+}
+
 export interface FileChangeItem {
   action: FileActionType;
   path: string;
@@ -73,10 +80,24 @@ export interface FileChangeItem {
   content?: string;
   targetContent?: string;
   replacementContent?: string;
+  /**
+   * Для `replace`: все точечные правки файла по порядку. При записи на диск они применяются
+   * к ТЕКУЩЕМУ содержимому файла, а не к снимку из памяти.
+   */
+  edits?: FileReplaceEdit[];
   originalContent?: string;
   modifiedContent?: string;
   additions?: number;
   deletions?: number;
+  /** Нестрогое предупреждение (например, фрагмент найден в нескольких местах). */
+  warning?: string;
+}
+
+/** Правка, которую нельзя безопасно применить: показывается пользователю, но не записывается. */
+export interface RejectedFileChange {
+  path: string;
+  action: FileActionType;
+  reason: string;
 }
 
 export interface FileProposal {
@@ -84,6 +105,8 @@ export interface FileProposal {
   messageId: string;
   summary?: string;
   changes: FileChangeItem[];
+  /** Правки, отклонённые разбором (небезопасный путь, фрагмент не найден и т. п.). */
+  rejected?: RejectedFileChange[];
   status: 'pending' | 'applying' | 'applied' | 'discarded' | 'error';
   error?: string;
   appliedAt?: string;
@@ -119,6 +142,9 @@ export interface Message {
   };
   /** Пользовательская оценка ответа: лайк / дизлайк */
   feedback?: 'like' | 'dislike';
+  /** Почему ответ закончился: `length` — оборван лимитом длины или таймаутом, ответ можно продолжить. */
+  finishReason?: 'stop' | 'length' | 'cancelled' | 'error';
+  canContinue?: boolean;
 }
 
 export interface ModelInfo {

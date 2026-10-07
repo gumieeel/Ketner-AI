@@ -109,8 +109,11 @@ export class CircuitBreaker {
    * Получить статус всех зарегистрированных провайдеров.
    */
   getAllStatuses(): ProviderCircuitStatus[] {
-    const providers = ['openai', 'anthropic', 'google', 'openrouter'];
-    return providers.map((p) => this.getStatus(p));
+    // Ключи бывают двух видов: «openrouter» и «openrouter:модель» (предохранитель на движок).
+    const keys = new Set<string>(['openai', 'anthropic', 'google', 'openrouter']);
+    for (const key of this.states.keys()) keys.add(key);
+    for (const key of this.failures.keys()) keys.add(key);
+    return Array.from(keys).map((key) => this.getStatus(key));
   }
 
   /**

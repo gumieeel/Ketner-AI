@@ -101,6 +101,27 @@ export function FileProposalCard({ proposal: initialProposal, workspace }: FileP
     setProposal((prev) => ({ ...prev, status: 'discarded' }));
   };
 
+  const rejected = proposal.rejected ?? [];
+
+  // Ничего безопасного применить нельзя: объясняем почему, вместо кнопки «Применить».
+  if (proposal.changes.length === 0) {
+    return (
+      <div className="mt-3 max-w-2xl rounded-2xl border border-amber-500/30 bg-amber-500/10 p-4 text-xs text-amber-500">
+        <h4 className="font-semibold">Предложенные изменения не применены</h4>
+        <ul className="mt-2 space-y-1">
+          {rejected.map((item, idx) => (
+            <li key={`${item.path}-${idx}`}>
+              <span className="font-mono text-text">{item.path}</span> — {item.reason}
+            </li>
+          ))}
+        </ul>
+        <p className="mt-2 text-muted">
+          Ничего не записано. Попросите модель повторить правку с точным фрагментом из файла.
+        </p>
+      </div>
+    );
+  }
+
   if (proposal.status === 'discarded') {
     return (
       <div className="mt-3 rounded-xl border border-stroke bg-surface/50 p-3 text-xs text-muted flex items-center justify-between">
@@ -172,6 +193,11 @@ export function FileProposalCard({ proposal: initialProposal, workspace }: FileP
                     — {change.description}
                   </span>
                 )}
+                {change.warning && (
+                  <span className="text-[10px] text-amber-500 truncate" title={change.warning}>
+                    ⚠ {change.warning}
+                  </span>
+                )}
               </div>
 
               <div className="flex items-center gap-2 pl-2 shrink-0">
@@ -189,6 +215,20 @@ export function FileProposalCard({ proposal: initialProposal, workspace }: FileP
             </div>
           ))}
         </div>
+
+        {/* Правки, которые безопасно применить нельзя */}
+        {rejected.length > 0 && proposal.status !== 'applied' && (
+          <div className="mb-2.5 rounded-lg border border-amber-500/30 bg-amber-500/10 p-2.5 text-xs text-amber-500">
+            <p className="font-medium">Часть правок не будет применена:</p>
+            <ul className="mt-1 space-y-0.5">
+              {rejected.map((item, idx) => (
+                <li key={`${item.path}-${idx}`}>
+                  <span className="font-mono text-text">{item.path}</span> — {item.reason}
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
 
         {/* Ошибки */}
         {proposal.status === 'error' && proposal.error && (

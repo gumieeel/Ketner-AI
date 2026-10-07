@@ -375,8 +375,10 @@ export interface ProviderResponse {
     cachedTokens?: number;
     reasoningTokens?: number;
   };
-  /** Фактическая стоимость от провайдера, если предоставлена. */
+  /** Фактическая стоимость от провайдера в USD, если предоставлена. */
   cost?: number;
+  /** Модель, которая реально ответила (провайдер мог переключиться на запасную). */
+  model?: string;
   finishReason: 'stop' | 'length' | 'cancelled' | 'error';
 }
 

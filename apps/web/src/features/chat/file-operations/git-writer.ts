@@ -1,5 +1,7 @@
 import type { FileChangeItem } from '../types';
 import { useWorkspace } from '../workspace-store';
+import { sanitizeChangePath } from './path-safety';
+import { applyTextEdits } from './text-patch';
 
 export interface GitHubCommitParams {
   owner: string;
@@ -37,6 +39,30 @@ function getHeaders(token: string): Record<string, string> {
   };
 }
 
+interface AtomicCommitResult {
+  newCommitSha: string;
+  baseCommitSha: string;
+  /** Что реально записано в коммит (для точечных правок — результат применения к файлу из репозитория). */
+  finalContents: Map<string, string>;
+}
+
+/** Текущее содержимое файла в базовом коммите (а не снимок, загруженный при привязке проекта). */
+async function fetchFileAtCommit(
+  baseUrl: string,
+  token: string,
+  path: string,
+  commitSha: string,
+): Promise<string> {
+  const encodedPath = path.split('/').map(encodeURIComponent).join('/');
+  const res = await fetch(`${baseUrl}/contents/${encodedPath}?ref=${commitSha}`, {
+    headers: { ...getHeaders(token), Accept: 'application/vnd.github.raw+json' },
+  });
+  if (!res.ok) {
+    throw new Error(`Не удалось получить актуальный файл ${path} из репозитория (${res.status}). Изменения не отправлены.`);
+  }
+  return await res.text();
+}
+
 /**
  * Создаёт атомарный коммит через GitHub Git Data API (Blobs -> Tree -> Commit).
  */
@@ -47,7 +73,16 @@ async function createAtomicCommit(
   token: string,
   changes: FileChangeItem[],
   commitMessage: string,
-): Promise<{ newCommitSha: string; baseCommitSha: string }> {
+): Promise<AtomicCommitResult> {
+  // Пути проверяются ещё раз: модель — недоверенный источник, а коммит необратим для пользователя.
+  for (const change of changes) {
+    const checked = sanitizeChangePath(change.path);
+    if (!checked.ok || checked.path !== change.path) {
+      throw new Error(`Недопустимый путь «${change.path}»: ${checked.ok ? 'путь не нормализован' : checked.reason}`);
+    }
+  }
+
+  const finalContents = new Map<string, string>();
   const headers = getHeaders(token);
   const baseUrl = `https://api.github.com/repos/${owner}/${repo}`;
 
@@ -90,7 +125,16 @@ async function createAtomicCommit(
         sha: null, // sha: null в GitHub API означает удаление файла из дерева
       });
     } else {
-      const content = change.modifiedContent ?? change.content ?? '';
+      let content = change.modifiedContent ?? change.content ?? '';
+      if (change.action === 'replace' && change.edits && change.edits.length > 0) {
+        const fresh = await fetchFileAtCommit(baseUrl, token, change.path, baseCommitSha);
+        const result = applyTextEdits(fresh, change.edits);
+        if (!result.ok) {
+          throw new Error(`${change.path}: ${result.reason}. Изменения не отправлены, файл в репозитории не тронут.`);
+        }
+        content = result.text;
+      }
+      finalContents.set(change.path, content);
       const blobRes = await fetch(`${baseUrl}/git/blobs`, {
         method: 'POST',
         headers,
@@ -149,6 +193,7 @@ async function createAtomicCommit(
   return {
     newCommitSha: newCommitData.sha,
     baseCommitSha,
+    finalContents,
   };
 }
 
@@ -161,7 +206,7 @@ export async function commitDirectlyToGitHub(
   const { owner, repo, branch, token, changes } = params;
   const commitMessage = params.commitMessage || `Ketner AI: обновление ${changes.length} файлов`;
 
-  const { newCommitSha } = await createAtomicCommit(
+  const { newCommitSha, finalContents } = await createAtomicCommit(
     owner,
     repo,
     branch,
@@ -188,7 +233,7 @@ export async function commitDirectlyToGitHub(
   }
 
   // Обновляем файлы в локальном сторе
-  syncWorkspaceStore(changes);
+  syncWorkspaceStore(changes, finalContents);
 
   return {
     commitSha: newCommitSha,
@@ -215,7 +260,7 @@ export async function createGitHubPullRequest(
         .join('\n') +
       `\n\n*Сгенерировано автоматически Ketner AI Gateway.*`;
 
-  const { newCommitSha } = await createAtomicCommit(
+  const { newCommitSha, finalContents } = await createAtomicCommit(
     owner,
     repo,
     branch,
@@ -259,7 +304,7 @@ export async function createGitHubPullRequest(
   const prData = (await prRes.json()) as { number: number; html_url: string };
 
   // Обновляем файлы в сторе
-  syncWorkspaceStore(changes);
+  syncWorkspaceStore(changes, finalContents);
 
   return {
     prNumber: prData.number,
@@ -269,7 +314,7 @@ export async function createGitHubPullRequest(
   };
 }
 
-function syncWorkspaceStore(changes: FileChangeItem[]): void {
+function syncWorkspaceStore(changes: FileChangeItem[], finalContents: Map<string, string>): void {
   const updatedFiles: Array<{ path: string; content?: string }> = [];
   for (const change of changes) {
     if (change.action === 'delete') {
@@ -277,7 +322,7 @@ function syncWorkspaceStore(changes: FileChangeItem[]): void {
     } else {
       updatedFiles.push({
         path: change.path,
-        content: change.modifiedContent ?? change.content,
+        content: finalContents.get(change.path) ?? change.modifiedContent ?? change.content,
       });
     }
   }

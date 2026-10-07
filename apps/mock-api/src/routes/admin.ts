@@ -6,6 +6,7 @@
  * 2. Или авторизацией под администраторским email из config.adminEmails (ADMIN_EMAILS)
  */
 
+import { safeEqualStrings } from '../auth/safe-equal.js';
 import { Router, type Request, type Response, type NextFunction } from 'express';
 import { config } from '../config.js';
 import { sendError } from '../middleware/errors.js';
@@ -50,7 +51,7 @@ export function createAdminRouter({
   // Middleware проверки прав администратора
   const requireAdmin = (req: Request, res: Response, next: NextFunction): void => {
     const adminKey = req.headers['x-admin-key'];
-    if (adminKey && adminKey === config.adminApiKey) {
+    if (typeof adminKey === 'string' && safeEqualStrings(adminKey, config.adminApiKey)) {
       return next();
     }
 

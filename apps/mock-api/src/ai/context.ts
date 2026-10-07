@@ -46,17 +46,67 @@ export class ContextOptimizer {
   }
 
   /**
-   * Нормализация и очистка текста для максимальной экономии токенов:
-   * убирает избыточные пробелы, пустые строки и невидимые символы.
+   * Нормализация текста для экономии токенов, безопасная для кода.
+   *
+   * Раньше убирались ВСЕ отступы и повторные пробелы, поэтому модель видела Python/YAML/Makefile
+   * без структуры, а `replace.targetContent` не совпадал с реальным файлом. Теперь:
+   *  - внутри ограждений ``` (в том числе незакрытых) текст не меняется, кроме перевода строк
+   *    и пробелов в конце строк;
+   *  - в обычном тексте блоки из двух и более подряд идущих строк с отступом (вставленный
+   *    без ограждения код) сохраняются как есть;
+   *  - остальной текст чистится как раньше: лишние пробелы и пустые строки убираются.
    */
   static cleanText(text: string): string {
     if (!text) return '';
-    return text
-      .replace(/\r\n/g, '\n')
-      .replace(/[ \t]*\n[ \t]*/g, '\n')
-      .replace(/\n{3,}/g, '\n\n')
-      .replace(/[ \t]+/g, ' ')
-      .trim();
+    const normalized = text.replace(/\r\n/g, '\n');
+    const parts = normalized.split(/(```[\s\S]*?(?:```|$))/g);
+    const cleaned = parts
+      .map((part, index) =>
+        index % 2 === 1 ? part.replace(/[ \t]+$/gm, '') : this.cleanProse(part),
+      )
+      .join('');
+    return cleaned.replace(/^\n+/, '').replace(/\s+$/, '');
+  }
+
+  private static cleanProse(text: string): string {
+    if (!text) return '';
+    const lines = text.split('\n');
+    const isIndented = (line: string): boolean => /^( {2,}|\t)\S/.test(line);
+    const keep = new Array<boolean>(lines.length).fill(false);
+
+    // Серии строк с отступом (допускается одна пустая строка между ними) считаются кодом.
+    let i = 0;
+    while (i < lines.length) {
+      if (!isIndented(lines[i])) {
+        i++;
+        continue;
+      }
+      let end = i;
+      let count = 0;
+      let j = i;
+      while (j < lines.length) {
+        if (isIndented(lines[j])) {
+          count++;
+          end = j;
+          j++;
+        } else if (lines[j].trim() === '' && j + 1 < lines.length && isIndented(lines[j + 1])) {
+          j++;
+        } else {
+          break;
+        }
+      }
+      if (count >= 2) {
+        for (let k = i; k <= end; k++) keep[k] = true;
+      }
+      i = end + 1;
+    }
+
+    return lines
+      .map((line, index) =>
+        keep[index] ? line.replace(/[ \t]+$/, '') : line.trim().replace(/[ \t]+/g, ' '),
+      )
+      .join('\n')
+      .replace(/\n{3,}/g, '\n\n');
   }
 
   /**

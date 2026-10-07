@@ -545,6 +545,29 @@ export function createBillingRouter({
     const user = userStore.findById(userId) || userStore.findByEmail(userId);
     const currency: CryptoCurrency = request.body?.currency || 'USDT_TRC20';
 
+    // Без шлюза остаётся только ручной перевод на кошелёк. Если и он выключен (production без
+    // ENABLE_MANUAL_CRYPTO), принять оплату нечем — счёт не создаём, а не показываем «пустой» адрес.
+    if (!cryptoCloudService.isConfigured()) {
+      if (!config.manualCryptoEnabled) {
+        sendError(
+          response,
+          501,
+          'payment_method_unavailable',
+          'Оплата криптовалютой временно недоступна',
+        );
+        return;
+      }
+      if (!config.enableMockBilling && currency !== 'USDT_TRC20') {
+        sendError(
+          response,
+          400,
+          'currency_unavailable',
+          'Сейчас доступна оплата USDT в сети TRC-20',
+        );
+        return;
+      }
+    }
+
     // Тарифы в долларах: Plus $9, Pro $25, Ultra $49
     const amountUsd = plan.id === 'ultra' ? 49 : plan.id === 'pro' ? 25 : 9;
     const tempOrderId = `crypto_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
@@ -651,15 +674,68 @@ export function createBillingRouter({
         return;
       }
 
-      const verification = await blockchainVerifier.verifyTransaction({
+      if (!config.manualCryptoEnabled) {
+        sendError(
+          response,
+          501,
+          'payment_method_unavailable',
+          'Ручное подтверждение переводов сейчас отключено',
+        );
+        return;
+      }
+
+      // Счёт уже оплачен — повторно ничего не активируем и второй TxID не принимаем.
+      if (invoice.status === 'paid') {
+        const current = subscriptionStore.get(invoice.userId);
+        response.json({
+          success: true,
+          subscription: current,
+          user: userStore.findById(invoice.userId) ?? { id: invoice.userId, plan: invoice.planId },
+          invoice,
+        });
+        return;
+      }
+
+      // Атомарно занимаем TxID ДО сетевых запросов: два одновременных запроса с одним хешем
+      // не пройдут оба (раньше проверка и запись были разделены await).
+      const reserved = usedTxStore.reserveTx({
         txHash,
-        currency: invoice.currency,
-        requiredUsd: invoice.amountUsd,
-        planId: invoice.planId,
         userId: invoice.userId,
+        planId: invoice.planId,
+        currency: invoice.currency,
+        amount: invoice.amount,
+        createdAt: new Date().toISOString(),
       });
+      if (!reserved) {
+        sendError(
+          response,
+          400,
+          'tx_already_used',
+          'Этот хеш транзакции (TxID) уже был использован ранее для активации подписки. Повторное использование запрещено.',
+        );
+        return;
+      }
+
+      let verification;
+      try {
+        verification = await blockchainVerifier.verifyTransaction({
+          txHash,
+          currency: invoice.currency,
+          requiredUsd: invoice.amountUsd,
+          planId: invoice.planId,
+          userId: invoice.userId,
+          invoiceCreatedAt: invoice.createdAt,
+        });
+      } catch (err) {
+        usedTxStore.releaseTx(txHash);
+        console.error('[billing] Ошибка проверки транзакции:', err);
+        sendError(response, 502, 'blockchain_verification_failed', 'Не удалось проверить транзакцию. Повторите позже.');
+        return;
+      }
 
       if (!verification.success) {
+        // Проверка не удалась — хеш освобождается, чтобы после подтверждения сети его можно было подать снова.
+        usedTxStore.releaseTx(txHash);
         sendError(
           response,
           400,
@@ -669,7 +745,7 @@ export function createBillingRouter({
         return;
       }
 
-      // Защита от повторного использования: записываем хеш
+      // Фиксируем фактическую сумму и время блока
       usedTxStore.recordUsedTx({
         txHash,
         userId: invoice.userId,

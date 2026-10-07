@@ -177,7 +177,17 @@ export const config = {
    * Stripe без ключей). Только вне production — в production их нет совсем.
    */
   enableMockBilling: !isProduction,
+  /**
+   * Ручное подтверждение прямого перевода на кошелёк (по TxID). В production выключено, пока
+   * владелец явно не задаст ENABLE_MANUAL_CRYPTO=true; даже тогда проверяется только USDT TRC-20.
+   */
+  manualCryptoEnabled: !isProduction || optionalEnv('ENABLE_MANUAL_CRYPTO') === 'true',
   enableDemoAccount: !isProduction || optionalEnv('ENABLE_DEMO_ACCOUNT') === 'true',
+  /**
+   * Анонимный доступ к чату и диалогам через общий demo-user. Только вне production:
+   * в production каждый вызов ИИ требует сессии, иначе любой может жечь бюджет провайдера.
+   */
+  allowAnonymousChat: !isProduction,
 
   /** Пользователь и план заглушки: реальные аккаунты появятся на этапе 3. */
   demoUserId: 'demo-user',
@@ -332,7 +342,8 @@ export const config = {
       readNumber('MOCK_AI_THINKING_MAX_MS', 900),
     ],
     chunkMs: [readNumber('MOCK_AI_CHUNK_MIN_MS', 20), readNumber('MOCK_AI_CHUNK_MAX_MS', 40)],
-    failureRate: readNumber('MOCK_AI_FAILURE_RATE', 0),
+    // Имитация сбоев — только для разработки: в production ответ никогда не подменяется заглушкой.
+    failureRate: isProduction ? 0 : readNumber('MOCK_AI_FAILURE_RATE', 0),
     random: Math.random,
   } satisfies AiConfig,
 } as const;

@@ -31,6 +31,21 @@ export interface SaveTurnInput {
   };
 }
 
+/**
+ * В историю диалога идёт только описание проекта (имя, источник, список путей), без содержимого
+ * файлов: код проекта уже лежит у пользователя, а хранить его копию в каждом сообщении — это
+ * раздутая база и лишняя утечка исходников (до 300 000 символов на реплику).
+ */
+export function stripWorkspaceFileContents(
+  workspace: Message['workspaceContext'],
+): Message['workspaceContext'] {
+  if (!workspace) return undefined;
+  return {
+    ...workspace,
+    files: workspace.files?.map((file) => ({ path: file.path, size: file.size, language: file.language })),
+  };
+}
+
 export interface ConversationStore {
   list(userId: string): ConversationSummary[];
   get(userId: string, conversationId: string): ConversationWithMessages | null;
@@ -271,7 +286,7 @@ export function createConversationStore(file: string): ConversationStore {
           // На бэкенде хранится только итоговый вариант сообщения.
           status: 'complete',
           attachments: message.attachments,
-          workspaceContext: message.workspaceContext,
+          workspaceContext: stripWorkspaceFileContents(message.workspaceContext),
           feedback: existing?.feedback,
         };
       });

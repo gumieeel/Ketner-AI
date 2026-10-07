@@ -1,4 +1,4 @@
-import { usedTxStore } from '../store/used-tx-store.js';
+import { config } from '../config.js';
 import type { CryptoCurrency, PlanId } from '../types.js';
 
 export const MERCHANT_ADDRESSES = {
@@ -16,6 +16,8 @@ export interface VerifyTransactionOptions {
   requiredUsd: number;
   planId: PlanId;
   userId: string;
+  /** Время создания счёта (ISO): перевод, совершённый раньше, к этому счёту не относится. */
+  invoiceCreatedAt?: string;
 }
 
 export interface VerificationResult {
@@ -45,27 +47,13 @@ export class BlockchainVerifier {
       };
     };
 
-    // 2. Тестовый режим для юнит-тестов
+    // 2. Тестовые TxID (TEST_* / MOCK_*) — только вне production. В production любой такой
+    //    хеш проходит обычную проверку по блокчейну и отклоняется как неверный формат.
     if (
-      process.env.NODE_ENV === 'test' ||
-      cleanHash.startsWith('TEST_') ||
-      cleanHash.startsWith('MOCK_')
+      config.enableMockBilling &&
+      (cleanHash.startsWith('TEST_') || cleanHash.startsWith('MOCK_'))
     ) {
-      if (cleanHash.startsWith('TEST_INVALID') || cleanHash.startsWith('MOCK_INVALID')) {
-        return {
-          success: false,
-          errorCode: 'invalid_tx_hash',
-          errorMessage: 'Транзакция не найдена в блокчейне (тестовая ошибка).',
-        };
-      }
       if (cleanHash.startsWith('TEST_VALID') || cleanHash.startsWith('MOCK_VALID')) {
-        if (usedTxStore.isTxUsed(cleanHash)) {
-          return {
-            success: false,
-            errorCode: 'tx_already_used',
-            errorMessage: 'Этот TxID уже был использован ранее для активации подписки.',
-          };
-        }
         return {
           success: true,
           transferredAmount: options.requiredUsd,
@@ -74,36 +62,62 @@ export class BlockchainVerifier {
           blockTimestamp: Date.now(),
         };
       }
-    }
-
-    // 3. Защита от Replay Attack (повторного использования хеша)
-    if (usedTxStore.isTxUsed(cleanHash)) {
       return {
         success: false,
-        errorCode: 'tx_already_used',
-        errorMessage:
-          'Этот хеш транзакции (TxID) уже был использован ранее для активации подписки. Повторное использование запрещено.',
+        errorCode: 'invalid_tx_hash',
+        errorMessage: 'Транзакция не найдена в блокчейне (тестовая ошибка).',
       };
     }
 
-    // 4. Роутинг проверки по типу сети
+    // 3. Повторное использование TxID отсекается атомарной резервацией в роутере
+    //    (usedTxStore.reserveTx) ещё до сетевых запросов, а не проверкой «до/после».
+
+    if (!config.manualCryptoEnabled) {
+      return {
+        success: false,
+        errorCode: 'manual_crypto_disabled',
+        errorMessage: 'Ручное подтверждение переводов сейчас отключено.',
+      };
+    }
+
+    // 4. Роутинг проверки по типу сети. В production поддержан только USDT TRC-20: проверки
+    //    TON и BTC не сверяют получателя/сумму по реальному курсу и годятся лишь для разработки.
+    const createdAtMs = options.invoiceCreatedAt ? Date.parse(options.invoiceCreatedAt) : NaN;
     switch (options.currency) {
       case 'USDT_TRC20':
-        return this.verifyTronTrc20(cleanHash, options.requiredUsd);
+        return this.verifyTronTrc20(cleanHash, options.requiredUsd, createdAtMs);
       case 'TON':
       case 'USDT_TON':
+        if (!config.enableMockBilling) return this.unsupportedCurrency(options.currency);
         return this.verifyTon(cleanHash, options.requiredUsd, options.currency);
       case 'BTC':
+        if (!config.enableMockBilling) return this.unsupportedCurrency(options.currency);
         return this.verifyBitcoin(cleanHash, options.requiredUsd);
       default:
-        return this.verifyTronTrc20(cleanHash, options.requiredUsd);
+        return this.unsupportedCurrency(String(options.currency));
     }
   }
 
+  private unsupportedCurrency(currency: string): VerificationResult {
+    return {
+      success: false,
+      errorCode: 'currency_not_supported',
+      errorMessage: `Ручное подтверждение для ${currency} недоступно. Оплатите USDT в сети TRC-20.`,
+    };
+  }
+
   /**
-   * Проверка транзакции USDT в сети Tron (TRC-20) через Tronscan API и TronGrid.
+   * Проверка транзакции USDT в сети Tron (TRC-20) через Tronscan API.
+   *
+   * Принимается только перевод официального контракта Tether на наш адрес: «токен с символом
+   * USDT» и записи без контракта не считаются. `invoiceCreatedAtMs` привязывает перевод к счёту
+   * по времени (платёж раньше создания счёта к нему не относится).
    */
-  private async verifyTronTrc20(txHash: string, requiredUsd: number): Promise<VerificationResult> {
+  private async verifyTronTrc20(
+    txHash: string,
+    requiredUsd: number,
+    invoiceCreatedAtMs: number,
+  ): Promise<VerificationResult> {
     // Tron txHash должен состоять ровно из 64 шестнадцатеричных символов
     const hexPattern = /^[0-9a-fA-F]{64}$/;
     if (!hexPattern.test(txHash)) {
@@ -159,7 +173,7 @@ export class BlockchainVerifier {
       };
 
       // Если объект пустой или хэш не совпадает — транзакции нет в блокчейне
-      if (!data || !data.hash) {
+      if (!data || !data.hash || data.hash.toLowerCase() !== txHash.toLowerCase()) {
         return {
           success: false,
           errorCode: 'tx_not_found',
@@ -178,8 +192,8 @@ export class BlockchainVerifier {
         };
       }
 
-      // Проверка подтверждения блоков
-      if (data.confirmed === false) {
+      // Проверка подтверждения блоков: нет явного подтверждения — нет оплаты
+      if (data.confirmed !== true) {
         return {
           success: false,
           errorCode: 'tx_unconfirmed',
@@ -191,12 +205,28 @@ export class BlockchainVerifier {
       // Проверка времени: транзакция не должна быть старше 48 часов
       const txTimestamp = data.timestamp || 0;
       const maxAgeMs = 48 * 60 * 60 * 1000;
-      if (txTimestamp > 0 && Date.now() - txTimestamp > maxAgeMs) {
+      if (!(txTimestamp > 0)) {
+        return {
+          success: false,
+          errorCode: 'tx_unconfirmed',
+          errorMessage: 'У транзакции нет времени подтверждения. Повторите проверку позже.',
+        };
+      }
+      if (Date.now() - txTimestamp > maxAgeMs) {
         return {
           success: false,
           errorCode: 'tx_expired',
           errorMessage:
             'Срок действия транзакции истёк (перевод старше 48 часов). Использование старых транзакций запрещено.',
+        };
+      }
+
+      // Перевод должен быть совершён не раньше создания счёта (допуск на расхождение часов 60 с)
+      if (Number.isFinite(invoiceCreatedAtMs) && txTimestamp < invoiceCreatedAtMs - 60_000) {
+        return {
+          success: false,
+          errorCode: 'tx_before_invoice',
+          errorMessage: 'Этот перевод был совершён до создания счёта и не может быть к нему применён.',
         };
       }
 
@@ -207,10 +237,10 @@ export class BlockchainVerifier {
       if (Array.isArray(data.trc20TransferInfo) && data.trc20TransferInfo.length > 0) {
         matchedTransfer = data.trc20TransferInfo.find((item) => {
           const isTarget = item.to_address === targetAddress;
+          // Адреса Tron (base58) чувствительны к регистру; символ токена подделывается и не доказательство.
           const isUsdt =
-            !item.contract_address ||
-            item.contract_address.toLowerCase() === TRC20_USDT_CONTRACT.toLowerCase() ||
-            item.symbol === 'USDT';
+            item.contract_address === TRC20_USDT_CONTRACT &&
+            (item.decimals === undefined || Number(item.decimals) === 6);
           return isTarget && isUsdt;
         });
       }
@@ -219,8 +249,7 @@ export class BlockchainVerifier {
       if (!matchedTransfer && data.trigger_info?.parameter) {
         const toParam = data.trigger_info.parameter._to;
         const contractParam = data.trigger_info.contract_address;
-        const isUsdt =
-          !contractParam || contractParam.toLowerCase() === TRC20_USDT_CONTRACT.toLowerCase();
+        const isUsdt = contractParam === TRC20_USDT_CONTRACT;
         if (toParam === targetAddress && isUsdt) {
           matchedTransfer = {
             to_address: toParam,
@@ -240,6 +269,13 @@ export class BlockchainVerifier {
       // Проверка суммы (USDT имеет 6 знаков после запятой)
       const rawUnits = Number(matchedTransfer.amount_str || '0');
       const transferredUsdt = rawUnits / 1_000_000;
+      if (!Number.isFinite(transferredUsdt) || transferredUsdt <= 0) {
+        return {
+          success: false,
+          errorCode: 'insufficient_amount',
+          errorMessage: 'Не удалось определить сумму перевода.',
+        };
+      }
 
       // Допускаем погрешность не более $0.05
       const minRequired = requiredUsd - 0.05;

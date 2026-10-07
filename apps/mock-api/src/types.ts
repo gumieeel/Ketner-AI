@@ -96,6 +96,8 @@ export interface WorkspaceFile {
   size: number;
   content?: string;
   language?: string;
+  /** Клиент передал только начало файла (кэш браузера или лимит размера). */
+  truncated?: boolean;
 }
 
 export interface WorkspaceContext {
