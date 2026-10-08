@@ -5,6 +5,8 @@ node_modules/
 
 # build output
 dist/
+# Собранный фронтенд коммитится: Render отдаёт его из репозитория (apps/mock-api/src/app.ts)
+!apps/web/dist/
 dist-ssr/
 build/
 out/
