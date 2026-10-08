@@ -4,8 +4,8 @@ import {
   ClaudeIcon,
   GeminiIcon,
   DeepSeekIcon,
-  QwenIcon,
   GrokIcon,
+  KetnerIcon,
 } from '@/components/icons/brands';
 import { useTranslation } from '@/i18n';
 import { cn } from '@/lib/cn';
@@ -22,16 +22,16 @@ interface StripModelItem {
 
 const STRIP_MODELS: StripModelItem[] = [
   {
-    name: 'Claude Fable 5.1',
+    name: 'Claude Opus 5.5',
     provider: 'Anthropic',
     icon: ClaudeIcon,
     tagsRu: 'Анализ · Кодинг · Архитектура',
     tagsEn: 'Analysis · Coding · Architecture',
-    descRu: 'Самая мощная модель для сложных агентных задач, глубокого анализа, длинного кода и вдумчивого письма.',
-    descEn: 'Most powerful model for complex agentic workflows, deep analysis, long code, and thoughtful writing.',
+    descRu: 'Мощная модель для сложных задач, глубокого анализа, длинного кода и вдумчивого письма.',
+    descEn: 'Powerful model for complex tasks, deep analysis, long code, and thoughtful writing.',
   },
   {
-    name: 'Gemini Flash 3.8',
+    name: 'Gemini 3.8 Flash',
     provider: 'Google',
     icon: GeminiIcon,
     tagsRu: 'Мультимодал · Видео · Скорость',
@@ -40,7 +40,7 @@ const STRIP_MODELS: StripModelItem[] = [
     descEn: 'Fast multimodal model with large context, ideal for images, video, and long documents.',
   },
   {
-    name: 'DeepSeek v4.1 Flash',
+    name: 'DeepSeek V4.1 Flash',
     provider: 'DeepSeek',
     icon: DeepSeekIcon,
     tagsRu: 'Рассуждения · Код · Математика',
@@ -49,13 +49,13 @@ const STRIP_MODELS: StripModelItem[] = [
     descEn: 'Ultra-fast and accurate: code synthesis, math, summarization, and high-volume text processing.',
   },
   {
-    name: 'Qwen 3.8 Max',
-    provider: 'Alibaba',
-    icon: QwenIcon,
-    tagsRu: 'Инженерия · Мультиязычность · Сложный код',
-    tagsEn: 'Engineering · Multilingual · Complex Code',
-    descRu: 'Флагман для сложных инженерных задач, мультиязычных проектов, архитектуры и точной генерации кода.',
-    descEn: 'Flagship for complex engineering tasks, multilingual projects, architecture, and code generation.',
+    name: 'Ketner Pro',
+    provider: 'Ketner',
+    icon: KetnerIcon,
+    tagsRu: 'Рабочая модель · Код · Анализ',
+    tagsEn: 'Workhorse · Code · Analysis',
+    descRu: 'Основная рабочая модель Ketner для кода, анализа и текстов: на неё Auto направляет обычные задачи. Доступна с тарифа Plus.',
+    descEn: 'Ketner\'s main workhorse for code, analysis and writing: Auto routes everyday tasks to it. Available from the Plus plan.',
   },
   {
     name: 'Grok 4.7',
@@ -67,7 +67,7 @@ const STRIP_MODELS: StripModelItem[] = [
     descEn: 'Responses with real-time web & X data, conversational tone, and deep reasoning.',
   },
   {
-    name: 'GPT-6 Astra',
+    name: 'GPT-6.1 Sol',
     provider: 'OpenAI',
     icon: OpenAiIcon,
     tagsRu: 'Флагман · Логика · Универсал',

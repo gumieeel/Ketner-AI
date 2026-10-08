@@ -48,13 +48,13 @@ const PLANS_DATA: PlanCardInfo[] = [
     context: { ru: 'Базовый контекст', en: 'Basic conversation context' },
     features: {
       ru: [
-        'Базовые модели: Ketner Mini, GPT-4o mini',
+        'Базовая модель: Ketner Mini',
         'Интеллектуальный режим Best AI (Auto)',
         'Сохранение полной истории диалогов',
         'Синхронизация между всеми устройствами',
       ],
       en: [
-        'Basic models: Ketner Mini, GPT-4o mini',
+        'Basic model: Ketner Mini',
         'Intelligent Best AI (Auto) mode',
         'Full conversation history saving',
         'Sync across all your devices',
@@ -75,15 +75,17 @@ const PLANS_DATA: PlanCardInfo[] = [
     context: { ru: 'Стандартный контекст', en: 'Standard context' },
     features: {
       ru: [
-        'Стандартные быстрые модели: DeepSeek v4.1 Flash, Claude Haiku 4.5, GPT-4o',
+        'Модели: Ketner Pro, GPT-6.1 Sol, Claude Haiku 5.5, DeepSeek V4.1 Flash',
+        'GPT-6.1 Sol доступна в рамках ежемесячной квоты премиум-запросов',
         'Быстрая скорость ответа',
-        'Безлимитный доступ через режим Auto или ручной выбор',
+        'Доступ через режим Auto или ручной выбор модели',
         'Отсутствие поминутных ограничений',
       ],
       en: [
-        'Standard fast models: DeepSeek v4.1 Flash, Claude Haiku 4.5, GPT-4o',
+        'Models: Ketner Pro, GPT-6.1 Sol, Claude Haiku 5.5, DeepSeek V4.1 Flash',
+        'GPT-6.1 Sol is available within the monthly premium-request quota',
         'Fast response speed',
-        'Unlimited access via Auto mode or manual selection',
+        'Access via Auto mode or manual model selection',
         'No per-minute limits',
       ],
     },
@@ -104,17 +106,19 @@ const PLANS_DATA: PlanCardInfo[] = [
     features: {
       ru: [
         'Все, что входит в тариф Plus',
-        'Топовые модели: GPT-6 Astra, Claude Fable 5.1, Gemini Flash 3.8, Grok 4.7',
+        'Топовые модели: Claude Opus 5.5, Grok 4.7, Gemini 3.8 Flash',
+        'Премиум-модели расходуют ежемесячную квоту премиум-запросов тарифа',
         'Пониженный контекст и скорость по сравнению с Ultra',
         'Высокий серверный приоритет обработки запросов',
-        'Ручной выбор конкретной модели без ограничений',
+        'Ручной выбор любой модели, доступной на тарифе',
       ],
       en: [
         'All Plus tier features included',
-        'Top models: GPT-6 Astra, Claude Fable 5.1, Gemini Flash 3.8, Grok 4.7',
+        'Top models: Claude Opus 5.5, Grok 4.7, Gemini 3.8 Flash',
+        'Premium models draw from the plan\'s monthly premium-request quota',
         'Reduced context and speed compared to Ultra tier',
         'High server request priority',
-        'Manual model selection without restrictions',
+        'Manual selection of any model available on your plan',
       ],
     },
   },
@@ -133,7 +137,7 @@ const PLANS_DATA: PlanCardInfo[] = [
     features: {
       ru: [
         'Все, что входит в тариф Pro',
-        'Все топовые модели: GPT-6 Astra, Claude Fable 5.1, Gemini Flash 3.8, Grok 4.7, Ketner Next',
+        'Все топовые модели: GPT-6.1 Sol, Claude Opus 5.5, Grok 4.7, Gemini 3.8 Flash',
         'Максимальный контекст диалога',
         'Использование моделей на 100% без ограничений скорости и контекста',
         'Наивысший VIP-приоритет запросов без ожидания',
@@ -141,7 +145,7 @@ const PLANS_DATA: PlanCardInfo[] = [
       ],
       en: [
         'All Pro tier features included',
-        'All top models: GPT-6 Astra, Claude Fable 5.1, Gemini Flash 3.8, Grok 4.7, Ketner Next',
+        'All top models: GPT-6.1 Sol, Claude Opus 5.5, Grok 4.7, Gemini 3.8 Flash',
         'Maximum conversation context',
         '100% model usage without speed or context limitations',
         'Top VIP queue priority with zero waiting',

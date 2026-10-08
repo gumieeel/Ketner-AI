@@ -47,21 +47,18 @@ const SCENARIOS: readonly Scenario[] = [
     answerKey: 'landing.demoAnswerComplex',
     complexityKey: 'landing.demoComplexityHigh',
     reasonKey: 'landing.demoReasonComplex',
-    modelId: 'claude-fable',
-    modelName: 'Claude Fable 5.1',
+    modelId: 'gpt-6.1-sol',
+    modelName: 'GPT-6.1 Sol',
     level: 3,
     withCode: true,
   },
 ];
 
-/** «Оркестр»: модели, из которых Auto выбирает. */
+/** «Оркестр»: модели, между которыми Auto выбирает (простое — Mini, обычное — Pro, сложное — Sol). */
 const ORCHESTRA: readonly { id: string; name: string }[] = [
   { id: 'ketner-mini', name: 'Ketner Mini' },
-  { id: 'deepseek-v4.1-flash', name: 'DeepSeek' },
-  { id: 'gpt-6-astra', name: 'GPT-6' },
-  { id: 'gemini-2.5-pro', name: 'Gemini' },
-  { id: 'grok-4.7', name: 'Grok' },
-  { id: 'claude-fable', name: 'Claude' },
+  { id: 'ketner-pro', name: 'Ketner Pro' },
+  { id: 'gpt-6.1-sol', name: 'GPT-6.1 Sol' },
 ];
 
 const TYPE_DELAY_MS = 24;
@@ -95,8 +92,9 @@ function ComplexityMeter({ level, color, scanning }: { level: number; color: str
 
 /**
  * Демо режима Auto: пример запроса печатается, Auto «взвешивает» его сложность и
- * подсвечивает модель в «оркестре». Простой вопрос уходит в лёгкую модель,
- * сложная задача — во флагман. Это иллюстрация, а не живой диалог.
+ * подсвечивает модель в «оркестре». Простой вопрос уходит в лёгкую модель Ketner Mini,
+ * обычная задача — в Ketner Pro, сложная (на Pro и Ultra) — в GPT-6.1 Sol. Это иллюстрация,
+ * а не живой диалог.
  *
  * Анимация запускается, только пока блок виден, и не запускается вовсе при
  * prefers-reduced-motion: тогда показывается итоговое состояние сценария.
@@ -292,7 +290,7 @@ export function AutoDemo({ className }: { className?: string }) {
         </div>
 
         {/* «Оркестр» моделей: выбранная подсвечивается цветом бренда */}
-        <div aria-hidden="true" className="flex items-center justify-between gap-1 border-t border-stroke px-4 py-3">
+        <div aria-hidden="true" className="flex items-center justify-around gap-1 border-t border-stroke px-4 py-3">
           {ORCHESTRA.map((model) => {
             const active = routed && model.id === scenario.modelId;
             return (

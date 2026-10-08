@@ -2,13 +2,20 @@
  * AI Gateway — центральный шлюз оркестрации AI-запросов Ketner AI.
  *
  * Объединяет:
- * - Model Registry (каталог моделей)
- * - Provider Manager (адаптеры OpenAI, Anthropic, Google, OpenRouter)
+ * - Model Registry (каталог моделей и их классы стоимости)
+ * - Provider Manager (единый канал OpenRouter: один ключ на все модели)
  * - Entitlement Service (проверка прав и тарифов)
- * - Fair Use Engine (защита от злоупотреблений, rate limits, concurrency)
+ * - Fair Use Engine (rate limits, concurrency, суточные квоты)
+ * - Budget Policy (месячный бюджет себестоимости и квота премиум-запросов)
+ * - Reasoning Policy (глубина размышлений и потолок ответа)
  * - Context Optimizer (оптимизация контекста)
  * - Usage Accounting & Cost Calculator (учёт токенов и себестоимости)
- * - Fallback & Failover (автоматическое переключение при сбоях провайдеров)
+ * - Fallback & Failover (запасные модели из реестра, предохранитель на каждую модель)
+ *
+ * Принцип: запрошенная пользователем модель не подменяется скрытно. Если её приходится заменить
+ * (исчерпана квота премиум-запросов, бюджет на исходе, сбой провайдера), в ответе возвращается
+ * реальная модель (`selectedModel`) и причина (`routingReason`), а расход пишется по цене именно
+ * той модели, которая ответила.
  */
 
 import { ERROR_MESSAGES, pickAnswer } from './answers.js';
@@ -28,24 +35,28 @@ import {
   type ModelRegistry,
   ECONOMY_SYSTEM_PROMPT,
   DEFAULT_SYSTEM_PROMPT,
+  FLOOR_MODEL_ID,
+  WORKHORSE_MODEL_ID,
 } from './model-registry.js';
 import { providerManager, type ProviderManager } from './providers/provider-factory.js';
+import { OpenRouterError } from './providers/openrouter-provider.js';
 import { delay, streamText } from './stream.js';
 import { isProduction, type AiConfig } from '../config.js';
-import { EntitlementService } from '../services/entitlement.js';
+import { EntitlementService, planAllowsModel } from '../services/entitlement.js';
 import { FairUseEngine } from '../services/fair-use.js';
 import { AutoRouter } from './auto-router.js';
 import type { UsageStore } from '../store/usage-store.js';
 import { feedbackStore as defaultFeedbackStore, type FeedbackStore } from '../store/index.js';
 import {
-  TierPipelineEngine,
-  computeDynamicMaxTokens,
-  type PipelineStrategy,
-} from './tier-pipeline.js';
+  chooseReasoningEffort,
+  computeOutputCap,
+  isPremiumClass,
+  toProviderReasoning,
+} from './reasoning-policy.js';
 import { CircuitBreaker, defaultCircuitBreaker } from './circuit-breaker.js';
 import { computeRequestCost } from './engine-pricing.js';
 import { createStreamWatchdog, DEFAULT_WATCHDOG_LIMITS } from './stream-watchdog.js';
-import { evaluateBudget } from '../services/budget-policy.js';
+import { evaluateBudget, type BudgetStage } from '../services/budget-policy.js';
 import { PayloadGuard } from './payload-guard.js';
 import {
   buildAttachmentsBlock,
@@ -58,14 +69,6 @@ export interface ComplexityContext {
   hasAttachments?: boolean;
   hasWorkspace?: boolean;
 }
-
-export interface EngineResolution {
-  modelId: string;
-  engineName: string;
-  level: 'simple' | 'moderate' | 'complex';
-}
-
-export type AstraEngineResolution = EngineResolution;
 
 export function classifyPromptComplexity(
   prompt?: string,
@@ -142,146 +145,6 @@ export function classifyPromptComplexity(
   return { level: 'moderate', category: classification.category };
 }
 
-/**
- * Интеллектуальный роутер движков OpenRouter для флагманских Pro-моделей:
- * 1. GPT-6 Astra:
- *    - лёгкие: deepseek/deepseek-chat
- *    - средние: openai/gpt-6-luna-pro
- *    - сложные: openai/gpt-6-sol-pro
- * 2. Claude Fable (5.1 / 5.5):
- *    - лёгкие: deepseek/deepseek-chat
- *    - средние: anthropic/claude-haiku-4.5
- *    - сложные: anthropic/claude-opus-5.5
- * 3. Gemini 3.8 Flash (ранее gemini-2.5-pro / gemini-pro):
- *    - лёгкие: deepseek/deepseek-chat
- *    - средние и сложные: google/gemini-3.8-flash
- * 4. Grok 4.7:
- *    - лёгкие: deepseek/deepseek-chat
- *    - средние и сложные: x-ai/grok-4.7
- */
-export function resolveEngineForModel(
-  modelId: string,
-  prompt?: string,
-  context?: ComplexityContext,
-  feedbackStore?: FeedbackStore,
-): EngineResolution {
-  const { level } = classifyPromptComplexity(prompt, context);
-  const shouldEscalate = feedbackStore?.shouldEscalateFromLightModel(modelId, level) ?? false;
-
-  // 1. GPT-6 Astra
-  if (modelId === 'gpt-6-astra') {
-    if (level === 'simple') {
-      if (shouldEscalate) {
-        return {
-          modelId: 'openai/gpt-6-luna-pro',
-          engineName: 'OpenAI: GPT-6 Luna Pro (Escalated from Light)',
-          level,
-        };
-      }
-      return { modelId: 'deepseek/deepseek-chat', engineName: 'DeepSeek Chat (Light Fast)', level };
-    }
-    if (level === 'moderate') {
-      return { modelId: 'openai/gpt-6-luna-pro', engineName: 'OpenAI: GPT-6 Luna Pro', level };
-    }
-    return { modelId: 'openai/gpt-6-sol-pro', engineName: 'OpenAI: GPT-6 Sol Pro', level };
-  }
-
-  // 2. Claude Fable (5.1 / 5.5)
-  if (modelId === 'claude-fable' || modelId === 'claude-3.5-sonnet') {
-    if (level === 'simple') {
-      if (shouldEscalate) {
-        return {
-          modelId: 'anthropic/claude-haiku-4.5',
-          engineName: 'Anthropic: Claude Haiku 4.5 (Escalated from Light)',
-          level,
-        };
-      }
-      return { modelId: 'deepseek/deepseek-chat', engineName: 'DeepSeek Chat (Light Fast)', level };
-    }
-    if (level === 'moderate') {
-      return { modelId: 'anthropic/claude-haiku-4.5', engineName: 'Anthropic: Claude Haiku 4.5', level };
-    }
-    return { modelId: 'anthropic/claude-opus-5.5', engineName: 'Anthropic: Claude Opus 5.5', level };
-  }
-
-  // 3. Gemini 3.8 Flash
-  if (
-    modelId === 'gemini-2.5-pro' ||
-    modelId === 'gemini-pro' ||
-    modelId === 'gemini-3.8-flash'
-  ) {
-    if (level === 'simple') {
-      if (shouldEscalate) {
-        return {
-          modelId: 'google/gemini-3.8-flash',
-          engineName: 'Google: Gemini 3.8 Flash (Escalated from Light)',
-          level,
-        };
-      }
-      return { modelId: 'deepseek/deepseek-chat', engineName: 'DeepSeek Chat (Light Fast)', level };
-    }
-    return { modelId: 'google/gemini-3.8-flash', engineName: 'Google: Gemini 3.8 Flash', level };
-  }
-
-  // 4. Grok 4.7
-  if (modelId === 'grok-4.7' || modelId === 'grok') {
-    if (level === 'simple') {
-      if (shouldEscalate) {
-        return {
-          modelId: 'x-ai/grok-4.7',
-          engineName: 'SpaceXAI: Grok 4.7 (Escalated from Light)',
-          level,
-        };
-      }
-      return { modelId: 'deepseek/deepseek-chat', engineName: 'DeepSeek Chat (Light Fast)', level };
-    }
-    return { modelId: 'x-ai/grok-4.7', engineName: 'SpaceXAI: Grok 4.7', level };
-  }
-
-  // Прочие модели:
-  if (modelId === 'gpt-4o-mini') {
-    return { modelId: 'openai/gpt-4o-mini', engineName: 'OpenAI: GPT-4o mini', level };
-  }
-  if (modelId === 'gpt-4o') {
-    return { modelId: 'openai/gpt-4o', engineName: 'OpenAI: GPT-4o', level };
-  }
-  if (modelId === 'deepseek-v4.1-flash') {
-    return { modelId: 'deepseek/deepseek-chat', engineName: 'DeepSeek V4.1 Flash', level };
-  }
-  if (modelId === 'gemini-2.5-flash') {
-    return { modelId: 'google/gemini-2.5-flash', engineName: 'Google: Gemini 2.5 Flash', level };
-  }
-  if (modelId === 'claude-3-haiku') {
-    return { modelId: 'anthropic/claude-haiku-4.5', engineName: 'Anthropic: Claude Haiku 4.5', level };
-  }
-
-  return { modelId, engineName: modelId, level };
-}
-
-export function resolveAstraEngine(
-  prompt?: string,
-  context?: ComplexityContext,
-  feedbackStore?: FeedbackStore,
-): AstraEngineResolution {
-  return resolveEngineForModel('gpt-6-astra', prompt, context, feedbackStore);
-}
-
-export function toOpenRouterModelId(
-  model: ModelRegistryEntry,
-  prompt?: string,
-  context?: ComplexityContext,
-  feedbackStore?: FeedbackStore,
-): string {
-  const resolution = resolveEngineForModel(model.id, prompt, context, feedbackStore);
-  if (resolution.modelId !== model.id) {
-    return resolution.modelId;
-  }
-  if (model.provider === 'openai') return `openai/${model.providerModelId}`;
-  if (model.provider === 'anthropic') return `anthropic/${model.providerModelId}`;
-  if (model.provider === 'google') return `google/${model.providerModelId}`;
-  return model.providerModelId;
-}
-
 const JCUKEN_MAP: Record<string, string> = {
   q: 'й', w: 'ц', e: 'у', r: 'к', t: 'е', y: 'н', u: 'г', i: 'ш', o: 'щ', p: 'з', '[': 'х', ']': 'ъ',
   a: 'ф', s: 'ы', d: 'в', f: 'а', g: 'п', h: 'р', j: 'о', k: 'л', l: 'д', ';': 'ж', "'": 'э',
@@ -307,6 +170,56 @@ export function convertLayoutIfInverted(input: string): string {
     return converted;
   }
   return input;
+}
+
+/** Решение об экономии: какую модель реально использовать вместо запрошенной. */
+export interface EconomyDecision {
+  model: ModelRegistryEntry;
+  /** Причина замены; null, если запрошенная модель оставлена. */
+  reason: string | null;
+}
+
+/**
+ * Правила экономии для явно выбранной модели. Вызывается после проверки прав доступа.
+ *
+ *  - бюджет исчерпан → любая модель, кроме лёгких, заменяется на самую дешёвую;
+ *  - премиум-модель (классы strong и top): квота премиум-запросов тарифа исчерпана или бюджет на
+ *    исходе (soft) → ответит рабочая модель, а не «ничего»: пользователь продолжает работать.
+ */
+export function applyEconomyRules(
+  requested: ModelRegistryEntry,
+  state: { stage: BudgetStage; premiumAvailable: boolean },
+  registry: ModelRegistry,
+): EconomyDecision {
+  if (state.stage === 'exhausted' || state.stage === 'hard_stop') {
+    if (requested.costClass !== 'lite') {
+      const floor = registry.resolve(FLOOR_MODEL_ID);
+      return {
+        model: floor,
+        reason: `Budget protection: monthly quota is used up, ${floor.name} answers instead of ${requested.name}`,
+      };
+    }
+    return { model: requested, reason: null };
+  }
+
+  if (isPremiumClass(requested.costClass)) {
+    if (!state.premiumAvailable) {
+      const workhorse = registry.resolve(WORKHORSE_MODEL_ID);
+      return {
+        model: workhorse,
+        reason: `Premium quota used up: ${workhorse.name} answers instead of ${requested.name}`,
+      };
+    }
+    if (state.stage === 'soft') {
+      const workhorse = registry.resolve(WORKHORSE_MODEL_ID);
+      return {
+        model: workhorse,
+        reason: `Budget protection: ${workhorse.name} answers instead of ${requested.name}`,
+      };
+    }
+  }
+
+  return { model: requested, reason: null };
 }
 
 export interface AIGatewayDeps {
@@ -348,7 +261,7 @@ export class AIGateway {
    */
   private async streamWithWatchdog(
     provider: AIProvider,
-    options: Pick<ProviderRequestOptions, 'model' | 'messages' | 'maxTokens'>,
+    options: Pick<ProviderRequestOptions, 'model' | 'messages' | 'maxTokens' | 'reasoning'>,
     hooks: {
       onDelta: (delta: string) => void;
       isCancelled: () => boolean;
@@ -419,6 +332,30 @@ export class AIGateway {
   }
 
   /**
+   * Запасная модель допустима, если она не нарушает правил экономии: премиум-модель берётся
+   * только пока есть квота премиум-запросов, а при исчерпанном бюджете — только лёгкие модели.
+   * Прав доступа по тарифу для запасных не требуется: они дешевле выбранной, а пользователь
+   * видит в ответе, какая модель реально ответила.
+   */
+  private isAllowedFallback(
+    model: ModelRegistryEntry,
+    plan: string,
+    state: { stage: BudgetStage; premiumAvailable: boolean },
+  ): boolean {
+    if (state.stage === 'exhausted' || state.stage === 'hard_stop') {
+      return model.costClass === 'lite';
+    }
+    if (isPremiumClass(model.costClass)) {
+      return (
+        state.stage === 'normal' &&
+        state.premiumAvailable &&
+        planAllowsModel(plan, model.requiredPlan)
+      );
+    }
+    return true;
+  }
+
+  /**
    * Стриминговая генерация ответа через AI Gateway.
    */
   async stream(
@@ -430,7 +367,7 @@ export class AIGateway {
     const activeUserId = req.userId;
     const language = req.language;
 
-    // 0. Payload Guard (Phase 5: валидация размера сообщений и вложений)
+    // 0. Payload Guard (валидация размера сообщений и вложений)
     const guardResult = PayloadGuard.validate(req.messages, {
       language,
       attachments: req.attachments,
@@ -467,12 +404,12 @@ export class AIGateway {
     const entitlements = EntitlementService.getEntitlements(effectivePlan);
     const snapshot = this.usageStore.getFairUseSnapshot(activeUserId);
 
-    // Месячный бюджет себестоимости: soft (80%) → exhausted (100%, только дешёвые движки) →
+    // Месячный бюджет себестоимости: soft (80%) → exhausted (100%, только дешёвые модели) →
     // hard_stop (125%, запросы отклоняются). Без потолка «безлимит» мог уйти в убыток.
     const budget = evaluateBudget(snapshot.estimatedCostLastMonth, entitlements.costBudget);
-    const isBudgetExceeded = budget.stage === 'exhausted' || budget.stage === 'hard_stop';
+    const stage = budget.stage;
 
-    if (budget.stage === 'hard_stop') {
+    if (stage === 'hard_stop') {
       this.usageStore.recordUsage({
         userId: activeUserId,
         conversationId: req.conversationId,
@@ -495,10 +432,15 @@ export class AIGateway {
       return;
     }
 
-    // 2. Резолвинг модели и выбор стратегии исполнения (Token Economics & Tier Pipelines)
-    let targetModel: ModelRegistryEntry;
-    let routingReason: string;
-    let pipelineStrategy: PipelineStrategy | null = null;
+    // Квота премиум-запросов: сколько тариф разрешает потратить на сильные модели за 30 дней.
+    const premiumSpent = this.usageStore.getCostLastMonthByModels(
+      activeUserId,
+      this.registry.getPremiumModelIds(),
+    );
+    const premiumAvailable = entitlements.premiumBudget - premiumSpent > 0;
+    const economyState = { stage, premiumAvailable };
+
+    // 2. Анализ запроса
     const rawPrompt =
       [...req.messages].reverse().find((m) => m.role === 'user')?.content ?? '';
     const decodedPrompt = convertLayoutIfInverted(rawPrompt);
@@ -522,63 +464,44 @@ export class AIGateway {
       hasAttachments: Boolean(activeAttachments && activeAttachments.length > 0),
       hasWorkspace: Boolean(activeWorkspace),
     };
+    const taskInfo = classifyPromptComplexity(prompt, complexityContext);
+    const hasWorkspaceOrAttachments = Boolean(
+      activeWorkspace || (activeAttachments && activeAttachments.length > 0),
+    );
 
-    if (req.modelId === 'auto') {
-      pipelineStrategy = TierPipelineEngine.resolveStrategy(prompt, {
-        userPlan: effectivePlan,
-        monthlyCost: snapshot.estimatedCostLastMonth,
-        monthlyBudget: entitlements.costBudget,
-        random: this.aiConfig.random,
-        registry: this.registry,
+    // 3. Выбор модели
+    let targetModel: ModelRegistryEntry;
+    let routingReason: string;
+
+    if (req.modelId === 'auto' || !req.modelId) {
+      const routed = AutoRouter.route({
+        plan: effectivePlan,
+        level: taskInfo.level,
+        category: taskInfo.category,
+        stage,
+        premiumAvailable,
       });
-
-      targetModel = this.registry.resolve(pipelineStrategy.targetModelId);
-      routingReason = pipelineStrategy.reason;
+      targetModel = this.registry.resolve(routed.modelId);
+      routingReason = routed.reason;
     } else {
-      const resolved = this.registry.resolve(req.modelId);
-      if (isBudgetExceeded && resolved.tier !== 'free') {
-        targetModel = this.registry.resolve('ketner-mini');
-        routingReason = `Budget protection: dynamically routed to ${targetModel.name} for fair usage`;
-      } else {
-        targetModel = resolved;
-        const resolution = resolveEngineForModel(targetModel.id, prompt, complexityContext, this.feedbackStore);
-        if (
-          [
-            'gpt-6-astra',
-            'claude-fable',
-            'claude-3.5-sonnet',
-            'gemini-2.5-pro',
-            'gemini-pro',
-            'gemini-3.8-flash',
-            'grok-4.7',
-          ].includes(targetModel.id)
-        ) {
-          routingReason = `${targetModel.name}: ${resolution.level} query routed to ${resolution.engineName}`;
-        } else {
-          routingReason = `Explicit user model selection (${targetModel.name})`;
-        }
+      const requested = this.registry.resolve(req.modelId);
+
+      // Права доступа проверяются по запрошенной модели ДО любой замены: иначе бесплатный
+      // пользователь, выбравший недоступную модель, молча получил бы другую вместо предложения
+      // улучшить тариф.
+      const accessCheck = EntitlementService.checkModelAccess(requested, effectivePlan);
+      if (!accessCheck.allowed) {
+        const msg =
+          language === 'en'
+            ? `Access to ${requested.name} requires an active subscription (${accessCheck.requiredPlan} or higher). Please upgrade your plan.`
+            : `Для доступа к модели ${requested.name} требуется подписка (${accessCheck.requiredPlan} или выше). Пожалуйста, улучшите ваш тариф.`;
+        callbacks.onError({ code: 'upgrade_required', message: msg });
+        return;
       }
-    }
 
-    // 3. Проверка прав доступа (Entitlement Check)
-    // Разовая «вспышка» флагмана для Plus выбирается самим сервером (см. TierPipelineEngine) и
-    // сознательно выходит за рамки тарифа; без этого исключения 5% запросов Auto у Plus
-    // падали бы с ошибкой «нужна подписка Pro».
-    const accessCheck =
-      pipelineStrategy?.mode === 'gpt_short'
-        ? { allowed: true as const }
-        : EntitlementService.checkModelAccess(targetModel, effectivePlan);
-    if (!accessCheck.allowed) {
-      const msg =
-        language === 'en'
-          ? `Access to ${targetModel.name} requires an active subscription (${accessCheck.requiredPlan} or Ultra). Please upgrade your plan.`
-          : `Для доступа к модели ${targetModel.name} требуется подписка (${accessCheck.requiredPlan} или Ultra). Пожалуйста, улучшите ваш тариф.`;
-
-      callbacks.onError({
-        code: 'upgrade_required',
-        message: msg,
-      });
-      return;
+      const economy = applyEconomyRules(requested, economyState, this.registry);
+      targetModel = economy.model;
+      routingReason = economy.reason ?? `Explicit user model selection (${requested.name})`;
     }
 
     // 4. Проверка Fair Use и захват concurrency слота
@@ -627,7 +550,7 @@ export class AIGateway {
         ? ECONOMY_SYSTEM_PROMPT
         : (targetModel.defaultSystemPrompt ?? DEFAULT_SYSTEM_PROMPT);
       const baseSystemPrompt = promptMap[language];
-      const systemPrompt = isBudgetExceeded
+      const systemPrompt = stage !== 'normal'
         ? `${baseSystemPrompt} ${language === 'en' ? 'Keep responses concise and direct.' : 'Отвечай максимально кратко и по существу.'}`
         : baseSystemPrompt;
 
@@ -740,39 +663,14 @@ export class AIGateway {
         return;
       }
 
-      // 6. Попытка генерации через провайдер с поддержкой Failover
-      const modelsToTry = this.registry.getFallbackChain(targetModel.id);
+      // 6. Генерация через провайдер с поддержкой Failover по цепочке запасных моделей из реестра
+      const modelsToTry = this.registry
+        .getFallbackChain(targetModel.id)
+        .filter((m, index) => index === 0 || this.isAllowedFallback(m, effectivePlan, economyState));
       let success = false;
       let streamedResponse: ProviderResponse | null = null;
       let usedModel = targetModel;
-      let doublePassCost = 0;
       let firstTokenMs: number | null = null;
-
-      const hasWorkspaceOrAttachments = Boolean(
-        activeWorkspace ||
-        (activeAttachments && activeAttachments.length > 0)
-      );
-
-      const dynamicMaxTokens = computeDynamicMaxTokens({
-        userPlan: effectivePlan,
-        monthlyCost: snapshot.estimatedCostLastMonth,
-        monthlyBudget: entitlements.costBudget,
-        baseTokens: hasWorkspaceOrAttachments
-          ? Math.max(entitlements.maxTokens, 4096)
-          : (pipelineStrategy?.maxOutputTokens ?? 1024),
-      });
-
-      // Если режим gpt_short — инструктируем модель отвечать кратко (<150 токенов)
-      if (pipelineStrategy?.mode === 'gpt_short' && pipelineStrategy.promptModifier) {
-        const lastMsg = optimizedMessages[optimizedMessages.length - 1];
-        if (lastMsg && lastMsg.role === 'user') {
-          const modText =
-            typeof pipelineStrategy.promptModifier === 'string'
-              ? pipelineStrategy.promptModifier
-              : pipelineStrategy.promptModifier[language];
-          lastMsg.content = `${modText}${lastMsg.content}`;
-        }
-      }
 
       // Шаблонные ответы-заглушки разрешены только вне production. В production любая из этих
       // настроек не может подменить реальную модель выдуманным ответом.
@@ -787,154 +685,25 @@ export class AIGateway {
               this.aiConfig.chunkMs[1] === 0)));
 
       let usedEngineId: string | undefined;
-      // Токены черновика считаются отдельно: они входят в квоту токенов, но их стоимость
-      // записывается по цене модели-черновика, а не удваивается ценой улучшающей модели.
-      let extraInputTokens = 0;
-      let extraOutputTokens = 0;
       let watchdogTimedOut = false;
+      // Общая оценка пользователей по лёгким моделям: при частых дизлайках глубина размышлений
+      // простых запросов поднимается на шаг.
+      const escalate = this.feedbackStore.shouldEscalateFromLightModel(targetModel.id, taskInfo.level);
 
-      // 6.0. Двухпроходный пайплайн улучшения (Double Pass Enhancer: cheap draft -> GPT/cheap refine).
-      // Для кода он отключён: инструкция «сделай лаконичнее» ломает рабочий код, а второй проход
-      // удваивает задержку и стоимость без выигрыша в качестве.
-      const taskInfo = classifyPromptComplexity(prompt, complexityContext);
-      if (
-        pipelineStrategy &&
-        !activeWorkspace &&
-        !activeAttachments?.length &&
-        taskInfo.category !== 'coding' &&
-        (pipelineStrategy.mode === 'gpt_improve' || pipelineStrategy.mode === 'cheap_improve') &&
-        !isTestEnv
-      ) {
-        const draftModel = this.registry.resolve(pipelineStrategy.draftModelId ?? 'deepseek-v4.1-flash');
-        const enhancerModel = this.registry.resolve(pipelineStrategy.enhancerModelId ?? targetModel.id);
-        let draftProvider = this.providers.get(draftModel.provider);
-        let draftModelId = draftModel.providerModelId;
-        if (!draftProvider || !draftProvider.isAvailable()) {
-          const openRouterProvider = this.providers.get('openrouter');
-          if (openRouterProvider?.isAvailable()) {
-            draftProvider = openRouterProvider;
-            draftModelId = toOpenRouterModelId(draftModel, prompt, complexityContext);
-          }
-        }
-
-        let enhancerProvider = this.providers.get(enhancerModel.provider);
-        let enhancerModelId = enhancerModel.providerModelId;
-        if (!enhancerProvider || !enhancerProvider.isAvailable()) {
-          const openRouterProvider = this.providers.get('openrouter');
-          if (openRouterProvider?.isAvailable()) {
-            enhancerProvider = openRouterProvider;
-            enhancerModelId = toOpenRouterModelId(enhancerModel, prompt, complexityContext, this.feedbackStore);
-          }
-        }
-
-        if (draftProvider?.isAvailable() && enhancerProvider?.isAvailable()) {
-          try {
-            // Шаг 1: быстрый черновик от дешёвой модели (с собственным таймаутом: раньше
-            // зависший провайдер держал запрос и слот параллелизма бесконечно)
-            const draftController = new AbortController();
-            const draftTimer = setTimeout(() => draftController.abort(), 20_000);
-            const abortDraft = (): void => draftController.abort();
-            clientAbortController.signal.addEventListener('abort', abortDraft, { once: true });
-            let draftRes: ProviderResponse;
-            try {
-              draftRes = await draftProvider.generateText({
-                model: draftModelId,
-                messages: optimizedMessages,
-                stream: false,
-                maxTokens: Math.min(draftModel.maxOutputTokens, 1500),
-                signal: draftController.signal,
-              });
-            } finally {
-              clearTimeout(draftTimer);
-              clientAbortController.signal.removeEventListener('abort', abortDraft);
-            }
-
-            if (draftRes.content && !isCancelled()) {
-              // Шаг 2: стриминг отполированного ответа. Во втором проходе передаём и вопрос
-              // пользователя, и черновик.
-              const modText =
-                pipelineStrategy.promptModifier
-                  ? typeof pipelineStrategy.promptModifier === 'string'
-                    ? pipelineStrategy.promptModifier
-                    : pipelineStrategy.promptModifier[language]
-                  : (language === 'ru'
-                      ? 'Улучши этот ответ. Сделай его более чётким, структурированным и лаконичным:\n\n'
-                      : 'Improve this answer. Make it clearer, structured and concise:\n\n');
-
-              const enhanceInstruction =
-                language === 'ru'
-                  ? `Вопрос пользователя:\n${prompt}\n\nЧерновой ответ:\n${draftRes.content}\n\nИнструкция:\n${modText}`
-                  : `User query:\n${prompt}\n\nDraft answer:\n${draftRes.content}\n\nInstruction:\n${modText}`;
-
-              usedModel = enhancerModel;
-              usedEngineId = enhancerModelId;
-              const pass = await this.streamWithWatchdog(
-                enhancerProvider,
-                {
-                  model: enhancerModelId,
-                  messages: [
-                    ...optimizedMessages.slice(0, -1),
-                    { role: 'user', content: enhanceInstruction },
-                  ],
-                  maxTokens: Math.max(Math.min(enhancerModel.maxOutputTokens, entitlements.maxTokens), 2048),
-                },
-                {
-                  onDelta: (delta) => {
-                    if (firstTokenMs === null) {
-                      firstTokenMs = Date.now() - startTime;
-                    }
-                    callbacks.onDelta(delta);
-                  },
-                  isCancelled,
-                  clientSignal: clientAbortController.signal,
-                  providerTimeoutMs: req.providerTimeoutMs,
-                },
-              );
-              streamedResponse = pass.response;
-              watchdogTimedOut = pass.timedOut;
-
-              if (streamedResponse && streamedResponse.content.length > 0) {
-                extraInputTokens = draftRes.usage.inputTokens;
-                extraOutputTokens = draftRes.usage.outputTokens;
-                doublePassCost = computeRequestCost({
-                  model: draftModel,
-                  engineId: draftModelId,
-                  tokens: draftRes.usage,
-                  providerCost: draftRes.cost,
-                }).usd;
-                success = true;
-              }
-            }
-          } catch (err) {
-            console.warn('[ai-gateway] Double-pass failed, falling back to direct stream:', err);
-          }
-        }
-      }
-
-      // 6.1. Прямой стриминг модели (если double-pass не применялся или не удался)
-      if (!isTestEnv && !success) {
+      if (!isTestEnv) {
         for (const candidateModel of modelsToTry) {
           if (combinedIsCancelled()) break;
 
-          let provider = this.providers.get(candidateModel.provider);
-          let modelToRequest = candidateModel.providerModelId;
-
+          const provider = this.providers.get(candidateModel.provider);
           if (!provider || !provider.isAvailable()) {
-            const openRouterProvider = this.providers.get('openrouter');
-            if (openRouterProvider && openRouterProvider.isAvailable()) {
-              provider = openRouterProvider;
-              modelToRequest = toOpenRouterModelId(candidateModel, prompt, complexityContext, this.feedbackStore);
-            } else {
-              continue;
-            }
+            continue;
           }
 
-          const activeProviderType = provider.type;
-          // Предохранитель ведётся по паре «провайдер + движок»: раньше один лимитирующий 429
-          // от бесплатной модели OpenRouter отключал на 30 с все остальные модели OpenRouter.
-          const breakerKey = `${activeProviderType}:${modelToRequest}`;
+          const engineId = candidateModel.providerModelId;
+          // Предохранитель ведётся по паре «провайдер + движок»: отказ одной модели не отключает
+          // остальные модели того же ключа OpenRouter.
+          const breakerKey = `${provider.type}:${engineId}`;
 
-          // Phase 5: Проверка Circuit Breaker
           if (this.circuitBreaker.isOpen(breakerKey)) {
             console.warn(
               `[ai-gateway] Circuit breaker OPEN для ${breakerKey}, быстрый переход к следующему fallback`,
@@ -942,29 +711,33 @@ export class AIGateway {
             continue;
           }
 
-          try {
-            usedModel = candidateModel;
-            usedEngineId = modelToRequest;
-            // Лимит выходных токенов:
-            // 1. При привязанном проекте или сложной задаче (код, рассуждения) отдаём полный объём модели и тарифа.
-            // 2. Рассуждающие модели тратят до 1500 токенов только на <think>, поэтому лимит не может быть меньше 4096.
-            // 3. dynamicMaxTokens применяется ТОЛЬКО при жёстком превышении бюджета (isBudgetExceeded) на простых запросах.
-            let maxTokensToUse: number;
-            if (hasWorkspaceOrAttachments || candidateModel.capabilities.reasoning || candidateModel.capabilities.coding) {
-              maxTokensToUse = Math.min(candidateModel.maxOutputTokens, entitlements.maxTokens);
-            } else if (isBudgetExceeded) {
-              maxTokensToUse = dynamicMaxTokens;
-            } else {
-              maxTokensToUse = Math.min(candidateModel.maxOutputTokens, entitlements.maxTokens);
-            }
-            maxTokensToUse = Math.max(maxTokensToUse, 2048);
+          // Глубина размышлений и потолок ответа считаются под конкретную модель цепочки:
+          // у каждой свой набор допустимых значений и своя цена выходных токенов.
+          const wantedEffort = chooseReasoningEffort({
+            level: taskInfo.level,
+            category: taskInfo.category,
+            plan: effectivePlan,
+            stage,
+            costClass: candidateModel.costClass,
+            escalate,
+          });
+          const reasoning = toProviderReasoning(candidateModel.reasoning, wantedEffort);
+          const maxTokens = computeOutputCap({
+            planMaxTokens: entitlements.maxTokens,
+            modelMaxOutputTokens: candidateModel.maxOutputTokens,
+            stage,
+            level: taskInfo.level,
+            heavyContext: hasWorkspaceOrAttachments,
+          });
 
-            const pass = await this.streamWithWatchdog(
+          const runPass = (withReasoning: typeof reasoning) =>
+            this.streamWithWatchdog(
               provider,
               {
-                model: modelToRequest,
+                model: engineId,
                 messages: optimizedMessages,
-                maxTokens: Math.min(candidateModel.maxOutputTokens, maxTokensToUse),
+                maxTokens,
+                reasoning: withReasoning,
               },
               {
                 onDelta: (delta) => {
@@ -978,6 +751,27 @@ export class AIGateway {
                 providerTimeoutMs: req.providerTimeoutMs,
               },
             );
+
+          try {
+            usedModel = candidateModel;
+            usedEngineId = engineId;
+
+            let pass: Awaited<ReturnType<typeof runPass>>;
+            try {
+              pass = await runPass(reasoning);
+            } catch (firstError) {
+              // HTTP 400 при заданных размышлениях почти всегда значит, что модель не принимает
+              // это значение параметра. Один повтор без параметра сохраняет ответ; предупреждение
+              // в логе подскажет поправить таблицу размышлений модели в реестре.
+              if (reasoning && firstError instanceof OpenRouterError && firstError.status === 400) {
+                console.warn(
+                  `[ai-gateway] ${engineId} отклонил reasoning=${JSON.stringify(reasoning)}, повтор без параметра`,
+                );
+                pass = await runPass(undefined);
+              } else {
+                throw firstError;
+              }
+            }
             streamedResponse = pass.response;
             watchdogTimedOut = pass.timedOut;
 
@@ -989,7 +783,7 @@ export class AIGateway {
               } else {
                 this.circuitBreaker.recordSuccess(breakerKey);
               }
-              this.noteEngineMismatch(modelToRequest, streamedResponse.model);
+              this.noteEngineMismatch(engineId, streamedResponse.model);
               success = true;
               break;
             } else if (!pass.timedOut && combinedIsCancelled()) {
@@ -998,9 +792,20 @@ export class AIGateway {
               this.circuitBreaker.recordFailure(breakerKey, new Error('Empty response from provider'));
             }
           } catch (providerError) {
+            // 401 и 402 относятся к ключу и балансу OpenRouter, а не к модели: все остальные модели
+            // того же ключа упадут так же. Не жжём предохранитель каждой модели и не гоняем цепочку.
+            if (
+              providerError instanceof OpenRouterError &&
+              (providerError.status === 401 || providerError.status === 402)
+            ) {
+              console.error(
+                `[ai-gateway] Ключ OpenRouter не принят или баланс исчерпан (HTTP ${providerError.status}): все модели недоступны`,
+              );
+              break;
+            }
             this.circuitBreaker.recordFailure(breakerKey, providerError);
             console.warn(
-              `[ai-gateway] Провайдер ${activeProviderType} (модель ${candidateModel.name}) вернул ошибку:`,
+              `[ai-gateway] Провайдер ${provider.type} (модель ${candidateModel.name}) вернул ошибку:`,
               providerError,
             );
           }
@@ -1012,7 +817,7 @@ export class AIGateway {
 
       if (!success && !isCancelled()) {
         if (!isTestEnv) {
-          // Phase 1: если все провайдеры упали в проде — честная ошибка, не списываем лимиты
+          // Если все модели цепочки упали в проде — честная ошибка, лимиты не списываем
           callbacks.onError({
             code: 'provider_error',
             message: ERROR_MESSAGES[language],
@@ -1034,15 +839,11 @@ export class AIGateway {
 
         // В test / dev режиме используем шаблонный генератор
         responseSource = 'template';
-        const effectiveModelName =
-          req.modelId && req.modelId !== 'auto'
-            ? (targetModel?.name ?? 'DeepSeek V4.1 Flash')
-            : 'DeepSeek V4.1 Flash';
         const templateAnswer = pickAnswer(
           prompt,
           language,
           this.aiConfig.random,
-          effectiveModelName,
+          targetModel.name,
           activeAttachments ?? req.attachments,
           (activeWorkspace ?? req.workspaceContext) as any,
         );
@@ -1071,31 +872,28 @@ export class AIGateway {
         success = true;
       }
 
-      // 8. Подсчёт токенов, стоимости и запись в UsageStore
+      // 7. Подсчёт токенов, стоимости и запись в UsageStore
       const latencyMs = Date.now() - startTime;
-      const passInputTokens =
+      const inputTokens =
         streamedResponse?.usage.inputTokens ?? ContextOptimizer.estimateTokens(prompt);
-      const passOutputTokens =
+      const outputTokens =
         streamedResponse?.usage.outputTokens ??
         ContextOptimizer.estimateTokens(streamedResponse?.content ?? '');
-      // В квоту токенов входят оба прохода (черновик + улучшение), в стоимость — каждый по своей цене.
-      const inputTokens = passInputTokens + extraInputTokens;
-      const outputTokens = passOutputTokens + extraOutputTokens;
 
-      // Цена приоритетно берётся из ответа провайдера (usage.cost), иначе — из таблицы с
-      // консервативной оценкой «бесплатных» движков, которые на деле платные.
-      const passCost = computeRequestCost({
+      // Цена приоритетно берётся из ответа провайдера (usage.cost): она включает размышления,
+      // кэш и фактический тариф. Таблица реестра — запасной вариант.
+      const requestCost = computeRequestCost({
         model: usedModel,
         engineId: usedEngineId,
         tokens: {
-          inputTokens: passInputTokens,
-          outputTokens: passOutputTokens,
+          inputTokens,
+          outputTokens,
           cachedTokens: streamedResponse?.usage.cachedTokens,
           reasoningTokens: streamedResponse?.usage.reasoningTokens,
         },
         providerCost: responseSource === 'provider' ? streamedResponse?.cost : undefined,
       });
-      const totalEstimatedCost = Number((passCost.usd + doublePassCost).toFixed(6));
+      const totalEstimatedCost = Number(requestCost.usd.toFixed(6));
 
       // Остановка сторожем по таймауту — это обрыв, а не выбор пользователя: ответ можно продолжить.
       let finishReason: 'stop' | 'length' | 'cancelled' | 'error' =
@@ -1116,7 +914,7 @@ export class AIGateway {
         reasoningTokens: streamedResponse?.usage.reasoningTokens,
         estimatedCost: totalEstimatedCost,
         actualCost:
-          typeof streamedResponse?.cost === 'number' ? Number((streamedResponse.cost + doublePassCost).toFixed(6)) : null,
+          typeof streamedResponse?.cost === 'number' ? Number(streamedResponse.cost.toFixed(6)) : null,
         latencyMs,
         ttftMs: firstTokenMs,
         status: isCancelled() ? 'cancelled' : 'success',
@@ -1147,7 +945,10 @@ export class AIGateway {
           inputTokens,
           outputTokens,
           selectedModel: { id: usedModel.id, name: usedModel.name },
-          routingReason,
+          routingReason:
+            usedModel.id !== targetModel.id
+              ? `${routingReason}; fallback to ${usedModel.name}`
+              : routingReason,
           source: responseSource,
           finishReason,
           canContinue,

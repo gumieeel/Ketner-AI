@@ -10,26 +10,42 @@ import type { PlanEntitlements } from '../ai/gateway-types.js';
 import type { ModelRegistryEntry } from '../ai/gateway-types.js';
 import { isVipEmail } from './vip.js';
 
-const ALL_MODELS = [
-  'ketner-mini',
-  'nemotron-ultra',
-  'glm-5.3-flash',
-  'deepseek-v4.1-flash',
-  'gpt-4o-mini',
-  'gemini-2.5-flash',
-  'claude-3-haiku',
-  'gpt-6-astra',
-  'claude-3.5-sonnet',
-  'claude-fable',
-  'gemini-2.5-pro',
-  'gemini-pro',
-  'ketner-pro',
-  'auto',
-];
+/**
+ * Ранг тарифа для проверки доступа: модель доступна, если ранг тарифа не ниже `requiredPlan` модели.
+ * Устаревшие планы gpt-pro / claude-pro / gemini-pro равны Pro. Неизвестный план считается Free.
+ */
+const PLAN_RANKS: Record<string, number> = {
+  free: 0,
+  plus: 1,
+  pro: 2,
+  'gpt-pro': 2,
+  'claude-pro': 2,
+  'gemini-pro': 2,
+  ultra: 3,
+};
+
+export function planRank(plan: string | null | undefined): number {
+  return plan ? (PLAN_RANKS[plan] ?? 0) : 0;
+}
+
+/** Единое правило доступа к модели по тарифу (его используют реестр, шлюз и /api/meta). */
+export function planAllowsModel(
+  userPlan: string | null | undefined,
+  requiredPlan: string | null | undefined,
+): boolean {
+  if (!requiredPlan) return true;
+  return planRank(userPlan) >= planRank(requiredPlan);
+}
+
+const PLAN_LABELS: Record<string, string> = {
+  free: 'Free',
+  plus: 'Plus',
+  pro: 'Pro',
+  ultra: 'Ultra',
+};
 
 /** Общие параметры для устаревших legacy-планов (gpt-pro, claude-pro, gemini-pro). */
 const LEGACY_PRO_BASE: Omit<PlanEntitlements, 'planId'> = {
-  allowedModels: ALL_MODELS,
   maxConcurrency: 4,
   priority: 2,
   fairUseLevel: 2,
@@ -40,29 +56,35 @@ const LEGACY_PRO_BASE: Omit<PlanEntitlements, 'planId'> = {
   tokensPerDay: 6_000_000,
   maxContextMessages: 120,
   contextLimit: 120,
-  maxTokens: 8192,
+  maxTokens: 12288,
   streamingEnabled: true,
+  // Legacy Pro: 1199 ₽ ≈ $12.62, бюджет $5.00 ≈ 40%.
   maxDailyCost: 0.60,
   costBudget: 5.00,
+  premiumBudget: 1.80,
 };
 
+/**
+ * Экономика тарифов (курс 95 ₽/$, расходы считаются за скользящие 30 дней).
+ *
+ * costBudget — потолок расхода на модели, ≈40% цены тарифа: остальное идёт на эквайринг (~4%),
+ * налоги (~6%), комиссию OpenRouter за пополнение (5.5% от расхода), инфраструктуру и прибыль.
+ * premiumBudget — часть costBudget на премиум-модели (классы strong и top, см. ModelCostClass).
+ * Ориентиры по запросам в месяц при 7.6k токенов на входе и 0.7k на выходе:
+ *   Plus  $0.60 ≈ 18 запросов GPT-6.1 Sol;
+ *   Pro   $3.00 ≈ 90 запросов Sol или 36 запросов Claude Opus 5.5;
+ *   Ultra $5.50 ≈ 160 запросов Sol или 66 запросов Opus.
+ */
 export const PLAN_ENTITLEMENTS: Record<PlanId, PlanEntitlements> = {
   free: {
     planId: 'free',
-    allowedModels: [
-      'ketner-mini',
-      'nemotron-ultra',
-      'glm-5.3-flash',
-      'gpt-4o-mini',
-      'gemini-2.5-flash',
-      'auto',
-    ],
     maxConcurrency: 1,
     priority: 0,
     fairUseLevel: 0,
     requestsPerMinute: 5,
-    requestsPerHour: 20,
-    requestsPerDay: 50,
+    requestsPerHour: 10,
+    // Пользователю обещано 10 сообщений в день, и сервер действительно держит этот лимит.
+    requestsPerDay: 10,
     userFacingDailyMessages: 10,
     tokensPerHour: 50_000,
     tokensPerDay: 150_000,
@@ -70,23 +92,14 @@ export const PLAN_ENTITLEMENTS: Record<PlanId, PlanEntitlements> = {
     contextLimit: 20,
     maxTokens: 2048,
     streamingEnabled: true,
-    // Free: цена 0₽ ($0). Субсидируемый буфер для ознакомления ($0.20/мес, $0.05/день).
-    maxDailyCost: 0.05,
-    costBudget: 0.20,
+    // Free: GPT-6 Luna без размышлений ≈ $0.001–0.0013 за запрос → 10 сообщений в день ≈ $0.3–0.4
+    // в месяц в худшем случае; средний пользователь тратит в 3–5 раз меньше. Премиум-моделей нет.
+    maxDailyCost: 0.03,
+    costBudget: 0.30,
+    premiumBudget: 0,
   },
   plus: {
     planId: 'plus',
-    allowedModels: [
-      'ketner-mini',
-      'nemotron-ultra',
-      'glm-5.3-flash',
-      'deepseek-v4.1-flash',
-      'gpt-4o-mini',
-      'gemini-2.5-flash',
-      'claude-3-haiku',
-      'ketner-pro',
-      'auto',
-    ],
     maxConcurrency: 2,
     priority: 1,
     fairUseLevel: 1,
@@ -97,17 +110,15 @@ export const PLAN_ENTITLEMENTS: Record<PlanId, PlanEntitlements> = {
     tokensPerDay: 1_500_000,
     maxContextMessages: 60,
     contextLimit: 60,
-    maxTokens: 4096,
+    maxTokens: 6144,
     streamingEnabled: true,
-    // Plus: цена 990₽ (~$10.42 при курсе 95).
-    // Формула: costBudget <= priceMonthly_USD * 0.40 -> $10.42 * 0.384 = $4.00
-    // Оставляет 61.6% на маржу, налоги, инфраструктуру и комиссию эквайринга.
+    // Plus: 990 ₽ ≈ $10.42 → бюджет $4.00 (38%).
     maxDailyCost: 0.40,
     costBudget: 4.00,
+    premiumBudget: 0.60,
   },
   pro: {
     planId: 'pro',
-    allowedModels: ALL_MODELS,
     maxConcurrency: 4,
     priority: 2,
     fairUseLevel: 2,
@@ -118,17 +129,15 @@ export const PLAN_ENTITLEMENTS: Record<PlanId, PlanEntitlements> = {
     tokensPerDay: 6_000_000,
     maxContextMessages: 120,
     contextLimit: 120,
-    maxTokens: 8192,
+    maxTokens: 12288,
     streamingEnabled: true,
-    // Pro: цена 1990₽ (~$20.95 при курсе 95).
-    // Формула: costBudget <= priceMonthly_USD * 0.45 -> $20.95 * 0.405 = $8.50
-    // Оставляет 59.5% на маржу, налоги, инфраструктуру и комиссию эквайринга.
+    // Pro: 1990 ₽ ≈ $20.95 → бюджет $8.50 (41%).
     maxDailyCost: 1.00,
     costBudget: 8.50,
+    premiumBudget: 3.00,
   },
   ultra: {
     planId: 'ultra',
-    allowedModels: ALL_MODELS,
     maxConcurrency: 8,
     priority: 3,
     fairUseLevel: 3,
@@ -141,13 +150,12 @@ export const PLAN_ENTITLEMENTS: Record<PlanId, PlanEntitlements> = {
     contextLimit: 500,
     maxTokens: 16384,
     streamingEnabled: true,
-    // Ultra: цена 2499₽ (~$26.31 при курсе 95).
-    // Формула: costBudget <= priceMonthly_USD * 0.45 -> $26.31 * 0.437 = $11.50 (снижено с убыточных $40!)
-    // Оставляет 56.3% на маржу, налоги, инфраструктуру и комиссию эквайринга.
+    // Ultra: 2990 ₽ ≈ $31.47 → бюджет $12.50 (40%). Раньше стояло $11.50, посчитанное на цену 2499 ₽.
     maxDailyCost: 1.50,
-    costBudget: 11.50,
+    costBudget: 12.50,
+    premiumBudget: 5.50,
   },
-  // ── Legacy-планы для обратной совместимости (цена 1199₽ ~ $12.62, costBudget $5.00 ~ 39.6%) ──
+  // ── Legacy-планы для обратной совместимости ──
   'gpt-pro': { planId: 'gpt-pro', ...LEGACY_PRO_BASE },
   'claude-pro': { planId: 'claude-pro', ...LEGACY_PRO_BASE },
   'gemini-pro': { planId: 'gemini-pro', ...LEGACY_PRO_BASE },
@@ -190,7 +198,7 @@ export class EntitlementService {
   }
 
   /**
-   * Проверить, имеет ли пользователь доступ к модели.
+   * Проверить, имеет ли пользователь доступ к модели: по `requiredPlan` модели и рангу тарифа.
    */
   static checkModelAccess(
     model: ModelRegistryEntry,
@@ -200,40 +208,15 @@ export class EntitlementService {
   ): { allowed: boolean; reason?: string; requiredPlan?: string } {
     const effectivePlan = this.resolveEffectivePlan(userPlan, userEmail, isVip);
 
-    if (!model.isPro) {
+    if (!model.requiredPlan || planAllowsModel(effectivePlan, model.requiredPlan)) {
       return { allowed: true };
     }
 
-    // Флагманские модели (GPT-6 Astra, Claude 3.5 Sonnet, Claude Fable, Gemini 2.5 Pro)
-    // требуют тарифа Pro или Ultra
-    if (model.tier === 'flagship') {
-      const isProOrUltra =
-        effectivePlan === 'pro' ||
-        effectivePlan === 'ultra' ||
-        effectivePlan === 'gpt-pro' ||
-        effectivePlan === 'claude-pro' ||
-        effectivePlan === 'gemini-pro';
-
-      if (isProOrUltra) {
-        return { allowed: true };
-      }
-
-      return {
-        allowed: false,
-        reason: `Доступ к флагманской модели ${model.name} требует подписки Pro или Ultra.`,
-        requiredPlan: 'Pro',
-      };
-    }
-
-    // Для остальных Pro-моделей (например Qwen 2.5 Max) достаточно тарифа Plus
-    if (effectivePlan !== 'free') {
-      return { allowed: true };
-    }
-
+    const label = PLAN_LABELS[model.requiredPlan] ?? model.requiredPlan;
     return {
       allowed: false,
-      reason: `Доступ к модели ${model.name} требует подписки (Plus, Pro или Ultra).`,
-      requiredPlan: 'Plus',
+      reason: `Доступ к модели ${model.name} требует подписки ${label} или выше.`,
+      requiredPlan: label,
     };
   }
 }

@@ -37,9 +37,9 @@ interface ComparisonRow {
 const COMPARISON_ROWS: ComparisonRow[] = [
   {
     feature: { ru: 'Доступные модели', en: 'Available models' },
-    free: { ru: 'Ketner Mini + GPT-4o mini', en: 'Ketner Mini + GPT-4o mini' },
-    plus: { ru: 'DeepSeek v4.1 Flash, Claude Haiku 4.5, GPT-4o', en: 'DeepSeek v4.1 Flash, Claude Haiku 4.5, GPT-4o' },
-    pro: { ru: 'Все из Plus + GPT-6 Astra, Claude Fable 5.1, Gemini Flash 3.8, Grok 4.7', en: 'All Plus + GPT-6 Astra, Claude Fable 5.1, Gemini Flash 3.8, Grok 4.7' },
+    free: { ru: 'Ketner Mini', en: 'Ketner Mini' },
+    plus: { ru: 'Ketner Pro, GPT-6.1 Sol, Claude Haiku 5.5, DeepSeek V4.1 Flash', en: 'Ketner Pro, GPT-6.1 Sol, Claude Haiku 5.5, DeepSeek V4.1 Flash' },
+    pro: { ru: 'Все из Plus + Claude Opus 5.5, Grok 4.7, Gemini 3.8 Flash', en: 'All Plus + Claude Opus 5.5, Grok 4.7, Gemini 3.8 Flash' },
     ultra: { ru: 'Все топовые модели на 100% без ограничений', en: 'All top models at 100% without limitations' },
   },
   {

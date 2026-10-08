@@ -13,11 +13,40 @@ export type { PlanId, Language, MessageAttachment, WorkspaceContext };
 // AI Provider & Model Registry
 // ─────────────────────────────────────────────────────────────
 
-/** Поддерживаемые AI провайдеры. */
-export type AIProviderType = 'openai' | 'anthropic' | 'google' | 'openrouter';
+/**
+ * Поддерживаемые AI провайдеры.
+ *
+ * Все модели идут через единый ключ OpenRouter (OPENROUTER_API_KEY): один счёт, один баланс,
+ * одна точка учёта расходов. Прямых ключей OpenAI / Anthropic / Google в проекте нет.
+ */
+export type AIProviderType = 'openrouter';
 
 /** Tier модели: определяет стоимость и приоритет. */
 export type ModelTier = 'free' | 'standard' | 'premium' | 'flagship';
+
+/**
+ * Класс стоимости модели — основа экономики тарифов.
+ *   lite   — до ~$0.003 за типичный запрос: повседневные вопросы, Free;
+ *   work   — ~$0.005: рабочая лошадка (код, анализ) для Plus и выше;
+ *   strong — $0.03–0.04: сильные модели, расходуют квоту премиум-запросов;
+ *   top    — $0.07–0.10: лучшие модели, расходуют ту же квоту.
+ * Классы strong и top считаются «премиум»: их суммарный расход за 30 дней ограничен
+ * `premiumBudget` тарифа (см. PlanEntitlements), после чего ответы дают модели класса work.
+ */
+export type ModelCostClass = 'lite' | 'work' | 'strong' | 'top';
+
+/** Глубина размышлений модели. Размышления оплачиваются как выходные токены. */
+export type ReasoningEffort = 'none' | 'low' | 'medium' | 'high';
+
+/** Как у модели управляются размышления в OpenRouter (`reasoning` в теле запроса). */
+export interface ModelReasoning {
+  /** Размышления нельзя отключить (effort 'none' недопустим). */
+  mandatory: boolean;
+  /** Поддерживаемые значения `reasoning.effort` (пусто — effort не принимается). */
+  efforts: ReasoningEffort[];
+  /** Модель умеет только включать и выключать размышления (`reasoning.enabled`). */
+  toggle?: boolean;
+}
 
 /** Capability-флаги модели для Auto Mode роутинга. */
 export interface ModelCapabilities {
@@ -62,6 +91,10 @@ export interface ModelRegistryEntry {
   enabled: boolean;
   /** Tier модели. */
   tier: ModelTier;
+  /** Класс стоимости: определяет, расходует ли модель квоту премиум-запросов. */
+  costClass: ModelCostClass;
+  /** Управление размышлениями модели. */
+  reasoning: ModelReasoning;
   /** Capabilities для Auto Mode. */
   capabilities: ModelCapabilities;
   /** Максимальный размер контекста в токенах. */
@@ -95,8 +128,6 @@ export type FairUseLevel = 0 | 1 | 2 | 3;
 export interface PlanEntitlements {
   /** ID плана. */
   planId: PlanId;
-  /** Список доступных моделей (ID). Пустой массив = только бесплатные. */
-  allowedModels: string[];
   /** Максимальное количество одновременных AI-запросов. */
   maxConcurrency: number;
   /** Приоритет в очереди (0 — низший, 3 — высший). */
@@ -127,6 +158,12 @@ export interface PlanEntitlements {
   maxDailyCost: number | null;
   /** Месячный бюджет на пользователя в $ (для adaptive cost control). */
   costBudget: number;
+  /**
+   * Часть месячного бюджета ($ за 30 дней), которую можно потратить на премиум-модели
+   * (классы strong и top). Остальное остаётся на повседневные модели, поэтому один
+   * тяжёлый день на Opus не оставляет пользователя без ответов до конца месяца.
+   */
+  premiumBudget: number;
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -358,6 +395,11 @@ export interface ProviderRequestOptions {
   temperature?: number;
   stream: boolean;
   signal?: AbortSignal;
+  /**
+   * Уже приведённое к возможностям модели значение размышлений: `reasoning.effort`
+   * либо `reasoning.enabled` для моделей, которые умеют только включать и выключать.
+   */
+  reasoning?: { effort: ReasoningEffort } | { enabled: boolean };
 }
 
 /** Callback'и для стримингового ответа провайдера. */

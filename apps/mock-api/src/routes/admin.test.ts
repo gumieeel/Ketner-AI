@@ -22,7 +22,7 @@ test('admin: проверка доступа по API ключу', async () => {
     assert.equal(allowed.status, 200);
     const modelsBody = (await allowed.json()) as { models: Array<{ id: string; name: string }> };
     assert.ok(Array.isArray(modelsBody.models));
-    assert.ok(modelsBody.models.some((m) => m.id === 'gpt-6-astra'));
+    assert.ok(modelsBody.models.some((m) => m.id === 'gpt-6.1-sol'));
   } finally {
     await server.close();
   }
@@ -32,7 +32,7 @@ test('admin: обновление модели (PATCH /api/admin/models/:id)', a
   const server = await startTestServer();
 
   try {
-    const updateRes = await fetch(`${server.baseUrl}/api/admin/models/gpt-6-astra`, {
+    const updateRes = await fetch(`${server.baseUrl}/api/admin/models/gpt-6.1-sol`, {
       method: 'PATCH',
       headers: {
         'Content-Type': 'application/json',
@@ -73,7 +73,7 @@ test('admin: метрики провайдеров, статистика и ре
     assert.equal(provRes.status, 200);
     const provBody = (await provRes.json()) as { providers: Array<{ provider: string }> };
     assert.ok(Array.isArray(provBody.providers));
-    assert.ok(provBody.providers.some((p) => p.provider === 'openai'));
+    assert.ok(provBody.providers.some((p) => p.provider === 'openrouter'));
 
     // Global Usage
     const usageRes = await fetch(`${server.baseUrl}/api/admin/usage`, { headers });
@@ -650,13 +650,13 @@ test('admin: circuit breaker мониторинг GET /api/admin/circuit-breaker
       circuitBreakers: Array<{ provider: string; state: string; consecutiveFailures: number }>;
     };
     assert.ok(Array.isArray(getBody.circuitBreakers));
-    assert.ok(getBody.circuitBreakers.some((c) => c.provider === 'openai'));
+    assert.ok(getBody.circuitBreakers.some((c) => c.provider === 'openrouter'));
 
     // 2. Сброс предохранителя для конкретного провайдера
     const resetRes = await fetch(`${server.baseUrl}/api/admin/circuit-breaker/reset`, {
       method: 'POST',
       headers,
-      body: JSON.stringify({ provider: 'openai' }),
+      body: JSON.stringify({ provider: 'openrouter' }),
     });
     assert.equal(resetRes.status, 200);
     const resetBody = (await resetRes.json()) as { success: boolean };

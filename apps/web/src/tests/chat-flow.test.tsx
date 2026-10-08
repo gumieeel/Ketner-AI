@@ -198,10 +198,8 @@ describe('чат: отправка, стриминг и управление о�
     await screen.findByRole('heading', { level: 2, name: EMPTY_TITLE });
 
     await user.click(screen.getByRole('button', { name: 'Выбрать модель' }));
-    await user.click(await screen.findByRole('option', { name: /Qwen (2\.5|3\.8) Max/ }));
-    expect(screen.getByRole('button', { name: 'Выбрать модель' })).toHaveTextContent(
-      /Qwen (2\.5|3\.8) Max/,
-    );
+    await user.click(await screen.findByRole('option', { name: /Ketner Pro/ }));
+    expect(screen.getByRole('button', { name: 'Выбрать модель' })).toHaveTextContent(/Ketner Pro/);
 
     await sendMessage(user, 'Вопрос');
     expect(await screen.findByText('Готово')).toBeInTheDocument();
@@ -247,24 +245,27 @@ describe('чат: отправка, стриминг и управление о�
     await screen.findByRole('heading', { level: 2, name: EMPTY_TITLE });
 
     await user.click(screen.getByRole('button', { name: 'Выбрать модель' }));
-    // Проверяем наличие всех моделей
-    expect(await screen.findByRole('option', { name: /Qwen 2\.5 Coder/ })).toBeInTheDocument();
-    expect(screen.getByRole('option', { name: /GPT-6 Astra/ })).toBeInTheDocument();
-    expect(screen.getByRole('option', { name: /Claude Fable 5\.[15]/ })).toBeInTheDocument();
-    expect(screen.getByRole('option', { name: /Gemini (Flash 3\.8|3\.8 Flash|3\.8 Pro)/ })).toBeInTheDocument();
-    expect(screen.getByRole('option', { name: /Qwen (2\.5|3\.8) Max/ })).toBeInTheDocument();
+    // Проверяем наличие всех моделей каталога
+    expect(await screen.findByRole('option', { name: /Ketner Mini/ })).toBeInTheDocument();
+    expect(screen.getByRole('option', { name: /Ketner Pro/ })).toBeInTheDocument();
+    expect(screen.getByRole('option', { name: /Claude Haiku 5\.5/ })).toBeInTheDocument();
+    expect(screen.getByRole('option', { name: /DeepSeek V4\.1 Flash/ })).toBeInTheDocument();
+    expect(screen.getByRole('option', { name: /GPT-6\.1 Sol/ })).toBeInTheDocument();
+    expect(screen.getByRole('option', { name: /Gemini 3\.8 Flash/ })).toBeInTheDocument();
+    expect(screen.getByRole('option', { name: /Grok 4\.7/ })).toBeInTheDocument();
+    expect(screen.getByRole('option', { name: /Claude Opus 5\.5/ })).toBeInTheDocument();
 
     await user.keyboard('{Escape}');
 
-    // Задаем платную модель GPT-6 Astra
+    // Задаем платную модель GPT-6.1 Sol (доступна с тарифа Plus)
     act(() => {
-      usePreferences.getState().setChatModelId('gpt-6-astra');
+      usePreferences.getState().setChatModelId('gpt-6.1-sol');
     });
 
     // Появляется плашка с предупреждением об апгрейде и ссылкой на тарифы
     const alert = await screen.findByRole('alert');
-    expect(alert).toHaveTextContent(/GPT-6 Astra/);
-    expect(alert).toHaveTextContent(/GPT Pro/);
+    expect(alert).toHaveTextContent(/GPT-6\.1 Sol/);
+    expect(alert).toHaveTextContent(/Plus/);
     const upgradeLink = within(alert).getByRole('link', { name: /Улучшить план/ });
     expect(upgradeLink).toHaveAttribute('href', '/pricing');
   });
@@ -275,14 +276,14 @@ describe('чат: отправка, стриминг и управление о�
     await screen.findByRole('heading', { level: 2, name: EMPTY_TITLE });
 
     // Задаем платную модель напрямую для проверки серверной ошибки
-    usePreferences.getState().setChatModelId('claude-fable');
+    usePreferences.getState().setChatModelId('claude-opus-5.5');
 
     // Отправляем сообщение
     await sendMessage(user, 'Тест платной модели');
 
     // Проверяем, что появилось сообщение об ошибке с требованием апгрейда
     expect(await screen.findByText('Требуется подписка (Upgrade your plan)')).toBeInTheDocument();
-    expect(screen.getAllByText(/Claude Fable 5\.[15]/).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/Claude Opus 5\.5/).length).toBeGreaterThan(0);
     expect(screen.getAllByRole('link', { name: /Улучшить план/ })[0]).toHaveAttribute(
       'href',
       '/pricing',
@@ -296,10 +297,20 @@ describe('чат: отправка, стриминг и управление о�
 
     // Открываем селектор моделей
     await user.click(await screen.findByRole('button', { name: 'Выбрать модель' }));
-    const gptOption = await screen.findByRole('option', { name: /GPT-6 Astra/ });
-    expect(gptOption).toBeDisabled();
-    expect(gptOption).toHaveClass('opacity-40');
-    expect(within(gptOption).getByText('pro')).toBeInTheDocument();
+    // Группа определяется тарифом из каталога: Sol открывается с Plus, Opus — с Pro
+    const solOption = await screen.findByRole('option', { name: /GPT-6\.1 Sol/ });
+    expect(solOption).toBeDisabled();
+    expect(solOption).toHaveClass('opacity-40');
+    expect(within(solOption).getByText('plus')).toBeInTheDocument();
+    const opusOption = screen.getByRole('option', { name: /Claude Opus 5\.5/ });
+    expect(opusOption).toBeDisabled();
+    expect(opusOption).toHaveClass('opacity-40');
+    expect(within(opusOption).getByText('pro')).toBeInTheDocument();
+    // Бесплатная Ketner Mini доступна и без бейджа тарифа
+    const miniOption = screen.getByRole('option', { name: /Ketner Mini/ });
+    expect(miniOption).toBeEnabled();
+    expect(within(miniOption).queryByText('plus')).toBeNull();
+    expect(within(miniOption).queryByText('pro')).toBeNull();
 
     // Закрываем меню кликом по фокусу или esc
     await user.keyboard('{Escape}');
@@ -308,6 +319,71 @@ describe('чат: отправка, стриминг и управление о�
     const field = await screen.findByLabelText(COMPOSER);
     await user.click(field);
     expect(screen.queryByRole('dialog')).toBeNull();
+  });
+
+  it('после ответа в ленте видна модель, которая реально ответила, а не выбранная в переключателе', async () => {
+    installFakeApi({ reply: 'Ответ рабочей модели', servedModelId: 'ketner-pro' });
+    const user = setupChat();
+
+    await sendMessage(user, 'Реши задачу');
+
+    expect(await screen.findByText('Ответ рабочей модели', {}, { timeout: 10000 })).toBeInTheDocument();
+    await waitFor(() => expect(lastAssistant().status).toBe('complete'));
+    expect(usePreferences.getState().chatModelId).toBe('auto');
+    expect(lastAssistant().modelId).toBe('ketner-pro');
+  });
+
+  it('доступ к моделям определяется рангом тарифа: Plus открывает Sol, но не Opus, устаревший gpt-pro равен Pro', async () => {
+    installFakeApi({ plan: 'plus' });
+    useAuth.setState({
+      user: {
+        id: 'demo-user',
+        email: 'demo@ketner.ai',
+        name: 'Демо Пользователь',
+        plan: 'plus',
+        createdAt: new Date().toISOString(),
+      },
+      token: 'fake.jwt.token',
+      status: 'authenticated',
+    });
+    const user = setupChat();
+    await screen.findByRole('heading', { level: 2, name: EMPTY_TITLE });
+
+    await user.click(screen.getByRole('button', { name: 'Выбрать модель' }));
+    expect(await screen.findByRole('option', { name: /GPT-6\.1 Sol/ })).toBeEnabled();
+    expect(screen.getByRole('option', { name: /Ketner Pro/ })).toBeEnabled();
+    expect(screen.getByRole('option', { name: /Claude Opus 5\.5/ })).toBeDisabled();
+    expect(screen.getByRole('option', { name: /Grok 4\.7/ })).toBeDisabled();
+    expect(screen.getByRole('option', { name: /Gemini 3\.8 Flash/ })).toBeDisabled();
+
+    // Устаревший тариф gpt-pro приравнен к Pro: открыты и Plus-, и Pro-модели
+    await user.keyboard('{Escape}');
+    act(() => {
+      useAuth.setState({
+        user: {
+          id: 'demo-user',
+          email: 'demo@ketner.ai',
+          name: 'Демо Пользователь',
+          plan: 'gpt-pro',
+          createdAt: new Date().toISOString(),
+        },
+      });
+    });
+    await user.click(screen.getByRole('button', { name: 'Выбрать модель' }));
+    expect(await screen.findByRole('option', { name: /Claude Opus 5\.5/ })).toBeEnabled();
+    expect(screen.getByRole('option', { name: /GPT-6\.1 Sol/ })).toBeEnabled();
+  });
+
+  it('сохранённая модель, которой нет в каталоге, после загрузки каталога сбрасывается на Auto', async () => {
+    installFakeApi({ reply: 'Готово' });
+    usePreferences.getState().setChatModelId('retired-model');
+    const user = setupChat();
+    await screen.findByRole('heading', { level: 2, name: EMPTY_TITLE });
+
+    await waitFor(() => expect(usePreferences.getState().chatModelId).toBe('auto'));
+
+    await sendMessage(user, 'Вопрос');
+    expect(await screen.findByText('Готово')).toBeInTheDocument();
   });
 
   it('после 3 сообщений на бесплатном плане весь экран затемняется и выскакивает модалка исчерпания лимита', async () => {

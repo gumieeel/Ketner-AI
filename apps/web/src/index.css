@@ -129,7 +129,6 @@
   --color-model-gemini: var(--model-gemini);
   --color-model-grok: var(--model-grok);
   --color-model-deepseek: var(--model-deepseek);
-  --color-model-qwen: var(--model-qwen);
   --color-model-ketner: var(--model-ketner);
 
   /* Тени и свечение — многослойные, зависят от темы */
@@ -221,7 +220,6 @@
     --model-gemini: #1f60d1;
     --model-grok: #3f4654;
     --model-deepseek: #3b55e6;
-    --model-qwen: #7645d9;
     --model-ketner: #06704d;
 
     /* Глубина */
@@ -330,7 +328,6 @@
     --model-gemini: #7ea6ff;
     --model-grok: #cfd6e2;
     --model-deepseek: #7b8cff;
-    --model-qwen: #b18cff;
     --model-ketner: #2ee6a6;
 
     --highlight-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05);

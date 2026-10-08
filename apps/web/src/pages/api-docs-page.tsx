@@ -57,7 +57,17 @@ const API_DOCS_NAV: ReadonlyArray<{ id: string; label: TranslationKey }> = [
   { id: 'playground', label: 'apiDocs.navPlayground' },
 ];
 
-const MODEL_IDS = ['gpt-6-astra', 'claude-fable-5.5', 'gemini-3.8-pro', 'qwen-2.5-coder'] as const;
+/** Публичные идентификаторы моделей: совпадают с каталогом сервера (GET /api/meta). */
+const MODEL_IDS = [
+  'ketner-mini',
+  'ketner-pro',
+  'claude-haiku-5.5',
+  'deepseek-v4.1-flash',
+  'gemini-3.8-flash',
+  'grok-4.7',
+  'gpt-6.1-sol',
+  'claude-opus-5.5',
+] as const;
 const API_BASE_URL = 'https://api.ketner.ai/v1';
 
 /** Метка карточки в блоке «Базовые параметры». */

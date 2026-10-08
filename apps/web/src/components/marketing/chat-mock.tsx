@@ -5,8 +5,8 @@ import {
   ClaudeIcon,
   GeminiIcon,
   DeepSeekIcon,
-  QwenIcon,
   GrokIcon,
+  KetnerIcon,
 } from '@/components/icons/brands';
 import { CornerMark } from '@/components/ui/corner-mark';
 import { SendIcon } from '@/components/icons';
@@ -26,8 +26,8 @@ interface ChatModel {
 const CHAT_MODELS: ChatModel[] = [
   {
     id: 'gpt',
-    name: 'GPT-6',
-    tag: 'Astra',
+    name: 'GPT-6.1',
+    tag: 'Sol',
     icon: OpenAiIcon,
     iconColor: 'text-emerald-500',
     responseRu:
@@ -38,7 +38,7 @@ const CHAT_MODELS: ChatModel[] = [
   {
     id: 'claude',
     name: 'Claude',
-    tag: 'Fable 5.1',
+    tag: 'Opus 5.5',
     icon: ClaudeIcon,
     iconColor: 'text-orange-400',
     responseRu:
@@ -49,7 +49,7 @@ const CHAT_MODELS: ChatModel[] = [
   {
     id: 'gemini',
     name: 'Gemini',
-    tag: 'Flash 3.8',
+    tag: '3.8 Flash',
     icon: GeminiIcon,
     iconColor: 'text-blue-500',
     responseRu:
@@ -69,11 +69,11 @@ const CHAT_MODELS: ChatModel[] = [
       'Classical: explores one pathway at a time. Quantum: explores all pathways at once thanks to qubit superposition.',
   },
   {
-    id: 'qwen',
-    name: 'Qwen',
-    tag: '3.8 Max',
-    icon: QwenIcon,
-    iconColor: 'text-purple-400',
+    id: 'ketner',
+    name: 'Ketner',
+    tag: 'Pro',
+    icon: KetnerIcon,
+    iconColor: 'text-accent',
     responseRu:
       'Классические компьютеры используют биты (0 или 1) для решения задач шаг за шагом. Квантовые компьютеры оперируют кубитами в суперпозиции, проводя комплексные вычисления параллельно.',
     responseEn:
@@ -82,7 +82,7 @@ const CHAT_MODELS: ChatModel[] = [
   {
     id: 'deepseek',
     name: 'DeepSeek',
-    tag: 'v4.1 Flash',
+    tag: 'V4.1 Flash',
     icon: DeepSeekIcon,
     iconColor: 'text-sky-400',
     responseRu:

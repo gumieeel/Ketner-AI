@@ -46,7 +46,7 @@ export const CLI_RUN_SNIPPET = `# Перейдите в корень вашег�
 cd ~/projects/my-awesome-app
 
 # 1. Запуск интерактивной сессии с агентом
-ketner run --model gpt-6-astra
+ketner run --model gpt-6.1-sol
 
 # 2. Передача конкретной команды напрямую
 ketner run "Найди и исправь падающие тесты в auth-flow.test.tsx и запусти npm test"
@@ -58,23 +58,23 @@ export function getContinueConfigSnippet(apiKey: string): string {
   return `{
   "models": [
     {
-      "title": "Ketner GPT-6 Astra",
+      "title": "Ketner GPT-6.1 Sol",
       "provider": "openai",
-      "model": "gpt-6-astra",
+      "model": "gpt-6.1-sol",
       "apiBase": "https://api.ketner.ai/v1",
       "apiKey": "${apiKey}"
     },
     {
-      "title": "Ketner Claude Fable 5.5",
+      "title": "Ketner Claude Opus 5.5",
       "provider": "openai",
-      "model": "claude-fable-5.5",
+      "model": "claude-opus-5.5",
       "apiBase": "https://api.ketner.ai/v1",
       "apiKey": "${apiKey}"
     },
     {
-      "title": "Ketner Gemini 3.8 Pro",
+      "title": "Ketner Gemini 3.8 Flash",
       "provider": "openai",
-      "model": "gemini-3.8-pro",
+      "model": "gemini-3.8-flash",
       "apiBase": "https://api.ketner.ai/v1",
       "apiKey": "${apiKey}"
     }
@@ -94,7 +94,7 @@ export function getMcpConfigSnippet(apiKey: string, os: 'windows' | 'macos' | 'l
       "env": {
         "KETNER_API_KEY": "${apiKey}",
         "KETNER_BASE_URL": "https://api.ketner.ai/v1",
-        "DEFAULT_MODEL": "gpt-6-astra"
+        "DEFAULT_MODEL": "gpt-6.1-sol"
       }
     },
     "filesystem": {
@@ -123,7 +123,7 @@ export function getSdkSnippets(apiKey: string) {
   -H "Content-Type: application/json" \\
   -H "Authorization: Bearer ${apiKey}" \\
   -d '{
-    "model": "gpt-6-astra",
+    "model": "gpt-6.1-sol",
     "messages": [{"role": "user", "content": "Привет, Ketner AI!"}],
     "stream": true
   }'`,
@@ -141,11 +141,11 @@ client = OpenAI(
     api_key=os.environ.get("KETNER_API_KEY", "${apiKey}"),
 )
 
-print("Запрос к GPT-6 Astra на локальной машине...")
+print("Запрос к GPT-6.1 Sol на локальной машине...")
 
 # Запуск стриминга ответа
 stream = client.chat.completions.create(
-    model="gpt-6-astra",
+    model="gpt-6.1-sol",
     messages=[
         {
             "role": "system",
@@ -178,7 +178,7 @@ const client = new OpenAI({
 
 async function main() {
   const stream = await client.chat.completions.create({
-    model: 'claude-fable-5.5',
+    model: 'claude-opus-5.5',
     messages: [{ role: 'user', content: 'Оптимизируй этот SQL-запрос для PostgreSQL' }],
     stream: true,
   });
@@ -203,7 +203,7 @@ export function getCompletionsSnippets(apiKey: string) {
   -H "Content-Type: application/json" \\
   -H "Authorization: Bearer ${apiKey}" \\
   -d '{
-    "model": "gpt-6-astra",
+    "model": "gpt-6.1-sol",
     "messages": [
       {"role": "system", "content": "You are a code review assistant."},
       {"role": "user", "content": "Review this PR diff"}
@@ -224,7 +224,7 @@ client = OpenAI(
 )
 
 response = client.chat.completions.create(
-    model="gpt-6-astra",
+    model="gpt-6.1-sol",
     messages=[
         {"role": "system", "content": "You are a code review assistant."},
         {"role": "user", "content": "Review this PR diff"},
@@ -242,7 +242,7 @@ print(response.choices[0].message.content)`,
   "id": "chatcmpl-9f83a21b",
   "object": "chat.completion",
   "created": 1727616000,
-  "model": "gpt-6-astra",
+  "model": "gpt-6.1-sol",
   "choices": [
     {
       "index": 0,
@@ -282,7 +282,7 @@ export function getConversationsSnippets(apiKey: string) {
     {
       "id": "conv_a8b9c1d2",
       "title": "Рефакторинг токенов дизайна",
-      "model": "gpt-6-astra",
+      "model": "gpt-6.1-sol",
       "created_at": 1727616000,
       "message_count": 8
     }

@@ -76,12 +76,12 @@ interface HubModel {
 }
 
 const MODELS: readonly HubModel[] = [
-  { id: 'gpt-6-astra', name: 'GPT-6', tag: 'Astra' },
-  { id: 'gemini', name: 'Gemini', tag: 'Flash 3.8' },
-  { id: 'deepseek', name: 'DeepSeek', tag: 'v4.1 Flash' },
-  { id: 'qwen', name: 'Qwen', tag: '3.8 Max' },
-  { id: 'grok', name: 'Grok', tag: '4.7' },
-  { id: 'claude', name: 'Claude', tag: 'Fable 5.1' },
+  { id: 'gpt-6.1-sol', name: 'GPT-6.1', tag: 'Sol' },
+  { id: 'gemini-3.8-flash', name: 'Gemini', tag: '3.8 Flash' },
+  { id: 'deepseek-v4.1-flash', name: 'DeepSeek', tag: 'V4.1 Flash' },
+  { id: 'ketner-pro', name: 'Ketner', tag: 'Pro' },
+  { id: 'grok-4.7', name: 'Grok', tag: '4.7' },
+  { id: 'claude-opus-5.5', name: 'Claude', tag: 'Opus 5.5' },
 ];
 
 const N = MODELS.length;

@@ -1,30 +1,42 @@
+import type { TranslationKey } from '@/i18n';
 import type { ModelInfo, PlanId } from './types';
 
 /**
- * Проверяет, доступна ли модель пользователю по его текущему тарифу.
- * - Auto доступен всем (Free).
- * - Plus модели требуют тариф Plus или выше.
- * - Pro модели требуют тариф Pro / Ultra.
+ * Ранг тарифа для проверки доступа: зеркало PLAN_RANKS на сервере
+ * (apps/mock-api/src/services/entitlement.ts). Устаревшие gpt-pro / claude-pro / gemini-pro
+ * равны Pro, неизвестный тариф считается Free.
+ */
+export const PLAN_RANKS: Readonly<Record<string, number>> = {
+  free: 0,
+  plus: 1,
+  pro: 2,
+  'gpt-pro': 2,
+  'claude-pro': 2,
+  'gemini-pro': 2,
+  ultra: 3,
+};
+
+export function planRank(plan: string | null | undefined): number {
+  return plan ? (PLAN_RANKS[plan] ?? 0) : 0;
+}
+
+/**
+ * Тариф, с которого доступна модель, или `null`, если модель бесплатная.
+ * Как на сервере (`canAccessModel` в ai/models.ts): `requiredPlan` учитывается только у платных моделей,
+ * а платная модель без `requiredPlan` считается моделью Plus.
+ */
+export function requiredPlanOf(model: ModelInfo): PlanId | null {
+  if (model.id === 'auto' || !model.isPro) return null;
+  return model.requiredPlan ?? 'plus';
+}
+
+/**
+ * Проверяет, доступна ли модель пользователю по его текущему тарифу:
+ * модель доступна, если ранг тарифа пользователя не ниже ранга `requiredPlan` модели.
+ * Auto и бесплатные модели доступны всем.
  */
 export function canAccessModel(userPlan: PlanId | undefined, model: ModelInfo): boolean {
-  if (model.id === 'auto') return true;
-  if (!model.isPro && (!model.requiredPlan || model.requiredPlan === 'free')) return true;
-  if (!userPlan || userPlan === 'free') return false;
-  if (userPlan === 'ultra') return true;
-  if (model.requiredPlan === 'plus') {
-    return userPlan === 'plus' || userPlan === 'pro';
-  }
-  if (model.requiredPlan === 'pro') {
-    return (
-      userPlan === 'pro' ||
-      userPlan === 'gpt-pro' ||
-      userPlan === 'claude-pro' ||
-      userPlan === 'gemini-pro'
-    );
-  }
-  if (model.requiredPlan && userPlan === model.requiredPlan) return true;
-  if (model.id === 'ketner-pro' && (userPlan === 'plus' || userPlan === 'pro')) return true;
-  return false;
+  return planRank(userPlan) >= planRank(requiredPlanOf(model));
 }
 
 /**
@@ -39,26 +51,37 @@ export function getRequiredPlanName(model: ModelInfo): string {
   return 'PRO';
 }
 
+/**
+ * Каталог моделей на случай, пока /api/meta не загрузился. Зеркало публичного каталога сервера
+ * (apps/mock-api/src/ai/models.ts): те же id, названия, `requiredPlan` и размер контекста, тот же порядок.
+ */
 export const DEFAULT_MODELS: ModelInfo[] = [
-  // Auto — бесплатный умный роутинг
+  // Auto — умный выбор модели, доступен всем
   {
     id: 'auto',
     name: '✨ Auto',
     contextMessages: 120,
     isPro: false,
   },
-  // Plus (990 ₽) — стандартные модели
+  // Free — повседневная модель
   {
-    id: 'claude-3-haiku',
-    name: 'Claude Haiku 4.5',
+    id: 'ketner-mini',
+    name: 'Ketner Mini',
     contextMessages: 40,
+    isPro: false,
+  },
+  // Plus (990 ₽) — рабочая лошадка и быстрые модели
+  {
+    id: 'ketner-pro',
+    name: 'Ketner Pro',
+    contextMessages: 60,
     isPro: true,
     requiredPlan: 'plus',
   },
   {
-    id: 'gpt-4o',
-    name: 'GPT-4o',
-    contextMessages: 60,
+    id: 'claude-haiku-5.5',
+    name: 'Claude Haiku 5.5',
+    contextMessages: 40,
     isPro: true,
     requiredPlan: 'plus',
   },
@@ -69,23 +92,9 @@ export const DEFAULT_MODELS: ModelInfo[] = [
     isPro: true,
     requiredPlan: 'plus',
   },
-  // Pro (1 990 ₽) — флагманские модели
+  // Pro (1 990 ₽) — премиум-модели; Gemini, Grok и Opus расходуют квоту премиум-запросов тарифа
   {
-    id: 'gpt-6-astra',
-    name: 'GPT-6 Astra',
-    contextMessages: 120,
-    isPro: true,
-    requiredPlan: 'pro',
-  },
-  {
-    id: 'claude-fable',
-    name: 'Claude Fable 5.5',
-    contextMessages: 120,
-    isPro: true,
-    requiredPlan: 'pro',
-  },
-  {
-    id: 'gemini-2.5-pro',
+    id: 'gemini-3.8-flash',
     name: 'Gemini 3.8 Flash',
     contextMessages: 120,
     isPro: true,
@@ -98,7 +107,38 @@ export const DEFAULT_MODELS: ModelInfo[] = [
     isPro: true,
     requiredPlan: 'pro',
   },
+  // GPT-6.1 Sol открыта с Plus, но тоже расходует квоту премиум-запросов
+  {
+    id: 'gpt-6.1-sol',
+    name: 'GPT-6.1 Sol',
+    contextMessages: 120,
+    isPro: true,
+    requiredPlan: 'plus',
+  },
+  {
+    id: 'claude-opus-5.5',
+    name: 'Claude Opus 5.5',
+    contextMessages: 120,
+    isPro: true,
+    requiredPlan: 'pro',
+  },
 ];
+
+/**
+ * Ключи словаря с названиями моделей каталога: интерфейс показывает название из словаря,
+ * а `name` от сервера служит запасным вариантом для моделей, которых здесь нет.
+ */
+export const MODEL_NAME_KEYS: Readonly<Record<string, TranslationKey>> = {
+  auto: 'chat.modelAuto',
+  'ketner-mini': 'chat.modelMini',
+  'ketner-pro': 'chat.modelPro',
+  'claude-haiku-5.5': 'chat.modelHaiku',
+  'deepseek-v4.1-flash': 'chat.modelDeepSeek',
+  'gpt-6.1-sol': 'chat.modelGptSol',
+  'gemini-3.8-flash': 'chat.modelGemini',
+  'grok-4.7': 'chat.modelGrok',
+  'claude-opus-5.5': 'chat.modelClaudeOpus',
+};
 
 export function findModel(models: ModelInfo[] | undefined, modelId: string): ModelInfo {
   const list = models && models.length > 0 ? models : DEFAULT_MODELS;

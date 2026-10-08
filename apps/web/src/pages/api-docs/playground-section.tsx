@@ -10,7 +10,7 @@ const SELECT_CLASS =
 
 export function PlaygroundSection() {
   const { t } = useTranslation();
-  const [testModel, setTestModel] = useState('gpt-6-astra');
+  const [testModel, setTestModel] = useState('gpt-6.1-sol');
   const [testPrompt, setTestPrompt] = useState(() => t('apiDocs.playPromptDefault'));
   const [testResponse, setTestResponse] = useState<string | null>(null);
   const [testLoading, setTestLoading] = useState(false);
@@ -61,10 +61,10 @@ export function PlaygroundSection() {
             onChange={(e) => setTestModel(e.target.value)}
             className={SELECT_CLASS}
           >
-            <option value="gpt-6-astra">{t('apiDocs.playModelGpt')}</option>
-            <option value="claude-fable-5.5">{t('apiDocs.playModelClaude')}</option>
-            <option value="gemini-3.8-pro">{t('apiDocs.playModelGemini')}</option>
-            <option value="qwen-2.5-coder">{t('apiDocs.playModelQwen')}</option>
+            <option value="gpt-6.1-sol">{t('apiDocs.playModelGpt')}</option>
+            <option value="claude-opus-5.5">{t('apiDocs.playModelClaude')}</option>
+            <option value="gemini-3.8-flash">{t('apiDocs.playModelGemini')}</option>
+            <option value="ketner-mini">{t('apiDocs.playModelMini')}</option>
           </select>
         </div>
 

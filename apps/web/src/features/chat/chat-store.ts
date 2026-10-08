@@ -266,13 +266,15 @@ export const useChat = create<ChatState>((set, get) => {
             buffer += delta;
             scheduleFlush();
           },
-          onDone: ({ messageId, finishReason, canContinue }) => {
+          onDone: ({ messageId, finishReason, canContinue, selectedModelId }) => {
             flush();
             updateAssistant({
               id: messageId === '' ? assistantId : messageId,
               status: 'complete',
               finishReason,
               canContinue,
+              // Показываем модель, которая реально ответила, а не ту, что выбрана в переключателе.
+              ...(selectedModelId ? { modelId: selectedModelId } : {}),
             });
           },
           onError: ({ code, message }) => {
@@ -470,7 +472,14 @@ export const useChat = create<ChatState>((set, get) => {
 
     loadMeta: async () => {
       try {
-        set({ meta: await api.fetchMeta() });
+        const meta = await api.fetchMeta();
+        set({ meta });
+        // Сохранённый в браузере выбор модели, которой нет в каталоге (например, сделанный до его
+        // обновления), в списке выглядел бы как Auto, а запрос уходил бы со старым идентификатором.
+        const preferences = usePreferences.getState();
+        if (meta.models.length > 0 && !meta.models.some((model) => model.id === preferences.chatModelId)) {
+          preferences.setChatModelId(meta.defaultModelId);
+        }
       } catch (error) {
         // Без каталога чат работает на модели по умолчанию: это не блокирует работу.
         console.error('[chat] каталог моделей не загрузился:', error);

@@ -34,14 +34,6 @@ export function DeepSeekIcon({ className = 'size-4' }: BrandIconProps) {
   );
 }
 
-export function QwenIcon({ className = 'size-4' }: BrandIconProps) {
-  return (
-    <svg viewBox="0 0 24 24" fill="currentColor" className={className} aria-hidden="true">
-      <path d="M12 2 4 6.6v9.8L12 21l8-4.6V6.6L12 2Zm0 3.2 5.5 3.2v6.4L12 18l-5.5-3.2V8.4L12 5.2Zm-2.5 4.5 4.3 2.5-4.3 2.5v-5Z" />
-    </svg>
-  );
-}
-
 export function GrokIcon({ className = 'size-4' }: BrandIconProps) {
   return (
     <svg viewBox="0 0 24 24" fill="currentColor" className={className} aria-hidden="true">
@@ -61,7 +53,6 @@ export type ModelBrand =
   | 'anthropic'
   | 'google'
   | 'xai'
-  | 'qwen'
   | 'deepseek'
   | 'ketner';
 
@@ -72,7 +63,6 @@ export function getModelBrand(modelId: string): ModelBrand {
   if (lower.includes('claude')) return 'anthropic';
   if (lower.includes('gemini')) return 'google';
   if (lower.includes('grok')) return 'xai';
-  if (lower.includes('qwen')) return 'qwen';
   if (lower.includes('deepseek')) return 'deepseek';
   return 'ketner';
 }
@@ -95,8 +85,6 @@ export function ModelBrandIcon({
       return <GeminiIcon className={className} />;
     case 'xai':
       return <GrokIcon className={className} />;
-    case 'qwen':
-      return <QwenIcon className={className} />;
     case 'deepseek':
       return <DeepSeekIcon className={className} />;
     default:

@@ -7,6 +7,7 @@ import { AIGateway } from './gateway.js';
 import { ProviderManager } from './providers/provider-factory.js';
 import { CircuitBreaker } from './circuit-breaker.js';
 import { ModelRegistry } from './model-registry.js';
+import { OpenRouterError } from './providers/openrouter-provider.js';
 import { SemanticCache } from './cache.js';
 import { UsageStore } from '../store/usage-store.js';
 import type {
@@ -23,6 +24,8 @@ const aiConfig = { thinkingMs: [0, 0], chunkMs: [0, 0], failureRate: 0, random: 
 interface Call {
   model: string;
   messages: ProviderRequestOptions['messages'];
+  maxTokens?: number;
+  reasoning?: ProviderRequestOptions['reasoning'];
 }
 
 /** Управляемый поддельный OpenRouter: сценарий задаётся функцией. */
@@ -39,7 +42,12 @@ function fakeOpenRouter(
       return { content: 'draft text for the user', usage: { inputTokens: 10, outputTokens: 10 }, finishReason: 'stop' };
     },
     async streamText(options, cb) {
-      calls.push({ model: options.model, messages: options.messages });
+      calls.push({
+        model: options.model,
+        messages: options.messages,
+        maxTokens: options.maxTokens,
+        reasoning: options.reasoning,
+      });
       return script(options, cb);
     },
   } as AIProvider;
@@ -63,11 +71,11 @@ function newUsage(): UsageStore {
 }
 
 /** Расход «за прошлые дни»: в месячный бюджет входит, а в суточную квоту — нет. */
-function seedMonthlyCost(usage: UsageStore, userId: string, cost: number): void {
+function seedMonthlyCost(usage: UsageStore, userId: string, cost: number, modelId = 'ketner-pro'): void {
   const record = usage.recordUsage({
     userId,
     conversationId: 'seed',
-    modelId: 'gpt-4o',
+    modelId,
     provider: 'openrouter',
     inputTokens: 1,
     outputTokens: 1,
@@ -93,6 +101,10 @@ interface Outcome {
   text: string;
   error?: { code: string; message: string };
   done?: Parameters<Parameters<AIGateway['stream']>[1]['onDone']>[0];
+}
+
+function assertNoError(outcome: Outcome): void {
+  assert.ok(!outcome.error, outcome.error ? `${outcome.error.code}: ${outcome.error.message}` : '');
 }
 
 async function run(gateway: AIGateway, req: GatewayRequest): Promise<Outcome> {
@@ -131,14 +143,14 @@ test('в учёт попадает реальная стоимость от пр
   assert.equal(usage.getFairUseSnapshot('u-cost').estimatedCostLastDay, 0.0123);
 });
 
-test('без цены от провайдера «бесплатный» ketner-mini всё равно стоит денег в учёте', async () => {
+test('без цены от провайдера расход считается по таблице реестра, а не нулём', async () => {
   const usage = newUsage();
   const gateway = makeGateway(fakeOpenRouter(okStream('ответ'), []), usage);
 
   const out = await run(gateway, request({ userId: 'u-table', userPlan: 'free', modelId: 'ketner-mini' }));
-  assert.equal(out.error, undefined);
-  // 1000 вх. × $0.30/M + 200 исх. × $1.20/M = $0.00054
-  assert.equal(usage.getFairUseSnapshot('u-table').estimatedCostLastDay, 0.0005);
+  assertNoError(out);
+  // Luna: 1000 вх. × $0.10/M + 200 исх. × $0.50/M = $0.0002
+  assert.equal(usage.getFairUseSnapshot('u-table').estimatedCostLastDay, 0.0002);
 });
 
 test('жёсткий потолок: при расходе ≥125% бюджета запрос отклоняется до обращения к провайдеру', async () => {
@@ -152,36 +164,224 @@ test('жёсткий потолок: при расходе ≥125% бюджет�
   assert.equal(calls.length, 0, 'провайдер вызываться не должен');
 });
 
-test('бюджет исчерпан (100–125%): явный выбор дорогой модели понижается до дешёвой', async () => {
+test('бюджет исчерпан (100–125%): явный выбор сильной модели понижается до самой дешёвой', async () => {
   const usage = newUsage();
   const calls: Call[] = [];
   const gateway = makeGateway(fakeOpenRouter(okStream('ок'), calls), usage);
   seedMonthlyCost(usage, 'u-ex', 4.2); // 105% бюджета Plus
 
-  const out = await run(gateway, request({ userId: 'u-ex', userPlan: 'plus', modelId: 'gpt-4o' }));
-  assert.equal(out.error, undefined);
+  const out = await run(gateway, request({ userId: 'u-ex', userPlan: 'plus', modelId: 'gpt-6.1-sol' }));
+  assertNoError(out);
   assert.match(out.done?.routingReason ?? '', /Budget protection/);
-  assert.ok(calls.length === 1);
-  assert.ok(!calls[0].model.includes('gpt-4o'), `ушёл запрос на ${calls[0].model}`);
+  assert.equal(out.done?.selectedModel?.id, 'ketner-mini', 'пользователь видит, какая модель ответила');
+  assert.deepEqual(calls.map((c) => c.model), ['openai/gpt-6-luna']);
+  assert.ok((calls[0].maxTokens ?? 0) <= 2048, 'при исчерпанном бюджете ответ короткий');
 });
 
-test('Plus в режиме Auto: 5% «вспышка» флагмана не падает с ошибкой «нужна подписка Pro»', async () => {
+test('бюджет на исходе (80–100%): сильная модель заменяется рабочей, рабочая остаётся', async () => {
   const usage = newUsage();
   const calls: Call[] = [];
+  const gateway = makeGateway(fakeOpenRouter(okStream('ок'), calls), usage);
+  seedMonthlyCost(usage, 'u-soft', 3.4); // 85% бюджета Plus
+
+  const strong = await run(gateway, request({ userId: 'u-soft', userPlan: 'plus', modelId: 'gpt-6.1-sol' }));
+  assert.equal(strong.done?.selectedModel?.id, 'ketner-pro');
+  assert.match(strong.done?.routingReason ?? '', /Budget protection/);
+
+  const work = await run(gateway, request({ userId: 'u-soft', userPlan: 'plus', modelId: 'ketner-pro' }));
+  assert.equal(work.done?.selectedModel?.id, 'ketner-pro');
+  assert.ok(calls.every((c) => (c.maxTokens ?? 0) <= 4096), 'в экономном режиме ответ не длиннее 4096 токенов');
+});
+
+test('квота премиум-запросов: пока есть остаток, отвечает выбранная модель, потом — рабочая', async () => {
+  const usage = newUsage();
+  const calls: Call[] = [];
+  const gateway = makeGateway(fakeOpenRouter(okStream('ок', { cost: 0.05 }), calls), usage);
+
+  // Plus: квота премиум-запросов $0.60 за 30 дней
+  const first = await run(gateway, request({ userId: 'u-prem', userPlan: 'plus', modelId: 'gpt-6.1-sol' }));
+  assertNoError(first);
+  assert.equal(first.done?.selectedModel?.id, 'gpt-6.1-sol');
+  assert.equal(calls[0].model, 'openai/gpt-6.1-sol');
+
+  seedMonthlyCost(usage, 'u-prem', 0.7, 'gpt-6-astra'); // старый id в истории расхода тоже считается
+  const second = await run(gateway, request({ userId: 'u-prem', userPlan: 'plus', modelId: 'gpt-6.1-sol' }));
+  assertNoError(second);
+  assert.equal(second.done?.selectedModel?.id, 'ketner-pro');
+  assert.match(second.done?.routingReason ?? '', /Premium quota used up/);
+  assert.equal(calls[1].model, 'xiaomi/mimo-v2.6-pro');
+
+  // Расход на рабочую модель квоту премиум-запросов не уменьшает и не блокирует работу
+  const third = await run(gateway, request({ userId: 'u-prem', userPlan: 'plus', modelId: 'ketner-pro' }));
+  assert.equal(third.done?.selectedModel?.id, 'ketner-pro');
+});
+
+test('права доступа проверяются по запрошенной модели до любой замены', async () => {
+  const usage = newUsage();
+  const calls: Call[] = [];
+  const gateway = makeGateway(fakeOpenRouter(okStream('ок'), calls), usage);
+
+  const free = await run(gateway, request({ userId: 'u-free', userPlan: 'free', modelId: 'gpt-6.1-sol' }));
+  assert.equal(free.error?.code, 'upgrade_required');
+  const plus = await run(gateway, request({ userId: 'u-plus', userPlan: 'plus', modelId: 'claude-opus-5.5' }));
+  assert.equal(plus.error?.code, 'upgrade_required');
+  assert.match(plus.error?.message ?? '', /Pro/);
+  assert.equal(calls.length, 0, 'запрещённая модель не вызывается и не подменяется молча');
+
+  const legacy = await run(gateway, request({ userId: 'u-legacy', userPlan: 'gpt-pro', modelId: 'claude-opus-5.5' }));
+  assertNoError(legacy);
+});
+
+test('Auto: Free — всегда Luna, Plus — рабочая модель, премиум-модели Plus Auto не выбирает', async () => {
+  const usage = newUsage();
+  const calls: Call[] = [];
+  const gateway = makeGateway(fakeOpenRouter(okStream('ок'), calls), usage);
+
+  const hard = `Реши уравнение и докажи теорему: интеграл от x^2 dx, пошагово (${Math.random()})`;
+  const free = await run(gateway, request({ userId: 'u-a-free', userPlan: 'free', messages: [{ role: 'user', content: hard }] }));
+  assert.equal(free.done?.selectedModel?.id, 'ketner-mini');
+  const plus = await run(gateway, request({ userId: 'u-a-plus', userPlan: 'plus', messages: [{ role: 'user', content: hard }] }));
+  assert.equal(plus.done?.selectedModel?.id, 'ketner-pro');
+  const pro = await run(gateway, request({ userId: 'u-a-pro', userPlan: 'pro', messages: [{ role: 'user', content: hard }] }));
+  assert.equal(pro.done?.selectedModel?.id, 'gpt-6.1-sol', 'Pro: тяжёлая математика уходит на сильную модель');
+  assert.deepEqual(calls.at(-1)?.reasoning, { effort: 'high' }, 'математика на сильной модели у Pro — максимальная глубина');
+});
+
+test('глубина размышлений и потолок ответа передаются провайдеру под конкретную модель', async () => {
+  const usage = newUsage();
+  const calls: Call[] = [];
+  const gateway = makeGateway(fakeOpenRouter(okStream('ок'), calls), usage);
+
+  // Приветствие на Luna: размышления отключены, ответ короткий
+  await run(gateway, request({ userId: 'u-r1', userPlan: 'free', modelId: 'ketner-mini', messages: [{ role: 'user', content: 'Привет' }] }));
+  assert.deepEqual(calls[0].reasoning, { effort: 'none' });
+  assert.ok((calls[0].maxTokens ?? 0) <= 2048);
+
+  // Обычный вопрос на MiMo: модель умеет только включать и выключать размышления
+  await run(gateway, request({ userId: 'u-r2', userPlan: 'plus', modelId: 'ketner-pro' }));
+  assert.deepEqual(calls[1].reasoning, { enabled: true });
+
+  // Sol: размышления отключить нельзя — минимум low; Opus у Pro — medium
+  await run(gateway, request({ userId: 'u-r3', userPlan: 'plus', modelId: 'gpt-6.1-sol', messages: [{ role: 'user', content: 'Привет' }] }));
+  assert.deepEqual(calls[2].reasoning, { effort: 'low' });
+  await run(gateway, request({ userId: 'u-r4', userPlan: 'pro', modelId: 'claude-opus-5.5' }));
+  assert.deepEqual(calls[3].reasoning, { effort: 'medium' });
+  assert.ok((calls[3].maxTokens ?? 0) > 4096 && (calls[3].maxTokens ?? 0) <= 12288, `maxTokens=${calls[3].maxTokens}`);
+});
+
+test('сбой модели: берётся запасная из реестра, расход пишется на ту, что ответила', async () => {
+  const usage = newUsage();
+  const calls: Call[] = [];
+  const failSol = async (o: ProviderRequestOptions, cb: ProviderStreamCallbacks): Promise<ProviderResponse> => {
+    if (o.model === 'openai/gpt-6.1-sol') throw new OpenRouterError(o.model, 503, 'overloaded');
+    return okStream('ответ запасной', { cost: 0.004 })(o, cb);
+  };
+  const gateway = makeGateway(fakeOpenRouter(failSol, calls), usage);
+
+  const out = await run(gateway, request({ userId: 'u-fb', userPlan: 'pro', modelId: 'gpt-6.1-sol' }));
+  assertNoError(out);
+  assert.deepEqual(calls.map((c) => c.model), ['openai/gpt-6.1-sol', 'xiaomi/mimo-v2.6-pro']);
+  assert.equal(out.done?.selectedModel?.id, 'ketner-pro');
+  assert.match(out.done?.routingReason ?? '', /fallback to Ketner Pro/);
+  assert.equal(usage.getByUser('u-fb')[0].modelId, 'ketner-pro');
+  assert.equal(usage.getCostLastMonthByModels('u-fb', ['gpt-6.1-sol']), 0, 'сильная модель квоту не тратит');
+});
+
+test('бюджет и квота ограничивают и запасные модели: премиум-модель в запасные не попадает', async () => {
+  const usage = newUsage();
+  const calls: Call[] = [];
+  const failing = async (o: ProviderRequestOptions): Promise<ProviderResponse> => {
+    throw new OpenRouterError(o.model, 500, 'boom');
+  };
+  const gateway = makeGateway(fakeOpenRouter(failing, calls), usage);
+  seedMonthlyCost(usage, 'u-fbq', 4.1); // бюджет Plus исчерпан: только лёгкие модели
+
+  const out = await run(gateway, request({ userId: 'u-fbq', userPlan: 'plus', modelId: 'ketner-pro' }));
+  assert.equal(out.error?.code, 'provider_error');
+  assert.deepEqual(
+    calls.map((c) => c.model),
+    ['openai/gpt-6-luna', 'anthropic/claude-haiku-5.5', 'deepseek/deepseek-v4.1-flash'],
+    'цепочка при исчерпанном бюджете состоит только из лёгких моделей',
+  );
+  assert.equal(usage.getByUser('u-fbq')[0].status, 'error');
+});
+
+test('HTTP 402 от OpenRouter (кончились кредиты): цепочка не перебирается, пользователь получает честную ошибку', async () => {
+  const usage = newUsage();
+  const calls: Call[] = [];
+  const noCredits = async (o: ProviderRequestOptions): Promise<ProviderResponse> => {
+    throw new OpenRouterError(o.model, 402, 'insufficient credits');
+  };
+  const breaker = new CircuitBreaker({ failureThreshold: 1, cooldownMs: 30_000 });
   const providers = new ProviderManager();
-  providers.setProvider('openrouter', fakeOpenRouter(okStream('вспышка'), calls));
+  providers.setProvider('openrouter', fakeOpenRouter(noCredits, calls));
   const gateway = new AIGateway({
     registry: new ModelRegistry(),
     providers,
     usageStore: usage,
-    aiConfig: { ...aiConfig, random: () => 0.02 }, // < 0.05 → вспышка
-    circuitBreaker: new CircuitBreaker(),
+    aiConfig,
+    circuitBreaker: breaker,
     useMockEngine: false,
   });
 
-  const out = await run(gateway, request({ userId: 'u-burst', userPlan: 'plus', modelId: 'auto' }));
-  assert.equal(out.error, undefined, out.error?.message);
-  assert.ok(out.text.length > 0);
+  const out = await run(gateway, request({ userId: 'u-402', userPlan: 'pro', modelId: 'gpt-6.1-sol' }));
+  assert.equal(out.error?.code, 'provider_error');
+  assert.equal(calls.length, 1, 'остальные модели того же ключа упадут так же');
+  assert.equal(breaker.isOpen('openrouter:openai/gpt-6.1-sol'), false, 'модель не виновата — предохранитель не трогаем');
+});
+
+test('HTTP 400 при заданных размышлениях: один повтор без параметра, модель та же', async () => {
+  const usage = newUsage();
+  const calls: Call[] = [];
+  const picky = async (o: ProviderRequestOptions, cb: ProviderStreamCallbacks): Promise<ProviderResponse> => {
+    if (o.reasoning) throw new OpenRouterError(o.model, 400, 'unsupported reasoning');
+    return okStream('ответ без размышлений')(o, cb);
+  };
+  const gateway = makeGateway(fakeOpenRouter(picky, calls), usage);
+
+  const out = await run(gateway, request({ userId: 'u-400', userPlan: 'pro', modelId: 'grok-4.7' }));
+  assertNoError(out);
+  assert.equal(calls.length, 2);
+  assert.ok(calls[0].reasoning);
+  assert.equal(calls[1].reasoning, undefined);
+  assert.equal(calls[1].model, 'x-ai/grok-4.7');
+  assert.equal(out.done?.selectedModel?.id, 'grok-4.7');
+});
+
+test('отказы лимитов и сбои провайдера не расходуют сообщения пользователя', async () => {
+  const usage = newUsage();
+  const gateway = makeGateway(fakeOpenRouter(okStream('ок'), []), usage);
+
+  // Free: 10 сообщений в сутки. Расход «два часа назад»: в сутки входит, в час и минуту — нет.
+  for (let i = 0; i < 10; i++) {
+    const record = usage.recordUsage({
+      userId: 'u-lim',
+      conversationId: 'seed',
+      modelId: 'ketner-mini',
+      provider: 'openrouter',
+      inputTokens: 10,
+      outputTokens: 10,
+      estimatedCost: 0.0001,
+      latencyMs: 1,
+      status: 'success',
+    });
+    record.createdAt = new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString();
+  }
+  for (let i = 0; i < 3; i++) {
+    const denied = await run(gateway, request({ userId: 'u-lim', userPlan: 'free', modelId: 'ketner-mini' }));
+    assert.equal(denied.error?.code, 'rate_limited');
+    // Отказ не продлевает блокировку: счётчик по-прежнему 10, а не растёт с каждой попыткой
+    assert.equal(usage.getFairUseSnapshot('u-lim').requestsLastDay, 10);
+  }
+
+  // Сбой провайдера: пользователь не получил ответа — сообщение не списывается
+  const failing = async (o: ProviderRequestOptions): Promise<ProviderResponse> => {
+    throw new OpenRouterError(o.model, 500, 'boom');
+  };
+  const broken = makeGateway(fakeOpenRouter(failing, []), usage);
+  const out = await run(broken, request({ userId: 'u-err', userPlan: 'plus', modelId: 'ketner-mini' }));
+  assert.equal(out.error?.code, 'provider_error');
+  assert.equal(usage.getFairUseSnapshot('u-err').requestsLastDay, 0);
 });
 
 test('ответ оборвался по таймауту посреди потока: пользователь получает показанный текст, вторая модель не вызывается', async () => {
@@ -205,31 +405,27 @@ test('ответ оборвался по таймауту посреди пот�
   assert.equal(out.done?.canContinue, true);
 });
 
-test('двухпроходный режим: стоимость черновика не удваивается, токены обоих проходов идут в квоту', async () => {
+test('один проход: запрос уходит в одну модель, токены и цена берутся из ответа', async () => {
   const usage = newUsage();
   const calls: Call[] = [];
   const gateway = makeGateway(
     fakeOpenRouter(okStream('итоговый ответ', { cost: 0.01, usage: { inputTokens: 500, outputTokens: 100 } }), calls),
     usage,
   );
-  // Pro + random 0.25 → gpt_improve (черновик + улучшение флагманом), вопрос — не код.
-  const providers = new ProviderManager();
-  providers.setProvider('openrouter', fakeOpenRouter(okStream('итоговый ответ', { cost: 0.01, usage: { inputTokens: 500, outputTokens: 100 } }), calls));
-  const g2 = new AIGateway({
-    registry: new ModelRegistry(),
-    providers,
-    usageStore: usage,
-    aiConfig: { ...aiConfig, random: () => 0.25 },
-    circuitBreaker: new CircuitBreaker(),
-    useMockEngine: false,
-  });
-  void gateway;
-  const out = await run(g2, request({ userId: 'u-two', userPlan: 'pro', modelId: 'auto', messages: [{ role: 'user', content: `Дай короткую справку об инфляции для школьника, без формул (${Math.random()})` }] }));
-  assert.equal(out.error, undefined, out.error?.message);
-  const snap = usage.getFairUseSnapshot('u-two');
-  // улучшающий проход: провайдер сообщил $0.01; черновик (10/10 токенов на дешёвой модели) — копейки
-  assert.ok(snap.estimatedCostLastDay >= 0.01 && snap.estimatedCostLastDay < 0.0101, `cost=${snap.estimatedCostLastDay}`);
-  assert.equal(snap.tokensLastDay, 500 + 100 + 10 + 10);
+  const out = await run(
+    gateway,
+    request({
+      userId: 'u-one',
+      userPlan: 'pro',
+      modelId: 'auto',
+      messages: [{ role: 'user', content: `Дай короткую справку об инфляции для школьника, без формул (${Math.random()})` }],
+    }),
+  );
+  assertNoError(out);
+  assert.equal(calls.length, 1, 'никаких черновиков и повторных проходов');
+  const snap = usage.getFairUseSnapshot('u-one');
+  assert.equal(snap.estimatedCostLastDay, 0.01);
+  assert.equal(snap.tokensLastDay, 600);
 });
 
 test('семантический кэш не смешивает ответы разных проектов (ключ не зависит от проекта — запрос с проектом не кэшируется)', () => {

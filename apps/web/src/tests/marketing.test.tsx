@@ -16,9 +16,14 @@ describe('marketing: лендинг, шапка, футер и тарифные 
     expect(h1Headings[0]).toHaveAccessibleName('Ketner AI');
 
     // Проверяем наличие карточек моделей и секций
-    expect(screen.getAllByText(/GPT-6/i).length).toBeGreaterThan(0);
-    expect(screen.getAllByText(/Claude (Opus|Fable)/i).length).toBeGreaterThan(0);
-    expect(screen.getAllByText(/DeepSeek/i).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/GPT-6\.1 Sol/).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/Claude Opus 5\.5/).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/Gemini 3\.8 Flash/).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/DeepSeek V4\.1 Flash/).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/Ketner Pro/).length).toBeGreaterThan(0);
+
+    // Моделей, которых нет в каталоге, на лендинге быть не должно
+    expect(screen.queryByText(/Astra|Fable|Qwen|GPT-4o|Ketner Next/)).toBeNull();
 
     // 4 тарифа
     expect(screen.getByRole('heading', { level: 2, name: 'Free' })).toBeInTheDocument();

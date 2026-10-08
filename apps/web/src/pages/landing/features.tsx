@@ -70,8 +70,8 @@ function AutoVisual() {
       <div className="relative mx-2 mt-3 h-1.5 rounded-full bg-brand-gradient opacity-80">
         {[
           { id: 'ketner-mini', left: '4%' },
-          { id: 'gpt-6-astra', left: '50%' },
-          { id: 'claude-fable', left: '96%' },
+          { id: 'ketner-pro', left: '50%' },
+          { id: 'gpt-6.1-sol', left: '96%' },
         ].map((mark) => (
           <span
             key={mark.id}
@@ -91,7 +91,7 @@ function AutoVisual() {
 }
 
 function ModelsVisual() {
-  const ids = ['gpt-6-astra', 'claude-fable', 'gemini-2.5-pro', 'grok-4.7', 'deepseek-v4.1-flash', 'ketner-mini'];
+  const ids = ['gpt-6.1-sol', 'claude-opus-5.5', 'gemini-3.8-flash', 'grok-4.7', 'deepseek-v4.1-flash', 'ketner-mini'];
 
   return (
     <div className="flex -space-x-2.5">

@@ -300,22 +300,12 @@ export const config = {
   cryptoCloudShopId: optionalEnv('CRYPTOCLOUD_SHOP_ID'),
   cryptoCloudSecretKey: optionalEnv('CRYPTOCLOUD_SECRET_KEY'),
 
-  /** AI Providers: OpenRouter */
+  /**
+   * ИИ: единый ключ OpenRouter для всех моделей (GPT, Claude, Grok, Gemini, DeepSeek, MiMo).
+   * Прямые ключи OpenAI / Anthropic / Google не используются.
+   */
   openRouterApiKey: optionalEnv('OPENROUTER_API_KEY'),
   openRouterBaseUrl: process.env.OPENROUTER_BASE_URL || 'https://openrouter.ai/api/v1',
-  openRouterModel: process.env.OPENROUTER_MODEL || 'openai/gpt-4o-mini',
-
-  /** AI Providers: OpenAI */
-  openaiApiKey: process.env.OPENAI_API_KEY || '',
-  openaiBaseUrl: process.env.OPENAI_BASE_URL || 'https://api.openai.com/v1',
-
-  /** AI Providers: Anthropic */
-  anthropicApiKey: process.env.ANTHROPIC_API_KEY || '',
-  anthropicBaseUrl: process.env.ANTHROPIC_BASE_URL || 'https://api.anthropic.com/v1',
-
-  /** AI Providers: Google Gemini */
-  googleApiKey: process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY || '',
-  googleBaseUrl: process.env.GOOGLE_BASE_URL || 'https://generativelanguage.googleapis.com/v1beta',
 
   /**
    * Секрет для проверки подписи webhook-запросов.

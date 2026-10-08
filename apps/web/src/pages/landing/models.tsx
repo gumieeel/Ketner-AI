@@ -18,22 +18,22 @@ interface LandingModel {
 
 const MODELS: readonly LandingModel[] = [
   {
-    modelId: 'gpt-6-astra',
-    name: 'GPT-6 Astra',
+    modelId: 'gpt-6.1-sol',
+    name: 'GPT-6.1 Sol',
     provider: 'OpenAI',
     tagsKey: 'landing.model.gpt.tags',
     descKey: 'landing.model.gpt.desc',
   },
   {
-    modelId: 'claude-fable',
-    name: 'Claude Fable 5.1',
+    modelId: 'claude-opus-5.5',
+    name: 'Claude Opus 5.5',
     provider: 'Anthropic',
     tagsKey: 'landing.model.claude.tags',
     descKey: 'landing.model.claude.desc',
   },
   {
-    modelId: 'gemini-2.5-pro',
-    name: 'Gemini Flash 3.8',
+    modelId: 'gemini-3.8-flash',
+    name: 'Gemini 3.8 Flash',
     provider: 'Google',
     tagsKey: 'landing.model.gemini.tags',
     descKey: 'landing.model.gemini.desc',
@@ -47,17 +47,17 @@ const MODELS: readonly LandingModel[] = [
   },
   {
     modelId: 'deepseek-v4.1-flash',
-    name: 'DeepSeek v4.1 Flash',
+    name: 'DeepSeek V4.1 Flash',
     provider: 'DeepSeek',
     tagsKey: 'landing.model.deepseek.tags',
     descKey: 'landing.model.deepseek.desc',
   },
   {
-    modelId: 'qwen-3.8-max',
-    name: 'Qwen 3.8 Max',
-    provider: 'Alibaba',
-    tagsKey: 'landing.model.qwen.tags',
-    descKey: 'landing.model.qwen.desc',
+    modelId: 'ketner-pro',
+    name: 'Ketner Pro',
+    provider: 'Ketner',
+    tagsKey: 'landing.model.pro.tags',
+    descKey: 'landing.model.pro.desc',
   },
 ];
 

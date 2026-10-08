@@ -14,6 +14,8 @@ export interface FakeApiOptions {
   enforcePlans?: boolean;
   /** Начальный тариф пользователя. */
   plan?: string;
+  /** Модель, которая «реально ответила» (приходит в событии done, как у сервера). */
+  servedModelId?: string;
 }
 
 export interface FakeApi {
@@ -25,44 +27,72 @@ export interface FakeApi {
   seed: (input: { title: string; messages?: Message[]; updatedAt?: string }) => Conversation;
 }
 
+/** Зеркало публичного каталога сервера (apps/mock-api/src/ai/models.ts): id, названия, requiredPlan. */
 const META: ChatMeta = {
   models: [
     {
-      id: 'ketner-mini',
-      name: 'Qwen 2.5 Coder',
-      contextMessages: 20,
+      id: 'auto',
+      name: '✨ Auto (Smart Router)',
+      contextMessages: 120,
       isPro: false,
     },
     {
-      id: 'gpt-6-astra',
-      name: 'GPT-6 Astra',
-      contextMessages: 120,
-      isPro: true,
-      requiredPlan: 'gpt-pro',
-    },
-    {
-      id: 'claude-fable',
-      name: 'Claude Fable 5.1',
-      contextMessages: 120,
-      isPro: true,
-      requiredPlan: 'claude-pro',
-    },
-    {
-      id: 'gemini-pro',
-      name: 'Gemini Flash 3.8',
-      contextMessages: 120,
-      isPro: true,
-      requiredPlan: 'gemini-pro',
+      id: 'ketner-mini',
+      name: 'Ketner Mini',
+      contextMessages: 40,
+      isPro: false,
     },
     {
       id: 'ketner-pro',
-      name: 'Qwen 3.8 Max',
+      name: 'Ketner Pro',
       contextMessages: 60,
       isPro: true,
-      requiredPlan: 'ultra',
+      requiredPlan: 'plus',
+    },
+    {
+      id: 'claude-haiku-5.5',
+      name: 'Claude Haiku 5.5',
+      contextMessages: 40,
+      isPro: true,
+      requiredPlan: 'plus',
+    },
+    {
+      id: 'deepseek-v4.1-flash',
+      name: 'DeepSeek V4.1 Flash',
+      contextMessages: 40,
+      isPro: true,
+      requiredPlan: 'plus',
+    },
+    {
+      id: 'gemini-3.8-flash',
+      name: 'Gemini 3.8 Flash',
+      contextMessages: 120,
+      isPro: true,
+      requiredPlan: 'pro',
+    },
+    {
+      id: 'grok-4.7',
+      name: 'Grok 4.7',
+      contextMessages: 120,
+      isPro: true,
+      requiredPlan: 'pro',
+    },
+    {
+      id: 'gpt-6.1-sol',
+      name: 'GPT-6.1 Sol',
+      contextMessages: 120,
+      isPro: true,
+      requiredPlan: 'plus',
+    },
+    {
+      id: 'claude-opus-5.5',
+      name: 'Claude Opus 5.5',
+      contextMessages: 120,
+      isPro: true,
+      requiredPlan: 'pro',
     },
   ],
-  defaultModelId: 'ketner-mini',
+  defaultModelId: 'auto',
   limits: {
     free: { messagesPerDay: 10, contextMessages: 20 },
     'gpt-pro': { messagesPerDay: null, contextMessages: 120 },
@@ -73,6 +103,23 @@ const META: ChatMeta = {
     pro: { messagesPerDay: null, contextMessages: 120 },
   },
 };
+
+/** Зеркало PLAN_RANKS сервера (apps/mock-api/src/services/entitlement.ts): модель доступна, если ранг тарифа не ниже требуемого. */
+const PLAN_RANKS: Record<string, number> = {
+  free: 0,
+  plus: 1,
+  pro: 2,
+  'gpt-pro': 2,
+  'claude-pro': 2,
+  'gemini-pro': 2,
+  ultra: 3,
+};
+
+const PLAN_LABELS: Record<string, string> = { free: 'Free', plus: 'Plus', pro: 'Pro', ultra: 'Ultra' };
+
+function planRank(plan: string | undefined): number {
+  return plan ? (PLAN_RANKS[plan] ?? 0) : 0;
+}
 
 const DEFAULT_REPLY = 'Ответ модели Ketner AI.';
 
@@ -88,7 +135,12 @@ function notFound(): Response {
 }
 
 /** Готовит поток SSE: несколько порций текста и финальное событие. */
-function sseChunks(reply: string, fail: boolean, messageId = 'assistant-1'): string[] {
+function sseChunks(
+  reply: string,
+  fail: boolean,
+  messageId = 'assistant-1',
+  servedModelId?: string,
+): string[] {
   if (fail) {
     return [
       `event: error\ndata: ${JSON.stringify({
@@ -111,6 +163,7 @@ function sseChunks(reply: string, fail: boolean, messageId = 'assistant-1'): str
   chunks.push(
     `event: done\ndata: ${JSON.stringify({
       messageId,
+      ...(servedModelId ? { selectedModel: { id: servedModelId, name: servedModelId } } : {}),
       usage: { inputTokens: 12, outputTokens: 24 },
     })}\n\n`,
   );
@@ -590,19 +643,15 @@ export function installFakeApi(options: FakeApiOptions = {}): FakeApi {
 
         const modelId = String(body.modelId ?? 'ketner-mini');
         const targetModel = META.models.find((m) => m.id === modelId) ?? META.models[0];
+        const requiredPlan = targetModel.isPro ? (targetModel.requiredPlan ?? 'plus') : undefined;
         const isUpgradeFail =
-          Boolean(options.enforcePlans) &&
-          Boolean(targetModel.isPro) &&
-          (currentPlan === 'free' ||
-            (targetModel.requiredPlan &&
-              currentPlan !== targetModel.requiredPlan &&
-              currentPlan !== 'ultra'));
+          Boolean(options.enforcePlans) && planRank(currentPlan) < planRank(requiredPlan);
 
         if (isUpgradeFail) {
           const upgradeChunks = [
             `event: error\ndata: ${JSON.stringify({
               code: 'upgrade_required',
-              message: `Для доступа к ${targetModel.name} требуется тариф ${targetModel.requiredPlan ?? 'PRO'} или Ultra. Пожалуйста, улучшите ваш тарифный план (Upgrade your plan).`,
+              message: `Доступ к модели ${targetModel.name} требует подписки ${PLAN_LABELS[requiredPlan ?? 'plus'] ?? requiredPlan} или выше. Пожалуйста, улучшите ваш тарифный план (Upgrade your plan).`,
             })}\n\n`,
           ];
           return new Response(streamOf(upgradeChunks, delayMs, init?.signal ?? null), {
@@ -631,7 +680,11 @@ export function installFakeApi(options: FakeApiOptions = {}): FakeApi {
           ];
         }
         return new Response(
-          streamOf(sseChunks(reply, fail, `assistant-${index + 1}`), delayMs, init?.signal ?? null),
+          streamOf(
+            sseChunks(reply, fail, `assistant-${index + 1}`, options.servedModelId),
+            delayMs,
+            init?.signal ?? null,
+          ),
           {
             status: 200,
             headers: { 'Content-Type': 'text/event-stream' },

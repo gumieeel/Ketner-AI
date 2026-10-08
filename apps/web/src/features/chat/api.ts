@@ -92,12 +92,22 @@ export function fetchMeta(): Promise<ChatMeta> {
   return request<ChatMeta>('/meta');
 }
 
+function readSelectedModelId(value: unknown): string | undefined {
+  if (value && typeof value === 'object' && 'id' in value) {
+    const id = (value as { id: unknown }).id;
+    return typeof id === 'string' && id !== '' ? id : undefined;
+  }
+  return undefined;
+}
+
 export interface CompletionHandlers {
   onDelta: (content: string) => void;
   onDone: (payload: {
     messageId: string;
     finishReason?: 'stop' | 'length' | 'cancelled' | 'error';
     canContinue?: boolean;
+    /** Модель, которая реально ответила (при Auto, замене по квоте или сбое она отличается от выбранной). */
+    selectedModelId?: string;
   }) => void;
   onError: (payload: { code: string; message: string }) => void;
 }
@@ -182,6 +192,7 @@ export async function streamCompletion(
             ? reason
             : undefined,
         canContinue: payload.canContinue === true,
+        selectedModelId: readSelectedModelId(payload.selectedModel),
       });
     } else if (event.event === 'error') {
       handlers.onError({

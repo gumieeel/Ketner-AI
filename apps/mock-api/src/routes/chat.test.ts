@@ -157,7 +157,7 @@ test('генерация на платной модели без подписк�
     const conversation = await createConversation(server.baseUrl, 'Платная модель');
     const response = await postCompletion(server.baseUrl, {
       conversationId: conversation.id,
-      modelId: 'gpt-6-astra',
+      modelId: 'gpt-6.1-sol',
       language: 'ru',
       messages: [{ role: 'user', content: 'Привет' }],
     });
@@ -168,7 +168,7 @@ test('генерация на платной модели без подписк�
     assert.ok(errorEvent, 'должно прийти событие error');
     const data = JSON.parse(errorEvent.data) as { code: string; message: string };
     assert.equal(data.code, 'upgrade_required');
-    assert.match(data.message, /Upgrade your plan|подписка|GPT-6 Astra/i);
+    assert.match(data.message, /Upgrade your plan|подписка|GPT-6\.1 Sol/i);
   } finally {
     await server.close();
   }
@@ -242,7 +242,7 @@ test('пользователь с тарифом Pro имеет доступ к�
     });
     const { conversation } = (await createConvRes.json()) as { conversation: { id: string } };
 
-    // Запрос к флагманской модели GPT-6 Astra
+    // Запрос к флагманской модели GPT-6.1 Sol
     const gptResponse = await fetch(`${server.baseUrl}/api/chat/completions`, {
       method: 'POST',
       headers: {
@@ -251,7 +251,7 @@ test('пользователь с тарифом Pro имеет доступ к�
       },
       body: JSON.stringify({
         conversationId: conversation.id,
-        modelId: 'gpt-6-astra',
+        modelId: 'gpt-6.1-sol',
         language: 'ru',
         messages: [{ role: 'user', content: 'Тестируем флагманскую модель GPT-6' }],
       }),
@@ -265,7 +265,7 @@ test('пользователь с тарифом Pro имеет доступ к�
     const doneEvent = events.find((e) => e.event === 'done');
     assert.ok(doneEvent, 'должен успешно завершиться со статусом done');
     const doneData = JSON.parse(doneEvent.data) as { selectedModel: { id: string } };
-    assert.equal(doneData.selectedModel.id, 'gpt-6-astra');
+    assert.equal(doneData.selectedModel.id, 'gpt-6.1-sol');
   } finally {
     await server.close();
   }
@@ -292,7 +292,7 @@ test('POST /api/chat/feedback сохраняет оценку ответа и GE
         conversationId: conversation.id,
         messageId,
         rating: 'like',
-        modelId: 'gpt-6-astra',
+        modelId: 'gpt-6.1-sol',
       }),
     });
     assert.equal(likeRes.status, 200);

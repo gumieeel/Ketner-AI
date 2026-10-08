@@ -15,24 +15,20 @@ import { useAuth } from '@/features/auth/auth-store';
 import { isFreeLimitReached } from '@/features/billing/free-usage';
 import { useUpgradeModal } from '@/features/billing/upgrade-modal-store';
 import { readFileAsAttachment } from '@/features/chat/attachment-utils';
-import { canAccessModel, findModel, getRequiredPlanName } from '@/features/chat/can-access-model';
+import {
+  MODEL_NAME_KEYS,
+  canAccessModel,
+  findModel,
+  getRequiredPlanName,
+} from '@/features/chat/can-access-model';
 import { useChat } from '@/features/chat/chat-store';
 import type { ModelInfo } from '@/features/chat/types';
 import { usePreferences } from '@/features/preferences/preferences-store';
 import { useTranslation } from '@/i18n';
-import type { TranslationKey } from '@/i18n';
 import { cn } from '@/lib/cn';
 import { ComposerAttachments } from './composer-attachments';
 import { LinkWorkspaceModal } from './link-workspace-modal';
 import { WorkspaceBar } from './workspace-bar';
-
-const MODEL_NAME_KEYS: Record<string, TranslationKey> = {
-  'ketner-mini': 'chat.modelMini',
-  'gpt-6-astra': 'chat.modelGptAstra',
-  'claude-fable': 'chat.modelClaudeFable',
-  'gemini-pro': 'chat.modelGeminiPro',
-  'ketner-pro': 'chat.modelPro',
-};
 
 const attachItemClass =
   'flex min-h-11 w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-left text-[13px] font-medium text-text transition-colors hover:bg-surface-2 focus-visible:bg-surface-2 md:min-h-10';

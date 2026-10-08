@@ -4,97 +4,33 @@ import { Badge } from '@/components/ui/badge';
 import { Kbd } from '@/components/ui/kbd';
 import { ModelMark } from '@/components/ui/model-mark';
 import { useAuth } from '@/features/auth/auth-store';
-import { canAccessModel } from '@/features/chat/can-access-model';
+import {
+  DEFAULT_MODELS,
+  MODEL_NAME_KEYS,
+  canAccessModel,
+  planRank,
+  requiredPlanOf,
+} from '@/features/chat/can-access-model';
 import { useChat } from '@/features/chat/chat-store';
 import type { ModelInfo } from '@/features/chat/types';
 import { usePreferences } from '@/features/preferences/preferences-store';
 import { cn } from '@/lib/cn';
 import { modelColor } from '@/lib/model-color';
 import { useTranslation } from '@/i18n';
-import type { TranslationKey } from '@/i18n';
-
-/** Названия моделей живут в словаре; `name` от сервера — запасной вариант. */
-const MODEL_NAME_KEYS: Record<string, TranslationKey> = {
-  auto: 'chat.modelAuto',
-  'ketner-mini': 'chat.modelMini',
-  'ketner-pro': 'chat.modelPro',
-  'gpt-6-astra': 'chat.modelGptAstra',
-  'claude-fable': 'chat.modelClaudeFable',
-  'gemini-pro': 'chat.modelGeminiPro',
-  'gemini-2.5-pro': 'chat.modelGeminiPro',
-  'grok-4.7': 'chat.modelGrok',
-  'deepseek-v4.1-flash': 'chat.modelDeepSeek',
-  'claude-3-haiku': 'chat.modelHaiku',
-  'gpt-4o': 'chat.modelGpt4o',
-};
 
 /** Модели по умолчанию: используются, пока каталог не загрузился. */
-const FALLBACK_MODELS: readonly ModelInfo[] = [
-  {
-    id: 'auto',
-    name: '✨ Auto',
-    contextMessages: 120,
-    isPro: false,
-  },
-  // Plus ($10) — стандартные быстрые модели
-  {
-    id: 'deepseek-v4.1-flash',
-    name: 'DeepSeek v4.1 Flash',
-    contextMessages: 40,
-    isPro: true,
-    requiredPlan: 'plus',
-  },
-  {
-    id: 'claude-3-haiku',
-    name: 'Claude Haiku 4.5',
-    contextMessages: 40,
-    isPro: true,
-    requiredPlan: 'plus',
-  },
-  {
-    id: 'gpt-4o',
-    name: 'GPT-4o',
-    contextMessages: 60,
-    isPro: true,
-    requiredPlan: 'plus',
-  },
-  // Pro ($20) — топовые флагманские модели
-  {
-    id: 'gpt-6-astra',
-    name: 'GPT-6 Astra',
-    contextMessages: 120,
-    isPro: true,
-    requiredPlan: 'pro',
-  },
-  {
-    id: 'claude-fable',
-    name: 'Claude Fable 5.1',
-    contextMessages: 120,
-    isPro: true,
-    requiredPlan: 'pro',
-  },
-  {
-    id: 'gemini-2.5-pro',
-    name: 'Gemini Flash 3.8',
-    contextMessages: 120,
-    isPro: true,
-    requiredPlan: 'pro',
-  },
-  {
-    id: 'grok-4.7',
-    name: 'Grok 4.7',
-    contextMessages: 120,
-    isPro: true,
-    requiredPlan: 'pro',
-  },
-  {
-    id: 'ketner-pro',
-    name: 'Qwen 3.8 Max',
-    contextMessages: 120,
-    isPro: true,
-    requiredPlan: 'pro',
-  },
-];
+const FALLBACK_MODELS: readonly ModelInfo[] = DEFAULT_MODELS;
+
+type ModelTier = 'free' | 'plus' | 'pro';
+
+/** Группа списка определяется тарифом, с которого доступна модель (`requiredPlan` каталога). */
+function tierOf(model: ModelInfo): ModelTier {
+  const rank = planRank(requiredPlanOf(model));
+  if (rank <= 0) {
+    return 'free';
+  }
+  return rank === 1 ? 'plus' : 'pro';
+}
 
 /** Переключатель моделей: логика ответа одна, меняется подпись и лимит контекста. */
 export function ModelPicker({ disabled = false }: { disabled?: boolean }) {
@@ -118,15 +54,9 @@ export function ModelPicker({ disabled = false }: { disabled?: boolean }) {
     return key ? t(key) : model.name;
   };
 
-  const isPlusModel = (m: ModelInfo) =>
-    m.requiredPlan === 'plus' ||
-    ['gpt-4o', 'gpt-4o-mini', 'deepseek-v4.1-flash', 'gemini-2.5-flash', 'claude-3-haiku', 'glm-5.3-flash', 'nemotron-ultra'].includes(m.id);
-
-  const isFreeModel = (m: ModelInfo) =>
-    m.id === 'auto' ||
-    (!m.isPro && !isPlusModel(m) && (!m.requiredPlan || m.requiredPlan === 'free'));
-
-  const isProModel = (m: ModelInfo) => !isFreeModel(m) && !isPlusModel(m);
+  const isFreeModel = (m: ModelInfo) => tierOf(m) === 'free';
+  const isPlusModel = (m: ModelInfo) => tierOf(m) === 'plus';
+  const isProModel = (m: ModelInfo) => tierOf(m) === 'pro';
 
   const autoModel = models.find((m) => m.id === 'auto');
   const freeModels = models.filter((m) => m.id !== 'auto' && isFreeModel(m));
