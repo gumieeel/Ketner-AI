@@ -1,11 +1,13 @@
 import { useState } from 'react';
-import { CloseIcon, FolderIcon, GitHubIcon, PlusIcon } from '@/components/icons';
+import { BoltIcon, CloseIcon, FolderIcon, GitHubIcon, PlusIcon } from '@/components/icons';
 import { LinkWorkspaceModal } from './link-workspace-modal';
 import { WorkspaceModal } from './workspace-modal';
 import { useWorkspace } from '@/features/chat/workspace-store';
+import { useTranslation } from '@/i18n';
 import { cn } from '@/lib/cn';
 
 export function WorkspaceBar() {
+  const { t } = useTranslation();
   const activeWorkspace = useWorkspace((state) => state.activeWorkspace);
   const unlinkWorkspace = useWorkspace((state) => state.unlinkWorkspace);
   const autoApply = useWorkspace((state) => state.autoApply);
@@ -16,15 +18,15 @@ export function WorkspaceBar() {
 
   return (
     <>
-      <div className="flex items-center gap-2 px-1 py-1">
+      <div className="flex flex-wrap items-center gap-2 px-0.5">
         {activeWorkspace ? (
           <>
-            <div className="flex items-center gap-1.5 rounded-lg border border-stroke bg-surface-2/80 px-2.5 py-1 text-xs text-text shadow-sm backdrop-blur transition hover:border-stroke-strong">
+            <div className="flex min-h-9 items-center rounded-xl border border-stroke bg-surface-2/70 pl-1 text-xs text-text shadow-sm transition-colors hover:border-stroke-strong max-md:min-h-11">
               <button
                 type="button"
                 onClick={() => setIsViewModalOpen(true)}
-                className="flex items-center gap-1.5 text-left font-medium text-text hover:text-accent transition"
-                title="Открыть файлы проекта"
+                className="flex min-h-9 items-center gap-1.5 rounded-lg px-1.5 text-left font-medium text-text transition-colors hover:text-accent max-md:min-h-11"
+                title={t('workspace.openFiles')}
               >
                 <span className="flex size-4 items-center justify-center text-accent">
                   {activeWorkspace.type === 'git_repo' ? (
@@ -33,58 +35,54 @@ export function WorkspaceBar() {
                     <FolderIcon className="size-3.5" />
                   )}
                 </span>
-                <span className="truncate max-w-[160px] sm:max-w-[240px] font-mono text-[11px]">
+                <span className="max-w-[130px] truncate font-mono text-[11px] sm:max-w-[240px]">
                   {activeWorkspace.name}
                 </span>
-                <span className="rounded-full bg-accent-soft px-1.5 py-0.2 text-[10px] font-medium text-accent">
-                  {activeWorkspace.filesCount} файлов
+                <span className="rounded-full bg-accent-soft px-2 py-0.5 text-[11px] font-medium text-accent">
+                  {t('workspace.filesCount', { count: activeWorkspace.filesCount })}
                 </span>
               </button>
 
               <button
                 type="button"
                 onClick={unlinkWorkspace}
-                className="ml-1 inline-flex size-4 items-center justify-center rounded-full text-muted transition hover:bg-surface hover:text-text"
-                aria-label="Отвязать проект"
-                title="Отвязать проект"
+                className="mx-0.5 inline-flex size-8 shrink-0 items-center justify-center rounded-lg text-muted transition-colors hover:bg-surface-3 hover:text-text max-md:size-10"
+                aria-label={t('workspace.unlink')}
+                title={t('workspace.unlink')}
               >
-                <CloseIcon className="size-2.5" />
+                <CloseIcon className="size-3" />
               </button>
             </div>
 
             <button
               type="button"
               onClick={() => setAutoApply(!autoApply)}
+              aria-pressed={autoApply}
               className={cn(
-                'flex items-center gap-1.5 rounded-lg border px-2.5 py-1 text-[11px] font-mono transition shadow-sm',
+                'inline-flex min-h-9 items-center gap-1.5 rounded-xl border px-3 text-[11px] font-medium shadow-sm transition-colors max-md:min-h-11',
                 autoApply
-                  ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-400 font-semibold'
+                  ? 'border-success/40 bg-success-soft font-semibold text-success'
                   : 'border-stroke bg-surface-2/70 text-muted hover:border-stroke-strong hover:text-text',
               )}
-              title={
-                autoApply
-                  ? 'Авто-запись включена: правки кода сразу сохраняются на диск'
-                  : 'Нажмите, чтобы включить автоматическое сохранение правок кода без подтверждения'
-              }
+              title={autoApply ? t('workspace.autoOnHint') : t('workspace.autoOffHint')}
             >
-              <span
-                className={cn(
-                  'size-1.5 rounded-full',
-                  autoApply ? 'bg-emerald-400 animate-pulse' : 'bg-muted',
-                )}
-              />
-              <span>{autoApply ? '⚡ Авто-запись: ВКЛ' : 'Авто-запись: ВЫКЛ'}</span>
+              {autoApply ? (
+                <BoltIcon className="size-3.5" />
+              ) : (
+                <span aria-hidden="true" className="size-1.5 rounded-full bg-subtle" />
+              )}
+              <span>{autoApply ? t('workspace.autoOn') : t('workspace.autoOff')}</span>
             </button>
           </>
         ) : (
           <button
             type="button"
             onClick={() => setIsLinkModalOpen(true)}
-            className="flex items-center gap-1.5 rounded-lg border border-dashed border-stroke bg-transparent px-2.5 py-1 text-xs text-muted transition hover:border-accent hover:text-text hover:bg-surface/50"
-            title="Привязать локальную папку или Git-репозиторий"
+            className="inline-flex min-h-9 items-center gap-1.5 rounded-xl border border-dashed border-stroke-strong bg-transparent px-3 text-xs text-muted transition-colors hover:border-accent hover:bg-surface-2/60 hover:text-text max-md:min-h-11"
+            title={t('workspace.linkHint')}
           >
             <PlusIcon className="size-3 text-accent" />
-            <span>Привязать папку / репо</span>
+            <span>{t('workspace.link')}</span>
           </button>
         )}
       </div>

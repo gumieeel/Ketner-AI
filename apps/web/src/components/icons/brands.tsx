@@ -52,7 +52,7 @@ export function GrokIcon({ className = 'size-4' }: BrandIconProps) {
 
 export function KetnerIcon({ className = 'size-4' }: BrandIconProps) {
   return (
-    <img src="/logo-mark.png" alt="Ketner" className={className} />
+    <img src="/logo-mark-160.png" alt="Ketner" className={className} />
   );
 }
 

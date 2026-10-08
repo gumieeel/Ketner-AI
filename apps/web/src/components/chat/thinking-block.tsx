@@ -114,31 +114,31 @@ export function ThinkingBlock({
   return (
     <div
       className={cn(
-        'my-2.5 overflow-hidden rounded-lg border transition-all duration-200',
+        'my-2.5 overflow-hidden rounded-xl border transition-[border-color,background-color,box-shadow] duration-300',
         isActive
-          ? 'border-accent/30 bg-surface-2/60 shadow-[0_0_15px_-4px_rgba(255,255,255,0.08)]'
-          : 'border-stroke/30 bg-surface-2/30 hover:border-stroke/50',
+          ? 'border-accent/35 bg-surface-2/70 shadow-[0_0_28px_-10px_var(--accent)]'
+          : 'border-stroke bg-surface-2/40 hover:border-stroke-strong',
       )}
     >
       <button
         type="button"
         onClick={toggleExpand}
-        className="flex w-full items-center justify-between px-3.5 py-2 text-left font-mono text-xs select-none transition-colors hover:bg-white/[0.03]"
+        className="flex min-h-10 w-full items-center justify-between px-3.5 py-2 text-left text-[13px] select-none transition-colors hover:bg-surface-2 max-md:min-h-11"
         aria-expanded={isExpanded}
       >
-        <span className="flex items-center gap-2.5 text-text/85">
+        <span className="flex min-w-0 items-center gap-2.5 text-text">
           <BrainIcon
             className={cn(
               'size-4 shrink-0 transition-transform duration-200',
-              isActive ? 'animate-pulse text-accent drop-shadow-[0_0_6px_rgba(255,255,255,0.35)]' : 'text-subtle',
+              isActive ? 'animate-pulse text-accent' : 'text-subtle',
             )}
           />
-          <span role="status" className="font-medium tracking-wide">
+          <span role="status" className={cn('truncate font-medium', isActive && 'text-shimmer')}>
             {titleText}
           </span>
           {isActive ? (
-            <span className="flex items-center gap-1.5 rounded bg-surface px-1.5 py-0.5 font-mono text-[10px] text-accent font-semibold border border-accent/20">
-              <span className="size-1.5 rounded-full bg-accent animate-ping" />
+            <span className="flex shrink-0 items-center gap-1.5 rounded-md border border-accent/25 bg-accent-soft px-1.5 py-0.5 font-mono text-[11px] font-semibold text-accent tabular-nums">
+              <span aria-hidden="true" className="size-1.5 rounded-full bg-accent animate-pulse" />
               {elapsedSeconds > 0 ? `${elapsedSeconds.toFixed(1)}s` : '0.1s'}
             </span>
           ) : null}
@@ -152,23 +152,23 @@ export function ThinkingBlock({
       </button>
 
       {isExpanded ? (
-        <div className="border-t border-stroke/20 bg-canvas/50 px-4 py-3 font-mono text-[12.5px] leading-relaxed text-subtle">
+        <div className="border-t border-stroke bg-canvas/50 px-4 py-3 text-[13px] leading-6 text-muted">
           <div className="border-l-2 border-accent/40 pl-3">
             {hasThoughts ? (
-              <div className="whitespace-pre-wrap break-words text-text/80">
+              <div className="whitespace-pre-wrap break-words text-muted">
                 {thinkingText}
                 {isActive ? (
                   <span
-                    className="inline-block w-1.5 h-3.5 bg-accent ml-1 align-middle animate-pulse"
+                    className="ml-1 inline-block h-3.5 w-1.5 animate-pulse bg-accent align-middle"
                     aria-hidden="true"
                   />
                 ) : null}
               </div>
             ) : isActive ? (
-              <div className="space-y-1.5 text-subtle text-xs animate-pulse">
+              <div className="animate-pulse space-y-1.5 text-xs text-subtle">
                 <p>• {t('chat.thinking')}</p>
-                <p>• {workspaceName ? t('chat.thinkingAnalyzingWorkspace', { name: workspaceName }) : 'Анализ запроса и контекста…'}</p>
-                <p>• Формирование решения и синтез ответа…</p>
+                <p>• {workspaceName ? t('chat.thinkingAnalyzingWorkspace', { name: workspaceName }) : t('chat.thinkStepAnalyse')}</p>
+                <p>• {t('chat.thinkStepCompose')}</p>
               </div>
             ) : null}
           </div>

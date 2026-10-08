@@ -1,13 +1,18 @@
 import { useState } from 'react';
-import { CloseIcon, CodeIcon, DownloadIcon, EyeIcon, FileTextIcon } from '@/components/icons';
+import { CodeIcon, DownloadIcon, EyeIcon, FileTextIcon } from '@/components/icons';
+import { IconButton } from '@/components/ui/icon-button';
+import { Modal, ModalHeader } from '@/components/ui/modal';
 import { formatFileSize, getFileExtension } from '@/features/chat/attachment-utils';
 import type { MessageAttachment } from '@/features/chat/types';
+import { useTranslation } from '@/i18n';
+import { cn } from '@/lib/cn';
 
 interface MessageAttachmentsProps {
   attachments: MessageAttachment[];
 }
 
 export function MessageAttachments({ attachments }: MessageAttachmentsProps) {
+  const { t } = useTranslation();
   const [activeImage, setActiveImage] = useState<MessageAttachment | null>(null);
   const [previewFile, setPreviewFile] = useState<MessageAttachment | null>(null);
 
@@ -20,57 +25,51 @@ export function MessageAttachments({ attachments }: MessageAttachmentsProps) {
   const files = attachments.filter((att) => att.category !== 'image' && att.category !== 'video');
 
   return (
-    <div className="flex flex-col gap-2.5 max-w-full">
+    <div className="flex max-w-full flex-col items-end gap-2.5">
       {/* 1. Галерея изображений */}
       {images.length > 0 ? (
         <div
-          className={`grid gap-2 ${
+          className={cn(
+            'grid w-full gap-2',
             images.length === 1
-              ? 'grid-cols-1 max-w-[400px]'
+              ? 'max-w-[400px] grid-cols-1'
               : images.length === 2
-                ? 'grid-cols-2 max-w-[500px]'
-                : 'grid-cols-2 sm:grid-cols-3 max-w-[600px]'
-          }`}
+                ? 'max-w-[500px] grid-cols-2'
+                : 'max-w-[600px] grid-cols-2 sm:grid-cols-3',
+          )}
         >
           {images.map((img) => (
-            <div
+            <button
               key={img.id}
+              type="button"
               onClick={() => setActiveImage(img)}
-              className="group relative cursor-pointer overflow-hidden rounded-lg border border-stroke bg-canvas transition hover:border-accent"
+              className="group relative overflow-hidden rounded-xl border border-stroke bg-canvas text-left transition-colors hover:border-accent"
             >
               <img
                 src={img.url}
                 alt={img.name}
                 loading="lazy"
-                className="max-h-64 w-full object-cover transition duration-300 group-hover:scale-105"
+                className="max-h-64 w-full object-cover transition-transform duration-300 group-hover:scale-105"
               />
-              <div className="absolute inset-0 flex items-end bg-gradient-to-t from-black/70 via-transparent to-transparent p-2 opacity-0 transition-opacity group-hover:opacity-100">
+              <span className="absolute inset-0 flex items-end bg-gradient-to-t from-black/70 via-transparent to-transparent p-2 opacity-0 transition-opacity group-hover:opacity-100 group-focus-visible:opacity-100">
                 <span className="truncate text-xs font-medium text-white">{img.name}</span>
-              </div>
-            </div>
+              </span>
+            </button>
           ))}
         </div>
       ) : null}
 
       {/* 2. Видеоплеер */}
       {videos.length > 0 ? (
-        <div className="flex flex-col gap-2 max-w-[520px]">
+        <div className="flex w-full max-w-[520px] flex-col gap-2">
           {videos.map((vid) => (
-            <div
-              key={vid.id}
-              className="overflow-hidden rounded-lg border border-stroke bg-black shadow-sm"
-            >
-              <video
-                src={vid.url}
-                controls
-                preload="metadata"
-                className="max-h-72 w-full object-contain"
-              >
-                Ваш браузер не поддерживает встроенное воспроизведение видео.
+            <div key={vid.id} className="overflow-hidden rounded-xl border border-stroke bg-black shadow-sm">
+              <video src={vid.url} controls preload="metadata" className="max-h-72 w-full object-contain">
+                {t('msgAtt.noVideo')}
               </video>
-              <div className="flex items-center justify-between border-t border-stroke/40 bg-surface px-3 py-1.5 text-xs text-muted">
+              <div className="flex items-center justify-between gap-3 border-t border-stroke bg-surface px-3 py-2 text-xs text-muted">
                 <span className="truncate font-medium text-text">{vid.name}</span>
-                <span>{formatFileSize(vid.size)}</span>
+                <span className="shrink-0">{formatFileSize(vid.size)}</span>
               </div>
             </div>
           ))}
@@ -79,7 +78,7 @@ export function MessageAttachments({ attachments }: MessageAttachmentsProps) {
 
       {/* 3. Документы, код и файлы */}
       {files.length > 0 ? (
-        <div className="flex flex-wrap gap-2">
+        <div className="flex flex-wrap justify-end gap-2">
           {files.map((file) => {
             const ext = getFileExtension(file.name).toUpperCase() || 'FILE';
             const isCodeOrText = file.category === 'code' || file.category === 'document';
@@ -87,9 +86,9 @@ export function MessageAttachments({ attachments }: MessageAttachmentsProps) {
             return (
               <div
                 key={file.id}
-                className="flex items-center gap-2.5 rounded-lg border border-stroke bg-surface-2 px-3 py-2 text-xs text-text shadow-sm transition hover:border-stroke-strong"
+                className="flex items-center gap-2.5 rounded-xl border border-stroke bg-surface-2 py-1.5 pr-1.5 pl-1.5 text-xs text-text shadow-xs transition-colors hover:border-stroke-strong"
               >
-                <div className="flex size-8 shrink-0 items-center justify-center rounded bg-surface text-accent">
+                <div className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-surface text-accent">
                   {file.category === 'code' ? (
                     <CodeIcon className="size-4" />
                   ) : (
@@ -97,33 +96,29 @@ export function MessageAttachments({ attachments }: MessageAttachmentsProps) {
                   )}
                 </div>
 
-                <div className="flex flex-col overflow-hidden max-w-[160px] sm:max-w-[220px]">
+                <div className="flex max-w-[140px] flex-col overflow-hidden sm:max-w-[220px]">
                   <span className="truncate font-medium text-text">{file.name}</span>
-                  <div className="flex items-center gap-1.5 text-[10px] text-muted">
-                    <span className="font-mono uppercase font-semibold text-accent/80">{ext}</span>
-                    <span>•</span>
+                  <div className="flex items-center gap-1.5 text-[11px] text-muted">
+                    <span className="font-mono font-semibold text-accent uppercase">{ext}</span>
+                    <span aria-hidden="true">•</span>
                     <span>{formatFileSize(file.size)}</span>
                   </div>
                 </div>
 
-                <div className="ml-2 flex items-center gap-1">
+                <div className="flex items-center">
                   {isCodeOrText && file.contentPreview ? (
-                    <button
-                      type="button"
-                      onClick={() => setPreviewFile(file)}
-                      title="Просмотреть содержимое"
-                      className="inline-flex size-6 items-center justify-center rounded text-muted hover:bg-surface hover:text-text"
-                    >
+                    <IconButton label={t('msgAtt.view')} size="sm" onClick={() => setPreviewFile(file)}>
                       <EyeIcon className="size-3.5" />
-                    </button>
+                    </IconButton>
                   ) : null}
 
                   {file.url ? (
                     <a
                       href={file.url}
                       download={file.name}
-                      title="Скачать файл"
-                      className="inline-flex size-6 items-center justify-center rounded text-muted hover:bg-surface hover:text-text"
+                      title={t('msgAtt.download')}
+                      aria-label={t('msgAtt.download')}
+                      className="inline-flex size-9 items-center justify-center rounded-md text-muted transition-colors hover:bg-surface hover:text-text max-md:size-11"
                     >
                       <DownloadIcon className="size-3.5" />
                     </a>
@@ -135,74 +130,54 @@ export function MessageAttachments({ attachments }: MessageAttachmentsProps) {
         </div>
       ) : null}
 
-      {/* Модальное окно просмотра изображения (Lightbox) */}
+      {/* Просмотр изображения (lightbox) */}
       {activeImage ? (
-        <div
-          onClick={() => setActiveImage(null)}
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4 backdrop-blur-sm animate-in fade-in duration-200"
+        <Modal
+          labelledBy="attachment-image-title"
+          onClose={() => setActiveImage(null)}
+          size="xl"
+          className="w-auto max-w-[94vw] bg-canvas"
         >
-          <div
-            onClick={(e) => e.stopPropagation()}
-            className="relative flex max-h-[90vh] max-w-[90vw] flex-col items-center"
-          >
-            <div className="mb-2 flex w-full items-center justify-between text-white">
-              <span className="truncate text-sm font-medium">{activeImage.name}</span>
-              <div className="flex items-center gap-2">
-                <a
-                  href={activeImage.url}
-                  download={activeImage.name}
-                  className="rounded p-1.5 hover:bg-white/10"
-                  title="Скачать"
-                >
-                  <DownloadIcon className="size-4" />
-                </a>
-                <button
-                  type="button"
-                  onClick={() => setActiveImage(null)}
-                  className="rounded p-1.5 hover:bg-white/10"
-                >
-                  <CloseIcon className="size-5" />
-                </button>
-              </div>
-            </div>
+          <ModalHeader
+            titleId="attachment-image-title"
+            title={<span className="block truncate">{activeImage.name}</span>}
+            actions={
+              <a
+                href={activeImage.url}
+                download={activeImage.name}
+                title={t('msgAtt.downloadShort')}
+                aria-label={t('msgAtt.downloadShort')}
+                className="inline-flex size-9 items-center justify-center rounded-md text-muted transition-colors hover:bg-surface-2 hover:text-text max-md:size-11"
+              >
+                <DownloadIcon className="size-4" />
+              </a>
+            }
+            onClose={() => setActiveImage(null)}
+          />
+          <div className="flex min-h-0 flex-1 items-center justify-center overflow-auto p-3">
             <img
               src={activeImage.url}
               alt={activeImage.name}
-              className="max-h-[80vh] max-w-full rounded-lg object-contain shadow-2xl"
+              className="max-h-[78dvh] max-w-full rounded-lg object-contain"
             />
           </div>
-        </div>
+        </Modal>
       ) : null}
 
-      {/* Модальное окно просмотра кода / текста файла */}
+      {/* Просмотр кода / текста файла */}
       {previewFile ? (
-        <div
-          onClick={() => setPreviewFile(null)}
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 p-4 backdrop-blur-sm"
-        >
-          <div
-            onClick={(e) => e.stopPropagation()}
-            className="flex max-h-[85vh] w-full max-w-3xl flex-col rounded-xl border border-stroke bg-canvas p-4 shadow-2xl"
-          >
-            <div className="mb-3 flex items-center justify-between border-b border-stroke pb-2.5">
-              <div className="flex items-center gap-2">
-                <CodeIcon className="size-4 text-accent" />
-                <span className="font-semibold text-text">{previewFile.name}</span>
-                <span className="text-xs text-muted font-mono">({formatFileSize(previewFile.size)})</span>
-              </div>
-              <button
-                type="button"
-                onClick={() => setPreviewFile(null)}
-                className="rounded p-1 text-muted hover:text-text"
-              >
-                <CloseIcon className="size-4" />
-              </button>
-            </div>
-            <div className="min-h-0 flex-1 overflow-auto rounded-lg border border-stroke bg-surface p-3 font-mono text-xs text-text">
-              <pre className="whitespace-pre-wrap">{previewFile.contentPreview}</pre>
-            </div>
+        <Modal labelledBy="attachment-file-title" onClose={() => setPreviewFile(null)} size="lg" className="max-w-3xl">
+          <ModalHeader
+            titleId="attachment-file-title"
+            icon={<CodeIcon className="size-5" />}
+            title={previewFile.name}
+            description={<span className="font-mono text-xs">{formatFileSize(previewFile.size)}</span>}
+            onClose={() => setPreviewFile(null)}
+          />
+          <div tabIndex={0} className="m-4 min-h-0 flex-1 overflow-auto rounded-xl border border-stroke bg-canvas p-4 font-mono text-xs text-text focus-visible:outline-2 focus-visible:outline-accent">
+            <pre className="whitespace-pre-wrap">{previewFile.contentPreview}</pre>
           </div>
-        </div>
+        </Modal>
       ) : null}
     </div>
   );

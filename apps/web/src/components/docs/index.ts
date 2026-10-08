@@ -5,3 +5,4 @@ export * from './code-tabs';
 export * from './method-badge';
 export * from './param-table';
 export * from './use-scroll-spy';
+export * from './doc-section';

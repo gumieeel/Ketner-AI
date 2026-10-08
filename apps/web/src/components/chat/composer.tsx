@@ -9,7 +9,7 @@ import {
   SparkleIcon,
   StopIcon,
 } from '@/components/icons';
-import { CornerMark } from '@/components/ui/corner-mark';
+import { buttonClasses } from '@/components/ui/button-classes';
 import { IconButton } from '@/components/ui/icon-button';
 import { useAuth } from '@/features/auth/auth-store';
 import { isFreeLimitReached } from '@/features/billing/free-usage';
@@ -21,9 +21,9 @@ import type { ModelInfo } from '@/features/chat/types';
 import { usePreferences } from '@/features/preferences/preferences-store';
 import { useTranslation } from '@/i18n';
 import type { TranslationKey } from '@/i18n';
+import { cn } from '@/lib/cn';
 import { ComposerAttachments } from './composer-attachments';
 import { LinkWorkspaceModal } from './link-workspace-modal';
-import { ModelPicker } from './model-picker';
 import { WorkspaceBar } from './workspace-bar';
 
 const MODEL_NAME_KEYS: Record<string, TranslationKey> = {
@@ -33,6 +33,9 @@ const MODEL_NAME_KEYS: Record<string, TranslationKey> = {
   'gemini-pro': 'chat.modelGeminiPro',
   'ketner-pro': 'chat.modelPro',
 };
+
+const attachItemClass =
+  'flex min-h-11 w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-left text-[13px] font-medium text-text transition-colors hover:bg-surface-2 focus-visible:bg-surface-2 md:min-h-10';
 
 /** Высота поля ввода (до 5 строк), после которой появляется прокрутка. */
 const MAX_HEIGHT_PX = 120;
@@ -82,6 +85,31 @@ export function Composer() {
       reason: 'free_limit',
     });
   };
+
+  const attachRef = useRef<HTMLDivElement | null>(null);
+
+  // Меню вложений закрывается по Escape и клику вне него.
+  useEffect(() => {
+    if (!isAttachMenuOpen) {
+      return;
+    }
+    const onKey = (event: globalThis.KeyboardEvent): void => {
+      if (event.key === 'Escape') {
+        setIsAttachMenuOpen(false);
+      }
+    };
+    const onPointer = (event: PointerEvent): void => {
+      if (attachRef.current && !attachRef.current.contains(event.target as Node)) {
+        setIsAttachMenuOpen(false);
+      }
+    };
+    document.addEventListener('keydown', onKey);
+    document.addEventListener('pointerdown', onPointer);
+    return () => {
+      document.removeEventListener('keydown', onKey);
+      document.removeEventListener('pointerdown', onPointer);
+    };
+  }, [isAttachMenuOpen]);
 
   // Поле растёт под текст до предела, дальше включается прокрутка.
   useEffect(() => {
@@ -172,33 +200,34 @@ export function Composer() {
 
   const canSubmit = draft.trim() !== '' || attachedFiles.length > 0;
 
+  const bannerClass =
+    'mb-2.5 flex flex-wrap items-center justify-between gap-x-3 gap-y-2 rounded-xl border border-warning/30 bg-warning-soft px-3.5 py-2.5 text-[13px] text-text shadow-sm';
+
   return (
-    <div className="mx-auto w-full max-w-[760px] shrink-0 px-4 pb-[max(1rem,env(safe-area-inset-bottom))] md:pb-6">
+    <div className="relative mx-auto w-full max-w-[792px] shrink-0 px-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] md:px-4 md:pb-5">
+      {/* Плавное «растворение» ленты под композером */}
+      <div
+        aria-hidden="true"
+        className="pointer-events-none absolute inset-x-0 -top-6 h-6 bg-gradient-to-t from-canvas to-transparent"
+      />
+
       {freeLimitReached ? (
-        <div
-          role="alert"
-          className="mb-2.5 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-warning/30 bg-warning-soft px-3.5 py-2.5 text-xs text-warning shadow-sm"
-        >
-          <div className="flex items-center gap-2">
+        <div role="alert" className={bannerClass}>
+          <div className="flex min-w-0 items-center gap-2">
             <AlertIcon className="size-4 shrink-0 text-warning" aria-hidden="true" />
-            <span className="font-medium">
-              {t('chat.freeLimitDesc')}
-            </span>
+            <span className="font-medium">{t('chat.freeLimitDesc')}</span>
           </div>
           <Link
             to="/pricing"
             onClick={handleFreeLimitAttempt}
-            className="inline-flex items-center gap-1 shrink-0 rounded-md bg-accent px-3 py-1.5 text-xs font-semibold text-accent-text transition hover:opacity-90 shadow-sm"
+            className={buttonClasses({ variant: 'primary', size: 'sm' })}
           >
             {t('chat.upgradeButton')} →
           </Link>
         </div>
       ) : !hasAccess ? (
-        <div
-          role="alert"
-          className="mb-2.5 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-warning/30 bg-warning-soft px-3.5 py-2.5 text-xs text-warning shadow-sm"
-        >
-          <div className="flex items-center gap-2">
+        <div role="alert" className={bannerClass}>
+          <div className="flex min-w-0 items-center gap-2">
             <SparkleIcon className="size-4 shrink-0 text-warning" aria-hidden="true" />
             <span className="font-medium">
               {t('chat.upgradeBanner', {
@@ -210,7 +239,7 @@ export function Composer() {
           <Link
             to="/pricing"
             onClick={handlePaidModelAttempt}
-            className="inline-flex items-center gap-1 shrink-0 rounded-md bg-accent px-3 py-1.5 text-xs font-semibold text-accent-text transition hover:opacity-90 shadow-sm"
+            className={buttonClasses({ variant: 'primary', size: 'sm' })}
           >
             {t('chat.upgradeButton')} →
           </Link>
@@ -236,16 +265,24 @@ export function Composer() {
         onDragOver={handleDragOver}
         onDragLeave={handleDragLeave}
         onDrop={handleDrop}
-        className={`relative rounded-lg border bg-surface p-2.5 transition-colors focus-within:border-accent focus-within:ring-3 focus-within:ring-accent-soft ${
-          isDragOver
-            ? 'border-accent ring-2 ring-accent-soft bg-surface-2'
-            : 'border-stroke'
-        }`}
+        className={cn(
+          'surface-glass relative rounded-2xl border p-2.5 shadow-lg',
+          'transition-[border-color,box-shadow] duration-200',
+          'focus-within:border-accent/60 focus-within:ring-4 focus-within:ring-accent-soft',
+          isDragOver ? 'border-accent ring-4 ring-accent-soft' : 'border-stroke-strong',
+        )}
       >
-        <CornerMark
-          size={12}
-          className="pointer-events-none absolute top-2.5 left-2.5 text-accent opacity-90"
-        />
+        {isDragOver ? (
+          <div
+            aria-hidden="true"
+            className="pointer-events-none absolute inset-0 z-10 grid place-items-center rounded-2xl bg-canvas/85 text-sm font-medium text-accent"
+          >
+            <span className="inline-flex items-center gap-2">
+              <PaperclipIcon className="size-4" />
+              {t('composer.dropHint')}
+            </span>
+          </div>
+        ) : null}
 
         {/* Превью прикреплённых файлов */}
         <ComposerAttachments
@@ -273,35 +310,38 @@ export function Composer() {
           }}
           onKeyDown={onKeyDown}
           placeholder={t('chat.placeholder')}
-          className="max-h-[120px] w-full resize-none bg-transparent pr-2 pl-6 pt-0.5 text-sm leading-5 text-text outline-none placeholder:text-muted"
+          className="block max-h-[120px] w-full resize-none bg-transparent px-1.5 py-1 text-base leading-6 max-md:-my-1.5 max-md:py-2.5 text-text outline-none placeholder:text-subtle md:text-[15px]"
         />
 
-        <div className="flex items-center gap-1.5 pt-1">
+        <div className="flex items-center gap-1.5 pt-1.5">
           {/* Кнопка скрепки с меню прикрепления */}
-          <div className="relative">
+          <div ref={attachRef} className="relative">
             <IconButton
-              label="Прикрепить фото, видео, файлы или папку"
+              label={t('composer.attachAria')}
               size="sm"
+              aria-haspopup="true"
+              aria-expanded={isAttachMenuOpen}
               onClick={() => setIsAttachMenuOpen(!isAttachMenuOpen)}
-              className="border border-stroke bg-surface hover:bg-surface-2 text-text"
+              className={cn(
+                'rounded-xl border border-stroke bg-surface-2/70 text-text hover:border-stroke-strong hover:bg-surface-2',
+                isAttachMenuOpen && 'border-stroke-strong bg-surface-2',
+              )}
             >
               <PaperclipIcon />
             </IconButton>
 
             {isAttachMenuOpen ? (
-              <div
-                className="absolute bottom-full left-0 mb-2 w-64 rounded-xl border border-stroke bg-canvas p-1.5 shadow-xl backdrop-blur-md z-40 animate-in fade-in slide-in-from-bottom-2 duration-150"
-              >
+              <div className="surface-glass bg-surface-2/95 absolute bottom-full left-0 z-[var(--z-dropdown)] mb-2 w-[min(18rem,calc(100vw-2rem))] origin-bottom-left animate-scale-in rounded-2xl border border-stroke-strong p-1.5 shadow-popover">
                 <button
                   type="button"
                   onClick={() => {
                     setIsAttachMenuOpen(false);
                     fileInputRef.current?.click();
                   }}
-                  className="flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-xs font-medium text-text transition hover:bg-surface"
+                  className={attachItemClass}
                 >
-                  <PaperclipIcon className="size-4 text-accent" />
-                  <span>Фото, видео или любые файлы</span>
+                  <PaperclipIcon className="size-4 shrink-0 text-accent" />
+                  <span>{t('composer.attachFiles')}</span>
                 </button>
 
                 <div className="my-1 border-t border-stroke" />
@@ -312,10 +352,10 @@ export function Composer() {
                     setIsAttachMenuOpen(false);
                     setIsWorkspaceModalOpen(true);
                   }}
-                  className="flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-xs font-medium text-text transition hover:bg-surface"
+                  className={attachItemClass}
                 >
-                  <FolderIcon className="size-4 text-accent" />
-                  <span>Привязать локальную папку</span>
+                  <FolderIcon className="size-4 shrink-0 text-accent" />
+                  <span>{t('composer.linkFolder')}</span>
                 </button>
 
                 <button
@@ -324,26 +364,27 @@ export function Composer() {
                     setIsAttachMenuOpen(false);
                     setIsWorkspaceModalOpen(true);
                   }}
-                  className="flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-xs font-medium text-text transition hover:bg-surface"
+                  className={attachItemClass}
                 >
-                  <GitHubIcon className="size-4 text-text" />
-                  <span>Привязать GitHub репозиторий</span>
+                  <GitHubIcon className="size-4 shrink-0 text-text" />
+                  <span>{t('composer.linkGithub')}</span>
                 </button>
               </div>
             ) : null}
           </div>
 
-          <ModelPicker disabled={streaming} />
+          <p className="ml-1 hidden min-w-0 truncate text-xs text-subtle md:block">{t('composer.hintSend')}</p>
 
           {streaming ? (
-            <IconButton
-              label={t('chat.stop')}
+            <button
+              type="button"
+              aria-label={t('chat.stop')}
+              title={t('chat.stop')}
               onClick={() => stop()}
-              size="sm"
-              className="ml-auto border border-stroke bg-surface text-text hover:bg-surface-2"
+              className="ml-auto inline-flex size-11 shrink-0 items-center justify-center rounded-xl border border-stroke-strong bg-surface-2 text-text transition-[background-color,transform] duration-200 hover:bg-surface-3 active:scale-95"
             >
               <StopIcon />
-            </IconButton>
+            </button>
           ) : (
             <button
               type="button"
@@ -351,7 +392,13 @@ export function Composer() {
               title={t('chat.send')}
               onClick={submit}
               disabled={!canSubmit}
-              className="ml-auto inline-flex size-[44px] shrink-0 items-center justify-center rounded-md bg-accent text-accent-text transition-colors hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
+              className={cn(
+                'ml-auto inline-flex size-11 shrink-0 items-center justify-center rounded-xl',
+                'bg-brand-gradient text-accent-text shadow-glow',
+                'transition-[transform,filter,box-shadow,background-color,color] duration-200 ease-out-expo',
+                'hover:-translate-y-px hover:brightness-110 active:translate-y-0 active:scale-95',
+                'disabled:translate-y-0 disabled:cursor-not-allowed disabled:bg-none disabled:bg-surface-3 disabled:text-subtle disabled:shadow-none disabled:hover:brightness-100',
+              )}
             >
               <SendIcon />
             </button>

@@ -1,16 +1,176 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
-import { KeyIcon, LogoutIcon, SparkleIcon, TelegramIcon, UserIcon } from '@/components/icons';
+import {
+  CreditCardIcon,
+  KeyIcon,
+  LogoutIcon,
+  MessagesIcon,
+  SparkleIcon,
+  SunIcon,
+  TelegramIcon,
+  UserIcon,
+} from '@/components/icons';
 import { LanguageToggle } from '@/components/layout/language-toggle';
 import { ThemeToggle } from '@/components/layout/theme-toggle';
-import { Badge } from '@/components/ui/badge';
+import { Badge, type BadgeTone } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { buttonClasses } from '@/components/ui/button-classes';
 import { Card, CardText, CardTitle } from '@/components/ui/card';
-import { useAuth } from '@/features/auth/auth-store';
+import { Skeleton } from '@/components/ui/skeleton';
 import { unlinkTelegram } from '@/features/auth/api';
+import { useAuth } from '@/features/auth/auth-store';
 import { useBilling } from '@/features/billing/billing-store';
-import { useTranslation } from '@/i18n';
+import { useTranslation, type TranslationKey } from '@/i18n';
+import { cn } from '@/lib/cn';
 import { formatShortDate } from '@/lib/format-date';
+
+/** Подсвечивает в навигации раздел, который сейчас в верхней трети экрана. */
+function useActiveSection(ids: readonly string[]): string {
+  const [active, setActive] = useState(ids[0] ?? '');
+  const key = ids.join('|');
+
+  useEffect(() => {
+    if (typeof IntersectionObserver === 'undefined') {
+      return;
+    }
+    const sectionIds = key.split('|');
+    const visible = new Set<string>();
+    const observer = new IntersectionObserver(
+      (entries) => {
+        for (const entry of entries) {
+          if (entry.isIntersecting) {
+            visible.add(entry.target.id);
+          } else {
+            visible.delete(entry.target.id);
+          }
+        }
+        const first = sectionIds.find((id) => visible.has(id));
+        if (first) {
+          setActive(first);
+        }
+      },
+      { rootMargin: '-8% 0px -65% 0px' },
+    );
+    for (const id of sectionIds) {
+      const element = document.getElementById(id);
+      if (element) {
+        observer.observe(element);
+      }
+    }
+    return () => observer.disconnect();
+  }, [key]);
+
+  return active;
+}
+
+interface SettingsSectionProps {
+  id: string;
+  icon: ReactNode;
+  title: string;
+  description?: string;
+  /** Действие справа от заголовка: на мобильных переносится под него. */
+  action?: ReactNode;
+  tone?: 'default' | 'accent' | 'danger';
+  children?: ReactNode;
+}
+
+const TONE_CARD: Record<NonNullable<SettingsSectionProps['tone']>, string> = {
+  default: '',
+  accent: 'border-accent/35',
+  danger: 'border-danger/30',
+};
+
+const TONE_ICON: Record<NonNullable<SettingsSectionProps['tone']>, string> = {
+  default: 'bg-surface-2 text-muted ring-stroke',
+  accent: 'bg-accent-soft text-accent ring-accent/25',
+  danger: 'bg-danger-soft text-danger ring-danger/25',
+};
+
+/** Карточка раздела настроек: иконка, заголовок, пояснение, действие и содержимое. */
+function SettingsSection({
+  id,
+  icon,
+  title,
+  description,
+  action,
+  tone = 'default',
+  children,
+}: SettingsSectionProps) {
+  const titleId = `${id}-title`;
+
+  return (
+    <section id={id} aria-labelledby={titleId} className="scroll-mt-20 lg:scroll-mt-6">
+      <Card className={cn('flex flex-col gap-4 p-4 sm:p-6', TONE_CARD[tone])}>
+        <div className="flex flex-wrap items-start justify-between gap-x-4 gap-y-3">
+          <div className="flex min-w-0 flex-1 basis-64 items-start gap-3.5">
+            <span
+              aria-hidden="true"
+              className={cn(
+                'grid size-10 shrink-0 place-items-center rounded-xl ring-1 ring-inset',
+                TONE_ICON[tone],
+              )}
+            >
+              {icon}
+            </span>
+            <div className="min-w-0">
+              <CardTitle id={titleId} className={cn(tone === 'danger' && 'text-danger')}>
+                {title}
+              </CardTitle>
+              {description ? (
+                <CardText className="mt-0.5 text-[13px] leading-5 break-words">{description}</CardText>
+              ) : null}
+            </div>
+          </div>
+          {action ? <div className="flex flex-wrap items-center gap-2">{action}</div> : null}
+        </div>
+        {children}
+      </Card>
+    </section>
+  );
+}
+
+/** Строка «подпись — значение» внутри карточки. */
+function InfoTile({
+  label,
+  mono = false,
+  children,
+}: {
+  label: string;
+  mono?: boolean;
+  children: ReactNode;
+}) {
+  return (
+    <div className="min-w-0 rounded-xl border border-stroke bg-canvas px-3.5 py-3">
+      <div className="text-xs text-muted">{label}</div>
+      <div className={cn('mt-0.5 truncate text-sm text-text', mono && 'font-mono text-[13px] select-all')}>
+        {children}
+      </div>
+    </div>
+  );
+}
+
+/** Пояснение под действием: на подложке, чтобы отделить от заголовка карточки. */
+function Note({ title, children }: { title?: ReactNode; children: ReactNode }) {
+  return (
+    <div className="flex flex-col gap-1 rounded-xl border border-stroke bg-canvas px-3.5 py-3 text-[13px] leading-5">
+      {title ? <span className="font-medium text-text">{title}</span> : null}
+      <span className="text-muted">{children}</span>
+    </div>
+  );
+}
+
+const PLAN_TONES: Record<string, BadgeTone> = {
+  free: 'neutral',
+  plus: 'plus',
+  pro: 'pro',
+  ultra: 'ultra',
+};
+
+const PLAN_NAME_KEYS: Record<string, TranslationKey> = {
+  free: 'pricing.free',
+  plus: 'pricing.plus',
+  pro: 'pricing.pro',
+};
 
 export function SettingsPage() {
   const { t, language } = useTranslation();
@@ -19,6 +179,7 @@ export function SettingsPage() {
   const token = useAuth((state) => state.token);
   const logout = useAuth((state) => state.logout);
   const subscription = useBilling((state) => state.subscription);
+  const billingLoading = useBilling((state) => state.loading);
   const loadSubscription = useBilling((state) => state.loadSubscription);
   const cancel = useBilling((state) => state.cancel);
 
@@ -58,6 +219,7 @@ export function SettingsPage() {
 
   const isPaid = user?.plan && user.plan !== 'free';
   const isCanceled = subscription?.status === 'canceled';
+  const telegramLinked = Boolean(user?.telegramChatId || user?.telegramUsername);
 
   const handleCancel = async () => {
     setCanceling(true);
@@ -68,198 +230,145 @@ export function SettingsPage() {
     }
   };
 
-  const planLabel =
-    user?.plan === 'pro'
-      ? t('pricing.pro')
-      : user?.plan === 'plus'
-        ? t('pricing.plus')
-        : user?.plan === 'ultra'
-          ? 'Ultra'
-          : t('pricing.free');
+  const planKey = user?.plan ? PLAN_NAME_KEYS[user.plan] : undefined;
+  const planLabel = planKey ? t(planKey) : user?.plan === 'ultra' ? 'Ultra' : t('pricing.free');
+  const planTone: BadgeTone = (user?.plan && PLAN_TONES[user.plan]) || (user?.plan ? 'brand' : 'neutral');
+
+  const sections: Array<{ id: string; label: string; danger?: boolean }> = [
+    { id: 'account', label: t('settings.account') },
+    { id: 'appearance', label: t('settings.appearance') },
+    { id: 'subscription', label: t('settings.subscription') },
+    { id: 'telegram', label: 'Telegram' },
+    { id: 'support', label: t('settings.support') },
+    ...(hasAdminAccess ? [{ id: 'admin', label: 'Admin API' }] : []),
+    ...(user ? [{ id: 'danger', label: t('settings.logout'), danger: true }] : []),
+  ];
+  const active = useActiveSection(sections.map((section) => section.id));
 
   return (
-    <div className="mx-auto flex w-full max-w-4xl flex-col gap-8 px-4 py-8 md:px-8 text-text">
-      {/* Шапка настроек */}
-      <div className="border-b border-stroke pb-5">
-        <h1 className="text-2xl md:text-3xl font-semibold tracking-tight text-text">
+    <div className="mx-auto w-full max-w-5xl px-4 pb-16 text-text md:px-8">
+      <header className="pt-6 pb-4 md:pt-10 md:pb-6">
+        <h1 className="text-[26px] font-semibold leading-tight tracking-tight text-text md:text-3xl">
           {t('settings.title')}
         </h1>
-        <p className="text-xs md:text-sm text-muted mt-1">
-          Управление профилем, внешним видом и параметрами тарифного плана
-        </p>
-      </div>
+        <p className="mt-1.5 text-sm leading-6 text-muted">{t('settings.subtitle')}</p>
+      </header>
 
-      <div className="grid grid-cols-1 md:grid-cols-[200px_1fr] gap-8 items-start">
-        {/* Боковая навигация по разделам */}
-        <nav className="flex md:flex-col gap-1 overflow-x-auto text-xs font-mono text-muted">
-          <a
-            href="#account"
-            className="rounded-md px-3 py-2 text-text font-medium bg-surface border border-stroke"
-          >
-            {t('settings.account')}
-          </a>
-          <a
-            href="#appearance"
-            className="rounded-md px-3 py-2 hover:text-text hover:bg-surface/50 transition-colors"
-          >
-            {t('settings.appearance')}
-          </a>
-          <a
-            href="#subscription"
-            className="rounded-md px-3 py-2 hover:text-text hover:bg-surface/50 transition-colors"
-          >
-            {t('settings.subscription')}
-          </a>
-          <a
-            href="#telegram"
-            className="rounded-md px-3 py-2 hover:text-text hover:bg-surface/50 transition-colors"
-          >
-            Telegram
-          </a>
-          <a
-            href="#support"
-            className="rounded-md px-3 py-2 hover:text-text hover:bg-surface/50 transition-colors"
-          >
-            {t('settings.support')}
-          </a>
-          {hasAdminAccess ? (
-            <a
-              href="#admin"
-              className="rounded-md px-3 py-2 hover:text-text hover:bg-surface/50 transition-colors"
-            >
-              Admin API
-            </a>
-          ) : null}
-          {user ? (
-            <a
-              href="#danger"
-              className="rounded-md px-3 py-2 text-danger hover:bg-danger/10 transition-colors"
-            >
-              {t('settings.logout')}
-            </a>
-          ) : null}
+      <div className="grid grid-cols-1 items-start gap-4 lg:grid-cols-[210px_minmax(0,1fr)] lg:gap-10">
+        {/* Навигация: вкладки сверху на узких экранах, колонка слева на широких */}
+        <nav
+          aria-label={t('settings.navLabel')}
+          className="sticky top-0 z-10 -mx-4 border-b border-stroke bg-canvas px-4 lg:top-6 lg:mx-0 lg:border-0 lg:bg-transparent lg:px-0"
+        >
+          <ul className="flex gap-1.5 overflow-x-auto py-2 [scrollbar-width:none] lg:flex-col lg:gap-0.5 lg:overflow-visible lg:py-0 [&::-webkit-scrollbar]:hidden">
+            {sections.map((section) => {
+              const isActive = active === section.id;
+              return (
+                <li key={section.id} className="shrink-0">
+                  <a
+                    href={`#${section.id}`}
+                    aria-current={isActive ? 'true' : undefined}
+                    className={cn(
+                      'relative flex min-h-11 items-center rounded-full px-4 text-sm whitespace-nowrap transition-colors lg:min-h-10 lg:rounded-lg lg:px-3',
+                      isActive
+                        ? 'bg-surface-2 font-medium text-text ring-1 ring-stroke-strong ring-inset'
+                        : 'text-muted hover:bg-surface hover:text-text',
+                      section.danger && !isActive && 'text-danger hover:bg-danger-soft hover:text-danger',
+                      section.danger && isActive && 'text-danger',
+                    )}
+                  >
+                    {section.label}
+                  </a>
+                </li>
+              );
+            })}
+          </ul>
         </nav>
 
-        {/* Основной стек настроек */}
-        <div className="flex flex-col gap-6">
-          {/* 1. Аккаунт */}
-          <section id="account">
-            <Card className="flex flex-col gap-4 p-5 md:p-6 border-stroke bg-surface">
-              <div className="flex items-center justify-between border-b border-stroke pb-4">
-                <div className="flex items-center gap-3">
-                  {user ? (
-                    <span className="grid size-11 shrink-0 place-items-center rounded-xl bg-surface-2 border border-stroke text-sm font-mono font-semibold text-accent">
-                      {user.name.slice(0, 2).toUpperCase()}
-                    </span>
-                  ) : (
-                    <div className="grid size-11 shrink-0 place-items-center rounded-xl bg-surface-2 border border-stroke text-muted">
-                      <UserIcon className="text-xl" />
-                    </div>
-                  )}
-                  <div>
-                    <CardTitle className="text-base font-semibold text-text">
-                      {user ? user.name : t('settings.account')}
-                    </CardTitle>
-                    <CardText className="text-xs text-muted mt-0.5">
-                      {user
-                        ? `${user.email} · ${t('settings.registeredOn')}: ${formatShortDate(user.createdAt, language)}`
-                        : `${t('settings.guestTitle')}. ${t('settings.guestText')}`}
-                    </CardText>
-                  </div>
-                </div>
-
-                {!user ? (
-                  <Link to="/login">
-                    <Button variant="outline" size="sm">
-                      {t('nav.login')}
-                    </Button>
-                  </Link>
-                ) : null}
+        <div className="flex min-w-0 flex-col gap-4 md:gap-5">
+          {/* Аккаунт */}
+          <SettingsSection
+            id="account"
+            icon={<UserIcon className="size-5" />}
+            title={user ? user.name : t('settings.account')}
+            description={
+              user
+                ? `${user.email} · ${t('settings.registeredOn')}: ${formatShortDate(user.createdAt, language)}`
+                : `${t('settings.guestTitle')}. ${t('settings.guestText')}`
+            }
+            action={
+              !user ? (
+                <Link to="/login" className={buttonClasses({ variant: 'primary', size: 'sm' })}>
+                  {t('nav.login')}
+                </Link>
+              ) : null
+            }
+          >
+            {user ? (
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                <InfoTile label="User ID" mono>
+                  {user.id}
+                </InfoTile>
+                <InfoTile label="Email">{user.email}</InfoTile>
               </div>
+            ) : null}
+          </SettingsSection>
 
-              {user ? (
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
-                  <div className="rounded-lg bg-canvas p-3 border border-stroke">
-                    <span className="text-muted block text-[11px] font-mono">User ID</span>
-                    <span className="font-mono text-text text-xs select-all mt-0.5 block truncate">
-                      {user.id}
-                    </span>
-                  </div>
-                  <div className="rounded-lg bg-canvas p-3 border border-stroke">
-                    <span className="text-muted block text-[11px] font-mono">Email</span>
-                    <span className="text-text text-xs mt-0.5 block truncate">{user.email}</span>
-                  </div>
-                </div>
+          {/* Внешний вид */}
+          <SettingsSection
+            id="appearance"
+            icon={<SunIcon className="size-5" />}
+            title={t('settings.appearance')}
+            description={t('settings.appearanceText')}
+          >
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 md:max-xl:grid-cols-1">
+              <div className="flex items-center justify-between gap-3 rounded-xl border border-stroke bg-canvas py-1.5 pr-1.5 pl-3.5">
+                <span className="text-sm font-medium text-text">{t('settings.theme')}</span>
+                <ThemeToggle />
+              </div>
+              <div className="flex items-center justify-between gap-3 rounded-xl border border-stroke bg-canvas py-1.5 pr-1.5 pl-3.5">
+                <span className="text-sm font-medium text-text">{t('settings.language')}</span>
+                <LanguageToggle />
+              </div>
+            </div>
+          </SettingsSection>
+
+          {/* Подписка */}
+          <SettingsSection
+            id="subscription"
+            icon={<CreditCardIcon className="size-5" />}
+            title={t('settings.subscription')}
+            action={
+              isPaid && !isCanceled ? (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleCancel}
+                  disabled={canceling}
+                  className="text-danger hover:border-danger/40 hover:bg-danger-soft"
+                >
+                  {canceling ? t('settings.canceling') : t('settings.cancelSubscription')}
+                </Button>
+              ) : (
+                <Link to="/pricing" className={cn(buttonClasses({ variant: 'primary', size: 'sm' }), 'gap-1.5')}>
+                  <SparkleIcon className="size-3.5" />
+                  {t('nav.upgrade')}
+                </Link>
+              )
+            }
+          >
+            <div className="flex flex-wrap items-center gap-2">
+              <Badge tone={planTone}>{planLabel}</Badge>
+              {isPaid ? (
+                <Badge tone={isCanceled ? 'warning' : 'success'}>
+                  {isCanceled ? t('settings.statusCanceled') : t('settings.statusActive')}
+                </Badge>
               ) : null}
-            </Card>
-          </section>
-
-          {/* 2. Внешний вид */}
-          <section id="appearance">
-            <Card className="flex flex-col gap-4 p-5 md:p-6 border-stroke bg-surface">
-              <div className="border-b border-stroke pb-3">
-                <CardTitle className="text-base font-semibold text-text">
-                  {t('settings.appearance')}
-                </CardTitle>
-                <CardText className="text-xs text-muted mt-0.5">
-                  {t('settings.appearanceText')}
-                </CardText>
-              </div>
-
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                <div className="flex items-center gap-3">
-                  <span className="text-xs font-medium text-text">{t('settings.theme')}</span>
-                  <ThemeToggle />
-                </div>
-                <div className="flex items-center gap-3">
-                  <span className="text-xs font-medium text-text">{t('settings.language')}</span>
-                  <LanguageToggle />
-                </div>
-              </div>
-            </Card>
-          </section>
-
-          {/* 3. Подписка */}
-          <section id="subscription">
-            <Card className="flex flex-col gap-4 p-5 md:p-6 border-stroke bg-surface">
-              <div className="flex flex-wrap items-center justify-between gap-3 border-b border-stroke pb-4">
-                <div className="flex items-center gap-2.5">
-                  <CardTitle className="text-base font-semibold text-text">
-                    {t('settings.subscription')}
-                  </CardTitle>
-                  <Badge tone="brand" className="font-mono text-xs">
-                    {planLabel}
-                  </Badge>
-                  {isPaid && (
-                    <span className="text-xs text-muted font-mono">
-                      ({isCanceled ? t('settings.statusCanceled') : t('settings.statusActive')})
-                    </span>
-                  )}
-                </div>
-
-                <div className="flex items-center gap-2">
-                  {isPaid && !isCanceled ? (
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={handleCancel}
-                      disabled={canceling}
-                      className="text-xs text-danger hover:bg-danger/10 hover:border-danger/40"
-                    >
-                      {canceling ? t('settings.canceling') : t('settings.cancelSubscription')}
-                    </Button>
-                  ) : (
-                    <Link to="/pricing">
-                      <Button variant="primary" size="sm" className="gap-1.5 text-xs">
-                        <SparkleIcon className="text-xs" />
-                        {t('nav.upgrade')}
-                      </Button>
-                    </Link>
-                  )}
-                </div>
-              </div>
-
-              <CardText className="text-xs text-muted leading-relaxed">
+            </div>
+            {isPaid && !subscription && billingLoading ? (
+              <Skeleton className="h-4 w-56 max-w-full" />
+            ) : (
+              <CardText className="text-[13px] leading-5">
                 {isPaid
                   ? isCanceled
                     ? t('settings.canceledNotice')
@@ -269,219 +378,166 @@ export function SettingsPage() {
                       )}`
                   : t('settings.subscriptionText')}
               </CardText>
-            </Card>
-          </section>
+            )}
+          </SettingsSection>
 
-          {/* Telegram аккаунт и платежи */}
-          <section id="telegram">
-            <Card className="flex flex-col gap-4 p-5 md:p-6 border-stroke bg-surface">
-              <div className="flex flex-wrap items-center justify-between gap-4 border-b border-stroke pb-4">
-                <div className="flex items-center gap-3">
-                  <div className="grid size-10 shrink-0 place-items-center rounded-xl bg-[#24A1DE]/15 text-[#24A1DE]">
-                    <TelegramIcon className="size-5" />
-                  </div>
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <CardTitle className="text-base font-semibold text-text">
-                        Telegram аккаунт и платежи
-                      </CardTitle>
-                      {user?.telegramChatId || user?.telegramUsername ? (
-                        <Badge tone="success" className="text-[10px]">Подключён</Badge>
-                      ) : (
-                        <Badge tone="neutral" className="text-[10px]">Не привязан</Badge>
-                      )}
-                    </div>
-                    <CardText className="text-xs text-muted mt-0.5">
-                      Синхронизация с ботом @Robo_kassa_bot для оплаты через Stars и управления подпиской
-                    </CardText>
-                  </div>
-                </div>
-
-                <div className="flex items-center gap-2">
-                  {user?.telegramChatId || user?.telegramUsername ? (
-                    <>
-                      <a
-                        href="https://t.me/Robo_kassa_bot"
-                        target="_blank"
-                        rel="noreferrer"
-                        className="inline-flex items-center gap-1.5 rounded-lg bg-[#24A1DE] hover:bg-[#1E96D1] px-3.5 py-2 text-xs font-semibold text-white transition-colors shadow-xs"
-                      >
-                        <TelegramIcon className="size-3.5" />
-                        <span>Открыть бот</span>
-                      </a>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={handleUnlinkTelegram}
-                        disabled={unlinkingTelegram}
-                        className="text-xs text-danger hover:bg-danger/10 hover:border-danger/40"
-                      >
-                        {unlinkingTelegram ? 'Отвязка...' : 'Отвязать'}
-                      </Button>
-                    </>
-                  ) : (
-                    <a
-                      href={`https://t.me/Robo_kassa_bot?start=link_${user?.id || 'demo'}`}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="inline-flex items-center gap-1.5 rounded-lg bg-[#24A1DE] hover:bg-[#1E96D1] px-4 py-2.5 text-xs font-semibold text-white transition-colors shadow-xs"
-                    >
-                      <TelegramIcon className="size-4" />
-                      <span>Подключить Telegram</span>
-                    </a>
-                  )}
-                </div>
-              </div>
-
-              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-xs bg-canvas p-3 rounded-lg border border-stroke">
-                <div className="flex flex-col gap-0.5">
-                  {user?.telegramChatId || user?.telegramUsername ? (
-                    <>
-                      <span className="font-medium text-text">
-                        Привязан Telegram:{' '}
-                        <strong className="text-accent font-mono">
-                          {user.telegramUsername ? `@${user.telegramUsername}` : `ID: ${user.telegramChatId}`}
-                        </strong>
-                      </span>
-                      <span className="text-[11px] text-muted">
-                        Вы можете отправить команду /status в боте @Robo_kassa_bot для проверки тарифа и продлевать подписку через Stars.
-                      </span>
-                    </>
-                  ) : (
-                    <>
-                      <span className="font-medium text-text">
-                        Привяжите Telegram для оплаты в 1 клик
-                      </span>
-                      <span className="text-[11px] text-muted">
-                        Нажмите «Подключить Telegram», чтобы привязать ваш аккаунт к платёжному боту @Robo_kassa_bot.
-                      </span>
-                    </>
-                  )}
-                </div>
-              </div>
-            </Card>
-          </section>
-
-          {/* 4. Служба поддержки и помощь */}
-          <section id="support">
-            <Card className="flex flex-col gap-4 p-5 md:p-6 border-stroke bg-surface">
-              <div className="flex flex-wrap items-center justify-between gap-4 border-b border-stroke pb-4">
-                <div className="flex items-center gap-3">
-                  <div className="grid size-10 shrink-0 place-items-center rounded-xl bg-[#24A1DE]/15 text-[#24A1DE]">
-                    <TelegramIcon className="size-5" />
-                  </div>
-                  <div>
-                    <CardTitle className="text-base font-semibold text-text">
-                      {t('settings.support')}
-                    </CardTitle>
-                    <CardText className="text-xs text-muted mt-0.5">
-                      {t('settings.supportDesc')}
-                    </CardText>
-                  </div>
-                </div>
-
+          {/* Telegram: аккаунт и платежи */}
+          <SettingsSection
+            id="telegram"
+            icon={<TelegramIcon className="size-5" />}
+            title={t('settings.telegramTitle')}
+            description={t('settings.telegramDesc')}
+            action={
+              telegramLinked ? (
+                <>
+                  <a
+                    href="https://t.me/Robo_kassa_bot"
+                    target="_blank"
+                    rel="noreferrer"
+                    className={cn(buttonClasses({ variant: 'secondary', size: 'sm' }), 'gap-1.5')}
+                  >
+                    <TelegramIcon className="size-3.5" />
+                    {t('settings.telegramOpenBot')}
+                  </a>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handleUnlinkTelegram}
+                    disabled={unlinkingTelegram}
+                    className="text-danger hover:border-danger/40 hover:bg-danger-soft"
+                  >
+                    {unlinkingTelegram ? t('settings.telegramUnlinking') : t('settings.telegramUnlink')}
+                  </Button>
+                </>
+              ) : (
                 <a
-                  href="https://t.me/ketner_support_bot"
+                  href={`https://t.me/Robo_kassa_bot?start=link_${user?.id || 'demo'}`}
                   target="_blank"
                   rel="noreferrer"
-                  className="inline-flex items-center gap-2 rounded-lg bg-[#24A1DE] hover:bg-[#1E96D1] px-4 py-2.5 text-xs font-semibold text-white transition-colors shadow-xs"
+                  className={cn(buttonClasses({ variant: 'primary', size: 'sm' }), 'gap-1.5')}
                 >
-                  <TelegramIcon className="size-4" />
-                  <span>{t('settings.supportContactBtn')}</span>
+                  <TelegramIcon className="size-3.5" />
+                  {t('settings.telegramConnect')}
                 </a>
-              </div>
+              )
+            }
+          >
+            <div className="flex flex-wrap items-center gap-2">
+              <Badge tone={telegramLinked ? 'success' : 'neutral'}>
+                {telegramLinked ? t('settings.telegramConnected') : t('settings.telegramNotLinked')}
+              </Badge>
+            </div>
+            {telegramLinked ? (
+              <Note
+                title={
+                  <>
+                    {t('settings.telegramLinkedAs')}{' '}
+                    <strong className="font-mono font-semibold text-accent">
+                      {user?.telegramUsername ? `@${user.telegramUsername}` : `ID: ${user?.telegramChatId}`}
+                    </strong>
+                  </>
+                }
+              >
+                {t('settings.telegramLinkedHint')}
+              </Note>
+            ) : (
+              <Note title={t('settings.telegramLinkTitle')}>{t('settings.telegramLinkHint')}</Note>
+            )}
+          </SettingsSection>
 
-              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-xs bg-canvas p-3 rounded-lg border border-stroke">
-                <div className="flex flex-col gap-0.5">
-                  <span className="font-medium text-text">
-                    Официальный бот поддержки: <a href="https://t.me/ketner_support_bot" target="_blank" rel="noreferrer" className="text-accent hover:underline font-mono">@ketner_support_bot</a>
-                  </span>
-                  <span className="text-[11px] text-muted">
-                    {t('settings.supportBotHint')}
-                  </span>
-                </div>
-                {user ? (
-                  <div className="font-mono text-[11px] text-muted bg-surface px-2.5 py-1 rounded border border-stroke/60 shrink-0">
-                    User ID: {user.id}
-                  </div>
-                ) : null}
-              </div>
-            </Card>
-          </section>
+          {/* Поддержка */}
+          <SettingsSection
+            id="support"
+            icon={<MessagesIcon className="size-5" />}
+            title={t('settings.support')}
+            description={t('settings.supportDesc')}
+            action={
+              <a
+                href="https://t.me/ketner_support_bot"
+                target="_blank"
+                rel="noreferrer"
+                className={cn(
+                  buttonClasses({ variant: 'secondary', size: 'sm' }),
+                  'h-auto min-h-11 gap-1.5 py-2 text-center whitespace-normal md:min-h-9',
+                )}
+              >
+                <TelegramIcon className="size-3.5 shrink-0" />
+                <span>{t('settings.supportContactBtn')}</span>
+              </a>
+            }
+          >
+            <Note
+              title={
+                <>
+                  {t('settings.supportBotLabel')}{' '}
+                  <a
+                    href="https://t.me/ketner_support_bot"
+                    target="_blank"
+                    rel="noreferrer"
+                    className="font-mono text-accent hover:underline"
+                  >
+                    @ketner_support_bot
+                  </a>
+                </>
+              }
+            >
+              {t('settings.supportBotHint')}
+              {user ? (
+                <span className="mt-2 block font-mono text-xs text-subtle select-all">User ID: {user.id}</span>
+              ) : null}
+            </Note>
+          </SettingsSection>
 
-          {/* 4. Администрирование (только для админов) */}
+          {/* Администрирование (только для админов) */}
           {hasAdminAccess ? (
-            <section id="admin">
-              <Card className="flex flex-col gap-4 p-5 md:p-6 border-accent/40 bg-surface">
-                <div className="flex flex-wrap items-center justify-between gap-3 border-b border-stroke pb-3">
-                  <div className="flex items-center gap-2.5">
-                    <KeyIcon className="text-accent text-lg" />
-                    <div>
-                      <CardTitle className="text-sm font-semibold text-text">
-                        Панель администратора
-                      </CardTitle>
-                      <CardText className="text-xs text-muted mt-0.5">
-                        Управление пользователями, лимиты, маржинальность
-                      </CardText>
-                    </div>
-                  </div>
-                  <Link to="/admin">
-                    <Button variant="primary" size="sm" className="text-xs">
-                      Открыть панель →
-                    </Button>
-                  </Link>
+            <SettingsSection
+              id="admin"
+              tone="accent"
+              icon={<KeyIcon className="size-5" />}
+              title={t('settings.adminTitle')}
+              description={t('settings.adminDesc')}
+              action={
+                <Link to="/admin" className={buttonClasses({ variant: 'primary', size: 'sm' })}>
+                  {t('settings.adminOpen')}
+                </Link>
+              }
+            >
+              <div className="flex flex-col gap-2 rounded-xl border border-stroke bg-canvas p-3.5">
+                <label htmlFor="admin-key-input" className="text-xs text-muted">
+                  {t('settings.adminKeyLabel')}
+                </label>
+                <div className="flex flex-wrap items-center gap-2">
+                  <input
+                    id="admin-key-input"
+                    type="password"
+                    placeholder="ketner-ai-admin-key-dev"
+                    value={adminKey}
+                    onChange={(e) => setAdminKey(e.target.value)}
+                    className="h-11 min-w-[200px] flex-1 rounded-md border border-stroke bg-surface px-3 font-mono text-[13px] text-text transition-[border-color,box-shadow] placeholder:text-subtle hover:border-stroke-strong focus:border-accent focus:ring-4 focus:ring-accent-soft focus:outline-none md:h-9"
+                  />
+                  <Button variant="outline" size="sm" onClick={() => handleSaveAdminKey(adminKey)}>
+                    {adminKeySaved ? t('settings.adminKeySaved') : t('settings.adminKeySave')}
+                  </Button>
                 </div>
-
-                <div className="flex flex-col gap-2 rounded-lg border border-stroke bg-canvas p-3">
-                  <label htmlFor="admin-key-input" className="text-xs font-mono text-muted">
-                    Admin API Key (x-admin-key):
-                  </label>
-                  <div className="flex flex-wrap items-center gap-2">
-                    <input
-                      id="admin-key-input"
-                      type="password"
-                      placeholder="ketner-ai-admin-key-dev"
-                      value={adminKey}
-                      onChange={(e) => setAdminKey(e.target.value)}
-                      className="h-8 min-w-[200px] flex-1 rounded-md border border-stroke bg-surface px-3 text-xs text-text outline-none focus:border-accent font-mono"
-                    />
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => handleSaveAdminKey(adminKey)}
-                      className="text-xs"
-                    >
-                      {adminKeySaved ? 'Сохранено ✓' : 'Сохранить ключ'}
-                    </Button>
-                  </div>
-                </div>
-              </Card>
-            </section>
+              </div>
+            </SettingsSection>
           ) : null}
 
-          {/* 5. Опасная зона: Выход */}
+          {/* Выход */}
           {user ? (
-            <section id="danger">
-              <Card className="flex items-center justify-between gap-4 p-5 border-danger/30 bg-surface">
-                <div>
-                  <CardTitle className="text-sm font-semibold text-danger">
-                    {t('settings.logout')}
-                  </CardTitle>
-                  <CardText className="text-xs text-muted mt-0.5">
-                    {t('settings.loggedInAs')} {user.email}
-                  </CardText>
-                </div>
-                <Button
-                  variant="danger"
-                  size="sm"
-                  onClick={() => void logout()}
-                  className="gap-1.5 text-xs"
-                >
-                  <LogoutIcon className="text-sm" />
+            <SettingsSection
+              id="danger"
+              tone="danger"
+              icon={<LogoutIcon className="size-5" />}
+              title={t('settings.logout')}
+              description={`${t('settings.loggedInAs')} ${user.email}`}
+              action={
+                <Button variant="danger" size="sm" onClick={() => void logout()} className="gap-1.5">
+                  <LogoutIcon className="size-3.5" />
                   {t('settings.logout')}
                 </Button>
-              </Card>
-            </section>
+              }
+            />
           ) : null}
         </div>
       </div>

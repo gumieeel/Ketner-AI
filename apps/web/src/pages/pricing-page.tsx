@@ -1,9 +1,30 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { ArrowRightIcon, SparkleIcon } from '@/components/icons';
 import { PlanCards } from '@/components/pricing/plan-cards';
+import { Reveal } from '@/components/ui/reveal';
+import { SectionLabel } from '@/components/ui/section-label';
+import { Tab, TabList, TabPanel, Tabs } from '@/components/ui/tabs';
+import type { TranslationKey } from '@/i18n';
 import { useTranslation } from '@/i18n';
 import { cn } from '@/lib/cn';
+
+type PlanKey = 'free' | 'plus' | 'pro' | 'ultra';
+
+const PLAN_KEYS: readonly PlanKey[] = ['free', 'plus', 'pro', 'ultra'];
+
+const PLAN_NAME_KEYS: Record<PlanKey, TranslationKey> = {
+  free: 'pricing.free',
+  plus: 'pricing.plus',
+  pro: 'pricing.pro',
+  ultra: 'pricing.ultra',
+};
+
+const TIER_DOT: Record<PlanKey, string> = {
+  free: 'bg-subtle',
+  plus: 'bg-tier-plus',
+  pro: 'bg-tier-pro',
+  ultra: 'bg-tier-ultra',
+};
 
 interface ComparisonRow {
   feature: { ru: string; en: string };
@@ -60,126 +81,104 @@ const COMPARISON_ROWS: ComparisonRow[] = [
 
 export function PricingPage() {
   const { t, language } = useTranslation();
-  const [activeMobilePlan, setActiveMobilePlan] = useState<'free' | 'plus' | 'pro' | 'ultra'>('pro');
+  const [activeMobilePlan, setActiveMobilePlan] = useState<PlanKey>('pro');
 
   return (
-    <div className="relative mx-auto flex w-full max-w-7xl flex-col gap-12 md:gap-16 px-4 sm:px-6 lg:px-8 py-12 animate-fade-in text-center">
+    <div className="relative mx-auto flex w-full max-w-7xl flex-col gap-14 px-4 py-12 text-center sm:px-6 md:gap-20 md:py-16 lg:px-8">
+      {/* Атмосфера за заголовком */}
+      <div
+        aria-hidden="true"
+        className="bg-aurora pointer-events-none absolute inset-x-0 -top-10 h-[360px] opacity-60 [mask-image:linear-gradient(to_bottom,black,transparent)]"
+      />
+
       {/* Заголовок страницы */}
-      <div className="flex flex-col items-center gap-3">
-        <div className="inline-flex items-center gap-2 rounded-sm border border-stroke bg-surface-2 px-2.5 py-1 font-mono text-[11px] font-semibold text-accent uppercase tracking-wider">
-          <SparkleIcon className="size-3 text-accent" />
-          <span>{t('pricing.nextGenBadge')}</span>
-        </div>
-        <h1 className="text-3xl md:text-5xl font-semibold tracking-[-0.03em] text-text">
-          {t('pricing.title')}
-        </h1>
-        <p className="max-w-2xl text-sm md:text-base leading-relaxed text-muted">
+      <Reveal eager className="relative flex flex-col items-center gap-4">
+        <SectionLabel>{t('pricing.nextGenBadge')}</SectionLabel>
+        <h1 className="t-headline text-text">{t('pricing.title')}</h1>
+        <p className="max-w-[56ch] text-[15px] leading-relaxed text-balance text-muted md:text-[17px]">
           {t('pricing.subtitle')}
         </p>
-      </div>
+      </Reveal>
 
       {/* 4 Карточки тарифов */}
       <PlanCards variant="full" />
 
       {/* Таблица сравнения */}
-      <div className="flex flex-col gap-6 w-full text-left">
-        <div className="flex flex-col gap-1">
-          <h2 className="text-xl font-semibold tracking-tight text-text">
-            {t('pricing.compare')}
-          </h2>
-          <p className="text-sm text-muted">
-            {language === 'ru'
-              ? 'Подробный обзор возможностей каждого тарифа'
-              : 'Detailed feature matrix across plans'}
-          </p>
+      <div className="flex w-full flex-col gap-6 text-left">
+        <div className="flex flex-col gap-1.5">
+          <h2 className="text-2xl font-semibold tracking-tight text-text">{t('pricing.compare')}</h2>
+          <p className="text-sm text-muted md:text-[15px]">{t('pricing.compareLead')}</p>
         </div>
 
-        {/* Mobile Plan Selector Tabs */}
-        <div className="md:hidden flex items-center p-1 rounded-lg border border-stroke bg-surface-2 gap-1 w-full">
-          {(['free', 'plus', 'pro', 'ultra'] as const).map((plan) => (
-            <button
-              key={plan}
-              type="button"
-              onClick={() => setActiveMobilePlan(plan)}
-              className={cn(
-                'flex-1 py-2 text-xs font-mono font-medium rounded-md uppercase tracking-wider transition-all min-h-[44px] flex items-center justify-center',
-                activeMobilePlan === plan
-                  ? 'bg-surface text-accent border border-stroke shadow-xs font-semibold'
-                  : 'text-muted hover:text-text',
+        {/* Mobile: выбор тарифа и одна карточка со значениями */}
+        <Tabs value={activeMobilePlan} onValueChange={(value) => setActiveMobilePlan(value as PlanKey)} className="md:hidden">
+          <TabList aria-label={t('pricing.planPicker')} className="w-full rounded-xl">
+            {PLAN_KEYS.map((plan) => (
+              <Tab key={plan} value={plan} className="flex-1 gap-1.5 px-2">
+                <span aria-hidden="true" className={cn('size-1.5 rounded-full', TIER_DOT[plan])} />
+                {t(PLAN_NAME_KEYS[plan])}
+              </Tab>
+            ))}
+          </TabList>
+
+          <TabPanel value={activeMobilePlan} className="mt-4 flex flex-col gap-4 rounded-2xl border border-stroke bg-surface p-5 shadow-sm">
+            <div className="flex items-center justify-between border-b border-stroke pb-3">
+              <h3 className="flex items-center gap-2 text-lg font-semibold text-text">
+                <span aria-hidden="true" className={cn('size-2 rounded-full', TIER_DOT[activeMobilePlan])} />
+                {t(PLAN_NAME_KEYS[activeMobilePlan])}
+              </h3>
+              {activeMobilePlan === 'pro' && (
+                <span className="rounded-full bg-accent-soft px-2.5 py-0.5 text-xs font-semibold text-accent">
+                  {t('pricing.popular')}
+                </span>
               )}
-            >
-              {plan === 'free' ? 'Free' : plan === 'plus' ? 'Plus' : plan === 'pro' ? 'Pro' : 'Ultra'}
-            </button>
-          ))}
-        </div>
-
-        {/* Mobile Single Active Card View */}
-        <div className="md:hidden w-full rounded-lg border border-stroke bg-surface p-5 flex flex-col gap-4 text-left shadow-sm">
-          <div className="flex items-center justify-between border-b border-stroke pb-3 mb-1">
-            <h3 className="text-base font-semibold text-text uppercase font-mono tracking-wide">
-              {activeMobilePlan.toUpperCase()}
-            </h3>
-            {activeMobilePlan === 'pro' && (
-              <span className="font-mono text-[10px] uppercase tracking-wider px-2 py-0.5 rounded bg-accent/15 text-accent border border-accent/30 font-semibold">
-                {language === 'ru' ? 'Популярный' : 'Popular'}
-              </span>
-            )}
-          </div>
-          {COMPARISON_ROWS.map((row, idx) => (
-            <div key={idx} className="flex flex-col gap-1 pb-3 border-b border-stroke/50 last:border-b-0 last:pb-0">
-              <span className="text-xs text-muted font-medium uppercase tracking-wider">
-                {row.feature[language]}
-              </span>
-              <span className="text-sm font-medium text-text">
-                {row[activeMobilePlan][language]}
-              </span>
             </div>
-          ))}
-        </div>
+            {COMPARISON_ROWS.map((row, idx) => (
+              <div key={idx} className="flex flex-col gap-1 border-b border-stroke/60 pb-3 last:border-b-0 last:pb-0">
+                <span className="text-xs font-medium text-subtle">{row.feature[language]}</span>
+                <span className="text-sm font-medium text-text">{row[activeMobilePlan][language]}</span>
+              </div>
+            ))}
+          </TabPanel>
+        </Tabs>
 
         {/* Desktop table view */}
-        <div data-testid="pricing-table" className="hidden md:block overflow-x-auto rounded-lg border border-stroke bg-surface">
+        <div
+          data-testid="pricing-table"
+          className="hidden overflow-x-auto rounded-2xl border border-stroke bg-surface shadow-sm md:block"
+        >
           <table className="w-full border-collapse text-sm">
             <thead>
-              <tr className="border-b border-stroke bg-surface-2/90 text-xs font-mono uppercase tracking-wider text-muted">
-                <th className="sticky left-0 bg-surface-2 p-4 text-left font-semibold text-text z-20 min-w-[200px] border-r border-stroke">
-                  {language === 'ru' ? 'Функция' : 'Feature'}
+              <tr className="border-b border-stroke bg-surface-2/80 text-[13px]">
+                <th className="sticky left-0 z-20 min-w-[200px] border-r border-stroke bg-surface-2 p-4 text-left font-semibold text-text">
+                  {t('pricing.colFeature')}
                 </th>
-                <th className="p-4 text-left font-semibold text-text min-w-[140px]">
-                  {language === 'ru' ? 'Тариф Free' : 'Free Plan'}
-                </th>
-                <th className="p-4 text-left font-semibold text-text min-w-[150px]">
-                  {language === 'ru' ? 'Тариф Plus' : 'Plus Plan'}
-                </th>
-                <th className="p-4 text-left font-semibold text-accent min-w-[180px]">
-                  {language === 'ru' ? 'Тариф Pro' : 'Pro Plan'}
-                </th>
-                <th className="p-4 text-left font-semibold text-text min-w-[180px]">
-                  {language === 'ru' ? 'Тариф Ultra' : 'Ultra Plan'}
-                </th>
+                {PLAN_KEYS.map((plan) => (
+                  <th
+                    key={plan}
+                    className={cn(
+                      'min-w-[150px] p-4 text-left font-semibold',
+                      plan === 'pro' ? 'text-accent' : 'text-text',
+                    )}
+                  >
+                    <span className="inline-flex items-center gap-2">
+                      <span aria-hidden="true" className={cn('size-2 rounded-full', TIER_DOT[plan])} />
+                      {t('pricing.colPlan', { plan: t(PLAN_NAME_KEYS[plan]) })}
+                    </span>
+                  </th>
+                ))}
               </tr>
             </thead>
             <tbody className="divide-y divide-stroke/60">
               {COMPARISON_ROWS.map((row, idx) => (
-                <tr
-                  key={idx}
-                  className="transition-colors hover:bg-surface-2/40"
-                >
-                  <td className="sticky left-0 bg-surface p-4 font-medium text-text z-10 border-r border-stroke">
+                <tr key={idx} className="transition-colors hover:bg-surface-2/40">
+                  <td className="sticky left-0 z-10 border-r border-stroke bg-surface p-4 font-medium text-text">
                     {row.feature[language]}
                   </td>
-                  <td className="p-4 text-muted text-xs">
-                    {row.free[language]}
-                  </td>
-                  <td className="p-4 text-muted text-xs">
-                    {row.plus[language]}
-                  </td>
-                  <td className="p-4 text-text text-xs font-medium">
-                    {row.pro[language]}
-                  </td>
-                  <td className="p-4 text-text text-xs font-medium">
-                    {row.ultra[language]}
-                  </td>
+                  <td className="p-4 text-[13px] leading-5 text-muted">{row.free[language]}</td>
+                  <td className="p-4 text-[13px] leading-5 text-muted">{row.plus[language]}</td>
+                  <td className="bg-accent-soft/40 p-4 text-[13px] leading-5 font-medium text-text">{row.pro[language]}</td>
+                  <td className="p-4 text-[13px] leading-5 font-medium text-text">{row.ultra[language]}</td>
                 </tr>
               ))}
             </tbody>
@@ -188,14 +187,13 @@ export function PricingPage() {
       </div>
 
       {/* Нижняя сноска */}
-      <div className="flex flex-col items-center gap-3 text-center text-xs text-muted pt-4 border-t border-stroke">
-        <p>{t('pricing.notice')}</p>
+      <div className="flex flex-col items-center gap-3 border-t border-stroke pt-8 text-center text-[13px] text-muted">
+        <p className="max-w-[70ch] text-balance">{t('pricing.notice')}</p>
         <Link
           to="/docs"
-          className="inline-flex items-center gap-1.5 text-accent font-medium hover:underline transition-colors font-mono uppercase tracking-wider text-[11px]"
+          className="inline-flex min-h-11 items-center gap-1.5 text-sm font-medium text-accent hover:underline"
         >
-          <span>{t('pricing.docsLink')}</span>
-          <ArrowRightIcon className="size-3" />
+          {t('pricing.docsLink')}
         </Link>
       </div>
     </div>

@@ -1,7 +1,8 @@
 import { useState } from 'react';
-import { CloseIcon, GitHubIcon, RefreshIcon } from '@/components/icons';
+import { GitHubIcon } from '@/components/icons';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Modal, ModalHeader } from '@/components/ui/modal';
 import {
   commitDirectlyToGitHub,
   createGitHubPullRequest,
@@ -10,6 +11,8 @@ import {
 } from '@/features/chat/file-operations';
 import type { FileChangeItem, WorkspaceContext } from '@/features/chat/types';
 import { useWorkspace } from '@/features/chat/workspace-store';
+import { useTranslation } from '@/i18n';
+import { cn } from '@/lib/cn';
 
 interface GitHubApplyModalProps {
   isOpen: boolean;
@@ -32,12 +35,13 @@ export function GitHubApplyModal({
   changes,
   onSuccess,
 }: GitHubApplyModalProps) {
+  const { t } = useTranslation();
   const setGitToken = useWorkspace((state) => state.setGitToken);
 
   const [token, setToken] = useState(workspace.gitToken || '');
   const [mode, setMode] = useState<'pr' | 'commit'>('pr');
   const [prTitle, setPrTitle] = useState(
-    `Ketner AI: правки для ${changes.map((c) => c.path.split('/').pop()).join(', ')}`,
+    t('gh.defaultTitle', { files: changes.map((c) => c.path.split('/').pop()).join(', ') }),
   );
   const [targetBranch] = useState(workspace.branch || 'main');
   const [loading, setLoading] = useState(false);
@@ -51,11 +55,11 @@ export function GitHubApplyModal({
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!token.trim()) {
-      setError('Укажите токен GitHub с правами на запись (scope: repo)');
+      setError(t('gh.errNoToken'));
       return;
     }
     if (!owner || !repo) {
-      setError('Некорректное имя репозитория');
+      setError(t('gh.errBadRepo'));
       return;
     }
 
@@ -103,137 +107,106 @@ export function GitHubApplyModal({
         onClose();
       }
     } catch (err: any) {
-      setError(err?.message || 'Не удалось применить изменения к GitHub');
+      setError(err?.message || t('gh.errApply'));
       setLoading(false);
     }
   };
 
   return (
-    <div
-      onClick={onClose}
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4 backdrop-blur-sm animate-in fade-in duration-200"
-    >
-      <div
-        onClick={(e) => e.stopPropagation()}
-        className="w-full max-w-lg rounded-2xl border border-stroke bg-canvas shadow-2xl overflow-hidden"
-      >
-        <div className="flex items-center justify-between border-b border-stroke bg-surface px-5 py-4">
-          <div className="flex items-center gap-2.5">
-            <span className="flex size-8 items-center justify-center rounded-lg bg-surface-2 text-accent">
-              <GitHubIcon className="size-4" />
-            </span>
-            <div>
-              <h3 className="text-sm font-semibold text-text">Запись изменений в GitHub</h3>
-              <p className="text-xs text-muted font-mono">{workspace.name}</p>
-            </div>
+    <Modal labelledBy="github-apply-title" onClose={onClose} size="md">
+      <ModalHeader
+        titleId="github-apply-title"
+        icon={<GitHubIcon className="size-5" />}
+        title={t('gh.title')}
+        description={<span className="font-mono text-xs">{workspace.name}</span>}
+        onClose={onClose}
+      />
+
+      <form onSubmit={handleSubmit} className="min-h-0 space-y-5 overflow-y-auto p-5">
+        {error && (
+          <div role="alert" className="rounded-xl border border-danger/30 bg-danger-soft p-3 text-[13px] leading-relaxed break-words text-danger">
+            {error}
           </div>
-          <button
-            type="button"
-            onClick={onClose}
-            className="rounded-lg p-1.5 text-muted hover:bg-surface-2 hover:text-text transition"
-          >
-            <CloseIcon className="size-4" />
-          </button>
+        )}
+
+        {/* Mode choice */}
+        <fieldset className="space-y-2">
+          <legend className="text-xs font-semibold text-muted">{t('gh.mode')}</legend>
+          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+            {(
+              [
+                { id: 'pr', title: t('gh.prOption'), hint: t('gh.prHint') },
+                { id: 'commit', title: t('gh.commitOption'), hint: t('gh.commitHint', { branch: targetBranch }) },
+              ] as const
+            ).map((option) => (
+              <button
+                key={option.id}
+                type="button"
+                aria-pressed={mode === option.id}
+                onClick={() => setMode(option.id)}
+                className={cn(
+                  'min-h-14 rounded-xl border p-3 text-left transition-[border-color,background-color,box-shadow] duration-200',
+                  mode === option.id
+                    ? 'border-accent bg-accent-soft ring-2 ring-accent/20'
+                    : 'border-stroke bg-canvas hover:border-stroke-strong',
+                )}
+              >
+                <div className="text-[13px] font-semibold text-text">{option.title}</div>
+                <div className="mt-0.5 text-xs leading-4 text-muted">{option.hint}</div>
+              </button>
+            ))}
+          </div>
+        </fieldset>
+
+        {/* PR Title */}
+        <div>
+          <label htmlFor="gh-title" className="mb-1.5 block text-[13px] font-medium text-text">
+            {mode === 'pr' ? t('gh.prLabel') : t('gh.commitLabel')}
+          </label>
+          <Input
+            id="gh-title"
+            value={prTitle}
+            onChange={(e) => setPrTitle(e.target.value)}
+            placeholder={t('gh.titlePlaceholder')}
+            required
+          />
         </div>
 
-        <form onSubmit={handleSubmit} className="p-5 space-y-4">
-          {error && (
-            <div className="rounded-lg border border-danger/30 bg-danger-soft p-3 text-xs text-danger leading-relaxed">
-              {error}
-            </div>
-          )}
-
-          {/* Mode choice */}
-          <div className="space-y-2">
-            <label className="text-xs font-semibold uppercase tracking-wider text-muted">
-              Способ отправки
+        {/* GitHub Token */}
+        <div>
+          <div className="mb-1.5 flex flex-wrap items-center justify-between gap-x-3">
+            <label htmlFor="gh-token" className="text-[13px] font-medium text-text">
+              {t('gh.tokenLabel')}
             </label>
-            <div className="grid grid-cols-2 gap-2">
-              <button
-                type="button"
-                onClick={() => setMode('pr')}
-                className={`rounded-xl border p-3 text-left transition ${
-                  mode === 'pr'
-                    ? 'border-accent bg-accent-soft text-text'
-                    : 'border-stroke bg-surface hover:border-stroke-strong text-muted'
-                }`}
-              >
-                <div className="text-xs font-semibold text-text">Создать Pull Request</div>
-                <div className="text-[11px] text-muted mt-0.5">В отдельную ветку с безопасным код-ревью</div>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => setMode('commit')}
-                className={`rounded-xl border p-3 text-left transition ${
-                  mode === 'commit'
-                    ? 'border-accent bg-accent-soft text-text'
-                    : 'border-stroke bg-surface hover:border-stroke-strong text-muted'
-                }`}
-              >
-                <div className="text-xs font-semibold text-text">Прямой коммит</div>
-                <div className="text-[11px] text-muted mt-0.5">Сразу в ветку {targetBranch}</div>
-              </button>
-            </div>
+            <a
+              href="https://github.com/settings/tokens/new?description=KetnerAI&scopes=repo"
+              target="_blank"
+              rel="noreferrer"
+              className="inline-flex min-h-8 items-center text-xs text-accent hover:underline max-md:min-h-10"
+            >
+              {t('gh.tokenLink')}
+            </a>
           </div>
+          <Input
+            id="gh-token"
+            type="password"
+            value={token}
+            onChange={(e) => setToken(e.target.value)}
+            placeholder="ghp_xxxxxxxxxxxx"
+            required
+          />
+          <p className="mt-1.5 text-xs leading-5 text-muted">{t('gh.tokenHint')}</p>
+        </div>
 
-          {/* PR Title */}
-          <div>
-            <label className="text-xs font-medium text-text block mb-1">
-              {mode === 'pr' ? 'Название Pull Request' : 'Сообщение коммита'}
-            </label>
-            <Input
-              value={prTitle}
-              onChange={(e) => setPrTitle(e.target.value)}
-              placeholder="Кратко опишите суть изменений"
-              required
-            />
-          </div>
-
-          {/* GitHub Token */}
-          <div>
-            <div className="flex items-center justify-between mb-1">
-              <label className="text-xs font-medium text-text">GitHub Personal Access Token</label>
-              <a
-                href="https://github.com/settings/tokens/new?description=KetnerAI&scopes=repo"
-                target="_blank"
-                rel="noreferrer"
-                className="text-[11px] text-accent hover:underline"
-              >
-                Создать токен (права repo) ↗
-              </a>
-            </div>
-            <Input
-              type="password"
-              value={token}
-              onChange={(e) => setToken(e.target.value)}
-              placeholder="ghp_xxxxxxxxxxxx"
-              required
-            />
-            <p className="text-[11px] text-muted mt-1">
-              Токен хранится локально в вашем браузере и используется только для отправки коммита.
-            </p>
-          </div>
-
-          <div className="pt-2 flex justify-end gap-2">
-            <Button variant="outline" type="button" onClick={onClose} disabled={loading}>
-              Отмена
-            </Button>
-            <Button variant="primary" type="submit" disabled={loading} className="gap-1.5">
-              {loading ? (
-                <>
-                  <RefreshIcon className="size-3.5 animate-spin" />
-                  Отправка...
-                </>
-              ) : mode === 'pr' ? (
-                'Создать Pull Request'
-              ) : (
-                'Сделать коммит'
-              )}
-            </Button>
-          </div>
-        </form>
-      </div>
-    </div>
+        <div className="flex flex-col-reverse gap-2 pt-1 sm:flex-row sm:justify-end">
+          <Button variant="outline" type="button" onClick={onClose} disabled={loading} className="max-sm:w-full">
+            {t('common.cancel')}
+          </Button>
+          <Button variant="primary" type="submit" loading={loading} className="gap-1.5 max-sm:w-full">
+            {loading ? t('gh.sending') : mode === 'pr' ? t('gh.prOption') : t('gh.submitCommit')}
+          </Button>
+        </div>
+      </form>
+    </Modal>
   );
 }

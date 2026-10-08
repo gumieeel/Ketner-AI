@@ -1,46 +1,66 @@
 import { ArrowUpRightIcon } from '@/components/icons';
-import { CornerMark } from '@/components/ui/corner-mark';
+import { ModelMark } from '@/components/ui/model-mark';
 import { EXAMPLE_PROMPTS } from '@/features/chat/example-prompts';
 import { useChat } from '@/features/chat/chat-store';
 import { useTranslation } from '@/i18n';
 
+/** Модели «оркестра»: показываются как декоративный ряд над заголовком. */
+const ORCHESTRA = ['gpt-6-astra', 'claude-fable', 'gemini-2.5-pro', 'grok-4.7', 'deepseek-v4.1-flash', 'ketner-mini'];
+
 /**
- * Пустое состояние нового чата («Открытый контур»).
- * Открытая композиция по левому краю ленты с характерным знаком, заголовком, подсказкой
- * и строками примеров с разделителями.
+ * Пустое состояние нового чата: приветствие и карточки-примеры.
+ * Примеры подставляются в поле ввода, а не отправляются — их можно поправить.
  */
 export function ChatEmptyState() {
   const { t, language } = useTranslation();
   const setDraft = useChat((state) => state.setDraft);
 
   return (
-    <div className="mx-auto flex w-full max-w-[760px] min-h-0 flex-1 flex-col justify-end overflow-y-auto px-4 pb-8 pt-6">
-      <div className="flex flex-col items-start gap-4">
-        <div className="flex items-center gap-2.5">
-          <img src="/logo-mark.png" alt="Ketner AI" className="size-7 object-contain" />
-          <CornerMark size={14} className="text-accent" />
+    <div className="relative flex min-h-0 flex-1 flex-col overflow-y-auto">
+      {/* Атмосфера: мягкое пятно за приветствием */}
+      <div
+        aria-hidden="true"
+        className="bg-aurora pointer-events-none absolute inset-x-0 top-0 h-[420px] opacity-60 [mask-image:linear-gradient(to_bottom,black,transparent)]"
+      />
+
+      <div className="relative mx-auto my-auto flex w-full max-w-[760px] flex-col items-center px-4 py-8 text-center md:py-12">
+        <div className="animate-slide-up flex items-center gap-3">
+          <span aria-hidden="true" className="flex -space-x-2">
+            {ORCHESTRA.map((id) => (
+              <span key={id} className="rounded-[11px] bg-canvas p-0.5 ring-2 ring-canvas">
+                <ModelMark modelId={id} size="sm" />
+              </span>
+            ))}
+          </span>
         </div>
 
-        <div>
-          <h2 className="text-[28px] md:text-[32px] leading-[36px] md:leading-[40px] font-semibold text-text tracking-tight">
-            {t('chat.emptyTitle')}
-          </h2>
-          <p className="mt-1 text-sm leading-5 text-muted max-w-[58ch]">
-            {t('chat.emptyHint')}
-          </p>
-        </div>
+        <p style={{ animationDelay: '60ms' }} className="animate-slide-up mt-4 text-[13px] font-medium text-accent">
+          {t('chat.emptyKicker')}
+        </p>
 
-        <div className="mt-4 w-full flex flex-col divide-y divide-stroke border-y border-stroke">
-          {EXAMPLE_PROMPTS[language].map((prompt) => (
-            <button
+        <h2 style={{ animationDelay: '100ms' }} className="t-headline animate-slide-up mt-2 text-text">
+          {t('chat.emptyTitle')}
+        </h2>
+        <p style={{ animationDelay: '140ms' }} className="animate-slide-up mt-3 max-w-[52ch] text-sm leading-6 text-muted md:text-[15px]">
+          {t('chat.emptyHint')}
+        </p>
+
+        <div className="mt-8 grid w-full grid-cols-1 gap-2.5 text-left md:grid-cols-3 md:gap-3">
+          {EXAMPLE_PROMPTS[language].map((prompt, index) => (
+            <div
               key={prompt}
-              type="button"
-              onClick={() => setDraft(prompt)}
-              className="group flex min-h-[44px] items-center justify-between py-2.5 text-left text-sm leading-5 text-text transition-colors hover:text-accent"
+              style={{ animationDelay: `${180 + index * 60}ms` }}
+              className="animate-slide-up flex"
             >
-              <span>{prompt}</span>
-              <ArrowUpRightIcon className="size-4 shrink-0 text-muted opacity-0 transition-all duration-120 group-hover:opacity-100 group-hover:text-accent translate-x-1 group-hover:translate-x-0" />
-            </button>
+              <button
+                type="button"
+                onClick={() => setDraft(prompt)}
+                className="lift group relative flex min-h-14 flex-1 items-start justify-between gap-3 rounded-2xl border border-stroke bg-surface p-4 text-left text-sm leading-5 text-text shadow-sm hover:border-accent/40 hover:bg-surface-2 hover:shadow-md md:min-h-28 md:flex-col md:justify-between"
+              >
+                <span className="text-pretty">{prompt}</span>
+                <ArrowUpRightIcon className="size-4 shrink-0 text-subtle transition-[color,transform] duration-200 group-hover:-translate-y-0.5 group-hover:translate-x-0.5 group-hover:text-accent md:self-end" />
+              </button>
+            </div>
           ))}
         </div>
       </div>

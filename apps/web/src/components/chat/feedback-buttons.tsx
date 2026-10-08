@@ -39,17 +39,18 @@ export function FeedbackButtons({ message, disabled = false }: FeedbackButtonsPr
   };
 
   return (
-    <div className="flex items-center gap-0.5" role="group" aria-label="Оценка ответа">
+    <div className="flex items-center gap-0.5" role="group" aria-label={t('chat.ratingGroup')}>
       <IconButton
         label={t('chat.like')}
         size="sm"
         disabled={disabled}
+        aria-pressed={isLiked}
         onClick={handleLike}
         className={cn(
           'transition-colors',
           isLiked
-            ? 'text-emerald-500 bg-emerald-500/10 hover:bg-emerald-500/20 hover:text-emerald-400'
-            : 'text-muted hover:text-text hover:bg-surface-raised',
+            ? 'bg-success-soft text-success hover:bg-success-soft hover:text-success'
+            : 'text-muted hover:bg-surface-2 hover:text-text',
         )}
       >
         <ThumbsUpIcon className={cn('size-3.5', isLiked && 'fill-current')} />
@@ -59,19 +60,20 @@ export function FeedbackButtons({ message, disabled = false }: FeedbackButtonsPr
         label={t('chat.dislike')}
         size="sm"
         disabled={disabled}
+        aria-pressed={isDisliked}
         onClick={handleDislike}
         className={cn(
           'transition-colors',
           isDisliked
-            ? 'text-red-500 bg-red-500/10 hover:bg-red-500/20 hover:text-red-400'
-            : 'text-muted hover:text-text hover:bg-surface-raised',
+            ? 'bg-danger-soft text-danger hover:bg-danger-soft hover:text-danger'
+            : 'text-muted hover:bg-surface-2 hover:text-text',
         )}
       >
         <ThumbsDownIcon className={cn('size-3.5', isDisliked && 'fill-current')} />
       </IconButton>
 
       {justSubmitted && (
-        <span className="ml-1 text-[11px] font-medium text-muted transition-opacity animate-fade-in">
+        <span role="status" className="ml-1.5 animate-fade-in text-xs font-medium text-muted">
           {t('chat.feedbackSaved')}
         </span>
       )}

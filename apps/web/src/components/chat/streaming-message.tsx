@@ -9,7 +9,7 @@ interface StreamingMessageProps {
 
 export function StreamingMessage({ content, isStreaming }: StreamingMessageProps) {
   return (
-    <div className="relative text-[15px] leading-[26px] text-text [&>*:not(pre):not(table):not(.code-block)]:max-w-[66ch]">
+    <div className="relative text-base leading-7 text-text">
       <Suspense fallback={<p className="whitespace-pre-wrap">{content}</p>}>
         <Markdown content={content} />
       </Suspense>

@@ -6,22 +6,22 @@ export interface SectionLabelProps extends HTMLAttributes<HTMLDivElement> {
   children: ReactNode;
 }
 
-export function SectionLabel({
-  index,
-  children,
-  className,
-  ...props
-}: SectionLabelProps) {
+/** Эйбрау над заголовком секции: короткая цветная подпись с маркером. */
+export function SectionLabel({ index, children, className, ...props }: SectionLabelProps) {
   return (
     <div
       className={cn(
-        'inline-flex items-center gap-2 font-mono text-xs uppercase tracking-[0.08em] text-muted',
+        'inline-flex items-center gap-2 text-[13px] font-semibold tracking-wide text-accent',
         className,
       )}
       {...props}
     >
-      {index && (
-        <span className="text-accent font-semibold">[{index}]</span>
+      {index ? (
+        <span className="tabular rounded-full bg-accent-soft px-2 py-0.5 font-mono text-[11px] leading-4">
+          {index}
+        </span>
+      ) : (
+        <span aria-hidden="true" className="size-1.5 rounded-full bg-brand-gradient" />
       )}
       <span>{children}</span>
     </div>

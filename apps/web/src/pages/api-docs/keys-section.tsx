@@ -1,18 +1,14 @@
 import { useState } from 'react';
-import {
-  CheckIcon,
-  CopyIcon,
-  EyeIcon,
-  EyeOffIcon,
-  KeyIcon,
-  PlusIcon,
-} from '@/components/icons';
+import { CheckIcon, CopyIcon, EyeIcon, EyeOffIcon, KeyIcon, PlusIcon } from '@/components/icons';
+import { Callout } from '@/components/docs/callout';
+import { DocSection } from '@/components/docs/doc-section';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Callout } from '@/components/docs/callout';
-import { DocHeading } from '@/components/docs/doc-heading';
-import { copyText } from '@/lib/clipboard';
+import { IconButton } from '@/components/ui/icon-button';
+import { Input } from '@/components/ui/input';
+import { RichText } from '@/components/ui/rich-text';
 import { useTranslation } from '@/i18n';
+import { copyText } from '@/lib/clipboard';
 
 export interface ApiKeyItem {
   id: string;
@@ -54,118 +50,95 @@ export function KeysSection({ keys, onAddKey, onRevokeKey }: KeysSectionProps) {
   };
 
   return (
-    <section id="keys" className="flex flex-col gap-4 rounded-xl border border-stroke bg-surface p-5 md:p-6 shadow-sm @container">
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-stroke pb-4">
-        <div className="flex items-center gap-3">
-          <div className="grid size-9 place-items-center rounded-lg bg-surface-2 border border-stroke text-accent">
-            <KeyIcon className="text-lg" />
-          </div>
-          <div>
-            <DocHeading level={2} id="keys" className="text-base md:text-lg font-semibold text-text">
-              Секретные API-ключи
-            </DocHeading>
-            <p className="text-xs text-muted mt-0.5">{t('apiDocs.keysDesc')}</p>
-          </div>
-        </div>
-
+    <DocSection
+      id="keys"
+      icon={<KeyIcon className="size-5" />}
+      title={t('apiDocs.keysTitle')}
+      description={t('apiDocs.keysDesc')}
+      aside={
         <Button
           variant="primary"
           size="sm"
+          aria-expanded={showKeyForm}
           onClick={() => setShowKeyForm((v) => !v)}
-          className="self-start sm:self-center gap-1.5"
+          className="gap-1.5"
         >
-          <PlusIcon className="text-xs" />
+          <PlusIcon className="size-3.5" />
           {t('apiDocs.createKey')}
         </Button>
-      </div>
-
+      }
+    >
       {showKeyForm ? (
         <form
           onSubmit={handleCreateKey}
-          className="flex flex-col @sm:flex-row items-stretch @sm:items-center gap-2 rounded-lg border border-accent/30 bg-surface-2 p-3 animate-fade-in"
+          className="flex animate-fade-in flex-col items-stretch gap-2 rounded-xl border border-accent/30 bg-surface-2 p-3 @md:flex-row @md:items-center"
         >
-          <input
+          <Input
             type="text"
             required
+            autoFocus
             value={newKeyName}
             onChange={(e) => setNewKeyName(e.target.value)}
             placeholder={t('apiDocs.keyNamePlaceholder')}
-            className="flex-1 rounded-md border border-stroke bg-canvas px-3 py-1.5 text-xs text-text outline-none focus:border-accent"
+            aria-label={t('apiDocs.keyNamePlaceholder')}
+            className="flex-1"
           />
           <div className="flex items-center gap-2">
-            <Button type="submit" variant="primary" size="sm">
-              Создать
+            <Button type="submit" variant="primary" size="md">
+              {t('apiDocs.keyCreate')}
             </Button>
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={() => setShowKeyForm(false)}
-            >
-              Отмена
+            <Button type="button" variant="outline" size="md" onClick={() => setShowKeyForm(false)}>
+              {t('apiDocs.keyCancel')}
             </Button>
           </div>
         </form>
       ) : null}
 
-      <div className="flex flex-col gap-2.5">
+      <ul className="flex flex-col gap-2.5">
         {keys.map((k) => {
           const isRevealed = Boolean(revealedKeyIds[k.id]);
           const isCopied = copiedKeyId === k.id;
-          const displayKey = isRevealed
-            ? k.key
-            : `${k.key.slice(0, 15)}••••••••••••••••••••••••••••`;
+          const displayKey = isRevealed ? k.key : `${k.key.slice(0, 15)}••••••••••••••••••••••••••••`;
 
           return (
-            <div
+            <li
               key={k.id}
-              className="flex flex-col @md:flex-row @md:items-center justify-between gap-3 rounded-lg border border-stroke bg-canvas p-3.5 transition-colors hover:border-stroke-strong"
+              className="flex flex-col justify-between gap-3 rounded-xl border border-stroke bg-canvas p-3.5 transition-colors hover:border-stroke-strong @md:flex-row @md:items-center"
             >
               <div className="min-w-0 flex-1">
-                <div className="flex items-center gap-2">
-                  <span className="font-semibold text-sm text-text truncate">{k.name}</span>
-                  <Badge tone="brand" className="text-[10px] py-0 px-1.5">
+                <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1">
+                  <span className="truncate text-sm font-semibold text-text">{k.name}</span>
+                  <Badge tone="success" className="px-2 py-0 text-[11px]">
                     {t('apiDocs.keyActive')}
                   </Badge>
-                  <span className="text-[11px] text-muted hidden @lg:inline font-mono">
-                    {k.createdAt}
-                  </span>
+                  <span className="font-mono text-xs text-subtle">{k.createdAt}</span>
                 </div>
-                <div className="mt-1.5 flex items-center gap-2 font-mono text-xs text-text">
-                  <span className="rounded bg-surface px-2 py-0.5 border border-stroke select-all text-xs">
+                <div className="mt-2 flex items-center gap-1.5">
+                  <code className="min-w-0 flex-1 truncate rounded-lg border border-stroke bg-surface px-2.5 py-1.5 font-mono text-xs text-text select-all @md:flex-none">
                     {displayKey}
-                  </span>
-                  <button
-                    type="button"
+                  </code>
+                  <IconButton
+                    size="sm"
+                    label={isRevealed ? t('apiDocs.keyHide') : t('apiDocs.keyShow')}
+                    aria-pressed={isRevealed}
                     onClick={() => toggleReveal(k.id)}
-                    title={isRevealed ? 'Скрыть' : 'Показать'}
-                    className="p-1 text-muted hover:text-text transition-colors"
                   >
-                    {isRevealed ? (
-                      <EyeOffIcon className="text-sm" />
-                    ) : (
-                      <EyeIcon className="text-sm" />
-                    )}
-                  </button>
+                    {isRevealed ? <EyeOffIcon className="size-4" /> : <EyeIcon className="size-4" />}
+                  </IconButton>
                 </div>
               </div>
 
-              <div className="flex items-center gap-2 shrink-0">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => handleCopyKey(k.id, k.key)}
-                  className="text-xs"
-                >
+              <div className="flex shrink-0 items-center gap-2">
+                <Button variant="outline" size="sm" onClick={() => handleCopyKey(k.id, k.key)} className="gap-1.5">
                   {isCopied ? (
                     <>
-                      <CheckIcon className="text-accent text-sm" />
-                      <span className="text-accent">Скопировано</span>
+                      <CheckIcon className="size-3.5 text-accent" />
+                      <span className="text-accent">{t('apiDocs.keyCopied')}</span>
                     </>
                   ) : (
                     <>
-                      <CopyIcon className="text-sm" />
-                      <span>Копировать</span>
+                      <CopyIcon className="size-3.5" />
+                      <span>{t('apiDocs.keyCopy')}</span>
                     </>
                   )}
                 </Button>
@@ -174,22 +147,20 @@ export function KeysSection({ keys, onAddKey, onRevokeKey }: KeysSectionProps) {
                     variant="outline"
                     size="sm"
                     onClick={() => onRevokeKey(k.id)}
-                    className="text-xs text-danger hover:bg-danger/10 hover:border-danger/40"
+                    className="text-danger hover:border-danger/40 hover:bg-danger-soft"
                   >
                     {t('apiDocs.revoke')}
                   </Button>
                 ) : null}
               </div>
-            </div>
+            </li>
           );
         })}
-      </div>
+      </ul>
 
-      <Callout tone="info" title="Безопасность">
-        Никогда не передавайте API-ключ в публичный доступ или git-репозиторий. Используйте
-        переменные окружения (<code className="font-mono text-accent">KETNER_API_KEY</code>) или
-        секреты вашей операционной системы.
+      <Callout tone="info" title={t('apiDocs.keysSecurityTitle')} className="my-0">
+        <RichText text={t('apiDocs.keysSecurityText')} />
       </Callout>
-    </section>
+    </DocSection>
   );
 }

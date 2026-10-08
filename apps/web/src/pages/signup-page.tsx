@@ -27,7 +27,7 @@ const MIN_PASSWORD_LENGTH = 8;
  * Клиентская валидация, индикатор требований пароля и сохранение сессии.
  */
 export function SignupPage() {
-  const { t, language } = useTranslation();
+  const { t } = useTranslation();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const rawRedirect = searchParams.get('redirect');
@@ -93,7 +93,7 @@ export function SignupPage() {
       await signup({ email: trimmedEmail, password, name: trimmedName });
       navigate(redirectUrl, { replace: true });
     } catch (error) {
-      setServerError(error instanceof Error ? error.message : 'Ошибка регистрации');
+      setServerError(error instanceof Error ? error.message : t('auth.signupFailed'));
     } finally {
       setLoading(false);
     }
@@ -117,7 +117,7 @@ export function SignupPage() {
           navigate(redirectUrl, { replace: true });
           return;
         }
-        setServerError(res.error.message || `Ошибка авторизации через ${provider}`);
+        setServerError(res.error.message || t('auth.oauthFailed', { provider }));
         return;
       }
     } catch (error) {
@@ -130,7 +130,7 @@ export function SignupPage() {
           // ignore
         }
       }
-      setServerError(error instanceof Error ? error.message : 'Ошибка OAuth');
+      setServerError(error instanceof Error ? error.message : t('auth.oauthError'));
     } finally {
       setLoading(false);
     }
@@ -146,7 +146,7 @@ export function SignupPage() {
               ? `/login?redirect=${encodeURIComponent(redirectUrl)}`
               : '/login'
           }
-          className="text-accent hover:underline"
+          className="inline-flex min-h-11 items-center font-medium text-accent hover:underline"
         >
           {t('auth.toLogin')}
         </Link>
@@ -157,7 +157,7 @@ export function SignupPage() {
         {redirectUrl.startsWith('/checkout') && (
           <div
             role="status"
-            className="rounded-md border border-accent/30 bg-accent-soft p-3 text-[13px] text-text font-medium flex items-center gap-2.5"
+            className="flex items-center gap-2.5 rounded-xl border border-accent/30 bg-accent-soft p-3 text-[13px] font-medium leading-5 text-text"
           >
             <SparkleIcon className="size-4 shrink-0 text-accent" />
             <span>{t('auth.checkoutSignupNotice')}</span>
@@ -168,7 +168,7 @@ export function SignupPage() {
         {serverError && (
           <div
             role="alert"
-            className="flex flex-col gap-1 rounded-md border border-danger/30 bg-danger-soft p-3 text-[13px] text-danger"
+            className="flex flex-col gap-1 rounded-xl border border-danger/30 bg-danger-soft p-3 text-[13px] leading-5 text-danger"
           >
             <div className="flex items-center gap-2">
               <AlertIcon className="size-4 shrink-0" />
@@ -178,11 +178,9 @@ export function SignupPage() {
               serverError.toLowerCase().includes('already exists')) && (
               <Link
                 to={`/login?email=${encodeURIComponent(email.trim())}`}
-                className="font-semibold underline hover:opacity-85 text-xs ml-6"
+                className="ml-6 inline-flex min-h-9 items-center text-xs font-semibold underline hover:opacity-85"
               >
-                {language === 'ru'
-                  ? 'Войти в существующий аккаунт →'
-                  : 'Log into existing account →'}
+                {t('auth.toExistingAccount')}
               </Link>
             )}
           </div>
@@ -198,7 +196,7 @@ export function SignupPage() {
             onClick={() => void handleOAuth('google')}
             aria-label={t('auth.continueGoogle')}
             title={t('auth.oauthStub')}
-            className="font-medium text-xs gap-2"
+            className="gap-2 text-sm font-medium"
           >
             <GoogleIcon className="size-4 text-text shrink-0" />
             <span>Google</span>
@@ -212,7 +210,7 @@ export function SignupPage() {
             onClick={() => void handleOAuth('github')}
             aria-label={t('auth.continueGitHub')}
             title={t('auth.oauthStub')}
-            className="font-medium text-xs gap-2"
+            className="gap-2 text-sm font-medium"
           >
             <GitHubIcon className="size-4 text-text shrink-0" />
             <span>GitHub</span>
@@ -232,7 +230,7 @@ export function SignupPage() {
                 aria-describedby={describedBy}
                 type="text"
                 autoComplete="name"
-                placeholder="Иван"
+                placeholder={t('auth.namePlaceholder')}
                 value={name}
                 onChange={(e) => {
                   setName(e.target.value);
@@ -289,18 +287,9 @@ export function SignupPage() {
                   <div className="absolute right-1 flex items-center">
                     <IconButton
                       size="sm"
-                      label={
-                        showPassword
-                          ? language === 'ru'
-                            ? 'Скрыть'
-                            : 'Hide'
-                          : language === 'ru'
-                            ? 'Показать'
-                            : 'Show'
-                      }
+                      label={showPassword ? t('auth.hidePassword') : t('auth.showPassword')}
                       aria-pressed={showPassword}
                       onClick={() => setShowPassword(!showPassword)}
-                      tabIndex={-1}
                     >
                       {showPassword ? (
                         <EyeOffIcon className="size-4" />
@@ -347,7 +336,7 @@ export function SignupPage() {
           </Button>
         </form>
 
-        <p role="status" className="text-center font-mono text-[11px] text-muted">
+        <p role="status" className="text-balance text-center text-xs leading-5 text-muted">
           {t('auth.demoNotice')}
         </p>
       </div>

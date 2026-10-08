@@ -22,37 +22,27 @@ export function Section({
   description,
   children,
   className,
-  align = 'left',
+  align = 'center',
 }: SectionProps) {
   return (
-    <section
-      id={id}
-      className={cn(
-        'w-full py-12 md:py-28 scroll-mt-14',
-        className,
-      )}
-    >
+    <section id={id} className={cn('w-full scroll-mt-20 py-12 md:py-20', className)}>
       <Reveal>
         <div
           className={cn(
-            'flex flex-col gap-3 mb-12',
+            'mb-10 flex flex-col gap-4 md:mb-14',
             align === 'center' ? 'items-center text-center' : 'items-start text-left',
           )}
         >
-          {(index || label) && (
-            <SectionLabel index={index}>{label}</SectionLabel>
-          )}
-          <h2 className="text-2xl sm:text-3xl md:text-4xl font-semibold tracking-tight text-text text-balance">
-            {title}
-          </h2>
+          {(index || label) && <SectionLabel index={index}>{label}</SectionLabel>}
+          <h2 className="t-headline max-w-[22ch] text-text">{title}</h2>
           {description && (
-            <p className="text-[15px] sm:text-base text-muted max-w-[64ch] text-balance leading-relaxed">
+            <p className="max-w-[60ch] text-[15px] leading-relaxed text-muted text-balance sm:text-base md:text-[17px]">
               {description}
             </p>
           )}
         </div>
-        {children}
       </Reveal>
+      {children}
     </section>
   );
 }

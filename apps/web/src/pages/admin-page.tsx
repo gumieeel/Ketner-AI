@@ -1,13 +1,28 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, type ReactNode } from 'react';
 import { useAuth } from '@/features/auth/auth-store';
-import { Badge } from '@/components/ui/badge';
+import { Badge, type BadgeTone } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
-import { Divider } from '@/components/ui/divider';
 import { Input } from '@/components/ui/input';
-import { Spinner } from '@/components/ui/spinner';
+import { Modal, ModalHeader } from '@/components/ui/modal';
+import { Skeleton } from '@/components/ui/skeleton';
 import { StatusDot } from '@/components/ui/status-dot';
-import { SearchIcon, CloseIcon, EditIcon, CheckIcon } from '@/components/icons';
+import {
+  AlertIcon,
+  BoltIcon,
+  ChartIcon,
+  CheckIcon,
+  CpuIcon,
+  EditIcon,
+  KeyIcon,
+  MessagesIcon,
+  RefreshIcon,
+  SearchIcon,
+  ShieldIcon,
+  UserIcon,
+} from '@/components/icons';
+import { useTranslation, type TranslationKey } from '@/i18n';
+import { cn } from '@/lib/cn';
 import type { PlanId } from '@/features/auth/types';
 
 interface UserSummary {
@@ -141,7 +156,213 @@ interface GatewayMetricsData {
   hasNegativeMarginAlert: boolean;
 }
 
+/**
+ * Ошибка для показа в интерфейсе: либо ключ перевода (язык можно переключить
+ * после появления ошибки), либо готовый текст, пришедший с сервера.
+ */
+type Problem =
+  | { key: TranslationKey; vars?: Record<string, string | number> }
+  | { text: string };
+
+class ProblemError extends Error {
+  readonly problem: Problem;
+
+  constructor(problem: Problem) {
+    super('admin-problem');
+    this.problem = problem;
+  }
+}
+
+function toProblem(error: unknown, fallback: TranslationKey): Problem {
+  if (error instanceof ProblemError) {
+    return error.problem;
+  }
+  if (error instanceof Error && error.message) {
+    return { text: error.message };
+  }
+  return { key: fallback };
+}
+
+const PLAN_TONES: Record<string, BadgeTone> = {
+  free: 'neutral',
+  plus: 'plus',
+  pro: 'pro',
+  ultra: 'ultra',
+};
+
+const PLAN_OPTIONS: PlanId[] = ['free', 'plus', 'pro', 'ultra', 'gpt-pro', 'claude-pro', 'gemini-pro'];
+
+const SELECT_CLASS =
+  'h-11 rounded-md border border-stroke bg-surface px-3 text-sm text-text shadow-xs transition-[border-color,box-shadow] duration-200 hover:border-stroke-strong focus:border-accent focus:outline-none focus:ring-4 focus:ring-accent-soft';
+
+const SUBTLE_PANEL = 'rounded-xl border border-stroke bg-canvas p-4';
+
+function budgetTone(pct: number): string {
+  if (pct >= 90) return 'bg-danger';
+  if (pct >= 50) return 'bg-warning';
+  return 'bg-accent';
+}
+
+/** Узкая заголовочная подпись блока внутри карточки. */
+function PanelTitle({ children, icon }: { children: ReactNode; icon?: ReactNode }) {
+  return (
+    <h3 className="flex items-center gap-2 text-[13px] font-semibold text-text">
+      {icon}
+      {children}
+    </h3>
+  );
+}
+
+interface KpiProps {
+  icon: ReactNode;
+  label: string;
+  value: ReactNode;
+  hint?: string;
+  tone?: 'default' | 'accent';
+  loading?: boolean;
+}
+
+/** Карточка показателя: иконка, значение с табличными цифрами и пояснение. */
+function Kpi({ icon, label, value, hint, tone = 'default', loading = false }: KpiProps) {
+  return (
+    <Card className="flex flex-col gap-3 rounded-2xl p-3.5 sm:p-5">
+      <div className="flex items-start gap-2.5 sm:items-center">
+        <span className="grid size-9 shrink-0 place-items-center rounded-lg bg-accent-soft text-accent ring-1 ring-accent/20 ring-inset">
+          {icon}
+        </span>
+        <p className="min-w-0 text-[13px] leading-4 font-medium text-muted">{label}</p>
+      </div>
+      <div>
+        {loading ? (
+          <Skeleton className="h-8 w-24" />
+        ) : (
+          <p
+            className={cn(
+              'text-2xl leading-8 font-semibold tracking-tight tabular-nums sm:text-[28px]',
+              tone === 'accent' ? 'text-gradient' : 'text-text',
+            )}
+          >
+            {value}
+          </p>
+        )}
+        {hint ? <p className="mt-1.5 hidden text-xs text-subtle sm:block">{hint}</p> : null}
+      </div>
+    </Card>
+  );
+}
+
+function MetricCard({ title, children }: { title: string; children: ReactNode }) {
+  return (
+    <div className={SUBTLE_PANEL}>
+      <p className="text-[13px] font-medium text-muted">{title}</p>
+      <div className="mt-2">{children}</div>
+    </div>
+  );
+}
+
+function MetricRow({ label, value, tone }: { label: ReactNode; value: ReactNode; tone?: 'accent' | 'muted' }) {
+  return (
+    <div className="flex items-baseline justify-between gap-3 text-[13px]">
+      <span className="text-muted">{label}</span>
+      <span
+        className={cn(
+          'font-semibold tabular-nums',
+          tone === 'accent' ? 'text-accent' : tone === 'muted' ? 'text-muted' : 'text-text',
+        )}
+      >
+        {value}
+      </span>
+    </div>
+  );
+}
+
+function UsersSkeleton() {
+  return (
+    <>
+      {Array.from({ length: 6 }, (_, index) => (
+        <tr key={index} aria-hidden="true">
+          <td className="px-4 py-3.5">
+            <Skeleton className="h-4 w-32" />
+            <Skeleton className="mt-2 h-3 w-44 max-w-full" />
+          </td>
+          <td className="hidden px-4 py-3.5 md:table-cell">
+            <Skeleton className="h-5 w-16 rounded-full" />
+          </td>
+          <td className="hidden px-4 py-3.5 lg:table-cell">
+            <Skeleton className="h-4 w-14" />
+          </td>
+          <td className="hidden px-4 py-3.5 lg:table-cell">
+            <Skeleton className="h-4 w-16" />
+          </td>
+          <td className="hidden px-4 py-3.5 sm:table-cell">
+            <Skeleton className="h-4 w-24" />
+          </td>
+          <td className="hidden px-4 py-3.5 xl:table-cell">
+            <Skeleton className="h-4 w-20" />
+          </td>
+          <td className="px-4 py-3.5 text-right">
+            <Skeleton className="ml-auto h-9 w-20 rounded-md" />
+          </td>
+        </tr>
+      ))}
+    </>
+  );
+}
+
+function DetailSkeleton() {
+  return (
+    <div aria-hidden="true" className="flex flex-col gap-4">
+      <div className="grid gap-4 md:grid-cols-2">
+        <Skeleton className="h-36 rounded-xl" />
+        <Skeleton className="h-36 rounded-xl" />
+      </div>
+      <Skeleton className="h-28 rounded-xl" />
+      <Skeleton className="h-20 rounded-xl" />
+    </div>
+  );
+}
+
+function BudgetMeter({ user, detailed = false }: { user: UserSummary; detailed?: boolean }) {
+  return (
+    <div className="flex items-center gap-2.5">
+      <div className="h-1.5 w-14 shrink-0 overflow-hidden rounded-full bg-surface-3 sm:w-20">
+        <div
+          className={cn('h-full rounded-full', budgetTone(user.budgetUsedPct))}
+          style={{ width: `${Math.min(100, user.budgetUsedPct)}%` }}
+        />
+      </div>
+      <span className="text-xs font-semibold tabular-nums">{user.budgetUsedPct}%</span>
+      {detailed ? (
+        <span className="hidden text-xs text-muted tabular-nums xl:inline">
+          (${user.usage.costThisMonth} / ${user.limits.costBudget ?? 0})
+        </span>
+      ) : null}
+    </div>
+  );
+}
+
+function PlanBadges({ user }: { user: Pick<UserSummary, 'plan' | 'isVip' | 'isAdmin'> }) {
+  return (
+    <div className="flex flex-wrap items-center gap-1.5">
+      <Badge tone={PLAN_TONES[user.plan] ?? 'outline'} className="px-2 py-0 text-[11px] uppercase">
+        {user.plan}
+      </Badge>
+      {user.isVip ? (
+        <Badge tone="warning" className="px-2 py-0 text-[11px]">
+          VIP
+        </Badge>
+      ) : null}
+      {user.isAdmin ? (
+        <Badge tone="danger" className="px-2 py-0 text-[11px]">
+          ADMIN
+        </Badge>
+      ) : null}
+    </div>
+  );
+}
+
 export function AdminPage() {
+  const { t } = useTranslation();
   const currentUser = useAuth((state) => state.user);
   const token = useAuth((state) => state.token);
 
@@ -156,13 +377,13 @@ export function AdminPage() {
   const [search, setSearch] = useState('');
   const [planFilter, setPlanFilter] = useState('');
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<Problem | null>(null);
 
   // Selected user for details & edit modal
   const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
   const [detailUser, setDetailUser] = useState<UserDetail | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
-  const [detailError, setDetailError] = useState<string | null>(null);
+  const [detailError, setDetailError] = useState<Problem | null>(null);
 
   // Edit form state
   const [editPlan, setEditPlan] = useState<PlanId>('free');
@@ -170,19 +391,15 @@ export function AdminPage() {
   const [editAdmin, setEditAdmin] = useState(false);
   const [saving, setSaving] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
-  const [saveError, setSaveError] = useState<string | null>(null);
+  const [saveError, setSaveError] = useState<Problem | null>(null);
 
-  // Esc key listener to close modal
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape' && selectedUserId) {
-        setSelectedUserId(null);
-        setDetailUser(null);
-      }
-    };
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [selectedUserId]);
+  const closeDetail = useCallback(() => {
+    setSelectedUserId(null);
+    setDetailUser(null);
+  }, []);
+
+  const describe = (problem: Problem): string =>
+    'text' in problem ? problem.text : t(problem.key, problem.vars);
 
   const getHeaders = useCallback((): HeadersInit => {
     const headers: Record<string, string> = {
@@ -214,10 +431,14 @@ export function AdminPage() {
 
       if (!res.ok) {
         if (res.status === 403) {
-          throw new Error('Доступ запрещён: требуются права администратора или верный Admin API Key');
+          throw new ProblemError({ key: 'admin.errForbidden' });
         }
         const body = (await res.json()) as { error?: { message?: string } };
-        throw new Error(body.error?.message || `Ошибка сервера (${res.status})`);
+        throw new ProblemError(
+          body.error?.message
+            ? { text: body.error.message }
+            : { key: 'admin.errServer', vars: { status: res.status } },
+        );
       }
 
       const data = (await res.json()) as {
@@ -229,7 +450,7 @@ export function AdminPage() {
       setUsers(data.users || []);
       setTotal(data.total || 0);
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : 'Не удалось загрузить пользователей');
+      setError(toProblem(err, 'admin.errLoadUsers'));
     } finally {
       setLoading(false);
     }
@@ -268,7 +489,11 @@ export function AdminPage() {
       });
       if (!res.ok) {
         const body = (await res.json()) as { error?: { message?: string } };
-        throw new Error(body.error?.message || `Ошибка загрузки (${res.status})`);
+        throw new ProblemError(
+          body.error?.message
+            ? { text: body.error.message }
+            : { key: 'admin.errDetail', vars: { status: res.status } },
+        );
       }
       const data = (await res.json()) as UserDetail;
       setDetailUser(data);
@@ -276,7 +501,7 @@ export function AdminPage() {
       setEditVip(data.isVip);
       setEditAdmin(data.isAdmin);
     } catch (err: unknown) {
-      setDetailError(err instanceof Error ? err.message : 'Ошибка загрузки карточки пользователя');
+      setDetailError(toProblem(err, 'admin.errDetailFallback'));
     } finally {
       setDetailLoading(false);
     }
@@ -301,14 +526,18 @@ export function AdminPage() {
 
       if (!res.ok) {
         const body = (await res.json()) as { error?: { message?: string } };
-        throw new Error(body.error?.message || `Ошибка обновления (${res.status})`);
+        throw new ProblemError(
+          body.error?.message
+            ? { text: body.error.message }
+            : { key: 'admin.errUpdate', vars: { status: res.status } },
+        );
       }
 
       setSaveSuccess(true);
       await loadUserDetail(selectedUserId);
       await loadUsers();
     } catch (err: unknown) {
-      setSaveError(err instanceof Error ? err.message : 'Не удалось сохранить изменения');
+      setSaveError(toProblem(err, 'admin.errSaveFallback'));
     } finally {
       setSaving(false);
     }
@@ -316,202 +545,236 @@ export function AdminPage() {
 
   const isSelf = detailUser && currentUser && (currentUser.id === detailUser.id || currentUser.email.toLowerCase() === detailUser.email.toLowerCase());
 
+  const hasData = users.length > 0;
+  const showKpiSkeleton = loading && !hasData;
+
   return (
-    <div className="mx-auto flex w-full max-w-7xl flex-col gap-6 px-4 py-8 text-text">
+    <div className="mx-auto flex w-full max-w-7xl flex-col gap-6 px-4 py-6 text-text md:py-8">
       {/* Header */}
-      <div className="flex flex-wrap items-center justify-between gap-4 border-b border-stroke pb-5">
-        <div>
-          <div className="flex items-center gap-2.5">
-            <h1 className="text-2xl font-semibold tracking-tight text-text">
-              Обзорная панель администратора
+      <header className="relative flex flex-col gap-5 overflow-hidden rounded-2xl border border-stroke bg-surface p-5 sm:p-6 lg:flex-row lg:items-end lg:justify-between">
+        <div
+          aria-hidden="true"
+          className="bg-aurora pointer-events-none absolute inset-0 opacity-50 [mask-image:linear-gradient(to_right,black,transparent_70%)]"
+        />
+        <div className="relative min-w-0">
+          <div className="flex flex-wrap items-center gap-2.5">
+            <h1 className="text-2xl font-semibold tracking-tight text-balance text-text md:text-[28px]">
+              {t('admin.title')}
             </h1>
             <Badge tone="brand">Admin</Badge>
           </div>
-          <p className="mt-1 text-sm text-muted">
-            Мониторинг пользователей, расходов токенов, соблюдения лимитов и управление доступом.
-          </p>
+          <p className="mt-2 max-w-[60ch] text-sm leading-6 text-muted">{t('admin.lead')}</p>
         </div>
 
         {/* Admin Key Switcher */}
-        <div className="flex items-center gap-2 rounded-lg bg-surface p-2 text-xs border border-stroke">
-          <span className="text-muted">Ключ доступа:</span>
-          <input
-            type="password"
-            value={adminKey}
-            onChange={(e) => {
-              setAdminKey(e.target.value);
-              localStorage.setItem('ketner_admin_key', e.target.value);
-            }}
-            placeholder="x-admin-key"
-            className="w-48 rounded bg-canvas px-2.5 py-1 text-text border border-stroke font-mono text-xs outline-none focus:border-accent"
-          />
+        <div className="relative flex flex-col gap-2 sm:flex-row sm:items-end">
+          <label className="flex flex-col gap-1.5 sm:w-64">
+            <span className="flex items-center gap-1.5 text-[13px] font-medium text-muted">
+              <KeyIcon className="size-3.5" />
+              {t('admin.keyLabel')}
+            </span>
+            <Input
+              type="password"
+              value={adminKey}
+              onChange={(e) => {
+                setAdminKey(e.target.value);
+                localStorage.setItem('ketner_admin_key', e.target.value);
+              }}
+              placeholder="x-admin-key"
+              autoComplete="off"
+              className="font-mono text-sm"
+            />
+          </label>
           <Button
-            size="sm"
             variant="secondary"
+            size="md"
+            className="h-12 sm:h-11"
+            leftIcon={<RefreshIcon className={cn('size-4', loading && 'animate-spin')} />}
             onClick={() => {
               void loadUsers();
               void loadMetrics();
             }}
           >
-            Обновить
+            {t('admin.refresh')}
           </Button>
         </div>
-      </div>
+      </header>
 
       {/* KPI Cards */}
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <Card className="p-4 border-stroke bg-surface">
-          <p className="text-[11px] font-mono text-muted uppercase tracking-wider">Всего пользователей</p>
-          <p className="mt-1 text-2xl font-semibold font-mono text-text">{total}</p>
-        </Card>
-        <Card className="p-4 border-stroke bg-surface">
-          <p className="text-[11px] font-mono text-muted uppercase tracking-wider">Запросов сегодня</p>
-          <p className="mt-1 text-2xl font-semibold font-mono text-accent">
-            {users.reduce((sum, u) => sum + (u.usage?.requestsToday || 0), 0)}
-          </p>
-        </Card>
-        <Card className="p-4 border-stroke bg-surface">
-          <p className="text-[11px] font-mono text-muted uppercase tracking-wider">Токенов сегодня</p>
-          <p className="mt-1 text-2xl font-semibold font-mono text-text">
-            {users.reduce((sum, u) => sum + (u.usage?.tokensToday || 0), 0).toLocaleString()}
-          </p>
-        </Card>
-        <Card className="p-4 border-stroke bg-surface">
-          <p className="text-[11px] font-mono text-muted uppercase tracking-wider">Расход за месяц</p>
-          <p className="mt-1 text-2xl font-semibold font-mono text-accent">
-            ${users.reduce((sum, u) => sum + (u.usage?.costThisMonth || 0), 0).toFixed(2)}
-          </p>
-        </Card>
-      </div>
+      <section className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
+        <Kpi
+          icon={<UserIcon className="size-[18px]" />}
+          label={t('admin.kpiUsers')}
+          value={total}
+          loading={showKpiSkeleton}
+        />
+        <Kpi
+          icon={<MessagesIcon className="size-[18px]" />}
+          label={t('admin.kpiRequests')}
+          value={users.reduce((sum, u) => sum + (u.usage?.requestsToday || 0), 0)}
+          hint={t('admin.kpiScope')}
+          tone="accent"
+          loading={showKpiSkeleton}
+        />
+        <Kpi
+          icon={<BoltIcon className="size-[18px]" />}
+          label={t('admin.kpiTokens')}
+          value={users.reduce((sum, u) => sum + (u.usage?.tokensToday || 0), 0).toLocaleString()}
+          hint={t('admin.kpiScope')}
+          loading={showKpiSkeleton}
+        />
+        <Kpi
+          icon={<ChartIcon className="size-[18px]" />}
+          label={t('admin.kpiSpend')}
+          value={`$${users.reduce((sum, u) => sum + (u.usage?.costThisMonth || 0), 0).toFixed(2)}`}
+          hint={t('admin.kpiScope')}
+          tone="accent"
+          loading={showKpiSkeleton}
+        />
+      </section>
 
       {/* Phase 4: Алерт отрицательной маржинальности */}
       {metrics?.hasNegativeMarginAlert && (
-        <div className="flex flex-col gap-2 rounded-lg border border-danger/40 bg-danger/10 p-4 text-xs text-danger">
-          <div className="flex items-center gap-2 font-semibold text-sm">
-            <span className="flex h-2.5 w-2.5 rounded-full bg-danger animate-pulse" />
-            Внимание: обнаружена отрицательная маржинальность (Contribution Margin &lt; 0)
+        <div
+          role="alert"
+          className="flex flex-col gap-3 rounded-2xl border border-danger/35 bg-danger-soft p-4 sm:p-5"
+        >
+          <div className="flex items-start gap-3">
+            <AlertIcon className="mt-0.5 size-5 shrink-0 text-danger" />
+            <div className="min-w-0">
+              <p className="text-sm font-semibold text-danger">{t('admin.marginAlertTitle')}</p>
+              <p className="mt-1 text-[13px] leading-5 text-muted">{t('admin.marginAlertText')}</p>
+            </div>
           </div>
-          <p className="text-muted">
-            Себестоимость запросов превысила доход от подписки для следующих пользователей:
-          </p>
-          <div className="flex flex-col gap-1.5 mt-1">
+          <ul className="flex flex-col gap-2">
             {metrics.alerts.map((alert, idx) => (
-              <div
+              <li
                 key={idx}
-                className="flex flex-wrap items-center justify-between gap-2 rounded bg-surface/80 px-3 py-1.5 border border-danger/20 font-mono text-[11px]"
+                className="flex flex-col gap-1 rounded-lg border border-danger/20 bg-surface/80 px-3 py-2 text-[13px] sm:flex-row sm:items-center sm:justify-between sm:gap-3"
               >
-                <span>
-                  {alert.userEmail} <Badge tone="brand">{alert.plan}</Badge>
+                <span className="flex min-w-0 flex-wrap items-center gap-2 text-text">
+                  <span className="min-w-0 break-all">{alert.userEmail}</span>
+                  <Badge tone={PLAN_TONES[alert.plan] ?? 'outline'} className="px-2 py-0 text-[11px] uppercase">
+                    {alert.plan}
+                  </Badge>
                 </span>
-                <span className="text-danger font-semibold">
-                  Расход: ${alert.aiCost} · Доход: ${alert.subscriptionRevenue} (Маржа: ${alert.contributionMargin})
+                <span className="font-medium text-danger tabular-nums">
+                  {t('admin.marginAlertLine', {
+                    cost: alert.aiCost,
+                    revenue: alert.subscriptionRevenue,
+                    margin: alert.contributionMargin,
+                  })}
                 </span>
-              </div>
+              </li>
             ))}
-          </div>
+          </ul>
         </div>
       )}
 
       {/* Phase 4: Метрики шлюза (Cache Hit Rate, Latency, TTFT, Источники и Тарифы) */}
       {metrics && (
-        <div className="flex flex-col gap-3 rounded-xl border border-stroke bg-surface/50 p-4">
-          <div className="flex items-center justify-between">
-            <h2 className="text-sm font-semibold tracking-tight text-text flex items-center gap-2">
-              <span>Экономика и производительность шлюза</span>
-              <Badge tone="brand">Phase 4</Badge>
+        <Card className="flex flex-col gap-4 rounded-2xl p-4 sm:p-5">
+          <div className="flex flex-col gap-1.5 sm:flex-row sm:items-center sm:justify-between">
+            <h2 className="flex items-center gap-2.5 text-base font-semibold tracking-tight text-text">
+              <span className="grid size-8 place-items-center rounded-lg bg-accent-soft text-accent ring-1 ring-accent/20 ring-inset">
+                <CpuIcon className="size-4" />
+              </span>
+              {t('admin.gatewayTitle')}
             </h2>
-            <span className="font-mono text-xs text-muted">
-              Всего запросов: {metrics.totalRequests} · Себестоимость: ${metrics.totalCost}
-            </span>
+            <p className="text-[13px] text-muted tabular-nums">
+              {t('admin.gatewayTotals', { requests: metrics.totalRequests, cost: metrics.totalCost })}
+            </p>
           </div>
 
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
-            <Card className="p-3 border-stroke bg-canvas">
-              <p className="text-[10px] font-mono text-muted uppercase tracking-wider">Semantic Cache Hit Rate</p>
-              <div className="mt-1 flex items-baseline gap-2">
-                <span className="text-xl font-bold font-mono text-accent">
+            <MetricCard title={t('admin.cacheHitRate')}>
+              <div className="flex flex-wrap items-baseline gap-x-2">
+                <span className="text-gradient text-2xl font-semibold tabular-nums">
                   {metrics.cacheHitRatePct}%
                 </span>
-                <span className="text-xs text-muted font-mono">
-                  ({metrics.cacheHits} из {metrics.totalRequests})
+                <span className="text-xs text-muted tabular-nums">
+                  {t('admin.cacheHits', { hits: metrics.cacheHits, total: metrics.totalRequests })}
                 </span>
               </div>
-              <p className="text-[10px] text-muted mt-0.5">Экономия 100% затрат на хит</p>
-            </Card>
+              <p className="mt-1 text-xs text-subtle">{t('admin.cacheSaving')}</p>
+            </MetricCard>
 
-            <Card className="p-3 border-stroke bg-canvas">
-              <p className="text-[10px] font-mono text-muted uppercase tracking-wider">Задержка и TTFT</p>
-              <div className="mt-1 flex items-baseline gap-2">
-                <span className="text-xl font-bold font-mono text-text">
+            <MetricCard title={t('admin.latency')}>
+              <div className="flex flex-wrap items-baseline gap-x-2">
+                <span className="text-2xl font-semibold text-text tabular-nums">
                   {metrics.latency.averageLatencyMs} ms
                 </span>
-                <span className="text-xs text-muted font-mono">
-                  (P95: {metrics.latency.p95LatencyMs} ms)
+                <span className="text-xs text-muted tabular-nums">
+                  P95: {metrics.latency.p95LatencyMs} ms
                 </span>
               </div>
-              <p className="text-[10px] text-muted mt-0.5 font-mono">
+              <p className="mt-1 text-xs text-subtle tabular-nums">
                 TTFT: {metrics.latency.averageTtftMs ?? '-'} ms
               </p>
-            </Card>
+            </MetricCard>
 
-            <Card className="p-3 border-stroke bg-canvas">
-              <p className="text-[10px] font-mono text-muted uppercase tracking-wider">Затраты по источникам</p>
-              <div className="mt-1 text-xs font-mono flex flex-col gap-0.5">
-                <div className="flex justify-between">
-                  <span className="text-muted">Провайдеры:</span>
-                  <span className="font-semibold text-text">${metrics.costBySource.provider.cost}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-muted">Кэш:</span>
-                  <span className="font-semibold text-accent">$0.00 ({metrics.costBySource.cache.requests} req)</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-muted">Шаблоны:</span>
-                  <span className="font-semibold text-muted">$0.00 ({metrics.costBySource.template.requests} req)</span>
-                </div>
+            <MetricCard title={t('admin.costBySource')}>
+              <div className="flex flex-col gap-1">
+                <MetricRow label={t('admin.sourceProvider')} value={`$${metrics.costBySource.provider.cost}`} />
+                <MetricRow
+                  label={t('admin.sourceCache')}
+                  value={`$0.00 · ${t('admin.requestsShort', { count: metrics.costBySource.cache.requests })}`}
+                  tone="accent"
+                />
+                <MetricRow
+                  label={t('admin.sourceTemplate')}
+                  value={`$0.00 · ${t('admin.requestsShort', { count: metrics.costBySource.template.requests })}`}
+                  tone="muted"
+                />
               </div>
-            </Card>
+            </MetricCard>
 
-            <Card className="p-3 border-stroke bg-canvas">
-              <p className="text-[10px] font-mono text-muted uppercase tracking-wider">Расход по тарифам</p>
-              <div className="mt-1 text-xs font-mono flex flex-col gap-0.5">
+            <MetricCard title={t('admin.costByPlan')}>
+              <div className="flex flex-col gap-1">
                 {metrics.costByPlan.slice(0, 3).map((p) => (
-                  <div key={p.plan} className="flex justify-between">
-                    <span className="capitalize text-muted">{p.plan}:</span>
-                    <span className="font-semibold text-text">${p.totalCost} ({p.requests} req)</span>
-                  </div>
+                  <MetricRow
+                    key={p.plan}
+                    label={<span className="capitalize">{p.plan}</span>}
+                    value={`$${p.totalCost} · ${t('admin.requestsShort', { count: p.requests })}`}
+                  />
                 ))}
               </div>
-            </Card>
+            </MetricCard>
           </div>
-        </div>
+        </Card>
       )}
 
       {/* Filter and Search Bar */}
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="flex flex-wrap items-center gap-3">
-          <div className="relative w-64 sm:w-80">
-            <SearchIcon className="absolute left-3 top-1/2 -translate-y-1/2 text-muted text-sm" />
+      <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+          <div className="relative w-full sm:w-80">
+            <SearchIcon
+              aria-hidden="true"
+              className="pointer-events-none absolute top-1/2 left-3.5 size-4 -translate-y-1/2 text-subtle"
+            />
             <Input
+              type="search"
+              aria-label={t('admin.searchLabel')}
               value={search}
               onChange={(e) => {
                 setSearch(e.target.value);
                 setPage(1);
               }}
-              placeholder="Поиск по email или имени..."
-              className="pl-9 text-xs"
+              placeholder={t('admin.searchPlaceholder')}
+              className="pl-10"
             />
           </div>
 
           <select
+            aria-label={t('admin.planFilter')}
             value={planFilter}
             onChange={(e) => {
               setPlanFilter(e.target.value);
               setPage(1);
             }}
-            className="rounded-md border border-stroke bg-surface px-3 py-1.5 text-xs text-text outline-none focus:border-accent"
+            className={cn(SELECT_CLASS, 'h-12 md:h-11')}
           >
-            <option value="">Все тарифы</option>
+            <option value="">{t('admin.allPlans')}</option>
             <option value="free">Free</option>
             <option value="plus">Plus</option>
             <option value="pro">Pro</option>
@@ -522,19 +785,25 @@ export function AdminPage() {
           </select>
         </div>
 
-        <div className="flex items-center gap-2 text-xs text-muted font-mono">
-          Сортировка: <span className="font-semibold text-text">% Бюджета (убывание)</span>
-        </div>
+        <p className="text-[13px] text-muted">
+          {t('admin.sort')}: <span className="font-medium text-text">{t('admin.sortValue')}</span>
+        </p>
       </div>
 
       {/* Error Message with Quick Unlock */}
       {error ? (
-        <div className="flex flex-col gap-3 rounded-lg border border-danger/30 bg-danger/10 p-4 text-xs text-danger">
-          <div className="flex items-center gap-2">
-            <span className="font-semibold">Ошибка доступа:</span>
-            <span>{error}</span>
+        <div
+          role="alert"
+          className="flex flex-col gap-3 rounded-2xl border border-danger/35 bg-danger-soft p-4 sm:p-5"
+        >
+          <div className="flex items-start gap-3">
+            <ShieldIcon className="mt-0.5 size-5 shrink-0 text-danger" />
+            <div className="min-w-0 text-sm">
+              <p className="font-semibold text-danger">{t('admin.accessError')}</p>
+              <p className="mt-1 leading-6 text-muted">{describe(error)}</p>
+            </div>
           </div>
-          <div className="flex flex-wrap items-center gap-2 pt-1">
+          <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
             <Button
               size="sm"
               variant="outline"
@@ -544,446 +813,367 @@ export function AdminPage() {
                 localStorage.setItem('ketner_admin_key', devKey);
                 void loadUsers();
               }}
-              className="text-xs"
+              className="h-auto min-h-9 py-2 whitespace-normal"
             >
-              Использовать стандартный ключ разработчика (ketner-ai-admin-key-dev)
+              {t('admin.useDevKey')} (ketner-ai-admin-key-dev)
             </Button>
-            <Button size="sm" variant="secondary" onClick={() => void loadUsers()} className="text-xs">
-              Повторить запрос
+            <Button size="sm" variant="secondary" onClick={() => void loadUsers()}>
+              {t('admin.retry')}
             </Button>
           </div>
         </div>
       ) : null}
 
       {/* Users Table */}
-      <div className="overflow-x-auto rounded-lg border border-stroke bg-surface">
-        <table className="w-full text-left text-xs">
-          <thead className="sticky top-0 z-10 border-b border-stroke bg-surface-2 text-[11px] font-mono uppercase tracking-wider text-muted">
-            <tr>
-              <th className="px-4 py-3">Пользователь</th>
-              <th className="px-4 py-3">Тариф / Роль</th>
-              <th className="px-4 py-3">Запросы (сегодня)</th>
-              <th className="px-4 py-3">Токены (сегодня)</th>
-              <th className="px-4 py-3">Бюджет (мес)</th>
-              <th className="px-4 py-3">Остаток токенов</th>
-              <th className="px-4 py-3 text-right">Действие</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-stroke">
-            {loading ? (
+      <Card className="overflow-hidden rounded-2xl p-0">
+        <span role="status" className="sr-only">
+          {loading ? t('admin.loadingUsers') : ''}
+        </span>
+        <div className="overflow-x-auto">
+          <table className="w-full text-left text-[13px]" aria-busy={loading}>
+            <thead className="border-b border-stroke bg-surface-2 text-xs font-medium text-muted">
               <tr>
-                <td colSpan={7} className="py-12 text-center">
-                  <Spinner className="mx-auto size-6 text-accent" />
-                </td>
+                <th scope="col" className="px-4 py-3 font-medium">{t('admin.colUser')}</th>
+                <th scope="col" className="hidden px-4 py-3 font-medium md:table-cell">{t('admin.colPlan')}</th>
+                <th scope="col" className="hidden px-4 py-3 font-medium lg:table-cell">{t('admin.colRequests')}</th>
+                <th scope="col" className="hidden px-4 py-3 font-medium lg:table-cell">{t('admin.colTokens')}</th>
+                <th scope="col" className="hidden px-4 py-3 font-medium sm:table-cell">{t('admin.colBudget')}</th>
+                <th scope="col" className="hidden px-4 py-3 font-medium xl:table-cell">{t('admin.colRemaining')}</th>
+                <th scope="col" className="px-4 py-3 text-right font-medium">{t('admin.colAction')}</th>
               </tr>
-            ) : users.length === 0 ? (
-              <tr>
-                <td colSpan={7} className="py-12 text-center text-muted">
-                  Пользователи не найдены
-                </td>
-              </tr>
-            ) : (
-              users.map((u) => (
-                <tr
-                  key={u.id}
-                  className="hover:bg-surface-2/60 cursor-pointer transition-colors"
-                  onClick={() => void loadUserDetail(u.id)}
-                >
-                  <td className="px-4 py-3">
-                    <div className="font-medium text-text">{u.name || 'Без имени'}</div>
-                    <div className="text-[11px] text-muted font-mono">{u.email}</div>
-                  </td>
-                  <td className="px-4 py-3">
-                    <div className="flex flex-wrap items-center gap-1.5 font-mono">
-                      <Badge
-                        tone={
-                          u.plan === 'ultra'
-                            ? 'brand'
-                            : u.plan === 'pro'
-                              ? 'neutral'
-                              : 'outline'
-                        }
-                        className="text-[10px] py-0 px-1.5"
-                      >
-                        {u.plan.toUpperCase()}
-                      </Badge>
-                      {u.isVip ? (
-                        <span className="rounded bg-surface-2 border border-stroke px-1.5 py-0.5 text-[10px] font-semibold text-accent">
-                          VIP
-                        </span>
-                      ) : null}
-                      {u.isAdmin ? (
-                        <span className="rounded bg-danger/10 border border-danger/30 px-1.5 py-0.5 text-[10px] font-semibold text-danger">
-                          ADMIN
-                        </span>
-                      ) : null}
-                    </div>
-                  </td>
-                  <td className="px-4 py-3 font-mono">
-                    <span className="font-semibold text-text">{u.usage.requestsToday}</span>
-                    {u.limits.requestsPerDay !== null ? (
-                      <span className="text-muted"> / {u.limits.requestsPerDay}</span>
-                    ) : (
-                      <span className="text-muted"> / ∞</span>
-                    )}
-                  </td>
-                  <td className="px-4 py-3 font-mono">
-                    {u.usage.tokensToday.toLocaleString()}
-                  </td>
-                  <td className="px-4 py-3">
-                    <div className="flex items-center gap-2">
-                      <div className="h-1.5 w-16 overflow-hidden rounded-full bg-surface-3 border border-stroke">
-                        <div
-                          className={`h-full ${
-                            u.budgetUsedPct >= 90
-                              ? 'bg-danger'
-                              : u.budgetUsedPct >= 50
-                                ? 'bg-warning'
-                                : 'bg-accent'
-                          }`}
-                          style={{ width: `${Math.min(100, u.budgetUsedPct)}%` }}
-                        />
-                      </div>
-                      <span className="font-mono text-[11px] font-semibold">{u.budgetUsedPct}%</span>
-                      <span className="text-[11px] text-muted font-mono">
-                        (${u.usage.costThisMonth} / ${u.limits.costBudget ?? 0})
+            </thead>
+            <tbody className="divide-y divide-stroke">
+              {loading && !hasData ? (
+                <UsersSkeleton />
+              ) : users.length === 0 ? (
+                <tr>
+                  <td colSpan={7} className="px-4 py-14 text-center">
+                    <div className="mx-auto flex max-w-xs flex-col items-center gap-2">
+                      <span className="grid size-11 place-items-center rounded-xl bg-surface-2 text-subtle ring-1 ring-stroke ring-inset">
+                        <SearchIcon className="size-5" />
                       </span>
+                      <p className="text-sm font-medium text-text">{t('admin.empty')}</p>
+                      <p className="text-[13px] leading-5 text-muted">{t('admin.emptyHint')}</p>
                     </div>
-                  </td>
-                  <td className="px-4 py-3 font-mono">
-                    {u.remaining.tokensToday !== null ? (
-                      <span
-                        className={
-                          u.remaining.tokensToday < 0
-                            ? 'font-semibold text-danger'
-                            : 'text-text'
-                        }
-                      >
-                        {u.remaining.tokensToday.toLocaleString()}
-                      </span>
-                    ) : (
-                      <span className="text-muted font-sans">Безлимит</span>
-                    )}
-                  </td>
-                  <td className="px-4 py-3 text-right">
-                    <Button
-                      size="sm"
-                      variant="secondary"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        void loadUserDetail(u.id);
-                      }}
-                      className="text-xs"
-                    >
-                      Детали
-                    </Button>
                   </td>
                 </tr>
-              ))
-            )}
-          </tbody>
-        </table>
-      </div>
+              ) : (
+                users.map((u) => (
+                  <tr
+                    key={u.id}
+                    className={cn(
+                      'cursor-pointer transition-colors hover:bg-surface-2/60',
+                      loading && 'opacity-60',
+                    )}
+                    onClick={() => void loadUserDetail(u.id)}
+                  >
+                    <td className="px-4 py-3">
+                      <div className="font-medium text-text">{u.name || t('admin.noName')}</div>
+                      <div className="mt-0.5 max-w-[42vw] truncate text-xs text-muted sm:max-w-[260px]">{u.email}</div>
+                      <div className="mt-1.5 md:hidden">
+                        <PlanBadges user={u} />
+                      </div>
+                      <div className="mt-2 sm:hidden">
+                        <BudgetMeter user={u} />
+                      </div>
+                    </td>
+                    <td className="hidden px-4 py-3 md:table-cell">
+                      <PlanBadges user={u} />
+                    </td>
+                    <td className="hidden px-4 py-3 tabular-nums lg:table-cell">
+                      <span className="font-semibold text-text">{u.usage.requestsToday}</span>
+                      <span className="text-muted"> / {u.limits.requestsPerDay !== null ? u.limits.requestsPerDay : '∞'}</span>
+                    </td>
+                    <td className="hidden px-4 py-3 tabular-nums lg:table-cell">
+                      {u.usage.tokensToday.toLocaleString()}
+                    </td>
+                    <td className="hidden px-4 py-3 sm:table-cell">
+                      <BudgetMeter user={u} detailed />
+                    </td>
+                    <td className="hidden px-4 py-3 tabular-nums xl:table-cell">
+                      {u.remaining.tokensToday !== null ? (
+                        <span
+                          className={
+                            u.remaining.tokensToday < 0
+                              ? 'font-semibold text-danger'
+                              : 'text-text'
+                          }
+                        >
+                          {u.remaining.tokensToday.toLocaleString()}
+                        </span>
+                      ) : (
+                        <span className="text-muted">{t('admin.unlimited')}</span>
+                      )}
+                    </td>
+                    <td className="px-4 py-3 text-right">
+                      <Button
+                        size="sm"
+                        variant="secondary"
+                        aria-label={t('admin.detailsFor', { name: u.name || u.email })}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          void loadUserDetail(u.id);
+                        }}
+                      >
+                        {t('admin.details')}
+                      </Button>
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+        {hasData ? (
+          <p className="border-t border-stroke px-4 py-3 text-xs text-muted tabular-nums">
+            {t('admin.shown', { shown: users.length, total })}
+          </p>
+        ) : null}
+      </Card>
 
       {/* User Details & Edit Modal */}
       {selectedUserId ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm animate-fade-in">
-          <div className="flex max-h-[90vh] w-full max-w-4xl flex-col rounded-xl border border-stroke bg-surface shadow-2xl overflow-hidden text-text">
-            {/* Modal Header */}
-            <div className="flex items-center justify-between border-b border-stroke px-6 py-4 bg-surface-2">
-              <div>
-                <h2 className="text-base font-semibold text-text">Карточка пользователя</h2>
-                <p className="text-xs font-mono text-muted mt-0.5">ID: {selectedUserId}</p>
-              </div>
-              <button
-                onClick={() => {
-                  setSelectedUserId(null);
-                  setDetailUser(null);
-                }}
-                className="rounded-md p-1.5 text-muted hover:bg-surface hover:text-text transition-colors"
-                title="Закрыть (Esc)"
-              >
-                <CloseIcon className="text-sm" />
-              </button>
-            </div>
+        <Modal labelledBy="admin-user-title" onClose={closeDetail} size="lg">
+          <ModalHeader
+            titleId="admin-user-title"
+            title={t('admin.modalTitle')}
+            description={<span className="break-all tabular-nums">{t('admin.modalId', { id: selectedUserId })}</span>}
+            icon={<UserIcon className="size-5" />}
+            onClose={closeDetail}
+          />
 
-            {/* Modal Body */}
-            <div className="flex-1 overflow-y-auto p-6 space-y-6">
-              {detailLoading ? (
-                <div className="py-20 text-center">
-                  <Spinner className="mx-auto size-8 text-accent" />
-                </div>
-              ) : detailError ? (
-                <div className="rounded-lg bg-danger/10 border border-danger/30 p-4 text-xs text-danger">
-                  {detailError}
-                </div>
-              ) : detailUser ? (
-                <>
-                  {/* Profile & Edit Section */}
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    {/* User Info */}
-                    <div className="rounded-lg border border-stroke bg-canvas p-4 space-y-2.5">
-                      <h3 className="font-semibold text-xs uppercase font-mono tracking-wider text-muted">
-                        Профиль
-                      </h3>
-                      <div className="text-xs space-y-1.5">
-                        <div>
-                          <span className="text-muted">Email:</span>{' '}
-                          <span className="font-mono text-text">{detailUser.email}</span>
-                        </div>
-                        <div>
-                          <span className="text-muted">Имя:</span>{' '}
-                          <span className="font-medium text-text">{detailUser.name}</span>
-                        </div>
-                        <div>
-                          <span className="text-muted">Регистрация:</span>{' '}
-                          <span className="font-mono text-text">
-                            {new Date(detailUser.createdAt).toLocaleString()}
-                          </span>
-                        </div>
-                        <div>
-                          <span className="text-muted">Тариф:</span>{' '}
-                          <Badge tone="brand" className="font-mono text-[10px] ml-1">
+          <div className="flex-1 space-y-4 overflow-y-auto p-4 sm:p-6">
+            {detailLoading ? (
+              <DetailSkeleton />
+            ) : detailError ? (
+              <div role="alert" className="flex items-start gap-3 rounded-xl border border-danger/35 bg-danger-soft p-4 text-sm text-danger">
+                <AlertIcon className="mt-0.5 size-4 shrink-0" />
+                {describe(detailError)}
+              </div>
+            ) : detailUser ? (
+              <>
+                {/* Profile & Edit Section */}
+                <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                  {/* User Info */}
+                  <div className={cn(SUBTLE_PANEL, 'space-y-3')}>
+                    <PanelTitle icon={<UserIcon className="size-4 text-accent" />}>{t('admin.profile')}</PanelTitle>
+                    <dl className="space-y-2 text-[13px]">
+                      <div className="flex justify-between gap-3">
+                        <dt className="shrink-0 text-muted">{t('admin.email')}</dt>
+                        <dd className="min-w-0 text-right break-all text-text">{detailUser.email}</dd>
+                      </div>
+                      <div className="flex justify-between gap-3">
+                        <dt className="shrink-0 text-muted">{t('admin.name')}</dt>
+                        <dd className="min-w-0 text-right font-medium break-words text-text">{detailUser.name}</dd>
+                      </div>
+                      <div className="flex justify-between gap-3">
+                        <dt className="shrink-0 text-muted">{t('admin.registered')}</dt>
+                        <dd className="text-right text-text tabular-nums">
+                          {new Date(detailUser.createdAt).toLocaleString()}
+                        </dd>
+                      </div>
+                      <div className="flex items-center justify-between gap-3">
+                        <dt className="shrink-0 text-muted">{t('admin.plan')}</dt>
+                        <dd>
+                          <Badge tone={PLAN_TONES[detailUser.plan] ?? 'brand'} className="uppercase">
                             {detailUser.plan}
                           </Badge>
-                        </div>
+                        </dd>
                       </div>
-                    </div>
-
-                    {/* Quick Edit Form */}
-                    <div className="rounded-lg border border-stroke bg-canvas p-4 space-y-3">
-                      <div className="flex items-center justify-between">
-                        <h3 className="font-semibold text-xs uppercase font-mono tracking-wider text-muted flex items-center gap-1.5">
-                          <EditIcon className="size-3.5 text-accent" /> Управление правами
-                        </h3>
-                        {isSelf ? (
-                          <span className="text-[10px] text-accent bg-surface-2 border border-stroke px-1.5 py-0.5 rounded font-mono">
-                            Ваш аккаунт
-                          </span>
-                        ) : null}
-                      </div>
-
-                      <div className="grid grid-cols-2 gap-3 text-xs">
-                        <div>
-                          <label className="block text-muted mb-1 text-[11px]">Сменить тариф</label>
-                          <select
-                            value={editPlan}
-                            onChange={(e) => setEditPlan(e.target.value as PlanId)}
-                            className="w-full rounded border border-stroke bg-surface px-2.5 py-1 text-xs text-text outline-none focus:border-accent"
-                          >
-                            <option value="free">free</option>
-                            <option value="plus">plus</option>
-                            <option value="pro">pro</option>
-                            <option value="ultra">ultra</option>
-                            <option value="gpt-pro">gpt-pro</option>
-                            <option value="claude-pro">claude-pro</option>
-                            <option value="gemini-pro">gemini-pro</option>
-                          </select>
-                        </div>
-
-                        <div className="space-y-2 pt-3">
-                          <label className="flex items-center gap-2 cursor-pointer text-xs">
-                            <input
-                              type="checkbox"
-                              checked={editVip}
-                              onChange={(e) => setEditVip(e.target.checked)}
-                              className="rounded border-stroke text-accent"
-                            />
-                            <span>VIP статус (Ultra)</span>
-                          </label>
-
-                          <label className="flex items-center gap-2 cursor-pointer text-xs">
-                            <input
-                              type="checkbox"
-                              checked={editAdmin}
-                              disabled={Boolean(isSelf)}
-                              onChange={(e) => setEditAdmin(e.target.checked)}
-                              className="rounded border-stroke text-accent disabled:opacity-50"
-                            />
-                            <span>Права администратора</span>
-                          </label>
-                        </div>
-                      </div>
-
-                      {saveError ? (
-                        <p className="text-xs text-danger font-medium">{saveError}</p>
-                      ) : null}
-                      {saveSuccess ? (
-                        <p className="text-xs text-accent font-medium flex items-center gap-1 font-mono">
-                          <CheckIcon className="size-3" /> Сохранено успешно!
-                        </p>
-                      ) : null}
-
-                      <Button
-                        size="sm"
-                        variant="primary"
-                        onClick={() => void handleSaveUser()}
-                        disabled={saving}
-                        className="w-full text-xs font-medium"
-                      >
-                        {saving ? 'Сохранение...' : 'Применить изменения'}
-                      </Button>
-                    </div>
+                    </dl>
                   </div>
 
-                  <Divider />
-
-                  {/* Hourly & Daily Limits Comparison */}
-                  <div className="rounded-lg border border-stroke bg-canvas p-4 space-y-3">
-                    <h3 className="font-semibold text-xs uppercase font-mono tracking-wider text-muted">
-                      Лимиты и текущий расход
-                    </h3>
-                    <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-xs">
-                      <div className="rounded-lg border border-stroke bg-surface p-3 font-mono">
-                        <span className="text-[11px] text-muted block">Запросы за час</span>
-                        <p className="text-base font-semibold mt-1">
-                          {detailUser.usage.requestsLastHour}{' '}
-                          <span className="text-xs font-normal text-muted">
-                            / {detailUser.limits.requestsPerHour ?? '∞'}
-                          </span>
-                        </p>
-                      </div>
-
-                      <div className="rounded-lg border border-stroke bg-surface p-3 font-mono">
-                        <span className="text-[11px] text-muted block">Запросы за день</span>
-                        <p className="text-base font-semibold mt-1">
-                          {detailUser.usage.requestsToday}{' '}
-                          <span className="text-xs font-normal text-muted">
-                            / {detailUser.limits.requestsPerDay ?? '∞'}
-                          </span>
-                        </p>
-                      </div>
-
-                      <div className="rounded-lg border border-stroke bg-surface p-3 font-mono">
-                        <span className="text-[11px] text-muted block">Токены за час</span>
-                        <p className="text-base font-semibold mt-1">
-                          {detailUser.usage.tokensLastHour.toLocaleString()}{' '}
-                          <span className="text-xs font-normal text-muted">
-                            / {detailUser.limits.tokensPerHour?.toLocaleString() ?? '∞'}
-                          </span>
-                        </p>
-                      </div>
-
-                      <div className="rounded-lg border border-stroke bg-surface p-3 font-mono">
-                        <span className="text-[11px] text-muted block">Токены за день</span>
-                        <p className="text-base font-semibold mt-1">
-                          {detailUser.usage.tokensToday.toLocaleString()}{' '}
-                          <span className="text-xs font-normal text-muted">
-                            / {detailUser.limits.tokensPerDay?.toLocaleString() ?? '∞'}
-                          </span>
-                        </p>
-                      </div>
+                  {/* Quick Edit Form */}
+                  <div className={cn(SUBTLE_PANEL, 'space-y-3')}>
+                    <div className="flex items-center justify-between gap-2">
+                      <PanelTitle icon={<EditIcon className="size-4 text-accent" />}>{t('admin.manage')}</PanelTitle>
+                      {isSelf ? <Badge tone="brand">{t('admin.yourAccount')}</Badge> : null}
                     </div>
-                  </div>
 
-                  <Divider />
-
-                  {/* Profitability Card */}
-                  <div className="rounded-lg border border-stroke bg-canvas p-4 space-y-3">
-                    <div className="flex items-center justify-between">
-                      <h3 className="font-semibold text-xs uppercase font-mono tracking-wider text-muted">
-                        Рентабельность подписки (30 дней)
-                      </h3>
-                      <div className="flex items-center gap-1.5 font-mono text-xs">
-                        <StatusDot
-                          tone={
-                            detailUser.profitability.status === 'profitable'
-                              ? 'success'
-                              : detailUser.profitability.status === 'low_margin'
-                                ? 'warning'
-                                : 'danger'
-                          }
-                        />
-                        <span className="capitalize">{detailUser.profitability.status}</span>
-                      </div>
-                    </div>
-                    <div className="flex flex-wrap items-center gap-6 text-xs font-mono">
-                      <div>
-                        <span className="text-muted font-sans">Выручка:</span>{' '}
-                        <span className="font-semibold text-text">
-                          ${detailUser.profitability.subscriptionRevenue.toFixed(2)} ({detailUser.profitability.priceRub} ₽)
-                        </span>
-                      </div>
-                      <div>
-                        <span className="text-muted font-sans">Затраты на AI:</span>{' '}
-                        <span className="font-semibold text-danger">
-                          ${detailUser.profitability.aiCost.toFixed(2)}
-                        </span>
-                      </div>
-                      <div>
-                        <span className="text-muted font-sans">Маржинальный доход:</span>{' '}
-                        <span
-                          className={`font-semibold ${
-                            detailUser.profitability.contributionMargin >= 0
-                              ? 'text-accent'
-                              : 'text-danger'
-                          }`}
+                    <div className="grid grid-cols-1 gap-3 text-[13px] sm:grid-cols-2">
+                      <label className="flex flex-col gap-1.5">
+                        <span className="text-muted">{t('admin.changePlan')}</span>
+                        <select
+                          value={editPlan}
+                          onChange={(e) => setEditPlan(e.target.value as PlanId)}
+                          className={SELECT_CLASS}
                         >
-                          ${detailUser.profitability.contributionMargin.toFixed(2)}
-                        </span>
+                          {PLAN_OPTIONS.map((plan) => (
+                            <option key={plan} value={plan}>
+                              {plan}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+
+                      <div className="flex flex-col justify-end">
+                        <label className="flex min-h-11 cursor-pointer items-center gap-2.5">
+                          <input
+                            type="checkbox"
+                            checked={editVip}
+                            onChange={(e) => setEditVip(e.target.checked)}
+                            className="size-[18px] accent-accent"
+                          />
+                          <span>{t('admin.vip')}</span>
+                        </label>
+
+                        <label className="flex min-h-11 cursor-pointer items-center gap-2.5 has-[:disabled]:cursor-not-allowed has-[:disabled]:opacity-60">
+                          <input
+                            type="checkbox"
+                            checked={editAdmin}
+                            disabled={Boolean(isSelf)}
+                            onChange={(e) => setEditAdmin(e.target.checked)}
+                            className="size-[18px] accent-accent"
+                          />
+                          <span>{t('admin.adminRights')}</span>
+                        </label>
                       </div>
                     </div>
+
+                    {saveError ? (
+                      <p role="alert" className="text-[13px] font-medium text-danger">{describe(saveError)}</p>
+                    ) : null}
+                    {saveSuccess ? (
+                      <p role="status" className="flex items-center gap-1.5 text-[13px] font-medium text-success">
+                        <CheckIcon className="size-3.5" /> {t('admin.saved')}
+                      </p>
+                    ) : null}
+
+                    <Button
+                      variant="primary"
+                      onClick={() => void handleSaveUser()}
+                      loading={saving}
+                      className="w-full"
+                    >
+                      {saving ? t('admin.saving') : t('admin.apply')}
+                    </Button>
                   </div>
+                </div>
 
-                  <Divider />
+                {/* Hourly & Daily Limits Comparison */}
+                <div className={cn(SUBTLE_PANEL, 'space-y-3')}>
+                  <PanelTitle icon={<BoltIcon className="size-4 text-accent" />}>{t('admin.limits')}</PanelTitle>
+                  <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+                    {(
+                      [
+                        ['admin.reqHour', detailUser.usage.requestsLastHour, detailUser.limits.requestsPerHour],
+                        ['admin.reqDay', detailUser.usage.requestsToday, detailUser.limits.requestsPerDay],
+                        ['admin.tokHour', detailUser.usage.tokensLastHour, detailUser.limits.tokensPerHour],
+                        ['admin.tokDay', detailUser.usage.tokensToday, detailUser.limits.tokensPerDay],
+                      ] as const
+                    ).map(([labelKey, used, limit]) => (
+                      <div key={labelKey} className="rounded-xl border border-stroke bg-surface p-3">
+                        <span className="block text-xs text-muted">{t(labelKey)}</span>
+                        <p className="mt-1 text-lg font-semibold tabular-nums">
+                          {used.toLocaleString()}{' '}
+                          <span className="text-xs font-normal text-muted">
+                            / {limit !== null ? limit.toLocaleString() : '∞'}
+                          </span>
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
 
-                  {/* Recent 20 Requests */}
-                  <div className="rounded-lg border border-stroke bg-canvas p-4 space-y-3">
-                    <h3 className="font-semibold text-xs uppercase font-mono tracking-wider text-muted">
-                      Последние 20 запросов ({detailUser.recentRequests.length})
-                    </h3>
-                    <div className="max-h-60 overflow-y-auto">
-                      {detailUser.recentRequests.length === 0 ? (
-                        <p className="text-xs text-muted py-4 text-center">Запросов пока нет</p>
-                      ) : (
-                        <table className="w-full text-left text-xs font-mono">
-                          <thead className="border-b border-stroke text-muted uppercase text-[10px]">
-                            <tr>
-                              <th className="py-1.5">Время</th>
-                              <th className="py-1.5">Модель</th>
-                              <th className="py-1.5">Провайдер</th>
-                              <th className="py-1.5">Токены</th>
-                              <th className="py-1.5">Стоимость</th>
-                              <th className="py-1.5">Задержка</th>
-                              <th className="py-1.5">Статус</th>
-                            </tr>
-                          </thead>
-                          <tbody className="divide-y divide-stroke">
-                            {detailUser.recentRequests.map((r) => (
-                              <tr key={r.id}>
-                                <td className="py-1.5 text-muted">
-                                  {new Date(r.createdAt).toLocaleTimeString()}
-                                </td>
-                                <td className="py-1.5 font-sans font-medium text-text">{r.modelId}</td>
-                                <td className="py-1.5 text-muted font-sans">{r.provider}</td>
-                                <td className="py-1.5">
-                                  {r.inputTokens + r.outputTokens}
-                                </td>
-                                <td className="py-1.5">${r.estimatedCost.toFixed(5)}</td>
-                                <td className="py-1.5 text-muted">{r.latencyMs}ms</td>
-                                <td className="py-1.5">
-                                  <span
-                                    className={
-                                      r.status === 'success'
-                                        ? 'text-accent font-sans'
-                                        : 'text-danger font-sans'
-                                    }
-                                  >
-                                    {r.status}
-                                  </span>
-                                </td>
-                              </tr>
-                            ))}
-                          </tbody>
-                        </table>
-                      )}
+                {/* Profitability Card */}
+                <div className={cn(SUBTLE_PANEL, 'space-y-3')}>
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <PanelTitle icon={<ChartIcon className="size-4 text-accent" />}>{t('admin.profit')}</PanelTitle>
+                    <div className="flex items-center gap-1.5 text-[13px] font-medium">
+                      <StatusDot
+                        tone={
+                          detailUser.profitability.status === 'profitable'
+                            ? 'success'
+                            : detailUser.profitability.status === 'low_margin'
+                              ? 'warning'
+                              : 'danger'
+                        }
+                      />
+                      <span>
+                        {detailUser.profitability.status === 'profitable'
+                          ? t('admin.profitable')
+                          : detailUser.profitability.status === 'low_margin'
+                            ? t('admin.lowMargin')
+                            : t('admin.lossMaking')}
+                      </span>
                     </div>
                   </div>
-                </>
-              ) : null}
-            </div>
+                  <dl className="grid grid-cols-1 gap-3 text-[13px] sm:grid-cols-3">
+                    <div className="rounded-xl border border-stroke bg-surface p-3">
+                      <dt className="text-xs text-muted">{t('admin.revenue')}</dt>
+                      <dd className="mt-1 font-semibold text-text tabular-nums">
+                        ${detailUser.profitability.subscriptionRevenue.toFixed(2)}{' '}
+                        <span className="font-normal text-muted">({detailUser.profitability.priceRub} ₽)</span>
+                      </dd>
+                    </div>
+                    <div className="rounded-xl border border-stroke bg-surface p-3">
+                      <dt className="text-xs text-muted">{t('admin.aiCost')}</dt>
+                      <dd className="mt-1 font-semibold text-danger tabular-nums">
+                        ${detailUser.profitability.aiCost.toFixed(2)}
+                      </dd>
+                    </div>
+                    <div className="rounded-xl border border-stroke bg-surface p-3">
+                      <dt className="text-xs text-muted">{t('admin.margin')}</dt>
+                      <dd
+                        className={cn(
+                          'mt-1 font-semibold tabular-nums',
+                          detailUser.profitability.contributionMargin >= 0 ? 'text-success' : 'text-danger',
+                        )}
+                      >
+                        ${detailUser.profitability.contributionMargin.toFixed(2)}
+                      </dd>
+                    </div>
+                  </dl>
+                </div>
+
+                {/* Recent 20 Requests */}
+                <div className={cn(SUBTLE_PANEL, 'space-y-3')}>
+                  <PanelTitle icon={<MessagesIcon className="size-4 text-accent" />}>
+                    {t('admin.recent', { count: detailUser.recentRequests.length })}
+                  </PanelTitle>
+                  <div className="max-h-64 overflow-auto rounded-lg border border-stroke bg-surface">
+                    {detailUser.recentRequests.length === 0 ? (
+                      <p className="py-8 text-center text-[13px] text-muted">{t('admin.noRequests')}</p>
+                    ) : (
+                      <table className="w-full min-w-[560px] text-left text-xs">
+                        <thead className="sticky top-0 border-b border-stroke bg-surface-2 text-muted">
+                          <tr>
+                            <th scope="col" className="px-3 py-2 font-medium">{t('admin.colTime')}</th>
+                            <th scope="col" className="px-3 py-2 font-medium">{t('admin.colModel')}</th>
+                            <th scope="col" className="px-3 py-2 font-medium">{t('admin.colProvider')}</th>
+                            <th scope="col" className="px-3 py-2 font-medium">{t('admin.colTokensShort')}</th>
+                            <th scope="col" className="px-3 py-2 font-medium">{t('admin.colCost')}</th>
+                            <th scope="col" className="px-3 py-2 font-medium">{t('admin.colLatency')}</th>
+                            <th scope="col" className="px-3 py-2 font-medium">{t('admin.colStatus')}</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-stroke tabular-nums">
+                          {detailUser.recentRequests.map((r) => (
+                            <tr key={r.id}>
+                              <td className="px-3 py-2 text-muted">
+                                {new Date(r.createdAt).toLocaleTimeString()}
+                              </td>
+                              <td className="px-3 py-2 font-medium text-text">{r.modelId}</td>
+                              <td className="px-3 py-2 text-muted">{r.provider}</td>
+                              <td className="px-3 py-2">{r.inputTokens + r.outputTokens}</td>
+                              <td className="px-3 py-2">${r.estimatedCost.toFixed(5)}</td>
+                              <td className="px-3 py-2 text-muted">{r.latencyMs}ms</td>
+                              <td className="px-3 py-2">
+                                <span className={r.status === 'success' ? 'text-success' : 'text-danger'}>
+                                  {r.status}
+                                </span>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    )}
+                  </div>
+                </div>
+              </>
+            ) : null}
           </div>
-        </div>
+        </Modal>
       ) : null}
     </div>
   );

@@ -25,7 +25,7 @@ const MIN_PASSWORD_LENGTH = 8;
  * Полноценная клиентская валидация, сохранение сессии и поддержка mock-OAuth.
  */
 export function LoginPage() {
-  const { t, language } = useTranslation();
+  const { t } = useTranslation();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const rawRedirect = searchParams.get('redirect');
@@ -81,7 +81,7 @@ export function LoginPage() {
       await login({ email: trimmedEmail, password });
       navigate(redirectUrl, { replace: true });
     } catch (error) {
-      setServerError(error instanceof Error ? error.message : 'Ошибка входа');
+      setServerError(error instanceof Error ? error.message : t('auth.loginFailed'));
     } finally {
       setLoading(false);
     }
@@ -105,7 +105,7 @@ export function LoginPage() {
           navigate(redirectUrl, { replace: true });
           return;
         }
-        setServerError(res.error.message || `Ошибка авторизации через ${provider}`);
+        setServerError(res.error.message || t('auth.oauthFailed', { provider }));
         return;
       }
     } catch (error) {
@@ -118,7 +118,7 @@ export function LoginPage() {
           // ignore
         }
       }
-      setServerError(error instanceof Error ? error.message : 'Ошибка OAuth');
+      setServerError(error instanceof Error ? error.message : t('auth.oauthError'));
     } finally {
       setLoading(false);
     }
@@ -142,7 +142,7 @@ export function LoginPage() {
               ? `/signup?redirect=${encodeURIComponent(redirectUrl)}`
               : '/signup'
           }
-          className="text-accent hover:underline"
+          className="inline-flex min-h-11 items-center font-medium text-accent hover:underline"
         >
           {t('auth.toSignup')}
         </Link>
@@ -153,7 +153,7 @@ export function LoginPage() {
         {redirectUrl.startsWith('/checkout') && (
           <div
             role="status"
-            className="rounded-md border border-accent/30 bg-accent-soft p-3 text-[13px] text-text font-medium flex items-center gap-2.5"
+            className="flex items-center gap-2.5 rounded-xl border border-accent/30 bg-accent-soft p-3 text-[13px] font-medium leading-5 text-text"
           >
             <SparkleIcon className="size-4 shrink-0 text-accent" />
             <span>{t('auth.checkoutSignupNotice')}</span>
@@ -164,7 +164,7 @@ export function LoginPage() {
         {serverError && (
           <div
             role="alert"
-            className="rounded-md border border-danger/30 bg-danger-soft p-3 text-[13px] text-danger flex items-center gap-2.5"
+            className="flex items-center gap-2.5 rounded-xl border border-danger/30 bg-danger-soft p-3 text-[13px] leading-5 text-danger"
           >
             <AlertIcon className="size-4 shrink-0" />
             <span>{serverError}</span>
@@ -181,7 +181,7 @@ export function LoginPage() {
             onClick={() => void handleOAuth('google')}
             aria-label={t('auth.continueGoogle')}
             title={t('auth.oauthStub')}
-            className="font-medium text-xs gap-2"
+            className="gap-2 text-sm font-medium"
           >
             <GoogleIcon className="size-4 text-text shrink-0" />
             <span>Google</span>
@@ -195,7 +195,7 @@ export function LoginPage() {
             onClick={() => void handleOAuth('github')}
             aria-label={t('auth.continueGitHub')}
             title={t('auth.oauthStub')}
-            className="font-medium text-xs gap-2"
+            className="gap-2 text-sm font-medium"
           >
             <GitHubIcon className="size-4 text-text shrink-0" />
             <span>GitHub</span>
@@ -252,18 +252,9 @@ export function LoginPage() {
                 <div className="absolute right-1 flex items-center">
                   <IconButton
                     size="sm"
-                    label={
-                      showPassword
-                        ? language === 'ru'
-                          ? 'Скрыть'
-                          : 'Hide'
-                        : language === 'ru'
-                          ? 'Показать'
-                          : 'Show'
-                    }
+                    label={showPassword ? t('auth.hidePassword') : t('auth.showPassword')}
                     aria-pressed={showPassword}
                     onClick={() => setShowPassword(!showPassword)}
-                    tabIndex={-1}
                   >
                     {showPassword ? (
                       <EyeOffIcon className="size-4" />
@@ -294,14 +285,14 @@ export function LoginPage() {
               variant="ghost"
               size="sm"
               onClick={handleDemoFill}
-              className="font-mono text-xs text-muted hover:text-text"
+              className="text-xs text-muted hover:text-text"
             >
               {t('auth.demoQuickLogin')}
             </Button>
           </div>
         </form>
 
-        <p role="status" className="text-center font-mono text-[11px] text-muted">
+        <p role="status" className="text-balance text-center text-xs leading-5 text-muted">
           {t('auth.demoNotice')}
         </p>
       </div>

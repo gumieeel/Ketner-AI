@@ -13,11 +13,11 @@ export function Brand({ className, to = '/', iconOnly = false }: BrandProps) {
     <Link
       to={to}
       className={cn(
-        'inline-flex items-center gap-2.5 rounded-sm font-semibold text-text',
+        'inline-flex min-h-11 shrink-0 items-center gap-2.5 rounded-md font-semibold whitespace-nowrap text-text',
         className,
       )}
     >
-      <img src="/logo-mark.png" alt="Ketner AI" className="size-8 shrink-0 object-contain" />
+      <img src="/logo-mark-160.png" alt="Ketner AI" className="size-8 shrink-0 object-contain" />
       <span className={cn('text-base font-semibold tracking-tight', iconOnly && 'sr-only')}>
         Ketner AI
       </span>

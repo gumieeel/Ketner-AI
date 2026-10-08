@@ -4,10 +4,10 @@ import { CodeBlock } from './code-block';
 import { parseInline, parseMarkdown, type InlineToken, type TableAlign } from './parse';
 
 const HEADING_CLASSES: Record<number, string> = {
-  1: 'mb-2 mt-6 text-lg font-semibold tracking-tight text-text',
-  2: 'mb-2 mt-5 text-base font-semibold tracking-tight text-text',
-  3: 'mb-2 mt-4 text-sm font-semibold tracking-tight text-text',
-  4: 'mb-1 mt-3 text-sm font-semibold text-text',
+  1: 'mb-3 mt-7 text-xl font-semibold leading-8 tracking-tight text-text',
+  2: 'mb-2.5 mt-6 text-lg font-semibold leading-7 tracking-tight text-text',
+  3: 'mb-2 mt-5 text-base font-semibold tracking-tight text-text',
+  4: 'mb-1.5 mt-4 text-[15px] font-semibold text-text',
   5: 'mb-1 mt-3 text-sm font-semibold text-text',
   6: 'mb-1 mt-3 text-xs font-semibold uppercase tracking-wider text-muted',
 };
@@ -28,7 +28,7 @@ function toInlineNode(token: InlineToken): ReactNode {
       return <s>{token.text}</s>;
     case 'code':
       return (
-        <code className="rounded-sm border border-stroke bg-surface-2 px-1 py-0.5 font-mono text-[0.9em] text-text">
+        <code className="rounded-md border border-stroke bg-surface-2 px-1.5 py-0.5 font-mono text-[0.88em] break-words text-text">
           {token.text}
         </code>
       );
@@ -38,7 +38,7 @@ function toInlineNode(token: InlineToken): ReactNode {
           href={token.href}
           target="_blank"
           rel="noreferrer"
-          className="text-accent underline underline-offset-2 hover:opacity-85 transition-opacity"
+          className="text-accent underline decoration-accent/40 underline-offset-[3px] transition-colors hover:decoration-accent"
         >
           {token.text}
         </a>
@@ -61,7 +61,7 @@ function Inline({ text }: { text: string }) {
 
 function MarkdownList({ ordered, items }: { ordered: boolean; items: string[] }) {
   const className = cn(
-    'my-2 flex flex-col gap-1 pl-5 marker:text-subtle',
+    'my-3 flex max-w-[68ch] flex-col gap-1.5 pl-6 marker:text-accent/70',
     ordered ? 'list-decimal' : 'list-disc',
   );
   const content = items.map((item, index) => (
@@ -87,12 +87,12 @@ export default function Markdown({ content }: { content: string }) {
   const blocks = useMemo(() => parseMarkdown(content), [content]);
 
   return (
-    <div className="text-base leading-[27px] text-text">
+    <div className="text-base leading-7 text-text">
       {blocks.map((block, index) => {
         switch (block.type) {
           case 'heading':
             return (
-              <p key={index} className={cn('first:mt-0', HEADING_CLASSES[block.level])}>
+              <p key={index} className={cn('max-w-[68ch] first:mt-0', HEADING_CLASSES[block.level])}>
                 <Inline text={block.text} />
               </p>
             );
@@ -104,7 +104,7 @@ export default function Markdown({ content }: { content: string }) {
             return (
               <blockquote
                 key={index}
-                className="my-2 border-l-2 border-accent/50 pl-3 text-muted"
+                className="my-3 max-w-[68ch] rounded-r-lg border-l-2 border-accent/50 bg-surface-2/40 py-1.5 pr-3 pl-4 text-muted"
               >
                 <Inline text={block.text} />
               </blockquote>
@@ -113,16 +113,16 @@ export default function Markdown({ content }: { content: string }) {
             return (
               <div
                 key={index}
-                className="my-3 overflow-x-auto rounded-lg border border-stroke bg-surface"
+                className="my-4 overflow-x-auto rounded-xl border border-stroke bg-surface shadow-xs"
               >
                 <table className="w-full border-collapse text-sm text-text">
-                  <thead className="bg-surface-2 border-b border-stroke">
+                  <thead className="border-b border-stroke bg-surface-2/80">
                     <tr>
                       {block.header.map((cell, cellIndex) => (
                         <th
                           key={cellIndex}
                           className={cn(
-                            'px-3 py-2 font-semibold text-text text-left',
+                            'px-3.5 py-2.5 text-left font-semibold whitespace-nowrap text-text',
                             ALIGN_CLASSES[block.align[cellIndex]],
                           )}
                         >
@@ -138,7 +138,7 @@ export default function Markdown({ content }: { content: string }) {
                           <td
                             key={cellIndex}
                             className={cn(
-                              'px-3 py-2 align-top text-text',
+                              'px-3.5 py-2.5 align-top text-text',
                               ALIGN_CLASSES[block.align[cellIndex]],
                             )}
                           >
@@ -152,10 +152,10 @@ export default function Markdown({ content }: { content: string }) {
               </div>
             );
           case 'divider':
-            return <hr key={index} className="my-4 border-stroke" />;
+            return <hr key={index} className="my-6 border-stroke" />;
           default:
             return (
-              <p key={index} className="my-2 first:mt-0 last:mb-0">
+              <p key={index} className="my-3 max-w-[68ch] first:mt-0 last:mb-0">
                 <Inline text={block.text} />
               </p>
             );

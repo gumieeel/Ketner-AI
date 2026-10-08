@@ -1,53 +1,36 @@
 import { Link } from 'react-router-dom';
-import { ArrowRightIcon, ChevronDownIcon } from '@/components/icons';
+import { ArrowRightIcon } from '@/components/icons';
 import { Section } from '@/components/marketing/section';
+import { Accordion } from '@/components/ui/accordion';
 import { FAQ_ITEMS } from '@/features/content/faq';
 import { useTranslation } from '@/i18n';
 
 export function LandingFaq() {
-  const { language } = useTranslation();
+  const { t, language } = useTranslation();
 
   return (
     <Section
       id="faq"
-      index="05"
-      label="FAQ"
-      title={language === 'ru' ? 'Частые вопросы' : 'Frequently Asked Questions'}
-      description={
-        language === 'ru'
-          ? 'Ответы на популярные вопросы о тарифах, моделях и возможностях платформы.'
-          : 'Answers to common questions about plans, models, and platform features.'
-      }
+      label={t('landing.faqLabel')}
+      title={t('landing.faqTitle')}
+      description={t('landing.faqLead')}
     >
-      <div className="flex flex-col gap-3 max-w-[800px] mx-auto w-full text-left">
-        {FAQ_ITEMS.map((item) => (
-          <details
-            key={item.id}
-            className="group rounded-md border border-stroke bg-surface transition-colors open:bg-surface-2"
-          >
-            <summary className="flex cursor-pointer items-center justify-between gap-4 p-5 font-medium text-text select-none list-none [&::-webkit-details-marker]:hidden">
-              <span className="text-base font-semibold">{item.q[language]}</span>
-              <ChevronDownIcon className="size-4 shrink-0 text-muted transition-transform duration-200 group-open:rotate-180" />
-            </summary>
-            <div className="px-5 pb-5 pt-1 text-sm text-muted leading-relaxed border-t border-stroke/40 mt-1">
-              {item.a[language]}
-            </div>
-          </details>
-        ))}
+      <div className="mx-auto flex w-full max-w-[800px] flex-col gap-6 text-left">
+        <Accordion
+          items={FAQ_ITEMS.map((item) => ({
+            id: item.id,
+            title: item.q[language],
+            content: item.a[language],
+          }))}
+        />
 
-        <div className="pt-4 text-center">
-          <Link
-            to="/docs#faq"
-            className="inline-flex items-center gap-2 font-mono text-xs uppercase tracking-wider text-muted hover:text-text transition-colors"
-          >
-            <span>
-              {language === 'ru'
-                ? 'Больше ответов в документации'
-                : 'More answers in documentation'}
-            </span>
-            <ArrowRightIcon className="size-3.5" />
-          </Link>
-        </div>
+        <Link
+          to="/docs#faq"
+          className="group inline-flex min-h-11 items-center gap-2 self-center rounded-full px-4 py-2 text-sm font-medium text-muted transition-colors duration-200 hover:bg-surface-2 hover:text-text"
+        >
+          <span>{t('landing.faqMore')}</span>
+          <ArrowRightIcon className="size-4 transition-transform duration-200 group-hover:translate-x-0.5" />
+        </Link>
       </div>
     </Section>
   );

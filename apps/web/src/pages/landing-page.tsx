@@ -1,6 +1,6 @@
 import { useEffect } from 'react';
 import { LandingHero } from './landing/hero';
-import { ModelStrip } from './landing/model-strip';
+import { LandingModels } from './landing/models';
 import { LandingFeatures } from './landing/features';
 import { LandingHowItWorks } from './landing/how-it-works';
 import { LandingPricingSection } from './landing/pricing-section';
@@ -17,11 +17,9 @@ export function LandingPage() {
   }, []);
 
   return (
-    <div className="flex flex-col items-center w-full gap-12 md:gap-20 animate-fade-in text-center">
-      <div className="w-full flex flex-col items-center gap-3 md:gap-4">
-        <LandingHero />
-        <ModelStrip />
-      </div>
+    <div className="flex w-full flex-col items-center text-center">
+      <LandingHero />
+      <LandingModels />
       <LandingFeatures />
       <LandingHowItWorks />
       <LandingPricingSection />

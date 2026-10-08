@@ -1,12 +1,15 @@
 import { useEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from 'react';
 import { CheckIcon, ChevronDownIcon, LockIcon } from '@/components/icons';
-import { StatusDot } from '@/components/ui/status-dot';
+import { Badge } from '@/components/ui/badge';
+import { Kbd } from '@/components/ui/kbd';
+import { ModelMark } from '@/components/ui/model-mark';
 import { useAuth } from '@/features/auth/auth-store';
 import { canAccessModel } from '@/features/chat/can-access-model';
 import { useChat } from '@/features/chat/chat-store';
 import type { ModelInfo } from '@/features/chat/types';
 import { usePreferences } from '@/features/preferences/preferences-store';
 import { cn } from '@/lib/cn';
+import { modelColor } from '@/lib/model-color';
 import { useTranslation } from '@/i18n';
 import type { TranslationKey } from '@/i18n';
 
@@ -200,6 +203,11 @@ export function ModelPicker({ disabled = false }: { disabled?: boolean }) {
     }
   };
 
+  const subtitleOf = (model: ModelInfo): string =>
+    model.id === 'auto'
+      ? t('chat.modelAutoSubtitle')
+      : t('chat.modelContext', { count: model.contextMessages });
+
   const renderModelItem = (model: ModelInfo) => {
     const active = model.id === current.id;
     const accessible = canAccessModel(user?.plan, model);
@@ -229,39 +237,58 @@ export function ModelPicker({ disabled = false }: { disabled?: boolean }) {
             triggerRef.current?.focus();
           }}
           className={cn(
-            'flex w-full items-center gap-2 rounded-md px-2.5 py-1.5 text-left text-[13px] transition-colors outline-none',
+            'flex w-full items-center gap-3 rounded-lg px-2.5 py-2 text-left outline-none',
+            'transition-[background-color,box-shadow] duration-150 max-md:min-h-14',
             active
-              ? 'bg-accent-soft text-text font-medium'
-              : 'text-text hover:bg-surface-2 focus-visible:bg-surface-2',
+              ? 'bg-accent-soft ring-1 ring-accent/30'
+              : 'hover:bg-surface-2 focus-visible:bg-surface-2 focus-visible:ring-2 focus-visible:ring-accent/40',
             isFocused && !active && accessible && 'bg-surface-2',
             !accessible && 'opacity-40 cursor-not-allowed hover:bg-transparent focus-visible:bg-transparent',
           )}
         >
-          <span className="size-3.5 flex items-center justify-center text-accent shrink-0">
-            {active ? <CheckIcon className="size-3.5" /> : null}
+          <ModelMark modelId={model.id} size="md" />
+          <span className="min-w-0 flex-1">
+            <span className="flex items-center gap-2">
+              <span className={cn('truncate text-sm', active ? 'font-semibold text-text' : 'font-medium text-text')}>
+                {labelOf(model)}
+              </span>
+              {isPlus ? (
+                <Badge tone="plus" className="px-2 py-0 text-[11px] leading-[18px]">
+                  plus
+                </Badge>
+              ) : isPro ? (
+                <Badge tone="pro" className="px-2 py-0 text-[11px] leading-[18px]">
+                  pro
+                </Badge>
+              ) : null}
+            </span>
+            <span className="mt-0.5 block truncate text-xs text-subtle">{subtitleOf(model)}</span>
           </span>
-          <span className="flex-1 truncate">{labelOf(model)}</span>
-          <div className="flex items-center gap-1.5 shrink-0 ml-auto">
-            {isPlus ? (
-              <span className="font-mono text-[10px] font-semibold text-sky-400 lowercase tracking-wider px-1.5 py-0.5 rounded bg-sky-400/10 border border-sky-400/25">
-                plus
-              </span>
-            ) : isPro ? (
-              <span className="font-mono text-[10px] font-semibold text-purple-400 lowercase tracking-wider px-1.5 py-0.5 rounded bg-purple-400/10 border border-purple-400/25">
-                pro
-              </span>
-            ) : null}
+          <span className="flex size-5 shrink-0 items-center justify-center">
             {!accessible ? (
-              <LockIcon className="size-3 text-subtle shrink-0 opacity-60" aria-hidden="true" />
+              <LockIcon className="size-3.5 text-subtle" aria-label={t('chat.modelLocked')} />
+            ) : active ? (
+              <CheckIcon className="size-4 text-accent" />
             ) : null}
-          </div>
+          </span>
         </button>
       </li>
     );
   };
 
+  const renderGroup = (label: string, items: readonly ModelInfo[], withDivider: boolean) => (
+    <div className={cn(withDivider && 'mt-1.5 border-t border-stroke pt-1.5')}>
+      <div className="px-2.5 pt-1.5 pb-1 text-xs font-semibold text-subtle">{label}</div>
+      <ul className="flex flex-col gap-0.5" role="none">
+        {items.map(renderModelItem)}
+      </ul>
+    </div>
+  );
+
+  const color = modelColor(current.id);
+
   return (
-    <div ref={containerRef} className="relative">
+    <div ref={containerRef} className="min-w-0 md:relative">
       <button
         ref={triggerRef}
         type="button"
@@ -278,23 +305,18 @@ export function ModelPicker({ disabled = false }: { disabled?: boolean }) {
         }}
         onKeyDown={onTriggerKeyDown}
         className={cn(
-          'inline-flex h-8 items-center gap-1.5 rounded-md px-2 text-[13px] text-muted transition-colors',
-          'hover:bg-surface-2 hover:text-text disabled:cursor-not-allowed disabled:opacity-60',
+          'group inline-flex h-10 max-w-full items-center gap-2 rounded-xl border border-stroke bg-surface-2/70 pr-2.5 pl-1.5 text-sm text-text',
+          'transition-[background-color,border-color,box-shadow] duration-200 max-md:h-11',
+          'hover:border-stroke-strong hover:bg-surface-2 disabled:cursor-not-allowed disabled:opacity-60',
+          open && 'border-stroke-strong bg-surface-2 shadow-sm',
         )}
+        style={open ? { boxShadow: `0 0 0 3px color-mix(in srgb, ${color} 18%, transparent)` } : undefined}
       >
-        <span className="flex items-center gap-1.5">
-          {current.id === 'auto' ? (
-            <>
-              <StatusDot tone="brand" />
-              <strong className="font-medium text-text">{t('chat.modelAuto')}</strong>
-            </>
-          ) : (
-            <span>
-              {t('chat.model')}: <strong className="font-medium text-text">{labelOf(current)}</strong>
-            </span>
-          )}
-        </span>
-        <ChevronDownIcon className="text-xs opacity-70" />
+        <ModelMark modelId={current.id} size="sm" />
+        <span className="truncate font-semibold">{labelOf(current)}</span>
+        <ChevronDownIcon
+          className={cn('size-4 shrink-0 text-subtle transition-transform duration-200', open && 'rotate-180')}
+        />
       </button>
 
       {open ? (
@@ -303,42 +325,31 @@ export function ModelPicker({ disabled = false }: { disabled?: boolean }) {
           aria-label={t('chat.modelMenu')}
           tabIndex={-1}
           onKeyDown={onListKeyDown}
-          className="absolute bottom-full left-0 z-[var(--z-dropdown)] mb-2 w-[min(92vw,368px)] max-h-[420px] overflow-y-auto rounded-lg border border-stroke bg-surface p-1.5 shadow-[0_12px_32px_-8px_rgba(0,0,0,.45)]"
+          className={cn(
+            'surface-glass bg-surface-2/95 absolute inset-x-3 top-full z-[var(--z-dropdown)] mt-2 max-h-[min(70vh,520px)] overflow-y-auto',
+            'rounded-2xl border border-stroke-strong p-1.5 shadow-popover animate-scale-in origin-top',
+            'md:inset-x-auto md:left-0 md:w-[400px]',
+          )}
         >
-          {/* 1. Standart Group */}
-          <div className="mb-2">
-            <div className="flex items-center justify-between px-2.5 py-1 text-[11px] font-mono font-medium text-subtle uppercase tracking-[0.06em]">
-              <span>{t('chat.tierFree')}</span>
-            </div>
-            <ul className="mt-1 space-y-0.5" role="none">
-              {autoModel ? renderModelItem(autoModel) : null}
-              {freeModels.map(renderModelItem)}
-            </ul>
+          {renderGroup(t('chat.tierFree'), [...(autoModel ? [autoModel] : []), ...freeModels], false)}
+          {plusModels.length > 0 ? renderGroup(t('chat.tierPlus'), plusModels, true) : null}
+          {proModels.length > 0 ? renderGroup(t('chat.tierPro'), proModels, true) : null}
+
+          <div className="mt-1.5 hidden items-center gap-3 border-t border-stroke px-2.5 pt-2 pb-1 text-xs text-subtle md:flex">
+            <span className="inline-flex items-center gap-1.5">
+              <Kbd>↑</Kbd>
+              <Kbd>↓</Kbd>
+              {t('chat.kbdNavigate')}
+            </span>
+            <span className="inline-flex items-center gap-1.5">
+              <Kbd>Enter</Kbd>
+              {t('chat.kbdSelect')}
+            </span>
+            <span className="inline-flex items-center gap-1.5">
+              <Kbd>Esc</Kbd>
+              {t('chat.kbdClose')}
+            </span>
           </div>
-
-          {/* 2. Plus Group */}
-          {plusModels.length > 0 ? (
-            <div className="border-t border-stroke pt-1.5 mb-2">
-              <div className="px-2.5 py-1 text-[11px] font-mono font-medium text-subtle uppercase tracking-[0.06em]">
-                {t('chat.tierPlus')}
-              </div>
-              <ul className="mt-1 space-y-0.5" role="none">
-                {plusModels.map(renderModelItem)}
-              </ul>
-            </div>
-          ) : null}
-
-          {/* 3. Pro / Ultra Group */}
-          {proModels.length > 0 ? (
-            <div className="border-t border-stroke pt-1.5">
-              <div className="px-2.5 py-1 text-[11px] font-mono font-medium text-subtle uppercase tracking-[0.06em]">
-                {t('chat.tierPro')}
-              </div>
-              <ul className="mt-1 space-y-0.5" role="none">
-                {proModels.map(renderModelItem)}
-              </ul>
-            </div>
-          ) : null}
         </div>
       ) : null}
     </div>

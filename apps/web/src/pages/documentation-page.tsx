@@ -13,8 +13,8 @@ import {
   StarIcon,
 } from '@/components/icons';
 import { Callout, DocHeading, DocsLayout, useScrollSpy } from '@/components/docs';
-import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
+import { Badge, type BadgeTone } from '@/components/ui/badge';
+import { buttonClasses } from '@/components/ui/button-classes';
 import { Card, CardText, CardTitle } from '@/components/ui/card';
 import { FAQ_ITEMS } from '@/features/content/faq';
 import { useTranslation } from '@/i18n';
@@ -151,14 +151,19 @@ const PLANS_DATA: PlanCardInfo[] = [
   },
 ];
 
+const PLAN_TONES: Record<string, BadgeTone> = {
+  free: 'neutral',
+  plus: 'plus',
+  pro: 'pro',
+  ultra: 'ultra',
+};
+
 export function DocumentationPage() {
-  const { language } = useTranslation();
+  const { t, language } = useTranslation();
   const location = useLocation();
   const { planId } = useParams<{ planId?: string }>();
-  const isEn = language === 'en';
 
-  const sectionIds = ['what-is-ketner', 'how-it-works', 'plans', 'fair-use', 'faq'];
-  const activeId = useScrollSpy(sectionIds);
+  const activeId = useScrollSpy(['what-is-ketner', 'how-it-works', 'plans', 'fair-use', 'faq']);
 
   useEffect(() => {
     if (planId) {
@@ -180,156 +185,129 @@ export function DocumentationPage() {
   const navItems = [
     {
       id: 'what-is-ketner',
-      label: isEn ? 'What is Ketner' : 'Что такое Ketner',
+      label: t('docPage.navWhat'),
       icon: <SparkleIcon className="size-4" />,
     },
     {
       id: 'how-it-works',
-      label: isEn ? 'How it works' : 'Как это работает',
+      label: t('docPage.navHow'),
       icon: <BoltIcon className="size-4" />,
     },
     {
       id: 'plans',
-      label: isEn ? 'Plans & Speeds' : 'Тарифы',
+      label: t('docPage.navPlans'),
       icon: <StarIcon className="size-4" />,
     },
     {
       id: 'fair-use',
-      label: isEn ? 'Fair Use' : 'Честное использование',
+      label: t('docPage.navFair'),
       icon: <ShieldIcon className="size-4" />,
     },
     {
       id: 'faq',
-      label: isEn ? 'FAQ' : 'Частые вопросы',
+      label: t('docPage.navFaq'),
       icon: <InfoIcon className="size-4" />,
     },
   ];
 
-  const tocItems = [
-    { id: 'what-is-ketner', label: isEn ? 'What is Ketner' : 'Что такое Ketner', level: 2 },
-    { id: 'how-it-works', label: isEn ? 'How it works' : 'Как это работает', level: 2 },
-    { id: 'plans', label: isEn ? 'Plans & Speeds' : 'Тарифы', level: 2 },
-    { id: 'fair-use', label: isEn ? 'Fair Use Policy' : 'Честное использование', level: 2 },
-    { id: 'faq', label: isEn ? 'FAQ' : 'Частые вопросы', level: 2 },
-  ];
+  const sectionClass = 'flex scroll-mt-32 flex-col gap-4 mb-12 xl:scroll-mt-24';
+  const stepClass = 'flex flex-col gap-2 rounded-2xl border-stroke bg-surface p-5';
 
   return (
-    <DocsLayout nav={navItems} toc={tocItems} activeId={activeId}>
+    <DocsLayout nav={navItems} activeId={activeId}>
       {/* Шапка документации */}
-      <div className="flex flex-col gap-4 border-b border-stroke pb-6 mb-8">
+      <div className="mb-8 flex flex-col gap-4 border-b border-stroke pb-6">
         <Link
           to="/chat"
-          className="inline-flex items-center gap-1.5 text-xs text-muted hover:text-text transition-colors"
+          className="-ml-2 inline-flex min-h-11 items-center gap-1.5 self-start rounded-md px-2 text-sm text-muted transition-colors hover:text-text"
         >
-          <ArrowLeftIcon className="size-3.5" />
-          {isEn ? 'Back to chat' : 'Вернуться в чат'}
+          <ArrowLeftIcon className="size-4" />
+          {t('docPage.back')}
         </Link>
-        <div className="flex flex-wrap items-center justify-between gap-4">
-          <div>
-            <h1 className="text-2xl sm:text-3xl font-semibold tracking-tight text-text">
-              {isEn ? 'Ketner AI Documentation' : 'Документация Ketner AI'}
+        <div className="flex flex-wrap items-end justify-between gap-4">
+          <div className="min-w-0">
+            <h1 className="text-[26px] font-semibold leading-tight tracking-tight text-balance text-text sm:text-3xl">
+              {t('docPage.title')}
             </h1>
-            <p className="mt-1 text-sm text-muted">
-              {isEn
-                ? 'Everything you need to know about Ketner AI, plans, and fair usage.'
-                : 'Всё, что нужно знать о Ketner AI, тарифах и политике честного использования.'}
+            <p className="mt-1.5 max-w-[60ch] text-sm leading-6 text-muted">
+              {t('docPage.lead')}
             </p>
           </div>
-          <Link to="/pricing">
-            <Button variant="primary" size="sm">
-              <SparkleIcon className="size-4 mr-1.5" />
-              {isEn ? 'View plans' : 'Перейти к тарифам'}
-            </Button>
+          <Link to="/pricing" className={cn(buttonClasses({ variant: 'primary', size: 'md' }), 'gap-1.5')}>
+            <SparkleIcon className="size-4" />
+            {t('docPage.viewPlans')}
           </Link>
         </div>
       </div>
 
       {/* 1. Что такое Ketner */}
-      <section id="what-is-ketner" className="scroll-mt-24 flex flex-col gap-4 mb-12">
-        <DocHeading id="what-is-ketner">
+      <section id="what-is-ketner" className={sectionClass}>
+        <DocHeading id="what-is-ketner-heading">
           <SparkleIcon className="size-5 text-accent" />
-          <span>{isEn ? 'What is Ketner' : 'Что такое Ketner'}</span>
+          <span>{t('docPage.navWhat')}</span>
         </DocHeading>
-        <Card className="p-6 bg-surface border-stroke">
-          <p className="text-base sm:text-lg font-medium text-text leading-relaxed">
-            {isEn
-              ? 'One service instead of dozens of subscriptions. Access the world’s best AI models in a single place.'
-              : 'Один сервис вместо десятка подписок. Доступ к лучшим AI-моделям мира в одном окне.'}
+        <Card className="relative overflow-hidden rounded-2xl border-stroke bg-surface p-5 sm:p-6">
+          <div
+            aria-hidden="true"
+            className="bg-aurora pointer-events-none absolute inset-0 opacity-40 [mask-image:linear-gradient(to_bottom_right,black,transparent_70%)]"
+          />
+          <p className="relative max-w-[56ch] text-base leading-relaxed font-medium text-balance text-text sm:text-lg">
+            {t('docPage.whatLead')}
           </p>
-          <p className="mt-3 text-sm text-muted leading-relaxed">
-            {isEn
-              ? 'Forget about switching between separate accounts, paying $20 to each provider, and managing API keys. Ketner AI brings together OpenAI GPT, Anthropic Claude, and Google Gemini under one seamless, unlimited subscription.'
-              : 'Забудьте о переключении между сайтами, раздельной оплате каждому провайдеру и сложных API-ключах. Ketner AI объединяет GPT от OpenAI, Claude от Anthropic и Gemini от Google в едином удобном интерфейсе без подсчёта токенов.'}
+          <p className="relative mt-3 max-w-[68ch] text-sm leading-relaxed text-muted">
+            {t('docPage.whatText')}
           </p>
         </Card>
       </section>
 
       {/* 2. Как это работает */}
-      <section id="how-it-works" className="scroll-mt-24 flex flex-col gap-4 mb-12">
-        <DocHeading id="how-it-works">
+      <section id="how-it-works" className={sectionClass}>
+        <DocHeading id="how-it-works-heading">
           <BoltIcon className="size-5 text-accent" />
-          <span>{isEn ? 'How it works' : 'Как это работает'}</span>
+          <span>{t('docPage.navHow')}</span>
         </DocHeading>
-        <div className="grid gap-4 sm:grid-cols-3">
-          <Card className="flex flex-col gap-2 p-5 border-stroke bg-surface">
-            <div className="flex size-7 items-center justify-center rounded-md bg-accent-soft font-mono text-xs font-semibold text-accent">
-              01
-            </div>
-            <CardTitle className="text-sm font-semibold text-text">
-              {isEn ? 'Type your question' : 'Вы пишете вопрос'}
-            </CardTitle>
-            <CardText className="text-xs text-muted leading-relaxed">
-              {isEn
-                ? 'Ask for code, translation, writing, analysis, or any creative task in your regular language.'
-                : 'Задайте любой вопрос: напишите код, попросите сделать рерайтинг, перевод или сложный анализ.'}
-            </CardText>
-          </Card>
-
-          <Card className="flex flex-col gap-2 p-5 border-stroke bg-surface">
-            <div className="flex size-7 items-center justify-center rounded-md bg-accent-soft font-mono text-xs font-semibold text-accent">
-              02
-            </div>
-            <CardTitle className="text-sm font-semibold text-text">
-              {isEn ? 'We pick the best model' : 'Система подбирает модель'}
-            </CardTitle>
-            <CardText className="text-xs text-muted leading-relaxed">
-              {isEn
-                ? 'Smart Auto Router chooses the best model for your task, or you can pick your favorite model manually.'
-                : 'Интеллектуальный маршрутизатор мгновенно выбирает лучшую модель (или вы выбираете её вручную).'}
-            </CardText>
-          </Card>
-
-          <Card className="flex flex-col gap-2 p-5 border-stroke bg-surface">
-            <div className="flex size-7 items-center justify-center rounded-md bg-accent-soft font-mono text-xs font-semibold text-accent">
-              03
-            </div>
-            <CardTitle className="text-sm font-semibold text-text">
-              {isEn ? 'You get the answer' : 'Вы получаете ответ'}
-            </CardTitle>
-            <CardText className="text-xs text-muted leading-relaxed">
-              {isEn
-                ? 'Streamed instantly to your screen with full markdown, code highlights, and preserved context.'
-                : 'Мгновенный потоковый ответ с форматированием, подсветкой кода и сохранением контекста.'}
-            </CardText>
-          </Card>
+        <div className="grid gap-3 sm:grid-cols-3 md:gap-4">
+          {[
+            {
+              n: '1',
+              title: t('docPage.step1Title'),
+              text: t('docPage.step1Text'),
+            },
+            {
+              n: '2',
+              title: t('docPage.step2Title'),
+              text: t('docPage.step2Text'),
+            },
+            {
+              n: '3',
+              title: t('docPage.step3Title'),
+              text: t('docPage.step3Text'),
+            },
+          ].map((step) => (
+            <Card key={step.n} className={stepClass}>
+              <span className="grid size-8 place-items-center rounded-lg bg-accent-soft text-sm font-semibold text-accent ring-1 ring-accent/20 ring-inset">
+                {step.n}
+              </span>
+              <CardTitle className="mt-1 text-[15px]">{step.title}</CardTitle>
+              <CardText className="text-[13px] leading-5">{step.text}</CardText>
+            </Card>
+          ))}
         </div>
       </section>
 
       {/* 3. Тарифные планы и лимиты */}
-      <section id="plans" className="scroll-mt-24 flex flex-col gap-6 mb-12">
+      <section id="plans" className={cn(sectionClass, 'gap-6')}>
         <div>
-          <DocHeading id="plans">
+          <DocHeading id="plans-heading" className="mb-2">
             <StarIcon className="size-5 text-accent" />
-            <span>{isEn ? 'Plans & Speeds' : 'Тарифные планы и лимиты'}</span>
+            <span>{t('docPage.plansTitle')}</span>
           </DocHeading>
-          <p className="text-sm text-muted">
-            {isEn
-              ? 'Simple transparent plans categorized by speed, priority, and model capabilities — no token math.'
-              : 'Понятные тарифы, которые различаются скоростью, приоритетом и глубиной контекста — никаких токенов.'}
+          <p className="max-w-[68ch] text-sm leading-6 text-muted">
+            {t('docPage.plansLead')}
           </p>
         </div>
 
-        <div className="grid gap-4 sm:grid-cols-2">
+        <div className="grid gap-3 md:gap-4 sm:grid-cols-2">
           {PLANS_DATA.map((plan) => {
             const isHighlighted = planId === plan.id;
             return (
@@ -337,69 +315,63 @@ export function DocumentationPage() {
                 key={plan.id}
                 id={`plan-${plan.id}`}
                 className={cn(
-                  'flex flex-col justify-between p-5 transition-all bg-surface',
+                  'flex scroll-mt-32 flex-col justify-between rounded-2xl bg-surface p-5 transition-[border-color,box-shadow] xl:scroll-mt-24',
                   isHighlighted
                     ? 'border-accent ring-2 ring-accent-soft'
                     : plan.popular
-                      ? 'border-accent/60'
+                      ? 'border-accent/50'
                       : 'border-stroke',
                 )}
               >
                 <div>
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <CardTitle className="text-lg font-semibold text-text">{plan.name}</CardTitle>
-                      <Badge tone={plan.popular ? 'brand' : 'neutral'}>
+                  <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1.5">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <CardTitle className="text-lg">{plan.name}</CardTitle>
+                      <Badge tone={plan.popular ? 'brand' : PLAN_TONES[plan.id] ?? 'neutral'}>
                         {plan.badge[language]}
                       </Badge>
                     </div>
-                    <span className="font-mono text-sm font-semibold text-text">{plan.price[language]}</span>
+                    <span className="text-sm font-semibold text-text tabular-nums">{plan.price[language]}</span>
                   </div>
 
-                  <p className="mt-2 text-xs text-muted leading-relaxed">
-                    {plan.desc[language]}
-                  </p>
+                  <p className="mt-2 text-[13px] leading-5 text-muted">{plan.desc[language]}</p>
 
-                  <div className="mt-3.5 flex flex-wrap gap-1.5 font-mono text-[11px]">
-                    <span className="inline-flex items-center gap-1 rounded bg-surface-2 px-2 py-0.5 text-text border border-stroke">
-                      <BoltIcon className="size-3 text-accent" />
-                      {plan.speed[language]}
-                    </span>
-                    <span className="inline-flex items-center gap-1 rounded bg-surface-2 px-2 py-0.5 text-text border border-stroke">
-                      <RocketIcon className="size-3 text-accent" />
-                      {plan.priority[language]}
-                    </span>
-                    <span className="inline-flex items-center gap-1 rounded bg-surface-2 px-2 py-0.5 text-text border border-stroke">
-                      <CpuIcon className="size-3 text-accent" />
-                      {plan.context[language]}
-                    </span>
-                  </div>
+                  <ul className="mt-3.5 flex flex-wrap gap-1.5 text-xs">
+                    {[
+                      { icon: BoltIcon, text: plan.speed[language] },
+                      { icon: RocketIcon, text: plan.priority[language] },
+                      { icon: CpuIcon, text: plan.context[language] },
+                    ].map(({ icon: Icon, text }) => (
+                      <li
+                        key={text}
+                        className="inline-flex items-center gap-1.5 rounded-lg border border-stroke bg-surface-2 px-2 py-1 text-text"
+                      >
+                        <Icon className="size-3.5 shrink-0 text-accent" />
+                        {text}
+                      </li>
+                    ))}
+                  </ul>
 
-                  <ul className="mt-4 space-y-1.5 text-xs text-text/80">
+                  <ul className="mt-4 space-y-2 text-[13px] leading-5 text-text/85">
                     {plan.features[language].map((f) => (
                       <li key={f} className="flex items-start gap-2">
-                        <CheckIcon className="mt-0.5 size-3.5 shrink-0 text-accent" />
+                        <CheckIcon className="mt-0.5 size-4 shrink-0 text-accent" />
                         <span>{f}</span>
                       </li>
                     ))}
                   </ul>
                 </div>
 
-                <div className="mt-5 pt-3.5 border-t border-stroke">
-                  <Link to={plan.id === 'free' ? '/chat' : `/checkout/${plan.id}`}>
-                    <Button
-                      variant={plan.popular || isHighlighted ? 'primary' : 'outline'}
-                      size="sm"
-                      className="w-full"
-                    >
-                      {plan.id === 'free'
-                        ? isEn
-                          ? 'Try Free'
-                          : 'Попробовать бесплатно'
-                        : isEn
-                          ? `Choose ${plan.name}`
-                          : `Выбрать ${plan.name}`}
-                    </Button>
+                <div className="mt-5 border-t border-stroke pt-4">
+                  <Link
+                    to={plan.id === 'free' ? '/chat' : `/checkout/${plan.id}`}
+                    className={buttonClasses({
+                      variant: plan.popular || isHighlighted ? 'primary' : 'outline',
+                      size: 'md',
+                      fullWidth: true,
+                    })}
+                  >
+                    {plan.id === 'free' ? t('docPage.tryFree') : t('docPage.choosePlan', { plan: plan.name })}
                   </Link>
                 </div>
               </Card>
@@ -409,71 +381,59 @@ export function DocumentationPage() {
       </section>
 
       {/* 4. Честное использование (Fair Use) */}
-      <section id="fair-use" className="scroll-mt-24 flex flex-col gap-4 mb-12">
-        <DocHeading id="fair-use">
+      <section id="fair-use" className={sectionClass}>
+        <DocHeading id="fair-use-heading">
           <ShieldIcon className="size-5 text-accent" />
-          <span>{isEn ? 'Fair Use Policy' : 'Честное использование (Fair Use)'}</span>
+          <span>{t('docPage.fairTitle')}</span>
         </DocHeading>
         <Callout
           tone="info"
+          className="my-0"
           title={
-            isEn
-              ? '“Unlimited” means normal human usage without restrictions'
-              : '«Безлимит» означает нормальное использование человеком без искусственных рамок'
+            t('docPage.fairCallout')
           }
         >
           <div className="mt-3 grid gap-3 sm:grid-cols-3">
-            <div className="rounded-md bg-surface p-3 border border-stroke">
-              <h4 className="font-semibold text-xs text-text mb-1">
-                {isEn ? '1. For real people' : '1. Для реальных людей'}
-              </h4>
-              <p className="text-[11px] text-muted leading-relaxed">
-                {isEn
-                  ? 'Chat as much as you need for coding, writing, research, and learning.'
-                  : 'Общайтесь столько, сколько требуется для вашей работы, учёбы и проектов.'}
-              </p>
-            </div>
-            <div className="rounded-md bg-surface p-3 border border-stroke">
-              <h4 className="font-semibold text-xs text-text mb-1">
-                {isEn ? '2. Protection from bots' : '2. Защита от спам-ботов'}
-              </h4>
-              <p className="text-[11px] text-muted leading-relaxed">
-                {isEn
-                  ? 'Fair Use prevents automated web scraping and DDOS floods so servers stay fast for everyone.'
-                  : 'Правила защищают серверы от автоматического парсинга, спам-ботов и перегрузок.'}
-              </p>
-            </div>
-            <div className="rounded-md bg-surface p-3 border border-stroke">
-              <h4 className="font-semibold text-xs text-text mb-1">
-                {isEn ? '3. Invisible and smooth' : '3. Без внезапных блокировок'}
-              </h4>
-              <p className="text-[11px] text-muted leading-relaxed">
-                {isEn
-                  ? 'If you use Ketner AI normally, you will never see any limits or roadblocks.'
-                  : 'При обычном использовании вы никогда не столкнётесь с блокировками. Всё работает плавно.'}
-              </p>
-            </div>
+            {[
+              {
+                title: t('docPage.fair1Title'),
+                text: t('docPage.fair1Text'),
+              },
+              {
+                title: t('docPage.fair2Title'),
+                text: t('docPage.fair2Text'),
+              },
+              {
+                title: t('docPage.fair3Title'),
+                text: t('docPage.fair3Text'),
+              },
+            ].map((item) => (
+              <div key={item.title} className="rounded-xl border border-stroke bg-surface p-3.5">
+                <h3 className="mb-1 text-[13px] font-semibold text-text">{item.title}</h3>
+                <p className="text-[13px] leading-5 text-muted">{item.text}</p>
+              </div>
+            ))}
           </div>
         </Callout>
       </section>
 
       {/* 5. FAQ */}
-      <section id="faq" className="scroll-mt-24 flex flex-col gap-4 pb-12">
-        <DocHeading id="faq">
+      <section id="faq" className={cn(sectionClass, 'pb-12')}>
+        <DocHeading id="faq-heading">
           <InfoIcon className="size-5 text-accent" />
-          <span>{isEn ? 'Frequently Asked Questions' : 'Часто задаваемые вопросы (FAQ)'}</span>
+          <span>{t('docPage.faqTitle')}</span>
         </DocHeading>
-        <div className="flex flex-col gap-2.5">
+        <div className="flex max-w-[76ch] flex-col gap-2.5">
           {FAQ_ITEMS.map((item) => (
             <details
               key={item.id}
-              className="group rounded-md border border-stroke bg-surface transition-colors open:bg-surface-2"
+              className="group rounded-xl border border-stroke bg-surface transition-colors open:bg-surface-2"
             >
-              <summary className="flex cursor-pointer items-center justify-between gap-4 p-4 font-medium text-text select-none list-none [&::-webkit-details-marker]:hidden">
+              <summary className="flex min-h-12 cursor-pointer list-none items-center justify-between gap-4 rounded-xl px-4 py-3 font-medium text-text select-none [&::-webkit-details-marker]:hidden">
                 <span className="text-sm font-semibold">{item.q[language]}</span>
                 <ChevronDownIcon className="size-4 shrink-0 text-muted transition-transform duration-200 group-open:rotate-180" />
               </summary>
-              <div className="px-4 pb-4 pt-1 text-xs sm:text-sm text-muted leading-relaxed border-t border-stroke mt-1">
+              <div className="border-t border-stroke px-4 pt-3 pb-4 text-sm leading-relaxed text-muted">
                 {item.a[language]}
               </div>
             </details>

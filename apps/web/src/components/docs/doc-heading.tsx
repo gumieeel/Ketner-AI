@@ -16,8 +16,8 @@ export function DocHeading({ id, level = 2, children, className }: DocHeadingPro
     <Component
       id={id}
       className={cn(
-        'group relative flex items-center gap-2 scroll-mt-24 font-semibold text-text',
-        level === 2 && 'text-xl tracking-tight mt-10 mb-4 first:mt-0',
+        'group relative flex items-center gap-2 scroll-mt-32 font-semibold text-text xl:scroll-mt-24',
+        level === 2 && 'text-xl tracking-tight mt-10 mb-4 first:mt-0 md:text-2xl',
         level === 3 && 'text-lg tracking-tight mt-8 mb-3',
         level === 4 && 'text-base mt-6 mb-2',
         className,
@@ -25,7 +25,7 @@ export function DocHeading({ id, level = 2, children, className }: DocHeadingPro
     >
       <a
         href={`#${id}`}
-        className="inline-flex items-center gap-2 hover:underline decoration-muted/40 underline-offset-4"
+        className="-my-2 inline-flex min-h-11 items-center gap-2 decoration-muted/40 underline-offset-4 hover:underline"
       >
         <span
           className="absolute -left-5 text-muted opacity-0 transition-opacity group-hover:opacity-100 hidden sm:inline-flex items-center"

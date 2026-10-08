@@ -12,9 +12,9 @@ import {
   TrashIcon,
   UserIcon,
 } from '@/components/icons';
-import { Badge } from '@/components/ui/badge';
+import { Badge, type BadgeTone } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { CornerMark } from '@/components/ui/corner-mark';
+import { buttonClasses } from '@/components/ui/button-classes';
 import { IconButton } from '@/components/ui/icon-button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { StatusDot } from '@/components/ui/status-dot';
@@ -30,6 +30,8 @@ import { Brand } from './brand';
 import { LanguageToggle } from './language-toggle';
 import { ThemeToggle } from './theme-toggle';
 
+const PLAN_TONES: Record<string, BadgeTone> = { plus: 'plus', pro: 'pro', ultra: 'ultra' };
+
 const GROUP_ORDER: readonly DateGroup[] = ['today', 'yesterday', 'week', 'earlier'];
 
 const GROUP_LABELS: Record<DateGroup, TranslationKey> = {
@@ -41,9 +43,9 @@ const GROUP_LABELS: Record<DateGroup, TranslationKey> = {
 
 const navLinkClasses = ({ isActive }: { isActive: boolean }) =>
   cn(
-    'flex min-h-[44px] py-4 items-center gap-2.5 rounded-md px-3 text-sm transition-colors',
+    'flex min-h-10 items-center gap-2.5 rounded-lg px-3 text-sm transition-colors max-md:min-h-11',
     isActive
-      ? 'bg-surface-2 font-medium text-text border-l-[3px] border-accent pl-[calc(0.75rem-3px)]'
+      ? 'bg-surface-2 font-medium text-text shadow-xs [&>svg]:text-accent'
       : 'text-muted hover:bg-surface-2 hover:text-text',
   );
 
@@ -119,7 +121,7 @@ export function Sidebar() {
         <div
           aria-hidden="true"
           onClick={close}
-          className="fixed inset-0 z-30 bg-black/60 backdrop-blur-[1px] md:hidden"
+          className="fixed inset-0 z-[var(--z-drawer)] bg-black/60 backdrop-blur-[2px] md:hidden"
         />
       ) : null}
 
@@ -129,13 +131,13 @@ export function Sidebar() {
         aria-label={t('nav.chats')}
         aria-hidden={!open ? undefined : false}
         className={cn(
-          'fixed inset-y-0 left-0 z-40 flex w-[min(360px,85vw)] md:w-[264px] flex-col',
+          'fixed inset-y-0 left-0 z-[calc(var(--z-drawer)+1)] flex w-[min(360px,85vw)] flex-col md:w-[272px]',
           'border-r border-stroke bg-surface text-text',
-          'transition-transform duration-[180ms] ease-out md:static md:z-auto md:translate-x-0',
-          open ? 'translate-x-0 shadow-xl md:shadow-none' : '-translate-x-full',
+          'transition-transform duration-[260ms] ease-out-expo md:static md:z-auto md:translate-x-0',
+          open ? 'translate-x-0 shadow-2xl md:shadow-none' : '-translate-x-full',
         )}
       >
-        <div className="flex h-12 items-center justify-between px-3 border-b border-stroke">
+        <div className="flex h-14 shrink-0 items-center justify-between border-b border-stroke px-4">
           <Brand />
           <IconButton
             ref={closeButtonRef}
@@ -147,25 +149,25 @@ export function Sidebar() {
           </IconButton>
         </div>
 
-        <div className="flex flex-col gap-2.5 p-3">
+        <div className="flex shrink-0 flex-col gap-2.5 p-3">
           <Link
             to="/chat"
             onClick={handleNewChat}
-            className="flex h-9 w-full items-center justify-center gap-2 rounded-md border border-stroke bg-surface-2 px-3 text-sm font-medium text-text transition-colors hover:border-stroke-strong hover:bg-surface-3"
+            className={buttonClasses({ variant: 'secondary', size: 'md', fullWidth: true, className: 'rounded-xl' })}
           >
-            <PlusIcon className="size-4" />
+            <PlusIcon className="size-4 text-accent" />
             <span>{t('nav.newChat')}</span>
           </Link>
 
           <div className="relative">
-            <SearchIcon className="pointer-events-none absolute top-1/2 left-2.5 -translate-y-1/2 size-4 text-muted" />
+            <SearchIcon className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-subtle" />
             <input
               type="search"
               value={search}
               onChange={(event) => setSearch(event.target.value)}
               aria-label={t('nav.searchChats')}
               placeholder={t('nav.searchChats')}
-              className="h-9 w-full rounded-md border border-stroke bg-canvas pr-3 pl-8 text-sm text-text placeholder:text-muted focus:border-stroke-strong outline-none transition-colors"
+              className="h-10 w-full rounded-xl border border-stroke bg-canvas pr-3 pl-9 text-sm text-text outline-none transition-[border-color,box-shadow] placeholder:text-subtle focus:border-accent/60 focus:ring-4 focus:ring-accent-soft max-md:h-11"
             />
           </div>
         </div>
@@ -174,7 +176,7 @@ export function Sidebar() {
           {status === 'loading' ? <ConversationsSkeleton /> : null}
 
           {status === 'error' ? (
-            <div className="rounded-md border border-danger/30 bg-danger-soft p-3 text-center">
+            <div className="rounded-xl border border-danger/30 bg-danger-soft p-3 text-center">
               <p className="text-xs text-danger">{t('chats.loadError')}</p>
               <Button
                 variant="outline"
@@ -188,10 +190,12 @@ export function Sidebar() {
           ) : null}
 
           {status !== 'loading' && status !== 'error' && conversations.length === 0 ? (
-            <div className="rounded-md border border-dashed border-stroke p-4 text-center my-auto">
-              <SparkleIcon className="mx-auto mb-2 size-5 text-subtle" />
-              <p className="text-xs font-medium text-text">{t('nav.empty')}</p>
-              <p className="mt-1 text-[11px] text-muted">{t('nav.emptyHint')}</p>
+            <div className="my-auto rounded-xl border border-dashed border-stroke-strong p-5 text-center">
+              <span className="mx-auto mb-3 grid size-9 place-items-center rounded-xl bg-accent-soft text-accent">
+                <SparkleIcon className="size-4" />
+              </span>
+              <p className="text-[13px] font-medium text-text">{t('nav.empty')}</p>
+              <p className="mt-1 text-xs leading-5 text-muted">{t('nav.emptyHint')}</p>
             </div>
           ) : null}
 
@@ -199,12 +203,12 @@ export function Sidebar() {
           status !== 'error' &&
           conversations.length > 0 &&
           groups.length === 0 ? (
-            <p className="px-3 py-4 text-xs text-muted text-center">{t('chat.searchEmpty')}</p>
+            <p className="px-3 py-6 text-center text-[13px] text-muted">{t('chat.searchEmpty')}</p>
           ) : null}
 
           {groups.map(({ group, items }) => (
             <section key={group} className="flex flex-col gap-0.5">
-              <span className="px-2 pt-3 pb-1 font-mono text-[11px] uppercase tracking-[0.08em] text-subtle font-semibold">
+              <span className="px-2.5 pt-3.5 pb-1 text-xs font-semibold text-subtle">
                 {t(GROUP_LABELS[group])}
               </span>
               {items.map((conversation) => (
@@ -220,7 +224,7 @@ export function Sidebar() {
           ))}
         </div>
 
-        <div className="mt-auto flex flex-col gap-1 border-t border-stroke p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
+        <div className="mt-auto flex shrink-0 flex-col gap-0.5 border-t border-stroke p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
           <NavLink to="/docs" onClick={close} className={navLinkClasses}>
             <BookOpenIcon className="size-4 shrink-0" />
             <span>{t('nav.docs')}</span>
@@ -236,48 +240,45 @@ export function Sidebar() {
           {hasAdminAccess ? (
             <NavLink to="/admin" onClick={close} className={navLinkClasses}>
               <UserIcon className="size-4 shrink-0 text-accent" />
-              <span className="flex-1 font-semibold text-accent">Admin Panel</span>
-              <Badge tone="brand">ADMIN</Badge>
+              <span className="flex-1 font-semibold text-accent">{t('nav.adminPanel')}</span>
+              <Badge tone="brand">{t('nav.adminBadge')}</Badge>
             </NavLink>
           ) : null}
 
-          <div className="flex items-center justify-between gap-2 pt-2 mt-1 border-t border-stroke px-1">
+          <div className="mt-1.5 flex items-center justify-between gap-2 border-t border-stroke px-1 pt-3">
             {user ? (
-              <div className="flex items-center gap-2 min-w-0 flex-1">
-                <Link
-                  to="/settings"
-                  onClick={close}
-                  className="grid size-8 shrink-0 place-items-center rounded-full bg-accent-soft text-accent text-xs font-semibold hover:opacity-85 transition-opacity"
-                  title={user.name}
+              <Link
+                to="/settings"
+                onClick={close}
+                title={user.name}
+                className="group/user -mx-1 flex min-h-11 min-w-0 flex-1 items-center gap-2 rounded-lg px-1 py-1 transition-colors hover:bg-surface-2"
+              >
+                <span
+                  aria-hidden="true"
+                  className="grid size-9 shrink-0 place-items-center rounded-full bg-accent-soft text-xs font-semibold text-accent ring-1 ring-accent/30 transition-[box-shadow] group-hover/user:ring-accent/60"
                 >
                   {user.name ? user.name.slice(0, 2).toUpperCase() : 'U'}
-                </Link>
-                <div className="min-w-0 flex-1">
-                  <Link
-                    to="/settings"
-                    onClick={close}
-                    className="block truncate text-xs font-medium text-text hover:underline"
-                  >
-                    {user.name}
-                  </Link>
-                  <div className="pt-0.5">
-                    <Badge tone="brand" className="font-mono text-[9px] px-1 py-0 uppercase">
+                </span>
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate text-[13px] font-medium text-text">{user.name}</span>
+                  <span className="block pt-0.5">
+                    <Badge tone={PLAN_TONES[user.plan] ?? 'neutral'} className="px-2 py-0 text-[11px] uppercase leading-[18px]">
                       {user.plan}
                     </Badge>
-                  </div>
-                </div>
-              </div>
+                  </span>
+                </span>
+              </Link>
             ) : (
               <div className="flex items-center gap-2 min-w-0 flex-1">
-                <span className="grid size-8 shrink-0 place-items-center rounded-full bg-surface-2 text-muted">
+                <span className="grid size-9 shrink-0 place-items-center rounded-full bg-surface-2 text-muted ring-1 ring-stroke">
                   <UserIcon className="size-4" />
                 </span>
                 <div className="min-w-0 flex-1">
-                  <p className="truncate text-xs font-medium text-text">{t('nav.guest')}</p>
+                  <p className="truncate text-[13px] font-medium text-text">{t('nav.guest')}</p>
                   <Link
                     to="/login"
                     onClick={close}
-                    className="text-xs text-accent hover:underline font-mono"
+                    className="-my-3 inline-flex min-h-11 items-center text-xs font-medium text-accent hover:underline"
                   >
                     {t('nav.login')}
                   </Link>
@@ -287,7 +288,7 @@ export function Sidebar() {
             <ThemeToggle />
           </div>
 
-          <div className="pt-1 px-1">
+          <div className="px-1 pt-2">
             <LanguageToggle className="w-full justify-center" />
           </div>
         </div>
@@ -325,7 +326,7 @@ function ConversationRow({
           void rename(conversation.id, value);
           setEditing(false);
         }}
-        className="flex h-9 items-center gap-1 px-1"
+        className="flex min-h-10 items-center gap-1 px-1 max-md:min-h-11"
       >
         <label htmlFor={`rename-${conversation.id}`} className="sr-only">
           {t('chats.rename')}
@@ -340,7 +341,7 @@ function ConversationRow({
               setEditing(false);
             }
           }}
-          className="h-7 min-w-0 flex-1 rounded-sm border border-accent bg-canvas px-2 text-xs text-text outline-none"
+          className="h-8 min-w-0 flex-1 rounded-lg border border-accent bg-canvas px-2.5 text-[13px] text-text outline-none ring-4 ring-accent-soft max-md:h-10"
         />
         <IconButton label={t('common.save')} size="sm" type="submit">
           <CheckIcon className="size-3.5" />
@@ -354,8 +355,8 @@ function ConversationRow({
 
   if (confirming) {
     return (
-      <div className="flex h-9 items-center gap-1.5 rounded-md border border-danger/30 bg-danger-soft px-2 text-danger">
-        <span className="min-w-0 flex-1 truncate text-xs">{t('chats.deleteConfirm')}</span>
+      <div className="flex min-h-10 items-center gap-1.5 rounded-lg border border-danger/30 bg-danger-soft px-2 text-danger max-md:min-h-11">
+        <span className="min-w-0 flex-1 truncate py-2 text-[13px] leading-5">{t('chats.deleteConfirm')}</span>
         <button
           type="button"
           onClick={() => {
@@ -365,7 +366,7 @@ function ConversationRow({
               navigate('/chat', { replace: true });
             }
           }}
-          className="rounded-sm px-2 py-0.5 text-xs font-medium text-danger hover:bg-danger/20 transition-colors"
+          className="inline-flex min-h-8 items-center rounded-md px-2.5 text-xs font-semibold text-danger transition-colors hover:bg-danger/15 max-md:min-h-10"
         >
           {t('chats.deleteYes')}
         </button>
@@ -379,21 +380,24 @@ function ConversationRow({
   return (
     <div
       className={cn(
-        'group relative flex h-9 items-center gap-1.5 rounded-md px-2 text-sm transition-colors',
+        'group relative flex min-h-10 items-center gap-1.5 rounded-lg pr-1 pl-3 text-sm transition-colors max-md:min-h-11',
         active
-          ? 'bg-surface-3 text-text font-medium'
+          ? 'bg-surface-3 font-medium text-text'
           : 'text-muted hover:bg-surface-2 hover:text-text',
       )}
     >
       {active ? (
-        <CornerMark size={10} className="shrink-0 text-accent mr-0.5" />
+        <span
+          aria-hidden="true"
+          className="absolute top-2.5 bottom-2.5 left-0 w-[3px] rounded-full bg-brand-gradient"
+        />
       ) : null}
 
       <NavLink
         to={`/chat/${conversation.id}`}
         onClick={onNavigate}
         title={conversation.title}
-        className="min-w-0 flex-1 truncate text-xs"
+        className="min-w-0 flex-1 truncate py-3.5 text-xs md:py-3"
       >
         {conversation.title === '' ? t('chat.title') : conversation.title}
       </NavLink>
@@ -408,12 +412,20 @@ function ConversationRow({
       ) : null}
 
       {showDate ? (
-        <span className="shrink-0 font-mono text-[10px] text-muted md:group-hover:hidden">
+        <span className="shrink-0 text-[11px] text-subtle md:group-focus-within:hidden md:group-hover:hidden">
           {formatShortDate(conversation.updatedAt, language)}
         </span>
       ) : null}
 
-      <div className="flex shrink-0 items-center gap-0.5 md:opacity-0 md:transition-opacity md:group-focus-within:opacity-100 md:group-hover:opacity-100">
+      <div
+        className={cn(
+          'flex shrink-0 items-center gap-0.5',
+          // На десктопе кнопки появляются поверх названия при наведении или фокусе и не отнимают у него места.
+          'md:absolute md:top-1/2 md:right-1 md:-translate-y-1/2 md:rounded-lg md:opacity-0 md:shadow-[-12px_0_10px_-4px_var(--row-bg)] md:transition-opacity',
+          'md:group-focus-within:opacity-100 md:group-hover:opacity-100',
+          active ? 'md:bg-surface-3 md:[--row-bg:var(--surface-3)]' : 'md:bg-surface-2 md:[--row-bg:var(--surface-2)]',
+        )}
+      >
         <IconButton
           label={t('chats.rename')}
           size="sm"
@@ -440,7 +452,7 @@ function ConversationsSkeleton() {
   return (
     <div className="flex flex-col gap-2 px-1">
       {[0, 1, 2, 3].map((index) => (
-        <Skeleton key={index} className="h-7 w-full" />
+        <Skeleton key={index} className="h-9 w-full rounded-lg" />
       ))}
     </div>
   );

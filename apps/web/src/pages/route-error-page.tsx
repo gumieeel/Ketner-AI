@@ -1,7 +1,7 @@
 import { Link, useRouteError } from 'react-router-dom';
 import { AlertIcon, RefreshIcon } from '@/components/icons';
 import { Button } from '@/components/ui/button';
-import { CornerMark } from '@/components/ui/corner-mark';
+import { buttonClasses } from '@/components/ui/button-classes';
 import { useTranslation } from '@/i18n';
 
 /** Запасной экран на случай ошибки рендера или загрузки маршрута. */
@@ -20,27 +20,27 @@ export function RouteErrorPage() {
         : null;
 
   return (
-    <div className="relative mx-auto my-auto flex w-full max-w-lg flex-1 flex-col items-center justify-center overflow-hidden rounded-lg border border-stroke bg-canvas py-16 px-6 text-center bg-grid hero-glow">
-      <CornerMark size={12} className="absolute top-2 left-2 text-stroke-strong" />
-      <CornerMark size={12} className="absolute top-2 right-2 text-stroke-strong rotate-90" />
-      <CornerMark size={12} className="absolute bottom-2 right-2 text-stroke-strong rotate-180" />
-      <CornerMark size={12} className="absolute bottom-2 left-2 text-stroke-strong -rotate-90" />
+    <div className="relative mx-auto my-auto flex w-full max-w-xl flex-1 flex-col items-center justify-center px-2 py-16 text-center">
+      <div
+        aria-hidden="true"
+        className="pointer-events-none absolute inset-x-[-10%] top-0 h-72 bg-[radial-gradient(ellipse_50%_60%_at_50%_30%,var(--danger-soft),transparent)]"
+      />
 
       <div className="relative z-10 flex flex-col items-center gap-4">
-        <div className="grid size-14 place-items-center rounded-full border border-danger/30 bg-danger-soft text-danger">
-          <AlertIcon className="size-7" />
+        <div className="animate-scale-in grid size-16 place-items-center rounded-2xl border border-danger/30 bg-danger-soft text-danger shadow-lg">
+          <AlertIcon className="size-8" />
         </div>
 
-        <h1 className="text-xl md:text-2xl font-semibold tracking-tight text-text">
+        <h1 className="animate-slide-up text-xl font-semibold tracking-tight text-balance text-text md:text-2xl">
           {t('error.title')}
         </h1>
 
-        <p className="max-w-sm text-sm text-muted leading-relaxed">
+        <p className="animate-slide-up max-w-sm text-sm leading-6 text-muted" style={{ animationDelay: '60ms' }}>
           {t('error.text')}
         </p>
 
         {import.meta.env.DEV && errorMessage && (
-          <pre className="max-w-md w-full overflow-x-auto rounded-md border border-stroke bg-surface-2 p-3 font-mono text-xs text-muted text-left">
+          <pre className="w-full max-w-md overflow-x-auto rounded-xl border border-stroke bg-surface-2 p-3 text-left font-mono text-xs text-muted">
             {errorMessage}
           </pre>
         )}
@@ -54,10 +54,8 @@ export function RouteErrorPage() {
           >
             {t('error.reload')}
           </Button>
-          <Link to="/">
-            <Button variant="outline" size="md">
-              {t('notFound.home')}
-            </Button>
+          <Link to="/" className={buttonClasses({ variant: 'outline', size: 'md' })}>
+            {t('notFound.home')}
           </Link>
         </div>
       </div>

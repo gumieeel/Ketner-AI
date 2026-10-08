@@ -23,8 +23,11 @@ export function Tooltip({
         role="tooltip"
         id={tooltipId}
         className={cn(
-          'pointer-events-none absolute left-1/2 -translate-x-1/2 z-[var(--z-dropdown)] whitespace-nowrap rounded-md border border-stroke-strong bg-surface-2 px-2 py-1 font-mono text-[11px] text-text shadow-popover opacity-0 transition-opacity duration-150 group-hover/tooltip:opacity-100 group-focus-within/tooltip:opacity-100',
-          side === 'top' ? 'bottom-full mb-1.5' : 'top-full mt-1.5',
+          'pointer-events-none absolute left-1/2 z-[var(--z-dropdown)] -translate-x-1/2 whitespace-nowrap rounded-md border border-stroke-strong bg-surface-3 px-2.5 py-1.5 text-xs font-medium text-text shadow-popover opacity-0',
+          'transition-[opacity,transform] duration-200 ease-out-expo group-hover/tooltip:opacity-100 group-focus-within/tooltip:opacity-100',
+          side === 'top'
+            ? 'bottom-full mb-2 translate-y-1 group-hover/tooltip:translate-y-0 group-focus-within/tooltip:translate-y-0'
+            : 'top-full mt-2 -translate-y-1 group-hover/tooltip:translate-y-0 group-focus-within/tooltip:translate-y-0',
           className,
         )}
       >

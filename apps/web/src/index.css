@@ -5,29 +5,83 @@
 /*
  * Дизайн-система Ketner AI.
  *
- * Семантические переменные (--canvas, --surface, --accent …) задаются в :root
- * (светлая тема) и .dark (тёмная); @theme inline отображает их в утилиты
- * Tailwind (bg-canvas, text-muted, border-stroke …) — без самоссылок.
- * Шрифты Inter Variable и JetBrains Mono Variable подключаются в main.tsx.
+ * Семантические переменные (--canvas, --surface, --accent …) задаются в корневом
+ * блоке (светлая тема) и в блоке .dark (тёмная). @theme inline отображает их в
+ * утилиты Tailwind (bg-canvas, text-muted, border-stroke …) — без самоссылок.
+ * Имена токенов не менялись: компоненты подхватывают палитру автоматически.
+ *
+ * Шрифты: Onest Variable (интерфейс, кириллица + латиница) и JetBrains Mono
+ * Variable (код и мелкие метки). Файлы лежат в public/fonts, подключены только
+ * подмножества latin и cyrillic.
  */
+
+@font-face {
+  font-family: 'Onest Variable';
+  font-style: normal;
+  font-display: swap;
+  font-weight: 100 900;
+  src: url('/fonts/onest-cyrillic.woff2') format('woff2-variations');
+  unicode-range: U+0301, U+0400-045F, U+0490-0491, U+04B0-04B1, U+2116;
+}
+
+@font-face {
+  font-family: 'Onest Variable';
+  font-style: normal;
+  font-display: swap;
+  font-weight: 100 900;
+  src: url('/fonts/onest-latin.woff2') format('woff2-variations');
+  unicode-range:
+    U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308,
+    U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
+@font-face {
+  font-family: 'JetBrains Mono Variable';
+  font-style: normal;
+  font-display: swap;
+  font-weight: 100 800;
+  src: url('/fonts/jetbrains-mono-cyrillic.woff2') format('woff2-variations');
+  unicode-range: U+0301, U+0400-045F, U+0490-0491, U+04B0-04B1, U+2116;
+}
+
+@font-face {
+  font-family: 'JetBrains Mono Variable';
+  font-style: normal;
+  font-display: swap;
+  font-weight: 100 800;
+  src: url('/fonts/jetbrains-mono-latin.woff2') format('woff2-variations');
+  unicode-range:
+    U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308,
+    U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
 
 @theme {
   --font-sans:
-    'Inter Variable', 'Golos Text', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+    'Onest Variable', system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial,
+    sans-serif;
   --font-mono:
     'JetBrains Mono Variable', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
 
-  /* Радиусы: 6 / 8 / 12 + круг для аватаров и статус-точек */
+  /* Радиусы: контролы 10–12, карточки 16–20, крупные поверхности 24+ */
   --radius-xs: 6px;
-  --radius-sm: 6px;
-  --radius-md: 8px;
-  --radius-lg: 12px;
-  /* Страховка для старой разметки: крупные радиусы не выходят за шкалу */
-  --radius-xl: 12px;
-  --radius-2xl: 12px;
-  --radius-3xl: 12px;
+  --radius-sm: 8px;
+  --radius-md: 10px;
+  --radius-lg: 16px;
+  --radius-xl: 20px;
+  --radius-2xl: 24px;
+  --radius-3xl: 32px;
 
+  /* Движение */
   --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-spring: cubic-bezier(0.34, 1.4, 0.64, 1);
+  --ease-smooth: cubic-bezier(0.4, 0, 0.2, 1);
+
+  --animate-fade-in: fadeIn 240ms var(--ease-out-expo) both;
+  --animate-slide-up: slideUp 320ms var(--ease-out-expo) both;
+  --animate-scale-in: scaleIn 240ms var(--ease-spring) both;
+  --animate-slide-in-right: slideInRight 280ms var(--ease-out-expo) both;
+  --animate-slide-in-left: slideInLeft 280ms var(--ease-out-expo) both;
+  --animate-float: floatY 6s ease-in-out infinite;
 }
 
 @theme inline {
@@ -45,6 +99,9 @@
   --color-accent-hover: var(--accent-hover);
   --color-accent-soft: var(--accent-soft);
   --color-accent-text: var(--accent-text);
+  --color-accent-2: var(--accent-2);
+  --color-accent-2-soft: var(--accent-2-soft);
+  --color-accent-3: var(--accent-3);
   --color-danger: var(--danger);
   --color-danger-soft: var(--danger-soft);
   --color-danger-text: var(--danger-text);
@@ -59,51 +116,126 @@
   --color-info-soft: var(--info-soft);
   --color-overlay: var(--overlay);
   --color-grid-line: var(--grid-line);
+  --color-glass: var(--glass);
 
-  --radius-sm: 6px;
-  --radius-md: 8px;
-  --radius-lg: 12px;
-  --radius-xl: 12px;
-  --radius-2xl: 12px;
+  /* Цвета тарифов */
+  --color-tier-plus: var(--tier-plus);
+  --color-tier-pro: var(--tier-pro);
+  --color-tier-ultra: var(--tier-ultra);
 
+  /* «Оркестр моделей»: у каждой модели свой узнаваемый цвет */
+  --color-model-gpt: var(--model-gpt);
+  --color-model-claude: var(--model-claude);
+  --color-model-gemini: var(--model-gemini);
+  --color-model-grok: var(--model-grok);
+  --color-model-deepseek: var(--model-deepseek);
+  --color-model-qwen: var(--model-qwen);
+  --color-model-ketner: var(--model-ketner);
+
+  /* Тени и свечение — многослойные, зависят от темы */
+  --shadow-xs: var(--elev-1);
+  --shadow-sm: var(--elev-1);
+  --shadow-md: var(--elev-2);
+  --shadow-lg: var(--elev-3);
+  --shadow-xl: var(--elev-4);
+  --shadow-2xl: var(--elev-5);
   --shadow-popover: var(--popover-shadow);
   --shadow-highlight: var(--highlight-shadow);
+  --shadow-glow: var(--glow-shadow);
+  --shadow-glow-lg: var(--glow-shadow-lg);
 }
 
 @layer base {
   :root {
     color-scheme: light;
 
-    --canvas: #fafafa;
+    /* Поверхности: воздушный холодный белый, не инверсия тёмной темы */
+    --canvas: #f4f6f9;
     --surface: #ffffff;
-    --surface-2: #f4f4f5;
-    --surface-3: #e9e9ec;
-    --stroke: rgba(9, 9, 11, 0.1);
-    --stroke-strong: rgba(9, 9, 11, 0.2);
-    --text: #09090b;
-    --muted: #52525b;
-    --subtle: #71717a;
-    --accent: #087f5b;
-    --accent-hover: #066a4b;
-    --accent-soft: rgba(8, 127, 91, 0.1);
+    --surface-2: #eef1f5;
+    --surface-3: #e2e7ee;
+    --stroke: rgba(15, 23, 42, 0.09);
+    --stroke-strong: rgba(15, 23, 42, 0.18);
+    --glass: rgba(255, 255, 255, 0.72);
+
+    /* Текст */
+    --text: #0b1220;
+    --muted: #475467;
+    --subtle: #586374;
+
+    /* Акцент: изумруд + циан */
+    --accent: #06704d;
+    --accent-hover: #055a3d;
+    --accent-soft: rgba(6, 112, 77, 0.1);
     --accent-text: #ffffff;
-    --danger: #dc2626;
-    --danger-soft: rgba(220, 38, 38, 0.08);
+    --accent-2: #0b6b86;
+    --accent-2-soft: rgba(11, 107, 134, 0.1);
+    --accent-3: #6d4fd6;
+
+    /* Фирменные градиенты */
+    --gradient-brand: linear-gradient(135deg, #087f5b 0%, #0e7490 100%);
+    --gradient-brand-hover: linear-gradient(135deg, #066a4b 0%, #0b647d 100%);
+    --gradient-brand-soft: linear-gradient(
+      135deg,
+      rgba(8, 127, 91, 0.12) 0%,
+      rgba(14, 116, 144, 0.1) 100%
+    );
+    --gradient-text: linear-gradient(110deg, #087f5b 0%, #0e7490 55%, #5b45c4 100%);
+    --gradient-border: linear-gradient(
+      135deg,
+      rgba(8, 127, 91, 0.7) 0%,
+      rgba(14, 116, 144, 0.5) 50%,
+      rgba(109, 79, 214, 0.45) 100%
+    );
+
+    /* Состояния */
+    --danger: #c81e1e;
+    --danger-soft: rgba(200, 30, 30, 0.08);
     --danger-text: #ffffff;
     --danger-solid: #dc2626;
     --danger-solid-hover: #b91c1c;
     --danger-solid-text: #ffffff;
-    --warning: #b45309;
-    --warning-soft: rgba(180, 83, 9, 0.08);
-    --success: #047857;
-    --success-soft: rgba(4, 120, 87, 0.08);
-    --info: #1d4ed8;
+    --warning: #9a4a06;
+    --warning-soft: rgba(154, 74, 6, 0.09);
+    --success: #036a4c;
+    --success-soft: rgba(3, 106, 76, 0.09);
+    --info: #1b46c7;
     --info-soft: rgba(29, 78, 216, 0.08);
-    --overlay: rgba(9, 9, 11, 0.4);
-    --grid-line: rgba(9, 9, 11, 0.06);
-    --glow: rgba(8, 127, 91, 0.05);
-    --highlight-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.6);
-    --popover-shadow: 0 12px 32px -8px rgba(9, 9, 11, 0.16), 0 2px 6px -2px rgba(9, 9, 11, 0.08);
+    --overlay: rgba(11, 18, 32, 0.45);
+    --grid-line: rgba(15, 23, 42, 0.06);
+    --glow: rgba(8, 127, 91, 0.08);
+
+    /* Атмосфера hero и крупных блоков */
+    --aurora-1: rgba(8, 127, 91, 0.13);
+    --aurora-2: rgba(14, 116, 144, 0.11);
+    --aurora-3: rgba(109, 79, 214, 0.08);
+
+    /* Тарифы */
+    --tier-plus: #0b6b86;
+    --tier-pro: #6d4fd6;
+    --tier-ultra: #9a4a06;
+
+    /* Модели: ≥ 4.5:1 даже на surface-3 — цвет годится и для мелких подписей */
+    --model-gpt: #0c7355;
+    --model-claude: #9f502f;
+    --model-gemini: #1f60d1;
+    --model-grok: #3f4654;
+    --model-deepseek: #3b55e6;
+    --model-qwen: #7645d9;
+    --model-ketner: #06704d;
+
+    /* Глубина */
+    --highlight-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.8);
+    --elev-1: 0 1px 2px rgba(15, 23, 42, 0.06), 0 1px 1px rgba(15, 23, 42, 0.04);
+    --elev-2: 0 2px 4px rgba(15, 23, 42, 0.05), 0 8px 20px -8px rgba(15, 23, 42, 0.1);
+    --elev-3: 0 4px 8px rgba(15, 23, 42, 0.05), 0 18px 40px -14px rgba(15, 23, 42, 0.16);
+    --elev-4: 0 8px 16px rgba(15, 23, 42, 0.06), 0 28px 60px -18px rgba(15, 23, 42, 0.22);
+    --elev-5: 0 12px 24px rgba(15, 23, 42, 0.08), 0 40px 90px -24px rgba(15, 23, 42, 0.3);
+    --popover-shadow:
+      0 0 0 1px rgba(15, 23, 42, 0.06), 0 16px 40px -8px rgba(15, 23, 42, 0.18),
+      0 4px 10px -4px rgba(15, 23, 42, 0.08);
+    --glow-shadow: 0 6px 20px -6px rgba(8, 127, 91, 0.45), 0 0 0 1px rgba(8, 127, 91, 0.25);
+    --glow-shadow-lg: 0 14px 44px -12px rgba(8, 127, 91, 0.4), 0 0 0 1px rgba(8, 127, 91, 0.2);
 
     /* Шкала слоёв */
     --z-header: 30;
@@ -112,13 +244,13 @@
     --z-modal: 50;
     --z-toast: 60;
 
-    /* Подсветка синтаксиса */
+    /* Подсветка синтаксиса (контраст ≥ 4.5:1 на --surface-2) */
     --syn-keyword: #6d28d9;
     --syn-string: #047857;
-    --syn-comment: #66666f;
+    --syn-comment: #5d6676;
     --syn-number: #0369a1;
-    --syn-function: #087f5b;
-    --syn-punct: #52525b;
+    --syn-function: #0b6b9b;
+    --syn-punct: #475467;
 
     /* Алиасы старых имён для разметки вида var(--color-accent-text) */
     --color-canvas: var(--canvas);
@@ -133,19 +265,42 @@
   .dark {
     color-scheme: dark;
 
-    --canvas: #09090b;
-    --surface: #101013;
-    --surface-2: #16161a;
-    --surface-3: #1d1d22;
-    --stroke: rgba(255, 255, 255, 0.08);
-    --stroke-strong: rgba(255, 255, 255, 0.16);
-    --text: #f4f4f5;
-    --muted: #a1a1aa;
-    --subtle: #71717a;
+    /* Поверхности: глубокий графит с лёгким холодным оттенком, не чистый чёрный */
+    --canvas: #0b0d11;
+    --surface: #11141a;
+    --surface-2: #171b22;
+    --surface-3: #1f242d;
+    --stroke: rgba(255, 255, 255, 0.075);
+    --stroke-strong: rgba(255, 255, 255, 0.15);
+    --glass: rgba(17, 20, 26, 0.68);
+
+    --text: #eef1f6;
+    --muted: #a1abbb;
+    --subtle: #8390a2;
+
     --accent: #2ee6a6;
     --accent-hover: #5cf0bc;
     --accent-soft: rgba(46, 230, 166, 0.12);
     --accent-text: #04140e;
+    --accent-2: #38c7f2;
+    --accent-2-soft: rgba(56, 199, 242, 0.12);
+    --accent-3: #a592ff;
+
+    --gradient-brand: linear-gradient(135deg, #2ee6a6 0%, #36cdf0 100%);
+    --gradient-brand-hover: linear-gradient(135deg, #4cf0b9 0%, #5bd6f5 100%);
+    --gradient-brand-soft: linear-gradient(
+      135deg,
+      rgba(46, 230, 166, 0.14) 0%,
+      rgba(56, 199, 242, 0.1) 100%
+    );
+    --gradient-text: linear-gradient(110deg, #7df5cf 0%, #2ee6a6 30%, #38c7f2 65%, #a592ff 100%);
+    --gradient-border: linear-gradient(
+      135deg,
+      rgba(46, 230, 166, 0.75) 0%,
+      rgba(56, 199, 242, 0.5) 50%,
+      rgba(165, 146, 255, 0.45) 100%
+    );
+
     --danger: #f87171;
     --danger-soft: rgba(248, 113, 113, 0.12);
     --danger-text: #1a0505;
@@ -158,19 +313,49 @@
     --success-soft: rgba(52, 211, 153, 0.12);
     --info: #60a5fa;
     --info-soft: rgba(96, 165, 250, 0.12);
-    --overlay: rgba(0, 0, 0, 0.6);
+    --overlay: rgba(2, 4, 8, 0.66);
     --grid-line: rgba(255, 255, 255, 0.05);
-    --glow: rgba(46, 230, 166, 0.09);
-    --highlight-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
-    --popover-shadow: 0 16px 40px -12px rgba(0, 0, 0, 0.7), 0 0 0 1px rgba(255, 255, 255, 0.06);
+    --glow: rgba(46, 230, 166, 0.1);
+
+    --aurora-1: rgba(46, 230, 166, 0.16);
+    --aurora-2: rgba(56, 199, 242, 0.13);
+    --aurora-3: rgba(165, 146, 255, 0.1);
+
+    --tier-plus: #38c7f2;
+    --tier-pro: #a592ff;
+    --tier-ultra: #fbbf24;
+
+    --model-gpt: #19c37d;
+    --model-claude: #f08a5d;
+    --model-gemini: #7ea6ff;
+    --model-grok: #cfd6e2;
+    --model-deepseek: #7b8cff;
+    --model-qwen: #b18cff;
+    --model-ketner: #2ee6a6;
+
+    --highlight-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05);
+    --elev-1: 0 1px 2px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.03);
+    --elev-2: 0 2px 6px rgba(0, 0, 0, 0.35), 0 10px 24px -8px rgba(0, 0, 0, 0.5),
+      inset 0 1px 0 rgba(255, 255, 255, 0.04);
+    --elev-3: 0 4px 10px rgba(0, 0, 0, 0.35), 0 20px 44px -14px rgba(0, 0, 0, 0.6),
+      inset 0 1px 0 rgba(255, 255, 255, 0.05);
+    --elev-4: 0 8px 18px rgba(0, 0, 0, 0.4), 0 30px 64px -18px rgba(0, 0, 0, 0.7),
+      inset 0 1px 0 rgba(255, 255, 255, 0.06);
+    --elev-5: 0 12px 26px rgba(0, 0, 0, 0.45), 0 44px 96px -24px rgba(0, 0, 0, 0.8),
+      inset 0 1px 0 rgba(255, 255, 255, 0.06);
+    --popover-shadow:
+      0 0 0 1px rgba(255, 255, 255, 0.08), 0 18px 48px -10px rgba(0, 0, 0, 0.75),
+      0 4px 12px -4px rgba(0, 0, 0, 0.5);
+    --glow-shadow: 0 6px 24px -6px rgba(46, 230, 166, 0.5), 0 0 0 1px rgba(46, 230, 166, 0.3);
+    --glow-shadow-lg: 0 16px 56px -12px rgba(46, 230, 166, 0.45), 0 0 0 1px rgba(46, 230, 166, 0.25);
 
     /* Подсветка синтаксиса */
     --syn-keyword: #c4b5fd;
     --syn-string: #6ee7b7;
-    --syn-comment: #71717a;
+    --syn-comment: #8390a2;
     --syn-number: #7dd3fc;
-    --syn-function: #2ee6a6;
-    --syn-punct: #a1a1aa;
+    --syn-function: #38c7f2;
+    --syn-punct: #a1abbb;
 
     /* Алиасы старых имён для разметки вида var(--color-accent-text) */
     --color-canvas: var(--canvas);
@@ -182,11 +367,15 @@
     --color-accent-text: var(--accent-text);
   }
 
-
   html,
   body,
   #root {
     height: 100%;
+  }
+
+  html {
+    -webkit-text-size-adjust: 100%;
+    scroll-padding-top: 5rem;
   }
 
   body {
@@ -196,9 +385,17 @@
     font-family: var(--font-sans);
     font-size: 15px;
     line-height: 1.6;
-    font-feature-settings: 'cv11', 'ss01';
+    font-feature-settings: 'kern', 'calt';
+    font-optical-sizing: auto;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
+  }
+
+  h1,
+  h2,
+  h3 {
+    text-wrap: balance;
   }
 
   ::selection {
@@ -209,6 +406,7 @@
   :focus-visible {
     outline: 2px solid var(--accent);
     outline-offset: 2px;
+    border-radius: var(--radius-sm);
   }
 
   code,
@@ -226,48 +424,109 @@
 }
 
 @layer components {
-  /* Курсор в конце стримящегося ответа */
-  .caret {
-    display: inline-block;
-    width: 0.5rem;
-    height: 1rem;
-    vertical-align: text-bottom;
-    background-color: currentColor;
-    animation: caret-blink 1s steps(2, start) infinite;
+  /* ──────────────── Типографика ──────────────── */
+
+  /* Крупный заголовок hero: плотный, с отрицательным трекингом */
+  .t-display {
+    font-size: clamp(2.5rem, 7.2vw + 0.4rem, 5.25rem);
+    line-height: 1.02;
+    letter-spacing: -0.045em;
+    font-weight: 650;
+    text-wrap: balance;
+  }
+  .t-headline {
+    font-size: clamp(1.875rem, 3.6vw + 0.6rem, 3.25rem);
+    line-height: 1.08;
+    letter-spacing: -0.038em;
+    font-weight: 650;
+    text-wrap: balance;
+  }
+  .t-title {
+    font-size: clamp(1.25rem, 1vw + 1rem, 1.5rem);
+    line-height: 1.25;
+    letter-spacing: -0.02em;
+    font-weight: 620;
+  }
+  .t-lead {
+    font-size: clamp(1.0625rem, 0.5vw + 0.95rem, 1.25rem);
+    line-height: 1.55;
+    color: var(--muted);
+    text-wrap: pretty;
   }
 
-  /* Импульс углового маркера в начале ответа (строго 240 ms) */
-  @keyframes reply-start-pulse {
-    0% {
-      opacity: 0.3;
-      transform: scale(0.92);
-    }
-    50% {
-      opacity: 1;
-      transform: scale(1.08);
-    }
-    100% {
-      opacity: 1;
-      transform: scale(1);
-    }
+  /* Градиентный текст — фирменный изумруд → циан → фиолет */
+  .text-gradient {
+    background-image: var(--gradient-text);
+    background-size: 160% 100%;
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+    -webkit-text-fill-color: transparent;
+  }
+  .text-gradient-animated {
+    animation: gradientPan 9s ease-in-out infinite alternate;
   }
 
-  .reply-marker-pulse {
-    animation: reply-start-pulse 240ms ease-out forwards;
+  /* Моно-лейбл: 11px, uppercase, разрядка */
+  .mono-label {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    line-height: 16px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
   }
 
-  /* Мобильная шторка: ровно 180 ms transform */
-  .drawer-transition {
-    transition: transform 180ms ease-out;
+  .tabular {
+    font-variant-numeric: tabular-nums;
   }
 
-  /* Один мягкий градиент акцента сверху — только для hero и auth */
+  .text-balance {
+    text-wrap: balance;
+  }
+
+  /* ──────────────── Поверхности и глубина ──────────────── */
+
+  .bg-brand-gradient {
+    background-image: var(--gradient-brand);
+  }
+  .bg-brand-soft {
+    background-image: var(--gradient-brand-soft);
+  }
+
+  /* Стекло: композер, поповеры, шапка */
+  .surface-glass {
+    background-color: var(--glass);
+    -webkit-backdrop-filter: blur(18px) saturate(1.5);
+    backdrop-filter: blur(18px) saturate(1.5);
+  }
+
+  /* Мягкое «приподнятое» состояние карточки */
+  .lift {
+    transition:
+      transform 240ms var(--ease-out-expo),
+      box-shadow 240ms var(--ease-out-expo),
+      border-color 240ms var(--ease-out-expo),
+      background-color 240ms var(--ease-out-expo);
+  }
+  .lift:hover {
+    transform: translateY(-2px);
+  }
+
+  /* Атмосфера: три размытых пятна изумруд / циан / фиолет */
+  .bg-aurora {
+    background-image:
+      radial-gradient(55% 45% at 15% 0%, var(--aurora-1), transparent 70%),
+      radial-gradient(45% 40% at 88% 8%, var(--aurora-2), transparent 70%),
+      radial-gradient(40% 35% at 55% 55%, var(--aurora-3), transparent 75%);
+  }
+
+  /* Один мягкий градиент акцента сверху — hero и auth */
   .hero-glow,
   .bg-hero-glow {
     background-image: radial-gradient(ellipse 70% 50% at 50% -10%, var(--glow), transparent 70%);
   }
 
-  /* Сетка 64px */
+  /* Сетка 64px с плавным затуханием */
   .bg-grid {
     background-image:
       linear-gradient(to right, var(--grid-line) 1px, transparent 1px),
@@ -279,6 +538,38 @@
   .bg-dots {
     background-image: radial-gradient(var(--grid-line) 1px, transparent 1px);
     background-size: 20px 20px;
+  }
+
+  /* Тонкая градиентная граница через mask-composite: exclude */
+  .gradient-border {
+    position: relative;
+  }
+  .gradient-border::before {
+    content: '';
+    position: absolute;
+    inset: -1px;
+    border-radius: inherit;
+    padding: 1px;
+    background: var(--gradient-border);
+    mask:
+      linear-gradient(#000 0 0) content-box,
+      linear-gradient(#000 0 0);
+    mask-composite: exclude;
+    -webkit-mask-composite: xor;
+    pointer-events: none;
+  }
+
+  /* Анимированный блик по границе */
+  .gradient-border-animated::before {
+    background: conic-gradient(
+      from var(--border-angle, 0deg),
+      transparent 0deg,
+      var(--accent) 60deg,
+      var(--accent-2) 120deg,
+      transparent 200deg,
+      transparent 360deg
+    );
+    animation: border-sweep 7s linear infinite;
   }
 
   /* Пунктирный разделитель секций с крестиками на концах */
@@ -306,102 +597,89 @@
     right: -5px;
   }
 
-  /* 1px граница-градиент акцента через mask-composite: exclude */
-  .gradient-border {
-    position: relative;
-  }
-  .gradient-border::before {
-    content: '';
-    position: absolute;
-    inset: -1px;
-    border-radius: inherit;
-    padding: 1px;
-    background: linear-gradient(
-      135deg,
-      var(--accent),
-      var(--accent-hover),
-      var(--stroke-strong)
-    );
-    opacity: 0.7;
-    mask:
-      linear-gradient(#000 0 0) content-box,
-      linear-gradient(#000 0 0);
-    mask-composite: exclude;
-    pointer-events: none;
+  /* ──────────────── Движение ──────────────── */
+
+  /* Курсор в конце стримящегося ответа */
+  .caret {
+    display: inline-block;
+    width: 0.5rem;
+    height: 1.05rem;
+    vertical-align: text-bottom;
+    border-radius: 2px;
+    background-image: var(--gradient-brand);
+    animation: caret-blink 1s steps(2, start) infinite;
   }
 
-  /* Опциональный анимированный блик */
-  .gradient-border-animated::before {
-    background: conic-gradient(
-      from var(--border-angle, 0deg),
-      transparent 0deg,
-      var(--accent) 60deg,
-      transparent 140deg,
-      transparent 360deg
-    );
-    animation: border-sweep 6s linear infinite;
+  /* Индикатор «модель готовит ответ»: три волнообразные точки */
+  .typing-dots {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+  }
+  .typing-dots > span {
+    width: 6px;
+    height: 6px;
+    border-radius: 999px;
+    background-image: var(--gradient-brand);
+    animation: typingDot 1.2s var(--ease-smooth) infinite;
+  }
+  .typing-dots > span:nth-child(2) {
+    animation-delay: 150ms;
+  }
+  .typing-dots > span:nth-child(3) {
+    animation-delay: 300ms;
+  }
+
+  /* Импульс маркера в начале ответа */
+  .reply-marker-pulse {
+    animation: reply-start-pulse 240ms ease-out forwards;
+  }
+
+  /* Появление нового сообщения в ленте */
+  .msg-in {
+    animation: msgIn 320ms var(--ease-out-expo) both;
+  }
+
+  /* Мобильная шторка */
+  .drawer-transition {
+    transition: transform 220ms var(--ease-out-expo);
   }
 
   /* Бесконечная плавная бегущая строка слева направо */
-  @keyframes marquee-ltr {
-    0% {
-      transform: translateX(-50%);
-    }
-    100% {
-      transform: translateX(0%);
-    }
-  }
-
   .animate-marquee-ltr {
     display: flex;
     width: max-content;
-    animation: marquee-ltr 28s linear infinite;
+    animation: marquee-ltr 40s linear infinite;
   }
-
   .animate-marquee-ltr:hover {
     animation-play-state: paused;
   }
 
-  @media (prefers-reduced-motion: reduce) {
-    .animate-marquee-ltr {
-      animation: none;
-      transform: none;
-    }
-  }
-
-  @media (max-width: 767px) {
-    .hero-glow {
-      box-shadow: none !important;
-    }
-    .gradient-border-animated::before {
-      animation: none !important;
-    }
-  }
-
-  .text-balance {
-    text-wrap: balance;
-  }
-
-  /* Появление секции: fade + 6px (класс вешает хук useReveal) */
+  /* Появление секции: fade + 14px (класс вешает компонент Reveal) */
   .reveal {
     opacity: 0;
-    transform: translateY(6px);
+    transform: translateY(14px);
     transition:
-      opacity 240ms var(--ease-out-expo),
-      transform 240ms var(--ease-out-expo);
+      opacity 520ms var(--ease-out-expo),
+      transform 520ms var(--ease-out-expo);
   }
   .reveal[data-visible='true'] {
     opacity: 1;
     transform: none;
   }
 
-  /* Бегущий пунктир по линиям схемы хаба */
+  /* Первый экран: текст виден сразу, «всплывает» только сдвигом */
+  .reveal-eager {
+    animation: rise 560ms var(--ease-out-expo) both;
+  }
+
+  /* Бегущий пунктир по линиям схемы */
   .flow-line {
     stroke-dasharray: 3 5;
     animation: flow-dash 1.6s linear infinite;
   }
 
-  /* Мягкая пульсация статус-точки — единственная бесконечная анимация */
+  /* Мягкая пульсация статус-точки */
   .status-pulse {
     animation: status-pulse 2.4s ease-in-out infinite;
   }
@@ -415,28 +693,41 @@
       var(--surface-2) 100%
     );
     background-size: 200% 100%;
-    animation: shimmer 1.2s linear infinite;
+    animation: shimmer 1.4s linear infinite;
   }
 
-  /* Моно-лейбл: 11px, uppercase, разрядка */
-  .mono-label {
-    font-family: var(--font-mono);
-    font-size: 11px;
-    line-height: 16px;
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
+  /* Тот же shimmer на всегда светлой подложке (рамка QR-кода) */
+  .skeleton-shimmer-light {
+    background: linear-gradient(90deg, #e2e8f0 0%, #f1f5f9 50%, #e2e8f0 100%);
+    background-size: 200% 100%;
+    animation: shimmer 1.4s linear infinite;
   }
 
-  .tabular {
-    font-variant-numeric: tabular-nums;
+  /* Блик на тексте «Размышляет…» */
+  .text-shimmer {
+    background-image: linear-gradient(
+      100deg,
+      var(--muted) 0%,
+      var(--muted) 40%,
+      var(--text) 50%,
+      var(--muted) 60%,
+      var(--muted) 100%
+    );
+    background-size: 250% 100%;
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+    -webkit-text-fill-color: transparent;
+    animation: textShimmer 2.2s linear infinite;
   }
 
-  /* Утилиты появления */
-  .animate-fade-in {
-    animation: fadeIn 240ms var(--ease-out-expo) both;
-  }
-  .animate-slide-up {
-    animation: slideUp 240ms var(--ease-out-expo) both;
+  @media (max-width: 767px) {
+    .hero-glow {
+      box-shadow: none !important;
+    }
+    .gradient-border-animated::before {
+      animation: none !important;
+    }
   }
 }
 
@@ -477,6 +768,24 @@
   }
 }
 
+@keyframes textShimmer {
+  from {
+    background-position: 125% 0;
+  }
+  to {
+    background-position: -125% 0;
+  }
+}
+
+@keyframes gradientPan {
+  from {
+    background-position: 0% 50%;
+  }
+  to {
+    background-position: 100% 50%;
+  }
+}
+
 @keyframes fadeIn {
   from {
     opacity: 0;
@@ -486,14 +795,90 @@
   }
 }
 
+@keyframes rise {
+  from {
+    transform: translateY(10px);
+  }
+  to {
+    transform: none;
+  }
+}
+
 @keyframes slideUp {
   from {
     opacity: 0;
-    transform: translateY(6px);
+    transform: translateY(10px);
   }
   to {
     opacity: 1;
     transform: translateY(0);
+  }
+}
+
+@keyframes scaleIn {
+  from {
+    opacity: 0;
+    transform: scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes slideInRight {
+  from {
+    opacity: 0;
+    transform: translateX(24px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes slideInLeft {
+  from {
+    opacity: 0;
+    transform: translateX(-24px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes msgIn {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.99);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes floatY {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-6px);
+  }
+}
+
+@keyframes typingDot {
+  0%,
+  60%,
+  100% {
+    opacity: 0.35;
+    transform: translateY(0) scale(0.85);
+  }
+  30% {
+    opacity: 1;
+    transform: translateY(-3px) scale(1);
   }
 }
 
@@ -503,6 +888,31 @@
   }
 }
 
+@keyframes reply-start-pulse {
+  0% {
+    opacity: 0.3;
+    transform: scale(0.92);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.08);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes marquee-ltr {
+  0% {
+    transform: translateX(-50%);
+  }
+  100% {
+    transform: translateX(0%);
+  }
+}
+
+/* Уважаем prefers-reduced-motion: никакого движения, только мгновенные состояния */
 @media (prefers-reduced-motion: reduce) {
   *,
   ::before,
@@ -515,6 +925,15 @@
 
   .reveal {
     opacity: 1;
+    transform: none;
+  }
+
+  .animate-marquee-ltr {
+    animation: none;
+    transform: none;
+  }
+
+  .lift:hover {
     transform: none;
   }
 }

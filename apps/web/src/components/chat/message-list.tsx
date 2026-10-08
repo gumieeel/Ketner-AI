@@ -60,7 +60,7 @@ export function MessageList() {
   return (
     <div className="relative min-h-0 flex-1">
       <div ref={containerRef} onScroll={onScroll} className="h-full overflow-y-auto">
-        <div className="mx-auto flex w-full max-w-[760px] flex-col gap-6 md:gap-8 px-4 py-6">
+        <div className="mx-auto flex w-full max-w-[760px] flex-col gap-7 px-4 py-6 md:gap-9 md:py-8">
           {messages.map((message, index) =>
             message.role === 'user' ? (
               <UserMessage key={message.id} message={message} editable={index === lastUser} />
@@ -79,9 +79,9 @@ export function MessageList() {
         <button
           type="button"
           onClick={() => scrollToBottom('smooth')}
-          className="absolute bottom-4 left-1/2 flex -translate-x-1/2 items-center gap-1 rounded-md border border-stroke-strong bg-surface px-3 py-1.5 text-xs text-text shadow-md transition-colors hover:bg-canvas"
+          className="surface-glass absolute inset-x-0 bottom-4 mx-auto flex h-9 w-fit animate-scale-in items-center gap-1.5 rounded-full border border-stroke-strong px-4 text-[13px] font-medium text-text shadow-lg transition-colors hover:bg-surface-2 max-md:h-11"
         >
-          <ChevronDownIcon />
+          <ChevronDownIcon className="size-4 text-accent" />
           {t('chat.jumpToLatest')}
         </button>
       ) : null}

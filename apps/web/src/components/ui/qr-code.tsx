@@ -1,4 +1,5 @@
 import React, { useMemo } from 'react';
+import { useTranslation } from '@/i18n';
 import { cn } from '@/lib/cn';
 
 interface QrCodeProps {
@@ -95,6 +96,7 @@ function generateQrMatrix(text: string): boolean[][] {
 }
 
 export function QrCode({ value, size = 192, className = '', badge }: QrCodeProps) {
+  const { t } = useTranslation();
   const matrix = useMemo(() => generateQrMatrix(value), [value]);
   const matrixSize = matrix.length;
   const cellSize = size / matrixSize;
@@ -113,7 +115,7 @@ export function QrCode({ value, size = 192, className = '', badge }: QrCodeProps
         viewBox={`0 0 ${size} ${size}`}
         className="shape-rendering-crispEdges block"
         role="img"
-        aria-label={`QR код: ${value}`}
+        aria-label={t('common.qrCode', { value })}
       >
         <rect width={size} height={size} fill="#ffffff" />
         {matrix.map((row, y) =>

@@ -44,7 +44,7 @@ export function ChatPage() {
 
       {messagesStatus === 'error' ? (
         <div className="flex min-h-0 flex-1 items-center justify-center px-4">
-          <div className="max-w-md rounded-lg border border-danger/30 bg-danger-soft p-4 text-center">
+          <div role="alert" className="max-w-md rounded-2xl border border-danger/30 bg-danger-soft p-5 text-center">
             <p className="flex items-center justify-center gap-2 font-medium text-danger">
               <AlertIcon />
               {t('chat.loadError')}
@@ -80,9 +80,16 @@ function MessagesSkeleton() {
   return (
     <div className="min-h-0 flex-1 overflow-hidden px-4 py-6">
       <div className="mx-auto flex w-full max-w-[760px] flex-col gap-6 md:gap-8">
-        <Skeleton className="h-16 w-2/3 self-end rounded-lg" />
-        <Skeleton className="h-24 w-full rounded-lg" />
-        <Skeleton className="h-10 w-1/2 self-end rounded-lg" />
+        <Skeleton className="h-14 w-2/3 self-end rounded-2xl rounded-br-md" />
+        <div className="flex gap-3">
+          <Skeleton className="size-8 shrink-0 rounded-[10px]" />
+          <div className="flex flex-1 flex-col gap-2.5 pt-1">
+            <Skeleton className="h-4 w-full" />
+            <Skeleton className="h-4 w-[92%]" />
+            <Skeleton className="h-4 w-[70%]" />
+          </div>
+        </div>
+        <Skeleton className="h-10 w-1/2 self-end rounded-2xl rounded-br-md" />
       </div>
     </div>
   );

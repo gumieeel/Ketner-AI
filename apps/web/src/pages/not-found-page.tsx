@@ -1,46 +1,42 @@
 import { Link } from 'react-router-dom';
 import { ArrowRightIcon } from '@/components/icons';
-import { Button } from '@/components/ui/button';
-import { CornerMark } from '@/components/ui/corner-mark';
+import { buttonClasses } from '@/components/ui/button-classes';
 import { useTranslation } from '@/i18n';
 
+/** Страница 404: крупный номер, пояснение и два пути назад. */
 export function NotFoundPage() {
-  const { t, language } = useTranslation();
+  const { t } = useTranslation();
 
   return (
-    <div className="relative mx-auto my-auto flex w-full max-w-lg flex-1 flex-col items-center justify-center overflow-hidden rounded-lg border border-stroke bg-canvas py-16 px-6 text-center bg-grid hero-glow">
-      <CornerMark size={12} className="absolute top-2 left-2 text-stroke-strong" />
-      <CornerMark size={12} className="absolute top-2 right-2 text-stroke-strong rotate-90" />
-      <CornerMark size={12} className="absolute bottom-2 right-2 text-stroke-strong rotate-180" />
-      <CornerMark size={12} className="absolute bottom-2 left-2 text-stroke-strong -rotate-90" />
+    <div className="relative mx-auto my-auto flex w-full max-w-xl flex-1 flex-col items-center justify-center px-2 py-16 text-center">
+      <div
+        aria-hidden="true"
+        className="bg-aurora pointer-events-none absolute inset-x-[-10%] top-0 h-72 opacity-60 [mask-image:radial-gradient(ellipse_60%_70%_at_50%_30%,black,transparent)]"
+      />
 
       <div className="relative z-10 flex flex-col items-center gap-4">
-        <span className="font-mono text-7xl md:text-8xl font-bold tracking-tighter text-stroke-strong select-none">
+        <span
+          aria-hidden="true"
+          className="text-gradient animate-slide-up text-[96px] leading-none font-semibold tracking-tighter select-none md:text-[128px]"
+        >
           404
         </span>
 
-        <h1 className="text-xl md:text-2xl font-semibold tracking-tight text-text">
+        <h1 className="animate-slide-up text-xl font-semibold tracking-tight text-balance text-text md:text-2xl" style={{ animationDelay: '60ms' }}>
           {t('notFound.title')}
         </h1>
 
-        <p className="max-w-sm text-sm text-muted leading-relaxed">
+        <p className="animate-slide-up max-w-sm text-sm leading-6 text-muted" style={{ animationDelay: '100ms' }}>
           {t('notFound.text')}
         </p>
 
-        <div className="flex flex-wrap items-center justify-center gap-3 pt-4">
-          <Link to="/">
-            <Button variant="primary" size="md">
-              {t('notFound.home')}
-            </Button>
+        <div className="animate-slide-up flex flex-wrap items-center justify-center gap-3 pt-4" style={{ animationDelay: '140ms' }}>
+          <Link to="/" className={buttonClasses({ variant: 'primary', size: 'md' })}>
+            {t('notFound.home')}
           </Link>
-          <Link to="/chat">
-            <Button
-              variant="outline"
-              size="md"
-              rightIcon={<ArrowRightIcon className="size-3.5" />}
-            >
-              {language === 'ru' ? 'Открыть чат' : 'Open chat'}
-            </Button>
+          <Link to="/chat" className={buttonClasses({ variant: 'outline', size: 'md', className: 'gap-1.5' })}>
+            {t('notFound.openChat')}
+            <ArrowRightIcon className="size-3.5" />
           </Link>
         </div>
       </div>

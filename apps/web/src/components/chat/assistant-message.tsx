@@ -2,6 +2,8 @@ import { Suspense, lazy, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { AlertIcon, RefreshIcon, SparkleIcon } from '@/components/icons';
 import { Button } from '@/components/ui/button';
+import { buttonClasses } from '@/components/ui/button-classes';
+import { ModelMark } from '@/components/ui/model-mark';
 import { CopyButton } from '@/components/ui/copy-button';
 import { IconButton } from '@/components/ui/icon-button';
 import { findModel } from '@/features/chat/can-access-model';
@@ -9,6 +11,7 @@ import { useChat } from '@/features/chat/chat-store';
 import type { Message } from '@/features/chat/types';
 import { useTranslation } from '@/i18n';
 import { cn } from '@/lib/cn';
+import { modelColor } from '@/lib/model-color';
 import { ThinkingBlock, parseThinking } from './thinking-block';
 import { useWorkspace } from '@/features/chat/workspace-store';
 import { parseFileProposals, stripFileActionBlocks } from '@/features/chat/file-operations';
@@ -75,13 +78,14 @@ export function AssistantMessage({ message, canRegenerate }: AssistantMessagePro
 
   return (
     <article className="flex gap-3" aria-label={t('chat.assistant')}>
-      <span className="mt-0.5 grid size-7 shrink-0 place-items-center rounded-md bg-surface-2 p-1 text-text">
-        <img src="/logo-mark.png" alt="Ketner AI" className="size-4.5 object-contain" />
-      </span>
+      <ModelMark modelId={message.modelId ?? 'ketner-mini'} size="md" className="mt-0.5" />
 
       <div className="min-w-0 flex-1">
         {modelName ? (
-          <div className="mb-1 font-mono text-[11px] uppercase tracking-[0.06em] text-subtle">
+          <div
+            className="mb-1 text-xs font-semibold"
+            style={{ color: message.modelId ? modelColor(message.modelId) : undefined }}
+          >
             {modelName}
           </div>
         ) : null}
@@ -96,10 +100,10 @@ export function AssistantMessage({ message, canRegenerate }: AssistantMessagePro
         ) : null}
 
         {displayContent ? (
-          <div className="text-[15px] leading-[26px] text-text [&>*:not(pre):not(table):not(.code-block)]:max-w-[66ch]">
+          <div className="text-base leading-7 text-text">
             <Suspense
               fallback={
-                <p className="text-[15px] leading-[26px] whitespace-pre-wrap max-w-[66ch]">
+                <p className="max-w-[68ch] whitespace-pre-wrap">
                   {displayContent}
                 </p>
               }
@@ -119,7 +123,7 @@ export function AssistantMessage({ message, canRegenerate }: AssistantMessagePro
         {failed ? (
           <div
             className={cn(
-              'mt-2 rounded-lg p-3.5 text-sm leading-5 transition-all',
+              'mt-2 rounded-xl p-4 text-sm leading-5',
               isUpgradeError
                 ? 'border border-warning/30 bg-warning-soft text-warning'
                 : 'border border-danger/30 bg-danger-soft text-danger',
@@ -136,10 +140,7 @@ export function AssistantMessage({ message, canRegenerate }: AssistantMessagePro
             <p className="mt-1 text-text/85">{message.error ?? t('chat.errorText')}</p>
             {isUpgradeError ? (
               <div className="mt-3">
-                <Link
-                  to="/pricing"
-                  className="inline-flex items-center gap-1.5 rounded-md bg-accent px-3 py-1.5 text-xs font-semibold text-accent-text transition hover:opacity-90 shadow-sm"
-                >
+                <Link to="/pricing" className={buttonClasses({ variant: 'primary', size: 'sm' })}>
                   {t('chat.upgradeButton')}
                 </Link>
               </div>
@@ -159,7 +160,7 @@ export function AssistantMessage({ message, canRegenerate }: AssistantMessagePro
         ) : null}
 
         {canContinue ? (
-          <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-muted">
+          <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-2 text-[13px] text-muted">
             <span>{t('chat.truncatedNotice')}</span>
             <Button variant="outline" size="sm" disabled={streaming} onClick={() => void continueReply()}>
               {t('chat.continue')}
@@ -168,7 +169,7 @@ export function AssistantMessage({ message, canRegenerate }: AssistantMessagePro
         ) : null}
 
         {hasContent && !isPending && !failed ? (
-          <div className="mt-2 flex items-center gap-1 text-muted">
+          <div className="mt-2 -ml-2 flex items-center gap-0.5 text-muted">
             <CopyButton value={parsed.content || message.content} label={t('chat.copy')} size="sm" />
             {canRegenerate ? (
               <IconButton

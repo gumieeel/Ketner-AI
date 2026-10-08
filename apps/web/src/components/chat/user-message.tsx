@@ -52,7 +52,7 @@ export function UserMessage({ message, editable }: UserMessageProps) {
               setEditing(false);
             }
           }}
-          className="w-full max-w-[92%] resize-none rounded-lg border border-accent bg-surface px-4 py-2.5 text-[15px] leading-[26px] text-text outline-none focus:ring-3 focus:ring-accent-soft"
+          className="w-full max-w-[92%] resize-none rounded-2xl border border-accent bg-surface px-4 py-3 text-base leading-[26px] text-text outline-none ring-4 ring-accent-soft md:text-[15px]"
         />
         <div className="flex items-center gap-2">
           <Button variant="ghost" size="sm" onClick={() => setEditing(false)}>
@@ -69,14 +69,16 @@ export function UserMessage({ message, editable }: UserMessageProps) {
   return (
     <div className="group flex flex-col items-end gap-1.5">
       {message.workspaceContext ? (
-        <div className="flex items-center gap-1.5 rounded-full border border-stroke bg-surface px-2.5 py-0.5 text-[11px] text-muted shadow-sm">
+        <div className="flex max-w-full items-center gap-1.5 rounded-full border border-stroke bg-surface px-2.5 py-1 text-xs text-muted shadow-xs">
           {message.workspaceContext.type === 'git_repo' ? (
             <GitHubIcon className="size-3 text-accent" />
           ) : (
             <FolderIcon className="size-3 text-accent" />
           )}
-          <span className="font-medium text-text">{message.workspaceContext.name}</span>
-          <span>({message.workspaceContext.filesCount ?? 0} файлов)</span>
+          <span className="truncate font-medium text-text">{message.workspaceContext.name}</span>
+          <span className="shrink-0">
+            {t('workspace.filesCount', { count: message.workspaceContext.filesCount ?? 0 })}
+          </span>
         </div>
       ) : null}
 
@@ -87,7 +89,7 @@ export function UserMessage({ message, editable }: UserMessageProps) {
       ) : null}
 
       {message.content ? (
-        <div className="max-w-[92%] rounded-lg bg-surface-2 px-4 py-2.5 text-[15px] leading-[26px] whitespace-pre-wrap text-text">
+        <div className="max-w-[92%] rounded-2xl rounded-br-md border border-stroke bg-surface-2 px-4 py-2.5 text-[15px] leading-[26px] break-words whitespace-pre-wrap text-text shadow-xs">
           {message.content}
         </div>
       ) : null}
@@ -97,7 +99,7 @@ export function UserMessage({ message, editable }: UserMessageProps) {
           label={t('chat.edit')}
           size="sm"
           onClick={startEditing}
-          className="opacity-0 transition-opacity group-hover:opacity-100 focus-visible:opacity-100"
+          className="transition-opacity focus-visible:opacity-100 md:opacity-0 md:group-hover:opacity-100 md:group-focus-within:opacity-100"
         >
           <EditIcon />
         </IconButton>

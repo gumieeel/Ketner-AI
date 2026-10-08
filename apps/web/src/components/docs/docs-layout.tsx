@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react';
+import { useTranslation } from '@/i18n';
 import { cn } from '@/lib/cn';
 
 export interface DocsNavItem {
@@ -15,95 +16,114 @@ export interface DocsTocItem {
 
 export interface DocsLayoutProps {
   nav: DocsNavItem[];
+  /** Содержание страницы справа (xl+). Если не нужно — опускается, и колонка контента шире. */
   toc?: DocsTocItem[];
   activeId?: string;
   children: ReactNode;
   className?: string;
 }
 
+/**
+ * Каркас страниц документации: слева разделы, по центру контент, справа (необязательно)
+ * содержание. На экранах уже xl разделы превращаются в закреплённую полосу вкладок.
+ * Сам контент — обычный блок, не `main`: ландшафт страницы задаёт внешний каркас.
+ */
 export function DocsLayout({ nav, toc, activeId, children, className }: DocsLayoutProps) {
-  return (
-    <div className={cn('mx-auto w-full max-w-7xl px-4 py-8 sm:px-6 lg:px-8', className)}>
-      {/* Mobile / Tablet Horizontal Navigation Chips */}
-      <div className="mb-6 flex items-center gap-1.5 overflow-x-auto pb-2 xl:hidden border-b border-stroke">
-        {nav.map((item) => {
-          const isActive = activeId === item.id;
-          return (
-            <a
-              key={item.id}
-              href={`#${item.id}`}
-              className={cn(
-                'inline-flex shrink-0 items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-colors',
-                isActive
-                  ? 'bg-surface-2 text-text border border-stroke'
-                  : 'text-muted hover:text-text hover:bg-surface-2/60',
-              )}
-            >
-              {item.icon ? <span className="size-3.5 shrink-0">{item.icon}</span> : null}
-              <span>{item.label}</span>
-            </a>
-          );
-        })}
-      </div>
+  const { t } = useTranslation();
+  const hasToc = Boolean(toc && toc.length > 0);
 
-      <div className="grid grid-cols-1 gap-8 xl:grid-cols-[220px_minmax(0,1fr)_200px] xl:gap-10">
-        {/* Left Sticky Navigation (Desktop) */}
-        <aside className="hidden xl:block">
-          <nav className="sticky top-20 flex flex-col gap-1 text-sm">
-            <p className="px-2 pb-2 text-[11px] font-mono font-medium uppercase tracking-[0.06em] text-subtle">
-              Разделы
-            </p>
-            {nav.map((item) => {
-              const isActive = activeId === item.id;
-              return (
+  return (
+    <div className={cn('w-full', className)}>
+      {/* Узкие экраны: закреплённая полоса разделов под шапкой сайта */}
+      <nav
+        aria-label={t('docs.navLabel')}
+        className="sticky top-16 z-20 -mx-4 mb-6 border-b border-stroke bg-canvas px-4 sm:-mx-6 sm:px-6 lg:-mx-8 lg:px-8 xl:hidden"
+      >
+        <ul className="flex gap-1.5 overflow-x-auto py-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+          {nav.map((item) => {
+            const isActive = activeId === item.id;
+            return (
+              <li key={item.id} className="shrink-0">
                 <a
-                  key={item.id}
                   href={`#${item.id}`}
+                  aria-current={isActive ? 'true' : undefined}
                   className={cn(
-                    'flex items-center gap-2 rounded-md px-2.5 py-1.5 text-[13px] font-medium transition-colors',
+                    'inline-flex min-h-11 items-center gap-1.5 rounded-full px-3.5 text-sm font-medium whitespace-nowrap transition-colors',
                     isActive
-                      ? 'bg-surface-2 text-text font-semibold'
-                      : 'text-muted hover:text-text hover:bg-surface-2/60',
+                      ? 'bg-surface-2 text-text ring-1 ring-stroke-strong ring-inset'
+                      : 'text-muted hover:bg-surface hover:text-text',
                   )}
                 >
-                  {item.icon ? (
-                    <span className={cn('size-4 shrink-0', isActive ? 'text-accent' : 'text-subtle')}>
-                      {item.icon}
-                    </span>
-                  ) : null}
-                  <span className="truncate">{item.label}</span>
+                  {item.icon ? <span className="size-4 shrink-0">{item.icon}</span> : null}
+                  <span>{item.label}</span>
                 </a>
-              );
-            })}
+              </li>
+            );
+          })}
+        </ul>
+      </nav>
+
+      <div
+        className={cn(
+          'grid grid-cols-1 gap-8 xl:gap-12',
+          hasToc ? 'xl:grid-cols-[210px_minmax(0,1fr)_176px]' : 'xl:grid-cols-[210px_minmax(0,1fr)]',
+        )}
+      >
+        {/* Разделы (xl+) */}
+        <aside className="hidden xl:block">
+          <nav aria-label={t('docs.navLabel')} className="sticky top-24">
+            <p className="px-2.5 pb-2 text-xs font-semibold text-subtle">{t('docs.sections')}</p>
+            <ul className="flex flex-col gap-0.5">
+              {nav.map((item) => {
+                const isActive = activeId === item.id;
+                return (
+                  <li key={item.id}>
+                    <a
+                      href={`#${item.id}`}
+                      aria-current={isActive ? 'true' : undefined}
+                      className={cn(
+                        'flex min-h-9 items-center gap-2.5 rounded-lg px-2.5 text-[13px] font-medium transition-colors',
+                        isActive
+                          ? 'bg-surface-2 text-text ring-1 ring-stroke ring-inset'
+                          : 'text-muted hover:bg-surface hover:text-text',
+                      )}
+                    >
+                      {item.icon ? (
+                        <span className={cn('size-4 shrink-0', isActive ? 'text-accent' : 'text-subtle')}>
+                          {item.icon}
+                        </span>
+                      ) : null}
+                      <span className="truncate">{item.label}</span>
+                    </a>
+                  </li>
+                );
+              })}
+            </ul>
           </nav>
         </aside>
 
-        {/* Center Content */}
-        <main className="min-w-0">
-          <div className="max-w-[68ch] [&>*:not(table):not(.code-block):not(pre):not(.overflow-x-auto)]:max-w-[68ch]">
-            {children}
-          </div>
-        </main>
+        {/* Контент */}
+        <div className="min-w-0">{children}</div>
 
-        {/* Right Sticky TOC (Desktop) */}
-        {toc && toc.length > 0 ? (
+        {/* Содержание страницы (xl+) */}
+        {hasToc ? (
           <aside className="hidden xl:block">
-            <nav className="sticky top-20 flex flex-col gap-1 text-xs">
-              <p className="px-2 pb-2 text-[11px] font-mono font-medium uppercase tracking-[0.06em] text-subtle">
-                На этой странице
-              </p>
-              <ul className="space-y-1 font-mono text-[11px]">
-                {toc.map((item) => {
+            <nav aria-label={t('docs.tocLabel')} className="sticky top-24">
+              <p className="pb-2 pl-3 text-xs font-semibold text-subtle">{t('docs.onThisPage')}</p>
+              <ul className="flex flex-col border-l border-stroke">
+                {toc?.map((item) => {
                   const isActive = activeId === item.id;
                   return (
-                    <li key={item.id} className={item.level === 3 ? 'pl-2' : ''}>
+                    <li key={item.id}>
                       <a
                         href={`#${item.id}`}
+                        aria-current={isActive ? 'true' : undefined}
                         className={cn(
-                          'block truncate py-1 transition-colors',
+                          '-ml-px block border-l-2 py-1.5 text-[13px] leading-5 transition-colors',
+                          item.level === 3 ? 'pl-6' : 'pl-3',
                           isActive
-                            ? 'text-accent font-medium'
-                            : 'text-muted hover:text-text',
+                            ? 'border-accent font-medium text-accent'
+                            : 'border-transparent text-muted hover:border-stroke-strong hover:text-text',
                         )}
                       >
                         {item.label}
@@ -114,9 +134,7 @@ export function DocsLayout({ nav, toc, activeId, children, className }: DocsLayo
               </ul>
             </nav>
           </aside>
-        ) : (
-          <div className="hidden xl:block" />
-        )}
+        ) : null}
       </div>
     </div>
   );

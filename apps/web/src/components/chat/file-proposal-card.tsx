@@ -1,10 +1,12 @@
 import { useEffect, useState } from 'react';
 import {
+  AlertIcon,
   CheckIcon,
   CodeIcon,
   FolderIcon,
   GitHubIcon,
   RefreshIcon,
+  SparkleIcon,
 } from '@/components/icons';
 import { Button } from '@/components/ui/button';
 import {
@@ -12,6 +14,8 @@ import {
 } from '@/features/chat/file-operations';
 import type { FileProposal, WorkspaceContext } from '@/features/chat/types';
 import { useWorkspace } from '@/features/chat/workspace-store';
+import { useTranslation } from '@/i18n';
+import { cn } from '@/lib/cn';
 import { FileDiffModal } from './file-diff-modal';
 import { GitHubApplyModal } from './github-apply-modal';
 
@@ -21,6 +25,7 @@ interface FileProposalCardProps {
 }
 
 export function FileProposalCard({ proposal: initialProposal, workspace }: FileProposalCardProps) {
+  const { t } = useTranslation();
   const autoApply = useWorkspace((state) => state.autoApply);
   const [proposal, setProposal] = useState<FileProposal>(initialProposal);
   const [isDiffOpen, setIsDiffOpen] = useState(false);
@@ -40,7 +45,7 @@ export function FileProposalCard({ proposal: initialProposal, workspace }: FileP
       setProposal((prev) => ({
         ...prev,
         status: 'error',
-        error: 'Проект не привязан к текущему чату. Привяжите папку или репозиторий.',
+        error: t('proposal.noWorkspaceError'),
       }));
       return;
     }
@@ -71,7 +76,7 @@ export function FileProposalCard({ proposal: initialProposal, workspace }: FileP
       setProposal((prev) => ({
         ...prev,
         status: 'error',
-        error: err?.message || 'Ошибка применения изменений',
+        error: err?.message || t('proposal.applyError'),
       }));
     }
   };
@@ -106,123 +111,125 @@ export function FileProposalCard({ proposal: initialProposal, workspace }: FileP
   // Ничего безопасного применить нельзя: объясняем почему, вместо кнопки «Применить».
   if (proposal.changes.length === 0) {
     return (
-      <div className="mt-3 max-w-2xl rounded-2xl border border-amber-500/30 bg-amber-500/10 p-4 text-xs text-amber-500">
-        <h4 className="font-semibold">Предложенные изменения не применены</h4>
+      <div
+        role="alert"
+        className="mt-3 max-w-2xl rounded-2xl border border-warning/30 bg-warning-soft p-4 text-[13px] text-text"
+      >
+        <h2 className="flex items-center gap-2 font-semibold text-warning">
+          <AlertIcon className="size-4 shrink-0" aria-hidden="true" />
+          {t('proposal.notAppliedTitle')}
+        </h2>
         <ul className="mt-2 space-y-1">
           {rejected.map((item, idx) => (
-            <li key={`${item.path}-${idx}`}>
+            <li key={`${item.path}-${idx}`} className="break-words">
               <span className="font-mono text-text">{item.path}</span> — {item.reason}
             </li>
           ))}
         </ul>
-        <p className="mt-2 text-muted">
-          Ничего не записано. Попросите модель повторить правку с точным фрагментом из файла.
-        </p>
+        <p className="mt-2 text-muted">{t('proposal.nothingWritten')}</p>
       </div>
     );
   }
 
   if (proposal.status === 'discarded') {
     return (
-      <div className="mt-3 rounded-xl border border-stroke bg-surface/50 p-3 text-xs text-muted flex items-center justify-between">
-        <span>Предложенные изменения в коде отклонены</span>
-        <button
-          type="button"
+      <div className="mt-3 flex max-w-2xl items-center justify-between gap-3 rounded-xl border border-dashed border-stroke-strong bg-surface/50 py-1.5 pr-1.5 pl-3.5 text-[13px] text-muted">
+        <span>{t('proposal.discarded')}</span>
+        <Button
+          variant="ghost"
+          size="sm"
           onClick={() => setProposal((prev) => ({ ...prev, status: 'pending' }))}
-          className="text-accent hover:underline text-xs"
+          className="text-accent hover:text-accent"
         >
-          Вернуть
-        </button>
+          {t('proposal.restore')}
+        </Button>
       </div>
     );
   }
 
   return (
     <>
-      <div className="mt-3 rounded-2xl border border-stroke bg-surface-2/60 backdrop-blur-sm p-4 shadow-sm transition hover:border-stroke-strong max-w-2xl">
+      <div className="mt-3 max-w-2xl rounded-2xl border border-stroke bg-surface-2/60 p-4 shadow-sm transition-colors hover:border-stroke-strong">
         {/* Шапка карточки */}
-        <div className="flex items-center justify-between gap-3 border-b border-stroke/70 pb-3">
-          <div className="flex items-center gap-2.5">
-            <span className="flex size-7 items-center justify-center rounded-lg bg-accent-soft text-accent">
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-stroke pb-3">
+          <div className="flex min-w-0 items-center gap-2.5">
+            <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-accent-soft text-accent">
               <CodeIcon className="size-4" />
             </span>
-            <div>
-              <h4 className="text-xs font-semibold text-text">
-                Предложены изменения в кодовой базе
-              </h4>
-              <p className="text-[11px] text-muted font-mono mt-0.5">
-                {proposal.changes.length} {proposal.changes.length === 1 ? 'файл' : 'файлов'} •{' '}
-                <span className="text-emerald-500 font-medium">+{totalAdditions}</span> /{' '}
-                <span className="text-rose-500 font-medium">-{totalDeletions}</span>
+            <div className="min-w-0">
+              <h2 className="text-[13px] font-semibold text-text">{t('proposal.title')}</h2>
+              <p className="mt-0.5 font-mono text-[11px] text-muted">
+                {t(proposal.changes.length === 1 ? 'proposal.fileOne' : 'proposal.fileMany', {
+                  count: proposal.changes.length,
+                })}{' '}
+                • <span className="font-medium text-success">+{totalAdditions}</span> /{' '}
+                <span className="font-medium text-danger">−{totalDeletions}</span>
               </p>
             </div>
           </div>
 
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => handleOpenDiff(0)}
-            className="text-xs gap-1.5 h-7"
-          >
-            Посмотреть Diff
+          <Button variant="outline" size="sm" onClick={() => handleOpenDiff(0)}>
+            {t('proposal.viewDiff')}
           </Button>
         </div>
 
         {/* Список файлов */}
-        <div className="py-2.5 space-y-1.5">
+        <div className="space-y-1.5 py-3">
           {proposal.changes.map((change, idx) => (
             <div
               key={change.path}
-              className="flex items-center justify-between rounded-lg bg-surface/80 px-2.5 py-1.5 text-xs transition hover:bg-surface"
+              className="flex min-h-11 items-center gap-2.5 rounded-lg bg-surface/80 px-2.5 py-1.5 text-xs transition-colors hover:bg-surface"
             >
-              <div className="flex items-center gap-2 min-w-0">
-                <span
-                  className={`rounded px-1.5 py-0.2 text-[9px] font-mono font-bold uppercase ${
-                    change.action === 'write'
-                      ? 'bg-emerald-500/15 text-emerald-400'
-                      : change.action === 'replace'
-                        ? 'bg-blue-500/15 text-blue-400'
-                        : 'bg-rose-500/15 text-rose-400'
-                  }`}
-                >
-                  {change.action}
+              <span
+                className={cn(
+                  'shrink-0 rounded-md px-1.5 py-0.5 font-mono text-[10px] font-bold uppercase',
+                  change.action === 'write'
+                    ? 'bg-success-soft text-success'
+                    : change.action === 'replace'
+                      ? 'bg-info-soft text-info'
+                      : 'bg-danger-soft text-danger',
+                )}
+              >
+                {change.action}
+              </span>
+
+              <div className="min-w-0 flex-1">
+                <span className="block truncate font-mono text-[12px] text-text" title={change.path}>
+                  {change.path}
                 </span>
-                <span className="font-mono text-[11px] text-text truncate">{change.path}</span>
-                {change.description && (
-                  <span className="text-[10px] text-muted truncate hidden sm:inline">
-                    — {change.description}
+                {change.description ? (
+                  <span className="block truncate text-[11px] text-muted">{change.description}</span>
+                ) : null}
+                {change.warning ? (
+                  <span className="flex items-center gap-1 text-[11px] text-warning" title={change.warning}>
+                    <AlertIcon className="size-3 shrink-0" aria-hidden="true" />
+                    <span className="truncate">{change.warning}</span>
                   </span>
-                )}
-                {change.warning && (
-                  <span className="text-[10px] text-amber-500 truncate" title={change.warning}>
-                    ⚠ {change.warning}
-                  </span>
-                )}
+                ) : null}
               </div>
 
-              <div className="flex items-center gap-2 pl-2 shrink-0">
-                <span className="text-[10px] font-mono text-muted">
-                  +{change.additions || 0} / -{change.deletions || 0}
-                </span>
-                <button
-                  type="button"
-                  onClick={() => handleOpenDiff(idx)}
-                  className="text-accent hover:underline text-[11px]"
-                >
-                  Diff
-                </button>
-              </div>
+              <span className="shrink-0 font-mono text-[11px] text-muted">
+                <span className="text-success">+{change.additions || 0}</span> /{' '}
+                <span className="text-danger">−{change.deletions || 0}</span>
+              </span>
+              <button
+                type="button"
+                onClick={() => handleOpenDiff(idx)}
+                className="inline-flex min-h-9 shrink-0 items-center rounded-md px-2 text-[12px] font-medium text-accent transition-colors hover:bg-accent-soft max-md:min-h-11 max-md:min-w-11 justify-center"
+              >
+                {t('proposal.diff')}
+              </button>
             </div>
           ))}
         </div>
 
         {/* Правки, которые безопасно применить нельзя */}
         {rejected.length > 0 && proposal.status !== 'applied' && (
-          <div className="mb-2.5 rounded-lg border border-amber-500/30 bg-amber-500/10 p-2.5 text-xs text-amber-500">
-            <p className="font-medium">Часть правок не будет применена:</p>
+          <div className="mb-3 rounded-lg border border-warning/30 bg-warning-soft p-3 text-xs text-text">
+            <p className="font-medium text-warning">{t('proposal.partRejected')}</p>
             <ul className="mt-1 space-y-0.5">
               {rejected.map((item, idx) => (
-                <li key={`${item.path}-${idx}`}>
+                <li key={`${item.path}-${idx}`} className="break-words">
                   <span className="font-mono text-text">{item.path}</span> — {item.reason}
                 </li>
               ))}
@@ -232,21 +239,22 @@ export function FileProposalCard({ proposal: initialProposal, workspace }: FileP
 
         {/* Ошибки */}
         {proposal.status === 'error' && proposal.error && (
-          <div className="mb-2.5 rounded-lg border border-danger/30 bg-danger-soft p-2.5 text-xs text-danger">
+          <div
+            role="alert"
+            className="mb-3 rounded-lg border border-danger/30 bg-danger-soft p-3 text-xs break-words text-danger"
+          >
             {proposal.error}
           </div>
         )}
 
         {/* Статус: успешно применено */}
         {proposal.status === 'applied' && (
-          <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-3 text-xs text-emerald-400">
-            <div className="flex items-center justify-between">
+          <div className="rounded-xl border border-success/30 bg-success-soft p-3 text-[13px] text-success">
+            <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1.5">
               <div className="flex items-center gap-2">
-                <CheckIcon className="size-4 text-emerald-500" />
+                <CheckIcon className="size-4 shrink-0" />
                 <span className="font-medium">
-                  {workspace?.type === 'git_repo'
-                    ? 'Изменения успешно отправлены в GitHub!'
-                    : 'Изменения успешно записаны на локальный диск!'}
+                  {workspace?.type === 'git_repo' ? t('proposal.appliedGit') : t('proposal.appliedLocal')}
                 </span>
               </div>
               {proposal.gitResult?.url && (
@@ -254,11 +262,11 @@ export function FileProposalCard({ proposal: initialProposal, workspace }: FileP
                   href={proposal.gitResult.url}
                   target="_blank"
                   rel="noreferrer"
-                  className="inline-flex items-center gap-1 font-semibold text-accent hover:underline ml-2"
+                  className="inline-flex min-h-9 items-center gap-1 font-semibold text-accent hover:underline max-md:min-h-11"
                 >
                   {proposal.gitResult.type === 'pull_request'
-                    ? `Открыть PR #${proposal.gitResult.prNumber || ''} ↗`
-                    : 'Открыть коммит ↗'}
+                    ? t('proposal.openPr', { number: proposal.gitResult.prNumber || '' })
+                    : t('proposal.openCommit')}
                 </a>
               )}
             </div>
@@ -269,59 +277,60 @@ export function FileProposalCard({ proposal: initialProposal, workspace }: FileP
         {proposal.status === 'pending' || proposal.status === 'error' ? (
           <>
             {proposal.status === 'pending' && !autoApply && (
-              <div className="mb-2 rounded-lg bg-surface/90 border border-stroke px-2.5 py-1.5 text-[11px] text-muted flex items-center justify-between">
-                <span>💡 Нажмите «Применить к проекту» ниже (или включите «⚡ Авто-запись» в шапке), чтобы сохранить файлы.</span>
+              <div className="mb-3 flex items-start gap-2 rounded-lg border border-stroke bg-surface/90 px-3 py-2 text-xs leading-5 text-muted">
+                <SparkleIcon className="mt-0.5 size-3.5 shrink-0 text-accent" aria-hidden="true" />
+                <span>{t('proposal.hint')}</span>
               </div>
             )}
-            <div className="flex items-center justify-between pt-2 border-t border-stroke/70">
-            <div className="text-[11px] text-muted">
-              {workspace ? (
-                <span className="flex items-center gap-1">
-                  Цель:{' '}
-                  {workspace.type === 'git_repo' ? (
-                    <GitHubIcon className="size-3 text-accent inline" />
-                  ) : (
-                    <FolderIcon className="size-3 text-accent inline" />
-                  )}
-                  <span className="font-mono text-text">{workspace.name}</span>
-                </span>
-              ) : (
-                'Требуется привязка проекта'
-              )}
-            </div>
-
-            <div className="flex items-center gap-2">
-              <Button variant="ghost" size="sm" onClick={handleDiscard} className="text-xs h-7.5">
-                Отклонить
-              </Button>
-              <Button
-                variant="primary"
-                size="sm"
-                onClick={handleApply}
-                disabled={!workspace}
-                className="text-xs h-7.5 gap-1.5"
-              >
-                {workspace?.type === 'git_repo' ? (
-                  <>
-                    <GitHubIcon className="size-3.5" />
-                    Применить к GitHub
-                  </>
+            <div className="flex flex-wrap items-center justify-between gap-3 border-t border-stroke pt-3">
+              <div className="min-w-0 text-xs text-muted">
+                {workspace ? (
+                  <span className="flex items-center gap-1.5">
+                    {t('proposal.target')}
+                    {workspace.type === 'git_repo' ? (
+                      <GitHubIcon className="size-3.5 shrink-0 text-accent" />
+                    ) : (
+                      <FolderIcon className="size-3.5 shrink-0 text-accent" />
+                    )}
+                    <span className="truncate font-mono text-text">{workspace.name}</span>
+                  </span>
                 ) : (
-                  <>
-                    <CheckIcon className="size-3.5" />
-                    Применить к проекту
-                  </>
+                  t('proposal.needWorkspace')
                 )}
-              </Button>
+              </div>
+
+              <div className="flex w-full flex-col-reverse gap-2 sm:ml-auto sm:w-auto sm:flex-row sm:items-center">
+                <Button variant="ghost" size="sm" onClick={handleDiscard} className="max-sm:w-full">
+                  {t('proposal.discard')}
+                </Button>
+                <Button
+                  variant="primary"
+                  size="sm"
+                  onClick={handleApply}
+                  disabled={!workspace}
+                  className="max-sm:w-full"
+                >
+                  {workspace?.type === 'git_repo' ? (
+                    <>
+                      <GitHubIcon className="size-3.5" />
+                      {t('proposal.applyGit')}
+                    </>
+                  ) : (
+                    <>
+                      <CheckIcon className="size-3.5" />
+                      {t('proposal.applyProject')}
+                    </>
+                  )}
+                </Button>
+              </div>
             </div>
-          </div>
-        </>
-      ) : null}
+          </>
+        ) : null}
 
         {proposal.status === 'applying' && (
-          <div className="flex items-center gap-2 text-xs text-accent pt-2">
+          <div role="status" className="flex items-center gap-2 pt-2 text-xs text-accent">
             <RefreshIcon className="size-3.5 animate-spin" />
-            <span>Запись изменений в файлы проекта...</span>
+            <span>{t('proposal.applying')}</span>
           </div>
         )}
       </div>

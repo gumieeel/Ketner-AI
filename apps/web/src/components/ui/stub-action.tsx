@@ -11,13 +11,15 @@ interface StubActionProps {
   size?: StubSize;
   /** Растягивает кнопку на всю ширину — для текстовых кнопок вида «Выйти». */
   block?: boolean;
+  /** Где показать пояснение: над кнопкой (по умолчанию) или под ней — для кнопок в шапке. */
+  placement?: 'top' | 'bottom';
   className?: string;
   children: ReactNode;
 }
 
 const sizeClasses: Record<StubSize, string> = {
   sm: 'size-8 justify-center text-base',
-  md: 'size-10 justify-center text-lg',
+  md: 'size-10 justify-center text-lg max-md:size-11',
 };
 
 const HINT_TIMEOUT_MS = 2500;
@@ -31,6 +33,7 @@ export function StubAction({
   hint,
   size = 'md',
   block = false,
+  placement = 'top',
   className,
   children,
 }: StubActionProps) {
@@ -52,7 +55,7 @@ export function StubAction({
           timerRef.current = window.setTimeout(() => setVisible(false), HINT_TIMEOUT_MS);
         }}
         className={cn(
-          'inline-flex items-center rounded-md transition-colors',
+          'inline-flex items-center rounded-lg transition-colors',
           'text-muted hover:bg-surface-2 hover:text-text',
           block ? 'h-10 w-full justify-start gap-2 px-3 text-sm' : sizeClasses[size],
           className,
@@ -63,7 +66,10 @@ export function StubAction({
       {visible ? (
         <span
           role="status"
-          className="absolute bottom-full right-0 z-[var(--z-dropdown)] mb-1 w-60 rounded-md border border-stroke-strong bg-surface-2 p-2 text-xs text-muted shadow-popover"
+          className={cn(
+            'absolute right-0 z-[var(--z-dropdown)] w-60 rounded-xl border border-stroke-strong bg-surface-2 p-3 text-xs leading-5 text-muted shadow-popover',
+            placement === 'top' ? 'bottom-full mb-1' : 'top-full mt-1',
+          )}
         >
           {hint ?? t('common.soon')}
         </span>

@@ -27,7 +27,7 @@ export function Divider({
               : 'bg-stroke',
           )}
         />
-        <span className="font-mono text-[11px] font-medium tracking-[0.08em] uppercase text-muted select-none">
+        <span className="select-none text-xs font-medium text-muted">
           {label}
         </span>
         <div

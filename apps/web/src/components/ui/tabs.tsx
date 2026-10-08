@@ -90,7 +90,7 @@ export function TabList({ className, children, ...props }: TabListProps) {
       role="tablist"
       onKeyDown={handleKeyDown}
       className={cn(
-        'inline-flex items-center gap-1 rounded-md border border-stroke bg-surface-2 p-1 text-sm',
+        'inline-flex max-w-full items-center gap-1 overflow-x-auto rounded-lg border border-stroke bg-surface-2 p-1 text-sm',
         className,
       )}
       {...props}
@@ -126,10 +126,11 @@ export function Tab({ value, children, disabled = false, className }: TabProps) 
       disabled={disabled}
       onClick={() => ctx.selectTab(value)}
       className={cn(
-        'inline-flex items-center justify-center rounded-sm px-3 py-1.5 text-xs font-medium transition-colors select-none',
+        'inline-flex min-h-9 items-center justify-center whitespace-nowrap rounded-md px-3.5 py-1.5 text-[13px] font-medium select-none max-md:min-h-11',
+        'transition-[background-color,color,box-shadow] duration-200',
         isSelected
-          ? 'bg-surface text-text shadow-sm border border-stroke'
-          : 'text-muted hover:text-text hover:bg-surface-3',
+          ? 'border border-stroke-strong bg-surface text-text shadow-sm'
+          : 'border border-transparent text-muted hover:bg-surface-3 hover:text-text',
         disabled && 'opacity-40 cursor-not-allowed',
         className,
       )}

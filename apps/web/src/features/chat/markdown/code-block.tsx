@@ -24,14 +24,18 @@ export function CodeBlock({ code, language }: CodeBlockProps) {
   const tokens = useMemo(() => highlight(code, language), [code, language]);
 
   return (
-    <div className="my-3 overflow-hidden rounded-lg border border-stroke bg-surface">
-      <div className="h-9 border-b border-stroke bg-surface-2 px-3 flex items-center justify-between gap-2">
-        <span className="font-mono text-xs text-muted">
+    <div className="code-block my-4 overflow-hidden rounded-xl border border-stroke bg-surface shadow-xs">
+      <div className="flex h-10 items-center justify-between gap-2 border-b border-stroke bg-surface-2/80 pr-1.5 pl-3.5">
+        <span className="flex items-center gap-2 font-mono text-xs text-muted">
+          <span aria-hidden="true" className="size-1.5 rounded-full bg-accent/70" />
           {language ?? t('chat.codePlain')}
         </span>
         <CopyButton value={code} label={t('chat.copyCode')} size="sm" />
       </div>
-      <pre className="overflow-x-auto p-3 font-mono text-[13px] leading-[22px] text-text">
+      <pre
+        tabIndex={0}
+        className="overflow-x-auto p-4 font-mono text-[13px] leading-[22px] text-text focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-accent"
+      >
         <code>
           {tokens.map((token, index) => (
             <span key={index} className={TOKEN_CLASSES[token.kind]}>

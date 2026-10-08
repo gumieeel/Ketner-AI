@@ -2,7 +2,6 @@ import type { ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import { ArrowLeftIcon } from '@/components/icons';
 import { ModelHub } from '@/components/marketing/model-hub';
-import { CornerMark } from '@/components/ui/corner-mark';
 import { useTranslation } from '@/i18n';
 import { Brand } from './brand';
 import { LanguageToggle } from './language-toggle';
@@ -18,79 +17,60 @@ export interface AuthShellProps {
 
 /**
  * Сплит-каркас для страниц входа и регистрации.
- * На десктопе (lg+): слева форма, справа фирменная декоративная панель с ModelHub.
- * На мобильных ( <lg ): только чистая форма с Brand в шапке.
+ * На десктопе (lg+): слева форма, справа фирменная панель с «оркестром моделей».
+ * На мобильных (<lg): только форма, бренд и переключатели в шапке.
  */
-export function AuthShell({
-  title,
-  subtitle,
-  children,
-  footer,
-  aside,
-}: AuthShellProps) {
-  const { t, language } = useTranslation();
+export function AuthShell({ title, subtitle, children, footer, aside }: AuthShellProps) {
+  const { t } = useTranslation();
 
   return (
-    <div className="min-h-screen grid grid-cols-1 lg:grid-cols-2 bg-canvas">
+    <div className="grid min-h-dvh grid-cols-1 bg-canvas lg:grid-cols-2">
       {/* Левая колонка — форма */}
-      <div className="flex flex-col justify-between min-h-screen lg:min-h-full px-6 py-8 sm:px-10">
-        {/* Верхняя полоса формы */}
-        <div className="flex items-center justify-between w-full">
+      <div className="flex min-h-dvh min-w-0 flex-col justify-between px-5 py-6 sm:px-10 sm:py-8">
+        <div className="flex w-full items-center justify-between gap-3">
           <Brand />
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1.5">
             <LanguageToggle />
             <ThemeToggle />
           </div>
         </div>
 
-        {/* Центрированный блок формы */}
-        <div className="mx-auto w-full max-w-[380px] my-auto py-8">
-          <h1 className="text-2xl font-semibold tracking-tight text-text">
+        <div className="mx-auto my-auto w-full max-w-[400px] animate-slide-up py-8">
+          <h1 className="text-balance text-[26px] font-semibold leading-tight tracking-tight text-text sm:text-[30px]">
             {title}
           </h1>
-          {subtitle && (
-            <p className="text-sm text-muted mt-1.5">{subtitle}</p>
-          )}
+          {subtitle ? <p className="mt-2 text-sm leading-6 text-muted">{subtitle}</p> : null}
           <div className="mt-8">{children}</div>
         </div>
 
-        {/* Подвал формы */}
-        <div className="flex flex-col items-center gap-3 text-sm mt-8 pb-4">
-          {footer}
+        <div className="mt-6 flex flex-col items-center gap-1 text-sm">
+          {footer ? <div className="flex min-h-11 items-center">{footer}</div> : null}
           <Link
             to="/chat"
-            className="inline-flex items-center gap-1.5 font-mono text-xs text-muted hover:text-text transition-colors"
+            className="inline-flex min-h-11 items-center gap-1.5 rounded-md px-2 text-sm text-muted transition-colors hover:text-text"
           >
-            <ArrowLeftIcon className="size-3.5" />
+            <ArrowLeftIcon className="size-4" />
             <span>{t('auth.backToChat')}</span>
           </Link>
         </div>
       </div>
 
-      {/* Правая колонка — декор (только lg+) */}
+      {/* Правая колонка — витрина (только lg+) */}
       <div
         aria-hidden="true"
-        className="hidden lg:flex relative overflow-hidden border-l border-stroke bg-surface flex-col items-center justify-center p-12 bg-grid hero-glow select-none"
+        className="relative hidden select-none flex-col items-center justify-center overflow-hidden border-l border-stroke bg-surface px-6 py-12 lg:flex xl:px-12"
       >
-        <CornerMark size={14} className="absolute top-3 left-3 text-stroke-strong" />
-        <CornerMark size={14} className="absolute top-3 right-3 text-stroke-strong rotate-90" />
-        <CornerMark size={14} className="absolute bottom-3 right-3 text-stroke-strong rotate-180" />
-        <CornerMark size={14} className="absolute bottom-3 left-3 text-stroke-strong -rotate-90" />
+        <div className="bg-aurora pointer-events-none absolute inset-0 opacity-70" />
+        <div className="bg-grid pointer-events-none absolute inset-0 opacity-60 [mask-image:radial-gradient(ellipse_70%_60%_at_50%_45%,black,transparent)]" />
 
         {aside ?? (
-          <div className="relative z-10 flex flex-col items-center text-center max-w-[420px] gap-8">
-            <div className="scale-85 origin-center">
-              <ModelHub />
-            </div>
-            <div className="flex flex-col gap-2">
-              <span className="text-base font-semibold tracking-tight text-text">
-                {language === 'ru'
-                  ? 'Все AI-модели. Одна подписка.'
-                  : 'All AI Models. One Subscription.'}
-              </span>
-              <span className="font-mono text-xs text-muted tracking-wider uppercase">
-                GPT · Claude · Gemini · Grok · Qwen · DeepSeek
-              </span>
+          <div className="relative z-10 flex w-full max-w-[560px] flex-col items-center gap-10 text-center">
+            <ModelHub />
+            <div className="flex max-w-[420px] flex-col gap-2">
+              <p className="text-balance text-xl font-semibold tracking-tight text-text">
+                {t('auth.asideTitle')}
+              </p>
+              <p className="text-balance text-sm leading-6 text-muted">{t('auth.asideLead')}</p>
             </div>
           </div>
         )}
