@@ -1,5 +1,7 @@
-import { createHmac } from 'node:crypto';
-const MOCK_JWT_SECRET = process.env.AUTH_JWT_SECRET || 'ketner-mock-jwt-secret';
+import { createHmac, timingSafeEqual } from 'node:crypto';
+import { config } from '../config.js';
+/** Ключ подписи берётся только из конфигурации: в production без секрета приложение не стартует. */
+const JWT_SECRET = config.authJwtSecret;
 function toBase64Url(str) {
     return Buffer.from(str, 'utf8').toString('base64url');
 }
@@ -28,7 +30,7 @@ export function createMockToken(user, expiresInSeconds = 7 * 24 * 3600) {
     };
     const headerB64 = toBase64Url(JSON.stringify(header));
     const payloadB64 = toBase64Url(JSON.stringify(payload));
-    const signature = sign(`${headerB64}.${payloadB64}`, MOCK_JWT_SECRET);
+    const signature = sign(`${headerB64}.${payloadB64}`, JWT_SECRET);
     return {
         token: `${headerB64}.${payloadB64}.${signature}`,
         expiresAt,
@@ -44,9 +46,15 @@ export function verifyMockToken(token) {
             return null;
         }
         const [headerB64, payloadB64, signature] = parts;
-        const expectedSignature = sign(`${headerB64}.${payloadB64}`, MOCK_JWT_SECRET);
-        // Допускаем также токен с фиктивной подписью в тестах, если подпись валидна или начинается с mock
-        if (signature !== expectedSignature && !signature.startsWith('mock_')) {
+        // Заголовок: принимаем только HS256 (алгоритм фиксирован на сервере, а не выбирается токеном).
+        const header = JSON.parse(fromBase64Url(headerB64));
+        if (header.alg !== 'HS256') {
+            return null;
+        }
+        // Подпись сравниваем за константное время; никаких «тестовых» подписей.
+        const expected = Buffer.from(sign(`${headerB64}.${payloadB64}`, JWT_SECRET), 'utf8');
+        const given = Buffer.from(signature, 'utf8');
+        if (given.length !== expected.length || !timingSafeEqual(given, expected)) {
             return null;
         }
         const payloadJson = fromBase64Url(payloadB64);

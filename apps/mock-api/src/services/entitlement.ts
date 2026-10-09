@@ -58,22 +58,33 @@ const LEGACY_PRO_BASE: Omit<PlanEntitlements, 'planId'> = {
   contextLimit: 120,
   maxTokens: 12288,
   streamingEnabled: true,
-  // Legacy Pro: 1199 ₽ ≈ $12.62, бюджет $5.00 ≈ 40%.
+  // Legacy Pro: 1199 ₽ ≈ $12.62, бюджет $5.00 ≈ 40% (новых оплат по старой цене нет).
   maxDailyCost: 0.60,
   costBudget: 5.00,
   premiumBudget: 1.80,
 };
 
 /**
- * Экономика тарифов (курс 95 ₽/$, расходы считаются за скользящие 30 дней).
+ * Экономика тарифов. Цены в долларах: Plus $9, Pro $25, Ultra $49 (services/pricing.ts).
+ * Расходы считаются за скользящие 30 дней. Полный расчёт: docs/models-and-pricing.md.
  *
- * costBudget — потолок расхода на модели, ≈40% цены тарифа: остальное идёт на эквайринг (~4%),
- * налоги (~6%), комиссию OpenRouter за пополнение (5.5% от расхода), инфраструктуру и прибыль.
+ * costBudget — потолок расхода на модели за 30 дней. Это 31% цены у Plus и 40–41% у Pro и Ultra:
+ * из остального идут налог (~6%), эквайринг (Stripe ≈ 4% + $0.30, крипта ≈ 2%, Telegram Stars
+ * отдаёт только ≈ $0.013 за звезду, то есть ≈ 72% цены), комиссия OpenRouter за пополнение
+ * (5.5% от расхода), субсидия Free-тира (≈ $3 на платящего при конверсии 5%) и прибыль.
+ * Поведение при подходе к потолку: 80% — экономный режим, 100% — только лёгкие модели,
+ * 125% — отказ (services/budget-policy.ts), поэтому 1.25 × costBudget — жёсткий предел расхода.
+ *
  * premiumBudget — часть costBudget на премиум-модели (классы strong и top, см. ModelCostClass).
- * Ориентиры по запросам в месяц при 7.6k токенов на входе и 0.7k на выходе:
- *   Plus  $0.60 ≈ 18 запросов GPT-6.1 Sol;
- *   Pro   $3.00 ≈ 90 запросов Sol или 36 запросов Claude Opus 5.5;
- *   Ultra $5.50 ≈ 160 запросов Sol или 66 запросов Opus.
+ * Ориентиры по запросам в месяц при 7.6k токенов на входе:
+ *   Plus  $0.45 ≈ 17 запросов GPT-6.1 Sol (низкая глубина размышлений);
+ *   Pro   $3.50 ≈ 129 запросов Sol или 50 запросов Claude Opus 5.5 (средняя глубина);
+ *   Ultra $9.00 ≈ 331 запрос Sol или 128 запросов Opus.
+ * Остаток costBudget — на Ketner Mini и Ketner Pro: это тысячи запросов в месяц, поэтому
+ * «безлимит» для обычного человека действительно безлимит, а дорогие модели идут по квоте.
+ *
+ * Тест services/currency.test.ts проверяет, что при любых изменениях бюджетов тариф остаётся
+ * прибыльным в худшем случае (пользователь выбрал весь бюджет, платит через Stripe).
  */
 export const PLAN_ENTITLEMENTS: Record<PlanId, PlanEntitlements> = {
   free: {
@@ -112,10 +123,10 @@ export const PLAN_ENTITLEMENTS: Record<PlanId, PlanEntitlements> = {
     contextLimit: 60,
     maxTokens: 6144,
     streamingEnabled: true,
-    // Plus: 990 ₽ ≈ $10.42 → бюджет $4.00 (38%).
-    maxDailyCost: 0.40,
-    costBudget: 4.00,
-    premiumBudget: 0.60,
+    // Plus: $9 → бюджет $2.75 (31%): самый тесный тариф, из-за Free-субсидии и комиссии Stripe $0.30.
+    maxDailyCost: 0.35,
+    costBudget: 2.75,
+    premiumBudget: 0.45,
   },
   pro: {
     planId: 'pro',
@@ -131,10 +142,10 @@ export const PLAN_ENTITLEMENTS: Record<PlanId, PlanEntitlements> = {
     contextLimit: 120,
     maxTokens: 12288,
     streamingEnabled: true,
-    // Pro: 1990 ₽ ≈ $20.95 → бюджет $8.50 (41%).
-    maxDailyCost: 1.00,
-    costBudget: 8.50,
-    premiumBudget: 3.00,
+    // Pro: $25 → бюджет $10.00 (40%).
+    maxDailyCost: 1.10,
+    costBudget: 10.0,
+    premiumBudget: 3.5,
   },
   ultra: {
     planId: 'ultra',
@@ -150,10 +161,10 @@ export const PLAN_ENTITLEMENTS: Record<PlanId, PlanEntitlements> = {
     contextLimit: 500,
     maxTokens: 16384,
     streamingEnabled: true,
-    // Ultra: 2990 ₽ ≈ $31.47 → бюджет $12.50 (40%). Раньше стояло $11.50, посчитанное на цену 2499 ₽.
-    maxDailyCost: 1.50,
-    costBudget: 12.50,
-    premiumBudget: 5.50,
+    // Ultra: $49 → бюджет $20.00 (41%).
+    maxDailyCost: 2.20,
+    costBudget: 20.0,
+    premiumBudget: 9.0,
   },
   // ── Legacy-планы для обратной совместимости ──
   'gpt-pro': { planId: 'gpt-pro', ...LEGACY_PRO_BASE },

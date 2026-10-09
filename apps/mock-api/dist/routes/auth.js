@@ -2,7 +2,8 @@ import { Router } from 'express';
 import { defaultBetterAuth } from '../auth/better-auth.js';
 import { createMockToken } from '../auth/jwt.js';
 import { sendError } from '../middleware/errors.js';
-import { config } from '../config.js';
+import { config, isProduction } from '../config.js';
+import { isAdminEmail, isVipEmail } from '../services/vip.js';
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const MIN_PASSWORD_LENGTH = 8;
 export function createAuthRouter(userStore, betterAuthInstance = defaultBetterAuth) {
@@ -20,6 +21,12 @@ export function createAuthRouter(userStore, betterAuthInstance = defaultBetterAu
             return;
         }
         const email = rawEmail.trim().toLowerCase();
+        // Адреса администраторов и VIP заводятся только через SEED_ADMIN_* / админ-панель:
+        // регистрация не подтверждает владение почтой, поэтому занять их нельзя.
+        if (isProduction && (isAdminEmail(email) || isVipEmail(email))) {
+            sendError(response, 409, 'user_already_exists', 'Пользователь с таким email уже существует');
+            return;
+        }
         const existing = userStore.findByEmail(email);
         if (existing) {
             sendError(response, 409, 'user_already_exists', 'Пользователь с таким email уже существует');
@@ -102,6 +109,11 @@ export function createAuthRouter(userStore, betterAuthInstance = defaultBetterAu
         response.status(204).end();
     });
     router.get('/oauth/:provider', async (request, response) => {
+        // Mock-вход выдаёт токен общего аккаунта без проверки у провайдера: только вне production.
+        if (isProduction) {
+            sendError(response, 501, 'oauth_not_configured', 'Вход через провайдера недоступен');
+            return;
+        }
         const rawProvider = request.params.provider;
         const provider = (Array.isArray(rawProvider) ? rawProvider[0] : rawProvider)?.toLowerCase();
         if (provider !== 'google' && provider !== 'github') {
@@ -129,6 +141,10 @@ export function createAuthRouter(userStore, betterAuthInstance = defaultBetterAu
         response.json({ user, token, expiresAt, provider });
     });
     router.post('/demo', (_request, response) => {
+        if (!config.enableDemoAccount) {
+            sendError(response, 404, 'not_found', 'Маршрут не найден');
+            return;
+        }
         const user = userStore.verifyPassword('demo@ketner.ai', 'password123');
         if (!user) {
             sendError(response, 500, 'demo_unavailable', 'Демо-аккаунт недоступен');

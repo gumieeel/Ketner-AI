@@ -1,12 +1,19 @@
 import { config } from '../config.js';
 import { LEGACY_PLANS, PLANS } from '../routes/billing.js';
 import { invoiceStore as defaultInvoiceStore, subscriptionStore as defaultSubscriptionStore, userStore as defaultUserStore, } from '../store/index.js';
+import { planPriceRub } from '../services/pricing.js';
 /**
- * Расчёт стоимости в Telegram Stars (⭐️ XTR).
- * Точно соответствует курсу $0.0185 за 1 звезду и тарифам на сайте Ketner AI:
- * - Plus (9 $ / 890 ₽ / 990 ₽) -> 500 ⭐️
- * - Pro (25 $ / 2 490 ₽ / 1 990 ₽) -> 1 350 ⭐️
- * - Ultra (49 $ [скидка с $59] / 4 890 ₽ / 2 990 ₽) -> 2 650 ⭐️
+ * Расчёт стоимости в Telegram Stars (⭐️ XTR). Аргумент — цена тарифа в долларах
+ * (`PlanItem.priceMonthly`, см. services/pricing.ts):
+ * - Plus ($9) -> 500 ⭐️
+ * - Pro ($25) -> 1 350 ⭐️
+ * - Ultra ($49, скидка с $59) -> 2 650 ⭐️
+ * Суммы в рублях и старые доллары (10/20/30) остаются в таблице, чтобы выписанные ранее счета
+ * продолжали сходиться.
+ *
+ * Важно для экономики: разработчик получает за 1 Star около $0.013 (выплата через Fragment),
+ * то есть с Stars-оплаты приходит примерно 72% цены тарифа. Это учтено в расчёте бюджетов
+ * (docs/models-and-pricing.md).
  */
 export function calculateStars(price) {
     if (price <= 0)
@@ -22,12 +29,13 @@ export function calculateStars(price) {
         price === 40) {
         return 2650;
     }
-    // Pro ($25 / 2490 ₽ / 1990 ₽ / 1999 ₽ / 1199 ₽ / $20 / $29)
+    // Pro ($25 / 2490 ₽ / 1990 ₽ / 1999 ₽ / 1199 ₽ [= $12.62, старые тарифы] / $20 / $29)
     if (price === 25 ||
         price === 2490 ||
         price === 1990 ||
         price === 1999 ||
         price === 1199 ||
+        price === 12.62 ||
         price === 20 ||
         price === 29) {
         return 1350;
@@ -51,6 +59,8 @@ export class TelegramBotService {
     deps;
     chatToUserId = new Map();
     isPolling = false;
+    /** Обработанные платежи Telegram (защита от повторной доставки одного и того же платежа). */
+    processedCharges = new Set();
     constructor(deps) {
         this.deps = deps;
         this.token = deps.botToken || config.telegramBotToken || '';
@@ -121,6 +131,7 @@ export class TelegramBotService {
                 const webhookUrl = `${effectiveBaseUrl.replace(/\/$/, '')}/api/telegram/webhook`;
                 const res = await this.callApi('setWebhook', {
                     url: webhookUrl,
+                    secret_token: config.telegramWebhookSecret,
                     allowed_updates: ['message', 'callback_query', 'pre_checkout_query'],
                     drop_pending_updates: false,
                 });
@@ -224,6 +235,38 @@ export class TelegramBotService {
         });
     }
     /**
+     * Проверка платежа Stars перед активацией тарифа.
+     *
+     * Подлинность самого обновления обеспечивает secret_token вебхука; здесь проверяется,
+     * что сумма, валюта и тариф соответствуют нашему счёту, и что платёж не обработан ранее.
+     */
+    checkStarsPayment(pay, claimedPlanId, userId, invoiceId) {
+        if (this.processedCharges.has(pay.telegram_payment_charge_id)) {
+            return { status: 'duplicate' };
+        }
+        const plan = claimedPlanId ? getPlanItem(claimedPlanId) : undefined;
+        if (!plan || plan.priceMonthly <= 0)
+            return { status: 'rejected', reason: 'unknown_plan' };
+        if (!userId)
+            return { status: 'rejected', reason: 'unknown_user' };
+        if (pay.currency !== 'XTR')
+            return { status: 'rejected', reason: 'invalid_currency' };
+        if (pay.total_amount < calculateStars(plan.priceMonthly)) {
+            return { status: 'rejected', reason: 'insufficient_amount' };
+        }
+        if (invoiceId) {
+            const invoice = this.deps.invoiceStore.getTelegramStarsInvoice(invoiceId);
+            if (!invoice)
+                return { status: 'rejected', reason: 'invoice_not_found' };
+            if (invoice.planId !== plan.id || invoice.userId !== userId) {
+                return { status: 'rejected', reason: 'invoice_mismatch' };
+            }
+            if (invoice.status === 'paid')
+                return { status: 'duplicate' };
+        }
+        return { status: 'ok', planId: plan.id };
+    }
+    /**
      * Обработка входящего обновления от Telegram (webhook или polling).
      */
     async processUpdate(update) {
@@ -319,13 +362,13 @@ export class TelegramBotService {
                 const plan = getPlanItem(planId) ?? getPlanItem('plus') ?? PLANS[1];
                 const linkedUser = this.resolveUser(chatId);
                 const targetUser = customUserId || linkedUser?.id || config.demoUserId;
-                const invoice = this.deps.invoiceStore.createSbpInvoice(targetUser, plan.id, plan.priceMonthly);
+                const invoice = this.deps.invoiceStore.createSbpInvoice(targetUser, plan.id, planPriceRub(plan.id));
                 await this.answerCallbackQuery(cb.id);
                 const sbpMessage = [
                     '⚡ <b>Оплата через СБП (Система быстрых платежей)</b>',
                     '',
                     `Тариф: <b>${plan.id.toUpperCase()}</b>`,
-                    `Сумма к оплате: <b>${plan.priceMonthly} ₽</b> (0% комиссии)`,
+                    `Сумма к оплате: <b>${planPriceRub(plan.id)} ₽</b> (0% комиссии)`,
                     '',
                     '📲 <b>Для оплаты на смартфоне нажмите кнопку «Оплатить в банке»:</b>',
                     'Она автоматически откроет приложение вашего банка (Сбер, Т-Банк, ВТБ, Альфа).',
@@ -356,6 +399,11 @@ export class TelegramBotService {
             }
             // Подтверждение СБП оплаты
             if (data.startsWith('confirm_sbp:')) {
+                // Кнопка «Я оплатил» — заглушка без платёжного шлюза: в production тариф по ней не выдаётся.
+                if (!config.enableMockBilling) {
+                    await this.answerCallbackQuery(cb.id, 'Подтверждение недоступно. Оплата СБП временно не принимается.', true);
+                    return { handled: true, action: 'mock_payment_disabled' };
+                }
                 const [, invoiceId, planId, customUserId] = data.split(':');
                 const validPlan = (planId || 'plus');
                 const linkedUser = this.resolveUser(chatId);
@@ -408,6 +456,11 @@ export class TelegramBotService {
             }
             // Подтверждение Stars оплаты
             if (data.startsWith('confirm_stars:')) {
+                // Stars подтверждаются только сообщением successful_payment от Telegram, не кнопкой.
+                if (!config.enableMockBilling) {
+                    await this.answerCallbackQuery(cb.id, 'Подтверждение недоступно: оплата определяется автоматически.', true);
+                    return { handled: true, action: 'mock_payment_disabled' };
+                }
                 const parts = data.split(':');
                 const invoiceId = parts[1] || undefined;
                 const planId = (parts[2] || 'plus');
@@ -445,21 +498,37 @@ export class TelegramBotService {
             // Успешный нативный платёж Telegram Stars
             if (msg.successful_payment) {
                 const pay = msg.successful_payment;
-                let planId = 'plus';
                 const linkedUser = this.resolveUser(chatId);
-                let userId = linkedUser?.id || this.chatToUserId.get(chatId) || config.demoUserId;
+                let userId = linkedUser?.id || this.chatToUserId.get(chatId) || '';
+                let claimedPlanId;
                 let invoiceId;
                 try {
                     const payload = JSON.parse(pay.invoice_payload);
                     if (payload.planId)
-                        planId = payload.planId;
+                        claimedPlanId = payload.planId;
                     if (payload.userId)
                         userId = payload.userId;
                     if (payload.invoiceId)
                         invoiceId = payload.invoiceId;
                 }
                 catch {
-                    // Игнорируем ошибку парсинга
+                    // Нечитаемый payload — платёж не привязать к тарифу, ниже он будет отклонён
+                }
+                const verdict = this.checkStarsPayment(pay, claimedPlanId, userId, invoiceId);
+                if (verdict.status === 'duplicate') {
+                    return { handled: true, action: 'stars_payment_duplicate' };
+                }
+                if (verdict.status === 'rejected') {
+                    console.warn(`[TelegramBot] Платёж ${pay.telegram_payment_charge_id} отклонён: ${verdict.reason}`);
+                    await this.sendMessage(chatId, `⚠️ Платёж получен, но тариф не удалось активировать автоматически. Напишите в поддержку и укажите номер платежа: <code>${escapeHtml(pay.telegram_payment_charge_id)}</code>.`);
+                    return { handled: true, action: 'stars_payment_rejected' };
+                }
+                const planId = verdict.planId;
+                this.processedCharges.add(pay.telegram_payment_charge_id);
+                if (this.processedCharges.size > 5000) {
+                    const oldest = this.processedCharges.values().next().value;
+                    if (oldest)
+                        this.processedCharges.delete(oldest);
                 }
                 this.deps.subscriptionStore.checkout(userId, planId);
                 const updatedUser = this.deps.userStore.updatePlan(userId, planId);
@@ -632,7 +701,7 @@ export class TelegramBotService {
                             ],
                             [
                                 {
-                                    text: `⚡ Оплатить через СБП (${plan.priceMonthly} ₽)`,
+                                    text: `⚡ Оплатить через СБП (${planPriceRub(plan.id)} ₽)`,
                                     callback_data: `pay_sbp:${plan.id}:${userId}`,
                                 },
                             ],
@@ -692,8 +761,8 @@ export class TelegramBotService {
                     '• ⚡ <b>СБП (Система быстрых платежей)</b> — моментальная оплата банковскими приложениями РФ по QR-коду с 0% комиссии.',
                     '',
                     '💎 <b>Актуальные тарифы:</b>',
-                    '• <b>Plus</b> ($9 / <b>500 ⭐️</b> / 890 ₽) — быстрые модели GPT-4o mini, DeepSeek V4.1 Flash, Claude Haiku 4.5',
-                    '• <b>Pro</b> ($25 / <b>1 350 ⭐️</b> / 2 490 ₽) — флагманы GPT-6 Astra, Claude Fable 5.1, Gemini 2.5 Pro',
+                    '• <b>Plus</b> ($9 / <b>500 ⭐️</b> / 890 ₽) — Ketner Pro, Claude Haiku 5.5, DeepSeek V4.1 Flash и GPT-6.1 Sol по квоте',
+                    '• <b>Pro</b> ($25 / <b>1 350 ⭐️</b> / 2 490 ₽) — всё из Plus + Claude Opus 5.5, Grok 4.7, Gemini 3.8 Flash по квоте',
                     '• <b>Ultra</b> ($49 [скидка] / <b>2 650 ⭐️</b> / 4 890 ₽) — максимум скорости, VIP-приоритет, безлимит Fair Use',
                     '',
                     '💡 <i>Чтобы привязать этот Telegram к вашему аккаунту на сайте, нажмите кнопку «Привязать аккаунт» ниже.</i>',
@@ -818,15 +887,15 @@ export class TelegramBotService {
             '💎 <b>Тарифные планы Ketner AI</b>',
             '',
             '1️⃣ <b>PLUS</b> — <b>$9/мес</b> (~890 ₽) или <b>500 ⭐️</b>',
-            '• Модели: DeepSeek v4.1 Flash, Claude Haiku 4.5, GPT-4o',
+            '• Модели: Ketner Pro, Claude Haiku 5.5, DeepSeek V4.1 Flash, GPT-6.1 Sol (по квоте)',
             '• Быстрая скорость генерации и базовый контекст',
             '',
             '2️⃣ <b>PRO</b> (⭐️ Популярный) — <b>$25/мес</b> (~2 490 ₽) или <b>1 350 ⭐️</b>',
-            '• Модели: GPT-6 Astra, Claude Fable 5.1, Gemini 2.5 Pro, Grok 4.7',
+            '• Всё из Plus + Claude Opus 5.5, Grok 4.7, Gemini 3.8 Flash (по квоте)',
             '• Все флагманские модели без отдельных подписок',
             '',
             '3️⃣ <b>ULTRA</b> (🔥 Скидка $10 вместо $59) — <b>$49/мес</b> (~4 890 ₽) или <b>2 650 ⭐️</b>',
-            '• Все топовые модели на 100% мощности без ограничений',
+            '• Все топовые модели, самая большая квота премиум-запросов (Fair Use)',
             '• Максимальный контекст диалога и высший VIP-приоритет',
             '',
             '👇 <i>Выберите способ оплаты:</i>',

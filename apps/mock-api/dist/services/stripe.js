@@ -4,6 +4,7 @@ import { db } from '../db/client.js';
 import * as schema from '../db/schema.js';
 import { eq } from 'drizzle-orm';
 import { subscriptionStore, userStore } from '../store/index.js';
+import { planPriceCents } from './pricing.js';
 export class StripeService {
     stripe = null;
     constructor() {
@@ -52,7 +53,7 @@ export class StripeService {
                             name: `Ketner AI: Подписка ${options.planId.toUpperCase()}`,
                             description: 'Ежемесячный доступ ко всем возможностям тарифа',
                         },
-                        unit_amount: options.planId === 'ultra' ? 2499 : options.planId === 'pro' ? 1990 : 990,
+                        unit_amount: planPriceCents(options.planId),
                         recurring: { interval: 'month' },
                     },
                     quantity: 1,
@@ -161,6 +162,26 @@ export class StripeService {
                     }
                 }
                 return { handled: true, message: 'Checkout session completed' };
+            }
+            case 'customer.subscription.updated': {
+                // Автопродление Stripe: без этого срок подписки (renewsAt) истекал бы у платящего клиента.
+                const sub = event.data.object;
+                const userId = sub.metadata?.userId;
+                const periodEnd = sub.current_period_end;
+                if (userId && (sub.status === 'active' || sub.status === 'trialing') && periodEnd) {
+                    const current = subscriptionStore.get(userId);
+                    const planId = sub.metadata?.planId ?? current.plan;
+                    if (planId && planId !== 'free') {
+                        subscriptionStore.set({
+                            userId,
+                            plan: planId,
+                            status: 'active',
+                            renewsAt: new Date(periodEnd * 1000).toISOString(),
+                        });
+                        userStore.updatePlan(userId, planId);
+                    }
+                }
+                return { handled: true, message: 'Subscription updated' };
             }
             case 'customer.subscription.deleted': {
                 const sub = event.data.object;

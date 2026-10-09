@@ -188,52 +188,31 @@ export async function ensureDatabaseSchema(sql) {
     ALTER TABLE "subscriptions" ADD COLUMN IF NOT EXISTS "renews_at" timestamp;
   `);
 }
+/**
+ * Сидирование БД. Администратор больше не создаётся с паролем из репозитория:
+ * его заводит userStore.ensureSeedAdmin() из SEED_ADMIN_EMAIL / SEED_ADMIN_PASSWORD.
+ * Публичный демо-аккаунт добавляется только когда он разрешён (вне production или ENABLE_DEMO_ACCOUNT=true).
+ */
 async function seedDefaultUsers(sql) {
-    const existing = await sql `
-    SELECT email FROM "ketner_users"
+    if (!config.enableDemoAccount) {
+        return;
+    }
+    await sql `
+    INSERT INTO "ketner_users" (
+      "id", "email", "name", "plan", "password_hash", "salt", "is_vip", "is_admin", "created_at", "updated_at"
+    ) VALUES (
+      'demo-user',
+      'demo@ketner.ai',
+      'Ketner Demo',
+      'free',
+      '4578b665fa9cf4514ba4523c91a03ef9cb0fe216893e36eb104f21cf4f0ff019',
+      '00000000000000000000000000000000',
+      false,
+      false,
+      NOW(),
+      NOW()
+    ) ON CONFLICT ("email") DO NOTHING
   `;
-    const existingEmails = new Set(existing.map((e) => e.email.toLowerCase()));
-    // 1. Admin account: artemsinyakov09@gmail.com
-    if (!existingEmails.has('artemsinyakov09@gmail.com')) {
-        await sql `
-      INSERT INTO "ketner_users" (
-        "id", "email", "name", "plan", "password_hash", "salt", "is_vip", "is_admin", "created_at", "updated_at"
-      ) VALUES (
-        'admin-artem-user',
-        'artemsinyakov09@gmail.com',
-        'Артем Синяков',
-        'ultra',
-        '4009ae8be009a067083073703c7340640f0c0ee81a0b59b584e037b51b33b7f1',
-        '11111111111111111111111111111111',
-        true,
-        true,
-        NOW(),
-        NOW()
-      ) ON CONFLICT ("email") DO UPDATE SET
-        "is_vip" = true,
-        "is_admin" = true,
-        "plan" = 'ultra'
-    `;
-    }
-    // 2. Demo account: demo@ketner.ai
-    if (!existingEmails.has('demo@ketner.ai')) {
-        await sql `
-      INSERT INTO "ketner_users" (
-        "id", "email", "name", "plan", "password_hash", "salt", "is_vip", "is_admin", "created_at", "updated_at"
-      ) VALUES (
-        'demo-user',
-        'demo@ketner.ai',
-        'Ketner Demo',
-        'free',
-        '4578b665fa9cf4514ba4523c91a03ef9cb0fe216893e36eb104f21cf4f0ff019',
-        '00000000000000000000000000000000',
-        false,
-        false,
-        NOW(),
-        NOW()
-      ) ON CONFLICT ("email") DO NOTHING
-    `;
-    }
 }
 async function loadAndSyncUsers(sql) {
     const rows = await sql `

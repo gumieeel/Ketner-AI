@@ -11,12 +11,14 @@ import { isVipUser } from '../services/vip.js';
 import { stripeService } from '../services/stripe.js';
 import { cryptoCloudService } from '../services/cryptocloud.js';
 import { blockchainVerifier } from '../services/blockchain-verifier.js';
+import { LEGACY_PRICE_USD, PLAN_PRICE_USD, planPriceRub, planPriceUsd } from '../services/pricing.js';
 
+/** Каталог тарифов. `priceMonthly` везде в долларах США (см. services/pricing.ts). */
 export const PLANS: readonly PlanItem[] = [
   {
     id: 'free',
     nameKey: 'pricing.free',
-    priceMonthly: 0,
+    priceMonthly: PLAN_PRICE_USD.free,
     limitBadge: {
       ru: 'Базовый доступ',
       en: 'Basic access',
@@ -30,7 +32,7 @@ export const PLANS: readonly PlanItem[] = [
   {
     id: 'plus',
     nameKey: 'pricing.plus',
-    priceMonthly: 990,
+    priceMonthly: PLAN_PRICE_USD.plus,
     limitBadge: {
       ru: 'Plus · 2 параллельных',
       en: 'Plus · 2 concurrent',
@@ -54,22 +56,22 @@ export const PLANS: readonly PlanItem[] = [
   {
     id: 'pro',
     nameKey: 'pricing.pro',
-    priceMonthly: 1990,
+    priceMonthly: PLAN_PRICE_USD.pro,
     popular: true,
     limitBadge: {
       ru: 'Все флагманы AI',
       en: 'All Flagship AIs',
     },
-    modelsHighlight: 'GPT-6 Astra, Claude Fable, Gemini Pro',
+    modelsHighlight: 'GPT-6.1 Sol, Claude Opus 5.5, Grok 4.7, Gemini 3.8 Flash',
     bullets: {
       ru: [
-        'Доступ ко ВСЕМ флагманским моделям (GPT, Claude, Gemini)',
+        'Доступ ко ВСЕМ флагманским моделям (GPT, Claude, Gemini, Grok)',
         'Без раздельных подписок на каждого провайдера',
         'Контекст до 120 сообщений',
         '4 параллельных запроса и повышенный приоритет',
       ],
       en: [
-        'Access to ALL flagship models (GPT, Claude, Gemini)',
+        'Access to ALL flagship models (GPT, Claude, Gemini, Grok)',
         'No separate subscriptions per AI provider',
         'Up to 120 context messages',
         '4 concurrent requests & higher priority',
@@ -79,7 +81,7 @@ export const PLANS: readonly PlanItem[] = [
   {
     id: 'ultra',
     nameKey: 'pricing.ultra',
-    priceMonthly: 2990,
+    priceMonthly: PLAN_PRICE_USD.ultra,
     limitBadge: {
       ru: 'Без ограничений · Высший приоритет',
       en: 'No limits · Highest priority',
@@ -104,7 +106,7 @@ export const PLANS: readonly PlanItem[] = [
 
 /**
  * Устаревшие тарифные планы (Legacy Plans).
- * Сохранены для пользователей со старыми подписками (цена 1199 ₽/мес ~ $12.62).
+ * Сохранены для пользователей со старыми подписками (1199 ₽/мес ≈ $12.62; новых оплат нет).
  * Функционально эквивалентны тарифу Pro. Скрыты из публичного каталога по умолчанию,
  * доступны при запросе с query-параметром includeLegacy=true.
  */
@@ -116,7 +118,7 @@ function createLegacyPlan(
   return {
     id,
     nameKey,
-    priceMonthly: 1199,
+    priceMonthly: LEGACY_PRICE_USD,
     limitBadge: { ru: 'Legacy Pro', en: 'Legacy Pro' },
     modelsHighlight,
     bullets: {
@@ -396,7 +398,7 @@ export function createBillingRouter({
     }
 
     const userId = getUserId(request);
-    const invoice = activeInvoiceStore.createSbpInvoice(userId, plan.id, plan.priceMonthly);
+    const invoice = activeInvoiceStore.createSbpInvoice(userId, plan.id, planPriceRub(plan.id));
 
     response.json({ invoice });
   });
@@ -466,7 +468,7 @@ export function createBillingRouter({
     const invoice = activeInvoiceStore.createTelegramStarsInvoice(
       userId,
       plan.id,
-      plan.priceMonthly,
+      planPriceRub(plan.id),
       starsAmount,
       config.telegramBotUsername,
     );
@@ -568,8 +570,8 @@ export function createBillingRouter({
       }
     }
 
-    // Тарифы в долларах: Plus $9, Pro $25, Ultra $49
-    const amountUsd = plan.id === 'ultra' ? 49 : plan.id === 'pro' ? 25 : 9;
+    // Тарифы в долларах: Plus $9, Pro $25, Ultra $49 (services/pricing.ts)
+    const amountUsd = planPriceUsd(plan.id);
     const tempOrderId = `crypto_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
 
     const cryptoCodeMap: Record<string, string> = {

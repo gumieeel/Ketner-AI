@@ -5,28 +5,30 @@
  * проверку подписи HMAC-SHA256 и управление жизненным циклом подписок.
  */
 import { Router } from 'express';
-import { createHmac } from 'node:crypto';
+import { createHmac, timingSafeEqual } from 'node:crypto';
 import { config } from '../config.js';
 import { sendError } from '../middleware/errors.js';
 import { stripeService } from '../services/stripe.js';
 export function createWebhookRouter({ subscriptionStore, userStore, webhookSecret = config.webhookSecret, }) {
     const router = Router();
     const processedEvents = new Set();
-    /** Проверка подписи HMAC-SHA256. */
+    /**
+     * Проверка подписи HMAC-SHA256 по сырому телу запроса (не по перепакованному JSON).
+     * Подпись обязательна всегда; сравнение выполняется за постоянное время.
+     */
     function verifySignature(req) {
         const signature = req.headers['x-webhook-signature'];
-        if (!signature || typeof signature !== 'string') {
+        const rawBody = req.rawBody;
+        if (typeof signature !== 'string' || !rawBody) {
             return false;
         }
-        const payload = JSON.stringify(req.body);
-        const expected = createHmac('sha256', webhookSecret).update(payload).digest('hex');
-        return signature === expected;
+        const expected = createHmac('sha256', webhookSecret).update(rawBody).digest('hex');
+        const given = Buffer.from(signature, 'utf8');
+        const wanted = Buffer.from(expected, 'utf8');
+        return given.length === wanted.length && timingSafeEqual(given, wanted);
     }
     router.post('/', async (request, response) => {
-        // В dev/test режиме, если сигнатура не передана или равна 'test-signature', пропускаем
-        const isTest = process.env.NODE_ENV === 'test';
-        const sig = request.headers['x-webhook-signature'];
-        if (!isTest && sig && !verifySignature(request)) {
+        if (!verifySignature(request)) {
             sendError(response, 401, 'invalid_signature', 'Неверная подпись вебхука');
             return;
         }
@@ -94,7 +96,12 @@ export function createWebhookRouter({ subscriptionStore, userStore, webhookSecre
             sendError(response, 400, 'missing_signature', 'Отсутствует stripe-signature заголовок');
             return;
         }
-        const rawBody = request.rawBody ?? JSON.stringify(request.body);
+        // Подпись Stripe считается по байтам запроса: без сырого тела проверять нечего.
+        const rawBody = request.rawBody;
+        if (!rawBody) {
+            sendError(response, 400, 'missing_raw_body', 'Не удалось получить тело запроса для проверки подписи');
+            return;
+        }
         try {
             const event = stripeService.constructEvent(rawBody, sig);
             const result = await stripeService.handleWebhookEvent(event);

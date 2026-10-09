@@ -1,308 +1,318 @@
 /**
- * Адаптер провайдера OpenRouter.
+ * Адаптер провайдера OpenRouter — единственный канал ко всем моделям.
  *
- * Интегрирует OpenRouter API с поддержкой OpenAI-совместимого формата,
- * пула бесплатных fallback-моделей и потоковой генерации.
+ * Один ключ (OPENROUTER_API_KEY), один счёт, единый учёт расходов через `usage.cost`.
+ * Адаптер запрашивает ровно ту модель, которую ему передали. Раньше при ошибке он молча перебирал
+ * «запасные» модели (gpt-4o-mini, deepseek-chat и др.): пользователь видел одно название, отвечала
+ * другая модель, а расход записывался по цене не той модели. Теперь отказ поднимается наверх, а
+ * запасную модель выбирает шлюз по цепочке fallback из реестра, с корректным учётом.
  */
-const DEFAULT_CANDIDATES = [
-    'openai/gpt-4o-mini',
-    'deepseek/deepseek-chat',
-    'google/gemini-2.5-flash',
-    'deepseek/deepseek-v4.1-flash',
-];
+/**
+ * Верхний предел `max_tokens`. Токены размышлений входят в `max_tokens`, поэтому при высокой
+ * глубине размышлений потолок нужен с запасом (иначе ответ обрывается пустым finish_reason=length).
+ * Платится только фактически сгенерированное.
+ */
+export const MAX_COMPLETION_TOKENS = 32768;
+/** Отказ OpenRouter: HTTP-статус нужен шлюзу и предохранителю, чтобы отличать 402 от 429 и 5xx. */
+export class OpenRouterError extends Error {
+    status;
+    constructor(model, status, body) {
+        super(`OpenRouter ${model}: HTTP ${status}${body ? `: ${body}` : ''}`);
+        this.name = 'OpenRouterError';
+        this.status = status;
+    }
+}
+/**
+ * Коротко и без секретов описывает отказ OpenRouter. Статус 402 означает, что на счёте закончились
+ * кредиты: тогда не работает ни одна платная модель сразу, и об этом должно быть видно в логах.
+ */
+async function describeUpstreamFailure(model, response) {
+    let body = '';
+    try {
+        body = (await response.text()).replace(/\s+/g, ' ').slice(0, 300);
+    }
+    catch {
+        // тело недоступно
+    }
+    const error = new OpenRouterError(model, response.status, body);
+    if (response.status === 402) {
+        console.error(`[openrouter] ${error.message}. Похоже, на счёте OpenRouter закончились кредиты.`);
+    }
+    else {
+        console.warn(`[openrouter] ${error.message}`);
+    }
+    return error;
+}
+function withCacheBreakpoint(message) {
+    return {
+        role: message.role,
+        content: [{ type: 'text', text: message.content, cache_control: { type: 'ephemeral' } }],
+    };
+}
+/**
+ * Явное кэширование промпта нужно только моделям Anthropic: OpenAI, DeepSeek, Grok и Gemini кэшируют
+ * автоматически. Читать из кэша в 10 раз дешевле, чем платить за вход заново, а контекст проекта и
+ * системный промпт повторяются в каждом сообщении. Две точки кэша: системный промпт (вместе с
+ * контекстом проекта) и стабильная часть истории — сообщение перед последним вопросом.
+ * Короче порога провайдера (4096 токенов у Opus и Haiku) запрос просто не кэшируется, без доплаты.
+ */
+export function prepareMessages(model, messages) {
+    const wire = messages.map((m) => ({ role: m.role, content: m.content }));
+    if (!model.startsWith('anthropic/')) {
+        return wire;
+    }
+    const systemIndex = messages.findIndex((m) => m.role === 'system');
+    if (systemIndex >= 0 && messages[systemIndex].content) {
+        wire[systemIndex] = withCacheBreakpoint(messages[systemIndex]);
+    }
+    const dialogue = messages
+        .map((m, index) => ({ m, index }))
+        .filter(({ m }) => m.role !== 'system');
+    if (dialogue.length > 2) {
+        const checkpoint = dialogue[dialogue.length - 2];
+        if (checkpoint.m.content) {
+            wire[checkpoint.index] = withCacheBreakpoint(checkpoint.m);
+        }
+    }
+    return wire;
+}
 export class OpenRouterProvider {
     type = 'openrouter';
     name = 'OpenRouter';
     apiKey;
     baseUrl;
-    defaultModel;
     constructor(config) {
         this.apiKey = config.apiKey.trim();
         this.baseUrl = (config.baseUrl ?? 'https://openrouter.ai/api/v1').replace(/\/+$/, '');
-        this.defaultModel = config.defaultModel ?? 'nvidia/nemotron-3-ultra-550b-a55b:free';
     }
     isAvailable() {
         return this.apiKey.length > 0;
     }
-    getCandidateModels(requestedModel) {
-        const list = [];
-        if (requestedModel && requestedModel.trim()) {
-            const clean = requestedModel.trim();
-            list.push(clean);
-            if (clean.includes('gpt-6-sol')) {
-                list.push('openai/gpt-6-luna-pro', 'openai/gpt-4o');
-            }
-            else if (clean.includes('gpt-6-luna')) {
-                list.push('openai/gpt-4o-mini', 'deepseek/deepseek-chat');
-            }
-            else if (clean.includes('claude-opus')) {
-                list.push('anthropic/claude-fable-5.1', 'anthropic/claude-3.5-sonnet');
-            }
+    headers() {
+        return {
+            Authorization: `Bearer ${this.apiKey}`,
+            'Content-Type': 'application/json',
+            'HTTP-Referer': 'https://ketner.ai',
+            'X-Title': 'Ketner AI',
+        };
+    }
+    /** Тело запроса. Экспортируется через метод, чтобы тесты проверяли реальный payload. */
+    buildBody(options, stream) {
+        const body = {
+            model: options.model,
+            messages: prepareMessages(options.model, options.messages),
+            stream,
+            max_tokens: Math.min(options.maxTokens ?? 4096, MAX_COMPLETION_TOKENS),
+            usage: { include: true },
+        };
+        if (options.reasoning) {
+            body.reasoning = options.reasoning;
         }
-        else if (this.defaultModel) {
-            list.push(this.defaultModel);
+        if (options.temperature !== undefined) {
+            body.temperature = options.temperature;
         }
-        for (const c of DEFAULT_CANDIDATES) {
-            if (!list.includes(c))
-                list.push(c);
-        }
-        return list;
+        return body;
     }
     async generateText(options) {
-        const modelsToTry = this.getCandidateModels(options.model);
-        const messages = options.messages.map((m) => ({
-            role: m.role,
-            content: m.content,
-        }));
-        for (const targetModel of modelsToTry) {
-            try {
-                const response = await fetch(`${this.baseUrl}/chat/completions`, {
-                    method: 'POST',
-                    headers: {
-                        Authorization: `Bearer ${this.apiKey}`,
-                        'Content-Type': 'application/json',
-                        'HTTP-Referer': 'https://ketner.ai',
-                        'X-Title': 'Ketner AI',
-                    },
-                    body: JSON.stringify({
-                        model: targetModel,
-                        messages,
-                        stream: false,
-                        max_tokens: Math.min(options.maxTokens ?? 4096, 8192),
-                    }),
-                    signal: options.signal,
-                });
-                if (!response.ok)
-                    continue;
-                const json = (await response.json());
-                const msg = json.choices?.[0]?.message;
-                let content = msg?.content ?? '';
-                const reasoning = msg?.reasoning ?? msg?.reasoning_content;
-                if (reasoning && !content.includes('<think>')) {
-                    content = `<think>\n${reasoning}\n</think>\n\n${content}`;
-                }
-                const cachedTokens = json.usage?.prompt_tokens_details?.cached_tokens ?? json.usage?.native_tokens_cached;
-                return {
-                    content,
-                    usage: {
-                        inputTokens: json.usage?.prompt_tokens ?? Math.ceil(content.length / 4),
-                        outputTokens: json.usage?.completion_tokens ?? Math.ceil(content.length / 4),
-                        cachedTokens: typeof cachedTokens === 'number' && cachedTokens > 0 ? cachedTokens : undefined,
-                    },
-                    finishReason: json.choices?.[0]?.finish_reason === 'length' ? 'length' : 'stop',
-                };
-            }
-            catch (err) {
-                if (err?.name === 'AbortError') {
-                    return {
-                        content: '',
-                        usage: { inputTokens: 0, outputTokens: 0 },
-                        finishReason: 'cancelled',
-                    };
-                }
-            }
+        const targetModel = options.model;
+        let response;
+        try {
+            response = await fetch(`${this.baseUrl}/chat/completions`, {
+                method: 'POST',
+                headers: this.headers(),
+                body: JSON.stringify(this.buildBody(options, false)),
+                signal: options.signal,
+            });
         }
-        throw new Error('All OpenRouter candidate models failed');
+        catch (err) {
+            if (err?.name === 'AbortError') {
+                return { content: '', usage: { inputTokens: 0, outputTokens: 0 }, finishReason: 'cancelled' };
+            }
+            throw err;
+        }
+        if (!response.ok) {
+            throw await describeUpstreamFailure(targetModel, response);
+        }
+        const json = (await response.json());
+        const msg = json.choices?.[0]?.message;
+        let content = msg?.content ?? '';
+        const reasoningText = msg?.reasoning ?? msg?.reasoning_content;
+        if (reasoningText && !content.includes('<think>')) {
+            content = `<think>\n${reasoningText}\n</think>\n\n${content}`;
+        }
+        const cachedTokens = json.usage?.prompt_tokens_details?.cached_tokens ?? json.usage?.native_tokens_cached;
+        const reasoningTokens = json.usage?.completion_tokens_details?.reasoning_tokens;
+        return {
+            content,
+            usage: {
+                inputTokens: json.usage?.prompt_tokens ?? Math.ceil(content.length / 4),
+                outputTokens: json.usage?.completion_tokens ?? Math.ceil(content.length / 4),
+                cachedTokens: typeof cachedTokens === 'number' && cachedTokens > 0 ? cachedTokens : undefined,
+                reasoningTokens: typeof reasoningTokens === 'number' ? reasoningTokens : undefined,
+            },
+            cost: typeof json.usage?.cost === 'number' ? json.usage.cost : undefined,
+            model: json.model ?? targetModel,
+            finishReason: json.choices?.[0]?.finish_reason === 'length' ? 'length' : 'stop',
+        };
     }
     async streamText(options, callbacks) {
-        const modelsToTry = this.getCandidateModels(options.model);
-        const messages = options.messages.map((m) => ({
-            role: m.role,
-            content: m.content,
-        }));
-        for (const targetModel of modelsToTry) {
-            if (callbacks.isCancelled()) {
-                return {
-                    content: '',
-                    usage: { inputTokens: 0, outputTokens: 0 },
-                    finishReason: 'cancelled',
-                };
+        const targetModel = options.model;
+        if (callbacks.isCancelled()) {
+            return { content: '', usage: { inputTokens: 0, outputTokens: 0 }, finishReason: 'cancelled' };
+        }
+        // Состояние попытки живёт снаружи try: при обрыве посреди ответа то, что уже ушло
+        // пользователю, возвращается как есть, а не дописывается вторым ответом другой модели.
+        let accumulatedContent = '';
+        let streamedAny = false;
+        let insideReasoning = false;
+        let promptTokens = 0;
+        let completionTokens = 0;
+        let reasoningTokens = null;
+        let cachedTokens = null;
+        let costUsd;
+        let actualModel;
+        const partialResponse = (reason) => {
+            if (insideReasoning) {
+                insideReasoning = false;
+                callbacks.onDelta('\n</think>\n\n');
+                accumulatedContent += '\n</think>\n\n';
             }
-            try {
-                const response = await fetch(`${this.baseUrl}/chat/completions`, {
-                    method: 'POST',
-                    headers: {
-                        Authorization: `Bearer ${this.apiKey}`,
-                        'Content-Type': 'application/json',
-                        'HTTP-Referer': 'https://ketner.ai',
-                        'X-Title': 'Ketner AI',
-                    },
-                    body: JSON.stringify({
-                        model: targetModel,
-                        messages,
-                        stream: true,
-                        max_tokens: Math.min(options.maxTokens ?? 4096, 8192),
-                    }),
-                    signal: options.signal,
-                });
-                if (!response.ok || !response.body)
-                    continue;
-                const reader = response.body.getReader();
-                const decoder = new TextDecoder('utf-8');
-                let buffer = '';
-                let accumulatedContent = '';
-                let streamedAny = false;
-                let finishReason = 'stop';
-                let promptTokens = 0;
-                let completionTokens = 0;
-                let reasoningTokens = null;
-                let cachedTokens = null;
-                let insideReasoning = false;
-                while (true) {
-                    if (callbacks.isCancelled()) {
-                        try {
-                            await reader.cancel();
-                        }
-                        catch {
-                            // ignore
-                        }
-                        finishReason = 'cancelled';
-                        break;
+            return {
+                content: accumulatedContent,
+                usage: {
+                    inputTokens: promptTokens || 0,
+                    outputTokens: completionTokens || Math.ceil(accumulatedContent.length / 4),
+                    cachedTokens: typeof cachedTokens === 'number' && cachedTokens > 0 ? cachedTokens : undefined,
+                    reasoningTokens: reasoningTokens ?? undefined,
+                },
+                cost: costUsd,
+                model: actualModel ?? targetModel,
+                finishReason: reason,
+            };
+        };
+        try {
+            const response = await fetch(`${this.baseUrl}/chat/completions`, {
+                method: 'POST',
+                headers: this.headers(),
+                body: JSON.stringify(this.buildBody(options, true)),
+                signal: options.signal,
+            });
+            if (!response.ok || !response.body) {
+                throw await describeUpstreamFailure(targetModel, response);
+            }
+            const reader = response.body.getReader();
+            const decoder = new TextDecoder('utf-8');
+            let buffer = '';
+            let finishReason = 'stop';
+            while (true) {
+                if (callbacks.isCancelled()) {
+                    try {
+                        await reader.cancel();
                     }
-                    const { value, done } = await reader.read();
-                    if (done)
-                        break;
-                    buffer += decoder.decode(value, { stream: true });
-                    const lines = buffer.split('\n');
-                    buffer = lines.pop() ?? '';
-                    for (const line of lines) {
-                        const trimmed = line.trim();
-                        if (!trimmed.startsWith('data:'))
-                            continue;
-                        const dataStr = trimmed.slice(5).trim();
-                        if (dataStr === '[DONE]')
-                            continue;
-                        try {
-                            const parsed = JSON.parse(dataStr);
-                            const reasoningDelta = parsed.choices?.[0]?.delta?.reasoning ??
-                                parsed.choices?.[0]?.delta?.reasoning_content ??
-                                '';
-                            const contentDelta = parsed.choices?.[0]?.delta?.content ?? '';
-                            if (reasoningDelta) {
-                                if (!insideReasoning) {
-                                    insideReasoning = true;
-                                    callbacks.onDelta('<think>\n');
-                                    accumulatedContent += '<think>\n';
-                                }
-                                streamedAny = true;
-                                accumulatedContent += reasoningDelta;
-                                callbacks.onDelta(reasoningDelta);
-                            }
-                            if (contentDelta) {
-                                if (insideReasoning) {
-                                    insideReasoning = false;
-                                    callbacks.onDelta('\n</think>\n\n');
-                                    accumulatedContent += '\n</think>\n\n';
-                                }
-                                streamedAny = true;
-                                accumulatedContent += contentDelta;
-                                callbacks.onDelta(contentDelta);
-                            }
-                            if (parsed.choices?.[0]?.finish_reason === 'length') {
-                                finishReason = 'length';
-                            }
-                            if (parsed.usage) {
-                                promptTokens = parsed.usage.prompt_tokens ?? promptTokens;
-                                completionTokens = parsed.usage.completion_tokens ?? completionTokens;
-                                const rTokens = parsed.usage.completion_tokens_details?.reasoning_tokens ??
-                                    parsed.usage.completionTokensDetails?.reasoningTokens;
-                                if (typeof rTokens === 'number') {
-                                    reasoningTokens = rTokens;
-                                }
-                                const cTokens = parsed.usage.prompt_tokens_details?.cached_tokens ??
-                                    parsed.usage.native_tokens_cached;
-                                if (typeof cTokens === 'number') {
-                                    cachedTokens = cTokens;
-                                }
-                            }
-                        }
-                        catch {
-                            // ignore parsing errors
-                        }
+                    catch {
+                        // ignore
                     }
+                    finishReason = 'cancelled';
+                    break;
                 }
-                if (insideReasoning) {
-                    insideReasoning = false;
-                    callbacks.onDelta('\n</think>\n\n');
-                    accumulatedContent += '\n</think>\n\n';
-                }
-                if (streamedAny) {
-                    if (completionTokens === 0) {
-                        completionTokens = Math.ceil(accumulatedContent.length / 4);
+                const { value, done } = await reader.read();
+                if (done)
+                    break;
+                buffer += decoder.decode(value, { stream: true });
+                const lines = buffer.split('\n');
+                buffer = lines.pop() ?? '';
+                for (const line of lines) {
+                    const trimmed = line.trim();
+                    if (!trimmed.startsWith('data:'))
+                        continue;
+                    const dataStr = trimmed.slice(5).trim();
+                    if (dataStr === '[DONE]')
+                        continue;
+                    try {
+                        const parsed = JSON.parse(dataStr);
+                        const reasoningDelta = parsed.choices?.[0]?.delta?.reasoning ??
+                            parsed.choices?.[0]?.delta?.reasoning_content ??
+                            '';
+                        const contentDelta = parsed.choices?.[0]?.delta?.content ?? '';
+                        if (reasoningDelta) {
+                            if (!insideReasoning) {
+                                insideReasoning = true;
+                                callbacks.onDelta('<think>\n');
+                                accumulatedContent += '<think>\n';
+                            }
+                            streamedAny = true;
+                            accumulatedContent += reasoningDelta;
+                            callbacks.onDelta(reasoningDelta);
+                        }
+                        if (contentDelta) {
+                            if (insideReasoning) {
+                                insideReasoning = false;
+                                callbacks.onDelta('\n</think>\n\n');
+                                accumulatedContent += '\n</think>\n\n';
+                            }
+                            streamedAny = true;
+                            accumulatedContent += contentDelta;
+                            callbacks.onDelta(contentDelta);
+                        }
+                        if (parsed.choices?.[0]?.finish_reason === 'length') {
+                            finishReason = 'length';
+                        }
+                        if (typeof parsed.model === 'string') {
+                            actualModel = parsed.model;
+                        }
+                        if (parsed.usage) {
+                            if (typeof parsed.usage.cost === 'number') {
+                                costUsd = parsed.usage.cost;
+                            }
+                            promptTokens = parsed.usage.prompt_tokens ?? promptTokens;
+                            completionTokens = parsed.usage.completion_tokens ?? completionTokens;
+                            const rTokens = parsed.usage.completion_tokens_details?.reasoning_tokens ??
+                                parsed.usage.completionTokensDetails?.reasoningTokens;
+                            if (typeof rTokens === 'number') {
+                                reasoningTokens = rTokens;
+                            }
+                            const cTokens = parsed.usage.prompt_tokens_details?.cached_tokens ??
+                                parsed.usage.native_tokens_cached;
+                            if (typeof cTokens === 'number') {
+                                cachedTokens = cTokens;
+                            }
+                        }
                     }
-                    return {
-                        content: accumulatedContent,
-                        usage: {
-                            inputTokens: promptTokens,
-                            outputTokens: completionTokens,
-                            cachedTokens: typeof cachedTokens === 'number' && cachedTokens > 0 ? cachedTokens : undefined,
-                            reasoningTokens: reasoningTokens ?? undefined,
-                        },
-                        finishReason,
-                    };
+                    catch {
+                        // ignore parsing errors
+                    }
                 }
             }
-            catch (err) {
-                if (err?.name === 'AbortError' || callbacks.isCancelled()) {
-                    return {
-                        content: '',
-                        usage: { inputTokens: 0, outputTokens: 0 },
-                        finishReason: 'cancelled',
-                    };
-                }
+            if (insideReasoning) {
+                insideReasoning = false;
+                callbacks.onDelta('\n</think>\n\n');
+                accumulatedContent += '\n</think>\n\n';
             }
+            if (completionTokens === 0 && streamedAny) {
+                completionTokens = Math.ceil(accumulatedContent.length / 4);
+            }
+            return {
+                content: accumulatedContent,
+                usage: {
+                    inputTokens: promptTokens,
+                    outputTokens: completionTokens,
+                    cachedTokens: typeof cachedTokens === 'number' && cachedTokens > 0 ? cachedTokens : undefined,
+                    reasoningTokens: reasoningTokens ?? undefined,
+                },
+                cost: costUsd,
+                model: actualModel ?? targetModel,
+                finishReason,
+            };
         }
-        throw new Error('All OpenRouter streaming candidate models failed');
-    }
-    /**
-     * OpenRouter Batch API (POST /api/v1/batches):
-     * Отправка пакета задач для фоновой обработки со скидкой до 50%
-     */
-    async createBatch(model, requests) {
-        const response = await fetch(`${this.baseUrl}/batches`, {
-            method: 'POST',
-            headers: {
-                Authorization: `Bearer ${this.apiKey}`,
-                'Content-Type': 'application/json',
-                'HTTP-Referer': 'https://ketner.ai',
-                'X-Title': 'Ketner AI',
-            },
-            body: JSON.stringify({
-                endpoint: '/v1/chat/completions',
-                model,
-                requests: requests.map((r) => ({
-                    custom_id: r.customId,
-                    body: {
-                        model,
-                        messages: r.messages,
-                        max_tokens: r.maxTokens ?? 2048,
-                    },
-                })),
-            }),
-        });
-        if (!response.ok) {
-            const err = await response.text();
-            throw new Error(`OpenRouter Batch creation failed (${response.status}): ${err}`);
+        catch (err) {
+            const aborted = err?.name === 'AbortError' || callbacks.isCancelled();
+            if (streamedAny) {
+                return partialResponse(aborted ? 'cancelled' : 'error');
+            }
+            if (aborted) {
+                return { content: '', usage: { inputTokens: 0, outputTokens: 0 }, finishReason: 'cancelled' };
+            }
+            throw err;
         }
-        const data = (await response.json());
-        return { id: data.id, status: data.status, raw: data };
-    }
-    /**
-     * OpenRouter Batch API (GET /api/v1/batches/:id):
-     * Проверка состояния пакета и получение завершённых результатов
-     */
-    async getBatch(batchId) {
-        const response = await fetch(`${this.baseUrl}/batches/${batchId}`, {
-            headers: {
-                Authorization: `Bearer ${this.apiKey}`,
-                'Content-Type': 'application/json',
-            },
-        });
-        if (!response.ok) {
-            const err = await response.text();
-            throw new Error(`OpenRouter Batch query failed (${response.status}): ${err}`);
-        }
-        const data = (await response.json());
-        return { id: data.id, status: data.status, results: data.results, raw: data };
     }
 }

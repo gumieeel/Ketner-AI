@@ -1,13 +1,11 @@
 /**
  * Фабрика и менеджер AI провайдеров.
  *
- * Создаёт экземпляры адаптеров (OpenAI, Anthropic, Google, OpenRouter),
- * проверяет их доступность и предоставляет единую точку доступа.
+ * Все модели идут через один канал: OpenRouter, один ключ OPENROUTER_API_KEY и один счёт.
+ * Прямых ключей OpenAI, Anthropic и Google в проекте нет. Менеджер оставлен как точка
+ * внедрения mock-провайдера в тестах и как место, куда можно добавить второй канал.
  */
 import { config } from '../../config.js';
-import { AnthropicProvider } from './anthropic-provider.js';
-import { GoogleProvider } from './google-provider.js';
-import { OpenAIProvider } from './openai-provider.js';
 import { OpenRouterProvider } from './openrouter-provider.js';
 export class ProviderManager {
     providers = new Map();
@@ -15,26 +13,9 @@ export class ProviderManager {
         this.initProviders();
     }
     initProviders() {
-        // OpenAI
-        this.providers.set('openai', new OpenAIProvider({
-            apiKey: config.openaiApiKey,
-            baseUrl: config.openaiBaseUrl,
-        }));
-        // Anthropic
-        this.providers.set('anthropic', new AnthropicProvider({
-            apiKey: config.anthropicApiKey,
-            baseUrl: config.anthropicBaseUrl,
-        }));
-        // Google Gemini
-        this.providers.set('google', new GoogleProvider({
-            apiKey: config.googleApiKey,
-            baseUrl: config.googleBaseUrl,
-        }));
-        // OpenRouter
         this.providers.set('openrouter', new OpenRouterProvider({
             apiKey: config.openRouterApiKey,
             baseUrl: config.openRouterBaseUrl,
-            defaultModel: config.openRouterModel,
         }));
     }
     /** Получить провайдер по типу. */

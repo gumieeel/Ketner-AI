@@ -154,7 +154,7 @@ export function createAdminRouter({
     const allUsers = userStore.list();
     const planPricesUsd: Record<string, number> = {};
     for (const plan of [...PLANS, ...LEGACY_PLANS]) {
-      planPricesUsd[plan.id] = CurrencyService.rubToUsd(plan.priceMonthly);
+      planPricesUsd[plan.id] = plan.priceMonthly;
     }
 
     const metrics = usageStore.getGatewayMetrics({
@@ -216,12 +216,12 @@ export function createAdminRouter({
     const currentUser = userStore.findById(userId);
     const userPlan = currentSub?.plan ?? currentUser?.plan ?? 'free';
 
-    // 2. Получение цены тарифа в рублях из каталога
+    // 2. Цена тарифа в долларах из каталога (каноническая валюта), рубли только для справки
     const planItem = [...PLANS, ...LEGACY_PLANS].find((p) => p.id === userPlan);
-    const priceRub = planItem?.priceMonthly ?? 0;
+    const autoPlanPriceUsd = planItem?.priceMonthly ?? 0;
+    const priceRub = Math.round(CurrencyService.usdToRub(autoPlanPriceUsd));
 
-    // 3. Автоматическая конвертация в USD по актуальному курсу
-    const autoPlanPriceUsd = CurrencyService.rubToUsd(priceRub);
+    // 3. Цена берётся напрямую, конвертация не нужна
 
     // 4. Опциональный ручной override через query.planPrice для тестирования
     const planPrice =
@@ -385,14 +385,12 @@ export function createAdminRouter({
     const entitlements = EntitlementService.getEntitlements(effectivePlan);
     const snapshot = usageStore.getFairUseSnapshot(user.id);
 
-    // 1. Получение цены тарифа в рублях из каталога
+    // 1. Цена тарифа в долларах из каталога (каноническая валюта), рубли только для справки
     const planItem =
       [...PLANS, ...LEGACY_PLANS].find((p) => p.id === effectivePlan) ??
       [...PLANS, ...LEGACY_PLANS].find((p) => p.id === rawPlan);
-    const priceRub = planItem?.priceMonthly ?? 0;
-
-    // 2. Автоматическая конвертация в USD по актуальному курсу
-    const autoPlanPriceUsd = CurrencyService.rubToUsd(priceRub);
+    const autoPlanPriceUsd = planItem?.priceMonthly ?? 0;
+    const priceRub = Math.round(CurrencyService.usdToRub(autoPlanPriceUsd));
 
     // 3. Опциональный ручной override через query.planPrice для тестирования
     const planPrice =

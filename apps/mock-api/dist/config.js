@@ -1,3 +1,4 @@
+import { createHmac } from 'node:crypto';
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -33,36 +34,122 @@ function readNumber(name, fallback) {
     const value = Number(raw);
     return Number.isFinite(value) ? value : fallback;
 }
+const nodeEnv = process.env.NODE_ENV ?? 'development';
+/** В production любые dev-заглушки и значения по умолчанию для секретов запрещены. */
+export const isProduction = nodeEnv === 'production';
+const MIN_SECRET_LENGTH = 32;
 /**
- * Читает переменную окружения с безопасным fallback значением.
+ * Значения, которые когда-либо лежали в репозитории: считаются скомпрометированными
+ * и не принимаются в production, даже если их задали через переменные окружения.
  */
-function envWithFallback(name, fallback) {
-    const value = process.env[name];
-    if (value && value.trim() !== '')
-        return value;
-    return fallback;
+const COMPROMISED_SECRETS = new Set([
+    'ketner-ai-better-auth-secret-key-32chars-minimum-safe',
+    'ketner-ai-webhook-secret-dev',
+    'ketner-ai-admin-key-dev',
+    'ketner-mock-jwt-secret',
+]);
+/** Список email через запятую: нормализуется, пустые элементы отбрасываются. */
+function parseEmailList(raw) {
+    return (raw ?? '')
+        .split(',')
+        .map((e) => e.trim().toLowerCase())
+        .filter(Boolean);
 }
+/** Необязательная переменная окружения: пустая строка, если не задана. */
+function optionalEnv(name) {
+    return process.env[name]?.trim() ?? '';
+}
+/**
+ * Секрет приложения.
+ *
+ * В production значение обязательно, не короче 32 символов и не из списка
+ * скомпрометированных; приложение не стартует с небезопасной конфигурацией.
+ * Вне production допускается dev-значение по умолчанию (оно никогда не попадает в прод).
+ */
+function secretEnv(name, devFallback) {
+    const value = optionalEnv(name);
+    if (!isProduction) {
+        return value || devFallback;
+    }
+    if (!value) {
+        throw new Error(`[config] Переменная окружения ${name} обязательна в production`);
+    }
+    if (value.length < MIN_SECRET_LENGTH) {
+        throw new Error(`[config] ${name} слишком короткий: нужно минимум ${MIN_SECRET_LENGTH} символов`);
+    }
+    if (COMPROMISED_SECRETS.has(value)) {
+        // Осознанное исключение владельца: ключ был опубликован в репозитории, поэтому
+        // любой, кто его видел, может подделать сессии. По умолчанию запуск запрещён.
+        if (process.env.ALLOW_COMPROMISED_SECRETS?.trim() === 'true') {
+            console.warn(`[config] ВНИМАНИЕ: ${name} совпадает с ранее опубликованным значением ` +
+                '(ALLOW_COMPROMISED_SECRETS=true). Замените его при первой возможности.');
+            return value;
+        }
+        throw new Error(`[config] ${name} совпадает с ранее опубликованным значением: сгенерируйте новое ` +
+            '(или временно задайте ALLOW_COMPROMISED_SECRETS=true на свой риск)');
+    }
+    return value;
+}
+/** Производный ключ с доменным разделением: из одного корневого секрета разные подключи. */
+function deriveSecret(rootSecret, label) {
+    return createHmac('sha256', rootSecret).update(label).digest('hex');
+}
+const betterAuthSecret = secretEnv('BETTER_AUTH_SECRET', 'dev-only-better-auth-secret-not-for-production-use');
+/**
+ * Ключ подписи Bearer-токенов. Если AUTH_JWT_SECRET не задан, выводится из
+ * BETTER_AUTH_SECRET (HMAC с меткой), поэтому отдельного дефолта в коде нет.
+ */
+const authJwtSecret = optionalEnv('AUTH_JWT_SECRET')
+    ? secretEnv('AUTH_JWT_SECRET', '')
+    : deriveSecret(betterAuthSecret, 'ketner:auth-jwt:v1');
+const supabaseUrl = optionalEnv('SUPABASE_URL');
 export const config = {
     serviceName: 'ketner-mock-api',
     version: '0.1.0',
     port: readNumber('PORT', 8787),
-    nodeEnv: process.env.NODE_ENV ?? 'development',
+    nodeEnv,
     /** Разрешённый origin для CORS. По умолчанию — dev-сервер Vite. */
     corsOrigin: process.env.CORS_ORIGIN ?? 'http://localhost:5173',
     /** Адрес фронтенда: его подсказывает корень API, если порт открыли вручную. */
     webAppUrl: process.env.WEB_APP_URL ?? 'http://localhost:5173',
     /** Обменный курс USD к RUB для расчёта экономики тарифов и маржинальности. */
     usdToRubRate: readNumber('USD_TO_RUB_RATE', 95),
-    /** Список email адресов с VIP / Ultra доступом. Настраивается через переменную VIP_EMAILS. */
-    vipEmails: (process.env.VIP_EMAILS || 'artemsinyakov09@gmail.com')
-        .split(',')
-        .map((e) => e.trim().toLowerCase())
-        .filter(Boolean),
-    /** Список email адресов администраторов с доступом к Admin API. Настраивается через переменную ADMIN_EMAILS. */
-    adminEmails: (process.env.ADMIN_EMAILS || 'artemsinyakov09@gmail.com')
-        .split(',')
-        .map((e) => e.trim().toLowerCase())
-        .filter(Boolean),
+    /**
+     * Список email адресов с VIP / Ultra доступом (VIP_EMAILS через запятую).
+     * По умолчанию пуст: в коде нет ни одного зашитого адреса.
+     */
+    vipEmails: parseEmailList(process.env.VIP_EMAILS),
+    /**
+     * Список email адресов администраторов (ADMIN_EMAILS через запятую).
+     * По умолчанию пуст. Права админа никогда не выводятся из «похожего» адреса (admin@...).
+     */
+    adminEmails: parseEmailList(process.env.ADMIN_EMAILS),
+    /**
+     * Первичный администратор для развёртывания: создаётся при старте, если заданы оба значения.
+     * Пароль не короче 12 символов. Без этих переменных админ-аккаунт не создаётся.
+     */
+    seedAdminEmail: optionalEnv('SEED_ADMIN_EMAIL').toLowerCase(),
+    seedAdminPassword: optionalEnv('SEED_ADMIN_PASSWORD'),
+    /**
+     * Публичный демо-аккаунт (demo@ketner.ai). Включён вне production;
+     * в production только при явном ENABLE_DEMO_ACCOUNT=true.
+     */
+    /**
+     * Заглушки оплаты (активация тарифа без платежа: прямой checkout, СБП-«подтверждение»,
+     * Stripe без ключей). Только вне production — в production их нет совсем.
+     */
+    enableMockBilling: !isProduction,
+    /**
+     * Ручное подтверждение прямого перевода на кошелёк (по TxID). В production выключено, пока
+     * владелец явно не задаст ENABLE_MANUAL_CRYPTO=true; даже тогда проверяется только USDT TRC-20.
+     */
+    manualCryptoEnabled: !isProduction || optionalEnv('ENABLE_MANUAL_CRYPTO') === 'true',
+    enableDemoAccount: !isProduction || optionalEnv('ENABLE_DEMO_ACCOUNT') === 'true',
+    /**
+     * Анонимный доступ к чату и диалогам через общий demo-user. Только вне production:
+     * в production каждый вызов ИИ требует сессии, иначе любой может жечь бюджет провайдера.
+     */
+    allowAnonymousChat: !isProduction,
     /** Пользователь и план заглушки: реальные аккаунты появятся на этапе 3. */
     demoUserId: 'demo-user',
     demoPlan: 'free',
@@ -94,7 +181,12 @@ export const config = {
      * Секретный ключ Better Auth для подписи сессий и кук.
      * Настраивается через BETTER_AUTH_SECRET (openssl rand -base64 32).
      */
-    betterAuthSecret: process.env.BETTER_AUTH_SECRET || 'ketner-ai-better-auth-secret-key-32chars-minimum-safe',
+    betterAuthSecret,
+    /**
+     * Ключ подписи Bearer-токенов (HS256). Настраивается через AUTH_JWT_SECRET;
+     * без неё выводится из BETTER_AUTH_SECRET.
+     */
+    authJwtSecret,
     /**
      * PostgreSQL / Supabase Database URL
      */
@@ -102,11 +194,11 @@ export const config = {
     /**
      * Supabase Project Credentials
      */
-    supabaseUrl: process.env.SUPABASE_URL || 'https://gwioimhpfulpjxzsuesy.supabase.co',
-    supabaseAnonKey: process.env.SUPABASE_PUBLISHABLE_KEY || process.env.SUPABASE_ANON_KEY || '',
-    supabaseSecretKey: process.env.SUPABASE_SECRET_KEY || '',
-    supabaseJwksUrl: process.env.SUPABASE_JWKS_URL ||
-        'https://gwioimhpfulpjxzsuesy.supabase.co/auth/v1/.well-known/jwks.json',
+    supabaseUrl,
+    supabaseAnonKey: optionalEnv('SUPABASE_PUBLISHABLE_KEY') || optionalEnv('SUPABASE_ANON_KEY'),
+    supabaseSecretKey: optionalEnv('SUPABASE_SECRET_KEY'),
+    supabaseJwksUrl: optionalEnv('SUPABASE_JWKS_URL') ||
+        (supabaseUrl ? `${supabaseUrl.replace(/\/+$/, '')}/auth/v1/.well-known/jwks.json` : ''),
     /**
      * Better Auth API Key для подключения к Better Auth Infra / Dashboard.
      * Настраивается через переменную BETTER_AUTH_API_KEY.
@@ -123,44 +215,41 @@ export const config = {
     githubClientId: process.env.GITHUB_CLIENT_ID || undefined,
     githubClientSecret: process.env.GITHUB_CLIENT_SECRET || undefined,
     /** Telegram Bot для приёма оплаты (Telegram Stars и СБП). */
-    telegramBotToken: process.env.TELEGRAM_BOT_TOKEN || '8950856076:AAF6Id66Vc0IHWBWByV1DArttb6cs8go2DM',
+    telegramBotToken: optionalEnv('TELEGRAM_BOT_TOKEN'),
     telegramBotUsername: process.env.TELEGRAM_BOT_USERNAME || 'Robo_kassa_bot',
     telegramPaymentProviderToken: process.env.TELEGRAM_PAYMENT_PROVIDER_TOKEN || '',
     telegramWebhookUrl: process.env.TELEGRAM_WEBHOOK_URL || '',
+    /**
+     * secret_token для вебхуков Telegram: передаётся в setWebhook, Telegram присылает его в
+     * заголовке X-Telegram-Bot-Api-Secret-Token. Выводится из корневого секрета (hex, 64 символа).
+     */
+    telegramWebhookSecret: deriveSecret(betterAuthSecret, 'ketner:telegram-webhook:payments:v1'),
+    telegramSupportWebhookSecret: deriveSecret(betterAuthSecret, 'ketner:telegram-webhook:support:v1'),
     /** Telegram Support Bot для приёма жалоб и поддержки пользователей. */
-    telegramSupportBotToken: process.env.TELEGRAM_SUPPORT_BOT_TOKEN || '8767965681:AAFkLbcszHQe7-XIZ8-y8Q-vebuoJXBSFGo',
+    telegramSupportBotToken: optionalEnv('TELEGRAM_SUPPORT_BOT_TOKEN'),
     telegramSupportBotUsername: process.env.TELEGRAM_SUPPORT_BOT_USERNAME || 'ketner_support_bot',
     supportAdminUsername: (process.env.SUPPORT_ADMIN_USERNAME || 'gumieeel').replace(/^@/, '').toLowerCase(),
     supportAdminChatId: process.env.SUPPORT_ADMIN_CHAT_ID
         ? Number(process.env.SUPPORT_ADMIN_CHAT_ID)
         : undefined,
     /** CryptoCloud: Приём платежей в криптовалюте */
-    cryptoCloudApiKey: process.env.CRYPTOCLOUD_API_KEY ||
-        'eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJ1dWlkIjoiTVRJeU1EYzEiLCJ0eXBlIjoicHJvamVjdCIsInYiOiI4YTQ3YmNkMjU3NTgyMTJkMWZlOWY4MjI3MGMyNGVhN2M0M2U3NDBhYjc3ZDA2ZWUwZWI5YTYzOTEzYjBjNzJkIiwiZXhwIjo4ODE5MDg1MTAzMX0.T6Nog1lIMERCkle_A2XgkOd8SGPmBdTh9an_ZlhqKyQ',
-    cryptoCloudShopId: process.env.CRYPTOCLOUD_SHOP_ID || 'AJyMLWkX7s5RphA4',
-    cryptoCloudSecretKey: process.env.CRYPTOCLOUD_SECRET_KEY || 'U7Dkec32RzJFn1gJWdGcMf9TIyXMyeIvDOpK',
-    /** AI Providers: OpenRouter */
-    openRouterApiKey: process.env.OPENROUTER_API_KEY ||
-        Buffer.from('c2stb3ItdjEtYzNiZWY1YmFjODgxM2Y2MjkyZDcwMjY3ZjE1NDFjMTcxNTEzOWNlZjdiNDZjZjBhMTdhMWI3OTM2MzNiMWYzNg==', 'base64').toString('utf8'),
+    cryptoCloudApiKey: optionalEnv('CRYPTOCLOUD_API_KEY'),
+    cryptoCloudShopId: optionalEnv('CRYPTOCLOUD_SHOP_ID'),
+    cryptoCloudSecretKey: optionalEnv('CRYPTOCLOUD_SECRET_KEY'),
+    /**
+     * ИИ: единый ключ OpenRouter для всех моделей (GPT, Claude, Grok, Gemini, DeepSeek, MiMo).
+     * Прямые ключи OpenAI / Anthropic / Google не используются.
+     */
+    openRouterApiKey: optionalEnv('OPENROUTER_API_KEY'),
     openRouterBaseUrl: process.env.OPENROUTER_BASE_URL || 'https://openrouter.ai/api/v1',
-    openRouterModel: process.env.OPENROUTER_MODEL || 'openai/gpt-4o-mini',
-    /** AI Providers: OpenAI */
-    openaiApiKey: process.env.OPENAI_API_KEY || '',
-    openaiBaseUrl: process.env.OPENAI_BASE_URL || 'https://api.openai.com/v1',
-    /** AI Providers: Anthropic */
-    anthropicApiKey: process.env.ANTHROPIC_API_KEY || '',
-    anthropicBaseUrl: process.env.ANTHROPIC_BASE_URL || 'https://api.anthropic.com/v1',
-    /** AI Providers: Google Gemini */
-    googleApiKey: process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY || '',
-    googleBaseUrl: process.env.GOOGLE_BASE_URL || 'https://generativelanguage.googleapis.com/v1beta',
     /**
      * Секрет для проверки подписи webhook-запросов.
      */
-    webhookSecret: envWithFallback('WEBHOOK_SECRET', 'ketner-ai-webhook-secret-dev'),
+    webhookSecret: secretEnv('WEBHOOK_SECRET', 'dev-only-webhook-secret-not-for-production'),
     /**
      * Ключ доступа к Admin API.
      */
-    adminApiKey: envWithFallback('ADMIN_API_KEY', 'ketner-ai-admin-key-dev'),
+    adminApiKey: secretEnv('ADMIN_API_KEY', 'dev-only-admin-key-not-for-production'),
     /**
      * Stripe Billing Credentials & Price IDs
      */
@@ -175,7 +264,8 @@ export const config = {
             readNumber('MOCK_AI_THINKING_MAX_MS', 900),
         ],
         chunkMs: [readNumber('MOCK_AI_CHUNK_MIN_MS', 20), readNumber('MOCK_AI_CHUNK_MAX_MS', 40)],
-        failureRate: readNumber('MOCK_AI_FAILURE_RATE', 0),
+        // Имитация сбоев — только для разработки: в production ответ никогда не подменяется заглушкой.
+        failureRate: isProduction ? 0 : readNumber('MOCK_AI_FAILURE_RATE', 0),
         random: Math.random,
     },
 };

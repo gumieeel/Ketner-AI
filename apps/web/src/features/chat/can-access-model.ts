@@ -70,7 +70,7 @@ export const DEFAULT_MODELS: ModelInfo[] = [
     contextMessages: 40,
     isPro: false,
   },
-  // Plus (990 ₽) — рабочая лошадка и быстрые модели
+  // Plus ($9) — рабочая лошадка и быстрые модели
   {
     id: 'ketner-pro',
     name: 'Ketner Pro',
@@ -92,7 +92,7 @@ export const DEFAULT_MODELS: ModelInfo[] = [
     isPro: true,
     requiredPlan: 'plus',
   },
-  // Pro (1 990 ₽) — премиум-модели; Gemini, Grok и Opus расходуют квоту премиум-запросов тарифа
+  // Pro ($25) — премиум-модели; Gemini, Grok и Opus расходуют квоту премиум-запросов тарифа
   {
     id: 'gemini-3.8-flash',
     name: 'Gemini 3.8 Flash',

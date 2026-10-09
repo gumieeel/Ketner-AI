@@ -17,9 +17,9 @@ test('billing: каталог тарифов GET /api/plans', async (t) => {
   assert.equal(plans[1]?.id, 'plus');
   assert.equal(plans[2]?.id, 'pro');
   assert.equal(plans[3]?.id, 'ultra');
-  assert.equal(plans[1]?.priceMonthly, 990);
-  assert.equal(plans[2]?.priceMonthly, 1990);
-  assert.equal(plans[3]?.priceMonthly, 2990);
+  assert.equal(plans[1]?.priceMonthly, 9);
+  assert.equal(plans[2]?.priceMonthly, 25);
+  assert.equal(plans[3]?.priceMonthly, 49);
 });
 
 test('billing: получение подписки и оформление checkout', async (t) => {

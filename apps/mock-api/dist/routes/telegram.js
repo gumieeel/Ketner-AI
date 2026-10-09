@@ -1,8 +1,46 @@
+import { timingSafeEqual } from 'node:crypto';
 import { Router } from 'express';
+import { config } from '../config.js';
+import { requireAuth } from '../middleware/auth.js';
 import { sendError } from '../middleware/errors.js';
-import { TelegramBotService } from '../telegram/bot.js';
+import { TelegramBotService, calculateStars, getPlanItem, } from '../telegram/bot.js';
 import { TelegramSupportBotService, telegramSupportBotService as defaultSupportBotService, } from '../telegram/support-bot.js';
 import { supportStore as defaultSupportStore } from '../store/index.js';
+import { isAdminUser } from '../services/vip.js';
+/** Сравнение секрета из заголовка с ожидаемым за постоянное время. */
+function secretMatches(provided, expected) {
+    if (typeof provided !== 'string' || provided.length === 0 || expected.length === 0)
+        return false;
+    const a = Buffer.from(provided);
+    const b = Buffer.from(expected);
+    return a.length === b.length && timingSafeEqual(a, b);
+}
+/** Вебхук принимается только от Telegram: заголовок secret_token обязателен. */
+function requireTelegramSecret(expected) {
+    return (request, response, next) => {
+        if (!secretMatches(request.headers['x-telegram-bot-api-secret-token'], expected)) {
+            sendError(response, 401, 'invalid_webhook_secret', 'Неверный секрет вебхука');
+            return;
+        }
+        next();
+    };
+}
+/** Отладочные эндпоинты (симуляции) существуют только вне production. */
+function devOnly(_request, response, next) {
+    if (!config.enableMockBilling) {
+        sendError(response, 404, 'not_found', 'Маршрут не найден');
+        return;
+    }
+    next();
+}
+/** Данные обращений поддержки — только администраторам. */
+function requireAdminUser(request, response, next) {
+    if (!isAdminUser(request.user)) {
+        sendError(response, 403, 'admin_access_denied', 'Требуются права администратора');
+        return;
+    }
+    next();
+}
 export function createTelegramRouter(deps) {
     const router = Router();
     const botService = deps.botService ?? new TelegramBotService(deps);
@@ -24,7 +62,7 @@ export function createTelegramRouter(deps) {
     /**
      * Официальный Webhook для Telegram Bot API (платежи).
      */
-    router.post('/telegram/webhook', async (request, response) => {
+    router.post('/telegram/webhook', requireTelegramSecret(config.telegramWebhookSecret), async (request, response) => {
         const update = request.body;
         if (!update || typeof update !== 'object') {
             sendError(response, 400, 'invalid_update', 'Некорректное тело обновления Telegram');
@@ -42,9 +80,11 @@ export function createTelegramRouter(deps) {
     /**
      * Эмуляция оплаты через Telegram Stars (для локального тестирования и демо без реальных денег).
      */
-    router.post('/telegram/simulate-payment', async (request, response) => {
+    router.post('/telegram/simulate-payment', devOnly, async (request, response) => {
         const planId = (request.body?.planId || 'plus');
         const userId = (request.body?.userId || 'demo-user');
+        const planItem = getPlanItem(planId);
+        const stars = planItem ? calculateStars(planItem.priceMonthly) : 0;
         const fakeUpdate = {
             update_id: Date.now(),
             message: {
@@ -53,7 +93,7 @@ export function createTelegramRouter(deps) {
                 date: Math.floor(Date.now() / 1000),
                 successful_payment: {
                     currency: 'XTR',
-                    total_amount: 550,
+                    total_amount: stars,
                     invoice_payload: JSON.stringify({ planId, userId }),
                     telegram_payment_charge_id: `tg_charge_${Date.now()}`,
                 },
@@ -81,7 +121,6 @@ export function createTelegramRouter(deps) {
             botUsername: supportBot.botUsername,
             botUrl: `https://t.me/${supportBot.botUsername}`,
             adminConnected: Boolean(supportStore.getAdminChatId()),
-            adminChatId: supportStore.getAdminChatId(),
             openTickets: supportStore.listOpenTickets().length,
             totalTickets: supportStore.listAllTickets().length,
         });
@@ -89,7 +128,7 @@ export function createTelegramRouter(deps) {
     /**
      * Официальный Webhook для Telegram Support Bot API.
      */
-    router.post('/telegram/support/webhook', async (request, response) => {
+    router.post('/telegram/support/webhook', requireTelegramSecret(config.telegramSupportWebhookSecret), async (request, response) => {
         const update = request.body;
         if (!update || typeof update !== 'object') {
             sendError(response, 400, 'invalid_update', 'Некорректное тело обновления Telegram');
@@ -107,7 +146,7 @@ export function createTelegramRouter(deps) {
     /**
      * Список обращений (тикеты).
      */
-    router.get('/telegram/support/tickets', (_request, response) => {
+    router.get('/telegram/support/tickets', requireAuth, requireAdminUser, (_request, response) => {
         response.json({
             openTickets: supportStore.listOpenTickets(),
             allTickets: supportStore.listAllTickets(),
@@ -116,7 +155,7 @@ export function createTelegramRouter(deps) {
     /**
      * Эмуляция отправки сообщения в поддержку (для тестов).
      */
-    router.post('/telegram/support/simulate-message', async (request, response) => {
+    router.post('/telegram/support/simulate-message', devOnly, async (request, response) => {
         const text = request.body?.text || 'Тестовая жалоба от пользователя';
         const userChatId = Number(request.body?.chatId || 10000001);
         const username = request.body?.username || 'test_user';

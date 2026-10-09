@@ -1,13 +1,21 @@
 import { Router } from 'express';
+import { config } from '../config.js';
 import { sendError } from '../middleware/errors.js';
 /**
  * Диалоги пользователя: список, создание, чтение, переименование, удаление.
  *
- * Пользователь пока один (заглушка): реальные аккаунты и проверка владельца
- * появятся на этапе 3, см. docs/auth-integration-todo.md.
+ * Каждый диалог принадлежит пользователю сессии. Общий demo-user (анонимный доступ) существует
+ * только вне production: в production запрос без сессии получает 401, а не чужие диалоги.
  */
-export function createConversationsRouter(store, defaultUserId) {
+export function createConversationsRouter(store, defaultUserId, allowAnonymous = config.allowAnonymousChat) {
     const router = Router();
+    router.use('/conversations', (request, response, next) => {
+        if (!request.userId && !allowAnonymous) {
+            sendError(response, 401, 'unauthorized', 'Сессия не найдена или истекла');
+            return;
+        }
+        next();
+    });
     const getUserId = (request) => request.userId ?? defaultUserId;
     router.get('/conversations', (request, response) => {
         const userId = getUserId(request);

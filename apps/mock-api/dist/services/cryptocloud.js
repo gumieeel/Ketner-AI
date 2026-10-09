@@ -1,3 +1,4 @@
+import { createHmac, timingSafeEqual } from 'node:crypto';
 import { config } from '../config.js';
 export class CryptoCloudService {
     apiKey;
@@ -12,19 +13,47 @@ export class CryptoCloudService {
         return Boolean(this.apiKey && this.shopId);
     }
     /**
-     * Проверяет токен вебхука CryptoCloud, если CRYPTOCLOUD_SECRET_KEY настроен.
+     * Проверяет подлинность postback CryptoCloud.
+     *
+     * Поле `token` — JWT (HS256), подписанный секретным ключом проекта (CRYPTOCLOUD_SECRET_KEY).
+     * Без ключа проверить нечем, поэтому postback отклоняется: «нет ключа — верим всем» недопустимо.
      */
-    verifyWebhookToken(token) {
-        if (!this.secretKey)
+    verifyPostbackToken(token) {
+        if (!this.secretKey || typeof token !== 'string')
+            return false;
+        const parts = token.split('.');
+        if (parts.length !== 3)
+            return false;
+        const [encodedHeader, encodedPayload, encodedSignature] = parts;
+        try {
+            const header = JSON.parse(Buffer.from(encodedHeader, 'base64url').toString('utf8'));
+            if (header.alg !== 'HS256')
+                return false;
+            const expected = createHmac('sha256', this.secretKey)
+                .update(`${encodedHeader}.${encodedPayload}`)
+                .digest();
+            const given = Buffer.from(encodedSignature, 'base64url');
+            if (given.length !== expected.length || !timingSafeEqual(given, expected))
+                return false;
+            const payload = JSON.parse(Buffer.from(encodedPayload, 'base64url').toString('utf8'));
+            if (typeof payload.exp === 'number' && payload.exp * 1000 < Date.now())
+                return false;
             return true;
-        return token === this.secretKey;
+        }
+        catch {
+            return false;
+        }
     }
     /**
      * Создает счет на оплату в CryptoCloud API v2.
-     * При отсутствии ключей возвращает демонстрационный платежный URL для тестов.
+     * Демонстрационный URL существует только вне production; в production без ключей
+     * или при ошибке API выбрасывается исключение (вызывающий код его обрабатывает).
      */
     async createInvoice(options) {
         if (!this.isConfigured()) {
+            if (!config.enableMockBilling) {
+                throw new Error('CryptoCloud не настроен (CRYPTOCLOUD_API_KEY / CRYPTOCLOUD_SHOP_ID)');
+            }
             // Демо-ссылка для локальной разработки и тестов
             const fakeUuid = `INV-${options.orderId.replace(/[^a-zA-Z0-9]/g, '').slice(-8).toUpperCase()}`;
             return {
@@ -67,6 +96,9 @@ export class CryptoCloudService {
         }
         catch (error) {
             console.error('[cryptocloud] Ошибка вызова CryptoCloud API:', error);
+            if (!config.enableMockBilling) {
+                throw error;
+            }
             const fakeUuid = `INV-${options.orderId.replace(/[^a-zA-Z0-9]/g, '').slice(-8).toUpperCase()}`;
             return {
                 invoiceId: fakeUuid,

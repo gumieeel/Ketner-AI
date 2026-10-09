@@ -1,9 +1,16 @@
-import { pbkdf2Sync, randomBytes, randomUUID } from 'node:crypto';
+import { pbkdf2Sync, randomBytes, randomUUID, timingSafeEqual } from 'node:crypto';
 import { mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
 import { dirname } from 'node:path';
+import { config, isProduction } from '../config.js';
 import { isVipEmail, isAdminEmail } from '../services/vip.js';
 function hashPassword(password, salt) {
     return pbkdf2Sync(password, salt, 1000, 32, 'sha256').toString('hex');
+}
+/** Сравнение хешей за константное время. */
+function hashesEqual(left, right) {
+    const a = Buffer.from(left, 'utf8');
+    const b = Buffer.from(right, 'utf8');
+    return a.length === b.length && timingSafeEqual(a, b);
 }
 function toPublicUser(user) {
     const isVip = user.isVip ?? isVipEmail(user.email);
@@ -33,46 +40,33 @@ const DEFAULT_DEMO_USER = (() => {
         passwordHash: hashPassword('password123', salt),
     };
 })();
-const DEFAULT_ADMIN_USER = (() => {
-    const salt = '11111111111111111111111111111111';
-    return {
-        id: 'admin-artem-user',
-        email: 'artemsinyakov09@gmail.com',
-        name: 'Артем Синяков',
-        plan: 'ultra',
-        isVip: true,
-        isAdmin: true,
-        createdAt: '2026-09-22T00:00:00.000Z',
-        salt,
-        passwordHash: hashPassword('password123', salt),
-    };
-})();
-function isTestEnvironment(file) {
-    return (file.includes('ketner-mock-api-') ||
-        process.env.NODE_ENV === 'test' ||
-        Boolean(process.env.VITEST));
-}
+/**
+ * Соли, зашитые в код прежних версий (демо-аккаунт и админ с паролем из репозитория).
+ * Аккаунты с такими солями считаются скомпрометированными: в production войти в них нельзя,
+ * пока пароль не сменён (см. ensureSeedAdmin / setPassword).
+ */
+const COMPROMISED_SALTS = new Set([
+    '00000000000000000000000000000000',
+    '11111111111111111111111111111111',
+]);
+const DEMO_EMAIL = 'demo@ketner.ai';
+const MIN_SEED_PASSWORD_LENGTH = 12;
+const SEED_EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 function readSnapshot(file) {
-    const isTest = isTestEnvironment(file);
+    const demo = config.enableDemoAccount ? [DEFAULT_DEMO_USER] : [];
     try {
         const parsed = JSON.parse(readFileSync(file, 'utf8'));
         const users = Array.isArray(parsed.users) ? parsed.users : [];
-        if (!users.some((u) => u.email.toLowerCase() === 'demo@ketner.ai')) {
+        if (config.enableDemoAccount && !users.some((u) => u.email.toLowerCase() === DEMO_EMAIL)) {
             users.push(DEFAULT_DEMO_USER);
-        }
-        if (!isTest && !users.some((u) => u.email.toLowerCase() === 'artemsinyakov09@gmail.com')) {
-            users.unshift(DEFAULT_ADMIN_USER);
         }
         return { users };
     }
     catch (error) {
         if (error.code !== 'ENOENT') {
-            console.warn('[mock-api] хранилище пользователей не прочитано, создаём демо:', error);
+            console.warn('[mock-api] хранилище пользователей не прочитано, начинаем заново:', error);
         }
-        if (!isTest) {
-            return { users: [DEFAULT_ADMIN_USER, DEFAULT_DEMO_USER] };
-        }
-        return { users: [DEFAULT_DEMO_USER] };
+        return { users: demo };
     }
 }
 function writeSnapshot(file, snapshot) {
@@ -98,7 +92,7 @@ export function createUserStore(file) {
     catch {
         // В некоторых тестовых средах запись может быть опциональной
     }
-    return {
+    const store = {
         list() {
             return snapshot.users.map(toPublicUser);
         },
@@ -142,8 +136,13 @@ export function createUserStore(file) {
             if (!stored) {
                 return null;
             }
+            // В production аккаунты с публично известным паролем из старых версий закрыты.
+            const isDemo = stored.email.toLowerCase() === DEMO_EMAIL && config.enableDemoAccount;
+            if (isProduction && COMPROMISED_SALTS.has(stored.salt) && !isDemo) {
+                return null;
+            }
             const hash = hashPassword(password, stored.salt);
-            if (hash !== stored.passwordHash) {
+            if (!hashesEqual(hash, stored.passwordHash)) {
                 return null;
             }
             return toPublicUser(stored);
@@ -247,5 +246,40 @@ export function createUserStore(file) {
         getAllStoredUsers() {
             return [...snapshot.users];
         },
+        ensureSeedAdmin() {
+            const email = config.seedAdminEmail;
+            const password = config.seedAdminPassword;
+            if (!email || !password) {
+                return;
+            }
+            if (!SEED_EMAIL_PATTERN.test(email)) {
+                // Значение намеренно не печатаем: при ошибке конфигурации там может оказаться пароль.
+                console.warn('[auth] SEED_ADMIN_EMAIL не похож на email: первичный администратор не создан');
+                return;
+            }
+            if (password.length < MIN_SEED_PASSWORD_LENGTH) {
+                console.warn(`[auth] SEED_ADMIN_PASSWORD короче ${MIN_SEED_PASSWORD_LENGTH} символов: админ не создан`);
+                return;
+            }
+            const existing = snapshot.users.find((u) => u.email.toLowerCase() === email);
+            if (!existing) {
+                const created = store.create(email, password, 'Administrator');
+                store.setAdmin(created.id, true);
+                store.setVip(created.id, true);
+                console.log(`[auth] Создан первичный администратор ${email}`);
+                return;
+            }
+            // Аккаунт со старым публичным паролем: восстанавливаем доступ владельцу новым паролем.
+            if (COMPROMISED_SALTS.has(existing.salt)) {
+                store.setPassword(email, password);
+                store.setAdmin(existing.id, true);
+                store.setVip(existing.id, true);
+                console.log(`[auth] Пароль администратора ${email} заменён (старый был публичным)`);
+                return;
+            }
+            // Аккаунт уже существует и его пароль не скомпрометирован: ничего не меняем.
+            console.warn(`[auth] ${email} уже зарегистрирован: SEED_ADMIN_* проигнорирован`);
+        },
     };
+    return store;
 }

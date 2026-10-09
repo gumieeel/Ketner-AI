@@ -5,6 +5,7 @@ import { db } from '../db/client.js';
 import * as schema from '../db/schema.js';
 import { eq } from 'drizzle-orm';
 import { subscriptionStore, userStore } from '../store/index.js';
+import { planPriceCents } from './pricing.js';
 
 export interface CheckoutSessionOptions {
   userId: string;
@@ -70,8 +71,7 @@ export class StripeService {
                 name: `Ketner AI: Подписка ${options.planId.toUpperCase()}`,
                 description: 'Ежемесячный доступ ко всем возможностям тарифа',
               },
-              unit_amount:
-                options.planId === 'ultra' ? 2499 : options.planId === 'pro' ? 1990 : 990,
+              unit_amount: planPriceCents(options.planId),
               recurring: { interval: 'month' },
             },
             quantity: 1,

@@ -10,6 +10,7 @@ import { ModelRegistry } from './model-registry.js';
 import { OpenRouterError } from './providers/openrouter-provider.js';
 import { SemanticCache } from './cache.js';
 import { UsageStore } from '../store/usage-store.js';
+import { PLAN_ENTITLEMENTS } from '../services/entitlement.js';
 import type {
   AIProvider,
   GatewayRequest,
@@ -65,6 +66,9 @@ function makeGateway(provider: AIProvider, usage: UsageStore): AIGateway {
     useMockEngine: false,
   });
 }
+
+/** Бюджет Plus берётся из тарифа, а не зашит числом: пересчёт цен не должен ломать тесты. */
+const PLUS_BUDGET = PLAN_ENTITLEMENTS.plus.costBudget;
 
 function newUsage(): UsageStore {
   return new UsageStore(join(mkdtempSync(join(tmpdir(), 'ketner-gw-')), 'usage.json'));
@@ -157,7 +161,7 @@ test('жёсткий потолок: при расходе ≥125% бюджет�
   const usage = newUsage();
   const calls: Call[] = [];
   const gateway = makeGateway(fakeOpenRouter(okStream('не должно прийти'), calls), usage);
-  seedMonthlyCost(usage, 'u-hard', 5.1); // бюджет Plus $4 → 127%
+  seedMonthlyCost(usage, 'u-hard', PLUS_BUDGET * 1.27); // 127% бюджета Plus
 
   const out = await run(gateway, request({ userId: 'u-hard', userPlan: 'plus' }));
   assert.equal(out.error?.code, 'fair_use_exceeded');
@@ -168,7 +172,7 @@ test('бюджет исчерпан (100–125%): явный выбор силь
   const usage = newUsage();
   const calls: Call[] = [];
   const gateway = makeGateway(fakeOpenRouter(okStream('ок'), calls), usage);
-  seedMonthlyCost(usage, 'u-ex', 4.2); // 105% бюджета Plus
+  seedMonthlyCost(usage, 'u-ex', PLUS_BUDGET * 1.05); // 105% бюджета Plus
 
   const out = await run(gateway, request({ userId: 'u-ex', userPlan: 'plus', modelId: 'gpt-6.1-sol' }));
   assertNoError(out);
@@ -182,7 +186,7 @@ test('бюджет на исходе (80–100%): сильная модель з
   const usage = newUsage();
   const calls: Call[] = [];
   const gateway = makeGateway(fakeOpenRouter(okStream('ок'), calls), usage);
-  seedMonthlyCost(usage, 'u-soft', 3.4); // 85% бюджета Plus
+  seedMonthlyCost(usage, 'u-soft', PLUS_BUDGET * 0.85); // 85% бюджета Plus
 
   const strong = await run(gateway, request({ userId: 'u-soft', userPlan: 'plus', modelId: 'gpt-6.1-sol' }));
   assert.equal(strong.done?.selectedModel?.id, 'ketner-pro');
@@ -198,13 +202,13 @@ test('квота премиум-запросов: пока есть остато
   const calls: Call[] = [];
   const gateway = makeGateway(fakeOpenRouter(okStream('ок', { cost: 0.05 }), calls), usage);
 
-  // Plus: квота премиум-запросов $0.60 за 30 дней
+  // Plus: квота премиум-запросов (PLAN_ENTITLEMENTS.plus.premiumBudget) за 30 дней
   const first = await run(gateway, request({ userId: 'u-prem', userPlan: 'plus', modelId: 'gpt-6.1-sol' }));
   assertNoError(first);
   assert.equal(first.done?.selectedModel?.id, 'gpt-6.1-sol');
   assert.equal(calls[0].model, 'openai/gpt-6.1-sol');
 
-  seedMonthlyCost(usage, 'u-prem', 0.7, 'gpt-6-astra'); // старый id в истории расхода тоже считается
+  seedMonthlyCost(usage, 'u-prem', PLAN_ENTITLEMENTS.plus.premiumBudget + 0.1, 'gpt-6-astra'); // старый id в истории расхода тоже считается
   const second = await run(gateway, request({ userId: 'u-prem', userPlan: 'plus', modelId: 'gpt-6.1-sol' }));
   assertNoError(second);
   assert.equal(second.done?.selectedModel?.id, 'ketner-pro');
@@ -294,7 +298,7 @@ test('бюджет и квота ограничивают и запасные м
     throw new OpenRouterError(o.model, 500, 'boom');
   };
   const gateway = makeGateway(fakeOpenRouter(failing, calls), usage);
-  seedMonthlyCost(usage, 'u-fbq', 4.1); // бюджет Plus исчерпан: только лёгкие модели
+  seedMonthlyCost(usage, 'u-fbq', PLUS_BUDGET * 1.03); // бюджет Plus исчерпан: только лёгкие модели
 
   const out = await run(gateway, request({ userId: 'u-fbq', userPlan: 'plus', modelId: 'ketner-pro' }));
   assert.equal(out.error?.code, 'provider_error');

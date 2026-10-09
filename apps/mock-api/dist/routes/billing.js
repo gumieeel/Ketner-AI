@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { config } from '../config.js';
+import { requireAuth } from '../middleware/auth.js';
 import { sendError } from '../middleware/errors.js';
 import { invoiceStore as defaultInvoiceStore, usedTxStore } from '../store/index.js';
 import { calculateStars } from '../telegram/bot.js';
@@ -7,11 +8,13 @@ import { isVipUser } from '../services/vip.js';
 import { stripeService } from '../services/stripe.js';
 import { cryptoCloudService } from '../services/cryptocloud.js';
 import { blockchainVerifier } from '../services/blockchain-verifier.js';
+import { LEGACY_PRICE_USD, PLAN_PRICE_USD, planPriceRub, planPriceUsd } from '../services/pricing.js';
+/** Каталог тарифов. `priceMonthly` везде в долларах США (см. services/pricing.ts). */
 export const PLANS = [
     {
         id: 'free',
         nameKey: 'pricing.free',
-        priceMonthly: 0,
+        priceMonthly: PLAN_PRICE_USD.free,
         limitBadge: {
             ru: 'Базовый доступ',
             en: 'Basic access',
@@ -25,7 +28,7 @@ export const PLANS = [
     {
         id: 'plus',
         nameKey: 'pricing.plus',
-        priceMonthly: 990,
+        priceMonthly: PLAN_PRICE_USD.plus,
         limitBadge: {
             ru: 'Plus · 2 параллельных',
             en: 'Plus · 2 concurrent',
@@ -49,22 +52,22 @@ export const PLANS = [
     {
         id: 'pro',
         nameKey: 'pricing.pro',
-        priceMonthly: 1990,
+        priceMonthly: PLAN_PRICE_USD.pro,
         popular: true,
         limitBadge: {
             ru: 'Все флагманы AI',
             en: 'All Flagship AIs',
         },
-        modelsHighlight: 'GPT-6 Astra, Claude Fable, Gemini Pro',
+        modelsHighlight: 'GPT-6.1 Sol, Claude Opus 5.5, Grok 4.7, Gemini 3.8 Flash',
         bullets: {
             ru: [
-                'Доступ ко ВСЕМ флагманским моделям (GPT, Claude, Gemini)',
+                'Доступ ко ВСЕМ флагманским моделям (GPT, Claude, Gemini, Grok)',
                 'Без раздельных подписок на каждого провайдера',
                 'Контекст до 120 сообщений',
                 '4 параллельных запроса и повышенный приоритет',
             ],
             en: [
-                'Access to ALL flagship models (GPT, Claude, Gemini)',
+                'Access to ALL flagship models (GPT, Claude, Gemini, Grok)',
                 'No separate subscriptions per AI provider',
                 'Up to 120 context messages',
                 '4 concurrent requests & higher priority',
@@ -74,7 +77,7 @@ export const PLANS = [
     {
         id: 'ultra',
         nameKey: 'pricing.ultra',
-        priceMonthly: 2990,
+        priceMonthly: PLAN_PRICE_USD.ultra,
         limitBadge: {
             ru: 'Без ограничений · Высший приоритет',
             en: 'No limits · Highest priority',
@@ -98,7 +101,7 @@ export const PLANS = [
 ];
 /**
  * Устаревшие тарифные планы (Legacy Plans).
- * Сохранены для пользователей со старыми подписками (цена 1199 ₽/мес ~ $12.62).
+ * Сохранены для пользователей со старыми подписками (1199 ₽/мес ≈ $12.62; новых оплат нет).
  * Функционально эквивалентны тарифу Pro. Скрыты из публичного каталога по умолчанию,
  * доступны при запросе с query-параметром includeLegacy=true.
  */
@@ -106,7 +109,7 @@ function createLegacyPlan(id, nameKey, modelsHighlight) {
     return {
         id,
         nameKey,
-        priceMonthly: 1199,
+        priceMonthly: LEGACY_PRICE_USD,
         limitBadge: { ru: 'Legacy Pro', en: 'Legacy Pro' },
         modelsHighlight,
         bullets: {
@@ -120,16 +123,103 @@ export const LEGACY_PLANS = [
     createLegacyPlan('claude-pro', 'pricing.claudePro', 'Claude Fable + All Pro Models'),
     createLegacyPlan('gemini-pro', 'pricing.geminiPro', 'Gemini Pro + All Pro Models'),
 ];
-export function createBillingRouter({ subscriptionStore, userStore, invoiceStore: activeInvoiceStore = defaultInvoiceStore, defaultUserId, }) {
+export function createBillingRouter({ subscriptionStore, userStore, invoiceStore: activeInvoiceStore = defaultInvoiceStore, }) {
     const router = Router();
-    const getUserId = (request) => {
-        const headerUserId = typeof request.headers?.['x-user-id'] === 'string' ? request.headers['x-user-id'] : undefined;
-        return request.userId ?? headerUserId ?? defaultUserId;
+    /**
+     * Идентификатор текущего пользователя. Берётся только из аутентифицированной сессии
+     * (`requireAuth` гарантирует наличие `request.user`): ни заголовки, ни тело запроса,
+     * ни «пользователь по умолчанию» личность не определяют.
+     */
+    const getUserId = (request) => request.user?.id ?? '';
+    /** Счёт доступен только владельцу: чужой счёт неотличим от несуществующего (404). */
+    const isOwnInvoice = (request, invoice) => {
+        const userId = getUserId(request);
+        return userId !== '' && invoice.userId === userId;
+    };
+    /** Заглушки оплаты существуют только вне production. */
+    const rejectMockInProduction = (response, message) => {
+        if (config.enableMockBilling)
+            return false;
+        sendError(response, 501, 'payment_method_unavailable', message);
+        return true;
     };
     const findPlan = (rawPlanId) => {
         return (PLANS.find((p) => p.id === rawPlanId) ??
             LEGACY_PLANS.find((p) => p.id === rawPlanId));
     };
+    // Webhook & Postback от CryptoCloud.
+    //
+    // Доверия к телу запроса нет: (1) подпись — JWT `token`, подписанный ключом проекта;
+    // (2) оплата перепроверяется через API CryptoCloud по сохранённому у нас uuid счёта;
+    // (3) повторная доставка не меняет состояние. Пока оба условия не выполнены, тариф не выдаётся.
+    const handleCryptoCloudWebhook = async (request, response) => {
+        if (request.method === 'GET' || request.method === 'HEAD') {
+            response.json({ status: 'ok', service: 'cryptocloud-webhook' });
+            return;
+        }
+        if (!cryptoCloudService.verifyPostbackToken(request.body?.token)) {
+            sendError(response, 401, 'invalid_signature', 'Неверная подпись postback');
+            return;
+        }
+        const status = String(request.body?.status || '').toLowerCase();
+        const orderId = String(request.body?.order_id || request.body?.orderId || '');
+        const invoiceUuid = String(request.body?.invoice_id || request.body?.uuid || '');
+        console.log('[cryptocloud] Получен подписанный postback:', { status, orderId, invoiceUuid });
+        if (status !== 'success' && status !== 'paid' && status !== 'overpaid') {
+            response.json({ status: 'ok' });
+            return;
+        }
+        const invoice = (orderId ? activeInvoiceStore.findCryptoInvoice?.(orderId) : undefined) ||
+            (invoiceUuid ? activeInvoiceStore.findCryptoInvoice?.(invoiceUuid) : undefined);
+        if (!invoice) {
+            // 200, чтобы шлюз не повторял доставку бесконечно; в логе остаётся след.
+            console.warn('[cryptocloud] Не найден счёт для postback:', { orderId, invoiceUuid });
+            response.json({ status: 'ok' });
+            return;
+        }
+        if (invoice.status === 'paid') {
+            response.json({ status: 'ok', idempotentReplay: true });
+            return;
+        }
+        if (!invoice.cryptoCloudInvoiceId) {
+            console.warn('[cryptocloud] У счёта нет uuid шлюза — перепроверить оплату нечем:', invoice.id);
+            response.json({ status: 'ok' });
+            return;
+        }
+        try {
+            const confirmed = await cryptoCloudService.checkInvoiceStatus(invoice.cryptoCloudInvoiceId);
+            if (confirmed !== 'paid' && confirmed !== 'success' && confirmed !== 'overpaid') {
+                console.warn('[cryptocloud] Postback не подтверждён API шлюза:', { id: invoice.id, confirmed });
+                response.json({ status: 'ok' });
+                return;
+            }
+        }
+        catch (err) {
+            console.error('[cryptocloud] Ошибка перепроверки оплаты:', err);
+            sendError(response, 502, 'gateway_check_failed', 'Не удалось подтвердить оплату у шлюза');
+            return;
+        }
+        activeInvoiceStore.markCryptoPaid(invoice.id);
+        subscriptionStore.checkout(invoice.userId, invoice.planId);
+        const user = userStore.updatePlan(invoice.userId, invoice.planId);
+        if (user?.email && user.email !== invoice.userId) {
+            subscriptionStore.checkout(user.email, invoice.planId);
+        }
+        if (user?.id && user.id !== invoice.userId) {
+            subscriptionStore.checkout(user.id, invoice.planId);
+        }
+        console.log(`[cryptocloud] Подписка ${invoice.planId} активирована для ${invoice.userId}`);
+        response.json({ status: 'ok' });
+    };
+    router.use([
+        '/billing/cryptocloud/webhook',
+        '/billing/cryptocloud/callback',
+        '/billing/cryptocloud/postback',
+        '/billing/webhook',
+    ], handleCryptoCloudWebhook);
+    // Всё, что ниже, требует входа. Каталог тарифов и вебхуки платёжных систем — выше и открыты
+    // (вебхуки защищаются подписью, см. C6).
+    router.use('/billing', requireAuth);
     router.get('/plans', (request, response) => {
         if (request.query.includeLegacy === 'true') {
             response.json({ plans: [...PLANS, ...LEGACY_PLANS] });
@@ -152,6 +242,10 @@ export function createBillingRouter({ subscriptionStore, userStore, invoiceStore
         response.json({ subscription });
     });
     router.post('/billing/checkout', (request, response) => {
+        // Оформление без платежа — заглушка для разработки; в production тариф даёт только оплата.
+        if (rejectMockInProduction(response, 'Оформление без оплаты недоступно. Выберите способ оплаты на странице тарифов.')) {
+            return;
+        }
         const rawPlanId = request.body?.planId;
         const validPlanIds = ['plus', 'pro', 'ultra', 'gpt-pro', 'claude-pro', 'gemini-pro'];
         if (!validPlanIds.includes(rawPlanId)) {
@@ -188,6 +282,9 @@ export function createBillingRouter({ subscriptionStore, userStore, invoiceStore
         const userId = getUserId(request);
         const user = userStore.findById(userId);
         if (!stripeService.isAvailable()) {
+            if (rejectMockInProduction(response, 'Оплата картой временно недоступна')) {
+                return;
+            }
             const subscription = subscriptionStore.checkout(userId, planId);
             const updatedUser = userStore.updatePlan(userId, planId);
             response.json({
@@ -215,6 +312,9 @@ export function createBillingRouter({ subscriptionStore, userStore, invoiceStore
     });
     // --- СБП (Система быстрых платежей) ---
     router.post('/billing/sbp/create-invoice', (request, response) => {
+        if (rejectMockInProduction(response, 'Оплата через СБП временно недоступна')) {
+            return;
+        }
         const rawPlanId = request.body?.planId;
         const plan = findPlan(rawPlanId);
         if (!plan || plan.priceMonthly <= 0) {
@@ -222,7 +322,7 @@ export function createBillingRouter({ subscriptionStore, userStore, invoiceStore
             return;
         }
         const userId = getUserId(request);
-        const invoice = activeInvoiceStore.createSbpInvoice(userId, plan.id, plan.priceMonthly);
+        const invoice = activeInvoiceStore.createSbpInvoice(userId, plan.id, planPriceRub(plan.id));
         response.json({ invoice });
     });
     const getParamInvoiceId = (req) => {
@@ -232,7 +332,7 @@ export function createBillingRouter({ subscriptionStore, userStore, invoiceStore
     router.get('/billing/sbp/status/:invoiceId', (request, response) => {
         const invoiceId = getParamInvoiceId(request);
         const invoice = activeInvoiceStore.getSbpInvoice(invoiceId);
-        if (!invoice) {
+        if (!invoice || !isOwnInvoice(request, invoice)) {
             sendError(response, 404, 'invoice_not_found', 'Счёт СБП не найден');
             return;
         }
@@ -242,14 +342,18 @@ export function createBillingRouter({ subscriptionStore, userStore, invoiceStore
         });
     });
     router.post('/billing/sbp/confirm/:invoiceId', (request, response) => {
+        // У СБП нет платёжного шлюза: «подтверждение» — заглушка, в production его нет.
+        if (rejectMockInProduction(response, 'Оплата через СБП временно недоступна')) {
+            return;
+        }
         const invoiceId = getParamInvoiceId(request);
         const invoice = activeInvoiceStore.getSbpInvoice(invoiceId);
-        if (!invoice) {
+        if (!invoice || !isOwnInvoice(request, invoice)) {
             sendError(response, 404, 'invoice_not_found', 'Счёт СБП не найден');
             return;
         }
         const updated = activeInvoiceStore.markSbpPaid(invoiceId) ?? invoice;
-        const userId = getUserId(request) || invoice.userId;
+        const userId = invoice.userId;
         const subscription = subscriptionStore.checkout(userId, invoice.planId);
         const user = userStore.updatePlan(userId, invoice.planId);
         response.json({
@@ -269,13 +373,13 @@ export function createBillingRouter({ subscriptionStore, userStore, invoiceStore
         }
         const userId = getUserId(request);
         const starsAmount = calculateStars(plan.priceMonthly);
-        const invoice = activeInvoiceStore.createTelegramStarsInvoice(userId, plan.id, plan.priceMonthly, starsAmount, config.telegramBotUsername);
+        const invoice = activeInvoiceStore.createTelegramStarsInvoice(userId, plan.id, planPriceRub(plan.id), starsAmount, config.telegramBotUsername);
         response.json({ invoice });
     });
     router.get('/billing/telegram-stars/status/:invoiceId', (request, response) => {
         const invoiceId = getParamInvoiceId(request);
         const invoice = activeInvoiceStore.getTelegramStarsInvoice(invoiceId);
-        if (!invoice) {
+        if (!invoice || !isOwnInvoice(request, invoice)) {
             sendError(response, 404, 'invoice_not_found', 'Счёт Telegram Stars не найден');
             return;
         }
@@ -287,12 +391,20 @@ export function createBillingRouter({ subscriptionStore, userStore, invoiceStore
     router.post('/billing/telegram-stars/confirm/:invoiceId', (request, response) => {
         const invoiceId = getParamInvoiceId(request);
         const invoice = activeInvoiceStore.getTelegramStarsInvoice(invoiceId);
-        if (!invoice) {
+        if (!invoice || !isOwnInvoice(request, invoice)) {
             sendError(response, 404, 'invoice_not_found', 'Счёт Telegram Stars не найден');
             return;
         }
-        const updated = activeInvoiceStore.markTelegramStarsPaid(invoiceId) ?? invoice;
-        const userId = getUserId(request) || invoice.userId;
+        // Счёт становится оплаченным только когда Telegram прислал successful_payment (бот).
+        // Самому клиенту «отметить оплату» нельзя; заглушка — только вне production.
+        if (invoice.status !== 'paid' && !config.enableMockBilling) {
+            sendError(response, 402, 'payment_not_received', 'Оплата Stars ещё не поступила. Оплатите счёт в Telegram и повторите проверку.');
+            return;
+        }
+        const updated = invoice.status === 'paid'
+            ? invoice
+            : (activeInvoiceStore.markTelegramStarsPaid(invoiceId) ?? invoice);
+        const userId = invoice.userId;
         const subscription = subscriptionStore.checkout(userId, invoice.planId);
         const user = userStore.updatePlan(userId, invoice.planId);
         if (user?.email && user.email !== userId) {
@@ -319,8 +431,20 @@ export function createBillingRouter({ subscriptionStore, userStore, invoiceStore
         const userId = getUserId(request);
         const user = userStore.findById(userId) || userStore.findByEmail(userId);
         const currency = request.body?.currency || 'USDT_TRC20';
-        // Тарифы в долларах: Plus $9, Pro $25, Ultra $49
-        const amountUsd = plan.id === 'ultra' ? 49 : plan.id === 'pro' ? 25 : 9;
+        // Без шлюза остаётся только ручной перевод на кошелёк. Если и он выключен (production без
+        // ENABLE_MANUAL_CRYPTO), принять оплату нечем — счёт не создаём, а не показываем «пустой» адрес.
+        if (!cryptoCloudService.isConfigured()) {
+            if (!config.manualCryptoEnabled) {
+                sendError(response, 501, 'payment_method_unavailable', 'Оплата криптовалютой временно недоступна');
+                return;
+            }
+            if (!config.enableMockBilling && currency !== 'USDT_TRC20') {
+                sendError(response, 400, 'currency_unavailable', 'Сейчас доступна оплата USDT в сети TRC-20');
+                return;
+            }
+        }
+        // Тарифы в долларах: Plus $9, Pro $25, Ultra $49 (services/pricing.ts)
+        const amountUsd = planPriceUsd(plan.id);
         const tempOrderId = `crypto_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
         const cryptoCodeMap = {
             USDT_TRC20: 'USDT_TRC20',
@@ -350,7 +474,7 @@ export function createBillingRouter({ subscriptionStore, userStore, invoiceStore
         const invoiceId = getParamInvoiceId(request);
         let invoice = activeInvoiceStore.findCryptoInvoice?.(invoiceId) ??
             activeInvoiceStore.getCryptoInvoice(invoiceId);
-        if (!invoice) {
+        if (!invoice || !isOwnInvoice(request, invoice)) {
             sendError(response, 404, 'invoice_not_found', 'Крипто-счёт не найден');
             return;
         }
@@ -384,7 +508,7 @@ export function createBillingRouter({ subscriptionStore, userStore, invoiceStore
         const invoiceId = getParamInvoiceId(request);
         let invoice = activeInvoiceStore.findCryptoInvoice?.(invoiceId) ??
             activeInvoiceStore.getCryptoInvoice(invoiceId);
-        if (!invoice) {
+        if (!invoice || !isOwnInvoice(request, invoice)) {
             sendError(response, 404, 'invoice_not_found', 'Крипто-счёт не найден');
             return;
         }
@@ -400,21 +524,62 @@ export function createBillingRouter({ subscriptionStore, userStore, invoiceStore
                 sendError(response, 400, 'tx_hash_required', 'Для подтверждения прямого перевода необходимо указать TxID (хеш транзакции из вашего кошелька).');
                 return;
             }
-            const verification = await blockchainVerifier.verifyTransaction({
+            if (!config.manualCryptoEnabled) {
+                sendError(response, 501, 'payment_method_unavailable', 'Ручное подтверждение переводов сейчас отключено');
+                return;
+            }
+            // Счёт уже оплачен — повторно ничего не активируем и второй TxID не принимаем.
+            if (invoice.status === 'paid') {
+                const current = subscriptionStore.get(invoice.userId);
+                response.json({
+                    success: true,
+                    subscription: current,
+                    user: userStore.findById(invoice.userId) ?? { id: invoice.userId, plan: invoice.planId },
+                    invoice,
+                });
+                return;
+            }
+            // Атомарно занимаем TxID ДО сетевых запросов: два одновременных запроса с одним хешем
+            // не пройдут оба (раньше проверка и запись были разделены await).
+            const reserved = usedTxStore.reserveTx({
                 txHash,
-                currency: invoice.currency,
-                requiredUsd: invoice.amountUsd,
+                userId: invoice.userId,
                 planId: invoice.planId,
-                userId: getUserId(request) || invoice.userId,
+                currency: invoice.currency,
+                amount: invoice.amount,
+                createdAt: new Date().toISOString(),
             });
+            if (!reserved) {
+                sendError(response, 400, 'tx_already_used', 'Этот хеш транзакции (TxID) уже был использован ранее для активации подписки. Повторное использование запрещено.');
+                return;
+            }
+            let verification;
+            try {
+                verification = await blockchainVerifier.verifyTransaction({
+                    txHash,
+                    currency: invoice.currency,
+                    requiredUsd: invoice.amountUsd,
+                    planId: invoice.planId,
+                    userId: invoice.userId,
+                    invoiceCreatedAt: invoice.createdAt,
+                });
+            }
+            catch (err) {
+                usedTxStore.releaseTx(txHash);
+                console.error('[billing] Ошибка проверки транзакции:', err);
+                sendError(response, 502, 'blockchain_verification_failed', 'Не удалось проверить транзакцию. Повторите позже.');
+                return;
+            }
             if (!verification.success) {
+                // Проверка не удалась — хеш освобождается, чтобы после подтверждения сети его можно было подать снова.
+                usedTxStore.releaseTx(txHash);
                 sendError(response, 400, verification.errorCode || 'blockchain_verification_failed', verification.errorMessage || 'Не удалось подтвердить транзакцию в блокчейне.');
                 return;
             }
-            // Защита от повторного использования: записываем хеш
+            // Фиксируем фактическую сумму и время блока
             usedTxStore.recordUsedTx({
                 txHash,
-                userId: getUserId(request) || invoice.userId,
+                userId: invoice.userId,
                 planId: invoice.planId,
                 currency: invoice.currency,
                 amount: verification.transferredAmount ?? invoice.amount,
@@ -422,7 +587,7 @@ export function createBillingRouter({ subscriptionStore, userStore, invoiceStore
                 blockTimestamp: verification.blockTimestamp,
             });
             const updated = activeInvoiceStore.markCryptoPaid(invoice.id, txHash) ?? invoice;
-            const userId = getUserId(request) || invoice.userId;
+            const userId = invoice.userId;
             const subscription = subscriptionStore.checkout(userId, invoice.planId);
             const user = userStore.updatePlan(userId, invoice.planId);
             if (user?.email && user.email !== userId) {
@@ -459,7 +624,7 @@ export function createBillingRouter({ subscriptionStore, userStore, invoiceStore
                 return;
             }
             const updated = activeInvoiceStore.markCryptoPaid(invoice.id) ?? invoice;
-            const userId = getUserId(request) || invoice.userId;
+            const userId = invoice.userId;
             const subscription = subscriptionStore.checkout(userId, invoice.planId);
             const user = userStore.updatePlan(userId, invoice.planId);
             if (user?.email && user.email !== userId) {
@@ -478,42 +643,5 @@ export function createBillingRouter({ subscriptionStore, userStore, invoiceStore
         }
         sendError(response, 400, 'payment_not_received', 'Оплата не подтверждена. Пожалуйста, совершите перевод и укажите TxID транзакции.');
     });
-    // Webhook & Postback от CryptoCloud
-    const handleCryptoCloudWebhook = (request, response) => {
-        if (request.method === 'GET' || request.method === 'HEAD') {
-            response.json({ status: 'ok', service: 'cryptocloud-webhook' });
-            return;
-        }
-        const status = String(request.body?.status || '').toLowerCase();
-        const orderId = String(request.body?.order_id || request.body?.orderId || '');
-        const invoiceUuid = String(request.body?.invoice_id || request.body?.uuid || '');
-        console.log('[cryptocloud] Получен webhook:', { status, orderId, invoiceUuid });
-        if (status === 'success' || status === 'paid' || status === 'overpaid') {
-            const invoice = (orderId ? activeInvoiceStore.findCryptoInvoice?.(orderId) ?? activeInvoiceStore.getCryptoInvoice(orderId) : undefined) ||
-                (invoiceUuid ? activeInvoiceStore.findCryptoInvoice?.(invoiceUuid) : undefined);
-            if (invoice) {
-                activeInvoiceStore.markCryptoPaid(invoice.id);
-                subscriptionStore.checkout(invoice.userId, invoice.planId);
-                const user = userStore.updatePlan(invoice.userId, invoice.planId);
-                if (user?.email && user.email !== invoice.userId) {
-                    subscriptionStore.checkout(user.email, invoice.planId);
-                }
-                if (user?.id && user.id !== invoice.userId) {
-                    subscriptionStore.checkout(user.id, invoice.planId);
-                }
-                console.log(`[cryptocloud] Подписка ${invoice.planId} активирована для ${invoice.userId}`);
-            }
-            else {
-                console.warn('[cryptocloud] Не найден инвойс для webhook:', { orderId, invoiceUuid });
-            }
-        }
-        response.json({ status: 'ok' });
-    };
-    router.use([
-        '/billing/cryptocloud/webhook',
-        '/billing/cryptocloud/callback',
-        '/billing/cryptocloud/postback',
-        '/billing/webhook',
-    ], handleCryptoCloudWebhook);
     return router;
 }

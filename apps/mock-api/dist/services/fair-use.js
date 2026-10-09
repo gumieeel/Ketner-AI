@@ -77,6 +77,17 @@ export class FairUseEngine {
                 reason,
             };
         }
+        // 7. Проверка лимита токенов в сутки
+        if (limits.tokensPerDay !== null && snapshot.tokensLastDay >= limits.tokensPerDay) {
+            const reason = language === 'en'
+                ? `Daily token quota reached (${Math.round(snapshot.tokensLastDay / 1000)}k tokens). It renews gradually over the next 24 hours.`
+                : `Достигнута суточная квота токенов (${Math.round(snapshot.tokensLastDay / 1000)}k токенов). Она восстанавливается в течение суток.`;
+            return {
+                action: 'deny',
+                code: 'rate_limited',
+                reason,
+            };
+        }
         return { action: 'allow' };
     }
 }

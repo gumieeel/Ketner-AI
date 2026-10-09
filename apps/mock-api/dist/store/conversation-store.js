@@ -4,6 +4,19 @@ import { dirname } from 'node:path';
 /** Длина автоматического заголовка диалога: см. docs/data-model.md. */
 export const TITLE_MAX_LENGTH = 60;
 /**
+ * В историю диалога идёт только описание проекта (имя, источник, список путей), без содержимого
+ * файлов: код проекта уже лежит у пользователя, а хранить его копию в каждом сообщении — это
+ * раздутая база и лишняя утечка исходников (до 300 000 символов на реплику).
+ */
+export function stripWorkspaceFileContents(workspace) {
+    if (!workspace)
+        return undefined;
+    return {
+        ...workspace,
+        files: workspace.files?.map((file) => ({ path: file.path, size: file.size, language: file.language })),
+    };
+}
+/**
  * Заголовок диалога по первому сообщению.
  *
  * Считаем именно символы, а не код-юниты: иначе обрезка разорвёт эмодзи.
@@ -158,7 +171,7 @@ export function createConversationStore(file) {
                     // На бэкенде хранится только итоговый вариант сообщения.
                     status: 'complete',
                     attachments: message.attachments,
-                    workspaceContext: message.workspaceContext,
+                    workspaceContext: stripWorkspaceFileContents(message.workspaceContext),
                     feedback: existing?.feedback,
                 };
             });

@@ -9,6 +9,7 @@
  * - Размер отдельного вложения (по умолчанию не более 20 МБ)
  */
 export const DEFAULT_PAYLOAD_LIMITS = {
+    maxWorkspaceChars: 400_000,
     maxTotalChars: 250_000,
     maxMessageChars: 100_000,
     maxAttachmentsCount: 10,
@@ -18,11 +19,16 @@ export class PayloadGuard {
     static validate(messages, options) {
         const limits = { ...DEFAULT_PAYLOAD_LIMITS, ...options?.limits };
         const lang = options?.language ?? 'ru';
-        // 1. Проверка вложений
-        const allAttachments = [
-            ...(options?.attachments ?? []),
-            ...messages.flatMap((m) => m.attachments ?? []),
-        ];
+        // 1. Проверка вложений: считаются только вложения ТЕКУЩЕГО запроса (последнее сообщение и
+        // явно переданные). Раньше складывались вложения всей истории, и после 10 файлов за диалог
+        // каждый следующий запрос, даже текстовый, получал 400; а переданные отдельно вложения
+        // последнего сообщения считались дважды.
+        const lastMessage = messages[messages.length - 1];
+        const byId = new Map();
+        for (const att of [...(options?.attachments ?? []), ...(lastMessage?.attachments ?? [])]) {
+            byId.set(att.id ?? `${att.name}:${att.size}`, att);
+        }
+        const allAttachments = Array.from(byId.values());
         if (allAttachments.length > limits.maxAttachmentsCount) {
             return {
                 valid: false,
@@ -41,6 +47,22 @@ export class PayloadGuard {
                     message: lang === 'en'
                         ? `Attachment "${att.name}" exceeds the maximum allowed size of ${Math.round(limits.maxAttachmentBytes / (1024 * 1024))}MB`
                         : `Файл "${att.name}" превышает максимальный размер ${Math.round(limits.maxAttachmentBytes / (1024 * 1024))}МБ`,
+                };
+            }
+        }
+        // 1.1. Размер содержимого привязанного проекта
+        if (options?.workspace?.files) {
+            let workspaceChars = 0;
+            for (const file of options.workspace.files) {
+                workspaceChars += file.content?.length ?? 0;
+            }
+            if (workspaceChars > limits.maxWorkspaceChars) {
+                return {
+                    valid: false,
+                    code: 'payload_too_large',
+                    message: lang === 'en'
+                        ? `The linked project is too large: ${workspaceChars} characters of file contents (max allowed: ${limits.maxWorkspaceChars})`
+                        : `Привязанный проект слишком большой: ${workspaceChars} символов содержимого файлов (максимум: ${limits.maxWorkspaceChars})`,
                 };
             }
         }

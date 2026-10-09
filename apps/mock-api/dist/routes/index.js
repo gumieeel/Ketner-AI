@@ -95,7 +95,7 @@ export function createApiRouter(deps) {
     const activeSubscriptionStore = deps.subscriptionStore ?? defaultSubscriptionStore;
     const activeInvoiceStore = deps.invoiceStore ?? defaultInvoiceStore;
     const activeUsageStore = deps.usageStore ?? defaultUsageStore;
-    router.use(createAuthMiddleware(activeUserStore, deps.betterAuth));
+    router.use(createAuthMiddleware(activeUserStore, deps.betterAuth, activeSubscriptionStore));
     router.get('/', (_request, response) => {
         response.json(describeService());
     });
@@ -106,7 +106,6 @@ export function createApiRouter(deps) {
         subscriptionStore: activeSubscriptionStore,
         userStore: activeUserStore,
         invoiceStore: activeInvoiceStore,
-        defaultUserId: deps.userId,
     }));
     router.use(createTelegramRouter({
         subscriptionStore: activeSubscriptionStore,

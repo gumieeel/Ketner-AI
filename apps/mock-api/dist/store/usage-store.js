@@ -158,15 +158,21 @@ export class UsageStore {
             if (time < oneMonthAgo)
                 break;
             const totalTokens = rec.inputTokens + rec.outputTokens;
-            if (time >= oneMinuteAgo)
+            // Отказанные и упавшие запросы не потребляют лимит: иначе каждый отказ продлевал бы блокировку
+            // (пользователь упёрся в лимит → отказ записался → лимит «не отпускает»), а сбой провайдера
+            // списывал бы с человека сообщение, которого он не получил.
+            const countsTowardLimits = rec.status !== 'rate_limited' && rec.status !== 'concurrency_limited' && rec.status !== 'error';
+            if (countsTowardLimits && time >= oneMinuteAgo)
                 requestsLastMinute++;
-            if (time >= oneHourAgo) {
+            if (countsTowardLimits && time >= oneHourAgo) {
                 requestsLastHour++;
                 tokensLastHour += totalTokens;
             }
             if (time >= oneDayAgo) {
-                requestsLastDay++;
-                tokensLastDay += totalTokens;
+                if (countsTowardLimits) {
+                    requestsLastDay++;
+                    tokensLastDay += totalTokens;
+                }
                 estimatedCostLastDay += rec.estimatedCost;
             }
             if (time >= oneMonthAgo) {
@@ -184,6 +190,28 @@ export class UsageStore {
             estimatedCostLastMonth: Number(estimatedCostLastMonth.toFixed(4)),
             activeConcurrentRequests: this.getActiveConcurrency(userId),
         };
+    }
+    /**
+     * Расход пользователя за скользящие 30 дней по заданным моделям.
+     * Нужен квоте премиум-запросов: сильные модели ограничены отдельным бюджетом тарифа.
+     * Берётся фактическая стоимость от провайдера, а если её нет — расчётная.
+     */
+    getCostLastMonthByModels(userId, modelIds) {
+        const wanted = new Set(modelIds);
+        if (wanted.size === 0)
+            return 0;
+        const userRecords = this.userIndex.get(userId) ?? [];
+        const since = Date.now() - 30 * 24 * 60 * 60 * 1000;
+        let total = 0;
+        for (let i = userRecords.length - 1; i >= 0; i--) {
+            const rec = userRecords[i];
+            if (new Date(rec.createdAt).getTime() < since)
+                break;
+            if (wanted.has(rec.modelId)) {
+                total += rec.actualCost ?? rec.estimatedCost;
+            }
+        }
+        return Number(total.toFixed(6));
     }
     /**
      * Получить последние записи использования для пользователя.
@@ -247,7 +275,7 @@ export class UsageStore {
      * Метрики по каждому провайдеру для мониторинга.
      */
     getProviderStats() {
-        const providers = ['openai', 'anthropic', 'google', 'openrouter'];
+        const providers = ['openrouter'];
         return providers.map((provider) => {
             const recs = this.records.filter((r) => r.provider === provider);
             const totalRequests = recs.length;

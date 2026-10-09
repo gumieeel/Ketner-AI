@@ -1,13 +1,14 @@
 import { existsSync, readFileSync, writeFileSync, mkdirSync, renameSync } from 'node:fs';
 import { dirname } from 'node:path';
 import { randomUUID } from 'node:crypto';
-/** Идентификаторы движков/моделей, считающихся «лёгкими» в шлюзе */
+/** Идентификаторы движков/моделей, считающихся «лёгкими» в шлюзе (класс lite). */
 export const LIGHT_ENGINES = new Set([
-    'deepseek/deepseek-chat',
+    'openai/gpt-6-luna',
+    'anthropic/claude-haiku-5.5',
+    'deepseek/deepseek-v4.1-flash',
+    'ketner-mini',
+    'claude-haiku-5.5',
     'deepseek-v4.1-flash',
-    'google/gemini-2.5-flash',
-    'openai/gpt-4o-mini',
-    'anthropic/claude-haiku-4.5',
 ]);
 export class FeedbackStore {
     records = [];
@@ -129,8 +130,8 @@ export class FeedbackStore {
     /**
      * Принятие решения в реальном времени: нужно ли эскалировать простой запрос с лёгкой модели на тяжёлую?
      *
-     * Если лёгкий движок (DeepSeek Chat и т.д.) получает много дизлайков (dislikeRate >= 25% при min 3 оценках),
-     * шлюз автоматически эскалирует обработку на следующий уровень (Luna Pro / Haiku 4.5 / Sol Pro / Opus 5.5).
+     * Если лёгкий движок (Luna, Haiku, DeepSeek Flash) получает много дизлайков (dislikeRate >= 25% при min 3 оценках),
+     * шлюз повышает глубину размышлений на один шаг (модель пользователя не подменяется).
      */
     shouldEscalateFromLightModel(_requestedModelId, _complexity) {
         if (this.autoEscalateOverride !== null) {
@@ -224,7 +225,7 @@ export class FeedbackStore {
             recommendation = `Недостаточно данных для переключения (${lightCount}/${this.minSamplesThreshold} оценок). Лёгкие модели работают в штатном режиме экономии токенов.`;
         }
         else if (escalateRecommended) {
-            recommendation = `Высокая доля негативных оценок лёгких моделей (${Math.round(lightDislikeRate * 100)}% при пороге ${Math.round(this.dislikeThreshold * 100)}%). Рекомендуется эскалация простых запросов на флагманские модели (Luna Pro / Haiku 4.5). Шлюз автоматически повышает класс моделей.`;
+            recommendation = `Высокая доля негативных оценок лёгких моделей (${Math.round(lightDislikeRate * 100)}% при пороге ${Math.round(this.dislikeThreshold * 100)}%). Рекомендуется эскалация простых запросов на флагманские модели (рабочая модель вместо лёгкой). Шлюз автоматически повышает глубину размышлений на один шаг.`;
         }
         else {
             recommendation = `Лёгкие модели показывают отличную удовлетворённость пользователей (${Math.round((1 - lightDislikeRate) * 100)}%). Эскалация не требуется, маршрутизация простых задач на лёгкие модели сохраняет максимальную экономию себестоимости.`;

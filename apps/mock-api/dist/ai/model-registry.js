@@ -5,7 +5,7 @@
  * перекомпиляции. По умолчанию загружается набор из DEFAULT_MODELS,
  * который можно расширять через admin API или конфиг-файл.
  */
-import { getPlanLimits } from '../services/entitlement.js';
+import { getPlanLimits, planAllowsModel } from '../services/entitlement.js';
 // ─────────────────────────────────────────────────────────────
 // Вспомогательные фабрики
 // ─────────────────────────────────────────────────────────────
@@ -65,11 +65,32 @@ function makePricing(input, output, cached = input * 0.5) {
 // ─────────────────────────────────────────────────────────────
 // Стандартный набор моделей
 // ─────────────────────────────────────────────────────────────
+/** Идентификатор самой дешёвой модели: база для Free, запасной вариант и «пол» при исчерпании бюджета. */
+export const FLOOR_MODEL_ID = 'ketner-mini';
+/** Рабочая лошадка: на неё переключаются премиум-запросы, когда квота премиум-моделей израсходована. */
+export const WORKHORSE_MODEL_ID = 'ketner-pro';
+const reasoning = (mandatory, efforts, toggle = false) => ({
+    mandatory,
+    efforts,
+    ...(toggle ? { toggle: true } : {}),
+});
 /**
- * Конфигурируемый набор моделей по умолчанию.
+ * Набор моделей по умолчанию. Все модели идут через единый ключ OpenRouter, `providerModelId` —
+ * это идентификатор модели в OpenRouter, ровно тот, что уходит в запрос (скрытых подмен нет).
  *
- * Цены указаны в $ за 1M токенов. Они обновляются админом или автоматически.
- * providerModelId — это идентификатор модели у соответствующего провайдера.
+ * Цены — реальные цены OpenRouter на 08.10.2026, $ за 1M токенов (вход / выход / чтение из кэша).
+ * Оценка качества — Artificial Analysis Intelligence Index при указанном усилии размышлений,
+ * цена — типичный запрос (7.6k токенов на входе, 0.7k на выходе, с размышлениями):
+ *
+ *   ketner-mini  GPT-6 Luna            AA 30–38   $0.001   повседневные вопросы, Free
+ *   ketner-pro   MiMo-V2.6 Pro         AA 46      $0.004   код и анализ: качество на уровне Grok 4.7 / Sonnet 5.5
+ *                                                          (high) при цене в 7–10 раз ниже
+ *   gpt-6.1-sol  GPT-6.1 Sol           AA 48–50   $0.03    сильная модель OpenAI
+ *   claude-opus-5.5 Claude Opus 5.5    AA 51–54   $0.07    лучшая модель по соотношению качества и цены у Anthropic
+ *
+ * Не вошли намеренно: GPT-6 Astra и Claude Fable 5.1 (то же качество, что у Sol и Opus, но в 3–5 раз
+ * дороже), Kimi K3, Qwen3.8 Max, Muse Spark, Nemotron 3 Ultra (хуже и дороже модели ketner-pro).
+ * Старые id (gpt-6-astra, claude-fable и др.) перенаправляются через LEGACY_MODEL_ALIASES.
  */
 const DEFAULT_REGISTRY_ENTRIES = [
     {
@@ -79,6 +100,8 @@ const DEFAULT_REGISTRY_ENTRIES = [
         providerModelId: 'auto',
         enabled: true,
         tier: 'free',
+        costClass: 'lite',
+        reasoning: reasoning(false, []),
         capabilities: makeCapabilities({
             coding: true,
             reasoning: true,
@@ -93,144 +116,64 @@ const DEFAULT_REGISTRY_ENTRIES = [
         requiredPlan: null,
         contextMessages: 120,
         isPro: false,
-        fallbackModelId: 'gpt-4o-mini',
+        fallbackModelId: FLOOR_MODEL_ID,
         defaultSystemPrompt: DEFAULT_SYSTEM_PROMPT,
         createdAt: now(),
         updatedAt: now(),
     },
-    // ── 1. Дешёвые модели (для Free, повседневных запросов и Fallback) ──
+    // ── Класс lite: повседневные запросы, Free и запасные модели ──
     {
         id: 'ketner-mini',
-        name: 'Ketner Mini (Qwen 3.8)',
+        name: 'Ketner Mini',
         provider: 'openrouter',
-        providerModelId: 'deepseek/deepseek-chat',
+        providerModelId: 'openai/gpt-6-luna',
         enabled: true,
         tier: 'free',
-        capabilities: makeCapabilities({ coding: true, reasoning: true, translation: true, creative: true }),
-        contextWindow: 32768,
-        maxOutputTokens: 4096,
-        pricing: makePricing(0, 0, 0),
-        requiredPlan: null,
-        contextMessages: 20,
-        isPro: false,
-        fallbackModelId: 'gpt-4o-mini',
-        defaultSystemPrompt: ECONOMY_SYSTEM_PROMPT,
-        createdAt: now(),
-        updatedAt: now(),
-    },
-    {
-        id: 'nemotron-ultra',
-        name: 'Nemotron 3 Ultra',
-        provider: 'openrouter',
-        providerModelId: 'nvidia/nemotron-3-ultra-550b-a55b:free',
-        enabled: true,
-        tier: 'free',
-        capabilities: makeCapabilities({ coding: true, reasoning: true, math: true, creative: true, translation: true }),
-        contextWindow: 131072,
-        maxOutputTokens: 4096,
-        pricing: makePricing(0, 0, 0),
-        requiredPlan: null,
-        contextMessages: 30,
-        isPro: false,
-        fallbackModelId: 'ketner-mini',
-        defaultSystemPrompt: ECONOMY_SYSTEM_PROMPT,
-        createdAt: now(),
-        updatedAt: now(),
-    },
-    {
-        id: 'gpt-4o-mini',
-        name: 'GPT-4o mini',
-        provider: 'openai',
-        providerModelId: 'gpt-4o-mini',
-        enabled: true,
-        tier: 'free',
-        capabilities: makeCapabilities({
-            coding: true,
-            reasoning: true,
-            translation: true,
-            creative: true,
-        }),
-        contextWindow: 128000,
-        maxOutputTokens: 4096,
-        pricing: makePricing(0.15, 0.6, 0.075),
-        requiredPlan: null,
-        contextMessages: 40,
-        isPro: false,
-        fallbackModelId: 'ketner-mini',
-        defaultSystemPrompt: ECONOMY_SYSTEM_PROMPT,
-        createdAt: now(),
-        updatedAt: now(),
-    },
-    {
-        id: 'gemini-2.5-flash',
-        name: 'Gemini 2.5 Flash',
-        provider: 'google',
-        providerModelId: 'gemini-2.5-flash',
-        enabled: true,
-        tier: 'free',
+        costClass: 'lite',
+        reasoning: reasoning(false, ['none', 'low', 'medium', 'high']),
         capabilities: makeCapabilities({
             coding: true,
             reasoning: true,
             vision: true,
             translation: true,
-            longContext: true,
-        }),
-        contextWindow: 1048576,
-        maxOutputTokens: 2048,
-        pricing: makePricing(0.15, 0.6, 0.075),
-        requiredPlan: null,
-        contextMessages: 40,
-        isPro: false,
-        fallbackModelId: 'ketner-mini',
-        defaultSystemPrompt: ECONOMY_SYSTEM_PROMPT,
-        createdAt: now(),
-        updatedAt: now(),
-    },
-    {
-        id: 'claude-3-haiku',
-        name: 'Claude 3 Haiku',
-        provider: 'anthropic',
-        providerModelId: 'claude-3-haiku-20240307',
-        enabled: true,
-        tier: 'free',
-        capabilities: makeCapabilities({
-            reasoning: true,
-            coding: true,
-            translation: true,
-            creative: true,
-        }),
-        contextWindow: 200000,
-        maxOutputTokens: 2048,
-        pricing: makePricing(0.25, 1.25, 0.125),
-        requiredPlan: null,
-        contextMessages: 40,
-        isPro: false,
-        fallbackModelId: 'ketner-mini',
-        defaultSystemPrompt: ECONOMY_SYSTEM_PROMPT,
-        createdAt: now(),
-        updatedAt: now(),
-    },
-    {
-        id: 'glm-5.3-flash',
-        name: 'GLM 5.3 Flash',
-        provider: 'openrouter',
-        providerModelId: 'z-ai/glm-5.3-flash',
-        enabled: true,
-        tier: 'free',
-        capabilities: makeCapabilities({
-            reasoning: true,
-            coding: true,
-            translation: true,
             creative: true,
             longContext: true,
         }),
-        contextWindow: 1048576,
+        contextWindow: 1050000,
         maxOutputTokens: 8192,
-        pricing: makePricing(0.15, 0.525, 0.05),
+        pricing: makePricing(0.1, 0.5, 0.01),
         requiredPlan: null,
         contextMessages: 40,
         isPro: false,
-        fallbackModelId: 'nemotron-ultra',
+        fallbackModelId: 'claude-haiku-5.5',
+        defaultSystemPrompt: ECONOMY_SYSTEM_PROMPT,
+        createdAt: now(),
+        updatedAt: now(),
+    },
+    {
+        id: 'claude-haiku-5.5',
+        name: 'Claude Haiku 5.5',
+        provider: 'openrouter',
+        providerModelId: 'anthropic/claude-haiku-5.5',
+        enabled: true,
+        tier: 'standard',
+        costClass: 'lite',
+        reasoning: reasoning(false, ['low', 'medium', 'high']),
+        capabilities: makeCapabilities({
+            coding: true,
+            reasoning: true,
+            vision: true,
+            translation: true,
+            creative: true,
+            longContext: true,
+        }),
+        contextWindow: 1000000,
+        maxOutputTokens: 8192,
+        pricing: makePricing(0.1, 0.5, 0.01),
+        requiredPlan: 'plus',
+        contextMessages: 40,
+        isPro: true,
+        fallbackModelId: 'deepseek-v4.1-flash',
         defaultSystemPrompt: ECONOMY_SYSTEM_PROMPT,
         createdAt: now(),
         updatedAt: now(),
@@ -241,7 +184,9 @@ const DEFAULT_REGISTRY_ENTRIES = [
         provider: 'openrouter',
         providerModelId: 'deepseek/deepseek-v4.1-flash',
         enabled: true,
-        tier: 'free',
+        tier: 'standard',
+        costClass: 'lite',
+        reasoning: reasoning(false, ['low', 'high']),
         capabilities: makeCapabilities({
             coding: true,
             reasoning: true,
@@ -251,200 +196,105 @@ const DEFAULT_REGISTRY_ENTRIES = [
             vision: true,
         }),
         contextWindow: 1048576,
-        maxOutputTokens: 8192,
-        pricing: makePricing(0.15, 0.6, 0.003),
-        requiredPlan: null,
+        maxOutputTokens: 16384,
+        pricing: makePricing(0.028, 1.0, 0.01),
+        requiredPlan: 'plus',
         contextMessages: 40,
-        isPro: false,
-        fallbackModelId: 'ketner-mini',
+        isPro: true,
+        fallbackModelId: FLOOR_MODEL_ID,
         defaultSystemPrompt: DEFAULT_SYSTEM_PROMPT,
         createdAt: now(),
         updatedAt: now(),
     },
+    // ── Класс work: рабочая лошадка для Plus и выше ──
     {
-        id: 'gpt-4o',
-        name: 'GPT-4o',
-        provider: 'openai',
-        providerModelId: 'gpt-4o',
+        id: WORKHORSE_MODEL_ID,
+        name: 'Ketner Pro',
+        provider: 'openrouter',
+        providerModelId: 'xiaomi/mimo-v2.6-pro',
         enabled: true,
-        tier: 'standard',
+        tier: 'premium',
+        costClass: 'work',
+        // MiMo умеет только включать и выключать размышления (reasoning.enabled), без уровней effort.
+        reasoning: reasoning(false, [], true),
         capabilities: makeCapabilities({
             coding: true,
             reasoning: true,
             vision: true,
-            creative: true,
             math: true,
             translation: true,
+            creative: true,
             research: true,
+            longContext: true,
         }),
-        contextWindow: 128000,
-        maxOutputTokens: 2048,
-        pricing: makePricing(2.5, 10, 1.25),
+        contextWindow: 1050000,
+        maxOutputTokens: 16384,
+        pricing: makePricing(0.435, 0.87, 0.004),
         requiredPlan: 'plus',
         contextMessages: 60,
         isPro: true,
-        fallbackModelId: 'gpt-4o-mini',
+        fallbackModelId: FLOOR_MODEL_ID,
         defaultSystemPrompt: DEFAULT_SYSTEM_PROMPT,
         createdAt: now(),
         updatedAt: now(),
     },
-    // ── 2. Топовые модели (Флагманы — ядро продукта) ──
+    // ── Классы strong и top: премиум, расходуют квоту премиум-запросов тарифа ──
     {
-        id: 'gpt-6-astra',
-        name: 'GPT-6 Astra',
-        provider: 'openai',
-        providerModelId: 'gpt-4o',
-        enabled: true,
-        tier: 'flagship',
-        capabilities: makeCapabilities({
-            reasoning: true,
-            coding: true,
-            vision: true,
-            creative: true,
-            math: true,
-            translation: true,
-            research: true,
-        }),
-        contextWindow: 128000,
-        maxOutputTokens: 2048,
-        pricing: makePricing(2.5, 10, 1.25),
-        requiredPlan: 'pro',
-        contextMessages: 120,
-        isPro: true,
-        fallbackModelId: 'ketner-mini',
-        defaultSystemPrompt: DEFAULT_SYSTEM_PROMPT,
-        createdAt: now(),
-        updatedAt: now(),
-    },
-    {
-        id: 'claude-3.5-sonnet',
-        name: 'Claude 3.5 Sonnet',
-        provider: 'anthropic',
-        providerModelId: 'claude-3-5-sonnet-20241022',
-        enabled: true,
-        tier: 'flagship',
-        capabilities: makeCapabilities({
-            reasoning: true,
-            coding: true,
-            creative: true,
-            translation: true,
-            research: true,
-            longContext: true,
-        }),
-        contextWindow: 200000,
-        maxOutputTokens: 2048,
-        pricing: makePricing(3.0, 15.0, 0.75),
-        requiredPlan: 'pro',
-        contextMessages: 120,
-        isPro: true,
-        fallbackModelId: 'claude-3-haiku',
-        defaultSystemPrompt: DEFAULT_SYSTEM_PROMPT,
-        createdAt: now(),
-        updatedAt: now(),
-    },
-    {
-        id: 'claude-fable',
-        name: 'Claude Fable 5.5',
-        provider: 'anthropic',
-        providerModelId: 'claude-3-5-sonnet-20241022',
-        enabled: true,
-        tier: 'flagship',
-        capabilities: makeCapabilities({
-            reasoning: true,
-            coding: true,
-            creative: true,
-            translation: true,
-            research: true,
-            longContext: true,
-        }),
-        contextWindow: 200000,
-        maxOutputTokens: 2048,
-        pricing: makePricing(3.0, 15.0, 0.75),
-        requiredPlan: 'pro',
-        contextMessages: 120,
-        isPro: true,
-        fallbackModelId: 'claude-3-haiku',
-        defaultSystemPrompt: DEFAULT_SYSTEM_PROMPT,
-        createdAt: now(),
-        updatedAt: now(),
-    },
-    {
-        id: 'gemini-2.5-pro',
-        name: 'Gemini 3.8 Flash',
-        provider: 'google',
-        providerModelId: 'google/gemini-3.8-flash',
-        enabled: true,
-        tier: 'flagship',
-        capabilities: makeCapabilities({
-            reasoning: true,
-            coding: true,
-            vision: true,
-            longContext: true,
-            math: true,
-            translation: true,
-            research: true,
-        }),
-        contextWindow: 1048576,
-        maxOutputTokens: 2048,
-        pricing: makePricing(0.15, 0.6, 0.0375),
-        requiredPlan: 'pro',
-        contextMessages: 120,
-        isPro: true,
-        fallbackModelId: 'gpt-4o-mini',
-        defaultSystemPrompt: DEFAULT_SYSTEM_PROMPT,
-        createdAt: now(),
-        updatedAt: now(),
-    },
-    {
-        id: 'gemini-pro',
-        name: 'Gemini 3.8 Flash',
-        provider: 'google',
-        providerModelId: 'google/gemini-3.8-flash',
-        enabled: true,
-        tier: 'flagship',
-        capabilities: makeCapabilities({
-            reasoning: true,
-            coding: true,
-            vision: true,
-            longContext: true,
-            math: true,
-            translation: true,
-            research: true,
-        }),
-        contextWindow: 1048576,
-        maxOutputTokens: 2048,
-        pricing: makePricing(0.15, 0.6, 0.0375),
-        requiredPlan: 'pro',
-        contextMessages: 120,
-        isPro: true,
-        fallbackModelId: 'gemini-2.5-flash',
-        defaultSystemPrompt: DEFAULT_SYSTEM_PROMPT,
-        createdAt: now(),
-        updatedAt: now(),
-    },
-    {
-        id: 'gemini-3.8-flash',
-        name: 'Gemini 3.8 Flash',
+        id: 'gpt-6.1-sol',
+        name: 'GPT-6.1 Sol',
         provider: 'openrouter',
-        providerModelId: 'google/gemini-3.8-flash',
+        providerModelId: 'openai/gpt-6.1-sol',
         enabled: true,
         tier: 'flagship',
+        costClass: 'strong',
+        reasoning: reasoning(true, ['low', 'medium', 'high']),
         capabilities: makeCapabilities({
             reasoning: true,
             coding: true,
             vision: true,
-            longContext: true,
+            creative: true,
             math: true,
             translation: true,
             research: true,
+            longContext: true,
         }),
-        contextWindow: 1048576,
-        maxOutputTokens: 2048,
-        pricing: makePricing(0.15, 0.6, 0.0375),
+        contextWindow: 1050000,
+        maxOutputTokens: 16384,
+        pricing: makePricing(2, 10, 0.1),
+        requiredPlan: 'plus',
+        contextMessages: 120,
+        isPro: true,
+        fallbackModelId: WORKHORSE_MODEL_ID,
+        defaultSystemPrompt: DEFAULT_SYSTEM_PROMPT,
+        createdAt: now(),
+        updatedAt: now(),
+    },
+    {
+        id: 'claude-opus-5.5',
+        name: 'Claude Opus 5.5',
+        provider: 'openrouter',
+        providerModelId: 'anthropic/claude-opus-5.5',
+        enabled: true,
+        tier: 'flagship',
+        costClass: 'top',
+        reasoning: reasoning(true, ['low', 'medium', 'high']),
+        capabilities: makeCapabilities({
+            reasoning: true,
+            coding: true,
+            vision: true,
+            creative: true,
+            math: true,
+            translation: true,
+            research: true,
+            longContext: true,
+        }),
+        contextWindow: 1000000,
+        maxOutputTokens: 16384,
+        pricing: makePricing(4, 20, 0.2),
         requiredPlan: 'pro',
         contextMessages: 120,
         isPro: true,
-        fallbackModelId: 'deepseek-v4.1-flash',
+        fallbackModelId: 'gpt-6.1-sol',
         defaultSystemPrompt: DEFAULT_SYSTEM_PROMPT,
         createdAt: now(),
         updatedAt: now(),
@@ -456,44 +306,77 @@ const DEFAULT_REGISTRY_ENTRIES = [
         providerModelId: 'x-ai/grok-4.7',
         enabled: true,
         tier: 'flagship',
+        costClass: 'strong',
+        reasoning: reasoning(true, ['low', 'medium', 'high']),
         capabilities: makeCapabilities({
             reasoning: true,
             coding: true,
+            vision: true,
             math: true,
             creative: true,
             research: true,
         }),
-        contextWindow: 131072,
-        maxOutputTokens: 2048,
-        pricing: makePricing(2.0, 10.0, 0.5),
+        contextWindow: 500000,
+        maxOutputTokens: 16384,
+        pricing: makePricing(2, 6, 0.5),
         requiredPlan: 'pro',
         contextMessages: 120,
         isPro: true,
-        fallbackModelId: 'deepseek-v4.1-flash',
+        fallbackModelId: WORKHORSE_MODEL_ID,
         defaultSystemPrompt: DEFAULT_SYSTEM_PROMPT,
         createdAt: now(),
         updatedAt: now(),
     },
     {
-        id: 'ketner-pro',
-        name: 'Qwen 2.5 Max',
+        id: 'gemini-3.8-flash',
+        name: 'Gemini 3.8 Flash',
         provider: 'openrouter',
-        providerModelId: 'qwen/qwen-2.5-72b-instruct',
+        providerModelId: 'google/gemini-3.8-flash',
         enabled: true,
-        tier: 'premium',
-        capabilities: makeCapabilities({ coding: true, reasoning: true, math: true }),
-        contextWindow: 65536,
-        maxOutputTokens: 8192,
-        pricing: makePricing(0.4, 1.2, 0.2),
-        requiredPlan: 'plus',
-        contextMessages: 60,
+        tier: 'flagship',
+        // Размышления нельзя отключить, а по данным AA модель многословна: реальная цена запроса
+        // близка к GPT-6.1 Sol, поэтому она расходует квоту премиум-запросов.
+        costClass: 'strong',
+        reasoning: reasoning(true, ['low', 'medium', 'high']),
+        capabilities: makeCapabilities({
+            reasoning: true,
+            coding: true,
+            vision: true,
+            longContext: true,
+            math: true,
+            translation: true,
+            research: true,
+        }),
+        contextWindow: 1048576,
+        maxOutputTokens: 16384,
+        pricing: makePricing(0.75, 3.75, 0.075),
+        requiredPlan: 'pro',
+        contextMessages: 120,
         isPro: true,
-        fallbackModelId: 'ketner-mini',
+        fallbackModelId: WORKHORSE_MODEL_ID,
         defaultSystemPrompt: DEFAULT_SYSTEM_PROMPT,
         createdAt: now(),
         updatedAt: now(),
     },
 ];
+/**
+ * Старые идентификаторы моделей → актуальные. Нужны, чтобы сохранённый в браузере выбор модели,
+ * старые диалоги и клиенты API не превращались молча в Auto. GPT-6 Astra и Claude Fable 5.1
+ * убраны из каталога: по независимым оценкам они не лучше Sol и Opus, но в 3–5 раз дороже.
+ */
+export const LEGACY_MODEL_ALIASES = {
+    'gpt-6-astra': 'gpt-6.1-sol',
+    'gpt-4o': 'gpt-6.1-sol',
+    'claude-fable': 'claude-opus-5.5',
+    'claude-3.5-sonnet': 'claude-opus-5.5',
+    'claude-3-haiku': 'claude-haiku-5.5',
+    'gemini-2.5-pro': 'gemini-3.8-flash',
+    'gemini-pro': 'gemini-3.8-flash',
+    'gpt-4o-mini': 'ketner-mini',
+    'gemini-2.5-flash': 'ketner-mini',
+    'glm-5.3-flash': 'ketner-mini',
+    'nemotron-ultra': 'ketner-mini',
+};
 // ─────────────────────────────────────────────────────────────
 // Model Registry
 // ─────────────────────────────────────────────────────────────
@@ -511,14 +394,14 @@ export class ModelRegistry {
             this.entries.set(entry.id, entry);
         }
     }
-    /** Получить модель по ID. */
+    /** Получить модель по ID (старые идентификаторы перенаправляются на актуальные). */
     get(modelId) {
-        return this.entries.get(modelId);
+        return this.entries.get(modelId) ?? this.entries.get(LEGACY_MODEL_ALIASES[modelId] ?? '');
     }
     /** Получить модель или модель по умолчанию. */
     resolve(modelId) {
         if (modelId) {
-            const entry = this.entries.get(modelId);
+            const entry = this.get(modelId);
             if (entry && entry.enabled)
                 return entry;
         }
@@ -526,7 +409,7 @@ export class ModelRegistry {
     }
     /** Модель по умолчанию — ketner-mini (или первая бесплатная). */
     getDefault() {
-        const mini = this.entries.get('ketner-mini');
+        const mini = this.entries.get(FLOOR_MODEL_ID);
         if (mini && mini.enabled)
             return mini;
         for (const entry of this.entries.values()) {
@@ -551,20 +434,25 @@ export class ModelRegistry {
     getByProvider(provider) {
         return this.getAll().filter((e) => e.provider === provider);
     }
-    /** Проверка доступа: флагманы (GPT-6, Claude 3.5, Gemini Pro) доступны только Pro/Ultra. */
+    /** Проверка доступа: по `requiredPlan` модели и рангу тарифа (единое правило в entitlement). */
     canAccess(userPlan, entry) {
-        if (!entry.isPro)
-            return true;
-        if (!userPlan || userPlan === 'free')
-            return false;
-        if (entry.tier === 'flagship') {
-            return (userPlan === 'pro' ||
-                userPlan === 'ultra' ||
-                userPlan === 'gpt-pro' ||
-                userPlan === 'claude-pro' ||
-                userPlan === 'gemini-pro');
+        return planAllowsModel(userPlan, entry.requiredPlan);
+    }
+    /**
+     * Идентификаторы премиум-моделей (классы strong и top), включая старые id из истории расхода:
+     * по ним считается, сколько квоты премиум-запросов пользователь уже потратил за 30 дней.
+     */
+    getPremiumModelIds() {
+        const ids = new Set();
+        for (const entry of this.entries.values()) {
+            if (entry.costClass === 'strong' || entry.costClass === 'top')
+                ids.add(entry.id);
         }
-        return true;
+        for (const [legacyId, targetId] of Object.entries(LEGACY_MODEL_ALIASES)) {
+            if (ids.has(targetId))
+                ids.add(legacyId);
+        }
+        return ids;
     }
     /** Добавить или обновить модель. */
     upsert(entry) {
@@ -593,17 +481,20 @@ export class ModelRegistry {
         entry.updatedAt = now();
         return true;
     }
-    /** Получить цепочку fallback-моделей. */
+    /**
+     * Цепочка fallback-моделей. Каждая модель встречается один раз: раньше замкнутые ссылки
+     * (ketner-mini ↔ gpt-4o-mini) заставляли пробовать одну и ту же модель до пяти раз подряд.
+     */
     getFallbackChain(modelId, maxDepth = 5) {
         const chain = [];
-        let current = this.entries.get(modelId);
-        let depth = 0;
-        while (current && depth < maxDepth) {
+        const seen = new Set();
+        let current = this.get(modelId);
+        while (current && chain.length < maxDepth && !seen.has(current.id)) {
+            seen.add(current.id);
             chain.push(current);
-            if (!current.fallbackModelId || current.fallbackModelId === current.id)
+            if (!current.fallbackModelId)
                 break;
             current = this.entries.get(current.fallbackModelId);
-            depth++;
         }
         return chain;
     }

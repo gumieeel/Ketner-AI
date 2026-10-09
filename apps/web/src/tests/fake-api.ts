@@ -338,20 +338,20 @@ export function installFakeApi(options: FakeApiOptions = {}): FakeApi {
             {
               id: 'plus',
               nameKey: 'pricing.plus',
-              priceMonthly: 990,
+              priceMonthly: 9,
               bullets: { ru: ['Быстрый отклик'], en: ['Fast speed'] },
             },
             {
               id: 'pro',
               nameKey: 'pricing.pro',
-              priceMonthly: 1990,
+              priceMonthly: 25,
               popular: true,
               bullets: { ru: ['Все флагманы AI'], en: ['All Flagship AIs'] },
             },
             {
               id: 'ultra',
               nameKey: 'pricing.ultra',
-              priceMonthly: 2990,
+              priceMonthly: 49,
               bullets: { ru: ['Максимум · VIP'], en: ['Maximum · VIP'] },
             },
           ],

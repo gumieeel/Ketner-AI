@@ -4,7 +4,8 @@ import { betterAuth } from 'better-auth';
 import { drizzleAdapter } from 'better-auth/adapters/drizzle';
 import { dash } from '@better-auth/infra';
 import { getMigrations } from 'better-auth/db/migration';
-import { config } from '../config.js';
+import { config, isProduction } from '../config.js';
+import { isAdminEmail, isVipEmail } from '../services/vip.js';
 import { db as pgDb } from '../db/client.js';
 import * as pgSchema from '../db/schema.js';
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -149,6 +150,25 @@ export function createBetterAuth(options = {}) {
                 }
                 : {}),
         },
+        databaseHooks: {
+            user: {
+                create: {
+                    // Адреса из ADMIN_EMAILS / VIP_EMAILS получают повышенные права по самому email.
+                    // В production их нельзя занять самостоятельной регистрацией по паролю:
+                    // допускается только вход через провайдера, подтвердившего владение адресом.
+                    // Тип параметра выводится из Better Auth: ручная аннотация расходилась с ним
+                    // (email: string у библиотеки, string | null у нас) и ломала сборку.
+                    before: async (user) => {
+                        if (isProduction &&
+                            user.emailVerified !== true &&
+                            (isAdminEmail(user.email) || isVipEmail(user.email))) {
+                            return false;
+                        }
+                        return true;
+                    },
+                },
+            },
+        },
         user: {
             additionalFields: {
                 plan: {
@@ -185,17 +205,19 @@ export async function initAuthDatabase(authInstance) {
             // Миграции уже применены
         }
     }
-    try {
-        await authInstance.api.signUpEmail({
-            body: {
-                email: 'demo@ketner.ai',
-                password: 'password123',
-                name: 'Ketner Demo',
-            },
-        });
-    }
-    catch {
-        // Демо-пользователь уже существует
+    if (config.enableDemoAccount) {
+        try {
+            await authInstance.api.signUpEmail({
+                body: {
+                    email: 'demo@ketner.ai',
+                    password: 'password123',
+                    name: 'Ketner Demo',
+                },
+            });
+        }
+        catch {
+            // Демо-пользователь уже существует
+        }
     }
     try {
         for (const vipEmail of config.vipEmails) {

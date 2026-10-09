@@ -2,28 +2,40 @@
  * AI Gateway — центральный шлюз оркестрации AI-запросов Ketner AI.
  *
  * Объединяет:
- * - Model Registry (каталог моделей)
- * - Provider Manager (адаптеры OpenAI, Anthropic, Google, OpenRouter)
+ * - Model Registry (каталог моделей и их классы стоимости)
+ * - Provider Manager (единый канал OpenRouter: один ключ на все модели)
  * - Entitlement Service (проверка прав и тарифов)
- * - Fair Use Engine (защита от злоупотреблений, rate limits, concurrency)
+ * - Fair Use Engine (rate limits, concurrency, суточные квоты)
+ * - Budget Policy (месячный бюджет себестоимости и квота премиум-запросов)
+ * - Reasoning Policy (глубина размышлений и потолок ответа)
  * - Context Optimizer (оптимизация контекста)
  * - Usage Accounting & Cost Calculator (учёт токенов и себестоимости)
- * - Fallback & Failover (автоматическое переключение при сбоях провайдеров)
+ * - Fallback & Failover (запасные модели из реестра, предохранитель на каждую модель)
+ *
+ * Принцип: запрошенная пользователем модель не подменяется скрытно. Если её приходится заменить
+ * (исчерпана квота премиум-запросов, бюджет на исходе, сбой провайдера), в ответе возвращается
+ * реальная модель (`selectedModel`) и причина (`routingReason`), а расход пишется по цене именно
+ * той модели, которая ответила.
  */
 import { ERROR_MESSAGES, pickAnswer } from './answers.js';
 import { semanticCache, SemanticCache } from './cache.js';
 import { ContextOptimizer } from './context.js';
-import { modelRegistry, ECONOMY_SYSTEM_PROMPT, DEFAULT_SYSTEM_PROMPT, } from './model-registry.js';
+import { modelRegistry, ECONOMY_SYSTEM_PROMPT, DEFAULT_SYSTEM_PROMPT, FLOOR_MODEL_ID, WORKHORSE_MODEL_ID, } from './model-registry.js';
 import { providerManager } from './providers/provider-factory.js';
+import { OpenRouterError } from './providers/openrouter-provider.js';
 import { delay, streamText } from './stream.js';
-import { CostCalculator } from '../services/cost.js';
-import { EntitlementService } from '../services/entitlement.js';
+import { isProduction } from '../config.js';
+import { EntitlementService, planAllowsModel } from '../services/entitlement.js';
 import { FairUseEngine } from '../services/fair-use.js';
 import { AutoRouter } from './auto-router.js';
 import { feedbackStore as defaultFeedbackStore } from '../store/index.js';
-import { TierPipelineEngine, computeDynamicMaxTokens, } from './tier-pipeline.js';
+import { chooseReasoningEffort, computeOutputCap, isPremiumClass, toProviderReasoning, } from './reasoning-policy.js';
 import { CircuitBreaker, defaultCircuitBreaker } from './circuit-breaker.js';
+import { computeRequestCost } from './engine-pricing.js';
+import { createStreamWatchdog, DEFAULT_WATCHDOG_LIMITS } from './stream-watchdog.js';
+import { evaluateBudget } from '../services/budget-policy.js';
 import { PayloadGuard } from './payload-guard.js';
+import { buildAttachmentsBlock, buildWorkspaceContextBlock, workspaceBudgetChars, } from './workspace-context.js';
 export function classifyPromptComplexity(prompt, context) {
     if (!prompt || !prompt.trim()) {
         return { level: 'complex', category: 'general' };
@@ -68,254 +80,6 @@ export function classifyPromptComplexity(prompt, context) {
     // 3. Умеренные / стандартные задачи
     return { level: 'moderate', category: classification.category };
 }
-/**
- * Интеллектуальный роутер движков OpenRouter для флагманских Pro-моделей:
- * 1. GPT-6 Astra:
- *    - лёгкие: deepseek/deepseek-chat
- *    - средние: openai/gpt-6-luna-pro
- *    - сложные: openai/gpt-6-sol-pro
- * 2. Claude Fable (5.1 / 5.5):
- *    - лёгкие: deepseek/deepseek-chat
- *    - средние: anthropic/claude-haiku-4.5
- *    - сложные: anthropic/claude-opus-5.5
- * 3. Gemini 3.8 Flash (ранее gemini-2.5-pro / gemini-pro):
- *    - лёгкие: deepseek/deepseek-chat
- *    - средние и сложные: google/gemini-3.8-flash
- * 4. Grok 4.7:
- *    - лёгкие: deepseek/deepseek-chat
- *    - средние и сложные: x-ai/grok-4.7
- */
-export function resolveEngineForModel(modelId, prompt, context, feedbackStore) {
-    const { level } = classifyPromptComplexity(prompt, context);
-    const shouldEscalate = feedbackStore?.shouldEscalateFromLightModel(modelId, level) ?? false;
-    // 1. GPT-6 Astra
-    if (modelId === 'gpt-6-astra') {
-        if (level === 'simple') {
-            if (shouldEscalate) {
-                return {
-                    modelId: 'openai/gpt-6-luna-pro',
-                    engineName: 'OpenAI: GPT-6 Luna Pro (Escalated from Light)',
-                    level,
-                };
-            }
-            return { modelId: 'deepseek/deepseek-chat', engineName: 'DeepSeek Chat (Light Fast)', level };
-        }
-        if (level === 'moderate') {
-            return { modelId: 'openai/gpt-6-luna-pro', engineName: 'OpenAI: GPT-6 Luna Pro', level };
-        }
-        return { modelId: 'openai/gpt-6-sol-pro', engineName: 'OpenAI: GPT-6 Sol Pro', level };
-    }
-    // 2. Claude Fable (5.1 / 5.5)
-    if (modelId === 'claude-fable' || modelId === 'claude-3.5-sonnet') {
-        if (level === 'simple') {
-            if (shouldEscalate) {
-                return {
-                    modelId: 'anthropic/claude-haiku-4.5',
-                    engineName: 'Anthropic: Claude Haiku 4.5 (Escalated from Light)',
-                    level,
-                };
-            }
-            return { modelId: 'deepseek/deepseek-chat', engineName: 'DeepSeek Chat (Light Fast)', level };
-        }
-        if (level === 'moderate') {
-            return { modelId: 'anthropic/claude-haiku-4.5', engineName: 'Anthropic: Claude Haiku 4.5', level };
-        }
-        return { modelId: 'anthropic/claude-opus-5.5', engineName: 'Anthropic: Claude Opus 5.5', level };
-    }
-    // 3. Gemini 3.8 Flash
-    if (modelId === 'gemini-2.5-pro' ||
-        modelId === 'gemini-pro' ||
-        modelId === 'gemini-3.8-flash') {
-        if (level === 'simple') {
-            if (shouldEscalate) {
-                return {
-                    modelId: 'google/gemini-3.8-flash',
-                    engineName: 'Google: Gemini 3.8 Flash (Escalated from Light)',
-                    level,
-                };
-            }
-            return { modelId: 'deepseek/deepseek-chat', engineName: 'DeepSeek Chat (Light Fast)', level };
-        }
-        return { modelId: 'google/gemini-3.8-flash', engineName: 'Google: Gemini 3.8 Flash', level };
-    }
-    // 4. Grok 4.7
-    if (modelId === 'grok-4.7' || modelId === 'grok') {
-        if (level === 'simple') {
-            if (shouldEscalate) {
-                return {
-                    modelId: 'x-ai/grok-4.7',
-                    engineName: 'SpaceXAI: Grok 4.7 (Escalated from Light)',
-                    level,
-                };
-            }
-            return { modelId: 'deepseek/deepseek-chat', engineName: 'DeepSeek Chat (Light Fast)', level };
-        }
-        return { modelId: 'x-ai/grok-4.7', engineName: 'SpaceXAI: Grok 4.7', level };
-    }
-    // Прочие модели:
-    if (modelId === 'gpt-4o-mini') {
-        return { modelId: 'openai/gpt-4o-mini', engineName: 'OpenAI: GPT-4o mini', level };
-    }
-    if (modelId === 'gpt-4o') {
-        return { modelId: 'openai/gpt-4o', engineName: 'OpenAI: GPT-4o', level };
-    }
-    if (modelId === 'deepseek-v4.1-flash') {
-        return { modelId: 'deepseek/deepseek-chat', engineName: 'DeepSeek V4.1 Flash', level };
-    }
-    if (modelId === 'gemini-2.5-flash') {
-        return { modelId: 'google/gemini-2.5-flash', engineName: 'Google: Gemini 2.5 Flash', level };
-    }
-    if (modelId === 'claude-3-haiku') {
-        return { modelId: 'anthropic/claude-haiku-4.5', engineName: 'Anthropic: Claude Haiku 4.5', level };
-    }
-    return { modelId, engineName: modelId, level };
-}
-export function resolveAstraEngine(prompt, context, feedbackStore) {
-    return resolveEngineForModel('gpt-6-astra', prompt, context, feedbackStore);
-}
-export function toOpenRouterModelId(model, prompt, context, feedbackStore) {
-    const resolution = resolveEngineForModel(model.id, prompt, context, feedbackStore);
-    if (resolution.modelId !== model.id) {
-        return resolution.modelId;
-    }
-    if (model.provider === 'openai')
-        return `openai/${model.providerModelId}`;
-    if (model.provider === 'anthropic')
-        return `anthropic/${model.providerModelId}`;
-    if (model.provider === 'google')
-        return `google/${model.providerModelId}`;
-    return model.providerModelId;
-}
-function prioritizeWorkspaceFiles(files) {
-    const highPriority = [
-        /^package\.json$/i,
-        /^tsconfig.*\.json$/i,
-        /^(src\/|apps\/[^\/]+\/src\/)?(index|main|server|app)\.(ts|tsx|js|jsx)$/i,
-        /routes/i,
-        /(schema|models|store|service)/i,
-        /^README\.md$/i,
-    ];
-    return [...files].sort((a, b) => {
-        const aMatch = highPriority.some((p) => p.test(a.path));
-        const bMatch = highPriority.some((p) => p.test(b.path));
-        if (aMatch && !bMatch)
-            return -1;
-        if (!aMatch && bMatch)
-            return 1;
-        return (a.path || '').localeCompare(b.path || '');
-    });
-}
-function buildWorkspaceContextBlock(ws, language) {
-    const isEn = language === 'en';
-    const typeLabel = ws.type === 'git_repo'
-        ? (isEn ? 'GitHub Repository' : 'GitHub-репозиторий')
-        : (isEn ? 'Local Project Folder' : 'Локальная папка проекта');
-    let block = isEn
-        ? `\n\n[ATTACHED WORKSPACE CONTEXT: ${typeLabel} "${ws.name}"]\nSource: ${ws.pathOrUrl || ws.name}${ws.branch ? ` (branch: ${ws.branch})` : ''}\nTotal Files Indexed: ${ws.filesCount || ws.files?.length || 0}\n`
-        : `\n\n[КОНТЕКСТ ПРИВЯЗАННОГО ПРОЕКТА: ${typeLabel} «${ws.name}»]\nИсточник: ${ws.pathOrUrl || ws.name}${ws.branch ? ` (ветка: ${ws.branch})` : ''}\nВсего проиндексировано файлов: ${ws.filesCount || ws.files?.length || 0}\n`;
-    if (Array.isArray(ws.files) && ws.files.length > 0) {
-        block += isEn ? '\nProject File Tree:\n' : '\nДерево файлов проекта:\n';
-        const treePreview = ws.files
-            .slice(0, 80)
-            .map((f) => `- ${f.path}${f.size ? ` (${Math.round((f.size / 1024) * 10) / 10} KB)` : ''}`)
-            .join('\n');
-        block += treePreview;
-        if (ws.files.length > 80) {
-            block += isEn ? `\n... and ${ws.files.length - 80} more files` : `\n... и ещё ${ws.files.length - 80} файлов`;
-        }
-        block += '\n';
-        const rawFilesWithContent = ws.files.filter((f) => typeof f.content === 'string' && f.content.trim().length > 0);
-        const filesWithContent = prioritizeWorkspaceFiles(rawFilesWithContent);
-        if (filesWithContent.length > 0) {
-            block += isEn ? '\nKey Project Code & File Contents:\n' : '\nСодержимое ключевых файлов проекта:\n';
-            let totalContentLength = 0;
-            const MAX_TOTAL_CHARS = 120000;
-            for (const f of filesWithContent) {
-                if (totalContentLength > MAX_TOTAL_CHARS) {
-                    block += isEn ? '\n[Additional files omitted for length]\n' : '\n[Остальные файлы пропущены для экономии контекста]\n';
-                    break;
-                }
-                const snippet = f.content.slice(0, 15000);
-                block += `\n--- File: ${f.path} ---\n\`\`\`${f.language || ''}\n${snippet}\n\`\`\`\n`;
-                totalContentLength += snippet.length;
-            }
-        }
-    }
-    block += isEn
-        ? `\nIMPORTANT AGENTIC INSTRUCTIONS FOR WORKSPACE WORK:
-- You are acting as Ketner AI Engine — a senior autonomous full-stack software engineer directly embedded in this project.
-- YOU HAVE FULL ACCESS TO THIS CODEBASE. The file tree and source code are provided above.
-- NEVER SAY: "I cannot edit files", "I am only an AI text model", "I have no access to your filesystem or repository". Your environment has an automated file-action execution runtime that captures your \`\`\`file-actions blocks and applies them directly to the user's disk and GitHub!
-- NEVER HALLUCINATE: NEVER say "I already pushed to main" or make up fake commit URLs. Always state: "I have prepared the changes in the card below. Click [Apply to Project] or [Apply to GitHub] to commit them."
-- When asked to analyze the project, check readiness, or find bugs:
-  1) Base your analysis ONLY on the actual code, imports, and dependencies above. Do NOT invent libraries that do not exist in package.json.
-  2) Give deep, precise technical answers: reference exact file paths, line numbers, function names, and root causes of bugs.
-  3) If you find bugs or missing features, explain the problem and immediately provide complete, ready-to-use fixes.
-- When creating, modifying, editing, or replacing files in the workspace:
-  Always include structured \`\`\`file-actions blocks in your response so the client UI can render a visual Diff Viewer and apply them:
-  \`\`\`file-actions
-  [
-    {
-      "action": "write",
-      "path": "path/to/file.ts",
-      "description": "Short summary of changes",
-      "content": "Full content of the file"
-    }
-  ]
-  \`\`\`
-  Or for targeted replacements in existing files:
-  \`\`\`file-actions
-  [
-    {
-      "action": "replace",
-      "path": "path/to/file.ts",
-      "description": "Short summary of replacement",
-      "targetContent": "exact existing code snippet to replace",
-      "replacementContent": "new replacement code snippet"
-    }
-  ]
-  \`\`\`
-- Always provide COMPLETE, syntactically valid code. Never cut off code with comments like "// ... rest of code unchanged ...", because that breaks compilation.
-- Never truncate or cut off your answer. Use clean Markdown headers and code blocks.
-- If the user prompt is typed in an incorrect keyboard layout (e.g. "ghjfyfkbpbhqe htgjpbnjhbq" for "проанализируй репозиторий"), automatically recognize the intended meaning and respond in the appropriate language.`
-        : `\nВАЖНЫЕ ИНЖЕНЕРНЫЕ ИНСТРУКЦИИ ДЛЯ РАБОТЫ С ПРОЕКТОМ:
-- Ты работаешь как Ketner AI Engine — ведущий инженерный AI-ассистент, напрямую подключённый к кодовой базе этого проекта.
-- У ТЕБЯ ЕСТЬ ПОЛНЫЙ ДОСТУП К ЭТОМУ ПРОЕКТУ. Все файлы и дерево проекта переданы тебе выше.
-- КАТЕГОРИЧЕСКИ ЗАПРЕЩЕНО писать: «у меня нет доступа к файлам», «я всего лишь языковая модель и не могу менять файлы», «я не могу запускать команды». Веб-интерфейс Ketner AI оснащён автоматическим движком записи: он перехватывает твои блоки \`\`\`file-actions и записывает их на диск или отправляет коммитом в GitHub! Ты ОБЯЗАН при любых просьбах изменить или создать код формировать блок \`\`\`file-actions!
-- КАТЕГОРИЧЕСКИ ЗАПРЕЩЕНО ВРАТЬ: никогда не говори «Я уже запушил изменения в main» и не выдумывай ссылки на несуществующие коммиты. Всегда говори правду: «Я подготовил изменения ниже. Нажмите [Применить к проекту] (или [Применить к GitHub]), чтобы сохранить их».
-- При запросе анализа проекта, готовности к продакшну или поиске ошибок:
-  1) Опирайся ИСКЛЮЧИТЕЛЬНО на реальный код и файлы из контекста выше (не выдумывай несуществующие базы или пакеты, которых нет в package.json).
-  2) Давай глубокий инженерный разбор: указывай точные пути файлов, названия функций, существующие роуты и коренные причины (root cause) ошибок.
-  3) Если находишь баг или недостающую логику — сразу предлагай готовое рабочее исправление в блоке \`\`\`file-actions.
-- При создании, перезаписи, модификации или редактировании файлов в проекте:
-  Обязательно приводи изменения в виде структурированного блока \`\`\`file-actions, чтобы веб-интерфейс отобразил визуальный Diff Viewer и позволил пользователю применить правки на локальный диск или закоммитить/создать PR в GitHub в один клик:
-  \`\`\`file-actions
-  [
-    {
-      "action": "write",
-      "path": "src/utils/example.ts",
-      "description": "Краткое описание создаваемого или перезаписываемого файла",
-      "content": "Полное новое содержимое файла"
-    }
-  ]
-  \`\`\`
-  Или для точечной замены блока кода в существующем файле:
-  \`\`\`file-actions
-  [
-    {
-      "action": "replace",
-      "path": "src/utils/example.ts",
-      "description": "Краткое описание замены",
-      "targetContent": "точный фрагмент существующего кода для замены",
-      "replacementContent": "новый фрагмент заменяющего кода"
-    }
-  ]
-  \`\`\`
-- Всегда генерируй ПОЛНЫЙ, рабочий и компилируемый код без плейсхолдеров вроде «// ... остальной код без изменений ...», которые ломают проект.
-- Никогда не обрывай ответ на полуслове. Используй качественное Markdown-форматирование, списки и блоки кода.
-- Если запрос пользователя набран в ошибочной раскладке (например, «ghjfyfkbpbhqe htgjpbnjhbq» вместо «проанализируй репозиторий»), автоматически распознай смысл и ответь на русском языке по существу.`;
-    return block;
-}
 const JCUKEN_MAP = {
     q: 'й', w: 'ц', e: 'у', r: 'к', t: 'е', y: 'н', u: 'г', i: 'ш', o: 'щ', p: 'з', '[': 'х', ']': 'ъ',
     a: 'ф', s: 'ы', d: 'в', f: 'а', g: 'п', h: 'р', j: 'о', k: 'л', l: 'д', ';': 'ж', "'": 'э',
@@ -341,19 +105,41 @@ export function convertLayoutIfInverted(input) {
     }
     return input;
 }
-function buildAttachmentsBlock(attachments, language) {
-    const isEn = language === 'en';
-    let block = isEn
-        ? `\n\n[USER ATTACHMENTS (${attachments.length} files)]:\n`
-        : `\n\n[ПРИКРЕПЛЁННЫЕ ПОЛЬЗОВАТЕЛЕМ ВЛОЖЕНИЯ (${attachments.length})]:\n`;
-    for (const a of attachments) {
-        block += `- **${a.name}** (${a.category.toUpperCase()}, ${Math.round(((a.size || 0) / 1024) * 10) / 10} KB)\n`;
-        if (a.contentPreview) {
-            const preview = a.contentPreview.slice(0, 20000);
-            block += `\`\`\`\n${preview}\n\`\`\`\n`;
+/**
+ * Правила экономии для явно выбранной модели. Вызывается после проверки прав доступа.
+ *
+ *  - бюджет исчерпан → любая модель, кроме лёгких, заменяется на самую дешёвую;
+ *  - премиум-модель (классы strong и top): квота премиум-запросов тарифа исчерпана или бюджет на
+ *    исходе (soft) → ответит рабочая модель, а не «ничего»: пользователь продолжает работать.
+ */
+export function applyEconomyRules(requested, state, registry) {
+    if (state.stage === 'exhausted' || state.stage === 'hard_stop') {
+        if (requested.costClass !== 'lite') {
+            const floor = registry.resolve(FLOOR_MODEL_ID);
+            return {
+                model: floor,
+                reason: `Budget protection: monthly quota is used up, ${floor.name} answers instead of ${requested.name}`,
+            };
+        }
+        return { model: requested, reason: null };
+    }
+    if (isPremiumClass(requested.costClass)) {
+        if (!state.premiumAvailable) {
+            const workhorse = registry.resolve(WORKHORSE_MODEL_ID);
+            return {
+                model: workhorse,
+                reason: `Premium quota used up: ${workhorse.name} answers instead of ${requested.name}`,
+            };
+        }
+        if (state.stage === 'soft') {
+            const workhorse = registry.resolve(WORKHORSE_MODEL_ID);
+            return {
+                model: workhorse,
+                reason: `Budget protection: ${workhorse.name} answers instead of ${requested.name}`,
+            };
         }
     }
-    return block;
+    return { model: requested, reason: null };
 }
 export class AIGateway {
     registry;
@@ -362,13 +148,70 @@ export class AIGateway {
     aiConfig;
     circuitBreaker;
     feedbackStore;
+    useMockEngine;
     constructor(deps) {
+        this.useMockEngine = deps.useMockEngine;
         this.registry = deps.registry ?? modelRegistry;
         this.providers = deps.providers ?? providerManager;
         this.usageStore = deps.usageStore;
         this.aiConfig = deps.aiConfig;
         this.circuitBreaker = deps.circuitBreaker ?? defaultCircuitBreaker;
         this.feedbackStore = deps.feedbackStore ?? defaultFeedbackStore;
+    }
+    /**
+     * Один проход стриминга со сторожем: сроки на первый токен, простой и общую длительность
+     * вместо единого таймера, обрывавшего любой длинный ответ.
+     */
+    async streamWithWatchdog(provider, options, hooks) {
+        const attempt = new AbortController();
+        const limits = {
+            ...DEFAULT_WATCHDOG_LIMITS,
+            ...(hooks.providerTimeoutMs
+                ? {
+                    firstTokenMs: hooks.providerTimeoutMs,
+                    idleMs: hooks.providerTimeoutMs,
+                    totalMs: Math.max(hooks.providerTimeoutMs, DEFAULT_WATCHDOG_LIMITS.totalMs),
+                }
+                : {}),
+        };
+        const watchdog = createStreamWatchdog(limits, (reason) => {
+            attempt.abort(new Error(`Timeout (${reason}) у провайдера ${provider.type}`));
+        });
+        const onClientAbort = () => attempt.abort();
+        if (hooks.clientSignal.aborted) {
+            attempt.abort();
+        }
+        else {
+            hooks.clientSignal.addEventListener('abort', onClientAbort, { once: true });
+        }
+        try {
+            const response = await provider.streamText({ ...options, stream: true, signal: attempt.signal }, {
+                onDelta: (delta) => {
+                    watchdog.touch();
+                    hooks.onDelta(delta);
+                },
+                isCancelled: () => hooks.isCancelled() || attempt.signal.aborted,
+            });
+            return { response, timedOut: watchdog.reason !== null };
+        }
+        finally {
+            watchdog.stop();
+            hooks.clientSignal.removeEventListener('abort', onClientAbort);
+        }
+    }
+    /** Расхождение запрошенного и фактического движка — это почти всегда неверный ID модели. */
+    reportedMismatches = new Set();
+    noteEngineMismatch(requested, actual) {
+        if (!actual || actual === requested)
+            return;
+        const family = (id) => id.split(':')[0].toLowerCase();
+        if (family(actual).startsWith(family(requested)) || family(requested).startsWith(family(actual)))
+            return;
+        const key = `${requested}->${actual}`;
+        if (this.reportedMismatches.has(key))
+            return;
+        this.reportedMismatches.add(key);
+        console.warn(`[ai-gateway] Запрошен движок ${requested}, ответил ${actual}. Проверьте ID модели в реестре.`);
     }
     getCircuitBreaker() {
         return this.circuitBreaker;
@@ -377,16 +220,34 @@ export class AIGateway {
         return this.feedbackStore;
     }
     /**
+     * Запасная модель допустима, если она не нарушает правил экономии: премиум-модель берётся
+     * только пока есть квота премиум-запросов, а при исчерпанном бюджете — только лёгкие модели.
+     * Прав доступа по тарифу для запасных не требуется: они дешевле выбранной, а пользователь
+     * видит в ответе, какая модель реально ответила.
+     */
+    isAllowedFallback(model, plan, state) {
+        if (state.stage === 'exhausted' || state.stage === 'hard_stop') {
+            return model.costClass === 'lite';
+        }
+        if (isPremiumClass(model.costClass)) {
+            return (state.stage === 'normal' &&
+                state.premiumAvailable &&
+                planAllowsModel(plan, model.requiredPlan));
+        }
+        return true;
+    }
+    /**
      * Стриминговая генерация ответа через AI Gateway.
      */
     async stream(req, callbacks, isCancelled) {
         const startTime = Date.now();
         const activeUserId = req.userId;
         const language = req.language;
-        // 0. Payload Guard (Phase 5: валидация размера сообщений и вложений)
+        // 0. Payload Guard (валидация размера сообщений и вложений)
         const guardResult = PayloadGuard.validate(req.messages, {
             language,
             attachments: req.attachments,
+            workspace: req.workspaceContext ?? req.messages[req.messages.length - 1]?.workspaceContext,
         });
         if (!guardResult.valid) {
             callbacks.onError({
@@ -413,72 +274,87 @@ export class AIGateway {
         const effectivePlan = EntitlementService.resolveEffectivePlan(req.userPlan, req.userEmail, req.isVip);
         const entitlements = EntitlementService.getEntitlements(effectivePlan);
         const snapshot = this.usageStore.getFairUseSnapshot(activeUserId);
-        // Проверка превышения бюджета себестоимости (адаптивный даунгрейд вместо жесткого блока)
-        const isBudgetExceeded = entitlements.costBudget > 0 &&
-            snapshot.estimatedCostLastMonth >= entitlements.costBudget;
-        // 2. Резолвинг модели и выбор стратегии исполнения (Token Economics & Tier Pipelines)
-        let targetModel;
-        let routingReason;
-        let pipelineStrategy = null;
+        // Месячный бюджет себестоимости: soft (80%) → exhausted (100%, только дешёвые модели) →
+        // hard_stop (125%, запросы отклоняются). Без потолка «безлимит» мог уйти в убыток.
+        const budget = evaluateBudget(snapshot.estimatedCostLastMonth, entitlements.costBudget);
+        const stage = budget.stage;
+        if (stage === 'hard_stop') {
+            this.usageStore.recordUsage({
+                userId: activeUserId,
+                conversationId: req.conversationId,
+                modelId: req.modelId,
+                provider: 'openrouter',
+                inputTokens: 0,
+                outputTokens: 0,
+                estimatedCost: 0,
+                latencyMs: Date.now() - startTime,
+                status: 'rate_limited',
+                source: 'provider',
+            });
+            callbacks.onError({
+                code: 'fair_use_exceeded',
+                message: language === 'en'
+                    ? 'Your plan resource quota for this period is used up. It renews gradually; you can upgrade your plan for a higher quota.'
+                    : 'Ресурсная квота вашего тарифа на этот период исчерпана. Она восстанавливается постепенно; для большей квоты можно повысить тариф.',
+            });
+            return;
+        }
+        // Квота премиум-запросов: сколько тариф разрешает потратить на сильные модели за 30 дней.
+        const premiumSpent = this.usageStore.getCostLastMonthByModels(activeUserId, this.registry.getPremiumModelIds());
+        const premiumAvailable = entitlements.premiumBudget - premiumSpent > 0;
+        const economyState = { stage, premiumAvailable };
+        // 2. Анализ запроса
         const rawPrompt = [...req.messages].reverse().find((m) => m.role === 'user')?.content ?? '';
         const decodedPrompt = convertLayoutIfInverted(rawPrompt);
         const prompt = decodedPrompt;
-        const activeWorkspace = req.workspaceContext ??
-            req.messages.slice().reverse().find((m) => m.workspaceContext)?.workspaceContext;
+        // Проект берётся только из ПОСЛЕДНЕГО сообщения: клиент прикладывает его к каждой реплике, пока
+        // проект привязан. Раньше брался и более ранний «метаданный» контекст, и после отвязки проекта
+        // модель продолжала считать, что у неё есть полный доступ к нулевому набору файлов.
+        const lastMessage = req.messages[req.messages.length - 1];
+        const activeWorkspace = req.workspaceContext ?? lastMessage?.workspaceContext;
         const activeAttachments = req.attachments ??
-            req.messages.slice().reverse().find((m) => m.attachments && m.attachments.length > 0)?.attachments;
+            lastMessage?.attachments ??
+            req.messages
+                .slice(-8)
+                .reverse()
+                .find((m) => m.attachments && m.attachments.length > 0)?.attachments;
         const complexityContext = {
             history: req.messages.slice(0, -1),
             hasAttachments: Boolean(activeAttachments && activeAttachments.length > 0),
             hasWorkspace: Boolean(activeWorkspace),
         };
-        if (req.modelId === 'auto') {
-            pipelineStrategy = TierPipelineEngine.resolveStrategy(prompt, {
-                userPlan: effectivePlan,
-                monthlyCost: snapshot.estimatedCostLastMonth,
-                monthlyBudget: entitlements.costBudget,
-                random: this.aiConfig.random,
-                registry: this.registry,
+        const taskInfo = classifyPromptComplexity(prompt, complexityContext);
+        const hasWorkspaceOrAttachments = Boolean(activeWorkspace || (activeAttachments && activeAttachments.length > 0));
+        // 3. Выбор модели
+        let targetModel;
+        let routingReason;
+        if (req.modelId === 'auto' || !req.modelId) {
+            const routed = AutoRouter.route({
+                plan: effectivePlan,
+                level: taskInfo.level,
+                category: taskInfo.category,
+                stage,
+                premiumAvailable,
             });
-            targetModel = this.registry.resolve(pipelineStrategy.targetModelId);
-            routingReason = pipelineStrategy.reason;
+            targetModel = this.registry.resolve(routed.modelId);
+            routingReason = routed.reason;
         }
         else {
-            const resolved = this.registry.resolve(req.modelId);
-            if (isBudgetExceeded && resolved.tier === 'flagship') {
-                targetModel = this.registry.resolve('ketner-mini');
-                routingReason = `Budget protection: dynamically routed to ${targetModel.name} for fair usage`;
+            const requested = this.registry.resolve(req.modelId);
+            // Права доступа проверяются по запрошенной модели ДО любой замены: иначе бесплатный
+            // пользователь, выбравший недоступную модель, молча получил бы другую вместо предложения
+            // улучшить тариф.
+            const accessCheck = EntitlementService.checkModelAccess(requested, effectivePlan);
+            if (!accessCheck.allowed) {
+                const msg = language === 'en'
+                    ? `Access to ${requested.name} requires an active subscription (${accessCheck.requiredPlan} or higher). Please upgrade your plan.`
+                    : `Для доступа к модели ${requested.name} требуется подписка (${accessCheck.requiredPlan} или выше). Пожалуйста, улучшите ваш тариф.`;
+                callbacks.onError({ code: 'upgrade_required', message: msg });
+                return;
             }
-            else {
-                targetModel = resolved;
-                const resolution = resolveEngineForModel(targetModel.id, prompt, complexityContext, this.feedbackStore);
-                if ([
-                    'gpt-6-astra',
-                    'claude-fable',
-                    'claude-3.5-sonnet',
-                    'gemini-2.5-pro',
-                    'gemini-pro',
-                    'gemini-3.8-flash',
-                    'grok-4.7',
-                ].includes(targetModel.id)) {
-                    routingReason = `${targetModel.name}: ${resolution.level} query routed to ${resolution.engineName}`;
-                }
-                else {
-                    routingReason = `Explicit user model selection (${targetModel.name})`;
-                }
-            }
-        }
-        // 3. Проверка прав доступа (Entitlement Check)
-        const accessCheck = EntitlementService.checkModelAccess(targetModel, effectivePlan);
-        if (!accessCheck.allowed) {
-            const msg = language === 'en'
-                ? `Access to ${targetModel.name} requires an active subscription (${accessCheck.requiredPlan} or Ultra). Please upgrade your plan.`
-                : `Для доступа к модели ${targetModel.name} требуется подписка (${accessCheck.requiredPlan} или Ultra). Пожалуйста, улучшите ваш тариф.`;
-            callbacks.onError({
-                code: 'upgrade_required',
-                message: msg,
-            });
-            return;
+            const economy = applyEconomyRules(requested, economyState, this.registry);
+            targetModel = economy.model;
+            routingReason = economy.reason ?? `Explicit user model selection (${requested.name})`;
         }
         // 4. Проверка Fair Use и захват concurrency слота
         const decision = FairUseEngine.evaluate(snapshot, effectivePlan, language);
@@ -516,15 +392,26 @@ export class AIGateway {
                 ? ECONOMY_SYSTEM_PROMPT
                 : (targetModel.defaultSystemPrompt ?? DEFAULT_SYSTEM_PROMPT);
             const baseSystemPrompt = promptMap[language];
-            const systemPrompt = isBudgetExceeded
+            const systemPrompt = stage !== 'normal'
                 ? `${baseSystemPrompt} ${language === 'en' ? 'Keep responses concise and direct.' : 'Отвечай максимально кратко и по существу.'}`
                 : baseSystemPrompt;
+            // Бюджет проекта зависит от тарифа, окна и цены модели: большой контекст на дорогой модели —
+            // главный источник убытка в безлимите.
+            const workspaceChars = workspaceBudgetChars(effectivePlan, targetModel.contextWindow, targetModel.pricing.inputPricePerMillion);
             let effectiveSystemPrompt = systemPrompt;
             if (activeWorkspace) {
-                effectiveSystemPrompt += buildWorkspaceContextBlock(activeWorkspace, language);
+                const { block, stats } = buildWorkspaceContextBlock(activeWorkspace, {
+                    language,
+                    query: prompt,
+                    maxContentChars: workspaceChars,
+                });
+                effectiveSystemPrompt += block;
+                if (stats.filesWithContent === 0 && stats.filesListed > 0) {
+                    console.warn(`[ai-gateway] Проект «${activeWorkspace.name}»: ${stats.filesListed} файлов в списке, но ни у одного нет содержимого`);
+                }
             }
             if (activeAttachments && activeAttachments.length > 0) {
-                effectiveSystemPrompt += buildAttachmentsBlock(activeAttachments, language);
+                effectiveSystemPrompt += buildAttachmentsBlock(activeAttachments, language, Math.floor(workspaceChars / 2));
             }
             let generatedSummary;
             const optimizedMessages = ContextOptimizer.optimize(req.messages.map((m, idx) => ({
@@ -546,7 +433,10 @@ export class AIGateway {
             const userScope = effectivePlan === 'free' ? 'shared' : activeUserId;
             const historyHash = SemanticCache.computeHistoryHash(req.messages, 3);
             const hasAttachments = Boolean(activeAttachments && activeAttachments.length > 0);
-            const cachedHit = !hasAttachments
+            // Ответ зависит от файлов проекта и вложений, а ключ кэша — только от текста вопроса:
+            // с проектом/вложениями кэш не читаем и не пишем (иначе чужой или устаревший ответ).
+            const cacheable = !hasAttachments && !activeWorkspace;
+            const cachedHit = cacheable
                 ? semanticCache.get(targetModel.id, language, prompt, userScope, historyHash)
                 : null;
             if (cachedHit && !isCancelled()) {
@@ -592,203 +482,130 @@ export class AIGateway {
                 }
                 return;
             }
-            // 6. Попытка генерации через провайдер с поддержкой Failover
-            const modelsToTry = this.registry.getFallbackChain(targetModel.id);
+            // 6. Генерация через провайдер с поддержкой Failover по цепочке запасных моделей из реестра
+            const modelsToTry = this.registry
+                .getFallbackChain(targetModel.id)
+                .filter((m, index) => index === 0 || this.isAllowedFallback(m, effectivePlan, economyState));
             let success = false;
             let streamedResponse = null;
             let usedModel = targetModel;
-            let doublePassCost = 0;
             let firstTokenMs = null;
-            const hasWorkspaceOrAttachments = Boolean(activeWorkspace ||
-                (activeAttachments && activeAttachments.length > 0));
-            const dynamicMaxTokens = computeDynamicMaxTokens({
-                userPlan: effectivePlan,
-                monthlyCost: snapshot.estimatedCostLastMonth,
-                monthlyBudget: entitlements.costBudget,
-                baseTokens: hasWorkspaceOrAttachments
-                    ? Math.max(entitlements.maxTokens, 4096)
-                    : (pipelineStrategy?.maxOutputTokens ?? 1024),
-            });
-            // Если режим gpt_short — инструктируем модель отвечать кратко (<150 токенов)
-            if (pipelineStrategy?.mode === 'gpt_short' && pipelineStrategy.promptModifier) {
-                const lastMsg = optimizedMessages[optimizedMessages.length - 1];
-                if (lastMsg && lastMsg.role === 'user') {
-                    const modText = typeof pipelineStrategy.promptModifier === 'string'
-                        ? pipelineStrategy.promptModifier
-                        : pipelineStrategy.promptModifier[language];
-                    lastMsg.content = `${modText}${lastMsg.content}`;
-                }
-            }
-            const isTestEnv = process.env.NODE_ENV === 'test' ||
-                this.aiConfig.failureRate > 0 ||
-                (this.aiConfig.thinkingMs[0] === 0 &&
-                    this.aiConfig.thinkingMs[1] === 0 &&
-                    this.aiConfig.chunkMs[0] === 0 &&
-                    this.aiConfig.chunkMs[1] === 0);
-            // 6.0. Двухпроходный пайплайн улучшения (Double Pass Enhancer: cheap draft -> GPT/cheap refine)
-            if (pipelineStrategy &&
-                !activeWorkspace &&
-                !activeAttachments?.length &&
-                (pipelineStrategy.mode === 'gpt_improve' || pipelineStrategy.mode === 'cheap_improve') &&
-                !isTestEnv) {
-                const draftModel = this.registry.resolve(pipelineStrategy.draftModelId ?? 'deepseek-v4.1-flash');
-                const enhancerModel = this.registry.resolve(pipelineStrategy.enhancerModelId ?? targetModel.id);
-                let draftProvider = this.providers.get(draftModel.provider);
-                let draftModelId = draftModel.providerModelId;
-                if (!draftProvider || !draftProvider.isAvailable()) {
-                    const openRouterProvider = this.providers.get('openrouter');
-                    if (openRouterProvider?.isAvailable()) {
-                        draftProvider = openRouterProvider;
-                        draftModelId = toOpenRouterModelId(draftModel, prompt, complexityContext);
-                    }
-                }
-                let enhancerProvider = this.providers.get(enhancerModel.provider);
-                let enhancerModelId = enhancerModel.providerModelId;
-                if (!enhancerProvider || !enhancerProvider.isAvailable()) {
-                    const openRouterProvider = this.providers.get('openrouter');
-                    if (openRouterProvider?.isAvailable()) {
-                        enhancerProvider = openRouterProvider;
-                        enhancerModelId = toOpenRouterModelId(enhancerModel, prompt, complexityContext, this.feedbackStore);
-                    }
-                }
-                if (draftProvider?.isAvailable() && enhancerProvider?.isAvailable()) {
-                    try {
-                        // Шаг 1: Быстрый черновик от дешёвой модели
-                        const draftRes = await draftProvider.generateText({
-                            model: draftModelId,
-                            messages: optimizedMessages,
-                            stream: false,
-                            maxTokens: Math.min(draftModel.maxOutputTokens, 1500),
-                        });
-                        if (draftRes.content && !isCancelled()) {
-                            // Шаг 2: Стриминг отполированного ответа пользователю
-                            // Во втором проходе передаём и вопрос пользователя, и черновик (Phase 1)
-                            const modText = pipelineStrategy.promptModifier
-                                ? typeof pipelineStrategy.promptModifier === 'string'
-                                    ? pipelineStrategy.promptModifier
-                                    : pipelineStrategy.promptModifier[language]
-                                : (language === 'ru'
-                                    ? 'Улучши этот ответ. Сделай его более чётким, структурированным и лаконичным:\n\n'
-                                    : 'Improve this answer. Make it clearer, structured and concise:\n\n');
-                            const enhanceInstruction = language === 'ru'
-                                ? `Вопрос пользователя:\n${prompt}\n\nЧерновой ответ:\n${draftRes.content}\n\nИнструкция:\n${modText}`
-                                : `User query:\n${prompt}\n\nDraft answer:\n${draftRes.content}\n\nInstruction:\n${modText}`;
-                            usedModel = enhancerModel;
-                            streamedResponse = await enhancerProvider.streamText({
-                                model: enhancerModelId,
-                                messages: [
-                                    ...optimizedMessages.slice(0, -1),
-                                    { role: 'user', content: enhanceInstruction },
-                                ],
-                                stream: true,
-                                maxTokens: Math.max(Math.min(enhancerModel.maxOutputTokens, entitlements.maxTokens), 2048),
-                            }, {
-                                onDelta: (delta) => {
-                                    if (firstTokenMs === null) {
-                                        firstTokenMs = Date.now() - startTime;
-                                    }
-                                    callbacks.onDelta(delta);
-                                },
-                                isCancelled,
-                            });
-                            if (streamedResponse && streamedResponse.content.length > 0) {
-                                // Суммируем токены и себестоимость обоих проходов (Phase 1)
-                                streamedResponse.usage.inputTokens += draftRes.usage.inputTokens;
-                                streamedResponse.usage.outputTokens += draftRes.usage.outputTokens;
-                                const draftCostResult = CostCalculator.calculate(draftRes.usage, draftModel.pricing);
-                                doublePassCost = draftCostResult.totalCost;
-                                success = true;
-                            }
-                        }
-                    }
-                    catch (err) {
-                        console.warn('[ai-gateway] Double-pass failed, falling back to direct stream:', err);
-                    }
-                }
-            }
-            // 6.1. Прямой стриминг модели (если double-pass не применялся или не удался)
-            if (!isTestEnv && !success) {
+            // Шаблонные ответы-заглушки разрешены только вне production. В production любая из этих
+            // настроек не может подменить реальную модель выдуманным ответом.
+            const isTestEnv = !isProduction &&
+                (this.useMockEngine ??
+                    (process.env.NODE_ENV === 'test' ||
+                        this.aiConfig.failureRate > 0 ||
+                        (this.aiConfig.thinkingMs[0] === 0 &&
+                            this.aiConfig.thinkingMs[1] === 0 &&
+                            this.aiConfig.chunkMs[0] === 0 &&
+                            this.aiConfig.chunkMs[1] === 0)));
+            let usedEngineId;
+            let watchdogTimedOut = false;
+            // Общая оценка пользователей по лёгким моделям: при частых дизлайках глубина размышлений
+            // простых запросов поднимается на шаг.
+            const escalate = this.feedbackStore.shouldEscalateFromLightModel(targetModel.id, taskInfo.level);
+            if (!isTestEnv) {
                 for (const candidateModel of modelsToTry) {
                     if (combinedIsCancelled())
                         break;
-                    let provider = this.providers.get(candidateModel.provider);
-                    let modelToRequest = candidateModel.providerModelId;
+                    const provider = this.providers.get(candidateModel.provider);
                     if (!provider || !provider.isAvailable()) {
-                        const openRouterProvider = this.providers.get('openrouter');
-                        if (openRouterProvider && openRouterProvider.isAvailable()) {
-                            provider = openRouterProvider;
-                            modelToRequest = toOpenRouterModelId(candidateModel, prompt, complexityContext, this.feedbackStore);
-                        }
-                        else {
-                            continue;
-                        }
-                    }
-                    const activeProviderType = provider.type;
-                    // Phase 5: Проверка Circuit Breaker для провайдера
-                    if (this.circuitBreaker.isOpen(activeProviderType)) {
-                        console.warn(`[ai-gateway] Circuit breaker OPEN для ${activeProviderType}, быстрый переход к следующему fallback`);
                         continue;
                     }
-                    const providerTimeoutMs = req.providerTimeoutMs ?? 25_000;
-                    const attemptController = new AbortController();
-                    const timeoutId = setTimeout(() => {
-                        attemptController.abort(new Error(`Timeout: provider ${activeProviderType} call timed out after ${providerTimeoutMs}ms`));
-                    }, providerTimeoutMs);
-                    const abortHandler = () => attemptController.abort();
-                    if (clientAbortController.signal.aborted) {
-                        attemptController.abort();
+                    const engineId = candidateModel.providerModelId;
+                    // Предохранитель ведётся по паре «провайдер + движок»: отказ одной модели не отключает
+                    // остальные модели того же ключа OpenRouter.
+                    const breakerKey = `${provider.type}:${engineId}`;
+                    if (this.circuitBreaker.isOpen(breakerKey)) {
+                        console.warn(`[ai-gateway] Circuit breaker OPEN для ${breakerKey}, быстрый переход к следующему fallback`);
+                        continue;
                     }
-                    else {
-                        clientAbortController.signal.addEventListener('abort', abortHandler, { once: true });
-                    }
+                    // Глубина размышлений и потолок ответа считаются под конкретную модель цепочки:
+                    // у каждой свой набор допустимых значений и своя цена выходных токенов.
+                    const wantedEffort = chooseReasoningEffort({
+                        level: taskInfo.level,
+                        category: taskInfo.category,
+                        plan: effectivePlan,
+                        stage,
+                        costClass: candidateModel.costClass,
+                        escalate,
+                    });
+                    const reasoning = toProviderReasoning(candidateModel.reasoning, wantedEffort);
+                    const maxTokens = computeOutputCap({
+                        planMaxTokens: entitlements.maxTokens,
+                        modelMaxOutputTokens: candidateModel.maxOutputTokens,
+                        stage,
+                        level: taskInfo.level,
+                        heavyContext: hasWorkspaceOrAttachments,
+                    });
+                    const runPass = (withReasoning) => this.streamWithWatchdog(provider, {
+                        model: engineId,
+                        messages: optimizedMessages,
+                        maxTokens,
+                        reasoning: withReasoning,
+                    }, {
+                        onDelta: (delta) => {
+                            if (firstTokenMs === null) {
+                                firstTokenMs = Date.now() - startTime;
+                            }
+                            callbacks.onDelta(delta);
+                        },
+                        isCancelled: combinedIsCancelled,
+                        clientSignal: clientAbortController.signal,
+                        providerTimeoutMs: req.providerTimeoutMs,
+                    });
                     try {
                         usedModel = candidateModel;
-                        // Лимит выходных токенов:
-                        // 1. При привязанном проекте или сложной задаче (код, рассуждения) отдаём полный объём модели и тарифа.
-                        // 2. Рассуждающие модели тратят до 1500 токенов только на <think>, поэтому лимит не может быть меньше 4096.
-                        // 3. dynamicMaxTokens применяется ТОЛЬКО при жёстком превышении бюджета (isBudgetExceeded) на простых запросах.
-                        let maxTokensToUse;
-                        if (hasWorkspaceOrAttachments || candidateModel.capabilities.reasoning || candidateModel.capabilities.coding) {
-                            maxTokensToUse = Math.min(candidateModel.maxOutputTokens, entitlements.maxTokens);
+                        usedEngineId = engineId;
+                        let pass;
+                        try {
+                            pass = await runPass(reasoning);
                         }
-                        else if (isBudgetExceeded) {
-                            maxTokensToUse = dynamicMaxTokens;
+                        catch (firstError) {
+                            // HTTP 400 при заданных размышлениях почти всегда значит, что модель не принимает
+                            // это значение параметра. Один повтор без параметра сохраняет ответ; предупреждение
+                            // в логе подскажет поправить таблицу размышлений модели в реестре.
+                            if (reasoning && firstError instanceof OpenRouterError && firstError.status === 400) {
+                                console.warn(`[ai-gateway] ${engineId} отклонил reasoning=${JSON.stringify(reasoning)}, повтор без параметра`);
+                                pass = await runPass(undefined);
+                            }
+                            else {
+                                throw firstError;
+                            }
                         }
-                        else {
-                            maxTokensToUse = Math.min(candidateModel.maxOutputTokens, entitlements.maxTokens);
-                        }
-                        maxTokensToUse = Math.max(maxTokensToUse, 2048);
-                        streamedResponse = await provider.streamText({
-                            model: modelToRequest,
-                            messages: optimizedMessages,
-                            stream: true,
-                            maxTokens: Math.min(candidateModel.maxOutputTokens, maxTokensToUse),
-                            signal: attemptController.signal,
-                        }, {
-                            onDelta: (delta) => {
-                                if (firstTokenMs === null) {
-                                    firstTokenMs = Date.now() - startTime;
-                                }
-                                callbacks.onDelta(delta);
-                            },
-                            isCancelled: () => combinedIsCancelled() || attemptController.signal.aborted,
-                        });
-                        clearTimeout(timeoutId);
-                        clientAbortController.signal.removeEventListener('abort', abortHandler);
+                        streamedResponse = pass.response;
+                        watchdogTimedOut = pass.timedOut;
                         if (streamedResponse && streamedResponse.content.length > 0) {
-                            this.circuitBreaker.recordSuccess(activeProviderType);
+                            if (pass.timedOut) {
+                                // Ответ дошёл частично и оборвался по таймауту: пользователю он показан, но
+                                // провайдер считается нестабильным.
+                                this.circuitBreaker.recordFailure(breakerKey, new Error('Stream stalled'));
+                            }
+                            else {
+                                this.circuitBreaker.recordSuccess(breakerKey);
+                            }
+                            this.noteEngineMismatch(engineId, streamedResponse.model);
                             success = true;
                             break;
                         }
+                        else if (!pass.timedOut && combinedIsCancelled()) {
+                            break;
+                        }
                         else {
-                            this.circuitBreaker.recordFailure(activeProviderType, new Error('Empty response from provider'));
+                            this.circuitBreaker.recordFailure(breakerKey, new Error('Empty response from provider'));
                         }
                     }
                     catch (providerError) {
-                        clearTimeout(timeoutId);
-                        clientAbortController.signal.removeEventListener('abort', abortHandler);
-                        this.circuitBreaker.recordFailure(activeProviderType, providerError);
-                        console.warn(`[ai-gateway] Провайдер ${activeProviderType} (модель ${candidateModel.name}) вернул ошибку:`, providerError);
+                        // 401 и 402 относятся к ключу и балансу OpenRouter, а не к модели: все остальные модели
+                        // того же ключа упадут так же. Не жжём предохранитель каждой модели и не гоняем цепочку.
+                        if (providerError instanceof OpenRouterError &&
+                            (providerError.status === 401 || providerError.status === 402)) {
+                            console.error(`[ai-gateway] Ключ OpenRouter не принят или баланс исчерпан (HTTP ${providerError.status}): все модели недоступны`);
+                            break;
+                        }
+                        this.circuitBreaker.recordFailure(breakerKey, providerError);
+                        console.warn(`[ai-gateway] Провайдер ${provider.type} (модель ${candidateModel.name}) вернул ошибку:`, providerError);
                     }
                 }
             }
@@ -796,7 +613,7 @@ export class AIGateway {
             let responseSource = 'provider';
             if (!success && !isCancelled()) {
                 if (!isTestEnv) {
-                    // Phase 1: если все провайдеры упали в проде — честная ошибка, не списываем лимиты
+                    // Если все модели цепочки упали в проде — честная ошибка, лимиты не списываем
                     callbacks.onError({
                         code: 'provider_error',
                         message: ERROR_MESSAGES[language],
@@ -817,10 +634,7 @@ export class AIGateway {
                 }
                 // В test / dev режиме используем шаблонный генератор
                 responseSource = 'template';
-                const effectiveModelName = req.modelId && req.modelId !== 'auto'
-                    ? (targetModel?.name ?? 'DeepSeek V4.1 Flash')
-                    : 'DeepSeek V4.1 Flash';
-                const templateAnswer = pickAnswer(prompt, language, this.aiConfig.random, effectiveModelName, activeAttachments ?? req.attachments, (activeWorkspace ?? req.workspaceContext));
+                const templateAnswer = pickAnswer(prompt, language, this.aiConfig.random, targetModel.name, activeAttachments ?? req.attachments, (activeWorkspace ?? req.workspaceContext));
                 await streamText(templateAnswer, {
                     thinkingMs: this.aiConfig.thinkingMs,
                     chunkMs: this.aiConfig.chunkMs,
@@ -844,19 +658,30 @@ export class AIGateway {
                 };
                 success = true;
             }
-            // 8. Подсчёт токенов, стоимости и запись в UsageStore
+            // 7. Подсчёт токенов, стоимости и запись в UsageStore
             const latencyMs = Date.now() - startTime;
             const inputTokens = streamedResponse?.usage.inputTokens ?? ContextOptimizer.estimateTokens(prompt);
             const outputTokens = streamedResponse?.usage.outputTokens ??
                 ContextOptimizer.estimateTokens(streamedResponse?.content ?? '');
-            const costResult = CostCalculator.calculate({
-                inputTokens,
-                outputTokens,
-                cachedTokens: streamedResponse?.usage.cachedTokens,
-                reasoningTokens: streamedResponse?.usage.reasoningTokens,
-            }, usedModel.pricing);
-            const totalEstimatedCost = costResult.totalCost + doublePassCost;
-            const finishReason = streamedResponse?.finishReason ?? (isCancelled() ? 'cancelled' : 'stop');
+            // Цена приоритетно берётся из ответа провайдера (usage.cost): она включает размышления,
+            // кэш и фактический тариф. Таблица реестра — запасной вариант.
+            const requestCost = computeRequestCost({
+                model: usedModel,
+                engineId: usedEngineId,
+                tokens: {
+                    inputTokens,
+                    outputTokens,
+                    cachedTokens: streamedResponse?.usage.cachedTokens,
+                    reasoningTokens: streamedResponse?.usage.reasoningTokens,
+                },
+                providerCost: responseSource === 'provider' ? streamedResponse?.cost : undefined,
+            });
+            const totalEstimatedCost = Number(requestCost.usd.toFixed(6));
+            // Остановка сторожем по таймауту — это обрыв, а не выбор пользователя: ответ можно продолжить.
+            let finishReason = streamedResponse?.finishReason ?? (isCancelled() ? 'cancelled' : 'stop');
+            if (watchdogTimedOut && !isCancelled() && finishReason !== 'stop') {
+                finishReason = 'length';
+            }
             const canContinue = finishReason === 'length';
             this.usageStore.recordUsage({
                 userId: activeUserId,
@@ -868,14 +693,14 @@ export class AIGateway {
                 cachedTokens: streamedResponse?.usage.cachedTokens,
                 reasoningTokens: streamedResponse?.usage.reasoningTokens,
                 estimatedCost: totalEstimatedCost,
-                actualCost: streamedResponse?.cost ?? null,
+                actualCost: typeof streamedResponse?.cost === 'number' ? Number(streamedResponse.cost.toFixed(6)) : null,
                 latencyMs,
                 ttftMs: firstTokenMs,
                 status: isCancelled() ? 'cancelled' : 'success',
                 source: responseSource,
             });
             if (!isCancelled()) {
-                if (streamedResponse?.content) {
+                if (streamedResponse?.content && cacheable && finishReason === 'stop') {
                     semanticCache.set(targetModel.id, language, prompt, streamedResponse.content, {
                         inputTokens,
                         outputTokens,
@@ -884,14 +709,16 @@ export class AIGateway {
                         historyHash,
                         source: responseSource,
                         finishReason,
-                        hasAttachments,
+                        hasAttachments: !cacheable,
                     });
                 }
                 callbacks.onDone({
                     inputTokens,
                     outputTokens,
                     selectedModel: { id: usedModel.id, name: usedModel.name },
-                    routingReason,
+                    routingReason: usedModel.id !== targetModel.id
+                        ? `${routingReason}; fallback to ${usedModel.name}`
+                        : routingReason,
                     source: responseSource,
                     finishReason,
                     canContinue,

@@ -224,8 +224,8 @@ test('billing: Telegram Stars (создание счёта в ⭐️ XTR и по
 
   assert.ok(invoice.id.startsWith('stars_'));
   assert.equal(invoice.planId, 'ultra');
-  assert.equal(invoice.priceRub, 2990);
-  assert.equal(invoice.starsAmount, 2650); // 2650 ⭐️ для Ultra (соответствует $49 по курсу $0.0185)
+  assert.equal(invoice.priceRub, 4890);
+  assert.equal(invoice.starsAmount, 2650); // 2650 ⭐️ для Ultra ($49)
   assert.ok(invoice.botDeepLink.includes('t.me/'));
   assert.ok(invoice.botDeepLink.includes('pay_ultra'));
 
@@ -560,7 +560,7 @@ test('telegram (C6): повторная доставка одного плате
     body: JSON.stringify({ email: 'stars-dup@example.com', password: 'password123', name: 'Dup' }),
   });
   const { user } = await readJson<AuthSession>(created);
-  const stars = calculateStars(990);
+  const stars = calculateStars(9);
   const send = () =>
     fetch(`${server.baseUrl}/api/telegram/webhook`, {
       method: 'POST',

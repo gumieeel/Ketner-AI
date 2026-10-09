@@ -1,6 +1,8 @@
+import { randomBytes } from 'node:crypto';
 import { fromNodeHeaders } from 'better-auth/node';
 import { defaultBetterAuth } from '../auth/better-auth.js';
 import { verifyMockToken } from '../auth/jwt.js';
+import { resolveBillingPlan } from '../services/plan-resolver.js';
 import { sendError } from './errors.js';
 import { isVipEmail, isAdminEmail } from '../services/vip.js';
 /**
@@ -9,7 +11,23 @@ import { isVipEmail, isAdminEmail } from '../services/vip.js';
  * либо извлекает Bearer-токен из заголовка Authorization.
  * Если пользователь найден, устанавливает req.user и req.userId.
  */
-export function createAuthMiddleware(userStore, betterAuthInstance = defaultBetterAuth) {
+export function createAuthMiddleware(userStore, betterAuthInstance = defaultBetterAuth, subscriptionStore) {
+    /**
+     * Срок подписки: если оплаченный период (и льготные сутки) закончился, тариф сводится к free
+     * и это сохраняется в профиле, чтобы интерфейс и лимиты видели одно и то же.
+     */
+    const applySubscriptionExpiry = (userId, plan, isVip) => {
+        if (!subscriptionStore || isVip || plan === 'free')
+            return plan;
+        const resolved = resolveBillingPlan({
+            storedPlan: plan,
+            subscription: subscriptionStore.get(userId),
+        });
+        if (resolved.expired) {
+            userStore.updatePlan(userId, 'free');
+        }
+        return resolved.plan;
+    };
     return async (request, _response, next) => {
         // 1. Проверяем сессию Better Auth через headers/cookies
         try {
@@ -19,7 +37,8 @@ export function createAuthMiddleware(userStore, betterAuthInstance = defaultBett
             if (session?.user) {
                 let stored = userStore.findByEmail(session.user.email);
                 if (!stored) {
-                    stored = userStore.create(session.user.email, 'session-synced-password-123', session.user.name);
+                    // Пароль локальной копии не используется для входа: вход идёт через Better Auth.
+                    stored = userStore.create(session.user.email, randomBytes(32).toString('hex'), session.user.name);
                 }
                 const rawPlan = session.user.plan;
                 const VALID_PLANS = ['free', 'gpt-pro', 'claude-pro', 'gemini-pro', 'ultra', 'plus', 'pro'];
@@ -30,15 +49,13 @@ export function createAuthMiddleware(userStore, betterAuthInstance = defaultBett
                         : (typeof rawPlan === 'string' && VALID_PLANS.includes(rawPlan))
                             ? rawPlan
                             : (stored?.plan ?? 'free');
-                const rawHeaderPlan = request.headers['x-user-plan'];
-                const headerPlan = (Array.isArray(rawHeaderPlan) ? rawHeaderPlan[0] : rawHeaderPlan)?.trim();
-                if (plan === 'free' && headerPlan && VALID_PLANS.includes(headerPlan)) {
-                    plan = headerPlan;
-                }
                 const isVip = Boolean(stored?.isVip || isVipEmail(session.user.email));
                 const isAdmin = Boolean(stored?.isAdmin || isAdminEmail(session.user.email));
                 if (isVip) {
                     plan = 'ultra';
+                }
+                else if (stored) {
+                    plan = applySubscriptionExpiry(stored.id, plan, false);
                 }
                 request.user = {
                     id: stored?.id || session.user.id,
@@ -78,6 +95,9 @@ export function createAuthMiddleware(userStore, betterAuthInstance = defaultBett
                     if (isVip) {
                         plan = 'ultra';
                     }
+                    else {
+                        plan = applySubscriptionExpiry(user.id, plan, false);
+                    }
                     request.user = {
                         ...user,
                         isVip,
@@ -90,39 +110,8 @@ export function createAuthMiddleware(userStore, betterAuthInstance = defaultBett
                 }
             }
         }
-        // 3. Fallback: проверка заголовков X-User-*
-        const rawHeaderEmail = request.headers['x-user-email'];
-        const headerEmail = (Array.isArray(rawHeaderEmail) ? rawHeaderEmail[0] : rawHeaderEmail)?.trim();
-        const rawHeaderId = request.headers['x-user-id'];
-        const headerId = (Array.isArray(rawHeaderId) ? rawHeaderId[0] : rawHeaderId)?.trim();
-        const rawHeaderPlan = request.headers['x-user-plan'];
-        const headerPlan = (Array.isArray(rawHeaderPlan) ? rawHeaderPlan[0] : rawHeaderPlan)?.trim();
-        if (!request.user && (headerEmail || headerId)) {
-            let user = headerEmail ? userStore.findByEmail(headerEmail) : (headerId ? userStore.findById(headerId) : undefined);
-            if (!user && headerEmail) {
-                user = userStore.create(headerEmail, 'session-synced-password-123', headerEmail.split('@')[0]);
-            }
-            if (user) {
-                const VALID_PLANS = ['free', 'gpt-pro', 'claude-pro', 'gemini-pro', 'ultra', 'plus', 'pro'];
-                let plan = (headerPlan && VALID_PLANS.includes(headerPlan))
-                    ? headerPlan
-                    : user.plan;
-                const isVip = Boolean(user.isVip || (user.email && isVipEmail(user.email)) || (headerEmail && isVipEmail(headerEmail)));
-                const isAdmin = Boolean(user.isAdmin || (user.email && isAdminEmail(user.email)) || (headerEmail && isAdminEmail(headerEmail)));
-                if (isVip) {
-                    plan = 'ultra';
-                }
-                request.user = {
-                    ...user,
-                    plan,
-                    isVip,
-                    isAdmin,
-                };
-                request.userId = user.id;
-                next();
-                return;
-            }
-        }
+        // Личность определяется только сессией Better Auth или подписанным Bearer-токеном.
+        // Заголовки X-User-* намеренно игнорируются: клиент не может сам назвать себя пользователем.
         next();
     };
 }

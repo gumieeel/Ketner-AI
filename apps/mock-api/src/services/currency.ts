@@ -1,7 +1,8 @@
 /**
  * Currency Service — конвертация валют и расчёт допустимой себестоимости.
  *
- * Связывает рублевые тарифы подписок с долларовыми затратами на API моделей.
+ * Курс нужен для справочных сумм в рублях (СБП, админка). Цены тарифов хранятся в долларах
+ * (services/pricing.ts), затраты на API моделей тоже в долларах.
  */
 
 import { config } from '../config.js';
@@ -45,14 +46,14 @@ export class CurrencyService {
   }
 
   /**
-   * Рассчитать предельный бюджет себестоимости AI для тарифа.
+   * Предельный бюджет себестоимости AI для тарифа.
    *
-   * Формула: costBudget = (priceMonthlyRub / rate) * targetCostRatio
-   * targetCostRatio по умолчанию 0.40..0.45 (оставляет 55–60% на эквайринг, налоги, инфра и прибыль).
+   * Формула: costBudget = priceMonthlyUsd * targetCostRatio. Доля 0.31–0.41 цены оставляет
+   * на эквайринг и налоги ≈10–13% (для Stars до 28%), на комиссию OpenRouter 5.5% от расхода,
+   * на субсидию Free-тира и прибыль остальное (расчёт в docs/models-and-pricing.md).
    */
-  static calculatePlanCostBudget(priceMonthlyRub: number, targetCostRatio = 0.40): number {
-    if (priceMonthlyRub <= 0) return 0.20; // субсидируемый буфер для free
-    const priceUsd = priceMonthlyRub / currentRate;
-    return Math.round(priceUsd * targetCostRatio * 100) / 100;
+  static calculatePlanCostBudget(priceMonthlyUsd: number, targetCostRatio = 0.40): number {
+    if (priceMonthlyUsd <= 0) return 0.20; // субсидируемый буфер для free
+    return Math.round(priceMonthlyUsd * targetCostRatio * 100) / 100;
   }
 }

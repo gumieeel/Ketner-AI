@@ -63,6 +63,27 @@ export function createUsedTxStore(file) {
             });
             persist();
         },
+        reserveTx(record) {
+            if (!record.txHash)
+                return false;
+            const key = record.txHash.toLowerCase().trim();
+            if (map.has(key))
+                return false;
+            map.set(key, {
+                ...record,
+                txHash: key,
+                createdAt: record.createdAt || new Date().toISOString(),
+            });
+            persist();
+            return true;
+        },
+        releaseTx(txHash) {
+            if (!txHash)
+                return;
+            if (map.delete(txHash.toLowerCase().trim())) {
+                persist();
+            }
+        },
         getUsedTx(txHash) {
             if (!txHash)
                 return undefined;
