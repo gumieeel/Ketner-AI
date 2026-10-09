@@ -55,18 +55,15 @@ data: {"code":"upstream_error","message":"..."}
 ### Ключевые компоненты:
 
 1. **AI Provider Abstraction (`src/ai/providers/`)**:
-   - `OpenAIProvider`: поддержка Chat Completions API (GPT-4o, o3-mini), reasoning tokens, prompt caching, usage tracking.
-   - `AnthropicProvider`: поддержка Claude Messages API (Claude 3.5 Sonnet, Claude Opus), prompt caching, streaming.
-   - `GoogleProvider`: поддержка Gemini API (Gemini 2.5 Pro, Flash) через SSE alt=sse, usageMetadata.
-   - `OpenRouterProvider`: пул бесплатных моделей с автоматическим переключением кандидатов при сбоях.
-   - `ProviderManager`: единая фабрика с проверкой доступности ключей и runtime переопределением.
+   - `OpenRouterProvider`: единственный провайдер. Все модели (OpenAI, Anthropic, Google, xAI, DeepSeek, Xiaomi) идут через один ключ `OPENROUTER_API_KEY`: потоковые ответы, управление глубиной размышлений (`reasoning`), prompt caching для Claude, фактическая стоимость из `usage.cost`.
+   - `ProviderManager`: фабрика провайдера, отдельный предохранитель на каждую модель.
 
 2. **Model Registry (`src/ai/model-registry.ts`)**:
    - Централизованный реестр моделей с ценами ($ за 1M токенов), capabilities (coding, math, reasoning, vision), лимитами контекста и привязкой к тарифам.
-   - Поддержка цепочек прозрачного failover (`fallbackModelId`).
+   - Цепочки failover без повторов, допустимые по бюджету. Подробности: `docs/models-and-pricing.md`.
 
 3. **Entitlement Service (`src/services/entitlement.ts`)**:
-   - Контроль прав доступа к платным моделям по тарифам (`Free`, `GPT Pro`, `Claude Pro`, `Gemini Pro`, `Ultra`).
+   - Контроль прав доступа к платным моделям по тарифам (`Free`, `Plus`, `Pro`, `Ultra`; старые `gpt-pro`, `claude-pro`, `gemini-pro` приравнены к Pro).
    - Автоматическое предоставление Ultra-прав для аккаунта `artemsinyakov09@gmail.com`.
 
 4. **Fair Use Engine & Concurrency Control (`src/services/fair-use.ts`)**:
