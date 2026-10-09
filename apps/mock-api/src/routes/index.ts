@@ -4,13 +4,16 @@ import type { AiConfig } from '../config.js';
 import { createAuthMiddleware } from '../middleware/auth.js';
 import type { ConversationStore } from '../store/conversation-store.js';
 import {
+  apiKeyStore as defaultApiKeyStore,
   invoiceStore as defaultInvoiceStore,
   subscriptionStore as defaultSubscriptionStore,
   userStore as defaultUserStore,
 } from '../store/index.js';
+import type { ApiKeyStore } from '../store/api-key-store.js';
 import type { InvoiceStore } from '../store/invoice-store.js';
 import type { SubscriptionStore } from '../store/subscription-store.js';
 import type { UserStore } from '../store/user-store.js';
+import { createApiKeysRouter } from './api-keys.js';
 import { createAuthRouter } from './auth.js';
 import { createBillingRouter } from './billing.js';
 import { createChatRouter } from './chat.js';
@@ -37,6 +40,7 @@ export interface ApiDeps {
   botService?: TelegramBotService;
   supportBotService?: TelegramSupportBotService;
   supportStore?: SupportStore;
+  apiKeyStore?: ApiKeyStore;
   ai: AiConfig;
   userId: string;
   betterAuth?: typeof defaultBetterAuth;
@@ -105,6 +109,17 @@ export const API_ENDPOINTS = [
     status: 'ready',
     description: 'Отмена подписки',
   },
+  { method: 'GET', path: '/api/keys', status: 'ready', description: 'API-ключи пользователя' },
+  { method: 'POST', path: '/api/keys', status: 'ready', description: 'Создать API-ключ (секрет виден один раз)' },
+  { method: 'DELETE', path: '/api/keys/:id', status: 'ready', description: 'Отозвать API-ключ' },
+  { method: 'GET', path: '/v1/models', status: 'ready', description: 'Модели для агента (OpenAI-формат, ключ API)' },
+  { method: 'GET', path: '/v1/usage', status: 'ready', description: 'Бюджет и расход по ключу API' },
+  {
+    method: 'POST',
+    path: '/v1/chat/completions',
+    status: 'ready',
+    description: 'Чат с вызовом инструментов (OpenAI-формат, SSE, ключ API)',
+  },
 ] as const;
 
 /**
@@ -169,6 +184,7 @@ export function createApiRouter(deps: ApiDeps): Router {
       userStore: activeUserStore,
     }),
   );
+  router.use(createApiKeysRouter({ apiKeyStore: deps.apiKeyStore ?? defaultApiKeyStore }));
   router.use(createConversationsRouter(deps.store, deps.userId));
   router.use(
     '/chat',

@@ -222,6 +222,10 @@ export const config = {
   supportStoreFile:
     process.env.SUPPORT_STORE_FILE ??
     fileURLToPath(new URL('../data/support.json', import.meta.url)),
+  /** Хранилище API-ключей для программирования (CLI, IDE): в файле только SHA-256 ключей. */
+  apiKeyStoreFile:
+    process.env.API_KEY_STORE_FILE ??
+    fileURLToPath(new URL('../data/api-keys.json', import.meta.url)),
   /** Хранилище оценок ответов (лайки/дизлайки) для анализа роутинга и эскалации моделей. */
   feedbackStoreFile:
     process.env.FEEDBACK_STORE_FILE ??

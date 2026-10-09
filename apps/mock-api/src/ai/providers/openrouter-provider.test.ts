@@ -217,3 +217,170 @@ test('таймаут (abort) посреди ответа отдаёт части
   assert.equal(result.content, 'часть');
   assert.equal(result.finishReason, 'cancelled');
 });
+
+// ── Агентский режим: вызов инструментов ─────────────────────────────────────
+
+const toolDelta = (index: number, part: { id?: string; name?: string; args?: string }) => ({
+  choices: [
+    {
+      delta: {
+        tool_calls: [
+          {
+            index,
+            ...(part.id ? { id: part.id, type: 'function' } : {}),
+            function: { ...(part.name ? { name: part.name } : {}), ...(part.args !== undefined ? { arguments: part.args } : {}) },
+          },
+        ],
+      },
+    },
+  ],
+});
+
+test('streamChat собирает вызов функции из частей и отдаёт события по мере прихода', async () => {
+  const provider = new OpenRouterProvider({ apiKey: 'k' });
+  const events: unknown[] = [];
+  const sent: Array<Record<string, unknown>> = [];
+  const result = await withFetch(
+    (async (_url: unknown, init?: RequestInit) => {
+      sent.push(JSON.parse(String(init?.body)));
+      return sse([
+        { model: 'xiaomi/mimo-v2.6-pro', choices: [{ delta: { reasoning: 'думаю' } }] },
+        delta('Смотрю файл. '),
+        toolDelta(0, { id: 'call_a', name: 'read_file', args: '' }),
+        toolDelta(0, { args: '{"path":' }),
+        toolDelta(0, { args: '"src/a.ts"}' }),
+        toolDelta(1, { id: 'call_b', name: 'list_dir', args: '{}' }),
+        { choices: [{ delta: {}, finish_reason: 'tool_calls' }], usage: { prompt_tokens: 900, completion_tokens: 40, cost: 0.0004, prompt_tokens_details: { cached_tokens: 600 } } },
+        '[DONE]',
+      ]);
+    }) as FetchFn,
+    () =>
+      provider.streamChat(
+        {
+          model: 'xiaomi/mimo-v2.6-pro',
+          messages: [{ role: 'user', content: 'открой a.ts' }],
+          tools: [{ type: 'function', function: { name: 'read_file', parameters: { type: 'object' } } }],
+          toolChoice: 'auto',
+          maxTokens: 2048,
+        },
+        { onEvent: (e) => events.push(e), isCancelled: () => false },
+      ),
+  );
+
+  assert.equal(result.finishReason, 'tool_calls');
+  assert.equal(result.content, 'Смотрю файл. ');
+  assert.deepEqual(
+    result.toolCalls.map((c) => [c.id, c.function.name, c.function.arguments]),
+    [
+      ['call_a', 'read_file', '{"path":"src/a.ts"}'],
+      ['call_b', 'list_dir', '{}'],
+    ],
+  );
+  assert.equal(result.cost, 0.0004);
+  assert.equal(result.usage.cachedTokens, 600);
+  assert.deepEqual((events[0] as { kind: string }).kind, 'reasoning', 'размышления идут отдельным событием, а не в тексте');
+  assert.ok(events.some((e) => (e as { kind: string }).kind === 'tool_call'));
+  assert.deepEqual(sent[0].tools, [{ type: 'function', function: { name: 'read_file', parameters: { type: 'object' } } }]);
+  assert.equal(sent[0].tool_choice, 'auto');
+  assert.deepEqual(sent[0].usage, { include: true });
+});
+
+test('streamChat: finish_reason stop с накопленными вызовами считается tool_calls', async () => {
+  const provider = new OpenRouterProvider({ apiKey: 'k' });
+  const result = await withFetch(
+    (async () =>
+      sse([
+        toolDelta(0, { id: 'c1', name: 'shell', args: '{"command":"ls"}' }),
+        { choices: [{ delta: {}, finish_reason: 'stop' }], usage: { prompt_tokens: 10, completion_tokens: 5 } },
+      ])) as FetchFn,
+    () =>
+      provider.streamChat(
+        { model: 'm', messages: [{ role: 'user', content: 'x' }], maxTokens: 100 },
+        { onEvent: () => undefined, isCancelled: () => false },
+      ),
+  );
+  assert.equal(result.finishReason, 'tool_calls');
+  assert.equal(result.toolCalls[0].function.name, 'shell');
+});
+
+test('streamChat: tools не отправляются без объявленных функций; сообщения tool передаются как есть', async () => {
+  const provider = new OpenRouterProvider({ apiKey: 'k' });
+  const body = provider.buildAgentBody({
+    model: 'deepseek/deepseek-v4.1-flash',
+    messages: [
+      { role: 'user', content: 'x' },
+      { role: 'assistant', content: null, tool_calls: [{ id: 'c1', type: 'function', function: { name: 'f', arguments: '{}' } }] },
+      { role: 'tool', tool_call_id: 'c1', content: 'готово' },
+    ],
+    toolChoice: 'auto',
+    maxTokens: 999_999,
+  });
+  assert.equal(body.tools, undefined);
+  assert.equal(body.tool_choice, undefined);
+  assert.equal(body.max_tokens, 32768);
+  const messages = body.messages as Array<Record<string, unknown>>;
+  assert.equal(messages[2].role, 'tool');
+  assert.equal(messages[2].tool_call_id, 'c1');
+  assert.equal(messages[1].content, null);
+});
+
+test('streamChat: для Anthropic кэшируются system и последний user, сообщения tool не трогаются', async () => {
+  const provider = new OpenRouterProvider({ apiKey: 'k' });
+  const body = provider.buildAgentBody({
+    model: 'anthropic/claude-opus-5.5',
+    messages: [
+      { role: 'system', content: 'правила' },
+      { role: 'user', content: 'первая задача' },
+      { role: 'assistant', content: null, tool_calls: [{ id: 'c1', type: 'function', function: { name: 'f', arguments: '{}' } }] },
+      { role: 'tool', tool_call_id: 'c1', content: 'результат' },
+    ],
+    maxTokens: 1000,
+  });
+  const messages = body.messages as Array<{ role: string; content: unknown }>;
+  const cached = (m: { content: unknown }) =>
+    Array.isArray(m.content) && (m.content[0] as { cache_control?: unknown }).cache_control !== undefined;
+  assert.ok(cached(messages[0]) && cached(messages[1]));
+  assert.equal(messages[3].content, 'результат');
+});
+
+test('streamChat: отказ до первого события поднимается, ошибка внутри потока после начала не теряет ответ', async () => {
+  const provider = new OpenRouterProvider({ apiKey: 'k' });
+  const originalWarn = console.warn;
+  console.warn = () => undefined;
+  try {
+    await assert.rejects(
+      withFetch(
+        (async () => new Response('{"error":{"message":"no credits"}}', { status: 402 })) as FetchFn,
+        () =>
+          provider.streamChat(
+            { model: 'm', messages: [{ role: 'user', content: 'x' }], maxTokens: 100 },
+            { onEvent: () => undefined, isCancelled: () => false },
+          ),
+      ),
+      (err: unknown) => err instanceof OpenRouterError && err.status === 402,
+    );
+
+    const partial = await withFetch(
+      (async () => sse([delta('начало ответа'), { error: { code: 502, message: 'upstream dropped' } }])) as FetchFn,
+      () =>
+        provider.streamChat(
+          { model: 'm', messages: [{ role: 'user', content: 'x' }], maxTokens: 100 },
+          { onEvent: () => undefined, isCancelled: () => false },
+        ),
+    );
+    assert.equal(partial.content, 'начало ответа');
+    assert.equal(partial.finishReason, 'error');
+
+    const early = withFetch(
+      (async () => sse([{ error: { code: 429, message: 'rate limited' } }])) as FetchFn,
+      () =>
+        provider.streamChat(
+          { model: 'm', messages: [{ role: 'user', content: 'x' }], maxTokens: 100 },
+          { onEvent: () => undefined, isCancelled: () => false },
+        ),
+    );
+    await assert.rejects(early, (err: unknown) => err instanceof OpenRouterError && err.status === 429);
+  } finally {
+    console.warn = originalWarn;
+  }
+});

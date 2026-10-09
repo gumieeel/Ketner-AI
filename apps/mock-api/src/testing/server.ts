@@ -3,12 +3,13 @@ import type { AddressInfo } from 'node:net';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createBetterAuth, initAuthDatabase } from '../auth/better-auth.js';
-import { createApp } from '../app.js';
+import { createApp, type AppDeps } from '../app.js';
 import type { AiConfig } from '../config.js';
 import { DEFAULT_MODEL_ID } from '../ai/models.js';
 import { createConversationStore } from '../store/conversation-store.js';
 import { createSubscriptionStore } from '../store/subscription-store.js';
 import { createUserStore } from '../store/user-store.js';
+import { createApiKeyStore, type ApiKeyStore } from '../store/api-key-store.js';
 import { UsageStore } from '../store/usage-store.js';
 import { semanticCache } from '../ai/cache.js';
 import type { Conversation, Message } from '../types.js';
@@ -27,10 +28,16 @@ export const FAST_AI: AiConfig = {
 export interface TestServer {
   baseUrl: string;
   close: () => Promise<void>;
+  /** Хранилища сервера: тесты создают ключи и сеют расход напрямую. */
+  usageStore: UsageStore;
+  apiKeyStore: ApiKeyStore;
 }
 
 /** Поднимает приложение на свободном порту с временным файлом хранилища. */
-export async function startTestServer(ai: Partial<AiConfig> = {}): Promise<TestServer> {
+export async function startTestServer(
+  ai: Partial<AiConfig> = {},
+  extra: Partial<AppDeps> = {},
+): Promise<TestServer> {
   const tempDir = mkdtempSync(join(tmpdir(), 'ketner-mock-api-'));
   const storeFile = join(tempDir, 'store.json');
   const userStoreFile = join(tempDir, 'users.json');
@@ -50,15 +57,20 @@ export async function startTestServer(ai: Partial<AiConfig> = {}): Promise<TestS
     botToken: '', // mock mode for fast and isolated test execution
   });
 
+  const testUsageStore = new UsageStore(usageStoreFile);
+  const testApiKeyStore = createApiKeyStore(join(tempDir, 'api-keys.json'));
+
   const app = createApp({
     store: createConversationStore(storeFile),
     userStore: createUserStore(userStoreFile),
     subscriptionStore: createSubscriptionStore(subscriptionStoreFile),
-    usageStore: new UsageStore(usageStoreFile),
+    usageStore: testUsageStore,
+    apiKeyStore: testApiKeyStore,
     supportStore: testSupportStore,
     supportBotService: testSupportBotService,
     ai: { ...FAST_AI, ...ai },
     betterAuth: testBetterAuth,
+    ...extra,
   });
   const server = app.listen(0);
   await new Promise<void>((resolve) => server.once('listening', resolve));
@@ -66,6 +78,8 @@ export async function startTestServer(ai: Partial<AiConfig> = {}): Promise<TestS
   const address = server.address() as AddressInfo;
   return {
     baseUrl: `http://127.0.0.1:${address.port}`,
+    usageStore: extra.usageStore ?? testUsageStore,
+    apiKeyStore: extra.apiKeyStore ?? testApiKeyStore,
     close: () =>
       new Promise<void>((resolve, reject) => {
         try {
