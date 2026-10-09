@@ -9,6 +9,17 @@ import type { Language, PlanId } from '../types.js';
 import type { FairUseDecision, FairUseSnapshot } from '../ai/gateway-types.js';
 import { EntitlementService } from './entitlement.js';
 
+/** Отличия правил для трафика агента (программирование через API-ключ). */
+export interface FairUseOptions {
+  /**
+   * Не применять часовой и суточный лимит токенов: контекст агента растёт с каждым шагом, и
+   * честная работа над кодом упёрлась бы в лимит чата. Бюджет в долларах остаётся главным ограничением.
+   */
+  skipTokenWindows?: boolean;
+  /** Во сколько раз суточный лимит расхода выше чатового (работа над кодом идёт всплесками). */
+  dailyCostFactor?: number;
+}
+
 export class FairUseEngine {
   /**
    * Оценить активность пользователя и принять решение (allow / throttle / deny).
@@ -17,6 +28,7 @@ export class FairUseEngine {
     snapshot: FairUseSnapshot,
     userPlan: PlanId,
     language: Language = 'ru',
+    options: FairUseOptions = {},
   ): FairUseDecision {
     const limits = EntitlementService.getEntitlements(userPlan);
 
@@ -77,11 +89,13 @@ export class FairUseEngine {
     }
 
     // 5. Проверка дневного лимита себестоимости (Cost Guard)
-    if (limits.maxDailyCost !== null && snapshot.estimatedCostLastDay >= limits.maxDailyCost) {
+    const dailyCostCap =
+      limits.maxDailyCost === null ? null : limits.maxDailyCost * (options.dailyCostFactor ?? 1);
+    if (dailyCostCap !== null && snapshot.estimatedCostLastDay >= dailyCostCap) {
       const reason =
         language === 'en'
-          ? `Fair Use Policy: daily usage quota exceeded ($${snapshot.estimatedCostLastDay.toFixed(2)} / $${limits.maxDailyCost.toFixed(2)}). Service will resume tomorrow.`
-          : `Политика добросовестного использования (Fair Use): превышена дневная квота ресурсов ($${snapshot.estimatedCostLastDay.toFixed(2)} / $${limits.maxDailyCost.toFixed(2)}). Доступ восстановится завтра.`;
+          ? `Fair Use Policy: daily usage quota exceeded ($${snapshot.estimatedCostLastDay.toFixed(2)} / $${dailyCostCap.toFixed(2)}). Service will resume tomorrow.`
+          : `Политика добросовестного использования (Fair Use): превышена дневная квота ресурсов ($${snapshot.estimatedCostLastDay.toFixed(2)} / $${dailyCostCap.toFixed(2)}). Доступ восстановится завтра.`;
 
       return {
         action: 'deny',
@@ -91,6 +105,10 @@ export class FairUseEngine {
     }
 
     // 6. Проверка лимита токенов в час
+    if (options.skipTokenWindows) {
+      return { action: 'allow' };
+    }
+
     if (limits.tokensPerHour !== null && snapshot.tokensLastHour >= limits.tokensPerHour) {
       const reason =
         language === 'en'

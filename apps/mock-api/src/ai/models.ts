@@ -13,7 +13,7 @@ export const DEFAULT_MODEL_ID = 'auto';
  * контекста берутся из реестра моделей. Второго источника правды нет: раньше этот файл вёл свой
  * каталог, и выбранная модель вне него молча превращалась в `auto`.
  */
-const PUBLIC_MODEL_IDS: readonly string[] = [
+export const PUBLIC_MODEL_IDS: readonly string[] = [
   'ketner-mini',
   'ketner-pro',
   'claude-haiku-5.5',

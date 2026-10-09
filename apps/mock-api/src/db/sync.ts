@@ -1,7 +1,8 @@
 import { randomUUID } from 'node:crypto';
 import postgres from 'postgres';
 import { config } from '../config.js';
-import { conversationStore, userStore, subscriptionStore, feedbackStore } from '../store/index.js';
+import { apiKeyStore, conversationStore, userStore, subscriptionStore, feedbackStore } from '../store/index.js';
+import type { ApiKeyRecord } from '../store/api-key-store.js';
 import type { Conversation, Message, Subscription } from '../types.js';
 import type { StoredUser } from '../store/user-store.js';
 import type { FeedbackRecord } from '../store/feedback-store.js';
@@ -709,6 +710,65 @@ function attachDatabaseDrivers(sql: postgres.Sql): void {
   });
 }
 
+/**
+ * API-ключи для CLI и IDE: в Postgres лежит только SHA-256 секрета. Без этой таблицы ключи
+ * пропадали бы при каждом деплое — диск Render временный.
+ */
+async function syncApiKeys(sql: postgres.Sql): Promise<void> {
+  await sql.unsafe(`
+    CREATE TABLE IF NOT EXISTS "api_keys" (
+      "id" text PRIMARY KEY NOT NULL,
+      "user_id" text NOT NULL,
+      "name" text NOT NULL,
+      "prefix" text NOT NULL,
+      "hash" text UNIQUE NOT NULL,
+      "created_at" timestamptz NOT NULL DEFAULT now(),
+      "last_used_at" timestamptz,
+      "revoked_at" timestamptz
+    );
+    CREATE INDEX IF NOT EXISTS "api_keys_user_idx" ON "api_keys" ("user_id");
+  `);
+  const rows = await sql<
+    {
+      id: string;
+      user_id: string;
+      name: string;
+      prefix: string;
+      hash: string;
+      created_at: Date;
+      last_used_at: Date | null;
+      revoked_at: Date | null;
+    }[]
+  >`SELECT id, user_id, name, prefix, hash, created_at, last_used_at, revoked_at FROM "api_keys"`;
+  apiKeyStore.loadExternal(
+    rows.map(
+      (r): ApiKeyRecord => ({
+        id: r.id,
+        userId: r.user_id,
+        name: r.name,
+        prefix: r.prefix,
+        hash: r.hash,
+        createdAt: new Date(r.created_at).toISOString(),
+        lastUsedAt: r.last_used_at ? new Date(r.last_used_at).toISOString() : null,
+        revokedAt: r.revoked_at ? new Date(r.revoked_at).toISOString() : null,
+      }),
+    ),
+  );
+  apiKeyStore.setDbDriver({
+    async upsert(record) {
+      await sql`
+        INSERT INTO "api_keys" ("id", "user_id", "name", "prefix", "hash", "created_at", "last_used_at", "revoked_at")
+        VALUES (${record.id}, ${record.userId}, ${record.name}, ${record.prefix}, ${record.hash},
+                ${record.createdAt}, ${record.lastUsedAt}, ${record.revokedAt})
+        ON CONFLICT ("id") DO UPDATE SET
+          "name" = EXCLUDED."name",
+          "last_used_at" = EXCLUDED."last_used_at",
+          "revoked_at" = EXCLUDED."revoked_at"
+      `;
+    },
+  });
+}
+
 export async function initDatabaseSync(): Promise<boolean> {
   if (!hasPostgresConfig()) {
     console.log(
@@ -734,6 +794,7 @@ export async function initDatabaseSync(): Promise<boolean> {
     await loadAndSyncFeedbacks(sql);
 
     attachDatabaseDrivers(sql);
+    await syncApiKeys(sql);
 
     // Ketner Code: проекты переживают перезапуск сервера (поднимаются из БД при первом обращении)
     const codeRunner = { query: (text: string, params?: unknown[]) => sql.unsafe(text, params as never[]) as unknown as Promise<never[]> };
