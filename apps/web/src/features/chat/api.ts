@@ -1,9 +1,20 @@
+import { storage } from '@/lib/storage';
 import { getAuthToken } from '../auth/auth-store';
 import { readSseStream } from './sse';
 import { API_BASE } from '@/lib/api-config';
 import type { ChatMeta, Conversation, ConversationSummary, Language, Message } from './types';
 
 const JSON_HEADERS = { 'Content-Type': 'application/json' };
+const GUEST_ID_KEY = 'ketner_guest_id';
+
+export function getGuestId(): string {
+  let guestId = storage.get(GUEST_ID_KEY);
+  if (!guestId) {
+    guestId = `guest_${Math.random().toString(36).substring(2, 11)}_${Date.now().toString(36)}`;
+    storage.set(GUEST_ID_KEY, guestId);
+  }
+  return guestId;
+}
 
 /** Ошибка API: код и текст приходят от сервера в едином формате. */
 export class ApiError extends Error {
@@ -37,6 +48,8 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const headers: Record<string, string> = { ...JSON_HEADERS };
   if (token) {
     headers['Authorization'] = `Bearer ${token}`;
+  } else {
+    headers['X-Guest-Id'] = getGuestId();
   }
   if (init?.headers) {
     Object.assign(headers, init.headers);
@@ -135,6 +148,8 @@ export async function streamCompletion(
   const headers: Record<string, string> = { ...JSON_HEADERS };
   if (token) {
     headers['Authorization'] = `Bearer ${token}`;
+  } else {
+    headers['X-Guest-Id'] = getGuestId();
   }
   // Личность и тариф определяет сервер по сессии; клиент их не присылает.
   const response = await fetch(`${API_BASE}/chat/completions`, {

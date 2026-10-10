@@ -153,11 +153,16 @@ export function createChatRouter({
     // Личность и тариф — только из сессии и серверных хранилищ. Поля userId / userEmail / userPlan
     // из тела запроса не читаются: клиент не вправе назваться другим пользователем или поднять тариф.
     const sessionUser = request.user;
+    const guestHeader = request.headers['x-guest-id'] || request.headers['x-user-id'];
+    const guestId = Array.isArray(guestHeader) ? guestHeader[0] : guestHeader;
+    const effectiveAnonymousUserId =
+      guestId && typeof guestId === 'string' && guestId.trim() ? guestId.trim() : userId;
+
     const identity = resolveChatIdentity({
       sessionUser,
       storedUser: sessionUser ? userStore?.findById(sessionUser.id) : undefined,
       subscription: sessionUser ? subscriptionStore?.get(sessionUser.id) : undefined,
-      anonymousUserId: userId,
+      anonymousUserId: effectiveAnonymousUserId,
       anonymousPlan: config.demoPlan,
       allowAnonymous,
     });
@@ -175,29 +180,37 @@ export function createChatRouter({
 
     // Единый каталог: любая модель реестра выбирается как есть, неизвестная — это auto.
     const requestedEntry = modelId === 'auto' ? undefined : modelRegistry.get(modelId);
-    const model =
+    let model =
       requestedEntry && requestedEntry.enabled ? requestedEntry : modelRegistry.resolve('auto');
+
+    // Для пользователей без аккаунта:
+    // По умолчанию (auto) или при выборе бесплатной модели используется Nemotron Ultra через OpenRouter.
+    if (identity.anonymous) {
+      if (model.id === 'auto' || model.costClass === 'lite' || !model.isPro) {
+        model = modelRegistry.resolve('nemotron-ultra');
+      }
+    }
 
     // Проверка доступа к платным моделям (то же правило, что применяет шлюз)
     const access = EntitlementService.checkModelAccess(model, userPlan, identity.email, isVip);
     if (!access.allowed) {
-      response.writeHead(200, {
-        'Content-Type': 'text/event-stream; charset=utf-8',
-        'Cache-Control': 'no-cache, no-transform',
-        Connection: 'keep-alive',
-      });
-      const requiredName = model.requiredPlan ? model.requiredPlan.toUpperCase() : 'PRO';
-      const errorMsg =
-        language === 'en'
-          ? `Access to ${model.name} requires an active subscription (${requiredName} or Ultra). Please upgrade your plan.`
-          : `Для доступа к модели ${model.name} требуется подписка (${requiredName} или Ultra). Пожалуйста, улучшите ваш тариф (Upgrade your plan).`;
+        response.writeHead(200, {
+          'Content-Type': 'text/event-stream; charset=utf-8',
+          'Cache-Control': 'no-cache, no-transform',
+          Connection: 'keep-alive',
+        });
+        const requiredName = model.requiredPlan ? model.requiredPlan.toUpperCase() : 'PRO';
+        const errorMsg =
+          language === 'en'
+            ? `Access to ${model.name} requires an active subscription (${requiredName} or Ultra). Please upgrade your plan.`
+            : `Для доступа к модели ${model.name} требуется подписка (${requiredName} или Ultra). Пожалуйста, улучшите ваш тариф (Upgrade your plan).`;
 
-      response.write(
-        `event: error\ndata: ${JSON.stringify({ code: 'upgrade_required', message: errorMsg })}\n\n`,
-      );
-      response.end();
-      return;
-    }
+        response.write(
+          `event: error\ndata: ${JSON.stringify({ code: 'upgrade_required', message: errorMsg })}\n\n`,
+        );
+        response.end();
+        return;
+      }
 
     response.writeHead(200, {
       'Content-Type': 'text/event-stream; charset=utf-8',
@@ -259,6 +272,7 @@ export function createChatRouter({
           userPlan,
           userEmail: identity.email,
           isVip,
+          isAnonymous: Boolean(identity.anonymous),
           conversationId,
           modelId: model.id,
           messages: messages.map((m) => ({

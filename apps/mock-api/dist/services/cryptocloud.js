@@ -10,7 +10,9 @@ export class CryptoCloudService {
         this.secretKey = config.cryptoCloudSecretKey?.trim() || '';
     }
     isConfigured() {
-        return Boolean(this.apiKey && this.shopId);
+        const key = config.cryptoCloudApiKey !== undefined ? config.cryptoCloudApiKey.trim() : this.apiKey;
+        const shop = config.cryptoCloudShopId !== undefined ? config.cryptoCloudShopId.trim() : this.shopId;
+        return Boolean(key && shop);
     }
     /**
      * Проверяет подлинность postback CryptoCloud.

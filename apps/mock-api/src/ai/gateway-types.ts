@@ -313,6 +313,7 @@ export interface GatewayRequest {
   userPlan: PlanId;
   userEmail?: string;
   isVip?: boolean;
+  isAnonymous?: boolean;
   conversationId: string;
   modelId: string;
   messages: Array<{

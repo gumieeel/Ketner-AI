@@ -65,7 +65,8 @@ test('ModelRegistry: получение, разрешение и проверк�
   assert.equal(registry.get('gpt-6.1-sol')?.id, 'gpt-6.1-sol');
   assert.equal(registry.get('claude-fable')?.id, 'claude-opus-5.5');
   assert.equal(registry.get('gemini-pro')?.id, 'gemini-3.8-flash');
-  assert.equal(registry.get('nemotron-ultra')?.id, 'ketner-mini');
+  assert.equal(registry.get('nemotron-ultra')?.id, 'nemotron-ultra');
+  assert.equal(registry.get('nemotron')?.id, 'nemotron-ultra');
   const premiumIds = registry.getPremiumModelIds();
   assert.ok(premiumIds.has('gpt-6.1-sol') && premiumIds.has('gpt-6.1-sol') && premiumIds.has('claude-fable'));
   assert.ok(!premiumIds.has('ketner-pro') && !premiumIds.has('ketner-mini'));

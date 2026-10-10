@@ -146,6 +146,34 @@ const DEFAULT_REGISTRY_ENTRIES: ModelRegistryEntry[] = [
     createdAt: now(),
     updatedAt: now(),
   },
+  // ── Бесплатная модель для анонимных пользователей без аккаунта ──
+  {
+    id: 'nemotron-ultra',
+    name: 'Nemotron 3 Ultra (Free)',
+    provider: 'openrouter',
+    providerModelId: 'nvidia/nemotron-3-ultra-550b-a55b:free',
+    enabled: true,
+    tier: 'free',
+    costClass: 'lite',
+    reasoning: reasoning(true, [], true),
+    capabilities: makeCapabilities({
+      coding: true,
+      reasoning: true,
+      math: true,
+      creative: true,
+      translation: true,
+    }),
+    contextWindow: 131072,
+    maxOutputTokens: 4096,
+    pricing: makePricing(0, 0, 0),
+    requiredPlan: null,
+    contextMessages: 40,
+    isPro: false,
+    fallbackModelId: null,
+    defaultSystemPrompt: DEFAULT_SYSTEM_PROMPT,
+    createdAt: now(),
+    updatedAt: now(),
+  },
   // ── Класс lite: повседневные запросы, Free и запасные модели ──
   {
     id: 'ketner-mini',
@@ -401,7 +429,8 @@ export const LEGACY_MODEL_ALIASES: Readonly<Record<string, string>> = {
   'gpt-4o-mini': 'ketner-mini',
   'gemini-2.5-flash': 'ketner-mini',
   'glm-5.3-flash': 'ketner-mini',
-  'nemotron-ultra': 'ketner-mini',
+  'nemotron': 'nemotron-ultra',
+  'nvidia/nemotron-3-ultra-550b-a55b:free': 'nemotron-ultra',
 };
 
 // ─────────────────────────────────────────────────────────────

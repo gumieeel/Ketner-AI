@@ -184,10 +184,10 @@ export const config = {
   manualCryptoEnabled: !isProduction || optionalEnv('ENABLE_MANUAL_CRYPTO') === 'true',
   enableDemoAccount: !isProduction || optionalEnv('ENABLE_DEMO_ACCOUNT') === 'true',
   /**
-   * Анонимный доступ к чату и диалогам через общий demo-user. Только вне production:
-   * в production каждый вызов ИИ требует сессии, иначе любой может жечь бюджет провайдера.
+   * Анонимный доступ к чату и диалогам через бесплатную модель OpenRouter (nvidia/nemotron-3-ultra-550b-a55b:free).
+   * Разрешён по умолчанию (отключается явно через ALLOW_ANONYMOUS_CHAT=false).
    */
-  allowAnonymousChat: !isProduction,
+  allowAnonymousChat: optionalEnv('ALLOW_ANONYMOUS_CHAT') === 'false' ? false : true,
 
   /** Пользователь и план заглушки: реальные аккаунты появятся на этапе 3. */
   demoUserId: 'demo-user',

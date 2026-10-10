@@ -20,11 +20,18 @@ test('стоимость от провайдера приоритетнее та
 });
 
 test('в реестре нет бесплатных моделей: каждая стоит денег и попадает в учёт', () => {
-  for (const entry of modelRegistry.getAll().filter((m) => m.id !== 'auto')) {
+  for (const entry of modelRegistry.getAll().filter((m) => m.id !== 'auto' && m.id !== 'nemotron-ultra')) {
     assert.ok(entry.pricing.inputPricePerMillion > 0, `${entry.id}: цена входа не задана`);
     assert.ok(entry.pricing.outputPricePerMillion > 0, `${entry.id}: цена выхода не задана`);
     assert.equal(isFreeEngine(entry.providerModelId), false, `${entry.id}: :free-модели общего пула не используются`);
   }
+});
+
+test('nemotron-ultra — бесплатная модель OpenRouter для анонимных пользователей', () => {
+  const nemotron = modelRegistry.resolve('nemotron-ultra');
+  assert.equal(nemotron.id, 'nemotron-ultra');
+  assert.equal(nemotron.tier, 'free');
+  assert.equal(isFreeEngine(nemotron.providerModelId), true);
 });
 
 test('модель с нулевой ценой в реестре (ошибка админа) считается по консервативной цене', () => {
