@@ -388,6 +388,17 @@ describe('чат: отправка, стриминг и управление о�
 
   it('после 3 сообщений на бесплатном плане весь экран затемняется и выскакивает модалка исчерпания лимита', async () => {
     installFakeApi({ reply: 'Ответ модели' });
+    useAuth.setState({
+      user: {
+        id: 'free-user',
+        email: 'free@ketner.ai',
+        name: 'Бесплатный Пользователь',
+        plan: 'free',
+        createdAt: new Date().toISOString(),
+      },
+      token: 'fake.jwt.token',
+      status: 'authenticated',
+    });
     const user = setupChat();
     await screen.findByRole('heading', { level: 2, name: EMPTY_TITLE });
 
@@ -421,6 +432,20 @@ describe('чат: отправка, стриминг и управление о�
     const field = screen.getByLabelText(COMPOSER);
     await user.click(field);
     expect(await screen.findByRole('dialog')).toBeInTheDocument();
+  });
+
+  it('гости без аккаунта могут отправлять сообщения без блокировки лимитом 3 сообщений', async () => {
+    installFakeApi({ reply: 'Ответ для гостя' });
+    const user = setupChat();
+    await screen.findByRole('heading', { level: 2, name: EMPTY_TITLE });
+
+    for (let i = 1; i <= 4; i++) {
+      await sendMessage(user, `Сообщение гостя ${i}`);
+      expect(await screen.findAllByText(`Сообщение гостя ${i}`)).not.toHaveLength(0);
+      await waitFor(() => expect(useChat.getState().streaming).toBe(false));
+    }
+
+    expect(screen.queryByRole('dialog')).toBeNull();
   });
 
   it('поддерживает навигацию с клавиатуры в ModelPicker и закрытие по Esc', async () => {

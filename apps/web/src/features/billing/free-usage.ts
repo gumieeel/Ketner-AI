@@ -128,7 +128,6 @@ export function incrementFreeUsage(accountKey?: string | null): FreeUsageInfo {
   };
 }
 
-/** Проверяет, исчерпан ли часовой лимит бесплатного тарифа для аккаунта */
 export function isFreeLimitReached(accountKey?: string | null): boolean {
   try {
     const user = useAuth.getState().user;
