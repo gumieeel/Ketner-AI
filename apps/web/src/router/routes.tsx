@@ -3,6 +3,7 @@ import { AppShell } from '@/components/layout/app-shell';
 import { StandaloneLayout } from '@/components/layout/standalone-layout';
 import { ApiDocsPage } from '@/pages/api-docs-page';
 import { ChatPage } from '@/pages/chat-page';
+import { CodePage } from '@/pages/code-page';
 import { CheckoutPage } from '@/pages/checkout-page';
 import { DocumentationPage } from '@/pages/documentation-page';
 import { LandingPage } from '@/pages/landing-page';
@@ -43,6 +44,15 @@ export const routes: RouteObject[] = [
     children: [
       { index: true, element: <ChatPage /> },
       { path: ':conversationId', element: <ChatPage /> },
+    ],
+  },
+  {
+    path: 'code',
+    element: <AppShell />,
+    errorElement: <RouteErrorPage />,
+    children: [
+      { index: true, element: <CodePage /> },
+      { path: ':projectId', element: <CodePage /> },
     ],
   },
   {

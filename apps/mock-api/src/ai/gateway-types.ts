@@ -204,6 +204,15 @@ export interface UsageRecord {
   status: UsageStatus;
   /** Источник ответа: провайдер, кэш или шаблон. */
   source: ResponseSource;
+  /**
+   * Вид запроса. Шаги агента (`agent`) тратят бюджет и токены так же, как чат, но не расходуют
+   * дневной лимит СООБЩЕНИЙ: один запуск агента — это десятки обращений к модели.
+   */
+  kind?: 'chat' | 'agent';
+  /** Идентификатор запуска агента (для подсчёта запусков в сутки). */
+  runId?: string;
+  /** Номер шага внутри запуска агента (0 — отметка о старте запуска). */
+  step?: number;
   createdAt: string;
 }
 
@@ -424,6 +433,75 @@ export interface ProviderResponse {
   finishReason: 'stop' | 'length' | 'cancelled' | 'error';
 }
 
+// ─────────────────────────────────────────────────────────────
+// Tool calling (агентный режим)
+// ─────────────────────────────────────────────────────────────
+
+/** Описание инструмента в формате function calling (совместимо с OpenAI и OpenRouter). */
+export interface ChatToolDefinition {
+  type: 'function';
+  function: {
+    name: string;
+    description: string;
+    /** JSON Schema параметров. */
+    parameters: Record<string, unknown>;
+  };
+}
+
+/** Вызов инструмента, собранный из потока. `arguments` — JSON-строка, как её прислала модель. */
+export interface ChatToolCall {
+  id: string;
+  name: string;
+  arguments: string;
+}
+
+/**
+ * Сообщение диалога с инструментами. Роль `tool` несёт результат вызова, `assistant` может нести
+ * сами вызовы и непрозрачные `reasoningDetails`, которые провайдер просит вернуть без изменений
+ * (иначе модели с размышлениями теряют цепочку рассуждений между шагами).
+ */
+export type ChatWireMessage =
+  | { role: 'system'; content: string }
+  | { role: 'user'; content: string }
+  | {
+      role: 'assistant';
+      content: string;
+      toolCalls?: ChatToolCall[];
+      reasoningDetails?: unknown[];
+    }
+  | { role: 'tool'; toolCallId: string; content: string };
+
+export interface ChatCompletionOptions {
+  model: string;
+  messages: ChatWireMessage[];
+  tools?: ChatToolDefinition[];
+  maxTokens?: number;
+  temperature?: number;
+  signal?: AbortSignal;
+  reasoning?: ProviderRequestOptions['reasoning'];
+}
+
+export interface ChatCompletionCallbacks {
+  /** Текст ответа модели (без размышлений). */
+  onDelta: (content: string) => void;
+  /** Размышления модели, если провайдер их отдаёт. */
+  onReasoningDelta?: (content: string) => void;
+  /** Любой полученный фрагмент потока (в том числе части аргументов инструмента): для сторожа простоя. */
+  onActivity?: () => void;
+  isCancelled: () => boolean;
+}
+
+export interface ChatCompletionResult {
+  content: string;
+  toolCalls: ChatToolCall[];
+  /** Непрозрачные данные размышлений: вернуть в следующем запросе вместе с сообщением ассистента. */
+  reasoningDetails?: unknown[];
+  usage: ProviderResponse['usage'];
+  cost?: number;
+  model?: string;
+  finishReason: 'stop' | 'length' | 'tool_calls' | 'cancelled' | 'error';
+}
+
 /** Интерфейс адаптера AI провайдера. */
 export interface AIProvider {
   /** Уникальный идентификатор провайдера. */
@@ -439,6 +517,11 @@ export interface AIProvider {
     options: ProviderRequestOptions,
     callbacks: ProviderStreamCallbacks,
   ): Promise<ProviderResponse>;
+  /** Один шаг диалога с инструментами (стриминг). Нужен агентному режиму. */
+  streamChat?(
+    options: ChatCompletionOptions,
+    callbacks: ChatCompletionCallbacks,
+  ): Promise<ChatCompletionResult>;
 }
 
 // ─────────────────────────────────────────────────────────────

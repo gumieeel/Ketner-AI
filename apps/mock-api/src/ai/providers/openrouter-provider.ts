@@ -11,6 +11,11 @@
 import type {
   AIProvider,
   AIProviderType,
+  ChatCompletionCallbacks,
+  ChatCompletionOptions,
+  ChatCompletionResult,
+  ChatToolCall,
+  ChatWireMessage,
   ProviderMessage,
   ProviderRequestOptions,
   ProviderResponse,
@@ -100,6 +105,88 @@ export function prepareMessages(model: string, messages: ProviderMessage[]): Wir
   return wire;
 }
 
+// ─────────────────────────────────────────────────────────────
+// Диалог с инструментами (агентный режим)
+// ─────────────────────────────────────────────────────────────
+
+type WireToolMessage = Record<string, unknown>;
+
+/**
+ * Приводит сообщения агента к формату chat/completions. Кэш-точки Anthropic ставятся на системный
+ * промпт и на первое сообщение пользователя (задачу запуска): оба неизменны на протяжении всего
+ * запуска, поэтому читаются из кэша на каждом шаге. Остальные провайдеры кэшируют сами.
+ */
+export function prepareChatMessages(model: string, messages: ChatWireMessage[]): WireToolMessage[] {
+  const cacheable = model.startsWith('anthropic/');
+  const lastUserIndex = (() => {
+    for (let i = messages.length - 1; i >= 0; i -= 1) {
+      if (messages[i].role === 'user') return i;
+    }
+    return -1;
+  })();
+
+  return messages.map((message, index): WireToolMessage => {
+    if (message.role === 'tool') {
+      return { role: 'tool', tool_call_id: message.toolCallId, content: message.content };
+    }
+    if (message.role === 'assistant') {
+      const wire: WireToolMessage = { role: 'assistant', content: message.content || null };
+      if (message.toolCalls && message.toolCalls.length > 0) {
+        wire.tool_calls = message.toolCalls.map((call) => ({
+          id: call.id,
+          type: 'function',
+          function: { name: call.name, arguments: call.arguments || '{}' },
+        }));
+      }
+      if (message.reasoningDetails && message.reasoningDetails.length > 0) {
+        wire.reasoning_details = message.reasoningDetails;
+      }
+      return wire;
+    }
+    if (cacheable && message.content && (message.role === 'system' || index === lastUserIndex)) {
+      return {
+        role: message.role,
+        content: [{ type: 'text', text: message.content, cache_control: { type: 'ephemeral' } }],
+      };
+    }
+    return { role: message.role, content: message.content };
+  });
+}
+
+/**
+ * Кусок `reasoning_details` из потока: у каждого есть `index` блока и тип. Куски одного блока нужно
+ * склеить (текст и резюме дописываются, подпись берётся последняя), иначе провайдер отвергнет
+ * или проигнорирует их при возврате на следующем шаге.
+ */
+export function mergeReasoningDetails(target: Array<Record<string, unknown>>, chunk: unknown): void {
+  if (!Array.isArray(chunk)) return;
+  for (const raw of chunk) {
+    if (!raw || typeof raw !== 'object') continue;
+    const item = raw as Record<string, unknown>;
+    const index = typeof item.index === 'number' ? item.index : target.length;
+    const existing = target.find((entry) => entry.index === index && entry.type === item.type);
+    if (!existing) {
+      target.push({ ...item, index });
+      continue;
+    }
+    for (const key of ['text', 'summary', 'data'] as const) {
+      if (typeof item[key] === 'string') {
+        existing[key] = `${typeof existing[key] === 'string' ? existing[key] : ''}${item[key]}`;
+      }
+    }
+    for (const [key, value] of Object.entries(item)) {
+      if (key === 'text' || key === 'summary' || key === 'data' || key === 'index') continue;
+      if (value !== undefined && value !== null) existing[key] = value;
+    }
+  }
+}
+
+interface PartialToolCall {
+  id: string;
+  name: string;
+  arguments: string;
+}
+
 export class OpenRouterProvider implements AIProvider {
   readonly type: AIProviderType = 'openrouter';
   readonly name = 'OpenRouter';
@@ -141,6 +228,203 @@ export class OpenRouterProvider implements AIProvider {
       body.temperature = options.temperature;
     }
     return body;
+  }
+
+  /** Тело запроса шага с инструментами. Отдельно от buildBody, чтобы тесты видели реальный payload. */
+  buildChatBody(options: ChatCompletionOptions): Record<string, unknown> {
+    const body: Record<string, unknown> = {
+      model: options.model,
+      messages: prepareChatMessages(options.model, options.messages),
+      stream: true,
+      max_tokens: Math.min(options.maxTokens ?? 8192, MAX_COMPLETION_TOKENS),
+      usage: { include: true },
+    };
+    if (options.tools && options.tools.length > 0) {
+      body.tools = options.tools;
+      body.tool_choice = 'auto';
+    }
+    if (options.reasoning) body.reasoning = options.reasoning;
+    if (options.temperature !== undefined) body.temperature = options.temperature;
+    return body;
+  }
+
+  /**
+   * Один шаг агента: потоковый ответ модели с возможными вызовами инструментов.
+   *
+   * Вызовы приходят кусками (`delta.tool_calls[i]`: имя в первом куске, аргументы по частям),
+   * размышления — отдельным потоком, а `reasoning_details` собираются целиком, чтобы вернуть их
+   * провайдеру на следующем шаге. Недособранные вызовы при обрыве отбрасываются: исполнять
+   * инструмент с обрезанными аргументами нельзя.
+   */
+  async streamChat(
+    options: ChatCompletionOptions,
+    callbacks: ChatCompletionCallbacks,
+  ): Promise<ChatCompletionResult> {
+    const targetModel = options.model;
+    const empty = (reason: 'cancelled' | 'error'): ChatCompletionResult => ({
+      content: '',
+      toolCalls: [],
+      usage: { inputTokens: 0, outputTokens: 0 },
+      finishReason: reason,
+    });
+
+    if (callbacks.isCancelled()) return empty('cancelled');
+
+    let content = '';
+    let streamedAny = false;
+    let promptTokens = 0;
+    let completionTokens = 0;
+    let reasoningTokens: number | undefined;
+    let cachedTokens: number | undefined;
+    let costUsd: number | undefined;
+    let actualModel: string | undefined;
+    let finish: string | undefined;
+    const partialCalls = new Map<number, PartialToolCall>();
+    const reasoningDetails: Array<Record<string, unknown>> = [];
+
+    const collectToolCalls = (): ChatToolCall[] =>
+      [...partialCalls.entries()]
+        .sort(([a], [b]) => a - b)
+        .map(([, call]) => call)
+        .filter((call) => call.name.length > 0)
+        .map((call, order) => ({
+          id: call.id || `call_${order}_${Date.now().toString(36)}`,
+          name: call.name,
+          arguments: call.arguments,
+        }));
+
+    const snapshot = (reason: ChatCompletionResult['finishReason']): ChatCompletionResult => ({
+      content,
+      toolCalls: reason === 'cancelled' || reason === 'error' ? [] : collectToolCalls(),
+      reasoningDetails: reasoningDetails.length > 0 ? reasoningDetails : undefined,
+      usage: {
+        inputTokens: promptTokens,
+        outputTokens: completionTokens || Math.ceil(content.length / 4),
+        cachedTokens: cachedTokens && cachedTokens > 0 ? cachedTokens : undefined,
+        reasoningTokens,
+      },
+      cost: costUsd,
+      model: actualModel ?? targetModel,
+      finishReason: reason,
+    });
+
+    try {
+      const response = await fetch(`${this.baseUrl}/chat/completions`, {
+        method: 'POST',
+        headers: this.headers(),
+        body: JSON.stringify(this.buildChatBody(options)),
+        signal: options.signal,
+      });
+
+      if (!response.ok || !response.body) {
+        throw await describeUpstreamFailure(targetModel, response);
+      }
+
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder('utf-8');
+      let buffer = '';
+
+      const handleLine = (line: string): void => {
+        const trimmed = line.trim();
+        if (!trimmed.startsWith('data:')) return;
+        const dataStr = trimmed.slice(5).trim();
+        if (!dataStr || dataStr === '[DONE]') return;
+
+        let parsed: Record<string, any>;
+        try {
+          parsed = JSON.parse(dataStr);
+        } catch {
+          return;
+        }
+
+        if (parsed.error) {
+          const status = Number(parsed.error.code);
+          throw new OpenRouterError(
+            targetModel,
+            Number.isFinite(status) && status >= 400 ? status : 502,
+            String(parsed.error.message ?? 'upstream stream error').slice(0, 300),
+          );
+        }
+
+        if (typeof parsed.model === 'string') actualModel = parsed.model;
+        callbacks.onActivity?.();
+        const choice = parsed.choices?.[0];
+        const delta = choice?.delta;
+
+        if (delta) {
+          const reasoningDelta = delta.reasoning ?? delta.reasoning_content ?? '';
+          if (typeof reasoningDelta === 'string' && reasoningDelta) {
+            streamedAny = true;
+            callbacks.onReasoningDelta?.(reasoningDelta);
+          }
+          if (delta.reasoning_details) mergeReasoningDetails(reasoningDetails, delta.reasoning_details);
+
+          if (typeof delta.content === 'string' && delta.content) {
+            streamedAny = true;
+            content += delta.content;
+            callbacks.onDelta(delta.content);
+          }
+
+          if (Array.isArray(delta.tool_calls)) {
+            streamedAny = true;
+            for (const part of delta.tool_calls as Array<Record<string, any>>) {
+              const index = typeof part.index === 'number' ? part.index : partialCalls.size;
+              let call = partialCalls.get(index);
+              if (!call) {
+                call = { id: '', name: '', arguments: '' };
+                partialCalls.set(index, call);
+              }
+              if (typeof part.id === 'string' && part.id) call.id = part.id;
+              if (typeof part.function?.name === 'string') call.name += part.function.name;
+              if (typeof part.function?.arguments === 'string') call.arguments += part.function.arguments;
+            }
+          }
+        }
+
+        if (choice?.finish_reason) finish = String(choice.finish_reason);
+
+        const usage = parsed.usage;
+        if (usage) {
+          if (typeof usage.cost === 'number') costUsd = usage.cost;
+          promptTokens = usage.prompt_tokens ?? promptTokens;
+          completionTokens = usage.completion_tokens ?? completionTokens;
+          const rTokens = usage.completion_tokens_details?.reasoning_tokens;
+          if (typeof rTokens === 'number') reasoningTokens = rTokens;
+          const cTokens = usage.prompt_tokens_details?.cached_tokens ?? usage.native_tokens_cached;
+          if (typeof cTokens === 'number') cachedTokens = cTokens;
+        }
+      };
+
+      while (true) {
+        if (callbacks.isCancelled()) {
+          try {
+            await reader.cancel();
+          } catch {
+            // ignore
+          }
+          return snapshot('cancelled');
+        }
+        const { value, done } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n');
+        buffer = lines.pop() ?? '';
+        for (const line of lines) handleLine(line);
+      }
+      if (buffer) handleLine(buffer);
+
+      const toolCalls = collectToolCalls();
+      let reason: ChatCompletionResult['finishReason'] = 'stop';
+      if (toolCalls.length > 0) reason = 'tool_calls';
+      else if (finish === 'length') reason = 'length';
+      return snapshot(reason);
+    } catch (err: unknown) {
+      const aborted = (err as Error)?.name === 'AbortError' || callbacks.isCancelled();
+      if (aborted) return snapshot('cancelled');
+      // Обрыв после того, как пользователь уже что-то получил: отдаём полученное, не повторяя запрос.
+      if (streamedAny && !(err instanceof OpenRouterError)) return snapshot('error');
+      throw err;
+    }
   }
 
   async generateText(options: ProviderRequestOptions): Promise<ProviderResponse> {

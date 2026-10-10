@@ -111,6 +111,11 @@ npm run dev:api   # только API
 | `STORE_FILE` | Файл для хранения диалогов (fallback) | `apps/mock-api/data/store.json` |
 | `MOCK_AI_FAILURE_RATE` | Доля запросов с ошибкой (для тестов) | `0` |
 | `VIP_EMAILS` | Email-адреса с автоматическим Ultra-тарифом | — |
+| `CODE_PROJECTS_DIR` | Каталог проектов Ketner Code | `apps/mock-api/data/projects` |
+| `SANDBOX_MODE` | Запуск команд агентом: `off` · `docker` · `local` | `off` |
+| `SANDBOX_DOCKER_IMAGE` | Образ для режима `docker` | `node:22-bookworm` |
+| `SANDBOX_ALLOW_NETWORK` | Сеть внутри команд агента | `false` |
+| `SANDBOX_ALLOW_LOCAL_IN_PRODUCTION` | Разрешить режим `local` в production | `false` |
 
 ---
 
@@ -280,6 +285,7 @@ Drizzle ORM + PostgreSQL/Supabase. Таблицы:
 | `/checkout/:planId` | Оформление подписки (Stripe / СБП / Stars) |
 | `/settings` | Настройки: профиль, тема, язык, подписка |
 | `/docs`, `/docs/api` | Документация и API-справка |
+| `/code`, `/code/:id` | Ketner Code: проекты и ИИ-агент ([подробнее](docs/code-workspace.md)) |
 | `/onboarding` | Онбординг нового пользователя |
 | `/admin` | Административная панель |
 
@@ -297,6 +303,9 @@ Drizzle ORM + PostgreSQL/Supabase. Таблицы:
 | `preferences.test.tsx` | Тема, язык, сохранение |
 | `tokens.test.ts` | CSS-токены дизайн-системы |
 | `routes.test.tsx` | Маршруты |
+| `code-flow.test.tsx` | Ketner Code: проекты, запуск агента, diff, сохранение перед запуском |
+| `code-import.test.ts` | Импорт папки и ZIP: фильтры, лимиты, разбиение на части |
+| `code-tree.test.ts` | Дерево файлов и группировка ленты агента |
 | `marketing.test.tsx` | Лендинг, страница тарифов |
 
 Fake API в `test-utils.tsx` конфигурируется параметрами: `reply`, `replies`, `chunkDelayMs`, `failTimes`, `enforcePlans`.
@@ -338,6 +347,7 @@ Fake API в `test-utils.tsx` конфигурируется параметрам
 
 ## Документация
 
+- [`docs/code-workspace.md`](docs/code-workspace.md) — Ketner Code: проекты, агент, безопасность и что ещё нужно
 - [`docs/tech-stack.md`](docs/tech-stack.md) — стек и причины выбора
 - [`docs/screens.md`](docs/screens.md) — карта экранов и переходов
 - [`docs/data-model.md`](docs/data-model.md) — модель данных и соответствие эндпоинтам

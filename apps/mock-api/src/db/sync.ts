@@ -5,6 +5,8 @@ import { conversationStore, userStore, subscriptionStore, feedbackStore } from '
 import type { Conversation, Message, Subscription } from '../types.js';
 import type { StoredUser } from '../store/user-store.js';
 import type { FeedbackRecord } from '../store/feedback-store.js';
+import { createPostgresProjectDriver, ensureCodeSchema } from '../code/postgres-driver.js';
+import { attachProjectDriver } from '../code/runtime.js';
 
 export function hasPostgresConfig(): boolean {
   const url = (config.databaseUrl || process.env.DATABASE_URL || '').trim();
@@ -730,6 +732,11 @@ export async function initDatabaseSync(): Promise<boolean> {
     await loadAndSyncFeedbacks(sql);
 
     attachDatabaseDrivers(sql);
+
+    // Ketner Code: проекты переживают перезапуск сервера (поднимаются из БД при первом обращении)
+    const codeRunner = { query: (text: string, params?: unknown[]) => sql.unsafe(text, params as never[]) as unknown as Promise<never[]> };
+    await ensureCodeSchema(codeRunner);
+    attachProjectDriver(createPostgresProjectDriver(codeRunner));
     console.log('🎉 [db] Все данные успешно синхронизированы с PostgreSQL / Supabase!');
     return true;
   } catch (error) {
