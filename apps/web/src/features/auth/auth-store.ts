@@ -249,7 +249,11 @@ export const useAuth = create<AuthState>((set, get) => ({
  * Читает токен авторизации для сетевых запросов.
  */
 export function getAuthToken(): string | null {
-  return useAuth.getState().token ?? storage.get(SESSION_KEY);
+  const { status, token } = useAuth.getState();
+  if (status === 'unauthenticated') {
+    return null;
+  }
+  return token ?? storage.get(SESSION_KEY);
 }
 
 export const useAuthStore = useAuth;

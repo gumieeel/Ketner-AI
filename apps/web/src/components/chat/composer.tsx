@@ -60,8 +60,8 @@ export function Composer() {
 
   const currentModel = findModel(meta?.models, selectedModelId);
   const hasAccess = canAccessModel(user?.plan, currentModel);
-  const isFree = !user || !user.plan || user.plan === 'free';
-  const freeLimitReached = isFree && isFreeLimitReached(user?.id);
+  const isFreeAccount = Boolean(user && (!user.plan || user.plan === 'free'));
+  const freeLimitReached = Boolean(isFreeAccount && user && isFreeLimitReached(user.id));
 
   const labelOf = (model: ModelInfo): string => {
     const key = MODEL_NAME_KEYS[model.id];

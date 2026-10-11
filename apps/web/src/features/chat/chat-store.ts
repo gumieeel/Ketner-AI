@@ -313,8 +313,8 @@ export const useChat = create<ChatState>((set, get) => {
       });
 
       const authUser = useAuth.getState().user;
-      const isFree = !authUser || !authUser.plan || authUser.plan === 'free';
-      if (isFree && isFreeLimitReached()) {
+      const isFree = Boolean(authUser && (!authUser.plan || authUser.plan === 'free'));
+      if (isFree && authUser && isFreeLimitReached(authUser.id)) {
         useUpgradeModal.getState().open({ reason: 'free_limit' });
       }
     } catch (error) {
@@ -501,7 +501,7 @@ export const useChat = create<ChatState>((set, get) => {
       const authUser = useAuth.getState().user;
       const modelId = usePreferences.getState().chatModelId;
       const currentModel = findModel(get().meta?.models, modelId);
-      const isFree = !authUser || !authUser.plan || authUser.plan === 'free';
+      const isFreeAccount = Boolean(authUser && (!authUser.plan || authUser.plan === 'free'));
 
       if (!canAccessModel(authUser?.plan, currentModel)) {
         useUpgradeModal.getState().open({
@@ -511,12 +511,12 @@ export const useChat = create<ChatState>((set, get) => {
         });
       }
 
-      if (isFree) {
-        if (isFreeLimitReached(authUser?.id)) {
+      if (isFreeAccount && authUser) {
+        if (isFreeLimitReached(authUser.id)) {
           useUpgradeModal.getState().open({ reason: 'free_limit' });
           return;
         }
-        incrementFreeUsage(authUser?.id);
+        incrementFreeUsage(authUser.id);
       }
 
       const activeWs = useWorkspace.getState().activeWorkspace;
@@ -613,7 +613,7 @@ export const useChat = create<ChatState>((set, get) => {
       const authUser = useAuth.getState().user;
       const modelId = usePreferences.getState().chatModelId;
       const currentModel = findModel(get().meta?.models, modelId);
-      const isFree = !authUser || !authUser.plan || authUser.plan === 'free';
+      const isFreeAccount = Boolean(authUser && (!authUser.plan || authUser.plan === 'free'));
 
       if (!canAccessModel(authUser?.plan, currentModel)) {
         useUpgradeModal.getState().open({
@@ -622,7 +622,7 @@ export const useChat = create<ChatState>((set, get) => {
           requiredPlan: getRequiredPlanName(currentModel),
         });
       }
-      if (isFree && isFreeLimitReached(authUser?.id)) {
+      if (isFreeAccount && authUser && isFreeLimitReached(authUser.id)) {
         useUpgradeModal.getState().open({ reason: 'free_limit' });
         return;
       }
@@ -665,7 +665,7 @@ export const useChat = create<ChatState>((set, get) => {
       const authUser = useAuth.getState().user;
       const modelId = usePreferences.getState().chatModelId;
       const currentModel = findModel(get().meta?.models, modelId);
-      const isFree = !authUser || !authUser.plan || authUser.plan === 'free';
+      const isFreeAccount = Boolean(authUser && (!authUser.plan || authUser.plan === 'free'));
 
       if (!canAccessModel(authUser?.plan, currentModel)) {
         useUpgradeModal.getState().open({
@@ -674,7 +674,7 @@ export const useChat = create<ChatState>((set, get) => {
           requiredPlan: getRequiredPlanName(currentModel),
         });
       }
-      if (isFree && isFreeLimitReached(authUser?.id)) {
+      if (isFreeAccount && authUser && isFreeLimitReached(authUser.id)) {
         useUpgradeModal.getState().open({ reason: 'free_limit' });
         return;
       }

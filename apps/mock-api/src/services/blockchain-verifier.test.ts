@@ -55,7 +55,7 @@ const verify = (extra: Partial<Parameters<typeof blockchainVerifier.verifyTransa
 test('verifier (C7): корректный перевод USDT на наш адрес принимается', async () => {
   mockTronscan(goodTx());
   const result = await verify();
-  assert.equal(result.success, true, result.errorMessage);
+  assert.equal(result.success, true, result.errorMessage ?? '');
   assert.equal(result.transferredAmount, 9);
 });
 

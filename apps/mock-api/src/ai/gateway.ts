@@ -473,7 +473,10 @@ export class AIGateway {
     let targetModel: ModelRegistryEntry;
     let routingReason: string;
 
-    if (req.modelId === 'auto' || !req.modelId) {
+    if (req.isAnonymous && (req.modelId === 'auto' || req.modelId === 'nemotron-ultra' || !req.modelId)) {
+      targetModel = this.registry.resolve('nemotron-ultra');
+      routingReason = 'Guest mode: nvidia/nemotron-3-ultra-550b-a55b:free via OpenRouter';
+    } else if (req.modelId === 'auto' || !req.modelId) {
       const routed = AutoRouter.route({
         plan: effectivePlan,
         level: taskInfo.level,
@@ -664,9 +667,11 @@ export class AIGateway {
       }
 
       // 6. Генерация через провайдер с поддержкой Failover по цепочке запасных моделей из реестра
-      const modelsToTry = this.registry
-        .getFallbackChain(targetModel.id)
-        .filter((m, index) => index === 0 || this.isAllowedFallback(m, effectivePlan, economyState));
+      const modelsToTry = req.isAnonymous
+        ? [targetModel]
+        : this.registry
+            .getFallbackChain(targetModel.id)
+            .filter((m, index) => index === 0 || this.isAllowedFallback(m, effectivePlan, economyState));
       let success = false;
       let streamedResponse: ProviderResponse | null = null;
       let usedModel = targetModel;

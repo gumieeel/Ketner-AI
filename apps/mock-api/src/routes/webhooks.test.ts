@@ -103,10 +103,10 @@ test('webhooks (C6): запрос без подписи, с чужой подп�
     });
     assert.equal(unsigned.status, 401);
 
-    // Старый публичный секрет и «тестовая» подпись
+    // Заведомо неверный секрет и «тестовая» подпись
     const wrongSecret = await fetch(
       `${server.baseUrl}/api/webhooks`,
-      signedWebhook(event, 'ketner-ai-webhook-secret-dev'),
+      signedWebhook(event, 'definitely-wrong-secret-1234567890'),
     );
     assert.equal(wrongSecret.status, 401);
     const testSignature = await fetch(`${server.baseUrl}/api/webhooks`, {

@@ -24,7 +24,15 @@ export function createConversationsRouter(
     next();
   });
 
-  const getUserId = (request: { userId?: string }): string => request.userId ?? defaultUserId;
+  const getUserId = (request: Request): string => {
+    if (request.userId) return request.userId;
+    const guestHeader = request.headers['x-guest-id'] || request.headers['x-user-id'];
+    const guestId = Array.isArray(guestHeader) ? guestHeader[0] : guestHeader;
+    if (guestId && typeof guestId === 'string' && guestId.trim()) {
+      return guestId.trim();
+    }
+    return defaultUserId;
+  };
 
   router.get('/conversations', (request: Request, response: Response) => {
     const userId = getUserId(request);

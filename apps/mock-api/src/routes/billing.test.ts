@@ -353,10 +353,17 @@ test('billing (C7): без шлюза и без ENABLE_MANUAL_CRYPTO крипт�
   const user = await signup(server.baseUrl, 'c7-prod@example.com');
   const headers = { 'Content-Type': 'application/json', Authorization: `Bearer ${user.token}` };
 
-  const mutable = config as unknown as { enableMockBilling: boolean; manualCryptoEnabled: boolean };
+  const mutable = config as unknown as {
+    enableMockBilling: boolean;
+    manualCryptoEnabled: boolean;
+    cryptoCloudApiKey?: string;
+    cryptoCloudShopId?: string;
+  };
   const previous = { ...mutable };
   mutable.enableMockBilling = false;
   mutable.manualCryptoEnabled = false;
+  mutable.cryptoCloudApiKey = '';
+  mutable.cryptoCloudShopId = '';
   try {
     const create = await fetch(`${server.baseUrl}/api/billing/crypto/create-invoice`, {
       method: 'POST',

@@ -16,7 +16,16 @@ export function createConversationsRouter(store, defaultUserId, allowAnonymous =
         }
         next();
     });
-    const getUserId = (request) => request.userId ?? defaultUserId;
+    const getUserId = (request) => {
+        if (request.userId)
+            return request.userId;
+        const guestHeader = request.headers['x-guest-id'] || request.headers['x-user-id'];
+        const guestId = Array.isArray(guestHeader) ? guestHeader[0] : guestHeader;
+        if (guestId && typeof guestId === 'string' && guestId.trim()) {
+            return guestId.trim();
+        }
+        return defaultUserId;
+    };
     router.get('/conversations', (request, response) => {
         const userId = getUserId(request);
         response.json({ conversations: store.list(userId) });

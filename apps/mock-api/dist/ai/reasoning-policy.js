@@ -79,8 +79,8 @@ export function toProviderReasoning(reasoning, wanted) {
     if (reasoning.efforts.length > 0) {
         return { effort: nearestSupported(reasoning.efforts, wanted, reasoning.mandatory) };
     }
-    if (reasoning.toggle && !reasoning.mandatory) {
-        return { enabled: wanted !== 'none' };
+    if (reasoning.toggle) {
+        return { enabled: reasoning.mandatory ? true : wanted !== 'none' };
     }
     return undefined;
 }
