@@ -133,13 +133,6 @@ export function ModelPicker({ disabled = false }: { disabled?: boolean }) {
     }
   };
 
-  const subtitleOf = (model: ModelInfo): string => {
-    if (model.id === 'auto') return t('chat.modelAutoSubtitle');
-    const context = t('chat.modelContext', { count: model.contextMessages });
-    const daily = user?.plan ? model.dailyLimits?.[user.plan] : undefined;
-    return daily === undefined ? context : `${context} · ${t('chat.modelDailyLimit', { count: daily })}`;
-  };
-
   const renderModelItem = (model: ModelInfo) => {
     const active = model.id === current.id;
     const accessible = canAccessModel(user?.plan, model);
@@ -194,7 +187,6 @@ export function ModelPicker({ disabled = false }: { disabled?: boolean }) {
                 </Badge>
               ) : null}
             </span>
-            <span className="mt-0.5 block truncate text-xs text-subtle">{subtitleOf(model)}</span>
           </span>
           <span className="flex size-5 shrink-0 items-center justify-center">
             {!accessible ? (
