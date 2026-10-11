@@ -5,6 +5,7 @@ import { invoiceStore as defaultInvoiceStore, subscriptionStore as defaultSubscr
 import { createAuthRouter } from './auth.js';
 import { createBillingRouter } from './billing.js';
 import { createChatRouter } from './chat.js';
+import { createCodeRouter } from './code.js';
 import { createConversationsRouter } from './conversations.js';
 import { healthRouter } from './health.js';
 import { createMetaRouter } from './meta.js';
@@ -75,6 +76,9 @@ export const API_ENDPOINTS = [
         status: 'ready',
         description: 'Отмена подписки',
     },
+    { method: 'GET', path: '/api/code/capabilities', status: 'ready', description: 'Ketner Code: лимиты тарифа и возможности' },
+    { method: 'GET', path: '/api/code/projects', status: 'ready', description: 'Ketner Code: проекты пользователя' },
+    { method: 'POST', path: '/api/code/projects/:id/run', status: 'ready', description: 'Ketner Code: запуск агента (SSE)' },
 ];
 /**
  * Описание сервиса.
@@ -125,6 +129,12 @@ export function createApiRouter(deps) {
         userStore: activeUserStore,
     }));
     router.use(createConversationsRouter(deps.store, deps.userId));
+    router.use('/code', createCodeRouter({
+        userId: deps.userId,
+        userStore: activeUserStore,
+        subscriptionStore: activeSubscriptionStore,
+        usageStore: activeUsageStore,
+    }));
     router.use('/chat', createChatRouter({
         ...deps,
         subscriptionStore: activeSubscriptionStore,

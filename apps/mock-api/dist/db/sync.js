@@ -2,6 +2,8 @@ import { randomUUID } from 'node:crypto';
 import postgres from 'postgres';
 import { config } from '../config.js';
 import { conversationStore, userStore, subscriptionStore, feedbackStore } from '../store/index.js';
+import { createPostgresProjectDriver, ensureCodeSchema } from '../code/postgres-driver.js';
+import { attachProjectDriver } from '../code/runtime.js';
 export function hasPostgresConfig() {
     const url = (config.databaseUrl || process.env.DATABASE_URL || '').trim();
     return Boolean(url &&
@@ -619,6 +621,10 @@ export async function initDatabaseSync() {
         await loadAndSyncSubscriptions(sql);
         await loadAndSyncFeedbacks(sql);
         attachDatabaseDrivers(sql);
+        // Ketner Code: проекты переживают перезапуск сервера (поднимаются из БД при первом обращении)
+        const codeRunner = { query: (text, params) => sql.unsafe(text, params) };
+        await ensureCodeSchema(codeRunner);
+        attachProjectDriver(createPostgresProjectDriver(codeRunner));
         console.log('🎉 [db] Все данные успешно синхронизированы с PostgreSQL / Supabase!');
         return true;
     }

@@ -258,6 +258,22 @@ export const config = {
     stripePricePlus: process.env.STRIPE_PRICE_PLUS || '',
     stripePricePro: process.env.STRIPE_PRICE_PRO || '',
     stripePriceUltra: process.env.STRIPE_PRICE_ULTRA || '',
+    /**
+     * Ketner Code: серверные проекты и агент.
+     * SANDBOX_MODE: off (по умолчанию, команды недоступны) | local (только для разработки) | docker.
+     */
+    code: {
+        projectsDir: process.env.CODE_PROJECTS_DIR?.trim() ||
+            fileURLToPath(new URL('../data/projects', import.meta.url)),
+        sandboxMode: (() => {
+            const raw = (process.env.SANDBOX_MODE ?? 'off').trim().toLowerCase();
+            return raw === 'local' || raw === 'docker' ? raw : 'off';
+        })(),
+        sandboxDockerImage: process.env.SANDBOX_DOCKER_IMAGE?.trim() || '',
+        sandboxAllowLocalInProduction: process.env.SANDBOX_ALLOW_LOCAL_IN_PRODUCTION === 'true',
+        /** Сеть внутри команд агента (npm install). По умолчанию выключена. */
+        sandboxAllowNetwork: process.env.SANDBOX_ALLOW_NETWORK === 'true',
+    },
     ai: {
         thinkingMs: [
             readNumber('MOCK_AI_THINKING_MIN_MS', 350),

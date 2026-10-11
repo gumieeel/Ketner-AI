@@ -75,6 +75,9 @@ export class UsageStore {
             ttftMs: params.ttftMs ?? null,
             status: params.status,
             source: params.source ?? 'provider',
+            ...(params.kind ? { kind: params.kind } : {}),
+            ...(params.runId ? { runId: params.runId } : {}),
+            ...(params.step !== undefined ? { step: params.step } : {}),
             createdAt: new Date().toISOString(),
         };
         this.records.push(record);
@@ -157,20 +160,29 @@ export class UsageStore {
             const time = new Date(rec.createdAt).getTime();
             if (time < oneMonthAgo)
                 break;
-            const totalTokens = rec.inputTokens + rec.outputTokens;
+            // У шагов агента контекст повторно уходит на каждом шаге, а читается он из кэша почти
+            // бесплатно, поэтому в квоту токенов идёт только «свежая» часть входа и ответ.
+            const totalTokens = rec.kind === 'agent'
+                ? Math.max(0, rec.inputTokens - (rec.cachedTokens ?? 0)) + rec.outputTokens
+                : rec.inputTokens + rec.outputTokens;
             // Отказанные и упавшие запросы не потребляют лимит: иначе каждый отказ продлевал бы блокировку
             // (пользователь упёрся в лимит → отказ записался → лимит «не отпускает»), а сбой провайдера
             // списывал бы с человека сообщение, которого он не получил.
             const countsTowardLimits = rec.status !== 'rate_limited' && rec.status !== 'concurrency_limited' && rec.status !== 'error';
-            if (countsTowardLimits && time >= oneMinuteAgo)
+            // Шаги агента не считаются «сообщениями» (их десятки на запуск и у них свой дневной лимит
+            // запусков), но токены и стоимость учитываются как у любого запроса.
+            const countsAsMessage = countsTowardLimits && rec.kind !== 'agent';
+            if (countsAsMessage && time >= oneMinuteAgo)
                 requestsLastMinute++;
             if (countsTowardLimits && time >= oneHourAgo) {
-                requestsLastHour++;
+                if (countsAsMessage)
+                    requestsLastHour++;
                 tokensLastHour += totalTokens;
             }
             if (time >= oneDayAgo) {
-                if (countsTowardLimits) {
+                if (countsAsMessage)
                     requestsLastDay++;
+                if (countsTowardLimits) {
                     tokensLastDay += totalTokens;
                 }
                 estimatedCostLastDay += rec.estimatedCost;
@@ -212,6 +224,23 @@ export class UsageStore {
             }
         }
         return Number(total.toFixed(6));
+    }
+    /**
+     * Сколько запусков агента пользователь начал за последние 24 часа. Запуск отмечается записью
+     * нулевого шага в момент старта, поэтому отменённый сразу после старта запуск тоже считается.
+     */
+    getAgentRunsLastDay(userId) {
+        const userRecords = this.userIndex.get(userId) ?? [];
+        const since = Date.now() - 24 * 60 * 60 * 1000;
+        const runs = new Set();
+        for (let i = userRecords.length - 1; i >= 0; i--) {
+            const rec = userRecords[i];
+            if (new Date(rec.createdAt).getTime() < since)
+                break;
+            if (rec.kind === 'agent' && rec.runId)
+                runs.add(rec.runId);
+        }
+        return runs.size;
     }
     /**
      * Получить последние записи использования для пользователя.
