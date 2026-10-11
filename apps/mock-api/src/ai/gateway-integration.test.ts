@@ -443,18 +443,20 @@ test('семантический кэш не смешивает ответы р�
   assert.equal(cache.get('auto', 'ru', 'проанализируй проект', 'shared', 'h'), null);
 });
 
-test('суточный лимит: второй запрос к Sol на Plus уходит в GPT-6 Luna Pro, причина видна пользователю', async () => {
+test('суточный лимит: третий запрос к Sol на Plus уходит в GPT-6 Luna Pro, причина видна пользователю', async () => {
   const usage = newUsage();
   const calls: Call[] = [];
   const gateway = makeGateway(fakeOpenRouter(okStream('ответ', { cost: 0.02 }), calls), usage);
 
-  const first = await run(gateway, request({ userId: 'u-dl', userPlan: 'plus', modelId: 'gpt-6.1-sol' }));
-  assertNoError(first);
-  assert.equal(first.done?.selectedModel?.id, 'gpt-6.1-sol');
+  for (let i = 0; i < 2; i++) {
+    const ok = await run(gateway, request({ userId: 'u-dl', userPlan: 'plus', modelId: 'gpt-6.1-sol' }));
+    assertNoError(ok);
+    assert.equal(ok.done?.selectedModel?.id, 'gpt-6.1-sol');
+  }
 
   const second = await run(gateway, request({ userId: 'u-dl', userPlan: 'plus', modelId: 'gpt-6.1-sol' }));
   assertNoError(second);
-  assert.deepEqual(calls.map((c) => c.model), ['openai/gpt-6.1-sol', 'openai/gpt-6-luna-pro']);
+  assert.deepEqual(calls.map((c) => c.model), ['openai/gpt-6.1-sol', 'openai/gpt-6.1-sol', 'openai/gpt-6-luna-pro']);
   assert.equal(second.done?.selectedModel?.id, 'gpt-6-luna-pro');
   assert.match(second.done?.routingReason ?? '', /Daily limit reached for GPT-6\.1 Sol/);
   assert.equal(usage.getByUser('u-dl')[0].modelId, 'gpt-6-luna-pro', 'расход пишется на ту, что ответила');

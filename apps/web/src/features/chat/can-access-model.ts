@@ -139,7 +139,7 @@ export const DEFAULT_MODELS: ModelInfo[] = [
     contextMessages: 120,
     isPro: true,
     requiredPlan: 'plus',
-    dailyLimits: { plus: 1 },
+    dailyLimits: { plus: 2 },
   },
   {
     id: 'claude-opus-5.5',

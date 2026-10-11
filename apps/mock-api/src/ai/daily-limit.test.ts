@@ -32,7 +32,7 @@ function use(usage: UsageStore, userId: string, modelId: string, times: number, 
 }
 
 test('суточные лимиты: Plus ограничен по моделям, остальные тарифы пока без лимитов', () => {
-  assert.equal(getDailyModelLimit('plus', 'gpt-6.1-sol'), 1);
+  assert.equal(getDailyModelLimit('plus', 'gpt-6.1-sol'), 2);
   assert.equal(getDailyModelLimit('plus', 'ketner-pro'), 20);
   assert.equal(getDailyModelLimit('plus', 'gemini-3.7-flash'), 5);
   assert.equal(getDailyModelLimit('plus', 'gpt-5.6-luna-pro'), 10);
@@ -65,22 +65,22 @@ test('пока лимит не исчерпан, модель остаётся �
 
 test('после лимита Sol отвечает GPT-6 Luna Pro, причина видна в routingReason', () => {
   const usage = newUsage();
-  use(usage, 'u2', 'gpt-6.1-sol', 1);
+  use(usage, 'u2', 'gpt-6.1-sol', 2);
   const decision = applyDailyLimits(registry.get('gpt-6.1-sol')!, 'plus', 'u2', usage, registry);
   assert.equal(decision.model.id, 'gpt-6-luna-pro');
-  assert.match(decision.reason ?? '', /Daily limit reached for GPT-6\.1 Sol \(1\/day on plus\)/);
+  assert.match(decision.reason ?? '', /Daily limit reached for GPT-6\.1 Sol \(2\/day on plus\)/);
 });
 
 test('лимит считается по скользящим 24 часам: вчерашний запрос уже не в счёт', () => {
   const usage = newUsage();
-  use(usage, 'u3', 'gpt-6.1-sol', 1, 25);
+  use(usage, 'u3', 'gpt-6.1-sol', 2, 25);
   const decision = applyDailyLimits(registry.get('gpt-6.1-sol')!, 'plus', 'u3', usage, registry);
   assert.equal(decision.model.id, 'gpt-6.1-sol');
 });
 
 test('лимит у каждого пользователя свой, а на тарифе без лимита замены нет', () => {
   const usage = newUsage();
-  use(usage, 'u4', 'gpt-6.1-sol', 3);
+  use(usage, 'u4', 'gpt-6.1-sol', 5);
   const sol = registry.get('gpt-6.1-sol')!;
   assert.equal(applyDailyLimits(sol, 'plus', 'u5', usage, registry).model.id, 'gpt-6.1-sol');
   assert.equal(applyDailyLimits(sol, 'pro', 'u4', usage, registry).model.id, 'gpt-6.1-sol');
