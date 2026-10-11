@@ -961,6 +961,8 @@ export const en: Record<TranslationKey, string> = {
 
   // Ketner Code
   'nav.code': 'Ketner Code',
+  'code.auth.title': 'Sign in to use projects',
+  'code.auth.hint': 'Ketner Code stores your code on the server, so an account is required. Projects are visible only to you.',
   'code.title': 'Ketner Code',
   'code.subtitle': 'Projects and an AI agent that reads code, makes changes and checks the result',
   'code.projects.title': 'Projects',

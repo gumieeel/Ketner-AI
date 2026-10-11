@@ -84,7 +84,9 @@ export function createCodeRouter(deps: CodeRouterDeps): Router {
       sandbox,
       allowSandboxNetwork: config.code.sandboxAllowNetwork,
     });
-  const allowAnonymous = deps.allowAnonymous ?? config.allowAnonymousChat;
+  // Гостевой чат общий для всех посетителей (один demo-user), а проекты содержат чужой код:
+  // без входа в аккаунт Ketner Code недоступен, иначе гости видели бы проекты и делили лимиты друг друга.
+  const allowAnonymous = deps.allowAnonymous ?? false;
   /** Запущенные агенты: один на проект. */
   const activeRuns = new Map<string, AbortController>();
   const runKey = (userId: string, projectId: string): string => `${userId}:${projectId}`;

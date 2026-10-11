@@ -1,8 +1,10 @@
 import { useEffect } from 'react';
-import { useParams } from 'react-router-dom';
+import { Link, useParams } from 'react-router-dom';
 import { ProjectList } from '@/components/code/project-list';
 import { Workspace } from '@/components/code/workspace';
+import { CodeIcon } from '@/components/icons';
 import { Button } from '@/components/ui/button';
+import { buttonClasses } from '@/components/ui/button-classes';
 import { Spinner } from '@/components/ui/spinner';
 import { useCode } from '@/features/code/code-store';
 import { useTranslation } from '@/i18n';
@@ -17,6 +19,7 @@ export function CodePage() {
   const closeProject = useCode((state) => state.closeProject);
   const projectStatus = useCode((state) => state.projectStatus);
   const notice = useCode((state) => state.notice);
+  const authRequired = useCode((state) => state.authRequired);
 
   useEffect(() => {
     void loadCapabilities();
@@ -32,6 +35,26 @@ export function CodePage() {
   }, [projectId, loadProjects, openProject, closeProject]);
 
   useEffect(() => () => closeProject(), [closeProject]);
+
+  if (authRequired) {
+    return (
+      <div className="mx-auto flex max-w-md flex-col items-center gap-4 px-4 py-16 text-center">
+        <span className="grid size-12 place-items-center rounded-xl bg-accent-soft text-accent">
+          <CodeIcon className="size-6" />
+        </span>
+        <h2 className="text-lg font-semibold tracking-tight text-text">{t('code.auth.title')}</h2>
+        <p className="text-[14px] leading-6 text-muted">{t('code.auth.hint')}</p>
+        <div className="flex flex-wrap justify-center gap-2">
+          <Link to="/login" className={buttonClasses({ variant: 'primary', size: 'md' })}>
+            {t('nav.login')}
+          </Link>
+          <Link to="/signup" className={buttonClasses({ variant: 'secondary', size: 'md' })}>
+            {t('nav.signup')}
+          </Link>
+        </div>
+      </div>
+    );
+  }
 
   if (!projectId) {
     return (

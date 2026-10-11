@@ -44,6 +44,8 @@ interface CodeState {
   capabilities: CodeCapabilities | null;
   projects: CodeProject[];
   projectsStatus: LoadStatus;
+  /** Сервер ответил 401: проекты доступны только после входа в аккаунт. */
+  authRequired: boolean;
   project: CodeProject | null;
   projectStatus: LoadStatus;
   files: CodeFileEntry[];
@@ -174,6 +176,7 @@ export const useCode = create<CodeState>((set, get) => {
     capabilities: null,
     projects: [],
     projectsStatus: 'idle',
+    authRequired: false,
     project: null,
     projectStatus: 'idle',
     files: [],
@@ -200,9 +203,9 @@ export const useCode = create<CodeState>((set, get) => {
       set({ projectsStatus: 'loading' });
       try {
         const projects = await codeApi.listProjects();
-        set({ projects, projectsStatus: 'ready' });
-      } catch {
-        set({ projectsStatus: 'error' });
+        set({ projects, projectsStatus: 'ready', authRequired: false });
+      } catch (error) {
+        set({ projectsStatus: 'error', authRequired: error instanceof ApiError && error.status === 401 });
       }
     },
 
@@ -283,6 +286,7 @@ export const useCode = create<CodeState>((set, get) => {
       } catch (error) {
         set({
           projectStatus: 'error',
+          authRequired: error instanceof ApiError && error.status === 401,
           notice: { kind: 'message', tone: 'error', text: errorText(error) },
         });
       }

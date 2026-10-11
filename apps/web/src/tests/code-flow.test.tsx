@@ -137,6 +137,7 @@ function resetCode(): void {
     capabilities: null,
     projects: [],
     projectsStatus: 'idle',
+    authRequired: false,
     modelId: 'auto',
     changed: {},
     notice: null,
@@ -277,6 +278,20 @@ describe('Ketner Code: проекты и агент', () => {
 
     await waitFor(() => expect(calls.deleted).toEqual(['p1']));
     await waitFor(() => expect(screen.queryByRole('link', { name: /Мой сайт/ })).toBeNull());
+  });
+
+  it('гостю вместо проектов предлагается войти', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => json({ error: { code: 'unauthorized', message: 'Войдите в аккаунт' } }, 401)),
+    );
+    renderRoute('/code');
+
+    expect(await screen.findByRole('heading', { name: 'Войдите, чтобы работать с проектами' })).toBeInTheDocument();
+    const main = within(screen.getByRole('main'));
+    expect(main.getByRole('link', { name: 'Войти' })).toHaveAttribute('href', '/login');
+    expect(main.getByRole('link', { name: 'Регистрация' })).toHaveAttribute('href', '/signup');
+    expect(screen.queryByRole('button', { name: 'Создать' })).toBeNull();
   });
 
   it('в боковом меню есть ссылка на Ketner Code', () => {

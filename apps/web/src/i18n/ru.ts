@@ -960,6 +960,8 @@ export const ru = {
   'common.qrCode': 'QR-код: {value}',
   // Ketner Code
   'nav.code': 'Ketner Code',
+  'code.auth.title': 'Войдите, чтобы работать с проектами',
+  'code.auth.hint': 'Ketner Code хранит ваш код на сервере, поэтому нужен аккаунт. Проекты видны только вам.',
   'code.title': 'Ketner Code',
   'code.subtitle': 'Проекты и ИИ-агент: он читает код, вносит правки и проверяет результат',
   'code.projects.title': 'Проекты',
