@@ -183,7 +183,7 @@ export function Workspace() {
   ];
 
   return (
-    <div className="flex h-full min-h-0 flex-col">
+    <div className="flex h-full min-h-0 min-w-0 flex-col overflow-hidden">
       <div className="flex shrink-0 items-center gap-2 border-b border-stroke px-3 py-2">
         <Link
           to="/code"
@@ -205,7 +205,7 @@ export function Workspace() {
 
       <Notice />
 
-      <div role="tablist" aria-label={project?.name} className="grid shrink-0 grid-cols-3 border-b border-stroke bg-surface md:hidden">
+      <div role="tablist" aria-label={project?.name} className="grid shrink-0 grid-cols-3 border-b border-stroke bg-surface xl:hidden">
         {tabs.map((tab) => (
           <button
             key={tab.id}
@@ -224,22 +224,22 @@ export function Workspace() {
         ))}
       </div>
 
-      <div className="flex min-h-0 flex-1">
+      <div className="flex min-h-0 min-w-0 flex-1">
         <section
           aria-label={t('code.ws.files')}
-          className={cn('min-h-0 w-full flex-col border-stroke md:flex md:w-60 md:shrink-0 md:border-r', pane === 'files' ? 'flex' : 'hidden')}
+          className={cn('min-h-0 w-full min-w-0 flex-col border-stroke xl:flex xl:w-60 xl:shrink-0 xl:border-r', pane === 'files' ? 'flex' : 'hidden')}
         >
           <FileTree disabled={running} />
         </section>
         <section
           aria-label={t('code.ws.editor')}
-          className={cn('min-h-0 min-w-0 flex-1 flex-col md:flex', pane === 'editor' ? 'flex' : 'hidden')}
+          className={cn('min-h-0 min-w-0 flex-1 flex-col xl:flex', pane === 'editor' ? 'flex' : 'hidden')}
         >
           <EditorPane />
         </section>
         <section
           aria-label={t('code.ws.agent')}
-          className={cn('min-h-0 w-full flex-col border-stroke md:flex md:w-[24rem] md:shrink-0 md:border-l lg:w-[28rem]', pane === 'agent' ? 'flex' : 'hidden')}
+          className={cn('min-h-0 w-full min-w-0 flex-col border-stroke xl:flex xl:w-[24rem] xl:shrink-0 xl:border-l 2xl:w-[28rem]', pane === 'agent' ? 'flex' : 'hidden')}
         >
           <AgentPanel />
         </section>
