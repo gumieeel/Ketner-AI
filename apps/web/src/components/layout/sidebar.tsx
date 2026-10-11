@@ -160,6 +160,15 @@ export function Sidebar() {
             <span>{t('nav.newChat')}</span>
           </Link>
 
+          <Link
+            to="/code"
+            onClick={close}
+            className={buttonClasses({ variant: 'secondary', size: 'md', fullWidth: true, className: 'rounded-xl' })}
+          >
+            <CodeIcon className="size-4 text-accent" />
+            <span>{t('nav.code')}</span>
+          </Link>
+
           <div className="relative">
             <SearchIcon className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-subtle" />
             <input
@@ -226,10 +235,6 @@ export function Sidebar() {
         </div>
 
         <div className="mt-auto flex shrink-0 flex-col gap-0.5 border-t border-stroke p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
-          <NavLink to="/code" onClick={close} className={navLinkClasses}>
-            <CodeIcon className="size-4 shrink-0" />
-            <span>{t('nav.code')}</span>
-          </NavLink>
           <NavLink to="/docs" onClick={close} className={navLinkClasses}>
             <BookOpenIcon className="size-4 shrink-0" />
             <span>{t('nav.docs')}</span>
