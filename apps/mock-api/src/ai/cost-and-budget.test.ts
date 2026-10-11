@@ -20,11 +20,19 @@ test('стоимость от провайдера приоритетнее та
 });
 
 test('в реестре нет бесплатных моделей: каждая стоит денег и попадает в учёт', () => {
-  for (const entry of modelRegistry.getAll().filter((m) => m.id !== 'auto' && m.id !== 'nemotron-ultra')) {
+  for (const entry of modelRegistry.getAll().filter((m) => m.id !== 'auto' && m.id !== 'nemotron-ultra' && m.id !== 'north-mini-code')) {
     assert.ok(entry.pricing.inputPricePerMillion > 0, `${entry.id}: цена входа не задана`);
     assert.ok(entry.pricing.outputPricePerMillion > 0, `${entry.id}: цена выхода не задана`);
     assert.equal(isFreeEngine(entry.providerModelId), false, `${entry.id}: :free-модели общего пула не используются`);
   }
+});
+
+test('north-mini-code — бесплатная модель агента Free, запасная у неё платная', () => {
+  const north = modelRegistry.resolve('north-mini-code');
+  assert.equal(north.id, 'north-mini-code');
+  assert.equal(isFreeEngine(north.providerModelId), true);
+  assert.equal(north.fallbackModelId, 'ketner-mini');
+  assert.equal(modelRegistry.resolve('nemotron-ultra').fallbackModelId, 'ketner-mini');
 });
 
 test('nemotron-ultra — бесплатная модель OpenRouter для анонимных пользователей', () => {

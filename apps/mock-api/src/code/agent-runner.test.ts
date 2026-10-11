@@ -423,3 +423,31 @@ test('compactMessages сжимает старые результаты и бол
   assert.doesNotThrow(() => JSON.parse((firstCall as { toolCalls: Array<{ arguments: string }> }).toolCalls[0].arguments));
   assert.equal(messages.filter((m) => m.role === 'tool')[0].content.length, big.length, 'исходный массив не изменён');
 });
+
+test('Free: агент работает на бесплатной North Mini Code, а при отказе пула берёт платный Ketner Mini', () =>
+  withHarness(
+    (call) => {
+      if (call.index === 0) throw new OpenRouterError(call.model, 429, 'rate limit exceeded');
+      return finalStep('done on the paid fallback');
+    },
+    async (h) => {
+      const { result } = await h.run('anything');
+      assert.equal(result.status, 'completed');
+      assert.equal(h.calls[0].model, 'cohere/north-mini-code:free');
+      assert.equal(h.calls[1].model, 'openai/gpt-6-luna');
+      assert.equal(result.modelId, 'ketner-mini');
+    },
+    { plan: 'free' },
+  ));
+
+test('Free: если бесплатная модель отвечает, платная не вызывается', () =>
+  withHarness(
+    () => finalStep('free answer'),
+    async (h) => {
+      const { result } = await h.run('anything');
+      assert.equal(result.status, 'completed');
+      assert.deepEqual(h.calls.map((c) => c.model), ['cohere/north-mini-code:free']);
+      assert.equal(result.modelId, 'north-mini-code');
+    },
+    { plan: 'free' },
+  ));

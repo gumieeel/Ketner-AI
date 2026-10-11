@@ -170,7 +170,32 @@ const DEFAULT_REGISTRY_ENTRIES: ModelRegistryEntry[] = [
     requiredPlan: null,
     contextMessages: 40,
     isPro: false,
-    fallbackModelId: null,
+    // Лимиты `:free` общие на аккаунт OpenRouter: при отказе отвечает платный Ketner Mini
+    // (гостям запасная не берётся, см. gateway: для анонимов цепочка из одной модели).
+    fallbackModelId: 'ketner-mini',
+    defaultSystemPrompt: DEFAULT_SYSTEM_PROMPT,
+    createdAt: now(),
+    updatedAt: now(),
+  },
+  // Бесплатная модель агента Ketner Code на Free (cohere/north-mini-code:free, 30B/3B активных,
+  // вызов инструментов). Размышления выключаются: так быстрее и не тратится лимит ответа.
+  {
+    id: 'north-mini-code',
+    name: 'North Mini Code (Free)',
+    provider: 'openrouter',
+    providerModelId: 'cohere/north-mini-code:free',
+    enabled: true,
+    tier: 'free',
+    costClass: 'lite',
+    reasoning: reasoning(false, [], true),
+    capabilities: makeCapabilities({ coding: true, reasoning: true }),
+    contextWindow: 128000,
+    maxOutputTokens: 8192,
+    pricing: makePricing(0, 0, 0),
+    requiredPlan: null,
+    contextMessages: 40,
+    isPro: false,
+    fallbackModelId: 'ketner-mini',
     defaultSystemPrompt: DEFAULT_SYSTEM_PROMPT,
     createdAt: now(),
     updatedAt: now(),
@@ -578,6 +603,7 @@ export const LEGACY_MODEL_ALIASES: Readonly<Record<string, string>> = {
   'gemini-2.5-flash': 'ketner-mini',
   'glm-5.3-flash': 'ketner-mini',
   'nemotron': 'nemotron-ultra',
+  'cohere/north-mini-code:free': 'north-mini-code',
   'nvidia/nemotron-3-ultra-550b-a55b:free': 'nemotron-ultra',
 };
 

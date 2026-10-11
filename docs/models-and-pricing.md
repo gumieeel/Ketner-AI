@@ -35,6 +35,17 @@
 | `grok-4.7` | Grok 4.7 | strong | Pro | `x-ai/grok-4.7` | 2.00 / 6.00 |
 | `claude-opus-5.5` | Claude Opus 5.5 | top | Pro | `anthropic/claude-opus-5.5` | 4.00 / 20.00 |
 
+### Бесплатные эндпоинты для Free-тира
+
+На Free запросы идут не на платный Ketner Mini, а на бесплатные `:free`-модели OpenRouter (`ai/plan-substitute.ts`):
+
+| Где | Запрошено | Отвечает | OpenRouter |
+|---|---|---|---|
+| Чат | Ketner Mini / Auto | Nemotron 3 Ultra (Free) `nemotron-ultra` | `nvidia/nemotron-3-ultra-550b-a55b:free` |
+| Агент Ketner Code | Ketner Mini / Auto | North Mini Code (Free) `north-mini-code` | `cohere/north-mini-code:free` |
+
+Лимиты `:free` у OpenRouter общие на аккаунт: 20 запросов в минуту и 1 000 в день (при купленных кредитах от $10, иначе 50). Поэтому при отказе бесплатной модели (429, ошибка, пустой ответ) запрос уходит на платный Ketner Mini, и худший случай по расходу остаётся прежним ($0.30 в месяц на пользователя Free). Пока пул не исчерпан, Free стоит $0, а субсидия Free-тира (≈ $3 на платящего) в расчётах ниже становится верхней оценкой. Гости (без аккаунта) уже работали на `nemotron-ultra`, без запасной модели. Запросы Free уходят на бесплатные эндпоинты, где провайдер может логировать промпты: это нужно отразить в политике приватности. Laguna S 2.1 (free) не подключена: в каталоге у неё срок отключения 31.10.2026.
+
 Служебные модели, которые в списке не показываются и работают только как запасные: `gpt-6-luna-pro` (`openai/gpt-6-luna-pro`, 0.10 / 0.50) и `qwen3.8-flash` (`qwen/qwen3.8-flash`, 0.15 / 0.47).
 
 Модель «Luna Decisions» в OpenRouter не найдена, вместо неё запасной для Sol стал `openai/gpt-6-luna-pro`. Варианты `:batch` в OpenRouter работают только через асинхронный Batch API (до 24 часов, без стриминга), поэтому в чат подключена обычная `google/gemini-3.7-flash`.

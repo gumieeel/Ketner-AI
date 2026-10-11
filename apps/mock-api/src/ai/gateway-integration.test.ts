@@ -151,7 +151,7 @@ test('без цены от провайдера расход считается 
   const usage = newUsage();
   const gateway = makeGateway(fakeOpenRouter(okStream('ответ'), []), usage);
 
-  const out = await run(gateway, request({ userId: 'u-table', userPlan: 'free', modelId: 'ketner-mini' }));
+  const out = await run(gateway, request({ userId: 'u-table', userPlan: 'plus', modelId: 'ketner-mini' }));
   assertNoError(out);
   // Luna: 1000 вх. × $0.10/M + 200 исх. × $0.50/M = $0.0002
   assert.equal(usage.getFairUseSnapshot('u-table').estimatedCostLastDay, 0.0002);
@@ -236,14 +236,14 @@ test('права доступа проверяются по запрошенно
   assertNoError(legacy);
 });
 
-test('Auto: Free — всегда Luna, Plus — рабочая модель, премиум-модели Plus Auto не выбирает', async () => {
+test('Auto: Free — бесплатная Nemotron, Plus — рабочая модель, премиум-модели Plus Auto не выбирает', async () => {
   const usage = newUsage();
   const calls: Call[] = [];
   const gateway = makeGateway(fakeOpenRouter(okStream('ок'), calls), usage);
 
   const hard = `Реши уравнение и докажи теорему: интеграл от x^2 dx, пошагово (${Math.random()})`;
   const free = await run(gateway, request({ userId: 'u-a-free', userPlan: 'free', messages: [{ role: 'user', content: hard }] }));
-  assert.equal(free.done?.selectedModel?.id, 'ketner-mini');
+  assert.equal(free.done?.selectedModel?.id, 'nemotron-ultra');
   const plus = await run(gateway, request({ userId: 'u-a-plus', userPlan: 'plus', messages: [{ role: 'user', content: hard }] }));
   assert.equal(plus.done?.selectedModel?.id, 'ketner-pro');
   const pro = await run(gateway, request({ userId: 'u-a-pro', userPlan: 'pro', messages: [{ role: 'user', content: hard }] }));
@@ -257,7 +257,7 @@ test('глубина размышлений и потолок ответа пе�
   const gateway = makeGateway(fakeOpenRouter(okStream('ок'), calls), usage);
 
   // Приветствие на Luna: размышления отключены, ответ короткий
-  await run(gateway, request({ userId: 'u-r1', userPlan: 'free', modelId: 'ketner-mini', messages: [{ role: 'user', content: 'Привет' }] }));
+  await run(gateway, request({ userId: 'u-r1', userPlan: 'plus', modelId: 'ketner-mini', messages: [{ role: 'user', content: 'Привет' }] }));
   assert.deepEqual(calls[0].reasoning, { effort: 'none' });
   assert.ok((calls[0].maxTokens ?? 0) <= 2048);
 
@@ -470,4 +470,43 @@ test('суточный лимит не действует на тарифе бе
     assertNoError(await run(gateway, request({ userId: 'u-dl-pro', userPlan: 'pro', modelId: 'gpt-6.1-sol' })));
   }
   assert.deepEqual(calls.map((c) => c.model), ['openai/gpt-6.1-sol', 'openai/gpt-6.1-sol']);
+});
+
+test('Free: Ketner Mini заменяется бесплатной Nemotron, расход ноль, причина видна', async () => {
+  const usage = newUsage();
+  const calls: Call[] = [];
+  const gateway = makeGateway(fakeOpenRouter(okStream('ответ'), calls), usage);
+
+  const out = await run(gateway, request({ userId: 'u-free-sub', userPlan: 'free', modelId: 'ketner-mini' }));
+  assertNoError(out);
+  assert.deepEqual(calls.map((c) => c.model), ['nvidia/nemotron-3-ultra-550b-a55b:free']);
+  assert.equal(out.done?.selectedModel?.id, 'nemotron-ultra');
+  assert.match(out.done?.routingReason ?? '', /Free plan: Nemotron 3 Ultra \(Free\) \(free OpenRouter endpoint\)/);
+  assert.equal(usage.getFairUseSnapshot('u-free-sub').estimatedCostLastDay, 0, ':free-эндпоинт ничего не стоит');
+});
+
+test('Free: когда бесплатный пул OpenRouter отказывает (429), отвечает платный Ketner Mini', async () => {
+  const usage = newUsage();
+  const calls: Call[] = [];
+  const rateLimited = async (o: ProviderRequestOptions, cb: ProviderStreamCallbacks): Promise<ProviderResponse> => {
+    if (o.model.endsWith(':free')) throw new OpenRouterError(o.model, 429, 'rate limit exceeded');
+    return okStream('ответ запасной', { cost: 0.0004 })(o, cb);
+  };
+  const gateway = makeGateway(fakeOpenRouter(rateLimited, calls), usage);
+
+  const out = await run(gateway, request({ userId: 'u-free-429', userPlan: 'free', modelId: 'ketner-mini' }));
+  assertNoError(out);
+  assert.equal(calls[0].model, 'nvidia/nemotron-3-ultra-550b-a55b:free');
+  assert.equal(calls.at(-1)?.model, 'openai/gpt-6-luna');
+  assert.equal(out.done?.selectedModel?.id, 'ketner-mini');
+  assert.equal(usage.getByUser('u-free-429')[0].modelId, 'ketner-mini', 'расход пишется на ту, что ответила');
+});
+
+test('платные тарифы бесплатную замену не получают', async () => {
+  const usage = newUsage();
+  const calls: Call[] = [];
+  const gateway = makeGateway(fakeOpenRouter(okStream('ответ'), calls), usage);
+  const out = await run(gateway, request({ userId: 'u-plus-mini', userPlan: 'plus', modelId: 'ketner-mini' }));
+  assertNoError(out);
+  assert.equal(calls[0].model, 'openai/gpt-6-luna');
 });

@@ -103,7 +103,8 @@ export const PLAN_ENTITLEMENTS: Record<PlanId, PlanEntitlements> = {
     contextLimit: 20,
     maxTokens: 2048,
     streamingEnabled: true,
-    // Free: GPT-6 Luna без размышлений ≈ $0.001–0.0013 за запрос → 10 сообщений в день ≈ $0.3–0.4
+    // Free идёт на бесплатные :free-эндпоинты (ai/plan-substitute.ts), платный GPT-6 Luna — только запасной
+    // при отказе общего пула OpenRouter. Худший случай: GPT-6 Luna без размышлений ≈ $0.001–0.0013 за запрос → 10 сообщений в день ≈ $0.3–0.4
     // в месяц в худшем случае; средний пользователь тратит в 3–5 раз меньше. Премиум-моделей нет.
     maxDailyCost: 0.03,
     costBudget: 0.30,

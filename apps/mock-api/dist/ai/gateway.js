@@ -28,6 +28,7 @@ import { isProduction } from '../config.js';
 import { EntitlementService, planAllowsModel } from '../services/entitlement.js';
 import { FairUseEngine } from '../services/fair-use.js';
 import { applyDailyLimits, isDailyLimitReached } from './daily-limit.js';
+import { applyPlanSubstitute } from './plan-substitute.js';
 import { AutoRouter } from './auto-router.js';
 import { feedbackStore as defaultFeedbackStore } from '../store/index.js';
 import { chooseReasoningEffort, computeOutputCap, isPremiumClass, toProviderReasoning, } from './reasoning-policy.js';
@@ -364,6 +365,12 @@ export class AIGateway {
         // Суточный лимит модели на тарифе: после него отвечает запасная модель (видно в routingReason).
         // Гостевая модель бесплатна и лимитов не имеет.
         if (!req.isAnonymous) {
+            // Free: вместо платного Ketner Mini идёт бесплатный эндпоинт, платная модель остаётся запасной.
+            const substitute = applyPlanSubstitute(targetModel, effectivePlan, 'chat', this.registry);
+            if (substitute.reason) {
+                targetModel = substitute.model;
+                routingReason = `${routingReason}; ${substitute.reason}`;
+            }
             const daily = applyDailyLimits(targetModel, effectivePlan, activeUserId, this.usageStore, this.registry);
             if (daily.reason) {
                 targetModel = daily.model;

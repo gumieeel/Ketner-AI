@@ -26,6 +26,7 @@ import { FLOOR_MODEL_ID, WORKHORSE_MODEL_ID, modelRegistry, type ModelRegistry }
 import { OpenRouterError } from '../ai/providers/openrouter-provider.js';
 import { providerManager, type ProviderManager } from '../ai/providers/provider-factory.js';
 import { isPremiumClass, toProviderReasoning } from '../ai/reasoning-policy.js';
+import { applyPlanSubstitute } from '../ai/plan-substitute.js';
 import { applyDailyLimits, isDailyLimitReached } from '../ai/daily-limit.js';
 import { createStreamWatchdog, type WatchdogLimits } from '../ai/stream-watchdog.js';
 import { EntitlementService } from '../services/entitlement.js';
@@ -451,6 +452,13 @@ export class AgentRunner {
           `${choice.model.name} requires the ${choice.denied.requiredPlan} plan or higher.`,
         ),
       );
+    }
+
+    // Free: вместо платного Ketner Mini агент работает на бесплатном эндпоинте (платный остаётся запасным).
+    const substitute = applyPlanSubstitute(choice.model, plan, 'code', this.registry);
+    if (substitute.reason) {
+      choice.model = substitute.model;
+      choice.reason = choice.reason ? `${choice.reason}; ${substitute.reason}` : substitute.reason;
     }
 
     // Суточный лимит модели на тарифе (тот же, что в чате): после него запуск идёт на запасной модели.
