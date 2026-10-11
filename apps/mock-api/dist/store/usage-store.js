@@ -226,6 +226,37 @@ export class UsageStore {
         return Number(total.toFixed(6));
     }
     /**
+     * Сколько раз за последние 24 часа ответила одна из заданных моделей. Нужен суточным лимитам
+     * моделей. Считаются ответы провайдера (успешные и прерванные пользователем: токены уже потрачены),
+     * но не кэш, не отказы и не сбои. Запуск агента считается один раз, сколько бы шагов он ни сделал.
+     */
+    getModelUsesLastDay(userId, modelIds) {
+        const wanted = new Set(modelIds);
+        if (wanted.size === 0)
+            return 0;
+        const userRecords = this.userIndex.get(userId) ?? [];
+        const since = Date.now() - 24 * 60 * 60 * 1000;
+        let uses = 0;
+        const runs = new Set();
+        for (let i = userRecords.length - 1; i >= 0; i--) {
+            const rec = userRecords[i];
+            if (new Date(rec.createdAt).getTime() < since)
+                break;
+            if (!wanted.has(rec.modelId))
+                continue;
+            if (rec.kind === 'agent') {
+                if (rec.runId)
+                    runs.add(rec.runId);
+                continue;
+            }
+            if (rec.source !== 'provider')
+                continue;
+            if (rec.status === 'success' || rec.status === 'cancelled')
+                uses += 1;
+        }
+        return uses + runs.size;
+    }
+    /**
      * Сколько запусков агента пользователь начал за последние 24 часа. Запуск отмечается записью
      * нулевого шага в момент старта, поэтому отменённый сразу после старта запуск тоже считается.
      */

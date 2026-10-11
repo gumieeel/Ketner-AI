@@ -133,10 +133,12 @@ export function ModelPicker({ disabled = false }: { disabled?: boolean }) {
     }
   };
 
-  const subtitleOf = (model: ModelInfo): string =>
-    model.id === 'auto'
-      ? t('chat.modelAutoSubtitle')
-      : t('chat.modelContext', { count: model.contextMessages });
+  const subtitleOf = (model: ModelInfo): string => {
+    if (model.id === 'auto') return t('chat.modelAutoSubtitle');
+    const context = t('chat.modelContext', { count: model.contextMessages });
+    const daily = user?.plan ? model.dailyLimits?.[user.plan] : undefined;
+    return daily === undefined ? context : `${context} · ${t('chat.modelDailyLimit', { count: daily })}`;
+  };
 
   const renderModelItem = (model: ModelInfo) => {
     const active = model.id === current.id;

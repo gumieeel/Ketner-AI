@@ -157,6 +157,8 @@ export interface ModelInfo {
   isPro?: boolean;
   /** Требуемый тариф для доступа. */
   requiredPlan?: PlanId;
+  /** Суточный лимит запросов к модели по тарифам; после него отвечает запасная модель. */
+  dailyLimits?: Partial<Record<PlanId, number>>;
 }
 
 export interface PlanLimits {

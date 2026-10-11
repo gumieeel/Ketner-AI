@@ -278,9 +278,9 @@ test('модель без поддержки инструментов замен
       const { events, result } = await h.run('anything');
       assert.equal(result.status, 'completed');
       assert.equal(h.calls[0].model, 'xiaomi/mimo-v2.6-pro');
-      assert.equal(h.calls[1].model, 'openai/gpt-6-luna');
-      assert.ok(events.some((e) => e.type === 'model_switch' && e.modelId === 'ketner-mini'));
-      assert.equal(result.modelId, 'ketner-mini');
+      assert.equal(h.calls[1].model, 'anthropic/claude-haiku-5.5');
+      assert.ok(events.some((e) => e.type === 'model_switch' && e.modelId === 'claude-haiku-5.5'));
+      assert.equal(result.modelId, 'claude-haiku-5.5');
     },
   ));
 
@@ -357,7 +357,7 @@ test('зависший поток обрывается сторожем и бе�
     async (h) => {
       const { result } = await h.run('hang');
       assert.equal(result.status, 'completed');
-      assert.equal(result.modelId, 'ketner-mini');
+      assert.equal(result.modelId, 'claude-haiku-5.5');
     },
     { watchdog: { firstTokenMs: 150, idleMs: 150, totalMs: 1_000 } },
   ));

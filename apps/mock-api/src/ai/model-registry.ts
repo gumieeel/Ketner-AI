@@ -15,6 +15,7 @@ import type {
   ModelReasoning,
 } from './gateway-types.js';
 import { getPlanLimits, planAllowsModel } from '../services/entitlement.js';
+import { DAILY_MODEL_LIMITS } from '../services/daily-limits.js';
 
 // ─────────────────────────────────────────────────────────────
 // Вспомогательные фабрики
@@ -250,7 +251,7 @@ const DEFAULT_REGISTRY_ENTRIES: ModelRegistryEntry[] = [
     }),
     contextWindow: 1048576,
     maxOutputTokens: 16384,
-    pricing: makePricing(0.028, 1.0, 0.01),
+    pricing: makePricing(0.3, 1.2, 0.006),
     requiredPlan: 'plus',
     contextMessages: 40,
     isPro: true,
@@ -286,6 +287,153 @@ const DEFAULT_REGISTRY_ENTRIES: ModelRegistryEntry[] = [
     requiredPlan: 'plus',
     contextMessages: 60,
     isPro: true,
+    fallbackModelId: 'claude-haiku-5.5',
+    defaultSystemPrompt: DEFAULT_SYSTEM_PROMPT,
+    createdAt: now(),
+    updatedAt: now(),
+  },
+  // ── Суточные лимиты Plus: модели с лимитом и запасные модели, которые отвечают после него ──
+  {
+    id: 'gpt-5.6-luna-pro',
+    name: 'GPT-5.6 Luna Pro',
+    provider: 'openrouter',
+    providerModelId: 'openai/gpt-5.6-luna-pro',
+    enabled: true,
+    tier: 'premium',
+    costClass: 'work',
+    reasoning: reasoning(false, ['low', 'medium', 'high']),
+    capabilities: makeCapabilities({
+      coding: true,
+      reasoning: true,
+      vision: true,
+      math: true,
+      translation: true,
+      creative: true,
+      research: true,
+      longContext: true,
+    }),
+    contextWindow: 1050000,
+    maxOutputTokens: 16384,
+    pricing: makePricing(0.2, 1.2, 0.02),
+    requiredPlan: 'plus',
+    contextMessages: 60,
+    isPro: true,
+    fallbackModelId: FLOOR_MODEL_ID,
+    defaultSystemPrompt: DEFAULT_SYSTEM_PROMPT,
+    createdAt: now(),
+    updatedAt: now(),
+  },
+  {
+    id: 'gemini-3.7-flash',
+    name: 'Gemini 3.7 Flash',
+    provider: 'openrouter',
+    providerModelId: 'google/gemini-3.7-flash',
+    enabled: true,
+    tier: 'premium',
+    costClass: 'work',
+    reasoning: reasoning(true, ['low', 'medium', 'high']),
+    capabilities: makeCapabilities({
+      coding: true,
+      reasoning: true,
+      vision: true,
+      math: true,
+      translation: true,
+      creative: true,
+      research: true,
+      longContext: true,
+    }),
+    contextWindow: 1048576,
+    maxOutputTokens: 16384,
+    pricing: makePricing(0.75, 3.75, 0.075),
+    requiredPlan: 'plus',
+    contextMessages: 60,
+    isPro: true,
+    fallbackModelId: 'claude-haiku-5.5',
+    defaultSystemPrompt: DEFAULT_SYSTEM_PROMPT,
+    createdAt: now(),
+    updatedAt: now(),
+  },
+  {
+    id: 'qwen3.8-27b',
+    name: 'Qwen3.8 27B',
+    provider: 'openrouter',
+    providerModelId: 'qwen/qwen3.8-27b',
+    enabled: true,
+    tier: 'premium',
+    costClass: 'work',
+    reasoning: reasoning(false, ['low', 'medium']),
+    capabilities: makeCapabilities({
+      coding: true,
+      reasoning: true,
+      vision: true,
+      translation: true,
+      creative: true,
+      longContext: true,
+    }),
+    contextWindow: 1000000,
+    maxOutputTokens: 16384,
+    pricing: makePricing(0.04, 2.3, 0.0198),
+    requiredPlan: 'plus',
+    contextMessages: 60,
+    isPro: true,
+    fallbackModelId: 'qwen3.8-flash',
+    defaultSystemPrompt: DEFAULT_SYSTEM_PROMPT,
+    createdAt: now(),
+    updatedAt: now(),
+  },
+  {
+    id: 'qwen3.8-flash',
+    name: 'Qwen3.8 Flash',
+    provider: 'openrouter',
+    providerModelId: 'qwen/qwen3.8-flash',
+    enabled: true,
+    tier: 'standard',
+    costClass: 'lite',
+    reasoning: reasoning(false, [], true),
+    capabilities: makeCapabilities({
+      coding: true,
+      reasoning: true,
+      vision: true,
+      translation: true,
+      creative: true,
+      longContext: true,
+    }),
+    contextWindow: 1000000,
+    maxOutputTokens: 16384,
+    pricing: makePricing(0.15, 0.47, 0.016),
+    requiredPlan: 'plus',
+    contextMessages: 40,
+    isPro: true,
+    fallbackModelId: FLOOR_MODEL_ID,
+    defaultSystemPrompt: DEFAULT_SYSTEM_PROMPT,
+    createdAt: now(),
+    updatedAt: now(),
+  },
+  {
+    id: 'gpt-6-luna-pro',
+    name: 'GPT-6 Luna Pro',
+    provider: 'openrouter',
+    providerModelId: 'openai/gpt-6-luna-pro',
+    enabled: true,
+    tier: 'standard',
+    costClass: 'lite',
+    reasoning: reasoning(false, ['low', 'medium', 'high']),
+    capabilities: makeCapabilities({
+      coding: true,
+      reasoning: true,
+      vision: true,
+      math: true,
+      translation: true,
+      creative: true,
+      research: true,
+      longContext: true,
+    }),
+    contextWindow: 1050000,
+    maxOutputTokens: 16384,
+    pricing: makePricing(0.1, 0.5, 0.01),
+    requiredPlan: 'plus',
+    contextMessages: 40,
+    isPro: true,
     fallbackModelId: FLOOR_MODEL_ID,
     defaultSystemPrompt: DEFAULT_SYSTEM_PROMPT,
     createdAt: now(),
@@ -317,7 +465,7 @@ const DEFAULT_REGISTRY_ENTRIES: ModelRegistryEntry[] = [
     requiredPlan: 'plus',
     contextMessages: 120,
     isPro: true,
-    fallbackModelId: WORKHORSE_MODEL_ID,
+    fallbackModelId: 'gpt-6-luna-pro',
     defaultSystemPrompt: DEFAULT_SYSTEM_PROMPT,
     createdAt: now(),
     updatedAt: now(),
@@ -433,6 +581,15 @@ export const LEGACY_MODEL_ALIASES: Readonly<Record<string, string>> = {
   'nvidia/nemotron-3-ultra-550b-a55b:free': 'nemotron-ultra',
 };
 
+/** Суточные лимиты модели по тарифам для /api/meta (пустой объект, если лимитов нет). */
+export function dailyLimitsOf(modelId: string): { dailyLimits?: Partial<Record<PlanId, number>> } {
+  const limits: Partial<Record<PlanId, number>> = {};
+  for (const [plan, byModel] of Object.entries(DAILY_MODEL_LIMITS)) {
+    if (modelId in byModel) limits[plan as PlanId] = byModel[modelId];
+  }
+  return Object.keys(limits).length > 0 ? { dailyLimits: limits } : {};
+}
+
 // ─────────────────────────────────────────────────────────────
 // Model Registry
 // ─────────────────────────────────────────────────────────────
@@ -517,6 +674,16 @@ export class ModelRegistry {
     return ids;
   }
 
+  /** Идентификатор модели и её старые id: в истории расхода записи могут лежать под любым из них. */
+  getIdsWithAliases(modelId: string): string[] {
+    const canonical = this.get(modelId)?.id ?? modelId;
+    const ids = [canonical];
+    for (const [legacyId, targetId] of Object.entries(LEGACY_MODEL_ALIASES)) {
+      if (targetId === canonical) ids.push(legacyId);
+    }
+    return ids;
+  }
+
   /** Добавить или обновить модель. */
   upsert(entry: ModelRegistryEntry): void {
     entry.updatedAt = now();
@@ -575,6 +742,7 @@ export class ModelRegistry {
         contextMessages: e.contextMessages,
         isPro: e.isPro,
         requiredPlan: e.requiredPlan ?? undefined,
+        ...dailyLimitsOf(e.id),
       }));
   }
 

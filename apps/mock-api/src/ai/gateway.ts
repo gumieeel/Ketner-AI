@@ -44,6 +44,7 @@ import { delay, streamText } from './stream.js';
 import { isProduction, type AiConfig } from '../config.js';
 import { EntitlementService, planAllowsModel } from '../services/entitlement.js';
 import { FairUseEngine } from '../services/fair-use.js';
+import { applyDailyLimits, isDailyLimitReached } from './daily-limit.js';
 import { AutoRouter } from './auto-router.js';
 import type { UsageStore } from '../store/usage-store.js';
 import { feedbackStore as defaultFeedbackStore, type FeedbackStore } from '../store/index.js';
@@ -507,6 +508,16 @@ export class AIGateway {
       routingReason = economy.reason ?? `Explicit user model selection (${requested.name})`;
     }
 
+    // Суточный лимит модели на тарифе: после него отвечает запасная модель (видно в routingReason).
+    // Гостевая модель бесплатна и лимитов не имеет.
+    if (!req.isAnonymous) {
+      const daily = applyDailyLimits(targetModel, effectivePlan, activeUserId, this.usageStore, this.registry);
+      if (daily.reason) {
+        targetModel = daily.model;
+        routingReason = `${routingReason}; ${daily.reason}`;
+      }
+    }
+
     // 4. Проверка Fair Use и захват concurrency слота
     const decision = FairUseEngine.evaluate(snapshot, effectivePlan, language);
 
@@ -671,7 +682,12 @@ export class AIGateway {
         ? [targetModel]
         : this.registry
             .getFallbackChain(targetModel.id)
-            .filter((m, index) => index === 0 || this.isAllowedFallback(m, effectivePlan, economyState));
+            .filter(
+              (m, index) =>
+                index === 0 ||
+                (this.isAllowedFallback(m, effectivePlan, economyState) &&
+                  !isDailyLimitReached(m, effectivePlan, activeUserId, this.usageStore, this.registry)),
+            );
       let success = false;
       let streamedResponse: ProviderResponse | null = null;
       let usedModel = targetModel;

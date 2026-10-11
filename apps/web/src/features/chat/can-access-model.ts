@@ -77,6 +77,7 @@ export const DEFAULT_MODELS: ModelInfo[] = [
     contextMessages: 60,
     isPro: true,
     requiredPlan: 'plus',
+    dailyLimits: { plus: 20 },
   },
   {
     id: 'claude-haiku-5.5',
@@ -91,6 +92,30 @@ export const DEFAULT_MODELS: ModelInfo[] = [
     contextMessages: 40,
     isPro: true,
     requiredPlan: 'plus',
+  },
+  {
+    id: 'gpt-5.6-luna-pro',
+    name: 'GPT-5.6 Luna Pro',
+    contextMessages: 60,
+    isPro: true,
+    requiredPlan: 'plus',
+    dailyLimits: { plus: 10 },
+  },
+  {
+    id: 'qwen3.8-27b',
+    name: 'Qwen3.8 27B',
+    contextMessages: 60,
+    isPro: true,
+    requiredPlan: 'plus',
+    dailyLimits: { plus: 12 },
+  },
+  {
+    id: 'gemini-3.7-flash',
+    name: 'Gemini 3.7 Flash',
+    contextMessages: 60,
+    isPro: true,
+    requiredPlan: 'plus',
+    dailyLimits: { plus: 5 },
   },
   // Pro ($25) — премиум-модели; Gemini, Grok и Opus расходуют квоту премиум-запросов тарифа
   {
@@ -114,6 +139,7 @@ export const DEFAULT_MODELS: ModelInfo[] = [
     contextMessages: 120,
     isPro: true,
     requiredPlan: 'plus',
+    dailyLimits: { plus: 1 },
   },
   {
     id: 'claude-opus-5.5',
@@ -135,6 +161,9 @@ export const MODEL_NAME_KEYS: Readonly<Record<string, TranslationKey>> = {
   'claude-haiku-5.5': 'chat.modelHaiku',
   'deepseek-v4.1-flash': 'chat.modelDeepSeek',
   'gpt-6.1-sol': 'chat.modelGptSol',
+  'gpt-5.6-luna-pro': 'chat.modelLunaPro',
+  'qwen3.8-27b': 'chat.modelQwen27b',
+  'gemini-3.7-flash': 'chat.modelGemini37',
   'gemini-3.8-flash': 'chat.modelGemini',
   'grok-4.7': 'chat.modelGrok',
   'claude-opus-5.5': 'chat.modelClaudeOpus',

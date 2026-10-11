@@ -17,6 +17,7 @@ import { FLOOR_MODEL_ID, WORKHORSE_MODEL_ID, modelRegistry } from '../ai/model-r
 import { OpenRouterError } from '../ai/providers/openrouter-provider.js';
 import { providerManager } from '../ai/providers/provider-factory.js';
 import { isPremiumClass, toProviderReasoning } from '../ai/reasoning-policy.js';
+import { applyDailyLimits, isDailyLimitReached } from '../ai/daily-limit.js';
 import { createStreamWatchdog } from '../ai/stream-watchdog.js';
 import { EntitlementService } from '../services/entitlement.js';
 import { FairUseEngine } from '../services/fair-use.js';
@@ -268,6 +269,12 @@ export class AgentRunner {
         if (choice.denied) {
             return reject('upgrade_required', t(language, `Для модели ${choice.model.name} нужна подписка ${choice.denied.requiredPlan} или выше.`, `${choice.model.name} requires the ${choice.denied.requiredPlan} plan or higher.`));
         }
+        // Суточный лимит модели на тарифе (тот же, что в чате): после него запуск идёт на запасной модели.
+        const daily = applyDailyLimits(choice.model, plan, input.userId, usageStore, this.registry);
+        if (daily.reason) {
+            choice.model = daily.model;
+            choice.reason = choice.reason ? `${choice.reason}; ${daily.reason}` : daily.reason;
+        }
         // Запуски агента не считаются сообщениями чата (у них свой суточный лимит), поэтому счётчики
         // сообщений обнуляются; параллелизм, дневная стоимость и токены проверяются как обычно.
         const decision = FairUseEngine.evaluate({ ...snapshot, requestsLastMinute: 0, requestsLastHour: 0, requestsLastDay: 0 }, plan, language);
@@ -375,7 +382,9 @@ export class AgentRunner {
             });
             const candidates = this.registry
                 .getFallbackChain(choice.model.id)
-                .filter((m, index) => index === 0 || isAllowedFallback(m, plan, economyState));
+                .filter((m, index) => index === 0 ||
+                (isAllowedFallback(m, plan, economyState) &&
+                    !isDailyLimitReached(m, plan, input.userId, usageStore, this.registry)));
             let candidateIndex = 0;
             const noReasoning = new Set();
             const toolContext = {

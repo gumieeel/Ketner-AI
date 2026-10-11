@@ -65,7 +65,7 @@ const LEGACY_PRO_BASE = {
  *
  * premiumBudget — часть costBudget на премиум-модели (классы strong и top, см. ModelCostClass).
  * Ориентиры по запросам в месяц при 7.6k токенов на входе:
- *   Plus  $0.45 ≈ 17 запросов GPT-6.1 Sol (низкая глубина размышлений);
+ *   Plus  $0.90 ≈ 34 запроса GPT-6.1 Sol (низкая глубина размышлений; в сутки Sol ограничен 1 запросом);
  *   Pro   $3.50 ≈ 129 запросов Sol или 50 запросов Claude Opus 5.5 (средняя глубина);
  *   Ultra $9.00 ≈ 331 запрос Sol или 128 запросов Opus.
  * Остаток costBudget — на Ketner Mini и Ketner Pro: это тысячи запросов в месяц, поэтому
@@ -114,7 +114,9 @@ export const PLAN_ENTITLEMENTS = {
         // Plus: $9 → бюджет $2.75 (31%): самый тесный тариф, из-за Free-субсидии и комиссии Stripe $0.30.
         maxDailyCost: 0.35,
         costBudget: 2.75,
-        premiumBudget: 0.45,
+        // Премиум-квота $0.90: Sol ограничен 1 запросом в сутки (~$0.027), а модели с дневными
+        // лимитами (Luna Pro, Qwen 27B, Gemini 3.7 Flash) тоже идут через неё. Общий costBudget не менялся.
+        premiumBudget: 0.90,
     },
     pro: {
         planId: 'pro',

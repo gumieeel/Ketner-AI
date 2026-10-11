@@ -1,4 +1,4 @@
-import { modelRegistry } from './model-registry.js';
+import { dailyLimitsOf, modelRegistry } from './model-registry.js';
 /** Публичный каталог моделей для `GET /api/meta`. Источник правды — реестр моделей. */
 export const DEFAULT_MODEL_ID = 'auto';
 /**
@@ -13,6 +13,9 @@ const PUBLIC_MODEL_IDS = [
     'ketner-pro',
     'claude-haiku-5.5',
     'deepseek-v4.1-flash',
+    'gpt-5.6-luna-pro',
+    'qwen3.8-27b',
+    'gemini-3.7-flash',
     'gemini-3.8-flash',
     'grok-4.7',
     'gpt-6.1-sol',
@@ -29,6 +32,7 @@ export const MODELS = PUBLIC_MODEL_IDS.flatMap((id) => {
         contextMessages: entry.contextMessages,
         isPro: entry.isPro,
         requiredPlan: entry.requiredPlan ?? undefined,
+        ...dailyLimitsOf(id),
     };
     return [info];
 });

@@ -54,7 +54,7 @@ test('ModelRegistry: получение, разрешение и проверк�
   const chain = registry.getFallbackChain('gpt-6.1-sol');
   assert.deepEqual(
     chain.map((m) => m.id),
-    ['gpt-6.1-sol', 'ketner-pro', 'ketner-mini', 'claude-haiku-5.5', 'deepseek-v4.1-flash'],
+    ['gpt-6.1-sol', 'gpt-6-luna-pro', 'ketner-mini', 'claude-haiku-5.5', 'deepseek-v4.1-flash'],
   );
   for (const entry of registry.getAll()) {
     const ids = registry.getFallbackChain(entry.id, 10).map((m) => m.id);

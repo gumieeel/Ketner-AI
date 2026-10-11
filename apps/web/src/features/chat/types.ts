@@ -153,6 +153,8 @@ export interface ModelInfo {
   contextMessages: number;
   isPro?: boolean;
   requiredPlan?: PlanId;
+  /** Суточный лимит запросов к модели по тарифам: после него отвечает запасная модель. */
+  dailyLimits?: Partial<Record<PlanId, number>>;
 }
 
 export interface PlanLimits {

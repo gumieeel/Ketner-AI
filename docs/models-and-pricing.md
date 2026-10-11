@@ -26,11 +26,32 @@
 | `ketner-mini` | Ketner Mini | lite | Free | `openai/gpt-6-luna` | 0.10 / 0.50 |
 | `ketner-pro` | Ketner Pro | work | Plus | `xiaomi/mimo-v2.6-pro` | 0.435 / 0.87 |
 | `claude-haiku-5.5` | Claude Haiku 5.5 | lite | Plus | `anthropic/claude-haiku-5.5` | 0.10 / 0.50 |
-| `deepseek-v4.1-flash` | DeepSeek V4.1 Flash | lite | Plus | `deepseek/deepseek-v4.1-flash` | 0.028 / 1.00 |
+| `deepseek-v4.1-flash` | DeepSeek V4.1 Flash | lite | Plus | `deepseek/deepseek-v4.1-flash` | 0.30 / 1.20 |
+| `gpt-5.6-luna-pro` | GPT-5.6 Luna Pro | work | Plus | `openai/gpt-5.6-luna-pro` | 0.20 / 1.20 |
+| `qwen3.8-27b` | Qwen3.8 27B | work | Plus | `qwen/qwen3.8-27b` | 0.04 / 2.30 |
+| `gemini-3.7-flash` | Gemini 3.7 Flash | work | Plus | `google/gemini-3.7-flash` | 0.75 / 3.75 |
 | `gpt-6.1-sol` | GPT-6.1 Sol | strong | Plus | `openai/gpt-6.1-sol` | 2.00 / 10.00 |
 | `gemini-3.8-flash` | Gemini 3.8 Flash | strong | Pro | `google/gemini-3.8-flash` | 0.75 / 3.75 |
 | `grok-4.7` | Grok 4.7 | strong | Pro | `x-ai/grok-4.7` | 2.00 / 6.00 |
 | `claude-opus-5.5` | Claude Opus 5.5 | top | Pro | `anthropic/claude-opus-5.5` | 4.00 / 20.00 |
+
+Служебные модели, которые в списке не показываются и работают только как запасные: `gpt-6-luna-pro` (`openai/gpt-6-luna-pro`, 0.10 / 0.50) и `qwen3.8-flash` (`qwen/qwen3.8-flash`, 0.15 / 0.47).
+
+Модель «Luna Decisions» в OpenRouter не найдена, вместо неё запасной для Sol стал `openai/gpt-6-luna-pro`. Варианты `:batch` в OpenRouter работают только через асинхронный Batch API (до 24 часов, без стриминга), поэтому в чат подключена обычная `google/gemini-3.7-flash`.
+
+### Суточные лимиты моделей (скользящие 24 часа)
+
+После лимита запрос автоматически отвечает запасной моделью, причина видна в `routingReason`. Лимиты заданы в `apps/mock-api/src/services/daily-limits.ts`, запасные модели берутся из `fallbackModelId` реестра. Сейчас лимиты есть только у Plus, Pro и Ultra будут добавлены следующим шагом.
+
+| Модель (Plus) | Запросов в сутки | После лимита |
+|---|---|---|
+| GPT-6.1 Sol | 1 | GPT-6 Luna Pro |
+| Ketner Pro (MiMo v2.6 Pro) | 20 | Claude Haiku 5.5 |
+| Gemini 3.7 Flash | 5 | Claude Haiku 5.5 |
+| GPT-5.6 Luna Pro | 10 | Ketner Mini (GPT-6 Luna) |
+| Qwen3.8 27B | 12 | Qwen3.8 Flash |
+
+Расход по Sol в худшем случае: 30 суток × 1 запрос × ≈$0.027 ≈ $0.82, поэтому премиум-квота Plus поднята с $0.45 до $0.90 (общий бюджет $2.75 не менялся). Запрос в агенте Ketner Code считается один раз за запуск.
 
 Старые id (`gpt-6-astra`, `claude-fable`, `gemini-pro`, `gpt-4o`, `nemotron-ultra` и др.) продолжают работать через `LEGACY_MODEL_ALIASES`, а их расход в истории считается в квоту премиум-запросов.
 
@@ -65,7 +86,7 @@ Claude Opus 5.5 Auto не выбирает никогда: он только п�
 | Тариф | Цена | Сообщений/сутки | Параллельных | Токенов/сутки | Потолок ответа | Бюджет `costBudget` | Квота `premiumBudget` |
 |---|---|---|---|---|---|---|---|
 | Free | $0 | 10 | 1 | 150k | 2048 | $0.30 | — |
-| Plus | $9 | 500 | 2 | 1.5M | 6144 | $2.75 | $0.45 |
+| Plus | $9 | 500 | 2 | 1.5M | 6144 | $2.75 | $0.90 |
 | Pro | $25 | 1 500 | 4 | 6M | 12288 | $10.00 | $3.50 |
 | Ultra | $49 (скидка с $59) | 4 000 | 8 | 20M | 16384 | $20.00 | $9.00 |
 
@@ -94,11 +115,11 @@ Claude Opus 5.5 Auto не выбирает никогда: он только п�
 
 | Тариф | Квота | GPT-6.1 Sol (low) | Claude Opus 5.5 (medium) | Grok 4.7 (low) |
 |---|---|---|---|---|
-| Plus | $0.45 | ≈ 17 | — (нет доступа) | — |
+| Plus | $0.90 | ≈ 34 | — (нет доступа) | — |
 | Pro | $3.50 | ≈ 129 | ≈ 50 | ≈ 156 |
 | Ultra | $9.00 | ≈ 331 | ≈ 128 | ≈ 402 |
 
-Остаток бюджета (Plus $2.30, Pro $6.50, Ultra $11) уходит на Ketner Mini и Ketner Pro: это тысячи запросов в месяц, так что для обычного человека эти модели фактически безлимитны.
+Остаток бюджета (Plus $1.85, Pro $6.50, Ultra $11) уходит на Ketner Mini и Ketner Pro: это тысячи запросов в месяц, так что для обычного человека эти модели фактически безлимитны.
 
 ## 3. Окупаемость при ценах $9 / $25 / $49
 

@@ -1,0 +1,42 @@
+/**
+ * Суточные лимиты запросов по моделям.
+ *
+ * Помимо месячного бюджета себестоимости и квоты премиум-запросов у каждой модели тарифа может быть
+ * свой суточный лимит: сколько раз за скользящие 24 часа пользователь может получить ответ именно
+ * от неё. Когда лимит исчерпан, отвечает запасная модель из реестра (`fallbackModelId`), причём
+ * дешевле и по возможности близкая по качеству. Замена видна в `selectedModel` и `routingReason`,
+ * скрытой подмены нет.
+ *
+ * Лимиты заданы тарифу и модели: нет записи — модель без суточного лимита. Сейчас лимиты есть
+ * только у Plus; Pro и Ultra настраиваются отдельно (достаточно добавить записи ниже).
+ *
+ * Как выбирались числа для Plus. Бюджет тарифа $2.75 в месяц, типичный запрос (7.6k токенов входа)
+ * стоит: Sol (low) ≈ $0.027, Gemini 3.7 Flash ≈ $0.015, Qwen3.8 27B ≈ $0.007, GPT-5.6 Luna Pro
+ * ≈ $0.006, Ketner Pro ≈ $0.005. Лимиты подобраны так, чтобы одна модель на пределе лимита
+ * не съедала весь месячный бюджет (Sol: 30 × $0.027 ≈ $0.82 при квоте премиум-запросов $0.90),
+ * а общая страховка — месячный бюджет и его стадии 80% / 100% / 125%.
+ */
+
+import type { PlanId } from '../types.js';
+
+/** Лимиты: тариф → id модели → запросов за скользящие 24 часа. */
+export const DAILY_MODEL_LIMITS: Readonly<Record<string, Readonly<Record<string, number>>>> = {
+  plus: {
+    'gpt-6.1-sol': 1,
+    'ketner-pro': 20,
+    'gemini-3.7-flash': 5,
+    'gpt-5.6-luna-pro': 10,
+    'qwen3.8-27b': 12,
+  },
+};
+
+/** Суточный лимит модели на тарифе или null, если лимита нет. Старые тарифы лимитов не имеют. */
+export function getDailyModelLimit(plan: PlanId | string | undefined, modelId: string): number | null {
+  const limit = plan ? DAILY_MODEL_LIMITS[plan]?.[modelId] : undefined;
+  return typeof limit === 'number' && limit >= 0 ? limit : null;
+}
+
+/** Все суточные лимиты тарифа (для /api/meta и интерфейса). */
+export function getDailyModelLimits(plan: PlanId | string | undefined): Record<string, number> {
+  return plan ? { ...(DAILY_MODEL_LIMITS[plan] ?? {}) } : {};
+}

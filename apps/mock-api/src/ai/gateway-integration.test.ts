@@ -284,10 +284,10 @@ test('сбой модели: берётся запасная из реестра
 
   const out = await run(gateway, request({ userId: 'u-fb', userPlan: 'pro', modelId: 'gpt-6.1-sol' }));
   assertNoError(out);
-  assert.deepEqual(calls.map((c) => c.model), ['openai/gpt-6.1-sol', 'xiaomi/mimo-v2.6-pro']);
-  assert.equal(out.done?.selectedModel?.id, 'ketner-pro');
-  assert.match(out.done?.routingReason ?? '', /fallback to Ketner Pro/);
-  assert.equal(usage.getByUser('u-fb')[0].modelId, 'ketner-pro');
+  assert.deepEqual(calls.map((c) => c.model), ['openai/gpt-6.1-sol', 'openai/gpt-6-luna-pro']);
+  assert.equal(out.done?.selectedModel?.id, 'gpt-6-luna-pro');
+  assert.match(out.done?.routingReason ?? '', /fallback to GPT-6 Luna Pro/);
+  assert.equal(usage.getByUser('u-fb')[0].modelId, 'gpt-6-luna-pro');
   assert.equal(usage.getCostLastMonthByModels('u-fb', ['gpt-6.1-sol']), 0, 'сильная модель квоту не тратит');
 });
 
@@ -441,4 +441,31 @@ test('семантический кэш не смешивает ответы р�
     hasAttachments: true,
   });
   assert.equal(cache.get('auto', 'ru', 'проанализируй проект', 'shared', 'h'), null);
+});
+
+test('суточный лимит: второй запрос к Sol на Plus уходит в GPT-6 Luna Pro, причина видна пользователю', async () => {
+  const usage = newUsage();
+  const calls: Call[] = [];
+  const gateway = makeGateway(fakeOpenRouter(okStream('ответ', { cost: 0.02 }), calls), usage);
+
+  const first = await run(gateway, request({ userId: 'u-dl', userPlan: 'plus', modelId: 'gpt-6.1-sol' }));
+  assertNoError(first);
+  assert.equal(first.done?.selectedModel?.id, 'gpt-6.1-sol');
+
+  const second = await run(gateway, request({ userId: 'u-dl', userPlan: 'plus', modelId: 'gpt-6.1-sol' }));
+  assertNoError(second);
+  assert.deepEqual(calls.map((c) => c.model), ['openai/gpt-6.1-sol', 'openai/gpt-6-luna-pro']);
+  assert.equal(second.done?.selectedModel?.id, 'gpt-6-luna-pro');
+  assert.match(second.done?.routingReason ?? '', /Daily limit reached for GPT-6\.1 Sol/);
+  assert.equal(usage.getByUser('u-dl')[0].modelId, 'gpt-6-luna-pro', 'расход пишется на ту, что ответила');
+});
+
+test('суточный лимит не действует на тарифе без лимитов', async () => {
+  const usage = newUsage();
+  const calls: Call[] = [];
+  const gateway = makeGateway(fakeOpenRouter(okStream('ответ', { cost: 0.02 }), calls), usage);
+  for (let i = 0; i < 2; i++) {
+    assertNoError(await run(gateway, request({ userId: 'u-dl-pro', userPlan: 'pro', modelId: 'gpt-6.1-sol' })));
+  }
+  assert.deepEqual(calls.map((c) => c.model), ['openai/gpt-6.1-sol', 'openai/gpt-6.1-sol']);
 });
