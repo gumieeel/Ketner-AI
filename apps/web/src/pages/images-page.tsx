@@ -2,33 +2,19 @@ import { useEffect, useState, type CSSProperties, type KeyboardEvent } from 'rea
 import { Link } from 'react-router-dom';
 import { AlertIcon, DownloadIcon, ImageIcon, InfoIcon, LockIcon, RefreshIcon, SparkleIcon, TrashIcon } from '@/components/icons';
 import { ImagesHelp } from '@/components/images/images-help';
+import { StylePicker } from '@/components/images/style-picker';
+import { IMAGE_STYLE_IDS } from '@/features/images/styles';
 import { Button } from '@/components/ui/button';
 import { buttonClasses } from '@/components/ui/button-classes';
 import { Spinner } from '@/components/ui/spinner';
 import { resolveImageUrl } from '@/features/images/api';
 import { useImages } from '@/features/images/images-store';
 import type { GeneratedImage, ImageAspect } from '@/features/images/types';
-import { useTranslation, type TranslationKey } from '@/i18n';
+import { useTranslation } from '@/i18n';
 import { cn } from '@/lib/cn';
 
 const ASPECTS: readonly ImageAspect[] = ['1:1', '4:3', '3:4', '16:9', '9:16'];
 const RATIO: Record<ImageAspect, string> = { '1:1': '1 / 1', '4:3': '4 / 3', '3:4': '3 / 4', '16:9': '16 / 9', '9:16': '9 / 16' };
-/** Стили и цвет образца на кнопке; названия — images.style.<id>. */
-const STYLES: ReadonlyArray<{ id: string; label: TranslationKey; swatch: string }> = [
-  { id: 'none', label: 'images.style.none', swatch: 'transparent' },
-  { id: 'photo', label: 'images.style.photo', swatch: 'linear-gradient(135deg,#8fa3b8,#3c4a5a)' },
-  { id: 'cinematic', label: 'images.style.cinematic', swatch: 'linear-gradient(135deg,#f4a259,#1d3557)' },
-  { id: 'portrait', label: 'images.style.portrait', swatch: 'linear-gradient(135deg,#e8c4a8,#7a5446)' },
-  { id: 'anime', label: 'images.style.anime', swatch: 'linear-gradient(135deg,#ff9ecb,#7cc6ff)' },
-  { id: 'watercolor', label: 'images.style.watercolor', swatch: 'linear-gradient(135deg,#bde0fe,#cdb4db)' },
-  { id: 'oil', label: 'images.style.oil', swatch: 'linear-gradient(135deg,#c08a3e,#5b3a1e)' },
-  { id: '3d', label: 'images.style.3d', swatch: 'radial-gradient(circle at 35% 30%,#e9f1ff,#6b8cff 60%,#2b3a8f)' },
-  { id: 'digital', label: 'images.style.digital', swatch: 'linear-gradient(135deg,#00c2a8,#6a4cff)' },
-  { id: 'pixel', label: 'images.style.pixel', swatch: 'conic-gradient(#ffcc00 0 25%,#00a86b 0 50%,#ff5a5f 0 75%,#3a86ff 0)' },
-  { id: 'sketch', label: 'images.style.sketch', swatch: 'linear-gradient(135deg,#f2f2f2,#9a9a9a)' },
-  { id: 'neon', label: 'images.style.neon', swatch: 'linear-gradient(135deg,#ff2bd6,#00e5ff)' },
-  { id: 'minimal', label: 'images.style.minimal', swatch: 'linear-gradient(135deg,#f6f1e9 50%,#e76f51 50%)' },
-];
 const UPGRADE_CODES = new Set(['upgrade_required', 'image_limit', 'fair_use_exceeded']);
 
 /** Маленькая иконка пропорции: прямоугольник нужной формы. */
@@ -182,7 +168,7 @@ export function ImagesPage() {
   }
 
   const model = capabilities.models.find((m) => m.id === modelId) ?? capabilities.models[0];
-  const styles = capabilities.styles ? STYLES.filter((item) => capabilities.styles?.includes(item.id)) : STYLES;
+  const styles = capabilities.styles ? IMAGE_STYLE_IDS.filter((id) => capabilities.styles?.includes(id)) : IMAGE_STYLE_IDS;
   const maxChars = capabilities.maxPromptChars;
   const canGenerate = capabilities.available && prompt.trim().length > 0 && !generating && !model?.locked;
   const onKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>): void => {
@@ -222,28 +208,7 @@ export function ImagesPage() {
 
           <fieldset className="flex min-w-0 flex-col gap-1.5">
             <legend className="mb-1.5 text-xs font-medium text-muted">{t('images.style')}</legend>
-            <div className="-mx-1 flex gap-1.5 overflow-x-auto px-1 pb-1 sm:flex-wrap sm:overflow-visible sm:pb-0">
-              {styles.map((item) => (
-                <button
-                  key={item.id}
-                  type="button"
-                  aria-pressed={item.id === style}
-                  disabled={generating}
-                  onClick={() => setStyle(item.id)}
-                  className={cn(
-                    'inline-flex min-h-10 shrink-0 items-center gap-2 rounded-lg border px-3 text-[13px] font-medium whitespace-nowrap transition-colors',
-                    item.id === style ? 'border-accent/50 bg-accent-soft text-accent' : 'border-stroke text-text hover:bg-surface-2',
-                  )}
-                >
-                  <span
-                    aria-hidden="true"
-                    className={cn('size-4 shrink-0 rounded-full', item.id === 'none' ? 'border border-dashed border-current opacity-60' : 'ring-1 ring-black/10')}
-                    style={item.id === 'none' ? undefined : { background: item.swatch }}
-                  />
-                  {t(item.label)}
-                </button>
-              ))}
-            </div>
+            <StylePicker styles={styles} value={style} onChange={setStyle} disabled={generating} />
           </fieldset>
 
           <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
