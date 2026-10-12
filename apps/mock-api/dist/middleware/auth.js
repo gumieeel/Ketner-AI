@@ -28,7 +28,7 @@ export function createAuthMiddleware(userStore, betterAuthInstance = defaultBett
         }
         return resolved.plan;
     };
-    return async (request, _response, next) => {
+    return async (request, response, next) => {
         // 1. Проверяем сессию Better Auth через headers/cookies
         try {
             const session = await betterAuthInstance.api.getSession({
@@ -83,6 +83,8 @@ export function createAuthMiddleware(userStore, betterAuthInstance = defaultBett
         if (authHeader && authHeader.startsWith('Bearer ')) {
             const token = authHeader.slice(7).trim();
             const payload = verifyMockToken(token);
+            // Токен не принят (истёк, подпись не сошлась, пользователя нет): запрос идёт как гостевой, но клиент
+            // получает заголовок и может сбросить устаревшую сессию вместо показа вошедшего пользователя.
             if (payload) {
                 let user = userStore.findById(payload.sub);
                 if (!user && payload.email) {
@@ -109,6 +111,8 @@ export function createAuthMiddleware(userStore, betterAuthInstance = defaultBett
                     return;
                 }
             }
+            // Заглушка better-auth-session живёт только в cookie: без cookie-сессии она тоже недействительна.
+            response.setHeader('X-Session-Invalid', '1');
         }
         // Личность определяется только сессией Better Auth или подписанным Bearer-токеном.
         // Заголовки X-User-* намеренно игнорируются: клиент не может сам назвать себя пользователем.

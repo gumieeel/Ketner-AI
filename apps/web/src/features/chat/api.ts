@@ -1,11 +1,21 @@
 import { storage } from '@/lib/storage';
-import { getAuthToken } from '../auth/auth-store';
+import { getAuthToken, useAuth } from '../auth/auth-store';
 import { readSseStream } from './sse';
 import { API_BASE } from '@/lib/api-config';
 import type { ChatMeta, Conversation, ConversationSummary, Language, Message } from './types';
 
 const JSON_HEADERS = { 'Content-Type': 'application/json' };
 const GUEST_ID_KEY = 'ketner_guest_id';
+
+/**
+ * Сервер не принял Bearer-токен (устарел, сменился ключ при деплое): запрос ушёл как гостевой.
+ * Пересверяем сессию: устаревшая сбрасывается, и интерфейс просит войти заново.
+ */
+export function checkSessionInvalid(response: Response): void {
+  if (response.headers.get('X-Session-Invalid') === '1' && useAuth.getState().status === 'authenticated') {
+    void useAuth.getState().restoreSession();
+  }
+}
 
 export function getGuestId(): string {
   let guestId = storage.get(GUEST_ID_KEY);
@@ -60,6 +70,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
     headers,
     credentials: 'include',
   });
+  checkSessionInvalid(response);
 
   if (!response.ok) {
     throw await toApiError(response);
@@ -186,6 +197,7 @@ export async function streamCompletion(
       }),
     }),
   });
+  checkSessionInvalid(response);
 
   if (!response.ok) {
     throw await toApiError(response);

@@ -1,5 +1,5 @@
 import { getAuthToken } from '../auth/auth-store';
-import { ApiError } from '../chat/api';
+import { ApiError, checkSessionInvalid } from '../chat/api';
 import { readSseStream } from '../chat/sse';
 import { API_BASE } from '@/lib/api-config';
 import type {
@@ -36,6 +36,7 @@ async function request<T>(path: string, init: RequestInit & { body?: string } = 
     headers: { ...authHeaders(init.body !== undefined), ...(init.headers as Record<string, string> | undefined) },
     credentials: 'include',
   });
+  checkSessionInvalid(response);
   if (!response.ok) throw await toApiError(response);
   if (response.status === 204) return undefined as T;
   return (await response.json()) as T;
@@ -111,6 +112,7 @@ export async function streamAgentRun(request: RunRequest, onEvent: (event: Agent
     signal: request.signal,
     body: JSON.stringify({ task: request.task, modelId: request.modelId, language: request.language }),
   });
+  checkSessionInvalid(response);
   if (!response.ok) throw await toApiError(response);
   if (!response.body) throw new ApiError('empty_stream', 'Сервер не вернул поток', response.status);
 

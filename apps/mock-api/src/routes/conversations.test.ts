@@ -98,3 +98,18 @@ test('каталог моделей и описание контракта от�
     await server.close();
   }
 });
+
+test('недействительный Bearer-токен помечается заголовком X-Session-Invalid, а действующий — нет', async () => {
+  const server = await startTestServer();
+  try {
+    const stale = await fetch(`${server.baseUrl}/api/conversations`, {
+      headers: { Authorization: 'Bearer stale.jwt.token' },
+    });
+    assert.equal(stale.headers.get('x-session-invalid'), '1');
+
+    const guest = await fetch(`${server.baseUrl}/api/conversations`);
+    assert.equal(guest.headers.get('x-session-invalid'), null, 'гость без токена не помечается');
+  } finally {
+    await server.close();
+  }
+});

@@ -8,6 +8,7 @@ import {
   oauthLogin,
   signup as apiSignup,
 } from './api';
+import { ApiError } from '../chat/api';
 import { refreshAccountLimit } from '../billing/free-usage';
 import { useUpgradeModal } from '../billing/upgrade-modal-store';
 import type { AuthSession, AuthStatus, LoginPayload, PlanId, SignupPayload, User } from './types';
@@ -106,6 +107,11 @@ export const useAuth = create<AuthState>((set, get) => ({
 
   restoreSession: async () => {
     const { token } = get();
+    // Сервер ответил «нет»: токен отклонён или Better Auth-сессии (cookie) нет. В этом случае
+    // сохранённой копии доверять нельзя: иначе интерфейс показывает вошедшего пользователя (например,
+    // Ultra), а все запросы уходят на сервер как гостевые (чат просит подписку, проекты просят войти).
+    let rejectedByServer = false;
+    let cookieSessionMissing = false;
 
     // 1. Если есть Bearer токен, запрашиваем актуальный профиль (/api/auth/me)
     if (token && token !== 'better-auth-session') {
@@ -116,8 +122,9 @@ export const useAuth = create<AuthState>((set, get) => ({
         saveSession({ user, token, expiresAt: '' });
         set({ user, status: 'authenticated', error: null });
         return;
-      } catch {
-        // Токен мог устареть, пробуем Better Auth сессию
+      } catch (error) {
+        // 401 — токен устарел или подпись не сошлась (ключ сменили при деплое); сетевая ошибка — нет.
+        rejectedByServer = error instanceof ApiError && error.status === 401;
       }
     }
 
@@ -134,13 +141,18 @@ export const useAuth = create<AuthState>((set, get) => ({
         set({ user, token: activeToken, status: 'authenticated', error: null });
         return;
       }
+      cookieSessionMissing = true;
     } catch {
-      // Игнорируем
+      // Сеть недоступна: ответа от сервера нет
     }
 
-    // 3. Fallback на локально сохранённую сессию
+    // 3. Fallback на локально сохранённую сессию, только когда сервер её не отверг:
+    //    например, нет сети. Токен-заглушка better-auth-session живёт только в cookie,
+    //    поэтому без cookie она ничего не значит.
     const stored = readStoredSession();
-    if (stored.token && stored.user) {
+    const storedIsCookieOnly = stored.token === 'better-auth-session';
+    const usable = !rejectedByServer && !(storedIsCookieOnly && cookieSessionMissing);
+    if (usable && stored.token && stored.user) {
       set({
         user: normalizeUser(stored.user as unknown as Record<string, unknown>),
         token: stored.token,
