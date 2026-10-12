@@ -2,7 +2,6 @@ import { Link, useNavigate } from 'react-router-dom';
 import { ArrowRightIcon, ArrowUpRightIcon, SparkleIcon } from '@/components/icons';
 import { buttonClasses } from '@/components/ui/button-classes';
 import { Card } from '@/components/ui/card';
-import { SectionLabel } from '@/components/ui/section-label';
 import { useChat } from '@/features/chat/chat-store';
 import { EXAMPLE_PROMPTS } from '@/features/chat/example-prompts';
 import { useTranslation } from '@/i18n';
@@ -28,13 +27,12 @@ export function OnboardingPage() {
         />
 
         <div className="relative flex flex-col gap-3">
-          <SectionLabel>{t('onboarding.kicker')}</SectionLabel>
 
           <div className="flex items-center gap-3.5">
             <div className="grid size-11 shrink-0 place-items-center rounded-xl bg-accent-soft text-accent ring-1 ring-accent/25 ring-inset">
               <SparkleIcon className="size-5" />
             </div>
-            <h1 className="text-2xl font-semibold tracking-tight text-balance text-text md:text-[28px]">
+            <h1 className="t-title text-balance text-text md:text-[28px]">
               {t('onboarding.title')}
             </h1>
           </div>

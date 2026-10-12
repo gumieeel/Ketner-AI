@@ -262,16 +262,16 @@ export function Composer() {
         onDragLeave={handleDragLeave}
         onDrop={handleDrop}
         className={cn(
-          'surface-glass relative rounded-2xl border p-2.5 shadow-lg',
+          'relative rounded-xl border bg-surface p-2.5 shadow-md',
           'transition-[border-color,box-shadow] duration-200',
-          'focus-within:border-accent/60 focus-within:ring-4 focus-within:ring-accent-soft',
-          isDragOver ? 'border-accent ring-4 ring-accent-soft' : 'border-stroke-strong',
+          'focus-within:border-accent/60 focus-within:ring-2 focus-within:ring-accent-soft',
+          isDragOver ? 'border-accent ring-2 ring-accent-soft' : 'border-stroke-strong',
         )}
       >
         {isDragOver ? (
           <div
             aria-hidden="true"
-            className="pointer-events-none absolute inset-0 z-10 grid place-items-center rounded-2xl bg-canvas/85 text-sm font-medium text-accent"
+            className="pointer-events-none absolute inset-0 z-10 grid place-items-center rounded-xl bg-canvas/85 text-sm font-medium text-accent"
           >
             <span className="inline-flex items-center gap-2">
               <PaperclipIcon className="size-4" />
@@ -319,7 +319,7 @@ export function Composer() {
               aria-expanded={isAttachMenuOpen}
               onClick={() => setIsAttachMenuOpen(!isAttachMenuOpen)}
               className={cn(
-                'rounded-xl border border-stroke bg-surface-2/70 text-text hover:border-stroke-strong hover:bg-surface-2',
+                'rounded-md border border-stroke text-text hover:border-stroke-strong hover:bg-surface-2',
                 isAttachMenuOpen && 'border-stroke-strong bg-surface-2',
               )}
             >
@@ -327,7 +327,7 @@ export function Composer() {
             </IconButton>
 
             {isAttachMenuOpen ? (
-              <div className="surface-glass bg-surface-2/95 absolute bottom-full left-0 z-[var(--z-dropdown)] mb-2 w-[min(18rem,calc(100vw-2rem))] origin-bottom-left animate-scale-in rounded-2xl border border-stroke-strong p-1.5 shadow-popover">
+              <div className="absolute bottom-full left-0 z-[var(--z-dropdown)] mb-2 w-[min(18rem,calc(100vw-2rem))] origin-bottom-left animate-scale-in rounded-lg border border-stroke-strong bg-surface-2 p-1.5 shadow-popover">
                 <button
                   type="button"
                   onClick={() => {
@@ -377,7 +377,7 @@ export function Composer() {
               aria-label={t('chat.stop')}
               title={t('chat.stop')}
               onClick={() => stop()}
-              className="ml-auto inline-flex size-11 shrink-0 items-center justify-center rounded-xl border border-stroke-strong bg-surface-2 text-text transition-[background-color,transform] duration-200 hover:bg-surface-3 active:scale-95"
+              className="ml-auto inline-flex size-11 shrink-0 items-center justify-center rounded-md border border-stroke-strong bg-surface-2 text-text transition-[background-color] duration-150 hover:bg-surface-3"
             >
               <StopIcon />
             </button>
@@ -389,11 +389,11 @@ export function Composer() {
               onClick={submit}
               disabled={!canSubmit}
               className={cn(
-                'ml-auto inline-flex size-11 shrink-0 items-center justify-center rounded-xl',
-                'bg-brand-gradient text-accent-text shadow-glow',
-                'transition-[transform,filter,box-shadow,background-color,color] duration-200 ease-out-expo',
-                'hover:-translate-y-px hover:brightness-110 active:translate-y-0 active:scale-95',
-                'disabled:translate-y-0 disabled:cursor-not-allowed disabled:bg-none disabled:bg-surface-3 disabled:text-subtle disabled:shadow-none disabled:hover:brightness-100',
+                'ml-auto inline-flex size-11 shrink-0 items-center justify-center rounded-md',
+                'bg-brand-gradient text-accent-text',
+                'transition-[background-color,color] duration-150',
+                'hover:bg-action-hover',
+                'disabled:cursor-not-allowed disabled:bg-surface-3 disabled:text-subtle disabled:shadow-none',
               )}
             >
               <SendIcon />

@@ -12,10 +12,12 @@ import { LanguageToggle } from './language-toggle';
 import { ThemeToggle } from './theme-toggle';
 
 const navLinkClass =
-  'inline-flex h-9 items-center rounded-full px-3.5 text-sm font-medium text-muted transition-colors duration-200 hover:bg-surface-2 hover:text-text';
+  'inline-flex h-9 items-center rounded-sm px-3 text-[14px] text-muted transition-colors duration-150 hover:bg-surface-2 hover:text-text';
 
 const footerLinkClass =
-  'inline-flex min-h-8 items-center text-sm text-muted transition-colors duration-200 hover:text-text max-md:min-h-11 max-md:min-w-11';
+  'inline-flex min-h-8 items-center text-[14px] text-muted transition-colors duration-150 hover:text-text max-md:min-h-11';
+
+const footerHeadClass = 'text-[13px] text-subtle';
 
 /**
  * Каркас страниц вне приложения: лендинг, вход, тарифы, оформление подписки, документация.
@@ -70,6 +72,10 @@ export function StandaloneLayout() {
 
   const isAuthPage = location.pathname === '/login' || location.pathname === '/signup';
   const isLanding = location.pathname === '/';
+  // Главная шире и с узкими полями — панели идут почти от края до края, как витрина.
+  const containerClass = isLanding
+    ? 'max-w-[1360px] px-3 sm:px-4 lg:px-5'
+    : 'max-w-[1200px] px-4 sm:px-6 lg:px-8';
 
   if (isAuthPage) {
     return (
@@ -88,32 +94,24 @@ export function StandaloneLayout() {
 
   const mobileLinkClass = ({ isActive }: { isActive: boolean }) =>
     cn(
-      'group flex min-h-14 items-center justify-between rounded-lg px-4 text-base font-medium transition-colors duration-200',
+      'group flex min-h-14 items-center justify-between rounded-md px-4 text-base font-medium transition-colors duration-150',
       isActive ? 'bg-accent-soft text-accent' : 'text-text hover:bg-surface-2',
     );
 
   return (
     <div className="relative flex min-h-screen flex-col overflow-x-clip bg-canvas text-text selection:bg-accent/20 selection:text-text">
-      {/* Атмосфера лендинга: аврора и сетка, затухающие вниз */}
-      {isLanding ? (
-        <div
-          aria-hidden="true"
-          className="pointer-events-none absolute inset-x-0 top-0 h-[820px] [mask-image:linear-gradient(to_bottom,#000_30%,transparent)]"
-        >
-          <div className="bg-aurora absolute inset-0" />
-          <div className="bg-grid absolute inset-0 opacity-60 [mask-image:radial-gradient(ellipse_70%_60%_at_50%_0%,#000,transparent_75%)]" />
-        </div>
-      ) : null}
-
       {/* Шапка */}
-      <header className="surface-glass sticky top-0 z-40 h-16 w-full border-b border-stroke">
-        <div className="mx-auto flex h-full max-w-[1200px] items-center justify-between px-4 sm:px-6 lg:px-8">
-          <div className="flex items-center gap-6 lg:gap-8">
+      <header className="sticky top-0 z-40 h-14 w-full border-b border-stroke bg-canvas">
+        <div className={cn('mx-auto flex h-full items-center justify-between', containerClass)}>
+          <div className="flex items-center gap-6 lg:gap-10">
             <Brand />
             <nav
               aria-label={t('nav.mainNavigation')}
-              className="hidden items-center gap-1 md:flex"
+              className="hidden items-center gap-0.5 md:flex"
             >
+              <a href="/#auto" className={navLinkClass}>
+                Auto
+              </a>
               <a href="/#models" className={navLinkClass}>
                 {t('nav.models')}
               </a>
@@ -136,7 +134,7 @@ export function StandaloneLayout() {
             <Link to="/chat" className={buttonClasses({ variant: 'primary', size: 'sm' })}>
               {startLabel}
             </Link>
-            <div className="mx-1 h-5 w-px bg-stroke" aria-hidden="true" />
+            <div className="mx-1.5 h-5 w-px bg-stroke" aria-hidden="true" />
             <LanguageToggle />
             <ThemeToggle />
           </div>
@@ -159,7 +157,7 @@ export function StandaloneLayout() {
         <div className="fixed inset-0 z-50 md:hidden">
           {/* Backdrop */}
           <div
-            className="fixed inset-0 animate-fade-in bg-black/60 backdrop-blur-sm"
+            className="fixed inset-0 animate-fade-in bg-overlay"
             onClick={() => setMobileMenuOpen(false)}
             aria-hidden="true"
           />
@@ -197,7 +195,7 @@ export function StandaloneLayout() {
               <a
                 href="/#models"
                 onClick={() => setMobileMenuOpen(false)}
-                className="group flex min-h-14 items-center justify-between rounded-lg px-4 text-base font-medium text-text transition-colors duration-200 hover:bg-surface-2"
+                className="group flex min-h-14 items-center justify-between rounded-md px-4 text-base font-medium text-text transition-colors duration-150 hover:bg-surface-2"
               >
                 {t('nav.models')}
                 <ChevronRightIcon className="size-4 text-subtle transition-transform duration-200 group-hover:translate-x-0.5" />
@@ -250,27 +248,41 @@ export function StandaloneLayout() {
       )}
 
       {/* Контент страницы */}
-      <main className="relative z-10 mx-auto flex w-full max-w-[1200px] flex-1 flex-col px-4 py-8 sm:px-6 md:py-12 lg:px-8">
+      <main
+        className={cn(
+          'relative z-10 mx-auto flex w-full flex-1 flex-col',
+          containerClass,
+          isLanding ? 'pt-3 pb-8' : 'py-8 md:py-12',
+        )}
+      >
         <Outlet />
       </main>
 
-      {/* Футер */}
-      <footer className="relative z-10 w-full border-t border-stroke bg-surface/60 py-12 text-left">
-        <div className="mx-auto flex max-w-[1200px] flex-col gap-10 px-4 sm:px-6 lg:px-8">
-          <div className="grid grid-cols-2 gap-x-6 gap-y-10 md:grid-cols-[1.4fr_1fr_1fr_1fr]">
-            {/* 1. Колонка: Бренд */}
+      {/* Футер: колонки ссылок и крупный знак Ketner */}
+      <footer className="relative z-10 mt-20 w-full border-t border-stroke text-left">
+        <div className={cn('mx-auto flex flex-col gap-12 pt-14', containerClass)}>
+          <div className="grid grid-cols-2 gap-x-6 gap-y-10 md:grid-cols-[1.5fr_1fr_1fr_1fr_1fr]">
             <div className="col-span-2 flex flex-col gap-4 md:col-span-1">
               <Brand />
-              <p className="max-w-[32ch] text-sm leading-relaxed text-muted">{t('footer.tagline')}</p>
+              <p className="max-w-[28ch] text-[14px] leading-relaxed text-muted">{t('home.footerTagline')}</p>
             </div>
 
-            {/* 2. Колонка: Продукт */}
-            <div className="flex flex-col gap-2.5">
-              <span className="text-sm font-semibold text-text">{t('footer.product')}</span>
-              <ul className="flex flex-col gap-1 max-md:gap-0">
+            <nav aria-label={t('home.footerProduct')} className="flex flex-col gap-3">
+              <span className={footerHeadClass}>{t('home.footerProduct')}</span>
+              <ul className="flex flex-col gap-1.5 max-md:gap-0">
                 <li>
                   <Link to="/chat" className={footerLinkClass}>
                     {t('nav.chat')}
+                  </Link>
+                </li>
+                <li>
+                  <Link to="/code" className={footerLinkClass}>
+                    {t('nav.code')}
+                  </Link>
+                </li>
+                <li>
+                  <Link to="/images" className={footerLinkClass}>
+                    {t('nav.images')}
                   </Link>
                 </li>
                 <li>
@@ -278,18 +290,28 @@ export function StandaloneLayout() {
                     {t('nav.pricing')}
                   </Link>
                 </li>
+              </ul>
+            </nav>
+
+            <nav aria-label={t('home.footerModels')} className="flex flex-col gap-3">
+              <span className={footerHeadClass}>{t('home.footerModels')}</span>
+              <ul className="flex flex-col gap-1.5 max-md:gap-0">
+                <li>
+                  <a href="/#auto" className={footerLinkClass}>
+                    {t('home.footerAuto')}
+                  </a>
+                </li>
                 <li>
                   <a href="/#models" className={footerLinkClass}>
-                    {t('footer.allModels')}
+                    {t('home.footerLimits')}
                   </a>
                 </li>
               </ul>
-            </div>
+            </nav>
 
-            {/* 3. Колонка: Ресурсы */}
-            <div className="flex flex-col gap-2.5">
-              <span className="text-sm font-semibold text-text">{t('footer.resources')}</span>
-              <ul className="flex flex-col gap-1 max-md:gap-0">
+            <nav aria-label={t('home.footerResources')} className="flex flex-col gap-3">
+              <span className={footerHeadClass}>{t('home.footerResources')}</span>
+              <ul className="flex flex-col gap-1.5 max-md:gap-0">
                 <li>
                   <Link to="/docs" className={footerLinkClass}>
                     {t('nav.docs')}
@@ -306,12 +328,11 @@ export function StandaloneLayout() {
                   </a>
                 </li>
               </ul>
-            </div>
+            </nav>
 
-            {/* 4. Колонка: Аккаунт */}
-            <div className="flex flex-col gap-2.5">
-              <span className="text-sm font-semibold text-text">{t('footer.account')}</span>
-              <ul className="flex flex-col gap-1 max-md:gap-0">
+            <nav aria-label={t('home.footerAccount')} className="flex flex-col gap-3">
+              <span className={footerHeadClass}>{t('home.footerAccount')}</span>
+              <ul className="flex flex-col gap-1.5 max-md:gap-0">
                 <li>
                   <Link to="/login" className={footerLinkClass}>
                     {t('nav.login')}
@@ -328,11 +349,18 @@ export function StandaloneLayout() {
                   </Link>
                 </li>
               </ul>
-            </div>
+            </nav>
           </div>
 
-          {/* Нижняя полоса */}
-          <div className="flex flex-wrap items-center justify-between gap-4 border-t border-stroke pt-6 text-sm text-muted">
+          {/* Крупный знак — логотип во всю ширину. Текст в псевдоэлементе: он декоративный и не читается вслух */}
+          <div aria-hidden="true" className="select-none overflow-hidden">
+            <span
+              data-wordmark="Ketner"
+              className="sharp block text-[clamp(5rem,29.5vw,27.5rem)] leading-[0.78] font-medium tracking-[-0.055em] text-surface-3 before:content-[attr(data-wordmark)]"
+            />
+          </div>
+
+          <div className="flex flex-wrap items-center justify-between gap-4 border-t border-stroke py-6 text-[14px] text-muted">
             <span>{t('footer.rights', { year: new Date().getFullYear() })}</span>
             <div className="flex items-center gap-2">
               <LanguageToggle />

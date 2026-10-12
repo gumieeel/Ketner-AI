@@ -37,7 +37,7 @@ export function SecuritySection() {
 
         <SecurityCard icon={<TerminalIcon className="size-4" />} title={t('apiDocs.secDockerTitle')}>
           {t('apiDocs.secDockerText')}
-          <code className="mt-2 block overflow-x-auto rounded-lg border border-stroke bg-surface p-2.5 font-mono text-xs whitespace-nowrap text-accent">
+          <code tabIndex={0} className="mt-2 block overflow-x-auto rounded-lg border border-stroke bg-surface p-2.5 font-mono text-xs whitespace-nowrap text-accent">
             docker run -v $(pwd):/workspace ketner/agent:latest
           </code>
         </SecurityCard>

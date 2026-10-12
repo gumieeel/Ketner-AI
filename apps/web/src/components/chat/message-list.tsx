@@ -79,7 +79,7 @@ export function MessageList() {
         <button
           type="button"
           onClick={() => scrollToBottom('smooth')}
-          className="surface-glass absolute inset-x-0 bottom-4 mx-auto flex h-9 w-fit animate-scale-in items-center gap-1.5 rounded-full border border-stroke-strong px-4 text-[13px] font-medium text-text shadow-lg transition-colors hover:bg-surface-2 max-md:h-11"
+          className="surface-glass absolute inset-x-0 bottom-4 mx-auto flex h-9 w-fit animate-scale-in items-center gap-1.5 rounded-md border border-stroke-strong px-4 text-[13px] font-medium text-text shadow-lg transition-colors hover:bg-surface-2 max-md:h-11"
         >
           <ChevronDownIcon className="size-4 text-accent" />
           {t('chat.jumpToLatest')}

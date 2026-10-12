@@ -48,7 +48,7 @@ export function DocsLayout({ nav, toc, activeId, children, className }: DocsLayo
                   href={`#${item.id}`}
                   aria-current={isActive ? 'true' : undefined}
                   className={cn(
-                    'inline-flex min-h-11 items-center gap-1.5 rounded-full px-3.5 text-sm font-medium whitespace-nowrap transition-colors',
+                    'inline-flex min-h-11 items-center gap-1.5 rounded-md px-3.5 text-sm font-medium whitespace-nowrap transition-colors',
                     isActive
                       ? 'bg-surface-2 text-text ring-1 ring-stroke-strong ring-inset'
                       : 'text-muted hover:bg-surface hover:text-text',

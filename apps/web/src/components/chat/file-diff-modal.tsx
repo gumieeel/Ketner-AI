@@ -46,7 +46,7 @@ export function FileDiffModal({
         title={
           <span className="flex min-w-0 flex-wrap items-center gap-2">
             <span className="min-w-0 font-mono text-sm break-all">{currentChange.path}</span>
-            <span className="rounded-full bg-surface-2 px-2 py-0.5 font-mono text-[11px] font-medium text-muted">
+            <span className="rounded-xs bg-surface-2 px-2 py-0.5 font-mono text-[11px] font-medium text-muted">
               {currentChange.action.toUpperCase()}
             </span>
           </span>

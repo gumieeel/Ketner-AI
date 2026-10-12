@@ -1,8 +1,6 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { PlanCards } from '@/components/pricing/plan-cards';
-import { Reveal } from '@/components/ui/reveal';
-import { SectionLabel } from '@/components/ui/section-label';
 import { Tab, TabList, TabPanel, Tabs } from '@/components/ui/tabs';
 import type { TranslationKey } from '@/i18n';
 import { useTranslation } from '@/i18n';
@@ -84,21 +82,14 @@ export function PricingPage() {
   const [activeMobilePlan, setActiveMobilePlan] = useState<PlanKey>('pro');
 
   return (
-    <div className="relative mx-auto flex w-full max-w-7xl flex-col gap-14 px-4 py-12 text-center sm:px-6 md:gap-20 md:py-16 lg:px-8">
-      {/* Атмосфера за заголовком */}
-      <div
-        aria-hidden="true"
-        className="bg-aurora pointer-events-none absolute inset-x-0 -top-10 h-[360px] opacity-60 [mask-image:linear-gradient(to_bottom,black,transparent)]"
-      />
-
-      {/* Заголовок страницы */}
-      <Reveal eager className="relative flex flex-col items-center gap-4">
-        <SectionLabel>{t('pricing.nextGenBadge')}</SectionLabel>
-        <h1 className="t-headline text-text">{t('pricing.title')}</h1>
-        <p className="max-w-[56ch] text-[15px] leading-relaxed text-balance text-muted md:text-[17px]">
+    <div className="relative mx-auto flex w-full max-w-7xl flex-col gap-14 py-4 text-left md:gap-20 md:py-8">
+      {/* Заголовок страницы: крупно слева, пояснение справа — как секции главной */}
+      <div className="grid grid-cols-1 gap-5 md:grid-cols-12 md:items-end md:gap-8">
+        <h1 className="t-display text-[clamp(2.75rem,5vw+0.5rem,5rem)] text-text md:col-span-7">{t('pricing.title')}</h1>
+        <p className="max-w-[46ch] text-[17px] leading-relaxed text-muted md:col-span-5 md:justify-self-end">
           {t('pricing.subtitle')}
         </p>
-      </Reveal>
+      </div>
 
       {/* 4 Карточки тарифов */}
       <PlanCards variant="full" />
@@ -106,7 +97,7 @@ export function PricingPage() {
       {/* Таблица сравнения */}
       <div className="flex w-full flex-col gap-6 text-left">
         <div className="flex flex-col gap-1.5">
-          <h2 className="text-2xl font-semibold tracking-tight text-text">{t('pricing.compare')}</h2>
+          <h2 className="t-title text-text">{t('pricing.compare')}</h2>
           <p className="text-sm text-muted md:text-[15px]">{t('pricing.compareLead')}</p>
         </div>
 
@@ -128,7 +119,7 @@ export function PricingPage() {
                 {t(PLAN_NAME_KEYS[activeMobilePlan])}
               </h3>
               {activeMobilePlan === 'pro' && (
-                <span className="rounded-full bg-accent-soft px-2.5 py-0.5 text-xs font-semibold text-accent">
+                <span className="rounded-xs bg-brand-gradient px-2 py-0.5 text-xs font-medium text-accent-text">
                   {t('pricing.popular')}
                 </span>
               )}

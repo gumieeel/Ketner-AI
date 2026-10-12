@@ -92,7 +92,7 @@ export function StylePicker({
                 event.currentTarget.scrollIntoView?.({ behavior: 'smooth', inline: 'center', block: 'nearest' });
               }}
               className={cn(
-                'h-10 shrink-0 rounded-full border px-4 text-[14px] font-medium whitespace-nowrap transition-colors disabled:opacity-60',
+                'h-10 shrink-0 rounded-md border px-4 text-[14px] font-medium whitespace-nowrap transition-colors disabled:opacity-60',
                 selected
                   ? 'border-accent/60 bg-accent-soft text-accent'
                   : 'border-stroke-strong bg-transparent text-text hover:border-accent/40 hover:bg-surface-2',

@@ -17,7 +17,7 @@ export function LanguageToggle({ className }: { className?: string }) {
       role="group"
       aria-label={t('settings.language')}
       className={cn(
-        'inline-flex items-center gap-0.5 rounded-full border border-stroke bg-surface-2 p-0.5',
+        'inline-flex items-center gap-0.5 rounded-sm border border-stroke p-0.5',
         className,
       )}
     >
@@ -30,11 +30,9 @@ export function LanguageToggle({ className }: { className?: string }) {
             aria-pressed={active}
             onClick={() => setLanguage(option.value)}
             className={cn(
-              'relative inline-flex min-h-8 min-w-10 items-center justify-center rounded-full px-3 text-xs font-semibold',
-              'transition-[background-color,color,box-shadow] duration-200 max-md:min-h-11 max-md:min-w-11',
-              active
-                ? 'bg-surface text-text shadow-sm ring-1 ring-stroke-strong'
-                : 'text-muted hover:text-text',
+              'relative inline-flex min-h-7 min-w-9 items-center justify-center rounded-xs px-2.5 text-[12px] font-medium',
+              'transition-[background-color,color] duration-150 max-md:min-h-11 max-md:min-w-11',
+              active ? 'bg-surface-3 text-text' : 'text-muted hover:text-text',
             )}
           >
             {option.label}

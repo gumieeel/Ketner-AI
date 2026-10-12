@@ -31,8 +31,8 @@ export const DEFAULT_MODEL_ID = 'auto';
 
 /** Цвет системной панели браузера: совпадает с токеном --canvas каждой темы. */
 export const THEME_COLOR: Record<Theme, string> = {
-  dark: '#09090b',
-  light: '#fafafa',
+  dark: '#1a1c1b',
+  light: '#eceee9',
 };
 
 export function applyTheme(theme: Theme): void {

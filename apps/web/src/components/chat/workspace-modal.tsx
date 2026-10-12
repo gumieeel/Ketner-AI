@@ -50,11 +50,11 @@ export function WorkspaceModal({ isOpen, onClose }: WorkspaceModalProps) {
         title={
           <span className="flex min-w-0 flex-wrap items-center gap-2">
             <span className="min-w-0 break-all">{activeWorkspace.name}</span>
-            <span className="rounded-full bg-accent-soft px-2 py-0.5 text-[11px] font-medium text-accent">
+            <span className="rounded-xs bg-accent-soft px-2 py-0.5 text-[11px] font-medium text-accent">
               {activeWorkspace.type === 'git_repo' ? t('linkWs.tabGit') : t('linkWs.tabFolder')}
             </span>
             {activeWorkspace.branch ? (
-              <span className="rounded-full border border-stroke px-2 py-0.5 font-mono text-[11px] font-normal text-muted">
+              <span className="rounded-xs border border-stroke px-2 py-0.5 font-mono text-[11px] font-normal text-muted">
                 {activeWorkspace.branch}
               </span>
             ) : null}
