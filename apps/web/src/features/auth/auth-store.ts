@@ -176,7 +176,13 @@ export const useAuth = create<AuthState>((set, get) => ({
       useUpgradeModal.getState().close();
       set({ user, token: session.token, status: 'authenticated', error: null });
 
-      // Синхронизируем сессию в Better Auth (куки)
+      // Синхронизируем сессию в Better Auth (куки). Сначала снимаем старую cookie-сессию: в браузере
+      // мог остаться вход другого аккаунта (например, через Google), и сервер видел бы его вместо этого.
+      try {
+        await authClient.signOut();
+      } catch {
+        // Игнорируем
+      }
       try {
         await authClient.signIn.email({
           email: payload.email,
@@ -203,7 +209,13 @@ export const useAuth = create<AuthState>((set, get) => ({
       useUpgradeModal.getState().close();
       set({ user, token: session.token, status: 'authenticated', error: null });
 
-      // Синхронизируем сессию в Better Auth (куки)
+      // Синхронизируем сессию в Better Auth (куки). Сначала снимаем старую cookie-сессию: в браузере
+      // мог остаться вход другого аккаунта (например, через Google), и сервер видел бы его вместо этого.
+      try {
+        await authClient.signOut();
+      } catch {
+        // Игнорируем
+      }
       try {
         await authClient.signIn.email({
           email: payload.email,

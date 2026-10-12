@@ -4,6 +4,7 @@ import userEvent, { type UserEvent } from '@testing-library/user-event';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { useAuth } from '@/features/auth/auth-store';
 import { useChat } from '@/features/chat/chat-store';
+import { useUpgradeModal } from '@/features/billing/upgrade-modal-store';
 import { usePreferences } from '@/features/preferences/preferences-store';
 import type { Message } from '@/features/chat/types';
 import { installFakeApi } from './fake-api';
@@ -257,37 +258,28 @@ describe('чат: отправка, стриминг и управление о�
 
     await user.keyboard('{Escape}');
 
-    // Задаем платную модель GPT-6.1 Sol (доступна с тарифа Plus)
+    // Платная модель, выбранная раньше (например, под другим аккаунтом), на Free сбрасывается на Auto.
     act(() => {
       usePreferences.getState().setChatModelId('gpt-6.1-sol');
     });
-
-    // Появляется плашка с предупреждением об апгрейде и ссылкой на тарифы
-    const alert = await screen.findByRole('alert');
-    expect(alert).toHaveTextContent(/GPT-6\.1 Sol/);
-    expect(alert).toHaveTextContent(/Plus/);
-    const upgradeLink = within(alert).getByRole('link', { name: /Улучшить план/ });
-    expect(upgradeLink).toHaveAttribute('href', '/pricing');
+    await waitFor(() => expect(usePreferences.getState().chatModelId).toBe('auto'));
   });
 
-  it('при попытке генерации на платной модели без подписки показывает ошибку апгрейда со ссылкой на тарифы', async () => {
-    installFakeApi({ enforcePlans: true });
-    const user = setupChat();
+  it('на недоступной модели сообщение не отправляется: открывается предложение улучшить тариф', async () => {
+    const api = installFakeApi({ enforcePlans: true });
+    setupChat();
     await screen.findByRole('heading', { level: 2, name: EMPTY_TITLE });
 
-    // Задаем платную модель напрямую для проверки серверной ошибки
-    usePreferences.getState().setChatModelId('claude-opus-5.5');
+    // Модель выбрана и сообщение отправлено в одном такте, до сброса выбора.
+    await act(async () => {
+      usePreferences.getState().setChatModelId('claude-opus-5.5');
+      await useChat.getState().send('Тест платной модели', []);
+    });
 
-    // Отправляем сообщение
-    await sendMessage(user, 'Тест платной модели');
-
-    // Проверяем, что появилось сообщение об ошибке с требованием апгрейда
-    expect(await screen.findByText('Требуется подписка (Upgrade your plan)')).toBeInTheDocument();
-    expect(screen.getAllByText(/Claude Opus 5\.5/).length).toBeGreaterThan(0);
-    expect(screen.getAllByRole('link', { name: /Улучшить план/ })[0]).toHaveAttribute(
-      'href',
-      '/pricing',
-    );
+    expect(useUpgradeModal.getState().isOpen).toBe(true);
+    expect(useUpgradeModal.getState().modelName).toMatch(/Claude Opus 5\.5/);
+    expect(api.completions).toBe(0);
+    useUpgradeModal.getState().close();
   });
 
   it('недоступные платные модели в списке заблокированы и полупрозрачны, а клик по полю ввода не открывает модалку', async () => {

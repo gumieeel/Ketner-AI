@@ -48,7 +48,46 @@ export function createAuthMiddleware(
   };
 
   return async (request: Request, response: Response, next: NextFunction): Promise<void> => {
-    // 1. Проверяем сессию Better Auth через headers/cookies
+    // 1. Bearer-токен, выданный при входе. Он важнее cookie: клиент показывает того пользователя, чей токен
+    //    хранит, а в браузере может остаться cookie-сессия другого аккаунта (вход через Google под Ultra,
+    //    потом вход по паролю под Free). Если брать cookie первым, интерфейс показывал бы Free, а сервер
+    //    отвечал бы как Ultra.
+    let bearerRejected = false;
+    const authHeader = request.headers.authorization;
+    if (authHeader && authHeader.startsWith('Bearer ')) {
+      const token = authHeader.slice(7).trim();
+      const payload = verifyMockToken(token);
+      // Токен не принят (истёк, подпись не сошлась, пользователя нет): запрос идёт как гостевой, но клиент
+      // получает заголовок и может сбросить устаревшую сессию вместо показа вошедшего пользователя.
+      if (payload) {
+        let user = userStore.findById(payload.sub);
+        if (!user && payload.email) {
+          user = userStore.findByEmail(payload.email);
+        }
+        if (user) {
+          const isVip = Boolean(user.isVip || (user.email && isVipEmail(user.email)));
+          const isAdmin = Boolean(user.isAdmin || (user.email && isAdminEmail(user.email)));
+          let plan: PlanId = user.plan;
+          if (isVip) {
+            plan = 'ultra';
+          } else {
+            plan = applySubscriptionExpiry(user.id, plan, false);
+          }
+          request.user = {
+            ...user,
+            isVip,
+            isAdmin,
+            plan,
+          };
+          request.userId = user.id;
+          next();
+          return;
+        }
+      }
+      bearerRejected = true;
+    }
+
+    // 2. Сессия Better Auth через cookie (вход через Google/GitHub или токен сессии Better Auth).
     try {
       const session = await betterAuthInstance.api.getSession({
         headers: fromNodeHeaders(request.headers),
@@ -101,39 +140,8 @@ export function createAuthMiddleware(
       // Игнорируем ошибки Better Auth и переходим к проверке Bearer токена
     }
 
-    // 2. Fallback: проверка Bearer токена для обратной совместимости
-    const authHeader = request.headers.authorization;
-    if (authHeader && authHeader.startsWith('Bearer ')) {
-      const token = authHeader.slice(7).trim();
-      const payload = verifyMockToken(token);
-      // Токен не принят (истёк, подпись не сошлась, пользователя нет): запрос идёт как гостевой, но клиент
-      // получает заголовок и может сбросить устаревшую сессию вместо показа вошедшего пользователя.
-      if (payload) {
-        let user = userStore.findById(payload.sub);
-        if (!user && payload.email) {
-          user = userStore.findByEmail(payload.email);
-        }
-        if (user) {
-          const isVip = Boolean(user.isVip || (user.email && isVipEmail(user.email)));
-          const isAdmin = Boolean(user.isAdmin || (user.email && isAdminEmail(user.email)));
-          let plan: PlanId = user.plan;
-          if (isVip) {
-            plan = 'ultra';
-          } else {
-            plan = applySubscriptionExpiry(user.id, plan, false);
-          }
-          request.user = {
-            ...user,
-            isVip,
-            isAdmin,
-            plan,
-          };
-          request.userId = user.id;
-          next();
-          return;
-        }
-      }
-      // Заглушка better-auth-session живёт только в cookie: без cookie-сессии она тоже недействительна.
+    if (bearerRejected) {
+      // Токен не принят и cookie-сессии нет: запрос идёт как гостевой, клиент сбросит устаревший вход.
       response.setHeader('X-Session-Invalid', '1');
     }
 

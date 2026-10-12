@@ -282,3 +282,35 @@ test('auth (C3): токены с поддельной подписью откл�
   });
   assert.equal(tamperedRes.status, 401);
 });
+
+test('auth: Bearer-токен важнее оставшейся cookie-сессии другого аккаунта', async (t) => {
+  const server = await startTestServer();
+  t.after(() => server.close());
+
+  // Аккаунт A: вход через Better Auth, в браузере остаётся его cookie.
+  const signUpA = await fetch(`${server.baseUrl}/api/auth/sign-up/email`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Origin: server.baseUrl },
+    body: JSON.stringify({ email: 'cookie-user@example.com', password: 'password123', name: 'Cookie User' }),
+  });
+  const cookieA = signUpA.headers.get('set-cookie') ?? '';
+  assert.ok(cookieA.includes('better-auth.session_token'));
+
+  // Аккаунт B: вход по паролю, клиент хранит его Bearer-токен.
+  const signUpB = await fetch(`${server.baseUrl}/api/auth/signup`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email: 'bearer-user@example.com', password: 'password123', name: 'Bearer User' }),
+  });
+  const sessionB = await readJson<AuthSession>(signUpB);
+
+  const me = await fetch(`${server.baseUrl}/api/auth/me`, {
+    headers: { Origin: server.baseUrl, Cookie: cookieA, Authorization: `Bearer ${sessionB.token}` },
+  });
+  assert.equal(me.status, 200);
+  assert.equal((await readJson<{ user: User }>(me)).user.email, 'bearer-user@example.com');
+
+  // Без Bearer-токена работает cookie-сессия, а не гость.
+  const cookieOnly = await fetch(`${server.baseUrl}/api/auth/me`, { headers: { Origin: server.baseUrl, Cookie: cookieA } });
+  assert.equal((await readJson<{ user: User }>(cookieOnly)).user.email, 'cookie-user@example.com');
+});

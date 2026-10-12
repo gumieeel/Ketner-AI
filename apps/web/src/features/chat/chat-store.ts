@@ -506,11 +506,13 @@ export const useChat = create<ChatState>((set, get) => {
       const isFreeAccount = Boolean(authUser && (!authUser.plan || authUser.plan === 'free'));
 
       if (!canAccessModel(authUser?.plan, currentModel)) {
+        // Модель недоступна на тарифе: сообщение не отправляется, предлагаем улучшить тариф.
         useUpgradeModal.getState().open({
           reason: 'paid_model',
           modelName: currentModel.name,
           requiredPlan: getRequiredPlanName(currentModel),
         });
+        return;
       }
 
       if (isFreeAccount && authUser) {
@@ -618,11 +620,13 @@ export const useChat = create<ChatState>((set, get) => {
       const isFreeAccount = Boolean(authUser && (!authUser.plan || authUser.plan === 'free'));
 
       if (!canAccessModel(authUser?.plan, currentModel)) {
+        // Модель недоступна на тарифе: сообщение не отправляется, предлагаем улучшить тариф.
         useUpgradeModal.getState().open({
           reason: 'paid_model',
           modelName: currentModel.name,
           requiredPlan: getRequiredPlanName(currentModel),
         });
+        return;
       }
       if (isFreeAccount && authUser && isFreeLimitReached(authUser.id)) {
         useUpgradeModal.getState().open({ reason: 'free_limit' });
