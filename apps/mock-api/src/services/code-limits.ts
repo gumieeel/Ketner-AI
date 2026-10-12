@@ -5,6 +5,13 @@
  * дневной бюджет себестоимости и месячный costBudget, поэтому здесь ограничивается то, чего общие
  * лимиты не видят: сколько проектов хранить, сколько запусков в сутки и сколько можно потратить
  * на один запуск (один запрос пользователя превращается в десятки обращений к модели).
+ *
+ * Бюджет запуска Pro и Ultra рассчитан на модели этих тарифов. Типичная задача (15 шагов по ~20k
+ * токенов контекста, половина из кэша) стоит: Sonnet и GPT-5.6 Sol ≈ $0.4, Grok и Terra xhigh ≈ $0.5,
+ * Opus ≈ $0.75, Fable и GPT-6 Astra ≈ $1.9 (в режиме Max ≈ $2.4); крупная (25 шагов по ~35k) — в 2–2.5
+ * раза дороже. Pro $2 хватает на типичную задачу любой модели и крупную на Opus и дешевле, Ultra $3 —
+ * на типичную в режиме Max и крупную на Opus в режиме Max. Запуск всё равно ограничен остатком
+ * дневного и месячного бюджета тарифа и квоты премиум-моделей.
  */
 
 import type { PlanId } from '../types.js';
@@ -64,7 +71,7 @@ export const CODE_LIMITS: Record<'free' | 'plus' | 'pro' | 'ultra', CodeLimits> 
     maxFileBytes: 2 * MB,
     runsPerDay: 40,
     maxSteps: 50,
-    maxRunCostUsd: 0.4,
+    maxRunCostUsd: 2.0,
     commands: true,
     commandTimeoutSec: 120,
     maxTaskChars: 16_000,
@@ -76,7 +83,7 @@ export const CODE_LIMITS: Record<'free' | 'plus' | 'pro' | 'ultra', CodeLimits> 
     maxFileBytes: 5 * MB,
     runsPerDay: 120,
     maxSteps: 100,
-    maxRunCostUsd: 1.0,
+    maxRunCostUsd: 3.0,
     commands: true,
     commandTimeoutSec: 300,
     maxTaskChars: 32_000,

@@ -134,8 +134,10 @@ export const PLAN_ENTITLEMENTS = {
         contextLimit: 120,
         maxTokens: 12288,
         streamingEnabled: true,
-        // Pro: $25 → бюджет $10.00 (40%), из них $7 — квота премиум-моделей.
-        maxDailyCost: 1.10,
+        // Pro: $25 → бюджет $10.00 (40%), из них $7 — квота премиум-моделей. Дневной потолок $2.20 не ниже
+        // бюджета одного запуска агента ($2): иначе задача на Fable или Astra обрывалась бы на полпути.
+        // Месячный бюджет прежний, поэтому худший случай по марже не меняется.
+        maxDailyCost: 2.2,
         costBudget: 10.0,
         premiumBudget: 7.0,
     },
@@ -154,7 +156,8 @@ export const PLAN_ENTITLEMENTS = {
         maxTokens: 16384,
         streamingEnabled: true,
         // Ultra: $49 → бюджет $20.00 (41%), из них $15 — квота премиум-моделей (режим Max тратит её быстрее).
-        maxDailyCost: 2.20,
+        // Дневной потолок $4.40 не ниже бюджета запуска агента ($3).
+        maxDailyCost: 4.4,
         costBudget: 20.0,
         premiumBudget: 15.0,
     },
