@@ -431,6 +431,7 @@ export function createCodeRouter(deps) {
                 task: body.task,
                 modelId,
                 language,
+                reasoningMode: body.reasoningMode === 'max' ? 'max' : 'standard',
                 signal: controller.signal,
             }, write);
         }

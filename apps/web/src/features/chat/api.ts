@@ -143,6 +143,8 @@ export interface CompletionRequest {
   /** История целиком: сервер приводит к ней своё состояние. */
   messages: readonly Message[];
   signal: AbortSignal;
+  /** Режим размышлений: max действует только на Ultra (сервер проверяет тариф сам). */
+  reasoningMode?: 'standard' | 'max';
 }
 
 /**
@@ -171,6 +173,7 @@ export async function streamCompletion(
     body: JSON.stringify({
       conversationId: completion.conversationId,
       modelId: completion.modelId,
+      ...(completion.reasoningMode === 'max' ? { reasoningMode: 'max' } : {}),
       // `language` — заглушечная замена системного промпта: у реального
       // провайдера язык ответа задаётся системным сообщением.
       language: completion.language,

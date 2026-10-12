@@ -58,16 +58,16 @@ export const PLANS = [
             ru: 'Все флагманы AI',
             en: 'All Flagship AIs',
         },
-        modelsHighlight: 'GPT-6.1 Sol, Claude Opus 5.5, Grok 4.7, Gemini 3.8 Flash',
+        modelsHighlight: 'Claude Opus 5.5, Sonnet 5.5, Fable 5.1, GPT-6 Astra, GPT-5.6 Sol, GPT-5.6 Terra, Grok 4.7',
         bullets: {
             ru: [
-                'Доступ ко ВСЕМ флагманским моделям (GPT, Claude, Gemini, Grok)',
+                'Флагманские модели Claude, GPT и Grok с суточными лимитами',
                 'Без раздельных подписок на каждого провайдера',
                 'Контекст до 120 сообщений',
                 '4 параллельных запроса и повышенный приоритет',
             ],
             en: [
-                'Access to ALL flagship models (GPT, Claude, Gemini, Grok)',
+                'Flagship Claude, GPT and Grok models with daily limits',
                 'No separate subscriptions per AI provider',
                 'Up to 120 context messages',
                 '4 concurrent requests & higher priority',
@@ -79,19 +79,19 @@ export const PLANS = [
         nameKey: 'pricing.ultra',
         priceMonthly: PLAN_PRICE_USD.ultra,
         limitBadge: {
-            ru: 'Без ограничений · Высший приоритет',
-            en: 'No limits · Highest priority',
+            ru: 'Режим Max · Высший приоритет',
+            en: 'Max mode · Highest priority',
         },
-        modelsHighlight: 'Максимальный контекст + 8 параллельных потоков',
+        modelsHighlight: 'Режим Max (xhigh) + лимиты в 2–3 раза выше Pro',
         bullets: {
             ru: [
-                'Всё из Pro с максимальным лимитом Fair Use',
+                'Всё из Pro, режим Max (размышления xhigh) и суточные лимиты моделей в 2–3 раза выше',
                 'До 500 сообщений контекста для больших файлов',
                 '8 параллельных запросов',
                 'Максимальная скорость и мгновенный отклик',
             ],
             en: [
-                'Everything in Pro with highest Fair Use limits',
+                'Everything in Pro, Max mode (xhigh reasoning) and 2–3× higher daily model limits',
                 'Up to 500 context messages for large codebases',
                 '8 concurrent requests',
                 'Maximum processing speed & instant response',

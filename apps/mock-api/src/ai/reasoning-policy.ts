@@ -11,17 +11,19 @@
  */
 
 import type {
+  EffortProfile,
   ModelCostClass,
   ModelReasoning,
   ProviderRequestOptions,
   ReasoningEffort,
+  ReasoningMode,
 } from './gateway-types.js';
 import type { BudgetStage } from '../services/budget-policy.js';
 import { planRank } from '../services/entitlement.js';
 
 export type PromptLevel = 'simple' | 'moderate' | 'complex';
 
-const ORDER: readonly ReasoningEffort[] = ['none', 'low', 'medium', 'high'];
+const ORDER: readonly ReasoningEffort[] = ['none', 'low', 'medium', 'high', 'xhigh', 'max'];
 
 const PREMIUM_CLASSES: ReadonlySet<ModelCostClass> = new Set<ModelCostClass>(['strong', 'top']);
 
@@ -90,7 +92,7 @@ function nearestSupported(
   if (allowed.includes(wanted)) return wanted;
 
   const target = ORDER.indexOf(wanted);
-  const preferHigher = wanted === 'medium' || wanted === 'high';
+  const preferHigher = target >= ORDER.indexOf('medium');
   let best = allowed[0];
   let bestDistance = Infinity;
   for (const effort of allowed) {
@@ -127,6 +129,39 @@ export function toProviderReasoning(
   return undefined;
 }
 
+/** Режим Max доступен только на Ultra (VIP получает Ultra как эффективный тариф). */
+export function isMaxModeAllowed(plan: string): boolean {
+  return planRank(plan) >= planRank('ultra');
+}
+
+/** Режим, который реально действует: max на тарифе ниже Ultra превращается в standard. */
+export function effectiveReasoningMode(requested: ReasoningMode | undefined, plan: string): ReasoningMode {
+  return requested === 'max' && isMaxModeAllowed(plan) ? 'max' : 'standard';
+}
+
+/**
+ * Глубина для модели с фиксированным профилем (модели Pro и Ultra): standard — medium, max — xhigh,
+ * у моделей вроде «Grok 4.7 xhigh» оба режима одинаковые. При расходе бюджета (80%+) глубина не выше
+ * low: экономия важнее, а цена размышлений растёт с глубиной в разы.
+ */
+export function profileEffort(
+  profile: EffortProfile,
+  mode: ReasoningMode,
+  stage: BudgetStage,
+): ReasoningEffort {
+  const effort = mode === 'max' ? profile.max : profile.standard;
+  return stage === 'normal' ? effort : 'low';
+}
+
+/**
+ * Сколько единиц суточного лимита стоит запрос: режим Max поднимает глубину профиля
+ * (medium → xhigh), запрос дорожает примерно в 2.4 раза и считается за 2.
+ */
+export function limitUnitsFor(profile: EffortProfile | undefined, mode: ReasoningMode): number {
+  if (!profile || mode !== 'max') return 1;
+  return ORDER.indexOf(profile.max) > ORDER.indexOf(profile.standard) ? 2 : 1;
+}
+
 export function isPremiumClass(costClass: ModelCostClass): boolean {
   return PREMIUM_CLASSES.has(costClass);
 }
@@ -140,6 +175,8 @@ export interface OutputCapInput {
   level: PromptLevel;
   /** К запросу приложен проект или файлы: ответ может быть большим. */
   heavyContext: boolean;
+  /** Глубина размышлений запроса: от high и выше размышлениям нужен запас, короткий потолок их обрежет. */
+  effort?: ReasoningEffort;
 }
 
 /** Нижняя граница: ответ с размышлениями короче этого обрывается, не успев начаться. */
@@ -157,6 +194,7 @@ export function computeOutputCap(input: OutputCapInput): number {
   let cap = Math.min(input.modelMaxOutputTokens, input.planMaxTokens);
   if (input.stage === 'soft') cap = Math.min(cap, 4096);
   if (input.stage === 'exhausted' || input.stage === 'hard_stop') cap = Math.min(cap, 2048);
-  if (input.level === 'simple' && !input.heavyContext) cap = Math.min(cap, 2048);
+  const deepReasoning = input.effort !== undefined && ORDER.indexOf(input.effort) >= ORDER.indexOf('high');
+  if (input.level === 'simple' && !input.heavyContext && !deepReasoning) cap = Math.min(cap, 2048);
   return Math.max(cap, Math.min(MIN_OUTPUT_CAP, input.modelMaxOutputTokens));
 }

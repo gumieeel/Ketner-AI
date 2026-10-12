@@ -2,7 +2,9 @@ import { dailyLimitsOf, modelRegistry } from './model-registry.js';
 /** Публичный каталог моделей для `GET /api/meta`. Источник правды — реестр моделей. */
 export const DEFAULT_MODEL_ID = 'auto';
 /**
- * Публичный список моделей для переключателя в интерфейсе (по возрастанию цены).
+ * Публичный список моделей для переключателя в интерфейсе: Free и Plus по возрастанию цены, затем
+ * модели Pro и Ultra. Выключенные в реестре модели (например, Gemini 4 Argon, пока её нет в
+ * OpenRouter) в каталог не попадают.
  *
  * Состав задаётся здесь, а отображаемое имя, доступность по тарифу (isPro / requiredPlan) и размер
  * контекста берутся из реестра моделей. Второго источника правды нет: раньше этот файл вёл свой
@@ -16,10 +18,15 @@ const PUBLIC_MODEL_IDS = [
     'gpt-5.6-luna-pro',
     'qwen3.8-27b',
     'gemini-3.7-flash',
-    'gemini-3.8-flash',
-    'grok-4.7',
     'gpt-6.1-sol',
     'claude-opus-5.5',
+    'claude-sonnet-5.5',
+    'claude-fable-5.1',
+    'gpt-6-astra',
+    'grok-4.7',
+    'gemini-4-argon',
+    'gpt-5.6-sol',
+    'gpt-5.6-terra',
 ];
 export const MODELS = PUBLIC_MODEL_IDS.flatMap((id) => {
     const entry = modelRegistry.get(id);
@@ -33,6 +40,7 @@ export const MODELS = PUBLIC_MODEL_IDS.flatMap((id) => {
         isPro: entry.isPro,
         requiredPlan: entry.requiredPlan ?? undefined,
         ...dailyLimitsOf(id),
+        ...(entry.effortProfile ? { reasoningEffort: { ...entry.effortProfile } } : {}),
     };
     return [info];
 });

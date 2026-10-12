@@ -36,7 +36,22 @@ export type ModelTier = 'free' | 'standard' | 'premium' | 'flagship';
 export type ModelCostClass = 'lite' | 'work' | 'strong' | 'top';
 
 /** Глубина размышлений модели. Размышления оплачиваются как выходные токены. */
-export type ReasoningEffort = 'none' | 'low' | 'medium' | 'high';
+export type ReasoningEffort = 'none' | 'low' | 'medium' | 'high' | 'xhigh' | 'max';
+
+/**
+ * Режим размышлений, который выбирает пользователь: standard для всех тарифов, max только на Ultra
+ * (модели с профилем размышлений переходят на свою максимальную глубину, см. effortProfile).
+ */
+export type ReasoningMode = 'standard' | 'max';
+
+/**
+ * Фиксированная глубина размышлений модели в режимах standard и max. Для моделей Pro и Ultra
+ * глубина не подстраивается под сложность запроса: пользователь платит за конкретный уровень.
+ */
+export interface EffortProfile {
+  standard: ReasoningEffort;
+  max: ReasoningEffort;
+}
 
 /** Как у модели управляются размышления в OpenRouter (`reasoning` в теле запроса). */
 export interface ModelReasoning {
@@ -95,6 +110,8 @@ export interface ModelRegistryEntry {
   costClass: ModelCostClass;
   /** Управление размышлениями модели. */
   reasoning: ModelReasoning;
+  /** Фиксированная глубина размышлений (модели Pro и Ultra). Без профиля глубина адаптивная. */
+  effortProfile?: EffortProfile;
   /** Capabilities для Auto Mode. */
   capabilities: ModelCapabilities;
   /** Максимальный размер контекста в токенах. */
@@ -213,6 +230,11 @@ export interface UsageRecord {
   runId?: string;
   /** Номер шага внутри запуска агента (0 — отметка о старте запуска). */
   step?: number;
+  /**
+   * Сколько единиц суточного лимита модели израсходовал запрос (по умолчанию 1). Запрос в режиме
+   * Max у модели с профилем размышлений стоит ~2.4 раза дороже и считается за 2.
+   */
+  limitUnits?: number;
   createdAt: string;
 }
 
@@ -345,6 +367,8 @@ export interface GatewayRequest {
   signal?: AbortSignal;
   /** Таймаут на вызов провайдера в мс (Phase 5, по умолчанию 25_000). */
   providerTimeoutMs?: number;
+  /** Режим размышлений пользователя: max действует только на Ultra. */
+  reasoningMode?: ReasoningMode;
 }
 
 /** Результат завершения генерации (расширенный). */
@@ -361,6 +385,8 @@ export interface GatewayDoneResult {
   canContinue: boolean;
   /** Обновлённая сводка контекста для сохранения в БД (Phase 2). */
   contextSummary?: string;
+  /** Режим размышлений, который реально действовал (max только на Ultra). */
+  reasoningMode?: ReasoningMode;
 }
 
 /** Callback'и для стримингового ответа. */

@@ -1,5 +1,7 @@
 import { create } from 'zustand';
 import { usePreferences } from '@/features/preferences/preferences-store';
+import { useAuth } from '@/features/auth/auth-store';
+import { reasoningModeFor } from '@/features/chat/reasoning-mode';
 import { codeApi, streamAgentRun, ApiError } from './api';
 import { chunkFiles, readFolderFiles, readZipFile, type ReadLimits } from './import-readers';
 import { parentDirectories } from './tree';
@@ -662,7 +664,14 @@ export const useCode = create<CodeState>((set, get) => {
 
       try {
         await streamAgentRun(
-          { projectId, task, modelId: get().modelId, language: usePreferences.getState().language, signal: abort.signal },
+          {
+            projectId,
+            task,
+            modelId: get().modelId,
+            language: usePreferences.getState().language,
+            signal: abort.signal,
+            reasoningMode: reasoningModeFor(useAuth.getState().user, usePreferences.getState().maxMode),
+          },
           handle,
         );
       } catch (error) {

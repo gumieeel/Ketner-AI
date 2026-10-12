@@ -6,7 +6,8 @@
  * (или с отключённой запасной) остаются как есть: лучше ответить, чем отказать.
  */
 
-import type { ModelRegistryEntry } from './gateway-types.js';
+import type { ModelRegistryEntry, ReasoningMode } from './gateway-types.js';
+import { limitUnitsFor } from './reasoning-policy.js';
 import type { ModelRegistry } from './model-registry.js';
 import { getDailyModelLimit } from '../services/daily-limits.js';
 
@@ -22,17 +23,23 @@ export interface DailyLimitDecision {
   limited?: { model: ModelRegistryEntry; limit: number };
 }
 
-/** Исчерпан ли суточный лимит модели у пользователя. */
+/**
+ * Исчерпан ли суточный лимит модели у пользователя. Запрос в режиме Max у модели с профилем
+ * размышлений стоит 2 единицы лимита: если их не хватает, отвечает запасная модель.
+ */
 export function isDailyLimitReached(
   model: ModelRegistryEntry,
   plan: string,
   userId: string,
   usage: DailyUsageSource,
   registry: ModelRegistry,
+  mode: ReasoningMode = 'standard',
 ): boolean {
   const limit = getDailyModelLimit(plan, model.id);
   if (limit === null) return false;
-  return usage.getModelUsesLastDay(userId, registry.getIdsWithAliases(model.id)) >= limit;
+  const used = usage.getModelUsesLastDay(userId, registry.getIdsWithAliases(model.id));
+  if (used >= limit) return true;
+  return used + limitUnitsFor(model.effortProfile, mode) > limit;
 }
 
 export function applyDailyLimits(
@@ -41,12 +48,13 @@ export function applyDailyLimits(
   userId: string,
   usage: DailyUsageSource,
   registry: ModelRegistry,
+  mode: ReasoningMode = 'standard',
 ): DailyLimitDecision {
   let current = model;
   const seen = new Set<string>();
   let first: DailyLimitDecision['limited'];
 
-  while (!seen.has(current.id) && isDailyLimitReached(current, plan, userId, usage, registry)) {
+  while (!seen.has(current.id) && isDailyLimitReached(current, plan, userId, usage, registry, mode)) {
     seen.add(current.id);
     const next = current.fallbackModelId ? registry.get(current.fallbackModelId) : undefined;
     if (!next || !next.enabled || seen.has(next.id)) break;

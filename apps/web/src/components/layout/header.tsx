@@ -5,6 +5,7 @@ import { StubAction } from '@/components/ui/stub-action';
 import { useChat } from '@/features/chat/chat-store';
 import { usePreferences } from '@/features/preferences/preferences-store';
 import { ModelPicker } from '@/components/chat/model-picker';
+import { MaxModeToggle } from '@/components/chat/max-mode-toggle';
 import { useTranslation } from '@/i18n';
 import { cn } from '@/lib/cn';
 import { LanguageToggle } from './language-toggle';
@@ -33,6 +34,7 @@ export function Header() {
       {inChat ? (
         <>
           <ModelPicker disabled={streaming} />
+          <MaxModeToggle disabled={streaming} />
           <span aria-hidden="true" className="hidden h-5 w-px shrink-0 bg-stroke lg:block" />
         </>
       ) : null}

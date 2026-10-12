@@ -101,6 +101,8 @@ export interface RunRequest {
   modelId: string;
   language: 'ru' | 'en';
   signal: AbortSignal;
+  /** Режим размышлений: max действует только на Ultra. */
+  reasoningMode?: 'standard' | 'max';
 }
 
 /** Запускает агента и отдаёт события потока. Завершается, когда сервер закрыл поток. */
@@ -110,7 +112,12 @@ export async function streamAgentRun(request: RunRequest, onEvent: (event: Agent
     headers: authHeaders(true),
     credentials: 'include',
     signal: request.signal,
-    body: JSON.stringify({ task: request.task, modelId: request.modelId, language: request.language }),
+    body: JSON.stringify({
+      task: request.task,
+      modelId: request.modelId,
+      language: request.language,
+      ...(request.reasoningMode === 'max' ? { reasoningMode: 'max' } : {}),
+    }),
   });
   checkSessionInvalid(response);
   if (!response.ok) throw await toApiError(response);

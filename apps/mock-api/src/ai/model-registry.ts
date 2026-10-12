@@ -8,6 +8,7 @@
 
 import type { PlanId, Language, ModelInfo, PlanLimits } from '../types.js';
 import type {
+  EffortProfile,
   ModelRegistryEntry,
   AIProviderType,
   ModelCapabilities,
@@ -94,6 +95,11 @@ export const FLOOR_MODEL_ID = 'ketner-mini';
 /** Рабочая лошадка: на неё переключаются премиум-запросы, когда квота премиум-моделей израсходована. */
 export const WORKHORSE_MODEL_ID = 'ketner-pro';
 
+/** Модели Pro и Ultra: medium, на Ultra в режиме Max — xhigh. */
+const STANDARD_PROFILE: EffortProfile = { standard: 'medium', max: 'xhigh' };
+/** Модели, которые всегда работают на xhigh (так и подписаны: «Grok 4.7 xhigh», «GPT-5.6 Terra xhigh»). */
+const XHIGH_PROFILE: EffortProfile = { standard: 'xhigh', max: 'xhigh' };
+
 const reasoning = (mandatory: boolean, efforts: ModelReasoning['efforts'], toggle = false): ModelReasoning => ({
   mandatory,
   efforts,
@@ -104,19 +110,22 @@ const reasoning = (mandatory: boolean, efforts: ModelReasoning['efforts'], toggl
  * Набор моделей по умолчанию. Все модели идут через единый ключ OpenRouter, `providerModelId` —
  * это идентификатор модели в OpenRouter, ровно тот, что уходит в запрос (скрытых подмен нет).
  *
- * Цены — реальные цены OpenRouter на 08.10.2026, $ за 1M токенов (вход / выход / чтение из кэша).
- * Оценка качества — Artificial Analysis Intelligence Index при указанном усилии размышлений,
- * цена — типичный запрос (7.6k токенов на входе, 0.7k на выходе, с размышлениями):
+ * Цены — реальные цены OpenRouter на 12.10.2026, $ за 1M токенов (вход / выход / чтение из кэша).
+ * Оценка качества — Artificial Analysis Intelligence Index из каталога OpenRouter, цена — типичный
+ * запрос (7.6k токенов на входе; выход 2k при medium, 7k при xhigh):
  *
- *   ketner-mini  GPT-6 Luna            AA 30–38   $0.001   повседневные вопросы, Free
- *   ketner-pro   MiMo-V2.6 Pro         AA 46      $0.004   код и анализ: качество на уровне Grok 4.7 / Sonnet 5.5
- *                                                          (high) при цене в 7–10 раз ниже
- *   gpt-6.1-sol  GPT-6.1 Sol           AA 48–50   $0.03    сильная модель OpenAI
- *   claude-opus-5.5 Claude Opus 5.5    AA 51–54   $0.07    лучшая модель по соотношению качества и цены у Anthropic
+ *   ketner-mini        GPT-6 Luna          AA 38    $0.001   повседневные вопросы
+ *   ketner-pro         MiMo-V2.6 Pro       AA 46    $0.005   рабочая лошадка, запасная для Pro-моделей
+ *   gpt-6.1-sol        GPT-6.1 Sol         AA 52    $0.035   сильная модель OpenAI (Plus)
+ *   claude-sonnet-5.5  Claude Sonnet 5.5   AA 56    $0.035 / $0.085 (medium / xhigh)
+ *   claude-opus-5.5    Claude Opus 5.5     AA 58    $0.070 / $0.170
+ *   claude-fable-5.1   Claude Fable 5.1    AA 53    $0.176 / $0.426  лучшая в коде (AA Coding 82)
+ *   gpt-6-astra        GPT-6 Astra         AA 53    $0.176 / $0.426
+ *   grok-4.7           Grok 4.7 xhigh      AA 46    $0.057
+ *   gpt-5.6-terra      GPT-5.6 Terra xhigh AA 42    $0.099   модель для кода (AA Coding 77)
  *
- * Не вошли намеренно: GPT-6 Astra и Claude Fable 5.1 (то же качество, что у Sol и Opus, но в 3–5 раз
- * дороже), Kimi K3, Qwen3.8 Max, Muse Spark, Nemotron 3 Ultra (хуже и дороже модели ketner-pro).
- * Старые id (gpt-6-astra, claude-fable и др.) перенаправляются через LEGACY_MODEL_ALIASES.
+ * Суточные лимиты и цепочки запасных моделей: services/daily-limits.ts и fallbackModelId ниже.
+ * Не вошли: Kimi K3, Qwen3.8 Max, Muse Spark, Nemotron 3 Ultra (хуже и дороже модели ketner-pro).
  */
 const DEFAULT_REGISTRY_ENTRIES: ModelRegistryEntry[] = [
   {
@@ -495,6 +504,8 @@ const DEFAULT_REGISTRY_ENTRIES: ModelRegistryEntry[] = [
     createdAt: now(),
     updatedAt: now(),
   },
+  // ── Модели Pro и Ultra: фиксированная глубина размышлений (medium, на Ultra в режиме Max — xhigh) ──
+  // Запасные идут от дорогой к дешёвой с сохранением качества: Fable → Opus → Sonnet → Ketner Pro → Haiku.
   {
     id: 'claude-opus-5.5',
     name: 'Claude Opus 5.5',
@@ -503,7 +514,8 @@ const DEFAULT_REGISTRY_ENTRIES: ModelRegistryEntry[] = [
     enabled: true,
     tier: 'flagship',
     costClass: 'top',
-    reasoning: reasoning(true, ['low', 'medium', 'high']),
+    reasoning: reasoning(true, ['low', 'medium', 'high', 'xhigh', 'max']),
+    effortProfile: STANDARD_PROFILE,
     capabilities: makeCapabilities({
       reasoning: true,
       coding: true,
@@ -515,8 +527,104 @@ const DEFAULT_REGISTRY_ENTRIES: ModelRegistryEntry[] = [
       longContext: true,
     }),
     contextWindow: 1000000,
-    maxOutputTokens: 16384,
+    maxOutputTokens: 32768,
     pricing: makePricing(4, 20, 0.2),
+    requiredPlan: 'pro',
+    contextMessages: 120,
+    isPro: true,
+    fallbackModelId: 'claude-sonnet-5.5',
+    defaultSystemPrompt: DEFAULT_SYSTEM_PROMPT,
+    createdAt: now(),
+    updatedAt: now(),
+  },
+  // AA 56 при цене вдвое ниже Opus: лучший выбор по цене и качеству среди сильных моделей.
+  {
+    id: 'claude-sonnet-5.5',
+    name: 'Claude Sonnet 5.5',
+    provider: 'openrouter',
+    providerModelId: 'anthropic/claude-sonnet-5.5',
+    enabled: true,
+    tier: 'flagship',
+    costClass: 'strong',
+    reasoning: reasoning(true, ['low', 'medium', 'high', 'xhigh', 'max']),
+    effortProfile: STANDARD_PROFILE,
+    capabilities: makeCapabilities({
+      reasoning: true,
+      coding: true,
+      vision: true,
+      creative: true,
+      math: true,
+      translation: true,
+      research: true,
+      longContext: true,
+    }),
+    contextWindow: 1000000,
+    maxOutputTokens: 32768,
+    pricing: makePricing(2, 10, 0.1),
+    requiredPlan: 'pro',
+    contextMessages: 120,
+    isPro: true,
+    fallbackModelId: WORKHORSE_MODEL_ID,
+    defaultSystemPrompt: DEFAULT_SYSTEM_PROMPT,
+    createdAt: now(),
+    updatedAt: now(),
+  },
+  // Самая дорогая модель Anthropic (лучшая в коде по AA Coding Index), после лимита — Opus 5.5.
+  {
+    id: 'claude-fable-5.1',
+    name: 'Claude Fable 5.1',
+    provider: 'openrouter',
+    providerModelId: 'anthropic/claude-fable-5.1',
+    enabled: true,
+    tier: 'flagship',
+    costClass: 'top',
+    reasoning: reasoning(true, ['low', 'medium', 'high', 'xhigh', 'max']),
+    effortProfile: STANDARD_PROFILE,
+    capabilities: makeCapabilities({
+      reasoning: true,
+      coding: true,
+      vision: true,
+      creative: true,
+      math: true,
+      translation: true,
+      research: true,
+      longContext: true,
+    }),
+    contextWindow: 1000000,
+    maxOutputTokens: 32768,
+    pricing: makePricing(10, 50, 0.25),
+    requiredPlan: 'pro',
+    contextMessages: 120,
+    isPro: true,
+    fallbackModelId: 'claude-opus-5.5',
+    defaultSystemPrompt: DEFAULT_SYSTEM_PROMPT,
+    createdAt: now(),
+    updatedAt: now(),
+  },
+  // Флагман OpenAI; после лимита — GPT-6.1 Sol (в 5 раз дешевле, AA почти тот же), затем GPT-6 Luna Pro.
+  {
+    id: 'gpt-6-astra',
+    name: 'GPT-6 Astra',
+    provider: 'openrouter',
+    providerModelId: 'openai/gpt-6-astra',
+    enabled: true,
+    tier: 'flagship',
+    costClass: 'top',
+    reasoning: reasoning(true, ['low', 'medium', 'high', 'xhigh', 'max']),
+    effortProfile: STANDARD_PROFILE,
+    capabilities: makeCapabilities({
+      reasoning: true,
+      coding: true,
+      vision: true,
+      creative: true,
+      math: true,
+      translation: true,
+      research: true,
+      longContext: true,
+    }),
+    contextWindow: 1050000,
+    maxOutputTokens: 32768,
+    pricing: makePricing(10, 50, 1),
     requiredPlan: 'pro',
     contextMessages: 120,
     isPro: true,
@@ -525,15 +633,17 @@ const DEFAULT_REGISTRY_ENTRIES: ModelRegistryEntry[] = [
     createdAt: now(),
     updatedAt: now(),
   },
+  // Grok работает всегда на xhigh (так и подписан). После лимита — Ketner Pro: AA почти как у Grok, в 11 раз дешевле.
   {
     id: 'grok-4.7',
-    name: 'Grok 4.7',
+    name: 'Grok 4.7 xhigh',
     provider: 'openrouter',
     providerModelId: 'x-ai/grok-4.7',
     enabled: true,
     tier: 'flagship',
     costClass: 'strong',
-    reasoning: reasoning(true, ['low', 'medium', 'high']),
+    reasoning: reasoning(true, ['low', 'medium', 'high', 'xhigh']),
+    effortProfile: XHIGH_PROFILE,
     capabilities: makeCapabilities({
       reasoning: true,
       coding: true,
@@ -543,12 +653,109 @@ const DEFAULT_REGISTRY_ENTRIES: ModelRegistryEntry[] = [
       research: true,
     }),
     contextWindow: 500000,
-    maxOutputTokens: 16384,
+    maxOutputTokens: 32768,
     pricing: makePricing(2, 6, 0.5),
     requiredPlan: 'pro',
     contextMessages: 120,
     isPro: true,
     fallbackModelId: WORKHORSE_MODEL_ID,
+    defaultSystemPrompt: DEFAULT_SYSTEM_PROMPT,
+    createdAt: now(),
+    updatedAt: now(),
+  },
+  // Анонсирована 30.09.2026, но в OpenRouter её пока нет (id не опубликован, endpoints отвечают 404).
+  // Включить, когда появится: проверить providerModelId, цену (вводная $2 / $10, потом $4 / $20) и глубины.
+  {
+    id: 'gemini-4-argon',
+    name: 'Gemini 4 Argon',
+    provider: 'openrouter',
+    providerModelId: 'google/gemini-4-argon',
+    enabled: false,
+    tier: 'flagship',
+    costClass: 'strong',
+    reasoning: reasoning(true, ['low', 'medium', 'high', 'xhigh', 'max']),
+    effortProfile: STANDARD_PROFILE,
+    capabilities: makeCapabilities({
+      reasoning: true,
+      coding: true,
+      vision: true,
+      creative: true,
+      math: true,
+      translation: true,
+      research: true,
+      longContext: true,
+    }),
+    contextWindow: 1048576,
+    maxOutputTokens: 32768,
+    pricing: makePricing(2, 10, 0.1),
+    requiredPlan: 'pro',
+    contextMessages: 120,
+    isPro: true,
+    fallbackModelId: 'gemini-3.8-flash',
+    defaultSystemPrompt: DEFAULT_SYSTEM_PROMPT,
+    createdAt: now(),
+    updatedAt: now(),
+  },
+  {
+    id: 'gpt-5.6-sol',
+    name: 'GPT-5.6 Sol',
+    provider: 'openrouter',
+    providerModelId: 'openai/gpt-5.6-sol',
+    enabled: true,
+    tier: 'flagship',
+    costClass: 'strong',
+    reasoning: reasoning(false, ['none', 'low', 'medium', 'high', 'xhigh', 'max']),
+    effortProfile: STANDARD_PROFILE,
+    capabilities: makeCapabilities({
+      reasoning: true,
+      coding: true,
+      vision: true,
+      creative: true,
+      math: true,
+      translation: true,
+      research: true,
+      longContext: true,
+    }),
+    contextWindow: 1050000,
+    maxOutputTokens: 32768,
+    pricing: makePricing(2, 10, 0.2),
+    requiredPlan: 'pro',
+    contextMessages: 120,
+    isPro: true,
+    fallbackModelId: WORKHORSE_MODEL_ID,
+    defaultSystemPrompt: DEFAULT_SYSTEM_PROMPT,
+    createdAt: now(),
+    updatedAt: now(),
+  },
+  // Terra — модель OpenAI для кода, всегда на xhigh. После лимита — Gemini 3.8 Flash (почти тот же
+  // Coding Index по AA, в 7 раз дешевле), затем Ketner Pro.
+  {
+    id: 'gpt-5.6-terra',
+    name: 'GPT-5.6 Terra xhigh',
+    provider: 'openrouter',
+    providerModelId: 'openai/gpt-5.6-terra',
+    enabled: true,
+    tier: 'flagship',
+    costClass: 'strong',
+    reasoning: reasoning(false, ['none', 'low', 'medium', 'high', 'xhigh', 'max']),
+    effortProfile: XHIGH_PROFILE,
+    capabilities: makeCapabilities({
+      reasoning: true,
+      coding: true,
+      vision: true,
+      creative: true,
+      math: true,
+      translation: true,
+      research: true,
+      longContext: true,
+    }),
+    contextWindow: 1050000,
+    maxOutputTokens: 32768,
+    pricing: makePricing(2, 12, 0.2),
+    requiredPlan: 'pro',
+    contextMessages: 120,
+    isPro: true,
+    fallbackModelId: 'gemini-3.8-flash',
     defaultSystemPrompt: DEFAULT_SYSTEM_PROMPT,
     createdAt: now(),
     updatedAt: now(),
@@ -559,10 +766,10 @@ const DEFAULT_REGISTRY_ENTRIES: ModelRegistryEntry[] = [
     provider: 'openrouter',
     providerModelId: 'google/gemini-3.8-flash',
     enabled: true,
-    tier: 'flagship',
-    // Размышления нельзя отключить, а по данным AA модель многословна: реальная цена запроса
-    // близка к GPT-6.1 Sol, поэтому она расходует квоту премиум-запросов.
-    costClass: 'strong',
+    tier: 'premium',
+    // Запасная модель для Terra и Gemini 4 Argon (в списке выбора не показывается). Цена запроса
+    // ≈ $0.013, как у Gemini 3.7 Flash в Plus, поэтому класс work, а не премиум.
+    costClass: 'work',
     reasoning: reasoning(true, ['low', 'medium', 'high']),
     capabilities: makeCapabilities({
       reasoning: true,
@@ -588,14 +795,13 @@ const DEFAULT_REGISTRY_ENTRIES: ModelRegistryEntry[] = [
 
 /**
  * Старые идентификаторы моделей → актуальные. Нужны, чтобы сохранённый в браузере выбор модели,
- * старые диалоги и клиенты API не превращались молча в Auto. GPT-6 Astra и Claude Fable 5.1
- * убраны из каталога: по независимым оценкам они не лучше Sol и Opus, но в 3–5 раз дороже.
+ * старые диалоги и клиенты API не превращались молча в Auto.
  */
 export const LEGACY_MODEL_ALIASES: Readonly<Record<string, string>> = {
-  'gpt-6-astra': 'gpt-6.1-sol',
   'gpt-4o': 'gpt-6.1-sol',
-  'claude-fable': 'claude-opus-5.5',
-  'claude-3.5-sonnet': 'claude-opus-5.5',
+  'claude-fable': 'claude-fable-5.1',
+  'claude-sonnet': 'claude-sonnet-5.5',
+  'claude-3.5-sonnet': 'claude-sonnet-5.5',
   'claude-3-haiku': 'claude-haiku-5.5',
   'gemini-2.5-pro': 'gemini-3.8-flash',
   'gemini-pro': 'gemini-3.8-flash',

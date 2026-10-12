@@ -544,6 +544,7 @@ export function createCodeRouter(deps: CodeRouterDeps): Router {
             task: body.task,
             modelId,
             language,
+            reasoningMode: body.reasoningMode === 'max' ? 'max' : 'standard',
             signal: controller.signal,
           },
           write,

@@ -18,6 +18,7 @@ import type {
   ChatWireMessage,
   ModelRegistryEntry,
   ReasoningEffort,
+  ReasoningMode,
 } from '../ai/gateway-types.js';
 import { applyEconomyRules } from '../ai/gateway.js';
 import { computeRequestCost } from '../ai/engine-pricing.js';
@@ -25,7 +26,13 @@ import { CircuitBreaker, defaultCircuitBreaker } from '../ai/circuit-breaker.js'
 import { FLOOR_MODEL_ID, WORKHORSE_MODEL_ID, modelRegistry, type ModelRegistry } from '../ai/model-registry.js';
 import { OpenRouterError } from '../ai/providers/openrouter-provider.js';
 import { providerManager, type ProviderManager } from '../ai/providers/provider-factory.js';
-import { isPremiumClass, toProviderReasoning } from '../ai/reasoning-policy.js';
+import {
+  effectiveReasoningMode,
+  isPremiumClass,
+  limitUnitsFor,
+  profileEffort,
+  toProviderReasoning,
+} from '../ai/reasoning-policy.js';
 import { applyPlanSubstitute } from '../ai/plan-substitute.js';
 import { applyDailyLimits, isDailyLimitReached } from '../ai/daily-limit.js';
 import { createStreamWatchdog, type WatchdogLimits } from '../ai/stream-watchdog.js';
@@ -120,6 +127,8 @@ export interface AgentRunInput {
   modelId?: string;
   language: Language;
   signal: AbortSignal;
+  /** Режим размышлений: max действует только на Ultra. */
+  reasoningMode?: ReasoningMode;
 }
 
 export interface AgentRunResult {
@@ -388,6 +397,7 @@ export class AgentRunner {
 
     const task = input.task.trim();
     const plan = EntitlementService.resolveEffectivePlan(input.plan, input.email, input.isVip);
+    const reasoningMode = effectiveReasoningMode(input.reasoningMode, plan);
     const limits = getCodeLimits(plan);
     const entitlements = EntitlementService.getEntitlements(plan);
 
@@ -462,7 +472,7 @@ export class AgentRunner {
     }
 
     // Суточный лимит модели на тарифе (тот же, что в чате): после него запуск идёт на запасной модели.
-    const daily = applyDailyLimits(choice.model, plan, input.userId, usageStore, this.registry);
+    const daily = applyDailyLimits(choice.model, plan, input.userId, usageStore, this.registry, reasoningMode);
     if (daily.reason) {
       choice.model = daily.model;
       choice.reason = choice.reason ? `${choice.reason}; ${daily.reason}` : daily.reason;
@@ -576,6 +586,7 @@ export class AgentRunner {
         kind: 'agent',
         runId,
         step: 0,
+        limitUnits: limitUnitsFor(choice.model.effortProfile, reasoningMode),
       });
       await flushThread();
 
@@ -596,7 +607,7 @@ export class AgentRunner {
           (m, index) =>
             index === 0 ||
             (isAllowedFallback(m, plan, economyState) &&
-              !isDailyLimitReached(m, plan, input.userId, usageStore, this.registry)),
+              !isDailyLimitReached(m, plan, input.userId, usageStore, this.registry, reasoningMode)),
         );
       let candidateIndex = 0;
       const noReasoning = new Set<string>();
@@ -658,7 +669,12 @@ export class AgentRunner {
 
           const reasoning = noReasoning.has(engineId)
             ? undefined
-            : toProviderReasoning(candidate.reasoning, agentEffort(candidate.costClass, budget.stage));
+            : toProviderReasoning(
+                candidate.reasoning,
+                candidate.effortProfile
+                  ? profileEffort(candidate.effortProfile, reasoningMode, budget.stage)
+                  : agentEffort(candidate.costClass, budget.stage),
+              );
           const outputCap = Math.min(
             candidate.maxOutputTokens,
             plan === 'free' ? 4_096 : budget.stage === 'normal' ? (plan === 'ultra' || plan === 'pro' ? 16_384 : 8_192) : 8_192,
@@ -757,6 +773,7 @@ export class AgentRunner {
               kind: 'agent',
               runId,
               step,
+              limitUnits: limitUnitsFor(candidate.effortProfile, reasoningMode),
             });
           }
 

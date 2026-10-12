@@ -78,10 +78,11 @@ const LEGACY_PRO_BASE: Omit<PlanEntitlements, 'planId'> = {
  * premiumBudget — часть costBudget на премиум-модели (классы strong и top, см. ModelCostClass).
  * Ориентиры по запросам в месяц при 7.6k токенов на входе:
  *   Plus  $1.30 ≈ 49 запросов GPT-6.1 Sol (низкая глубина размышлений; в сутки Sol ограничен 2 запросами);
- *   Pro   $3.50 ≈ 129 запросов Sol или 50 запросов Claude Opus 5.5 (средняя глубина);
- *   Ultra $9.00 ≈ 331 запрос Sol или 128 запросов Opus.
- * Остаток costBudget — на Ketner Mini и Ketner Pro: это тысячи запросов в месяц, поэтому
- * «безлимит» для обычного человека действительно безлимит, а дорогие модели идут по квоте.
+ *   Pro   $7.00 ≈ 200 запросов Sonnet 5.5 или 100 запросов Opus 5.5 (medium);
+ *   Ultra $15.00 ≈ 213 запросов Opus (medium) или 88 в режиме Max (xhigh).
+ * Квота — главный ресурс Pro и Ultra, поэтому она больше половины бюджета (до 75%). Остаток costBudget
+ * ($3 и $5) — на Ketner Pro и лёгкие модели: при $0.005 за запрос это 600–1 000 запросов. Общий бюджет
+ * не менялся, поэтому худший случай по марже тот же. Суточные лимиты моделей: services/daily-limits.ts.
  *
  * Тест services/currency.test.ts проверяет, что при любых изменениях бюджетов тариф остаётся
  * прибыльным в худшем случае (пользователь выбрал весь бюджет, платит через Stripe).
@@ -145,10 +146,10 @@ export const PLAN_ENTITLEMENTS: Record<PlanId, PlanEntitlements> = {
     contextLimit: 120,
     maxTokens: 12288,
     streamingEnabled: true,
-    // Pro: $25 → бюджет $10.00 (40%).
+    // Pro: $25 → бюджет $10.00 (40%), из них $7 — квота премиум-моделей.
     maxDailyCost: 1.10,
     costBudget: 10.0,
-    premiumBudget: 3.5,
+    premiumBudget: 7.0,
   },
   ultra: {
     planId: 'ultra',
@@ -164,10 +165,10 @@ export const PLAN_ENTITLEMENTS: Record<PlanId, PlanEntitlements> = {
     contextLimit: 500,
     maxTokens: 16384,
     streamingEnabled: true,
-    // Ultra: $49 → бюджет $20.00 (41%).
+    // Ultra: $49 → бюджет $20.00 (41%), из них $15 — квота премиум-моделей (режим Max тратит её быстрее).
     maxDailyCost: 2.20,
     costBudget: 20.0,
-    premiumBudget: 9.0,
+    premiumBudget: 15.0,
   },
   // ── Legacy-планы для обратной совместимости ──
   'gpt-pro': { planId: 'gpt-pro', ...LEGACY_PRO_BASE },

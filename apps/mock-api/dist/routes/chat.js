@@ -61,6 +61,7 @@ function parseCompletionRequest(body) {
             modelId: typeof candidate.modelId === 'string' ? candidate.modelId : DEFAULT_MODEL_ID,
             language: candidate.language === 'en' ? 'en' : 'ru',
             messages,
+            reasoningMode: candidate.reasoningMode === 'max' ? 'max' : 'standard',
         },
     };
 }
@@ -201,6 +202,7 @@ export function createChatRouter({ store, userId, ai, subscriptionStore, userSto
                 workspaceContext: messages[messages.length - 1]?.workspaceContext,
                 language,
                 stream: true,
+                reasoningMode: parsed.value.reasoningMode,
                 cachedSummary: existingConversation?.conversation.contextSummary,
                 signal: clientAbortController.signal,
             }, {
@@ -222,6 +224,7 @@ export function createChatRouter({ store, userId, ai, subscriptionStore, userSto
                             source: result.source,
                             finishReason: result.finishReason,
                             canContinue: result.canContinue,
+                            reasoningMode: result.reasoningMode,
                             usage: {
                                 inputTokens: result.inputTokens,
                                 outputTokens: result.outputTokens,

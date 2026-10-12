@@ -51,9 +51,11 @@ test('Экономика тарифов: цены каталога в долла
       ratio < 0.45,
       `Для тарифа ${plan.id}: costBudget=$${entitlement.costBudget} составляет ${(ratio * 100).toFixed(1)}% цены $${plan.priceMonthly}, ожидается < 45%`,
     );
+    // Квота премиум-моделей — часть бюджета, а не добавка к нему: даже у Pro и Ultra, где она основной
+    // ресурс, на Ketner Pro и лёгкие модели остаётся не меньше четверти бюджета.
     assert.ok(
-      entitlement.premiumBudget <= entitlement.costBudget * 0.5,
-      `Для тарифа ${plan.id}: квота премиум-моделей не должна съедать больше половины бюджета`,
+      entitlement.premiumBudget <= entitlement.costBudget * 0.75,
+      `Для тарифа ${plan.id}: квота премиум-моделей не должна съедать больше 75% бюджета`,
     );
   }
 });

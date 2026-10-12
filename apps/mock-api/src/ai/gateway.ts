@@ -52,7 +52,10 @@ import { feedbackStore as defaultFeedbackStore, type FeedbackStore } from '../st
 import {
   chooseReasoningEffort,
   computeOutputCap,
+  effectiveReasoningMode,
   isPremiumClass,
+  limitUnitsFor,
+  profileEffort,
   toProviderReasoning,
 } from './reasoning-policy.js';
 import { CircuitBreaker, defaultCircuitBreaker } from './circuit-breaker.js';
@@ -403,6 +406,9 @@ export class AIGateway {
       req.userEmail,
       req.isVip,
     );
+    // Режим Max (глубина xhigh у моделей Pro и Ultra) действует только на Ultra; запрос max на другом
+    // тарифе выполняется в обычном режиме.
+    const reasoningMode = effectiveReasoningMode(req.reasoningMode, effectivePlan);
     const entitlements = EntitlementService.getEntitlements(effectivePlan);
     const snapshot = this.usageStore.getFairUseSnapshot(activeUserId);
 
@@ -518,11 +524,23 @@ export class AIGateway {
         targetModel = substitute.model;
         routingReason = `${routingReason}; ${substitute.reason}`;
       }
-      const daily = applyDailyLimits(targetModel, effectivePlan, activeUserId, this.usageStore, this.registry);
+      const daily = applyDailyLimits(
+        targetModel,
+        effectivePlan,
+        activeUserId,
+        this.usageStore,
+        this.registry,
+        reasoningMode,
+      );
       if (daily.reason) {
         targetModel = daily.model;
         routingReason = `${routingReason}; ${daily.reason}`;
       }
+    }
+
+    if (reasoningMode === 'max' && targetModel.effortProfile) {
+      const { standard, max } = targetModel.effortProfile;
+      routingReason = `${routingReason}; Max mode: ${max} reasoning${standard === max ? ' (always)' : ''}`;
     }
 
     // 4. Проверка Fair Use и захват concurrency слота
@@ -627,6 +645,9 @@ export class AIGateway {
       );
 
       // 5.1. Проверка семантического кэша (Semantic & Query Caching)
+      // Ответ в режиме Max (глубже размышления) не подменяется кэшированным обычным и наоборот.
+      const cacheModelKey =
+        reasoningMode === 'max' && targetModel.effortProfile ? `${targetModel.id}:max` : targetModel.id;
       const userScope = effectivePlan === 'free' ? 'shared' : activeUserId;
       const historyHash = SemanticCache.computeHistoryHash(req.messages, 3);
       const hasAttachments = Boolean(activeAttachments && activeAttachments.length > 0);
@@ -635,7 +656,7 @@ export class AIGateway {
       const cacheable = !hasAttachments && !activeWorkspace;
 
       const cachedHit = cacheable
-        ? semanticCache.get(targetModel.id, language, prompt, userScope, historyHash)
+        ? semanticCache.get(cacheModelKey, language, prompt, userScope, historyHash)
         : null;
 
       if (cachedHit && !isCancelled()) {
@@ -693,7 +714,7 @@ export class AIGateway {
               (m, index) =>
                 index === 0 ||
                 (this.isAllowedFallback(m, effectivePlan, economyState) &&
-                  !isDailyLimitReached(m, effectivePlan, activeUserId, this.usageStore, this.registry)),
+                  !isDailyLimitReached(m, effectivePlan, activeUserId, this.usageStore, this.registry, reasoningMode)),
             );
       let success = false;
       let streamedResponse: ProviderResponse | null = null;
@@ -741,14 +762,18 @@ export class AIGateway {
 
           // Глубина размышлений и потолок ответа считаются под конкретную модель цепочки:
           // у каждой свой набор допустимых значений и своя цена выходных токенов.
-          const wantedEffort = chooseReasoningEffort({
-            level: taskInfo.level,
-            category: taskInfo.category,
-            plan: effectivePlan,
-            stage,
-            costClass: candidateModel.costClass,
-            escalate,
-          });
+          // У моделей Pro и Ultra глубина фиксирована профилем (medium, в режиме Max — xhigh),
+          // у остальных подстраивается под сложность запроса.
+          const wantedEffort = candidateModel.effortProfile
+            ? profileEffort(candidateModel.effortProfile, reasoningMode, stage)
+            : chooseReasoningEffort({
+                level: taskInfo.level,
+                category: taskInfo.category,
+                plan: effectivePlan,
+                stage,
+                costClass: candidateModel.costClass,
+                escalate,
+              });
           const reasoning = toProviderReasoning(candidateModel.reasoning, wantedEffort);
           const maxTokens = computeOutputCap({
             planMaxTokens: entitlements.maxTokens,
@@ -756,6 +781,7 @@ export class AIGateway {
             stage,
             level: taskInfo.level,
             heavyContext: hasWorkspaceOrAttachments,
+            effort: wantedEffort,
           });
 
           const runPass = (withReasoning: typeof reasoning) =>
@@ -947,12 +973,13 @@ export class AIGateway {
         ttftMs: firstTokenMs,
         status: isCancelled() ? 'cancelled' : 'success',
         source: responseSource,
+        limitUnits: limitUnitsFor(usedModel.effortProfile, reasoningMode),
       });
 
       if (!isCancelled()) {
         if (streamedResponse?.content && cacheable && finishReason === 'stop') {
           semanticCache.set(
-            targetModel.id,
+            cacheModelKey,
             language,
             prompt,
             streamedResponse.content,
@@ -981,6 +1008,7 @@ export class AIGateway {
           finishReason,
           canContinue,
           contextSummary: generatedSummary,
+          reasoningMode,
         });
       }
     } catch (error) {

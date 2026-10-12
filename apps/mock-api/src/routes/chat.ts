@@ -22,6 +22,7 @@ import { EntitlementService } from '../services/entitlement.js';
 import { resolveChatIdentity } from '../services/chat-identity.js';
 import { PayloadGuard } from '../ai/payload-guard.js';
 import type { Language, IncomingMessage, MessageStatus, FeedbackRating } from '../types.js';
+import type { ReasoningMode } from '../ai/gateway-types.js';
 
 const MAX_MESSAGES = 200;
 const MAX_CONTENT_LENGTH = 200000;
@@ -32,6 +33,8 @@ export interface CompletionRequest {
   modelId: string;
   language: Language;
   messages: IncomingMessage[];
+  /** Режим размышлений: max действует только на Ultra (сервер проверяет тариф сам). */
+  reasoningMode?: ReasoningMode;
 }
 
 type ParseResult = { ok: true; value: CompletionRequest } | { ok: false; message: string };
@@ -87,6 +90,7 @@ function parseCompletionRequest(body: unknown): ParseResult {
       modelId: typeof candidate.modelId === 'string' ? candidate.modelId : DEFAULT_MODEL_ID,
       language: candidate.language === 'en' ? 'en' : 'ru',
       messages,
+      reasoningMode: candidate.reasoningMode === 'max' ? 'max' : 'standard',
     },
   };
 }
@@ -285,6 +289,7 @@ export function createChatRouter({
           workspaceContext: messages[messages.length - 1]?.workspaceContext,
           language,
           stream: true,
+          reasoningMode: parsed.value.reasoningMode,
           cachedSummary: existingConversation?.conversation.contextSummary,
           signal: clientAbortController.signal,
         },
@@ -313,6 +318,7 @@ export function createChatRouter({
                 source: result.source,
                 finishReason: result.finishReason,
                 canContinue: result.canContinue,
+                reasoningMode: result.reasoningMode,
                 usage: {
                   inputTokens: result.inputTokens,
                   outputTokens: result.outputTokens,

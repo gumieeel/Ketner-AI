@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import { translate } from '@/i18n';
 import { usePreferences } from '@/features/preferences/preferences-store';
 import { useAuth } from '@/features/auth/auth-store';
+import { reasoningModeFor } from '@/features/chat/reasoning-mode';
 import { incrementFreeUsage, isFreeLimitReached } from '@/features/billing/free-usage';
 import { useUpgradeModal } from '@/features/billing/upgrade-modal-store';
 import { canAccessModel, findModel, getRequiredPlanName } from './can-access-model';
@@ -260,6 +261,7 @@ export const useChat = create<ChatState>((set, get) => {
           language: usePreferences.getState().language,
           messages: history,
           signal: controller.signal,
+          reasoningMode: reasoningModeFor(useAuth.getState().user, usePreferences.getState().maxMode),
         },
         {
           onDelta: (delta) => {

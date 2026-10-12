@@ -155,6 +155,8 @@ export interface ModelInfo {
   requiredPlan?: PlanId;
   /** Суточный лимит запросов к модели по тарифам: после него отвечает запасная модель. */
   dailyLimits?: Partial<Record<PlanId, number>>;
+  /** Фиксированная глубина размышлений (модели Pro и Ultra): обычный режим и режим Max (Ultra). */
+  reasoningEffort?: { standard: string; max: string };
 }
 
 export interface PlanLimits {

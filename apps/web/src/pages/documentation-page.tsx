@@ -106,16 +106,16 @@ const PLANS_DATA: PlanCardInfo[] = [
     features: {
       ru: [
         'Все, что входит в тариф Plus',
-        'Топовые модели: Claude Opus 5.5, Grok 4.7, Gemini 3.8 Flash',
-        'Премиум-модели расходуют ежемесячную квоту премиум-запросов тарифа',
+        'Топовые модели: Claude Opus 5.5, Sonnet 5.5, Fable 5.1, GPT-6 Astra, GPT-5.6 Sol, GPT-5.6 Terra xhigh, Grok 4.7 xhigh',
+        'Размышления medium (Grok и Terra — xhigh), суточные лимиты по моделям с запасными моделями',
         'Пониженный контекст и скорость по сравнению с Ultra',
         'Высокий серверный приоритет обработки запросов',
         'Ручной выбор любой модели, доступной на тарифе',
       ],
       en: [
         'All Plus tier features included',
-        'Top models: Claude Opus 5.5, Grok 4.7, Gemini 3.8 Flash',
-        'Premium models draw from the plan\'s monthly premium-request quota',
+        'Top models: Claude Opus 5.5, Sonnet 5.5, Fable 5.1, GPT-6 Astra, GPT-5.6 Sol, GPT-5.6 Terra xhigh, Grok 4.7 xhigh',
+        'Medium reasoning (Grok and Terra at xhigh), daily per-model limits with backup models',
         'Reduced context and speed compared to Ultra tier',
         'High server request priority',
         'Manual selection of any model available on your plan',
@@ -128,8 +128,8 @@ const PLANS_DATA: PlanCardInfo[] = [
     price: { ru: '$49 / мес (скидка вместо $59)', en: '$49 / mo (discount from $59)' },
     badge: { ru: 'Максимум возможностей', en: 'Maximum power' },
     desc: {
-      ru: 'Все топовые модели на 100% мощности, максимальный контекст диалога и наивысший VIP-приоритет.',
-      en: 'All top models at 100% capacity, maximum conversation context, and top VIP priority.',
+      ru: 'Все модели Pro, режим Max (размышления xhigh), лимиты в 2–3 раза выше, максимальный контекст и наивысший VIP-приоритет.',
+      en: 'All Pro models, Max mode (xhigh reasoning), 2–3× higher limits, maximum context and top VIP priority.',
     },
     speed: { ru: 'Максимальная скорость (100%)', en: 'Maximum speed (100%)' },
     priority: { ru: 'Наивысший VIP-приоритет', en: 'Highest VIP priority' },
@@ -137,17 +137,17 @@ const PLANS_DATA: PlanCardInfo[] = [
     features: {
       ru: [
         'Все, что входит в тариф Pro',
-        'Все топовые модели: GPT-6.1 Sol, Claude Opus 5.5, Grok 4.7, Gemini 3.8 Flash',
+        'Режим Max: модели Pro размышляют на уровне xhigh вместо medium',
         'Максимальный контекст диалога',
-        'Использование моделей на 100% без ограничений скорости и контекста',
+        'Суточные лимиты моделей в 2–3 раза выше, чем на Pro',
         'Наивысший VIP-приоритет запросов без ожидания',
         'Параллельные запросы без задержек',
       ],
       en: [
         'All Pro tier features included',
-        'All top models: GPT-6.1 Sol, Claude Opus 5.5, Grok 4.7, Gemini 3.8 Flash',
+        'Max mode: Pro models reason at xhigh instead of medium',
         'Maximum conversation context',
-        '100% model usage without speed or context limitations',
+        'Daily model limits 2–3× higher than on Pro',
         'Top VIP queue priority with zero waiting',
         'Parallel concurrent requests without delays',
       ],

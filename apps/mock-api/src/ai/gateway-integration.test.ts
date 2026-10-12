@@ -510,3 +510,109 @@ test('платные тарифы бесплатную замену не пол�
   assertNoError(out);
   assert.equal(calls[0].model, 'openai/gpt-6-luna');
 });
+
+// ── Pro и Ultra: фиксированная глубина размышлений, режим Max и суточные лимиты ──
+
+test('Pro: модели Pro размышляют на medium, Grok и Terra всегда на xhigh', async () => {
+  const usage = newUsage();
+  const calls: Call[] = [];
+  const gateway = makeGateway(fakeOpenRouter(okStream('ок'), calls), usage);
+
+  const greet = [{ role: 'user' as const, content: 'Привет' }];
+  assertNoError(await run(gateway, request({ userId: 'u-pp1', userPlan: 'pro', modelId: 'claude-opus-5.5', messages: greet })));
+  assert.equal(calls[0].model, 'anthropic/claude-opus-5.5');
+  assert.deepEqual(calls[0].reasoning, { effort: 'medium' }, 'даже на приветствие — medium, а не адаптивная глубина');
+  assertNoError(await run(gateway, request({ userId: 'u-pp1', userPlan: 'pro', modelId: 'grok-4.7' })));
+  assert.deepEqual(calls[1].reasoning, { effort: 'xhigh' });
+  assertNoError(await run(gateway, request({ userId: 'u-pp1', userPlan: 'pro', modelId: 'gpt-5.6-terra' })));
+  assert.equal(calls[2].model, 'openai/gpt-5.6-terra');
+  assert.deepEqual(calls[2].reasoning, { effort: 'xhigh' });
+  assertNoError(await run(gateway, request({ userId: 'u-pp1', userPlan: 'pro', modelId: 'gpt-5.6-sol' })));
+  assert.deepEqual(calls[3].reasoning, { effort: 'medium' });
+});
+
+test('режим Max: на Ultra xhigh, на Pro игнорируется', async () => {
+  const usage = newUsage();
+  const calls: Call[] = [];
+  const gateway = makeGateway(fakeOpenRouter(okStream('ок'), calls), usage);
+
+  const ultraMax = await run(gateway, request({ userId: 'u-um', userPlan: 'ultra', modelId: 'claude-sonnet-5.5', reasoningMode: 'max' }));
+  assertNoError(ultraMax);
+  assert.deepEqual(calls[0].reasoning, { effort: 'xhigh' });
+  assert.equal(ultraMax.done?.reasoningMode, 'max');
+  assert.match(ultraMax.done?.routingReason ?? '', /Max mode: xhigh reasoning/);
+  assert.ok((calls[0].maxTokens ?? 0) > 2048, 'xhigh не обрезается коротким потолком ответа');
+
+  const ultraStd = await run(gateway, request({ userId: 'u-um', userPlan: 'ultra', modelId: 'claude-sonnet-5.5' }));
+  assertNoError(ultraStd);
+  assert.deepEqual(calls[1].reasoning, { effort: 'medium' });
+  assert.equal(ultraStd.done?.reasoningMode, 'standard');
+
+  const proMax = await run(gateway, request({ userId: 'u-pm', userPlan: 'pro', modelId: 'claude-sonnet-5.5', reasoningMode: 'max' }));
+  assertNoError(proMax);
+  assert.deepEqual(calls[2].reasoning, { effort: 'medium' }, 'Max на Pro не действует');
+  assert.equal(proMax.done?.reasoningMode, 'standard');
+  assert.doesNotMatch(proMax.done?.routingReason ?? '', /Max mode/);
+});
+
+test('экономный режим (80% бюджета): вместо модели Pro отвечает рабочая', async () => {
+  const usage = newUsage();
+  const calls: Call[] = [];
+  const gateway = makeGateway(fakeOpenRouter(okStream('ок'), calls), usage);
+  seedMonthlyCost(usage, 'u-psoft', PLAN_ENTITLEMENTS.pro.costBudget * 0.85, 'ketner-pro');
+  assertNoError(await run(gateway, request({ userId: 'u-psoft', userPlan: 'pro', modelId: 'claude-sonnet-5.5' })));
+  // В экономном режиме премиум-модель заменяется рабочей (Ketner Pro).
+  assert.equal(calls[0].model, 'xiaomi/mimo-v2.6-pro');
+});
+
+test('суточный лимит Pro: Fable → Opus → Sonnet → Ketner Pro', async () => {
+  const usage = newUsage();
+  const calls: Call[] = [];
+  const gateway = makeGateway(fakeOpenRouter(okStream('ок', { cost: 0.01 }), calls), usage);
+  const ask = () => run(gateway, request({ userId: 'u-chain', userPlan: 'pro', modelId: 'claude-fable-5.1' }));
+
+  const picked: string[] = [];
+  for (let i = 0; i < 11; i++) {
+    const out = await ask();
+    assertNoError(out);
+    picked.push(out.done?.selectedModel?.id ?? '');
+  }
+  // Fable 1 в сутки, затем Opus 3, затем Sonnet 6, затем Ketner Pro.
+  assert.deepEqual(picked, [
+    'claude-fable-5.1',
+    'claude-opus-5.5', 'claude-opus-5.5', 'claude-opus-5.5',
+    'claude-sonnet-5.5', 'claude-sonnet-5.5', 'claude-sonnet-5.5', 'claude-sonnet-5.5', 'claude-sonnet-5.5', 'claude-sonnet-5.5',
+    'ketner-pro',
+  ]);
+  const last = await ask();
+  assert.match(last.done?.routingReason ?? '', /Daily limit reached for Claude Fable 5\.1 \(1\/day on pro\)/);
+});
+
+test('режим Max считается за 2: на Ultra Fable в режиме Max — 1 раз в сутки из 3', async () => {
+  const usage = newUsage();
+  const calls: Call[] = [];
+  const gateway = makeGateway(fakeOpenRouter(okStream('ок', { cost: 0.02 }), calls), usage);
+  const ask = (mode?: 'max') =>
+    run(gateway, request({ userId: 'u-maxu', userPlan: 'ultra', modelId: 'claude-fable-5.1', ...(mode ? { reasoningMode: mode } : {}) }));
+
+  assert.equal((await ask('max')).done?.selectedModel?.id, 'claude-fable-5.1');
+  assert.equal(usage.getModelUsesLastDay('u-maxu', ['claude-fable-5.1']), 2);
+  // Осталась 1 единица: запрос Max (2) уже не помещается, отвечает Opus.
+  assert.equal((await ask('max')).done?.selectedModel?.id, 'claude-opus-5.5');
+  // Обычный запрос (1 единица) ещё помещается.
+  assert.equal((await ask()).done?.selectedModel?.id, 'claude-fable-5.1');
+  assert.equal((await ask()).done?.selectedModel?.id, 'claude-opus-5.5');
+});
+
+test('GPT-6 Astra после лимита → GPT-6.1 Sol, Terra → Gemini 3.8 Flash', async () => {
+  const usage = newUsage();
+  const calls: Call[] = [];
+  const gateway = makeGateway(fakeOpenRouter(okStream('ок', { cost: 0.01 }), calls), usage);
+  await run(gateway, request({ userId: 'u-ast', userPlan: 'pro', modelId: 'gpt-6-astra' }));
+  const second = await run(gateway, request({ userId: 'u-ast', userPlan: 'pro', modelId: 'gpt-6-astra' }));
+  assert.equal(second.done?.selectedModel?.id, 'gpt-6.1-sol');
+
+  for (let i = 0; i < 2; i++) await run(gateway, request({ userId: 'u-ter', userPlan: 'pro', modelId: 'gpt-5.6-terra' }));
+  const third = await run(gateway, request({ userId: 'u-ter', userPlan: 'pro', modelId: 'gpt-5.6-terra' }));
+  assert.equal(third.done?.selectedModel?.id, 'gemini-3.8-flash');
+});

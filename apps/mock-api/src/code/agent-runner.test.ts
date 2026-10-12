@@ -451,3 +451,30 @@ test('Free: если бесплатная модель отвечает, пла�
     },
     { plan: 'free' },
   ));
+
+test('агент на модели Pro: medium, на Ultra в режиме Max — xhigh, запуск считается за 2', async () => {
+  const efforts: unknown[] = [];
+  await withHarness(
+    (_call, options) => {
+      efforts.push(options.reasoning);
+      return finalStep('done');
+    },
+    async (h) => {
+      await h.run('task', { modelId: 'claude-opus-5.5' });
+      assert.deepEqual(efforts[0], { effort: 'medium' });
+    },
+    { plan: 'pro' },
+  );
+  await withHarness(
+    (_call, options) => {
+      efforts.push(options.reasoning);
+      return finalStep('done');
+    },
+    async (h) => {
+      await h.run('task', { modelId: 'claude-opus-5.5', reasoningMode: 'max' });
+      assert.deepEqual(efforts[1], { effort: 'xhigh' });
+      assert.equal(h.usage.getModelUsesLastDay('u1', ['claude-opus-5.5']), 2);
+    },
+    { plan: 'ultra' },
+  );
+});

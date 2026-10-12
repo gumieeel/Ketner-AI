@@ -26,6 +26,7 @@ export function resetPreferences(): void {
     language: 'ru',
     sidebarOpen: false,
     chatModelId: DEFAULT_MODEL_ID,
+    maxMode: false,
   });
   window.localStorage.clear();
   document.documentElement.classList.remove('dark');

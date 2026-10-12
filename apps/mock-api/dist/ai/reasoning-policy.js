@@ -10,7 +10,7 @@
  * режим low у GPT-6.1 Sol в 2.5 раза дешевле high, у Claude Opus 5.5 в 3.3 раза.
  */
 import { planRank } from '../services/entitlement.js';
-const ORDER = ['none', 'low', 'medium', 'high'];
+const ORDER = ['none', 'low', 'medium', 'high', 'xhigh', 'max'];
 const PREMIUM_CLASSES = new Set(['strong', 'top']);
 /**
  * Категории, где глубина размышлений заметно влияет на правильность ответа. Только математика:
@@ -53,7 +53,7 @@ function nearestSupported(supported, wanted, mandatory) {
     if (allowed.includes(wanted))
         return wanted;
     const target = ORDER.indexOf(wanted);
-    const preferHigher = wanted === 'medium' || wanted === 'high';
+    const preferHigher = target >= ORDER.indexOf('medium');
     let best = allowed[0];
     let bestDistance = Infinity;
     for (const effort of allowed) {
@@ -84,6 +84,32 @@ export function toProviderReasoning(reasoning, wanted) {
     }
     return undefined;
 }
+/** Режим Max доступен только на Ultra (VIP получает Ultra как эффективный тариф). */
+export function isMaxModeAllowed(plan) {
+    return planRank(plan) >= planRank('ultra');
+}
+/** Режим, который реально действует: max на тарифе ниже Ultra превращается в standard. */
+export function effectiveReasoningMode(requested, plan) {
+    return requested === 'max' && isMaxModeAllowed(plan) ? 'max' : 'standard';
+}
+/**
+ * Глубина для модели с фиксированным профилем (модели Pro и Ultra): standard — medium, max — xhigh,
+ * у моделей вроде «Grok 4.7 xhigh» оба режима одинаковые. При расходе бюджета (80%+) глубина не выше
+ * low: экономия важнее, а цена размышлений растёт с глубиной в разы.
+ */
+export function profileEffort(profile, mode, stage) {
+    const effort = mode === 'max' ? profile.max : profile.standard;
+    return stage === 'normal' ? effort : 'low';
+}
+/**
+ * Сколько единиц суточного лимита стоит запрос: режим Max поднимает глубину профиля
+ * (medium → xhigh), запрос дорожает примерно в 2.4 раза и считается за 2.
+ */
+export function limitUnitsFor(profile, mode) {
+    if (!profile || mode !== 'max')
+        return 1;
+    return ORDER.indexOf(profile.max) > ORDER.indexOf(profile.standard) ? 2 : 1;
+}
 export function isPremiumClass(costClass) {
     return PREMIUM_CLASSES.has(costClass);
 }
@@ -103,7 +129,8 @@ export function computeOutputCap(input) {
         cap = Math.min(cap, 4096);
     if (input.stage === 'exhausted' || input.stage === 'hard_stop')
         cap = Math.min(cap, 2048);
-    if (input.level === 'simple' && !input.heavyContext)
+    const deepReasoning = input.effort !== undefined && ORDER.indexOf(input.effort) >= ORDER.indexOf('high');
+    if (input.level === 'simple' && !input.heavyContext && !deepReasoning)
         cap = Math.min(cap, 2048);
     return Math.max(cap, Math.min(MIN_OUTPUT_CAP, input.modelMaxOutputTokens));
 }

@@ -103,6 +103,7 @@ export class UsageStore {
     kind?: UsageRecord['kind'];
     runId?: string;
     step?: number;
+    limitUnits?: number;
   }): UsageRecord {
     const record: UsageRecord = {
       id: randomUUID(),
@@ -123,6 +124,7 @@ export class UsageStore {
       source: params.source ?? 'provider',
       ...(params.kind ? { kind: params.kind } : {}),
       ...(params.runId ? { runId: params.runId } : {}),
+      ...(params.limitUnits && params.limitUnits !== 1 ? { limitUnits: params.limitUnits } : {}),
       ...(params.step !== undefined ? { step: params.step } : {}),
       createdAt: new Date().toISOString(),
     };
@@ -291,19 +293,22 @@ export class UsageStore {
     const userRecords = this.userIndex.get(userId) ?? [];
     const since = Date.now() - 24 * 60 * 60 * 1000;
     let uses = 0;
-    const runs = new Set<string>();
+    // Запуск агента считается один раз (по наибольшему весу его записей).
+    const runs = new Map<string, number>();
     for (let i = userRecords.length - 1; i >= 0; i--) {
       const rec = userRecords[i];
       if (new Date(rec.createdAt).getTime() < since) break;
       if (!wanted.has(rec.modelId)) continue;
+      const units = rec.limitUnits ?? 1;
       if (rec.kind === 'agent') {
-        if (rec.runId) runs.add(rec.runId);
+        if (rec.runId) runs.set(rec.runId, Math.max(runs.get(rec.runId) ?? 0, units));
         continue;
       }
       if (rec.source !== 'provider') continue;
-      if (rec.status === 'success' || rec.status === 'cancelled') uses += 1;
+      if (rec.status === 'success' || rec.status === 'cancelled') uses += units;
     }
-    return uses + runs.size;
+    for (const units of runs.values()) uses += units;
+    return uses;
   }
 
   /**

@@ -31,14 +31,17 @@ function use(usage: UsageStore, userId: string, modelId: string, times: number, 
   }
 }
 
-test('суточные лимиты: Plus ограничен по моделям, остальные тарифы пока без лимитов', () => {
+test('суточные лимиты: Plus, Pro и Ultra ограничены по моделям, Free — нет', () => {
   assert.equal(getDailyModelLimit('plus', 'gpt-6.1-sol'), 2);
   assert.equal(getDailyModelLimit('plus', 'ketner-pro'), 20);
   assert.equal(getDailyModelLimit('plus', 'gemini-3.7-flash'), 5);
   assert.equal(getDailyModelLimit('plus', 'gpt-5.6-luna-pro'), 10);
   assert.equal(getDailyModelLimit('plus', 'qwen3.8-27b'), 12);
   assert.equal(getDailyModelLimit('plus', 'ketner-mini'), null);
-  assert.equal(getDailyModelLimit('pro', 'gpt-6.1-sol'), null);
+  assert.equal(getDailyModelLimit('pro', 'gpt-6.1-sol'), 6);
+  assert.equal(getDailyModelLimit('pro', 'claude-opus-5.5'), 3);
+  assert.equal(getDailyModelLimit('ultra', 'claude-opus-5.5'), 7);
+  assert.equal(getDailyModelLimit('gpt-pro', 'claude-opus-5.5'), 3, 'старые тарифы получают лимиты Pro');
   assert.deepEqual(getDailyModelLimits('free'), {});
   assert.equal(Object.keys(DAILY_MODEL_LIMITS.plus).length, 5);
 });
@@ -105,4 +108,37 @@ test('ошибочные и кэшированные ответы лимит н�
   assert.equal(usage.getModelUsesLastDay('u7', ['gpt-6.1-sol']), 0);
   usage.recordUsage({ userId: 'u7', conversationId: 'c', modelId: 'gpt-6.1-sol', provider: 'openrouter', inputTokens: 1, outputTokens: 1, estimatedCost: 0.01, latencyMs: 1, status: 'cancelled' });
   assert.equal(usage.getModelUsesLastDay('u7', ['gpt-6.1-sol']), 1);
+});
+
+test('Pro и Ultra: у каждой модели с лимитом есть цепочка, которая заканчивается моделью без лимита', () => {
+  for (const plan of ['pro', 'ultra'] as const) {
+    for (const id of Object.keys(DAILY_MODEL_LIMITS[plan])) {
+      const chain = registry.getFallbackChain(id, 10);
+      assert.ok(chain.length > 1, `${plan}/${id}: нет запасной модели`);
+      assert.equal(getDailyModelLimit(plan, chain.at(-1)!.id), null, `${plan}/${id}: цепочка заканчивается моделью с лимитом`);
+    }
+  }
+});
+
+test('модели Pro и Ultra: id в OpenRouter, профиль размышлений и запасные модели', () => {
+  const expect = {
+    'claude-opus-5.5': ['anthropic/claude-opus-5.5', 'medium', 'claude-sonnet-5.5'],
+    'claude-sonnet-5.5': ['anthropic/claude-sonnet-5.5', 'medium', 'ketner-pro'],
+    'claude-fable-5.1': ['anthropic/claude-fable-5.1', 'medium', 'claude-opus-5.5'],
+    'gpt-6-astra': ['openai/gpt-6-astra', 'medium', 'gpt-6.1-sol'],
+    'grok-4.7': ['x-ai/grok-4.7', 'xhigh', 'ketner-pro'],
+    'gpt-5.6-sol': ['openai/gpt-5.6-sol', 'medium', 'ketner-pro'],
+    'gpt-5.6-terra': ['openai/gpt-5.6-terra', 'xhigh', 'gemini-3.8-flash'],
+  } as const;
+  for (const [id, [engine, standard, fallback]] of Object.entries(expect)) {
+    const entry = registry.get(id)!;
+    assert.equal(entry.providerModelId, engine, id);
+    assert.equal(entry.requiredPlan, 'pro', id);
+    assert.equal(entry.effortProfile?.standard, standard, id);
+    assert.equal(entry.effortProfile?.max, 'xhigh', id);
+    assert.ok(entry.reasoning.efforts.includes('xhigh'), `${id}: xhigh должен быть среди допустимых глубин`);
+    assert.equal(entry.fallbackModelId, fallback, id);
+  }
+  // Gemini 4 Argon анонсирована, но в OpenRouter её нет: модель выключена и в каталог не попадает.
+  assert.equal(registry.get('gemini-4-argon')?.enabled, false);
 });
