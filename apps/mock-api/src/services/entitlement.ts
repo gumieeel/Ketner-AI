@@ -125,9 +125,10 @@ export const PLAN_ENTITLEMENTS: Record<PlanId, PlanEntitlements> = {
     contextLimit: 60,
     maxTokens: 6144,
     streamingEnabled: true,
-    // Plus: $9 → бюджет $2.75 (31%): самый тесный тариф, из-за Free-субсидии и комиссии Stripe $0.30.
+    // Plus: $9 → бюджет $3.00 (33%): самый тесный тариф, из-за Free-субсидии и комиссии Stripe $0.30.
+    // В худшем случае (весь бюджет, Stripe, Free-тир по старой оценке $3.01) маржа ≈ 18%, на 125% ≈ 9%.
     maxDailyCost: 0.35,
-    costBudget: 2.75,
+    costBudget: 3.0,
     // Премиум-квота $1.30 (потолок: половина costBudget, см. currency.test): ≈ 49 запросов Sol в месяц
     // при лимите 2 в сутки. Общий costBudget не менялся, поэтому худший случай по марже прежний.
     premiumBudget: 1.30,
@@ -146,12 +147,13 @@ export const PLAN_ENTITLEMENTS: Record<PlanId, PlanEntitlements> = {
     contextLimit: 120,
     maxTokens: 12288,
     streamingEnabled: true,
-    // Pro: $25 → бюджет $10.00 (40%), из них $7 — квота премиум-моделей. Дневной потолок $2.20 не ниже
+    // Pro: $25 → бюджет $11.00 (44%), из них $8 — квота премиум-моделей. Худший случай (Stripe, Free-тир):
+    // маржа ≈ 30% на 100% бюджета и ≈ 19% на 125%. Дневной потолок $2.20 не ниже
     // бюджета одного запуска агента ($2): иначе задача на GPT-6 Astra обрывалась бы на полпути.
     // Месячный бюджет прежний, поэтому худший случай по марже не меняется.
     maxDailyCost: 2.2,
-    costBudget: 10.0,
-    premiumBudget: 7.0,
+    costBudget: 11.0,
+    premiumBudget: 8.0,
   },
   ultra: {
     planId: 'ultra',
@@ -167,11 +169,12 @@ export const PLAN_ENTITLEMENTS: Record<PlanId, PlanEntitlements> = {
     contextLimit: 500,
     maxTokens: 16384,
     streamingEnabled: true,
-    // Ultra: $49 → бюджет $20.00 (41%), из них $15 — квота премиум-моделей (режим Max тратит её быстрее).
+    // Ultra: $49 → бюджет $22.00 (44.9%), из них $16.50 — квота премиум-моделей (режим Max тратит
+    // её быстрее). Худший случай (Stripe, Free-тир): маржа ≈ 36% на 100% бюджета и ≈ 24% на 125%.
     // Дневной потолок $4.40 не ниже бюджета запуска агента ($3).
     maxDailyCost: 4.4,
-    costBudget: 20.0,
-    premiumBudget: 15.0,
+    costBudget: 22.0,
+    premiumBudget: 16.5,
   },
   // ── Legacy-планы для обратной совместимости ──
   'gpt-pro': { planId: 'gpt-pro', ...LEGACY_PRO_BASE },
