@@ -60,14 +60,15 @@ describe('маршрутизация и каркас экранов', () => {
     expect(screen.getByText('Тарифные планы и лимиты')).toBeInTheDocument();
   });
 
-  it('страница API и подключения агентов открывается по /api-docs', () => {
+  it('страница API для разработчиков открывается по /api-docs', () => {
     renderRoute('/api-docs');
 
-    expect(
-      screen.getByRole('heading', { level: 1, name: /API & Подключение AI-агентов к машине/ }),
-    ).toBeInTheDocument();
-    expect(screen.getByText('Секретные API-ключи')).toBeInTheDocument();
-    expect(screen.getByText('Base URL (OpenAI V1)')).toBeInTheDocument();
+    expect(screen.getByRole('heading', { level: 1, name: 'API для разработчиков' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { level: 2, name: 'API-ключи' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { level: 2, name: 'Адрес API' })).toBeInTheDocument();
+    // Гость видит приглашение войти, а не выдуманные ключи
+    expect(screen.getByText('Войдите, чтобы создавать ключи и управлять ими.')).toBeInTheDocument();
+    expect(screen.queryByText(/ketner_sk_live/)).toBeNull();
   });
 
   it('страница входа показывает форму и кнопки OAuth-заглушек', () => {
