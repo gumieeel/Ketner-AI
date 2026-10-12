@@ -1,7 +1,6 @@
 import { useRef, useState, type ChangeEvent, type FormEvent } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { CodeIcon, FolderIcon, GitHubIcon, PlusIcon, TrashIcon } from '@/components/icons';
-import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardTitle } from '@/components/ui/card';
 import { Field, Input } from '@/components/ui/input';
@@ -218,39 +217,13 @@ function ImportForm() {
   );
 }
 
-function LimitsCard() {
-  const { t } = useTranslation();
-  const capabilities = useCode((state) => state.capabilities);
-  if (!capabilities) return null;
-  const { limits, usage } = capabilities;
-  return (
-    <Card className="p-4">
-      <CardTitle className="text-sm">{t('code.limits.title')}</CardTitle>
-      <ul className="mt-2 flex flex-col gap-1 text-[13px] text-muted">
-        <li>{t('code.limits.files', { count: limits.maxFiles, size: formatBytes(limits.maxProjectBytes) })}</li>
-        <li>{t('code.limits.steps', { count: limits.maxSteps })}</li>
-        {limits.commands ? <li>{t('code.limits.commands')}</li> : null}
-        <li>{t('code.projects.runs', { used: usage.runsToday, max: limits.runsPerDay })}</li>
-      </ul>
-      {!limits.commands ? (
-        <Link to="/pricing" className="mt-2 inline-block text-[13px] font-medium text-accent hover:underline">
-          {t('code.limits.upgrade')}
-        </Link>
-      ) : null}
-    </Card>
-  );
-}
-
 /** Экран «Ketner Code»: список проектов, создание и импорт. */
 export function ProjectList() {
   const { t, language } = useTranslation();
   const projects = useCode((state) => state.projects);
   const status = useCode((state) => state.projectsStatus);
-  const capabilities = useCode((state) => state.capabilities);
   const deleteProject = useCode((state) => state.deleteProject);
   const loadProjects = useCode((state) => state.loadProjects);
-  const limit = capabilities?.limits.maxProjects;
-  const reached = limit !== undefined && projects.length >= limit;
   const [pendingDelete, setPendingDelete] = useState<string | null>(null);
 
   return (
@@ -263,7 +236,6 @@ export function ProjectList() {
             </h2>
             <p className="text-[13px] text-muted">{t('code.subtitle')}</p>
           </div>
-          {limit !== undefined ? <Badge tone="neutral">{t('code.projects.limit', { used: projects.length, max: limit })}</Badge> : null}
         </div>
 
         {status === 'loading' || status === 'idle' ? (
@@ -292,7 +264,6 @@ export function ProjectList() {
           </div>
         ) : null}
 
-        {reached ? <p className="rounded-lg border border-warning/30 bg-warning-soft px-3 py-2 text-[13px] text-text">{t('code.projects.limitReached')}</p> : null}
 
         <ul className="flex flex-col gap-2">
           {projects.map((project) => (
@@ -344,7 +315,6 @@ export function ProjectList() {
           <CardTitle className="mb-3 text-sm">{t('code.import.title')}</CardTitle>
           <ImportForm />
         </Card>
-        <LimitsCard />
       </aside>
     </div>
   );

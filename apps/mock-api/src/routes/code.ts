@@ -230,7 +230,7 @@ export function createCodeRouter(deps: CodeRouterDeps): Router {
         return;
       }
       if ((await store.count(caller.userId)) >= caller.limits.maxProjects) {
-        sendError(response, 413, 'quota_exceeded', `Достигнут лимит проектов тарифа (${caller.limits.maxProjects}).`);
+        sendError(response, 413, 'quota_exceeded', 'На вашем тарифе больше проектов создать нельзя. Удалите ненужный проект или повысьте тариф.');
         return;
       }
       let archive: Uint8Array;

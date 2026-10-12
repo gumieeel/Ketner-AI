@@ -109,8 +109,8 @@ export function StandaloneLayout() {
               aria-label={t('nav.mainNavigation')}
               className="hidden items-center gap-0.5 md:flex"
             >
-              <a href="/#auto" className={navLinkClass}>
-                Auto
+              <a href="/#spaces" className={navLinkClass}>
+                {t('home.navFeatures')}
               </a>
               <a href="/#models" className={navLinkClass}>
                 {t('nav.models')}
@@ -261,7 +261,7 @@ export function StandaloneLayout() {
       {/* Футер: колонки ссылок и крупный знак Ketner */}
       <footer className="relative z-10 mt-20 w-full border-t border-stroke text-left">
         <div className={cn('mx-auto flex flex-col gap-12 pt-14', containerClass)}>
-          <div className="grid grid-cols-2 gap-x-6 gap-y-10 md:grid-cols-[1.5fr_1fr_1fr_1fr_1fr]">
+          <div className="grid grid-cols-2 gap-x-6 gap-y-10 md:grid-cols-[1.5fr_1fr_1fr_1fr]">
             <div className="col-span-2 flex flex-col gap-4 md:col-span-1">
               <Brand />
               <p className="max-w-[28ch] text-[14px] leading-relaxed text-muted">{t('home.footerTagline')}</p>
@@ -286,25 +286,14 @@ export function StandaloneLayout() {
                   </Link>
                 </li>
                 <li>
-                  <Link to="/pricing" className={footerLinkClass}>
-                    {t('nav.pricing')}
-                  </Link>
-                </li>
-              </ul>
-            </nav>
-
-            <nav aria-label={t('home.footerModels')} className="flex flex-col gap-3">
-              <span className={footerHeadClass}>{t('home.footerModels')}</span>
-              <ul className="flex flex-col gap-1.5 max-md:gap-0">
-                <li>
-                  <a href="/#auto" className={footerLinkClass}>
-                    {t('home.footerAuto')}
-                  </a>
-                </li>
-                <li>
                   <a href="/#models" className={footerLinkClass}>
                     {t('home.footerLimits')}
                   </a>
+                </li>
+                <li>
+                  <Link to="/pricing" className={footerLinkClass}>
+                    {t('nav.pricing')}
+                  </Link>
                 </li>
               </ul>
             </nav>

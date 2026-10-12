@@ -463,8 +463,8 @@ export class AgentRunner {
         'run_limit',
         t(
           language,
-          `Достигнут суточный лимит запусков агента (${limits.runsPerDay}). Он обновится в течение суток; больше запусков даёт тариф выше.`,
-          `Daily agent run limit reached (${limits.runsPerDay}). It renews within 24 hours; a higher plan gives more runs.`,
+          'Запуски агента на сегодня закончились. Продолжите завтра или на тарифе выше.',
+          'Agent runs are used up for today. Continue tomorrow or on a higher plan.',
         ),
       );
     }
@@ -1085,8 +1085,8 @@ export class AgentRunner {
           status = 'budget';
           finalMessage = t(
             language,
-            'Исчерпан бюджет запуска, в том числе на моделях дешевле. Сделанные правки сохранены; продолжите новым запросом.',
-            'The run budget is used up, including on cheaper models. The changes made are saved; continue with a new request.',
+            'Работа остановлена. Сделанные правки сохранены; продолжите новым запросом.',
+            'The run was stopped. The changes made are saved; continue with a new request.',
           );
           break;
         }
@@ -1094,8 +1094,8 @@ export class AgentRunner {
           status = 'step_limit';
           finalMessage = t(
             language,
-            `Достигнут лимит шагов (${step}). Сделанные правки сохранены; продолжите новым запросом.`,
-            `Step limit reached (${step}). The changes made are saved; continue with a new request.`,
+            'Работа остановлена. Сделанные правки сохранены; продолжите новым запросом.',
+            'The run was stopped. The changes made are saved; continue with a new request.',
           );
         }
       }

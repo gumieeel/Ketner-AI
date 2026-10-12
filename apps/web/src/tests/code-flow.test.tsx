@@ -158,14 +158,14 @@ describe('Ketner Code: проекты и агент', () => {
     vi.unstubAllGlobals();
   });
 
-  it('показывает список проектов, лимиты тарифа и форму создания', async () => {
+  it('показывает список проектов и форму создания, без счётчиков лимитов', async () => {
     installCodeApi();
     renderRoute('/code');
 
     const link = await screen.findByRole('link', { name: /Мой сайт/ });
     expect(link).toHaveAttribute('href', '/code/p1');
-    expect(await screen.findByText('Проектов: 1 из 3')).toBeInTheDocument();
-    expect(screen.getByText('Возможности вашего тарифа')).toBeInTheDocument();
+    expect(screen.queryByText(/Проектов: \d+ из \d+/)).toBeNull();
+    expect(screen.queryByText('Возможности вашего тарифа')).toBeNull();
     expect(screen.getByRole('button', { name: 'Создать' })).toBeInTheDocument();
   });
 

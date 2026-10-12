@@ -65,13 +65,13 @@ export const PLANS: readonly PlanItem[] = [
     modelsHighlight: 'Claude Opus 5.5, Sonnet 5.5, GPT-6 Astra, GPT-5.6 Sol, GPT-5.6 Terra, Grok 4.7',
     bullets: {
       ru: [
-        'Флагманские модели Claude, GPT и Grok с суточными лимитами',
+        'Флагманские модели Claude, GPT и Grok',
         'Без раздельных подписок на каждого провайдера',
         'Контекст до 120 сообщений',
         '4 параллельных запроса и повышенный приоритет',
       ],
       en: [
-        'Flagship Claude, GPT and Grok models with daily limits',
+        'Flagship Claude, GPT and Grok models',
         'No separate subscriptions per AI provider',
         'Up to 120 context messages',
         '4 concurrent requests & higher priority',
@@ -86,16 +86,16 @@ export const PLANS: readonly PlanItem[] = [
       ru: 'Режим Max · Высший приоритет',
       en: 'Max mode · Highest priority',
     },
-    modelsHighlight: 'Режим Max (xhigh) + лимиты в 2–3 раза выше Pro',
+    modelsHighlight: 'Все модели Pro + режим Max',
     bullets: {
       ru: [
-        'Всё из Pro, режим Max (размышления xhigh) и суточные лимиты моделей в 2–3 раза выше',
+        'Всё из Pro и режим Max: модели думают глубже',
         'До 500 сообщений контекста для больших файлов',
         '8 параллельных запросов',
         'Максимальная скорость и мгновенный отклик',
       ],
       en: [
-        'Everything in Pro, Max mode (xhigh reasoning) and 2–3× higher daily model limits',
+        'Everything in Pro plus Max mode: models think deeper',
         'Up to 500 context messages for large codebases',
         '8 concurrent requests',
         'Maximum processing speed & instant response',

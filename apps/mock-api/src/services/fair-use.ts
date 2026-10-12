@@ -36,8 +36,8 @@ export class FairUseEngine {
     if (snapshot.activeConcurrentRequests >= limits.maxConcurrency) {
       const reason =
         language === 'en'
-          ? `Concurrency limit reached (${limits.maxConcurrency} active request(s)). Please wait for the ongoing response to complete.`
-          : `Превышен лимит параллельных запросов (${limits.maxConcurrency} активных). Дождитесь завершения текущего ответа.`;
+          ? `Another reply is still being written. Please wait for it to finish.`
+          : `Предыдущий ответ ещё пишется. Дождитесь его завершения.`;
 
       return {
         action: 'deny',
@@ -50,8 +50,8 @@ export class FairUseEngine {
     if (limits.requestsPerMinute !== null && snapshot.requestsLastMinute >= limits.requestsPerMinute) {
       const reason =
         language === 'en'
-          ? `Too many requests per minute (${snapshot.requestsLastMinute}/${limits.requestsPerMinute}). Please slow down.`
-          : `Слишком много запросов в минуту (${snapshot.requestsLastMinute}/${limits.requestsPerMinute}). Пожалуйста, снизьте частоту запросов.`;
+          ? `Too many messages in a row. Please slow down a little.`
+          : `Слишком много сообщений подряд. Сделайте небольшую паузу.`;
 
       return {
         action: 'throttle',
@@ -64,8 +64,8 @@ export class FairUseEngine {
     if (limits.requestsPerHour !== null && snapshot.requestsLastHour >= limits.requestsPerHour) {
       const reason =
         language === 'en'
-          ? `Hourly request limit reached (${snapshot.requestsLastHour}/${limits.requestsPerHour}). Limit resets in an hour.`
-          : `Достигнут часовой лимит запросов (${snapshot.requestsLastHour}/${limits.requestsPerHour}). Лимит обновится в течение часа.`;
+          ? `You have sent a lot of messages. Please try again later.`
+          : `Сообщений было много. Попробуйте чуть позже.`;
 
       return {
         action: 'deny',
@@ -78,8 +78,8 @@ export class FairUseEngine {
     if (limits.requestsPerDay !== null && snapshot.requestsLastDay >= limits.requestsPerDay) {
       const reason =
         language === 'en'
-          ? `Daily request limit reached (${snapshot.requestsLastDay}/${limits.requestsPerDay}). Upgrade your plan for higher limits.`
-          : `Достигнут дневной лимит сообщений (${snapshot.requestsLastDay}/${limits.requestsPerDay}). Улучшите тариф для увеличения лимитов.`;
+          ? `Messages are used up for today. Try again tomorrow or upgrade your plan.`
+          : `Сообщения на сегодня закончились. Продолжите завтра или на платном тарифе.`;
 
       return {
         action: 'deny',
@@ -94,8 +94,8 @@ export class FairUseEngine {
     if (dailyCostCap !== null && snapshot.estimatedCostLastDay >= dailyCostCap) {
       const reason =
         language === 'en'
-          ? `Fair Use Policy: daily usage quota exceeded ($${snapshot.estimatedCostLastDay.toFixed(2)} / $${dailyCostCap.toFixed(2)}). Service will resume tomorrow.`
-          : `Политика добросовестного использования (Fair Use): превышена дневная квота ресурсов ($${snapshot.estimatedCostLastDay.toFixed(2)} / $${dailyCostCap.toFixed(2)}). Доступ восстановится завтра.`;
+          ? `Usage is paused until tomorrow under the fair-use policy.`
+          : `По правилам честного использования работа продолжится завтра.`;
 
       return {
         action: 'deny',
@@ -112,8 +112,8 @@ export class FairUseEngine {
     if (limits.tokensPerHour !== null && snapshot.tokensLastHour >= limits.tokensPerHour) {
       const reason =
         language === 'en'
-          ? `Hourly token quota reached (${Math.round(snapshot.tokensLastHour / 1000)}k tokens). Please wait before asking large tasks.`
-          : `Достигнута часовая квота токенов (${Math.round(snapshot.tokensLastHour / 1000)}k токенов). Сделайте небольшую паузу.`;
+          ? `You have done a lot of work in the last hour. Please take a short break.`
+          : `За последний час было очень много работы. Сделайте небольшую паузу.`;
 
       return {
         action: 'deny',
@@ -126,8 +126,8 @@ export class FairUseEngine {
     if (limits.tokensPerDay !== null && snapshot.tokensLastDay >= limits.tokensPerDay) {
       const reason =
         language === 'en'
-          ? `Daily token quota reached (${Math.round(snapshot.tokensLastDay / 1000)}k tokens). It renews gradually over the next 24 hours.`
-          : `Достигнута суточная квота токенов (${Math.round(snapshot.tokensLastDay / 1000)}k токенов). Она восстанавливается в течение суток.`;
+          ? `Usage is paused for now. It will be available again within a day.`
+          : `Работа на время приостановлена. Доступ вернётся в течение суток.`;
 
       return {
         action: 'deny',

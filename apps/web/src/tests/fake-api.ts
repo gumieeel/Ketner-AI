@@ -16,6 +16,8 @@ export interface FakeApiOptions {
   plan?: string;
   /** Модель, которая «реально ответила» (приходит в событии done, как у сервера). */
   servedModelId?: string;
+  /** После скольких генераций сервер отвечает 429 rate_limited (лимиты считает сервер). */
+  rateLimitAfter?: number;
 }
 
 export interface FakeApi {
@@ -640,6 +642,13 @@ export function installFakeApi(options: FakeApiOptions = {}): FakeApi {
         const index = api.completions;
         api.completions += 1;
         api.completionBodies.push(body);
+
+        if (options.rateLimitAfter !== undefined && index >= options.rateLimitAfter) {
+          return json(
+            { error: { code: 'rate_limited', message: 'Сообщения на это время закончились. Попробуйте позже.' } },
+            429,
+          );
+        }
 
         const modelId = String(body.modelId ?? 'ketner-mini');
         const targetModel = META.models.find((m) => m.id === modelId) ?? META.models[0];

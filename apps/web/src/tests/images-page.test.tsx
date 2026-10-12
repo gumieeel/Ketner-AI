@@ -90,7 +90,8 @@ describe('страница «Изображения»', () => {
     renderRoute('/images');
 
     expect(await screen.findByAltText('старая картинка')).toBeInTheDocument();
-    expect(screen.getByText('Сегодня 1 из 5')).toBeInTheDocument();
+    // Счётчик использования на странице не показывается: лимиты считает сервер
+    expect(screen.queryByText(/Сегодня \d+ из \d+/)).toBeNull();
     // Free: FLUX.2 закрыта, у FLUX.1 только квадрат.
     expect(screen.getByRole('button', { name: /FLUX\.2 klein/ })).toHaveTextContent('PLUS');
     expect(screen.getByRole('button', { name: /16:9/ })).toBeDisabled();

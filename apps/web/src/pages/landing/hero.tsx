@@ -1,13 +1,13 @@
 import { Link } from 'react-router-dom';
 import { KnotRelief } from '@/components/marketing/knot-relief';
-import { RouterDemo } from '@/components/marketing/router-demo';
+import { ModelDemo } from '@/components/marketing/model-demo';
 import { buttonClasses } from '@/components/ui/button-classes';
 import { useAuth } from '@/features/auth/auth-store';
 import { useTranslation } from '@/i18n';
 
 /**
- * Первый экран: слева — панель с обещанием и объёмным щитом Ketner, справа — живое
- * демо роутера Auto. Нижний правый угол панели срезан «ступенькой», как в фирменной
+ * Первый экран: слева — панель с обещанием и объёмным щитом Ketner, справа — демо
+ * переписки, в которой отвечает выбранная модель. Нижний правый угол панели срезан «ступенькой», как в фирменной
  * геометрии срезов.
  */
 export function LandingHero() {
@@ -59,7 +59,7 @@ export function LandingHero() {
       </div>
 
       <div className="lg:col-span-4">
-        <RouterDemo />
+        <ModelDemo />
       </div>
     </section>
   );
