@@ -231,7 +231,6 @@ export const ru = {
   'chat.modelGemini': 'Gemini 3.8 Flash',
   'chat.modelGrok': 'Grok 4.7 xhigh',
   'chat.modelClaudeSonnet': 'Claude Sonnet 5.5',
-  'chat.modelClaudeFable': 'Claude Fable 5.1',
   'chat.modelGptAstra': 'GPT-6 Astra',
   'chat.modelGpt56Sol': 'GPT-5.6 Sol',
   'chat.modelGpt56Terra': 'GPT-5.6 Terra xhigh',
@@ -242,7 +241,7 @@ export const ru = {
   'chat.maxModeLocked': 'Режим Max доступен на тарифе Ultra',
   'chat.maxModeBadge': '⚡ Режим Max',
   'chat.maxModeUpgradeTitle': 'Режим Max доступен на Ultra',
-  'chat.maxModeUpgradeDesc': 'В режиме Max Claude Opus, Sonnet, Fable, GPT-6 Astra и GPT-5.6 Sol размышляют на уровне xhigh вместо medium: ответы глубже на сложных задачах. Перейдите на Ultra, чтобы включить его.',
+  'chat.maxModeUpgradeDesc': 'В режиме Max Claude Opus, Sonnet, GPT-6 Astra и GPT-5.6 Sol размышляют на уровне xhigh вместо medium: ответы глубже на сложных задачах. Перейдите на Ultra, чтобы включить его.',
   'chat.modelClaudeOpus': 'Claude Opus 5.5',
   'chat.upgradeRequired': 'Требуется подписка (Upgrade your plan)',
   'chat.upgradeRequiredDesc':

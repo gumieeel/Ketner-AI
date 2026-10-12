@@ -14,8 +14,8 @@ export const FAQ_ITEMS: FaqItem[] = [
       en: 'Is it really unlimited?',
     },
     a: {
-      ru: 'Почти. На платных тарифах вы не останетесь без ответа: Ketner Pro и лёгкие модели рассчитаны на тысячи сообщений в месяц. У самых дорогих моделей (Claude Opus, Fable, GPT-6 Astra и других) есть суточный лимит: когда он заканчивается, отвечает запасная модель — дешевле, но качественная, и это видно в ответе.',
-      en: 'Almost. On paid plans you are never left without an answer: Ketner Pro and the lighter models cover thousands of messages a month. The most expensive models (Claude Opus, Fable, GPT-6 Astra and others) have a daily limit: once it is used up, a cheaper but capable backup model answers, and the reply shows it.',
+      ru: 'Почти. На платных тарифах вы не останетесь без ответа: Ketner Pro и лёгкие модели рассчитаны на тысячи сообщений в месяц. У самых дорогих моделей (Claude Opus, GPT-6 Astra и других) есть суточный лимит: когда он заканчивается, отвечает запасная модель — дешевле, но качественная, и это видно в ответе.',
+      en: 'Almost. On paid plans you are never left without an answer: Ketner Pro and the lighter models cover thousands of messages a month. The most expensive models (Claude Opus, GPT-6 Astra and others) have a daily limit: once it is used up, a cheaper but capable backup model answers, and the reply shows it.',
     },
   },
   {
@@ -25,8 +25,8 @@ export const FAQ_ITEMS: FaqItem[] = [
       en: 'Which AI models are included in Ketner AI?',
     },
     a: {
-      ru: 'На тарифе Free доступна Ketner Mini. Plus добавляет Ketner Pro, GPT-6.1 Sol (OpenAI), Claude Haiku 5.5 (Anthropic) и DeepSeek V4.1 Flash. Pro открывает Claude Opus 5.5, Sonnet 5.5 и Fable 5.1 (Anthropic), GPT-6 Astra, GPT-5.6 Sol и GPT-5.6 Terra xhigh (OpenAI) и Grok 4.7 xhigh (xAI): они размышляют на уровне medium, у каждой суточный лимит, после которого отвечает запасная модель. Ultra даёт лимиты в 2–3 раза выше и режим Max, в котором модели размышляют на уровне xhigh. Мы постоянно добавляем новые модели сразу после их официального релиза.',
-      en: 'The Free plan includes Ketner Mini. Plus adds Ketner Pro, GPT-6.1 Sol (OpenAI), Claude Haiku 5.5 (Anthropic) and DeepSeek V4.1 Flash. Pro unlocks Claude Opus 5.5, Sonnet 5.5 and Fable 5.1 (Anthropic), GPT-6 Astra, GPT-5.6 Sol and GPT-5.6 Terra xhigh (OpenAI) and Grok 4.7 xhigh (xAI): they reason at medium, and each has a daily limit after which a backup model answers. Ultra raises the limits 2–3× and adds Max mode with xhigh reasoning. New state-of-the-art models are added as soon as they release.',
+      ru: 'На тарифе Free доступна Ketner Mini. Plus добавляет Ketner Pro, GPT-6.1 Sol (OpenAI), Claude Haiku 5.5 (Anthropic) и DeepSeek V4.1 Flash. Pro открывает Claude Opus 5.5 и Sonnet 5.5 (Anthropic), GPT-6 Astra, GPT-5.6 Sol и GPT-5.6 Terra xhigh (OpenAI) и Grok 4.7 xhigh (xAI): они размышляют на уровне medium, у каждой суточный лимит, после которого отвечает запасная модель. Ultra даёт лимиты в 2–3 раза выше и режим Max, в котором модели размышляют на уровне xhigh. Мы постоянно добавляем новые модели сразу после их официального релиза.',
+      en: 'The Free plan includes Ketner Mini. Plus adds Ketner Pro, GPT-6.1 Sol (OpenAI), Claude Haiku 5.5 (Anthropic) and DeepSeek V4.1 Flash. Pro unlocks Claude Opus 5.5 and Sonnet 5.5 (Anthropic), GPT-6 Astra, GPT-5.6 Sol and GPT-5.6 Terra xhigh (OpenAI) and Grok 4.7 xhigh (xAI): they reason at medium, and each has a daily limit after which a backup model answers. Ultra raises the limits 2–3× and adds Max mode with xhigh reasoning. New state-of-the-art models are added as soon as they release.',
     },
   },
   {

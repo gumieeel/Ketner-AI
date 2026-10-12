@@ -25,7 +25,6 @@ export const REQUIRED_PLANS: Record<string, string> = {
   'grok-4.7': 'pro',
   'claude-opus-5.5': 'pro',
   'claude-sonnet-5.5': 'pro',
-  'claude-fable-5.1': 'pro',
   'gpt-6-astra': 'pro',
   'gpt-5.6-sol': 'pro',
   'gpt-5.6-terra': 'pro',

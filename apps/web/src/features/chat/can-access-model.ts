@@ -145,15 +145,7 @@ export const DEFAULT_MODELS: ModelInfo[] = [
     dailyLimits: { pro: 6, ultra: 14 },
     reasoningEffort: { standard: 'medium', max: 'xhigh' },
   },
-  {
-    id: 'claude-fable-5.1',
-    name: 'Claude Fable 5.1',
-    contextMessages: 120,
-    isPro: true,
-    requiredPlan: 'pro',
-    dailyLimits: { pro: 1, ultra: 3 },
-    reasoningEffort: { standard: 'medium', max: 'xhigh' },
-  },
+
   {
     id: 'gpt-6-astra',
     name: 'GPT-6 Astra',
@@ -209,7 +201,6 @@ export const MODEL_NAME_KEYS: Readonly<Record<string, TranslationKey>> = {
   'gemini-3.8-flash': 'chat.modelGemini',
   'grok-4.7': 'chat.modelGrok',
   'claude-sonnet-5.5': 'chat.modelClaudeSonnet',
-  'claude-fable-5.1': 'chat.modelClaudeFable',
   'gpt-6-astra': 'chat.modelGptAstra',
   'gpt-5.6-sol': 'chat.modelGpt56Sol',
   'gpt-5.6-terra': 'chat.modelGpt56Terra',

@@ -24,7 +24,6 @@ const PUBLIC_MODEL_IDS: readonly string[] = [
   'gpt-6.1-sol',
   'claude-opus-5.5',
   'claude-sonnet-5.5',
-  'claude-fable-5.1',
   'gpt-6-astra',
   'grok-4.7',
   'gemini-4-argon',

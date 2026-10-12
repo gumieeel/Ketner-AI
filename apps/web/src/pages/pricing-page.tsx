@@ -39,7 +39,7 @@ const COMPARISON_ROWS: ComparisonRow[] = [
     feature: { ru: 'Доступные модели', en: 'Available models' },
     free: { ru: 'Ketner Mini', en: 'Ketner Mini' },
     plus: { ru: 'Ketner Pro, GPT-6.1 Sol, Claude Haiku 5.5, DeepSeek V4.1 Flash', en: 'Ketner Pro, GPT-6.1 Sol, Claude Haiku 5.5, DeepSeek V4.1 Flash' },
-    pro: { ru: 'Все из Plus + Claude Opus 5.5, Sonnet 5.5, Fable 5.1, GPT-6 Astra, GPT-5.6 Sol, GPT-5.6 Terra xhigh, Grok 4.7 xhigh', en: 'All Plus + Claude Opus 5.5, Sonnet 5.5, Fable 5.1, GPT-6 Astra, GPT-5.6 Sol, GPT-5.6 Terra xhigh, Grok 4.7 xhigh' },
+    pro: { ru: 'Все из Plus + Claude Opus 5.5, Sonnet 5.5, GPT-6 Astra, GPT-5.6 Sol, GPT-5.6 Terra xhigh, Grok 4.7 xhigh', en: 'All Plus + Claude Opus 5.5, Sonnet 5.5, GPT-6 Astra, GPT-5.6 Sol, GPT-5.6 Terra xhigh, Grok 4.7 xhigh' },
     ultra: { ru: 'Все модели Pro + режим Max (xhigh), лимиты в 2–3 раза выше', en: 'All Pro models + Max mode (xhigh), 2–3× higher limits' },
   },
   {

@@ -98,13 +98,13 @@ export const PLANS: readonly Plan[] = [
       en: 'Top models',
     },
     modelsHighlight: {
-      ru: 'Все из Plus + Claude Opus, Sonnet и Fable, GPT-6 Astra, GPT-5.6 Sol и Terra, Grok 4.7',
-      en: 'All Plus + Claude Opus, Sonnet & Fable, GPT-6 Astra, GPT-5.6 Sol & Terra, Grok 4.7',
+      ru: 'Все из Plus + Claude Opus и Sonnet, GPT-6 Astra, GPT-5.6 Sol и Terra, Grok 4.7',
+      en: 'All Plus + Claude Opus & Sonnet, GPT-6 Astra, GPT-5.6 Sol & Terra, Grok 4.7',
     },
     bullets: {
       ru: [
         'Все, что входит в тариф Plus',
-        'Топовые модели: Claude Opus 5.5, Sonnet 5.5, Fable 5.1, GPT-6 Astra, GPT-5.6 Sol, GPT-5.6 Terra xhigh, Grok 4.7 xhigh',
+        'Топовые модели: Claude Opus 5.5, Sonnet 5.5, GPT-6 Astra, GPT-5.6 Sol, GPT-5.6 Terra xhigh, Grok 4.7 xhigh',
         'Размышления на уровне medium (Grok и Terra — всегда xhigh)',
         'Суточные лимиты по моделям: после лимита отвечает запасная модель',
         'Высокий приоритет обработки запросов',
@@ -112,7 +112,7 @@ export const PLANS: readonly Plan[] = [
       ],
       en: [
         'All Plus tier features included',
-        'Top models: Claude Opus 5.5, Sonnet 5.5, Fable 5.1, GPT-6 Astra, GPT-5.6 Sol, GPT-5.6 Terra xhigh, Grok 4.7 xhigh',
+        'Top models: Claude Opus 5.5, Sonnet 5.5, GPT-6 Astra, GPT-5.6 Sol, GPT-5.6 Terra xhigh, Grok 4.7 xhigh',
         'Medium reasoning (Grok and Terra always run at xhigh)',
         'Daily limits per model: a backup model answers after the limit',
         'High request processing priority',
@@ -122,12 +122,12 @@ export const PLANS: readonly Plan[] = [
     highlights: {
       ru: [
         'Все возможности тарифа Plus',
-        'Claude Opus, Sonnet, Fable, GPT-6 Astra, Grok 4.7',
+        'Claude Opus, Sonnet, GPT-6 Astra, Grok 4.7',
         'Размышления medium, суточные лимиты по моделям',
       ],
       en: [
         'All Plus tier features included',
-        'Claude Opus, Sonnet, Fable, GPT-6 Astra, Grok 4.7',
+        'Claude Opus, Sonnet, GPT-6 Astra, Grok 4.7',
         'Medium reasoning, daily limits per model',
       ],
     },

@@ -92,13 +92,13 @@ const reasoning = (mandatory, efforts, toggle = false) => ({
  *   gpt-6.1-sol        GPT-6.1 Sol         AA 52    $0.035   сильная модель OpenAI (Plus)
  *   claude-sonnet-5.5  Claude Sonnet 5.5   AA 56    $0.035 / $0.085 (medium / xhigh)
  *   claude-opus-5.5    Claude Opus 5.5     AA 58    $0.070 / $0.170
- *   claude-fable-5.1   Claude Fable 5.1    AA 53    $0.176 / $0.426  лучшая в коде (AA Coding 82)
  *   gpt-6-astra        GPT-6 Astra         AA 53    $0.176 / $0.426
  *   grok-4.7           Grok 4.7 xhigh      AA 46    $0.057
  *   gpt-5.6-terra      GPT-5.6 Terra xhigh AA 42    $0.099   модель для кода (AA Coding 77)
  *
  * Суточные лимиты и цепочки запасных моделей: services/daily-limits.ts и fallbackModelId ниже.
- * Не вошли: Kimi K3, Qwen3.8 Max, Muse Spark, Nemotron 3 Ultra (хуже и дороже модели ketner-pro).
+ * Не вошли: Claude Fable 5.1 (в 2.5 раза дороже Opus 5.5 при более низком AA), Kimi K3, Qwen3.8 Max,
+ * Muse Spark, Nemotron 3 Ultra (хуже и дороже модели ketner-pro).
  */
 const DEFAULT_REGISTRY_ENTRIES = [
     {
@@ -478,7 +478,7 @@ const DEFAULT_REGISTRY_ENTRIES = [
         updatedAt: now(),
     },
     // ── Модели Pro и Ultra: фиксированная глубина размышлений (medium, на Ultra в режиме Max — xhigh) ──
-    // Запасные идут от дорогой к дешёвой с сохранением качества: Fable → Opus → Sonnet → Ketner Pro → Haiku.
+    // Запасные идут от дорогой к дешёвой с сохранением качества: Opus → Sonnet → Ketner Pro → Haiku.
     {
         id: 'claude-opus-5.5',
         name: 'Claude Opus 5.5',
@@ -538,38 +538,6 @@ const DEFAULT_REGISTRY_ENTRIES = [
         contextMessages: 120,
         isPro: true,
         fallbackModelId: WORKHORSE_MODEL_ID,
-        defaultSystemPrompt: DEFAULT_SYSTEM_PROMPT,
-        createdAt: now(),
-        updatedAt: now(),
-    },
-    // Самая дорогая модель Anthropic (лучшая в коде по AA Coding Index), после лимита — Opus 5.5.
-    {
-        id: 'claude-fable-5.1',
-        name: 'Claude Fable 5.1',
-        provider: 'openrouter',
-        providerModelId: 'anthropic/claude-fable-5.1',
-        enabled: true,
-        tier: 'flagship',
-        costClass: 'top',
-        reasoning: reasoning(true, ['low', 'medium', 'high', 'xhigh', 'max']),
-        effortProfile: STANDARD_PROFILE,
-        capabilities: makeCapabilities({
-            reasoning: true,
-            coding: true,
-            vision: true,
-            creative: true,
-            math: true,
-            translation: true,
-            research: true,
-            longContext: true,
-        }),
-        contextWindow: 1000000,
-        maxOutputTokens: 32768,
-        pricing: makePricing(10, 50, 0.25),
-        requiredPlan: 'pro',
-        contextMessages: 120,
-        isPro: true,
-        fallbackModelId: 'claude-opus-5.5',
         defaultSystemPrompt: DEFAULT_SYSTEM_PROMPT,
         createdAt: now(),
         updatedAt: now(),
@@ -771,7 +739,9 @@ const DEFAULT_REGISTRY_ENTRIES = [
  */
 export const LEGACY_MODEL_ALIASES = {
     'gpt-4o': 'gpt-6.1-sol',
-    'claude-fable': 'claude-fable-5.1',
+    // Claude Fable 5.1 убрана из каталога (дороже Opus при более низкой оценке): старый выбор ведёт на Opus.
+    'claude-fable': 'claude-opus-5.5',
+    'claude-fable-5.1': 'claude-opus-5.5',
     'claude-sonnet': 'claude-sonnet-5.5',
     'claude-3.5-sonnet': 'claude-sonnet-5.5',
     'claude-3-haiku': 'claude-haiku-5.5',

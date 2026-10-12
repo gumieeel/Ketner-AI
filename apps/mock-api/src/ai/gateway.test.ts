@@ -63,7 +63,8 @@ test('ModelRegistry: получение, разрешение и проверк�
 
   // Старые идентификаторы из сохранённых диалогов и истории расхода ведут на актуальные модели
   assert.equal(registry.get('gpt-6.1-sol')?.id, 'gpt-6.1-sol');
-  assert.equal(registry.get('claude-fable')?.id, 'claude-fable-5.1');
+  assert.equal(registry.get('claude-fable')?.id, 'claude-opus-5.5');
+  assert.equal(registry.get('claude-fable-5.1')?.id, 'claude-opus-5.5', 'Fable убрана: сохранённый выбор ведёт на Opus');
   assert.equal(registry.get('gpt-6-astra')?.id, 'gpt-6-astra', 'GPT-6 Astra снова в каталоге под своим id');
   assert.equal(registry.get('claude-3.5-sonnet')?.id, 'claude-sonnet-5.5');
   assert.equal(registry.get('gemini-pro')?.id, 'gemini-3.8-flash');

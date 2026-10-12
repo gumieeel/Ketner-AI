@@ -226,7 +226,7 @@ export class TelegramBotService {
 
       await this.callApi('setMyDescription', {
         description:
-          '🤖 Официальный платёжный сервис Ketner AI.\n\nМгновенная оплата подписок на флагманские модели ИИ (GPT-6 Astra, Claude Fable, Gemini 2.5 Pro) через Telegram Stars (⭐️) и СБП (0% комиссии). Синхронизация с веб-аккаунтом.',
+          '🤖 Официальный платёжный сервис Ketner AI.\n\nМгновенная оплата подписок на флагманские модели ИИ (GPT-6 Astra, Claude Opus, Grok) через Telegram Stars (⭐️) и СБП (0% комиссии). Синхронизация с веб-аккаунтом.',
       });
 
       const effectiveBaseUrl =
@@ -978,7 +978,7 @@ export class TelegramBotService {
           '',
           '💎 <b>Актуальные тарифы:</b>',
           '• <b>Plus</b> ($9 / <b>500 ⭐️</b> / 890 ₽) — Ketner Pro, Claude Haiku 5.5, DeepSeek V4.1 Flash и GPT-6.1 Sol по квоте',
-          '• <b>Pro</b> ($25 / <b>1 350 ⭐️</b> / 2 490 ₽) — всё из Plus + Claude Opus, Sonnet, Fable, GPT-6 Astra, GPT-5.6 Sol и Terra, Grok 4.7 с суточными лимитами',
+          '• <b>Pro</b> ($25 / <b>1 350 ⭐️</b> / 2 490 ₽) — всё из Plus + Claude Opus, Sonnet, GPT-6 Astra, GPT-5.6 Sol и Terra, Grok 4.7 с суточными лимитами',
           '• <b>Ultra</b> ($49 [скидка] / <b>2 650 ⭐️</b> / 4 890 ₽) — режим Max (xhigh), лимиты в 2–3 раза выше, VIP-приоритет',
           '',
           '💡 <i>Чтобы привязать этот Telegram к вашему аккаунту на сайте, нажмите кнопку «Привязать аккаунт» ниже.</i>',
@@ -1136,7 +1136,7 @@ export class TelegramBotService {
       '• Быстрая скорость генерации и базовый контекст',
       '',
       '2️⃣ <b>PRO</b> (⭐️ Популярный) — <b>$25/мес</b> (~2 490 ₽) или <b>1 350 ⭐️</b>',
-      '• Всё из Plus + Claude Opus 5.5, Sonnet 5.5, Fable 5.1, GPT-6 Astra, GPT-5.6 Sol, GPT-5.6 Terra, Grok 4.7 (суточные лимиты)',
+      '• Всё из Plus + Claude Opus 5.5, Sonnet 5.5, GPT-6 Astra, GPT-5.6 Sol, GPT-5.6 Terra, Grok 4.7 (суточные лимиты)',
       '• Все флагманские модели без отдельных подписок',
       '',
       '3️⃣ <b>ULTRA</b> (🔥 Скидка $10 вместо $59) — <b>$49/мес</b> (~4 890 ₽) или <b>2 650 ⭐️</b>',

@@ -106,7 +106,7 @@ const PLANS_DATA: PlanCardInfo[] = [
     features: {
       ru: [
         'Все, что входит в тариф Plus',
-        'Топовые модели: Claude Opus 5.5, Sonnet 5.5, Fable 5.1, GPT-6 Astra, GPT-5.6 Sol, GPT-5.6 Terra xhigh, Grok 4.7 xhigh',
+        'Топовые модели: Claude Opus 5.5, Sonnet 5.5, GPT-6 Astra, GPT-5.6 Sol, GPT-5.6 Terra xhigh, Grok 4.7 xhigh',
         'Размышления medium (Grok и Terra — xhigh), суточные лимиты по моделям с запасными моделями',
         'Пониженный контекст и скорость по сравнению с Ultra',
         'Высокий серверный приоритет обработки запросов',
@@ -114,7 +114,7 @@ const PLANS_DATA: PlanCardInfo[] = [
       ],
       en: [
         'All Plus tier features included',
-        'Top models: Claude Opus 5.5, Sonnet 5.5, Fable 5.1, GPT-6 Astra, GPT-5.6 Sol, GPT-5.6 Terra xhigh, Grok 4.7 xhigh',
+        'Top models: Claude Opus 5.5, Sonnet 5.5, GPT-6 Astra, GPT-5.6 Sol, GPT-5.6 Terra xhigh, Grok 4.7 xhigh',
         'Medium reasoning (Grok and Terra at xhigh), daily per-model limits with backup models',
         'Reduced context and speed compared to Ultra tier',
         'High server request priority',

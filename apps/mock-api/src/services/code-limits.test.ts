@@ -10,7 +10,7 @@ test('бюджет запуска агента не выше дневного п
   }
 });
 
-test('Pro и Ultra: бюджета запуска хватает на типичную задачу на Fable 5.1 / GPT-6 Astra', () => {
+test('Pro и Ultra: бюджета запуска хватает на типичную задачу на GPT-6 Astra', () => {
   // 15 шагов × 20k токенов, половина из кэша, 6k на выходе (medium) / 15k (Max): $1.95 и $2.40 у Astra.
   assert.ok(CODE_LIMITS.pro.maxRunCostUsd >= 1.95);
   assert.ok(CODE_LIMITS.ultra.maxRunCostUsd >= 2.4);

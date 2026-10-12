@@ -62,7 +62,7 @@ export const PLANS: readonly PlanItem[] = [
       ru: 'Все флагманы AI',
       en: 'All Flagship AIs',
     },
-    modelsHighlight: 'Claude Opus 5.5, Sonnet 5.5, Fable 5.1, GPT-6 Astra, GPT-5.6 Sol, GPT-5.6 Terra, Grok 4.7',
+    modelsHighlight: 'Claude Opus 5.5, Sonnet 5.5, GPT-6 Astra, GPT-5.6 Sol, GPT-5.6 Terra, Grok 4.7',
     bullets: {
       ru: [
         'Флагманские модели Claude, GPT и Grok с суточными лимитами',
@@ -130,7 +130,7 @@ function createLegacyPlan(
 
 export const LEGACY_PLANS: readonly PlanItem[] = [
   createLegacyPlan('gpt-pro', 'pricing.gptPro', 'GPT-6 Astra + All Pro Models'),
-  createLegacyPlan('claude-pro', 'pricing.claudePro', 'Claude Fable + All Pro Models'),
+  createLegacyPlan('claude-pro', 'pricing.claudePro', 'Claude + All Pro Models'),
   createLegacyPlan('gemini-pro', 'pricing.geminiPro', 'Gemini Pro + All Pro Models'),
 ];
 

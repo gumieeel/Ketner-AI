@@ -128,7 +128,8 @@ test('free не получает платные движки, plus получа�
 test('resolveModel для публичных id возвращает ту же модель, старые id — актуальную, неизвестный id — auto', () => {
   assert.equal(resolveModel('gpt-6.1-sol').id, 'gpt-6.1-sol');
   assert.equal(resolveModel('gpt-6-astra').id, 'gpt-6-astra');
-  assert.equal(resolveModel('claude-fable').id, 'claude-fable-5.1');
+  assert.equal(resolveModel('claude-fable').id, 'claude-opus-5.5');
+  assert.equal(resolveModel('claude-fable-5.1').id, 'claude-opus-5.5');
   assert.equal(resolveModel('gpt-4o').id, 'gpt-6.1-sol');
   assert.equal(resolveModel('нет-такой-модели').id, 'auto');
 });

@@ -33,7 +33,6 @@
 | `gpt-6.1-sol` | GPT-6.1 Sol | strong | Plus | `openai/gpt-6.1-sol` | 2.00 / 10.00 |
 | `claude-opus-5.5` | Claude Opus 5.5 | top | Pro | `anthropic/claude-opus-5.5` | 4.00 / 20.00 |
 | `claude-sonnet-5.5` | Claude Sonnet 5.5 | strong | Pro | `anthropic/claude-sonnet-5.5` | 2.00 / 10.00 |
-| `claude-fable-5.1` | Claude Fable 5.1 | top | Pro | `anthropic/claude-fable-5.1` | 10.00 / 50.00 |
 | `gpt-6-astra` | GPT-6 Astra | top | Pro | `openai/gpt-6-astra` | 10.00 / 50.00 |
 | `grok-4.7` | Grok 4.7 xhigh | strong | Pro | `x-ai/grok-4.7` | 2.00 / 6.00 |
 | `gpt-5.6-sol` | GPT-5.6 Sol | strong | Pro | `openai/gpt-5.6-sol` | 2.00 / 10.00 |
@@ -75,7 +74,6 @@ Gemini 4 Argon анонсирована Google 30.09.2026, но в OpenRouter е
 
 | Модель | Pro, в сутки | Ultra, в сутки | Запасные по очереди |
 |---|---|---|---|
-| Claude Fable 5.1 | 1 | 3 | Opus 5.5 → Sonnet 5.5 → Ketner Pro → Haiku 5.5 |
 | GPT-6 Astra | 1 | 3 | GPT-6.1 Sol → GPT-6 Luna Pro → Ketner Mini |
 | Claude Opus 5.5 | 3 | 7 | Sonnet 5.5 → Ketner Pro → Haiku 5.5 |
 | Claude Sonnet 5.5 | 6 | 14 | Ketner Pro → Haiku 5.5 |
@@ -88,15 +86,15 @@ Gemini 4 Argon анонсирована Google 30.09.2026, но в OpenRouter е
 | Ketner Pro | 60 | 150 | Haiku 5.5 |
 | Gemini 3.7 Flash / GPT-5.6 Luna Pro / Qwen3.8 27B | 15 / 30 / 40 | 40 / 80 / 100 | как в Plus |
 
-Как выбирались запасные: каждая следующая модель заметно дешевле (в 2–10 раз), но близка по качеству (AA Intelligence Index): Opus 5.5 (58) не хуже Fable 5.1 (53) при цене в 2.5 раза ниже, Sonnet 5.5 (56) вдвое дешевле Opus, GPT-6.1 Sol (52) в 5 раз дешевле Astra (53), Ketner Pro (MiMo, 46) почти как Grok 4.7 (46) при цене в 11 раз ниже, Gemini 3.8 Flash почти как Terra по AA Coding Index (76 против 77) и в 7 раз дешевле.
+Как выбирались запасные: каждая следующая модель заметно дешевле (в 2–10 раз), но близка по качеству (AA Intelligence Index): Sonnet 5.5 (56) вдвое дешевле Opus, GPT-6.1 Sol (52) в 5 раз дешевле Astra (53), Ketner Pro (MiMo, 46) почти как Grok 4.7 (46) при цене в 11 раз ниже, Gemini 3.8 Flash почти как Terra по AA Coding Index (76 против 77) и в 7 раз дешевле.
 
 ### Режим размышлений Pro и Ultra, кнопка Max
 
-Модели Pro и Ultra работают с фиксированной глубиной размышлений, а не адаптивной: Claude Opus, Sonnet, Fable, GPT-6 Astra, GPT-5.6 Sol (и Gemini 4 Argon) — medium; Grok 4.7 и GPT-5.6 Terra — всегда xhigh (так и подписаны). На Ultra в шапке чата есть кнопка **Max**: она переводит первые шесть моделей на xhigh (запрос дороже примерно в 2.4 раза) и считается за **2** в суточном лимите модели; на xhigh-моделях Max ничего не меняет. На Pro кнопка видна с замком и открывает переход на Ultra; сервер сам проверяет тариф (`reasoningMode: 'max'` от Pro выполняется как обычный запрос). Режим действует и в чате, и в агенте Ketner Code. При расходе 80% бюджета глубина опускается до low, а премиум-модели заменяются рабочими.
+Модели Pro и Ultra работают с фиксированной глубиной размышлений, а не адаптивной: Claude Opus, Sonnet, GPT-6 Astra, GPT-5.6 Sol (и Gemini 4 Argon) — medium; Grok 4.7 и GPT-5.6 Terra — всегда xhigh (так и подписаны). На Ultra в шапке чата есть кнопка **Max**: она переводит первые пять моделей на xhigh (запрос дороже примерно в 2.4 раза) и считается за **2** в суточном лимите модели; на xhigh-моделях Max ничего не меняет. На Pro кнопка видна с замком и открывает переход на Ultra; сервер сам проверяет тариф (`reasoningMode: 'max'` от Pro выполняется как обычный запрос). Режим действует и в чате, и в агенте Ketner Code. При расходе 80% бюджета глубина опускается до low, а премиум-модели заменяются рабочими.
 
-Старые id (`claude-fable` → Fable 5.1, `claude-3.5-sonnet` → Sonnet 5.5, `gemini-pro`, `gpt-4o`, `nemotron` и др.) продолжают работать через `LEGACY_MODEL_ALIASES`. `gpt-6-astra` снова настоящая модель каталога.
+Старые id (`claude-fable` и `claude-fable-5.1` → Opus 5.5, `claude-3.5-sonnet` → Sonnet 5.5, `gemini-pro`, `gpt-4o`, `nemotron` и др.) продолжают работать через `LEGACY_MODEL_ALIASES`. `gpt-6-astra` снова настоящая модель каталога.
 
-Не вошли намеренно: Kimi K3, Qwen3.8 Max, Muse Spark, Nemotron 3 Ultra (хуже и дороже Ketner Pro).
+Не вошли намеренно: Claude Fable 5.1 (убрана 12.10.2026: в 2.5 раза дороже Opus 5.5 при более низкой оценке AA), Kimi K3, Qwen3.8 Max, Muse Spark, Nemotron 3 Ultra (хуже и дороже Ketner Pro).
 
 ### Правила Auto
 
@@ -155,7 +153,7 @@ Claude Opus 5.5 Auto не выбирает никогда: он только п�
 | Claude Opus 5.5 | high | 4 000 | $0.1104 |
 | Claude Sonnet 5.5 / GPT-5.6 Sol | medium / xhigh | 2 000 / 7 000 | $0.0352 / $0.0852 |
 | Claude Opus 5.5 | xhigh | 7 000 | $0.1704 |
-| Claude Fable 5.1 / GPT-6 Astra | medium / xhigh | 2 000 / 7 000 | $0.176 / $0.426 |
+| GPT-6 Astra | medium / xhigh | 2 000 / 7 000 | $0.176 / $0.426 |
 | Grok 4.7 | xhigh | 7 000 | $0.0572 |
 | GPT-5.6 Terra | xhigh | 7 000 | $0.0992 |
 

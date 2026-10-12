@@ -232,7 +232,6 @@ export const en: Record<TranslationKey, string> = {
   'chat.modelGemini': 'Gemini 3.8 Flash',
   'chat.modelGrok': 'Grok 4.7 xhigh',
   'chat.modelClaudeSonnet': 'Claude Sonnet 5.5',
-  'chat.modelClaudeFable': 'Claude Fable 5.1',
   'chat.modelGptAstra': 'GPT-6 Astra',
   'chat.modelGpt56Sol': 'GPT-5.6 Sol',
   'chat.modelGpt56Terra': 'GPT-5.6 Terra xhigh',
@@ -243,7 +242,7 @@ export const en: Record<TranslationKey, string> = {
   'chat.maxModeLocked': 'Max mode is available on Ultra',
   'chat.maxModeBadge': '⚡ Max mode',
   'chat.maxModeUpgradeTitle': 'Max mode is available on Ultra',
-  'chat.maxModeUpgradeDesc': 'In Max mode Claude Opus, Sonnet, Fable, GPT-6 Astra and GPT-5.6 Sol reason at xhigh instead of medium for deeper answers on hard tasks. Upgrade to Ultra to turn it on.',
+  'chat.maxModeUpgradeDesc': 'In Max mode Claude Opus, Sonnet, GPT-6 Astra and GPT-5.6 Sol reason at xhigh instead of medium for deeper answers on hard tasks. Upgrade to Ultra to turn it on.',
   'chat.modelClaudeOpus': 'Claude Opus 5.5',
   'chat.upgradeRequired': 'Upgrade your plan',
   'chat.upgradeRequiredDesc':

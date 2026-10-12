@@ -565,43 +565,42 @@ test('экономный режим (80% бюджета): вместо моде�
   assert.equal(calls[0].model, 'xiaomi/mimo-v2.6-pro');
 });
 
-test('суточный лимит Pro: Fable → Opus → Sonnet → Ketner Pro', async () => {
+test('суточный лимит Pro: Opus → Sonnet → Ketner Pro', async () => {
   const usage = newUsage();
   const calls: Call[] = [];
   const gateway = makeGateway(fakeOpenRouter(okStream('ок', { cost: 0.01 }), calls), usage);
-  const ask = () => run(gateway, request({ userId: 'u-chain', userPlan: 'pro', modelId: 'claude-fable-5.1' }));
+  const ask = () => run(gateway, request({ userId: 'u-chain', userPlan: 'pro', modelId: 'claude-opus-5.5' }));
 
   const picked: string[] = [];
-  for (let i = 0; i < 11; i++) {
+  for (let i = 0; i < 10; i++) {
     const out = await ask();
     assertNoError(out);
     picked.push(out.done?.selectedModel?.id ?? '');
   }
-  // Fable 1 в сутки, затем Opus 3, затем Sonnet 6, затем Ketner Pro.
+  // Opus 3 в сутки, затем Sonnet 6, затем Ketner Pro.
   assert.deepEqual(picked, [
-    'claude-fable-5.1',
     'claude-opus-5.5', 'claude-opus-5.5', 'claude-opus-5.5',
     'claude-sonnet-5.5', 'claude-sonnet-5.5', 'claude-sonnet-5.5', 'claude-sonnet-5.5', 'claude-sonnet-5.5', 'claude-sonnet-5.5',
     'ketner-pro',
   ]);
   const last = await ask();
-  assert.match(last.done?.routingReason ?? '', /Daily limit reached for Claude Fable 5\.1 \(1\/day on pro\)/);
+  assert.match(last.done?.routingReason ?? '', /Daily limit reached for Claude Opus 5\.5 \(3\/day on pro\)/);
 });
 
-test('режим Max считается за 2: на Ultra Fable в режиме Max — 1 раз в сутки из 3', async () => {
+test('режим Max считается за 2: на Ultra Opus в режиме Max — 3 раза в сутки из 7', async () => {
   const usage = newUsage();
   const calls: Call[] = [];
   const gateway = makeGateway(fakeOpenRouter(okStream('ок', { cost: 0.02 }), calls), usage);
   const ask = (mode?: 'max') =>
-    run(gateway, request({ userId: 'u-maxu', userPlan: 'ultra', modelId: 'claude-fable-5.1', ...(mode ? { reasoningMode: mode } : {}) }));
+    run(gateway, request({ userId: 'u-maxu', userPlan: 'ultra', modelId: 'claude-opus-5.5', ...(mode ? { reasoningMode: mode } : {}) }));
 
-  assert.equal((await ask('max')).done?.selectedModel?.id, 'claude-fable-5.1');
-  assert.equal(usage.getModelUsesLastDay('u-maxu', ['claude-fable-5.1']), 2);
-  // Осталась 1 единица: запрос Max (2) уже не помещается, отвечает Opus.
-  assert.equal((await ask('max')).done?.selectedModel?.id, 'claude-opus-5.5');
+  for (let i = 0; i < 3; i++) assert.equal((await ask('max')).done?.selectedModel?.id, 'claude-opus-5.5');
+  assert.equal(usage.getModelUsesLastDay('u-maxu', ['claude-opus-5.5']), 6);
+  // Осталась 1 единица: запрос Max (2) уже не помещается, отвечает Sonnet.
+  assert.equal((await ask('max')).done?.selectedModel?.id, 'claude-sonnet-5.5');
   // Обычный запрос (1 единица) ещё помещается.
-  assert.equal((await ask()).done?.selectedModel?.id, 'claude-fable-5.1');
   assert.equal((await ask()).done?.selectedModel?.id, 'claude-opus-5.5');
+  assert.equal((await ask()).done?.selectedModel?.id, 'claude-sonnet-5.5');
 });
 
 test('GPT-6 Astra после лимита → GPT-6.1 Sol, Terra → Gemini 3.8 Flash', async () => {

@@ -124,7 +124,6 @@ test('модели Pro и Ultra: id в OpenRouter, профиль размышл
   const expect = {
     'claude-opus-5.5': ['anthropic/claude-opus-5.5', 'medium', 'claude-sonnet-5.5'],
     'claude-sonnet-5.5': ['anthropic/claude-sonnet-5.5', 'medium', 'ketner-pro'],
-    'claude-fable-5.1': ['anthropic/claude-fable-5.1', 'medium', 'claude-opus-5.5'],
     'gpt-6-astra': ['openai/gpt-6-astra', 'medium', 'gpt-6.1-sol'],
     'grok-4.7': ['x-ai/grok-4.7', 'xhigh', 'ketner-pro'],
     'gpt-5.6-sol': ['openai/gpt-5.6-sol', 'medium', 'ketner-pro'],
@@ -141,4 +140,6 @@ test('модели Pro и Ultra: id в OpenRouter, профиль размышл
   }
   // Gemini 4 Argon анонсирована, но в OpenRouter её нет: модель выключена и в каталог не попадает.
   assert.equal(registry.get('gemini-4-argon')?.enabled, false);
+  // Claude Fable 5.1 убрана: отдельной записи нет, старый id ведёт на Opus.
+  assert.equal(registry.get('claude-fable-5.1')?.id, 'claude-opus-5.5');
 });
