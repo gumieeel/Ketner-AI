@@ -138,6 +138,9 @@ export function createBetterAuth(options = {}) {
                     google: {
                         clientId: config.googleClientId,
                         clientSecret: config.googleClientSecret,
+                        // Всегда показывать выбор аккаунта: без этого Google молча берёт тот, под которым
+                        // браузер уже вошёл (на телефоне это часто не тот аккаунт).
+                        prompt: 'select_account',
                     },
                 }
                 : {}),
