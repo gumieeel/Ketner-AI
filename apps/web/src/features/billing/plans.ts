@@ -62,14 +62,14 @@ export const PLANS: readonly Plan[] = [
     bullets: {
       ru: [
         'Модели: Ketner Pro, GPT-6.1 Sol, Claude Haiku 5.5, DeepSeek V4.1 Flash',
-        'GPT-6.1 Sol доступна в рамках ежемесячной квоты премиум-запросов',
+        'Картинки FLUX.2 klein в пяти форматах',
         'Быстрая скорость генерации ответов',
         'Стандартный контекст диалога',
         'Доступ через Auto Mode или ручной выбор модели',
       ],
       en: [
         'Models: Ketner Pro, GPT-6.1 Sol, Claude Haiku 5.5, DeepSeek V4.1 Flash',
-        'GPT-6.1 Sol is available within the monthly premium-request quota',
+        'FLUX.2 klein images in five aspect ratios',
         'Fast response generation speed',
         'Standard conversation context',
         'Access via Auto Mode or manual model selection',
@@ -105,16 +105,14 @@ export const PLANS: readonly Plan[] = [
       ru: [
         'Все, что входит в тариф Plus',
         'Топовые модели: Claude Opus 5.5, Sonnet 5.5, GPT-6 Astra, GPT-5.6 Sol, GPT-5.6 Terra xhigh, Grok 4.7 xhigh',
-        'Размышления на уровне medium (Grok и Terra — всегда xhigh)',
-        'Суточные лимиты по моделям: после лимита отвечает запасная модель',
+        'Картинки FLUX.2 dev и Seedream',
         'Высокий приоритет обработки запросов',
         'Ручной выбор любой топовой модели',
       ],
       en: [
         'All Plus tier features included',
         'Top models: Claude Opus 5.5, Sonnet 5.5, GPT-6 Astra, GPT-5.6 Sol, GPT-5.6 Terra xhigh, Grok 4.7 xhigh',
-        'Medium reasoning (Grok and Terra always run at xhigh)',
-        'Daily limits per model: a backup model answers after the limit',
+        'FLUX.2 dev and Seedream images',
         'High request processing priority',
         'Manual selection of any top model',
       ],
@@ -123,12 +121,12 @@ export const PLANS: readonly Plan[] = [
       ru: [
         'Все возможности тарифа Plus',
         'Claude Opus, Sonnet, GPT-6 Astra, Grok 4.7',
-        'Размышления medium, суточные лимиты по моделям',
+        'Картинки FLUX.2 dev и Seedream',
       ],
       en: [
         'All Plus tier features included',
         'Claude Opus, Sonnet, GPT-6 Astra, Grok 4.7',
-        'Medium reasoning, daily limits per model',
+        'FLUX.2 dev and Seedream images',
       ],
     },
   },
@@ -146,22 +144,22 @@ export const PLANS: readonly Plan[] = [
       en: 'Maximum power',
     },
     modelsHighlight: {
-      ru: 'Все модели Pro + режим Max (xhigh) и лимиты в 2–3 раза выше',
-      en: 'All Pro models + Max mode (xhigh) and 2–3× higher limits',
+      ru: 'Все модели Pro + режим Max и лучшие модели картинок',
+      en: 'All Pro models + Max mode and the best image models',
     },
     bullets: {
       ru: [
         'Все, что входит в тариф Pro',
-        'Режим Max: модели Pro размышляют на уровне xhigh вместо medium',
-        'Суточные лимиты моделей в 2–3 раза выше, чем на Pro',
+        'Режим Max: модели думают дольше и глубже',
+        'Картинки FLUX.2 pro и Nano Banana 2',
         'Максимальный контекст диалога',
         'Наивысший VIP-приоритет обработки запросов без ожидания',
         'Параллельные запросы без задержек',
       ],
       en: [
         'All Pro tier features included',
-        'Max mode: Pro models reason at xhigh instead of medium',
-        'Daily model limits 2–3× higher than on Pro',
+        'Max mode: models think longer and deeper',
+        'FLUX.2 pro and Nano Banana 2 images',
         'Maximum conversation context',
         'Top VIP queue priority with zero waiting',
         'Parallel concurrent requests without delays',
@@ -169,13 +167,13 @@ export const PLANS: readonly Plan[] = [
     },
     highlights: {
       ru: [
-        'Режим Max: размышления xhigh',
-        'Лимиты моделей в 2–3 раза выше Pro',
+        'Режим Max: модели думают глубже',
+        'FLUX.2 pro и Nano Banana 2',
         'Максимальный контекст и VIP-приоритет',
       ],
       en: [
-        'Max mode: xhigh reasoning',
-        '2–3× higher model limits than Pro',
+        'Max mode: deeper thinking',
+        'FLUX.2 pro and Nano Banana 2',
         'Maximum context & VIP priority',
       ],
     },

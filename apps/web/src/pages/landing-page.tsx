@@ -1,5 +1,4 @@
 import { useEffect } from 'react';
-import { LandingAutoPipeline } from './landing/auto-pipeline';
 import { LandingFaq } from './landing/faq';
 import { LandingFinalCta } from './landing/final-cta';
 import { LandingHero } from './landing/hero';
@@ -22,7 +21,6 @@ export function LandingPage() {
     <div className="flex w-full flex-col">
       <LandingHero />
       <LandingProviders />
-      <LandingAutoPipeline />
       <LandingWorkspaces />
       <LandingModels />
       <LandingSavings />

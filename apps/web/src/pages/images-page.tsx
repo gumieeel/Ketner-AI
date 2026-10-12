@@ -268,11 +268,7 @@ export function ImagesPage() {
             </div>
 
             <div className="flex items-center justify-between gap-3 lg:flex-col lg:items-end">
-              {model && !model.locked ? (
-                <span className="text-xs text-muted">{t('images.usage', { used: Math.min(model.usedToday, model.dailyLimit), limit: model.dailyLimit })}</span>
-              ) : (
-                <span />
-              )}
+              <span />
               <Button
                 size="lg"
                 onClick={() => void generate()}
@@ -307,7 +303,7 @@ export function ImagesPage() {
             >
               {notice.tone === 'error' ? <AlertIcon className="mt-0.5 size-4 shrink-0" /> : <InfoIcon className="mt-0.5 size-4 shrink-0" />}
               <span className="min-w-0 flex-1">
-                {notice.tone === 'info' ? t('images.replaced', { model: notice.text }) : notice.text}
+                {notice.text}
                 {notice.code && UPGRADE_CODES.has(notice.code) ? (
                   <>
                     {' '}

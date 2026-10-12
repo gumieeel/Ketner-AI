@@ -110,13 +110,13 @@ export const useImages = create<ImagesState>((set, get) => ({
     controller = new AbortController();
     set({ generating: true, pendingAspect: effectiveAspect, notice: null });
     try {
-      const { image, replacedBy } = await imagesApi.generate(
+      const { image } = await imagesApi.generate(
         { prompt: text, modelId, aspect: effectiveAspect, style, language: usePreferences.getState().language },
         controller.signal,
       );
       set((state) => ({
         images: [image, ...state.images],
-        notice: replacedBy ? { tone: 'info', text: replacedBy } : null,
+        notice: null,
         capabilities: state.capabilities
           ? {
               ...state.capabilities,

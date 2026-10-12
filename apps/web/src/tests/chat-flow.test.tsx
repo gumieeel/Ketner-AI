@@ -378,8 +378,8 @@ describe('чат: отправка, стриминг и управление о�
     expect(await screen.findByText('Готово')).toBeInTheDocument();
   });
 
-  it('после 3 сообщений на бесплатном плане весь экран затемняется и выскакивает модалка исчерпания лимита', async () => {
-    installFakeApi({ reply: 'Ответ модели' });
+  it('когда сервер отказывает бесплатному аккаунту, весь экран затемняется и открывается предложение тарифа', async () => {
+    installFakeApi({ reply: 'Ответ модели', rateLimitAfter: 1 });
     useAuth.setState({
       user: {
         id: 'free-user',
@@ -394,39 +394,24 @@ describe('чат: отправка, стриминг и управление о�
     const user = setupChat();
     await screen.findByRole('heading', { level: 2, name: EMPTY_TITLE });
 
-    // Отправляем 1-е сообщение
+    // Первое сообщение проходит: клиент сам ничего не считает
     await sendMessage(user, 'Первое сообщение');
     expect(await screen.findAllByText('Первое сообщение')).not.toHaveLength(0);
     await waitFor(() => expect(useChat.getState().streaming).toBe(false));
+    expect(screen.queryByRole('dialog')).toBeNull();
 
-    // Отправляем 2-е сообщение
+    // Второе сервер отклоняет (429 rate_limited) — открывается модалка без цифр лимита
     await sendMessage(user, 'Второе сообщение');
-    expect(await screen.findAllByText('Второе сообщение')).not.toHaveLength(0);
-    await waitFor(() => expect(useChat.getState().streaming).toBe(false));
-
-    // Отправляем 3-е сообщение
-    await sendMessage(user, 'Третье сообщение');
-    expect(await screen.findAllByText('Третье сообщение')).not.toHaveLength(0);
-    await waitFor(() => expect(useChat.getState().streaming).toBe(false));
-
-    // После 3-го сообщения весь экран затемняется и открывается модалка лимита
     const modal = await screen.findByRole('dialog');
-    expect(modal).toBeInTheDocument();
     expect(modal).toHaveClass('backdrop-blur-md');
-    expect(within(modal).getByText('Лимит бесплатного плана исчерпан')).toBeInTheDocument();
-    expect(within(modal).getByText('3 из 3 сообщений использовано')).toBeInTheDocument();
+    expect(within(modal).getByText('Продолжите на платном тарифе')).toBeInTheDocument();
+    expect(within(modal).queryByText(/из 3/)).toBeNull();
 
-    // Закрываем модалку по кнопке закрытия
     await user.click(within(modal).getAllByRole('button', { name: 'Закрыть' })[0]);
     await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
-
-    // Пытаемся отправить 4-е сообщение — поле блокируется, модалка снова открывается
-    const field = screen.getByLabelText(COMPOSER);
-    await user.click(field);
-    expect(await screen.findByRole('dialog')).toBeInTheDocument();
   });
 
-  it('гости без аккаунта могут отправлять сообщения без блокировки лимитом 3 сообщений', async () => {
+  it('гости без аккаунта отправляют сообщения, клиент их не блокирует', async () => {
     installFakeApi({ reply: 'Ответ для гостя' });
     const user = setupChat();
     await screen.findByRole('heading', { level: 2, name: EMPTY_TITLE });

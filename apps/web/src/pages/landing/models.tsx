@@ -23,7 +23,6 @@ const GOOD_FOR: Record<string, TranslationKey> = {
 };
 
 type Tier = 'free' | 'plus' | 'pro';
-const TIER_ORDER: Record<Tier, number> = { free: 0, plus: 1, pro: 2 };
 const TIER_LABEL: Record<Tier, string> = { free: 'Free', plus: 'Plus', pro: 'Pro' };
 const TIER_TONE: Record<Tier, BadgeTone> = { free: 'neutral', plus: 'plus', pro: 'pro' };
 
@@ -33,44 +32,28 @@ function tierOf(requiredPlan: string | undefined): Tier {
   return 'free';
 }
 
-/** Каталог берётся из того же зеркала, что и выбор модели в чате, — цифры не расходятся. */
+/** Каталог берётся из того же зеркала, что и выбор модели в чате. */
 const ROWS = DEFAULT_MODELS.filter((model) => GOOD_FOR[model.id]).map((model) => ({
   id: model.id,
   name: model.name,
   tier: tierOf(model.requiredPlan),
-  limits: model.dailyLimits,
 }));
 
 export function LandingModels() {
   const { t } = useTranslation();
 
-  const limitCell = (tier: Tier, plan: 'plus' | 'pro' | 'ultra', limits: (typeof ROWS)[number]['limits']) => {
-    if (TIER_ORDER[tier] > TIER_ORDER[plan === 'ultra' ? 'pro' : plan]) {
-      return <span className="text-subtle">{t('home.modelsNotIncluded')}</span>;
-    }
-    const value = limits?.[plan];
-    if (value === undefined) {
-      return <span className="text-muted">{t('home.modelsNoLimit')}</span>;
-    }
-    return <span className="text-text">{value}</span>;
-  };
-
   return (
     <section aria-labelledby="models-title" id="models" className="w-full scroll-mt-20 pt-28 md:pt-36">
       <SectionHead id="models-title" title={t('home.modelsTitle')} lead={t('home.modelsLead')} />
 
-      <p className="mt-10 text-[13px] text-subtle md:hidden">{t('home.modelsColLimits')}</p>
-      <div className="mt-3 overflow-hidden rounded-xl border border-stroke bg-surface md:mt-12">
+      <div className="mt-12 overflow-hidden rounded-xl border border-stroke bg-surface">
         <table className="w-full border-collapse text-left">
           <caption className="sr-only">{t('home.modelsTitle')}</caption>
           <thead className="max-md:hidden">
             <tr className="border-b border-stroke text-[13px] text-subtle">
               <th scope="col" className="px-6 py-4 font-normal">{t('home.modelsColModel')}</th>
               <th scope="col" className="px-4 py-4 font-normal">{t('home.modelsColGood')}</th>
-              <th scope="col" className="px-4 py-4 font-normal">{t('home.modelsColFrom')}</th>
-              <th scope="col" colSpan={3} className="px-6 py-4 text-right font-normal">
-                {t('home.modelsColLimits')}
-              </th>
+              <th scope="col" className="px-6 py-4 text-right font-normal">{t('home.modelsColFrom')}</th>
             </tr>
           </thead>
           <tbody>
@@ -85,31 +68,17 @@ export function LandingModels() {
                     <span className="text-[15px] font-medium text-text">{row.name}</span>
                   </span>
                 </th>
-                <td className="px-4 py-3.5 text-[14px] text-muted max-md:col-start-1 max-md:row-start-2 max-md:p-0 max-md:pl-9">
+                <td className="px-4 py-3.5 text-[14px] text-muted max-md:col-span-2 max-md:row-start-2 max-md:p-0 max-md:pl-9">
                   {t(GOOD_FOR[row.id])}
                 </td>
-                <td className="px-4 py-3.5 max-md:col-start-2 max-md:row-start-1 max-md:p-0 max-md:text-right">
+                <td className="px-6 py-3.5 text-right max-md:col-start-2 max-md:row-start-1 max-md:p-0">
                   <Badge tone={TIER_TONE[row.tier]}>{TIER_LABEL[row.tier]}</Badge>
-                </td>
-                {(['plus', 'pro', 'ultra'] as const).map((plan) => (
-                  <td
-                    key={plan}
-                    className="tabular w-[7.5rem] px-2 py-3.5 text-right text-[14px] last:pr-6 max-md:hidden"
-                  >
-                    {limitCell(row.tier, plan, row.limits)}
-                  </td>
-                ))}
-                <td className="tabular hidden text-right text-[13px] text-muted max-md:col-start-2 max-md:row-start-2 max-md:block">
-                  {row.limits
-                    ? [row.limits.plus, row.limits.pro, row.limits.ultra].map((v) => v ?? '—').join(' / ')
-                    : t('home.modelsNoLimit')}
                 </td>
               </tr>
             ))}
           </tbody>
         </table>
       </div>
-      <p className="mt-4 max-w-[70ch] text-[13px] text-subtle">{t('home.modelsFootnote')}</p>
     </section>
   );
 }

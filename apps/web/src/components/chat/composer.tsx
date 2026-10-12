@@ -1,7 +1,6 @@
 import { useEffect, useRef, useState, type ClipboardEvent, type DragEvent, type KeyboardEvent } from 'react';
 import { Link } from 'react-router-dom';
 import {
-  AlertIcon,
   FolderIcon,
   GitHubIcon,
   PaperclipIcon,
@@ -12,7 +11,6 @@ import {
 import { buttonClasses } from '@/components/ui/button-classes';
 import { IconButton } from '@/components/ui/icon-button';
 import { useAuth } from '@/features/auth/auth-store';
-import { isFreeLimitReached } from '@/features/billing/free-usage';
 import { useUpgradeModal } from '@/features/billing/upgrade-modal-store';
 import { readFileAsAttachment } from '@/features/chat/attachment-utils';
 import {
@@ -24,6 +22,7 @@ import {
 import { useChat } from '@/features/chat/chat-store';
 import type { ModelInfo } from '@/features/chat/types';
 import { usePreferences } from '@/features/preferences/preferences-store';
+import { useWorkspace } from '@/features/chat/workspace-store';
 import { useTranslation } from '@/i18n';
 import { cn } from '@/lib/cn';
 import { ComposerAttachments } from './composer-attachments';
@@ -60,8 +59,7 @@ export function Composer() {
 
   const currentModel = findModel(meta?.models, selectedModelId);
   const hasAccess = canAccessModel(user?.plan, currentModel);
-  const isFreeAccount = Boolean(user && (!user.plan || user.plan === 'free'));
-  const freeLimitReached = Boolean(isFreeAccount && user && isFreeLimitReached(user.id));
+  const activeWorkspace = useWorkspace((state) => state.activeWorkspace);
 
   const labelOf = (model: ModelInfo): string => {
     const key = MODEL_NAME_KEYS[model.id];
@@ -73,12 +71,6 @@ export function Composer() {
       reason: 'paid_model',
       modelName: labelOf(currentModel),
       requiredPlan: getRequiredPlanName(currentModel),
-    });
-  };
-
-  const handleFreeLimitAttempt = () => {
-    useUpgradeModal.getState().open({
-      reason: 'free_limit',
     });
   };
 
@@ -167,10 +159,6 @@ export function Composer() {
     if (streaming) {
       return;
     }
-    if (freeLimitReached) {
-      handleFreeLimitAttempt();
-      return;
-    }
     if (!hasAccess) {
       handlePaidModelAttempt();
     }
@@ -188,12 +176,6 @@ export function Composer() {
     }
   };
 
-  const onFieldClick = (): void => {
-    if (freeLimitReached) {
-      handleFreeLimitAttempt();
-    }
-  };
-
   const canSubmit = draft.trim() !== '' || attachedFiles.length > 0;
 
   const bannerClass =
@@ -207,21 +189,7 @@ export function Composer() {
         className="pointer-events-none absolute inset-x-0 -top-6 h-6 bg-gradient-to-t from-canvas to-transparent"
       />
 
-      {freeLimitReached ? (
-        <div role="alert" className={bannerClass}>
-          <div className="flex min-w-0 items-center gap-2">
-            <AlertIcon className="size-4 shrink-0 text-warning" aria-hidden="true" />
-            <span className="font-medium">{t('chat.freeLimitDesc')}</span>
-          </div>
-          <Link
-            to="/pricing"
-            onClick={handleFreeLimitAttempt}
-            className={buttonClasses({ variant: 'primary', size: 'sm' })}
-          >
-            {t('chat.upgradeButton')} →
-          </Link>
-        </div>
-      ) : !hasAccess ? (
+      {!hasAccess ? (
         <div role="alert" className={bannerClass}>
           <div className="flex min-w-0 items-center gap-2">
             <SparkleIcon className="size-4 shrink-0 text-warning" aria-hidden="true" />
@@ -237,15 +205,17 @@ export function Composer() {
             onClick={handlePaidModelAttempt}
             className={buttonClasses({ variant: 'primary', size: 'sm' })}
           >
-            {t('chat.upgradeButton')} →
+            {t('chat.upgradeButton')}
           </Link>
         </div>
       ) : null}
 
-      {/* Полоса привязанной рабочей папки / репозитория */}
-      <div className="mb-1.5">
-        <WorkspaceBar />
-      </div>
+      {/* Полоса привязанной рабочей папки / репозитория (только когда она привязана) */}
+      {activeWorkspace ? (
+        <div className="mb-1.5">
+          <WorkspaceBar />
+        </div>
+      ) : null}
 
       {/* Скрытый input для выбора файлов */}
       <input
@@ -257,7 +227,6 @@ export function Composer() {
       />
 
       <div
-        onClick={onFieldClick}
         onDragOver={handleDragOver}
         onDragLeave={handleDragLeave}
         onDrop={handleDrop}
@@ -294,16 +263,8 @@ export function Composer() {
           ref={fieldRef}
           rows={1}
           value={draft}
-          onClick={onFieldClick}
-          onFocus={onFieldClick}
           onPaste={handlePaste}
-          onChange={(event) => {
-            if (freeLimitReached) {
-              handleFreeLimitAttempt();
-              return;
-            }
-            setDraft(event.target.value);
-          }}
+          onChange={(event) => setDraft(event.target.value)}
           onKeyDown={onKeyDown}
           placeholder={t('chat.placeholder')}
           className="block max-h-[120px] w-full resize-none bg-transparent px-1.5 py-1 text-base leading-6 max-md:-my-1.5 max-md:py-2.5 text-text outline-none placeholder:text-subtle md:text-[15px]"

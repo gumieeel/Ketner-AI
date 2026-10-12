@@ -38,14 +38,14 @@ const COMPARISON_ROWS: ComparisonRow[] = [
     free: { ru: 'Ketner Mini', en: 'Ketner Mini' },
     plus: { ru: 'Ketner Pro, GPT-6.1 Sol, Claude Haiku 5.5, DeepSeek V4.1 Flash', en: 'Ketner Pro, GPT-6.1 Sol, Claude Haiku 5.5, DeepSeek V4.1 Flash' },
     pro: { ru: 'Все из Plus + Claude Opus 5.5, Sonnet 5.5, GPT-6 Astra, GPT-5.6 Sol, GPT-5.6 Terra xhigh, Grok 4.7 xhigh', en: 'All Plus + Claude Opus 5.5, Sonnet 5.5, GPT-6 Astra, GPT-5.6 Sol, GPT-5.6 Terra xhigh, Grok 4.7 xhigh' },
-    ultra: { ru: 'Все модели Pro + режим Max (xhigh), лимиты в 2–3 раза выше', en: 'All Pro models + Max mode (xhigh), 2–3× higher limits' },
+    ultra: { ru: 'Все модели Pro + режим Max', en: 'All Pro models + Max mode' },
   },
   {
     feature: { ru: 'Скорость генерации', en: 'Generation speed' },
     free: { ru: 'Базовая', en: 'Standard' },
     plus: { ru: 'Быстрая', en: 'Fast' },
-    pro: { ru: 'Средняя (пониженная)', en: 'Standard (reduced vs Ultra)' },
-    ultra: { ru: 'Максимальная (100% скорость)', en: 'Maximum (100% speed)' },
+    pro: { ru: 'Быстрая', en: 'Fast' },
+    ultra: { ru: 'Максимальная', en: 'Maximum' },
   },
   {
     feature: { ru: 'Размер контекста', en: 'Context window' },
@@ -55,13 +55,6 @@ const COMPARISON_ROWS: ComparisonRow[] = [
     ultra: { ru: 'Максимальный контекст', en: 'Maximum context' },
   },
   {
-    feature: { ru: 'Использование моделей', en: 'Model capacity usage' },
-    free: { ru: 'Базовое (до 3 сообщ./час)', en: 'Basic (up to 3 msgs/hr)' },
-    plus: { ru: 'Стандартное без очередей', en: 'Standard without queuing' },
-    pro: { ru: 'Топовые модели с оптимизацией квот', en: 'Top models with quota optimization' },
-    ultra: { ru: '100% использование без ограничений', en: '100% usage without limitations' },
-  },
-  {
     feature: { ru: 'Приоритет очереди', en: 'Queue priority' },
     free: { ru: 'Стандартный', en: 'Standard' },
     plus: { ru: 'Повышенный', en: 'Enhanced' },
@@ -69,11 +62,11 @@ const COMPARISON_ROWS: ComparisonRow[] = [
     ultra: { ru: 'Выделенный VIP-приоритет', en: 'Dedicated VIP priority' },
   },
   {
-    feature: { ru: 'API & Доступ для агентов', en: 'API & Agent access' },
+    feature: { ru: 'API для редакторов и кода', en: 'API for editors and code' },
     free: { ru: '—', en: '—' },
-    plus: { ru: '—', en: '—' },
-    pro: { ru: 'Доступно по ключу', en: 'API key included' },
-    ultra: { ru: 'Высокие лимиты API + MCP', en: 'High limits API + MCP' },
+    plus: { ru: 'По API-ключу', en: 'With an API key' },
+    pro: { ru: 'По API-ключу', en: 'With an API key' },
+    ultra: { ru: 'По API-ключу', en: 'With an API key' },
   },
 ];
 

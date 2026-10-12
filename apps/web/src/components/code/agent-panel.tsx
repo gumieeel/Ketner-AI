@@ -178,7 +178,7 @@ export function AgentPanel() {
           <h2 className="text-sm font-semibold text-text">{t('code.agent.title')}</h2>
           {running && live ? (
             <span className="truncate text-xs text-muted">
-              {live.modelName} · {t('code.agent.step', { step: Math.max(live.step, 1), max: live.maxSteps })}
+              {live.modelName}, {t('code.agent.step', { step: Math.max(live.step, 1) })}
             </span>
           ) : null}
         </div>
@@ -297,11 +297,6 @@ export function AgentPanel() {
             )}
           </div>
         </div>
-        {capabilities && capabilities.usage.runsToday > 0 ? (
-          <p className="mt-1.5 text-xs text-subtle">
-            {t('code.agent.limitHint', { used: capabilities.usage.runsToday, max: capabilities.limits.runsPerDay })}
-          </p>
-        ) : null}
       </div>
     </div>
   );

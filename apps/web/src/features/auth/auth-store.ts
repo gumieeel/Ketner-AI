@@ -9,7 +9,6 @@ import {
   signup as apiSignup,
 } from './api';
 import { ApiError } from '../chat/api';
-import { refreshAccountLimit } from '../billing/free-usage';
 import { useUpgradeModal } from '../billing/upgrade-modal-store';
 import type { AuthSession, AuthStatus, LoginPayload, PlanId, SignupPayload, User } from './types';
 
@@ -172,7 +171,6 @@ export const useAuth = create<AuthState>((set, get) => ({
       const session = await apiLogin(payload);
       const user = normalizeUser(session.user as unknown as Record<string, unknown>);
       saveSession({ user, token: session.token, expiresAt: session.expiresAt });
-      refreshAccountLimit(user.id);
       useUpgradeModal.getState().close();
       set({ user, token: session.token, status: 'authenticated', error: null });
 
@@ -205,7 +203,6 @@ export const useAuth = create<AuthState>((set, get) => ({
       const session = await apiSignup(payload);
       const user = normalizeUser(session.user as unknown as Record<string, unknown>);
       saveSession({ user, token: session.token, expiresAt: session.expiresAt });
-      refreshAccountLimit(user.id);
       useUpgradeModal.getState().close();
       set({ user, token: session.token, status: 'authenticated', error: null });
 
@@ -236,7 +233,6 @@ export const useAuth = create<AuthState>((set, get) => ({
     try {
       const session = await oauthLogin(provider);
       saveSession(session);
-      refreshAccountLimit(session.user.id);
       useUpgradeModal.getState().close();
       set({ user: session.user, token: session.token, status: 'authenticated', error: null });
     } catch (error) {

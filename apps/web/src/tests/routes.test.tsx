@@ -57,7 +57,7 @@ describe('маршрутизация и каркас экранов', () => {
     expect(
       screen.getByRole('heading', { level: 1, name: 'Документация Ketner AI' }),
     ).toBeInTheDocument();
-    expect(screen.getByText('Тарифные планы и лимиты')).toBeInTheDocument();
+    expect(screen.getByText('Тарифные планы')).toBeInTheDocument();
   });
 
   it('страница API для разработчиков открывается по /api-docs', () => {

@@ -3,7 +3,6 @@ import { translate } from '@/i18n';
 import { usePreferences } from '@/features/preferences/preferences-store';
 import { useAuth } from '@/features/auth/auth-store';
 import { reasoningModeFor } from '@/features/chat/reasoning-mode';
-import { incrementFreeUsage, isFreeLimitReached } from '@/features/billing/free-usage';
 import { useUpgradeModal } from '@/features/billing/upgrade-modal-store';
 import { canAccessModel, findModel, getRequiredPlanName } from './can-access-model';
 import * as api from './api';
@@ -282,6 +281,14 @@ export const useChat = create<ChatState>((set, get) => {
           onError: ({ code, message }) => {
             flush();
             console.error('[chat] ошибка генерации:', code, message);
+            // Лимиты считает сервер. Когда он отказал бесплатному аккаунту, предлагаем перейти на платный тариф.
+            const refusedUser = useAuth.getState().user;
+            if (
+              (code === 'rate_limited' || code === 'fair_use_exceeded') &&
+              (!refusedUser || !refusedUser.plan || refusedUser.plan === 'free')
+            ) {
+              useUpgradeModal.getState().open({ reason: 'free_limit' });
+            }
             updateAssistant({
               status: 'error',
               error: message || translate(usePreferences.getState().language, 'chat.errorText'),
@@ -314,11 +321,6 @@ export const useChat = create<ChatState>((set, get) => {
         return next;
       });
 
-      const authUser = useAuth.getState().user;
-      const isFree = Boolean(authUser && (!authUser.plan || authUser.plan === 'free'));
-      if (isFree && authUser && isFreeLimitReached(authUser.id)) {
-        useUpgradeModal.getState().open({ reason: 'free_limit' });
-      }
     } catch (error) {
       flush();
       if (isAbortError(error)) {
@@ -343,6 +345,12 @@ export const useChat = create<ChatState>((set, get) => {
           return next;
         });
       } else {
+        if (error instanceof ApiError && (error.code === 'rate_limited' || error.code === 'fair_use_exceeded')) {
+          const refusedUser = useAuth.getState().user;
+          if (!refusedUser || !refusedUser.plan || refusedUser.plan === 'free') {
+            useUpgradeModal.getState().open({ reason: 'free_limit' });
+          }
+        }
         updateAssistant({ status: 'error', error: describeError(error) });
       }
     } finally {
@@ -503,7 +511,6 @@ export const useChat = create<ChatState>((set, get) => {
       const authUser = useAuth.getState().user;
       const modelId = usePreferences.getState().chatModelId;
       const currentModel = findModel(get().meta?.models, modelId);
-      const isFreeAccount = Boolean(authUser && (!authUser.plan || authUser.plan === 'free'));
 
       if (!canAccessModel(authUser?.plan, currentModel)) {
         // Модель недоступна на тарифе: сообщение не отправляется, предлагаем улучшить тариф.
@@ -513,14 +520,6 @@ export const useChat = create<ChatState>((set, get) => {
           requiredPlan: getRequiredPlanName(currentModel),
         });
         return;
-      }
-
-      if (isFreeAccount && authUser) {
-        if (isFreeLimitReached(authUser.id)) {
-          useUpgradeModal.getState().open({ reason: 'free_limit' });
-          return;
-        }
-        incrementFreeUsage(authUser.id);
       }
 
       const activeWs = useWorkspace.getState().activeWorkspace;
@@ -617,7 +616,6 @@ export const useChat = create<ChatState>((set, get) => {
       const authUser = useAuth.getState().user;
       const modelId = usePreferences.getState().chatModelId;
       const currentModel = findModel(get().meta?.models, modelId);
-      const isFreeAccount = Boolean(authUser && (!authUser.plan || authUser.plan === 'free'));
 
       if (!canAccessModel(authUser?.plan, currentModel)) {
         // Модель недоступна на тарифе: сообщение не отправляется, предлагаем улучшить тариф.
@@ -626,10 +624,6 @@ export const useChat = create<ChatState>((set, get) => {
           modelName: currentModel.name,
           requiredPlan: getRequiredPlanName(currentModel),
         });
-        return;
-      }
-      if (isFreeAccount && authUser && isFreeLimitReached(authUser.id)) {
-        useUpgradeModal.getState().open({ reason: 'free_limit' });
         return;
       }
 
@@ -671,7 +665,6 @@ export const useChat = create<ChatState>((set, get) => {
       const authUser = useAuth.getState().user;
       const modelId = usePreferences.getState().chatModelId;
       const currentModel = findModel(get().meta?.models, modelId);
-      const isFreeAccount = Boolean(authUser && (!authUser.plan || authUser.plan === 'free'));
 
       if (!canAccessModel(authUser?.plan, currentModel)) {
         useUpgradeModal.getState().open({
@@ -679,10 +672,6 @@ export const useChat = create<ChatState>((set, get) => {
           modelName: currentModel.name,
           requiredPlan: getRequiredPlanName(currentModel),
         });
-      }
-      if (isFreeAccount && authUser && isFreeLimitReached(authUser.id)) {
-        useUpgradeModal.getState().open({ reason: 'free_limit' });
-        return;
       }
 
       // Правка обрезает ленту до этого сообщения: как в ChatGPT, всё, что было

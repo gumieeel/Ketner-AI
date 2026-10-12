@@ -794,7 +794,6 @@ export async function initDatabaseSync(): Promise<boolean> {
     await loadAndSyncFeedbacks(sql);
 
     attachDatabaseDrivers(sql);
-    await syncApiKeys(sql);
 
     // Ketner Code: проекты переживают перезапуск сервера (поднимаются из БД при первом обращении)
     const codeRunner = { query: (text: string, params?: unknown[]) => sql.unsafe(text, params as never[]) as unknown as Promise<never[]> };
@@ -803,6 +802,12 @@ export async function initDatabaseSync(): Promise<boolean> {
     // Картинки: диск Render временный, поэтому храним их в Postgres.
     await ensureImagesSchema(codeRunner);
     attachImageDriver(codeRunner);
+    // API-ключи — отдельно: сбой этой таблицы не должен отключать остальные хранилища.
+    try {
+      await syncApiKeys(sql);
+    } catch (error) {
+      console.error('❌ [db] API-ключи не синхронизированы с PostgreSQL:', error);
+    }
     console.log('🎉 [db] Все данные успешно синхронизированы с PostgreSQL / Supabase!');
     return true;
   } catch (error) {

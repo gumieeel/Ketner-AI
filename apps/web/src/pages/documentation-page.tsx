@@ -76,17 +76,15 @@ const PLANS_DATA: PlanCardInfo[] = [
     features: {
       ru: [
         'Модели: Ketner Pro, GPT-6.1 Sol, Claude Haiku 5.5, DeepSeek V4.1 Flash',
-        'GPT-6.1 Sol доступна в рамках ежемесячной квоты премиум-запросов',
+        'Картинки FLUX.2 klein в пяти форматах',
         'Быстрая скорость ответа',
         'Доступ через режим Auto или ручной выбор модели',
-        'Отсутствие поминутных ограничений',
       ],
       en: [
         'Models: Ketner Pro, GPT-6.1 Sol, Claude Haiku 5.5, DeepSeek V4.1 Flash',
-        'GPT-6.1 Sol is available within the monthly premium-request quota',
+        'FLUX.2 klein images in five aspect ratios',
         'Fast response speed',
         'Access via Auto mode or manual model selection',
-        'No per-minute limits',
       ],
     },
   },
@@ -96,27 +94,25 @@ const PLANS_DATA: PlanCardInfo[] = [
     price: { ru: '$25 / мес', en: '$25 / mo' },
     badge: { ru: 'Топовые модели', en: 'Top models' },
     desc: {
-      ru: 'Топовые мировые флагманы (пониженный контекст и скорость по сравнению с Ultra). Включает всё из Plus.',
-      en: 'World-class top flagship models (reduced context and speed compared to Ultra). Includes all Plus features.',
+      ru: 'Топовые мировые флагманы. Включает всё из Plus.',
+      en: 'World-class flagship models. Includes all Plus features.',
     },
-    speed: { ru: 'Средняя скорость (пониженная)', en: 'Standard speed (reduced)' },
+    speed: { ru: 'Быстрая скорость', en: 'Fast generation speed' },
     priority: { ru: 'Высокий приоритет', en: 'High server priority' },
-    context: { ru: 'Пониженный контекст', en: 'Reduced context' },
+    context: { ru: 'Расширенный контекст', en: 'Extended context' },
     popular: true,
     features: {
       ru: [
         'Все, что входит в тариф Plus',
         'Топовые модели: Claude Opus 5.5, Sonnet 5.5, GPT-6 Astra, GPT-5.6 Sol, GPT-5.6 Terra xhigh, Grok 4.7 xhigh',
-        'Размышления medium (Grok и Terra — xhigh), суточные лимиты по моделям с запасными моделями',
-        'Пониженный контекст и скорость по сравнению с Ultra',
+        'Картинки FLUX.2 dev и Seedream',
         'Высокий серверный приоритет обработки запросов',
         'Ручной выбор любой модели, доступной на тарифе',
       ],
       en: [
         'All Plus tier features included',
         'Top models: Claude Opus 5.5, Sonnet 5.5, GPT-6 Astra, GPT-5.6 Sol, GPT-5.6 Terra xhigh, Grok 4.7 xhigh',
-        'Medium reasoning (Grok and Terra at xhigh), daily per-model limits with backup models',
-        'Reduced context and speed compared to Ultra tier',
+        'FLUX.2 dev and Seedream images',
         'High server request priority',
         'Manual selection of any model available on your plan',
       ],
@@ -128,26 +124,26 @@ const PLANS_DATA: PlanCardInfo[] = [
     price: { ru: '$49 / мес (скидка вместо $59)', en: '$49 / mo (discount from $59)' },
     badge: { ru: 'Максимум возможностей', en: 'Maximum power' },
     desc: {
-      ru: 'Все модели Pro, режим Max (размышления xhigh), лимиты в 2–3 раза выше, максимальный контекст и наивысший VIP-приоритет.',
-      en: 'All Pro models, Max mode (xhigh reasoning), 2–3× higher limits, maximum context and top VIP priority.',
+      ru: 'Все модели Pro, режим Max, лучшие модели картинок, максимальный контекст и наивысший приоритет.',
+      en: 'All Pro models, Max mode, the best image models, maximum context and top priority.',
     },
-    speed: { ru: 'Максимальная скорость (100%)', en: 'Maximum speed (100%)' },
+    speed: { ru: 'Максимальная скорость', en: 'Maximum speed' },
     priority: { ru: 'Наивысший VIP-приоритет', en: 'Highest VIP priority' },
     context: { ru: 'Максимальный контекст', en: 'Maximum context' },
     features: {
       ru: [
         'Все, что входит в тариф Pro',
-        'Режим Max: модели Pro размышляют на уровне xhigh вместо medium',
+        'Режим Max: модели думают дольше и глубже',
         'Максимальный контекст диалога',
-        'Суточные лимиты моделей в 2–3 раза выше, чем на Pro',
+        'Картинки FLUX.2 pro и Nano Banana 2',
         'Наивысший VIP-приоритет запросов без ожидания',
         'Параллельные запросы без задержек',
       ],
       en: [
         'All Pro tier features included',
-        'Max mode: Pro models reason at xhigh instead of medium',
+        'Max mode: models think longer and deeper',
         'Maximum conversation context',
-        'Daily model limits 2–3× higher than on Pro',
+        'FLUX.2 pro and Nano Banana 2 images',
         'Top VIP queue priority with zero waiting',
         'Parallel concurrent requests without delays',
       ],
@@ -299,7 +295,7 @@ export function DocumentationPage() {
         </div>
       </section>
 
-      {/* 3. Тарифные планы и лимиты */}
+      {/* 3. Тарифные планы */}
       <section id="plans" className={cn(sectionClass, 'gap-6')}>
         <div>
           <DocHeading id="plans-heading" className="mb-2">

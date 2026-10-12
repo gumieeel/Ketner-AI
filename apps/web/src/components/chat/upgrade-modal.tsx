@@ -1,5 +1,5 @@
 import { Link, useNavigate } from 'react-router-dom';
-import { AlertIcon, CloseIcon, SparkleIcon } from '@/components/icons';
+import { CloseIcon, SparkleIcon } from '@/components/icons';
 import { buttonClasses } from '@/components/ui/button-classes';
 import { IconButton } from '@/components/ui/icon-button';
 import { Modal } from '@/components/ui/modal';
@@ -75,12 +75,7 @@ export function UpgradeModal() {
       <div className="relative min-h-0 overflow-y-auto">
         {/* Badge & Title */}
         <div className="mb-5 pr-8">
-          {reason === 'free_limit' ? (
-            <div className="mb-3 inline-flex items-center gap-1.5 rounded-md border border-warning/30 bg-warning-soft px-3 py-1 text-xs font-semibold text-warning">
-              <AlertIcon className="size-3.5" aria-hidden="true" />
-              <span>{t('chat.freeLimitBadge')}</span>
-            </div>
-          ) : (
+          {reason === 'free_limit' ? null : (
             <div className="mb-3 inline-flex items-center gap-1.5 rounded-md border border-accent/30 bg-accent-soft px-3 py-1 text-xs font-semibold text-accent">
               <SparkleIcon className="size-3.5" aria-hidden="true" />
               <span>{reason === 'max_mode' ? t('chat.maxModeBadge') : t('chat.paidModelBadge')}</span>

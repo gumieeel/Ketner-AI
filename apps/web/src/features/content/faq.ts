@@ -10,12 +10,12 @@ export const FAQ_ITEMS: FaqItem[] = [
   {
     id: 'unlimited',
     q: {
-      ru: 'Это правда безлимитно?',
-      en: 'Is it really unlimited?',
+      ru: 'Есть ли ограничения?',
+      en: 'Are there any limits?',
     },
     a: {
-      ru: 'Почти. На платных тарифах вы не останетесь без ответа: Ketner Pro и лёгкие модели рассчитаны на тысячи сообщений в месяц. У самых дорогих моделей (Claude Opus, GPT-6 Astra и других) есть суточный лимит: когда он заканчивается, отвечает запасная модель — дешевле, но качественная, и это видно в ответе.',
-      en: 'Almost. On paid plans you are never left without an answer: Ketner Pro and the lighter models cover thousands of messages a month. The most expensive models (Claude Opus, GPT-6 Astra and others) have a daily limit: once it is used up, a cheaper but capable backup model answers, and the reply shows it.',
+      ru: 'Тарифы рассчитаны на обычную работу человека: переписку, код, документы и картинки. Действует политика честного использования — она защищает сервис от автоматических массовых запросов, а не от вас.',
+      en: 'Plans are built for normal human use: chat, code, documents and images. A fair-use policy applies; it protects the service from automated bulk traffic, not from you.',
     },
   },
   {
@@ -25,8 +25,8 @@ export const FAQ_ITEMS: FaqItem[] = [
       en: 'Which AI models are included in Ketner AI?',
     },
     a: {
-      ru: 'На тарифе Free доступна Ketner Mini. Plus добавляет Ketner Pro, GPT-6.1 Sol (OpenAI), Claude Haiku 5.5 (Anthropic) и DeepSeek V4.1 Flash. Pro открывает Claude Opus 5.5 и Sonnet 5.5 (Anthropic), GPT-6 Astra, GPT-5.6 Sol и GPT-5.6 Terra xhigh (OpenAI) и Grok 4.7 xhigh (xAI): они размышляют на уровне medium, у каждой суточный лимит, после которого отвечает запасная модель. Ultra даёт лимиты в 2–3 раза выше и режим Max, в котором модели размышляют на уровне xhigh. Мы постоянно добавляем новые модели сразу после их официального релиза.',
-      en: 'The Free plan includes Ketner Mini. Plus adds Ketner Pro, GPT-6.1 Sol (OpenAI), Claude Haiku 5.5 (Anthropic) and DeepSeek V4.1 Flash. Pro unlocks Claude Opus 5.5 and Sonnet 5.5 (Anthropic), GPT-6 Astra, GPT-5.6 Sol and GPT-5.6 Terra xhigh (OpenAI) and Grok 4.7 xhigh (xAI): they reason at medium, and each has a daily limit after which a backup model answers. Ultra raises the limits 2–3× and adds Max mode with xhigh reasoning. New state-of-the-art models are added as soon as they release.',
+      ru: 'На тарифе Free доступна Ketner Mini. Plus добавляет Ketner Pro, GPT-6.1 Sol (OpenAI), Claude Haiku 5.5 (Anthropic) и DeepSeek V4.1 Flash. Pro открывает Claude Opus 5.5 и Sonnet 5.5 (Anthropic), GPT-6 Astra, GPT-5.6 Sol и GPT-5.6 Terra xhigh (OpenAI) и Grok 4.7 xhigh (xAI). Ultra добавляет режим Max, в котором модели думают глубже, и лучшие модели картинок. Новые модели появляются вскоре после официального релиза.',
+      en: 'The Free plan includes Ketner Mini. Plus adds Ketner Pro, GPT-6.1 Sol (OpenAI), Claude Haiku 5.5 (Anthropic) and DeepSeek V4.1 Flash. Pro unlocks Claude Opus 5.5 and Sonnet 5.5 (Anthropic), GPT-6 Astra, GPT-5.6 Sol and GPT-5.6 Terra xhigh (OpenAI) and Grok 4.7 xhigh (xAI). Ultra adds Max mode, where models think deeper, and the best image models. New models arrive soon after their official release.',
     },
   },
   {
@@ -36,8 +36,8 @@ export const FAQ_ITEMS: FaqItem[] = [
       en: 'Why are responses so fast?',
     },
     a: {
-      ru: 'Наша система интеллектуальной маршрутизации анализирует ваш вопрос и направляет его к наиболее быстрому и точному провайдеру, кэширует частые запросы и использует параллельные соединения с облачными кластерами AI.',
-      en: 'Our smart routing system classifies your query in milliseconds, sends it to the most efficient provider, caches frequent answers, and connects to high-speed cloud clusters.',
+      ru: 'Ketner подключается к моделям напрямую и передаёт ответ потоком, по мере того как модель его пишет, — не нужно ждать конца генерации.',
+      en: 'Ketner connects to the models directly and streams the reply as the model writes it, so you never wait for the whole answer.',
     },
   },
   {
@@ -47,8 +47,8 @@ export const FAQ_ITEMS: FaqItem[] = [
       en: 'Can I choose the model manually?',
     },
     a: {
-      ru: 'Конечно. По умолчанию включён режим «Best AI (Auto)», в котором система сама подбирает модель под вопрос: на тарифе Free и для простых вопросов — Ketner Mini, для обычных задач — Ketner Pro, а для сложной математики, логики и кода на Pro и Ultra — GPT-6.1 Sol, пока не израсходована квота премиум-запросов; после этого отвечает Ketner Pro. Но в любой момент в выпадающем меню чата вы можете переключиться на нужную модель вручную.',
-      en: 'Absolutely. By default, "Best AI (Auto)" picks the model for you: Ketner Mini on the Free plan and for simple questions, Ketner Pro for everyday tasks, and GPT-6.1 Sol for hard maths, logic and code on Pro and Ultra while your premium-request quota lasts — after that Ketner Pro answers instead. You can open the model picker at any time to pick a model yourself.',
+      ru: 'Да. По умолчанию включён режим Auto: он сам подбирает модель под вопрос. В любой момент в меню чата можно выбрать модель вручную.',
+      en: 'Yes. Auto is on by default and picks a model for each question. You can pick a model yourself in the chat menu at any time.',
     },
   },
   {
