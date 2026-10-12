@@ -73,7 +73,7 @@ function installCodeApi(options: { projects?: CodeProject[]; thread?: ThreadItem
       if (e.type === 'tool_result') {
         serverThread.push({ id: `t${e.callId}`, kind: 'tool', runId: 'r1', step: e.step, tool: e.tool, label: e.label, ok: e.ok, summary: e.summary, change: e.change, createdAt: now });
       } else if (e.type === 'done') {
-        serverThread.push({ id: `r${serverThread.length}`, kind: 'run', runId: e.runId, status: e.status, steps: e.steps, costUsd: e.costUsd, modelId: e.modelId, message: e.message, createdAt: now });
+        serverThread.push({ id: `r${serverThread.length}`, kind: 'run', runId: e.runId, status: e.status, steps: e.steps, costUsd: e.costUsd, modelId: e.modelId, message: e.message, ...(e.plan ? { plan: e.plan } : {}), createdAt: now });
       }
     }
   };
@@ -230,6 +230,45 @@ describe('Ketner Code: проекты и агент', () => {
     expect(await screen.findByText('+новое')).toHaveAttribute('data-diff', 'add');
     expect(screen.getByText('-старое')).toHaveAttribute('data-diff', 'del');
     expect(useCode.getState().running).toBe(false);
+  });
+
+  it('список задач сверху: агент делит задачу на подзадачи, прогресс виден и после завершения', async () => {
+    const planStart = [
+      { text: 'Создать компонент Button', status: 'in_progress' as const },
+      { text: 'Подключить Button в Header', status: 'pending' as const },
+    ];
+    const planDone = planStart.map((item) => ({ ...item, status: 'done' as const }));
+    installCodeApi({
+      run: [
+        { type: 'run_start', runId: 'r1', modelId: 'claude-opus-5.5', modelName: 'Claude Opus 5.5', maxSteps: 50, budgetUsd: 2, commands: false, routingReason: null },
+        { type: 'tool_call', step: 1, callId: 'p1', tool: 'update_plan', label: 'update_plan' },
+        { type: 'tool_result', step: 1, callId: 'p1', tool: 'update_plan', label: 'update_plan', ok: true, summary: '0/2' },
+        { type: 'plan', items: planStart },
+        { type: 'model_switch', modelId: 'ketner-pro', modelName: 'Ketner Pro', reason: 'Продолжаю на модели дешевле' },
+        { type: 'plan', items: planDone },
+        { type: 'step_done', step: 2, costUsd: 0.01, totalCostUsd: 2.01 },
+        { type: 'done', runId: 'r1', status: 'completed', steps: 2, costUsd: 2.01, modelId: 'ketner-pro', plan: planDone },
+      ],
+    });
+    const user = userEvent.setup();
+    renderRoute('/code/p1');
+    await screen.findByText('index.html');
+
+    await user.type(screen.getByLabelText('Опишите задачу: что создать или изменить…'), 'Сделай кнопку');
+    await user.click(screen.getByRole('button', { name: 'Запустить' }));
+
+    expect(await screen.findByText('Готово')).toBeInTheDocument();
+    const tasks = await screen.findByRole('region', { name: 'Задачи' });
+    expect(within(tasks).getByText('Создать компонент Button')).toBeInTheDocument();
+    expect(within(tasks).getByText('2 из 2')).toBeInTheDocument();
+    // Компактный прогресс в шапке проекта.
+    expect(screen.getByRole('button', { name: 'Задачи агента: 2 из 2' })).toBeInTheDocument();
+    // Переход на модель дешевле — без сообщения об ошибке.
+    expect(screen.queryByRole('alert')).toBeNull();
+
+    // Список сворачивается.
+    await user.click(within(tasks).getByRole('button', { expanded: true }));
+    expect(within(tasks).queryByText('Подключить Button в Header')).toBeNull();
   });
 
   it('ошибка лимита запуска предлагает улучшить план', async () => {

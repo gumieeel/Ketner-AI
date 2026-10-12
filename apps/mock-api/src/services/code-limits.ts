@@ -26,8 +26,16 @@ export interface CodeLimits {
   runsPerDay: number;
   /** Обращений к модели в одном запуске. */
   maxSteps: number;
-  /** Потолок себестоимости одного запуска, USD. */
+  /** Потолок себестоимости одного запуска на выбранной модели, USD. */
   maxRunCostUsd: number;
+  /**
+   * Когда бюджет выбранной модели (или лимит шагов) исчерпан, агент не останавливается, а молча
+   * продолжает на модели дешевле: сначала рабочей (Ketner Pro), потом лёгкой. Это добавочные бюджеты
+   * этих ступеней, USD. Общий расход запуска всё равно не выходит за месячный бюджет тарифа и
+   * дневной потолок с запасом 25%.
+   */
+  continueWorkUsd: number;
+  continueLiteUsd: number;
   /** Можно ли запускать команды (тесты, сборка) в песочнице. */
   commands: boolean;
   /** Предельная длительность одной команды. */
@@ -48,6 +56,8 @@ export const CODE_LIMITS: Record<'free' | 'plus' | 'pro' | 'ultra', CodeLimits> 
     runsPerDay: 3,
     maxSteps: 8,
     maxRunCostUsd: 0.02,
+    continueWorkUsd: 0,
+    continueLiteUsd: 0.01,
     commands: false,
     commandTimeoutSec: 30,
     maxTaskChars: 4_000,
@@ -60,6 +70,8 @@ export const CODE_LIMITS: Record<'free' | 'plus' | 'pro' | 'ultra', CodeLimits> 
     runsPerDay: 15,
     maxSteps: 25,
     maxRunCostUsd: 0.1,
+    continueWorkUsd: 0.1,
+    continueLiteUsd: 0.05,
     commands: false,
     commandTimeoutSec: 60,
     maxTaskChars: 8_000,
@@ -72,6 +84,8 @@ export const CODE_LIMITS: Record<'free' | 'plus' | 'pro' | 'ultra', CodeLimits> 
     runsPerDay: 40,
     maxSteps: 50,
     maxRunCostUsd: 2.0,
+    continueWorkUsd: 0.4,
+    continueLiteUsd: 0.1,
     commands: true,
     commandTimeoutSec: 120,
     maxTaskChars: 16_000,
@@ -84,6 +98,8 @@ export const CODE_LIMITS: Record<'free' | 'plus' | 'pro' | 'ultra', CodeLimits> 
     runsPerDay: 120,
     maxSteps: 100,
     maxRunCostUsd: 3.0,
+    continueWorkUsd: 0.6,
+    continueLiteUsd: 0.15,
     commands: true,
     commandTimeoutSec: 300,
     maxTaskChars: 32_000,

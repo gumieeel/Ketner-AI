@@ -238,14 +238,14 @@ test('остановка по стоимости запуска сохраняе
     { plan: 'free' },
   ));
 
-test('остановка по числу шагов тарифа', () =>
+test('остановка по числу шагов: лёгкая модель получает добавочные шаги, но не больше двойного лимита', () =>
   withHarness(
     () => toolStep([['list_files', {}]], 0.0001),
     async (h) => {
       const { result } = await h.run('loop forever');
       assert.equal(result.status, 'step_limit');
-      assert.equal(result.steps, getCodeLimits('free').maxSteps);
-      assert.equal(h.calls.length, getCodeLimits('free').maxSteps);
+      assert.equal(result.steps, getCodeLimits('free').maxSteps * 2);
+      assert.equal(h.calls.length, getCodeLimits('free').maxSteps * 2);
     },
     { plan: 'free' },
   ));
@@ -478,3 +478,88 @@ test('агент на модели Pro: medium, на Ultra в режиме Max �
     { plan: 'ultra' },
   );
 });
+
+test('бюджет выбранной модели исчерпан: агент молча продолжает на Ketner Pro и доводит задачу', () =>
+  withHarness(
+    (call) =>
+      call.index < 2
+        ? toolStep([['write_file', { path: `f${call.index}.txt`, content: 'x' }]], 1.2)
+        : call.index === 2
+          ? toolStep([['write_file', { path: 'f2.txt', content: 'x' }]], 0.01)
+          : finalStep('all done', 0.01),
+    async (h) => {
+      const { events, result } = await h.run('big task', { modelId: 'claude-opus-5.5' });
+      assert.equal(result.status, 'completed');
+      assert.deepEqual(
+        h.calls.map((c) => c.model),
+        ['anthropic/claude-opus-5.5', 'anthropic/claude-opus-5.5', 'xiaomi/mimo-v2.6-pro', 'xiaomi/mimo-v2.6-pro'],
+      );
+      assert.ok(events.some((e) => e.type === 'model_switch' && e.modelId === 'ketner-pro'));
+      assert.ok(!events.some((e) => e.type === 'error'), 'ошибки пользователь не видит');
+      assert.equal(result.modelId, 'ketner-pro');
+      const note = h.calls[2].messages.at(-1);
+      assert.ok(note?.role === 'user' && /continues on a lighter model/.test(note.content));
+      for (const name of ['f0.txt', 'f1.txt', 'f2.txt']) {
+        assert.ok((await h.store.listFiles('u1', h.projectId)).some((f) => f.path === name), name);
+      }
+    },
+    { plan: 'pro' },
+  ));
+
+test('после рабочей модели — лёгкая; когда кончается и её бюджет, запуск останавливается честно', () =>
+  withHarness(
+    (call) => toolStep([['write_file', { path: `f${call.index}.txt`, content: 'x' }]], call.index < 2 ? 1.0 : 0.25),
+    async (h) => {
+      const { events, result } = await h.run('endless', { modelId: 'claude-opus-5.5' });
+      assert.equal(result.status, 'budget');
+      const switches = events.filter((e) => e.type === 'model_switch').map((e) => (e.type === 'model_switch' ? e.modelId : ''));
+      assert.deepEqual(switches, ['ketner-pro', 'claude-haiku-5.5']);
+      assert.ok(result.costUsd <= 2.2 * 1.25 + 0.25, 'расход не выходит за дневной потолок с запасом (плюс последний шаг)');
+    },
+    { plan: 'pro' },
+  ));
+
+test('работа по плану: пока в плане есть пункты, агент не заканчивает', () =>
+  withHarness(
+    (call) => {
+      switch (call.index) {
+        case 0:
+          return toolStep([['update_plan', { items: [{ text: 'Create a.txt', status: 'in_progress' }, { text: 'Create b.txt', status: 'pending' }] }], ['write_file', { path: 'a.txt', content: 'a' }]]);
+        case 1:
+          return finalStep('Done with a.txt');
+        case 2:
+          return toolStep([['write_file', { path: 'b.txt', content: 'b' }], ['update_plan', { items: [{ text: 'Create a.txt', status: 'done' }, { text: 'Create b.txt', status: 'done' }] }]]);
+        default:
+          return finalStep('Both files created');
+      }
+    },
+    async (h) => {
+      const { events, result } = await h.run('create two files');
+      assert.equal(result.status, 'completed');
+      assert.equal(h.calls.length, 4);
+      const nudge = h.calls[2].messages.at(-1);
+      assert.ok(nudge?.role === 'user' && /unfinished subtasks/.test(nudge.content) && /Create b\.txt/.test(nudge.content));
+      const done = events.at(-1);
+      assert.ok(done?.type === 'done' && done.plan?.every((item) => item.status === 'done'));
+      const runItem = (await h.store.getThread('u1', h.projectId)).at(-1);
+      assert.ok(runItem?.kind === 'run' && runItem.plan?.length === 2, 'план сохраняется в ленте');
+    },
+    { plan: 'pro' },
+  ));
+
+test('update_plan: в работе не больше одного пункта, модель получает текущий пункт', () =>
+  withHarness(
+    (call) =>
+      call.index === 0
+        ? toolStep([['update_plan', { items: [{ text: 'A', status: 'in_progress' }, { text: 'B', status: 'in_progress' }] }]])
+        : finalStep('ok'),
+    async (h) => {
+      const { events } = await h.run('plan');
+      const plan = events.find((e) => e.type === 'plan');
+      assert.ok(plan?.type === 'plan');
+      assert.deepEqual(plan.items.map((i) => i.status), ['in_progress', 'pending']);
+      const toolMessage = h.calls[1].messages.find((m) => m.role === 'tool');
+      assert.match(toolMessage?.content ?? '', /Now working on: "A"/);
+    },
+    { plan: 'free' },
+  ));

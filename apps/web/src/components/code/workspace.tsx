@@ -10,6 +10,7 @@ import { cn } from '@/lib/cn';
 import { AgentPanel } from './agent-panel';
 import { CodeEditor } from './code-editor';
 import { FileTree } from './file-tree';
+import { PlanProgressRing, useAgentPlan } from './task-list';
 
 type MobilePane = 'files' | 'editor' | 'agent';
 
@@ -166,6 +167,7 @@ export function Workspace() {
   const importIntoProject = useCode((state) => state.importIntoProject);
   const [pane, setPane] = useState<MobilePane>('agent');
   const uploadRef = useRef<HTMLInputElement | null>(null);
+  const plan = useAgentPlan();
 
   const onUpload = (event: ChangeEvent<HTMLInputElement>): void => {
     const list = event.target.files;
@@ -194,6 +196,24 @@ export function Workspace() {
           <span className="hidden sm:inline">{t('code.ws.back')}</span>
         </Link>
         <h2 className="min-w-0 flex-1 truncate text-sm font-semibold text-text">{project?.name}</h2>
+        {plan ? (
+          <button
+            type="button"
+            onClick={() => setPane('agent')}
+            aria-label={t('code.tasks.pill', { done: plan.done, total: plan.items.length })}
+            title={t('code.tasks.pill', { done: plan.done, total: plan.items.length })}
+            className={cn(
+              'inline-flex min-h-9 shrink-0 items-center gap-1.5 rounded-lg border px-2 text-xs font-medium',
+              'transition-colors xl:pointer-events-none',
+              plan.live ? 'border-accent/40 bg-accent-soft text-accent' : 'border-stroke text-muted hover:text-text',
+            )}
+          >
+            <PlanProgressRing done={plan.done} total={plan.items.length} />
+            <span className="tabular">
+              {plan.done}/{plan.items.length}
+            </span>
+          </button>
+        ) : null}
         <input ref={uploadRef} type="file" multiple className="sr-only" aria-label={t('code.ws.upload')} onChange={onUpload} />
         <Button size="sm" variant="ghost" disabled={running} onClick={() => uploadRef.current?.click()} leftIcon={<PlusIcon className="size-4" />}>
           <span className="max-sm:sr-only">{t('code.ws.upload')}</span>

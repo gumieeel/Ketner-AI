@@ -5,10 +5,11 @@ import { Button } from '@/components/ui/button';
 import { IconButton } from '@/components/ui/icon-button';
 import { Spinner } from '@/components/ui/spinner';
 import { useCode } from '@/features/code/code-store';
-import type { AgentRunStatus, PlanItem, ThreadItem } from '@/features/code/types';
+import type { AgentRunStatus, ThreadItem } from '@/features/code/types';
 import { useTranslation, type TranslationKey } from '@/i18n';
 import { cn } from '@/lib/cn';
 import { DiffView } from './diff-view';
+import { TaskList } from './task-list';
 
 const Markdown = lazy(() => import('@/features/chat/markdown/markdown'));
 
@@ -111,32 +112,6 @@ function RunFooter({ item }: { item: RunItem }) {
   );
 }
 
-function PlanList({ items }: { items: PlanItem[] }) {
-  const { t } = useTranslation();
-  if (items.length === 0) return null;
-  return (
-    <section aria-label={t('code.agent.plan')} className="rounded-lg border border-stroke bg-surface px-3 py-2">
-      <h3 className="mb-1 text-xs font-semibold uppercase tracking-wide text-subtle">{t('code.agent.plan')}</h3>
-      <ul className="flex flex-col gap-1">
-        {items.map((item, index) => (
-          <li key={index} className="flex items-start gap-2 text-[13px] leading-5">
-            <span
-              aria-hidden="true"
-              className={cn(
-                'mt-1.5 size-2 shrink-0 rounded-full border',
-                item.status === 'done' && 'border-success bg-success',
-                item.status === 'in_progress' && 'border-accent bg-accent animate-pulse',
-                item.status === 'pending' && 'border-stroke-strong',
-              )}
-            />
-            <span className={cn(item.status === 'done' ? 'text-muted line-through' : 'text-text')}>{item.text}</span>
-          </li>
-        ))}
-      </ul>
-    </section>
-  );
-}
-
 function AssistantText({ text }: { text: string }) {
   return (
     <div className="min-w-0 text-[14px] [&_*]:max-w-full">
@@ -167,7 +142,7 @@ export function AgentPanel() {
 
   useEffect(() => {
     if (stickToBottom.current) endRef.current?.scrollIntoView?.({ block: 'end' });
-  }, [thread, live?.text, live?.plan]);
+  }, [thread, live?.text]);
 
   const submit = (): void => {
     const task = draft.trim();
@@ -220,6 +195,8 @@ export function AgentPanel() {
         ) : null}
       </div>
 
+      <TaskList />
+
       <div
         ref={scrollRef}
         onScroll={(event) => {
@@ -268,7 +245,6 @@ export function AgentPanel() {
         )}
 
         {live?.text ? <AssistantText text={live.text} /> : null}
-        {live ? <PlanList items={live.plan} /> : null}
         {running ? (
           <div role="status" className="flex items-center gap-2 text-xs text-muted">
             <Spinner className="size-3.5 text-accent" />

@@ -29,6 +29,12 @@ export interface ProjectQuota {
 
 export type AgentRunStatus = 'completed' | 'cancelled' | 'error' | 'step_limit' | 'budget' | 'length';
 
+/** Пункт плана агента: задача делится на подзадачи, агент проходит их по очереди. */
+export interface PlanItem {
+  text: string;
+  status: 'pending' | 'in_progress' | 'done';
+}
+
 export interface ToolChange {
   path: string;
   action: 'create' | 'modify' | 'delete' | 'move';
@@ -69,6 +75,8 @@ export type ThreadItem =
       costUsd: number;
       modelId: string;
       message?: string;
+      /** План запуска на момент завершения: показывается в списке задач после перезагрузки. */
+      plan?: PlanItem[];
       createdAt: string;
     };
 

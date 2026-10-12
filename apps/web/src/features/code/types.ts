@@ -28,6 +28,9 @@ export interface CodeLimits {
   runsPerDay: number;
   maxSteps: number;
   maxRunCostUsd: number;
+  /** Добавочные бюджеты ступеней дешевле: агент продолжает на них, когда бюджет выбранной модели исчерпан. */
+  continueWorkUsd?: number;
+  continueLiteUsd?: number;
   commands: boolean;
   commandTimeoutSec: number;
   maxTaskChars: number;
@@ -93,6 +96,8 @@ export type ThreadItem =
       costUsd: number;
       modelId: string;
       message?: string;
+      /** План запуска на момент завершения (сервер сохраняет его в ленте). */
+      plan?: PlanItem[];
       /** Только на клиенте: код ошибки запуска, по нему подбирается подсказка. */
       code?: string;
       createdAt: string;
@@ -133,6 +138,7 @@ export type AgentEvent =
       costUsd: number;
       modelId: string;
       message?: string;
+      plan?: PlanItem[];
     }
   | { type: 'error'; code: string; message: string };
 

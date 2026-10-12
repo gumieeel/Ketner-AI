@@ -19,17 +19,14 @@ import {
 import { looksBinaryBuffer } from './project-fs.js';
 import type { ProjectStore } from './project-store.js';
 import type { SandboxRunner } from './sandbox.js';
-import type { ProjectQuota, ToolChange } from './types.js';
+import type { PlanItem, ProjectQuota, ToolChange } from './types.js';
 
 // ─────────────────────────────────────────────────────────────
 // Контекст и результат
 // ─────────────────────────────────────────────────────────────
 
 export type PlanStatus = 'pending' | 'in_progress' | 'done';
-export interface PlanItem {
-  text: string;
-  status: PlanStatus;
-}
+export type { PlanItem } from './types.js';
 
 export interface ToolContext {
   userId: string;
@@ -218,8 +215,11 @@ export function agentToolDefinitions(options: { commands: boolean; network: bool
       function: {
         name: 'update_plan',
         description:
-          'Keep a short task list for multi-step work. Call it at the start of a non-trivial task and whenever the ' +
-          'status of an item changes. Statuses: pending, in_progress, done. At most one item in_progress.',
+          'Your task list, shown to the user. At the start of any task that needs more than one or two changes, ' +
+          'split it into 3-8 concrete, verifiable subtasks in execution order. Then work through them one at a ' +
+          'time: exactly one item in_progress, mark it done as soon as it is finished and verified, and set the ' +
+          'next one in_progress in the same call. Add items when you discover new work; remove items that turned ' +
+          'out to be unnecessary. Always send the full list. Statuses: pending, in_progress, done.',
         parameters: {
           type: 'object',
           properties: {
@@ -768,11 +768,24 @@ function updatePlan(args: Record<string, unknown>, ctx: ToolContext): ToolOutcom
       status: status === 'done' || status === 'in_progress' ? status : 'pending',
     });
   }
+  // Не больше одного пункта «в работе»: лишние возвращаются в очередь, порядок сохраняется.
+  let seenInProgress = false;
+  for (const item of items) {
+    if (item.status !== 'in_progress') continue;
+    if (seenInProgress) item.status = 'pending';
+    seenInProgress = true;
+  }
   ctx.plan = items;
   const done = items.filter((item) => item.status === 'done').length;
+  const current = items.find((item) => item.status === 'in_progress');
+  const next = items.find((item) => item.status === 'pending');
+  const remaining = items.length - done;
   return {
     ok: true,
-    output: `Plan updated: ${done}/${items.length} done.`,
+    output:
+      `Plan updated: ${done}/${items.length} done.` +
+      (current ? ` Now working on: "${current.text}".` : next ? ` Next: "${next.text}" (mark it in_progress when you start).` : '') +
+      (remaining === 0 ? ' All items are done: verify the result and write the final message.' : ''),
     label: 'update_plan',
     summary: `${done}/${items.length}`,
     planUpdate: items,

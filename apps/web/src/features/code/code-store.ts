@@ -633,6 +633,7 @@ export const useCode = create<CodeState>((set, get) => {
                   costUsd: event.costUsd,
                   modelId: event.modelId,
                   message: event.message,
+                  ...(event.plan && event.plan.length > 0 ? { plan: event.plan } : {}),
                   createdAt: new Date().toISOString(),
                 },
               ],
