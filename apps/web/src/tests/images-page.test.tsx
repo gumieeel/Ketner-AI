@@ -128,6 +128,22 @@ describe('страница «Изображения»', () => {
     expect(within(screen.getByRole('alert')).getByRole('link')).toHaveAttribute('href', '/pricing');
   });
 
+  it('справка «О моделях» описывает модели, лимиты тарифа и закрывается по Escape', async () => {
+    installImagesApi('free');
+    loginAs('free');
+    const user = userEvent.setup();
+    renderRoute('/images');
+
+    await user.click(await screen.findByRole('button', { name: 'О моделях' }));
+    const dialog = screen.getByRole('dialog', { name: 'Модели и лимиты' });
+    expect(within(dialog).getByText('Самая быстрая модель: картинка готова за несколько секунд.')).toBeInTheDocument();
+    expect(within(dialog).getByText('Ваш лимит: 5 в сутки, сегодня использовано 1')).toBeInTheDocument();
+    expect(within(dialog).getByText('Доступна с тарифа Plus')).toBeInTheDocument();
+    expect(within(dialog).getByText('Только квадрат 1:1')).toBeInTheDocument();
+    await user.keyboard('{Escape}');
+    expect(screen.queryByRole('dialog')).toBeNull();
+  });
+
   it('просит войти, если сервер ответил 401', async () => {
     installFakeApi({ reply: 'ok' });
     const base = globalThis.fetch;

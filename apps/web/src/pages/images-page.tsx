@@ -1,6 +1,7 @@
 import { useEffect, useState, type CSSProperties, type KeyboardEvent } from 'react';
 import { Link } from 'react-router-dom';
 import { AlertIcon, DownloadIcon, ImageIcon, InfoIcon, LockIcon, RefreshIcon, SparkleIcon, TrashIcon } from '@/components/icons';
+import { ImagesHelp } from '@/components/images/images-help';
 import { Button } from '@/components/ui/button';
 import { buttonClasses } from '@/components/ui/button-classes';
 import { Spinner } from '@/components/ui/spinner';
@@ -117,6 +118,7 @@ export function ImagesPage() {
   const notice = useImages((state) => state.notice);
   const dismissNotice = useImages((state) => state.dismissNotice);
   const generate = useImages((state) => state.generate);
+  const [helpOpen, setHelpOpen] = useState(false);
 
   useEffect(() => {
     void load();
@@ -175,10 +177,16 @@ export function ImagesPage() {
   return (
     <div className="h-full overflow-y-auto">
       <div className="mx-auto flex w-full max-w-6xl flex-col gap-6 px-4 py-6 md:px-6 md:py-8">
-        <header className="flex flex-col gap-1">
-          <h2 className="text-xl font-semibold tracking-tight text-text md:text-2xl">{t('images.title')}</h2>
-          <p className="text-[14px] text-muted">{t('images.subtitle')}</p>
+        <header className="flex items-start justify-between gap-3">
+          <div className="flex min-w-0 flex-col gap-1">
+            <h2 className="text-xl font-semibold tracking-tight text-text md:text-2xl">{t('images.title')}</h2>
+            <p className="text-[14px] text-muted">{t('images.subtitle')}</p>
+          </div>
+          <Button variant="outline" size="md" className="shrink-0" leftIcon={<InfoIcon className="size-4" />} onClick={() => setHelpOpen(true)}>
+            {t('images.help.open')}
+          </Button>
         </header>
+        {helpOpen ? <ImagesHelp models={capabilities.models} onClose={() => setHelpOpen(false)} /> : null}
 
         <section className="flex flex-col gap-3 rounded-2xl border border-stroke bg-surface p-3 shadow-sm md:p-4">
           <textarea
