@@ -1,4 +1,5 @@
 import { config } from '../config.js';
+import { createApiKeyStore } from './api-key-store.js';
 import { createConversationStore } from './conversation-store.js';
 import { createSubscriptionStore } from './subscription-store.js';
 import { createUserStore } from './user-store.js';
@@ -8,6 +9,11 @@ export const conversationStore = createConversationStore(config.storeFile);
 
 /** Хранилище пользователей по умолчанию: файл из `config.userStoreFile`. */
 export const userStore = createUserStore(config.userStoreFile);
+
+/** API-ключи для программирования (CLI, IDE): файл из `config.apiKeyStoreFile`. */
+export const apiKeyStore = createApiKeyStore(config.apiKeyStoreFile);
+export { createApiKeyStore } from './api-key-store.js';
+export type { ApiKeyStore, PublicApiKey } from './api-key-store.js';
 
 /** Хранилище подписок по умолчанию: файл из `config.subscriptionStoreFile`. */
 export const subscriptionStore = createSubscriptionStore(config.subscriptionStoreFile);

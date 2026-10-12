@@ -9,7 +9,10 @@ import { config } from './config.js';
 import type { AiConfig } from './config.js';
 import { errorHandler, notFoundHandler } from './middleware/errors.js';
 import { createApiRouter, describeService } from './routes/index.js';
-import { conversationStore, subscriptionStore, userStore } from './store/index.js';
+import { apiKeyStore as defaultApiKeyStore, conversationStore, subscriptionStore, userStore } from './store/index.js';
+import type { ApiKeyStore } from './store/api-key-store.js';
+import type { AgentGateway } from './ai/agent-gateway.js';
+import { createV1Router } from './routes/v1.js';
 import type { ConversationStore } from './store/conversation-store.js';
 import type { SubscriptionStore } from './store/subscription-store.js';
 import type { UserStore } from './store/user-store.js';
@@ -38,6 +41,10 @@ export interface AppDeps {
   botService?: TelegramBotService;
   supportBotService?: TelegramSupportBotService;
   supportStore?: SupportStore;
+  /** Хранилище API-ключей для программирования (`/v1`, `/api/keys`). */
+  apiKeyStore?: ApiKeyStore;
+  /** Шлюз агента; в тестах подставляется с поддельным провайдером. */
+  agentGateway?: AgentGateway;
 }
 
 const defaultDeps: AppDeps = {
@@ -78,6 +85,19 @@ export function createApp(overrides: Partial<AppDeps> = {}): Express {
         callback(null, true);
       },
       credentials: true,
+    }),
+  );
+
+  // OpenAI-совместимый API для CLI и IDE. Подключается до общего разбора JSON: у него свой лимит
+  // тела (8 МБ), а авторизация идёт API-ключом, не сессией сайта.
+  app.use(
+    '/v1',
+    createV1Router({
+      apiKeyStore: deps.apiKeyStore ?? defaultApiKeyStore,
+      userStore: deps.userStore,
+      subscriptionStore: deps.subscriptionStore,
+      usageStore: deps.usageStore ?? defaultUsageStore,
+      gateway: deps.agentGateway,
     }),
   );
 

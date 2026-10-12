@@ -5,7 +5,7 @@ import { defaultBetterAuth } from '../auth/better-auth.js';
 import { verifyMockToken } from '../auth/jwt.js';
 import type { UserStore } from '../store/user-store.js';
 import type { SubscriptionStore } from '../store/subscription-store.js';
-import { resolveBillingPlan } from '../services/plan-resolver.js';
+import { applySubscriptionExpiry } from '../services/user-plan.js';
 import type { PlanId, User } from '../types.js';
 import { sendError } from './errors.js';
 import { isVipEmail, isAdminEmail } from '../services/vip.js';
@@ -31,21 +31,9 @@ export function createAuthMiddleware(
   betterAuthInstance = defaultBetterAuth,
   subscriptionStore?: SubscriptionStore,
 ) {
-  /**
-   * Срок подписки: если оплаченный период (и льготные сутки) закончился, тариф сводится к free
-   * и это сохраняется в профиле, чтобы интерфейс и лимиты видели одно и то же.
-   */
-  const applySubscriptionExpiry = (userId: string, plan: PlanId, isVip: boolean): PlanId => {
-    if (!subscriptionStore || isVip || plan === 'free') return plan;
-    const resolved = resolveBillingPlan({
-      storedPlan: plan,
-      subscription: subscriptionStore.get(userId),
-    });
-    if (resolved.expired) {
-      userStore.updatePlan(userId, 'free');
-    }
-    return resolved.plan;
-  };
+  /** Срок подписки: правило общее с API-ключами (services/user-plan.ts). */
+  const applyExpiry = (userId: string, plan: PlanId, isVip: boolean): PlanId =>
+    applySubscriptionExpiry(userStore, subscriptionStore, userId, plan, isVip);
 
   return async (request: Request, response: Response, next: NextFunction): Promise<void> => {
     // 1. Bearer-токен, выданный при входе. Он важнее cookie: клиент показывает того пользователя, чей токен
@@ -71,7 +59,7 @@ export function createAuthMiddleware(
           if (isVip) {
             plan = 'ultra';
           } else {
-            plan = applySubscriptionExpiry(user.id, plan, false);
+            plan = applyExpiry(user.id, plan, false);
           }
           request.user = {
             ...user,
@@ -116,7 +104,7 @@ export function createAuthMiddleware(
         if (isVip) {
           plan = 'ultra';
         } else if (stored) {
-          plan = applySubscriptionExpiry(stored.id, plan, false);
+          plan = applyExpiry(stored.id, plan, false);
         }
 
         request.user = {

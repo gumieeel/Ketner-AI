@@ -9,6 +9,14 @@
  */
 
 import type {
+  AgentCapableProvider,
+  AgentMessage,
+  AgentProviderRequest,
+  AgentProviderResult,
+  AgentStreamEvent,
+  AgentToolCall,
+} from '../agent/agent-types.js';
+import type {
   AIProvider,
   AIProviderType,
   ChatCompletionCallbacks,
@@ -187,7 +195,32 @@ interface PartialToolCall {
   arguments: string;
 }
 
-export class OpenRouterProvider implements AIProvider {
+type AgentWireMessage =
+  | { role: 'system' | 'user'; content: string | CacheableContent }
+  | Exclude<AgentMessage, { role: 'system' | 'user' }>;
+
+/**
+ * Сообщения агентского запроса. Явное кэширование нужно только моделям Anthropic: системный промпт
+ * (в нём описание инструментов и правила работы) и последнее сообщение пользователя не меняются
+ * от шага к шагу, а читать их из кэша в 10 раз дешевле. Остальные модели кэшируют сами.
+ * Точку кэша не ставим на сообщения роли tool: OpenRouter документирует `cache_control` только для
+ * текстовых блоков system и user.
+ */
+export function prepareAgentMessages(model: string, messages: AgentMessage[]): AgentWireMessage[] {
+  if (!model.startsWith('anthropic/')) return messages;
+  const lastUser = messages.reduce((found, m, i) => (m.role === 'user' ? i : found), -1);
+  return messages.map((m, i) => {
+    if ((m.role === 'system' || i === lastUser) && (m.role === 'system' || m.role === 'user') && m.content) {
+      return {
+        role: m.role,
+        content: [{ type: 'text', text: m.content, cache_control: { type: 'ephemeral' } }],
+      } as AgentWireMessage;
+    }
+    return m;
+  });
+}
+
+export class OpenRouterProvider implements AIProvider, AgentCapableProvider {
   readonly type: AIProviderType = 'openrouter';
   readonly name = 'OpenRouter';
 
@@ -662,6 +695,195 @@ export class OpenRouterProvider implements AIProvider {
       if (aborted) {
         return { content: '', usage: { inputTokens: 0, outputTokens: 0 }, finishReason: 'cancelled' };
       }
+      throw err;
+    }
+  }
+
+  /** Тело агентского запроса (с инструментами). Отдельный метод, чтобы тесты проверяли payload. */
+  buildAgentBody(request: AgentProviderRequest): Record<string, unknown> {
+    const body: Record<string, unknown> = {
+      model: request.model,
+      messages: prepareAgentMessages(request.model, request.messages),
+      stream: true,
+      max_tokens: Math.min(request.maxTokens, MAX_COMPLETION_TOKENS),
+      usage: { include: true },
+    };
+    if (request.tools && request.tools.length > 0) {
+      body.tools = request.tools;
+      if (request.toolChoice !== undefined) body.tool_choice = request.toolChoice;
+    }
+    if (request.reasoning) body.reasoning = request.reasoning;
+    if (request.temperature !== undefined) body.temperature = request.temperature;
+    return body;
+  }
+
+  /**
+   * Стриминг с вызовом функций для API агентов (/v1). В отличие от `streamText`, размышления модели не вклеиваются в текст
+   * ответа, а приходят отдельными событиями, а вызовы функций собираются из частей по индексу.
+   */
+  async streamAgent(
+    request: AgentProviderRequest,
+    hooks: { onEvent: (event: AgentStreamEvent) => void; isCancelled: () => boolean },
+  ): Promise<AgentProviderResult> {
+    const targetModel = request.model;
+    const empty = (finishReason: 'cancelled' | 'error'): AgentProviderResult => ({
+      content: '',
+      toolCalls: [],
+      usage: { inputTokens: 0, outputTokens: 0 },
+      finishReason,
+    });
+    if (hooks.isCancelled()) return empty('cancelled');
+
+    let content = '';
+    let emitted = false;
+    let promptTokens = 0;
+    let completionTokens = 0;
+    let reasoningTokens: number | undefined;
+    let cachedTokens: number | undefined;
+    let costUsd: number | undefined;
+    let actualModel: string | undefined;
+    let finishReason: AgentProviderResult['finishReason'] = 'stop';
+    const calls = new Map<number, AgentToolCall>();
+
+    const snapshot = (reason: AgentProviderResult['finishReason']): AgentProviderResult => {
+      const toolCalls = [...calls.entries()]
+        .sort(([a], [b]) => a - b)
+        .map(([, call]) => call)
+        .filter((call) => call.function.name);
+      return {
+        content,
+        toolCalls,
+        finishReason: reason === 'stop' && toolCalls.length > 0 ? 'tool_calls' : reason,
+        usage: {
+          inputTokens: promptTokens,
+          outputTokens: completionTokens || Math.ceil((content.length + toolCalls.reduce((n, c) => n + c.function.arguments.length, 0)) / 4),
+          cachedTokens: cachedTokens && cachedTokens > 0 ? cachedTokens : undefined,
+          reasoningTokens,
+        },
+        cost: costUsd,
+        model: actualModel ?? targetModel,
+      };
+    };
+
+    try {
+      const response = await fetch(`${this.baseUrl}/chat/completions`, {
+        method: 'POST',
+        headers: this.headers(),
+        body: JSON.stringify(this.buildAgentBody(request)),
+        signal: request.signal,
+      });
+      if (!response.ok || !response.body) {
+        throw await describeUpstreamFailure(targetModel, response);
+      }
+
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder('utf-8');
+      let buffer = '';
+
+      const handle = (dataStr: string): void => {
+        let parsed: any;
+        try {
+          parsed = JSON.parse(dataStr);
+        } catch {
+          return;
+        }
+        if (parsed.error) {
+          const status = Number(parsed.error.code);
+          const message = String(parsed.error.message ?? 'upstream error');
+          if (!emitted) {
+            throw new OpenRouterError(targetModel, Number.isInteger(status) && status >= 400 ? status : 502, message);
+          }
+          finishReason = 'error';
+          return;
+        }
+        if (typeof parsed.model === 'string') actualModel = parsed.model;
+        const choice = parsed.choices?.[0];
+        const delta = choice?.delta;
+        if (delta) {
+          const reasoning = delta.reasoning ?? delta.reasoning_content;
+          if (typeof reasoning === 'string' && reasoning) {
+            emitted = true;
+            hooks.onEvent({ kind: 'reasoning', text: reasoning });
+          }
+          if (typeof delta.content === 'string' && delta.content) {
+            emitted = true;
+            content += delta.content;
+            hooks.onEvent({ kind: 'content', text: delta.content });
+          }
+          if (Array.isArray(delta.tool_calls)) {
+            for (const part of delta.tool_calls) {
+              const index = Number.isInteger(part.index) ? part.index : 0;
+              const current = calls.get(index) ?? {
+                id: '',
+                type: 'function' as const,
+                function: { name: '', arguments: '' },
+              };
+              if (typeof part.id === 'string' && part.id) current.id = part.id;
+              if (typeof part.function?.name === 'string') current.function.name += part.function.name;
+              const args = typeof part.function?.arguments === 'string' ? part.function.arguments : '';
+              current.function.arguments += args;
+              if (!current.id) current.id = `call_${index}_${Math.random().toString(36).slice(2, 10)}`;
+              calls.set(index, current);
+              emitted = true;
+              hooks.onEvent({
+                kind: 'tool_call',
+                index,
+                id: typeof part.id === 'string' && part.id ? part.id : undefined,
+                name: typeof part.function?.name === 'string' && part.function.name ? part.function.name : undefined,
+                argumentsDelta: args || undefined,
+              });
+            }
+          }
+        }
+        const reason = choice?.finish_reason;
+        if (reason === 'length') finishReason = 'length';
+        else if (reason === 'tool_calls') finishReason = 'tool_calls';
+        else if (reason === 'error') finishReason = 'error';
+
+        const usage = parsed.usage;
+        if (usage) {
+          if (typeof usage.cost === 'number') costUsd = usage.cost;
+          promptTokens = usage.prompt_tokens ?? promptTokens;
+          completionTokens = usage.completion_tokens ?? completionTokens;
+          const r = usage.completion_tokens_details?.reasoning_tokens;
+          if (typeof r === 'number') reasoningTokens = r;
+          const c = usage.prompt_tokens_details?.cached_tokens ?? usage.native_tokens_cached;
+          if (typeof c === 'number') cachedTokens = c;
+        }
+      };
+
+      while (true) {
+        if (hooks.isCancelled()) {
+          try {
+            await reader.cancel();
+          } catch {
+            // ignore
+          }
+          return snapshot('cancelled');
+        }
+        const { value, done } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n');
+        buffer = lines.pop() ?? '';
+        for (const line of lines) {
+          const trimmed = line.trim();
+          if (!trimmed.startsWith('data:')) continue;
+          const data = trimmed.slice(5).trim();
+          if (data && data !== '[DONE]') handle(data);
+        }
+      }
+      const tail = buffer.trim();
+      if (tail.startsWith('data:')) {
+        const data = tail.slice(5).trim();
+        if (data && data !== '[DONE]') handle(data);
+      }
+      return snapshot(finishReason);
+    } catch (err: unknown) {
+      if (err instanceof OpenRouterError) throw err;
+      const aborted = (err as Error)?.name === 'AbortError' || hooks.isCancelled();
+      if (emitted) return snapshot(aborted ? 'cancelled' : 'error');
+      if (aborted) return empty('cancelled');
       throw err;
     }
   }
