@@ -17,48 +17,26 @@ export function ChatEmptyState() {
 
   return (
     <div className="relative flex min-h-0 flex-1 flex-col overflow-y-auto">
-      {/* Атмосфера: мягкое пятно за приветствием */}
-      <div
-        aria-hidden="true"
-        className="bg-aurora pointer-events-none absolute inset-x-0 top-0 h-[420px] opacity-60 [mask-image:linear-gradient(to_bottom,black,transparent)]"
-      />
-
       <div className="relative mx-auto my-auto flex w-full max-w-[760px] flex-col items-center px-4 py-8 text-center md:py-12">
-        <div className="animate-slide-up flex items-center gap-3">
-          <span aria-hidden="true" className="flex -space-x-2">
-            {ORCHESTRA.map((id) => (
-              <span key={id} className="rounded-[11px] bg-canvas p-0.5 ring-2 ring-canvas">
-                <ModelMark modelId={id} size="sm" />
-              </span>
-            ))}
-          </span>
-        </div>
+        <span aria-hidden="true" className="flex items-center gap-1.5">
+          {ORCHESTRA.map((id) => (
+            <ModelMark key={id} modelId={id} size="sm" />
+          ))}
+        </span>
 
-        <p style={{ animationDelay: '60ms' }} className="animate-slide-up mt-4 text-[13px] font-medium text-accent">
-          {t('chat.emptyKicker')}
-        </p>
-
-        <h2 style={{ animationDelay: '100ms' }} className="t-headline animate-slide-up mt-2 text-text">
-          {t('chat.emptyTitle')}
-        </h2>
-        <p style={{ animationDelay: '140ms' }} className="animate-slide-up mt-3 max-w-[52ch] text-sm leading-6 text-muted md:text-[15px]">
-          {t('chat.emptyHint')}
-        </p>
+        <h2 className="t-headline mt-6 text-text">{t('chat.emptyTitle')}</h2>
+        <p className="mt-4 max-w-[52ch] text-[15px] leading-6 text-muted">{t('chat.emptyHint')}</p>
 
         <div className="mt-8 grid w-full grid-cols-1 gap-2.5 text-left md:grid-cols-3 md:gap-3">
-          {EXAMPLE_PROMPTS[language].map((prompt, index) => (
-            <div
-              key={prompt}
-              style={{ animationDelay: `${180 + index * 60}ms` }}
-              className="animate-slide-up flex"
-            >
+          {EXAMPLE_PROMPTS[language].map((prompt) => (
+            <div key={prompt} className="flex">
               <button
                 type="button"
                 onClick={() => setDraft(prompt)}
-                className="lift group relative flex min-h-14 flex-1 items-start justify-between gap-3 rounded-2xl border border-stroke bg-surface p-4 text-left text-sm leading-5 text-text shadow-sm hover:border-accent/40 hover:bg-surface-2 hover:shadow-md md:min-h-28 md:flex-col md:justify-between"
+                className="group relative flex min-h-14 flex-1 items-start justify-between gap-3 rounded-lg border border-stroke bg-surface p-4 text-left text-[14px] leading-5 text-text transition-colors duration-150 hover:border-stroke-strong hover:bg-surface-2 md:min-h-28 md:flex-col md:justify-between"
               >
                 <span className="text-pretty">{prompt}</span>
-                <ArrowUpRightIcon className="size-4 shrink-0 text-subtle transition-[color,transform] duration-200 group-hover:-translate-y-0.5 group-hover:translate-x-0.5 group-hover:text-accent md:self-end" />
+                <ArrowUpRightIcon className="size-4 shrink-0 text-subtle transition-colors duration-150 group-hover:text-accent md:self-end" />
               </button>
             </div>
           ))}
