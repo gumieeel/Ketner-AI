@@ -6,6 +6,8 @@ import type { Conversation, Message, Subscription } from '../types.js';
 import type { StoredUser } from '../store/user-store.js';
 import type { FeedbackRecord } from '../store/feedback-store.js';
 import { createPostgresProjectDriver, ensureCodeSchema } from '../code/postgres-driver.js';
+import { ensureImagesSchema } from '../images/image-store.js';
+import { attachImageDriver } from '../images/runtime.js';
 import { attachProjectDriver } from '../code/runtime.js';
 
 export function hasPostgresConfig(): boolean {
@@ -737,6 +739,9 @@ export async function initDatabaseSync(): Promise<boolean> {
     const codeRunner = { query: (text: string, params?: unknown[]) => sql.unsafe(text, params as never[]) as unknown as Promise<never[]> };
     await ensureCodeSchema(codeRunner);
     attachProjectDriver(createPostgresProjectDriver(codeRunner));
+    // Картинки: диск Render временный, поэтому храним их в Postgres.
+    await ensureImagesSchema(codeRunner);
+    attachImageDriver(codeRunner);
     console.log('🎉 [db] Все данные успешно синхронизированы с PostgreSQL / Supabase!');
     return true;
   } catch (error) {

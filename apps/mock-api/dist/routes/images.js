@@ -1,0 +1,109 @@
+/**
+ * /api/images — генерация картинок (страница «Изображения»).
+ * Только для вошедших пользователей: галерея личная, лимиты считаются на аккаунт.
+ */
+import { Router } from 'express';
+import { config } from '../config.js';
+import { sendError } from '../middleware/errors.js';
+import { resolveChatIdentity } from '../services/chat-identity.js';
+import { EntitlementService } from '../services/entitlement.js';
+import { usageStore as defaultUsageStore } from '../store/index.js';
+import { getImageService } from '../images/runtime.js';
+import { ImageServiceError } from '../images/service.js';
+import { getImageStore } from '../images/runtime.js';
+export function createImagesRouter(deps) {
+    const router = Router();
+    const usageStore = deps.usageStore ?? defaultUsageStore;
+    const service = deps.service ?? getImageService(usageStore);
+    const store = deps.store ?? getImageStore();
+    function identify(request, response) {
+        const sessionUser = request.user;
+        const identity = resolveChatIdentity({
+            sessionUser,
+            storedUser: sessionUser ? deps.userStore?.findById(sessionUser.id) : undefined,
+            subscription: sessionUser ? deps.subscriptionStore?.get(sessionUser.id) : undefined,
+            anonymousUserId: deps.userId,
+            anonymousPlan: config.demoPlan,
+            allowAnonymous: false,
+        });
+        if (!identity.ok) {
+            sendError(response, identity.status, identity.code, identity.message);
+            return null;
+        }
+        const language = request.headers['accept-language']?.toString().toLowerCase().startsWith('en') ? 'en' : 'ru';
+        return {
+            userId: identity.userId,
+            plan: EntitlementService.resolveEffectivePlan(identity.plan, identity.email, identity.isVip),
+            language: typeof request.body?.language === 'string' ? (request.body.language === 'en' ? 'en' : 'ru') : language,
+        };
+    }
+    const guarded = (handler) => async (request, response) => {
+        const caller = identify(request, response);
+        if (!caller)
+            return;
+        try {
+            await handler(caller, request, response);
+        }
+        catch (error) {
+            if (error instanceof ImageServiceError) {
+                sendError(response, error.status, error.code, error.message);
+                return;
+            }
+            console.error('[images] сбой обработчика:', error);
+            sendError(response, 500, 'internal_error', 'Внутренняя ошибка сервера');
+        }
+    };
+    // Файл по подписанной ссылке: открывается в <img> и скачивается без заголовка авторизации.
+    router.get('/:id/file', async (request, response) => {
+        const id = String(request.params.id ?? '');
+        const exp = Number(request.query.exp);
+        const sig = typeof request.query.sig === 'string' ? request.query.sig : '';
+        if (!service.verify(id, exp, sig)) {
+            sendError(response, 403, 'forbidden', 'Ссылка недействительна или устарела');
+            return;
+        }
+        const found = await store.getById(id);
+        if (!found) {
+            sendError(response, 404, 'not_found', 'Картинка не найдена');
+            return;
+        }
+        const ext = found.meta.mime === 'image/png' ? 'png' : 'jpg';
+        response.setHeader('Content-Type', found.meta.mime);
+        response.setHeader('Cache-Control', 'private, max-age=21600');
+        response.setHeader('X-Content-Type-Options', 'nosniff');
+        if (request.query.download === '1') {
+            response.setHeader('Content-Disposition', `attachment; filename="ketner-${id.slice(0, 8)}.${ext}"`);
+        }
+        response.end(found.bytes);
+    });
+    router.get('/capabilities', guarded(async (caller, _request, response) => {
+        response.json({ plan: caller.plan, ...service.capabilities(caller) });
+    }));
+    router.get('/', guarded(async (caller, _request, response) => {
+        response.json({ images: await service.list(caller) });
+    }));
+    router.post('/generate', guarded(async (caller, request, response) => {
+        const controller = new AbortController();
+        const onClose = () => {
+            if (!response.writableEnded)
+                controller.abort();
+        };
+        response.on('close', onClose);
+        try {
+            const result = await service.generate(caller, request.body ?? {}, controller.signal);
+            response.status(201).json(result);
+        }
+        finally {
+            response.off('close', onClose);
+        }
+    }));
+    router.delete('/:id', guarded(async (caller, request, response) => {
+        const removed = await store.remove(caller.userId, String(request.params.id ?? ''));
+        if (!removed) {
+            sendError(response, 404, 'not_found', 'Картинка не найдена');
+            return;
+        }
+        response.status(204).end();
+    }));
+    return router;
+}

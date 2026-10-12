@@ -6,6 +6,7 @@ import {
   CloseIcon,
   CodeIcon,
   EditIcon,
+  ImageIcon,
   PlusIcon,
   SearchIcon,
   SettingsIcon,
@@ -169,10 +170,26 @@ export function Sidebar() {
             <span>{t('nav.code')}</span>
           </Link>
 
+          <Link
+            to="/images"
+            onClick={close}
+            className={buttonClasses({ variant: 'secondary', size: 'md', fullWidth: true, className: 'rounded-xl' })}
+          >
+            <ImageIcon className="size-4 text-accent" />
+            <span>{t('nav.images')}</span>
+          </Link>
+
           <div className="relative">
             <SearchIcon className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-subtle" />
             <input
               type="search"
+              name="ketner-chat-search"
+              autoComplete="off"
+              autoCorrect="off"
+              spellCheck={false}
+              data-1p-ignore=""
+              data-lpignore="true"
+              data-form-type="other"
               value={search}
               onChange={(event) => setSearch(event.target.value)}
               aria-label={t('nav.searchChats')}

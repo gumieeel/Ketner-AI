@@ -6,6 +6,7 @@ import { createAuthRouter } from './auth.js';
 import { createBillingRouter } from './billing.js';
 import { createChatRouter } from './chat.js';
 import { createCodeRouter } from './code.js';
+import { createImagesRouter } from './images.js';
 import { createConversationsRouter } from './conversations.js';
 import { healthRouter } from './health.js';
 import { createMetaRouter } from './meta.js';
@@ -130,6 +131,12 @@ export function createApiRouter(deps) {
     }));
     router.use(createConversationsRouter(deps.store, deps.userId));
     router.use('/code', createCodeRouter({
+        userId: deps.userId,
+        userStore: activeUserStore,
+        subscriptionStore: activeSubscriptionStore,
+        usageStore: activeUsageStore,
+    }));
+    router.use('/images', createImagesRouter({
         userId: deps.userId,
         userStore: activeUserStore,
         subscriptionStore: activeSubscriptionStore,

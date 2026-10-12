@@ -4,6 +4,7 @@ import { StandaloneLayout } from '@/components/layout/standalone-layout';
 import { ApiDocsPage } from '@/pages/api-docs-page';
 import { ChatPage } from '@/pages/chat-page';
 import { CodePage } from '@/pages/code-page';
+import { ImagesPage } from '@/pages/images-page';
 import { CheckoutPage } from '@/pages/checkout-page';
 import { DocumentationPage } from '@/pages/documentation-page';
 import { LandingPage } from '@/pages/landing-page';
@@ -54,6 +55,12 @@ export const routes: RouteObject[] = [
       { index: true, element: <CodePage /> },
       { path: ':projectId', element: <CodePage /> },
     ],
+  },
+  {
+    path: 'images',
+    element: <AppShell />,
+    errorElement: <RouteErrorPage />,
+    children: [{ index: true, element: <ImagesPage /> }],
   },
   {
     path: 'settings',

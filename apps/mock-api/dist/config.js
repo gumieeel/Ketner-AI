@@ -262,6 +262,14 @@ export const config = {
      * Ketner Code: серверные проекты и агент.
      * SANDBOX_MODE: off (по умолчанию, команды недоступны) | local (только для разработки) | docker.
      */
+    /** Генерация изображений: Cloudflare Workers AI (FLUX). Без токена раздел показывает «недоступно». */
+    images: {
+        cloudflareAccountId: process.env.CLOUDFLARE_ACCOUNT_ID?.trim() || '',
+        cloudflareApiToken: process.env.CLOUDFLARE_API_TOKEN?.trim() || '',
+        /** Папка для картинок без БД (локально и в тестах). С DATABASE_URL картинки хранятся в Postgres. */
+        dir: process.env.IMAGES_DIR?.trim() ||
+            fileURLToPath(new URL('../data/images', import.meta.url)),
+    },
     code: {
         projectsDir: process.env.CODE_PROJECTS_DIR?.trim() ||
             fileURLToPath(new URL('../data/projects', import.meta.url)),

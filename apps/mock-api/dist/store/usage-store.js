@@ -172,7 +172,7 @@ export class UsageStore {
             const countsTowardLimits = rec.status !== 'rate_limited' && rec.status !== 'concurrency_limited' && rec.status !== 'error';
             // Шаги агента не считаются «сообщениями» (их десятки на запуск и у них свой дневной лимит
             // запусков), но токены и стоимость учитываются как у любого запроса.
-            const countsAsMessage = countsTowardLimits && rec.kind !== 'agent';
+            const countsAsMessage = countsTowardLimits && rec.kind !== 'agent' && rec.kind !== 'image';
             if (countsAsMessage && time >= oneMinuteAgo)
                 requestsLastMinute++;
             if (countsTowardLimits && time >= oneHourAgo) {
@@ -231,6 +231,20 @@ export class UsageStore {
      * моделей. Считаются ответы провайдера (успешные и прерванные пользователем: токены уже потрачены),
      * но не кэш, не отказы и не сбои. Запуск агента считается один раз, сколько бы шагов он ни сделал.
      */
+    /** Сколько картинок модели пользователь сгенерировал за последние 24 часа (успешных). */
+    getImagesLastDay(userId, modelId) {
+        const userRecords = this.userIndex.get(userId) ?? [];
+        const since = Date.now() - 24 * 60 * 60 * 1000;
+        let count = 0;
+        for (let i = userRecords.length - 1; i >= 0; i--) {
+            const rec = userRecords[i];
+            if (new Date(rec.createdAt).getTime() < since)
+                break;
+            if (rec.kind === 'image' && rec.modelId === modelId && rec.status === 'success')
+                count += 1;
+        }
+        return count;
+    }
     getModelUsesLastDay(userId, modelIds) {
         const wanted = new Set(modelIds);
         if (wanted.size === 0)
