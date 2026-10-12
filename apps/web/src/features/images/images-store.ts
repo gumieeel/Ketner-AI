@@ -20,6 +20,8 @@ interface ImagesState {
   prompt: string;
   modelId: string;
   aspect: ImageAspect;
+  /** Стиль: сервер дописывает к описанию подсказку этого стиля. */
+  style: string;
   generating: boolean;
   /** Пропорции текущей генерации: заглушка рисуется в нужной форме. */
   pendingAspect: ImageAspect | null;
@@ -28,12 +30,32 @@ interface ImagesState {
   setPrompt: (prompt: string) => void;
   setModel: (modelId: string) => void;
   setAspect: (aspect: ImageAspect) => void;
+  setStyle: (style: string) => void;
   generate: () => Promise<void>;
   remove: (id: string) => Promise<void>;
   dismissNotice: () => void;
 }
 
 let controller: AbortController | null = null;
+
+const STYLE_KEY = 'ketner.imageStyle';
+
+/** Выбранный стиль запоминается в браузере для удобства; без хранилища — «без стиля». */
+function readStyle(): string {
+  try {
+    return window.localStorage.getItem(STYLE_KEY) || 'none';
+  } catch {
+    return 'none';
+  }
+}
+
+function writeStyle(style: string): void {
+  try {
+    window.localStorage.setItem(STYLE_KEY, style);
+  } catch {
+    // хранилище недоступно — стиль просто не запомнится
+  }
+}
 
 export const useImages = create<ImagesState>((set, get) => ({
   capabilities: null,
@@ -43,6 +65,7 @@ export const useImages = create<ImagesState>((set, get) => ({
   prompt: '',
   modelId: 'flux-schnell',
   aspect: '1:1',
+  style: readStyle(),
   generating: false,
   pendingAspect: null,
   notice: null,
@@ -52,7 +75,9 @@ export const useImages = create<ImagesState>((set, get) => ({
     try {
       const [capabilities, images] = await Promise.all([imagesApi.capabilities(), imagesApi.list()]);
       const current = capabilities.models.find((m) => m.id === get().modelId && !m.locked);
+      const style = capabilities.styles && !capabilities.styles.includes(get().style) ? (capabilities.defaultStyleId ?? 'none') : get().style;
       set({
+        style,
         capabilities,
         images,
         status: 'ready',
@@ -70,10 +95,14 @@ export const useImages = create<ImagesState>((set, get) => ({
     set({ modelId, aspect });
   },
   setAspect: (aspect) => set({ aspect }),
+  setStyle: (style) => {
+    writeStyle(style);
+    set({ style });
+  },
   dismissNotice: () => set({ notice: null }),
 
   generate: async () => {
-    const { prompt, modelId, aspect, generating, capabilities } = get();
+    const { prompt, modelId, aspect, style, generating, capabilities } = get();
     const text = prompt.trim();
     if (!text || generating) return;
     const model = capabilities?.models.find((m) => m.id === modelId);
@@ -82,7 +111,7 @@ export const useImages = create<ImagesState>((set, get) => ({
     set({ generating: true, pendingAspect: effectiveAspect, notice: null });
     try {
       const { image, replacedBy } = await imagesApi.generate(
-        { prompt: text, modelId, aspect: effectiveAspect, language: usePreferences.getState().language },
+        { prompt: text, modelId, aspect: effectiveAspect, style, language: usePreferences.getState().language },
         controller.signal,
       );
       set((state) => ({

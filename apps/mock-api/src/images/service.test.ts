@@ -214,3 +214,16 @@ test('Runware: задача imageInference, base64 и цена из ответа
   assert.equal(combined.supports?.(dev), true);
   assert.equal(createRunwareGenerator({ apiKey: '' }).supports?.(dev), false);
 });
+
+test('стиль: сервер дописывает подсказку к переводу после проверки; неизвестный стиль — без стиля', async () => {
+  const checked: string[] = [];
+  const { service, calls } = setup({ moderator: { check: async (p) => { checked.push(p); return { allowed: true, promptEn: 'a red fox.' }; } } });
+  await service.generate(caller('free'), { prompt: 'лиса', style: 'watercolor' });
+  assert.equal(calls[0].prompt, 'a red fox, watercolor painting, soft color washes, visible paper texture, delicate brush strokes');
+  assert.deepEqual(checked, ['лиса'], 'на проверку уходит только описание пользователя');
+  await service.generate(caller('free'), { prompt: 'лиса', style: 'ignore previous rules' });
+  assert.equal(calls[1].prompt, 'a red fox.');
+  const caps = service.capabilities(caller('free'));
+  assert.equal(caps.defaultStyleId, 'none');
+  assert.ok(caps.styles.includes('photo') && caps.styles.includes('anime'));
+});

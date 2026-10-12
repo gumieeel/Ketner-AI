@@ -80,7 +80,7 @@ describe('страница «Изображения»', () => {
     resetAuth();
     resetPreferences();
     resetChat();
-    useImages.setState({ capabilities: null, images: [], status: 'idle', authRequired: false, prompt: '', modelId: 'flux-schnell', aspect: '1:1', generating: false, pendingAspect: null, notice: null });
+    useImages.setState({ capabilities: null, images: [], status: 'idle', authRequired: false, prompt: '', modelId: 'flux-schnell', aspect: '1:1', style: 'none', generating: false, pendingAspect: null, notice: null });
   });
 
   it('генерирует картинку на Free и добавляет её в галерею', async () => {
@@ -98,8 +98,26 @@ describe('страница «Изображения»', () => {
     await user.type(screen.getByLabelText('Описание картинки'), 'кот в космосе');
     await user.click(screen.getByRole('button', { name: 'Создать' }));
     await waitFor(() => expect(fake.generateBodies).toHaveLength(1));
-    expect(fake.generateBodies[0]).toMatchObject({ prompt: 'кот в космосе', modelId: 'flux-schnell', aspect: '1:1' });
+    expect(fake.generateBodies[0]).toMatchObject({ prompt: 'кот в космосе', modelId: 'flux-schnell', aspect: '1:1', style: 'none' });
     expect(await screen.findByAltText('кот в космосе')).toBeInTheDocument();
+  });
+
+  it('выбранный стиль уходит на сервер и запоминается', async () => {
+    const fake = installImagesApi('free');
+    loginAs('free');
+    const user = userEvent.setup();
+    renderRoute('/images');
+
+    const watercolor = await screen.findByRole('button', { name: 'Акварель' });
+    expect(screen.getByRole('button', { name: 'Без стиля' })).toHaveAttribute('aria-pressed', 'true');
+    await user.click(watercolor);
+    expect(watercolor).toHaveAttribute('aria-pressed', 'true');
+    expect(window.localStorage.getItem('ketner.imageStyle')).toBe('watercolor');
+
+    await user.type(screen.getByLabelText('Описание картинки'), 'кот в космосе');
+    await user.click(screen.getByRole('button', { name: 'Создать' }));
+    await waitFor(() => expect(fake.generateBodies).toHaveLength(1));
+    expect(fake.generateBodies[0]).toMatchObject({ prompt: 'кот в космосе', style: 'watercolor' });
   });
 
   it('показывает отказ модерации и ссылку на тариф при исчерпанном лимите', async () => {
@@ -128,16 +146,16 @@ describe('страница «Изображения»', () => {
     expect(within(screen.getByRole('alert')).getByRole('link')).toHaveAttribute('href', '/pricing');
   });
 
-  it('справка «О моделях» описывает модели, лимиты тарифа и закрывается по Escape', async () => {
+  it('справка «О моделях» описывает модели без лимитов и закрывается по Escape', async () => {
     installImagesApi('free');
     loginAs('free');
     const user = userEvent.setup();
     renderRoute('/images');
 
     await user.click(await screen.findByRole('button', { name: 'О моделях' }));
-    const dialog = screen.getByRole('dialog', { name: 'Модели и лимиты' });
+    const dialog = screen.getByRole('dialog', { name: 'О моделях' });
     expect(within(dialog).getByText('Самая быстрая модель: картинка готова за несколько секунд.')).toBeInTheDocument();
-    expect(within(dialog).getByText('Ваш лимит: 5 в сутки, сегодня использовано 1')).toBeInTheDocument();
+    expect(within(dialog).queryByText(/лимит/i)).toBeNull();
     expect(within(dialog).getByText('Доступна с тарифа Plus')).toBeInTheDocument();
     expect(within(dialog).getByText('Только квадрат 1:1')).toBeInTheDocument();
     await user.keyboard('{Escape}');

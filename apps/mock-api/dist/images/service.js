@@ -5,6 +5,7 @@
 import { createHmac, timingSafeEqual } from 'node:crypto';
 import { evaluateBudget } from '../services/budget-policy.js';
 import { EntitlementService } from '../services/entitlement.js';
+import { applyImageStyle, DEFAULT_IMAGE_STYLE_ID, IMAGE_STYLES } from './styles.js';
 import { ASPECT_SIZES, DEFAULT_IMAGE_MODEL_ID, IMAGE_MODELS, getImageModel, imageCostUsd, imageDailyLimit, PAID_IMAGE_MODEL_IDS, paidImageBudget, } from './models.js';
 export const MAX_PROMPT_CHARS = 1_000;
 const URL_TTL_SECONDS = 6 * 60 * 60;
@@ -45,6 +46,8 @@ export class ImageService {
         return {
             available: this.available,
             defaultModelId: DEFAULT_IMAGE_MODEL_ID,
+            defaultStyleId: DEFAULT_IMAGE_STYLE_ID,
+            styles: IMAGE_STYLES.map((style) => style.id),
             maxPromptChars: MAX_PROMPT_CHARS,
             // Платные модели без ключа Runware не показываются; модели Cloudflare — основа страницы, без них
             // страница и так сообщает, что генерация недоступна.
@@ -170,6 +173,8 @@ export class ImageService {
             }
             // Платный провайдер может не ответить (например, кончился баланс Runware): тогда картинку рисует
             // следующая модель цепочки, и интерфейс показывает, какая модель ответила.
+            // Стиль дописывается после проверки: проверяется описание пользователя, подсказки стилей задаёт сервер.
+            const modelPrompt = applyImageStyle(verdict.promptEn, input.style);
             const failed = new Set();
             let generated;
             let size = sizeFor(model);
@@ -178,7 +183,7 @@ export class ImageService {
                 size = sizeFor(model);
                 started = Date.now();
                 try {
-                    generated = await this.deps.generator.generate({ model, prompt: verdict.promptEn, width: size.width, height: size.height, signal });
+                    generated = await this.deps.generator.generate({ model, prompt: modelPrompt, width: size.width, height: size.height, signal });
                     break;
                 }
                 catch (error) {

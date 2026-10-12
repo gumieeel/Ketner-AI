@@ -10,6 +10,7 @@ import type { UsageStore } from '../store/usage-store.js';
 import type { ImageGenerator } from './cloudflare.js';
 import type { ImageMeta, ImageStore } from './image-store.js';
 import type { PromptModerator } from './moderation.js';
+import { applyImageStyle, DEFAULT_IMAGE_STYLE_ID, IMAGE_STYLES } from './styles.js';
 import {
   ASPECT_SIZES,
   DEFAULT_IMAGE_MODEL_ID,
@@ -103,6 +104,8 @@ export class ImageService {
     return {
       available: this.available,
       defaultModelId: DEFAULT_IMAGE_MODEL_ID,
+      defaultStyleId: DEFAULT_IMAGE_STYLE_ID,
+      styles: IMAGE_STYLES.map((style) => style.id),
       maxPromptChars: MAX_PROMPT_CHARS,
       // Платные модели без ключа Runware не показываются; модели Cloudflare — основа страницы, без них
       // страница и так сообщает, что генерация недоступна.
@@ -190,7 +193,7 @@ export class ImageService {
 
   async generate(
     caller: ImageCaller,
-    input: { prompt: unknown; modelId?: unknown; aspect?: unknown },
+    input: { prompt: unknown; modelId?: unknown; aspect?: unknown; style?: unknown },
     signal?: AbortSignal,
   ): Promise<{ image: PublicImage; replacedBy: string | null }> {
     const { language } = caller;
@@ -251,6 +254,8 @@ export class ImageService {
 
       // Платный провайдер может не ответить (например, кончился баланс Runware): тогда картинку рисует
       // следующая модель цепочки, и интерфейс показывает, какая модель ответила.
+      // Стиль дописывается после проверки: проверяется описание пользователя, подсказки стилей задаёт сервер.
+      const modelPrompt = applyImageStyle(verdict.promptEn, input.style);
       const failed = new Set<string>();
       let generated;
       let size = sizeFor(model);
@@ -259,7 +264,7 @@ export class ImageService {
         size = sizeFor(model);
         started = Date.now();
         try {
-          generated = await this.deps.generator.generate({ model, prompt: verdict.promptEn, width: size.width, height: size.height, signal });
+          generated = await this.deps.generator.generate({ model, prompt: modelPrompt, width: size.width, height: size.height, signal });
           break;
         } catch (error) {
           console.error(`[images] ${model.engine} не сгенерировала картинку:`, error instanceof Error ? error.message : error);

@@ -14,6 +14,9 @@ export interface ImageCapabilities {
   plan: string;
   available: boolean;
   defaultModelId: string;
+  /** Стили, которые принимает сервер (старый сервер их не присылает). */
+  styles?: string[];
+  defaultStyleId?: string;
   maxPromptChars: number;
   models: ImageModelInfo[];
 }

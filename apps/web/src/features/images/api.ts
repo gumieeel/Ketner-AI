@@ -43,7 +43,7 @@ export function resolveImageUrl(url: string): string {
 export const imagesApi = {
   capabilities: () => request<ImageCapabilities>('/capabilities'),
   list: () => request<{ images: GeneratedImage[] }>('').then((body) => body.images),
-  generate: (input: { prompt: string; modelId: string; aspect: ImageAspect; language: 'ru' | 'en' }, signal?: AbortSignal) =>
+  generate: (input: { prompt: string; modelId: string; aspect: ImageAspect; style: string; language: 'ru' | 'en' }, signal?: AbortSignal) =>
     request<{ image: GeneratedImage; replacedBy: string | null }>('/generate', {
       method: 'POST',
       body: JSON.stringify(input),

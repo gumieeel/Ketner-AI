@@ -26,7 +26,7 @@ function Section({ title, children }: { title: string; children: React.ReactNode
   );
 }
 
-/** Справка на странице «Изображения»: модели, лимиты, советы к описанию и правила. */
+/** Справка на странице «Изображения»: модели, советы к описанию и правила. */
 export function ImagesHelp({ models, onClose }: { models: readonly ImageModelInfo[]; onClose: () => void }) {
   const { t } = useTranslation();
   const planName = (plan: string) => plan.charAt(0).toUpperCase() + plan.slice(1);
@@ -66,22 +66,12 @@ export function ImagesHelp({ models, onClose }: { models: readonly ImageModelInf
                     </>
                   ) : null}
                   <p className="text-xs text-subtle">{square ? t('images.help.formatsSquare') : t('images.help.formatsAll')}</p>
-                  <p className={cn('mt-auto text-xs font-medium', model.locked ? 'text-muted' : 'text-accent')}>
-                    {model.locked
-                      ? t('images.help.locked', { plan: planName(model.requiredPlan) })
-                      : t('images.help.yourLimit', { limit: model.dailyLimit, used: Math.min(model.usedToday, model.dailyLimit) })}
-                  </p>
+                  {model.locked ? (
+                    <p className="mt-auto text-xs font-medium text-muted">{t('images.help.locked', { plan: planName(model.requiredPlan) })}</p>
+                  ) : null}
                 </li>
               );
             })}
-          </ul>
-        </Section>
-
-        <Section title={t('images.help.limitsTitle')}>
-          <ul className="flex list-disc flex-col gap-1.5 pl-5 text-[14px] leading-6 text-text marker:text-subtle">
-            <li>{t('images.help.limits1')}</li>
-            <li>{t('images.help.limits2')}</li>
-            <li>{t('images.help.limits3')}</li>
           </ul>
         </Section>
 
