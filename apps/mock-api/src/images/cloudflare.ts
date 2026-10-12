@@ -8,10 +8,15 @@ import type { ImageModel } from './models.js';
 export interface GeneratedImage {
   bytes: Buffer;
   mime: string;
+  /** Точная стоимость от провайдера в $, если он её сообщает (Runware). */
+  costUsd?: number;
 }
 
 export interface ImageGenerator {
+  /** Настроен ли хотя бы один провайдер. */
   readonly available: boolean;
+  /** Может ли генератор нарисовать картинку этой моделью (провайдер настроен). Нет метода — может любой. */
+  supports?(model: ImageModel): boolean;
   generate(input: { model: ImageModel; prompt: string; width: number; height: number; signal?: AbortSignal }): Promise<GeneratedImage>;
 }
 
@@ -34,6 +39,7 @@ export function createCloudflareGenerator(options: {
   const available = Boolean(options.accountId && options.apiToken);
   return {
     available,
+    supports: (model) => available && model.provider === 'cloudflare',
     async generate({ model, prompt, width, height, signal }) {
       if (!available) throw new ImageProviderError('Cloudflare Workers AI is not configured', 503);
       const url = `https://api.cloudflare.com/client/v4/accounts/${options.accountId}/ai/run/${model.engine}`;

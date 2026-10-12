@@ -266,6 +266,7 @@ export const config = {
     images: {
         cloudflareAccountId: process.env.CLOUDFLARE_ACCOUNT_ID?.trim() || '',
         cloudflareApiToken: process.env.CLOUDFLARE_API_TOKEN?.trim() || '',
+        runwareApiKey: process.env.RUNWARE_API_KEY?.trim() || '',
         /** Папка для картинок без БД (локально и в тестах). С DATABASE_URL картинки хранятся в Postgres. */
         dir: process.env.IMAGES_DIR?.trim() ||
             fileURLToPath(new URL('../data/images', import.meta.url)),

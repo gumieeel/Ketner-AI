@@ -17,6 +17,8 @@ import {
   getImageModel,
   imageCostUsd,
   imageDailyLimit,
+  PAID_IMAGE_MODEL_IDS,
+  paidImageBudget,
   type ImageAspect,
   type ImageModel,
 } from './models.js';
@@ -102,7 +104,9 @@ export class ImageService {
       available: this.available,
       defaultModelId: DEFAULT_IMAGE_MODEL_ID,
       maxPromptChars: MAX_PROMPT_CHARS,
-      models: IMAGE_MODELS.map((model) => {
+      // Платные модели без ключа Runware не показываются; модели Cloudflare — основа страницы, без них
+      // страница и так сообщает, что генерация недоступна.
+      models: IMAGE_MODELS.filter((model) => model.provider === 'cloudflare' || this.supports(model)).map((model) => {
         const dailyLimit = imageDailyLimit(model, caller.plan);
         return {
           id: model.id,
@@ -115,6 +119,41 @@ export class ImageService {
         };
       }),
     };
+  }
+
+  private supports(model: ImageModel): boolean {
+    const { generator } = this.deps;
+    return generator.supports ? generator.supports(model) : generator.available;
+  }
+
+  /** Потрачено на платные картинки за 30 дней сверх бюджета тарифа на них. */
+  private paidBudgetSpent(caller: ImageCaller): boolean {
+    const budget = paidImageBudget(caller.plan);
+    if (budget <= 0) return true;
+    return this.deps.usageStore.getCostLastMonthByModels(caller.userId, PAID_IMAGE_MODEL_IDS) >= budget;
+  }
+
+  /**
+   * Модель, которая нарисует картинку: начиная с `start` по цепочке запасных. Пропускаются модели без
+   * настроенного провайдера, с исчерпанным суточным лимитом, платные при исчерпанном бюджете на них
+   * и всё, кроме самой дешёвой, когда исчерпан месячный бюджет тарифа. null — рисовать нечем.
+   */
+  private pickModel(start: ImageModel, caller: ImageCaller, options: { cheapestOnly: boolean; skip?: ReadonlySet<string> }): ImageModel | null {
+    const paidSpent = this.paidBudgetSpent(caller);
+    const seen = new Set<string>();
+    let model: ImageModel | undefined = options.cheapestOnly ? getImageModel(DEFAULT_IMAGE_MODEL_ID) : start;
+    while (model && !seen.has(model.id)) {
+      seen.add(model.id);
+      const usable =
+        !options.skip?.has(model.id) &&
+        this.supports(model) &&
+        imageDailyLimit(model, caller.plan) > 0 &&
+        !(model.provider === 'runware' && paidSpent) &&
+        this.deps.usageStore.getImagesLastDay(caller.userId, model.id) < imageDailyLimit(model, caller.plan);
+      if (usable) return model;
+      model = model.fallbackModelId ? getImageModel(model.fallbackModelId) : undefined;
+    }
+    return null;
   }
 
   private sign(id: string, exp: number): string {
@@ -182,24 +221,19 @@ export class ImageService {
     }
 
     // Суточные лимиты: когда лимит модели исчерпан, картинку делает запасная модель.
-    let model: ImageModel = requested;
-    if (budget.stage === 'exhausted') model = getImageModel(DEFAULT_IMAGE_MODEL_ID)!;
-    const seen = new Set<string>();
-    while (this.deps.usageStore.getImagesLastDay(caller.userId, model.id) >= imageDailyLimit(model, caller.plan)) {
-      seen.add(model.id);
-      const next = model.fallbackModelId ? getImageModel(model.fallbackModelId) : undefined;
-      if (!next || seen.has(next.id) || imageDailyLimit(next, caller.plan) === 0) {
-        throw new ImageServiceError(
-          'image_limit',
-          429,
-          t(language, 'Суточный лимит картинок исчерпан. Он обновится в течение суток; больше картинок даёт тариф выше.', 'Daily image limit reached. It renews within 24 hours; a higher plan gives more images.'),
-        );
-      }
-      model = next;
+    const cheapestOnly = budget.stage === 'exhausted';
+    const picked = this.pickModel(requested, caller, { cheapestOnly });
+    if (!picked) {
+      throw new ImageServiceError(
+        'image_limit',
+        429,
+        t(language, 'Суточный лимит картинок исчерпан. Он обновится в течение суток; больше картинок даёт тариф выше.', 'Daily image limit reached. It renews within 24 hours; a higher plan gives more images.'),
+      );
     }
+    let model: ImageModel = picked;
 
     const aspect: ImageAspect = typeof input.aspect === 'string' && input.aspect in ASPECT_SIZES ? (input.aspect as ImageAspect) : '1:1';
-    const size = ASPECT_SIZES[model.aspects.includes(aspect) ? aspect : '1:1'];
+    const sizeFor = (m: ImageModel) => ASPECT_SIZES[m.aspects.includes(aspect) ? aspect : '1:1'];
 
     if (this.inFlight.has(caller.userId)) {
       throw new ImageServiceError('concurrency_limit', 429, t(language, 'Дождитесь, пока создастся предыдущая картинка.', 'Wait until the previous image is ready.'));
@@ -215,21 +249,35 @@ export class ImageService {
         throw new ImageServiceError('moderation_blocked', 422, language === 'en' ? text.en : text.ru);
       }
 
-      const started = Date.now();
+      // Платный провайдер может не ответить (например, кончился баланс Runware): тогда картинку рисует
+      // следующая модель цепочки, и интерфейс показывает, какая модель ответила.
+      const failed = new Set<string>();
       let generated;
-      try {
-        generated = await this.deps.generator.generate({ model, prompt: verdict.promptEn, width: size.width, height: size.height, signal });
-      } catch (error) {
-        console.error(`[images] ${model.engine} не сгенерировала картинку:`, error instanceof Error ? error.message : error);
-        this.record(caller.userId, model, 0, Date.now() - started, 'error');
-        throw new ImageServiceError('provider_error', 502, t(language, 'Не удалось создать картинку. Попробуйте ещё раз.', 'Could not create the image. Please try again.'));
+      let size = sizeFor(model);
+      let started = Date.now();
+      for (;;) {
+        size = sizeFor(model);
+        started = Date.now();
+        try {
+          generated = await this.deps.generator.generate({ model, prompt: verdict.promptEn, width: size.width, height: size.height, signal });
+          break;
+        } catch (error) {
+          console.error(`[images] ${model.engine} не сгенерировала картинку:`, error instanceof Error ? error.message : error);
+          this.record(caller.userId, model, 0, Date.now() - started, 'error');
+          failed.add(model.id);
+          const next: ImageModel | null = signal?.aborted || model.provider !== 'runware' ? null : this.pickModel(model, caller, { cheapestOnly, skip: failed });
+          if (!next) {
+            throw new ImageServiceError('provider_error', 502, t(language, 'Не удалось создать картинку. Попробуйте ещё раз.', 'Could not create the image. Please try again.'));
+          }
+          model = next;
+        }
       }
 
       const meta = await this.deps.store.save(
         { userId: caller.userId, prompt, modelId: model.id, width: size.width, height: size.height, mime: generated.mime },
         generated.bytes,
       );
-      this.record(caller.userId, model, imageCostUsd(model, size.width, size.height), Date.now() - started, 'success');
+      this.record(caller.userId, model, generated.costUsd ?? imageCostUsd(model, size.width, size.height), Date.now() - started, 'success');
       return {
         image: this.toPublic(meta),
         replacedBy: model.id !== requested.id ? model.name : null,
@@ -244,7 +292,7 @@ export class ImageService {
       userId,
       conversationId: 'images',
       modelId: model.id,
-      // Тип провайдера в учёте пока один; сама модель (flux-*) однозначно указывает на Cloudflare.
+      // Тип провайдера в учёте один на все ИИ-запросы; провайдер картинки однозначно задаёт id модели.
       provider: 'openrouter',
       inputTokens: 0,
       outputTokens: 0,

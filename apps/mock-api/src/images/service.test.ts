@@ -8,6 +8,8 @@ import { ImageStore } from './image-store.js';
 import { ImageService, ImageServiceError } from './service.js';
 import { createLlmModerator, isObviouslyForbidden, type PromptModerator } from './moderation.js';
 import { createCloudflareGenerator, type ImageGenerator } from './cloudflare.js';
+import { combineGenerators, createRunwareGenerator } from './runware.js';
+import { PAID_IMAGE_BUDGET_USD } from './models.js';
 import type { AIProvider } from '../ai/gateway-types.js';
 import { PLAN_ENTITLEMENTS } from '../services/entitlement.js';
 
@@ -21,7 +23,7 @@ function setup(options: { moderator?: PromptModerator; generator?: Partial<Image
     available: true,
     async generate({ model, prompt, width, height }) {
       calls.push({ model: model.id, prompt, width, height });
-      return { bytes: JPEG, mime: 'image/jpeg' };
+      return { bytes: JPEG, mime: 'image/jpeg', costUsd: model.provider === 'runware' ? 0.0123 : undefined };
     },
     ...options.generator,
   };
@@ -136,4 +138,79 @@ test('Cloudflare: schnell — JSON, klein — multipart с размером; о�
   assert.equal(form.get('width'), '1344');
   assert.equal(form.get('height'), '768');
   assert.equal(createCloudflareGenerator({ accountId: '', apiToken: '' }).available, false);
+});
+
+test('Pro: FLUX.2 dev и Seedream через Runware, цена из ответа провайдера, цепочка запасных до Cloudflare', async () => {
+  const { service, usage, calls } = setup();
+  const caps = service.capabilities(caller('pro'));
+  assert.deepEqual(
+    caps.models.map((m) => [m.id, m.locked, m.dailyLimit]),
+    [['flux-schnell', false, 100], ['flux-2-klein', false, 50], ['flux-2-dev', false, 10], ['seedream-5-flash', false, 5], ['flux-2-pro', true, 0], ['nano-banana-2', true, 0]],
+  );
+  await assert.rejects(service.generate(caller('pro'), { prompt: 'x', modelId: 'flux-2-pro' }), (e: unknown) => e instanceof ImageServiceError && e.code === 'upgrade_required');
+
+  const seedream = await service.generate(caller('pro'), { prompt: 'кот', modelId: 'seedream-5-flash', aspect: '16:9' });
+  assert.deepEqual([seedream.image.modelId, seedream.image.width], ['seedream-5-flash', 1024], 'Seedream пока только квадрат');
+  assert.equal(usage.getCostLastMonthByModels('u1', ['seedream-5-flash']), 0.0123, 'в учёт идёт цена от Runware');
+  for (let i = 0; i < 4; i++) await service.generate(caller('pro'), { prompt: `кот ${i}`, modelId: 'seedream-5-flash' });
+  const next = await service.generate(caller('pro'), { prompt: 'кот', modelId: 'seedream-5-flash', aspect: '16:9' });
+  assert.deepEqual([next.image.modelId, next.replacedBy, next.image.width], ['flux-2-dev', 'FLUX.2 dev', 1344]);
+  assert.equal(calls.at(-1)?.model, 'flux-2-dev');
+});
+
+test('Ultra: FLUX.2 pro и Nano Banana 2; сбой Runware — картинку рисует следующая модель цепочки', async () => {
+  const failing = new Set(['flux-2-pro', 'seedream-5-flash']);
+  const { service, usage } = setup({
+    generator: {
+      async generate({ model }) {
+        if (failing.has(model.id)) throw new Error('Runware insufficientCredits');
+        return { bytes: JPEG, mime: 'image/jpeg' };
+      },
+    },
+  });
+  const result = await service.generate(caller('ultra'), { prompt: 'замок', modelId: 'flux-2-pro' });
+  assert.deepEqual([result.image.modelId, result.replacedBy], ['flux-2-dev', 'FLUX.2 dev']);
+  assert.equal(usage.getImagesLastDay('u1', 'flux-2-pro'), 0, 'неудачная попытка не тратит лимит');
+  const banana = await service.generate(caller('ultra'), { prompt: 'замок', modelId: 'nano-banana-2' });
+  assert.deepEqual([banana.image.modelId, banana.replacedBy], ['nano-banana-2', null]);
+});
+
+test('бюджет на платные картинки: после него отвечают модели Cloudflare; без ключа Runware платных моделей нет', async () => {
+  const { service, usage } = setup();
+  const rec = usage.recordUsage({ userId: 'u3', conversationId: 'images', modelId: 'flux-2-dev', provider: 'openrouter', inputTokens: 0, outputTokens: 0, estimatedCost: PAID_IMAGE_BUDGET_USD.pro, latencyMs: 1, status: 'success', kind: 'image' });
+  rec.createdAt = new Date(Date.now() - 3 * 86400000).toISOString();
+  const result = await service.generate(caller('pro', 'u3'), { prompt: 'кот', modelId: 'flux-2-dev' });
+  assert.deepEqual([result.image.modelId, result.replacedBy], ['flux-2-klein', 'FLUX.2 klein']);
+
+  const cfOnly = setup({ generator: { supports: (model) => model.provider === 'cloudflare' } });
+  assert.deepEqual(cfOnly.service.capabilities(caller('ultra')).models.map((m) => m.id), ['flux-schnell', 'flux-2-klein']);
+  const fallback = await cfOnly.service.generate(caller('ultra'), { prompt: 'кот', modelId: 'flux-2-pro' });
+  assert.equal(fallback.image.modelId, 'flux-2-klein');
+});
+
+test('Runware: задача imageInference, base64 и цена из ответа; ошибка баланса — исключение; маршрутизация по провайдеру', async () => {
+  const { IMAGE_MODELS, getImageModel } = await import('./models.js');
+  const bodies: unknown[] = [];
+  let reply: unknown = { data: [{ imageBase64Data: JPEG.toString('base64'), cost: 0.0091 }] };
+  const fetchImpl = (async (_url: string, init: RequestInit) => {
+    bodies.push(JSON.parse(String(init.body)));
+    return new Response(JSON.stringify(reply), { status: 200 });
+  }) as unknown as typeof fetch;
+  const runware = createRunwareGenerator({ apiKey: 'key', fetchImpl });
+  const dev = getImageModel('flux-2-dev')!;
+  const out = await runware.generate({ model: dev, prompt: 'fox', width: 1344, height: 768 });
+  assert.ok(out.bytes.equals(JPEG));
+  assert.equal(out.costUsd, 0.0091);
+  assert.deepEqual(
+    (bodies[0] as Array<Record<string, unknown>>)[0],
+    { ...(bodies[0] as Array<Record<string, unknown>>)[0], taskType: 'imageInference', model: 'runware:400@1', width: 1344, height: 768, outputType: 'base64Data', includeCost: true, positivePrompt: 'fox' },
+  );
+  reply = { errors: [{ code: 'insufficientCredits', message: 'top up' }] };
+  await assert.rejects(runware.generate({ model: dev, prompt: 'fox', width: 1024, height: 1024 }), /insufficientCredits/);
+
+  const cloudflare = createCloudflareGenerator({ accountId: '', apiToken: '' });
+  const combined = combineGenerators(cloudflare, runware);
+  assert.equal(combined.supports?.(IMAGE_MODELS[0]), false, 'Cloudflare без ключей');
+  assert.equal(combined.supports?.(dev), true);
+  assert.equal(createRunwareGenerator({ apiKey: '' }).supports?.(dev), false);
 });

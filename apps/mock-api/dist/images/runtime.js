@@ -4,6 +4,7 @@ import { config } from '../config.js';
 import { providerManager } from '../ai/providers/provider-factory.js';
 import { modelRegistry } from '../ai/model-registry.js';
 import { createCloudflareGenerator } from './cloudflare.js';
+import { combineGenerators, createRunwareGenerator } from './runware.js';
 import { ImageStore } from './image-store.js';
 import { createLlmModerator } from './moderation.js';
 import { ImageService } from './service.js';
@@ -23,10 +24,10 @@ export function getImageService(usageStore) {
         service = new ImageService({
             store: getImageStore(),
             usageStore,
-            generator: createCloudflareGenerator({
+            generator: combineGenerators(createCloudflareGenerator({
                 accountId: config.images.cloudflareAccountId,
                 apiToken: config.images.cloudflareApiToken,
-            }),
+            }), createRunwareGenerator({ apiKey: config.images.runwareApiKey })),
             moderator: createLlmModerator({
                 provider: () => providerManager.get('openrouter'),
                 model: modelRegistry.resolve('ketner-mini').providerModelId,

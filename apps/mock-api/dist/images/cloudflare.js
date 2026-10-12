@@ -14,6 +14,7 @@ export function createCloudflareGenerator(options) {
     const available = Boolean(options.accountId && options.apiToken);
     return {
         available,
+        supports: (model) => available && model.provider === 'cloudflare',
         async generate({ model, prompt, width, height, signal }) {
             if (!available)
                 throw new ImageProviderError('Cloudflare Workers AI is not configured', 503);
