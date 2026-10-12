@@ -67,9 +67,9 @@ export function TabList({ className, children, ...props }: TabListProps) {
     const currentIndex = tabs.findIndex((t) => t === document.activeElement);
 
     let nextIndex = -1;
-    if (e.key === 'ArrowRight') {
+    if (e.key === 'ArrowRight' || e.key === 'ArrowDown') {
       nextIndex = (currentIndex + 1) % tabs.length;
-    } else if (e.key === 'ArrowLeft') {
+    } else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') {
       nextIndex = (currentIndex - 1 + tabs.length) % tabs.length;
     } else if (e.key === 'Home') {
       nextIndex = 0;
@@ -161,7 +161,7 @@ export function TabPanel({ value, children, className, ...props }: TabPanelProps
       id={panelId}
       aria-labelledby={tabId}
       tabIndex={0}
-      className={cn('mt-3 focus-visible:outline-none', className)}
+      className={cn('mt-3', className)}
       {...props}
     >
       {children}
