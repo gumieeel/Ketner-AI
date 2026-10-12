@@ -208,7 +208,6 @@ export function RouterDemo({ className }: { className?: string }) {
               <span className={cn('text-[14px] font-medium', active ? 'text-accent-text' : 'text-text')}>
                 {lane.name}
               </span>
-              {active ? <span className="ml-auto size-1.5 rounded-full bg-[#0f1a16]" /> : null}
             </div>
           );
         })}

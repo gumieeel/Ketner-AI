@@ -1223,7 +1223,6 @@ export const ru = {
   'home.spacesImagesFact1': '6 моделей',
   'home.spacesImagesFact2': 'До 5 форматов кадра',
   'home.spacesImagesFact3': 'Бесплатно с Free',
-  'home.spacesOpen': 'Открыть',
   'home.spacesChatQ': 'Сравни два варианта заголовка для лендинга и выбери сильный',
   'home.spacesChatA': 'Второй сильнее: он называет выгоду, а не функцию. Первый можно оставить подзаголовком.',
   'home.spacesCodeTask': 'Добавь тёмную тему в настройки',

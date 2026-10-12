@@ -1224,7 +1224,6 @@ export const en: Record<TranslationKey, string> = {
   'home.spacesImagesFact1': '6 models',
   'home.spacesImagesFact2': 'Up to 5 aspect ratios',
   'home.spacesImagesFact3': 'Free on the Free plan',
-  'home.spacesOpen': 'Open',
   'home.spacesChatQ': 'Compare two landing headlines and pick the stronger one',
   'home.spacesChatA': 'The second is stronger: it names the benefit, not the feature. Keep the first as a subheading.',
   'home.spacesCodeTask': 'Add a dark theme to settings',
