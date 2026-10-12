@@ -50,7 +50,7 @@ export function PanelShell({
 /** Таймер счёта: подпись и обратный отсчёт табличными цифрами. */
 export function TimerPill({ label, value }: { label: string; value: string }) {
   return (
-    <div className="inline-flex shrink-0 items-center gap-2 self-start rounded-full border border-stroke bg-canvas px-3 py-1.5 text-xs sm:self-auto">
+    <div className="inline-flex shrink-0 items-center gap-2 self-start rounded-md border border-stroke bg-canvas px-3 py-1.5 text-xs sm:self-auto">
       <span className="text-muted">{label}</span>
       <span className="font-semibold text-accent tabular-nums">{value}</span>
     </div>

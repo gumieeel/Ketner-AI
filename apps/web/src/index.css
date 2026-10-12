@@ -368,6 +368,7 @@
     font-family: var(--font-sans);
     font-size: 15px;
     line-height: 1.55;
+    font-weight: 400;
     font-variation-settings: 'SHRP' 0;
     font-feature-settings: 'kern', 'calt';
     -webkit-font-smoothing: antialiased;
@@ -375,10 +376,17 @@
     text-rendering: optimizeLegibility;
   }
 
+  /* Заголовки любого уровня — с острыми окончаниями букв, текст — с мягкими */
   h1,
   h2,
   h3 {
     text-wrap: balance;
+    font-variation-settings: 'SHRP' 100;
+  }
+
+  /* Светлый текст на тёмном фоне кажется жирнее — обычный вес чуть легче */
+  .dark body {
+    font-weight: 370;
   }
 
   ::selection {

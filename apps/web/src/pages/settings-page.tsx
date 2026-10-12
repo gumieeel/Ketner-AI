@@ -269,7 +269,7 @@ export function SettingsPage() {
                     href={`#${section.id}`}
                     aria-current={isActive ? 'true' : undefined}
                     className={cn(
-                      'relative flex min-h-11 items-center rounded-full px-4 text-sm whitespace-nowrap transition-colors lg:min-h-10 lg:rounded-lg lg:px-3',
+                      'relative flex min-h-11 items-center rounded-md px-4 text-sm whitespace-nowrap transition-colors lg:min-h-10 lg:rounded-lg lg:px-3',
                       isActive
                         ? 'bg-surface-2 font-medium text-text ring-1 ring-stroke-strong ring-inset'
                         : 'text-muted hover:bg-surface hover:text-text',

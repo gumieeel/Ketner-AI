@@ -53,6 +53,9 @@ export function PlanCards({ variant = 'compact', className }: PlanCardsProps) {
                 ? t('pricing.cta.pro')
                 : t('pricing.cta.ultra');
 
+        // На главной тарифы вложены в секцию с h2, на странице тарифов — сразу под h1.
+        const PlanHeading = variant === 'compact' ? 'h3' : 'h2';
+
         const tabLabel = isCurrent
           ? t('pricing.currentPlan')
           : isPro
@@ -66,6 +69,7 @@ export function PlanCards({ variant = 'compact', className }: PlanCardsProps) {
             key={plan.id}
             className={cn(
               'relative flex flex-col justify-between px-6 pt-12 pb-6',
+              !tabLabel && 'max-md:pt-7',
               isPro ? 'bg-surface-2' : 'bg-surface',
               isCurrent && 'shadow-[inset_0_0_0_1px_var(--accent)]',
             )}
@@ -85,9 +89,9 @@ export function PlanCards({ variant = 'compact', className }: PlanCardsProps) {
 
             <div>
               <div className="flex items-baseline justify-between gap-3">
-                <h2 className="sharp text-[24px] font-medium tracking-[-0.02em] text-text">
+                <PlanHeading className="sharp text-[24px] font-medium tracking-[-0.02em] text-text">
                   {t(plan.nameKey)}
-                </h2>
+                </PlanHeading>
                 {plan.limitBadge ? (
                   <span className="text-[13px] text-subtle">{plan.limitBadge[language]}</span>
                 ) : null}

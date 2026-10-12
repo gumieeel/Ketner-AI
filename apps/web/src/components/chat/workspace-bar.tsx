@@ -38,7 +38,7 @@ export function WorkspaceBar() {
                 <span className="max-w-[130px] truncate font-mono text-[11px] sm:max-w-[240px]">
                   {activeWorkspace.name}
                 </span>
-                <span className="rounded-full bg-accent-soft px-2 py-0.5 text-[11px] font-medium text-accent">
+                <span className="rounded-xs bg-accent-soft px-2 py-0.5 text-[11px] font-medium text-accent">
                   {t('workspace.filesCount', { count: activeWorkspace.filesCount })}
                 </span>
               </button>

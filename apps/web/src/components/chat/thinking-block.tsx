@@ -137,7 +137,7 @@ export function ThinkingBlock({
             {titleText}
           </span>
           {isActive ? (
-            <span className="flex shrink-0 items-center gap-1.5 rounded-md border border-accent/25 bg-accent-soft px-1.5 py-0.5 font-mono text-[11px] font-semibold text-accent tabular-nums">
+            <span className="flex shrink-0 items-center gap-1.5 rounded-xs border border-accent/25 bg-accent-soft px-1.5 py-0.5 font-mono text-[11px] font-semibold text-accent tabular-nums">
               <span aria-hidden="true" className="size-1.5 rounded-full bg-accent animate-pulse" />
               {elapsedSeconds > 0 ? `${elapsedSeconds.toFixed(1)}s` : '0.1s'}
             </span>

@@ -28,7 +28,7 @@ export function LandingHero() {
         />
 
         <h1 id="hero-title" className="t-display text-[clamp(2.625rem,4.6vw+0.4rem,4.75rem)] text-text">
-          <span className="block">{t('home.heroTitleA')}</span>
+          <span className="block">{t('home.heroTitleA')}</span>{' '}
           <span className="block">{t('home.heroTitleB')}</span>
         </h1>
         <p className="t-lead mt-6 max-w-[46ch] text-pretty">{t('home.heroLead')}</p>

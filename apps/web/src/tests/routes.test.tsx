@@ -11,8 +11,10 @@ describe('маршрутизация и каркас экранов', () => {
   it('лендинг открывается и ведёт в чат', () => {
     renderRoute('/');
 
-    expect(screen.getByRole('heading', { level: 1, name: 'Ketner AI' })).toBeInTheDocument();
-    const startLinks = screen.getAllByRole('link', { name: 'Начать чат' });
+    expect(
+      screen.getByRole('heading', { level: 1, name: 'Все сильные модели в одной подписке' }),
+    ).toBeInTheDocument();
+    const startLinks = screen.getAllByRole('link', { name: 'Начать бесплатно' });
     expect(startLinks.length).toBeGreaterThan(0);
     expect(startLinks[0]).toHaveAttribute('href', '/chat');
   });

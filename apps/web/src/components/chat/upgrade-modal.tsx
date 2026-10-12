@@ -76,12 +76,12 @@ export function UpgradeModal() {
         {/* Badge & Title */}
         <div className="mb-5 pr-8">
           {reason === 'free_limit' ? (
-            <div className="mb-3 inline-flex items-center gap-1.5 rounded-full border border-warning/30 bg-warning-soft px-3 py-1 text-xs font-semibold text-warning">
+            <div className="mb-3 inline-flex items-center gap-1.5 rounded-md border border-warning/30 bg-warning-soft px-3 py-1 text-xs font-semibold text-warning">
               <AlertIcon className="size-3.5" aria-hidden="true" />
               <span>{t('chat.freeLimitBadge')}</span>
             </div>
           ) : (
-            <div className="mb-3 inline-flex items-center gap-1.5 rounded-full border border-accent/30 bg-accent-soft px-3 py-1 text-xs font-semibold text-accent">
+            <div className="mb-3 inline-flex items-center gap-1.5 rounded-md border border-accent/30 bg-accent-soft px-3 py-1 text-xs font-semibold text-accent">
               <SparkleIcon className="size-3.5" aria-hidden="true" />
               <span>{reason === 'max_mode' ? t('chat.maxModeBadge') : t('chat.paidModelBadge')}</span>
             </div>
@@ -125,7 +125,7 @@ export function UpgradeModal() {
                   <span aria-hidden="true" className={cn('size-2 rounded-full', TIER_DOT[plan.id] ?? 'bg-subtle')} />
                   {t(plan.nameKey)}
                   {plan.popular ? (
-                    <span className="rounded-full bg-accent-soft px-2 py-0.5 text-[11px] font-semibold text-accent">
+                    <span className="rounded-xs bg-accent-soft px-2 py-0.5 text-[11px] font-semibold text-accent">
                       {t('pricing.popular')}
                     </span>
                   ) : null}

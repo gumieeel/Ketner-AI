@@ -352,11 +352,12 @@ export function StandaloneLayout() {
             </nav>
           </div>
 
-          {/* Крупный знак: подпись бренда во всю ширину, декоративная */}
+          {/* Крупный знак — логотип во всю ширину. Текст в псевдоэлементе: он декоративный и не читается вслух */}
           <div aria-hidden="true" className="select-none overflow-hidden">
-            <span className="sharp block text-[clamp(5rem,29.5vw,27.5rem)] leading-[0.78] font-medium tracking-[-0.055em] text-surface-3">
-              Ketner
-            </span>
+            <span
+              data-wordmark="Ketner"
+              className="sharp block text-[clamp(5rem,29.5vw,27.5rem)] leading-[0.78] font-medium tracking-[-0.055em] text-surface-3 before:content-[attr(data-wordmark)]"
+            />
           </div>
 
           <div className="flex flex-wrap items-center justify-between gap-4 border-t border-stroke py-6 text-[14px] text-muted">

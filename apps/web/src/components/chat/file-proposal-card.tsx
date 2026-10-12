@@ -182,7 +182,7 @@ export function FileProposalCard({ proposal: initialProposal, workspace }: FileP
             >
               <span
                 className={cn(
-                  'shrink-0 rounded-md px-1.5 py-0.5 font-mono text-[10px] font-bold uppercase',
+                  'shrink-0 rounded-xs px-1.5 py-0.5 font-mono text-[10px] font-bold uppercase',
                   change.action === 'write'
                     ? 'bg-success-soft text-success'
                     : change.action === 'replace'

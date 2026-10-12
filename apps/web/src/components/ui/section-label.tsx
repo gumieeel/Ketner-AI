@@ -11,18 +11,14 @@ export function SectionLabel({ index, children, className, ...props }: SectionLa
   return (
     <div
       className={cn(
-        'inline-flex items-center gap-2 text-[13px] font-semibold tracking-wide text-accent',
+        'inline-flex items-center gap-2 text-[13px] font-medium text-subtle',
         className,
       )}
       {...props}
     >
       {index ? (
-        <span className="tabular rounded-full bg-accent-soft px-2 py-0.5 font-mono text-[11px] leading-4">
-          {index}
-        </span>
-      ) : (
-        <span aria-hidden="true" className="size-1.5 rounded-full bg-brand-gradient" />
-      )}
+        <span className="tabular text-muted">{index}</span>
+      ) : null}
       <span>{children}</span>
     </div>
   );
