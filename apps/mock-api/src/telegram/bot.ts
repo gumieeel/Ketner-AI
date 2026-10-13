@@ -169,8 +169,13 @@ export class TelegramBotService {
     return this.rates;
   }
 
+  /**
+   * Адрес сайта для кнопок бота. Telegram принимает только https, поэтому локальный адрес
+   * разработки (WEB_APP_URL по умолчанию — localhost) заменяется на ketner.org.
+   */
   private get siteUrl(): string {
-    return (this.deps.webAppUrl || config.webAppUrl || 'https://ketner.org').replace(/\/+$/, '');
+    const candidate = this.deps.webAppUrl || config.webAppUrl || '';
+    return (candidate.startsWith('https://') ? candidate : 'https://ketner.org').replace(/\/+$/, '');
   }
 
   get miniAppUrl(): string {
