@@ -11,6 +11,7 @@ import { createSubscriptionStore } from '../store/subscription-store.js';
 import { createUserStore } from '../store/user-store.js';
 import { createApiKeyStore, type ApiKeyStore } from '../store/api-key-store.js';
 import { UsageStore } from '../store/usage-store.js';
+import { createInvoiceStore } from '../store/invoice-store.js';
 import { createGithubConnectionStore, type GithubConnectionStore } from '../github/connection-store.js';
 import { semanticCache } from '../ai/cache.js';
 import type { Conversation, Message } from '../types.js';
@@ -73,6 +74,7 @@ export async function startTestServer(
     usageStore: testUsageStore,
     apiKeyStore: testApiKeyStore,
     githubConnectionStore: testGithubStore,
+    invoiceStore: createInvoiceStore(join(tempDir, 'invoices.json')),
     supportStore: testSupportStore,
     supportBotService: testSupportBotService,
     ai: { ...FAST_AI, ...ai },

@@ -64,7 +64,7 @@ export interface CryptoPanelProps {
   onConfirm: () => void;
 }
 
-/** Панель оплаты криптовалютой: шлюз TryBit / CryptoCloud или прямой перевод с TxID. */
+/** Панель оплаты криптовалютой: шлюз Trybit или прямой перевод с TxID. */
 export function CryptoPanel(props: CryptoPanelProps) {
   const {
     plan,
@@ -111,7 +111,7 @@ export function CryptoPanel(props: CryptoPanelProps) {
               {t('checkout.cryptoSecure')}
             </Badge>
             <Badge tone="neutral" className="px-2 py-0 text-[11px]">
-              TryBit / CryptoCloud
+              Trybit
             </Badge>
           </div>
         </div>
@@ -217,7 +217,7 @@ export function CryptoPanel(props: CryptoPanelProps) {
           <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2">
             <ChoiceTile selected={mode === 'gateway'} onClick={() => onModeChange('gateway')} className="p-3.5">
               <span className="flex w-full items-center justify-between gap-2">
-                <span className="text-[13px] font-semibold text-text">TryBit / CryptoCloud</span>
+                <span className="text-[13px] font-semibold text-text">Trybit</span>
                 <TileTag selected={mode === 'gateway'}>{t('checkout.tileCryptoBadge')}</TileTag>
               </span>
               <span className="mt-0.5 text-xs leading-5 text-muted">{t('checkout.cryptoModeGatewayDesc')}</span>
@@ -260,7 +260,7 @@ export function CryptoPanel(props: CryptoPanelProps) {
   );
 }
 
-/** Вариант 1: оплата через шлюз TryBit / CryptoCloud. */
+/** Вариант 1: оплата через шлюз Trybit. */
 function GatewayBlock({
   amount,
   address,

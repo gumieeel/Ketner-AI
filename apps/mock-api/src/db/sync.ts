@@ -10,6 +10,8 @@ import {
   feedbackStore,
 } from '../store/index.js';
 import type { StoredGithubConnection } from '../github/connection-store.js';
+import { invoiceStore } from '../store/invoice-store.js';
+import type { CryptoInvoice } from '../types.js';
 import type { ApiKeyRecord } from '../store/api-key-store.js';
 import type { Conversation, Message, Subscription } from '../types.js';
 import type { StoredUser } from '../store/user-store.js';
@@ -838,6 +840,39 @@ async function syncGithubConnections(sql: postgres.Sql): Promise<void> {
   });
 }
 
+/**
+ * Крипто-счета (Trybit): postback может прийти после деплоя, а диск Render временный. Без таблицы
+ * сервер не нашёл бы счёт и не выдал тариф за уже оплаченный заказ.
+ */
+async function syncCryptoInvoices(sql: postgres.Sql): Promise<void> {
+  await sql.unsafe(`
+    CREATE TABLE IF NOT EXISTS "crypto_invoices" (
+      "id" text PRIMARY KEY NOT NULL,
+      "user_id" text NOT NULL,
+      "status" text NOT NULL,
+      "data" jsonb NOT NULL,
+      "created_at" timestamptz NOT NULL DEFAULT now(),
+      "updated_at" timestamptz NOT NULL DEFAULT now()
+    );
+  `);
+  const rows = await sql<{ data: CryptoInvoice }[]>`
+    SELECT data FROM "crypto_invoices" WHERE created_at > now() - interval '60 days'
+  `;
+  invoiceStore.loadCryptoExternal?.(rows.map((row) => row.data));
+  invoiceStore.setCryptoDbDriver?.({
+    async upsert(invoice) {
+      await sql`
+        INSERT INTO "crypto_invoices" ("id", "user_id", "status", "data", "created_at", "updated_at")
+        VALUES (${invoice.id}, ${invoice.userId}, ${invoice.status}, ${sql.json(invoice as never)}, ${invoice.createdAt}, now())
+        ON CONFLICT ("id") DO UPDATE SET
+          "status" = EXCLUDED."status",
+          "data" = EXCLUDED."data",
+          "updated_at" = now()
+      `;
+    },
+  });
+}
+
 export async function initDatabaseSync(): Promise<boolean> {
   if (!hasPostgresConfig()) {
     console.log(
@@ -876,6 +911,11 @@ export async function initDatabaseSync(): Promise<boolean> {
       await syncApiKeys(sql);
     } catch (error) {
       console.error('❌ [db] API-ключи не синхронизированы с PostgreSQL:', error);
+    }
+    try {
+      await syncCryptoInvoices(sql);
+    } catch (error) {
+      console.error('❌ [db] Крипто-счета не синхронизированы с PostgreSQL:', error);
     }
     try {
       await syncGithubConnections(sql);

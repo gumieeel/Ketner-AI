@@ -16,6 +16,7 @@ import { createV1Router } from './routes/v1.js';
 import { createGithubCallbackHandler } from './routes/github.js';
 import type { GithubConnectionStore } from './github/connection-store.js';
 import type { GithubOAuthSettings } from './github/oauth.js';
+import type { InvoiceStore } from './store/invoice-store.js';
 import type { ConversationStore } from './store/conversation-store.js';
 import type { SubscriptionStore } from './store/subscription-store.js';
 import type { UserStore } from './store/user-store.js';
@@ -54,6 +55,8 @@ export interface AppDeps {
   githubFetch?: typeof fetch;
   /** Настройки OAuth GitHub; в тестах подменяются. */
   githubSettings?: () => GithubOAuthSettings | null;
+  /** Счета на оплату; в тестах — временный файл, чтобы не трогать рабочие данные. */
+  invoiceStore?: InvoiceStore;
 }
 
 const defaultDeps: AppDeps = {

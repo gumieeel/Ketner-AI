@@ -31,6 +31,13 @@ export interface InvoiceStore {
   getCryptoInvoice(id: string): CryptoInvoice | undefined;
   findCryptoInvoice(identifier: string): CryptoInvoice | undefined;
   markCryptoPaid(id: string, txHash?: string): CryptoInvoice | undefined;
+  /** Счета из Postgres: диск Render временный, без этого оплата после деплоя терялась бы. */
+  loadCryptoExternal?(records: CryptoInvoice[]): void;
+  setCryptoDbDriver?(driver: CryptoInvoiceDbDriver | null): void;
+}
+
+export interface CryptoInvoiceDbDriver {
+  upsert(invoice: CryptoInvoice): Promise<void>;
 }
 
 interface InvoiceSnapshot {
@@ -70,6 +77,12 @@ export function createInvoiceStore(file?: string): InvoiceStore {
   const sbpInvoices = new Map<string, SbpInvoice>();
   const starsInvoices = new Map<string, TelegramStarsInvoice>();
   const cryptoInvoices = new Map<string, CryptoInvoice>();
+  let cryptoDb: CryptoInvoiceDbDriver | null = null;
+  const saveCrypto = (invoice: CryptoInvoice): void => {
+    cryptoDb?.upsert({ ...invoice }).catch((error: unknown) => {
+      console.error('[mock-api] Ошибка записи крипто-счёта в Postgres:', error);
+    });
+  };
 
   if (file) {
     const snapshot = readSnapshot(file);
@@ -223,6 +236,7 @@ export function createInvoiceStore(file?: string): InvoiceStore {
 
       cryptoInvoices.set(id, invoice);
       persist();
+      saveCrypto(invoice);
       return invoice;
     },
 
@@ -234,10 +248,13 @@ export function createInvoiceStore(file?: string): InvoiceStore {
       if (!identifier) return undefined;
       const direct = cryptoInvoices.get(identifier);
       if (direct) return direct;
+      // Trybit присылает invoice_id без префикса INV-, а при создании отдаёт uuid с ним.
+      const bare = identifier.replace(/^INV-/i, '');
       for (const inv of cryptoInvoices.values()) {
         if (
           inv.id === identifier ||
           inv.cryptoCloudInvoiceId === identifier ||
+          (inv.cryptoCloudInvoiceId && inv.cryptoCloudInvoiceId.replace(/^INV-/i, '') === bare) ||
           (inv.cryptoCloudUrl && inv.cryptoCloudUrl.includes(identifier))
         ) {
           return inv;
@@ -256,7 +273,16 @@ export function createInvoiceStore(file?: string): InvoiceStore {
       };
       cryptoInvoices.set(invoice.id, updated);
       persist();
+      saveCrypto(updated);
       return updated;
+    },
+
+    loadCryptoExternal(records: CryptoInvoice[]): void {
+      for (const record of records) cryptoInvoices.set(record.id, { ...record });
+    },
+
+    setCryptoDbDriver(driver: CryptoInvoiceDbDriver | null): void {
+      cryptoDb = driver;
     },
   };
 }

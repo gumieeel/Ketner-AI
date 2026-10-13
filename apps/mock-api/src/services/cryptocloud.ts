@@ -89,7 +89,7 @@ export class CryptoCloudService {
     }
 
     try {
-      const response = await fetch('https://api.cryptocloud.plus/v2/invoice/create', {
+      const response = await fetch(`${config.cryptoCloudApiUrl}/v2/invoice/create`, {
         method: 'POST',
         headers: {
           Authorization: `Token ${this.apiKey}`,
@@ -101,7 +101,8 @@ export class CryptoCloudService {
           currency: 'USD',
           order_id: options.orderId,
           email: options.userEmail || undefined,
-          cryptocurrency: options.cryptocurrency || undefined,
+          // Дополнительные параметры Trybit принимает только внутри add_fields.
+          ...(options.cryptocurrency ? { add_fields: { cryptocurrency: options.cryptocurrency } } : {}),
         }),
       });
 
@@ -148,7 +149,7 @@ export class CryptoCloudService {
 
   /**
    * Проверяет статус счета через CryptoCloud API v2.
-   * Endpoint: POST https://api.cryptocloud.plus/v2/invoice/merchant/info
+   * Endpoint: POST <TRYBIT_API_URL>/v2/invoice/merchant/info
    */
   async checkInvoiceStatus(invoiceId: string): Promise<string> {
     if (!this.isConfigured()) {
@@ -156,7 +157,7 @@ export class CryptoCloudService {
     }
 
     try {
-      const response = await fetch('https://api.cryptocloud.plus/v2/invoice/merchant/info', {
+      const response = await fetch(`${config.cryptoCloudApiUrl}/v2/invoice/merchant/info`, {
         method: 'POST',
         headers: {
           Authorization: `Token ${this.apiKey}`,
@@ -181,7 +182,8 @@ export class CryptoCloudService {
       };
 
       if (data.status === 'success' && Array.isArray(data.result)) {
-        const item = data.result.find((inv) => inv.uuid === invoiceId);
+        const bare = (value: string) => value.replace(/^INV-/i, '');
+        const item = data.result.find((inv) => bare(inv.uuid) === bare(invoiceId));
         if (item?.status) {
           const rawStatus = item.status.toLowerCase();
           return rawStatus; // 'paid', 'created', 'partial', 'overpaid', 'canceled'
