@@ -1,6 +1,8 @@
 import { Router, type Request, type Response } from 'express';
 import { defaultBetterAuth } from '../auth/better-auth.js';
 import { createMockToken } from '../auth/jwt.js';
+import { telegramBotService } from '../telegram/bot.js';
+import { telegramLinkCodes } from '../telegram/link-codes.js';
 import { sendError } from '../middleware/errors.js';
 import type { UserStore } from '../store/user-store.js';
 
@@ -116,10 +118,11 @@ export function createAuthRouter(
       sendError(response, 401, 'unauthorized', 'Сессия не найдена или истекла');
       return;
     }
-    const botUser = config.telegramBotUsername.replace(/^@/, '');
+    const botUser = (telegramBotService.botUsername || config.telegramBotUsername).replace(/^@/, '');
+    // Одноразовый код на 15 минут вместо id пользователя: ссылку нельзя подобрать или переслать.
     response.json({
       botUsername: botUser,
-      linkUrl: `https://t.me/${botUser}?start=link_${request.user.id}`,
+      linkUrl: `https://t.me/${botUser}?start=lnk_${telegramLinkCodes.issue(request.user.id)}`,
       isLinked: Boolean(request.user.telegramChatId),
       telegramUsername: request.user.telegramUsername,
     });

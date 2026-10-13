@@ -73,11 +73,19 @@ export function createSubscriptionStore(file: string): SubscriptionStore {
     },
 
     checkout(userId: string, plan: PlanId): Subscription {
-      const renewsAt = new Date(Date.now() + 30 * 24 * 3600 * 1000).toISOString();
       const normalized = userId.trim().toLowerCase();
       const existingIndex = snapshot.subscriptions.findIndex(
         (sub) => sub.userId === userId || sub.userId.toLowerCase() === normalized,
       );
+      // Продление того же тарифа до окончания срока не сжигает оставшиеся дни: 30 дней
+      // добавляются к текущей дате окончания. Смена тарифа начинает новый срок с сегодняшнего дня.
+      const previous = existingIndex >= 0 ? snapshot.subscriptions[existingIndex] : undefined;
+      const previousEnd = previous?.renewsAt ? Date.parse(previous.renewsAt) : NaN;
+      const extendFrom =
+        previous && previous.plan === plan && previousEnd > Date.now()
+          ? previousEnd
+          : Date.now();
+      const renewsAt = new Date(extendFrom + 30 * 24 * 3600 * 1000).toISOString();
 
       const updated: Subscription = {
         userId,

@@ -16,6 +16,7 @@ import { RouteErrorPage } from '@/pages/route-error-page';
 import { SettingsPage } from '@/pages/settings-page';
 import { SignupPage } from '@/pages/signup-page';
 import { AdminPage } from '@/pages/admin-page';
+import { TelegramAppPage } from '@/pages/telegram-app-page';
 
 /**
  * Маршруты приложения.
@@ -38,6 +39,8 @@ export const routes: RouteObject[] = [
       { path: 'checkout/:planId', element: <CheckoutPage /> },
     ],
   },
+  // Кабинет внутри Telegram (мини-приложение бота): без шапки и боковой панели сайта.
+  { path: 'tg', element: <TelegramAppPage />, errorElement: <RouteErrorPage /> },
   {
     path: 'chat',
     element: <AppShell />,

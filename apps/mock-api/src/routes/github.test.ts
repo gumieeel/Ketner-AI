@@ -73,7 +73,9 @@ test('токен шифруется: в файле его нет, чужим к�
   assert.equal(store.tokenOf('u1'), 'gho_plain_token');
   assert.equal(createGithubConnectionStore({ file, secret: 'one' }).tokenOf('u1'), 'gho_plain_token');
   assert.equal(createGithubConnectionStore({ file, secret: 'two' }).tokenOf('u1'), undefined);
-  assert.equal(decryptToken(encryptToken('x', 'a').replace(/.$/, 'A'), 'a'), undefined);
+  const sealed = encryptToken('x', 'a');
+  const tampered = sealed.slice(0, -1) + (sealed.endsWith('A') ? 'B' : 'A');
+  assert.equal(decryptToken(tampered, 'a'), undefined);
   assert.equal(store.remove('u1'), true);
   assert.equal(store.get('u1'), undefined);
 });

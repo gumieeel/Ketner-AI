@@ -30,36 +30,10 @@ import { OrderSummary } from './checkout/order-summary';
 import { CheckoutSkeleton } from './checkout/parts';
 import { StarsPanel } from './checkout/stars-panel';
 
-function calculateStars(price: number): number {
-  if (price <= 0) return 0;
-  if (
-    price === 49 ||
-    price === 59 ||
-    price === 4890 ||
-    price === 2990 ||
-    price === 2499 ||
-    price === 30 ||
-    price === 39 ||
-    price === 40
-  ) {
-    return 2650;
-  }
-  if (
-    price === 25 ||
-    price === 2490 ||
-    price === 1990 ||
-    price === 1999 ||
-    price === 1199 ||
-    price === 20 ||
-    price === 29
-  ) {
-    return 1350;
-  }
-  if (price === 9 || price === 890 || price === 990 || price === 999 || price === 10) {
-    return 500;
-  }
-  if (price <= 100) return Math.round(price / 0.0185);
-  return Math.round((price / 99) / 0.0185);
+/** Оценка цены в звёздах до выставления счёта: курс по умолчанию $0.015, округление до 10. */
+function calculateStars(priceUsd: number): number {
+  if (priceUsd <= 0) return 0;
+  return Math.max(10, Math.ceil(priceUsd / 0.015 / 10) * 10);
 }
 
 export function CheckoutPage() {
@@ -316,7 +290,8 @@ export function CheckoutPage() {
     }
   };
 
-  const starsAmount = calculateStars(plan.priceMonthly);
+  // Сумма в звёздах приходит со счётом (по текущему курсу Telegram Stars); до счёта — оценка.
+  const starsAmount = starsInvoice?.starsAmount ?? calculateStars(plan.priceMonthly);
   const rawBot = starsInvoice?.botUsername;
   const botUsername =
     rawBot && rawBot.trim() !== '' && rawBot !== 'KetnerAIBot'
@@ -334,6 +309,8 @@ export function CheckoutPage() {
   ) {
     botDeepLink = starsInvoice.botDeepLink;
   }
+  // Ссылка на окно оплаты открывает оплату сразу, без переписки с ботом.
+  if (starsInvoice?.invoiceLink) botDeepLink = starsInvoice.invoiceLink;
 
   const currentCrypto =
     CRYPTO_OPTIONS.find((c) => c.id === cryptoCurrency) || CRYPTO_OPTIONS[0];

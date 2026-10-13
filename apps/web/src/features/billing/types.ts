@@ -65,6 +65,8 @@ export interface TelegramStarsInvoice {
   planId: PlanId;
   priceRub: number;
   starsAmount: number;
+  /** Прямая ссылка на окно оплаты звёздами в Telegram (если бот настроен). */
+  invoiceLink?: string;
   botUsername: string;
   botDeepLink: string;
   status: 'pending' | 'paid';

@@ -78,3 +78,10 @@ export async function unlinkTelegram(token?: string): Promise<User> {
   return body.user;
 }
 
+
+/** Одноразовая ссылка на бота для привязки Telegram (действует 15 минут). */
+export async function getTelegramLink(token?: string): Promise<{ linkUrl: string; botUsername: string }> {
+  return request<{ linkUrl: string; botUsername: string }>('/auth/telegram-link', {
+    headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+  });
+}
