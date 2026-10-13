@@ -5,7 +5,7 @@ import { sendError } from '../middleware/errors.js';
 import { invoiceStore as defaultInvoiceStore, usedTxStore, type InvoiceStore } from '../store/index.js';
 import type { SubscriptionStore } from '../store/subscription-store.js';
 import type { UserStore } from '../store/user-store.js';
-import { calculateStars } from '../telegram/bot.js';
+import { calculateStars, telegramBotService } from '../telegram/bot.js';
 import type { CryptoCurrency, PlanId, PlanItem } from '../types.js';
 import { isVipUser } from '../services/vip.js';
 import { stripeService } from '../services/stripe.js';
@@ -451,7 +451,7 @@ export function createBillingRouter({
 
   // --- Telegram Stars (⭐️ XTR) ---
 
-  router.post('/billing/telegram-stars/create-invoice', (request: Request, response: Response) => {
+  router.post('/billing/telegram-stars/create-invoice', async (request: Request, response: Response) => {
     const rawPlanId: unknown = request.body?.planId;
     const plan = findPlan(rawPlanId);
     if (!plan || plan.priceMonthly <= 0) {
@@ -465,14 +465,20 @@ export function createBillingRouter({
     }
 
     const userId = getUserId(request);
-    const starsAmount = calculateStars(plan.priceMonthly);
-    const invoice = activeInvoiceStore.createTelegramStarsInvoice(
+    // Цена в звёздах — по текущему курсу Telegram Stars; сумма фиксируется в счёте.
+    const starsAmount = calculateStars(planPriceUsd(plan.id));
+    let invoice = activeInvoiceStore.createTelegramStarsInvoice(
       userId,
       plan.id,
       planPriceRub(plan.id),
       starsAmount,
-      config.telegramBotUsername,
+      telegramBotService.botUsername || config.telegramBotUsername,
     );
+    // Прямая ссылка на окно оплаты в Telegram; без бота остаётся ссылка на чат с ботом.
+    if (telegramBotService.isConfigured) {
+      const link = await telegramBotService.createInvoiceLink(invoice);
+      if (link) invoice = activeInvoiceStore.getTelegramStarsInvoice(invoice.id) ?? invoice;
+    }
 
     response.json({ invoice });
   });
@@ -511,11 +517,18 @@ export function createBillingRouter({
       return;
     }
 
-    const updated =
-      invoice.status === 'paid'
-        ? invoice
-        : (activeInvoiceStore.markTelegramStarsPaid(invoiceId) ?? invoice);
     const userId = invoice.userId;
+    // Звёзды включает бот по successful_payment; здесь только отдаём результат, не продлевая повторно.
+    if (invoice.status === 'paid') {
+      response.json({
+        success: true,
+        subscription: subscriptionStore.get(userId),
+        user: userStore.findById(userId) ?? { id: userId, plan: invoice.planId },
+        invoice,
+      });
+      return;
+    }
+    const updated = activeInvoiceStore.markTelegramStarsPaid(invoiceId) ?? invoice;
 
     const subscription = subscriptionStore.checkout(userId, invoice.planId);
     const user = userStore.updatePlan(userId, invoice.planId);
@@ -806,8 +819,18 @@ export function createBillingRouter({
         return;
       }
 
-      const updated = activeInvoiceStore.markCryptoPaid(invoice.id) ?? invoice;
       const userId = invoice.userId;
+      // Уже оплаченный счёт (тариф включили postback или проверка статуса) второй раз не продлевает.
+      if (invoice.status === 'paid') {
+        response.json({
+          success: true,
+          subscription: subscriptionStore.get(userId),
+          user: userStore.findById(userId) ?? { id: userId, plan: invoice.planId },
+          invoice,
+        });
+        return;
+      }
+      const updated = activeInvoiceStore.markCryptoPaid(invoice.id) ?? invoice;
 
       const subscription = subscriptionStore.checkout(userId, invoice.planId);
       const user = userStore.updatePlan(userId, invoice.planId);

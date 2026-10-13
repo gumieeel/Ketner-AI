@@ -19,7 +19,7 @@ import { Button } from '@/components/ui/button';
 import { buttonClasses } from '@/components/ui/button-classes';
 import { Card, CardText, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
-import { unlinkTelegram } from '@/features/auth/api';
+import { getTelegramLink, unlinkTelegram } from '@/features/auth/api';
 import { useAuth } from '@/features/auth/auth-store';
 import { useBilling } from '@/features/billing/billing-store';
 import { useGithub } from '@/features/github/github-store';
@@ -201,6 +201,18 @@ export function SettingsPage() {
 
   const [canceling, setCanceling] = useState(false);
   const [unlinkingTelegram, setUnlinkingTelegram] = useState(false);
+  const [linkingTelegram, setLinkingTelegram] = useState(false);
+
+  // Ссылка на бота с одноразовым кодом: открывается сразу, бот привязывает аккаунт сам.
+  const handleLinkTelegram = async () => {
+    setLinkingTelegram(true);
+    try {
+      const { linkUrl } = await getTelegramLink(token ?? undefined);
+      window.location.href = linkUrl;
+    } catch {
+      setLinkingTelegram(false);
+    }
+  };
 
   const handleUnlinkTelegram = async () => {
     if (!token) return;
@@ -507,7 +519,7 @@ export function SettingsPage() {
               telegramLinked ? (
                 <>
                   <a
-                    href="https://t.me/Robo_kassa_bot"
+                    href="https://t.me/Robo_kassa_bot?start=menu"
                     target="_blank"
                     rel="noreferrer"
                     className={cn(buttonClasses({ variant: 'secondary', size: 'sm' }), 'gap-1.5')}
@@ -526,15 +538,15 @@ export function SettingsPage() {
                   </Button>
                 </>
               ) : (
-                <a
-                  href={`https://t.me/Robo_kassa_bot?start=link_${user?.id || 'demo'}`}
-                  target="_blank"
-                  rel="noreferrer"
-                  className={cn(buttonClasses({ variant: 'primary', size: 'sm' }), 'gap-1.5')}
+                <Button
+                  size="sm"
+                  loading={linkingTelegram}
+                  disabled={!user}
+                  onClick={() => void handleLinkTelegram()}
+                  leftIcon={<TelegramIcon className="size-3.5" />}
                 >
-                  <TelegramIcon className="size-3.5" />
                   {t('settings.telegramConnect')}
-                </a>
+                </Button>
               )
             }
           >

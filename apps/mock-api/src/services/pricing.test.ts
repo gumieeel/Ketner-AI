@@ -37,12 +37,11 @@ test('pricing: Stripe берёт центы, СБП рубли, Stars сходя
 
   for (const plan of PLANS) {
     if (plan.priceMonthly <= 0) continue;
-    // Звёзды считаются от цены тарифа в долларах и дают те же значения, что и сумма в рублях.
-    assert.equal(
-      calculateStars(plan.priceMonthly),
-      calculateStars(planPriceRub(plan.id)),
-      `Stars для ${plan.id} должны совпадать при расчёте от доллара и от рубля`,
-    );
+    // Звёзды считаются от цены в долларах по курсу Stars: по тому же курсу это не меньше цены тарифа.
+    const stars = calculateStars(plan.priceMonthly);
+    assert.ok(stars * 0.015 >= plan.priceMonthly, `${plan.id}: ${stars} ⭐ дешевле $${plan.priceMonthly}`);
+    assert.ok(stars * 0.015 < plan.priceMonthly + 0.2, `${plan.id}: ${stars} ⭐ заметно дороже $${plan.priceMonthly}`);
+    assert.equal(stars % 10, 0, 'цена в звёздах округляется до 10');
   }
 });
 
@@ -55,13 +54,12 @@ test('pricing: рублёвая сумма СБП не ниже цены в до
   }
 });
 
-test('pricing: старые тарифы платят прежние 1199 ₽ (≈ $12.62) и получают Stars как Pro', () => {
+test('pricing: старые тарифы платят прежние 1199 ₽ (≈ $12.62)', () => {
   assert.equal(planPriceUsd('gpt-pro'), LEGACY_PRICE_USD);
   assert.equal(planPriceRub('claude-pro'), LEGACY_PRICE_RUB);
   assert.equal(planPriceCents('gemini-pro'), 1262);
   for (const legacy of LEGACY_PLANS) {
     assert.equal(legacy.priceMonthly, LEGACY_PRICE_USD);
-    assert.equal(calculateStars(legacy.priceMonthly), calculateStars(PLAN_PRICE_USD.pro));
   }
 });
 

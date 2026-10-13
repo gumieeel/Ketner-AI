@@ -125,6 +125,8 @@ export function createApp(overrides: Partial<AppDeps> = {}): Express {
       request.path === '/api/auth/logout' ||
       request.path === '/api/auth/me' ||
       request.path === '/api/auth/demo' ||
+      request.path === '/api/auth/telegram-link' ||
+      request.path === '/api/auth/telegram-unlink' ||
       request.path.startsWith('/api/auth/oauth')
     ) {
       return next();

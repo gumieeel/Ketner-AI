@@ -4,12 +4,13 @@ import { config } from '../config.js';
 import { requireAuth } from '../middleware/auth.js';
 import { sendError } from '../middleware/errors.js';
 import {
+  STARS_PLANS,
   TelegramBotService,
-  calculateStars,
-  getPlanItem,
+  encodePayload,
   type TelegramBotDeps,
   type TelegramUpdate,
 } from '../telegram/bot.js';
+import { createMiniAppRouter } from './telegram-miniapp.js';
 import {
   TelegramSupportBotService,
   telegramSupportBotService as defaultSupportBotService,
@@ -105,11 +106,10 @@ export function createTelegramRouter(deps: TelegramRouterDeps): Router {
    * Эмуляция оплаты через Telegram Stars (для локального тестирования и демо без реальных денег).
    */
   router.post('/telegram/simulate-payment', devOnly, async (request: Request, response: Response): Promise<void> => {
-    const planId = (request.body?.planId || 'plus') as PlanId;
-    const userId = (request.body?.userId || 'demo-user') as string;
-    const planItem = getPlanItem(planId);
-    const stars = planItem ? calculateStars(planItem.priceMonthly) : 0;
-
+    const rawPlan = String(request.body?.planId || 'plus');
+    const planId = ((STARS_PLANS as readonly string[]).includes(rawPlan) ? rawPlan : 'plus') as PlanId;
+    const userId = String(request.body?.userId || 'demo-user');
+    const invoice = botService.createStarsInvoice(userId, planId);
     const fakeUpdate: TelegramUpdate = {
       update_id: Date.now(),
       message: {
@@ -118,24 +118,30 @@ export function createTelegramRouter(deps: TelegramRouterDeps): Router {
         date: Math.floor(Date.now() / 1000),
         successful_payment: {
           currency: 'XTR',
-          total_amount: stars,
-          invoice_payload: JSON.stringify({ planId, userId }),
+          total_amount: invoice.starsAmount,
+          invoice_payload: encodePayload({ planId, stars: invoice.starsAmount, invoiceId: invoice.id, userId }),
           telegram_payment_charge_id: `tg_charge_${Date.now()}`,
         },
       },
     };
-
     const result = await botService.processUpdate(fakeUpdate);
-    const subscription = deps.subscriptionStore.get(userId);
-    const user = deps.userStore.findById(userId);
-
     response.json({
       ok: true,
       result,
-      subscription,
-      user,
+      subscription: deps.subscriptionStore.get(userId),
+      user: deps.userStore.findById(userId),
     });
   });
+
+  // Мини-приложение Telegram: кабинет подписки.
+  router.use(
+    createMiniAppRouter({
+      botService,
+      userStore: deps.userStore,
+      subscriptionStore: deps.subscriptionStore,
+      invoiceStore: deps.invoiceStore,
+    }),
+  );
 
   // -------------------------------------------------------------
   // 2. SUPPORT БОТ (@ketner_support_bot)

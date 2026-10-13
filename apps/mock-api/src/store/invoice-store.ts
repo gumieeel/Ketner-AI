@@ -17,7 +17,10 @@ export interface InvoiceStore {
     botUsername: string,
   ): TelegramStarsInvoice;
   getTelegramStarsInvoice(id: string): TelegramStarsInvoice | undefined;
-  markTelegramStarsPaid(id: string): TelegramStarsInvoice | undefined;
+  markTelegramStarsPaid(id: string, chargeId?: string): TelegramStarsInvoice | undefined;
+  setTelegramStarsLink?(id: string, invoiceLink: string): TelegramStarsInvoice | undefined;
+  /** Оплаченные счета пользователя (звёзды и криптовалюта), новые сверху. */
+  paidInvoicesOf?(userId: string): Array<{ id: string; method: 'stars' | 'crypto'; planId: PlanId; amount: string; paidAt: string }>;
 
   createCryptoInvoice(
     userId: string,
@@ -170,7 +173,7 @@ export function createInvoiceStore(file?: string): InvoiceStore {
       const expiresAt = new Date(Date.now() + 30 * 60 * 1000).toISOString();
       const rawUser = botUsername && botUsername.trim() !== '' ? botUsername : 'Robo_kassa_bot';
       const cleanUsername = rawUser.replace(/^@/, '');
-      const botDeepLink = `https://t.me/${cleanUsername}?start=pay_${planId}__${id}`;
+      const botDeepLink = `https://t.me/${cleanUsername}?start=${id}`;
 
       const invoice: TelegramStarsInvoice = {
         id,
@@ -194,13 +197,49 @@ export function createInvoiceStore(file?: string): InvoiceStore {
       return starsInvoices.get(id);
     },
 
-    markTelegramStarsPaid(id: string): TelegramStarsInvoice | undefined {
+    markTelegramStarsPaid(id: string, chargeId?: string): TelegramStarsInvoice | undefined {
       const invoice = starsInvoices.get(id);
       if (!invoice) return undefined;
-      const updated: TelegramStarsInvoice = { ...invoice, status: 'paid' };
+      const updated: TelegramStarsInvoice = {
+        ...invoice,
+        status: 'paid',
+        paidAt: invoice.paidAt ?? new Date().toISOString(),
+        ...(chargeId ? { chargeId } : {}),
+      };
       starsInvoices.set(id, updated);
       persist();
       return updated;
+    },
+
+    setTelegramStarsLink(id: string, invoiceLink: string): TelegramStarsInvoice | undefined {
+      const invoice = starsInvoices.get(id);
+      if (!invoice) return undefined;
+      const updated: TelegramStarsInvoice = { ...invoice, invoiceLink };
+      starsInvoices.set(id, updated);
+      persist();
+      return updated;
+    },
+
+    paidInvoicesOf(userId: string) {
+      const stars = [...starsInvoices.values()]
+        .filter((inv) => inv.userId === userId && inv.status === 'paid')
+        .map((inv) => ({
+          id: inv.id,
+          method: 'stars' as const,
+          planId: inv.planId,
+          amount: `${inv.starsAmount} ⭐`,
+          paidAt: inv.paidAt ?? inv.createdAt,
+        }));
+      const crypto = [...cryptoInvoices.values()]
+        .filter((inv) => inv.userId === userId && inv.status === 'paid')
+        .map((inv) => ({
+          id: inv.id,
+          method: 'crypto' as const,
+          planId: inv.planId,
+          amount: `$${inv.amountUsd}`,
+          paidAt: inv.createdAt,
+        }));
+      return [...stars, ...crypto].sort((a, b) => b.paidAt.localeCompare(a.paidAt)).slice(0, 20);
     },
 
     createCryptoInvoice(

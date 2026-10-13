@@ -199,6 +199,11 @@ export interface TelegramStarsInvoice {
   status: 'pending' | 'paid';
   expiresAt: string;
   createdAt: string;
+  /** Ссылка на оплату в Telegram (createInvoiceLink): открывает окно оплаты звёздами. */
+  invoiceLink?: string;
+  /** Номер платежа Telegram — для поддержки и возвратов. */
+  chargeId?: string;
+  paidAt?: string;
 }
 
 export type CryptoCurrency = 'USDT_TRC20' | 'USDT_TON' | 'TON' | 'BTC';
