@@ -9,7 +9,7 @@ import { MaxModeToggle } from '@/components/chat/max-mode-toggle';
 import { useTranslation } from '@/i18n';
 import { cn } from '@/lib/cn';
 import { LanguageToggle } from './language-toggle';
-import { ThemeToggle } from './theme-toggle';
+import { HeaderMenu } from './header-menu';
 
 /** Шапка рабочей области: название диалога, «Поделиться», язык и тема. */
 export function Header() {
@@ -70,7 +70,7 @@ export function Header() {
         ) : null}
         {/* На узких экранах язык переключается в боковом меню. */}
         <LanguageToggle className={inChat ? 'max-sm:hidden' : undefined} />
-        <ThemeToggle />
+        <HeaderMenu />
       </div>
     </header>
   );

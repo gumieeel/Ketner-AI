@@ -9,6 +9,7 @@ import { cn } from '@/lib/cn';
 import { useFocusTrap } from '@/lib/use-focus-trap';
 import { Brand } from './brand';
 import { LanguageToggle } from './language-toggle';
+import { HeaderMenu } from './header-menu';
 import { ThemeToggle } from './theme-toggle';
 
 const navLinkClass =
@@ -136,12 +137,11 @@ export function StandaloneLayout() {
             </Link>
             <div className="mx-1.5 h-5 w-px bg-stroke" aria-hidden="true" />
             <LanguageToggle />
-            <ThemeToggle />
+            <HeaderMenu />
           </div>
 
           {/* Mobile Menu Button */}
           <div className="flex items-center gap-1 md:hidden">
-            <ThemeToggle />
             <IconButton
               label={mobileMenuOpen ? t('nav.closeMenu') : t('nav.openMenu')}
               onClick={() => setMobileMenuOpen(!mobileMenuOpen)}

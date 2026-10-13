@@ -20,7 +20,8 @@ describe('тема и язык интерфейса', () => {
     const user = userEvent.setup();
     renderRoute('/chat');
 
-    await user.click(screen.getAllByRole('button', { name: /Тема:/ })[0]);
+    await user.click(screen.getByRole('button', { name: 'Меню' }));
+    await user.click(screen.getByRole('menuitemradio', { name: 'Светлая' }));
 
     expect(document.documentElement).not.toHaveClass('dark');
     expect(window.localStorage.getItem('ketner.theme')).toBe('light');
