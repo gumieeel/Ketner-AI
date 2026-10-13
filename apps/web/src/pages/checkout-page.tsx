@@ -1,19 +1,16 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { useAuth } from '@/features/auth/auth-store';
-import { ArrowLeftIcon, CheckIcon, CryptoIcon, SbpIcon, ShieldIcon, StarIcon } from '@/components/icons';
+import { ArrowLeftIcon, CheckIcon, CryptoIcon, ShieldIcon, StarIcon } from '@/components/icons';
 import { Badge, type BadgeTone } from '@/components/ui/badge';
 import { buttonClasses } from '@/components/ui/button-classes';
 import { Card } from '@/components/ui/card';
 import {
   confirmCryptoPayment,
-  confirmSbpPayment,
   confirmTelegramStarsPayment,
   createCryptoInvoice,
-  createSbpInvoice,
   createTelegramStarsInvoice,
   getCryptoInvoiceStatus,
-  getSbpInvoiceStatus,
   getTelegramStarsStatus,
 } from '@/features/billing/api';
 import { useBilling } from '@/features/billing/billing-store';
@@ -22,7 +19,6 @@ import type {
   CryptoCurrency,
   CryptoInvoice,
   PaymentMethod,
-  SbpInvoice,
   TelegramStarsInvoice,
 } from '@/features/billing/types';
 import { copyText } from '@/lib/clipboard';
@@ -32,7 +28,6 @@ import { CRYPTO_OPTIONS } from './checkout/crypto-options';
 import { CryptoPanel } from './checkout/crypto-panel';
 import { OrderSummary } from './checkout/order-summary';
 import { CheckoutSkeleton } from './checkout/parts';
-import { SbpPanel } from './checkout/sbp-panel';
 import { StarsPanel } from './checkout/stars-panel';
 
 function calculateStars(price: number): number {
@@ -67,16 +62,6 @@ function calculateStars(price: number): number {
   return Math.round((price / 99) / 0.0185);
 }
 
-function calculateRubPrice(priceUsd: number): number {
-  if (priceUsd === 9) return 890;
-  if (priceUsd === 25) return 2490;
-  if (priceUsd === 49) return 4890;
-  if (priceUsd === 10) return 990;
-  if (priceUsd === 20) return 1990;
-  if (priceUsd === 30) return 2990;
-  return Math.round(priceUsd * 99);
-}
-
 export function CheckoutPage() {
   const { t } = useTranslation();
   const navigate = useNavigate();
@@ -109,12 +94,6 @@ export function CheckoutPage() {
     }
   }, [user?.email, payerEmail]);
 
-  // СБП
-  const [sbpInvoice, setSbpInvoice] = useState<SbpInvoice | null>(null);
-  const [sbpLoading, setSbpLoading] = useState(false);
-  const [sbpSecondsLeft, setSbpSecondsLeft] = useState(15 * 60);
-  const [copiedSbpSum, setCopiedSbpSum] = useState(false);
-
   // Криптовалюта
   const [cryptoCurrency, setCryptoCurrency] = useState<CryptoCurrency>('USDT_TRC20');
   const [cryptoInvoice, setCryptoInvoice] = useState<CryptoInvoice | null>(null);
@@ -142,15 +121,6 @@ export function CheckoutPage() {
 
   const pollingRef = useRef<number | null>(null);
 
-  // Таймер СБП
-  useEffect(() => {
-    if (paymentMethod !== 'sbp') return;
-    const interval = window.setInterval(() => {
-      setSbpSecondsLeft((prev) => (prev > 0 ? prev - 1 : 0));
-    }, 1000);
-    return () => clearInterval(interval);
-  }, [paymentMethod]);
-
   // Таймер Криптовалюты
   useEffect(() => {
     if (paymentMethod !== 'crypto') return;
@@ -159,22 +129,6 @@ export function CheckoutPage() {
     }, 1000);
     return () => clearInterval(interval);
   }, [paymentMethod]);
-
-  // Загрузка инвойса СБП
-  useEffect(() => {
-    if (paymentMethod === 'sbp' && !sbpInvoice && plan && plan.priceMonthly > 0) {
-      setSbpLoading(true);
-      createSbpInvoice(plan.id)
-        .then(({ invoice }) => {
-          setSbpInvoice(invoice);
-          setSbpSecondsLeft(15 * 60);
-        })
-        .catch((err) => {
-          console.error('Failed to create SBP invoice:', err);
-        })
-        .finally(() => setSbpLoading(false));
-    }
-  }, [paymentMethod, sbpInvoice, plan]);
 
   // Загрузка инвойса Криптовалюты
   useEffect(() => {
@@ -213,22 +167,7 @@ export function CheckoutPage() {
   useEffect(() => {
     if (success) return;
 
-    if (paymentMethod === 'sbp' && sbpInvoice && sbpInvoice.status !== 'paid') {
-      pollingRef.current = window.setInterval(async () => {
-        try {
-          const res = await getSbpInvoiceStatus(sbpInvoice.id);
-          if (res.status === 'paid') {
-            const conf = await confirmSbpPayment(sbpInvoice.id);
-            setSubscription(conf.subscription, conf.user.plan);
-            if (user) setUser({ ...user, plan: conf.user.plan });
-            setPaidMethodName(t('checkout.methodSbp'));
-            setSuccess(true);
-          }
-        } catch {
-          // ignore network polling errors
-        }
-      }, 3000);
-    } else if (paymentMethod === 'crypto' && cryptoInvoice && cryptoInvoice.status !== 'paid') {
+    if (paymentMethod === 'crypto' && cryptoInvoice && cryptoInvoice.status !== 'paid') {
       pollingRef.current = window.setInterval(async () => {
         try {
           const res = await getCryptoInvoiceStatus(cryptoInvoice.id);
@@ -265,7 +204,7 @@ export function CheckoutPage() {
         clearInterval(pollingRef.current);
       }
     };
-  }, [paymentMethod, sbpInvoice, cryptoInvoice, starsInvoice, success, user, setUser, setSubscription, t]);
+  }, [paymentMethod, cryptoInvoice, starsInvoice, success, user, setUser, setSubscription, t]);
 
   if (authStatus === 'loading') {
     return <CheckoutSkeleton label={t('common.loading')} />;
@@ -286,29 +225,6 @@ export function CheckoutPage() {
       </div>
     );
   }
-
-  // Подтверждение СБП
-  const handleSbpConfirm = async () => {
-    const invoiceId = sbpInvoice?.id || `sbp_${plan.id}`;
-    setSubmitting(true);
-    setCheckFeedback(null);
-    try {
-      const res = await confirmSbpPayment(invoiceId);
-      setSubscription(res.subscription, res.user.plan);
-      if (user) setUser({ ...user, plan: res.user.plan });
-      setPaidMethodName(t('checkout.methodSbp'));
-      setSuccess(true);
-    } catch (err) {
-      console.error('Failed to confirm SBP payment:', err);
-      setCheckFeedback({
-        method: 'sbp',
-        type: 'warning',
-        message: t('checkout.sbpConfirmFailed'),
-      });
-    } finally {
-      setSubmitting(false);
-    }
-  };
 
   // Подтверждение Криптовалюты
   const handleCryptoConfirm = async () => {
@@ -400,7 +316,6 @@ export function CheckoutPage() {
     }
   };
 
-  const rubAmount = calculateRubPrice(plan.priceMonthly);
   const starsAmount = calculateStars(plan.priceMonthly);
   const rawBot = starsInvoice?.botUsername;
   const botUsername =
@@ -554,7 +469,7 @@ export function CheckoutPage() {
               <span className="text-xs text-muted">{t('checkout.chooseMethod')}</span>
             </div>
 
-            <div role="group" aria-labelledby="checkout-methods" className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+            <div role="group" aria-labelledby="checkout-methods" className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               <MethodTile
                 selected={paymentMethod === 'crypto'}
                 onSelect={() => selectMethod('crypto')}
@@ -563,15 +478,6 @@ export function CheckoutPage() {
                 badgeTone="brand"
                 title={t('checkout.tileCrypto')}
                 description={t('checkout.tileCryptoDesc')}
-              />
-              <MethodTile
-                selected={paymentMethod === 'sbp'}
-                onSelect={() => selectMethod('sbp')}
-                icon={<SbpIcon className="size-[18px]" />}
-                iconClassName="bg-surface-2 ring-stroke"
-                badge={t('checkout.tileSbpBadge')}
-                title={t('checkout.tileSbp')}
-                description={t('checkout.tileSbpDesc')}
               />
               <MethodTile
                 selected={paymentMethod === 'stars'}
@@ -584,21 +490,6 @@ export function CheckoutPage() {
               />
             </div>
           </div>
-
-          {paymentMethod === 'sbp' && (
-            <SbpPanel
-              plan={plan}
-              rubAmount={rubAmount}
-              timer={formatTimer(sbpSecondsLeft)}
-              invoice={sbpInvoice}
-              loading={sbpLoading}
-              copied={copiedSbpSum}
-              onCopyAmount={() => void copyToClipboard(String(rubAmount), setCopiedSbpSum)}
-              submitting={submitting}
-              feedback={feedbackFor('sbp')}
-              onConfirm={() => void handleSbpConfirm()}
-            />
-          )}
 
           {paymentMethod === 'crypto' && (
             <CryptoPanel
