@@ -226,6 +226,10 @@ export const config = {
   apiKeyStoreFile:
     process.env.API_KEY_STORE_FILE ??
     fileURLToPath(new URL('../data/api-keys.json', import.meta.url)),
+  /** Привязанные аккаунты GitHub: токены в файле только в зашифрованном виде (AES-256-GCM). */
+  githubConnectionStoreFile:
+    process.env.GITHUB_CONNECTION_STORE_FILE ??
+    fileURLToPath(new URL('../data/github-connections.json', import.meta.url)),
   /** Хранилище оценок ответов (лайки/дизлайки) для анализа роутинга и эскалации моделей. */
   feedbackStoreFile:
     process.env.FEEDBACK_STORE_FILE ??

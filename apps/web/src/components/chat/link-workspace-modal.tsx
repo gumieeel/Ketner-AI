@@ -1,30 +1,36 @@
-import { useRef, useState } from 'react';
-import { FolderIcon, GitHubIcon, RefreshIcon } from '@/components/icons';
+import { useEffect, useRef, useState } from 'react';
+import { GithubRepoPicker, type PickedRepo } from '@/components/github/github-repo-picker';
+import { FolderIcon, GitHubIcon } from '@/components/icons';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import { Modal, ModalHeader } from '@/components/ui/modal';
-import { fetchGitHubRepo, parseGitHubUrl } from '@/features/chat/git-repo-reader';
+import { fetchGitHubRepo } from '@/features/chat/git-repo-reader';
 import { pickFolderNative, readFolderFromFiles } from '@/features/chat/local-folder-reader';
 import { useWorkspace } from '@/features/chat/workspace-store';
 import { useTranslation } from '@/i18n';
 import { cn } from '@/lib/cn';
 
+export type LinkWorkspaceTab = 'folder' | 'git';
+
 interface LinkWorkspaceModalProps {
   isOpen: boolean;
   onClose: () => void;
+  /** Какую вкладку открыть: пункт меню «Папка» или «GitHub». */
+  initialTab?: LinkWorkspaceTab;
 }
 
-export function LinkWorkspaceModal({ isOpen, onClose }: LinkWorkspaceModalProps) {
+export function LinkWorkspaceModal({ isOpen, onClose, initialTab = 'folder' }: LinkWorkspaceModalProps) {
   const { t } = useTranslation();
   const setWorkspace = useWorkspace((state) => state.setWorkspace);
-  const [tab, setTab] = useState<'folder' | 'git'>('folder');
+  const [tab, setTab] = useState<LinkWorkspaceTab>(initialTab);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Git repo fields
-  const [repoUrl, setRepoUrl] = useState('');
-  const [branch, setBranch] = useState('main');
-  const [token, setToken] = useState('');
+  useEffect(() => {
+    if (isOpen) {
+      setTab(initialTab);
+      setError(null);
+    }
+  }, [isOpen, initialTab]);
 
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
@@ -73,60 +79,18 @@ export function LinkWorkspaceModal({ isOpen, onClose }: LinkWorkspaceModalProps)
     }
   };
 
-  // 2. Привязка Git-репозитория
-  const handleLinkGitRepo = async (e: React.FormEvent) => {
-    e.preventDefault();
+  // 2. Привязка репозитория из подключённого аккаунта GitHub (приватные тоже)
+  const handleLinkGitRepo = async ({ owner, repo, branch }: PickedRepo) => {
     setError(null);
-
-    const parsed = parseGitHubUrl(repoUrl);
-    if (!parsed) {
-      setError(t('linkWs.errBadUrl'));
-      return;
-    }
-
     setLoading(true);
     try {
-      const targetBranch = parsed.branch || branch || 'main';
-      const ws = await fetchGitHubRepo(parsed.owner, parsed.repo, targetBranch, token);
+      const ws = await fetchGitHubRepo(owner, repo, branch);
       setWorkspace(ws);
       setLoading(false);
       onClose();
     } catch (err: any) {
       setError(err?.message || t('linkWs.errLoadRepo'));
       setLoading(false);
-    }
-  };
-
-  // 3. Подключение тестового демо-репозитория
-  const handleConnectSampleRepo = async () => {
-    setRepoUrl('https://github.com/gumieeel/Ketner-AI');
-    setBranch('main');
-    setError(null);
-    setLoading(true);
-    try {
-      const ws = await fetchGitHubRepo('gumieeel', 'Ketner-AI', 'main');
-      setWorkspace(ws);
-      setLoading(false);
-      onClose();
-    } catch {
-      // Создаем локальную структуру проекта, если лимит API исчерпан
-      setWorkspace({
-        id: `sample-${Date.now()}`,
-        type: 'git_repo',
-        name: 'Ketner-AI',
-        pathOrUrl: 'https://github.com/gumieeel/Ketner-AI',
-        branch: 'main',
-        filesCount: 48,
-        files: [
-          { path: 'package.json', size: 1820, language: 'json', content: '{\n  "name": "ketner-ai",\n  "version": "1.0.0"\n}' },
-          { path: 'apps/web/src/pages/chat-page.tsx', size: 3500, language: 'tsx', content: '// ChatPage implementation' },
-          { path: 'apps/web/src/features/chat/chat-store.ts', size: 8200, language: 'ts', content: '// Chat store' },
-          { path: 'apps/mock-api/src/ai/gateway.ts', size: 12000, language: 'ts', content: '// AI Gateway' },
-        ],
-        indexedAt: new Date().toISOString(),
-      });
-      setLoading(false);
-      onClose();
     }
   };
 
@@ -205,56 +169,13 @@ export function LinkWorkspaceModal({ isOpen, onClose }: LinkWorkspaceModalProps)
             </Button>
           </div>
         ) : (
-          <form onSubmit={handleLinkGitRepo} className="flex flex-col gap-4">
-            <div>
-              <label htmlFor="repoUrl" className="mb-1.5 block text-[13px] font-medium text-muted">
-                {t('linkWs.repoLabel')}
-              </label>
-              <Input
-                id="repoUrl"
-                placeholder={t('linkWs.repoPlaceholder')}
-                value={repoUrl}
-                onChange={(e) => setRepoUrl(e.target.value)}
-                autoFocus
-                required
-              />
-            </div>
-
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-              <div>
-                <label htmlFor="branch" className="mb-1.5 block text-[13px] font-medium text-muted">
-                  {t('linkWs.branch')}
-                </label>
-                <Input id="branch" placeholder="main" value={branch} onChange={(e) => setBranch(e.target.value)} />
-              </div>
-              <div>
-                <label htmlFor="token" className="mb-1.5 block text-[13px] font-medium text-muted">
-                  {t('linkWs.token')}
-                </label>
-                <Input
-                  id="token"
-                  type="password"
-                  placeholder={t('linkWs.tokenPlaceholder')}
-                  value={token}
-                  onChange={(e) => setToken(e.target.value)}
-                />
-              </div>
-            </div>
-
-            <div className="mt-1 flex flex-col-reverse gap-3 sm:flex-row sm:items-center sm:justify-between">
-              <button
-                type="button"
-                onClick={handleConnectSampleRepo}
-                className="inline-flex min-h-10 items-center gap-1.5 self-start rounded-lg px-1 text-[13px] font-medium text-accent hover:underline max-md:min-h-11"
-              >
-                <RefreshIcon className="size-3.5" />
-                {t('linkWs.sample')}
-              </button>
-              <Button type="submit" loading={loading} className="max-sm:w-full">
-                {loading ? t('linkWs.connecting') : t('linkWs.submit')}
-              </Button>
-            </div>
-          </form>
+          <GithubRepoPicker
+            intent="link-repo"
+            busy={loading}
+            submitLabel={t('linkWs.submit')}
+            busyLabel={t('linkWs.connecting')}
+            onPick={(picked) => void handleLinkGitRepo(picked)}
+          />
         )}
       </div>
     </Modal>

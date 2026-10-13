@@ -1,12 +1,14 @@
-import { useRef, useState, type ChangeEvent, type FormEvent } from 'react';
+import { useEffect, useRef, useState, type ChangeEvent, type FormEvent } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { CodeIcon, FolderIcon, GitHubIcon, PlusIcon, TrashIcon } from '@/components/icons';
+import { CodeIcon, FolderIcon, PlusIcon, TrashIcon } from '@/components/icons';
+import { GithubRepoPicker } from '@/components/github/github-repo-picker';
 import { Button } from '@/components/ui/button';
 import { Card, CardTitle } from '@/components/ui/card';
 import { Field, Input } from '@/components/ui/input';
 import { IconButton } from '@/components/ui/icon-button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useCode } from '@/features/code/code-store';
+import { useGithub } from '@/features/github/github-store';
 import { formatBytes } from '@/features/code/tree';
 import { useTranslation, type TranslationKey } from '@/i18n';
 import { formatShortDate } from '@/lib/format-date';
@@ -91,7 +93,7 @@ function CreateForm() {
   );
 }
 
-/** Импорт кода: папка, ZIP или публичный репозиторий GitHub. */
+/** Импорт кода: папка, ZIP или репозиторий из подключённого GitHub (приватные тоже). */
 function ImportForm() {
   const { t } = useTranslation();
   const navigate = useNavigate();
@@ -99,7 +101,8 @@ function ImportForm() {
   const importFromZip = useCode((state) => state.importFromZip);
   const importGithub = useCode((state) => state.importGithub);
   const [mode, setMode] = useState<ImportMode>('folder');
-  const [url, setUrl] = useState('');
+  const resumeIntent = useGithub((state) => state.resumeIntent);
+  const consumeGithubIntent = useGithub((state) => state.consumeIntent);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const folderRef = useRef<HTMLInputElement | null>(null);
@@ -127,14 +130,13 @@ function ImportForm() {
     if (file) void run(() => importFromZip(file));
     event.target.value = '';
   };
-  const onGithub = (event: FormEvent): void => {
-    event.preventDefault();
-    const value = url.trim();
-    if (!/^(https?:\/\/)?(www\.)?github\.com\/[^/\s]+\/[^/\s]+/i.test(value)) {
-      setError(t('code.import.invalidUrl'));
-      return;
-    }
-    void run(() => importGithub(value));
+  useEffect(() => {
+    // Вернулись после подключения GitHub из этой формы — сразу показываем выбор репозитория.
+    if (resumeIntent === 'code-import' && consumeGithubIntent('code-import')) setMode('github');
+  }, [resumeIntent, consumeGithubIntent]);
+
+  const onGithub = ({ owner, repo, branch }: { owner: string; repo: string; branch: string }): void => {
+    void run(() => importGithub(`https://github.com/${owner}/${repo}/tree/${encodeURIComponent(branch)}`));
   };
 
   const modes: Array<{ id: ImportMode; label: string }> = [
@@ -195,16 +197,13 @@ function ImportForm() {
       ) : null}
 
       {mode === 'github' ? (
-        <form onSubmit={onGithub} className="flex flex-col gap-3">
-          <Field label={t('code.import.github')} id="code-import-github" hint={t('code.import.githubHint')}>
-            {(props) => (
-              <Input {...props} type="url" value={url} onChange={(event) => setUrl(event.target.value)} placeholder={t('code.import.githubPlaceholder')} />
-            )}
-          </Field>
-          <Button type="submit" loading={busy} leftIcon={<GitHubIcon className="size-4" />}>
-            {busy ? t('code.import.working') : t('code.import.go')}
-          </Button>
-        </form>
+        <GithubRepoPicker
+          intent="code-import"
+          busy={busy}
+          submitLabel={t('code.import.go')}
+          busyLabel={t('code.import.working')}
+          onPick={onGithub}
+        />
       ) : null}
 
       {error ? (

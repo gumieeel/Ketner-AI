@@ -10,10 +10,14 @@ import {
   userStore as defaultUserStore,
 } from '../store/index.js';
 import type { ApiKeyStore } from '../store/api-key-store.js';
+import { githubConnectionStore as defaultGithubConnectionStore } from '../store/index.js';
+import type { GithubConnectionStore } from '../github/connection-store.js';
+import type { GithubOAuthSettings } from '../github/oauth.js';
 import type { InvoiceStore } from '../store/invoice-store.js';
 import type { SubscriptionStore } from '../store/subscription-store.js';
 import type { UserStore } from '../store/user-store.js';
 import { createApiKeysRouter } from './api-keys.js';
+import { createGithubRouter } from './github.js';
 import { createAuthRouter } from './auth.js';
 import { createBillingRouter } from './billing.js';
 import { createChatRouter } from './chat.js';
@@ -43,6 +47,12 @@ export interface ApiDeps {
   supportBotService?: TelegramSupportBotService;
   supportStore?: SupportStore;
   apiKeyStore?: ApiKeyStore;
+  /** Привязанные аккаунты GitHub (OAuth, токен только на сервере). */
+  githubConnectionStore?: GithubConnectionStore;
+  /** Запросы к GitHub; в тестах подменяется. */
+  githubFetch?: typeof fetch;
+  /** Настройки OAuth GitHub; в тестах подменяются. */
+  githubSettings?: () => GithubOAuthSettings | null;
   ai: AiConfig;
   userId: string;
   betterAuth?: typeof defaultBetterAuth;
@@ -117,6 +127,11 @@ export const API_ENDPOINTS = [
   { method: 'GET', path: '/api/keys', status: 'ready', description: 'API-ключи пользователя' },
   { method: 'POST', path: '/api/keys', status: 'ready', description: 'Создать API-ключ (секрет виден один раз)' },
   { method: 'DELETE', path: '/api/keys/:id', status: 'ready', description: 'Отозвать API-ключ' },
+  { method: 'GET', path: '/api/github/status', status: 'ready', description: 'Привязанный аккаунт GitHub' },
+  { method: 'GET', path: '/api/github/connect-url', status: 'ready', description: 'Ссылка на подключение GitHub (OAuth)' },
+  { method: 'POST', path: '/api/github/confirm', status: 'ready', description: 'Завершить подключение GitHub' },
+  { method: 'DELETE', path: '/api/github/connection', status: 'ready', description: 'Отключить GitHub' },
+  { method: 'GET', path: '/api/github/api/*', status: 'ready', description: 'Прокси к GitHub REST от имени пользователя' },
   { method: 'GET', path: '/v1/models', status: 'ready', description: 'Модели для агента (OpenAI-формат, ключ API)' },
   { method: 'GET', path: '/v1/usage', status: 'ready', description: 'Бюджет и расход по ключу API' },
   {
@@ -190,6 +205,8 @@ export function createApiRouter(deps: ApiDeps): Router {
     }),
   );
   router.use(createApiKeysRouter({ apiKeyStore: deps.apiKeyStore ?? defaultApiKeyStore }));
+  const activeGithubStore = deps.githubConnectionStore ?? defaultGithubConnectionStore;
+  router.use(createGithubRouter({ store: activeGithubStore, fetchImpl: deps.githubFetch, settings: deps.githubSettings }));
   router.use(createConversationsRouter(deps.store, deps.userId));
   router.use(
     '/code',
@@ -198,6 +215,8 @@ export function createApiRouter(deps: ApiDeps): Router {
       userStore: activeUserStore,
       subscriptionStore: activeSubscriptionStore,
       usageStore: activeUsageStore,
+      githubTokenOf: (userId) => activeGithubStore.tokenOf(userId),
+      fetchImpl: deps.githubFetch,
     }),
   );
   router.use(

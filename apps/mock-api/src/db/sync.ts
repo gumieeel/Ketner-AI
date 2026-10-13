@@ -1,7 +1,15 @@
 import { randomUUID } from 'node:crypto';
 import postgres from 'postgres';
 import { config } from '../config.js';
-import { apiKeyStore, conversationStore, userStore, subscriptionStore, feedbackStore } from '../store/index.js';
+import {
+  apiKeyStore,
+  conversationStore,
+  githubConnectionStore,
+  userStore,
+  subscriptionStore,
+  feedbackStore,
+} from '../store/index.js';
+import type { StoredGithubConnection } from '../github/connection-store.js';
 import type { ApiKeyRecord } from '../store/api-key-store.js';
 import type { Conversation, Message, Subscription } from '../types.js';
 import type { StoredUser } from '../store/user-store.js';
@@ -769,6 +777,67 @@ async function syncApiKeys(sql: postgres.Sql): Promise<void> {
   });
 }
 
+/**
+ * Привязанные аккаунты GitHub: токен лежит зашифрованным (AES-256-GCM), расшифровать его можно
+ * только ключом из BETTER_AUTH_SECRET. Таблица нужна по той же причине: диск Render временный.
+ */
+async function syncGithubConnections(sql: postgres.Sql): Promise<void> {
+  await sql.unsafe(`
+    CREATE TABLE IF NOT EXISTS "github_connections" (
+      "user_id" text PRIMARY KEY NOT NULL,
+      "github_id" bigint NOT NULL,
+      "login" text NOT NULL,
+      "avatar_url" text,
+      "scopes" text NOT NULL DEFAULT '',
+      "token_enc" text NOT NULL,
+      "connected_at" timestamptz NOT NULL DEFAULT now()
+    );
+  `);
+  const rows = await sql<
+    {
+      user_id: string;
+      github_id: string | number;
+      login: string;
+      avatar_url: string | null;
+      scopes: string;
+      token_enc: string;
+      connected_at: Date;
+    }[]
+  >`SELECT user_id, github_id, login, avatar_url, scopes, token_enc, connected_at FROM "github_connections"`;
+  githubConnectionStore.loadExternal(
+    rows.map(
+      (r): StoredGithubConnection => ({
+        userId: r.user_id,
+        githubId: Number(r.github_id),
+        login: r.login,
+        avatarUrl: r.avatar_url,
+        scopes: r.scopes.split(',').filter(Boolean),
+        tokenEnc: r.token_enc,
+        connectedAt: new Date(r.connected_at).toISOString(),
+      }),
+    ),
+  );
+  githubConnectionStore.setDbDriver({
+    async upsert(record) {
+      await sql`
+        INSERT INTO "github_connections" ("user_id", "github_id", "login", "avatar_url", "scopes", "token_enc", "connected_at")
+        VALUES (${record.userId}, ${record.githubId}, ${record.login}, ${record.avatarUrl},
+                ${record.scopes.join(',')}, ${record.tokenEnc}, ${record.connectedAt})
+        ON CONFLICT ("user_id") DO UPDATE SET
+          "github_id" = EXCLUDED."github_id",
+          "login" = EXCLUDED."login",
+          "avatar_url" = EXCLUDED."avatar_url",
+          "scopes" = EXCLUDED."scopes",
+          "token_enc" = EXCLUDED."token_enc",
+          "connected_at" = EXCLUDED."connected_at"
+      `;
+    },
+    async remove(userId) {
+      await sql`DELETE FROM "github_connections" WHERE "user_id" = ${userId}`;
+    },
+  });
+}
+
 export async function initDatabaseSync(): Promise<boolean> {
   if (!hasPostgresConfig()) {
     console.log(
@@ -807,6 +876,11 @@ export async function initDatabaseSync(): Promise<boolean> {
       await syncApiKeys(sql);
     } catch (error) {
       console.error('❌ [db] API-ключи не синхронизированы с PostgreSQL:', error);
+    }
+    try {
+      await syncGithubConnections(sql);
+    } catch (error) {
+      console.error('❌ [db] Подключения GitHub не синхронизированы с PostgreSQL:', error);
     }
     console.log('🎉 [db] Все данные успешно синхронизированы с PostgreSQL / Supabase!');
     return true;

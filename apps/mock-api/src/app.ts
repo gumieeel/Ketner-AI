@@ -13,6 +13,9 @@ import { apiKeyStore as defaultApiKeyStore, conversationStore, subscriptionStore
 import type { ApiKeyStore } from './store/api-key-store.js';
 import type { AgentGateway } from './ai/agent-gateway.js';
 import { createV1Router } from './routes/v1.js';
+import { createGithubCallbackHandler } from './routes/github.js';
+import type { GithubConnectionStore } from './github/connection-store.js';
+import type { GithubOAuthSettings } from './github/oauth.js';
 import type { ConversationStore } from './store/conversation-store.js';
 import type { SubscriptionStore } from './store/subscription-store.js';
 import type { UserStore } from './store/user-store.js';
@@ -45,6 +48,12 @@ export interface AppDeps {
   apiKeyStore?: ApiKeyStore;
   /** Шлюз агента; в тестах подставляется с поддельным провайдером. */
   agentGateway?: AgentGateway;
+  /** Привязанные аккаунты GitHub; в тестах — хранилище во временном файле. */
+  githubConnectionStore?: GithubConnectionStore;
+  /** Запросы к GitHub (OAuth и прокси); в тестах подменяется. */
+  githubFetch?: typeof fetch;
+  /** Настройки OAuth GitHub; в тестах подменяются. */
+  githubSettings?: () => GithubOAuthSettings | null;
 }
 
 const defaultDeps: AppDeps = {
@@ -100,6 +109,10 @@ export function createApp(overrides: Partial<AppDeps> = {}): Express {
       gateway: deps.agentGateway,
     }),
   );
+
+  // Колбэк подключения GitHub для репозиториев. Лежит под /api/auth/callback/github (подкаталог
+  // колбэка входа, так его принимает то же OAuth-приложение), поэтому стоит до Better Auth.
+  app.get('/api/auth/callback/github/repos', createGithubCallbackHandler());
 
   // Обработчик Better Auth для нативных эндпоинтов (sign-up, sign-in, get-session и т.д.):
   app.use((request, response, next) => {

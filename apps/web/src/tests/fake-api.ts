@@ -18,6 +18,8 @@ export interface FakeApiOptions {
   servedModelId?: string;
   /** После скольких генераций сервер отвечает 429 rate_limited (лимиты считает сервер). */
   rateLimitAfter?: number;
+  /** Привязанный аккаунт GitHub: по умолчанию не подключён. */
+  github?: { connected: boolean; login?: string };
 }
 
 export interface FakeApi {
@@ -221,6 +223,14 @@ function streamOf(chunks: string[], delayMs: number, signal: AbortSignal | null)
 export function installFakeApi(options: FakeApiOptions = {}): FakeApi {
   const delayMs = options.chunkDelayMs ?? 1;
   let currentPlan = options.plan ?? 'free';
+  let githubConnected = options.github?.connected ?? false;
+  const githubStatus = () => ({
+    available: true,
+    connected: githubConnected,
+    account: githubConnected
+      ? { login: options.github?.login ?? 'octo', avatarUrl: null, scopes: ['repo', 'read:user'], connectedAt: '2026-10-01T10:00:00.000Z' }
+      : null,
+  });
   const conversations = new Map<string, { conversation: Conversation; messages: Message[] }>();
   const api: FakeApi = {
     completions: 0,
@@ -699,6 +709,17 @@ export function installFakeApi(options: FakeApiOptions = {}): FakeApi {
             headers: { 'Content-Type': 'text/event-stream' },
           },
         );
+      }
+
+      if (url === '/api/github/status') {
+        return json(githubStatus());
+      }
+      if (url === '/api/github/connection' && method === 'DELETE') {
+        githubConnected = false;
+        return json(githubStatus());
+      }
+      if (url.startsWith('/api/github/connect-url')) {
+        return json({ url: 'https://github.com/login/oauth/authorize?client_id=test' });
       }
 
       return json({ error: { code: 'not_found', message: `Нет обработчика для ${url}` } }, 404);
