@@ -1,4 +1,5 @@
 import React, { useMemo } from 'react';
+import qrcode from 'qrcode-generator';
 import { useTranslation } from '@/i18n';
 import { cn } from '@/lib/cn';
 
@@ -10,101 +11,31 @@ interface QrCodeProps {
 }
 
 /**
- * Детерминированный генератор QR-матрицы 29x29 (QR Version 3).
- * Включает точные угловые маркеры (Finder Patterns 7x7) и тайминги,
- * а также детерминированное псевдослучайное заполнение данными по тексту.
+ * Настоящий QR-код (его можно отсканировать кошельком). Уровень коррекции H: значок в центре
+ * закрывает часть модулей, а код всё равно читается.
  */
-function generateQrMatrix(text: string): boolean[][] {
-  const size = 29;
-  const matrix: boolean[][] = Array.from({ length: size }, () => Array(size).fill(false));
-  const isReserved: boolean[][] = Array.from({ length: size }, () => Array(size).fill(false));
-
-  // Finder pattern (7x7)
-  const drawFinder = (startX: number, startY: number) => {
-    for (let y = 0; y < 7; y++) {
-      for (let x = 0; x < 7; x++) {
-        const isBorder = y === 0 || y === 6 || x === 0 || x === 6;
-        const isCenter = y >= 2 && y <= 4 && x >= 2 && x <= 4;
-        matrix[startY + y][startX + x] = isBorder || isCenter;
-        isReserved[startY + y][startX + x] = true;
-      }
-    }
-    // Separator border (1 cell around)
-    for (let y = -1; y <= 7; y++) {
-      for (let x = -1; x <= 7; x++) {
-        const py = startY + y;
-        const px = startX + x;
-        if (py >= 0 && py < size && px >= 0 && px < size) {
-          isReserved[py][px] = true;
-        }
-      }
-    }
-  };
-
-  drawFinder(0, 0);
-  drawFinder(size - 7, 0);
-  drawFinder(0, size - 7);
-
-  // Timing patterns
-  for (let i = 8; i < size - 8; i++) {
-    matrix[6][i] = i % 2 === 0;
-    isReserved[6][i] = true;
-    matrix[i][6] = i % 2 === 0;
-    isReserved[i][6] = true;
-  }
-
-  // Alignment pattern (5x5) at (20, 20)
-  const ax = 20;
-  const ay = 20;
-  for (let y = -2; y <= 2; y++) {
-    for (let x = -2; x <= 2; x++) {
-      const isAlignBorder = Math.abs(x) === 2 || Math.abs(y) === 2;
-      const isAlignCenter = x === 0 && y === 0;
-      matrix[ay + y][ax + x] = isAlignBorder || isAlignCenter;
-      isReserved[ay + y][ax + x] = true;
+function qrPath(text: string): { path: string; count: number } {
+  const qr = qrcode(0, 'H');
+  qr.addData(text, 'Byte');
+  qr.make();
+  const count = qr.getModuleCount();
+  let path = '';
+  for (let y = 0; y < count; y++) {
+    for (let x = 0; x < count; x++) {
+      if (qr.isDark(y, x)) path += `M${x} ${y}h1v1h-1z`;
     }
   }
-
-  // Seeded hash from string
-  let hash = 2166136261;
-  for (let i = 0; i < text.length; i++) {
-    hash ^= text.charCodeAt(i);
-    hash = Math.imul(hash, 16777619);
-  }
-
-  const nextRand = () => {
-    hash = Math.imul(hash ^ (hash >>> 16), 2246822507);
-    hash = Math.imul(hash ^ (hash >>> 13), 3266489909);
-    hash ^= hash >>> 16;
-    return (hash >>> 0) / 4294967296;
-  };
-
-  // Populate data modules
-  for (let y = 0; y < size; y++) {
-    for (let x = 0; x < size; x++) {
-      if (!isReserved[y][x]) {
-        // Reserved center spot for badge if desired
-        if (Math.abs(x - 14) <= 2 && Math.abs(y - 14) <= 2) {
-          continue;
-        }
-        matrix[y][x] = nextRand() > 0.45;
-      }
-    }
-  }
-
-  return matrix;
+  return { path, count };
 }
 
 export function QrCode({ value, size = 192, className = '', badge }: QrCodeProps) {
   const { t } = useTranslation();
-  const matrix = useMemo(() => generateQrMatrix(value), [value]);
-  const matrixSize = matrix.length;
-  const cellSize = size / matrixSize;
+  const { path, count } = useMemo(() => qrPath(value), [value]);
 
   return (
     <div
       className={cn(
-        'relative inline-flex items-center justify-center rounded-lg bg-white p-3 shadow-popover border border-stroke',
+        'relative inline-flex items-center justify-center rounded-lg border border-stroke bg-white p-3 shadow-popover',
         className,
       )}
       style={{ width: size + 24, height: size + 24 }}
@@ -112,35 +43,19 @@ export function QrCode({ value, size = 192, className = '', badge }: QrCodeProps
       <svg
         width={size}
         height={size}
-        viewBox={`0 0 ${size} ${size}`}
-        className="shape-rendering-crispEdges block"
+        viewBox={`0 0 ${count} ${count}`}
+        shapeRendering="crispEdges"
+        className="block"
         role="img"
         aria-label={t('common.qrCode', { value })}
       >
-        <rect width={size} height={size} fill="#ffffff" />
-        {matrix.map((row, y) =>
-          row.map((cell, x) => {
-            if (!cell) return null;
-            return (
-              <rect
-                key={`${x}-${y}`}
-                x={x * cellSize}
-                y={y * cellSize}
-                width={cellSize + 0.3}
-                height={cellSize + 0.3}
-                fill="#09090b"
-                rx={cellSize * 0.15}
-              />
-            );
-          }),
-        )}
+        <rect width={count} height={count} fill="#ffffff" />
+        <path d={path} fill="#09090b" />
       </svg>
 
       {badge ? (
-        <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-          <div className="rounded-md bg-white p-1.5 border border-stroke shadow-sm">
-            {badge}
-          </div>
+        <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
+          <div className="rounded-md border border-stroke bg-white p-1.5 shadow-sm">{badge}</div>
         </div>
       ) : null}
     </div>

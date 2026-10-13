@@ -160,7 +160,15 @@ describe('billing-flow: каталог тарифов, чекаут и упра�
     // Должны появиться заголовок криптовалюты, сеть и адрес кошелька
     expect(await screen.findByText(/Оплата криптовалютой/i)).toBeInTheDocument();
     expect(screen.getByText(/USDT \(TRC-20\)/i)).toBeInTheDocument();
-    expect(screen.getByText(/TDyeGqX4ranC94g7RMw6cGsCPvRQ7XAtQP/i)).toBeInTheDocument();
+    // Реквизиты Trybit показываются прямо на странице, без перехода на сайт шлюза.
+    expect(await screen.findByText(/TDyeGqX4ranC94g7RMw6cGsCPvRQ7XAtQP/i)).toBeInTheDocument();
+    expect(screen.getByText('Ожидаем перевод')).toBeInTheDocument();
+    expect(screen.getByRole('img', { name: /QR-код: .*TDyeGqX4ranC94g7RMw6cGsCPvRQ7XAtQP/ })).toBeInTheDocument();
+    expect(screen.queryByText(/Открыть шлюз Trybit/)).not.toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /Другие способы оплаты на странице Trybit/ })).toHaveAttribute(
+      'href',
+      'https://pay.trybit.com/DEMO123',
+    );
 
     const confirmCryptoButton = screen.getByRole('button', {
       name: /Подтвердить оплату криптовалютой/i,

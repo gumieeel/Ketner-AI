@@ -261,26 +261,15 @@ export function CryptoPanel(props: CryptoPanelProps) {
 }
 
 /** Вариант 1: оплата через шлюз Trybit. */
-function GatewayBlock({
-  amount,
-  address,
-  invoice,
-  loading,
-  gatewayOpened,
-  onGatewayOpen,
-  submitting,
-  feedback,
-  onConfirm,
-}: CryptoPanelProps) {
+function GatewayBlock(props: CryptoPanelProps) {
+  const { amount, invoice, loading, gatewayOpened, onGatewayOpen, submitting, feedback, onConfirm } = props;
   const { t } = useTranslation();
+
+  // Trybit выдал адрес и точную сумму: платёж проходит прямо здесь, без новой вкладки.
+  if (invoice?.gatewayDetails) return <GatewayInlineBlock {...props} />;
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="flex flex-col gap-1 rounded-xl border border-stroke bg-surface-2 px-3.5 py-3 text-[13px] sm:flex-row sm:items-center sm:justify-between sm:gap-3">
-        <span className="shrink-0 text-muted">{t('checkout.cryptoOfficialWallet')}</span>
-        <span className="font-mono text-xs font-semibold break-all text-text select-all">{address}</span>
-      </div>
-
       {invoice?.cryptoCloudUrl ? (
         <a
           href={invoice.cryptoCloudUrl}
@@ -344,12 +333,123 @@ function GatewayBlock({
         <p className="text-xs leading-5 text-muted">{t('checkout.cryptoGatewayInfo')}</p>
       </StatusRow>
 
+      <CheckBlock feedback={feedback} submitting={submitting} onConfirm={onConfirm} />
+    </div>
+  );
+}
+
+/** Оплата на сайте по реквизитам Trybit (H2H): сумма, сеть, адрес, QR и автоматическая проверка. */
+function GatewayInlineBlock({
+  amount,
+  option,
+  address,
+  qr,
+  invoice,
+  loading,
+  copiedAddress,
+  copiedAmount,
+  onCopyAddress,
+  onCopyAmount,
+  submitting,
+  feedback,
+  onConfirm,
+}: CryptoPanelProps) {
+  const { t } = useTranslation();
+  const OptionIcon = option.icon;
+  const memo = invoice?.memo;
+
+  return (
+    <div className="flex flex-col gap-4">
+      <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+        <div className="flex flex-col justify-between gap-2 rounded-xl border border-stroke bg-surface-2 p-3.5">
+          <span className="text-[13px] text-muted">{t('checkout.cryptoAmountExact')}</span>
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <span className="text-xl font-semibold text-accent tabular-nums">{amount}</span>
+            <CopyButton variant="ghost" copied={copiedAmount} label={t('checkout.cryptoCopyAmount')} onCopy={onCopyAmount} />
+          </div>
+        </div>
+        <div className="flex flex-col justify-between gap-2 rounded-xl border border-stroke bg-surface-2 p-3.5">
+          <span className="text-[13px] text-muted">{t('checkout.cryptoSelectedNetwork')}</span>
+          <span className="text-sm font-semibold text-text">{invoice?.network || option.network}</span>
+        </div>
+      </div>
+
+      <div className="flex flex-col gap-2.5 rounded-xl border border-stroke bg-canvas p-3.5">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <span className="text-[13px] font-semibold text-text">{t('checkout.cryptoAddress')}</span>
+          <CopyButton copied={copiedAddress} label={t('checkout.cryptoCopyAddress')} onCopy={onCopyAddress} />
+        </div>
+        <div className="rounded-lg border border-stroke bg-surface-2 p-2.5 font-mono text-xs font-semibold break-all text-text select-all">
+          {address}
+        </div>
+        {memo ? (
+          <div className="flex flex-col gap-1.5">
+            <span className="text-[13px] font-semibold text-text">{t('checkout.cryptoMemo')}</span>
+            <div className="rounded-lg border border-warning/40 bg-surface-2 p-2.5 font-mono text-xs font-semibold break-all text-text select-all">
+              {memo}
+            </div>
+            <p className="text-xs leading-5 text-muted">{t('checkout.cryptoMemoHint')}</p>
+          </div>
+        ) : null}
+      </div>
+
+      <div className="flex flex-col items-center gap-5 rounded-xl border border-stroke bg-surface-2 p-4 sm:flex-row sm:items-start">
+        <QrFrame loading={loading} loadingLabel={t('common.loading')} skeletonClassName="size-36">
+          <QrCode
+            value={qr}
+            size={144}
+            badge={
+              <div className="flex size-6 items-center justify-center rounded-md bg-white shadow-xs">
+                <OptionIcon className="size-4" />
+              </div>
+            }
+          />
+        </QrFrame>
+        <div className="flex min-w-0 flex-col gap-2 text-left">
+          <h3 className="text-sm font-semibold text-text">{t('checkout.cryptoScanQr')}</h3>
+          <p className="text-[13px] leading-5 text-muted">{t('checkout.cryptoInlineHint')}</p>
+          <p className="flex items-start gap-2 text-[13px] leading-5 font-medium text-text">
+            <AlertIcon className="mt-0.5 size-4 shrink-0 text-warning" />
+            <span>{t('checkout.cryptoWrongNetwork')}</span>
+          </p>
+        </div>
+      </div>
+
+      <StatusRow status={t('checkout.cryptoInlineStatus')} hint={t('checkout.autoCheck')} dotClassName="bg-accent">
+        <p className="text-xs leading-5 text-muted">{t('checkout.cryptoGatewayInfo')}</p>
+      </StatusRow>
+
+      <CheckBlock feedback={feedback} submitting={submitting} onConfirm={onConfirm} />
+
+      {invoice?.cryptoCloudUrl ? (
+        <a
+          href={invoice.cryptoCloudUrl}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="inline-flex min-h-10 items-center justify-center gap-1.5 self-center text-[13px] text-muted underline-offset-2 hover:text-text hover:underline"
+        >
+          {t('checkout.cryptoOtherWays')}
+          <ExternalLinkIcon className="size-3.5" />
+        </a>
+      ) : null}
+    </div>
+  );
+}
+
+/** Подсказка и кнопка ручной проверки оплаты (проверка идёт и сама каждые несколько секунд). */
+function CheckBlock({
+  feedback,
+  submitting,
+  onConfirm,
+}: Pick<CryptoPanelProps, 'feedback' | 'submitting' | 'onConfirm'>) {
+  const { t } = useTranslation();
+  return (
+    <>
       {feedback ? (
         <Notice tone="warning" live>
           {feedback}
         </Notice>
       ) : null}
-
       <Button
         type="button"
         variant="outline"
@@ -363,7 +463,7 @@ function GatewayBlock({
       >
         {submitting ? t('checkout.cryptoChecking') : t('checkout.cryptoCheck')}
       </Button>
-    </div>
+    </>
   );
 }
 

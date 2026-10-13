@@ -27,6 +27,7 @@ export interface InvoiceStore {
     cryptoCloudUrl?: string,
     cryptoCloudInvoiceId?: string,
     customId?: string,
+    gateway?: CryptoGatewayDetails,
   ): CryptoInvoice;
   getCryptoInvoice(id: string): CryptoInvoice | undefined;
   findCryptoInvoice(identifier: string): CryptoInvoice | undefined;
@@ -34,6 +35,26 @@ export interface InvoiceStore {
   /** Счета из Postgres: диск Render временный, без этого оплата после деплоя терялась бы. */
   loadCryptoExternal?(records: CryptoInvoice[]): void;
   setCryptoDbDriver?(driver: CryptoInvoiceDbDriver | null): void;
+}
+
+/** Реквизиты от Trybit для оплаты на сайте (H2H). */
+export interface CryptoGatewayDetails {
+  address: string;
+  amount: number;
+  network: string;
+  expiresAt?: string;
+  memo?: string;
+}
+
+/** Строка для QR: кошельки понимают адрес; для BTC и TON — стандартные ссылки с суммой. */
+function gatewayQr(currency: CryptoCurrency, details: CryptoGatewayDetails): string {
+  if (currency === 'BTC') return `bitcoin:${details.address}?amount=${details.amount}`;
+  if (currency === 'TON') {
+    const nano = Math.round(details.amount * 1e9);
+    const text = details.memo ? `&text=${encodeURIComponent(details.memo)}` : '';
+    return `ton://transfer/${details.address}?amount=${nano}${text}`;
+  }
+  return details.address;
 }
 
 export interface CryptoInvoiceDbDriver {
@@ -190,6 +211,7 @@ export function createInvoiceStore(file?: string): InvoiceStore {
       cryptoCloudUrl?: string,
       cryptoCloudInvoiceId?: string,
       customId?: string,
+      gateway?: CryptoGatewayDetails,
     ): CryptoInvoice {
       const id = customId || `crypto_${Date.now()}_${crypto.randomBytes(4).toString('hex')}`;
       const expiresAt = new Date(Date.now() + 30 * 60 * 1000).toISOString();
@@ -222,16 +244,17 @@ export function createInvoiceStore(file?: string): InvoiceStore {
         userId,
         planId,
         currency,
-        amount,
+        amount: gateway ? gateway.amount : amount,
         amountUsd,
-        address,
-        qrPayload,
+        address: gateway ? gateway.address : address,
+        qrPayload: gateway ? gatewayQr(currency, gateway) : qrPayload,
         status: 'pending',
-        expiresAt,
+        expiresAt: gateway?.expiresAt ?? expiresAt,
         createdAt: new Date().toISOString(),
-        network,
+        network: gateway?.network || network,
         cryptoCloudUrl,
         cryptoCloudInvoiceId,
+        ...(gateway ? { gatewayDetails: true, ...(gateway.memo ? { memo: gateway.memo } : {}) } : {}),
       };
 
       cryptoInvoices.set(id, invoice);

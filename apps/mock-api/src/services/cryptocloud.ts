@@ -16,6 +16,26 @@ export interface CryptoCloudInvoiceResult {
   link: string;
   expiry?: string;
   status: string;
+  /**
+   * Реквизиты для оплаты прямо на сайте (H2H): адрес, точная сумма в криптовалюте и сеть.
+   * Trybit выдаёт их, когда валюта выбрана при создании счёта; в тестовом режиме адреса нет.
+   */
+  h2h?: {
+    address: string;
+    amount: number;
+    currencyCode: string;
+    network: string;
+    expiresAt?: string;
+    memo?: string;
+  };
+}
+
+/** `2026-10-14 15:04:01.555132` (UTC) → ISO. */
+function trybitDate(value: unknown): string | undefined {
+  if (typeof value !== 'string' || !value.trim()) return undefined;
+  const iso = value.trim().replace(' ', 'T').replace(/(\.\d{3})\d*$/, '$1');
+  const date = new Date(/[zZ]|[+-]\d\d:?\d\d$/.test(iso) ? iso : `${iso}Z`);
+  return Number.isNaN(date.getTime()) ? undefined : date.toISOString();
 }
 
 export class CryptoCloudService {
@@ -118,7 +138,13 @@ export class CryptoCloudService {
           uuid: string;
           link: string;
           expiry?: string;
+          expiry_date?: string;
           status?: string;
+          address?: string;
+          amount?: number | string;
+          memo?: string;
+          comment?: string;
+          currency?: { code?: string; fullcode?: string; network?: { code?: string; fullname?: string } };
         };
         message?: string;
       };
@@ -127,11 +153,28 @@ export class CryptoCloudService {
         throw new Error(data.message || 'CryptoCloud: не удалось создать счёт');
       }
 
+      const result = data.result;
+      const cryptoAmount = Number(result.amount);
+      const h2h =
+        typeof result.address === 'string' && result.address.trim() && Number.isFinite(cryptoAmount) && cryptoAmount > 0
+          ? {
+              address: result.address.trim(),
+              amount: cryptoAmount,
+              currencyCode: result.currency?.fullcode || result.currency?.code || options.cryptocurrency || '',
+              network: [result.currency?.network?.fullname, result.currency?.network?.code]
+                .filter(Boolean)
+                .filter((value, index, all) => all.indexOf(value) === index)
+                .join(' · '),
+              expiresAt: trybitDate(result.expiry_date),
+              memo: (result.memo || result.comment || '').trim() || undefined,
+            }
+          : undefined;
       return {
-        invoiceId: data.result.uuid,
-        link: data.result.link,
-        expiry: data.result.expiry,
-        status: data.result.status || 'created',
+        invoiceId: result.uuid,
+        link: result.link,
+        expiry: result.expiry,
+        status: result.status || 'created',
+        h2h,
       };
     } catch (error) {
       console.error('[cryptocloud] Ошибка вызова CryptoCloud API:', error);
