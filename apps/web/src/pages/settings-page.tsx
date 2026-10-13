@@ -2,6 +2,8 @@ import { useEffect, useState, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import {
   CreditCardIcon,
+  ExternalLinkIcon,
+  GitHubIcon,
   KeyIcon,
   LogoutIcon,
   MessagesIcon,
@@ -20,6 +22,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { unlinkTelegram } from '@/features/auth/api';
 import { useAuth } from '@/features/auth/auth-store';
 import { useBilling } from '@/features/billing/billing-store';
+import { useGithub } from '@/features/github/github-store';
 import { useTranslation, type TranslationKey } from '@/i18n';
 import { cn } from '@/lib/cn';
 import { formatShortDate } from '@/lib/format-date';
@@ -183,6 +186,19 @@ export function SettingsPage() {
   const loadSubscription = useBilling((state) => state.loadSubscription);
   const cancel = useBilling((state) => state.cancel);
 
+  const githubStatus = useGithub((state) => state.status);
+  const githubLoading = useGithub((state) => state.loading);
+  const githubBusy = useGithub((state) => state.busy);
+  const githubError = useGithub((state) => state.error);
+  const loadGithub = useGithub((state) => state.load);
+  const connectGithub = useGithub((state) => state.connect);
+  const disconnectGithub = useGithub((state) => state.disconnect);
+  const [confirmGithubDisconnect, setConfirmGithubDisconnect] = useState(false);
+
+  useEffect(() => {
+    if (user) void loadGithub();
+  }, [user, loadGithub]);
+
   const [canceling, setCanceling] = useState(false);
   const [unlinkingTelegram, setUnlinkingTelegram] = useState(false);
 
@@ -238,6 +254,7 @@ export function SettingsPage() {
     { id: 'account', label: t('settings.account') },
     { id: 'appearance', label: t('settings.appearance') },
     { id: 'subscription', label: t('settings.subscription') },
+    { id: 'github', label: 'GitHub' },
     { id: 'telegram', label: 'Telegram' },
     { id: 'support', label: t('settings.support') },
     ...(hasAdminAccess ? [{ id: 'admin', label: 'Admin API' }] : []),
@@ -379,6 +396,105 @@ export function SettingsPage() {
                   : t('settings.subscriptionText')}
               </CardText>
             )}
+          </SettingsSection>
+
+          {/* GitHub: доступ к репозиториям, включая приватные */}
+          <SettingsSection
+            id="github"
+            icon={<GitHubIcon className="size-5" />}
+            title={t('settings.githubTitle')}
+            description={t('settings.githubDesc')}
+            action={
+              !user ? null : githubStatus?.connected ? (
+                confirmGithubDisconnect ? (
+                  <>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      loading={githubBusy}
+                      onClick={async () => {
+                        await disconnectGithub();
+                        setConfirmGithubDisconnect(false);
+                      }}
+                      className="text-danger hover:border-danger/40 hover:bg-danger-soft"
+                    >
+                      {t('settings.githubDisconnectYes')}
+                    </Button>
+                    <Button variant="ghost" size="sm" onClick={() => setConfirmGithubDisconnect(false)}>
+                      {t('common.cancel')}
+                    </Button>
+                  </>
+                ) : (
+                  <Button variant="outline" size="sm" onClick={() => setConfirmGithubDisconnect(true)}>
+                    {t('settings.githubDisconnect')}
+                  </Button>
+                )
+              ) : githubStatus?.available ? (
+                <Button
+                  size="sm"
+                  loading={githubBusy}
+                  onClick={() => void connectGithub()}
+                  leftIcon={<GitHubIcon className="size-3.5" />}
+                >
+                  {t('settings.githubConnect')}
+                </Button>
+              ) : null
+            }
+          >
+            {!user ? (
+              <Note>{t('settings.githubSignIn')}</Note>
+            ) : githubLoading && !githubStatus ? (
+              <Skeleton className="h-16 w-full" />
+            ) : githubStatus?.connected && githubStatus.account ? (
+              <>
+                <div className="flex flex-wrap items-center gap-3">
+                  {githubStatus.account.avatarUrl ? (
+                    <img src={githubStatus.account.avatarUrl} alt="" className="size-9 rounded-full ring-1 ring-stroke" />
+                  ) : null}
+                  <div className="min-w-0">
+                    <a
+                      href={`https://github.com/${githubStatus.account.login}`}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="font-mono text-[14px] font-semibold text-text hover:text-accent"
+                    >
+                      @{githubStatus.account.login}
+                    </a>
+                    <p className="text-xs text-muted">
+                      {t('settings.githubSince', { date: formatShortDate(githubStatus.account.connectedAt, language) })}
+                    </p>
+                  </div>
+                  <Badge tone="success">{t('settings.githubConnected')}</Badge>
+                </div>
+                {confirmGithubDisconnect ? <Note>{t('settings.githubDisconnectHint')}</Note> : null}
+                <Note title={t('settings.githubAccessTitle')}>
+                  {t('settings.githubAccessHint')}{' '}
+                  <a
+                    href="https://github.com/settings/applications"
+                    target="_blank"
+                    rel="noreferrer"
+                    className="inline-flex items-center gap-1 text-accent hover:underline"
+                  >
+                    {t('settings.githubManage')}
+                    <ExternalLinkIcon className="size-3" />
+                  </a>
+                </Note>
+              </>
+            ) : githubStatus && !githubStatus.available ? (
+              <Note>{t('settings.githubUnavailable')}</Note>
+            ) : (
+              <>
+                <div className="flex flex-wrap items-center gap-2">
+                  <Badge tone="neutral">{t('settings.githubNotConnected')}</Badge>
+                </div>
+                <Note title={t('settings.githubWhyTitle')}>{t('settings.githubWhyHint')}</Note>
+              </>
+            )}
+            {githubError ? (
+              <p role="alert" className="text-[13px] text-danger">
+                {githubError}
+              </p>
+            ) : null}
           </SettingsSection>
 
           {/* Telegram: аккаунт и платежи */}

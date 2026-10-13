@@ -176,16 +176,18 @@ export class GithubImportError extends Error {
 
 export async function downloadGithubZip(
   target: GithubRef,
-  options: { maxBytes: number; timeoutMs?: number; fetchImpl?: typeof fetch },
+  options: { maxBytes: number; timeoutMs?: number; fetchImpl?: typeof fetch; token?: string },
 ): Promise<Uint8Array> {
   const fetchImpl = options.fetchImpl ?? fetch;
+  const headers: Record<string, string> = { 'User-Agent': 'ketner-code', Accept: 'application/vnd.github+json' };
+  if (options.token) headers.Authorization = `Bearer ${options.token}`;
   const url =
     `https://api.github.com/repos/${encodeURIComponent(target.owner)}/${encodeURIComponent(target.repo)}/zipball` +
-    (target.ref ? `/${encodeURIComponent(target.ref)}` : '');
+    (target.ref ? `/${target.ref.split('/').map(encodeURIComponent).join('/')}` : '');
   let response: Response;
   try {
     response = await fetchImpl(url, {
-      headers: { 'User-Agent': 'ketner-code', Accept: 'application/vnd.github+json' },
+      headers,
       redirect: 'follow',
       signal: AbortSignal.timeout(options.timeoutMs ?? 30_000),
     });
@@ -195,7 +197,9 @@ export async function downloadGithubZip(
   if (response.status === 404 || response.status === 403 || response.status === 401) {
     throw new GithubImportError(
       'not_found',
-      'Репозиторий не найден или закрыт. Поддерживаются только публичные репозитории; для приватного загрузите ZIP.',
+      options.token
+        ? 'Репозиторий не найден или у привязанного аккаунта GitHub нет к нему доступа.'
+        : 'Репозиторий не найден или закрыт. Подключите GitHub в настройках, чтобы импортировать приватные репозитории.',
     );
   }
   if (!response.ok || !response.body) {

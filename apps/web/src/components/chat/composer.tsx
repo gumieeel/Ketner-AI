@@ -23,10 +23,11 @@ import { useChat } from '@/features/chat/chat-store';
 import type { ModelInfo } from '@/features/chat/types';
 import { usePreferences } from '@/features/preferences/preferences-store';
 import { useWorkspace } from '@/features/chat/workspace-store';
+import { useGithub } from '@/features/github/github-store';
 import { useTranslation } from '@/i18n';
 import { cn } from '@/lib/cn';
 import { ComposerAttachments } from './composer-attachments';
-import { LinkWorkspaceModal } from './link-workspace-modal';
+import { LinkWorkspaceModal, type LinkWorkspaceTab } from './link-workspace-modal';
 import { WorkspaceBar } from './workspace-bar';
 
 const attachItemClass =
@@ -56,6 +57,17 @@ export function Composer() {
   const [isDragOver, setIsDragOver] = useState(false);
   const [isAttachMenuOpen, setIsAttachMenuOpen] = useState(false);
   const [isWorkspaceModalOpen, setIsWorkspaceModalOpen] = useState(false);
+  const [workspaceTab, setWorkspaceTab] = useState<LinkWorkspaceTab>('folder');
+  const resumeIntent = useGithub((state) => state.resumeIntent);
+  const consumeGithubIntent = useGithub((state) => state.consumeIntent);
+
+  useEffect(() => {
+    // Вернулись после подключения GitHub из окна привязки — открываем его снова на вкладке GitHub.
+    if (resumeIntent === 'link-repo' && consumeGithubIntent('link-repo')) {
+      setWorkspaceTab('git');
+      setIsWorkspaceModalOpen(true);
+    }
+  }, [resumeIntent, consumeGithubIntent]);
 
   const currentModel = findModel(meta?.models, selectedModelId);
   const hasAccess = canAccessModel(user?.plan, currentModel);
@@ -307,6 +319,7 @@ export function Composer() {
                   type="button"
                   onClick={() => {
                     setIsAttachMenuOpen(false);
+                    setWorkspaceTab('folder');
                     setIsWorkspaceModalOpen(true);
                   }}
                   className={attachItemClass}
@@ -319,6 +332,7 @@ export function Composer() {
                   type="button"
                   onClick={() => {
                     setIsAttachMenuOpen(false);
+                    setWorkspaceTab('git');
                     setIsWorkspaceModalOpen(true);
                   }}
                   className={attachItemClass}
@@ -369,6 +383,7 @@ export function Composer() {
 
       <LinkWorkspaceModal
         isOpen={isWorkspaceModalOpen}
+        initialTab={workspaceTab}
         onClose={() => setIsWorkspaceModalOpen(false)}
       />
     </div>

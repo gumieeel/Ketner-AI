@@ -315,31 +315,30 @@ const mode = "production";
       global.fetch = vi.fn(async (url: any, opts?: any) => {
         const u = url.toString();
         if (u.includes('/git/ref/heads/main')) {
-          return { ok: true, json: async () => ({ object: { sha: 'base-commit-sha-123' } }) } as any;
+          return Response.json({ object: { sha: 'base-commit-sha-123' } });
         }
         if (u.includes('/git/commits/base-commit-sha-123')) {
-          return { ok: true, json: async () => ({ tree: { sha: 'base-tree-sha-456' } }) } as any;
+          return Response.json({ tree: { sha: 'base-tree-sha-456' } });
         }
         if (u.includes('/git/blobs')) {
-          return { ok: true, json: async () => ({ sha: 'new-blob-sha-789' }) } as any;
+          return Response.json({ sha: 'new-blob-sha-789' });
         }
         if (u.includes('/git/trees')) {
-          return { ok: true, json: async () => ({ sha: 'new-tree-sha-012' }) } as any;
+          return Response.json({ sha: 'new-tree-sha-012' });
         }
         if (u.includes('/git/commits')) {
-          return { ok: true, json: async () => ({ sha: 'final-commit-sha-345' }) } as any;
+          return Response.json({ sha: 'final-commit-sha-345' });
         }
         if (u.includes('/git/refs/heads/main') && opts?.method === 'PATCH') {
-          return { ok: true, json: async () => ({ object: { sha: 'final-commit-sha-345' } }) } as any;
+          return Response.json({ object: { sha: 'final-commit-sha-345' } });
         }
-        return { ok: false, status: 404 } as any;
+        return new Response(null, { status: 404 });
       });
 
       const res = await commitDirectlyToGitHub({
         owner: 'testowner',
         repo: 'testrepo',
         branch: 'main',
-        token: 'ghp_fake_token',
         changes: [
           {
             action: 'write',
@@ -350,6 +349,13 @@ const mode = "production";
       });
 
       expect(res.commitSha).toBe('final-commit-sha-345');
+      // Всё идёт через прокси сервера: токена в браузере нет, адрес GitHub напрямую не вызывается.
+      const calls = vi.mocked(global.fetch).mock.calls;
+      expect(calls.length).toBeGreaterThan(0);
+      for (const [url, init] of calls) {
+        expect(String(url)).toMatch(/^\/api\/github\/api\/repos\/testowner\/testrepo\//);
+        expect(JSON.stringify((init as RequestInit | undefined)?.headers ?? {})).not.toMatch(/token /i);
+      }
       expect(res.url).toContain('https://github.com/testowner/testrepo/commit/final-commit-sha-345');
 
       // Проверяем обновление стора
@@ -374,30 +380,29 @@ const mode = "production";
       global.fetch = vi.fn(async (url: any, opts?: any) => {
         const u = url.toString();
         if (u.includes('/git/ref/heads/main')) {
-          return { ok: true, json: async () => ({ object: { sha: 'base-sha' } }) } as any;
+          return Response.json({ object: { sha: 'base-sha' } });
         }
         if (u.includes('/git/commits/base-sha')) {
-          return { ok: true, json: async () => ({ tree: { sha: 'base-tree' } }) } as any;
+          return Response.json({ tree: { sha: 'base-tree' } });
         }
         if (u.includes('/contents/src/a.ts?ref=base-sha')) {
           // В репозитории файл уже изменился другим человеком.
-          return { ok: true, text: async () => 'const a = 1;\nconst teammate = 42;\n' } as any;
+          return new Response('const a = 1;\nconst teammate = 42;\n');
         }
         if (u.includes('/git/blobs')) {
           committedBlob = JSON.parse(opts.body).content;
-          return { ok: true, json: async () => ({ sha: 'blob' }) } as any;
+          return Response.json({ sha: 'blob' });
         }
-        if (u.includes('/git/trees')) return { ok: true, json: async () => ({ sha: 'tree' }) } as any;
-        if (u.includes('/git/commits')) return { ok: true, json: async () => ({ sha: 'commit' }) } as any;
-        if (u.includes('/git/refs/heads/main')) return { ok: true, json: async () => ({}) } as any;
-        return { ok: false, status: 404 } as any;
+        if (u.includes('/git/trees')) return Response.json({ sha: 'tree' });
+        if (u.includes('/git/commits')) return Response.json({ sha: 'commit' });
+        if (u.includes('/git/refs/heads/main')) return Response.json({});
+        return new Response(null, { status: 404 });
       });
 
       await commitDirectlyToGitHub({
         owner: 'testowner',
         repo: 'testrepo',
         branch: 'main',
-        token: 'ghp_fake_token',
         changes: [
           {
             action: 'replace',
@@ -429,14 +434,14 @@ const mode = "production";
       let blobCalls = 0;
       global.fetch = vi.fn(async (url: any) => {
         const u = url.toString();
-        if (u.includes('/git/ref/heads/main')) return { ok: true, json: async () => ({ object: { sha: 'base-sha' } }) } as any;
-        if (u.includes('/git/commits/base-sha')) return { ok: true, json: async () => ({ tree: { sha: 'base-tree' } }) } as any;
-        if (u.includes('/contents/')) return { ok: true, text: async () => 'совсем другое содержимое' } as any;
+        if (u.includes('/git/ref/heads/main')) return Response.json({ object: { sha: 'base-sha' } });
+        if (u.includes('/git/commits/base-sha')) return Response.json({ tree: { sha: 'base-tree' } });
+        if (u.includes('/contents/')) return new Response('совсем другое содержимое');
         if (u.includes('/git/blobs')) {
           blobCalls++;
-          return { ok: true, json: async () => ({ sha: 'blob' }) } as any;
+          return Response.json({ sha: 'blob' });
         }
-        return { ok: false, status: 404 } as any;
+        return new Response(null, { status: 404 });
       });
 
       await expect(
@@ -444,8 +449,7 @@ const mode = "production";
           owner: 'testowner',
           repo: 'testrepo',
           branch: 'main',
-          token: 'ghp_fake_token',
-          changes: [
+            changes: [
             {
               action: 'replace',
               path: 'src/a.ts',
@@ -474,40 +478,36 @@ const mode = "production";
       global.fetch = vi.fn(async (url: any) => {
         const u = url.toString();
         if (u.includes('/git/ref/heads/main')) {
-          return { ok: true, json: async () => ({ object: { sha: 'base-commit-sha-123' } }) } as any;
+          return Response.json({ object: { sha: 'base-commit-sha-123' } });
         }
         if (u.includes('/git/commits/base-commit-sha-123')) {
-          return { ok: true, json: async () => ({ tree: { sha: 'base-tree-sha-456' } }) } as any;
+          return Response.json({ tree: { sha: 'base-tree-sha-456' } });
         }
         if (u.includes('/git/blobs')) {
-          return { ok: true, json: async () => ({ sha: 'blob-sha' }) } as any;
+          return Response.json({ sha: 'blob-sha' });
         }
         if (u.includes('/git/trees')) {
-          return { ok: true, json: async () => ({ sha: 'tree-sha' }) } as any;
+          return Response.json({ sha: 'tree-sha' });
         }
         if (u.includes('/git/commits')) {
-          return { ok: true, json: async () => ({ sha: 'commit-sha' }) } as any;
+          return Response.json({ sha: 'commit-sha' });
         }
         if (u.includes('/git/refs')) {
-          return { ok: true, json: async () => ({ ref: 'refs/heads/ai-patch-branch' }) } as any;
+          return Response.json({ ref: 'refs/heads/ai-patch-branch' });
         }
         if (u.includes('/pulls')) {
-          return {
-            ok: true,
-            json: async () => ({
-              number: 42,
-              html_url: 'https://github.com/testowner/testrepo/pull/42',
-            }),
-          } as any;
+          return Response.json({
+            number: 42,
+            html_url: 'https://github.com/testowner/testrepo/pull/42',
+          });
         }
-        return { ok: false, status: 404 } as any;
+        return new Response(null, { status: 404 });
       });
 
       const res = await createGitHubPullRequest({
         owner: 'testowner',
         repo: 'testrepo',
         branch: 'main',
-        token: 'ghp_fake_token',
         title: 'New AI feature',
         changes: [
           {

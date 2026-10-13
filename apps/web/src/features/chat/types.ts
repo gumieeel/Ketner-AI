@@ -60,7 +60,6 @@ export interface WorkspaceContext {
   name: string;
   pathOrUrl: string;
   branch?: string;
-  gitToken?: string;
   filesCount: number;
   files: WorkspaceFile[];
   indexedAt: string;

@@ -1,6 +1,7 @@
 import type { WorkspaceContext, WorkspaceFile } from './types';
 import { getFileExtension, isReadableTextPath } from './attachment-utils';
 import { isSensitivePath } from './file-operations/path-safety';
+import { githubFetch } from '../github/api';
 
 export interface ParseRepoResult {
   owner: string;
@@ -86,43 +87,43 @@ export function repoFileScore(path: string): number {
   return score - Math.min(depth, 6);
 }
 
+/** Ветка в пути API: сегменты экранируются по отдельности, слэши (`feat/x`) остаются. */
+export function branchPath(branch: string): string {
+  return branch.split('/').map(encodeURIComponent).join('/');
+}
+
+/** Путь в API GitHub для репозитория: owner и repo экранируются. */
+export function repoPath(owner: string, repo: string): string {
+  return `/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}`;
+}
+
+async function readFailure(res: Response, owner: string, repo: string): Promise<never> {
+  if (res.status === 403 || res.status === 429) {
+    throw new Error('GitHub временно ограничил запросы. Попробуйте через минуту.');
+  }
+  if (res.status === 404) {
+    throw new Error(`Репозиторий ${owner}/${repo} или ветка не найдены, либо у подключённого аккаунта GitHub нет к ним доступа.`);
+  }
+  throw new Error(`Ошибка загрузки репозитория (${res.status})`);
+}
+
 /**
- * Загружает дерево репозитория GitHub через публичный REST API.
+ * Загружает дерево репозитория через привязанный аккаунт GitHub (`/api/github/api`): работают и
+ * приватные репозитории, токен остаётся на сервере. Без ветки берётся ветка по умолчанию.
  */
-export async function fetchGitHubRepo(
-  owner: string,
-  repo: string,
-  branch = 'main',
-  token?: string,
-): Promise<WorkspaceContext> {
-  const headers: Record<string, string> = {
-    Accept: 'application/vnd.github.v3+json',
-  };
-  if (token?.trim()) {
-    headers['Authorization'] = `token ${token.trim()}`;
+export async function fetchGitHubRepo(owner: string, repo: string, branch?: string): Promise<WorkspaceContext> {
+  const base = repoPath(owner, repo);
+
+  let targetBranch = branch?.trim();
+  if (!targetBranch) {
+    const info = await githubFetch(base);
+    if (!info.ok) await readFailure(info, owner, repo);
+    targetBranch = ((await info.json()) as { default_branch?: string }).default_branch || 'main';
   }
 
-  // 1. Пытаемся получить дерево репозитория
-  let targetBranch = branch;
-  let treeUrl = `https://api.github.com/repos/${owner}/${repo}/git/trees/${targetBranch}?recursive=1`;
-  let res = await fetch(treeUrl, { headers });
-
-  if (res.status === 404 && targetBranch === 'main') {
-    // Пробуем master, если main не существует
-    targetBranch = 'master';
-    treeUrl = `https://api.github.com/repos/${owner}/${repo}/git/trees/${targetBranch}?recursive=1`;
-    res = await fetch(treeUrl, { headers });
-  }
-
-  if (!res.ok) {
-    if (res.status === 403 || res.status === 429) {
-      throw new Error('Лимит запросов к GitHub API исчерпан. Пожалуйста, укажите GitHub Personal Access Token или попробуйте позже.');
-    }
-    if (res.status === 404) {
-      throw new Error(`Репозиторий ${owner}/${repo} не найден. Проверьте правильность ссылки или укажите токен для приватного репозитория.`);
-    }
-    throw new Error(`Ошибка загрузки репозитория (${res.status}): ${res.statusText}`);
-  }
+  // 1. Дерево репозитория целиком
+  const res = await githubFetch(`${base}/git/trees/${branchPath(targetBranch)}?recursive=1`);
+  if (!res.ok) await readFailure(res, owner, repo);
 
   const data = (await res.json()) as {
     tree?: Array<{ path: string; mode: string; type: string; size?: number; url?: string }>;
@@ -148,16 +149,13 @@ export async function fetchGitHubRepo(
 
   const encodePath = (path: string) => path.split('/').map(encodeURIComponent).join('/');
   const contentMap = new Map<string, string>();
+  const ref = encodeURIComponent(targetBranch);
   await Promise.all(
     filesToFetch.map(async (fileNode) => {
       try {
-        // Для приватных репозиториев raw.githubusercontent.com без токена недоступен — идём через API.
-        const contentRes = token?.trim()
-          ? await fetch(
-              `https://api.github.com/repos/${owner}/${repo}/contents/${encodePath(fileNode.path)}?ref=${encodeURIComponent(targetBranch)}`,
-              { headers: { ...headers, Accept: 'application/vnd.github.raw+json' } },
-            )
-          : await fetch(`https://raw.githubusercontent.com/${owner}/${repo}/${targetBranch}/${encodePath(fileNode.path)}`);
+        const contentRes = await githubFetch(`${base}/contents/${encodePath(fileNode.path)}?ref=${ref}`, {
+          accept: 'application/vnd.github.raw+json',
+        });
         if (contentRes.ok) {
           const text = await contentRes.text();
           if (text.length <= MAX_FETCHED_FILE_BYTES) {
@@ -183,7 +181,6 @@ export async function fetchGitHubRepo(
     name: `${owner}/${repo}`,
     pathOrUrl: `https://github.com/${owner}/${repo}`,
     branch: targetBranch,
-    gitToken: token?.trim() || undefined,
     filesCount: collected.length,
     files: collected,
     indexedAt: new Date().toISOString(),

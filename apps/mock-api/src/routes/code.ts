@@ -42,6 +42,8 @@ export interface CodeRouterDeps {
   runner?: AgentRunner;
   allowAnonymous?: boolean;
   fetchImpl?: typeof fetch;
+  /** Токен привязанного GitHub: с ним импортируются и приватные репозитории. */
+  githubTokenOf?: (userId: string) => string | undefined;
 }
 
 interface Caller {
@@ -226,7 +228,7 @@ export function createCodeRouter(deps: CodeRouterDeps): Router {
       const body = (request.body ?? {}) as Record<string, unknown>;
       const target = typeof body.url === 'string' ? parseGithubUrl(body.url) : null;
       if (!target) {
-        sendError(response, 400, 'invalid_request', 'Укажите адрес публичного репозитория GitHub, например https://github.com/owner/repo');
+        sendError(response, 400, 'invalid_request', 'Укажите репозиторий GitHub, например https://github.com/owner/repo');
         return;
       }
       if ((await store.count(caller.userId)) >= caller.limits.maxProjects) {
@@ -235,7 +237,11 @@ export function createCodeRouter(deps: CodeRouterDeps): Router {
       }
       let archive: Uint8Array;
       try {
-        archive = await downloadGithubZip(target, { maxBytes: GITHUB_ARCHIVE_MAX_BYTES, fetchImpl: deps.fetchImpl });
+        archive = await downloadGithubZip(target, {
+          maxBytes: GITHUB_ARCHIVE_MAX_BYTES,
+          fetchImpl: deps.fetchImpl,
+          token: deps.githubTokenOf?.(caller.userId),
+        });
       } catch (error) {
         if (error instanceof GithubImportError) {
           sendError(response, error.code === 'not_found' ? 404 : error.code === 'too_large' ? 413 : 502, `github_${error.code}`, error.message);

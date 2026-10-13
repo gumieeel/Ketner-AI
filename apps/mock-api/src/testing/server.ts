@@ -11,6 +11,7 @@ import { createSubscriptionStore } from '../store/subscription-store.js';
 import { createUserStore } from '../store/user-store.js';
 import { createApiKeyStore, type ApiKeyStore } from '../store/api-key-store.js';
 import { UsageStore } from '../store/usage-store.js';
+import { createGithubConnectionStore, type GithubConnectionStore } from '../github/connection-store.js';
 import { semanticCache } from '../ai/cache.js';
 import type { Conversation, Message } from '../types.js';
 
@@ -31,6 +32,7 @@ export interface TestServer {
   /** Хранилища сервера: тесты создают ключи и сеют расход напрямую. */
   usageStore: UsageStore;
   apiKeyStore: ApiKeyStore;
+  githubConnectionStore: GithubConnectionStore;
 }
 
 /** Поднимает приложение на свободном порту с временным файлом хранилища. */
@@ -59,6 +61,10 @@ export async function startTestServer(
 
   const testUsageStore = new UsageStore(usageStoreFile);
   const testApiKeyStore = createApiKeyStore(join(tempDir, 'api-keys.json'));
+  const testGithubStore = createGithubConnectionStore({
+    file: join(tempDir, 'github-connections.json'),
+    secret: 'test-github-secret',
+  });
 
   const app = createApp({
     store: createConversationStore(storeFile),
@@ -66,6 +72,7 @@ export async function startTestServer(
     subscriptionStore: createSubscriptionStore(subscriptionStoreFile),
     usageStore: testUsageStore,
     apiKeyStore: testApiKeyStore,
+    githubConnectionStore: testGithubStore,
     supportStore: testSupportStore,
     supportBotService: testSupportBotService,
     ai: { ...FAST_AI, ...ai },
@@ -80,6 +87,7 @@ export async function startTestServer(
     baseUrl: `http://127.0.0.1:${address.port}`,
     usageStore: extra.usageStore ?? testUsageStore,
     apiKeyStore: extra.apiKeyStore ?? testApiKeyStore,
+    githubConnectionStore: extra.githubConnectionStore ?? testGithubStore,
     close: () =>
       new Promise<void>((resolve, reject) => {
         try {
