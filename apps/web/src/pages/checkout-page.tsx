@@ -183,7 +183,9 @@ export function CheckoutPage() {
       createCryptoInvoice(plan.id, cryptoCurrency)
         .then(({ invoice }) => {
           setCryptoInvoice(invoice);
-          setCryptoSecondsLeft(30 * 60);
+          // Таймер по сроку счёта в шлюзе (у H2H-счёта он свой), иначе 30 минут.
+          const left = Math.floor((new Date(invoice.expiresAt).getTime() - Date.now()) / 1000);
+          setCryptoSecondsLeft(invoice.gatewayDetails && left > 0 ? left : 30 * 60);
         })
         .catch((err) => {
           console.error('Failed to create Crypto invoice:', err);
@@ -382,9 +384,12 @@ export function CheckoutPage() {
   };
 
   const formatTimer = (seconds: number) => {
-    const mins = Math.floor(seconds / 60);
+    const pad = (value: number) => value.toString().padStart(2, '0');
+    const hours = Math.floor(seconds / 3600);
+    const mins = Math.floor((seconds % 3600) / 60);
     const secs = seconds % 60;
-    return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+    // Счёт Trybit живёт сутки: часы показываем, только когда они есть.
+    return hours > 0 ? `${hours}:${pad(mins)}:${pad(secs)}` : `${pad(mins)}:${pad(secs)}`;
   };
 
   const copyToClipboard = async (text: string, setCopiedFn: (val: boolean) => void) => {
@@ -417,7 +422,13 @@ export function CheckoutPage() {
 
   const currentCrypto =
     CRYPTO_OPTIONS.find((c) => c.id === cryptoCurrency) || CRYPTO_OPTIONS[0];
-  const cryptoAmountStr = currentCrypto.formatAmount(plan.priceMonthly);
+  // Реквизиты от Trybit (H2H): точная сумма в криптовалюте приходит со счётом.
+  const gatewayDetails = Boolean(cryptoInvoice?.gatewayDetails);
+  const cryptoTicker = currentCrypto.formatAmount(plan.priceMonthly).split(' ').pop() ?? '';
+  const cryptoAmountStr =
+    gatewayDetails && cryptoInvoice
+      ? `${cryptoInvoice.amount} ${cryptoTicker}`
+      : currentCrypto.formatAmount(plan.priceMonthly);
   const cryptoAddress = cryptoInvoice?.address || currentCrypto.defaultAddress;
   const cryptoQr =
     cryptoInvoice?.qrPayload || `${currentCrypto.network.toLowerCase()}:${cryptoAddress}`;
@@ -614,7 +625,10 @@ export function CheckoutPage() {
               copiedAmount={copiedCryptoAmount}
               onCopyAddress={() => void copyToClipboard(cryptoAddress, setCopiedCryptoAddress)}
               onCopyAmount={() =>
-                void copyToClipboard(String(currentCrypto.calcAmount(plan.priceMonthly)), setCopiedCryptoAmount)
+                void copyToClipboard(
+                  String(gatewayDetails && cryptoInvoice ? cryptoInvoice.amount : currentCrypto.calcAmount(plan.priceMonthly)),
+                  setCopiedCryptoAmount,
+                )
               }
               txHash={txHashInput}
               onTxHashChange={setTxHashInput}

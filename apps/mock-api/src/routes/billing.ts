@@ -605,6 +605,7 @@ export function createBillingRouter({
       ccResult?.link,
       ccResult?.invoiceId,
       tempOrderId,
+      ccResult?.h2h,
     );
 
     response.json({ invoice });

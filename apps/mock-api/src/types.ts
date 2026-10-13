@@ -218,6 +218,10 @@ export interface CryptoInvoice {
   network: string;
   cryptoCloudUrl?: string;
   cryptoCloudInvoiceId?: string;
+  /** Реквизиты выдал Trybit: оплата прямо на сайте, без перехода на страницу шлюза. */
+  gatewayDetails?: boolean;
+  /** MEMO/комментарий к переводу (сеть TON). */
+  memo?: string;
   txHash?: string;
 }
 

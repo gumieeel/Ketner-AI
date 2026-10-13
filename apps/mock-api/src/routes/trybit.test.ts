@@ -25,7 +25,10 @@ interface GatewayCall {
   body: Record<string, unknown>;
 }
 
-function fakeTrybit(paidStatus: string): { calls: GatewayCall[]; restore: () => void } {
+function fakeTrybit(
+  paidStatus: string,
+  createExtra: Record<string, unknown> = {},
+): { calls: GatewayCall[]; restore: () => void } {
   const calls: GatewayCall[] = [];
   const realFetch = globalThis.fetch;
   globalThis.fetch = (async (input: string | URL | Request, init?: RequestInit) => {
@@ -36,7 +39,13 @@ function fakeTrybit(paidStatus: string): { calls: GatewayCall[]; restore: () => 
     if (url.endsWith('/v2/invoice/create')) {
       return Response.json({
         status: 'success',
-        result: { uuid: 'INV-ABC12345', link: 'https://pay.trybit.com/INV-ABC12345', status: 'created' },
+        result: {
+          uuid: 'INV-ABC12345',
+          link: 'https://pay.trybit.com/INV-ABC12345',
+          status: 'created',
+          address: '',
+          ...createExtra,
+        },
       });
     }
     if (url.endsWith('/v2/invoice/merchant/info')) {
@@ -143,4 +152,51 @@ test('Trybit: postback без подтверждения оплаты в API ш�
   assert.equal(postback.status, 200);
   const me = await readJson<{ user: { plan: string } }>(await fetch(`${server.baseUrl}/api/auth/me`, { headers: auth }));
   assert.equal(me.user.plan, 'free');
+});
+
+test('Trybit H2H: реквизиты для оплаты на сайте приходят в счёте', async (t) => {
+  const gateway = fakeTrybit('created', {
+    address: 'TXyzGatewayAddress123',
+    amount: 9.42,
+    expiry_date: '2026-10-14 15:04:01.555132',
+    currency: { code: 'USDT', fullcode: 'USDT_TRC20', network: { code: 'TRC20', fullname: 'Tron' } },
+  });
+  const server = await startTestServer();
+  t.after(async () => {
+    gateway.restore();
+    await server.close();
+  });
+  const buyer = await signup(server.baseUrl, 'trybit-h2h@example.com');
+  const created = await fetch(`${server.baseUrl}/api/billing/crypto/create-invoice`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${buyer.token}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ planId: 'plus', currency: 'USDT_TRC20' }),
+  });
+  const { invoice } = await readJson<{
+    invoice: { address: string; amount: number; network: string; expiresAt: string; gatewayDetails?: boolean; qrPayload: string };
+  }>(created);
+  assert.equal(invoice.gatewayDetails, true);
+  assert.equal(invoice.address, 'TXyzGatewayAddress123');
+  assert.equal(invoice.amount, 9.42);
+  assert.equal(invoice.network, 'Tron · TRC20');
+  assert.equal(invoice.expiresAt, '2026-10-14T15:04:01.555Z');
+  assert.equal(invoice.qrPayload, 'TXyzGatewayAddress123');
+});
+
+test('Trybit без адреса (тестовый режим): остаётся ссылка на страницу оплаты', async (t) => {
+  const gateway = fakeTrybit('created');
+  const server = await startTestServer();
+  t.after(async () => {
+    gateway.restore();
+    await server.close();
+  });
+  const buyer = await signup(server.baseUrl, 'trybit-noaddr@example.com');
+  const created = await fetch(`${server.baseUrl}/api/billing/crypto/create-invoice`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${buyer.token}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ planId: 'plus', currency: 'USDT_TRC20' }),
+  });
+  const { invoice } = await readJson<{ invoice: { gatewayDetails?: boolean; cryptoCloudUrl: string } }>(created);
+  assert.equal(invoice.gatewayDetails, undefined);
+  assert.equal(invoice.cryptoCloudUrl, 'https://pay.trybit.com/INV-ABC12345');
 });
