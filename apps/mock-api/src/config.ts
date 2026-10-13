@@ -304,9 +304,12 @@ export const config = {
     : undefined,
 
   /** CryptoCloud: Приём платежей в криптовалюте */
-  cryptoCloudApiKey: optionalEnv('CRYPTOCLOUD_API_KEY'),
-  cryptoCloudShopId: optionalEnv('CRYPTOCLOUD_SHOP_ID'),
-  cryptoCloudSecretKey: optionalEnv('CRYPTOCLOUD_SECRET_KEY'),
+  /** Trybit (бывший CryptoCloud): одинаковый API v2. Подходят оба набора переменных. */
+  cryptoCloudApiKey: optionalEnv('TRYBIT_API_KEY') || optionalEnv('CRYPTOCLOUD_API_KEY'),
+  cryptoCloudShopId: optionalEnv('TRYBIT_SHOP_ID') || optionalEnv('CRYPTOCLOUD_SHOP_ID'),
+  cryptoCloudSecretKey: optionalEnv('TRYBIT_SECRET_KEY') || optionalEnv('CRYPTOCLOUD_SECRET_KEY'),
+  /** Адрес API платёжного шлюза. */
+  cryptoCloudApiUrl: (process.env.TRYBIT_API_URL?.trim() || 'https://api.trybit.com').replace(/\/+$/, ''),
 
   /**
    * ИИ: единый ключ OpenRouter для всех моделей (GPT, Claude, Grok, Gemini, DeepSeek, MiMo).

@@ -96,7 +96,7 @@ export function CheckoutPage() {
     }
   }, [authStatus, user, planId, navigate]);
 
-  // Выбранный способ оплаты: по умолчанию криптовалюта (TryBit / CryptoCloud Gateway)
+  // Выбранный способ оплаты: по умолчанию криптовалюта (Trybit)
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('crypto');
   const [cryptoTransferMode, setCryptoTransferMode] = useState<'gateway' | 'manual'>('gateway');
   const [payerEmail, setPayerEmail] = useState(user?.email || '');

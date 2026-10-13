@@ -250,6 +250,7 @@ export function createBillingRouter({
 
   router.use(
     [
+      '/billing/trybit/webhook',
       '/billing/cryptocloud/webhook',
       '/billing/cryptocloud/callback',
       '/billing/cryptocloud/postback',
