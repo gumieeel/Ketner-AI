@@ -105,7 +105,7 @@ describe('billing-flow: каталог тарифов, чекаут и упра�
     ).toBeInTheDocument();
   });
 
-  it('чекаут: по умолчанию отображается криптовалюта как основной способ, а выбор СБП показывает реквизиты в рублях', async () => {
+  it('чекаут: по умолчанию отображается криптовалюта, СБП среди способов оплаты нет', async () => {
     useAuth.setState({
       status: 'authenticated',
       token: 'mock-token',
@@ -129,13 +129,9 @@ describe('billing-flow: каталог тарифов, чекаут и упра�
     const confirmCrypto = screen.getByRole('button', { name: /Подтвердить оплату криптовалютой/i });
     expect(confirmCrypto).toBeInTheDocument();
 
-    // Переключаемся на СБП
-    const sbpTab = screen.getByRole('button', { name: /СБП по QR/i });
-    fireEvent.click(sbpTab);
-
-    expect(await screen.findByText(/Оплата через СБП/i)).toBeInTheDocument();
-    expect(screen.getAllByText(/890 ₽/i).length).toBeGreaterThan(0);
-    expect(screen.getByRole('button', { name: /Подтвердить оплату через СБП/i })).toBeInTheDocument();
+    // СБП пока убрана: остаются криптовалюта и Telegram Stars.
+    expect(screen.queryByRole('button', { name: /СБП/i })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Telegram Stars/i })).toBeInTheDocument();
   });
 
   it('чекаут: выбор способа оплаты Криптовалюта отображает реквизиты и подтверждает транзакцию', async () => {
@@ -224,42 +220,6 @@ describe('billing-flow: каталог тарифов, чекаут и упра�
       expect(useAuth.getState().user?.plan).toBe('free');
       expect(useBilling.getState().subscription?.status).toBe('canceled');
     });
-  });
-
-  it('чекаут: выбор способа оплаты СБП показывает QR-код и подтверждает оплату', async () => {
-    useAuth.setState({
-      status: 'authenticated',
-      token: 'mock-token',
-      user: {
-        id: 'demo-user',
-        email: 'demo@ketner.ai',
-        name: 'Демо Пользователь',
-        plan: 'free',
-        createdAt: '2026-01-01T00:00:00.000Z',
-      },
-    });
-
-    renderRoute('/checkout/gpt-pro');
-
-    // Кликаем по вкладке СБП
-    const sbpTab = screen.getByRole('button', { name: /СБП по QR/i });
-    fireEvent.click(sbpTab);
-
-    // Должен появиться блок СБП с кнопкой банка и кнопкой подтверждения
-    expect(await screen.findByText(/Оплата через СБП/i)).toBeInTheDocument();
-    expect(screen.getByText(/Отсканируйте QR-код в приложении любого банка/i)).toBeInTheDocument();
-
-    const confirmButton = screen.getByRole('button', { name: /Подтвердить оплату через СБП/i });
-    expect(confirmButton).toBeInTheDocument();
-
-    fireEvent.click(confirmButton);
-
-    await waitFor(() => {
-      expect(screen.getByText(/Подписка успешно оформлена/i)).toBeInTheDocument();
-      expect(screen.getByText(/Перейти в чат/i)).toBeInTheDocument();
-    });
-
-    expect(useAuth.getState().user?.plan).toBe('gpt-pro');
   });
 
   it('чекаут: выбор Telegram Stars отображает количество звёзд и ссылку на бота', async () => {

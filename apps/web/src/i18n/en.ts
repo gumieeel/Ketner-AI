@@ -463,7 +463,7 @@ export const en: Record<TranslationKey, string> = {
   'msgAtt.downloadShort': 'Download',
 
   // Чат: окно тарифа
-  'upgrade.payMethods': 'SBP • Bank cards • Telegram Stars',
+  'upgrade.payMethods': 'Crypto (Trybit) • Telegram Stars',
 
   // Чат: файлы проекта (мобильная навигация)
   'wsView.back': 'Back to the file list',

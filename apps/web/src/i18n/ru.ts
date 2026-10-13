@@ -463,7 +463,7 @@ export const ru = {
   'msgAtt.downloadShort': 'Скачать',
 
   // Чат: окно тарифа
-  'upgrade.payMethods': 'СБП • Банковские карты • Telegram Stars',
+  'upgrade.payMethods': 'Криптовалюта (Trybit) • Telegram Stars',
 
   // Чат: файлы проекта (мобильная навигация)
   'wsView.back': 'К списку файлов',
