@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode } from 'react';
+import { useEffect, useState, type FormEvent, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import {
   CreditCardIcon,
@@ -19,8 +19,13 @@ import { Button } from '@/components/ui/button';
 import { buttonClasses } from '@/components/ui/button-classes';
 import { Card, CardText, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
-import { getTelegramLink, unlinkTelegram } from '@/features/auth/api';
-import { useAuth } from '@/features/auth/auth-store';
+import { TelegramAuthDialog } from '@/components/telegram/telegram-auth-dialog';
+import { Input } from '@/components/ui/input';
+import { unlinkTelegram } from '@/features/auth/api';
+import { normalizeUser, useAuth } from '@/features/auth/auth-store';
+import type { User } from '@/features/auth/types';
+import { ApiError } from '@/features/chat/api';
+import { isTelegramOnlyEmail, telegramSiteAuth } from '@/features/telegram/site-auth';
 import { useBilling } from '@/features/billing/billing-store';
 import { useGithub } from '@/features/github/github-store';
 import { useTranslation, type TranslationKey } from '@/i18n';
@@ -201,27 +206,66 @@ export function SettingsPage() {
 
   const [canceling, setCanceling] = useState(false);
   const [unlinkingTelegram, setUnlinkingTelegram] = useState(false);
-  const [linkingTelegram, setLinkingTelegram] = useState(false);
+  const [telegramDialog, setTelegramDialog] = useState(false);
+  const [telegramNotice, setTelegramNotice] = useState<{ tone: 'success' | 'danger'; text: string } | null>(null);
+  const [claimOpen, setClaimOpen] = useState(false);
+  const [claimCode, setClaimCode] = useState('');
+  const [claiming, setClaiming] = useState(false);
+  const telegramOnly = isTelegramOnlyEmail(user?.email);
+  const shownEmail = user ? (telegramOnly ? t('settings.telegramAccountEmail') : user.email) : '';
 
-  // Ссылка на бота с одноразовым кодом: открывается сразу, бот привязывает аккаунт сам.
-  const handleLinkTelegram = async () => {
-    setLinkingTelegram(true);
+  // Свежий статус Telegram: сохранённый профиль мог устареть (привязали в боте или в кабинете Telegram).
+  const userId = user?.id;
+  useEffect(() => {
+    if (!userId) return;
+    let cancelled = false;
+    void telegramSiteAuth
+      .me(token)
+      .then(({ user: fresh }) => {
+        if (cancelled) return;
+        const current = useAuth.getState().user;
+        if (current?.telegramChatId !== fresh.telegramChatId || current?.telegramUsername !== fresh.telegramUsername) {
+          setUser(normalizeUser(fresh as unknown as Record<string, unknown>));
+        }
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, [userId, token, setUser]);
+
+  const applyLinked = (linked: User) => {
+    setUser(normalizeUser(linked as unknown as Record<string, unknown>));
+    setTelegramDialog(false);
+    setClaimOpen(false);
+    setClaimCode('');
+    setTelegramNotice({ tone: 'success', text: t('settings.telegramLinkedDone') });
+  };
+
+  const handleClaim = async (event: FormEvent) => {
+    event.preventDefault();
+    if (claimCode.trim().length < 4) return;
+    setClaiming(true);
+    setTelegramNotice(null);
     try {
-      const { linkUrl } = await getTelegramLink(token ?? undefined);
-      window.location.href = linkUrl;
-    } catch {
-      setLinkingTelegram(false);
+      const { user: linked } = await telegramSiteAuth.claim(claimCode, token);
+      applyLinked(linked);
+    } catch (error) {
+      setTelegramNotice({ tone: 'danger', text: error instanceof ApiError ? error.message : t('settings.telegramClaimFailed') });
+    } finally {
+      setClaiming(false);
     }
   };
 
   const handleUnlinkTelegram = async () => {
     if (!token) return;
     setUnlinkingTelegram(true);
+    setTelegramNotice(null);
     try {
       const updated = await unlinkTelegram(token);
-      setUser(updated);
-    } catch {
-      // ignore
+      setUser(normalizeUser(updated as unknown as Record<string, unknown>));
+    } catch (error) {
+      setTelegramNotice({ tone: 'danger', text: error instanceof ApiError ? error.message : t('settings.telegramClaimFailed') });
     } finally {
       setUnlinkingTelegram(false);
     }
@@ -322,7 +366,7 @@ export function SettingsPage() {
             title={user ? user.name : t('settings.account')}
             description={
               user
-                ? `${user.email} · ${t('settings.registeredOn')}: ${formatShortDate(user.createdAt, language)}`
+                ? `${shownEmail} · ${t('settings.registeredOn')}: ${formatShortDate(user.createdAt, language)}`
                 : `${t('settings.guestTitle')}. ${t('settings.guestText')}`
             }
             action={
@@ -338,7 +382,7 @@ export function SettingsPage() {
                 <InfoTile label="User ID" mono>
                   {user.id}
                 </InfoTile>
-                <InfoTile label="Email">{user.email}</InfoTile>
+                <InfoTile label="Email">{shownEmail}</InfoTile>
               </div>
             ) : null}
           </SettingsSection>
@@ -509,7 +553,7 @@ export function SettingsPage() {
             ) : null}
           </SettingsSection>
 
-          {/* Telegram: аккаунт и платежи */}
+          {/* Telegram: вход, кабинет подписки, уведомления */}
           <SettingsSection
             id="telegram"
             icon={<TelegramIcon className="size-5" />}
@@ -519,7 +563,7 @@ export function SettingsPage() {
               telegramLinked ? (
                 <>
                   <a
-                    href="https://t.me/Robo_kassa_bot?start=menu"
+                    href="https://t.me/Robo_kassa_bot"
                     target="_blank"
                     rel="noreferrer"
                     className={cn(buttonClasses({ variant: 'secondary', size: 'sm' }), 'gap-1.5')}
@@ -527,22 +571,26 @@ export function SettingsPage() {
                     <TelegramIcon className="size-3.5" />
                     {t('settings.telegramOpenBot')}
                   </a>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={handleUnlinkTelegram}
-                    disabled={unlinkingTelegram}
-                    className="text-danger hover:border-danger/40 hover:bg-danger-soft"
-                  >
-                    {unlinkingTelegram ? t('settings.telegramUnlinking') : t('settings.telegramUnlink')}
-                  </Button>
+                  {!telegramOnly ? (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={handleUnlinkTelegram}
+                      disabled={unlinkingTelegram}
+                      className="text-danger hover:border-danger/40 hover:bg-danger-soft"
+                    >
+                      {unlinkingTelegram ? t('settings.telegramUnlinking') : t('settings.telegramUnlink')}
+                    </Button>
+                  ) : null}
                 </>
               ) : (
                 <Button
                   size="sm"
-                  loading={linkingTelegram}
                   disabled={!user}
-                  onClick={() => void handleLinkTelegram()}
+                  onClick={() => {
+                    setTelegramNotice(null);
+                    setTelegramDialog(true);
+                  }}
                   leftIcon={<TelegramIcon className="size-3.5" />}
                 >
                   {t('settings.telegramConnect')}
@@ -555,6 +603,19 @@ export function SettingsPage() {
                 {telegramLinked ? t('settings.telegramConnected') : t('settings.telegramNotLinked')}
               </Badge>
             </div>
+            {telegramNotice ? (
+              <p
+                role={telegramNotice.tone === 'danger' ? 'alert' : 'status'}
+                className={cn(
+                  'rounded-xl border px-3.5 py-3 text-[13px] leading-5',
+                  telegramNotice.tone === 'success'
+                    ? 'border-accent/35 bg-accent-soft text-text'
+                    : 'border-danger/30 bg-danger-soft text-danger',
+                )}
+              >
+                {telegramNotice.text}
+              </p>
+            ) : null}
             {telegramLinked ? (
               <Note
                 title={
@@ -566,11 +627,54 @@ export function SettingsPage() {
                   </>
                 }
               >
-                {t('settings.telegramLinkedHint')}
+                {telegramOnly ? t('settings.telegramOnlyHint') : t('settings.telegramLinkedHint')}
               </Note>
             ) : (
-              <Note title={t('settings.telegramLinkTitle')}>{t('settings.telegramLinkHint')}</Note>
+              <>
+                <Note title={t('settings.telegramLinkTitle')}>{t('settings.telegramLinkHint')}</Note>
+                {user ? (
+                  claimOpen ? (
+                    <form onSubmit={handleClaim} className="flex flex-col gap-2 sm:flex-row sm:items-end">
+                      <div className="flex min-w-0 flex-1 flex-col gap-1.5">
+                        <label htmlFor="telegram-claim-code" className="text-[13px] font-medium text-text">
+                          {t('settings.telegramCodeLabel')}
+                        </label>
+                        <Input
+                          id="telegram-claim-code"
+                          value={claimCode}
+                          onChange={(event) => setClaimCode(event.target.value.toUpperCase())}
+                          maxLength={8}
+                          autoComplete="one-time-code"
+                          autoCapitalize="characters"
+                          spellCheck={false}
+                          placeholder="K7M2QX"
+                          className="font-mono tracking-[0.2em]"
+                        />
+                      </div>
+                      <Button type="submit" loading={claiming} disabled={claimCode.trim().length < 4}>
+                        {t('settings.telegramCodeSubmit')}
+                      </Button>
+                    </form>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => setClaimOpen(true)}
+                      className="inline-flex min-h-10 items-center self-start text-[13px] font-medium text-accent hover:underline"
+                    >
+                      {t('settings.telegramHaveCode')}
+                    </button>
+                  )
+                ) : null}
+              </>
             )}
+            {telegramDialog ? (
+              <TelegramAuthDialog
+                mode="link"
+                token={token}
+                onClose={() => setTelegramDialog(false)}
+                onLinked={applyLinked}
+              />
+            ) : null}
           </SettingsSection>
 
           {/* Поддержка */}
@@ -658,7 +762,7 @@ export function SettingsPage() {
               tone="danger"
               icon={<LogoutIcon className="size-5" />}
               title={t('settings.logout')}
-              description={`${t('settings.loggedInAs')} ${user.email}`}
+              description={`${t('settings.loggedInAs')} ${shownEmail}`}
               action={
                 <Button variant="danger" size="sm" onClick={() => void logout()} className="gap-1.5">
                   <LogoutIcon className="size-3.5" />

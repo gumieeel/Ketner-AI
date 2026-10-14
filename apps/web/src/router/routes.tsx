@@ -17,6 +17,7 @@ import { SettingsPage } from '@/pages/settings-page';
 import { SignupPage } from '@/pages/signup-page';
 import { AdminPage } from '@/pages/admin-page';
 import { TelegramAppPage } from '@/pages/telegram-app-page';
+import { TelegramMagicPage } from '@/pages/telegram-magic-page';
 
 /**
  * Маршруты приложения.
@@ -32,6 +33,8 @@ export const routes: RouteObject[] = [
       { index: true, element: <LandingPage /> },
       { path: 'login', element: <LoginPage /> },
       { path: 'signup', element: <SignupPage /> },
+      // Вход по одноразовой ссылке из кабинета в Telegram.
+      { path: 'auth/telegram', element: <TelegramMagicPage /> },
       { path: 'pricing', element: <PricingPage /> },
       { path: 'docs', element: <DocumentationPage /> },
       { path: 'docs/plans/:planId', element: <DocumentationPage /> },

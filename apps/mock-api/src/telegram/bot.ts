@@ -793,7 +793,7 @@ export class TelegramBotService implements TelegramPaymentsPort {
           : '';
       await this.sendMessage(
         chatId,
-        `🔗 <b>Привязать Telegram к аккаунту Ketner?</b>\n\nАккаунт: <b>${escapeHtml(accountLabel(target))}</b>\nЗапрос с устройства: ${device}${warn}\n\nПодтверждайте, только если вы сами сейчас в настройках ketner.org.`,
+        `🔗 <b>Привязать Telegram к аккаунту Ketner?</b>\n\nАккаунт: <b>${escapeHtml(accountLabel(target))}</b>\nЗапрос с устройства: ${device}${warn}\n\nПодтверждайте, только если вы сами сейчас в настройках ketner.org. Если ссылку вам кто-то прислал — нажмите «Это не я».`,
         { reply_markup: { inline_keyboard: buttons('✅ Привязать') } },
       );
       return { handled: true, action: 'auth_link_prompt' };
@@ -801,7 +801,7 @@ export class TelegramBotService implements TelegramPaymentsPort {
     if (linked) {
       await this.sendMessage(
         chatId,
-        `🔐 <b>Вход на ketner.org</b>\n\nАккаунт: <b>${escapeHtml(accountLabel(linked))}</b>\nУстройство: ${device}\n\nПодтверждайте, только если вы сами сейчас входите на сайт.`,
+        `🔐 <b>Вход на ketner.org</b>\n\nАккаунт: <b>${escapeHtml(accountLabel(linked))}</b>\nУстройство: ${device}\n\nПодтверждайте, только если вы сами сейчас входите на сайт. Если ссылку на этот вход вам кто-то прислал — нажмите «Это не я».`,
         { reply_markup: { inline_keyboard: buttons('✅ Войти') } },
       );
       return { handled: true, action: 'auth_login_prompt' };

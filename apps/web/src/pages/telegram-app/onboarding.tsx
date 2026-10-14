@@ -1,5 +1,5 @@
 import { useEffect, useId, useRef, useState, type FormEvent } from 'react';
-import { ArrowLeftIcon, ExternalLinkIcon, KetnerIcon, LockIcon, TelegramIcon } from '@/components/icons';
+import { ArrowLeftIcon, ExternalLinkIcon, LockIcon, TelegramIcon } from '@/components/icons';
 import { Button } from '@/components/ui/button';
 import { CopyButton } from '@/components/ui/copy-button';
 import { Input } from '@/components/ui/input';
@@ -54,9 +54,7 @@ export function Onboarding({
   return (
     <div className="flex flex-col gap-4 pt-6">
       <div className="flex flex-col items-center gap-3 px-2 text-center">
-        <span className="grid size-16 place-items-center rounded-2xl bg-accent-soft text-accent ring-1 ring-accent/20">
-          <KetnerIcon className="size-8" />
-        </span>
+        <img src="/logo-mark-160.png" alt="Ketner AI" className="size-16 object-contain" />
         <h1 className="text-[24px] font-semibold tracking-tight">{t('tg.welcomeTitle', { name: firstName })}</h1>
         <p className="text-[15px] leading-6 text-muted">{t('tg.welcomeLead')}</p>
       </div>

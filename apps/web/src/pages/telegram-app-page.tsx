@@ -1,51 +1,74 @@
-import { useCallback, useEffect, useId, useRef, useState, type FormEvent, type ReactNode } from 'react';
-import { CheckIcon, ExternalLinkIcon, MessagesIcon, StarIcon, TelegramIcon } from '@/components/icons';
-import { Badge, type BadgeTone } from '@/components/ui/badge';
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { CloseIcon, FileTextIcon, ShieldIcon, SparkleIcon, StarIcon, TelegramIcon, UserIcon } from '@/components/icons';
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
-import type { PlanId } from '@/features/billing/types';
-import { ApiError, miniAppApi, type MiniAppPlan, type MiniAppState } from '@/features/telegram/api';
-import { loadTelegramWebApp, type TelegramWebApp } from '@/features/telegram/webapp';
+import { ApiError, miniAppApi, type MiniAppState } from '@/features/telegram/api';
+import { haptic, loadTelegramWebApp, paintTelegramChrome, type TelegramWebApp } from '@/features/telegram/webapp';
 import { usePreferences } from '@/features/preferences/preferences-store';
 import { useTranslation, type TranslationKey } from '@/i18n';
 import { cn } from '@/lib/cn';
+import { AdminTab } from './telegram-app/admin-tab';
+import { HomeTab } from './telegram-app/home-tab';
+import { Onboarding } from './telegram-app/onboarding';
+import { PaymentsTab } from './telegram-app/payments-tab';
+import { PlansTab } from './telegram-app/plans-tab';
+import { ProfileTab } from './telegram-app/profile-tab';
+import { BOT_URL, MiniAppProvider, Panel, PLAN_TONE, subscriptionInfo, type MiniApp, type TabId } from './telegram-app/shared';
 
 type Screen =
   | { kind: 'loading' }
   | { kind: 'outside' }
   | { kind: 'error'; message: string }
-  | { kind: 'link'; firstName: string; siteUrl: string }
+  | { kind: 'onboarding'; firstName: string; siteUrl: string }
   | { kind: 'ready'; token: string; state: MiniAppState };
 
-const DAY_MS = 24 * 3600 * 1000;
-const BOT_URL = 'https://t.me/Robo_kassa_bot';
-const SUPPORT_URL = 'https://t.me/ketner_support_bot';
+interface Toast {
+  id: number;
+  tone: 'success' | 'danger' | 'info';
+  text: string;
+}
 
-const PLAN_TONE: Record<string, BadgeTone> = { free: 'neutral', plus: 'plus', pro: 'pro', ultra: 'ultra' };
-const PLAN_HINT: Record<string, TranslationKey> = { plus: 'tg.planPlusHint', pro: 'tg.planProHint', ultra: 'tg.planUltraHint' };
+const TABS: Array<{ id: TabId; label: TranslationKey; icon: (props: { className?: string }) => ReactNode }> = [
+  { id: 'home', label: 'tg.tabHome', icon: SparkleIcon },
+  { id: 'plans', label: 'tg.tabPlans', icon: StarIcon },
+  { id: 'payments', label: 'tg.tabPayments', icon: FileTextIcon },
+  { id: 'profile', label: 'tg.tabProfile', icon: UserIcon },
+  { id: 'admin', label: 'tg.tabAdmin', icon: ShieldIcon },
+];
+
+const TAB_IDS = new Set<string>(TABS.map((tab) => tab.id));
+
+/** Вкладка из ссылки бота (`/tg?tab=plans`) или из start_param (`t.me/bot/app?startapp=plans`). */
+function initialTab(app: TelegramWebApp | null): TabId {
+  const fromQuery = new URLSearchParams(window.location.search).get('tab');
+  const fromStart = app?.initDataUnsafe.start_param;
+  const value = fromQuery ?? fromStart ?? 'home';
+  return TAB_IDS.has(value) ? (value as TabId) : 'home';
+}
 
 /**
- * Кабинет Ketner AI внутри Telegram (мини-приложение бота): подписка, продление и смена тарифа
- * за звёзды, история оплат. Открывается кнопкой «Кабинет» в боте.
+ * Кабинет Ketner AI внутри Telegram (мини-приложение бота): подписка и автопродление,
+ * оплата звёздами, чеки и возвраты, уведомления и вход на сайт в одно касание.
  */
 export function TelegramAppPage() {
-  const { t, language } = useTranslation();
+  const { t } = useTranslation();
+  const theme = usePreferences((state) => state.theme);
   const setTheme = usePreferences((state) => state.setTheme);
   const setLanguage = usePreferences((state) => state.setLanguage);
   const [screen, setScreen] = useState<Screen>({ kind: 'loading' });
-  const appRef = useRef<TelegramWebApp | null>(null);
+  const [app, setApp] = useState<TelegramWebApp | null>(null);
   // Язык переключается после запуска (по языку Telegram): текст ошибки берётся актуальный,
   // а сессия из-за смены языка заново не запрашивается.
   const tRef = useRef(t);
   tRef.current = t;
   const started = useRef(false);
 
-  const openSession = useCallback(async (app: TelegramWebApp) => {
+  const openSession = useCallback(async (webApp: TelegramWebApp) => {
     try {
-      const session = await miniAppApi.session(app.initData);
+      const session = await miniAppApi.session(webApp.initData);
       if (session.linked) setScreen({ kind: 'ready', token: session.token, state: session });
-      else setScreen({ kind: 'link', firstName: session.telegram.firstName, siteUrl: session.siteUrl });
+      else setScreen({ kind: 'onboarding', firstName: session.telegram.firstName, siteUrl: session.siteUrl });
     } catch (error) {
       setScreen({ kind: 'error', message: error instanceof ApiError ? error.message : tRef.current('tg.errorGeneric') });
     }
@@ -54,71 +77,269 @@ export function TelegramAppPage() {
   useEffect(() => {
     if (started.current) return;
     started.current = true;
-    void loadTelegramWebApp().then((app) => {
-      if (!app) {
+    void loadTelegramWebApp().then((webApp) => {
+      if (!webApp) {
         setScreen({ kind: 'outside' });
         return;
       }
-      appRef.current = app;
-      app.ready();
-      app.expand();
-      setTheme(app.colorScheme === 'light' ? 'light' : 'dark');
-      const code = app.initDataUnsafe.user?.language_code ?? '';
+      setApp(webApp);
+      webApp.ready();
+      webApp.expand();
+      setTheme(webApp.colorScheme === 'light' ? 'light' : 'dark');
+      const code = webApp.initDataUnsafe.user?.language_code ?? '';
       setLanguage(/^(ru|uk|be|kk)/.test(code) ? 'ru' : code ? 'en' : 'ru');
-      void openSession(app);
+      void openSession(webApp);
     });
   }, [openSession, setLanguage, setTheme]);
 
-  const app = appRef.current;
+  // Шапка и фон Telegram в цвет кабинета.
+  useEffect(() => {
+    if (!app) return;
+    const frame = window.requestAnimationFrame(() => {
+      const canvas = getComputedStyle(document.documentElement).getPropertyValue('--canvas').trim();
+      paintTelegramChrome(app, canvas);
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [app, theme]);
 
   return (
     <main className="min-h-[100dvh] bg-canvas text-text">
-      <div className="mx-auto flex w-full max-w-md flex-col gap-4 px-4 pt-5 pb-10">
-        {screen.kind === 'loading' ? <LoadingView /> : null}
-        {screen.kind === 'outside' ? <OutsideView /> : null}
-        {screen.kind === 'error' ? (
-          <Panel>
-            <p role="alert" className="text-[15px] text-text">{screen.message}</p>
-            {app ? (
-              <Button className="mt-3 w-full" onClick={() => void openSession(app)}>
-                {t('tg.retry')}
-              </Button>
-            ) : null}
-          </Panel>
-        ) : null}
-        {screen.kind === 'link' && app ? (
-          <LinkView
-            app={app}
-            firstName={screen.firstName}
-            siteUrl={screen.siteUrl}
-            onLinked={(token, state) => setScreen({ kind: 'ready', token, state })}
-          />
-        ) : null}
-        {screen.kind === 'ready' && app ? (
-          <Dashboard
-            app={app}
-            token={screen.token}
-            state={screen.state}
-            language={language}
-            onState={(state) => setScreen({ kind: 'ready', token: screen.token, state })}
-            onUnlinked={() => void openSession(app)}
-          />
-        ) : null}
-      </div>
+      {screen.kind === 'ready' && app ? (
+        <Cabinet
+          app={app}
+          token={screen.token}
+          state={screen.state}
+          onState={(state) => setScreen((current) => (current.kind === 'ready' ? { ...current, state } : current))}
+          onUnlinked={() => void openSession(app)}
+        />
+      ) : (
+        <div className="mx-auto flex w-full max-w-md flex-col gap-4 px-4 pt-5 pb-10">
+          {screen.kind === 'loading' ? <LoadingView /> : null}
+          {screen.kind === 'outside' ? <OutsideView /> : null}
+          {screen.kind === 'error' ? (
+            <Panel className="mt-6">
+              <p role="alert" className="text-[15px] text-text">
+                {screen.message}
+              </p>
+              {app ? (
+                <Button className="mt-3 w-full" onClick={() => void openSession(app)}>
+                  {t('tg.retry')}
+                </Button>
+              ) : null}
+            </Panel>
+          ) : null}
+          {screen.kind === 'onboarding' && app ? (
+            <Onboarding
+              app={app}
+              firstName={screen.firstName}
+              siteUrl={screen.siteUrl}
+              onLinked={(token, state) => setScreen({ kind: 'ready', token, state })}
+            />
+          ) : null}
+        </div>
+      )}
     </main>
   );
 }
 
-function Panel({ children, className }: { children: ReactNode; className?: string }) {
-  return <section className={cn('rounded-xl border border-stroke bg-surface p-4', className)}>{children}</section>;
+function Cabinet({
+  app,
+  token,
+  state,
+  onState,
+  onUnlinked,
+}: {
+  app: TelegramWebApp;
+  token: string;
+  state: MiniAppState;
+  onState: (state: MiniAppState) => void;
+  onUnlinked: () => void;
+}) {
+  const { t } = useTranslation();
+  const [tab, setTab] = useState<TabId>(() => {
+    const first = initialTab(app);
+    return first === 'admin' && !state.user.isAdmin ? 'home' : first;
+  });
+  const [recurring, setRecurring] = useState(false);
+  const [toast, setToast] = useState<Toast | null>(null);
+  const toastTimer = useRef<number | null>(null);
+  const tRef = useRef(t);
+  tRef.current = t;
+  const tokenRef = useRef(token);
+  tokenRef.current = token;
+  const onStateRef = useRef(onState);
+  onStateRef.current = onState;
+
+  const notify = useCallback((tone: Toast['tone'], text: string) => {
+    if (toastTimer.current) window.clearTimeout(toastTimer.current);
+    setToast({ id: Date.now(), tone, text });
+    toastTimer.current = window.setTimeout(() => setToast(null), tone === 'danger' ? 7000 : 5000);
+  }, []);
+
+  useEffect(() => () => {
+    if (toastTimer.current) window.clearTimeout(toastTimer.current);
+  }, []);
+
+  const refresh = useCallback(async () => {
+    try {
+      onStateRef.current(await miniAppApi.state(tokenRef.current));
+    } catch {
+      // покажем прежнее состояние; следующее действие обновит его
+    }
+  }, []);
+
+  // Вернулись в кабинет (после оплаты криптой на сайте, из бота) — обновляем данные.
+  useEffect(() => {
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') void refresh();
+    };
+    document.addEventListener('visibilitychange', onVisible);
+    return () => document.removeEventListener('visibilitychange', onVisible);
+  }, [refresh]);
+
+  const goTo = useCallback(
+    (next: TabId, options?: { recurring?: boolean }) => {
+      if (options?.recurring !== undefined) setRecurring(options.recurring);
+      haptic.select(app);
+      setTab(next);
+      window.scrollTo({ top: 0 });
+    },
+    [app],
+  );
+
+  const openSite = useCallback(
+    async (path: string) => {
+      try {
+        const { url } = await miniAppApi.siteLogin(tokenRef.current, path);
+        app.openLink(url);
+      } catch {
+        app.openLink(`${state.siteUrl}${path}`);
+        notify('info', tRef.current('tg.siteLoginFallback'));
+      }
+    },
+    [app, notify, state.siteUrl],
+  );
+
+  const context = useMemo<MiniApp>(
+    () => ({ app, token, state, setState: onState, refresh, notify, goTo, openSite }),
+    [app, token, state, onState, refresh, notify, goTo, openSite],
+  );
+
+  const tabs = TABS.filter((item) => item.id !== 'admin' || state.user.isAdmin);
+  const info = subscriptionInfo(state);
+  const name = state.user.name || (state.user.telegramUsername ? `@${state.user.telegramUsername}` : '');
+  const titles: Record<TabId, string> = {
+    home: name ? t('tg.hello', { name: name.split(' ')[0] ?? name }) : t('tg.tabHome'),
+    plans: t('tg.plansTitle'),
+    payments: t('tg.tabPayments'),
+    profile: t('tg.tabProfile'),
+    admin: t('tg.adminTitle'),
+  };
+
+  return (
+    <MiniAppProvider value={context}>
+      <div className="mx-auto flex w-full max-w-md flex-col gap-4 px-4 pt-4 pb-[calc(6rem+env(safe-area-inset-bottom))]">
+        <header className="flex items-center justify-between gap-3 pt-1">
+          <h1 className="min-w-0 truncate text-[22px] font-semibold tracking-tight">{titles[tab]}</h1>
+          <Badge tone={PLAN_TONE[info.plan] ?? 'neutral'}>
+            {state.user.isVip ? 'VIP' : (state.plans.find((plan) => plan.id === info.plan)?.title ?? 'Free')}
+          </Badge>
+        </header>
+
+        <div role="tabpanel" id={`tg-panel-${tab}`} aria-labelledby={`tg-tab-${tab}`}>
+          {tab === 'home' ? <HomeTab /> : null}
+          {tab === 'plans' ? <PlansTab recurring={recurring} onRecurringChange={setRecurring} /> : null}
+          {tab === 'payments' ? <PaymentsTab /> : null}
+          {tab === 'profile' ? <ProfileTab onUnlinked={onUnlinked} /> : null}
+          {tab === 'admin' && state.user.isAdmin ? <AdminTab /> : null}
+        </div>
+      </div>
+
+      {toast ? (
+        <div className="pointer-events-none fixed inset-x-0 bottom-[calc(4.75rem+env(safe-area-inset-bottom))] z-40 flex justify-center px-4">
+          <div
+            key={toast.id}
+            role={toast.tone === 'danger' ? 'alert' : 'status'}
+            className={cn(
+              'pointer-events-auto flex w-full max-w-md animate-slide-up items-start gap-2 rounded-xl border px-3.5 py-3 text-[14px] leading-5 shadow-lg',
+              toast.tone === 'success' && 'border-accent/40 bg-surface text-text',
+              toast.tone === 'info' && 'border-stroke-strong bg-surface text-text',
+              toast.tone === 'danger' && 'border-danger/40 bg-surface text-danger',
+            )}
+          >
+            <span
+              aria-hidden="true"
+              className={cn(
+                'mt-1.5 size-2 shrink-0 rounded-full',
+                toast.tone === 'success' ? 'bg-accent' : toast.tone === 'danger' ? 'bg-danger' : 'bg-muted',
+              )}
+            />
+            <span className="flex-1">{toast.text}</span>
+            <button
+              type="button"
+              onClick={() => setToast(null)}
+              aria-label={t('tg.close')}
+              className="-m-1 grid size-8 shrink-0 place-items-center rounded-full text-muted hover:text-text"
+            >
+              <CloseIcon className="size-3.5" />
+            </button>
+          </div>
+        </div>
+      ) : null}
+
+      <nav
+        aria-label={t('tg.navLabel')}
+        className="fixed inset-x-0 bottom-0 z-30 border-t border-stroke bg-surface/95 pb-[env(safe-area-inset-bottom)] backdrop-blur"
+      >
+        <div role="tablist" className="mx-auto grid max-w-md" style={{ gridTemplateColumns: `repeat(${tabs.length}, minmax(0, 1fr))` }}>
+          {tabs.map((item) => {
+            const Icon = item.icon;
+            const active = item.id === tab;
+            const count = item.id === 'admin' ? state.pendingRefunds : 0;
+            return (
+              <button
+                key={item.id}
+                id={`tg-tab-${item.id}`}
+                type="button"
+                role="tab"
+                aria-selected={active}
+                aria-controls={`tg-panel-${item.id}`}
+                onClick={() => goTo(item.id)}
+                className={cn(
+                  'relative flex min-h-[60px] flex-col items-center justify-center gap-1 text-[11px] font-medium transition-colors duration-150',
+                  'focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-accent',
+                  active ? 'text-accent' : 'text-muted hover:text-text',
+                )}
+              >
+                <span className="relative">
+                  <Icon className={cn('size-[22px]', active && item.id === 'plans' && 'fill-accent/20')} />
+                  {count > 0 ? (
+                    <span className="absolute -top-1.5 -right-2.5 min-w-4 rounded-full bg-warning px-1 text-center text-[10px] leading-4 font-semibold text-canvas">
+                      {count}
+                    </span>
+                  ) : null}
+                </span>
+                {t(item.label)}
+              </button>
+            );
+          })}
+        </div>
+      </nav>
+    </MiniAppProvider>
+  );
 }
 
 function LoadingView() {
   return (
     <div className="flex flex-col gap-3" aria-busy="true">
-      <Skeleton className="h-16 w-full" />
-      <Skeleton className="h-36 w-full" />
-      <Skeleton className="h-48 w-full" />
+      <Skeleton className="h-10 w-2/3" />
+      <Skeleton className="h-44 w-full" />
+      <div className="grid grid-cols-2 gap-2">
+        <Skeleton className="h-20" />
+        <Skeleton className="h-20" />
+        <Skeleton className="h-20" />
+        <Skeleton className="h-20" />
+      </div>
     </div>
   );
 }
@@ -137,351 +358,5 @@ function OutsideView() {
         {t('tg.openBot')}
       </a>
     </Panel>
-  );
-}
-
-function LinkView({
-  app,
-  firstName,
-  siteUrl,
-  onLinked,
-}: {
-  app: TelegramWebApp;
-  firstName: string;
-  siteUrl: string;
-  onLinked: (token: string, state: MiniAppState) => void;
-}) {
-  const { t } = useTranslation();
-  const emailId = useId();
-  const passwordId = useId();
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  const submit = async (event: FormEvent) => {
-    event.preventDefault();
-    setBusy(true);
-    setError(null);
-    try {
-      const session = await miniAppApi.link(app.initData, email.trim(), password);
-      if (session.linked) {
-        app.HapticFeedback?.notificationOccurred('success');
-        onLinked(session.token, session);
-      }
-    } catch (caught) {
-      app.HapticFeedback?.notificationOccurred('error');
-      setError(caught instanceof ApiError ? caught.message : t('tg.errorGeneric'));
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  return (
-    <>
-      <header className="flex flex-col gap-1 pt-2">
-        <h1 className="text-[22px] font-semibold tracking-tight">{t('tg.linkTitle', { name: firstName })}</h1>
-        <p className="text-[14px] leading-6 text-muted">{t('tg.linkLead')}</p>
-      </header>
-      <Panel>
-        <form onSubmit={submit} className="flex flex-col gap-3">
-          <div className="flex flex-col gap-1.5">
-            <label htmlFor={emailId} className="text-[13px] font-medium">{t('tg.email')}</label>
-            <Input id={emailId} type="email" autoComplete="email" required value={email} onChange={(e) => setEmail(e.target.value)} />
-          </div>
-          <div className="flex flex-col gap-1.5">
-            <label htmlFor={passwordId} className="text-[13px] font-medium">{t('tg.password')}</label>
-            <Input
-              id={passwordId}
-              type="password"
-              autoComplete="current-password"
-              required
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-            />
-          </div>
-          {error ? (
-            <p role="alert" className="rounded-md border border-danger/30 bg-danger-soft px-3 py-2 text-[13px] text-danger">
-              {error}
-            </p>
-          ) : null}
-          <Button type="submit" loading={busy} className="w-full">
-            {t('tg.linkSubmit')}
-          </Button>
-        </form>
-      </Panel>
-      <Panel className="flex flex-col gap-2">
-        <p className="text-[14px] font-medium">{t('tg.linkOtherTitle')}</p>
-        <p className="text-[13px] leading-5 text-muted">{t('tg.linkOtherText')}</p>
-        <Button variant="outline" className="w-full gap-2" onClick={() => app.openLink(`${siteUrl}/settings#telegram`)}>
-          {t('tg.linkViaSite')}
-          <ExternalLinkIcon className="size-3.5" />
-        </Button>
-        <button
-          type="button"
-          onClick={() => app.openLink(`${siteUrl}/signup`)}
-          className="min-h-10 text-[13px] text-accent hover:underline"
-        >
-          {t('tg.noAccount')}
-        </button>
-      </Panel>
-    </>
-  );
-}
-
-function formatDate(iso: string, language: string): string {
-  return new Date(iso).toLocaleDateString(language === 'en' ? 'en-US' : 'ru-RU', { day: 'numeric', month: 'long' });
-}
-
-function Dashboard({
-  app,
-  token,
-  state,
-  language,
-  onState,
-  onUnlinked,
-}: {
-  app: TelegramWebApp;
-  token: string;
-  state: MiniAppState;
-  language: string;
-  onState: (state: MiniAppState) => void;
-  onUnlinked: () => void;
-}) {
-  const { t } = useTranslation();
-  const [paying, setPaying] = useState<PlanId | null>(null);
-  const [notice, setNotice] = useState<{ tone: 'success' | 'danger'; text: string } | null>(null);
-  const [confirmUnlink, setConfirmUnlink] = useState(false);
-
-  const { user, subscription, plans, rate, history, siteUrl } = state;
-  const end = subscription.renewsAt ? Date.parse(subscription.renewsAt) : NaN;
-  const running = user.isVip || (subscription.plan !== 'free' && Number.isFinite(end) && end > Date.now());
-  const currentPlan: PlanId = user.isVip ? 'ultra' : running ? subscription.plan : 'free';
-  const daysLeft = running && Number.isFinite(end) ? Math.max(1, Math.ceil((end - Date.now()) / DAY_MS)) : 0;
-
-  const refresh = async () => onState(await miniAppApi.state(token));
-
-  const waitForPayment = async (invoiceId: string) => {
-    for (let attempt = 0; attempt < 20; attempt += 1) {
-      const { status } = await miniAppApi.invoiceStatus(token, invoiceId);
-      if (status === 'paid') return true;
-      await new Promise((resolve) => setTimeout(resolve, 1500));
-    }
-    return false;
-  };
-
-  const pay = async (plan: MiniAppPlan) => {
-    setPaying(plan.id);
-    setNotice(null);
-    try {
-      const invoice = await miniAppApi.invoice(token, plan.id);
-      app.openInvoice(invoice.link, (status) => {
-        if (status === 'paid') {
-          setNotice({ tone: 'success', text: t('tg.paymentProcessing') });
-          void waitForPayment(invoice.invoiceId)
-            .then(async (paid) => {
-              await refresh();
-              app.HapticFeedback?.notificationOccurred(paid ? 'success' : 'warning');
-              setNotice({ tone: 'success', text: paid ? t('tg.paymentDone', { plan: plan.title }) : t('tg.paymentLate') });
-            })
-            .finally(() => setPaying(null));
-          return;
-        }
-        if (status === 'failed') {
-          app.HapticFeedback?.notificationOccurred('error');
-          setNotice({ tone: 'danger', text: t('tg.paymentFailed') });
-        }
-        setPaying(null);
-      });
-    } catch (error) {
-      setNotice({ tone: 'danger', text: error instanceof ApiError ? error.message : t('tg.errorGeneric') });
-      setPaying(null);
-    }
-  };
-
-  const unlink = async () => {
-    await miniAppApi.unlink(token);
-    onUnlinked();
-  };
-
-  return (
-    <>
-      <header className="flex items-center gap-3 pt-1">
-        <span className="grid size-11 shrink-0 place-items-center rounded-full bg-accent-soft text-[17px] font-semibold text-accent">
-          {(user.name || user.email).slice(0, 1).toUpperCase()}
-        </span>
-        <div className="min-w-0 flex-1">
-          <p className="truncate text-[16px] font-semibold">{user.name || user.email}</p>
-          <p className="truncate text-[13px] text-muted">{user.email}</p>
-        </div>
-        <Badge tone={PLAN_TONE[currentPlan] ?? 'neutral'}>{currentPlan === 'free' ? 'Free' : plans.find((p) => p.id === currentPlan)?.title ?? currentPlan}</Badge>
-      </header>
-
-      <Panel>
-        <p className="text-[13px] text-muted">{t('tg.subscription')}</p>
-        {running ? (
-          <>
-            <p className="mt-1 text-[22px] font-semibold tracking-tight">
-              {user.isVip ? 'Ultra · VIP' : plans.find((p) => p.id === currentPlan)?.title ?? currentPlan}
-            </p>
-            {user.isVip ? (
-              <p className="mt-1 text-[14px] text-muted">{t('tg.vip')}</p>
-            ) : (
-              <>
-                <p className="mt-1 text-[14px] text-muted">
-                  {t(subscription.status === 'canceled' ? 'tg.untilCanceled' : 'tg.until', {
-                    date: formatDate(subscription.renewsAt!, language),
-                    days: daysLeft,
-                  })}
-                </p>
-                <div
-                  className="mt-3 h-1.5 overflow-hidden rounded-full bg-surface-3"
-                  role="progressbar"
-                  aria-valuemin={0}
-                  aria-valuemax={30}
-                  aria-valuenow={Math.min(30, daysLeft)}
-                  aria-label={t('tg.daysLeft', { days: daysLeft })}
-                >
-                  <div className="h-full rounded-full bg-accent" style={{ width: `${Math.min(100, (daysLeft / 30) * 100)}%` }} />
-                </div>
-              </>
-            )}
-          </>
-        ) : (
-          <>
-            <p className="mt-1 text-[22px] font-semibold tracking-tight">Free</p>
-            <p className="mt-1 text-[14px] text-muted">{t('tg.freeText')}</p>
-          </>
-        )}
-      </Panel>
-
-      {notice ? (
-        <p
-          role={notice.tone === 'danger' ? 'alert' : 'status'}
-          className={cn(
-            'rounded-lg border px-3 py-2.5 text-[14px]',
-            notice.tone === 'success' ? 'border-accent/40 bg-accent-soft text-text' : 'border-danger/30 bg-danger-soft text-danger',
-          )}
-        >
-          {notice.text}
-        </p>
-      ) : null}
-
-      {!user.isVip ? (
-        <section aria-labelledby="tg-plans" className="flex flex-col gap-2.5">
-          <div className="flex items-baseline justify-between gap-2 px-1">
-            <h2 id="tg-plans" className="text-[15px] font-semibold">
-              {running ? t('tg.plansRenew') : t('tg.plansBuy')}
-            </h2>
-            <span className="text-[12px] text-subtle">{t('tg.perMonth')}</span>
-          </div>
-          {plans.map((plan) => {
-            const isCurrent = running && plan.id === currentPlan;
-            const starsLabel = plan.stars.toLocaleString(language === 'en' ? 'en-US' : 'ru-RU');
-            return (
-              <div
-                key={plan.id}
-                className={cn('flex flex-col gap-3 rounded-xl border bg-surface p-4', isCurrent ? 'border-accent/60' : 'border-stroke')}
-              >
-                <div className="flex items-start justify-between gap-3">
-                  <div className="min-w-0">
-                    <p className="flex items-center gap-2 text-[16px] font-semibold">
-                      {plan.title}
-                      {isCurrent ? (
-                        <span className="inline-flex items-center gap-1 text-[12px] font-medium text-accent">
-                          <CheckIcon className="size-3.5" />
-                          {t('tg.current')}
-                        </span>
-                      ) : null}
-                    </p>
-                    <p className="mt-0.5 text-[13px] leading-5 text-muted">{t(PLAN_HINT[plan.id] ?? 'tg.planPlusHint')}</p>
-                  </div>
-                  <div className="shrink-0 text-right">
-                    <p className="flex items-center justify-end gap-1 text-[17px] font-semibold tabular-nums">
-                      {starsLabel}
-                      <StarIcon className="size-4 fill-warning text-warning" />
-                    </p>
-                    <p className="text-[12px] text-subtle">≈ ${plan.priceUsd}</p>
-                  </div>
-                </div>
-                <Button
-                  variant={isCurrent || !running ? 'primary' : 'outline'}
-                  className="w-full"
-                  loading={paying === plan.id}
-                  disabled={paying !== null}
-                  onClick={() => void pay(plan)}
-                >
-                  {isCurrent
-                    ? t('tg.renew', { stars: starsLabel })
-                    : running
-                      ? t('tg.switch', { plan: plan.title, stars: starsLabel })
-                      : t('tg.buy', { stars: starsLabel })}
-                </Button>
-              </div>
-            );
-          })}
-          <p className="px-1 text-[12px] leading-5 text-subtle">
-            {running ? `${t('tg.renewHint')} ` : ''}
-            {t('tg.rate', {
-              rate: rate.usdPerStar.toFixed(4),
-              source: rate.source === 'fragment' ? 'Fragment' : t('tg.rateDefault'),
-            })}
-          </p>
-          <button
-            type="button"
-            onClick={() => app.openLink(`${siteUrl}/checkout/${running && currentPlan !== 'free' ? currentPlan : 'plus'}`)}
-            className="inline-flex min-h-10 items-center justify-center gap-1.5 text-[13px] text-accent hover:underline"
-          >
-            {t('tg.payCrypto')}
-            <ExternalLinkIcon className="size-3.5" />
-          </button>
-        </section>
-      ) : null}
-
-      {history.length > 0 ? (
-        <Panel>
-          <h2 className="text-[15px] font-semibold">{t('tg.history')}</h2>
-          <ul className="mt-2 divide-y divide-stroke">
-            {history.map((item) => (
-              <li key={item.id} className="flex items-center justify-between gap-3 py-2.5 text-[14px]">
-                <span className="min-w-0">
-                  <span className="font-medium">{plans.find((p) => p.id === item.planId)?.title ?? item.planId}</span>
-                  <span className="ml-2 text-[12px] text-subtle">{formatDate(item.paidAt, language)}</span>
-                </span>
-                <span className="shrink-0 tabular-nums text-muted">{item.amount}</span>
-              </li>
-            ))}
-          </ul>
-        </Panel>
-      ) : null}
-
-      <Panel className="flex flex-col gap-2">
-        <Button className="w-full gap-2" onClick={() => app.openLink(`${siteUrl}/chat`)}>
-          <MessagesIcon className="size-4" />
-          {t('tg.openChat')}
-        </Button>
-        <Button variant="outline" className="w-full gap-2" onClick={() => app.openTelegramLink(SUPPORT_URL)}>
-          <TelegramIcon className="size-4" />
-          {t('tg.support')}
-        </Button>
-        {confirmUnlink ? (
-          <div className="flex flex-col gap-2 rounded-lg border border-stroke bg-canvas p-3">
-            <p className="text-[13px] text-text">{t('tg.unlinkConfirm')}</p>
-            <div className="flex gap-2">
-              <Button variant="danger" size="sm" className="flex-1" onClick={() => void unlink()}>
-                {t('tg.unlinkYes')}
-              </Button>
-              <Button variant="outline" size="sm" className="flex-1" onClick={() => setConfirmUnlink(false)}>
-                {t('common.cancel')}
-              </Button>
-            </div>
-          </div>
-        ) : (
-          <button type="button" onClick={() => setConfirmUnlink(true)} className="min-h-10 text-[13px] text-muted hover:text-text">
-            {t('tg.unlink')}
-          </button>
-        )}
-      </Panel>
-    </>
   );
 }

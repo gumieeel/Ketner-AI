@@ -23,6 +23,8 @@ interface AuthState {
   logout: () => Promise<void>;
   restoreSession: () => Promise<void>;
   setUser: (user: User | null) => void;
+  /** Сессия, полученная не через форму: вход через Telegram или одноразовая ссылка из кабинета. */
+  applySession: (session: AuthSession) => Promise<void>;
   clearError: () => void;
 }
 
@@ -82,6 +84,13 @@ export function normalizeUser(rawUser: Record<string, unknown>): User {
       ? rawUser.name.trim()
       : email.split('@')[0] || 'User';
 
+  const telegramChatId =
+    typeof rawUser.telegramChatId === 'number' || typeof rawUser.telegramChatId === 'string'
+      ? rawUser.telegramChatId
+      : undefined;
+  const telegramUsername =
+    typeof rawUser.telegramUsername === 'string' && rawUser.telegramUsername ? rawUser.telegramUsername : undefined;
+
   return {
     id: String(rawUser.id || 'user'),
     email,
@@ -91,6 +100,8 @@ export function normalizeUser(rawUser: Record<string, unknown>): User {
     isAdmin,
     createdAt:
       typeof rawUser.createdAt === 'string' ? rawUser.createdAt : new Date().toISOString(),
+    ...(telegramChatId !== undefined ? { telegramChatId } : {}),
+    ...(telegramUsername ? { telegramUsername } : {}),
   };
 }
 
@@ -255,6 +266,19 @@ export const useAuth = create<AuthState>((set, get) => ({
     if (token) {
       await apiLogout(token);
     }
+  },
+
+  applySession: async (session: AuthSession) => {
+    // Снимаем cookie-сессию прежнего входа (Google/GitHub): иначе сервер мог бы видеть другой аккаунт.
+    try {
+      await authClient.signOut();
+    } catch {
+      // Игнорируем
+    }
+    const user = normalizeUser(session.user as unknown as Record<string, unknown>);
+    saveSession({ user, token: session.token, expiresAt: session.expiresAt });
+    useUpgradeModal.getState().close();
+    set({ user, token: session.token, status: 'authenticated', error: null });
   },
 
   setUser: (user: User | null) => {
