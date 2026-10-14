@@ -13,6 +13,8 @@ import type { ApiKeyStore } from '../store/api-key-store.js';
 import { githubConnectionStore as defaultGithubConnectionStore } from '../store/index.js';
 import type { GithubConnectionStore } from '../github/connection-store.js';
 import type { GithubOAuthSettings } from '../github/oauth.js';
+import { BillingService, createBillingLedger } from '../billing/billing-service.js';
+import { billingService as defaultBillingService } from '../billing/index.js';
 import type { InvoiceStore } from '../store/invoice-store.js';
 import type { SubscriptionStore } from '../store/subscription-store.js';
 import type { UserStore } from '../store/user-store.js';
@@ -53,6 +55,8 @@ export interface ApiDeps {
   githubFetch?: typeof fetch;
   /** Настройки OAuth GitHub; в тестах подменяются. */
   githubSettings?: () => GithubOAuthSettings | null;
+  /** Платежи, подписки и возвраты. */
+  billingService?: BillingService;
   ai: AiConfig;
   userId: string;
   betterAuth?: typeof defaultBetterAuth;
@@ -162,6 +166,17 @@ export function createApiRouter(deps: ApiDeps): Router {
   const activeSubscriptionStore = deps.subscriptionStore ?? defaultSubscriptionStore;
   const activeInvoiceStore = deps.invoiceStore ?? defaultInvoiceStore;
   const activeUsageStore = deps.usageStore ?? defaultUsageStore;
+  // Журнал платежей работает с теми же хранилищами, что и роутеры (в тестах — с временными).
+  const activeBilling =
+    deps.billingService ??
+    (activeUserStore === defaultUserStore && activeSubscriptionStore === defaultSubscriptionStore
+      ? defaultBillingService
+      : new BillingService({
+          userStore: activeUserStore,
+          subscriptionStore: activeSubscriptionStore,
+          usageStore: activeUsageStore,
+          ledger: createBillingLedger(),
+        }));
 
   router.use(createAuthMiddleware(activeUserStore, deps.betterAuth, activeSubscriptionStore));
 
@@ -177,6 +192,7 @@ export function createApiRouter(deps: ApiDeps): Router {
       subscriptionStore: activeSubscriptionStore,
       userStore: activeUserStore,
       invoiceStore: activeInvoiceStore,
+      billingService: activeBilling,
     }),
   );
   router.use(
@@ -185,6 +201,7 @@ export function createApiRouter(deps: ApiDeps): Router {
       userStore: activeUserStore,
       invoiceStore: activeInvoiceStore,
       botService: deps.botService,
+      billingService: activeBilling,
       supportBotService: deps.supportBotService,
       supportStore: deps.supportStore,
     }),

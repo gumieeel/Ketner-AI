@@ -11,6 +11,8 @@ import {
 } from '../store/index.js';
 import type { StoredGithubConnection } from '../github/connection-store.js';
 import { invoiceStore } from '../store/invoice-store.js';
+import { billingLedger } from '../billing/index.js';
+import type { DocStore } from '../store/doc-store.js';
 import type { CryptoInvoice } from '../types.js';
 import type { ApiKeyRecord } from '../store/api-key-store.js';
 import type { Conversation, Message, Subscription } from '../types.js';
@@ -873,6 +875,39 @@ async function syncCryptoInvoices(sql: postgres.Sql): Promise<void> {
   });
 }
 
+/**
+ * Небольшие хранилища документов (журнал платежей, подписки со звёздами, настройки уведомлений,
+ * счета в звёздах): одна таблица с пространствами имён, документы — JSON.
+ */
+async function syncDocStores(sql: postgres.Sql, stores: Array<DocStore<{ id: string }>>): Promise<void> {
+  await sql.unsafe(`
+    CREATE TABLE IF NOT EXISTS "ketner_docs" (
+      "namespace" text NOT NULL,
+      "id" text NOT NULL,
+      "data" jsonb NOT NULL,
+      "updated_at" timestamptz NOT NULL DEFAULT now(),
+      PRIMARY KEY ("namespace", "id")
+    );
+  `);
+  const driver = {
+    async upsert(namespace: string, doc: { id: string }) {
+      await sql`
+        INSERT INTO "ketner_docs" ("namespace", "id", "data", "updated_at")
+        VALUES (${namespace}, ${doc.id}, ${sql.json(doc as never)}, now())
+        ON CONFLICT ("namespace", "id") DO UPDATE SET "data" = EXCLUDED."data", "updated_at" = now()
+      `;
+    },
+    async remove(namespace: string, id: string) {
+      await sql`DELETE FROM "ketner_docs" WHERE "namespace" = ${namespace} AND "id" = ${id}`;
+    },
+  };
+  for (const store of stores) {
+    const rows = await sql<{ data: { id: string } }[]>`SELECT data FROM "ketner_docs" WHERE "namespace" = ${store.namespace}`;
+    store.loadExternal(rows.map((row) => row.data));
+    store.setDbDriver(driver);
+  }
+}
+
 export async function initDatabaseSync(): Promise<boolean> {
   if (!hasPostgresConfig()) {
     console.log(
@@ -911,6 +946,15 @@ export async function initDatabaseSync(): Promise<boolean> {
       await syncApiKeys(sql);
     } catch (error) {
       console.error('❌ [db] API-ключи не синхронизированы с PostgreSQL:', error);
+    }
+    try {
+      await syncDocStores(sql, [
+        billingLedger.payments,
+        billingLedger.starsSubscriptions,
+        billingLedger.prefs,
+      ] as unknown as Array<DocStore<{ id: string }>>);
+    } catch (error) {
+      console.error('❌ [db] Журнал платежей не синхронизирован с PostgreSQL:', error);
     }
     try {
       await syncCryptoInvoices(sql);

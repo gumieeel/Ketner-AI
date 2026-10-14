@@ -4,25 +4,76 @@ import type { PlanId } from '../billing/types';
 
 export { ApiError };
 
+export type PaidPlanId = Exclude<PlanId, 'free'>;
+
+export interface PlanPreview {
+  /** new — новая подписка, extend — продление того же тарифа, switch — смена тарифа. */
+  mode: 'new' | 'extend' | 'switch';
+  renewsAt: string;
+  /** Дни за остаток прежнего тарифа при смене. */
+  bonusDays: number;
+}
+
 export interface MiniAppPlan {
-  id: PlanId;
+  id: PaidPlanId;
   title: string;
   priceUsd: number;
   stars: number;
+  preview: PlanPreview;
+}
+
+export type PaymentStatus = 'paid' | 'refund_requested' | 'refunded' | 'refund_declined';
+export type RefundOption = { kind: 'auto' } | { kind: 'request' } | { kind: 'none'; reason: 'refunded' | 'pending' | 'declined' | 'expired' };
+
+export interface MiniAppPayment {
+  id: string;
+  method: 'stars' | 'crypto';
+  planId: PaidPlanId;
+  planTitle: string;
+  amount: number;
+  currency: 'XTR' | 'USD';
+  paidAt: string;
+  status: PaymentStatus;
+  recurring: boolean;
+  periodEnd: string | null;
+  bonusDays: number;
+  chargeId: string | null;
+  refund: { requestedAt?: string; reason?: string; comment?: string; decidedAt?: string; auto?: boolean; note?: string } | null;
+  refundOption: RefundOption;
 }
 
 export interface MiniAppState {
-  user: { id: string; email: string; name: string; plan: PlanId; isVip: boolean; telegramUsername: string | null };
+  user: {
+    id: string;
+    /** null — аккаунт создан через Telegram (почты нет). */
+    email: string | null;
+    name: string;
+    plan: PlanId;
+    isVip: boolean;
+    isAdmin: boolean;
+    createdAt: string;
+    telegramUsername: string | null;
+    telegramOnly: boolean;
+  };
   subscription: { plan: PlanId; status: 'active' | 'trialing' | 'past_due' | 'canceled'; renewsAt: string | null };
+  autoRenew: { planId: PaidPlanId; status: 'active' | 'canceled'; stars: number; nextChargeAt: string | null } | null;
   plans: MiniAppPlan[];
   rate: { usdPerStar: number; source: 'fragment' | 'config'; updatedAt: string };
-  history: Array<{ id: string; method: 'stars' | 'crypto'; planId: PlanId; amount: string; paidAt: string }>;
+  payments: MiniAppPayment[];
+  prefs: { reminders: boolean; receipts: boolean };
+  refundPolicy: { autoHours: number; autoMaxRequests: number; requestDays: number };
+  pendingRefunds: number;
   siteUrl: string;
+  botUsername: string;
 }
 
 export type MiniAppSession =
   | ({ linked: true; token: string; expiresAt: string } & MiniAppState)
   | { linked: false; telegram: { firstName: string; username: string | null }; siteUrl: string };
+
+export interface AdminRefund extends MiniAppPayment {
+  customer: { name: string; email: string | null; telegramUsername: string | null } | null;
+}
 
 async function call<T>(path: string, init: { method?: string; body?: unknown; token?: string } = {}): Promise<T> {
   const headers: Record<string, string> = {};
@@ -48,15 +99,30 @@ async function call<T>(path: string, init: { method?: string; body?: unknown; to
   return (await response.json()) as T;
 }
 
+const enc = encodeURIComponent;
+
 /** API кабинета в Telegram: вход по initData, затем обычный токен сессии сайта. */
 export const miniAppApi = {
   session: (initData: string) => call<MiniAppSession>('/session', { body: { initData } }),
+  register: (initData: string) => call<MiniAppSession>('/register', { body: { initData } }),
   link: (initData: string, email: string, password: string) =>
     call<MiniAppSession>('/link', { body: { initData, email, password } }),
+  linkCode: (initData: string) => call<{ code: string; expiresAt: number }>('/link-code', { body: { initData } }),
   state: (token: string) => call<MiniAppState>('/state', { token }),
-  invoice: (token: string, planId: PlanId) =>
-    call<{ invoiceId: string; link: string; stars: number }>('/invoice', { token, body: { planId } }),
+  invoice: (token: string, planId: PaidPlanId, recurring: boolean) =>
+    call<{ invoiceId: string; link: string; stars: number; recurring: boolean }>('/invoice', { token, body: { planId, recurring } }),
   invoiceStatus: (token: string, invoiceId: string) =>
-    call<{ status: 'pending' | 'paid' }>(`/invoice/${encodeURIComponent(invoiceId)}`, { token }),
+    call<{ status: 'pending' | 'paid' | 'expired' }>(`/invoice/${enc(invoiceId)}`, { token }),
+  autoRenew: (token: string, enabled: boolean) => call<MiniAppState>('/auto-renew', { token, body: { enabled } }),
+  refund: (token: string, paymentId: string, reason: string, comment: string) =>
+    call<{ outcome: 'refunded' | 'requested' } & MiniAppState>(`/payments/${enc(paymentId)}/refund`, {
+      token,
+      body: { reason, comment },
+    }),
+  prefs: (token: string, prefs: Partial<MiniAppState['prefs']>) => call<MiniAppState>('/prefs', { token, body: prefs }),
+  siteLogin: (token: string, next: string) => call<{ url: string }>('/site-login', { token, body: { next } }),
   unlink: (token: string) => call<{ ok: boolean }>('/unlink', { token, body: {} }),
+  adminRefunds: (token: string) => call<{ refunds: AdminRefund[] }>('/admin/refunds', { token }),
+  adminDecide: (token: string, paymentId: string, approve: boolean, note: string) =>
+    call<{ payment: MiniAppPayment }>(`/admin/refunds/${enc(paymentId)}`, { token, body: { approve, note } }),
 };

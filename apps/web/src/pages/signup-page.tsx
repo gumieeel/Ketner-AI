@@ -10,6 +10,7 @@ import {
   SparkleIcon,
 } from '@/components/icons';
 import { AuthShell } from '@/components/layout/auth-shell';
+import { TelegramLoginButton } from '@/components/telegram/telegram-login-button';
 import { Button } from '@/components/ui/button';
 import { Divider } from '@/components/ui/divider';
 import { IconButton } from '@/components/ui/icon-button';
@@ -187,34 +188,37 @@ export function SignupPage() {
         )}
 
         {/* 3. OAuth Кнопки */}
-        <div className="grid grid-cols-2 gap-3">
-          <Button
-            variant="outline"
-            size="lg"
-            fullWidth
-            disabled={loading}
-            onClick={() => void handleOAuth('google')}
-            aria-label={t('auth.continueGoogle')}
-            title={t('auth.oauthStub')}
-            className="gap-2 text-sm font-medium"
-          >
-            <GoogleIcon className="size-4 text-text shrink-0" />
-            <span>Google</span>
-          </Button>
+        <div className="flex flex-col gap-3">
+          <TelegramLoginButton label={t('auth.continueTelegram')} redirectUrl={redirectUrl} disabled={loading} />
+          <div className="grid grid-cols-2 gap-3">
+            <Button
+              variant="outline"
+              size="lg"
+              fullWidth
+              disabled={loading}
+              onClick={() => void handleOAuth('google')}
+              aria-label={t('auth.continueGoogle')}
+              title={t('auth.oauthStub')}
+              className="gap-2 text-sm font-medium"
+            >
+              <GoogleIcon className="size-4 text-text shrink-0" />
+              <span>Google</span>
+            </Button>
 
-          <Button
-            variant="outline"
-            size="lg"
-            fullWidth
-            disabled={loading}
-            onClick={() => void handleOAuth('github')}
-            aria-label={t('auth.continueGitHub')}
-            title={t('auth.oauthStub')}
-            className="gap-2 text-sm font-medium"
-          >
-            <GitHubIcon className="size-4 text-text shrink-0" />
-            <span>GitHub</span>
-          </Button>
+            <Button
+              variant="outline"
+              size="lg"
+              fullWidth
+              disabled={loading}
+              onClick={() => void handleOAuth('github')}
+              aria-label={t('auth.continueGitHub')}
+              title={t('auth.oauthStub')}
+              className="gap-2 text-sm font-medium"
+            >
+              <GitHubIcon className="size-4 text-text shrink-0" />
+              <span>GitHub</span>
+            </Button>
+          </div>
         </div>
 
         {/* 4. Разделитель */}

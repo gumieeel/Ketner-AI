@@ -17,6 +17,7 @@ import { createGithubCallbackHandler } from './routes/github.js';
 import type { GithubConnectionStore } from './github/connection-store.js';
 import type { GithubOAuthSettings } from './github/oauth.js';
 import type { InvoiceStore } from './store/invoice-store.js';
+import type { BillingService } from './billing/billing-service.js';
 import type { ConversationStore } from './store/conversation-store.js';
 import type { SubscriptionStore } from './store/subscription-store.js';
 import type { UserStore } from './store/user-store.js';
@@ -57,6 +58,8 @@ export interface AppDeps {
   githubSettings?: () => GithubOAuthSettings | null;
   /** Счета на оплату; в тестах — временный файл, чтобы не трогать рабочие данные. */
   invoiceStore?: InvoiceStore;
+  /** Платежи, подписки и возвраты. */
+  billingService?: BillingService;
 }
 
 const defaultDeps: AppDeps = {
@@ -125,8 +128,7 @@ export function createApp(overrides: Partial<AppDeps> = {}): Express {
       request.path === '/api/auth/logout' ||
       request.path === '/api/auth/me' ||
       request.path === '/api/auth/demo' ||
-      request.path === '/api/auth/telegram-link' ||
-      request.path === '/api/auth/telegram-unlink' ||
+      request.path.startsWith('/api/auth/telegram') ||
       request.path.startsWith('/api/auth/oauth')
     ) {
       return next();

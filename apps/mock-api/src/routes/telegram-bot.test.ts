@@ -3,16 +3,19 @@ import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
+import { BillingService, createBillingLedger, DAY_MS } from '../billing/billing-service.js';
 import { config } from '../config.js';
 import { createInvoiceStore } from '../store/invoice-store.js';
 import { createSubscriptionStore } from '../store/subscription-store.js';
+import { UsageStore } from '../store/usage-store.js';
 import { createUserStore } from '../store/user-store.js';
+import { TelegramAuthRequests } from '../telegram/auth-requests.js';
 import { TelegramBotService, decodePayload, encodePayload, type TelegramUpdate } from '../telegram/bot.js';
 import { TelegramLinkCodes, telegramLinkCodes } from '../telegram/link-codes.js';
 import { StarsRateService } from '../telegram/stars-rate.js';
 import { signInitData, validateInitData } from '../telegram/webapp-auth.js';
 import { readJson, startTestServer, type ApiErrorBody } from '../testing/server.js';
-import type { AuthSession, Subscription } from '../types.js';
+import type { AuthSession, Subscription, User } from '../types.js';
 
 const TOKEN = '123456:TEST_TOKEN_abcdefghijklmnop';
 const tgHeaders = { 'Content-Type': 'application/json', 'X-Telegram-Bot-Api-Secret-Token': config.telegramWebhookSecret };
@@ -27,12 +30,24 @@ class RecordingBot extends TelegramBotService {
   calls: ApiCall[] = [];
   override async callApi<T = unknown>(method: string, body: Record<string, unknown>): Promise<T | null> {
     this.calls.push({ method, body });
-    if (method === 'createInvoiceLink') return 'https://t.me/$test_invoice' as T;
+    if (method === 'createInvoiceLink') return `https://t.me/$inv_${this.calls.length}` as T;
     return true as T;
   }
   last(method: string): ApiCall | undefined {
     return [...this.calls].reverse().find((call) => call.method === method);
   }
+  all(method: string): ApiCall[] {
+    return this.calls.filter((call) => call.method === method);
+  }
+}
+
+interface MiniState {
+  user: { id: string; email: string | null; telegramOnly: boolean; isAdmin: boolean };
+  subscription: Subscription;
+  autoRenew: { status: string; stars: number; nextChargeAt: string | null } | null;
+  plans: Array<{ id: string; stars: number; preview: { mode: string; bonusDays: number; renewsAt: string } }>;
+  payments: Array<{ id: string; status: string; amount: number; refundOption: { kind: string; reason?: string } }>;
+  prefs: { reminders: boolean; receipts: boolean };
 }
 
 async function harness() {
@@ -40,20 +55,24 @@ async function harness() {
   const userStore = createUserStore(join(dir, 'users.json'));
   const subscriptionStore = createSubscriptionStore(join(dir, 'subs.json'));
   const invoiceStore = createInvoiceStore(join(dir, 'invoices.json'));
-  // Общие коды: их выдаёт сайт (/api/auth/telegram-link), а принимает бот.
-  const linkCodes = telegramLinkCodes;
+  const usageStore = new UsageStore(join(dir, 'usage.json'));
+  const billingService = new BillingService({ userStore, subscriptionStore, usageStore, ledger: createBillingLedger() });
   const rateService = new StarsRateService({ fetchImpl: (async () => new Response('', { status: 500 })) as typeof fetch });
+  const authRequests = new TelegramAuthRequests();
   const bot = new RecordingBot({
     userStore,
     subscriptionStore,
     invoiceStore,
     botToken: TOKEN,
     botUsername: 'ketner_test_bot',
-    linkCodes,
+    // Общие коды: их выдаёт сайт (/api/auth/telegram-link), а принимает бот.
+    linkCodes: telegramLinkCodes,
     rateService,
+    authRequests,
+    billingService,
     webAppUrl: 'https://ketner.org',
   });
-  const server = await startTestServer({}, { userStore, subscriptionStore, invoiceStore, botService: bot });
+  const server = await startTestServer({}, { userStore, subscriptionStore, invoiceStore, usageStore, botService: bot, billingService });
   let counter = 0;
   const signup = async (): Promise<AuthSession> => {
     counter += 1;
@@ -71,199 +90,390 @@ async function harness() {
       body: JSON.stringify({ update_id: Date.now(), ...update }),
     });
   const message = (chatId: number, text: string) =>
-    send({ message: { message_id: 1, date: 0, chat: { id: chatId, type: 'private' }, from: { id: chatId, first_name: 'Ivan' }, text } });
+    send({ message: { message_id: 1, date: 0, chat: { id: chatId, type: 'private' }, from: { id: chatId, first_name: 'Ivan', username: 'ivan' }, text } });
   const callback = (chatId: number, data: string) =>
-    send({ callback_query: { id: 'cb', from: { id: chatId, first_name: 'Ivan' }, message: { message_id: 1, chat: { id: chatId } }, data } });
-  return { server, bot, userStore, subscriptionStore, invoiceStore, linkCodes, rateService, signup, send, message, callback };
-}
-
-test('курс Stars: свежий курс Fragment применяется, устаревший или странный — нет', async () => {
-  const now = Date.parse('2026-10-13T12:00:00Z');
-  const feed = (body: unknown) => (async () => Response.json(body)) as unknown as typeof fetch;
-
-  const fresh = new StarsRateService({ now: () => now, fetchImpl: feed({ usdt_per_star: 0.0149, last_updated: '2026-10-12T00:00:00Z' }) });
-  assert.equal((await fresh.refresh()).source, 'fragment');
-  assert.equal(fresh.quote(9), 610);
-  assert.equal(fresh.quote(25), 1680);
-
-  const stale = new StarsRateService({ now: () => now, fetchImpl: feed({ usdt_per_star: 0.0149, last_updated: '2026-01-09T00:00:00Z' }) });
-  assert.deepEqual([(await stale.refresh()).source, stale.rate.usdPerStar], ['config', 0.015]);
-
-  const absurd = new StarsRateService({ now: () => now, fetchImpl: feed({ usdt_per_star: 2, last_updated: '2026-10-12T00:00:00Z' }) });
-  assert.equal((await absurd.refresh()).source, 'config');
-
-  const down = new StarsRateService({ fetchImpl: (async () => { throw new Error('offline'); }) as unknown as typeof fetch });
-  assert.equal((await down.refresh()).usdPerStar, 0.015);
-  assert.equal(down.quote(9), 600);
-  assert.equal(down.quote(49), 3270);
-});
-
-test('initData мини-приложения: подпись и срок действия проверяются', () => {
-  const now = Date.parse('2026-10-13T12:00:00Z');
-  const fields = { auth_date: String(now / 1000 - 60), query_id: 'q1', user: JSON.stringify({ id: 42, first_name: 'Ivan', username: 'ivan' }) };
-  const signed = signInitData(fields, TOKEN);
-  assert.equal(validateInitData(signed, TOKEN, { now })?.user.id, 42);
-  assert.equal(validateInitData(signed, 'other:token', { now }), null);
-  assert.equal(validateInitData(signed.replace('ivan', 'admin'), TOKEN, { now }), null);
-  assert.equal(validateInitData(signed, TOKEN, { now: now + 2 * 24 * 3600 * 1000 }), null);
-});
-
-test('коды привязки одноразовые и живут 15 минут', () => {
-  const codes = new TelegramLinkCodes();
-  const code = codes.issue('user-1', 0);
-  assert.equal(codes.consume(code, 1000), 'user-1');
-  assert.equal(codes.consume(code, 1000), null);
-  const late = codes.issue('user-2', 0);
-  assert.equal(codes.consume(late, 16 * 60 * 1000), null);
-  assert.match(codes.issue('user-3'), /^[A-Za-z0-9_-]{16}$/);
-});
-
-test('payload счёта: кодируется компактно и не принимает чужие тарифы', () => {
-  const raw = encodePayload({ planId: 'pro', stars: 1670, invoiceId: 'stars_1_ab', userId: '7f3c2a10-1111-2222-3333-444455556666' });
-  assert.ok(raw.length <= 128);
-  assert.deepEqual(decodePayload(raw), { planId: 'pro', stars: 1670, invoiceId: 'stars_1_ab', userId: '7f3c2a10-1111-2222-3333-444455556666' });
-  assert.equal(decodePayload('v1|free|10|x|u'), null);
-  assert.equal(decodePayload('{"planId":"plus"}'), null);
-});
-
-test('бот: привязка по одноразовой ссылке с сайта, оплата звёздами, продление и защита от повторов', async (t) => {
-  const h = await harness();
-  t.after(() => h.server.close());
-  const buyer = await h.signup();
-  const auth = { Authorization: `Bearer ${buyer.token}` };
-  const chatId = 777001;
-
-  // Без привязки купить нельзя: оплата должна попасть на аккаунт.
-  await h.callback(chatId, 'buy:plus');
-  assert.equal(h.bot.last('sendInvoice'), undefined);
-  assert.match(String(h.bot.last('sendMessage')?.body.text), /не привязан/);
-
-  // Сайт выдаёт одноразовую ссылку, а не id пользователя.
-  const link = await readJson<{ linkUrl: string }>(await fetch(`${h.server.baseUrl}/api/auth/telegram-link`, { headers: auth }));
-  assert.match(link.linkUrl, /\?start=lnk_[A-Za-z0-9_-]{16}$/);
-  assert.ok(!link.linkUrl.includes(buyer.user.id));
-  const code = link.linkUrl.split('start=')[1]!;
-  await h.message(chatId, `/start ${code}`);
-  assert.equal(h.userStore.findByTelegramChatId(chatId)?.id, buyer.user.id);
-  // Повторно по той же ссылке другой чат не привяжется.
-  await h.message(888002, `/start ${code}`);
-  assert.equal(h.userStore.findByTelegramChatId(888002), null);
-
-  await h.callback(chatId, 'buy:pro');
-  const invoice = h.bot.last('sendInvoice')!;
-  assert.equal(invoice.body.currency, 'XTR');
-  const prices = invoice.body.prices as Array<{ amount: number }>;
-  assert.equal(prices[0]!.amount, h.rateService.quote(25));
-  const payload = String(invoice.body.payload);
-
-  // Перед списанием сумма сверяется со счётом.
-  await h.send({ pre_checkout_query: { id: 'pc1', from: { id: chatId, first_name: 'Ivan' }, currency: 'XTR', total_amount: 10, invoice_payload: payload } });
-  assert.equal(h.bot.last('answerPreCheckoutQuery')?.body.ok, false);
-  await h.send({ pre_checkout_query: { id: 'pc2', from: { id: chatId, first_name: 'Ivan' }, currency: 'XTR', total_amount: prices[0]!.amount, invoice_payload: payload } });
-  assert.equal(h.bot.last('answerPreCheckoutQuery')?.body.ok, true);
-
-  const pay = (charge: string, raw = payload, amount = prices[0]!.amount) =>
-    h.send({
+    send({ callback_query: { id: 'cb', from: { id: chatId, first_name: 'Ivan', username: 'ivan' }, message: { message_id: 9, chat: { id: chatId } }, data } });
+  const initData = (telegramUserId: number, firstName = 'Anna') =>
+    signInitData({ auth_date: String(Math.floor(Date.now() / 1000)), user: JSON.stringify({ id: telegramUserId, first_name: firstName, username: 'anna' }) }, TOKEN);
+  const mini = async <T>(path: string, body?: unknown, token?: string, method?: string): Promise<{ status: number; body: T }> => {
+    const response = await fetch(`${server.baseUrl}/api/telegram/miniapp/${path}`, {
+      method: method ?? (body === undefined ? 'GET' : 'POST'),
+      headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+      body: body === undefined ? undefined : JSON.stringify(body),
+    });
+    return { status: response.status, body: await readJson<T>(response) };
+  };
+  /** Telegram сообщает об оплате звёздами. */
+  const pay = (chatId: number, payload: string, amount: number, charge: string, extra: Record<string, unknown> = {}) =>
+    send({
       message: {
         message_id: 2,
         date: 0,
         chat: { id: chatId, type: 'private' },
-        successful_payment: { currency: 'XTR', total_amount: amount, invoice_payload: raw, telegram_payment_charge_id: charge },
+        from: { id: chatId, first_name: 'Ivan' },
+        successful_payment: { currency: 'XTR', total_amount: amount, invoice_payload: payload, telegram_payment_charge_id: charge, ...extra },
       },
     });
-  await pay('charge-1');
-  const first = h.subscriptionStore.get(buyer.user.id);
-  assert.equal(first.plan, 'pro');
-  const firstEnd = Date.parse(first.renewsAt!);
-  assert.ok(Math.abs(firstEnd - (Date.now() + 30 * 864e5)) < 60_000);
+  /** Привязанный к Telegram покупатель с токеном кабинета. */
+  const linkedBuyer = async (telegramUserId: number) => {
+    const buyer = await signup();
+    const linked = await mini<{ token: string } & MiniState>('link', { initData: initData(telegramUserId), email: buyer.user.email, password: 'password123' });
+    return { buyer, token: linked.body.token };
+  };
+  return { server, bot, userStore, subscriptionStore, invoiceStore, usageStore, billingService, rateService, authRequests, signup, send, message, callback, initData, mini, pay, linkedBuyer };
+}
 
-  // Повторная доставка того же платежа ничего не продлевает.
-  await pay('charge-1');
-  await pay('charge-2');
-  assert.equal(h.subscriptionStore.get(buyer.user.id).renewsAt, first.renewsAt);
+// ───────────── базовые кирпичики ─────────────
 
-  // Сайт видит оплату, а подтверждение не продлевает второй раз.
-  const invoiceId = decodePayload(payload)!.invoiceId;
-  const confirm = await fetch(`${h.server.baseUrl}/api/billing/telegram-stars/confirm/${invoiceId}`, { method: 'POST', headers: auth });
-  assert.equal(confirm.status, 200);
-  assert.equal(h.subscriptionStore.get(buyer.user.id).renewsAt, first.renewsAt);
-
-  // Новый счёт на тот же тариф до окончания срока — дни добавляются, а не сгорают.
-  await h.callback(chatId, 'buy:pro');
-  const renewal = h.bot.last('sendInvoice')!;
-  await pay('charge-3', String(renewal.body.payload), (renewal.body.prices as Array<{ amount: number }>)[0]!.amount);
-  const extended = Date.parse(h.subscriptionStore.get(buyer.user.id).renewsAt!);
-  assert.ok(Math.abs(extended - firstEnd - 30 * 864e5) < 60_000);
+test('курс Stars: свежий курс Fragment применяется, устаревший или странный — нет', async () => {
+  const now = Date.parse('2026-10-13T12:00:00Z');
+  const feed = (body: unknown) => (async () => Response.json(body)) as unknown as typeof fetch;
+  const fresh = new StarsRateService({ now: () => now, fetchImpl: feed({ usdt_per_star: 0.0149, last_updated: '2026-10-12T00:00:00Z' }) });
+  assert.equal((await fresh.refresh()).source, 'fragment');
+  assert.equal(fresh.quote(9), 610);
+  const stale = new StarsRateService({ now: () => now, fetchImpl: feed({ usdt_per_star: 0.0149, last_updated: '2026-01-09T00:00:00Z' }) });
+  assert.deepEqual([(await stale.refresh()).source, stale.rate.usdPerStar], ['config', 0.015]);
+  const absurd = new StarsRateService({ now: () => now, fetchImpl: feed({ usdt_per_star: 2, last_updated: '2026-10-12T00:00:00Z' }) });
+  assert.equal((await absurd.refresh()).source, 'config');
+  const down = new StarsRateService({ fetchImpl: (async () => { throw new Error('offline'); }) as unknown as typeof fetch });
+  await down.refresh();
+  assert.deepEqual([down.quote(9), down.quote(25), down.quote(49)], [600, 1670, 3270]);
 });
 
-test('бот: напоминание о продлении приходит один раз', async (t) => {
-  const h = await harness();
-  t.after(() => h.server.close());
-  const buyer = await h.signup();
-  h.userStore.linkTelegram(buyer.user.id, 555001);
-  const ends = new Date(Date.now() + 2.5 * 864e5).toISOString();
-  h.subscriptionStore.set({ userId: buyer.user.id, plan: 'plus', status: 'active', renewsAt: ends } satisfies Subscription);
-  assert.equal(await h.bot.sendRenewalReminders(), 1);
-  assert.equal(await h.bot.sendRenewalReminders(), 0);
-  const reminder = h.bot.last('sendMessage')!;
-  assert.equal(reminder.body.chat_id, 555001);
-  assert.match(String(reminder.body.text), /закончится/);
+test('initData мини-приложения: подпись и срок действия проверяются', () => {
+  const now = Date.parse('2026-10-13T12:00:00Z');
+  const signed = signInitData({ auth_date: String(now / 1000 - 60), user: JSON.stringify({ id: 42, first_name: 'Ivan', username: 'ivan' }) }, TOKEN);
+  assert.equal(validateInitData(signed, TOKEN, { now })?.user.id, 42);
+  assert.equal(validateInitData(signed, 'other:token', { now }), null);
+  assert.equal(validateInitData(signed.replace('ivan', 'admin'), TOKEN, { now }), null);
+  assert.equal(validateInitData(signed, TOKEN, { now: now + 2 * DAY_MS }), null);
 });
 
-test('мини-приложение: вход по initData, привязка паролем, счёт в звёздах', async (t) => {
+test('коды привязки и payload счёта', () => {
+  const codes = new TelegramLinkCodes();
+  const code = codes.issue('user-1', 0);
+  assert.equal(codes.consume(code, 1000), 'user-1');
+  assert.equal(codes.consume(code, 1000), null);
+
+  const raw = encodePayload({ planId: 'pro', stars: 1670, invoiceId: 'stars_1_ab', userId: '7f3c2a10-1111-2222-3333-444455556666', recurring: true });
+  assert.ok(raw.length <= 128);
+  assert.equal(decodePayload(raw)?.recurring, true);
+  assert.equal(decodePayload('v1|free|10|x|u'), null);
+
+  const auth = new TelegramAuthRequests();
+  const claim = auth.issueClaimCode(7, 'x', 0);
+  assert.match(claim.code, /^[A-HJ-NP-Z2-9]{6}$/);
+  assert.deepEqual(auth.consumeClaimCode(claim.code.toLowerCase(), 1000), { telegramUserId: 7, username: 'x' });
+  assert.equal(auth.consumeClaimCode(claim.code, 1000), null);
+});
+
+// ───────────── вход и привязка ─────────────
+
+test('вход на сайт через Telegram: новый человек получает аккаунт, сессия выдаётся один раз', async (t) => {
   const h = await harness();
   t.after(() => h.server.close());
-  const buyer = await h.signup();
-  const initData = signInitData(
-    { auth_date: String(Math.floor(Date.now() / 1000)), user: JSON.stringify({ id: 990001, first_name: 'Anna', username: 'anna' }) },
-    TOKEN,
-  );
-  const post = (path: string, body: unknown, headers: Record<string, string> = {}) =>
-    fetch(`${h.server.baseUrl}/api/telegram/miniapp/${path}`, {
+  const start = await readJson<{ requestId: string; botUrl: string }>(
+    await fetch(`${h.server.baseUrl}/api/auth/telegram/start`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', ...headers },
-      body: JSON.stringify(body),
-    });
+      headers: { 'Content-Type': 'application/json', 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0) Chrome/130.0' },
+      body: JSON.stringify({ mode: 'login' }),
+    }),
+  );
+  assert.match(start.botUrl, /^https:\/\/t\.me\/ketner_test_bot\?start=auth_[A-Za-z0-9_-]{16}$/);
+  const poll = async () => readJson<{ status: string; token?: string; user?: User }>(await fetch(`${h.server.baseUrl}/api/auth/telegram/poll/${start.requestId}`));
+  assert.equal((await poll()).status, 'pending');
 
-  const forged = await post('session', { initData: initData.replace('Anna', 'Eve') });
+  const code = start.botUrl.split('start=auth_')[1]!;
+  await h.message(7001, `/start auth_${code}`);
+  const prompt = h.bot.last('sendMessage')!;
+  assert.match(String(prompt.body.text), /Chrome · Windows/);
+  assert.match(String(prompt.body.text), /создадим его/);
+
+  await h.callback(7001, `auth:y:${code}`);
+  const approved = await poll();
+  assert.equal(approved.status, 'approved');
+  assert.ok(approved.token);
+  assert.match(approved.user!.email, /@telegram\.invalid$/);
+  assert.equal(h.userStore.findByTelegramChatId(7001)?.id, approved.user!.id);
+  // Повторный опрос сессию не отдаёт.
+  assert.equal((await poll()).status, 'expired');
+
+  const me = await readJson<{ user: User }>(await fetch(`${h.server.baseUrl}/api/auth/me`, { headers: { Authorization: `Bearer ${approved.token}` } }));
+  assert.equal(me.user.id, approved.user!.id);
+
+  // Повторный вход тем же Telegram попадает в тот же аккаунт.
+  const again = await readJson<{ requestId: string; botUrl: string }>(
+    await fetch(`${h.server.baseUrl}/api/auth/telegram/start`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' }),
+  );
+  const code2 = again.botUrl.split('start=auth_')[1]!;
+  await h.message(7001, `/start auth_${code2}`);
+  assert.match(String(h.bot.last('sendMessage')!.body.text), /Вход на ketner\.org/);
+  await h.callback(7001, `auth:n:${code2}`);
+  const declined = await readJson<{ status: string }>(await fetch(`${h.server.baseUrl}/api/auth/telegram/poll/${again.requestId}`));
+  assert.equal(declined.status, 'declined');
+});
+
+test('привязка из настроек: подтверждение в боте, код из кабинета, вход на сайт из кабинета', async (t) => {
+  const h = await harness();
+  t.after(() => h.server.close());
+  const site = await h.signup();
+  const auth = { Authorization: `Bearer ${site.token}`, 'Content-Type': 'application/json' };
+
+  const unauthorized = await fetch(`${h.server.baseUrl}/api/auth/telegram/start`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ mode: 'link' }) });
+  assert.equal(unauthorized.status, 401);
+
+  const start = await readJson<{ requestId: string; botUrl: string }>(
+    await fetch(`${h.server.baseUrl}/api/auth/telegram/start`, { method: 'POST', headers: auth, body: JSON.stringify({ mode: 'link' }) }),
+  );
+  const code = start.botUrl.split('start=auth_')[1]!;
+  await h.message(7101, `/start auth_${code}`);
+  assert.match(String(h.bot.last('sendMessage')!.body.text), new RegExp(site.user.email.replace(/[.]/g, '\\.')));
+  await h.callback(7101, `auth:y:${code}`);
+  assert.equal(h.userStore.findByTelegramChatId(7101)?.id, site.user.id);
+  const linkPoll = await readJson<{ status: string; mode: string; token?: string }>(await fetch(`${h.server.baseUrl}/api/auth/telegram/poll/${start.requestId}`));
+  assert.deepEqual([linkPoll.status, linkPoll.mode, linkPoll.token], ['approved', 'link', undefined]);
+
+  // Код из кабинета для второго аккаунта (например, вход через Google на другом устройстве).
+  const other = await h.signup();
+  const claim = await h.mini<{ code: string }>('link-code', { initData: h.initData(7202) });
+  const claimed = await fetch(`${h.server.baseUrl}/api/auth/telegram/claim`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${other.token}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ code: claim.body.code }),
+  });
+  assert.equal(claimed.status, 200);
+  assert.equal(h.userStore.findByTelegramChatId(7202)?.id, other.user.id);
+  const reused = await fetch(`${h.server.baseUrl}/api/auth/telegram/claim`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${other.token}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ code: claim.body.code }),
+  });
+  assert.equal(reused.status, 400);
+
+  // Кабинет открывает сайт уже войдя: ссылка одноразовая.
+  const session = await h.mini<{ token: string }>('session', { initData: h.initData(7202) });
+  const magic = await h.mini<{ url: string }>('site-login', { next: '/settings' }, session.body.token);
+  const url = new URL(magic.body.url);
+  assert.equal(url.origin + url.pathname, 'https://ketner.org/auth/telegram');
+  assert.equal(url.searchParams.get('next'), '/settings');
+  const exchange = () =>
+    fetch(`${h.server.baseUrl}/api/auth/telegram/magic`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ token: url.searchParams.get('t') }) });
+  const first = await exchange();
+  assert.equal((await readJson<{ user: User }>(first)).user.id, other.user.id);
+  assert.equal((await exchange()).status, 400);
+});
+
+test('кабинет: «Продолжить с Telegram» создаёт аккаунт, отвязать его нельзя', async (t) => {
+  const h = await harness();
+  t.after(() => h.server.close());
+  const guest = await h.mini<{ linked: boolean }>('session', { initData: h.initData(7301) });
+  assert.equal(guest.body.linked, false);
+  const created = await h.mini<{ linked: boolean; token: string } & MiniState>('register', { initData: h.initData(7301, 'Мария') });
+  assert.equal(created.body.linked, true);
+  assert.equal(created.body.user.telegramOnly, true);
+  assert.equal(created.body.user.email, null);
+  // Повтор не плодит аккаунты.
+  const again = await h.mini<MiniState>('register', { initData: h.initData(7301) });
+  assert.equal(again.body.user.id, created.body.user.id);
+  const unlink = await h.mini<ApiErrorBody>('unlink', {}, created.body.token);
+  assert.equal(unlink.status, 409);
+  assert.equal(unlink.body.error.code, 'telegram_only_account');
+
+  const forged = await h.mini<ApiErrorBody>('session', { initData: h.initData(7301).replace('Anna', 'Eve') });
   assert.equal(forged.status, 401);
+});
 
-  const guest = await readJson<{ linked: boolean }>(await post('session', { initData }));
-  assert.equal(guest.linked, false);
+// ───────────── оплата, продление, смена тарифа ─────────────
 
-  const wrong = await post('link', { initData, email: buyer.user.email, password: 'nope-nope' });
-  assert.equal(wrong.status, 401);
-  assert.equal((await readJson<ApiErrorBody>(wrong)).error.code, 'invalid_credentials');
+test('оплата звёздами: чек в журнале, продление добавляет дни, смена тарифа пересчитывает остаток', async (t) => {
+  const h = await harness();
+  t.after(() => h.server.close());
+  const { buyer, token } = await h.linkedBuyer(7401);
 
-  const linked = await readJson<{ linked: boolean; token: string; plans: Array<{ id: string; stars: number }> }>(
-    await post('link', { initData, email: buyer.user.email, password: 'password123' }),
-  );
-  assert.equal(linked.linked, true);
-  assert.deepEqual(linked.plans.map((plan) => plan.id), ['plus', 'pro', 'ultra']);
-  assert.equal(linked.plans[0]!.stars, h.rateService.quote(9));
-  assert.equal(h.userStore.findByTelegramChatId(990001)?.id, buyer.user.id);
-
-  // Следующий запуск мини-приложения входит сразу.
-  const again = await readJson<{ linked: boolean; user: { email: string } }>(await post('session', { initData }));
-  assert.equal(again.user.email, buyer.user.email);
-
-  const bearer = { Authorization: `Bearer ${linked.token}` };
-  const invoice = await readJson<{ invoiceId: string; link: string; stars: number }>(await post('invoice', { planId: 'ultra' }, bearer));
-  assert.equal(invoice.link, 'https://t.me/$test_invoice');
-  assert.equal(invoice.stars, h.rateService.quote(49));
+  const invoice = await h.mini<{ invoiceId: string; link: string; stars: number }>('invoice', { planId: 'plus' }, token);
+  assert.equal(invoice.body.stars, h.rateService.quote(9));
   const linkCall = h.bot.last('createInvoiceLink')!;
-  assert.equal(decodePayload(String(linkCall.body.payload))?.userId, buyer.user.id);
+  assert.equal(linkCall.body.subscription_period, undefined);
+  const payload = String(linkCall.body.payload);
 
-  const status = await readJson<{ status: string }>(
-    await fetch(`${h.server.baseUrl}/api/telegram/miniapp/invoice/${invoice.invoiceId}`, { headers: bearer }),
-  );
-  assert.equal(status.status, 'pending');
+  // Перед списанием сумма сверяется со счётом.
+  await h.send({ pre_checkout_query: { id: 'pc', from: { id: 7401, first_name: 'Ivan' }, currency: 'XTR', total_amount: 10, invoice_payload: payload } });
+  assert.equal(h.bot.last('answerPreCheckoutQuery')?.body.ok, false);
 
-  const badPlan = await post('invoice', { planId: 'free' }, bearer);
-  assert.equal(badPlan.status, 400);
+  await h.pay(7401, payload, invoice.body.stars, 'ch-1');
+  await h.pay(7401, payload, invoice.body.stars, 'ch-1'); // повторная доставка
+  const afterFirst = h.subscriptionStore.get(buyer.user.id);
+  assert.equal(afterFirst.plan, 'plus');
+  const firstEnd = Date.parse(afterFirst.renewsAt!);
+  assert.ok(Math.abs(firstEnd - (Date.now() + 30 * DAY_MS)) < 60_000);
 
-  await post('unlink', {}, bearer);
-  assert.equal(h.userStore.findByTelegramChatId(990001), null);
+  const state = await h.mini<MiniState>('state', undefined, token);
+  assert.equal(state.body.payments.length, 1);
+  assert.equal(state.body.payments[0]!.refundOption.kind, 'auto');
+  const plusPlan = state.body.plans.find((plan) => plan.id === 'plus')!;
+  assert.equal(plusPlan.preview.mode, 'extend');
+  const ultraPlan = state.body.plans.find((plan) => plan.id === 'ultra')!;
+  assert.equal(ultraPlan.preview.mode, 'switch');
+  // 30 дней Plus ($9) ≈ 5 дней Ultra ($49).
+  assert.equal(ultraPlan.preview.bonusDays, 5);
+
+  // Продление того же тарифа: +30 дней к сроку.
+  const renew = await h.mini<{ invoiceId: string; stars: number }>('invoice', { planId: 'plus' }, token);
+  await h.pay(7401, String(h.bot.last('createInvoiceLink')!.body.payload), renew.body.stars, 'ch-2');
+  const extended = Date.parse(h.subscriptionStore.get(buyer.user.id).renewsAt!);
+  assert.ok(Math.abs(extended - firstEnd - 30 * DAY_MS) < 60_000);
+
+  // Смена на Ultra: 30 дней + пересчёт ~60 дней Plus.
+  const upgrade = await h.mini<{ invoiceId: string; stars: number }>('invoice', { planId: 'ultra' }, token);
+  await h.pay(7401, String(h.bot.last('createInvoiceLink')!.body.payload), upgrade.body.stars, 'ch-3');
+  const ultra = h.subscriptionStore.get(buyer.user.id);
+  assert.equal(ultra.plan, 'ultra');
+  const ultraDays = Math.round((Date.parse(ultra.renewsAt!) - Date.now()) / DAY_MS);
+  assert.ok(ultraDays >= 40 && ultraDays <= 41, `ultraDays=${ultraDays}`);
+  assert.match(String(h.bot.last('sendMessage')!.body.text), /добавили 1[01] дн\./);
+  assert.equal(h.userStore.findById(buyer.user.id)?.plan, 'ultra');
+});
+
+test('автопродление звёздами: подписка, очередное списание, отключение', async (t) => {
+  const h = await harness();
+  t.after(() => h.server.close());
+  const { buyer, token } = await h.linkedBuyer(7501);
+
+  const invoice = await h.mini<{ stars: number; recurring: boolean }>('invoice', { planId: 'pro', recurring: true }, token);
+  assert.equal(invoice.body.recurring, true);
+  const linkCall = h.bot.last('createInvoiceLink')!;
+  assert.equal(linkCall.body.subscription_period, 2592000);
+  const payload = String(linkCall.body.payload);
+  assert.equal(decodePayload(payload)?.recurring, true);
+
+  const firstExpiry = Math.floor((Date.now() + 30 * DAY_MS) / 1000);
+  await h.pay(7501, payload, invoice.body.stars, 'sub-1', { is_recurring: true, is_first_recurring: true, subscription_expiration_date: firstExpiry });
+  let state = await h.mini<MiniState>('state', undefined, token);
+  assert.equal(state.body.autoRenew?.status, 'active');
+  assert.equal(state.body.autoRenew?.stars, invoice.body.stars);
+  const firstEnd = Date.parse(state.body.subscription.renewsAt!);
+
+  // Через 30 дней Telegram списывает сам и присылает платёж с тем же payload.
+  await h.pay(7501, payload, invoice.body.stars, 'sub-2', { is_recurring: true, subscription_expiration_date: firstExpiry + 30 * 86400 });
+  state = await h.mini<MiniState>('state', undefined, token);
+  assert.ok(Math.abs(Date.parse(state.body.subscription.renewsAt!) - firstEnd - 30 * DAY_MS) < 60_000);
+  assert.equal(state.body.payments.length, 2);
+  assert.match(String(h.bot.last('sendMessage')!.body.text), /Автопродление прошло/);
+
+  const off = await h.mini<MiniState>('auto-renew', { enabled: false }, token);
+  assert.equal(off.body.autoRenew?.status, 'canceled');
+  const edit = h.bot.last('editUserStarSubscription')!;
+  assert.deepEqual(edit.body, { user_id: 7501, telegram_payment_charge_id: 'sub-1', is_canceled: true });
+  assert.equal(h.subscriptionStore.get(buyer.user.id).plan, 'pro');
+});
+
+// ───────────── возвраты ─────────────
+
+test('возврат звёзд в первые 48 часов — сразу, срок откатывается', async (t) => {
+  const h = await harness();
+  t.after(() => h.server.close());
+  const { buyer, token } = await h.linkedBuyer(7601);
+  const invoice = await h.mini<{ stars: number }>('invoice', { planId: 'pro' }, token);
+  await h.pay(7601, String(h.bot.last('createInvoiceLink')!.body.payload), invoice.body.stars, 'rf-1');
+  assert.equal(h.subscriptionStore.get(buyer.user.id).plan, 'pro');
+
+  const paymentId = encodeURIComponent('stars:rf-1');
+  const refund = await h.mini<{ outcome: string } & MiniState>(`payments/${paymentId}/refund`, { reason: 'Не подошло' }, token);
+  assert.equal(refund.body.outcome, 'refunded');
+  assert.deepEqual(h.bot.last('refundStarPayment')!.body, { user_id: 7601, telegram_payment_charge_id: 'rf-1' });
+  assert.equal(h.subscriptionStore.get(buyer.user.id).plan, 'free');
+  assert.equal(h.userStore.findById(buyer.user.id)?.plan, 'free');
+  assert.equal(refund.body.payments[0]!.status, 'refunded');
+  assert.deepEqual(refund.body.payments[0]!.refundOption, { kind: 'none', reason: 'refunded' });
+
+  const again = await h.mini<ApiErrorBody>(`payments/${paymentId}/refund`, {}, token);
+  assert.equal(again.body.error.code, 'refund_refunded');
+});
+
+test('возврат по заявке: старый платёж и крипта идут администратору, решение — кнопкой в боте или в кабинете', async (t) => {
+  const h = await harness();
+  t.after(() => h.server.close());
+  const admin = await h.linkedBuyer(7701);
+  h.userStore.setAdmin(admin.buyer.user.id, true);
+  const { buyer, token } = await h.linkedBuyer(7702);
+
+  // Платёж звёздами трёхдневной давности.
+  const old = h.billingService.grant(buyer.user.id, 'plus', { id: 'stars:old-1', method: 'stars', amount: 600, currency: 'XTR', chargeId: 'old-1', telegramUserId: 7702 }, Date.now() - 3 * DAY_MS);
+  assert.deepEqual(h.billingService.refundOption(old.payment), { kind: 'request' });
+  const requested = await h.mini<{ outcome: string }>(`payments/${encodeURIComponent('stars:old-1')}/refund`, { reason: 'Не пользуюсь', comment: 'Уезжаю' }, token);
+  assert.equal(requested.body.outcome, 'requested');
+  const adminMessage = h.bot.all('sendMessage').find((call) => call.body.chat_id === 7701)!;
+  assert.match(String(adminMessage.body.text), /Заявка на возврат/);
+  assert.match(String(adminMessage.body.text), /Уезжаю/);
+  const buttons = (adminMessage.body.reply_markup as { inline_keyboard: Array<Array<{ callback_data?: string }>> }).inline_keyboard[0]!;
+  const approve = buttons[0]!.callback_data!;
+  assert.match(approve, /^rf:y:/);
+
+  // Не администратор нажать не может.
+  await h.callback(7702, approve);
+  assert.equal(h.billingService.findPayment('stars:old-1')?.status, 'refund_requested');
+
+  await h.callback(7701, approve);
+  assert.equal(h.billingService.findPayment('stars:old-1')?.status, 'refunded');
+  assert.deepEqual(h.bot.last('refundStarPayment')!.body, { user_id: 7702, telegram_payment_charge_id: 'old-1' });
+
+  // Крипта: заявка, отказ из кабинета администратора.
+  h.billingService.grant(buyer.user.id, 'pro', { id: 'crypto:c-1', method: 'crypto', amount: 25, currency: 'USD' });
+  await h.mini(`payments/${encodeURIComponent('crypto:c-1')}/refund`, { reason: 'Ошибся тарифом' }, token);
+  const list = await h.mini<{ refunds: Array<{ id: string; customer: { email: string } }> }>('admin/refunds', undefined, admin.token);
+  assert.deepEqual(list.body.refunds.map((refund) => refund.id), ['crypto:c-1']);
+  const forbidden = await h.mini<ApiErrorBody>('admin/refunds', undefined, token);
+  assert.equal(forbidden.status, 403);
+  const decided = await h.mini<{ payment: { status: string } }>(`admin/refunds/${encodeURIComponent('crypto:c-1')}`, { approve: false, note: 'Срок прошёл' }, admin.token);
+  assert.equal(decided.body.payment.status, 'refund_declined');
+  assert.match(String(h.bot.all('sendMessage').filter((call) => call.body.chat_id === 7702).at(-1)!.body.text), /Срок прошёл/);
+});
+
+test('возврат, оформленный Telegram (refunded_payment), откатывает срок', async (t) => {
+  const h = await harness();
+  t.after(() => h.server.close());
+  const { buyer, token } = await h.linkedBuyer(7801);
+  const invoice = await h.mini<{ stars: number }>('invoice', { planId: 'plus' }, token);
+  const payload = String(h.bot.last('createInvoiceLink')!.body.payload);
+  await h.pay(7801, payload, invoice.body.stars, 'tg-ref');
+  await h.send({
+    message: { message_id: 3, date: 0, chat: { id: 7801, type: 'private' }, refunded_payment: { currency: 'XTR', total_amount: invoice.body.stars, invoice_payload: payload, telegram_payment_charge_id: 'tg-ref' } },
+  });
+  assert.equal(h.billingService.findPayment('stars:tg-ref')?.status, 'refunded');
+  assert.equal(h.subscriptionStore.get(buyer.user.id).plan, 'free');
+});
+
+// ───────────── бот: команды и напоминания ─────────────
+
+test('бот: /start ведёт в кабинет, /paysupport и /terms объясняют возвраты', async (t) => {
+  const h = await harness();
+  t.after(() => h.server.close());
+  await h.message(7901, '/start');
+  const start = h.bot.last('sendMessage')!;
+  const button = (start.body.reply_markup as { inline_keyboard: Array<Array<{ web_app?: { url: string } }>> }).inline_keyboard[0]![0]!;
+  assert.equal(button.web_app?.url, 'https://ketner.org/tg');
+  await h.message(7901, '/paysupport');
+  assert.match(String(h.bot.last('sendMessage')!.body.text), /48 часов/);
+  await h.message(7901, '/terms');
+  assert.match(String(h.bot.last('sendMessage')!.body.text), /14 дней/);
+});
+
+test('напоминания: с автопродлением — о списании, отключённые — не приходят', async (t) => {
+  const h = await harness();
+  t.after(() => h.server.close());
+  const { buyer, token } = await h.linkedBuyer(8001);
+  const ends = new Date(Date.now() + 2.5 * DAY_MS).toISOString();
+  h.subscriptionStore.set({ userId: buyer.user.id, plan: 'plus', status: 'active', renewsAt: ends });
+  await h.billingService.startStarsSubscription({ userId: buyer.user.id, planId: 'plus', telegramUserId: 8001, chargeId: 'c', invoiceId: 'i', stars: 600, nextChargeAt: ends });
+  assert.equal(await h.bot.sendRenewalReminders(), 1);
+  assert.match(String(h.bot.last('sendMessage')!.body.text), /автоматически продлим/);
+  assert.equal(await h.bot.sendRenewalReminders(), 0);
+
+  const other = await h.linkedBuyer(8002);
+  h.subscriptionStore.set({ userId: other.buyer.user.id, plan: 'pro', status: 'active', renewsAt: ends });
+  await h.mini('prefs', { reminders: false }, other.token);
+  assert.equal(await h.bot.sendRenewalReminders(), 0);
+  void token;
 });
 
 test('сайт: счёт в звёздах считается по текущему курсу', async (t) => {

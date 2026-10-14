@@ -74,7 +74,11 @@ test('токен шифруется: в файле его нет, чужим к�
   assert.equal(createGithubConnectionStore({ file, secret: 'one' }).tokenOf('u1'), 'gho_plain_token');
   assert.equal(createGithubConnectionStore({ file, secret: 'two' }).tokenOf('u1'), undefined);
   const sealed = encryptToken('x', 'a');
-  const tampered = sealed.slice(0, -1) + (sealed.endsWith('A') ? 'B' : 'A');
+  // Портим настоящий байт шифротекста (последний символ base64 может нести только биты выравнивания).
+  const parts = sealed.split('.');
+  const body = Buffer.from(parts[3]!, 'base64url');
+  body[0] = body[0]! ^ 0xff;
+  const tampered = [...parts.slice(0, 3), body.toString('base64url')].join('.');
   assert.equal(decryptToken(tampered, 'a'), undefined);
   assert.equal(store.remove('u1'), true);
   assert.equal(store.get('u1'), undefined);
