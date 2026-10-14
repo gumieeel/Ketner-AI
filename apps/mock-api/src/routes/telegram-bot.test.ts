@@ -390,43 +390,86 @@ test('возврат звёзд в первые 48 часов — сразу, с
   assert.equal(again.body.error.code, 'refund_refunded');
 });
 
-test('возврат по заявке: старый платёж и крипта идут администратору, решение — кнопкой в боте или в кабинете', async (t) => {
+/** Запись об ответе модели — так выглядит «использование» для правил возврата. */
+function useModel(usageStore: UsageStore, userId: string, status: 'success' | 'error' = 'success') {
+  usageStore.recordUsage({
+    userId,
+    conversationId: 'c1',
+    modelId: 'ketner-mini',
+    provider: 'openrouter' as never,
+    inputTokens: 10,
+    outputTokens: 20,
+    estimatedCost: 0,
+    latencyMs: 100,
+    status,
+  });
+}
+
+test('возврат: только 24 часа и без единого запроса к моделям', async (t) => {
+  const h = await harness();
+  t.after(() => h.server.close());
+  const { buyer, token } = await h.linkedBuyer(7650);
+
+  // Оплата двое суток назад — срок вышел.
+  h.billingService.grant(buyer.user.id, 'plus', { id: 'stars:old-1', method: 'stars', amount: 600, currency: 'XTR', chargeId: 'old-1', telegramUserId: 7650 }, Date.now() - 2 * DAY_MS);
+  const expired = await h.mini<ApiErrorBody>(`payments/${encodeURIComponent('stars:old-1')}/refund`, { reason: 'Не подошло' }, token);
+  assert.equal(expired.status, 409);
+  assert.equal(expired.body.error.code, 'refund_expired');
+
+  // Свежая оплата, но модель уже ответила — вернуть нельзя.
+  h.billingService.grant(buyer.user.id, 'pro', { id: 'stars:used-1', method: 'stars', amount: 1670, currency: 'XTR', chargeId: 'used-1', telegramUserId: 7650 });
+  const fresh = h.billingService.findPayment('stars:used-1')!;
+  assert.deepEqual(h.billingService.refundOption(fresh), { kind: 'auto' });
+  // Ошибка модели использованием не считается.
+  useModel(h.usageStore, buyer.user.id, 'error');
+  assert.deepEqual(h.billingService.refundOption(fresh), { kind: 'auto' });
+  useModel(h.usageStore, buyer.user.id);
+  assert.deepEqual(h.billingService.refundOption(fresh), { kind: 'none', reason: 'used' });
+  const used = await h.mini<ApiErrorBody>(`payments/${encodeURIComponent('stars:used-1')}/refund`, {}, token);
+  assert.equal(used.body.error.code, 'refund_used');
+  assert.match(used.body.error.message, /24 часов/);
+  assert.equal(h.bot.all('refundStarPayment').length, 0);
+});
+
+test('возврат криптовалюты: заявка администратору, решение кнопкой в боте или в кабинете', async (t) => {
   const h = await harness();
   t.after(() => h.server.close());
   const admin = await h.linkedBuyer(7701);
   h.userStore.setAdmin(admin.buyer.user.id, true);
   const { buyer, token } = await h.linkedBuyer(7702);
 
-  // Платёж звёздами трёхдневной давности.
-  const old = h.billingService.grant(buyer.user.id, 'plus', { id: 'stars:old-1', method: 'stars', amount: 600, currency: 'XTR', chargeId: 'old-1', telegramUserId: 7702 }, Date.now() - 3 * DAY_MS);
-  assert.deepEqual(h.billingService.refundOption(old.payment), { kind: 'request' });
-  const requested = await h.mini<{ outcome: string }>(`payments/${encodeURIComponent('stars:old-1')}/refund`, { reason: 'Не пользуюсь', comment: 'Уезжаю' }, token);
+  h.billingService.grant(buyer.user.id, 'pro', { id: 'crypto:c-1', method: 'crypto', amount: 25, currency: 'USD' });
+  assert.deepEqual(h.billingService.refundOption(h.billingService.findPayment('crypto:c-1')!), { kind: 'request' });
+  const requested = await h.mini<{ outcome: string }>(`payments/${encodeURIComponent('crypto:c-1')}/refund`, { reason: 'Ошибся тарифом', comment: 'Хотел Plus' }, token);
   assert.equal(requested.body.outcome, 'requested');
   const adminMessage = h.bot.all('sendMessage').find((call) => call.body.chat_id === 7701)!;
   assert.match(String(adminMessage.body.text), /Заявка на возврат/);
-  assert.match(String(adminMessage.body.text), /Уезжаю/);
+  assert.match(String(adminMessage.body.text), /Хотел Plus/);
+  assert.match(String(adminMessage.body.text), /Запросов к моделям после оплаты: 0/);
   const buttons = (adminMessage.body.reply_markup as { inline_keyboard: Array<Array<{ callback_data?: string }>> }).inline_keyboard[0]!;
   const approve = buttons[0]!.callback_data!;
   assert.match(approve, /^rf:y:/);
 
   // Не администратор нажать не может.
   await h.callback(7702, approve);
-  assert.equal(h.billingService.findPayment('stars:old-1')?.status, 'refund_requested');
+  assert.equal(h.billingService.findPayment('crypto:c-1')?.status, 'refund_requested');
 
-  await h.callback(7701, approve);
-  assert.equal(h.billingService.findPayment('stars:old-1')?.status, 'refunded');
-  assert.deepEqual(h.bot.last('refundStarPayment')!.body, { user_id: 7702, telegram_payment_charge_id: 'old-1' });
-
-  // Крипта: заявка, отказ из кабинета администратора.
-  h.billingService.grant(buyer.user.id, 'pro', { id: 'crypto:c-1', method: 'crypto', amount: 25, currency: 'USD' });
-  await h.mini(`payments/${encodeURIComponent('crypto:c-1')}/refund`, { reason: 'Ошибся тарифом' }, token);
-  const list = await h.mini<{ refunds: Array<{ id: string; customer: { email: string } }> }>('admin/refunds', undefined, admin.token);
-  assert.deepEqual(list.body.refunds.map((refund) => refund.id), ['crypto:c-1']);
+  // Кабинет администратора видит заявку и сколько клиент успел воспользоваться.
+  const list = await h.mini<{ refunds: Array<{ id: string; usedRequests: number }> }>('admin/refunds', undefined, admin.token);
+  assert.deepEqual(list.body.refunds.map((refund) => [refund.id, refund.usedRequests]), [['crypto:c-1', 0]]);
   const forbidden = await h.mini<ApiErrorBody>('admin/refunds', undefined, token);
   assert.equal(forbidden.status, 403);
-  const decided = await h.mini<{ payment: { status: string } }>(`admin/refunds/${encodeURIComponent('crypto:c-1')}`, { approve: false, note: 'Срок прошёл' }, admin.token);
+
+  await h.callback(7701, approve);
+  assert.equal(h.billingService.findPayment('crypto:c-1')?.status, 'refunded');
+  assert.equal(h.subscriptionStore.get(buyer.user.id).plan, 'free');
+
+  // Вторая заявка — отказ из кабинета администратора с пояснением.
+  h.billingService.grant(buyer.user.id, 'plus', { id: 'crypto:c-2', method: 'crypto', amount: 9, currency: 'USD' });
+  await h.mini(`payments/${encodeURIComponent('crypto:c-2')}/refund`, { reason: 'Другое' }, token);
+  const decided = await h.mini<{ payment: { status: string } }>(`admin/refunds/${encodeURIComponent('crypto:c-2')}`, { approve: false, note: 'Перевод не найден' }, admin.token);
   assert.equal(decided.body.payment.status, 'refund_declined');
-  assert.match(String(h.bot.all('sendMessage').filter((call) => call.body.chat_id === 7702).at(-1)!.body.text), /Срок прошёл/);
+  assert.match(String(h.bot.all('sendMessage').filter((call) => call.body.chat_id === 7702).at(-1)!.body.text), /Перевод не найден/);
 });
 
 test('возврат, оформленный Telegram (refunded_payment), откатывает срок', async (t) => {
@@ -453,9 +496,9 @@ test('бот: /start ведёт в кабинет, /paysupport и /terms объ�
   const button = (start.body.reply_markup as { inline_keyboard: Array<Array<{ web_app?: { url: string } }>> }).inline_keyboard[0]![0]!;
   assert.equal(button.web_app?.url, 'https://ketner.org/tg');
   await h.message(7901, '/paysupport');
-  assert.match(String(h.bot.last('sendMessage')!.body.text), /48 часов/);
+  assert.match(String(h.bot.last('sendMessage')!.body.text), /в течение 24 часов, если после неё вы не сделали ни одного запроса/);
   await h.message(7901, '/terms');
-  assert.match(String(h.bot.last('sendMessage')!.body.text), /14 дней/);
+  assert.match(String(h.bot.last('sendMessage')!.body.text), /оплата не возвращается/);
 });
 
 test('напоминания: с автопродлением — о списании, отключённые — не приходят', async (t) => {

@@ -11,15 +11,17 @@ import type { PlanId, Subscription, User } from '../types.js';
 export const DAY_MS = 24 * 3600 * 1000;
 const PERIOD_DAYS = 30;
 
-/** Правила возврата: показываются клиенту дословно в кабинете и в /terms. */
+/**
+ * Правила возврата (показываются клиенту в кабинете, в /terms и на сайте):
+ * вернуть оплату можно в течение 24 часов, если после неё не было ни одного запроса к моделям.
+ * Звёзды возвращаются сразу, криптовалюта — вручную по заявке.
+ */
 export const REFUND_POLICY = {
-  /** Звёзды возвращаются сразу, если с оплаты прошло не больше… */
-  autoWindowMs: 48 * 3600 * 1000,
-  /** …и за это время было не больше стольких запросов к моделям. */
-  autoMaxRequests: 20,
-  /** Заявку на возврат можно подать в течение 14 дней после оплаты. */
-  requestWindowMs: 14 * DAY_MS,
+  windowMs: 24 * 3600 * 1000,
 } as const;
+
+/** Запросы, которые считаются использованием: модель ответила (полностью или до остановки). */
+const COUNTS_AS_USE = new Set(['success', 'cancelled']);
 
 export type PaymentMethod = 'stars' | 'crypto';
 export type PaymentStatus = 'paid' | 'refund_requested' | 'refunded' | 'refund_declined';
@@ -120,7 +122,7 @@ export class BillingError extends Error {
 export type RefundOption =
   | { kind: 'auto' }
   | { kind: 'request' }
-  | { kind: 'none'; reason: 'refunded' | 'pending' | 'declined' | 'expired' };
+  | { kind: 'none'; reason: 'refunded' | 'pending' | 'declined' | 'expired' | 'used' };
 
 export interface GrantPreview {
   mode: 'new' | 'extend' | 'switch';
@@ -246,23 +248,21 @@ export class BillingService {
 
   // ───────────── возвраты ─────────────
 
-  private requestsSince(userId: string, sinceIso: string): number {
+  /** Сколько раз после оплаты модели ответили этому человеку (ошибки и отказы по лимитам не считаются). */
+  requestsSince(userId: string, sinceIso: string): number {
     const records = this.deps.usageStore?.getByUser(userId, 500) ?? [];
-    return records.filter((record) => record.createdAt >= sinceIso).length;
+    return records.filter((record) => record.createdAt >= sinceIso && COUNTS_AS_USE.has(record.status)).length;
   }
 
   refundOption(payment: PaymentRecord, now = Date.now()): RefundOption {
     if (payment.status === 'refunded') return { kind: 'none', reason: 'refunded' };
     if (payment.status === 'refund_requested') return { kind: 'none', reason: 'pending' };
     if (payment.status === 'refund_declined') return { kind: 'none', reason: 'declined' };
-    const age = now - Date.parse(payment.paidAt);
-    if (age > REFUND_POLICY.requestWindowMs) return { kind: 'none', reason: 'expired' };
-    const canAuto =
-      payment.method === 'stars' &&
-      Boolean(payment.chargeId && payment.telegramUserId) &&
-      age <= REFUND_POLICY.autoWindowMs &&
-      this.requestsSince(payment.userId, payment.paidAt) <= REFUND_POLICY.autoMaxRequests;
-    return canAuto ? { kind: 'auto' } : { kind: 'request' };
+    if (now - Date.parse(payment.paidAt) > REFUND_POLICY.windowMs) return { kind: 'none', reason: 'expired' };
+    if (this.requestsSince(payment.userId, payment.paidAt) > 0) return { kind: 'none', reason: 'used' };
+    // Звёзды Telegram возвращает сам и сразу; криптовалюту администратор переводит вручную.
+    const instant = payment.method === 'stars' && Boolean(payment.chargeId && payment.telegramUserId);
+    return instant ? { kind: 'auto' } : { kind: 'request' };
   }
 
   /** Возврат по запросу клиента: сразу (звёзды, по правилам) или заявкой администратору. */
@@ -280,7 +280,8 @@ export class BillingService {
         refunded: 'Деньги за этот платёж уже возвращены.',
         pending: 'Заявка на возврат уже отправлена — ответим в течение суток.',
         declined: 'По этому платежу в возврате уже отказано. Напишите в поддержку, если не согласны.',
-        expired: 'Возврат возможен в течение 14 дней после оплаты. Напишите в поддержку — разберёмся.',
+        expired: 'Вернуть оплату можно только в течение 24 часов после неё.',
+        used: 'После этой оплаты моделями уже пользовались, поэтому вернуть её нельзя. Возврат возможен в течение 24 часов, если не было ни одного запроса.',
       } as const;
       throw new BillingError(`refund_${option.reason}`, messages[option.reason], 409);
     }

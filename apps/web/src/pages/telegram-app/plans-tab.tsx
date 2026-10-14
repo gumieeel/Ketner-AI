@@ -159,7 +159,7 @@ export function PlansTab({ recurring, onRecurringChange }: { recurring: boolean;
       })}
 
       <div className="flex flex-col gap-1.5 px-1 text-[12px] leading-5 text-subtle">
-        <p>{t('tg.refundShort', { hours: refundPolicy.autoHours })}</p>
+        <p>{t('tg.refundShort', { hours: refundPolicy.hours })}</p>
         <p>
           {t('tg.rate', {
             rate: rate.usdPerStar.toFixed(4),
