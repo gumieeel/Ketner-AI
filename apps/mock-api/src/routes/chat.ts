@@ -6,6 +6,7 @@ import { modelRegistry } from '../ai/model-registry.js';
 import { delay, randomBetween } from '../ai/stream.js';
 import { config, isProduction, type AiConfig } from '../config.js';
 import { sendError } from '../middleware/errors.js';
+import { resolveGuestId } from '../middleware/guest.js';
 import type { ConversationStore } from '../store/conversation-store.js';
 import {
   usageStore as defaultUsageStore,
@@ -157,10 +158,12 @@ export function createChatRouter({
     // Личность и тариф — только из сессии и серверных хранилищ. Поля userId / userEmail / userPlan
     // из тела запроса не читаются: клиент не вправе назваться другим пользователем или поднять тариф.
     const sessionUser = request.user;
-    const guestHeader = request.headers['x-guest-id'] || request.headers['x-user-id'];
-    const guestId = Array.isArray(guestHeader) ? guestHeader[0] : guestHeader;
-    const effectiveAnonymousUserId =
-      guestId && typeof guestId === 'string' && guestId.trim() ? guestId.trim() : userId;
+    const guestId = sessionUser ? null : resolveGuestId(request, userId);
+    if (!sessionUser && guestId === null) {
+      sendError(response, 400, 'invalid_guest_id', 'Не передан корректный идентификатор гостя');
+      return;
+    }
+    const effectiveAnonymousUserId = guestId ?? userId;
 
     const identity = resolveChatIdentity({
       sessionUser,

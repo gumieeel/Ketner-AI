@@ -113,3 +113,34 @@ test('недействительный Bearer-токен помечается з
     await server.close();
   }
 });
+
+test('гость не может назваться другим пользователем через заголовки', async () => {
+  const server = await startTestServer();
+  try {
+    const owner = { ...JSON_HEADERS, 'X-Guest-Id': 'guest_owner12345_abc' };
+    const created = await fetch(`${server.baseUrl}/api/conversations`, {
+      method: 'POST',
+      headers: owner,
+      body: JSON.stringify({ title: 'Личное' }),
+    });
+    assert.equal(created.status, 201);
+
+    // Чужой гостевой id и X-User-Id не открывают диалоги владельца
+    const other = await readJson<{ conversations: unknown[] }>(
+      await fetch(`${server.baseUrl}/api/conversations`, { headers: { 'X-Guest-Id': 'guest_other67890_xyz' } }),
+    );
+    assert.deepEqual(other.conversations, []);
+    const spoof = await readJson<{ conversations: unknown[] }>(
+      await fetch(`${server.baseUrl}/api/conversations`, { headers: { 'X-User-Id': 'guest_owner12345_abc' } }),
+    );
+    assert.deepEqual(spoof.conversations, []);
+
+    // Идентификатор, не похожий на гостевой, не принимается как личность
+    const forged = await readJson<{ conversations: unknown[] }>(
+      await fetch(`${server.baseUrl}/api/conversations`, { headers: { 'X-Guest-Id': 'admin-artem-user' } }),
+    );
+    assert.deepEqual(forged.conversations, []);
+  } finally {
+    await server.close();
+  }
+});

@@ -29,7 +29,17 @@ interface UsageStoreData {
   records: UsageRecord[];
 }
 
+/** Зеркало записей использования в Postgres (таблица `ketner_docs`, пространство `usage`). */
+interface UsageDbDriver {
+  upsert(namespace: string, doc: UsageRecord): Promise<void>;
+}
+
+const MAX_RECORDS = 50000;
+
 export class UsageStore {
+  /** Пространство имён в `ketner_docs`; совместимо с syncDocStores. */
+  readonly namespace = 'usage';
+  private dbDriver: UsageDbDriver | null = null;
   private filePath: string;
   private records: UsageRecord[] = [];
   private userIndex = new Map<string, UsageRecord[]>();
@@ -67,6 +77,21 @@ export class UsageStore {
       this.records = [];
     }
     this.rebuildIndex();
+  }
+
+  /** Подмешивает записи из базы (после перезапуска диск Render пуст): дубликаты по id отбрасываются. */
+  loadExternal(docs: UsageRecord[]): void {
+    const byId = new Map<string, UsageRecord>();
+    for (const record of this.records) byId.set(record.id, record);
+    for (const record of docs) byId.set(record.id, record);
+    this.records = [...byId.values()]
+      .sort((a, b) => a.createdAt.localeCompare(b.createdAt))
+      .slice(-MAX_RECORDS);
+    this.rebuildIndex();
+  }
+
+  setDbDriver(driver: UsageDbDriver | null): void {
+    this.dbDriver = driver;
   }
 
   private persist(): void {
@@ -138,8 +163,8 @@ export class UsageStore {
     userRecords.push(record);
 
     // Ограничиваем историю в памяти/файле (последние 50,000 записей)
-    if (this.records.length > 50000) {
-      this.records = this.records.slice(-50000);
+    if (this.records.length > MAX_RECORDS) {
+      this.records = this.records.slice(-MAX_RECORDS);
       this.rebuildIndex();
     }
 
@@ -148,6 +173,9 @@ export class UsageStore {
     } catch (err) {
       console.error('[usage-store] Ошибка сохранения usage:', err);
     }
+    this.dbDriver?.upsert(this.namespace, record).catch((error: unknown) => {
+      console.error('[db] Ошибка записи usage:', error);
+    });
 
     return record;
   }
