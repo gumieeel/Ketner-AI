@@ -76,14 +76,14 @@ export function PaymentsTab() {
         </section>
       )}
 
-      <RefundPolicy hours={refundPolicy.autoHours} max={refundPolicy.autoMaxRequests} days={refundPolicy.requestDays} />
+      <RefundPolicy hours={refundPolicy.hours} />
 
       {open ? <PaymentSheet payment={open} onClose={() => setOpenId(null)} /> : null}
     </div>
   );
 }
 
-export function RefundPolicy({ hours, max, days }: { hours: number; max: number; days: number }) {
+export function RefundPolicy({ hours }: { hours: number }) {
   const { t } = useTranslation();
   return (
     <Panel aria-labelledby="tg-policy-title">
@@ -91,9 +91,10 @@ export function RefundPolicy({ hours, max, days }: { hours: number; max: number;
         {t('tg.policyTitle')}
       </h2>
       <ul className="mt-2 flex flex-col gap-2 text-[13px] leading-5 text-muted">
-        <li>{t('tg.policy1', { hours, max })}</li>
-        <li>{t('tg.policy2', { days })}</li>
+        <li>{t('tg.policy1', { hours })}</li>
+        <li>{t('tg.policy2')}</li>
         <li>{t('tg.policy3')}</li>
+        <li>{t('tg.policy4')}</li>
       </ul>
     </Panel>
   );
@@ -137,8 +138,10 @@ function PaymentSheet({ payment, onClose }: { payment: MiniAppPayment; onClose: 
     refunded: t('tg.refundNoneRefunded', { date: formatDate(payment.refund?.decidedAt, language) }),
     pending: t('tg.refundNonePending', { date: formatDate(payment.refund?.requestedAt, language) }),
     declined: payment.refund?.note ? t('tg.refundNoneDeclinedNote', { note: payment.refund.note }) : t('tg.refundNoneDeclined'),
-    expired: t('tg.refundNoneExpired', { days: state.refundPolicy.requestDays }),
+    expired: t('tg.refundNoneExpired', { hours: state.refundPolicy.hours }),
+    used: t('tg.refundNoneUsed', { hours: state.refundPolicy.hours }),
   };
+  const deadline = formatDateTime(new Date(Date.parse(payment.paidAt) + state.refundPolicy.hours * 3600_000).toISOString(), language);
 
   return (
     <Sheet title={t('tg.receiptTitle', { plan: payment.planTitle })} onClose={onClose} closeLabel={t('tg.close')} app={app}>
@@ -173,13 +176,10 @@ function PaymentSheet({ payment, onClose }: { payment: MiniAppPayment; onClose: 
         ) : !form ? (
           <>
             <p className="text-[14px] leading-6 text-muted">
-              {option.kind === 'auto'
-                ? t('tg.refundAutoText')
-                : payment.method === 'crypto'
-                  ? t('tg.refundCryptoText')
-                  : t('tg.refundRequestText', { hours: state.refundPolicy.autoHours })}
+              {option.kind === 'auto' ? t('tg.refundAutoText') : t('tg.refundCryptoText')}
               {payment.recurring ? ` ${t('tg.refundAutoRenewOff')}` : ''}
             </p>
+            <Notice tone="warning">{t('tg.refundDeadline', { date: deadline })}</Notice>
             <Button variant="outline" className="w-full" onClick={() => setForm(true)}>
               {option.kind === 'auto' ? t('tg.refundStart') : t('tg.refundRequestStart')}
             </Button>

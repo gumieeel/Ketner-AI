@@ -23,7 +23,10 @@ export interface MiniAppPlan {
 }
 
 export type PaymentStatus = 'paid' | 'refund_requested' | 'refunded' | 'refund_declined';
-export type RefundOption = { kind: 'auto' } | { kind: 'request' } | { kind: 'none'; reason: 'refunded' | 'pending' | 'declined' | 'expired' };
+export type RefundOption =
+  | { kind: 'auto' }
+  | { kind: 'request' }
+  | { kind: 'none'; reason: 'refunded' | 'pending' | 'declined' | 'expired' | 'used' };
 
 export interface MiniAppPayment {
   id: string;
@@ -61,7 +64,8 @@ export interface MiniAppState {
   rate: { usdPerStar: number; source: 'fragment' | 'config'; updatedAt: string };
   payments: MiniAppPayment[];
   prefs: { reminders: boolean; receipts: boolean };
-  refundPolicy: { autoHours: number; autoMaxRequests: number; requestDays: number };
+  /** Возврат — в течение стольких часов после оплаты и только без запросов к моделям. */
+  refundPolicy: { hours: number };
   pendingRefunds: number;
   siteUrl: string;
   botUsername: string;
@@ -72,6 +76,8 @@ export type MiniAppSession =
   | { linked: false; telegram: { firstName: string; username: string | null }; siteUrl: string };
 
 export interface AdminRefund extends MiniAppPayment {
+  /** Сколько раз модели ответили клиенту после оплаты. */
+  usedRequests: number;
   customer: { name: string; email: string | null; telegramUsername: string | null } | null;
 }
 

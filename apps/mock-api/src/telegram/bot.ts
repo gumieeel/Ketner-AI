@@ -411,6 +411,7 @@ export class TelegramBotService implements TelegramPaymentsPort {
       `Оплачен: ${formatDate(payment.paidAt)}`,
       payment.refund?.reason ? `Причина: ${escapeHtml(payment.refund.reason)}` : '',
       payment.refund?.comment ? `Комментарий: ${escapeHtml(payment.refund.comment)}` : '',
+      `Запросов к моделям после оплаты: ${this.billing.requestsSince(payment.userId, payment.paidAt)}`,
       payment.method === 'crypto' ? '\nКриптовалюту возвращаете вручную на кошелёк клиента.' : '',
     ]
       .filter(Boolean)
@@ -618,13 +619,12 @@ export class TelegramBotService implements TelegramPaymentsPort {
   }
 
   private refundPolicyText(): string {
-    const hours = Math.round(REFUND_POLICY.autoWindowMs / 3600_000);
-    const days = Math.round(REFUND_POLICY.requestWindowMs / DAY_MS);
+    const hours = Math.round(REFUND_POLICY.windowMs / 3600_000);
     return [
-      `• Звёзды возвращаются сразу, если с оплаты прошло не больше ${hours} часов и было не больше ${REFUND_POLICY.autoMaxRequests} запросов к моделям.`,
-      `• В остальных случаях — заявка на возврат в течение ${days} дней после оплаты, ответ в течение суток.`,
-      '• Оплату криптовалютой возвращаем на ваш кошелёк по заявке.',
-      '• После возврата дни этой оплаты снимаются с подписки.',
+      `• Вернуть оплату можно в течение ${hours} часов, если после неё вы не сделали ни одного запроса к моделям.`,
+      '• Если моделями уже пользовались или прошло больше 24 часов, оплата не возвращается.',
+      '• Звёзды возвращаются сразу, кнопкой в кабинете. Криптовалюту возвращаем на ваш кошелёк по заявке, обычно в течение суток.',
+      '• После возврата дни этой оплаты снимаются с подписки, автопродление отключается.',
     ].join('\n');
   }
 
@@ -653,7 +653,7 @@ export class TelegramBotService implements TelegramPaymentsPort {
         '<b>Возвраты</b>',
         this.refundPolicyText(),
         '',
-        `Полные условия: ${this.siteUrl}/docs`,
+        `Полные условия: ${this.siteUrl}/docs#faq`,
       ].join('\n'),
       { reply_markup: { inline_keyboard: [[this.openAppButton()]] } },
     );

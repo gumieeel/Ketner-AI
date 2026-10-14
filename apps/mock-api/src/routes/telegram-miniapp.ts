@@ -112,11 +112,7 @@ export function createMiniAppRouter({ botService, userStore, subscriptionStore, 
       rate,
       payments: billing.paymentsOf(user.id).map(paymentView),
       prefs: billing.prefsOf(user.id),
-      refundPolicy: {
-        autoHours: Math.round(REFUND_POLICY.autoWindowMs / 3600_000),
-        autoMaxRequests: REFUND_POLICY.autoMaxRequests,
-        requestDays: Math.round(REFUND_POLICY.requestWindowMs / 86_400_000),
-      },
+      refundPolicy: { hours: Math.round(REFUND_POLICY.windowMs / 3600_000) },
       pendingRefunds: user.isAdmin ? billing.pendingRefunds().length : 0,
       siteUrl: botService.siteUrl,
       botUsername: botService.botUsername,
@@ -302,6 +298,8 @@ export function createMiniAppRouter({ botService, userStore, subscriptionStore, 
         const owner = userStore.findById(payment.userId);
         return {
           ...paymentView(payment),
+          /** Сколько раз модели ответили клиенту после оплаты: по правилам возврат — только без использования. */
+          usedRequests: billing.requestsSince(payment.userId, payment.paidAt),
           customer: owner
             ? { name: owner.name, email: isTelegramAccountEmail(owner.email) ? null : owner.email, telegramUsername: owner.telegramUsername ?? null }
             : null,

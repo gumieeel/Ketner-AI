@@ -62,4 +62,15 @@ export const FAQ_ITEMS: FaqItem[] = [
       en: 'A standard ChatGPT Plus subscription costs $20 and locks you into OpenAI only. With Ketner AI, a single subscription gives you all premier world-class models — GPT, Claude, and Gemini — in one unified interface, saving you time and hundreds of dollars.',
     },
   },
+  {
+    id: 'refund',
+    q: {
+      ru: 'Можно ли вернуть деньги?',
+      en: 'Can I get a refund?',
+    },
+    a: {
+      ru: 'Да, в течение 24 часов после оплаты — если вы ещё не сделали ни одного запроса к моделям. Звёзды Telegram возвращаются сразу, кнопкой в кабинете бота @Robo_kassa_bot (раздел «Платежи»). Оплату криптовалютой возвращаем на ваш кошелёк по заявке, обычно в течение суток: оформите её в том же кабинете или напишите в поддержку @ketner_support_bot. Если моделями уже пользовались или прошло больше 24 часов, оплата не возвращается. После возврата дни этой оплаты снимаются с подписки, автопродление отключается.',
+      en: 'Yes, within 24 hours of paying — if you have not made a single request to the models yet. Telegram Stars are returned instantly with a button in the @Robo_kassa_bot account (the “Payments” tab). Crypto payments are returned to your wallet on request, usually within a day: request it in the same account or message support at @ketner_support_bot. If the models were already used or more than 24 hours have passed, the payment is not refunded. After a refund, the days from that payment are removed from the subscription and auto-renewal turns off.',
+    },
+  },
 ];

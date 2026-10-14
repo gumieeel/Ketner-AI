@@ -115,6 +115,12 @@ function RefundCard({ refund, onDecided }: { refund: AdminRefund; onDecided: (ap
             <dd className="min-w-0 break-words">{refund.refund.comment}</dd>
           </div>
         ) : null}
+        <div className="flex gap-2">
+          <dt className="text-muted">{t('tg.fieldUsed')}:</dt>
+          <dd className={refund.usedRequests > 0 ? 'font-medium text-danger' : undefined}>
+            {refund.usedRequests > 0 ? t('tg.adminUsedYes', { count: refund.usedRequests }) : t('tg.adminUsedNo')}
+          </dd>
+        </div>
         {refund.refund?.requestedAt ? (
           <div className="flex gap-2">
             <dt className="text-muted">{t('tg.fieldRequested')}:</dt>
