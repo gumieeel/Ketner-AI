@@ -9,6 +9,7 @@ import {
   GoogleIcon,
   SparkleIcon,
 } from '@/components/icons';
+import { LegalNotice } from '@/components/auth/legal-notice';
 import { AuthShell } from '@/components/layout/auth-shell';
 import { TelegramLoginButton } from '@/components/telegram/telegram-login-button';
 import { Button } from '@/components/ui/button';
@@ -340,9 +341,7 @@ export function SignupPage() {
           </Button>
         </form>
 
-        <p role="status" className="text-balance text-center text-xs leading-5 text-muted">
-          {t('auth.demoNotice')}
-        </p>
+        <LegalNotice />
       </div>
     </AuthShell>
   );

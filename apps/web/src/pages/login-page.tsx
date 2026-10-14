@@ -8,6 +8,7 @@ import {
   GoogleIcon,
   SparkleIcon,
 } from '@/components/icons';
+import { LegalNotice } from '@/components/auth/legal-notice';
 import { AuthShell } from '@/components/layout/auth-shell';
 import { TelegramLoginButton } from '@/components/telegram/telegram-login-button';
 import { Button } from '@/components/ui/button';
@@ -123,14 +124,6 @@ export function LoginPage() {
     } finally {
       setLoading(false);
     }
-  };
-
-  const handleDemoFill = () => {
-    setEmail('demo@ketner.ai');
-    setPassword('password123');
-    setEmailError(null);
-    setPasswordError(null);
-    setServerError(null);
   };
 
   return (
@@ -282,23 +275,9 @@ export function LoginPage() {
             {loading ? t('auth.loggingIn') : t('auth.login')}
           </Button>
 
-          {/* 7. Быстрый демо-вход */}
-          <div className="flex justify-center pt-1">
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              onClick={handleDemoFill}
-              className="text-xs text-muted hover:text-text"
-            >
-              {t('auth.demoQuickLogin')}
-            </Button>
-          </div>
         </form>
 
-        <p role="status" className="text-balance text-center text-xs leading-5 text-muted">
-          {t('auth.demoNotice')}
-        </p>
+        <LegalNotice />
       </div>
     </AuthShell>
   );

@@ -457,6 +457,18 @@ export function CheckoutPage() {
             </div>
           </div>
 
+          <p className="text-[12px] leading-5 text-subtle">
+            Оплачивая, вы принимаете{' '}
+            <Link to="/terms" className="underline underline-offset-4 hover:text-text">
+              оферту
+            </Link>{' '}
+            и{' '}
+            <Link to="/payment-terms" className="underline underline-offset-4 hover:text-text">
+              условия оплаты и возврата
+            </Link>
+            : в течение 24 часов, если моделями ещё не пользовались.
+          </p>
+
           {paymentMethod === 'crypto' && (
             <CryptoPanel
               plan={plan}

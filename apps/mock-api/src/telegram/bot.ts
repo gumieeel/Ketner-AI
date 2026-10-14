@@ -399,6 +399,20 @@ export class TelegramBotService implements TelegramPaymentsPort {
     await this.sendMessage(user.telegramChatId, text, { reply_markup: { inline_keyboard: [[this.openAppButton()]] } });
   }
 
+  async notifyAdminsAboutContact(message: { name: string; email: string; message: string }): Promise<void> {
+    const admins = this.deps.userStore.list().filter((candidate) => candidate.isAdmin && candidate.telegramChatId);
+    const text = [
+      '✉️ <b>Обращение с сайта</b>',
+      '',
+      `От: ${escapeHtml(message.name)} · ${escapeHtml(message.email)}`,
+      '',
+      escapeHtml(message.message),
+      '',
+      'Ответьте клиенту на почту.',
+    ].join('\n');
+    for (const admin of admins) await this.sendMessage(admin.telegramChatId!, text);
+  }
+
   async notifyAdminsAboutRefund(payment: PaymentRecord, user: User | null): Promise<void> {
     const admins = this.deps.userStore.list().filter((candidate) => candidate.isAdmin && candidate.telegramChatId);
     const ref = paymentRef(payment.id);
@@ -653,7 +667,7 @@ export class TelegramBotService implements TelegramPaymentsPort {
         '<b>Возвраты</b>',
         this.refundPolicyText(),
         '',
-        `Полные условия: ${this.siteUrl}/docs#faq`,
+        `Полные условия: ${this.siteUrl}/payment-terms`,
       ].join('\n'),
       { reply_markup: { inline_keyboard: [[this.openAppButton()]] } },
     );
