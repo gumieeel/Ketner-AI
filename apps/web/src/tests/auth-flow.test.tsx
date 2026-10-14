@@ -46,17 +46,12 @@ describe('auth-flow: сценарии авторизации и сессии', (
     });
   });
 
-  it('быстрый демо-вход по ссылке', async () => {
+  it('на странице входа нет демо-входа, но есть ссылки на условия', () => {
     renderRoute('/login');
 
-    const quickFill = screen.getByText(/Быстрый вход/i);
-    fireEvent.click(quickFill);
-
-    const emailInput = screen.getByLabelText(/Email/i) as HTMLInputElement;
-    const passwordInput = screen.getByLabelText(/Пароль/i) as HTMLInputElement;
-
-    expect(emailInput.value).toBe('demo@ketner.ai');
-    expect(passwordInput.value).toBe('password123');
+    expect(screen.queryByText(/Быстрый вход/i)).not.toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /соглашение и оферту/i })).toHaveAttribute('href', '/terms');
+    expect(screen.getByRole('link', { name: /политику конфиденциальности/i })).toHaveAttribute('href', '/privacy');
   });
 
   it('валидация и успешная регистрация на странице /signup', async () => {
