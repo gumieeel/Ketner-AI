@@ -1,6 +1,7 @@
 import { Router, type NextFunction, type Request, type Response } from 'express';
 import { config } from '../config.js';
 import { sendError } from '../middleware/errors.js';
+import { resolveGuestId } from '../middleware/guest.js';
 import type { ConversationStore } from '../store/conversation-store.js';
 
 /**
@@ -24,15 +25,15 @@ export function createConversationsRouter(
     next();
   });
 
-  const getUserId = (request: Request): string => {
-    if (request.userId) return request.userId;
-    const guestHeader = request.headers['x-guest-id'] || request.headers['x-user-id'];
-    const guestId = Array.isArray(guestHeader) ? guestHeader[0] : guestHeader;
-    if (guestId && typeof guestId === 'string' && guestId.trim()) {
-      return guestId.trim();
+  router.use('/conversations', (request: Request, response: Response, next: NextFunction) => {
+    if (!request.userId && resolveGuestId(request, defaultUserId) === null) {
+      sendError(response, 400, 'invalid_guest_id', 'Не передан корректный идентификатор гостя');
+      return;
     }
-    return defaultUserId;
-  };
+    next();
+  });
+
+  const getUserId = (request: Request): string => request.userId ?? resolveGuestId(request, defaultUserId) ?? defaultUserId;
 
   router.get('/conversations', (request: Request, response: Response) => {
     const userId = getUserId(request);
