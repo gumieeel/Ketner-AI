@@ -553,14 +553,14 @@ export function installFakeApi(options: FakeApiOptions = {}): FakeApi {
             amountUsd,
             address:
               currency === 'USDT_TRC20'
-                ? 'TDyeGqX4ranC94g7RMw6cGsCPvRQ7XAtQP'
+                ? 'TTrybitH2hDemoAddrUsdtTrc20xxxxxx'
                 : currency === 'BTC'
-                  ? 'bc1qa27xsypxy7pstvh2yrmzrlwev36qrr5az3vr7h'
-                  : 'UQA6ebFQPlulDzarfUtQJX8T61BHknM76VVYZ-3j-8eLnbyS',
+                  ? 'bc1qtrybith2hdemoaddressbtc0000000000xx'
+                  : 'UQTrybitH2hDemoAddressTon000000000000000000000000',
             qrPayload:
               currency === 'USDT_TRC20'
-                ? `tron:TDyeGqX4ranC94g7RMw6cGsCPvRQ7XAtQP?amount=${amount}`
-                : `ton://transfer/UQA6ebFQPlulDzarfUtQJX8T61BHknM76VVYZ-3j-8eLnbyS?amount=${amount}`,
+                ? `tron:TTrybitH2hDemoAddrUsdtTrc20xxxxxx?amount=${amount}`
+                : `ton://transfer/UQTrybitH2hDemoAddressTon000000000000000000000000?amount=${amount}`,
             status: 'pending',
             expiresAt: new Date(Date.now() + 1800000).toISOString(),
             network: currency === 'USDT_TRC20' ? 'TRC-20' : currency === 'BTC' ? 'Bitcoin' : 'TON',
@@ -580,8 +580,8 @@ export function installFakeApi(options: FakeApiOptions = {}): FakeApi {
             currency: 'USDT_TRC20',
             amount: 10,
             amountUsd: 10,
-            address: 'TDyeGqX4ranC94g7RMw6cGsCPvRQ7XAtQP',
-            qrPayload: 'tron:TDyeGqX4ranC94g7RMw6cGsCPvRQ7XAtQP?amount=10',
+            address: 'TTrybitH2hDemoAddrUsdtTrc20xxxxxx',
+            qrPayload: 'tron:TTrybitH2hDemoAddrUsdtTrc20xxxxxx?amount=10',
             status: 'pending',
             expiresAt: new Date(Date.now() + 1800000).toISOString(),
             network: 'TRC-20',
@@ -610,8 +610,8 @@ export function installFakeApi(options: FakeApiOptions = {}): FakeApi {
             currency: 'USDT_TRC20',
             amount: 10,
             amountUsd: 10,
-            address: 'TDyeGqX4ranC94g7RMw6cGsCPvRQ7XAtQP',
-            qrPayload: 'tron:TDyeGqX4ranC94g7RMw6cGsCPvRQ7XAtQP?amount=10',
+            address: 'TTrybitH2hDemoAddrUsdtTrc20xxxxxx',
+            qrPayload: 'tron:TTrybitH2hDemoAddrUsdtTrc20xxxxxx?amount=10',
             status: 'paid',
             expiresAt: new Date(Date.now() + 1800000).toISOString(),
             network: 'TRC-20',

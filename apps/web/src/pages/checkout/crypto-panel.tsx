@@ -1,7 +1,6 @@
 import {
   AlertIcon,
   BitcoinIcon,
-  CheckIcon,
   CryptoIcon,
   ExternalLinkIcon,
   InfoIcon,
@@ -31,8 +30,6 @@ import {
   TimerPill,
 } from './parts';
 
-export type CryptoTransferMode = 'gateway' | 'manual';
-
 export interface CryptoPanelProps {
   plan: Plan;
   planName: string;
@@ -40,8 +37,6 @@ export interface CryptoPanelProps {
   timer: string;
   currency: CryptoCurrency;
   onCurrencyChange: (currency: CryptoCurrency) => void;
-  mode: CryptoTransferMode;
-  onModeChange: (mode: CryptoTransferMode) => void;
   payerEmail: string;
   onPayerEmailChange: (email: string) => void;
   sendReceipt: boolean;
@@ -50,6 +45,9 @@ export interface CryptoPanelProps {
   onGatewayOpen: () => void;
   invoice: CryptoInvoice | null;
   loading: boolean;
+  /** Trybit не выставил счёт — показываем причину и кнопку повтора. */
+  invoiceError: string | null;
+  onRetryInvoice: () => void;
   option: CryptoOption;
   address: string;
   qr: string;
@@ -57,14 +55,12 @@ export interface CryptoPanelProps {
   copiedAmount: boolean;
   onCopyAddress: () => void;
   onCopyAmount: () => void;
-  txHash: string;
-  onTxHashChange: (value: string) => void;
   submitting: boolean;
   feedback: string | null;
   onConfirm: () => void;
 }
 
-/** Панель оплаты криптовалютой: шлюз Trybit или прямой перевод с TxID. */
+/** Панель оплаты криптовалютой: только через Trybit — реквизиты и проверка оплаты от шлюза. */
 export function CryptoPanel(props: CryptoPanelProps) {
   const {
     plan,
@@ -73,8 +69,6 @@ export function CryptoPanel(props: CryptoPanelProps) {
     timer,
     currency,
     onCurrencyChange,
-    mode,
-    onModeChange,
     payerEmail,
     onPayerEmailChange,
     sendReceipt,
@@ -211,27 +205,6 @@ export function CryptoPanel(props: CryptoPanelProps) {
           )}
         </div>
 
-        {/* 3. Способ проведения оплаты */}
-        <div role="group" aria-labelledby="crypto-step-mode" className="flex flex-col gap-2.5">
-          <StepLabel id="crypto-step-mode" title={t('checkout.cryptoStepMode')} />
-          <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2">
-            <ChoiceTile selected={mode === 'gateway'} onClick={() => onModeChange('gateway')} className="p-3.5">
-              <span className="flex w-full items-center justify-between gap-2">
-                <span className="text-[13px] font-semibold text-text">Trybit</span>
-                <TileTag selected={mode === 'gateway'}>{t('checkout.tileCryptoBadge')}</TileTag>
-              </span>
-              <span className="mt-0.5 text-xs leading-5 text-muted">{t('checkout.cryptoModeGatewayDesc')}</span>
-            </ChoiceTile>
-            <ChoiceTile selected={mode === 'manual'} onClick={() => onModeChange('manual')} className="p-3.5">
-              <span className="flex w-full items-center justify-between gap-2">
-                <span className="text-[13px] font-semibold text-text">{t('checkout.cryptoModeManual')}</span>
-                <TileTag selected={mode === 'manual'}>{t('checkout.cryptoModeManualBadge')}</TileTag>
-              </span>
-              <span className="mt-0.5 text-xs leading-5 text-muted">{t('checkout.cryptoModeManualDesc')}</span>
-            </ChoiceTile>
-          </div>
-        </div>
-
         {/* Email для чека */}
         <div className="flex flex-col gap-2.5 rounded-xl border border-stroke bg-canvas/70 p-3.5">
           <StepLabel htmlFor="payer-email-crypto" title={t('checkout.receiptEmail')} hint={t('checkout.receiptEmailHint')} />
@@ -254,7 +227,7 @@ export function CryptoPanel(props: CryptoPanelProps) {
           </label>
         </div>
 
-        {mode === 'gateway' ? <GatewayBlock {...props} /> : <ManualBlock {...props} />}
+        <GatewayBlock {...props} />
       </div>
     </PanelShell>
   );
@@ -262,8 +235,21 @@ export function CryptoPanel(props: CryptoPanelProps) {
 
 /** Вариант 1: оплата через шлюз Trybit. */
 function GatewayBlock(props: CryptoPanelProps) {
-  const { amount, invoice, loading, gatewayOpened, onGatewayOpen, submitting, feedback, onConfirm } = props;
+  const { amount, invoice, loading, invoiceError, onRetryInvoice, gatewayOpened, onGatewayOpen, submitting, feedback, onConfirm } = props;
   const { t } = useTranslation();
+
+  if (invoiceError && !invoice) {
+    return (
+      <div className="flex flex-col gap-3">
+        <Notice tone="warning" live>
+          {invoiceError}
+        </Notice>
+        <Button type="button" variant="primary" size="lg" fullWidth leftIcon={<RefreshIcon className="size-4" />} onClick={onRetryInvoice}>
+          {t('checkout.cryptoInvoiceRetry')}
+        </Button>
+      </div>
+    );
+  }
 
   // Trybit выдал адрес и точную сумму: платёж проходит прямо здесь, без новой вкладки.
   if (invoice?.gatewayDetails) return <GatewayInlineBlock {...props} />;
@@ -421,17 +407,6 @@ function GatewayInlineBlock({
 
       <CheckBlock feedback={feedback} submitting={submitting} onConfirm={onConfirm} />
 
-      {invoice?.cryptoCloudUrl ? (
-        <a
-          href={invoice.cryptoCloudUrl}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="inline-flex min-h-10 items-center justify-center gap-1.5 self-center text-[13px] text-muted underline-offset-2 hover:text-text hover:underline"
-        >
-          {t('checkout.cryptoOtherWays')}
-          <ExternalLinkIcon className="size-3.5" />
-        </a>
-      ) : null}
     </div>
   );
 }
@@ -464,119 +439,5 @@ function CheckBlock({
         {submitting ? t('checkout.cryptoChecking') : t('checkout.cryptoCheck')}
       </Button>
     </>
-  );
-}
-
-/** Вариант 2: прямой перевод на кошелёк с проверкой TxID. */
-function ManualBlock({
-  amount,
-  option,
-  address,
-  qr,
-  loading,
-  copiedAddress,
-  copiedAmount,
-  onCopyAddress,
-  onCopyAmount,
-  txHash,
-  onTxHashChange,
-  submitting,
-  feedback,
-  onConfirm,
-}: CryptoPanelProps) {
-  const { t } = useTranslation();
-  const OptionIcon = option.icon;
-
-  return (
-    <div className="flex flex-col gap-4 border-t border-stroke pt-5">
-      <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-        <div className="flex flex-col justify-between gap-2 rounded-xl border border-stroke bg-surface-2 p-3.5">
-          <span className="text-[13px] text-muted">{t('checkout.cryptoAmount')}</span>
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <span className="text-xl font-semibold text-accent tabular-nums">{amount}</span>
-            <CopyButton variant="ghost" copied={copiedAmount} label={t('checkout.cryptoCopyAmount')} onCopy={onCopyAmount} />
-          </div>
-        </div>
-
-        <div className="flex flex-col justify-between gap-2 rounded-xl border border-stroke bg-surface-2 p-3.5">
-          <span className="text-[13px] text-muted">{t('checkout.cryptoSelectedNetwork')}</span>
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <span className="text-sm font-semibold text-text">{option.network}</span>
-            <Badge tone="brand" className="px-2 py-0 text-[11px]">
-              {t('checkout.cryptoOneConfirmation')}
-            </Badge>
-          </div>
-        </div>
-      </div>
-
-      <div className="flex flex-col gap-2.5 rounded-xl border border-stroke bg-canvas p-3.5">
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <span className="text-[13px] font-semibold text-text">{t('checkout.cryptoAddress')}</span>
-          <CopyButton copied={copiedAddress} label={t('checkout.cryptoCopyAddress')} onCopy={onCopyAddress} />
-        </div>
-        <div className="rounded-lg border border-stroke bg-surface-2 p-2.5 font-mono text-xs font-semibold break-all text-text select-all">
-          {address}
-        </div>
-      </div>
-
-      <div className="flex flex-col items-center gap-5 rounded-xl border border-stroke bg-surface-2 p-4 sm:flex-row sm:items-start">
-        <QrFrame loading={loading} loadingLabel={t('common.loading')} skeletonClassName="size-36">
-          <QrCode
-            value={qr}
-            size={144}
-            badge={
-              <div className="flex size-6 items-center justify-center rounded-md bg-white shadow-xs">
-                <OptionIcon className="size-4" />
-              </div>
-            }
-          />
-        </QrFrame>
-
-        <div className="flex min-w-0 flex-col gap-2 text-left">
-          <h3 className="text-sm font-semibold text-text">{t('checkout.cryptoScanQr')}</h3>
-          <p className="text-[13px] leading-5 text-muted">{t('checkout.cryptoWallets')}</p>
-          <p className="flex items-start gap-2 text-[13px] leading-5 font-medium text-text">
-            <AlertIcon className="mt-0.5 size-4 shrink-0 text-warning" />
-            <span>{t('checkout.cryptoWrongNetwork')}</span>
-          </p>
-        </div>
-      </div>
-
-      <div className="flex flex-col gap-2.5 rounded-xl border border-accent/30 bg-canvas p-4">
-        <StepLabel htmlFor="crypto-tx-hash" title={t('checkout.cryptoTxHash')} hint={t('checkout.cryptoTxRequired')} />
-        <Input
-          id="crypto-tx-hash"
-          type="text"
-          autoComplete="off"
-          spellCheck={false}
-          placeholder={t('checkout.cryptoTxHashPlaceholder')}
-          value={txHash}
-          onChange={(e) => onTxHashChange(e.target.value)}
-          className="font-mono text-sm md:text-sm"
-        />
-        <p className="text-xs leading-5 text-muted">{t('checkout.cryptoVerifier')}</p>
-      </div>
-
-      {feedback ? (
-        <Notice tone="warning" live>
-          {feedback}
-        </Notice>
-      ) : null}
-
-      <Button
-        type="button"
-        variant="primary"
-        size="lg"
-        fullWidth
-        className="h-auto min-h-12 py-3 whitespace-normal"
-        aria-label={t('checkout.cryptoConfirm')}
-        loading={submitting}
-        leftIcon={<CheckIcon className="size-4" />}
-        onClick={onConfirm}
-      >
-        {submitting ? t('checkout.cryptoChecking') : t('checkout.cryptoPaidConfirm')}
-      </Button>
-
-    </div>
   );
 }

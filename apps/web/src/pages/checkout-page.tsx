@@ -57,7 +57,6 @@ export function CheckoutPage() {
 
   // Выбранный способ оплаты: по умолчанию криптовалюта (Trybit)
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('crypto');
-  const [cryptoTransferMode, setCryptoTransferMode] = useState<'gateway' | 'manual'>('gateway');
   const [payerEmail, setPayerEmail] = useState(user?.email || '');
   const [sendReceiptEmail, setSendReceiptEmail] = useState(true);
   const [gatewayOpened, setGatewayOpened] = useState(false);
@@ -72,8 +71,9 @@ export function CheckoutPage() {
   const [cryptoCurrency, setCryptoCurrency] = useState<CryptoCurrency>('USDT_TRC20');
   const [cryptoInvoice, setCryptoInvoice] = useState<CryptoInvoice | null>(null);
   const [cryptoLoading, setCryptoLoading] = useState(false);
+  const [cryptoError, setCryptoError] = useState<string | null>(null);
+  const [cryptoAttempt, setCryptoAttempt] = useState(0);
   const [cryptoSecondsLeft, setCryptoSecondsLeft] = useState(30 * 60);
-  const [txHashInput, setTxHashInput] = useState('');
   const [copiedCryptoAddress, setCopiedCryptoAddress] = useState(false);
   const [copiedCryptoAmount, setCopiedCryptoAmount] = useState(false);
 
@@ -108,6 +108,8 @@ export function CheckoutPage() {
   useEffect(() => {
     if (paymentMethod === 'crypto' && plan && plan.priceMonthly > 0) {
       setCryptoLoading(true);
+      setCryptoError(null);
+      setCryptoInvoice(null);
       createCryptoInvoice(plan.id, cryptoCurrency)
         .then(({ invoice }) => {
           setCryptoInvoice(invoice);
@@ -117,10 +119,12 @@ export function CheckoutPage() {
         })
         .catch((err) => {
           console.error('Failed to create Crypto invoice:', err);
+          setCryptoError(err instanceof Error && err.message ? err.message : t('checkout.cryptoInvoiceFailed'));
         })
         .finally(() => setCryptoLoading(false));
     }
-  }, [paymentMethod, cryptoCurrency, plan]);
+    // t меняется при смене языка — счёт из-за этого заново не выставляем
+  }, [paymentMethod, cryptoCurrency, plan, cryptoAttempt]);
 
   // Загрузка инвойса Telegram Stars
   useEffect(() => {
@@ -202,26 +206,11 @@ export function CheckoutPage() {
 
   // Подтверждение Криптовалюты
   const handleCryptoConfirm = async () => {
-    const invoiceId = cryptoInvoice?.id || `crypto_${plan.id}`;
-    const cleanTx = txHashInput.trim();
-
-    if (cryptoTransferMode === 'manual' && !cleanTx) {
-      setCheckFeedback({
-        method: 'crypto',
-        type: 'warning',
-        message: t('checkout.cryptoNeedTx'),
-      });
-      return;
-    }
-
+    if (!cryptoInvoice) return;
     setSubmitting(true);
     setCheckFeedback(null);
     try {
-      const res = await confirmCryptoPayment(
-        invoiceId,
-        cleanTx || undefined,
-        cryptoTransferMode,
-      );
+      const res = await confirmCryptoPayment(cryptoInvoice.id);
       setSubscription(res.subscription, res.user.plan);
       if (user) setUser({ ...user, plan: res.user.plan });
       setPaidMethodName(t('checkout.methodCrypto'));
@@ -321,9 +310,9 @@ export function CheckoutPage() {
     gatewayDetails && cryptoInvoice
       ? `${cryptoInvoice.amount} ${cryptoTicker}`
       : currentCrypto.formatAmount(plan.priceMonthly);
-  const cryptoAddress = cryptoInvoice?.address || currentCrypto.defaultAddress;
-  const cryptoQr =
-    cryptoInvoice?.qrPayload || `${currentCrypto.network.toLowerCase()}:${cryptoAddress}`;
+  // Адрес и QR выдаёт только Trybit; своих кошельков на странице нет.
+  const cryptoAddress = cryptoInvoice?.address ?? '';
+  const cryptoQr = cryptoInvoice?.qrPayload ?? '';
 
   const planName = t(plan.nameKey);
   const feedbackFor = (method: PaymentMethod): string | null =>
@@ -476,8 +465,6 @@ export function CheckoutPage() {
               timer={formatTimer(cryptoSecondsLeft)}
               currency={cryptoCurrency}
               onCurrencyChange={setCryptoCurrency}
-              mode={cryptoTransferMode}
-              onModeChange={setCryptoTransferMode}
               payerEmail={payerEmail}
               onPayerEmailChange={setPayerEmail}
               sendReceipt={sendReceiptEmail}
@@ -486,6 +473,8 @@ export function CheckoutPage() {
               onGatewayOpen={() => setGatewayOpened(true)}
               invoice={cryptoInvoice}
               loading={cryptoLoading}
+              invoiceError={cryptoError}
+              onRetryInvoice={() => setCryptoAttempt((attempt) => attempt + 1)}
               option={currentCrypto}
               address={cryptoAddress}
               qr={cryptoQr}
@@ -498,8 +487,6 @@ export function CheckoutPage() {
                   setCopiedCryptoAmount,
                 )
               }
-              txHash={txHashInput}
-              onTxHashChange={setTxHashInput}
               submitting={submitting}
               feedback={feedbackFor('crypto')}
               onConfirm={() => void handleCryptoConfirm()}

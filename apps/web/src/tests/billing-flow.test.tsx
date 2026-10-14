@@ -1,5 +1,5 @@
 import { fireEvent, screen, waitFor } from '@testing-library/react';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { useAuth } from '@/features/auth/auth-store';
 import { useBilling } from '@/features/billing/billing-store';
 import {
@@ -157,14 +157,14 @@ describe('billing-flow: каталог тарифов, чекаут и упра�
     expect(await screen.findByText(/Оплата криптовалютой/i)).toBeInTheDocument();
     expect(screen.getByText(/USDT \(TRC-20\)/i)).toBeInTheDocument();
     // Реквизиты Trybit показываются прямо на странице, без перехода на сайт шлюза.
-    expect(await screen.findByText(/TDyeGqX4ranC94g7RMw6cGsCPvRQ7XAtQP/i)).toBeInTheDocument();
+    expect(await screen.findByText(/TTrybitH2hDemoAddrUsdtTrc20xxxxxx/i)).toBeInTheDocument();
     expect(screen.getByText('Ожидаем перевод')).toBeInTheDocument();
-    expect(screen.getByRole('img', { name: /QR-код: .*TDyeGqX4ranC94g7RMw6cGsCPvRQ7XAtQP/ })).toBeInTheDocument();
+    expect(screen.getByRole('img', { name: /QR-код: .*TTrybitH2hDemoAddrUsdtTrc20xxxxxx/ })).toBeInTheDocument();
     expect(screen.queryByText(/Открыть шлюз Trybit/)).not.toBeInTheDocument();
-    expect(screen.getByRole('link', { name: /Другие способы оплаты на странице Trybit/ })).toHaveAttribute(
-      'href',
-      'https://pay.trybit.com/DEMO123',
-    );
+    // Оплата только через Trybit: ни выбора «прямой перевод», ни поля TxID, ни ухода на сайт шлюза.
+    expect(screen.queryByText(/Прямой перевод/)).not.toBeInTheDocument();
+    expect(screen.queryByLabelText(/TxID|хеш транзакции/i)).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: /Trybit/ })).not.toBeInTheDocument();
 
     const confirmCryptoButton = screen.getByRole('button', {
       name: /Подтвердить оплату криптовалютой/i,
@@ -180,6 +180,35 @@ describe('billing-flow: каталог тарифов, чекаут и упра�
     // Проверяем, что в auth-store план пользователя синхронизирован с 'plus'
     expect(useAuth.getState().user?.plan).toBe('plus');
     expect(useBilling.getState().subscription?.plan).toBe('plus');
+  });
+
+  it('чекаут: если Trybit не выставил счёт — понятная ошибка и повтор', async () => {
+    useAuth.setState({
+      status: 'authenticated',
+      token: 'mock-token',
+      user: { id: 'demo-user', email: 'demo@ketner.ai', name: 'Демо', plan: 'free', createdAt: '2026-01-01T00:00:00.000Z' },
+    });
+    const base = globalThis.fetch;
+    let attempts = 0;
+    vi.stubGlobal('fetch', async (input: RequestInfo | URL, init?: RequestInit) => {
+      if (String(input) === '/api/billing/crypto/create-invoice') {
+        attempts += 1;
+        if (attempts === 1) {
+          return Response.json(
+            { error: { code: 'gateway_unavailable', message: 'Trybit не выставил счёт. Попробуйте ещё раз через минуту.' } },
+            { status: 502 },
+          );
+        }
+      }
+      return base(input, init);
+    });
+    renderRoute('/checkout/plus');
+    fireEvent.click(screen.getByRole('button', { name: /Криптовалюта/i }));
+
+    expect(await screen.findByText('Trybit не выставил счёт. Попробуйте ещё раз через минуту.')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Выставить счёт заново' }));
+    expect(await screen.findByText(/TTrybitH2hDemoAddrUsdtTrc20xxxxxx/)).toBeInTheDocument();
+    expect(attempts).toBe(2);
   });
 
   it('настройки: отображение платной подписки и отмена подписки', async () => {

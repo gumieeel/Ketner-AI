@@ -166,11 +166,8 @@ export async function getCryptoInvoiceStatus(
   );
 }
 
-export async function confirmCryptoPayment(
-  invoiceId: string,
-  txHash?: string,
-  mode?: 'gateway' | 'manual',
-): Promise<{
+/** Проверка оплаты счёта Trybit. Прямых переводов с TxID нет: подтверждает только шлюз. */
+export async function confirmCryptoPayment(invoiceId: string): Promise<{
   success: boolean;
   subscription: Subscription;
   user: { plan: PlanId };
@@ -183,7 +180,7 @@ export async function confirmCryptoPayment(
     invoice: CryptoInvoice;
   }>(`/billing/crypto/confirm/${invoiceId}`, {
     method: 'POST',
-    body: JSON.stringify({ txHash, mode }),
+    body: JSON.stringify({}),
   });
 }
 

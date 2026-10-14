@@ -8,10 +8,9 @@ export interface CryptoOption {
   icon: typeof UsdtIcon;
   calcAmount: (usd: number) => number;
   formatAmount: (usd: number) => string;
-  defaultAddress: string;
 }
 
-/** Поддерживаемые валюты и сети: курс, формат суммы и адрес по умолчанию. */
+/** Поддерживаемые валюты и сети: курс и формат суммы (адрес для оплаты выдаёт Trybit). */
 export const CRYPTO_OPTIONS: readonly CryptoOption[] = [
   {
     id: 'USDT_TRC20',
@@ -20,7 +19,6 @@ export const CRYPTO_OPTIONS: readonly CryptoOption[] = [
     icon: UsdtIcon,
     calcAmount: (usd) => usd,
     formatAmount: (usd) => `${usd.toFixed(2)} USDT`,
-    defaultAddress: 'TDyeGqX4ranC94g7RMw6cGsCPvRQ7XAtQP',
   },
   {
     id: 'USDT_TON',
@@ -29,7 +27,6 @@ export const CRYPTO_OPTIONS: readonly CryptoOption[] = [
     icon: TonIcon,
     calcAmount: (usd) => usd,
     formatAmount: (usd) => `${usd.toFixed(2)} USDT`,
-    defaultAddress: 'UQA6ebFQPlulDzarfUtQJX8T61BHknM76VVYZ-3j-8eLnbyS',
   },
   {
     id: 'TON',
@@ -38,7 +35,6 @@ export const CRYPTO_OPTIONS: readonly CryptoOption[] = [
     icon: TonIcon,
     calcAmount: (usd) => +(usd / 5.4).toFixed(2),
     formatAmount: (usd) => `${(usd / 5.4).toFixed(2)} TON`,
-    defaultAddress: 'UQA6ebFQPlulDzarfUtQJX8T61BHknM76VVYZ-3j-8eLnbyS',
   },
   {
     id: 'BTC',
@@ -47,6 +43,5 @@ export const CRYPTO_OPTIONS: readonly CryptoOption[] = [
     icon: BitcoinIcon,
     calcAmount: (usd) => +(usd / 95000).toFixed(6),
     formatAmount: (usd) => `${(usd / 95000).toFixed(6)} BTC`,
-    defaultAddress: 'bc1qa27xsypxy7pstvh2yrmzrlwev36qrr5az3vr7h',
   },
 ];
