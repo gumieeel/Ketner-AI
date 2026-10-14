@@ -177,11 +177,6 @@ export const config = {
    * Stripe без ключей). Только вне production — в production их нет совсем.
    */
   enableMockBilling: !isProduction,
-  /**
-   * Ручное подтверждение прямого перевода на кошелёк (по TxID). В production выключено, пока
-   * владелец явно не задаст ENABLE_MANUAL_CRYPTO=true; даже тогда проверяется только USDT TRC-20.
-   */
-  manualCryptoEnabled: !isProduction || optionalEnv('ENABLE_MANUAL_CRYPTO') === 'true',
   enableDemoAccount: !isProduction || optionalEnv('ENABLE_DEMO_ACCOUNT') === 'true',
   /**
    * Анонимный доступ к чату и диалогам через бесплатную модель OpenRouter (nvidia/nemotron-3-ultra-550b-a55b:free).
@@ -214,10 +209,6 @@ export const config = {
   invoiceStoreFile:
     process.env.INVOICE_STORE_FILE ??
     fileURLToPath(new URL('../data/invoices.json', import.meta.url)),
-  /** Хранилище использованных блокчейн-транзакций (защита от повторного использования). */
-  usedTxStoreFile:
-    process.env.USED_TX_STORE_FILE ??
-    fileURLToPath(new URL('../data/used_transactions.json', import.meta.url)),
   /** Хранилище тикетов поддержки: файл переживает перезапуск mock-API. */
   supportStoreFile:
     process.env.SUPPORT_STORE_FILE ??

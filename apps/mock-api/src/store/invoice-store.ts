@@ -261,22 +261,9 @@ export function createInvoiceStore(file?: string): InvoiceStore {
             ? +(amountUsd / 95000).toFixed(6)
             : amountUsd;
 
-      const address =
-        currency === 'USDT_TRC20'
-          ? 'TDyeGqX4ranC94g7RMw6cGsCPvRQ7XAtQP'
-          : currency === 'BTC'
-            ? 'bc1qa27xsypxy7pstvh2yrmzrlwev36qrr5az3vr7h'
-            : 'UQA6ebFQPlulDzarfUtQJX8T61BHknM76VVYZ-3j-8eLnbyS';
-
+      // Прямых переводов нет: адрес и QR выдаёт только Trybit (H2H), своих кошельков счёт не содержит.
       const network =
         currency === 'USDT_TRC20' ? 'TRC-20' : currency === 'BTC' ? 'Bitcoin' : 'TON';
-
-      const qrPayload =
-        currency === 'USDT_TRC20'
-          ? `tron:${address}?amount=${amount}`
-          : currency === 'BTC'
-            ? `bitcoin:${address}?amount=${amount}`
-            : `ton://transfer/${address}?amount=${amount}`;
 
       const invoice: CryptoInvoice = {
         id,
@@ -285,8 +272,8 @@ export function createInvoiceStore(file?: string): InvoiceStore {
         currency,
         amount: gateway ? gateway.amount : amount,
         amountUsd,
-        address: gateway ? gateway.address : address,
-        qrPayload: gateway ? gatewayQr(currency, gateway) : qrPayload,
+        address: gateway ? gateway.address : '',
+        qrPayload: gateway ? gatewayQr(currency, gateway) : '',
         status: 'pending',
         expiresAt: gateway?.expiresAt ?? expiresAt,
         createdAt: new Date().toISOString(),

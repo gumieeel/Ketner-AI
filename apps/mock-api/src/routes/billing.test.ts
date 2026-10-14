@@ -93,101 +93,44 @@ test('billing: получение подписки и оформление check
   assert.equal(cancelData.user.plan, 'free');
 });
 
-test('billing: верификация крипто-платежей отклоняет фейковые TxID и защищает от replay-атак', async (t) => {
+test('billing: криптовалюта только через Trybit — своих адресов нет, переводы с TxID не принимаются', async (t) => {
   const server = await startTestServer();
   t.after(() => server.close());
+  const { token } = await signup(server.baseUrl, 'crypto_tester@example.com');
+  const headers = { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` };
 
-  // Регистрируем пользователя
-  const regRes = await fetch(`${server.baseUrl}/api/auth/signup`, {
+  const created = await fetch(`${server.baseUrl}/api/billing/crypto/create-invoice`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ email: 'crypto_tester@example.com', password: 'password123', name: 'Crypto Tester' }),
-  });
-  const { token, user } = await readJson<AuthSession>(regRes);
-  assert.equal(user.plan, 'free');
-
-  // Создаём крипто-счёт на тариф Plus
-  const createInvRes = await fetch(`${server.baseUrl}/api/billing/crypto/create-invoice`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${token}`,
-    },
+    headers,
     body: JSON.stringify({ planId: 'plus', currency: 'USDT_TRC20' }),
   });
-  assert.equal(createInvRes.status, 200);
-  const { invoice } = await readJson<{ invoice: { id: string; amountUsd: number; address: string } }>(createInvRes);
-  assert.ok(invoice.id);
+  assert.equal(created.status, 200);
+  const { invoice } = await readJson<{
+    invoice: { id: string; amountUsd: number; address: string; qrPayload: string; cryptoCloudInvoiceId?: string };
+  }>(created);
   assert.equal(invoice.amountUsd, 9);
-  assert.equal(invoice.address, 'TDyeGqX4ranC94g7RMw6cGsCPvRQ7XAtQP');
+  // Счёт выставлен в Trybit; своего кошелька для прямого перевода в нём нет.
+  assert.ok(invoice.cryptoCloudInvoiceId);
+  assert.equal(invoice.address, '');
+  assert.equal(invoice.qrPayload, '');
 
-  // 1. Попытка подтвердить прямой перевод с фейковым хешем из скриншота (VOXD7G4GPWE3R7KDJX7R)
-  const fakeConfirmRes = await fetch(`${server.baseUrl}/api/billing/crypto/confirm/${invoice.id}`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${token}`,
-    },
-    body: JSON.stringify({ txHash: 'VOXD7G4GPWE3R7KDJX7R', mode: 'manual' }),
-  });
-  assert.equal(fakeConfirmRes.status, 400);
-  const fakeData = await readJson<{ error: { code: string; message: string } }>(fakeConfirmRes);
-  assert.equal(fakeData.error.code, 'invalid_tx_format');
-  assert.ok(fakeData.error.message.includes('64'));
+  for (const body of [{ txHash: `TEST_VALID_TX_${Date.now()}`, mode: 'manual' }, { mode: 'manual' }, { txHash: 'abc' }]) {
+    const res = await fetch(`${server.baseUrl}/api/billing/crypto/confirm/${invoice.id}`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify(body),
+    });
+    assert.equal(res.status, 400);
+    assert.equal((await readJson<{ error: { code: string } }>(res)).error.code, 'manual_transfer_unavailable');
+  }
 
-  // 2. Попытка подтвердить с несуществующим 64-значным хешем (тестовая ошибка)
-  const testInvalidRes = await fetch(`${server.baseUrl}/api/billing/crypto/confirm/${invoice.id}`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${token}`,
-    },
-    body: JSON.stringify({ txHash: 'TEST_INVALID_TX_64CHARS_0000000000000000000000000000000000000000000', mode: 'manual' }),
-  });
-  assert.equal(testInvalidRes.status, 400);
+  // Без подтверждения Trybit тариф не включается.
+  const unpaid = await fetch(`${server.baseUrl}/api/billing/crypto/confirm/${invoice.id}`, { method: 'POST', headers, body: '{}' });
+  assert.equal(unpaid.status, 400);
+  assert.equal((await readJson<{ error: { code: string } }>(unpaid)).error.code, 'payment_not_received');
 
-  // 3. Успешное подтверждение с валидным хешем
-  const validTxHash = `TEST_VALID_TX_${Date.now()}_${Math.random().toString(36).slice(2)}`;
-  const validConfirmRes = await fetch(`${server.baseUrl}/api/billing/crypto/confirm/${invoice.id}`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${token}`,
-    },
-    body: JSON.stringify({ txHash: validTxHash, mode: 'manual' }),
-  });
-  assert.equal(validConfirmRes.status, 200);
-  const validData = await readJson<{ success: boolean; user: { plan: string }; subscription: Subscription }>(
-    validConfirmRes,
-  );
-  assert.equal(validData.success, true);
-  assert.equal(validData.user.plan, 'plus');
-  assert.equal(validData.subscription.plan, 'plus');
-  assert.equal(validData.subscription.status, 'active');
-
-  // 4. Защита от Replay Attack: попытка повторно использовать тот же TxID в новом счёте
-  const secondInvRes = await fetch(`${server.baseUrl}/api/billing/crypto/create-invoice`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${token}`,
-    },
-    body: JSON.stringify({ planId: 'pro', currency: 'USDT_TRC20' }),
-  });
-  const { invoice: invoice2 } = await readJson<{ invoice: { id: string } }>(secondInvRes);
-
-  const replayRes = await fetch(`${server.baseUrl}/api/billing/crypto/confirm/${invoice2.id}`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${token}`,
-    },
-    body: JSON.stringify({ txHash: validTxHash, mode: 'manual' }),
-  });
-  assert.equal(replayRes.status, 400);
-  const replayData = await readJson<{ error: { code: string; message: string } }>(replayRes);
-  assert.equal(replayData.error.code, 'tx_already_used');
-  assert.ok(replayData.error.message.includes('уже был использован'));
+  const sub = await fetch(`${server.baseUrl}/api/billing/subscription`, { headers });
+  assert.equal((await readJson<{ subscription: Subscription }>(sub)).subscription.plan, 'free');
 });
 
 
@@ -319,84 +262,26 @@ test('billing (C5): в production заглушки оплаты выключен
   assert.equal(subscription.plan, 'free');
 });
 
-test('billing (C7): параллельные подтверждения одного TxID активируют тариф один раз', async (t) => {
-  const server = await startTestServer();
-  t.after(() => server.close());
-  const user = await signup(server.baseUrl, 'c7-race@example.com');
-  const headers = { 'Content-Type': 'application/json', Authorization: `Bearer ${user.token}` };
-
-  const makeInvoice = async (): Promise<string> => {
-    const res = await fetch(`${server.baseUrl}/api/billing/crypto/create-invoice`, {
-      method: 'POST',
-      headers,
-      body: JSON.stringify({ planId: 'plus', currency: 'USDT_TRC20' }),
-    });
-    return (await readJson<{ invoice: { id: string } }>(res)).invoice.id;
-  };
-  const [first, second] = [await makeInvoice(), await makeInvoice()];
-  const hash = `TEST_VALID_RACE_${Date.now()}`;
-
-  const confirm = (invoiceId: string) =>
-    fetch(`${server.baseUrl}/api/billing/crypto/confirm/${invoiceId}`, {
-      method: 'POST',
-      headers,
-      body: JSON.stringify({ txHash: hash, mode: 'manual' }),
-    });
-  const results = await Promise.all([confirm(first), confirm(second)]);
-  const statuses = results.map((r) => r.status).sort();
-  assert.deepEqual(statuses, [200, 400], 'один запрос проходит, второй — tx_already_used');
-});
-
-test('billing (C7): без шлюза и без ENABLE_MANUAL_CRYPTO крипто-счёт не создаётся', async (t) => {
+test('billing (C7): без шлюза Trybit в production крипто-счёт не создаётся ни в какой валюте', async (t) => {
   const server = await startTestServer();
   t.after(() => server.close());
   const user = await signup(server.baseUrl, 'c7-prod@example.com');
   const headers = { 'Content-Type': 'application/json', Authorization: `Bearer ${user.token}` };
 
-  const mutable = config as unknown as {
-    enableMockBilling: boolean;
-    manualCryptoEnabled: boolean;
-    cryptoCloudApiKey?: string;
-    cryptoCloudShopId?: string;
-  };
+  const mutable = config as unknown as { enableMockBilling: boolean; cryptoCloudApiKey?: string; cryptoCloudShopId?: string };
   const previous = { ...mutable };
   mutable.enableMockBilling = false;
-  mutable.manualCryptoEnabled = false;
   mutable.cryptoCloudApiKey = '';
   mutable.cryptoCloudShopId = '';
   try {
-    const create = await fetch(`${server.baseUrl}/api/billing/crypto/create-invoice`, {
-      method: 'POST',
-      headers,
-      body: JSON.stringify({ planId: 'plus', currency: 'USDT_TRC20' }),
-    });
-    assert.equal(create.status, 501);
-
-    // Ручное подтверждение включено, но валюта не TRC-20: счёт не создаётся
-    mutable.manualCryptoEnabled = true;
-    const ton = await fetch(`${server.baseUrl}/api/billing/crypto/create-invoice`, {
-      method: 'POST',
-      headers,
-      body: JSON.stringify({ planId: 'plus', currency: 'TON' }),
-    });
-    assert.equal(ton.status, 400);
-
-    // TRC-20 доступен, а «тестовый» TxID в production — просто неверный формат
-    const ok = await fetch(`${server.baseUrl}/api/billing/crypto/create-invoice`, {
-      method: 'POST',
-      headers,
-      body: JSON.stringify({ planId: 'plus', currency: 'USDT_TRC20' }),
-    });
-    assert.equal(ok.status, 200);
-    const { invoice } = await readJson<{ invoice: { id: string } }>(ok);
-    const fake = await fetch(`${server.baseUrl}/api/billing/crypto/confirm/${invoice.id}`, {
-      method: 'POST',
-      headers,
-      body: JSON.stringify({ txHash: 'TEST_VALID_FREE_PLAN', mode: 'manual' }),
-    });
-    assert.equal(fake.status, 400);
-    const body = await readJson<{ error: { code: string } }>(fake);
-    assert.equal(body.error.code, 'invalid_tx_format');
+    for (const currency of ['USDT_TRC20', 'TON', 'BTC']) {
+      const create = await fetch(`${server.baseUrl}/api/billing/crypto/create-invoice`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ planId: 'plus', currency }),
+      });
+      assert.equal(create.status, 501, currency);
+    }
   } finally {
     Object.assign(mutable, previous);
   }

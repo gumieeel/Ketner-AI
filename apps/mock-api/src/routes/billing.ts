@@ -2,7 +2,7 @@ import { Router, type Request, type Response } from 'express';
 import { config } from '../config.js';
 import { requireAuth } from '../middleware/auth.js';
 import { sendError } from '../middleware/errors.js';
-import { invoiceStore as defaultInvoiceStore, usedTxStore, type InvoiceStore } from '../store/index.js';
+import { invoiceStore as defaultInvoiceStore, type InvoiceStore } from '../store/index.js';
 import type { SubscriptionStore } from '../store/subscription-store.js';
 import type { UserStore } from '../store/user-store.js';
 import { calculateStars, telegramBotService } from '../telegram/bot.js';
@@ -11,7 +11,6 @@ import type { CryptoCurrency, CryptoInvoice, PlanId, PlanItem } from '../types.j
 import { isVipUser } from '../services/vip.js';
 import { stripeService } from '../services/stripe.js';
 import { cryptoCloudService } from '../services/cryptocloud.js';
-import { blockchainVerifier } from '../services/blockchain-verifier.js';
 import { LEGACY_PRICE_USD, PLAN_PRICE_USD, planPriceRub, planPriceUsd } from '../services/pricing.js';
 
 /** Каталог тарифов. `priceMonthly` везде в долларах США (см. services/pricing.ts). */
@@ -583,27 +582,11 @@ export function createBillingRouter({
     const user = userStore.findById(userId) || userStore.findByEmail(userId);
     const currency: CryptoCurrency = request.body?.currency || 'USDT_TRC20';
 
-    // Без шлюза остаётся только ручной перевод на кошелёк. Если и он выключен (production без
-    // ENABLE_MANUAL_CRYPTO), принять оплату нечем — счёт не создаём, а не показываем «пустой» адрес.
-    if (!cryptoCloudService.isConfigured()) {
-      if (!config.manualCryptoEnabled) {
-        sendError(
-          response,
-          501,
-          'payment_method_unavailable',
-          'Оплата криптовалютой временно недоступна',
-        );
-        return;
-      }
-      if (!config.enableMockBilling && currency !== 'USDT_TRC20') {
-        sendError(
-          response,
-          400,
-          'currency_unavailable',
-          'Сейчас доступна оплата USDT в сети TRC-20',
-        );
-        return;
-      }
+    // Оплата криптовалютой — только через Trybit. Без настроенного шлюза счёт не создаём
+    // (в разработке шлюз подменяется заглушкой, enableMockBilling).
+    if (!cryptoCloudService.isConfigured() && !config.enableMockBilling) {
+      sendError(response, 501, 'payment_method_unavailable', 'Оплата криптовалютой временно недоступна');
+      return;
     }
 
     // Тарифы в долларах: Plus $9, Pro $25, Ultra $49 (services/pricing.ts)
@@ -629,7 +612,11 @@ export function createBillingRouter({
         cryptocurrency,
       });
     } catch (err) {
-      console.warn('[billing] Ошибка создания CryptoCloud счёта:', err);
+      console.warn('[billing] Ошибка создания счёта Trybit:', err);
+    }
+    if (!ccResult?.invoiceId) {
+      sendError(response, 502, 'gateway_unavailable', 'Trybit не выставил счёт. Попробуйте ещё раз через минуту.');
+      return;
     }
 
     const invoice = activeInvoiceStore.createCryptoInvoice(
@@ -685,122 +672,18 @@ export function createBillingRouter({
       return;
     }
 
-    const rawTxHash = request.body?.txHash;
-    const txHash =
-      typeof rawTxHash === 'string' && rawTxHash.trim().length > 0
-        ? rawTxHash.trim()
-        : undefined;
-    const rawMode = request.body?.mode;
-    const mode = rawMode === 'gateway' ? 'gateway' : rawMode === 'manual' || txHash ? 'manual' : 'gateway';
-
-    // 1. ПРЯМОЙ ПЕРЕВОД НА КОШЕЛЁК (MANUAL BLOCKCHAIN VERIFICATION)
-    if (mode === 'manual' || txHash) {
-      if (!txHash) {
-        sendError(
-          response,
-          400,
-          'tx_hash_required',
-          'Для подтверждения прямого перевода необходимо указать TxID (хеш транзакции из вашего кошелька).',
-        );
-        return;
-      }
-
-      if (!config.manualCryptoEnabled) {
-        sendError(
-          response,
-          501,
-          'payment_method_unavailable',
-          'Ручное подтверждение переводов сейчас отключено',
-        );
-        return;
-      }
-
-      // Счёт уже оплачен — повторно ничего не активируем и второй TxID не принимаем.
-      if (invoice.status === 'paid') {
-        const current = subscriptionStore.get(invoice.userId);
-        response.json({
-          success: true,
-          subscription: current,
-          user: userStore.findById(invoice.userId) ?? { id: invoice.userId, plan: invoice.planId },
-          invoice,
-        });
-        return;
-      }
-
-      // Атомарно занимаем TxID ДО сетевых запросов: два одновременных запроса с одним хешем
-      // не пройдут оба (раньше проверка и запись были разделены await).
-      const reserved = usedTxStore.reserveTx({
-        txHash,
-        userId: invoice.userId,
-        planId: invoice.planId,
-        currency: invoice.currency,
-        amount: invoice.amount,
-        createdAt: new Date().toISOString(),
-      });
-      if (!reserved) {
-        sendError(
-          response,
-          400,
-          'tx_already_used',
-          'Этот хеш транзакции (TxID) уже был использован ранее для активации подписки. Повторное использование запрещено.',
-        );
-        return;
-      }
-
-      let verification;
-      try {
-        verification = await blockchainVerifier.verifyTransaction({
-          txHash,
-          currency: invoice.currency,
-          requiredUsd: invoice.amountUsd,
-          planId: invoice.planId,
-          userId: invoice.userId,
-          invoiceCreatedAt: invoice.createdAt,
-        });
-      } catch (err) {
-        usedTxStore.releaseTx(txHash);
-        console.error('[billing] Ошибка проверки транзакции:', err);
-        sendError(response, 502, 'blockchain_verification_failed', 'Не удалось проверить транзакцию. Повторите позже.');
-        return;
-      }
-
-      if (!verification.success) {
-        // Проверка не удалась — хеш освобождается, чтобы после подтверждения сети его можно было подать снова.
-        usedTxStore.releaseTx(txHash);
-        sendError(
-          response,
-          400,
-          verification.errorCode || 'blockchain_verification_failed',
-          verification.errorMessage || 'Не удалось подтвердить транзакцию в блокчейне.',
-        );
-        return;
-      }
-
-      // Фиксируем фактическую сумму и время блока
-      usedTxStore.recordUsedTx({
-        txHash,
-        userId: invoice.userId,
-        planId: invoice.planId,
-        currency: invoice.currency,
-        amount: verification.transferredAmount ?? invoice.amount,
-        createdAt: new Date().toISOString(),
-        blockTimestamp: verification.blockTimestamp,
-      });
-
-      const userId = invoice.userId;
-      const { invoice: updated, subscription, user } = activateCrypto(invoice, txHash);
-
-      response.json({
-        success: true,
-        subscription,
-        user: user ?? { id: userId, plan: invoice.planId },
-        invoice: updated,
-        verification,
-      });
+    // Прямые переводы на кошелёк с TxID больше не принимаются: оплата только в окне Trybit.
+    if (request.body?.txHash || request.body?.mode === 'manual') {
+      sendError(
+        response,
+        400,
+        'manual_transfer_unavailable',
+        'Прямые переводы не принимаются. Оплатите счёт в окне Trybit на странице оплаты.',
+      );
       return;
     }
 
-    // 2. ОПЛАТА ЧЕРЕЗ ШЛЮЗ CRYPTOCLOUD / TRYBIT (GATEWAY VERIFICATION)
+    // ОПЛАТА ЧЕРЕЗ TRYBIT: статус счёта проверяется в шлюзе.
     if (invoice.cryptoCloudInvoiceId && cryptoCloudService.isConfigured()) {
       let isPaid = invoice.status === 'paid';
       if (!isPaid) {
@@ -819,7 +702,7 @@ export function createBillingRouter({
           response,
           400,
           'payment_not_received',
-          'Оплата ещё не подтверждена платёжной системой CryptoCloud. Пожалуйста, совершите перевод в окне TryBit и повторите проверку.',
+          'Trybit ещё не подтвердил оплату. Совершите перевод по реквизитам на странице оплаты и повторите проверку.',
         );
         return;
       }
@@ -850,7 +733,7 @@ export function createBillingRouter({
       response,
       400,
       'payment_not_received',
-      'Оплата не подтверждена. Пожалуйста, совершите перевод и укажите TxID транзакции.',
+      'Trybit ещё не подтвердил оплату. Совершите перевод по реквизитам на странице оплаты и повторите проверку.',
     );
   });
 

@@ -39,8 +39,6 @@ export { supportStore, createSupportStore } from './support-store.js';
 export type { SupportStore, SupportTicket, SupportMessage } from './support-store.js';
 
 /** Хранилище использованных блокчейн-транзакций (защита от replay-атак). */
-export { usedTxStore, createUsedTxStore } from './used-tx-store.js';
-export type { UsedTxStore, UsedTxRecord } from './used-tx-store.js';
 
 /** Хранилище пользовательских оценок (лайки/дизлайки) и аналитика эскалации моделей. */
 import { FeedbackStore } from './feedback-store.js';
