@@ -6,7 +6,8 @@ import { invoiceStore as defaultInvoiceStore, usedTxStore, type InvoiceStore } f
 import type { SubscriptionStore } from '../store/subscription-store.js';
 import type { UserStore } from '../store/user-store.js';
 import { calculateStars, telegramBotService } from '../telegram/bot.js';
-import type { CryptoCurrency, PlanId, PlanItem } from '../types.js';
+import { BillingService, createBillingLedger, planLabel } from '../billing/billing-service.js';
+import type { CryptoCurrency, CryptoInvoice, PlanId, PlanItem } from '../types.js';
 import { isVipUser } from '../services/vip.js';
 import { stripeService } from '../services/stripe.js';
 import { cryptoCloudService } from '../services/cryptocloud.js';
@@ -138,14 +139,43 @@ export interface BillingRouterDeps {
   subscriptionStore: SubscriptionStore;
   userStore: UserStore;
   invoiceStore?: InvoiceStore;
+  /** Журнал платежей и выдача тарифа; без него — отдельный журнал в памяти (тесты). */
+  billingService?: BillingService;
 }
 
 export function createBillingRouter({
   subscriptionStore,
   userStore,
   invoiceStore: activeInvoiceStore = defaultInvoiceStore,
+  billingService,
 }: BillingRouterDeps): Router {
   const router = Router();
+  const billing =
+    billingService ?? new BillingService({ userStore, subscriptionStore, ledger: createBillingLedger() });
+
+  /**
+   * Оплаченный крипто-счёт: тариф выдаётся один раз (с продлением или пересчётом при смене
+   * тарифа), платёж попадает в журнал, в Telegram приходит чек.
+   */
+  const activateCrypto = (invoice: CryptoInvoice, txHash?: string) => {
+    const updated = activeInvoiceStore.markCryptoPaid(invoice.id, txHash) ?? invoice;
+    const result = billing.grant(invoice.userId, invoice.planId, {
+      id: `crypto:${invoice.id}`,
+      method: 'crypto',
+      amount: invoice.amountUsd,
+      currency: 'USD',
+      invoiceId: invoice.id,
+    });
+    if (!result.duplicate && result.subscription.renewsAt) {
+      const until = new Date(result.subscription.renewsAt).toLocaleDateString('ru-RU', { day: 'numeric', month: 'long' });
+      void billing.telegram?.notifyUser(
+        invoice.userId,
+        `✅ Оплата криптовалютой получена: тариф <b>${planLabel(invoice.planId)}</b> действует до <b>${until}</b>.`,
+        'receipt',
+      );
+    }
+    return { invoice: updated, subscription: result.subscription, user: result.user };
+  };
 
   /**
    * Идентификатор текущего пользователя. Берётся только из аутентифицированной сессии
@@ -235,15 +265,7 @@ export function createBillingRouter({
       return;
     }
 
-    activeInvoiceStore.markCryptoPaid(invoice.id);
-    subscriptionStore.checkout(invoice.userId, invoice.planId);
-    const user = userStore.updatePlan(invoice.userId, invoice.planId);
-    if (user?.email && user.email !== invoice.userId) {
-      subscriptionStore.checkout(user.email, invoice.planId);
-    }
-    if (user?.id && user.id !== invoice.userId) {
-      subscriptionStore.checkout(user.id, invoice.planId);
-    }
+    activateCrypto(invoice);
     console.log(`[cryptocloud] Подписка ${invoice.planId} активирована для ${invoice.userId}`);
     response.json({ status: 'ok' });
   };
@@ -639,15 +661,7 @@ export function createBillingRouter({
       try {
         const ccStatus = await cryptoCloudService.checkInvoiceStatus(invoice.cryptoCloudInvoiceId);
         if (ccStatus === 'paid' || ccStatus === 'success' || ccStatus === 'overpaid') {
-          invoice = activeInvoiceStore.markCryptoPaid(invoice.id) ?? invoice;
-          subscriptionStore.checkout(invoice.userId, invoice.planId);
-          const user = userStore.updatePlan(invoice.userId, invoice.planId);
-          if (user?.email && user.email !== invoice.userId) {
-            subscriptionStore.checkout(user.email, invoice.planId);
-          }
-          if (user?.id && user.id !== invoice.userId) {
-            subscriptionStore.checkout(user.id, invoice.planId);
-          }
+          invoice = activateCrypto(invoice).invoice;
           console.log(`[billing:crypto] Счёт ${invoice.id} оплачен через CryptoCloud. План ${invoice.planId} активирован.`);
         }
       } catch (err) {
@@ -773,17 +787,8 @@ export function createBillingRouter({
         blockTimestamp: verification.blockTimestamp,
       });
 
-      const updated = activeInvoiceStore.markCryptoPaid(invoice.id, txHash) ?? invoice;
       const userId = invoice.userId;
-
-      const subscription = subscriptionStore.checkout(userId, invoice.planId);
-      const user = userStore.updatePlan(userId, invoice.planId);
-      if (user?.email && user.email !== userId) {
-        subscriptionStore.checkout(user.email, invoice.planId);
-      }
-      if (user?.id && user.id !== userId) {
-        subscriptionStore.checkout(user.id, invoice.planId);
-      }
+      const { invoice: updated, subscription, user } = activateCrypto(invoice, txHash);
 
       response.json({
         success: true,
@@ -830,16 +835,7 @@ export function createBillingRouter({
         });
         return;
       }
-      const updated = activeInvoiceStore.markCryptoPaid(invoice.id) ?? invoice;
-
-      const subscription = subscriptionStore.checkout(userId, invoice.planId);
-      const user = userStore.updatePlan(userId, invoice.planId);
-      if (user?.email && user.email !== userId) {
-        subscriptionStore.checkout(user.email, invoice.planId);
-      }
-      if (user?.id && user.id !== userId) {
-        subscriptionStore.checkout(user.id, invoice.planId);
-      }
+      const { invoice: updated, subscription, user } = activateCrypto(invoice);
 
       response.json({
         success: true,

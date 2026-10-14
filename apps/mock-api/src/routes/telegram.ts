@@ -11,6 +11,7 @@ import {
   type TelegramUpdate,
 } from '../telegram/bot.js';
 import { createMiniAppRouter } from './telegram-miniapp.js';
+import { createTelegramAuthRouter } from './telegram-auth.js';
 import {
   TelegramSupportBotService,
   telegramSupportBotService as defaultSupportBotService,
@@ -132,6 +133,9 @@ export function createTelegramRouter(deps: TelegramRouterDeps): Router {
       user: deps.userStore.findById(userId),
     });
   });
+
+  // Вход и привязка через Telegram для сайта.
+  router.use(createTelegramAuthRouter({ botService, userStore: deps.userStore }));
 
   // Мини-приложение Telegram: кабинет подписки.
   router.use(
