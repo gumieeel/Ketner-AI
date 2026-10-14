@@ -316,6 +316,26 @@ export function StandaloneLayout() {
                     {t('footer.faq')}
                   </a>
                 </li>
+                <li>
+                  <Link to="/terms" className={footerLinkClass}>
+                    Соглашение и оферта
+                  </Link>
+                </li>
+                <li>
+                  <Link to="/privacy" className={footerLinkClass}>
+                    Конфиденциальность
+                  </Link>
+                </li>
+                <li>
+                  <Link to="/payment-terms" className={footerLinkClass}>
+                    Оплата и возврат
+                  </Link>
+                </li>
+                <li>
+                  <Link to="/contacts" className={footerLinkClass}>
+                    Контакты
+                  </Link>
+                </li>
               </ul>
             </nav>
 

@@ -22,6 +22,8 @@ import { createApiKeysRouter } from './api-keys.js';
 import { createGithubRouter } from './github.js';
 import { createAuthRouter } from './auth.js';
 import { createBillingRouter } from './billing.js';
+import { createContactRouter } from './contact.js';
+import { telegramBotService } from '../telegram/bot.js';
 import { createChatRouter } from './chat.js';
 import { createCodeRouter } from './code.js';
 import { createImagesRouter } from './images.js';
@@ -187,6 +189,11 @@ export function createApiRouter(deps: ApiDeps): Router {
   router.use(healthRouter);
   router.use(createMetaRouter());
   router.use('/auth', createAuthRouter(activeUserStore, deps.betterAuth));
+  router.use(
+    createContactRouter({
+      notify: (message) => (deps.botService ?? telegramBotService).notifyAdminsAboutContact(message),
+    }),
+  );
   router.use(
     createBillingRouter({
       subscriptionStore: activeSubscriptionStore,
