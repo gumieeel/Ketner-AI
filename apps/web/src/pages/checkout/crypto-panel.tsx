@@ -18,6 +18,7 @@ import { RichText } from '@/components/ui/rich-text';
 import type { CryptoCurrency, CryptoInvoice, Plan } from '@/features/billing/types';
 import { useTranslation } from '@/i18n';
 import type { CryptoOption } from './crypto-options';
+import { openGatewayWindow } from './gateway-window';
 import {
   ChoiceTile,
   CopyButton,
@@ -251,8 +252,8 @@ function GatewayBlock(props: CryptoPanelProps) {
     );
   }
 
-  // Trybit выдал адрес и точную сумму: платёж проходит прямо здесь, без новой вкладки.
-  if (invoice?.gatewayDetails) return <GatewayInlineBlock {...props} />;
+  // Есть ссылка на платёжную страницу Trybit — открываем виджет окном. Только адрес без ссылки — показываем реквизиты на сайте.
+  if (invoice?.gatewayDetails && !invoice.cryptoCloudUrl) return <GatewayInlineBlock {...props} />;
 
   return (
     <div className="flex flex-col gap-4">
@@ -261,7 +262,11 @@ function GatewayBlock(props: CryptoPanelProps) {
           href={invoice.cryptoCloudUrl}
           target="_blank"
           rel="noopener noreferrer"
-          onClick={onGatewayOpen}
+          onClick={(event) => {
+            event.preventDefault();
+            openGatewayWindow(invoice.cryptoCloudUrl as string);
+            onGatewayOpen();
+          }}
           className={buttonClasses({
             variant: 'primary',
             size: 'lg',
@@ -304,6 +309,10 @@ function GatewayBlock(props: CryptoPanelProps) {
                 href={invoice.cryptoCloudUrl}
                 target="_blank"
                 rel="noopener noreferrer"
+                onClick={(event) => {
+                  event.preventDefault();
+                  openGatewayWindow(invoice.cryptoCloudUrl as string);
+                }}
                 className="shrink-0 font-semibold text-accent underline underline-offset-2 hover:opacity-80"
               >
                 {t('checkout.cryptoReopen')}

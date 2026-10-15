@@ -26,6 +26,7 @@ import { useTranslation } from '@/i18n';
 import { cn } from '@/lib/cn';
 import { CRYPTO_OPTIONS } from './checkout/crypto-options';
 import { CryptoPanel } from './checkout/crypto-panel';
+import { closeGatewayWindow } from './checkout/gateway-window';
 import { OrderSummary } from './checkout/order-summary';
 import { CheckoutSkeleton } from './checkout/parts';
 import { StarsPanel } from './checkout/stars-panel';
@@ -140,6 +141,11 @@ export function CheckoutPage() {
         .finally(() => setStarsLoading(false));
     }
   }, [paymentMethod, starsInvoice, plan]);
+
+  // Оплата прошла — закрываем окно виджета Trybit
+  useEffect(() => {
+    if (success) closeGatewayWindow();
+  }, [success]);
 
   // Polling статуса инвойса
   useEffect(() => {

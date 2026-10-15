@@ -156,15 +156,19 @@ describe('billing-flow: каталог тарифов, чекаут и упра�
     // Должны появиться заголовок криптовалюты, сеть и адрес кошелька
     expect(await screen.findByText(/Оплата криптовалютой/i)).toBeInTheDocument();
     expect(screen.getByText(/USDT \(TRC-20\)/i)).toBeInTheDocument();
-    // Реквизиты Trybit показываются прямо на странице, без перехода на сайт шлюза.
-    expect(await screen.findByText(/TTrybitH2hDemoAddrUsdtTrc20xxxxxx/i)).toBeInTheDocument();
-    expect(screen.getByText('Ожидаем перевод')).toBeInTheDocument();
-    expect(screen.getByRole('img', { name: /QR-код: .*TTrybitH2hDemoAddrUsdtTrc20xxxxxx/ })).toBeInTheDocument();
-    expect(screen.queryByText(/Открыть шлюз Trybit/)).not.toBeInTheDocument();
-    // Оплата только через Trybit: ни выбора «прямой перевод», ни поля TxID, ни ухода на сайт шлюза.
+    // Оплата — в виджете Trybit: окно открывается кнопкой, реквизиты и ввод TxID на сайте не показываются.
+    const openSpy = vi.spyOn(window, 'open').mockReturnValue({ focus: vi.fn(), close: vi.fn() } as unknown as Window);
+    const widgetButton = await screen.findByRole('link', { name: /Оплатить в виджете Trybit/ });
+    fireEvent.click(widgetButton);
+    expect(openSpy).toHaveBeenCalledWith(
+      'https://pay.trybit.com/DEMO123',
+      'ketner-trybit-pay',
+      expect.stringContaining('popup=yes'),
+    );
+    expect(await screen.findByText(/Окно оплаты открыто/)).toBeInTheDocument();
+    expect(screen.queryByText(/TTrybitH2hDemoAddrUsdtTrc20xxxxxx/)).not.toBeInTheDocument();
     expect(screen.queryByText(/Прямой перевод/)).not.toBeInTheDocument();
     expect(screen.queryByLabelText(/TxID|хеш транзакции/i)).not.toBeInTheDocument();
-    expect(screen.queryByRole('link', { name: /Trybit/ })).not.toBeInTheDocument();
 
     const confirmCryptoButton = screen.getByRole('button', {
       name: /Подтвердить оплату криптовалютой/i,
@@ -207,7 +211,7 @@ describe('billing-flow: каталог тарифов, чекаут и упра�
 
     expect(await screen.findByText('Trybit не выставил счёт. Попробуйте ещё раз через минуту.')).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Выставить счёт заново' }));
-    expect(await screen.findByText(/TTrybitH2hDemoAddrUsdtTrc20xxxxxx/)).toBeInTheDocument();
+    expect(await screen.findByRole('link', { name: /Оплатить в виджете Trybit/ })).toBeInTheDocument();
     expect(attempts).toBe(2);
   });
 
