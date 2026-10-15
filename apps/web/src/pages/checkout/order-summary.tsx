@@ -14,7 +14,7 @@ const PLAN_ACCENTS: Record<string, { card: string; bar: string }> = {
 const PERKS = ['checkout.perk1', 'checkout.perk2', 'checkout.perk3'] as const;
 
 /** Сводка заказа справа: тариф, цена, что входит и строка о безопасности. */
-export function OrderSummary({ plan }: { plan: Plan }) {
+export function OrderSummary({ plan, feeUsd = 0 }: { plan: Plan; feeUsd?: number }) {
   const { t, language } = useTranslation();
   const accent = PLAN_ACCENTS[plan.id] ?? { card: 'border-stroke', bar: 'bg-brand-gradient' };
   const highlight =
@@ -50,11 +50,11 @@ export function OrderSummary({ plan }: { plan: Plan }) {
           </div>
           <div className="flex items-center justify-between gap-3">
             <dt className="text-muted">{t('checkout.fee')}</dt>
-            <dd className="font-semibold text-success tabular-nums">$0.00</dd>
+            <dd className={cn('font-semibold tabular-nums', feeUsd > 0 ? 'text-text' : 'text-success')}>${feeUsd.toFixed(2)}</dd>
           </div>
           <div className="flex items-center justify-between gap-3 border-t border-stroke pt-2.5 text-base font-semibold text-text">
             <dt>{t('checkout.total')}</dt>
-            <dd className="text-gradient tabular-nums">${plan.priceMonthly}</dd>
+            <dd className="text-gradient tabular-nums">${feeUsd > 0 ? (plan.priceMonthly + feeUsd).toFixed(2) : plan.priceMonthly}</dd>
           </div>
         </dl>
 

@@ -155,7 +155,7 @@ describe('billing-flow: каталог тарифов, чекаут и упра�
 
     // Должны появиться заголовок криптовалюты, сеть и адрес кошелька
     expect(await screen.findByText(/Оплата криптовалютой/i)).toBeInTheDocument();
-    expect(screen.getByText(/USDT \(TRC-20\)/i)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /USDT · Tron \(TRC-20\)/ })).toBeInTheDocument();
     // Оплата — в виджете Trybit: окно открывается кнопкой, реквизиты и ввод TxID на сайте не показываются.
     const openSpy = vi.spyOn(window, 'open').mockReturnValue({ focus: vi.fn(), close: vi.fn() } as unknown as Window);
     const widgetButton = await screen.findByRole('link', { name: /Оплатить в виджете Trybit/ });
@@ -213,6 +213,45 @@ describe('billing-flow: каталог тарифов, чекаут и упра�
     fireEvent.click(screen.getByRole('button', { name: 'Выставить счёт заново' }));
     expect(await screen.findByRole('link', { name: /Оплатить в виджете Trybit/ })).toBeInTheDocument();
     expect(attempts).toBe(2);
+  });
+
+  it('чекаут: все монеты и сети Trybit, поиск и комиссии', async () => {
+    useAuth.setState({
+      status: 'authenticated',
+      token: 'mock-token',
+      user: { id: 'demo-user', email: 'demo@ketner.ai', name: 'Демо', plan: 'free', createdAt: '2026-01-01T00:00:00.000Z' },
+    });
+    const base = globalThis.fetch;
+    const requested: string[] = [];
+    vi.stubGlobal('fetch', async (input: RequestInfo | URL, init?: RequestInit) => {
+      if (String(input) === '/api/billing/crypto/create-invoice') {
+        requested.push((JSON.parse(String(init?.body)) as { currency: string }).currency);
+      }
+      return base(input, init);
+    });
+    renderRoute('/checkout/plus');
+    fireEvent.click(screen.getByRole('button', { name: /Криптовалюта/i }));
+
+    // Счёт по умолчанию — USDT в Tron: комиссии берутся из счёта Trybit
+    expect(await screen.findByText('Итого к оплате')).toBeInTheDocument();
+    expect(screen.getAllByText('$10.57').length).toBeGreaterThan(0);
+    expect(screen.getByText(/сервис \$0\.17, перевод \$1\.40/)).toBeInTheDocument();
+    expect(screen.getByText(/Комиссию сети блокчейна за отправку платите вы/)).toBeInTheDocument();
+
+    // Все монеты доступны; редкая находится поиском, сети выбираются отдельно
+    fireEvent.click(screen.getByRole('button', { name: /Показать все \(18\)/ }));
+    expect(screen.getByRole('button', { name: /TRUMP/ })).toBeInTheDocument();
+    fireEvent.change(screen.getByRole('searchbox'), { target: { value: 'bnb' } });
+    fireEvent.click(screen.getByRole('button', { name: /^BNB\s?BNB$/ }));
+    await waitFor(() => expect(requested).toContain('BNB'));
+    fireEvent.change(screen.getByRole('searchbox'), { target: { value: 'usdc' } });
+    fireEvent.click(screen.getByRole('button', { name: /^USDC\s?USD Coin/ }));
+    expect(await screen.findByRole('button', { name: /USDC · Solana \(SOL\)/ })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /USDC · Ethereum \(ERC-20\)/ })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /USDC · Base/ }));
+    await waitFor(() => expect(requested).toContain('USDC_BASE'));
+    // В сети без комиссии перевода в счёте только комиссия сервиса
+    await waitFor(() => expect(screen.getAllByText('$9.17').length).toBeGreaterThan(0));
   });
 
   it('настройки: отображение платной подписки и отмена подписки', async () => {

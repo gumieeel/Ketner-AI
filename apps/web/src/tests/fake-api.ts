@@ -567,6 +567,13 @@ export function installFakeApi(options: FakeApiOptions = {}): FakeApi {
             cryptoCloudUrl: 'https://pay.trybit.com/DEMO123',
             // Trybit выдал реквизиты (H2H): оплата прямо на сайте.
             gatewayDetails: true,
+            // Комиссии из счёта Trybit: сервис 1,9 % + перевод по Tron, обе на покупателе.
+            fees: {
+              serviceUsd: 0.17,
+              transferUsd: currency === 'USDT_TRC20' ? 1.4 : 0,
+              payerUsd: +(0.17 + (currency === 'USDT_TRC20' ? 1.4 : 0)).toFixed(2),
+              totalUsd: +(amountUsd + 0.17 + (currency === 'USDT_TRC20' ? 1.4 : 0)).toFixed(2),
+            },
           },
         });
       }

@@ -24,7 +24,7 @@ import type {
 import { copyText } from '@/lib/clipboard';
 import { useTranslation } from '@/i18n';
 import { cn } from '@/lib/cn';
-import { CRYPTO_OPTIONS } from './checkout/crypto-options';
+import { cryptoOption } from './checkout/crypto-options';
 import { CryptoPanel } from './checkout/crypto-panel';
 import { closeGatewayWindow } from './checkout/gateway-window';
 import { OrderSummary } from './checkout/order-summary';
@@ -307,11 +307,10 @@ export function CheckoutPage() {
   // Ссылка на окно оплаты открывает оплату сразу, без переписки с ботом.
   if (starsInvoice?.invoiceLink) botDeepLink = starsInvoice.invoiceLink;
 
-  const currentCrypto =
-    CRYPTO_OPTIONS.find((c) => c.id === cryptoCurrency) || CRYPTO_OPTIONS[0];
+  const currentCrypto = cryptoOption(cryptoCurrency);
   // Реквизиты от Trybit (H2H): точная сумма в криптовалюте приходит со счётом.
   const gatewayDetails = Boolean(cryptoInvoice?.gatewayDetails);
-  const cryptoTicker = currentCrypto.formatAmount(plan.priceMonthly).split(' ').pop() ?? '';
+  const cryptoTicker = currentCrypto.ticker;
   const cryptoAmountStr =
     gatewayDetails && cryptoInvoice
       ? `${cryptoInvoice.amount} ${cryptoTicker}`
@@ -501,7 +500,7 @@ export function CheckoutPage() {
               onCopyAddress={() => void copyToClipboard(cryptoAddress, setCopiedCryptoAddress)}
               onCopyAmount={() =>
                 void copyToClipboard(
-                  String(gatewayDetails && cryptoInvoice ? cryptoInvoice.amount : currentCrypto.calcAmount(plan.priceMonthly)),
+                  String(gatewayDetails && cryptoInvoice ? cryptoInvoice.amount : (currentCrypto.calcAmount(plan.priceMonthly) ?? plan.priceMonthly)),
                   setCopiedCryptoAmount,
                 )
               }
@@ -531,7 +530,7 @@ export function CheckoutPage() {
           </p>
         </div>
 
-        <OrderSummary plan={plan} />
+        <OrderSummary plan={plan} feeUsd={paymentMethod === 'crypto' && !cryptoLoading ? (cryptoInvoice?.fees?.payerUsd ?? 0) : 0} />
       </div>
     </div>
   );

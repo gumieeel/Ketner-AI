@@ -47,11 +47,13 @@ export interface CryptoGatewayDetails {
   network: string;
   expiresAt?: string;
   memo?: string;
+  fees?: { serviceUsd: number; transferUsd: number; invoiceUsd: number };
 }
 
 /** Строка для QR: кошельки понимают адрес; для BTC и TON — стандартные ссылки с суммой. */
 function gatewayQr(currency: CryptoCurrency, details: CryptoGatewayDetails): string {
   if (currency === 'BTC') return `bitcoin:${details.address}?amount=${details.amount}`;
+  if (currency === 'LTC') return `litecoin:${details.address}?amount=${details.amount}`;
   if (currency === 'TON') {
     const nano = Math.round(details.amount * 1e9);
     const text = details.memo ? `&text=${encodeURIComponent(details.memo)}` : '';
@@ -262,8 +264,7 @@ export function createInvoiceStore(file?: string): InvoiceStore {
             : amountUsd;
 
       // Прямых переводов нет: адрес и QR выдаёт только Trybit (H2H), своих кошельков счёт не содержит.
-      const network =
-        currency === 'USDT_TRC20' ? 'TRC-20' : currency === 'BTC' ? 'Bitcoin' : 'TON';
+      const network = currency === 'BTC' ? 'Bitcoin' : currency.startsWith('USDT_TRC') || currency === 'TRX' ? 'TRC-20' : currency.replace(/^[A-Z]+_?/, '') || currency;
 
       const invoice: CryptoInvoice = {
         id,
@@ -281,6 +282,16 @@ export function createInvoiceStore(file?: string): InvoiceStore {
         cryptoCloudUrl,
         cryptoCloudInvoiceId,
         ...(gateway ? { gatewayDetails: true, ...(gateway.memo ? { memo: gateway.memo } : {}) } : {}),
+        ...(gateway?.fees
+          ? {
+              fees: {
+                serviceUsd: gateway.fees.serviceUsd,
+                transferUsd: gateway.fees.transferUsd,
+                payerUsd: Math.max(0, Math.round((gateway.fees.invoiceUsd - amountUsd) * 100) / 100),
+                totalUsd: Math.max(amountUsd, gateway.fees.invoiceUsd),
+              },
+            }
+          : {}),
       };
 
       cryptoInvoices.set(id, invoice);

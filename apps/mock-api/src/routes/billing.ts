@@ -7,6 +7,7 @@ import type { SubscriptionStore } from '../store/subscription-store.js';
 import type { UserStore } from '../store/user-store.js';
 import { calculateStars, telegramBotService } from '../telegram/bot.js';
 import { BillingService, createBillingLedger, planLabel } from '../billing/billing-service.js';
+import { isTrybitCurrency } from '../billing/trybit-currencies.js';
 import type { CryptoCurrency, CryptoInvoice, PlanId, PlanItem } from '../types.js';
 import { isVipUser } from '../services/vip.js';
 import { stripeService } from '../services/stripe.js';
@@ -580,7 +581,12 @@ export function createBillingRouter({
 
     const userId = getUserId(request);
     const user = userStore.findById(userId) || userStore.findByEmail(userId);
-    const currency: CryptoCurrency = request.body?.currency || 'USDT_TRC20';
+    const requestedCurrency: unknown = request.body?.currency ?? 'USDT_TRC20';
+    if (!isTrybitCurrency(requestedCurrency)) {
+      sendError(response, 400, 'invalid_currency', 'Эта криптовалюта или сеть не поддерживается');
+      return;
+    }
+    const currency: CryptoCurrency = requestedCurrency;
 
     // Оплата криптовалютой — только через Trybit. Без настроенного шлюза счёт не создаём
     // (в разработке шлюз подменяется заглушкой, enableMockBilling).
@@ -593,13 +599,7 @@ export function createBillingRouter({
     const amountUsd = planPriceUsd(plan.id);
     const tempOrderId = `crypto_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
 
-    const cryptoCodeMap: Record<string, string> = {
-      USDT_TRC20: 'USDT_TRC20',
-      USDT_TON: 'USDT_TON',
-      TON: 'TON',
-      BTC: 'BTC',
-    };
-    const cryptocurrency = cryptoCodeMap[currency] || 'USDT_TRC20';
+    const cryptocurrency: string = currency;
 
     let ccResult;
     try {
