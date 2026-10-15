@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { config } from '../config.js';
+import { TRYBIT_CURRENCIES } from '../billing/trybit-currencies.js';
 import { readJson, startTestServer } from '../testing/server.js';
 import type { AuthSession, PlanItem, Subscription } from '../types.js';
 
@@ -289,4 +290,73 @@ test('billing (C7): без шлюза Trybit в production крипто-счёт
   const sub = await fetch(`${server.baseUrl}/api/billing/subscription`, { headers });
   const { subscription } = await readJson<{ subscription: Subscription }>(sub);
   assert.equal(subscription.plan, 'free');
+});
+
+test('billing: все валюты и сети Trybit принимаются, незнакомые отклоняются', async (t) => {
+  const server = await startTestServer();
+  t.after(() => server.close());
+  const { token } = await signup(server.baseUrl, 'currencies@example.com');
+  const headers = { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` };
+  const create = (currency: unknown) =>
+    fetch(`${server.baseUrl}/api/billing/crypto/create-invoice`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ planId: 'plus', currency }),
+    });
+
+  assert.equal(TRYBIT_CURRENCIES.length, 38);
+  for (const currency of TRYBIT_CURRENCIES) assert.equal((await create(currency)).status, 200, currency);
+  for (const bad of ['DOGE', 'USDT', '', 'usdt_trc20', 42]) {
+    const res = await create(bad);
+    assert.equal(res.status, 400, String(bad));
+    assert.equal((await readJson<{ error: { code: string } }>(res)).error.code, 'invalid_currency');
+  }
+});
+
+test('billing: комиссии Trybit из ответа шлюза попадают в счёт', async (t) => {
+  const server = await startTestServer();
+  t.after(() => server.close());
+  const { token } = await signup(server.baseUrl, 'fees@example.com');
+  const headers = { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` };
+
+  const mutable = config as unknown as { cryptoCloudApiKey?: string; cryptoCloudShopId?: string };
+  const previousConfig = { ...mutable };
+  const realFetch = globalThis.fetch;
+  mutable.cryptoCloudApiKey = 'test-key';
+  mutable.cryptoCloudShopId = 'test-shop';
+  globalThis.fetch = (async (input: string | URL | Request, init?: RequestInit) => {
+    if (String(input).includes('/v2/invoice/create')) {
+      return Response.json({
+        status: 'success',
+        result: {
+          uuid: 'INV-FEES1234',
+          link: 'https://pay.trybit.com/FEES1234',
+          status: 'created',
+          address: 'TFeeTestAddress000000000000000000',
+          amount: 10.4,
+          amount_usd: 10.4,
+          fee_usd: 1.4,
+          service_fee_usd: 0.17,
+          currency: { code: 'USDT', fullcode: 'USDT_TRC20', network: { code: 'TRC20', fullname: 'Tron' } },
+        },
+      });
+    }
+    return realFetch(input, init);
+  }) as typeof fetch;
+  t.after(() => {
+    globalThis.fetch = realFetch;
+    Object.assign(mutable, previousConfig);
+  });
+
+  const res = await fetch(`${server.baseUrl}/api/billing/crypto/create-invoice`, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify({ planId: 'plus', currency: 'USDT_TRC20' }),
+  });
+  assert.equal(res.status, 200);
+  const { invoice } = await readJson<{
+    invoice: { amount: number; fees?: { serviceUsd: number; transferUsd: number; payerUsd: number; totalUsd: number } };
+  }>(res);
+  assert.equal(invoice.amount, 10.4);
+  assert.deepEqual(invoice.fees, { serviceUsd: 0.17, transferUsd: 1.4, payerUsd: 1.4, totalUsd: 10.4 });
 });

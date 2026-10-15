@@ -1,3 +1,4 @@
+import type { TrybitCurrency } from './billing/trybit-currencies.js';
 /**
  * Типы контракта mock-API.
  *
@@ -206,7 +207,17 @@ export interface TelegramStarsInvoice {
   paidAt?: string;
 }
 
-export type CryptoCurrency = 'USDT_TRC20' | 'USDT_TON' | 'TON' | 'BTC';
+export type CryptoCurrency = TrybitCurrency;
+
+/** Комиссии Trybit по счёту (в долларах) и часть, которую платит покупатель сверх цены тарифа. */
+export interface CryptoFees {
+  serviceUsd: number;
+  transferUsd: number;
+  /** На сколько счёт дороже цены тарифа: комиссия, лежащая на покупателе. */
+  payerUsd: number;
+  /** Итог к оплате в долларах (цена тарифа + payerUsd). */
+  totalUsd: number;
+}
 
 export interface CryptoInvoice {
   id: string;
@@ -228,5 +239,7 @@ export interface CryptoInvoice {
   /** MEMO/комментарий к переводу (сеть TON). */
   memo?: string;
   txHash?: string;
+  /** Комиссии Trybit по этому счёту (приходят в ответе шлюза). */
+  fees?: CryptoFees;
 }
 

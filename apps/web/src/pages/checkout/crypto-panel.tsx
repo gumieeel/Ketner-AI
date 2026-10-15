@@ -1,13 +1,10 @@
 import {
   AlertIcon,
-  BitcoinIcon,
   CryptoIcon,
   ExternalLinkIcon,
   InfoIcon,
   RefreshIcon,
   ShieldIcon,
-  TonIcon,
-  UsdtIcon,
 } from '@/components/icons';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -17,17 +14,16 @@ import { QrCode } from '@/components/ui/qr-code';
 import { RichText } from '@/components/ui/rich-text';
 import type { CryptoCurrency, CryptoInvoice, Plan } from '@/features/billing/types';
 import { useTranslation } from '@/i18n';
+import { CryptoFeeBreakdown, CryptoPicker } from './crypto-picker';
 import type { CryptoOption } from './crypto-options';
 import { openGatewayWindow } from './gateway-window';
 import {
-  ChoiceTile,
   CopyButton,
   Notice,
   PanelShell,
   QrFrame,
   StatusRow,
   StepLabel,
-  TileTag,
   TimerPill,
 } from './parts';
 
@@ -77,7 +73,6 @@ export function CryptoPanel(props: CryptoPanelProps) {
     invoice,
   } = props;
   const { t } = useTranslation();
-  const isUsdt = currency.startsWith('USDT');
   const invoiceNo =
     invoice?.cryptoCloudInvoiceId || (invoice ? `INV-${invoice.id.slice(0, 8).toUpperCase()}` : 'INV-AI');
 
@@ -127,84 +122,10 @@ export function CryptoPanel(props: CryptoPanelProps) {
           </Badge>
         </div>
 
-        {/* 1. Валюта */}
-        <div role="group" aria-labelledby="crypto-step-currency" className="flex flex-col gap-2.5">
-          <StepLabel id="crypto-step-currency" title={t('checkout.cryptoStepCurrency')} hint={t('checkout.cryptoStepCurrencyHint')} />
-          <div className="grid grid-cols-3 gap-2 sm:gap-2.5">
-            <ChoiceTile selected={isUsdt} onClick={() => onCurrencyChange('USDT_TRC20')}>
-              <span className="flex w-full items-center justify-between gap-1">
-                <UsdtIcon className="size-5" />
-                <TileTag selected={isUsdt}>{t('checkout.cryptoTop')}</TileTag>
-              </span>
-              <span className="mt-1 text-[13px] font-semibold text-text">USDT</span>
-              <span className="text-xs text-muted">Tether USD</span>
-            </ChoiceTile>
-            <ChoiceTile selected={currency === 'TON'} onClick={() => onCurrencyChange('TON')}>
-              <span className="flex w-full items-center justify-between gap-1">
-                <TonIcon className="size-5" />
-                <span className="max-sm:hidden">
-                  <TileTag selected={currency === 'TON'}>Telegram</TileTag>
-                </span>
-              </span>
-              <span className="mt-1 text-[13px] font-semibold text-text">TON</span>
-              <span className="text-xs text-muted">The Open Network</span>
-            </ChoiceTile>
-            <ChoiceTile selected={currency === 'BTC'} onClick={() => onCurrencyChange('BTC')}>
-              <span className="flex w-full items-center justify-between gap-1">
-                <BitcoinIcon className="size-5" />
-                <span className="max-sm:hidden">
-                  <TileTag selected={currency === 'BTC'}>Mainnet</TileTag>
-                </span>
-              </span>
-              <span className="mt-1 text-[13px] font-semibold text-text">Bitcoin</span>
-              <span className="text-xs text-muted">BTC Network</span>
-            </ChoiceTile>
-          </div>
-        </div>
+        {/* 1–2. Монета и сеть — как на платёжной странице Trybit */}
+        <CryptoPicker value={currency} onChange={onCurrencyChange} />
 
-        {/* 2. Сеть */}
-        <div role="group" aria-labelledby="crypto-step-network" className="flex flex-col gap-2.5">
-          <StepLabel id="crypto-step-network" title={`2. ${t('checkout.cryptoNetwork')}`} hint={t('checkout.cryptoStepNetworkHint')} />
-
-          {isUsdt ? (
-            <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2">
-              <ChoiceTile
-                selected={currency === 'USDT_TRC20'}
-                onClick={() => onCurrencyChange('USDT_TRC20')}
-                className="flex-row items-center justify-between gap-3"
-              >
-                <span className="flex min-w-0 flex-col">
-                  <span className="text-[13px] font-semibold text-text">USDT (TRC-20)</span>
-                  <span className="text-xs text-muted">{t('checkout.cryptoTronHint')}</span>
-                </span>
-                <TileTag tone="brand">{t('checkout.cryptoFast')}</TileTag>
-              </ChoiceTile>
-              <ChoiceTile
-                selected={currency === 'USDT_TON'}
-                onClick={() => onCurrencyChange('USDT_TON')}
-                className="flex-row items-center justify-between gap-3"
-              >
-                <span className="flex min-w-0 flex-col">
-                  <span className="text-[13px] font-semibold text-text">USDT (TON)</span>
-                  <span className="text-xs text-muted">{t('checkout.cryptoTonUsdtHint')}</span>
-                </span>
-                <TileTag>~$0.05</TileTag>
-              </ChoiceTile>
-            </div>
-          ) : (
-            <div className="flex items-center justify-between gap-3 rounded-xl border border-accent bg-accent-soft p-3">
-              <span className="flex min-w-0 flex-col">
-                <span className="text-[13px] font-semibold text-text">
-                  {currency === 'TON' ? 'The Open Network (TON)' : 'Bitcoin Mainnet (BTC)'}
-                </span>
-                <span className="text-xs text-muted">
-                  {currency === 'TON' ? t('checkout.cryptoTonHint') : t('checkout.cryptoBtcHint')}
-                </span>
-              </span>
-              <TileTag tone="brand">{t('checkout.cryptoActive')}</TileTag>
-            </div>
-          )}
-        </div>
+        <CryptoFeeBreakdown priceUsd={plan.priceMonthly} currency={currency} fees={invoice?.fees} loading={props.loading} />
 
         {/* Email для чека */}
         <div className="flex flex-col gap-2.5 rounded-xl border border-stroke bg-canvas/70 p-3.5">

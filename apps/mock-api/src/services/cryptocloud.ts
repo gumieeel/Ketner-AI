@@ -27,6 +27,8 @@ export interface CryptoCloudInvoiceResult {
     network: string;
     expiresAt?: string;
     memo?: string;
+    /** Комиссии из ответа шлюза (в долларах); недоступны в заглушке. */
+    fees?: { serviceUsd: number; transferUsd: number; invoiceUsd: number };
   };
 }
 
@@ -36,6 +38,17 @@ function trybitDate(value: unknown): string | undefined {
   const iso = value.trim().replace(' ', 'T').replace(/(\.\d{3})\d*$/, '$1');
   const date = new Date(/[zZ]|[+-]\d\d:?\d\d$/.test(iso) ? iso : `${iso}Z`);
   return Number.isNaN(date.getTime()) ? undefined : date.toISOString();
+}
+
+function money(value: unknown): number {
+  const number = Number(value);
+  return Number.isFinite(number) && number > 0 ? Math.round(number * 100) / 100 : 0;
+}
+
+function parseFees(result: { amount_usd?: unknown; fee_usd?: unknown; service_fee_usd?: unknown }) {
+  const invoiceUsd = money(result.amount_usd);
+  if (!invoiceUsd) return undefined;
+  return { serviceUsd: money(result.service_fee_usd), transferUsd: money(result.fee_usd), invoiceUsd };
 }
 
 export class CryptoCloudService {
@@ -144,6 +157,9 @@ export class CryptoCloudService {
           amount?: number | string;
           memo?: string;
           comment?: string;
+          amount_usd?: number | string;
+          fee_usd?: number | string;
+          service_fee_usd?: number | string;
           currency?: { code?: string; fullcode?: string; network?: { code?: string; fullname?: string } };
         };
         message?: string;
@@ -167,6 +183,7 @@ export class CryptoCloudService {
                 .join(' · '),
               expiresAt: trybitDate(result.expiry_date),
               memo: (result.memo || result.comment || '').trim() || undefined,
+              fees: parseFees(result),
             }
           : undefined;
       return {

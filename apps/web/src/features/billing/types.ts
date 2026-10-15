@@ -27,7 +27,24 @@ export interface Plan {
 
 export type PaymentMethod = 'sbp' | 'crypto' | 'stars' | 'card';
 
-export type CryptoCurrency = 'USDT_TRC20' | 'USDT_TON' | 'TON' | 'BTC';
+/** Валюты и сети Trybit; полный справочник — trybit-currencies.ts. */
+export type CryptoCurrency =
+  | 'BTC' | 'LTC' | 'TRX' | 'SOL' | 'TON' | 'BNB'
+  | 'ETH' | 'ETH_ARB' | 'ETH_BASE' | 'ETH_OPT'
+  | 'USDT_TRC20' | 'USDT_BSC' | 'USDT_TON' | 'USDT_ERC20' | 'USDT_ARB' | 'USDT_OPT' | 'USDT_SOL'
+  | 'USDC_BSC' | 'USDC_ERC20' | 'USDC_BASE' | 'USDC_ARB' | 'USDC_OPT' | 'USDC_SOL'
+  | 'DAI_BSC' | 'DAI_ERC20' | 'DAI_BASE' | 'DAI_ARB' | 'DAI_OPT'
+  | 'PYUSD_ERC20' | 'PYUSD_SOL' | 'USDD_TRC20' | 'XAUT_ERC20'
+  | 'ARB_ARB' | 'OP_OPT' | 'SHIB_ERC20' | 'SHIB_BSC' | 'PEPE_ERC20' | 'TRUMP_SOL';
+
+/** Комиссии Trybit по счёту, в долларах. */
+export interface CryptoFees {
+  serviceUsd: number;
+  transferUsd: number;
+  /** Сколько счёт дороже цены тарифа: эту часть комиссии платит покупатель. */
+  payerUsd: number;
+  totalUsd: number;
+}
 
 export interface CryptoInvoice {
   id: string;
@@ -47,6 +64,7 @@ export interface CryptoInvoice {
   /** MEMO/комментарий к переводу (сеть TON). */
   memo?: string;
   txHash?: string;
+  fees?: CryptoFees;
 }
 
 export interface SbpInvoice {
