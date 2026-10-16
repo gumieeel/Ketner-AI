@@ -1501,18 +1501,18 @@ test('сообщение по возврату: только своя заявк
 test('бот поддержки: уведомления администратору сайта без SUPPORT_ADMIN_CHAT_ID (переживают деплой)', async (t) => {
   const store = createSupportStore(join(mkdtempSync(join(tmpdir(), 'ketner-sup-')), 's.json'));
   const sent: Array<{ chatId: number | string; text: string }> = [];
-  let userStoreRef: { list(): User[] } | undefined;
+  const userStoreRef: { current?: { list(): User[] } } = {};
   const support = new TelegramSupportBotService({
     supportStore: store,
     botToken: '',
-    userStore: { list: () => userStoreRef!.list() },
+    userStore: { list: () => userStoreRef.current!.list() },
   });
   support.sendMessage = async (chatId, text) => {
     sent.push({ chatId, text });
     return { message_id: 7000 + sent.length };
   };
   const h = await harness({ supportBotService: support, supportStore: store });
-  userStoreRef = h.userStore;
+  userStoreRef.current = h.userStore;
   t.after(() => h.server.close());
   const admin = await h.linkedBuyer(9931);
   h.userStore.setAdmin(admin.buyer.user.id, true);
