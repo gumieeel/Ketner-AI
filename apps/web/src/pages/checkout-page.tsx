@@ -226,9 +226,18 @@ export function CheckoutPage() {
   const applyPaid = useEffectEvent(applyPaidResult);
 
   // Оплата прошла — закрываем окно виджета Trybit
+  // и меняем адрес на /checkout/success: по нему рекламные системы считают покупки
+  // (экран остаётся тем же, перезагрузка покажет общую страницу «Оплата прошла»).
   useEffect(() => {
-    if (success) closeGatewayWindow();
-  }, [success]);
+    if (!success) return;
+    closeGatewayWindow();
+    const item = packId ? `pack-${packId}` : (planId ?? '');
+    window.history.replaceState(
+      window.history.state,
+      '',
+      `/checkout/success${item ? `?item=${encodeURIComponent(item)}` : ''}`,
+    );
+  }, [success, packId, planId]);
 
   // Polling статуса инвойса
   useEffect(() => {

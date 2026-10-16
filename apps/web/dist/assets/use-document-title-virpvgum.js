@@ -1,0 +1,1 @@
+import{i as e,n as t}from"./jsx-runtime-Dk72oS4N.js";var n=e(t(),1);function r(e){(0,n.useEffect)(()=>{let t=document.title;return document.title=e,()=>{document.title=t}},[e])}export{r as t};

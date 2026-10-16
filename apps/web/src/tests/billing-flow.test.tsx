@@ -184,6 +184,9 @@ describe('billing-flow: каталог тарифов, чекаут и упра�
       expect(screen.getByText(/Перейти в чат/i)).toBeInTheDocument();
       expect(screen.getByText(/В настройки/i)).toBeInTheDocument();
     });
+    // Адрес после оплаты — для цели «Покупка» в рекламных кабинетах.
+    expect(window.location.pathname).toBe('/checkout/success');
+    expect(window.location.search).toBe('?item=plus');
 
     // Проверяем, что в auth-store план пользователя синхронизирован с 'plus'
     expect(useAuth.getState().user?.plan).toBe('plus');

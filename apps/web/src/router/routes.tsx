@@ -63,6 +63,11 @@ export const routes: RouteObject[] = [
       { path: 'docs/plans/:planId', lazy: documentationPage },
       { path: 'docs/api', lazy: apiDocsPage },
       {
+        // Адрес после успешной оплаты на сайте (цель «Покупка» в рекламных кабинетах).
+        path: 'checkout/success',
+        lazy: lazyPage(() => import('@/pages/checkout-success-page'), 'CheckoutSuccessPage'),
+      },
+      {
         path: 'checkout/:planId',
         lazy: lazyPage(() => import('@/pages/checkout-page'), 'CheckoutPage'),
       },
