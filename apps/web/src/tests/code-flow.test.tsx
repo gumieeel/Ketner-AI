@@ -40,14 +40,18 @@ const PROJECT: CodeProject = {
 };
 
 function json(body: unknown, status = 200): Response {
-  return new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } });
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { 'Content-Type': 'application/json' },
+  });
 }
 
 function sse(events: AgentEvent[]): Response {
   const encoder = new TextEncoder();
   const body = new ReadableStream<Uint8Array>({
     start(controller) {
-      for (const event of events) controller.enqueue(encoder.encode(`data: ${JSON.stringify(event)}\n\n`));
+      for (const event of events)
+        controller.enqueue(encoder.encode(`data: ${JSON.stringify(event)}\n\n`));
       controller.close();
     },
   });
@@ -60,7 +64,9 @@ interface Calls {
   deleted: string[];
 }
 
-function installCodeApi(options: { projects?: CodeProject[]; thread?: ThreadItem[]; run?: AgentEvent[] } = {}): Calls {
+function installCodeApi(
+  options: { projects?: CodeProject[]; thread?: ThreadItem[]; run?: AgentEvent[] } = {},
+): Calls {
   const calls: Calls = { runBodies: [], writes: [], deleted: [] };
   let projects = options.projects ?? [PROJECT];
   // Сервер хранит ленту сам: после запуска клиент перечитывает её, поэтому фейк повторяет это поведение.
@@ -71,9 +77,31 @@ function installCodeApi(options: { projects?: CodeProject[]; thread?: ThreadItem
     serverThread.push({ id: `u${serverThread.length}`, kind: 'user', text: task, createdAt: now });
     for (const e of events) {
       if (e.type === 'tool_result') {
-        serverThread.push({ id: `t${e.callId}`, kind: 'tool', runId: 'r1', step: e.step, tool: e.tool, label: e.label, ok: e.ok, summary: e.summary, change: e.change, createdAt: now });
+        serverThread.push({
+          id: `t${e.callId}`,
+          kind: 'tool',
+          runId: 'r1',
+          step: e.step,
+          tool: e.tool,
+          label: e.label,
+          ok: e.ok,
+          summary: e.summary,
+          change: e.change,
+          createdAt: now,
+        });
       } else if (e.type === 'done') {
-        serverThread.push({ id: `r${serverThread.length}`, kind: 'run', runId: e.runId, status: e.status, steps: e.steps, costUsd: e.costUsd, modelId: e.modelId, message: e.message, ...(e.plan ? { plan: e.plan } : {}), createdAt: now });
+        serverThread.push({
+          id: `r${serverThread.length}`,
+          kind: 'run',
+          runId: e.runId,
+          status: e.status,
+          steps: e.steps,
+          costUsd: e.costUsd,
+          modelId: e.modelId,
+          message: e.message,
+          ...(e.plan ? { plan: e.plan } : {}),
+          createdAt: now,
+        });
       }
     }
   };
@@ -83,7 +111,8 @@ function installCodeApi(options: { projects?: CodeProject[]; thread?: ThreadItem
       const url = new URL(String(input), 'http://localhost');
       const path = url.pathname.replace(/^.*\/code/, '');
       const method = init?.method ?? 'GET';
-      if (!url.pathname.includes('/code')) return json({ error: { code: 'not_found', message: 'нет' } }, 404);
+      if (!url.pathname.includes('/code'))
+        return json({ error: { code: 'not_found', message: 'нет' } }, 404);
 
       if (path === '/capabilities') return json(CAPABILITIES);
       if (path === '/projects' && method === 'GET') return json({ projects });
@@ -93,7 +122,8 @@ function installCodeApi(options: { projects?: CodeProject[]; thread?: ThreadItem
         projects = [created, ...projects];
         return json({ project: created }, 201);
       }
-      if (path === '/projects/p1' && method === 'GET') return json({ project: PROJECT, running: false });
+      if (path === '/projects/p1' && method === 'GET')
+        return json({ project: PROJECT, running: false });
       if (path === '/projects/p1' && method === 'DELETE') {
         calls.deleted.push('p1');
         projects = projects.filter((p) => p.id !== 'p1');
@@ -117,7 +147,15 @@ function installCodeApi(options: { projects?: CodeProject[]; thread?: ThreadItem
       if (path === '/projects/p1/file' && method === 'PUT') {
         const body = JSON.parse(String(init?.body)) as { path: string; content: string };
         calls.writes.push(body);
-        return json({ file: { path: body.path, size: body.content.length, language: 'javascript', modifiedAt: '' }, created: false });
+        return json({
+          file: {
+            path: body.path,
+            size: body.content.length,
+            language: 'javascript',
+            modifiedAt: '',
+          },
+          created: false,
+        });
       }
       if (path === '/projects/p1/run' && method === 'POST') {
         const body = JSON.parse(String(init?.body)) as Record<string, unknown>;
@@ -186,8 +224,12 @@ describe('Ketner Code: проекты и агент', () => {
     renderRoute('/code/p1');
 
     expect(await screen.findByText('index.html')).toBeInTheDocument();
-    expect(screen.getByText('Опишите задачу — агент изучит проект, внесёт правки и проверит результат.')).toBeInTheDocument();
-    expect(screen.getByText('Запуск команд (тесты, сборка) доступен на тарифах Pro и Ultra.')).toBeInTheDocument();
+    expect(
+      screen.getByText('Опишите задачу — агент изучит проект, внесёт правки и проверит результат.'),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText('Запуск команд (тесты, сборка) доступен на тарифах Pro и Ultra.'),
+    ).toBeInTheDocument();
     // Модель, недоступная на тарифе, видна, но выбрать её нельзя.
     const locked = screen.getByRole('option', { name: /Ketner Pro/ });
     expect(locked).toBeDisabled();
@@ -196,9 +238,24 @@ describe('Ketner Code: проекты и агент', () => {
   it('запускает агента: показывает правку с diff, итог и обновляет файлы', async () => {
     const calls = installCodeApi({
       run: [
-        { type: 'run_start', runId: 'r1', modelId: 'ketner-mini', modelName: 'Ketner Mini', maxSteps: 8, budgetUsd: 0.05, commands: false, routingReason: null },
+        {
+          type: 'run_start',
+          runId: 'r1',
+          modelId: 'ketner-mini',
+          modelName: 'Ketner Mini',
+          maxSteps: 8,
+          budgetUsd: 0.05,
+          commands: false,
+          routingReason: null,
+        },
         { type: 'delta', step: 1, content: 'Добавляю заголовок.' },
-        { type: 'tool_call', step: 1, callId: 'c1', tool: 'edit_file', label: 'edit_file index.html' },
+        {
+          type: 'tool_call',
+          step: 1,
+          callId: 'c1',
+          tool: 'edit_file',
+          label: 'edit_file index.html',
+        },
         {
           type: 'tool_result',
           step: 1,
@@ -207,17 +264,33 @@ describe('Ketner Code: проекты и агент', () => {
           label: 'edit_file index.html',
           ok: true,
           summary: 'ok',
-          change: { path: 'index.html', action: 'modify', additions: 2, deletions: 1, patch: '@@ -1,1 +1,2 @@\n-старое\n+новое\n+ещё' },
+          change: {
+            path: 'index.html',
+            action: 'modify',
+            additions: 2,
+            deletions: 1,
+            patch: '@@ -1,1 +1,2 @@\n-старое\n+новое\n+ещё',
+          },
         },
         { type: 'step_done', step: 1, costUsd: 0.001, totalCostUsd: 0.001 },
-        { type: 'done', runId: 'r1', status: 'completed', steps: 1, costUsd: 0.001, modelId: 'ketner-mini' },
+        {
+          type: 'done',
+          runId: 'r1',
+          status: 'completed',
+          steps: 1,
+          costUsd: 0.001,
+          modelId: 'ketner-mini',
+        },
       ],
     });
     const user = userEvent.setup();
     renderRoute('/code/p1');
     await screen.findByText('index.html');
 
-    await user.type(screen.getByLabelText('Опишите задачу: что создать или изменить…'), 'Добавь заголовок');
+    await user.type(
+      screen.getByLabelText('Опишите задачу: что создать или изменить…'),
+      'Добавь заголовок',
+    );
     await user.click(screen.getByRole('button', { name: 'Запустить' }));
 
     expect(await screen.findByText('Готово')).toBeInTheDocument();
@@ -240,21 +313,54 @@ describe('Ketner Code: проекты и агент', () => {
     const planDone = planStart.map((item) => ({ ...item, status: 'done' as const }));
     installCodeApi({
       run: [
-        { type: 'run_start', runId: 'r1', modelId: 'claude-opus-5.5', modelName: 'Claude Opus 5.5', maxSteps: 50, budgetUsd: 2, commands: false, routingReason: null },
+        {
+          type: 'run_start',
+          runId: 'r1',
+          modelId: 'claude-opus-5.5',
+          modelName: 'Claude Opus 5.5',
+          maxSteps: 50,
+          budgetUsd: 2,
+          commands: false,
+          routingReason: null,
+        },
         { type: 'tool_call', step: 1, callId: 'p1', tool: 'update_plan', label: 'update_plan' },
-        { type: 'tool_result', step: 1, callId: 'p1', tool: 'update_plan', label: 'update_plan', ok: true, summary: '0/2' },
+        {
+          type: 'tool_result',
+          step: 1,
+          callId: 'p1',
+          tool: 'update_plan',
+          label: 'update_plan',
+          ok: true,
+          summary: '0/2',
+        },
         { type: 'plan', items: planStart },
-        { type: 'model_switch', modelId: 'ketner-pro', modelName: 'Ketner Pro', reason: 'Продолжаю на модели дешевле' },
+        {
+          type: 'model_switch',
+          modelId: 'ketner-pro',
+          modelName: 'Ketner Pro',
+          reason: 'Продолжаю на модели дешевле',
+        },
         { type: 'plan', items: planDone },
         { type: 'step_done', step: 2, costUsd: 0.01, totalCostUsd: 2.01 },
-        { type: 'done', runId: 'r1', status: 'completed', steps: 2, costUsd: 2.01, modelId: 'ketner-pro', plan: planDone },
+        {
+          type: 'done',
+          runId: 'r1',
+          status: 'completed',
+          steps: 2,
+          costUsd: 2.01,
+          modelId: 'ketner-pro',
+          plan: planDone,
+        },
       ],
     });
     const user = userEvent.setup();
     renderRoute('/code/p1');
     await screen.findByText('index.html');
 
-    await user.type(screen.getByLabelText('Опишите задачу: что создать или изменить…'), 'Сделай кнопку');
+    await user.type(
+      screen.getByLabelText('Опишите задачу: что создать или изменить…'),
+      'Сделай кнопку',
+    );
     await user.click(screen.getByRole('button', { name: 'Запустить' }));
 
     expect(await screen.findByText('Готово')).toBeInTheDocument();
@@ -272,22 +378,40 @@ describe('Ketner Code: проекты и агент', () => {
   });
 
   it('ошибка лимита запуска предлагает улучшить план', async () => {
-    installCodeApi({ run: [{ type: 'error', code: 'upgrade_required', message: 'Лимит запусков на сегодня исчерпан' }] });
+    installCodeApi({
+      run: [
+        { type: 'error', code: 'upgrade_required', message: 'Лимит запусков на сегодня исчерпан' },
+      ],
+    });
     const user = userEvent.setup();
     renderRoute('/code/p1');
     await screen.findByText('index.html');
 
-    await user.type(screen.getByLabelText('Опишите задачу: что создать или изменить…'), 'Сделай что-нибудь');
+    await user.type(
+      screen.getByLabelText('Опишите задачу: что создать или изменить…'),
+      'Сделай что-нибудь',
+    );
     await user.click(screen.getByRole('button', { name: 'Запустить' }));
 
-    const upgrade = await within(screen.getByRole('region', { name: 'Агент' })).findByRole('link', { name: 'Улучшить план' });
+    const upgrade = await within(screen.getByRole('region', { name: 'Агент' })).findByRole('link', {
+      name: 'Улучшить план',
+    });
     expect(upgrade).toHaveAttribute('href', '/pricing');
     expect(screen.getByText('Лимит запусков на сегодня исчерпан')).toBeInTheDocument();
   });
 
   it('несохранённые правки в редакторе сохраняются перед запуском агента', async () => {
     const calls = installCodeApi({
-      run: [{ type: 'done', runId: 'r1', status: 'completed', steps: 0, costUsd: 0, modelId: 'ketner-mini' }],
+      run: [
+        {
+          type: 'done',
+          runId: 'r1',
+          status: 'completed',
+          steps: 0,
+          costUsd: 0,
+          modelId: 'ketner-mini',
+        },
+      ],
     });
     const user = userEvent.setup();
     renderRoute('/code/p1');
@@ -322,11 +446,15 @@ describe('Ketner Code: проекты и агент', () => {
   it('гостю вместо проектов предлагается войти', async () => {
     vi.stubGlobal(
       'fetch',
-      vi.fn(async () => json({ error: { code: 'unauthorized', message: 'Войдите в аккаунт' } }, 401)),
+      vi.fn(async () =>
+        json({ error: { code: 'unauthorized', message: 'Войдите в аккаунт' } }, 401),
+      ),
     );
     renderRoute('/code');
 
-    expect(await screen.findByRole('heading', { name: 'Войдите, чтобы работать с проектами' })).toBeInTheDocument();
+    expect(
+      await screen.findByRole('heading', { name: 'Войдите, чтобы работать с проектами' }),
+    ).toBeInTheDocument();
     const main = within(screen.getByRole('main'));
     expect(main.getByRole('link', { name: 'Войти' })).toHaveAttribute('href', '/login');
     expect(main.getByRole('link', { name: 'Регистрация' })).toHaveAttribute('href', '/signup');

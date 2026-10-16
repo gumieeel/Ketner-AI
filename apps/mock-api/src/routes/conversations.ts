@@ -34,7 +34,8 @@ export function createConversationsRouter(
     next();
   });
 
-  const getUserId = (request: Request): string => request.userId ?? resolveGuestId(request, defaultUserId) ?? defaultUserId;
+  const getUserId = (request: Request): string =>
+    request.userId ?? resolveGuestId(request, defaultUserId) ?? defaultUserId;
 
   router.get('/conversations', (request: Request, response: Response) => {
     const userId = getUserId(request);
@@ -46,7 +47,12 @@ export function createConversationsRouter(
 
   router.post('/conversations', (request: Request, response: Response) => {
     if (!request.userId && isProduction && guestCreatesPerIp.hit(clientIp(request))) {
-      sendError(response, 429, 'too_many_requests', 'Слишком много новых диалогов. Войдите в аккаунт, чтобы продолжить.');
+      sendError(
+        response,
+        429,
+        'too_many_requests',
+        'Слишком много новых диалогов. Войдите в аккаунт, чтобы продолжить.',
+      );
       return;
     }
     const userId = getUserId(request);

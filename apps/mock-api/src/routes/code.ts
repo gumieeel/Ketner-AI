@@ -5,10 +5,7 @@ import { sendError } from '../middleware/errors.js';
 import { resolveChatIdentity } from '../services/chat-identity.js';
 import { EntitlementService } from '../services/entitlement.js';
 import { getCodeLimits, quotaOf, type CodeLimits } from '../services/code-limits.js';
-import {
-  usageStore as defaultUsageStore,
-  type UsageStore,
-} from '../store/index.js';
+import { usageStore as defaultUsageStore, type UsageStore } from '../store/index.js';
 import type { SubscriptionStore } from '../store/subscription-store.js';
 import type { UserStore } from '../store/user-store.js';
 import type { Language, PlanId } from '../types.js';
@@ -107,7 +104,11 @@ export function createCodeRouter(deps: CodeRouterDeps): Router {
       sendError(response, identity.status, identity.code, identity.message);
       return null;
     }
-    const plan = EntitlementService.resolveEffectivePlan(identity.plan, identity.email, identity.isVip);
+    const plan = EntitlementService.resolveEffectivePlan(
+      identity.plan,
+      identity.email,
+      identity.isVip,
+    );
     return {
       userId: identity.userId,
       plan,
@@ -143,7 +144,11 @@ export function createCodeRouter(deps: CodeRouterDeps): Router {
       }
     };
 
-  async function requireProject(caller: Caller, request: Request, response: Response): Promise<ProjectMeta | null> {
+  async function requireProject(
+    caller: Caller,
+    request: Request,
+    response: Response,
+  ): Promise<ProjectMeta | null> {
     const id = String(request.params.id ?? '');
     const meta = await store.get(caller.userId, id);
     if (!meta) {
@@ -172,7 +177,12 @@ export function createCodeRouter(deps: CodeRouterDeps): Router {
           id: model.id,
           name: model.name,
           costClass: model.costClass,
-          locked: !EntitlementService.checkModelAccess(model, caller.plan, caller.email, caller.isVip).allowed,
+          locked: !EntitlementService.checkModelAccess(
+            model,
+            caller.plan,
+            caller.email,
+            caller.isVip,
+          ).allowed,
         }));
       response.json({
         plan: caller.plan,
@@ -228,11 +238,21 @@ export function createCodeRouter(deps: CodeRouterDeps): Router {
       const body = (request.body ?? {}) as Record<string, unknown>;
       const target = typeof body.url === 'string' ? parseGithubUrl(body.url) : null;
       if (!target) {
-        sendError(response, 400, 'invalid_request', 'Укажите репозиторий GitHub, например https://github.com/owner/repo');
+        sendError(
+          response,
+          400,
+          'invalid_request',
+          'Укажите репозиторий GitHub, например https://github.com/owner/repo',
+        );
         return;
       }
       if ((await store.count(caller.userId)) >= caller.limits.maxProjects) {
-        sendError(response, 413, 'quota_exceeded', 'На вашем тарифе больше проектов создать нельзя. Удалите ненужный проект или повысьте тариф.');
+        sendError(
+          response,
+          413,
+          'quota_exceeded',
+          'На вашем тарифе больше проектов создать нельзя. Удалите ненужный проект или повысьте тариф.',
+        );
         return;
       }
       let archive: Uint8Array;
@@ -244,7 +264,12 @@ export function createCodeRouter(deps: CodeRouterDeps): Router {
         });
       } catch (error) {
         if (error instanceof GithubImportError) {
-          sendError(response, error.code === 'not_found' ? 404 : error.code === 'too_large' ? 413 : 502, `github_${error.code}`, error.message);
+          sendError(
+            response,
+            error.code === 'not_found' ? 404 : error.code === 'too_large' ? 413 : 502,
+            `github_${error.code}`,
+            error.message,
+          );
           return;
         }
         throw error;
@@ -261,14 +286,25 @@ export function createCodeRouter(deps: CodeRouterDeps): Router {
         return;
       }
       if (extracted.files.length === 0) {
-        sendError(response, 422, 'empty_import', 'В репозитории нет текстовых файлов, которые можно импортировать');
+        sendError(
+          response,
+          422,
+          'empty_import',
+          'В репозитории нет текстовых файлов, которые можно импортировать',
+        );
         return;
       }
       const name = typeof body.name === 'string' && body.name.trim() ? body.name : target.repo;
       const quota = quotaOf(caller.limits);
       const meta = await store.create(
         caller.userId,
-        { name, source: { type: 'github', ref: `${target.owner}/${target.repo}${target.ref ? `@${target.ref}` : ''}` } },
+        {
+          name,
+          source: {
+            type: 'github',
+            ref: `${target.owner}/${target.repo}${target.ref ? `@${target.ref}` : ''}`,
+          },
+        },
         { maxProjects: caller.limits.maxProjects, quota },
       );
       const result = await store.importFiles(caller.userId, meta.id, extracted.files, quota);
@@ -286,7 +322,11 @@ export function createCodeRouter(deps: CodeRouterDeps): Router {
     '/projects/:id',
     guarded(async (caller, request, response) => {
       const meta = await requireProject(caller, request, response);
-      if (meta) response.json({ project: publicProject(meta), running: activeRuns.has(runKey(caller.userId, meta.id)) });
+      if (meta)
+        response.json({
+          project: publicProject(meta),
+          running: activeRuns.has(runKey(caller.userId, meta.id)),
+        });
     }),
   );
 
@@ -296,7 +336,10 @@ export function createCodeRouter(deps: CodeRouterDeps): Router {
       const meta = await requireProject(caller, request, response);
       if (!meta) return;
       const body = (request.body ?? {}) as Record<string, unknown>;
-      const updated = await store.update(caller.userId, meta.id, { name: body.name, description: body.description });
+      const updated = await store.update(caller.userId, meta.id, {
+        name: body.name,
+        description: body.description,
+      });
       response.json({ project: publicProject(updated) });
     }),
   );
@@ -337,7 +380,12 @@ export function createCodeRouter(deps: CodeRouterDeps): Router {
         maxBytes: caller.limits.maxFileBytes,
       });
       const filePath = queryPath(request);
-      response.json({ path: filePath, content: read.content, size: read.size, language: languageOf(filePath) });
+      response.json({
+        path: filePath,
+        content: read.content,
+        size: read.size,
+        language: languageOf(filePath),
+      });
     }),
   );
 
@@ -351,11 +399,19 @@ export function createCodeRouter(deps: CodeRouterDeps): Router {
         sendError(response, 400, 'invalid_request', 'Нужны поля path и content (строки)');
         return;
       }
-      const written = await store.writeText(caller.userId, meta.id, body.path, body.content, quotaOf(caller.limits));
+      const written = await store.writeText(
+        caller.userId,
+        meta.id,
+        body.path,
+        body.content,
+        quotaOf(caller.limits),
+      );
       const project = await store.get(caller.userId, meta.id);
-      response
-        .status(written.created ? 201 : 200)
-        .json({ file: entryJson(written.entry), created: written.created, project: project ? publicProject(project) : undefined });
+      response.status(written.created ? 201 : 200).json({
+        file: entryJson(written.entry),
+        created: written.created,
+        project: project ? publicProject(project) : undefined,
+      });
     }),
   );
 
@@ -396,7 +452,12 @@ export function createCodeRouter(deps: CodeRouterDeps): Router {
         return;
       }
       if (body.files.length > MAX_IMPORT_FILES_PER_REQUEST) {
-        sendError(response, 413, 'quota_exceeded', `За один запрос можно импортировать не больше ${MAX_IMPORT_FILES_PER_REQUEST} файлов`);
+        sendError(
+          response,
+          413,
+          'quota_exceeded',
+          `За один запрос можно импортировать не больше ${MAX_IMPORT_FILES_PER_REQUEST} файлов`,
+        );
         return;
       }
       const accepted: Array<{ path: string; content: string }> = [];
@@ -411,7 +472,12 @@ export function createCodeRouter(deps: CodeRouterDeps): Router {
           accepted.push({ path: filePath, content: raw.content });
         }
       }
-      const result = await store.importFiles(caller.userId, meta.id, accepted, quotaOf(caller.limits));
+      const result = await store.importFiles(
+        caller.userId,
+        meta.id,
+        accepted,
+        quotaOf(caller.limits),
+      );
       const project = await store.get(caller.userId, meta.id);
       const allSkipped = [...skipped, ...result.skipped];
       response.json({
@@ -442,7 +508,10 @@ export function createCodeRouter(deps: CodeRouterDeps): Router {
       for (const file of files) {
         if (response.destroyed) return;
         try {
-          writer.add(file.path, await fs.readBuffer(file.path, { maxBytes: caller.limits.maxFileBytes * 4 }));
+          writer.add(
+            file.path,
+            await fs.readBuffer(file.path, { maxBytes: caller.limits.maxFileBytes * 4 }),
+          );
         } catch {
           // файл исчез или не читается — в архив не попадает
         }
@@ -472,7 +541,12 @@ export function createCodeRouter(deps: CodeRouterDeps): Router {
       const meta = await requireProject(caller, request, response);
       if (!meta) return;
       if (activeRuns.has(runKey(caller.userId, meta.id))) {
-        sendError(response, 409, 'run_in_progress', 'Дождитесь завершения запуска или остановите его');
+        sendError(
+          response,
+          409,
+          'run_in_progress',
+          'Дождитесь завершения запуска или остановите его',
+        );
         return;
       }
       await store.clearThread(caller.userId, meta.id);
@@ -503,7 +577,12 @@ export function createCodeRouter(deps: CodeRouterDeps): Router {
         return;
       }
       if (body.task.length > caller.limits.maxTaskChars + 1_000) {
-        sendError(response, 413, 'invalid_request', `Задача слишком длинная (до ${caller.limits.maxTaskChars} символов)`);
+        sendError(
+          response,
+          413,
+          'invalid_request',
+          `Задача слишком длинная (до ${caller.limits.maxTaskChars} символов)`,
+        );
         return;
       }
       const modelId = typeof body.modelId === 'string' ? body.modelId : undefined;

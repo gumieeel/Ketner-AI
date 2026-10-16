@@ -45,11 +45,18 @@ export function createImagesRouter(deps: ImagesRouterDeps): Router {
       sendError(response, identity.status, identity.code, identity.message);
       return null;
     }
-    const language = request.headers['accept-language']?.toString().toLowerCase().startsWith('en') ? 'en' : 'ru';
+    const language = request.headers['accept-language']?.toString().toLowerCase().startsWith('en')
+      ? 'en'
+      : 'ru';
     return {
       userId: identity.userId,
       plan: EntitlementService.resolveEffectivePlan(identity.plan, identity.email, identity.isVip),
-      language: typeof request.body?.language === 'string' ? (request.body.language === 'en' ? 'en' : 'ru') : language,
+      language:
+        typeof request.body?.language === 'string'
+          ? request.body.language === 'en'
+            ? 'en'
+            : 'ru'
+          : language,
     };
   }
 
@@ -89,7 +96,10 @@ export function createImagesRouter(deps: ImagesRouterDeps): Router {
     response.setHeader('Cache-Control', 'private, max-age=21600');
     response.setHeader('X-Content-Type-Options', 'nosniff');
     if (request.query.download === '1') {
-      response.setHeader('Content-Disposition', `attachment; filename="ketner-${id.slice(0, 8)}.${ext}"`);
+      response.setHeader(
+        'Content-Disposition',
+        `attachment; filename="ketner-${id.slice(0, 8)}.${ext}"`,
+      );
     }
     response.end(found.bytes);
   });

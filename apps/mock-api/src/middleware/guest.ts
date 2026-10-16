@@ -18,6 +18,10 @@ export function readGuestId(request: Request): string | null {
  * Идентификатор анонимного пользователя. В production без корректного гостевого id вернётся null
  * (общий demo-user там не существует); вне production — запасной defaultUserId для тестов и разработки.
  */
-export function resolveGuestId(request: Request, defaultUserId: string, production: boolean = isProduction): string | null {
+export function resolveGuestId(
+  request: Request,
+  defaultUserId: string,
+  production: boolean = isProduction,
+): string | null {
   return readGuestId(request) ?? (production ? null : defaultUserId);
 }

@@ -23,13 +23,24 @@ export function ParamTable({ params, className }: ParamTableProps) {
   if (params.length === 0) return null;
 
   return (
-    <div className={cn('my-4 overflow-x-auto rounded-xl border border-stroke bg-surface shadow-xs', className)}>
+    <div
+      className={cn(
+        'my-4 overflow-x-auto rounded-xl border border-stroke bg-surface shadow-xs',
+        className,
+      )}
+    >
       <table className="w-full min-w-[480px] text-left text-[13px]">
         <thead className="border-b border-stroke bg-surface-2/80 text-xs font-semibold text-muted">
           <tr>
-            <th scope="col" className="px-4 py-2.5 font-semibold">{t('docs.paramName')}</th>
-            <th scope="col" className="px-4 py-2.5 font-semibold">{t('docs.paramType')}</th>
-            <th scope="col" className="px-4 py-2.5 font-semibold">{t('docs.paramDescription')}</th>
+            <th scope="col" className="px-4 py-2.5 font-semibold">
+              {t('docs.paramName')}
+            </th>
+            <th scope="col" className="px-4 py-2.5 font-semibold">
+              {t('docs.paramType')}
+            </th>
+            <th scope="col" className="px-4 py-2.5 font-semibold">
+              {t('docs.paramDescription')}
+            </th>
           </tr>
         </thead>
         <tbody className="divide-y divide-stroke">

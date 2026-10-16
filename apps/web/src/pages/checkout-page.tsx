@@ -238,10 +238,7 @@ export function CheckoutPage() {
       setCheckFeedback({
         method: 'crypto',
         type: 'warning',
-        message:
-          err instanceof Error && err.message
-            ? err.message
-            : t('checkout.cryptoPending'),
+        message: err instanceof Error && err.message ? err.message : t('checkout.cryptoPending'),
       });
     } finally {
       setSubmitting(false);
@@ -378,10 +375,16 @@ export function CheckoutPage() {
         </Card>
 
         <div className="flex w-full flex-col gap-3 pt-2 sm:flex-row">
-          <Link to="/chat" className={buttonClasses({ variant: 'primary', size: 'lg', className: 'flex-1' })}>
+          <Link
+            to="/chat"
+            className={buttonClasses({ variant: 'primary', size: 'lg', className: 'flex-1' })}
+          >
             {t('checkout.goToChat')}
           </Link>
-          <Link to="/settings" className={buttonClasses({ variant: 'outline', size: 'lg', className: 'flex-1' })}>
+          <Link
+            to="/settings"
+            className={buttonClasses({ variant: 'outline', size: 'lg', className: 'flex-1' })}
+          >
             {t('checkout.goToSettings')}
           </Link>
         </div>
@@ -452,7 +455,11 @@ export function CheckoutPage() {
               <span className="text-xs text-muted">{t('checkout.chooseMethod')}</span>
             </div>
 
-            <div role="group" aria-labelledby="checkout-methods" className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <div
+              role="group"
+              aria-labelledby="checkout-methods"
+              className="grid grid-cols-1 gap-3 sm:grid-cols-2"
+            >
               <MethodTile
                 selected={paymentMethod === 'crypto'}
                 onSelect={() => selectMethod('crypto')}
@@ -512,7 +519,11 @@ export function CheckoutPage() {
               onCopyAddress={() => void copyToClipboard(cryptoAddress, setCopiedCryptoAddress)}
               onCopyAmount={() =>
                 void copyToClipboard(
-                  String(gatewayDetails && cryptoInvoice ? cryptoInvoice.amount : (currentCrypto.calcAmount(plan.priceMonthly) ?? plan.priceMonthly)),
+                  String(
+                    gatewayDetails && cryptoInvoice
+                      ? cryptoInvoice.amount
+                      : (currentCrypto.calcAmount(plan.priceMonthly) ?? plan.priceMonthly),
+                  ),
                   setCopiedCryptoAmount,
                 )
               }
@@ -542,7 +553,12 @@ export function CheckoutPage() {
           </p>
         </div>
 
-        <OrderSummary plan={plan} feeUsd={paymentMethod === 'crypto' && !cryptoLoading ? (cryptoInvoice?.fees?.payerUsd ?? 0) : 0} />
+        <OrderSummary
+          plan={plan}
+          feeUsd={
+            paymentMethod === 'crypto' && !cryptoLoading ? (cryptoInvoice?.fees?.payerUsd ?? 0) : 0
+          }
+        />
       </div>
     </div>
   );

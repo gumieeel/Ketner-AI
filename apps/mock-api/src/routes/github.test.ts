@@ -3,11 +3,20 @@ import { mkdtempSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
-import { createGithubConnectionStore, decryptToken, encryptToken } from '../github/connection-store.js';
+import {
+  createGithubConnectionStore,
+  decryptToken,
+  encryptToken,
+} from '../github/connection-store.js';
 import { createState, readState, safeReturnTo, type GithubOAuthSettings } from '../github/oauth.js';
 import { downloadGithubZip } from '../code/archive.js';
 import { isAllowedGithubCall } from './github.js';
-import { readJson, startTestServer, type ApiErrorBody, type TestServer } from '../testing/server.js';
+import {
+  readJson,
+  startTestServer,
+  type ApiErrorBody,
+  type TestServer,
+} from '../testing/server.js';
 import type { AuthSession } from '../types.js';
 
 const SETTINGS: GithubOAuthSettings = {
@@ -28,19 +37,37 @@ function fakeGithub(options: { scope?: string; userStatus?: number } = {}) {
   const calls: GithubCall[] = [];
   const impl = (async (input: string | URL | Request, init: RequestInit = {}) => {
     const url = String(input);
-    const headers = Object.fromEntries(Object.entries((init.headers ?? {}) as Record<string, string>));
-    calls.push({ url, method: init.method ?? 'GET', headers, body: typeof init.body === 'string' ? init.body : undefined });
+    const headers = Object.fromEntries(
+      Object.entries((init.headers ?? {}) as Record<string, string>),
+    );
+    calls.push({
+      url,
+      method: init.method ?? 'GET',
+      headers,
+      body: typeof init.body === 'string' ? init.body : undefined,
+    });
     if (url === 'https://github.com/login/oauth/access_token') {
       const body = JSON.parse(String(init.body)) as { code: string };
       if (body.code !== 'good-code') return Response.json({ error: 'bad_verification_code' });
-      return Response.json({ access_token: 'gho_secret_token', scope: options.scope ?? 'repo,read:user', token_type: 'bearer' });
+      return Response.json({
+        access_token: 'gho_secret_token',
+        scope: options.scope ?? 'repo,read:user',
+        token_type: 'bearer',
+      });
     }
     if (url === 'https://api.github.com/user') {
-      return Response.json({ id: 42, login: 'octo', avatar_url: 'https://avatars.githubusercontent.com/u/42' });
+      return Response.json({
+        id: 42,
+        login: 'octo',
+        avatar_url: 'https://avatars.githubusercontent.com/u/42',
+      });
     }
     if (url.startsWith('https://api.github.com/user/repos')) {
-      if (options.userStatus) return new Response('{"message":"Bad credentials"}', { status: options.userStatus });
-      return Response.json([{ full_name: 'octo/private-app', private: true }], { headers: { link: '<next>; rel="next"' } });
+      if (options.userStatus)
+        return new Response('{"message":"Bad credentials"}', { status: options.userStatus });
+      return Response.json([{ full_name: 'octo/private-app', private: true }], {
+        headers: { link: '<next>; rel="next"' },
+      });
     }
     if (url.includes('/applications/')) return new Response(null, { status: 204 });
     return new Response('{"message":"Not Found"}', { status: 404 });
@@ -54,24 +81,41 @@ async function signup(server: TestServer): Promise<AuthSession> {
   const response = await fetch(`${server.baseUrl}/api/auth/signup`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ email: `gh${counter}@example.com`, password: 'password123', name: 'Dev' }),
+    body: JSON.stringify({
+      email: `gh${counter}@example.com`,
+      password: 'password123',
+      name: 'Dev',
+    }),
   });
   return readJson<AuthSession>(response);
 }
 
-const auth = (token: string, extra: Record<string, string> = {}) => ({ Authorization: `Bearer ${token}`, ...extra });
+const auth = (token: string, extra: Record<string, string> = {}) => ({
+  Authorization: `Bearer ${token}`,
+  ...extra,
+});
 
 test('токен шифруется: в файле его нет, чужим ключом не расшифровать', () => {
   const file = join(mkdtempSync(join(tmpdir(), 'ketner-gh-')), 'github.json');
   const store = createGithubConnectionStore({ file, secret: 'one' });
   store.save(
-    { userId: 'u1', githubId: 1, login: 'octo', avatarUrl: null, scopes: ['repo'], connectedAt: '2026-10-13T10:00:00.000Z' },
+    {
+      userId: 'u1',
+      githubId: 1,
+      login: 'octo',
+      avatarUrl: null,
+      scopes: ['repo'],
+      connectedAt: '2026-10-13T10:00:00.000Z',
+    },
     'gho_plain_token',
   );
   const raw = readFileSync(file, 'utf8');
   assert.ok(!raw.includes('gho_plain_token'));
   assert.equal(store.tokenOf('u1'), 'gho_plain_token');
-  assert.equal(createGithubConnectionStore({ file, secret: 'one' }).tokenOf('u1'), 'gho_plain_token');
+  assert.equal(
+    createGithubConnectionStore({ file, secret: 'one' }).tokenOf('u1'),
+    'gho_plain_token',
+  );
   assert.equal(createGithubConnectionStore({ file, secret: 'two' }).tokenOf('u1'), undefined);
   const sealed = encryptToken('x', 'a');
   // Портим настоящий байт шифротекста (последний символ base64 может нести только биты выравнивания).
@@ -86,11 +130,16 @@ test('токен шифруется: в файле его нет, чужим к�
 
 test('state подписан, привязан к пользователю и истекает', () => {
   const state = createState('user-1', 'https://ketner.org/chat', 'secret', 1_000);
-  assert.deepEqual(readState(state, 'secret', 2_000), { userId: 'user-1', returnTo: 'https://ketner.org/chat' });
+  assert.deepEqual(readState(state, 'secret', 2_000), {
+    userId: 'user-1',
+    returnTo: 'https://ketner.org/chat',
+  });
   assert.equal(readState(state, 'other', 2_000), null);
   assert.equal(readState(state, 'secret', 1_000 + 11 * 60_000), null);
   const [body, sig] = state.split('.');
-  const forged = Buffer.from(JSON.stringify({ u: 'admin', n: 'x', e: 9e15, r: 'https://ketner.org' })).toString('base64url');
+  const forged = Buffer.from(
+    JSON.stringify({ u: 'admin', n: 'x', e: 9e15, r: 'https://ketner.org' }),
+  ).toString('base64url');
   assert.equal(readState(`${forged}.${sig}`, 'secret', 2_000), null);
   assert.equal(readState(`${body}.`, 'secret', 2_000), null);
 });
@@ -98,7 +147,14 @@ test('state подписан, привязан к пользователю и и
 test('адрес возврата: только свои сайты', () => {
   assert.equal(safeReturnTo('https://ketner.org/settings#x'), 'https://ketner.org/settings');
   assert.equal(safeReturnTo('http://localhost:5173/chat'), 'http://localhost:5173/chat');
-  for (const bad of ['https://evil.com/', 'https://ketner.org.evil.com/', 'javascript:alert(1)', 'https://user:pw@ketner.org/', 42, '']) {
+  for (const bad of [
+    'https://evil.com/',
+    'https://ketner.org.evil.com/',
+    'javascript:alert(1)',
+    'https://user:pw@ketner.org/',
+    42,
+    '',
+  ]) {
     assert.equal(safeReturnTo(bad), null, String(bad));
   }
 });
@@ -136,7 +192,10 @@ test('прокси пускает только чтение, коммит и PR'
 
 test('подключение GitHub: ссылка, колбэк, подтверждение своей сессией, прокси и отключение', async () => {
   const github = fakeGithub();
-  const server = await startTestServer({}, { githubFetch: github.impl, githubSettings: () => SETTINGS });
+  const server = await startTestServer(
+    {},
+    { githubFetch: github.impl, githubSettings: () => SETTINGS },
+  );
   try {
     const owner = await signup(server);
     const stranger = await signup(server);
@@ -150,14 +209,19 @@ test('подключение GitHub: ссылка, колбэк, подтвер�
     assert.deepEqual(status, { available: true, connected: false, account: null });
 
     // Без подключения прокси объясняет, что делать.
-    const notConnected = await fetch(`${server.baseUrl}/api/github/api/user/repos`, { headers: auth(owner.token) });
+    const notConnected = await fetch(`${server.baseUrl}/api/github/api/user/repos`, {
+      headers: auth(owner.token),
+    });
     assert.equal(notConnected.status, 409);
     assert.equal((await readJson<ApiErrorBody>(notConnected)).error.code, 'github_not_connected');
 
     const connect = await readJson<{ url: string }>(
-      await fetch(`${server.baseUrl}/api/github/connect-url?returnTo=${encodeURIComponent('http://localhost:5173/settings')}`, {
-        headers: auth(owner.token),
-      }),
+      await fetch(
+        `${server.baseUrl}/api/github/connect-url?returnTo=${encodeURIComponent('http://localhost:5173/settings')}`,
+        {
+          headers: auth(owner.token),
+        },
+      ),
     );
     const authorize = new URL(connect.url);
     assert.equal(authorize.origin + authorize.pathname, 'https://github.com/login/oauth/authorize');
@@ -167,9 +231,12 @@ test('подключение GitHub: ссылка, колбэк, подтвер�
     const state = authorize.searchParams.get('state')!;
 
     // Колбэк не обменивает код, а возвращает его во фрагменте на сайт.
-    const callback = await fetch(`${server.baseUrl}/api/auth/callback/github/repos?code=good-code&state=${encodeURIComponent(state)}`, {
-      redirect: 'manual',
-    });
+    const callback = await fetch(
+      `${server.baseUrl}/api/auth/callback/github/repos?code=good-code&state=${encodeURIComponent(state)}`,
+      {
+        redirect: 'manual',
+      },
+    );
     assert.equal(callback.status, 302);
     const location = new URL(callback.headers.get('location')!);
     assert.equal(location.origin + location.pathname, 'http://localhost:5173/settings');
@@ -178,9 +245,12 @@ test('подключение GitHub: ссылка, колбэк, подтвер�
     assert.equal(fragment.get('github_state'), state);
     assert.equal(location.search, '');
 
-    const denied = await fetch(`${server.baseUrl}/api/auth/callback/github/repos?error=access_denied&state=${encodeURIComponent(state)}`, {
-      redirect: 'manual',
-    });
+    const denied = await fetch(
+      `${server.baseUrl}/api/auth/callback/github/repos?error=access_denied&state=${encodeURIComponent(state)}`,
+      {
+        redirect: 'manual',
+      },
+    );
     assert.match(denied.headers.get('location')!, /#github_error=denied$/);
 
     // Чужая сессия не может завершить подключение по этой ссылке.
@@ -205,32 +275,56 @@ test('подключение GitHub: ссылка, колбэк, подтвер�
       body: JSON.stringify({ code: 'good-code', state }),
     });
     assert.equal(confirmed.status, 200);
-    const confirmedBody = await readJson<{ connected: boolean; account: { login: string; scopes: string[] } }>(confirmed);
+    const confirmedBody = await readJson<{
+      connected: boolean;
+      account: { login: string; scopes: string[] };
+    }>(confirmed);
     assert.equal(confirmedBody.connected, true);
     assert.equal(confirmedBody.account.login, 'octo');
     assert.deepEqual(confirmedBody.account.scopes, ['repo', 'read:user']);
     assert.ok(!JSON.stringify(confirmedBody).includes('gho_secret_token'));
 
     // Прокси подставляет токен сам, браузер его не видит.
-    const repos = await fetch(`${server.baseUrl}/api/github/api/user/repos?per_page=100&sort=pushed`, { headers: auth(owner.token) });
+    const repos = await fetch(
+      `${server.baseUrl}/api/github/api/user/repos?per_page=100&sort=pushed`,
+      { headers: auth(owner.token) },
+    );
     assert.equal(repos.status, 200);
     assert.equal(repos.headers.get('link'), '<next>; rel="next"');
     assert.deepEqual(await repos.json(), [{ full_name: 'octo/private-app', private: true }]);
-    const proxied = github.calls.find((call) => call.url.startsWith('https://api.github.com/user/repos'))!;
+    const proxied = github.calls.find((call) =>
+      call.url.startsWith('https://api.github.com/user/repos'),
+    )!;
     assert.equal(proxied.url, 'https://api.github.com/user/repos?per_page=100&sort=pushed');
     assert.equal(proxied.headers.Authorization, 'Bearer gho_secret_token');
 
-    const forbidden = await fetch(`${server.baseUrl}/api/github/api/repos/octo/app`, { method: 'DELETE', headers: auth(owner.token) });
+    const forbidden = await fetch(`${server.baseUrl}/api/github/api/repos/octo/app`, {
+      method: 'DELETE',
+      headers: auth(owner.token),
+    });
     assert.equal(forbidden.status, 403);
-    assert.ok(!github.calls.some((call) => call.method === 'DELETE' && call.url === 'https://api.github.com/repos/octo/app'));
+    assert.ok(
+      !github.calls.some(
+        (call) => call.method === 'DELETE' && call.url === 'https://api.github.com/repos/octo/app',
+      ),
+    );
 
     // Другой пользователь не получает чужой токен.
-    const strangerRepos = await fetch(`${server.baseUrl}/api/github/api/user/repos`, { headers: auth(stranger.token) });
+    const strangerRepos = await fetch(`${server.baseUrl}/api/github/api/user/repos`, {
+      headers: auth(stranger.token),
+    });
     assert.equal(strangerRepos.status, 409);
 
-    const disconnected = await fetch(`${server.baseUrl}/api/github/connection`, { method: 'DELETE', headers: auth(owner.token) });
+    const disconnected = await fetch(`${server.baseUrl}/api/github/connection`, {
+      method: 'DELETE',
+      headers: auth(owner.token),
+    });
     assert.equal(((await disconnected.json()) as { connected: boolean }).connected, false);
-    assert.ok(github.calls.some((call) => call.method === 'DELETE' && call.url.includes('/applications/client-123/token')));
+    assert.ok(
+      github.calls.some(
+        (call) => call.method === 'DELETE' && call.url.includes('/applications/client-123/token'),
+      ),
+    );
     assert.equal(server.githubConnectionStore.tokenOf(owner.user.id), undefined);
   } finally {
     await server.close();
@@ -239,7 +333,10 @@ test('подключение GitHub: ссылка, колбэк, подтвер�
 
 test('подключение без права repo отклоняется; отозванный в GitHub токен снимает подключение', async () => {
   const narrow = fakeGithub({ scope: 'read:user' });
-  const server = await startTestServer({}, { githubFetch: narrow.impl, githubSettings: () => SETTINGS });
+  const server = await startTestServer(
+    {},
+    { githubFetch: narrow.impl, githubSettings: () => SETTINGS },
+  );
   try {
     const owner = await signup(server);
     const state = createState(owner.user.id, 'https://ketner.org/settings');
@@ -255,14 +352,26 @@ test('подключение без права repo отклоняется; от
   }
 
   const revoked = fakeGithub({ userStatus: 401 });
-  const second = await startTestServer({}, { githubFetch: revoked.impl, githubSettings: () => SETTINGS });
+  const second = await startTestServer(
+    {},
+    { githubFetch: revoked.impl, githubSettings: () => SETTINGS },
+  );
   try {
     const owner = await signup(second);
     second.githubConnectionStore.save(
-      { userId: owner.user.id, githubId: 1, login: 'octo', avatarUrl: null, scopes: ['repo'], connectedAt: new Date().toISOString() },
+      {
+        userId: owner.user.id,
+        githubId: 1,
+        login: 'octo',
+        avatarUrl: null,
+        scopes: ['repo'],
+        connectedAt: new Date().toISOString(),
+      },
       'gho_revoked',
     );
-    const response = await fetch(`${second.baseUrl}/api/github/api/user/repos`, { headers: auth(owner.token) });
+    const response = await fetch(`${second.baseUrl}/api/github/api/user/repos`, {
+      headers: auth(owner.token),
+    });
     assert.equal(response.status, 409);
     assert.equal((await readJson<ApiErrorBody>(response)).error.code, 'github_reauth_required');
     assert.equal(second.githubConnectionStore.get(owner.user.id), undefined);
@@ -275,9 +384,13 @@ test('GitHub без настроек на сервере: статус недо�
   const server = await startTestServer({}, { githubSettings: () => null });
   try {
     const owner = await signup(server);
-    const status = await readJson<{ available: boolean }>(await fetch(`${server.baseUrl}/api/github/status`, { headers: auth(owner.token) }));
+    const status = await readJson<{ available: boolean }>(
+      await fetch(`${server.baseUrl}/api/github/status`, { headers: auth(owner.token) }),
+    );
     assert.equal(status.available, false);
-    const connect = await fetch(`${server.baseUrl}/api/github/connect-url`, { headers: auth(owner.token) });
+    const connect = await fetch(`${server.baseUrl}/api/github/connect-url`, {
+      headers: auth(owner.token),
+    });
     assert.equal(connect.status, 503);
   } finally {
     await server.close();

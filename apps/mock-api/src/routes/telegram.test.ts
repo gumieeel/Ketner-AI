@@ -18,7 +18,6 @@ async function signupAdmin(baseUrl: string): Promise<{ Authorization: string }> 
   return { Authorization: `Bearer ${body.token}` };
 }
 
-
 test('telegram: статус бота GET /api/telegram/status', async (t) => {
   const server = await startTestServer();
   t.after(() => server.close());
@@ -63,7 +62,9 @@ test('billing: оплата по СБП (создание, статус и по�
   assert.ok(invoice.deepLink.startsWith('https://qr.nspk.ru/'));
 
   // 2. Проверка статуса
-  const statusRes = await fetch(`${server.baseUrl}/api/billing/sbp/status/${invoice.id}`, { headers: auth });
+  const statusRes = await fetch(`${server.baseUrl}/api/billing/sbp/status/${invoice.id}`, {
+    headers: auth,
+  });
   assert.equal(statusRes.status, 200);
   const statusData = await readJson<{ status: string; invoice: SbpInvoice }>(statusRes);
   assert.equal(statusData.status, 'pending');
@@ -109,11 +110,16 @@ test('telegram support bot: создание тикета, отправка ад
   };
   const adminRes = await fetch(`${server.baseUrl}/api/telegram/support/webhook`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'X-Telegram-Bot-Api-Secret-Token': config.telegramSupportWebhookSecret },
+    headers: {
+      'Content-Type': 'application/json',
+      'X-Telegram-Bot-Api-Secret-Token': config.telegramSupportWebhookSecret,
+    },
     body: JSON.stringify(adminStartUpdate),
   });
   assert.equal(adminRes.status, 200);
-  const adminBody = await readJson<{ ok: boolean; result: { handled: boolean; action: string } }>(adminRes);
+  const adminBody = await readJson<{ ok: boolean; result: { handled: boolean; action: string } }>(
+    adminRes,
+  );
   assert.equal(adminBody.result.action, 'admin_welcome_sent');
 
   // 3. Обычный пользователь отправляет жалобу в бот
@@ -130,18 +136,27 @@ test('telegram support bot: создание тикета, отправка ад
   };
   const userRes = await fetch(`${server.baseUrl}/api/telegram/support/webhook`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'X-Telegram-Bot-Api-Secret-Token': config.telegramSupportWebhookSecret },
+    headers: {
+      'Content-Type': 'application/json',
+      'X-Telegram-Bot-Api-Secret-Token': config.telegramSupportWebhookSecret,
+    },
     body: JSON.stringify(userMsgUpdate),
   });
   assert.equal(userRes.status, 200);
-  const userBody = await readJson<{ ok: boolean; result: { handled: boolean; action: string } }>(userRes);
+  const userBody = await readJson<{ ok: boolean; result: { handled: boolean; action: string } }>(
+    userRes,
+  );
   assert.equal(userBody.result.action, 'user_ticket_message_processed');
 
   // 4. Проверяем список тикетов (доступен только администратору сайта)
   const adminAuth = await signupAdmin(server.baseUrl);
-  const ticketsRes = await fetch(`${server.baseUrl}/api/telegram/support/tickets`, { headers: adminAuth });
+  const ticketsRes = await fetch(`${server.baseUrl}/api/telegram/support/tickets`, {
+    headers: adminAuth,
+  });
   assert.equal(ticketsRes.status, 200);
-  const ticketsData = await readJson<{ openTickets: Array<{ id: string; userChatId: number; messages: Array<{ text: string }> }> }>(ticketsRes);
+  const ticketsData = await readJson<{
+    openTickets: Array<{ id: string; userChatId: number; messages: Array<{ text: string }> }>;
+  }>(ticketsRes);
   assert.equal(ticketsData.openTickets.length, 1);
   const ticket = ticketsData.openTickets[0];
   assert.equal(ticket.userChatId, userChatId);
@@ -160,16 +175,25 @@ test('telegram support bot: создание тикета, отправка ад
   };
   const replyRes = await fetch(`${server.baseUrl}/api/telegram/support/webhook`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'X-Telegram-Bot-Api-Secret-Token': config.telegramSupportWebhookSecret },
+    headers: {
+      'Content-Type': 'application/json',
+      'X-Telegram-Bot-Api-Secret-Token': config.telegramSupportWebhookSecret,
+    },
     body: JSON.stringify(adminReplyUpdate),
   });
   assert.equal(replyRes.status, 200);
-  const replyBody = await readJson<{ ok: boolean; result: { handled: boolean; action: string } }>(replyRes);
+  const replyBody = await readJson<{ ok: boolean; result: { handled: boolean; action: string } }>(
+    replyRes,
+  );
   assert.equal(replyBody.result.action, 'admin_reply_delivered');
 
   // 6. Проверяем, что в истории тикета появился ответ администратора
-  const updatedTicketsRes = await fetch(`${server.baseUrl}/api/telegram/support/tickets`, { headers: adminAuth });
-  const updatedTickets = await readJson<{ openTickets: Array<{ id: string; messages: Array<{ from: string; text: string }> }> }>(updatedTicketsRes);
+  const updatedTicketsRes = await fetch(`${server.baseUrl}/api/telegram/support/tickets`, {
+    headers: adminAuth,
+  });
+  const updatedTickets = await readJson<{
+    openTickets: Array<{ id: string; messages: Array<{ from: string; text: string }> }>;
+  }>(updatedTicketsRes);
   const updatedTicket = updatedTickets.openTickets[0];
   assert.equal(updatedTicket.messages.length, 2);
   assert.equal(updatedTicket.messages[1].from, 'admin');
@@ -180,7 +204,10 @@ test('telegram (C6): вебхуки принимают только запрос
   const server = await startTestServer();
   t.after(() => server.close());
 
-  const update = { update_id: 1, message: { message_id: 1, chat: { id: 5, type: 'private' }, date: 1, text: '/start' } };
+  const update = {
+    update_id: 1,
+    message: { message_id: 1, chat: { id: 5, type: 'private' }, date: 1, text: '/start' },
+  };
   for (const path of ['/api/telegram/webhook', '/api/telegram/support/webhook']) {
     for (const headers of [
       { 'Content-Type': 'application/json' },
@@ -188,8 +215,9 @@ test('telegram (C6): вебхуки принимают только запрос
       // секрет платёжного бота не подходит поддержке и наоборот
       {
         'Content-Type': 'application/json',
-        'X-Telegram-Bot-Api-Secret-Token':
-          path.includes('support') ? config.telegramWebhookSecret : config.telegramSupportWebhookSecret,
+        'X-Telegram-Bot-Api-Secret-Token': path.includes('support')
+          ? config.telegramWebhookSecret
+          : config.telegramSupportWebhookSecret,
       },
     ]) {
       const res = await fetch(`${server.baseUrl}${path}`, {
@@ -212,7 +240,11 @@ test('telegram (C6): отладочные эндпоинты закрыты в p
   const reg = await fetch(`${server.baseUrl}/api/auth/signup`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ email: 'plain-user@example.com', password: 'password123', name: 'Plain' }),
+    body: JSON.stringify({
+      email: 'plain-user@example.com',
+      password: 'password123',
+      name: 'Plain',
+    }),
   });
   const { token } = await readJson<AuthSession>(reg);
   const plain = await fetch(`${server.baseUrl}/api/telegram/support/tickets`, {

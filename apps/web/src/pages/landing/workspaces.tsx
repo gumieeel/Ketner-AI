@@ -114,9 +114,17 @@ function CodePreview() {
               )}
             >
               {step.state === 'done' ? <CheckIcon className="size-3" /> : null}
-              {step.state === 'active' ? <span className="size-1.5 rounded-full bg-accent" /> : null}
+              {step.state === 'active' ? (
+                <span className="size-1.5 rounded-full bg-accent" />
+              ) : null}
             </span>
-            <span className={cn(step.state === 'done' ? 'text-muted line-through decoration-stroke-strong' : 'text-text')}>
+            <span
+              className={cn(
+                step.state === 'done'
+                  ? 'text-muted line-through decoration-stroke-strong'
+                  : 'text-text',
+              )}
+            >
               {t(step.key)}
             </span>
           </li>
@@ -127,7 +135,9 @@ function CodePreview() {
           <span className="block text-subtle">src/main.tsx</span>
           <span className="block text-danger">- applyTheme(stored)</span>
           <span className="block text-accent">+ applyTheme(stored ?? prefersDark())</span>
-          <span className="block text-accent">+ document.documentElement.dataset.theme = theme</span>
+          <span className="block text-accent">
+            + document.documentElement.dataset.theme = theme
+          </span>
         </code>
       </pre>
     </div>
@@ -142,9 +152,15 @@ function ImagesPreview() {
         <KnotRelief className="w-[64%] max-w-[320px]" depth={0.8} />
       </div>
       <div className="flex flex-wrap items-center gap-2 px-1 pb-1">
-        <p className="mr-auto min-w-0 flex-1 text-[14px] leading-snug text-text">{t('home.spacesImagePrompt')}</p>
-        <span className="rounded-sm border border-stroke px-2 py-1 text-[12px] text-muted">FLUX.2 dev</span>
-        <span className="tabular rounded-sm border border-stroke px-2 py-1 text-[12px] text-muted">1:1</span>
+        <p className="mr-auto min-w-0 flex-1 text-[14px] leading-snug text-text">
+          {t('home.spacesImagePrompt')}
+        </p>
+        <span className="rounded-sm border border-stroke px-2 py-1 text-[12px] text-muted">
+          FLUX.2 dev
+        </span>
+        <span className="tabular rounded-sm border border-stroke px-2 py-1 text-[12px] text-muted">
+          1:1
+        </span>
       </div>
     </div>
   );
@@ -161,7 +177,11 @@ export function LandingWorkspaces() {
   const [selected, setSelected] = useState<SpaceId>('chat');
 
   return (
-    <section aria-labelledby="spaces-title" id="spaces" className="w-full scroll-mt-20 pt-28 md:pt-36">
+    <section
+      aria-labelledby="spaces-title"
+      id="spaces"
+      className="w-full scroll-mt-20 pt-28 md:pt-36"
+    >
       <SectionHead id="spaces-title" title={t('home.spacesTitle')} lead={t('home.spacesLead')} />
 
       <Tabs

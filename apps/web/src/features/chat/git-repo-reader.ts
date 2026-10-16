@@ -14,7 +14,9 @@ export function parseGitHubUrl(input: string): ParseRepoResult | null {
   if (!trimmed) return null;
 
   // Формат 1: owner/repo или owner/repo#branch
-  const simpleMatch = trimmed.match(/^([a-zA-Z0-9_.-]+)\/([a-zA-Z0-9_.-]+)(?:#([a-zA-Z0-9_.-]+))?$/);
+  const simpleMatch = trimmed.match(
+    /^([a-zA-Z0-9_.-]+)\/([a-zA-Z0-9_.-]+)(?:#([a-zA-Z0-9_.-]+))?$/,
+  );
   if (simpleMatch) {
     return {
       owner: simpleMatch[1],
@@ -54,20 +56,60 @@ const MAX_FETCHED_TOTAL_BYTES = 600 * 1024;
 const MAX_FETCHED_FILE_BYTES = 128 * 1024;
 
 const SKIPPED_SEGMENTS = new Set([
-  'node_modules', '.git', 'dist', 'build', '.next', 'out', 'target', 'coverage',
-  '.turbo', '.cache', 'vendor', '__pycache__', 'venv',
+  'node_modules',
+  '.git',
+  'dist',
+  'build',
+  '.next',
+  'out',
+  'target',
+  'coverage',
+  '.turbo',
+  '.cache',
+  'vendor',
+  '__pycache__',
+  'venv',
 ]);
 
 const NON_SOURCE_EXTENSIONS = new Set([
-  'png', 'jpg', 'jpeg', 'gif', 'webp', 'ico', 'avif', 'bmp', 'svg', 'pdf', 'zip', 'gz', 'tgz', 'rar', '7z',
-  'woff', 'woff2', 'ttf', 'eot', 'otf', 'mp3', 'mp4', 'mov', 'webm', 'wasm', 'exe', 'dll', 'so', 'bin',
-  'lock', 'map',
+  'png',
+  'jpg',
+  'jpeg',
+  'gif',
+  'webp',
+  'ico',
+  'avif',
+  'bmp',
+  'svg',
+  'pdf',
+  'zip',
+  'gz',
+  'tgz',
+  'rar',
+  '7z',
+  'woff',
+  'woff2',
+  'ttf',
+  'eot',
+  'otf',
+  'mp3',
+  'mp4',
+  'mov',
+  'webm',
+  'wasm',
+  'exe',
+  'dll',
+  'so',
+  'bin',
+  'lock',
+  'map',
 ]);
 
 function isUsefulRepoPath(path: string): boolean {
   const segments = path.split('/');
   if (segments.some((s) => SKIPPED_SEGMENTS.has(s))) return false;
-  if (path.endsWith('-lock.json') || path.endsWith('pnpm-lock.yaml') || path.endsWith('yarn.lock')) return false;
+  if (path.endsWith('-lock.json') || path.endsWith('pnpm-lock.yaml') || path.endsWith('yarn.lock'))
+    return false;
   return !NON_SOURCE_EXTENSIONS.has(getFileExtension(path));
 }
 
@@ -78,9 +120,17 @@ export function repoFileScore(path: string): number {
   if (/^package\.json$/i.test(path)) score = 100;
   else if (/^readme(\.md)?$/i.test(path)) score = 90;
   else if (/^tsconfig.*\.json$/i.test(path)) score = 80;
-  else if (/(^|\/)(pyproject\.toml|requirements\.txt|Cargo\.toml|go\.mod|pom\.xml|Gemfile|composer\.json)$/i.test(path)) score = 75;
+  else if (
+    /(^|\/)(pyproject\.toml|requirements\.txt|Cargo\.toml|go\.mod|pom\.xml|Gemfile|composer\.json)$/i.test(
+      path,
+    )
+  )
+    score = 75;
   else if (/(^|\/)(index|main|app|server)\.(ts|tsx|js|jsx|py|go|rs)$/i.test(path)) score = 70;
-  else if (/(^|\/)(Dockerfile|docker-compose\.ya?ml|vite\.config\.[jt]s|next\.config\.[jt]s)$/i.test(path)) score = 60;
+  else if (
+    /(^|\/)(Dockerfile|docker-compose\.ya?ml|vite\.config\.[jt]s|next\.config\.[jt]s)$/i.test(path)
+  )
+    score = 60;
   else if (/(^|\/)package\.json$/i.test(path)) score = 55;
   else if (/^(src|app|lib|apps|packages|server|api)\//i.test(path)) score = 40;
   else if (/^(tests?|docs?)\//i.test(path)) score = 15;
@@ -102,7 +152,9 @@ async function readFailure(res: Response, owner: string, repo: string): Promise<
     throw new Error('GitHub временно ограничил запросы. Попробуйте через минуту.');
   }
   if (res.status === 404) {
-    throw new Error(`Репозиторий ${owner}/${repo} или ветка не найдены, либо у подключённого аккаунта GitHub нет к ним доступа.`);
+    throw new Error(
+      `Репозиторий ${owner}/${repo} или ветка не найдены, либо у подключённого аккаунта GitHub нет к ним доступа.`,
+    );
   }
   throw new Error(`Ошибка загрузки репозитория (${res.status})`);
 }
@@ -111,7 +163,11 @@ async function readFailure(res: Response, owner: string, repo: string): Promise<
  * Загружает дерево репозитория через привязанный аккаунт GitHub (`/api/github/api`): работают и
  * приватные репозитории, токен остаётся на сервере. Без ветки берётся ветка по умолчанию.
  */
-export async function fetchGitHubRepo(owner: string, repo: string, branch?: string): Promise<WorkspaceContext> {
+export async function fetchGitHubRepo(
+  owner: string,
+  repo: string,
+  branch?: string,
+): Promise<WorkspaceContext> {
   const base = repoPath(owner, repo);
 
   let targetBranch = branch?.trim();
@@ -138,14 +194,16 @@ export async function fetchGitHubRepo(owner: string, repo: string, branch?: stri
 
   // 2. Скачиваем содержимое самых важных текстовых файлов (в пределах лимитов).
   let fetchedBytes = 0;
-  const filesToFetch = codeFiles.filter((f) => {
-    if (isSensitivePath(f.path) || !isReadableTextPath(f.path)) return false;
-    const size = f.size ?? 0;
-    if (size > MAX_FETCHED_FILE_BYTES) return false;
-    if (fetchedBytes + size > MAX_FETCHED_TOTAL_BYTES) return false;
-    fetchedBytes += size;
-    return true;
-  }).slice(0, MAX_FETCHED_FILES);
+  const filesToFetch = codeFiles
+    .filter((f) => {
+      if (isSensitivePath(f.path) || !isReadableTextPath(f.path)) return false;
+      const size = f.size ?? 0;
+      if (size > MAX_FETCHED_FILE_BYTES) return false;
+      if (fetchedBytes + size > MAX_FETCHED_TOTAL_BYTES) return false;
+      fetchedBytes += size;
+      return true;
+    })
+    .slice(0, MAX_FETCHED_FILES);
 
   const encodePath = (path: string) => path.split('/').map(encodeURIComponent).join('/');
   const contentMap = new Map<string, string>();
@@ -153,9 +211,12 @@ export async function fetchGitHubRepo(owner: string, repo: string, branch?: stri
   await Promise.all(
     filesToFetch.map(async (fileNode) => {
       try {
-        const contentRes = await githubFetch(`${base}/contents/${encodePath(fileNode.path)}?ref=${ref}`, {
-          accept: 'application/vnd.github.raw+json',
-        });
+        const contentRes = await githubFetch(
+          `${base}/contents/${encodePath(fileNode.path)}?ref=${ref}`,
+          {
+            accept: 'application/vnd.github.raw+json',
+          },
+        );
         if (contentRes.ok) {
           const text = await contentRes.text();
           if (text.length <= MAX_FETCHED_FILE_BYTES) {

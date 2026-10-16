@@ -52,7 +52,9 @@ export function Accordion({
             data-open={open ? 'true' : 'false'}
             className={cn(
               'rounded-lg border transition-[background-color,border-color] duration-200 ease-out-expo',
-              open ? 'border-stroke-strong bg-surface-2' : 'border-stroke bg-surface hover:bg-surface-2',
+              open
+                ? 'border-stroke-strong bg-surface-2'
+                : 'border-stroke bg-surface hover:bg-surface-2',
             )}
           >
             <h3 className="m-0">
@@ -88,7 +90,9 @@ export function Accordion({
               )}
             >
               <div className="overflow-hidden">
-                <div className="max-w-[68ch] px-5 pb-5 text-[15px] leading-relaxed text-muted">{item.content}</div>
+                <div className="max-w-[68ch] px-5 pb-5 text-[15px] leading-relaxed text-muted">
+                  {item.content}
+                </div>
               </div>
             </div>
           </div>

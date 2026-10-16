@@ -28,7 +28,10 @@ describe('ленивая загрузка страниц', () => {
   it('правовая страница подгружается и открывается со своим документом', async () => {
     renderAppRoute('/terms');
     expect(
-      await screen.findByRole('heading', { level: 1, name: 'Пользовательское соглашение и оферта' }),
+      await screen.findByRole('heading', {
+        level: 1,
+        name: 'Пользовательское соглашение и оферта',
+      }),
     ).toBeInTheDocument();
   });
 

@@ -57,7 +57,12 @@ const ARBITRUM = 'Arbitrum';
 const OPTIMISM = 'Optimism';
 const BASE = 'Base';
 
-const n = (code: CryptoCurrency, coin: string, network: string, transferFee: TransferFee = 'none'): CryptoNetwork => ({
+const n = (
+  code: CryptoCurrency,
+  coin: string,
+  network: string,
+  transferFee: TransferFee = 'none',
+): CryptoNetwork => ({
   code,
   coin,
   network,
@@ -120,9 +125,13 @@ export function networksOfCoin(coinId: string): CryptoNetwork[] {
 }
 
 /** Оценка комиссий до выставления счёта; точные суммы приходят от Trybit в самом счёте. */
-export function estimateFees(priceUsd: number, transferFee: TransferFee): { serviceUsd: number; transferUsd: number | null } {
+export function estimateFees(
+  priceUsd: number,
+  transferFee: TransferFee,
+): { serviceUsd: number; transferUsd: number | null } {
   return {
     serviceUsd: Math.round(priceUsd * SERVICE_FEE_PERCENT) / 100,
-    transferUsd: transferFee === 'fixed' ? TRON_TRANSFER_FEE_USD : transferFee === 'none' ? 0 : null,
+    transferUsd:
+      transferFee === 'fixed' ? TRON_TRANSFER_FEE_USD : transferFee === 'none' ? 0 : null,
   };
 }

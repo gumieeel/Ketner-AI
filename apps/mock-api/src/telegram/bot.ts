@@ -31,14 +31,22 @@ import { starsRateService, type StarsRateService } from './stars-rate.js';
 /** Тарифы, которые продаются за звёзды. */
 export const STARS_PLANS = ['plus', 'pro', 'ultra'] as const satisfies readonly PlanId[];
 
-const PLAN_TITLES: Record<string, string> = { free: 'Free', plus: 'Plus', pro: 'Pro', ultra: 'Ultra' };
+const PLAN_TITLES: Record<string, string> = {
+  free: 'Free',
+  plus: 'Plus',
+  pro: 'Pro',
+  ultra: 'Ultra',
+};
 
 export function planTitle(planId: string): string {
   return PLAN_TITLES[planId] ?? planId.toUpperCase();
 }
 
 /** Цена тарифа в звёздах по текущему курсу Telegram Stars (см. stars-rate.ts). */
-export function calculateStars(priceUsd: number, rates: StarsRateService = starsRateService): number {
+export function calculateStars(
+  priceUsd: number,
+  rates: StarsRateService = starsRateService,
+): number {
   return rates.quote(priceUsd);
 }
 
@@ -102,7 +110,12 @@ export interface TelegramUpdate {
     date: number;
     reply_to_message?: { message_id: number; from?: TelegramFrom; text?: string; caption?: string };
     successful_payment?: SuccessfulPayment;
-    refunded_payment?: { currency: string; total_amount: number; invoice_payload: string; telegram_payment_charge_id: string };
+    refunded_payment?: {
+      currency: string;
+      total_amount: number;
+      invoice_payload: string;
+      telegram_payment_charge_id: string;
+    };
   };
   callback_query?: {
     id: string;
@@ -138,9 +151,23 @@ export function encodePayload(payload: StarsPayload): string {
 export function decodePayload(raw: string): StarsPayload | null {
   const [version, planId, stars, invoiceId, userId, flag] = raw.split('|');
   const amount = Number(stars);
-  if (version !== 'v1' || !planId || !invoiceId || !userId || !Number.isInteger(amount) || amount <= 0) return null;
+  if (
+    version !== 'v1' ||
+    !planId ||
+    !invoiceId ||
+    !userId ||
+    !Number.isInteger(amount) ||
+    amount <= 0
+  )
+    return null;
   if (!(STARS_PLANS as readonly string[]).includes(planId)) return null;
-  return { planId: planId as PlanId, stars: amount, invoiceId, userId, ...(flag === 'r' ? { recurring: true } : {}) };
+  return {
+    planId: planId as PlanId,
+    stars: amount,
+    invoiceId,
+    userId,
+    ...(flag === 'r' ? { recurring: true } : {}),
+  };
 }
 
 function escapeHtml(text: string): string {
@@ -149,7 +176,11 @@ function escapeHtml(text: string): string {
 
 function formatDate(iso: string | null | undefined): string {
   if (!iso) return '';
-  return new Date(iso).toLocaleDateString('ru-RU', { day: 'numeric', month: 'long', year: 'numeric' });
+  return new Date(iso).toLocaleDateString('ru-RU', {
+    day: 'numeric',
+    month: 'long',
+    year: 'numeric',
+  });
 }
 
 /** Короткая ссылка на платёж для кнопок (callback_data — не больше 64 байт). */
@@ -182,7 +213,10 @@ export class TelegramBotService implements TelegramPaymentsPort {
   constructor(deps: TelegramBotDeps) {
     this.deps = deps;
     this.token = deps.botToken ?? config.telegramBotToken ?? '';
-    this.username = (deps.botUsername || config.telegramBotUsername || 'Robo_kassa_bot').replace(/^@/, '');
+    this.username = (deps.botUsername || config.telegramBotUsername || 'Robo_kassa_bot').replace(
+      /^@/,
+      '',
+    );
     this.rates = deps.rateService ?? starsRateService;
     this.linkCodes = deps.linkCodes ?? telegramLinkCodes;
     this.auth = deps.authRequests ?? telegramAuthRequests;
@@ -217,7 +251,10 @@ export class TelegramBotService implements TelegramPaymentsPort {
    */
   get siteUrl(): string {
     const candidate = this.deps.webAppUrl || config.webAppUrl || '';
-    return (candidate.startsWith('https://') ? candidate : 'https://ketner.org').replace(/\/+$/, '');
+    return (candidate.startsWith('https://') ? candidate : 'https://ketner.org').replace(
+      /\/+$/,
+      '',
+    );
   }
 
   get miniAppUrl(): string {
@@ -251,7 +288,8 @@ export class TelegramBotService implements TelegramPaymentsPort {
         ],
       });
       await this.callApi('setMyShortDescription', {
-        short_description: 'Ketner AI: подписка, оплата звёздами, возвраты и вход на сайт без пароля.',
+        short_description:
+          'Ketner AI: подписка, оплата звёздами, возвраты и вход на сайт без пароля.',
       });
       await this.callApi('setMyDescription', {
         description:
@@ -261,7 +299,11 @@ export class TelegramBotService implements TelegramPaymentsPort {
         menu_button: { type: 'web_app', text: 'Кабинет', web_app: { url: this.miniAppUrl } },
       });
 
-      const baseUrl = config.telegramWebhookUrl || process.env.RENDER_EXTERNAL_URL || publicBaseUrl || config.betterAuthUrl;
+      const baseUrl =
+        config.telegramWebhookUrl ||
+        process.env.RENDER_EXTERNAL_URL ||
+        publicBaseUrl ||
+        config.betterAuthUrl;
       if (baseUrl && baseUrl.startsWith('https://')) {
         const webhookUrl = `${baseUrl.replace(/\/$/, '')}/api/telegram/webhook`;
         await this.callApi('setWebhook', {
@@ -347,7 +389,11 @@ export class TelegramBotService implements TelegramPaymentsPort {
     }
   }
 
-  async sendMessage(chatId: number | string, text: string, extra: Record<string, unknown> = {}): Promise<unknown> {
+  async sendMessage(
+    chatId: number | string,
+    text: string,
+    extra: Record<string, unknown> = {},
+  ): Promise<unknown> {
     return this.callApi('sendMessage', {
       chat_id: chatId,
       text,
@@ -357,11 +403,24 @@ export class TelegramBotService implements TelegramPaymentsPort {
     });
   }
 
-  async answerCallbackQuery(callbackQueryId: string, text?: string, showAlert = false): Promise<unknown> {
-    return this.callApi('answerCallbackQuery', { callback_query_id: callbackQueryId, text, show_alert: showAlert });
+  async answerCallbackQuery(
+    callbackQueryId: string,
+    text?: string,
+    showAlert = false,
+  ): Promise<unknown> {
+    return this.callApi('answerCallbackQuery', {
+      callback_query_id: callbackQueryId,
+      text,
+      show_alert: showAlert,
+    });
   }
 
-  private async editMessage(chatId: number | string, messageId: number, text: string, keyboard?: unknown[][]): Promise<void> {
+  private async editMessage(
+    chatId: number | string,
+    messageId: number,
+    text: string,
+    keyboard?: unknown[][],
+  ): Promise<void> {
     await this.callApi('editMessageText', {
       chat_id: chatId,
       message_id: messageId,
@@ -382,7 +441,11 @@ export class TelegramBotService implements TelegramPaymentsPort {
     return result === true;
   }
 
-  async setStarsSubscriptionCanceled(telegramUserId: number, chargeId: string, canceled: boolean): Promise<boolean> {
+  async setStarsSubscriptionCanceled(
+    telegramUserId: number,
+    chargeId: string,
+    canceled: boolean,
+  ): Promise<boolean> {
     const result = await this.callApi<boolean>('editUserStarSubscription', {
       user_id: telegramUserId,
       telegram_payment_charge_id: chargeId,
@@ -391,16 +454,29 @@ export class TelegramBotService implements TelegramPaymentsPort {
     return result === true;
   }
 
-  async notifyUser(userId: string, text: string, kind: 'receipt' | 'refund' | 'reminder' | 'system'): Promise<void> {
+  async notifyUser(
+    userId: string,
+    text: string,
+    kind: 'receipt' | 'refund' | 'reminder' | 'system',
+  ): Promise<void> {
     const user = this.deps.userStore.findById(userId);
     if (!user?.telegramChatId) return;
     const prefs = this.billing.prefsOf(userId);
-    if ((kind === 'receipt' && !prefs.receipts) || (kind === 'reminder' && !prefs.reminders)) return;
-    await this.sendMessage(user.telegramChatId, text, { reply_markup: { inline_keyboard: [[this.openAppButton()]] } });
+    if ((kind === 'receipt' && !prefs.receipts) || (kind === 'reminder' && !prefs.reminders))
+      return;
+    await this.sendMessage(user.telegramChatId, text, {
+      reply_markup: { inline_keyboard: [[this.openAppButton()]] },
+    });
   }
 
-  async notifyAdminsAboutContact(message: { name: string; email: string; message: string }): Promise<void> {
-    const admins = this.deps.userStore.list().filter((candidate) => candidate.isAdmin && candidate.telegramChatId);
+  async notifyAdminsAboutContact(message: {
+    name: string;
+    email: string;
+    message: string;
+  }): Promise<void> {
+    const admins = this.deps.userStore
+      .list()
+      .filter((candidate) => candidate.isAdmin && candidate.telegramChatId);
     const text = [
       '✉️ <b>Обращение с сайта</b>',
       '',
@@ -414,7 +490,9 @@ export class TelegramBotService implements TelegramPaymentsPort {
   }
 
   async notifyAdminsAboutRefund(payment: PaymentRecord, user: User | null): Promise<void> {
-    const admins = this.deps.userStore.list().filter((candidate) => candidate.isAdmin && candidate.telegramChatId);
+    const admins = this.deps.userStore
+      .list()
+      .filter((candidate) => candidate.isAdmin && candidate.telegramChatId);
     const ref = paymentRef(payment.id);
     const amount = payment.currency === 'XTR' ? `${payment.amount} ⭐` : `$${payment.amount}`;
     const text = [
@@ -435,10 +513,18 @@ export class TelegramBotService implements TelegramPaymentsPort {
         reply_markup: {
           inline_keyboard: [
             [
-              { text: payment.method === 'stars' ? '✅ Вернуть звёзды' : '✅ Одобрить', callback_data: `rf:y:${ref}` },
+              {
+                text: payment.method === 'stars' ? '✅ Вернуть звёзды' : '✅ Одобрить',
+                callback_data: `rf:y:${ref}`,
+              },
               { text: '✖️ Отказать', callback_data: `rf:n:${ref}` },
             ],
-            [{ text: '📱 Все заявки в кабинете', web_app: { url: `${this.miniAppUrl}?tab=admin` } }],
+            [
+              {
+                text: '📱 Все заявки в кабинете',
+                web_app: { url: `${this.miniAppUrl}?tab=admin` },
+              },
+            ],
           ],
         },
       });
@@ -450,10 +536,19 @@ export class TelegramBotService implements TelegramPaymentsPort {
   /** Счёт на тариф по текущему курсу. Сумма фиксируется в счёте и не меняется при смене курса. */
   createStarsInvoice(userId: string, planId: PlanId): TelegramStarsInvoice {
     const stars = this.rates.quote(planPriceUsd(planId));
-    return this.deps.invoiceStore.createTelegramStarsInvoice(userId, planId, planPriceRub(planId), stars, this.username);
+    return this.deps.invoiceStore.createTelegramStarsInvoice(
+      userId,
+      planId,
+      planPriceRub(planId),
+      stars,
+      this.username,
+    );
   }
 
-  private invoiceParams(invoice: TelegramStarsInvoice, recurring: boolean): Record<string, unknown> {
+  private invoiceParams(
+    invoice: TelegramStarsInvoice,
+    recurring: boolean,
+  ): Record<string, unknown> {
     const plan = getPlanItem(invoice.planId);
     const title = recurring
       ? `Ketner AI ${planTitle(invoice.planId)} · каждый месяц`
@@ -478,9 +573,15 @@ export class TelegramBotService implements TelegramPaymentsPort {
   }
 
   /** Ссылка на окно оплаты звёздами (для мини-приложения и сайта). */
-  async createInvoiceLink(invoice: TelegramStarsInvoice, recurring = false): Promise<string | null> {
+  async createInvoiceLink(
+    invoice: TelegramStarsInvoice,
+    recurring = false,
+  ): Promise<string | null> {
     if (invoice.invoiceLink && !recurring) return invoice.invoiceLink;
-    const link = await this.callApi<string>('createInvoiceLink', this.invoiceParams(invoice, recurring));
+    const link = await this.callApi<string>(
+      'createInvoiceLink',
+      this.invoiceParams(invoice, recurring),
+    );
     if (typeof link !== 'string' || !link.startsWith('https://')) return null;
     if (!recurring) this.deps.invoiceStore.setTelegramStarsLink?.(invoice.id, link);
     return link;
@@ -491,9 +592,11 @@ export class TelegramBotService implements TelegramPaymentsPort {
   }
 
   /** Проверка перед списанием: счёт наш, сумма и валюта совпадают, аккаунт существует. */
-  validatePayment(currency: string, totalAmount: number, rawPayload: string):
-    | { ok: true; payload: StarsPayload }
-    | { ok: false; reason: string } {
+  validatePayment(
+    currency: string,
+    totalAmount: number,
+    rawPayload: string,
+  ): { ok: true; payload: StarsPayload } | { ok: false; reason: string } {
     const payload = decodePayload(rawPayload);
     if (!payload) return { ok: false, reason: 'unknown_invoice' };
     if (currency !== 'XTR') return { ok: false, reason: 'invalid_currency' };
@@ -503,7 +606,8 @@ export class TelegramBotService implements TelegramPaymentsPort {
     if (invoice && (invoice.userId !== payload.userId || invoice.planId !== payload.planId)) {
       return { ok: false, reason: 'invoice_mismatch' };
     }
-    if (invoice?.status === 'paid' && !payload.recurring) return { ok: false, reason: 'already_paid' };
+    if (invoice?.status === 'paid' && !payload.recurring)
+      return { ok: false, reason: 'already_paid' };
     return { ok: true, payload };
   }
 
@@ -515,7 +619,12 @@ export class TelegramBotService implements TelegramPaymentsPort {
     now = Date.now(),
   ): Promise<{ status: 'activated' | 'duplicate' | 'rejected'; subscription?: Subscription }> {
     const payload = decodePayload(pay.invoice_payload);
-    if (!payload || pay.currency !== 'XTR' || pay.total_amount !== payload.stars || !this.deps.userStore.findById(payload.userId)) {
+    if (
+      !payload ||
+      pay.currency !== 'XTR' ||
+      pay.total_amount !== payload.stars ||
+      !this.deps.userStore.findById(payload.userId)
+    ) {
       console.warn(`[TelegramBot] Платёж ${pay.telegram_payment_charge_id} не распознан`);
       await this.sendMessage(
         chatId,
@@ -572,13 +681,21 @@ export class TelegramBotService implements TelegramPaymentsPort {
 
     const until = formatDate(result.subscription.renewsAt);
     const lines = renewal
-      ? [`🔄 <b>Автопродление прошло</b>`, '', `Списано ${pay.total_amount} ⭐. Тариф <b>${planTitle(payload.planId)}</b> действует до <b>${until}</b>.`]
+      ? [
+          `🔄 <b>Автопродление прошло</b>`,
+          '',
+          `Списано ${pay.total_amount} ⭐. Тариф <b>${planTitle(payload.planId)}</b> действует до <b>${until}</b>.`,
+        ]
       : [
           '🎉 <b>Оплата прошла!</b>',
           '',
           `Тариф <b>${planTitle(payload.planId)}</b> действует до <b>${until}</b>.`,
-          result.payment.bonusDays > 0 ? `За неиспользованные дни прежнего тарифа добавили ${result.payment.bonusDays} дн.` : '',
-          recurring ? 'Автопродление включено: через 30 дней спишем столько же звёзд. Отключить можно в кабинете.' : '',
+          result.payment.bonusDays > 0
+            ? `За неиспользованные дни прежнего тарифа добавили ${result.payment.bonusDays} дн.`
+            : '',
+          recurring
+            ? 'Автопродление включено: через 30 дней спишем столько же звёзд. Отключить можно в кабинете.'
+            : '',
         ];
     const payerIsAccountOwner = String(account?.telegramChatId ?? '') === String(chatId);
     if (payerIsAccountOwner && !this.billing.prefsOf(payload.userId).receipts && renewal) {
@@ -586,7 +703,10 @@ export class TelegramBotService implements TelegramPaymentsPort {
     }
     await this.sendMessage(chatId, lines.filter(Boolean).join('\n'), {
       reply_markup: {
-        inline_keyboard: [[{ text: '🚀 Открыть Ketner AI', url: `${this.siteUrl}/chat` }], [this.openAppButton('📱 Кабинет')]],
+        inline_keyboard: [
+          [{ text: '🚀 Открыть Ketner AI', url: `${this.siteUrl}/chat` }],
+          [this.openAppButton('📱 Кабинет')],
+        ],
       },
     });
     return { status: 'activated', subscription: result.subscription };
@@ -602,9 +722,11 @@ export class TelegramBotService implements TelegramPaymentsPort {
     if (user.isVip) return 'Тариф <b>Ultra</b> (VIP) без срока.';
     const sub = this.deps.subscriptionStore.get(user.id);
     const end = sub.renewsAt ? Date.parse(sub.renewsAt) : NaN;
-    if (sub.plan === 'free' || !Number.isFinite(end) || end <= Date.now()) return 'Тариф <b>Free</b>, платная подписка не активна.';
+    if (sub.plan === 'free' || !Number.isFinite(end) || end <= Date.now())
+      return 'Тариф <b>Free</b>, платная подписка не активна.';
     const auto = this.billing.starsSubscriptionOf(user.id);
-    const autoText = auto?.status === 'active' && auto.planId === sub.plan ? ', автопродление включено' : '';
+    const autoText =
+      auto?.status === 'active' && auto.planId === sub.plan ? ', автопродление включено' : '';
     return `Тариф <b>${planTitle(sub.plan)}</b> до <b>${formatDate(sub.renewsAt)}</b>${autoText}.`;
   }
 
@@ -612,13 +734,21 @@ export class TelegramBotService implements TelegramPaymentsPort {
     const user = this.resolveUser(chatId);
     const name = escapeHtml(from?.first_name || user?.name || '');
     const text = user
-      ? [`👋 ${name ? `${name}, з` : 'З'}дравствуйте!`, '', this.statusLine(user), '', 'Подписка, оплата, возвраты и вход на сайт — в кабинете:'].join('\n')
+      ? [
+          `👋 ${name ? `${name}, з` : 'З'}дравствуйте!`,
+          '',
+          this.statusLine(user),
+          '',
+          'Подписка, оплата, возвраты и вход на сайт — в кабинете:',
+        ].join('\n')
       : [
           `👋 ${name ? `${name}, д` : 'Д'}обро пожаловать в Ketner AI!`,
           '',
           'Все сильные модели в одной подписке. Нажмите кнопку ниже — создадим аккаунт или привяжем существующий, без паролей.',
         ].join('\n');
-    await this.sendMessage(chatId, text, { reply_markup: { inline_keyboard: [[this.openAppButton()]] } });
+    await this.sendMessage(chatId, text, {
+      reply_markup: { inline_keyboard: [[this.openAppButton()]] },
+    });
   }
 
   async sendStatus(chatId: number | string): Promise<void> {
@@ -627,9 +757,13 @@ export class TelegramBotService implements TelegramPaymentsPort {
       await this.sendStart(chatId);
       return;
     }
-    await this.sendMessage(chatId, ['📊 <b>Ваша подписка</b>', '', this.statusLine(user)].join('\n'), {
-      reply_markup: { inline_keyboard: [[this.openAppButton('📱 Управлять подпиской')]] },
-    });
+    await this.sendMessage(
+      chatId,
+      ['📊 <b>Ваша подписка</b>', '', this.statusLine(user)].join('\n'),
+      {
+        reply_markup: { inline_keyboard: [[this.openAppButton('📱 Управлять подпиской')]] },
+      },
+    );
   }
 
   private refundPolicyText(): string {
@@ -645,10 +779,21 @@ export class TelegramBotService implements TelegramPaymentsPort {
   private async sendPaySupport(chatId: number | string): Promise<void> {
     await this.sendMessage(
       chatId,
-      ['💳 <b>Помощь с оплатой</b>', '', 'Платежи, чеки и возвраты — на вкладке «Платежи» в кабинете. Там же можно вернуть звёзды в одно касание.', '', this.refundPolicyText(), '', 'Если что-то пошло не так — напишите @ketner_support_bot, ответим в течение суток.'].join('\n'),
+      [
+        '💳 <b>Помощь с оплатой</b>',
+        '',
+        'Платежи, чеки и возвраты — на вкладке «Платежи» в кабинете. Там же можно вернуть звёзды в одно касание.',
+        '',
+        this.refundPolicyText(),
+        '',
+        'Если что-то пошло не так — напишите @ketner_support_bot, ответим в течение суток.',
+      ].join('\n'),
       {
         reply_markup: {
-          inline_keyboard: [[this.openAppButton('💳 Платежи и возвраты', 'payments')], [{ text: '💬 Написать в поддержку', url: 'https://t.me/ketner_support_bot' }]],
+          inline_keyboard: [
+            [this.openAppButton('💳 Платежи и возвраты', 'payments')],
+            [{ text: '💬 Написать в поддержку', url: 'https://t.me/ketner_support_bot' }],
+          ],
         },
       },
     );
@@ -686,10 +831,15 @@ export class TelegramBotService implements TelegramPaymentsPort {
           ? {}
           : {
               error_message:
-                verdict.reason === 'already_paid' ? 'Этот счёт уже оплачен.' : 'Счёт устарел. Откройте кабинет и выставите новый.',
+                verdict.reason === 'already_paid'
+                  ? 'Этот счёт уже оплачен.'
+                  : 'Счёт устарел. Откройте кабинет и выставите новый.',
             }),
       });
-      return { handled: true, action: verdict.ok ? 'pre_checkout_approved' : `pre_checkout_rejected:${verdict.reason}` };
+      return {
+        handled: true,
+        action: verdict.ok ? 'pre_checkout_approved' : `pre_checkout_rejected:${verdict.reason}`,
+      };
     }
 
     if (update.callback_query) return this.handleCallback(update.callback_query);
@@ -702,14 +852,22 @@ export class TelegramBotService implements TelegramPaymentsPort {
       const result = await this.handleStarsPayment(chatId, msg.from, msg.successful_payment);
       return {
         handled: true,
-        action: result.status === 'activated' ? 'stars_payment_completed' : `stars_payment_${result.status}`,
+        action:
+          result.status === 'activated'
+            ? 'stars_payment_completed'
+            : `stars_payment_${result.status}`,
       };
     }
 
     if (msg.refunded_payment) {
-      const payment = this.billing.markRefundedByTelegram(msg.refunded_payment.telegram_payment_charge_id);
+      const payment = this.billing.markRefundedByTelegram(
+        msg.refunded_payment.telegram_payment_charge_id,
+      );
       if (payment) {
-        await this.sendMessage(chatId, `↩️ Возврат ${payment.amount} ⭐ за ${planTitle(payment.planId)} оформлен, дни этой оплаты сняты с подписки.`);
+        await this.sendMessage(
+          chatId,
+          `↩️ Возврат ${payment.amount} ⭐ за ${planTitle(payment.planId)} оформлен, дни этой оплаты сняты с подписки.`,
+        );
       }
       return { handled: true, action: 'stars_refunded' };
     }
@@ -719,9 +877,12 @@ export class TelegramBotService implements TelegramPaymentsPort {
     const command = (rawCommand ?? '').replace(/@\w+$/, '').toLowerCase();
     const arg = rest.join(' ').trim();
 
-    if (command === '/start' && arg.startsWith('auth_')) return this.handleAuthStart(chatId, arg.slice(5), msg.from);
-    if (command === '/start' && arg.startsWith('lnk_')) return this.handleLinkCode(chatId, arg.slice(4), msg.from);
-    if (command === '/start' && arg.startsWith('stars_')) return this.handleStarsDeepLink(chatId, arg);
+    if (command === '/start' && arg.startsWith('auth_'))
+      return this.handleAuthStart(chatId, arg.slice(5), msg.from);
+    if (command === '/start' && arg.startsWith('lnk_'))
+      return this.handleLinkCode(chatId, arg.slice(4), msg.from);
+    if (command === '/start' && arg.startsWith('stars_'))
+      return this.handleStarsDeepLink(chatId, arg);
     if (command === '/start' || command === '/menu' || command === '/plans' || command === '/buy') {
       await this.sendStart(chatId, msg.from);
       return { handled: true, action: 'start' };
@@ -739,13 +900,19 @@ export class TelegramBotService implements TelegramPaymentsPort {
       return { handled: true, action: 'terms' };
     }
 
-    await this.sendMessage(chatId, 'Всё управление — в кабинете: подписка, оплата, возвраты и вход на сайт.', {
-      reply_markup: { inline_keyboard: [[this.openAppButton()]] },
-    });
+    await this.sendMessage(
+      chatId,
+      'Всё управление — в кабинете: подписка, оплата, возвраты и вход на сайт.',
+      {
+        reply_markup: { inline_keyboard: [[this.openAppButton()]] },
+      },
+    );
     return { handled: true, action: 'fallback' };
   }
 
-  private async handleCallback(cb: NonNullable<TelegramUpdate['callback_query']>): Promise<{ handled: boolean; action?: string }> {
+  private async handleCallback(
+    cb: NonNullable<TelegramUpdate['callback_query']>,
+  ): Promise<{ handled: boolean; action?: string }> {
     const chatId = cb.message?.chat.id;
     const data = cb.data ?? '';
     if (!chatId) {
@@ -773,10 +940,17 @@ export class TelegramBotService implements TelegramPaymentsPort {
 
   // ───────────── вход и привязка подтверждением ─────────────
 
-  private async handleAuthStart(chatId: number | string, code: string, from?: TelegramFrom): Promise<{ handled: boolean; action?: string }> {
+  private async handleAuthStart(
+    chatId: number | string,
+    code: string,
+    from?: TelegramFrom,
+  ): Promise<{ handled: boolean; action?: string }> {
     const request = this.auth.byStartCode(code);
     if (!request || request.status !== 'pending') {
-      await this.sendMessage(chatId, '⌛ Ссылка устарела. Вернитесь на сайт и нажмите кнопку ещё раз — ссылка действует 5 минут.');
+      await this.sendMessage(
+        chatId,
+        '⌛ Ссылка устарела. Вернитесь на сайт и нажмите кнопку ещё раз — ссылка действует 5 минут.',
+      );
       return { handled: true, action: 'auth_expired' };
     }
     const linked = this.resolveUser(chatId);
@@ -790,7 +964,10 @@ export class TelegramBotService implements TelegramPaymentsPort {
     if (request.mode === 'link') {
       const target = request.siteUserId ? this.deps.userStore.findById(request.siteUserId) : null;
       if (!target) {
-        await this.sendMessage(chatId, 'Аккаунт для привязки не найден. Начните заново в настройках сайта.');
+        await this.sendMessage(
+          chatId,
+          'Аккаунт для привязки не найден. Начните заново в настройках сайта.',
+        );
         return { handled: true, action: 'auth_link_missing' };
       }
       if (linked && linked.id !== target.id && isTelegramAccountEmail(linked.email)) {
@@ -843,7 +1020,12 @@ export class TelegramBotService implements TelegramPaymentsPort {
     if (decision !== 'y') {
       this.auth.resolve(code!, { approve: false });
       await this.answerCallbackQuery(cb.id, 'Отменено');
-      if (messageId) await this.editMessage(chatId, messageId, '✖️ Вход отменён. Если это были не вы — ничего делать не нужно, доступа к аккаунту нет.');
+      if (messageId)
+        await this.editMessage(
+          chatId,
+          messageId,
+          '✖️ Вход отменён. Если это были не вы — ничего делать не нужно, доступа к аккаунту нет.',
+        );
       return { handled: true, action: 'auth_declined' };
     }
     let userId: string;
@@ -855,7 +1037,11 @@ export class TelegramBotService implements TelegramPaymentsPort {
       }
       const current = this.resolveUser(chatId);
       if (current && current.id !== target.id && isTelegramAccountEmail(current.email)) {
-        await this.answerCallbackQuery(cb.id, 'Этот Telegram открывает отдельный аккаунт — войдите через Telegram на сайте', true);
+        await this.answerCallbackQuery(
+          cb.id,
+          'Этот Telegram открывает отдельный аккаунт — войдите через Telegram на сайте',
+          true,
+        );
         return { handled: true, action: 'auth_link_conflict' };
       }
       this.linkTelegram(target.id, chatId, cb.from.username);
@@ -865,12 +1051,17 @@ export class TelegramBotService implements TelegramPaymentsPort {
       userId = linked.id;
     }
     this.auth.resolve(code!, { approve: true, userId });
-    await this.answerCallbackQuery(cb.id, request.mode === 'link' ? 'Telegram привязан' : 'Вход подтверждён');
+    await this.answerCallbackQuery(
+      cb.id,
+      request.mode === 'link' ? 'Telegram привязан' : 'Вход подтверждён',
+    );
     if (messageId) {
       await this.editMessage(
         chatId,
         messageId,
-        request.mode === 'link' ? '✅ Telegram привязан. Вернитесь на сайт — страница обновится сама.' : '✅ Вход подтверждён. Вернитесь на сайт — он откроется сам.',
+        request.mode === 'link'
+          ? '✅ Telegram привязан. Вернитесь на сайт — страница обновится сама.'
+          : '✅ Вход подтверждён. Вернитесь на сайт — он откроется сам.',
         [[this.openAppButton()]],
       );
     }
@@ -878,39 +1069,67 @@ export class TelegramBotService implements TelegramPaymentsPort {
   }
 
   /** Аккаунт Ketner для человека, который пришёл из Telegram (вход только через Telegram). */
-  createTelegramAccount(from: Pick<TelegramFrom, 'id' | 'first_name' | 'last_name' | 'username'>): User {
-    const existing = this.resolveUser(from.id) ?? this.deps.userStore.findByEmail(telegramAccountEmail(from.id));
+  createTelegramAccount(
+    from: Pick<TelegramFrom, 'id' | 'first_name' | 'last_name' | 'username'>,
+  ): User {
+    const existing =
+      this.resolveUser(from.id) ?? this.deps.userStore.findByEmail(telegramAccountEmail(from.id));
     if (existing) {
       if (!existing.telegramChatId) this.linkTelegram(existing.id, from.id, from.username);
       return this.deps.userStore.findById(existing.id) ?? existing;
     }
-    const name = [from.first_name, from.last_name].filter(Boolean).join(' ').trim() || from.username || 'Telegram';
-    const created = this.deps.userStore.create(telegramAccountEmail(from.id), randomBytes(24).toString('base64url'), name);
+    const name =
+      [from.first_name, from.last_name].filter(Boolean).join(' ').trim() ||
+      from.username ||
+      'Telegram';
+    const created = this.deps.userStore.create(
+      telegramAccountEmail(from.id),
+      randomBytes(24).toString('base64url'),
+      name,
+    );
     return this.linkTelegram(created.id, from.id, from.username) ?? created;
   }
 
   /** Старые ссылки привязки из настроек (`/start lnk_<код>`). */
-  private async handleLinkCode(chatId: number | string, code: string, from?: TelegramFrom): Promise<{ handled: boolean; action?: string }> {
+  private async handleLinkCode(
+    chatId: number | string,
+    code: string,
+    from?: TelegramFrom,
+  ): Promise<{ handled: boolean; action?: string }> {
     const userId = this.linkCodes.consume(code);
     const user = userId ? this.deps.userStore.findById(userId) : null;
     if (!user) {
-      await this.sendMessage(chatId, '⌛ Ссылка для привязки устарела. Нажмите «Подключить Telegram» в настройках сайта ещё раз.');
+      await this.sendMessage(
+        chatId,
+        '⌛ Ссылка для привязки устарела. Нажмите «Подключить Telegram» в настройках сайта ещё раз.',
+      );
       return { handled: true, action: 'link_code_invalid' };
     }
     this.linkTelegram(user.id, chatId, from?.username);
-    await this.sendMessage(chatId, `✅ Telegram привязан к аккаунту <b>${escapeHtml(accountLabel(user))}</b>.\n\n${this.statusLine(user)}`, {
-      reply_markup: { inline_keyboard: [[this.openAppButton()]] },
-    });
+    await this.sendMessage(
+      chatId,
+      `✅ Telegram привязан к аккаунту <b>${escapeHtml(accountLabel(user))}</b>.\n\n${this.statusLine(user)}`,
+      {
+        reply_markup: { inline_keyboard: [[this.openAppButton()]] },
+      },
+    );
     return { handled: true, action: 'account_linked' };
   }
 
   /** Счёт, выставленный на сайте: `/start stars_<id>`. */
-  private async handleStarsDeepLink(chatId: number | string, invoiceId: string): Promise<{ handled: boolean; action?: string }> {
+  private async handleStarsDeepLink(
+    chatId: number | string,
+    invoiceId: string,
+  ): Promise<{ handled: boolean; action?: string }> {
     const invoice = this.deps.invoiceStore.getTelegramStarsInvoice(invoiceId);
     if (!invoice || invoice.status === 'paid') {
-      await this.sendMessage(chatId, invoice ? 'Этот счёт уже оплачен ✅' : 'Счёт не найден или устарел. Выберите тариф заново.', {
-        reply_markup: { inline_keyboard: [[this.openAppButton('⭐ Тарифы', 'plans')]] },
-      });
+      await this.sendMessage(
+        chatId,
+        invoice ? 'Этот счёт уже оплачен ✅' : 'Счёт не найден или устарел. Выберите тариф заново.',
+        {
+          reply_markup: { inline_keyboard: [[this.openAppButton('⭐ Тарифы', 'plans')]] },
+        },
+      );
       return { handled: true, action: invoice ? 'deep_link_paid' : 'deep_link_missing' };
     }
     await this.sendStarsInvoice(chatId, invoice);
@@ -937,7 +1156,9 @@ export class TelegramBotService implements TelegramPaymentsPort {
       return { handled: true, action: 'refund_forbidden' };
     }
     const [, decision, ref] = data.split(':');
-    const payment = this.billing.pendingRefunds().find((candidate) => paymentRef(candidate.id) === ref);
+    const payment = this.billing
+      .pendingRefunds()
+      .find((candidate) => paymentRef(candidate.id) === ref);
     if (!payment) {
       await this.answerCallbackQuery(cb.id, 'Заявка уже обработана', true);
       return { handled: true, action: 'refund_missing' };
@@ -954,7 +1175,11 @@ export class TelegramBotService implements TelegramPaymentsPort {
       }
       return { handled: true, action: decision === 'y' ? 'refund_approved' : 'refund_declined' };
     } catch (error) {
-      await this.answerCallbackQuery(cb.id, error instanceof BillingError ? error.message : 'Не получилось', true);
+      await this.answerCallbackQuery(
+        cb.id,
+        error instanceof BillingError ? error.message : 'Не получилось',
+        true,
+      );
       return { handled: true, action: 'refund_failed' };
     }
   }
@@ -972,7 +1197,14 @@ export class TelegramBotService implements TelegramPaymentsPort {
       const end = Date.parse(sub.renewsAt);
       if (!Number.isFinite(end)) continue;
       const left = end - now;
-      const kind = left > 2 * DAY_MS && left <= 3 * DAY_MS ? '3d' : left > 0 && left <= DAY_MS ? '1d' : left <= 0 && left > -DAY_MS ? 'ended' : null;
+      const kind =
+        left > 2 * DAY_MS && left <= 3 * DAY_MS
+          ? '3d'
+          : left > 0 && left <= DAY_MS
+            ? '1d'
+            : left <= 0 && left > -DAY_MS
+              ? 'ended'
+              : null;
       if (!kind) continue;
       const auto = this.billing.starsSubscriptionOf(user.id);
       const autoActive = auto?.status === 'active' && auto.planId === sub.plan;
@@ -987,7 +1219,16 @@ export class TelegramBotService implements TelegramPaymentsPort {
           ? `⏰ Подписка <b>${planTitle(sub.plan)}</b> закончилась. Продлите её, чтобы вернуть доступ к моделям тарифа.`
           : `⏰ Подписка <b>${planTitle(sub.plan)}</b> закончится ${kind === '1d' ? '<b>завтра</b>' : `<b>${formatDate(sub.renewsAt)}</b>`}. Продлите заранее — оставшиеся дни сохранятся.`;
       await this.sendMessage(user.telegramChatId, text, {
-        reply_markup: { inline_keyboard: [[this.openAppButton(autoActive ? '📱 Кабинет' : `⭐ Продлить ${planTitle(sub.plan)}`, autoActive ? undefined : 'plans')]] },
+        reply_markup: {
+          inline_keyboard: [
+            [
+              this.openAppButton(
+                autoActive ? '📱 Кабинет' : `⭐ Продлить ${planTitle(sub.plan)}`,
+                autoActive ? undefined : 'plans',
+              ),
+            ],
+          ],
+        },
       });
       sent += 1;
     }

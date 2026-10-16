@@ -12,7 +12,10 @@ const GUEST_ID_KEY = 'ketner_guest_id';
  * Пересверяем сессию: устаревшая сбрасывается, и интерфейс просит войти заново.
  */
 export function checkSessionInvalid(response: Response): void {
-  if (response.headers.get('X-Session-Invalid') === '1' && useAuth.getState().status === 'authenticated') {
+  if (
+    response.headers.get('X-Session-Invalid') === '1' &&
+    useAuth.getState().status === 'authenticated'
+  ) {
     void useAuth.getState().restoreSession();
   }
 }
@@ -248,4 +251,3 @@ export function sendFeedback(params: SendFeedbackParams): Promise<{ success: boo
     body: JSON.stringify(params),
   });
 }
-

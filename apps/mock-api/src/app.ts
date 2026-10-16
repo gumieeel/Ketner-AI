@@ -17,7 +17,12 @@ import {
 } from './middleware/security.js';
 import { sendError } from './middleware/errors.js';
 import { createApiRouter, describeService } from './routes/index.js';
-import { apiKeyStore as defaultApiKeyStore, conversationStore, subscriptionStore, userStore } from './store/index.js';
+import {
+  apiKeyStore as defaultApiKeyStore,
+  conversationStore,
+  subscriptionStore,
+  userStore,
+} from './store/index.js';
 import type { ApiKeyStore } from './store/api-key-store.js';
 import type { AgentGateway } from './ai/agent-gateway.js';
 import type { AIGateway } from './ai/gateway.js';
@@ -185,8 +190,16 @@ export function createApp(overrides: Partial<AppDeps> = {}): Express {
       if (!isPublicBetterAuthEndpoint(request.method, request.path)) {
         return sendError(response, 404, 'not_found', 'Маршрут не найден');
       }
-      if (request.path === '/api/auth/sign-in/email' && betterAuthSignInPerIp.hit(clientIp(request))) {
-        return sendError(response, 429, 'too_many_requests', 'Слишком много попыток входа. Подождите несколько минут.');
+      if (
+        request.path === '/api/auth/sign-in/email' &&
+        betterAuthSignInPerIp.hit(clientIp(request))
+      ) {
+        return sendError(
+          response,
+          429,
+          'too_many_requests',
+          'Слишком много попыток входа. Подождите несколько минут.',
+        );
       }
       return toNodeHandler(betterAuthInstance)(request, response);
     }

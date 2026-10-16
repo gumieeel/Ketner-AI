@@ -117,12 +117,21 @@ function readLimits(capabilities: CodeCapabilities | null): ReadLimits {
 }
 
 let idCounter = 0;
-const localId = (prefix: string): string => `${prefix}-${Date.now().toString(36)}-${(idCounter += 1)}`;
+const localId = (prefix: string): string =>
+  `${prefix}-${Date.now().toString(36)}-${(idCounter += 1)}`;
 
 export const useCode = create<CodeState>((set, get) => {
   /** Сообщение пользователю: пропущенные при импорте файлы. */
   const importNotice = (written: number, skipped: ImportSkip[], skippedCount: number): void => {
-    set({ notice: { kind: 'import', tone: 'info', written, skippedCount, details: skipped.slice(0, 50) } });
+    set({
+      notice: {
+        kind: 'import',
+        tone: 'info',
+        written,
+        skippedCount,
+        details: skipped.slice(0, 50),
+      },
+    });
   };
 
   /** Создаёт проект и загружает в него файлы частями. */
@@ -165,7 +174,12 @@ export const useCode = create<CodeState>((set, get) => {
               const current = state.buffers[buffer.path];
               // Пока шёл запрос, пользователь мог начать править файл: его правки важнее.
               if (!current || current.content !== current.saved) return state;
-              return { buffers: { ...state.buffers, [buffer.path]: { ...current, content: read.content, saved: read.content } } };
+              return {
+                buffers: {
+                  ...state.buffers,
+                  [buffer.path]: { ...current, content: read.content, saved: read.content },
+                },
+              };
             });
           } catch (error) {
             if (error instanceof ApiError && error.status === 404) get().closeFile(buffer.path);
@@ -207,7 +221,10 @@ export const useCode = create<CodeState>((set, get) => {
         const projects = await codeApi.listProjects();
         set({ projects, projectsStatus: 'ready', authRequired: false });
       } catch (error) {
-        set({ projectsStatus: 'error', authRequired: error instanceof ApiError && error.status === 401 });
+        set({
+          projectsStatus: 'error',
+          authRequired: error instanceof ApiError && error.status === 401,
+        });
       }
     },
 
@@ -230,7 +247,10 @@ export const useCode = create<CodeState>((set, get) => {
       const files = Array.from(list);
       const folderName = (files[0]?.webkitRelativePath || '').split('/')[0] || 'Проект';
       const read = await readFolderFiles(files, readLimits(get().capabilities));
-      const project = await createWithFiles(folderName, { files: read.files, skipped: read.skipped });
+      const project = await createWithFiles(folderName, {
+        files: read.files,
+        skipped: read.skipped,
+      });
       void get().loadCapabilities();
       return project;
     },
@@ -296,14 +316,27 @@ export const useCode = create<CodeState>((set, get) => {
 
     closeProject() {
       controller?.abort();
-      set({ project: null, projectStatus: 'idle', files: [], openPaths: [], activePath: null, buffers: {}, thread: [], live: null, running: false });
+      set({
+        project: null,
+        projectStatus: 'idle',
+        files: [],
+        openPaths: [],
+        activePath: null,
+        buffers: {},
+        thread: [],
+        live: null,
+        running: false,
+      });
     },
 
     async refreshFiles() {
       const { project } = get();
       if (!project) return;
       try {
-        const [{ files }, { project: fresh }] = await Promise.all([codeApi.listFiles(project.id), codeApi.getProject(project.id)]);
+        const [{ files }, { project: fresh }] = await Promise.all([
+          codeApi.listFiles(project.id),
+          codeApi.getProject(project.id),
+        ]);
         if (get().project?.id !== project.id) return;
         set((state) => ({
           files,
@@ -328,14 +361,23 @@ export const useCode = create<CodeState>((set, get) => {
       }));
       if (buffers[path]?.status === 'ready') return;
       set((state) => ({
-        buffers: { ...state.buffers, [path]: { path, language: '', content: '', saved: '', status: 'loading' } },
+        buffers: {
+          ...state.buffers,
+          [path]: { path, language: '', content: '', saved: '', status: 'loading' },
+        },
       }));
       try {
         const read = await codeApi.readFile(project.id, path);
         set((state) => ({
           buffers: {
             ...state.buffers,
-            [path]: { path, language: read.language, content: read.content, saved: read.content, status: 'ready' },
+            [path]: {
+              path,
+              language: read.language,
+              content: read.content,
+              saved: read.content,
+              status: 'ready',
+            },
           },
         }));
       } catch (error) {
@@ -343,7 +385,14 @@ export const useCode = create<CodeState>((set, get) => {
         set((state) => ({
           buffers: {
             ...state.buffers,
-            [path]: { path, language: '', content: '', saved: '', status: binary ? 'binary' : 'error', error: errorText(error) },
+            [path]: {
+              path,
+              language: '',
+              content: '',
+              saved: '',
+              status: binary ? 'binary' : 'error',
+              error: errorText(error),
+            },
           },
         }));
       }
@@ -357,7 +406,9 @@ export const useCode = create<CodeState>((set, get) => {
         const buffers = { ...state.buffers };
         delete buffers[path];
         const activePath =
-          state.activePath === path ? (openPaths[index - 1] ?? openPaths[0] ?? null) : state.activePath;
+          state.activePath === path
+            ? (openPaths[index - 1] ?? openPaths[0] ?? null)
+            : state.activePath;
         return { openPaths, buffers, activePath };
       });
     },
@@ -384,7 +435,9 @@ export const useCode = create<CodeState>((set, get) => {
         await codeApi.writeFile(project.id, path, content);
         set((state) => {
           const current = state.buffers[path];
-          return current ? { buffers: { ...state.buffers, [path]: { ...current, saved: content } } } : state;
+          return current
+            ? { buffers: { ...state.buffers, [path]: { ...current, saved: content } } }
+            : state;
         });
         void get().refreshFiles();
         return true;
@@ -395,7 +448,9 @@ export const useCode = create<CodeState>((set, get) => {
     },
 
     async saveAll() {
-      const dirty = Object.values(get().buffers).filter((b) => b.status === 'ready' && b.content !== b.saved);
+      const dirty = Object.values(get().buffers).filter(
+        (b) => b.status === 'ready' && b.content !== b.saved,
+      );
       const results = await Promise.all(dirty.map((b) => get().saveFile(b.path)));
       return results.every(Boolean);
     },
@@ -449,7 +504,9 @@ export const useCode = create<CodeState>((set, get) => {
       if (!project) return;
       try {
         const limits = readLimits(get().capabilities);
-        const read = zip ? await readZipFile(Array.from(list)[0], limits) : await readFolderFiles(list, limits);
+        const read = zip
+          ? await readZipFile(Array.from(list)[0], limits)
+          : await readFolderFiles(list, limits);
         let written = 0;
         const skipped = [...read.skipped];
         for (const chunk of chunkFiles(read.files)) {
@@ -499,8 +556,19 @@ export const useCode = create<CodeState>((set, get) => {
       const abort = new AbortController();
       controller = abort;
       const projectId = project.id;
-      const optimistic: ThreadItem = { id: localId('user'), kind: 'user', text: task, createdAt: new Date().toISOString() };
-      set((state) => ({ running: true, live: null, changed: {}, thread: [...state.thread, optimistic], notice: null }));
+      const optimistic: ThreadItem = {
+        id: localId('user'),
+        kind: 'user',
+        text: task,
+        createdAt: new Date().toISOString(),
+      };
+      set((state) => ({
+        running: true,
+        live: null,
+        changed: {},
+        thread: [...state.thread, optimistic],
+        notice: null,
+      }));
 
       let pendingText = '';
       let flushTimer: ReturnType<typeof setTimeout> | null = null;
@@ -523,7 +591,14 @@ export const useCode = create<CodeState>((set, get) => {
         set((state) => ({
           thread: [
             ...state.thread,
-            { id: localId('assistant'), kind: 'assistant', text, runId: state.live?.runId ?? '', modelId, createdAt: new Date().toISOString() },
+            {
+              id: localId('assistant'),
+              kind: 'assistant',
+              text,
+              runId: state.live?.runId ?? '',
+              modelId,
+              createdAt: new Date().toISOString(),
+            },
           ],
           live: state.live ? { ...state.live, text: '' } : state.live,
         }));
@@ -562,7 +637,9 @@ export const useCode = create<CodeState>((set, get) => {
             break;
           case 'model_switch':
             set((state) =>
-              state.live ? { live: { ...state.live, modelId: event.modelId, modelName: event.modelName } } : state,
+              state.live
+                ? { live: { ...state.live, modelId: event.modelId, modelName: event.modelName } }
+                : state,
             );
             break;
           case 'delta':
@@ -594,7 +671,14 @@ export const useCode = create<CodeState>((set, get) => {
             set((state) => ({
               thread: state.thread.map((item) =>
                 item.kind === 'tool' && item.id === `call-${event.callId}`
-                  ? { ...item, label: event.label, ok: event.ok, summary: event.summary, change: event.change, pending: false }
+                  ? {
+                      ...item,
+                      label: event.label,
+                      ok: event.ok,
+                      summary: event.summary,
+                      change: event.change,
+                      pending: false,
+                    }
                   : item,
               ),
               changed: event.change
@@ -671,12 +755,15 @@ export const useCode = create<CodeState>((set, get) => {
             modelId: get().modelId,
             language: usePreferences.getState().language,
             signal: abort.signal,
-            reasoningMode: reasoningModeFor(useAuth.getState().user, usePreferences.getState().maxMode),
+            reasoningMode: reasoningModeFor(
+              useAuth.getState().user,
+              usePreferences.getState().maxMode,
+            ),
           },
           handle,
         );
       } catch (error) {
-        if (!(abort.signal.aborted)) {
+        if (!abort.signal.aborted) {
           rejected = rejected || !get().live;
           set((state) => ({
             thread: [
@@ -704,8 +791,12 @@ export const useCode = create<CodeState>((set, get) => {
           set({ running: false, live: null });
           // Сервер — источник истины: лента, файлы и счётчики подтягиваются заново.
           try {
-            const [{ items }] = await Promise.all([codeApi.getThread(projectId), get().refreshFiles()]);
-            if (get().project?.id === projectId && !get().running && !rejected) set({ thread: items });
+            const [{ items }] = await Promise.all([
+              codeApi.getThread(projectId),
+              get().refreshFiles(),
+            ]);
+            if (get().project?.id === projectId && !get().running && !rejected)
+              set({ thread: items });
           } catch {
             // остаётся локальная копия ленты
           }

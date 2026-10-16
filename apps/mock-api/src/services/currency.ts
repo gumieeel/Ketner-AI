@@ -52,8 +52,8 @@ export class CurrencyService {
    * на эквайринг и налоги ≈10–13% (для Stars до 28%), на комиссию OpenRouter 5.5% от расхода,
    * на субсидию Free-тира и прибыль остальное (расчёт в docs/models-and-pricing.md).
    */
-  static calculatePlanCostBudget(priceMonthlyUsd: number, targetCostRatio = 0.40): number {
-    if (priceMonthlyUsd <= 0) return 0.20; // субсидируемый буфер для free
+  static calculatePlanCostBudget(priceMonthlyUsd: number, targetCostRatio = 0.4): number {
+    if (priceMonthlyUsd <= 0) return 0.2; // субсидируемый буфер для free
     return Math.round(priceMonthlyUsd * targetCostRatio * 100) / 100;
   }
 }

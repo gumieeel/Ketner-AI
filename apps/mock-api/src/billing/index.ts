@@ -6,4 +6,9 @@ export * from './billing-service.js';
 /** Журнал платежей и подписок по умолчанию (файлы рядом с остальными хранилищами + Postgres). */
 export const billingLedger = createBillingLedger(defaultLedgerDir);
 
-export const billingService = new BillingService({ userStore, subscriptionStore, usageStore, ledger: billingLedger });
+export const billingService = new BillingService({
+  userStore,
+  subscriptionStore,
+  usageStore,
+  ledger: billingLedger,
+});

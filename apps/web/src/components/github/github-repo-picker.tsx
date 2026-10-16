@@ -34,7 +34,13 @@ const SELECT_CLASS =
  * Выбор репозитория из привязанного аккаунта GitHub (включая приватные) и ветки.
  * Без подключения показывает кнопку «Подключить GitHub»; токен в браузер не попадает.
  */
-export function GithubRepoPicker({ intent, submitLabel, busyLabel, busy, onPick }: GithubRepoPickerProps) {
+export function GithubRepoPicker({
+  intent,
+  submitLabel,
+  busyLabel,
+  busy,
+  onPick,
+}: GithubRepoPickerProps) {
   const { t } = useTranslation();
   const authStatus = useAuth((state) => state.status);
   const status = useGithub((state) => state.status);
@@ -49,7 +55,11 @@ export function GithubRepoPicker({ intent, submitLabel, busyLabel, busy, onPick 
   const [repos, setRepos] = useState<GithubRepo[] | null>(null);
   const [reposError, setReposError] = useState<string | null>(null);
   const [query, setQuery] = useState('');
-  const [selected, setSelected] = useState<{ owner: string; name: string; defaultBranch?: string } | null>(null);
+  const [selected, setSelected] = useState<{
+    owner: string;
+    name: string;
+    defaultBranch?: string;
+  } | null>(null);
   const [branches, setBranches] = useState<string[] | null>(null);
   const [branch, setBranch] = useState('');
   const [branchesError, setBranchesError] = useState<string | null>(null);
@@ -72,7 +82,8 @@ export function GithubRepoPicker({ intent, submitLabel, busyLabel, busy, onPick 
       })
       .catch((error: unknown) => {
         if (cancelled) return;
-        if (error instanceof GithubConnectionError && error.code === 'github_reauth_required') void load(true);
+        if (error instanceof GithubConnectionError && error.code === 'github_reauth_required')
+          void load(true);
         setReposError(error instanceof Error ? error.message : t('linkWs.errLoadRepo'));
         setRepos([]);
       });
@@ -119,12 +130,16 @@ export function GithubRepoPicker({ intent, submitLabel, busyLabel, busy, onPick 
     const needle = (typed ? `${typed.owner}/${typed.repo}` : query.trim()).toLowerCase();
     if (!needle) return repos;
     return repos.filter(
-      (r) => r.fullName.toLowerCase().includes(needle) || (!typed && Boolean(r.description?.toLowerCase().includes(needle))),
+      (r) =>
+        r.fullName.toLowerCase().includes(needle) ||
+        (!typed && Boolean(r.description?.toLowerCase().includes(needle))),
     );
   }, [repos, query, typed]);
   // Ссылка на репозиторий, которого нет в списке (например, чужой публичный): его тоже можно открыть.
   const typedOutsideList =
-    typed && repos !== null && !repos.some((r) => r.fullName.toLowerCase() === `${typed.owner}/${typed.repo}`.toLowerCase());
+    typed &&
+    repos !== null &&
+    !repos.some((r) => r.fullName.toLowerCase() === `${typed.owner}/${typed.repo}`.toLowerCase());
 
   if (!signedIn) {
     return (
@@ -180,7 +195,12 @@ export function GithubRepoPicker({ intent, submitLabel, busyLabel, busy, onPick 
 
   const submit = (event: FormEvent) => {
     event.preventDefault();
-    if (selected) onPick({ owner: selected.owner, repo: selected.name, branch: branch || selected.defaultBranch || 'main' });
+    if (selected)
+      onPick({
+        owner: selected.owner,
+        repo: selected.name,
+        branch: branch || selected.defaultBranch || 'main',
+      });
   };
 
   return (
@@ -192,9 +212,14 @@ export function GithubRepoPicker({ intent, submitLabel, busyLabel, busy, onPick 
           ) : (
             <GitHubIcon className="size-4" />
           )}
-          <span className="truncate">{t('linkWs.connectedAs', { login: status?.account?.login ?? '' })}</span>
+          <span className="truncate">
+            {t('linkWs.connectedAs', { login: status?.account?.login ?? '' })}
+          </span>
         </span>
-        <Link to="/settings#github" className="inline-flex min-h-8 items-center text-accent hover:underline">
+        <Link
+          to="/settings#github"
+          className="inline-flex min-h-8 items-center text-accent hover:underline"
+        >
           {t('linkWs.manage')}
         </Link>
       </div>
@@ -230,7 +255,9 @@ export function GithubRepoPicker({ intent, submitLabel, busyLabel, busy, onPick 
           <RepoOption
             label={t('linkWs.useTyped', { repo: `${typed.owner}/${typed.repo}` })}
             checked={selected?.owner === typed.owner && selected?.name === typed.repo}
-            onSelect={() => setSelected({ owner: typed.owner, name: typed.repo, defaultBranch: typed.branch })}
+            onSelect={() =>
+              setSelected({ owner: typed.owner, name: typed.repo, defaultBranch: typed.branch })
+            }
           />
         ) : null}
         {filtered.slice(0, 200).map((repo) => (
@@ -241,11 +268,15 @@ export function GithubRepoPicker({ intent, submitLabel, busyLabel, busy, onPick 
             isPrivate={repo.private}
             privateLabel={t('linkWs.private')}
             checked={selected?.owner === repo.owner && selected?.name === repo.name}
-            onSelect={() => setSelected({ owner: repo.owner, name: repo.name, defaultBranch: repo.defaultBranch })}
+            onSelect={() =>
+              setSelected({ owner: repo.owner, name: repo.name, defaultBranch: repo.defaultBranch })
+            }
           />
         ))}
         {repos !== null && filtered.length === 0 && !typedOutsideList ? (
-          <p className="p-3 text-[13px] leading-5 text-muted">{reposError ?? t('linkWs.reposEmpty')}</p>
+          <p className="p-3 text-[13px] leading-5 text-muted">
+            {reposError ?? t('linkWs.reposEmpty')}
+          </p>
         ) : null}
       </div>
 
@@ -253,12 +284,20 @@ export function GithubRepoPicker({ intent, submitLabel, busyLabel, busy, onPick 
 
       {selected ? (
         <div className="flex flex-col gap-1.5">
-          <label htmlFor={branchId} className="inline-flex items-center gap-1.5 text-[13px] font-medium text-text">
+          <label
+            htmlFor={branchId}
+            className="inline-flex items-center gap-1.5 text-[13px] font-medium text-text"
+          >
             <GitBranchIcon className="size-3.5 text-muted" />
             {t('linkWs.branch')}
           </label>
           {branches && branches.length > 0 ? (
-            <select id={branchId} value={branch} onChange={(event) => setBranch(event.target.value)} className={SELECT_CLASS}>
+            <select
+              id={branchId}
+              value={branch}
+              onChange={(event) => setBranch(event.target.value)}
+              className={SELECT_CLASS}
+            >
               {branches.map((name) => (
                 <option key={name} value={name}>
                   {name}
@@ -278,7 +317,12 @@ export function GithubRepoPicker({ intent, submitLabel, busyLabel, busy, onPick 
         </div>
       ) : null}
 
-      <Button type="submit" disabled={!selected || busy} loading={busy} className="mt-1 w-full gap-2">
+      <Button
+        type="submit"
+        disabled={!selected || busy}
+        loading={busy}
+        className="mt-1 w-full gap-2"
+      >
         {busy ? busyLabel : submitLabel}
       </Button>
     </form>
@@ -331,7 +375,9 @@ function RepoOption({
       </span>
       <span className="min-w-0 flex-1">
         <span className="block truncate font-mono text-[13px] text-text">{label}</span>
-        {description ? <span className="block truncate text-xs text-muted">{description}</span> : null}
+        {description ? (
+          <span className="block truncate text-xs text-muted">{description}</span>
+        ) : null}
       </span>
       {isPrivate ? (
         <span className="inline-flex shrink-0 items-center gap-1 rounded-xs border border-stroke px-1.5 py-0.5 text-[11px] text-muted">

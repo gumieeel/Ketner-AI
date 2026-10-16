@@ -10,7 +10,10 @@ import type { ProjectMeta, ThreadItem } from './types.js';
 const QUOTA = { maxFiles: 20, maxFileBytes: 2_000, maxProjectBytes: 10_000 };
 const LIMITS = { maxProjects: 3, quota: QUOTA };
 
-async function withStore<T>(run: (store: ProjectStore, dir: string) => Promise<T>, driver?: ProjectDbDriver): Promise<T> {
+async function withStore<T>(
+  run: (store: ProjectStore, dir: string) => Promise<T>,
+  driver?: ProjectDbDriver,
+): Promise<T> {
   const dir = await mkdtemp(path.join(tmpdir(), 'ketner-code-'));
   try {
     return await run(new ProjectStore({ rootDir: dir, driver }), dir);
@@ -32,7 +35,17 @@ async function codeError(promise: Promise<unknown>): Promise<CodeError> {
 test('normalizeProjectPath: нормализует и отклоняет опасные пути', () => {
   assert.equal(normalizeProjectPath('./src\\a.ts'), 'src/a.ts');
   assert.equal(normalizeProjectPath('a//b/./c.txt'), 'a/b/c.txt');
-  for (const bad of ['', '   ', '/etc/passwd', 'C:\\Windows', '../x', 'a/../../x', '~/x', 'a\u0000b', '.']) {
+  for (const bad of [
+    '',
+    '   ',
+    '/etc/passwd',
+    'C:\\Windows',
+    '../x',
+    'a/../../x',
+    '~/x',
+    'a\u0000b',
+    '.',
+  ]) {
     assert.throws(() => normalizeProjectPath(bad), CodeError, `путь «${bad}» должен быть отклонён`);
   }
   assert.throws(() => normalizeProjectPath(42 as unknown as string), CodeError);
@@ -61,27 +74,45 @@ test('проект виден только владельцу', () =>
     assert.equal(await store.get('u2', meta.id), null);
     assert.equal((await store.list('u2')).length, 0);
     assert.equal((await codeError(store.readText('u2', meta.id, 'README.md'))).code, 'not_found');
-    assert.equal((await codeError(store.writeText('u2', meta.id, 'x.txt', 'x', QUOTA))).code, 'not_found');
+    assert.equal(
+      (await codeError(store.writeText('u2', meta.id, 'x.txt', 'x', QUOTA))).code,
+      'not_found',
+    );
     assert.equal((await store.list('u1')).length, 1);
   }));
 
 test('лимит числа проектов и пустое имя', () =>
   withStore(async (store) => {
     for (let i = 0; i < 3; i += 1) await store.create('u1', { name: `P${i}` }, LIMITS);
-    assert.equal((await codeError(store.create('u1', { name: 'P4' }, LIMITS))).code, 'quota_exceeded');
-    assert.equal((await codeError(store.create('u2', { name: '   ' }, LIMITS))).code, 'invalid_request');
+    assert.equal(
+      (await codeError(store.create('u1', { name: 'P4' }, LIMITS))).code,
+      'quota_exceeded',
+    );
+    assert.equal(
+      (await codeError(store.create('u2', { name: '   ' }, LIMITS))).code,
+      'invalid_request',
+    );
   }));
 
 test('запись: пути за пределами проекта и .git запрещены', () =>
   withStore(async (store, root) => {
     const meta = await store.create('u1', { name: 'P' }, LIMITS);
     for (const bad of ['../escape.txt', '/abs.txt', 'a/../../b.txt']) {
-      assert.equal((await codeError(store.writeText('u1', meta.id, bad, 'x', QUOTA))).code, 'invalid_path');
+      assert.equal(
+        (await codeError(store.writeText('u1', meta.id, bad, 'x', QUOTA))).code,
+        'invalid_path',
+      );
     }
-    assert.equal((await codeError(store.writeText('u1', meta.id, '.git/hooks/pre-commit', 'x', QUOTA))).code, 'forbidden_path');
+    assert.equal(
+      (await codeError(store.writeText('u1', meta.id, '.git/hooks/pre-commit', 'x', QUOTA))).code,
+      'forbidden_path',
+    );
     // ничего не появилось рядом с проектом
     const { readdir } = await import('node:fs/promises');
-    assert.deepEqual((await readdir(root)).filter((n) => n.includes('escape')), []);
+    assert.deepEqual(
+      (await readdir(root)).filter((n) => n.includes('escape')),
+      [],
+    );
   }));
 
 test('символическая ссылка внутри проекта не даёт читать и писать за его пределами', () =>
@@ -94,34 +125,68 @@ test('символическая ссылка внутри проекта не �
     await mkdir(path.join(root, 'outside-dir'));
     await symlink(path.join(root, 'outside-dir'), path.join(fs.root, 'dirlink'));
 
-    assert.equal((await codeError(store.readText('u1', meta.id, 'link.txt'))).code, 'forbidden_path');
-    assert.equal((await codeError(store.writeText('u1', meta.id, 'link.txt', 'pwn', QUOTA))).code, 'forbidden_path');
-    assert.equal((await codeError(store.writeText('u1', meta.id, 'dirlink/new.txt', 'pwn', QUOTA))).code, 'forbidden_path');
-    assert.equal((await codeError(store.deletePath('u1', meta.id, 'link.txt'))).code, 'forbidden_path');
+    assert.equal(
+      (await codeError(store.readText('u1', meta.id, 'link.txt'))).code,
+      'forbidden_path',
+    );
+    assert.equal(
+      (await codeError(store.writeText('u1', meta.id, 'link.txt', 'pwn', QUOTA))).code,
+      'forbidden_path',
+    );
+    assert.equal(
+      (await codeError(store.writeText('u1', meta.id, 'dirlink/new.txt', 'pwn', QUOTA))).code,
+      'forbidden_path',
+    );
+    assert.equal(
+      (await codeError(store.deletePath('u1', meta.id, 'link.txt'))).code,
+      'forbidden_path',
+    );
 
     const { readFile, stat } = await import('node:fs/promises');
     assert.equal(await readFile(secretFile, 'utf8'), 'TOP SECRET');
     await assert.rejects(stat(path.join(root, 'outside-dir', 'new.txt')));
     // и в списке файлов ссылок нет
-    assert.ok(!(await fs.list()).some((e) => e.path === 'link.txt' || e.path.startsWith('dirlink')));
+    assert.ok(
+      !(await fs.list()).some((e) => e.path === 'link.txt' || e.path.startsWith('dirlink')),
+    );
   }));
 
 test('квоты: размер файла, число файлов, размер проекта', () =>
   withStore(async (store) => {
-    const meta = await store.create('u1', { name: 'P' }, { maxProjects: 3, quota: { ...QUOTA, maxFiles: 3, maxProjectBytes: 3_000 } });
+    const meta = await store.create(
+      'u1',
+      { name: 'P' },
+      { maxProjects: 3, quota: { ...QUOTA, maxFiles: 3, maxProjectBytes: 3_000 } },
+    );
     const quota = { maxFiles: 3, maxFileBytes: 1_500, maxProjectBytes: 3_000 };
-    assert.equal((await codeError(store.writeText('u1', meta.id, 'big.txt', 'x'.repeat(1_600), quota))).code, 'file_too_large');
+    assert.equal(
+      (await codeError(store.writeText('u1', meta.id, 'big.txt', 'x'.repeat(1_600), quota))).code,
+      'file_too_large',
+    );
     await store.writeText('u1', meta.id, 'a.txt', 'a'.repeat(1_400), quota);
     await store.writeText('u1', meta.id, 'b.txt', 'b'.repeat(1_400), quota);
     // README + a + b = 3 файла, ещё один нельзя
-    assert.equal((await codeError(store.writeText('u1', meta.id, 'c.txt', 'c', quota))).code, 'quota_exceeded');
+    assert.equal(
+      (await codeError(store.writeText('u1', meta.id, 'c.txt', 'c', quota))).code,
+      'quota_exceeded',
+    );
     // перезапись существующего допустима, если проект остаётся в пределах
     await store.writeText('u1', meta.id, 'a.txt', 'short', quota);
     const files = await store.listFiles('u1', meta.id);
     assert.equal(files.length, 3);
     // суммарный размер: a=5, b=1400, README~30; увеличить b до 1500 нельзя только если сумма > 3000 — здесь можно
     await store.writeText('u1', meta.id, 'b.txt', 'b'.repeat(1_500), quota);
-    assert.equal((await codeError(store.writeText('u1', meta.id, 'a.txt', 'a'.repeat(1_500), { ...quota, maxProjectBytes: 1_550 }))).code, 'quota_exceeded');
+    assert.equal(
+      (
+        await codeError(
+          store.writeText('u1', meta.id, 'a.txt', 'a'.repeat(1_500), {
+            ...quota,
+            maxProjectBytes: 1_550,
+          }),
+        )
+      ).code,
+      'quota_exceeded',
+    );
   }));
 
 test('importFiles пропускает опасное и служебное, остальное пишет', () =>
@@ -163,7 +228,10 @@ test('moveFile переименовывает и не затирает суще�
     const meta = await store.create('u1', { name: 'P' }, LIMITS);
     await store.writeText('u1', meta.id, 'a.txt', 'A', QUOTA);
     await store.writeText('u1', meta.id, 'b.txt', 'B', QUOTA);
-    assert.equal((await codeError(store.moveFile('u1', meta.id, 'a.txt', 'b.txt'))).code, 'already_exists');
+    assert.equal(
+      (await codeError(store.moveFile('u1', meta.id, 'a.txt', 'b.txt'))).code,
+      'already_exists',
+    );
     await store.moveFile('u1', meta.id, 'a.txt', 'src/c.txt');
     assert.equal((await store.readText('u1', meta.id, 'src/c.txt')).content, 'A');
     assert.equal((await codeError(store.readText('u1', meta.id, 'a.txt'))).code, 'not_found');
@@ -186,16 +254,27 @@ test('refresh находит файлы, изменённые командами
     assert.deepEqual(change.modified, ['keep.txt']);
     assert.deepEqual(change.deleted, ['gone.txt']);
     assert.equal(change.overQuota, false);
-    assert.ok(!(await store.listFiles('u1', meta.id)).some((f) => f.path.startsWith('node_modules')));
+    assert.ok(
+      !(await store.listFiles('u1', meta.id)).some((f) => f.path.startsWith('node_modules')),
+    );
   }));
 
 test('лента: добавление, ограничение длины, очистка', () =>
   withStore(async (store) => {
     const meta = await store.create('u1', { name: 'P' }, LIMITS);
-    const item = (n: number): ThreadItem => ({ id: String(n), kind: 'user', text: `m${n}`, createdAt: new Date().toISOString() });
+    const item = (n: number): ThreadItem => ({
+      id: String(n),
+      kind: 'user',
+      text: `m${n}`,
+      createdAt: new Date().toISOString(),
+    });
     await store.appendThread('u1', meta.id, [item(1), item(2)]);
     assert.equal((await store.getThread('u1', meta.id)).length, 2);
-    await store.appendThread('u1', meta.id, Array.from({ length: 700 }, (_, i) => item(i + 10)));
+    await store.appendThread(
+      'u1',
+      meta.id,
+      Array.from({ length: 700 }, (_, i) => item(i + 10)),
+    );
     const thread = await store.getThread('u1', meta.id);
     assert.equal(thread.length, 600);
     assert.equal((thread[thread.length - 1] as { text: string }).text, 'm709');
@@ -218,7 +297,10 @@ function memoryDriver() {
       return {
         meta,
         thread: threads.get(projectId) ?? [],
-        files: [...(files.get(projectId) ?? new Map()).entries()].map(([p, content]) => ({ path: p, content })),
+        files: [...(files.get(projectId) ?? new Map()).entries()].map(([p, content]) => ({
+          path: p,
+          content,
+        })),
       };
     },
     async saveProject(meta) {
@@ -249,7 +331,9 @@ test('драйвер БД: изменения дублируются, а про�
     const meta = await store.create('u1', { name: 'Durable', template: 'python' }, LIMITS);
     projectId = meta.id;
     await store.writeText('u1', meta.id, 'notes/todo.md', '- сделать\n', QUOTA);
-    await store.appendThread('u1', meta.id, [{ id: 't', kind: 'user', text: 'привет', createdAt: new Date().toISOString() }]);
+    await store.appendThread('u1', meta.id, [
+      { id: 't', kind: 'user', text: 'привет', createdAt: new Date().toISOString() },
+    ]);
     await store.deletePath('u1', meta.id, 'test_main.py');
     await store.flush();
     assert.equal(db.projects.get(meta.id)?.name, 'Durable');
@@ -267,6 +351,10 @@ test('драйвер БД: изменения дублируются, а про�
     assert.equal((await fresh.readText('u1', projectId, 'notes/todo.md')).content, '- сделать\n');
     assert.ok((await fresh.listFiles('u1', projectId)).some((f) => f.path === 'main.py'));
     assert.equal((await fresh.getThread('u1', projectId)).length, 1);
-    assert.equal(await fresh.get('u2', projectId), null, 'чужой пользователь не получает проект из БД');
+    assert.equal(
+      await fresh.get('u2', projectId),
+      null,
+      'чужой пользователь не получает проект из БД',
+    );
   }, db.driver);
 });

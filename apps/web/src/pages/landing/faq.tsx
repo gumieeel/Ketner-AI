@@ -13,7 +13,9 @@ export function LandingFaq() {
           <h2 id="faq-title" className="t-headline text-text">
             {t('home.faqTitle')}
           </h2>
-          <p className="mt-5 max-w-[40ch] text-[17px] leading-relaxed text-muted">{t('home.faqLead')}</p>
+          <p className="mt-5 max-w-[40ch] text-[17px] leading-relaxed text-muted">
+            {t('home.faqLead')}
+          </p>
           <Link
             to="/docs#faq"
             className="mt-4 inline-flex min-h-11 items-center text-[15px] font-medium text-accent underline decoration-accent/40 underline-offset-4 hover:decoration-accent"

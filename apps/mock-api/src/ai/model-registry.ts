@@ -72,11 +72,7 @@ function makeCapabilities(overrides: Partial<ModelCapabilities> = {}): ModelCapa
   };
 }
 
-function makePricing(
-  input: number,
-  output: number,
-  cached: number = input * 0.5,
-): ModelPricing {
+function makePricing(input: number, output: number, cached: number = input * 0.5): ModelPricing {
   return {
     inputPricePerMillion: input,
     outputPricePerMillion: output,
@@ -100,7 +96,11 @@ const STANDARD_PROFILE: EffortProfile = { standard: 'medium', max: 'xhigh' };
 /** Модели, которые всегда работают на xhigh (так и подписаны: «Grok 4.7 xhigh», «GPT-5.6 Terra xhigh»). */
 const XHIGH_PROFILE: EffortProfile = { standard: 'xhigh', max: 'xhigh' };
 
-const reasoning = (mandatory: boolean, efforts: ModelReasoning['efforts'], toggle = false): ModelReasoning => ({
+const reasoning = (
+  mandatory: boolean,
+  efforts: ModelReasoning['efforts'],
+  toggle = false,
+): ModelReasoning => ({
   mandatory,
   efforts,
   ...(toggle ? { toggle: true } : {}),
@@ -779,7 +779,7 @@ export const LEGACY_MODEL_ALIASES: Readonly<Record<string, string>> = {
   'gpt-4o-mini': 'ketner-mini',
   'gemini-2.5-flash': 'ketner-mini',
   'glm-5.3-flash': 'ketner-mini',
-  'nemotron': 'nemotron-ultra',
+  nemotron: 'nemotron-ultra',
   'cohere/north-mini-code:free': 'north-mini-code',
   'nvidia/nemotron-3-ultra-550b-a55b:free': 'nemotron-ultra',
 };

@@ -254,7 +254,9 @@ export class UsageStore {
       // (пользователь упёрся в лимит → отказ записался → лимит «не отпускает»), а сбой провайдера
       // списывал бы с человека сообщение, которого он не получил.
       const countsTowardLimits =
-        rec.status !== 'rate_limited' && rec.status !== 'concurrency_limited' && rec.status !== 'error';
+        rec.status !== 'rate_limited' &&
+        rec.status !== 'concurrency_limited' &&
+        rec.status !== 'error';
       // Шаги агента не считаются «сообщениями» (их десятки на запуск и у них свой дневной лимит
       // запусков), но токены и стоимость учитываются как у любого запроса.
       const countsAsMessage = countsTowardLimits && rec.kind !== 'agent' && rec.kind !== 'image';
@@ -486,12 +488,15 @@ export class UsageStore {
    * Phase 3: Пересчёт эмпирического бюджета тарифа по реальным накопленным данным расходов.
    * Возвращает агрегаты по тарифам и рекомендуемый costBudget на основе 95-го перцентиля расходов.
    */
-  getEmpiricalPlanBudget(planUsers: Array<{ userId: string; plan: string }>): Record<string, {
-    userCount: number;
-    avgMonthlyCost: number;
-    p95MonthlyCost: number;
-    recommendedCostBudget: number;
-  }> {
+  getEmpiricalPlanBudget(planUsers: Array<{ userId: string; plan: string }>): Record<
+    string,
+    {
+      userCount: number;
+      avgMonthlyCost: number;
+      p95MonthlyCost: number;
+      recommendedCostBudget: number;
+    }
+  > {
     const thirtyDaysAgo = Date.now() - 30 * 24 * 60 * 60 * 1000;
     const planToUserCosts = new Map<string, number[]>();
 
@@ -508,12 +513,15 @@ export class UsageStore {
       list.push(userCost);
     }
 
-    const result: Record<string, {
-      userCount: number;
-      avgMonthlyCost: number;
-      p95MonthlyCost: number;
-      recommendedCostBudget: number;
-    }> = {};
+    const result: Record<
+      string,
+      {
+        userCount: number;
+        avgMonthlyCost: number;
+        p95MonthlyCost: number;
+        recommendedCostBudget: number;
+      }
+    > = {};
 
     for (const [plan, costs] of planToUserCosts.entries()) {
       costs.sort((a, b) => a - b);
@@ -574,14 +582,17 @@ export class UsageStore {
     };
 
     // 2. По моделям
-    const modelMap = new Map<string, {
-      modelId: string;
-      cost: number;
-      requests: number;
-      inputTokens: number;
-      outputTokens: number;
-      totalLatency: number;
-    }>();
+    const modelMap = new Map<
+      string,
+      {
+        modelId: string;
+        cost: number;
+        requests: number;
+        inputTokens: number;
+        outputTokens: number;
+        totalLatency: number;
+      }
+    >();
 
     // 3. Задержки и TTFT
     const latencies: number[] = [];
@@ -595,13 +606,16 @@ export class UsageStore {
       }
     }
 
-    const planCostMap = new Map<string, {
-      plan: string;
-      totalCost: number;
-      userIds: Set<string>;
-      requests: number;
-      totalTokens: number;
-    }>();
+    const planCostMap = new Map<
+      string,
+      {
+        plan: string;
+        totalCost: number;
+        userIds: Set<string>;
+        requests: number;
+        totalTokens: number;
+      }
+    >();
 
     for (const r of records) {
       totalCost += r.estimatedCost;
@@ -698,17 +712,17 @@ export class UsageStore {
     latencies.sort((a, b) => a - b);
     ttfts.sort((a, b) => a - b);
     const avgLatency =
-      latencies.length > 0 ? Math.round(latencies.reduce((a, b) => a + b, 0) / latencies.length) : 0;
+      latencies.length > 0
+        ? Math.round(latencies.reduce((a, b) => a + b, 0) / latencies.length)
+        : 0;
     const p95Latency =
       latencies.length > 0
-        ? latencies[Math.floor(latencies.length * 0.95)] ?? latencies[latencies.length - 1]
+        ? (latencies[Math.floor(latencies.length * 0.95)] ?? latencies[latencies.length - 1])
         : 0;
     const avgTtft =
       ttfts.length > 0 ? Math.round(ttfts.reduce((a, b) => a + b, 0) / ttfts.length) : null;
     const p95Ttft =
-      ttfts.length > 0
-        ? ttfts[Math.floor(ttfts.length * 0.95)] ?? ttfts[ttfts.length - 1]
-        : null;
+      ttfts.length > 0 ? (ttfts[Math.floor(ttfts.length * 0.95)] ?? ttfts[ttfts.length - 1]) : null;
 
     const latency: LatencyBreakdown = {
       averageLatencyMs: avgLatency,
@@ -727,8 +741,7 @@ export class UsageStore {
           usersCount,
           requests: p.requests,
           totalTokens: p.totalTokens,
-          averageCostPerUser:
-            usersCount > 0 ? Number((p.totalCost / usersCount).toFixed(4)) : 0,
+          averageCostPerUser: usersCount > 0 ? Number((p.totalCost / usersCount).toFixed(4)) : 0,
         };
       })
       .sort((a, b) => b.totalCost - a.totalCost);

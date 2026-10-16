@@ -20,10 +20,11 @@ export class TelegramSupportBotService {
   constructor(deps: TelegramSupportBotDeps = {}) {
     this.store = deps.supportStore || defaultSupportStore;
     this.token = deps.botToken || config.telegramSupportBotToken || '';
-    this.username = (deps.botUsername || config.telegramSupportBotUsername || 'ketner_support_bot').replace(
-      /^@/,
-      '',
-    );
+    this.username = (
+      deps.botUsername ||
+      config.telegramSupportBotUsername ||
+      'ketner_support_bot'
+    ).replace(/^@/, '');
     this.adminUsername = (deps.adminUsername || config.supportAdminUsername || 'gumieeel')
       .replace(/^@/, '')
       .toLowerCase();
@@ -161,7 +162,9 @@ export class TelegramSupportBotService {
           console.log(`✅ [SupportBot] Webhook успешно зарегистрирован на: ${webhookUrl}`);
           return;
         }
-        console.warn('⚠️ [SupportBot] Не удалось установить Webhook, переключаемся на long-polling...');
+        console.warn(
+          '⚠️ [SupportBot] Не удалось установить Webhook, переключаемся на long-polling...',
+        );
       }
 
       console.log('⚡ [SupportBot] Запуск фонового long-polling...');
@@ -216,20 +219,18 @@ export class TelegramSupportBotService {
     const fromUser = msg.from;
     const fromUsername = fromUser?.username?.toLowerCase().replace(/^@/, '');
 
-    const hasMedia = Boolean(
-      msg.photo || msg.document || msg.video || msg.voice || msg.sticker,
-    );
+    const hasMedia = Boolean(msg.photo || msg.document || msg.video || msg.voice || msg.sticker);
     const mediaTypeLabel = msg.photo
       ? '📷 [Фотография / Скриншот]'
       : msg.document
-      ? `📎 [Файл: ${msg.document.file_name || 'документ'}]`
-      : msg.voice
-      ? '🎤 [Голосовое сообщение]'
-      : msg.video
-      ? '📹 [Видео]'
-      : msg.sticker
-      ? '🎨 [Стикер]'
-      : '';
+        ? `📎 [Файл: ${msg.document.file_name || 'документ'}]`
+        : msg.voice
+          ? '🎤 [Голосовое сообщение]'
+          : msg.video
+            ? '📹 [Видео]'
+            : msg.sticker
+              ? '🎨 [Стикер]'
+              : '';
 
     const text = (msg.text || msg.caption || mediaTypeLabel).trim();
 
@@ -415,7 +416,10 @@ export class TelegramSupportBotService {
     if (text === '/status') {
       const activeTicket = this.store.getActiveTicketForUser(chatId);
       if (!activeTicket) {
-        await this.sendMessage(chatId, 'У вас нет активных обращений. Напишите ваш вопрос, чтобы создать новое!');
+        await this.sendMessage(
+          chatId,
+          'У вас нет активных обращений. Напишите ваш вопрос, чтобы создать новое!',
+        );
       } else {
         await this.sendMessage(
           chatId,
@@ -432,11 +436,17 @@ export class TelegramSupportBotService {
         return { handled: true, action: 'user_close_none' };
       }
       this.store.closeTicket(activeTicket.id);
-      await this.sendMessage(chatId, `✅ Ваше обращение <b>#${activeTicket.id}</b> успешно закрыто. Если появятся вопросы — пишите!`);
+      await this.sendMessage(
+        chatId,
+        `✅ Ваше обращение <b>#${activeTicket.id}</b> успешно закрыто. Если появятся вопросы — пишите!`,
+      );
 
       const adminChatId = this.store.getAdminChatId();
       if (adminChatId) {
-        await this.sendMessage(adminChatId, `ℹ️ Пользователь закрыл обращение <b>#${activeTicket.id}</b>.`);
+        await this.sendMessage(
+          adminChatId,
+          `ℹ️ Пользователь закрыл обращение <b>#${activeTicket.id}</b>.`,
+        );
       }
       return { handled: true, action: 'user_ticket_closed' };
     }

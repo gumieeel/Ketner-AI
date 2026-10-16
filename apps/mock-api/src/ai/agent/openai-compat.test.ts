@@ -32,7 +32,14 @@ test('минимальный запрос: модель auto, глубина р�
 });
 
 test('content-массив из текстовых частей склеивается, картинки отклоняются', () => {
-  const value = parse({ messages: [user([{ type: 'text', text: 'a' }, { type: 'text', text: 'b' }])] });
+  const value = parse({
+    messages: [
+      user([
+        { type: 'text', text: 'a' },
+        { type: 'text', text: 'b' },
+      ]),
+    ],
+  });
   assert.equal((value.messages[0] as { content: string }).content, 'a\nb');
   const bad = rejection({ messages: [user([{ type: 'image_url', image_url: { url: 'x' } }])] });
   assert.equal(bad.param, 'messages[0]');
@@ -50,7 +57,13 @@ test('полный круг вызова функции: assistant с tool_calls
       {
         role: 'assistant',
         content: null,
-        tool_calls: [{ id: 'c1', type: 'function', function: { name: 'read_file', arguments: '{"path":"a.ts"}' } }],
+        tool_calls: [
+          {
+            id: 'c1',
+            type: 'function',
+            function: { name: 'read_file', arguments: '{"path":"a.ts"}' },
+          },
+        ],
       },
       { role: 'tool', tool_call_id: 'c1', content: 'const a = 1;' },
     ],
@@ -72,7 +85,11 @@ test('аргументы вызова объектом превращаются 
   const value = parse({
     messages: [
       user('x'),
-      { role: 'assistant', content: null, tool_calls: [{ id: 'c1', type: 'function', function: { name: 'f', arguments: { a: 1 } } }] },
+      {
+        role: 'assistant',
+        content: null,
+        tool_calls: [{ id: 'c1', type: 'function', function: { name: 'f', arguments: { a: 1 } } }],
+      },
       { role: 'tool', tool_call_id: 'c1', content: 'ok' },
     ],
   });
@@ -82,7 +99,8 @@ test('аргументы вызова объектом превращаются 
 
 test('tool_call_id без предшествующего вызова и последнее сообщение assistant отклоняются', () => {
   assert.match(
-    rejection({ messages: [user('x'), { role: 'tool', tool_call_id: 'nope', content: 'r' }] }).message,
+    rejection({ messages: [user('x'), { role: 'tool', tool_call_id: 'nope', content: 'r' }] })
+      .message,
     /не найден/,
   );
   assert.match(
@@ -94,11 +112,18 @@ test('tool_call_id без предшествующего вызова и пос�
 test('проверка инструментов: имя, повтор, число, tool_choice на неизвестную функцию', () => {
   const fn = (name: string) => ({ type: 'function', function: { name } });
   assert.equal(rejection({ messages: [user('x')], tools: [fn('плохое имя')] }).param, 'tools[0]');
-  assert.match(rejection({ messages: [user('x')], tools: [fn('a'), fn('a')] }).message, /повторяется/);
+  assert.match(
+    rejection({ messages: [user('x')], tools: [fn('a'), fn('a')] }).message,
+    /повторяется/,
+  );
   const many = Array.from({ length: 65 }, (_, i) => fn(`f${i}`));
   assert.match(rejection({ messages: [user('x')], tools: many }).message, /не больше 64/);
   assert.equal(
-    rejection({ messages: [user('x')], tools: [fn('a')], tool_choice: { type: 'function', function: { name: 'b' } } }).param,
+    rejection({
+      messages: [user('x')],
+      tools: [fn('a')],
+      tool_choice: { type: 'function', function: { name: 'b' } },
+    }).param,
     'tool_choice',
   );
 });
@@ -114,7 +139,10 @@ test('числовые поля: границы temperature, max_tokens, n и re
   assert.equal(rejection({ messages: [user('x')], max_tokens: 0 }).param, 'max_tokens');
   assert.equal(rejection({ messages: [user('x')], max_tokens: 1.5 }).param, 'max_tokens');
   assert.equal(rejection({ messages: [user('x')], n: 2 }).param, 'n');
-  assert.equal(rejection({ messages: [user('x')], reasoning_effort: 'extreme' }).param, 'reasoning_effort');
+  assert.equal(
+    rejection({ messages: [user('x')], reasoning_effort: 'extreme' }).param,
+    'reasoning_effort',
+  );
   assert.equal(rejection({ messages: [user('x')], stream: 'yes' }).param, 'stream');
   assert.equal(rejection({ messages: [] }).param, 'messages');
   assert.equal(rejection('строка').param, undefined);
@@ -129,9 +157,19 @@ test('ответ без стриминга: пустой текст с вызо�
     toolCalls: [{ id: 'c1', type: 'function', function: { name: 'f', arguments: '{}' } }],
     finishReason: 'tool_calls',
     usage: { inputTokens: 10, outputTokens: 5, cachedTokens: 4, reasoningTokens: 2 },
-    ketner: { cost_usd: 0.001, requested_model: 'auto', routing_reason: 'r', budget: { stage: 'normal', used_pct: 1, premium_available: true } },
+    ketner: {
+      cost_usd: 0.001,
+      requested_model: 'auto',
+      routing_reason: 'r',
+      budget: { stage: 'normal', used_pct: 1, premium_available: true },
+    },
   });
-  const choice = (body.choices as Array<{ message: { content: unknown; tool_calls: unknown[] }; finish_reason: string }>)[0];
+  const choice = (
+    body.choices as Array<{
+      message: { content: unknown; tool_calls: unknown[] };
+      finish_reason: string;
+    }>
+  )[0];
   assert.equal(choice.message.content, null);
   assert.equal(choice.message.tool_calls.length, 1);
   assert.equal(choice.finish_reason, 'tool_calls');

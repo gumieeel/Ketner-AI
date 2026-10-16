@@ -29,9 +29,9 @@ export function hasPostgresConfig(): boolean {
   const url = (config.databaseUrl || process.env.DATABASE_URL || '').trim();
   return Boolean(
     url &&
-      !url.includes('postgres:postgres@localhost') &&
-      !url.includes('user:password@localhost') &&
-      (url.startsWith('postgres://') || url.startsWith('postgresql://')),
+    !url.includes('postgres:postgres@localhost') &&
+    !url.includes('user:password@localhost') &&
+    (url.startsWith('postgres://') || url.startsWith('postgresql://')),
   );
 }
 
@@ -757,18 +757,16 @@ async function syncApiKeys(sql: postgres.Sql): Promise<void> {
     }[]
   >`SELECT id, user_id, name, prefix, hash, created_at, last_used_at, revoked_at FROM "api_keys"`;
   apiKeyStore.loadExternal(
-    rows.map(
-      (r): ApiKeyRecord => ({
-        id: r.id,
-        userId: r.user_id,
-        name: r.name,
-        prefix: r.prefix,
-        hash: r.hash,
-        createdAt: new Date(r.created_at).toISOString(),
-        lastUsedAt: r.last_used_at ? new Date(r.last_used_at).toISOString() : null,
-        revokedAt: r.revoked_at ? new Date(r.revoked_at).toISOString() : null,
-      }),
-    ),
+    rows.map((r): ApiKeyRecord => ({
+      id: r.id,
+      userId: r.user_id,
+      name: r.name,
+      prefix: r.prefix,
+      hash: r.hash,
+      createdAt: new Date(r.created_at).toISOString(),
+      lastUsedAt: r.last_used_at ? new Date(r.last_used_at).toISOString() : null,
+      revokedAt: r.revoked_at ? new Date(r.revoked_at).toISOString() : null,
+    })),
   );
   apiKeyStore.setDbDriver({
     async upsert(record) {
@@ -813,17 +811,15 @@ async function syncGithubConnections(sql: postgres.Sql): Promise<void> {
     }[]
   >`SELECT user_id, github_id, login, avatar_url, scopes, token_enc, connected_at FROM "github_connections"`;
   githubConnectionStore.loadExternal(
-    rows.map(
-      (r): StoredGithubConnection => ({
-        userId: r.user_id,
-        githubId: Number(r.github_id),
-        login: r.login,
-        avatarUrl: r.avatar_url,
-        scopes: r.scopes.split(',').filter(Boolean),
-        tokenEnc: r.token_enc,
-        connectedAt: new Date(r.connected_at).toISOString(),
-      }),
-    ),
+    rows.map((r): StoredGithubConnection => ({
+      userId: r.user_id,
+      githubId: Number(r.github_id),
+      login: r.login,
+      avatarUrl: r.avatar_url,
+      scopes: r.scopes.split(',').filter(Boolean),
+      tokenEnc: r.token_enc,
+      connectedAt: new Date(r.connected_at).toISOString(),
+    })),
   );
   githubConnectionStore.setDbDriver({
     async upsert(record) {
@@ -883,7 +879,10 @@ async function syncCryptoInvoices(sql: postgres.Sql): Promise<void> {
  * Небольшие хранилища документов (журнал платежей, подписки со звёздами, настройки уведомлений,
  * счета в звёздах): одна таблица с пространствами имён, документы — JSON.
  */
-async function syncDocStores(sql: postgres.Sql, stores: Array<DocStore<{ id: string }>>): Promise<void> {
+async function syncDocStores(
+  sql: postgres.Sql,
+  stores: Array<DocStore<{ id: string }>>,
+): Promise<void> {
   await sql.unsafe(`
     CREATE TABLE IF NOT EXISTS "ketner_docs" (
       "namespace" text NOT NULL,
@@ -906,7 +905,9 @@ async function syncDocStores(sql: postgres.Sql, stores: Array<DocStore<{ id: str
     },
   };
   for (const store of stores) {
-    const rows = await sql<{ data: { id: string } }[]>`SELECT data FROM "ketner_docs" WHERE "namespace" = ${store.namespace}`;
+    const rows = await sql<
+      { data: { id: string } }[]
+    >`SELECT data FROM "ketner_docs" WHERE "namespace" = ${store.namespace}`;
     store.loadExternal(rows.map((row) => row.data));
     store.setDbDriver(driver);
   }
@@ -939,7 +940,10 @@ export async function initDatabaseSync(): Promise<boolean> {
     attachDatabaseDrivers(sql);
 
     // Ketner Code: проекты переживают перезапуск сервера (поднимаются из БД при первом обращении)
-    const codeRunner = { query: (text: string, params?: unknown[]) => sql.unsafe(text, params as never[]) as unknown as Promise<never[]> };
+    const codeRunner = {
+      query: (text: string, params?: unknown[]) =>
+        sql.unsafe(text, params as never[]) as unknown as Promise<never[]>,
+    };
     await ensureCodeSchema(codeRunner);
     attachProjectDriver(createPostgresProjectDriver(codeRunner));
     // Картинки: диск Render временный, поэтому храним их в Postgres.

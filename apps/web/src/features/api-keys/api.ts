@@ -14,7 +14,8 @@ export interface ApiKeyInfo {
 }
 
 async function request<T>(path: string, init: RequestInit & { body?: string } = {}): Promise<T> {
-  const headers: Record<string, string> = init.body !== undefined ? { 'Content-Type': 'application/json' } : {};
+  const headers: Record<string, string> =
+    init.body !== undefined ? { 'Content-Type': 'application/json' } : {};
   const token = getAuthToken();
   if (token) headers.Authorization = `Bearer ${token}`;
   const response = await fetch(`${API_BASE}${path}`, { ...init, headers, credentials: 'include' });
@@ -38,8 +39,12 @@ async function request<T>(path: string, init: RequestInit & { body?: string } = 
 export const apiKeysApi = {
   list: async () => (await request<{ keys: ApiKeyInfo[] }>('/keys')).keys,
   create: (name: string) =>
-    request<{ key: ApiKeyInfo; secret: string }>('/keys', { method: 'POST', body: JSON.stringify({ name }) }),
-  revoke: (id: string) => request<{ ok: boolean }>(`/keys/${encodeURIComponent(id)}`, { method: 'DELETE' }),
+    request<{ key: ApiKeyInfo; secret: string }>('/keys', {
+      method: 'POST',
+      body: JSON.stringify({ name }),
+    }),
+  revoke: (id: string) =>
+    request<{ ok: boolean }>(`/keys/${encodeURIComponent(id)}`, { method: 'DELETE' }),
 };
 
 /** Адрес OpenAI-совместимого API: тот же сайт, путь /v1. */

@@ -11,7 +11,13 @@ const COMPOSER = 'Спросите что-нибудь…';
 
 function loginAs(plan: 'pro' | 'ultra'): void {
   useAuth.setState({
-    user: { id: 'demo-user', email: 'demo@ketner.ai', name: 'Демо', plan, createdAt: new Date().toISOString() },
+    user: {
+      id: 'demo-user',
+      email: 'demo@ketner.ai',
+      name: 'Демо',
+      plan,
+      createdAt: new Date().toISOString(),
+    },
     token: 'fake.jwt.token',
     status: 'authenticated',
   });
@@ -51,7 +57,9 @@ describe('режим Max', () => {
     const user = userEvent.setup();
     renderRoute('/chat');
 
-    const toggle = await screen.findByRole('button', { name: /^Max: Режим Max доступен на тарифе Ultra/ });
+    const toggle = await screen.findByRole('button', {
+      name: /^Max: Режим Max доступен на тарифе Ultra/,
+    });
     expect(toggle).not.toHaveAttribute('aria-pressed');
     await user.click(toggle);
     expect(useUpgradeModal.getState().isOpen).toBe(true);

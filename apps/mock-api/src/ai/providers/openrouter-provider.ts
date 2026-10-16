@@ -56,7 +56,10 @@ export class OpenRouterError extends Error {
  * Коротко и без секретов описывает отказ OpenRouter. Статус 402 означает, что на счёте закончились
  * кредиты: тогда не работает ни одна платная модель сразу, и об этом должно быть видно в логах.
  */
-async function describeUpstreamFailure(model: string, response: Response): Promise<OpenRouterError> {
+async function describeUpstreamFailure(
+  model: string,
+  response: Response,
+): Promise<OpenRouterError> {
   let body = '';
   try {
     body = (await response.text()).replace(/\s+/g, ' ').slice(0, 300);
@@ -65,14 +68,20 @@ async function describeUpstreamFailure(model: string, response: Response): Promi
   }
   const error = new OpenRouterError(model, response.status, body);
   if (response.status === 402) {
-    console.error(`[openrouter] ${error.message}. Похоже, на счёте OpenRouter закончились кредиты.`);
+    console.error(
+      `[openrouter] ${error.message}. Похоже, на счёте OpenRouter закончились кредиты.`,
+    );
   } else {
     console.warn(`[openrouter] ${error.message}`);
   }
   return error;
 }
 
-type CacheableContent = Array<{ type: 'text'; text: string; cache_control?: { type: 'ephemeral' } }>;
+type CacheableContent = Array<{
+  type: 'text';
+  text: string;
+  cache_control?: { type: 'ephemeral' };
+}>;
 
 type WireMessage = { role: ProviderMessage['role']; content: string | CacheableContent };
 
@@ -166,7 +175,10 @@ export function prepareChatMessages(model: string, messages: ChatWireMessage[]):
  * склеить (текст и резюме дописываются, подпись берётся последняя), иначе провайдер отвергнет
  * или проигнорирует их при возврате на следующем шаге.
  */
-export function mergeReasoningDetails(target: Array<Record<string, unknown>>, chunk: unknown): void {
+export function mergeReasoningDetails(
+  target: Array<Record<string, unknown>>,
+  chunk: unknown,
+): void {
   if (!Array.isArray(chunk)) return;
   for (const raw of chunk) {
     if (!raw || typeof raw !== 'object') continue;
@@ -244,7 +256,11 @@ export function prepareAgentMessages(model: string, messages: AgentMessage[]): A
   if (!model.startsWith('anthropic/')) return messages;
   const lastUser = messages.reduce((found, m, i) => (m.role === 'user' ? i : found), -1);
   return messages.map((m, i) => {
-    if ((m.role === 'system' || i === lastUser) && (m.role === 'system' || m.role === 'user') && m.content) {
+    if (
+      (m.role === 'system' || i === lastUser) &&
+      (m.role === 'system' || m.role === 'user') &&
+      m.content
+    ) {
       return {
         role: m.role,
         content: [{ type: 'text', text: m.content, cache_control: { type: 'ephemeral' } }],
@@ -424,7 +440,8 @@ export class OpenRouterProvider implements AIProvider, AgentCapableProvider {
             streamedAny = true;
             callbacks.onReasoningDelta?.(reasoningDelta);
           }
-          if (delta.reasoning_details) mergeReasoningDetails(reasoningDetails, delta.reasoning_details);
+          if (delta.reasoning_details)
+            mergeReasoningDetails(reasoningDetails, delta.reasoning_details);
 
           if (typeof delta.content === 'string' && delta.content) {
             streamedAny = true;
@@ -443,7 +460,8 @@ export class OpenRouterProvider implements AIProvider, AgentCapableProvider {
               }
               if (typeof part.id === 'string' && part.id) call.id = part.id;
               if (typeof part.function?.name === 'string') call.name += part.function.name;
-              if (typeof part.function?.arguments === 'string') call.arguments += part.function.arguments;
+              if (typeof part.function?.arguments === 'string')
+                call.arguments += part.function.arguments;
             }
           }
         }
@@ -506,7 +524,11 @@ export class OpenRouterProvider implements AIProvider, AgentCapableProvider {
       });
     } catch (err: unknown) {
       if ((err as Error)?.name === 'AbortError') {
-        return { content: '', usage: { inputTokens: 0, outputTokens: 0 }, finishReason: 'cancelled' };
+        return {
+          content: '',
+          usage: { inputTokens: 0, outputTokens: 0 },
+          finishReason: 'cancelled',
+        };
       }
       throw err;
     }
@@ -545,7 +567,8 @@ export class OpenRouterProvider implements AIProvider, AgentCapableProvider {
       usage: {
         inputTokens: json.usage?.prompt_tokens ?? Math.ceil(content.length / 4),
         outputTokens: json.usage?.completion_tokens ?? Math.ceil(content.length / 4),
-        cachedTokens: typeof cachedTokens === 'number' && cachedTokens > 0 ? cachedTokens : undefined,
+        cachedTokens:
+          typeof cachedTokens === 'number' && cachedTokens > 0 ? cachedTokens : undefined,
         reasoningTokens: typeof reasoningTokens === 'number' ? reasoningTokens : undefined,
       },
       cost: typeof json.usage?.cost === 'number' ? json.usage.cost : undefined,
@@ -587,7 +610,8 @@ export class OpenRouterProvider implements AIProvider, AgentCapableProvider {
         usage: {
           inputTokens: promptTokens || 0,
           outputTokens: completionTokens || Math.ceil(accumulatedContent.length / 4),
-          cachedTokens: typeof cachedTokens === 'number' && cachedTokens > 0 ? cachedTokens : undefined,
+          cachedTokens:
+            typeof cachedTokens === 'number' && cachedTokens > 0 ? cachedTokens : undefined,
           reasoningTokens: reasoningTokens ?? undefined,
         },
         cost: costUsd,
@@ -714,7 +738,8 @@ export class OpenRouterProvider implements AIProvider, AgentCapableProvider {
         usage: {
           inputTokens: promptTokens,
           outputTokens: completionTokens,
-          cachedTokens: typeof cachedTokens === 'number' && cachedTokens > 0 ? cachedTokens : undefined,
+          cachedTokens:
+            typeof cachedTokens === 'number' && cachedTokens > 0 ? cachedTokens : undefined,
           reasoningTokens: reasoningTokens ?? undefined,
         },
         cost: costUsd,
@@ -727,7 +752,11 @@ export class OpenRouterProvider implements AIProvider, AgentCapableProvider {
         return partialResponse(aborted ? 'cancelled' : 'error');
       }
       if (aborted) {
-        return { content: '', usage: { inputTokens: 0, outputTokens: 0 }, finishReason: 'cancelled' };
+        return {
+          content: '',
+          usage: { inputTokens: 0, outputTokens: 0 },
+          finishReason: 'cancelled',
+        };
       }
       throw err;
     }
@@ -790,7 +819,11 @@ export class OpenRouterProvider implements AIProvider, AgentCapableProvider {
         finishReason: reason === 'stop' && toolCalls.length > 0 ? 'tool_calls' : reason,
         usage: {
           inputTokens: promptTokens,
-          outputTokens: completionTokens || Math.ceil((content.length + toolCalls.reduce((n, c) => n + c.function.arguments.length, 0)) / 4),
+          outputTokens:
+            completionTokens ||
+            Math.ceil(
+              (content.length + toolCalls.reduce((n, c) => n + c.function.arguments.length, 0)) / 4,
+            ),
           cachedTokens: cachedTokens && cachedTokens > 0 ? cachedTokens : undefined,
           reasoningTokens,
         },
@@ -825,7 +858,11 @@ export class OpenRouterProvider implements AIProvider, AgentCapableProvider {
           const status = Number(parsed.error.code);
           const message = String(parsed.error.message ?? 'upstream error');
           if (!emitted) {
-            throw new OpenRouterError(targetModel, Number.isInteger(status) && status >= 400 ? status : 502, message);
+            throw new OpenRouterError(
+              targetModel,
+              Number.isInteger(status) && status >= 400 ? status : 502,
+              message,
+            );
           }
           finishReason = 'error';
           return;
@@ -846,24 +883,31 @@ export class OpenRouterProvider implements AIProvider, AgentCapableProvider {
           }
           if (Array.isArray(delta.tool_calls)) {
             for (const part of delta.tool_calls as StreamToolCallPart[]) {
-              const index = typeof part.index === 'number' && Number.isInteger(part.index) ? part.index : 0;
+              const index =
+                typeof part.index === 'number' && Number.isInteger(part.index) ? part.index : 0;
               const current = calls.get(index) ?? {
                 id: '',
                 type: 'function' as const,
                 function: { name: '', arguments: '' },
               };
               if (typeof part.id === 'string' && part.id) current.id = part.id;
-              if (typeof part.function?.name === 'string') current.function.name += part.function.name;
-              const args = typeof part.function?.arguments === 'string' ? part.function.arguments : '';
+              if (typeof part.function?.name === 'string')
+                current.function.name += part.function.name;
+              const args =
+                typeof part.function?.arguments === 'string' ? part.function.arguments : '';
               current.function.arguments += args;
-              if (!current.id) current.id = `call_${index}_${Math.random().toString(36).slice(2, 10)}`;
+              if (!current.id)
+                current.id = `call_${index}_${Math.random().toString(36).slice(2, 10)}`;
               calls.set(index, current);
               emitted = true;
               hooks.onEvent({
                 kind: 'tool_call',
                 index,
                 id: typeof part.id === 'string' && part.id ? part.id : undefined,
-                name: typeof part.function?.name === 'string' && part.function.name ? part.function.name : undefined,
+                name:
+                  typeof part.function?.name === 'string' && part.function.name
+                    ? part.function.name
+                    : undefined,
                 argumentsDelta: args || undefined,
               });
             }

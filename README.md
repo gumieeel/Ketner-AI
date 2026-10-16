@@ -16,18 +16,18 @@ Ketner AI — это production-ready SaaS-платформа с полноце�
 
 ## Стек
 
-| Слой | Технология | Версия |
-|---|---|---|
-| **Фронтенд** | React + TypeScript | 19.3 / 6.0.3 |
-| **Сборка** | Vite | 8.3 |
-| **Стили** | Tailwind CSS | 4.3 |
-| **Маршрутизация** | React Router | 7.18 |
-| **Состояние** | Zustand | 5.0 |
-| **Бэкенд** | Node.js + Express | 24 / 5.2 |
-| **Аутентификация** | Better Auth + SQLite | — |
-| **БД (prod)** | PostgreSQL через Drizzle ORM | — |
-| **Тесты** | Vitest + Testing Library | 5.0 / 16.3 |
-| **Монорепо** | npm workspaces | npm 11 |
+| Слой               | Технология                   | Версия       |
+| ------------------ | ---------------------------- | ------------ |
+| **Фронтенд**       | React + TypeScript           | 19.3 / 6.0.3 |
+| **Сборка**         | Vite                         | 8.3          |
+| **Стили**          | Tailwind CSS                 | 4.3          |
+| **Маршрутизация**  | React Router                 | 7.18         |
+| **Состояние**      | Zustand                      | 5.0          |
+| **Бэкенд**         | Node.js + Express            | 24 / 5.2     |
+| **Аутентификация** | Better Auth + SQLite         | —            |
+| **БД (prod)**      | PostgreSQL через Drizzle ORM | —            |
+| **Тесты**          | Vitest + Testing Library     | 5.0 / 16.3   |
+| **Монорепо**       | npm workspaces               | npm 11       |
 
 ---
 
@@ -57,14 +57,14 @@ npm run dev:api   # только API
 
 ## Команды
 
-| Команда | Что делает |
-|---|---|
-| `npm run dev` | Фронтенд + API одновременно |
-| `npm run build` | Production-сборка обоих воркспейсов |
-| `npm run typecheck` | Проверка типов без эмита |
-| `npm run lint` | ESLint по всему монорепо |
-| `npm test` | Тесты фронтенда + smoke-тесты API |
-| `npm run format` | Prettier с автоисправлением |
+| Команда             | Что делает                          |
+| ------------------- | ----------------------------------- |
+| `npm run dev`       | Фронтенд + API одновременно         |
+| `npm run build`     | Production-сборка обоих воркспейсов |
+| `npm run typecheck` | Проверка типов без эмита            |
+| `npm run lint`      | ESLint по всему монорепо            |
+| `npm test`          | Тесты фронтенда + smoke-тесты API   |
+| `npm run format`    | Prettier с автоисправлением         |
 
 ---
 
@@ -76,46 +76,46 @@ npm run dev:api   # только API
 
 Все модели идут через один канал, OpenRouter, по одному ключу. Прямые ключи OpenAI, Anthropic и Google не нужны.
 
-| Переменная | Назначение |
-|---|---|
-| `OPENROUTER_API_KEY` | Единый ключ для GPT, Claude, Grok, Gemini, DeepSeek и MiMo. Следите за балансом счёта: при нуле перестают работать все платные модели сразу |
-| `OPENROUTER_BASE_URL` | Адрес API (по умолчанию `https://openrouter.ai/api/v1`) |
+| Переменная            | Назначение                                                                                                                                  |
+| --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
+| `OPENROUTER_API_KEY`  | Единый ключ для GPT, Claude, Grok, Gemini, DeepSeek и MiMo. Следите за балансом счёта: при нуле перестают работать все платные модели сразу |
+| `OPENROUTER_BASE_URL` | Адрес API (по умолчанию `https://openrouter.ai/api/v1`)                                                                                     |
 
 ### Аутентификация
 
-| Переменная | Назначение | По умолчанию |
-|---|---|---|
-| `BETTER_AUTH_SECRET` | Секрет для подписи сессий Better Auth | `dev-secret-change-me` |
-| `BETTER_AUTH_URL` | Публичный URL сервиса | `http://localhost:8787` |
-| `DATABASE_URL` | PostgreSQL (Supabase). Если не задан — SQLite | — |
+| Переменная           | Назначение                                    | По умолчанию            |
+| -------------------- | --------------------------------------------- | ----------------------- |
+| `BETTER_AUTH_SECRET` | Секрет для подписи сессий Better Auth         | `dev-secret-change-me`  |
+| `BETTER_AUTH_URL`    | Публичный URL сервиса                         | `http://localhost:8787` |
+| `DATABASE_URL`       | PostgreSQL (Supabase). Если не задан — SQLite | —                       |
 
 ### Платёжные провайдеры
 
-| Переменная | Назначение |
-|---|---|
-| `STRIPE_SECRET_KEY` | Stripe API-ключ (если не задан — mock-биллинг) |
-| `STRIPE_WEBHOOK_SECRET` | Секрет для верификации вебхуков Stripe |
-| `STRIPE_PRICE_PLUS` | Stripe Price ID для тарифа Plus |
-| `STRIPE_PRICE_PRO` | Stripe Price ID для тарифа Pro |
-| `STRIPE_PRICE_ULTRA` | Stripe Price ID для тарифа Ultra |
-| `TELEGRAM_BOT_TOKEN` | Токен Telegram-бота для оплаты Stars и СБП |
-| `TELEGRAM_PAYMENT_PROVIDER_TOKEN` | Провайдер-токен для платежей в боте |
+| Переменная                        | Назначение                                     |
+| --------------------------------- | ---------------------------------------------- |
+| `STRIPE_SECRET_KEY`               | Stripe API-ключ (если не задан — mock-биллинг) |
+| `STRIPE_WEBHOOK_SECRET`           | Секрет для верификации вебхуков Stripe         |
+| `STRIPE_PRICE_PLUS`               | Stripe Price ID для тарифа Plus                |
+| `STRIPE_PRICE_PRO`                | Stripe Price ID для тарифа Pro                 |
+| `STRIPE_PRICE_ULTRA`              | Stripe Price ID для тарифа Ultra               |
+| `TELEGRAM_BOT_TOKEN`              | Токен Telegram-бота для оплаты Stars и СБП     |
+| `TELEGRAM_PAYMENT_PROVIDER_TOKEN` | Провайдер-токен для платежей в боте            |
 
 ### Прочее
 
-| Переменная | Назначение | По умолчанию |
-|---|---|---|
-| `PORT` | Порт API-сервера | `8787` |
-| `CORS_ORIGIN` | Разрешённый origin | `http://localhost:5173` |
-| `WEB_APP_URL` | URL фронтенда (для редиректов Stripe) | `http://localhost:5173` |
-| `STORE_FILE` | Файл для хранения диалогов (fallback) | `apps/mock-api/data/store.json` |
-| `MOCK_AI_FAILURE_RATE` | Доля запросов с ошибкой (для тестов) | `0` |
-| `VIP_EMAILS` | Email-адреса с автоматическим Ultra-тарифом | — |
-| `CODE_PROJECTS_DIR` | Каталог проектов Ketner Code | `apps/mock-api/data/projects` |
-| `SANDBOX_MODE` | Запуск команд агентом: `off` · `docker` · `local` | `off` |
-| `SANDBOX_DOCKER_IMAGE` | Образ для режима `docker` | `node:22-bookworm` |
-| `SANDBOX_ALLOW_NETWORK` | Сеть внутри команд агента | `false` |
-| `SANDBOX_ALLOW_LOCAL_IN_PRODUCTION` | Разрешить режим `local` в production | `false` |
+| Переменная                          | Назначение                                        | По умолчанию                    |
+| ----------------------------------- | ------------------------------------------------- | ------------------------------- |
+| `PORT`                              | Порт API-сервера                                  | `8787`                          |
+| `CORS_ORIGIN`                       | Разрешённый origin                                | `http://localhost:5173`         |
+| `WEB_APP_URL`                       | URL фронтенда (для редиректов Stripe)             | `http://localhost:5173`         |
+| `STORE_FILE`                        | Файл для хранения диалогов (fallback)             | `apps/mock-api/data/store.json` |
+| `MOCK_AI_FAILURE_RATE`              | Доля запросов с ошибкой (для тестов)              | `0`                             |
+| `VIP_EMAILS`                        | Email-адреса с автоматическим Ultra-тарифом       | —                               |
+| `CODE_PROJECTS_DIR`                 | Каталог проектов Ketner Code                      | `apps/mock-api/data/projects`   |
+| `SANDBOX_MODE`                      | Запуск команд агентом: `off` · `docker` · `local` | `off`                           |
+| `SANDBOX_DOCKER_IMAGE`              | Образ для режима `docker`                         | `node:22-bookworm`              |
+| `SANDBOX_ALLOW_NETWORK`             | Сеть внутри команд агента                         | `false`                         |
+| `SANDBOX_ALLOW_LOCAL_IN_PRODUCTION` | Разрешить режим `local` в production              | `false`                         |
 
 ---
 
@@ -165,27 +165,27 @@ docs/                  Проектная документация
 
 #### Модели
 
-| Модель | Класс | Тариф | OpenRouter |
-|---|---|---|---|
-| Ketner Mini | lite | Free | `openai/gpt-6-luna` |
-| Ketner Pro | work | Plus | `xiaomi/mimo-v2.6-pro` |
-| Claude Haiku 5.5 | lite | Plus | `anthropic/claude-haiku-5.5` |
-| DeepSeek V4.1 Flash | lite | Plus | `deepseek/deepseek-v4.1-flash` |
-| GPT-6.1 Sol | strong | Plus | `openai/gpt-6.1-sol` |
-| Gemini 3.8 Flash | strong | Pro | `google/gemini-3.8-flash` |
-| Grok 4.7 | strong | Pro | `x-ai/grok-4.7` |
-| Claude Opus 5.5 | top | Pro | `anthropic/claude-opus-5.5` |
+| Модель              | Класс  | Тариф | OpenRouter                     |
+| ------------------- | ------ | ----- | ------------------------------ |
+| Ketner Mini         | lite   | Free  | `openai/gpt-6-luna`            |
+| Ketner Pro          | work   | Plus  | `xiaomi/mimo-v2.6-pro`         |
+| Claude Haiku 5.5    | lite   | Plus  | `anthropic/claude-haiku-5.5`   |
+| DeepSeek V4.1 Flash | lite   | Plus  | `deepseek/deepseek-v4.1-flash` |
+| GPT-6.1 Sol         | strong | Plus  | `openai/gpt-6.1-sol`           |
+| Gemini 3.8 Flash    | strong | Pro   | `google/gemini-3.8-flash`      |
+| Grok 4.7            | strong | Pro   | `x-ai/grok-4.7`                |
+| Claude Opus 5.5     | top    | Pro   | `anthropic/claude-opus-5.5`    |
 
 Модели классов strong и top расходуют квоту премиум-запросов тарифа (скользящие 30 дней). Когда квота кончилась, отвечает Ketner Pro, а в ответе указана реальная модель.
 
 ### Тарифы и Fair Use
 
-| Тариф | Цена (USD/мес) | Сообщений/сутки | Параллельных | Токенов/сутки | Бюджет расхода на модели | Квота премиум-запросов |
-|---|---|---|---|---|---|---|
-| **Free** | $0 | 10 | 1 | 150 000 | $0.30 | нет |
-| **Plus** | $9 | 500 | 2 | 1 500 000 | $2.75 | $0.45 |
-| **Pro** | $25 | 1 500 | 4 | 6 000 000 | $10.00 | $3.50 |
-| **Ultra** | $49 (скидка с $59) | 4 000 | 8 | 20 000 000 | $20.00 | $9.00 |
+| Тариф     | Цена (USD/мес)     | Сообщений/сутки | Параллельных | Токенов/сутки | Бюджет расхода на модели | Квота премиум-запросов |
+| --------- | ------------------ | --------------- | ------------ | ------------- | ------------------------ | ---------------------- |
+| **Free**  | $0                 | 10              | 1            | 150 000       | $0.30                    | нет                    |
+| **Plus**  | $9                 | 500             | 2            | 1 500 000     | $2.75                    | $0.45                  |
+| **Pro**   | $25                | 1 500           | 4            | 6 000 000     | $10.00                   | $3.50                  |
+| **Ultra** | $49 (скидка с $59) | 4 000           | 8            | 20 000 000    | $20.00                   | $9.00                  |
 
 Цены тарифов хранятся в долларах в одном месте: `apps/mock-api/src/services/pricing.ts` (сайт берёт те же числа из `apps/web/src/features/billing/plans.ts`, их совпадение проверяет тест). Рубли нужны только для СБП (890 / 2 490 / 4 890 ₽), Telegram Stars считаются в `telegram/bot.ts` (500 / 1 350 / 2 650 ⭐️).
 
@@ -225,12 +225,14 @@ data: {"code":"upgrade_required","message":"..."}
 Реализованы три способа оплаты:
 
 ### Stripe (международные платежи)
+
 - Создание Checkout Session → редирект на hosted checkout
 - Вебхуки: `checkout.session.completed`, `customer.subscription.deleted`
 - При успешной оплате: обновление подписки в in-memory store + PostgreSQL/Supabase (если подключено)
 - Graceful fallback: если `STRIPE_SECRET_KEY` не задан — активируется локальный mock
 
 ### Telegram Bot (`@KetnerAIBot`)
+
 - Оплата через **Telegram Stars** (XTR) — нативные счета `sendInvoice`, авто-подтверждение через `answerPreCheckoutQuery`
 - Оплата через **СБП** — генерация deeplink в банковское приложение, QR-код, подтверждение через callback
 - Команды: `/start`, `/plans`, `/status`, `/help`
@@ -238,6 +240,7 @@ data: {"code":"upgrade_required","message":"..."}
 - Long Polling (локально) / Webhook (production на HTTPS)
 
 ### Mock-биллинг (fallback)
+
 - Активируется автоматически при отсутствии ключей
 - Полная эмуляция API с файловым хранилищем
 
@@ -260,53 +263,53 @@ data: {"code":"upgrade_required","message":"..."}
 
 Drizzle ORM + PostgreSQL/Supabase. Таблицы:
 
-| Таблица | Назначение |
-|---|---|
-| `user`, `session`, `account`, `verification` | Better Auth (управляется автоматически) |
-| `ketner_users` | Пользователи Ketner AI с токенами и стоимостью |
-| `conversations` | Диалоги с архивированием и метаданными |
-| `messages` | Сообщения с трекингом токенов, стоимости и edit-истории |
-| `subscriptions` | Подписки с полной интеграцией Stripe |
-| `billing_events` | Лог платёжных событий с идемпотентностью |
-| `usage_metrics` | Метрики использования по модели, пользователю, диалогу |
+| Таблица                                      | Назначение                                              |
+| -------------------------------------------- | ------------------------------------------------------- |
+| `user`, `session`, `account`, `verification` | Better Auth (управляется автоматически)                 |
+| `ketner_users`                               | Пользователи Ketner AI с токенами и стоимостью          |
+| `conversations`                              | Диалоги с архивированием и метаданными                  |
+| `messages`                                   | Сообщения с трекингом токенов, стоимости и edit-истории |
+| `subscriptions`                              | Подписки с полной интеграцией Stripe                    |
+| `billing_events`                             | Лог платёжных событий с идемпотентностью                |
+| `usage_metrics`                              | Метрики использования по модели, пользователю, диалогу  |
 
 ---
 
 ## Экраны
 
-| Путь | Экран |
-|---|---|
-| `/` | Лендинг |
-| `/chat` | Новый чат |
-| `/chat/:id` | Открытый диалог |
-| `/login` | Вход |
-| `/signup` | Регистрация |
-| `/pricing` | Тарифы |
-| `/checkout/:planId` | Оформление подписки (Stripe / СБП / Stars) |
-| `/settings` | Настройки: профиль, тема, язык, подписка |
-| `/docs`, `/docs/api` | Документация и API-справка |
+| Путь                 | Экран                                                                 |
+| -------------------- | --------------------------------------------------------------------- |
+| `/`                  | Лендинг                                                               |
+| `/chat`              | Новый чат                                                             |
+| `/chat/:id`          | Открытый диалог                                                       |
+| `/login`             | Вход                                                                  |
+| `/signup`            | Регистрация                                                           |
+| `/pricing`           | Тарифы                                                                |
+| `/checkout/:planId`  | Оформление подписки (Stripe / СБП / Stars)                            |
+| `/settings`          | Настройки: профиль, тема, язык, подписка                              |
+| `/docs`, `/docs/api` | Документация и API-справка                                            |
 | `/code`, `/code/:id` | Ketner Code: проекты и ИИ-агент ([подробнее](docs/code-workspace.md)) |
-| `/onboarding` | Онбординг нового пользователя |
-| `/admin` | Административная панель |
+| `/onboarding`        | Онбординг нового пользователя                                         |
+| `/admin`             | Административная панель                                               |
 
 ---
 
 ## Тестирование
 
-| Файл | Что покрывает |
-|---|---|
-| `auth-flow.test.tsx` | Вход, регистрация, OAuth, выход, независимые лимиты по аккаунтам |
-| `chat-flow.test.tsx` | Отправка, стриминг, остановка, правка, перегенерация, платные модели, лимиты |
-| `billing-flow.test.tsx` | Чекаут, подписка, отмена, маски карты |
-| `sidebar.test.tsx` | История диалогов, поиск, переименование, удаление |
-| `markdown.test.ts` | Парсер markdown |
-| `preferences.test.tsx` | Тема, язык, сохранение |
-| `tokens.test.ts` | CSS-токены дизайн-системы |
-| `routes.test.tsx` | Маршруты |
-| `code-flow.test.tsx` | Ketner Code: проекты, запуск агента, diff, сохранение перед запуском |
-| `code-import.test.ts` | Импорт папки и ZIP: фильтры, лимиты, разбиение на части |
-| `code-tree.test.ts` | Дерево файлов и группировка ленты агента |
-| `marketing.test.tsx` | Лендинг, страница тарифов |
+| Файл                    | Что покрывает                                                                |
+| ----------------------- | ---------------------------------------------------------------------------- |
+| `auth-flow.test.tsx`    | Вход, регистрация, OAuth, выход, независимые лимиты по аккаунтам             |
+| `chat-flow.test.tsx`    | Отправка, стриминг, остановка, правка, перегенерация, платные модели, лимиты |
+| `billing-flow.test.tsx` | Чекаут, подписка, отмена, маски карты                                        |
+| `sidebar.test.tsx`      | История диалогов, поиск, переименование, удаление                            |
+| `markdown.test.ts`      | Парсер markdown                                                              |
+| `preferences.test.tsx`  | Тема, язык, сохранение                                                       |
+| `tokens.test.ts`        | CSS-токены дизайн-системы                                                    |
+| `routes.test.tsx`       | Маршруты                                                                     |
+| `code-flow.test.tsx`    | Ketner Code: проекты, запуск агента, diff, сохранение перед запуском         |
+| `code-import.test.ts`   | Импорт папки и ZIP: фильтры, лимиты, разбиение на части                      |
+| `code-tree.test.ts`     | Дерево файлов и группировка ленты агента                                     |
+| `marketing.test.tsx`    | Лендинг, страница тарифов                                                    |
 
 Fake API в `test-utils.tsx` конфигурируется параметрами: `reply`, `replies`, `chunkDelayMs`, `failTimes`, `enforcePlans`.
 

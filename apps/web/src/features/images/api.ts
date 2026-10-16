@@ -15,7 +15,10 @@ function headers(json: boolean): Record<string, string> {
 async function request<T>(path: string, init: RequestInit & { body?: string } = {}): Promise<T> {
   const response = await fetch(`${API_BASE}/images${path}`, {
     ...init,
-    headers: { ...headers(init.body !== undefined), ...(init.headers as Record<string, string> | undefined) },
+    headers: {
+      ...headers(init.body !== undefined),
+      ...(init.headers as Record<string, string> | undefined),
+    },
     credentials: 'include',
   });
   checkSessionInvalid(response);
@@ -43,7 +46,16 @@ export function resolveImageUrl(url: string): string {
 export const imagesApi = {
   capabilities: () => request<ImageCapabilities>('/capabilities'),
   list: () => request<{ images: GeneratedImage[] }>('').then((body) => body.images),
-  generate: (input: { prompt: string; modelId: string; aspect: ImageAspect; style: string; language: 'ru' | 'en' }, signal?: AbortSignal) =>
+  generate: (
+    input: {
+      prompt: string;
+      modelId: string;
+      aspect: ImageAspect;
+      style: string;
+      language: 'ru' | 'en';
+    },
+    signal?: AbortSignal,
+  ) =>
     request<{ image: GeneratedImage; replacedBy: string | null }>('/generate', {
       method: 'POST',
       body: JSON.stringify(input),

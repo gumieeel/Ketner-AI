@@ -34,9 +34,14 @@ export interface GitHubPRResponse {
 
 /** Ошибка записи: понятный текст по статусу GitHub. */
 function writeError(status: number, action: string): Error {
-  if (status === 403) return new Error(`${action}: у подключённого аккаунта GitHub нет прав на запись в этот репозиторий.`);
-  if (status === 404) return new Error(`${action}: репозиторий или ветка не найдены, либо нет доступа на запись.`);
-  if (status === 409 || status === 422) return new Error(`${action}: ветка изменилась, пока готовились правки. Отправьте ещё раз.`);
+  if (status === 403)
+    return new Error(
+      `${action}: у подключённого аккаунта GitHub нет прав на запись в этот репозиторий.`,
+    );
+  if (status === 404)
+    return new Error(`${action}: репозиторий или ветка не найдены, либо нет доступа на запись.`);
+  if (status === 409 || status === 422)
+    return new Error(`${action}: ветка изменилась, пока готовились правки. Отправьте ещё раз.`);
   return new Error(`${action} (${status})`);
 }
 
@@ -54,7 +59,9 @@ async function fetchFileAtCommit(base: string, path: string, commitSha: string):
     accept: 'application/vnd.github.raw+json',
   });
   if (!res.ok) {
-    throw new Error(`Не удалось получить актуальный файл ${path} из репозитория (${res.status}). Изменения не отправлены.`);
+    throw new Error(
+      `Не удалось получить актуальный файл ${path} из репозитория (${res.status}). Изменения не отправлены.`,
+    );
   }
   return await res.text();
 }
@@ -73,7 +80,9 @@ async function createAtomicCommit(
   for (const change of changes) {
     const checked = sanitizeChangePath(change.path);
     if (!checked.ok || checked.path !== change.path) {
-      throw new Error(`Недопустимый путь «${change.path}»: ${checked.ok ? 'путь не нормализован' : checked.reason}`);
+      throw new Error(
+        `Недопустимый путь «${change.path}»: ${checked.ok ? 'путь не нормализован' : checked.reason}`,
+      );
     }
   }
 
@@ -84,7 +93,9 @@ async function createAtomicCommit(
   const refRes = await githubFetch(`${base}/git/ref/heads/${branchPath(baseBranch)}`);
   if (!refRes.ok) {
     if (refRes.status === 404) {
-      throw new Error(`Ветка «${baseBranch}» или репозиторий «${owner}/${repo}» не найдены, либо у подключённого аккаунта GitHub нет к ним доступа.`);
+      throw new Error(
+        `Ветка «${baseBranch}» или репозиторий «${owner}/${repo}» не найдены, либо у подключённого аккаунта GitHub нет к ним доступа.`,
+      );
     }
     throw new Error(`Ошибка получения ветки GitHub (${refRes.status})`);
   }
@@ -121,7 +132,9 @@ async function createAtomicCommit(
         const fresh = await fetchFileAtCommit(base, change.path, baseCommitSha);
         const result = applyTextEdits(fresh, change.edits);
         if (!result.ok) {
-          throw new Error(`${change.path}: ${result.reason}. Изменения не отправлены, файл в репозитории не тронут.`);
+          throw new Error(
+            `${change.path}: ${result.reason}. Изменения не отправлены, файл в репозитории не тронут.`,
+          );
         }
         content = result.text;
       }
@@ -184,13 +197,22 @@ export async function commitDirectlyToGitHub(
   const { owner, repo, branch, changes } = params;
   const commitMessage = params.commitMessage || `Ketner AI: обновление ${changes.length} файлов`;
 
-  const { newCommitSha, finalContents } = await createAtomicCommit(owner, repo, branch, changes, commitMessage);
+  const { newCommitSha, finalContents } = await createAtomicCommit(
+    owner,
+    repo,
+    branch,
+    changes,
+    commitMessage,
+  );
 
   // Обновляем ссылку ветки (без force: если ветка ушла вперёд, GitHub откажет)
-  const updateRefRes = await githubFetch(`${repoPath(owner, repo)}/git/refs/heads/${branchPath(branch)}`, {
-    method: 'PATCH',
-    body: { sha: newCommitSha, force: false },
-  });
+  const updateRefRes = await githubFetch(
+    `${repoPath(owner, repo)}/git/refs/heads/${branchPath(branch)}`,
+    {
+      method: 'PATCH',
+      body: { sha: newCommitSha, force: false },
+    },
+  );
 
   if (!updateRefRes.ok) {
     throw writeError(updateRefRes.status, `Не удалось обновить ветку ${branch}`);
@@ -209,22 +231,30 @@ export async function commitDirectlyToGitHub(
 /**
  * Создаёт отдельную ветку и открывает Pull Request на GitHub.
  */
-export async function createGitHubPullRequest(
-  params: GitHubPRParams,
-): Promise<GitHubPRResponse> {
+export async function createGitHubPullRequest(params: GitHubPRParams): Promise<GitHubPRResponse> {
   const { owner, repo, branch, changes } = params;
   const newBranch = params.newBranch || `ai-patch-${Date.now().toString(36)}`;
-  const commitMessage = params.commitMessage || `Ketner AI: правки для ${changes.map((c) => c.path).join(', ')}`;
+  const commitMessage =
+    params.commitMessage || `Ketner AI: правки для ${changes.map((c) => c.path).join(', ')}`;
   const title = params.title || `Ketner AI: обновление ${changes.length} файлов`;
   const body =
     params.body ||
     `### Изменения от Ketner AI\n\nБыли внесены следующие изменения:\n` +
       changes
-        .map((c) => `- **${c.action.toUpperCase()}** \`${c.path}\`${c.description ? `: ${c.description}` : ''}`)
+        .map(
+          (c) =>
+            `- **${c.action.toUpperCase()}** \`${c.path}\`${c.description ? `: ${c.description}` : ''}`,
+        )
         .join('\n') +
       `\n\n*Сгенерировано автоматически Ketner AI Gateway.*`;
 
-  const { newCommitSha, finalContents } = await createAtomicCommit(owner, repo, branch, changes, commitMessage);
+  const { newCommitSha, finalContents } = await createAtomicCommit(
+    owner,
+    repo,
+    branch,
+    changes,
+    commitMessage,
+  );
   const base = repoPath(owner, repo);
 
   // 1. Создаём новую ветку

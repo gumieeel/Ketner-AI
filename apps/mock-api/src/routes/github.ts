@@ -64,13 +64,16 @@ function isSafePath(path: string): boolean {
     } catch {
       return false;
     }
-    if (decoded === '.' || decoded === '..' || decoded.includes('/') || decoded.includes('\\')) return false;
+    if (decoded === '.' || decoded === '..' || decoded.includes('/') || decoded.includes('\\'))
+      return false;
   }
   return true;
 }
 
 export function isAllowedGithubCall(method: string, path: string): boolean {
-  return isSafePath(path) && ALLOWED.some((rule) => rule.method === method && rule.pattern.test(path));
+  return (
+    isSafePath(path) && ALLOWED.some((rule) => rule.method === method && rule.pattern.test(path))
+  );
 }
 
 /** Небольшой предохранитель от зацикливания клиента: запросов на пользователя за окно. */
@@ -81,7 +84,11 @@ const WINDOW_LIMIT = 600;
  * Привязка аккаунта GitHub: OAuth-подключение, статус, отключение и прокси к api.github.com.
  * Токен никогда не уходит в браузер — сайт ходит в GitHub только через `/api/github/api/*`.
  */
-export function createGithubRouter({ store, settings: injected, fetchImpl: injectedFetch }: GithubRouterDeps): Router {
+export function createGithubRouter({
+  store,
+  settings: injected,
+  fetchImpl: injectedFetch,
+}: GithubRouterDeps): Router {
   const settings = injected ?? githubOAuthSettings;
   const fetchImpl = injectedFetch ?? fetch;
   const router = Router();
@@ -93,7 +100,12 @@ export function createGithubRouter({ store, settings: injected, fetchImpl: injec
       available: settings() !== null,
       connected: Boolean(connection),
       account: connection
-        ? { login: connection.login, avatarUrl: connection.avatarUrl, scopes: connection.scopes, connectedAt: connection.connectedAt }
+        ? {
+            login: connection.login,
+            avatarUrl: connection.avatarUrl,
+            scopes: connection.scopes,
+            connectedAt: connection.connectedAt,
+          }
         : null,
     };
   };
@@ -120,13 +132,23 @@ export function createGithubRouter({ store, settings: injected, fetchImpl: injec
     }
     const body = (request.body ?? {}) as { code?: unknown; state?: unknown };
     if (typeof body.code !== 'string' || typeof body.state !== 'string' || body.code.length > 200) {
-      sendError(response, 400, 'invalid_request', 'Не хватает данных от GitHub. Подключите ещё раз.');
+      sendError(
+        response,
+        400,
+        'invalid_request',
+        'Не хватает данных от GitHub. Подключите ещё раз.',
+      );
       return;
     }
     const state = readState(body.state);
     // Код обменивается только в той сессии, что начала подключение: чужую ссылку не подсунуть.
     if (!state || state.userId !== request.user!.id) {
-      sendError(response, 400, 'github_state_invalid', 'Ссылка подключения устарела или открыта в другом аккаунте. Подключите GitHub ещё раз.');
+      sendError(
+        response,
+        400,
+        'github_state_invalid',
+        'Ссылка подключения устарела или открыта в другом аккаунте. Подключите GitHub ещё раз.',
+      );
       return;
     }
     try {
@@ -148,7 +170,12 @@ export function createGithubRouter({ store, settings: injected, fetchImpl: injec
       response.json(publicStatus(request.user!.id));
     } catch (error) {
       if (error instanceof GithubOAuthError) {
-        sendError(response, error.code === 'unavailable' ? 502 : 400, `github_${error.code}`, error.message);
+        sendError(
+          response,
+          error.code === 'unavailable' ? 502 : 400,
+          `github_${error.code}`,
+          error.message,
+        );
         return;
       }
       throw error;
@@ -164,68 +191,92 @@ export function createGithubRouter({ store, settings: injected, fetchImpl: injec
     response.json(publicStatus(userId));
   });
 
-  router.use('/github/api', requireAuth, async (request: Request, response: Response, next: NextFunction) => {
-    const userId = request.user!.id;
-    const url = new URL(request.url, 'http://proxy.local');
-    const method = request.method.toUpperCase();
-    if (!isAllowedGithubCall(method, url.pathname)) {
-      sendError(response, 403, 'github_call_forbidden', 'Этот запрос к GitHub через Ketner недоступен');
-      return;
-    }
-    const token = store.tokenOf(userId);
-    if (!token) {
-      sendError(response, 409, 'github_not_connected', 'Подключите GitHub в настройках, чтобы работать с репозиториями');
-      return;
-    }
-
-    const now = Date.now();
-    const window = windows.get(userId);
-    if (!window || now - window.start > WINDOW_MS) windows.set(userId, { start: now, count: 1 });
-    else if (++window.count > WINDOW_LIMIT) {
-      sendError(response, 429, 'rate_limited', 'Слишком много запросов к GitHub подряд. Сделайте небольшую паузу.');
-      return;
-    }
-
-    const headers: Record<string, string> = githubHeaders(token);
-    const accept = request.headers.accept;
-    if (accept && ACCEPT_VALUES.has(accept)) headers.Accept = accept;
-    const hasBody = method === 'POST' || method === 'PATCH';
-    if (hasBody) headers['Content-Type'] = 'application/json';
-
-    let upstream: globalThis.Response;
-    try {
-      upstream = await fetchImpl(`https://api.github.com${url.pathname}${url.search}`, {
-        method,
-        headers,
-        body: hasBody ? JSON.stringify(request.body ?? {}) : undefined,
-        redirect: 'follow',
-        signal: AbortSignal.timeout(30_000),
-      });
-    } catch {
-      sendError(response, 502, 'github_unavailable', 'GitHub не ответил. Попробуйте ещё раз.');
-      return;
-    }
-
-    if (upstream.status === 401) {
-      // Токен отозван в настройках GitHub: подключение больше не работает, просим подключить заново.
-      store.remove(userId);
-      sendError(response, 409, 'github_reauth_required', 'Доступ к GitHub отозван. Подключите аккаунт ещё раз в настройках.');
-      return;
-    }
-
-    try {
-      const payload = Buffer.from(await upstream.arrayBuffer());
-      response.status(upstream.status);
-      for (const name of ['content-type', 'link', 'x-ratelimit-remaining', 'x-ratelimit-reset']) {
-        const value = upstream.headers.get(name);
-        if (value) response.setHeader(name, value);
+  router.use(
+    '/github/api',
+    requireAuth,
+    async (request: Request, response: Response, next: NextFunction) => {
+      const userId = request.user!.id;
+      const url = new URL(request.url, 'http://proxy.local');
+      const method = request.method.toUpperCase();
+      if (!isAllowedGithubCall(method, url.pathname)) {
+        sendError(
+          response,
+          403,
+          'github_call_forbidden',
+          'Этот запрос к GitHub через Ketner недоступен',
+        );
+        return;
       }
-      response.setHeader('Cache-Control', 'no-store');
-      response.send(payload);
-    } catch (error) {
-      next(error);
-    }
-  });
+      const token = store.tokenOf(userId);
+      if (!token) {
+        sendError(
+          response,
+          409,
+          'github_not_connected',
+          'Подключите GitHub в настройках, чтобы работать с репозиториями',
+        );
+        return;
+      }
+
+      const now = Date.now();
+      const window = windows.get(userId);
+      if (!window || now - window.start > WINDOW_MS) windows.set(userId, { start: now, count: 1 });
+      else if (++window.count > WINDOW_LIMIT) {
+        sendError(
+          response,
+          429,
+          'rate_limited',
+          'Слишком много запросов к GitHub подряд. Сделайте небольшую паузу.',
+        );
+        return;
+      }
+
+      const headers: Record<string, string> = githubHeaders(token);
+      const accept = request.headers.accept;
+      if (accept && ACCEPT_VALUES.has(accept)) headers.Accept = accept;
+      const hasBody = method === 'POST' || method === 'PATCH';
+      if (hasBody) headers['Content-Type'] = 'application/json';
+
+      let upstream: globalThis.Response;
+      try {
+        upstream = await fetchImpl(`https://api.github.com${url.pathname}${url.search}`, {
+          method,
+          headers,
+          body: hasBody ? JSON.stringify(request.body ?? {}) : undefined,
+          redirect: 'follow',
+          signal: AbortSignal.timeout(30_000),
+        });
+      } catch {
+        sendError(response, 502, 'github_unavailable', 'GitHub не ответил. Попробуйте ещё раз.');
+        return;
+      }
+
+      if (upstream.status === 401) {
+        // Токен отозван в настройках GitHub: подключение больше не работает, просим подключить заново.
+        store.remove(userId);
+        sendError(
+          response,
+          409,
+          'github_reauth_required',
+          'Доступ к GitHub отозван. Подключите аккаунт ещё раз в настройках.',
+        );
+        return;
+      }
+
+      try {
+        const payload = Buffer.from(await upstream.arrayBuffer());
+        response.status(upstream.status);
+        for (const name of ['content-type', 'link', 'x-ratelimit-remaining', 'x-ratelimit-reset']) {
+          const value = upstream.headers.get(name);
+          if (value) response.setHeader(name, value);
+        }
+        response.setHeader('Cache-Control', 'no-store');
+        response.send(payload);
+      } catch (error) {
+        next(error);
+      }
+    },
+  );
 
   return router;
 }
@@ -246,9 +297,15 @@ export function createGithubCallbackHandler() {
     const error = typeof request.query.error === 'string' ? request.query.error : '';
     const code = typeof request.query.code === 'string' ? request.query.code : '';
     if (error || !code) {
-      response.redirect(302, withFragment(returnTo, { github_error: error === 'access_denied' ? 'denied' : 'failed' }));
+      response.redirect(
+        302,
+        withFragment(returnTo, { github_error: error === 'access_denied' ? 'denied' : 'failed' }),
+      );
       return;
     }
-    response.redirect(302, withFragment(returnTo, { github_code: code, github_state: String(request.query.state) }));
+    response.redirect(
+      302,
+      withFragment(returnTo, { github_code: code, github_state: String(request.query.state) }),
+    );
   };
 }

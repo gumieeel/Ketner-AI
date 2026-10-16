@@ -164,5 +164,6 @@ export function paidImageBudget(plan: string): number {
   return PAID_IMAGE_BUDGET_USD[PLAN_KEY[plan] ?? 'free'];
 }
 
-export const PAID_IMAGE_MODEL_IDS: readonly string[] = IMAGE_MODELS.filter((m) => m.provider === 'runware').map((m) => m.id);
-
+export const PAID_IMAGE_MODEL_IDS: readonly string[] = IMAGE_MODELS.filter(
+  (m) => m.provider === 'runware',
+).map((m) => m.id);

@@ -23,11 +23,16 @@ export async function syncBetterAuthCredential(
   const ctx = await auth.$context;
   const found = await ctx.internalAdapter.findUserByEmail(normalized, { includeAccounts: true });
   if (!found) {
-    await auth.api.signUpEmail({ body: { email: normalized, password, name: name || normalized.split('@')[0] } });
+    await auth.api.signUpEmail({
+      body: { email: normalized, password, name: name || normalized.split('@')[0] },
+    });
     return;
   }
   const credential = found.accounts.find((account) => account.providerId === 'credential');
-  if (credential?.password && (await ctx.password.verify({ hash: credential.password, password }))) {
+  if (
+    credential?.password &&
+    (await ctx.password.verify({ hash: credential.password, password }))
+  ) {
     return;
   }
   const hash = await ctx.password.hash(password);

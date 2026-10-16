@@ -40,7 +40,8 @@ export function errorHandler(
   _next: NextFunction,
 ): void {
   // Ошибки разбора тела (битый JSON, слишком большой запрос) — это 4xx, а не сбой сервера.
-  const status = (error as { status?: unknown; statusCode?: unknown } | null)?.status ??
+  const status =
+    (error as { status?: unknown; statusCode?: unknown } | null)?.status ??
     (error as { statusCode?: unknown } | null)?.statusCode;
   if (typeof status === 'number' && status >= 400 && status < 500) {
     sendError(
@@ -54,6 +55,7 @@ export function errorHandler(
   console.error('[mock-api] необработанная ошибка:', error);
   if (response.headersSent) return;
   // Текст внутренней ошибки (пути, сообщения драйвера БД) наружу не отдаётся — только в лог.
-  const message = !isProduction && error instanceof Error ? error.message : 'Внутренняя ошибка сервера';
+  const message =
+    !isProduction && error instanceof Error ? error.message : 'Внутренняя ошибка сервера';
   sendError(response, 500, 'internal_error', message);
 }

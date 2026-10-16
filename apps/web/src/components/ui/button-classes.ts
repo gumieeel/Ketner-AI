@@ -6,8 +6,10 @@ export type ButtonSize = 'sm' | 'md' | 'lg';
 const variantClasses: Record<ButtonVariant, string> = {
   // Пастельный нефрит с тёмным текстом. Без свечения и подпрыгивания: на hover — светлее.
   primary: 'bg-brand-gradient text-accent-text hover:bg-action-hover active:brightness-95',
-  secondary: 'border border-stroke bg-surface-2 text-text hover:border-stroke-strong hover:bg-surface-3',
-  outline: 'border border-stroke-strong bg-transparent text-text hover:border-muted/60 hover:bg-surface-2',
+  secondary:
+    'border border-stroke bg-surface-2 text-text hover:border-stroke-strong hover:bg-surface-3',
+  outline:
+    'border border-stroke-strong bg-transparent text-text hover:border-muted/60 hover:bg-surface-2',
   ghost: 'text-muted hover:bg-surface-2 hover:text-text active:bg-surface-3',
   danger: 'bg-danger-solid text-danger-solid-text hover:bg-danger-solid-hover active:brightness-95',
   // Тёмная кнопка для нефритовых панелей — одинакова в обеих темах.

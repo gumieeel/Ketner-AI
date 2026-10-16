@@ -1,6 +1,15 @@
 import { useEffect, useState, type CSSProperties, type KeyboardEvent } from 'react';
 import { Link } from 'react-router-dom';
-import { AlertIcon, DownloadIcon, ImageIcon, InfoIcon, LockIcon, RefreshIcon, SparkleIcon, TrashIcon } from '@/components/icons';
+import {
+  AlertIcon,
+  DownloadIcon,
+  ImageIcon,
+  InfoIcon,
+  LockIcon,
+  RefreshIcon,
+  SparkleIcon,
+  TrashIcon,
+} from '@/components/icons';
 import { ImagesHelp } from '@/components/images/images-help';
 import { StylePicker } from '@/components/images/style-picker';
 import { IMAGE_STYLE_IDS } from '@/features/images/styles';
@@ -14,7 +23,13 @@ import { useTranslation } from '@/i18n';
 import { cn } from '@/lib/cn';
 
 const ASPECTS: readonly ImageAspect[] = ['1:1', '4:3', '3:4', '16:9', '9:16'];
-const RATIO: Record<ImageAspect, string> = { '1:1': '1 / 1', '4:3': '4 / 3', '3:4': '3 / 4', '16:9': '16 / 9', '9:16': '9 / 16' };
+const RATIO: Record<ImageAspect, string> = {
+  '1:1': '1 / 1',
+  '4:3': '4 / 3',
+  '3:4': '3 / 4',
+  '16:9': '16 / 9',
+  '9:16': '9 / 16',
+};
 const UPGRADE_CODES = new Set(['upgrade_required', 'image_limit', 'fair_use_exceeded']);
 
 /** Маленькая иконка пропорции: прямоугольник нужной формы. */
@@ -23,7 +38,10 @@ function AspectGlyph({ aspect }: { aspect: ImageAspect }) {
   const scale = 12 / Math.max(w, h);
   return (
     <span aria-hidden="true" className="grid size-4 place-items-center">
-      <span className="block rounded-[2px] border-[1.5px] border-current" style={{ width: w * scale, height: h * scale }} />
+      <span
+        className="block rounded-[2px] border-[1.5px] border-current"
+        style={{ width: w * scale, height: h * scale }}
+      />
     </span>
   );
 }
@@ -46,7 +64,13 @@ function ImageCard({ image }: { image: GeneratedImage }) {
   const url = resolveImageUrl(image.url);
   return (
     <figure className="group relative overflow-hidden rounded-xl border border-stroke bg-surface">
-      <a href={url} target="_blank" rel="noreferrer" aria-label={t('images.open')} className="block">
+      <a
+        href={url}
+        target="_blank"
+        rel="noreferrer"
+        aria-label={t('images.open')}
+        className="block"
+      >
         <img
           src={url}
           alt={image.prompt}
@@ -151,7 +175,9 @@ export function ImagesPage() {
   if (status === 'error') {
     return (
       <div className="mx-auto flex max-w-md flex-col items-center gap-3 p-10 text-center">
-        <p role="alert" className="text-sm text-danger">{t('images.loadError')}</p>
+        <p role="alert" className="text-sm text-danger">
+          {t('images.loadError')}
+        </p>
         <Button variant="outline" onClick={() => void load()}>
           {t('common.retry')}
         </Button>
@@ -168,9 +194,12 @@ export function ImagesPage() {
   }
 
   const model = capabilities.models.find((m) => m.id === modelId) ?? capabilities.models[0];
-  const styles = capabilities.styles ? IMAGE_STYLE_IDS.filter((id) => capabilities.styles?.includes(id)) : IMAGE_STYLE_IDS;
+  const styles = capabilities.styles
+    ? IMAGE_STYLE_IDS.filter((id) => capabilities.styles?.includes(id))
+    : IMAGE_STYLE_IDS;
   const maxChars = capabilities.maxPromptChars;
-  const canGenerate = capabilities.available && prompt.trim().length > 0 && !generating && !model?.locked;
+  const canGenerate =
+    capabilities.available && prompt.trim().length > 0 && !generating && !model?.locked;
   const onKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>): void => {
     if (event.key === 'Enter' && (event.metaKey || event.ctrlKey)) {
       event.preventDefault();
@@ -184,14 +213,24 @@ export function ImagesPage() {
       <div className="mx-auto flex w-full max-w-6xl flex-col gap-6 px-4 py-6 md:px-6 md:py-8">
         <header className="flex items-start justify-between gap-3">
           <div className="flex min-w-0 flex-col gap-1">
-            <h2 className="text-xl font-semibold tracking-tight text-text md:text-2xl">{t('images.title')}</h2>
+            <h2 className="text-xl font-semibold tracking-tight text-text md:text-2xl">
+              {t('images.title')}
+            </h2>
             <p className="text-[14px] text-muted">{t('images.subtitle')}</p>
           </div>
-          <Button variant="outline" size="md" className="shrink-0" leftIcon={<InfoIcon className="size-4" />} onClick={() => setHelpOpen(true)}>
+          <Button
+            variant="outline"
+            size="md"
+            className="shrink-0"
+            leftIcon={<InfoIcon className="size-4" />}
+            onClick={() => setHelpOpen(true)}
+          >
             {t('images.help.open')}
           </Button>
         </header>
-        {helpOpen ? <ImagesHelp models={capabilities.models} onClose={() => setHelpOpen(false)} /> : null}
+        {helpOpen ? (
+          <ImagesHelp models={capabilities.models} onClose={() => setHelpOpen(false)} />
+        ) : null}
 
         <section className="flex flex-col gap-3 rounded-2xl border border-stroke bg-surface p-3 shadow-sm md:p-4">
           <textarea
@@ -214,7 +253,9 @@ export function ImagesPage() {
           <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
             <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-end">
               <fieldset className="flex flex-col gap-1.5">
-                <legend className="mb-1.5 text-xs font-medium text-muted">{t('images.model')}</legend>
+                <legend className="mb-1.5 text-xs font-medium text-muted">
+                  {t('images.model')}
+                </legend>
                 <div className="flex flex-wrap gap-1.5">
                   {capabilities.models.map((m) => (
                     <button
@@ -223,17 +264,25 @@ export function ImagesPage() {
                       aria-pressed={m.id === modelId}
                       disabled={generating}
                       onClick={() => setModel(m.id)}
-                      title={m.locked ? t('images.lockedPlan', { plan: m.requiredPlan.toUpperCase() }) : undefined}
+                      title={
+                        m.locked
+                          ? t('images.lockedPlan', { plan: m.requiredPlan.toUpperCase() })
+                          : undefined
+                      }
                       className={cn(
                         'inline-flex min-h-10 items-center gap-1.5 rounded-lg border px-3 text-[13px] font-medium transition-colors',
-                        m.id === modelId ? 'border-accent/50 bg-accent-soft text-accent' : 'border-stroke text-text hover:bg-surface-2',
+                        m.id === modelId
+                          ? 'border-accent/50 bg-accent-soft text-accent'
+                          : 'border-stroke text-text hover:bg-surface-2',
                         m.locked && 'text-muted',
                       )}
                     >
                       {m.locked ? <LockIcon className="size-3.5" aria-hidden="true" /> : null}
                       {m.name}
                       {m.locked ? (
-                        <span className="text-[11px] text-subtle">{t('images.lockedPlan', { plan: m.requiredPlan.toUpperCase() })}</span>
+                        <span className="text-[11px] text-subtle">
+                          {t('images.lockedPlan', { plan: m.requiredPlan.toUpperCase() })}
+                        </span>
                       ) : null}
                     </button>
                   ))}
@@ -241,7 +290,9 @@ export function ImagesPage() {
               </fieldset>
 
               <fieldset className="flex flex-col gap-1.5">
-                <legend className="mb-1.5 text-xs font-medium text-muted">{t('images.aspect')}</legend>
+                <legend className="mb-1.5 text-xs font-medium text-muted">
+                  {t('images.aspect')}
+                </legend>
                 <div className="flex flex-wrap gap-1.5">
                   {ASPECTS.map((value) => {
                     const supported = Boolean(model?.aspects.includes(value));
@@ -255,7 +306,9 @@ export function ImagesPage() {
                         title={supported ? value : t('images.squareOnly')}
                         className={cn(
                           'inline-flex min-h-10 items-center gap-1.5 rounded-lg border px-2.5 text-[13px] tabular transition-colors disabled:cursor-not-allowed disabled:opacity-40',
-                          value === aspect && supported ? 'border-accent/50 bg-accent-soft text-accent' : 'border-stroke text-text hover:bg-surface-2',
+                          value === aspect && supported
+                            ? 'border-accent/50 bg-accent-soft text-accent'
+                            : 'border-stroke text-text hover:bg-surface-2',
                         )}
                       >
                         <AspectGlyph aspect={value} />
@@ -273,7 +326,9 @@ export function ImagesPage() {
                 size="lg"
                 onClick={() => void generate()}
                 disabled={!canGenerate}
-                leftIcon={generating ? <Spinner className="size-4" /> : <SparkleIcon className="size-4" />}
+                leftIcon={
+                  generating ? <Spinner className="size-4" /> : <SparkleIcon className="size-4" />
+                }
               >
                 {generating ? t('images.generating') : t('images.generate')}
               </Button>
@@ -281,13 +336,17 @@ export function ImagesPage() {
           </div>
 
           {!capabilities.available ? (
-            <p role="status" className="flex items-center gap-2 rounded-lg bg-surface-2 px-3 py-2 text-[13px] text-muted">
+            <p
+              role="status"
+              className="flex items-center gap-2 rounded-lg bg-surface-2 px-3 py-2 text-[13px] text-muted"
+            >
               <InfoIcon className="size-4 shrink-0" /> {t('images.unavailable')}
             </p>
           ) : null}
           {model?.locked ? (
             <p className="flex flex-wrap items-center gap-2 text-[13px] text-muted">
-              <LockIcon className="size-3.5" /> {t('images.lockedPlan', { plan: model.requiredPlan.toUpperCase() })}
+              <LockIcon className="size-3.5" />{' '}
+              {t('images.lockedPlan', { plan: model.requiredPlan.toUpperCase() })}
               <Link to="/pricing" className="font-medium text-accent hover:underline">
                 {t('images.upgrade')}
               </Link>
@@ -301,7 +360,11 @@ export function ImagesPage() {
                 notice.tone === 'error' ? 'bg-danger-soft text-danger' : 'bg-surface-2 text-muted',
               )}
             >
-              {notice.tone === 'error' ? <AlertIcon className="mt-0.5 size-4 shrink-0" /> : <InfoIcon className="mt-0.5 size-4 shrink-0" />}
+              {notice.tone === 'error' ? (
+                <AlertIcon className="mt-0.5 size-4 shrink-0" />
+              ) : (
+                <InfoIcon className="mt-0.5 size-4 shrink-0" />
+              )}
               <span className="min-w-0 flex-1">
                 {notice.text}
                 {notice.code && UPGRADE_CODES.has(notice.code) ? (
@@ -313,7 +376,12 @@ export function ImagesPage() {
                   </>
                 ) : null}
               </span>
-              <button type="button" onClick={dismissNotice} aria-label={t('chat.close')} className="shrink-0 rounded px-1 text-current opacity-70 hover:opacity-100">
+              <button
+                type="button"
+                onClick={dismissNotice}
+                aria-label={t('chat.close')}
+                className="shrink-0 rounded px-1 text-current opacity-70 hover:opacity-100"
+              >
                 ×
               </button>
             </div>
@@ -342,7 +410,10 @@ export function ImagesPage() {
             </div>
           </section>
         ) : (
-          <section aria-label={t('images.title')} className="columns-2 gap-3 md:columns-3 xl:columns-4 [&>*]:mb-3 [&>*]:break-inside-avoid">
+          <section
+            aria-label={t('images.title')}
+            className="columns-2 gap-3 md:columns-3 xl:columns-4 [&>*]:mb-3 [&>*]:break-inside-avoid"
+          >
             {generating && pendingAspect ? (
               <div
                 role="status"

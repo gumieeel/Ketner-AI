@@ -17,7 +17,13 @@ export interface ImageGenerator {
   readonly available: boolean;
   /** Может ли генератор нарисовать картинку этой моделью (провайдер настроен). Нет метода — может любой. */
   supports?(model: ImageModel): boolean;
-  generate(input: { model: ImageModel; prompt: string; width: number; height: number; signal?: AbortSignal }): Promise<GeneratedImage>;
+  generate(input: {
+    model: ImageModel;
+    prompt: string;
+    width: number;
+    height: number;
+    signal?: AbortSignal;
+  }): Promise<GeneratedImage>;
 }
 
 export class ImageProviderError extends Error {
@@ -64,7 +70,10 @@ export function createCloudflareGenerator(options: {
       });
       const text = await response.text();
       if (!response.ok) {
-        throw new ImageProviderError(`Workers AI HTTP ${response.status}: ${text.slice(0, 300)}`, response.status);
+        throw new ImageProviderError(
+          `Workers AI HTTP ${response.status}: ${text.slice(0, 300)}`,
+          response.status,
+        );
       }
       let image: unknown;
       try {

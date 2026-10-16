@@ -39,8 +39,14 @@ test('pricing: Stripe берёт центы, СБП рубли, Stars сходя
     if (plan.priceMonthly <= 0) continue;
     // Звёзды считаются от цены в долларах по курсу Stars: по тому же курсу это не меньше цены тарифа.
     const stars = calculateStars(plan.priceMonthly);
-    assert.ok(stars * 0.015 >= plan.priceMonthly, `${plan.id}: ${stars} ⭐ дешевле $${plan.priceMonthly}`);
-    assert.ok(stars * 0.015 < plan.priceMonthly + 0.2, `${plan.id}: ${stars} ⭐ заметно дороже $${plan.priceMonthly}`);
+    assert.ok(
+      stars * 0.015 >= plan.priceMonthly,
+      `${plan.id}: ${stars} ⭐ дешевле $${plan.priceMonthly}`,
+    );
+    assert.ok(
+      stars * 0.015 < plan.priceMonthly + 0.2,
+      `${plan.id}: ${stars} ⭐ заметно дороже $${plan.priceMonthly}`,
+    );
     assert.equal(stars % 10, 0, 'цена в звёздах округляется до 10');
   }
 });
@@ -66,14 +72,19 @@ test('pricing: старые тарифы платят прежние 1199 ₽ (�
 test('pricing: цены на сайте (apps/web/.../plans.ts) совпадают с бэкендом', (t) => {
   // Сайт и сервер хранят каталог раздельно, и однажды они разошлись (доллары против рублей).
   // Тест читает исходник каталога сайта и сравнивает цены платных тарифов и скидочную цену Ultra.
-  const webPlans = resolve(dirname(fileURLToPath(import.meta.url)), '../../../web/src/features/billing/plans.ts');
+  const webPlans = resolve(
+    dirname(fileURLToPath(import.meta.url)),
+    '../../../web/src/features/billing/plans.ts',
+  );
   if (!existsSync(webPlans)) {
     t.skip('исходники сайта недоступны в этом окружении');
     return;
   }
   const source = readFileSync(webPlans, 'utf8');
   const priceOf = (id: string): number | undefined => {
-    const block = source.match(new RegExp(`id: '${id}',[\\s\\S]*?priceMonthly: (\\d+(?:\\.\\d+)?)`));
+    const block = source.match(
+      new RegExp(`id: '${id}',[\\s\\S]*?priceMonthly: (\\d+(?:\\.\\d+)?)`),
+    );
     return block ? Number(block[1]) : undefined;
   };
   assert.equal(priceOf('free'), PLAN_PRICE_USD.free);

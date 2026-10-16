@@ -3,7 +3,8 @@ import { ChevronRightIcon } from '@/components/icons';
 import { useTranslation, type TranslationKey } from '@/i18n';
 import { cn } from '@/lib/cn';
 
-const FADE = 'linear-gradient(to right, transparent, black 48px, black calc(100% - 48px), transparent)';
+const FADE =
+  'linear-gradient(to right, transparent, black 48px, black calc(100% - 48px), transparent)';
 const FADE_LEFT = 'linear-gradient(to right, transparent, black 48px)';
 const FADE_RIGHT = 'linear-gradient(to right, black calc(100% - 48px), transparent)';
 
@@ -29,7 +30,10 @@ export function StylePicker({
   const update = useCallback(() => {
     const el = scroller.current;
     if (!el) return;
-    setEdges({ left: el.scrollLeft > 2, right: el.scrollLeft + el.clientWidth < el.scrollWidth - 2 });
+    setEdges({
+      left: el.scrollLeft > 2,
+      right: el.scrollLeft + el.clientWidth < el.scrollWidth - 2,
+    });
   }, []);
 
   useEffect(() => {
@@ -61,14 +65,26 @@ export function StylePicker({
     el.scrollBy?.({ left: direction * Math.max(160, el.clientWidth * 0.7), behavior: 'smooth' });
   };
 
-  const mask = edges.left && edges.right ? FADE : edges.left ? FADE_LEFT : edges.right ? FADE_RIGHT : undefined;
+  const mask =
+    edges.left && edges.right
+      ? FADE
+      : edges.left
+        ? FADE_LEFT
+        : edges.right
+          ? FADE_RIGHT
+          : undefined;
   const arrow =
     'absolute top-1/2 z-10 grid size-9 -translate-y-1/2 place-items-center rounded-full border border-stroke bg-surface text-text shadow-md transition-colors hover:bg-surface-2';
 
   return (
     <div className="relative">
       {edges.left ? (
-        <button type="button" aria-label={t('images.style.prev')} onClick={() => scrollBy(-1)} className={cn(arrow, 'left-0')}>
+        <button
+          type="button"
+          aria-label={t('images.style.prev')}
+          onClick={() => scrollBy(-1)}
+          className={cn(arrow, 'left-0')}
+        >
           <ChevronRightIcon className="size-4 rotate-180" />
         </button>
       ) : null}
@@ -89,7 +105,11 @@ export function StylePicker({
               onClick={(event) => {
                 onChange(id);
                 // Нажатый стиль выезжает в середину строки, чтобы не оставаться под стрелкой.
-                event.currentTarget.scrollIntoView?.({ behavior: 'smooth', inline: 'center', block: 'nearest' });
+                event.currentTarget.scrollIntoView?.({
+                  behavior: 'smooth',
+                  inline: 'center',
+                  block: 'nearest',
+                });
               }}
               className={cn(
                 'h-10 shrink-0 rounded-md border px-4 text-[14px] font-medium whitespace-nowrap transition-colors disabled:opacity-60',
@@ -104,7 +124,12 @@ export function StylePicker({
         })}
       </div>
       {edges.right ? (
-        <button type="button" aria-label={t('images.style.next')} onClick={() => scrollBy(1)} className={cn(arrow, 'right-0')}>
+        <button
+          type="button"
+          aria-label={t('images.style.next')}
+          onClick={() => scrollBy(1)}
+          className={cn(arrow, 'right-0')}
+        >
           <ChevronRightIcon className="size-4" />
         </button>
       ) : null}

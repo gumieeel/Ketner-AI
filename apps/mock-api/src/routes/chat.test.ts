@@ -217,7 +217,11 @@ test('пользователь с тарифом Pro имеет доступ к�
     const regRes = await fetch(`${server.baseUrl}/api/auth/signup`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email: 'pro-user@example.com', password: 'password123', name: 'Pro User' }),
+      body: JSON.stringify({
+        email: 'pro-user@example.com',
+        password: 'password123',
+        name: 'Pro User',
+      }),
     });
     const { token } = (await regRes.json()) as { token: string };
 
@@ -324,4 +328,3 @@ test('POST /api/chat/feedback сохраняет оценку ответа и GE
     await server.close();
   }
 });
-

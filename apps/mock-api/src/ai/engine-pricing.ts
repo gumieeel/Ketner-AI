@@ -56,7 +56,11 @@ export interface RequestCost {
 }
 
 export function computeRequestCost(input: RequestCostInput): RequestCost {
-  if (typeof input.providerCost === 'number' && Number.isFinite(input.providerCost) && input.providerCost >= 0) {
+  if (
+    typeof input.providerCost === 'number' &&
+    Number.isFinite(input.providerCost) &&
+    input.providerCost >= 0
+  ) {
     return { usd: Number(input.providerCost.toFixed(6)), source: 'provider' };
   }
   const pricing = effectivePricing(input.model, input.engineId);

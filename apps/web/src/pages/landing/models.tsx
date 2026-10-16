@@ -43,7 +43,11 @@ export function LandingModels() {
   const { t } = useTranslation();
 
   return (
-    <section aria-labelledby="models-title" id="models" className="w-full scroll-mt-20 pt-28 md:pt-36">
+    <section
+      aria-labelledby="models-title"
+      id="models"
+      className="w-full scroll-mt-20 pt-28 md:pt-36"
+    >
       <SectionHead id="models-title" title={t('home.modelsTitle')} lead={t('home.modelsLead')} />
 
       <div className="mt-12 overflow-hidden rounded-xl border border-stroke bg-surface">
@@ -51,9 +55,15 @@ export function LandingModels() {
           <caption className="sr-only">{t('home.modelsTitle')}</caption>
           <thead className="max-md:hidden">
             <tr className="border-b border-stroke text-[13px] text-subtle">
-              <th scope="col" className="px-6 py-4 font-normal">{t('home.modelsColModel')}</th>
-              <th scope="col" className="px-4 py-4 font-normal">{t('home.modelsColGood')}</th>
-              <th scope="col" className="px-6 py-4 text-right font-normal">{t('home.modelsColFrom')}</th>
+              <th scope="col" className="px-6 py-4 font-normal">
+                {t('home.modelsColModel')}
+              </th>
+              <th scope="col" className="px-4 py-4 font-normal">
+                {t('home.modelsColGood')}
+              </th>
+              <th scope="col" className="px-6 py-4 text-right font-normal">
+                {t('home.modelsColFrom')}
+              </th>
             </tr>
           </thead>
           <tbody>

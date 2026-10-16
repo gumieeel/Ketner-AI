@@ -82,9 +82,12 @@ test('admin: метрики провайдеров, статистика и ре
     assert.ok(typeof usageBody.stats.totalRequests === 'number');
 
     // Profitability with manual override
-    const profRes = await fetch(`${server.baseUrl}/api/admin/profitability/demo-user?planPrice=39.99`, {
-      headers,
-    });
+    const profRes = await fetch(
+      `${server.baseUrl}/api/admin/profitability/demo-user?planPrice=39.99`,
+      {
+        headers,
+      },
+    );
     assert.equal(profRes.status, 200);
     const profBody = (await profRes.json()) as {
       profitability: { userId: string; subscriptionRevenue: number; status: string; plan: string };
@@ -99,7 +102,12 @@ test('admin: метрики провайдеров, статистика и ре
     });
     assert.equal(autoProfRes.status, 200);
     const autoProfBody = (await autoProfRes.json()) as {
-      profitability: { userId: string; subscriptionRevenue: number; plan: string; priceRub: number };
+      profitability: {
+        userId: string;
+        subscriptionRevenue: number;
+        plan: string;
+        priceRub: number;
+      };
     };
     assert.equal(autoProfBody.profitability.userId, 'demo-user');
     assert.equal(autoProfBody.profitability.plan, 'free');
@@ -246,9 +254,24 @@ test('admin: GET /api/admin/users — список, пагинация, филь
         isVip: boolean;
         isAdmin: boolean;
         createdAt: string;
-        usage: { requestsToday: number; tokensToday: number; costToday: number; costThisMonth: number };
-        limits: { requestsPerDay: number | null; tokensPerDay: number | null; maxDailyCost: number | null; costBudget: number | null };
-        remaining: { requestsToday: number | null; tokensToday: number | null; costToday: number | null; costThisMonth: number | null };
+        usage: {
+          requestsToday: number;
+          tokensToday: number;
+          costToday: number;
+          costThisMonth: number;
+        };
+        limits: {
+          requestsPerDay: number | null;
+          tokensPerDay: number | null;
+          maxDailyCost: number | null;
+          costBudget: number | null;
+        };
+        remaining: {
+          requestsToday: number | null;
+          tokensToday: number | null;
+          costToday: number | null;
+          costThisMonth: number | null;
+        };
         budgetUsedPct: number;
       }>;
       total: number;
@@ -275,21 +298,32 @@ test('admin: GET /api/admin/users — список, пагинация, филь
     // 4. Поиск по подстроке `search=alice`
     const searchRes = await fetch(`${server.baseUrl}/api/admin/users?search=alice`, { headers });
     assert.equal(searchRes.status, 200);
-    const searchBody = (await searchRes.json()) as { users: Array<{ email: string }>; total: number };
+    const searchBody = (await searchRes.json()) as {
+      users: Array<{ email: string }>;
+      total: number;
+    };
     assert.equal(searchBody.total, 1);
     assert.equal(searchBody.users[0].email, 'alice@example.com');
 
     // 5. Фильтр по тарифу `plan=pro`
     const planRes = await fetch(`${server.baseUrl}/api/admin/users?plan=pro`, { headers });
     assert.equal(planRes.status, 200);
-    const planBody = (await planRes.json()) as { users: Array<{ email: string; plan: string }>; total: number };
+    const planBody = (await planRes.json()) as {
+      users: Array<{ email: string; plan: string }>;
+      total: number;
+    };
     assert.ok(planBody.users.every((u) => u.plan === 'pro'));
     assert.ok(planBody.users.some((u) => u.email === 'bob@example.com'));
 
     // 6. Пагинация `page=1&pageSize=2`
     const pageRes = await fetch(`${server.baseUrl}/api/admin/users?page=1&pageSize=2`, { headers });
     assert.equal(pageRes.status, 200);
-    const pageBody = (await pageRes.json()) as { users: Array<unknown>; total: number; pageSize: number; totalPages: number };
+    const pageBody = (await pageRes.json()) as {
+      users: Array<unknown>;
+      total: number;
+      pageSize: number;
+      totalPages: number;
+    };
     assert.equal(pageBody.users.length, 2);
     assert.equal(pageBody.pageSize, 2);
     assert.ok(pageBody.totalPages >= 2);
@@ -305,7 +339,9 @@ test('admin: GET /api/admin/users/:id — детальная карточка п
     const headers = { 'x-admin-key': config.adminApiKey };
 
     // 1. Несуществующий пользователь -> 404
-    const notFoundRes = await fetch(`${server.baseUrl}/api/admin/users/non-existent-user-123`, { headers });
+    const notFoundRes = await fetch(`${server.baseUrl}/api/admin/users/non-existent-user-123`, {
+      headers,
+    });
     assert.equal(notFoundRes.status, 404);
     const notFoundBody = (await notFoundRes.json()) as { error: { code: string } };
     assert.equal(notFoundBody.error.code, 'user_not_found');
@@ -346,7 +382,12 @@ test('admin: GET /api/admin/users/:id — детальная карточка п
         costThisMonth: number | null;
       };
       budgetUsedPct: number;
-      profitability: { userId: string; subscriptionRevenue: number; aiCost: number; status: string };
+      profitability: {
+        userId: string;
+        subscriptionRevenue: number;
+        aiCost: number;
+        status: string;
+      };
       recentRequests: unknown[];
     };
 
@@ -408,11 +449,18 @@ test('admin: GET /api/admin/users/:id — детальная карточка п
     assert.ok(events.length > 0);
 
     // Проверяем детальную карточку активного пользователя
-    const activeRes = await fetch(`${server.baseUrl}/api/admin/users/${createdUser.id}`, { headers });
+    const activeRes = await fetch(`${server.baseUrl}/api/admin/users/${createdUser.id}`, {
+      headers,
+    });
     assert.equal(activeRes.status, 200);
     const activeBody = (await activeRes.json()) as {
       usage: { requestsToday: number; tokensToday: number; costToday: number };
-      recentRequests: Array<{ id: string; userId: string; inputTokens: number; outputTokens: number }>;
+      recentRequests: Array<{
+        id: string;
+        userId: string;
+        inputTokens: number;
+        outputTokens: number;
+      }>;
     };
 
     assert.ok(activeBody.usage.requestsToday >= 1);
@@ -449,7 +497,10 @@ test('admin: PATCH /api/admin/users/:id — обновление плана, VIP
       body: JSON.stringify({ plan: 'pro' }),
     });
     assert.equal(patchPlanRes.status, 200);
-    const patchPlanBody = (await patchPlanRes.json()) as { success: boolean; user: { plan: string } };
+    const patchPlanBody = (await patchPlanRes.json()) as {
+      success: boolean;
+      user: { plan: string };
+    };
     assert.equal(patchPlanBody.success, true);
     assert.equal(patchPlanBody.user.plan, 'pro');
 
@@ -670,5 +721,3 @@ test('admin: circuit breaker мониторинг GET /api/admin/circuit-breaker
     await server.close();
   }
 });
-
-

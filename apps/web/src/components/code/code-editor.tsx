@@ -15,7 +15,14 @@ interface CodeEditorProps {
  * через агента, а ручной редактор нужен для быстрых исправлений. Tab вставляет отступ,
  * Ctrl/Cmd+S сохраняет.
  */
-export function CodeEditor({ path, value, readOnly, onChange, onSave, className }: CodeEditorProps) {
+export function CodeEditor({
+  path,
+  value,
+  readOnly,
+  onChange,
+  onSave,
+  className,
+}: CodeEditorProps) {
   const areaRef = useRef<HTMLTextAreaElement | null>(null);
   const gutterRef = useRef<HTMLPreElement | null>(null);
 
@@ -25,7 +32,10 @@ export function CodeEditor({ path, value, readOnly, onChange, onSave, className 
     return count;
   }, [value]);
 
-  const numbers = useMemo(() => Array.from({ length: lineCount }, (_, i) => i + 1).join('\n'), [lineCount]);
+  const numbers = useMemo(
+    () => Array.from({ length: lineCount }, (_, i) => i + 1).join('\n'),
+    [lineCount],
+  );
 
   useEffect(() => {
     if (areaRef.current) areaRef.current.scrollTop = 0;
@@ -51,7 +61,12 @@ export function CodeEditor({ path, value, readOnly, onChange, onSave, className 
   };
 
   return (
-    <div className={cn('flex min-h-0 flex-1 overflow-hidden bg-canvas font-mono text-[13px] leading-5', className)}>
+    <div
+      className={cn(
+        'flex min-h-0 flex-1 overflow-hidden bg-canvas font-mono text-[13px] leading-5',
+        className,
+      )}
+    >
       <pre
         ref={gutterRef}
         aria-hidden="true"

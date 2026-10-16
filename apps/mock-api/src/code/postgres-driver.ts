@@ -40,7 +40,9 @@ export const CODE_SCHEMA_SQL = `
 `;
 
 export async function ensureCodeSchema(runner: SqlRunner): Promise<void> {
-  for (const statement of CODE_SCHEMA_SQL.split(';').map((part) => part.trim()).filter(Boolean)) {
+  for (const statement of CODE_SCHEMA_SQL.split(';')
+    .map((part) => part.trim())
+    .filter(Boolean)) {
     await runner.query(statement);
   }
 }
@@ -141,11 +143,10 @@ export function createPostgresProjectDriver(runner: SqlRunner): ProjectDbDriver 
     },
 
     async saveThread(userId, projectId, thread) {
-      await runner.query('UPDATE code_projects SET thread = $3::jsonb WHERE id = $1 AND user_id = $2', [
-        projectId,
-        userId,
-        JSON.stringify(thread),
-      ]);
+      await runner.query(
+        'UPDATE code_projects SET thread = $3::jsonb WHERE id = $1 AND user_id = $2',
+        [projectId, userId, JSON.stringify(thread)],
+      );
     },
 
     async deleteProject(userId, projectId) {
@@ -153,7 +154,10 @@ export function createPostgresProjectDriver(runner: SqlRunner): ProjectDbDriver 
         'DELETE FROM code_project_files WHERE project_id = $1 AND EXISTS (SELECT 1 FROM code_projects WHERE id = $1 AND user_id = $2)',
         [projectId, userId],
       );
-      await runner.query('DELETE FROM code_projects WHERE id = $1 AND user_id = $2', [projectId, userId]);
+      await runner.query('DELETE FROM code_projects WHERE id = $1 AND user_id = $2', [
+        projectId,
+        userId,
+      ]);
     },
 
     async saveFile(userId, projectId, file) {

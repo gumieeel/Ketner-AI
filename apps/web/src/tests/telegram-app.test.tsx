@@ -44,9 +44,27 @@ function makeState(overrides: Partial<MiniAppState> = {}): MiniAppState {
     subscription: { plan: 'pro', status: 'active', renewsAt: inDays(12) },
     autoRenew: null,
     plans: [
-      { id: 'plus', title: 'Plus', priceUsd: 9, stars: 600, preview: { mode: 'switch', renewsAt: inDays(30), bonusDays: 33 } },
-      { id: 'pro', title: 'Pro', priceUsd: 25, stars: 1670, preview: { mode: 'extend', renewsAt: inDays(42), bonusDays: 0 } },
-      { id: 'ultra', title: 'Ultra', priceUsd: 49, stars: 3270, preview: { mode: 'switch', renewsAt: inDays(36), bonusDays: 6 } },
+      {
+        id: 'plus',
+        title: 'Plus',
+        priceUsd: 9,
+        stars: 600,
+        preview: { mode: 'switch', renewsAt: inDays(30), bonusDays: 33 },
+      },
+      {
+        id: 'pro',
+        title: 'Pro',
+        priceUsd: 25,
+        stars: 1670,
+        preview: { mode: 'extend', renewsAt: inDays(42), bonusDays: 0 },
+      },
+      {
+        id: 'ultra',
+        title: 'Ultra',
+        priceUsd: 49,
+        stars: 3270,
+        preview: { mode: 'switch', renewsAt: inDays(36), bonusDays: 6 },
+      },
     ],
     rate: { usdPerStar: 0.015, source: 'config', updatedAt: '2026-10-13T00:00:00Z' },
     payments: [payment()],
@@ -71,27 +89,52 @@ function fakeWebApp(overrides: Partial<TelegramWebApp> = {}): TelegramWebApp {
     openInvoice: vi.fn(),
     openLink: vi.fn(),
     openTelegramLink: vi.fn(),
-    BackButton: { isVisible: false, show: vi.fn(), hide: vi.fn(), onClick: vi.fn(), offClick: vi.fn() },
+    BackButton: {
+      isVisible: false,
+      show: vi.fn(),
+      hide: vi.fn(),
+      onClick: vi.fn(),
+      offClick: vi.fn(),
+    },
     ...overrides,
   };
 }
 
-type Handler = (url: string, init: RequestInit & { json?: Record<string, unknown> }) => Response | Promise<Response> | undefined;
+type Handler = (
+  url: string,
+  init: RequestInit & { json?: Record<string, unknown> },
+) => Response | Promise<Response> | undefined;
 
 /** Подменяет fetch: обработчик возвращает ответ или undefined (тогда 404). Тела запросов сохраняются. */
 function mockApi(handler: Handler) {
-  const calls: Array<{ url: string; method: string; body?: Record<string, unknown>; auth?: string }> = [];
+  const calls: Array<{
+    url: string;
+    method: string;
+    body?: Record<string, unknown>;
+    auth?: string;
+  }> = [];
   vi.stubGlobal('fetch', async (input: RequestInfo | URL, init: RequestInit = {}) => {
     const url = String(input);
-    const json = typeof init.body === 'string' ? (JSON.parse(init.body) as Record<string, unknown>) : undefined;
-    calls.push({ url, method: init.method ?? 'GET', body: json, auth: (init.headers as Record<string, string> | undefined)?.Authorization });
+    const json =
+      typeof init.body === 'string'
+        ? (JSON.parse(init.body) as Record<string, unknown>)
+        : undefined;
+    calls.push({
+      url,
+      method: init.method ?? 'GET',
+      body: json,
+      auth: (init.headers as Record<string, string> | undefined)?.Authorization,
+    });
     const response = await handler(url, { ...init, json });
-    return response ?? Response.json({ error: { code: 'not_found', message: url } }, { status: 404 });
+    return (
+      response ?? Response.json({ error: { code: 'not_found', message: url } }, { status: 404 })
+    );
   });
   return calls;
 }
 
-const linkedSession = (state: MiniAppState) => Response.json({ linked: true, token: 'tok', expiresAt: '', ...state });
+const linkedSession = (state: MiniAppState) =>
+  Response.json({ linked: true, token: 'tok', expiresAt: '', ...state });
 
 describe('кабинет в Telegram (/tg)', () => {
   beforeEach(() => {
@@ -107,7 +150,10 @@ describe('кабинет в Telegram (/tg)', () => {
     window.Telegram = { WebApp: fakeWebApp({ initData: '' }) };
     render(<TelegramAppPage />);
     expect(await screen.findByText('Кабинет открывается в Telegram')).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: /Открыть бота/ })).toHaveAttribute('href', 'https://t.me/Robo_kassa_bot');
+    expect(screen.getByRole('link', { name: /Открыть бота/ })).toHaveAttribute(
+      'href',
+      'https://t.me/Robo_kassa_bot',
+    );
   });
 
   it('«Продолжить с Telegram» создаёт аккаунт в одно касание', async () => {
@@ -120,7 +166,11 @@ describe('кабинет в Telegram (/tg)', () => {
     });
     const calls = mockApi((url) => {
       if (url === '/api/telegram/miniapp/session') {
-        return Response.json({ linked: false, telegram: { firstName: 'Анна', username: 'anna' }, siteUrl: 'https://ketner.org' });
+        return Response.json({
+          linked: false,
+          telegram: { firstName: 'Анна', username: 'anna' },
+          siteUrl: 'https://ketner.org',
+        });
       }
       if (url === '/api/telegram/miniapp/register') return linkedSession(fresh);
       return undefined;
@@ -131,7 +181,9 @@ describe('кабинет в Telegram (/tg)', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Продолжить с Telegram' }));
     expect(await screen.findByRole('heading', { name: 'Привет, Анна' })).toBeInTheDocument();
     expect(screen.getByText(/Платная подписка не активна/)).toBeInTheDocument();
-    expect(calls.find((call) => call.url.endsWith('/register'))?.body).toEqual({ initData: app.initData });
+    expect(calls.find((call) => call.url.endsWith('/register'))?.body).toEqual({
+      initData: app.initData,
+    });
 
     // Аккаунт, созданный через Telegram, отвязать нельзя.
     fireEvent.click(screen.getByRole('tab', { name: 'Профиль' }));
@@ -144,9 +196,14 @@ describe('кабинет в Telegram (/tg)', () => {
     window.Telegram = { WebApp: app };
     const calls = mockApi((url) => {
       if (url === '/api/telegram/miniapp/session') {
-        return Response.json({ linked: false, telegram: { firstName: 'Анна', username: 'anna' }, siteUrl: 'https://ketner.org' });
+        return Response.json({
+          linked: false,
+          telegram: { firstName: 'Анна', username: 'anna' },
+          siteUrl: 'https://ketner.org',
+        });
       }
-      if (url === '/api/telegram/miniapp/link-code') return Response.json({ code: 'K7M2QX', expiresAt: Date.now() + 600_000 });
+      if (url === '/api/telegram/miniapp/link-code')
+        return Response.json({ code: 'K7M2QX', expiresAt: Date.now() + 600_000 });
       if (url === '/api/telegram/miniapp/link') return linkedSession(makeState());
       return undefined;
     });
@@ -174,33 +231,55 @@ describe('кабинет в Telegram (/tg)', () => {
 
   it('главная: срок, автопродление выключается переключателем', async () => {
     window.Telegram = { WebApp: fakeWebApp() };
-    const state = makeState({ autoRenew: { planId: 'pro', status: 'active', stars: 1670, nextChargeAt: inDays(12) } });
+    const state = makeState({
+      autoRenew: { planId: 'pro', status: 'active', stars: 1670, nextChargeAt: inDays(12) },
+    });
     const calls = mockApi((url) => {
       if (url === '/api/telegram/miniapp/session') return linkedSession(state);
-      if (url === '/api/telegram/miniapp/auto-renew') return Response.json({ ...state, autoRenew: { ...state.autoRenew!, status: 'canceled' } });
+      if (url === '/api/telegram/miniapp/auto-renew')
+        return Response.json({ ...state, autoRenew: { ...state.autoRenew!, status: 'canceled' } });
       return undefined;
     });
     render(<TelegramAppPage />);
 
-    expect(await screen.findByRole('progressbar', { name: 'Осталось дней: 12' })).toBeInTheDocument();
+    expect(
+      await screen.findByRole('progressbar', { name: 'Осталось дней: 12' }),
+    ).toBeInTheDocument();
     const toggle = screen.getByRole('switch', { name: 'Автопродление' });
     expect(toggle).toHaveAttribute('aria-checked', 'true');
     expect(screen.getByText(/Pro за 1\s670 ⭐ продлится/)).toBeInTheDocument();
     fireEvent.click(toggle);
-    await waitFor(() => expect(screen.getByRole('switch', { name: 'Автопродление' })).toHaveAttribute('aria-checked', 'false'));
-    expect(calls.find((call) => call.url.endsWith('/auto-renew'))).toMatchObject({ body: { enabled: false }, auth: 'Bearer tok' });
+    await waitFor(() =>
+      expect(screen.getByRole('switch', { name: 'Автопродление' })).toHaveAttribute(
+        'aria-checked',
+        'false',
+      ),
+    );
+    expect(calls.find((call) => call.url.endsWith('/auto-renew'))).toMatchObject({
+      body: { enabled: false },
+      auth: 'Bearer tok',
+    });
     expect(await screen.findByText(/Автопродление выключено/)).toBeInTheDocument();
   });
 
   it('тарифы: пересчёт при смене и оплата подписки с автопродлением', async () => {
     const app = fakeWebApp({
-      openInvoice: vi.fn((_url: string, callback?: (status: 'paid' | 'cancelled' | 'failed' | 'pending') => void) => callback?.('paid')),
+      openInvoice: vi.fn(
+        (_url: string, callback?: (status: 'paid' | 'cancelled' | 'failed' | 'pending') => void) =>
+          callback?.('paid'),
+      ),
     });
     window.Telegram = { WebApp: app };
     const state = makeState();
     const calls = mockApi((url) => {
       if (url === '/api/telegram/miniapp/session') return linkedSession(state);
-      if (url === '/api/telegram/miniapp/invoice') return Response.json({ invoiceId: 'stars_9', link: 'https://t.me/$inv', stars: 3270, recurring: true });
+      if (url === '/api/telegram/miniapp/invoice')
+        return Response.json({
+          invoiceId: 'stars_9',
+          link: 'https://t.me/$inv',
+          stars: 3270,
+          recurring: true,
+        });
       if (url === '/api/telegram/miniapp/invoice/stars_9') return Response.json({ status: 'paid' });
       if (url === '/api/telegram/miniapp/state') return Response.json(state);
       return undefined;
@@ -210,13 +289,24 @@ describe('кабинет в Telegram (/tg)', () => {
     fireEvent.click(await screen.findByRole('tab', { name: 'Тарифы' }));
     const ultra = screen.getByRole('article', { name: /Ultra/ });
     expect(within(ultra).getByText('+6 дн. за остаток текущего тарифа')).toBeInTheDocument();
-    expect(within(screen.getByRole('article', { name: /Pro/ })).getByRole('button', { name: /Продлить за 1\s670 ⭐/ })).toBeInTheDocument();
+    expect(
+      within(screen.getByRole('article', { name: /Pro/ })).getByRole('button', {
+        name: /Продлить за 1\s670 ⭐/,
+      }),
+    ).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('radio', { name: 'С автопродлением' }));
     fireEvent.click(within(ultra).getByRole('button', { name: /Подписаться · 3\s270 ⭐ в месяц/ }));
-    await waitFor(() => expect(app.openInvoice).toHaveBeenCalledWith('https://t.me/$inv', expect.any(Function)));
-    expect(calls.find((call) => call.url === '/api/telegram/miniapp/invoice')?.body).toEqual({ planId: 'ultra', recurring: true });
-    expect(await screen.findByText('Готово! Ultra включён, автопродление подключено.')).toBeInTheDocument();
+    await waitFor(() =>
+      expect(app.openInvoice).toHaveBeenCalledWith('https://t.me/$inv', expect.any(Function)),
+    );
+    expect(calls.find((call) => call.url === '/api/telegram/miniapp/invoice')?.body).toEqual({
+      planId: 'ultra',
+      recurring: true,
+    });
+    expect(
+      await screen.findByText('Готово! Ultra включён, автопродление подключено.'),
+    ).toBeInTheDocument();
   });
 
   it('платежи: чек и мгновенный возврат звёзд с причиной', async () => {
@@ -230,7 +320,9 @@ describe('кабинет в Telegram (/tg)', () => {
           outcome: 'refunded',
           ...state,
           subscription: { plan: 'free', status: 'active', renewsAt: null },
-          payments: [payment({ status: 'refunded', refundOption: { kind: 'none', reason: 'refunded' } })],
+          payments: [
+            payment({ status: 'refunded', refundOption: { kind: 'none', reason: 'refunded' } }),
+          ],
         });
       }
       return undefined;
@@ -243,32 +335,49 @@ describe('кабинет в Telegram (/tg)', () => {
     expect(within(sheet).getByText('Telegram Stars')).toBeInTheDocument();
     expect(app.BackButton!.show).toHaveBeenCalled();
 
-    expect(within(sheet).getByText(/Вернуть можно до .*Первый же ответ модели закрывает возврат/)).toBeInTheDocument();
+    expect(
+      within(sheet).getByText(/Вернуть можно до .*Первый же ответ модели закрывает возврат/),
+    ).toBeInTheDocument();
     fireEvent.click(within(sheet).getByRole('button', { name: 'Вернуть деньги' }));
     fireEvent.click(within(sheet).getByRole('button', { name: /Вернуть 1\s670 ⭐/ }));
     expect(within(sheet).getByText(/Выберите причину/)).toBeInTheDocument();
     fireEvent.click(within(sheet).getByRole('radio', { name: 'Ошибся тарифом' }));
-    fireEvent.change(within(sheet).getByLabelText('Комментарий (необязательно)'), { target: { value: 'Хотел Plus' } });
+    fireEvent.change(within(sheet).getByLabelText('Комментарий (необязательно)'), {
+      target: { value: 'Хотел Plus' },
+    });
     fireEvent.click(within(sheet).getByRole('button', { name: /Вернуть 1\s670 ⭐/ }));
 
-    expect(await screen.findByText(/Готово: 1\s670 ⭐ вернулись на баланс Telegram/)).toBeInTheDocument();
+    expect(
+      await screen.findByText(/Готово: 1\s670 ⭐ вернулись на баланс Telegram/),
+    ).toBeInTheDocument();
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
-    expect(calls.find((call) => call.url.endsWith('/refund'))?.body).toEqual({ reason: 'Ошибся тарифом', comment: 'Хотел Plus' });
+    expect(calls.find((call) => call.url.endsWith('/refund'))?.body).toEqual({
+      reason: 'Ошибся тарифом',
+      comment: 'Хотел Plus',
+    });
     expect(screen.getByText('Возвращён')).toBeInTheDocument();
     expect(app.BackButton!.hide).toHaveBeenCalled();
   });
 
   it('платежи: после запроса к моделям вернуть оплату нельзя — кабинет объясняет почему', async () => {
     window.Telegram = { WebApp: fakeWebApp() };
-    const state = makeState({ payments: [payment({ refundOption: { kind: 'none', reason: 'used' } })] });
+    const state = makeState({
+      payments: [payment({ refundOption: { kind: 'none', reason: 'used' } })],
+    });
     mockApi((url) => (url === '/api/telegram/miniapp/session' ? linkedSession(state) : undefined));
     window.history.replaceState(null, '', '/tg?tab=payments');
     render(<TelegramAppPage />);
 
-    expect(await screen.findByText(/Вернуть оплату можно в течение 24 часов после неё — если вы ещё не сделали ни одного запроса/)).toBeInTheDocument();
+    expect(
+      await screen.findByText(
+        /Вернуть оплату можно в течение 24 часов после неё — если вы ещё не сделали ни одного запроса/,
+      ),
+    ).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: /Pro.*1\s670 ⭐/ }));
     const sheet = screen.getByRole('dialog', { name: 'Чек · Pro' });
-    expect(within(sheet).getByText(/моделями уже пользовались, поэтому вернуть её нельзя/)).toBeInTheDocument();
+    expect(
+      within(sheet).getByText(/моделями уже пользовались, поэтому вернуть её нельзя/),
+    ).toBeInTheDocument();
     expect(within(sheet).queryByRole('button', { name: 'Вернуть деньги' })).not.toBeInTheDocument();
   });
 
@@ -284,8 +393,18 @@ describe('кабинет в Telegram (/tg)', () => {
             ? []
             : [
                 {
-                  ...payment({ id: 'crypto:c-1', method: 'crypto', amount: 25, currency: 'USD', status: 'refund_requested' }),
-                  refund: { requestedAt: new Date().toISOString(), reason: 'Не пользуюсь', comment: 'Уезжаю' },
+                  ...payment({
+                    id: 'crypto:c-1',
+                    method: 'crypto',
+                    amount: 25,
+                    currency: 'USD',
+                    status: 'refund_requested',
+                  }),
+                  refund: {
+                    requestedAt: new Date().toISOString(),
+                    reason: 'Не пользуюсь',
+                    comment: 'Уезжаю',
+                  },
                   usedRequests: 0,
                   customer: { name: 'Иван', email: 'ivan@example.com', telegramUsername: null },
                 },
@@ -296,7 +415,8 @@ describe('кабинет в Telegram (/tg)', () => {
         decided = true;
         return Response.json({ payment: payment({ status: 'refunded' }) });
       }
-      if (url === '/api/telegram/miniapp/state') return Response.json({ ...state, pendingRefunds: 0 });
+      if (url === '/api/telegram/miniapp/state')
+        return Response.json({ ...state, pendingRefunds: 0 });
       return undefined;
     });
     window.history.replaceState(null, '', '/tg?tab=admin');
@@ -307,7 +427,10 @@ describe('кабинет в Telegram (/tg)', () => {
     expect(screen.getByText('запросов после оплаты не было')).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Вернуть' }));
     expect(await screen.findByText('Новых заявок нет')).toBeInTheDocument();
-    expect(calls.find((call) => call.url.endsWith('crypto%3Ac-1'))?.body).toEqual({ approve: true, note: '' });
+    expect(calls.find((call) => call.url.endsWith('crypto%3Ac-1'))?.body).toEqual({
+      approve: true,
+      note: '',
+    });
   });
 
   it('профиль: уведомления и вход на сайт одноразовой ссылкой', async () => {
@@ -316,19 +439,30 @@ describe('кабинет в Telegram (/tg)', () => {
     const state = makeState();
     const calls = mockApi((url) => {
       if (url === '/api/telegram/miniapp/session') return linkedSession(state);
-      if (url === '/api/telegram/miniapp/prefs') return Response.json({ ...state, prefs: { reminders: false, receipts: true } });
-      if (url === '/api/telegram/miniapp/site-login') return Response.json({ url: 'https://ketner.org/auth/telegram?t=abc&next=%2Fchat' });
+      if (url === '/api/telegram/miniapp/prefs')
+        return Response.json({ ...state, prefs: { reminders: false, receipts: true } });
+      if (url === '/api/telegram/miniapp/site-login')
+        return Response.json({ url: 'https://ketner.org/auth/telegram?t=abc&next=%2Fchat' });
       return undefined;
     });
     window.history.replaceState(null, '', '/tg?tab=profile');
     render(<TelegramAppPage />);
 
     fireEvent.click(await screen.findByRole('switch', { name: 'Напоминания о продлении' }));
-    await waitFor(() => expect(screen.getByRole('switch', { name: 'Напоминания о продлении' })).toHaveAttribute('aria-checked', 'false'));
+    await waitFor(() =>
+      expect(screen.getByRole('switch', { name: 'Напоминания о продлении' })).toHaveAttribute(
+        'aria-checked',
+        'false',
+      ),
+    );
     expect(calls.find((call) => call.url.endsWith('/prefs'))?.body).toEqual({ reminders: false });
 
     fireEvent.click(screen.getByRole('button', { name: /Открыть Ketner AI/ }));
-    await waitFor(() => expect(app.openLink).toHaveBeenCalledWith('https://ketner.org/auth/telegram?t=abc&next=%2Fchat'));
+    await waitFor(() =>
+      expect(app.openLink).toHaveBeenCalledWith(
+        'https://ketner.org/auth/telegram?t=abc&next=%2Fchat',
+      ),
+    );
     expect(calls.find((call) => call.url.endsWith('/site-login'))?.body).toEqual({ next: '/chat' });
     expect(screen.getByRole('button', { name: /Отвязать Telegram/ })).toBeInTheDocument();
   });

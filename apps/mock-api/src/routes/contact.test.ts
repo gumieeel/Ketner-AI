@@ -17,14 +17,22 @@ async function start() {
   const server = app.listen(0);
   const url = `http://127.0.0.1:${(server.address() as AddressInfo).port}/api/contact`;
   const send = (body: unknown) =>
-    fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+    fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
   return { store, notified, send, close: () => server.close() };
 }
 
 test('форма обратной связи: сохраняет обращение и уведомляет администраторов', async () => {
   const t = await start();
   try {
-    const ok = await t.send({ name: 'Анна', email: 'Anna@Example.com', message: 'Не пришёл чек после оплаты' });
+    const ok = await t.send({
+      name: 'Анна',
+      email: 'Anna@Example.com',
+      message: 'Не пришёл чек после оплаты',
+    });
     assert.equal(ok.status, 201);
     assert.equal(t.store.all().length, 1);
     assert.equal(t.store.all()[0]?.email, 'anna@example.com');
@@ -38,7 +46,12 @@ test('форма обратной связи: сохраняет обращен�
       assert.equal((await t.send(bad)).status, 400);
     }
     // ловушка для ботов: тихо принимается, но не сохраняется
-    const bot = await t.send({ name: 'x', email: 'a@b.co', message: 'spam spam spam spam', website: 'http://spam' });
+    const bot = await t.send({
+      name: 'x',
+      email: 'a@b.co',
+      message: 'spam spam spam spam',
+      website: 'http://spam',
+    });
     assert.equal(bot.status, 202);
     assert.equal(t.store.all().length, 1);
   } finally {

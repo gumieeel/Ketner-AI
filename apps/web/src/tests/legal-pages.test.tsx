@@ -19,27 +19,42 @@ describe('правовые страницы и контакты', () => {
   ])('%s открывается, показывает заголовок и почту поддержки', (path, title) => {
     renderRoute(path);
     expect(screen.getByRole('heading', { level: 1, name: title })).toBeInTheDocument();
-    expect(screen.getAllByRole('link', { name: 'ketner.support@gmail.com' }).length).toBeGreaterThan(0);
+    expect(
+      screen.getAllByRole('link', { name: 'ketner.support@gmail.com' }).length,
+    ).toBeGreaterThan(0);
   });
 
   it('условия возврата называют окно в 24 часа и запрет использования моделей', () => {
     renderRoute('/payment-terms');
-    expect(screen.getByText(/не более 24 часов и вы ещё не сделали ни одного запроса к моделям/)).toBeInTheDocument();
+    expect(
+      screen.getByText(/не более 24 часов и вы ещё не сделали ни одного запроса к моделям/),
+    ).toBeInTheDocument();
   });
 
   it('форма обратной связи отправляет обращение', async () => {
-    const fetchMock = vi.fn(async () => new Response(JSON.stringify({ ok: true }), { status: 201 }));
+    const fetchMock = vi.fn(
+      async () => new Response(JSON.stringify({ ok: true }), { status: 201 }),
+    );
     vi.stubGlobal('fetch', fetchMock);
     renderRoute('/contacts');
 
     fireEvent.change(screen.getByLabelText('Имя'), { target: { value: 'Анна' } });
-    fireEvent.change(screen.getByLabelText('Почта для ответа'), { target: { value: 'anna@example.com' } });
-    fireEvent.change(screen.getByLabelText('Сообщение'), { target: { value: 'Не пришёл чек после оплаты' } });
+    fireEvent.change(screen.getByLabelText('Почта для ответа'), {
+      target: { value: 'anna@example.com' },
+    });
+    fireEvent.change(screen.getByLabelText('Сообщение'), {
+      target: { value: 'Не пришёл чек после оплаты' },
+    });
     fireEvent.click(screen.getByRole('button', { name: 'Отправить' }));
 
     await waitFor(() => expect(screen.getByRole('status')).toHaveTextContent('anna@example.com'));
-    const call = (fetchMock.mock.calls as unknown as [string, RequestInit][]).find(([url]) => url.endsWith('/contact'));
-    expect(JSON.parse(String(call?.[1].body))).toMatchObject({ name: 'Анна', email: 'anna@example.com' });
+    const call = (fetchMock.mock.calls as unknown as [string, RequestInit][]).find(([url]) =>
+      url.endsWith('/contact'),
+    );
+    expect(JSON.parse(String(call?.[1].body))).toMatchObject({
+      name: 'Анна',
+      email: 'anna@example.com',
+    });
   });
 
   it('в футере есть ссылки на правовые страницы', () => {
@@ -49,7 +64,9 @@ describe('правовые страницы и контакты', () => {
       ['Конфиденциальность', '/privacy'],
       ['Оплата и возврат', '/payment-terms'],
     ] as const) {
-      expect(screen.getAllByRole('link', { name }).some((link) => link.getAttribute('href') === href)).toBe(true);
+      expect(
+        screen.getAllByRole('link', { name }).some((link) => link.getAttribute('href') === href),
+      ).toBe(true);
     }
   });
 });

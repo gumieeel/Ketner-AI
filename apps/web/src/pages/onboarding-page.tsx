@@ -27,7 +27,6 @@ export function OnboardingPage() {
         />
 
         <div className="relative flex flex-col gap-3">
-
           <div className="flex items-center gap-3.5">
             <div className="grid size-11 shrink-0 place-items-center rounded-xl bg-accent-soft text-accent ring-1 ring-accent/25 ring-inset">
               <SparkleIcon className="size-5" />
@@ -54,8 +53,12 @@ export function OnboardingPage() {
                   className="lift group flex min-h-14 w-full items-center justify-between gap-3 rounded-xl border border-stroke bg-surface p-4 text-left shadow-xs hover:border-accent/40 hover:bg-surface-2 hover:shadow-md"
                 >
                   <span className="min-w-0">
-                    <span className="block text-sm font-medium text-text text-pretty">{prompt}</span>
-                    <span className="mt-0.5 block text-xs text-muted">{t('onboarding.startWith')}</span>
+                    <span className="block text-sm font-medium text-text text-pretty">
+                      {prompt}
+                    </span>
+                    <span className="mt-0.5 block text-xs text-muted">
+                      {t('onboarding.startWith')}
+                    </span>
                   </span>
                   <ArrowUpRightIcon className="size-4 shrink-0 text-subtle transition-[color,transform] duration-200 group-hover:-translate-y-0.5 group-hover:translate-x-0.5 group-hover:text-accent" />
                 </button>
@@ -67,7 +70,11 @@ export function OnboardingPage() {
         <div className="relative flex justify-end border-t border-stroke pt-5">
           <Link
             to="/chat"
-            className={buttonClasses({ variant: 'primary', size: 'lg', className: 'gap-2 max-sm:w-full' })}
+            className={buttonClasses({
+              variant: 'primary',
+              size: 'lg',
+              className: 'gap-2 max-sm:w-full',
+            })}
           >
             {t('landing.cta')}
             <ArrowRightIcon className="size-4" />

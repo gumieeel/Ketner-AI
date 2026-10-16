@@ -17,7 +17,15 @@ function capabilities(plan: 'free' | 'plus'): ImageCapabilities {
     defaultModelId: 'flux-schnell',
     maxPromptChars: 1000,
     models: [
-      { id: 'flux-schnell', name: 'FLUX.1 schnell', aspects: ['1:1'], requiredPlan: 'free', locked: false, dailyLimit: plan === 'free' ? 5 : 50, usedToday: 1 },
+      {
+        id: 'flux-schnell',
+        name: 'FLUX.1 schnell',
+        aspects: ['1:1'],
+        requiredPlan: 'free',
+        locked: false,
+        dailyLimit: plan === 'free' ? 5 : 50,
+        usedToday: 1,
+      },
       {
         id: 'flux-2-klein',
         name: 'FLUX.2 klein',
@@ -49,27 +57,43 @@ interface ImagesFake {
   generateBodies: Record<string, unknown>[];
 }
 
-function installImagesApi(plan: 'free' | 'plus', options: { generate?: () => Response } = {}): ImagesFake {
+function installImagesApi(
+  plan: 'free' | 'plus',
+  options: { generate?: () => Response } = {},
+): ImagesFake {
   installFakeApi({ reply: 'ok', plan });
   const base = globalThis.fetch;
   const fake: ImagesFake = { generateBodies: [] };
-  vi.stubGlobal('fetch', async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
-    const url = String(input);
-    const method = init?.method ?? 'GET';
-    if (url === '/api/images/capabilities') return json(capabilities(plan));
-    if (url === '/api/images' && method === 'GET') return json({ images: [image('old', 'старая картинка')] });
-    if (url === '/api/images/generate' && method === 'POST') {
-      fake.generateBodies.push(JSON.parse(String(init?.body)) as Record<string, unknown>);
-      return options.generate?.() ?? json({ image: image('new', 'кот в космосе'), replacedBy: null }, 201);
-    }
-    return base(input, init);
-  });
+  vi.stubGlobal(
+    'fetch',
+    async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
+      const url = String(input);
+      const method = init?.method ?? 'GET';
+      if (url === '/api/images/capabilities') return json(capabilities(plan));
+      if (url === '/api/images' && method === 'GET')
+        return json({ images: [image('old', 'старая картинка')] });
+      if (url === '/api/images/generate' && method === 'POST') {
+        fake.generateBodies.push(JSON.parse(String(init?.body)) as Record<string, unknown>);
+        return (
+          options.generate?.() ??
+          json({ image: image('new', 'кот в космосе'), replacedBy: null }, 201)
+        );
+      }
+      return base(input, init);
+    },
+  );
   return fake;
 }
 
 function loginAs(plan: 'free' | 'plus'): void {
   useAuth.setState({
-    user: { id: 'demo-user', email: 'demo@ketner.ai', name: 'Демо', plan, createdAt: new Date().toISOString() },
+    user: {
+      id: 'demo-user',
+      email: 'demo@ketner.ai',
+      name: 'Демо',
+      plan,
+      createdAt: new Date().toISOString(),
+    },
     token: 'fake.jwt.token',
     status: 'authenticated',
   });
@@ -80,7 +104,19 @@ describe('страница «Изображения»', () => {
     resetAuth();
     resetPreferences();
     resetChat();
-    useImages.setState({ capabilities: null, images: [], status: 'idle', authRequired: false, prompt: '', modelId: 'flux-schnell', aspect: '1:1', style: 'none', generating: false, pendingAspect: null, notice: null });
+    useImages.setState({
+      capabilities: null,
+      images: [],
+      status: 'idle',
+      authRequired: false,
+      prompt: '',
+      modelId: 'flux-schnell',
+      aspect: '1:1',
+      style: 'none',
+      generating: false,
+      pendingAspect: null,
+      notice: null,
+    });
   });
 
   it('генерирует картинку на Free и добавляет её в галерею', async () => {
@@ -99,7 +135,12 @@ describe('страница «Изображения»', () => {
     await user.type(screen.getByLabelText('Описание картинки'), 'кот в космосе');
     await user.click(screen.getByRole('button', { name: 'Создать' }));
     await waitFor(() => expect(fake.generateBodies).toHaveLength(1));
-    expect(fake.generateBodies[0]).toMatchObject({ prompt: 'кот в космосе', modelId: 'flux-schnell', aspect: '1:1', style: 'none' });
+    expect(fake.generateBodies[0]).toMatchObject({
+      prompt: 'кот в космосе',
+      modelId: 'flux-schnell',
+      aspect: '1:1',
+      style: 'none',
+    });
     expect(await screen.findByAltText('кот в космосе')).toBeInTheDocument();
   });
 
@@ -110,7 +151,10 @@ describe('страница «Изображения»', () => {
     renderRoute('/images');
 
     const watercolor = await screen.findByRole('button', { name: 'Акварель' });
-    expect(screen.getByRole('button', { name: 'Без стиля' })).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByRole('button', { name: 'Без стиля' })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    );
     await user.click(watercolor);
     expect(watercolor).toHaveAttribute('aria-pressed', 'true');
     expect(window.localStorage.getItem('ketner.imageStyle')).toBe('watercolor');
@@ -127,8 +171,14 @@ describe('страница «Изображения»', () => {
       generate: () => {
         call += 1;
         return call === 1
-          ? json({ error: { code: 'moderation_blocked', message: 'Такой запрос нельзя выполнить' } }, 422)
-          : json({ error: { code: 'image_limit', message: 'Лимит картинок на сегодня исчерпан' } }, 429);
+          ? json(
+              { error: { code: 'moderation_blocked', message: 'Такой запрос нельзя выполнить' } },
+              422,
+            )
+          : json(
+              { error: { code: 'image_limit', message: 'Лимит картинок на сегодня исчерпан' } },
+              429,
+            );
       },
     });
     loginAs('free');
@@ -155,7 +205,9 @@ describe('страница «Изображения»', () => {
 
     await user.click(await screen.findByRole('button', { name: 'О моделях' }));
     const dialog = screen.getByRole('dialog', { name: 'О моделях' });
-    expect(within(dialog).getByText('Самая быстрая модель: картинка готова за несколько секунд.')).toBeInTheDocument();
+    expect(
+      within(dialog).getByText('Самая быстрая модель: картинка готова за несколько секунд.'),
+    ).toBeInTheDocument();
     expect(within(dialog).queryByText(/лимит/i)).toBeNull();
     expect(within(dialog).getByText('Доступна с тарифа Plus')).toBeInTheDocument();
     expect(within(dialog).getByText('Только квадрат 1:1')).toBeInTheDocument();

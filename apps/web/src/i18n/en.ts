@@ -76,23 +76,24 @@ export const en: Record<TranslationKey, string> = {
   'pricing.nextGenBadge': 'Next-generation plans',
   'pricing.allInclusive': 'All-in-one',
   'pricing.docsLink': 'More about plans and models in the docs',
-  'pricing.notice':
-    'All subscriptions are backed by secure checkout and instant access.',
+  'pricing.notice': 'All subscriptions are backed by secure checkout and instant access.',
 
   'docs.title': 'Ketner AI Documentation',
-  'docs.subtitle':
-    'Plans, models and answers to common questions.',
+  'docs.subtitle': 'Plans, models and answers to common questions.',
   'docs.backToPricing': 'Back to pricing',
   'docs.plansTitle': 'Plans',
   'docs.modelsTitle': 'Model Specifications',
   'docs.matrixTitle': 'Comparison Matrix',
   'docs.faqTitle': 'Frequently Asked Questions',
   'docs.step1Title': 'Ask your question',
-  'docs.step1Desc': 'Ask anything: write code, request rewrites, translations, or deep complex analysis.',
+  'docs.step1Desc':
+    'Ask anything: write code, request rewrites, translations, or deep complex analysis.',
   'docs.step2Title': 'System routes the model',
-  'docs.step2Desc': 'Intelligent routing dynamically picks the optimal model (or you choose manually).',
+  'docs.step2Desc':
+    'Intelligent routing dynamically picks the optimal model (or you choose manually).',
   'docs.step3Title': 'Receive your answer',
-  'docs.step3Desc': 'Instant streaming response with zero delays and no token counting on paid tiers.',
+  'docs.step3Desc':
+    'Instant streaming response with zero delays and no token counting on paid tiers.',
 
   'checkout.title': 'Checkout',
   'checkout.cardNumber': 'Card number',
@@ -108,8 +109,7 @@ export const en: Record<TranslationKey, string> = {
   'checkout.cardNumberInvalid': 'Enter a valid 16-digit card number',
   'checkout.expiryInvalid': 'Enter a valid expiration date (MM/YY)',
   'checkout.cvcInvalid': 'Enter a 3-digit CVC/CVV code',
-  'checkout.notice':
-    'Secure checkout: 256-bit SSL encrypted according to PCI-DSS standard.',
+  'checkout.notice': 'Secure checkout: 256-bit SSL encrypted according to PCI-DSS standard.',
   'checkout.selectedPlan': 'Selected plan',
   'checkout.methodTitle': 'Payment method',
   'checkout.methodSbp': 'SBP (Faster Payments System)',
@@ -165,9 +165,11 @@ export const en: Record<TranslationKey, string> = {
   'settings.subscription': 'Subscription',
   'settings.subscriptionText': 'Manage your plan.',
   'settings.support': 'Customer Support',
-  'settings.supportDesc': 'Direct communication with administrators regarding subscriptions, billing, and AI models.',
+  'settings.supportDesc':
+    'Direct communication with administrators regarding subscriptions, billing, and AI models.',
   'settings.supportContactBtn': 'Contact on Telegram (@ketner_support_bot)',
-  'settings.supportBotHint': 'Submit your ticket or question — our administrator will reply directly in the Telegram chat.',
+  'settings.supportBotHint':
+    'Submit your ticket or question — our administrator will reply directly in the Telegram chat.',
   'settings.logout': 'Log out',
 
   'chat.title': 'New chat',
@@ -200,7 +202,8 @@ export const en: Record<TranslationKey, string> = {
   'chat.maxModeLocked': 'Max mode is available on Ultra',
   'chat.maxModeBadge': '⚡ Max mode',
   'chat.maxModeUpgradeTitle': 'Max mode is available on Ultra',
-  'chat.maxModeUpgradeDesc': 'In Max mode Claude Opus, Sonnet, GPT-6 Astra and GPT-5.6 Sol think longer and go deeper on hard tasks. It’s available on Ultra.',
+  'chat.maxModeUpgradeDesc':
+    'In Max mode Claude Opus, Sonnet, GPT-6 Astra and GPT-5.6 Sol think longer and go deeper on hard tasks. It’s available on Ultra.',
   'chat.modelClaudeOpus': 'Claude Opus 5.5',
   'chat.upgradeRequired': 'Upgrade your plan',
   'chat.upgradeRequiredDesc':
@@ -253,7 +256,8 @@ export const en: Record<TranslationKey, string> = {
   'chat.errorText': 'Couldn’t get a reply. Try again.',
   'chat.continue': 'Continue',
   'chat.truncatedNotice': 'The reply was cut off.',
-  'chat.continuePrompt': 'Continue the reply from where it was cut off. Do not repeat what is already written.',
+  'chat.continuePrompt':
+    'Continue the reply from where it was cut off. Do not repeat what is already written.',
   'chat.errorNotFound': 'Conversation not found: it may have been deleted.',
   'chat.jumpToLatest': 'Jump to latest',
   'chat.loadError': 'Could not load the conversation',
@@ -273,7 +277,6 @@ export const en: Record<TranslationKey, string> = {
   'onboarding.text': 'Ask a question, or start with one of the examples below.',
   'onboarding.examples': 'Example prompts',
   'onboarding.startWith': 'Open in chat',
-
 
   'common.loading': 'Loading…',
   'common.soon': 'Soon',
@@ -361,7 +364,8 @@ export const en: Record<TranslationKey, string> = {
   'proposal.noWorkspaceError': 'No project is linked to this chat. Link a folder or a repository.',
   'proposal.applyError': 'Failed to apply the changes',
   'proposal.notAppliedTitle': 'The proposed changes were not applied',
-  'proposal.nothingWritten': 'Nothing was written. Ask the model to repeat the edit with an exact fragment from the file.',
+  'proposal.nothingWritten':
+    'Nothing was written. Ask the model to repeat the edit with an exact fragment from the file.',
   'proposal.discarded': 'The proposed code changes were discarded',
   'proposal.restore': 'Restore',
   'proposal.title': 'Changes proposed to the codebase',
@@ -374,7 +378,8 @@ export const en: Record<TranslationKey, string> = {
   'proposal.appliedLocal': 'Changes were written to the local disk!',
   'proposal.openPr': 'Open PR #{number} ↗',
   'proposal.openCommit': 'Open commit ↗',
-  'proposal.hint': 'Press “Apply to project” below, or turn on “Auto-write” above the input, to save the files.',
+  'proposal.hint':
+    'Press “Apply to project” below, or turn on “Auto-write” above the input, to save the files.',
   'proposal.target': 'Target:',
   'proposal.needWorkspace': 'A linked project is required',
   'proposal.discard': 'Discard',
@@ -388,11 +393,13 @@ export const en: Record<TranslationKey, string> = {
 
   // Чат: привязка проекта
   'linkWs.title': 'Link a codebase to this chat',
-  'linkWs.desc': 'The AI will see the project structure and files, search the code and answer with the repository in mind',
+  'linkWs.desc':
+    'The AI will see the project structure and files, search the code and answer with the repository in mind',
   'linkWs.tabFolder': 'Local folder',
   'linkWs.tabGit': 'GitHub repository',
   'linkWs.folderTitle': 'Choose a project folder on your computer',
-  'linkWs.folderDesc': 'Your browser will safely read code files (js, ts, py, rs, go, json and more), skipping node_modules and binaries.',
+  'linkWs.folderDesc':
+    'Your browser will safely read code files (js, ts, py, rs, go, json and more), skipping node_modules and binaries.',
   'linkWs.pickFolder': 'Choose a local folder',
   'linkWs.indexing': 'Indexing the project…',
   'linkWs.branch': 'Branch',
@@ -403,7 +410,8 @@ export const en: Record<TranslationKey, string> = {
   'linkWs.repoSearch': 'Repository',
   'linkWs.repoSearchPlaceholder': 'Search or paste: owner/repo, https://github.com/…',
   'linkWs.connectTitle': 'Connect GitHub',
-  'linkWs.connectDesc': 'Ketner will see your repositories, private ones included, and can open pull requests on your behalf. The token is kept on the server only.',
+  'linkWs.connectDesc':
+    'Ketner will see your repositories, private ones included, and can open pull requests on your behalf. The token is kept on the server only.',
   'linkWs.connectCta': 'Connect GitHub',
   'linkWs.unavailable': 'GitHub connection is not configured on the server yet.',
   'linkWs.signInDesc': 'Sign in to Ketner to connect GitHub and work with repositories.',
@@ -415,7 +423,8 @@ export const en: Record<TranslationKey, string> = {
   'linkWs.private': 'Private',
   'linkWs.useTyped': 'Open {repo}',
   'linkWs.branchesLoading': 'Loading branches…',
-  'linkWs.orgHint': 'Missing an organization repository? Grant Ketner AI access in the organization settings on GitHub.',
+  'linkWs.orgHint':
+    'Missing an organization repository? Grant Ketner AI access in the organization settings on GitHub.',
 
   // Чат: запись в GitHub
   'gh.title': 'Write changes to GitHub',
@@ -433,7 +442,8 @@ export const en: Record<TranslationKey, string> = {
   'gh.errBadRepo': 'Invalid repository name',
   'gh.errApply': 'Could not apply the changes to GitHub',
   'gh.account': 'Changes will be sent as @{login}',
-  'gh.needConnect': 'Connect GitHub to send changes: the commit and pull request are created on your behalf.',
+  'gh.needConnect':
+    'Connect GitHub to send changes: the commit and pull request are created on your behalf.',
   'gh.connect': 'Connect GitHub',
 
   // Чат: окно diff
@@ -450,9 +460,11 @@ export const en: Record<TranslationKey, string> = {
   'wsView.notFound': 'No files found',
   'wsView.ask': 'Ask the AI about this file',
   'wsView.askDraft': 'Explain what the file {path} is for and how it works in the project {name}:',
-  'wsView.noContent': 'File contents are not preloaded (the file is available by its path in the project structure)',
+  'wsView.noContent':
+    'File contents are not preloaded (the file is available by its path in the project structure)',
   'wsView.pick': 'Choose a file to view',
-  'wsView.pickHint': 'The AI sees the whole project structure and uses its code when answering your questions in chat',
+  'wsView.pickHint':
+    'The AI sees the whole project structure and uses its code when answering your questions in chat',
 
   // Чат: вложения в сообщениях
   'msgAtt.noVideo': 'Your browser does not support built-in video playback.',
@@ -474,7 +486,8 @@ export const en: Record<TranslationKey, string> = {
 
   // Вход и регистрация
   'auth.asideTitle': 'All AI models. One subscription.',
-  'auth.asideLead': 'GPT, Claude, Gemini, Grok, DeepSeek and Ketner Mini in one chat. Auto mode picks the right model for you.',
+  'auth.asideLead':
+    'GPT, Claude, Gemini, Grok, DeepSeek and Ketner Mini in one chat. Auto mode picks the right model for you.',
   'auth.showPassword': 'Show',
   'auth.hidePassword': 'Hide',
   'auth.loginFailed': 'Sign-in failed',
@@ -488,7 +501,8 @@ export const en: Record<TranslationKey, string> = {
   'settings.subtitle': 'Profile, appearance and plan settings',
   'settings.navLabel': 'Settings sections',
   'settings.telegramTitle': 'Telegram',
-  'settings.telegramDesc': 'Password-free sign-in, a subscription account in the @Robo_kassa_bot bot, Stars payments, receipts and renewal reminders.',
+  'settings.telegramDesc':
+    'Password-free sign-in, a subscription account in the @Robo_kassa_bot bot, Stars payments, receipts and renewal reminders.',
   'settings.telegramConnected': 'Connected',
   'settings.telegramNotLinked': 'Not linked',
   'settings.telegramOpenBot': 'Open the bot',
@@ -496,30 +510,38 @@ export const en: Record<TranslationKey, string> = {
   'settings.telegramUnlinking': 'Unlinking...',
   'settings.telegramConnect': 'Connect Telegram',
   'settings.telegramLinkedAs': 'Linked Telegram:',
-  'settings.telegramLinkedHint': 'Sign in on the website with “Sign in with Telegram”. In the bot, tap “Кабинет”: subscription, auto-renewal, receipts and refunds.',
+  'settings.telegramLinkedHint':
+    'Sign in on the website with “Sign in with Telegram”. In the bot, tap “Кабинет”: subscription, auto-renewal, receipts and refunds.',
   'settings.telegramLinkTitle': 'How to connect',
-  'settings.telegramLinkHint': 'Click “Connect Telegram”, open the bot and confirm — this page updates by itself.',
+  'settings.telegramLinkHint':
+    'Click “Connect Telegram”, open the bot and confirm — this page updates by itself.',
   'settings.telegramHaveCode': 'Have a code from the Telegram account? Enter code',
   'settings.telegramCodeSubmit': 'Connect',
   'settings.telegramCodeLabel': 'Code from the Telegram account',
-  'settings.telegramOnlyHint': 'This account was created with Telegram: sign in with “Sign in with Telegram” on any device.',
+  'settings.telegramOnlyHint':
+    'This account was created with Telegram: sign in with “Sign in with Telegram” on any device.',
   'settings.telegramClaimFailed': 'Something went wrong. Please try again.',
-  'settings.telegramLinkedDone': 'Telegram connected. You can now sign in with it, and manage the subscription in the bot.',
+  'settings.telegramLinkedDone':
+    'Telegram connected. You can now sign in with it, and manage the subscription in the bot.',
   'settings.telegramAccountEmail': 'Telegram account',
   'settings.githubTitle': 'GitHub',
-  'settings.githubDesc': 'Access to your repositories, private ones included: chat and Ketner Code read code, make commits and open pull requests.',
+  'settings.githubDesc':
+    'Access to your repositories, private ones included: chat and Ketner Code read code, make commits and open pull requests.',
   'settings.githubConnect': 'Connect GitHub',
   'settings.githubDisconnect': 'Disconnect',
   'settings.githubDisconnectYes': 'Yes, disconnect',
-  'settings.githubDisconnectHint': 'Ketner will lose access to your repositories and the token will be revoked. Projects linked to chats stay, but sending changes won\'t work until you connect GitHub again.',
+  'settings.githubDisconnectHint':
+    "Ketner will lose access to your repositories and the token will be revoked. Projects linked to chats stay, but sending changes won't work until you connect GitHub again.",
   'settings.githubConnected': 'Connected',
   'settings.githubNotConnected': 'Not connected',
   'settings.githubSince': 'Connected {date}',
   'settings.githubAccessTitle': 'What Ketner gets',
-  'settings.githubAccessHint': 'Read and write access to repositories (repo scope). The token is stored encrypted on the server only and never reaches the browser; through Ketner it is used only to read code, commit and open pull requests.',
+  'settings.githubAccessHint':
+    'Read and write access to repositories (repo scope). The token is stored encrypted on the server only and never reaches the browser; through Ketner it is used only to read code, commit and open pull requests.',
   'settings.githubManage': 'Access on GitHub',
   'settings.githubWhyTitle': 'Why connect',
-  'settings.githubWhyHint': 'To link private repositories to a chat, pick a branch, import them into Ketner Code and send edits as a commit or pull request without personal tokens.',
+  'settings.githubWhyHint':
+    'To link private repositories to a chat, pick a branch, import them into Ketner Code and send edits as a commit or pull request without personal tokens.',
   'settings.githubUnavailable': 'GitHub connection is not configured on the server yet.',
   'settings.githubSignIn': 'Sign in to connect GitHub.',
   'github.noticeConnected': 'GitHub connected: @{login}',
@@ -534,7 +556,8 @@ export const en: Record<TranslationKey, string> = {
   'tgAuth.openTelegram': 'Open Telegram',
   'tgAuth.orScan': 'or scan with your phone camera',
   'tgAuth.step1': 'Open the Ketner AI bot with the “Open Telegram” button.',
-  'tgAuth.step2Login': 'Confirm the sign-in with the button in the bot — this page signs in by itself.',
+  'tgAuth.step2Login':
+    'Confirm the sign-in with the button in the bot — this page signs in by itself.',
   'tgAuth.step2Link': 'Tap “Привязать” (Link) in the bot — this page updates by itself.',
   'tgAuth.waiting': 'Waiting for confirmation in Telegram…',
   'tgAuth.doneLogin': 'Done, signing in…',
@@ -545,8 +568,10 @@ export const en: Record<TranslationKey, string> = {
   'tgAuth.retry': 'Start over',
   'tgAuth.magicTitle': 'Signing in from Telegram',
   'tgAuth.magicProgress': 'Signing in…',
-  'tgAuth.magicMissing': 'The link has no sign-in key. Open the website from the Telegram account again.',
-  'tgAuth.magicFailed': 'Could not sign in with this link. Open the website from the Telegram account again.',
+  'tgAuth.magicMissing':
+    'The link has no sign-in key. Open the website from the Telegram account again.',
+  'tgAuth.magicFailed':
+    'Could not sign in with this link. Open the website from the Telegram account again.',
   'tgAuth.toLogin': 'Go to sign in',
   'tg.errorGeneric': 'Could not reach Ketner. Please try again.',
   'tg.retry': 'Try again',
@@ -554,18 +579,22 @@ export const en: Record<TranslationKey, string> = {
   'tg.cancel': 'Cancel',
   'tg.back': 'Back',
   'tg.outsideTitle': 'The account opens in Telegram',
-  'tg.outsideText': 'Open the Ketner AI bot and tap the “Кабинет” (Account) button next to the message field.',
+  'tg.outsideText':
+    'Open the Ketner AI bot and tap the “Кабинет” (Account) button next to the message field.',
   'tg.openBot': 'Open the bot',
   'tg.welcomeTitle': 'Hi, {name}!',
-  'tg.welcomeLead': 'This is your Ketner AI account: subscription, payments and refunds — all here, no commands.',
+  'tg.welcomeLead':
+    'This is your Ketner AI account: subscription, payments and refunds — all here, no commands.',
   'tg.welcomePoint1': 'Pay with Telegram Stars in two taps, with optional auto-renewal',
   'tg.welcomePoint2': 'Subscription term, receipts and refunds always at hand',
   'tg.welcomePoint3': 'Sign in to ketner.org with one button — no password',
   'tg.continueTelegram': 'Continue with Telegram',
-  'tg.continueHint': 'We will create an account in a second. Later, sign in on the website with “Sign in with Telegram”.',
+  'tg.continueHint':
+    'We will create an account in a second. Later, sign in on the website with “Sign in with Telegram”.',
   'tg.haveAccount': 'I already have an account',
   'tg.existingTitle': 'Connect your account',
-  'tg.existingLead': 'Your subscription and payment history will show up here, and reminders will come to Telegram.',
+  'tg.existingLead':
+    'Your subscription and payment history will show up here, and reminders will come to Telegram.',
   'tg.existingHow': 'How you sign in on the website',
   'tg.wayPassword': 'Email and password',
   'tg.wayCode': 'Google or GitHub',
@@ -604,7 +633,8 @@ export const en: Record<TranslationKey, string> = {
   'tg.enableAuto': 'Turn on auto-renewal',
   'tg.renewOrSwitch': 'Renew or change plan',
   'tg.choosePlan': 'Choose a plan',
-  'tg.refundPendingHome': 'Your refund request for {plan} from {date} is under review. The answer will come to the bot.',
+  'tg.refundPendingHome':
+    'Your refund request for {plan} from {date} is under review. The answer will come to the bot.',
   'tg.adminBanner': 'Refund requests waiting: {count}',
   'tg.quickActions': 'Quick actions',
   'tg.openChat': 'Open Ketner AI',
@@ -616,7 +646,8 @@ export const en: Record<TranslationKey, string> = {
   'tg.modeAuto': 'Auto-renewing',
   'tg.modeOnceHint': 'One-time payment. Renew whenever you like — days are added to your term.',
   'tg.modeAutoHint': 'Stars are charged every 30 days. Turn it off any time on the Home tab.',
-  'tg.autoReplace': 'Auto-renewal for {plan} is on now. A new subscription replaces it — we turn the old one off.',
+  'tg.autoReplace':
+    'Auto-renewal for {plan} is on now. A new subscription replaces it — we turn the old one off.',
   'tg.plansRenew': 'Renew or change plan',
   'tg.plansBuy': 'Choose a plan',
   'tg.perMonth': 'for 30 days',
@@ -630,7 +661,8 @@ export const en: Record<TranslationKey, string> = {
   'tg.previewSwitch': 'Switch right away — until {date}.',
   'tg.previewThenAuto': 'Then every 30 days.',
   'tg.previewBonus': '+{days} days for the rest of your current plan',
-  'tg.previewNoBonus': 'What is left of your current plan is worth less than a day of the new one — no bonus days.',
+  'tg.previewNoBonus':
+    'What is left of your current plan is worth less than a day of the new one — no bonus days.',
   'tg.renew': 'Renew for {stars} ⭐',
   'tg.switch': 'Switch to {plan} · {stars} ⭐',
   'tg.buy': 'Pay {stars} ⭐',
@@ -641,22 +673,28 @@ export const en: Record<TranslationKey, string> = {
   'tg.paymentDoneAuto': 'Done! {plan} is on, auto-renewal is set up.',
   'tg.paymentLate': 'Payment received. The plan turns on within a minute — refresh the account.',
   'tg.paymentFailed': 'The payment did not go through. Please try again.',
-  'tg.refundShort': 'Changed your mind? You can get a refund within {hours} hours if you have not used the models yet.',
+  'tg.refundShort':
+    'Changed your mind? You can get a refund within {hours} hours if you have not used the models yet.',
   'tg.rate': 'Rate: 1 ⭐ ≈ ${rate} ({source}), updated automatically.',
   'tg.rateDefault': 'default',
   'tg.payCrypto': 'Pay with crypto on the website',
   'tg.paymentsTitle': 'Payment history',
   'tg.paymentsEmpty': 'No payments yet',
-  'tg.paymentsEmptyText': 'Subscription receipts will appear here — with the term and an option to get a refund.',
+  'tg.paymentsEmptyText':
+    'Subscription receipts will appear here — with the term and an option to get a refund.',
   'tg.statusPaid': 'Paid',
   'tg.statusRequested': 'Refund under review',
   'tg.statusRefunded': 'Refunded',
   'tg.statusDeclined': 'Refund declined',
   'tg.policyTitle': 'How refunds work',
-  'tg.policy4': 'After a refund, the days from this payment are removed from the subscription and auto-renewal turns off.',
-  'tg.policy1': 'You can get a refund within {hours} hours of paying — if you have not made a single request to the models yet.',
-  'tg.policy2': 'If the models were already used or the time has passed, the payment is not refunded.',
-  'tg.policy3': 'Stars go back to your Telegram balance right away. Crypto is returned to your wallet on request, usually within a day.',
+  'tg.policy4':
+    'After a refund, the days from this payment are removed from the subscription and auto-renewal turns off.',
+  'tg.policy1':
+    'You can get a refund within {hours} hours of paying — if you have not made a single request to the models yet.',
+  'tg.policy2':
+    'If the models were already used or the time has passed, the payment is not refunded.',
+  'tg.policy3':
+    'Stars go back to your Telegram balance right away. Crypto is returned to your wallet on request, usually within a day.',
   'tg.receiptTitle': 'Receipt · {plan}',
   'tg.fieldPlan': 'Plan',
   'tg.fieldMethod': 'Method',
@@ -671,8 +709,10 @@ export const en: Record<TranslationKey, string> = {
   'tg.methodCrypto': 'Crypto',
   'tg.copyId': 'Copy number',
   'tg.refundTitle': 'Refund',
-  'tg.refundAutoText': 'Stars go back to your Telegram balance right away, and your subscription returns to what it was before this payment.',
-  'tg.refundCryptoText': 'Crypto refunds are handled manually: we answer in the bot within a day and ask for your wallet address.',
+  'tg.refundAutoText':
+    'Stars go back to your Telegram balance right away, and your subscription returns to what it was before this payment.',
+  'tg.refundCryptoText':
+    'Crypto refunds are handled manually: we answer in the bot within a day and ask for your wallet address.',
   'tg.refundAutoRenewOff': 'Auto-renewal will turn off.',
   'tg.refundStart': 'Get a refund',
   'tg.refundRequestStart': 'Request a refund',
@@ -691,17 +731,22 @@ export const en: Record<TranslationKey, string> = {
   'tg.refundDone': 'Done: {amount} went back to your Telegram balance.',
   'tg.refundRequested': 'Request sent. We will answer in the bot, usually within a day.',
   'tg.refundNoneRefunded': 'Refunded on {date}.',
-  'tg.refundNonePending': 'Your request from {date} is under review. The answer will come to the bot.',
+  'tg.refundNonePending':
+    'Your request from {date} is under review. The answer will come to the bot.',
   'tg.refundNoneDeclined': 'The refund was declined. If you disagree, contact support.',
   'tg.refundNoneDeclinedNote': 'The refund was declined: {note}. If you disagree, contact support.',
-  'tg.refundNoneExpired': 'The refund window has passed: refunds are possible within {hours} hours of paying.',
-  'tg.refundDeadline': 'You can get a refund until {date}, as long as you make no requests to the models. The first model reply closes the refund.',
-  'tg.refundNoneUsed': 'The models were already used after this payment, so it cannot be refunded. Refunds are possible within {hours} hours and only with no requests to the models.',
+  'tg.refundNoneExpired':
+    'The refund window has passed: refunds are possible within {hours} hours of paying.',
+  'tg.refundDeadline':
+    'You can get a refund until {date}, as long as you make no requests to the models. The first model reply closes the refund.',
+  'tg.refundNoneUsed':
+    'The models were already used after this payment, so it cannot be refunded. Refunds are possible within {hours} hours and only with no requests to the models.',
   'tg.telegramAccount': 'Telegram account',
   'tg.memberSince': 'since {date}',
   'tg.siteTitle': 'Ketner AI on the website',
   'tg.siteText': 'We open ketner.org already signed in to your account — no password needed.',
-  'tg.siteTextTelegram': 'We open ketner.org already signed in. On another device, tap “Sign in with Telegram”.',
+  'tg.siteTextTelegram':
+    'We open ketner.org already signed in. On another device, tap “Sign in with Telegram”.',
   'tg.openSiteSettings': 'Account settings on the website',
   'tg.notifyTitle': 'Bot notifications',
   'tg.notifyReminders': 'Renewal reminders',
@@ -710,9 +755,11 @@ export const en: Record<TranslationKey, string> = {
   'tg.notifyReceiptsHint': 'A message after every payment',
   'tg.notifyRefundsAlways': 'Refund answers and important account messages always arrive.',
   'tg.language': 'Language',
-  'tg.telegramOnlyNote': 'This account was created with Telegram, so it cannot be unlinked: Telegram is how you sign in.',
+  'tg.telegramOnlyNote':
+    'This account was created with Telegram, so it cannot be unlinked: Telegram is how you sign in.',
   'tg.unlink': 'Unlink Telegram from the account',
-  'tg.unlinkConfirm': 'Unlink Telegram? Reminders and receipts will stop, and the account will ask you to sign in again.',
+  'tg.unlinkConfirm':
+    'Unlink Telegram? Reminders and receipts will stop, and the account will ask you to sign in again.',
   'tg.unlinkYes': 'Unlink',
   'tg.adminTitle': 'Refund requests',
   'tg.adminWaiting': 'Waiting for a decision',
@@ -727,7 +774,8 @@ export const en: Record<TranslationKey, string> = {
   'tg.adminDecline': 'Decline',
   'tg.adminApproved': 'Refund done, the customer was notified.',
   'tg.adminDeclined': 'Decline sent to the customer.',
-  'tg.adminCryptoHint': 'You return crypto manually: approving cancels the paid period and asks the customer to send their wallet to support.',
+  'tg.adminCryptoHint':
+    'You return crypto manually: approving cancels the paid period and asks the customer to send their wallet to support.',
   'common.close': 'Close',
   'settings.supportBotLabel': 'Official support bot:',
   'settings.adminTitle': 'Admin panel',
@@ -770,7 +818,8 @@ export const en: Record<TranslationKey, string> = {
   'admin.kpiScope': 'for loaded users',
 
   // Админ-панель: маржинальность и шлюз
-  'admin.marginAlertTitle': 'Warning: negative contribution margin detected (Contribution Margin < 0)',
+  'admin.marginAlertTitle':
+    'Warning: negative contribution margin detected (Contribution Margin < 0)',
   'admin.marginAlertText': 'Request cost exceeded subscription revenue for these users:',
   'admin.marginAlertLine': 'Cost: ${cost} · Revenue: ${revenue} (Margin: ${margin})',
   'admin.gatewayTitle': 'Gateway economics and performance',
@@ -898,7 +947,8 @@ export const en: Record<TranslationKey, string> = {
 
   // Оформление: криптовалюта
   'checkout.cryptoTitle': 'Pay with crypto',
-  'checkout.cryptoLead': 'Pay via Trybit: 35+ coins and networks — USDT, BTC, ETH, TON, SOL and more. The fee is shown before you pay.',
+  'checkout.cryptoLead':
+    'Pay via Trybit: 35+ coins and networks — USDT, BTC, ETH, TON, SOL and more. The fee is shown before you pay.',
   'checkout.cryptoInvoiceRetry': 'Issue the invoice again',
   'checkout.cryptoInvoiceFailed': 'Trybit did not issue an invoice. Please try again in a minute.',
   'checkout.cryptoTimer': 'Rate locked for',
@@ -924,10 +974,13 @@ export const en: Record<TranslationKey, string> = {
   'checkout.feeDynamic': 'by network load',
   'checkout.feeTrybit': 'Trybit fee',
   'checkout.feeTotal': 'Total to pay',
-  'checkout.feeNotePayer': 'The fee is included in the amount: service {service}, transfer {transfer}.',
-  'checkout.feeNoteMerchant': 'The Trybit fee ({service} + {transfer}) is covered by the service — you pay exactly the plan price.',
+  'checkout.feeNotePayer':
+    'The fee is included in the amount: service {service}, transfer {transfer}.',
+  'checkout.feeNoteMerchant':
+    'The Trybit fee ({service} + {transfer}) is covered by the service — you pay exactly the plan price.',
   'checkout.feeNoteEstimate': 'Trybit shows the exact amount once the invoice is created.',
-  'checkout.feeNetwork': 'You pay the blockchain network fee for sending from your own wallet — it is not part of the invoice.',
+  'checkout.feeNetwork':
+    'You pay the blockchain network fee for sending from your own wallet — it is not part of the invoice.',
   'checkout.cryptoStepCurrency': '1. Payment currency',
   'checkout.cryptoStepCurrencyHint': 'Choose a cryptocurrency',
   'checkout.cryptoTop': 'Top',
@@ -944,20 +997,27 @@ export const en: Record<TranslationKey, string> = {
   'checkout.cryptoOpenGateway': 'Pay in Trybit widget · {amount}',
   'checkout.cryptoCreatingInvoice': 'Creating the Trybit invoice…',
   'checkout.cryptoGoToPay': 'Proceed to payment · {amount}',
-  'checkout.cryptoGatewayHint': 'The Trybit payment window opens: choose a wallet and coin and send the amount — the window closes by itself and the plan activates automatically.',
-  'checkout.cryptoGatewayOpened': 'The payment window is open. When the payment goes through it closes by itself and the plan activates automatically.',
+  'checkout.cryptoGatewayHint':
+    'The Trybit payment window opens: choose a wallet and coin and send the amount — the window closes by itself and the plan activates automatically.',
+  'checkout.cryptoGatewayOpened':
+    'The payment window is open. When the payment goes through it closes by itself and the plan activates automatically.',
   'checkout.cryptoReopen': 'Open again',
   'checkout.cryptoGatewayStatus': 'Waiting for payment in the gateway',
   'checkout.cryptoAmountExact': 'Exact amount to send',
   'checkout.cryptoMemo': 'Comment (MEMO)',
-  'checkout.cryptoMemoHint': 'Be sure to include it in the transfer, otherwise the payment will not be credited.',
-  'checkout.cryptoInlineHint': 'Scan the QR in your wallet or copy the address and amount. Send exactly this amount in a single payment.',
+  'checkout.cryptoMemoHint':
+    'Be sure to include it in the transfer, otherwise the payment will not be credited.',
+  'checkout.cryptoInlineHint':
+    'Scan the QR in your wallet or copy the address and amount. Send exactly this amount in a single payment.',
   'checkout.cryptoInlineStatus': 'Waiting for the transfer',
-  'checkout.cryptoGatewayInfo': 'The Trybit gateway records the incoming payment and activates the plan automatically.',
+  'checkout.cryptoGatewayInfo':
+    'The Trybit gateway records the incoming payment and activates the plan automatically.',
   'checkout.cryptoCheck': 'Check crypto payment',
   'checkout.cryptoSelectedNetwork': 'Selected network',
-  'checkout.cryptoWrongNetwork': 'Warning: sending funds over the wrong network means they are lost for good.',
-  'checkout.cryptoPending': 'The network is still processing the payment. Please check again in 1–2 minutes.',
+  'checkout.cryptoWrongNetwork':
+    'Warning: sending funds over the wrong network means they are lost for good.',
+  'checkout.cryptoPending':
+    'The network is still processing the payment. Please check again in 1–2 minutes.',
 
   // Оформление: Telegram Stars
   'checkout.starsTitle': 'Pay with Telegram Stars',
@@ -968,7 +1028,8 @@ export const en: Record<TranslationKey, string> = {
   'checkout.starsSync': 'Synced with Telegram',
   'checkout.starsPayIn': 'Pay in Telegram (@{bot})',
   'checkout.starsCheck': 'Check Stars payment',
-  'checkout.starsNotPaid': 'The Stars payment hasn’t arrived yet. Open Telegram (@{bot}), pay the invoice and press the check button again.',
+  'checkout.starsNotPaid':
+    'The Stars payment hasn’t arrived yet. Open Telegram (@{bot}), pay the invoice and press the check button again.',
   'checkout.starsCheckFailed': 'Could not check the invoice status. Try again in a few seconds.',
 
   // Оформление: сводка и успех
@@ -993,22 +1054,29 @@ export const en: Record<TranslationKey, string> = {
   'docPage.title': 'Ketner AI Documentation',
   'docPage.lead': 'Everything you need to know about Ketner AI, plans, and fair usage.',
   'docPage.viewPlans': 'View plans',
-  'docPage.whatLead': 'One service instead of dozens of subscriptions. Access the world’s best AI models in a single place.',
-  'docPage.whatText': 'Forget about switching between separate accounts, paying $20 to each provider, and managing API keys. Ketner AI brings together OpenAI GPT, Anthropic Claude, and Google Gemini under one seamless, unlimited subscription.',
+  'docPage.whatLead':
+    'One service instead of dozens of subscriptions. Access the world’s best AI models in a single place.',
+  'docPage.whatText':
+    'Forget about switching between separate accounts, paying $20 to each provider, and managing API keys. Ketner AI brings together OpenAI GPT, Anthropic Claude, and Google Gemini under one seamless, unlimited subscription.',
   'docPage.step1Title': 'Type your question',
-  'docPage.step1Text': 'Ask for code, translation, writing, analysis, or any creative task in your regular language.',
+  'docPage.step1Text':
+    'Ask for code, translation, writing, analysis, or any creative task in your regular language.',
   'docPage.step2Title': 'We pick the best model',
-  'docPage.step2Text': 'Smart Auto Router chooses the best model for your task, or you can pick your favorite model manually.',
+  'docPage.step2Text':
+    'Smart Auto Router chooses the best model for your task, or you can pick your favorite model manually.',
   'docPage.step3Title': 'You get the answer',
-  'docPage.step3Text': 'Streamed instantly to your screen with full markdown, code highlights, and preserved context.',
+  'docPage.step3Text':
+    'Streamed instantly to your screen with full markdown, code highlights, and preserved context.',
   'docPage.plansTitle': 'Plans',
-  'docPage.plansLead': 'Simple transparent plans categorized by speed, priority, and model capabilities — no token math.',
+  'docPage.plansLead':
+    'Simple transparent plans categorized by speed, priority, and model capabilities — no token math.',
   'docPage.fairTitle': 'Fair Use Policy',
   'docPage.fairCallout': 'Plans are built for normal human use: chat, code, documents and images',
   'docPage.fair1Title': '1. For real people',
   'docPage.fair1Text': 'Chat as much as you need for coding, writing, research, and learning.',
   'docPage.fair2Title': '2. Protection from bots',
-  'docPage.fair2Text': 'Fair Use prevents automated web scraping and DDOS floods so servers stay fast for everyone.',
+  'docPage.fair2Text':
+    'Fair Use prevents automated web scraping and DDOS floods so servers stay fast for everyone.',
   'docPage.fair3Title': '3. Invisible and smooth',
   'docPage.fair3Text': 'With normal use you won’t run into restrictions.',
   'docPage.faqTitle': 'Frequently Asked Questions',
@@ -1021,12 +1089,14 @@ export const en: Record<TranslationKey, string> = {
   // Ketner Code
   'nav.code': 'Ketner Code',
   'code.auth.title': 'Sign in to use projects',
-  'code.auth.hint': 'Ketner Code stores your code on the server, so an account is required. Projects are visible only to you.',
+  'code.auth.hint':
+    'Ketner Code stores your code on the server, so an account is required. Projects are visible only to you.',
   'code.title': 'Ketner Code',
   'code.subtitle': 'Projects and an AI agent that reads code, makes changes and checks the result',
   'code.projects.title': 'Projects',
   'code.projects.empty': 'No projects yet',
-  'code.projects.emptyHint': 'Create a project from scratch or import your code — the agent can then work with it.',
+  'code.projects.emptyHint':
+    'Create a project from scratch or import your code — the agent can then work with it.',
   'code.projects.new': 'New project',
   'code.projects.name': 'Name',
   'code.projects.namePlaceholder': 'My project',
@@ -1051,7 +1121,8 @@ export const en: Record<TranslationKey, string> = {
   'code.import.result': 'Files uploaded: {written}. Skipped: {skipped}.',
   'code.import.skippedTitle': 'What was skipped',
   'code.import.noFiles': 'The selected source has no suitable text files.',
-  'code.import.note': 'Files with secrets (.env, keys), dependencies (node_modules) and binary files are not uploaded.',
+  'code.import.note':
+    'Files with secrets (.env, keys), dependencies (node_modules) and binary files are not uploaded.',
   'code.ws.back': 'All projects',
   'code.ws.files': 'Files',
   'code.ws.editor': 'Editor',
@@ -1082,7 +1153,8 @@ export const en: Record<TranslationKey, string> = {
   'code.agent.stop': 'Stop',
   'code.agent.running': 'The agent is working',
   'code.agent.step': 'step {step}',
-  'code.agent.empty': 'Describe a task — the agent will study the project, make changes and check the result.',
+  'code.agent.empty':
+    'Describe a task — the agent will study the project, make changes and check the result.',
   'code.agent.example1': 'Add a README describing the project and how to run it',
   'code.agent.example2': 'Find and fix bugs in the code',
   'code.agent.example3': 'Add tests for the main functions',
@@ -1117,58 +1189,71 @@ export const en: Record<TranslationKey, string> = {
   'images.authHint': 'Images are saved to your account.',
   'images.upgrade': 'Upgrade plan',
   'images.loadError': 'Could not load images.',
-  'images.rules': 'Requests are checked: explicit images, graphic violence and degrading images of real people cannot be created.',
+  'images.rules':
+    'Requests are checked: explicit images, graphic violence and degrading images of real people cannot be created.',
   'images.elapsed': '{seconds} s',
-  'images.help.open': "About models",
-  'images.help.title': "About the models",
-  'images.help.intro': "Each model draws differently. Fast ones suit sketches and ideas, precise ones suit finished images.",
-  'images.help.models': "Models",
-  'images.help.free': "Free",
-  'images.help.fromPlan': "from {plan}",
-  'images.help.bestFor': "Best for",
-  'images.help.formatsAll': "Any format: square, 4:3, 3:4, 16:9, 9:16",
-  'images.help.formatsSquare': "Square 1:1 only",
-  'images.help.locked': "Available from the {plan} plan",
-  'images.help.model.flux-schnell.about': "The fastest model: an image is ready in a few seconds.",
-  'images.help.model.flux-schnell.best': "sketches, ideas, simple scenes and characters.",
-  'images.help.model.flux-2-klein.about': "The new FLUX generation: more detail and closer to your description.",
-  'images.help.model.flux-2-klein.best': "illustrations, covers and backgrounds in the format you need.",
-  'images.help.model.flux-2-dev.about': "High quality and fine detail, renders light and materials well.",
-  'images.help.model.flux-2-dev.best': "photorealistic scenes, product shots and interiors.",
-  'images.help.model.seedream-5-flash.about': "Bright, rich images with a design and advertising feel.",
-  'images.help.model.seedream-5-flash.best': "posters, illustrations and social media images.",
-  'images.help.model.flux-2-pro.about': "The best photorealism and complex compositions with several subjects.",
-  'images.help.model.flux-2-pro.best': "portraits, ads and images where every detail matters.",
-  'images.help.model.nano-banana-2.about': "Understands long, complex descriptions best and renders text on the image neatly.",
-  'images.help.model.nano-banana-2.best': "scenes with lettering, diagrams and following instructions precisely.",
-  'images.help.tipsTitle': "How to write a good description",
-  'images.help.tip1': "Describe the essentials: who or what, where, the light and the mood. For example: \"a red fox in a snowy forest at sunset\".",
-  'images.help.tip2': "Pick a style below the description and it is added to the request automatically. You can also describe a style in words: \"like an old postcard\".",
-  'images.help.tip3': "Put text for the image in quotes and keep it short. Nano Banana 2 and Seedream handle text best.",
-  'images.help.tip4': "You can write in any language: the description is translated for the model automatically.",
-  'images.help.rulesTitle': "Rules",
-  'images.style': "Choose a style",
-  'images.style.none': "No style",
-  'images.style.photo': "Photo",
-  'images.style.cinematic': "Cinema",
-  'images.style.portrait': "Portrait",
-  'images.style.anime': "Anime",
-  'images.style.watercolor': "Watercolor",
-  'images.style.oil': "Oil painting",
-  'images.style.3d': "3D",
-  'images.style.digital': "Digital art",
-  'images.style.pixel': "Pixel art",
-  'images.style.sketch': "Sketch",
-  'images.style.neon': "Neon",
-  'images.style.minimal': "Minimalism",
-  'images.style.whiteboard': "Whiteboard",
-  'images.style.product': "Product promo",
-  'images.style.cartoon': "Cartoon",
-  'images.style.app-promo': "App promo",
-  'images.style.comic': "Comic book",
-  'images.style.ugc': "UGC",
-  'images.style.prev': "Previous styles",
-  'images.style.next': "Next styles",
+  'images.help.open': 'About models',
+  'images.help.title': 'About the models',
+  'images.help.intro':
+    'Each model draws differently. Fast ones suit sketches and ideas, precise ones suit finished images.',
+  'images.help.models': 'Models',
+  'images.help.free': 'Free',
+  'images.help.fromPlan': 'from {plan}',
+  'images.help.bestFor': 'Best for',
+  'images.help.formatsAll': 'Any format: square, 4:3, 3:4, 16:9, 9:16',
+  'images.help.formatsSquare': 'Square 1:1 only',
+  'images.help.locked': 'Available from the {plan} plan',
+  'images.help.model.flux-schnell.about': 'The fastest model: an image is ready in a few seconds.',
+  'images.help.model.flux-schnell.best': 'sketches, ideas, simple scenes and characters.',
+  'images.help.model.flux-2-klein.about':
+    'The new FLUX generation: more detail and closer to your description.',
+  'images.help.model.flux-2-klein.best':
+    'illustrations, covers and backgrounds in the format you need.',
+  'images.help.model.flux-2-dev.about':
+    'High quality and fine detail, renders light and materials well.',
+  'images.help.model.flux-2-dev.best': 'photorealistic scenes, product shots and interiors.',
+  'images.help.model.seedream-5-flash.about':
+    'Bright, rich images with a design and advertising feel.',
+  'images.help.model.seedream-5-flash.best': 'posters, illustrations and social media images.',
+  'images.help.model.flux-2-pro.about':
+    'The best photorealism and complex compositions with several subjects.',
+  'images.help.model.flux-2-pro.best': 'portraits, ads and images where every detail matters.',
+  'images.help.model.nano-banana-2.about':
+    'Understands long, complex descriptions best and renders text on the image neatly.',
+  'images.help.model.nano-banana-2.best':
+    'scenes with lettering, diagrams and following instructions precisely.',
+  'images.help.tipsTitle': 'How to write a good description',
+  'images.help.tip1':
+    'Describe the essentials: who or what, where, the light and the mood. For example: "a red fox in a snowy forest at sunset".',
+  'images.help.tip2':
+    'Pick a style below the description and it is added to the request automatically. You can also describe a style in words: "like an old postcard".',
+  'images.help.tip3':
+    'Put text for the image in quotes and keep it short. Nano Banana 2 and Seedream handle text best.',
+  'images.help.tip4':
+    'You can write in any language: the description is translated for the model automatically.',
+  'images.help.rulesTitle': 'Rules',
+  'images.style': 'Choose a style',
+  'images.style.none': 'No style',
+  'images.style.photo': 'Photo',
+  'images.style.cinematic': 'Cinema',
+  'images.style.portrait': 'Portrait',
+  'images.style.anime': 'Anime',
+  'images.style.watercolor': 'Watercolor',
+  'images.style.oil': 'Oil painting',
+  'images.style.3d': '3D',
+  'images.style.digital': 'Digital art',
+  'images.style.pixel': 'Pixel art',
+  'images.style.sketch': 'Sketch',
+  'images.style.neon': 'Neon',
+  'images.style.minimal': 'Minimalism',
+  'images.style.whiteboard': 'Whiteboard',
+  'images.style.product': 'Product promo',
+  'images.style.cartoon': 'Cartoon',
+  'images.style.app-promo': 'App promo',
+  'images.style.comic': 'Comic book',
+  'images.style.ugc': 'UGC',
+  'images.style.prev': 'Previous styles',
+  'images.style.next': 'Next styles',
   'code.tasks.title': 'Tasks',
   'code.tasks.progress': '{done} of {total}',
   'code.tasks.pill': 'Agent tasks: {done} of {total}',
@@ -1198,7 +1283,8 @@ export const en: Record<TranslationKey, string> = {
   'code.tool.update_plan': 'Plan',
   'code.notice.close': 'Dismiss',
   'home.heroTitle': 'Every frontier model in one subscription',
-  'home.heroLead': 'GPT, Claude, Gemini, Grok and DeepSeek in one window. Switch models mid-conversation or let Auto choose.',
+  'home.heroLead':
+    'GPT, Claude, Gemini, Grok and DeepSeek in one window. Switch models mid-conversation or let Auto choose.',
   'home.heroCta': 'Start for free',
   'home.heroCtaSignedIn': 'Open chat',
   'home.heroSecondary': 'Compare plans',
@@ -1209,9 +1295,12 @@ export const en: Record<TranslationKey, string> = {
   'home.spacesChat': 'Chat',
   'home.spacesCode': 'Ketner Code',
   'home.spacesImages': 'Images',
-  'home.spacesChatDesc': 'Switch models mid-conversation. DOCX, XLSX and PPTX are read as text, and you can link a folder or repository to a chat.',
-  'home.spacesCodeDesc': 'The agent splits a task into steps, edits project files and shows the diff. Import from ZIP or GitHub, export to ZIP.',
-  'home.spacesImagesDesc': 'FLUX.1 schnell for free; FLUX.2, Seedream and Nano Banana on paid plans. Styles, formats and a gallery.',
+  'home.spacesChatDesc':
+    'Switch models mid-conversation. DOCX, XLSX and PPTX are read as text, and you can link a folder or repository to a chat.',
+  'home.spacesCodeDesc':
+    'The agent splits a task into steps, edits project files and shows the diff. Import from ZIP or GitHub, export to ZIP.',
+  'home.spacesImagesDesc':
+    'FLUX.1 schnell for free; FLUX.2, Seedream and Nano Banana on paid plans. Styles, formats and a gallery.',
   'home.spacesChatFact1': '14 models plus Auto',
   'home.spacesChatFact2': 'Files, folders, GitHub',
   'home.spacesChatFact3': 'Max mode on Ultra',
@@ -1222,7 +1311,8 @@ export const en: Record<TranslationKey, string> = {
   'home.spacesImagesFact2': 'Up to 5 aspect ratios',
   'home.spacesImagesFact3': 'Free on the Free plan',
   'home.spacesChatQ': 'Compare two landing headlines and pick the stronger one',
-  'home.spacesChatA': 'The second is stronger: it names the benefit, not the feature. Keep the first as a subheading.',
+  'home.spacesChatA':
+    'The second is stronger: it names the benefit, not the feature. Keep the first as a subheading.',
   'home.spacesCodeTask': 'Add a dark theme to settings',
   'home.spacesCodeStep1': 'Find where the theme is stored',
   'home.spacesCodeStep2': 'Add a toggle',
@@ -1260,13 +1350,15 @@ export const en: Record<TranslationKey, string> = {
   'home.saveNoGain': 'A single subscription costs less than Ketner Pro: see Plus at $9',
   'home.saveFine': 'Separate subscription prices are from the services’ sites, August 2026.',
   'home.pricingTitle': 'Plans',
-  'home.pricingLead': 'Start for free. A paid plan unlocks strong models, more of Ketner Code and paid image models.',
+  'home.pricingLead':
+    'Start for free. A paid plan unlocks strong models, more of Ketner Code and paid image models.',
   'home.pricingCompare': 'Full plan comparison',
   'home.faqTitle': 'FAQ',
   'home.faqLead': 'Plans and models in brief. More in the docs.',
   'home.faqMore': 'All documentation',
   'home.finalTitle': 'Start on the free plan',
-  'home.finalLead': 'Ketner Mini, Auto and FLUX.1 schnell are free. A paid plan takes a minute to set up.',
+  'home.finalLead':
+    'Ketner Mini, Auto and FLUX.1 schnell are free. A paid plan takes a minute to set up.',
   'home.footerProduct': 'Product',
   'home.footerAccount': 'Account',
   'home.footerResources': 'Resources',
@@ -1278,7 +1370,8 @@ export const en: Record<TranslationKey, string> = {
   'home.heroTitleA': 'Every frontier model',
   'home.heroTitleB': 'in one subscription',
   'dev.title': 'Developer API',
-  'dev.lead': 'An OpenAI-compatible API: connect Ketner models to Cursor, Continue or your own code. Any library that lets you change the OpenAI base URL works.',
+  'dev.lead':
+    'An OpenAI-compatible API: connect Ketner models to Cursor, Continue or your own code. Any library that lets you change the OpenAI base URL works.',
   'dev.navKeys': 'Keys',
   'dev.navBase': 'Base URL and models',
   'dev.navQuick': 'Quick start',
@@ -1303,31 +1396,38 @@ export const en: Record<TranslationKey, string> = {
   'dev.keysRevokeConfirm': 'Revoke “{name}”? Apps using it will stop working.',
   'dev.keysRevokeYes': 'Yes, revoke',
   'dev.keysNewTitle': 'Copy your key now',
-  'dev.keysNewText': 'The key is shown only once: the server keeps only its fingerprint. If you lose it, create a new one.',
+  'dev.keysNewText':
+    'The key is shown only once: the server keeps only its fingerprint. If you lose it, create a new one.',
   'dev.keysCopy': 'Copy',
   'dev.keysCopied': 'Copied',
   'dev.keysDone': 'Done, I saved it',
   'dev.keysLoadError': 'Couldn’t load keys. Refresh the page.',
-  'dev.keysSafety': 'Don’t commit the key or put it in frontend code. Keep it in an environment variable such as KETNER_API_KEY.',
+  'dev.keysSafety':
+    'Don’t commit the key or put it in frontend code. Keep it in an environment variable such as KETNER_API_KEY.',
   'dev.baseTitle': 'Base URL',
-  'dev.baseHint': 'Set it as the base URL in your OpenAI client. Authorize with Authorization: Bearer and your key.',
+  'dev.baseHint':
+    'Set it as the base URL in your OpenAI client. Authorize with Authorization: Bearer and your key.',
   'dev.baseCopy': 'Copy URL',
   'dev.modelsTitle': 'Models',
   'dev.modelsHint': 'Pass the id in the model field. auto picks a model for you.',
   'dev.quickTitle': 'Quick start',
   'dev.quickDesc': 'One chat request in cURL, Python or JavaScript.',
-  'dev.quickKeyHint': 'Your new key is filled into the examples. Refresh the page and it will be hidden again.',
+  'dev.quickKeyHint':
+    'Your new key is filled into the examples. Refresh the page and it will be hidden again.',
   'dev.quickPrompt': 'Write a Python function that checks whether a string is a palindrome',
   'dev.editorsTitle': 'Connect an editor',
   'dev.editorsDesc': 'Cursor and Continue work with any OpenAI-compatible endpoint.',
   'dev.cursorTitle': 'Cursor',
   'dev.cursor1': 'Open **Settings → Models**.',
-  'dev.cursor2': 'Under **OpenAI API Key**, paste your key and turn on **Override OpenAI Base URL**.',
+  'dev.cursor2':
+    'Under **OpenAI API Key**, paste your key and turn on **Override OpenAI Base URL**.',
   'dev.cursor3': 'Set the URL to `{url}`.',
-  'dev.cursor4': 'Add a model by id, for example `ketner-pro` or `claude-sonnet-5.5`, then click **Verify**.',
+  'dev.cursor4':
+    'Add a model by id, for example `ketner-pro` or `claude-sonnet-5.5`, then click **Verify**.',
   'dev.continueTitle': 'Continue (VS Code, JetBrains)',
   'dev.continueHint': 'Add the models to `~/.continue/config.yaml`:',
-  'dev.completionsLead': 'OpenAI Chat Completions format: regular replies, streaming (SSE) and function calling (tools). Your client runs the model → tool → result loop.',
+  'dev.completionsLead':
+    'OpenAI Chat Completions format: regular replies, streaming (SSE) and function calling (tools). Your client runs the model → tool → result loop.',
   'dev.paramsTitle': 'Body parameters',
   'dev.paramModel': 'model id from the list, or auto',
   'dev.paramMessages': 'Messages with roles system, user, assistant and tool',
@@ -1337,20 +1437,25 @@ export const en: Record<TranslationKey, string> = {
   'dev.paramMaxTokens': 'Maximum reply length',
   'dev.paramTemperature': 'Temperature, 0 to 2',
   'dev.examplesTitle': 'Function calling example',
-  'dev.modelsEndpointLead': 'Returns models in OpenAI format. The available field shows whether a model is on your plan.',
+  'dev.modelsEndpointLead':
+    'Returns models in OpenAI format. The available field shows whether a model is on your plan.',
   'dev.errorsTitle': 'Errors',
-  'dev.errorsText': 'Errors use the OpenAI format: `{"error": {"message", "type", "code"}}`. 401 means a wrong or revoked key, 403 means the model or API isn’t on your plan, 429 means too many requests, retry later.',
+  'dev.errorsText':
+    'Errors use the OpenAI format: `{"error": {"message", "type", "code"}}`. 401 means a wrong or revoked key, 403 means the model or API isn’t on your plan, 429 means too many requests, retry later.',
   'home.demoTitle': 'One chat, any model',
-  'home.demoSummary': 'Illustration: three requests in one chat, each answered by the chosen model: Claude Opus 5.5, GPT-6 Astra or Gemini 3.7 Flash.',
+  'home.demoSummary':
+    'Illustration: three requests in one chat, each answered by the chosen model: Claude Opus 5.5, GPT-6 Astra or Gemini 3.7 Flash.',
   'home.demoRequest': 'Request',
   'home.demoModel': 'Model',
   'home.demoAnswer': 'Answer',
   'home.demoPick': 'Show example {n}',
   'home.demoNote': 'Illustration, not a live chat',
   'home.demoQ1': 'Cut this paragraph in half and make it livelier',
-  'home.demoA1': 'I removed the repetition and jargon and kept the main point. Half the length, same meaning.',
+  'home.demoA1':
+    'I removed the repetition and jargon and kept the main point. Half the length, same meaning.',
   'home.demoQ2': 'Read this log: why does the service crash every night at 03:00?',
-  'home.demoA2': 'The backup job starts at 03:00 and takes all the memory. Cap its memory or move it to 04:30.',
+  'home.demoA2':
+    'The backup job starts at 03:00 and takes all the memory. Cap its memory or move it to 04:30.',
   'home.demoQ3': 'Suggest five names for a seaside coffee shop',
   'home.demoA3': 'Salt Breeze, Lighthouse & Bean, Low Tide, Seafoam, Shoreline Roast.',
   'home.navFeatures': 'Features',

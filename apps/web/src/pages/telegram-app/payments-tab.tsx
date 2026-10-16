@@ -1,13 +1,34 @@
 import { useId, useState } from 'react';
-import { ChevronRightIcon, CryptoIcon, FileTextIcon, RefreshIcon, StarIcon } from '@/components/icons';
+import {
+  ChevronRightIcon,
+  CryptoIcon,
+  FileTextIcon,
+  RefreshIcon,
+  StarIcon,
+} from '@/components/icons';
 import { Badge, type BadgeTone } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { CopyButton } from '@/components/ui/copy-button';
-import { ApiError, miniAppApi, type MiniAppPayment, type PaymentStatus } from '@/features/telegram/api';
+import {
+  ApiError,
+  miniAppApi,
+  type MiniAppPayment,
+  type PaymentStatus,
+} from '@/features/telegram/api';
 import { haptic } from '@/features/telegram/webapp';
 import { useTranslation, type TranslationKey } from '@/i18n';
 import { cn } from '@/lib/cn';
-import { Field, formatAmount, formatDate, formatDateTime, Notice, Panel, SectionTitle, Sheet, useMiniApp } from './shared';
+import {
+  Field,
+  formatAmount,
+  formatDate,
+  formatDateTime,
+  Notice,
+  Panel,
+  SectionTitle,
+  Sheet,
+  useMiniApp,
+} from './shared';
 
 const STATUS: Record<PaymentStatus, { tone: BadgeTone; key: TranslationKey }> = {
   paid: { tone: 'success', key: 'tg.statusPaid' },
@@ -16,7 +37,13 @@ const STATUS: Record<PaymentStatus, { tone: BadgeTone; key: TranslationKey }> = 
   refund_declined: { tone: 'danger', key: 'tg.statusDeclined' },
 };
 
-const REASONS: TranslationKey[] = ['tg.reasonNotFit', 'tg.reasonWrongPlan', 'tg.reasonNoUse', 'tg.reasonExpensive', 'tg.reasonOther'];
+const REASONS: TranslationKey[] = [
+  'tg.reasonNotFit',
+  'tg.reasonWrongPlan',
+  'tg.reasonNoUse',
+  'tg.reasonExpensive',
+  'tg.reasonOther',
+];
 
 export function PaymentsTab() {
   const { t, language } = useTranslation();
@@ -50,7 +77,11 @@ export function PaymentsTab() {
                   className="flex min-h-16 w-full items-center gap-3 px-4 py-3 text-left hover:bg-surface-2 focus-visible:bg-surface-2 focus-visible:outline-none"
                 >
                   <span className="grid size-9 shrink-0 place-items-center rounded-full bg-surface-2 text-muted">
-                    {payment.method === 'stars' ? <StarIcon className="size-4 fill-warning text-warning" /> : <CryptoIcon className="size-4" />}
+                    {payment.method === 'stars' ? (
+                      <StarIcon className="size-4 fill-warning text-warning" />
+                    ) : (
+                      <CryptoIcon className="size-4" />
+                    )}
                   </span>
                   <span className="min-w-0 flex-1">
                     <span className="flex items-center gap-1.5 text-[15px] font-medium">
@@ -62,11 +93,19 @@ export function PaymentsTab() {
                         </>
                       ) : null}
                     </span>
-                    <span className="mt-0.5 block text-[12px] text-subtle">{formatDateTime(payment.paidAt, language)}</span>
+                    <span className="mt-0.5 block text-[12px] text-subtle">
+                      {formatDateTime(payment.paidAt, language)}
+                    </span>
                   </span>
                   <span className="flex shrink-0 flex-col items-end gap-1">
-                    <span className="text-[14px] font-medium tabular-nums">{formatAmount(payment, language)}</span>
-                    {payment.status !== 'paid' ? <Badge tone={STATUS[payment.status].tone}>{t(STATUS[payment.status].key)}</Badge> : null}
+                    <span className="text-[14px] font-medium tabular-nums">
+                      {formatAmount(payment, language)}
+                    </span>
+                    {payment.status !== 'paid' ? (
+                      <Badge tone={STATUS[payment.status].tone}>
+                        {t(STATUS[payment.status].key)}
+                      </Badge>
+                    ) : null}
                   </span>
                   <ChevronRightIcon className="size-4 shrink-0 text-subtle" />
                 </button>
@@ -125,7 +164,10 @@ function PaymentSheet({ payment, onClose }: { payment: MiniAppPayment; onClose: 
       const { outcome, ...next } = result;
       setState(next);
       haptic.success(app);
-      notify('success', outcome === 'refunded' ? t('tg.refundDone', { amount }) : t('tg.refundRequested'));
+      notify(
+        'success',
+        outcome === 'refunded' ? t('tg.refundDone', { amount }) : t('tg.refundRequested'),
+      );
       onClose();
     } catch (caught) {
       haptic.error(app);
@@ -137,14 +179,24 @@ function PaymentSheet({ payment, onClose }: { payment: MiniAppPayment; onClose: 
   const noneText: Record<string, string> = {
     refunded: t('tg.refundNoneRefunded', { date: formatDate(payment.refund?.decidedAt, language) }),
     pending: t('tg.refundNonePending', { date: formatDate(payment.refund?.requestedAt, language) }),
-    declined: payment.refund?.note ? t('tg.refundNoneDeclinedNote', { note: payment.refund.note }) : t('tg.refundNoneDeclined'),
+    declined: payment.refund?.note
+      ? t('tg.refundNoneDeclinedNote', { note: payment.refund.note })
+      : t('tg.refundNoneDeclined'),
     expired: t('tg.refundNoneExpired', { hours: state.refundPolicy.hours }),
     used: t('tg.refundNoneUsed', { hours: state.refundPolicy.hours }),
   };
-  const deadline = formatDateTime(new Date(Date.parse(payment.paidAt) + state.refundPolicy.hours * 3600_000).toISOString(), language);
+  const deadline = formatDateTime(
+    new Date(Date.parse(payment.paidAt) + state.refundPolicy.hours * 3600_000).toISOString(),
+    language,
+  );
 
   return (
-    <Sheet title={t('tg.receiptTitle', { plan: payment.planTitle })} onClose={onClose} closeLabel={t('tg.close')} app={app}>
+    <Sheet
+      title={t('tg.receiptTitle', { plan: payment.planTitle })}
+      onClose={onClose}
+      closeLabel={t('tg.close')}
+      app={app}
+    >
       <div className="flex flex-col items-center gap-1 pb-3 text-center">
         <p className="text-[28px] font-semibold tabular-nums tracking-tight">{amount}</p>
         <Badge tone={STATUS[payment.status].tone}>{t(STATUS[payment.status].key)}</Badge>
@@ -152,19 +204,31 @@ function PaymentSheet({ payment, onClose }: { payment: MiniAppPayment; onClose: 
       <dl className="divide-y divide-stroke rounded-lg border border-stroke px-3">
         <Field label={t('tg.fieldPlan')}>
           {payment.planTitle}
-          {payment.recurring ? <span className="ml-1 text-muted">· {t('tg.autoRenew')}</span> : null}
+          {payment.recurring ? (
+            <span className="ml-1 text-muted">· {t('tg.autoRenew')}</span>
+          ) : null}
         </Field>
-        <Field label={t('tg.fieldMethod')}>{payment.method === 'stars' ? 'Telegram Stars' : t('tg.methodCrypto')}</Field>
+        <Field label={t('tg.fieldMethod')}>
+          {payment.method === 'stars' ? 'Telegram Stars' : t('tg.methodCrypto')}
+        </Field>
         <Field label={t('tg.fieldDate')}>{formatDateTime(payment.paidAt, language)}</Field>
-        {payment.periodEnd ? <Field label={t('tg.fieldPeriod')}>{formatDate(payment.periodEnd, language, true)}</Field> : null}
-        {payment.bonusDays > 0 ? <Field label={t('tg.fieldBonus')}>{t('tg.bonusValue', { days: payment.bonusDays })}</Field> : null}
+        {payment.periodEnd ? (
+          <Field label={t('tg.fieldPeriod')}>{formatDate(payment.periodEnd, language, true)}</Field>
+        ) : null}
+        {payment.bonusDays > 0 ? (
+          <Field label={t('tg.fieldBonus')}>
+            {t('tg.bonusValue', { days: payment.bonusDays })}
+          </Field>
+        ) : null}
         <Field label={t('tg.fieldId')}>
           <span className="inline-flex max-w-full items-center gap-1">
             <span className="truncate font-mono text-[12px]">{payment.chargeId ?? payment.id}</span>
             <CopyButton value={payment.chargeId ?? payment.id} label={t('tg.copyId')} size="sm" />
           </span>
         </Field>
-        {payment.refund?.reason ? <Field label={t('tg.fieldReason')}>{payment.refund.reason}</Field> : null}
+        {payment.refund?.reason ? (
+          <Field label={t('tg.fieldReason')}>{payment.refund.reason}</Field>
+        ) : null}
       </dl>
 
       <section aria-labelledby={`${commentId}-refund`} className="mt-4 flex flex-col gap-3">
@@ -172,7 +236,9 @@ function PaymentSheet({ payment, onClose }: { payment: MiniAppPayment; onClose: 
           {t('tg.refundTitle')}
         </h3>
         {option.kind === 'none' ? (
-          <Notice tone={option.reason === 'declined' ? 'warning' : 'info'}>{noneText[option.reason]}</Notice>
+          <Notice tone={option.reason === 'declined' ? 'warning' : 'info'}>
+            {noneText[option.reason]}
+          </Notice>
         ) : !form ? (
           <>
             <p className="text-[14px] leading-6 text-muted">
@@ -204,7 +270,9 @@ function PaymentSheet({ payment, onClose }: { payment: MiniAppPayment; onClose: 
                   className={cn(
                     'min-h-9 rounded-full border px-3.5 text-[13px] transition-colors duration-150',
                     'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent',
-                    reason === key ? 'border-accent bg-accent-soft text-text' : 'border-stroke text-muted hover:text-text',
+                    reason === key
+                      ? 'border-accent bg-accent-soft text-text'
+                      : 'border-stroke text-muted hover:text-text',
                   )}
                 >
                   {t(key)}
@@ -227,10 +295,20 @@ function PaymentSheet({ payment, onClose }: { payment: MiniAppPayment; onClose: 
             </div>
             {option.kind === 'auto' ? <Notice tone="warning">{t('tg.refundWarn')}</Notice> : null}
             {error ? <Notice tone="danger">{error}</Notice> : null}
-            <Button variant={option.kind === 'auto' ? 'danger' : 'primary'} className="w-full" loading={busy} onClick={() => void submit()}>
+            <Button
+              variant={option.kind === 'auto' ? 'danger' : 'primary'}
+              className="w-full"
+              loading={busy}
+              onClick={() => void submit()}
+            >
               {option.kind === 'auto' ? t('tg.refundConfirm', { amount }) : t('tg.refundSend')}
             </Button>
-            <Button variant="ghost" className="w-full" disabled={busy} onClick={() => setForm(false)}>
+            <Button
+              variant="ghost"
+              className="w-full"
+              disabled={busy}
+              onClick={() => setForm(false)}
+            >
               {t('tg.cancel')}
             </Button>
           </div>

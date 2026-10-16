@@ -66,7 +66,9 @@ export function DocsLayout({ nav, toc, activeId, children, className }: DocsLayo
       <div
         className={cn(
           'grid grid-cols-1 gap-8 xl:gap-12',
-          hasToc ? 'xl:grid-cols-[210px_minmax(0,1fr)_176px]' : 'xl:grid-cols-[210px_minmax(0,1fr)]',
+          hasToc
+            ? 'xl:grid-cols-[210px_minmax(0,1fr)_176px]'
+            : 'xl:grid-cols-[210px_minmax(0,1fr)]',
         )}
       >
         {/* Разделы (xl+) */}
@@ -89,7 +91,12 @@ export function DocsLayout({ nav, toc, activeId, children, className }: DocsLayo
                       )}
                     >
                       {item.icon ? (
-                        <span className={cn('size-4 shrink-0', isActive ? 'text-accent' : 'text-subtle')}>
+                        <span
+                          className={cn(
+                            'size-4 shrink-0',
+                            isActive ? 'text-accent' : 'text-subtle',
+                          )}
+                        >
                           {item.icon}
                         </span>
                       ) : null}

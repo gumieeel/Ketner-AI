@@ -41,7 +41,14 @@ export interface MiniAppPayment {
   periodEnd: string | null;
   bonusDays: number;
   chargeId: string | null;
-  refund: { requestedAt?: string; reason?: string; comment?: string; decidedAt?: string; auto?: boolean; note?: string } | null;
+  refund: {
+    requestedAt?: string;
+    reason?: string;
+    comment?: string;
+    decidedAt?: string;
+    auto?: boolean;
+    note?: string;
+  } | null;
   refundOption: RefundOption;
 }
 
@@ -58,8 +65,17 @@ export interface MiniAppState {
     telegramUsername: string | null;
     telegramOnly: boolean;
   };
-  subscription: { plan: PlanId; status: 'active' | 'trialing' | 'past_due' | 'canceled'; renewsAt: string | null };
-  autoRenew: { planId: PaidPlanId; status: 'active' | 'canceled'; stars: number; nextChargeAt: string | null } | null;
+  subscription: {
+    plan: PlanId;
+    status: 'active' | 'trialing' | 'past_due' | 'canceled';
+    renewsAt: string | null;
+  };
+  autoRenew: {
+    planId: PaidPlanId;
+    status: 'active' | 'canceled';
+    stars: number;
+    nextChargeAt: string | null;
+  } | null;
   plans: MiniAppPlan[];
   rate: { usdPerStar: number; source: 'fragment' | 'config'; updatedAt: string };
   payments: MiniAppPayment[];
@@ -81,7 +97,10 @@ export interface AdminRefund extends MiniAppPayment {
   customer: { name: string; email: string | null; telegramUsername: string | null } | null;
 }
 
-async function call<T>(path: string, init: { method?: string; body?: unknown; token?: string } = {}): Promise<T> {
+async function call<T>(
+  path: string,
+  init: { method?: string; body?: unknown; token?: string } = {},
+): Promise<T> {
   const headers: Record<string, string> = {};
   if (init.body !== undefined) headers['Content-Type'] = 'application/json';
   if (init.token) headers.Authorization = `Bearer ${init.token}`;
@@ -113,22 +132,35 @@ export const miniAppApi = {
   register: (initData: string) => call<MiniAppSession>('/register', { body: { initData } }),
   link: (initData: string, email: string, password: string) =>
     call<MiniAppSession>('/link', { body: { initData, email, password } }),
-  linkCode: (initData: string) => call<{ code: string; expiresAt: number }>('/link-code', { body: { initData } }),
+  linkCode: (initData: string) =>
+    call<{ code: string; expiresAt: number }>('/link-code', { body: { initData } }),
   state: (token: string) => call<MiniAppState>('/state', { token }),
   invoice: (token: string, planId: PaidPlanId, recurring: boolean) =>
-    call<{ invoiceId: string; link: string; stars: number; recurring: boolean }>('/invoice', { token, body: { planId, recurring } }),
+    call<{ invoiceId: string; link: string; stars: number; recurring: boolean }>('/invoice', {
+      token,
+      body: { planId, recurring },
+    }),
   invoiceStatus: (token: string, invoiceId: string) =>
     call<{ status: 'pending' | 'paid' | 'expired' }>(`/invoice/${enc(invoiceId)}`, { token }),
-  autoRenew: (token: string, enabled: boolean) => call<MiniAppState>('/auto-renew', { token, body: { enabled } }),
+  autoRenew: (token: string, enabled: boolean) =>
+    call<MiniAppState>('/auto-renew', { token, body: { enabled } }),
   refund: (token: string, paymentId: string, reason: string, comment: string) =>
-    call<{ outcome: 'refunded' | 'requested' } & MiniAppState>(`/payments/${enc(paymentId)}/refund`, {
-      token,
-      body: { reason, comment },
-    }),
-  prefs: (token: string, prefs: Partial<MiniAppState['prefs']>) => call<MiniAppState>('/prefs', { token, body: prefs }),
-  siteLogin: (token: string, next: string) => call<{ url: string }>('/site-login', { token, body: { next } }),
+    call<{ outcome: 'refunded' | 'requested' } & MiniAppState>(
+      `/payments/${enc(paymentId)}/refund`,
+      {
+        token,
+        body: { reason, comment },
+      },
+    ),
+  prefs: (token: string, prefs: Partial<MiniAppState['prefs']>) =>
+    call<MiniAppState>('/prefs', { token, body: prefs }),
+  siteLogin: (token: string, next: string) =>
+    call<{ url: string }>('/site-login', { token, body: { next } }),
   unlink: (token: string) => call<{ ok: boolean }>('/unlink', { token, body: {} }),
   adminRefunds: (token: string) => call<{ refunds: AdminRefund[] }>('/admin/refunds', { token }),
   adminDecide: (token: string, paymentId: string, approve: boolean, note: string) =>
-    call<{ payment: MiniAppPayment }>(`/admin/refunds/${enc(paymentId)}`, { token, body: { approve, note } }),
+    call<{ payment: MiniAppPayment }>(`/admin/refunds/${enc(paymentId)}`, {
+      token,
+      body: { approve, note },
+    }),
 };

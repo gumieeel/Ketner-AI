@@ -17,11 +17,17 @@ export function LandingFinalCta() {
         <h2 id="final-title" className="t-headline max-w-[14ch] text-accent-text">
           {t('home.finalTitle')}
         </h2>
-        <p className="mt-5 max-w-[46ch] text-[17px] leading-relaxed text-accent-text/80">{t('home.finalLead')}</p>
+        <p className="mt-5 max-w-[46ch] text-[17px] leading-relaxed text-accent-text/80">
+          {t('home.finalLead')}
+        </p>
         <div className="mt-10 flex flex-col gap-3 sm:flex-row">
           <Link
             to="/chat"
-            className={buttonClasses({ variant: 'ink', size: 'lg', className: 'w-full sm:w-auto sm:min-w-[200px]' })}
+            className={buttonClasses({
+              variant: 'ink',
+              size: 'lg',
+              className: 'w-full sm:w-auto sm:min-w-[200px]',
+            })}
           >
             {t('home.heroCta')}
           </Link>
@@ -30,7 +36,8 @@ export function LandingFinalCta() {
             className={buttonClasses({
               variant: 'outline',
               size: 'lg',
-              className: 'w-full border-[#0f1a16]/30 text-accent-text hover:border-[#0f1a16]/60 hover:bg-[#0f1a16]/5 sm:w-auto',
+              className:
+                'w-full border-[#0f1a16]/30 text-accent-text hover:border-[#0f1a16]/60 hover:bg-[#0f1a16]/5 sm:w-auto',
             })}
           >
             {t('home.heroSecondary')}

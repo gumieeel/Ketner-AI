@@ -126,17 +126,19 @@ export class ContextOptimizer {
    * Без вызова провайдера — детерминированная компрессия для стабильного prefix caching.
    * Реальная LLM-сводка добавляется в Phase 3.
    */
-  static generateSummary(
-    messages: IncomingMessage[],
-    language?: Language,
-  ): string {
+  static generateSummary(messages: IncomingMessage[], language?: Language): string {
     if (messages.length === 0) return '';
 
     const prefix = language === 'en' ? 'Conversation summary' : 'Краткий контекст беседы';
     const snippets = messages.map((m) => {
-      const role = m.role === 'user'
-        ? (language === 'en' ? 'User' : 'Пользователь')
-        : (language === 'en' ? 'Assistant' : 'Ассистент');
+      const role =
+        m.role === 'user'
+          ? language === 'en'
+            ? 'User'
+            : 'Пользователь'
+          : language === 'en'
+            ? 'Assistant'
+            : 'Ассистент';
       // Берём первые 200 символов — достаточно для понимания контекста
       const snippet = this.cleanText(
         m.role === 'assistant' ? this.stripReasoning(m.content) : m.content,
@@ -184,10 +186,7 @@ export class ContextOptimizer {
 
     if (!shouldSummarize) {
       const windowed = messages.slice(-maxMsgs);
-      let currentTokens = result.reduce(
-        (sum, m) => sum + this.estimateTokens(m.content),
-        0,
-      );
+      let currentTokens = result.reduce((sum, m) => sum + this.estimateTokens(m.content), 0);
 
       const chosenMessages: IncomingMessage[] = [];
       for (let i = windowed.length - 1; i >= 0; i--) {
@@ -249,10 +248,7 @@ export class ContextOptimizer {
     }
 
     // 5. Последние RECENT_COUNT сообщений
-    let currentTokens = result.reduce(
-      (sum, m) => sum + this.estimateTokens(m.content),
-      0,
-    );
+    let currentTokens = result.reduce((sum, m) => sum + this.estimateTokens(m.content), 0);
 
     const chosenRecent: IncomingMessage[] = [];
     for (let i = recentMessages.length - 1; i >= 0; i--) {

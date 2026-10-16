@@ -13,11 +13,7 @@
 import { createHash, randomUUID } from 'node:crypto';
 import { mkdir, readFile, readdir, rename, rm, writeFile } from 'node:fs/promises';
 import path from 'node:path';
-import {
-  CodeError,
-  isIgnoredPath,
-  normalizeProjectPath,
-} from './path-safety.js';
+import { CodeError, isIgnoredPath, normalizeProjectPath } from './path-safety.js';
 import { looksBinaryBuffer, ProjectFs, type FsEntry } from './project-fs.js';
 import { isTemplateId, templateFiles, type TemplateId } from './templates.js';
 import {
@@ -34,11 +30,19 @@ export interface ProjectDbDriver {
   loadProject(
     userId: string,
     projectId: string,
-  ): Promise<{ meta: ProjectMeta; thread: ThreadItem[]; files: Array<{ path: string; content: string }> } | null>;
+  ): Promise<{
+    meta: ProjectMeta;
+    thread: ThreadItem[];
+    files: Array<{ path: string; content: string }>;
+  } | null>;
   saveProject(meta: ProjectMeta): Promise<void>;
   saveThread(userId: string, projectId: string, thread: ThreadItem[]): Promise<void>;
   deleteProject(userId: string, projectId: string): Promise<void>;
-  saveFile(userId: string, projectId: string, file: { path: string; content: string; size: number }): Promise<void>;
+  saveFile(
+    userId: string,
+    projectId: string,
+    file: { path: string; content: string; size: number },
+  ): Promise<void>;
   deleteFile(userId: string, projectId: string, filePath: string): Promise<void>;
 }
 
@@ -56,8 +60,11 @@ const PROJECT_ID_PATTERN = /^[a-zA-Z0-9-]{8,64}$/;
 
 export function sanitizeProjectName(input: unknown): string {
   const raw = typeof input === 'string' ? input : '';
-  // eslint-disable-next-line no-control-regex
-  const cleaned = raw.replace(/[\u0000-\u001f\u007f]/g, ' ').replace(/\s+/g, ' ').trim();
+  const cleaned = raw
+    // eslint-disable-next-line no-control-regex -- управляющие символы и надо вычистить
+    .replace(/[\u0000-\u001f\u007f]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
   if (!cleaned) throw new CodeError('invalid_request', 'Название проекта не может быть пустым');
   return [...cleaned].slice(0, 80).join('');
 }
@@ -87,7 +94,10 @@ export class ProjectStore {
   }
 
   private userDir(userId: string): string {
-    return path.join(this.rootDir, `u_${createHash('sha256').update(userId).digest('hex').slice(0, 32)}`);
+    return path.join(
+      this.rootDir,
+      `u_${createHash('sha256').update(userId).digest('hex').slice(0, 32)}`,
+    );
   }
 
   private projectDir(userId: string, projectId: string): string {
@@ -115,7 +125,11 @@ export class ProjectStore {
   }
 
   /** Фоновая запись в БД: порядок записей одного проекта сохраняется, сбой не ломает запрос. */
-  private scheduleDb(userId: string, projectId: string, task: (driver: ProjectDbDriver) => Promise<void>): void {
+  private scheduleDb(
+    userId: string,
+    projectId: string,
+    task: (driver: ProjectDbDriver) => Promise<void>,
+  ): void {
     const driver = this.driver;
     if (!driver) return;
     const key = this.key(userId, projectId);
@@ -144,7 +158,10 @@ export class ProjectStore {
 
   private async readMetaFromDisk(userId: string, projectId: string): Promise<ProjectMeta | null> {
     try {
-      const raw = await readFile(path.join(this.projectDir(userId, projectId), 'meta.json'), 'utf8');
+      const raw = await readFile(
+        path.join(this.projectDir(userId, projectId), 'meta.json'),
+        'utf8',
+      );
       const parsed = JSON.parse(raw) as ProjectMeta;
       if (parsed && parsed.id === projectId && parsed.userId === userId) return parsed;
     } catch (error) {
@@ -229,7 +246,9 @@ export class ProjectStore {
         console.error('[code] не удалось получить список проектов из БД:', error);
       }
     }
-    return [...byId.values()].sort((a, b) => (a.updatedAt < b.updatedAt ? 1 : a.updatedAt > b.updatedAt ? -1 : 0));
+    return [...byId.values()].sort((a, b) =>
+      a.updatedAt < b.updatedAt ? 1 : a.updatedAt > b.updatedAt ? -1 : 0,
+    );
   }
 
   async count(userId: string): Promise<number> {
@@ -255,7 +274,9 @@ export class ProjectStore {
         : undefined;
     const id = randomUUID();
     const now = new Date().toISOString();
-    const source: ProjectSource = input.source ?? (template === 'empty' ? { type: 'empty' } : { type: 'template', ref: template });
+    const source: ProjectSource =
+      input.source ??
+      (template === 'empty' ? { type: 'empty' } : { type: 'template', ref: template });
 
     const meta: ProjectMeta = {
       id,
@@ -277,7 +298,10 @@ export class ProjectStore {
 
     // Для импорта шаблон не нужен: файлы приходят от клиента.
     if (source.type === 'empty' || source.type === 'template') {
-      const files = Object.entries(templateFiles(template, name)).map(([filePath, content]) => ({ path: filePath, content }));
+      const files = Object.entries(templateFiles(template, name)).map(([filePath, content]) => ({
+        path: filePath,
+        content,
+      }));
       await this.importFiles(userId, id, files, limits.quota);
     }
     this.scheduleDb(userId, id, async (driver) => {
@@ -287,13 +311,18 @@ export class ProjectStore {
     return (await this.get(userId, id)) ?? meta;
   }
 
-  async update(userId: string, projectId: string, patch: { name?: unknown; description?: unknown }): Promise<ProjectMeta> {
+  async update(
+    userId: string,
+    projectId: string,
+    patch: { name?: unknown; description?: unknown },
+  ): Promise<ProjectMeta> {
     const meta = await this.requireMeta(userId, projectId);
     return this.withLock(userId, projectId, async () => {
       const next: ProjectMeta = { ...meta, updatedAt: new Date().toISOString() };
       if (patch.name !== undefined) next.name = sanitizeProjectName(patch.name);
       if (patch.description !== undefined) {
-        const text = typeof patch.description === 'string' ? patch.description.trim().slice(0, 300) : '';
+        const text =
+          typeof patch.description === 'string' ? patch.description.trim().slice(0, 300) : '';
         if (text) next.description = text;
         else delete next.description;
       }
@@ -347,7 +376,9 @@ export class ProjectStore {
 
   async listFiles(userId: string, projectId: string): Promise<FsEntry[]> {
     const index = await this.loadIndex(userId, projectId);
-    return [...index.files.values()].sort((a, b) => (a.path < b.path ? -1 : a.path > b.path ? 1 : 0));
+    return [...index.files.values()].sort((a, b) =>
+      a.path < b.path ? -1 : a.path > b.path ? 1 : 0,
+    );
   }
 
   async readText(
@@ -360,7 +391,11 @@ export class ProjectStore {
     return fs.readText(filePath, options);
   }
 
-  private async touchMeta(userId: string, projectId: string, index: ProjectIndex): Promise<ProjectMeta> {
+  private async touchMeta(
+    userId: string,
+    projectId: string,
+    index: ProjectIndex,
+  ): Promise<ProjectMeta> {
     const meta = await this.requireMeta(userId, projectId);
     const next: ProjectMeta = {
       ...meta,
@@ -373,7 +408,12 @@ export class ProjectStore {
     return next;
   }
 
-  private checkQuota(index: ProjectIndex, filePath: string, newSize: number, quota: ProjectQuota): void {
+  private checkQuota(
+    index: ProjectIndex,
+    filePath: string,
+    newSize: number,
+    quota: ProjectQuota,
+  ): void {
     if (newSize > quota.maxFileBytes) {
       throw new CodeError(
         'file_too_large',
@@ -402,7 +442,8 @@ export class ProjectStore {
     quota: ProjectQuota,
   ): Promise<{ entry: FsEntry; created: boolean; previous: string | null }> {
     const normalized = normalizeProjectPath(filePath);
-    if (typeof content !== 'string') throw new CodeError('invalid_request', 'content должен быть строкой');
+    if (typeof content !== 'string')
+      throw new CodeError('invalid_request', 'content должен быть строкой');
     await this.requireMeta(userId, projectId);
     return this.withLock(userId, projectId, async () => {
       const index = await this.loadIndex(userId, projectId);
@@ -458,7 +499,10 @@ export class ProjectStore {
           continue;
         }
         if (isIgnoredPath(normalized)) {
-          skipped.push({ path: normalized, reason: 'служебный каталог (зависимости, кэш) не импортируется' });
+          skipped.push({
+            path: normalized,
+            reason: 'служебный каталог (зависимости, кэш) не импортируется',
+          });
           continue;
         }
         if (normalized === '.git' || normalized.startsWith('.git/')) {
@@ -474,7 +518,10 @@ export class ProjectStore {
           toSync.push({ path: normalized, content: file.content, size: entry.size });
           written += 1;
         } catch (error) {
-          skipped.push({ path: normalized, reason: error instanceof CodeError ? error.message : 'ошибка записи' });
+          skipped.push({
+            path: normalized,
+            reason: error instanceof CodeError ? error.message : 'ошибка записи',
+          });
         }
       }
       if (written > 0) {
@@ -488,7 +535,11 @@ export class ProjectStore {
   }
 
   /** Удаляет файл или каталог. Возвращает удалённые пути (для обновления индекса клиента). */
-  async deletePath(userId: string, projectId: string, targetPath: string): Promise<{ removed: string[]; previous: string | null }> {
+  async deletePath(
+    userId: string,
+    projectId: string,
+    targetPath: string,
+  ): Promise<{ removed: string[]; previous: string | null }> {
     const normalized = normalizeProjectPath(targetPath);
     await this.requireMeta(userId, projectId);
     return this.withLock(userId, projectId, async () => {
@@ -548,7 +599,13 @@ export class ProjectStore {
     userId: string,
     projectId: string,
     quota?: ProjectQuota,
-  ): Promise<{ created: string[]; modified: string[]; deleted: string[]; meta: ProjectMeta; overQuota: boolean }> {
+  ): Promise<{
+    created: string[];
+    modified: string[];
+    deleted: string[];
+    meta: ProjectMeta;
+    overQuota: boolean;
+  }> {
     await this.requireMeta(userId, projectId);
     return this.withLock(userId, projectId, async () => {
       const before = this.indexes.get(this.key(userId, projectId));
@@ -560,7 +617,8 @@ export class ProjectStore {
         for (const [filePath, entry] of index.files) {
           const old = before.files.get(filePath);
           if (!old) created.push(filePath);
-          else if (old.size !== entry.size || old.mtimeMs !== entry.mtimeMs) modified.push(filePath);
+          else if (old.size !== entry.size || old.mtimeMs !== entry.mtimeMs)
+            modified.push(filePath);
         }
         for (const filePath of before.files.keys()) {
           if (!index.files.has(filePath)) deleted.push(filePath);
@@ -583,7 +641,9 @@ export class ProjectStore {
         }
       }
       for (const filePath of deleted) {
-        this.scheduleDb(userId, projectId, (driver) => driver.deleteFile(userId, projectId, filePath));
+        this.scheduleDb(userId, projectId, (driver) =>
+          driver.deleteFile(userId, projectId, filePath),
+        );
       }
       const overQuota = Boolean(
         quota && (index.files.size > quota.maxFiles || index.totalBytes > quota.maxProjectBytes),
@@ -598,7 +658,11 @@ export class ProjectStore {
     return path.join(this.projectDir(userId, projectId), 'thread.json');
   }
 
-  private async writeThread(userId: string, projectId: string, thread: ThreadItem[]): Promise<void> {
+  private async writeThread(
+    userId: string,
+    projectId: string,
+    thread: ThreadItem[],
+  ): Promise<void> {
     const target = this.threadPath(userId, projectId);
     await mkdir(path.dirname(target), { recursive: true });
     const temporary = `${target}.tmp`;
@@ -609,7 +673,9 @@ export class ProjectStore {
   async getThread(userId: string, projectId: string): Promise<ThreadItem[]> {
     await this.requireMeta(userId, projectId);
     try {
-      const parsed = JSON.parse(await readFile(this.threadPath(userId, projectId), 'utf8')) as unknown;
+      const parsed = JSON.parse(
+        await readFile(this.threadPath(userId, projectId), 'utf8'),
+      ) as unknown;
       return Array.isArray(parsed) ? (parsed as ThreadItem[]) : [];
     } catch {
       return [];

@@ -35,7 +35,8 @@ function loadInitialAutoApply(): boolean {
  * приводятся к путям относительно корня.
  */
 export function normalizeWorkspacePaths(ws: WorkspaceContext): WorkspaceContext {
-  if (ws.type !== 'local_folder' || !ws.name || !Array.isArray(ws.files) || ws.files.length === 0) return ws;
+  if (ws.type !== 'local_folder' || !ws.name || !Array.isArray(ws.files) || ws.files.length === 0)
+    return ws;
   const prefix = `${ws.name}/`;
   if (!ws.files.every((f) => f.path.startsWith(prefix))) return ws;
   return {
@@ -50,7 +51,9 @@ function loadInitialWorkspace(): WorkspaceContext | null {
     if (!raw) return null;
     // Ранние версии хранили здесь личный токен GitHub. Теперь доступ идёт через привязанный
     // аккаунт на сервере, а старый токен из браузера убираем.
-    const { gitToken: legacyToken, ...stored } = JSON.parse(raw) as WorkspaceContext & { gitToken?: string };
+    const { gitToken: legacyToken, ...stored } = JSON.parse(raw) as WorkspaceContext & {
+      gitToken?: string;
+    };
     if (legacyToken !== undefined) localStorage.setItem(STORAGE_KEY, JSON.stringify(stored));
     return normalizeWorkspacePaths(stored);
   } catch {

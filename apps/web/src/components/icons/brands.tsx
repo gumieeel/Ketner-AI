@@ -43,18 +43,10 @@ export function GrokIcon({ className = 'size-4' }: BrandIconProps) {
 }
 
 export function KetnerIcon({ className = 'size-4' }: BrandIconProps) {
-  return (
-    <img src="/logo-mark-160.png" alt="Ketner" className={className} />
-  );
+  return <img src="/logo-mark-160.png" alt="Ketner" className={className} />;
 }
 
-export type ModelBrand =
-  | 'openai'
-  | 'anthropic'
-  | 'google'
-  | 'xai'
-  | 'deepseek'
-  | 'ketner';
+export type ModelBrand = 'openai' | 'anthropic' | 'google' | 'xai' | 'deepseek' | 'ketner';
 
 /* eslint-disable-next-line react-refresh/only-export-components */
 export function getModelBrand(modelId: string): ModelBrand {

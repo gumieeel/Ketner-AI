@@ -42,7 +42,12 @@ export function createAuthRouter(
     }
 
     if (typeof rawPassword === 'string' && rawPassword.length > MAX_PASSWORD_LENGTH) {
-      sendError(response, 400, 'invalid_password', `Пароль длиннее ${MAX_PASSWORD_LENGTH} символов`);
+      sendError(
+        response,
+        400,
+        'invalid_password',
+        `Пароль длиннее ${MAX_PASSWORD_LENGTH} символов`,
+      );
       return;
     }
 
@@ -67,7 +72,11 @@ export function createAuthRouter(
 
     const ipKey = clientIp(request);
     if (signupsPerIp.isLimited(ipKey)) {
-      tooMany(response, signupsPerIp.retryAfterSec(ipKey), 'Слишком много регистраций с этого адреса. Попробуйте позже.');
+      tooMany(
+        response,
+        signupsPerIp.retryAfterSec(ipKey),
+        'Слишком много регистраций с этого адреса. Попробуйте позже.',
+      );
       return;
     }
 
@@ -105,7 +114,10 @@ export function createAuthRouter(
     const ipKey = clientIp(request);
     const emailKey = rawEmail.trim().toLowerCase().slice(0, 320);
     if (failedLoginsPerIp.isLimited(ipKey) || failedLoginsPerEmail.isLimited(emailKey)) {
-      const retry = Math.max(failedLoginsPerIp.retryAfterSec(ipKey), failedLoginsPerEmail.retryAfterSec(emailKey));
+      const retry = Math.max(
+        failedLoginsPerIp.retryAfterSec(ipKey),
+        failedLoginsPerEmail.retryAfterSec(emailKey),
+      );
       tooMany(response, retry, 'Слишком много неудачных попыток входа. Подождите несколько минут.');
       return;
     }
@@ -144,7 +156,10 @@ export function createAuthRouter(
       sendError(response, 401, 'unauthorized', 'Сессия не найдена или истекла');
       return;
     }
-    const botUser = (telegramBotService.botUsername || config.telegramBotUsername).replace(/^@/, '');
+    const botUser = (telegramBotService.botUsername || config.telegramBotUsername).replace(
+      /^@/,
+      '',
+    );
     // Одноразовый код на 15 минут вместо id пользователя: ссылку нельзя подобрать или переслать.
     response.json({
       botUsername: botUser,

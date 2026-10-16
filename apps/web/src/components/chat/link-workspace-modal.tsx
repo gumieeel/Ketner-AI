@@ -18,7 +18,11 @@ interface LinkWorkspaceModalProps {
   initialTab?: LinkWorkspaceTab;
 }
 
-export function LinkWorkspaceModal({ isOpen, onClose, initialTab = 'folder' }: LinkWorkspaceModalProps) {
+export function LinkWorkspaceModal({
+  isOpen,
+  onClose,
+  initialTab = 'folder',
+}: LinkWorkspaceModalProps) {
   const { t } = useTranslation();
   const setWorkspace = useWorkspace((state) => state.setWorkspace);
   const [tab, setTab] = useState<LinkWorkspaceTab>(initialTab);
@@ -121,7 +125,11 @@ export function LinkWorkspaceModal({ isOpen, onClose, initialTab = 'folder' }: L
         <div className="mb-5 flex rounded-xl border border-stroke bg-canvas p-1">
           {(
             [
-              { id: 'folder', label: t('linkWs.tabFolder'), icon: <FolderIcon className="size-4 text-accent" /> },
+              {
+                id: 'folder',
+                label: t('linkWs.tabFolder'),
+                icon: <FolderIcon className="size-4 text-accent" />,
+              },
               { id: 'git', label: t('linkWs.tabGit'), icon: <GitHubIcon className="size-4" /> },
             ] as const
           ).map((item) => (
@@ -147,7 +155,10 @@ export function LinkWorkspaceModal({ isOpen, onClose, initialTab = 'folder' }: L
         </div>
 
         {error ? (
-          <div role="alert" className="mb-4 rounded-xl border border-danger/30 bg-danger-soft p-3 text-[13px] break-words text-danger">
+          <div
+            role="alert"
+            className="mb-4 rounded-xl border border-danger/30 bg-danger-soft p-3 text-[13px] break-words text-danger"
+          >
             {error}
           </div>
         ) : null}
@@ -160,10 +171,17 @@ export function LinkWorkspaceModal({ isOpen, onClose, initialTab = 'folder' }: L
 
             <div className="space-y-1.5">
               <h3 className="text-sm font-semibold text-text">{t('linkWs.folderTitle')}</h3>
-              <p className="mx-auto max-w-sm text-[13px] leading-5 text-muted">{t('linkWs.folderDesc')}</p>
+              <p className="mx-auto max-w-sm text-[13px] leading-5 text-muted">
+                {t('linkWs.folderDesc')}
+              </p>
             </div>
 
-            <Button size="lg" loading={loading} onClick={handleLinkLocalFolder} className="mt-2 w-full gap-2">
+            <Button
+              size="lg"
+              loading={loading}
+              onClick={handleLinkLocalFolder}
+              className="mt-2 w-full gap-2"
+            >
               <FolderIcon className="size-4" />
               {loading ? t('linkWs.indexing') : t('linkWs.pickFolder')}
             </Button>

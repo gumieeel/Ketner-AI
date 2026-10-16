@@ -188,7 +188,8 @@ export interface PlanEntitlements {
 // ─────────────────────────────────────────────────────────────
 
 /** Статус учётной записи использования. */
-export type UsageStatus = 'success' | 'error' | 'cancelled' | 'rate_limited' | 'concurrency_limited';
+export type UsageStatus =
+  'success' | 'error' | 'cancelled' | 'rate_limited' | 'concurrency_limited';
 
 /** Источник ответа: реальный провайдер, кэш или шаблонная заглушка. */
 export type ResponseSource = 'provider' | 'cache' | 'template';
@@ -557,14 +558,7 @@ export interface AIProvider {
 
 /** Категория задачи для Auto Mode роутинга. */
 export type TaskCategory =
-  | 'coding'
-  | 'reasoning'
-  | 'creative'
-  | 'math'
-  | 'translation'
-  | 'general'
-  | 'research'
-  | 'vision';
+  'coding' | 'reasoning' | 'creative' | 'math' | 'translation' | 'general' | 'research' | 'vision';
 
 /** Результат классификации задачи. */
 export interface TaskClassification {

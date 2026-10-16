@@ -76,7 +76,11 @@ export class DocStore<T extends { id: string }> {
     try {
       mkdirSync(dirname(this.file), { recursive: true });
       const temporary = `${this.file}.tmp`;
-      writeFileSync(temporary, `${JSON.stringify({ docs: [...this.docs.values()] }, null, 2)}\n`, 'utf8');
+      writeFileSync(
+        temporary,
+        `${JSON.stringify({ docs: [...this.docs.values()] }, null, 2)}\n`,
+        'utf8',
+      );
       renameSync(temporary, this.file);
     } catch (error) {
       console.error(`[mock-api] Ошибка записи ${this.namespace}:`, error);

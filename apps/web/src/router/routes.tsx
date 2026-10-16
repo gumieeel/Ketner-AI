@@ -50,7 +50,10 @@ export const routes: RouteObject[] = [
       { path: 'login', element: <LoginPage /> },
       { path: 'signup', element: <SignupPage /> },
       // Вход по одноразовой ссылке из кабинета в Telegram.
-      { path: 'auth/telegram', lazy: lazyPage(() => import('@/pages/telegram-magic-page'), 'TelegramMagicPage') },
+      {
+        path: 'auth/telegram',
+        lazy: lazyPage(() => import('@/pages/telegram-magic-page'), 'TelegramMagicPage'),
+      },
       { path: 'pricing', element: <PricingPage /> },
       { path: 'privacy', lazy: lazyLegal('privacy') },
       { path: 'terms', lazy: lazyLegal('terms') },
@@ -59,7 +62,10 @@ export const routes: RouteObject[] = [
       { path: 'docs', lazy: documentationPage },
       { path: 'docs/plans/:planId', lazy: documentationPage },
       { path: 'docs/api', lazy: apiDocsPage },
-      { path: 'checkout/:planId', lazy: lazyPage(() => import('@/pages/checkout-page'), 'CheckoutPage') },
+      {
+        path: 'checkout/:planId',
+        lazy: lazyPage(() => import('@/pages/checkout-page'), 'CheckoutPage'),
+      },
     ],
   },
   // Кабинет внутри Telegram (мини-приложение бота): без шапки и боковой панели сайта.
@@ -96,7 +102,9 @@ export const routes: RouteObject[] = [
     path: 'settings',
     element: <AppShell />,
     errorElement: <RouteErrorPage />,
-    children: [{ index: true, lazy: lazyPage(() => import('@/pages/settings-page'), 'SettingsPage') }],
+    children: [
+      { index: true, lazy: lazyPage(() => import('@/pages/settings-page'), 'SettingsPage') },
+    ],
   },
   {
     path: 'api-docs',
@@ -114,7 +122,9 @@ export const routes: RouteObject[] = [
     path: 'onboarding',
     element: <AppShell />,
     errorElement: <RouteErrorPage />,
-    children: [{ index: true, lazy: lazyPage(() => import('@/pages/onboarding-page'), 'OnboardingPage') }],
+    children: [
+      { index: true, lazy: lazyPage(() => import('@/pages/onboarding-page'), 'OnboardingPage') },
+    ],
   },
   {
     path: 'admin',

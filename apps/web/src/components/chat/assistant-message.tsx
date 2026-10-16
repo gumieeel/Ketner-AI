@@ -102,11 +102,7 @@ export function AssistantMessage({ message, canRegenerate }: AssistantMessagePro
         {displayContent ? (
           <div className="text-base leading-7 text-text">
             <Suspense
-              fallback={
-                <p className="max-w-[68ch] whitespace-pre-wrap">
-                  {displayContent}
-                </p>
-              }
+              fallback={<p className="max-w-[68ch] whitespace-pre-wrap">{displayContent}</p>}
             >
               <Markdown content={displayContent} />
             </Suspense>
@@ -162,7 +158,12 @@ export function AssistantMessage({ message, canRegenerate }: AssistantMessagePro
         {canContinue ? (
           <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-2 text-[13px] text-muted">
             <span>{t('chat.truncatedNotice')}</span>
-            <Button variant="outline" size="sm" disabled={streaming} onClick={() => void continueReply()}>
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={streaming}
+              onClick={() => void continueReply()}
+            >
               {t('chat.continue')}
             </Button>
           </div>
@@ -170,7 +171,11 @@ export function AssistantMessage({ message, canRegenerate }: AssistantMessagePro
 
         {hasContent && !isPending && !failed ? (
           <div className="mt-2 -ml-2 flex items-center gap-0.5 text-muted">
-            <CopyButton value={parsed.content || message.content} label={t('chat.copy')} size="sm" />
+            <CopyButton
+              value={parsed.content || message.content}
+              label={t('chat.copy')}
+              size="sm"
+            />
             {canRegenerate ? (
               <IconButton
                 label={t('chat.regenerate')}

@@ -63,7 +63,11 @@ export function StarsPanel({
 
       <div className="flex flex-col items-center gap-3">
         <p className="text-[13px] font-medium text-muted">{t('checkout.starsQrHint')}</p>
-        <QrFrame loading={loading} loadingLabel={t('checkout.starsPreparing')} skeletonClassName="size-40">
+        <QrFrame
+          loading={loading}
+          loadingLabel={t('checkout.starsPreparing')}
+          skeletonClassName="size-40"
+        >
           <QrCode
             value={botDeepLink}
             size={160}

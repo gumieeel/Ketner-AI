@@ -82,11 +82,25 @@ test('FeedbackStore: расчёт аналитики и порога авто-э
   // При высокой доле дизлайков глубина размышлений простого запроса растёт на шаг, модель не меняется
   const escalate = store.shouldEscalateFromLightModel('ketner-mini', 'simple');
   assert.equal(
-    chooseReasoningEffort({ level: 'simple', category: 'general', plan: 'plus', stage: 'normal', costClass: 'lite', escalate }),
+    chooseReasoningEffort({
+      level: 'simple',
+      category: 'general',
+      plan: 'plus',
+      stage: 'normal',
+      costClass: 'lite',
+      escalate,
+    }),
     'low',
   );
   assert.equal(
-    chooseReasoningEffort({ level: 'moderate', category: 'general', plan: 'plus', stage: 'normal', costClass: 'work', escalate }),
+    chooseReasoningEffort({
+      level: 'moderate',
+      category: 'general',
+      plan: 'plus',
+      stage: 'normal',
+      costClass: 'work',
+      escalate,
+    }),
     'medium',
   );
 });
@@ -117,7 +131,14 @@ test('FeedbackStore: высокая удовлетворённость не вы
   // При отличных оценках простой запрос остаётся на быстром ответе без размышлений
   const escalate = store.shouldEscalateFromLightModel('ketner-mini', 'simple');
   assert.equal(
-    chooseReasoningEffort({ level: 'simple', category: 'general', plan: 'plus', stage: 'normal', costClass: 'lite', escalate }),
+    chooseReasoningEffort({
+      level: 'simple',
+      category: 'general',
+      plan: 'plus',
+      stage: 'normal',
+      costClass: 'lite',
+      escalate,
+    }),
     'none',
   );
 });

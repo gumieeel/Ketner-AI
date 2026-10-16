@@ -135,7 +135,10 @@ export function isMaxModeAllowed(plan: string): boolean {
 }
 
 /** Режим, который реально действует: max на тарифе ниже Ultra превращается в standard. */
-export function effectiveReasoningMode(requested: ReasoningMode | undefined, plan: string): ReasoningMode {
+export function effectiveReasoningMode(
+  requested: ReasoningMode | undefined,
+  plan: string,
+): ReasoningMode {
   return requested === 'max' && isMaxModeAllowed(plan) ? 'max' : 'standard';
 }
 
@@ -194,7 +197,8 @@ export function computeOutputCap(input: OutputCapInput): number {
   let cap = Math.min(input.modelMaxOutputTokens, input.planMaxTokens);
   if (input.stage === 'soft') cap = Math.min(cap, 4096);
   if (input.stage === 'exhausted' || input.stage === 'hard_stop') cap = Math.min(cap, 2048);
-  const deepReasoning = input.effort !== undefined && ORDER.indexOf(input.effort) >= ORDER.indexOf('high');
+  const deepReasoning =
+    input.effort !== undefined && ORDER.indexOf(input.effort) >= ORDER.indexOf('high');
   if (input.level === 'simple' && !input.heavyContext && !deepReasoning) cap = Math.min(cap, 2048);
   return Math.max(cap, Math.min(MIN_OUTPUT_CAP, input.modelMaxOutputTokens));
 }

@@ -15,11 +15,7 @@ export interface FileDiffResult {
 /**
  * Вычисляет построчный diff (Longest Common Subsequence) между старой и новой версиями файла.
  */
-export function generateLineDiff(
-  oldText = '',
-  newText = '',
-  filePath = '',
-): FileDiffResult {
+export function generateLineDiff(oldText = '', newText = '', filePath = ''): FileDiffResult {
   const oldLines = oldText ? oldText.split('\n') : [];
   const newLines = newText ? newText.split('\n') : [];
 

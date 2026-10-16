@@ -108,7 +108,11 @@ export function KeysSection({ onSecretCreated }: KeysSectionProps) {
       description={t('dev.keysDesc')}
       aside={
         signedIn && !formOpen ? (
-          <Button size="sm" onClick={() => setFormOpen(true)} leftIcon={<PlusIcon className="size-3.5" />}>
+          <Button
+            size="sm"
+            onClick={() => setFormOpen(true)}
+            leftIcon={<PlusIcon className="size-3.5" />}
+          >
             {t('dev.keysCreate')}
           </Button>
         ) : null
@@ -124,7 +128,10 @@ export function KeysSection({ onSecretCreated }: KeysSectionProps) {
       ) : null}
 
       {secret ? (
-        <div role="status" className="flex flex-col gap-3 rounded-lg border border-accent/50 bg-accent-soft p-4">
+        <div
+          role="status"
+          className="flex flex-col gap-3 rounded-lg border border-accent/50 bg-accent-soft p-4"
+        >
           <div>
             <p className="font-medium text-text">{t('dev.keysNewTitle')}</p>
             <p className="mt-1 text-[14px] text-muted">{t('dev.keysNewText')}</p>
@@ -139,7 +146,9 @@ export function KeysSection({ onSecretCreated }: KeysSectionProps) {
             <Button
               size="sm"
               onClick={copySecret}
-              leftIcon={copied ? <CheckIcon className="size-3.5" /> : <CopyIcon className="size-3.5" />}
+              leftIcon={
+                copied ? <CheckIcon className="size-3.5" /> : <CopyIcon className="size-3.5" />
+              }
             >
               {copied ? t('dev.keysCopied') : t('dev.keysCopy')}
             </Button>
@@ -158,7 +167,10 @@ export function KeysSection({ onSecretCreated }: KeysSectionProps) {
       ) : null}
 
       {formOpen ? (
-        <form onSubmit={create} className="flex flex-col gap-2 rounded-lg border border-stroke bg-canvas p-3 @md:flex-row @md:items-end">
+        <form
+          onSubmit={create}
+          className="flex flex-col gap-2 rounded-lg border border-stroke bg-canvas p-3 @md:flex-row @md:items-end"
+        >
           <div className="flex min-w-0 flex-1 flex-col gap-1.5">
             <label htmlFor={nameId} className="text-[13px] font-medium text-text">
               {t('dev.keysName')}
@@ -185,12 +197,17 @@ export function KeysSection({ onSecretCreated }: KeysSectionProps) {
       ) : null}
 
       {error ? (
-        <p role="alert" className="rounded-md border border-danger/30 bg-danger-soft px-3 py-2 text-[14px] text-danger">
+        <p
+          role="alert"
+          className="rounded-md border border-danger/30 bg-danger-soft px-3 py-2 text-[14px] text-danger"
+        >
           {error}
         </p>
       ) : null}
 
-      {signedIn && loading ? <p className="text-[14px] text-muted">{t('dev.keysLoading')}</p> : null}
+      {signedIn && loading ? (
+        <p className="text-[14px] text-muted">{t('dev.keysLoading')}</p>
+      ) : null}
       {signedIn && !loading && keys.length === 0 && !error ? (
         <p className="text-[14px] text-muted">{t('dev.keysEmpty')}</p>
       ) : null}
@@ -211,8 +228,15 @@ export function KeysSection({ onSecretCreated }: KeysSectionProps) {
               </div>
               {confirmId === key.id ? (
                 <div className="flex flex-wrap items-center gap-2">
-                  <span className="text-[13px] text-text">{t('dev.keysRevokeConfirm', { name: key.name })}</span>
-                  <Button size="sm" variant="danger" loading={busy} onClick={() => void revoke(key.id)}>
+                  <span className="text-[13px] text-text">
+                    {t('dev.keysRevokeConfirm', { name: key.name })}
+                  </span>
+                  <Button
+                    size="sm"
+                    variant="danger"
+                    loading={busy}
+                    onClick={() => void revoke(key.id)}
+                  >
                     {t('dev.keysRevokeYes')}
                   </Button>
                   <Button size="sm" variant="outline" onClick={() => setConfirmId(null)}>

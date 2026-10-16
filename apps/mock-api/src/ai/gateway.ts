@@ -98,16 +98,16 @@ export function classifyPromptComplexity(
   // то короткая реплика («да», «продолжи», «ок») не должна сбрасывать сложность на deepseek
   const historyIsComplex = Boolean(
     context?.history &&
-      context.history.length > 0 &&
-      context.history.slice(-4).some((m) => {
-        const text = m.content || '';
-        return (
-          text.length > 250 ||
-          /```|function|class|interface|import|export|select|def |const |let |error|exception/i.test(
-            text,
-          )
-        );
-      }),
+    context.history.length > 0 &&
+    context.history.slice(-4).some((m) => {
+      const text = m.content || '';
+      return (
+        text.length > 250 ||
+        /```|function|class|interface|import|export|select|def |const |let |error|exception/i.test(
+          text,
+        )
+      );
+    }),
   );
 
   const hasCodeOrTechnicalSyntax =
@@ -125,9 +125,15 @@ export function classifyPromptComplexity(
     trimmed.length < 50 &&
     classification.complexity === 'simple' &&
     classification.category === 'general' &&
-    !/(напиши|составь|придумай|объясни|расскажи|переведи|write|explain|translate|код|функци)/i.test(trimmed);
+    !/(напиши|составь|придумай|объясни|расскажи|переведи|write|explain|translate|код|функци)/i.test(
+      trimmed,
+    );
 
-  if ((isGreetingOrChitChat || isTrivialGeneral) && !historyIsComplex && !hasCodeOrTechnicalSyntax) {
+  if (
+    (isGreetingOrChitChat || isTrivialGeneral) &&
+    !historyIsComplex &&
+    !hasCodeOrTechnicalSyntax
+  ) {
     return { level: 'simple', category: classification.category };
   }
 
@@ -143,7 +149,10 @@ export function classifyPromptComplexity(
     historyIsComplex;
 
   if (isComplex) {
-    return { level: 'complex', category: hasCodeOrTechnicalSyntax ? 'coding' : classification.category };
+    return {
+      level: 'complex',
+      category: hasCodeOrTechnicalSyntax ? 'coding' : classification.category,
+    };
   }
 
   // 3. Умеренные / стандартные задачи
@@ -151,12 +160,72 @@ export function classifyPromptComplexity(
 }
 
 const JCUKEN_MAP: Record<string, string> = {
-  q: 'й', w: 'ц', e: 'у', r: 'к', t: 'е', y: 'н', u: 'г', i: 'ш', o: 'щ', p: 'з', '[': 'х', ']': 'ъ',
-  a: 'ф', s: 'ы', d: 'в', f: 'а', g: 'п', h: 'р', j: 'о', k: 'л', l: 'д', ';': 'ж', "'": 'э',
-  z: 'я', x: 'ч', c: 'с', v: 'м', b: 'и', n: 'т', m: 'ь', ',': 'б', '.': 'ю', '`': 'ё',
-  Q: 'Й', W: 'Ц', E: 'У', R: 'К', T: 'Е', Y: 'Н', U: 'Г', I: 'Ш', O: 'Щ', P: 'З', '{': 'Х', '}': 'Ъ',
-  A: 'Ф', S: 'Ы', D: 'В', F: 'А', G: 'П', H: 'Р', J: 'О', K: 'Л', L: 'Д', ':': 'Ж', '"': 'Э',
-  Z: 'Я', X: 'Ч', C: 'С', V: 'М', B: 'И', N: 'Т', M: 'Ь', '<': 'Б', '>': 'Ю', '~': 'Ё',
+  q: 'й',
+  w: 'ц',
+  e: 'у',
+  r: 'к',
+  t: 'е',
+  y: 'н',
+  u: 'г',
+  i: 'ш',
+  o: 'щ',
+  p: 'з',
+  '[': 'х',
+  ']': 'ъ',
+  a: 'ф',
+  s: 'ы',
+  d: 'в',
+  f: 'а',
+  g: 'п',
+  h: 'р',
+  j: 'о',
+  k: 'л',
+  l: 'д',
+  ';': 'ж',
+  "'": 'э',
+  z: 'я',
+  x: 'ч',
+  c: 'с',
+  v: 'м',
+  b: 'и',
+  n: 'т',
+  m: 'ь',
+  ',': 'б',
+  '.': 'ю',
+  '`': 'ё',
+  Q: 'Й',
+  W: 'Ц',
+  E: 'У',
+  R: 'К',
+  T: 'Е',
+  Y: 'Н',
+  U: 'Г',
+  I: 'Ш',
+  O: 'Щ',
+  P: 'З',
+  '{': 'Х',
+  '}': 'Ъ',
+  A: 'Ф',
+  S: 'Ы',
+  D: 'В',
+  F: 'А',
+  G: 'П',
+  H: 'Р',
+  J: 'О',
+  K: 'Л',
+  L: 'Д',
+  ':': 'Ж',
+  '"': 'Э',
+  Z: 'Я',
+  X: 'Ч',
+  C: 'С',
+  V: 'М',
+  B: 'И',
+  N: 'Т',
+  M: 'Ь',
+  '<': 'Б',
+  '>': 'Ю',
+  '~': 'Ё',
 };
 
 export function convertLayoutIfInverted(input: string): string {
@@ -170,7 +239,8 @@ export function convertLayoutIfInverted(input: string): string {
     .map((ch) => JCUKEN_MAP[ch] ?? ch)
     .join('');
 
-  const ruPatterns = /(анализ|репозитор|проект|файл|сдела|помог|напиш|объясн|ошибк|папк|ветк|функц|компонент|скрипт|привет|как|что|где|почему)/i;
+  const ruPatterns =
+    /(анализ|репозитор|проект|файл|сдела|помог|напиш|объясн|ошибк|папк|ветк|функц|компонент|скрипт|привет|как|что|где|почему)/i;
   if (ruPatterns.test(converted)) {
     return converted;
   }
@@ -242,7 +312,11 @@ export function isAllowedFallbackModel(
     return model.costClass === 'lite';
   }
   if (isPremiumClass(model.costClass)) {
-    return state.stage === 'normal' && state.premiumAvailable && planAllowsModel(plan, model.requiredPlan);
+    return (
+      state.stage === 'normal' &&
+      state.premiumAvailable &&
+      planAllowsModel(plan, model.requiredPlan)
+    );
   }
   return true;
 }
@@ -339,7 +413,11 @@ export class AIGateway {
   private noteEngineMismatch(requested: string, actual: string | undefined): void {
     if (!actual || actual === requested) return;
     const family = (id: string): string => id.split(':')[0].toLowerCase();
-    if (family(actual).startsWith(family(requested)) || family(requested).startsWith(family(actual))) return;
+    if (
+      family(actual).startsWith(family(requested)) ||
+      family(requested).startsWith(family(actual))
+    )
+      return;
     const key = `${requested}->${actual}`;
     if (this.reportedMismatches.has(key)) return;
     this.reportedMismatches.add(key);
@@ -453,8 +531,7 @@ export class AIGateway {
     const economyState = { stage, premiumAvailable };
 
     // 2. Анализ запроса
-    const rawPrompt =
-      [...req.messages].reverse().find((m) => m.role === 'user')?.content ?? '';
+    const rawPrompt = [...req.messages].reverse().find((m) => m.role === 'user')?.content ?? '';
     const decodedPrompt = convertLayoutIfInverted(rawPrompt);
     const prompt = decodedPrompt;
 
@@ -485,7 +562,10 @@ export class AIGateway {
     let targetModel: ModelRegistryEntry;
     let routingReason: string;
 
-    if (req.isAnonymous && (req.modelId === 'auto' || req.modelId === 'nemotron-ultra' || !req.modelId)) {
+    if (
+      req.isAnonymous &&
+      (req.modelId === 'auto' || req.modelId === 'nemotron-ultra' || !req.modelId)
+    ) {
       targetModel = this.registry.resolve('nemotron-ultra');
       routingReason = 'Guest mode: nvidia/nemotron-3-ultra-550b-a55b:free via OpenRouter';
     } else if (req.modelId === 'auto' || !req.modelId) {
@@ -593,9 +673,10 @@ export class AIGateway {
         ? ECONOMY_SYSTEM_PROMPT
         : (targetModel.defaultSystemPrompt ?? DEFAULT_SYSTEM_PROMPT);
       const baseSystemPrompt = promptMap[language];
-      const systemPrompt = stage !== 'normal'
-        ? `${baseSystemPrompt} ${language === 'en' ? 'Keep responses concise and direct.' : 'Отвечай максимально кратко и по существу.'}`
-        : baseSystemPrompt;
+      const systemPrompt =
+        stage !== 'normal'
+          ? `${baseSystemPrompt} ${language === 'en' ? 'Keep responses concise and direct.' : 'Отвечай максимально кратко и по существу.'}`
+          : baseSystemPrompt;
 
       // Бюджет проекта зависит от тарифа, окна и цены модели: большой контекст на дорогой модели —
       // главный источник убытка в безлимите.
@@ -651,7 +732,9 @@ export class AIGateway {
       // 5.1. Проверка семантического кэша (Semantic & Query Caching)
       // Ответ в режиме Max (глубже размышления) не подменяется кэшированным обычным и наоборот.
       const cacheModelKey =
-        reasoningMode === 'max' && targetModel.effortProfile ? `${targetModel.id}:max` : targetModel.id;
+        reasoningMode === 'max' && targetModel.effortProfile
+          ? `${targetModel.id}:max`
+          : targetModel.id;
       const userScope = effectivePlan === 'free' ? 'shared' : activeUserId;
       const historyHash = SemanticCache.computeHistoryHash(req.messages, 3);
       const hasAttachments = Boolean(activeAttachments && activeAttachments.length > 0);
@@ -718,7 +801,14 @@ export class AIGateway {
               (m, index) =>
                 index === 0 ||
                 (this.isAllowedFallback(m, effectivePlan, economyState) &&
-                  !isDailyLimitReached(m, effectivePlan, activeUserId, this.usageStore, this.registry, reasoningMode)),
+                  !isDailyLimitReached(
+                    m,
+                    effectivePlan,
+                    activeUserId,
+                    this.usageStore,
+                    this.registry,
+                    reasoningMode,
+                  )),
             );
       let success = false;
       let streamedResponse: ProviderResponse | null = null;
@@ -747,7 +837,10 @@ export class AIGateway {
       let watchdogTimedOut = false;
       // Общая оценка пользователей по лёгким моделям: при частых дизлайках глубина размышлений
       // простых запросов поднимается на шаг.
-      const escalate = this.feedbackStore.shouldEscalateFromLightModel(targetModel.id, taskInfo.level);
+      const escalate = this.feedbackStore.shouldEscalateFromLightModel(
+        targetModel.id,
+        taskInfo.level,
+      );
 
       if (!isTestEnv) {
         for (const candidateModel of modelsToTry) {
@@ -853,7 +946,10 @@ export class AIGateway {
             } else if (!pass.timedOut && combinedIsCancelled()) {
               break;
             } else {
-              this.circuitBreaker.recordFailure(breakerKey, new Error('Empty response from provider'));
+              this.circuitBreaker.recordFailure(
+                breakerKey,
+                new Error('Empty response from provider'),
+              );
             }
           } catch (providerError) {
             // 401 и 402 относятся к ключу и балансу OpenRouter, а не к модели: все остальные модели
@@ -978,7 +1074,9 @@ export class AIGateway {
         reasoningTokens: streamedResponse?.usage.reasoningTokens,
         estimatedCost: totalEstimatedCost,
         actualCost:
-          typeof streamedResponse?.cost === 'number' ? Number(streamedResponse.cost.toFixed(6)) : null,
+          typeof streamedResponse?.cost === 'number'
+            ? Number(streamedResponse.cost.toFixed(6))
+            : null,
         latencyMs,
         ttftMs: firstTokenMs,
         status: isCancelled() ? 'cancelled' : 'success',

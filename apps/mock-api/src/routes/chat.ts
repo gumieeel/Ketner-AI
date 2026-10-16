@@ -65,7 +65,10 @@ function parseCompletionRequest(body: unknown): ParseResult {
     const hasAttachments = Array.isArray(raw.attachments) && raw.attachments.length > 0;
     const content = typeof raw.content === 'string' ? raw.content : '';
     if (!hasAttachments && content.trim() === '') {
-      return { ok: false, message: 'У каждого сообщения должен быть непустой content или вложения' };
+      return {
+        ok: false,
+        message: 'У каждого сообщения должен быть непустой content или вложения',
+      };
     }
     if (content.length > MAX_CONTENT_LENGTH) {
       return { ok: false, message: `Сообщение длиннее ${MAX_CONTENT_LENGTH} символов` };
@@ -158,7 +161,12 @@ export function createChatRouter({
       workspace: parsed.value.messages[parsed.value.messages.length - 1]?.workspaceContext,
     });
     if (!guardResult.valid) {
-      sendError(response, 400, guardResult.code ?? 'payload_too_large', guardResult.message ?? 'Payload too large');
+      sendError(
+        response,
+        400,
+        guardResult.code ?? 'payload_too_large',
+        guardResult.message ?? 'Payload too large',
+      );
       return;
     }
 
@@ -191,7 +199,10 @@ export function createChatRouter({
     if (identity.anonymous && limitGuestsByIp) {
       const ip = clientIp(request);
       if (guestPerIpHour.isLimited(ip) || guestPerIpDay.isLimited(ip)) {
-        response.setHeader('Retry-After', String(Math.max(guestPerIpHour.retryAfterSec(ip), guestPerIpDay.retryAfterSec(ip))));
+        response.setHeader(
+          'Retry-After',
+          String(Math.max(guestPerIpHour.retryAfterSec(ip), guestPerIpDay.retryAfterSec(ip))),
+        );
         sendError(
           response,
           429,
@@ -228,23 +239,23 @@ export function createChatRouter({
     // Проверка доступа к платным моделям (то же правило, что применяет шлюз)
     const access = EntitlementService.checkModelAccess(model, userPlan, identity.email, isVip);
     if (!access.allowed) {
-        response.writeHead(200, {
-          'Content-Type': 'text/event-stream; charset=utf-8',
-          'Cache-Control': 'no-cache, no-transform',
-          Connection: 'keep-alive',
-        });
-        const requiredName = model.requiredPlan ? model.requiredPlan.toUpperCase() : 'PRO';
-        const errorMsg =
-          language === 'en'
-            ? `Access to ${model.name} requires an active subscription (${requiredName} or Ultra). Please upgrade your plan.`
-            : `Для доступа к модели ${model.name} требуется подписка (${requiredName} или Ultra). Пожалуйста, улучшите ваш тариф (Upgrade your plan).`;
+      response.writeHead(200, {
+        'Content-Type': 'text/event-stream; charset=utf-8',
+        'Cache-Control': 'no-cache, no-transform',
+        Connection: 'keep-alive',
+      });
+      const requiredName = model.requiredPlan ? model.requiredPlan.toUpperCase() : 'PRO';
+      const errorMsg =
+        language === 'en'
+          ? `Access to ${model.name} requires an active subscription (${requiredName} or Ultra). Please upgrade your plan.`
+          : `Для доступа к модели ${model.name} требуется подписка (${requiredName} или Ultra). Пожалуйста, улучшите ваш тариф (Upgrade your plan).`;
 
-        response.write(
-          `event: error\ndata: ${JSON.stringify({ code: 'upgrade_required', message: errorMsg })}\n\n`,
-        );
-        response.end();
-        return;
-      }
+      response.write(
+        `event: error\ndata: ${JSON.stringify({ code: 'upgrade_required', message: errorMsg })}\n\n`,
+      );
+      response.end();
+      return;
+    }
 
     response.writeHead(200, {
       'Content-Type': 'text/event-stream; charset=utf-8',
@@ -403,7 +414,12 @@ export function createChatRouter({
       return;
     }
     if (body.rating !== 'like' && body.rating !== 'dislike' && body.rating !== null) {
-      sendError(response, 400, 'invalid_rating', 'Поле rating должно быть "like", "dislike" или null');
+      sendError(
+        response,
+        400,
+        'invalid_rating',
+        'Поле rating должно быть "like", "dislike" или null',
+      );
       return;
     }
 
@@ -445,9 +461,10 @@ export function createChatRouter({
         messageId,
         conversationId,
         userId: activeUserId,
-        modelId: typeof body.modelId === 'string' && body.modelId.trim()
-          ? body.modelId.trim()
-          : (updatedMsg.modelId ?? 'unknown'),
+        modelId:
+          typeof body.modelId === 'string' && body.modelId.trim()
+            ? body.modelId.trim()
+            : (updatedMsg.modelId ?? 'unknown'),
         engineModelId: updatedMsg.modelId,
         complexityLevel,
         rating,

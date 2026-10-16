@@ -1,10 +1,23 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import { CloseIcon, FileTextIcon, ShieldIcon, SparkleIcon, StarIcon, TelegramIcon, UserIcon } from '@/components/icons';
+import {
+  CloseIcon,
+  FileTextIcon,
+  ShieldIcon,
+  SparkleIcon,
+  StarIcon,
+  TelegramIcon,
+  UserIcon,
+} from '@/components/icons';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { ApiError, miniAppApi, type MiniAppState } from '@/features/telegram/api';
-import { haptic, loadTelegramWebApp, paintTelegramChrome, type TelegramWebApp } from '@/features/telegram/webapp';
+import {
+  haptic,
+  loadTelegramWebApp,
+  paintTelegramChrome,
+  type TelegramWebApp,
+} from '@/features/telegram/webapp';
 import { usePreferences } from '@/features/preferences/preferences-store';
 import { useTranslation, type TranslationKey } from '@/i18n';
 import { cn } from '@/lib/cn';
@@ -14,7 +27,15 @@ import { Onboarding } from './telegram-app/onboarding';
 import { PaymentsTab } from './telegram-app/payments-tab';
 import { PlansTab } from './telegram-app/plans-tab';
 import { ProfileTab } from './telegram-app/profile-tab';
-import { BOT_URL, MiniAppProvider, Panel, PLAN_TONE, subscriptionInfo, type MiniApp, type TabId } from './telegram-app/shared';
+import {
+  BOT_URL,
+  MiniAppProvider,
+  Panel,
+  PLAN_TONE,
+  subscriptionInfo,
+  type MiniApp,
+  type TabId,
+} from './telegram-app/shared';
 
 type Screen =
   | { kind: 'loading' }
@@ -29,7 +50,11 @@ interface Toast {
   text: string;
 }
 
-const TABS: Array<{ id: TabId; label: TranslationKey; icon: (props: { className?: string }) => ReactNode }> = [
+const TABS: Array<{
+  id: TabId;
+  label: TranslationKey;
+  icon: (props: { className?: string }) => ReactNode;
+}> = [
   { id: 'home', label: 'tg.tabHome', icon: SparkleIcon },
   { id: 'plans', label: 'tg.tabPlans', icon: StarIcon },
   { id: 'payments', label: 'tg.tabPayments', icon: FileTextIcon },
@@ -68,9 +93,17 @@ export function TelegramAppPage() {
     try {
       const session = await miniAppApi.session(webApp.initData);
       if (session.linked) setScreen({ kind: 'ready', token: session.token, state: session });
-      else setScreen({ kind: 'onboarding', firstName: session.telegram.firstName, siteUrl: session.siteUrl });
+      else
+        setScreen({
+          kind: 'onboarding',
+          firstName: session.telegram.firstName,
+          siteUrl: session.siteUrl,
+        });
     } catch (error) {
-      setScreen({ kind: 'error', message: error instanceof ApiError ? error.message : tRef.current('tg.errorGeneric') });
+      setScreen({
+        kind: 'error',
+        message: error instanceof ApiError ? error.message : tRef.current('tg.errorGeneric'),
+      });
     }
   }, []);
 
@@ -109,7 +142,9 @@ export function TelegramAppPage() {
           app={app}
           token={screen.token}
           state={screen.state}
-          onState={(state) => setScreen((current) => (current.kind === 'ready' ? { ...current, state } : current))}
+          onState={(state) =>
+            setScreen((current) => (current.kind === 'ready' ? { ...current, state } : current))
+          }
           onUnlinked={() => void openSession(app)}
         />
       ) : (
@@ -176,9 +211,12 @@ function Cabinet({
     toastTimer.current = window.setTimeout(() => setToast(null), tone === 'danger' ? 7000 : 5000);
   }, []);
 
-  useEffect(() => () => {
-    if (toastTimer.current) window.clearTimeout(toastTimer.current);
-  }, []);
+  useEffect(
+    () => () => {
+      if (toastTimer.current) window.clearTimeout(toastTimer.current);
+    },
+    [],
+  );
 
   const refresh = useCallback(async () => {
     try {
@@ -227,7 +265,8 @@ function Cabinet({
 
   const tabs = TABS.filter((item) => item.id !== 'admin' || state.user.isAdmin);
   const info = subscriptionInfo(state);
-  const name = state.user.name || (state.user.telegramUsername ? `@${state.user.telegramUsername}` : '');
+  const name =
+    state.user.name || (state.user.telegramUsername ? `@${state.user.telegramUsername}` : '');
   const titles: Record<TabId, string> = {
     home: name ? t('tg.hello', { name: name.split(' ')[0] ?? name }) : t('tg.tabHome'),
     plans: t('tg.plansTitle'),
@@ -240,15 +279,21 @@ function Cabinet({
     <MiniAppProvider value={context}>
       <div className="mx-auto flex w-full max-w-md flex-col gap-4 px-4 pt-4 pb-[calc(6rem+env(safe-area-inset-bottom))]">
         <header className="flex items-center justify-between gap-3 pt-1">
-          <h1 className="min-w-0 truncate text-[22px] font-semibold tracking-tight">{titles[tab]}</h1>
+          <h1 className="min-w-0 truncate text-[22px] font-semibold tracking-tight">
+            {titles[tab]}
+          </h1>
           <Badge tone={PLAN_TONE[info.plan] ?? 'neutral'}>
-            {state.user.isVip ? 'VIP' : (state.plans.find((plan) => plan.id === info.plan)?.title ?? 'Free')}
+            {state.user.isVip
+              ? 'VIP'
+              : (state.plans.find((plan) => plan.id === info.plan)?.title ?? 'Free')}
           </Badge>
         </header>
 
         <div role="tabpanel" id={`tg-panel-${tab}`} aria-labelledby={`tg-tab-${tab}`}>
           {tab === 'home' ? <HomeTab /> : null}
-          {tab === 'plans' ? <PlansTab recurring={recurring} onRecurringChange={setRecurring} /> : null}
+          {tab === 'plans' ? (
+            <PlansTab recurring={recurring} onRecurringChange={setRecurring} />
+          ) : null}
           {tab === 'payments' ? <PaymentsTab /> : null}
           {tab === 'profile' ? <ProfileTab onUnlinked={onUnlinked} /> : null}
           {tab === 'admin' && state.user.isAdmin ? <AdminTab /> : null}
@@ -271,7 +316,11 @@ function Cabinet({
               aria-hidden="true"
               className={cn(
                 'mt-1.5 size-2 shrink-0 rounded-full',
-                toast.tone === 'success' ? 'bg-accent' : toast.tone === 'danger' ? 'bg-danger' : 'bg-muted',
+                toast.tone === 'success'
+                  ? 'bg-accent'
+                  : toast.tone === 'danger'
+                    ? 'bg-danger'
+                    : 'bg-muted',
               )}
             />
             <span className="flex-1">{toast.text}</span>
@@ -291,7 +340,11 @@ function Cabinet({
         aria-label={t('tg.navLabel')}
         className="fixed inset-x-0 bottom-0 z-30 border-t border-stroke bg-surface/95 pb-[env(safe-area-inset-bottom)] backdrop-blur"
       >
-        <div role="tablist" className="mx-auto grid max-w-md" style={{ gridTemplateColumns: `repeat(${tabs.length}, minmax(0, 1fr))` }}>
+        <div
+          role="tablist"
+          className="mx-auto grid max-w-md"
+          style={{ gridTemplateColumns: `repeat(${tabs.length}, minmax(0, 1fr))` }}
+        >
           {tabs.map((item) => {
             const Icon = item.icon;
             const active = item.id === tab;
@@ -312,7 +365,9 @@ function Cabinet({
                 )}
               >
                 <span className="relative">
-                  <Icon className={cn('size-[22px]', active && item.id === 'plans' && 'fill-accent/20')} />
+                  <Icon
+                    className={cn('size-[22px]', active && item.id === 'plans' && 'fill-accent/20')}
+                  />
                   {count > 0 ? (
                     <span className="absolute -top-1.5 -right-2.5 min-w-4 rounded-full bg-warning px-1 text-center text-[10px] leading-4 font-semibold text-canvas">
                       {count}
@@ -353,7 +408,10 @@ function OutsideView() {
       </span>
       <h1 className="text-lg font-semibold">{t('tg.outsideTitle')}</h1>
       <p className="text-[14px] leading-6 text-muted">{t('tg.outsideText')}</p>
-      <a href={BOT_URL} className="mt-1 inline-flex min-h-11 items-center gap-2 rounded-md bg-action px-4 font-medium text-action-text">
+      <a
+        href={BOT_URL}
+        className="mt-1 inline-flex min-h-11 items-center gap-2 rounded-md bg-action px-4 font-medium text-action-text"
+      >
         <TelegramIcon className="size-4" />
         {t('tg.openBot')}
       </a>

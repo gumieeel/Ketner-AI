@@ -60,64 +60,162 @@ export class AutoRouter {
 
     // 1. Кодинг / разработка
     const codeKeywords = [
-      'function', 'const ', 'let ', 'var ', 'class ', 'import ', 'export ',
-      'def ', 'return', 'async', 'await', 'interface ', 'type ',
-      'sql', 'select ', 'insert ', 'docker', 'git ', 'commit',
-      'html', 'css', 'javascript', 'typescript', 'python', 'react', 'vue',
-      'баг', 'ошибка', 'код', 'функци', 'скрипт', 'рефакторинг', 'тест',
-      'напиши код', 'исправь', 'debug', 'refactor', 'api', 'endpoint',
-      'component', 'hook', 'query', 'mutation', 'migration',
-      'алгоритм', 'algorithm', 'golang', 'rust', ' c++', ' java', 'линтер',
+      'function',
+      'const ',
+      'let ',
+      'var ',
+      'class ',
+      'import ',
+      'export ',
+      'def ',
+      'return',
+      'async',
+      'await',
+      'interface ',
+      'type ',
+      'sql',
+      'select ',
+      'insert ',
+      'docker',
+      'git ',
+      'commit',
+      'html',
+      'css',
+      'javascript',
+      'typescript',
+      'python',
+      'react',
+      'vue',
+      'баг',
+      'ошибка',
+      'код',
+      'функци',
+      'скрипт',
+      'рефакторинг',
+      'тест',
+      'напиши код',
+      'исправь',
+      'debug',
+      'refactor',
+      'api',
+      'endpoint',
+      'component',
+      'hook',
+      'query',
+      'mutation',
+      'migration',
+      'алгоритм',
+      'algorithm',
+      'golang',
+      'rust',
+      ' c++',
+      ' java',
+      'линтер',
     ];
     const isCode = codeKeywords.some((kw) => text.includes(kw)) || prompt.includes('```');
 
     // 2. Математика
     const mathKeywords = [
-      'вычисли', 'посчитай', 'уравнение', 'интеграл', 'производная', 'формула',
-      'calculate', 'solve', 'equation', 'integral', 'derivative', 'probability',
-      'вероятность', 'матрица', 'matrix', 'theorem', 'теорема', 'доказательство',
+      'вычисли',
+      'посчитай',
+      'уравнение',
+      'интеграл',
+      'производная',
+      'формула',
+      'calculate',
+      'solve',
+      'equation',
+      'integral',
+      'derivative',
+      'probability',
+      'вероятность',
+      'матрица',
+      'matrix',
+      'theorem',
+      'теорема',
+      'доказательство',
     ];
     const isMath = mathKeywords.some((kw) => text.includes(kw));
 
     // 3. Рассуждения / глубокий анализ
     const reasoningKeywords = [
-      'почему', 'сравни', 'проанализируй', 'в чём разница', 'архитектура',
-      'преимущества и недостатки', 'why', 'compare', 'analyze', 'difference between',
-      'step by step', 'пошагово', 'explain', 'объясни', 'оцени',
-      'pros and cons', 'trade-offs', 'рассуди',
+      'почему',
+      'сравни',
+      'проанализируй',
+      'в чём разница',
+      'архитектура',
+      'преимущества и недостатки',
+      'why',
+      'compare',
+      'analyze',
+      'difference between',
+      'step by step',
+      'пошагово',
+      'explain',
+      'объясни',
+      'оцени',
+      'pros and cons',
+      'trade-offs',
+      'рассуди',
     ];
     const isReasoning = reasoningKeywords.some((kw) => text.includes(kw));
 
     // 4. Перевод
     const translationKeywords = [
-      'переведи', 'перевод', 'translate', 'translation',
-      'на английский', 'на русский', 'to english', 'to russian',
+      'переведи',
+      'перевод',
+      'translate',
+      'translation',
+      'на английский',
+      'на русский',
+      'to english',
+      'to russian',
     ];
     const isTranslation = translationKeywords.some((kw) => text.includes(kw));
 
     // 5. Креатив / тексты
     const creativeKeywords = [
-      'напиши статью', 'эссе', 'сочинение', 'стихотворение', 'пост', 'рассказ',
-      'write an essay', 'poem', 'story', 'blog post', 'write a', 'напиши текст',
-      'перепиши', 'rewrite', 'summarize', 'резюмируй', 'краткое содержание',
+      'напиши статью',
+      'эссе',
+      'сочинение',
+      'стихотворение',
+      'пост',
+      'рассказ',
+      'write an essay',
+      'poem',
+      'story',
+      'blog post',
+      'write a',
+      'напиши текст',
+      'перепиши',
+      'rewrite',
+      'summarize',
+      'резюмируй',
+      'краткое содержание',
     ];
     const isCreative = creativeKeywords.some((kw) => text.includes(kw));
 
     // 6. Research
     const researchKeywords = [
-      'найди', 'search', 'research', 'исследование', 'обзор',
-      'review', 'survey', 'state of the art',
+      'найди',
+      'search',
+      'research',
+      'исследование',
+      'обзор',
+      'review',
+      'survey',
+      'state of the art',
     ];
     const isResearch = researchKeywords.some((kw) => text.includes(kw));
 
     // Приоритет категорий (от специфичных к общим)
     let category: TaskCategory = 'general';
-    if (isCode)        category = 'coding';
-    else if (isMath)   category = 'math';
+    if (isCode) category = 'coding';
+    else if (isMath) category = 'math';
     else if (isReasoning) category = 'reasoning';
-    else if (isResearch)  category = 'research';
+    else if (isResearch) category = 'research';
     else if (isTranslation) category = 'translation';
-    else if (isCreative)    category = 'creative';
+    else if (isCreative) category = 'creative';
 
     // Оценка сложности
     const isComplex =
@@ -127,15 +225,11 @@ export class AutoRouter {
       isReasoning ||
       isResearch;
 
-    const isModerate = !isComplex && (
-      prompt.length > 300 ||
-      isCode ||
-      isMath
-    );
+    const isModerate = !isComplex && (prompt.length > 300 || isCode || isMath);
 
     return {
       category,
-      complexity: isComplex ? 'complex' : (isModerate ? 'moderate' : 'simple'),
+      complexity: isComplex ? 'complex' : isModerate ? 'moderate' : 'simple',
       requiresLongContext: prompt.length > 4000,
       suggestedCapabilities: {
         coding: isCode,

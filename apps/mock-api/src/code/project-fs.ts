@@ -13,7 +13,12 @@ import { constants as fsConstants } from 'node:fs';
 import { randomBytes } from 'node:crypto';
 import { lstat, mkdir, open, readdir, rename, rm, stat, writeFile } from 'node:fs/promises';
 import path from 'node:path';
-import { CodeError, IGNORED_DIRECTORIES, isGitInternalPath, normalizeProjectPath } from './path-safety.js';
+import {
+  CodeError,
+  IGNORED_DIRECTORIES,
+  isGitInternalPath,
+  normalizeProjectPath,
+} from './path-safety.js';
 
 export interface FsEntry {
   path: string;
@@ -57,14 +62,20 @@ export class ProjectFs {
       try {
         info = await lstat(current);
       } catch (error) {
-        if ((error as NodeJS.ErrnoException).code === 'ENOENT' || (error as NodeJS.ErrnoException).code === 'ENOTDIR') {
+        if (
+          (error as NodeJS.ErrnoException).code === 'ENOENT' ||
+          (error as NodeJS.ErrnoException).code === 'ENOTDIR'
+        ) {
           if (options.allowMissing) return path.join(this.root, ...segments);
           throw new CodeError('not_found', `Файл не найден: ${normalized}`);
         }
         throw error;
       }
       if (info.isSymbolicLink()) {
-        throw new CodeError('forbidden_path', `Символические ссылки не поддерживаются: ${normalized}`);
+        throw new CodeError(
+          'forbidden_path',
+          `Символические ссылки не поддерживаются: ${normalized}`,
+        );
       }
       if (i < segments.length - 1 && !info.isDirectory()) {
         throw new CodeError('invalid_path', `${segments.slice(0, i + 1).join('/')} — не каталог`);
@@ -140,10 +151,16 @@ export class ProjectFs {
   }
 
   /** Текстовое содержимое файла; двоичные файлы читать как текст нельзя. */
-  async readText(relative: string, options: { maxBytes?: number } = {}): Promise<{ content: string; size: number }> {
+  async readText(
+    relative: string,
+    options: { maxBytes?: number } = {},
+  ): Promise<{ content: string; size: number }> {
     const buffer = await this.readBuffer(relative, options);
     if (looksBinaryBuffer(buffer)) {
-      throw new CodeError('binary_file', `${normalizeProjectPath(relative)} — двоичный файл, прочитать как текст нельзя`);
+      throw new CodeError(
+        'binary_file',
+        `${normalizeProjectPath(relative)} — двоичный файл, прочитать как текст нельзя`,
+      );
     }
     return { content: buffer.toString('utf8'), size: buffer.length };
   }

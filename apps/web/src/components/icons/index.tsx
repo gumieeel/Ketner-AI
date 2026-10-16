@@ -659,5 +659,3 @@ export function ThumbsDownIcon(props: IconProps) {
     </SvgIcon>
   );
 }
-
-

@@ -130,19 +130,74 @@ export const API_ENDPOINTS = [
     status: 'ready',
     description: 'Отмена подписки',
   },
-  { method: 'GET', path: '/api/code/capabilities', status: 'ready', description: 'Ketner Code: лимиты тарифа и возможности' },
-  { method: 'GET', path: '/api/code/projects', status: 'ready', description: 'Ketner Code: проекты пользователя' },
-  { method: 'POST', path: '/api/code/projects/:id/run', status: 'ready', description: 'Ketner Code: запуск агента (SSE)' },
+  {
+    method: 'GET',
+    path: '/api/code/capabilities',
+    status: 'ready',
+    description: 'Ketner Code: лимиты тарифа и возможности',
+  },
+  {
+    method: 'GET',
+    path: '/api/code/projects',
+    status: 'ready',
+    description: 'Ketner Code: проекты пользователя',
+  },
+  {
+    method: 'POST',
+    path: '/api/code/projects/:id/run',
+    status: 'ready',
+    description: 'Ketner Code: запуск агента (SSE)',
+  },
   { method: 'GET', path: '/api/keys', status: 'ready', description: 'API-ключи пользователя' },
-  { method: 'POST', path: '/api/keys', status: 'ready', description: 'Создать API-ключ (секрет виден один раз)' },
+  {
+    method: 'POST',
+    path: '/api/keys',
+    status: 'ready',
+    description: 'Создать API-ключ (секрет виден один раз)',
+  },
   { method: 'DELETE', path: '/api/keys/:id', status: 'ready', description: 'Отозвать API-ключ' },
-  { method: 'GET', path: '/api/github/status', status: 'ready', description: 'Привязанный аккаунт GitHub' },
-  { method: 'GET', path: '/api/github/connect-url', status: 'ready', description: 'Ссылка на подключение GitHub (OAuth)' },
-  { method: 'POST', path: '/api/github/confirm', status: 'ready', description: 'Завершить подключение GitHub' },
-  { method: 'DELETE', path: '/api/github/connection', status: 'ready', description: 'Отключить GitHub' },
-  { method: 'GET', path: '/api/github/api/*', status: 'ready', description: 'Прокси к GitHub REST от имени пользователя' },
-  { method: 'GET', path: '/v1/models', status: 'ready', description: 'Модели для агента (OpenAI-формат, ключ API)' },
-  { method: 'GET', path: '/v1/usage', status: 'ready', description: 'Бюджет и расход по ключу API' },
+  {
+    method: 'GET',
+    path: '/api/github/status',
+    status: 'ready',
+    description: 'Привязанный аккаунт GitHub',
+  },
+  {
+    method: 'GET',
+    path: '/api/github/connect-url',
+    status: 'ready',
+    description: 'Ссылка на подключение GitHub (OAuth)',
+  },
+  {
+    method: 'POST',
+    path: '/api/github/confirm',
+    status: 'ready',
+    description: 'Завершить подключение GitHub',
+  },
+  {
+    method: 'DELETE',
+    path: '/api/github/connection',
+    status: 'ready',
+    description: 'Отключить GitHub',
+  },
+  {
+    method: 'GET',
+    path: '/api/github/api/*',
+    status: 'ready',
+    description: 'Прокси к GitHub REST от имени пользователя',
+  },
+  {
+    method: 'GET',
+    path: '/v1/models',
+    status: 'ready',
+    description: 'Модели для агента (OpenAI-формат, ключ API)',
+  },
+  {
+    method: 'GET',
+    path: '/v1/usage',
+    status: 'ready',
+    description: 'Бюджет и расход по ключу API',
+  },
   {
     method: 'POST',
     path: '/v1/chat/completions',
@@ -198,7 +253,8 @@ export function createApiRouter(deps: ApiDeps): Router {
   router.use('/auth', createAuthRouter(activeUserStore, deps.betterAuth));
   router.use(
     createContactRouter({
-      notify: (message) => (deps.botService ?? telegramBotService).notifyAdminsAboutContact(message),
+      notify: (message) =>
+        (deps.botService ?? telegramBotService).notifyAdminsAboutContact(message),
     }),
   );
   router.use(
@@ -237,7 +293,13 @@ export function createApiRouter(deps: ApiDeps): Router {
   );
   router.use(createApiKeysRouter({ apiKeyStore: deps.apiKeyStore ?? defaultApiKeyStore }));
   const activeGithubStore = deps.githubConnectionStore ?? defaultGithubConnectionStore;
-  router.use(createGithubRouter({ store: activeGithubStore, fetchImpl: deps.githubFetch, settings: deps.githubSettings }));
+  router.use(
+    createGithubRouter({
+      store: activeGithubStore,
+      fetchImpl: deps.githubFetch,
+      settings: deps.githubSettings,
+    }),
+  );
   router.use(createConversationsRouter(deps.store, deps.userId));
   router.use(
     '/code',

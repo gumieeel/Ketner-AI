@@ -6,10 +6,14 @@ const LIMITS = { maxFiles: 50, maxFileBytes: 1000, maxTotalBytes: 5000 };
 
 function zipFile(entries: Record<string, string | Uint8Array>): File {
   const data: Record<string, Uint8Array> = {};
-  for (const [name, value] of Object.entries(entries)) // В jsdom TextEncoder отдаёт Uint8Array из другого окружения, а fflate проверяет instanceof.
+  for (const [name, value] of Object.entries(entries))
+    // В jsdom TextEncoder отдаёт Uint8Array из другого окружения, а fflate проверяет instanceof.
     data[name] = Uint8Array.from(typeof value === 'string' ? strToU8(value) : value);
   const bytes = zipSync(data);
-  return new File([bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer], 'p.zip');
+  return new File(
+    [bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer],
+    'p.zip',
+  );
 }
 
 describe('импорт кода в проект', () => {
@@ -23,7 +27,9 @@ describe('импорт кода в проект', () => {
     const result = await readZipFile(file, LIMITS);
     expect(result.files.map((f) => f.path)).toEqual(['src/a.ts']);
     const reasons = result.skipped.map((s) => s.path);
-    expect(reasons).toEqual(expect.arrayContaining(['.env', 'node_modules/x/index.js', 'logo.png']));
+    expect(reasons).toEqual(
+      expect.arrayContaining(['.env', 'node_modules/x/index.js', 'logo.png']),
+    );
   });
 
   it('ZIP: убирает общий корневой каталог архива', async () => {
@@ -47,7 +53,10 @@ describe('импорт кода в проект', () => {
   });
 
   it('файлы режутся на части ограниченного размера', () => {
-    const files = Array.from({ length: 10 }, (_, i) => ({ path: `f${i}.txt`, content: 'x'.repeat(400_000) }));
+    const files = Array.from({ length: 10 }, (_, i) => ({
+      path: `f${i}.txt`,
+      content: 'x'.repeat(400_000),
+    }));
     const chunks = chunkFiles(files);
     expect(chunks.length).toBeGreaterThan(1);
     expect(chunks.flat()).toHaveLength(10);

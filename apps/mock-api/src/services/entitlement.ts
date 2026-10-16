@@ -59,9 +59,9 @@ const LEGACY_PRO_BASE: Omit<PlanEntitlements, 'planId'> = {
   maxTokens: 12288,
   streamingEnabled: true,
   // Legacy Pro: 1199 ₽ ≈ $12.62, бюджет $5.00 ≈ 40% (новых оплат по старой цене нет).
-  maxDailyCost: 0.60,
-  costBudget: 5.00,
-  premiumBudget: 1.80,
+  maxDailyCost: 0.6,
+  costBudget: 5.0,
+  premiumBudget: 1.8,
 };
 
 /**
@@ -108,7 +108,7 @@ export const PLAN_ENTITLEMENTS: Record<PlanId, PlanEntitlements> = {
     // при отказе общего пула OpenRouter. Худший случай: GPT-6 Luna без размышлений ≈ $0.001–0.0013 за запрос → 10 сообщений в день ≈ $0.3–0.4
     // в месяц в худшем случае; средний пользователь тратит в 3–5 раз меньше. Премиум-моделей нет.
     maxDailyCost: 0.03,
-    costBudget: 0.30,
+    costBudget: 0.3,
     premiumBudget: 0,
   },
   plus: {
@@ -131,7 +131,7 @@ export const PLAN_ENTITLEMENTS: Record<PlanId, PlanEntitlements> = {
     costBudget: 3.0,
     // Премиум-квота $1.30 (потолок: половина costBudget, см. currency.test): ≈ 49 запросов Sol в месяц
     // при лимите 2 в сутки. Общий costBudget не менялся, поэтому худший случай по марже прежний.
-    premiumBudget: 1.30,
+    premiumBudget: 1.3,
   },
   pro: {
     planId: 'pro',
@@ -250,7 +250,8 @@ export function getPlanLimits(): Record<PlanId, PlanLimits> {
   for (const [planId, ent] of Object.entries(PLAN_ENTITLEMENTS) as [PlanId, PlanEntitlements][]) {
     result[planId] = {
       contextMessages: ent.maxContextMessages,
-      messagesPerDay: ent.userFacingDailyMessages !== undefined ? ent.userFacingDailyMessages : null,
+      messagesPerDay:
+        ent.userFacingDailyMessages !== undefined ? ent.userFacingDailyMessages : null,
     };
   }
   return result;

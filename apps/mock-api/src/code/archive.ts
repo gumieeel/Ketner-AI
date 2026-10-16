@@ -8,7 +8,12 @@
 
 import { Zip, ZipDeflate, unzipSync } from 'fflate';
 import { looksBinaryBuffer } from './project-fs.js';
-import { isGitInternalPath, isIgnoredPath, isSecretPath, normalizeProjectPath } from './path-safety.js';
+import {
+  isGitInternalPath,
+  isIgnoredPath,
+  isSecretPath,
+  normalizeProjectPath,
+} from './path-safety.js';
 
 export interface ExtractLimits {
   maxFiles: number;
@@ -50,7 +55,8 @@ export function extractZipText(data: Uint8Array, limits: ExtractLimits): Extract
   const raw = unzipSync(data, {
     filter: (file) => {
       if (file.name.endsWith('/')) return false;
-      const relative = root && file.name.startsWith(root) ? file.name.slice(root.length) : file.name;
+      const relative =
+        root && file.name.startsWith(root) ? file.name.slice(root.length) : file.name;
       let normalized: string;
       try {
         normalized = normalizeProjectPath(relative);
@@ -90,7 +96,9 @@ export function extractZipText(data: Uint8Array, limits: ExtractLimits): Extract
   for (const [name, bytes] of Object.entries(raw)) {
     const normalized = accepted.get(name);
     if (!normalized) continue;
-    if (looksBinaryBuffer(Buffer.from(bytes.buffer, bytes.byteOffset, Math.min(bytes.length, 8000)))) {
+    if (
+      looksBinaryBuffer(Buffer.from(bytes.buffer, bytes.byteOffset, Math.min(bytes.length, 8000)))
+    ) {
       skipped.push({ path: normalized, reason: 'двоичный файл' });
       continue;
     }
@@ -149,14 +157,19 @@ export function parseGithubUrl(input: string): GithubRef | null {
     } catch {
       return null;
     }
-    if (url.protocol !== 'https:' || !['github.com', 'www.github.com'].includes(url.hostname.toLowerCase())) return null;
+    if (
+      url.protocol !== 'https:' ||
+      !['github.com', 'www.github.com'].includes(url.hostname.toLowerCase())
+    )
+      return null;
     if (url.username || url.password || url.port) return null;
     segments = url.pathname.split('/').filter(Boolean);
   }
   if (segments.length < 2) return null;
   const owner = segments[0];
   const repo = segments[1].replace(/\.git$/i, '');
-  if (!GITHUB_NAME.test(owner) || !GITHUB_NAME.test(repo) || repo === '.' || repo === '..') return null;
+  if (!GITHUB_NAME.test(owner) || !GITHUB_NAME.test(repo) || repo === '.' || repo === '..')
+    return null;
   let ref: string | undefined;
   if (segments[2] === 'tree' && segments[3]) {
     ref = decodeURIComponent(segments[3]);
@@ -179,7 +192,10 @@ export async function downloadGithubZip(
   options: { maxBytes: number; timeoutMs?: number; fetchImpl?: typeof fetch; token?: string },
 ): Promise<Uint8Array> {
   const fetchImpl = options.fetchImpl ?? fetch;
-  const headers: Record<string, string> = { 'User-Agent': 'ketner-code', Accept: 'application/vnd.github+json' };
+  const headers: Record<string, string> = {
+    'User-Agent': 'ketner-code',
+    Accept: 'application/vnd.github+json',
+  };
   if (options.token) headers.Authorization = `Bearer ${options.token}`;
   const url =
     `https://api.github.com/repos/${encodeURIComponent(target.owner)}/${encodeURIComponent(target.repo)}/zipball` +
@@ -192,7 +208,10 @@ export async function downloadGithubZip(
       signal: AbortSignal.timeout(options.timeoutMs ?? 30_000),
     });
   } catch {
-    throw new GithubImportError('unavailable', 'GitHub недоступен. Попробуйте позже или загрузите ZIP-архив.');
+    throw new GithubImportError(
+      'unavailable',
+      'GitHub недоступен. Попробуйте позже или загрузите ZIP-архив.',
+    );
   }
   if (response.status === 404 || response.status === 403 || response.status === 401) {
     throw new GithubImportError(
@@ -203,7 +222,10 @@ export async function downloadGithubZip(
     );
   }
   if (!response.ok || !response.body) {
-    throw new GithubImportError('unavailable', 'GitHub недоступен. Попробуйте позже или загрузите ZIP-архив.');
+    throw new GithubImportError(
+      'unavailable',
+      'GitHub недоступен. Попробуйте позже или загрузите ZIP-архив.',
+    );
   }
   const declared = Number(response.headers.get('content-length') ?? 0);
   if (declared > options.maxBytes) {

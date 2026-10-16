@@ -48,7 +48,9 @@ function authHeaders(extra: Record<string, string> = {}): Record<string, string>
 }
 
 async function request<T>(path: string, init: RequestInit & { body?: string } = {}): Promise<T> {
-  const headers = authHeaders(init.body !== undefined ? { 'Content-Type': 'application/json' } : {});
+  const headers = authHeaders(
+    init.body !== undefined ? { 'Content-Type': 'application/json' } : {},
+  );
   const response = await fetch(`${API_BASE}${path}`, { ...init, headers, credentials: 'include' });
   checkSessionInvalid(response);
   if (!response.ok) {
@@ -96,7 +98,9 @@ export async function githubFetch(
   checkSessionInvalid(response);
   if (!response.ok) {
     try {
-      const body = (await response.clone().json()) as { error?: { code?: string; message?: string } };
+      const body = (await response.clone().json()) as {
+        error?: { code?: string; message?: string };
+      };
       const code = body.error?.code;
       if (code && CONNECTION_CODES.has(code)) {
         throw new GithubConnectionError(code, body.error?.message ?? 'GitHub недоступен');
@@ -124,7 +128,10 @@ export const githubApi = {
   connectUrl: (returnTo: string) =>
     request<{ url: string }>(`/github/connect-url?returnTo=${encodeURIComponent(returnTo)}`),
   confirm: (code: string, state: string) =>
-    request<GithubStatus>('/github/confirm', { method: 'POST', body: JSON.stringify({ code, state }) }),
+    request<GithubStatus>('/github/confirm', {
+      method: 'POST',
+      body: JSON.stringify({ code, state }),
+    }),
   disconnect: () => request<GithubStatus>('/github/connection', { method: 'DELETE' }),
 
   /** Репозитории аккаунта, включая приватные и репозитории организаций; свежие сверху. */
@@ -153,7 +160,9 @@ export const githubApi = {
   },
 
   async defaultBranch(owner: string, repo: string): Promise<string> {
-    const response = await githubFetch(`/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}`);
+    const response = await githubFetch(
+      `/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}`,
+    );
     if (!response.ok) throw new Error(`GitHub не отдал репозиторий (${response.status})`);
     return ((await response.json()) as { default_branch?: string }).default_branch ?? '';
   },

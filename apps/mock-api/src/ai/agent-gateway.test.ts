@@ -41,7 +41,10 @@ const okResult = (over: Partial<AgentProviderResult> = {}): AgentProviderResult 
   ...over,
 });
 
-function fakeProvider(script: Script, calls: AgentProviderRequest[]): AIProvider & AgentCapableProvider {
+function fakeProvider(
+  script: Script,
+  calls: AgentProviderRequest[],
+): AIProvider & AgentCapableProvider {
   return {
     type: 'openrouter',
     name: 'FakeOpenRouter',
@@ -87,14 +90,21 @@ function request(over: Partial<AgentRunRequest> = {}): AgentRunRequest {
   };
 }
 
-const events = (): { list: AgentStreamEvent[]; callbacks: { onEvent: (e: AgentStreamEvent) => void } } => {
+const events = (): {
+  list: AgentStreamEvent[];
+  callbacks: { onEvent: (e: AgentStreamEvent) => void };
+} => {
   const list: AgentStreamEvent[] = [];
   return { list, callbacks: { onEvent: (e) => list.push(e) } };
 };
 
 const asOk = (outcome: unknown): AgentSuccess => {
   const value = outcome as AgentSuccess | AgentFailure;
-  assert.equal(value.kind, 'ok', value.kind === 'error' ? `${value.status} ${value.code}: ${value.message}` : '');
+  assert.equal(
+    value.kind,
+    'ok',
+    value.kind === 'error' ? `${value.status} ${value.code}: ${value.message}` : '',
+  );
   return value as AgentSuccess;
 };
 const asFail = (outcome: unknown): AgentFailure => {
@@ -104,7 +114,13 @@ const asFail = (outcome: unknown): AgentFailure => {
 };
 
 /** Расход «вчера»: входит в месячный бюджет, но не в суточный лимит. */
-function seed(usage: UsageStore, userId: string, cost: number, modelId = 'ketner-pro', ageMs = 3 * 86_400_000): void {
+function seed(
+  usage: UsageStore,
+  userId: string,
+  cost: number,
+  modelId = 'ketner-pro',
+  ageMs = 3 * 86_400_000,
+): void {
   const record = usage.recordUsage({
     userId,
     conversationId: 'seed',
@@ -122,10 +138,22 @@ function seed(usage: UsageStore, userId: string, cost: number, modelId = 'ketner
 test('ответ с вызовом функции: события идут клиенту, расход пишется по цене провайдера в api:<ключ>', async () => {
   const { gateway, usage, calls } = setup(async (_r, emit) => {
     emit({ kind: 'reasoning', text: 'думаю' });
-    emit({ kind: 'tool_call', index: 0, id: 'c1', name: 'read_file', argumentsDelta: '{"path":"a.ts"}' });
+    emit({
+      kind: 'tool_call',
+      index: 0,
+      id: 'c1',
+      name: 'read_file',
+      argumentsDelta: '{"path":"a.ts"}',
+    });
     return okResult({
       content: '',
-      toolCalls: [{ id: 'c1', type: 'function', function: { name: 'read_file', arguments: '{"path":"a.ts"}' } }],
+      toolCalls: [
+        {
+          id: 'c1',
+          type: 'function',
+          function: { name: 'read_file', arguments: '{"path":"a.ts"}' },
+        },
+      ],
       finishReason: 'tool_calls',
       cost: 0.0123,
       usage: { inputTokens: 5000, outputTokens: 80, cachedTokens: 4000 },
@@ -142,7 +170,10 @@ test('ответ с вызовом функции: события идут кл�
   assert.equal(out.model.id, 'ketner-pro');
   assert.equal(out.costUsd, 0.0123);
   assert.equal(out.routingReason, 'Explicit user model selection (Ketner Pro)');
-  assert.deepEqual(sink.list.map((e) => e.kind), ['reasoning', 'tool_call']);
+  assert.deepEqual(
+    sink.list.map((e) => e.kind),
+    ['reasoning', 'tool_call'],
+  );
   assert.equal(calls[0].model, 'xiaomi/mimo-v2.6-pro');
   assert.equal(calls[0].tools?.length, 1);
 
@@ -163,10 +194,14 @@ test('Free не допускается; неизвестная модель и �
   assert.equal(unknown.status, 404);
   assert.equal(unknown.code, 'model_not_found');
 
-  const legacy = asFail(await gateway.run(request({ model: 'gemini-3.8-flash' }), events().callbacks));
+  const legacy = asFail(
+    await gateway.run(request({ model: 'gemini-3.8-flash' }), events().callbacks),
+  );
   assert.equal(legacy.code, 'model_not_found', 'старые id вне публичного каталога не принимаются');
 
-  const tooHigh = asFail(await gateway.run(request({ model: 'claude-opus-5.5' }), events().callbacks));
+  const tooHigh = asFail(
+    await gateway.run(request({ model: 'claude-opus-5.5' }), events().callbacks),
+  );
   assert.equal(tooHigh.status, 403);
   assert.match(tooHigh.message, /Pro/);
   assert.equal(calls.length, 0);
@@ -197,7 +232,9 @@ test('квота премиум-запросов исчерпана: отвеч�
 
 test('премиум-модель отвечает, пока квота есть', async () => {
   const { gateway, calls } = setup(async () => okResult());
-  const out = asOk(await gateway.run(request({ userPlan: 'pro', model: 'gpt-6.1-sol' }), events().callbacks));
+  const out = asOk(
+    await gateway.run(request({ userPlan: 'pro', model: 'gpt-6.1-sol' }), events().callbacks),
+  );
   assert.equal(out.model.id, 'gpt-6.1-sol');
   assert.equal(calls[0].model, 'openai/gpt-6.1-sol');
   assert.equal(out.budget.premiumAvailable, true);
@@ -229,8 +266,15 @@ test('токенные окна чата для агента не действу
   // 400k токенов за последний час при чатовом лимите Plus 300k: чат отказал бы.
   const heavy = request();
   usage.recordUsage({
-    userId: heavy.userId, conversationId: 'api:old', modelId: 'ketner-pro', provider: 'openrouter',
-    inputTokens: 400_000, outputTokens: 1000, estimatedCost: 0.01, latencyMs: 1, status: 'success',
+    userId: heavy.userId,
+    conversationId: 'api:old',
+    modelId: 'ketner-pro',
+    provider: 'openrouter',
+    inputTokens: 400_000,
+    outputTokens: 1000,
+    estimatedCost: 0.01,
+    latencyMs: 1,
+    status: 'success',
   });
   asOk(await gateway.run(heavy, events().callbacks));
 
@@ -250,7 +294,8 @@ test('токенные окна чата для агента не действу
 test('параллельный запрос сверх лимита тарифа отклоняется с Retry-After', async () => {
   const { gateway, usage } = setup(async () => okResult());
   const req = request();
-  for (let i = 0; i < PLAN_ENTITLEMENTS.plus.maxConcurrency; i++) usage.acquireConcurrencySlot(req.userId);
+  for (let i = 0; i < PLAN_ENTITLEMENTS.plus.maxConcurrency; i++)
+    usage.acquireConcurrencySlot(req.userId);
   const refused = asFail(await gateway.run(req, events().callbacks));
   assert.equal(refused.status, 429);
   assert.equal(refused.retryAfterSec, 5);
@@ -299,7 +344,11 @@ test('HTTP 402 от OpenRouter: цепочка не перебирается, к
     assert.equal(refused.status, 503);
     assert.equal(refused.code, 'provider_unavailable');
     assert.equal(usage.getByUser(req.userId)[0].status, 'error');
-    assert.equal(usage.getFairUseSnapshot(req.userId).requestsLastDay, 0, 'сбой не списывает лимит');
+    assert.equal(
+      usage.getFairUseSnapshot(req.userId).requestsLastDay,
+      0,
+      'сбой не списывает лимит',
+    );
   } finally {
     console.error = err;
   }
@@ -334,7 +383,11 @@ test('HTTP 400 с размышлениями: один повтор без па�
     assert.equal(first.calls[1].reasoning, undefined);
 
     const overflow = setup(async (r) => {
-      throw new OpenRouterError(r.model, 400, "This model's maximum context length is 200000 tokens");
+      throw new OpenRouterError(
+        r.model,
+        400,
+        "This model's maximum context length is 200000 tokens",
+      );
     });
     const refused = asFail(await overflow.gateway.run(request(), events().callbacks));
     assert.equal(refused.status, 400);
@@ -376,7 +429,10 @@ test('глубина размышлений: потолок по тарифу, �
 
 test('глубина размышлений доходит до провайдера в формате модели', async () => {
   const { gateway, calls } = setup(async () => okResult());
-  await gateway.run(request({ userPlan: 'ultra', model: 'ketner-mini', reasoningEffort: 'high' }), events().callbacks);
+  await gateway.run(
+    request({ userPlan: 'ultra', model: 'ketner-mini', reasoningEffort: 'high' }),
+    events().callbacks,
+  );
   assert.deepEqual(calls[0].reasoning, { effort: 'high' });
   // Ketner Pro умеет только включать и выключать размышления.
   await gateway.run(request({ model: 'ketner-pro', reasoningEffort: 'low' }), events().callbacks);
@@ -400,7 +456,10 @@ test('отмена клиентом: запрос заканчивается, р
 
 test('провайдер не настроен: честный 503, а не выдуманный ответ', async () => {
   const providers = new ProviderManager();
-  providers.setProvider('openrouter', { ...fakeProvider(async () => okResult(), []), isAvailable: () => false });
+  providers.setProvider('openrouter', {
+    ...fakeProvider(async () => okResult(), []),
+    isAvailable: () => false,
+  });
   const gateway = new AgentGateway({
     usageStore: new UsageStore(join(mkdtempSync(join(tmpdir(), 'ketner-agent-')), 'usage.json')),
     registry: new ModelRegistry(),

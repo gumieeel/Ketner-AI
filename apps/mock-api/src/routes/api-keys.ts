@@ -2,11 +2,7 @@ import { Router, type Request, type Response } from 'express';
 import { sendError } from '../middleware/errors.js';
 import { requireAuth } from '../middleware/auth.js';
 import { planRank } from '../services/entitlement.js';
-import {
-  ApiKeyLimitError,
-  ApiKeyNameError,
-  type ApiKeyStore,
-} from '../store/api-key-store.js';
+import { ApiKeyLimitError, ApiKeyNameError, type ApiKeyStore } from '../store/api-key-store.js';
 
 export interface ApiKeysRouterDeps {
   apiKeyStore: ApiKeyStore;
@@ -36,7 +32,12 @@ export function createApiKeysRouter({ apiKeyStore }: ApiKeysRouterDeps): Router 
     }
     const name = (request.body as { name?: unknown } | undefined)?.name;
     if (typeof name !== 'string') {
-      sendError(response, 400, 'invalid_request', 'Поле name обязательно: название ключа, например «MacBook»');
+      sendError(
+        response,
+        400,
+        'invalid_request',
+        'Поле name обязательно: название ключа, например «MacBook»',
+      );
       return;
     }
     try {

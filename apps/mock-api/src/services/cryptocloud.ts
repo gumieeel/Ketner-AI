@@ -35,7 +35,10 @@ export interface CryptoCloudInvoiceResult {
 /** `2026-10-14 15:04:01.555132` (UTC) → ISO. */
 function trybitDate(value: unknown): string | undefined {
   if (typeof value !== 'string' || !value.trim()) return undefined;
-  const iso = value.trim().replace(' ', 'T').replace(/(\.\d{3})\d*$/, '$1');
+  const iso = value
+    .trim()
+    .replace(' ', 'T')
+    .replace(/(\.\d{3})\d*$/, '$1');
   const date = new Date(/[zZ]|[+-]\d\d:?\d\d$/.test(iso) ? iso : `${iso}Z`);
   return Number.isNaN(date.getTime()) ? undefined : date.toISOString();
 }
@@ -48,7 +51,11 @@ function money(value: unknown): number {
 function parseFees(result: { amount_usd?: unknown; fee_usd?: unknown; service_fee_usd?: unknown }) {
   const invoiceUsd = money(result.amount_usd);
   if (!invoiceUsd) return undefined;
-  return { serviceUsd: money(result.service_fee_usd), transferUsd: money(result.fee_usd), invoiceUsd };
+  return {
+    serviceUsd: money(result.service_fee_usd),
+    transferUsd: money(result.fee_usd),
+    invoiceUsd,
+  };
 }
 
 export class CryptoCloudService {
@@ -63,8 +70,10 @@ export class CryptoCloudService {
   }
 
   isConfigured(): boolean {
-    const key = config.cryptoCloudApiKey !== undefined ? config.cryptoCloudApiKey.trim() : this.apiKey;
-    const shop = config.cryptoCloudShopId !== undefined ? config.cryptoCloudShopId.trim() : this.shopId;
+    const key =
+      config.cryptoCloudApiKey !== undefined ? config.cryptoCloudApiKey.trim() : this.apiKey;
+    const shop =
+      config.cryptoCloudShopId !== undefined ? config.cryptoCloudShopId.trim() : this.shopId;
     return Boolean(key && shop);
   }
 
@@ -113,7 +122,10 @@ export class CryptoCloudService {
         throw new Error('CryptoCloud не настроен (CRYPTOCLOUD_API_KEY / CRYPTOCLOUD_SHOP_ID)');
       }
       // Демо-ссылка для локальной разработки и тестов
-      const fakeUuid = `INV-${options.orderId.replace(/[^a-zA-Z0-9]/g, '').slice(-8).toUpperCase()}`;
+      const fakeUuid = `INV-${options.orderId
+        .replace(/[^a-zA-Z0-9]/g, '')
+        .slice(-8)
+        .toUpperCase()}`;
       return {
         invoiceId: fakeUuid,
         link: `https://cryptocloud.plus/pay/${fakeUuid}`,
@@ -135,7 +147,9 @@ export class CryptoCloudService {
           order_id: options.orderId,
           email: options.userEmail || undefined,
           // Дополнительные параметры Trybit принимает только внутри add_fields.
-          ...(options.cryptocurrency ? { add_fields: { cryptocurrency: options.cryptocurrency } } : {}),
+          ...(options.cryptocurrency
+            ? { add_fields: { cryptocurrency: options.cryptocurrency } }
+            : {}),
         }),
       });
 
@@ -160,7 +174,11 @@ export class CryptoCloudService {
           amount_usd?: number | string;
           fee_usd?: number | string;
           service_fee_usd?: number | string;
-          currency?: { code?: string; fullcode?: string; network?: { code?: string; fullname?: string } };
+          currency?: {
+            code?: string;
+            fullcode?: string;
+            network?: { code?: string; fullname?: string };
+          };
         };
         message?: string;
       };
@@ -172,11 +190,15 @@ export class CryptoCloudService {
       const result = data.result;
       const cryptoAmount = Number(result.amount);
       const h2h =
-        typeof result.address === 'string' && result.address.trim() && Number.isFinite(cryptoAmount) && cryptoAmount > 0
+        typeof result.address === 'string' &&
+        result.address.trim() &&
+        Number.isFinite(cryptoAmount) &&
+        cryptoAmount > 0
           ? {
               address: result.address.trim(),
               amount: cryptoAmount,
-              currencyCode: result.currency?.fullcode || result.currency?.code || options.cryptocurrency || '',
+              currencyCode:
+                result.currency?.fullcode || result.currency?.code || options.cryptocurrency || '',
               network: [result.currency?.network?.fullname, result.currency?.network?.code]
                 .filter(Boolean)
                 .filter((value, index, all) => all.indexOf(value) === index)
@@ -198,7 +220,10 @@ export class CryptoCloudService {
       if (!config.enableMockBilling) {
         throw error;
       }
-      const fakeUuid = `INV-${options.orderId.replace(/[^a-zA-Z0-9]/g, '').slice(-8).toUpperCase()}`;
+      const fakeUuid = `INV-${options.orderId
+        .replace(/[^a-zA-Z0-9]/g, '')
+        .slice(-8)
+        .toUpperCase()}`;
       return {
         invoiceId: fakeUuid,
         link: `https://cryptocloud.plus/pay/${fakeUuid}`,

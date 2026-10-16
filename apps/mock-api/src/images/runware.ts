@@ -15,7 +15,11 @@ interface RunwareResponse {
   errors?: Array<{ code?: string; message?: string }>;
 }
 
-export function createRunwareGenerator(options: { apiKey: string; fetchImpl?: typeof fetch; timeoutMs?: number }): ImageGenerator {
+export function createRunwareGenerator(options: {
+  apiKey: string;
+  fetchImpl?: typeof fetch;
+  timeoutMs?: number;
+}): ImageGenerator {
   const fetchImpl = options.fetchImpl ?? fetch;
   const available = Boolean(options.apiKey);
   return {
@@ -52,7 +56,10 @@ export function createRunwareGenerator(options: { apiKey: string; fetchImpl?: ty
       const error = body.errors?.[0];
       if (!response.ok || error) {
         const code = error?.code ?? `HTTP ${response.status}`;
-        throw new ImageProviderError(`Runware ${code}: ${(error?.message ?? text).slice(0, 300)}`, response.ok ? 502 : response.status);
+        throw new ImageProviderError(
+          `Runware ${code}: ${(error?.message ?? text).slice(0, 300)}`,
+          response.ok ? 502 : response.status,
+        );
       }
       const item = body.data?.[0];
       const image = item?.imageBase64Data;
@@ -60,8 +67,16 @@ export function createRunwareGenerator(options: { apiKey: string; fetchImpl?: ty
         throw new ImageProviderError('Runware returned no image', 502);
       }
       const bytes = Buffer.from(image, 'base64');
-      const mime = bytes[0] === 0x89 && bytes[1] === 0x50 ? 'image/png' : bytes[0] === 0x52 && bytes[1] === 0x49 ? 'image/webp' : 'image/jpeg';
-      const cost = typeof item?.cost === 'number' && Number.isFinite(item.cost) && item.cost >= 0 ? item.cost : undefined;
+      const mime =
+        bytes[0] === 0x89 && bytes[1] === 0x50
+          ? 'image/png'
+          : bytes[0] === 0x52 && bytes[1] === 0x49
+            ? 'image/webp'
+            : 'image/jpeg';
+      const cost =
+        typeof item?.cost === 'number' && Number.isFinite(item.cost) && item.cost >= 0
+          ? item.cost
+          : undefined;
       return { bytes, mime, costUsd: cost };
     },
   };

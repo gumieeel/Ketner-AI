@@ -19,7 +19,12 @@ function originOf(raw: string | undefined | null): string | null {
  */
 export function allowedCorsOrigins(): Set<string> {
   const origins = new Set<string>(['https://ketner.org', 'https://www.ketner.org']);
-  for (const raw of [config.corsOrigin, config.webAppUrl, config.betterAuthUrl, process.env.RENDER_EXTERNAL_URL]) {
+  for (const raw of [
+    config.corsOrigin,
+    config.webAppUrl,
+    config.betterAuthUrl,
+    process.env.RENDER_EXTERNAL_URL,
+  ]) {
     const origin = originOf(raw);
     if (origin) origins.add(origin);
   }
@@ -112,7 +117,10 @@ export function securityHeaders(getCsp: () => string) {
     }
     response.setHeader('X-Content-Type-Options', 'nosniff');
     response.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
-    response.setHeader('Permissions-Policy', 'camera=(), microphone=(self), geolocation=(), payment=(), usb=()');
+    response.setHeader(
+      'Permissions-Policy',
+      'camera=(), microphone=(self), geolocation=(), payment=(), usb=()',
+    );
     response.setHeader('Cross-Origin-Opener-Policy', 'same-origin-allow-popups');
     // Ответы API в чужие фреймы не встраиваются; страницы сайта — см. frame-ancestors в CSP.
     if (request.path.startsWith('/api/') || request.path.startsWith('/v1/')) {

@@ -89,17 +89,31 @@ export function createAuthMiddleware(
       if (session?.user && betterAuthSessionMayOpen(session.user, stored)) {
         if (!stored) {
           // Пароль локальной копии не используется для входа: вход идёт через Better Auth.
-          stored = userStore.create(session.user.email, randomBytes(32).toString('hex'), session.user.name);
+          stored = userStore.create(
+            session.user.email,
+            randomBytes(32).toString('hex'),
+            session.user.name,
+          );
         }
 
         const rawPlan = (session.user as Record<string, unknown>).plan;
-        const VALID_PLANS: PlanId[] = ['free', 'gpt-pro', 'claude-pro', 'gemini-pro', 'ultra', 'plus', 'pro'];
+        const VALID_PLANS: PlanId[] = [
+          'free',
+          'gpt-pro',
+          'claude-pro',
+          'gemini-pro',
+          'ultra',
+          'plus',
+          'pro',
+        ];
         let plan: PlanId =
-          (typeof rawPlan === 'string' && VALID_PLANS.includes(rawPlan as PlanId) && rawPlan !== 'free')
+          typeof rawPlan === 'string' &&
+          VALID_PLANS.includes(rawPlan as PlanId) &&
+          rawPlan !== 'free'
             ? (rawPlan as PlanId)
-            : (stored?.plan && stored.plan !== 'free')
+            : stored?.plan && stored.plan !== 'free'
               ? stored.plan
-              : (typeof rawPlan === 'string' && VALID_PLANS.includes(rawPlan as PlanId))
+              : typeof rawPlan === 'string' && VALID_PLANS.includes(rawPlan as PlanId)
                 ? (rawPlan as PlanId)
                 : (stored?.plan ?? 'free');
 
@@ -116,9 +130,11 @@ export function createAuthMiddleware(
           email: session.user.email,
           name: stored?.name || session.user.name,
           plan,
-          createdAt: stored?.createdAt || (session.user.createdAt
-            ? new Date(session.user.createdAt).toISOString()
-            : new Date().toISOString()),
+          createdAt:
+            stored?.createdAt ||
+            (session.user.createdAt
+              ? new Date(session.user.createdAt).toISOString()
+              : new Date().toISOString()),
           isVip,
           isAdmin,
           telegramChatId: stored?.telegramChatId,

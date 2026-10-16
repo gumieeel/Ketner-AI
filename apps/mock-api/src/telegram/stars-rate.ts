@@ -31,9 +31,17 @@ export class StarsRateService {
   private timer: NodeJS.Timeout | null = null;
 
   constructor(
-    private readonly options: { feedUrl?: string; fetchImpl?: typeof fetch; now?: () => number } = {},
+    private readonly options: {
+      feedUrl?: string;
+      fetchImpl?: typeof fetch;
+      now?: () => number;
+    } = {},
   ) {
-    this.current = { usdPerStar: configuredRate(), source: 'config', updatedAt: new Date(this.now()).toISOString() };
+    this.current = {
+      usdPerStar: configuredRate(),
+      source: 'config',
+      updatedAt: new Date(this.now()).toISOString(),
+    };
   }
 
   private now(): number {
@@ -58,20 +66,37 @@ export class StarsRateService {
   async refresh(): Promise<StarsRate> {
     const feedUrl = this.options.feedUrl ?? process.env.STARS_RATE_FEED_URL ?? DEFAULT_FEED;
     try {
-      const response = await (this.options.fetchImpl ?? fetch)(feedUrl, { signal: AbortSignal.timeout(10_000) });
+      const response = await (this.options.fetchImpl ?? fetch)(feedUrl, {
+        signal: AbortSignal.timeout(10_000),
+      });
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
-      const data = (await response.json()) as { usdt_per_star?: unknown; last_updated?: unknown; timestamp?: unknown };
+      const data = (await response.json()) as {
+        usdt_per_star?: unknown;
+        last_updated?: unknown;
+        timestamp?: unknown;
+      };
       const rate = Number(data.usdt_per_star);
       const stamp = Date.parse(String(data.last_updated ?? data.timestamp ?? ''));
       const fresh = Number.isFinite(stamp) && this.now() - stamp <= MAX_FEED_AGE_MS;
       if (Number.isFinite(rate) && rate >= MIN_RATE && rate <= MAX_RATE && fresh) {
-        this.current = { usdPerStar: rate, source: 'fragment', updatedAt: new Date(stamp).toISOString() };
+        this.current = {
+          usdPerStar: rate,
+          source: 'fragment',
+          updatedAt: new Date(stamp).toISOString(),
+        };
         return this.rate;
       }
     } catch (error) {
-      console.warn('[stars-rate] источник курса недоступен, используем настройку:', (error as Error).message);
+      console.warn(
+        '[stars-rate] источник курса недоступен, используем настройку:',
+        (error as Error).message,
+      );
     }
-    this.current = { usdPerStar: configuredRate(), source: 'config', updatedAt: new Date(this.now()).toISOString() };
+    this.current = {
+      usdPerStar: configuredRate(),
+      source: 'config',
+      updatedAt: new Date(this.now()).toISOString(),
+    };
     return this.rate;
   }
 

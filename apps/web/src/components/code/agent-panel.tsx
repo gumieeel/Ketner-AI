@@ -1,6 +1,13 @@
 import { Suspense, lazy, useEffect, useRef, useState, type KeyboardEvent } from 'react';
 import { Link } from 'react-router-dom';
-import { AlertIcon, CheckIcon, SendIcon, SparkleIcon, StopIcon, TrashIcon } from '@/components/icons';
+import {
+  AlertIcon,
+  CheckIcon,
+  SendIcon,
+  SparkleIcon,
+  StopIcon,
+  TrashIcon,
+} from '@/components/icons';
 import { Button } from '@/components/ui/button';
 import { IconButton } from '@/components/ui/icon-button';
 import { Spinner } from '@/components/ui/spinner';
@@ -59,7 +66,10 @@ function ToolRow({ item }: { item: ToolItem }) {
           <AlertIcon className="size-3.5 shrink-0 text-danger" />
         )}
         <span className="shrink-0 font-medium text-text">{key ? t(key) : item.tool}</span>
-        <span className="min-w-0 flex-1 truncate font-mono text-[12px] text-muted" title={labelDetail(item)}>
+        <span
+          className="min-w-0 flex-1 truncate font-mono text-[12px] text-muted"
+          title={labelDetail(item)}
+        >
           {labelDetail(item)}
         </span>
         {item.change && (item.change.additions > 0 || item.change.deletions > 0) ? (
@@ -68,7 +78,9 @@ function ToolRow({ item }: { item: ToolItem }) {
             <span className="text-danger">−{item.change.deletions}</span>
           </span>
         ) : item.summary ? (
-          <span className={cn('shrink-0 text-[12px]', item.ok ? 'text-subtle' : 'text-danger')}>{item.summary}</span>
+          <span className={cn('shrink-0 text-[12px]', item.ok ? 'text-subtle' : 'text-danger')}>
+            {item.summary}
+          </span>
         ) : null}
         {patch ? (
           <button
@@ -89,18 +101,29 @@ function ToolRow({ item }: { item: ToolItem }) {
 function RunFooter({ item }: { item: RunItem }) {
   const { t } = useTranslation();
   const failed = item.status === 'error';
-  const needsUpgrade = item.code === 'upgrade_required' || item.code === 'run_limit' || item.code === 'fair_use_exceeded';
+  const needsUpgrade =
+    item.code === 'upgrade_required' ||
+    item.code === 'run_limit' ||
+    item.code === 'fair_use_exceeded';
   return (
     <div
       className={cn(
         'flex flex-col gap-1 rounded-lg border px-3 py-2 text-[13px]',
-        failed ? 'border-danger/30 bg-danger-soft text-danger' : 'border-stroke bg-surface-2 text-muted',
+        failed
+          ? 'border-danger/30 bg-danger-soft text-danger'
+          : 'border-stroke bg-surface-2 text-muted',
       )}
     >
       <div className="flex items-center gap-2">
-        {failed ? <AlertIcon className="size-3.5 shrink-0" /> : <CheckIcon className="size-3.5 shrink-0 text-success" />}
+        {failed ? (
+          <AlertIcon className="size-3.5 shrink-0" />
+        ) : (
+          <CheckIcon className="size-3.5 shrink-0 text-success" />
+        )}
         <span className="font-medium">{t(RUN_KEYS[item.status])}</span>
-        {item.steps > 0 ? <span className="text-subtle">· {t('code.run.steps', { count: item.steps })}</span> : null}
+        {item.steps > 0 ? (
+          <span className="text-subtle">· {t('code.run.steps', { count: item.steps })}</span>
+        ) : null}
       </div>
       {item.message ? <p className="leading-5">{item.message}</p> : null}
       {needsUpgrade ? (
@@ -115,7 +138,9 @@ function RunFooter({ item }: { item: RunItem }) {
 function AssistantText({ text }: { text: string }) {
   return (
     <div className="min-w-0 text-[14px] [&_*]:max-w-full">
-      <Suspense fallback={<p className="whitespace-pre-wrap text-sm leading-6 text-text">{text}</p>}>
+      <Suspense
+        fallback={<p className="whitespace-pre-wrap text-sm leading-6 text-text">{text}</p>}
+      >
         <Markdown content={text} />
       </Suspense>
     </div>
@@ -234,7 +259,10 @@ export function AgentPanel() {
               ))}
             </ul>
           ) : group.item.kind === 'user' ? (
-            <div key={group.item.id} className="ml-auto max-w-[90%] whitespace-pre-wrap rounded-2xl rounded-br-md bg-accent-soft px-3.5 py-2 text-[14px] leading-6 text-text">
+            <div
+              key={group.item.id}
+              className="ml-auto max-w-[90%] whitespace-pre-wrap rounded-2xl rounded-br-md bg-accent-soft px-3.5 py-2 text-[14px] leading-6 text-text"
+            >
               {group.item.text}
             </div>
           ) : group.item.kind === 'assistant' ? (
@@ -287,11 +315,21 @@ export function AgentPanel() {
               </select>
             </label>
             {running ? (
-              <Button size="sm" variant="secondary" onClick={stopAgent} leftIcon={<StopIcon className="size-4" />}>
+              <Button
+                size="sm"
+                variant="secondary"
+                onClick={stopAgent}
+                leftIcon={<StopIcon className="size-4" />}
+              >
                 {t('code.agent.stop')}
               </Button>
             ) : (
-              <Button size="sm" onClick={submit} disabled={!draft.trim()} leftIcon={<SendIcon className="size-4" />}>
+              <Button
+                size="sm"
+                onClick={submit}
+                disabled={!draft.trim()}
+                leftIcon={<SendIcon className="size-4" />}
+              >
                 {t('code.agent.send')}
               </Button>
             )}

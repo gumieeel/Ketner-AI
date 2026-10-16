@@ -46,7 +46,11 @@ test('локальный раннер: вывод, код возврата и р
   withDir(async (dir) => {
     await writeFile(path.join(dir, 'hello.txt'), 'привет');
     const sandbox = new LocalProcessSandbox({ networkIsolation: false });
-    const ok = await sandbox.run({ ...BASE, cwd: dir, command: 'cat hello.txt && echo "-err" >&2 && pwd' });
+    const ok = await sandbox.run({
+      ...BASE,
+      cwd: dir,
+      command: 'cat hello.txt && echo "-err" >&2 && pwd',
+    });
     assert.equal(ok.exitCode, 0);
     assert.match(ok.output, /привет/);
     assert.match(ok.output, /-err/);
@@ -98,7 +102,12 @@ test('локальный раннер: отмена по сигналу', () =>
     const sandbox = new LocalProcessSandbox({ networkIsolation: false });
     const controller = new AbortController();
     setTimeout(() => controller.abort(), 300);
-    const result = await sandbox.run({ ...BASE, cwd: dir, command: 'sleep 30', signal: controller.signal });
+    const result = await sandbox.run({
+      ...BASE,
+      cwd: dir,
+      command: 'sleep 30',
+      signal: controller.signal,
+    });
     assert.equal(result.cancelled, true);
     assert.ok(result.durationMs < 5_000);
   }));
@@ -110,7 +119,8 @@ test('локальный раннер: большой вывод обрезае�
       ...BASE,
       cwd: dir,
       maxOutputBytes: 1_000,
-      command: 'i=0; while [ $i -lt 3000 ]; do echo "строка номер $i"; i=$((i+1)); done; echo ФИНИШ',
+      command:
+        'i=0; while [ $i -lt 3000 ]; do echo "строка номер $i"; i=$((i+1)); done; echo ФИНИШ',
     });
     assert.equal(result.truncated, true);
     assert.ok(result.output.length < 1_400);
@@ -125,7 +135,12 @@ test(
     withDir(async (dir) => {
       const sandbox = new LocalProcessSandbox();
       assert.equal(sandbox.canBlockNetwork, true);
-      const offline = await sandbox.run({ ...BASE, cwd: dir, network: false, command: "tail -n +3 /proc/net/dev | cut -d: -f1 | tr -d ' '" });
+      const offline = await sandbox.run({
+        ...BASE,
+        cwd: dir,
+        network: false,
+        command: "tail -n +3 /proc/net/dev | cut -d: -f1 | tr -d ' '",
+      });
       assert.deepEqual(offline.output.trim().split('\n').filter(Boolean), ['lo']);
     }),
 );
@@ -141,7 +156,13 @@ test('buildSandboxEnv содержит только безопасный мин�
 
 test('buildDockerArgs: без сети, без привилегий, с лимитами и монтированием только проекта', () => {
   const args = buildDockerArgs(
-    { cwd: '/data/projects/u/p/files', command: 'npm test', timeoutMs: 1, maxOutputBytes: 1, network: false },
+    {
+      cwd: '/data/projects/u/p/files',
+      command: 'npm test',
+      timeoutMs: 1,
+      maxOutputBytes: 1,
+      network: false,
+    },
     'ketner-abc',
     { ...DEFAULT_DOCKER_CONFIG, user: '1000:1000' },
   );
@@ -170,11 +191,28 @@ test('createSandbox: по умолчанию выключена, local не вк
   const warn = console.warn;
   console.warn = () => undefined;
   try {
-    assert.equal(createSandbox({ mode: 'off', isProduction: false, allowLocalInProduction: false }), null);
-    assert.equal(createSandbox({ mode: 'local', isProduction: true, allowLocalInProduction: false }), null);
-    assert.equal(createSandbox({ mode: 'local', isProduction: true, allowLocalInProduction: true })?.kind, 'local');
-    assert.equal(createSandbox({ mode: 'local', isProduction: false, allowLocalInProduction: false })?.isolated, false);
-    const docker = createSandbox({ mode: 'docker', isProduction: true, allowLocalInProduction: false });
+    assert.equal(
+      createSandbox({ mode: 'off', isProduction: false, allowLocalInProduction: false }),
+      null,
+    );
+    assert.equal(
+      createSandbox({ mode: 'local', isProduction: true, allowLocalInProduction: false }),
+      null,
+    );
+    assert.equal(
+      createSandbox({ mode: 'local', isProduction: true, allowLocalInProduction: true })?.kind,
+      'local',
+    );
+    assert.equal(
+      createSandbox({ mode: 'local', isProduction: false, allowLocalInProduction: false })
+        ?.isolated,
+      false,
+    );
+    const docker = createSandbox({
+      mode: 'docker',
+      isProduction: true,
+      allowLocalInProduction: false,
+    });
     assert.equal(docker?.kind, 'docker');
     assert.equal(docker?.isolated, true);
   } finally {

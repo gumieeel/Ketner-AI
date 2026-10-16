@@ -11,7 +11,13 @@ export function DiffView({ patch, className }: { patch: string; className?: stri
       )}
     >
       {lines.map((line, index) => {
-        const kind = line.startsWith('@@') ? 'hunk' : line[0] === '+' ? 'add' : line[0] === '-' ? 'del' : 'ctx';
+        const kind = line.startsWith('@@')
+          ? 'hunk'
+          : line[0] === '+'
+            ? 'add'
+            : line[0] === '-'
+              ? 'del'
+              : 'ctx';
         return (
           <div
             key={index}

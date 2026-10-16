@@ -1,5 +1,10 @@
 import { Link } from 'react-router-dom';
-import { LEGAL_DOCUMENTS, LEGAL_UPDATED, SUPPORT_EMAIL, type LegalPageId } from '@/features/content/legal';
+import {
+  LEGAL_DOCUMENTS,
+  LEGAL_UPDATED,
+  SUPPORT_EMAIL,
+  type LegalPageId,
+} from '@/features/content/legal';
 import { useDocumentTitle } from '@/lib/use-document-title';
 
 const LINKS: { id: LegalPageId; label: string }[] = [
@@ -16,10 +21,15 @@ export function LegalPage({ id }: { id: LegalPageId }) {
   return (
     <article className="mx-auto flex w-full max-w-3xl flex-col gap-8">
       <header className="flex flex-col gap-3">
-        <h1 className="text-3xl font-semibold tracking-tight text-balance md:text-4xl">{doc.title}</h1>
+        <h1 className="text-3xl font-semibold tracking-tight text-balance md:text-4xl">
+          {doc.title}
+        </h1>
         <p className="text-[15px] leading-7 text-muted">{doc.lead}</p>
         <p className="text-[13px] text-subtle">Редакция от {LEGAL_UPDATED}</p>
-        <nav aria-label="Правовая информация" className="flex flex-wrap gap-x-4 gap-y-1 text-[14px]">
+        <nav
+          aria-label="Правовая информация"
+          className="flex flex-wrap gap-x-4 gap-y-1 text-[14px]"
+        >
           {LINKS.map((link) => (
             <Link
               key={link.id}

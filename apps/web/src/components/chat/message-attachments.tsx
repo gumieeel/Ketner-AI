@@ -63,8 +63,16 @@ export function MessageAttachments({ attachments }: MessageAttachmentsProps) {
       {videos.length > 0 ? (
         <div className="flex w-full max-w-[520px] flex-col gap-2">
           {videos.map((vid) => (
-            <div key={vid.id} className="overflow-hidden rounded-xl border border-stroke bg-black shadow-sm">
-              <video src={vid.url} controls preload="metadata" className="max-h-72 w-full object-contain">
+            <div
+              key={vid.id}
+              className="overflow-hidden rounded-xl border border-stroke bg-black shadow-sm"
+            >
+              <video
+                src={vid.url}
+                controls
+                preload="metadata"
+                className="max-h-72 w-full object-contain"
+              >
                 {t('msgAtt.noVideo')}
               </video>
               <div className="flex items-center justify-between gap-3 border-t border-stroke bg-surface px-3 py-2 text-xs text-muted">
@@ -107,7 +115,11 @@ export function MessageAttachments({ attachments }: MessageAttachmentsProps) {
 
                 <div className="flex items-center">
                   {isCodeOrText && file.contentPreview ? (
-                    <IconButton label={t('msgAtt.view')} size="sm" onClick={() => setPreviewFile(file)}>
+                    <IconButton
+                      label={t('msgAtt.view')}
+                      size="sm"
+                      onClick={() => setPreviewFile(file)}
+                    >
                       <EyeIcon className="size-3.5" />
                     </IconButton>
                   ) : null}
@@ -166,15 +178,25 @@ export function MessageAttachments({ attachments }: MessageAttachmentsProps) {
 
       {/* Просмотр кода / текста файла */}
       {previewFile ? (
-        <Modal labelledBy="attachment-file-title" onClose={() => setPreviewFile(null)} size="lg" className="max-w-3xl">
+        <Modal
+          labelledBy="attachment-file-title"
+          onClose={() => setPreviewFile(null)}
+          size="lg"
+          className="max-w-3xl"
+        >
           <ModalHeader
             titleId="attachment-file-title"
             icon={<CodeIcon className="size-5" />}
             title={previewFile.name}
-            description={<span className="font-mono text-xs">{formatFileSize(previewFile.size)}</span>}
+            description={
+              <span className="font-mono text-xs">{formatFileSize(previewFile.size)}</span>
+            }
             onClose={() => setPreviewFile(null)}
           />
-          <div tabIndex={0} className="m-4 min-h-0 flex-1 overflow-auto rounded-xl border border-stroke bg-canvas p-4 font-mono text-xs text-text focus-visible:outline-2 focus-visible:outline-accent">
+          <div
+            tabIndex={0}
+            className="m-4 min-h-0 flex-1 overflow-auto rounded-xl border border-stroke bg-canvas p-4 font-mono text-xs text-text focus-visible:outline-2 focus-visible:outline-accent"
+          >
             <pre className="whitespace-pre-wrap">{previewFile.contentPreview}</pre>
           </div>
         </Modal>

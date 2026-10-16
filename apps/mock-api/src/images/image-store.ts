@@ -46,7 +46,9 @@ export const IMAGES_SCHEMA_SQL = `
 `;
 
 export async function ensureImagesSchema(runner: ImageSqlRunner): Promise<void> {
-  for (const statement of IMAGES_SCHEMA_SQL.split(';').map((part) => part.trim()).filter(Boolean)) {
+  for (const statement of IMAGES_SCHEMA_SQL.split(';')
+    .map((part) => part.trim())
+    .filter(Boolean)) {
     await runner.query(statement);
   }
 }
@@ -107,13 +109,32 @@ export class ImageStore {
     writeFileSync(path.join(dir, 'index.json'), JSON.stringify(items));
   }
 
-  async save(input: Omit<ImageMeta, 'id' | 'createdAt' | 'size'>, bytes: Buffer): Promise<ImageMeta> {
-    const meta: ImageMeta = { ...input, id: randomUUID(), size: bytes.length, createdAt: new Date().toISOString() };
+  async save(
+    input: Omit<ImageMeta, 'id' | 'createdAt' | 'size'>,
+    bytes: Buffer,
+  ): Promise<ImageMeta> {
+    const meta: ImageMeta = {
+      ...input,
+      id: randomUUID(),
+      size: bytes.length,
+      createdAt: new Date().toISOString(),
+    };
     if (this.runner) {
       await this.runner.query(
         `INSERT INTO generated_images (id, user_id, prompt, model_id, width, height, mime, size, data, created_at)
          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
-        [meta.id, meta.userId, meta.prompt, meta.modelId, meta.width, meta.height, meta.mime, meta.size, bytes, meta.createdAt],
+        [
+          meta.id,
+          meta.userId,
+          meta.prompt,
+          meta.modelId,
+          meta.width,
+          meta.height,
+          meta.mime,
+          meta.size,
+          bytes,
+          meta.createdAt,
+        ],
       );
       await this.runner.query(
         `DELETE FROM generated_images WHERE user_id = $1 AND id NOT IN (
@@ -126,7 +147,8 @@ export class ImageStore {
     mkdirSync(dir, { recursive: true });
     writeFileSync(path.join(dir, meta.id), bytes);
     const items = [meta, ...this.readIndex(meta.userId)];
-    for (const old of items.slice(MAX_IMAGES_PER_USER)) rmSync(path.join(dir, old.id), { force: true });
+    for (const old of items.slice(MAX_IMAGES_PER_USER))
+      rmSync(path.join(dir, old.id), { force: true });
     this.writeIndex(meta.userId, items.slice(0, MAX_IMAGES_PER_USER));
     return meta;
   }
@@ -164,7 +186,10 @@ export class ImageStore {
   /** Картинка по id без владельца: для ссылок с подписью (подпись проверяет маршрут). */
   async getById(id: string): Promise<{ meta: ImageMeta; bytes: Buffer } | null> {
     if (this.runner) {
-      const rows = await this.runner.query<Row>(`SELECT ${META_COLUMNS}, data FROM generated_images WHERE id = $1`, [id]);
+      const rows = await this.runner.query<Row>(
+        `SELECT ${META_COLUMNS}, data FROM generated_images WHERE id = $1`,
+        [id],
+      );
       const row = rows[0];
       if (!row?.data) return null;
       return { meta: toMeta(row), bytes: Buffer.from(row.data) };
@@ -174,7 +199,9 @@ export class ImageStore {
       const indexFile = path.join(this.dir, entry, 'index.json');
       if (!existsSync(indexFile)) continue;
       try {
-        const meta = (JSON.parse(readFileSync(indexFile, 'utf8')) as ImageMeta[]).find((item) => item.id === id);
+        const meta = (JSON.parse(readFileSync(indexFile, 'utf8')) as ImageMeta[]).find(
+          (item) => item.id === id,
+        );
         if (meta) return { meta, bytes: readFileSync(path.join(this.dir, entry, id)) };
       } catch {
         // повреждённый индекс пропускаем
@@ -194,12 +221,17 @@ export class ImageStore {
     const items = this.readIndex(userId);
     if (!items.some((item) => item.id === id)) return false;
     rmSync(path.join(this.userDir(userId), id), { force: true });
-    this.writeIndex(userId, items.filter((item) => item.id !== id));
+    this.writeIndex(
+      userId,
+      items.filter((item) => item.id !== id),
+    );
     return true;
   }
 
   /** Только для тестов: очистить локальную папку. */
   clearLocal(): void {
-    if (existsSync(this.dir)) for (const entry of readdirSync(this.dir)) rmSync(path.join(this.dir, entry), { recursive: true, force: true });
+    if (existsSync(this.dir))
+      for (const entry of readdirSync(this.dir))
+        rmSync(path.join(this.dir, entry), { recursive: true, force: true });
   }
 }

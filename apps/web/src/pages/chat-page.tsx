@@ -44,7 +44,10 @@ export function ChatPage() {
 
       {messagesStatus === 'error' ? (
         <div className="flex min-h-0 flex-1 items-center justify-center px-4">
-          <div role="alert" className="max-w-md rounded-2xl border border-danger/30 bg-danger-soft p-5 text-center">
+          <div
+            role="alert"
+            className="max-w-md rounded-2xl border border-danger/30 bg-danger-soft p-5 text-center"
+          >
             <p className="flex items-center justify-center gap-2 font-medium text-danger">
               <AlertIcon />
               {t('chat.loadError')}

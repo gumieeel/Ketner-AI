@@ -32,7 +32,9 @@ describe('доступ к моделям по тарифу (зеркало пр�
   });
 
   it('каталог по умолчанию повторяет публичный каталог сервера', () => {
-    expect(DEFAULT_MODELS.map((model) => [model.id, model.name, model.requiredPlan ?? null])).toEqual([
+    expect(
+      DEFAULT_MODELS.map((model) => [model.id, model.name, model.requiredPlan ?? null]),
+    ).toEqual([
       ['auto', '✨ Auto', null],
       ['ketner-mini', 'Ketner Mini', null],
       ['ketner-pro', 'Ketner Pro', 'plus'],

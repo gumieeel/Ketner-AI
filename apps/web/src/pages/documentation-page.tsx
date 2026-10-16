@@ -229,11 +229,12 @@ export function DocumentationPage() {
             <h1 className="text-[26px] font-semibold leading-tight tracking-tight text-balance text-text sm:text-3xl">
               {t('docPage.title')}
             </h1>
-            <p className="mt-1.5 max-w-[60ch] text-sm leading-6 text-muted">
-              {t('docPage.lead')}
-            </p>
+            <p className="mt-1.5 max-w-[60ch] text-sm leading-6 text-muted">{t('docPage.lead')}</p>
           </div>
-          <Link to="/pricing" className={cn(buttonClasses({ variant: 'primary', size: 'md' }), 'gap-1.5')}>
+          <Link
+            to="/pricing"
+            className={cn(buttonClasses({ variant: 'primary', size: 'md' }), 'gap-1.5')}
+          >
             <SparkleIcon className="size-4" />
             {t('docPage.viewPlans')}
           </Link>
@@ -302,9 +303,7 @@ export function DocumentationPage() {
             <StarIcon className="size-5 text-accent" />
             <span>{t('docPage.plansTitle')}</span>
           </DocHeading>
-          <p className="max-w-[68ch] text-sm leading-6 text-muted">
-            {t('docPage.plansLead')}
-          </p>
+          <p className="max-w-[68ch] text-sm leading-6 text-muted">{t('docPage.plansLead')}</p>
         </div>
 
         <div className="grid gap-3 md:gap-4 sm:grid-cols-2">
@@ -327,11 +326,13 @@ export function DocumentationPage() {
                   <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1.5">
                     <div className="flex flex-wrap items-center gap-2">
                       <CardTitle className="text-lg">{plan.name}</CardTitle>
-                      <Badge tone={plan.popular ? 'brand' : PLAN_TONES[plan.id] ?? 'neutral'}>
+                      <Badge tone={plan.popular ? 'brand' : (PLAN_TONES[plan.id] ?? 'neutral')}>
                         {plan.badge[language]}
                       </Badge>
                     </div>
-                    <span className="text-sm font-semibold text-text tabular-nums">{plan.price[language]}</span>
+                    <span className="text-sm font-semibold text-text tabular-nums">
+                      {plan.price[language]}
+                    </span>
                   </div>
 
                   <p className="mt-2 text-[13px] leading-5 text-muted">{plan.desc[language]}</p>
@@ -371,7 +372,9 @@ export function DocumentationPage() {
                       fullWidth: true,
                     })}
                   >
-                    {plan.id === 'free' ? t('docPage.tryFree') : t('docPage.choosePlan', { plan: plan.name })}
+                    {plan.id === 'free'
+                      ? t('docPage.tryFree')
+                      : t('docPage.choosePlan', { plan: plan.name })}
                   </Link>
                 </div>
               </Card>
@@ -386,13 +389,7 @@ export function DocumentationPage() {
           <ShieldIcon className="size-5 text-accent" />
           <span>{t('docPage.fairTitle')}</span>
         </DocHeading>
-        <Callout
-          tone="info"
-          className="my-0"
-          title={
-            t('docPage.fairCallout')
-          }
-        >
+        <Callout tone="info" className="my-0" title={t('docPage.fairCallout')}>
           <div className="mt-3 grid gap-3 sm:grid-cols-3">
             {[
               {

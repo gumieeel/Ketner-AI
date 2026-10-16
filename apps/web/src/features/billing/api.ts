@@ -161,9 +161,7 @@ export async function createCryptoInvoice(
 export async function getCryptoInvoiceStatus(
   invoiceId: string,
 ): Promise<{ status: string; invoice: CryptoInvoice }> {
-  return request<{ status: string; invoice: CryptoInvoice }>(
-    `/billing/crypto/status/${invoiceId}`,
-  );
+  return request<{ status: string; invoice: CryptoInvoice }>(`/billing/crypto/status/${invoiceId}`);
 }
 
 /** Проверка оплаты счёта Trybit. Прямых переводов с TxID нет: подтверждает только шлюз. */

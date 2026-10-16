@@ -42,7 +42,10 @@ const CLAIM_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 export class TelegramAuthRequests {
   private byId = new Map<string, AuthRequest>();
   private byCode = new Map<string, string>();
-  private claims = new Map<string, { telegramUserId: number; username?: string; expiresAt: number }>();
+  private claims = new Map<
+    string,
+    { telegramUserId: number; username?: string; expiresAt: number }
+  >();
   private magic = new Map<string, { userId: string; expiresAt: number }>();
 
   create(mode: AuthMode, device: string, siteUserId?: string, now = Date.now()): AuthRequest {
@@ -71,7 +74,11 @@ export class TelegramAuthRequests {
     return { ...request };
   }
 
-  resolve(code: string, decision: { approve: true; userId: string } | { approve: false }, now = Date.now()): AuthRequest | null {
+  resolve(
+    code: string,
+    decision: { approve: true; userId: string } | { approve: false },
+    now = Date.now(),
+  ): AuthRequest | null {
     const id = this.byCode.get(code);
     const request = id ? this.byId.get(id) : undefined;
     if (!request || request.status !== 'pending' || request.expiresAt < now) return null;
@@ -98,20 +105,33 @@ export class TelegramAuthRequests {
   }
 
   /** Код из мини-приложения для ввода на сайте. */
-  issueClaimCode(telegramUserId: number, username: string | undefined, now = Date.now()): { code: string; expiresAt: number } {
+  issueClaimCode(
+    telegramUserId: number,
+    username: string | undefined,
+    now = Date.now(),
+  ): { code: string; expiresAt: number } {
     this.sweep(now);
-    for (const [code, claim] of this.claims) if (claim.telegramUserId === telegramUserId) this.claims.delete(code);
+    for (const [code, claim] of this.claims)
+      if (claim.telegramUserId === telegramUserId) this.claims.delete(code);
     let code: string;
     do {
-      code = Array.from({ length: 6 }, () => CLAIM_ALPHABET[randomInt(CLAIM_ALPHABET.length)]).join('');
+      code = Array.from({ length: 6 }, () => CLAIM_ALPHABET[randomInt(CLAIM_ALPHABET.length)]).join(
+        '',
+      );
     } while (this.claims.has(code));
     const expiresAt = now + CLAIM_TTL_MS;
     this.claims.set(code, { telegramUserId, username, expiresAt });
     return { code, expiresAt };
   }
 
-  consumeClaimCode(raw: string, now = Date.now()): { telegramUserId: number; username?: string } | null {
-    const code = raw.trim().toUpperCase().replace(/[^A-Z0-9]/g, '');
+  consumeClaimCode(
+    raw: string,
+    now = Date.now(),
+  ): { telegramUserId: number; username?: string } | null {
+    const code = raw
+      .trim()
+      .toUpperCase()
+      .replace(/[^A-Z0-9]/g, '');
     const claim = this.claims.get(code);
     this.claims.delete(code);
     if (!claim || claim.expiresAt < now) return null;

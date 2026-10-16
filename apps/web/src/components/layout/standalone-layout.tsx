@@ -190,7 +190,11 @@ export function StandaloneLayout() {
             {/* Шапка Drawer */}
             <div className="flex shrink-0 items-center justify-between pb-4">
               <Brand />
-              <IconButton label={t('nav.closeMenu')} size="md" onClick={() => setMobileMenuOpen(false)}>
+              <IconButton
+                label={t('nav.closeMenu')}
+                size="md"
+                onClick={() => setMobileMenuOpen(false)}
+              >
                 <CloseIcon className="size-5" />
               </IconButton>
             </div>
@@ -204,11 +208,20 @@ export function StandaloneLayout() {
                 {t('nav.models')}
                 <ChevronRightIcon className="size-4 text-subtle transition-transform duration-200 group-hover:translate-x-0.5" />
               </a>
-              <NavLink to="/pricing" onClick={() => setMobileMenuOpen(false)} className={mobileLinkClass}>
+              <NavLink
+                to="/pricing"
+                onClick={() => setMobileMenuOpen(false)}
+                className={mobileLinkClass}
+              >
                 {t('nav.pricing')}
                 <ChevronRightIcon className="size-4 text-subtle transition-transform duration-200 group-hover:translate-x-0.5" />
               </NavLink>
-              <NavLink to="/docs" end onClick={() => setMobileMenuOpen(false)} className={mobileLinkClass}>
+              <NavLink
+                to="/docs"
+                end
+                onClick={() => setMobileMenuOpen(false)}
+                className={mobileLinkClass}
+              >
                 {t('nav.docs')}
                 <ChevronRightIcon className="size-4 text-subtle transition-transform duration-200 group-hover:translate-x-0.5" />
               </NavLink>
@@ -268,7 +281,9 @@ export function StandaloneLayout() {
           <div className="grid grid-cols-2 gap-x-6 gap-y-10 md:grid-cols-[1.5fr_1fr_1fr_1fr]">
             <div className="col-span-2 flex flex-col gap-4 md:col-span-1">
               <Brand />
-              <p className="max-w-[28ch] text-[14px] leading-relaxed text-muted">{t('home.footerTagline')}</p>
+              <p className="max-w-[28ch] text-[14px] leading-relaxed text-muted">
+                {t('home.footerTagline')}
+              </p>
             </div>
 
             <nav aria-label={t('home.footerProduct')} className="flex flex-col gap-3">

@@ -42,13 +42,28 @@ export function useAgentPlan(): AgentPlan | null {
 }
 
 /** Кольцо прогресса для компактного индикатора в шапке проекта. */
-export function PlanProgressRing({ done, total, className }: { done: number; total: number; className?: string }) {
+export function PlanProgressRing({
+  done,
+  total,
+  className,
+}: {
+  done: number;
+  total: number;
+  className?: string;
+}) {
   const radius = 7;
   const length = 2 * Math.PI * radius;
   const share = total > 0 ? done / total : 0;
   return (
     <svg viewBox="0 0 18 18" aria-hidden="true" className={cn('size-4 -rotate-90', className)}>
-      <circle cx="9" cy="9" r={radius} fill="none" strokeWidth="2.5" className="stroke-stroke-strong" />
+      <circle
+        cx="9"
+        cy="9"
+        r={radius}
+        fill="none"
+        strokeWidth="2.5"
+        className="stroke-stroke-strong"
+      />
       <circle
         cx="9"
         cy="9"
@@ -96,7 +111,10 @@ export function TaskList() {
   const current = plan.items.find((item) => item.status === 'in_progress');
 
   return (
-    <section aria-label={t('code.tasks.title')} className="shrink-0 border-b border-stroke bg-surface/60 px-3 py-2">
+    <section
+      aria-label={t('code.tasks.title')}
+      className="shrink-0 border-b border-stroke bg-surface/60 px-3 py-2"
+    >
       <button
         type="button"
         aria-expanded={!collapsed}
@@ -105,7 +123,9 @@ export function TaskList() {
       >
         <PlanProgressRing done={plan.done} total={total} />
         <span className="text-[13px] font-semibold text-text">{t('code.tasks.title')}</span>
-        <span className="tabular text-xs text-muted">{t('code.tasks.progress', { done: plan.done, total })}</span>
+        <span className="tabular text-xs text-muted">
+          {t('code.tasks.progress', { done: plan.done, total })}
+        </span>
         {collapsed && current ? (
           <span className="min-w-0 flex-1 truncate text-xs text-muted">· {current.text}</span>
         ) : (
@@ -113,7 +133,10 @@ export function TaskList() {
         )}
         <ChevronDownIcon
           aria-hidden="true"
-          className={cn('size-4 shrink-0 text-subtle transition-transform duration-200', collapsed && '-rotate-90')}
+          className={cn(
+            'size-4 shrink-0 text-subtle transition-transform duration-200',
+            collapsed && '-rotate-90',
+          )}
         />
       </button>
       {!collapsed ? (

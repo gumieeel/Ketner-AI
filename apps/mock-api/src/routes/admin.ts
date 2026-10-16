@@ -133,7 +133,9 @@ export function createAdminRouter({
     circuitBreaker.reset(provider);
     res.json({
       success: true,
-      message: provider ? `Circuit breaker для ${provider} сброшен` : 'Все circuit breakers сброшены',
+      message: provider
+        ? `Circuit breaker для ${provider} сброшен`
+        : 'Все circuit breakers сброшены',
     });
   });
 
@@ -272,8 +274,10 @@ export function createAdminRouter({
 
   // 8. Список пользователей с кратким статусом, лимитами и расходом
   router.get('/users', (req: Request, res: Response): void => {
-    const search = typeof req.query.search === 'string' ? req.query.search.trim().toLowerCase() : '';
-    const planFilter = typeof req.query.plan === 'string' ? req.query.plan.trim().toLowerCase() : '';
+    const search =
+      typeof req.query.search === 'string' ? req.query.search.trim().toLowerCase() : '';
+    const planFilter =
+      typeof req.query.plan === 'string' ? req.query.plan.trim().toLowerCase() : '';
     const page = Math.max(1, parseInt(String(req.query.page ?? '1'), 10) || 1);
     const pageSize = Math.max(1, parseInt(String(req.query.pageSize ?? '50'), 10) || 50);
 
@@ -509,7 +513,15 @@ export function createAdminRouter({
       return;
     }
 
-    const VALID_PLANS: PlanId[] = ['free', 'gpt-pro', 'claude-pro', 'gemini-pro', 'ultra', 'plus', 'pro'];
+    const VALID_PLANS: PlanId[] = [
+      'free',
+      'gpt-pro',
+      'claude-pro',
+      'gemini-pro',
+      'ultra',
+      'plus',
+      'pro',
+    ];
     if (body.plan !== undefined) {
       if (typeof body.plan !== 'string' || !VALID_PLANS.includes(body.plan as PlanId)) {
         sendError(res, 400, 'invalid_plan', `Недопустимый тариф: ${body.plan}`);

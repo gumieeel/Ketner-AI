@@ -36,7 +36,8 @@ export function createContactRouter(deps: ContactRouterDeps = {}): Router {
   router.post('/contact', async (request: Request, response: Response) => {
     const body = (request.body ?? {}) as Record<string, unknown>;
     const name = typeof body.name === 'string' ? body.name.trim().slice(0, 100) : '';
-    const email = typeof body.email === 'string' ? body.email.trim().toLowerCase().slice(0, 200) : '';
+    const email =
+      typeof body.email === 'string' ? body.email.trim().toLowerCase().slice(0, 200) : '';
     const message = typeof body.message === 'string' ? body.message.trim() : '';
     // Скрытое поле-ловушка для ботов: люди его не видят и не заполняют.
     if (typeof body.website === 'string' && body.website.trim()) {
@@ -44,11 +45,29 @@ export function createContactRouter(deps: ContactRouterDeps = {}): Router {
       return;
     }
     if (!name) return sendError(response, 400, 'invalid_request', 'Укажите имя');
-    if (!EMAIL_PATTERN.test(email)) return sendError(response, 400, 'invalid_request', 'Укажите корректную почту для ответа');
-    if (message.length < 10) return sendError(response, 400, 'invalid_request', 'Опишите вопрос подробнее (не менее 10 символов)');
-    if (message.length > 4000) return sendError(response, 400, 'invalid_request', 'Сообщение слишком длинное (не более 4000 символов)');
+    if (!EMAIL_PATTERN.test(email))
+      return sendError(response, 400, 'invalid_request', 'Укажите корректную почту для ответа');
+    if (message.length < 10)
+      return sendError(
+        response,
+        400,
+        'invalid_request',
+        'Опишите вопрос подробнее (не менее 10 символов)',
+      );
+    if (message.length > 4000)
+      return sendError(
+        response,
+        400,
+        'invalid_request',
+        'Сообщение слишком длинное (не более 4000 символов)',
+      );
     if (limited(`ip:${request.ip ?? 'unknown'}`) || limited(`email:${email}`)) {
-      return sendError(response, 429, 'too_many_requests', 'Слишком много обращений. Попробуйте позже или напишите на почту.');
+      return sendError(
+        response,
+        429,
+        'too_many_requests',
+        'Слишком много обращений. Попробуйте позже или напишите на почту.',
+      );
     }
 
     const record: ContactMessage = {

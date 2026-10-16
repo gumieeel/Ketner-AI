@@ -6,9 +6,7 @@ export type GithubIntent = 'link-repo' | 'code-import';
 
 /** Результат возврата с GitHub — показывается коротким уведомлением. */
 export type GithubNotice =
-  | { kind: 'connected'; login: string }
-  | { kind: 'denied' }
-  | { kind: 'failed'; message?: string };
+  { kind: 'connected'; login: string } | { kind: 'denied' } | { kind: 'failed'; message?: string };
 
 const INTENT_KEY = 'ketner.github.intent';
 
@@ -89,7 +87,11 @@ export const useGithub = create<GithubStore>((set, get) => ({
         return status;
       })
       .catch((error: unknown) => {
-        set({ loading: false, error: error instanceof ApiError ? error.message : 'Не удалось проверить подключение GitHub' });
+        set({
+          loading: false,
+          error:
+            error instanceof ApiError ? error.message : 'Не удалось проверить подключение GitHub',
+        });
         return null;
       })
       .finally(() => {
@@ -106,7 +108,10 @@ export const useGithub = create<GithubStore>((set, get) => ({
       writeIntent(intent ?? null);
       window.location.assign(url);
     } catch (error) {
-      set({ busy: false, error: error instanceof ApiError ? error.message : 'Не удалось начать подключение GitHub' });
+      set({
+        busy: false,
+        error: error instanceof ApiError ? error.message : 'Не удалось начать подключение GitHub',
+      });
     }
   },
 
@@ -116,7 +121,10 @@ export const useGithub = create<GithubStore>((set, get) => ({
       const status = await githubApi.disconnect();
       set({ status, busy: false });
     } catch (error) {
-      set({ busy: false, error: error instanceof ApiError ? error.message : 'Не удалось отключить GitHub' });
+      set({
+        busy: false,
+        error: error instanceof ApiError ? error.message : 'Не удалось отключить GitHub',
+      });
     }
   },
 
@@ -160,4 +168,5 @@ export const useGithub = create<GithubStore>((set, get) => ({
 }));
 
 /** Подключён ли GitHub прямо сейчас (по последнему известному статусу). */
-export const selectGithubConnected = (state: GithubStore): boolean => Boolean(state.status?.connected);
+export const selectGithubConnected = (state: GithubStore): boolean =>
+  Boolean(state.status?.connected);

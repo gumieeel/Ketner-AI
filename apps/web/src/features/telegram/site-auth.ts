@@ -21,11 +21,15 @@ export function isTelegramOnlyEmail(email: string | null | undefined): boolean {
   return Boolean(email && email.endsWith('@telegram.invalid'));
 }
 
-async function call<T>(path: string, init: { method?: string; body?: unknown; token?: string | null } = {}): Promise<T> {
+async function call<T>(
+  path: string,
+  init: { method?: string; body?: unknown; token?: string | null } = {},
+): Promise<T> {
   const headers: Record<string, string> = {};
   if (init.body !== undefined) headers['Content-Type'] = 'application/json';
   // Вход через Google/GitHub живёт в cookie; токен-заглушку не отправляем.
-  if (init.token && init.token !== 'better-auth-session') headers.Authorization = `Bearer ${init.token}`;
+  if (init.token && init.token !== 'better-auth-session')
+    headers.Authorization = `Bearer ${init.token}`;
   const response = await fetch(`${API_BASE}${path}`, {
     method: init.method ?? (init.body !== undefined ? 'POST' : 'GET'),
     headers,
@@ -51,9 +55,12 @@ async function call<T>(path: string, init: { method?: string; body?: unknown; to
 export const telegramSiteAuth = {
   start: (mode: TelegramAuthMode, token?: string | null) =>
     call<TelegramAuthStart>('/auth/telegram/start', { body: { mode }, token }),
-  poll: (requestId: string) => call<TelegramAuthPoll>(`/auth/telegram/poll/${encodeURIComponent(requestId)}`),
-  claim: (code: string, token?: string | null) => call<{ user: User }>('/auth/telegram/claim', { body: { code }, token }),
-  magic: (magicToken: string) => call<AuthSession>('/auth/telegram/magic', { body: { token: magicToken } }),
+  poll: (requestId: string) =>
+    call<TelegramAuthPoll>(`/auth/telegram/poll/${encodeURIComponent(requestId)}`),
+  claim: (code: string, token?: string | null) =>
+    call<{ user: User }>('/auth/telegram/claim', { body: { code }, token }),
+  magic: (magicToken: string) =>
+    call<AuthSession>('/auth/telegram/magic', { body: { token: magicToken } }),
   /** Свежий профиль (с полями Telegram) — и для входа по паролю, и для cookie-сессии Google/GitHub. */
   me: (token?: string | null) => call<{ user: User }>('/auth/me', { token }),
 };

@@ -9,7 +9,12 @@ import { useDocumentTitle } from '@/lib/use-document-title';
 
 type Status = 'idle' | 'sending' | 'sent';
 
-async function sendContact(payload: { name: string; email: string; message: string; website: string }): Promise<void> {
+async function sendContact(payload: {
+  name: string;
+  email: string;
+  message: string;
+  website: string;
+}): Promise<void> {
   const response = await fetch(`${API_BASE}/contact`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -59,14 +64,18 @@ export function ContactsPage() {
       <header className="flex flex-col gap-3">
         <h1 className="text-3xl font-semibold tracking-tight text-balance md:text-4xl">Контакты</h1>
         <p className="text-[15px] leading-7 text-muted">
-          Вопросы по оплате, возврату, работе сервиса или данным — пишите, ответим на почту, которую вы укажете. Обычно в течение суток.
+          Вопросы по оплате, возврату, работе сервиса или данным — пишите, ответим на почту, которую
+          вы укажете. Обычно в течение суток.
         </p>
       </header>
 
       <section aria-label="Способы связи" className="grid gap-3 sm:grid-cols-2">
         <div className="flex flex-col gap-1 rounded-xl border border-stroke bg-surface p-4">
           <span className="text-[13px] text-subtle">Почта поддержки</span>
-          <a className="text-[16px] font-medium text-text underline underline-offset-4" href={`mailto:${SUPPORT_EMAIL}`}>
+          <a
+            className="text-[16px] font-medium text-text underline underline-offset-4"
+            href={`mailto:${SUPPORT_EMAIL}`}
+          >
             {SUPPORT_EMAIL}
           </a>
         </div>
@@ -88,18 +97,33 @@ export function ContactsPage() {
           Форма обратной связи
         </h2>
         {status === 'sent' ? (
-          <p role="status" className="rounded-xl border border-stroke bg-surface p-4 text-[15px] leading-6 text-text">
+          <p
+            role="status"
+            className="rounded-xl border border-stroke bg-surface p-4 text-[15px] leading-6 text-text"
+          >
             Спасибо, сообщение отправлено. Ответим на {email}.
           </p>
         ) : (
           <form onSubmit={(event) => void submit(event)} className="flex flex-col gap-4" noValidate>
             <label className="flex flex-col gap-1.5 text-[14px] text-muted">
               Имя
-              <Input value={name} onChange={(event) => setName(event.target.value)} autoComplete="name" required maxLength={100} />
+              <Input
+                value={name}
+                onChange={(event) => setName(event.target.value)}
+                autoComplete="name"
+                required
+                maxLength={100}
+              />
             </label>
             <label className="flex flex-col gap-1.5 text-[14px] text-muted">
               Почта для ответа
-              <Input type="email" value={email} onChange={(event) => setEmail(event.target.value)} autoComplete="email" required />
+              <Input
+                type="email"
+                value={email}
+                onChange={(event) => setEmail(event.target.value)}
+                autoComplete="email"
+                required
+              />
             </label>
             <label className="flex flex-col gap-1.5 text-[14px] text-muted">
               Сообщение
@@ -116,7 +140,12 @@ export function ContactsPage() {
             <div aria-hidden="true" className="absolute -left-[9999px] h-0 w-0 overflow-hidden">
               <label>
                 Сайт
-                <input tabIndex={-1} autoComplete="off" value={website} onChange={(event) => setWebsite(event.target.value)} />
+                <input
+                  tabIndex={-1}
+                  autoComplete="off"
+                  value={website}
+                  onChange={(event) => setWebsite(event.target.value)}
+                />
               </label>
             </div>
             {error ? (

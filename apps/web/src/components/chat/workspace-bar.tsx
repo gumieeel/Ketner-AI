@@ -80,10 +80,7 @@ export function WorkspaceBar() {
         ) : null}
       </div>
 
-      <WorkspaceModal
-        isOpen={isViewModalOpen}
-        onClose={() => setIsViewModalOpen(false)}
-      />
+      <WorkspaceModal isOpen={isViewModalOpen} onClose={() => setIsViewModalOpen(false)} />
     </>
   );
 }

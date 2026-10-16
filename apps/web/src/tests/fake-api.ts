@@ -119,7 +119,12 @@ const PLAN_RANKS: Record<string, number> = {
   ultra: 3,
 };
 
-const PLAN_LABELS: Record<string, string> = { free: 'Free', plus: 'Plus', pro: 'Pro', ultra: 'Ultra' };
+const PLAN_LABELS: Record<string, string> = {
+  free: 'Free',
+  plus: 'Plus',
+  pro: 'Pro',
+  ultra: 'Ultra',
+};
 
 function planRank(plan: string | undefined): number {
   return plan ? (PLAN_RANKS[plan] ?? 0) : 0;
@@ -228,7 +233,12 @@ export function installFakeApi(options: FakeApiOptions = {}): FakeApi {
     available: true,
     connected: githubConnected,
     account: githubConnected
-      ? { login: options.github?.login ?? 'octo', avatarUrl: null, scopes: ['repo', 'read:user'], connectedAt: '2026-10-01T10:00:00.000Z' }
+      ? {
+          login: options.github?.login ?? 'octo',
+          avatarUrl: null,
+          scopes: ['repo', 'read:user'],
+          connectedAt: '2026-10-01T10:00:00.000Z',
+        }
       : null,
   });
   const conversations = new Map<string, { conversation: Conversation; messages: Message[] }>();
@@ -664,7 +674,12 @@ export function installFakeApi(options: FakeApiOptions = {}): FakeApi {
 
         if (options.rateLimitAfter !== undefined && index >= options.rateLimitAfter) {
           return json(
-            { error: { code: 'rate_limited', message: 'Сообщения на это время закончились. Попробуйте позже.' } },
+            {
+              error: {
+                code: 'rate_limited',
+                message: 'Сообщения на это время закончились. Попробуйте позже.',
+              },
+            },
             429,
           );
         }

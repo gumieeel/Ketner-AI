@@ -53,7 +53,8 @@ export interface CodeCapabilities {
   defaultModelId: string;
 }
 
-export type AgentRunStatus = 'completed' | 'cancelled' | 'error' | 'step_limit' | 'budget' | 'length';
+export type AgentRunStatus =
+  'completed' | 'cancelled' | 'error' | 'step_limit' | 'budget' | 'length';
 
 export interface ToolChange {
   path: string;
@@ -72,7 +73,14 @@ export interface PlanItem {
 /** Запись ленты агента (как на сервере; в живом запуске дополняется записями текущего запуска). */
 export type ThreadItem =
   | { id: string; kind: 'user'; text: string; createdAt: string }
-  | { id: string; kind: 'assistant'; text: string; runId: string; modelId?: string; createdAt: string }
+  | {
+      id: string;
+      kind: 'assistant';
+      text: string;
+      runId: string;
+      modelId?: string;
+      createdAt: string;
+    }
   | {
       id: string;
       kind: 'tool';

@@ -56,7 +56,10 @@ export function decryptToken(value: string, secret: string): string | undefined 
   try {
     const decipher = createDecipheriv('aes-256-gcm', keyFrom(secret), Buffer.from(iv, 'base64url'));
     decipher.setAuthTag(Buffer.from(tag, 'base64url'));
-    return Buffer.concat([decipher.update(Buffer.from(body, 'base64url')), decipher.final()]).toString('utf8');
+    return Buffer.concat([
+      decipher.update(Buffer.from(body, 'base64url')),
+      decipher.final(),
+    ]).toString('utf8');
   } catch {
     return undefined;
   }
@@ -75,11 +78,16 @@ function toPublic(record: StoredGithubConnection): GithubConnection {
 
 function readSnapshot(file: string): StoredGithubConnection[] {
   try {
-    const parsed = JSON.parse(readFileSync(file, 'utf8')) as { connections?: StoredGithubConnection[] };
+    const parsed = JSON.parse(readFileSync(file, 'utf8')) as {
+      connections?: StoredGithubConnection[];
+    };
     return Array.isArray(parsed.connections) ? parsed.connections : [];
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code !== 'ENOENT') {
-      console.warn('[mock-api] хранилище GitHub-подключений не прочитано, начинаем с пустого:', error);
+      console.warn(
+        '[mock-api] хранилище GitHub-подключений не прочитано, начинаем с пустого:',
+        error,
+      );
     }
     return [];
   }
@@ -96,7 +104,10 @@ function writeSnapshot(file: string, connections: StoredGithubConnection[]): voi
   }
 }
 
-export function createGithubConnectionStore(options: { file?: string; secret: string }): GithubConnectionStore {
+export function createGithubConnectionStore(options: {
+  file?: string;
+  secret: string;
+}): GithubConnectionStore {
   const byUser = new Map<string, StoredGithubConnection>();
   let dbDriver: GithubConnectionDbDriver | null = null;
 
@@ -120,7 +131,10 @@ export function createGithubConnectionStore(options: { file?: string; secret: st
     },
 
     save(connection, token) {
-      const record: StoredGithubConnection = { ...connection, tokenEnc: encryptToken(token, options.secret) };
+      const record: StoredGithubConnection = {
+        ...connection,
+        tokenEnc: encryptToken(token, options.secret),
+      };
       byUser.set(connection.userId, record);
       persist();
       dbDriver?.upsert({ ...record }).catch((error: unknown) => {

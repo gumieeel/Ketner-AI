@@ -82,9 +82,7 @@ export function createSubscriptionStore(file: string): SubscriptionStore {
       const previous = existingIndex >= 0 ? snapshot.subscriptions[existingIndex] : undefined;
       const previousEnd = previous?.renewsAt ? Date.parse(previous.renewsAt) : NaN;
       const extendFrom =
-        previous && previous.plan === plan && previousEnd > Date.now()
-          ? previousEnd
-          : Date.now();
+        previous && previous.plan === plan && previousEnd > Date.now() ? previousEnd : Date.now();
       const renewsAt = new Date(extendFrom + 30 * 24 * 3600 * 1000).toISOString();
 
       const updated: Subscription = {
@@ -101,9 +99,9 @@ export function createSubscriptionStore(file: string): SubscriptionStore {
       }
 
       persist();
-      dbDriver?.onSubscriptionUpdated?.({ ...updated })?.catch?.((err) =>
-        console.error('[db] Error persisting subscription checkout:', err),
-      );
+      dbDriver
+        ?.onSubscriptionUpdated?.({ ...updated })
+        ?.catch?.((err) => console.error('[db] Error persisting subscription checkout:', err));
       return updated;
     },
 
@@ -129,9 +127,9 @@ export function createSubscriptionStore(file: string): SubscriptionStore {
       }
 
       persist();
-      dbDriver?.onSubscriptionUpdated?.({ ...updated })?.catch?.((err) =>
-        console.error('[db] Error persisting subscription cancel:', err),
-      );
+      dbDriver
+        ?.onSubscriptionUpdated?.({ ...updated })
+        ?.catch?.((err) => console.error('[db] Error persisting subscription cancel:', err));
       return updated;
     },
 
@@ -148,9 +146,9 @@ export function createSubscriptionStore(file: string): SubscriptionStore {
       }
 
       persist();
-      dbDriver?.onSubscriptionUpdated?.({ ...subscription })?.catch?.((err) =>
-        console.error('[db] Error persisting subscription update:', err),
-      );
+      dbDriver
+        ?.onSubscriptionUpdated?.({ ...subscription })
+        ?.catch?.((err) => console.error('[db] Error persisting subscription update:', err));
       return subscription;
     },
 

@@ -51,8 +51,18 @@ function sign(body: string, secret: string): string {
   return createHmac('sha256', `ketner:github-state:${secret}`).update(body).digest('base64url');
 }
 
-export function createState(userId: string, returnTo: string, secret = config.betterAuthSecret, now = Date.now()): string {
-  const payload: StatePayload = { u: userId, n: randomBytes(9).toString('base64url'), e: now + STATE_TTL_MS, r: returnTo };
+export function createState(
+  userId: string,
+  returnTo: string,
+  secret = config.betterAuthSecret,
+  now = Date.now(),
+): string {
+  const payload: StatePayload = {
+    u: userId,
+    n: randomBytes(9).toString('base64url'),
+    e: now + STATE_TTL_MS,
+    r: returnTo,
+  };
   const body = Buffer.from(JSON.stringify(payload), 'utf8').toString('base64url');
   return `${body}.${sign(body, secret)}`;
 }
@@ -68,8 +78,15 @@ export function readState(
   const actual = Buffer.from(signature);
   if (expected.length !== actual.length || !timingSafeEqual(expected, actual)) return null;
   try {
-    const payload = JSON.parse(Buffer.from(body, 'base64url').toString('utf8')) as Partial<StatePayload>;
-    if (typeof payload.u !== 'string' || typeof payload.r !== 'string' || typeof payload.e !== 'number') return null;
+    const payload = JSON.parse(
+      Buffer.from(body, 'base64url').toString('utf8'),
+    ) as Partial<StatePayload>;
+    if (
+      typeof payload.u !== 'string' ||
+      typeof payload.r !== 'string' ||
+      typeof payload.e !== 'number'
+    )
+      return null;
     if (payload.e < now) return null;
     return { userId: payload.u, returnTo: payload.r };
   } catch {
@@ -80,7 +97,12 @@ export function readState(
 /** Сайты, на которые можно вернуть человека после GitHub. */
 function allowedOrigins(): Set<string> {
   const origins = new Set<string>(['https://ketner.org', 'https://www.ketner.org']);
-  for (const raw of [config.webAppUrl, config.corsOrigin, config.betterAuthUrl, process.env.RENDER_EXTERNAL_URL]) {
+  for (const raw of [
+    config.webAppUrl,
+    config.corsOrigin,
+    config.betterAuthUrl,
+    process.env.RENDER_EXTERNAL_URL,
+  ]) {
     if (!raw) continue;
     try {
       origins.add(new URL(raw).origin);
@@ -158,7 +180,11 @@ export async function exchangeCode(
   try {
     response = await fetchImpl('https://github.com/login/oauth/access_token', {
       method: 'POST',
-      headers: { Accept: 'application/json', 'Content-Type': 'application/json', 'User-Agent': 'ketner-ai' },
+      headers: {
+        Accept: 'application/json',
+        'Content-Type': 'application/json',
+        'User-Agent': 'ketner-ai',
+      },
       body: JSON.stringify({
         client_id: settings.clientId,
         client_secret: settings.clientSecret,
@@ -188,12 +214,18 @@ export async function exchangeCode(
     .map((scope) => scope.trim())
     .filter(Boolean);
   if (!scopes.includes('repo')) {
-    throw new GithubOAuthError('bad_scope', 'Без доступа к репозиториям Ketner не сможет читать и менять код. Разрешите доступ при подключении.');
+    throw new GithubOAuthError(
+      'bad_scope',
+      'Без доступа к репозиториям Ketner не сможет читать и менять код. Разрешите доступ при подключении.',
+    );
   }
   return { token: body.access_token, scopes };
 }
 
-export async function fetchProfile(token: string, fetchImpl: typeof fetch = fetch): Promise<GithubProfile> {
+export async function fetchProfile(
+  token: string,
+  fetchImpl: typeof fetch = fetch,
+): Promise<GithubProfile> {
   let response: Response;
   try {
     response = await fetchImpl('https://api.github.com/user', {
@@ -204,11 +236,17 @@ export async function fetchProfile(token: string, fetchImpl: typeof fetch = fetc
     throw new GithubOAuthError('unavailable', 'GitHub не ответил. Попробуйте подключить ещё раз.');
   }
   if (!response.ok) {
-    throw new GithubOAuthError('exchange_failed', 'Не удалось получить профиль GitHub. Попробуйте ещё раз.');
+    throw new GithubOAuthError(
+      'exchange_failed',
+      'Не удалось получить профиль GitHub. Попробуйте ещё раз.',
+    );
   }
   const user = (await response.json()) as { id?: number; login?: string; avatar_url?: string };
   if (typeof user.id !== 'number' || typeof user.login !== 'string') {
-    throw new GithubOAuthError('exchange_failed', 'Не удалось получить профиль GitHub. Попробуйте ещё раз.');
+    throw new GithubOAuthError(
+      'exchange_failed',
+      'Не удалось получить профиль GitHub. Попробуйте ещё раз.',
+    );
   }
   return { id: user.id, login: user.login, avatarUrl: user.avatar_url ?? null };
 }
@@ -220,17 +258,20 @@ export async function revokeToken(
   fetchImpl: typeof fetch = fetch,
 ): Promise<void> {
   try {
-    await fetchImpl(`https://api.github.com/applications/${encodeURIComponent(settings.clientId)}/token`, {
-      method: 'DELETE',
-      headers: {
-        Accept: 'application/vnd.github+json',
-        'Content-Type': 'application/json',
-        'User-Agent': 'ketner-ai',
-        Authorization: `Basic ${Buffer.from(`${settings.clientId}:${settings.clientSecret}`).toString('base64')}`,
+    await fetchImpl(
+      `https://api.github.com/applications/${encodeURIComponent(settings.clientId)}/token`,
+      {
+        method: 'DELETE',
+        headers: {
+          Accept: 'application/vnd.github+json',
+          'Content-Type': 'application/json',
+          'User-Agent': 'ketner-ai',
+          Authorization: `Basic ${Buffer.from(`${settings.clientId}:${settings.clientSecret}`).toString('base64')}`,
+        },
+        body: JSON.stringify({ access_token: token }),
+        signal: AbortSignal.timeout(10_000),
       },
-      body: JSON.stringify({ access_token: token }),
-      signal: AbortSignal.timeout(10_000),
-    });
+    );
   } catch {
     // токен всё равно удалён у нас; в GitHub его можно отозвать вручную
   }

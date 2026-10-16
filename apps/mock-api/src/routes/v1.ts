@@ -90,7 +90,12 @@ export function createV1Router(deps: V1RouterDeps): Router {
     const record = deps.apiKeyStore.verify(match[1]);
     const user = record ? deps.userStore.findById(record.userId) : null;
     if (!record || !user) {
-      sendOpenAiError(response, 401, 'invalid_api_key', 'Ключ не найден или отозван. Создайте новый в разделе API.');
+      sendOpenAiError(
+        response,
+        401,
+        'invalid_api_key',
+        'Ключ не найден или отозван. Создайте новый в разделе API.',
+      );
       return;
     }
     const { plan, isVip } = resolveUserPlan(user, deps.userStore, deps.subscriptionStore);
@@ -131,7 +136,9 @@ export function createV1Router(deps: V1RouterDeps): Router {
       const caller = response.locals.caller as AgentCaller;
       const parsed = parseChatRequest(request.body);
       if (!parsed.ok) {
-        sendOpenAiError(response, 400, 'invalid_request_error', parsed.message, { param: parsed.param });
+        sendOpenAiError(response, 400, 'invalid_request_error', parsed.message, {
+          param: parsed.param,
+        });
         return;
       }
       const body = parsed.value;
@@ -155,7 +162,9 @@ export function createV1Router(deps: V1RouterDeps): Router {
 
       const writeData = (payload: unknown): void => {
         if (!response.writableEnded && !response.destroyed) {
-          response.write(`data: ${typeof payload === 'string' ? payload : JSON.stringify(payload)}\n\n`);
+          response.write(
+            `data: ${typeof payload === 'string' ? payload : JSON.stringify(payload)}\n\n`,
+          );
         }
       };
       const startStream = (): void => {
@@ -278,7 +287,9 @@ export function createV1Router(deps: V1RouterDeps): Router {
           });
         }
         if (outcome.finishReason === 'error') {
-          writeData(buildErrorBody(502, 'upstream_error', 'Ответ модели оборвался. Повторите запрос.'));
+          writeData(
+            buildErrorBody(502, 'upstream_error', 'Ответ модели оборвался. Повторите запрос.'),
+          );
         } else {
           writeData(
             buildChunk({
@@ -311,17 +322,32 @@ export function createV1Router(deps: V1RouterDeps): Router {
 
   // Всё остальное под /v1 и ошибки разбора тела отвечают в формате OpenAI.
   router.use((request: Request, response: Response) => {
-    sendOpenAiError(response, 404, 'not_found', `Эндпоинт ${request.method} ${request.originalUrl} не найден`);
+    sendOpenAiError(
+      response,
+      404,
+      'not_found',
+      `Эндпоинт ${request.method} ${request.originalUrl} не найден`,
+    );
   });
 
   router.use((error: unknown, _request: Request, response: Response, _next: NextFunction) => {
     const type = (error as { type?: string } | null)?.type;
     if (type === 'entity.too.large') {
-      sendOpenAiError(response, 413, 'request_too_large', 'Тело запроса больше 8 МБ: сожмите историю диалога.');
+      sendOpenAiError(
+        response,
+        413,
+        'request_too_large',
+        'Тело запроса больше 8 МБ: сожмите историю диалога.',
+      );
       return;
     }
     if (type === 'entity.parse.failed') {
-      sendOpenAiError(response, 400, 'invalid_request_error', 'Тело запроса не является корректным JSON');
+      sendOpenAiError(
+        response,
+        400,
+        'invalid_request_error',
+        'Тело запроса не является корректным JSON',
+      );
       return;
     }
     console.error('[v1] необработанная ошибка:', error);

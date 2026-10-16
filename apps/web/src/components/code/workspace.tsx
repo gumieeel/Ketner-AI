@@ -27,7 +27,9 @@ function Notice() {
       role={error ? 'alert' : 'status'}
       className={cn(
         'flex items-start gap-2 border-b px-3 py-2 text-[13px]',
-        error ? 'border-danger/30 bg-danger-soft text-danger' : 'border-stroke bg-surface-2 text-text',
+        error
+          ? 'border-danger/30 bg-danger-soft text-danger'
+          : 'border-stroke bg-surface-2 text-text',
       )}
     >
       <div className="min-w-0 flex-1">
@@ -35,10 +37,14 @@ function Notice() {
           <p>{notice.text}</p>
         ) : (
           <>
-            <p>{t('code.import.result', { written: notice.written, skipped: notice.skippedCount })}</p>
+            <p>
+              {t('code.import.result', { written: notice.written, skipped: notice.skippedCount })}
+            </p>
             {notice.details.length > 0 ? (
               <details className="mt-1">
-                <summary className="cursor-pointer text-muted">{t('code.import.skippedTitle')}</summary>
+                <summary className="cursor-pointer text-muted">
+                  {t('code.import.skippedTitle')}
+                </summary>
                 <ul className="mt-1 max-h-32 overflow-y-auto font-mono text-xs text-muted">
                   {notice.details.map((item) => (
                     <li key={item.path} className="truncate">
@@ -85,7 +91,10 @@ function EditorPane() {
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      <div role="tablist" className="flex shrink-0 overflow-x-auto border-b border-stroke bg-surface">
+      <div
+        role="tablist"
+        className="flex shrink-0 overflow-x-auto border-b border-stroke bg-surface"
+      >
         {openPaths.map((path) => {
           const b = buffers[path];
           const isDirty = Boolean(b && b.status === 'ready' && b.content !== b.saved);
@@ -107,9 +116,18 @@ function EditorPane() {
                 className="flex min-h-9 max-w-[12rem] items-center gap-1.5 pr-1 pl-3 text-[13px]"
               >
                 <span className="truncate">{baseName(path)}</span>
-                {isDirty ? <span aria-label={t('code.ws.unsaved')} className="size-1.5 shrink-0 rounded-full bg-warning" /> : null}
+                {isDirty ? (
+                  <span
+                    aria-label={t('code.ws.unsaved')}
+                    className="size-1.5 shrink-0 rounded-full bg-warning"
+                  />
+                ) : null}
               </button>
-              <IconButton label={t('code.ws.closeTab', { name: baseName(path) })} size="sm" onClick={() => closeFile(path)}>
+              <IconButton
+                label={t('code.ws.closeTab', { name: baseName(path) })}
+                size="sm"
+                onClick={() => closeFile(path)}
+              >
                 <CloseIcon className="size-3" />
               </IconButton>
             </div>
@@ -122,8 +140,15 @@ function EditorPane() {
           {activePath}
         </span>
         <div className="flex shrink-0 items-center gap-2">
-          <span className={cn('text-xs', dirty ? 'text-warning' : 'text-subtle')}>{dirty ? t('code.ws.unsaved') : t('code.ws.saved')}</span>
-          <Button size="sm" variant="secondary" disabled={!dirty} onClick={() => void saveFile(activePath)}>
+          <span className={cn('text-xs', dirty ? 'text-warning' : 'text-subtle')}>
+            {dirty ? t('code.ws.unsaved') : t('code.ws.saved')}
+          </span>
+          <Button
+            size="sm"
+            variant="secondary"
+            disabled={!dirty}
+            onClick={() => void saveFile(activePath)}
+          >
             {t('code.ws.save')}
           </Button>
         </div>
@@ -205,7 +230,9 @@ export function Workspace() {
             className={cn(
               'inline-flex min-h-9 shrink-0 items-center gap-1.5 rounded-lg border px-2 text-xs font-medium',
               'transition-colors xl:pointer-events-none',
-              plan.live ? 'border-accent/40 bg-accent-soft text-accent' : 'border-stroke text-muted hover:text-text',
+              plan.live
+                ? 'border-accent/40 bg-accent-soft text-accent'
+                : 'border-stroke text-muted hover:text-text',
             )}
           >
             <PlanProgressRing done={plan.done} total={plan.items.length} />
@@ -214,18 +241,41 @@ export function Workspace() {
             </span>
           </button>
         ) : null}
-        <input ref={uploadRef} type="file" multiple className="sr-only" aria-label={t('code.ws.upload')} onChange={onUpload} />
-        <Button size="sm" variant="ghost" disabled={running} onClick={() => uploadRef.current?.click()} leftIcon={<PlusIcon className="size-4" />}>
+        <input
+          ref={uploadRef}
+          type="file"
+          multiple
+          className="sr-only"
+          aria-label={t('code.ws.upload')}
+          onChange={onUpload}
+        />
+        <Button
+          size="sm"
+          variant="ghost"
+          disabled={running}
+          onClick={() => uploadRef.current?.click()}
+          leftIcon={<PlusIcon className="size-4" />}
+        >
           <span className="max-sm:sr-only">{t('code.ws.upload')}</span>
         </Button>
-        <Button size="sm" variant="ghost" disabled={files.length === 0} onClick={() => void exportZip()} leftIcon={<DownloadIcon className="size-4" />}>
+        <Button
+          size="sm"
+          variant="ghost"
+          disabled={files.length === 0}
+          onClick={() => void exportZip()}
+          leftIcon={<DownloadIcon className="size-4" />}
+        >
           <span className="max-sm:sr-only">{t('code.ws.export')}</span>
         </Button>
       </div>
 
       <Notice />
 
-      <div role="tablist" aria-label={project?.name} className="grid shrink-0 grid-cols-3 border-b border-stroke bg-surface xl:hidden">
+      <div
+        role="tablist"
+        aria-label={project?.name}
+        className="grid shrink-0 grid-cols-3 border-b border-stroke bg-surface xl:hidden"
+      >
         {tabs.map((tab) => (
           <button
             key={tab.id}
@@ -239,7 +289,9 @@ export function Workspace() {
             )}
           >
             {tab.label}
-            {tab.id === 'agent' && running ? <span className="ml-1.5 inline-block size-1.5 animate-pulse rounded-full bg-accent" /> : null}
+            {tab.id === 'agent' && running ? (
+              <span className="ml-1.5 inline-block size-1.5 animate-pulse rounded-full bg-accent" />
+            ) : null}
           </button>
         ))}
       </div>
@@ -247,19 +299,28 @@ export function Workspace() {
       <div className="flex min-h-0 min-w-0 flex-1">
         <section
           aria-label={t('code.ws.files')}
-          className={cn('min-h-0 w-full min-w-0 flex-col border-stroke xl:flex xl:w-60 xl:shrink-0 xl:border-r', pane === 'files' ? 'flex' : 'hidden')}
+          className={cn(
+            'min-h-0 w-full min-w-0 flex-col border-stroke xl:flex xl:w-60 xl:shrink-0 xl:border-r',
+            pane === 'files' ? 'flex' : 'hidden',
+          )}
         >
           <FileTree disabled={running} />
         </section>
         <section
           aria-label={t('code.ws.editor')}
-          className={cn('min-h-0 min-w-0 flex-1 flex-col xl:flex', pane === 'editor' ? 'flex' : 'hidden')}
+          className={cn(
+            'min-h-0 min-w-0 flex-1 flex-col xl:flex',
+            pane === 'editor' ? 'flex' : 'hidden',
+          )}
         >
           <EditorPane />
         </section>
         <section
           aria-label={t('code.ws.agent')}
-          className={cn('min-h-0 w-full min-w-0 flex-col border-stroke xl:flex xl:w-[24rem] xl:shrink-0 xl:border-l 2xl:w-[28rem]', pane === 'agent' ? 'flex' : 'hidden')}
+          className={cn(
+            'min-h-0 w-full min-w-0 flex-col border-stroke xl:flex xl:w-[24rem] xl:shrink-0 xl:border-l 2xl:w-[28rem]',
+            pane === 'agent' ? 'flex' : 'hidden',
+          )}
         >
           <AgentPanel />
         </section>

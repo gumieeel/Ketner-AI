@@ -37,12 +37,27 @@ test('единицы суточного лимита: Max у модели с п�
 });
 
 test('xhigh уходит провайдеру как есть, а модели без xhigh получают ближайшую глубину', () => {
-  assert.deepEqual(toProviderReasoning({ mandatory: true, efforts: ['low', 'medium', 'high', 'xhigh', 'max'] }, 'xhigh'), { effort: 'xhigh' });
-  assert.deepEqual(toProviderReasoning({ mandatory: true, efforts: ['low', 'medium', 'high'] }, 'xhigh'), { effort: 'high' });
+  assert.deepEqual(
+    toProviderReasoning(
+      { mandatory: true, efforts: ['low', 'medium', 'high', 'xhigh', 'max'] },
+      'xhigh',
+    ),
+    { effort: 'xhigh' },
+  );
+  assert.deepEqual(
+    toProviderReasoning({ mandatory: true, efforts: ['low', 'medium', 'high'] }, 'xhigh'),
+    { effort: 'high' },
+  );
 });
 
 test('глубоким размышлениям не ставится короткий потолок ответа', () => {
-  const base = { planMaxTokens: 16384, modelMaxOutputTokens: 32768, stage: 'normal' as const, level: 'simple' as const, heavyContext: false };
+  const base = {
+    planMaxTokens: 16384,
+    modelMaxOutputTokens: 32768,
+    stage: 'normal' as const,
+    level: 'simple' as const,
+    heavyContext: false,
+  };
   assert.equal(computeOutputCap({ ...base, effort: 'medium' }), 2048);
   assert.equal(computeOutputCap({ ...base, effort: 'xhigh' }), 16384);
 });
@@ -52,6 +67,13 @@ test('каталог /api/meta отдаёт профиль размышлени�
   assert.deepEqual(opus?.reasoningEffort, { standard: 'medium', max: 'xhigh' });
   assert.deepEqual(opus?.dailyLimits, { pro: 3, ultra: 7 });
   assert.equal(MODELS.find((m) => m.id === 'grok-4.7')?.name, 'Grok 4.7 xhigh');
-  assert.equal(MODELS.some((m) => m.id === 'gemini-4-argon'), false);
-  assert.equal(MODELS.some((m) => m.id === 'gemini-3.8-flash'), false, 'Gemini 3.8 Flash теперь только запасная');
+  assert.equal(
+    MODELS.some((m) => m.id === 'gemini-4-argon'),
+    false,
+  );
+  assert.equal(
+    MODELS.some((m) => m.id === 'gemini-3.8-flash'),
+    false,
+    'Gemini 3.8 Flash теперь только запасная',
+  );
 });

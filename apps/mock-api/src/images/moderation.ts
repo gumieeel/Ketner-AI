@@ -12,7 +12,8 @@
 
 import type { AIProvider } from '../ai/gateway-types.js';
 
-export type ModerationCategory = 'minors' | 'sexual' | 'real_person' | 'violence' | 'hate' | 'other';
+export type ModerationCategory =
+  'minors' | 'sexual' | 'real_person' | 'violence' | 'hate' | 'other';
 
 export type ModerationResult =
   | { allowed: true; promptEn: string }
@@ -47,9 +48,19 @@ const SYSTEM = [
   'Answer with JSON only: {"allowed": true|false, "category": "none|minors|sexual|real_person|violence|hate|other", "prompt_en": "..."}',
 ].join('\n');
 
-const CATEGORIES: ReadonlySet<string> = new Set(['minors', 'sexual', 'real_person', 'violence', 'hate', 'other']);
+const CATEGORIES: ReadonlySet<string> = new Set([
+  'minors',
+  'sexual',
+  'real_person',
+  'violence',
+  'hate',
+  'other',
+]);
 
-export function createLlmModerator(options: { provider: () => AIProvider | undefined; model: string }): PromptModerator {
+export function createLlmModerator(options: {
+  provider: () => AIProvider | undefined;
+  model: string;
+}): PromptModerator {
   return {
     async check(prompt, signal) {
       if (isObviouslyForbidden(prompt)) return { allowed: false, category: 'minors' };
@@ -70,17 +81,30 @@ export function createLlmModerator(options: { provider: () => AIProvider | undef
         });
         const match = response.content.match(/\{[\s\S]*\}/);
         if (!match) return { allowed: false, category: 'unavailable' };
-        const parsed = JSON.parse(match[0]) as { allowed?: unknown; category?: unknown; prompt_en?: unknown };
+        const parsed = JSON.parse(match[0]) as {
+          allowed?: unknown;
+          category?: unknown;
+          prompt_en?: unknown;
+        };
         if (parsed.allowed === true) {
-          const promptEn = typeof parsed.prompt_en === 'string' && parsed.prompt_en.trim() ? parsed.prompt_en.trim() : prompt;
+          const promptEn =
+            typeof parsed.prompt_en === 'string' && parsed.prompt_en.trim()
+              ? parsed.prompt_en.trim()
+              : prompt;
           // Перевод тоже проверяется локальным фильтром: модель не должна «пронести» запрещённое.
           if (isObviouslyForbidden(promptEn)) return { allowed: false, category: 'minors' };
           return { allowed: true, promptEn: promptEn.slice(0, 2_000) };
         }
-        const category = typeof parsed.category === 'string' && CATEGORIES.has(parsed.category) ? parsed.category : 'other';
+        const category =
+          typeof parsed.category === 'string' && CATEGORIES.has(parsed.category)
+            ? parsed.category
+            : 'other';
         return { allowed: false, category: category as ModerationCategory };
       } catch (error) {
-        console.warn('[images] проверка запроса не удалась:', error instanceof Error ? error.message : error);
+        console.warn(
+          '[images] проверка запроса не удалась:',
+          error instanceof Error ? error.message : error,
+        );
         return { allowed: false, category: 'unavailable' };
       }
     },

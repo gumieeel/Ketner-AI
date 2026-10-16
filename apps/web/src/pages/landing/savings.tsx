@@ -47,7 +47,11 @@ export function LandingSavings() {
   const max = Math.max(separate, KETNER_PRO, 1);
 
   return (
-    <section aria-labelledby="save-title" id="savings" className="w-full scroll-mt-20 pt-28 md:pt-36">
+    <section
+      aria-labelledby="save-title"
+      id="savings"
+      className="w-full scroll-mt-20 pt-28 md:pt-36"
+    >
       <SectionHead id="save-title" title={t('home.saveTitle')} lead={t('home.saveLead')} />
 
       <div className="mt-12 grid grid-cols-1 gap-3 lg:grid-cols-12">
@@ -77,7 +81,9 @@ export function LandingSavings() {
                   aria-hidden="true"
                   className={cn(
                     'grid size-5 shrink-0 place-items-center rounded-xs border transition-colors duration-150 peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2 peer-focus-visible:outline-accent',
-                    checked ? 'border-transparent bg-brand-gradient text-accent-text' : 'border-stroke-strong',
+                    checked
+                      ? 'border-transparent bg-brand-gradient text-accent-text'
+                      : 'border-stroke-strong',
                   )}
                 >
                   {checked ? <CheckIcon className="size-3.5" /> : null}
@@ -90,7 +96,9 @@ export function LandingSavings() {
               </label>
             );
           })}
-          <p className="mt-auto px-4 pt-6 pb-2 text-[13px] leading-relaxed text-subtle">{t('home.saveFine')}</p>
+          <p className="mt-auto px-4 pt-6 pb-2 text-[13px] leading-relaxed text-subtle">
+            {t('home.saveFine')}
+          </p>
         </fieldset>
 
         {/* Сравнение */}
@@ -114,7 +122,10 @@ export function LandingSavings() {
                 </div>
                 <div className="mt-3 h-1.5 w-full overflow-hidden rounded-xs bg-surface-3">
                   <div
-                    className={cn('h-full transition-[width] duration-300', row.strong ? 'bg-accent' : 'bg-muted/60')}
+                    className={cn(
+                      'h-full transition-[width] duration-300',
+                      row.strong ? 'bg-accent' : 'bg-muted/60',
+                    )}
                     style={{ width: `${(row.value / max) * 100}%` }}
                   />
                 </div>
@@ -138,9 +149,7 @@ export function LandingSavings() {
                 <span className="sharp tabular text-[64px] leading-[0.95] font-medium tracking-[-0.04em] sm:text-[88px]">
                   {money(saved)}
                 </span>
-                <span className="pb-2 text-[15px]">
-                  {t('home.saveLess', { pct })}
-                </span>
+                <span className="pb-2 text-[15px]">{t('home.saveLess', { pct })}</span>
               </div>
             )}
           </div>

@@ -12,7 +12,10 @@ import { createUserStore } from '../store/user-store.js';
 import { createApiKeyStore, type ApiKeyStore } from '../store/api-key-store.js';
 import { UsageStore } from '../store/usage-store.js';
 import { createInvoiceStore } from '../store/invoice-store.js';
-import { createGithubConnectionStore, type GithubConnectionStore } from '../github/connection-store.js';
+import {
+  createGithubConnectionStore,
+  type GithubConnectionStore,
+} from '../github/connection-store.js';
 import { semanticCache } from '../ai/cache.js';
 import { AIGateway } from '../ai/gateway.js';
 import type { Conversation, Message } from '../types.js';

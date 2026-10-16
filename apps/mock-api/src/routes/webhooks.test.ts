@@ -61,7 +61,10 @@ test('webhooks: активация подписки, отмена и идемп�
     // 2. Идемпотентность: то же событие повторно
     const replayRes = await fetch(`${server.baseUrl}/api/webhooks`, signedWebhook(paid));
     assert.equal(replayRes.status, 200);
-    const replayBody = (await replayRes.json()) as { received: boolean; idempotentReplay?: boolean };
+    const replayBody = (await replayRes.json()) as {
+      received: boolean;
+      idempotentReplay?: boolean;
+    };
     assert.equal(replayBody.idempotentReplay, true);
 
     // 3. Отмена подписки
@@ -149,7 +152,12 @@ test('cryptocloud postback (C6): без валидного токена тари
       const res = await fetch(`${server.baseUrl}/api/billing/cryptocloud/postback`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ status: 'success', order_id: invoice.id, invoice_id: invoice.id, token }),
+        body: JSON.stringify({
+          status: 'success',
+          order_id: invoice.id,
+          invoice_id: invoice.id,
+          token,
+        }),
       });
       assert.equal(res.status, 401);
     }

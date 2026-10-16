@@ -71,13 +71,7 @@ export interface Conversation {
 }
 
 export type AttachmentCategory =
-  | 'image'
-  | 'video'
-  | 'audio'
-  | 'document'
-  | 'code'
-  | 'archive'
-  | 'file';
+  'image' | 'video' | 'audio' | 'document' | 'code' | 'archive' | 'file';
 
 export interface MessageAttachment {
   id: string;
@@ -242,4 +236,3 @@ export interface CryptoInvoice {
   /** Комиссии Trybit по этому счёту (приходят в ответе шлюза). */
   fees?: CryptoFees;
 }
-

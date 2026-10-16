@@ -28,7 +28,12 @@ const LOGIN_LIMIT = 5;
  * API кабинета в Telegram (`/api/telegram/miniapp/*`). Личность подтверждается подписью initData;
  * после этого выдаётся обычный токен сессии сайта, остальные запросы идут с ним.
  */
-export function createMiniAppRouter({ botService, userStore, subscriptionStore, invoiceStore }: MiniAppRouterDeps): Router {
+export function createMiniAppRouter({
+  botService,
+  userStore,
+  subscriptionStore,
+  invoiceStore,
+}: MiniAppRouterDeps): Router {
   const router = Router();
   const billing = botService.billing;
   const loginAttempts = new Map<number, number[]>();
@@ -39,7 +44,8 @@ export function createMiniAppRouter({ botService, userStore, subscriptionStore, 
       sendError(response, 503, 'telegram_unavailable', 'Бот Telegram на сервере не настроен');
       return null;
     }
-    const verified = typeof initData === 'string' ? validateInitData(initData, botService.botToken) : null;
+    const verified =
+      typeof initData === 'string' ? validateInitData(initData, botService.botToken) : null;
     if (!verified) {
       sendError(response, 401, 'invalid_init_data', 'Откройте кабинет заново из Telegram');
       return null;
@@ -71,7 +77,8 @@ export function createMiniAppRouter({ botService, userStore, subscriptionStore, 
       bonusDays: payment.bonusDays,
       chargeId: payment.chargeId ?? null,
       refund: payment.refund ?? null,
-      refundOption: option.kind === 'none' ? { kind: 'none', reason: option.reason } : { kind: option.kind },
+      refundOption:
+        option.kind === 'none' ? { kind: 'none', reason: option.reason } : { kind: option.kind },
     };
   };
 
@@ -94,7 +101,12 @@ export function createMiniAppRouter({ botService, userStore, subscriptionStore, 
       },
       subscription,
       autoRenew: auto
-        ? { planId: auto.planId, status: auto.status, stars: auto.stars, nextChargeAt: auto.nextChargeAt }
+        ? {
+            planId: auto.planId,
+            status: auto.status,
+            stars: auto.stars,
+            nextChargeAt: auto.nextChargeAt,
+          }
         : null,
       plans: STARS_PLANS.map((planId) => {
         const priceUsd = planPriceUsd(planId);
@@ -160,9 +172,16 @@ export function createMiniAppRouter({ botService, userStore, subscriptionStore, 
     const tgUser = telegramUserOf(request, response);
     if (!tgUser) return;
     const now = Date.now();
-    const attempts = (loginAttempts.get(tgUser.id) ?? []).filter((at) => now - at < LOGIN_WINDOW_MS);
+    const attempts = (loginAttempts.get(tgUser.id) ?? []).filter(
+      (at) => now - at < LOGIN_WINDOW_MS,
+    );
     if (attempts.length >= LOGIN_LIMIT) {
-      sendError(response, 429, 'rate_limited', 'Слишком много попыток. Попробуйте через несколько минут.');
+      sendError(
+        response,
+        429,
+        'rate_limited',
+        'Слишком много попыток. Попробуйте через несколько минут.',
+      );
       return;
     }
     const body = (request.body ?? {}) as { email?: unknown; password?: unknown };
@@ -197,59 +216,83 @@ export function createMiniAppRouter({ botService, userStore, subscriptionStore, 
   });
 
   /** Счёт в звёздах: на 30 дней или подписка с автопродлением. */
-  router.post('/telegram/miniapp/invoice', requireAuth, async (request: Request, response: Response) => {
-    const body = (request.body ?? {}) as { planId?: unknown; recurring?: unknown };
-    if (typeof body.planId !== 'string' || !(STARS_PLANS as readonly string[]).includes(body.planId)) {
-      sendError(response, 400, 'invalid_plan', 'Выберите тариф Plus, Pro или Ultra');
-      return;
-    }
-    const recurring = body.recurring === true;
-    const invoice = botService.createStarsInvoice(request.user!.id, body.planId as PlanId);
-    const link = await botService.createInvoiceLink(invoice, recurring);
-    if (!link) {
-      sendError(response, 502, 'telegram_unavailable', 'Telegram не выставил счёт. Попробуйте ещё раз.');
-      return;
-    }
-    response.json({ invoiceId: invoice.id, stars: invoice.starsAmount, link, recurring });
-  });
+  router.post(
+    '/telegram/miniapp/invoice',
+    requireAuth,
+    async (request: Request, response: Response) => {
+      const body = (request.body ?? {}) as { planId?: unknown; recurring?: unknown };
+      if (
+        typeof body.planId !== 'string' ||
+        !(STARS_PLANS as readonly string[]).includes(body.planId)
+      ) {
+        sendError(response, 400, 'invalid_plan', 'Выберите тариф Plus, Pro или Ultra');
+        return;
+      }
+      const recurring = body.recurring === true;
+      const invoice = botService.createStarsInvoice(request.user!.id, body.planId as PlanId);
+      const link = await botService.createInvoiceLink(invoice, recurring);
+      if (!link) {
+        sendError(
+          response,
+          502,
+          'telegram_unavailable',
+          'Telegram не выставил счёт. Попробуйте ещё раз.',
+        );
+        return;
+      }
+      response.json({ invoiceId: invoice.id, stars: invoice.starsAmount, link, recurring });
+    },
+  );
 
-  router.get('/telegram/miniapp/invoice/:id', requireAuth, (request: Request, response: Response) => {
-    const invoice = invoiceStore.getTelegramStarsInvoice(String(request.params.id));
-    if (!invoice || invoice.userId !== request.user!.id) {
-      sendError(response, 404, 'invoice_not_found', 'Счёт не найден');
-      return;
-    }
-    response.json({ status: invoice.status });
-  });
+  router.get(
+    '/telegram/miniapp/invoice/:id',
+    requireAuth,
+    (request: Request, response: Response) => {
+      const invoice = invoiceStore.getTelegramStarsInvoice(String(request.params.id));
+      if (!invoice || invoice.userId !== request.user!.id) {
+        sendError(response, 404, 'invoice_not_found', 'Счёт не найден');
+        return;
+      }
+      response.json({ status: invoice.status });
+    },
+  );
 
-  router.post('/telegram/miniapp/auto-renew', requireAuth, async (request: Request, response: Response) => {
-    const enabled = (request.body as { enabled?: unknown } | undefined)?.enabled;
-    if (typeof enabled !== 'boolean') {
-      sendError(response, 400, 'invalid_request', 'Укажите enabled: true или false');
-      return;
-    }
-    try {
-      await billing.setAutoRenew(request.user!.id, enabled);
-      const user = currentUser(request, response);
-      if (user) response.json(stateOf(user));
-    } catch (error) {
-      fail(response, error);
-    }
-  });
+  router.post(
+    '/telegram/miniapp/auto-renew',
+    requireAuth,
+    async (request: Request, response: Response) => {
+      const enabled = (request.body as { enabled?: unknown } | undefined)?.enabled;
+      if (typeof enabled !== 'boolean') {
+        sendError(response, 400, 'invalid_request', 'Укажите enabled: true или false');
+        return;
+      }
+      try {
+        await billing.setAutoRenew(request.user!.id, enabled);
+        const user = currentUser(request, response);
+        if (user) response.json(stateOf(user));
+      } catch (error) {
+        fail(response, error);
+      }
+    },
+  );
 
-  router.post('/telegram/miniapp/payments/:id/refund', requireAuth, async (request: Request, response: Response) => {
-    const body = (request.body ?? {}) as { reason?: unknown; comment?: unknown };
-    try {
-      const result = await billing.requestRefund(request.user!.id, String(request.params.id), {
-        reason: typeof body.reason === 'string' ? body.reason : undefined,
-        comment: typeof body.comment === 'string' ? body.comment : undefined,
-      });
-      const user = currentUser(request, response);
-      if (user) response.json({ outcome: result.outcome, ...stateOf(user) });
-    } catch (error) {
-      fail(response, error);
-    }
-  });
+  router.post(
+    '/telegram/miniapp/payments/:id/refund',
+    requireAuth,
+    async (request: Request, response: Response) => {
+      const body = (request.body ?? {}) as { reason?: unknown; comment?: unknown };
+      try {
+        const result = await billing.requestRefund(request.user!.id, String(request.params.id), {
+          reason: typeof body.reason === 'string' ? body.reason : undefined,
+          comment: typeof body.comment === 'string' ? body.comment : undefined,
+        });
+        const user = currentUser(request, response);
+        if (user) response.json({ outcome: result.outcome, ...stateOf(user) });
+      } catch (error) {
+        fail(response, error);
+      }
+    },
+  );
 
   router.post('/telegram/miniapp/prefs', requireAuth, (request: Request, response: Response) => {
     const body = (request.body ?? {}) as { reminders?: unknown; receipts?: unknown };
@@ -262,18 +305,29 @@ export function createMiniAppRouter({ botService, userStore, subscriptionStore, 
   });
 
   /** Одноразовая ссылка: открывает сайт уже войдя в этот аккаунт. */
-  router.post('/telegram/miniapp/site-login', requireAuth, (request: Request, response: Response) => {
-    const next = (request.body as { next?: unknown } | undefined)?.next;
-    const path = typeof next === 'string' && /^\/[a-z0-9/_-]*$/i.test(next) ? next : '/chat';
-    const token = botService.authRequests.issueMagic(request.user!.id);
-    response.json({ url: `${botService.siteUrl}/auth/telegram?t=${token}&next=${encodeURIComponent(path)}` });
-  });
+  router.post(
+    '/telegram/miniapp/site-login',
+    requireAuth,
+    (request: Request, response: Response) => {
+      const next = (request.body as { next?: unknown } | undefined)?.next;
+      const path = typeof next === 'string' && /^\/[a-z0-9/_-]*$/i.test(next) ? next : '/chat';
+      const token = botService.authRequests.issueMagic(request.user!.id);
+      response.json({
+        url: `${botService.siteUrl}/auth/telegram?t=${token}&next=${encodeURIComponent(path)}`,
+      });
+    },
+  );
 
   router.post('/telegram/miniapp/unlink', requireAuth, (request: Request, response: Response) => {
     const user = currentUser(request, response);
     if (!user) return;
     if (isTelegramAccountEmail(user.email)) {
-      sendError(response, 409, 'telegram_only_account', 'Этот аккаунт создан через Telegram — без него в аккаунт не войти.');
+      sendError(
+        response,
+        409,
+        'telegram_only_account',
+        'Этот аккаунт создан через Telegram — без него в аккаунт не войти.',
+      );
       return;
     }
     userStore.unlinkTelegram(user.id);
@@ -291,41 +345,53 @@ export function createMiniAppRouter({ botService, userStore, subscriptionStore, 
     return true;
   };
 
-  router.get('/telegram/miniapp/admin/refunds', requireAuth, (request: Request, response: Response) => {
-    if (!requireAdmin(request, response)) return;
-    response.json({
-      refunds: billing.pendingRefunds().map((payment) => {
-        const owner = userStore.findById(payment.userId);
-        return {
-          ...paymentView(payment),
-          /** Сколько раз модели ответили клиенту после оплаты: по правилам возврат — только без использования. */
-          usedRequests: billing.requestsSince(payment.userId, payment.paidAt),
-          customer: owner
-            ? { name: owner.name, email: isTelegramAccountEmail(owner.email) ? null : owner.email, telegramUsername: owner.telegramUsername ?? null }
-            : null,
-        };
-      }),
-    });
-  });
+  router.get(
+    '/telegram/miniapp/admin/refunds',
+    requireAuth,
+    (request: Request, response: Response) => {
+      if (!requireAdmin(request, response)) return;
+      response.json({
+        refunds: billing.pendingRefunds().map((payment) => {
+          const owner = userStore.findById(payment.userId);
+          return {
+            ...paymentView(payment),
+            /** Сколько раз модели ответили клиенту после оплаты: по правилам возврат — только без использования. */
+            usedRequests: billing.requestsSince(payment.userId, payment.paidAt),
+            customer: owner
+              ? {
+                  name: owner.name,
+                  email: isTelegramAccountEmail(owner.email) ? null : owner.email,
+                  telegramUsername: owner.telegramUsername ?? null,
+                }
+              : null,
+          };
+        }),
+      });
+    },
+  );
 
-  router.post('/telegram/miniapp/admin/refunds/:id', requireAuth, async (request: Request, response: Response) => {
-    if (!requireAdmin(request, response)) return;
-    const body = (request.body ?? {}) as { approve?: unknown; note?: unknown };
-    if (typeof body.approve !== 'boolean') {
-      sendError(response, 400, 'invalid_request', 'Укажите approve: true или false');
-      return;
-    }
-    try {
-      const payment = await billing.decideRefund(
-        String(request.params.id),
-        body.approve,
-        typeof body.note === 'string' ? body.note.slice(0, 300) : undefined,
-      );
-      response.json({ payment: paymentView(payment) });
-    } catch (error) {
-      fail(response, error);
-    }
-  });
+  router.post(
+    '/telegram/miniapp/admin/refunds/:id',
+    requireAuth,
+    async (request: Request, response: Response) => {
+      if (!requireAdmin(request, response)) return;
+      const body = (request.body ?? {}) as { approve?: unknown; note?: unknown };
+      if (typeof body.approve !== 'boolean') {
+        sendError(response, 400, 'invalid_request', 'Укажите approve: true или false');
+        return;
+      }
+      try {
+        const payment = await billing.decideRefund(
+          String(request.params.id),
+          body.approve,
+          typeof body.note === 'string' ? body.note.slice(0, 300) : undefined,
+        );
+        response.json({ payment: paymentView(payment) });
+      } catch (error) {
+        fail(response, error);
+      }
+    },
+  );
 
   return router;
 }

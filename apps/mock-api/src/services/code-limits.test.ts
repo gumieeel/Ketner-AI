@@ -6,7 +6,10 @@ import { PLAN_ENTITLEMENTS } from './entitlement.js';
 test('бюджет запуска агента не выше дневного потолка тарифа: иначе запуск обрывался бы раньше лимита', () => {
   for (const plan of ['free', 'plus', 'pro', 'ultra'] as const) {
     const daily = PLAN_ENTITLEMENTS[plan].maxDailyCost ?? Infinity;
-    assert.ok(CODE_LIMITS[plan].maxRunCostUsd <= daily, `${plan}: запуск $${CODE_LIMITS[plan].maxRunCostUsd} > дневной потолок $${daily}`);
+    assert.ok(
+      CODE_LIMITS[plan].maxRunCostUsd <= daily,
+      `${plan}: запуск $${CODE_LIMITS[plan].maxRunCostUsd} > дневной потолок $${daily}`,
+    );
   }
 });
 

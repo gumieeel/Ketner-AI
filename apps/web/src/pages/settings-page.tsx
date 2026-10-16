@@ -125,7 +125,9 @@ function SettingsSection({
                 {title}
               </CardTitle>
               {description ? (
-                <CardText className="mt-0.5 text-[13px] leading-5 break-words">{description}</CardText>
+                <CardText className="mt-0.5 text-[13px] leading-5 break-words">
+                  {description}
+                </CardText>
               ) : null}
             </div>
           </div>
@@ -150,7 +152,12 @@ function InfoTile({
   return (
     <div className="min-w-0 rounded-xl border border-stroke bg-canvas px-3.5 py-3">
       <div className="text-xs text-muted">{label}</div>
-      <div className={cn('mt-0.5 truncate text-sm text-text', mono && 'font-mono text-[13px] select-all')}>
+      <div
+        className={cn(
+          'mt-0.5 truncate text-sm text-text',
+          mono && 'font-mono text-[13px] select-all',
+        )}
+      >
         {children}
       </div>
     </div>
@@ -207,7 +214,10 @@ export function SettingsPage() {
   const [canceling, setCanceling] = useState(false);
   const [unlinkingTelegram, setUnlinkingTelegram] = useState(false);
   const [telegramDialog, setTelegramDialog] = useState(false);
-  const [telegramNotice, setTelegramNotice] = useState<{ tone: 'success' | 'danger'; text: string } | null>(null);
+  const [telegramNotice, setTelegramNotice] = useState<{
+    tone: 'success' | 'danger';
+    text: string;
+  } | null>(null);
   const [claimOpen, setClaimOpen] = useState(false);
   const [claimCode, setClaimCode] = useState('');
   const [claiming, setClaiming] = useState(false);
@@ -224,7 +234,10 @@ export function SettingsPage() {
       .then(({ user: fresh }) => {
         if (cancelled) return;
         const current = useAuth.getState().user;
-        if (current?.telegramChatId !== fresh.telegramChatId || current?.telegramUsername !== fresh.telegramUsername) {
+        if (
+          current?.telegramChatId !== fresh.telegramChatId ||
+          current?.telegramUsername !== fresh.telegramUsername
+        ) {
           setUser(normalizeUser(fresh as unknown as Record<string, unknown>));
         }
       })
@@ -251,7 +264,10 @@ export function SettingsPage() {
       const { user: linked } = await telegramSiteAuth.claim(claimCode, token);
       applyLinked(linked);
     } catch (error) {
-      setTelegramNotice({ tone: 'danger', text: error instanceof ApiError ? error.message : t('settings.telegramClaimFailed') });
+      setTelegramNotice({
+        tone: 'danger',
+        text: error instanceof ApiError ? error.message : t('settings.telegramClaimFailed'),
+      });
     } finally {
       setClaiming(false);
     }
@@ -265,13 +281,16 @@ export function SettingsPage() {
       const updated = await unlinkTelegram(token);
       setUser(normalizeUser(updated as unknown as Record<string, unknown>));
     } catch (error) {
-      setTelegramNotice({ tone: 'danger', text: error instanceof ApiError ? error.message : t('settings.telegramClaimFailed') });
+      setTelegramNotice({
+        tone: 'danger',
+        text: error instanceof ApiError ? error.message : t('settings.telegramClaimFailed'),
+      });
     } finally {
       setUnlinkingTelegram(false);
     }
   };
-  const [adminKey, setAdminKey] = useState<string>(
-    () => (typeof window !== 'undefined' ? localStorage.getItem('ketner_admin_key') || '' : ''),
+  const [adminKey, setAdminKey] = useState<string>(() =>
+    typeof window !== 'undefined' ? localStorage.getItem('ketner_admin_key') || '' : '',
   );
   const [adminKeySaved, setAdminKeySaved] = useState(false);
 
@@ -304,7 +323,8 @@ export function SettingsPage() {
 
   const planKey = user?.plan ? PLAN_NAME_KEYS[user.plan] : undefined;
   const planLabel = planKey ? t(planKey) : user?.plan === 'ultra' ? 'Ultra' : t('pricing.free');
-  const planTone: BadgeTone = (user?.plan && PLAN_TONES[user.plan]) || (user?.plan ? 'brand' : 'neutral');
+  const planTone: BadgeTone =
+    (user?.plan && PLAN_TONES[user.plan]) || (user?.plan ? 'brand' : 'neutral');
 
   const sections: Array<{ id: string; label: string; danger?: boolean }> = [
     { id: 'account', label: t('settings.account') },
@@ -346,7 +366,9 @@ export function SettingsPage() {
                       isActive
                         ? 'bg-surface-2 font-medium text-text ring-1 ring-stroke-strong ring-inset'
                         : 'text-muted hover:bg-surface hover:text-text',
-                      section.danger && !isActive && 'text-danger hover:bg-danger-soft hover:text-danger',
+                      section.danger &&
+                        !isActive &&
+                        'text-danger hover:bg-danger-soft hover:text-danger',
                       section.danger && isActive && 'text-danger',
                     )}
                   >
@@ -423,7 +445,10 @@ export function SettingsPage() {
                   {canceling ? t('settings.canceling') : t('settings.cancelSubscription')}
                 </Button>
               ) : (
-                <Link to="/pricing" className={cn(buttonClasses({ variant: 'primary', size: 'sm' }), 'gap-1.5')}>
+                <Link
+                  to="/pricing"
+                  className={cn(buttonClasses({ variant: 'primary', size: 'sm' }), 'gap-1.5')}
+                >
                   <SparkleIcon className="size-3.5" />
                   {t('nav.upgrade')}
                 </Link>
@@ -476,12 +501,20 @@ export function SettingsPage() {
                     >
                       {t('settings.githubDisconnectYes')}
                     </Button>
-                    <Button variant="ghost" size="sm" onClick={() => setConfirmGithubDisconnect(false)}>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setConfirmGithubDisconnect(false)}
+                    >
                       {t('common.cancel')}
                     </Button>
                   </>
                 ) : (
-                  <Button variant="outline" size="sm" onClick={() => setConfirmGithubDisconnect(true)}>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setConfirmGithubDisconnect(true)}
+                  >
                     {t('settings.githubDisconnect')}
                   </Button>
                 )
@@ -505,7 +538,11 @@ export function SettingsPage() {
               <>
                 <div className="flex flex-wrap items-center gap-3">
                   {githubStatus.account.avatarUrl ? (
-                    <img src={githubStatus.account.avatarUrl} alt="" className="size-9 rounded-full ring-1 ring-stroke" />
+                    <img
+                      src={githubStatus.account.avatarUrl}
+                      alt=""
+                      className="size-9 rounded-full ring-1 ring-stroke"
+                    />
                   ) : null}
                   <div className="min-w-0">
                     <a
@@ -517,7 +554,9 @@ export function SettingsPage() {
                       @{githubStatus.account.login}
                     </a>
                     <p className="text-xs text-muted">
-                      {t('settings.githubSince', { date: formatShortDate(githubStatus.account.connectedAt, language) })}
+                      {t('settings.githubSince', {
+                        date: formatShortDate(githubStatus.account.connectedAt, language),
+                      })}
                     </p>
                   </div>
                   <Badge tone="success">{t('settings.githubConnected')}</Badge>
@@ -579,7 +618,9 @@ export function SettingsPage() {
                       disabled={unlinkingTelegram}
                       className="text-danger hover:border-danger/40 hover:bg-danger-soft"
                     >
-                      {unlinkingTelegram ? t('settings.telegramUnlinking') : t('settings.telegramUnlink')}
+                      {unlinkingTelegram
+                        ? t('settings.telegramUnlinking')
+                        : t('settings.telegramUnlink')}
                     </Button>
                   ) : null}
                 </>
@@ -622,7 +663,9 @@ export function SettingsPage() {
                   <>
                     {t('settings.telegramLinkedAs')}{' '}
                     <strong className="font-mono font-semibold text-accent">
-                      {user?.telegramUsername ? `@${user.telegramUsername}` : `ID: ${user?.telegramChatId}`}
+                      {user?.telegramUsername
+                        ? `@${user.telegramUsername}`
+                        : `ID: ${user?.telegramChatId}`}
                     </strong>
                   </>
                 }
@@ -631,12 +674,20 @@ export function SettingsPage() {
               </Note>
             ) : (
               <>
-                <Note title={t('settings.telegramLinkTitle')}>{t('settings.telegramLinkHint')}</Note>
+                <Note title={t('settings.telegramLinkTitle')}>
+                  {t('settings.telegramLinkHint')}
+                </Note>
                 {user ? (
                   claimOpen ? (
-                    <form onSubmit={handleClaim} className="flex flex-col gap-2 sm:flex-row sm:items-end">
+                    <form
+                      onSubmit={handleClaim}
+                      className="flex flex-col gap-2 sm:flex-row sm:items-end"
+                    >
                       <div className="flex min-w-0 flex-1 flex-col gap-1.5">
-                        <label htmlFor="telegram-claim-code" className="text-[13px] font-medium text-text">
+                        <label
+                          htmlFor="telegram-claim-code"
+                          className="text-[13px] font-medium text-text"
+                        >
                           {t('settings.telegramCodeLabel')}
                         </label>
                         <Input
@@ -651,7 +702,11 @@ export function SettingsPage() {
                           className="font-mono tracking-[0.2em]"
                         />
                       </div>
-                      <Button type="submit" loading={claiming} disabled={claimCode.trim().length < 4}>
+                      <Button
+                        type="submit"
+                        loading={claiming}
+                        disabled={claimCode.trim().length < 4}
+                      >
                         {t('settings.telegramCodeSubmit')}
                       </Button>
                     </form>
@@ -715,7 +770,9 @@ export function SettingsPage() {
             >
               {t('settings.supportBotHint')}
               {user ? (
-                <span className="mt-2 block font-mono text-xs text-subtle select-all">User ID: {user.id}</span>
+                <span className="mt-2 block font-mono text-xs text-subtle select-all">
+                  User ID: {user.id}
+                </span>
               ) : null}
             </Note>
           </SettingsSection>
@@ -764,7 +821,12 @@ export function SettingsPage() {
               title={t('settings.logout')}
               description={`${t('settings.loggedInAs')} ${shownEmail}`}
               action={
-                <Button variant="danger" size="sm" onClick={() => void logout()} className="gap-1.5">
+                <Button
+                  variant="danger"
+                  size="sm"
+                  onClick={() => void logout()}
+                  className="gap-1.5"
+                >
                   <LogoutIcon className="size-3.5" />
                   {t('settings.logout')}
                 </Button>

@@ -22,7 +22,8 @@ export interface PayloadGuardLimits {
 
 export interface PayloadValidationResult {
   valid: boolean;
-  code?: 'payload_too_large' | 'message_too_large' | 'too_many_attachments' | 'attachment_too_large';
+  code?:
+    'payload_too_large' | 'message_too_large' | 'too_many_attachments' | 'attachment_too_large';
   message?: string;
 }
 
@@ -71,7 +72,7 @@ export class PayloadGuard {
     }
 
     for (const att of allAttachments) {
-      const size = att.size ?? (att.extractedText?.length ?? 0);
+      const size = att.size ?? att.extractedText?.length ?? 0;
       if (size > limits.maxAttachmentBytes) {
         return {
           valid: false,

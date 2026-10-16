@@ -62,7 +62,10 @@ async function start() {
   await new Promise<void>((resolve) => holder.close(() => resolve()));
 
   const productionURL = `http://127.0.0.1:${port}`;
-  const { auth, db } = createBetterAuth({ dbPath: join(dir, 'auth.sqlite'), baseURL: productionURL });
+  const { auth, db } = createBetterAuth({
+    dbPath: join(dir, 'auth.sqlite'),
+    baseURL: productionURL,
+  });
   await initAuthDatabase(auth);
   const app = createApp({
     store: createConversationStore(join(dir, 'store.json')),
@@ -97,7 +100,10 @@ test('вход через Google с другого домена создаёт �
     const { url } = (await signIn.json()) as { url: string };
     const google = new URL(url);
     // Google возвращает на зарегистрированный адрес колбэка, а не на домен сайта.
-    assert.equal(google.searchParams.get('redirect_uri'), `${env.productionURL}/api/auth/callback/google`);
+    assert.equal(
+      google.searchParams.get('redirect_uri'),
+      `${env.productionURL}/api/auth/callback/google`,
+    );
     const state = google.searchParams.get('state')!;
 
     // Колбэк приходит на другой домен: cookie состояния там нет — раньше вход падал здесь.
@@ -115,16 +121,25 @@ test('вход через Google с другого домена создаёт �
     const finish = await fetch(proxy, { redirect: 'manual' });
     assert.equal(finish.status, 302);
     assert.equal(finish.headers.get('location'), `${env.siteURL}/chat`);
-    const cookies = finish.headers.getSetCookie().map((cookie) => cookie.split(';')[0]).join('; ');
+    const cookies = finish.headers
+      .getSetCookie()
+      .map((cookie) => cookie.split(';')[0])
+      .join('; ');
     assert.match(cookies, /better-auth\.session_token=/);
 
-    const session = await fetch(`${env.siteURL}/api/auth/get-session`, { headers: { Cookie: cookies } });
+    const session = await fetch(`${env.siteURL}/api/auth/get-session`, {
+      headers: { Cookie: cookies },
+    });
     const body = (await session.json()) as { user?: { email: string } } | null;
     assert.equal(body?.user?.email, 'proxy-user@example.com');
 
     // Зашифрованный профиль одноразовый: повторно войти по той же ссылке нельзя.
     const replay = await fetch(proxy, { redirect: 'manual' });
-    assert.ok(!replay.headers.getSetCookie().some((cookie) => cookie.includes('session_token=') && !cookie.includes('Max-Age=0')));
+    assert.ok(
+      !replay.headers
+        .getSetCookie()
+        .some((cookie) => cookie.includes('session_token=') && !cookie.includes('Max-Age=0')),
+    );
   } finally {
     await env.close();
     restore();

@@ -7,7 +7,11 @@ export function LandingPricingSection() {
   const { t } = useTranslation();
 
   return (
-    <section aria-labelledby="pricing-title" id="pricing" className="w-full scroll-mt-20 pt-28 md:pt-36">
+    <section
+      aria-labelledby="pricing-title"
+      id="pricing"
+      className="w-full scroll-mt-20 pt-28 md:pt-36"
+    >
       <SectionHead
         id="pricing-title"
         title={t('home.pricingTitle')}

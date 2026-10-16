@@ -8,7 +8,14 @@ import { canAccessModel, findModel, getRequiredPlanName } from './can-access-mod
 import * as api from './api';
 import { ApiError } from './api';
 import { deriveTitle } from './derive-title';
-import type { ChatMeta, ConversationSummary, Message, MessageAttachment, WorkspaceContext, WorkspaceFile } from './types';
+import type {
+  ChatMeta,
+  ConversationSummary,
+  Message,
+  MessageAttachment,
+  WorkspaceContext,
+  WorkspaceFile,
+} from './types';
 import { useWorkspace } from './workspace-store';
 import { isSensitivePath } from './file-operations/path-safety';
 
@@ -260,7 +267,10 @@ export const useChat = create<ChatState>((set, get) => {
           language: usePreferences.getState().language,
           messages: history,
           signal: controller.signal,
-          reasoningMode: reasoningModeFor(useAuth.getState().user, usePreferences.getState().maxMode),
+          reasoningMode: reasoningModeFor(
+            useAuth.getState().user,
+            usePreferences.getState().maxMode,
+          ),
         },
         {
           onDelta: (delta) => {
@@ -320,7 +330,6 @@ export const useChat = create<ChatState>((set, get) => {
         }
         return next;
       });
-
     } catch (error) {
       flush();
       if (isAbortError(error)) {
@@ -345,7 +354,10 @@ export const useChat = create<ChatState>((set, get) => {
           return next;
         });
       } else {
-        if (error instanceof ApiError && (error.code === 'rate_limited' || error.code === 'fair_use_exceeded')) {
+        if (
+          error instanceof ApiError &&
+          (error.code === 'rate_limited' || error.code === 'fair_use_exceeded')
+        ) {
           const refusedUser = useAuth.getState().user;
           if (!refusedUser || !refusedUser.plan || refusedUser.plan === 'free') {
             useUpgradeModal.getState().open({ reason: 'free_limit' });
@@ -492,7 +504,10 @@ export const useChat = create<ChatState>((set, get) => {
         // Сохранённый в браузере выбор модели, которой нет в каталоге (например, сделанный до его
         // обновления), в списке выглядел бы как Auto, а запрос уходил бы со старым идентификатором.
         const preferences = usePreferences.getState();
-        if (meta.models.length > 0 && !meta.models.some((model) => model.id === preferences.chatModelId)) {
+        if (
+          meta.models.length > 0 &&
+          !meta.models.some((model) => model.id === preferences.chatModelId)
+        ) {
           preferences.setChatModelId(meta.defaultModelId);
         }
       } catch (error) {

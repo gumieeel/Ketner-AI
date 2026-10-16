@@ -1,11 +1,13 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { computeRequestCost, effectivePricing, isFreeEngine, UNDECLARED_PAID_ENGINE_PRICING } from './engine-pricing.js';
-import { modelRegistry } from './model-registry.js';
 import {
-  BUDGET_HARD_STOP_RATIO,
-  evaluateBudget,
-} from '../services/budget-policy.js';
+  computeRequestCost,
+  effectivePricing,
+  isFreeEngine,
+  UNDECLARED_PAID_ENGINE_PRICING,
+} from './engine-pricing.js';
+import { modelRegistry } from './model-registry.js';
+import { BUDGET_HARD_STOP_RATIO, evaluateBudget } from '../services/budget-policy.js';
 import { createStreamWatchdog } from './stream-watchdog.js';
 
 test('стоимость от провайдера приоритетнее таблицы', () => {
@@ -20,10 +22,16 @@ test('стоимость от провайдера приоритетнее та
 });
 
 test('в реестре нет бесплатных моделей: каждая стоит денег и попадает в учёт', () => {
-  for (const entry of modelRegistry.getAll().filter((m) => m.id !== 'auto' && m.id !== 'nemotron-ultra' && m.id !== 'north-mini-code')) {
+  for (const entry of modelRegistry
+    .getAll()
+    .filter((m) => m.id !== 'auto' && m.id !== 'nemotron-ultra' && m.id !== 'north-mini-code')) {
     assert.ok(entry.pricing.inputPricePerMillion > 0, `${entry.id}: цена входа не задана`);
     assert.ok(entry.pricing.outputPricePerMillion > 0, `${entry.id}: цена выхода не задана`);
-    assert.equal(isFreeEngine(entry.providerModelId), false, `${entry.id}: :free-модели общего пула не используются`);
+    assert.equal(
+      isFreeEngine(entry.providerModelId),
+      false,
+      `${entry.id}: :free-модели общего пула не используются`,
+    );
   }
 });
 
@@ -46,7 +54,12 @@ test('модель с нулевой ценой в реестре (ошибка 
   const mini = modelRegistry.resolve('ketner-mini');
   const zeroPriced = {
     ...mini,
-    pricing: { ...mini.pricing, inputPricePerMillion: 0, outputPricePerMillion: 0, cachedInputPricePerMillion: 0 },
+    pricing: {
+      ...mini.pricing,
+      inputPricePerMillion: 0,
+      outputPricePerMillion: 0,
+      cachedInputPricePerMillion: 0,
+    },
   };
   const r = computeRequestCost({
     model: zeroPriced,
@@ -62,7 +75,12 @@ test('настоящий :free движок стоит 0', () => {
   const mini = modelRegistry.resolve('ketner-mini');
   const zeroPriced = {
     ...mini,
-    pricing: { ...mini.pricing, inputPricePerMillion: 0, outputPricePerMillion: 0, cachedInputPricePerMillion: 0 },
+    pricing: {
+      ...mini.pricing,
+      inputPricePerMillion: 0,
+      outputPricePerMillion: 0,
+      cachedInputPricePerMillion: 0,
+    },
   };
   assert.equal(isFreeEngine('vendor/model:free'), true);
   const r = computeRequestCost({
@@ -88,7 +106,10 @@ test('отрицательная или NaN стоимость провайде�
   const sol = modelRegistry.resolve('gpt-6.1-sol');
   const tokens = { inputTokens: 1000, outputTokens: 1000 };
   assert.equal(computeRequestCost({ model: sol, tokens, providerCost: -1 }).source, 'table');
-  assert.equal(computeRequestCost({ model: sol, tokens, providerCost: Number.NaN }).source, 'table');
+  assert.equal(
+    computeRequestCost({ model: sol, tokens, providerCost: Number.NaN }).source,
+    'table',
+  );
 });
 
 test('бюджет: стадии normal → soft → exhausted → hard_stop', () => {
@@ -101,28 +122,40 @@ test('бюджет: стадии normal → soft → exhausted → hard_stop', (
 
 test('сторож: таймаут до первого токена, затем простой, непрерывный поток не обрывается', async () => {
   const fired: string[] = [];
-  const quick = createStreamWatchdog({ firstTokenMs: 20, idleMs: 40, totalMs: 1000 }, (r) => fired.push(r));
+  const quick = createStreamWatchdog({ firstTokenMs: 20, idleMs: 40, totalMs: 1000 }, (r) =>
+    fired.push(r),
+  );
   await new Promise((r) => setTimeout(r, 50));
   assert.deepEqual(fired, ['first_token']);
   assert.equal(quick.reason, 'first_token');
 
   const firedIdle: string[] = [];
-  const idle = createStreamWatchdog({ firstTokenMs: 30, idleMs: 25, totalMs: 1000 }, (r) => firedIdle.push(r));
+  const idle = createStreamWatchdog({ firstTokenMs: 30, idleMs: 25, totalMs: 1000 }, (r) =>
+    firedIdle.push(r),
+  );
   idle.touch();
   await new Promise((r) => setTimeout(r, 60));
   assert.deepEqual(firedIdle, ['idle']);
 
   const firedLive: string[] = [];
-  const live = createStreamWatchdog({ firstTokenMs: 30, idleMs: 30, totalMs: 1000 }, (r) => firedLive.push(r));
+  const live = createStreamWatchdog({ firstTokenMs: 30, idleMs: 30, totalMs: 1000 }, (r) =>
+    firedLive.push(r),
+  );
   for (let i = 0; i < 6; i++) {
     live.touch();
     await new Promise((r) => setTimeout(r, 15));
   }
   live.stop();
-  assert.deepEqual(firedLive, [], 'поток, в котором токены идут, не должен обрываться (раньше резало на 25 с)');
+  assert.deepEqual(
+    firedLive,
+    [],
+    'поток, в котором токены идут, не должен обрываться (раньше резало на 25 с)',
+  );
 
   const firedTotal: string[] = [];
-  const total = createStreamWatchdog({ firstTokenMs: 500, idleMs: 500, totalMs: 40 }, (r) => firedTotal.push(r));
+  const total = createStreamWatchdog({ firstTokenMs: 500, idleMs: 500, totalMs: 40 }, (r) =>
+    firedTotal.push(r),
+  );
   for (let i = 0; i < 5; i++) {
     total.touch();
     await new Promise((r) => setTimeout(r, 15));

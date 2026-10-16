@@ -37,7 +37,8 @@ export function parseThinking(rawContent: string): ParsedMessageContent {
   }
 
   const thinkingText = afterStart.slice(0, thinkEndIdx).trim();
-  const restContent = (prefix ? prefix + '\n\n' : '') + afterStart.slice(thinkEndIdx + '</think>'.length).trim();
+  const restContent =
+    (prefix ? prefix + '\n\n' : '') + afterStart.slice(thinkEndIdx + '</think>'.length).trim();
 
   return {
     thinking: thinkingText,
@@ -109,7 +110,7 @@ export function ThinkingBlock({
       ? workspaceName
         ? t('chat.thinkingAnalyzingWorkspace', { name: workspaceName })
         : t('chat.thinkingActive')
-      : durationDisplay ?? t('chat.thinkingProcess');
+      : (durationDisplay ?? t('chat.thinkingProcess'));
 
   return (
     <div
@@ -167,7 +168,12 @@ export function ThinkingBlock({
             ) : isActive ? (
               <div className="animate-pulse space-y-1.5 text-xs text-subtle">
                 <p>• {t('chat.thinking')}</p>
-                <p>• {workspaceName ? t('chat.thinkingAnalyzingWorkspace', { name: workspaceName }) : t('chat.thinkStepAnalyse')}</p>
+                <p>
+                  •{' '}
+                  {workspaceName
+                    ? t('chat.thinkingAnalyzingWorkspace', { name: workspaceName })
+                    : t('chat.thinkStepAnalyse')}
+                </p>
                 <p>• {t('chat.thinkStepCompose')}</p>
               </div>
             ) : null}

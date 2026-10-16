@@ -15,7 +15,10 @@ function splitLines(text: string): string[] {
   return lines;
 }
 
-export function countLineChanges(before: string, after: string): { additions: number; deletions: number } {
+export function countLineChanges(
+  before: string,
+  after: string,
+): { additions: number; deletions: number } {
   if (before === after) return { additions: 0, deletions: 0 };
   const a = splitLines(before);
   const b = splitLines(after);
@@ -115,7 +118,11 @@ function diffOps(a: string[], b: string[]): DiffOp[] {
  * Нужен ленте агента, чтобы показать правку без повторного чтения файла. Длина ограничена:
  * лишнее заменяется пометкой.
  */
-export function makePatch(before: string, after: string, options: { context?: number; maxChars?: number } = {}): string {
+export function makePatch(
+  before: string,
+  after: string,
+  options: { context?: number; maxChars?: number } = {},
+): string {
   if (before === after) return '';
   const context = options.context ?? 2;
   const maxChars = options.maxChars ?? 2_000;
@@ -137,7 +144,12 @@ export function makePatch(before: string, after: string, options: { context?: nu
   const keep = new Array<boolean>(ops.length).fill(false);
   changed.forEach((isChanged, index) => {
     if (!isChanged) return;
-    for (let k = Math.max(0, index - context); k <= Math.min(ops.length - 1, index + context); k += 1) keep[k] = true;
+    for (
+      let k = Math.max(0, index - context);
+      k <= Math.min(ops.length - 1, index + context);
+      k += 1
+    )
+      keep[k] = true;
   });
 
   const out: string[] = [];
@@ -154,7 +166,12 @@ export function makePatch(before: string, after: string, options: { context?: nu
     const oldCount = block.filter((op) => op.kind !== '+').length;
     const newCount = block.filter((op) => op.kind !== '-').length;
     const header = `@@ -${oldNo[index]},${oldCount} +${newNo[index]},${newCount} @@`;
-    const lines = [header, ...block.map((op) => `${op.kind}${op.text.length > 300 ? `${op.text.slice(0, 300)}…` : op.text}`)];
+    const lines = [
+      header,
+      ...block.map(
+        (op) => `${op.kind}${op.text.length > 300 ? `${op.text.slice(0, 300)}…` : op.text}`,
+      ),
+    ];
     for (const line of lines) {
       if (length + line.length + 1 > maxChars) {
         out.push('… (patch truncated)');

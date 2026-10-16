@@ -36,8 +36,14 @@ const COMPARISON_ROWS: ComparisonRow[] = [
   {
     feature: { ru: 'Доступные модели', en: 'Available models' },
     free: { ru: 'Ketner Mini', en: 'Ketner Mini' },
-    plus: { ru: 'Ketner Pro, GPT-6.1 Sol, Claude Haiku 5.5, DeepSeek V4.1 Flash', en: 'Ketner Pro, GPT-6.1 Sol, Claude Haiku 5.5, DeepSeek V4.1 Flash' },
-    pro: { ru: 'Все из Plus + Claude Opus 5.5, Sonnet 5.5, GPT-6 Astra, GPT-5.6 Sol, GPT-5.6 Terra xhigh, Grok 4.7 xhigh', en: 'All Plus + Claude Opus 5.5, Sonnet 5.5, GPT-6 Astra, GPT-5.6 Sol, GPT-5.6 Terra xhigh, Grok 4.7 xhigh' },
+    plus: {
+      ru: 'Ketner Pro, GPT-6.1 Sol, Claude Haiku 5.5, DeepSeek V4.1 Flash',
+      en: 'Ketner Pro, GPT-6.1 Sol, Claude Haiku 5.5, DeepSeek V4.1 Flash',
+    },
+    pro: {
+      ru: 'Все из Plus + Claude Opus 5.5, Sonnet 5.5, GPT-6 Astra, GPT-5.6 Sol, GPT-5.6 Terra xhigh, Grok 4.7 xhigh',
+      en: 'All Plus + Claude Opus 5.5, Sonnet 5.5, GPT-6 Astra, GPT-5.6 Sol, GPT-5.6 Terra xhigh, Grok 4.7 xhigh',
+    },
     ultra: { ru: 'Все модели Pro + режим Max', en: 'All Pro models + Max mode' },
   },
   {
@@ -78,7 +84,9 @@ export function PricingPage() {
     <div className="relative mx-auto flex w-full max-w-7xl flex-col gap-14 py-4 text-left md:gap-20 md:py-8">
       {/* Заголовок страницы: крупно слева, пояснение справа — как секции главной */}
       <div className="grid grid-cols-1 gap-5 md:grid-cols-12 md:items-end md:gap-8">
-        <h1 className="t-display text-[clamp(2.75rem,5vw+0.5rem,5rem)] text-text md:col-span-7">{t('pricing.title')}</h1>
+        <h1 className="t-display text-[clamp(2.75rem,5vw+0.5rem,5rem)] text-text md:col-span-7">
+          {t('pricing.title')}
+        </h1>
         <p className="max-w-[46ch] text-[17px] leading-relaxed text-muted md:col-span-5 md:justify-self-end">
           {t('pricing.subtitle')}
         </p>
@@ -95,7 +103,11 @@ export function PricingPage() {
         </div>
 
         {/* Mobile: выбор тарифа и одна карточка со значениями */}
-        <Tabs value={activeMobilePlan} onValueChange={(value) => setActiveMobilePlan(value as PlanKey)} className="md:hidden">
+        <Tabs
+          value={activeMobilePlan}
+          onValueChange={(value) => setActiveMobilePlan(value as PlanKey)}
+          className="md:hidden"
+        >
           <TabList aria-label={t('pricing.planPicker')} className="w-full rounded-xl">
             {PLAN_KEYS.map((plan) => (
               <Tab key={plan} value={plan} className="flex-1 gap-1.5 px-2">
@@ -105,10 +117,16 @@ export function PricingPage() {
             ))}
           </TabList>
 
-          <TabPanel value={activeMobilePlan} className="mt-4 flex flex-col gap-4 rounded-2xl border border-stroke bg-surface p-5 shadow-sm">
+          <TabPanel
+            value={activeMobilePlan}
+            className="mt-4 flex flex-col gap-4 rounded-2xl border border-stroke bg-surface p-5 shadow-sm"
+          >
             <div className="flex items-center justify-between border-b border-stroke pb-3">
               <h3 className="flex items-center gap-2 text-lg font-semibold text-text">
-                <span aria-hidden="true" className={cn('size-2 rounded-full', TIER_DOT[activeMobilePlan])} />
+                <span
+                  aria-hidden="true"
+                  className={cn('size-2 rounded-full', TIER_DOT[activeMobilePlan])}
+                />
                 {t(PLAN_NAME_KEYS[activeMobilePlan])}
               </h3>
               {activeMobilePlan === 'pro' && (
@@ -118,9 +136,14 @@ export function PricingPage() {
               )}
             </div>
             {COMPARISON_ROWS.map((row, idx) => (
-              <div key={idx} className="flex flex-col gap-1 border-b border-stroke/60 pb-3 last:border-b-0 last:pb-0">
+              <div
+                key={idx}
+                className="flex flex-col gap-1 border-b border-stroke/60 pb-3 last:border-b-0 last:pb-0"
+              >
                 <span className="text-xs font-medium text-subtle">{row.feature[language]}</span>
-                <span className="text-sm font-medium text-text">{row[activeMobilePlan][language]}</span>
+                <span className="text-sm font-medium text-text">
+                  {row[activeMobilePlan][language]}
+                </span>
               </div>
             ))}
           </TabPanel>
@@ -146,7 +169,10 @@ export function PricingPage() {
                     )}
                   >
                     <span className="inline-flex items-center gap-2">
-                      <span aria-hidden="true" className={cn('size-2 rounded-full', TIER_DOT[plan])} />
+                      <span
+                        aria-hidden="true"
+                        className={cn('size-2 rounded-full', TIER_DOT[plan])}
+                      />
                       {t('pricing.colPlan', { plan: t(PLAN_NAME_KEYS[plan]) })}
                     </span>
                   </th>
@@ -161,8 +187,12 @@ export function PricingPage() {
                   </td>
                   <td className="p-4 text-[13px] leading-5 text-muted">{row.free[language]}</td>
                   <td className="p-4 text-[13px] leading-5 text-muted">{row.plus[language]}</td>
-                  <td className="bg-accent-soft/40 p-4 text-[13px] leading-5 font-medium text-text">{row.pro[language]}</td>
-                  <td className="p-4 text-[13px] leading-5 font-medium text-text">{row.ultra[language]}</td>
+                  <td className="bg-accent-soft/40 p-4 text-[13px] leading-5 font-medium text-text">
+                    {row.pro[language]}
+                  </td>
+                  <td className="p-4 text-[13px] leading-5 font-medium text-text">
+                    {row.ultra[language]}
+                  </td>
                 </tr>
               ))}
             </tbody>

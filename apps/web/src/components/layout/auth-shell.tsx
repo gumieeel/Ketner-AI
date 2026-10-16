@@ -36,9 +36,7 @@ export function AuthShell({ title, subtitle, children, footer, aside }: AuthShel
         </div>
 
         <div className="mx-auto my-auto w-full max-w-[400px] py-8">
-          <h1 className="t-title text-balance text-[28px] text-text sm:text-[34px]">
-            {title}
-          </h1>
+          <h1 className="t-title text-balance text-[28px] text-text sm:text-[34px]">{title}</h1>
           {subtitle ? <p className="mt-2 text-sm leading-6 text-muted">{subtitle}</p> : null}
           <div className="mt-8">{children}</div>
         </div>

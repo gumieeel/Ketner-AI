@@ -48,21 +48,33 @@ export function Onboarding({
   };
 
   if (step === 'existing') {
-    return <ExistingAccount app={app} siteUrl={siteUrl} onBack={() => setStep('welcome')} onLinked={onLinked} />;
+    return (
+      <ExistingAccount
+        app={app}
+        siteUrl={siteUrl}
+        onBack={() => setStep('welcome')}
+        onLinked={onLinked}
+      />
+    );
   }
 
   return (
     <div className="flex flex-col gap-4 pt-6">
       <div className="flex flex-col items-center gap-3 px-2 text-center">
         <img src="/logo-mark-160.png" alt="Ketner AI" className="size-16 object-contain" />
-        <h1 className="text-[24px] font-semibold tracking-tight">{t('tg.welcomeTitle', { name: firstName })}</h1>
+        <h1 className="text-[24px] font-semibold tracking-tight">
+          {t('tg.welcomeTitle', { name: firstName })}
+        </h1>
         <p className="text-[15px] leading-6 text-muted">{t('tg.welcomeLead')}</p>
       </div>
 
       <ul className="flex flex-col gap-2 rounded-xl border border-stroke bg-surface p-4 text-[14px] leading-5">
         {(['tg.welcomePoint1', 'tg.welcomePoint2', 'tg.welcomePoint3'] as const).map((key) => (
           <li key={key} className="flex gap-2.5">
-            <span aria-hidden="true" className="mt-[7px] size-1.5 shrink-0 rounded-full bg-accent" />
+            <span
+              aria-hidden="true"
+              className="mt-[7px] size-1.5 shrink-0 rounded-full bg-accent"
+            />
             <span>{t(key)}</span>
           </li>
         ))}
@@ -71,13 +83,24 @@ export function Onboarding({
       {error ? <Notice tone="danger">{error}</Notice> : null}
 
       <div className="flex flex-col gap-2">
-        <Button size="lg" className="w-full" loading={busy} onClick={() => void register()} leftIcon={<TelegramIcon className="size-5" />}>
+        <Button
+          size="lg"
+          className="w-full"
+          loading={busy}
+          onClick={() => void register()}
+          leftIcon={<TelegramIcon className="size-5" />}
+        >
           {t('tg.continueTelegram')}
         </Button>
         <p className="px-2 text-center text-[12px] leading-5 text-subtle">{t('tg.continueHint')}</p>
       </div>
 
-      <Button variant="outline" className="w-full" disabled={busy} onClick={() => setStep('existing')}>
+      <Button
+        variant="outline"
+        className="w-full"
+        disabled={busy}
+        onClick={() => setStep('existing')}
+      >
         {t('tg.haveAccount')}
       </Button>
     </div>
@@ -124,12 +147,22 @@ function ExistingAccount({
           { value: 'code', label: t('tg.wayCode') },
         ]}
       />
-      {way === 'password' ? <PasswordForm app={app} onLinked={onLinked} /> : <CodeFlow app={app} siteUrl={siteUrl} onLinked={onLinked} />}
+      {way === 'password' ? (
+        <PasswordForm app={app} onLinked={onLinked} />
+      ) : (
+        <CodeFlow app={app} siteUrl={siteUrl} onLinked={onLinked} />
+      )}
     </div>
   );
 }
 
-function PasswordForm({ app, onLinked }: { app: TelegramWebApp; onLinked: (token: string, state: MiniAppState) => void }) {
+function PasswordForm({
+  app,
+  onLinked,
+}: {
+  app: TelegramWebApp;
+  onLinked: (token: string, state: MiniAppState) => void;
+}) {
   const { t } = useTranslation();
   const emailId = useId();
   const passwordId = useId();
@@ -162,7 +195,14 @@ function PasswordForm({ app, onLinked }: { app: TelegramWebApp; onLinked: (token
           <label htmlFor={emailId} className="text-[13px] font-medium">
             {t('tg.email')}
           </label>
-          <Input id={emailId} type="email" autoComplete="email" required value={email} onChange={(e) => setEmail(e.target.value)} />
+          <Input
+            id={emailId}
+            type="email"
+            autoComplete="email"
+            required
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+          />
         </div>
         <div className="flex flex-col gap-1.5">
           <label htmlFor={passwordId} className="text-[13px] font-medium">
@@ -194,7 +234,15 @@ function PasswordForm({ app, onLinked }: { app: TelegramWebApp; onLinked: (token
  * Код для ввода на сайте. Пока код на экране, кабинет сам проверяет, привязан ли Telegram,
  * и открывается, как только человек ввёл код в настройках.
  */
-function CodeFlow({ app, siteUrl, onLinked }: { app: TelegramWebApp; siteUrl: string; onLinked: (token: string, state: MiniAppState) => void }) {
+function CodeFlow({
+  app,
+  siteUrl,
+  onLinked,
+}: {
+  app: TelegramWebApp;
+  siteUrl: string;
+  onLinked: (token: string, state: MiniAppState) => void;
+}) {
   const { t } = useTranslation();
   const [code, setCode] = useState<{ code: string; expiresAt: number } | null>(null);
   const [busy, setBusy] = useState(false);
@@ -263,9 +311,14 @@ function CodeFlow({ app, siteUrl, onLinked }: { app: TelegramWebApp; siteUrl: st
 
       {code && !expired ? (
         <div className="flex flex-col items-center gap-2 rounded-lg border border-accent/40 bg-accent-soft px-3 py-4">
-          <p className="text-[12px] font-medium uppercase tracking-wider text-muted">{t('tg.codeLabel')}</p>
+          <p className="text-[12px] font-medium uppercase tracking-wider text-muted">
+            {t('tg.codeLabel')}
+          </p>
           <div className="flex items-center gap-2">
-            <span className="font-mono text-[30px] font-semibold tracking-[0.28em] text-text" aria-live="polite">
+            <span
+              className="font-mono text-[30px] font-semibold tracking-[0.28em] text-text"
+              aria-live="polite"
+            >
               {code.code}
             </span>
             <CopyButton value={code.code} label={t('tg.codeCopy')} />
@@ -283,7 +336,11 @@ function CodeFlow({ app, siteUrl, onLinked }: { app: TelegramWebApp; siteUrl: st
       )}
       {error ? <Notice tone="danger">{error}</Notice> : null}
 
-      <Button variant="outline" className="w-full gap-2" onClick={() => app.openLink(`${siteUrl}/settings#telegram`)}>
+      <Button
+        variant="outline"
+        className="w-full gap-2"
+        onClick={() => app.openLink(`${siteUrl}/settings#telegram`)}
+      >
         {t('tg.openSettings')}
         <ExternalLinkIcon className="size-3.5" />
       </Button>

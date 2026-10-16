@@ -1,18 +1,36 @@
 import { useState } from 'react';
-import { ChevronRightIcon, FileTextIcon, MessagesIcon, RefreshIcon, ShieldIcon, StarIcon, TelegramIcon } from '@/components/icons';
+import {
+  ChevronRightIcon,
+  FileTextIcon,
+  MessagesIcon,
+  RefreshIcon,
+  ShieldIcon,
+  StarIcon,
+  TelegramIcon,
+} from '@/components/icons';
 import { Button } from '@/components/ui/button';
 import { ApiError, miniAppApi } from '@/features/telegram/api';
 import { haptic } from '@/features/telegram/webapp';
 import { useTranslation } from '@/i18n';
 import { cn } from '@/lib/cn';
-import { formatDate, formatStars, Notice, Panel, SUPPORT_URL, subscriptionInfo, Toggle, useMiniApp } from './shared';
+import {
+  formatDate,
+  formatStars,
+  Notice,
+  Panel,
+  SUPPORT_URL,
+  subscriptionInfo,
+  Toggle,
+  useMiniApp,
+} from './shared';
 
 export function HomeTab() {
   const { t, language } = useTranslation();
   const { app, token, state, setState, notify, goTo, openSite } = useMiniApp();
   const { user, autoRenew, plans, payments } = state;
   const info = subscriptionInfo(state);
-  const planTitle = (id: string) => plans.find((plan) => plan.id === id)?.title ?? (id === 'free' ? 'Free' : id);
+  const planTitle = (id: string) =>
+    plans.find((plan) => plan.id === id)?.title ?? (id === 'free' ? 'Free' : id);
   const [savingAuto, setSavingAuto] = useState(false);
   const [opening, setOpening] = useState(false);
   const pendingRefund = payments.find((payment) => payment.status === 'refund_requested');
@@ -65,7 +83,10 @@ export function HomeTab() {
               aria-label={t('tg.daysLeft', { days: info.daysLeft })}
             >
               <div
-                className={cn('h-full rounded-full', info.daysLeft <= 3 ? 'bg-warning' : 'bg-accent')}
+                className={cn(
+                  'h-full rounded-full',
+                  info.daysLeft <= 3 ? 'bg-warning' : 'bg-accent',
+                )}
                 style={{ width: `${Math.min(100, (info.daysLeft / 30) * 100)}%` }}
               />
             </div>
@@ -106,7 +127,11 @@ export function HomeTab() {
               </Button>
             )}
             {info.running && !autoRenew ? (
-              <Button variant="outline" className="w-full gap-2" onClick={() => goTo('plans', { recurring: true })}>
+              <Button
+                variant="outline"
+                className="w-full gap-2"
+                onClick={() => goTo('plans', { recurring: true })}
+              >
                 <RefreshIcon className="size-4" />
                 {t('tg.enableAuto')}
               </Button>
@@ -117,7 +142,10 @@ export function HomeTab() {
 
       {pendingRefund ? (
         <Notice tone="info">
-          {t('tg.refundPendingHome', { plan: pendingRefund.planTitle, date: formatDate(pendingRefund.refund?.requestedAt, language) })}
+          {t('tg.refundPendingHome', {
+            plan: pendingRefund.planTitle,
+            date: formatDate(pendingRefund.refund?.requestedAt, language),
+          })}
         </Notice>
       ) : null}
 
@@ -134,16 +162,43 @@ export function HomeTab() {
       ) : null}
 
       <nav aria-label={t('tg.quickActions')} className="grid grid-cols-2 gap-2">
-        <QuickAction icon={<MessagesIcon className="size-5" />} label={t('tg.openChat')} busy={opening} onClick={() => void openChat()} />
-        <QuickAction icon={<StarIcon className="size-5" />} label={t('tg.tabPlans')} onClick={() => goTo('plans')} />
-        <QuickAction icon={<FileTextIcon className="size-5" />} label={t('tg.tabPayments')} onClick={() => goTo('payments')} />
-        <QuickAction icon={<TelegramIcon className="size-5" />} label={t('tg.support')} onClick={() => app.openTelegramLink(SUPPORT_URL)} />
+        <QuickAction
+          icon={<MessagesIcon className="size-5" />}
+          label={t('tg.openChat')}
+          busy={opening}
+          onClick={() => void openChat()}
+        />
+        <QuickAction
+          icon={<StarIcon className="size-5" />}
+          label={t('tg.tabPlans')}
+          onClick={() => goTo('plans')}
+        />
+        <QuickAction
+          icon={<FileTextIcon className="size-5" />}
+          label={t('tg.tabPayments')}
+          onClick={() => goTo('payments')}
+        />
+        <QuickAction
+          icon={<TelegramIcon className="size-5" />}
+          label={t('tg.support')}
+          onClick={() => app.openTelegramLink(SUPPORT_URL)}
+        />
       </nav>
     </div>
   );
 }
 
-function QuickAction({ icon, label, busy, onClick }: { icon: React.ReactNode; label: string; busy?: boolean; onClick: () => void }) {
+function QuickAction({
+  icon,
+  label,
+  busy,
+  onClick,
+}: {
+  icon: React.ReactNode;
+  label: string;
+  busy?: boolean;
+  onClick: () => void;
+}) {
   return (
     <button
       type="button"

@@ -1,5 +1,11 @@
 import { useState } from 'react';
-import { ExternalLinkIcon, GlobeIcon, MessagesIcon, SettingsIcon, TelegramIcon } from '@/components/icons';
+import {
+  ExternalLinkIcon,
+  GlobeIcon,
+  MessagesIcon,
+  SettingsIcon,
+  TelegramIcon,
+} from '@/components/icons';
 import { Button } from '@/components/ui/button';
 import { ApiError, miniAppApi, type MiniAppState } from '@/features/telegram/api';
 import { haptic } from '@/features/telegram/webapp';
@@ -72,12 +78,23 @@ export function ProfileTab({ onUnlinked }: { onUnlinked: () => void }) {
 
       <Panel className="flex flex-col gap-2">
         <h2 className="text-[15px] font-semibold">{t('tg.siteTitle')}</h2>
-        <p className="text-[13px] leading-5 text-muted">{user.telegramOnly ? t('tg.siteTextTelegram') : t('tg.siteText')}</p>
-        <Button className="w-full gap-2" loading={opening === '/chat'} onClick={() => void open('/chat')}>
+        <p className="text-[13px] leading-5 text-muted">
+          {user.telegramOnly ? t('tg.siteTextTelegram') : t('tg.siteText')}
+        </p>
+        <Button
+          className="w-full gap-2"
+          loading={opening === '/chat'}
+          onClick={() => void open('/chat')}
+        >
           <MessagesIcon className="size-4" />
           {t('tg.openChat')}
         </Button>
-        <Button variant="outline" className="w-full gap-2" loading={opening === '/settings'} onClick={() => void open('/settings')}>
+        <Button
+          variant="outline"
+          className="w-full gap-2"
+          loading={opening === '/settings'}
+          onClick={() => void open('/settings')}
+        >
           <SettingsIcon className="size-4" />
           {t('tg.openSiteSettings')}
         </Button>
@@ -126,7 +143,11 @@ export function ProfileTab({ onUnlinked }: { onUnlinked: () => void }) {
       </Panel>
 
       <Panel className="flex flex-col gap-2">
-        <Button variant="outline" className="w-full gap-2" onClick={() => app.openTelegramLink(SUPPORT_URL)}>
+        <Button
+          variant="outline"
+          className="w-full gap-2"
+          onClick={() => app.openTelegramLink(SUPPORT_URL)}
+        >
           <TelegramIcon className="size-4" />
           {t('tg.support')}
           <ExternalLinkIcon className="size-3.5" />
@@ -141,13 +162,22 @@ export function ProfileTab({ onUnlinked }: { onUnlinked: () => void }) {
               <Button variant="danger" size="sm" className="flex-1" onClick={() => void unlink()}>
                 {t('tg.unlinkYes')}
               </Button>
-              <Button variant="outline" size="sm" className="flex-1" onClick={() => setConfirmUnlink(false)}>
+              <Button
+                variant="outline"
+                size="sm"
+                className="flex-1"
+                onClick={() => setConfirmUnlink(false)}
+              >
                 {t('tg.cancel')}
               </Button>
             </div>
           </div>
         ) : (
-          <button type="button" onClick={() => setConfirmUnlink(true)} className="min-h-10 text-[13px] text-muted hover:text-text">
+          <button
+            type="button"
+            onClick={() => setConfirmUnlink(true)}
+            className="min-h-10 text-[13px] text-muted hover:text-text"
+          >
             {t('tg.unlink')}
           </button>
         )}

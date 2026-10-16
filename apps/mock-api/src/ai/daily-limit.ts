@@ -54,7 +54,10 @@ export function applyDailyLimits(
   const seen = new Set<string>();
   let first: DailyLimitDecision['limited'];
 
-  while (!seen.has(current.id) && isDailyLimitReached(current, plan, userId, usage, registry, mode)) {
+  while (
+    !seen.has(current.id) &&
+    isDailyLimitReached(current, plan, userId, usage, registry, mode)
+  ) {
     seen.add(current.id);
     const next = current.fallbackModelId ? registry.get(current.fallbackModelId) : undefined;
     if (!next || !next.enabled || seen.has(next.id)) break;

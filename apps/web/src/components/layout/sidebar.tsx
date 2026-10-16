@@ -63,7 +63,9 @@ export function Sidebar() {
   useEffect(() => {
     if (open && window.innerWidth < 768) document.body.style.overflow = 'hidden';
     else document.body.style.overflow = '';
-    return () => { document.body.style.overflow = ''; };
+    return () => {
+      document.body.style.overflow = '';
+    };
   }, [open]);
   const conversations = useChat((state) => state.conversations);
   const status = useChat((state) => state.conversationsStatus);
@@ -101,9 +103,7 @@ export function Sidebar() {
     const visible =
       query === ''
         ? conversations
-        : conversations.filter((conversation) =>
-            conversation.title.toLowerCase().includes(query),
-          );
+        : conversations.filter((conversation) => conversation.title.toLowerCase().includes(query));
 
     return GROUP_ORDER.map((group) => ({
       group,
@@ -276,9 +276,14 @@ export function Sidebar() {
                   {user.name ? user.name.slice(0, 2).toUpperCase() : 'U'}
                 </span>
                 <span className="min-w-0 flex-1">
-                  <span className="block truncate text-[13px] font-medium text-text">{user.name}</span>
+                  <span className="block truncate text-[13px] font-medium text-text">
+                    {user.name}
+                  </span>
                   <span className="block pt-0.5">
-                    <Badge tone={PLAN_TONES[user.plan] ?? 'neutral'} className="px-1.5 py-0 text-[11px] capitalize leading-[18px]">
+                    <Badge
+                      tone={PLAN_TONES[user.plan] ?? 'neutral'}
+                      className="px-1.5 py-0 text-[11px] capitalize leading-[18px]"
+                    >
                       {user.plan}
                     </Badge>
                   </span>
@@ -372,7 +377,9 @@ function ConversationRow({
   if (confirming) {
     return (
       <div className="flex min-h-10 items-center gap-1.5 rounded-lg border border-danger/30 bg-danger-soft px-2 text-danger max-md:min-h-11">
-        <span className="min-w-0 flex-1 truncate py-2 text-[13px] leading-5">{t('chats.deleteConfirm')}</span>
+        <span className="min-w-0 flex-1 truncate py-2 text-[13px] leading-5">
+          {t('chats.deleteConfirm')}
+        </span>
         <button
           type="button"
           onClick={() => {
@@ -403,10 +410,7 @@ function ConversationRow({
       )}
     >
       {active ? (
-        <span
-          aria-hidden="true"
-          className="absolute top-2.5 bottom-2.5 left-0 w-[2px] bg-accent"
-        />
+        <span aria-hidden="true" className="absolute top-2.5 bottom-2.5 left-0 w-[2px] bg-accent" />
       ) : null}
 
       <NavLink
@@ -419,12 +423,7 @@ function ConversationRow({
       </NavLink>
 
       {isStreaming ? (
-        <StatusDot
-          tone="brand"
-          pulse
-          className="mr-1"
-          aria-label={t('chat.thinking')}
-        />
+        <StatusDot tone="brand" pulse className="mr-1" aria-label={t('chat.thinking')} />
       ) : null}
 
       {showDate ? (
@@ -439,7 +438,9 @@ function ConversationRow({
           // На десктопе кнопки появляются поверх названия при наведении или фокусе и не отнимают у него места.
           'md:absolute md:top-1/2 md:right-1 md:-translate-y-1/2 md:rounded-lg md:opacity-0 md:shadow-[-12px_0_10px_-4px_var(--row-bg)] md:transition-opacity',
           'md:group-focus-within:opacity-100 md:group-hover:opacity-100',
-          active ? 'md:bg-surface-3 md:[--row-bg:var(--surface-3)]' : 'md:bg-surface-2 md:[--row-bg:var(--surface-2)]',
+          active
+            ? 'md:bg-surface-3 md:[--row-bg:var(--surface-3)]'
+            : 'md:bg-surface-2 md:[--row-bg:var(--surface-2)]',
         )}
       >
         <IconButton
@@ -452,11 +453,7 @@ function ConversationRow({
         >
           <EditIcon className="size-3.5" />
         </IconButton>
-        <IconButton
-          label={t('chats.delete')}
-          size="sm"
-          onClick={() => setConfirming(true)}
-        >
+        <IconButton label={t('chats.delete')} size="sm" onClick={() => setConfirming(true)}>
           <TrashIcon className="size-3.5" />
         </IconButton>
       </div>

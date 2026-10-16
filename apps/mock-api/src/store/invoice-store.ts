@@ -2,7 +2,13 @@ import crypto from 'node:crypto';
 import { mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
 import { dirname } from 'node:path';
 import { config } from '../config.js';
-import type { CryptoCurrency, CryptoInvoice, PlanId, SbpInvoice, TelegramStarsInvoice } from '../types.js';
+import type {
+  CryptoCurrency,
+  CryptoInvoice,
+  PlanId,
+  SbpInvoice,
+  TelegramStarsInvoice,
+} from '../types.js';
 
 export interface InvoiceStore {
   createSbpInvoice(userId: string, planId: PlanId, amount: number): SbpInvoice;
@@ -20,7 +26,13 @@ export interface InvoiceStore {
   markTelegramStarsPaid(id: string, chargeId?: string): TelegramStarsInvoice | undefined;
   setTelegramStarsLink?(id: string, invoiceLink: string): TelegramStarsInvoice | undefined;
   /** Оплаченные счета пользователя (звёзды и криптовалюта), новые сверху. */
-  paidInvoicesOf?(userId: string): Array<{ id: string; method: 'stars' | 'crypto'; planId: PlanId; amount: string; paidAt: string }>;
+  paidInvoicesOf?(userId: string): Array<{
+    id: string;
+    method: 'stars' | 'crypto';
+    planId: PlanId;
+    amount: string;
+    paidAt: string;
+  }>;
 
   createCryptoInvoice(
     userId: string,
@@ -264,7 +276,12 @@ export function createInvoiceStore(file?: string): InvoiceStore {
             : amountUsd;
 
       // Прямых переводов нет: адрес и QR выдаёт только Trybit (H2H), своих кошельков счёт не содержит.
-      const network = currency === 'BTC' ? 'Bitcoin' : currency.startsWith('USDT_TRC') || currency === 'TRX' ? 'TRC-20' : currency.replace(/^[A-Z]+_?/, '') || currency;
+      const network =
+        currency === 'BTC'
+          ? 'Bitcoin'
+          : currency.startsWith('USDT_TRC') || currency === 'TRX'
+            ? 'TRC-20'
+            : currency.replace(/^[A-Z]+_?/, '') || currency;
 
       const invoice: CryptoInvoice = {
         id,
@@ -281,13 +298,18 @@ export function createInvoiceStore(file?: string): InvoiceStore {
         network: gateway?.network || network,
         cryptoCloudUrl,
         cryptoCloudInvoiceId,
-        ...(gateway ? { gatewayDetails: true, ...(gateway.memo ? { memo: gateway.memo } : {}) } : {}),
+        ...(gateway
+          ? { gatewayDetails: true, ...(gateway.memo ? { memo: gateway.memo } : {}) }
+          : {}),
         ...(gateway?.fees
           ? {
               fees: {
                 serviceUsd: gateway.fees.serviceUsd,
                 transferUsd: gateway.fees.transferUsd,
-                payerUsd: Math.max(0, Math.round((gateway.fees.invoiceUsd - amountUsd) * 100) / 100),
+                payerUsd: Math.max(
+                  0,
+                  Math.round((gateway.fees.invoiceUsd - amountUsd) * 100) / 100,
+                ),
                 totalUsd: Math.max(amountUsd, gateway.fees.invoiceUsd),
               },
             }

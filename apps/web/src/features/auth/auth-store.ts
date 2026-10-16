@@ -56,7 +56,15 @@ function saveSession(session: AuthSession | null): void {
 }
 
 function parsePlan(raw: unknown): PlanId {
-  const VALID_PLANS: PlanId[] = ['free', 'gpt-pro', 'claude-pro', 'gemini-pro', 'ultra', 'plus', 'pro'];
+  const VALID_PLANS: PlanId[] = [
+    'free',
+    'gpt-pro',
+    'claude-pro',
+    'gemini-pro',
+    'ultra',
+    'plus',
+    'pro',
+  ];
   if (typeof raw === 'string' && (VALID_PLANS as string[]).includes(raw)) {
     return raw as PlanId;
   }
@@ -89,7 +97,9 @@ export function normalizeUser(rawUser: Record<string, unknown>): User {
       ? rawUser.telegramChatId
       : undefined;
   const telegramUsername =
-    typeof rawUser.telegramUsername === 'string' && rawUser.telegramUsername ? rawUser.telegramUsername : undefined;
+    typeof rawUser.telegramUsername === 'string' && rawUser.telegramUsername
+      ? rawUser.telegramUsername
+      : undefined;
 
   return {
     id: String(rawUser.id || 'user'),
@@ -98,8 +108,7 @@ export function normalizeUser(rawUser: Record<string, unknown>): User {
     plan,
     isVip,
     isAdmin,
-    createdAt:
-      typeof rawUser.createdAt === 'string' ? rawUser.createdAt : new Date().toISOString(),
+    createdAt: typeof rawUser.createdAt === 'string' ? rawUser.createdAt : new Date().toISOString(),
     ...(telegramChatId !== undefined ? { telegramChatId } : {}),
     ...(telegramUsername ? { telegramUsername } : {}),
   };
@@ -108,7 +117,9 @@ export function normalizeUser(rawUser: Record<string, unknown>): User {
 const initialSession = readStoredSession();
 
 export const useAuth = create<AuthState>((set, get) => ({
-  user: initialSession.user ? normalizeUser(initialSession.user as unknown as Record<string, unknown>) : null,
+  user: initialSession.user
+    ? normalizeUser(initialSession.user as unknown as Record<string, unknown>)
+    : null,
   token: initialSession.token,
   status: initialSession.token ? 'authenticated' : 'unauthenticated',
   error: null,

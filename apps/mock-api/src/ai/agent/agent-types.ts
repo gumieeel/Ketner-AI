@@ -26,10 +26,7 @@ export interface AgentToolDefinition {
 }
 
 export type AgentToolChoice =
-  | 'auto'
-  | 'none'
-  | 'required'
-  | { type: 'function'; function: { name: string } };
+  'auto' | 'none' | 'required' | { type: 'function'; function: { name: string } };
 
 /** Что провайдер присылает по мере генерации. */
 export type AgentStreamEvent =

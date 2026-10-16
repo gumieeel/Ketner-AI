@@ -47,7 +47,8 @@ export const ru = {
   'auth.nameRequired': 'Пожалуйста, укажите имя',
   'auth.loggingIn': 'Вход...',
   'auth.signingUp': 'Регистрация...',
-  'auth.checkoutSignupNotice': 'Для оформления подписки необходимо сначала войти или создать аккаунт.',
+  'auth.checkoutSignupNotice':
+    'Для оформления подписки необходимо сначала войти или создать аккаунт.',
   'settings.loggedInAs': 'Вы вошли как',
   'settings.registeredOn': 'Дата регистрации',
 
@@ -78,19 +79,21 @@ export const ru = {
     'Все тарифы защищены гарантией безопасной оплаты и поддерживают моментальную активацию.',
 
   'docs.title': 'Документация Ketner AI',
-  'docs.subtitle':
-    'Тарифные планы, модели и ответы на частые вопросы.',
+  'docs.subtitle': 'Тарифные планы, модели и ответы на частые вопросы.',
   'docs.backToPricing': 'К тарифам',
   'docs.plansTitle': 'Тарифные планы',
   'docs.modelsTitle': 'Спецификации моделей',
   'docs.matrixTitle': 'Сравнительная матрица',
   'docs.faqTitle': 'Часто задаваемые вопросы',
   'docs.step1Title': 'Вы пишете вопрос',
-  'docs.step1Desc': 'Задайте любой вопрос: напишите код, попросите сделать рерайтинг, перевод или сложный анализ.',
+  'docs.step1Desc':
+    'Задайте любой вопрос: напишите код, попросите сделать рерайтинг, перевод или сложный анализ.',
   'docs.step2Title': 'Система подбирает модель',
-  'docs.step2Desc': 'Интеллектуальный маршрутизатор мгновенно выбирает лучшую модель (или вы выбираете её вручную).',
+  'docs.step2Desc':
+    'Интеллектуальный маршрутизатор мгновенно выбирает лучшую модель (или вы выбираете её вручную).',
   'docs.step3Title': 'Вы получаете ответ',
-  'docs.step3Desc': 'Мгновенный потоковый ответ без задержек и подсчёта токенов на платных тарифах.',
+  'docs.step3Desc':
+    'Мгновенный потоковый ответ без задержек и подсчёта токенов на платных тарифах.',
 
   'checkout.title': 'Оформление подписки',
   'checkout.cardNumber': 'Номер карты',
@@ -100,15 +103,13 @@ export const ru = {
   'checkout.processing': 'Оформление...',
   'checkout.success': 'Подписка оформлена',
   'checkout.successTitle': 'Подписка успешно оформлена!',
-  'checkout.successMessage':
-    'Тариф успешно повышен. Все возможности тарифа открыты.',
+  'checkout.successMessage': 'Тариф успешно повышен. Все возможности тарифа открыты.',
   'checkout.goToChat': 'Перейти в чат',
   'checkout.goToSettings': 'В настройки',
   'checkout.cardNumberInvalid': 'Введите корректный 16-значный номер карты',
   'checkout.expiryInvalid': 'Введите корректный срок действия (ММ/ГГ)',
   'checkout.cvcInvalid': 'Введите 3-значный CVC/CVV код',
-  'checkout.notice':
-    'Безопасная оплата: соединение зашифровано по стандарту PCI-DSS 256-bit.',
+  'checkout.notice': 'Безопасная оплата: соединение зашифровано по стандарту PCI-DSS 256-bit.',
   'checkout.selectedPlan': 'Выбранный план',
   'checkout.methodTitle': 'Способ оплаты',
   'checkout.methodSbp': 'СБП (Система быстрых платежей)',
@@ -164,9 +165,11 @@ export const ru = {
   'settings.subscription': 'Подписка',
   'settings.subscriptionText': 'Управление тарифом.',
   'settings.support': 'Служба поддержки',
-  'settings.supportDesc': 'Оперативная связь с администратором по подпискам, платежам и работе моделей.',
+  'settings.supportDesc':
+    'Оперативная связь с администратором по подпискам, платежам и работе моделей.',
   'settings.supportContactBtn': 'Написать в Telegram (@ketner_support_bot)',
-  'settings.supportBotHint': 'Задайте вопрос или отправьте обращение — администратор ответит вам прямо в чате бота.',
+  'settings.supportBotHint':
+    'Задайте вопрос или отправьте обращение — администратор ответит вам прямо в чате бота.',
   'settings.logout': 'Выйти из аккаунта',
 
   'chat.title': 'Новый чат',
@@ -199,7 +202,8 @@ export const ru = {
   'chat.maxModeLocked': 'Режим Max доступен на тарифе Ultra',
   'chat.maxModeBadge': '⚡ Режим Max',
   'chat.maxModeUpgradeTitle': 'Режим Max доступен на Ultra',
-  'chat.maxModeUpgradeDesc': 'В режиме Max Claude Opus, Sonnet, GPT-6 Astra и GPT-5.6 Sol думают дольше и отвечают глубже на сложных задачах. Режим доступен на тарифе Ultra.',
+  'chat.maxModeUpgradeDesc':
+    'В режиме Max Claude Opus, Sonnet, GPT-6 Astra и GPT-5.6 Sol думают дольше и отвечают глубже на сложных задачах. Режим доступен на тарифе Ultra.',
   'chat.modelClaudeOpus': 'Claude Opus 5.5',
   'chat.upgradeRequired': 'Требуется подписка (Upgrade your plan)',
   'chat.upgradeRequiredDesc':
@@ -226,8 +230,7 @@ export const ru = {
   'chat.modelAutoSubtitle': 'Система подбирает лучшую модель под задачу',
   'chat.manualSelection': 'Ручной выбор модели',
   'chat.modelContext': 'Контекст: {count} сообщений',
-  'chat.composerNotice':
-    'Ketner AI может допускать ошибки. Проверяйте важную информацию.',
+  'chat.composerNotice': 'Ketner AI может допускать ошибки. Проверяйте важную информацию.',
   'chat.emptyTitle': 'С чего начнём?',
   'chat.emptyHint': 'Опишите задачу или выберите пример — его можно изменить перед отправкой.',
   'chat.you': 'Вы',
@@ -253,7 +256,8 @@ export const ru = {
   'chat.errorText': 'Не удалось получить ответ. Попробуйте ещё раз.',
   'chat.continue': 'Продолжить',
   'chat.truncatedNotice': 'Ответ оборвался на середине.',
-  'chat.continuePrompt': 'Продолжи ответ с того места, где он оборвался. Не повторяй уже написанное.',
+  'chat.continuePrompt':
+    'Продолжи ответ с того места, где он оборвался. Не повторяй уже написанное.',
   'chat.errorNotFound': 'Диалог не найден: возможно, его удалили.',
   'chat.jumpToLatest': 'К последнему сообщению',
   'chat.loadError': 'Не удалось загрузить диалог',
@@ -273,7 +277,6 @@ export const ru = {
   'onboarding.text': 'Задайте вопрос или начните с одного из примеров ниже.',
   'onboarding.examples': 'Примеры запросов',
   'onboarding.startWith': 'Открыть в чате',
-
 
   'common.loading': 'Загрузка…',
   'common.soon': 'Скоро',
@@ -341,7 +344,8 @@ export const ru = {
   'workspace.autoOn': 'Авто-запись: ВКЛ',
   'workspace.autoOff': 'Авто-запись: ВЫКЛ',
   'workspace.autoOnHint': 'Авто-запись включена: правки кода сразу сохраняются на диск',
-  'workspace.autoOffHint': 'Нажмите, чтобы включить автоматическое сохранение правок кода без подтверждения',
+  'workspace.autoOffHint':
+    'Нажмите, чтобы включить автоматическое сохранение правок кода без подтверждения',
   'workspace.link': 'Привязать папку / репо',
   'workspace.linkHint': 'Привязать локальную папку или Git-репозиторий',
 
@@ -358,10 +362,12 @@ export const ru = {
   'chat.emptyKicker': 'Все модели — в одном окне',
 
   // Чат: карточка правок
-  'proposal.noWorkspaceError': 'Проект не привязан к текущему чату. Привяжите папку или репозиторий.',
+  'proposal.noWorkspaceError':
+    'Проект не привязан к текущему чату. Привяжите папку или репозиторий.',
   'proposal.applyError': 'Ошибка применения изменений',
   'proposal.notAppliedTitle': 'Предложенные изменения не применены',
-  'proposal.nothingWritten': 'Ничего не записано. Попросите модель повторить правку с точным фрагментом из файла.',
+  'proposal.nothingWritten':
+    'Ничего не записано. Попросите модель повторить правку с точным фрагментом из файла.',
   'proposal.discarded': 'Предложенные изменения в коде отклонены',
   'proposal.restore': 'Вернуть',
   'proposal.title': 'Предложены изменения в кодовой базе',
@@ -374,7 +380,8 @@ export const ru = {
   'proposal.appliedLocal': 'Изменения успешно записаны на локальный диск!',
   'proposal.openPr': 'Открыть PR #{number} ↗',
   'proposal.openCommit': 'Открыть коммит ↗',
-  'proposal.hint': 'Нажмите «Применить к проекту» ниже или включите «Авто-запись» над полем ввода, чтобы сохранить файлы.',
+  'proposal.hint':
+    'Нажмите «Применить к проекту» ниже или включите «Авто-запись» над полем ввода, чтобы сохранить файлы.',
   'proposal.target': 'Цель:',
   'proposal.needWorkspace': 'Требуется привязка проекта',
   'proposal.discard': 'Отклонить',
@@ -388,11 +395,13 @@ export const ru = {
 
   // Чат: привязка проекта
   'linkWs.title': 'Привязать кодовую базу к чату',
-  'linkWs.desc': 'ИИ будет видеть структуру проекта и файлы, искать код и отвечать с учётом репозитория',
+  'linkWs.desc':
+    'ИИ будет видеть структуру проекта и файлы, искать код и отвечать с учётом репозитория',
   'linkWs.tabFolder': 'Локальная папка',
   'linkWs.tabGit': 'GitHub репозиторий',
   'linkWs.folderTitle': 'Выберите папку проекта на вашем компьютере',
-  'linkWs.folderDesc': 'Браузер безопасно прочитает файлы кода (js, ts, py, rs, go, json и др.), исключая node_modules и бинарники.',
+  'linkWs.folderDesc':
+    'Браузер безопасно прочитает файлы кода (js, ts, py, rs, go, json и др.), исключая node_modules и бинарники.',
   'linkWs.pickFolder': 'Выбрать локальную папку',
   'linkWs.indexing': 'Индексация проекта…',
   'linkWs.branch': 'Ветка',
@@ -403,10 +412,12 @@ export const ru = {
   'linkWs.repoSearch': 'Репозиторий',
   'linkWs.repoSearchPlaceholder': 'Поиск или ссылка: owner/repo, https://github.com/…',
   'linkWs.connectTitle': 'Подключите GitHub',
-  'linkWs.connectDesc': 'Ketner увидит ваши репозитории, включая приватные, и сможет открывать Pull Request от вашего имени. Токен хранится только на сервере.',
+  'linkWs.connectDesc':
+    'Ketner увидит ваши репозитории, включая приватные, и сможет открывать Pull Request от вашего имени. Токен хранится только на сервере.',
   'linkWs.connectCta': 'Подключить GitHub',
   'linkWs.unavailable': 'Подключение GitHub на сервере пока не настроено.',
-  'linkWs.signInDesc': 'Войдите в аккаунт Ketner, чтобы подключить GitHub и работать с репозиториями.',
+  'linkWs.signInDesc':
+    'Войдите в аккаунт Ketner, чтобы подключить GitHub и работать с репозиториями.',
   'linkWs.signIn': 'Войти',
   'linkWs.connectedAs': 'GitHub: {login}',
   'linkWs.manage': 'Управлять',
@@ -415,7 +426,8 @@ export const ru = {
   'linkWs.private': 'Приватный',
   'linkWs.useTyped': 'Открыть {repo}',
   'linkWs.branchesLoading': 'Загружаем ветки…',
-  'linkWs.orgHint': 'Нет репозитория организации? Разрешите доступ Ketner AI в настройках организации на GitHub.',
+  'linkWs.orgHint':
+    'Нет репозитория организации? Разрешите доступ Ketner AI в настройках организации на GitHub.',
 
   // Чат: запись в GitHub
   'gh.title': 'Запись изменений в GitHub',
@@ -433,7 +445,8 @@ export const ru = {
   'gh.errBadRepo': 'Некорректное имя репозитория',
   'gh.errApply': 'Не удалось применить изменения к GitHub',
   'gh.account': 'Изменения уйдут от имени @{login}',
-  'gh.needConnect': 'Чтобы отправить изменения, подключите GitHub: коммит и Pull Request создаются от вашего имени.',
+  'gh.needConnect':
+    'Чтобы отправить изменения, подключите GitHub: коммит и Pull Request создаются от вашего имени.',
   'gh.connect': 'Подключить GitHub',
 
   // Чат: окно diff
@@ -450,9 +463,11 @@ export const ru = {
   'wsView.notFound': 'Файлы не найдены',
   'wsView.ask': 'Спросить ИИ об этом файле',
   'wsView.askDraft': 'Объясни назначение файла {path} и как он работает в проекте {name}:',
-  'wsView.noContent': 'Содержимое файла не предзагружено (файл доступен по пути в структуре проекта)',
+  'wsView.noContent':
+    'Содержимое файла не предзагружено (файл доступен по пути в структуре проекта)',
   'wsView.pick': 'Выберите файл для просмотра',
-  'wsView.pickHint': 'ИИ видит структуру всего проекта и использует его код при ответах на ваши вопросы в чате',
+  'wsView.pickHint':
+    'ИИ видит структуру всего проекта и использует его код при ответах на ваши вопросы в чате',
 
   // Чат: вложения в сообщениях
   'msgAtt.noVideo': 'Ваш браузер не поддерживает встроенное воспроизведение видео.',
@@ -474,7 +489,8 @@ export const ru = {
 
   // Вход и регистрация
   'auth.asideTitle': 'Все AI-модели. Одна подписка.',
-  'auth.asideLead': 'GPT, Claude, Gemini, Grok, DeepSeek и Ketner Mini в одном чате. Режим Auto сам подберёт подходящую модель.',
+  'auth.asideLead':
+    'GPT, Claude, Gemini, Grok, DeepSeek и Ketner Mini в одном чате. Режим Auto сам подберёт подходящую модель.',
   'auth.showPassword': 'Показать',
   'auth.hidePassword': 'Скрыть',
   'auth.loginFailed': 'Ошибка входа',
@@ -488,7 +504,8 @@ export const ru = {
   'settings.subtitle': 'Профиль, внешний вид и параметры тарифа',
   'settings.navLabel': 'Разделы настроек',
   'settings.telegramTitle': 'Telegram',
-  'settings.telegramDesc': 'Вход без пароля, кабинет подписки в боте @Robo_kassa_bot, оплата звёздами, чеки и напоминания о продлении.',
+  'settings.telegramDesc':
+    'Вход без пароля, кабинет подписки в боте @Robo_kassa_bot, оплата звёздами, чеки и напоминания о продлении.',
   'settings.telegramConnected': 'Подключён',
   'settings.telegramNotLinked': 'Не привязан',
   'settings.telegramOpenBot': 'Открыть бот',
@@ -496,30 +513,38 @@ export const ru = {
   'settings.telegramUnlinking': 'Отвязка...',
   'settings.telegramConnect': 'Подключить Telegram',
   'settings.telegramLinkedAs': 'Привязан Telegram:',
-  'settings.telegramLinkedHint': 'Входите на сайт кнопкой «Войти через Telegram». В боте нажмите «Кабинет»: подписка, автопродление, чеки и возвраты.',
+  'settings.telegramLinkedHint':
+    'Входите на сайт кнопкой «Войти через Telegram». В боте нажмите «Кабинет»: подписка, автопродление, чеки и возвраты.',
   'settings.telegramLinkTitle': 'Как подключить',
-  'settings.telegramLinkHint': 'Нажмите «Подключить Telegram», откройте бота и подтвердите — страница обновится сама.',
+  'settings.telegramLinkHint':
+    'Нажмите «Подключить Telegram», откройте бота и подтвердите — страница обновится сама.',
   'settings.telegramHaveCode': 'Есть код из кабинета в Telegram? Ввести код',
   'settings.telegramCodeSubmit': 'Подключить',
   'settings.telegramCodeLabel': 'Код из кабинета в Telegram',
-  'settings.telegramOnlyHint': 'Аккаунт создан через Telegram: входите кнопкой «Войти через Telegram» на любом устройстве.',
+  'settings.telegramOnlyHint':
+    'Аккаунт создан через Telegram: входите кнопкой «Войти через Telegram» на любом устройстве.',
   'settings.telegramClaimFailed': 'Не получилось. Попробуйте ещё раз.',
-  'settings.telegramLinkedDone': 'Telegram подключён. Теперь можно входить через него, а кабинет подписки — в боте.',
+  'settings.telegramLinkedDone':
+    'Telegram подключён. Теперь можно входить через него, а кабинет подписки — в боте.',
   'settings.telegramAccountEmail': 'Аккаунт Telegram',
   'settings.githubTitle': 'GitHub',
-  'settings.githubDesc': 'Доступ к вашим репозиториям, включая приватные: чат и Ketner Code читают код, делают коммиты и открывают Pull Request.',
+  'settings.githubDesc':
+    'Доступ к вашим репозиториям, включая приватные: чат и Ketner Code читают код, делают коммиты и открывают Pull Request.',
   'settings.githubConnect': 'Подключить GitHub',
   'settings.githubDisconnect': 'Отключить',
   'settings.githubDisconnectYes': 'Да, отключить',
-  'settings.githubDisconnectHint': 'Ketner потеряет доступ к репозиториям, токен будет отозван. Привязанные к чатам проекты останутся, но отправлять изменения не получится, пока вы не подключите GitHub снова.',
+  'settings.githubDisconnectHint':
+    'Ketner потеряет доступ к репозиториям, токен будет отозван. Привязанные к чатам проекты останутся, но отправлять изменения не получится, пока вы не подключите GitHub снова.',
   'settings.githubConnected': 'Подключён',
   'settings.githubNotConnected': 'Не подключён',
   'settings.githubSince': 'Подключён {date}',
   'settings.githubAccessTitle': 'Что получает Ketner',
-  'settings.githubAccessHint': 'Чтение и запись в репозитории (право repo). Токен хранится зашифрованным только на сервере и не попадает в браузер; через Ketner доступны лишь чтение кода, коммиты и Pull Request.',
+  'settings.githubAccessHint':
+    'Чтение и запись в репозитории (право repo). Токен хранится зашифрованным только на сервере и не попадает в браузер; через Ketner доступны лишь чтение кода, коммиты и Pull Request.',
   'settings.githubManage': 'Доступы на GitHub',
   'settings.githubWhyTitle': 'Зачем подключать',
-  'settings.githubWhyHint': 'Чтобы привязывать к чату приватные репозитории, выбирать ветку, импортировать их в Ketner Code и отправлять правки коммитом или Pull Request без личных токенов.',
+  'settings.githubWhyHint':
+    'Чтобы привязывать к чату приватные репозитории, выбирать ветку, импортировать их в Ketner Code и отправлять правки коммитом или Pull Request без личных токенов.',
   'settings.githubUnavailable': 'Подключение GitHub на сервере пока не настроено.',
   'settings.githubSignIn': 'Войдите в аккаунт, чтобы подключить GitHub.',
   'github.noticeConnected': 'GitHub подключён: @{login}',
@@ -546,7 +571,8 @@ export const ru = {
   'tgAuth.magicTitle': 'Вход из Telegram',
   'tgAuth.magicProgress': 'Входим в аккаунт…',
   'tgAuth.magicMissing': 'В ссылке нет ключа входа. Откройте сайт из кабинета в Telegram ещё раз.',
-  'tgAuth.magicFailed': 'Не получилось войти по ссылке. Откройте сайт из кабинета в Telegram ещё раз.',
+  'tgAuth.magicFailed':
+    'Не получилось войти по ссылке. Откройте сайт из кабинета в Telegram ещё раз.',
   'tgAuth.toLogin': 'Перейти ко входу',
   'tg.errorGeneric': 'Не получилось связаться с Ketner. Попробуйте ещё раз.',
   'tg.retry': 'Повторить',
@@ -562,10 +588,12 @@ export const ru = {
   'tg.welcomePoint2': 'Срок подписки, чеки и возвраты всегда под рукой',
   'tg.welcomePoint3': 'Вход на ketner.org одной кнопкой — без пароля',
   'tg.continueTelegram': 'Продолжить с Telegram',
-  'tg.continueHint': 'Создадим аккаунт за секунду. На сайт потом можно входить кнопкой «Войти через Telegram».',
+  'tg.continueHint':
+    'Создадим аккаунт за секунду. На сайт потом можно входить кнопкой «Войти через Telegram».',
   'tg.haveAccount': 'У меня уже есть аккаунт',
   'tg.existingTitle': 'Подключим ваш аккаунт',
-  'tg.existingLead': 'Подписка и история оплат перенесутся сюда, а напоминания будут приходить в Telegram.',
+  'tg.existingLead':
+    'Подписка и история оплат перенесутся сюда, а напоминания будут приходить в Telegram.',
   'tg.existingHow': 'Как вы входите на сайт',
   'tg.wayPassword': 'Почта и пароль',
   'tg.wayCode': 'Google или GitHub',
@@ -604,7 +632,8 @@ export const ru = {
   'tg.enableAuto': 'Включить автопродление',
   'tg.renewOrSwitch': 'Продлить или сменить тариф',
   'tg.choosePlan': 'Выбрать тариф',
-  'tg.refundPendingHome': 'Заявка на возврат за {plan} от {date} на рассмотрении. Ответ придёт в бот.',
+  'tg.refundPendingHome':
+    'Заявка на возврат за {plan} от {date} на рассмотрении. Ответ придёт в бот.',
   'tg.adminBanner': 'Заявок на возврат ждут решения: {count}',
   'tg.quickActions': 'Быстрые действия',
   'tg.openChat': 'Открыть Ketner AI',
@@ -616,7 +645,8 @@ export const ru = {
   'tg.modeAuto': 'С автопродлением',
   'tg.modeOnceHint': 'Разовая оплата. Продлите, когда захотите — дни добавятся к сроку.',
   'tg.modeAutoHint': 'Звёзды списываются раз в 30 дней. Выключить можно в любой момент на главной.',
-  'tg.autoReplace': 'Сейчас подключено автопродление {plan}. Новая подписка заменит его — старую отключим сами.',
+  'tg.autoReplace':
+    'Сейчас подключено автопродление {plan}. Новая подписка заменит его — старую отключим сами.',
   'tg.plansRenew': 'Продлить или сменить тариф',
   'tg.plansBuy': 'Выберите тариф',
   'tg.perMonth': 'на 30 дней',
@@ -641,22 +671,26 @@ export const ru = {
   'tg.paymentDoneAuto': 'Готово! {plan} включён, автопродление подключено.',
   'tg.paymentLate': 'Оплата получена. Тариф включится в течение минуты — обновите кабинет.',
   'tg.paymentFailed': 'Оплата не прошла. Попробуйте ещё раз.',
-  'tg.refundShort': 'Передумали? Вернуть оплату можно в течение {hours} часов, если вы ещё не пользовались моделями.',
+  'tg.refundShort':
+    'Передумали? Вернуть оплату можно в течение {hours} часов, если вы ещё не пользовались моделями.',
   'tg.rate': 'Курс: 1 ⭐ ≈ ${rate} ({source}), пересчитывается автоматически.',
   'tg.rateDefault': 'по умолчанию',
   'tg.payCrypto': 'Оплатить криптовалютой на сайте',
   'tg.paymentsTitle': 'История оплат',
   'tg.paymentsEmpty': 'Платежей пока нет',
-  'tg.paymentsEmptyText': 'Здесь появятся чеки за подписку — со сроком и возможностью вернуть деньги.',
+  'tg.paymentsEmptyText':
+    'Здесь появятся чеки за подписку — со сроком и возможностью вернуть деньги.',
   'tg.statusPaid': 'Оплачен',
   'tg.statusRequested': 'Возврат на рассмотрении',
   'tg.statusRefunded': 'Возвращён',
   'tg.statusDeclined': 'В возврате отказано',
   'tg.policyTitle': 'Как работают возвраты',
   'tg.policy4': 'После возврата дни этой оплаты снимаются с подписки, автопродление отключается.',
-  'tg.policy1': 'Вернуть оплату можно в течение {hours} часов после неё — если вы ещё не сделали ни одного запроса к моделям.',
+  'tg.policy1':
+    'Вернуть оплату можно в течение {hours} часов после неё — если вы ещё не сделали ни одного запроса к моделям.',
   'tg.policy2': 'Если моделями уже пользовались или срок прошёл, оплата не возвращается.',
-  'tg.policy3': 'Звёзды возвращаются сразу на баланс Telegram. Криптовалюту возвращаем на ваш кошелёк по заявке, обычно в течение суток.',
+  'tg.policy3':
+    'Звёзды возвращаются сразу на баланс Telegram. Криптовалюту возвращаем на ваш кошелёк по заявке, обычно в течение суток.',
   'tg.receiptTitle': 'Чек · {plan}',
   'tg.fieldPlan': 'Тариф',
   'tg.fieldMethod': 'Способ',
@@ -671,8 +705,10 @@ export const ru = {
   'tg.methodCrypto': 'Криптовалюта',
   'tg.copyId': 'Скопировать номер',
   'tg.refundTitle': 'Возврат',
-  'tg.refundAutoText': 'Звёзды вернутся на баланс Telegram сразу, а подписка станет такой, какой была до этой оплаты.',
-  'tg.refundCryptoText': 'Возврат криптовалюты оформляем вручную: ответим в бот в течение суток и уточним адрес кошелька.',
+  'tg.refundAutoText':
+    'Звёзды вернутся на баланс Telegram сразу, а подписка станет такой, какой была до этой оплаты.',
+  'tg.refundCryptoText':
+    'Возврат криптовалюты оформляем вручную: ответим в бот в течение суток и уточним адрес кошелька.',
   'tg.refundAutoRenewOff': 'Автопродление выключится.',
   'tg.refundStart': 'Вернуть деньги',
   'tg.refundRequestStart': 'Подать заявку на возврат',
@@ -693,15 +729,20 @@ export const ru = {
   'tg.refundNoneRefunded': 'Деньги возвращены {date}.',
   'tg.refundNonePending': 'Заявка от {date} на рассмотрении. Ответ придёт в бот.',
   'tg.refundNoneDeclined': 'В возврате отказано. Если не согласны — напишите в поддержку.',
-  'tg.refundNoneDeclinedNote': 'В возврате отказано: {note}. Если не согласны — напишите в поддержку.',
-  'tg.refundNoneExpired': 'Срок возврата прошёл: вернуть оплату можно в течение {hours} часов после неё.',
-  'tg.refundDeadline': 'Вернуть можно до {date}, пока вы не сделали ни одного запроса к моделям. Первый же ответ модели закрывает возврат.',
-  'tg.refundNoneUsed': 'После этой оплаты моделями уже пользовались, поэтому вернуть её нельзя. Возврат возможен в течение {hours} часов и только без запросов к моделям.',
+  'tg.refundNoneDeclinedNote':
+    'В возврате отказано: {note}. Если не согласны — напишите в поддержку.',
+  'tg.refundNoneExpired':
+    'Срок возврата прошёл: вернуть оплату можно в течение {hours} часов после неё.',
+  'tg.refundDeadline':
+    'Вернуть можно до {date}, пока вы не сделали ни одного запроса к моделям. Первый же ответ модели закрывает возврат.',
+  'tg.refundNoneUsed':
+    'После этой оплаты моделями уже пользовались, поэтому вернуть её нельзя. Возврат возможен в течение {hours} часов и только без запросов к моделям.',
   'tg.telegramAccount': 'Аккаунт Telegram',
   'tg.memberSince': 'с {date}',
   'tg.siteTitle': 'Ketner AI на сайте',
   'tg.siteText': 'Откроем ketner.org уже войдя в ваш аккаунт — пароль вводить не нужно.',
-  'tg.siteTextTelegram': 'Откроем ketner.org уже войдя в аккаунт. На другом устройстве нажмите «Войти через Telegram».',
+  'tg.siteTextTelegram':
+    'Откроем ketner.org уже войдя в аккаунт. На другом устройстве нажмите «Войти через Telegram».',
   'tg.openSiteSettings': 'Настройки аккаунта на сайте',
   'tg.notifyTitle': 'Уведомления в боте',
   'tg.notifyReminders': 'Напоминания о продлении',
@@ -710,9 +751,11 @@ export const ru = {
   'tg.notifyReceiptsHint': 'Сообщение после каждой оплаты',
   'tg.notifyRefundsAlways': 'Ответы по возвратам и важные сообщения об аккаунте приходят всегда.',
   'tg.language': 'Язык',
-  'tg.telegramOnlyNote': 'Аккаунт создан через Telegram, поэтому отвязать его нельзя: Telegram и есть ваш вход.',
+  'tg.telegramOnlyNote':
+    'Аккаунт создан через Telegram, поэтому отвязать его нельзя: Telegram и есть ваш вход.',
   'tg.unlink': 'Отвязать Telegram от аккаунта',
-  'tg.unlinkConfirm': 'Отвязать Telegram? Напоминания и чеки перестанут приходить, а кабинет попросит войти заново.',
+  'tg.unlinkConfirm':
+    'Отвязать Telegram? Напоминания и чеки перестанут приходить, а кабинет попросит войти заново.',
   'tg.unlinkYes': 'Отвязать',
   'tg.adminTitle': 'Заявки на возврат',
   'tg.adminWaiting': 'Ждут решения',
@@ -727,7 +770,8 @@ export const ru = {
   'tg.adminDecline': 'Отказать',
   'tg.adminApproved': 'Возврат оформлен, клиенту ушло сообщение.',
   'tg.adminDeclined': 'Отказ отправлен клиенту.',
-  'tg.adminCryptoHint': 'Крипту возвращаете вручную: одобрение отменит оплаченный период и попросит клиента прислать кошелёк в поддержку.',
+  'tg.adminCryptoHint':
+    'Крипту возвращаете вручную: одобрение отменит оплаченный период и попросит клиента прислать кошелёк в поддержку.',
   'common.close': 'Закрыть',
   'settings.supportBotLabel': 'Официальный бот поддержки:',
   'settings.adminTitle': 'Панель администратора',
@@ -760,7 +804,8 @@ export const ru = {
 
   // Админ-панель: шапка и KPI
   'admin.title': 'Обзорная панель администратора',
-  'admin.lead': 'Мониторинг пользователей, расходов токенов, соблюдения лимитов и управление доступом.',
+  'admin.lead':
+    'Мониторинг пользователей, расходов токенов, соблюдения лимитов и управление доступом.',
   'admin.keyLabel': 'Ключ доступа',
   'admin.refresh': 'Обновить',
   'admin.kpiUsers': 'Всего пользователей',
@@ -770,8 +815,10 @@ export const ru = {
   'admin.kpiScope': 'по загруженным пользователям',
 
   // Админ-панель: маржинальность и шлюз
-  'admin.marginAlertTitle': 'Внимание: обнаружена отрицательная маржинальность (Contribution Margin < 0)',
-  'admin.marginAlertText': 'Себестоимость запросов превысила доход от подписки для следующих пользователей:',
+  'admin.marginAlertTitle':
+    'Внимание: обнаружена отрицательная маржинальность (Contribution Margin < 0)',
+  'admin.marginAlertText':
+    'Себестоимость запросов превысила доход от подписки для следующих пользователей:',
   'admin.marginAlertLine': 'Расход: ${cost} · Доход: ${revenue} (Маржа: ${margin})',
   'admin.gatewayTitle': 'Экономика и производительность шлюза',
   'admin.gatewayTotals': 'Всего запросов: {requests} · Себестоимость: ${cost}',
@@ -894,11 +941,13 @@ export const ru = {
   'checkout.sbpStatus': 'Ожидание перевода в банке',
   'checkout.sbpCheck': 'Проверить оплату СБП',
   'checkout.sbpInstant': 'Мгновенное зачисление средств и автоматическая активация.',
-  'checkout.sbpConfirmFailed': 'Не удалось подтвердить перевод через СБП. Повторите попытку через несколько секунд.',
+  'checkout.sbpConfirmFailed':
+    'Не удалось подтвердить перевод через СБП. Повторите попытку через несколько секунд.',
 
   // Оформление: криптовалюта
   'checkout.cryptoTitle': 'Оплата криптовалютой',
-  'checkout.cryptoLead': 'Оплата через Trybit: более 35 монет и сетей — USDT, BTC, ETH, TON, SOL и другие. Комиссия показана до оплаты.',
+  'checkout.cryptoLead':
+    'Оплата через Trybit: более 35 монет и сетей — USDT, BTC, ETH, TON, SOL и другие. Комиссия показана до оплаты.',
   'checkout.cryptoInvoiceRetry': 'Выставить счёт заново',
   'checkout.cryptoInvoiceFailed': 'Trybit не выставил счёт. Попробуйте ещё раз через минуту.',
   'checkout.cryptoTimer': 'Таймер фиксации',
@@ -925,9 +974,11 @@ export const ru = {
   'checkout.feeTrybit': 'Комиссия Trybit',
   'checkout.feeTotal': 'Итого к оплате',
   'checkout.feeNotePayer': 'Комиссия включена в сумму: сервис {service}, перевод {transfer}.',
-  'checkout.feeNoteMerchant': 'Комиссия Trybit ({service} + {transfer}) на стороне сервиса — вы платите ровно цену тарифа.',
+  'checkout.feeNoteMerchant':
+    'Комиссия Trybit ({service} + {transfer}) на стороне сервиса — вы платите ровно цену тарифа.',
   'checkout.feeNoteEstimate': 'Точную сумму Trybit покажет после выставления счёта.',
-  'checkout.feeNetwork': 'Комиссию сети блокчейна за отправку платите вы со своего кошелька — она не входит в счёт.',
+  'checkout.feeNetwork':
+    'Комиссию сети блокчейна за отправку платите вы со своего кошелька — она не входит в счёт.',
   'checkout.cryptoStepCurrency': '1. Валюта для оплаты',
   'checkout.cryptoStepCurrencyHint': 'Выберите криптовалюту',
   'checkout.cryptoTop': 'Топ',
@@ -944,20 +995,26 @@ export const ru = {
   'checkout.cryptoOpenGateway': 'Оплатить в виджете Trybit · {amount}',
   'checkout.cryptoCreatingInvoice': 'Создание счёта Trybit…',
   'checkout.cryptoGoToPay': 'Перейти к оплате · {amount}',
-  'checkout.cryptoGatewayHint': 'Откроется окно оплаты Trybit: выберите кошелёк и монету, переведите сумму — окно закроется само, а подписка включится автоматически.',
-  'checkout.cryptoGatewayOpened': 'Окно оплаты открыто. Когда оплата пройдёт, оно закроется само, а подписка активируется автоматически.',
+  'checkout.cryptoGatewayHint':
+    'Откроется окно оплаты Trybit: выберите кошелёк и монету, переведите сумму — окно закроется само, а подписка включится автоматически.',
+  'checkout.cryptoGatewayOpened':
+    'Окно оплаты открыто. Когда оплата пройдёт, оно закроется само, а подписка активируется автоматически.',
   'checkout.cryptoReopen': 'Открыть повторно',
   'checkout.cryptoGatewayStatus': 'Ожидание оплаты в шлюзе',
   'checkout.cryptoAmountExact': 'Точная сумма к переводу',
   'checkout.cryptoMemo': 'Комментарий (MEMO)',
   'checkout.cryptoMemoHint': 'Обязательно укажите его в переводе, иначе платёж не зачислится.',
-  'checkout.cryptoInlineHint': 'Отсканируйте QR в кошельке или скопируйте адрес и сумму. Переведите ровно указанную сумму одним платежом.',
+  'checkout.cryptoInlineHint':
+    'Отсканируйте QR в кошельке или скопируйте адрес и сумму. Переведите ровно указанную сумму одним платежом.',
   'checkout.cryptoInlineStatus': 'Ожидаем перевод',
-  'checkout.cryptoGatewayInfo': 'Платёжный шлюз Trybit зафиксирует поступление средств и активирует тариф автоматически.',
+  'checkout.cryptoGatewayInfo':
+    'Платёжный шлюз Trybit зафиксирует поступление средств и активирует тариф автоматически.',
   'checkout.cryptoCheck': 'Проверить оплату криптовалютой',
   'checkout.cryptoSelectedNetwork': 'Выбранная сеть',
-  'checkout.cryptoWrongNetwork': 'Внимание: перевод средств в неверной сети приведёт к безвозвратной потере.',
-  'checkout.cryptoPending': 'Платёж пока обрабатывается сетью. Пожалуйста, повторите проверку через 1–2 минуты.',
+  'checkout.cryptoWrongNetwork':
+    'Внимание: перевод средств в неверной сети приведёт к безвозвратной потере.',
+  'checkout.cryptoPending':
+    'Платёж пока обрабатывается сетью. Пожалуйста, повторите проверку через 1–2 минуты.',
 
   // Оформление: Telegram Stars
   'checkout.starsTitle': 'Оплата через Telegram Stars',
@@ -968,8 +1025,10 @@ export const ru = {
   'checkout.starsSync': 'Синхронизация с Telegram',
   'checkout.starsPayIn': 'Оплатить в Telegram (@{bot})',
   'checkout.starsCheck': 'Проверить оплату Stars',
-  'checkout.starsNotPaid': 'Оплата Stars пока не поступила. Пожалуйста, откройте Telegram (@{bot}), оплатите счёт и нажмите кнопку проверки снова.',
-  'checkout.starsCheckFailed': 'Не удалось проверить статус счёта. Повторите попытку через несколько секунд.',
+  'checkout.starsNotPaid':
+    'Оплата Stars пока не поступила. Пожалуйста, откройте Telegram (@{bot}), оплатите счёт и нажмите кнопку проверки снова.',
+  'checkout.starsCheckFailed':
+    'Не удалось проверить статус счёта. Повторите попытку через несколько секунд.',
 
   // Оформление: сводка и успех
   'checkout.planPrice': 'Стоимость тарифа',
@@ -993,22 +1052,30 @@ export const ru = {
   'docPage.title': 'Документация Ketner AI',
   'docPage.lead': 'Всё, что нужно знать о Ketner AI, тарифах и политике честного использования.',
   'docPage.viewPlans': 'Перейти к тарифам',
-  'docPage.whatLead': 'Один сервис вместо десятка подписок. Доступ к лучшим AI-моделям мира в одном окне.',
-  'docPage.whatText': 'Забудьте о переключении между сайтами, раздельной оплате каждому провайдеру и сложных API-ключах. Ketner AI объединяет GPT от OpenAI, Claude от Anthropic и Gemini от Google в едином удобном интерфейсе без подсчёта токенов.',
+  'docPage.whatLead':
+    'Один сервис вместо десятка подписок. Доступ к лучшим AI-моделям мира в одном окне.',
+  'docPage.whatText':
+    'Забудьте о переключении между сайтами, раздельной оплате каждому провайдеру и сложных API-ключах. Ketner AI объединяет GPT от OpenAI, Claude от Anthropic и Gemini от Google в едином удобном интерфейсе без подсчёта токенов.',
   'docPage.step1Title': 'Вы пишете вопрос',
-  'docPage.step1Text': 'Задайте любой вопрос: напишите код, попросите сделать рерайтинг, перевод или сложный анализ.',
+  'docPage.step1Text':
+    'Задайте любой вопрос: напишите код, попросите сделать рерайтинг, перевод или сложный анализ.',
   'docPage.step2Title': 'Система подбирает модель',
-  'docPage.step2Text': 'Интеллектуальный маршрутизатор мгновенно выбирает лучшую модель (или вы выбираете её вручную).',
+  'docPage.step2Text':
+    'Интеллектуальный маршрутизатор мгновенно выбирает лучшую модель (или вы выбираете её вручную).',
   'docPage.step3Title': 'Вы получаете ответ',
-  'docPage.step3Text': 'Мгновенный потоковый ответ с форматированием, подсветкой кода и сохранением контекста.',
+  'docPage.step3Text':
+    'Мгновенный потоковый ответ с форматированием, подсветкой кода и сохранением контекста.',
   'docPage.plansTitle': 'Тарифные планы',
-  'docPage.plansLead': 'Понятные тарифы, которые различаются скоростью, приоритетом и глубиной контекста — никаких токенов.',
+  'docPage.plansLead':
+    'Понятные тарифы, которые различаются скоростью, приоритетом и глубиной контекста — никаких токенов.',
   'docPage.fairTitle': 'Честное использование (Fair Use)',
-  'docPage.fairCallout': 'Тарифы рассчитаны на обычную работу человека: переписку, код, документы и картинки',
+  'docPage.fairCallout':
+    'Тарифы рассчитаны на обычную работу человека: переписку, код, документы и картинки',
   'docPage.fair1Title': '1. Для реальных людей',
   'docPage.fair1Text': 'Общайтесь столько, сколько требуется для вашей работы, учёбы и проектов.',
   'docPage.fair2Title': '2. Защита от спам-ботов',
-  'docPage.fair2Text': 'Правила защищают серверы от автоматического парсинга, спам-ботов и перегрузок.',
+  'docPage.fair2Text':
+    'Правила защищают серверы от автоматического парсинга, спам-ботов и перегрузок.',
   'docPage.fair3Title': '3. Без внезапных блокировок',
   'docPage.fair3Text': 'При обычной работе ограничения вам не встретятся.',
   'docPage.faqTitle': 'Часто задаваемые вопросы (FAQ)',
@@ -1020,12 +1087,14 @@ export const ru = {
   // Ketner Code
   'nav.code': 'Ketner Code',
   'code.auth.title': 'Войдите, чтобы работать с проектами',
-  'code.auth.hint': 'Ketner Code хранит ваш код на сервере, поэтому нужен аккаунт. Проекты видны только вам.',
+  'code.auth.hint':
+    'Ketner Code хранит ваш код на сервере, поэтому нужен аккаунт. Проекты видны только вам.',
   'code.title': 'Ketner Code',
   'code.subtitle': 'Проекты и ИИ-агент: он читает код, вносит правки и проверяет результат',
   'code.projects.title': 'Проекты',
   'code.projects.empty': 'Проектов пока нет',
-  'code.projects.emptyHint': 'Создайте проект с нуля или импортируйте свой код — агент сможет с ним работать.',
+  'code.projects.emptyHint':
+    'Создайте проект с нуля или импортируйте свой код — агент сможет с ним работать.',
   'code.projects.new': 'Новый проект',
   'code.projects.name': 'Название',
   'code.projects.namePlaceholder': 'Мой проект',
@@ -1050,7 +1119,8 @@ export const ru = {
   'code.import.result': 'Загружено файлов: {written}. Пропущено: {skipped}.',
   'code.import.skippedTitle': 'Что пропущено',
   'code.import.noFiles': 'В выбранном источнике нет подходящих текстовых файлов.',
-  'code.import.note': 'Файлы с секретами (.env, ключи), зависимости (node_modules) и двоичные файлы не загружаются.',
+  'code.import.note':
+    'Файлы с секретами (.env, ключи), зависимости (node_modules) и двоичные файлы не загружаются.',
   'code.ws.back': 'Все проекты',
   'code.ws.files': 'Файлы',
   'code.ws.editor': 'Редактор',
@@ -1116,58 +1186,69 @@ export const ru = {
   'images.authHint': 'Картинки сохраняются в вашем аккаунте.',
   'images.upgrade': 'Улучшить план',
   'images.loadError': 'Не удалось загрузить изображения.',
-  'images.rules': 'Запросы проверяются: откровенные картинки, жестокость и унизительные изображения реальных людей создать нельзя.',
+  'images.rules':
+    'Запросы проверяются: откровенные картинки, жестокость и унизительные изображения реальных людей создать нельзя.',
   'images.elapsed': '{seconds} с',
-  'images.help.open': "О моделях",
-  'images.help.title': "О моделях",
-  'images.help.intro': "Каждая модель рисует по-своему. Быстрые подходят для набросков и идей, точные — для готовых картинок.",
-  'images.help.models': "Модели",
-  'images.help.free': "Free",
-  'images.help.fromPlan': "с {plan}",
-  'images.help.bestFor': "Лучше всего для",
-  'images.help.formatsAll': "Любой формат: квадрат, 4:3, 3:4, 16:9, 9:16",
-  'images.help.formatsSquare': "Только квадрат 1:1",
-  'images.help.locked': "Доступна с тарифа {plan}",
-  'images.help.model.flux-schnell.about': "Самая быстрая модель: картинка готова за несколько секунд.",
-  'images.help.model.flux-schnell.best': "набросков, идей, простых сцен и персонажей.",
-  'images.help.model.flux-2-klein.about': "Новое поколение FLUX: больше деталей и точнее следует описанию.",
-  'images.help.model.flux-2-klein.best': "иллюстраций, обложек и фонов нужного формата.",
-  'images.help.model.flux-2-dev.about': "Высокое качество и проработка деталей, хорошо передаёт свет и материалы.",
-  'images.help.model.flux-2-dev.best': "фотореалистичных сцен, предметных фото и интерьеров.",
-  'images.help.model.seedream-5-flash.about': "Яркие, насыщенные картинки в духе дизайна и рекламы.",
-  'images.help.model.seedream-5-flash.best': "постеров, иллюстраций и картинок для соцсетей.",
-  'images.help.model.flux-2-pro.about': "Лучшая фотореалистичность и сложные композиции с несколькими объектами.",
-  'images.help.model.flux-2-pro.best': "портретов, рекламы и картинок, где важна каждая деталь.",
-  'images.help.model.nano-banana-2.about': "Лучше других понимает длинные и сложные описания и аккуратно пишет текст на картинке.",
-  'images.help.model.nano-banana-2.best': "сцен с надписями, схем и точного следования инструкции.",
-  'images.help.tipsTitle': "Как написать хорошее описание",
-  'images.help.tip1': "Опишите главное: кто или что, где, какой свет и настроение. Например: «рыжая лиса в заснеженном лесу на закате».",
-  'images.help.tip2': "Выберите стиль под полем описания — он добавится к запросу сам. Можно и описать стиль словами: «в стиле старой открытки».",
-  'images.help.tip3': "Текст на картинке пишите в кавычках и коротко. Лучше всего с текстом справляются Nano Banana 2 и Seedream.",
-  'images.help.tip4': "Можно писать по-русски: описание автоматически переводится для модели.",
-  'images.help.rulesTitle': "Правила",
-  'images.style': "Выбрать стиль",
-  'images.style.none': "Без стиля",
-  'images.style.photo': "Фото",
-  'images.style.cinematic': "Кино",
-  'images.style.portrait': "Портрет",
-  'images.style.anime': "Аниме",
-  'images.style.watercolor': "Акварель",
-  'images.style.oil': "Масло",
-  'images.style.3d': "3D",
-  'images.style.digital': "Цифровой арт",
-  'images.style.pixel': "Пиксель-арт",
-  'images.style.sketch': "Скетч",
-  'images.style.neon': "Неон",
-  'images.style.minimal': "Минимализм",
-  'images.style.whiteboard': "Рисунок на доске",
-  'images.style.product': "Промо товара",
-  'images.style.cartoon': "Мультфильм",
-  'images.style.app-promo': "Промо приложения",
-  'images.style.comic': "Комикс",
-  'images.style.ugc': "UGC",
-  'images.style.prev': "Предыдущие стили",
-  'images.style.next': "Следующие стили",
+  'images.help.open': 'О моделях',
+  'images.help.title': 'О моделях',
+  'images.help.intro':
+    'Каждая модель рисует по-своему. Быстрые подходят для набросков и идей, точные — для готовых картинок.',
+  'images.help.models': 'Модели',
+  'images.help.free': 'Free',
+  'images.help.fromPlan': 'с {plan}',
+  'images.help.bestFor': 'Лучше всего для',
+  'images.help.formatsAll': 'Любой формат: квадрат, 4:3, 3:4, 16:9, 9:16',
+  'images.help.formatsSquare': 'Только квадрат 1:1',
+  'images.help.locked': 'Доступна с тарифа {plan}',
+  'images.help.model.flux-schnell.about':
+    'Самая быстрая модель: картинка готова за несколько секунд.',
+  'images.help.model.flux-schnell.best': 'набросков, идей, простых сцен и персонажей.',
+  'images.help.model.flux-2-klein.about':
+    'Новое поколение FLUX: больше деталей и точнее следует описанию.',
+  'images.help.model.flux-2-klein.best': 'иллюстраций, обложек и фонов нужного формата.',
+  'images.help.model.flux-2-dev.about':
+    'Высокое качество и проработка деталей, хорошо передаёт свет и материалы.',
+  'images.help.model.flux-2-dev.best': 'фотореалистичных сцен, предметных фото и интерьеров.',
+  'images.help.model.seedream-5-flash.about':
+    'Яркие, насыщенные картинки в духе дизайна и рекламы.',
+  'images.help.model.seedream-5-flash.best': 'постеров, иллюстраций и картинок для соцсетей.',
+  'images.help.model.flux-2-pro.about':
+    'Лучшая фотореалистичность и сложные композиции с несколькими объектами.',
+  'images.help.model.flux-2-pro.best': 'портретов, рекламы и картинок, где важна каждая деталь.',
+  'images.help.model.nano-banana-2.about':
+    'Лучше других понимает длинные и сложные описания и аккуратно пишет текст на картинке.',
+  'images.help.model.nano-banana-2.best': 'сцен с надписями, схем и точного следования инструкции.',
+  'images.help.tipsTitle': 'Как написать хорошее описание',
+  'images.help.tip1':
+    'Опишите главное: кто или что, где, какой свет и настроение. Например: «рыжая лиса в заснеженном лесу на закате».',
+  'images.help.tip2':
+    'Выберите стиль под полем описания — он добавится к запросу сам. Можно и описать стиль словами: «в стиле старой открытки».',
+  'images.help.tip3':
+    'Текст на картинке пишите в кавычках и коротко. Лучше всего с текстом справляются Nano Banana 2 и Seedream.',
+  'images.help.tip4': 'Можно писать по-русски: описание автоматически переводится для модели.',
+  'images.help.rulesTitle': 'Правила',
+  'images.style': 'Выбрать стиль',
+  'images.style.none': 'Без стиля',
+  'images.style.photo': 'Фото',
+  'images.style.cinematic': 'Кино',
+  'images.style.portrait': 'Портрет',
+  'images.style.anime': 'Аниме',
+  'images.style.watercolor': 'Акварель',
+  'images.style.oil': 'Масло',
+  'images.style.3d': '3D',
+  'images.style.digital': 'Цифровой арт',
+  'images.style.pixel': 'Пиксель-арт',
+  'images.style.sketch': 'Скетч',
+  'images.style.neon': 'Неон',
+  'images.style.minimal': 'Минимализм',
+  'images.style.whiteboard': 'Рисунок на доске',
+  'images.style.product': 'Промо товара',
+  'images.style.cartoon': 'Мультфильм',
+  'images.style.app-promo': 'Промо приложения',
+  'images.style.comic': 'Комикс',
+  'images.style.ugc': 'UGC',
+  'images.style.prev': 'Предыдущие стили',
+  'images.style.next': 'Следующие стили',
   'code.tasks.title': 'Задачи',
   'code.tasks.progress': '{done} из {total}',
   'code.tasks.pill': 'Задачи агента: {done} из {total}',
@@ -1197,7 +1278,8 @@ export const ru = {
   'code.tool.update_plan': 'План',
   'code.notice.close': 'Закрыть',
   'home.heroTitle': 'Все сильные модели в одной подписке',
-  'home.heroLead': 'GPT, Claude, Gemini, Grok и DeepSeek в одном окне. Переключайте модель прямо в диалоге или доверьте выбор режиму Auto.',
+  'home.heroLead':
+    'GPT, Claude, Gemini, Grok и DeepSeek в одном окне. Переключайте модель прямо в диалоге или доверьте выбор режиму Auto.',
   'home.heroCta': 'Начать бесплатно',
   'home.heroCtaSignedIn': 'Открыть чат',
   'home.heroSecondary': 'Сравнить тарифы',
@@ -1208,9 +1290,12 @@ export const ru = {
   'home.spacesChat': 'Чат',
   'home.spacesCode': 'Ketner Code',
   'home.spacesImages': 'Изображения',
-  'home.spacesChatDesc': 'Меняйте модель прямо в диалоге. DOCX, XLSX и PPTX читаются как текст, к чату можно привязать папку или репозиторий.',
-  'home.spacesCodeDesc': 'Агент делит задачу на шаги, правит файлы проекта и показывает diff. Импорт из ZIP или GitHub, экспорт в ZIP.',
-  'home.spacesImagesDesc': 'FLUX.1 schnell — бесплатно, FLUX.2, Seedream и Nano Banana — на платных тарифах. Стили, форматы и галерея.',
+  'home.spacesChatDesc':
+    'Меняйте модель прямо в диалоге. DOCX, XLSX и PPTX читаются как текст, к чату можно привязать папку или репозиторий.',
+  'home.spacesCodeDesc':
+    'Агент делит задачу на шаги, правит файлы проекта и показывает diff. Импорт из ZIP или GitHub, экспорт в ZIP.',
+  'home.spacesImagesDesc':
+    'FLUX.1 schnell — бесплатно, FLUX.2, Seedream и Nano Banana — на платных тарифах. Стили, форматы и галерея.',
   'home.spacesChatFact1': '14 моделей и режим Auto',
   'home.spacesChatFact2': 'Файлы, папки, GitHub',
   'home.spacesChatFact3': 'Режим Max на Ultra',
@@ -1221,7 +1306,8 @@ export const ru = {
   'home.spacesImagesFact2': 'До 5 форматов кадра',
   'home.spacesImagesFact3': 'Бесплатно с Free',
   'home.spacesChatQ': 'Сравни два варианта заголовка для лендинга и выбери сильный',
-  'home.spacesChatA': 'Второй сильнее: он называет выгоду, а не функцию. Первый можно оставить подзаголовком.',
+  'home.spacesChatA':
+    'Второй сильнее: он называет выгоду, а не функцию. Первый можно оставить подзаголовком.',
   'home.spacesCodeTask': 'Добавь тёмную тему в настройки',
   'home.spacesCodeStep1': 'Найти, где хранится тема',
   'home.spacesCodeStep2': 'Добавить переключатель',
@@ -1259,13 +1345,15 @@ export const ru = {
   'home.saveNoGain': 'Одна подписка дешевле Ketner Pro — посмотрите тариф Plus за $9',
   'home.saveFine': 'Цены отдельных подписок — с сайтов сервисов, август 2026.',
   'home.pricingTitle': 'Тарифы',
-  'home.pricingLead': 'Начните бесплатно. Платный тариф открывает сильные модели, больше возможностей в Ketner Code и платные модели картинок.',
+  'home.pricingLead':
+    'Начните бесплатно. Платный тариф открывает сильные модели, больше возможностей в Ketner Code и платные модели картинок.',
   'home.pricingCompare': 'Подробное сравнение тарифов',
   'home.faqTitle': 'Частые вопросы',
   'home.faqLead': 'Коротко о тарифах и моделях. Подробнее — в документации.',
   'home.faqMore': 'Вся документация',
   'home.finalTitle': 'Начните с бесплатного тарифа',
-  'home.finalLead': 'Ketner Mini, режим Auto и FLUX.1 schnell доступны без оплаты. Платный тариф подключается за минуту.',
+  'home.finalLead':
+    'Ketner Mini, режим Auto и FLUX.1 schnell доступны без оплаты. Платный тариф подключается за минуту.',
   'home.footerProduct': 'Продукт',
   'home.footerAccount': 'Аккаунт',
   'home.footerResources': 'Ресурсы',
@@ -1277,7 +1365,8 @@ export const ru = {
   'home.heroTitleA': 'Все сильные модели',
   'home.heroTitleB': 'в одной подписке',
   'dev.title': 'API для разработчиков',
-  'dev.lead': 'OpenAI-совместимый API: подключите модели Ketner к Cursor, Continue или своему коду. Подойдёт любая библиотека, которая умеет менять базовый адрес OpenAI.',
+  'dev.lead':
+    'OpenAI-совместимый API: подключите модели Ketner к Cursor, Continue или своему коду. Подойдёт любая библиотека, которая умеет менять базовый адрес OpenAI.',
   'dev.navKeys': 'Ключи',
   'dev.navBase': 'Адрес и модели',
   'dev.navQuick': 'Быстрый старт',
@@ -1302,31 +1391,38 @@ export const ru = {
   'dev.keysRevokeConfirm': 'Отозвать ключ «{name}»? Программы с ним перестанут работать.',
   'dev.keysRevokeYes': 'Да, отозвать',
   'dev.keysNewTitle': 'Скопируйте ключ сейчас',
-  'dev.keysNewText': 'Ключ показывается один раз: на сервере хранится только его отпечаток. Если потеряете ключ, создайте новый.',
+  'dev.keysNewText':
+    'Ключ показывается один раз: на сервере хранится только его отпечаток. Если потеряете ключ, создайте новый.',
   'dev.keysCopy': 'Скопировать',
   'dev.keysCopied': 'Скопировано',
   'dev.keysDone': 'Готово, я сохранил',
   'dev.keysLoadError': 'Не удалось загрузить ключи. Обновите страницу.',
-  'dev.keysSafety': 'Не публикуйте ключ в репозитории и не вставляйте его в код фронтенда — храните в переменной окружения, например KETNER_API_KEY.',
+  'dev.keysSafety':
+    'Не публикуйте ключ в репозитории и не вставляйте его в код фронтенда — храните в переменной окружения, например KETNER_API_KEY.',
   'dev.baseTitle': 'Адрес API',
-  'dev.baseHint': 'Укажите его как base URL в клиенте OpenAI. Авторизация: заголовок Authorization: Bearer и ваш ключ.',
+  'dev.baseHint':
+    'Укажите его как base URL в клиенте OpenAI. Авторизация: заголовок Authorization: Bearer и ваш ключ.',
   'dev.baseCopy': 'Скопировать адрес',
   'dev.modelsTitle': 'Модели',
   'dev.modelsHint': 'Передайте id в поле model. auto выбирает модель сам.',
   'dev.quickTitle': 'Быстрый старт',
   'dev.quickDesc': 'Один запрос к чату на cURL, Python или JavaScript.',
-  'dev.quickKeyHint': 'В примерах подставлен ваш новый ключ. Обновите страницу — и он снова скроется.',
+  'dev.quickKeyHint':
+    'В примерах подставлен ваш новый ключ. Обновите страницу — и он снова скроется.',
   'dev.quickPrompt': 'Напиши функцию на Python, которая проверяет, что строка — палиндром',
   'dev.editorsTitle': 'Подключение к редактору',
   'dev.editorsDesc': 'Cursor и Continue работают с любым OpenAI-совместимым адресом.',
   'dev.cursorTitle': 'Cursor',
   'dev.cursor1': 'Откройте **Settings → Models**.',
-  'dev.cursor2': 'В разделе **OpenAI API Key** вставьте ваш ключ и включите **Override OpenAI Base URL**.',
+  'dev.cursor2':
+    'В разделе **OpenAI API Key** вставьте ваш ключ и включите **Override OpenAI Base URL**.',
   'dev.cursor3': 'В поле адреса укажите `{url}`.',
-  'dev.cursor4': 'Добавьте модель по id, например `ketner-pro` или `claude-sonnet-5.5`, и нажмите **Verify**.',
+  'dev.cursor4':
+    'Добавьте модель по id, например `ketner-pro` или `claude-sonnet-5.5`, и нажмите **Verify**.',
   'dev.continueTitle': 'Continue (VS Code, JetBrains)',
   'dev.continueHint': 'Добавьте модели в `~/.continue/config.yaml`:',
-  'dev.completionsLead': 'Формат OpenAI Chat Completions: обычные ответы, поток (SSE) и вызов функций (tools). Цикл «модель → инструмент → результат» выполняет ваш клиент.',
+  'dev.completionsLead':
+    'Формат OpenAI Chat Completions: обычные ответы, поток (SSE) и вызов функций (tools). Цикл «модель → инструмент → результат» выполняет ваш клиент.',
   'dev.paramsTitle': 'Параметры тела',
   'dev.paramModel': 'id модели из списка или auto',
   'dev.paramMessages': 'Сообщения с ролями system, user, assistant и tool',
@@ -1336,20 +1432,25 @@ export const ru = {
   'dev.paramMaxTokens': 'Предельная длина ответа',
   'dev.paramTemperature': 'Температура, от 0 до 2',
   'dev.examplesTitle': 'Пример с вызовом функции',
-  'dev.modelsEndpointLead': 'Возвращает модели в формате OpenAI. Поле available показывает, доступна ли модель на вашем тарифе.',
+  'dev.modelsEndpointLead':
+    'Возвращает модели в формате OpenAI. Поле available показывает, доступна ли модель на вашем тарифе.',
   'dev.errorsTitle': 'Ошибки',
-  'dev.errorsText': 'Ошибки приходят в формате OpenAI: `{"error": {"message", "type", "code"}}`. 401 — неверный или отозванный ключ, 403 — модель или API недоступны на тарифе, 429 — слишком много запросов, повторите позже.',
+  'dev.errorsText':
+    'Ошибки приходят в формате OpenAI: `{"error": {"message", "type", "code"}}`. 401 — неверный или отозванный ключ, 403 — модель или API недоступны на тарифе, 429 — слишком много запросов, повторите позже.',
   'home.demoTitle': 'Одна переписка, любая модель',
-  'home.demoSummary': 'Иллюстрация: три запроса в одном чате, на каждый отвечает выбранная модель — Claude Opus 5.5, GPT-6 Astra или Gemini 3.7 Flash.',
+  'home.demoSummary':
+    'Иллюстрация: три запроса в одном чате, на каждый отвечает выбранная модель — Claude Opus 5.5, GPT-6 Astra или Gemini 3.7 Flash.',
   'home.demoRequest': 'Запрос',
   'home.demoModel': 'Модель',
   'home.demoAnswer': 'Ответ',
   'home.demoPick': 'Показать пример {n}',
   'home.demoNote': 'Иллюстрация, не живой диалог',
   'home.demoQ1': 'Сократи этот абзац вдвое и сделай его живее',
-  'home.demoA1': 'Убрал повторы и канцелярит, оставил главную мысль. Текст стал вдвое короче, смысл тот же.',
+  'home.demoA1':
+    'Убрал повторы и канцелярит, оставил главную мысль. Текст стал вдвое короче, смысл тот же.',
   'home.demoQ2': 'Разбери лог: почему сервис падает каждую ночь в 03:00?',
-  'home.demoA2': 'В 03:00 стартует резервное копирование и забирает всю память. Ограничьте ему память или перенесите на 04:30.',
+  'home.demoA2':
+    'В 03:00 стартует резервное копирование и забирает всю память. Ограничьте ему память или перенесите на 04:30.',
   'home.demoQ3': 'Придумай пять названий для кофейни у моря',
   'home.demoA3': '«Солёный бриз», «Маяк и зерно», «Отлив», «Пена», «Береговая обжарка».',
   'home.navFeatures': 'Возможности',

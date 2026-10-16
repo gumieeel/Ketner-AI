@@ -27,11 +27,23 @@ export function buildTree(files: readonly Pick<CodeFileEntry, 'path' | 'size'>[]
       }
       parent = dir;
     }
-    parent.children.push({ name: parts[parts.length - 1], path: file.path, kind: 'file', size: file.size, children: [] });
+    parent.children.push({
+      name: parts[parts.length - 1],
+      path: file.path,
+      kind: 'file',
+      size: file.size,
+      children: [],
+    });
   }
 
   const sort = (nodes: TreeNode[]): void => {
-    nodes.sort((a, b) => (a.kind === b.kind ? a.name.localeCompare(b.name, undefined, { numeric: true }) : a.kind === 'dir' ? -1 : 1));
+    nodes.sort((a, b) =>
+      a.kind === b.kind
+        ? a.name.localeCompare(b.name, undefined, { numeric: true })
+        : a.kind === 'dir'
+          ? -1
+          : 1,
+    );
     for (const node of nodes) if (node.kind === 'dir') sort(node.children);
   };
   sort(root.children);

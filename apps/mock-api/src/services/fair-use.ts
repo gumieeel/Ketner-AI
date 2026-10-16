@@ -47,7 +47,10 @@ export class FairUseEngine {
     }
 
     // 2. Проверка запросов в минуту (RPM)
-    if (limits.requestsPerMinute !== null && snapshot.requestsLastMinute >= limits.requestsPerMinute) {
+    if (
+      limits.requestsPerMinute !== null &&
+      snapshot.requestsLastMinute >= limits.requestsPerMinute
+    ) {
       const reason =
         language === 'en'
           ? `Too many messages in a row. Please slow down a little.`

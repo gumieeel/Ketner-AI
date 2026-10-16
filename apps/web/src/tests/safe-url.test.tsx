@@ -30,7 +30,9 @@ describe('safeHref', () => {
 
 describe('Markdown: ссылки', () => {
   it('ссылка с javascript: показывается текстом, без <a>', () => {
-    const { container } = render(<Markdown content="[клик](javascript:alert(1)) и [сайт](https://ketner.org)" />);
+    const { container } = render(
+      <Markdown content="[клик](javascript:alert(1)) и [сайт](https://ketner.org)" />,
+    );
     const links = [...container.querySelectorAll('a')];
     expect(links).toHaveLength(1);
     expect(links[0].getAttribute('href')).toBe('https://ketner.org');

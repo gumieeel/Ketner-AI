@@ -198,7 +198,9 @@ const mode = "production";
 
       // Проверяем, что состояние стора обновилось
       const updatedWs = useWorkspace.getState().activeWorkspace;
-      expect(updatedWs?.files.find((f) => f.path === 'src/new.ts')?.content).toBe('export const X = 42;');
+      expect(updatedWs?.files.find((f) => f.path === 'src/new.ts')?.content).toBe(
+        'export const X = 42;',
+      );
     });
   });
 
@@ -207,7 +209,9 @@ const mode = "production";
       const disk: Record<string, string> = { ...initial };
       // Явный тип результата: фабрика рекурсивна (каталог возвращает вложенные каталоги), иначе TS7023.
       const dirFor = (prefix: string): LocalDirectoryHandle => ({
-        getDirectoryHandle: vi.fn(async (name: string) => dirFor(prefix ? `${prefix}/${name}` : name)),
+        getDirectoryHandle: vi.fn(async (name: string) =>
+          dirFor(prefix ? `${prefix}/${name}` : name),
+        ),
         getFileHandle: vi.fn(async (name: string, opts?: { create?: boolean }) => {
           const path = prefix ? `${prefix}/${name}` : name;
           if (!(path in disk) && !opts?.create) throw new Error('NotFoundError');
@@ -356,9 +360,13 @@ const mode = "production";
       expect(calls.length).toBeGreaterThan(0);
       for (const [url, init] of calls) {
         expect(String(url)).toMatch(/^\/api\/github\/api\/repos\/testowner\/testrepo\//);
-        expect(JSON.stringify((init as RequestInit | undefined)?.headers ?? {})).not.toMatch(/token /i);
+        expect(JSON.stringify((init as RequestInit | undefined)?.headers ?? {})).not.toMatch(
+          /token /i,
+        );
       }
-      expect(res.url).toContain('https://github.com/testowner/testrepo/commit/final-commit-sha-345');
+      expect(res.url).toContain(
+        'https://github.com/testowner/testrepo/commit/final-commit-sha-345',
+      );
 
       // Проверяем обновление стора
       const updatedWs = useWorkspace.getState().activeWorkspace;
@@ -436,8 +444,10 @@ const mode = "production";
       let blobCalls = 0;
       global.fetch = vi.fn(async (url: RequestInfo | URL) => {
         const u = url.toString();
-        if (u.includes('/git/ref/heads/main')) return Response.json({ object: { sha: 'base-sha' } });
-        if (u.includes('/git/commits/base-sha')) return Response.json({ tree: { sha: 'base-tree' } });
+        if (u.includes('/git/ref/heads/main'))
+          return Response.json({ object: { sha: 'base-sha' } });
+        if (u.includes('/git/commits/base-sha'))
+          return Response.json({ tree: { sha: 'base-tree' } });
         if (u.includes('/contents/')) return new Response('совсем другое содержимое');
         if (u.includes('/git/blobs')) {
           blobCalls++;
@@ -451,7 +461,7 @@ const mode = "production";
           owner: 'testowner',
           repo: 'testrepo',
           branch: 'main',
-            changes: [
+          changes: [
             {
               action: 'replace',
               path: 'src/a.ts',

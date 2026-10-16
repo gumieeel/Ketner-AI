@@ -3,7 +3,11 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
-import { createPostgresProjectDriver, ensureCodeSchema, type SqlRunner } from './postgres-driver.js';
+import {
+  createPostgresProjectDriver,
+  ensureCodeSchema,
+  type SqlRunner,
+} from './postgres-driver.js';
 import { ProjectStore } from './project-store.js';
 
 /**
@@ -13,10 +17,18 @@ import { ProjectStore } from './project-store.js';
 async function openPglite(): Promise<{ runner: SqlRunner; close: () => Promise<void> } | null> {
   try {
     const specifier = process.env.PGLITE_MODULE ?? '@electric-sql/pglite';
-    const mod = (await import(specifier)) as { PGlite: new () => { query: (t: string, p?: unknown[]) => Promise<{ rows: unknown[] }>; close: () => Promise<void> } };
+    const mod = (await import(specifier)) as {
+      PGlite: new () => {
+        query: (t: string, p?: unknown[]) => Promise<{ rows: unknown[] }>;
+        close: () => Promise<void>;
+      };
+    };
     const db = new mod.PGlite();
     return {
-      runner: { query: async <T,>(text: string, params?: unknown[]) => (await db.query(text, params)).rows as T[] },
+      runner: {
+        query: async <T>(text: string, params?: unknown[]) =>
+          (await db.query(text, params)).rows as T[],
+      },
       close: () => db.close(),
     };
   } catch {
@@ -44,7 +56,9 @@ test('PostgreSQL: проект целиком переживает потерю 
     await first.writeText('alice', meta.id, 'src/with-nul.txt', 'a\u0000b', QUOTA);
     await first.writeText('alice', meta.id, 'docs/удалить.md', 'x', QUOTA);
     await first.deletePath('alice', meta.id, 'docs/удалить.md');
-    await first.appendThread('alice', meta.id, [{ id: '1', kind: 'user', text: 'привет', createdAt: new Date().toISOString() }]);
+    await first.appendThread('alice', meta.id, [
+      { id: '1', kind: 'user', text: 'привет', createdAt: new Date().toISOString() },
+    ]);
     await first.flush();
 
     // «новый сервер»: пустой диск, та же БД
@@ -57,7 +71,10 @@ test('PostgreSQL: проект целиком переживает потерю 
     const files = (await second.listFiles('alice', meta.id)).map((f) => f.path);
     assert.ok(files.includes('package.json') && files.includes('src/with-nul.txt'));
     assert.ok(!files.includes('docs/удалить.md'), 'удалённый файл не воскресает');
-    assert.match((await second.readText('alice', meta.id, 'package.json')).content, /"type": "module"/);
+    assert.match(
+      (await second.readText('alice', meta.id, 'package.json')).content,
+      /"type": "module"/,
+    );
     assert.equal((await second.getThread('alice', meta.id))[0]?.kind, 'user');
 
     // чужой пользователь ничего не видит и ничего не записывает
@@ -75,7 +92,9 @@ test('PostgreSQL: проект целиком переживает потерю 
     await second.remove('alice', meta.id);
     await second.flush();
     assert.equal(await driver.loadProject('alice', meta.id), null);
-    const left = await pg.runner.query<{ n: number }>('SELECT count(*)::int AS n FROM code_project_files');
+    const left = await pg.runner.query<{ n: number }>(
+      'SELECT count(*)::int AS n FROM code_project_files',
+    );
     assert.equal(left[0].n, 0);
   } finally {
     await pg.close();

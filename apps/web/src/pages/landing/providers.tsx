@@ -36,7 +36,9 @@ export function LandingProviders() {
           <span className="sharp text-[19px] font-medium tracking-[-0.01em]">Ketner</span>
         </li>
       </ul>
-      <p className="text-[13px] text-subtle lg:max-w-[18ch] lg:text-right">{t('home.providersLabel')}</p>
+      <p className="text-[13px] text-subtle lg:max-w-[18ch] lg:text-right">
+        {t('home.providersLabel')}
+      </p>
     </section>
   );
 }

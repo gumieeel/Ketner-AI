@@ -103,7 +103,9 @@ export function PlanCards({ variant = 'compact', className }: PlanCardsProps) {
                 </span>
                 <span className="text-[14px] text-muted">/{t('pricing.month')}</span>
                 {plan.originalPriceMonthly ? (
-                  <span className="tabular text-[14px] text-subtle line-through">${plan.originalPriceMonthly}</span>
+                  <span className="tabular text-[14px] text-subtle line-through">
+                    ${plan.originalPriceMonthly}
+                  </span>
                 ) : null}
                 {plan.discountBadge ? (
                   <Badge tone="warning" className="ml-1 self-center">
@@ -137,13 +139,19 @@ export function PlanCards({ variant = 'compact', className }: PlanCardsProps) {
                     {t('pricing.currentPlan')}
                   </Button>
                 ) : isFree ? (
-                  <Link to="/chat" className={buttonClasses({ variant: 'outline', fullWidth: true })}>
+                  <Link
+                    to="/chat"
+                    className={buttonClasses({ variant: 'outline', fullWidth: true })}
+                  >
                     {t('landing.cta')}
                   </Link>
                 ) : (
                   <Link
                     to={`/checkout/${plan.id}`}
-                    className={buttonClasses({ variant: emphasised ? 'primary' : 'outline', fullWidth: true })}
+                    className={buttonClasses({
+                      variant: emphasised ? 'primary' : 'outline',
+                      fullWidth: true,
+                    })}
                   >
                     {t('pricing.choosePlan')}
                   </Link>
@@ -151,7 +159,10 @@ export function PlanCards({ variant = 'compact', className }: PlanCardsProps) {
               ) : (
                 <Link
                   to={isFree ? '/chat' : `/checkout/${plan.id}`}
-                  className={buttonClasses({ variant: isPro ? 'primary' : 'outline', fullWidth: true })}
+                  className={buttonClasses({
+                    variant: isPro ? 'primary' : 'outline',
+                    fullWidth: true,
+                  })}
                 >
                   {compactCtaLabel}
                 </Link>

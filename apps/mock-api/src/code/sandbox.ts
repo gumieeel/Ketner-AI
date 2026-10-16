@@ -217,7 +217,9 @@ export class LocalProcessSandbox implements SandboxRunner {
       child.stderr?.setEncoding('utf8');
       child.stdout?.on('data', (chunk: string) => collector.push(chunk));
       child.stderr?.on('data', (chunk: string) => collector.push(chunk));
-      child.on('error', (error) => finish(null, null, `\n[не удалось запустить команду: ${error.message}]`));
+      child.on('error', (error) =>
+        finish(null, null, `\n[не удалось запустить команду: ${error.message}]`),
+      );
       child.on('close', (code, signal) => finish(code, signal));
     });
   }

@@ -47,7 +47,9 @@ describe('чат: отправка, стриминг и управление о�
     await sendMessage(user, 'Как дела?');
 
     expect(await screen.findAllByText('Как дела?')).not.toHaveLength(0);
-    expect(await screen.findByText('Привет от Ketner AI', {}, { timeout: 10000 })).toBeInTheDocument();
+    expect(
+      await screen.findByText('Привет от Ketner AI', {}, { timeout: 10000 }),
+    ).toBeInTheDocument();
     // Ответ получает идентификатор с сервера: сохранённое сообщение и то, что
     // видно в ленте, — одна и та же сущность.
     expect(lastAssistant().id).toBe('assistant-1');
@@ -131,7 +133,9 @@ describe('чат: отправка, стриминг и управление о�
     const retryBtn = await screen.findByRole('button', { name: 'Повторить' });
     await user.click(retryBtn);
 
-    expect(await screen.findByText('Ответ со второй попытки', {}, { timeout: 8000 })).toBeInTheDocument();
+    expect(
+      await screen.findByText('Ответ со второй попытки', {}, { timeout: 8000 }),
+    ).toBeInTheDocument();
     await waitFor(() => expect(screen.queryByText('Не удалось получить ответ')).toBeNull());
     expect(api.completions).toBe(2);
   });
@@ -319,7 +323,9 @@ describe('чат: отправка, стриминг и управление о�
 
     await sendMessage(user, 'Реши задачу');
 
-    expect(await screen.findByText('Ответ рабочей модели', {}, { timeout: 10000 })).toBeInTheDocument();
+    expect(
+      await screen.findByText('Ответ рабочей модели', {}, { timeout: 10000 }),
+    ).toBeInTheDocument();
     await waitFor(() => expect(lastAssistant().status).toBe('complete'));
     expect(usePreferences.getState().chatModelId).toBe('auto');
     expect(lastAssistant().modelId).toBe('ketner-pro');
@@ -445,4 +451,3 @@ describe('чат: отправка, стриминг и управление о�
     expect(trigger).toHaveFocus();
   });
 });
-

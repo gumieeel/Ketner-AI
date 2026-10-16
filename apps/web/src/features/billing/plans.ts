@@ -35,16 +35,8 @@ export const PLANS: readonly Plan[] = [
       ],
     },
     highlights: {
-      ru: [
-        'Базовая модель Ketner Mini',
-        'Стандартная скорость',
-        'Базовый контекст',
-      ],
-      en: [
-        'Basic model: Ketner Mini',
-        'Standard speed',
-        'Basic context',
-      ],
+      ru: ['Базовая модель Ketner Mini', 'Стандартная скорость', 'Базовый контекст'],
+      en: ['Basic model: Ketner Mini', 'Standard speed', 'Basic context'],
     },
   },
   {

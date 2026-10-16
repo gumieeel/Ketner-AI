@@ -40,7 +40,9 @@ interface Harness {
   calls: AgentProviderRequest[];
   usage: UsageStore;
   /** Регистрирует пользователя на нужном тарифе и выдаёт ему API-ключ. */
-  caller: (plan?: 'free' | 'plus' | 'pro' | 'ultra') => Promise<{ secret: string; userId: string; token: string; keyId: string }>;
+  caller: (
+    plan?: 'free' | 'plus' | 'pro' | 'ultra',
+  ) => Promise<{ secret: string; userId: string; token: string; keyId: string }>;
 }
 
 let emailCounter = 0;
@@ -78,7 +80,11 @@ async function harness(script: Script): Promise<Harness> {
     const signup = await fetch(`${server.baseUrl}/api/auth/signup`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email: `dev${emailCounter}@example.com`, password: 'password123', name: 'Dev' }),
+      body: JSON.stringify({
+        email: `dev${emailCounter}@example.com`,
+        password: 'password123',
+        name: 'Dev',
+      }),
     });
     const { token, user } = await readJson<AuthSession>(signup);
     if (plan !== 'free') {
@@ -108,10 +114,19 @@ const get = (h: Harness, secret: string, path: string) =>
   fetch(`${h.server.baseUrl}${path}`, { headers: { Authorization: `Bearer ${secret}` } });
 
 const TOOLS = [
-  { type: 'function', function: { name: 'read_file', description: 'Читает файл', parameters: { type: 'object', properties: { path: { type: 'string' } } } } },
+  {
+    type: 'function',
+    function: {
+      name: 'read_file',
+      description: 'Читает файл',
+      parameters: { type: 'object', properties: { path: { type: 'string' } } },
+    },
+  },
 ];
 
-interface ErrorBody { error: { message: string; type: string; code: string; param: string | null } }
+interface ErrorBody {
+  error: { message: string; type: string; code: string; param: string | null };
+}
 
 function sseData(text: string): Array<Record<string, unknown> | '[DONE]'> {
   return text
@@ -120,7 +135,9 @@ function sseData(text: string): Array<Record<string, unknown> | '[DONE]'> {
     .filter((line): line is string => Boolean(line))
     .map((line) => {
       const payload = line.slice(6);
-      return payload === '[DONE]' ? ('[DONE]' as const) : (JSON.parse(payload) as Record<string, unknown>);
+      return payload === '[DONE]'
+        ? ('[DONE]' as const)
+        : (JSON.parse(payload) as Record<string, unknown>);
     });
 }
 
@@ -138,30 +155,63 @@ test('/api/keys: Free ключ не создаст, Plus создаёт, сек�
 
   const plus = await h.caller('plus');
   const auth = { 'Content-Type': 'application/json', Authorization: `Bearer ${plus.token}` };
-  const created = await fetch(`${h.server.baseUrl}/api/keys`, { method: 'POST', headers: auth, body: JSON.stringify({ name: 'MacBook' }) });
+  const created = await fetch(`${h.server.baseUrl}/api/keys`, {
+    method: 'POST',
+    headers: auth,
+    body: JSON.stringify({ name: 'MacBook' }),
+  });
   assert.equal(created.status, 201);
-  const { key, secret } = await readJson<{ key: { id: string; name: string; prefix: string }; secret: string }>(created);
+  const { key, secret } = await readJson<{
+    key: { id: string; name: string; prefix: string };
+    secret: string;
+  }>(created);
   assert.match(secret, /^ketner_sk_[0-9a-f]{64}$/);
   assert.equal(key.prefix, secret.slice(0, 14));
 
-  const listed = await readJson<{ keys: Array<{ id: string }> }>(await fetch(`${h.server.baseUrl}/api/keys`, { headers: auth }));
+  const listed = await readJson<{ keys: Array<{ id: string }> }>(
+    await fetch(`${h.server.baseUrl}/api/keys`, { headers: auth }),
+  );
   assert.ok(listed.keys.some((k) => k.id === key.id));
   assert.equal(JSON.stringify(listed).includes(secret), false, 'секрет в списке не показывается');
 
-  assert.equal((await fetch(`${h.server.baseUrl}/api/keys`, { method: 'POST', headers: auth, body: JSON.stringify({}) })).status, 400);
+  assert.equal(
+    (
+      await fetch(`${h.server.baseUrl}/api/keys`, {
+        method: 'POST',
+        headers: auth,
+        body: JSON.stringify({}),
+      })
+    ).status,
+    400,
+  );
   assert.equal((await fetch(`${h.server.baseUrl}/api/keys`)).status, 401);
 
-  const revoked = await fetch(`${h.server.baseUrl}/api/keys/${key.id}`, { method: 'DELETE', headers: auth });
+  const revoked = await fetch(`${h.server.baseUrl}/api/keys/${key.id}`, {
+    method: 'DELETE',
+    headers: auth,
+  });
   assert.equal(revoked.status, 200);
-  assert.equal((await fetch(`${h.server.baseUrl}/api/keys/${key.id}`, { method: 'DELETE', headers: auth })).status, 404);
+  assert.equal(
+    (await fetch(`${h.server.baseUrl}/api/keys/${key.id}`, { method: 'DELETE', headers: auth }))
+      .status,
+    404,
+  );
   assert.equal((await get(h, secret, '/v1/models')).status, 401, 'отозванный ключ не работает');
 
   // У пользователя уже есть один ключ из harness().caller(): добираем до 10 и проверяем 11-й.
   for (let i = 0; i < 9; i++) {
-    const r = await fetch(`${h.server.baseUrl}/api/keys`, { method: 'POST', headers: auth, body: JSON.stringify({ name: `k${i}` }) });
+    const r = await fetch(`${h.server.baseUrl}/api/keys`, {
+      method: 'POST',
+      headers: auth,
+      body: JSON.stringify({ name: `k${i}` }),
+    });
     assert.equal(r.status, 201);
   }
-  const limited = await fetch(`${h.server.baseUrl}/api/keys`, { method: 'POST', headers: auth, body: JSON.stringify({ name: 'лишний' }) });
+  const limited = await fetch(`${h.server.baseUrl}/api/keys`, {
+    method: 'POST',
+    headers: auth,
+    body: JSON.stringify({ name: 'лишний' }),
+  });
   assert.equal(limited.status, 409);
 });
 
@@ -177,7 +227,11 @@ test('/v1: без ключа, с чужим ключом и с токеном с
   assert.equal(body.error.type, 'authentication_error');
 
   assert.equal((await get(h, `ketner_sk_${'0'.repeat(64)}`, '/v1/models')).status, 401);
-  assert.equal((await get(h, me.token, '/v1/models')).status, 401, 'токен сессии сайта не заменяет API-ключ');
+  assert.equal(
+    (await get(h, me.token, '/v1/models')).status,
+    401,
+    'токен сессии сайта не заменяет API-ключ',
+  );
   assert.equal((await get(h, me.secret, '/v1/models')).status, 200);
 });
 
@@ -185,15 +239,28 @@ test('GET /v1/models: auto и публичные модели, доступно�
   const h = await harness(async () => result());
   t.after(() => h.server.close());
   const plus = await h.caller('plus');
-  const list = await readJson<{ object: string; data: Array<{ id: string; available: boolean; requires_plan: string; object: string }> }>(
-    await get(h, plus.secret, '/v1/models'),
-  );
+  const list = await readJson<{
+    object: string;
+    data: Array<{ id: string; available: boolean; requires_plan: string; object: string }>;
+  }>(await get(h, plus.secret, '/v1/models'));
   assert.equal(list.object, 'list');
   const ids = list.data.map((m) => m.id);
   assert.deepEqual(ids, [
-    'auto', 'ketner-mini', 'ketner-pro', 'claude-haiku-5.5', 'deepseek-v4.1-flash',
-    'gpt-5.6-luna-pro', 'qwen3.8-27b', 'gemini-3.7-flash', 'gpt-6.1-sol',
-    'claude-opus-5.5', 'claude-sonnet-5.5', 'gpt-6-astra', 'grok-4.7', 'gpt-5.6-sol', 'gpt-5.6-terra',
+    'auto',
+    'ketner-mini',
+    'ketner-pro',
+    'claude-haiku-5.5',
+    'deepseek-v4.1-flash',
+    'gpt-5.6-luna-pro',
+    'qwen3.8-27b',
+    'gemini-3.7-flash',
+    'gpt-6.1-sol',
+    'claude-opus-5.5',
+    'claude-sonnet-5.5',
+    'gpt-6-astra',
+    'grok-4.7',
+    'gpt-5.6-sol',
+    'gpt-5.6-terra',
   ]);
   const byId = Object.fromEntries(list.data.map((m) => [m.id, m]));
   assert.equal(byId['ketner-pro'].available, true);
@@ -209,10 +276,22 @@ test('GET /v1/models: auto и публичные модели, доступно�
 
 test('POST /v1/chat/completions без стриминга: вызов функции, расход и решение маршрутизации', async (t) => {
   const h = await harness(async (_r, emit) => {
-    emit({ kind: 'tool_call', index: 0, id: 'call_1', name: 'read_file', argumentsDelta: '{"path":"src/a.ts"}' });
+    emit({
+      kind: 'tool_call',
+      index: 0,
+      id: 'call_1',
+      name: 'read_file',
+      argumentsDelta: '{"path":"src/a.ts"}',
+    });
     return result({
       content: '',
-      toolCalls: [{ id: 'call_1', type: 'function', function: { name: 'read_file', arguments: '{"path":"src/a.ts"}' } }],
+      toolCalls: [
+        {
+          id: 'call_1',
+          type: 'function',
+          function: { name: 'read_file', arguments: '{"path":"src/a.ts"}' },
+        },
+      ],
       finishReason: 'tool_calls',
       cost: 0.0123,
     });
@@ -222,16 +301,32 @@ test('POST /v1/chat/completions без стриминга: вызов функц
 
   const response = await post(h, dev.secret, {
     model: 'ketner-pro',
-    messages: [{ role: 'system', content: 'Ты кодинг-агент' }, { role: 'user', content: 'открой src/a.ts' }],
+    messages: [
+      { role: 'system', content: 'Ты кодинг-агент' },
+      { role: 'user', content: 'открой src/a.ts' },
+    ],
     tools: TOOLS,
     tool_choice: 'auto',
   });
   assert.equal(response.status, 200);
   const body = await readJson<{
-    id: string; object: string; model: string;
-    choices: Array<{ message: { content: unknown; tool_calls: Array<{ id: string; function: { name: string; arguments: string } }> }; finish_reason: string }>;
+    id: string;
+    object: string;
+    model: string;
+    choices: Array<{
+      message: {
+        content: unknown;
+        tool_calls: Array<{ id: string; function: { name: string; arguments: string } }>;
+      };
+      finish_reason: string;
+    }>;
     usage: { prompt_tokens: number; completion_tokens: number; total_tokens: number };
-    ketner: { cost_usd: number; requested_model: string; routing_reason: string; budget: { stage: string; used_pct: number; premium_available: boolean } };
+    ketner: {
+      cost_usd: number;
+      requested_model: string;
+      routing_reason: string;
+      budget: { stage: string; used_pct: number; premium_available: boolean };
+    };
   }>(response);
 
   assert.equal(body.object, 'chat.completion');
@@ -240,7 +335,9 @@ test('POST /v1/chat/completions без стриминга: вызов функц
   assert.equal(body.choices[0].finish_reason, 'tool_calls');
   assert.equal(body.choices[0].message.content, null);
   assert.equal(body.choices[0].message.tool_calls[0].function.name, 'read_file');
-  assert.deepEqual(JSON.parse(body.choices[0].message.tool_calls[0].function.arguments), { path: 'src/a.ts' });
+  assert.deepEqual(JSON.parse(body.choices[0].message.tool_calls[0].function.arguments), {
+    path: 'src/a.ts',
+  });
   assert.equal(body.usage.total_tokens, 1280);
   assert.equal(body.ketner.cost_usd, 0.0123);
   assert.equal(body.ketner.requested_model, 'ketner-pro');
@@ -257,8 +354,24 @@ test('POST /v1/chat/completions без стриминга: вызов функц
 test('круг инструмента: ответ tool возвращается модели, итог приходит текстом', async (t) => {
   const h = await harness(async (request, emit, call) => {
     if (call === 1) {
-      emit({ kind: 'tool_call', index: 0, id: 'c1', name: 'read_file', argumentsDelta: '{"path":"a"}' });
-      return result({ content: '', toolCalls: [{ id: 'c1', type: 'function', function: { name: 'read_file', arguments: '{"path":"a"}' } }], finishReason: 'tool_calls' });
+      emit({
+        kind: 'tool_call',
+        index: 0,
+        id: 'c1',
+        name: 'read_file',
+        argumentsDelta: '{"path":"a"}',
+      });
+      return result({
+        content: '',
+        toolCalls: [
+          {
+            id: 'c1',
+            type: 'function',
+            function: { name: 'read_file', arguments: '{"path":"a"}' },
+          },
+        ],
+        finishReason: 'tool_calls',
+      });
     }
     const last = request.messages[request.messages.length - 1];
     assert.equal(last.role, 'tool');
@@ -275,9 +388,9 @@ test('круг инструмента: ответ tool возвращается 
   const assistant = first.choices[0].message;
   messages.push(assistant, { role: 'tool', tool_call_id: 'c1', content: 'const a = 1;' });
 
-  const second = await readJson<{ choices: Array<{ message: { content: string }; finish_reason: string }> }>(
-    await post(h, dev.secret, { model: 'ketner-pro', messages, tools: TOOLS }),
-  );
+  const second = await readJson<{
+    choices: Array<{ message: { content: string }; finish_reason: string }>;
+  }>(await post(h, dev.secret, { model: 'ketner-pro', messages, tools: TOOLS }));
   assert.equal(second.choices[0].finish_reason, 'stop');
   assert.equal(second.choices[0].message.content, 'В файле одна строка.');
   assert.equal(h.calls.length, 2);
@@ -293,7 +406,13 @@ test('стриминг: роль, размышления, вызов функц�
     emit({ kind: 'tool_call', index: 0, argumentsDelta: '"b.ts"}' });
     return result({
       content: 'Открываю ',
-      toolCalls: [{ id: 'c9', type: 'function', function: { name: 'read_file', arguments: '{"path":"b.ts"}' } }],
+      toolCalls: [
+        {
+          id: 'c9',
+          type: 'function',
+          function: { name: 'read_file', arguments: '{"path":"b.ts"}' },
+        },
+      ],
       finishReason: 'tool_calls',
       cost: 0.02,
     });
@@ -301,14 +420,24 @@ test('стриминг: роль, размышления, вызов функц�
   t.after(() => h.server.close());
   const dev = await h.caller('plus');
 
-  const response = await post(h, dev.secret, { model: 'ketner-pro', stream: true, messages: [{ role: 'user', content: 'открой b.ts' }], tools: TOOLS });
+  const response = await post(h, dev.secret, {
+    model: 'ketner-pro',
+    stream: true,
+    messages: [{ role: 'user', content: 'открой b.ts' }],
+    tools: TOOLS,
+  });
   assert.equal(response.status, 200);
   assert.match(response.headers.get('content-type') ?? '', /text\/event-stream/);
   const chunks = sseData(await response.text());
 
   assert.equal(chunks[chunks.length - 1], '[DONE]');
   const objects = chunks.filter((c): c is Record<string, unknown> => c !== '[DONE]');
-  type Chunk = { choices: Array<{ delta: Record<string, unknown>; finish_reason: string | null }>; model: string; usage?: Record<string, number>; ketner?: Record<string, unknown> };
+  type Chunk = {
+    choices: Array<{ delta: Record<string, unknown>; finish_reason: string | null }>;
+    model: string;
+    usage?: Record<string, number>;
+    ketner?: Record<string, unknown>;
+  };
   const typed = objects as unknown as Chunk[];
 
   assert.equal(typed[0].choices[0].delta.role, 'assistant');
@@ -319,7 +448,8 @@ test('стриминг: роль, размышления, вызов функц�
   let args = '';
   let name = '';
   for (const c of typed) {
-    for (const call of (c.choices[0]?.delta.tool_calls as Array<{ id?: string; function?: { name?: string; arguments?: string } }> | undefined) ?? []) {
+    for (const call of (c.choices[0]?.delta.tool_calls as
+      Array<{ id?: string; function?: { name?: string; arguments?: string } }> | undefined) ?? []) {
       name ||= call.function?.name ?? '';
       args += call.function?.arguments ?? '';
     }
@@ -338,12 +468,19 @@ test('стриминг: роль, размышления, вызов функц�
 test('отказ до начала ответа остаётся обычным HTTP-статусом даже при stream=true', async (t) => {
   const warn = console.warn;
   console.warn = () => undefined;
-  t.after(() => { console.warn = warn; });
-  const h = await harness(async (r) => { throw new OpenRouterError(r.model, 500, 'boom'); });
+  t.after(() => {
+    console.warn = warn;
+  });
+  const h = await harness(async (r) => {
+    throw new OpenRouterError(r.model, 500, 'boom');
+  });
   t.after(() => h.server.close());
   const dev = await h.caller('plus');
 
-  const response = await post(h, dev.secret, { stream: true, messages: [{ role: 'user', content: 'x' }] });
+  const response = await post(h, dev.secret, {
+    stream: true,
+    messages: [{ role: 'user', content: 'x' }],
+  });
   assert.equal(response.status, 502);
   assert.match(response.headers.get('content-type') ?? '', /application\/json/);
   assert.equal((await readJson<ErrorBody>(response)).error.code, 'upstream_error');
@@ -352,7 +489,9 @@ test('отказ до начала ответа остаётся обычным 
 test('обрыв посреди потока: событие error, затем расход и [DONE], без finish_reason', async (t) => {
   const warn = console.warn;
   console.warn = () => undefined;
-  t.after(() => { console.warn = warn; });
+  t.after(() => {
+    console.warn = warn;
+  });
   const h = await harness(async (_r, emit) => {
     emit({ kind: 'content', text: 'начало' });
     throw new Error('socket hang up');
@@ -360,10 +499,22 @@ test('обрыв посреди потока: событие error, затем �
   t.after(() => h.server.close());
   const dev = await h.caller('plus');
 
-  const chunks = sseData(await (await post(h, dev.secret, { stream: true, messages: [{ role: 'user', content: 'x' }] })).text());
+  const chunks = sseData(
+    await (
+      await post(h, dev.secret, { stream: true, messages: [{ role: 'user', content: 'x' }] })
+    ).text(),
+  );
   const objects = chunks.filter((c): c is Record<string, unknown> => c !== '[DONE]');
-  assert.ok(objects.some((c) => 'error' in c), 'клиент узнаёт об обрыве');
-  assert.equal(objects.some((c) => (c.choices as Array<{ finish_reason: string | null }> | undefined)?.[0]?.finish_reason), false);
+  assert.ok(
+    objects.some((c) => 'error' in c),
+    'клиент узнаёт об обрыве',
+  );
+  assert.equal(
+    objects.some(
+      (c) => (c.choices as Array<{ finish_reason: string | null }> | undefined)?.[0]?.finish_reason,
+    ),
+    false,
+  );
   assert.equal(chunks[chunks.length - 1], '[DONE]');
 });
 
@@ -382,11 +533,16 @@ test('Free: 403 upgrade_required; неверный JSON, ошибка тела �
   assert.equal(badJson.status, 400);
   assert.equal((await readJson<ErrorBody>(badJson)).error.type, 'invalid_request_error');
 
-  const badBody = await post(h, dev.secret, { messages: [{ role: 'user', content: 'x' }], temperature: 9 });
+  const badBody = await post(h, dev.secret, {
+    messages: [{ role: 'user', content: 'x' }],
+    temperature: 9,
+  });
   assert.equal(badBody.status, 400);
   assert.equal((await readJson<ErrorBody>(badBody)).error.param, 'temperature');
 
-  const huge = await post(h, dev.secret, { messages: [{ role: 'user', content: 'a'.repeat(9 * 1024 * 1024) }] });
+  const huge = await post(h, dev.secret, {
+    messages: [{ role: 'user', content: 'a'.repeat(9 * 1024 * 1024) }],
+  });
   assert.equal(huge.status, 413);
   assert.equal((await readJson<ErrorBody>(huge)).error.code, 'request_too_large');
 
@@ -401,7 +557,8 @@ test('лимиты: параллельный запрос получает 429 �
   t.after(() => h.server.close());
 
   const busy = await h.caller('plus');
-  for (let i = 0; i < PLAN_ENTITLEMENTS.plus.maxConcurrency; i++) h.usage.acquireConcurrencySlot(busy.userId);
+  for (let i = 0; i < PLAN_ENTITLEMENTS.plus.maxConcurrency; i++)
+    h.usage.acquireConcurrencySlot(busy.userId);
   const limited = await post(h, busy.secret, { messages: [{ role: 'user', content: 'x' }] });
   assert.equal(limited.status, 429);
   assert.equal(limited.headers.get('retry-after'), '5');
@@ -409,8 +566,15 @@ test('лимиты: параллельный запрос получает 429 �
 
   const broke = await h.caller('plus');
   const seeded = h.usage.recordUsage({
-    userId: broke.userId, conversationId: 'seed', modelId: 'ketner-pro', provider: 'openrouter',
-    inputTokens: 1, outputTokens: 1, estimatedCost: PLAN_ENTITLEMENTS.plus.costBudget * 1.3, latencyMs: 1, status: 'success',
+    userId: broke.userId,
+    conversationId: 'seed',
+    modelId: 'ketner-pro',
+    provider: 'openrouter',
+    inputTokens: 1,
+    outputTokens: 1,
+    estimatedCost: PLAN_ENTITLEMENTS.plus.costBudget * 1.3,
+    latencyMs: 1,
+    status: 'success',
   });
   seeded.createdAt = new Date(Date.now() - 3 * 86_400_000).toISOString();
   const refused = await post(h, broke.secret, { messages: [{ role: 'user', content: 'x' }] });
@@ -426,12 +590,26 @@ test('подмена модели видна клиенту: исчерпана 
   t.after(() => h.server.close());
   const dev = await h.caller('pro');
   const seeded = h.usage.recordUsage({
-    userId: dev.userId, conversationId: 'seed', modelId: 'gpt-6.1-sol', provider: 'openrouter',
-    inputTokens: 1, outputTokens: 1, estimatedCost: PLAN_ENTITLEMENTS.pro.premiumBudget + 0.05, latencyMs: 1, status: 'success',
+    userId: dev.userId,
+    conversationId: 'seed',
+    modelId: 'gpt-6.1-sol',
+    provider: 'openrouter',
+    inputTokens: 1,
+    outputTokens: 1,
+    estimatedCost: PLAN_ENTITLEMENTS.pro.premiumBudget + 0.05,
+    latencyMs: 1,
+    status: 'success',
   });
   seeded.createdAt = new Date(Date.now() - 3 * 86_400_000).toISOString();
 
-  const body = await readJson<{ model: string; ketner: { requested_model: string; routing_reason: string; budget: { premium_available: boolean } } }>(
+  const body = await readJson<{
+    model: string;
+    ketner: {
+      requested_model: string;
+      routing_reason: string;
+      budget: { premium_available: boolean };
+    };
+  }>(
     await post(h, dev.secret, { model: 'gpt-6.1-sol', messages: [{ role: 'user', content: 'x' }] }),
   );
   assert.equal(body.model, 'ketner-pro');
@@ -446,9 +624,13 @@ test('GET /v1/usage: бюджет, премиум-квота и число за�
   t.after(() => h.server.close());
   const dev = await h.caller('plus');
 
-  const before = await readJson<{ plan: string; budget: { limit_usd: number; used_usd: number; stage: string }; premium: { limit_usd: number; available: boolean }; requests_last_day: number; window: string }>(
-    await get(h, dev.secret, '/v1/usage'),
-  );
+  const before = await readJson<{
+    plan: string;
+    budget: { limit_usd: number; used_usd: number; stage: string };
+    premium: { limit_usd: number; available: boolean };
+    requests_last_day: number;
+    window: string;
+  }>(await get(h, dev.secret, '/v1/usage'));
   assert.equal(before.plan, 'plus');
   assert.equal(before.budget.limit_usd, PLAN_ENTITLEMENTS.plus.costBudget);
   assert.equal(before.budget.used_usd, 0);
@@ -478,7 +660,12 @@ test('клиент оборвал соединение: генерация ос�
   const dev = await h.caller('plus');
 
   const controller = new AbortController();
-  const response = await post(h, dev.secret, { stream: true, messages: [{ role: 'user', content: 'x' }] }, { signal: controller.signal });
+  const response = await post(
+    h,
+    dev.secret,
+    { stream: true, messages: [{ role: 'user', content: 'x' }] },
+    { signal: controller.signal },
+  );
   const reader = response.body!.getReader();
   await reader.read();
   controller.abort();

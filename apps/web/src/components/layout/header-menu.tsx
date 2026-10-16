@@ -151,7 +151,14 @@ export function HeaderMenu({ className }: { className?: string }) {
           <div role="separator" className="my-1.5 border-t border-stroke" />
 
           {links.map((item) => (
-            <Link key={item.to} to={item.to} role="menuitem" tabIndex={-1} onClick={() => close(false)} className={itemClass}>
+            <Link
+              key={item.to}
+              to={item.to}
+              role="menuitem"
+              tabIndex={-1}
+              onClick={() => close(false)}
+              className={itemClass}
+            >
               <span className="text-muted">{item.icon}</span>
               <span className="flex-1">{item.label}</span>
             </Link>

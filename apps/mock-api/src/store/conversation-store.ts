@@ -42,7 +42,11 @@ export function stripWorkspaceFileContents(
   if (!workspace) return undefined;
   return {
     ...workspace,
-    files: workspace.files?.map((file) => ({ path: file.path, size: file.size, language: file.language })),
+    files: workspace.files?.map((file) => ({
+      path: file.path,
+      size: file.size,
+      language: file.language,
+    })),
   };
 }
 
@@ -189,9 +193,9 @@ export function createConversationStore(file: string): ConversationStore {
         if (conversation && userId) {
           conversation.userId = userId;
           persist();
-          dbDriver?.onConversationCreated?.({ ...conversation })?.catch?.((err) =>
-            console.error('[db] Error persisting assigned conversation:', err),
-          );
+          dbDriver
+            ?.onConversationCreated?.({ ...conversation })
+            ?.catch?.((err) => console.error('[db] Error persisting assigned conversation:', err));
         }
       }
       if (!conversation) {
@@ -211,9 +215,9 @@ export function createConversationStore(file: string): ConversationStore {
       };
       snapshot.conversations.push(conversation);
       persist();
-      dbDriver?.onConversationCreated?.({ ...conversation })?.catch?.((err) =>
-        console.error('[db] Error persisting created conversation:', err),
-      );
+      dbDriver
+        ?.onConversationCreated?.({ ...conversation })
+        ?.catch?.((err) => console.error('[db] Error persisting created conversation:', err));
       return { ...conversation };
     },
 
@@ -225,9 +229,9 @@ export function createConversationStore(file: string): ConversationStore {
       conversation.title = deriveTitle(title);
       conversation.updatedAt = new Date().toISOString();
       persist();
-      dbDriver?.onConversationRenamed?.({ ...conversation })?.catch?.((err) =>
-        console.error('[db] Error persisting renamed conversation:', err),
-      );
+      dbDriver
+        ?.onConversationRenamed?.({ ...conversation })
+        ?.catch?.((err) => console.error('[db] Error persisting renamed conversation:', err));
       return { ...conversation };
     },
 
@@ -244,9 +248,9 @@ export function createConversationStore(file: string): ConversationStore {
         (message) => message.conversationId !== conversationId,
       );
       persist();
-      dbDriver?.onConversationRemoved?.(userId, conversationId)?.catch?.((err) =>
-        console.error('[db] Error persisting removed conversation:', err),
-      );
+      dbDriver
+        ?.onConversationRemoved?.(userId, conversationId)
+        ?.catch?.((err) => console.error('[db] Error persisting removed conversation:', err));
       return true;
     },
 
@@ -277,7 +281,9 @@ export function createConversationStore(file: string): ConversationStore {
       const now = new Date().toISOString();
       const restored: Message[] = history.map((message) => {
         const existing = message.id
-          ? snapshot.messages.find((m) => m.id === message.id && m.conversationId === conversationId)
+          ? snapshot.messages.find(
+              (m) => m.id === message.id && m.conversationId === conversationId,
+            )
           : undefined;
         // id из запроса сохраняется, только если он новый или уже принадлежит этому диалогу:
         // id сообщения из чужого диалога перезаписал бы его текст в базе (ON CONFLICT по id).
@@ -286,7 +292,9 @@ export function createConversationStore(file: string): ConversationStore {
           typeof message.id === 'string' &&
           snapshot.messages.some((m) => m.id === message.id && m.conversationId !== conversationId);
         const safeId =
-          typeof message.id === 'string' && /^[A-Za-z0-9_-]{1,100}$/.test(message.id) && !takenElsewhere
+          typeof message.id === 'string' &&
+          /^[A-Za-z0-9_-]{1,100}$/.test(message.id) &&
+          !takenElsewhere
             ? message.id
             : randomUUID();
         return {
@@ -332,9 +340,9 @@ export function createConversationStore(file: string): ConversationStore {
       conversation.updatedAt = now;
       persist();
 
-      dbDriver?.onTurnSaved?.({ ...conversation }, restored, { ...assistantMessage })?.catch?.((err) =>
-        console.error('[db] Error persisting turn:', err),
-      );
+      dbDriver
+        ?.onTurnSaved?.({ ...conversation }, restored, { ...assistantMessage })
+        ?.catch?.((err) => console.error('[db] Error persisting turn:', err));
 
       return { conversation: { ...conversation }, assistant: assistantMessage };
     },
@@ -345,9 +353,9 @@ export function createConversationStore(file: string): ConversationStore {
         conversation.contextSummary = summary;
         conversation.updatedAt = new Date().toISOString();
         persist();
-        dbDriver?.onContextSummaryUpdated?.(userId, conversationId, summary)?.catch?.((err) =>
-          console.error('[db] Error persisting context summary:', err),
-        );
+        dbDriver
+          ?.onContextSummaryUpdated?.(userId, conversationId, summary)
+          ?.catch?.((err) => console.error('[db] Error persisting context summary:', err));
       }
     },
 
@@ -368,9 +376,9 @@ export function createConversationStore(file: string): ConversationStore {
       message.feedback = feedback ?? undefined;
       conversation.updatedAt = new Date().toISOString();
       persist();
-      dbDriver?.onMessageFeedbackUpdated?.(userId, conversationId, messageId, feedback)?.catch?.((err) =>
-        console.error('[db] Error persisting message feedback:', err),
-      );
+      dbDriver
+        ?.onMessageFeedbackUpdated?.(userId, conversationId, messageId, feedback)
+        ?.catch?.((err) => console.error('[db] Error persisting message feedback:', err));
       return { ...message };
     },
 

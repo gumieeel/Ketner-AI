@@ -34,8 +34,7 @@ export interface ParsedChatRequest {
 }
 
 export type ParseResult =
-  | { ok: true; value: ParsedChatRequest }
-  | { ok: false; message: string; param?: string };
+  { ok: true; value: ParsedChatRequest } | { ok: false; message: string; param?: string };
 
 const fail = (message: string, param?: string): ParseResult => ({ ok: false, message, param });
 
@@ -82,12 +81,22 @@ function readToolCalls(raw: unknown, index: number): AgentToolCall[] | string {
   return calls;
 }
 
-function readMessages(raw: unknown): { ok: true; messages: AgentMessage[] } | { ok: false; message: string; param: string } {
+function readMessages(
+  raw: unknown,
+): { ok: true; messages: AgentMessage[] } | { ok: false; message: string; param: string } {
   if (!Array.isArray(raw) || raw.length === 0) {
-    return { ok: false, message: 'messages должен содержать хотя бы одно сообщение', param: 'messages' };
+    return {
+      ok: false,
+      message: 'messages должен содержать хотя бы одно сообщение',
+      param: 'messages',
+    };
   }
   if (raw.length > MAX_AGENT_MESSAGES) {
-    return { ok: false, message: `Слишком длинная история: не больше ${MAX_AGENT_MESSAGES} сообщений`, param: 'messages' };
+    return {
+      ok: false,
+      message: `Слишком длинная история: не больше ${MAX_AGENT_MESSAGES} сообщений`,
+      param: 'messages',
+    };
   }
 
   const messages: AgentMessage[] = [];
@@ -118,7 +127,11 @@ function readMessages(raw: unknown): { ok: true; messages: AgentMessage[] } | { 
         const calls = readToolCalls(item.tool_calls, i);
         if (typeof calls === 'string') return { ok: false, message: calls, param };
         for (const call of calls) knownCallIds.add(call.id);
-        messages.push({ role: 'assistant', content, ...(calls.length > 0 ? { tool_calls: calls } : {}) });
+        messages.push({
+          role: 'assistant',
+          content,
+          ...(calls.length > 0 ? { tool_calls: calls } : {}),
+        });
       } else {
         messages.push({ role: 'assistant', content: content ?? '' });
       }
@@ -142,20 +155,35 @@ function readMessages(raw: unknown): { ok: true; messages: AgentMessage[] } | { 
       continue;
     }
 
-    return { ok: false, message: `${param}: роль должна быть system, user, assistant или tool`, param };
+    return {
+      ok: false,
+      message: `${param}: роль должна быть system, user, assistant или tool`,
+      param,
+    };
   }
 
   const last = messages[messages.length - 1];
   if (last.role !== 'user' && last.role !== 'tool') {
-    return { ok: false, message: 'Последнее сообщение должно быть от user или tool', param: 'messages' };
+    return {
+      ok: false,
+      message: 'Последнее сообщение должно быть от user или tool',
+      param: 'messages',
+    };
   }
   return { ok: true, messages };
 }
 
-function readTools(raw: unknown): { ok: true; tools: AgentToolDefinition[] } | { ok: false; message: string; param: string } {
-  if (!Array.isArray(raw)) return { ok: false, message: 'tools должен быть массивом', param: 'tools' };
+function readTools(
+  raw: unknown,
+): { ok: true; tools: AgentToolDefinition[] } | { ok: false; message: string; param: string } {
+  if (!Array.isArray(raw))
+    return { ok: false, message: 'tools должен быть массивом', param: 'tools' };
   if (raw.length > MAX_AGENT_TOOLS) {
-    return { ok: false, message: `Слишком много инструментов: не больше ${MAX_AGENT_TOOLS}`, param: 'tools' };
+    return {
+      ok: false,
+      message: `Слишком много инструментов: не больше ${MAX_AGENT_TOOLS}`,
+      param: 'tools',
+    };
   }
   const tools: AgentToolDefinition[] = [];
   const names = new Set<string>();
@@ -167,7 +195,11 @@ function readTools(raw: unknown): { ok: true; tools: AgentToolDefinition[] } | {
     }
     const fn = tool.function;
     if (typeof fn.name !== 'string' || !TOOL_NAME.test(fn.name)) {
-      return { ok: false, message: `${param}: имя функции — латиница, цифры, _ и -, до 64 символов`, param };
+      return {
+        ok: false,
+        message: `${param}: имя функции — латиница, цифры, _ и -, до 64 символов`,
+        param,
+      };
     }
     if (names.has(fn.name)) {
       return { ok: false, message: `${param}: имя функции "${fn.name}" повторяется`, param };
@@ -195,7 +227,8 @@ export function parseChatRequest(body: unknown): ParseResult {
   if (!isRecord(body)) return fail('Тело запроса должно быть объектом JSON');
 
   const model = body.model === undefined || body.model === null ? 'auto' : body.model;
-  if (typeof model !== 'string' || model.trim() === '') return fail('model должен быть непустой строкой', 'model');
+  if (typeof model !== 'string' || model.trim() === '')
+    return fail('model должен быть непустой строкой', 'model');
 
   if (body.n !== undefined && body.n !== 1) return fail('Поддерживается только n = 1', 'n');
 
@@ -214,23 +247,37 @@ export function parseChatRequest(body: unknown): ParseResult {
   if (tools && choice !== undefined && choice !== null) {
     if (choice === 'auto' || choice === 'none' || choice === 'required') {
       toolChoice = choice;
-    } else if (isRecord(choice) && choice.type === 'function' && isRecord(choice.function) && typeof choice.function.name === 'string') {
+    } else if (
+      isRecord(choice) &&
+      choice.type === 'function' &&
+      isRecord(choice.function) &&
+      typeof choice.function.name === 'string'
+    ) {
       const name = choice.function.name;
       if (!tools.some((t) => t.function.name === name)) {
         return fail(`tool_choice ссылается на неизвестную функцию "${name}"`, 'tool_choice');
       }
       toolChoice = { type: 'function', function: { name } };
     } else {
-      return fail('tool_choice: auto, none, required или {type:"function", function:{name}}', 'tool_choice');
+      return fail(
+        'tool_choice: auto, none, required или {type:"function", function:{name}}',
+        'tool_choice',
+      );
     }
   }
 
-  if (body.stream !== undefined && typeof body.stream !== 'boolean') return fail('stream должен быть true или false', 'stream');
+  if (body.stream !== undefined && typeof body.stream !== 'boolean')
+    return fail('stream должен быть true или false', 'stream');
 
   const rawMax = body.max_completion_tokens ?? body.max_tokens;
   let maxTokens: number | undefined;
   if (rawMax !== undefined && rawMax !== null) {
-    if (typeof rawMax !== 'number' || !Number.isInteger(rawMax) || rawMax < 1 || rawMax > MAX_MAX_TOKENS) {
+    if (
+      typeof rawMax !== 'number' ||
+      !Number.isInteger(rawMax) ||
+      rawMax < 1 ||
+      rawMax > MAX_MAX_TOKENS
+    ) {
       return fail(`max_tokens: целое число от 1 до ${MAX_MAX_TOKENS}`, 'max_tokens');
     }
     maxTokens = rawMax;
@@ -288,7 +335,9 @@ export function newCompletionId(): string {
  * Причина завершения в терминах OpenAI. Отмена отдельной причины не имеет. Оборванный ответ
  * (`error`) отдаётся как `length`: он неполон, и клиент не должен принять его за законченный.
  */
-export function toOpenAiFinishReason(reason: AgentProviderResult['finishReason']): OpenAiFinishReason {
+export function toOpenAiFinishReason(
+  reason: AgentProviderResult['finishReason'],
+): OpenAiFinishReason {
   if (reason === 'length' || reason === 'error') return 'length';
   if (reason === 'tool_calls') return 'tool_calls';
   return 'stop';
@@ -299,7 +348,9 @@ export function toOpenAiUsage(usage: AgentProviderResult['usage']): Record<strin
     prompt_tokens: usage.inputTokens,
     completion_tokens: usage.outputTokens,
     total_tokens: usage.inputTokens + usage.outputTokens,
-    ...(usage.cachedTokens !== undefined ? { prompt_tokens_details: { cached_tokens: usage.cachedTokens } } : {}),
+    ...(usage.cachedTokens !== undefined
+      ? { prompt_tokens_details: { cached_tokens: usage.cachedTokens } }
+      : {}),
     ...(usage.reasoningTokens !== undefined
       ? { completion_tokens_details: { reasoning_tokens: usage.reasoningTokens } }
       : {}),

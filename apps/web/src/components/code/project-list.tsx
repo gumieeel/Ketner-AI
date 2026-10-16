@@ -23,7 +23,11 @@ const TEMPLATE_KEYS: Record<string, TranslationKey> = {
 type ImportMode = 'folder' | 'zip' | 'github';
 
 function messageOf(error: unknown, fallback: string): string {
-  return error instanceof Error && error.message ? (error.message === 'no_files' ? fallback : error.message) : fallback;
+  return error instanceof Error && error.message
+    ? error.message === 'no_files'
+      ? fallback
+      : error.message
+    : fallback;
 }
 
 /** Создание проекта: название и шаблон. */
@@ -44,7 +48,10 @@ function CreateForm() {
     setBusy(true);
     setError('');
     try {
-      const project = await createProject(name.trim() || t('code.projects.namePlaceholder'), template);
+      const project = await createProject(
+        name.trim() || t('code.projects.namePlaceholder'),
+        template,
+      );
       navigate(`/code/${project.id}`);
     } catch (e) {
       setError(messageOf(e, t('code.projects.loadError')));
@@ -135,8 +142,18 @@ function ImportForm() {
     if (resumeIntent === 'code-import' && consumeGithubIntent('code-import')) setMode('github');
   }, [resumeIntent, consumeGithubIntent]);
 
-  const onGithub = ({ owner, repo, branch }: { owner: string; repo: string; branch: string }): void => {
-    void run(() => importGithub(`https://github.com/${owner}/${repo}/tree/${encodeURIComponent(branch)}`));
+  const onGithub = ({
+    owner,
+    repo,
+    branch,
+  }: {
+    owner: string;
+    repo: string;
+    branch: string;
+  }): void => {
+    void run(() =>
+      importGithub(`https://github.com/${owner}/${repo}/tree/${encodeURIComponent(branch)}`),
+    );
   };
 
   const modes: Array<{ id: ImportMode; label: string }> = [
@@ -147,7 +164,11 @@ function ImportForm() {
 
   return (
     <div className="flex flex-col gap-3">
-      <div role="group" aria-label={t('code.import.title')} className="grid grid-cols-3 gap-1 rounded-lg bg-surface-2 p-1">
+      <div
+        role="group"
+        aria-label={t('code.import.title')}
+        className="grid grid-cols-3 gap-1 rounded-lg bg-surface-2 p-1"
+      >
         {modes.map((item) => (
           <button
             key={item.id}
@@ -181,7 +202,12 @@ function ImportForm() {
             webkitdirectory=""
             multiple
           />
-          <Button variant="secondary" loading={busy} onClick={() => folderRef.current?.click()} leftIcon={<FolderIcon className="size-4" />}>
+          <Button
+            variant="secondary"
+            loading={busy}
+            onClick={() => folderRef.current?.click()}
+            leftIcon={<FolderIcon className="size-4" />}
+          >
             {busy ? t('code.import.working') : t('code.import.folder')}
           </Button>
         </>
@@ -189,8 +215,20 @@ function ImportForm() {
 
       {mode === 'zip' ? (
         <>
-          <input ref={zipRef} type="file" accept=".zip,application/zip" className="sr-only" aria-label={t('code.import.zip')} onChange={onZip} />
-          <Button variant="secondary" loading={busy} onClick={() => zipRef.current?.click()} leftIcon={<FolderIcon className="size-4" />}>
+          <input
+            ref={zipRef}
+            type="file"
+            accept=".zip,application/zip"
+            className="sr-only"
+            aria-label={t('code.import.zip')}
+            onChange={onZip}
+          />
+          <Button
+            variant="secondary"
+            loading={busy}
+            onClick={() => zipRef.current?.click()}
+            leftIcon={<FolderIcon className="size-4" />}
+          >
             {busy ? t('code.import.working') : t('code.import.zip')}
           </Button>
         </>
@@ -247,7 +285,12 @@ export function ProjectList() {
         {status === 'error' ? (
           <div className="rounded-xl border border-danger/30 bg-danger-soft p-4 text-center">
             <p className="text-sm text-danger">{t('code.projects.loadError')}</p>
-            <Button variant="outline" size="sm" className="mt-2" onClick={() => void loadProjects()}>
+            <Button
+              variant="outline"
+              size="sm"
+              className="mt-2"
+              onClick={() => void loadProjects()}
+            >
               {t('common.retry')}
             </Button>
           </div>
@@ -259,28 +302,41 @@ export function ProjectList() {
               <CodeIcon className="size-5" />
             </span>
             <p className="text-sm font-medium text-text">{t('code.projects.empty')}</p>
-            <p className="mx-auto mt-1 max-w-sm text-[13px] leading-5 text-muted">{t('code.projects.emptyHint')}</p>
+            <p className="mx-auto mt-1 max-w-sm text-[13px] leading-5 text-muted">
+              {t('code.projects.emptyHint')}
+            </p>
           </div>
         ) : null}
 
-
         <ul className="flex flex-col gap-2">
           {projects.map((project) => (
-            <li key={project.id} className="flex items-center gap-2 rounded-xl border border-stroke bg-surface p-1 pr-2 transition-colors hover:border-stroke-strong">
-              <Link to={`/code/${project.id}`} className="flex min-w-0 flex-1 items-center gap-3 rounded-lg px-3 py-2.5">
+            <li
+              key={project.id}
+              className="flex items-center gap-2 rounded-xl border border-stroke bg-surface p-1 pr-2 transition-colors hover:border-stroke-strong"
+            >
+              <Link
+                to={`/code/${project.id}`}
+                className="flex min-w-0 flex-1 items-center gap-3 rounded-lg px-3 py-2.5"
+              >
                 <span className="grid size-9 shrink-0 place-items-center rounded-lg bg-accent-soft text-accent">
                   <FolderIcon className="size-4" />
                 </span>
                 <span className="min-w-0">
-                  <span className="block truncate text-sm font-medium text-text">{project.name}</span>
+                  <span className="block truncate text-sm font-medium text-text">
+                    {project.name}
+                  </span>
                   <span className="block truncate text-xs text-muted">
-                    {t('code.projects.files', { count: project.fileCount })} · {formatBytes(project.totalBytes)} · {formatShortDate(project.updatedAt, language)}
+                    {t('code.projects.files', { count: project.fileCount })} ·{' '}
+                    {formatBytes(project.totalBytes)} ·{' '}
+                    {formatShortDate(project.updatedAt, language)}
                   </span>
                 </span>
               </Link>
               {pendingDelete === project.id ? (
                 <div className="flex shrink-0 items-center gap-1">
-                  <span className="hidden text-xs text-danger sm:inline">{t('code.projects.confirmDelete', { name: project.name })}</span>
+                  <span className="hidden text-xs text-danger sm:inline">
+                    {t('code.projects.confirmDelete', { name: project.name })}
+                  </span>
                   <Button
                     size="sm"
                     variant="danger"
@@ -296,7 +352,11 @@ export function ProjectList() {
                   </Button>
                 </div>
               ) : (
-                <IconButton label={`${t('code.projects.delete')}: ${project.name}`} size="sm" onClick={() => setPendingDelete(project.id)}>
+                <IconButton
+                  label={`${t('code.projects.delete')}: ${project.name}`}
+                  size="sm"
+                  onClick={() => setPendingDelete(project.id)}
+                >
                   <TrashIcon className="size-4" />
                 </IconButton>
               )}

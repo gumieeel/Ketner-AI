@@ -17,7 +17,12 @@ const USER = {
 };
 
 function signIn(): void {
-  useAuth.setState({ user: USER as never, token: 'session-token', status: 'authenticated', error: null });
+  useAuth.setState({
+    user: USER as never,
+    token: 'session-token',
+    status: 'authenticated',
+    error: null,
+  });
 }
 
 interface Call {
@@ -43,12 +48,19 @@ function stubGithubServer(connected: boolean): Call[] {
         available: true,
         connected,
         account: connected
-          ? { login: 'octo', avatarUrl: null, scopes: ['repo'], connectedAt: '2026-10-01T10:00:00.000Z' }
+          ? {
+              login: 'octo',
+              avatarUrl: null,
+              scopes: ['repo'],
+              connectedAt: '2026-10-01T10:00:00.000Z',
+            }
           : null,
       });
     }
     if (url.startsWith('/api/github/connect-url')) {
-      return Response.json({ url: 'https://github.com/login/oauth/authorize?client_id=test&state=s' });
+      return Response.json({
+        url: 'https://github.com/login/oauth/authorize?client_id=test&state=s',
+      });
     }
     if (url.startsWith('/api/github/api/user/repos')) {
       return Response.json([
@@ -76,7 +88,9 @@ function stubGithubServer(connected: boolean): Call[] {
       return Response.json([{ name: 'main' }, { name: 'develop' }]);
     }
     if (url === '/api/github/api/repos/octo/secret-app/git/trees/develop?recursive=1') {
-      return Response.json({ tree: [{ path: 'package.json', type: 'blob', mode: '100644', size: 20 }] });
+      return Response.json({
+        tree: [{ path: 'package.json', type: 'blob', mode: '100644', size: 20 }],
+      });
     }
     if (url === '/api/github/api/repos/octo/secret-app/contents/package.json?ref=develop') {
       return new Response('{"name":"secret"}');
@@ -100,7 +114,10 @@ describe('привязка аккаунта GitHub', () => {
   });
 
   it('разбирает ответ колбэка во фрагменте адреса', () => {
-    expect(readGithubReturn('#github_code=abc&github_state=s.1')).toEqual({ code: 'abc', state: 's.1' });
+    expect(readGithubReturn('#github_code=abc&github_state=s.1')).toEqual({
+      code: 'abc',
+      state: 's.1',
+    });
     expect(readGithubReturn('#github_error=denied')).toEqual({ error: 'denied' });
     expect(readGithubReturn('#section')).toBeNull();
     expect(readGithubReturn('')).toBeNull();
@@ -119,7 +136,12 @@ describe('привязка аккаунта GitHub', () => {
       return Response.json({
         available: true,
         connected: true,
-        account: { login: 'octo', avatarUrl: null, scopes: ['repo'], connectedAt: '2026-10-01T10:00:00.000Z' },
+        account: {
+          login: 'octo',
+          avatarUrl: null,
+          scopes: ['repo'],
+          connectedAt: '2026-10-01T10:00:00.000Z',
+        },
       });
     });
     window.history.replaceState(null, '', '/chat#github_code=abc&github_state=s1');
@@ -156,9 +178,13 @@ describe('привязка аккаунта GitHub', () => {
 
     fireEvent.click(connect);
     await waitFor(() =>
-      expect(calls.some((call) => call.url.startsWith('/api/github/connect-url?returnTo='))).toBe(true),
+      expect(calls.some((call) => call.url.startsWith('/api/github/connect-url?returnTo='))).toBe(
+        true,
+      ),
     );
-    await waitFor(() => expect(window.sessionStorage.getItem('ketner.github.intent')).toBe('link-repo'));
+    await waitFor(() =>
+      expect(window.sessionStorage.getItem('ketner.github.intent')).toBe('link-repo'),
+    );
   });
 
   it('приватный репозиторий выбирается из списка, ветка — из настоящих веток, всё через прокси', async () => {
@@ -175,7 +201,9 @@ describe('привязка аккаунта GitHub', () => {
     expect(within(repo).getByText('Приватный')).toBeInTheDocument();
     expect(screen.getByText('GitHub: octo')).toBeInTheDocument();
 
-    fireEvent.change(screen.getByPlaceholderText(/Поиск или ссылка/), { target: { value: 'secret' } });
+    fireEvent.change(screen.getByPlaceholderText(/Поиск или ссылка/), {
+      target: { value: 'secret' },
+    });
     expect(screen.queryByRole('radio', { name: /octo\/site/ })).not.toBeInTheDocument();
 
     fireEvent.click(repo);
@@ -189,7 +217,9 @@ describe('привязка аккаунта GitHub', () => {
     const workspace = useWorkspace.getState().activeWorkspace;
     expect(workspace?.name).toBe('octo/secret-app');
     expect(workspace?.branch).toBe('develop');
-    expect(workspace?.files.find((file) => file.path === 'package.json')?.content).toBe('{"name":"secret"}');
+    expect(workspace?.files.find((file) => file.path === 'package.json')?.content).toBe(
+      '{"name":"secret"}',
+    );
     expect(JSON.stringify(workspace)).not.toMatch(/token/i);
     // Ни одного прямого запроса в GitHub из браузера.
     expect(calls.every((call) => call.url.startsWith('/api/'))).toBe(true);
@@ -200,7 +230,10 @@ describe('привязка аккаунта GitHub', () => {
     installFakeApi({ github: { connected: true, login: 'octo' } });
     renderRoute('/settings');
 
-    expect(await screen.findByRole('link', { name: '@octo' })).toHaveAttribute('href', 'https://github.com/octo');
+    expect(await screen.findByRole('link', { name: '@octo' })).toHaveAttribute(
+      'href',
+      'https://github.com/octo',
+    );
     fireEvent.click(screen.getByRole('button', { name: 'Отключить' }));
     fireEvent.click(await screen.findByRole('button', { name: 'Да, отключить' }));
     expect(await screen.findByText('Не подключён')).toBeInTheDocument();

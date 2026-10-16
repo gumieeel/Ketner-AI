@@ -49,7 +49,11 @@ test('оплаченный тариф действует, пока идёт пе
     allowAnonymous: false,
     sessionUser: { id: 'u2', email: 'u2@example.com', plan: 'pro' },
     storedUser: { plan: 'pro' },
-    subscription: { plan: 'pro', status: 'active', renewsAt: new Date(NOW + 86_400_000).toISOString() },
+    subscription: {
+      plan: 'pro',
+      status: 'active',
+      renewsAt: new Date(NOW + 86_400_000).toISOString(),
+    },
     now: NOW,
   });
   assert.ok(r.ok);
@@ -117,7 +121,10 @@ test('free не получает платные движки, plus получа�
   assert.equal(check('claude-fable', 'plus'), false);
   assert.equal(check('claude-fable', 'pro'), true);
 
-  const denied = EntitlementService.checkModelAccess(modelRegistry.resolve('claude-opus-5.5'), 'plus');
+  const denied = EntitlementService.checkModelAccess(
+    modelRegistry.resolve('claude-opus-5.5'),
+    'plus',
+  );
   assert.equal(denied.allowed, false);
   if (!denied.allowed) {
     assert.equal(denied.requiredPlan, 'Pro');

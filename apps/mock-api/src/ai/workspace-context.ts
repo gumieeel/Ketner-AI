@@ -12,7 +12,13 @@
  *  - промпт не обещает «полный доступ»: модель знает, какие файлы она видела, а какие нет.
  */
 
-import type { Language, MessageAttachment, PlanId, WorkspaceContext, WorkspaceFile } from '../types.js';
+import type {
+  Language,
+  MessageAttachment,
+  PlanId,
+  WorkspaceContext,
+  WorkspaceFile,
+} from '../types.js';
 
 // ─────────────────────────────────────────────────────────────
 // Бюджет
@@ -75,7 +81,10 @@ export function isSensitivePath(path: string): boolean {
 
 const STATIC_PRIORITY: Array<[RegExp, number]> = [
   [/^(src\/|apps\/[^/]+\/src\/)?(index|main|server|app)\.(ts|tsx|js|jsx|py|go|rs)$/i, 80],
-  [/(^|\/)(pyproject\.toml|requirements\.txt|Cargo\.toml|go\.mod|pom\.xml|Gemfile|composer\.json)$/i, 70],
+  [
+    /(^|\/)(pyproject\.toml|requirements\.txt|Cargo\.toml|go\.mod|pom\.xml|Gemfile|composer\.json)$/i,
+    70,
+  ],
   [/^package\.json$/i, 100],
   [/(^|\/)package\.json$/i, 60],
   [/(^|\/)(Dockerfile|docker-compose\.ya?ml)$/i, 55],
@@ -145,7 +154,11 @@ function fenceFor(content: string): string {
   return '`'.repeat(Math.max(3, longest + 1));
 }
 
-function renderFile(file: WorkspaceFile, language: Language, remaining: number): { text: string; used: number } {
+function renderFile(
+  file: WorkspaceFile,
+  language: Language,
+  remaining: number,
+): { text: string; used: number } {
   const full = file.content ?? '';
   const limit = Math.min(MAX_FILE_CHARS, remaining);
   const shown = full.length > limit ? full.slice(0, limit) : full;
@@ -188,12 +201,18 @@ export function buildWorkspaceContextBlock(
   const files = Array.isArray(ws.files) ? ws.files : [];
   const typeLabel =
     ws.type === 'git_repo'
-      ? isEn ? 'GitHub repository' : 'GitHub-репозиторий'
-      : isEn ? 'Local project folder' : 'Локальная папка проекта';
+      ? isEn
+        ? 'GitHub repository'
+        : 'GitHub-репозиторий'
+      : isEn
+        ? 'Local project folder'
+        : 'Локальная папка проекта';
 
   // Секреты: путь виден, содержимое — нет.
   const readable = files.filter((f) => !isSensitivePath(f.path));
-  const withContent = readable.filter((f) => typeof f.content === 'string' && f.content.trim().length > 0);
+  const withContent = readable.filter(
+    (f) => typeof f.content === 'string' && f.content.trim().length > 0,
+  );
 
   const queryLower = query.toLowerCase();
   const terms = extractQueryTerms(query);
@@ -250,12 +269,15 @@ export function buildWorkspaceContextBlock(
   const treeLines = sortedFiles.slice(0, MAX_TREE_ENTRIES).map((f) => {
     let note = '';
     if (isSensitivePath(f.path)) note = isEn ? ' (excluded: secrets)' : ' (исключён: секреты)';
-    else if (!shownPaths.has(f.path)) note = isEn ? ' (content not loaded)' : ' (содержимое не загружено)';
+    else if (!shownPaths.has(f.path))
+      note = isEn ? ' (content not loaded)' : ' (содержимое не загружено)';
     return `- ${f.path}${formatSize(f.size)}${note}`;
   });
   if (files.length > MAX_TREE_ENTRIES) {
     treeLines.push(
-      isEn ? `... and ${files.length - MAX_TREE_ENTRIES} more files` : `... и ещё ${files.length - MAX_TREE_ENTRIES} файлов`,
+      isEn
+        ? `... and ${files.length - MAX_TREE_ENTRIES} more files`
+        : `... и ещё ${files.length - MAX_TREE_ENTRIES} файлов`,
     );
   }
 
@@ -321,7 +343,7 @@ export function looksBinary(text: string): boolean {
   let bad = 0;
   for (let i = 0; i < sample.length; i++) {
     const code = sample.charCodeAt(i);
-    if (code === 0xfffd || code === 0 || (code < 9) || (code > 13 && code < 32)) bad++;
+    if (code === 0xfffd || code === 0 || code < 9 || (code > 13 && code < 32)) bad++;
   }
   return bad / sample.length > 0.02;
 }
@@ -364,7 +386,9 @@ export function buildAttachmentsBlock(
       continue;
     }
     if (remaining < 500) {
-      block += isEn ? '  [omitted: attachment budget exhausted]\n' : '  [пропущено: исчерпан лимит на вложения]\n';
+      block += isEn
+        ? '  [omitted: attachment budget exhausted]\n'
+        : '  [пропущено: исчерпан лимит на вложения]\n';
       continue;
     }
 

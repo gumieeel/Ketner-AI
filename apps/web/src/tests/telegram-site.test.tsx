@@ -58,7 +58,13 @@ describe('вход и привязка Telegram на сайте', () => {
         polls += 1;
         return polls < 2
           ? Response.json({ status: 'pending' })
-          : Response.json({ status: 'approved', mode: 'login', token: 'tg-token', expiresAt: '', user: USER });
+          : Response.json({
+              status: 'approved',
+              mode: 'login',
+              token: 'tg-token',
+              expiresAt: '',
+              user: USER,
+            });
       }
       return undefined;
     });
@@ -77,7 +83,9 @@ describe('вход и привязка Telegram на сайте', () => {
     await act(async () => {
       vi.advanceTimersByTime(2000);
     });
-    await waitFor(() => expect(onLogin).toHaveBeenCalledWith(expect.objectContaining({ token: 'tg-token' })));
+    await waitFor(() =>
+      expect(onLogin).toHaveBeenCalledWith(expect.objectContaining({ token: 'tg-token' })),
+    );
     expect(screen.getByText('Готово, входим…')).toBeInTheDocument();
   });
 
@@ -102,7 +110,10 @@ describe('вход и привязка Telegram на сайте', () => {
     await act(async () => {
       vi.advanceTimersByTime(2000);
     });
-    expect(await screen.findByText('Вход отклонён в Telegram.')).toBeInTheDocument();
+    // Ответ опроса обрабатывается асинхронно: под нагрузкой одной секунды ожидания мало.
+    expect(
+      await screen.findByText('Вход отклонён в Telegram.', {}, { timeout: 5000 }),
+    ).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Начать заново' }));
     await screen.findByRole('link', { name: /Открыть Telegram/ });
     expect(starts).toBe(2);
@@ -130,7 +141,11 @@ describe('вход и привязка Telegram на сайте', () => {
     let used = false;
     const calls = withTelegram((url) => {
       if (url === '/api/auth/telegram/magic') {
-        if (used) return Response.json({ error: { code: 'invalid_token', message: 'Ссылка для входа устарела.' } }, { status: 400 });
+        if (used)
+          return Response.json(
+            { error: { code: 'invalid_token', message: 'Ссылка для входа устарела.' } },
+            { status: 400 },
+          );
         used = true;
         return Response.json({ token: 'magic-session', expiresAt: '', user: USER });
       }
@@ -138,25 +153,41 @@ describe('вход и привязка Telegram на сайте', () => {
     });
     renderRoute('/auth/telegram?t=one-time&next=/pricing');
     await waitFor(() => expect(useAuth.getState().token).toBe('magic-session'));
-    expect(calls.find((call) => call.url === '/api/auth/telegram/magic')?.body).toEqual({ token: 'one-time' });
-    expect(await screen.findByRole('heading', { level: 1, name: /Тариф|тариф|Plans|Цены|План/i })).toBeInTheDocument();
+    expect(calls.find((call) => call.url === '/api/auth/telegram/magic')?.body).toEqual({
+      token: 'one-time',
+    });
+    expect(
+      await screen.findByRole('heading', { level: 1, name: /Тариф|тариф|Plans|Цены|План/i }),
+    ).toBeInTheDocument();
 
     resetAuth();
     renderRoute('/auth/telegram?t=one-time');
     expect(await screen.findByText('Ссылка для входа устарела.')).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'Перейти ко входу' })).toHaveAttribute('href', '/login');
+    expect(screen.getByRole('link', { name: 'Перейти ко входу' })).toHaveAttribute(
+      'href',
+      '/login',
+    );
   });
 
   it('настройки: свежий статус Telegram и привязка кодом из кабинета', async () => {
-    useAuth.setState({ user: USER as never, token: 'session-token', status: 'authenticated', error: null });
+    useAuth.setState({
+      user: USER as never,
+      token: 'session-token',
+      status: 'authenticated',
+      error: null,
+    });
     let linked = false;
     const calls = withTelegram((url) => {
       if (url === '/api/auth/me') {
-        return Response.json({ user: linked ? { ...USER, telegramChatId: 77, telegramUsername: 'anna_tg' } : USER });
+        return Response.json({
+          user: linked ? { ...USER, telegramChatId: 77, telegramUsername: 'anna_tg' } : USER,
+        });
       }
       if (url === '/api/auth/telegram/claim') {
         linked = true;
-        return Response.json({ user: { ...USER, telegramChatId: 77, telegramUsername: 'anna_tg' } });
+        return Response.json({
+          user: { ...USER, telegramChatId: 77, telegramUsername: 'anna_tg' },
+        });
       }
       return undefined;
     });
@@ -165,10 +196,14 @@ describe('вход и привязка Telegram на сайте', () => {
     const section = await screen.findByRole('region', { name: 'Telegram' });
     expect(within(section).getByText('Не привязан')).toBeInTheDocument();
     fireEvent.click(within(section).getByRole('button', { name: /Ввести код/ }));
-    fireEvent.change(within(section).getByLabelText('Код из кабинета в Telegram'), { target: { value: 'k7m2qx' } });
+    fireEvent.change(within(section).getByLabelText('Код из кабинета в Telegram'), {
+      target: { value: 'k7m2qx' },
+    });
     fireEvent.click(within(section).getByRole('button', { name: 'Подключить' }));
 
-    expect(await within(section).findByText(/Telegram подключён\. Теперь можно входить/)).toBeInTheDocument();
+    expect(
+      await within(section).findByText(/Telegram подключён\. Теперь можно входить/),
+    ).toBeInTheDocument();
     expect(within(section).getByText('Подключён')).toBeInTheDocument();
     expect(within(section).getByText('@anna_tg')).toBeInTheDocument();
     expect(calls.find((call) => call.url === '/api/auth/telegram/claim')).toMatchObject({
@@ -178,8 +213,18 @@ describe('вход и привязка Telegram на сайте', () => {
   });
 
   it('аккаунт из Telegram: вместо служебной почты — «Аккаунт Telegram», отвязки нет', async () => {
-    const tgUser = { ...USER, email: 'tg-77@telegram.invalid', telegramChatId: 77, telegramUsername: 'anna_tg' };
-    useAuth.setState({ user: tgUser as never, token: 'session-token', status: 'authenticated', error: null });
+    const tgUser = {
+      ...USER,
+      email: 'tg-77@telegram.invalid',
+      telegramChatId: 77,
+      telegramUsername: 'anna_tg',
+    };
+    useAuth.setState({
+      user: tgUser as never,
+      token: 'session-token',
+      status: 'authenticated',
+      error: null,
+    });
     withTelegram((url) => (url === '/api/auth/me' ? Response.json({ user: tgUser }) : undefined));
     renderRoute('/settings');
 

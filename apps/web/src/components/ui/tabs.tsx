@@ -25,13 +25,7 @@ export interface TabsProps {
   className?: string;
 }
 
-export function Tabs({
-  defaultValue = '',
-  value,
-  onValueChange,
-  children,
-  className,
-}: TabsProps) {
+export function Tabs({ defaultValue = '', value, onValueChange, children, className }: TabsProps) {
   const [internalValue, setInternalValue] = useState(defaultValue);
   const isControlled = value !== undefined;
   const selected = isControlled ? value : internalValue;

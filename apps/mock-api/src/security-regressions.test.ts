@@ -15,7 +15,11 @@ import { createConversationStore } from './store/conversation-store.js';
 import { createSubscriptionStore } from './store/subscription-store.js';
 import { createUserStore, type UserStore } from './store/user-store.js';
 import { UsageStore } from './store/usage-store.js';
-import { isAllowedCorsOrigin, isPublicBetterAuthEndpoint, inlineScriptHashes } from './middleware/security.js';
+import {
+  isAllowedCorsOrigin,
+  isPublicBetterAuthEndpoint,
+  inlineScriptHashes,
+} from './middleware/security.js';
 import { RateLimiter } from './middleware/rate-limit.js';
 
 const ORIGIN = 'http://localhost:9999';
@@ -34,8 +38,24 @@ before(async () => {
     join(dir, 'users.json'),
     JSON.stringify({
       users: [
-        { id: 'victim-tg', email: 'tg-777000@telegram.invalid', name: 'Tg', plan: 'ultra', createdAt: OLD, salt: 'a'.repeat(32), passwordHash: 'x' },
-        { id: 'victim-legacy', email: 'legacy@example.com', name: 'Legacy', plan: 'pro', createdAt: OLD, salt: 'b'.repeat(32), passwordHash: 'x' },
+        {
+          id: 'victim-tg',
+          email: 'tg-777000@telegram.invalid',
+          name: 'Tg',
+          plan: 'ultra',
+          createdAt: OLD,
+          salt: 'a'.repeat(32),
+          passwordHash: 'x',
+        },
+        {
+          id: 'victim-legacy',
+          email: 'legacy@example.com',
+          name: 'Legacy',
+          plan: 'pro',
+          createdAt: OLD,
+          salt: 'b'.repeat(32),
+          passwordHash: 'x',
+        },
       ],
     }),
   );
@@ -69,9 +89,17 @@ async function cookieSignIn(email: string, password: string): Promise<string | n
 }
 
 test('регистрация напрямую в Better Auth закрыта', async () => {
-  const res = await fetch(`${base}/api/auth/sign-up/email`, json({ email: 'tg-777000@telegram.invalid', password: 'attacker-pass-123', name: 'x' }));
+  const res = await fetch(
+    `${base}/api/auth/sign-up/email`,
+    json({ email: 'tg-777000@telegram.invalid', password: 'attacker-pass-123', name: 'x' }),
+  );
   assert.equal(res.status, 404);
-  for (const path of ['/api/auth/update-user', '/api/auth/change-email', '/api/auth/delete-user', '/api/auth/link-social']) {
+  for (const path of [
+    '/api/auth/update-user',
+    '/api/auth/change-email',
+    '/api/auth/delete-user',
+    '/api/auth/link-social',
+  ]) {
     assert.equal((await fetch(`${base}${path}`, json({}))).status, 404, path);
   }
 });
@@ -88,7 +116,10 @@ test('чужая запись Better Auth с той же почтой не от�
 });
 
 test('вход владельца по паролю перезаписывает посторонний пароль Better Auth', async () => {
-  const login = await fetch(`${base}/api/auth/login`, json({ email: 'legacy@example.com', password: 'victim-password-1' }));
+  const login = await fetch(
+    `${base}/api/auth/login`,
+    json({ email: 'legacy@example.com', password: 'victim-password-1' }),
+  );
   assert.equal(login.status, 200);
   assert.equal(await cookieSignIn('legacy@example.com', 'attacker-pass-123'), null);
   assert.ok(await cookieSignIn('legacy@example.com', 'victim-password-1'));
@@ -103,15 +134,24 @@ test('пароль хранится в scrypt, старый хеш обновл�
 test('перебор пароля упирается в лимит по почте', async () => {
   let last = 0;
   for (let i = 0; i < 10; i += 1) {
-    last = (await fetch(`${base}/api/auth/login`, json({ email: 'legacy@example.com', password: `wrong-${i}` }))).status;
+    last = (
+      await fetch(
+        `${base}/api/auth/login`,
+        json({ email: 'legacy@example.com', password: `wrong-${i}` }),
+      )
+    ).status;
   }
   assert.equal(last, 429);
 });
 
 test('CORS: чужой сайт не получает доступ к ответам с cookie', async () => {
-  const evil = await fetch(`${base}/api/health`, { headers: { Origin: 'https://evil.example.com' } });
+  const evil = await fetch(`${base}/api/health`, {
+    headers: { Origin: 'https://evil.example.com' },
+  });
   assert.equal(evil.headers.get('access-control-allow-origin'), null);
-  const tricky = await fetch(`${base}/api/health`, { headers: { Origin: 'https://ketner-ai.onrender.com.evil.net' } });
+  const tricky = await fetch(`${base}/api/health`, {
+    headers: { Origin: 'https://ketner-ai.onrender.com.evil.net' },
+  });
   assert.equal(tricky.headers.get('access-control-allow-origin'), null);
   assert.equal(isAllowedCorsOrigin('https://ketner.org', true), true);
   assert.equal(isAllowedCorsOrigin('http://localhost:4444', true), false);
@@ -125,7 +165,11 @@ test('заголовки безопасности и отсутствие X-Powe
 });
 
 test('битый JSON — 400 без внутренних подробностей', async () => {
-  const res = await fetch(`${base}/api/auth/login`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{oops' });
+  const res = await fetch(`${base}/api/auth/login`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: '{oops',
+  });
   assert.equal(res.status, 400);
 });
 
@@ -154,7 +198,12 @@ test('id сообщения из чужого диалога не переисп
   assert.ok(bob?.messages.every((m) => m.id !== 'msg-alice-1'));
   // И чужой диалог нельзя «присвоить» по id.
   assert.equal(
-    store.saveTurn({ userId: 'bob', conversationId: a.id, history: [{ role: 'user', content: 'x' }], assistant: { content: 'y', modelId: 'm', status: 'complete' } }),
+    store.saveTurn({
+      userId: 'bob',
+      conversationId: a.id,
+      history: [{ role: 'user', content: 'x' }],
+      assistant: { content: 'y', modelId: 'm', status: 'complete' },
+    }),
     null,
   );
   assert.equal(store.get('alice', a.id)?.conversation.userId, 'alice');
@@ -165,12 +214,27 @@ test('правила: список открытых эндпоинтов Better 
   assert.equal(isPublicBetterAuthEndpoint('POST', '/api/auth/sign-in/email'), true);
   assert.equal(isPublicBetterAuthEndpoint('GET', '/api/auth/get-session'), true);
   assert.equal(isPublicBetterAuthEndpoint('GET', '/api/auth/callback/google'), true);
-  assert.deepEqual(inlineScriptHashes('<script>a()</script><script src="/x.js"></script>').length, 1);
+  assert.deepEqual(
+    inlineScriptHashes('<script>a()</script><script src="/x.js"></script>').length,
+    1,
+  );
   const stored = { email: 'a@b.c', createdAt: OLD };
   assert.equal(betterAuthSessionMayOpen({ email: 'a@b.c', emailVerified: true }, stored), true);
-  assert.equal(betterAuthSessionMayOpen({ email: 'a@b.c', emailVerified: false, createdAt: new Date() }, stored), false);
-  assert.equal(betterAuthSessionMayOpen({ email: 'a@b.c', emailVerified: false, createdAt: OLD }, stored), true);
-  assert.equal(betterAuthSessionMayOpen({ email: 'tg-1@telegram.invalid', emailVerified: true }, stored), false);
+  assert.equal(
+    betterAuthSessionMayOpen(
+      { email: 'a@b.c', emailVerified: false, createdAt: new Date() },
+      stored,
+    ),
+    false,
+  );
+  assert.equal(
+    betterAuthSessionMayOpen({ email: 'a@b.c', emailVerified: false, createdAt: OLD }, stored),
+    true,
+  );
+  assert.equal(
+    betterAuthSessionMayOpen({ email: 'tg-1@telegram.invalid', emailVerified: true }, stored),
+    false,
+  );
 });
 
 test('RateLimiter: окно и сброс', () => {

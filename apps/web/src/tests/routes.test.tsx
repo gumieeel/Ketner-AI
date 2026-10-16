@@ -63,7 +63,9 @@ describe('маршрутизация и каркас экранов', () => {
   it('страница API для разработчиков открывается по /api-docs', () => {
     renderRoute('/api-docs');
 
-    expect(screen.getByRole('heading', { level: 1, name: 'API для разработчиков' })).toBeInTheDocument();
+    expect(
+      screen.getByRole('heading', { level: 1, name: 'API для разработчиков' }),
+    ).toBeInTheDocument();
     expect(screen.getByRole('heading', { level: 2, name: 'API-ключи' })).toBeInTheDocument();
     expect(screen.getByRole('heading', { level: 2, name: 'Адрес API' })).toBeInTheDocument();
     // Гость видит приглашение войти, а не выдуманные ключи
@@ -109,7 +111,9 @@ describe('маршрутизация и каркас экранов', () => {
       screen.getByRole('heading', { level: 1, name: 'Оформление подписки' }),
     ).toBeInTheDocument();
     expect(screen.getByRole('heading', { level: 2, name: 'Plus' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /Подтвердить оплату криптовалютой/i })).toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: /Подтвердить оплату криптовалютой/i }),
+    ).toBeInTheDocument();
   });
 
   it('неавторизованный пользователь при попытке оформления подписки перенаправляется на регистрацию', () => {

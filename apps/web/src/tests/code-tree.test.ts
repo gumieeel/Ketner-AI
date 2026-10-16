@@ -11,7 +11,11 @@ describe('дерево файлов проекта', () => {
       { path: 'src/a.ts', size: 3 },
       { path: 'README.md', size: 4 },
     ]);
-    expect(tree.map((n) => `${n.kind}:${n.name}`)).toEqual(['dir:src', 'file:README.md', 'file:z.txt']);
+    expect(tree.map((n) => `${n.kind}:${n.name}`)).toEqual([
+      'dir:src',
+      'file:README.md',
+      'file:z.txt',
+    ]);
     expect(tree[0].children.map((n) => n.path)).toEqual(['src/a.ts', 'src/b.ts']);
   });
 

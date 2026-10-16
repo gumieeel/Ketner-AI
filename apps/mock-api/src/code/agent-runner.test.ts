@@ -15,7 +15,13 @@ import { OpenRouterError } from '../ai/providers/openrouter-provider.js';
 import { ProviderManager } from '../ai/providers/provider-factory.js';
 import type { PlanId } from '../types.js';
 import { UsageStore } from '../store/usage-store.js';
-import { AgentRunner, compactMessages, selectAgentModel, type AgentEvent, type AgentRunInput } from './agent-runner.js';
+import {
+  AgentRunner,
+  compactMessages,
+  selectAgentModel,
+  type AgentEvent,
+  type AgentRunInput,
+} from './agent-runner.js';
 import { ProjectStore } from './project-store.js';
 import { getCodeLimits, quotaOf } from '../services/code-limits.js';
 import { modelRegistry } from '../ai/model-registry.js';
@@ -26,7 +32,11 @@ interface Call {
   toolNames: string[];
   index: number;
 }
-type Script = (call: Call, options: ChatCompletionOptions, callbacks: ChatCompletionCallbacks) => ChatCompletionResult | Promise<ChatCompletionResult>;
+type Script = (
+  call: Call,
+  options: ChatCompletionOptions,
+  callbacks: ChatCompletionCallbacks,
+) => ChatCompletionResult | Promise<ChatCompletionResult>;
 
 let callCounter = 0;
 const toolStep = (calls: Array<[string, unknown]>, cost = 0.001): ChatCompletionResult => ({
@@ -82,19 +92,29 @@ interface Harness {
   usage: UsageStore;
   projectId: string;
   calls: Call[];
-  run: (task: string, overrides?: Partial<AgentRunInput>) => Promise<{ events: AgentEvent[]; result: Awaited<ReturnType<AgentRunner['run']>> }>;
+  run: (
+    task: string,
+    overrides?: Partial<AgentRunInput>,
+  ) => Promise<{ events: AgentEvent[]; result: Awaited<ReturnType<AgentRunner['run']>> }>;
 }
 
 async function withHarness(
   script: Script,
   run: (h: Harness) => Promise<void>,
-  options: { plan?: PlanId; watchdog?: { firstTokenMs: number; idleMs: number; totalMs: number } } = {},
+  options: {
+    plan?: PlanId;
+    watchdog?: { firstTokenMs: number; idleMs: number; totalMs: number };
+  } = {},
 ): Promise<void> {
   const dir = await mkdtemp(path.join(tmpdir(), 'ketner-agent-'));
   try {
     const plan = options.plan ?? 'pro';
     const store = new ProjectStore({ rootDir: path.join(dir, 'projects') });
-    const meta = await store.create('u1', { name: 'Demo' }, { maxProjects: 5, quota: quotaOf(getCodeLimits(plan)) });
+    const meta = await store.create(
+      'u1',
+      { name: 'Demo' },
+      { maxProjects: 5, quota: quotaOf(getCodeLimits(plan)) },
+    );
     const usage = new UsageStore(path.join(dir, 'usage.json'));
     const providers = new ProviderManager();
     const { provider, calls } = fakeProvider(script);
@@ -147,7 +167,9 @@ test('полный запуск: инструменты меняют проек�
         ]);
       }
       if (call.index === 1) {
-        return toolStep([['edit_file', { path: 'src/hello.js', old_string: '"hi"', new_string: '"hello"' }]]);
+        return toolStep([
+          ['edit_file', { path: 'src/hello.js', old_string: '"hi"', new_string: '"hello"' }],
+        ]);
       }
       return finalStep('Done: created src/hello.js.');
     },
@@ -157,10 +179,18 @@ test('полный запуск: инструменты меняют проек�
       assert.equal(result.steps, 3);
       assert.equal(types(events)[0], 'run_start');
       assert.equal(types(events).at(-1), 'done');
-      assert.ok(events.some((e) => e.type === 'tool_result' && e.tool === 'write_file' && e.change?.action === 'create'));
+      assert.ok(
+        events.some(
+          (e) =>
+            e.type === 'tool_result' && e.tool === 'write_file' && e.change?.action === 'create',
+        ),
+      );
       assert.ok(events.some((e) => e.type === 'delta' && e.content.includes('Done')));
 
-      assert.equal((await h.store.readText('u1', h.projectId, 'src/hello.js')).content, 'console.log("hello");\n');
+      assert.equal(
+        (await h.store.readText('u1', h.projectId, 'src/hello.js')).content,
+        'console.log("hello");\n',
+      );
 
       // системный промпт: проект, список файлов и все инструменты, кроме команд (песочницы нет)
       const first = h.calls[0];
@@ -170,7 +200,11 @@ test('полный запуск: инструменты меняют проек�
       assert.ok(first.toolNames.includes('edit_file'));
       assert.ok(!first.toolNames.includes('run_command'));
       // результаты инструментов возвращаются модели
-      assert.ok(h.calls[1].messages.some((m) => m.role === 'tool' && m.content.includes('Created src/hello.js')));
+      assert.ok(
+        h.calls[1].messages.some(
+          (m) => m.role === 'tool' && m.content.includes('Created src/hello.js'),
+        ),
+      );
 
       // лента сохранена
       const thread = await h.store.getThread('u1', h.projectId);
@@ -214,10 +248,17 @@ test('лимит запусков в сутки по тарифу', () =>
   withHarness(
     () => finalStep('ok', 0.0005),
     async (h) => {
-      for (let i = 0; i < 3; i += 1) assert.equal((await h.run(`task ${i}`)).result.status, 'completed');
+      for (let i = 0; i < 3; i += 1)
+        assert.equal((await h.run(`task ${i}`)).result.status, 'completed');
       const { events, result } = await h.run('one too many');
       assert.equal(result.status, 'rejected');
-      assert.deepEqual(events, [{ type: 'error', code: 'run_limit', message: events[0].type === 'error' ? events[0].message : '' }]);
+      assert.deepEqual(events, [
+        {
+          type: 'error',
+          code: 'run_limit',
+          message: events[0].type === 'error' ? events[0].message : '',
+        },
+      ]);
       assert.equal(h.calls.length, 3, 'модель не вызывалась');
     },
     { plan: 'free' },
@@ -255,7 +296,12 @@ test('отмена клиентом: правки сохранены, стату
     (call) => {
       if (call.index === 0) return toolStep([['write_file', { path: 'a.txt', content: 'a' }]]);
       controller.abort();
-      return { content: '', toolCalls: [], usage: { inputTokens: 500, outputTokens: 0 }, finishReason: 'cancelled' };
+      return {
+        content: '',
+        toolCalls: [],
+        usage: { inputTokens: 500, outputTokens: 0 },
+        finishReason: 'cancelled',
+      };
     },
     async (h) => {
       const { result } = await h.run('start and stop', { signal: controller.signal });
@@ -271,7 +317,8 @@ const controller = new AbortController();
 test('модель без поддержки инструментов заменяется следующей в цепочке', () =>
   withHarness(
     (call) => {
-      if (call.index === 0) throw new OpenRouterError(call.model, 404, 'No endpoints found that support tool use');
+      if (call.index === 0)
+        throw new OpenRouterError(call.model, 404, 'No endpoints found that support tool use');
       return finalStep('worked on the fallback');
     },
     async (h) => {
@@ -336,7 +383,13 @@ test('агент застревает на одинаковых ошибках: 
 
 test('оборванный ответ (length) продолжается подсказкой, а повтор завершает запуск', () =>
   withHarness(
-    () => ({ content: 'half of an ans', toolCalls: [], usage: { inputTokens: 100, outputTokens: 4096 }, cost: 0.001, finishReason: 'length' }),
+    () => ({
+      content: 'half of an ans',
+      toolCalls: [],
+      usage: { inputTokens: 100, outputTokens: 4096 },
+      cost: 0.001,
+      finishReason: 'length',
+    }),
     async (h) => {
       const { result } = await h.run('big task');
       assert.equal(result.status, 'length');
@@ -349,8 +402,15 @@ test('зависший поток обрывается сторожем и бе�
   withHarness(
     async (call, options) => {
       if (call.index === 0) {
-        await new Promise<void>((resolve) => options.signal?.addEventListener('abort', () => resolve(), { once: true }));
-        return { content: '', toolCalls: [], usage: { inputTokens: 0, outputTokens: 0 }, finishReason: 'cancelled' };
+        await new Promise<void>((resolve) =>
+          options.signal?.addEventListener('abort', () => resolve(), { once: true }),
+        );
+        return {
+          content: '',
+          toolCalls: [],
+          usage: { inputTokens: 0, outputTokens: 0 },
+          finishReason: 'cancelled',
+        };
       }
       return finalStep('recovered');
     },
@@ -366,8 +426,20 @@ test('инструкции проекта (AGENTS.md) попадают в сис
   withHarness(
     () => finalStep('ok'),
     async (h) => {
-      await h.store.writeText('u1', h.projectId, 'AGENTS.md', 'Use tabs. Run npm test.', quotaOf(getCodeLimits('pro')));
-      await h.store.writeText('u1', h.projectId, '.env', 'API_KEY=topsecret', quotaOf(getCodeLimits('pro')));
+      await h.store.writeText(
+        'u1',
+        h.projectId,
+        'AGENTS.md',
+        'Use tabs. Run npm test.',
+        quotaOf(getCodeLimits('pro')),
+      );
+      await h.store.writeText(
+        'u1',
+        h.projectId,
+        '.env',
+        'API_KEY=topsecret',
+        quotaOf(getCodeLimits('pro')),
+      );
       await h.run('hi');
       const system = h.calls[0].messages[0].content;
       assert.match(system, /Use tabs/);
@@ -383,7 +455,10 @@ test('задача проверяется: пустая и слишком дли
       assert.equal((await h.run('   ')).result.status, 'rejected');
       const long = await h.run('x'.repeat(getCodeLimits('pro').maxTaskChars + 1));
       assert.equal(long.result.status, 'rejected');
-      assert.equal((await h.run('hi', { projectId: 'does-not-exist-123' })).result.status, 'rejected');
+      assert.equal(
+        (await h.run('hi', { projectId: 'does-not-exist-123' })).result.status,
+        'rejected',
+      );
       assert.equal(h.calls.length, 0);
     },
   ));
@@ -393,21 +468,42 @@ test('selectAgentModel: auto зависит от тарифа и экономи�
   const base = { registry: modelRegistry, state: normal };
   assert.equal(selectAgentModel({ ...base, plan: 'free' }).model.id, 'ketner-mini');
   assert.equal(selectAgentModel({ ...base, plan: 'pro' }).model.id, 'ketner-pro');
-  assert.equal(selectAgentModel({ ...base, plan: 'pro', state: { stage: 'exhausted', premiumAvailable: true } }).model.id, 'ketner-mini');
+  assert.equal(
+    selectAgentModel({
+      ...base,
+      plan: 'pro',
+      state: { stage: 'exhausted', premiumAvailable: true },
+    }).model.id,
+    'ketner-mini',
+  );
   assert.ok(selectAgentModel({ ...base, plan: 'free', requestedId: 'claude-opus-5.5' }).denied);
-  const premiumDry = selectAgentModel({ ...base, plan: 'ultra', requestedId: 'claude-opus-5.5', state: { stage: 'normal', premiumAvailable: false } });
+  const premiumDry = selectAgentModel({
+    ...base,
+    plan: 'ultra',
+    requestedId: 'claude-opus-5.5',
+    state: { stage: 'normal', premiumAvailable: false },
+  });
   assert.equal(premiumDry.model.id, 'ketner-pro');
   assert.ok(premiumDry.reason);
 });
 
 test('compactMessages сжимает старые результаты и большие аргументы, не трогая свежие', () => {
   const big = 'x'.repeat(20_000);
-  const messages: ChatWireMessage[] = [{ role: 'system', content: 's' }, { role: 'user', content: 'task' }];
+  const messages: ChatWireMessage[] = [
+    { role: 'system', content: 's' },
+    { role: 'user', content: 'task' },
+  ];
   for (let i = 0; i < 12; i += 1) {
     messages.push({
       role: 'assistant',
       content: '',
-      toolCalls: [{ id: `c${i}`, name: 'write_file', arguments: JSON.stringify({ path: `f${i}`, content: big }) }],
+      toolCalls: [
+        {
+          id: `c${i}`,
+          name: 'write_file',
+          arguments: JSON.stringify({ path: `f${i}`, content: big }),
+        },
+      ],
     });
     messages.push({ role: 'tool', toolCallId: `c${i}`, content: big });
   }
@@ -419,9 +515,17 @@ test('compactMessages сжимает старые результаты и бол
   assert.ok(tools[0].content.length < 1_000);
   assert.equal(tools[tools.length - 1].content.length, big.length);
   const firstCall = compacted.find((m) => m.role === 'assistant' && m.toolCalls);
-  assert.ok(firstCall && firstCall.role === 'assistant' && firstCall.toolCalls![0].arguments.length < 1_000);
-  assert.doesNotThrow(() => JSON.parse((firstCall as { toolCalls: Array<{ arguments: string }> }).toolCalls[0].arguments));
-  assert.equal(messages.filter((m) => m.role === 'tool')[0].content.length, big.length, 'исходный массив не изменён');
+  assert.ok(
+    firstCall && firstCall.role === 'assistant' && firstCall.toolCalls![0].arguments.length < 1_000,
+  );
+  assert.doesNotThrow(() =>
+    JSON.parse((firstCall as { toolCalls: Array<{ arguments: string }> }).toolCalls[0].arguments),
+  );
+  assert.equal(
+    messages.filter((m) => m.role === 'tool')[0].content.length,
+    big.length,
+    'исходный массив не изменён',
+  );
 });
 
 test('Free: агент работает на бесплатной North Mini Code, а при отказе пула берёт платный Ketner Mini', () =>
@@ -446,7 +550,10 @@ test('Free: если бесплатная модель отвечает, пла�
     async (h) => {
       const { result } = await h.run('anything');
       assert.equal(result.status, 'completed');
-      assert.deepEqual(h.calls.map((c) => c.model), ['cohere/north-mini-code:free']);
+      assert.deepEqual(
+        h.calls.map((c) => c.model),
+        ['cohere/north-mini-code:free'],
+      );
       assert.equal(result.modelId, 'north-mini-code');
     },
     { plan: 'free' },
@@ -492,7 +599,12 @@ test('бюджет выбранной модели исчерпан: агент 
       assert.equal(result.status, 'completed');
       assert.deepEqual(
         h.calls.map((c) => c.model),
-        ['anthropic/claude-opus-5.5', 'anthropic/claude-opus-5.5', 'xiaomi/mimo-v2.6-pro', 'xiaomi/mimo-v2.6-pro'],
+        [
+          'anthropic/claude-opus-5.5',
+          'anthropic/claude-opus-5.5',
+          'xiaomi/mimo-v2.6-pro',
+          'xiaomi/mimo-v2.6-pro',
+        ],
       );
       assert.ok(events.some((e) => e.type === 'model_switch' && e.modelId === 'ketner-pro'));
       assert.ok(!events.some((e) => e.type === 'error'), 'ошибки пользователь не видит');
@@ -500,7 +612,10 @@ test('бюджет выбранной модели исчерпан: агент 
       const note = h.calls[2].messages.at(-1);
       assert.ok(note?.role === 'user' && /continues on a lighter model/.test(note.content));
       for (const name of ['f0.txt', 'f1.txt', 'f2.txt']) {
-        assert.ok((await h.store.listFiles('u1', h.projectId)).some((f) => f.path === name), name);
+        assert.ok(
+          (await h.store.listFiles('u1', h.projectId)).some((f) => f.path === name),
+          name,
+        );
       }
     },
     { plan: 'pro' },
@@ -508,13 +623,22 @@ test('бюджет выбранной модели исчерпан: агент 
 
 test('после рабочей модели — лёгкая; когда кончается и её бюджет, запуск останавливается честно', () =>
   withHarness(
-    (call) => toolStep([['write_file', { path: `f${call.index}.txt`, content: 'x' }]], call.index < 2 ? 1.0 : 0.25),
+    (call) =>
+      toolStep(
+        [['write_file', { path: `f${call.index}.txt`, content: 'x' }]],
+        call.index < 2 ? 1.0 : 0.25,
+      ),
     async (h) => {
       const { events, result } = await h.run('endless', { modelId: 'claude-opus-5.5' });
       assert.equal(result.status, 'budget');
-      const switches = events.filter((e) => e.type === 'model_switch').map((e) => (e.type === 'model_switch' ? e.modelId : ''));
+      const switches = events
+        .filter((e) => e.type === 'model_switch')
+        .map((e) => (e.type === 'model_switch' ? e.modelId : ''));
       assert.deepEqual(switches, ['ketner-pro', 'claude-haiku-5.5']);
-      assert.ok(result.costUsd <= 2.2 * 1.25 + 0.25, 'расход не выходит за дневной потолок с запасом (плюс последний шаг)');
+      assert.ok(
+        result.costUsd <= 2.2 * 1.25 + 0.25,
+        'расход не выходит за дневной потолок с запасом (плюс последний шаг)',
+      );
     },
     { plan: 'pro' },
   ));
@@ -524,11 +648,33 @@ test('работа по плану: пока в плане есть пункты
     (call) => {
       switch (call.index) {
         case 0:
-          return toolStep([['update_plan', { items: [{ text: 'Create a.txt', status: 'in_progress' }, { text: 'Create b.txt', status: 'pending' }] }], ['write_file', { path: 'a.txt', content: 'a' }]]);
+          return toolStep([
+            [
+              'update_plan',
+              {
+                items: [
+                  { text: 'Create a.txt', status: 'in_progress' },
+                  { text: 'Create b.txt', status: 'pending' },
+                ],
+              },
+            ],
+            ['write_file', { path: 'a.txt', content: 'a' }],
+          ]);
         case 1:
           return finalStep('Done with a.txt');
         case 2:
-          return toolStep([['write_file', { path: 'b.txt', content: 'b' }], ['update_plan', { items: [{ text: 'Create a.txt', status: 'done' }, { text: 'Create b.txt', status: 'done' }] }]]);
+          return toolStep([
+            ['write_file', { path: 'b.txt', content: 'b' }],
+            [
+              'update_plan',
+              {
+                items: [
+                  { text: 'Create a.txt', status: 'done' },
+                  { text: 'Create b.txt', status: 'done' },
+                ],
+              },
+            ],
+          ]);
         default:
           return finalStep('Both files created');
       }
@@ -538,7 +684,11 @@ test('работа по плану: пока в плане есть пункты
       assert.equal(result.status, 'completed');
       assert.equal(h.calls.length, 4);
       const nudge = h.calls[2].messages.at(-1);
-      assert.ok(nudge?.role === 'user' && /unfinished subtasks/.test(nudge.content) && /Create b\.txt/.test(nudge.content));
+      assert.ok(
+        nudge?.role === 'user' &&
+          /unfinished subtasks/.test(nudge.content) &&
+          /Create b\.txt/.test(nudge.content),
+      );
       const done = events.at(-1);
       assert.ok(done?.type === 'done' && done.plan?.every((item) => item.status === 'done'));
       const runItem = (await h.store.getThread('u1', h.projectId)).at(-1);
@@ -551,13 +701,26 @@ test('update_plan: в работе не больше одного пункта, 
   withHarness(
     (call) =>
       call.index === 0
-        ? toolStep([['update_plan', { items: [{ text: 'A', status: 'in_progress' }, { text: 'B', status: 'in_progress' }] }]])
+        ? toolStep([
+            [
+              'update_plan',
+              {
+                items: [
+                  { text: 'A', status: 'in_progress' },
+                  { text: 'B', status: 'in_progress' },
+                ],
+              },
+            ],
+          ])
         : finalStep('ok'),
     async (h) => {
       const { events } = await h.run('plan');
       const plan = events.find((e) => e.type === 'plan');
       assert.ok(plan?.type === 'plan');
-      assert.deepEqual(plan.items.map((i) => i.status), ['in_progress', 'pending']);
+      assert.deepEqual(
+        plan.items.map((i) => i.status),
+        ['in_progress', 'pending'],
+      );
       const toolMessage = h.calls[1].messages.find((m) => m.role === 'tool');
       assert.match(toolMessage?.content ?? '', /Now working on: "A"/);
     },

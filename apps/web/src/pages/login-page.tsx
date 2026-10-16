@@ -131,11 +131,7 @@ export function LoginPage() {
       title={t('auth.loginTitle')}
       footer={
         <Link
-          to={
-            isSafeRedirect
-              ? `/signup?redirect=${encodeURIComponent(redirectUrl)}`
-              : '/signup'
-          }
+          to={isSafeRedirect ? `/signup?redirect=${encodeURIComponent(redirectUrl)}` : '/signup'}
           className="inline-flex min-h-11 items-center font-medium text-accent hover:underline"
         >
           {t('auth.toSignup')}
@@ -167,7 +163,11 @@ export function LoginPage() {
 
         {/* 3. OAuth Кнопки */}
         <div className="flex flex-col gap-3">
-          <TelegramLoginButton label={t('auth.continueTelegram')} redirectUrl={redirectUrl} disabled={loading} />
+          <TelegramLoginButton
+            label={t('auth.continueTelegram')}
+            redirectUrl={redirectUrl}
+            disabled={loading}
+          />
           <div className="grid grid-cols-2 gap-3">
             <Button
               variant="outline"
@@ -224,11 +224,7 @@ export function LoginPage() {
             )}
           </Field>
 
-          <Field
-            id="login-password"
-            label={t('auth.password')}
-            error={passwordError ?? undefined}
-          >
+          <Field id="login-password" label={t('auth.password')} error={passwordError ?? undefined}>
             {({ id, invalid, 'aria-describedby': describedBy }) => (
               <div className="relative flex items-center">
                 <Input
@@ -265,16 +261,9 @@ export function LoginPage() {
           </Field>
 
           {/* 6. Кнопка «Войти» */}
-          <Button
-            size="lg"
-            fullWidth
-            loading={loading}
-            type="submit"
-            className="mt-2"
-          >
+          <Button size="lg" fullWidth loading={loading} type="submit" className="mt-2">
             {loading ? t('auth.loggingIn') : t('auth.login')}
           </Button>
-
         </form>
 
         <LegalNotice />

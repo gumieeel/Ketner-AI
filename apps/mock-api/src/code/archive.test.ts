@@ -1,7 +1,13 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { strToU8, zipSync } from 'fflate';
-import { createZipWriter, downloadGithubZip, extractZipText, GithubImportError, parseGithubUrl } from './archive.js';
+import {
+  createZipWriter,
+  downloadGithubZip,
+  extractZipText,
+  GithubImportError,
+  parseGithubUrl,
+} from './archive.js';
 
 const LIMITS = { maxFiles: 50, maxFileBytes: 1_000, maxTotalBytes: 5_000 };
 
@@ -9,7 +15,11 @@ test('parseGithubUrl принимает только github.com и безопа�
   assert.deepEqual(parseGithubUrl('https://github.com/acme/app'), { owner: 'acme', repo: 'app' });
   assert.deepEqual(parseGithubUrl('github.com/acme/app.git'), { owner: 'acme', repo: 'app' });
   assert.deepEqual(parseGithubUrl('acme/app'), { owner: 'acme', repo: 'app' });
-  assert.deepEqual(parseGithubUrl('https://github.com/acme/app/tree/dev/src'), { owner: 'acme', repo: 'app', ref: 'dev' });
+  assert.deepEqual(parseGithubUrl('https://github.com/acme/app/tree/dev/src'), {
+    owner: 'acme',
+    repo: 'app',
+    ref: 'dev',
+  });
   for (const bad of [
     'https://evil.com/acme/app',
     'http://github.com/acme/app',
@@ -50,15 +60,29 @@ test('extractZipText: убирает общий каталог, фильтруе
 test('extractZipText: лимит числа файлов и общего размера, опасные пути', () => {
   const many: Record<string, Uint8Array> = {};
   for (let i = 0; i < 10; i += 1) many[`f${i}.txt`] = strToU8('x'.repeat(100));
-  const limited = extractZipText(zipSync(many), { maxFiles: 3, maxFileBytes: 1_000, maxTotalBytes: 100_000 });
+  const limited = extractZipText(zipSync(many), {
+    maxFiles: 3,
+    maxFileBytes: 1_000,
+    maxTotalBytes: 100_000,
+  });
   assert.equal(limited.files.length, 3);
   assert.equal(limited.skipped.length, 7);
 
-  const total = extractZipText(zipSync(many), { maxFiles: 100, maxFileBytes: 1_000, maxTotalBytes: 450 });
+  const total = extractZipText(zipSync(many), {
+    maxFiles: 100,
+    maxFileBytes: 1_000,
+    maxTotalBytes: 450,
+  });
   assert.equal(total.files.length, 4);
 
-  const traversal = extractZipText(zipSync({ 'a/../../etc/passwd': strToU8('x'), 'ok.txt': strToU8('ok') }), LIMITS);
-  assert.deepEqual(traversal.files.map((f) => f.path), ['ok.txt']);
+  const traversal = extractZipText(
+    zipSync({ 'a/../../etc/passwd': strToU8('x'), 'ok.txt': strToU8('ok') }),
+    LIMITS,
+  );
+  assert.deepEqual(
+    traversal.files.map((f) => f.path),
+    ['ok.txt'],
+  );
 });
 
 test('createZipWriter собирает читаемый архив', () => {
@@ -89,20 +113,32 @@ test('downloadGithubZip: размер ограничен, 404 даёт поня�
   assert.equal(ok.length, body.length);
 
   await assert.rejects(
-    downloadGithubZip({ owner: 'a', repo: 'b' }, { maxBytes: 10, fetchImpl: (async () => new Response(body)) as typeof fetch }),
+    downloadGithubZip(
+      { owner: 'a', repo: 'b' },
+      { maxBytes: 10, fetchImpl: (async () => new Response(body)) as typeof fetch },
+    ),
     (error: unknown) => error instanceof GithubImportError && error.code === 'too_large',
   );
   await assert.rejects(
-    downloadGithubZip({ owner: 'a', repo: 'b' }, { maxBytes: 10_000, fetchImpl: (async () => new Response('', { status: 404 })) as typeof fetch }),
+    downloadGithubZip(
+      { owner: 'a', repo: 'b' },
+      {
+        maxBytes: 10_000,
+        fetchImpl: (async () => new Response('', { status: 404 })) as typeof fetch,
+      },
+    ),
     (error: unknown) => error instanceof GithubImportError && error.code === 'not_found',
   );
   await assert.rejects(
-    downloadGithubZip({ owner: 'a', repo: 'b' }, {
-      maxBytes: 10_000,
-      fetchImpl: (async () => {
-        throw new Error('network');
-      }) as typeof fetch,
-    }),
+    downloadGithubZip(
+      { owner: 'a', repo: 'b' },
+      {
+        maxBytes: 10_000,
+        fetchImpl: (async () => {
+          throw new Error('network');
+        }) as typeof fetch,
+      },
+    ),
     (error: unknown) => error instanceof GithubImportError && error.code === 'unavailable',
   );
 });

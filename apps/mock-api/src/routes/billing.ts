@@ -12,7 +12,12 @@ import type { CryptoCurrency, CryptoInvoice, PlanId, PlanItem } from '../types.j
 import { isVipUser } from '../services/vip.js';
 import { stripeService } from '../services/stripe.js';
 import { cryptoCloudService } from '../services/cryptocloud.js';
-import { LEGACY_PRICE_USD, PLAN_PRICE_USD, planPriceRub, planPriceUsd } from '../services/pricing.js';
+import {
+  LEGACY_PRICE_USD,
+  PLAN_PRICE_USD,
+  planPriceRub,
+  planPriceUsd,
+} from '../services/pricing.js';
 
 /** Каталог тарифов. `priceMonthly` везде в долларах США (см. services/pricing.ts). */
 export const PLANS: readonly PlanItem[] = [
@@ -26,7 +31,11 @@ export const PLANS: readonly PlanItem[] = [
     },
     modelsHighlight: 'Ketner Mini + Auto Mode',
     bullets: {
-      ru: ['Ketner Mini (быстрая модель)', 'Интеллектуальный Auto Mode', 'Базовые функции и история чатов'],
+      ru: [
+        'Ketner Mini (быстрая модель)',
+        'Интеллектуальный Auto Mode',
+        'Базовые функции и история чатов',
+      ],
       en: ['Ketner Mini (fast model)', 'Intelligent Auto Mode', 'Basic features & chat history'],
     },
   },
@@ -63,7 +72,8 @@ export const PLANS: readonly PlanItem[] = [
       ru: 'Все флагманы AI',
       en: 'All Flagship AIs',
     },
-    modelsHighlight: 'Claude Opus 5.5, Sonnet 5.5, GPT-6 Astra, GPT-5.6 Sol, GPT-5.6 Terra, Grok 4.7',
+    modelsHighlight:
+      'Claude Opus 5.5, Sonnet 5.5, GPT-6 Astra, GPT-5.6 Sol, GPT-5.6 Terra, Grok 4.7',
     bullets: {
       ru: [
         'Флагманские модели Claude, GPT и Grok',
@@ -151,7 +161,8 @@ export function createBillingRouter({
 }: BillingRouterDeps): Router {
   const router = Router();
   const billing =
-    billingService ?? new BillingService({ userStore, subscriptionStore, ledger: createBillingLedger() });
+    billingService ??
+    new BillingService({ userStore, subscriptionStore, ledger: createBillingLedger() });
 
   /**
    * Оплаченный крипто-счёт: тариф выдаётся один раз (с продлением или пересчётом при смене
@@ -167,7 +178,10 @@ export function createBillingRouter({
       invoiceId: invoice.id,
     });
     if (!result.duplicate && result.subscription.renewsAt) {
-      const until = new Date(result.subscription.renewsAt).toLocaleDateString('ru-RU', { day: 'numeric', month: 'long' });
+      const until = new Date(result.subscription.renewsAt).toLocaleDateString('ru-RU', {
+        day: 'numeric',
+        month: 'long',
+      });
       void billing.telegram?.notifyUser(
         invoice.userId,
         `✅ Оплата криптовалютой получена: тариф <b>${planLabel(invoice.planId)}</b> действует до <b>${until}</b>.`,
@@ -198,10 +212,7 @@ export function createBillingRouter({
   };
 
   const findPlan = (rawPlanId: unknown): PlanItem | undefined => {
-    return (
-      PLANS.find((p) => p.id === rawPlanId) ??
-      LEGACY_PLANS.find((p) => p.id === rawPlanId)
-    );
+    return PLANS.find((p) => p.id === rawPlanId) ?? LEGACY_PLANS.find((p) => p.id === rawPlanId);
   };
 
   // Webhook & Postback от CryptoCloud.
@@ -247,7 +258,10 @@ export function createBillingRouter({
     }
 
     if (!invoice.cryptoCloudInvoiceId) {
-      console.warn('[cryptocloud] У счёта нет uuid шлюза — перепроверить оплату нечем:', invoice.id);
+      console.warn(
+        '[cryptocloud] У счёта нет uuid шлюза — перепроверить оплату нечем:',
+        invoice.id,
+      );
       response.json({ status: 'ok' });
       return;
     }
@@ -255,7 +269,10 @@ export function createBillingRouter({
     try {
       const confirmed = await cryptoCloudService.checkInvoiceStatus(invoice.cryptoCloudInvoiceId);
       if (confirmed !== 'paid' && confirmed !== 'success' && confirmed !== 'overpaid') {
-        console.warn('[cryptocloud] Postback не подтверждён API шлюза:', { id: invoice.id, confirmed });
+        console.warn('[cryptocloud] Postback не подтверждён API шлюза:', {
+          id: invoice.id,
+          confirmed,
+        });
         response.json({ status: 'ok' });
         return;
       }
@@ -321,12 +338,7 @@ export function createBillingRouter({
     const rawPlanId: unknown = request.body?.planId;
     const validPlanIds = ['plus', 'pro', 'ultra', 'gpt-pro', 'claude-pro', 'gemini-pro'];
     if (!validPlanIds.includes(rawPlanId as string)) {
-      sendError(
-        response,
-        400,
-        'invalid_plan',
-        'Допустимые тарифы для оплаты: plus, pro, ultra',
-      );
+      sendError(response, 400, 'invalid_plan', 'Допустимые тарифы для оплаты: plus, pro, ultra');
       return;
     }
 
@@ -362,12 +374,7 @@ export function createBillingRouter({
       const rawPlanId: unknown = request.body?.planId;
       const validPlanIds = ['plus', 'pro', 'ultra', 'gpt-pro', 'claude-pro', 'gemini-pro'];
       if (!validPlanIds.includes(rawPlanId as string)) {
-        sendError(
-          response,
-          400,
-          'invalid_plan',
-          'Допустимые тарифы для оплаты: plus, pro, ultra',
-        );
+        sendError(response, 400, 'invalid_plan', 'Допустимые тарифы для оплаты: plus, pro, ultra');
         return;
       }
 
@@ -473,101 +480,110 @@ export function createBillingRouter({
 
   // --- Telegram Stars (⭐️ XTR) ---
 
-  router.post('/billing/telegram-stars/create-invoice', async (request: Request, response: Response) => {
-    const rawPlanId: unknown = request.body?.planId;
-    const plan = findPlan(rawPlanId);
-    if (!plan || plan.priceMonthly <= 0) {
-      sendError(
-        response,
-        400,
-        'invalid_plan',
-        'Некорректный тариф для оплаты через Telegram Stars',
+  router.post(
+    '/billing/telegram-stars/create-invoice',
+    async (request: Request, response: Response) => {
+      const rawPlanId: unknown = request.body?.planId;
+      const plan = findPlan(rawPlanId);
+      if (!plan || plan.priceMonthly <= 0) {
+        sendError(
+          response,
+          400,
+          'invalid_plan',
+          'Некорректный тариф для оплаты через Telegram Stars',
+        );
+        return;
+      }
+
+      const userId = getUserId(request);
+      // Цена в звёздах — по текущему курсу Telegram Stars; сумма фиксируется в счёте.
+      const starsAmount = calculateStars(planPriceUsd(plan.id));
+      let invoice = activeInvoiceStore.createTelegramStarsInvoice(
+        userId,
+        plan.id,
+        planPriceRub(plan.id),
+        starsAmount,
+        telegramBotService.botUsername || config.telegramBotUsername,
       );
-      return;
-    }
+      // Прямая ссылка на окно оплаты в Telegram; без бота остаётся ссылка на чат с ботом.
+      if (telegramBotService.isConfigured) {
+        const link = await telegramBotService.createInvoiceLink(invoice);
+        if (link) invoice = activeInvoiceStore.getTelegramStarsInvoice(invoice.id) ?? invoice;
+      }
 
-    const userId = getUserId(request);
-    // Цена в звёздах — по текущему курсу Telegram Stars; сумма фиксируется в счёте.
-    const starsAmount = calculateStars(planPriceUsd(plan.id));
-    let invoice = activeInvoiceStore.createTelegramStarsInvoice(
-      userId,
-      plan.id,
-      planPriceRub(plan.id),
-      starsAmount,
-      telegramBotService.botUsername || config.telegramBotUsername,
-    );
-    // Прямая ссылка на окно оплаты в Telegram; без бота остаётся ссылка на чат с ботом.
-    if (telegramBotService.isConfigured) {
-      const link = await telegramBotService.createInvoiceLink(invoice);
-      if (link) invoice = activeInvoiceStore.getTelegramStarsInvoice(invoice.id) ?? invoice;
-    }
+      response.json({ invoice });
+    },
+  );
 
-    response.json({ invoice });
-  });
+  router.get(
+    '/billing/telegram-stars/status/:invoiceId',
+    (request: Request, response: Response) => {
+      const invoiceId = getParamInvoiceId(request);
+      const invoice = activeInvoiceStore.getTelegramStarsInvoice(invoiceId);
+      if (!invoice || !isOwnInvoice(request, invoice)) {
+        sendError(response, 404, 'invoice_not_found', 'Счёт Telegram Stars не найден');
+        return;
+      }
 
-  router.get('/billing/telegram-stars/status/:invoiceId', (request: Request, response: Response) => {
-    const invoiceId = getParamInvoiceId(request);
-    const invoice = activeInvoiceStore.getTelegramStarsInvoice(invoiceId);
-    if (!invoice || !isOwnInvoice(request, invoice)) {
-      sendError(response, 404, 'invoice_not_found', 'Счёт Telegram Stars не найден');
-      return;
-    }
-
-    response.json({
-      status: invoice.status,
-      invoice,
-    });
-  });
-
-  router.post('/billing/telegram-stars/confirm/:invoiceId', (request: Request, response: Response) => {
-    const invoiceId = getParamInvoiceId(request);
-    const invoice = activeInvoiceStore.getTelegramStarsInvoice(invoiceId);
-    if (!invoice || !isOwnInvoice(request, invoice)) {
-      sendError(response, 404, 'invoice_not_found', 'Счёт Telegram Stars не найден');
-      return;
-    }
-
-    // Счёт становится оплаченным только когда Telegram прислал successful_payment (бот).
-    // Самому клиенту «отметить оплату» нельзя; заглушка — только вне production.
-    if (invoice.status !== 'paid' && !config.enableMockBilling) {
-      sendError(
-        response,
-        402,
-        'payment_not_received',
-        'Оплата Stars ещё не поступила. Оплатите счёт в Telegram и повторите проверку.',
-      );
-      return;
-    }
-
-    const userId = invoice.userId;
-    // Звёзды включает бот по successful_payment; здесь только отдаём результат, не продлевая повторно.
-    if (invoice.status === 'paid') {
       response.json({
-        success: true,
-        subscription: subscriptionStore.get(userId),
-        user: userStore.findById(userId) ?? { id: userId, plan: invoice.planId },
+        status: invoice.status,
         invoice,
       });
-      return;
-    }
-    const updated = activeInvoiceStore.markTelegramStarsPaid(invoiceId) ?? invoice;
+    },
+  );
 
-    const subscription = subscriptionStore.checkout(userId, invoice.planId);
-    const user = userStore.updatePlan(userId, invoice.planId);
-    if (user?.email && user.email !== userId) {
-      subscriptionStore.checkout(user.email, invoice.planId);
-    }
-    if (user?.id && user.id !== userId) {
-      subscriptionStore.checkout(user.id, invoice.planId);
-    }
+  router.post(
+    '/billing/telegram-stars/confirm/:invoiceId',
+    (request: Request, response: Response) => {
+      const invoiceId = getParamInvoiceId(request);
+      const invoice = activeInvoiceStore.getTelegramStarsInvoice(invoiceId);
+      if (!invoice || !isOwnInvoice(request, invoice)) {
+        sendError(response, 404, 'invoice_not_found', 'Счёт Telegram Stars не найден');
+        return;
+      }
 
-    response.json({
-      success: true,
-      subscription,
-      user: user ?? { id: userId, plan: invoice.planId },
-      invoice: updated,
-    });
-  });
+      // Счёт становится оплаченным только когда Telegram прислал successful_payment (бот).
+      // Самому клиенту «отметить оплату» нельзя; заглушка — только вне production.
+      if (invoice.status !== 'paid' && !config.enableMockBilling) {
+        sendError(
+          response,
+          402,
+          'payment_not_received',
+          'Оплата Stars ещё не поступила. Оплатите счёт в Telegram и повторите проверку.',
+        );
+        return;
+      }
+
+      const userId = invoice.userId;
+      // Звёзды включает бот по successful_payment; здесь только отдаём результат, не продлевая повторно.
+      if (invoice.status === 'paid') {
+        response.json({
+          success: true,
+          subscription: subscriptionStore.get(userId),
+          user: userStore.findById(userId) ?? { id: userId, plan: invoice.planId },
+          invoice,
+        });
+        return;
+      }
+      const updated = activeInvoiceStore.markTelegramStarsPaid(invoiceId) ?? invoice;
+
+      const subscription = subscriptionStore.checkout(userId, invoice.planId);
+      const user = userStore.updatePlan(userId, invoice.planId);
+      if (user?.email && user.email !== userId) {
+        subscriptionStore.checkout(user.email, invoice.planId);
+      }
+      if (user?.id && user.id !== userId) {
+        subscriptionStore.checkout(user.id, invoice.planId);
+      }
+
+      response.json({
+        success: true,
+        subscription,
+        user: user ?? { id: userId, plan: invoice.planId },
+        invoice: updated,
+      });
+    },
+  );
 
   // --- Crypto & CryptoCloud ---
 
@@ -591,7 +607,12 @@ export function createBillingRouter({
     // Оплата криптовалютой — только через Trybit. Без настроенного шлюза счёт не создаём
     // (в разработке шлюз подменяется заглушкой, enableMockBilling).
     if (!cryptoCloudService.isConfigured() && !config.enableMockBilling) {
-      sendError(response, 501, 'payment_method_unavailable', 'Оплата криптовалютой временно недоступна');
+      sendError(
+        response,
+        501,
+        'payment_method_unavailable',
+        'Оплата криптовалютой временно недоступна',
+      );
       return;
     }
 
@@ -615,7 +636,12 @@ export function createBillingRouter({
       console.warn('[billing] Ошибка создания счёта Trybit:', err);
     }
     if (!ccResult?.invoiceId) {
-      sendError(response, 502, 'gateway_unavailable', 'Trybit не выставил счёт. Попробуйте ещё раз через минуту.');
+      sendError(
+        response,
+        502,
+        'gateway_unavailable',
+        'Trybit не выставил счёт. Попробуйте ещё раз через минуту.',
+      );
       return;
     }
 
@@ -649,7 +675,9 @@ export function createBillingRouter({
         const ccStatus = await cryptoCloudService.checkInvoiceStatus(invoice.cryptoCloudInvoiceId);
         if (ccStatus === 'paid' || ccStatus === 'success' || ccStatus === 'overpaid') {
           invoice = activateCrypto(invoice).invoice;
-          console.log(`[billing:crypto] Счёт ${invoice.id} оплачен через CryptoCloud. План ${invoice.planId} активирован.`);
+          console.log(
+            `[billing:crypto] Счёт ${invoice.id} оплачен через CryptoCloud. План ${invoice.planId} активирован.`,
+          );
         }
       } catch (err) {
         console.warn('[billing] Ошибка проверки статуса CryptoCloud:', err);
@@ -662,81 +690,85 @@ export function createBillingRouter({
     });
   });
 
-  router.post('/billing/crypto/confirm/:invoiceId', async (request: Request, response: Response) => {
-    const invoiceId = getParamInvoiceId(request);
-    const invoice =
-      activeInvoiceStore.findCryptoInvoice?.(invoiceId) ??
-      activeInvoiceStore.getCryptoInvoice(invoiceId);
-    if (!invoice || !isOwnInvoice(request, invoice)) {
-      sendError(response, 404, 'invoice_not_found', 'Крипто-счёт не найден');
-      return;
-    }
-
-    // Прямые переводы на кошелёк с TxID больше не принимаются: оплата только в окне Trybit.
-    if (request.body?.txHash || request.body?.mode === 'manual') {
-      sendError(
-        response,
-        400,
-        'manual_transfer_unavailable',
-        'Прямые переводы не принимаются. Оплатите счёт в окне Trybit на странице оплаты.',
-      );
-      return;
-    }
-
-    // ОПЛАТА ЧЕРЕЗ TRYBIT: статус счёта проверяется в шлюзе.
-    if (invoice.cryptoCloudInvoiceId && cryptoCloudService.isConfigured()) {
-      let isPaid = invoice.status === 'paid';
-      if (!isPaid) {
-        try {
-          const ccStatus = await cryptoCloudService.checkInvoiceStatus(invoice.cryptoCloudInvoiceId);
-          if (ccStatus === 'paid' || ccStatus === 'success' || ccStatus === 'overpaid') {
-            isPaid = true;
-          }
-        } catch (err) {
-          console.warn('[billing] Ошибка проверки статуса счёта в CryptoCloud:', err);
-        }
+  router.post(
+    '/billing/crypto/confirm/:invoiceId',
+    async (request: Request, response: Response) => {
+      const invoiceId = getParamInvoiceId(request);
+      const invoice =
+        activeInvoiceStore.findCryptoInvoice?.(invoiceId) ??
+        activeInvoiceStore.getCryptoInvoice(invoiceId);
+      if (!invoice || !isOwnInvoice(request, invoice)) {
+        sendError(response, 404, 'invoice_not_found', 'Крипто-счёт не найден');
+        return;
       }
 
-      if (!isPaid) {
+      // Прямые переводы на кошелёк с TxID больше не принимаются: оплата только в окне Trybit.
+      if (request.body?.txHash || request.body?.mode === 'manual') {
         sendError(
           response,
           400,
-          'payment_not_received',
-          'Trybit ещё не подтвердил оплату. Совершите перевод по реквизитам на странице оплаты и повторите проверку.',
+          'manual_transfer_unavailable',
+          'Прямые переводы не принимаются. Оплатите счёт в окне Trybit на странице оплаты.',
         );
         return;
       }
 
-      const userId = invoice.userId;
-      // Уже оплаченный счёт (тариф включили postback или проверка статуса) второй раз не продлевает.
-      if (invoice.status === 'paid') {
+      // ОПЛАТА ЧЕРЕЗ TRYBIT: статус счёта проверяется в шлюзе.
+      if (invoice.cryptoCloudInvoiceId && cryptoCloudService.isConfigured()) {
+        let isPaid = invoice.status === 'paid';
+        if (!isPaid) {
+          try {
+            const ccStatus = await cryptoCloudService.checkInvoiceStatus(
+              invoice.cryptoCloudInvoiceId,
+            );
+            if (ccStatus === 'paid' || ccStatus === 'success' || ccStatus === 'overpaid') {
+              isPaid = true;
+            }
+          } catch (err) {
+            console.warn('[billing] Ошибка проверки статуса счёта в CryptoCloud:', err);
+          }
+        }
+
+        if (!isPaid) {
+          sendError(
+            response,
+            400,
+            'payment_not_received',
+            'Trybit ещё не подтвердил оплату. Совершите перевод по реквизитам на странице оплаты и повторите проверку.',
+          );
+          return;
+        }
+
+        const userId = invoice.userId;
+        // Уже оплаченный счёт (тариф включили postback или проверка статуса) второй раз не продлевает.
+        if (invoice.status === 'paid') {
+          response.json({
+            success: true,
+            subscription: subscriptionStore.get(userId),
+            user: userStore.findById(userId) ?? { id: userId, plan: invoice.planId },
+            invoice,
+          });
+          return;
+        }
+        const { invoice: updated, subscription, user } = activateCrypto(invoice);
+
         response.json({
           success: true,
-          subscription: subscriptionStore.get(userId),
-          user: userStore.findById(userId) ?? { id: userId, plan: invoice.planId },
-          invoice,
+          subscription,
+          user: user ?? { id: userId, plan: invoice.planId },
+          invoice: updated,
         });
         return;
       }
-      const { invoice: updated, subscription, user } = activateCrypto(invoice);
 
-      response.json({
-        success: true,
-        subscription,
-        user: user ?? { id: userId, plan: invoice.planId },
-        invoice: updated,
-      });
-      return;
-    }
-
-    sendError(
-      response,
-      400,
-      'payment_not_received',
-      'Trybit ещё не подтвердил оплату. Совершите перевод по реквизитам на странице оплаты и повторите проверку.',
-    );
-  });
-
+      sendError(
+        response,
+        400,
+        'payment_not_received',
+        'Trybit ещё не подтвердил оплату. Совершите перевод по реквизитам на странице оплаты и повторите проверку.',
+      );
+    },
+  );
 
   return router;
 }

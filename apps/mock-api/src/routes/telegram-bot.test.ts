@@ -10,7 +10,12 @@ import { createSubscriptionStore } from '../store/subscription-store.js';
 import { UsageStore } from '../store/usage-store.js';
 import { createUserStore } from '../store/user-store.js';
 import { TelegramAuthRequests } from '../telegram/auth-requests.js';
-import { TelegramBotService, decodePayload, encodePayload, type TelegramUpdate } from '../telegram/bot.js';
+import {
+  TelegramBotService,
+  decodePayload,
+  encodePayload,
+  type TelegramUpdate,
+} from '../telegram/bot.js';
 import { TelegramLinkCodes, telegramLinkCodes } from '../telegram/link-codes.js';
 import { StarsRateService } from '../telegram/stars-rate.js';
 import { signInitData, validateInitData } from '../telegram/webapp-auth.js';
@@ -18,7 +23,10 @@ import { readJson, startTestServer, type ApiErrorBody } from '../testing/server.
 import type { AuthSession, Subscription, User } from '../types.js';
 
 const TOKEN = '123456:TEST_TOKEN_abcdefghijklmnop';
-const tgHeaders = { 'Content-Type': 'application/json', 'X-Telegram-Bot-Api-Secret-Token': config.telegramWebhookSecret };
+const tgHeaders = {
+  'Content-Type': 'application/json',
+  'X-Telegram-Bot-Api-Secret-Token': config.telegramWebhookSecret,
+};
 
 interface ApiCall {
   method: string;
@@ -28,7 +36,10 @@ interface ApiCall {
 /** Бот с подменённым Telegram API: все вызовы записываются. */
 class RecordingBot extends TelegramBotService {
   calls: ApiCall[] = [];
-  override async callApi<T = unknown>(method: string, body: Record<string, unknown>): Promise<T | null> {
+  override async callApi<T = unknown>(
+    method: string,
+    body: Record<string, unknown>,
+  ): Promise<T | null> {
     this.calls.push({ method, body });
     if (method === 'createInvoiceLink') return `https://t.me/$inv_${this.calls.length}` as T;
     return true as T;
@@ -45,8 +56,17 @@ interface MiniState {
   user: { id: string; email: string | null; telegramOnly: boolean; isAdmin: boolean };
   subscription: Subscription;
   autoRenew: { status: string; stars: number; nextChargeAt: string | null } | null;
-  plans: Array<{ id: string; stars: number; preview: { mode: string; bonusDays: number; renewsAt: string } }>;
-  payments: Array<{ id: string; status: string; amount: number; refundOption: { kind: string; reason?: string } }>;
+  plans: Array<{
+    id: string;
+    stars: number;
+    preview: { mode: string; bonusDays: number; renewsAt: string };
+  }>;
+  payments: Array<{
+    id: string;
+    status: string;
+    amount: number;
+    refundOption: { kind: string; reason?: string };
+  }>;
   prefs: { reminders: boolean; receipts: boolean };
 }
 
@@ -56,8 +76,15 @@ async function harness() {
   const subscriptionStore = createSubscriptionStore(join(dir, 'subs.json'));
   const invoiceStore = createInvoiceStore(join(dir, 'invoices.json'));
   const usageStore = new UsageStore(join(dir, 'usage.json'));
-  const billingService = new BillingService({ userStore, subscriptionStore, usageStore, ledger: createBillingLedger() });
-  const rateService = new StarsRateService({ fetchImpl: (async () => new Response('', { status: 500 })) as typeof fetch });
+  const billingService = new BillingService({
+    userStore,
+    subscriptionStore,
+    usageStore,
+    ledger: createBillingLedger(),
+  });
+  const rateService = new StarsRateService({
+    fetchImpl: (async () => new Response('', { status: 500 })) as typeof fetch,
+  });
   const authRequests = new TelegramAuthRequests();
   const bot = new RecordingBot({
     userStore,
@@ -72,14 +99,21 @@ async function harness() {
     billingService,
     webAppUrl: 'https://ketner.org',
   });
-  const server = await startTestServer({}, { userStore, subscriptionStore, invoiceStore, usageStore, botService: bot, billingService });
+  const server = await startTestServer(
+    {},
+    { userStore, subscriptionStore, invoiceStore, usageStore, botService: bot, billingService },
+  );
   let counter = 0;
   const signup = async (): Promise<AuthSession> => {
     counter += 1;
     const response = await fetch(`${server.baseUrl}/api/auth/signup`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email: `tg${counter}-${Date.now()}@example.com`, password: 'password123', name: 'Buyer' }),
+      body: JSON.stringify({
+        email: `tg${counter}-${Date.now()}@example.com`,
+        password: 'password123',
+        name: 'Buyer',
+      }),
     });
     return readJson<AuthSession>(response);
   };
@@ -90,37 +124,100 @@ async function harness() {
       body: JSON.stringify({ update_id: Date.now(), ...update }),
     });
   const message = (chatId: number, text: string) =>
-    send({ message: { message_id: 1, date: 0, chat: { id: chatId, type: 'private' }, from: { id: chatId, first_name: 'Ivan', username: 'ivan' }, text } });
+    send({
+      message: {
+        message_id: 1,
+        date: 0,
+        chat: { id: chatId, type: 'private' },
+        from: { id: chatId, first_name: 'Ivan', username: 'ivan' },
+        text,
+      },
+    });
   const callback = (chatId: number, data: string) =>
-    send({ callback_query: { id: 'cb', from: { id: chatId, first_name: 'Ivan', username: 'ivan' }, message: { message_id: 9, chat: { id: chatId } }, data } });
+    send({
+      callback_query: {
+        id: 'cb',
+        from: { id: chatId, first_name: 'Ivan', username: 'ivan' },
+        message: { message_id: 9, chat: { id: chatId } },
+        data,
+      },
+    });
   const initData = (telegramUserId: number, firstName = 'Anna') =>
-    signInitData({ auth_date: String(Math.floor(Date.now() / 1000)), user: JSON.stringify({ id: telegramUserId, first_name: firstName, username: 'anna' }) }, TOKEN);
-  const mini = async <T>(path: string, body?: unknown, token?: string, method?: string): Promise<{ status: number; body: T }> => {
+    signInitData(
+      {
+        auth_date: String(Math.floor(Date.now() / 1000)),
+        user: JSON.stringify({ id: telegramUserId, first_name: firstName, username: 'anna' }),
+      },
+      TOKEN,
+    );
+  const mini = async <T>(
+    path: string,
+    body?: unknown,
+    token?: string,
+    method?: string,
+  ): Promise<{ status: number; body: T }> => {
     const response = await fetch(`${server.baseUrl}/api/telegram/miniapp/${path}`, {
       method: method ?? (body === undefined ? 'GET' : 'POST'),
-      headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+      headers: {
+        'Content-Type': 'application/json',
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
       body: body === undefined ? undefined : JSON.stringify(body),
     });
     return { status: response.status, body: await readJson<T>(response) };
   };
   /** Telegram сообщает об оплате звёздами. */
-  const pay = (chatId: number, payload: string, amount: number, charge: string, extra: Record<string, unknown> = {}) =>
+  const pay = (
+    chatId: number,
+    payload: string,
+    amount: number,
+    charge: string,
+    extra: Record<string, unknown> = {},
+  ) =>
     send({
       message: {
         message_id: 2,
         date: 0,
         chat: { id: chatId, type: 'private' },
         from: { id: chatId, first_name: 'Ivan' },
-        successful_payment: { currency: 'XTR', total_amount: amount, invoice_payload: payload, telegram_payment_charge_id: charge, ...extra },
+        successful_payment: {
+          currency: 'XTR',
+          total_amount: amount,
+          invoice_payload: payload,
+          telegram_payment_charge_id: charge,
+          ...extra,
+        },
       },
     });
   /** Привязанный к Telegram покупатель с токеном кабинета. */
   const linkedBuyer = async (telegramUserId: number) => {
     const buyer = await signup();
-    const linked = await mini<{ token: string } & MiniState>('link', { initData: initData(telegramUserId), email: buyer.user.email, password: 'password123' });
+    const linked = await mini<{ token: string } & MiniState>('link', {
+      initData: initData(telegramUserId),
+      email: buyer.user.email,
+      password: 'password123',
+    });
     return { buyer, token: linked.body.token };
   };
-  return { server, bot, userStore, subscriptionStore, invoiceStore, usageStore, billingService, rateService, authRequests, signup, send, message, callback, initData, mini, pay, linkedBuyer };
+  return {
+    server,
+    bot,
+    userStore,
+    subscriptionStore,
+    invoiceStore,
+    usageStore,
+    billingService,
+    rateService,
+    authRequests,
+    signup,
+    send,
+    message,
+    callback,
+    initData,
+    mini,
+    pay,
+    linkedBuyer,
+  };
 }
 
 // ───────────── базовые кирпичики ─────────────
@@ -128,21 +225,40 @@ async function harness() {
 test('курс Stars: свежий курс Fragment применяется, устаревший или странный — нет', async () => {
   const now = Date.parse('2026-10-13T12:00:00Z');
   const feed = (body: unknown) => (async () => Response.json(body)) as unknown as typeof fetch;
-  const fresh = new StarsRateService({ now: () => now, fetchImpl: feed({ usdt_per_star: 0.0149, last_updated: '2026-10-12T00:00:00Z' }) });
+  const fresh = new StarsRateService({
+    now: () => now,
+    fetchImpl: feed({ usdt_per_star: 0.0149, last_updated: '2026-10-12T00:00:00Z' }),
+  });
   assert.equal((await fresh.refresh()).source, 'fragment');
   assert.equal(fresh.quote(9), 610);
-  const stale = new StarsRateService({ now: () => now, fetchImpl: feed({ usdt_per_star: 0.0149, last_updated: '2026-01-09T00:00:00Z' }) });
+  const stale = new StarsRateService({
+    now: () => now,
+    fetchImpl: feed({ usdt_per_star: 0.0149, last_updated: '2026-01-09T00:00:00Z' }),
+  });
   assert.deepEqual([(await stale.refresh()).source, stale.rate.usdPerStar], ['config', 0.015]);
-  const absurd = new StarsRateService({ now: () => now, fetchImpl: feed({ usdt_per_star: 2, last_updated: '2026-10-12T00:00:00Z' }) });
+  const absurd = new StarsRateService({
+    now: () => now,
+    fetchImpl: feed({ usdt_per_star: 2, last_updated: '2026-10-12T00:00:00Z' }),
+  });
   assert.equal((await absurd.refresh()).source, 'config');
-  const down = new StarsRateService({ fetchImpl: (async () => { throw new Error('offline'); }) as unknown as typeof fetch });
+  const down = new StarsRateService({
+    fetchImpl: (async () => {
+      throw new Error('offline');
+    }) as unknown as typeof fetch,
+  });
   await down.refresh();
   assert.deepEqual([down.quote(9), down.quote(25), down.quote(49)], [600, 1670, 3270]);
 });
 
 test('initData мини-приложения: подпись и срок действия проверяются', () => {
   const now = Date.parse('2026-10-13T12:00:00Z');
-  const signed = signInitData({ auth_date: String(now / 1000 - 60), user: JSON.stringify({ id: 42, first_name: 'Ivan', username: 'ivan' }) }, TOKEN);
+  const signed = signInitData(
+    {
+      auth_date: String(now / 1000 - 60),
+      user: JSON.stringify({ id: 42, first_name: 'Ivan', username: 'ivan' }),
+    },
+    TOKEN,
+  );
   assert.equal(validateInitData(signed, TOKEN, { now })?.user.id, 42);
   assert.equal(validateInitData(signed, 'other:token', { now }), null);
   assert.equal(validateInitData(signed.replace('ivan', 'admin'), TOKEN, { now }), null);
@@ -155,7 +271,13 @@ test('коды привязки и payload счёта', () => {
   assert.equal(codes.consume(code, 1000), 'user-1');
   assert.equal(codes.consume(code, 1000), null);
 
-  const raw = encodePayload({ planId: 'pro', stars: 1670, invoiceId: 'stars_1_ab', userId: '7f3c2a10-1111-2222-3333-444455556666', recurring: true });
+  const raw = encodePayload({
+    planId: 'pro',
+    stars: 1670,
+    invoiceId: 'stars_1_ab',
+    userId: '7f3c2a10-1111-2222-3333-444455556666',
+    recurring: true,
+  });
   assert.ok(raw.length <= 128);
   assert.equal(decodePayload(raw)?.recurring, true);
   assert.equal(decodePayload('v1|free|10|x|u'), null);
@@ -163,7 +285,10 @@ test('коды привязки и payload счёта', () => {
   const auth = new TelegramAuthRequests();
   const claim = auth.issueClaimCode(7, 'x', 0);
   assert.match(claim.code, /^[A-HJ-NP-Z2-9]{6}$/);
-  assert.deepEqual(auth.consumeClaimCode(claim.code.toLowerCase(), 1000), { telegramUserId: 7, username: 'x' });
+  assert.deepEqual(auth.consumeClaimCode(claim.code.toLowerCase(), 1000), {
+    telegramUserId: 7,
+    username: 'x',
+  });
   assert.equal(auth.consumeClaimCode(claim.code, 1000), null);
 });
 
@@ -175,12 +300,18 @@ test('вход на сайт через Telegram: новый человек по
   const start = await readJson<{ requestId: string; botUrl: string }>(
     await fetch(`${h.server.baseUrl}/api/auth/telegram/start`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0) Chrome/130.0' },
+      headers: {
+        'Content-Type': 'application/json',
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0) Chrome/130.0',
+      },
       body: JSON.stringify({ mode: 'login' }),
     }),
   );
   assert.match(start.botUrl, /^https:\/\/t\.me\/ketner_test_bot\?start=auth_[A-Za-z0-9_-]{16}$/);
-  const poll = async () => readJson<{ status: string; token?: string; user?: User }>(await fetch(`${h.server.baseUrl}/api/auth/telegram/poll/${start.requestId}`));
+  const poll = async () =>
+    readJson<{ status: string; token?: string; user?: User }>(
+      await fetch(`${h.server.baseUrl}/api/auth/telegram/poll/${start.requestId}`),
+    );
   assert.equal((await poll()).status, 'pending');
 
   const code = start.botUrl.split('start=auth_')[1]!;
@@ -198,18 +329,28 @@ test('вход на сайт через Telegram: новый человек по
   // Повторный опрос сессию не отдаёт.
   assert.equal((await poll()).status, 'expired');
 
-  const me = await readJson<{ user: User }>(await fetch(`${h.server.baseUrl}/api/auth/me`, { headers: { Authorization: `Bearer ${approved.token}` } }));
+  const me = await readJson<{ user: User }>(
+    await fetch(`${h.server.baseUrl}/api/auth/me`, {
+      headers: { Authorization: `Bearer ${approved.token}` },
+    }),
+  );
   assert.equal(me.user.id, approved.user!.id);
 
   // Повторный вход тем же Telegram попадает в тот же аккаунт.
   const again = await readJson<{ requestId: string; botUrl: string }>(
-    await fetch(`${h.server.baseUrl}/api/auth/telegram/start`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' }),
+    await fetch(`${h.server.baseUrl}/api/auth/telegram/start`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: '{}',
+    }),
   );
   const code2 = again.botUrl.split('start=auth_')[1]!;
   await h.message(7001, `/start auth_${code2}`);
   assert.match(String(h.bot.last('sendMessage')!.body.text), /Вход на ketner\.org/);
   await h.callback(7001, `auth:n:${code2}`);
-  const declined = await readJson<{ status: string }>(await fetch(`${h.server.baseUrl}/api/auth/telegram/poll/${again.requestId}`));
+  const declined = await readJson<{ status: string }>(
+    await fetch(`${h.server.baseUrl}/api/auth/telegram/poll/${again.requestId}`),
+  );
   assert.equal(declined.status, 'declined');
 });
 
@@ -219,19 +360,35 @@ test('привязка из настроек: подтверждение в бо
   const site = await h.signup();
   const auth = { Authorization: `Bearer ${site.token}`, 'Content-Type': 'application/json' };
 
-  const unauthorized = await fetch(`${h.server.baseUrl}/api/auth/telegram/start`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ mode: 'link' }) });
+  const unauthorized = await fetch(`${h.server.baseUrl}/api/auth/telegram/start`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ mode: 'link' }),
+  });
   assert.equal(unauthorized.status, 401);
 
   const start = await readJson<{ requestId: string; botUrl: string }>(
-    await fetch(`${h.server.baseUrl}/api/auth/telegram/start`, { method: 'POST', headers: auth, body: JSON.stringify({ mode: 'link' }) }),
+    await fetch(`${h.server.baseUrl}/api/auth/telegram/start`, {
+      method: 'POST',
+      headers: auth,
+      body: JSON.stringify({ mode: 'link' }),
+    }),
   );
   const code = start.botUrl.split('start=auth_')[1]!;
   await h.message(7101, `/start auth_${code}`);
-  assert.match(String(h.bot.last('sendMessage')!.body.text), new RegExp(site.user.email.replace(/[.]/g, '\\.')));
+  assert.match(
+    String(h.bot.last('sendMessage')!.body.text),
+    new RegExp(site.user.email.replace(/[.]/g, '\\.')),
+  );
   await h.callback(7101, `auth:y:${code}`);
   assert.equal(h.userStore.findByTelegramChatId(7101)?.id, site.user.id);
-  const linkPoll = await readJson<{ status: string; mode: string; token?: string }>(await fetch(`${h.server.baseUrl}/api/auth/telegram/poll/${start.requestId}`));
-  assert.deepEqual([linkPoll.status, linkPoll.mode, linkPoll.token], ['approved', 'link', undefined]);
+  const linkPoll = await readJson<{ status: string; mode: string; token?: string }>(
+    await fetch(`${h.server.baseUrl}/api/auth/telegram/poll/${start.requestId}`),
+  );
+  assert.deepEqual(
+    [linkPoll.status, linkPoll.mode, linkPoll.token],
+    ['approved', 'link', undefined],
+  );
 
   // Код из кабинета для второго аккаунта (например, вход через Google на другом устройстве).
   const other = await h.signup();
@@ -252,12 +409,20 @@ test('привязка из настроек: подтверждение в бо
 
   // Кабинет открывает сайт уже войдя: ссылка одноразовая.
   const session = await h.mini<{ token: string }>('session', { initData: h.initData(7202) });
-  const magic = await h.mini<{ url: string }>('site-login', { next: '/settings' }, session.body.token);
+  const magic = await h.mini<{ url: string }>(
+    'site-login',
+    { next: '/settings' },
+    session.body.token,
+  );
   const url = new URL(magic.body.url);
   assert.equal(url.origin + url.pathname, 'https://ketner.org/auth/telegram');
   assert.equal(url.searchParams.get('next'), '/settings');
   const exchange = () =>
-    fetch(`${h.server.baseUrl}/api/auth/telegram/magic`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ token: url.searchParams.get('t') }) });
+    fetch(`${h.server.baseUrl}/api/auth/telegram/magic`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ token: url.searchParams.get('t') }),
+    });
   const first = await exchange();
   assert.equal((await readJson<{ user: User }>(first)).user.id, other.user.id);
   assert.equal((await exchange()).status, 400);
@@ -268,7 +433,9 @@ test('кабинет: «Продолжить с Telegram» создаёт акк
   t.after(() => h.server.close());
   const guest = await h.mini<{ linked: boolean }>('session', { initData: h.initData(7301) });
   assert.equal(guest.body.linked, false);
-  const created = await h.mini<{ linked: boolean; token: string } & MiniState>('register', { initData: h.initData(7301, 'Мария') });
+  const created = await h.mini<{ linked: boolean; token: string } & MiniState>('register', {
+    initData: h.initData(7301, 'Мария'),
+  });
   assert.equal(created.body.linked, true);
   assert.equal(created.body.user.telegramOnly, true);
   assert.equal(created.body.user.email, null);
@@ -279,7 +446,9 @@ test('кабинет: «Продолжить с Telegram» создаёт акк
   assert.equal(unlink.status, 409);
   assert.equal(unlink.body.error.code, 'telegram_only_account');
 
-  const forged = await h.mini<ApiErrorBody>('session', { initData: h.initData(7301).replace('Anna', 'Eve') });
+  const forged = await h.mini<ApiErrorBody>('session', {
+    initData: h.initData(7301).replace('Anna', 'Eve'),
+  });
   assert.equal(forged.status, 401);
 });
 
@@ -290,14 +459,26 @@ test('оплата звёздами: чек в журнале, продлени�
   t.after(() => h.server.close());
   const { buyer, token } = await h.linkedBuyer(7401);
 
-  const invoice = await h.mini<{ invoiceId: string; link: string; stars: number }>('invoice', { planId: 'plus' }, token);
+  const invoice = await h.mini<{ invoiceId: string; link: string; stars: number }>(
+    'invoice',
+    { planId: 'plus' },
+    token,
+  );
   assert.equal(invoice.body.stars, h.rateService.quote(9));
   const linkCall = h.bot.last('createInvoiceLink')!;
   assert.equal(linkCall.body.subscription_period, undefined);
   const payload = String(linkCall.body.payload);
 
   // Перед списанием сумма сверяется со счётом.
-  await h.send({ pre_checkout_query: { id: 'pc', from: { id: 7401, first_name: 'Ivan' }, currency: 'XTR', total_amount: 10, invoice_payload: payload } });
+  await h.send({
+    pre_checkout_query: {
+      id: 'pc',
+      from: { id: 7401, first_name: 'Ivan' },
+      currency: 'XTR',
+      total_amount: 10,
+      invoice_payload: payload,
+    },
+  });
   assert.equal(h.bot.last('answerPreCheckoutQuery')?.body.ok, false);
 
   await h.pay(7401, payload, invoice.body.stars, 'ch-1');
@@ -318,14 +499,32 @@ test('оплата звёздами: чек в журнале, продлени�
   assert.equal(ultraPlan.preview.bonusDays, 5);
 
   // Продление того же тарифа: +30 дней к сроку.
-  const renew = await h.mini<{ invoiceId: string; stars: number }>('invoice', { planId: 'plus' }, token);
-  await h.pay(7401, String(h.bot.last('createInvoiceLink')!.body.payload), renew.body.stars, 'ch-2');
+  const renew = await h.mini<{ invoiceId: string; stars: number }>(
+    'invoice',
+    { planId: 'plus' },
+    token,
+  );
+  await h.pay(
+    7401,
+    String(h.bot.last('createInvoiceLink')!.body.payload),
+    renew.body.stars,
+    'ch-2',
+  );
   const extended = Date.parse(h.subscriptionStore.get(buyer.user.id).renewsAt!);
   assert.ok(Math.abs(extended - firstEnd - 30 * DAY_MS) < 60_000);
 
   // Смена на Ultra: 30 дней + пересчёт ~60 дней Plus.
-  const upgrade = await h.mini<{ invoiceId: string; stars: number }>('invoice', { planId: 'ultra' }, token);
-  await h.pay(7401, String(h.bot.last('createInvoiceLink')!.body.payload), upgrade.body.stars, 'ch-3');
+  const upgrade = await h.mini<{ invoiceId: string; stars: number }>(
+    'invoice',
+    { planId: 'ultra' },
+    token,
+  );
+  await h.pay(
+    7401,
+    String(h.bot.last('createInvoiceLink')!.body.payload),
+    upgrade.body.stars,
+    'ch-3',
+  );
   const ultra = h.subscriptionStore.get(buyer.user.id);
   assert.equal(ultra.plan, 'ultra');
   const ultraDays = Math.round((Date.parse(ultra.renewsAt!) - Date.now()) / DAY_MS);
@@ -339,7 +538,11 @@ test('автопродление звёздами: подписка, очере�
   t.after(() => h.server.close());
   const { buyer, token } = await h.linkedBuyer(7501);
 
-  const invoice = await h.mini<{ stars: number; recurring: boolean }>('invoice', { planId: 'pro', recurring: true }, token);
+  const invoice = await h.mini<{ stars: number; recurring: boolean }>(
+    'invoice',
+    { planId: 'pro', recurring: true },
+    token,
+  );
   assert.equal(invoice.body.recurring, true);
   const linkCall = h.bot.last('createInvoiceLink')!;
   assert.equal(linkCall.body.subscription_period, 2592000);
@@ -347,23 +550,36 @@ test('автопродление звёздами: подписка, очере�
   assert.equal(decodePayload(payload)?.recurring, true);
 
   const firstExpiry = Math.floor((Date.now() + 30 * DAY_MS) / 1000);
-  await h.pay(7501, payload, invoice.body.stars, 'sub-1', { is_recurring: true, is_first_recurring: true, subscription_expiration_date: firstExpiry });
+  await h.pay(7501, payload, invoice.body.stars, 'sub-1', {
+    is_recurring: true,
+    is_first_recurring: true,
+    subscription_expiration_date: firstExpiry,
+  });
   let state = await h.mini<MiniState>('state', undefined, token);
   assert.equal(state.body.autoRenew?.status, 'active');
   assert.equal(state.body.autoRenew?.stars, invoice.body.stars);
   const firstEnd = Date.parse(state.body.subscription.renewsAt!);
 
   // Через 30 дней Telegram списывает сам и присылает платёж с тем же payload.
-  await h.pay(7501, payload, invoice.body.stars, 'sub-2', { is_recurring: true, subscription_expiration_date: firstExpiry + 30 * 86400 });
+  await h.pay(7501, payload, invoice.body.stars, 'sub-2', {
+    is_recurring: true,
+    subscription_expiration_date: firstExpiry + 30 * 86400,
+  });
   state = await h.mini<MiniState>('state', undefined, token);
-  assert.ok(Math.abs(Date.parse(state.body.subscription.renewsAt!) - firstEnd - 30 * DAY_MS) < 60_000);
+  assert.ok(
+    Math.abs(Date.parse(state.body.subscription.renewsAt!) - firstEnd - 30 * DAY_MS) < 60_000,
+  );
   assert.equal(state.body.payments.length, 2);
   assert.match(String(h.bot.last('sendMessage')!.body.text), /Автопродление прошло/);
 
   const off = await h.mini<MiniState>('auto-renew', { enabled: false }, token);
   assert.equal(off.body.autoRenew?.status, 'canceled');
   const edit = h.bot.last('editUserStarSubscription')!;
-  assert.deepEqual(edit.body, { user_id: 7501, telegram_payment_charge_id: 'sub-1', is_canceled: true });
+  assert.deepEqual(edit.body, {
+    user_id: 7501,
+    telegram_payment_charge_id: 'sub-1',
+    is_canceled: true,
+  });
   assert.equal(h.subscriptionStore.get(buyer.user.id).plan, 'pro');
 });
 
@@ -374,13 +590,25 @@ test('возврат звёзд в первые 48 часов — сразу, с
   t.after(() => h.server.close());
   const { buyer, token } = await h.linkedBuyer(7601);
   const invoice = await h.mini<{ stars: number }>('invoice', { planId: 'pro' }, token);
-  await h.pay(7601, String(h.bot.last('createInvoiceLink')!.body.payload), invoice.body.stars, 'rf-1');
+  await h.pay(
+    7601,
+    String(h.bot.last('createInvoiceLink')!.body.payload),
+    invoice.body.stars,
+    'rf-1',
+  );
   assert.equal(h.subscriptionStore.get(buyer.user.id).plan, 'pro');
 
   const paymentId = encodeURIComponent('stars:rf-1');
-  const refund = await h.mini<{ outcome: string } & MiniState>(`payments/${paymentId}/refund`, { reason: 'Не подошло' }, token);
+  const refund = await h.mini<{ outcome: string } & MiniState>(
+    `payments/${paymentId}/refund`,
+    { reason: 'Не подошло' },
+    token,
+  );
   assert.equal(refund.body.outcome, 'refunded');
-  assert.deepEqual(h.bot.last('refundStarPayment')!.body, { user_id: 7601, telegram_payment_charge_id: 'rf-1' });
+  assert.deepEqual(h.bot.last('refundStarPayment')!.body, {
+    user_id: 7601,
+    telegram_payment_charge_id: 'rf-1',
+  });
   assert.equal(h.subscriptionStore.get(buyer.user.id).plan, 'free');
   assert.equal(h.userStore.findById(buyer.user.id)?.plan, 'free');
   assert.equal(refund.body.payments[0]!.status, 'refunded');
@@ -411,13 +639,36 @@ test('возврат: только 24 часа и без единого запр
   const { buyer, token } = await h.linkedBuyer(7650);
 
   // Оплата двое суток назад — срок вышел.
-  h.billingService.grant(buyer.user.id, 'plus', { id: 'stars:old-1', method: 'stars', amount: 600, currency: 'XTR', chargeId: 'old-1', telegramUserId: 7650 }, Date.now() - 2 * DAY_MS);
-  const expired = await h.mini<ApiErrorBody>(`payments/${encodeURIComponent('stars:old-1')}/refund`, { reason: 'Не подошло' }, token);
+  h.billingService.grant(
+    buyer.user.id,
+    'plus',
+    {
+      id: 'stars:old-1',
+      method: 'stars',
+      amount: 600,
+      currency: 'XTR',
+      chargeId: 'old-1',
+      telegramUserId: 7650,
+    },
+    Date.now() - 2 * DAY_MS,
+  );
+  const expired = await h.mini<ApiErrorBody>(
+    `payments/${encodeURIComponent('stars:old-1')}/refund`,
+    { reason: 'Не подошло' },
+    token,
+  );
   assert.equal(expired.status, 409);
   assert.equal(expired.body.error.code, 'refund_expired');
 
   // Свежая оплата, но модель уже ответила — вернуть нельзя.
-  h.billingService.grant(buyer.user.id, 'pro', { id: 'stars:used-1', method: 'stars', amount: 1670, currency: 'XTR', chargeId: 'used-1', telegramUserId: 7650 });
+  h.billingService.grant(buyer.user.id, 'pro', {
+    id: 'stars:used-1',
+    method: 'stars',
+    amount: 1670,
+    currency: 'XTR',
+    chargeId: 'used-1',
+    telegramUserId: 7650,
+  });
   const fresh = h.billingService.findPayment('stars:used-1')!;
   assert.deepEqual(h.billingService.refundOption(fresh), { kind: 'auto' });
   // Ошибка модели использованием не считается.
@@ -425,7 +676,11 @@ test('возврат: только 24 часа и без единого запр
   assert.deepEqual(h.billingService.refundOption(fresh), { kind: 'auto' });
   useModel(h.usageStore, buyer.user.id);
   assert.deepEqual(h.billingService.refundOption(fresh), { kind: 'none', reason: 'used' });
-  const used = await h.mini<ApiErrorBody>(`payments/${encodeURIComponent('stars:used-1')}/refund`, {}, token);
+  const used = await h.mini<ApiErrorBody>(
+    `payments/${encodeURIComponent('stars:used-1')}/refund`,
+    {},
+    token,
+  );
   assert.equal(used.body.error.code, 'refund_used');
   assert.match(used.body.error.message, /24 часов/);
   assert.equal(h.bot.all('refundStarPayment').length, 0);
@@ -438,15 +693,28 @@ test('возврат криптовалюты: заявка администра
   h.userStore.setAdmin(admin.buyer.user.id, true);
   const { buyer, token } = await h.linkedBuyer(7702);
 
-  h.billingService.grant(buyer.user.id, 'pro', { id: 'crypto:c-1', method: 'crypto', amount: 25, currency: 'USD' });
-  assert.deepEqual(h.billingService.refundOption(h.billingService.findPayment('crypto:c-1')!), { kind: 'request' });
-  const requested = await h.mini<{ outcome: string }>(`payments/${encodeURIComponent('crypto:c-1')}/refund`, { reason: 'Ошибся тарифом', comment: 'Хотел Plus' }, token);
+  h.billingService.grant(buyer.user.id, 'pro', {
+    id: 'crypto:c-1',
+    method: 'crypto',
+    amount: 25,
+    currency: 'USD',
+  });
+  assert.deepEqual(h.billingService.refundOption(h.billingService.findPayment('crypto:c-1')!), {
+    kind: 'request',
+  });
+  const requested = await h.mini<{ outcome: string }>(
+    `payments/${encodeURIComponent('crypto:c-1')}/refund`,
+    { reason: 'Ошибся тарифом', comment: 'Хотел Plus' },
+    token,
+  );
   assert.equal(requested.body.outcome, 'requested');
   const adminMessage = h.bot.all('sendMessage').find((call) => call.body.chat_id === 7701)!;
   assert.match(String(adminMessage.body.text), /Заявка на возврат/);
   assert.match(String(adminMessage.body.text), /Хотел Plus/);
   assert.match(String(adminMessage.body.text), /Запросов к моделям после оплаты: 0/);
-  const buttons = (adminMessage.body.reply_markup as { inline_keyboard: Array<Array<{ callback_data?: string }>> }).inline_keyboard[0]!;
+  const buttons = (
+    adminMessage.body.reply_markup as { inline_keyboard: Array<Array<{ callback_data?: string }>> }
+  ).inline_keyboard[0]!;
   const approve = buttons[0]!.callback_data!;
   assert.match(approve, /^rf:y:/);
 
@@ -455,8 +723,15 @@ test('возврат криптовалюты: заявка администра
   assert.equal(h.billingService.findPayment('crypto:c-1')?.status, 'refund_requested');
 
   // Кабинет администратора видит заявку и сколько клиент успел воспользоваться.
-  const list = await h.mini<{ refunds: Array<{ id: string; usedRequests: number }> }>('admin/refunds', undefined, admin.token);
-  assert.deepEqual(list.body.refunds.map((refund) => [refund.id, refund.usedRequests]), [['crypto:c-1', 0]]);
+  const list = await h.mini<{ refunds: Array<{ id: string; usedRequests: number }> }>(
+    'admin/refunds',
+    undefined,
+    admin.token,
+  );
+  assert.deepEqual(
+    list.body.refunds.map((refund) => [refund.id, refund.usedRequests]),
+    [['crypto:c-1', 0]],
+  );
   const forbidden = await h.mini<ApiErrorBody>('admin/refunds', undefined, token);
   assert.equal(forbidden.status, 403);
 
@@ -465,11 +740,28 @@ test('возврат криптовалюты: заявка администра
   assert.equal(h.subscriptionStore.get(buyer.user.id).plan, 'free');
 
   // Вторая заявка — отказ из кабинета администратора с пояснением.
-  h.billingService.grant(buyer.user.id, 'plus', { id: 'crypto:c-2', method: 'crypto', amount: 9, currency: 'USD' });
+  h.billingService.grant(buyer.user.id, 'plus', {
+    id: 'crypto:c-2',
+    method: 'crypto',
+    amount: 9,
+    currency: 'USD',
+  });
   await h.mini(`payments/${encodeURIComponent('crypto:c-2')}/refund`, { reason: 'Другое' }, token);
-  const decided = await h.mini<{ payment: { status: string } }>(`admin/refunds/${encodeURIComponent('crypto:c-2')}`, { approve: false, note: 'Перевод не найден' }, admin.token);
+  const decided = await h.mini<{ payment: { status: string } }>(
+    `admin/refunds/${encodeURIComponent('crypto:c-2')}`,
+    { approve: false, note: 'Перевод не найден' },
+    admin.token,
+  );
   assert.equal(decided.body.payment.status, 'refund_declined');
-  assert.match(String(h.bot.all('sendMessage').filter((call) => call.body.chat_id === 7702).at(-1)!.body.text), /Перевод не найден/);
+  assert.match(
+    String(
+      h.bot
+        .all('sendMessage')
+        .filter((call) => call.body.chat_id === 7702)
+        .at(-1)!.body.text,
+    ),
+    /Перевод не найден/,
+  );
 });
 
 test('возврат, оформленный Telegram (refunded_payment), откатывает срок', async (t) => {
@@ -480,7 +772,17 @@ test('возврат, оформленный Telegram (refunded_payment), отк
   const payload = String(h.bot.last('createInvoiceLink')!.body.payload);
   await h.pay(7801, payload, invoice.body.stars, 'tg-ref');
   await h.send({
-    message: { message_id: 3, date: 0, chat: { id: 7801, type: 'private' }, refunded_payment: { currency: 'XTR', total_amount: invoice.body.stars, invoice_payload: payload, telegram_payment_charge_id: 'tg-ref' } },
+    message: {
+      message_id: 3,
+      date: 0,
+      chat: { id: 7801, type: 'private' },
+      refunded_payment: {
+        currency: 'XTR',
+        total_amount: invoice.body.stars,
+        invoice_payload: payload,
+        telegram_payment_charge_id: 'tg-ref',
+      },
+    },
   });
   assert.equal(h.billingService.findPayment('stars:tg-ref')?.status, 'refunded');
   assert.equal(h.subscriptionStore.get(buyer.user.id).plan, 'free');
@@ -493,10 +795,15 @@ test('бот: /start ведёт в кабинет, /paysupport и /terms объ�
   t.after(() => h.server.close());
   await h.message(7901, '/start');
   const start = h.bot.last('sendMessage')!;
-  const button = (start.body.reply_markup as { inline_keyboard: Array<Array<{ web_app?: { url: string } }>> }).inline_keyboard[0]![0]!;
+  const button = (
+    start.body.reply_markup as { inline_keyboard: Array<Array<{ web_app?: { url: string } }>> }
+  ).inline_keyboard[0]![0]!;
   assert.equal(button.web_app?.url, 'https://ketner.org/tg');
   await h.message(7901, '/paysupport');
-  assert.match(String(h.bot.last('sendMessage')!.body.text), /в течение 24 часов, если после неё вы не сделали ни одного запроса/);
+  assert.match(
+    String(h.bot.last('sendMessage')!.body.text),
+    /в течение 24 часов, если после неё вы не сделали ни одного запроса/,
+  );
   await h.message(7901, '/terms');
   assert.match(String(h.bot.last('sendMessage')!.body.text), /оплата не возвращается/);
 });
@@ -506,14 +813,32 @@ test('напоминания: с автопродлением — о списа�
   t.after(() => h.server.close());
   const { buyer, token } = await h.linkedBuyer(8001);
   const ends = new Date(Date.now() + 2.5 * DAY_MS).toISOString();
-  h.subscriptionStore.set({ userId: buyer.user.id, plan: 'plus', status: 'active', renewsAt: ends });
-  await h.billingService.startStarsSubscription({ userId: buyer.user.id, planId: 'plus', telegramUserId: 8001, chargeId: 'c', invoiceId: 'i', stars: 600, nextChargeAt: ends });
+  h.subscriptionStore.set({
+    userId: buyer.user.id,
+    plan: 'plus',
+    status: 'active',
+    renewsAt: ends,
+  });
+  await h.billingService.startStarsSubscription({
+    userId: buyer.user.id,
+    planId: 'plus',
+    telegramUserId: 8001,
+    chargeId: 'c',
+    invoiceId: 'i',
+    stars: 600,
+    nextChargeAt: ends,
+  });
   assert.equal(await h.bot.sendRenewalReminders(), 1);
   assert.match(String(h.bot.last('sendMessage')!.body.text), /автоматически продлим/);
   assert.equal(await h.bot.sendRenewalReminders(), 0);
 
   const other = await h.linkedBuyer(8002);
-  h.subscriptionStore.set({ userId: other.buyer.user.id, plan: 'pro', status: 'active', renewsAt: ends });
+  h.subscriptionStore.set({
+    userId: other.buyer.user.id,
+    plan: 'pro',
+    status: 'active',
+    renewsAt: ends,
+  });
   await h.mini('prefs', { reminders: false }, other.token);
   assert.equal(await h.bot.sendRenewalReminders(), 0);
   void token;
@@ -528,7 +853,9 @@ test('сайт: счёт в звёздах считается по текуще�
     headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${buyer.token}` },
     body: JSON.stringify({ planId: 'plus' }),
   });
-  const { invoice } = await readJson<{ invoice: { starsAmount: number; botDeepLink: string; id: string } }>(created);
+  const { invoice } = await readJson<{
+    invoice: { starsAmount: number; botDeepLink: string; id: string };
+  }>(created);
   assert.equal(invoice.starsAmount, 600);
   assert.match(invoice.botDeepLink, new RegExp(`\\?start=${invoice.id}$`));
 });

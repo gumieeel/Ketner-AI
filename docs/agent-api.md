@@ -48,17 +48,17 @@
 
 Формат OpenAI Chat Completions (текст и вызов функций). Принимаются поля:
 
-| Поле | Описание |
-|---|---|
-| `model` | id из `/v1/models` или `auto` |
-| `messages` | роли `system`, `user`, `assistant` (с `tool_calls`), `tool` (с `tool_call_id`); `content` — строка либо массив `{type:"text", text}` |
-| `tools` | до 64 функций `{type:"function", function:{name, description, parameters}}` |
-| `tool_choice` | `auto`, `none`, `required` или `{type:"function", function:{name}}` |
-| `stream` | `true` — SSE `data: {...}` и в конце `data: [DONE]` |
-| `stream_options` | игнорируется: `usage` в потоке приходит всегда |
-| `max_tokens`, `max_completion_tokens` | потолок ответа; сервер ограничивает его тарифом: вдвое выше чатового (Plus 12288, Pro 24576, Ultra 32768 токенов), но не выше предела модели; в экономном режиме бюджета ещё ниже |
-| `temperature` | 0–2 |
-| `reasoning_effort` | `none`, `minimal`, `low`, `medium`, `high`; по умолчанию `low`. Сервер ограничивает глубину: на Plus и Pro не выше `medium`, `high` только на Ultra, на подходе бюджета к пределу (80%) не выше `low` |
+| Поле                                  | Описание                                                                                                                                                                                              |
+| ------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `model`                               | id из `/v1/models` или `auto`                                                                                                                                                                         |
+| `messages`                            | роли `system`, `user`, `assistant` (с `tool_calls`), `tool` (с `tool_call_id`); `content` — строка либо массив `{type:"text", text}`                                                                  |
+| `tools`                               | до 64 функций `{type:"function", function:{name, description, parameters}}`                                                                                                                           |
+| `tool_choice`                         | `auto`, `none`, `required` или `{type:"function", function:{name}}`                                                                                                                                   |
+| `stream`                              | `true` — SSE `data: {...}` и в конце `data: [DONE]`                                                                                                                                                   |
+| `stream_options`                      | игнорируется: `usage` в потоке приходит всегда                                                                                                                                                        |
+| `max_tokens`, `max_completion_tokens` | потолок ответа; сервер ограничивает его тарифом: вдвое выше чатового (Plus 12288, Pro 24576, Ultra 32768 токенов), но не выше предела модели; в экономном режиме бюджета ещё ниже                     |
+| `temperature`                         | 0–2                                                                                                                                                                                                   |
+| `reasoning_effort`                    | `none`, `minimal`, `low`, `medium`, `high`; по умолчанию `low`. Сервер ограничивает глубину: на Plus и Pro не выше `medium`, `high` только на Ultra, на подходе бюджета к пределу (80%) не выше `low` |
 
 Не поддерживается: `n` больше 1 (ошибка), картинки в `content` (ошибка), `response_format`, `logprobs`, `stop`
 и прочие параметры OpenAI (молча игнорируются). Последнее сообщение должно быть от `user` или `tool`.
@@ -73,15 +73,29 @@
   "object": "chat.completion",
   "created": 1760000000,
   "model": "ketner-pro",
-  "choices": [{
-    "index": 0,
-    "message": { "role": "assistant", "content": null,
-      "tool_calls": [{ "id": "call_1", "type": "function",
-        "function": { "name": "read_file", "arguments": "{\"path\":\"src/a.ts\"}" } }] },
-    "finish_reason": "tool_calls"
-  }],
-  "usage": { "prompt_tokens": 1200, "completion_tokens": 80, "total_tokens": 1280,
-             "prompt_tokens_details": { "cached_tokens": 900 } },
+  "choices": [
+    {
+      "index": 0,
+      "message": {
+        "role": "assistant",
+        "content": null,
+        "tool_calls": [
+          {
+            "id": "call_1",
+            "type": "function",
+            "function": { "name": "read_file", "arguments": "{\"path\":\"src/a.ts\"}" }
+          }
+        ]
+      },
+      "finish_reason": "tool_calls"
+    }
+  ],
+  "usage": {
+    "prompt_tokens": 1200,
+    "completion_tokens": 80,
+    "total_tokens": 1280,
+    "prompt_tokens_details": { "cached_tokens": 900 }
+  },
   "ketner": {
     "cost_usd": 0.0012,
     "requested_model": "gpt-6.1-sol",
@@ -126,31 +140,31 @@
 
 Тело `{"error": {"message": "...", "type": "...", "code": "..."}}`.
 
-| HTTP | `code` | Когда |
-|---|---|---|
-| 400 | `invalid_request_error` | неверное тело запроса |
-| 400 | `context_length_exceeded` | история не помещается в окно модели: клиент должен сжать контекст |
-| 401 | `invalid_api_key` | нет ключа, ключ неверный или отозван |
-| 403 | `upgrade_required` | тариф ниже Plus или модель требует более высокого тарифа |
-| 404 | `model_not_found` | модели нет среди публичных (список: `GET /v1/models`; старые id не принимаются) |
-| 413 | `request_too_large` | тело больше 8 МБ |
-| 429 | `insufficient_quota` | бюджет тарифа исчерпан (125%): повтор не поможет |
-| 429 | `rate_limit_exceeded` | лимит запросов, параллельных запросов или суточный лимит расхода; есть `Retry-After` (секунды, примерно) |
-| 400 | `invalid_request_error` | провайдер отклонил запрос (текст причины в `message`) |
-| 500 | `internal_error` | внутренняя ошибка сервера |
-| 502 | `upstream_error` | все модели цепочки недоступны |
-| 503 | `provider_unavailable` | на стороне сервера недоступен ключ OpenRouter или нет кредитов |
+| HTTP | `code`                    | Когда                                                                                                    |
+| ---- | ------------------------- | -------------------------------------------------------------------------------------------------------- |
+| 400  | `invalid_request_error`   | неверное тело запроса                                                                                    |
+| 400  | `context_length_exceeded` | история не помещается в окно модели: клиент должен сжать контекст                                        |
+| 401  | `invalid_api_key`         | нет ключа, ключ неверный или отозван                                                                     |
+| 403  | `upgrade_required`        | тариф ниже Plus или модель требует более высокого тарифа                                                 |
+| 404  | `model_not_found`         | модели нет среди публичных (список: `GET /v1/models`; старые id не принимаются)                          |
+| 413  | `request_too_large`       | тело больше 8 МБ                                                                                         |
+| 429  | `insufficient_quota`      | бюджет тарифа исчерпан (125%): повтор не поможет                                                         |
+| 429  | `rate_limit_exceeded`     | лимит запросов, параллельных запросов или суточный лимит расхода; есть `Retry-After` (секунды, примерно) |
+| 400  | `invalid_request_error`   | провайдер отклонил запрос (текст причины в `message`)                                                    |
+| 500  | `internal_error`          | внутренняя ошибка сервера                                                                                |
+| 502  | `upstream_error`          | все модели цепочки недоступны                                                                            |
+| 503  | `provider_unavailable`    | на стороне сервера недоступен ключ OpenRouter или нет кредитов                                           |
 
 `error.type` по OpenAI: `invalid_request_error`, `authentication_error`, `permission_error`, `not_found_error`,
 `rate_limit_error`, `insufficient_quota`, `server_error`. `error.param` указывает на неверное поле запроса.
 
 ## Ключи API (для сайта; авторизация сессией)
 
-| Метод | Путь | Ответ |
-|---|---|---|
-| GET | `/api/keys` | `{ "keys": [{ "id", "name", "prefix", "createdAt", "lastUsedAt" }] }` |
-| POST | `/api/keys` `{ "name": "MacBook" }` | `{ "key": { ...как выше }, "secret": "ketner_sk_..." }`: секрет показывается один раз |
-| DELETE | `/api/keys/:id` | `{ "ok": true }` |
+| Метод  | Путь                                | Ответ                                                                                 |
+| ------ | ----------------------------------- | ------------------------------------------------------------------------------------- |
+| GET    | `/api/keys`                         | `{ "keys": [{ "id", "name", "prefix", "createdAt", "lastUsedAt" }] }`                 |
+| POST   | `/api/keys` `{ "name": "MacBook" }` | `{ "key": { ...как выше }, "secret": "ketner_sk_..." }`: секрет показывается один раз |
+| DELETE | `/api/keys/:id`                     | `{ "ok": true }`                                                                      |
 
 Ошибки этих эндпоинтов в формате сайта `{ "error": { "code", "message" } }`: 401 без сессии, 403 `upgrade_required`
 (создание ключа с тарифа Plus), 400 `invalid_request` (нет имени или оно не 1–60 символов), 409 `key_limit_reached`

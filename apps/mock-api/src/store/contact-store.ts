@@ -18,5 +18,6 @@ export function createContactStore(file?: string): DocStore<ContactMessage> {
 
 /** Рабочее хранилище: файл на диске плюс зеркало в Postgres (см. db/sync.ts). */
 export const contactStore = createContactStore(
-  process.env.CONTACT_STORE_FILE ?? fileURLToPath(new URL('../../data/contact.json', import.meta.url)),
+  process.env.CONTACT_STORE_FILE ??
+    fileURLToPath(new URL('../../data/contact.json', import.meta.url)),
 );

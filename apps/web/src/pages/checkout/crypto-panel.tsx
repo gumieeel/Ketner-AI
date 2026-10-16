@@ -17,15 +17,7 @@ import { useTranslation } from '@/i18n';
 import { CryptoFeeBreakdown, CryptoPicker } from './crypto-picker';
 import type { CryptoOption } from './crypto-options';
 import { openGatewayWindow } from './gateway-window';
-import {
-  CopyButton,
-  Notice,
-  PanelShell,
-  QrFrame,
-  StatusRow,
-  StepLabel,
-  TimerPill,
-} from './parts';
+import { CopyButton, Notice, PanelShell, QrFrame, StatusRow, StepLabel, TimerPill } from './parts';
 
 export interface CryptoPanelProps {
   plan: Plan;
@@ -74,7 +66,8 @@ export function CryptoPanel(props: CryptoPanelProps) {
   } = props;
   const { t } = useTranslation();
   const invoiceNo =
-    invoice?.cryptoCloudInvoiceId || (invoice ? `INV-${invoice.id.slice(0, 8).toUpperCase()}` : 'INV-AI');
+    invoice?.cryptoCloudInvoiceId ||
+    (invoice ? `INV-${invoice.id.slice(0, 8).toUpperCase()}` : 'INV-AI');
 
   return (
     <PanelShell
@@ -87,7 +80,13 @@ export function CryptoPanel(props: CryptoPanelProps) {
         {/* Шапка счёта */}
         <div className="flex flex-wrap items-center justify-between gap-3 border-b border-stroke pb-4">
           <div className="flex min-w-0 items-center gap-3">
-            <img src="/logo-mark-160.png" alt="" width={36} height={36} className="size-9 shrink-0 rounded-xl" />
+            <img
+              src="/logo-mark-160.png"
+              alt=""
+              width={36}
+              height={36}
+              className="size-9 shrink-0 rounded-xl"
+            />
             <div className="min-w-0">
               <p className="text-sm leading-tight font-semibold text-text">Ketner AI</p>
               <p className="mt-0.5 truncate font-mono text-xs text-muted">
@@ -125,11 +124,20 @@ export function CryptoPanel(props: CryptoPanelProps) {
         {/* 1–2. Монета и сеть — как на платёжной странице Trybit */}
         <CryptoPicker value={currency} onChange={onCurrencyChange} />
 
-        <CryptoFeeBreakdown priceUsd={plan.priceMonthly} currency={currency} fees={invoice?.fees} loading={props.loading} />
+        <CryptoFeeBreakdown
+          priceUsd={plan.priceMonthly}
+          currency={currency}
+          fees={invoice?.fees}
+          loading={props.loading}
+        />
 
         {/* Email для чека */}
         <div className="flex flex-col gap-2.5 rounded-xl border border-stroke bg-canvas/70 p-3.5">
-          <StepLabel htmlFor="payer-email-crypto" title={t('checkout.receiptEmail')} hint={t('checkout.receiptEmailHint')} />
+          <StepLabel
+            htmlFor="payer-email-crypto"
+            title={t('checkout.receiptEmail')}
+            hint={t('checkout.receiptEmailHint')}
+          />
           <Input
             id="payer-email-crypto"
             type="email"
@@ -157,7 +165,18 @@ export function CryptoPanel(props: CryptoPanelProps) {
 
 /** Вариант 1: оплата через шлюз Trybit. */
 function GatewayBlock(props: CryptoPanelProps) {
-  const { amount, invoice, loading, invoiceError, onRetryInvoice, gatewayOpened, onGatewayOpen, submitting, feedback, onConfirm } = props;
+  const {
+    amount,
+    invoice,
+    loading,
+    invoiceError,
+    onRetryInvoice,
+    gatewayOpened,
+    onGatewayOpen,
+    submitting,
+    feedback,
+    onConfirm,
+  } = props;
   const { t } = useTranslation();
 
   if (invoiceError && !invoice) {
@@ -166,7 +185,14 @@ function GatewayBlock(props: CryptoPanelProps) {
         <Notice tone="warning" live>
           {invoiceError}
         </Notice>
-        <Button type="button" variant="primary" size="lg" fullWidth leftIcon={<RefreshIcon className="size-4" />} onClick={onRetryInvoice}>
+        <Button
+          type="button"
+          variant="primary"
+          size="lg"
+          fullWidth
+          leftIcon={<RefreshIcon className="size-4" />}
+          onClick={onRetryInvoice}
+        >
           {t('checkout.cryptoInvoiceRetry')}
         </Button>
       </div>
@@ -245,7 +271,11 @@ function GatewayBlock(props: CryptoPanelProps) {
         </Notice>
       ) : null}
 
-      <StatusRow status={t('checkout.cryptoGatewayStatus')} hint={t('checkout.autoCheck')} dotClassName="bg-accent">
+      <StatusRow
+        status={t('checkout.cryptoGatewayStatus')}
+        hint={t('checkout.autoCheck')}
+        dotClassName="bg-accent"
+      >
         <p className="text-xs leading-5 text-muted">{t('checkout.cryptoGatewayInfo')}</p>
       </StatusRow>
 
@@ -281,19 +311,30 @@ function GatewayInlineBlock({
           <span className="text-[13px] text-muted">{t('checkout.cryptoAmountExact')}</span>
           <div className="flex flex-wrap items-center justify-between gap-2">
             <span className="text-xl font-semibold text-accent tabular-nums">{amount}</span>
-            <CopyButton variant="ghost" copied={copiedAmount} label={t('checkout.cryptoCopyAmount')} onCopy={onCopyAmount} />
+            <CopyButton
+              variant="ghost"
+              copied={copiedAmount}
+              label={t('checkout.cryptoCopyAmount')}
+              onCopy={onCopyAmount}
+            />
           </div>
         </div>
         <div className="flex flex-col justify-between gap-2 rounded-xl border border-stroke bg-surface-2 p-3.5">
           <span className="text-[13px] text-muted">{t('checkout.cryptoSelectedNetwork')}</span>
-          <span className="text-sm font-semibold text-text">{invoice?.network || option.network}</span>
+          <span className="text-sm font-semibold text-text">
+            {invoice?.network || option.network}
+          </span>
         </div>
       </div>
 
       <div className="flex flex-col gap-2.5 rounded-xl border border-stroke bg-canvas p-3.5">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <span className="text-[13px] font-semibold text-text">{t('checkout.cryptoAddress')}</span>
-          <CopyButton copied={copiedAddress} label={t('checkout.cryptoCopyAddress')} onCopy={onCopyAddress} />
+          <CopyButton
+            copied={copiedAddress}
+            label={t('checkout.cryptoCopyAddress')}
+            onCopy={onCopyAddress}
+          />
         </div>
         <div className="rounded-lg border border-stroke bg-surface-2 p-2.5 font-mono text-xs font-semibold break-all text-text select-all">
           {address}
@@ -331,12 +372,15 @@ function GatewayInlineBlock({
         </div>
       </div>
 
-      <StatusRow status={t('checkout.cryptoInlineStatus')} hint={t('checkout.autoCheck')} dotClassName="bg-accent">
+      <StatusRow
+        status={t('checkout.cryptoInlineStatus')}
+        hint={t('checkout.autoCheck')}
+        dotClassName="bg-accent"
+      >
         <p className="text-xs leading-5 text-muted">{t('checkout.cryptoGatewayInfo')}</p>
       </StatusRow>
 
       <CheckBlock feedback={feedback} submitting={submitting} onConfirm={onConfirm} />
-
     </div>
   );
 }

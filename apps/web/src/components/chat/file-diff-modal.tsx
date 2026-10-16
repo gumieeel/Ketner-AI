@@ -53,8 +53,12 @@ export function FileDiffModal({
         }
         description={
           <span className="flex flex-wrap items-center gap-x-3 gap-y-0.5">
-            <span className="font-mono text-success">{t('diff.added', { count: diffResult.additions })}</span>
-            <span className="font-mono text-danger">{t('diff.removed', { count: diffResult.deletions })}</span>
+            <span className="font-mono text-success">
+              {t('diff.added', { count: diffResult.additions })}
+            </span>
+            <span className="font-mono text-danger">
+              {t('diff.removed', { count: diffResult.deletions })}
+            </span>
             {currentChange.description && (
               <span className="min-w-0 truncate text-subtle">• {currentChange.description}</span>
             )}
@@ -62,7 +66,11 @@ export function FileDiffModal({
         }
         actions={
           <Button variant="outline" size="sm" onClick={handleCopyNewContent} className="mr-1">
-            {copied ? <CheckIcon className="size-3.5 text-success" /> : <CopyIcon className="size-3.5" />}
+            {copied ? (
+              <CheckIcon className="size-3.5 text-success" />
+            ) : (
+              <CopyIcon className="size-3.5" />
+            )}
             <span className="max-sm:sr-only">{copied ? t('diff.copied') : t('diff.copy')}</span>
           </Button>
         }
@@ -100,7 +108,10 @@ export function FileDiffModal({
         )}
 
         {/* Unified Diff Area */}
-        <div tabIndex={0} className="flex-1 overflow-auto bg-canvas font-mono text-xs leading-5 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-accent">
+        <div
+          tabIndex={0}
+          className="flex-1 overflow-auto bg-canvas font-mono text-xs leading-5 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-accent"
+        >
           <div className="inline-block min-w-full">
             {diffResult.lines.map((line: DiffLine, idx: number) => {
               const isAdd = line.type === 'add';
@@ -117,7 +128,10 @@ export function FileDiffModal({
                   )}
                 >
                   {/* Line numbers */}
-                  <div aria-hidden="true" className="flex w-16 shrink-0 select-none justify-between pr-3 font-mono text-[11px] text-subtle">
+                  <div
+                    aria-hidden="true"
+                    className="flex w-16 shrink-0 select-none justify-between pr-3 font-mono text-[11px] text-subtle"
+                  >
                     <span className="w-7 text-right">{line.oldLineNumber ?? ''}</span>
                     <span className="w-7 text-right">{line.newLineNumber ?? ''}</span>
                   </div>
@@ -134,7 +148,9 @@ export function FileDiffModal({
                   </span>
 
                   {/* Code text */}
-                  <pre className="flex-1 font-mono break-all whitespace-pre-wrap">{line.text || ' '}</pre>
+                  <pre className="flex-1 font-mono break-all whitespace-pre-wrap">
+                    {line.text || ' '}
+                  </pre>
                 </div>
               );
             })}

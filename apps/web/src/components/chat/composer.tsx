@@ -1,4 +1,11 @@
-import { useEffect, useRef, useState, type ClipboardEvent, type DragEvent, type KeyboardEvent } from 'react';
+import {
+  useEffect,
+  useRef,
+  useState,
+  type ClipboardEvent,
+  type DragEvent,
+  type KeyboardEvent,
+} from 'react';
 import { Link } from 'react-router-dom';
 import {
   FolderIcon,
@@ -262,10 +269,7 @@ export function Composer() {
         ) : null}
 
         {/* Превью прикреплённых файлов */}
-        <ComposerAttachments
-          attachments={attachedFiles}
-          onRemove={removeAttachment}
-        />
+        <ComposerAttachments attachments={attachedFiles} onRemove={removeAttachment} />
 
         <label htmlFor="composer" className="sr-only">
           {t('chat.placeholder')}
@@ -344,7 +348,9 @@ export function Composer() {
             ) : null}
           </div>
 
-          <p className="ml-1 hidden min-w-0 truncate text-xs text-subtle md:block">{t('composer.hintSend')}</p>
+          <p className="ml-1 hidden min-w-0 truncate text-xs text-subtle md:block">
+            {t('composer.hintSend')}
+          </p>
 
           {streaming ? (
             <button
@@ -389,4 +395,3 @@ export function Composer() {
     </div>
   );
 }
-

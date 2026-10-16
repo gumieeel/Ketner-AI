@@ -43,13 +43,21 @@ test('стрим возвращает реальную стоимость usage.
       return sse([
         { model: 'deepseek/deepseek-v4.1-flash', ...delta('Привет') },
         delta(', мир'),
-        { choices: [{ delta: {}, finish_reason: 'stop' }], usage: { prompt_tokens: 120, completion_tokens: 8, cost: 0.000042 } },
+        {
+          choices: [{ delta: {}, finish_reason: 'stop' }],
+          usage: { prompt_tokens: 120, completion_tokens: 8, cost: 0.000042 },
+        },
         '[DONE]',
       ]);
     }) as FetchFn,
     () =>
       provider.streamText(
-        { model: 'deepseek/deepseek-v4.1-flash', messages: [{ role: 'user', content: 'hi' }], stream: true, maxTokens: 100 },
+        {
+          model: 'deepseek/deepseek-v4.1-flash',
+          messages: [{ role: 'user', content: 'hi' }],
+          stream: true,
+          maxTokens: 100,
+        },
         { onDelta: () => undefined, isCancelled: () => false },
       ),
   );
@@ -57,7 +65,11 @@ test('стрим возвращает реальную стоимость usage.
   assert.equal(result.cost, 0.000042);
   assert.equal(result.model, 'deepseek/deepseek-v4.1-flash');
   assert.equal(result.usage.inputTokens, 120);
-  assert.deepEqual(sent[0].usage, { include: true }, 'учёт стоимости должен запрашиваться у OpenRouter');
+  assert.deepEqual(
+    sent[0].usage,
+    { include: true },
+    'учёт стоимости должен запрашиваться у OpenRouter',
+  );
 });
 
 test('отказ модели (например 404) логируется и поднимается шлюзу: скрытых запасных моделей нет', async () => {
@@ -73,7 +85,9 @@ test('отказ модели (например 404) логируется и п�
       (async (_url: unknown, init?: RequestInit) => {
         calls++;
         requested.push(String(JSON.parse(String(init?.body)).model));
-        return new Response('{"error":{"message":"No endpoints found for bad/model"}}', { status: 404 });
+        return new Response('{"error":{"message":"No endpoints found for bad/model"}}', {
+          status: 404,
+        });
       }) as FetchFn,
       () =>
         provider.streamText(
@@ -90,7 +104,10 @@ test('отказ модели (например 404) логируется и п�
   assert.deepEqual(requested, ['bad/model']);
   assert.ok(failure instanceof OpenRouterError);
   assert.equal((failure as OpenRouterError).status, 404);
-  assert.ok(warnings.some((w) => w.includes('bad/model') && w.includes('404')), 'отказ должен попасть в лог');
+  assert.ok(
+    warnings.some((w) => w.includes('bad/model') && w.includes('404')),
+    'отказ должен попасть в лог',
+  );
   assert.ok(!warnings.join('\n').includes('"k"'), 'ключ не должен попадать в лог');
 });
 
@@ -102,9 +119,14 @@ test('HTTP 402 (кончились кредиты) громко попадает
   let failure: unknown;
   try {
     await withFetch(
-      (async () => new Response('{"error":{"message":"Insufficient credits"}}', { status: 402 })) as FetchFn,
+      (async () =>
+        new Response('{"error":{"message":"Insufficient credits"}}', { status: 402 })) as FetchFn,
       () =>
-        provider.generateText({ model: 'openai/gpt-6-luna', messages: [{ role: 'user', content: 'x' }], stream: false }),
+        provider.generateText({
+          model: 'openai/gpt-6-luna',
+          messages: [{ role: 'user', content: 'x' }],
+          stream: false,
+        }),
     ).catch((err: unknown) => {
       failure = err;
     });
@@ -113,7 +135,10 @@ test('HTTP 402 (кончились кредиты) громко попадает
   }
   assert.ok(failure instanceof OpenRouterError);
   assert.equal((failure as OpenRouterError).status, 402);
-  assert.ok(errors.some((e) => e.includes('кредиты')), 'нехватка кредитов должна быть заметна в логах');
+  assert.ok(
+    errors.some((e) => e.includes('кредиты')),
+    'нехватка кредитов должна быть заметна в логах',
+  );
 });
 
 test('размышления и кэш: reasoning_tokens и cached_tokens попадают в учёт, текст размышлений оборачивается в <think>', async () => {
@@ -162,8 +187,14 @@ test('размышления и кэш: reasoning_tokens и cached_tokens поп
   assert.equal(result.usage.cachedTokens, 4096);
   assert.equal(result.cost, 0.0123);
   assert.deepEqual(sent[0].reasoning, { effort: 'medium' });
-  const system = (sent[0].messages as Array<{ content: unknown }>)[0].content as Array<{ cache_control?: unknown }>;
-  assert.deepEqual(system[0].cache_control, { type: 'ephemeral' }, 'Anthropic: системный промпт кэшируется');
+  const system = (sent[0].messages as Array<{ content: unknown }>)[0].content as Array<{
+    cache_control?: unknown;
+  }>;
+  assert.deepEqual(
+    system[0].cache_control,
+    { type: 'ephemeral' },
+    'Anthropic: системный промпт кэшируется',
+  );
 });
 
 test('обрыв посреди ответа возвращает уже показанный текст, а не запускает второй ответ другой модели', async () => {
@@ -177,11 +208,19 @@ test('обрыв посреди ответа возвращает уже пок�
     }) as FetchFn,
     () =>
       provider.streamText(
-        { model: 'deepseek/deepseek-v4.1-flash', messages: [{ role: 'user', content: 'x' }], stream: true },
+        {
+          model: 'deepseek/deepseek-v4.1-flash',
+          messages: [{ role: 'user', content: 'x' }],
+          stream: true,
+        },
         { onDelta: (d) => shown.push(d), isCancelled: () => false },
       ),
   );
-  assert.equal(calls, 1, 'вторая модель не должна вызываться после того, как пользователь уже видит ответ');
+  assert.equal(
+    calls,
+    1,
+    'вторая модель не должна вызываться после того, как пользователь уже видит ответ',
+  );
   assert.equal(result.content, 'Начало ответа и продолжение');
   assert.equal(shown.join(''), result.content);
   assert.equal(result.finishReason, 'error');
@@ -210,7 +249,12 @@ test('таймаут (abort) посреди ответа отдаёт части
     }) as FetchFn,
     () =>
       provider.streamText(
-        { model: 'x/y', messages: [{ role: 'user', content: 'x' }], stream: true, signal: controller.signal },
+        {
+          model: 'x/y',
+          messages: [{ role: 'user', content: 'x' }],
+          stream: true,
+          signal: controller.signal,
+        },
         { onDelta: () => undefined, isCancelled: () => false },
       ),
   );
@@ -228,7 +272,10 @@ const toolDelta = (index: number, part: { id?: string; name?: string; args?: str
           {
             index,
             ...(part.id ? { id: part.id, type: 'function' } : {}),
-            function: { ...(part.name ? { name: part.name } : {}), ...(part.args !== undefined ? { arguments: part.args } : {}) },
+            function: {
+              ...(part.name ? { name: part.name } : {}),
+              ...(part.args !== undefined ? { arguments: part.args } : {}),
+            },
           },
         ],
       },
@@ -250,7 +297,15 @@ test('streamAgent собирает вызов функции из частей �
         toolDelta(0, { args: '{"path":' }),
         toolDelta(0, { args: '"src/a.ts"}' }),
         toolDelta(1, { id: 'call_b', name: 'list_dir', args: '{}' }),
-        { choices: [{ delta: {}, finish_reason: 'tool_calls' }], usage: { prompt_tokens: 900, completion_tokens: 40, cost: 0.0004, prompt_tokens_details: { cached_tokens: 600 } } },
+        {
+          choices: [{ delta: {}, finish_reason: 'tool_calls' }],
+          usage: {
+            prompt_tokens: 900,
+            completion_tokens: 40,
+            cost: 0.0004,
+            prompt_tokens_details: { cached_tokens: 600 },
+          },
+        },
         '[DONE]',
       ]);
     }) as FetchFn,
@@ -259,7 +314,9 @@ test('streamAgent собирает вызов функции из частей �
         {
           model: 'xiaomi/mimo-v2.6-pro',
           messages: [{ role: 'user', content: 'открой a.ts' }],
-          tools: [{ type: 'function', function: { name: 'read_file', parameters: { type: 'object' } } }],
+          tools: [
+            { type: 'function', function: { name: 'read_file', parameters: { type: 'object' } } },
+          ],
           toolChoice: 'auto',
           maxTokens: 2048,
         },
@@ -278,9 +335,15 @@ test('streamAgent собирает вызов функции из частей �
   );
   assert.equal(result.cost, 0.0004);
   assert.equal(result.usage.cachedTokens, 600);
-  assert.deepEqual((events[0] as { kind: string }).kind, 'reasoning', 'размышления идут отдельным событием, а не в тексте');
+  assert.deepEqual(
+    (events[0] as { kind: string }).kind,
+    'reasoning',
+    'размышления идут отдельным событием, а не в тексте',
+  );
   assert.ok(events.some((e) => (e as { kind: string }).kind === 'tool_call'));
-  assert.deepEqual(sent[0].tools, [{ type: 'function', function: { name: 'read_file', parameters: { type: 'object' } } }]);
+  assert.deepEqual(sent[0].tools, [
+    { type: 'function', function: { name: 'read_file', parameters: { type: 'object' } } },
+  ]);
   assert.equal(sent[0].tool_choice, 'auto');
   assert.deepEqual(sent[0].usage, { include: true });
 });
@@ -291,7 +354,10 @@ test('streamAgent: finish_reason stop с накопленными вызовам
     (async () =>
       sse([
         toolDelta(0, { id: 'c1', name: 'shell', args: '{"command":"ls"}' }),
-        { choices: [{ delta: {}, finish_reason: 'stop' }], usage: { prompt_tokens: 10, completion_tokens: 5 } },
+        {
+          choices: [{ delta: {}, finish_reason: 'stop' }],
+          usage: { prompt_tokens: 10, completion_tokens: 5 },
+        },
       ])) as FetchFn,
     () =>
       provider.streamAgent(
@@ -309,7 +375,11 @@ test('streamAgent: tools не отправляются без объявленн
     model: 'deepseek/deepseek-v4.1-flash',
     messages: [
       { role: 'user', content: 'x' },
-      { role: 'assistant', content: null, tool_calls: [{ id: 'c1', type: 'function', function: { name: 'f', arguments: '{}' } }] },
+      {
+        role: 'assistant',
+        content: null,
+        tool_calls: [{ id: 'c1', type: 'function', function: { name: 'f', arguments: '{}' } }],
+      },
       { role: 'tool', tool_call_id: 'c1', content: 'готово' },
     ],
     toolChoice: 'auto',
@@ -331,14 +401,19 @@ test('streamAgent: для Anthropic кэшируются system и послед�
     messages: [
       { role: 'system', content: 'правила' },
       { role: 'user', content: 'первая задача' },
-      { role: 'assistant', content: null, tool_calls: [{ id: 'c1', type: 'function', function: { name: 'f', arguments: '{}' } }] },
+      {
+        role: 'assistant',
+        content: null,
+        tool_calls: [{ id: 'c1', type: 'function', function: { name: 'f', arguments: '{}' } }],
+      },
       { role: 'tool', tool_call_id: 'c1', content: 'результат' },
     ],
     maxTokens: 1000,
   });
   const messages = body.messages as Array<{ role: string; content: unknown }>;
   const cached = (m: { content: unknown }) =>
-    Array.isArray(m.content) && (m.content[0] as { cache_control?: unknown }).cache_control !== undefined;
+    Array.isArray(m.content) &&
+    (m.content[0] as { cache_control?: unknown }).cache_control !== undefined;
   assert.ok(cached(messages[0]) && cached(messages[1]));
   assert.equal(messages[3].content, 'результат');
 });
@@ -350,7 +425,8 @@ test('streamAgent: отказ до первого события поднима�
   try {
     await assert.rejects(
       withFetch(
-        (async () => new Response('{"error":{"message":"no credits"}}', { status: 402 })) as FetchFn,
+        (async () =>
+          new Response('{"error":{"message":"no credits"}}', { status: 402 })) as FetchFn,
         () =>
           provider.streamAgent(
             { model: 'm', messages: [{ role: 'user', content: 'x' }], maxTokens: 100 },
@@ -361,7 +437,11 @@ test('streamAgent: отказ до первого события поднима�
     );
 
     const partial = await withFetch(
-      (async () => sse([delta('начало ответа'), { error: { code: 502, message: 'upstream dropped' } }])) as FetchFn,
+      (async () =>
+        sse([
+          delta('начало ответа'),
+          { error: { code: 502, message: 'upstream dropped' } },
+        ])) as FetchFn,
       () =>
         provider.streamAgent(
           { model: 'm', messages: [{ role: 'user', content: 'x' }], maxTokens: 100 },
@@ -379,7 +459,10 @@ test('streamAgent: отказ до первого события поднима�
           { onEvent: () => undefined, isCancelled: () => false },
         ),
     );
-    await assert.rejects(early, (err: unknown) => err instanceof OpenRouterError && err.status === 429);
+    await assert.rejects(
+      early,
+      (err: unknown) => err instanceof OpenRouterError && err.status === 429,
+    );
   } finally {
     console.warn = originalWarn;
   }

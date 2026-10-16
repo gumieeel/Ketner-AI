@@ -73,9 +73,15 @@ export const useImages = create<ImagesState>((set, get) => ({
   load: async () => {
     set({ status: 'loading', authRequired: false });
     try {
-      const [capabilities, images] = await Promise.all([imagesApi.capabilities(), imagesApi.list()]);
+      const [capabilities, images] = await Promise.all([
+        imagesApi.capabilities(),
+        imagesApi.list(),
+      ]);
       const current = capabilities.models.find((m) => m.id === get().modelId && !m.locked);
-      const style = capabilities.styles && !capabilities.styles.includes(get().style) ? (capabilities.defaultStyleId ?? 'none') : get().style;
+      const style =
+        capabilities.styles && !capabilities.styles.includes(get().style)
+          ? (capabilities.defaultStyleId ?? 'none')
+          : get().style;
       set({
         style,
         capabilities,
@@ -111,7 +117,13 @@ export const useImages = create<ImagesState>((set, get) => ({
     set({ generating: true, pendingAspect: effectiveAspect, notice: null });
     try {
       const { image } = await imagesApi.generate(
-        { prompt: text, modelId, aspect: effectiveAspect, style, language: usePreferences.getState().language },
+        {
+          prompt: text,
+          modelId,
+          aspect: effectiveAspect,
+          style,
+          language: usePreferences.getState().language,
+        },
         controller.signal,
       );
       set((state) => ({
@@ -120,7 +132,9 @@ export const useImages = create<ImagesState>((set, get) => ({
         capabilities: state.capabilities
           ? {
               ...state.capabilities,
-              models: state.capabilities.models.map((m) => (m.id === image.modelId ? { ...m, usedToday: m.usedToday + 1 } : m)),
+              models: state.capabilities.models.map((m) =>
+                m.id === image.modelId ? { ...m, usedToday: m.usedToday + 1 } : m,
+              ),
             }
           : state.capabilities,
       }));
@@ -146,7 +160,10 @@ export const useImages = create<ImagesState>((set, get) => ({
     try {
       await imagesApi.remove(id);
     } catch (error) {
-      set({ images: before, notice: { tone: 'error', text: error instanceof Error ? error.message : String(error) } });
+      set({
+        images: before,
+        notice: { tone: 'error', text: error instanceof Error ? error.message : String(error) },
+      });
     }
   },
 }));

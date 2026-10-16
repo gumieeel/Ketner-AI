@@ -34,7 +34,11 @@ export function validateInitData(
 
   const authDate = Number(params.get('auth_date'));
   const now = Math.floor((options.now ?? Date.now()) / 1000);
-  if (!Number.isFinite(authDate) || now - authDate > (options.maxAgeSeconds ?? 24 * 3600) || authDate - now > 300) {
+  if (
+    !Number.isFinite(authDate) ||
+    now - authDate > (options.maxAgeSeconds ?? 24 * 3600) ||
+    authDate - now > 300
+  ) {
     return null;
   }
   try {

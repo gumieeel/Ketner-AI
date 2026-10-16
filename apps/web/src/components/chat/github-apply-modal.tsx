@@ -126,7 +126,10 @@ export function GitHubApplyModal({
 
       <form onSubmit={handleSubmit} className="min-h-0 space-y-5 overflow-y-auto p-5">
         {error && (
-          <div role="alert" className="rounded-xl border border-danger/30 bg-danger-soft p-3 text-[13px] leading-relaxed break-words text-danger">
+          <div
+            role="alert"
+            className="rounded-xl border border-danger/30 bg-danger-soft p-3 text-[13px] leading-relaxed break-words text-danger"
+          >
             {error}
           </div>
         )}
@@ -138,7 +141,11 @@ export function GitHubApplyModal({
             {(
               [
                 { id: 'pr', title: t('gh.prOption'), hint: t('gh.prHint') },
-                { id: 'commit', title: t('gh.commitOption'), hint: t('gh.commitHint', { branch: targetBranch }) },
+                {
+                  id: 'commit',
+                  title: t('gh.commitOption'),
+                  hint: t('gh.commitHint', { branch: targetBranch }),
+                },
               ] as const
             ).map((option) => (
               <button
@@ -182,7 +189,9 @@ export function GitHubApplyModal({
             ) : (
               <GitHubIcon className="size-4" />
             )}
-            <span className="min-w-0 truncate">{t('gh.account', { login: githubStatus?.account?.login ?? '' })}</span>
+            <span className="min-w-0 truncate">
+              {t('gh.account', { login: githubStatus?.account?.login ?? '' })}
+            </span>
           </p>
         ) : (
           <div className="flex flex-col gap-3 rounded-xl border border-stroke bg-canvas p-3.5">
@@ -202,10 +211,22 @@ export function GitHubApplyModal({
         )}
 
         <div className="flex flex-col-reverse gap-2 pt-1 sm:flex-row sm:justify-end">
-          <Button variant="outline" type="button" onClick={onClose} disabled={loading} className="max-sm:w-full">
+          <Button
+            variant="outline"
+            type="button"
+            onClick={onClose}
+            disabled={loading}
+            className="max-sm:w-full"
+          >
             {t('common.cancel')}
           </Button>
-          <Button variant="primary" type="submit" loading={loading} disabled={!connected} className="gap-1.5 max-sm:w-full">
+          <Button
+            variant="primary"
+            type="submit"
+            loading={loading}
+            disabled={!connected}
+            className="gap-1.5 max-sm:w-full"
+          >
             {loading ? t('gh.sending') : mode === 'pr' ? t('gh.prOption') : t('gh.submitCommit')}
           </Button>
         </div>

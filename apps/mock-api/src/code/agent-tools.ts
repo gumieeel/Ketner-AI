@@ -97,7 +97,10 @@ function formatBytes(bytes: number): string {
 // Описания инструментов
 // ─────────────────────────────────────────────────────────────
 
-export function agentToolDefinitions(options: { commands: boolean; network: boolean }): ChatToolDefinition[] {
+export function agentToolDefinitions(options: {
+  commands: boolean;
+  network: boolean;
+}): ChatToolDefinition[] {
   const tools: ChatToolDefinition[] = [
     {
       type: 'function',
@@ -109,8 +112,14 @@ export function agentToolDefinitions(options: { commands: boolean; network: bool
         parameters: {
           type: 'object',
           properties: {
-            path: { type: 'string', description: 'Directory relative to the project root. Default: the root.' },
-            recursive: { type: 'boolean', description: 'List all files below the directory (limited to 300 entries).' },
+            path: {
+              type: 'string',
+              description: 'Directory relative to the project root. Default: the root.',
+            },
+            recursive: {
+              type: 'boolean',
+              description: 'List all files below the directory (limited to 300 entries).',
+            },
           },
         },
       },
@@ -143,12 +152,25 @@ export function agentToolDefinitions(options: { commands: boolean; network: bool
         parameters: {
           type: 'object',
           properties: {
-            pattern: { type: 'string', description: 'Regular expression to find inside files. Omit to only list files matching "glob".' },
-            glob: { type: 'string', description: 'Only files whose path matches this glob (supports *, **, ?, {a,b}).' },
+            pattern: {
+              type: 'string',
+              description:
+                'Regular expression to find inside files. Omit to only list files matching "glob".',
+            },
+            glob: {
+              type: 'string',
+              description: 'Only files whose path matches this glob (supports *, **, ?, {a,b}).',
+            },
             path: { type: 'string', description: 'Only search below this directory.' },
-            literal: { type: 'boolean', description: 'Treat "pattern" as a plain string, not a regular expression.' },
+            literal: {
+              type: 'boolean',
+              description: 'Treat "pattern" as a plain string, not a regular expression.',
+            },
             case_sensitive: { type: 'boolean', description: 'Default false.' },
-            max_results: { type: 'integer', description: 'Maximum number of matches (default 80).' },
+            max_results: {
+              type: 'integer',
+              description: 'Maximum number of matches (default 80).',
+            },
           },
         },
       },
@@ -165,9 +187,15 @@ export function agentToolDefinitions(options: { commands: boolean; network: bool
           type: 'object',
           properties: {
             path: { type: 'string' },
-            old_string: { type: 'string', description: 'Exact text to replace (without line-number prefixes).' },
+            old_string: {
+              type: 'string',
+              description: 'Exact text to replace (without line-number prefixes).',
+            },
             new_string: { type: 'string', description: 'Replacement text.' },
-            replace_all: { type: 'boolean', description: 'Replace every occurrence. Default false.' },
+            replace_all: {
+              type: 'boolean',
+              description: 'Replace every occurrence. Default false.',
+            },
           },
           required: ['path', 'old_string', 'new_string'],
         },
@@ -206,8 +234,13 @@ export function agentToolDefinitions(options: { commands: boolean; network: bool
       type: 'function',
       function: {
         name: 'delete_file',
-        description: 'Delete a file or a whole directory (recursively). This cannot be undone: delete only what the task requires.',
-        parameters: { type: 'object', properties: { path: { type: 'string' } }, required: ['path'] },
+        description:
+          'Delete a file or a whole directory (recursively). This cannot be undone: delete only what the task requires.',
+        parameters: {
+          type: 'object',
+          properties: { path: { type: 'string' } },
+          required: ['path'],
+        },
       },
     },
     {
@@ -255,8 +288,14 @@ export function agentToolDefinitions(options: { commands: boolean; network: bool
         parameters: {
           type: 'object',
           properties: {
-            command: { type: 'string', description: 'Shell command, for example "npm test" or "python -m unittest".' },
-            timeout_seconds: { type: 'integer', description: 'Timeout, default 60, maximum is set by the plan.' },
+            command: {
+              type: 'string',
+              description: 'Shell command, for example "npm test" or "python -m unittest".',
+            },
+            timeout_seconds: {
+              type: 'integer',
+              description: 'Timeout, default 60, maximum is set by the plan.',
+            },
           },
           required: ['command'],
         },
@@ -275,10 +314,13 @@ function parseArgs(raw: string): Record<string, unknown> | { __error: string } {
   if (text === '') return {};
   try {
     const parsed = JSON.parse(text) as unknown;
-    if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) return parsed as Record<string, unknown>;
+    if (parsed && typeof parsed === 'object' && !Array.isArray(parsed))
+      return parsed as Record<string, unknown>;
     return { __error: 'arguments must be a JSON object' };
   } catch (error) {
-    return { __error: `arguments are not valid JSON (${(error as Error).message}). Send complete, valid JSON.` };
+    return {
+      __error: `arguments are not valid JSON (${(error as Error).message}). Send complete, valid JSON.`,
+    };
   }
 }
 
@@ -329,7 +371,9 @@ async function listFiles(args: Record<string, unknown>, ctx: ToolContext): Promi
       lines.push(`${file.path}  (${formatBytes(file.size)})`);
     }
     if (below.length > limits.maxListEntries) {
-      lines.push(`[... ${below.length - limits.maxListEntries} more files; narrow "path" or use search_files]`);
+      lines.push(
+        `[... ${below.length - limits.maxListEntries} more files; narrow "path" or use search_files]`,
+      );
     }
   } else {
     const dirs = new Map<string, number>();
@@ -373,18 +417,24 @@ async function readFile(args: Record<string, unknown>, ctx: ToolContext): Promis
   }
   const label = `read_file ${filePath}`;
   if (isSecretPath(filePath)) {
-    return fail(label, 'This file may contain secrets (.env, keys). Its content is not available to the assistant.');
+    return fail(
+      label,
+      'This file may contain secrets (.env, keys). Its content is not available to the assistant.',
+    );
   }
 
   let content: string;
   try {
-    content = (await ctx.store.readText(ctx.userId, ctx.projectId, filePath, { maxBytes: 2_000_000 })).content;
+    content = (
+      await ctx.store.readText(ctx.userId, ctx.projectId, filePath, { maxBytes: 2_000_000 })
+    ).content;
   } catch (error) {
     return fail(label, error instanceof CodeError ? error.message : 'could not read the file');
   }
   ctx.readPaths.add(filePath);
 
-  if (content === '') return { ok: true, output: `${filePath}: (empty file)`, label, summary: 'empty' };
+  if (content === '')
+    return { ok: true, output: `${filePath}: (empty file)`, label, summary: 'empty' };
 
   const all = content.split('\n');
   if (all[all.length - 1] === '') all.pop();
@@ -394,7 +444,8 @@ async function readFile(args: Record<string, unknown>, ctx: ToolContext): Promis
   let end = int(args, 'end_line') ?? start + limits.maxReadLines - 1;
   start = Math.max(1, start);
   end = Math.min(total, Math.max(start, end), start + limits.maxReadLines - 1);
-  if (start > total) return fail(label, `start_line ${start} is past the end of the file (${total} lines)`);
+  if (start > total)
+    return fail(label, `start_line ${start} is past the end of the file (${total} lines)`);
 
   const width = String(end).length;
   const numbered: string[] = [];
@@ -481,7 +532,10 @@ async function searchFiles(args: Record<string, unknown>, ctx: ToolContext): Pro
   if (pattern) {
     const literal = bool(args, 'literal');
     if (!literal && isRiskyRegex(pattern)) {
-      return fail(label, 'This regular expression is too complex or risky. Simplify it or set "literal": true.');
+      return fail(
+        label,
+        'This regular expression is too complex or risky. Simplify it or set "literal": true.',
+      );
     }
     try {
       regex = new RegExp(
@@ -493,7 +547,10 @@ async function searchFiles(args: Record<string, unknown>, ctx: ToolContext): Pro
     }
   }
   const globRegex = glob ? globToRegExp(glob) : null;
-  const maxResults = Math.min(Math.max(int(args, 'max_results') ?? limits.maxSearchResults, 1), 200);
+  const maxResults = Math.min(
+    Math.max(int(args, 'max_results') ?? limits.maxSearchResults, 1),
+    200,
+  );
   const prefix = directory ? `${directory}/` : '';
 
   const files = (await ctx.store.listFiles(ctx.userId, ctx.projectId)).filter(
@@ -504,7 +561,8 @@ async function searchFiles(args: Record<string, unknown>, ctx: ToolContext): Pro
     const shown = files.slice(0, limits.maxListEntries).map((f) => f.path);
     return {
       ok: true,
-      output: shown.length > 0 ? `${files.length} file(s):\n${shown.join('\n')}` : 'No files match.',
+      output:
+        shown.length > 0 ? `${files.length} file(s):\n${shown.join('\n')}` : 'No files match.',
       label,
       summary: `${files.length} files`,
     };
@@ -558,7 +616,12 @@ async function searchFiles(args: Record<string, unknown>, ctx: ToolContext): Pro
     matches > results.length ? `, showing ${results.length}` : ''
   }:\n${results.join('\n')}`;
   if (stoppedEarly) output += '\n[search stopped early: narrow it with "path" or "glob"]';
-  return { ok: true, output: clip(output, limits.maxOutputChars), label, summary: `${matches} matches` };
+  return {
+    ok: true,
+    output: clip(output, limits.maxOutputChars),
+    label,
+    summary: `${matches} matches`,
+  };
 }
 
 function lineNumberAt(text: string, index: number): number {
@@ -573,7 +636,8 @@ function snippetAround(text: string, startLine: number, endLine: number, context
   const to = Math.min(lines.length, endLine + context);
   const width = String(to).length;
   const out: string[] = [];
-  for (let i = from; i <= to; i += 1) out.push(`${String(i).padStart(width, ' ')}\t${lines[i - 1].replace(/\r$/, '')}`);
+  for (let i = from; i <= to; i += 1)
+    out.push(`${String(i).padStart(width, ' ')}\t${lines[i - 1].replace(/\r$/, '')}`);
   return out.join('\n');
 }
 
@@ -586,9 +650,12 @@ function findSimilarLines(content: string, needle: string): string {
   const hits: string[] = [];
   const lines = content.split('\n');
   for (let i = 0; i < lines.length && hits.length < 3; i += 1) {
-    if (lines[i].includes(first) || lines[i].trim() === first) hits.push(`  line ${i + 1}: ${lines[i].trimEnd().slice(0, 160)}`);
+    if (lines[i].includes(first) || lines[i].trim() === first)
+      hits.push(`  line ${i + 1}: ${lines[i].trimEnd().slice(0, 160)}`);
   }
-  return hits.length > 0 ? `\nSimilar text exists here, compare whitespace and indentation:\n${hits.join('\n')}` : '';
+  return hits.length > 0
+    ? `\nSimilar text exists here, compare whitespace and indentation:\n${hits.join('\n')}`
+    : '';
 }
 
 async function editFile(args: Record<string, unknown>, ctx: ToolContext): Promise<ToolOutcome> {
@@ -607,22 +674,31 @@ async function editFile(args: Record<string, unknown>, ctx: ToolContext): Promis
   const label = `edit_file ${filePath}`;
   if (isSecretPath(filePath)) return fail(label, 'Secret files cannot be edited by the assistant.');
   if (isGitInternalPath(filePath)) return fail(label, 'The .git directory cannot be edited.');
-  if (oldString === '') return fail(label, '"old_string" is empty. To create or overwrite a file use write_file.');
-  if (oldString === newString) return fail(label, '"old_string" and "new_string" are identical, nothing to change.');
+  if (oldString === '')
+    return fail(label, '"old_string" is empty. To create or overwrite a file use write_file.');
+  if (oldString === newString)
+    return fail(label, '"old_string" and "new_string" are identical, nothing to change.');
 
   let original: string;
   try {
-    original = (await ctx.store.readText(ctx.userId, ctx.projectId, filePath, { maxBytes: 2_000_000 })).content;
+    original = (
+      await ctx.store.readText(ctx.userId, ctx.projectId, filePath, { maxBytes: 2_000_000 })
+    ).content;
   } catch (error) {
     return fail(label, error instanceof CodeError ? error.message : 'could not read the file');
   }
 
   const crlf = original.includes('\r\n');
   const needle = crlf && !oldString.includes('\r\n') ? oldString.replace(/\n/g, '\r\n') : oldString;
-  const replacement = crlf && !newString.includes('\r\n') ? newString.replace(/\n/g, '\r\n') : newString;
+  const replacement =
+    crlf && !newString.includes('\r\n') ? newString.replace(/\n/g, '\r\n') : newString;
 
   const positions: number[] = [];
-  for (let from = original.indexOf(needle); from !== -1; from = original.indexOf(needle, from + needle.length)) {
+  for (
+    let from = original.indexOf(needle);
+    from !== -1;
+    from = original.indexOf(needle, from + needle.length)
+  ) {
     positions.push(from);
     if (positions.length > 200) break;
   }
@@ -648,7 +724,8 @@ async function editFile(args: Record<string, unknown>, ctx: ToolContext): Promis
   if (replaceAll) {
     updated = original.split(needle).join(replacement);
   } else {
-    updated = original.slice(0, positions[0]) + replacement + original.slice(positions[0] + needle.length);
+    updated =
+      original.slice(0, positions[0]) + replacement + original.slice(positions[0] + needle.length);
   }
   const newStartLine = firstLine;
   const newEndLine = newStartLine + replacement.split('\n').length - 1;
@@ -668,14 +745,24 @@ async function editFile(args: Record<string, unknown>, ctx: ToolContext): Promis
       clip(snippetAround(updated, newStartLine, newEndLine), 4_000),
     label,
     summary: `+${additions} −${deletions}`,
-    change: { path: filePath, action: 'modify', additions, deletions, patch: makePatch(original, updated) },
+    change: {
+      path: filePath,
+      action: 'modify',
+      additions,
+      deletions,
+      patch: makePatch(original, updated),
+    },
   };
 }
 
-async function writeFileTool(args: Record<string, unknown>, ctx: ToolContext): Promise<ToolOutcome> {
+async function writeFileTool(
+  args: Record<string, unknown>,
+  ctx: ToolContext,
+): Promise<ToolOutcome> {
   const rawPath = str(args, 'path');
   const content = str(args, 'content');
-  if (!rawPath || content === undefined) return fail('write_file', '"path" and "content" are required');
+  if (!rawPath || content === undefined)
+    return fail('write_file', '"path" and "content" are required');
   let filePath: string;
   try {
     filePath = normalizeProjectPath(rawPath);
@@ -684,12 +771,21 @@ async function writeFileTool(args: Record<string, unknown>, ctx: ToolContext): P
   }
   const label = `write_file ${filePath}`;
   if (isSecretPath(filePath)) {
-    return fail(label, 'Writing secret files (.env, keys) is blocked. Create ".env.example" with placeholder values instead.');
+    return fail(
+      label,
+      'Writing secret files (.env, keys) is blocked. Create ".env.example" with placeholder values instead.',
+    );
   }
   if (isGitInternalPath(filePath)) return fail(label, 'The .git directory cannot be edited.');
 
   try {
-    const { created, previous } = await ctx.store.writeText(ctx.userId, ctx.projectId, filePath, content, ctx.quota);
+    const { created, previous } = await ctx.store.writeText(
+      ctx.userId,
+      ctx.projectId,
+      filePath,
+      content,
+      ctx.quota,
+    );
     ctx.readPaths.add(filePath);
     const { additions, deletions } = countLineChanges(previous ?? '', content);
     return {
@@ -718,7 +814,8 @@ async function moveFileTool(args: Record<string, unknown>, ctx: ToolContext): Pr
   try {
     const source = normalizeProjectPath(from);
     const target = normalizeProjectPath(to);
-    if (isSecretPath(source) || isSecretPath(target)) return fail(label, 'Secret files cannot be moved by the assistant.');
+    if (isSecretPath(source) || isSecretPath(target))
+      return fail(label, 'Secret files cannot be moved by the assistant.');
     await ctx.store.moveFile(ctx.userId, ctx.projectId, source, target);
     return {
       ok: true,
@@ -732,18 +829,25 @@ async function moveFileTool(args: Record<string, unknown>, ctx: ToolContext): Pr
   }
 }
 
-async function deleteFileTool(args: Record<string, unknown>, ctx: ToolContext): Promise<ToolOutcome> {
+async function deleteFileTool(
+  args: Record<string, unknown>,
+  ctx: ToolContext,
+): Promise<ToolOutcome> {
   const rawPath = str(args, 'path');
   if (!rawPath) return fail('delete_file', '"path" is required');
   const label = `delete_file ${rawPath}`;
   try {
     const filePath = normalizeProjectPath(rawPath);
-    if (isSecretPath(filePath)) return fail(label, 'Secret files cannot be deleted by the assistant.');
+    if (isSecretPath(filePath))
+      return fail(label, 'Secret files cannot be deleted by the assistant.');
     const { removed, previous } = await ctx.store.deletePath(ctx.userId, ctx.projectId, filePath);
     const deletions = previous !== null ? countLineChanges(previous, '').deletions : 0;
     return {
       ok: true,
-      output: removed.length > 1 ? `Deleted ${filePath} (${removed.length} files).` : `Deleted ${filePath}.`,
+      output:
+        removed.length > 1
+          ? `Deleted ${filePath} (${removed.length} files).`
+          : `Deleted ${filePath}.`,
       label,
       summary: removed.length > 1 ? `${removed.length} files` : 'deleted',
       change: { path: filePath, action: 'delete', additions: 0, deletions },
@@ -759,7 +863,10 @@ function updatePlan(args: Record<string, unknown>, ctx: ToolContext): ToolOutcom
   const items: PlanItem[] = [];
   for (const entry of raw.slice(0, 20)) {
     if (!entry || typeof entry !== 'object') continue;
-    const text = typeof (entry as { text?: unknown }).text === 'string' ? (entry as { text: string }).text.trim() : '';
+    const text =
+      typeof (entry as { text?: unknown }).text === 'string'
+        ? (entry as { text: string }).text.trim()
+        : '';
     const status = (entry as { status?: unknown }).status;
     if (!text) continue;
     items.push({
@@ -783,8 +890,14 @@ function updatePlan(args: Record<string, unknown>, ctx: ToolContext): ToolOutcom
     ok: true,
     output:
       `Plan updated: ${done}/${items.length} done.` +
-      (current ? ` Now working on: "${current.text}".` : next ? ` Next: "${next.text}" (mark it in_progress when you start).` : '') +
-      (remaining === 0 ? ' All items are done: verify the result and write the final message.' : ''),
+      (current
+        ? ` Now working on: "${current.text}".`
+        : next
+          ? ` Next: "${next.text}" (mark it in_progress when you start).`
+          : '') +
+      (remaining === 0
+        ? ' All items are done: verify the result and write the final message.'
+        : ''),
     label: 'update_plan',
     summary: `${done}/${items.length}`,
     planUpdate: items,
@@ -797,10 +910,16 @@ async function runCommand(args: Record<string, unknown>, ctx: ToolContext): Prom
   if (!command) return fail('run_command', '"command" is required');
   const label = `run_command ${command.length > 120 ? `${command.slice(0, 117)}...` : command}`;
   if (!ctx.sandbox) {
-    return fail(label, 'Running commands is not available on this server. Work with files only and explain how to test.');
+    return fail(
+      label,
+      'Running commands is not available on this server. Work with files only and explain how to test.',
+    );
   }
   if (!ctx.commandsAllowed) {
-    return fail(label, 'Running commands is not included in the current plan. Work with files only.');
+    return fail(
+      label,
+      'Running commands is not included in the current plan. Work with files only.',
+    );
   }
 
   const requested = int(args, 'timeout_seconds');
@@ -829,7 +948,9 @@ async function runCommand(args: Record<string, unknown>, ctx: ToolContext): Prom
   if (change.overQuota) {
     // Команда раздула проект сверх квоты: созданные ею файлы удаляются, самые большие первыми.
     const files = await ctx.store.listFiles(ctx.userId, ctx.projectId);
-    const bySize = files.filter((f) => change.created.includes(f.path)).sort((a, b) => b.size - a.size);
+    const bySize = files
+      .filter((f) => change.created.includes(f.path))
+      .sort((a, b) => b.size - a.size);
     let total = files.reduce((sum, f) => sum + f.size, 0);
     let count = files.length;
     const removed: string[] = [];
@@ -851,14 +972,19 @@ async function runCommand(args: Record<string, unknown>, ctx: ToolContext): Prom
   }
 
   const fileLine = (label2: string, list: string[]): string | null =>
-    list.length > 0 ? `${label2}: ${list.slice(0, 15).join(', ')}${list.length > 15 ? `, ... (+${list.length - 15})` : ''}` : null;
-  const changed = [fileLine('created', change.created), fileLine('modified', change.modified), fileLine('deleted', change.deleted)].filter(
-    Boolean,
-  );
+    list.length > 0
+      ? `${label2}: ${list.slice(0, 15).join(', ')}${list.length > 15 ? `, ... (+${list.length - 15})` : ''}`
+      : null;
+  const changed = [
+    fileLine('created', change.created),
+    fileLine('modified', change.modified),
+    fileLine('deleted', change.deleted),
+  ].filter(Boolean);
 
   let status: string;
   if (result.cancelled) status = 'cancelled by the user';
-  else if (result.timedOut) status = `timed out after ${Math.round(timeoutMs / 1000)}s and was killed`;
+  else if (result.timedOut)
+    status = `timed out after ${Math.round(timeoutMs / 1000)}s and was killed`;
   else if (result.exitCode === null) status = `terminated by signal ${result.signal ?? 'unknown'}`;
   else status = `exit code ${result.exitCode}`;
 
@@ -877,7 +1003,11 @@ async function runCommand(args: Record<string, unknown>, ctx: ToolContext): Prom
     ok,
     output: clip(output, limits.maxOutputChars),
     label,
-    summary: result.timedOut ? 'timeout' : result.cancelled ? 'cancelled' : `exit ${result.exitCode}`,
+    summary: result.timedOut
+      ? 'timeout'
+      : result.cancelled
+        ? 'cancelled'
+        : `exit ${result.exitCode}`,
   };
 }
 
@@ -885,7 +1015,11 @@ async function runCommand(args: Record<string, unknown>, ctx: ToolContext): Prom
 // Диспетчер
 // ─────────────────────────────────────────────────────────────
 
-export async function executeTool(name: string, rawArguments: string, ctx: ToolContext): Promise<ToolOutcome> {
+export async function executeTool(
+  name: string,
+  rawArguments: string,
+  ctx: ToolContext,
+): Promise<ToolOutcome> {
   const args = parseArgs(rawArguments);
   if ('__error' in args) return fail(name, String(args.__error));
 
@@ -910,7 +1044,10 @@ export async function executeTool(name: string, rawArguments: string, ctx: ToolC
       case 'run_command':
         return await runCommand(args, ctx);
       default:
-        return fail(name, `Unknown tool "${name}". Available: list_files, read_file, search_files, edit_file, write_file, move_file, delete_file, update_plan${ctx.sandbox && ctx.commandsAllowed ? ', run_command' : ''}.`);
+        return fail(
+          name,
+          `Unknown tool "${name}". Available: list_files, read_file, search_files, edit_file, write_file, move_file, delete_file, update_plan${ctx.sandbox && ctx.commandsAllowed ? ', run_command' : ''}.`,
+        );
     }
   } catch (error) {
     console.error(`[code] инструмент ${name} завершился сбоем:`, error);

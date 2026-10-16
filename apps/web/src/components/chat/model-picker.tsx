@@ -107,7 +107,12 @@ export function ModelPicker({ disabled = false }: { disabled?: boolean }) {
   }, [open]);
 
   const onTriggerKeyDown = (event: ReactKeyboardEvent) => {
-    if (event.key === 'ArrowDown' || event.key === 'ArrowUp' || event.key === 'Enter' || event.key === ' ') {
+    if (
+      event.key === 'ArrowDown' ||
+      event.key === 'ArrowUp' ||
+      event.key === 'Enter' ||
+      event.key === ' '
+    ) {
       event.preventDefault();
       openMenu();
     }
@@ -168,13 +173,19 @@ export function ModelPicker({ disabled = false }: { disabled?: boolean }) {
               ? 'bg-accent-soft ring-1 ring-accent/30'
               : 'hover:bg-surface-2 focus-visible:bg-surface-2 focus-visible:ring-2 focus-visible:ring-accent/40',
             isFocused && !active && accessible && 'bg-surface-2',
-            !accessible && 'opacity-40 cursor-not-allowed hover:bg-transparent focus-visible:bg-transparent',
+            !accessible &&
+              'opacity-40 cursor-not-allowed hover:bg-transparent focus-visible:bg-transparent',
           )}
         >
           <ModelMark modelId={model.id} size="md" />
           <span className="min-w-0 flex-1">
             <span className="flex items-center gap-2">
-              <span className={cn('truncate text-sm', active ? 'font-semibold text-text' : 'font-medium text-text')}>
+              <span
+                className={cn(
+                  'truncate text-sm',
+                  active ? 'font-semibold text-text' : 'font-medium text-text',
+                )}
+              >
                 {labelOf(model)}
               </span>
               {isPlus ? (
@@ -234,12 +245,19 @@ export function ModelPicker({ disabled = false }: { disabled?: boolean }) {
           'hover:border-stroke-strong hover:bg-surface-2 disabled:cursor-not-allowed disabled:opacity-60',
           open && 'border-stroke-strong bg-surface-2 shadow-sm',
         )}
-        style={open ? { boxShadow: `0 0 0 3px color-mix(in srgb, ${color} 18%, transparent)` } : undefined}
+        style={
+          open
+            ? { boxShadow: `0 0 0 3px color-mix(in srgb, ${color} 18%, transparent)` }
+            : undefined
+        }
       >
         <ModelMark modelId={current.id} size="sm" />
         <span className="truncate font-semibold">{labelOf(current)}</span>
         <ChevronDownIcon
-          className={cn('size-4 shrink-0 text-subtle transition-transform duration-200', open && 'rotate-180')}
+          className={cn(
+            'size-4 shrink-0 text-subtle transition-transform duration-200',
+            open && 'rotate-180',
+          )}
         />
       </button>
 
@@ -255,7 +273,11 @@ export function ModelPicker({ disabled = false }: { disabled?: boolean }) {
             'md:inset-x-auto md:left-0 md:w-[400px]',
           )}
         >
-          {renderGroup(t('chat.tierFree'), [...(autoModel ? [autoModel] : []), ...freeModels], false)}
+          {renderGroup(
+            t('chat.tierFree'),
+            [...(autoModel ? [autoModel] : []), ...freeModels],
+            false,
+          )}
           {plusModels.length > 0 ? renderGroup(t('chat.tierPlus'), plusModels, true) : null}
           {proModels.length > 0 ? renderGroup(t('chat.tierPro'), proModels, true) : null}
 

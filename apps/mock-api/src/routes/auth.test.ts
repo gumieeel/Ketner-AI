@@ -173,7 +173,11 @@ test('auth: регистрация напрямую в Better Auth закрыт�
   const signUpRes = await fetch(`${server.baseUrl}/api/auth/sign-up/email`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', Origin: server.baseUrl },
-    body: JSON.stringify({ email: 'better-auth-user@example.com', password: 'password123', name: 'Better Auth User' }),
+    body: JSON.stringify({
+      email: 'better-auth-user@example.com',
+      password: 'password123',
+      name: 'Better Auth User',
+    }),
   });
   assert.equal(signUpRes.status, 404);
 
@@ -181,7 +185,11 @@ test('auth: регистрация напрямую в Better Auth закрыт�
   const siteSignup = await fetch(`${server.baseUrl}/api/auth/signup`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ email: 'better-auth-user@example.com', password: 'password123', name: 'Better Auth User' }),
+    body: JSON.stringify({
+      email: 'better-auth-user@example.com',
+      password: 'password123',
+      name: 'Better Auth User',
+    }),
   });
   assert.equal(siteSignup.status, 201);
 
@@ -252,8 +260,7 @@ test('auth (C3): токены с поддельной подписью откл�
   const server = await startTestServer();
   t.after(() => server.close());
 
-  const b64 = (value: unknown): string =>
-    Buffer.from(JSON.stringify(value)).toString('base64url');
+  const b64 = (value: unknown): string => Buffer.from(JSON.stringify(value)).toString('base64url');
   const header = b64({ alg: 'HS256', typ: 'JWT' });
   const payload = b64({ sub: 'demo-user', exp: Math.floor(Date.now() / 1000) + 3600 });
 
@@ -293,7 +300,11 @@ test('auth: Bearer-токен важнее оставшейся cookie-сесс�
   await fetch(`${server.baseUrl}/api/auth/signup`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ email: 'cookie-user@example.com', password: 'password123', name: 'Cookie User' }),
+    body: JSON.stringify({
+      email: 'cookie-user@example.com',
+      password: 'password123',
+      name: 'Cookie User',
+    }),
   });
   const signInA = await fetch(`${server.baseUrl}/api/auth/sign-in/email`, {
     method: 'POST',
@@ -307,7 +318,11 @@ test('auth: Bearer-токен важнее оставшейся cookie-сесс�
   const signUpB = await fetch(`${server.baseUrl}/api/auth/signup`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ email: 'bearer-user@example.com', password: 'password123', name: 'Bearer User' }),
+    body: JSON.stringify({
+      email: 'bearer-user@example.com',
+      password: 'password123',
+      name: 'Bearer User',
+    }),
   });
   const sessionB = await readJson<AuthSession>(signUpB);
 
@@ -318,6 +333,8 @@ test('auth: Bearer-токен важнее оставшейся cookie-сесс�
   assert.equal((await readJson<{ user: User }>(me)).user.email, 'bearer-user@example.com');
 
   // Без Bearer-токена работает cookie-сессия, а не гость.
-  const cookieOnly = await fetch(`${server.baseUrl}/api/auth/me`, { headers: { Origin: server.baseUrl, Cookie: cookieA } });
+  const cookieOnly = await fetch(`${server.baseUrl}/api/auth/me`, {
+    headers: { Origin: server.baseUrl, Cookie: cookieA },
+  });
   assert.equal((await readJson<{ user: User }>(cookieOnly)).user.email, 'cookie-user@example.com');
 });

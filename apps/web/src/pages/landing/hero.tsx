@@ -27,7 +27,10 @@ export function LandingHero() {
           className="pointer-events-none absolute inset-0 -z-10 bg-[linear-gradient(100deg,var(--hero-panel)_30%,transparent_60%)] max-sm:bg-[linear-gradient(180deg,var(--hero-panel)_52%,transparent_78%)]"
         />
 
-        <h1 id="hero-title" className="t-display text-[clamp(2.625rem,4.6vw+0.4rem,4.75rem)] text-text">
+        <h1
+          id="hero-title"
+          className="t-display text-[clamp(2.625rem,4.6vw+0.4rem,4.75rem)] text-text"
+        >
           <span className="block">{t('home.heroTitleA')}</span>{' '}
           <span className="block">{t('home.heroTitleB')}</span>
         </h1>
@@ -36,7 +39,11 @@ export function LandingHero() {
         <div className="mt-auto flex flex-col gap-3 pt-10 sm:flex-row sm:items-center">
           <Link
             to="/chat"
-            className={buttonClasses({ variant: 'primary', size: 'lg', className: 'w-full sm:w-auto sm:min-w-[200px]' })}
+            className={buttonClasses({
+              variant: 'primary',
+              size: 'lg',
+              className: 'w-full sm:w-auto sm:min-w-[200px]',
+            })}
           >
             {signedIn ? t('home.heroCtaSignedIn') : t('home.heroCta')}
           </Link>

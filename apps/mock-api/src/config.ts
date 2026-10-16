@@ -84,7 +84,9 @@ function secretEnv(name: string, devFallback: string): string {
     throw new Error(`[config] Переменная окружения ${name} обязательна в production`);
   }
   if (value.length < MIN_SECRET_LENGTH) {
-    throw new Error(`[config] ${name} слишком короткий: нужно минимум ${MIN_SECRET_LENGTH} символов`);
+    throw new Error(
+      `[config] ${name} слишком короткий: нужно минимум ${MIN_SECRET_LENGTH} символов`,
+    );
   }
   if (COMPROMISED_SECRETS.has(value)) {
     // Осознанное исключение владельца: ключ был опубликован в репозитории, поэтому
@@ -198,8 +200,7 @@ export const config = {
     fileURLToPath(new URL('../data/subscriptions.json', import.meta.url)),
   /** Хранилище использования AI (usage & cost): файл переживает перезапуск. */
   usageStoreFile:
-    process.env.USAGE_STORE_FILE ??
-    fileURLToPath(new URL('../data/usage.json', import.meta.url)),
+    process.env.USAGE_STORE_FILE ?? fileURLToPath(new URL('../data/usage.json', import.meta.url)),
   /** База данных Better Auth (SQLite). */
   authDbFile:
     process.env.AUTH_DB_FILE ?? fileURLToPath(new URL('../data/auth.sqlite', import.meta.url)),
@@ -270,14 +271,17 @@ export const config = {
    * заголовке X-Telegram-Bot-Api-Secret-Token. Выводится из корневого секрета (hex, 64 символа).
    */
   telegramWebhookSecret: deriveSecret(betterAuthSecret, 'ketner:telegram-webhook:payments:v1'),
-  telegramSupportWebhookSecret: deriveSecret(betterAuthSecret, 'ketner:telegram-webhook:support:v1'),
+  telegramSupportWebhookSecret: deriveSecret(
+    betterAuthSecret,
+    'ketner:telegram-webhook:support:v1',
+  ),
 
   /** Telegram Support Bot для приёма жалоб и поддержки пользователей. */
   telegramSupportBotToken: optionalEnv('TELEGRAM_SUPPORT_BOT_TOKEN'),
-  telegramSupportBotUsername:
-    process.env.TELEGRAM_SUPPORT_BOT_USERNAME || 'ketner_support_bot',
-  supportAdminUsername:
-    (process.env.SUPPORT_ADMIN_USERNAME || 'gumieeel').replace(/^@/, '').toLowerCase(),
+  telegramSupportBotUsername: process.env.TELEGRAM_SUPPORT_BOT_USERNAME || 'ketner_support_bot',
+  supportAdminUsername: (process.env.SUPPORT_ADMIN_USERNAME || 'gumieeel')
+    .replace(/^@/, '')
+    .toLowerCase(),
   supportAdminChatId: process.env.SUPPORT_ADMIN_CHAT_ID
     ? Number(process.env.SUPPORT_ADMIN_CHAT_ID)
     : undefined,
@@ -288,7 +292,10 @@ export const config = {
   cryptoCloudShopId: optionalEnv('TRYBIT_SHOP_ID') || optionalEnv('CRYPTOCLOUD_SHOP_ID'),
   cryptoCloudSecretKey: optionalEnv('TRYBIT_SECRET_KEY') || optionalEnv('CRYPTOCLOUD_SECRET_KEY'),
   /** Адрес API платёжного шлюза. */
-  cryptoCloudApiUrl: (process.env.TRYBIT_API_URL?.trim() || 'https://api.trybit.com').replace(/\/+$/, ''),
+  cryptoCloudApiUrl: (process.env.TRYBIT_API_URL?.trim() || 'https://api.trybit.com').replace(
+    /\/+$/,
+    '',
+  ),
 
   /**
    * ИИ: единый ключ OpenRouter для всех моделей (GPT, Claude, Grok, Gemini, DeepSeek, MiMo).
@@ -327,8 +334,7 @@ export const config = {
     runwareApiKey: process.env.RUNWARE_API_KEY?.trim() || '',
     /** Папка для картинок без БД (локально и в тестах). С DATABASE_URL картинки хранятся в Postgres. */
     dir:
-      process.env.IMAGES_DIR?.trim() ||
-      fileURLToPath(new URL('../data/images', import.meta.url)),
+      process.env.IMAGES_DIR?.trim() || fileURLToPath(new URL('../data/images', import.meta.url)),
   },
 
   code: {

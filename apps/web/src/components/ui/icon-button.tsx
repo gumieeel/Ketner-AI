@@ -15,14 +15,7 @@ export interface IconButtonProps extends ButtonHTMLAttributes<HTMLButtonElement>
 }
 
 export const IconButton = forwardRef<HTMLButtonElement, IconButtonProps>(function IconButton(
-  {
-    label,
-    size = 'md',
-    className,
-    children,
-    type = 'button',
-    ...props
-  },
+  { label, size = 'md', className, children, type = 'button', ...props },
   ref,
 ) {
   return (

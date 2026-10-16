@@ -23,7 +23,10 @@ export function TelegramMagicPage() {
   const applySession = useAuth((state) => state.applySession);
   const [searchParams] = useSearchParams();
   // Параметры читаем один раз: после этого токен убирается из адреса.
-  const initial = useRef({ magic: searchParams.get('t'), next: safeNext(searchParams.get('next')) });
+  const initial = useRef({
+    magic: searchParams.get('t'),
+    next: safeNext(searchParams.get('next')),
+  });
   const [error, setError] = useState<string | null>(null);
   const started = useRef(false);
 
@@ -42,14 +45,19 @@ export function TelegramMagicPage() {
         await applySession(session);
         navigate(next, { replace: true });
       })
-      .catch((caught: unknown) => setError(caught instanceof ApiError ? caught.message : t('tgAuth.magicFailed')));
+      .catch((caught: unknown) =>
+        setError(caught instanceof ApiError ? caught.message : t('tgAuth.magicFailed')),
+      );
   }, [applySession, navigate, t]);
 
   return (
     <AuthShell title={t('tgAuth.magicTitle')}>
       {error ? (
         <div className="flex flex-col gap-4">
-          <p role="alert" className="flex items-start gap-2.5 rounded-xl border border-danger/30 bg-danger-soft p-3 text-[14px] leading-5 text-danger">
+          <p
+            role="alert"
+            className="flex items-start gap-2.5 rounded-xl border border-danger/30 bg-danger-soft p-3 text-[14px] leading-5 text-danger"
+          >
             <AlertIcon className="mt-0.5 size-4 shrink-0" />
             {error}
           </p>
@@ -58,7 +66,10 @@ export function TelegramMagicPage() {
           </Link>
         </div>
       ) : (
-        <p role="status" className="flex items-center justify-center gap-2.5 py-8 text-[15px] text-muted">
+        <p
+          role="status"
+          className="flex items-center justify-center gap-2.5 py-8 text-[15px] text-muted"
+        >
           <Spinner className="size-5" />
           {t('tgAuth.magicProgress')}
         </p>

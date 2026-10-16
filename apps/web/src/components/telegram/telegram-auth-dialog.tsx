@@ -7,7 +7,11 @@ import { QrCode } from '@/components/ui/qr-code';
 import { Spinner } from '@/components/ui/spinner';
 import type { AuthSession, User } from '@/features/auth/types';
 import { ApiError } from '@/features/chat/api';
-import { telegramSiteAuth, type TelegramAuthMode, type TelegramAuthStart } from '@/features/telegram/site-auth';
+import {
+  telegramSiteAuth,
+  type TelegramAuthMode,
+  type TelegramAuthStart,
+} from '@/features/telegram/site-auth';
 import { useTranslation } from '@/i18n';
 
 type Phase =
@@ -54,7 +58,10 @@ export function TelegramAuthDialog({
       setPhase({ kind: 'waiting', request });
       setNow(Date.now());
     } catch (error) {
-      setPhase({ kind: 'error', message: error instanceof ApiError ? error.message : tRef.current('tgAuth.errorStart') });
+      setPhase({
+        kind: 'error',
+        message: error instanceof ApiError ? error.message : tRef.current('tgAuth.errorStart'),
+      });
     }
   }, [mode, token]);
 
@@ -98,7 +105,10 @@ export function TelegramAuthDialog({
     };
   }, [requestId]);
 
-  const left = phase.kind === 'waiting' ? Math.max(0, Math.ceil((Date.parse(phase.request.expiresAt) - now) / 1000)) : 0;
+  const left =
+    phase.kind === 'waiting'
+      ? Math.max(0, Math.ceil((Date.parse(phase.request.expiresAt) - now) / 1000))
+      : 0;
   const mmss = `${Math.floor(left / 60)}:${String(left % 60).padStart(2, '0')}`;
 
   return (
@@ -130,13 +140,20 @@ export function TelegramAuthDialog({
             </a>
             <div className="hidden flex-col items-center gap-2 sm:flex">
               <p className="text-[13px] text-muted">{t('tgAuth.orScan')}</p>
-              <QrCode value={phase.request.botUrl} size={168} badge={<TelegramIcon className="size-5 text-[#229ED9]" />} />
+              <QrCode
+                value={phase.request.botUrl}
+                size={168}
+                badge={<TelegramIcon className="size-5 text-[#229ED9]" />}
+              />
             </div>
             <ol className="flex flex-col gap-1.5 text-[14px] leading-5 text-text">
               <li>1. {t('tgAuth.step1')}</li>
               <li>2. {mode === 'login' ? t('tgAuth.step2Login') : t('tgAuth.step2Link')}</li>
             </ol>
-            <p role="status" className="flex items-center gap-2 rounded-lg bg-surface-2 px-3 py-2.5 text-[13px] text-muted">
+            <p
+              role="status"
+              className="flex items-center gap-2 rounded-lg bg-surface-2 px-3 py-2.5 text-[13px] text-muted"
+            >
               <Spinner className="size-3.5 shrink-0" />
               <span className="flex-1">{t('tgAuth.waiting')}</span>
               <span className="tabular-nums text-subtle">{mmss}</span>
@@ -145,7 +162,10 @@ export function TelegramAuthDialog({
         ) : null}
 
         {phase.kind === 'done' ? (
-          <p role="status" className="flex min-h-32 items-center justify-center gap-2 text-[15px] font-medium text-text">
+          <p
+            role="status"
+            className="flex min-h-32 items-center justify-center gap-2 text-[15px] font-medium text-text"
+          >
             <CheckIcon className="size-5 text-accent" />
             {mode === 'login' ? t('tgAuth.doneLogin') : t('tgAuth.doneLink')}
           </p>
@@ -153,9 +173,16 @@ export function TelegramAuthDialog({
 
         {phase.kind === 'declined' || phase.kind === 'expired' || phase.kind === 'error' ? (
           <>
-            <p role="alert" className="flex items-start gap-2.5 rounded-lg border border-danger/30 bg-danger-soft p-3 text-[14px] leading-5 text-danger">
+            <p
+              role="alert"
+              className="flex items-start gap-2.5 rounded-lg border border-danger/30 bg-danger-soft p-3 text-[14px] leading-5 text-danger"
+            >
               <AlertIcon className="mt-0.5 size-4 shrink-0" />
-              {phase.kind === 'declined' ? t('tgAuth.declined') : phase.kind === 'expired' ? t('tgAuth.expired') : phase.message}
+              {phase.kind === 'declined'
+                ? t('tgAuth.declined')
+                : phase.kind === 'expired'
+                  ? t('tgAuth.expired')
+                  : phase.message}
             </p>
             <Button fullWidth onClick={() => void start()}>
               {t('tgAuth.retry')}

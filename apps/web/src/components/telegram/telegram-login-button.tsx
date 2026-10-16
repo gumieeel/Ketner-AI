@@ -6,7 +6,15 @@ import { useAuth } from '@/features/auth/auth-store';
 import { TelegramAuthDialog } from './telegram-auth-dialog';
 
 /** «Войти через Telegram»: нового человека бот зарегистрирует сам, знакомого — впустит в его аккаунт. */
-export function TelegramLoginButton({ label, redirectUrl, disabled }: { label: string; redirectUrl: string; disabled?: boolean }) {
+export function TelegramLoginButton({
+  label,
+  redirectUrl,
+  disabled,
+}: {
+  label: string;
+  redirectUrl: string;
+  disabled?: boolean;
+}) {
   const navigate = useNavigate();
   const applySession = useAuth((state) => state.applySession);
   const [open, setOpen] = useState(false);

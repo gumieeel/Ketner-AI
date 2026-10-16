@@ -128,13 +128,12 @@ export function createBetterAuth(options: BetterAuthInstanceOptions = {}) {
     options.usePostgres ??
     Boolean(
       config.databaseUrl &&
-        config.databaseUrl.trim() !== '' &&
-        !config.databaseUrl.includes('user:password@localhost') &&
-        !options.dbPath,
+      config.databaseUrl.trim() !== '' &&
+      !config.databaseUrl.includes('user:password@localhost') &&
+      !options.dbPath,
     );
 
-  const dashApiKey =
-    options.apiKey ?? (config.betterAuthApiKey || process.env.BETTER_AUTH_API_KEY);
+  const dashApiKey = options.apiKey ?? (config.betterAuthApiKey || process.env.BETTER_AUTH_API_KEY);
 
   const auth = betterAuth({
     baseURL,
@@ -241,7 +240,12 @@ export function trustedAuthOrigins(
   requestURLOrigin: string | null = null,
 ): string[] {
   const trusted = new Set<string>(['https://ketner.org', 'https://www.ketner.org']);
-  for (const raw of [baseURL, config.corsOrigin, config.webAppUrl, process.env.RENDER_EXTERNAL_URL]) {
+  for (const raw of [
+    baseURL,
+    config.corsOrigin,
+    config.webAppUrl,
+    process.env.RENDER_EXTERNAL_URL,
+  ]) {
     if (!raw) continue;
     try {
       trusted.add(new URL(raw).origin);
@@ -288,7 +292,9 @@ export async function initAuthDatabase(
 
   try {
     for (const vipEmail of config.vipEmails) {
-      defaultAuthDb?.prepare?.('UPDATE user SET plan = ? WHERE email = ?')?.run?.('ultra', vipEmail);
+      defaultAuthDb
+        ?.prepare?.('UPDATE user SET plan = ? WHERE email = ?')
+        ?.run?.('ultra', vipEmail);
     }
   } catch {
     // База данных может быть in-memory в тестах или без sqlite

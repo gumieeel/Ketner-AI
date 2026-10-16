@@ -39,7 +39,10 @@ export function getDirectoryHandle(workspaceId: string): LocalDirectoryHandle | 
  * Проверяет и при необходимости запрашивает права на чтение и запись.
  * Браузер без методов запроса прав выдаёт доступ уже при выборе папки.
  */
-async function verifyPermission(handle: LocalDirectoryHandle, readWrite: boolean): Promise<boolean> {
+async function verifyPermission(
+  handle: LocalDirectoryHandle,
+  readWrite: boolean,
+): Promise<boolean> {
   if (!handle.queryPermission || !handle.requestPermission) return true;
   const options: PermissionMode = { mode: readWrite ? 'readwrite' : 'read' };
   if ((await handle.queryPermission(options)) === 'granted') {
@@ -70,7 +73,10 @@ async function resolveDirectory(
 /**
  * Читает текущее содержимое локального файла прямо с диска.
  */
-export async function readLocalFile(rootHandle: LocalDirectoryHandle, relativePath: string): Promise<string> {
+export async function readLocalFile(
+  rootHandle: LocalDirectoryHandle,
+  relativePath: string,
+): Promise<string> {
   const parts = safeRelativeParts(relativePath);
   const fileName = parts.pop();
   if (!fileName) throw new Error('Некорректный путь к файлу');

@@ -55,11 +55,7 @@ export interface UserDbDriver {
     chatId: number | string | null,
     username?: string | null,
   ) => Promise<void> | void;
-  onPasswordUpdated?: (
-    userId: string,
-    salt: string,
-    passwordHash: string,
-  ) => Promise<void> | void;
+  onPasswordUpdated?: (userId: string, salt: string, passwordHash: string) => Promise<void> | void;
 }
 
 interface Snapshot {
@@ -81,7 +77,12 @@ const SCRYPT_P = 1;
 const SCRYPT_PREFIX = `scrypt$${SCRYPT_N}$${SCRYPT_R}$${SCRYPT_P}$`;
 
 function hashPassword(password: string, salt: string): string {
-  const derived = scryptSync(password, salt, 32, { N: SCRYPT_N, r: SCRYPT_R, p: SCRYPT_P, maxmem: 64 * 1024 * 1024 });
+  const derived = scryptSync(password, salt, 32, {
+    N: SCRYPT_N,
+    r: SCRYPT_R,
+    p: SCRYPT_P,
+    maxmem: 64 * 1024 * 1024,
+  });
   return `${SCRYPT_PREFIX}${derived.toString('hex')}`;
 }
 
@@ -242,9 +243,9 @@ export function createUserStore(file: string): UserStore {
 
       snapshot.users.push(newUser);
       persist();
-      dbDriver?.onUserCreated?.({ ...newUser })?.catch?.((err) =>
-        console.error('[db] Error persisting created user:', err),
-      );
+      dbDriver
+        ?.onUserCreated?.({ ...newUser })
+        ?.catch?.((err) => console.error('[db] Error persisting created user:', err));
 
       return toPublicUser(newUser);
     },
@@ -265,7 +266,11 @@ export function createUserStore(file: string): UserStore {
         return null;
       }
 
-      if (!stored.passwordHash || !stored.salt || !passwordMatches(password, stored.salt, stored.passwordHash)) {
+      if (
+        !stored.passwordHash ||
+        !stored.salt ||
+        !passwordMatches(password, stored.salt, stored.passwordHash)
+      ) {
         return null;
       }
 
@@ -274,9 +279,9 @@ export function createUserStore(file: string): UserStore {
         stored.salt = randomBytes(16).toString('hex');
         stored.passwordHash = hashPassword(password, stored.salt);
         persist();
-        dbDriver?.onPasswordUpdated?.(stored.id, stored.salt, stored.passwordHash)?.catch?.((err) =>
-          console.error('[db] Error persisting upgraded password hash:', err),
-        );
+        dbDriver
+          ?.onPasswordUpdated?.(stored.id, stored.salt, stored.passwordHash)
+          ?.catch?.((err) => console.error('[db] Error persisting upgraded password hash:', err));
       }
 
       return toPublicUser(stored);
@@ -293,9 +298,9 @@ export function createUserStore(file: string): UserStore {
       user.salt = randomBytes(16).toString('hex');
       user.passwordHash = hashPassword(password, user.salt);
       persist();
-      dbDriver?.onPasswordUpdated?.(user.id, user.salt, user.passwordHash)?.catch?.((err) =>
-        console.error('[db] Error persisting updated password:', err),
-      );
+      dbDriver
+        ?.onPasswordUpdated?.(user.id, user.salt, user.passwordHash)
+        ?.catch?.((err) => console.error('[db] Error persisting updated password:', err));
       return toPublicUser(user);
     },
 
@@ -309,9 +314,9 @@ export function createUserStore(file: string): UserStore {
       }
       user.plan = plan;
       persist();
-      dbDriver?.onPlanUpdated?.(user.id, plan)?.catch?.((err) =>
-        console.error('[db] Error persisting plan update:', err),
-      );
+      dbDriver
+        ?.onPlanUpdated?.(user.id, plan)
+        ?.catch?.((err) => console.error('[db] Error persisting plan update:', err));
       return toPublicUser(user);
     },
 
@@ -325,9 +330,9 @@ export function createUserStore(file: string): UserStore {
       }
       user.isVip = isVip;
       persist();
-      dbDriver?.onVipUpdated?.(user.id, isVip)?.catch?.((err) =>
-        console.error('[db] Error persisting VIP update:', err),
-      );
+      dbDriver
+        ?.onVipUpdated?.(user.id, isVip)
+        ?.catch?.((err) => console.error('[db] Error persisting VIP update:', err));
       return toPublicUser(user);
     },
 
@@ -341,9 +346,9 @@ export function createUserStore(file: string): UserStore {
       }
       user.isAdmin = isAdmin;
       persist();
-      dbDriver?.onAdminUpdated?.(user.id, isAdmin)?.catch?.((err) =>
-        console.error('[db] Error persisting admin update:', err),
-      );
+      dbDriver
+        ?.onAdminUpdated?.(user.id, isAdmin)
+        ?.catch?.((err) => console.error('[db] Error persisting admin update:', err));
       return toPublicUser(user);
     },
 
@@ -369,9 +374,9 @@ export function createUserStore(file: string): UserStore {
         user.telegramUsername = username.replace(/^@/, '');
       }
       persist();
-      dbDriver?.onTelegramUpdated?.(user.id, chatId, user.telegramUsername)?.catch?.((err) =>
-        console.error('[db] Error persisting Telegram link:', err),
-      );
+      dbDriver
+        ?.onTelegramUpdated?.(user.id, chatId, user.telegramUsername)
+        ?.catch?.((err) => console.error('[db] Error persisting Telegram link:', err));
       return toPublicUser(user);
     },
 
@@ -386,9 +391,9 @@ export function createUserStore(file: string): UserStore {
       delete user.telegramChatId;
       delete user.telegramUsername;
       persist();
-      dbDriver?.onTelegramUpdated?.(user.id, null, null)?.catch?.((err) =>
-        console.error('[db] Error persisting Telegram unlink:', err),
-      );
+      dbDriver
+        ?.onTelegramUpdated?.(user.id, null, null)
+        ?.catch?.((err) => console.error('[db] Error persisting Telegram unlink:', err));
       return toPublicUser(user);
     },
 
@@ -426,7 +431,9 @@ export function createUserStore(file: string): UserStore {
       }
       if (!SEED_EMAIL_PATTERN.test(email)) {
         // Значение намеренно не печатаем: при ошибке конфигурации там может оказаться пароль.
-        console.warn('[auth] SEED_ADMIN_EMAIL не похож на email: первичный администратор не создан');
+        console.warn(
+          '[auth] SEED_ADMIN_EMAIL не похож на email: первичный администратор не создан',
+        );
         return;
       }
       if (password.length < MIN_SEED_PASSWORD_LENGTH) {

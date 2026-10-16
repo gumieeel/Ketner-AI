@@ -27,7 +27,8 @@ export interface ProjectQuota {
   maxProjectBytes: number;
 }
 
-export type AgentRunStatus = 'completed' | 'cancelled' | 'error' | 'step_limit' | 'budget' | 'length';
+export type AgentRunStatus =
+  'completed' | 'cancelled' | 'error' | 'step_limit' | 'budget' | 'length';
 
 /** Пункт плана агента: задача делится на подзадачи, агент проходит их по очереди. */
 export interface PlanItem {
@@ -52,7 +53,14 @@ export interface ToolChange {
  */
 export type ThreadItem =
   | { id: string; kind: 'user'; text: string; createdAt: string }
-  | { id: string; kind: 'assistant'; text: string; runId: string; modelId?: string; createdAt: string }
+  | {
+      id: string;
+      kind: 'assistant';
+      text: string;
+      runId: string;
+      modelId?: string;
+      createdAt: string;
+    }
   | {
       id: string;
       kind: 'tool';

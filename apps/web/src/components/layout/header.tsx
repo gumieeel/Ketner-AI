@@ -45,7 +45,13 @@ export function Header() {
           inChat ? 'text-muted max-lg:sr-only' : 'text-text',
         )}
       >
-        {inChat ? title || t('chat.title') : location.pathname.startsWith('/code') ? t('code.title') : location.pathname.startsWith('/images') ? t('images.title') : t('app.name')}
+        {inChat
+          ? title || t('chat.title')
+          : location.pathname.startsWith('/code')
+            ? t('code.title')
+            : location.pathname.startsWith('/images')
+              ? t('images.title')
+              : t('app.name')}
       </h1>
 
       <div className={cn('ml-auto flex shrink-0 items-center gap-1.5', inChat && 'max-sm:gap-0.5')}>
@@ -62,7 +68,11 @@ export function Header() {
               <PlusIcon className="size-4" />
             </IconButton>
             <span className="max-sm:hidden">
-              <StubAction label={t('chat.share')} hint={t('chat.composerNotice')} placement="bottom">
+              <StubAction
+                label={t('chat.share')}
+                hint={t('chat.composerNotice')}
+                placement="bottom"
+              >
                 <ShareIcon className="size-4" />
               </StubAction>
             </span>

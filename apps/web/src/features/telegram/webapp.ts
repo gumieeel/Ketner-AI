@@ -2,7 +2,13 @@
 export interface TelegramWebApp {
   initData: string;
   initDataUnsafe: {
-    user?: { id: number; first_name: string; username?: string; language_code?: string; photo_url?: string };
+    user?: {
+      id: number;
+      first_name: string;
+      username?: string;
+      language_code?: string;
+      photo_url?: string;
+    };
     start_param?: string;
   };
   colorScheme: 'light' | 'dark';
@@ -10,7 +16,10 @@ export interface TelegramWebApp {
   ready(): void;
   expand(): void;
   isVersionAtLeast(version: string): boolean;
-  openInvoice(url: string, callback?: (status: 'paid' | 'cancelled' | 'failed' | 'pending') => void): void;
+  openInvoice(
+    url: string,
+    callback?: (status: 'paid' | 'cancelled' | 'failed' | 'pending') => void,
+  ): void;
   openLink(url: string, options?: { try_instant_view?: boolean }): void;
   openTelegramLink(url: string): void;
   showConfirm?(message: string, callback: (ok: boolean) => void): void;
@@ -70,9 +79,12 @@ export function loadTelegramWebApp(timeoutMs = 5000): Promise<TelegramWebApp | n
 
 /** Безопасные вызовы: старые клиенты Telegram поддерживают не всё. */
 export const haptic = {
-  success: (app: TelegramWebApp | null) => tryCall(() => app?.HapticFeedback?.notificationOccurred('success')),
-  error: (app: TelegramWebApp | null) => tryCall(() => app?.HapticFeedback?.notificationOccurred('error')),
-  warning: (app: TelegramWebApp | null) => tryCall(() => app?.HapticFeedback?.notificationOccurred('warning')),
+  success: (app: TelegramWebApp | null) =>
+    tryCall(() => app?.HapticFeedback?.notificationOccurred('success')),
+  error: (app: TelegramWebApp | null) =>
+    tryCall(() => app?.HapticFeedback?.notificationOccurred('error')),
+  warning: (app: TelegramWebApp | null) =>
+    tryCall(() => app?.HapticFeedback?.notificationOccurred('warning')),
   tap: (app: TelegramWebApp | null) => tryCall(() => app?.HapticFeedback?.impactOccurred('light')),
   select: (app: TelegramWebApp | null) => tryCall(() => app?.HapticFeedback?.selectionChanged?.()),
 };

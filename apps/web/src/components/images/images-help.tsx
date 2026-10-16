@@ -7,15 +7,38 @@ import { cn } from '@/lib/cn';
 
 /** Описания моделей для пользователей: для чего подходит и что умеет. */
 const MODEL_TEXT: Record<string, { about: TranslationKey; best: TranslationKey }> = {
-  'flux-schnell': { about: 'images.help.model.flux-schnell.about', best: 'images.help.model.flux-schnell.best' },
-  'flux-2-klein': { about: 'images.help.model.flux-2-klein.about', best: 'images.help.model.flux-2-klein.best' },
-  'flux-2-dev': { about: 'images.help.model.flux-2-dev.about', best: 'images.help.model.flux-2-dev.best' },
-  'seedream-5-flash': { about: 'images.help.model.seedream-5-flash.about', best: 'images.help.model.seedream-5-flash.best' },
-  'flux-2-pro': { about: 'images.help.model.flux-2-pro.about', best: 'images.help.model.flux-2-pro.best' },
-  'nano-banana-2': { about: 'images.help.model.nano-banana-2.about', best: 'images.help.model.nano-banana-2.best' },
+  'flux-schnell': {
+    about: 'images.help.model.flux-schnell.about',
+    best: 'images.help.model.flux-schnell.best',
+  },
+  'flux-2-klein': {
+    about: 'images.help.model.flux-2-klein.about',
+    best: 'images.help.model.flux-2-klein.best',
+  },
+  'flux-2-dev': {
+    about: 'images.help.model.flux-2-dev.about',
+    best: 'images.help.model.flux-2-dev.best',
+  },
+  'seedream-5-flash': {
+    about: 'images.help.model.seedream-5-flash.about',
+    best: 'images.help.model.seedream-5-flash.best',
+  },
+  'flux-2-pro': {
+    about: 'images.help.model.flux-2-pro.about',
+    best: 'images.help.model.flux-2-pro.best',
+  },
+  'nano-banana-2': {
+    about: 'images.help.model.nano-banana-2.about',
+    best: 'images.help.model.nano-banana-2.best',
+  },
 };
 
-const PLAN_TONE: Record<string, BadgeTone> = { free: 'neutral', plus: 'plus', pro: 'pro', ultra: 'ultra' };
+const PLAN_TONE: Record<string, BadgeTone> = {
+  free: 'neutral',
+  plus: 'plus',
+  pro: 'pro',
+  ultra: 'ultra',
+};
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
@@ -27,7 +50,13 @@ function Section({ title, children }: { title: string; children: React.ReactNode
 }
 
 /** Справка на странице «Изображения»: модели, советы к описанию и правила. */
-export function ImagesHelp({ models, onClose }: { models: readonly ImageModelInfo[]; onClose: () => void }) {
+export function ImagesHelp({
+  models,
+  onClose,
+}: {
+  models: readonly ImageModelInfo[];
+  onClose: () => void;
+}) {
   const { t } = useTranslation();
   const planName = (plan: string) => plan.charAt(0).toUpperCase() + plan.slice(1);
 
@@ -49,25 +78,35 @@ export function ImagesHelp({ models, onClose }: { models: readonly ImageModelInf
               return (
                 <li
                   key={model.id}
-                  className={cn('flex flex-col gap-2 rounded-xl border border-stroke bg-canvas p-3.5', model.locked && 'opacity-80')}
+                  className={cn(
+                    'flex flex-col gap-2 rounded-xl border border-stroke bg-canvas p-3.5',
+                    model.locked && 'opacity-80',
+                  )}
                 >
                   <div className="flex items-center justify-between gap-2">
                     <span className="text-[15px] font-semibold text-text">{model.name}</span>
                     <Badge tone={PLAN_TONE[model.requiredPlan] ?? 'neutral'}>
-                      {model.requiredPlan === 'free' ? t('images.help.free') : t('images.help.fromPlan', { plan: planName(model.requiredPlan) })}
+                      {model.requiredPlan === 'free'
+                        ? t('images.help.free')
+                        : t('images.help.fromPlan', { plan: planName(model.requiredPlan) })}
                     </Badge>
                   </div>
                   {text ? (
                     <>
                       <p className="text-[13px] leading-5 text-text">{t(text.about)}</p>
                       <p className="text-[13px] leading-5 text-muted">
-                        <span className="font-medium text-text">{t('images.help.bestFor')}</span> {t(text.best)}
+                        <span className="font-medium text-text">{t('images.help.bestFor')}</span>{' '}
+                        {t(text.best)}
                       </p>
                     </>
                   ) : null}
-                  <p className="text-xs text-subtle">{square ? t('images.help.formatsSquare') : t('images.help.formatsAll')}</p>
+                  <p className="text-xs text-subtle">
+                    {square ? t('images.help.formatsSquare') : t('images.help.formatsAll')}
+                  </p>
                   {model.locked ? (
-                    <p className="mt-auto text-xs font-medium text-muted">{t('images.help.locked', { plan: planName(model.requiredPlan) })}</p>
+                    <p className="mt-auto text-xs font-medium text-muted">
+                      {t('images.help.locked', { plan: planName(model.requiredPlan) })}
+                    </p>
                   ) : null}
                 </li>
               );

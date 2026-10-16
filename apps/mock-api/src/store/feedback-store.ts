@@ -163,9 +163,9 @@ export class FeedbackStore {
       };
       this.records[existingIndex] = updated;
       this.persist();
-      this.dbDriver?.onFeedbackRecorded?.({ ...updated })?.catch?.((err) =>
-        console.error('[db] Error persisting updated feedback:', err),
-      );
+      this.dbDriver
+        ?.onFeedbackRecorded?.({ ...updated })
+        ?.catch?.((err) => console.error('[db] Error persisting updated feedback:', err));
       return updated;
     }
 
@@ -185,9 +185,9 @@ export class FeedbackStore {
 
     this.records.push(record);
     this.persist();
-    this.dbDriver?.onFeedbackRecorded?.({ ...record })?.catch?.((err) =>
-      console.error('[db] Error persisting created feedback:', err),
-    );
+    this.dbDriver
+      ?.onFeedbackRecorded?.({ ...record })
+      ?.catch?.((err) => console.error('[db] Error persisting created feedback:', err));
     return record;
   }
 
@@ -297,7 +297,9 @@ export class FeedbackStore {
     for (const r of filtered) {
       const engineKey = r.engineModelId || 'default';
       if (!byEngine[engineKey]) {
-        const engineRecords = filtered.filter((item) => (item.engineModelId || 'default') === engineKey);
+        const engineRecords = filtered.filter(
+          (item) => (item.engineModelId || 'default') === engineKey,
+        );
         byEngine[engineKey] = calcGroup(engineRecords);
       }
     }
@@ -324,9 +326,7 @@ export class FeedbackStore {
       lightCount >= this.minSamplesThreshold && lightDislikeRate >= this.dislikeThreshold;
 
     const activeEscalation =
-      this.autoEscalateOverride !== null
-        ? this.autoEscalateOverride
-        : escalateRecommended;
+      this.autoEscalateOverride !== null ? this.autoEscalateOverride : escalateRecommended;
 
     let recommendation: string;
     if (lightCount < this.minSamplesThreshold) {

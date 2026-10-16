@@ -33,7 +33,12 @@ export function useMiniApp(): MiniApp {
   return value;
 }
 
-export const PLAN_TONE: Record<string, BadgeTone> = { free: 'neutral', plus: 'plus', pro: 'pro', ultra: 'ultra' };
+export const PLAN_TONE: Record<string, BadgeTone> = {
+  free: 'neutral',
+  plus: 'plus',
+  pro: 'pro',
+  ultra: 'ultra',
+};
 export const PLAN_HINT: Record<string, TranslationKey> = {
   plus: 'tg.planPlusHint',
   pro: 'tg.planProHint',
@@ -42,7 +47,11 @@ export const PLAN_HINT: Record<string, TranslationKey> = {
 
 const locale = (language: string) => (language === 'en' ? 'en-US' : 'ru-RU');
 
-export function formatDate(iso: string | null | undefined, language: string, withYear = false): string {
+export function formatDate(
+  iso: string | null | undefined,
+  language: string,
+  withYear = false,
+): string {
   if (!iso) return '—';
   return new Date(iso).toLocaleDateString(locale(language), {
     day: 'numeric',
@@ -52,15 +61,25 @@ export function formatDate(iso: string | null | undefined, language: string, wit
 }
 
 export function formatDateTime(iso: string, language: string): string {
-  return new Date(iso).toLocaleString(locale(language), { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
+  return new Date(iso).toLocaleString(locale(language), {
+    day: 'numeric',
+    month: 'short',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
 }
 
 export function formatStars(stars: number, language: string): string {
   return stars.toLocaleString(locale(language));
 }
 
-export function formatAmount(payment: Pick<MiniAppPayment, 'amount' | 'currency'>, language: string): string {
-  return payment.currency === 'XTR' ? `${formatStars(payment.amount, language)} ⭐` : `$${payment.amount}`;
+export function formatAmount(
+  payment: Pick<MiniAppPayment, 'amount' | 'currency'>,
+  language: string,
+): string {
+  return payment.currency === 'XTR'
+    ? `${formatStars(payment.amount, language)} ⭐`
+    : `$${payment.amount}`;
 }
 
 /** Состояние подписки «на сейчас»: действует ли, сколько осталось дней. */
@@ -69,11 +88,16 @@ export function subscriptionInfo(state: MiniAppState, now = Date.now()) {
   const end = subscription.renewsAt ? Date.parse(subscription.renewsAt) : NaN;
   const running = user.isVip || (subscription.plan !== 'free' && Number.isFinite(end) && end > now);
   const plan = user.isVip ? 'ultra' : running ? subscription.plan : 'free';
-  const daysLeft = running && Number.isFinite(end) ? Math.max(1, Math.ceil((end - now) / DAY_MS)) : 0;
+  const daysLeft =
+    running && Number.isFinite(end) ? Math.max(1, Math.ceil((end - now) / DAY_MS)) : 0;
   return { running, plan, daysLeft, endsAt: running && !user.isVip ? subscription.renewsAt : null };
 }
 
-export function Panel({ children, className, ...props }: { children: ReactNode; className?: string } & React.HTMLAttributes<HTMLElement>) {
+export function Panel({
+  children,
+  className,
+  ...props
+}: { children: ReactNode; className?: string } & React.HTMLAttributes<HTMLElement>) {
   return (
     <section className={cn('rounded-xl border border-stroke bg-surface p-4', className)} {...props}>
       {children}
@@ -81,7 +105,15 @@ export function Panel({ children, className, ...props }: { children: ReactNode; 
   );
 }
 
-export function SectionTitle({ id, children, aside }: { id?: string; children: ReactNode; aside?: ReactNode }) {
+export function SectionTitle({
+  id,
+  children,
+  aside,
+}: {
+  id?: string;
+  children: ReactNode;
+  aside?: ReactNode;
+}) {
   return (
     <div className="flex items-baseline justify-between gap-2 px-1">
       <h2 id={id} className="text-[15px] font-semibold">
@@ -158,7 +190,11 @@ export function Segmented<T extends string>({
   onChange: (value: T) => void;
 }) {
   return (
-    <div role="radiogroup" aria-label={label} className="grid grid-flow-col gap-1 rounded-lg border border-stroke bg-surface-2 p-1">
+    <div
+      role="radiogroup"
+      aria-label={label}
+      className="grid grid-flow-col gap-1 rounded-lg border border-stroke bg-surface-2 p-1"
+    >
       {options.map((option) => (
         <button
           key={option.value}
@@ -169,7 +205,9 @@ export function Segmented<T extends string>({
           className={cn(
             'min-h-9 rounded-md px-3 text-[14px] font-medium transition-colors duration-150',
             'focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-accent',
-            value === option.value ? 'bg-surface text-text shadow-sm ring-1 ring-stroke' : 'text-muted hover:text-text',
+            value === option.value
+              ? 'bg-surface text-text shadow-sm ring-1 ring-stroke'
+              : 'text-muted hover:text-text',
           )}
         >
           {option.label}
@@ -179,7 +217,13 @@ export function Segmented<T extends string>({
   );
 }
 
-export function Notice({ tone, children }: { tone: 'success' | 'danger' | 'info' | 'warning'; children: ReactNode }) {
+export function Notice({
+  tone,
+  children,
+}: {
+  tone: 'success' | 'danger' | 'info' | 'warning';
+  children: ReactNode;
+}) {
   return (
     <p
       role={tone === 'danger' ? 'alert' : 'status'}
@@ -251,7 +295,10 @@ export function Sheet({
       if (items.length === 0) return;
       const first = items[0]!;
       const last = items[items.length - 1]!;
-      if (event.shiftKey && (document.activeElement === first || document.activeElement === panel)) {
+      if (
+        event.shiftKey &&
+        (document.activeElement === first || document.activeElement === panel)
+      ) {
         event.preventDefault();
         last.focus();
       } else if (!event.shiftKey && document.activeElement === last) {
@@ -299,7 +346,9 @@ export function Sheet({
             <CloseIcon className="size-4" />
           </button>
         </div>
-        <div className="overflow-y-auto px-4 pt-3 pb-[max(1.25rem,env(safe-area-inset-bottom))]">{children}</div>
+        <div className="overflow-y-auto px-4 pt-3 pb-[max(1.25rem,env(safe-area-inset-bottom))]">
+          {children}
+        </div>
       </div>
     </div>
   );

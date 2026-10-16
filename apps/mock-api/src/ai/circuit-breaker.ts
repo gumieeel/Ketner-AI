@@ -10,7 +10,7 @@ export type CircuitBreakerState = 'closed' | 'open' | 'half-open';
 
 export interface CircuitBreakerOptions {
   failureThreshold?: number; // По умолчанию 3
-  cooldownMs?: number;        // По умолчанию 30_000 (30 сек)
+  cooldownMs?: number; // По умолчанию 30_000 (30 сек)
 }
 
 export interface ProviderCircuitStatus {

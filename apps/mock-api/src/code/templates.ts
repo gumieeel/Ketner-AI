@@ -23,7 +23,11 @@ export function templateFiles(template: TemplateId, name: string): Record<string
         'README.md': readme(title, 'Node.js проект.\n\n```bash\nnpm test\nnpm start\n```'),
         'package.json': `${JSON.stringify(
           {
-            name: title.toLowerCase().replace(/[^a-z0-9._-]+/g, '-').replace(/^-+|-+$/g, '') || 'project',
+            name:
+              title
+                .toLowerCase()
+                .replace(/[^a-z0-9._-]+/g, '-')
+                .replace(/^-+|-+$/g, '') || 'project',
             version: '0.1.0',
             private: true,
             type: 'module',
@@ -38,7 +42,10 @@ export function templateFiles(template: TemplateId, name: string): Record<string
       };
     case 'python':
       return {
-        'README.md': readme(title, 'Python проект.\n\n```bash\npython -m unittest\npython main.py\n```'),
+        'README.md': readme(
+          title,
+          'Python проект.\n\n```bash\npython -m unittest\npython main.py\n```',
+        ),
         'main.py': `def greet(name: str) -> str:\n    return f"Hello, {name}!"\n\n\nif __name__ == "__main__":\n    print(greet("world"))\n`,
         'test_main.py': `import unittest\n\nfrom main import greet\n\n\nclass GreetTest(unittest.TestCase):\n    def test_greet(self):\n        self.assertEqual(greet("world"), "Hello, world!")\n\n\nif __name__ == "__main__":\n    unittest.main()\n`,
         '.gitignore': '__pycache__/\n.venv/\n.env\n',

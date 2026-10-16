@@ -25,13 +25,7 @@ export interface ConversationSummary extends Conversation {
 }
 
 export type AttachmentCategory =
-  | 'image'
-  | 'video'
-  | 'audio'
-  | 'document'
-  | 'code'
-  | 'archive'
-  | 'file';
+  'image' | 'video' | 'audio' | 'document' | 'code' | 'archive' | 'file';
 
 export interface MessageAttachment {
   id: string;

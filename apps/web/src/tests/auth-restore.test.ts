@@ -2,7 +2,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const getSession = vi.fn();
 vi.mock('@/features/auth/auth-client', () => ({
-  authClient: { getSession: (...args: unknown[]) => getSession(...args), signIn: { email: vi.fn() }, signOut: vi.fn() },
+  authClient: {
+    getSession: (...args: unknown[]) => getSession(...args),
+    signIn: { email: vi.fn() },
+    signOut: vi.fn(),
+  },
 }));
 
 import { useAuth } from '@/features/auth/auth-store';
@@ -30,7 +34,11 @@ function stubMe(status: number | 'network'): void {
     vi.fn(async () => {
       if (status === 'network') throw new TypeError('Failed to fetch');
       return new Response(
-        JSON.stringify(status === 200 ? { user: ULTRA_USER } : { error: { code: 'unauthorized', message: 'Сессия не найдена' } }),
+        JSON.stringify(
+          status === 200
+            ? { user: ULTRA_USER }
+            : { error: { code: 'unauthorized', message: 'Сессия не найдена' } },
+        ),
         { status, headers: { 'Content-Type': 'application/json' } },
       );
     }),
@@ -86,7 +94,9 @@ describe('restoreSession: устаревшая сохранённая сесси
   it('есть cookie-сессия Better Auth: вход восстанавливается без Bearer-токена', async () => {
     seedStoredSession('stale.jwt.token');
     stubMe(401);
-    getSession.mockResolvedValue({ data: { user: ULTRA_USER, session: { token: 'cookie-session-token' } } });
+    getSession.mockResolvedValue({
+      data: { user: ULTRA_USER, session: { token: 'cookie-session-token' } },
+    });
     await useAuth.getState().restoreSession();
     expect(useAuth.getState().status).toBe('authenticated');
     expect(useAuth.getState().token).toBe('cookie-session-token');
@@ -110,7 +120,9 @@ describe('ответ с X-Session-Invalid сбрасывает устаревш�
       vi.fn(async (input: RequestInfo | URL) => {
         const url = String(input);
         if (url.endsWith('/auth/me')) {
-          return new Response(JSON.stringify({ error: { code: 'unauthorized', message: 'x' } }), { status: 401 });
+          return new Response(JSON.stringify({ error: { code: 'unauthorized', message: 'x' } }), {
+            status: 401,
+          });
         }
         return new Response(JSON.stringify({ conversations: [] }), {
           status: 200,

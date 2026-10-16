@@ -12,7 +12,7 @@ export const PLAN_LEVELS: Readonly<Record<string, number>> = PLAN_RANKS;
 
 /** Тариф, с которого доступна модель каталога (зеркало `requiredPlan` из реестра моделей сервера). */
 export const REQUIRED_PLANS: Record<string, string> = {
-  'auto': 'free',
+  auto: 'free',
   'ketner-mini': 'free',
   'ketner-pro': 'plus',
   'claude-haiku-5.5': 'plus',

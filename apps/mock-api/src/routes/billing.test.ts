@@ -107,7 +107,13 @@ test('billing: криптовалюта только через Trybit — св�
   });
   assert.equal(created.status, 200);
   const { invoice } = await readJson<{
-    invoice: { id: string; amountUsd: number; address: string; qrPayload: string; cryptoCloudInvoiceId?: string };
+    invoice: {
+      id: string;
+      amountUsd: number;
+      address: string;
+      qrPayload: string;
+      cryptoCloudInvoiceId?: string;
+    };
   }>(created);
   assert.equal(invoice.amountUsd, 9);
   // Счёт выставлен в Trybit; своего кошелька для прямого перевода в нём нет.
@@ -115,25 +121,38 @@ test('billing: криптовалюта только через Trybit — св�
   assert.equal(invoice.address, '');
   assert.equal(invoice.qrPayload, '');
 
-  for (const body of [{ txHash: `TEST_VALID_TX_${Date.now()}`, mode: 'manual' }, { mode: 'manual' }, { txHash: 'abc' }]) {
+  for (const body of [
+    { txHash: `TEST_VALID_TX_${Date.now()}`, mode: 'manual' },
+    { mode: 'manual' },
+    { txHash: 'abc' },
+  ]) {
     const res = await fetch(`${server.baseUrl}/api/billing/crypto/confirm/${invoice.id}`, {
       method: 'POST',
       headers,
       body: JSON.stringify(body),
     });
     assert.equal(res.status, 400);
-    assert.equal((await readJson<{ error: { code: string } }>(res)).error.code, 'manual_transfer_unavailable');
+    assert.equal(
+      (await readJson<{ error: { code: string } }>(res)).error.code,
+      'manual_transfer_unavailable',
+    );
   }
 
   // Без подтверждения Trybit тариф не включается.
-  const unpaid = await fetch(`${server.baseUrl}/api/billing/crypto/confirm/${invoice.id}`, { method: 'POST', headers, body: '{}' });
+  const unpaid = await fetch(`${server.baseUrl}/api/billing/crypto/confirm/${invoice.id}`, {
+    method: 'POST',
+    headers,
+    body: '{}',
+  });
   assert.equal(unpaid.status, 400);
-  assert.equal((await readJson<{ error: { code: string } }>(unpaid)).error.code, 'payment_not_received');
+  assert.equal(
+    (await readJson<{ error: { code: string } }>(unpaid)).error.code,
+    'payment_not_received',
+  );
 
   const sub = await fetch(`${server.baseUrl}/api/billing/subscription`, { headers });
   assert.equal((await readJson<{ subscription: Subscription }>(sub)).subscription.plan, 'free');
 });
-
 
 async function signup(baseUrl: string, email: string): Promise<{ token: string; id: string }> {
   const res = await fetch(`${baseUrl}/api/auth/signup`, {
@@ -191,10 +210,13 @@ test('billing (C5): чужой счёт недоступен ни для ста�
     headers: strangerHeaders,
   });
   assert.equal(status.status, 404);
-  const confirm = await fetch(`${server.baseUrl}/api/billing/telegram-stars/confirm/${invoice.id}`, {
-    method: 'POST',
-    headers: strangerHeaders,
-  });
+  const confirm = await fetch(
+    `${server.baseUrl}/api/billing/telegram-stars/confirm/${invoice.id}`,
+    {
+      method: 'POST',
+      headers: strangerHeaders,
+    },
+  );
   assert.equal(confirm.status, 404);
 
   // Владелец своё видит
@@ -204,7 +226,9 @@ test('billing (C5): чужой счёт недоступен ни для ста�
   assert.equal(own.status, 200);
 
   // Тариф у постороннего не изменился
-  const sub = await fetch(`${server.baseUrl}/api/billing/subscription`, { headers: strangerHeaders });
+  const sub = await fetch(`${server.baseUrl}/api/billing/subscription`, {
+    headers: strangerHeaders,
+  });
   const { subscription } = await readJson<{ subscription: Subscription }>(sub);
   assert.equal(subscription.plan, 'free');
 });
@@ -249,10 +273,13 @@ test('billing (C5): в production заглушки оплаты выключен
     assert.equal(sbpCreate.status, 501);
 
     // Stars: подтверждение до реальной оплаты (successful_payment от Telegram) не проходит.
-    const confirm = await fetch(`${server.baseUrl}/api/billing/telegram-stars/confirm/${invoice.id}`, {
-      method: 'POST',
-      headers,
-    });
+    const confirm = await fetch(
+      `${server.baseUrl}/api/billing/telegram-stars/confirm/${invoice.id}`,
+      {
+        method: 'POST',
+        headers,
+      },
+    );
     assert.equal(confirm.status, 402);
   } finally {
     mutable.enableMockBilling = previous;
@@ -269,7 +296,11 @@ test('billing (C7): без шлюза Trybit в production крипто-счёт
   const user = await signup(server.baseUrl, 'c7-prod@example.com');
   const headers = { 'Content-Type': 'application/json', Authorization: `Bearer ${user.token}` };
 
-  const mutable = config as unknown as { enableMockBilling: boolean; cryptoCloudApiKey?: string; cryptoCloudShopId?: string };
+  const mutable = config as unknown as {
+    enableMockBilling: boolean;
+    cryptoCloudApiKey?: string;
+    cryptoCloudShopId?: string;
+  };
   const previous = { ...mutable };
   mutable.enableMockBilling = false;
   mutable.cryptoCloudApiKey = '';
@@ -305,7 +336,8 @@ test('billing: все валюты и сети Trybit принимаются, н
     });
 
   assert.equal(TRYBIT_CURRENCIES.length, 38);
-  for (const currency of TRYBIT_CURRENCIES) assert.equal((await create(currency)).status, 200, currency);
+  for (const currency of TRYBIT_CURRENCIES)
+    assert.equal((await create(currency)).status, 200, currency);
   for (const bad of ['DOGE', 'USDT', '', 'usdt_trc20', 42]) {
     const res = await create(bad);
     assert.equal(res.status, 400, String(bad));
@@ -337,7 +369,11 @@ test('billing: комиссии Trybit из ответа шлюза попада
           amount_usd: 10.4,
           fee_usd: 1.4,
           service_fee_usd: 0.17,
-          currency: { code: 'USDT', fullcode: 'USDT_TRC20', network: { code: 'TRC20', fullname: 'Tron' } },
+          currency: {
+            code: 'USDT',
+            fullcode: 'USDT_TRC20',
+            network: { code: 'TRC20', fullname: 'Tron' },
+          },
         },
       });
     }
@@ -355,8 +391,16 @@ test('billing: комиссии Trybit из ответа шлюза попада
   });
   assert.equal(res.status, 200);
   const { invoice } = await readJson<{
-    invoice: { amount: number; fees?: { serviceUsd: number; transferUsd: number; payerUsd: number; totalUsd: number } };
+    invoice: {
+      amount: number;
+      fees?: { serviceUsd: number; transferUsd: number; payerUsd: number; totalUsd: number };
+    };
   }>(res);
   assert.equal(invoice.amount, 10.4);
-  assert.deepEqual(invoice.fees, { serviceUsd: 0.17, transferUsd: 1.4, payerUsd: 1.4, totalUsd: 10.4 });
+  assert.deepEqual(invoice.fees, {
+    serviceUsd: 0.17,
+    transferUsd: 1.4,
+    payerUsd: 1.4,
+    totalUsd: 10.4,
+  });
 });

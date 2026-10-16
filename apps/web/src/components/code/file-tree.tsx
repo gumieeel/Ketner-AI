@@ -1,12 +1,25 @@
 import { useMemo, useState, type FormEvent } from 'react';
-import { ChevronDownIcon, ChevronRightIcon, EditIcon, FileTextIcon, FolderIcon, PlusIcon, TrashIcon } from '@/components/icons';
+import {
+  ChevronDownIcon,
+  ChevronRightIcon,
+  EditIcon,
+  FileTextIcon,
+  FolderIcon,
+  PlusIcon,
+  TrashIcon,
+} from '@/components/icons';
 import { IconButton } from '@/components/ui/icon-button';
 import { useCode, type ChangeKind } from '@/features/code/code-store';
 import { buildTree, formatBytes, type TreeNode } from '@/features/code/tree';
 import { useTranslation } from '@/i18n';
 import { cn } from '@/lib/cn';
 
-const CHANGE_MARK: Record<ChangeKind, string> = { create: 'A', modify: 'M', delete: 'D', move: 'R' };
+const CHANGE_MARK: Record<ChangeKind, string> = {
+  create: 'A',
+  modify: 'M',
+  delete: 'D',
+  move: 'R',
+};
 const CHANGE_TONE: Record<ChangeKind, string> = {
   create: 'text-success',
   modify: 'text-warning',
@@ -70,7 +83,11 @@ export function FileTree({ disabled }: { disabled?: boolean }) {
               style={padding}
               className="flex min-h-8 min-w-0 flex-1 items-center gap-1.5 rounded-md pr-2 text-left text-[13px] text-muted hover:bg-surface-2 hover:text-text"
             >
-              {open ? <ChevronDownIcon className="size-3.5 shrink-0" /> : <ChevronRightIcon className="size-3.5 shrink-0" />}
+              {open ? (
+                <ChevronDownIcon className="size-3.5 shrink-0" />
+              ) : (
+                <ChevronRightIcon className="size-3.5 shrink-0" />
+              )}
               <FolderIcon className="size-3.5 shrink-0 text-accent" />
               <span className="truncate">{node.name}</span>
             </button>
@@ -108,17 +125,27 @@ export function FileTree({ disabled }: { disabled?: boolean }) {
             style={padding}
             className={cn(
               'flex min-h-8 min-w-0 flex-1 items-center gap-1.5 rounded-md pr-2 text-left text-[13px] transition-colors',
-              activePath === node.path ? 'bg-surface-2 font-medium text-text' : 'text-muted hover:bg-surface-2 hover:text-text',
+              activePath === node.path
+                ? 'bg-surface-2 font-medium text-text'
+                : 'text-muted hover:bg-surface-2 hover:text-text',
             )}
           >
             <FileTextIcon className="size-3.5 shrink-0 text-subtle" />
             <span className="truncate">{node.name}</span>
             {change ? (
-              <span title={t('code.ws.changedByAgent')} className={cn('ml-auto shrink-0 font-mono text-[11px] font-semibold', CHANGE_TONE[change])}>
+              <span
+                title={t('code.ws.changedByAgent')}
+                className={cn(
+                  'ml-auto shrink-0 font-mono text-[11px] font-semibold',
+                  CHANGE_TONE[change],
+                )}
+              >
                 {CHANGE_MARK[change]}
               </span>
             ) : (
-              <span className="ml-auto hidden shrink-0 text-[11px] text-subtle group-hover:inline">{formatBytes(node.size ?? 0)}</span>
+              <span className="ml-auto hidden shrink-0 text-[11px] text-subtle group-hover:inline">
+                {formatBytes(node.size ?? 0)}
+              </span>
             )}
           </button>
           {!disabled ? (
@@ -133,7 +160,11 @@ export function FileTree({ disabled }: { disabled?: boolean }) {
               >
                 <EditIcon className="size-3.5" />
               </IconButton>
-              <IconButton label={t('code.ws.delete')} size="sm" onClick={() => confirmDelete(node.path)}>
+              <IconButton
+                label={t('code.ws.delete')}
+                size="sm"
+                onClick={() => confirmDelete(node.path)}
+              >
                 <TrashIcon className="size-3.5" />
               </IconButton>
             </span>
@@ -146,8 +177,15 @@ export function FileTree({ disabled }: { disabled?: boolean }) {
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       <div className="flex shrink-0 items-center justify-between px-3 py-2">
-        <span className="text-xs font-semibold uppercase tracking-wide text-subtle">{t('code.ws.files')}</span>
-        <IconButton label={t('code.ws.newFile')} size="sm" disabled={disabled} onClick={() => setCreating(true)}>
+        <span className="text-xs font-semibold uppercase tracking-wide text-subtle">
+          {t('code.ws.files')}
+        </span>
+        <IconButton
+          label={t('code.ws.newFile')}
+          size="sm"
+          disabled={disabled}
+          onClick={() => setCreating(true)}
+        >
           <PlusIcon className="size-4" />
         </IconButton>
       </div>
@@ -170,7 +208,9 @@ export function FileTree({ disabled }: { disabled?: boolean }) {
 
       <div className="min-h-0 flex-1 overflow-y-auto px-1 pb-3">
         {tree.length === 0 ? (
-          <p className="px-3 py-6 text-center text-[13px] text-muted">{t('code.ws.emptyProject')}</p>
+          <p className="px-3 py-6 text-center text-[13px] text-muted">
+            {t('code.ws.emptyProject')}
+          </p>
         ) : (
           <ul role="tree">{tree.map((node) => renderNode(node, 0))}</ul>
         )}

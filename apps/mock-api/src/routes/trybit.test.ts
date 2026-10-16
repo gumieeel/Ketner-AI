@@ -49,7 +49,10 @@ function fakeTrybit(
       });
     }
     if (url.endsWith('/v2/invoice/merchant/info')) {
-      return Response.json({ status: 'success', result: [{ uuid: 'INV-ABC12345', status: paidStatus }] });
+      return Response.json({
+        status: 'success',
+        result: [{ uuid: 'INV-ABC12345', status: paidStatus }],
+      });
     }
     return new Response('not found', { status: 404 });
   }) as typeof fetch;
@@ -100,7 +103,11 @@ test('Trybit: счёт создаётся на api.trybit.com, подписан�
   const forged = await fetch(`${server.baseUrl}/api/billing/trybit/webhook`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ status: 'success', invoice_id: 'ABC12345', token: sign({ id: 'x' }, 'wrong') }),
+    body: JSON.stringify({
+      status: 'success',
+      invoice_id: 'ABC12345',
+      token: sign({ id: 'x' }, 'wrong'),
+    }),
   });
   assert.equal(forged.status, 401);
 
@@ -120,7 +127,9 @@ test('Trybit: счёт создаётся на api.trybit.com, подписан�
   assert.equal(postback.status, 200);
   assert.ok(gateway.calls.some((call) => call.url.endsWith('/v2/invoice/merchant/info')));
 
-  const me = await readJson<{ user: { plan: string } }>(await fetch(`${server.baseUrl}/api/auth/me`, { headers: auth }));
+  const me = await readJson<{ user: { plan: string } }>(
+    await fetch(`${server.baseUrl}/api/auth/me`, { headers: auth }),
+  );
   assert.equal(me.user.plan, 'plus');
 
   const status = await readJson<{ status: string }>(
@@ -147,10 +156,17 @@ test('Trybit: postback без подтверждения оплаты в API ш�
   const postback = await fetch(`${server.baseUrl}/api/billing/cryptocloud/webhook`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ status: 'success', invoice_id: 'ABC12345', order_id: null, token: sign({ id: 'ABC12345' }) }),
+    body: JSON.stringify({
+      status: 'success',
+      invoice_id: 'ABC12345',
+      order_id: null,
+      token: sign({ id: 'ABC12345' }),
+    }),
   });
   assert.equal(postback.status, 200);
-  const me = await readJson<{ user: { plan: string } }>(await fetch(`${server.baseUrl}/api/auth/me`, { headers: auth }));
+  const me = await readJson<{ user: { plan: string } }>(
+    await fetch(`${server.baseUrl}/api/auth/me`, { headers: auth }),
+  );
   assert.equal(me.user.plan, 'free');
 });
 
@@ -159,7 +175,11 @@ test('Trybit H2H: реквизиты для оплаты на сайте при�
     address: 'TXyzGatewayAddress123',
     amount: 9.42,
     expiry_date: '2026-10-14 15:04:01.555132',
-    currency: { code: 'USDT', fullcode: 'USDT_TRC20', network: { code: 'TRC20', fullname: 'Tron' } },
+    currency: {
+      code: 'USDT',
+      fullcode: 'USDT_TRC20',
+      network: { code: 'TRC20', fullname: 'Tron' },
+    },
   });
   const server = await startTestServer();
   t.after(async () => {
@@ -173,7 +193,14 @@ test('Trybit H2H: реквизиты для оплаты на сайте при�
     body: JSON.stringify({ planId: 'plus', currency: 'USDT_TRC20' }),
   });
   const { invoice } = await readJson<{
-    invoice: { address: string; amount: number; network: string; expiresAt: string; gatewayDetails?: boolean; qrPayload: string };
+    invoice: {
+      address: string;
+      amount: number;
+      network: string;
+      expiresAt: string;
+      gatewayDetails?: boolean;
+      qrPayload: string;
+    };
   }>(created);
   assert.equal(invoice.gatewayDetails, true);
   assert.equal(invoice.address, 'TXyzGatewayAddress123');
@@ -196,7 +223,9 @@ test('Trybit без адреса (тестовый режим): остаётся
     headers: { Authorization: `Bearer ${buyer.token}`, 'Content-Type': 'application/json' },
     body: JSON.stringify({ planId: 'plus', currency: 'USDT_TRC20' }),
   });
-  const { invoice } = await readJson<{ invoice: { gatewayDetails?: boolean; cryptoCloudUrl: string } }>(created);
+  const { invoice } = await readJson<{
+    invoice: { gatewayDetails?: boolean; cryptoCloudUrl: string };
+  }>(created);
   assert.equal(invoice.gatewayDetails, undefined);
   assert.equal(invoice.cryptoCloudUrl, 'https://pay.trybit.com/INV-ABC12345');
 });

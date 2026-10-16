@@ -87,7 +87,10 @@ function limitsOf(plan: PlanId | string | undefined): Readonly<Record<string, nu
 }
 
 /** Суточный лимит модели на тарифе или null, если лимита нет. */
-export function getDailyModelLimit(plan: PlanId | string | undefined, modelId: string): number | null {
+export function getDailyModelLimit(
+  plan: PlanId | string | undefined,
+  modelId: string,
+): number | null {
   const limit = limitsOf(plan)?.[modelId];
   return typeof limit === 'number' && limit >= 0 ? limit : null;
 }

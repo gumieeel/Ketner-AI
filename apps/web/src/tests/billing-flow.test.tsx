@@ -99,7 +99,9 @@ describe('billing-flow: каталог тарифов, чекаут и упра�
     resetAuth();
     renderRoute('/checkout/plus');
 
-    expect(screen.getByRole('heading', { level: 1, name: 'Создание аккаунта' })).toBeInTheDocument();
+    expect(
+      screen.getByRole('heading', { level: 1, name: 'Создание аккаунта' }),
+    ).toBeInTheDocument();
     expect(
       screen.getByText('Для оформления подписки необходимо сначала войти или создать аккаунт.'),
     ).toBeInTheDocument();
@@ -155,9 +157,11 @@ describe('billing-flow: каталог тарифов, чекаут и упра�
 
     // Должны появиться заголовок криптовалюты, сеть и адрес кошелька
     expect(await screen.findByText(/Оплата криптовалютой/i)).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /USDT · Tron \(TRC-20\)/ })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /USDT · Tron \(TRC-20\)/ })).toBeInTheDocument();
     // Оплата — в виджете Trybit: окно открывается кнопкой, реквизиты и ввод TxID на сайте не показываются.
-    const openSpy = vi.spyOn(window, 'open').mockReturnValue({ focus: vi.fn(), close: vi.fn() } as unknown as Window);
+    const openSpy = vi
+      .spyOn(window, 'open')
+      .mockReturnValue({ focus: vi.fn(), close: vi.fn() } as unknown as Window);
     const widgetButton = await screen.findByRole('link', { name: /Оплатить в виджете Trybit/ });
     fireEvent.click(widgetButton);
     expect(openSpy).toHaveBeenCalledWith(
@@ -190,7 +194,13 @@ describe('billing-flow: каталог тарифов, чекаут и упра�
     useAuth.setState({
       status: 'authenticated',
       token: 'mock-token',
-      user: { id: 'demo-user', email: 'demo@ketner.ai', name: 'Демо', plan: 'free', createdAt: '2026-01-01T00:00:00.000Z' },
+      user: {
+        id: 'demo-user',
+        email: 'demo@ketner.ai',
+        name: 'Демо',
+        plan: 'free',
+        createdAt: '2026-01-01T00:00:00.000Z',
+      },
     });
     const base = globalThis.fetch;
     let attempts = 0;
@@ -199,7 +209,12 @@ describe('billing-flow: каталог тарифов, чекаут и упра�
         attempts += 1;
         if (attempts === 1) {
           return Response.json(
-            { error: { code: 'gateway_unavailable', message: 'Trybit не выставил счёт. Попробуйте ещё раз через минуту.' } },
+            {
+              error: {
+                code: 'gateway_unavailable',
+                message: 'Trybit не выставил счёт. Попробуйте ещё раз через минуту.',
+              },
+            },
             { status: 502 },
           );
         }
@@ -209,9 +224,13 @@ describe('billing-flow: каталог тарифов, чекаут и упра�
     renderRoute('/checkout/plus');
     fireEvent.click(screen.getByRole('button', { name: /Криптовалюта/i }));
 
-    expect(await screen.findByText('Trybit не выставил счёт. Попробуйте ещё раз через минуту.')).toBeInTheDocument();
+    expect(
+      await screen.findByText('Trybit не выставил счёт. Попробуйте ещё раз через минуту.'),
+    ).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Выставить счёт заново' }));
-    expect(await screen.findByRole('link', { name: /Оплатить в виджете Trybit/ })).toBeInTheDocument();
+    expect(
+      await screen.findByRole('link', { name: /Оплатить в виджете Trybit/ }),
+    ).toBeInTheDocument();
     expect(attempts).toBe(2);
   });
 
@@ -219,7 +238,13 @@ describe('billing-flow: каталог тарифов, чекаут и упра�
     useAuth.setState({
       status: 'authenticated',
       token: 'mock-token',
-      user: { id: 'demo-user', email: 'demo@ketner.ai', name: 'Демо', plan: 'free', createdAt: '2026-01-01T00:00:00.000Z' },
+      user: {
+        id: 'demo-user',
+        email: 'demo@ketner.ai',
+        name: 'Демо',
+        plan: 'free',
+        createdAt: '2026-01-01T00:00:00.000Z',
+      },
     });
     const base = globalThis.fetch;
     const requested: string[] = [];
@@ -246,7 +271,9 @@ describe('billing-flow: каталог тарифов, чекаут и упра�
     await waitFor(() => expect(requested).toContain('BNB'));
     fireEvent.change(screen.getByRole('searchbox'), { target: { value: 'usdc' } });
     fireEvent.click(screen.getByRole('button', { name: /^USDC\s?USD Coin/ }));
-    expect(await screen.findByRole('button', { name: /USDC · Solana \(SOL\)/ })).toBeInTheDocument();
+    expect(
+      await screen.findByRole('button', { name: /USDC · Solana \(SOL\)/ }),
+    ).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /USDC · Ethereum \(ERC-20\)/ })).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: /USDC · Base/ }));
     await waitFor(() => expect(requested).toContain('USDC_BASE'));

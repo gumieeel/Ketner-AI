@@ -5,11 +5,26 @@ import { ApiError, miniAppApi, type MiniAppPlan } from '@/features/telegram/api'
 import { haptic } from '@/features/telegram/webapp';
 import { useTranslation } from '@/i18n';
 import { cn } from '@/lib/cn';
-import { formatDate, formatStars, Notice, PLAN_HINT, Segmented, SectionTitle, subscriptionInfo, useMiniApp } from './shared';
+import {
+  formatDate,
+  formatStars,
+  Notice,
+  PLAN_HINT,
+  Segmented,
+  SectionTitle,
+  subscriptionInfo,
+  useMiniApp,
+} from './shared';
 
 type Mode = 'once' | 'auto';
 
-export function PlansTab({ recurring, onRecurringChange }: { recurring: boolean; onRecurringChange: (value: boolean) => void }) {
+export function PlansTab({
+  recurring,
+  onRecurringChange,
+}: {
+  recurring: boolean;
+  onRecurringChange: (value: boolean) => void;
+}) {
   const { t, language } = useTranslation();
   const { app, token, state, refresh, notify, openSite } = useMiniApp();
   const { user, plans, rate, autoRenew, refundPolicy } = state;
@@ -43,7 +58,12 @@ export function PlansTab({ recurring, onRecurringChange }: { recurring: boolean;
             .then(async (paid) => {
               await refresh();
               if (paid) haptic.success(app);
-              notify('success', paid ? t(recurring ? 'tg.paymentDoneAuto' : 'tg.paymentDone', { plan: plan.title }) : t('tg.paymentLate'));
+              notify(
+                'success',
+                paid
+                  ? t(recurring ? 'tg.paymentDoneAuto' : 'tg.paymentDone', { plan: plan.title })
+                  : t('tg.paymentLate'),
+              );
             })
             .finally(() => setPaying(null));
           return;
@@ -79,10 +99,14 @@ export function PlansTab({ recurring, onRecurringChange }: { recurring: boolean;
           { value: 'auto', label: t('tg.modeAuto') },
         ]}
       />
-      <p className="px-1 text-[13px] leading-5 text-muted">{recurring ? t('tg.modeAutoHint') : t('tg.modeOnceHint')}</p>
+      <p className="px-1 text-[13px] leading-5 text-muted">
+        {recurring ? t('tg.modeAutoHint') : t('tg.modeOnceHint')}
+      </p>
       {recurring && activeAuto ? (
         <Notice tone="info">
-          {t('tg.autoReplace', { plan: plans.find((plan) => plan.id === activeAuto.planId)?.title ?? activeAuto.planId })}
+          {t('tg.autoReplace', {
+            plan: plans.find((plan) => plan.id === activeAuto.planId)?.title ?? activeAuto.planId,
+          })}
         </Notice>
       ) : null}
 
@@ -106,11 +130,17 @@ export function PlansTab({ recurring, onRecurringChange }: { recurring: boolean;
           <article
             key={plan.id}
             aria-labelledby={`tg-plan-${plan.id}`}
-            className={cn('flex flex-col gap-3 rounded-xl border bg-surface p-4', isCurrent ? 'border-accent/60' : 'border-stroke')}
+            className={cn(
+              'flex flex-col gap-3 rounded-xl border bg-surface p-4',
+              isCurrent ? 'border-accent/60' : 'border-stroke',
+            )}
           >
             <div className="flex items-start justify-between gap-3">
               <div className="min-w-0">
-                <h3 id={`tg-plan-${plan.id}`} className="flex items-center gap-2 text-[17px] font-semibold">
+                <h3
+                  id={`tg-plan-${plan.id}`}
+                  className="flex items-center gap-2 text-[17px] font-semibold"
+                >
                   {plan.title}
                   {isCurrent ? (
                     <span className="inline-flex items-center gap-1 text-[12px] font-medium text-accent">
@@ -119,7 +149,9 @@ export function PlansTab({ recurring, onRecurringChange }: { recurring: boolean;
                     </span>
                   ) : null}
                 </h3>
-                <p className="mt-0.5 text-[13px] leading-5 text-muted">{t(PLAN_HINT[plan.id] ?? 'tg.planPlusHint')}</p>
+                <p className="mt-0.5 text-[13px] leading-5 text-muted">
+                  {t(PLAN_HINT[plan.id] ?? 'tg.planPlusHint')}
+                </p>
               </div>
               <div className="shrink-0 text-right">
                 <p className="flex items-center justify-end gap-1 text-[18px] font-semibold tabular-nums">
@@ -139,7 +171,9 @@ export function PlansTab({ recurring, onRecurringChange }: { recurring: boolean;
                 {recurring ? ` ${t('tg.previewThenAuto')}` : ''}
               </p>
               {preview.mode === 'switch' && preview.bonusDays > 0 ? (
-                <p className="mt-0.5 text-accent">{t('tg.previewBonus', { days: preview.bonusDays })}</p>
+                <p className="mt-0.5 text-accent">
+                  {t('tg.previewBonus', { days: preview.bonusDays })}
+                </p>
               ) : null}
               {preview.mode === 'switch' && preview.bonusDays === 0 && info.running ? (
                 <p className="mt-0.5 text-muted">{t('tg.previewNoBonus')}</p>
@@ -170,7 +204,9 @@ export function PlansTab({ recurring, onRecurringChange }: { recurring: boolean;
       <Button
         variant="ghost"
         className="w-full gap-2"
-        onClick={() => void openSite(`/checkout/${info.running && info.plan !== 'free' ? info.plan : 'plus'}`)}
+        onClick={() =>
+          void openSite(`/checkout/${info.running && info.plan !== 'free' ? info.plan : 'plus'}`)
+        }
       >
         <CryptoIcon className="size-4" />
         {t('tg.payCrypto')}

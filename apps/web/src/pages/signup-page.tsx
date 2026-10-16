@@ -143,11 +143,7 @@ export function SignupPage() {
       title={t('auth.signupTitle')}
       footer={
         <Link
-          to={
-            isSafeRedirect
-              ? `/login?redirect=${encodeURIComponent(redirectUrl)}`
-              : '/login'
-          }
+          to={isSafeRedirect ? `/login?redirect=${encodeURIComponent(redirectUrl)}` : '/login'}
           className="inline-flex min-h-11 items-center font-medium text-accent hover:underline"
         >
           {t('auth.toLogin')}
@@ -190,7 +186,11 @@ export function SignupPage() {
 
         {/* 3. OAuth Кнопки */}
         <div className="flex flex-col gap-3">
-          <TelegramLoginButton label={t('auth.continueTelegram')} redirectUrl={redirectUrl} disabled={loading} />
+          <TelegramLoginButton
+            label={t('auth.continueTelegram')}
+            redirectUrl={redirectUrl}
+            disabled={loading}
+          />
           <div className="grid grid-cols-2 gap-3">
             <Button
               variant="outline"
@@ -266,11 +266,7 @@ export function SignupPage() {
             )}
           </Field>
 
-          <Field
-            id="signup-password"
-            label={t('auth.password')}
-            error={passwordError ?? undefined}
-          >
+          <Field id="signup-password" label={t('auth.password')} error={passwordError ?? undefined}>
             {({ id, invalid, 'aria-describedby': describedBy }) => (
               <div className="flex flex-col gap-2">
                 <div className="relative flex items-center">
@@ -310,16 +306,12 @@ export function SignupPage() {
                   <CheckIcon
                     className={cn(
                       'size-3.5',
-                      password.length >= MIN_PASSWORD_LENGTH
-                        ? 'text-success'
-                        : 'text-subtle',
+                      password.length >= MIN_PASSWORD_LENGTH ? 'text-success' : 'text-subtle',
                     )}
                   />
                   <span
                     className={
-                      password.length >= MIN_PASSWORD_LENGTH
-                        ? 'text-muted'
-                        : 'text-subtle'
+                      password.length >= MIN_PASSWORD_LENGTH ? 'text-muted' : 'text-subtle'
                     }
                   >
                     {t('auth.passwordRequirement')}
@@ -330,13 +322,7 @@ export function SignupPage() {
           </Field>
 
           {/* 6. Кнопка «Зарегистрироваться» */}
-          <Button
-            size="lg"
-            fullWidth
-            loading={loading}
-            type="submit"
-            className="mt-2"
-          >
+          <Button size="lg" fullWidth loading={loading} type="submit" className="mt-2">
             {loading ? t('auth.signingUp') : t('auth.signup')}
           </Button>
         </form>

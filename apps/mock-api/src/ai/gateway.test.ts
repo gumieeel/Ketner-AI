@@ -18,8 +18,16 @@ import { FairUseEngine } from '../services/fair-use.js';
 import type { FairUseSnapshot } from './gateway-types.js';
 import { applyEconomyRules, classifyPromptComplexity } from './gateway.js';
 import { SemanticCache } from './cache.js';
-import { chooseReasoningEffort, computeOutputCap, toProviderReasoning } from './reasoning-policy.js';
-import { OpenRouterProvider, MAX_COMPLETION_TOKENS, prepareMessages } from './providers/openrouter-provider.js';
+import {
+  chooseReasoningEffort,
+  computeOutputCap,
+  toProviderReasoning,
+} from './reasoning-policy.js';
+import {
+  OpenRouterProvider,
+  MAX_COMPLETION_TOKENS,
+  prepareMessages,
+} from './providers/openrouter-provider.js';
 import { UsageStore } from '../store/usage-store.js';
 import { CircuitBreaker } from './circuit-breaker.js';
 import { PayloadGuard } from './payload-guard.js';
@@ -64,22 +72,42 @@ test('ModelRegistry: получение, разрешение и проверк�
   // Старые идентификаторы из сохранённых диалогов и истории расхода ведут на актуальные модели
   assert.equal(registry.get('gpt-6.1-sol')?.id, 'gpt-6.1-sol');
   assert.equal(registry.get('claude-fable')?.id, 'claude-opus-5.5');
-  assert.equal(registry.get('claude-fable-5.1')?.id, 'claude-opus-5.5', 'Fable убрана: сохранённый выбор ведёт на Opus');
-  assert.equal(registry.get('gpt-6-astra')?.id, 'gpt-6-astra', 'GPT-6 Astra снова в каталоге под своим id');
+  assert.equal(
+    registry.get('claude-fable-5.1')?.id,
+    'claude-opus-5.5',
+    'Fable убрана: сохранённый выбор ведёт на Opus',
+  );
+  assert.equal(
+    registry.get('gpt-6-astra')?.id,
+    'gpt-6-astra',
+    'GPT-6 Astra снова в каталоге под своим id',
+  );
   assert.equal(registry.get('claude-3.5-sonnet')?.id, 'claude-sonnet-5.5');
   assert.equal(registry.get('gemini-pro')?.id, 'gemini-3.8-flash');
   assert.equal(registry.get('nemotron-ultra')?.id, 'nemotron-ultra');
   assert.equal(registry.get('nemotron')?.id, 'nemotron-ultra');
   const premiumIds = registry.getPremiumModelIds();
-  assert.ok(premiumIds.has('gpt-6.1-sol') && premiumIds.has('gpt-6.1-sol') && premiumIds.has('claude-fable'));
+  assert.ok(
+    premiumIds.has('gpt-6.1-sol') &&
+      premiumIds.has('gpt-6.1-sol') &&
+      premiumIds.has('claude-fable'),
+  );
   assert.ok(!premiumIds.has('ketner-pro') && !premiumIds.has('ketner-mini'));
 
   // Brand Protection & дифференциация промптов:
   // 1. Brand protection во всех промптах
   assert.ok(ECONOMY_SYSTEM_PROMPT.ru.includes('Ketner AI'));
-  assert.ok(ECONOMY_SYSTEM_PROMPT.ru.includes('Никогда не упоминай, что ты создан OpenAI, Anthropic или Google'));
+  assert.ok(
+    ECONOMY_SYSTEM_PROMPT.ru.includes(
+      'Никогда не упоминай, что ты создан OpenAI, Anthropic или Google',
+    ),
+  );
   assert.ok(DEFAULT_SYSTEM_PROMPT.ru.includes('Ketner AI'));
-  assert.ok(DEFAULT_SYSTEM_PROMPT.ru.includes('Никогда не упоминай, что ты создан OpenAI, Anthropic или Google'));
+  assert.ok(
+    DEFAULT_SYSTEM_PROMPT.ru.includes(
+      'Никогда не упоминай, что ты создан OpenAI, Anthropic или Google',
+    ),
+  );
 
   // 2. Дешёвые модели используют ECONOMY_SYSTEM_PROMPT
   assert.equal(def.defaultSystemPrompt, ECONOMY_SYSTEM_PROMPT);
@@ -95,11 +123,15 @@ test('AutoRouter: классификация задач', () => {
   const mathPrompt = 'Посчитай интеграл от x^2 dx от 0 до 5';
   assert.equal(AutoRouter.classify(mathPrompt).category, 'math');
 
-  const reasoningPrompt = 'Сравни архитектуру микросервисов и монолита: плюсы, минусы и когда что выбирать';
+  const reasoningPrompt =
+    'Сравни архитектуру микросервисов и монолита: плюсы, минусы и когда что выбирать';
   assert.equal(AutoRouter.classify(reasoningPrompt).category, 'reasoning');
 
   const registry = new ModelRegistry();
-  assert.equal(registry.resolve('deepseek-v4.1-flash').providerModelId, 'deepseek/deepseek-v4.1-flash');
+  assert.equal(
+    registry.resolve('deepseek-v4.1-flash').providerModelId,
+    'deepseek/deepseek-v4.1-flash',
+  );
 });
 
 test('AutoRouter.route: детерминированный выбор модели по тарифу, сложности и квотам', () => {
@@ -108,22 +140,47 @@ test('AutoRouter.route: детерминированный выбор модел
 
   // Free: всегда самая дешёвая модель
   for (const level of ['simple', 'moderate', 'complex'] as const) {
-    assert.equal(AutoRouter.route({ ...base, plan: 'free', level, category: 'coding' }).modelId, 'ketner-mini');
+    assert.equal(
+      AutoRouter.route({ ...base, plan: 'free', level, category: 'coding' }).modelId,
+      'ketner-mini',
+    );
   }
 
   // Plus: простое — дешёвая модель, остальное — рабочая; премиум Auto не тратит
-  assert.equal(AutoRouter.route({ ...base, plan: 'plus', level: 'simple', category: 'general' }).modelId, 'ketner-mini');
-  assert.equal(AutoRouter.route({ ...base, plan: 'plus', level: 'moderate', category: 'general' }).modelId, 'ketner-pro');
-  assert.equal(AutoRouter.route({ ...base, plan: 'plus', level: 'complex', category: 'math' }).modelId, 'ketner-pro');
+  assert.equal(
+    AutoRouter.route({ ...base, plan: 'plus', level: 'simple', category: 'general' }).modelId,
+    'ketner-mini',
+  );
+  assert.equal(
+    AutoRouter.route({ ...base, plan: 'plus', level: 'moderate', category: 'general' }).modelId,
+    'ketner-pro',
+  );
+  assert.equal(
+    AutoRouter.route({ ...base, plan: 'plus', level: 'complex', category: 'math' }).modelId,
+    'ketner-pro',
+  );
 
   // Pro и Ultra: тяжёлая математика, логика и код идут на сильную модель, пока есть квота
   for (const plan of ['pro', 'ultra', 'gpt-pro', 'claude-pro']) {
     for (const category of ['math', 'reasoning', 'coding']) {
-      assert.equal(AutoRouter.route({ ...base, plan, level: 'complex', category }).modelId, 'gpt-6.1-sol', `${plan}/${category}`);
+      assert.equal(
+        AutoRouter.route({ ...base, plan, level: 'complex', category }).modelId,
+        'gpt-6.1-sol',
+        `${plan}/${category}`,
+      );
     }
-    assert.equal(AutoRouter.route({ ...base, plan, level: 'complex', category: 'creative' }).modelId, 'ketner-pro');
     assert.equal(
-      AutoRouter.route({ ...base, plan, level: 'complex', category: 'math', premiumAvailable: false }).modelId,
+      AutoRouter.route({ ...base, plan, level: 'complex', category: 'creative' }).modelId,
+      'ketner-pro',
+    );
+    assert.equal(
+      AutoRouter.route({
+        ...base,
+        plan,
+        level: 'complex',
+        category: 'math',
+        premiumAvailable: false,
+      }).modelId,
       'ketner-pro',
       'квота премиум-запросов исчерпана — рабочая модель',
     );
@@ -131,11 +188,16 @@ test('AutoRouter.route: детерминированный выбор модел
 
   // Бюджет на исходе: премиум не берётся, исчерпан — только самая дешёвая
   assert.equal(
-    AutoRouter.route({ ...base, plan: 'ultra', level: 'complex', category: 'math', stage: 'soft' }).modelId,
+    AutoRouter.route({ ...base, plan: 'ultra', level: 'complex', category: 'math', stage: 'soft' })
+      .modelId,
     'ketner-pro',
   );
   for (const stage of ['exhausted', 'hard_stop'] as const) {
-    assert.equal(AutoRouter.route({ ...base, plan: 'ultra', level: 'complex', category: 'math', stage }).modelId, 'ketner-mini');
+    assert.equal(
+      AutoRouter.route({ ...base, plan: 'ultra', level: 'complex', category: 'math', stage })
+        .modelId,
+      'ketner-mini',
+    );
   }
 
   // Результат всегда доступен по тарифу, а класс top (Opus) Auto не выбирает никогда
@@ -144,9 +206,18 @@ test('AutoRouter.route: детерминированный выбор модел
       for (const category of ['general', 'coding', 'math', 'reasoning', 'creative']) {
         for (const stage of ['normal', 'soft', 'exhausted'] as const) {
           for (const premiumAvailable of [true, false]) {
-            const { modelId } = AutoRouter.route({ plan, level, category, stage, premiumAvailable });
+            const { modelId } = AutoRouter.route({
+              plan,
+              level,
+              category,
+              stage,
+              premiumAvailable,
+            });
             const model = registry.get(modelId)!;
-            assert.ok(planAllowsModel(plan, model.requiredPlan), `${plan} не имеет доступа к ${modelId}`);
+            assert.ok(
+              planAllowsModel(plan, model.requiredPlan),
+              `${plan} не имеет доступа к ${modelId}`,
+            );
             assert.notEqual(model.costClass, 'top');
           }
         }
@@ -262,7 +333,11 @@ test('EntitlementService & FairUseEngine: лимиты и защита от зл
   // FairUse: суточный лимит сообщений Free (10) и суточная квота токенов
   const dayLimit = FairUseEngine.evaluate({ ...normalSnapshot, requestsLastDay: 10 }, 'free', 'ru');
   assert.equal(dayLimit.action, 'deny');
-  const dayTokens = FairUseEngine.evaluate({ ...normalSnapshot, tokensLastDay: 150_000 }, 'free', 'ru');
+  const dayTokens = FairUseEngine.evaluate(
+    { ...normalSnapshot, tokensLastDay: 150_000 },
+    'free',
+    'ru',
+  );
   assert.equal(dayTokens.action, 'deny');
   if (dayTokens.action === 'deny') {
     assert.equal(dayTokens.code, 'rate_limited');
@@ -286,15 +361,35 @@ test('Политика размышлений: глубина зависит о�
 
   // high — только когда глубина окупается: математика на премиум-модели у Pro и выше
   assert.equal(effort({ level: 'complex', category: 'math', costClass: 'strong' }), 'high');
-  assert.equal(effort({ level: 'complex', category: 'math', costClass: 'strong', plan: 'plus' }), 'medium');
+  assert.equal(
+    effort({ level: 'complex', category: 'math', costClass: 'strong', plan: 'plus' }),
+    'medium',
+  );
   assert.equal(effort({ level: 'complex', category: 'math', costClass: 'work' }), 'medium');
-  assert.equal(effort({ level: 'complex', category: 'coding', costClass: 'strong' }), 'medium', 'код и так на сильной модели');
-  assert.equal(effort({ level: 'complex', category: 'reasoning', costClass: 'strong' }), 'medium', '«объясни/почему» — не повод для high');
-  assert.equal(effort({ level: 'complex', category: 'general', costClass: 'top', plan: 'ultra' }), 'high');
-  assert.equal(effort({ level: 'complex', category: 'general', costClass: 'top', plan: 'pro' }), 'medium');
+  assert.equal(
+    effort({ level: 'complex', category: 'coding', costClass: 'strong' }),
+    'medium',
+    'код и так на сильной модели',
+  );
+  assert.equal(
+    effort({ level: 'complex', category: 'reasoning', costClass: 'strong' }),
+    'medium',
+    '«объясни/почему» — не повод для high',
+  );
+  assert.equal(
+    effort({ level: 'complex', category: 'general', costClass: 'top', plan: 'ultra' }),
+    'high',
+  );
+  assert.equal(
+    effort({ level: 'complex', category: 'general', costClass: 'top', plan: 'pro' }),
+    'medium',
+  );
 
   // Бюджет на исходе: не глубже low
-  assert.equal(effort({ level: 'complex', category: 'math', costClass: 'top', plan: 'ultra', stage: 'soft' }), 'low');
+  assert.equal(
+    effort({ level: 'complex', category: 'math', costClass: 'top', plan: 'ultra', stage: 'soft' }),
+    'low',
+  );
   assert.equal(effort({ level: 'complex', stage: 'exhausted' }), 'low');
   assert.equal(effort({ level: 'simple', stage: 'exhausted' }), 'none');
 
@@ -310,16 +405,27 @@ test('Политика размышлений: глубина зависит о�
   const sol = registry.get('gpt-6.1-sol')!;
   const mimo = registry.get('ketner-pro')!;
   assert.deepEqual(toProviderReasoning(luna.reasoning, 'none'), { effort: 'none' });
-  assert.deepEqual(toProviderReasoning(sol.reasoning, 'none'), { effort: 'low' }, 'у Sol размышления нельзя отключить');
+  assert.deepEqual(
+    toProviderReasoning(sol.reasoning, 'none'),
+    { effort: 'low' },
+    'у Sol размышления нельзя отключить',
+  );
   assert.deepEqual(toProviderReasoning(sol.reasoning, 'high'), { effort: 'high' });
   assert.deepEqual(toProviderReasoning(mimo.reasoning, 'none'), { enabled: false });
   assert.deepEqual(toProviderReasoning(mimo.reasoning, 'medium'), { enabled: true });
-  assert.equal(toProviderReasoning({ mandatory: false, efforts: [] }, 'low'), undefined, 'управлять нечем — параметр не передаётся');
+  assert.equal(
+    toProviderReasoning({ mandatory: false, efforts: [] }, 'low'),
+    undefined,
+    'управлять нечем — параметр не передаётся',
+  );
   for (const entry of registry.getAll().filter((m) => m.id !== 'auto')) {
     for (const wanted of ['none', 'low', 'medium', 'high'] as const) {
       const value = toProviderReasoning(entry.reasoning, wanted);
       if (value && 'effort' in value) {
-        assert.ok(entry.reasoning.efforts.includes(value.effort), `${entry.id}: ${value.effort} не поддерживается`);
+        assert.ok(
+          entry.reasoning.efforts.includes(value.effort),
+          `${entry.id}: ${value.effort} не поддерживается`,
+        );
         if (entry.reasoning.mandatory) assert.notEqual(value.effort, 'none');
       }
     }
@@ -342,7 +448,11 @@ test('Потолок ответа: тариф, модель, бюджет и п�
   assert.equal(cap({ stage: 'soft' }), 4096);
   assert.equal(cap({ stage: 'exhausted' }), 2048);
   assert.equal(cap({ level: 'simple' }), 2048);
-  assert.equal(cap({ level: 'simple', heavyContext: true }), 12288, 'с проектом или файлами ответ может быть большим');
+  assert.equal(
+    cap({ level: 'simple', heavyContext: true }),
+    12288,
+    'с проектом или файлами ответ может быть большим',
+  );
   assert.equal(cap({ planMaxTokens: 512 }), 1024, 'ниже минимума ответ с размышлениями обрывается');
 });
 
@@ -361,13 +471,28 @@ test('Правила экономии: премиум-модель заменя�
   assert.equal(noQuota.model.id, 'ketner-pro');
   assert.ok(noQuota.reason?.includes('Premium quota'));
 
-  assert.equal(applyEconomyRules(opus, { stage: 'soft', premiumAvailable: true }, registry).model.id, 'ketner-pro');
-  assert.equal(applyEconomyRules(mimo, { stage: 'soft', premiumAvailable: false }, registry).model.id, 'ketner-pro');
+  assert.equal(
+    applyEconomyRules(opus, { stage: 'soft', premiumAvailable: true }, registry).model.id,
+    'ketner-pro',
+  );
+  assert.equal(
+    applyEconomyRules(mimo, { stage: 'soft', premiumAvailable: false }, registry).model.id,
+    'ketner-pro',
+  );
 
   // Бюджет исчерпан: всё, кроме лёгких моделей, заменяется на самую дешёвую
-  assert.equal(applyEconomyRules(mimo, { stage: 'exhausted', premiumAvailable: true }, registry).model.id, 'ketner-mini');
-  assert.equal(applyEconomyRules(opus, { stage: 'hard_stop', premiumAvailable: true }, registry).model.id, 'ketner-mini');
-  assert.equal(applyEconomyRules(haiku, { stage: 'exhausted', premiumAvailable: true }, registry).model.id, 'claude-haiku-5.5');
+  assert.equal(
+    applyEconomyRules(mimo, { stage: 'exhausted', premiumAvailable: true }, registry).model.id,
+    'ketner-mini',
+  );
+  assert.equal(
+    applyEconomyRules(opus, { stage: 'hard_stop', premiumAvailable: true }, registry).model.id,
+    'ketner-mini',
+  );
+  assert.equal(
+    applyEconomyRules(haiku, { stage: 'exhausted', premiumAvailable: true }, registry).model.id,
+    'claude-haiku-5.5',
+  );
 });
 
 test('Реестр: каждая модель уходит в OpenRouter под своим id, без скрытых подмен', () => {
@@ -499,11 +624,16 @@ test('Фаза 1: контекстно-зависимая сложность (cl
       { role: 'user', content: 'Как написать WebSocket сервер на TypeScript?' },
       {
         role: 'assistant',
-        content: 'import { WebSocketServer } from "ws";\nconst wss = new WebSocketServer({ port: 8080 });\nwss.on("connection", (ws) => { ... });',
+        content:
+          'import { WebSocketServer } from "ws";\nconst wss = new WebSocketServer({ port: 8080 });\nwss.on("connection", (ws) => { ... });',
       },
     ],
   });
-  assert.equal(yesInCodeThread.level, 'complex', '«да» в техническом диалоге не должно падать на simple');
+  assert.equal(
+    yesInCodeThread.level,
+    'complex',
+    '«да» в техническом диалоге не должно падать на simple',
+  );
 
   // Запрос с вложениями -> всегда complex
   const withAttachments = classifyPromptComplexity('Посмотри', {
@@ -518,7 +648,10 @@ test('Фаза 2: ContextOptimizer — диалог из 30 сообщений, 
   for (let i = 1; i <= 30; i++) {
     messages.push({
       role: i % 2 === 1 ? 'user' : 'assistant',
-      content: i === 1 ? 'Начало диалога: обсуждаем архитектуру финтех-сервиса' : `Сообщение номер ${i} с техническими деталями`,
+      content:
+        i === 1
+          ? 'Начало диалога: обсуждаем архитектуру финтех-сервиса'
+          : `Сообщение номер ${i} с техническими деталями`,
     });
   }
 
@@ -549,11 +682,17 @@ test('Фаза 2: ContextOptimizer — диалог из 30 сообщений, 
   assert.equal(optimized[optimized.length - 1].content, messages[messages.length - 1].content);
 
   // 5. Токенизация кириллицы: кириллица дает больше токенов на символ (~2.5 символа на токен vs 4 для латиницы)
-  const cyrillicText = 'Привет мир! Это подробный текст на русском языке для токенизатора.'.repeat(5);
-  const latinText = 'Hello world! This is a detailed prompt in English language for tokenizer.'.repeat(5);
+  const cyrillicText = 'Привет мир! Это подробный текст на русском языке для токенизатора.'.repeat(
+    5,
+  );
+  const latinText =
+    'Hello world! This is a detailed prompt in English language for tokenizer.'.repeat(5);
   const cyrTokens = ContextOptimizer.estimateTokens(cyrillicText);
   const latTokens = ContextOptimizer.estimateTokens(latinText);
-  assert.ok(cyrTokens > latTokens, 'Кириллический текст должен оцениваться с более плотным коэффициентом токенов');
+  assert.ok(
+    cyrTokens > latTokens,
+    'Кириллический текст должен оцениваться с более плотным коэффициентом токенов',
+  );
 });
 
 test('Фаза 3: OpenRouter payload — кэш промпта Anthropic, размышления, потолок токенов', () => {
@@ -566,22 +705,37 @@ test('Фаза 3: OpenRouter payload — кэш промпта Anthropic, раз
   ];
   const wire = prepareMessages('anthropic/claude-opus-5.5', history);
   assert.ok(Array.isArray(wire[0].content), 'системный промпт — массив блоков');
-  assert.deepEqual((wire[0].content as Array<{ cache_control?: unknown }>)[0].cache_control, { type: 'ephemeral' });
+  assert.deepEqual((wire[0].content as Array<{ cache_control?: unknown }>)[0].cache_control, {
+    type: 'ephemeral',
+  });
   // «Ответ 1» стоит перед последним вопросом — это граница кэша
   assert.ok(Array.isArray(wire[2].content), 'чекпоинт истории — массив блоков');
-  assert.deepEqual((wire[2].content as Array<{ cache_control?: unknown }>)[0].cache_control, { type: 'ephemeral' });
+  assert.deepEqual((wire[2].content as Array<{ cache_control?: unknown }>)[0].cache_control, {
+    type: 'ephemeral',
+  });
   assert.equal(wire[1].content, 'Шаг 1');
   assert.equal(wire[3].content, 'Шаг 2');
 
   // 2. Остальные модели кэшируют сами: сообщения уходят как есть
-  for (const model of ['openai/gpt-6.1-sol', 'x-ai/grok-4.7', 'google/gemini-3.8-flash', 'deepseek/deepseek-v4.1-flash']) {
+  for (const model of [
+    'openai/gpt-6.1-sol',
+    'x-ai/grok-4.7',
+    'google/gemini-3.8-flash',
+    'deepseek/deepseek-v4.1-flash',
+  ]) {
     assert.deepEqual(prepareMessages(model, history), history, model);
   }
 
   // 3. Тело запроса: ровно та модель, что передали, размышления и usage с ценой
   const provider = new OpenRouterProvider({ apiKey: 'test-openrouter-key' });
   const body = provider.buildBody(
-    { model: 'openai/gpt-6.1-sol', messages: history, stream: true, maxTokens: 12288, reasoning: { effort: 'low' } },
+    {
+      model: 'openai/gpt-6.1-sol',
+      messages: history,
+      stream: true,
+      maxTokens: 12288,
+      reasoning: { effort: 'low' },
+    },
     true,
   );
   assert.equal(body.model, 'openai/gpt-6.1-sol');
@@ -591,7 +745,10 @@ test('Фаза 3: OpenRouter payload — кэш промпта Anthropic, раз
   assert.equal('models' in body, false, 'запасные модели OpenRouter не подставляются скрытно');
 
   // 4. Без reasoning параметр не отправляется; потолок токенов ограничен
-  const plain = provider.buildBody({ model: 'x-ai/grok-4.7', messages: history, stream: false, maxTokens: 999_999 }, false);
+  const plain = provider.buildBody(
+    { model: 'x-ai/grok-4.7', messages: history, stream: false, maxTokens: 999_999 },
+    false,
+  );
   assert.equal('reasoning' in plain, false);
   assert.equal(plain.max_tokens, MAX_COMPLETION_TOKENS);
   assert.ok(MAX_COMPLETION_TOKENS >= 16384, 'потолок вмещает ответ Ultra вместе с размышлениями');
@@ -600,7 +757,11 @@ test('Фаза 3: OpenRouter payload — кэш промпта Anthropic, раз
 test('Фаза 3: Системные промпты — общий слой бренда и однострочные модификаторы', () => {
   // 1. Общий слой бренда защищает имя Ketner AI и скрывает внешние бренды
   assert.ok(COMMON_BRAND_SYSTEM_LAYER.ru.includes('Ketner AI'));
-  assert.ok(COMMON_BRAND_SYSTEM_LAYER.ru.includes('Никогда не упоминай, что ты создан OpenAI, Anthropic или Google'));
+  assert.ok(
+    COMMON_BRAND_SYSTEM_LAYER.ru.includes(
+      'Никогда не упоминай, что ты создан OpenAI, Anthropic или Google',
+    ),
+  );
   assert.ok(COMMON_BRAND_SYSTEM_LAYER.en.includes('Never mention OpenAI, Anthropic, or Google'));
 
   // 2. Тарифные модификаторы лаконичны (одна строка)
@@ -635,14 +796,23 @@ test('Фаза 3: Персистентный SemanticCache переживает 
 
   // 2. Создаем второй экземпляр, имитируя перезапуск сервера
   const cache2 = new SemanticCache(5000, 24 * 60 * 60 * 1000, cacheFile);
-  const restoredHit = cache2.get('gpt-6.1-sol', 'ru', 'тестовый запрос для диска', 'user-persist', 'hash-1');
+  const restoredHit = cache2.get(
+    'gpt-6.1-sol',
+    'ru',
+    'тестовый запрос для диска',
+    'user-persist',
+    'hash-1',
+  );
 
   assert.ok(restoredHit, 'Запись должна восстановиться после перезапуска');
   assert.equal(restoredHit?.response, 'ответ из дискового кэша');
 
   // 3. Очистка удаляет и файл с диска
   cache2.clear();
-  assert.equal(cache2.get('gpt-6.1-sol', 'ru', 'тестовый запрос для диска', 'user-persist', 'hash-1'), null);
+  assert.equal(
+    cache2.get('gpt-6.1-sol', 'ru', 'тестовый запрос для диска', 'user-persist', 'hash-1'),
+    null,
+  );
 });
 
 test('Фаза 3: Пересчёт эмпирического costBudget по реальным данным usage-store', () => {
@@ -688,7 +858,10 @@ test('Фаза 3: Пересчёт эмпирического costBudget по р
   // Проверяем динамическое обновление бюджета тарифа
   const initialBudget = EntitlementService.getEntitlements('plus').costBudget;
   EntitlementService.updatePlanCostBudget('plus', empirical.plus.recommendedCostBudget);
-  assert.equal(EntitlementService.getEntitlements('plus').costBudget, empirical.plus.recommendedCostBudget);
+  assert.equal(
+    EntitlementService.getEntitlements('plus').costBudget,
+    empirical.plus.recommendedCostBudget,
+  );
 
   // Восстанавливаем исходный бюджет
   EntitlementService.updatePlanCostBudget('plus', initialBudget);
@@ -859,10 +1032,9 @@ test('Фаза 5: PayloadGuard — защита от гигантских соо
   assert.equal(normalResult.valid, true);
 
   // 2. Слишком длинное отдельное сообщение (> maxMessageChars)
-  const hugeMsgResult = PayloadGuard.validate(
-    [{ role: 'user', content: 'A'.repeat(120_000) }],
-    { limits: { maxMessageChars: 100_000 } },
-  );
+  const hugeMsgResult = PayloadGuard.validate([{ role: 'user', content: 'A'.repeat(120_000) }], {
+    limits: { maxMessageChars: 100_000 },
+  });
   assert.equal(hugeMsgResult.valid, false);
   assert.equal(hugeMsgResult.code, 'message_too_large');
 
@@ -885,10 +1057,10 @@ test('Фаза 5: PayloadGuard — защита от гигантских соо
     category: 'code' as const,
     size: 100,
   }));
-  const attCountResult = PayloadGuard.validate(
-    [{ role: 'user', content: 'Посмотри файлы' }],
-    { attachments: tooManyAttachments, limits: { maxAttachmentsCount: 10 } },
-  );
+  const attCountResult = PayloadGuard.validate([{ role: 'user', content: 'Посмотри файлы' }], {
+    attachments: tooManyAttachments,
+    limits: { maxAttachmentsCount: 10 },
+  });
   assert.equal(attCountResult.valid, false);
   assert.equal(attCountResult.code, 'too_many_attachments');
 
@@ -902,10 +1074,10 @@ test('Фаза 5: PayloadGuard — защита от гигантских соо
       size: 25 * 1024 * 1024, // 25 MB
     },
   ];
-  const attSizeResult = PayloadGuard.validate(
-    [{ role: 'user', content: 'Вот архив' }],
-    { attachments: hugeAttachment, limits: { maxAttachmentBytes: 20 * 1024 * 1024 } },
-  );
+  const attSizeResult = PayloadGuard.validate([{ role: 'user', content: 'Вот архив' }], {
+    attachments: hugeAttachment,
+    limits: { maxAttachmentBytes: 20 * 1024 * 1024 },
+  });
   assert.equal(attSizeResult.valid, false);
   assert.equal(attSizeResult.code, 'attachment_too_large');
 });

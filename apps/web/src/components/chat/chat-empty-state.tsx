@@ -5,7 +5,14 @@ import { useChat } from '@/features/chat/chat-store';
 import { useTranslation } from '@/i18n';
 
 /** Модели «оркестра»: показываются как декоративный ряд над заголовком. */
-const ORCHESTRA = ['gpt-6.1-sol', 'claude-opus-5.5', 'gpt-6-astra', 'grok-4.7', 'deepseek-v4.1-flash', 'ketner-mini'];
+const ORCHESTRA = [
+  'gpt-6.1-sol',
+  'claude-opus-5.5',
+  'gpt-6-astra',
+  'grok-4.7',
+  'deepseek-v4.1-flash',
+  'ketner-mini',
+];
 
 /**
  * Пустое состояние нового чата: приветствие и карточки-примеры.

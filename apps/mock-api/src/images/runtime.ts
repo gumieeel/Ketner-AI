@@ -40,7 +40,9 @@ export function getImageService(usageStore: UsageStore): ImageService {
         provider: () => providerManager.get('openrouter'),
         model: modelRegistry.resolve('ketner-mini').providerModelId,
       }),
-      urlSecret: createHmac('sha256', config.authJwtSecret).update('ketner:image-urls:v1').digest('hex'),
+      urlSecret: createHmac('sha256', config.authJwtSecret)
+        .update('ketner:image-urls:v1')
+        .digest('hex'),
     });
   }
   return service;

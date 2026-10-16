@@ -20,7 +20,10 @@ function CoinBadge({ coin, className }: { coin: Coin; className?: string }) {
   return (
     <span
       aria-hidden="true"
-      className={cn('grid size-8 shrink-0 place-items-center rounded-full text-[10px] font-bold tracking-tight text-white', className)}
+      className={cn(
+        'grid size-8 shrink-0 place-items-center rounded-full text-[10px] font-bold tracking-tight text-white',
+        className,
+      )}
       style={{ backgroundColor: coin.color }}
     >
       {coin.id.slice(0, 4)}
@@ -31,7 +34,13 @@ function CoinBadge({ coin, className }: { coin: Coin; className?: string }) {
 const usd = (value: number) => `$${value.toFixed(2)}`;
 
 /** Выбор монеты, затем сети — те же варианты, что на платёжной странице Trybit. */
-export function CryptoPicker({ value, onChange }: { value: CryptoCurrency; onChange: (currency: CryptoCurrency) => void }) {
+export function CryptoPicker({
+  value,
+  onChange,
+}: {
+  value: CryptoCurrency;
+  onChange: (currency: CryptoCurrency) => void;
+}) {
   const { t } = useTranslation();
   const [query, setQuery] = useState('');
   const [showAll, setShowAll] = useState(false);
@@ -40,7 +49,11 @@ export function CryptoPicker({ value, onChange }: { value: CryptoCurrency; onCha
 
   const coins = useMemo(() => {
     const needle = query.trim().toLowerCase();
-    if (needle) return COINS.filter((coin) => coin.id.toLowerCase().includes(needle) || coin.name.toLowerCase().includes(needle));
+    if (needle)
+      return COINS.filter(
+        (coin) =>
+          coin.id.toLowerCase().includes(needle) || coin.name.toLowerCase().includes(needle),
+      );
     return showAll ? COINS : COINS.filter((coin) => coin.popular || coin.id === selected.id);
   }, [query, showAll, selected.id]);
 
@@ -81,7 +94,9 @@ export function CryptoPicker({ value, onChange }: { value: CryptoCurrency; onCha
             </ChoiceTile>
           ))}
         </div>
-        {coins.length === 0 ? <p className="text-[13px] text-muted">{t('checkout.coinNone')}</p> : null}
+        {coins.length === 0 ? (
+          <p className="text-[13px] text-muted">{t('checkout.coinNone')}</p>
+        ) : null}
         {!query ? (
           <button
             type="button"
@@ -101,7 +116,12 @@ export function CryptoPicker({ value, onChange }: { value: CryptoCurrency; onCha
         />
         <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2">
           {networks.map((item) => (
-            <NetworkTile key={item.code} item={item} selected={item.code === value} onSelect={() => onChange(item.code)} />
+            <NetworkTile
+              key={item.code}
+              item={item}
+              selected={item.code === value}
+              onSelect={() => onChange(item.code)}
+            />
           ))}
         </div>
       </div>
@@ -109,10 +129,22 @@ export function CryptoPicker({ value, onChange }: { value: CryptoCurrency; onCha
   );
 }
 
-function NetworkTile({ item, selected, onSelect }: { item: CryptoNetwork; selected: boolean; onSelect: () => void }) {
+function NetworkTile({
+  item,
+  selected,
+  onSelect,
+}: {
+  item: CryptoNetwork;
+  selected: boolean;
+  onSelect: () => void;
+}) {
   const { t } = useTranslation();
   return (
-    <ChoiceTile selected={selected} onClick={onSelect} className="flex-row items-center justify-between gap-3">
+    <ChoiceTile
+      selected={selected}
+      onClick={onSelect}
+      className="flex-row items-center justify-between gap-3"
+    >
       <span className="flex min-w-0 flex-col">
         <span className="text-[13px] font-semibold text-text">
           {item.coin} · {item.network}
@@ -125,7 +157,9 @@ function NetworkTile({ item, selected, onSelect }: { item: CryptoNetwork; select
               : t('checkout.feeTransferNone')}
         </span>
       </span>
-      {item.transferFee === 'none' ? <TileTag tone="brand">{t('checkout.feeNoExtra')}</TileTag> : null}
+      {item.transferFee === 'none' ? (
+        <TileTag tone="brand">{t('checkout.feeNoExtra')}</TileTag>
+      ) : null}
     </ChoiceTile>
   );
 }
@@ -146,32 +180,53 @@ export function CryptoFeeBreakdown({
   const network = networkOf(currency);
   const estimate = estimateFees(priceUsd, network.transferFee);
 
-  const rows: { label: string; value: string; strong?: boolean }[] = [{ label: t('checkout.feePlan'), value: usd(priceUsd) }];
+  const rows: { label: string; value: string; strong?: boolean }[] = [
+    { label: t('checkout.feePlan'), value: usd(priceUsd) },
+  ];
   let note: string;
   if (fees && !loading) {
     if (fees.payerUsd > 0) {
       rows.push({ label: t('checkout.feeTrybit'), value: `+ ${usd(fees.payerUsd)}` });
       rows.push({ label: t('checkout.feeTotal'), value: usd(fees.totalUsd), strong: true });
-      note = t('checkout.feeNotePayer', { service: usd(fees.serviceUsd), transfer: usd(fees.transferUsd) });
+      note = t('checkout.feeNotePayer', {
+        service: usd(fees.serviceUsd),
+        transfer: usd(fees.transferUsd),
+      });
     } else {
       rows.push({ label: t('checkout.feeTotal'), value: usd(priceUsd), strong: true });
-      note = t('checkout.feeNoteMerchant', { service: usd(fees.serviceUsd), transfer: usd(fees.transferUsd) });
+      note = t('checkout.feeNoteMerchant', {
+        service: usd(fees.serviceUsd),
+        transfer: usd(fees.transferUsd),
+      });
     }
   } else {
-    rows.push({ label: t('checkout.feeService', { percent: SERVICE_FEE_PERCENT }), value: `≈ ${usd(estimate.serviceUsd)}` });
+    rows.push({
+      label: t('checkout.feeService', { percent: SERVICE_FEE_PERCENT }),
+      value: `≈ ${usd(estimate.serviceUsd)}`,
+    });
     rows.push({
       label: t('checkout.feeTransfer'),
-      value: estimate.transferUsd === null ? t('checkout.feeDynamic') : `≈ ${usd(estimate.transferUsd)}`,
+      value:
+        estimate.transferUsd === null ? t('checkout.feeDynamic') : `≈ ${usd(estimate.transferUsd)}`,
     });
     note = t('checkout.feeNoteEstimate');
   }
 
   return (
     <div className="flex flex-col gap-2.5 rounded-xl border border-stroke bg-canvas/70 p-3.5">
-      <StepLabel title={t('checkout.feeTitle')} hint={fees && !loading ? t('checkout.feeExact') : t('checkout.feeEstimate')} />
+      <StepLabel
+        title={t('checkout.feeTitle')}
+        hint={fees && !loading ? t('checkout.feeExact') : t('checkout.feeEstimate')}
+      />
       <dl className="flex flex-col gap-1.5 text-[13px]">
         {rows.map((row) => (
-          <div key={row.label} className={cn('flex items-baseline justify-between gap-3', row.strong && 'border-t border-stroke pt-2 font-semibold text-text')}>
+          <div
+            key={row.label}
+            className={cn(
+              'flex items-baseline justify-between gap-3',
+              row.strong && 'border-t border-stroke pt-2 font-semibold text-text',
+            )}
+          >
             <dt className={row.strong ? undefined : 'text-muted'}>{row.label}</dt>
             <dd className="tabular-nums">{row.value}</dd>
           </div>

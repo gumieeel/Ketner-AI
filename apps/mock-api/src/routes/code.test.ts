@@ -17,7 +17,13 @@ import { createCodeRouter } from './code.js';
 interface Env {
   baseUrl: string;
   store: ProjectStore;
-  call: (userId: string, plan: string, method: string, url: string, body?: unknown) => Promise<Response>;
+  call: (
+    userId: string,
+    plan: string,
+    method: string,
+    url: string,
+    body?: unknown,
+  ) => Promise<Response>;
 }
 
 async function withServer(
@@ -35,7 +41,12 @@ async function withServer(
   app.use(express.json({ limit: '50mb' }));
   app.use((request, _response, next) => {
     const id = request.header('x-test-user');
-    if (id) request.user = { id, email: `${id}@example.com`, plan: (request.header('x-test-plan') ?? 'free') as User['plan'] } as User;
+    if (id)
+      request.user = {
+        id,
+        email: `${id}@example.com`,
+        plan: (request.header('x-test-plan') ?? 'free') as User['plan'],
+      } as User;
     next();
   });
   app.use(
@@ -60,7 +71,11 @@ async function withServer(
       call: (userId, plan, method, url, body) =>
         fetch(`${baseUrl}/api/code${url}`, {
           method,
-          headers: { 'x-test-user': userId, 'x-test-plan': plan, ...(body !== undefined ? { 'Content-Type': 'application/json' } : {}) },
+          headers: {
+            'x-test-user': userId,
+            'x-test-plan': plan,
+            ...(body !== undefined ? { 'Content-Type': 'application/json' } : {}),
+          },
           body: body !== undefined ? JSON.stringify(body) : undefined,
         }),
     });
@@ -76,7 +91,13 @@ interface CodeApiBody {
   limits: { maxProjects: number };
   commands: { available: boolean; reason?: string };
   models: Array<{ id: string; locked: boolean }>;
-  project: { id: string; name: string; fileCount: number; userId?: string; source?: { type: string } };
+  project: {
+    id: string;
+    name: string;
+    fileCount: number;
+    userId?: string;
+    source?: { type: string };
+  };
   projects: unknown[];
   file: { language: string };
   content: string;
@@ -110,18 +131,32 @@ test('capabilities отражает тариф: команды недоступ�
     assert.deepEqual([free.commands.available, free.commands.reason], [false, 'plan']);
     const pro = await json(await call('a', 'pro', 'GET', '/capabilities'));
     assert.deepEqual([pro.commands.available, pro.commands.reason], [false, 'server_disabled']);
-    assert.ok(pro.models.some((m: { id: string; locked: boolean }) => m.id === 'claude-opus-5.5' && m.locked === false));
-    assert.ok(free.models.some((m: { id: string; locked: boolean }) => m.id === 'claude-opus-5.5' && m.locked === true));
+    assert.ok(
+      pro.models.some(
+        (m: { id: string; locked: boolean }) => m.id === 'claude-opus-5.5' && m.locked === false,
+      ),
+    );
+    assert.ok(
+      free.models.some(
+        (m: { id: string; locked: boolean }) => m.id === 'claude-opus-5.5' && m.locked === true,
+      ),
+    );
   });
-  await withServer({ sandbox: new LocalProcessSandbox({ networkIsolation: false }) }, async ({ call }) => {
-    const pro = await json(await call('a', 'pro', 'GET', '/capabilities'));
-    assert.equal(pro.commands.available, true);
-  });
+  await withServer(
+    { sandbox: new LocalProcessSandbox({ networkIsolation: false }) },
+    async ({ call }) => {
+      const pro = await json(await call('a', 'pro', 'GET', '/capabilities'));
+      assert.equal(pro.commands.available, true);
+    },
+  );
 });
 
 test('проекты: создание, список, переименование, удаление, лимит тарифа и изоляция пользователей', async () => {
   await withServer({}, async ({ call }) => {
-    const created = await call('alice', 'free', 'POST', '/projects', { name: 'Первый', template: 'node' });
+    const created = await call('alice', 'free', 'POST', '/projects', {
+      name: 'Первый',
+      template: 'node',
+    });
     assert.equal(created.status, 201);
     const project = (await json(created)).project;
     assert.ok(project.fileCount >= 4);
@@ -131,9 +166,14 @@ test('проекты: создание, список, переименовани
     assert.equal(second.status, 413);
     assert.equal((await json(second)).error.code, 'quota_exceeded');
 
-    assert.equal((await call('alice', 'free', 'POST', '/projects', { name: 'x', template: 'nope' })).status, 400);
+    assert.equal(
+      (await call('alice', 'free', 'POST', '/projects', { name: 'x', template: 'nope' })).status,
+      400,
+    );
 
-    const renamed = await json(await call('alice', 'free', 'PATCH', `/projects/${project.id}`, { name: 'Новое имя' }));
+    const renamed = await json(
+      await call('alice', 'free', 'PATCH', `/projects/${project.id}`, { name: 'Новое имя' }),
+    );
     assert.equal(renamed.project.name, 'Новое имя');
 
     assert.equal((await call('bob', 'free', 'GET', `/projects/${project.id}`)).status, 404);
@@ -151,40 +191,80 @@ test('файлы: чтение, запись, перемещение, удале
     const { project } = await json(await call('alice', 'free', 'POST', '/projects', { name: 'P' }));
     const id = project.id;
 
-    const put = await call('alice', 'free', 'PUT', `/projects/${id}/file`, { path: 'src/a.ts', content: 'export const a = 1;\n' });
+    const put = await call('alice', 'free', 'PUT', `/projects/${id}/file`, {
+      path: 'src/a.ts',
+      content: 'export const a = 1;\n',
+    });
     assert.equal(put.status, 201);
     assert.equal((await json(put)).file.language, 'typescript');
 
-    const read = await json(await call('alice', 'free', 'GET', `/projects/${id}/file?path=src/a.ts`));
+    const read = await json(
+      await call('alice', 'free', 'GET', `/projects/${id}/file?path=src/a.ts`),
+    );
     assert.equal(read.content, 'export const a = 1;\n');
 
     const list = await json(await call('alice', 'free', 'GET', `/projects/${id}/files`));
     assert.ok(list.files.some((f: { path: string }) => f.path === 'src/a.ts'));
 
-    assert.equal((await call('alice', 'free', 'POST', `/projects/${id}/move`, { from: 'src/a.ts', to: 'src/b.ts' })).status, 204);
-    assert.equal((await call('alice', 'free', 'GET', `/projects/${id}/file?path=src/a.ts`)).status, 404);
-    const removed = await json(await call('alice', 'free', 'DELETE', `/projects/${id}/file?path=src/b.ts`));
+    assert.equal(
+      (
+        await call('alice', 'free', 'POST', `/projects/${id}/move`, {
+          from: 'src/a.ts',
+          to: 'src/b.ts',
+        })
+      ).status,
+      204,
+    );
+    assert.equal(
+      (await call('alice', 'free', 'GET', `/projects/${id}/file?path=src/a.ts`)).status,
+      404,
+    );
+    const removed = await json(
+      await call('alice', 'free', 'DELETE', `/projects/${id}/file?path=src/b.ts`),
+    );
     assert.deepEqual(removed.removed, ['src/b.ts']);
 
     for (const bad of ['../secret', '/etc/passwd', 'a/../../b']) {
-      const r = await call('alice', 'free', 'PUT', `/projects/${id}/file`, { path: bad, content: 'x' });
+      const r = await call('alice', 'free', 'PUT', `/projects/${id}/file`, {
+        path: bad,
+        content: 'x',
+      });
       assert.equal(r.status, 400, bad);
     }
-    assert.equal((await call('alice', 'free', 'PUT', `/projects/${id}/file`, { path: '.git/config', content: 'x' })).status, 403);
-    assert.equal((await call('alice', 'free', 'PUT', `/projects/${id}/file`, { path: 'a.txt' })).status, 400);
+    assert.equal(
+      (
+        await call('alice', 'free', 'PUT', `/projects/${id}/file`, {
+          path: '.git/config',
+          content: 'x',
+        })
+      ).status,
+      403,
+    );
+    assert.equal(
+      (await call('alice', 'free', 'PUT', `/projects/${id}/file`, { path: 'a.txt' })).status,
+      400,
+    );
 
-    const tooBig = await call('alice', 'free', 'PUT', `/projects/${id}/file`, { path: 'big.txt', content: 'x'.repeat(250_000) });
+    const tooBig = await call('alice', 'free', 'PUT', `/projects/${id}/file`, {
+      path: 'big.txt',
+      content: 'x'.repeat(250_000),
+    });
     assert.equal(tooBig.status, 413);
 
     await store.fsFor('alice', id).then((fs) => fs.write('bin.dat', Buffer.from([1, 2, 0, 3])));
-    assert.equal((await call('alice', 'free', 'GET', `/projects/${id}/file?path=bin.dat`)).status, 415);
+    assert.equal(
+      (await call('alice', 'free', 'GET', `/projects/${id}/file?path=bin.dat`)).status,
+      415,
+    );
     assert.equal((await call('bob', 'free', 'GET', `/projects/${id}/files`)).status, 404);
   });
 });
 
 test('импорт: секреты и зависимости пропускаются, остальное записывается', async () => {
   await withServer({}, async ({ call }) => {
-    const { project } = await json(await call('alice', 'plus', 'POST', '/projects', { name: 'Imp' }));
+    const { project } = await json(
+      await call('alice', 'plus', 'POST', '/projects', { name: 'Imp' }),
+    );
     const response = await json(
       await call('alice', 'plus', 'POST', `/projects/${project.id}/import`, {
         files: [
@@ -199,24 +279,41 @@ test('импорт: секреты и зависимости пропускаю�
     );
     assert.equal(response.written, 2);
     assert.equal(response.skippedCount, 4);
-    const files = (await json(await call('alice', 'plus', 'GET', `/projects/${project.id}/files`))).files.map((f: { path: string }) => f.path);
+    const files = (
+      await json(await call('alice', 'plus', 'GET', `/projects/${project.id}/files`))
+    ).files.map((f: { path: string }) => f.path);
     assert.ok(files.includes('src/main.py') && files.includes('.env.example'));
     assert.ok(!files.includes('.env') && !files.some((p: string) => p.includes('node_modules')));
 
-    assert.equal((await call('alice', 'plus', 'POST', `/projects/${project.id}/import`, { files: [] })).status, 400);
+    assert.equal(
+      (await call('alice', 'plus', 'POST', `/projects/${project.id}/import`, { files: [] })).status,
+      400,
+    );
   });
 });
 
 test('экспорт отдаёт ZIP со всеми файлами проекта', async () => {
   await withServer({}, async ({ call }) => {
-    const { project } = await json(await call('alice', 'free', 'POST', '/projects', { name: 'Мой проект', template: 'python' }));
-    await call('alice', 'free', 'PUT', `/projects/${project.id}/file`, { path: 'docs/note.md', content: 'привет' });
+    const { project } = await json(
+      await call('alice', 'free', 'POST', '/projects', { name: 'Мой проект', template: 'python' }),
+    );
+    await call('alice', 'free', 'PUT', `/projects/${project.id}/file`, {
+      path: 'docs/note.md',
+      content: 'привет',
+    });
     const response = await call('alice', 'free', 'GET', `/projects/${project.id}/export.zip`);
     assert.equal(response.status, 200);
     assert.equal(response.headers.get('content-type'), 'application/zip');
-    assert.match(response.headers.get('content-disposition') ?? '', /attachment; filename="[A-Za-z0-9._-]+\.zip"/);
+    assert.match(
+      response.headers.get('content-disposition') ?? '',
+      /attachment; filename="[A-Za-z0-9._-]+\.zip"/,
+    );
     const archive = new Uint8Array(await response.arrayBuffer());
-    const { files } = extractZipText(archive, { maxFiles: 100, maxFileBytes: 100_000, maxTotalBytes: 1_000_000 });
+    const { files } = extractZipText(archive, {
+      maxFiles: 100,
+      maxFileBytes: 100_000,
+      maxTotalBytes: 1_000_000,
+    });
     assert.ok(files.some((f) => f.path === 'docs/note.md' && f.content === 'привет'));
     assert.ok(files.some((f) => f.path === 'README.md'));
   });
@@ -235,11 +332,15 @@ test('импорт из GitHub: проверка адреса, лимиты и �
   }) as unknown as typeof fetch;
 
   await withServer({ fetchImpl }, async ({ call }) => {
-    const bad = await call('alice', 'plus', 'POST', '/projects/import-github', { url: 'https://evil.example.com/a/b' });
+    const bad = await call('alice', 'plus', 'POST', '/projects/import-github', {
+      url: 'https://evil.example.com/a/b',
+    });
     assert.equal(bad.status, 400);
     assert.equal(requested, '', 'на посторонний адрес запрос не уходит');
 
-    const ok = await call('alice', 'plus', 'POST', '/projects/import-github', { url: 'https://github.com/acme/widgets' });
+    const ok = await call('alice', 'plus', 'POST', '/projects/import-github', {
+      url: 'https://github.com/acme/widgets',
+    });
     assert.equal(ok.status, 201);
     const body = await json(ok);
     assert.equal(requested, 'https://api.github.com/repos/acme/widgets/zipball');
@@ -249,15 +350,25 @@ test('импорт из GitHub: проверка адреса, лимиты и �
     assert.equal(body.skippedCount, 1);
   });
 
-  await withServer({ fetchImpl: (async () => new Response('', { status: 404 })) as typeof fetch }, async ({ call }) => {
-    const missing = await call('alice', 'plus', 'POST', '/projects/import-github', { url: 'acme/private' });
-    assert.equal(missing.status, 404);
-    assert.equal((await json(missing)).error.code, 'github_not_found');
-    assert.deepEqual((await json(await call('alice', 'plus', 'GET', '/projects'))).projects, []);
-  });
+  await withServer(
+    { fetchImpl: (async () => new Response('', { status: 404 })) as typeof fetch },
+    async ({ call }) => {
+      const missing = await call('alice', 'plus', 'POST', '/projects/import-github', {
+        url: 'acme/private',
+      });
+      assert.equal(missing.status, 404);
+      assert.equal((await json(missing)).error.code, 'github_not_found');
+      assert.deepEqual((await json(await call('alice', 'plus', 'GET', '/projects'))).projects, []);
+    },
+  );
 });
 
-function fakeRunner(script: (input: Parameters<AgentRunner['run']>[0], emit: (e: AgentEvent) => void) => Promise<void>): AgentRunner {
+function fakeRunner(
+  script: (
+    input: Parameters<AgentRunner['run']>[0],
+    emit: (e: AgentEvent) => void,
+  ) => Promise<void>,
+): AgentRunner {
   return {
     run: async (input: Parameters<AgentRunner['run']>[0], emit: (e: AgentEvent) => void) => {
       await script(input, emit);
@@ -266,7 +377,9 @@ function fakeRunner(script: (input: Parameters<AgentRunner['run']>[0], emit: (e:
   } as unknown as AgentRunner;
 }
 
-async function readEvents(response: Response): Promise<Array<{ event: string; data: { status?: string } }>> {
+async function readEvents(
+  response: Response,
+): Promise<Array<{ event: string; data: { status?: string } }>> {
   const text = await response.text();
   return text
     .split('\n\n')
@@ -285,10 +398,26 @@ test('запуск агента: SSE-события, параметры из т�
   let seen: Parameters<AgentRunner['run']>[0] | undefined;
   const runner = fakeRunner(async (input, emit) => {
     seen = input;
-    emit({ type: 'run_start', runId: 'r1', modelId: 'ketner-mini', modelName: 'Ketner Mini', maxSteps: 8, budgetUsd: 0.02, commands: false, routingReason: null });
+    emit({
+      type: 'run_start',
+      runId: 'r1',
+      modelId: 'ketner-mini',
+      modelName: 'Ketner Mini',
+      maxSteps: 8,
+      budgetUsd: 0.02,
+      commands: false,
+      routingReason: null,
+    });
     if (input.task === 'wait') await gate;
     emit({ type: 'delta', step: 1, content: 'готово' });
-    emit({ type: 'done', runId: 'r1', status: 'completed', steps: 1, costUsd: 0, modelId: 'ketner-mini' });
+    emit({
+      type: 'done',
+      runId: 'r1',
+      status: 'completed',
+      steps: 1,
+      costUsd: 0,
+      modelId: 'ketner-mini',
+    });
   });
 
   await withServer({ runner }, async ({ call }) => {
@@ -298,19 +427,29 @@ test('запуск агента: SSE-события, параметры из т�
     assert.equal((await call('alice', 'plus', 'POST', url, { task: '   ' })).status, 400);
     assert.equal((await call('bob', 'plus', 'POST', url, { task: 'x' })).status, 404);
 
-    const first = call('alice', 'plus', 'POST', url, { task: 'wait', modelId: 'gpt-6.1-sol', language: 'en' });
+    const first = call('alice', 'plus', 'POST', url, {
+      task: 'wait',
+      modelId: 'gpt-6.1-sol',
+      language: 'en',
+    });
     await new Promise((resolve) => setTimeout(resolve, 100));
     const second = await call('alice', 'plus', 'POST', url, { task: 'another' });
     assert.equal(second.status, 409);
     assert.equal((await json(second)).error.code, 'run_in_progress');
-    assert.equal((await json(await call('alice', 'plus', 'GET', `/projects/${project.id}`))).running, true);
+    assert.equal(
+      (await json(await call('alice', 'plus', 'GET', `/projects/${project.id}`))).running,
+      true,
+    );
     release();
 
     const response = await first;
     assert.equal(response.status, 200);
     assert.match(response.headers.get('content-type') ?? '', /text\/event-stream/);
     const events = await readEvents(response);
-    assert.deepEqual(events.map((e) => e.event), ['run_start', 'delta', 'done']);
+    assert.deepEqual(
+      events.map((e) => e.event),
+      ['run_start', 'delta', 'done'],
+    );
     assert.equal(seen?.plan, 'plus');
     assert.equal(seen?.userId, 'alice');
     assert.equal(seen?.modelId, 'gpt-6.1-sol');
@@ -326,10 +465,28 @@ test('запуск агента: SSE-события, параметры из т�
 test('кнопка «Стоп» прерывает запуск, закрытие соединения тоже', async () => {
   let aborted = 0;
   const runner = fakeRunner(async (input, emit) => {
-    emit({ type: 'run_start', runId: 'r1', modelId: 'ketner-mini', modelName: 'Ketner Mini', maxSteps: 8, budgetUsd: 0.02, commands: false, routingReason: null });
-    await new Promise<void>((resolve) => input.signal.addEventListener('abort', () => resolve(), { once: true }));
+    emit({
+      type: 'run_start',
+      runId: 'r1',
+      modelId: 'ketner-mini',
+      modelName: 'Ketner Mini',
+      maxSteps: 8,
+      budgetUsd: 0.02,
+      commands: false,
+      routingReason: null,
+    });
+    await new Promise<void>((resolve) =>
+      input.signal.addEventListener('abort', () => resolve(), { once: true }),
+    );
     aborted += 1;
-    emit({ type: 'done', runId: 'r1', status: 'cancelled', steps: 1, costUsd: 0, modelId: 'ketner-mini' });
+    emit({
+      type: 'done',
+      runId: 'r1',
+      status: 'cancelled',
+      steps: 1,
+      costUsd: 0,
+      modelId: 'ketner-mini',
+    });
   });
 
   await withServer({ runner }, async ({ call }) => {
@@ -345,12 +502,19 @@ test('кнопка «Стоп» прерывает запуск, закрыти�
     assert.equal(aborted, 1);
 
     const controller = new AbortController();
-    const second = fetch(`${(await call('alice', 'plus', 'GET', '/capabilities')).url.replace('/capabilities', '')}${url.replace('/api/code', '')}`, {
-      method: 'POST',
-      headers: { 'x-test-user': 'alice', 'x-test-plan': 'plus', 'Content-Type': 'application/json' },
-      body: JSON.stringify({ task: 'long again' }),
-      signal: controller.signal,
-    }).catch(() => undefined);
+    const second = fetch(
+      `${(await call('alice', 'plus', 'GET', '/capabilities')).url.replace('/capabilities', '')}${url.replace('/api/code', '')}`,
+      {
+        method: 'POST',
+        headers: {
+          'x-test-user': 'alice',
+          'x-test-plan': 'plus',
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ task: 'long again' }),
+        signal: controller.signal,
+      },
+    ).catch(() => undefined);
     await new Promise((resolve) => setTimeout(resolve, 100));
     controller.abort();
     await second;
@@ -362,11 +526,19 @@ test('кнопка «Стоп» прерывает запуск, закрыти�
 test('лента: чтение и очистка', async () => {
   await withServer({}, async ({ call, store }) => {
     const { project } = await json(await call('alice', 'free', 'POST', '/projects', { name: 'T' }));
-    await store.appendThread('alice', project.id, [{ id: '1', kind: 'user', text: 'привет', createdAt: new Date().toISOString() }]);
+    await store.appendThread('alice', project.id, [
+      { id: '1', kind: 'user', text: 'привет', createdAt: new Date().toISOString() },
+    ]);
     const thread = await json(await call('alice', 'free', 'GET', `/projects/${project.id}/thread`));
     assert.equal(thread.items.length, 1);
     assert.equal((await call('bob', 'free', 'GET', `/projects/${project.id}/thread`)).status, 404);
-    assert.equal((await call('alice', 'free', 'DELETE', `/projects/${project.id}/thread`)).status, 204);
-    assert.deepEqual((await json(await call('alice', 'free', 'GET', `/projects/${project.id}/thread`))).items, []);
+    assert.equal(
+      (await call('alice', 'free', 'DELETE', `/projects/${project.id}/thread`)).status,
+      204,
+    );
+    assert.deepEqual(
+      (await json(await call('alice', 'free', 'GET', `/projects/${project.id}/thread`))).items,
+      [],
+    );
   });
 });

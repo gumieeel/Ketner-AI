@@ -15,11 +15,7 @@
  */
 
 import { ContextOptimizer } from './context.js';
-import type {
-  ModelRegistryEntry,
-  PlanId,
-  ReasoningEffort,
-} from './gateway-types.js';
+import type { ModelRegistryEntry, PlanId, ReasoningEffort } from './gateway-types.js';
 import { applyEconomyRules, isAllowedFallbackModel } from './gateway.js';
 import { modelRegistry, type ModelRegistry, WORKHORSE_MODEL_ID } from './model-registry.js';
 import { PUBLIC_MODEL_IDS } from './models.js';
@@ -126,7 +122,13 @@ const fail = (
   code: string,
   message: string,
   retryAfterSec?: number,
-): AgentFailure => ({ kind: 'error', status, code, message, ...(retryAfterSec ? { retryAfterSec } : {}) });
+): AgentFailure => ({
+  kind: 'error',
+  status,
+  code,
+  message,
+  ...(retryAfterSec ? { retryAfterSec } : {}),
+});
 
 /** Уровни, которые агентский API принимает от клиента (xhigh и max — только для чата в режиме Max). */
 type AgentEffort = Exclude<ReasoningEffort, 'xhigh' | 'max'>;
@@ -158,7 +160,8 @@ export function estimateAgentPromptTokens(
   let total = 0;
   for (const message of messages) {
     total += 4;
-    if (typeof message.content === 'string') total += ContextOptimizer.estimateTokens(message.content);
+    if (typeof message.content === 'string')
+      total += ContextOptimizer.estimateTokens(message.content);
     if (message.role === 'assistant' && message.tool_calls) {
       for (const call of message.tool_calls) {
         total += ContextOptimizer.estimateTokens(call.function.name + call.function.arguments) + 4;
@@ -173,7 +176,9 @@ export function estimateAgentPromptTokens(
 
 /** Переполнение окна контекста у OpenRouter приходит как HTTP 400 с понятным текстом. */
 function isContextOverflow(error: OpenRouterError): boolean {
-  return error.status === 400 && /context|too many tokens|maximum.*tokens|too long/i.test(error.message);
+  return (
+    error.status === 400 && /context|too many tokens|maximum.*tokens|too long/i.test(error.message)
+  );
 }
 
 /** Собирает ответ из событий: нужен, если провайдер оборвался уже после первого фрагмента. */
@@ -350,7 +355,11 @@ export class AgentGateway {
     } else {
       const found = PUBLIC_MODEL_IDS.includes(req.model) ? this.registry.get(req.model) : undefined;
       if (!found || !found.enabled) {
-        return fail(404, 'model_not_found', `Модель "${req.model}" не найдена. Список моделей: GET /v1/models`);
+        return fail(
+          404,
+          'model_not_found',
+          `Модель "${req.model}" не найдена. Список моделей: GET /v1/models`,
+        );
       }
       requested = found;
       const access = EntitlementService.checkModelAccess(requested, plan);
@@ -391,7 +400,12 @@ export class AgentGateway {
     });
     if (decision.action === 'deny') {
       const isConcurrency = decision.code === 'concurrency_limit';
-      this.recordRefused(req, target.id, isConcurrency ? 'concurrency_limited' : 'rate_limited', startTime);
+      this.recordRefused(
+        req,
+        target.id,
+        isConcurrency ? 'concurrency_limited' : 'rate_limited',
+        startTime,
+      );
       const retryAfter = isConcurrency ? 5 : decision.code === 'fair_use_exceeded' ? 3600 : 300;
       return fail(429, 'rate_limit_exceeded', decision.reason, retryAfter);
     }
@@ -460,7 +474,9 @@ export class AgentGateway {
       const engineId = candidate.providerModelId;
       const breakerKey = `${provider.type}:${engineId}`;
       if (this.circuitBreaker.isOpen(breakerKey)) {
-        console.warn(`[agent-gateway] Circuit breaker OPEN для ${breakerKey}, переходим к запасной модели`);
+        console.warn(
+          `[agent-gateway] Circuit breaker OPEN для ${breakerKey}, переходим к запасной модели`,
+        );
         continue;
       }
 
@@ -478,23 +494,28 @@ export class AgentGateway {
       const modelRef: AgentModelRef = { id: candidate.id, name: candidate.name };
 
       const runPass = (withReasoning: typeof reasoning) =>
-        this.streamWithWatchdog(provider, req, {
-          model: engineId,
-          messages: req.messages,
-          tools: req.tools,
-          toolChoice: req.toolChoice,
-          maxTokens,
-          temperature: req.temperature,
-          reasoning: withReasoning,
-        }, {
-          onEvent: (event) => {
-            if (firstEventMs === null) firstEventMs = Date.now() - ctx.startTime;
-            emitted = true;
-            accumulator.add(event);
-            callbacks.onEvent(event, { model: modelRef });
+        this.streamWithWatchdog(
+          provider,
+          req,
+          {
+            model: engineId,
+            messages: req.messages,
+            tools: req.tools,
+            toolChoice: req.toolChoice,
+            maxTokens,
+            temperature: req.temperature,
+            reasoning: withReasoning,
           },
-          isCancelled,
-        });
+          {
+            onEvent: (event) => {
+              if (firstEventMs === null) firstEventMs = Date.now() - ctx.startTime;
+              emitted = true;
+              accumulator.add(event);
+              callbacks.onEvent(event, { model: modelRef });
+            },
+            isCancelled,
+          },
+        );
 
       try {
         usedModel = candidate;
@@ -506,8 +527,16 @@ export class AgentGateway {
         } catch (firstError) {
           // 400 при заданных размышлениях обычно значит, что модель не принимает это значение:
           // один повтор без параметра. Повторять можно только пока клиенту ничего не отправлено.
-          if (reasoning && !emitted && firstError instanceof OpenRouterError && firstError.status === 400 && !isContextOverflow(firstError)) {
-            console.warn(`[agent-gateway] ${engineId} отклонил reasoning=${JSON.stringify(reasoning)}, повтор без параметра`);
+          if (
+            reasoning &&
+            !emitted &&
+            firstError instanceof OpenRouterError &&
+            firstError.status === 400 &&
+            !isContextOverflow(firstError)
+          ) {
+            console.warn(
+              `[agent-gateway] ${engineId} отклонил reasoning=${JSON.stringify(reasoning)}, повтор без параметра`,
+            );
             pass = await runPass(undefined);
           } else {
             throw firstError;
@@ -534,7 +563,9 @@ export class AgentGateway {
       } catch (error) {
         lastError = error;
         if (error instanceof OpenRouterError && (error.status === 401 || error.status === 402)) {
-          console.error(`[agent-gateway] Ключ OpenRouter не принят или баланс исчерпан (HTTP ${error.status})`);
+          console.error(
+            `[agent-gateway] Ключ OpenRouter не принят или баланс исчерпан (HTTP ${error.status})`,
+          );
           authFailure = true;
           break;
         }
@@ -559,23 +590,51 @@ export class AgentGateway {
 
     if (!result) {
       if (isCancelled()) {
-        this.recordUsage(req, ctx, usedModel, usedEngineId, null, 0, 'cancelled', firstEventMs, latencyMs());
-        return this.buildSuccess(req, ctx, usedModel, {
-          content: '',
-          toolCalls: [],
-          finishReason: 'cancelled',
-          usage: { inputTokens: 0, outputTokens: 0 },
-        }, 0);
+        this.recordUsage(
+          req,
+          ctx,
+          usedModel,
+          usedEngineId,
+          null,
+          0,
+          'cancelled',
+          firstEventMs,
+          latencyMs(),
+        );
+        return this.buildSuccess(
+          req,
+          ctx,
+          usedModel,
+          {
+            content: '',
+            toolCalls: [],
+            finishReason: 'cancelled',
+            usage: { inputTokens: 0, outputTokens: 0 },
+          },
+          0,
+        );
       }
       this.recordUsage(req, ctx, target, usedEngineId, null, 0, 'error', null, latencyMs());
       if (authFailure || !anyProviderTried) {
-        return fail(503, 'provider_unavailable', 'Сервис ИИ временно недоступен. Повторите запрос позже.');
+        return fail(
+          503,
+          'provider_unavailable',
+          'Сервис ИИ временно недоступен. Повторите запрос позже.',
+        );
       }
       if (lastError instanceof OpenRouterError && lastError.status === 400) {
         if (isContextOverflow(lastError)) {
-          return fail(400, 'context_length_exceeded', 'История не помещается в окно модели. Сожмите контекст.');
+          return fail(
+            400,
+            'context_length_exceeded',
+            'История не помещается в окно модели. Сожмите контекст.',
+          );
         }
-        return fail(400, 'invalid_request_error', `Провайдер отклонил запрос: ${lastError.message.slice(0, 300)}`);
+        return fail(
+          400,
+          'invalid_request_error',
+          `Провайдер отклонил запрос: ${lastError.message.slice(0, 300)}`,
+        );
       }
       return fail(502, 'upstream_error', 'Все модели цепочки недоступны. Повторите запрос позже.');
     }
@@ -643,7 +702,11 @@ export class AgentGateway {
 
   private buildSuccess(
     req: AgentRunRequest,
-    ctx: { entitlements: ReturnType<typeof EntitlementService.getEntitlements>; routingReason: string; target: ModelRegistryEntry },
+    ctx: {
+      entitlements: ReturnType<typeof EntitlementService.getEntitlements>;
+      routingReason: string;
+      target: ModelRegistryEntry;
+    },
     usedModel: ModelRegistryEntry,
     result: AgentProviderResult,
     costUsd: number,

@@ -65,8 +65,10 @@ class Collector {
     const reason = skipReason(path);
     if (reason) return this.skip(path, reason);
     if (size > this.limits.maxFileBytes) return this.skip(path, 'файл больше лимита вашего тарифа');
-    if (this.result.files.length >= this.limits.maxFiles) return this.skip(path, 'превышено число файлов тарифа');
-    if (this.total + size > this.limits.maxTotalBytes) return this.skip(path, 'превышен общий размер проекта');
+    if (this.result.files.length >= this.limits.maxFiles)
+      return this.skip(path, 'превышено число файлов тарифа');
+    if (this.total + size > this.limits.maxTotalBytes)
+      return this.skip(path, 'превышен общий размер проекта');
     return true;
   }
 
@@ -87,7 +89,10 @@ class Collector {
 }
 
 /** Файлы выбранной папки (`<input webkitdirectory>`). Имя самой папки в путь не входит. */
-export async function readFolderFiles(list: FileList | File[], limits: ReadLimits): Promise<ReadResult> {
+export async function readFolderFiles(
+  list: FileList | File[],
+  limits: ReadLimits,
+): Promise<ReadResult> {
   const collector = new Collector(limits);
   for (const file of Array.from(list)) {
     const full = file.webkitRelativePath || file.name;
@@ -129,9 +134,11 @@ export async function readZipFile(file: File, limits: ReadLimits): Promise<ReadR
   const raw = unzipSync(data, {
     filter: (entry) => {
       if (entry.name.endsWith('/')) return false;
-      const relative = root && entry.name.startsWith(root) ? entry.name.slice(root.length) : entry.name;
+      const relative =
+        root && entry.name.startsWith(root) ? entry.name.slice(root.length) : entry.name;
       const path = relative.replace(/\\/g, '/');
-      if (!path || path.startsWith('/') || path.split('/').includes('..')) return collector.skip(path || entry.name, 'недопустимый путь');
+      if (!path || path.startsWith('/') || path.split('/').includes('..'))
+        return collector.skip(path || entry.name, 'недопустимый путь');
       if (!collector.precheck(path, entry.originalSize)) return false;
       accepted.set(entry.name, path);
       return true;
@@ -145,7 +152,11 @@ export async function readZipFile(file: File, limits: ReadLimits): Promise<ReadR
 }
 
 /** Делит файлы на запросы разумного размера: сервер принимает импорт частями. */
-export function chunkFiles<T extends { content: string }>(files: T[], maxBytes = 3_000_000, maxCount = 400): T[][] {
+export function chunkFiles<T extends { content: string }>(
+  files: T[],
+  maxBytes = 3_000_000,
+  maxCount = 400,
+): T[][] {
   const chunks: T[][] = [];
   let current: T[] = [];
   let size = 0;

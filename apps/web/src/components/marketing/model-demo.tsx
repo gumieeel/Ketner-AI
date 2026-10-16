@@ -15,11 +15,12 @@ const MODELS: readonly { id: string; name: string }[] = [
   { id: 'grok-4.7', name: 'Grok 4.7 xhigh' },
 ];
 
-const EXAMPLES: readonly { promptKey: TranslationKey; answerKey: TranslationKey; model: number }[] = [
-  { promptKey: 'home.demoQ1', answerKey: 'home.demoA1', model: 0 },
-  { promptKey: 'home.demoQ2', answerKey: 'home.demoA2', model: 1 },
-  { promptKey: 'home.demoQ3', answerKey: 'home.demoA3', model: 2 },
-];
+const EXAMPLES: readonly { promptKey: TranslationKey; answerKey: TranslationKey; model: number }[] =
+  [
+    { promptKey: 'home.demoQ1', answerKey: 'home.demoA1', model: 0 },
+    { promptKey: 'home.demoQ2', answerKey: 'home.demoA2', model: 1 },
+    { promptKey: 'home.demoQ3', answerKey: 'home.demoA3', model: 2 },
+  ];
 
 const TYPE_DELAY_MS = 22;
 const PICK_MS = 700;
@@ -129,7 +130,9 @@ export function ModelDemo({ className }: { className?: string }) {
                 onClick={() => choose(itemIndex)}
                 className={cn(
                   'tabular grid size-8 place-items-center rounded-sm text-[13px] font-medium transition-colors duration-150 max-md:size-11',
-                  selected ? 'bg-surface-3 text-text' : 'text-subtle hover:bg-surface-2 hover:text-text',
+                  selected
+                    ? 'bg-surface-3 text-text'
+                    : 'text-subtle hover:bg-surface-2 hover:text-text',
                 )}
               >
                 {itemIndex + 1}
@@ -147,7 +150,10 @@ export function ModelDemo({ className }: { className?: string }) {
         </p>
       </div>
 
-      <div aria-hidden="true" className="mx-5 mt-4 border-t border-dashed border-stroke-strong pt-4">
+      <div
+        aria-hidden="true"
+        className="mx-5 mt-4 border-t border-dashed border-stroke-strong pt-4"
+      >
         <span className="text-[12px] text-subtle">{t('home.demoAnswer')}</span>
         <p className="mt-1.5 min-h-[4.5em] text-[15px] leading-snug text-muted">
           {phase === 'answering' || phase === 'done' ? answerWords.slice(0, words).join(' ') : ' '}
@@ -168,7 +174,9 @@ export function ModelDemo({ className }: { className?: string }) {
               )}
             >
               <ModelMark modelId={item.id} size="sm" />
-              <span className={cn('text-[14px] font-medium', active ? 'text-accent-text' : 'text-text')}>
+              <span
+                className={cn('text-[14px] font-medium', active ? 'text-accent-text' : 'text-text')}
+              >
                 {item.name}
               </span>
             </div>

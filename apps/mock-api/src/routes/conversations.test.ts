@@ -127,17 +127,23 @@ test('гость не может назваться другим пользов�
 
     // Чужой гостевой id и X-User-Id не открывают диалоги владельца
     const other = await readJson<{ conversations: unknown[] }>(
-      await fetch(`${server.baseUrl}/api/conversations`, { headers: { 'X-Guest-Id': 'guest_other67890_xyz' } }),
+      await fetch(`${server.baseUrl}/api/conversations`, {
+        headers: { 'X-Guest-Id': 'guest_other67890_xyz' },
+      }),
     );
     assert.deepEqual(other.conversations, []);
     const spoof = await readJson<{ conversations: unknown[] }>(
-      await fetch(`${server.baseUrl}/api/conversations`, { headers: { 'X-User-Id': 'guest_owner12345_abc' } }),
+      await fetch(`${server.baseUrl}/api/conversations`, {
+        headers: { 'X-User-Id': 'guest_owner12345_abc' },
+      }),
     );
     assert.deepEqual(spoof.conversations, []);
 
     // Идентификатор, не похожий на гостевой, не принимается как личность
     const forged = await readJson<{ conversations: unknown[] }>(
-      await fetch(`${server.baseUrl}/api/conversations`, { headers: { 'X-Guest-Id': 'admin-artem-user' } }),
+      await fetch(`${server.baseUrl}/api/conversations`, {
+        headers: { 'X-Guest-Id': 'admin-artem-user' },
+      }),
     );
     assert.deepEqual(forged.conversations, []);
   } finally {

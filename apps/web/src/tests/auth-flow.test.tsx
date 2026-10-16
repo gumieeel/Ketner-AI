@@ -50,8 +50,14 @@ describe('auth-flow: сценарии авторизации и сессии', (
     renderRoute('/login');
 
     expect(screen.queryByText(/Быстрый вход/i)).not.toBeInTheDocument();
-    expect(screen.getByRole('link', { name: /соглашение и оферту/i })).toHaveAttribute('href', '/terms');
-    expect(screen.getByRole('link', { name: /политику конфиденциальности/i })).toHaveAttribute('href', '/privacy');
+    expect(screen.getByRole('link', { name: /соглашение и оферту/i })).toHaveAttribute(
+      'href',
+      '/terms',
+    );
+    expect(screen.getByRole('link', { name: /политику конфиденциальности/i })).toHaveAttribute(
+      'href',
+      '/privacy',
+    );
   });
 
   it('валидация и успешная регистрация на странице /signup', async () => {
@@ -138,7 +144,9 @@ describe('auth-flow: сценарии авторизации и сессии', (
 
     await waitFor(() => {
       expect(useAuth.getState().status).toBe('authenticated');
-      expect(screen.getByRole('heading', { level: 1, name: 'Оформление подписки' })).toBeInTheDocument();
+      expect(
+        screen.getByRole('heading', { level: 1, name: 'Оформление подписки' }),
+      ).toBeInTheDocument();
       expect(screen.getByText('GPT Pro')).toBeInTheDocument();
     });
   });
@@ -165,4 +173,3 @@ describe('auth-flow: сценарии авторизации и сессии', (
     expect(toggleButton).toHaveAttribute('aria-pressed', 'false');
   });
 });
-

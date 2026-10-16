@@ -41,7 +41,11 @@ async function withFetch<T>(impl: FetchFn, run: () => Promise<T>): Promise<T> {
 const TOOLS: ChatToolDefinition[] = [
   {
     type: 'function',
-    function: { name: 'read_file', description: 'read', parameters: { type: 'object', properties: {} } },
+    function: {
+      name: 'read_file',
+      description: 'read',
+      parameters: { type: 'object', properties: {} },
+    },
   },
 ];
 
@@ -58,32 +62,60 @@ test('streamChat собирает вызовы инструментов из к�
           choices: [
             {
               delta: {
-                tool_calls: [{ index: 0, id: 'call_a', type: 'function', function: { name: 'read_file', arguments: '' } }],
+                tool_calls: [
+                  {
+                    index: 0,
+                    id: 'call_a',
+                    type: 'function',
+                    function: { name: 'read_file', arguments: '' },
+                  },
+                ],
               },
             },
           ],
         },
-        { choices: [{ delta: { tool_calls: [{ index: 0, function: { arguments: '{"path":"src/' } }] } }] },
+        {
+          choices: [
+            { delta: { tool_calls: [{ index: 0, function: { arguments: '{"path":"src/' } }] } },
+          ],
+        },
         { choices: [{ delta: { tool_calls: [{ index: 0, function: { arguments: 'a.ts"}' } }] } }] },
         {
           choices: [
             {
               delta: {
-                tool_calls: [{ index: 1, id: 'call_b', type: 'function', function: { name: 'read_file', arguments: '{"path":"b.ts"}' } }],
+                tool_calls: [
+                  {
+                    index: 1,
+                    id: 'call_b',
+                    type: 'function',
+                    function: { name: 'read_file', arguments: '{"path":"b.ts"}' },
+                  },
+                ],
               },
             },
           ],
         },
         {
           choices: [{ delta: {}, finish_reason: 'tool_calls' }],
-          usage: { prompt_tokens: 900, completion_tokens: 40, cost: 0.0007, prompt_tokens_details: { cached_tokens: 600 } },
+          usage: {
+            prompt_tokens: 900,
+            completion_tokens: 40,
+            cost: 0.0007,
+            prompt_tokens_details: { cached_tokens: 600 },
+          },
         },
         '[DONE]',
       ]);
     }) as FetchFn,
     () =>
       provider.streamChat(
-        { model: 'xiaomi/mimo-v2.6-pro', messages: [{ role: 'user', content: 'go' }], tools: TOOLS, maxTokens: 500 },
+        {
+          model: 'xiaomi/mimo-v2.6-pro',
+          messages: [{ role: 'user', content: 'go' }],
+          tools: TOOLS,
+          maxTokens: 500,
+        },
         { onDelta: (d) => text.push(d), isCancelled: () => false },
       ),
   );
@@ -112,7 +144,10 @@ test('streamChat: обычный ответ без инструментов за
     (async () =>
       sse([
         { choices: [{ delta: { content: 'Готово.' } }] },
-        { choices: [{ delta: {}, finish_reason: 'stop' }], usage: { prompt_tokens: 10, completion_tokens: 2 } },
+        {
+          choices: [{ delta: {}, finish_reason: 'stop' }],
+          usage: { prompt_tokens: 10, completion_tokens: 2 },
+        },
       ])) as FetchFn,
     () =>
       provider.streamChat(
@@ -137,7 +172,9 @@ test('streamChat: размышления идут отдельным поток�
             {
               delta: {
                 reasoning: 'Надо ',
-                reasoning_details: [{ type: 'reasoning.text', index: 0, text: 'Надо ', format: 'x' }],
+                reasoning_details: [
+                  { type: 'reasoning.text', index: 0, text: 'Надо ', format: 'x' },
+                ],
               },
             },
           ],
@@ -147,7 +184,9 @@ test('streamChat: размышления идут отдельным поток�
             {
               delta: {
                 reasoning: 'подумать',
-                reasoning_details: [{ type: 'reasoning.text', index: 0, text: 'подумать', signature: 'sig1' }],
+                reasoning_details: [
+                  { type: 'reasoning.text', index: 0, text: 'подумать', signature: 'sig1' },
+                ],
               },
             },
           ],
@@ -184,7 +223,13 @@ test('streamChat: отмена клиентом отбрасывает недо�
         { choices: [{ delta: { content: 'начинаю' } }] },
         {
           choices: [
-            { delta: { tool_calls: [{ index: 0, id: 'c', function: { name: 'write_file', arguments: '{"path":"a' } }] } },
+            {
+              delta: {
+                tool_calls: [
+                  { index: 0, id: 'c', function: { name: 'write_file', arguments: '{"path":"a' } },
+                ],
+              },
+            },
           ],
         },
         { choices: [{ delta: { content: ' ещё' } }] },
@@ -259,7 +304,9 @@ test('prepareChatMessages: роли tool/assistant приводятся к фо�
   assert.deepEqual(wire[2], {
     role: 'assistant',
     content: null,
-    tool_calls: [{ id: 'c1', type: 'function', function: { name: 'read_file', arguments: '{"path":"a"}' } }],
+    tool_calls: [
+      { id: 'c1', type: 'function', function: { name: 'read_file', arguments: '{"path":"a"}' } },
+    ],
     reasoning_details: [{ type: 'reasoning.text', text: 'думал', index: 0 }],
   });
   assert.deepEqual(wire[3], { role: 'tool', tool_call_id: 'c1', content: 'файл' });
@@ -275,7 +322,8 @@ test('prepareChatMessages: для Anthropic кэшируются системн�
   ];
   const wire = prepareChatMessages('anthropic/claude-opus-5.5', messages);
   const cached = (m: Record<string, unknown>) =>
-    Array.isArray(m.content) && (m.content as Array<Record<string, unknown>>)[0].cache_control !== undefined;
+    Array.isArray(m.content) &&
+    (m.content as Array<Record<string, unknown>>)[0].cache_control !== undefined;
   assert.equal(cached(wire[0]), true);
   assert.equal(cached(wire[1]), true);
   assert.equal(cached(wire[3]), false);

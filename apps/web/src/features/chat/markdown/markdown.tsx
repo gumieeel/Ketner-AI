@@ -97,7 +97,10 @@ export default function Markdown({ content }: { content: string }) {
         switch (block.type) {
           case 'heading':
             return (
-              <p key={index} className={cn('max-w-[68ch] first:mt-0', HEADING_CLASSES[block.level])}>
+              <p
+                key={index}
+                className={cn('max-w-[68ch] first:mt-0', HEADING_CLASSES[block.level])}
+              >
                 <Inline text={block.text} />
               </p>
             );
