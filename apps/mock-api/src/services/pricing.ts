@@ -59,3 +59,55 @@ export function planPriceRub(planId: PlanId | string): number {
 export function planPriceCents(planId: PlanId | string): number {
   return Math.round(planPriceUsd(planId) * 100);
 }
+
+// ─────────────────────────────────────────────────────────────
+// Экономика: комиссии и доли выручки (на них опираются бюджеты тарифов, пакеты и тесты)
+// ─────────────────────────────────────────────────────────────
+
+/** Налог с выручки. */
+export const TAX_RATE = 0.06;
+/** Комиссия OpenRouter за пополнение баланса: каждый доллар расхода на модели стоит $1.055. */
+export const OPENROUTER_TOPUP_FEE = 0.055;
+/**
+ * Какая доля цены доходит до нас по каналу оплаты (до налога). Telegram Stars отдаёт разработчику
+ * ≈ $0.013 за звезду при цене покупки ≈ $0.018, то есть ≈ 72%; Trybit (крипта) берёт ≈ 2%.
+ */
+export const PAYMENT_NET_SHARE = { stars: 0.72, crypto: 0.98 } as const;
+/** Себестоимость $1 расхода на модели с учётом комиссии пополнения OpenRouter. */
+export function modelSpendCostUsd(spendUsd: number): number {
+  return spendUsd * (1 + OPENROUTER_TOPUP_FEE);
+}
+
+// ─────────────────────────────────────────────────────────────
+// Пакеты премиум-квоты поверх подписки
+// ─────────────────────────────────────────────────────────────
+
+/**
+ * Пакет докупки: `quotaUsd` долларов премиум-квоты (расход на модели классов strong и top) за
+ * `priceUsd`. Кредиты пакета действуют `PREMIUM_PACK_DAYS` дней и тратятся после основной квоты
+ * тарифа. Покупать могут Plus, Pro и Ultra (на Free премиум-моделей нет).
+ *
+ * Цена не ниже себестоимости / `PACK_MAX_COST_SHARE`: себестоимость — квота с комиссией пополнения
+ * OpenRouter, то есть маржа пакета до налога и комиссии оплаты не ниже 40% (у тарифов костбюджет —
+ * 31–45% цены). Проверка: services/currency.test.ts.
+ */
+export interface PremiumPack {
+  id: string;
+  quotaUsd: number;
+  priceUsd: number;
+}
+
+export const PREMIUM_PACKS: readonly PremiumPack[] = [
+  { id: 'premium-3', quotaUsd: 3, priceUsd: 6 },
+  { id: 'premium-5', quotaUsd: 5, priceUsd: 9 },
+  { id: 'premium-10', quotaUsd: 10, priceUsd: 18 },
+];
+
+/** Срок действия кредитов пакета. */
+export const PREMIUM_PACK_DAYS = 30;
+/** Себестоимость пакета — не больше этой доли его цены. */
+export const PACK_MAX_COST_SHARE = 0.6;
+
+export function findPremiumPack(id: unknown): PremiumPack | undefined {
+  return PREMIUM_PACKS.find((pack) => pack.id === id);
+}

@@ -6,10 +6,11 @@ import test from 'node:test';
 import { ModelRegistry } from '../ai/model-registry.js';
 import { typicalRequestCost } from '../ai/engine-pricing.js';
 import { UsageStore } from '../store/usage-store.js';
+import { PremiumCreditStore } from '../store/premium-credit-store.js';
 import { readJson, startTestServer } from '../testing/server.js';
 import type { AuthSession } from '../types.js';
 import { PLAN_ENTITLEMENTS } from './entitlement.js';
-import { buildQuotaReport, getPremiumQuota } from './premium-quota.js';
+import { buildQuotaReport, getPremiumQuota, settlePremiumCost } from './premium-quota.js';
 
 const registry = new ModelRegistry();
 const DAY = 24 * 3_600_000;
@@ -43,7 +44,11 @@ function spend(
   }
 }
 
-const deps = (usage: UsageStore) => ({ usageStore: usage, registry });
+const deps = (usage: UsageStore, credits = new PremiumCreditStore()) => ({
+  usageStore: usage,
+  registry,
+  credits,
+});
 
 test('квота: топ-модели тарифа, цена запроса по таблице и остаток по квоте и пулу', () => {
   const usage = newUsage();
@@ -167,4 +172,32 @@ test('GET /api/usage/quota: только со входом; тариф из се
   assert.equal(body.reasoningMode, 'max');
   assert.equal(body.premium.spentUsd, 0.21);
   assert.ok(body.models.some((m) => m.id === 'claude-opus-5.5' && m.remaining > 0));
+});
+
+test('квота: кредиты пакетов добавляют запросы сверх квоты тарифа и лимитов модели', () => {
+  const usage = newUsage();
+  const credits = new PremiumCreditStore();
+  credits.grant({ id: 'pay-1', userId: 'u-cr', packId: 'premium-5', amountUsd: 5, days: 30 });
+  // Квота тарифа и суточная доля пула Opus исчерпаны.
+  spend(usage, 'u-cr', 'claude-opus-5.5', PLAN_ENTITLEMENTS.pro.premiumBudget / 8, 8);
+  const report = buildQuotaReport('u-cr', 'pro', deps(usage, credits));
+  assert.equal(report.premium.creditsUsd, 5);
+  assert.ok(report.premium.available);
+  assert.equal(report.premium.baseAvailable, false);
+  const opus = report.models.find((m) => m.id === 'claude-opus-5.5')!;
+  assert.equal(opus.limitedBy, 'quota', 'квоту тарифа ограничивает она сама');
+  assert.equal(opus.remainingByCredits, Math.floor(5 / opus.requestCostUsd));
+  assert.equal(opus.remaining, opus.remainingByCredits);
+});
+
+test('квота: списание с кредитов — только то, что не помещается в квоту тарифа', () => {
+  const usage = newUsage();
+  const credits = new PremiumCreditStore();
+  credits.grant({ id: 'pay-2', userId: 'u-st', packId: 'premium-3', amountUsd: 3, days: 30 });
+  const d = deps(usage, credits);
+  spend(usage, 'u-st', 'claude-sonnet-5.5', PLAN_ENTITLEMENTS.pro.premiumBudget - 0.05);
+  assert.equal(settlePremiumCost('u-st', 'pro', 0.02, false, d), 0, 'помещается в квоту');
+  assert.equal(settlePremiumCost('u-st', 'pro', 0.08, false, d), 0.03);
+  assert.equal(settlePremiumCost('u-st', 'pro', 0.1, true, d), 0.1, 'за счёт пакета — целиком');
+  assert.equal(credits.balanceOf('u-st').remainingUsd, 2.87);
 });

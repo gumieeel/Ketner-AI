@@ -121,7 +121,12 @@ export interface ModelLimitDecision {
   limited?: { model: ModelRegistryEntry; status: ModelLimitStatus };
 }
 
-function describeLimit(model: ModelRegistryEntry, plan: string, status: ModelLimitStatus): string {
+/** Причина ограничения для routingReason: пул на неделю или его суточная доля. */
+export function describeLimit(
+  model: ModelRegistryEntry,
+  plan: string,
+  status: ModelLimitStatus,
+): string {
   const { weeklyPool, dailyCap } = status.limit;
   return status.binding === 'week'
     ? `Weekly pool used up for ${model.name} (${weeklyPool}/week on ${plan})`

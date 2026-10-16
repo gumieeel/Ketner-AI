@@ -1,6 +1,7 @@
 import { Router, type Request, type Response } from 'express';
 import { ERROR_MESSAGES } from '../ai/answers.js';
 import { AIGateway, classifyPromptComplexity } from '../ai/gateway.js';
+import type { PremiumCreditSource } from '../store/premium-credit-store.js';
 import { DEFAULT_MODEL_ID } from '../ai/models.js';
 import { modelRegistry } from '../ai/model-registry.js';
 import { delay, randomBetween } from '../ai/stream.js';
@@ -109,6 +110,8 @@ export interface ChatRouterDeps {
   usageStore?: UsageStore;
   gateway?: AIGateway;
   feedbackStore?: FeedbackStore;
+  /** Кредиты докупленных пакетов (тот же журнал, что у биллинга). */
+  premiumCredits?: PremiumCreditSource;
   /**
    * Разрешить анонимные вызовы через общий demo-user. По умолчанию — только вне production
    * (config.allowAnonymousChat); в production чат без сессии отвечает 401.
@@ -132,6 +135,7 @@ export function createChatRouter({
   usageStore = defaultUsageStore,
   gateway,
   feedbackStore = defaultFeedbackStore,
+  premiumCredits,
   allowAnonymous = config.allowAnonymousChat,
   limitGuestsByIp = isProduction,
 }: ChatRouterDeps): Router {
@@ -142,6 +146,7 @@ export function createChatRouter({
       usageStore,
       aiConfig: ai,
       feedbackStore,
+      premiumCredits,
     });
 
   // Гостевой id придумывает сам браузер, поэтому лимит «на гостя» обходится сменой id.

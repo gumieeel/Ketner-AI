@@ -8,7 +8,7 @@ import { planPriceUsd } from '../services/pricing.js';
 import type { InvoiceStore } from '../store/invoice-store.js';
 import type { SubscriptionStore } from '../store/subscription-store.js';
 import type { UserStore } from '../store/user-store.js';
-import { STARS_PLANS, planTitle, type TelegramBotService } from '../telegram/bot.js';
+import { STARS_PLANS, planTitle, paymentTitle, type TelegramBotService } from '../telegram/bot.js';
 import { isTelegramAccountEmail } from '../telegram/auth-requests.js';
 import { validateInitData, type TelegramWebAppUser } from '../telegram/webapp-auth.js';
 import { EmailLinkCodes, EMAIL_CODE_TTL_MS } from '../telegram/email-link-codes.js';
@@ -133,7 +133,8 @@ export function createMiniAppRouter({
       id: payment.id,
       method: payment.method,
       planId: payment.planId,
-      planTitle: planTitle(payment.planId),
+      planTitle: paymentTitle(payment),
+      ...(payment.packId ? { packId: payment.packId } : {}),
       amount: payment.amount,
       currency: payment.currency,
       paidAt: payment.paidAt,

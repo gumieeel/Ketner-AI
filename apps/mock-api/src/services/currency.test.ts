@@ -3,6 +3,14 @@ import test from 'node:test';
 import { CurrencyService } from './currency.js';
 import { PLAN_ENTITLEMENTS } from './entitlement.js';
 import { PLANS } from '../routes/billing.js';
+import {
+  modelSpendCostUsd,
+  OPENROUTER_TOPUP_FEE,
+  PACK_MAX_COST_SHARE,
+  PAYMENT_NET_SHARE,
+  PREMIUM_PACKS,
+  TAX_RATE,
+} from './pricing.js';
 
 test('CurrencyService: конвертация валют и динамическое обновление курса', () => {
   const initialRate = CurrencyService.getUsdToRubRate();
@@ -23,8 +31,8 @@ test('CurrencyService: конвертация валют и динамическ
 
 // Допущения расчёта (docs/models-and-pricing.md): налог 6%, Stripe 3.9% + $0.30 (карта, международная),
 // комиссия пополнения OpenRouter 5.5%, субсидия Free-тира $3.01 на платящего (конверсия 5%, средний расход Free $0.15).
-const TAX = 0.06;
-const OPENROUTER_FEE = 1.055;
+const TAX = TAX_RATE;
+const OPENROUTER_FEE = 1 + OPENROUTER_TOPUP_FEE;
 const FREE_SUBSIDY_PER_PAYER = 3.01;
 const HARD_STOP_MULTIPLIER = 1.25; // services/budget-policy.ts: после 125% бюджета запросы отклоняются
 const STARS_PAYOUT_USD = 0.013; // выплата разработчику за 1 Star
@@ -94,4 +102,27 @@ test('CurrencyService.calculatePlanCostBudget: считает от цены в �
   assert.equal(CurrencyService.calculatePlanCostBudget(25), 10);
   assert.equal(CurrencyService.calculatePlanCostBudget(49, 0.4), 19.6);
   assert.equal(CurrencyService.calculatePlanCostBudget(0), 0.2);
+});
+
+test('Пакеты премиум-квоты: цена не ниже себестоимости / 0.6 и прибыльны в любом канале оплаты', () => {
+  assert.ok(PREMIUM_PACKS.length > 0);
+  for (const pack of PREMIUM_PACKS) {
+    // Себестоимость — квота с комиссией пополнения OpenRouter (пакет тратится только на модели).
+    const cost = modelSpendCostUsd(pack.quotaUsd);
+    assert.ok(
+      pack.priceUsd >= cost / PACK_MAX_COST_SHARE,
+      `${pack.id}: цена $${pack.priceUsd} ниже себестоимости $${cost.toFixed(2)} / ${PACK_MAX_COST_SHARE}`,
+    );
+    // Пакет выкуплен целиком: даже через Telegram Stars (≈72% цены) после налога остаётся прибыль.
+    for (const [method, share] of Object.entries(PAYMENT_NET_SHARE)) {
+      const net = pack.priceUsd * share * (1 - TAX);
+      assert.ok(
+        net - cost > 0,
+        `${pack.id} через ${method}: чистыми $${net.toFixed(2)} не покрывают $${cost.toFixed(2)}`,
+      );
+    }
+  }
+  // Чем больше пакет, тем не дороже доллар квоты.
+  const perQuota = PREMIUM_PACKS.map((p) => p.priceUsd / p.quotaUsd);
+  assert.ok(perQuota.every((v, i) => i === 0 || v <= perQuota[i - 1] + 1e-9));
 });

@@ -984,3 +984,91 @@ test('сайт: счёт в звёздах считается по текуще�
   assert.equal(invoice.starsAmount, 600);
   assert.match(invoice.botDeepLink, new RegExp(`\\?start=${invoice.id}$`));
 });
+
+// ───────────── пакеты премиум-квоты за звёзды ─────────────
+
+test('пакет за звёзды: только на платном тарифе; оплата начисляет кредиты, повтор — нет', async (t) => {
+  const h = await harness();
+  t.after(() => h.server.close());
+  const buyer = await h.signup();
+  const auth = { Authorization: `Bearer ${buyer.token}`, 'Content-Type': 'application/json' };
+  const createPack = () =>
+    fetch(`${h.server.baseUrl}/api/billing/telegram-stars/create-invoice`, {
+      method: 'POST',
+      headers: auth,
+      body: JSON.stringify({ packId: 'premium-5' }),
+    });
+
+  // На Free премиум-моделей нет — пакет не продаётся.
+  const denied = await createPack();
+  assert.equal(denied.status, 403);
+  assert.equal((await readJson<ApiErrorBody>(denied)).error.code, 'plan_required');
+
+  h.billingService.grant(buyer.user.id, 'pro', {
+    id: 'crypto:plan-for-pack',
+    method: 'crypto',
+    amount: 25,
+    currency: 'USD',
+  });
+  const created = await createPack();
+  assert.equal(created.status, 200);
+  const { invoice } = await readJson<{
+    invoice: { id: string; packId: string; starsAmount: number };
+  }>(created);
+  assert.equal(invoice.packId, 'premium-5');
+  assert.equal(invoice.starsAmount, h.rateService.quote(9));
+
+  const payload = encodePayload({
+    packId: 'premium-5',
+    stars: invoice.starsAmount,
+    invoiceId: invoice.id,
+    userId: buyer.user.id,
+  });
+  assert.equal(h.bot.validatePayment('XTR', invoice.starsAmount, payload).ok, true);
+  await h.pay(777001, payload, invoice.starsAmount, 'charge-pack-1');
+  await h.pay(777001, payload, invoice.starsAmount, 'charge-pack-1');
+
+  const packs = await readJson<{
+    packs: Array<{ id: string; priceUsd: number; quotaUsd: number }>;
+    credits: { remainingUsd: number; items: Array<{ id: string }> };
+  }>(await fetch(`${h.server.baseUrl}/api/billing/packs`, { headers: auth }));
+  assert.deepEqual(
+    packs.packs.map((p) => p.id),
+    ['premium-3', 'premium-5', 'premium-10'],
+  );
+  assert.equal(packs.credits.remainingUsd, 5);
+  assert.equal(packs.credits.items.length, 1, 'повторная доставка платежа не начисляет второй раз');
+  // Подписка от пакета не меняется.
+  assert.equal(h.subscriptionStore.get(buyer.user.id).plan, 'pro');
+
+  // Возврат: пока из пакета ничего не потрачено — звёзды возвращаются сразу; потом — нет.
+  const payment = h.billingService.findPayment('stars:charge-pack-1')!;
+  assert.equal(payment.packId, 'premium-5');
+  assert.deepEqual(h.billingService.refundOption(payment), { kind: 'auto' });
+  h.billingService.ledger.credits.debit(buyer.user.id, 0.01);
+  assert.deepEqual(h.billingService.refundOption(payment), { kind: 'none', reason: 'used' });
+});
+
+test('пакет за звёзды: возврат неиспользованного пакета снимает кредиты, подписку не трогает', async (t) => {
+  const h = await harness();
+  t.after(() => h.server.close());
+  const buyer = await h.signup();
+  h.billingService.grant(buyer.user.id, 'plus', {
+    id: 'crypto:plan-plus',
+    method: 'crypto',
+    amount: 9,
+    currency: 'USD',
+  });
+  const { payment } = h.billingService.grantPack(buyer.user.id, 'premium-3', {
+    id: 'stars:pack-refund',
+    method: 'stars',
+    amount: 400,
+    currency: 'XTR',
+    chargeId: 'pack-refund',
+    telegramUserId: 777002,
+  });
+  const result = await h.billingService.requestRefund(buyer.user.id, payment.id);
+  assert.equal(result.outcome, 'refunded');
+  assert.equal(h.billingService.ledger.credits.balanceOf(buyer.user.id).remainingUsd, 0);
+  assert.equal(h.subscriptionStore.get(buyer.user.id).plan, 'plus');
+});

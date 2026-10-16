@@ -12,7 +12,7 @@ import { buttonClasses } from '@/components/ui/button-classes';
 import { Input } from '@/components/ui/input';
 import { QrCode } from '@/components/ui/qr-code';
 import { RichText } from '@/components/ui/rich-text';
-import type { CryptoCurrency, CryptoInvoice, Plan } from '@/features/billing/types';
+import type { CryptoCurrency, CryptoInvoice } from '@/features/billing/types';
 import { useTranslation } from '@/i18n';
 import { CryptoFeeBreakdown, CryptoPicker } from './crypto-picker';
 import type { CryptoOption } from './crypto-options';
@@ -20,8 +20,10 @@ import { openGatewayWindow } from './gateway-window';
 import { CopyButton, Notice, PanelShell, QrFrame, StatusRow, StepLabel, TimerPill } from './parts';
 
 export interface CryptoPanelProps {
-  plan: Plan;
-  planName: string;
+  /** Цена покупки (тарифа или пакета), $. */
+  priceUsd: number;
+  /** Метка покупки: «Тариф Pro · 30 дней» или «+$5 премиум-квоты · 30 дней». */
+  chipLabel: string;
   amount: string;
   timer: string;
   currency: CryptoCurrency;
@@ -52,8 +54,8 @@ export interface CryptoPanelProps {
 /** Панель оплаты криптовалютой: только через Trybit — реквизиты и проверка оплаты от шлюза. */
 export function CryptoPanel(props: CryptoPanelProps) {
   const {
-    plan,
-    planName,
+    priceUsd,
+    chipLabel,
     amount,
     timer,
     currency,
@@ -113,11 +115,11 @@ export function CryptoPanel(props: CryptoPanelProps) {
               <span className="text-[28px] leading-9 font-semibold tracking-tight text-text tabular-nums sm:text-3xl">
                 {amount}
               </span>
-              <span className="text-xs text-muted tabular-nums">≈ ${plan.priceMonthly}.00 USD</span>
+              <span className="text-xs text-muted tabular-nums">≈ ${priceUsd}.00 USD</span>
             </p>
           </div>
           <Badge tone="brand" className="self-start sm:self-auto">
-            {t('checkout.cryptoPlanChip', { plan: planName })}
+            {chipLabel}
           </Badge>
         </div>
 
@@ -125,7 +127,7 @@ export function CryptoPanel(props: CryptoPanelProps) {
         <CryptoPicker value={currency} onChange={onCurrencyChange} />
 
         <CryptoFeeBreakdown
-          priceUsd={plan.priceMonthly}
+          priceUsd={priceUsd}
           currency={currency}
           fees={invoice?.fees}
           loading={props.loading}

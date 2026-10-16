@@ -16,14 +16,14 @@
 
 import { ContextOptimizer } from './context.js';
 import type { ModelRegistryEntry, PlanId, ReasoningEffort } from './gateway-types.js';
-import { applyEconomyRules, isAllowedFallbackModel } from './gateway.js';
+import { applyEconomyRules, isAllowedFallbackModel, type EconomyState } from './gateway.js';
 import { modelRegistry, type ModelRegistry, WORKHORSE_MODEL_ID } from './model-registry.js';
 import { PUBLIC_MODEL_IDS } from './models.js';
 import { providerManager, type ProviderManager } from './providers/provider-factory.js';
 import { OpenRouterError } from './providers/openrouter-provider.js';
 import { CircuitBreaker, defaultCircuitBreaker } from './circuit-breaker.js';
 import { computeRequestCost } from './engine-pricing.js';
-import { computeOutputCap, toProviderReasoning } from './reasoning-policy.js';
+import { computeOutputCap, isPremiumClass, toProviderReasoning } from './reasoning-policy.js';
 import { createStreamWatchdog, type WatchdogLimits } from './stream-watchdog.js';
 import { delay } from './stream.js';
 import {
@@ -38,7 +38,8 @@ import {
 } from './agent/agent-types.js';
 import type { RequestedReasoningEffort } from './agent/openai-compat.js';
 import { evaluateBudget, type BudgetStage } from '../services/budget-policy.js';
-import { getPremiumQuota } from '../services/premium-quota.js';
+import { getPremiumQuota, settlePremiumCost } from '../services/premium-quota.js';
+import type { PremiumCreditSource } from '../store/premium-credit-store.js';
 import { EntitlementService, planRank } from '../services/entitlement.js';
 import { FairUseEngine } from '../services/fair-use.js';
 import type { UsageStore } from '../store/usage-store.js';
@@ -116,6 +117,8 @@ export interface AgentGatewayDeps {
   registry?: ModelRegistry;
   providers?: ProviderManager;
   circuitBreaker?: CircuitBreaker;
+  /** Кредиты докупленных пакетов; по умолчанию — общий журнал платежей. */
+  premiumCredits?: PremiumCreditSource;
 }
 
 const fail = (
@@ -219,8 +222,10 @@ export class AgentGateway {
   private readonly registry: ModelRegistry;
   private readonly providers: ProviderManager;
   private readonly circuitBreaker: CircuitBreaker;
+  private readonly premiumCredits?: PremiumCreditSource;
 
   constructor(deps: AgentGatewayDeps) {
+    this.premiumCredits = deps.premiumCredits;
     this.usageStore = deps.usageStore;
     this.registry = deps.registry ?? modelRegistry;
     this.providers = deps.providers ?? providerManager;
@@ -228,7 +233,7 @@ export class AgentGateway {
   }
 
   private quotaDeps() {
-    return { usageStore: this.usageStore, registry: this.registry };
+    return { usageStore: this.usageStore, registry: this.registry, credits: this.premiumCredits };
   }
 
   /** Публичные модели каталога для агента (без `auto`). */
@@ -343,8 +348,12 @@ export class AgentGateway {
       );
     }
 
-    const premiumAvailable = getPremiumQuota(req.userId, plan, this.quotaDeps()).available;
-    const economyState = { stage, premiumAvailable };
+    const premium = getPremiumQuota(req.userId, plan, this.quotaDeps());
+    const economyState: EconomyState = {
+      stage,
+      premiumAvailable: premium.baseAvailable,
+      creditsAvailable: premium.creditsUsd > 0,
+    };
 
     // 3. Модель: только публичный каталог; права проверяются по запрошенной модели до замен.
     let requested: ModelRegistryEntry;
@@ -415,6 +424,7 @@ export class AgentGateway {
     try {
       return await this.execute(req, callbacks, {
         plan,
+        fundedByCredits: Boolean(economy.fundedByCredits),
         entitlements,
         stage,
         economyState,
@@ -439,9 +449,10 @@ export class AgentGateway {
     callbacks: AgentRunCallbacks,
     ctx: {
       plan: PlanId;
+      fundedByCredits: boolean;
       entitlements: ReturnType<typeof EntitlementService.getEntitlements>;
       stage: BudgetStage;
-      economyState: { stage: BudgetStage; premiumAvailable: boolean };
+      economyState: EconomyState;
       requested: ModelRegistryEntry;
       target: ModelRegistryEntry;
       candidates: ModelRegistryEntry[];
@@ -671,7 +682,7 @@ export class AgentGateway {
 
   private recordUsage(
     req: AgentRunRequest,
-    ctx: { conversationId: string },
+    ctx: { conversationId: string; plan: PlanId; fundedByCredits: boolean },
     model: ModelRegistryEntry,
     _engineId: string | undefined,
     result: AgentProviderResult | null,
@@ -680,11 +691,18 @@ export class AgentGateway {
     ttftMs: number | null,
     latencyMs: number,
   ): void {
+    // Премиум-запрос сверх квоты тарифа (или за счёт пакета) списывается с кредитов пакетов.
+    const premium = isPremiumClass(model.costClass);
+    const premiumCreditUsd = premium
+      ? settlePremiumCost(req.userId, ctx.plan, costUsd, ctx.fundedByCredits, this.quotaDeps())
+      : 0;
     this.usageStore.recordUsage({
       userId: req.userId,
       conversationId: ctx.conversationId,
       modelId: model.id,
       provider: model.provider,
+      premiumCreditUsd,
+      ...(premium && ctx.fundedByCredits ? { fundedBy: 'credits' as const } : {}),
       inputTokens: result?.usage.inputTokens ?? 0,
       outputTokens: result?.usage.outputTokens ?? 0,
       cachedTokens: result?.usage.cachedTokens,

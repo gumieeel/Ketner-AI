@@ -1,12 +1,14 @@
 /**
  * Квота премиум-моделей пользователя и «сколько запросов осталось».
  *
- * Квота — это `premiumBudget` тарифа за скользящие 30 дней (модели классов strong и top). Здесь
- * она считается для шлюза, агента и интерфейса одинаково, а для каждой топ-модели — сколько её
- * запросов примерно осталось и когда вернётся следующий. Запросов осталось меньшее из:
- *   - остаток квоты / цена запроса модели;
- *   - остаток недельного пула модели и его суточной доли (services/daily-limits.ts);
- *   - ноль, если месячный бюджет на исходе (80%+): тогда премиум-модели заменяет рабочая.
+ * Квота — это `premiumBudget` тарифа за скользящие 30 дней (модели классов strong и top). Сверху
+ * могут быть кредиты докупленных пакетов (store/premium-credit-store.ts): они тратятся после
+ * квоты тарифа, не входят в месячный бюджет и не ограничены лимитами моделей — пакет оплачен
+ * отдельно. Здесь всё это считается для шлюза, агента и интерфейса одинаково, а для каждой
+ * топ-модели — сколько её запросов примерно осталось и когда вернётся следующий:
+ *   - по квоте тарифа: меньшее из «остаток квоты / цена запроса» и остатка недельного пула модели
+ *     и его суточной доли (services/daily-limits.ts); ноль, если месячный бюджет на исходе (80%+);
+ *   - плюс по кредитам: остаток кредитов / цена запроса.
  * Цена запроса — средняя фактическая за 30 дней по всем пользователям (если запросов набралось
  * достаточно), иначе оценка по таблице цен для типичного запроса (ai/engine-pricing.ts).
  */
@@ -17,6 +19,8 @@ import { typicalRequestCost } from '../ai/engine-pricing.js';
 import { modelLimitStatus } from '../ai/model-limits.js';
 import { effectiveReasoningMode, isPremiumClass, limitUnitsFor } from '../ai/reasoning-policy.js';
 import type { UsageStore } from '../store/usage-store.js';
+import type { PremiumCreditSource } from '../store/premium-credit-store.js';
+import { billingLedger } from '../billing/index.js';
 import type { PlanId } from '../types.js';
 import { BUDGET_SOFT_RATIO, evaluateBudget, type BudgetStage } from './budget-policy.js';
 import { EntitlementService, planAllowsModel } from './entitlement.js';
@@ -27,18 +31,29 @@ const QUOTA_WINDOW_MS = 30 * DAY_MS;
 export const PREMIUM_QUOTA_WARNING_PCT = 80;
 
 export interface PremiumQuota {
+  /** Квота тарифа за 30 дней, $. */
   budgetUsd: number;
+  /** Сколько из квоты тарифа потрачено (без того, что оплачено кредитами пакетов), $. */
   spentUsd: number;
   remainingUsd: number;
   usedPct: number;
-  /** Можно ли сейчас ответить премиум-моделью (по квоте; бюджет и лимиты моделей — отдельно). */
+  /** Остаток кредитов докупленных пакетов, $, и когда сгорает ближайший из них. */
+  creditsUsd: number;
+  creditsExpireAt: string | null;
+  /** Осталась ли квота тарифа (Auto тратит только её). */
+  baseAvailable: boolean;
+  /** Можно ли сейчас ответить премиум-моделью: квота тарифа или кредиты (бюджет и лимиты — отдельно). */
   available: boolean;
 }
 
 export interface QuotaDeps {
   usageStore: UsageStore;
   registry: ModelRegistry;
+  /** Кредиты докупленных пакетов; по умолчанию — общий журнал платежей. */
+  credits?: PremiumCreditSource;
 }
+
+const creditsOf = (deps: QuotaDeps): PremiumCreditSource => deps.credits ?? billingLedger.credits;
 
 const round = (value: number, digits = 4): number => Number(value.toFixed(digits));
 
@@ -50,13 +65,38 @@ export function getPremiumQuota(userId: string, plan: PlanId, deps: QuotaDeps): 
     deps.registry.getPremiumModelIds(),
   );
   const remainingUsd = Math.max(0, budgetUsd - spentUsd);
+  const credits = creditsOf(deps).balanceOf(userId);
   return {
     budgetUsd,
     spentUsd: round(spentUsd),
     remainingUsd: round(remainingUsd),
     usedPct: budgetUsd > 0 ? Math.min(100, Math.round((spentUsd / budgetUsd) * 100)) : 0,
-    available: remainingUsd > 0,
+    creditsUsd: round(credits.remainingUsd),
+    creditsExpireAt: credits.nextExpiresAt,
+    baseAvailable: remainingUsd > 0,
+    available: remainingUsd > 0 || credits.remainingUsd > 0,
   };
+}
+
+/**
+ * Сколько из стоимости премиум-запроса списать с кредитов пакетов (и списать). Запрос за счёт
+ * кредитов (`fundedByCredits`: квота тарифа или лимит модели исчерпаны) оплачивается кредитами
+ * целиком; обычный — только той частью, что не помещается в остаток квоты тарифа. Вызывается до
+ * записи расхода: возвращённая сумма пишется в `UsageRecord.premiumCreditUsd`.
+ */
+export function settlePremiumCost(
+  userId: string,
+  plan: PlanId,
+  costUsd: number,
+  fundedByCredits: boolean,
+  deps: QuotaDeps,
+): number {
+  if (!(costUsd > 0)) return 0;
+  const credits = creditsOf(deps);
+  if (fundedByCredits) return credits.debit(userId, costUsd);
+  const { remainingUsd } = getPremiumQuota(userId, plan, deps);
+  const overflow = costUsd - remainingUsd;
+  return overflow > 0 ? credits.debit(userId, overflow) : 0;
 }
 
 /**
@@ -85,10 +125,12 @@ export interface ModelQuota {
   /** Примерная цена одного запроса ($) и откуда она взята. */
   requestCostUsd: number;
   priceSource: 'observed' | 'estimate';
-  /** Сколько запросов примерно осталось (меньшее из всех ограничений). */
+  /** Сколько запросов примерно осталось: по квоте тарифа (с лимитами модели) плюс по кредитам. */
   remaining: number;
-  /** Сколько запросов покрывает остаток квоты (без лимитов модели). */
+  /** Сколько запросов покрывает остаток квоты тарифа (без лимитов модели). */
   remainingByQuota: number;
+  /** Сколько запросов покрывают кредиты докупленных пакетов (лимиты модели на них не действуют). */
+  remainingByCredits: number;
   /** Остаток недельного пула и его суточной доли (в запросах), если у модели есть лимит. */
   pool: {
     weekly: number;
@@ -96,7 +138,7 @@ export interface ModelQuota {
     weekRemaining: number;
     dayRemaining: number;
   } | null;
-  /** Что ограничивает, когда запросов не осталось (null — запросы есть). */
+  /** Что ограничивает квоту тарифа, когда её запросов не осталось (null — запросы есть). */
   limitedBy: QuotaLimitedBy;
   /** Когда вернётся хотя бы один запрос (ISO), если сейчас их 0. */
   restoresAt: string | null;
@@ -149,6 +191,8 @@ export function buildQuotaReport(
     const units = limitUnitsFor(model.effortProfile, mode);
     const remainingByQuota =
       requestCostUsd > 0 ? Math.floor(premium.remainingUsd / requestCostUsd) : 0;
+    const remainingByCredits =
+      requestCostUsd > 0 ? Math.floor(premium.creditsUsd / requestCostUsd) : 0;
     const status = modelLimitStatus(model, plan, userId, deps.usageStore, deps.registry, units);
     const pool = status
       ? {
@@ -179,7 +223,8 @@ export function buildQuotaReport(
     if (budget.stage !== 'normal') {
       candidates.push({ by: 'budget', left: 0, at: budgetRestoresAt });
     }
-    const remaining = Math.max(0, Math.min(...candidates.map((c) => c.left)));
+    const fromPlan = Math.max(0, Math.min(...candidates.map((c) => c.left)));
+    const remaining = fromPlan + remainingByCredits;
     const blocking = candidates.filter((c) => c.left <= 0);
     // Все исчерпанные ограничения должны вернуться: ждём самое позднее.
     const restore =
@@ -196,8 +241,9 @@ export function buildQuotaReport(
       priceSource: observed !== null ? 'observed' : 'estimate',
       remaining,
       remainingByQuota,
+      remainingByCredits,
       pool,
-      limitedBy: remaining > 0 ? null : (blocking[0]?.by ?? 'quota'),
+      limitedBy: fromPlan > 0 ? null : (blocking[0]?.by ?? 'quota'),
       restoresAt: restore,
     };
   });

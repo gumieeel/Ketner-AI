@@ -190,7 +190,10 @@ export interface SbpInvoice {
 export interface TelegramStarsInvoice {
   id: string;
   userId: string;
+  /** Тариф счёта; для пакета премиум-квоты — тариф на момент покупки. */
   planId: PlanId;
+  /** Счёт на пакет премиум-квоты (services/pricing.ts → PREMIUM_PACKS), а не на тариф. */
+  packId?: string;
   priceRub: number;
   starsAmount: number;
   botUsername: string;
@@ -220,7 +223,10 @@ export interface CryptoFees {
 export interface CryptoInvoice {
   id: string;
   userId: string;
+  /** Тариф счёта; для пакета премиум-квоты — тариф на момент покупки. */
   planId: PlanId;
+  /** Счёт на пакет премиум-квоты (services/pricing.ts → PREMIUM_PACKS), а не на тариф. */
+  packId?: string;
   currency: CryptoCurrency;
   amount: number;
   amountUsd: number;

@@ -10,7 +10,12 @@ import {
   userStore as defaultUserStore,
 } from '../store/index.js';
 import type { PlanId, PlanItem, Subscription, TelegramStarsInvoice, User } from '../types.js';
-import { planPriceRub, planPriceUsd } from '../services/pricing.js';
+import {
+  findPremiumPack,
+  planPriceRub,
+  planPriceUsd,
+  PREMIUM_PACK_DAYS,
+} from '../services/pricing.js';
 import {
   BillingError,
   REFUND_POLICY,
@@ -39,6 +44,12 @@ const PLAN_TITLES: Record<string, string> = {
 
 export function planTitle(planId: string): string {
   return PLAN_TITLES[planId] ?? planId.toUpperCase();
+}
+
+/** За что платёж в сообщениях: тариф или пакет премиум-квоты. */
+export function paymentTitle(payment: Pick<PaymentRecord, 'planId' | 'packId'>): string {
+  const pack = payment.packId ? findPremiumPack(payment.packId) : undefined;
+  return pack ? `+$${pack.quotaUsd} премиум-квоты` : planTitle(payment.planId);
 }
 
 /** Цена тарифа в звёздах по текущему курсу Telegram Stars (см. stars-rate.ts). */
@@ -133,7 +144,10 @@ export interface TelegramUpdate {
 
 /** Данные, зашитые в счёт. Их задаёт только бот, поэтому им можно доверять при оплате. */
 export interface StarsPayload {
-  planId: PlanId;
+  /** Тариф счёта (для пакета премиум-квоты не передаётся). */
+  planId?: PlanId;
+  /** Пакет премиум-квоты вместо тарифа (services/pricing.ts → PREMIUM_PACKS). */
+  packId?: string;
   stars: number;
   invoiceId: string;
   userId: string;
@@ -142,7 +156,8 @@ export interface StarsPayload {
 }
 
 export function encodePayload(payload: StarsPayload): string {
-  const parts = ['v1', payload.planId, payload.stars, payload.invoiceId, payload.userId];
+  const item = payload.packId ? `pack:${payload.packId}` : payload.planId;
+  const parts = ['v1', item, payload.stars, payload.invoiceId, payload.userId];
   if (payload.recurring) parts.push('r');
   return parts.join('|');
 }
@@ -163,6 +178,11 @@ export function decodePayload(raw: string): StarsPayload | null {
     amount <= 0
   )
     return null;
+  if (planId.startsWith('pack:')) {
+    const packId = planId.slice('pack:'.length);
+    if (!findPremiumPack(packId) || flag === 'r') return null;
+    return { packId, stars: amount, invoiceId, userId };
+  }
   if (!(STARS_PLANS as readonly string[]).includes(planId)) return null;
   return {
     planId: planId as PlanId,
@@ -502,7 +522,7 @@ export class TelegramBotService implements TelegramPaymentsPort {
       '↩️ <b>Заявка на возврат</b>',
       '',
       `Клиент: ${escapeHtml(user ? `${user.name} · ${accountLabel(user)}` : payment.userId)}`,
-      `Платёж: ${planTitle(payment.planId)} · ${amount} · ${payment.method === 'stars' ? 'звёзды' : 'криптовалюта'}`,
+      `Платёж: ${paymentTitle(payment)} · ${amount} · ${payment.method === 'stars' ? 'звёзды' : 'криптовалюта'}`,
       `Оплачен: ${formatDate(payment.paidAt)}`,
       payment.refund?.reason ? `Причина: ${escapeHtml(payment.refund.reason)}` : '',
       payment.refund?.comment ? `Комментарий: ${escapeHtml(payment.refund.comment)}` : '',
@@ -548,10 +568,40 @@ export class TelegramBotService implements TelegramPaymentsPort {
     );
   }
 
+  /** Счёт на пакет премиум-квоты по текущему курсу звёзд. */
+  createPackStarsInvoice(userId: string, packId: string): TelegramStarsInvoice | null {
+    const pack = findPremiumPack(packId);
+    if (!pack) return null;
+    const user = this.deps.userStore.findById(userId);
+    return this.deps.invoiceStore.createTelegramStarsInvoice(
+      userId,
+      user?.plan ?? 'free',
+      0,
+      this.rates.quote(pack.priceUsd),
+      this.username,
+      pack.id,
+    );
+  }
+
   private invoiceParams(
     invoice: TelegramStarsInvoice,
     recurring: boolean,
   ): Record<string, unknown> {
+    const pack = invoice.packId ? findPremiumPack(invoice.packId) : undefined;
+    if (pack) {
+      return {
+        title: `Ketner AI · +$${pack.quotaUsd} премиум-квоты`,
+        description: `Пакет запросов к топ-моделям поверх подписки: +$${pack.quotaUsd} премиум-квоты на ${PREMIUM_PACK_DAYS} дней. Тратится после квоты тарифа.`,
+        payload: encodePayload({
+          packId: pack.id,
+          stars: invoice.starsAmount,
+          invoiceId: invoice.id,
+          userId: invoice.userId,
+        }),
+        currency: 'XTR',
+        prices: [{ label: `+$${pack.quotaUsd} премиум-квоты`, amount: invoice.starsAmount }],
+      };
+    }
     const plan = getPlanItem(invoice.planId);
     const title = recurring
       ? `Ketner AI ${planTitle(invoice.planId)} · каждый месяц`
@@ -606,7 +656,10 @@ export class TelegramBotService implements TelegramPaymentsPort {
     if (totalAmount !== payload.stars) return { ok: false, reason: 'amount_mismatch' };
     if (!this.deps.userStore.findById(payload.userId)) return { ok: false, reason: 'unknown_user' };
     const invoice = this.deps.invoiceStore.getTelegramStarsInvoice(payload.invoiceId);
-    if (invoice && (invoice.userId !== payload.userId || invoice.planId !== payload.planId)) {
+    const sameItem = payload.packId
+      ? invoice?.packId === payload.packId
+      : invoice?.planId === payload.planId && !invoice?.packId;
+    if (invoice && (invoice.userId !== payload.userId || !sameItem)) {
       return { ok: false, reason: 'invoice_mismatch' };
     }
     if (invoice?.status === 'paid' && !payload.recurring)
@@ -636,11 +689,16 @@ export class TelegramBotService implements TelegramPaymentsPort {
       return { status: 'rejected' };
     }
     const telegramUserId = from?.id ?? Number(chatId);
+    if (payload.packId) {
+      return this.handlePackPayment(chatId, telegramUserId, payload.packId, payload, pay, now);
+    }
+    if (!payload.planId) return { status: 'rejected' };
+    const planId = payload.planId;
     const recurring = Boolean(pay.is_recurring || payload.recurring);
     const renewal = Boolean(pay.is_recurring && !pay.is_first_recurring);
     const result = this.billing.grant(
       payload.userId,
-      payload.planId,
+      planId,
       {
         id: `stars:${pay.telegram_payment_charge_id}`,
         method: 'stars',
@@ -663,7 +721,7 @@ export class TelegramBotService implements TelegramPaymentsPort {
       await this.billing.startStarsSubscription(
         {
           userId: payload.userId,
-          planId: payload.planId,
+          planId: planId,
           telegramUserId,
           chargeId: pay.telegram_payment_charge_id,
           invoiceId: payload.invoiceId,
@@ -687,12 +745,12 @@ export class TelegramBotService implements TelegramPaymentsPort {
       ? [
           `🔄 <b>Автопродление прошло</b>`,
           '',
-          `Списано ${pay.total_amount} ⭐. Тариф <b>${planTitle(payload.planId)}</b> действует до <b>${until}</b>.`,
+          `Списано ${pay.total_amount} ⭐. Тариф <b>${planTitle(planId)}</b> действует до <b>${until}</b>.`,
         ]
       : [
           '🎉 <b>Оплата прошла!</b>',
           '',
-          `Тариф <b>${planTitle(payload.planId)}</b> действует до <b>${until}</b>.`,
+          `Тариф <b>${planTitle(planId)}</b> действует до <b>${until}</b>.`,
           result.payment.bonusDays > 0
             ? `За неиспользованные дни прежнего тарифа добавили ${result.payment.bonusDays} дн.`
             : '',
@@ -713,6 +771,47 @@ export class TelegramBotService implements TelegramPaymentsPort {
       },
     });
     return { status: 'activated', subscription: result.subscription };
+  }
+
+  /** Оплата пакета премиум-квоты звёздами: кредиты на 30 дней, подписка не меняется. */
+  private async handlePackPayment(
+    chatId: number | string,
+    telegramUserId: number,
+    packId: string,
+    payload: StarsPayload,
+    pay: SuccessfulPayment,
+    now: number,
+  ): Promise<{ status: 'activated' | 'duplicate' | 'rejected'; subscription?: Subscription }> {
+    const result = this.billing.grantPack(
+      payload.userId,
+      packId,
+      {
+        id: `stars:${pay.telegram_payment_charge_id}`,
+        method: 'stars',
+        amount: pay.total_amount,
+        currency: 'XTR',
+        invoiceId: payload.invoiceId,
+        chargeId: pay.telegram_payment_charge_id,
+        telegramUserId,
+      },
+      now,
+    );
+    if (result.duplicate) return { status: 'duplicate' };
+    this.deps.invoiceStore.markTelegramStarsPaid(payload.invoiceId, pay.telegram_payment_charge_id);
+    await this.sendMessage(
+      chatId,
+      [
+        '🎉 <b>Оплата прошла!</b>',
+        '',
+        `Начислили <b>+$${result.credit.amountUsd}</b> премиум-квоты до <b>${formatDate(result.credit.expiresAt)}</b>. Она тратится после квоты тарифа.`,
+      ].join('\n'),
+      {
+        reply_markup: {
+          inline_keyboard: [[{ text: '🚀 Открыть Ketner AI', url: `${this.siteUrl}/chat` }]],
+        },
+      },
+    );
+    return { status: 'activated' };
   }
 
   // ───────────── тексты и кнопки ─────────────
@@ -871,7 +970,9 @@ export class TelegramBotService implements TelegramPaymentsPort {
       if (payment) {
         await this.sendMessage(
           chatId,
-          `↩️ Возврат ${payment.amount} ⭐ за ${planTitle(payment.planId)} оформлен, дни этой оплаты сняты с подписки.`,
+          payment.packId
+            ? `↩️ Возврат ${payment.amount} ⭐ за ${paymentTitle(payment)} оформлен, кредиты пакета сняты.`
+            : `↩️ Возврат ${payment.amount} ⭐ за ${planTitle(payment.planId)} оформлен, дни этой оплаты сняты с подписки.`,
         );
       }
       return { handled: true, action: 'stars_refunded' };
@@ -1160,7 +1261,7 @@ export class TelegramBotService implements TelegramPaymentsPort {
         await this.editMessage(
           chatId,
           cb.message.message_id,
-          `${decision === 'y' ? '✅ Возврат оформлен' : '✖️ В возврате отказано'}: ${planTitle(payment.planId)} · ${payment.currency === 'XTR' ? `${payment.amount} ⭐` : `$${payment.amount}`}`,
+          `${decision === 'y' ? '✅ Возврат оформлен' : '✖️ В возврате отказано'}: ${paymentTitle(payment)} · ${payment.currency === 'XTR' ? `${payment.amount} ⭐` : `$${payment.amount}`}`,
         );
       }
       return { handled: true, action: decision === 'y' ? 'refund_approved' : 'refund_declined' };

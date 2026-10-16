@@ -989,6 +989,7 @@ export async function initDatabaseSync(): Promise<boolean> {
         billingLedger.payments,
         billingLedger.starsSubscriptions,
         billingLedger.prefs,
+        billingLedger.credits,
         usageStore,
         contactStore,
       ] as unknown as Array<DocStore<{ id: string }>>);

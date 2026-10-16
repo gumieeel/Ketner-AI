@@ -229,3 +229,63 @@ test('Trybit без адреса (тестовый режим): остаётся
   assert.equal(invoice.gatewayDetails, undefined);
   assert.equal(invoice.cryptoCloudUrl, 'https://pay.trybit.com/INV-ABC12345');
 });
+
+test('Trybit: пакет премиум-квоты — счёт на цену пакета, оплата начисляет кредиты, видно в квоте', async (t) => {
+  const gateway = fakeTrybit('paid');
+  const server = await startTestServer();
+  t.after(async () => {
+    gateway.restore();
+    await server.close();
+  });
+  // VIP получает Ultra: пакеты докупаются к платному тарифу.
+  const buyer = await signup(server.baseUrl, 'test-vip@example.com');
+  const auth = { Authorization: `Bearer ${buyer.token}` };
+
+  const created = await fetch(`${server.baseUrl}/api/billing/crypto/create-invoice`, {
+    method: 'POST',
+    headers: { ...auth, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ packId: 'premium-10', currency: 'USDT_TRC20' }),
+  });
+  assert.equal(created.status, 200);
+  const { invoice } = await readJson<{
+    invoice: { id: string; packId: string; amountUsd: number };
+  }>(created);
+  assert.equal(invoice.packId, 'premium-10');
+  assert.equal(invoice.amountUsd, 18);
+  const create = gateway.calls.find((call) => call.url.endsWith('/v2/invoice/create'))!;
+  assert.equal(create.body.amount, 18);
+
+  const confirm = await readJson<{ credit: { amountUsd: number; expiresAt: string } }>(
+    await fetch(`${server.baseUrl}/api/billing/crypto/confirm/${invoice.id}`, {
+      method: 'POST',
+      headers: { ...auth, 'Content-Type': 'application/json' },
+      body: '{}',
+    }),
+  );
+  assert.equal(confirm.credit.amountUsd, 10);
+  const days = (Date.parse(confirm.credit.expiresAt) - Date.now()) / 86_400_000;
+  assert.ok(Math.abs(days - 30) < 0.01, 'кредиты действуют 30 дней');
+
+  // Повторный postback шлюза кредиты не удваивает.
+  await fetch(`${server.baseUrl}/api/billing/trybit/webhook`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      status: 'success',
+      invoice_id: 'ABC12345',
+      token: sign({ id: 'ABC12345', exp: Math.floor(Date.now() / 1000) + 300 }),
+    }),
+  });
+  const quota = await readJson<{ premium: { creditsUsd: number } }>(
+    await fetch(`${server.baseUrl}/api/usage/quota`, { headers: auth }),
+  );
+  assert.equal(quota.premium.creditsUsd, 10);
+
+  // Неизвестный пакет — 400.
+  const unknown = await fetch(`${server.baseUrl}/api/billing/crypto/create-invoice`, {
+    method: 'POST',
+    headers: { ...auth, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ packId: 'premium-1000', currency: 'USDT_TRC20' }),
+  });
+  assert.equal(unknown.status, 400);
+});

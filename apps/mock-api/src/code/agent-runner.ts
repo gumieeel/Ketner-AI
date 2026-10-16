@@ -20,7 +20,7 @@ import type {
   ReasoningEffort,
   ReasoningMode,
 } from '../ai/gateway-types.js';
-import { applyEconomyRules } from '../ai/gateway.js';
+import { applyEconomyRules, type EconomyState } from '../ai/gateway.js';
 import { computeRequestCost } from '../ai/engine-pricing.js';
 import { CircuitBreaker, defaultCircuitBreaker } from '../ai/circuit-breaker.js';
 import {
@@ -46,7 +46,8 @@ import { FairUseEngine } from '../services/fair-use.js';
 import { evaluateBudget, type BudgetStage } from '../services/budget-policy.js';
 import { getCodeLimits, quotaOf } from '../services/code-limits.js';
 import type { Language, PlanId } from '../types.js';
-import { getPremiumQuota } from '../services/premium-quota.js';
+import { getPremiumQuota, settlePremiumCost } from '../services/premium-quota.js';
+import type { PremiumCreditSource } from '../store/premium-credit-store.js';
 import {
   agentToolDefinitions,
   executeTool,
@@ -116,6 +117,8 @@ export type AgentEvent =
 export interface AgentRunnerDeps {
   store: ProjectStore;
   usageStore: UsageStore;
+  /** Кредиты докупленных пакетов; по умолчанию — общий журнал платежей. */
+  premiumCredits?: PremiumCreditSource;
   sandbox: SandboxRunner | null;
   allowSandboxNetwork?: boolean;
   providers?: ProviderManager;
@@ -162,6 +165,8 @@ export interface AgentModelChoice {
   model: ModelRegistryEntry;
   reason: string | null;
   denied?: { requiredPlan: string; message: string };
+  /** Премиум-модель оставлена за счёт кредитов докупленных пакетов. */
+  fundedByCredits?: boolean;
 }
 
 /**
@@ -174,7 +179,7 @@ export function selectAgentModel(input: {
   email?: string;
   isVip?: boolean;
   requestedId?: string;
-  state: { stage: BudgetStage; premiumAvailable: boolean };
+  state: EconomyState;
   registry: ModelRegistry;
 }): AgentModelChoice {
   const { registry, state } = input;
@@ -182,7 +187,8 @@ export function selectAgentModel(input: {
 
   if (!requestedId || requestedId === 'auto') {
     const base = registry.resolve(input.plan === 'free' ? FLOOR_MODEL_ID : WORKHORSE_MODEL_ID);
-    const economy = applyEconomyRules(base, state, registry);
+    // Auto тратит только квоту тарифа, кредиты пакетов — для явного выбора модели.
+    const economy = applyEconomyRules(base, { ...state, creditsAvailable: false }, registry);
     return { model: economy.model, reason: economy.reason };
   }
 
@@ -204,15 +210,17 @@ export function selectAgentModel(input: {
     };
   }
   const economy = applyEconomyRules(requested, state, registry);
-  return { model: economy.model, reason: economy.reason };
+  return {
+    model: economy.model,
+    reason: economy.reason,
+    fundedByCredits: Boolean(economy.fundedByCredits),
+  };
 }
 
 /** Запасная модель не должна нарушать правил экономии (то же правило, что в AIGateway). */
-function isAllowedFallback(
-  model: ModelRegistryEntry,
-  plan: PlanId,
-  state: { stage: BudgetStage; premiumAvailable: boolean },
-): boolean {
+function isAllowedFallback(model: ModelRegistryEntry, plan: PlanId, state: EconomyState): boolean {
+  const allowed = EntitlementService.checkModelAccess(model, plan).allowed;
+  if (isPremiumClass(model.costClass) && state.creditsAvailable && allowed) return true;
   if (state.stage === 'exhausted' || state.stage === 'hard_stop') return model.costClass === 'lite';
   if (isPremiumClass(model.costClass)) {
     return (
@@ -542,9 +550,15 @@ export class AgentRunner {
       );
     }
 
-    const premium = getPremiumQuota(input.userId, plan, { usageStore, registry: this.registry });
-    const premiumRemaining = premium.remainingUsd;
-    const economyState = { stage: budget.stage, premiumAvailable: premium.available };
+    const quotaDeps = { usageStore, registry: this.registry, credits: this.deps.premiumCredits };
+    const premium = getPremiumQuota(input.userId, plan, quotaDeps);
+    // На премиум-модели запуск может потратить остаток квоты тарифа и кредиты пакетов.
+    const premiumRemaining = premium.remainingUsd + premium.creditsUsd;
+    const economyState: EconomyState = {
+      stage: budget.stage,
+      premiumAvailable: premium.baseAvailable,
+      creditsAvailable: premium.creditsUsd > 0,
+    };
 
     const choice = selectAgentModel({
       plan,
@@ -985,11 +999,24 @@ export class AgentRunner {
             stepCost += cost.usd;
             totalCost += cost.usd;
             tierSpent += cost.usd;
+            // Премиум-шаг сверх квоты тарифа (или за счёт пакета) списывается с кредитов пакетов.
+            const premiumStep = isPremiumClass(candidate.costClass);
+            const premiumCreditUsd = premiumStep
+              ? settlePremiumCost(
+                  input.userId,
+                  plan,
+                  Number(cost.usd.toFixed(6)),
+                  Boolean(choice.fundedByCredits),
+                  quotaDeps,
+                )
+              : 0;
             usageStore.recordUsage({
               userId: input.userId,
               conversationId,
               modelId: candidate.id,
               provider: candidate.provider,
+              premiumCreditUsd,
+              ...(premiumStep && choice.fundedByCredits ? { fundedBy: 'credits' as const } : {}),
               inputTokens: usage.inputTokens,
               outputTokens: usage.outputTokens,
               cachedTokens: usage.cachedTokens,

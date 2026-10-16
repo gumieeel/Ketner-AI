@@ -10,6 +10,7 @@ import { ModelRegistry } from './model-registry.js';
 import { OpenRouterError } from './providers/openrouter-provider.js';
 import { SemanticCache } from './cache.js';
 import { UsageStore } from '../store/usage-store.js';
+import { PremiumCreditStore } from '../store/premium-credit-store.js';
 import { PLAN_ENTITLEMENTS } from '../services/entitlement.js';
 import type {
   AIProvider,
@@ -66,7 +67,11 @@ function fakeOpenRouter(
   } as AIProvider;
 }
 
-function makeGateway(provider: AIProvider, usage: UsageStore): AIGateway {
+function makeGateway(
+  provider: AIProvider,
+  usage: UsageStore,
+  premiumCredits: PremiumCreditStore = new PremiumCreditStore(),
+): AIGateway {
   const providers = new ProviderManager();
   providers.setProvider('openrouter', provider);
   return new AIGateway({
@@ -76,6 +81,7 @@ function makeGateway(provider: AIProvider, usage: UsageStore): AIGateway {
     aiConfig,
     circuitBreaker: new CircuitBreaker({ failureThreshold: 3, cooldownMs: 30_000 }),
     useMockEngine: false,
+    premiumCredits,
   });
 }
 
@@ -933,4 +939,125 @@ test('провайдер настроен, но упал — честная ош
 
   assert.equal(outcome.error?.code, 'provider_error');
   assert.equal(outcome.done, undefined);
+});
+
+// ─────────────── Докупленные пакеты премиум-квоты ───────────────
+
+function credits(userId: string, amountUsd: number): PremiumCreditStore {
+  const store = new PremiumCreditStore();
+  store.grant({ id: `pay-${userId}`, userId, packId: 'premium-5', amountUsd, days: 30 });
+  return store;
+}
+
+test('пакет: квота тарифа кончилась — премиум-модель отвечает за счёт кредитов, а не Ketner Pro', async () => {
+  const usage = newUsage();
+  const calls: Call[] = [];
+  const store = credits('u-pack', 5);
+  const gateway = makeGateway(fakeOpenRouter(okStream('ок', { cost: 0.07 }), calls), usage, store);
+  seedMonthlyCost(usage, 'u-pack', PLAN_ENTITLEMENTS.pro.premiumBudget + 0.5, 'claude-sonnet-5.5');
+
+  const out = await run(
+    gateway,
+    request({ userId: 'u-pack', userPlan: 'pro', modelId: 'claude-opus-5.5' }),
+  );
+  assertNoError(out);
+  assert.equal(out.done?.selectedModel?.id, 'claude-opus-5.5');
+  assert.match(out.done?.routingReason ?? '', /paid from purchased premium credits/);
+  assert.equal(store.balanceOf('u-pack').remainingUsd, 4.93, 'с кредитов списана цена запроса');
+  const record = usage.getByUser('u-pack')[0];
+  assert.equal(record.premiumCreditUsd, 0.07);
+  assert.equal(record.fundedBy, 'credits');
+  // Оплаченное кредитами не входит ни в квоту тарифа, ни в месячный бюджет.
+  assert.equal(
+    usage.getCostLastMonthByModels('u-pack', ['claude-opus-5.5', 'claude-sonnet-5.5']),
+    PLAN_ENTITLEMENTS.pro.premiumBudget + 0.5,
+  );
+});
+
+test('пакет: без кредитов при исчерпанной квоте по-прежнему отвечает рабочая модель', async () => {
+  const usage = newUsage();
+  const calls: Call[] = [];
+  const gateway = makeGateway(fakeOpenRouter(okStream('ок', { cost: 0.07 }), calls), usage);
+  seedMonthlyCost(
+    usage,
+    'u-nopack',
+    PLAN_ENTITLEMENTS.pro.premiumBudget + 0.5,
+    'claude-sonnet-5.5',
+  );
+  const out = await run(
+    gateway,
+    request({ userId: 'u-nopack', userPlan: 'pro', modelId: 'claude-opus-5.5' }),
+  );
+  assert.equal(out.done?.selectedModel?.id, 'ketner-pro');
+});
+
+test('пакет: лимит модели исчерпан — с кредитами модель остаётся, запрос в пул не входит', async () => {
+  const usage = newUsage();
+  const calls: Call[] = [];
+  const store = credits('u-packlim', 5);
+  const gateway = makeGateway(fakeOpenRouter(okStream('ок', { cost: 0.07 }), calls), usage, store);
+  const ask = () =>
+    run(gateway, request({ userId: 'u-packlim', userPlan: 'pro', modelId: 'claude-opus-5.5' }));
+
+  // 8 запросов — суточная доля пула Opus на Pro, оплачены квотой тарифа.
+  for (let i = 0; i < 8; i++)
+    assert.equal((await ask()).done?.selectedModel?.id, 'claude-opus-5.5');
+  assert.equal(
+    store.balanceOf('u-packlim').remainingUsd,
+    5,
+    'пока квота тарифа есть, кредиты целы',
+  );
+
+  const ninth = await ask();
+  assert.equal(ninth.done?.selectedModel?.id, 'claude-opus-5.5');
+  assert.match(
+    ninth.done?.routingReason ?? '',
+    /Daily share of the weekly pool used up for Claude Opus 5\.5.*paid from purchased premium credits/,
+  );
+  assert.equal(store.balanceOf('u-packlim').remainingUsd, 4.93);
+  assert.equal(usage.getModelUsesLastDay('u-packlim', ['claude-opus-5.5']), 8);
+});
+
+test('пакет: остаток квоты тарифа меньше цены запроса — разница списывается с кредитов', async () => {
+  const usage = newUsage();
+  const calls: Call[] = [];
+  const store = credits('u-split', 5);
+  const gateway = makeGateway(fakeOpenRouter(okStream('ок', { cost: 0.1 }), calls), usage, store);
+  seedMonthlyCost(
+    usage,
+    'u-split',
+    PLAN_ENTITLEMENTS.pro.premiumBudget - 0.04,
+    'claude-sonnet-5.5',
+  );
+  const out = await run(
+    gateway,
+    request({ userId: 'u-split', userPlan: 'pro', modelId: 'claude-opus-5.5' }),
+  );
+  assert.equal(out.done?.selectedModel?.id, 'claude-opus-5.5');
+  assert.equal(usage.getByUser('u-split')[0].premiumCreditUsd, 0.06);
+  assert.equal(store.balanceOf('u-split').remainingUsd, 4.94);
+});
+
+test('пакет: Auto кредиты не тратит — только квоту тарифа', async () => {
+  const usage = newUsage();
+  const calls: Call[] = [];
+  const store = credits('u-auto', 5);
+  const gateway = makeGateway(fakeOpenRouter(okStream('ок', { cost: 0.03 }), calls), usage, store);
+  seedMonthlyCost(usage, 'u-auto', PLAN_ENTITLEMENTS.pro.premiumBudget + 0.5, 'claude-sonnet-5.5');
+  const out = await run(
+    gateway,
+    request({
+      userId: 'u-auto',
+      userPlan: 'pro',
+      modelId: 'auto',
+      messages: [
+        {
+          role: 'user',
+          content: `Докажи теорему о сумме углов треугольника и вычисли интеграл ${'x'.repeat(200)}`,
+        },
+      ],
+    }),
+  );
+  assert.notEqual(out.done?.selectedModel?.id, 'gpt-6.1-sol');
+  assert.equal(store.balanceOf('u-auto').remainingUsd, 5);
 });

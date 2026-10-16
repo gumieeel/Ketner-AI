@@ -4,13 +4,12 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { buttonClasses } from '@/components/ui/button-classes';
 import { QrCode } from '@/components/ui/qr-code';
-import type { Plan } from '@/features/billing/types';
 import { useTranslation } from '@/i18n';
 import { Notice, PanelShell, QrFrame, StatusRow } from './parts';
 
 export interface StarsPanelProps {
-  plan: Plan;
-  planName: string;
+  /** Подпись под суммой: за что и на какой срок платёж. */
+  periodNotice: string;
   starsAmount: number;
   botUsername: string;
   botDeepLink: string;
@@ -22,8 +21,7 @@ export interface StarsPanelProps {
 
 /** Панель оплаты Telegram Stars: сумма в звёздах, QR на бота и проверка счёта. */
 export function StarsPanel({
-  plan,
-  planName,
+  periodNotice,
   starsAmount,
   botUsername,
   botDeepLink,
@@ -56,9 +54,7 @@ export function StarsPanel({
           <span className="text-4xl font-semibold tracking-tight tabular-nums">{starsAmount}</span>
           <span className="text-xl text-muted">Stars</span>
         </p>
-        <p className="text-[13px] text-muted">
-          {t('checkout.starsPeriodNotice', { price: `$${plan.priceMonthly}`, plan: planName })}
-        </p>
+        <p className="text-[13px] text-muted">{periodNotice}</p>
       </div>
 
       <div className="flex flex-col items-center gap-3">

@@ -17,12 +17,15 @@ import { buildQuotaReport } from '../services/premium-quota.js';
 import type { UsageStore } from '../store/usage-store.js';
 import type { SubscriptionStore } from '../store/subscription-store.js';
 import type { UserStore } from '../store/user-store.js';
+import type { PremiumCreditSource } from '../store/premium-credit-store.js';
 
 export interface UsageRouterDeps {
   usageStore: UsageStore;
   userStore: UserStore;
   subscriptionStore: SubscriptionStore;
   registry?: ModelRegistry;
+  /** Кредиты докупленных пакетов (тот же журнал, что у биллинга). */
+  credits?: PremiumCreditSource;
 }
 
 export function createUsageRouter({
@@ -30,6 +33,7 @@ export function createUsageRouter({
   userStore,
   subscriptionStore,
   registry = modelRegistry,
+  credits,
 }: UsageRouterDeps): Router {
   const router = Router();
 
@@ -55,7 +59,7 @@ export function createUsageRouter({
     const mode = request.query.mode === 'max' ? 'max' : 'standard';
     // Остаток меняется после каждого ответа: кэшировать его браузеру нельзя.
     response.setHeader('Cache-Control', 'no-store');
-    response.json(buildQuotaReport(identity.userId, plan, { usageStore, registry }, mode));
+    response.json(buildQuotaReport(identity.userId, plan, { usageStore, registry, credits }, mode));
   });
 
   return router;

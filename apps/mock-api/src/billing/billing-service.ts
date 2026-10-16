@@ -1,8 +1,9 @@
 import { join } from 'node:path';
 import { dirname } from 'node:path';
 import { config } from '../config.js';
-import { planPriceUsd } from '../services/pricing.js';
+import { findPremiumPack, planPriceUsd, PREMIUM_PACK_DAYS } from '../services/pricing.js';
 import { DocStore } from '../store/doc-store.js';
+import { PremiumCreditStore, type PremiumCredit } from '../store/premium-credit-store.js';
 import type { SubscriptionStore } from '../store/subscription-store.js';
 import type { UsageStore } from '../store/usage-store.js';
 import type { UserStore } from '../store/user-store.js';
@@ -35,7 +36,10 @@ export interface PaymentRecord {
   id: string;
   userId: string;
   method: PaymentMethod;
+  /** Тариф, который дала оплата; для пакета — тариф на момент покупки (подписка не меняется). */
   planId: PlanId;
+  /** Оплачен пакет премиум-квоты (services/pricing.ts), а не тариф. */
+  packId?: string;
   /** Звёзды (XTR) или доллары (USD). */
   amount: number;
   currency: 'XTR' | 'USD';
@@ -89,6 +93,8 @@ export interface BillingLedger {
   payments: DocStore<PaymentRecord>;
   starsSubscriptions: DocStore<StarsSubscription>;
   prefs: DocStore<NotificationPrefs>;
+  /** Кредиты премиум-квоты из докупленных пакетов. */
+  credits: PremiumCreditStore;
 }
 
 export function createBillingLedger(dir?: string): BillingLedger {
@@ -100,6 +106,7 @@ export function createBillingLedger(dir?: string): BillingLedger {
       file('stars-subscriptions'),
     ),
     prefs: new DocStore<NotificationPrefs>('notification_prefs', file('notification-prefs')),
+    credits: new PremiumCreditStore(file('premium-credits')),
   };
 }
 
@@ -274,6 +281,48 @@ export class BillingService {
     };
   }
 
+  /**
+   * Оплачен пакет премиум-квоты: начисляет кредиты на 30 дней и записывает платёж. Подписка не
+   * меняется. Повторная доставка того же платежа (тот же id) ничего не меняет: `duplicate: true`.
+   */
+  grantPack(
+    userId: string,
+    packId: string,
+    payment: {
+      id: string;
+      method: PaymentMethod;
+      amount: number;
+      currency: 'XTR' | 'USD';
+      invoiceId?: string;
+      chargeId?: string;
+      telegramUserId?: number;
+    },
+    now = Date.now(),
+  ): { duplicate: boolean; payment: PaymentRecord; credit: PremiumCredit } {
+    const pack = findPremiumPack(packId);
+    if (!pack) throw new BillingError('unknown_pack', 'Такого пакета нет', 400);
+    const existing = this.deps.ledger.payments.get(payment.id);
+    const { credit } = this.deps.ledger.credits.grant(
+      { id: payment.id, userId, packId, amountUsd: pack.quotaUsd, days: PREMIUM_PACK_DAYS },
+      now,
+    );
+    if (existing) return { duplicate: true, payment: existing, credit };
+    const current = this.deps.subscriptionStore.get(userId);
+    const snapshot: PlanSnapshot = { plan: current.plan, renewsAt: current.renewsAt };
+    const record = this.deps.ledger.payments.put({
+      ...payment,
+      userId,
+      planId: current.plan,
+      packId,
+      paidAt: new Date(now).toISOString(),
+      status: 'paid',
+      before: snapshot,
+      after: snapshot,
+      bonusDays: 0,
+    });
+    return { duplicate: false, payment: record, credit };
+  }
+
   paymentsOf(userId: string): PaymentRecord[] {
     return this.deps.ledger.payments
       .filter((payment) => payment.userId === userId)
@@ -304,8 +353,13 @@ export class BillingService {
     if (payment.status === 'refund_declined') return { kind: 'none', reason: 'declined' };
     if (now - Date.parse(payment.paidAt) > REFUND_POLICY.windowMs)
       return { kind: 'none', reason: 'expired' };
-    if (this.requestsSince(payment.userId, payment.paidAt) > 0)
+    if (payment.packId) {
+      // Пакет возвращается, пока из него ничего не потрачено (запросы по квоте тарифа не в счёт).
+      const credit = this.deps.ledger.credits.get(payment.id);
+      if (credit && credit.remainingUsd < credit.amountUsd) return { kind: 'none', reason: 'used' };
+    } else if (this.requestsSince(payment.userId, payment.paidAt) > 0) {
       return { kind: 'none', reason: 'used' };
+    }
     // Звёзды Telegram возвращает сам и сразу; криптовалюту администратор переводит вручную.
     const instant =
       payment.method === 'stars' && Boolean(payment.chargeId && payment.telegramUserId);
@@ -345,7 +399,7 @@ export class BillingService {
         const refunded = this.completeRefund({ ...payment, refund }, { auto: true }, now);
         await this.telegram.notifyUser(
           userId,
-          `↩️ Вернули <b>${payment.amount} ⭐</b> за ${planLabel(payment.planId)}. Звёзды уже на вашем балансе в Telegram.`,
+          `↩️ Вернули <b>${payment.amount} ⭐</b> за ${paymentLabel(payment)}. Звёзды уже на вашем балансе в Telegram.`,
           'refund',
         );
         return { outcome: 'refunded', payment: refunded };
@@ -381,7 +435,7 @@ export class BillingService {
       });
       await this.telegram?.notifyUser(
         payment.userId,
-        `По заявке на возврат за ${planLabel(payment.planId)} ответ отрицательный${note ? `: ${escapeHtml(note)}` : '.'} Если есть вопросы — напишите в поддержку @ketner_support_bot.`,
+        `По заявке на возврат за ${paymentLabel(payment)} ответ отрицательный${note ? `: ${escapeHtml(note)}` : '.'} Если есть вопросы — напишите в поддержку @ketner_support_bot.`,
         'refund',
       );
       return declined;
@@ -455,8 +509,12 @@ export class BillingService {
     });
   }
 
-  /** Снимает с подписки то, что дала эта оплата. */
+  /** Снимает с подписки (или с кредитов пакета) то, что дала эта оплата. */
   private revert(payment: PaymentRecord, now: number): void {
+    if (payment.packId) {
+      this.deps.ledger.credits.revoke(payment.id);
+      return;
+    }
     const current = this.deps.subscriptionStore.get(payment.userId);
     const untouched =
       current.plan === payment.after.plan && current.renewsAt === payment.after.renewsAt;
@@ -570,6 +628,17 @@ const PLAN_LABELS: Record<string, string> = { plus: 'Plus', pro: 'Pro', ultra: '
 
 export function planLabel(planId: string): string {
   return PLAN_LABELS[planId] ?? planId.toUpperCase();
+}
+
+/** Название пакета премиум-квоты для чеков и сообщений: «пакет +$5 премиум-квоты». */
+export function packLabel(packId: string): string {
+  const pack = findPremiumPack(packId);
+  return pack ? `пакет +$${pack.quotaUsd} премиум-квоты` : 'пакет премиум-квоты';
+}
+
+/** За что платёж: тариф или пакет. */
+export function paymentLabel(payment: Pick<PaymentRecord, 'planId' | 'packId'>): string {
+  return payment.packId ? packLabel(payment.packId) : planLabel(payment.planId);
 }
 
 function escapeHtml(text: string): string {

@@ -6,6 +6,8 @@ import type {
   CryptoInvoice,
   Plan,
   PlanId,
+  PacksResponse,
+  PremiumCredit,
   SbpInvoice,
   Subscription,
   TelegramStarsInvoice,
@@ -135,12 +137,15 @@ export async function confirmTelegramStarsPayment(invoiceId: string): Promise<{
   subscription: Subscription;
   user: { plan: PlanId };
   invoice: TelegramStarsInvoice;
+  /** Кредиты, если оплачен пакет премиум-квоты. */
+  credit?: PremiumCredit | null;
 }> {
   return request<{
     success: boolean;
     subscription: Subscription;
     user: { plan: PlanId };
     invoice: TelegramStarsInvoice;
+    credit?: PremiumCredit | null;
   }>(`/billing/telegram-stars/confirm/${invoiceId}`, {
     method: 'POST',
   });
@@ -170,15 +175,44 @@ export async function confirmCryptoPayment(invoiceId: string): Promise<{
   subscription: Subscription;
   user: { plan: PlanId };
   invoice: CryptoInvoice;
+  /** Кредиты, если оплачен пакет премиум-квоты. */
+  credit?: PremiumCredit | null;
 }> {
   return request<{
     success: boolean;
     subscription: Subscription;
     user: { plan: PlanId };
     invoice: CryptoInvoice;
+    credit?: PremiumCredit | null;
   }>(`/billing/crypto/confirm/${invoiceId}`, {
     method: 'POST',
     body: JSON.stringify({}),
+  });
+}
+
+// --- Пакеты премиум-квоты ---
+
+/** Пакеты поверх подписки и кредиты пользователя. */
+export async function fetchPacks(): Promise<PacksResponse> {
+  return request<PacksResponse>('/billing/packs');
+}
+
+export async function createPackCryptoInvoice(
+  packId: string,
+  currency: CryptoCurrency = 'USDT_TRC20',
+): Promise<{ invoice: CryptoInvoice }> {
+  return request<{ invoice: CryptoInvoice }>('/billing/crypto/create-invoice', {
+    method: 'POST',
+    body: JSON.stringify({ packId, currency }),
+  });
+}
+
+export async function createPackStarsInvoice(
+  packId: string,
+): Promise<{ invoice: TelegramStarsInvoice }> {
+  return request<{ invoice: TelegramStarsInvoice }>('/billing/telegram-stars/create-invoice', {
+    method: 'POST',
+    body: JSON.stringify({ packId }),
   });
 }
 

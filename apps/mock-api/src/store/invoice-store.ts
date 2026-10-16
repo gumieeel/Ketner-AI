@@ -21,6 +21,7 @@ export interface InvoiceStore {
     priceRub: number,
     starsAmount: number,
     botUsername: string,
+    packId?: string,
   ): TelegramStarsInvoice;
   getTelegramStarsInvoice(id: string): TelegramStarsInvoice | undefined;
   markTelegramStarsPaid(id: string, chargeId?: string): TelegramStarsInvoice | undefined;
@@ -43,6 +44,7 @@ export interface InvoiceStore {
     cryptoCloudInvoiceId?: string,
     customId?: string,
     gateway?: CryptoGatewayDetails,
+    packId?: string,
   ): CryptoInvoice;
   getCryptoInvoice(id: string): CryptoInvoice | undefined;
   findCryptoInvoice(identifier: string): CryptoInvoice | undefined;
@@ -182,6 +184,7 @@ export function createInvoiceStore(file?: string): InvoiceStore {
       priceRub: number,
       starsAmount: number,
       botUsername: string,
+      packId?: string,
     ): TelegramStarsInvoice {
       const id = `stars_${Date.now()}_${crypto.randomBytes(3).toString('hex')}`;
       const expiresAt = new Date(Date.now() + 30 * 60 * 1000).toISOString();
@@ -193,6 +196,7 @@ export function createInvoiceStore(file?: string): InvoiceStore {
         id,
         userId,
         planId,
+        ...(packId ? { packId } : {}),
         priceRub,
         starsAmount,
         botUsername: cleanUsername,
@@ -265,6 +269,7 @@ export function createInvoiceStore(file?: string): InvoiceStore {
       cryptoCloudInvoiceId?: string,
       customId?: string,
       gateway?: CryptoGatewayDetails,
+      packId?: string,
     ): CryptoInvoice {
       const id = customId || `crypto_${Date.now()}_${crypto.randomBytes(4).toString('hex')}`;
       const expiresAt = new Date(Date.now() + 30 * 60 * 1000).toISOString();
@@ -287,6 +292,7 @@ export function createInvoiceStore(file?: string): InvoiceStore {
         id,
         userId,
         planId,
+        ...(packId ? { packId } : {}),
         currency,
         amount: gateway ? gateway.amount : amount,
         amountUsd,

@@ -1,4 +1,5 @@
 import { useEffect, useRef } from 'react';
+import { Link } from 'react-router-dom';
 import { AlertIcon } from '@/components/icons';
 import { useAuth } from '@/features/auth/auth-store';
 import { useChat } from '@/features/chat/chat-store';
@@ -64,6 +65,14 @@ export function QuotaLine() {
             ? ` · ${t('quota.warningRestore', { when: formatDateTime(report.premium.restoresAt, language) })}`
             : ''}
         </span>
+      ) : null}
+      {warning || model?.remaining === 0 ? (
+        <Link
+          to="/pricing#premium-packs"
+          className="font-medium text-accent underline-offset-4 hover:underline"
+        >
+          {t('quota.buyMore')}
+        </Link>
       ) : null}
     </div>
   );

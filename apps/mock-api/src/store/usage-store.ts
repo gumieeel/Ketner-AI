@@ -146,6 +146,8 @@ export class UsageStore {
     runId?: string;
     step?: number;
     limitUnits?: number;
+    premiumCreditUsd?: number;
+    fundedBy?: UsageRecord['fundedBy'];
   }): UsageRecord {
     const record: UsageRecord = {
       id: randomUUID(),
@@ -168,6 +170,10 @@ export class UsageStore {
       ...(params.runId ? { runId: params.runId } : {}),
       ...(params.limitUnits && params.limitUnits !== 1 ? { limitUnits: params.limitUnits } : {}),
       ...(params.step !== undefined ? { step: params.step } : {}),
+      ...(params.premiumCreditUsd && params.premiumCreditUsd > 0
+        ? { premiumCreditUsd: params.premiumCreditUsd }
+        : {}),
+      ...(params.fundedBy ? { fundedBy: params.fundedBy } : {}),
       createdAt: new Date().toISOString(),
     };
 
@@ -283,15 +289,17 @@ export class UsageStore {
         if (countsAsMessage) requestsLastHour++;
         tokensLastHour += totalTokens;
       }
+      // Часть, оплаченная кредитами пакета, в бюджет тарифа не входит: пакет оплачен отдельно.
+      const planCost = rec.estimatedCost - (rec.premiumCreditUsd ?? 0);
       if (time >= oneDayAgo) {
         if (countsAsMessage) requestsLastDay++;
         if (countsTowardLimits) {
           tokensLastDay += totalTokens;
         }
-        estimatedCostLastDay += rec.estimatedCost;
+        estimatedCostLastDay += planCost;
       }
       if (time >= oneMonthAgo) {
-        estimatedCostLastMonth += rec.estimatedCost;
+        estimatedCostLastMonth += planCost;
       }
     }
 
@@ -311,7 +319,8 @@ export class UsageStore {
   /**
    * Расход пользователя за скользящие 30 дней по заданным моделям.
    * Нужен квоте премиум-запросов: сильные модели ограничены отдельным бюджетом тарифа.
-   * Берётся фактическая стоимость от провайдера, а если её нет — расчётная.
+   * Берётся фактическая стоимость от провайдера, а если её нет — расчётная; часть, оплаченная
+   * кредитами пакета, в квоту тарифа не входит.
    */
   getCostLastMonthByModels(userId: string, modelIds: Iterable<string>): number {
     const wanted = new Set(modelIds);
@@ -323,7 +332,7 @@ export class UsageStore {
       const rec = userRecords[i];
       if (new Date(rec.createdAt).getTime() < since) break;
       if (wanted.has(rec.modelId)) {
-        total += rec.actualCost ?? rec.estimatedCost;
+        total += (rec.actualCost ?? rec.estimatedCost) - (rec.premiumCreditUsd ?? 0);
       }
     }
     return Number(total.toFixed(6));
@@ -347,7 +356,9 @@ export class UsageStore {
       const at = new Date(rec.createdAt).getTime();
       if (at < since) break;
       if (wanted && !wanted.has(rec.modelId)) continue;
-      const cost = wanted ? (rec.actualCost ?? rec.estimatedCost) : rec.estimatedCost;
+      const cost =
+        (wanted ? (rec.actualCost ?? rec.estimatedCost) : rec.estimatedCost) -
+        (rec.premiumCreditUsd ?? 0);
       if (cost > 0) events.push({ at, cost });
     }
     return events.reverse();
@@ -401,7 +412,8 @@ export class UsageStore {
    *
    * Считаются ответы провайдера (успешные и прерванные пользователем: токены уже потрачены), но
    * не кэш, не отказы и не сбои. Запуск агента считается один раз (по наибольшему весу его записей,
-   * по времени первой записи), сколько бы шагов он ни сделал.
+   * по времени первой записи), сколько бы шагов он ни сделал. Запросы за счёт кредитов пакета
+   * (`fundedBy: 'credits'`) в лимиты моделей не входят.
    */
   getModelUseEvents(
     userId: string,
@@ -418,7 +430,7 @@ export class UsageStore {
       const rec = userRecords[i];
       const at = new Date(rec.createdAt).getTime();
       if (at < since) break;
-      if (!wanted.has(rec.modelId)) continue;
+      if (!wanted.has(rec.modelId) || rec.fundedBy === 'credits') continue;
       const units = rec.limitUnits ?? 1;
       if (rec.kind === 'agent') {
         if (!rec.runId) continue;

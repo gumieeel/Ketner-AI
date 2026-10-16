@@ -346,3 +346,67 @@ describe('billing-flow: каталог тарифов, чекаут и упра�
     expect(screen.getByRole('button', { name: /Подтвердить оплату Stars/i })).toBeInTheDocument();
   });
 });
+
+describe('пакеты премиум-квоты', () => {
+  beforeEach(() => {
+    resetPreferences();
+    resetChat();
+    resetAuth();
+    resetBilling();
+  });
+
+  const loginPro = () =>
+    useAuth.setState({
+      status: 'authenticated',
+      token: 'mock-token',
+      user: {
+        id: 'demo-user',
+        email: 'demo@ketner.ai',
+        name: 'Демо',
+        plan: 'pro',
+        createdAt: '2026-01-01T00:00:00.000Z',
+      },
+    });
+
+  it('на странице тарифов платный пользователь видит пакеты со ссылкой на оплату', async () => {
+    installFakeApi({ plan: 'pro' });
+    loginPro();
+    renderRoute('/pricing');
+    expect(await screen.findByText('Докупить запросы к топ-моделям')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Купить за $9' })).toHaveAttribute(
+      'href',
+      '/checkout/pack/premium-5',
+    );
+  });
+
+  it('пакет +$5: оплата криптой начисляет квоту, тариф не меняется', async () => {
+    installFakeApi({ plan: 'pro' });
+    loginPro();
+    renderRoute('/checkout/pack/premium-5');
+    expect((await screen.findAllByText('+$5 премиум-квоты')).length).toBeGreaterThan(0);
+    // Счёт Trybit выставлен на цену пакета.
+    await screen.findByRole('link', { name: /Оплатить в виджете Trybit/ });
+    fireEvent.click(screen.getByRole('button', { name: /Подтвердить оплату криптовалютой/i }));
+    expect(await screen.findByText('Премиум-квота пополнена')).toBeInTheDocument();
+    expect(screen.getByText(/Квота начислена · действует до/)).toBeInTheDocument();
+    expect(useAuth.getState().user?.plan).toBe('pro');
+  });
+
+  it('на Free пакетов на странице тарифов нет', async () => {
+    installFakeApi({ plan: 'free' });
+    useAuth.setState({
+      status: 'authenticated',
+      token: 'mock-token',
+      user: {
+        id: 'demo-user',
+        email: 'demo@ketner.ai',
+        name: 'Демо',
+        plan: 'free',
+        createdAt: '2026-01-01T00:00:00.000Z',
+      },
+    });
+    renderRoute('/pricing');
+    await screen.findAllByText(/Ultra/);
+    expect(screen.queryByText('Докупить запросы к топ-моделям')).not.toBeInTheDocument();
+  });
+});

@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { PlanCards } from '@/components/pricing/plan-cards';
+import { PremiumPacks } from '@/components/pricing/premium-packs';
 import { Tab, TabList, TabPanel, Tabs } from '@/components/ui/tabs';
 import type { TranslationKey } from '@/i18n';
 import { useTranslation } from '@/i18n';
@@ -94,6 +95,9 @@ export function PricingPage() {
 
       {/* 4 Карточки тарифов */}
       <PlanCards variant="full" />
+
+      {/* Пакеты премиум-квоты поверх подписки (только для платных тарифов) */}
+      <PremiumPacks />
 
       {/* Таблица сравнения */}
       <div className="flex w-full flex-col gap-6 text-left">

@@ -44,7 +44,7 @@ import { delay, streamText } from './stream.js';
 import { isProduction, type AiConfig } from '../config.js';
 import { EntitlementService, planAllowsModel } from '../services/entitlement.js';
 import { FairUseEngine } from '../services/fair-use.js';
-import { applyModelLimits, isModelLimitReached } from './model-limits.js';
+import { applyModelLimits, describeLimit, isModelLimitReached } from './model-limits.js';
 import { applyPlanSubstitute } from './plan-substitute.js';
 import { AutoRouter } from './auto-router.js';
 import type { UsageStore } from '../store/usage-store.js';
@@ -62,7 +62,8 @@ import { CircuitBreaker, defaultCircuitBreaker } from './circuit-breaker.js';
 import { computeRequestCost } from './engine-pricing.js';
 import { createStreamWatchdog, DEFAULT_WATCHDOG_LIMITS } from './stream-watchdog.js';
 import { evaluateBudget, type BudgetStage } from '../services/budget-policy.js';
-import { getPremiumQuota } from '../services/premium-quota.js';
+import { getPremiumQuota, settlePremiumCost } from '../services/premium-quota.js';
+import type { PremiumCreditSource } from '../store/premium-credit-store.js';
 import { PayloadGuard } from './payload-guard.js';
 import {
   buildAttachmentsBlock,
@@ -253,6 +254,20 @@ export interface EconomyDecision {
   model: ModelRegistryEntry;
   /** Причина замены; null, если запрошенная модель оставлена. */
   reason: string | null;
+  /**
+   * Премиум-модель оставлена за счёт кредитов докупленных пакетов: квота тарифа исчерпана или
+   * бюджет тарифа на исходе. Стоимость запроса спишется с кредитов (services/premium-quota.ts).
+   */
+  fundedByCredits?: boolean;
+}
+
+/** Состояние экономии пользователя на момент запроса. */
+export interface EconomyState {
+  stage: BudgetStage;
+  /** Осталась квота премиум-моделей тарифа. */
+  premiumAvailable: boolean;
+  /** Есть кредиты докупленных пакетов: тратятся после квоты тарифа и вне его бюджета. */
+  creditsAvailable?: boolean;
 }
 
 /**
@@ -260,14 +275,24 @@ export interface EconomyDecision {
  *
  *  - бюджет исчерпан → любая модель, кроме лёгких, заменяется на самую дешёвую;
  *  - премиум-модель (классы strong и top): квота премиум-запросов тарифа исчерпана или бюджет на
- *    исходе (soft) → ответит рабочая модель, а не «ничего»: пользователь продолжает работать.
+ *    исходе (soft) → ответит рабочая модель, а не «ничего»: пользователь продолжает работать;
+ *  - но если есть кредиты докупленных пакетов, премиум-модель остаётся и оплачивается ими: пакет
+ *    оплачен отдельно и в бюджет тарифа не входит.
  */
 export function applyEconomyRules(
   requested: ModelRegistryEntry,
-  state: { stage: BudgetStage; premiumAvailable: boolean },
+  state: EconomyState,
   registry: ModelRegistry,
 ): EconomyDecision {
+  const premium = isPremiumClass(requested.costClass);
+  const byCredits = (why: string): EconomyDecision => ({
+    model: requested,
+    reason: `${why}: ${requested.name} is paid from purchased premium credits`,
+    fundedByCredits: true,
+  });
+
   if (state.stage === 'exhausted' || state.stage === 'hard_stop') {
+    if (premium && state.creditsAvailable) return byCredits('Plan budget is used up');
     if (requested.costClass !== 'lite') {
       const floor = registry.resolve(FLOOR_MODEL_ID);
       return {
@@ -278,8 +303,9 @@ export function applyEconomyRules(
     return { model: requested, reason: null };
   }
 
-  if (isPremiumClass(requested.costClass)) {
+  if (premium) {
     if (!state.premiumAvailable) {
+      if (state.creditsAvailable) return byCredits('Plan premium quota used up');
       const workhorse = registry.resolve(WORKHORSE_MODEL_ID);
       return {
         model: workhorse,
@@ -287,6 +313,7 @@ export function applyEconomyRules(
       };
     }
     if (state.stage === 'soft') {
+      if (state.creditsAvailable) return byCredits('Budget protection');
       const workhorse = registry.resolve(WORKHORSE_MODEL_ID);
       return {
         model: workhorse,
@@ -300,19 +327,22 @@ export function applyEconomyRules(
 
 /**
  * Запасная модель допустима, если она не нарушает правил экономии: премиум-модель берётся
- * только пока есть квота премиум-запросов, а при исчерпанном бюджете — только лёгкие модели.
- * Прав доступа по тарифу для запасных не требуется: они дешевле выбранной, а пользователь
- * видит в ответе, какая модель реально ответила.
+ * только пока есть квота премиум-запросов (или кредиты пакетов), а при исчерпанном бюджете —
+ * только лёгкие модели (или премиум за кредиты). Прав доступа по тарифу для непремиальных
+ * запасных не требуется: они дешевле выбранной, а пользователь видит в ответе, какая модель
+ * реально ответила.
  */
 export function isAllowedFallbackModel(
   model: ModelRegistryEntry,
   plan: string,
-  state: { stage: BudgetStage; premiumAvailable: boolean },
+  state: EconomyState,
 ): boolean {
+  const premium = isPremiumClass(model.costClass);
+  if (premium && state.creditsAvailable && planAllowsModel(plan, model.requiredPlan)) return true;
   if (state.stage === 'exhausted' || state.stage === 'hard_stop') {
     return model.costClass === 'lite';
   }
-  if (isPremiumClass(model.costClass)) {
+  if (premium) {
     return (
       state.stage === 'normal' &&
       state.premiumAvailable &&
@@ -334,6 +364,8 @@ export interface AIGatewayDeps {
    * По умолчанию определяется окружением. В production игнорируется: заглушка там невозможна.
    */
   useMockEngine?: boolean;
+  /** Кредиты докупленных пакетов; по умолчанию — общий журнал платежей. */
+  premiumCredits?: PremiumCreditSource;
 }
 
 export class AIGateway {
@@ -344,9 +376,11 @@ export class AIGateway {
   private circuitBreaker: CircuitBreaker;
   private feedbackStore: FeedbackStore;
   private useMockEngine?: boolean;
+  private premiumCredits?: PremiumCreditSource;
 
   constructor(deps: AIGatewayDeps) {
     this.useMockEngine = deps.useMockEngine;
+    this.premiumCredits = deps.premiumCredits;
     this.registry = deps.registry ?? modelRegistry;
     this.providers = deps.providers ?? providerManager;
     this.usageStore = deps.usageStore;
@@ -435,11 +469,7 @@ export class AIGateway {
     return this.feedbackStore;
   }
 
-  private isAllowedFallback(
-    model: ModelRegistryEntry,
-    plan: string,
-    state: { stage: BudgetStage; premiumAvailable: boolean },
-  ): boolean {
+  private isAllowedFallback(model: ModelRegistryEntry, plan: string, state: EconomyState): boolean {
     return isAllowedFallbackModel(model, plan, state);
   }
 
@@ -524,11 +554,19 @@ export class AIGateway {
     }
 
     // Квота премиум-запросов: сколько тариф разрешает потратить на сильные модели за 30 дней.
-    const premiumAvailable = getPremiumQuota(activeUserId, effectivePlan, {
+    const quotaDeps = {
       usageStore: this.usageStore,
       registry: this.registry,
-    }).available;
-    const economyState = { stage, premiumAvailable };
+      credits: this.premiumCredits,
+    };
+    const premiumQuota = getPremiumQuota(activeUserId, effectivePlan, quotaDeps);
+    const economyState: EconomyState = {
+      stage,
+      premiumAvailable: premiumQuota.baseAvailable,
+      creditsAvailable: premiumQuota.creditsUsd > 0,
+    };
+    // Запрос оплачивается кредитами пакета (квота тарифа, бюджет или лимит модели исчерпаны).
+    let fundedByCredits = false;
 
     // 2. Анализ запроса
     const rawPrompt = [...req.messages].reverse().find((m) => m.role === 'user')?.content ?? '';
@@ -574,7 +612,8 @@ export class AIGateway {
         level: taskInfo.level,
         category: taskInfo.category,
         stage,
-        premiumAvailable,
+        // Auto тратит только квоту тарифа: кредиты пакетов — для явного выбора модели.
+        premiumAvailable: premiumQuota.baseAvailable,
       });
       targetModel = this.registry.resolve(routed.modelId);
       routingReason = routed.reason;
@@ -596,6 +635,7 @@ export class AIGateway {
 
       const economy = applyEconomyRules(requested, economyState, this.registry);
       targetModel = economy.model;
+      fundedByCredits = Boolean(economy.fundedByCredits);
       routingReason = economy.reason ?? `Explicit user model selection (${requested.name})`;
     }
 
@@ -616,7 +656,15 @@ export class AIGateway {
         this.registry,
         reasoningMode,
       );
-      if (limited.reason) {
+      if (
+        limited.limited &&
+        isPremiumClass(targetModel.costClass) &&
+        economyState.creditsAvailable
+      ) {
+        // Лимит модели защищает квоту тарифа; кредиты пакета им не ограничены.
+        fundedByCredits = true;
+        routingReason = `${routingReason}; ${describeLimit(limited.limited.model, effectivePlan, limited.limited.status)}: paid from purchased premium credits`;
+      } else if (limited.reason) {
         targetModel = limited.model;
         routingReason = `${routingReason}; ${limited.reason}`;
       }
@@ -815,14 +863,15 @@ export class AIGateway {
               (m, index) =>
                 index === 0 ||
                 (this.isAllowedFallback(m, effectivePlan, economyState) &&
-                  !isModelLimitReached(
-                    m,
-                    effectivePlan,
-                    activeUserId,
-                    this.usageStore,
-                    this.registry,
-                    reasoningMode,
-                  )),
+                  ((fundedByCredits && isPremiumClass(m.costClass)) ||
+                    !isModelLimitReached(
+                      m,
+                      effectivePlan,
+                      activeUserId,
+                      this.usageStore,
+                      this.registry,
+                      reasoningMode,
+                    ))),
             );
       let success = false;
       let streamedResponse: ProviderResponse | null = null;
@@ -1068,6 +1117,17 @@ export class AIGateway {
         providerCost: responseSource === 'provider' ? streamedResponse?.cost : undefined,
       });
       const totalEstimatedCost = Number(requestCost.usd.toFixed(6));
+      // Премиум-запрос сверх квоты тарифа (или за счёт пакета) списывается с кредитов пакетов.
+      const premiumCreditUsd =
+        responseSource === 'provider' && isPremiumClass(usedModel.costClass)
+          ? settlePremiumCost(
+              activeUserId,
+              effectivePlan,
+              totalEstimatedCost,
+              fundedByCredits,
+              quotaDeps,
+            )
+          : 0;
 
       // Остановка сторожем по таймауту — это обрыв, а не выбор пользователя: ответ можно продолжить.
       let finishReason: 'stop' | 'length' | 'cancelled' | 'error' =
@@ -1096,6 +1156,10 @@ export class AIGateway {
         status: isCancelled() ? 'cancelled' : 'success',
         source: responseSource,
         limitUnits: limitUnitsFor(usedModel.effortProfile, reasoningMode),
+        premiumCreditUsd,
+        ...(fundedByCredits && isPremiumClass(usedModel.costClass)
+          ? { fundedBy: 'credits' as const }
+          : {}),
       });
 
       if (!isCancelled()) {

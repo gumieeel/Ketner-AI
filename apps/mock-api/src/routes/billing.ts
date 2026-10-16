@@ -13,11 +13,16 @@ import { isVipUser } from '../services/vip.js';
 import { stripeService } from '../services/stripe.js';
 import { cryptoCloudService } from '../services/cryptocloud.js';
 import {
+  findPremiumPack,
   LEGACY_PRICE_USD,
   PLAN_PRICE_USD,
   planPriceRub,
   planPriceUsd,
+  PREMIUM_PACK_DAYS,
+  PREMIUM_PACKS,
+  type PremiumPack,
 } from '../services/pricing.js';
+import { EntitlementService, planRank } from '../services/entitlement.js';
 
 /** Каталог тарифов. `priceMonthly` везде в долларах США (см. services/pricing.ts). */
 export const PLANS: readonly PlanItem[] = [
@@ -170,6 +175,29 @@ export function createBillingRouter({
    */
   const activateCrypto = (invoice: CryptoInvoice, txHash?: string) => {
     const updated = activeInvoiceStore.markCryptoPaid(invoice.id, txHash) ?? invoice;
+    if (invoice.packId) {
+      // Пакет премиум-квоты: кредиты на 30 дней, подписка не меняется. Тот же id платежа — без повтора.
+      const pack = billing.grantPack(invoice.userId, invoice.packId, {
+        id: `crypto:${invoice.id}`,
+        method: 'crypto',
+        amount: invoice.amountUsd,
+        currency: 'USD',
+        invoiceId: invoice.id,
+      });
+      if (!pack.duplicate) {
+        void billing.telegram?.notifyUser(
+          invoice.userId,
+          `✅ Оплата криптовалютой получена: начислили <b>+$${pack.credit.amountUsd}</b> премиум-квоты до <b>${new Date(pack.credit.expiresAt).toLocaleDateString('ru-RU', { day: 'numeric', month: 'long' })}</b>.`,
+          'receipt',
+        );
+      }
+      return {
+        invoice: updated,
+        subscription: subscriptionStore.get(invoice.userId),
+        user: userStore.findById(invoice.userId),
+        credit: pack.credit,
+      };
+    }
     const result = billing.grant(invoice.userId, invoice.planId, {
       id: `crypto:${invoice.id}`,
       method: 'crypto',
@@ -213,6 +241,30 @@ export function createBillingRouter({
 
   const findPlan = (rawPlanId: unknown): PlanItem | undefined => {
     return PLANS.find((p) => p.id === rawPlanId) ?? LEGACY_PLANS.find((p) => p.id === rawPlanId);
+  };
+
+  /**
+   * Пакет премиум-квоты из тела запроса и проверка, что его можно купить: только на платном
+   * тарифе (на Free премиум-моделей нет, кредиты нечем было бы тратить). null — ответ уже отправлен.
+   */
+  const packForPurchase = (request: Request, response: Response): PremiumPack | null => {
+    const pack = findPremiumPack(request.body?.packId);
+    if (!pack) {
+      sendError(response, 400, 'invalid_pack', 'Такого пакета нет');
+      return null;
+    }
+    const user = request.user;
+    const plan = EntitlementService.resolveEffectivePlan(user?.plan, user?.email, isVipUser(user));
+    if (planRank(plan) < planRank('plus')) {
+      sendError(
+        response,
+        403,
+        'plan_required',
+        'Пакеты премиум-квоты докупаются к подписке Plus, Pro или Ultra',
+      );
+      return null;
+    }
+    return pack;
   };
 
   // Webhook & Postback от CryptoCloud.
@@ -308,6 +360,22 @@ export function createBillingRouter({
       return;
     }
     response.json({ plans: PLANS });
+  });
+
+  // Пакеты премиум-квоты поверх подписки и кредиты пользователя.
+  router.get('/billing/packs', (request: Request, response: Response) => {
+    const userId = getUserId(request);
+    response.json({
+      packs: PREMIUM_PACKS.map((pack) => ({
+        ...pack,
+        days: PREMIUM_PACK_DAYS,
+        stars: calculateStars(pack.priceUsd),
+      })),
+      credits: {
+        ...billing.ledger.credits.balanceOf(userId),
+        items: billing.ledger.credits.allOf(userId),
+      },
+    });
   });
 
   router.get('/billing/subscription', (request: Request, response: Response) => {
@@ -483,6 +551,28 @@ export function createBillingRouter({
   router.post(
     '/billing/telegram-stars/create-invoice',
     async (request: Request, response: Response) => {
+      const userId = getUserId(request);
+      if (request.body?.packId !== undefined) {
+        const pack = packForPurchase(request, response);
+        if (!pack) return;
+        let packInvoice = activeInvoiceStore.createTelegramStarsInvoice(
+          userId,
+          request.user?.plan ?? 'free',
+          0,
+          calculateStars(pack.priceUsd),
+          telegramBotService.botUsername || config.telegramBotUsername,
+          pack.id,
+        );
+        if (telegramBotService.isConfigured) {
+          const link = await telegramBotService.createInvoiceLink(packInvoice);
+          if (link) {
+            packInvoice = activeInvoiceStore.getTelegramStarsInvoice(packInvoice.id) ?? packInvoice;
+          }
+        }
+        response.json({ invoice: packInvoice });
+        return;
+      }
+
       const rawPlanId: unknown = request.body?.planId;
       const plan = findPlan(rawPlanId);
       if (!plan || plan.priceMonthly <= 0) {
@@ -495,7 +585,6 @@ export function createBillingRouter({
         return;
       }
 
-      const userId = getUserId(request);
       // Цена в звёздах — по текущему курсу Telegram Stars; сумма фиксируется в счёте.
       const starsAmount = calculateStars(planPriceUsd(plan.id));
       let invoice = activeInvoiceStore.createTelegramStarsInvoice(
@@ -555,6 +644,32 @@ export function createBillingRouter({
       }
 
       const userId = invoice.userId;
+      if (invoice.packId) {
+        // Пакет начисляет бот по successful_payment; без бота (только вне production) — здесь.
+        const paymentId = invoice.chargeId ? `stars:${invoice.chargeId}` : `stars:${invoice.id}`;
+        const granted =
+          invoice.status === 'paid'
+            ? billing.ledger.credits.get(paymentId)
+            : billing.grantPack(userId, invoice.packId, {
+                id: paymentId,
+                method: 'stars',
+                amount: invoice.starsAmount,
+                currency: 'XTR',
+                invoiceId: invoice.id,
+              }).credit;
+        const updatedPack =
+          invoice.status === 'paid'
+            ? invoice
+            : (activeInvoiceStore.markTelegramStarsPaid(invoiceId) ?? invoice);
+        response.json({
+          success: true,
+          subscription: subscriptionStore.get(userId),
+          user: userStore.findById(userId) ?? { id: userId, plan: invoice.planId },
+          invoice: updatedPack,
+          credit: granted ?? null,
+        });
+        return;
+      }
       // Звёзды включает бот по successful_payment; здесь только отдаём результат, не продлевая повторно.
       if (invoice.status === 'paid') {
         response.json({
@@ -588,9 +703,12 @@ export function createBillingRouter({
   // --- Crypto & CryptoCloud ---
 
   router.post('/billing/crypto/create-invoice', async (request: Request, response: Response) => {
-    const rawPlanId: unknown = request.body?.planId;
-    const plan = findPlan(rawPlanId);
-    if (!plan || plan.priceMonthly <= 0) {
+    // Счёт на тариф ({ planId }) или на пакет премиум-квоты ({ packId }).
+    const isPack = request.body?.packId !== undefined;
+    const pack = isPack ? packForPurchase(request, response) : null;
+    if (isPack && !pack) return;
+    const plan = isPack ? undefined : findPlan(request.body?.planId);
+    if (!isPack && (!plan || plan.priceMonthly <= 0)) {
       sendError(response, 400, 'invalid_plan', 'Некорректный тариф для оплаты криптовалютой');
       return;
     }
@@ -616,8 +734,10 @@ export function createBillingRouter({
       return;
     }
 
-    // Тарифы в долларах: Plus $9, Pro $25, Ultra $49 (services/pricing.ts)
-    const amountUsd = planPriceUsd(plan.id);
+    // Цены в долларах: тарифы Plus $9, Pro $25, Ultra $49 и пакеты — services/pricing.ts
+    const amountUsd = pack ? pack.priceUsd : planPriceUsd(plan!.id);
+    // У счёта на пакет тариф — текущий тариф покупателя (подписка от пакета не меняется).
+    const invoicePlanId = pack ? (request.user?.plan ?? 'free') : plan!.id;
     const tempOrderId = `crypto_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
 
     const cryptocurrency: string = currency;
@@ -627,7 +747,7 @@ export function createBillingRouter({
       ccResult = await cryptoCloudService.createInvoice({
         orderId: tempOrderId,
         amountUsd,
-        planId: plan.id,
+        planId: invoicePlanId,
         userId,
         userEmail: user?.email,
         cryptocurrency,
@@ -647,13 +767,14 @@ export function createBillingRouter({
 
     const invoice = activeInvoiceStore.createCryptoInvoice(
       userId,
-      plan.id,
+      invoicePlanId,
       currency,
       amountUsd,
       ccResult?.link,
       ccResult?.invoiceId,
       tempOrderId,
       ccResult?.h2h,
+      pack?.id,
     );
 
     response.json({ invoice });
@@ -747,16 +868,20 @@ export function createBillingRouter({
             subscription: subscriptionStore.get(userId),
             user: userStore.findById(userId) ?? { id: userId, plan: invoice.planId },
             invoice,
+            ...(invoice.packId
+              ? { credit: billing.ledger.credits.get(`crypto:${invoice.id}`) ?? null }
+              : {}),
           });
           return;
         }
-        const { invoice: updated, subscription, user } = activateCrypto(invoice);
+        const { invoice: updated, subscription, user, credit } = activateCrypto(invoice);
 
         response.json({
           success: true,
           subscription,
           user: user ?? { id: userId, plan: invoice.planId },
           invoice: updated,
+          ...(credit ? { credit } : {}),
         });
         return;
       }

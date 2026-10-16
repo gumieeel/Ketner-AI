@@ -1,7 +1,7 @@
 import { CheckIcon, LockIcon } from '@/components/icons';
 import { Badge } from '@/components/ui/badge';
 import { Card } from '@/components/ui/card';
-import type { Plan } from '@/features/billing/types';
+import type { Plan, PremiumPack } from '@/features/billing/types';
 import { useTranslation } from '@/i18n';
 import { cn } from '@/lib/cn';
 
@@ -91,6 +91,61 @@ export function OrderSummary({ plan, feeUsd = 0 }: { plan: Plan; feeUsd?: number
           <LockIcon className="size-3.5 shrink-0 text-accent" />
           <span>{t('checkout.secure')}</span>
         </p>
+      </Card>
+    </aside>
+  );
+}
+
+const PACK_PERKS = ['packs.perk1', 'packs.perk2', 'packs.perk3'] as const;
+
+/** Сводка заказа для пакета премиум-квоты: сколько квоты, на сколько дней и как тратится. */
+export function PackSummary({ pack, feeUsd = 0 }: { pack: PremiumPack; feeUsd?: number }) {
+  const { t } = useTranslation();
+  return (
+    <aside className="flex flex-col gap-4 lg:sticky lg:top-24">
+      <Card className="flex flex-col gap-5 overflow-hidden rounded-2xl border-stroke p-5 sm:p-6">
+        <div aria-hidden="true" className="absolute inset-x-0 top-0 h-1 bg-brand-gradient" />
+        <div className="flex items-center justify-between gap-3 border-b border-stroke pb-4">
+          <span className="text-[13px] font-medium text-muted">{t('packs.selected')}</span>
+          <Badge tone="brand">{t('packs.days', { days: pack.days })}</Badge>
+        </div>
+        <div>
+          <h2 className="text-2xl font-semibold tracking-tight text-text">
+            {t('packs.name', { quota: pack.quotaUsd })}
+          </h2>
+          <p className="mt-1.5 text-[13px] leading-5 text-muted">{t('packs.lead')}</p>
+        </div>
+        <dl className="flex flex-col gap-2.5 rounded-xl border border-stroke bg-canvas p-4 text-[13px]">
+          <div className="flex items-center justify-between gap-3">
+            <dt className="text-muted">{t('packs.price')}</dt>
+            <dd className="font-semibold text-text tabular-nums">${pack.priceUsd}</dd>
+          </div>
+          <div className="flex items-center justify-between gap-3">
+            <dt className="text-muted">{t('checkout.fee')}</dt>
+            <dd
+              className={cn(
+                'font-semibold tabular-nums',
+                feeUsd > 0 ? 'text-text' : 'text-success',
+              )}
+            >
+              ${feeUsd.toFixed(2)}
+            </dd>
+          </div>
+          <div className="flex items-center justify-between gap-3 border-t border-stroke pt-2.5 text-base font-semibold text-text">
+            <dt>{t('checkout.total')}</dt>
+            <dd className="text-gradient tabular-nums">
+              ${feeUsd > 0 ? (pack.priceUsd + feeUsd).toFixed(2) : pack.priceUsd}
+            </dd>
+          </div>
+        </dl>
+        <ul className="flex flex-col gap-2 border-t border-stroke pt-4 text-[13px] leading-5 text-muted">
+          {PACK_PERKS.map((key) => (
+            <li key={key} className="flex items-start gap-2">
+              <CheckIcon className="mt-0.5 size-4 shrink-0 text-accent" />
+              <span>{t(key, { days: pack.days })}</span>
+            </li>
+          ))}
+        </ul>
       </Card>
     </aside>
   );
