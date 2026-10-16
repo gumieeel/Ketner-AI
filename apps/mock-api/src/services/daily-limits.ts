@@ -32,6 +32,10 @@
  *   Pro   (квота $7 → $0.23 в день): Opus $0.070 → 3, Sonnet и Sol $0.035 → 6, Astra $0.176 → 1,
  *         Grok xhigh $0.057 → 4, Terra xhigh $0.099 → 2.
  *   Ultra (квота $15 → $0.50 в день): Opus 7, Sonnet и Sol 14, Astra 3, Grok 8, Terra 5.
+ * GLM-5.3 (открытая флагманская модель, класс work, $0.019 за запрос) — по цене относительно
+ * Gemini 3.7 Flash ($0.013 → 5 / 15 / 40): Plus 3, Pro 10, Ultra 25. Квоту премиум-моделей не тратит;
+ * Auto на Pro и Ultra отдаёт ей задачи средней сложности вместо GPT-6.1 Sol, после лимита отвечает
+ * Ketner Pro.
  * Худший случай (пользователь выбирает все лимиты) ограничен месячным бюджетом и его стадиями
  * 80% / 100% / 125%: маржа Pro ≈ 34%, Ultra ≈ 36% с учётом Free-тира, не ниже 24% и 30%
  * на жёстком пределе.
@@ -45,6 +49,7 @@ export const DAILY_MODEL_LIMITS: Readonly<Record<string, Readonly<Record<string,
     'gpt-6.1-sol': 2,
     'ketner-pro': 20,
     'gemini-3.7-flash': 5,
+    'glm-5.3': 3,
     'gpt-5.6-luna-pro': 10,
     'qwen3.8-27b': 12,
   },
@@ -60,6 +65,7 @@ export const DAILY_MODEL_LIMITS: Readonly<Record<string, Readonly<Record<string,
     'gpt-6.1-sol': 6,
     'gemini-3.8-flash': 15,
     'gemini-3.7-flash': 15,
+    'glm-5.3': 10,
     'ketner-pro': 60,
     'gpt-5.6-luna-pro': 30,
     'qwen3.8-27b': 40,
@@ -75,6 +81,7 @@ export const DAILY_MODEL_LIMITS: Readonly<Record<string, Readonly<Record<string,
     'gpt-6.1-sol': 14,
     'gemini-3.8-flash': 40,
     'gemini-3.7-flash': 40,
+    'glm-5.3': 25,
     'ketner-pro': 150,
     'gpt-5.6-luna-pro': 80,
     'qwen3.8-27b': 100,

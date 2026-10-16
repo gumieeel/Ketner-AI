@@ -82,20 +82,35 @@ export interface ComplexityContext {
   hasWorkspace?: boolean;
 }
 
+export interface PromptComplexity {
+  level: 'simple' | 'moderate' | 'complex';
+  category: string;
+  /**
+   * Сложная задача (только при level `complex`): доказательство, проектирование, конкурентность,
+   * длинное условие, привязанный проект. Ради неё Auto тратит квоту премиум-запросов.
+   */
+  hard: boolean;
+}
+
+/** Короткая реплика («да», «продолжи», «а если n = 0?») наследует сложность предыдущего вопроса. */
+const FOLLOW_UP_MAX_CHARS = 200;
+
 export function classifyPromptComplexity(
   prompt?: string,
   context?: ComplexityContext,
-): {
-  level: 'simple' | 'moderate' | 'complex';
-  category: string;
-} {
+): PromptComplexity {
   if (!prompt || !prompt.trim()) {
-    return { level: 'complex', category: 'general' };
+    return { level: 'complex', category: 'general', hard: false };
   }
 
-  // Если есть вложения или проект — задача сразу переходит в категорию сложных
+  // Если есть вложения или проект — задача сразу переходит в категорию сложных. Привязанный проект —
+  // сложная задача (код в нескольких файлах), вложение — как обычный вопрос по коду.
   if (context?.hasAttachments || context?.hasWorkspace) {
-    return { level: 'complex', category: 'coding' };
+    return {
+      level: 'complex',
+      category: 'coding',
+      hard: Boolean(context.hasWorkspace) || AutoRouter.isHard(prompt),
+    };
   }
 
   const classification = AutoRouter.classify(prompt);
@@ -136,12 +151,21 @@ export function classifyPromptComplexity(
       trimmed,
     );
 
+  const hardPrompt = AutoRouter.isHard(trimmed);
+  const previousQuestion = context?.history?.findLast((m) => m.role === 'user')?.content;
+  const followsHardTask =
+    !hardPrompt &&
+    trimmed.length <= FOLLOW_UP_MAX_CHARS &&
+    Boolean(previousQuestion && AutoRouter.isHard(previousQuestion));
+
   if (
     (isGreetingOrChitChat || isTrivialGeneral) &&
     !historyIsComplex &&
-    !hasCodeOrTechnicalSyntax
+    !hasCodeOrTechnicalSyntax &&
+    !hardPrompt &&
+    !followsHardTask
   ) {
-    return { level: 'simple', category: classification.category };
+    return { level: 'simple', category: classification.category, hard: false };
   }
 
   // 2. Сложные задачи: глубокий код, математика, архитектура, системный дизайн, длинные формулировки (>500 символов)
@@ -153,17 +177,21 @@ export function classifyPromptComplexity(
     classification.category === 'research' ||
     hasCodeOrTechnicalSyntax ||
     trimmed.length > 500 ||
-    historyIsComplex;
+    historyIsComplex ||
+    hardPrompt ||
+    followsHardTask;
 
   if (isComplex) {
-    return {
-      level: 'complex',
-      category: hasCodeOrTechnicalSyntax ? 'coding' : classification.category,
-    };
+    let category = hasCodeOrTechnicalSyntax ? 'coding' : classification.category;
+    // «Продолжи» в задаче по доказательству — та же задача, а не общий вопрос.
+    if (followsHardTask && previousQuestion && category === 'general') {
+      category = AutoRouter.classify(previousQuestion).category;
+    }
+    return { level: 'complex', category, hard: hardPrompt || followsHardTask };
   }
 
   // 3. Умеренные / стандартные задачи
-  return { level: 'moderate', category: classification.category };
+  return { level: 'moderate', category: classification.category, hard: false };
 }
 
 const JCUKEN_MAP: Record<string, string> = {
@@ -621,6 +649,7 @@ export class AIGateway {
       const routed = AutoRouter.route({
         plan: effectivePlan,
         level: taskInfo.level,
+        hard: taskInfo.hard,
         category: taskInfo.category,
         stage,
         // Auto тратит только квоту тарифа: кредиты пакетов — для явного выбора модели.

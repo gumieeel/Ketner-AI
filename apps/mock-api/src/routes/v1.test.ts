@@ -254,6 +254,7 @@ test('GET /v1/models: auto и публичные модели, доступно�
     'gpt-5.6-luna-pro',
     'qwen3.8-27b',
     'gemini-3.7-flash',
+    'glm-5.3',
     'gpt-6.1-sol',
     'claude-opus-5.5',
     'claude-sonnet-5.5',

@@ -48,6 +48,9 @@ test('суточные нормы: Plus, Pro и Ultra ограничены по 
   assert.equal(getDailyModelLimit('plus', 'gemini-3.7-flash'), 5);
   assert.equal(getDailyModelLimit('plus', 'gpt-5.6-luna-pro'), 10);
   assert.equal(getDailyModelLimit('plus', 'qwen3.8-27b'), 12);
+  assert.equal(getDailyModelLimit('plus', 'glm-5.3'), 3);
+  assert.equal(getDailyModelLimit('pro', 'glm-5.3'), 10);
+  assert.equal(getDailyModelLimit('ultra', 'glm-5.3'), 25);
   assert.equal(getDailyModelLimit('plus', 'ketner-mini'), null);
   assert.equal(getDailyModelLimit('pro', 'gpt-6.1-sol'), 6);
   assert.equal(getDailyModelLimit('pro', 'claude-opus-5.5'), 3);
@@ -58,7 +61,7 @@ test('суточные нормы: Plus, Pro и Ultra ограничены по 
     'старые тарифы получают лимиты Pro',
   );
   assert.deepEqual(getDailyModelLimits('free'), {});
-  assert.equal(Object.keys(DAILY_MODEL_LIMITS.plus).length, 5);
+  assert.equal(Object.keys(DAILY_MODEL_LIMITS.plus).length, 6);
 });
 
 test('каждая модель с лимитом имеет запасную модель, а цепочка заканчивается моделью без лимита', () => {
@@ -74,6 +77,7 @@ test('каждая модель с лимитом имеет запасную м
   assert.equal(registry.get('gpt-6.1-sol')!.fallbackModelId, 'gpt-6-luna-pro');
   assert.equal(registry.get('gpt-5.6-luna-pro')!.fallbackModelId, 'ketner-mini');
   assert.equal(registry.get('qwen3.8-27b')!.fallbackModelId, 'qwen3.8-flash');
+  assert.equal(registry.get('glm-5.3')!.fallbackModelId, 'ketner-pro');
 });
 
 test('пока лимит не исчерпан, модель остаётся запрошенной', () => {

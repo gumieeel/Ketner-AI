@@ -21,6 +21,7 @@ export const REQUIRED_PLANS: Record<string, string> = {
   'gpt-5.6-luna-pro': 'plus',
   'qwen3.8-27b': 'plus',
   'gemini-3.7-flash': 'plus',
+  'glm-5.3': 'plus',
   'gemini-3.8-flash': 'pro',
   'grok-4.7': 'pro',
   'claude-opus-5.5': 'pro',

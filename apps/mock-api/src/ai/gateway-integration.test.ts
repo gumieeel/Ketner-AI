@@ -344,6 +344,53 @@ test('Auto: Free — бесплатная Nemotron, Plus — рабочая мо
   );
 });
 
+test('Auto на Pro: средняя задача по коду — открытая GLM-5.3 без расхода премиум-квоты, сложная — GPT-6.1 Sol', async () => {
+  const usage = newUsage();
+  const calls: Call[] = [];
+  const gateway = makeGateway(fakeOpenRouter(okStream('ок', { cost: 0.02 }), calls), usage);
+  const premiumIds = new ModelRegistry().getPremiumModelIds();
+
+  const medium = await run(
+    gateway,
+    request({
+      userId: 'u-a-open',
+      userPlan: 'pro',
+      messages: [
+        { role: 'user', content: `Напиши функцию debounce на TypeScript (${Math.random()})` },
+      ],
+    }),
+  );
+  assertNoError(medium);
+  assert.equal(medium.done?.selectedModel?.id, 'glm-5.3', 'подмена видна в selectedModel');
+  assert.match(medium.done?.routingReason ?? '', /open flagship model \(premium quota saved\)/);
+  assert.equal(calls.at(-1)?.model, 'z-ai/glm-5.3');
+  assert.equal(usage.getCostLastMonthByModels('u-a-open', premiumIds), 0, 'квота не тронута');
+
+  // Короткое «продолжи» в той же задаче остаётся на той же модели
+  const followUp = await run(
+    gateway,
+    request({
+      userId: 'u-a-open',
+      userPlan: 'pro',
+      messages: [
+        { role: 'user', content: 'Найди race condition в очереди задач на Go' },
+        {
+          role: 'assistant',
+          content: 'Проблема в том, что воркеры читают общий срез без мьютекса…',
+        },
+        { role: 'user', content: `продолжи (${Math.random()})` },
+      ],
+    }),
+  );
+  assertNoError(followUp);
+  assert.equal(followUp.done?.selectedModel?.id, 'gpt-6.1-sol');
+  assert.match(
+    followUp.done?.routingReason ?? '',
+    /hard reasoning task, strong model from the premium quota/,
+  );
+  assert.ok(usage.getCostLastMonthByModels('u-a-open', premiumIds) > 0);
+});
+
 test('глубина размышлений и потолок ответа передаются провайдеру под конкретную модель', async () => {
   const usage = newUsage();
   const calls: Call[] = [];

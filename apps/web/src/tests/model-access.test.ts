@@ -43,6 +43,7 @@ describe('доступ к моделям по тарифу (зеркало пр�
       ['gpt-5.6-luna-pro', 'GPT-5.6 Luna Pro', 'plus'],
       ['qwen3.8-27b', 'Qwen3.8 27B', 'plus'],
       ['gemini-3.7-flash', 'Gemini 3.7 Flash', 'plus'],
+      ['glm-5.3', 'GLM-5.3', 'plus'],
       ['gpt-6.1-sol', 'GPT-6.1 Sol', 'plus'],
       ['claude-opus-5.5', 'Claude Opus 5.5', 'pro'],
       ['claude-sonnet-5.5', 'Claude Sonnet 5.5', 'pro'],

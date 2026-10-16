@@ -108,6 +108,11 @@ function makePricing(input: number, output: number, cached: number = input * 0.5
 export const FLOOR_MODEL_ID = 'ketner-mini';
 /** Рабочая лошадка: на неё переключаются премиум-запросы, когда квота премиум-моделей израсходована. */
 export const WORKHORSE_MODEL_ID = 'ketner-pro';
+/**
+ * Открытая флагманская модель (GLM-5.3, открытые веса): Auto на Pro и Ultra отдаёт ей задачи средней
+ * сложности по коду, математике и логике, сохраняя премиум-модель для сложных.
+ */
+export const OPEN_FLAGSHIP_MODEL_ID = 'glm-5.3';
 
 /** Модели Pro и Ultra: medium, на Ultra в режиме Max — xhigh. */
 const STANDARD_PROFILE: EffortProfile = { standard: 'medium', max: 'xhigh' };
@@ -136,6 +141,8 @@ const reasoning = (
  *
  *   ketner-mini        GPT-6 Luna          AA 38    $0.001   повседневные вопросы
  *   ketner-pro         MiMo-V2.6 Pro       AA 46    $0.005   рабочая лошадка, запасная для Pro-моделей
+ *   glm-5.3            GLM-5.3             AA 45    $0.019   открытая флагманская: Auto на Pro/Ultra для
+ *                                                               задач средней сложности вместо Sol
  *   gpt-6.1-sol        GPT-6.1 Sol         AA 52    $0.035   сильная модель OpenAI (Plus)
  *   claude-sonnet-5.5  Claude Sonnet 5.5   AA 56    $0.035 / $0.085 (medium / xhigh)
  *   claude-opus-5.5    Claude Opus 5.5     AA 58    $0.070 / $0.170
@@ -145,7 +152,10 @@ const reasoning = (
  *
  * Суточные лимиты и цепочки запасных моделей: services/daily-limits.ts и fallbackModelId ниже.
  * Не вошли: Claude Fable 5.1 (в 2.5 раза дороже Opus 5.5 при более низком AA), Kimi K3, Qwen3.8 Max,
- * Muse Spark, Nemotron 3 Ultra (хуже и дороже модели ketner-pro).
+ * Muse Spark, Nemotron 3 Ultra (хуже и дороже модели ketner-pro), DeepSeek V4 Pro (AA ≈ 36 на текущей
+ * версии индекса — ниже Ketner Mini). Из открытых флагманов сильнее только MiMo-V2.6 Pro (это и есть
+ * ketner-pro); GLM-5.3 почти вровень с ней (45 против 46) и сильна в коде, но в 4 раза дороже, поэтому
+ * Auto берёт её только там, где иначе потратил бы квоту премиум-моделей.
  */
 const DEFAULT_REGISTRY_ENTRIES: ModelRegistryEntry[] = [
   {
@@ -407,6 +417,38 @@ const DEFAULT_REGISTRY_ENTRIES: ModelRegistryEntry[] = [
     contextMessages: 60,
     isPro: true,
     fallbackModelId: 'claude-haiku-5.5',
+    defaultSystemPrompt: DEFAULT_SYSTEM_PROMPT,
+    createdAt: now(),
+    updatedAt: now(),
+  },
+  // ── Открытая флагманская модель: Auto отдаёт ей задачи средней сложности по коду, математике и
+  // логике вместо премиум-модели (ai/auto-router.ts). Класс work — квоту премиум-запросов не тратит.
+  {
+    id: OPEN_FLAGSHIP_MODEL_ID,
+    name: 'GLM-5.3',
+    provider: 'openrouter',
+    providerModelId: 'z-ai/glm-5.3',
+    enabled: true,
+    tier: 'premium',
+    costClass: 'work',
+    // GLM умеет только включать и выключать размышления, без уровней effort.
+    reasoning: reasoning(false, [], true),
+    capabilities: makeCapabilities({
+      coding: true,
+      reasoning: true,
+      math: true,
+      translation: true,
+      creative: true,
+      research: true,
+      longContext: true,
+    }),
+    contextWindow: 200000,
+    maxOutputTokens: 16384,
+    pricing: makePricing(1.4, 4.4, 0.26),
+    requiredPlan: 'plus',
+    contextMessages: 60,
+    isPro: true,
+    fallbackModelId: WORKHORSE_MODEL_ID,
     defaultSystemPrompt: DEFAULT_SYSTEM_PROMPT,
     createdAt: now(),
     updatedAt: now(),

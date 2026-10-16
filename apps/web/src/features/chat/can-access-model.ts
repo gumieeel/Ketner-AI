@@ -117,6 +117,15 @@ export const DEFAULT_MODELS: ModelInfo[] = [
     requiredPlan: 'plus',
     dailyLimits: { plus: 5, pro: 15, ultra: 40 },
   },
+  // GLM-5.3 — открытая флагманская модель: квоту премиум-запросов не тратит
+  {
+    id: 'glm-5.3',
+    name: 'GLM-5.3',
+    contextMessages: 60,
+    isPro: true,
+    requiredPlan: 'plus',
+    dailyLimits: { plus: 3, pro: 10, ultra: 25 },
+  },
   // GPT-6.1 Sol открыта с Plus, но тоже расходует квоту премиум-запросов
   {
     id: 'gpt-6.1-sol',
@@ -198,6 +207,7 @@ export const MODEL_NAME_KEYS: Readonly<Record<string, TranslationKey>> = {
   'gpt-5.6-luna-pro': 'chat.modelLunaPro',
   'qwen3.8-27b': 'chat.modelQwen27b',
   'gemini-3.7-flash': 'chat.modelGemini37',
+  'glm-5.3': 'chat.modelGlm',
   'gemini-3.8-flash': 'chat.modelGemini',
   'grok-4.7': 'chat.modelGrok',
   'claude-sonnet-5.5': 'chat.modelClaudeSonnet',

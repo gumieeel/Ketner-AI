@@ -7,10 +7,18 @@
  *
  *   Free                         → ketner-mini (Luna): повседневные вопросы стоят ≈ $0.001;
  *   простой вопрос               → ketner-mini (Luna), размышления выключены;
- *   обычная и сложная задача     → ketner-pro (MiMo-V2.6-Pro): уровень флагманов за ≈ $0.005;
- *   сложная математика, логика,  → gpt-6.1-sol, но только с Pro и выше и пока не исчерпана
- *   код (Pro, Ultra)               квота премиум-запросов тарифа;
+ *   обычная и сложная задача     → ketner-pro (MiMo-V2.6-Pro, открытые веса): уровень флагманов
+ *                                  за ≈ $0.005;
+ *   математика, логика, код      → glm-5.3 (открытые веса) за ≈ $0.019 из общего бюджета, квоту
+ *   средней сложности (Pro, Ultra)  премиум-запросов не тратит;
+ *   сложные математика, логика,  → gpt-6.1-sol, пока не исчерпана квота премиум-запросов тарифа,
+ *   код (Pro, Ultra)               потом glm-5.3;
  *   бюджет на исходе             → только дешёвые модели.
+ *
+ * Сложная (`hard`) — не любая задача с кодом или вопросом «почему»: это доказательства, проектирование
+ * систем, гонки и утечки, длинные условия, работа с привязанным проектом (AutoRouter.isHard). Раньше
+ * на премиум-модель шла любая задача по коду, математике и логике на Pro и Ultra, и квота уходила на
+ * «объясни, почему…» и «напиши функцию».
  *
  * Auto никогда не выбирает класс `top` (Claude Opus): он доступен только по явному выбору
  * пользователя и расходует ту же квоту премиум-запросов.
@@ -22,7 +30,7 @@
 
 import type { TaskCategory, TaskClassification } from './gateway-types.js';
 import { planAllowsModel, planRank } from '../services/entitlement.js';
-import { FLOOR_MODEL_ID, WORKHORSE_MODEL_ID } from './model-registry.js';
+import { FLOOR_MODEL_ID, OPEN_FLAGSHIP_MODEL_ID, WORKHORSE_MODEL_ID } from './model-registry.js';
 import type { BudgetStage } from '../services/budget-policy.js';
 
 export type AutoComplexity = 'simple' | 'moderate' | 'complex';
@@ -32,6 +40,8 @@ export interface AutoRouteInput {
   plan: string;
   /** Сложность запроса (учитывает историю, вложения и проект). */
   level: AutoComplexity;
+  /** Сложная задача, ради которой стоит тратить квоту премиум-запросов (AutoRouter.isHard). */
+  hard?: boolean;
   /** Категория задачи. */
   category: string;
   /** Стадия месячного бюджета пользователя. */
@@ -45,11 +55,62 @@ export interface AutoRouteResult {
   reason: string;
 }
 
-/** Категории, где сильная модель заметно лучше рабочей: ради них тратится квота премиум-запросов. */
-const PREMIUM_AUTO_CATEGORIES: ReadonlySet<string> = new Set(['math', 'reasoning', 'coding']);
+/**
+ * Категории, где сильная модель заметно лучше рабочей: средние задачи идут на открытую флагманскую,
+ * сложные — на премиум-модель.
+ */
+const STRONG_AUTO_CATEGORIES: ReadonlySet<string> = new Set(['math', 'reasoning', 'coding']);
 
-/** Премиум-модель, которую Auto берёт для тяжёлых задач. */
+/** Премиум-модель, которую Auto берёт для сложных задач. */
 export const AUTO_PREMIUM_MODEL_ID = 'gpt-6.1-sol';
+/** Открытая флагманская модель для задач средней сложности по коду, математике и логике. */
+export const AUTO_OPEN_MODEL_ID = OPEN_FLAGSHIP_MODEL_ID;
+
+/** Условие длиннее этого — сложная задача: много вводных, которые надо удержать разом. */
+export const HARD_PROMPT_CHARS = 3000;
+
+/**
+ * Признаки сложной задачи: доказательства и олимпиадная математика, проектирование систем, отладка
+ * конкурентности и утечек, оптимизация алгоритмов, безопасность, компиляторы. «Объясни», «сравни»,
+ * «напиши функцию», «найди ошибку» — средняя сложность.
+ */
+const HARD_TASK_PATTERN = new RegExp(
+  [
+    'докаж',
+    'доказательств',
+    'теорем',
+    'олимпиад',
+    '\\bprove\\b',
+    '\\bproof',
+    'theorem',
+    'olympiad',
+    'спроектируй',
+    'проектирование систем',
+    'system design',
+    'design (a|the) (system|service|architecture)',
+    'архитектур\\S* (сервиса|системы|приложения|бэкенда|платформы)',
+    'распредел[её]нн\\S* (систем|транзакц|блокировк)',
+    'distributed (system|transaction|lock)',
+    'race condition',
+    'состояни\\S* гонки',
+    'гонк\\S* данных',
+    'deadlock',
+    'взаимоблокировк',
+    'утечк\\S* памяти',
+    'memory leak',
+    'оптимизируй (алгоритм|производительность|запрос)',
+    'optimi[sz]e (the |this )?(algorithm|performance|query)',
+    'асимптотик',
+    'time complexity',
+    'уязвимост',
+    'vulnerabilit',
+    'криптограф',
+    'cryptograph',
+    'компилятор',
+    'compiler',
+  ].join('|'),
+  'i',
+);
 
 export class AutoRouter {
   /**
@@ -132,8 +193,9 @@ export class AutoRouter {
       'матрица',
       'matrix',
       'theorem',
-      'теорема',
-      'доказательство',
+      'теорем',
+      'доказательств',
+      'докаж',
     ];
     const isMath = mathKeywords.some((kw) => text.includes(kw));
 
@@ -158,7 +220,10 @@ export class AutoRouter {
       'trade-offs',
       'рассуди',
     ];
-    const isReasoning = reasoningKeywords.some((kw) => text.includes(kw));
+    // Признаки сложной задачи (доказательство, проектирование, гонки, утечки) — тоже рассуждения:
+    // «Найди race condition» — не поиск информации.
+    const isReasoning =
+      reasoningKeywords.some((kw) => text.includes(kw)) || HARD_TASK_PATTERN.test(text);
 
     // 4. Перевод
     const translationKeywords = [
@@ -243,6 +308,14 @@ export class AutoRouter {
   }
 
   /**
+   * Сложная ли задача: такую Auto на Pro и Ultra отдаёт премиум-модели, а не открытой флагманской.
+   */
+  static isHard(prompt: string): boolean {
+    const text = prompt.trim();
+    return text.length > HARD_PROMPT_CHARS || HARD_TASK_PATTERN.test(text);
+  }
+
+  /**
    * Выбрать модель для режима Auto. Результат всегда доступен по тарифу пользователя.
    */
   static route(input: AutoRouteInput): AutoRouteResult {
@@ -263,18 +336,26 @@ export class AutoRouter {
       return { modelId: FLOOR_MODEL_ID, reason: 'Auto: simple query, fast economy model' };
     }
 
-    const wantsPremium =
+    // Pro и Ultra: код, математика и логика идут на сильные модели, пока бюджет не на исходе.
+    const strongTask =
       input.level === 'complex' &&
       rank >= planRank('pro') &&
-      PREMIUM_AUTO_CATEGORIES.has(input.category) &&
-      input.premiumAvailable &&
+      STRONG_AUTO_CATEGORIES.has(input.category) &&
       input.stage === 'normal' &&
       planAllowsModel(input.plan, 'pro');
 
-    if (wantsPremium) {
+    if (strongTask) {
+      if (input.hard && input.premiumAvailable) {
+        return {
+          modelId: AUTO_PREMIUM_MODEL_ID,
+          reason: `Auto: hard ${input.category} task, strong model from the premium quota`,
+        };
+      }
       return {
-        modelId: AUTO_PREMIUM_MODEL_ID,
-        reason: `Auto: complex ${input.category} task, strong model from the premium quota`,
+        modelId: AUTO_OPEN_MODEL_ID,
+        reason: input.hard
+          ? `Auto: hard ${input.category} task, premium quota used up, open flagship model`
+          : `Auto: ${input.category} task of medium difficulty, open flagship model (premium quota saved)`,
       };
     }
 

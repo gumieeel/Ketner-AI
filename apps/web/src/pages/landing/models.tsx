@@ -13,6 +13,7 @@ const GOOD_FOR: Record<string, TranslationKey> = {
   'gpt-5.6-luna-pro': 'home.good.luna',
   'qwen3.8-27b': 'home.good.qwen',
   'gemini-3.7-flash': 'home.good.gemini',
+  'glm-5.3': 'home.good.glm',
   'gpt-6.1-sol': 'home.good.sol61',
   'claude-opus-5.5': 'home.good.opus',
   'claude-sonnet-5.5': 'home.good.sonnet',

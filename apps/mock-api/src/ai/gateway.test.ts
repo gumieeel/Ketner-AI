@@ -160,38 +160,60 @@ test('AutoRouter.route: детерминированный выбор модел
     'ketner-pro',
   );
 
-  // Pro и Ultra: тяжёлая математика, логика и код идут на сильную модель, пока есть квота
-  for (const plan of ['pro', 'ultra', 'gpt-pro', 'claude-pro']) {
-    for (const category of ['math', 'reasoning', 'coding']) {
-      assert.equal(
-        AutoRouter.route({ ...base, plan, level: 'complex', category }).modelId,
-        'gpt-6.1-sol',
-        `${plan}/${category}`,
-      );
-    }
-    assert.equal(
-      AutoRouter.route({ ...base, plan, level: 'complex', category: 'creative' }).modelId,
-      'ketner-pro',
-    );
-    assert.equal(
-      AutoRouter.route({
-        ...base,
-        plan,
-        level: 'complex',
-        category: 'math',
-        premiumAvailable: false,
-      }).modelId,
-      'ketner-pro',
-      'квота премиум-запросов исчерпана — рабочая модель',
-    );
-  }
-
-  // Бюджет на исходе: премиум не берётся, исчерпан — только самая дешёвая
+  // Plus: сложная задача тоже на рабочей модели — ни премиум-квоты, ни GLM Auto на Plus не тратит
   assert.equal(
-    AutoRouter.route({ ...base, plan: 'ultra', level: 'complex', category: 'math', stage: 'soft' })
+    AutoRouter.route({ ...base, plan: 'plus', level: 'complex', category: 'coding', hard: true })
       .modelId,
     'ketner-pro',
   );
+
+  // Pro и Ultra: код, математика и логика средней сложности — открытая флагманская модель (квота
+  // премиум-запросов не тратится), сложные — премиум-модель, пока есть квота
+  for (const plan of ['pro', 'ultra', 'gpt-pro', 'claude-pro']) {
+    for (const category of ['math', 'reasoning', 'coding']) {
+      const medium = AutoRouter.route({ ...base, plan, level: 'complex', category });
+      assert.equal(medium.modelId, 'glm-5.3', `${plan}/${category}`);
+      assert.match(medium.reason, /medium difficulty, open flagship model \(premium quota saved\)/);
+      const hard = AutoRouter.route({ ...base, plan, level: 'complex', category, hard: true });
+      assert.equal(hard.modelId, 'gpt-6.1-sol', `${plan}/${category} hard`);
+      assert.match(hard.reason, /hard .* task, strong model from the premium quota/);
+    }
+    assert.equal(
+      AutoRouter.route({ ...base, plan, level: 'moderate', category: 'coding' }).modelId,
+      'ketner-pro',
+      'обычная задача — рабочая модель',
+    );
+    assert.equal(
+      AutoRouter.route({ ...base, plan, level: 'complex', category: 'creative', hard: true })
+        .modelId,
+      'ketner-pro',
+    );
+    const noQuota = AutoRouter.route({
+      ...base,
+      plan,
+      level: 'complex',
+      category: 'math',
+      hard: true,
+      premiumAvailable: false,
+    });
+    assert.equal(noQuota.modelId, 'glm-5.3', 'квота исчерпана — открытая флагманская модель');
+    assert.match(noQuota.reason, /premium quota used up/);
+  }
+
+  // Бюджет на исходе: ни премиум, ни GLM не берутся; исчерпан — только самая дешёвая
+  for (const hard of [false, true]) {
+    assert.equal(
+      AutoRouter.route({
+        ...base,
+        plan: 'ultra',
+        level: 'complex',
+        category: 'math',
+        hard,
+        stage: 'soft',
+      }).modelId,
+      'ketner-pro',
+    );
+  }
   for (const stage of ['exhausted', 'hard_stop'] as const) {
     assert.equal(
       AutoRouter.route({ ...base, plan: 'ultra', level: 'complex', category: 'math', stage })
@@ -206,24 +228,88 @@ test('AutoRouter.route: детерминированный выбор модел
       for (const category of ['general', 'coding', 'math', 'reasoning', 'creative']) {
         for (const stage of ['normal', 'soft', 'exhausted'] as const) {
           for (const premiumAvailable of [true, false]) {
-            const { modelId } = AutoRouter.route({
-              plan,
-              level,
-              category,
-              stage,
-              premiumAvailable,
-            });
-            const model = registry.get(modelId)!;
-            assert.ok(
-              planAllowsModel(plan, model.requiredPlan),
-              `${plan} не имеет доступа к ${modelId}`,
-            );
-            assert.notEqual(model.costClass, 'top');
+            for (const hard of [false, true]) {
+              const { modelId } = AutoRouter.route({
+                plan,
+                level,
+                hard,
+                category,
+                stage,
+                premiumAvailable,
+              });
+              const model = registry.get(modelId)!;
+              assert.ok(
+                planAllowsModel(plan, model.requiredPlan),
+                `${plan} не имеет доступа к ${modelId}`,
+              );
+              assert.notEqual(model.costClass, 'top');
+              // Премиум-квоту Auto тратит только на сложные задачи
+              if (model.costClass === 'strong') assert.ok(hard && premiumAvailable);
+            }
           }
         }
       }
     }
   }
+});
+
+test('AutoRouter.isHard: премиум-модель — для доказательств, проектирования и длинных условий', () => {
+  const hard = [
+    'Докажи, что корень из 2 иррационален',
+    'Спроектируй систему бронирования на 10 млн пользователей',
+    'Найди race condition в этом воркере',
+    'Почему здесь deadlock между двумя транзакциями?',
+    'Prove that the algorithm terminates',
+    'Оптимизируй алгоритм: сейчас O(n^3)',
+    'x'.repeat(3001),
+  ];
+  for (const prompt of hard) assert.equal(AutoRouter.isHard(prompt), true, prompt.slice(0, 40));
+  const medium = [
+    'Объясни, почему небо голубое',
+    'Напиши функцию сортировки массива на TypeScript',
+    'Посчитай интеграл от x^2 на отрезке [0, 1]',
+    'Сравни React и Vue',
+    'Найди ошибку: const a = [1, 2, 3].map(x => x * 2',
+    'Approve the prover settings', // «prove» только как отдельное слово
+  ];
+  for (const prompt of medium) assert.equal(AutoRouter.isHard(prompt), false, prompt);
+});
+
+test('classifyPromptComplexity: сложность задачи (hard) и её наследование короткой репликой', () => {
+  const medium = classifyPromptComplexity('Напиши функцию, которая переворачивает строку');
+  assert.deepEqual(medium, { level: 'complex', category: 'coding', hard: false });
+
+  const proof = classifyPromptComplexity('Докажи теорему Ферма для n = 3');
+  assert.equal(proof.level, 'complex');
+  assert.equal(proof.hard, true);
+
+  // «Продолжи» после доказательства — та же сложная задача (и та же модель)
+  const followUp = classifyPromptComplexity('продолжи', {
+    history: [
+      { role: 'user', content: 'Докажи теорему Ферма для n = 3, пошагово и строго' },
+      { role: 'assistant', content: 'Шаг 1. Предположим противное… '.repeat(20) },
+    ],
+  });
+  assert.deepEqual(followUp, { level: 'complex', category: 'math', hard: true });
+
+  // Длинная реплика — новая задача, сложность считается заново
+  const newTask = classifyPromptComplexity(`Теперь напиши README. ${'Подробно. '.repeat(30)}`, {
+    history: [{ role: 'user', content: 'Докажи теорему Ферма для n = 3' }],
+  });
+  assert.equal(newTask.hard, false);
+
+  // Признаки сложной задачи — категория «рассуждения», а не «поиск» или «общее»
+  assert.deepEqual(classifyPromptComplexity('Спроектируй систему бронирования отелей'), {
+    level: 'complex',
+    category: 'reasoning',
+    hard: true,
+  });
+  assert.equal(classifyPromptComplexity('Найди race condition в воркере').category, 'reasoning');
+
+  // Привязанный проект — сложная задача, вложение — обычная
+  assert.equal(classifyPromptComplexity('Почини тесты', { hasWorkspace: true }).hard, true);
+  assert.equal(classifyPromptComplexity('Посмотри файл', { hasAttachments: true }).hard, false);
+  assert.equal(classifyPromptComplexity('привет').hard, false);
 });
 
 test('ContextOptimizer: оценка токенов и скользящее окно истории', () => {
