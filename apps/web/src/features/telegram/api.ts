@@ -22,13 +22,15 @@ export interface MiniAppPlan {
   /** Сколько эти звёзды стоят по официальному курсу Telegram, $. */
   starsUsd: number;
   preview: PlanPreview;
+  /** ВРЕМЕННО: тариф выдаётся без оплаты, кнопка сразу подтверждает покупку. */
+  freeTest?: boolean;
 }
 
 export type PaymentStatus = 'paid' | 'refund_requested' | 'refunded' | 'refund_declined';
 export type RefundOption =
   | { kind: 'auto' }
   | { kind: 'request' }
-  | { kind: 'none'; reason: 'refunded' | 'pending' | 'declined' | 'expired' | 'used' };
+  | { kind: 'none'; reason: 'refunded' | 'pending' | 'declined' | 'expired' | 'used' | 'free' };
 
 export interface MiniAppPayment {
   id: string;
@@ -40,8 +42,6 @@ export interface MiniAppPayment {
   paidAt: string;
   status: PaymentStatus;
   recurring: boolean;
-  /** ВРЕМЕННО: тестовая оплата с тестового баланса звёзд. */
-  test?: boolean;
   periodEnd: string | null;
   bonusDays: number;
   chargeId: string | null;
@@ -57,8 +57,6 @@ export interface MiniAppPayment {
 }
 
 export interface MiniAppState {
-  /** ВРЕМЕННО: тестовая оплата включена — баланс тестовых звёзд. */
-  testPayments?: { balance: number } | null;
   user: {
     id: string;
     /** null — аккаунт создан через Telegram (почты нет). */
@@ -156,24 +154,14 @@ export const miniAppApi = {
   state: (token: string) => call<MiniAppState>('/state', { token }),
   invoice: (token: string, planId: PaidPlanId, recurring: boolean) =>
     call<
-      | { test?: false; invoiceId: string; link: string; stars: number; recurring: boolean }
-      | {
-          test: true;
-          invoiceId: string;
-          stars: number;
-          title: string;
-          recurring: false;
-          balance: number;
-        }
+      | { granted?: false; invoiceId: string; link: string; stars: number; recurring: boolean }
+      | { granted: true; planId: PaidPlanId; stars: 0; recurring: false; renewsAt: string }
     >('/invoice', {
       token,
       body: { planId, recurring },
     }),
   invoiceStatus: (token: string, invoiceId: string) =>
     call<{ status: 'pending' | 'paid' | 'expired' }>(`/invoice/${enc(invoiceId)}`, { token }),
-  /** ВРЕМЕННО: оплата счёта с тестового баланса звёзд. */
-  testPay: (token: string, invoiceId: string) =>
-    call<MiniAppState>('/test-pay', { token, body: { invoiceId } }),
   autoRenew: (token: string, enabled: boolean) =>
     call<MiniAppState>('/auto-renew', { token, body: { enabled } }),
   refund: (token: string, paymentId: string, reason: string, comment: string) =>

@@ -15,7 +15,6 @@ import {
   subscriptionInfo,
   useMiniApp,
 } from './shared';
-import { TestPayDialog, type TestInvoice } from './test-pay-dialog';
 
 /** Цена в звёздах округляется до 10 ⭐ (≈ $0.20): разница меньше этой — не «дороже». */
 const STARS_ROUNDING_USD = 0.25;
@@ -30,13 +29,10 @@ export function PlansTab({
   onRecurringChange: (value: boolean) => void;
 }) {
   const { t, language } = useTranslation();
-  const { app, token, state, setState, refresh, notify, openSite } = useMiniApp();
+  const { app, token, state, refresh, notify, openSite } = useMiniApp();
   const { user, plans, rate, autoRenew, refundPolicy } = state;
   const info = subscriptionInfo(state);
   const [paying, setPaying] = useState<string | null>(null);
-  const [testInvoice, setTestInvoice] = useState<(TestInvoice & { plan: MiniAppPlan }) | null>(
-    null,
-  );
   const mode: Mode = recurring ? 'auto' : 'once';
   const activeAuto = autoRenew?.status === 'active' ? autoRenew : null;
 
@@ -58,9 +54,12 @@ export function PlansTab({
     setPaying(plan.id);
     try {
       const invoice = await miniAppApi.invoice(token, plan.id, recurring);
-      if (invoice.test) {
-        // ВРЕМЕННО: тестовая оплата — своё окно подтверждения вместо окна Telegram.
-        setTestInvoice({ ...invoice, plan });
+      if (invoice.granted) {
+        // ВРЕМЕННО: тариф выдан без оплаты — окно Telegram не открываем.
+        await refresh();
+        haptic.success(app);
+        notify('success', t('tg.freeTestDone', { plan: plan.title }));
+        setPaying(null);
         return;
       }
       app.openInvoice(invoice.link, (status) => {
@@ -114,29 +113,6 @@ export function PlansTab({
       <p className="px-1 text-[13px] leading-5 text-muted">
         {recurring ? t('tg.modeAutoHint') : t('tg.modeOnceHint')}
       </p>
-      {state.testPayments ? (
-        <Notice tone="info">
-          {t('tg.testPayBanner', {
-            stars: formatStars(state.testPayments.balance, language),
-          })}
-        </Notice>
-      ) : null}
-      {testInvoice ? (
-        <TestPayDialog
-          invoice={testInvoice}
-          onClose={() => {
-            setTestInvoice(null);
-            setPaying(null);
-          }}
-          onPaid={(next) => {
-            const plan = testInvoice.plan;
-            setTestInvoice(null);
-            setPaying(null);
-            setState(next);
-            notify('success', t('tg.paymentDone', { plan: plan.title }));
-          }}
-        />
-      ) : null}
       {recurring && activeAuto ? (
         <Notice tone="info">
           {t('tg.autoReplace', {
@@ -154,13 +130,15 @@ export function PlansTab({
         const autoHere = recurring && activeAuto?.planId === plan.id;
         const stars = formatStars(plan.stars, language);
         const { preview } = plan;
-        const label = recurring
-          ? t('tg.subscribe', { stars })
-          : preview.mode === 'extend'
-            ? t('tg.renew', { stars })
-            : preview.mode === 'switch'
-              ? t('tg.switch', { plan: plan.title, stars })
-              : t('tg.buy', { stars });
+        const label = plan.freeTest
+          ? t('tg.freeTestBuy')
+          : recurring
+            ? t('tg.subscribe', { stars })
+            : preview.mode === 'extend'
+              ? t('tg.renew', { stars })
+              : preview.mode === 'switch'
+                ? t('tg.switch', { plan: plan.title, stars })
+                : t('tg.buy', { stars });
         return (
           <article
             key={plan.id}
@@ -203,8 +181,9 @@ export function PlansTab({
                   : preview.mode === 'switch'
                     ? t('tg.previewSwitch', { date: formatDate(preview.renewsAt, language) })
                     : t('tg.previewNew', { date: formatDate(preview.renewsAt, language) })}
-                {recurring ? ` ${t('tg.previewThenAuto')}` : ''}
+                {recurring && !plan.freeTest ? ` ${t('tg.previewThenAuto')}` : ''}
               </p>
+              {plan.freeTest ? <p className="mt-0.5 text-accent">{t('tg.freeTestHint')}</p> : null}
               {preview.mode === 'switch' && preview.bonusDays > 0 ? (
                 <p className="mt-0.5 text-accent">
                   {t('tg.previewBonus', { days: preview.bonusDays })}

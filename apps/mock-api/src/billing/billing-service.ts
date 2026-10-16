@@ -56,8 +56,6 @@ export interface PaymentRecord {
   telegramUserId?: number;
   /** Платёж по подписке со звёздами (автопродление). */
   recurring?: boolean;
-  /** ВРЕМЕННО: тестовая оплата с тестового баланса звёзд (настоящие звёзды не списывались). */
-  test?: boolean;
   refund?: {
     requestedAt?: string;
     reason?: string;
@@ -142,7 +140,7 @@ export class BillingError extends Error {
 export type RefundOption =
   | { kind: 'auto' }
   | { kind: 'request' }
-  | { kind: 'none'; reason: 'refunded' | 'pending' | 'declined' | 'expired' | 'used' };
+  | { kind: 'none'; reason: 'refunded' | 'pending' | 'declined' | 'expired' | 'used' | 'free' };
 
 export interface GrantPreview {
   mode: 'new' | 'extend' | 'switch';
@@ -248,7 +246,6 @@ export class BillingService {
       chargeId?: string;
       telegramUserId?: number;
       recurring?: boolean;
-      test?: boolean;
     },
     now = Date.now(),
   ): { duplicate: boolean; payment: PaymentRecord; subscription: Subscription; user: User | null } {
@@ -380,6 +377,8 @@ export class BillingService {
 
   refundOption(payment: PaymentRecord, now = Date.now()): RefundOption {
     if (payment.status === 'refunded') return { kind: 'none', reason: 'refunded' };
+    // Тариф выдан бесплатно (временная акция в боте) — возвращать нечего.
+    if (payment.amount <= 0) return { kind: 'none', reason: 'free' };
     if (payment.status === 'refund_requested') return { kind: 'none', reason: 'pending' };
     if (payment.status === 'refund_declined') return { kind: 'none', reason: 'declined' };
     if (now - Date.parse(payment.paidAt) > REFUND_POLICY.windowMs)
@@ -392,11 +391,8 @@ export class BillingService {
       return { kind: 'none', reason: 'used' };
     }
     // Звёзды Telegram возвращает сам и сразу; криптовалюту администратор переводит вручную.
-    // Тестовую оплату возвращает администратор по заявке (рассмотрение до 3 дней).
     const instant =
-      !payment.test &&
-      payment.method === 'stars' &&
-      Boolean(payment.chargeId && payment.telegramUserId);
+      payment.method === 'stars' && Boolean(payment.chargeId && payment.telegramUserId);
     return instant ? { kind: 'auto' } : { kind: 'request' };
   }
 
@@ -418,6 +414,7 @@ export class BillingService {
         declined:
           'По этому платежу в возврате уже отказано. Напишите в поддержку, если не согласны.',
         expired: 'Вернуть оплату можно только в течение 24 часов после неё.',
+        free: 'Тариф был выдан бесплатно — возвращать нечего.',
         used: 'После этой оплаты моделями уже пользовались, поэтому вернуть её нельзя. Возврат возможен в течение 24 часов, если не было ни одного запроса.',
       } as const;
       throw new BillingError(`refund_${option.reason}`, messages[option.reason], 409);
@@ -474,7 +471,7 @@ export class BillingService {
       );
       return declined;
     }
-    if (payment.method === 'stars' && !payment.test) {
+    if (payment.method === 'stars') {
       if (!payment.chargeId || !payment.telegramUserId || !this.telegram) {
         throw new BillingError(
           'refund_unavailable',
@@ -493,11 +490,9 @@ export class BillingService {
     const refunded = this.completeRefund(payment, { auto: false, note }, now);
     await this.telegram?.notifyUser(
       payment.userId,
-      payment.test
-        ? `↩️ Возврат одобрен: <b>${payment.amount} ⭐</b> вернулись на тестовый баланс.`
-        : payment.method === 'stars'
-          ? `↩️ Возврат одобрен: <b>${payment.amount} ⭐</b> вернулись на ваш баланс в Telegram.`
-          : `↩️ Возврат одобрен: <b>$${payment.amount}</b> отправим на ваш кошелёк, напишите его в поддержку @ketner_support_bot, если ещё не указали.`,
+      payment.method === 'stars'
+        ? `↩️ Возврат одобрен: <b>${payment.amount} ⭐</b> вернулись на ваш баланс в Telegram.`
+        : `↩️ Возврат одобрен: <b>$${payment.amount}</b> отправим на ваш кошелёк, напишите его в поддержку @ketner_support_bot, если ещё не указали.`,
       'refund',
     );
     return refunded;

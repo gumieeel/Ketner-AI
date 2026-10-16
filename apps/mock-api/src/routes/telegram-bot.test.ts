@@ -64,6 +64,7 @@ interface MiniState {
     stars: number;
     starsUsd: number;
     preview: { mode: string; bonusDays: number; renewsAt: string };
+    freeTest?: boolean;
   }>;
   rate: { usdPerStar: number; source: string };
   payments: Array<{
@@ -1135,85 +1136,42 @@ test('бонус за крипту: действует на период, опл
   assert.equal(h.billingService.cryptoBonusActive(buyer.user.id, 'pro', now - 5 * DAY_MS), false);
 });
 
-test('ВРЕМЕННО: тестовая оплата с баланса 1300 ⭐ и возврат заявкой', async (t) => {
-  const previous = process.env.TG_TEST_PAYMENTS;
-  process.env.TG_TEST_PAYMENTS = 'on';
+test('ВРЕМЕННО: Pro в кабинете бота выдаётся бесплатно, без счёта и списания звёзд', async (t) => {
+  const previous = process.env.TG_FREE_PLANS;
+  process.env.TG_FREE_PLANS = 'pro';
   const h = await harness();
   t.after(() => {
     h.server.close();
-    if (previous === undefined) delete process.env.TG_TEST_PAYMENTS;
-    else process.env.TG_TEST_PAYMENTS = previous;
+    if (previous === undefined) delete process.env.TG_FREE_PLANS;
+    else process.env.TG_FREE_PLANS = previous;
   });
-  const admin = await h.linkedBuyer(7801);
-  h.userStore.setAdmin(admin.buyer.user.id, true);
-  const { buyer, token } = await h.linkedBuyer(7802);
+  const { token } = await h.linkedBuyer(7601);
 
-  type TestState = MiniState & { testPayments: { balance: number } | null };
-  let state = await h.mini<TestState>('state', undefined, token);
-  assert.deepEqual(state.body.testPayments, { balance: 1300 });
+  let state = await h.mini<MiniState>('state', undefined, token);
+  assert.equal(state.body.plans.find((plan) => plan.id === 'pro')?.freeTest, true);
+  assert.equal(state.body.plans.find((plan) => plan.id === 'plus')?.freeTest, false);
 
-  // Счёт создаётся без Telegram: кабинет сам покажет окно подтверждения.
   const before = h.bot.calls.length;
-  const invoice = await h.mini<{ test: boolean; invoiceId: string; stars: number; title: string }>(
+  const grant = await h.mini<{ granted?: boolean; stars: number }>(
     'invoice',
-    { planId: 'plus' },
+    { planId: 'pro', recurring: true },
     token,
   );
-  assert.equal(invoice.body.test, true);
-  assert.match(invoice.body.title, /Plus · 30 дней/);
+  assert.equal(grant.body.granted, true);
+  assert.equal(grant.body.stars, 0);
   assert.equal(
     h.bot.calls.slice(before).some((call) => call.method === 'createInvoiceLink'),
     false,
   );
 
-  const paid = await h.mini<TestState>('test-pay', { invoiceId: invoice.body.invoiceId }, token);
-  assert.equal(paid.status, 200);
-  assert.equal(paid.body.subscription.plan, 'plus');
-  assert.equal(paid.body.testPayments?.balance, 1300 - invoice.body.stars);
-  const payment = paid.body.payments[0]!;
-  assert.equal(payment.amount, invoice.body.stars);
-  assert.deepEqual(payment.refundOption, { kind: 'request' });
-  const status = await h.mini<{ status: string }>(
-    `invoice/${invoice.body.invoiceId}`,
-    undefined,
-    token,
-  );
-  assert.equal(status.body.status, 'paid');
+  state = await h.mini<MiniState>('state', undefined, token);
+  assert.equal(state.body.subscription.plan, 'pro');
+  assert.equal(state.body.autoRenew, null);
+  assert.equal(state.body.payments[0]!.amount, 0);
+  assert.deepEqual(state.body.payments[0]!.refundOption, { kind: 'none', reason: 'free' });
 
-  // Повторно тот же счёт не оплатить; на дорогой тариф не хватает баланса.
-  const again = await h.mini<ApiErrorBody>(
-    'test-pay',
-    { invoiceId: invoice.body.invoiceId },
-    token,
-  );
-  assert.equal(again.status, 409);
-  const ultra = await h.mini<{ invoiceId: string }>('invoice', { planId: 'ultra' }, token);
-  const poor = await h.mini<ApiErrorBody>('test-pay', { invoiceId: ultra.body.invoiceId }, token);
-  assert.equal(poor.status, 402);
-
-  // Возврат — заявкой администратору, без обращения к Telegram.
-  const requested = await h.mini<{ outcome: string }>(
-    `payments/${encodeURIComponent(payment.id)}/refund`,
-    { reason: 'Передумал' },
-    token,
-  );
-  assert.equal(requested.body.outcome, 'requested');
-  assert.equal(h.bot.last('refundStarPayment'), undefined);
-  const adminMessage = h.bot
-    .all('sendMessage')
-    .filter((call) => call.body.chat_id === 7801)
-    .at(-1)!;
-  assert.match(String(adminMessage.body.text), /тестовая оплата/);
-
-  const decided = await h.mini<{ payment: { status: string } }>(
-    `admin/refunds/${encodeURIComponent(payment.id)}`,
-    { approve: true },
-    admin.token,
-  );
-  assert.equal(decided.body.payment.status, 'refunded');
-  assert.equal(h.bot.last('refundStarPayment'), undefined);
-  state = await h.mini<TestState>('state', undefined, token);
-  assert.equal(state.body.testPayments?.balance, 1300);
-  assert.equal(state.body.subscription.plan, 'free');
-  assert.equal(h.subscriptionStore.get(buyer.user.id).plan, 'free');
+  // Остальные тарифы — как раньше, через счёт в звёздах.
+  const plus = await h.mini<{ granted?: boolean }>('invoice', { planId: 'plus' }, token);
+  assert.equal(plus.body.granted, undefined);
+  assert.ok(h.bot.last('createInvoiceLink'));
 });
