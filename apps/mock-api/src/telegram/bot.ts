@@ -1,4 +1,4 @@
-import { createHash } from 'node:crypto';
+import { createHash, randomBytes } from 'node:crypto';
 import { config } from '../config.js';
 import { LEGACY_PLANS, PLANS } from '../routes/billing.js';
 import type { InvoiceStore } from '../store/invoice-store.js';
@@ -682,6 +682,47 @@ export class TelegramBotService implements TelegramPaymentsPort {
     if (invoice?.status === 'paid' && !payload.recurring)
       return { ok: false, reason: 'already_paid' };
     return { ok: true, payload };
+  }
+
+  /**
+   * TEMP (TG_FREE_PRO): тариф выдаётся без списания звёзд, но проходит тот же путь, что настоящая
+   * оплата: счёт, запись в истории с ценой и номером платежа, чек в чате. Платёж помечается `free`.
+   */
+  async grantFreePlan(user: User, planId: PlanId, now = Date.now()): Promise<TelegramStarsInvoice> {
+    const invoice = this.createStarsInvoice(user.id, planId);
+    const chargeId = `stxF${randomBytes(18).toString('base64url')}`;
+    const pay: SuccessfulPayment = {
+      currency: 'XTR',
+      total_amount: invoice.starsAmount,
+      invoice_payload: encodePayload({
+        planId,
+        stars: invoice.starsAmount,
+        invoiceId: invoice.id,
+        userId: user.id,
+      }),
+      telegram_payment_charge_id: chargeId,
+    };
+    if (user.telegramChatId) {
+      await this.handleStarsPayment(user.telegramChatId, undefined, pay, now);
+    } else {
+      this.billing.grant(
+        user.id,
+        planId,
+        {
+          id: `stars:${chargeId}`,
+          method: 'stars',
+          amount: invoice.starsAmount,
+          currency: 'XTR',
+          invoiceId: invoice.id,
+          chargeId,
+        },
+        now,
+      );
+      this.deps.invoiceStore.markTelegramStarsPaid(invoice.id, chargeId);
+    }
+    const payment = this.billing.findByCharge(chargeId);
+    if (payment) this.billing.markFree(payment.id);
+    return invoice;
   }
 
   /** Оплата звёздами (первая, разовая или очередное автопродление). Повтор того же платежа — без изменений. */

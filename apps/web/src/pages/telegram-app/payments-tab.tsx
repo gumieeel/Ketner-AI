@@ -147,6 +147,7 @@ function PaymentSheet({ payment, onClose }: { payment: MiniAppPayment; onClose: 
   const [comment, setComment] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [confirmDelete, setConfirmDelete] = useState(false);
   const commentId = useId();
   const reasonLabelId = useId();
   const option = payment.refundOption;
@@ -168,6 +169,21 @@ function PaymentSheet({ payment, onClose }: { payment: MiniAppPayment; onClose: 
         'success',
         outcome === 'refunded' ? t('tg.refundDone', { amount }) : t('tg.refundRequested'),
       );
+      onClose();
+    } catch (caught) {
+      haptic.error(app);
+      setError(caught instanceof ApiError ? caught.message : t('tg.errorGeneric'));
+      setBusy(false);
+    }
+  };
+
+  const remove = async () => {
+    setBusy(true);
+    setError(null);
+    try {
+      setState(await miniAppApi.deletePayment(token, payment.id));
+      haptic.success(app);
+      notify('success', t('tg.receiptDeleted'));
       onClose();
     } catch (caught) {
       haptic.error(app);
@@ -314,6 +330,45 @@ function PaymentSheet({ payment, onClose }: { payment: MiniAppPayment; onClose: 
           </div>
         )}
       </section>
+
+      {state.user.isAdmin ? (
+        <section className="mt-6 flex flex-col gap-2 border-t border-stroke pt-4">
+          {confirmDelete ? (
+            <>
+              <Notice tone="warning">{t('tg.receiptDeleteConfirm')}</Notice>
+              {error && !form ? <Notice tone="danger">{error}</Notice> : null}
+              <Button
+                variant="danger"
+                className="w-full"
+                loading={busy}
+                onClick={() => void remove()}
+              >
+                {t('tg.receiptDeleteYes')}
+              </Button>
+              <Button
+                variant="ghost"
+                className="w-full"
+                disabled={busy}
+                onClick={() => setConfirmDelete(false)}
+              >
+                {t('tg.cancel')}
+              </Button>
+            </>
+          ) : (
+            <Button
+              variant="ghost"
+              className="w-full text-danger-text"
+              disabled={busy}
+              onClick={() => {
+                haptic.tap(app);
+                setConfirmDelete(true);
+              }}
+            >
+              {t('tg.receiptDelete')}
+            </Button>
+          )}
+        </section>
+      ) : null}
     </Sheet>
   );
 }

@@ -56,6 +56,11 @@ export interface PaymentRecord {
   telegramUserId?: number;
   /** Платёж по подписке со звёздами (автопродление). */
   recurring?: boolean;
+  /**
+   * TEMP: тариф выдан без списания звёзд (TG_FREE_PRO). В истории выглядит как обычная оплата,
+   * но при возврате Telegram не вызывается — откатывается только срок.
+   */
+  free?: boolean;
   refund?: {
     requestedAt?: string;
     reason?: string;
@@ -376,6 +381,21 @@ export class BillingService {
     return { autoRenew };
   }
 
+  /** TEMP: помечает платёж как выданный без списания звёзд. */
+  markFree(paymentId: string): PaymentRecord | undefined {
+    const payment = this.deps.ledger.payments.get(paymentId);
+    if (!payment) return undefined;
+    return this.deps.ledger.payments.put({ ...payment, free: true });
+  }
+
+  /** Удаляет один чек из истории пользователя (тариф и срок не меняются). */
+  deletePayment(userId: string, paymentId: string): void {
+    const payment = this.deps.ledger.payments.get(paymentId);
+    if (!payment || payment.userId !== userId)
+      throw new BillingError('payment_not_found', 'Платёж не найден', 404);
+    this.deps.ledger.payments.remove(paymentId);
+  }
+
   /** Удаляет всю историю платежей пользователя (тариф и подписка не меняются). Возвращает число записей. */
   clearPayments(userId: string): number {
     const ids = this.deps.ledger.payments
@@ -449,6 +469,15 @@ export class BillingService {
       reason: details.reason?.slice(0, 60),
       comment: details.comment?.slice(0, 500),
     };
+    if (option.kind === 'auto' && payment.free) {
+      const refunded = this.completeRefund({ ...payment, refund }, { auto: true }, now);
+      await this.telegram?.notifyUser(
+        userId,
+        `↩️ Возврат за ${paymentLabel(payment)} оформлен, срок тарифа отменён.`,
+        'refund',
+      );
+      return { outcome: 'refunded', payment: refunded };
+    }
     if (option.kind === 'auto' && this.telegram) {
       const ok = await this.telegram.refundStars(payment.telegramUserId!, payment.chargeId!);
       if (ok) {
@@ -496,7 +525,7 @@ export class BillingService {
       );
       return declined;
     }
-    if (payment.method === 'stars') {
+    if (payment.method === 'stars' && !payment.free) {
       if (!payment.chargeId || !payment.telegramUserId || !this.telegram) {
         throw new BillingError(
           'refund_unavailable',

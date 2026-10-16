@@ -1226,3 +1226,57 @@ test('админ: /resetplan @username обнуляет тариф только 
   assert.equal(h.billingService.paymentsOf(buyer.user.id).length, 1, 'история оплат не тронута');
   assert.match(String(h.bot.last('editMessageText')?.body.text), /обнулён/);
 });
+
+test('бесплатный Pro (TEMP): в истории как обычная оплата звёздами, возврат без Telegram', async (t) => {
+  const h = await harness();
+  t.after(() => h.server.close());
+  const { buyer, token } = await h.linkedBuyer(8001);
+  const user = h.userStore.findById(buyer.user.id)!;
+  const invoice = await h.bot.grantFreePlan(user, 'pro');
+
+  const state = await h.mini<MiniState>('state', undefined, token);
+  assert.equal(state.body.subscription.plan, 'pro');
+  const [payment] = state.body.payments;
+  assert.ok(payment);
+  assert.equal(payment.amount, invoice.starsAmount);
+  assert.ok(invoice.starsAmount > 0);
+  assert.equal(payment.status, 'paid');
+  assert.match(String((payment as unknown as { chargeId: string }).chargeId), /^stx/);
+  assert.equal('free' in payment, false, 'клиенту пометка не видна');
+  assert.equal(h.invoiceStore.getTelegramStarsInvoice(invoice.id)?.status, 'paid');
+  const receipt = h.bot.all('sendMessage').filter((call) => call.body.chat_id === 8001).at(-1)!;
+  assert.match(String(receipt.body.text), /Оплата прошла/);
+
+  const refund = await h.mini<{ outcome: string }>(
+    `payments/${encodeURIComponent(payment.id)}/refund`,
+    { reason: 'Тест' },
+    token,
+  );
+  assert.equal(refund.body.outcome, 'refunded');
+  assert.equal(h.bot.all('refundStarPayment').length, 0, 'Telegram не вызывается');
+  assert.equal(h.subscriptionStore.get(buyer.user.id).plan, 'free');
+});
+
+test('удалить чек из истории может только администратор', async (t) => {
+  const h = await harness();
+  t.after(() => h.server.close());
+  const { buyer, token } = await h.linkedBuyer(8101);
+  h.billingService.grant(buyer.user.id, 'pro', {
+    id: 'stars:d-1',
+    method: 'stars',
+    amount: 100,
+    currency: 'XTR',
+  });
+  const path = `payments/${encodeURIComponent('stars:d-1')}`;
+  const denied = await h.mini(path, undefined, token, 'DELETE');
+  assert.equal(denied.status, 403);
+  assert.equal(h.billingService.paymentsOf(buyer.user.id).length, 1);
+
+  h.userStore.setAdmin(buyer.user.id, true);
+  const deleted = await h.mini<MiniState>(path, undefined, token, 'DELETE');
+  assert.equal(deleted.status, 200);
+  assert.equal(deleted.body.payments.length, 0);
+  assert.equal(h.subscriptionStore.get(buyer.user.id).plan, 'pro', 'тариф не меняется');
+  const missing = await h.mini(path, undefined, token, 'DELETE');
+  assert.equal(missing.status, 404);
+});

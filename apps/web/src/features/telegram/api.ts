@@ -167,6 +167,9 @@ export const miniAppApi = {
         body: { reason, comment },
       },
     ),
+  /** Удалить чек из истории (только администратор). */
+  deletePayment: (token: string, paymentId: string) =>
+    call<MiniAppState>(`/payments/${enc(paymentId)}`, { token, method: 'DELETE' }),
   prefs: (token: string, prefs: Partial<MiniAppState['prefs']>) =>
     call<MiniAppState>('/prefs', { token, body: prefs }),
   siteLogin: (token: string, next: string) =>

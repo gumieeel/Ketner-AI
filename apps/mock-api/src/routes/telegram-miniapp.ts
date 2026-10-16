@@ -1,4 +1,3 @@
-import { randomUUID } from 'node:crypto';
 import { Router, type Request, type Response } from 'express';
 import { createMockToken } from '../auth/jwt.js';
 import { requireAuth } from '../middleware/auth.js';
@@ -412,16 +411,19 @@ export function createMiniAppRouter({
         return;
       }
       const recurring = body.recurring === true;
-      // TEMP: тариф Pro выдаётся сразу, без счёта и оплаты в Telegram (TG_FREE_PRO=off отключает).
+      // TEMP: тариф Pro выдаётся сразу, без окна оплаты Telegram (TG_FREE_PRO=off отключает).
+      // В истории и в чате это выглядит как обычная оплата звёздами.
       if (process.env.TG_FREE_PRO !== 'off' && body.planId === 'pro' && !recurring) {
-        const freeId = `free:${randomUUID()}`;
-        billing.grant(
-          request.user!.id,
-          'pro',
-          { id: freeId, method: 'stars', amount: 0, currency: 'XTR', invoiceId: freeId },
-          Date.now(),
-        );
-        response.json({ invoiceId: freeId, stars: 0, link: '', recurring: false, free: true });
+        const user = currentUser(request, response);
+        if (!user) return;
+        const invoice = await botService.grantFreePlan(user, 'pro');
+        response.json({
+          invoiceId: invoice.id,
+          stars: invoice.starsAmount,
+          link: '',
+          recurring: false,
+          free: true,
+        });
         return;
       }
       const invoice = botService.createStarsInvoice(request.user!.id, body.planId as PlanId);
@@ -483,6 +485,26 @@ export function createMiniAppRouter({
         });
         const user = currentUser(request, response);
         if (user) response.json({ outcome: result.outcome, ...stateOf(user) });
+      } catch (error) {
+        fail(response, error);
+      }
+    },
+  );
+
+  /** Удалить чек из истории (только администраторам; тариф и срок не меняются). */
+  router.delete(
+    '/telegram/miniapp/payments/:id',
+    requireAuth,
+    (request: Request, response: Response) => {
+      const user = currentUser(request, response);
+      if (!user) return;
+      if (!user.isAdmin) {
+        sendError(response, 403, 'admin_only', 'Удалять чеки может только администратор');
+        return;
+      }
+      try {
+        billing.deletePayment(user.id, String(request.params.id));
+        response.json(stateOf(user));
       } catch (error) {
         fail(response, error);
       }

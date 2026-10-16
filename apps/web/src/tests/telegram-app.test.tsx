@@ -420,6 +420,46 @@ describe('кабинет в Telegram (/tg)', () => {
     expect(within(sheet).queryByRole('button', { name: 'Вернуть деньги' })).not.toBeInTheDocument();
   });
 
+  it('платежи: администратор удаляет чек из истории с подтверждением', async () => {
+    window.Telegram = { WebApp: fakeWebApp() };
+    const base = makeState();
+    const state = makeState({ user: { ...base.user, isAdmin: true } });
+    const calls = mockApi((url, init) => {
+      if (url === '/api/telegram/miniapp/session') return linkedSession(state);
+      if (url === '/api/telegram/miniapp/payments/stars%3Ach-1' && init.method === 'DELETE') {
+        return Response.json({ ...state, payments: [] });
+      }
+      return undefined;
+    });
+    window.history.replaceState(null, '', '/tg?tab=payments');
+    render(<TelegramAppPage />);
+
+    fireEvent.click(await screen.findByRole('button', { name: /Pro.*1\s670 ⭐/ }));
+    const sheet = screen.getByRole('dialog', { name: 'Чек · Pro' });
+    fireEvent.click(within(sheet).getByRole('button', { name: 'Удалить чек из истории' }));
+    expect(calls.some((call) => call.method === 'DELETE')).toBe(false);
+    expect(within(sheet).getByText(/Чек пропадёт из истории оплат/)).toBeInTheDocument();
+    fireEvent.click(within(sheet).getByRole('button', { name: 'Да, удалить чек' }));
+
+    expect(await screen.findByText('Чек удалён из истории')).toBeInTheDocument();
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    expect(calls.filter((call) => call.method === 'DELETE')).toHaveLength(1);
+  });
+
+  it('платежи: обычному пользователю удалить чек нельзя', async () => {
+    window.Telegram = { WebApp: fakeWebApp() };
+    const state = makeState();
+    mockApi((url) => (url === '/api/telegram/miniapp/session' ? linkedSession(state) : undefined));
+    window.history.replaceState(null, '', '/tg?tab=payments');
+    render(<TelegramAppPage />);
+
+    fireEvent.click(await screen.findByRole('button', { name: /Pro.*1\s670 ⭐/ }));
+    const sheet = screen.getByRole('dialog', { name: 'Чек · Pro' });
+    expect(
+      within(sheet).queryByRole('button', { name: 'Удалить чек из истории' }),
+    ).not.toBeInTheDocument();
+  });
+
   it('администратор: заявка на возврат одобряется из кабинета', async () => {
     window.Telegram = { WebApp: fakeWebApp() };
     const state = makeState({ user: { ...makeState().user, isAdmin: true }, pendingRefunds: 1 });
