@@ -843,6 +843,20 @@ export const ru = {
   'admin.sourceTemplate': 'Шаблоны',
   'admin.requestsShort': '{count} запр.',
   'admin.costByPlan': 'Расход по тарифам',
+  'admin.models30dTitle': 'Модели за 30 дней',
+  'admin.models30dHint':
+    'Только ответы провайдера. Кэш — доля кэшированных входных токенов; вердикт по длинным запросам (вход от порога кэша вендора).',
+  'admin.colModelName': 'Модель',
+  'admin.colModelRequests': 'Запросов',
+  'admin.colAvgTokens': 'Вход / выход, ср.',
+  'admin.colCached': 'Кэш',
+  'admin.colAvgCost': 'Цена запроса',
+  'admin.colPlanShare': 'Доля тарифов',
+  'admin.cacheStatus.working': 'работает',
+  'admin.cacheStatus.not_working': 'не срабатывает',
+  'admin.cacheStatus.no_data': 'мало данных',
+  'admin.cacheStatus.not_expected': 'не кэшируется',
+  'admin.models30dEmpty': 'За 30 дней запросов к моделям не было.',
 
   // Админ-панель: фильтры и ошибки
   'admin.searchLabel': 'Поиск пользователей',

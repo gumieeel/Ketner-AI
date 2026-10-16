@@ -267,6 +267,38 @@ export interface ModelMetric {
   averageLatencyMs: number;
 }
 
+/**
+ * Кэш промпта у модели по данным учёта:
+ *   working      — кэшированные токены приходят;
+ *   not_working  — длинных запросов достаточно, а кэша почти нет (стоит разобраться);
+ *   no_data      — длинных запросов слишком мало, чтобы судить;
+ *   not_expected — модель не кэширует (бесплатные эндпоинты, неизвестный вендор).
+ */
+export type PromptCacheStatus = 'working' | 'not_working' | 'no_data' | 'not_expected';
+
+/** Сводка по модели за скользящие 30 дней (только ответы провайдера, без семантического кэша). */
+export interface ModelUsageMetric {
+  modelId: string;
+  /** Имя из реестра (null — модели уже нет в реестре). */
+  name: string | null;
+  /** Вендор движка: anthropic, openai, google, x-ai... */
+  vendor: string;
+  requests: number;
+  avgInputTokens: number;
+  avgOutputTokens: number;
+  /** Доля кэшированных входных токенов, % от всех входных. */
+  cachedTokenSharePct: number;
+  /** Доля длинных запросов (вход от порога кэша), у которых был кэш, %. */
+  cacheHitRequestsPct: number;
+  /** Длинных запросов (вход не короче порога кэша вендора). */
+  cacheEligibleRequests: number;
+  cacheStatus: PromptCacheStatus;
+  avgCostPerRequest: number;
+  totalCost: number;
+  /** Доля расхода на эту модель по тарифам, % (сумма ≈ 100). */
+  costShareByPlanPct: Record<string, number>;
+}
+
 /** Phase 4: Распределение расходов по тарифам. */
 export interface PlanCostMetric {
   plan: string;
@@ -275,6 +307,8 @@ export interface PlanCostMetric {
   requests: number;
   totalTokens: number;
   averageCostPerUser: number;
+  /** Доля тарифа в общем расходе за период, %. */
+  costSharePct: number;
 }
 
 /** Phase 4: Разбивка задержек и TTFT. */
@@ -310,6 +344,8 @@ export interface GatewayMetrics {
   };
   costByModel: ModelMetric[];
   costByPlan: PlanCostMetric[];
+  /** По каждой модели за скользящие 30 дней: токены, кэш, цена запроса, доли тарифов. */
+  models30d: ModelUsageMetric[];
   latency: LatencyBreakdown;
   alerts: MetricAlert[];
   hasNegativeMarginAlert: boolean;

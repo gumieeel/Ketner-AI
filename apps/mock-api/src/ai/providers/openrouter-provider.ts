@@ -29,6 +29,8 @@ import type {
   ProviderResponse,
   ProviderStreamCallbacks,
 } from '../gateway-types.js';
+import { ContextOptimizer } from '../context.js';
+import { promptCachePolicy } from '../prompt-cache.js';
 
 export interface OpenRouterProviderConfig {
   apiKey: string;
@@ -93,31 +95,55 @@ function withCacheBreakpoint(message: ProviderMessage): WireMessage {
 }
 
 /**
- * Явное кэширование промпта нужно только моделям Anthropic: OpenAI, DeepSeek, Grok и Gemini кэшируют
- * автоматически. Читать из кэша в 10 раз дешевле, чем платить за вход заново, а контекст проекта и
- * системный промпт повторяются в каждом сообщении. Две точки кэша: системный промпт (вместе с
- * контекстом проекта) и стабильная часть истории — сообщение перед последним вопросом.
+ * Точки кэша промпта (политика по вендорам — ai/prompt-cache.ts). OpenAI, Grok, DeepSeek кэшируют
+ * сами, им точки не нужны. Читать из кэша в 4–10 раз дешевле, чем платить за вход заново, а
+ * системный промпт, контекст проекта и начало истории повторяются в каждом сообщении.
+ *
+ * Anthropic, до трёх точек:
+ *   1. конец ведущих системных сообщений (промпт с контекстом проекта и сводка истории);
+ *   2. якорь — первое сообщение диалога: префикс «система + якорь» не меняется весь разговор,
+ *      поэтому читается из кэша и в тот ход, когда окно истории сдвинулось;
+ *   3. сообщение перед последним вопросом — вся история, пока окно не сдвинулось.
  * Короче порога провайдера (4096 токенов у Opus и Haiku) запрос просто не кэшируется, без доплаты.
+ *
+ * Gemini: OpenRouter использует только последнюю точку, а запись платная (вход + хранение 5 минут),
+ * поэтому одна точка и только на длинном префиксе.
  */
 export function prepareMessages(model: string, messages: ProviderMessage[]): WireMessage[] {
   const wire: WireMessage[] = messages.map((m) => ({ role: m.role, content: m.content }));
-  if (!model.startsWith('anthropic/')) {
+  const policy = promptCachePolicy(model);
+  if (policy.mode !== 'explicit' && policy.mode !== 'explicit-last') {
     return wire;
   }
 
-  const systemIndex = messages.findIndex((m) => m.role === 'system');
-  if (systemIndex >= 0 && messages[systemIndex].content) {
-    wire[systemIndex] = withCacheBreakpoint(messages[systemIndex]);
-  }
-
+  const leadingSystemEnd = (() => {
+    let end = -1;
+    while (end + 1 < messages.length && messages[end + 1].role === 'system') end += 1;
+    return end;
+  })();
   const dialogue = messages
     .map((m, index) => ({ m, index }))
     .filter(({ m }) => m.role !== 'system');
-  if (dialogue.length > 2) {
-    const checkpoint = dialogue[dialogue.length - 2];
-    if (checkpoint.m.content) {
-      wire[checkpoint.index] = withCacheBreakpoint(checkpoint.m);
+  const checkpoint = dialogue.length > 2 ? dialogue[dialogue.length - 2].index : -1;
+
+  if (policy.mode === 'explicit-last') {
+    const index = checkpoint >= 0 ? checkpoint : leadingSystemEnd;
+    const prefixTokens = messages
+      .slice(0, index + 1)
+      .reduce((sum, m) => sum + ContextOptimizer.estimateTokens(m.content), 0);
+    if (index >= 0 && messages[index].content && prefixTokens >= policy.minTokens) {
+      wire[index] = withCacheBreakpoint(messages[index]);
     }
+    return wire;
+  }
+
+  const breakpoints = new Set<number>();
+  if (leadingSystemEnd >= 0) breakpoints.add(leadingSystemEnd);
+  // Якорь имеет смысл, только если он не совпадает с точкой истории.
+  if (dialogue.length >= 4) breakpoints.add(dialogue[0].index);
+  if (checkpoint >= 0) breakpoints.add(checkpoint);
+  for (const index of breakpoints) {
+    if (messages[index].content) wire[index] = withCacheBreakpoint(messages[index]);
   }
   return wire;
 }

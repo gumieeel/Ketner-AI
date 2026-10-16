@@ -15,6 +15,7 @@ import type {
   LatencyBreakdown,
   MetricAlert,
   ModelMetric,
+  ModelUsageMetric,
   PlanCostMetric,
   ProviderStatus,
   ResponseSource,
@@ -24,6 +25,7 @@ import type {
   UsageStatus,
   UserProfitability,
 } from '../ai/gateway-types.js';
+import { promptCachePolicy, vendorOf } from '../ai/prompt-cache.js';
 
 interface UsageStoreData {
   records: UsageRecord[];
@@ -35,6 +37,21 @@ interface UsageDbDriver {
 }
 
 const MAX_RECORDS = 50000;
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+/** Что метрикам нужно знать о модели из реестра: имя и движок (по нему — вендор и кэш). */
+export interface ModelDescriptor {
+  name: string | null;
+  engineId: string;
+}
+
+/** Сколько длинных запросов нужно, чтобы судить о кэше модели. */
+const CACHE_VERDICT_MIN_REQUESTS = 10;
+/** Если кэш есть меньше чем у этой доли длинных запросов, он, скорее всего, не срабатывает. */
+const CACHE_WORKING_MIN_HIT_RATE = 0.2;
+
+const pct = (part: number, whole: number): number =>
+  whole > 0 ? Number(((part / whole) * 100).toFixed(1)) : 0;
 
 export class UsageStore {
   /** Пространство имён в `ketner_docs`; совместимо с syncDocStores. */
@@ -544,6 +561,107 @@ export class UsageStore {
   }
 
   /**
+   * Сводка по каждой модели за скользящие 30 дней: число запросов, средний вход и выход, доля
+   * кэшированных токенов, средняя цена запроса и доли тарифов в расходе на модель.
+   *
+   * Считаются только ответы провайдера (успешные и прерванные: токены оплачены). Семантический кэш
+   * не входит: у его ответов вход целиком помечен как «кэш», и он скрыл бы, срабатывает ли кэш
+   * промпта у самого провайдера. Картинки тоже не входят: у них нет токенов.
+   *
+   * Вердикт по кэшу (`cacheStatus`) строится по длинным запросам — тем, чей вход не короче порога
+   * кэша вендора: у коротких кэша не бывает в принципе.
+   */
+  getModelUsage30d(
+    params: {
+      userPlans?: ReadonlyMap<string, string>;
+      describeModel?: (modelId: string) => ModelDescriptor;
+      now?: number;
+    } = {},
+  ): ModelUsageMetric[] {
+    const since = (params.now ?? Date.now()) - 30 * DAY_MS;
+    const describe = params.describeModel ?? ((id: string) => ({ name: null, engineId: id }));
+    const byModel = new Map<
+      string,
+      {
+        requests: number;
+        input: number;
+        output: number;
+        cached: number;
+        cost: number;
+        eligible: number;
+        eligibleHits: number;
+        costByPlan: Map<string, number>;
+      }
+    >();
+    const minTokensOf = new Map<string, number>();
+
+    for (const r of this.records) {
+      if (new Date(r.createdAt).getTime() < since) continue;
+      if (r.kind === 'image' || (r.source ?? 'provider') !== 'provider') continue;
+      if (r.status !== 'success' && r.status !== 'cancelled') continue;
+      if (r.inputTokens <= 0 && r.outputTokens <= 0) continue;
+
+      let entry = byModel.get(r.modelId);
+      if (!entry) {
+        entry = {
+          requests: 0,
+          input: 0,
+          output: 0,
+          cached: 0,
+          cost: 0,
+          eligible: 0,
+          eligibleHits: 0,
+          costByPlan: new Map(),
+        };
+        byModel.set(r.modelId, entry);
+        minTokensOf.set(r.modelId, promptCachePolicy(describe(r.modelId).engineId).minTokens);
+      }
+      const cached = Math.min(r.inputTokens, Math.max(0, r.cachedTokens ?? 0));
+      entry.requests += 1;
+      entry.input += r.inputTokens;
+      entry.output += r.outputTokens;
+      entry.cached += cached;
+      entry.cost += r.estimatedCost;
+      if (r.inputTokens >= (minTokensOf.get(r.modelId) ?? Infinity)) {
+        entry.eligible += 1;
+        if (cached > 0) entry.eligibleHits += 1;
+      }
+      const plan = params.userPlans?.get(r.userId) ?? 'free';
+      entry.costByPlan.set(plan, (entry.costByPlan.get(plan) ?? 0) + r.estimatedCost);
+    }
+
+    return [...byModel.entries()]
+      .map(([modelId, m]): ModelUsageMetric => {
+        const model = describe(modelId);
+        const policy = promptCachePolicy(model.engineId);
+        let cacheStatus: ModelUsageMetric['cacheStatus'];
+        if (policy.mode === 'none') cacheStatus = 'not_expected';
+        else if (m.eligible < CACHE_VERDICT_MIN_REQUESTS) cacheStatus = 'no_data';
+        else
+          cacheStatus =
+            m.eligibleHits / m.eligible >= CACHE_WORKING_MIN_HIT_RATE ? 'working' : 'not_working';
+        const costShareByPlanPct: Record<string, number> = {};
+        for (const [plan, cost] of m.costByPlan) costShareByPlanPct[plan] = pct(cost, m.cost);
+        return {
+          modelId,
+          name: model.name,
+          vendor: vendorOf(model.engineId),
+          requests: m.requests,
+          avgInputTokens: Math.round(m.input / m.requests),
+          avgOutputTokens: Math.round(m.output / m.requests),
+          cachedTokenSharePct: pct(m.cached, m.input),
+          cacheHitRequestsPct: pct(m.eligibleHits, m.eligible),
+          cacheEligibleRequests: m.eligible,
+          cacheStatus,
+          avgCostPerRequest: Number((m.cost / m.requests).toFixed(6)),
+          totalCost: Number(m.cost.toFixed(4)),
+          costShareByPlanPct,
+        };
+      })
+      .sort((a, b) => b.totalCost - a.totalCost);
+  }
+
+  /**
    * Phase 4: Комплексные метрики шлюза для дашборда администратора (/api/admin/metrics).
    * Включает:
    * - Стоимость по источникам (cache vs provider vs template)
@@ -560,6 +678,7 @@ export class UsageStore {
     planPricesRub?: Record<string, number>;
     planPricesUsd?: Record<string, number>;
     rubToUsdRate?: number;
+    describeModel?: (modelId: string) => ModelDescriptor;
   }): GatewayMetrics {
     let records = this.records;
     if (params?.fromDate) {
@@ -742,6 +861,7 @@ export class UsageStore {
           requests: p.requests,
           totalTokens: p.totalTokens,
           averageCostPerUser: usersCount > 0 ? Number((p.totalCost / usersCount).toFixed(4)) : 0,
+          costSharePct: pct(p.totalCost, totalCost),
         };
       })
       .sort((a, b) => b.totalCost - a.totalCost);
@@ -787,6 +907,10 @@ export class UsageStore {
       costBySource,
       costByModel,
       costByPlan,
+      models30d: this.getModelUsage30d({
+        userPlans: userPlanMap,
+        describeModel: params?.describeModel,
+      }),
       latency,
       alerts,
       hasNegativeMarginAlert: alerts.length > 0,

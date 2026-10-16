@@ -632,6 +632,22 @@ test('admin: метрики шлюза GET /api/admin/metrics (Фаза 4: да�
     assert.ok(body.metrics.costBySource.template !== undefined);
     assert.ok(Array.isArray(body.metrics.costByModel));
     assert.ok(Array.isArray(body.metrics.costByPlan));
+    // Сводка по моделям за 30 дней: токены, доля кэша, цена запроса, доли тарифов
+    const models30d = (body.metrics as { models30d?: Array<Record<string, unknown>> }).models30d;
+    assert.ok(Array.isArray(models30d));
+    for (const model of models30d) {
+      for (const key of [
+        'requests',
+        'avgInputTokens',
+        'avgOutputTokens',
+        'cachedTokenSharePct',
+        'avgCostPerRequest',
+      ]) {
+        assert.equal(typeof model[key], 'number', key);
+      }
+      assert.equal(typeof model.costShareByPlanPct, 'object');
+      assert.equal(typeof model.cacheStatus, 'string');
+    }
     assert.ok(typeof body.metrics.latency.averageLatencyMs === 'number');
     assert.ok(Array.isArray(body.alerts));
     assert.equal(typeof body.hasNegativeMarginAlert, 'boolean');

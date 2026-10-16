@@ -174,6 +174,11 @@ export function createAdminRouter({
         };
       }),
       planPricesUsd,
+      // Имя и движок модели нужны сводке за 30 дней: по движку видно вендора и порог его кэша.
+      describeModel: (modelId) => {
+        const entry = registry.get(modelId);
+        return { name: entry?.name ?? null, engineId: entry?.providerModelId ?? modelId };
+      },
     });
 
     const feedbackAnalytics = feedbackStore.getAnalytics({ from, to });

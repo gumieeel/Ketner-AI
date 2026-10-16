@@ -845,6 +845,20 @@ export const en: Record<TranslationKey, string> = {
   'admin.sourceTemplate': 'Templates',
   'admin.requestsShort': '{count} req',
   'admin.costByPlan': 'Spend by plan',
+  'admin.models30dTitle': 'Models, last 30 days',
+  'admin.models30dHint':
+    'Provider responses only. Cache is the share of cached input tokens; the verdict uses long requests (input above the vendor cache threshold).',
+  'admin.colModelName': 'Model',
+  'admin.colModelRequests': 'Requests',
+  'admin.colAvgTokens': 'Avg in / out',
+  'admin.colCached': 'Cache',
+  'admin.colAvgCost': 'Cost / request',
+  'admin.colPlanShare': 'Plan share',
+  'admin.cacheStatus.working': 'working',
+  'admin.cacheStatus.not_working': 'not hitting',
+  'admin.cacheStatus.no_data': 'not enough data',
+  'admin.cacheStatus.not_expected': 'not cached',
+  'admin.models30dEmpty': 'No model requests in the last 30 days.',
 
   // Админ-панель: фильтры и ошибки
   'admin.searchLabel': 'Search users',

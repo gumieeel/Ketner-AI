@@ -111,6 +111,82 @@ interface UserDetail {
   }>;
 }
 
+type CacheStatus = 'working' | 'not_working' | 'no_data' | 'not_expected';
+
+interface ModelUsage30d {
+  modelId: string;
+  name: string | null;
+  vendor: string;
+  requests: number;
+  avgInputTokens: number;
+  avgOutputTokens: number;
+  cachedTokenSharePct: number;
+  cacheHitRequestsPct: number;
+  cacheEligibleRequests: number;
+  cacheStatus: CacheStatus;
+  avgCostPerRequest: number;
+  totalCost: number;
+  costShareByPlanPct: Record<string, number>;
+}
+
+const CACHE_STATUS_TONE: Record<CacheStatus, string> = {
+  working: 'text-success',
+  not_working: 'text-danger',
+  no_data: 'text-muted',
+  not_expected: 'text-subtle',
+};
+
+/** Сводка по моделям за 30 дней: сколько запросов, какой вход и выход, срабатывает ли кэш. */
+function ModelUsageTable({ models }: { models: ModelUsage30d[] }) {
+  const { t } = useTranslation();
+  if (models.length === 0) {
+    return <p className="text-[13px] text-muted">{t('admin.models30dEmpty')}</p>;
+  }
+  return (
+    <div className="overflow-x-auto">
+      <table className="w-full min-w-[640px] text-left text-[13px] tabular-nums">
+        <thead className="text-muted">
+          <tr>
+            <th className="py-1.5 pr-3 font-medium">{t('admin.colModelName')}</th>
+            <th className="py-1.5 pr-3 font-medium">{t('admin.colModelRequests')}</th>
+            <th className="py-1.5 pr-3 font-medium">{t('admin.colAvgTokens')}</th>
+            <th className="py-1.5 pr-3 font-medium">{t('admin.colCached')}</th>
+            <th className="py-1.5 pr-3 font-medium">{t('admin.colAvgCost')}</th>
+            <th className="py-1.5 font-medium">{t('admin.colPlanShare')}</th>
+          </tr>
+        </thead>
+        <tbody>
+          {models.map((m) => (
+            <tr key={m.modelId} className="border-t border-border/60">
+              <td className="py-1.5 pr-3">
+                <span className="font-medium text-text">{m.name ?? m.modelId}</span>
+                <span className="ml-1.5 text-xs text-subtle">{m.vendor}</span>
+              </td>
+              <td className="py-1.5 pr-3">{m.requests}</td>
+              <td className="py-1.5 pr-3">
+                {m.avgInputTokens} / {m.avgOutputTokens}
+              </td>
+              <td className="py-1.5 pr-3">
+                {m.cachedTokenSharePct}%{' '}
+                <span className={cn('text-xs', CACHE_STATUS_TONE[m.cacheStatus])}>
+                  {t(`admin.cacheStatus.${m.cacheStatus}` as TranslationKey)}
+                </span>
+              </td>
+              <td className="py-1.5 pr-3">${m.avgCostPerRequest.toFixed(4)}</td>
+              <td className="py-1.5 text-xs text-muted">
+                {Object.entries(m.costShareByPlanPct)
+                  .sort((a, b) => b[1] - a[1])
+                  .map(([plan, share]) => `${plan} ${share}%`)
+                  .join(' · ')}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
 interface GatewayMetricsData {
   totalRequests: number;
   totalCost: number;
@@ -136,7 +212,9 @@ interface GatewayMetricsData {
     requests: number;
     totalTokens: number;
     averageCostPerUser: number;
+    costSharePct?: number;
   }>;
+  models30d?: ModelUsage30d[];
   latency: {
     averageLatencyMs: number;
     p95LatencyMs: number;
@@ -762,12 +840,22 @@ export function AdminPage() {
                   <MetricRow
                     key={p.plan}
                     label={<span className="capitalize">{p.plan}</span>}
-                    value={`$${p.totalCost} · ${t('admin.requestsShort', { count: p.requests })}`}
+                    value={`$${p.totalCost}${p.costSharePct !== undefined ? ` (${p.costSharePct}%)` : ''} · ${t('admin.requestsShort', { count: p.requests })}`}
                   />
                 ))}
               </div>
             </MetricCard>
           </div>
+
+          {metrics.models30d && (
+            <div className="flex flex-col gap-2">
+              <div>
+                <p className="text-sm font-semibold text-text">{t('admin.models30dTitle')}</p>
+                <p className="text-xs text-subtle">{t('admin.models30dHint')}</p>
+              </div>
+              <ModelUsageTable models={metrics.models30d} />
+            </div>
+          )}
         </Card>
       )}
 

@@ -11,6 +11,7 @@
 
 import type { IncomingMessage, Language } from '../types.js';
 import type { ProviderMessage } from './gateway-types.js';
+import { alignedWindowStart, HISTORY_RECENT_MIN } from './prompt-cache.js';
 
 export interface ContextOptimizationOptions {
   maxMessages: number;
@@ -156,7 +157,8 @@ export class ContextOptimizer {
    *   1. system (системный промпт)
    *   2. system (сводка старых сообщений, если история длинная)
    *   3. Первое сообщение диалога (якорь для понимания темы)
-   *   4. Последние 6–8 сообщений
+   *   4. Последние 8–13 сообщений: окно сдвигается шагом в 6 сообщений, чтобы начало истории
+   *      совпадало с прошлым запросом и читалось из кэша провайдера (ai/prompt-cache.ts)
    */
   static optimize(
     messages: IncomingMessage[],
@@ -213,9 +215,12 @@ export class ContextOptimizer {
       return result;
     }
 
-    const RECENT_COUNT = Math.min(8, maxMsgs);
-    const recentMessages = messages.slice(-RECENT_COUNT);
-    const olderMessages = messages.slice(0, messages.length - RECENT_COUNT);
+    // Окно сдвигается шагами, а не на каждом ходу: так начало истории совпадает с прошлым
+    // запросом и читается из кэша провайдера (см. ai/prompt-cache.ts).
+    const RECENT_COUNT = Math.min(HISTORY_RECENT_MIN, maxMsgs);
+    const windowStart = alignedWindowStart(messages.length, RECENT_COUNT, maxMsgs);
+    const recentMessages = messages.slice(windowStart);
+    const olderMessages = messages.slice(0, windowStart);
 
     // 3. Вставляем сводку старых сообщений
     if (olderMessages.length > 0) {

@@ -687,13 +687,17 @@ export class AIGateway {
       );
 
       let effectiveSystemPrompt = systemPrompt;
+      // Файлы «под вопрос» идут в сам вопрос, а не в системный промпт: системный промпт должен
+      // совпадать от хода к ходу, иначе кэш провайдера сбрасывается на каждом сообщении.
+      let workspaceQueryBlock = '';
       if (activeWorkspace) {
-        const { block, stats } = buildWorkspaceContextBlock(activeWorkspace, {
+        const { stableBlock, queryBlock, stats } = buildWorkspaceContextBlock(activeWorkspace, {
           language,
           query: prompt,
           maxContentChars: workspaceChars,
         });
-        effectiveSystemPrompt += block;
+        effectiveSystemPrompt += stableBlock;
+        workspaceQueryBlock = queryBlock;
         if (stats.filesWithContent === 0 && stats.filesListed > 0) {
           console.warn(
             `[ai-gateway] Проект «${activeWorkspace.name}»: ${stats.filesListed} файлов в списке, но ни у одного нет содержимого`,
@@ -728,6 +732,16 @@ export class AIGateway {
           },
         },
       );
+
+      if (workspaceQueryBlock) {
+        const lastUser = optimizedMessages.findLastIndex((m) => m.role === 'user');
+        if (lastUser >= 0) {
+          optimizedMessages[lastUser] = {
+            ...optimizedMessages[lastUser],
+            content: `${workspaceQueryBlock}\n\n${optimizedMessages[lastUser].content}`,
+          };
+        }
+      }
 
       // 5.1. Проверка семантического кэша (Semantic & Query Caching)
       // Ответ в режиме Max (глубже размышления) не подменяется кэшированным обычным и наоборот.
