@@ -33,7 +33,7 @@ Ketner AI — это production-ready SaaS-платформа с полноце�
 
 ## Быстрый старт
 
-**Требования:** Node.js 20+ (разрабатывалось на 24.21), npm 10+
+**Требования:** Node.js 22.12+ (нужен встроенный `node:sqlite`; разрабатывалось на 24.21), npm 10+
 
 ```bash
 npm install
@@ -139,7 +139,7 @@ apps/
     src/
       ai/              AI Gateway, Model Registry, провайдеры, Auto-router
       auth/            Better Auth, JWT
-      db/              Drizzle ORM: схема PostgreSQL, миграции, Supabase-клиент
+      db/              Drizzle ORM: схема PostgreSQL, миграции
       middleware/       Аутентификация, ошибки
       routes/          Эндпоинты: auth, chat, billing, webhooks, admin
       services/        Stripe, Entitlement, Fair Use, Cost, VIP

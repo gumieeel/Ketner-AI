@@ -15,3 +15,5 @@ apps/*/.env
 .DS_Store
 Thumbs.db
 coverage
+# локальные данные mock-API (пользователи, сессии, диалоги) в образ не копируются
+apps/mock-api/data
