@@ -34,24 +34,6 @@ export interface MiniAppRouterDeps {
 
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
 
-/**
- * ВРЕМЕННО: тарифы, которые в кабинете бота выдаются без оплаты (покупка сразу подтверждается,
- * звёзды не списываются). По умолчанию — Pro. Отключить без деплоя кода: переменная окружения
- * `TG_FREE_PLANS=off` (или перечислить тарифы через запятую, например `pro,ultra`).
- */
-export function freeTestPlans(env: NodeJS.ProcessEnv = process.env): Set<PlanId> {
-  const raw = env.TG_FREE_PLANS;
-  if (raw === undefined) return new Set<PlanId>(['pro']);
-  const value = raw.trim().toLowerCase();
-  if (!value || value === 'off' || value === '0' || value === 'false') return new Set();
-  return new Set(
-    value
-      .split(',')
-      .map((item) => item.trim())
-      .filter((item): item is PlanId => (STARS_PLANS as readonly string[]).includes(item)),
-  );
-}
-
 /** Экранирование для HTML-версии письма. */
 function escapeMailHtml(text: string): string {
   return text
@@ -214,8 +196,6 @@ export function createMiniAppRouter({
           highlight: getPlanItem(planId)?.modelsHighlight ?? '',
           bullets: getPlanItem(planId)?.bullets.ru ?? [],
           preview,
-          /** ВРЕМЕННО: тариф выдаётся без оплаты (см. freeTestPlans). */
-          freeTest: freeTestPlans().has(planId),
         };
       }),
       rate,
@@ -428,41 +408,6 @@ export function createMiniAppRouter({
         !(STARS_PLANS as readonly string[]).includes(body.planId)
       ) {
         sendError(response, 400, 'invalid_plan', 'Выберите тариф Plus, Pro или Ultra');
-        return;
-      }
-      const planId = body.planId as PlanId;
-      if (freeTestPlans().has(planId)) {
-        // ВРЕМЕННО: без счёта и списания звёзд — тариф включается сразу на 30 дней.
-        const userId = request.user!.id;
-        const result = billing.grant(userId, planId, {
-          id: `free:${userId}:${Date.now()}`,
-          method: 'stars',
-          amount: 0,
-          currency: 'XTR',
-        });
-        const until = new Date(result.subscription.renewsAt ?? Date.now()).toLocaleDateString(
-          'ru-RU',
-          {
-            day: 'numeric',
-            month: 'long',
-            year: 'numeric',
-            timeZone: 'UTC',
-          },
-        );
-        void botService
-          .notifyUser(
-            userId,
-            `🎉 <b>Покупка подтверждена</b>\n\nТариф <b>${planTitle(planId)}</b> действует до <b>${until}</b>. Сейчас он выдаётся бесплатно — звёзды не списаны.`,
-            'system',
-          )
-          .catch(() => undefined);
-        response.json({
-          granted: true,
-          planId,
-          stars: 0,
-          recurring: false,
-          renewsAt: result.subscription.renewsAt,
-        });
         return;
       }
       const recurring = body.recurring === true;

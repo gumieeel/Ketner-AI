@@ -54,14 +54,6 @@ export function PlansTab({
     setPaying(plan.id);
     try {
       const invoice = await miniAppApi.invoice(token, plan.id, recurring);
-      if (invoice.granted) {
-        // ВРЕМЕННО: тариф выдан без оплаты — окно Telegram не открываем.
-        await refresh();
-        haptic.success(app);
-        notify('success', t('tg.freeTestDone', { plan: plan.title }));
-        setPaying(null);
-        return;
-      }
       app.openInvoice(invoice.link, (status) => {
         if (status === 'paid') {
           notify('info', t('tg.paymentProcessing'));
@@ -130,15 +122,13 @@ export function PlansTab({
         const autoHere = recurring && activeAuto?.planId === plan.id;
         const stars = formatStars(plan.stars, language);
         const { preview } = plan;
-        const label = plan.freeTest
-          ? t('tg.freeTestBuy')
-          : recurring
-            ? t('tg.subscribe', { stars })
-            : preview.mode === 'extend'
-              ? t('tg.renew', { stars })
-              : preview.mode === 'switch'
-                ? t('tg.switch', { plan: plan.title, stars })
-                : t('tg.buy', { stars });
+        const label = recurring
+          ? t('tg.subscribe', { stars })
+          : preview.mode === 'extend'
+            ? t('tg.renew', { stars })
+            : preview.mode === 'switch'
+              ? t('tg.switch', { plan: plan.title, stars })
+              : t('tg.buy', { stars });
         return (
           <article
             key={plan.id}
@@ -181,9 +171,8 @@ export function PlansTab({
                   : preview.mode === 'switch'
                     ? t('tg.previewSwitch', { date: formatDate(preview.renewsAt, language) })
                     : t('tg.previewNew', { date: formatDate(preview.renewsAt, language) })}
-                {recurring && !plan.freeTest ? ` ${t('tg.previewThenAuto')}` : ''}
+                {recurring ? ` ${t('tg.previewThenAuto')}` : ''}
               </p>
-              {plan.freeTest ? <p className="mt-0.5 text-accent">{t('tg.freeTestHint')}</p> : null}
               {preview.mode === 'switch' && preview.bonusDays > 0 ? (
                 <p className="mt-0.5 text-accent">
                   {t('tg.previewBonus', { days: preview.bonusDays })}

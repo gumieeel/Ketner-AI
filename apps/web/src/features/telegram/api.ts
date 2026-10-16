@@ -22,15 +22,13 @@ export interface MiniAppPlan {
   /** Сколько эти звёзды стоят по официальному курсу Telegram, $. */
   starsUsd: number;
   preview: PlanPreview;
-  /** ВРЕМЕННО: тариф выдаётся без оплаты, кнопка сразу подтверждает покупку. */
-  freeTest?: boolean;
 }
 
 export type PaymentStatus = 'paid' | 'refund_requested' | 'refunded' | 'refund_declined';
 export type RefundOption =
   | { kind: 'auto' }
   | { kind: 'request' }
-  | { kind: 'none'; reason: 'refunded' | 'pending' | 'declined' | 'expired' | 'used' | 'free' };
+  | { kind: 'none'; reason: 'refunded' | 'pending' | 'declined' | 'expired' | 'used' };
 
 export interface MiniAppPayment {
   id: string;
@@ -153,10 +151,7 @@ export const miniAppApi = {
     call<{ code: string; expiresAt: number }>('/link-code', { body: { initData } }),
   state: (token: string) => call<MiniAppState>('/state', { token }),
   invoice: (token: string, planId: PaidPlanId, recurring: boolean) =>
-    call<
-      | { granted?: false; invoiceId: string; link: string; stars: number; recurring: boolean }
-      | { granted: true; planId: PaidPlanId; stars: 0; recurring: false; renewsAt: string }
-    >('/invoice', {
+    call<{ invoiceId: string; link: string; stars: number; recurring: boolean }>('/invoice', {
       token,
       body: { planId, recurring },
     }),
