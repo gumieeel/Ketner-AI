@@ -13,7 +13,7 @@ import {
 import type { StoredGithubConnection } from '../github/connection-store.js';
 import { invoiceStore } from '../store/invoice-store.js';
 import { billingLedger } from '../billing/index.js';
-import { usageStore } from '../store/index.js';
+import { supportStore, usageStore } from '../store/index.js';
 import { contactStore } from '../store/contact-store.js';
 import type { DocStore } from '../store/doc-store.js';
 import type { CryptoInvoice } from '../types.js';
@@ -995,6 +995,16 @@ export async function initDatabaseSync(): Promise<boolean> {
       ] as unknown as Array<DocStore<{ id: string }>>);
     } catch (error) {
       console.error('❌ [db] Журнал платежей не синхронизирован с PostgreSQL:', error);
+    }
+    // Обращения в поддержку: файл на Render стирается при деплое, база — нет.
+    try {
+      await syncDocStores(sql, [
+        supportStore.mirror.tickets,
+        supportStore.mirror.meta,
+      ] as unknown as Array<DocStore<{ id: string }>>);
+      supportStore.hydrateFromMirror();
+    } catch (error) {
+      console.error('❌ [db] Обращения в поддержку не синхронизированы с PostgreSQL:', error);
     }
     try {
       await syncCryptoInvoices(sql);

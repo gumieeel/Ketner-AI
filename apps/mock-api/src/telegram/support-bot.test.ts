@@ -65,3 +65,39 @@ test('поддержка: при закреплённом чате админи�
   await bot.processUpdate(message(900, '/tickets', { first_name: 'Админ' }));
   assert.ok(sent.some((m) => m.chatId === 900 && m.text.includes('Открытые обращения')));
 });
+
+test('поддержка: обращения переживают перезапуск через зеркало в базе', async () => {
+  const before = makeBot({ adminChatId: 900 });
+  await before.bot.processUpdate(message(501, 'Хочу оформить возврат', { first_name: 'Клиент' }));
+  const notice = before.sent.find((m) => m.chatId === 900 && m.text.includes('Новое сообщение'))!;
+  const noticeId = before.sent.indexOf(notice) + 1;
+
+  // «Деплой»: файл пропал, данные приходят только из базы.
+  const store = createSupportStore();
+  store.mirror.tickets.loadExternal(before.store.mirror.tickets.all());
+  store.mirror.meta.loadExternal(before.store.mirror.meta.all());
+  store.hydrateFromMirror();
+  assert.equal(store.listOpenTickets().length, 1);
+  assert.equal(store.getTicketByAdminMessageId(noticeId)?.id, 'T-1001');
+
+  const after = new TelegramSupportBotService({
+    supportStore: store,
+    botToken: '',
+    adminUsername: 'boss',
+    adminChatId: 900,
+  });
+  const sent: Array<{ chatId: number | string; text: string }> = [];
+  after.sendMessage = async (chatId, text) => {
+    sent.push({ chatId, text });
+    return { message_id: 100 + sent.length };
+  };
+  // Номер с решёткой тоже принимается.
+  await after.processUpdate(
+    message(900, '/reply #T-1001 Ответ после деплоя', { first_name: 'Админ' }),
+  );
+  assert.ok(sent.some((m) => m.chatId === 501 && m.text.includes('Ответ после деплоя')));
+
+  // Новое обращение не занимает старый номер.
+  await after.processUpdate(message(502, 'Другой вопрос', { first_name: 'Второй' }));
+  assert.ok(store.getTicket('T-1002'));
+});

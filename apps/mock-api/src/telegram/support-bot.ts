@@ -518,7 +518,7 @@ export class TelegramSupportBotService {
 
       // Команда /close <ticketId>
       if (text.startsWith('/close')) {
-        const targetId = text.replace('/close', '').trim();
+        const targetId = text.replace('/close', '').trim().replace(/^#/, '');
         let ticket: SupportTicket | undefined;
 
         if (targetId) {
@@ -549,7 +549,7 @@ export class TelegramSupportBotService {
       // Команда /reply <ticketId> <ответ>
       if (text.startsWith('/reply')) {
         const parts = text.replace('/reply', '').trim().split(' ');
-        const ticketParam = parts[0];
+        const ticketParam = parts[0]?.replace(/^#/, '');
         const replyText = parts.slice(1).join(' ').trim();
 
         if (!ticketParam || !replyText) {
