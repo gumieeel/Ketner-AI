@@ -1,5 +1,5 @@
 import { render } from '@testing-library/react';
-import { RouterProvider, createMemoryRouter } from 'react-router-dom';
+import { RouterProvider, createMemoryRouter, type RouteObject } from 'react-router-dom';
 import { ThemeSync } from '@/app/theme-sync';
 import { useAuth } from '@/features/auth/auth-store';
 import { useBilling } from '@/features/billing/billing-store';
@@ -8,9 +8,29 @@ import { useChat } from '@/features/chat/chat-store';
 import { DEFAULT_MODEL_ID, usePreferences } from '@/features/preferences/preferences-store';
 import { routes } from '@/router/routes';
 
+/**
+ * Те же маршруты, что у App, но ленивые страницы загружены заранее: в приложении роутер
+ * дожидается чанка, а тесты сразу проверяют разметку после рендера.
+ */
+async function preloadLazyRoutes(list: RouteObject[]): Promise<RouteObject[]> {
+  return Promise.all(
+    list.map(async (route) => {
+      const { lazy, children, ...rest } = route;
+      const loaded = typeof lazy === 'function' ? await lazy() : {};
+      return {
+        ...rest,
+        ...loaded,
+        ...(children ? { children: await preloadLazyRoutes(children) } : {}),
+      } as RouteObject;
+    }),
+  );
+}
+
+const testRoutes = await preloadLazyRoutes(routes);
+
 /** Рендерит приложение на заданном маршруте — так же, как это делает App. */
 export function renderRoute(path: string) {
-  const router = createMemoryRouter(routes, { initialEntries: [path] });
+  const router = createMemoryRouter(testRoutes, { initialEntries: [path] });
   return render(
     <ThemeSync>
       <RouterProvider router={router} />
