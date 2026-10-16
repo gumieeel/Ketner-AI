@@ -140,7 +140,7 @@ export class BillingError extends Error {
 export type RefundOption =
   | { kind: 'auto' }
   | { kind: 'request' }
-  | { kind: 'none'; reason: 'refunded' | 'pending' | 'declined' | 'expired' | 'used' };
+  | { kind: 'none'; reason: 'refunded' | 'pending' | 'declined' | 'expired' | 'used' | 'free' };
 
 export interface GrantPreview {
   mode: 'new' | 'extend' | 'switch';
@@ -377,6 +377,8 @@ export class BillingService {
 
   refundOption(payment: PaymentRecord, now = Date.now()): RefundOption {
     if (payment.status === 'refunded') return { kind: 'none', reason: 'refunded' };
+    // Тариф выдан бесплатно (временная акция в боте) — возвращать нечего.
+    if (payment.amount <= 0) return { kind: 'none', reason: 'free' };
     if (payment.status === 'refund_requested') return { kind: 'none', reason: 'pending' };
     if (payment.status === 'refund_declined') return { kind: 'none', reason: 'declined' };
     if (now - Date.parse(payment.paidAt) > REFUND_POLICY.windowMs)
@@ -412,6 +414,7 @@ export class BillingService {
         declined:
           'По этому платежу в возврате уже отказано. Напишите в поддержку, если не согласны.',
         expired: 'Вернуть оплату можно только в течение 24 часов после неё.',
+        free: 'Тариф был выдан бесплатно — возвращать нечего.',
         used: 'После этой оплаты моделями уже пользовались, поэтому вернуть её нельзя. Возврат возможен в течение 24 часов, если не было ни одного запроса.',
       } as const;
       throw new BillingError(`refund_${option.reason}`, messages[option.reason], 409);
