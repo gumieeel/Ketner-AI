@@ -184,6 +184,7 @@ function PaymentSheet({ payment, onClose }: { payment: MiniAppPayment; onClose: 
       : t('tg.refundNoneDeclined'),
     expired: t('tg.refundNoneExpired', { hours: state.refundPolicy.hours }),
     used: t('tg.refundNoneUsed', { hours: state.refundPolicy.hours }),
+    free: t('tg.refundNoneFree'),
   };
   const deadline = formatDateTime(
     new Date(Date.parse(payment.paidAt) + state.refundPolicy.hours * 3600_000).toISOString(),

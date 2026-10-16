@@ -64,6 +64,7 @@ interface MiniState {
     stars: number;
     starsUsd: number;
     preview: { mode: string; bonusDays: number; renewsAt: string };
+    freeTest?: boolean;
   }>;
   rate: { usdPerStar: number; source: string };
   payments: Array<{
@@ -1133,4 +1134,44 @@ test('бонус за крипту: действует на период, опл
   const crypto = h.billingService.findPayment('crypto:bonus-2')!;
   h.billingService.ledger.payments.put({ ...crypto, status: 'refunded' });
   assert.equal(h.billingService.cryptoBonusActive(buyer.user.id, 'pro', now - 5 * DAY_MS), false);
+});
+
+test('ВРЕМЕННО: Pro в кабинете бота выдаётся бесплатно, без счёта и списания звёзд', async (t) => {
+  const previous = process.env.TG_FREE_PLANS;
+  process.env.TG_FREE_PLANS = 'pro';
+  const h = await harness();
+  t.after(() => {
+    h.server.close();
+    if (previous === undefined) delete process.env.TG_FREE_PLANS;
+    else process.env.TG_FREE_PLANS = previous;
+  });
+  const { token } = await h.linkedBuyer(7601);
+
+  let state = await h.mini<MiniState>('state', undefined, token);
+  assert.equal(state.body.plans.find((plan) => plan.id === 'pro')?.freeTest, true);
+  assert.equal(state.body.plans.find((plan) => plan.id === 'plus')?.freeTest, false);
+
+  const before = h.bot.calls.length;
+  const grant = await h.mini<{ granted?: boolean; stars: number }>(
+    'invoice',
+    { planId: 'pro', recurring: true },
+    token,
+  );
+  assert.equal(grant.body.granted, true);
+  assert.equal(grant.body.stars, 0);
+  assert.equal(
+    h.bot.calls.slice(before).some((call) => call.method === 'createInvoiceLink'),
+    false,
+  );
+
+  state = await h.mini<MiniState>('state', undefined, token);
+  assert.equal(state.body.subscription.plan, 'pro');
+  assert.equal(state.body.autoRenew, null);
+  assert.equal(state.body.payments[0]!.amount, 0);
+  assert.deepEqual(state.body.payments[0]!.refundOption, { kind: 'none', reason: 'free' });
+
+  // Остальные тарифы — как раньше, через счёт в звёздах.
+  const plus = await h.mini<{ granted?: boolean }>('invoice', { planId: 'plus' }, token);
+  assert.equal(plus.body.granted, undefined);
+  assert.ok(h.bot.last('createInvoiceLink'));
 });
