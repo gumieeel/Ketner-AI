@@ -313,7 +313,11 @@ function PaymentSheet({ payment, onClose }: { payment: MiniAppPayment; onClose: 
         ) : !form ? (
           <>
             <p className="text-[14px] leading-6 text-muted">
-              {option.kind === 'auto' ? t('tg.refundAutoText') : t('tg.refundCryptoText')}
+              {option.kind === 'auto'
+                ? t('tg.refundAutoText')
+                : payment.method === 'stars'
+                  ? t('tg.refundStarsRequestText')
+                  : t('tg.refundCryptoText')}
               {payment.recurring ? ` ${t('tg.refundAutoRenewOff')}` : ''}
             </p>
             <Notice tone="warning">{t('tg.refundDeadline', { date: deadline })}</Notice>
@@ -364,7 +368,7 @@ function PaymentSheet({ payment, onClose }: { payment: MiniAppPayment; onClose: 
                 className="w-full resize-none rounded-md border border-stroke bg-surface px-3.5 py-2.5 text-base text-text placeholder:text-subtle hover:border-stroke-strong focus:border-accent focus:outline-none focus:ring-2 focus:ring-accent-soft md:text-[15px]"
               />
             </div>
-            {option.kind === 'auto' ? <Notice tone="warning">{t('tg.refundWarn')}</Notice> : null}
+            <Notice tone="warning">{t('tg.refundWarn')}</Notice>
             {error ? <Notice tone="danger">{error}</Notice> : null}
             <Button
               variant={option.kind === 'auto' ? 'danger' : 'primary'}

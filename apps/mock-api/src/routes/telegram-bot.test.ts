@@ -632,7 +632,7 @@ test('оплата звёздами: чек в журнале, продлени�
 
   const state = await h.mini<MiniState>('state', undefined, token);
   assert.equal(state.body.payments.length, 1);
-  assert.equal(state.body.payments[0]!.refundOption.kind, 'auto');
+  assert.equal(state.body.payments[0]!.refundOption.kind, 'request');
   const plusPlan = state.body.plans.find((plan) => plan.id === 'plus')!;
   assert.equal(plusPlan.preview.mode, 'extend');
   // Кабинет показывает ту же цену, что попадёт в счёт, и её цену по официальному курсу Telegram.
@@ -735,7 +735,7 @@ test('автопродление звёздами: подписка, очере�
 
 // ───────────── возвраты ─────────────
 
-test('возврат звёзд в первые 48 часов — сразу, срок откатывается', async (t) => {
+test('возврат звёзд: только после одобрения администратора, затем срок откатывается', async (t) => {
   const h = await harness();
   t.after(() => h.server.close());
   const { buyer, token } = await h.linkedBuyer(7601);
@@ -754,15 +754,25 @@ test('возврат звёзд в первые 48 часов — сразу, с
     { reason: 'Не подошло' },
     token,
   );
-  assert.equal(refund.body.outcome, 'refunded');
+  assert.equal(refund.body.outcome, 'requested');
+  assert.equal(
+    h.bot.all('refundStarPayment').length,
+    0,
+    'без решения администратора звёзды не возвращаются',
+  );
+  assert.equal(h.subscriptionStore.get(buyer.user.id).plan, 'pro');
+  assert.equal(refund.body.payments[0]!.status, 'refund_requested');
+
+  await h.billingService.decideRefund('stars:rf-1', true);
   assert.deepEqual(h.bot.last('refundStarPayment')!.body, {
     user_id: 7601,
     telegram_payment_charge_id: 'rf-1',
   });
   assert.equal(h.subscriptionStore.get(buyer.user.id).plan, 'free');
   assert.equal(h.userStore.findById(buyer.user.id)?.plan, 'free');
-  assert.equal(refund.body.payments[0]!.status, 'refunded');
-  assert.deepEqual(refund.body.payments[0]!.refundOption, { kind: 'none', reason: 'refunded' });
+  const after = await h.mini<MiniState>('state', undefined, token);
+  assert.equal(after.body.payments[0]!.status, 'refunded');
+  assert.deepEqual(after.body.payments[0]!.refundOption, { kind: 'none', reason: 'refunded' });
 
   const again = await h.mini<ApiErrorBody>(`payments/${paymentId}/refund`, {}, token);
   assert.equal(again.body.error.code, 'refund_refunded');
@@ -820,10 +830,10 @@ test('возврат: только 24 часа и без единого запр
     telegramUserId: 7650,
   });
   const fresh = h.billingService.findPayment('stars:used-1')!;
-  assert.deepEqual(h.billingService.refundOption(fresh), { kind: 'auto' });
+  assert.deepEqual(h.billingService.refundOption(fresh), { kind: 'request' });
   // Ошибка модели использованием не считается.
   useModel(h.usageStore, buyer.user.id, 'error');
-  assert.deepEqual(h.billingService.refundOption(fresh), { kind: 'auto' });
+  assert.deepEqual(h.billingService.refundOption(fresh), { kind: 'request' });
   useModel(h.usageStore, buyer.user.id);
   assert.deepEqual(h.billingService.refundOption(fresh), { kind: 'none', reason: 'used' });
   const used = await h.mini<ApiErrorBody>(
@@ -1078,7 +1088,7 @@ test('пакет за звёзды: только на платном тариф�
   // Возврат: пока из пакета ничего не потрачено — звёзды возвращаются сразу; потом — нет.
   const payment = h.billingService.findPayment('stars:charge-pack-1')!;
   assert.equal(payment.packId, 'premium-5');
-  assert.deepEqual(h.billingService.refundOption(payment), { kind: 'auto' });
+  assert.deepEqual(h.billingService.refundOption(payment), { kind: 'request' });
   h.billingService.ledger.credits.debit(buyer.user.id, 0.01);
   assert.deepEqual(h.billingService.refundOption(payment), { kind: 'none', reason: 'used' });
 });
@@ -1102,7 +1112,9 @@ test('пакет за звёзды: возврат неиспользованн�
     telegramUserId: 777002,
   });
   const result = await h.billingService.requestRefund(buyer.user.id, payment.id);
-  assert.equal(result.outcome, 'refunded');
+  assert.equal(result.outcome, 'requested');
+  await h.billingService.decideRefund(payment.id, true);
+  assert.equal(h.billingService.findPayment(payment.id)?.status, 'refunded');
   assert.equal(h.billingService.ledger.credits.balanceOf(buyer.user.id).remainingUsd, 0);
   assert.equal(h.subscriptionStore.get(buyer.user.id).plan, 'plus');
 });
@@ -1264,7 +1276,8 @@ test('бесплатный Pro (TEMP): в истории как обычная �
     { reason: 'Тест' },
     token,
   );
-  assert.equal(refund.body.outcome, 'refunded');
+  assert.equal(refund.body.outcome, 'requested');
+  await h.billingService.decideRefund(payment.id, true);
   assert.equal(h.bot.all('refundStarPayment').length, 0, 'Telegram не вызывается');
   assert.equal(h.subscriptionStore.get(buyer.user.id).plan, 'free');
 });
@@ -1425,7 +1438,7 @@ test('возврат: заявка приходит в бот поддержки
   assert.match(support.sent.at(-1)!.text, /Открытых заявок на возврат нет/);
 });
 
-test('возврат звёзд автоматически — администратору приходит уведомление без кнопок', async (t) => {
+test('возврат звёзд: заявка с кнопками в бот поддержки, звёзды — только после «Одобрить»', async (t) => {
   const support = recordingSupportBot(9910);
   const h = await harness({ supportBotService: support.bot, supportStore: support.store });
   t.after(() => h.server.close());
@@ -1443,10 +1456,25 @@ test('возврат звёзд автоматически — админист�
     { reason: 'Не подошло' },
     token,
   );
-  assert.equal(result.body.outcome, 'refunded');
+  assert.equal(result.body.outcome, 'requested');
+  assert.equal(h.bot.all('refundStarPayment').length, 0);
   const notice = support.sent.find((m) => m.chatId === 9910)!;
-  assert.match(notice.text, /Возврат оформлен автоматически/);
-  assert.equal(notice.extra.reply_markup, undefined);
+  assert.match(notice.text, /Заявка на возврат/);
+  const ref = /R-([A-Za-z0-9_-]{16})/.exec(notice.text)![1]!;
+  await support.bot.processUpdate({
+    update_id: 3,
+    callback_query: {
+      id: 'z',
+      from: { id: 9910, first_name: 'Admin' },
+      message: { message_id: 5001, chat: { id: 9910 }, text: 'Заявка' },
+      data: `rf:y:${ref}`,
+    },
+  });
+  assert.deepEqual(h.bot.last('refundStarPayment')!.body, {
+    user_id: 9911,
+    telegram_payment_charge_id: 'auto-1',
+  });
+  assert.equal(h.billingService.findPayment('stars:auto-1')?.status, 'refunded');
 });
 
 test('сообщение по возврату: только своя заявка и только при наличии заявки', async (t) => {

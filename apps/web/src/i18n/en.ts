@@ -744,7 +744,7 @@ export const en: Record<TranslationKey, string> = {
   'tg.policy2':
     'If the models were already used or the time has passed, the payment is not refunded.',
   'tg.policy3':
-    'Stars go back to your Telegram balance right away. Crypto is returned to your wallet on request, usually within a day.',
+    'Every request is reviewed by an administrator, usually within a day. Once approved, stars go back to your Telegram balance and crypto to your wallet.',
   'tg.receiptTitle': 'Receipt · {plan}',
   'tg.fieldPlan': 'Plan',
   'tg.fieldMethod': 'Method',
@@ -761,6 +761,8 @@ export const en: Record<TranslationKey, string> = {
   'tg.refundTitle': 'Refund',
   'tg.refundAutoText':
     'Stars go back to your Telegram balance right away, and your subscription returns to what it was before this payment.',
+  'tg.refundStarsRequestText':
+    'An administrator will review the request, usually within a day. Once approved, the stars go back to your Telegram balance and your subscription returns to how it was before this payment.',
   'tg.refundCryptoText':
     'Crypto refunds are handled manually: we answer in the bot within a day and ask for your wallet address.',
   'tg.refundAutoRenewOff': 'Auto-renewal will turn off.',
@@ -775,7 +777,7 @@ export const en: Record<TranslationKey, string> = {
   'tg.reasonRequired': 'Pick a reason — it helps us respond faster.',
   'tg.commentLabel': 'Comment (optional)',
   'tg.commentPlaceholder': 'What went wrong?',
-  'tg.refundWarn': 'Access from this payment ends right after the refund.',
+  'tg.refundWarn': 'If the refund is approved, access from this payment ends.',
   'tg.refundConfirm': 'Refund {amount}',
   'tg.refundSend': 'Send request',
   'tg.receiptDelete': 'Delete receipt from history',
@@ -814,7 +816,7 @@ export const en: Record<TranslationKey, string> = {
   'tg.caseMessageHint': 'The reply will appear here and in the bot.',
   'tg.caseSend': 'Send',
   'tg.refundDone': 'Done: {amount} went back to your Telegram balance.',
-  'tg.refundRequested': 'Request sent. We will answer in the bot, usually within a day.',
+  'tg.refundRequested': 'Request sent to the administrator. The decision will come to the bot, usually within a day.',
   'tg.refundNoneRefunded': 'Refunded on {date}.',
   'tg.refundNonePending':
     'Your request from {date} is under review. The answer will come to the bot.',

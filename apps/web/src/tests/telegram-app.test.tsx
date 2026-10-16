@@ -23,7 +23,7 @@ function payment(overrides: Partial<MiniAppPayment> = {}): MiniAppPayment {
     bonusDays: 0,
     chargeId: 'ch-1',
     refund: null,
-    refundOption: { kind: 'auto' },
+    refundOption: { kind: 'request' },
     ...overrides,
   };
 }
@@ -348,7 +348,7 @@ describe('кабинет в Telegram (/tg)', () => {
     ).toBeInTheDocument();
   });
 
-  it('платежи: чек и мгновенный возврат звёзд с причиной', async () => {
+  it('платежи: возврат звёзд — заявка администратору с причиной', async () => {
     const app = fakeWebApp();
     window.Telegram = { WebApp: app };
     const state = makeState();
@@ -356,11 +356,14 @@ describe('кабинет в Telegram (/tg)', () => {
       if (url === '/api/telegram/miniapp/session') return linkedSession(state);
       if (url === '/api/telegram/miniapp/payments/stars%3Ach-1/refund') {
         return Response.json({
-          outcome: 'refunded',
+          outcome: 'requested',
           ...state,
-          subscription: { plan: 'free', status: 'active', renewsAt: null },
           payments: [
-            payment({ status: 'refunded', refundOption: { kind: 'none', reason: 'refunded' } }),
+            payment({
+              status: 'refund_requested',
+              refund: { requestedAt: new Date().toISOString(), reason: 'Ошибся тарифом' },
+              refundOption: { kind: 'none', reason: 'pending' },
+            }),
           ],
         });
       }
@@ -373,28 +376,24 @@ describe('кабинет в Telegram (/tg)', () => {
     const sheet = screen.getByRole('dialog', { name: 'Чек · Pro' });
     expect(within(sheet).getByText('Telegram Stars')).toBeInTheDocument();
     expect(app.BackButton!.show).toHaveBeenCalled();
+    expect(within(sheet).getByText(/Заявку рассмотрит администратор/)).toBeInTheDocument();
 
-    expect(
-      within(sheet).getByText(/Вернуть можно до .*Первый же ответ модели закрывает возврат/),
-    ).toBeInTheDocument();
-    fireEvent.click(within(sheet).getByRole('button', { name: 'Вернуть деньги' }));
-    fireEvent.click(within(sheet).getByRole('button', { name: /Вернуть 1\s670 ⭐/ }));
+    fireEvent.click(within(sheet).getByRole('button', { name: 'Подать заявку на возврат' }));
+    fireEvent.click(within(sheet).getByRole('button', { name: 'Отправить заявку' }));
     expect(within(sheet).getByText(/Выберите причину/)).toBeInTheDocument();
     fireEvent.click(within(sheet).getByRole('radio', { name: 'Ошибся тарифом' }));
     fireEvent.change(within(sheet).getByLabelText('Комментарий (необязательно)'), {
       target: { value: 'Хотел Plus' },
     });
-    fireEvent.click(within(sheet).getByRole('button', { name: /Вернуть 1\s670 ⭐/ }));
+    fireEvent.click(within(sheet).getByRole('button', { name: 'Отправить заявку' }));
 
-    expect(
-      await screen.findByText(/Готово: 1\s670 ⭐ вернулись на баланс Telegram/),
-    ).toBeInTheDocument();
+    expect(await screen.findByText(/Заявка отправлена администратору/)).toBeInTheDocument();
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
     expect(calls.find((call) => call.url.endsWith('/refund'))?.body).toEqual({
       reason: 'Ошибся тарифом',
       comment: 'Хотел Plus',
     });
-    expect(screen.getByText('Возвращён')).toBeInTheDocument();
+    expect(screen.getByRole('region', { name: /Заявки на возврат/ })).toBeInTheDocument();
     expect(app.BackButton!.hide).toHaveBeenCalled();
   });
 

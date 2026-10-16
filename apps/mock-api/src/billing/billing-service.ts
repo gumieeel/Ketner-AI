@@ -490,13 +490,12 @@ export class BillingService {
     } else if (this.requestsSince(payment.userId, payment.paidAt) > 0) {
       return { kind: 'none', reason: 'used' };
     }
-    // Звёзды Telegram возвращает сам и сразу; криптовалюту администратор переводит вручную.
-    const instant =
-      payment.method === 'stars' && Boolean(payment.chargeId && payment.telegramUserId);
-    return instant ? { kind: 'auto' } : { kind: 'request' };
+    // Любой возврат — только заявкой: решение принимает администратор. После одобрения звёзды
+    // возвращает Telegram, криптовалюту администратор переводит вручную.
+    return { kind: 'request' };
   }
 
-  /** Возврат по запросу клиента: сразу (звёзды, по правилам) или заявкой администратору. */
+  /** Возврат по запросу клиента: всегда заявка администратору, он одобряет или отказывает. */
   async requestRefund(
     userId: string,
     paymentId: string,
@@ -523,30 +522,6 @@ export class BillingService {
       reason: details.reason?.slice(0, 60),
       comment: details.comment?.slice(0, 500),
     };
-    if (option.kind === 'auto' && payment.free) {
-      const refunded = this.completeRefund({ ...payment, refund }, { auto: true }, now);
-      await this.telegram?.notifyUser(
-        userId,
-        `↩️ Возврат за ${paymentLabel(payment)} оформлен, срок тарифа отменён.`,
-        'refund',
-      );
-      await this.telegram?.notifyAdminsAboutRefund(refunded, this.deps.userStore.findById(userId));
-      return { outcome: 'refunded', payment: refunded };
-    }
-    if (option.kind === 'auto' && this.telegram) {
-      const ok = await this.telegram.refundStars(payment.telegramUserId!, payment.chargeId!);
-      if (ok) {
-        const refunded = this.completeRefund({ ...payment, refund }, { auto: true }, now);
-        await this.telegram.notifyUser(
-          userId,
-          `↩️ Вернули <b>${payment.amount} ⭐</b> за ${paymentLabel(payment)}. Звёзды уже на вашем балансе в Telegram.`,
-          'refund',
-        );
-        await this.telegram.notifyAdminsAboutRefund(refunded, this.deps.userStore.findById(userId));
-        return { outcome: 'refunded', payment: refunded };
-      }
-      // Telegram не принял автоматический возврат — передаём заявку человеку.
-    }
     const requested = this.deps.ledger.payments.put({
       ...payment,
       status: 'refund_requested',
@@ -600,9 +575,11 @@ export class BillingService {
     const refunded = this.completeRefund(payment, { auto: false, note }, now);
     await this.telegram?.notifyUser(
       payment.userId,
-      payment.method === 'stars'
-        ? `↩️ Возврат одобрен: <b>${payment.amount} ⭐</b> вернулись на ваш баланс в Telegram.`
-        : `↩️ Возврат одобрен: <b>$${payment.amount}</b> отправим на ваш кошелёк, напишите его в поддержку @ketner_support_bot, если ещё не указали.`,
+      payment.free
+        ? `↩️ Возврат за ${paymentLabel(payment)} одобрен, срок тарифа отменён.`
+        : payment.method === 'stars'
+          ? `↩️ Возврат одобрен: <b>${payment.amount} ⭐</b> вернулись на ваш баланс в Telegram.`
+          : `↩️ Возврат одобрен: <b>$${payment.amount}</b> отправим на ваш кошелёк, напишите его в поддержку @ketner_support_bot, если ещё не указали.`,
       'refund',
     );
     return refunded;
