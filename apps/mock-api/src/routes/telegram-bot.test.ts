@@ -1157,3 +1157,31 @@ test('оплата с сайта: ссылка ведёт в бота, бот п
   const order = h.bot.calls.filter((call) => call.body.chat_id === 7951).map((call) => call.method);
   assert.deepEqual(order, ['sendMessage', 'sendInvoice']);
 });
+
+test('админ: /clearpayments @username очищает историю оплат, тариф не трогает', async (t) => {
+  const h = await harness();
+  t.after(() => h.server.close());
+  const admin = await h.linkedBuyer(7801);
+  h.userStore.setAdmin(admin.buyer.user.id, true);
+  const { buyer } = await h.linkedBuyer(7802);
+  h.userStore.linkTelegram(buyer.user.id, 7802, 'DjksKejd');
+  for (const id of ['stars:x-1', 'stars:x-2']) {
+    h.billingService.grant(buyer.user.id, 'pro', {
+      id,
+      method: 'stars',
+      amount: 100,
+      currency: 'XTR',
+    });
+  }
+  assert.equal(h.billingService.paymentsOf(buyer.user.id).length, 2);
+
+  // Не администратор не может.
+  await h.message(7802, '/clearpayments @djkskejd');
+  assert.equal(h.billingService.paymentsOf(buyer.user.id).length, 2);
+
+  await h.message(7801, '/clearpayments @djkskejd');
+  assert.equal(h.billingService.paymentsOf(buyer.user.id).length, 0);
+  assert.equal(h.subscriptionStore.get(buyer.user.id).plan, 'pro');
+  const reply = h.bot.all('sendMessage').filter((call) => call.body.chat_id === 7801).at(-1)!;
+  assert.match(String(reply.body.text), /удалено записей — 2/);
+});
