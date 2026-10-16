@@ -12,6 +12,7 @@ import {
   createPackCryptoInvoice,
   createPackStarsInvoice,
   createTelegramStarsInvoice,
+  fetchCryptoBonus,
   fetchPacks,
   getCryptoInvoiceStatus,
   getTelegramStarsStatus,
@@ -73,6 +74,26 @@ export function CheckoutPage() {
     };
   }, [packId, user]);
   const pack = packId ? packs?.find((item) => item.id === packId) : undefined;
+
+  // Бонус за оплату тарифа криптой: суммы приходят с сервера (services/entitlement.ts).
+  const [cryptoBonus, setCryptoBonus] = useState<{
+    pct: number;
+    quotaUsd: number;
+    bonusUsd: number;
+  } | null>(null);
+  useEffect(() => {
+    if (!plan || !user) return;
+    let stale = false;
+    fetchCryptoBonus()
+      .then((data) => {
+        const forPlan = data.plans[plan.id];
+        if (!stale && forPlan) setCryptoBonus({ pct: data.pct, ...forPlan });
+      })
+      .catch(() => undefined);
+    return () => {
+      stale = true;
+    };
+  }, [plan, user]);
   const purchaseKind: 'plan' | 'pack' | null = plan ? 'plan' : pack ? 'pack' : null;
   const purchaseId = plan?.id ?? pack?.id ?? '';
   const priceUsd = plan?.priceMonthly ?? pack?.priceUsd ?? 0;
@@ -535,7 +556,11 @@ export function CheckoutPage() {
                 badge={t('checkout.tileCryptoBadge')}
                 badgeTone="brand"
                 title={t('checkout.tileCrypto')}
-                description={t('checkout.tileCryptoDesc')}
+                description={
+                  cryptoBonus
+                    ? `${t('checkout.tileCryptoDesc')} · ${t('checkout.tileCryptoBonus', { pct: cryptoBonus.pct })}`
+                    : t('checkout.tileCryptoDesc')
+                }
               />
               <MethodTile
                 selected={paymentMethod === 'stars'}
@@ -565,6 +590,18 @@ export function CheckoutPage() {
             <CryptoPanel
               priceUsd={priceUsd}
               chipLabel={chipLabel}
+              bonusNote={
+                cryptoBonus
+                  ? {
+                      title: t('checkout.cryptoBonusTitle', { pct: cryptoBonus.pct }),
+                      text: t('checkout.cryptoBonusText', {
+                        plan: planName,
+                        quota: cryptoBonus.quotaUsd.toFixed(2),
+                        total: (cryptoBonus.quotaUsd + cryptoBonus.bonusUsd).toFixed(2),
+                      }),
+                    }
+                  : null
+              }
               amount={cryptoAmountStr}
               timer={formatTimer(cryptoSecondsLeft)}
               currency={cryptoCurrency}

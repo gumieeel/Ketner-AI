@@ -24,6 +24,8 @@ export interface CryptoPanelProps {
   priceUsd: number;
   /** Метка покупки: «Тариф Pro · 30 дней» или «+$5 премиум-квоты · 30 дней». */
   chipLabel: string;
+  /** Пояснение бонуса за оплату криптой (только для тарифов). */
+  bonusNote?: { title: string; text: string } | null;
   amount: string;
   timer: string;
   currency: CryptoCurrency;
@@ -56,6 +58,7 @@ export function CryptoPanel(props: CryptoPanelProps) {
   const {
     priceUsd,
     chipLabel,
+    bonusNote,
     amount,
     timer,
     currency,
@@ -78,6 +81,12 @@ export function CryptoPanel(props: CryptoPanelProps) {
       lead={t('checkout.cryptoLead')}
       aside={<TimerPill label={t('checkout.cryptoTimer')} value={timer} />}
     >
+      {bonusNote ? (
+        <div className="rounded-xl border border-success/30 bg-success-soft px-4 py-3 text-[13px] leading-5">
+          <p className="font-semibold text-success">{bonusNote.title}</p>
+          <p className="mt-0.5 text-text">{bonusNote.text}</p>
+        </div>
+      ) : null}
       <div className="relative flex flex-col gap-6 overflow-hidden rounded-2xl border border-accent/30 bg-gradient-to-b from-accent-soft via-surface to-surface p-3.5 sm:p-6">
         {/* Шапка счёта */}
         <div className="flex flex-wrap items-center justify-between gap-3 border-b border-stroke pb-4">

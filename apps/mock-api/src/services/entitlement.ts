@@ -182,6 +182,29 @@ export const PLAN_ENTITLEMENTS: Record<PlanId, PlanEntitlements> = {
   'gemini-pro': { planId: 'gemini-pro', ...LEGACY_PRO_BASE },
 };
 
+/**
+ * Бонус за оплату тарифа криптовалютой (Trybit): +15% к квоте премиум-моделей `premiumBudget` на
+ * оплаченный период, и на ту же сумму растёт `costBudget` (иначе бонусная квота съедала бы бюджет
+ * рабочих моделей и раньше включала экономный режим).
+ *
+ * Откуда деньги: Telegram Stars отдаёт ≈ 72% цены, крипта ≈ 98% (services/pricing.ts →
+ * PAYMENT_NET_SHARE). Бонус стоит 15% × premiumBudget × 1.055 (Pro ≈ $1.27, Ultra ≈ $2.61, даже на
+ * пределе 125% — $1.58 и $3.26), а разница комиссий — 26% цены (Pro ≈ $6.1, Ultra ≈ $12):
+ * оплата криптой с бонусом остаётся выгоднее для нас, чем оплата звёздами без него.
+ * Проверка: services/currency.test.ts.
+ */
+export const CRYPTO_PREMIUM_BONUS = 0.15;
+
+/** Права тарифа с бонусом за оплату криптой (см. CRYPTO_PREMIUM_BONUS). */
+export function withCryptoBonus(entitlements: PlanEntitlements): PlanEntitlements {
+  const bonus = Math.round(entitlements.premiumBudget * CRYPTO_PREMIUM_BONUS * 100) / 100;
+  return {
+    ...entitlements,
+    premiumBudget: entitlements.premiumBudget + bonus,
+    costBudget: entitlements.costBudget + bonus,
+  };
+}
+
 export class EntitlementService {
   /**
    * Разрешить эффективный план пользователя.
@@ -195,10 +218,15 @@ export class EntitlementService {
   }
 
   /**
-   * Получить права доступа для тарифа.
+   * Получить права доступа для тарифа. `cryptoBonus` — текущий период тарифа оплачен криптой
+   * (тогда квота премиум-моделей и бюджет больше, см. CRYPTO_PREMIUM_BONUS).
    */
-  static getEntitlements(planId: PlanId): PlanEntitlements {
-    return PLAN_ENTITLEMENTS[planId] ?? PLAN_ENTITLEMENTS.free;
+  static getEntitlements(
+    planId: PlanId,
+    options: { cryptoBonus?: boolean } = {},
+  ): PlanEntitlements {
+    const base = PLAN_ENTITLEMENTS[planId] ?? PLAN_ENTITLEMENTS.free;
+    return options.cryptoBonus && base.premiumBudget > 0 ? withCryptoBonus(base) : base;
   }
 
   /**

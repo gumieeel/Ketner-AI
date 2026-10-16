@@ -976,6 +976,10 @@ export const en: Record<TranslationKey, string> = {
   'checkout.tileCrypto': 'Cryptocurrency',
   'checkout.tileCryptoBadge': 'Main',
   'checkout.tileCryptoDesc': '35+ coins and networks · Trybit',
+  'checkout.tileCryptoBonus': '+{pct}% top-model quota',
+  'checkout.cryptoBonusTitle': '+{pct}% top-model quota for paying with crypto',
+  'checkout.cryptoBonusText':
+    'On {plan}, your Claude, GPT, Gemini and Grok quota grows from ${quota} to ${total} for the whole paid period. We share the fee savings: Telegram Stars keeps about 28% of a payment, Trybit about 2%.',
   'checkout.tileSbp': 'SBP via QR',
   'checkout.tileSbpBadge': '0% fee',
   'checkout.tileSbpDesc': 'Any Russian bank · 0% fee',

@@ -5,7 +5,7 @@
 
 import { createHmac, timingSafeEqual } from 'node:crypto';
 import { evaluateBudget } from '../services/budget-policy.js';
-import { EntitlementService } from '../services/entitlement.js';
+import { planEntitlements } from '../services/premium-quota.js';
 import type { UsageStore } from '../store/usage-store.js';
 import type { ImageGenerator } from './cloudflare.js';
 import type { ImageMeta, ImageStore } from './image-store.js';
@@ -268,7 +268,8 @@ export class ImageService {
     }
 
     // Месячный бюджет тарифа общий с чатом: на 125% — отказ, при исчерпании — только самая дешёвая модель.
-    const entitlements = EntitlementService.getEntitlements(caller.plan as never);
+    // Период, оплаченный криптой, даёт бонус к бюджету (services/entitlement.ts → CRYPTO_PREMIUM_BONUS).
+    const entitlements = planEntitlements(caller.userId, caller.plan as never, {});
     const snapshot = this.deps.usageStore.getFairUseSnapshot(caller.userId);
     const budget = evaluateBudget(snapshot.estimatedCostLastMonth, entitlements.costBudget);
     if (budget.stage === 'hard_stop') {

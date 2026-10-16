@@ -38,7 +38,12 @@ import {
 } from './agent/agent-types.js';
 import type { RequestedReasoningEffort } from './agent/openai-compat.js';
 import { evaluateBudget, type BudgetStage } from '../services/budget-policy.js';
-import { getPremiumQuota, settlePremiumCost } from '../services/premium-quota.js';
+import {
+  getPremiumQuota,
+  planEntitlements,
+  settlePremiumCost,
+  type PlanBonusSource,
+} from '../services/premium-quota.js';
 import type { PremiumCreditSource } from '../store/premium-credit-store.js';
 import { EntitlementService, planRank } from '../services/entitlement.js';
 import { FairUseEngine } from '../services/fair-use.js';
@@ -119,6 +124,8 @@ export interface AgentGatewayDeps {
   circuitBreaker?: CircuitBreaker;
   /** Кредиты докупленных пакетов; по умолчанию — общий журнал платежей. */
   premiumCredits?: PremiumCreditSource;
+  /** Бонус к квоте за оплату криптой; по умолчанию — общий биллинг. */
+  planBonus?: PlanBonusSource;
 }
 
 const fail = (
@@ -223,9 +230,11 @@ export class AgentGateway {
   private readonly providers: ProviderManager;
   private readonly circuitBreaker: CircuitBreaker;
   private readonly premiumCredits?: PremiumCreditSource;
+  private readonly planBonus?: PlanBonusSource;
 
   constructor(deps: AgentGatewayDeps) {
     this.premiumCredits = deps.premiumCredits;
+    this.planBonus = deps.planBonus;
     this.usageStore = deps.usageStore;
     this.registry = deps.registry ?? modelRegistry;
     this.providers = deps.providers ?? providerManager;
@@ -233,7 +242,12 @@ export class AgentGateway {
   }
 
   private quotaDeps() {
-    return { usageStore: this.usageStore, registry: this.registry, credits: this.premiumCredits };
+    return {
+      usageStore: this.usageStore,
+      registry: this.registry,
+      credits: this.premiumCredits,
+      bonus: this.planBonus,
+    };
   }
 
   /** Публичные модели каталога для агента (без `auto`). */
@@ -276,7 +290,7 @@ export class AgentGateway {
 
   /** Сводка для `GET /v1/usage`: бюджет, квота премиум-запросов и число запросов за сутки. */
   summarizeUsage(userId: string, plan: PlanId) {
-    const entitlements = EntitlementService.getEntitlements(plan);
+    const entitlements = planEntitlements(userId, plan, this.quotaDeps());
     const snapshot = this.usageStore.getFairUseSnapshot(userId);
     const budget = evaluateBudget(snapshot.estimatedCostLastMonth, entitlements.costBudget);
     const premium = getPremiumQuota(userId, plan, this.quotaDeps());
@@ -333,7 +347,7 @@ export class AgentGateway {
         'API для программирования доступен с тарифа Plus. Повысьте тариф в личном кабинете.',
       );
     }
-    const entitlements = EntitlementService.getEntitlements(plan);
+    const entitlements = planEntitlements(req.userId, plan, this.quotaDeps());
 
     // 2. Бюджет: тот же месячный бюджет себестоимости, что и в чате.
     const snapshot = this.usageStore.getFairUseSnapshot(req.userId);

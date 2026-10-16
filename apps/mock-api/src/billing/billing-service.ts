@@ -323,6 +323,34 @@ export class BillingService {
     return { duplicate: false, payment: record, credit };
   }
 
+  /**
+   * Оплачен ли текущий период тарифа криптовалютой: есть оплата тарифа через Trybit (не пакет, не
+   * возвращённая), чей период покрывает `now`. Период оплаты — от её даты (а при продлении того же
+   * тарифа — от прежнего срока) до срока, который она дала. Даёт бонус к премиум-квоте
+   * (services/entitlement.ts → CRYPTO_PREMIUM_BONUS).
+   */
+  cryptoBonusActive(userId: string, plan: PlanId, now = Date.now()): boolean {
+    return this.deps.ledger.payments
+      .filter(
+        (payment) =>
+          payment.userId === userId &&
+          payment.method === 'crypto' &&
+          !payment.packId &&
+          payment.status !== 'refunded' &&
+          payment.planId === plan,
+      )
+      .some((payment) => {
+        const end = payment.after.renewsAt ? Date.parse(payment.after.renewsAt) : NaN;
+        const paidAt = Date.parse(payment.paidAt);
+        const previousEnd =
+          payment.before.plan === payment.planId && payment.before.renewsAt
+            ? Date.parse(payment.before.renewsAt)
+            : NaN;
+        const start = previousEnd > paidAt ? previousEnd : paidAt;
+        return now >= start && now < end;
+      });
+  }
+
   paymentsOf(userId: string): PaymentRecord[] {
     return this.deps.ledger.payments
       .filter((payment) => payment.userId === userId)

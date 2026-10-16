@@ -554,6 +554,17 @@ export function installFakeApi(options: FakeApiOptions = {}): FakeApi {
         });
       }
 
+      if (url === '/api/billing/crypto-bonus' && method === 'GET') {
+        return json({
+          pct: 15,
+          plans: {
+            plus: { quotaUsd: 1.3, bonusUsd: 0.2 },
+            pro: { quotaUsd: 8, bonusUsd: 1.2 },
+            ultra: { quotaUsd: 16.5, bonusUsd: 2.48 },
+          },
+        });
+      }
+
       if (url === '/api/billing/packs' && method === 'GET') {
         return json({
           packs: PACKS,

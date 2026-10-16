@@ -46,7 +46,12 @@ import { FairUseEngine } from '../services/fair-use.js';
 import { evaluateBudget, type BudgetStage } from '../services/budget-policy.js';
 import { getCodeLimits, quotaOf } from '../services/code-limits.js';
 import type { Language, PlanId } from '../types.js';
-import { getPremiumQuota, settlePremiumCost } from '../services/premium-quota.js';
+import {
+  getPremiumQuota,
+  planEntitlements,
+  settlePremiumCost,
+  type PlanBonusSource,
+} from '../services/premium-quota.js';
 import type { PremiumCreditSource } from '../store/premium-credit-store.js';
 import {
   agentToolDefinitions,
@@ -119,6 +124,8 @@ export interface AgentRunnerDeps {
   usageStore: UsageStore;
   /** Кредиты докупленных пакетов; по умолчанию — общий журнал платежей. */
   premiumCredits?: PremiumCreditSource;
+  /** Бонус к квоте за оплату криптой; по умолчанию — общий биллинг. */
+  planBonus?: PlanBonusSource;
   sandbox: SandboxRunner | null;
   allowSandboxNetwork?: boolean;
   providers?: ProviderManager;
@@ -503,7 +510,14 @@ export class AgentRunner {
     const plan = EntitlementService.resolveEffectivePlan(input.plan, input.email, input.isVip);
     const reasoningMode = effectiveReasoningMode(input.reasoningMode, plan);
     const limits = getCodeLimits(plan);
-    const entitlements = EntitlementService.getEntitlements(plan);
+    const quotaDeps = {
+      usageStore,
+      registry: this.registry,
+      credits: this.deps.premiumCredits,
+      bonus: this.deps.planBonus,
+    };
+    // Период, оплаченный криптой, даёт бонус к квоте премиум-моделей и бюджету.
+    const entitlements = planEntitlements(input.userId, plan, quotaDeps);
 
     if (!task)
       return reject(
@@ -550,7 +564,6 @@ export class AgentRunner {
       );
     }
 
-    const quotaDeps = { usageStore, registry: this.registry, credits: this.deps.premiumCredits };
     const premium = getPremiumQuota(input.userId, plan, quotaDeps);
     // На премиум-модели запуск может потратить остаток квоты тарифа и кредиты пакетов.
     const premiumRemaining = premium.remainingUsd + premium.creditsUsd;

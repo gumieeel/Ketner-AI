@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { CurrencyService } from './currency.js';
-import { PLAN_ENTITLEMENTS } from './entitlement.js';
+import { CRYPTO_PREMIUM_BONUS, PLAN_ENTITLEMENTS, withCryptoBonus } from './entitlement.js';
 import { PLANS } from '../routes/billing.js';
 import {
   modelSpendCostUsd,
@@ -125,4 +125,38 @@ test('Пакеты премиум-квоты: цена не ниже себес�
   // Чем больше пакет, тем не дороже доллар квоты.
   const perQuota = PREMIUM_PACKS.map((p) => p.priceUsd / p.quotaUsd);
   assert.ok(perQuota.every((v, i) => i === 0 || v <= perQuota[i - 1] + 1e-9));
+});
+
+test('Бонус за оплату криптой: +15% к квоте покрывается разницей комиссий звёзд и крипты', () => {
+  assert.equal(CRYPTO_PREMIUM_BONUS, 0.15);
+  for (const plan of PLANS) {
+    if (plan.priceMonthly <= 0) continue;
+    const base = PLAN_ENTITLEMENTS[plan.id];
+    const bonus = withCryptoBonus(base);
+    const extra = bonus.premiumBudget - base.premiumBudget;
+    assert.ok(Math.abs(extra - base.premiumBudget * CRYPTO_PREMIUM_BONUS) < 0.01, plan.id);
+    assert.ok(
+      Math.abs(bonus.costBudget - base.costBudget - extra) < 1e-9,
+      'бюджет растёт на бонус',
+    );
+
+    const cryptoNet = plan.priceMonthly * PAYMENT_NET_SHARE.crypto * (1 - TAX);
+    const starsNet = plan.priceMonthly * PAYMENT_NET_SHARE.stars * (1 - TAX);
+    // Бонус (даже на жёстком пределе 125%) дешевле, чем разница комиссий звёзд и крипты.
+    const bonusCost = extra * OPENROUTER_FEE * HARD_STOP_MULTIPLIER;
+    assert.ok(
+      bonusCost <= cryptoNet - starsNet,
+      `${plan.id}: бонус $${bonusCost.toFixed(2)} дороже разницы комиссий $${(cryptoNet - starsNet).toFixed(2)}`,
+    );
+    for (const ratio of [1, HARD_STOP_MULTIPLIER]) {
+      const cryptoMargin = cryptoNet - bonus.costBudget * ratio * OPENROUTER_FEE;
+      const starsMargin = starsNet - base.costBudget * ratio * OPENROUTER_FEE;
+      assert.ok(
+        cryptoMargin >= starsMargin,
+        `${plan.id}: крипта с бонусом ($${cryptoMargin.toFixed(2)}) хуже звёзд ($${starsMargin.toFixed(2)}) на ${ratio * 100}%`,
+      );
+      // И с учётом Free-тира крипта с бонусом в плюсе.
+      assert.ok(cryptoMargin - FREE_SUBSIDY_PER_PAYER > 0, `${plan.id}: убыток на ${ratio * 100}%`);
+    }
+  }
 });

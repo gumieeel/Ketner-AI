@@ -289,3 +289,20 @@ test('Trybit: пакет премиум-квоты — счёт на цену п
   });
   assert.equal(unknown.status, 400);
 });
+
+test('бонус за крипту: страница оплаты получает его в цифрах тарифа', async (t) => {
+  const server = await startTestServer();
+  t.after(() => server.close());
+  const buyer = await signup(server.baseUrl, 'bonus-info@example.com');
+  const body = await readJson<{
+    pct: number;
+    plans: Record<string, { quotaUsd: number; bonusUsd: number }>;
+  }>(
+    await fetch(`${server.baseUrl}/api/billing/crypto-bonus`, {
+      headers: { Authorization: `Bearer ${buyer.token}` },
+    }),
+  );
+  assert.equal(body.pct, 15);
+  assert.deepEqual(Object.keys(body.plans), ['plus', 'pro', 'ultra']);
+  assert.equal(body.plans.pro.bonusUsd, Math.round(body.plans.pro.quotaUsd * 15) / 100);
+});

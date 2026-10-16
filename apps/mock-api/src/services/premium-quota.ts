@@ -20,7 +20,8 @@ import { modelLimitStatus } from '../ai/model-limits.js';
 import { effectiveReasoningMode, isPremiumClass, limitUnitsFor } from '../ai/reasoning-policy.js';
 import type { UsageStore } from '../store/usage-store.js';
 import type { PremiumCreditSource } from '../store/premium-credit-store.js';
-import { billingLedger } from '../billing/index.js';
+import { billingLedger, billingService } from '../billing/index.js';
+import type { PlanEntitlements } from '../ai/gateway-types.js';
 import type { PlanId } from '../types.js';
 import { BUDGET_SOFT_RATIO, evaluateBudget, type BudgetStage } from './budget-policy.js';
 import { EntitlementService, planAllowsModel } from './entitlement.js';
@@ -46,20 +47,40 @@ export interface PremiumQuota {
   available: boolean;
 }
 
+/** Чем оплачен текущий период тарифа: при оплате криптой — бонус к квоте (BillingService). */
+export interface PlanBonusSource {
+  cryptoBonusActive(userId: string, plan: PlanId, now?: number): boolean;
+}
+
 export interface QuotaDeps {
   usageStore: UsageStore;
   registry: ModelRegistry;
   /** Кредиты докупленных пакетов; по умолчанию — общий журнал платежей. */
   credits?: PremiumCreditSource;
+  /** Бонус за оплату криптой; по умолчанию — общий биллинг. */
+  bonus?: PlanBonusSource;
 }
 
 const creditsOf = (deps: QuotaDeps): PremiumCreditSource => deps.credits ?? billingLedger.credits;
+
+/**
+ * Права тарифа пользователя с учётом бонуса за оплату криптой: квота премиум-моделей и бюджет
+ * себестоимости больше на CRYPTO_PREMIUM_BONUS, пока действует период, оплаченный через Trybit.
+ */
+export function planEntitlements(
+  userId: string,
+  plan: PlanId,
+  deps: Pick<QuotaDeps, 'bonus'>,
+): PlanEntitlements & { cryptoBonus: boolean } {
+  const cryptoBonus = (deps.bonus ?? billingService).cryptoBonusActive(userId, plan);
+  return { ...EntitlementService.getEntitlements(plan, { cryptoBonus }), cryptoBonus };
+}
 
 const round = (value: number, digits = 4): number => Number(value.toFixed(digits));
 
 /** Квота премиум-моделей пользователя за скользящие 30 дней. */
 export function getPremiumQuota(userId: string, plan: PlanId, deps: QuotaDeps): PremiumQuota {
-  const budgetUsd = EntitlementService.getEntitlements(plan).premiumBudget;
+  const budgetUsd = planEntitlements(userId, plan, deps).premiumBudget;
   const spentUsd = deps.usageStore.getCostLastMonthByModels(
     userId,
     deps.registry.getPremiumModelIds(),
@@ -148,6 +169,8 @@ export interface QuotaReport {
   plan: PlanId;
   reasoningMode: ReasoningMode;
   premium: PremiumQuota & {
+    /** Текущий период оплачен криптой: квота больше на CRYPTO_PREMIUM_BONUS. */
+    cryptoBonus: boolean;
     warning: boolean;
     /** Когда вернётся хотя бы часть израсходованной квоты (первая трата выпадет из 30 дней). */
     restoresAt: string | null;
@@ -163,7 +186,7 @@ export function buildQuotaReport(
   deps: QuotaDeps,
   requestedMode?: ReasoningMode,
 ): QuotaReport {
-  const entitlements = EntitlementService.getEntitlements(plan);
+  const entitlements = planEntitlements(userId, plan, deps);
   const mode = effectiveReasoningMode(requestedMode, plan);
   const premium = getPremiumQuota(userId, plan, deps);
   const premiumIds = deps.registry.getPremiumModelIds();
@@ -253,6 +276,7 @@ export function buildQuotaReport(
     reasoningMode: mode,
     premium: {
       ...premium,
+      cryptoBonus: entitlements.cryptoBonus,
       warning: premium.budgetUsd > 0 && premium.usedPct >= PREMIUM_QUOTA_WARNING_PCT,
       restoresAt:
         premiumEvents.length > 0

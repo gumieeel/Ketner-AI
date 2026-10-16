@@ -62,7 +62,12 @@ import { CircuitBreaker, defaultCircuitBreaker } from './circuit-breaker.js';
 import { computeRequestCost } from './engine-pricing.js';
 import { createStreamWatchdog, DEFAULT_WATCHDOG_LIMITS } from './stream-watchdog.js';
 import { evaluateBudget, type BudgetStage } from '../services/budget-policy.js';
-import { getPremiumQuota, settlePremiumCost } from '../services/premium-quota.js';
+import {
+  getPremiumQuota,
+  planEntitlements,
+  settlePremiumCost,
+  type PlanBonusSource,
+} from '../services/premium-quota.js';
 import type { PremiumCreditSource } from '../store/premium-credit-store.js';
 import { PayloadGuard } from './payload-guard.js';
 import {
@@ -366,6 +371,8 @@ export interface AIGatewayDeps {
   useMockEngine?: boolean;
   /** Кредиты докупленных пакетов; по умолчанию — общий журнал платежей. */
   premiumCredits?: PremiumCreditSource;
+  /** Бонус к квоте за оплату криптой; по умолчанию — общий биллинг. */
+  planBonus?: PlanBonusSource;
 }
 
 export class AIGateway {
@@ -377,10 +384,12 @@ export class AIGateway {
   private feedbackStore: FeedbackStore;
   private useMockEngine?: boolean;
   private premiumCredits?: PremiumCreditSource;
+  private planBonus?: PlanBonusSource;
 
   constructor(deps: AIGatewayDeps) {
     this.useMockEngine = deps.useMockEngine;
     this.premiumCredits = deps.premiumCredits;
+    this.planBonus = deps.planBonus;
     this.registry = deps.registry ?? modelRegistry;
     this.providers = deps.providers ?? providerManager;
     this.usageStore = deps.usageStore;
@@ -522,7 +531,14 @@ export class AIGateway {
     // Режим Max (глубина xhigh у моделей Pro и Ultra) действует только на Ultra; запрос max на другом
     // тарифе выполняется в обычном режиме.
     const reasoningMode = effectiveReasoningMode(req.reasoningMode, effectivePlan);
-    const entitlements = EntitlementService.getEntitlements(effectivePlan);
+    const quotaDeps = {
+      usageStore: this.usageStore,
+      registry: this.registry,
+      credits: this.premiumCredits,
+      bonus: this.planBonus,
+    };
+    // Период, оплаченный криптой, даёт бонус к квоте премиум-моделей и бюджету.
+    const entitlements = planEntitlements(activeUserId, effectivePlan, quotaDeps);
     const snapshot = this.usageStore.getFairUseSnapshot(activeUserId);
 
     // Месячный бюджет себестоимости: soft (80%) → exhausted (100%, только дешёвые модели) →
@@ -554,11 +570,6 @@ export class AIGateway {
     }
 
     // Квота премиум-запросов: сколько тариф разрешает потратить на сильные модели за 30 дней.
-    const quotaDeps = {
-      usageStore: this.usageStore,
-      registry: this.registry,
-      credits: this.premiumCredits,
-    };
     const premiumQuota = getPremiumQuota(activeUserId, effectivePlan, quotaDeps);
     const economyState: EconomyState = {
       stage,

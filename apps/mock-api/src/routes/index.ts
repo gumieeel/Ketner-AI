@@ -340,6 +340,7 @@ export function createApiRouter(deps: ApiDeps): Router {
       userStore: activeUserStore,
       subscriptionStore: activeSubscriptionStore,
       credits: activeBilling.ledger.credits,
+      bonus: activeBilling,
     }),
   );
   router.use(
@@ -357,6 +358,7 @@ export function createApiRouter(deps: ApiDeps): Router {
       ...deps,
       gateway: deps.chatGateway,
       premiumCredits: activeBilling.ledger.credits,
+      planBonus: activeBilling,
       subscriptionStore: activeSubscriptionStore,
       userStore: activeUserStore,
       usageStore: activeUsageStore,

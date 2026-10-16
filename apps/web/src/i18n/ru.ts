@@ -974,6 +974,10 @@ export const ru = {
   'checkout.tileCrypto': 'Криптовалюта',
   'checkout.tileCryptoBadge': 'Основной',
   'checkout.tileCryptoDesc': 'Более 35 монет и сетей · Trybit',
+  'checkout.tileCryptoBonus': '+{pct}% к квоте топ-моделей',
+  'checkout.cryptoBonusTitle': 'Бонус +{pct}% к квоте топ-моделей за оплату криптой',
+  'checkout.cryptoBonusText':
+    'На тарифе {plan} квота Claude, GPT, Gemini и Grok вырастет с ${quota} до ${total} на весь оплаченный период. Так мы делимся экономией на комиссиях: Telegram Stars удерживает около 28% платежа, Trybit — около 2%.',
   'checkout.tileSbp': 'СБП по QR',
   'checkout.tileSbpBadge': '0% комиссия',
   'checkout.tileSbpDesc': 'Любой банк РФ · 0% комиссии',

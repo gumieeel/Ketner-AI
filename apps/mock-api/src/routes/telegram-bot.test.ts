@@ -1072,3 +1072,34 @@ test('пакет за звёзды: возврат неиспользованн�
   assert.equal(h.billingService.ledger.credits.balanceOf(buyer.user.id).remainingUsd, 0);
   assert.equal(h.subscriptionStore.get(buyer.user.id).plan, 'plus');
 });
+
+test('бонус за крипту: действует на период, оплаченный через Trybit, и не после возврата', async (t) => {
+  const h = await harness();
+  t.after(() => h.server.close());
+  const buyer = await h.signup();
+  const now = Date.now();
+  // Сначала оплата звёздами: бонуса нет.
+  h.billingService.grant(
+    buyer.user.id,
+    'pro',
+    { id: 'stars:bonus-1', method: 'stars', amount: 1350, currency: 'XTR' },
+    now - 40 * DAY_MS,
+  );
+  assert.equal(h.billingService.cryptoBonusActive(buyer.user.id, 'pro', now - 20 * DAY_MS), false);
+  // Продление криптой: бонус — на добавленные 30 дней, а не на оставшиеся дни звёзд.
+  h.billingService.grant(
+    buyer.user.id,
+    'pro',
+    { id: 'crypto:bonus-2', method: 'crypto', amount: 25, currency: 'USD' },
+    now - 35 * DAY_MS,
+  );
+  assert.equal(h.billingService.cryptoBonusActive(buyer.user.id, 'pro', now - 20 * DAY_MS), false);
+  assert.equal(h.billingService.cryptoBonusActive(buyer.user.id, 'pro', now - 5 * DAY_MS), true);
+  assert.equal(h.billingService.cryptoBonusActive(buyer.user.id, 'ultra', now - 5 * DAY_MS), false);
+  // Срок истёк — бонуса нет.
+  assert.equal(h.billingService.cryptoBonusActive(buyer.user.id, 'pro', now + 30 * DAY_MS), false);
+  // Возвращённая оплата бонуса не даёт.
+  const crypto = h.billingService.findPayment('crypto:bonus-2')!;
+  h.billingService.ledger.payments.put({ ...crypto, status: 'refunded' });
+  assert.equal(h.billingService.cryptoBonusActive(buyer.user.id, 'pro', now - 5 * DAY_MS), false);
+});

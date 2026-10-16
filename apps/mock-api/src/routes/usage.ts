@@ -13,7 +13,7 @@ import { sendError } from '../middleware/errors.js';
 import { modelRegistry, type ModelRegistry } from '../ai/model-registry.js';
 import { resolveChatIdentity } from '../services/chat-identity.js';
 import { EntitlementService } from '../services/entitlement.js';
-import { buildQuotaReport } from '../services/premium-quota.js';
+import { buildQuotaReport, type PlanBonusSource } from '../services/premium-quota.js';
 import type { UsageStore } from '../store/usage-store.js';
 import type { SubscriptionStore } from '../store/subscription-store.js';
 import type { UserStore } from '../store/user-store.js';
@@ -26,6 +26,8 @@ export interface UsageRouterDeps {
   registry?: ModelRegistry;
   /** Кредиты докупленных пакетов (тот же журнал, что у биллинга). */
   credits?: PremiumCreditSource;
+  /** Бонус к квоте за оплату криптой (тот же биллинг). */
+  bonus?: PlanBonusSource;
 }
 
 export function createUsageRouter({
@@ -34,6 +36,7 @@ export function createUsageRouter({
   subscriptionStore,
   registry = modelRegistry,
   credits,
+  bonus,
 }: UsageRouterDeps): Router {
   const router = Router();
 
@@ -59,7 +62,9 @@ export function createUsageRouter({
     const mode = request.query.mode === 'max' ? 'max' : 'standard';
     // Остаток меняется после каждого ответа: кэшировать его браузеру нельзя.
     response.setHeader('Cache-Control', 'no-store');
-    response.json(buildQuotaReport(identity.userId, plan, { usageStore, registry, credits }, mode));
+    response.json(
+      buildQuotaReport(identity.userId, plan, { usageStore, registry, credits, bonus }, mode),
+    );
   });
 
   return router;

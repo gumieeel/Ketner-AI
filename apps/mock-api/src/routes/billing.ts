@@ -22,7 +22,7 @@ import {
   PREMIUM_PACKS,
   type PremiumPack,
 } from '../services/pricing.js';
-import { EntitlementService, planRank } from '../services/entitlement.js';
+import { CRYPTO_PREMIUM_BONUS, EntitlementService, planRank } from '../services/entitlement.js';
 
 /** Каталог тарифов. `priceMonthly` везде в долларах США (см. services/pricing.ts). */
 export const PLANS: readonly PlanItem[] = [
@@ -360,6 +360,21 @@ export function createBillingRouter({
       return;
     }
     response.json({ plans: PLANS });
+  });
+
+  // Бонус за оплату тарифа криптой: страница оплаты объясняет его в цифрах тарифа.
+  router.get('/billing/crypto-bonus', (_request: Request, response: Response) => {
+    const plans: Record<string, { quotaUsd: number; bonusUsd: number }> = {};
+    for (const plan of PLANS) {
+      const base = EntitlementService.getEntitlements(plan.id);
+      if (base.premiumBudget <= 0) continue;
+      const withBonus = EntitlementService.getEntitlements(plan.id, { cryptoBonus: true });
+      plans[plan.id] = {
+        quotaUsd: base.premiumBudget,
+        bonusUsd: Number((withBonus.premiumBudget - base.premiumBudget).toFixed(2)),
+      };
+    }
+    response.json({ pct: Math.round(CRYPTO_PREMIUM_BONUS * 100), plans });
   });
 
   // Пакеты премиум-квоты поверх подписки и кредиты пользователя.

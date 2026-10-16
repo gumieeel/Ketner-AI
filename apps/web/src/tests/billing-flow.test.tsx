@@ -410,3 +410,33 @@ describe('пакеты премиум-квоты', () => {
     expect(screen.queryByText('Докупить запросы к топ-моделям')).not.toBeInTheDocument();
   });
 });
+
+describe('бонус за оплату криптой', () => {
+  beforeEach(() => {
+    resetPreferences();
+    resetChat();
+    resetAuth();
+    resetBilling();
+    installFakeApi();
+  });
+
+  it('страница оплаты тарифа объясняет +15% к квоте в цифрах тарифа', async () => {
+    useAuth.setState({
+      status: 'authenticated',
+      token: 'mock-token',
+      user: {
+        id: 'demo-user',
+        email: 'demo@ketner.ai',
+        name: 'Демо',
+        plan: 'free',
+        createdAt: '2026-01-01T00:00:00.000Z',
+      },
+    });
+    renderRoute('/checkout/pro');
+    expect(
+      await screen.findByText('Бонус +15% к квоте топ-моделей за оплату криптой'),
+    ).toBeInTheDocument();
+    expect(screen.getByText(/вырастет с \$8\.00 до \$9\.20/)).toBeInTheDocument();
+    expect(screen.getByText(/Trybit · \+15% к квоте топ-моделей/)).toBeInTheDocument();
+  });
+});

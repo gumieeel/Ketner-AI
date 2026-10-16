@@ -201,3 +201,15 @@ test('квота: списание с кредитов — только то, ч
   assert.equal(settlePremiumCost('u-st', 'pro', 0.1, true, d), 0.1, 'за счёт пакета — целиком');
   assert.equal(credits.balanceOf('u-st').remainingUsd, 2.87);
 });
+
+test('квота: период, оплаченный криптой, даёт +15% к квоте и бюджету тарифа', () => {
+  const usage = newUsage();
+  const cryptoPaid = { cryptoBonusActive: (userId: string) => userId === 'u-crypto' };
+  const withBonus = buildQuotaReport('u-crypto', 'pro', { ...deps(usage), bonus: cryptoPaid });
+  const without = buildQuotaReport('u-stars', 'pro', { ...deps(usage), bonus: cryptoPaid });
+  const base = PLAN_ENTITLEMENTS.pro.premiumBudget;
+  assert.equal(withBonus.premium.cryptoBonus, true);
+  assert.equal(withBonus.premium.budgetUsd, base + Math.round(base * 0.15 * 100) / 100);
+  assert.equal(without.premium.cryptoBonus, false);
+  assert.equal(without.premium.budgetUsd, base);
+});
