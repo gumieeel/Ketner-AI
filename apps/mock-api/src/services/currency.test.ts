@@ -2,13 +2,19 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { CurrencyService } from './currency.js';
 import { CRYPTO_PREMIUM_BONUS, PLAN_ENTITLEMENTS, withCryptoBonus } from './entitlement.js';
-import { PLANS } from '../routes/billing.js';
+import { LEGACY_PLANS, PLANS } from '../routes/billing.js';
+import { packStars, planStars } from '../telegram/bot.js';
+import { StarsRateService } from '../telegram/stars-rate.js';
+import type { PlanId } from '../types.js';
+import { packWorstCaseCostUsd, planWorstCaseCostUsd } from './margin.js';
 import {
+  FREE_TIER_SUBSIDY_USD,
   modelSpendCostUsd,
   OPENROUTER_TOPUP_FEE,
   PACK_MAX_COST_SHARE,
   PAYMENT_NET_SHARE,
   PREMIUM_PACKS,
+  starsNetUsd,
   TAX_RATE,
 } from './pricing.js';
 
@@ -33,10 +39,8 @@ test('CurrencyService: конвертация валют и динамическ
 // комиссия пополнения OpenRouter 5.5%, субсидия Free-тира $3.01 на платящего (конверсия 5%, средний расход Free $0.15).
 const TAX = TAX_RATE;
 const OPENROUTER_FEE = 1 + OPENROUTER_TOPUP_FEE;
-const FREE_SUBSIDY_PER_PAYER = 3.01;
+const FREE_SUBSIDY_PER_PAYER = FREE_TIER_SUBSIDY_USD;
 const HARD_STOP_MULTIPLIER = 1.25; // services/budget-policy.ts: после 125% бюджета запросы отклоняются
-const STARS_PAYOUT_USD = 0.013; // выплата разработчику за 1 Star
-const STARS_BY_PLAN: Record<string, number> = { plus: 500, pro: 1350, ultra: 2650 };
 
 function stripeNet(priceUsd: number): number {
   return priceUsd * (1 - TAX) - (priceUsd * 0.039 + 0.3);
@@ -88,14 +92,99 @@ test('Экономика тарифов: даже в худшем случае �
       net - atCeiling > 0,
       `Для тарифа ${plan.id}: на пределе 125% бюджета расход $${atCeiling.toFixed(2)} превышает выручку $${net.toFixed(2)}`,
     );
+  }
+});
 
-    // Оплата Stars: приходит около 72% цены, но без учёта Free-тира тариф остаётся прибыльным.
-    const starsNet = STARS_BY_PLAN[plan.id] * STARS_PAYOUT_USD * (1 - TAX);
+/** Курс звёзд из источника (Fragment): от минимального до максимального правдоподобного. */
+async function starsAt(usdPerStar: number): Promise<StarsRateService> {
+  const now = Date.now();
+  const rates = new StarsRateService({
+    now: () => now,
+    fetchImpl: (async () =>
+      new Response(
+        JSON.stringify({ usdt_per_star: usdPerStar, last_updated: new Date(now).toISOString() }),
+      )) as typeof fetch,
+  });
+  const rate = await rates.refresh();
+  assert.equal(rate.usdPerStar, usdPerStar);
+  return rates;
+}
+
+const STAR_RATES = [0.008, 0.013, 0.015, 0.018, 0.02, 0.03];
+
+test('Ни один тариф не уходит в минус ни в одном канале: 125% бюджета, комиссии и доля Free-тира', async () => {
+  const margins: string[] = [];
+  const check = (what: string, net: number, cost: number) => {
+    margins.push(`${what}: ${(net - cost).toFixed(2)}`);
     assert.ok(
-      starsNet - costBudget * OPENROUTER_FEE > 0,
-      `Для тарифа ${plan.id}: при оплате Stars ($${starsNet.toFixed(2)}) расход на бюджете $${(costBudget * OPENROUTER_FEE).toFixed(2)} убыточен`,
+      net - cost >= 0,
+      `${what}: чистыми $${net.toFixed(2)}, худший расход $${cost.toFixed(2)}`,
+    );
+  };
+
+  for (const plan of [...PLANS, ...LEGACY_PLANS]) {
+    if (plan.priceMonthly <= 0) continue;
+    const planId = plan.id as PlanId;
+    const worst = planWorstCaseCostUsd(planId);
+    assert.ok(
+      Math.abs(worst - (PLAN_ENTITLEMENTS[planId].costBudget * 1.25 * OPENROUTER_FEE + 3.01)) <
+        1e-9,
+    );
+    check(`${planId} картой`, stripeNet(plan.priceMonthly), worst);
+    check(
+      `${planId} криптой с бонусом`,
+      plan.priceMonthly * PAYMENT_NET_SHARE.crypto * (1 - TAX),
+      planWorstCaseCostUsd(planId, { cryptoBonus: true }),
     );
   }
+
+  // Звёзды: Telegram платит фиксированные $0.013 за звезду, а курс покупки плавает. При любом
+  // курсе, который принимает stars-rate.ts, цена в звёздах не ниже точки безубыточности.
+  for (const usdPerStar of STAR_RATES) {
+    const rates = await starsAt(usdPerStar);
+    for (const planId of ['plus', 'pro', 'ultra'] as const) {
+      const stars = planStars(planId, rates);
+      check(
+        `${planId} звёздами (${stars} ⭐, курс ${usdPerStar})`,
+        starsNetUsd(stars),
+        planWorstCaseCostUsd(planId),
+      );
+    }
+    for (const pack of PREMIUM_PACKS) {
+      const stars = packStars(pack, rates);
+      check(
+        `${pack.id} звёздами (${stars} ⭐, курс ${usdPerStar})`,
+        starsNetUsd(stars),
+        packWorstCaseCostUsd(pack),
+      );
+    }
+  }
+  for (const pack of PREMIUM_PACKS) {
+    check(
+      `${pack.id} криптой`,
+      pack.priceUsd * PAYMENT_NET_SHARE.crypto * (1 - TAX),
+      packWorstCaseCostUsd(pack),
+    );
+  }
+  assert.ok(margins.length > 40, margins.join('\n'));
+});
+
+test('Цена в звёздах: по курсу, а не выше нужного — минимум включается только при дорогих звёздах', async () => {
+  const market = await starsAt(0.015);
+  for (const plan of PLANS) {
+    if (plan.priceMonthly <= 0) continue;
+    // При рыночном курсе Fragment цена — обычная цена по курсу (минимум ниже неё).
+    assert.equal(planStars(plan.id, market), market.quote(plan.priceMonthly), plan.id);
+  }
+  const expensive = await starsAt(0.03);
+  // При звёздах по $0.03 цена по курсу (300 ⭐ за Plus) дала бы $3.67 при худшем расходе $6.97.
+  assert.equal(expensive.quote(9), 300);
+  assert.equal(planStars('plus', expensive), 580);
+  assert.ok(starsNetUsd(580) >= planWorstCaseCostUsd('plus'));
+  assert.ok(
+    starsNetUsd(570) < planWorstCaseCostUsd('plus'),
+    '580 ⭐ — именно точка безубыточности',
+  );
 });
 
 test('CurrencyService.calculatePlanCostBudget: считает от цены в долларах', () => {

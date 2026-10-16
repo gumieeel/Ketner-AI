@@ -5,7 +5,7 @@ import { sendError } from '../middleware/errors.js';
 import { invoiceStore as defaultInvoiceStore, type InvoiceStore } from '../store/index.js';
 import type { SubscriptionStore } from '../store/subscription-store.js';
 import type { UserStore } from '../store/user-store.js';
-import { calculateStars, telegramBotService } from '../telegram/bot.js';
+import { packStars, planStars, telegramBotService } from '../telegram/bot.js';
 import { BillingService, createBillingLedger, planLabel } from '../billing/billing-service.js';
 import { isTrybitCurrency } from '../billing/trybit-currencies.js';
 import type { CryptoCurrency, CryptoInvoice, PlanId, PlanItem } from '../types.js';
@@ -384,7 +384,7 @@ export function createBillingRouter({
       packs: PREMIUM_PACKS.map((pack) => ({
         ...pack,
         days: PREMIUM_PACK_DAYS,
-        stars: calculateStars(pack.priceUsd),
+        stars: packStars(pack),
       })),
       credits: {
         ...billing.ledger.credits.balanceOf(userId),
@@ -574,7 +574,7 @@ export function createBillingRouter({
           userId,
           request.user?.plan ?? 'free',
           0,
-          calculateStars(pack.priceUsd),
+          packStars(pack),
           telegramBotService.botUsername || config.telegramBotUsername,
           pack.id,
         );
@@ -600,8 +600,9 @@ export function createBillingRouter({
         return;
       }
 
-      // Цена в звёздах — по текущему курсу Telegram Stars; сумма фиксируется в счёте.
-      const starsAmount = calculateStars(planPriceUsd(plan.id));
+      // Цена в звёздах — по текущему курсу Telegram Stars, но не ниже точки безубыточности;
+      // сумма фиксируется в счёте.
+      const starsAmount = planStars(plan.id);
       let invoice = activeInvoiceStore.createTelegramStarsInvoice(
         userId,
         plan.id,

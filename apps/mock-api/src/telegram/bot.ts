@@ -15,7 +15,9 @@ import {
   planPriceRub,
   planPriceUsd,
   PREMIUM_PACK_DAYS,
+  type PremiumPack,
 } from '../services/pricing.js';
+import { packMinStars, planMinStars } from '../services/margin.js';
 import {
   BillingError,
   REFUND_POLICY,
@@ -52,12 +54,26 @@ export function paymentTitle(payment: Pick<PaymentRecord, 'planId' | 'packId'>):
   return pack ? `+$${pack.quotaUsd} премиум-квоты` : planTitle(payment.planId);
 }
 
-/** Цена тарифа в звёздах по текущему курсу Telegram Stars (см. stars-rate.ts). */
+/** Сумма в долларах в звёздах по текущему курсу Telegram Stars (см. stars-rate.ts). */
 export function calculateStars(
   priceUsd: number,
   rates: StarsRateService = starsRateService,
 ): number {
   return rates.quote(priceUsd);
+}
+
+/**
+ * Цена тарифа в звёздах: по курсу Stars, но не ниже точки безубыточности. Telegram платит за звезду
+ * фиксированные $0.013, а курс покупки плавает: при дорогих звёздах цена по курсу дала бы так мало
+ * звёзд, что худший случай тарифа (services/margin.ts) ушёл бы в минус.
+ */
+export function planStars(planId: PlanId, rates: StarsRateService = starsRateService): number {
+  return Math.max(rates.quote(planPriceUsd(planId)), planMinStars(planId));
+}
+
+/** Цена пакета премиум-квоты в звёздах: по курсу, но не ниже себестоимости пакета. */
+export function packStars(pack: PremiumPack, rates: StarsRateService = starsRateService): number {
+  return Math.max(rates.quote(pack.priceUsd), packMinStars(pack));
 }
 
 export function getPlanItem(planId: string): PlanItem | undefined {
@@ -558,7 +574,7 @@ export class TelegramBotService implements TelegramPaymentsPort {
 
   /** Счёт на тариф по текущему курсу. Сумма фиксируется в счёте и не меняется при смене курса. */
   createStarsInvoice(userId: string, planId: PlanId): TelegramStarsInvoice {
-    const stars = this.rates.quote(planPriceUsd(planId));
+    const stars = planStars(planId, this.rates);
     return this.deps.invoiceStore.createTelegramStarsInvoice(
       userId,
       planId,
@@ -577,7 +593,7 @@ export class TelegramBotService implements TelegramPaymentsPort {
       userId,
       user?.plan ?? 'free',
       0,
-      this.rates.quote(pack.priceUsd),
+      packStars(pack, this.rates),
       this.username,
       pack.id,
     );

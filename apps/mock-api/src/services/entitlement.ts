@@ -84,8 +84,8 @@ const LEGACY_PRO_BASE: Omit<PlanEntitlements, 'planId'> = {
  * ($3 и $5) — на Ketner Pro и лёгкие модели: при $0.005 за запрос это 600–1 000 запросов. Общий бюджет
  * не менялся, поэтому худший случай по марже тот же. Суточные лимиты моделей: services/daily-limits.ts.
  *
- * Тест services/currency.test.ts проверяет, что при любых изменениях бюджетов тариф остаётся
- * прибыльным в худшем случае (пользователь выбрал весь бюджет, платит через Stripe).
+ * Тест services/currency.test.ts проверяет, что при любых изменениях бюджетов тариф не уходит в
+ * минус в худшем случае (125% бюджета, доля Free-тира) ни в одном канале оплаты (services/margin.ts).
  */
 export const PLAN_ENTITLEMENTS: Record<PlanId, PlanEntitlements> = {
   free: {

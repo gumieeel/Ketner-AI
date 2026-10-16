@@ -3,7 +3,7 @@
  *
  * Каноническая валюта — доллар: именно эти цены показаны на сайте, их же берут Stripe и
  * CryptoCloud. Рубли нужны только для СБП (сумма перевода в банке), Stars считаются отдельно
- * в `telegram/bot.ts` (`calculateStars`).
+ * в `telegram/bot.ts` (`planStars`, `packStars`: по курсу, но не ниже точки безубыточности).
  *
  * Бюджеты расходов на модели в `services/entitlement.ts` рассчитаны от этих цен
  * (см. docs/models-and-pricing.md). Меняя цену, пересчитайте и бюджеты.
@@ -77,6 +77,31 @@ export const PAYMENT_NET_SHARE = { stars: 0.72, crypto: 0.98 } as const;
 export function modelSpendCostUsd(spendUsd: number): number {
   return spendUsd * (1 + OPENROUTER_TOPUP_FEE);
 }
+
+/**
+ * Сколько Telegram платит разработчику за одну звезду при выводе через Fragment, $. Цена звёзд
+ * для покупателя выше (≈ $0.015 на Fragment, ≈ $0.018–0.02 в приложении) и плавает, а выплата
+ * фиксирована, поэтому цена в звёздах не опускается ниже точки безубыточности (services/margin.ts).
+ */
+export const STARS_PAYOUT_USD = 0.013;
+
+/** Сколько долларов доходит до нас с `stars` звёзд после налога. */
+export function starsNetUsd(stars: number): number {
+  return stars * STARS_PAYOUT_USD * (1 - TAX_RATE);
+}
+
+/** Минимум звёзд, выручка с которых после налога покрывает `costUsd` (вверх до 10). */
+export function breakEvenStars(costUsd: number): number {
+  if (!(costUsd > 0)) return 0;
+  return Math.ceil(costUsd / (STARS_PAYOUT_USD * (1 - TAX_RATE)) / 10) * 10;
+}
+
+/**
+ * Субсидия Free-тира на одного платящего, оценка сверху: конверсия 5%, средний расход Free $0.15
+ * ($0.15 × 19 бесплатных на платящего, с комиссией OpenRouter). Сейчас Free идёт на бесплатные
+ * эндпоинты OpenRouter, так что реальная субсидия ближе к нулю.
+ */
+export const FREE_TIER_SUBSIDY_USD = 3.01;
 
 // ─────────────────────────────────────────────────────────────
 // Пакеты премиум-квоты поверх подписки
