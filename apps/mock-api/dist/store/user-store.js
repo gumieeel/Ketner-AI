@@ -1,11 +1,41 @@
-import { pbkdf2Sync, randomBytes, randomUUID, timingSafeEqual } from 'node:crypto';
+import { pbkdf2Sync, randomBytes, randomUUID, scryptSync, timingSafeEqual } from 'node:crypto';
 import { mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
 import { dirname } from 'node:path';
 import { config, isProduction } from '../config.js';
 import { isVipEmail, isAdminEmail } from '../services/vip.js';
-function hashPassword(password, salt) {
+/**
+ * Прежний формат хеша: PBKDF2-SHA256 на 1000 итераций (в сотни раз слабее рекомендаций OWASP).
+ * Остаётся только для проверки старых паролей: после удачного входа хеш пересчитывается в scrypt.
+ */
+function hashPasswordLegacy(password, salt) {
     return pbkdf2Sync(password, salt, 1000, 32, 'sha256').toString('hex');
 }
+/** Параметры scrypt: N=2^15, r=8, p=1 (≈ 32 МБ памяти и десятки миллисекунд на попытку). */
+const SCRYPT_N = 1 << 15;
+const SCRYPT_R = 8;
+const SCRYPT_P = 1;
+const SCRYPT_PREFIX = `scrypt$${SCRYPT_N}$${SCRYPT_R}$${SCRYPT_P}$`;
+function hashPassword(password, salt) {
+    const derived = scryptSync(password, salt, 32, { N: SCRYPT_N, r: SCRYPT_R, p: SCRYPT_P, maxmem: 64 * 1024 * 1024 });
+    return `${SCRYPT_PREFIX}${derived.toString('hex')}`;
+}
+/** Проверка пароля против хеша любого поддерживаемого формата. */
+function passwordMatches(password, salt, storedHash) {
+    if (storedHash.startsWith('scrypt$')) {
+        const [, n, r, p, hex] = storedHash.split('$');
+        const N = Number(n);
+        const R = Number(r);
+        const P = Number(p);
+        if (!Number.isInteger(N) || !Number.isInteger(R) || !Number.isInteger(P) || !hex)
+            return false;
+        const derived = scryptSync(password, salt, 32, { N, r: R, p: P, maxmem: 64 * 1024 * 1024 });
+        return hashesEqual(derived.toString('hex'), hex);
+    }
+    return hashesEqual(hashPasswordLegacy(password, salt), storedHash);
+}
+/** Фиктивная проверка для несуществующего email: время ответа не выдаёт, есть ли такой аккаунт. */
+const DUMMY_SALT = randomBytes(16).toString('hex');
+const DUMMY_HASH = hashPassword(randomBytes(16).toString('hex'), DUMMY_SALT);
 /** Сравнение хешей за константное время. */
 function hashesEqual(left, right) {
     const a = Buffer.from(left, 'utf8');
@@ -37,7 +67,7 @@ const DEFAULT_DEMO_USER = (() => {
         plan: 'free',
         createdAt: '2026-09-22T00:00:00.000Z',
         salt,
-        passwordHash: hashPassword('password123', salt),
+        passwordHash: hashPasswordLegacy('password123', salt),
     };
 })();
 /**
@@ -50,6 +80,8 @@ const COMPROMISED_SALTS = new Set([
     '11111111111111111111111111111111',
 ]);
 const DEMO_EMAIL = 'demo@ketner.ai';
+/** Длиннее пароли не хешируются: защита от DoS дорогим KDF на мегабайтных строках. */
+export const MAX_PASSWORD_LENGTH = 256;
 const MIN_SEED_PASSWORD_LENGTH = 12;
 const SEED_EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 function readSnapshot(file) {
@@ -133,7 +165,8 @@ export function createUserStore(file) {
         verifyPassword(email, password) {
             const normalizedEmail = email.trim().toLowerCase();
             const stored = snapshot.users.find((candidate) => candidate.email.toLowerCase() === normalizedEmail);
-            if (!stored) {
+            if (!stored || typeof password !== 'string' || password.length > MAX_PASSWORD_LENGTH) {
+                passwordMatches(String(password).slice(0, MAX_PASSWORD_LENGTH), DUMMY_SALT, DUMMY_HASH);
                 return null;
             }
             // В production аккаунты с публично известным паролем из старых версий закрыты.
@@ -141,9 +174,15 @@ export function createUserStore(file) {
             if (isProduction && COMPROMISED_SALTS.has(stored.salt) && !isDemo) {
                 return null;
             }
-            const hash = hashPassword(password, stored.salt);
-            if (!hashesEqual(hash, stored.passwordHash)) {
+            if (!stored.passwordHash || !stored.salt || !passwordMatches(password, stored.salt, stored.passwordHash)) {
                 return null;
+            }
+            // Старый хеш (PBKDF2, 1000 итераций) прозрачно заменяется на scrypt при первом удачном входе.
+            if (!stored.passwordHash.startsWith('scrypt$') && !COMPROMISED_SALTS.has(stored.salt)) {
+                stored.salt = randomBytes(16).toString('hex');
+                stored.passwordHash = hashPassword(password, stored.salt);
+                persist();
+                dbDriver?.onPasswordUpdated?.(stored.id, stored.salt, stored.passwordHash)?.catch?.((err) => console.error('[db] Error persisting upgraded password hash:', err));
             }
             return toPublicUser(stored);
         },

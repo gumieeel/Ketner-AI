@@ -2,6 +2,7 @@ import { Router, type Request, type Response } from 'express';
 import { createMockToken } from '../auth/jwt.js';
 import { requireAuth } from '../middleware/auth.js';
 import { sendError } from '../middleware/errors.js';
+import { RateLimiter, clientIp } from '../middleware/rate-limit.js';
 import type { UserStore } from '../store/user-store.js';
 import { describeDevice, isTelegramAccountEmail } from '../telegram/auth-requests.js';
 import type { TelegramBotService } from '../telegram/bot.js';
@@ -18,8 +19,20 @@ export interface TelegramAuthRouterDeps {
 export function createTelegramAuthRouter({ botService, userStore }: TelegramAuthRouterDeps): Router {
   const router = Router();
   const requests = botService.authRequests;
+  // Запросы входа живут в памяти: без лимита их можно наплодить миллионами. Код из мини-приложения
+  // короткий (6 символов) — попытки ввода ограничены, чтобы его нельзя было подобрать.
+  const startsPerIp = new RateLimiter(10 * 60 * 1000, 20);
+  const claimAttempts = new RateLimiter(10 * 60 * 1000, 10);
+  const magicPerIp = new RateLimiter(10 * 60 * 1000, 30);
+  const limited = (response: Response, limiter: RateLimiter, key: string): boolean => {
+    if (!limiter.hit(key)) return false;
+    response.setHeader('Retry-After', String(limiter.retryAfterSec(key)));
+    sendError(response, 429, 'too_many_requests', 'Слишком много попыток. Подождите несколько минут.');
+    return true;
+  };
 
   router.post('/auth/telegram/start', (request: Request, response: Response) => {
+    if (limited(response, startsPerIp, clientIp(request))) return;
     const mode = (request.body as { mode?: unknown } | undefined)?.mode === 'link' ? 'link' : 'login';
     if (mode === 'link' && !request.user) {
       sendError(response, 401, 'unauthorized', 'Войдите, чтобы подключить Telegram');
@@ -55,6 +68,7 @@ export function createTelegramAuthRouter({ botService, userStore }: TelegramAuth
 
   /** Код из кабинета в Telegram, введённый в настройках сайта. */
   router.post('/auth/telegram/claim', requireAuth, (request: Request, response: Response) => {
+    if (limited(response, claimAttempts, `user:${request.user!.id}`) || limited(response, claimAttempts, `ip:${clientIp(request)}`)) return;
     const code = (request.body as { code?: unknown } | undefined)?.code;
     if (typeof code !== 'string' || code.trim().length < 4) {
       sendError(response, 400, 'invalid_request', 'Введите код из Telegram');
@@ -81,6 +95,7 @@ export function createTelegramAuthRouter({ botService, userStore }: TelegramAuth
 
   /** Одноразовая ссылка входа из кабинета в Telegram. */
   router.post('/auth/telegram/magic', (request: Request, response: Response) => {
+    if (limited(response, magicPerIp, clientIp(request))) return;
     const token = (request.body as { token?: unknown } | undefined)?.token;
     const userId = typeof token === 'string' ? requests.consumeMagic(token) : null;
     const user = userId ? userStore.findById(userId) : null;

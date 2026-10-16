@@ -202,7 +202,7 @@ export class ProjectStore {
     async create(userId, input, limits) {
         const name = sanitizeProjectName(input.name);
         if ((await this.count(userId)) >= limits.maxProjects) {
-            throw new CodeError('quota_exceeded', `Достигнут лимит проектов тарифа (${limits.maxProjects}). Удалите ненужный проект или повысьте тариф.`);
+            throw new CodeError('quota_exceeded', 'На вашем тарифе больше проектов создать нельзя. Удалите ненужный проект или повысьте тариф.');
         }
         const template = isTemplateId(input.template) ? input.template : 'empty';
         const description = typeof input.description === 'string' && input.description.trim()

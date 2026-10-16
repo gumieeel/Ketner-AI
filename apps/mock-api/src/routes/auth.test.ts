@@ -164,45 +164,47 @@ test('auth: привязка диалогов к авторизованному 
   assert.equal(guestList.conversations.length, 0);
 });
 
-test('auth: Better Auth нативные эндпоинты регистрации и сессии', async (t) => {
+test('auth: регистрация напрямую в Better Auth закрыта, вход и сессия работают', async (t) => {
   const server = await startTestServer();
   t.after(() => server.close());
 
-  // 1. Регистрация через Better Auth /api/auth/sign-up/email
+  // 1. Регистрация в обход сайта (/api/auth/sign-up/email) закрыта: она позволяла завести запись
+  //    Better Auth с чужой почтой и войти в чужой аккаунт.
   const signUpRes = await fetch(`${server.baseUrl}/api/auth/sign-up/email`, {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Origin: server.baseUrl,
-    },
-    body: JSON.stringify({
-      email: 'better-auth-user@example.com',
-      password: 'password123',
-      name: 'Better Auth User',
-    }),
+    headers: { 'Content-Type': 'application/json', Origin: server.baseUrl },
+    body: JSON.stringify({ email: 'better-auth-user@example.com', password: 'password123', name: 'Better Auth User' }),
   });
-  assert.equal(signUpRes.status, 200);
-  const signUpData = await readJson<{ user: { email: string; name: string; plan: string } }>(
-    signUpRes,
-  );
-  assert.equal(signUpData.user.email, 'better-auth-user@example.com');
-  assert.equal(signUpData.user.name, 'Better Auth User');
-  assert.equal(signUpData.user.plan, 'free');
+  assert.equal(signUpRes.status, 404);
 
-  // Cookie better-auth.session_token возвращается в заголовках
-  const setCookie = signUpRes.headers.get('set-cookie');
+  // 2. Регистрация через сайт создаёт и запись Better Auth с тем же паролем.
+  const siteSignup = await fetch(`${server.baseUrl}/api/auth/signup`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email: 'better-auth-user@example.com', password: 'password123', name: 'Better Auth User' }),
+  });
+  assert.equal(siteSignup.status, 201);
+
+  // 3. Вход в Better Auth (cookie) и сессия.
+  const signInRes = await fetch(`${server.baseUrl}/api/auth/sign-in/email`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Origin: server.baseUrl },
+    body: JSON.stringify({ email: 'better-auth-user@example.com', password: 'password123' }),
+  });
+  assert.equal(signInRes.status, 200);
+  const setCookie = signInRes.headers.get('set-cookie');
   assert.ok(setCookie && setCookie.includes('better-auth.session_token'));
 
-  // 2. Получение сессии через /api/auth/get-session с cookie
   const sessionRes = await fetch(`${server.baseUrl}/api/auth/get-session`, {
-    headers: {
-      Origin: server.baseUrl,
-      Cookie: setCookie,
-    },
+    headers: { Origin: server.baseUrl, Cookie: setCookie },
   });
   assert.equal(sessionRes.status, 200);
   const sessionData = await readJson<{ user: { email: string } }>(sessionRes);
   assert.equal(sessionData.user.email, 'better-auth-user@example.com');
+
+  // 4. Cookie-сессия открывает тот же аккаунт сайта (запись создана вместе с ним).
+  const me = await fetch(`${server.baseUrl}/api/auth/me`, { headers: { Cookie: setCookie } });
+  assert.equal(me.status, 200);
 });
 
 test('auth (C2): заголовки X-User-* не определяют личность и не повышают тариф', async (t) => {
@@ -287,13 +289,18 @@ test('auth: Bearer-токен важнее оставшейся cookie-сесс�
   const server = await startTestServer();
   t.after(() => server.close());
 
-  // Аккаунт A: вход через Better Auth, в браузере остаётся его cookie.
-  const signUpA = await fetch(`${server.baseUrl}/api/auth/sign-up/email`, {
+  // Аккаунт A: регистрация на сайте и вход через Better Auth, в браузере остаётся его cookie.
+  await fetch(`${server.baseUrl}/api/auth/signup`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', Origin: server.baseUrl },
+    headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ email: 'cookie-user@example.com', password: 'password123', name: 'Cookie User' }),
   });
-  const cookieA = signUpA.headers.get('set-cookie') ?? '';
+  const signInA = await fetch(`${server.baseUrl}/api/auth/sign-in/email`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Origin: server.baseUrl },
+    body: JSON.stringify({ email: 'cookie-user@example.com', password: 'password123' }),
+  });
+  const cookieA = signInA.headers.get('set-cookie') ?? '';
   assert.ok(cookieA.includes('better-auth.session_token'));
 
   // Аккаунт B: вход по паролю, клиент хранит его Bearer-токен.

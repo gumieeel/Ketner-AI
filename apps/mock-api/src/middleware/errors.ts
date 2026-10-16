@@ -1,4 +1,5 @@
 import type { NextFunction, Request, Response } from 'express';
+import { isProduction } from '../config.js';
 
 /** Единый формат ошибок API: фронтенд разбирает его в одном месте. */
 export interface ApiErrorBody {
@@ -38,7 +39,21 @@ export function errorHandler(
   response: Response<ApiErrorBody>,
   _next: NextFunction,
 ): void {
-  const message = error instanceof Error ? error.message : 'Неизвестная ошибка';
+  // Ошибки разбора тела (битый JSON, слишком большой запрос) — это 4xx, а не сбой сервера.
+  const status = (error as { status?: unknown; statusCode?: unknown } | null)?.status ??
+    (error as { statusCode?: unknown } | null)?.statusCode;
+  if (typeof status === 'number' && status >= 400 && status < 500) {
+    sendError(
+      response,
+      status,
+      status === 413 ? 'payload_too_large' : 'invalid_request',
+      status === 413 ? 'Запрос слишком большой' : 'Некорректный запрос',
+    );
+    return;
+  }
   console.error('[mock-api] необработанная ошибка:', error);
+  if (response.headersSent) return;
+  // Текст внутренней ошибки (пути, сообщения драйвера БД) наружу не отдаётся — только в лог.
+  const message = !isProduction && error instanceof Error ? error.message : 'Внутренняя ошибка сервера';
   sendError(response, 500, 'internal_error', message);
 }

@@ -2,7 +2,8 @@ import { randomBytes } from 'node:crypto';
 import { fromNodeHeaders } from 'better-auth/node';
 import { defaultBetterAuth } from '../auth/better-auth.js';
 import { verifyMockToken } from '../auth/jwt.js';
-import { resolveBillingPlan } from '../services/plan-resolver.js';
+import { betterAuthSessionMayOpen } from '../auth/better-auth-sync.js';
+import { applySubscriptionExpiry } from '../services/user-plan.js';
 import { sendError } from './errors.js';
 import { isVipEmail, isAdminEmail } from '../services/vip.js';
 /**
@@ -12,22 +13,8 @@ import { isVipEmail, isAdminEmail } from '../services/vip.js';
  * Если пользователь найден, устанавливает req.user и req.userId.
  */
 export function createAuthMiddleware(userStore, betterAuthInstance = defaultBetterAuth, subscriptionStore) {
-    /**
-     * Срок подписки: если оплаченный период (и льготные сутки) закончился, тариф сводится к free
-     * и это сохраняется в профиле, чтобы интерфейс и лимиты видели одно и то же.
-     */
-    const applySubscriptionExpiry = (userId, plan, isVip) => {
-        if (!subscriptionStore || isVip || plan === 'free')
-            return plan;
-        const resolved = resolveBillingPlan({
-            storedPlan: plan,
-            subscription: subscriptionStore.get(userId),
-        });
-        if (resolved.expired) {
-            userStore.updatePlan(userId, 'free');
-        }
-        return resolved.plan;
-    };
+    /** Срок подписки: правило общее с API-ключами (services/user-plan.ts). */
+    const applyExpiry = (userId, plan, isVip) => applySubscriptionExpiry(userStore, subscriptionStore, userId, plan, isVip);
     return async (request, response, next) => {
         // 1. Bearer-токен, выданный при входе. Он важнее cookie: клиент показывает того пользователя, чей токен
         //    хранит, а в браузере может остаться cookie-сессия другого аккаунта (вход через Google под Ultra,
@@ -53,7 +40,7 @@ export function createAuthMiddleware(userStore, betterAuthInstance = defaultBett
                         plan = 'ultra';
                     }
                     else {
-                        plan = applySubscriptionExpiry(user.id, plan, false);
+                        plan = applyExpiry(user.id, plan, false);
                     }
                     request.user = {
                         ...user,
@@ -73,8 +60,11 @@ export function createAuthMiddleware(userStore, betterAuthInstance = defaultBett
             const session = await betterAuthInstance.api.getSession({
                 headers: fromNodeHeaders(request.headers),
             });
-            if (session?.user) {
-                let stored = userStore.findByEmail(session.user.email);
+            let stored = session?.user ? userStore.findByEmail(session.user.email) : null;
+            // Сессия Better Auth открывает аккаунт сайта только если запись Better Auth точно принадлежит
+            // его владельцу (см. betterAuthSessionMayOpen): иначе чужая регистрация с той же почтой давала
+            // бы вход в чужой аккаунт.
+            if (session?.user && betterAuthSessionMayOpen(session.user, stored)) {
                 if (!stored) {
                     // Пароль локальной копии не используется для входа: вход идёт через Better Auth.
                     stored = userStore.create(session.user.email, randomBytes(32).toString('hex'), session.user.name);
@@ -94,7 +84,7 @@ export function createAuthMiddleware(userStore, betterAuthInstance = defaultBett
                     plan = 'ultra';
                 }
                 else if (stored) {
-                    plan = applySubscriptionExpiry(stored.id, plan, false);
+                    plan = applyExpiry(stored.id, plan, false);
                 }
                 request.user = {
                     id: stored?.id || session.user.id,

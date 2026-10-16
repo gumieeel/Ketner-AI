@@ -546,6 +546,7 @@ function attachDatabaseDrivers(sql: postgres.Sql): void {
           "title" = EXCLUDED."title",
           "context_summary" = EXCLUDED."context_summary",
           "updated_at" = NOW()
+        WHERE "conversations"."user_id" = EXCLUDED."user_id"
       `;
 
       // Insert all messages in the turn
@@ -576,6 +577,7 @@ function attachDatabaseDrivers(sql: postgres.Sql): void {
             "feedback" = EXCLUDED."feedback",
             "metadata" = EXCLUDED."metadata",
             "updated_at" = NOW()
+          WHERE "messages"."conversation_id" = EXCLUDED."conversation_id"
         `;
       }
     },

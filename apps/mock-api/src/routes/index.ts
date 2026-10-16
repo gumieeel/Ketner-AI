@@ -1,5 +1,5 @@
 import { Router, type Request, type Response } from 'express';
-import { config } from '../config.js';
+import { config, isProduction } from '../config.js';
 import type { AiConfig } from '../config.js';
 import { createAuthMiddleware } from '../middleware/auth.js';
 import type { ConversationStore } from '../store/conversation-store.js';
@@ -155,6 +155,10 @@ export const API_ENDPOINTS = [
  * браузере по ошибке, и там уместнее подсказка, чем 404.
  */
 export function describeService() {
+  // Карта API в production не публикуется: она только облегчает разведку.
+  if (isProduction) {
+    return { service: 'ketner-api', version: config.version };
+  }
   return {
     service: config.serviceName,
     version: config.version,

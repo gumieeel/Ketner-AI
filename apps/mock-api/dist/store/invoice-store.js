@@ -2,6 +2,19 @@ import crypto from 'node:crypto';
 import { mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
 import { dirname } from 'node:path';
 import { config } from '../config.js';
+/** Строка для QR: кошельки понимают адрес; для BTC и TON — стандартные ссылки с суммой. */
+function gatewayQr(currency, details) {
+    if (currency === 'BTC')
+        return `bitcoin:${details.address}?amount=${details.amount}`;
+    if (currency === 'LTC')
+        return `litecoin:${details.address}?amount=${details.amount}`;
+    if (currency === 'TON') {
+        const nano = Math.round(details.amount * 1e9);
+        const text = details.memo ? `&text=${encodeURIComponent(details.memo)}` : '';
+        return `ton://transfer/${details.address}?amount=${nano}${text}`;
+    }
+    return details.address;
+}
 function readSnapshot(file) {
     try {
         const parsed = JSON.parse(readFileSync(file, 'utf8'));
@@ -33,6 +46,12 @@ export function createInvoiceStore(file) {
     const sbpInvoices = new Map();
     const starsInvoices = new Map();
     const cryptoInvoices = new Map();
+    let cryptoDb = null;
+    const saveCrypto = (invoice) => {
+        cryptoDb?.upsert({ ...invoice }).catch((error) => {
+            console.error('[mock-api] Ошибка записи крипто-счёта в Postgres:', error);
+        });
+    };
     if (file) {
         const snapshot = readSnapshot(file);
         for (const inv of snapshot.sbpInvoices)
@@ -90,7 +109,7 @@ export function createInvoiceStore(file) {
             const expiresAt = new Date(Date.now() + 30 * 60 * 1000).toISOString();
             const rawUser = botUsername && botUsername.trim() !== '' ? botUsername : 'Robo_kassa_bot';
             const cleanUsername = rawUser.replace(/^@/, '');
-            const botDeepLink = `https://t.me/${cleanUsername}?start=pay_${planId}__${id}`;
+            const botDeepLink = `https://t.me/${cleanUsername}?start=${id}`;
             const invoice = {
                 id,
                 userId,
@@ -110,16 +129,51 @@ export function createInvoiceStore(file) {
         getTelegramStarsInvoice(id) {
             return starsInvoices.get(id);
         },
-        markTelegramStarsPaid(id) {
+        markTelegramStarsPaid(id, chargeId) {
             const invoice = starsInvoices.get(id);
             if (!invoice)
                 return undefined;
-            const updated = { ...invoice, status: 'paid' };
+            const updated = {
+                ...invoice,
+                status: 'paid',
+                paidAt: invoice.paidAt ?? new Date().toISOString(),
+                ...(chargeId ? { chargeId } : {}),
+            };
             starsInvoices.set(id, updated);
             persist();
             return updated;
         },
-        createCryptoInvoice(userId, planId, currency, amountUsd, cryptoCloudUrl, cryptoCloudInvoiceId, customId) {
+        setTelegramStarsLink(id, invoiceLink) {
+            const invoice = starsInvoices.get(id);
+            if (!invoice)
+                return undefined;
+            const updated = { ...invoice, invoiceLink };
+            starsInvoices.set(id, updated);
+            persist();
+            return updated;
+        },
+        paidInvoicesOf(userId) {
+            const stars = [...starsInvoices.values()]
+                .filter((inv) => inv.userId === userId && inv.status === 'paid')
+                .map((inv) => ({
+                id: inv.id,
+                method: 'stars',
+                planId: inv.planId,
+                amount: `${inv.starsAmount} ⭐`,
+                paidAt: inv.paidAt ?? inv.createdAt,
+            }));
+            const crypto = [...cryptoInvoices.values()]
+                .filter((inv) => inv.userId === userId && inv.status === 'paid')
+                .map((inv) => ({
+                id: inv.id,
+                method: 'crypto',
+                planId: inv.planId,
+                amount: `$${inv.amountUsd}`,
+                paidAt: inv.createdAt,
+            }));
+            return [...stars, ...crypto].sort((a, b) => b.paidAt.localeCompare(a.paidAt)).slice(0, 20);
+        },
+        createCryptoInvoice(userId, planId, currency, amountUsd, cryptoCloudUrl, cryptoCloudInvoiceId, customId, gateway) {
             const id = customId || `crypto_${Date.now()}_${crypto.randomBytes(4).toString('hex')}`;
             const expiresAt = new Date(Date.now() + 30 * 60 * 1000).toISOString();
             const amount = currency === 'TON'
@@ -127,35 +181,38 @@ export function createInvoiceStore(file) {
                 : currency === 'BTC'
                     ? +(amountUsd / 95000).toFixed(6)
                     : amountUsd;
-            const address = currency === 'USDT_TRC20'
-                ? 'TDyeGqX4ranC94g7RMw6cGsCPvRQ7XAtQP'
-                : currency === 'BTC'
-                    ? 'bc1qa27xsypxy7pstvh2yrmzrlwev36qrr5az3vr7h'
-                    : 'UQA6ebFQPlulDzarfUtQJX8T61BHknM76VVYZ-3j-8eLnbyS';
-            const network = currency === 'USDT_TRC20' ? 'TRC-20' : currency === 'BTC' ? 'Bitcoin' : 'TON';
-            const qrPayload = currency === 'USDT_TRC20'
-                ? `tron:${address}?amount=${amount}`
-                : currency === 'BTC'
-                    ? `bitcoin:${address}?amount=${amount}`
-                    : `ton://transfer/${address}?amount=${amount}`;
+            // Прямых переводов нет: адрес и QR выдаёт только Trybit (H2H), своих кошельков счёт не содержит.
+            const network = currency === 'BTC' ? 'Bitcoin' : currency.startsWith('USDT_TRC') || currency === 'TRX' ? 'TRC-20' : currency.replace(/^[A-Z]+_?/, '') || currency;
             const invoice = {
                 id,
                 userId,
                 planId,
                 currency,
-                amount,
+                amount: gateway ? gateway.amount : amount,
                 amountUsd,
-                address,
-                qrPayload,
+                address: gateway ? gateway.address : '',
+                qrPayload: gateway ? gatewayQr(currency, gateway) : '',
                 status: 'pending',
-                expiresAt,
+                expiresAt: gateway?.expiresAt ?? expiresAt,
                 createdAt: new Date().toISOString(),
-                network,
+                network: gateway?.network || network,
                 cryptoCloudUrl,
                 cryptoCloudInvoiceId,
+                ...(gateway ? { gatewayDetails: true, ...(gateway.memo ? { memo: gateway.memo } : {}) } : {}),
+                ...(gateway?.fees
+                    ? {
+                        fees: {
+                            serviceUsd: gateway.fees.serviceUsd,
+                            transferUsd: gateway.fees.transferUsd,
+                            payerUsd: Math.max(0, Math.round((gateway.fees.invoiceUsd - amountUsd) * 100) / 100),
+                            totalUsd: Math.max(amountUsd, gateway.fees.invoiceUsd),
+                        },
+                    }
+                    : {}),
             };
             cryptoInvoices.set(id, invoice);
             persist();
+            saveCrypto(invoice);
             return invoice;
         },
         getCryptoInvoice(id) {
@@ -167,9 +224,12 @@ export function createInvoiceStore(file) {
             const direct = cryptoInvoices.get(identifier);
             if (direct)
                 return direct;
+            // Trybit присылает invoice_id без префикса INV-, а при создании отдаёт uuid с ним.
+            const bare = identifier.replace(/^INV-/i, '');
             for (const inv of cryptoInvoices.values()) {
                 if (inv.id === identifier ||
                     inv.cryptoCloudInvoiceId === identifier ||
+                    (inv.cryptoCloudInvoiceId && inv.cryptoCloudInvoiceId.replace(/^INV-/i, '') === bare) ||
                     (inv.cryptoCloudUrl && inv.cryptoCloudUrl.includes(identifier))) {
                     return inv;
                 }
@@ -187,7 +247,15 @@ export function createInvoiceStore(file) {
             };
             cryptoInvoices.set(invoice.id, updated);
             persist();
+            saveCrypto(updated);
             return updated;
+        },
+        loadCryptoExternal(records) {
+            for (const record of records)
+                cryptoInvoices.set(record.id, { ...record });
+        },
+        setCryptoDbDriver(driver) {
+            cryptoDb = driver;
         },
     };
 }
