@@ -63,9 +63,10 @@ export function calculateStars(
 }
 
 /**
- * Цена тарифа в звёздах: по курсу Stars, но не ниже точки безубыточности. Telegram платит за звезду
- * фиксированные $0.013, а курс покупки плавает: при дорогих звёздах цена по курсу дала бы так мало
- * звёзд, что худший случай тарифа (services/margin.ts) ушёл бы в минус.
+ * Цена тарифа в звёздах: цена тарифа по официальному курсу Telegram (Pro $25 = 1 260 ⭐), но не ниже
+ * точки безубыточности. Telegram платит за звезду фиксированные $0.013, поэтому если в
+ * STARS_USD_RATE задан слишком дорогой курс, цена по нему дала бы так мало звёзд, что худший случай
+ * тарифа (services/margin.ts) ушёл бы в минус.
  */
 export function planStars(planId: PlanId, rates: StarsRateService = starsRateService): number {
   return Math.max(rates.quote(planPriceUsd(planId)), planMinStars(planId));

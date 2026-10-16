@@ -7,8 +7,12 @@
  * расход не растёт: после 100% бюджета отвечает только Ketner Mini, агент и картинки ограничены
  * остатком до 125%, а расход, оплаченный кредитами пакетов, в бюджет тарифа не входит.
  *
- * По этим суммам считается минимальная цена в звёздах (telegram/bot.ts → planStars, packStars),
- * а services/currency.test.ts проверяет, что ни один тариф и пакет не убыточен ни в одном канале.
+ * Карта и крипта проверяются с долей Free-тира. Звёзды — без неё: тариф в звёздах продаётся по
+ * официальному курсу Telegram ровно за цену тарифа (решение владельца), и с верхней оценкой доли
+ * Free-тира ($3.01) худший случай звёзд был бы в минусе; сейчас Free идёт на бесплатные эндпоинты,
+ * и реальная доля близка к нулю. Минимальная цена в звёздах (telegram/bot.ts → planStars,
+ * packStars) защищает от убытка, если курс в STARS_USD_RATE задан слишком дорогим.
+ * services/currency.test.ts проверяет оба расчёта.
  */
 
 import type { PlanId } from '../types.js';
@@ -38,9 +42,16 @@ export function packWorstCaseCostUsd(pack: PremiumPack): number {
   return modelSpendCostUsd(pack.quotaUsd);
 }
 
-/** Минимальная цена тарифа в звёздах: дешевле — тариф может уйти в минус. */
+/** Худший расход на платящего звёздами ($): предел бюджета с комиссией, без доли Free-тира. */
+export function planStarsWorstCaseCostUsd(planId: PlanId): number {
+  return modelSpendCostUsd(
+    EntitlementService.getEntitlements(planId).costBudget * BUDGET_HARD_STOP_RATIO,
+  );
+}
+
+/** Минимальная цена тарифа в звёздах: дешевле — тариф в худшем случае уйдёт в минус. */
 export function planMinStars(planId: PlanId): number {
-  return breakEvenStars(planWorstCaseCostUsd(planId));
+  return breakEvenStars(planStarsWorstCaseCostUsd(planId));
 }
 
 /** Минимальная цена пакета в звёздах. */

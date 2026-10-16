@@ -496,15 +496,15 @@ export function installFakeApi(options: FakeApiOptions = {}): FakeApi {
       if (url === '/api/billing/telegram-stars/create-invoice' && method === 'POST') {
         const planId = (body.planId as string) || 'gpt-pro';
         const priceRub = planId === 'ultra' ? 4890 : planId === 'pro' ? 2490 : 890;
-        // Как на сервере: официальный курс Telegram, но не ниже точки безубыточности.
-        const starsAmount = planId === 'ultra' ? 2630 : planId === 'pro' ? 1440 : 580;
+        // Как на сервере: цена тарифа по официальному курсу Telegram.
+        const starsAmount = planId === 'ultra' ? 2460 : planId === 'pro' ? 1260 : 460;
         return json({
           invoice: {
             id: 'stars_mock_123',
             planId,
             priceRub,
             starsAmount,
-            starsUsd: Math.round(starsAmount * 19.99) / 1000,
+            starsUsd: Math.round(starsAmount * 0.01999 * 100) / 100,
             usdPerStar: 0.01999,
             botUsername: 'Robo_kassa_bot',
             botDeepLink: `https://t.me/Robo_kassa_bot?start=pay_${planId}_demo-user`,
@@ -521,7 +521,7 @@ export function installFakeApi(options: FakeApiOptions = {}): FakeApi {
             id: 'stars_mock_123',
             planId: 'gpt-pro',
             priceRub: 2490,
-            starsAmount: 1440,
+            starsAmount: 1260,
             botUsername: 'Robo_kassa_bot',
             botDeepLink: 'https://t.me/Robo_kassa_bot?start=pay_gpt-pro_demo-user',
             status: 'pending',
@@ -548,7 +548,7 @@ export function installFakeApi(options: FakeApiOptions = {}): FakeApi {
             id: 'stars_mock_123',
             planId: 'gpt-pro',
             priceRub: 2490,
-            starsAmount: 1440,
+            starsAmount: 1260,
             botUsername: 'Robo_kassa_bot',
             botDeepLink: 'https://t.me/Robo_kassa_bot?start=pay_gpt-pro_demo-user',
             status: 'paid',

@@ -634,10 +634,10 @@ test('оплата звёздами: чек в журнале, продлени�
   assert.equal(plusPlan.preview.mode, 'extend');
   // Кабинет показывает ту же цену, что попадёт в счёт, и её цену по официальному курсу Telegram.
   assert.equal(plusPlan.stars, invoice.body.stars);
-  assert.equal(plusPlan.starsUsd, 11.59);
+  assert.equal(plusPlan.starsUsd, 9.2);
   assert.deepEqual(
     state.body.plans.map((plan) => plan.stars),
-    [580, 1440, 2630],
+    [460, 1260, 2460],
   );
   assert.equal(state.body.rate.source, 'official');
   const ultraPlan = state.body.plans.find((plan) => plan.id === 'ultra')!;
@@ -991,7 +991,7 @@ test('напоминания: с автопродлением — о списа�
   void token;
 });
 
-test('сайт: счёт в звёздах — по официальному курсу, не ниже точки безубыточности', async (t) => {
+test('сайт: счёт в звёздах — цена тарифа по официальному курсу Telegram', async (t) => {
   const h = await harness();
   t.after(() => h.server.close());
   const buyer = await h.signup();
@@ -1009,9 +1009,9 @@ test('сайт: счёт в звёздах — по официальному к�
       usdPerStar: number;
     };
   }>(created);
-  // По официальному курсу Plus — 460 ⭐, но минимум без убытка — 580 ⭐ ($11.59 у Telegram).
-  assert.equal(invoice.starsAmount, 580);
-  assert.equal(invoice.starsUsd, 11.59);
+  // Plus $9 по официальному курсу Telegram — 460 ⭐ ($9.20 у Telegram, округление до 10 ⭐).
+  assert.equal(invoice.starsAmount, 460);
+  assert.equal(invoice.starsUsd, 9.2);
   assert.equal(invoice.usdPerStar, STARS_OFFICIAL_USD_PER_STAR);
   assert.match(invoice.botDeepLink, new RegExp(`\\?start=${invoice.id}$`));
 });

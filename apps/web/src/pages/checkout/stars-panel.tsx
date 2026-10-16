@@ -26,6 +26,9 @@ export interface StarsPanelProps {
   onConfirm: () => void;
 }
 
+/** Цена в звёздах округляется до 10 ⭐ (≈ $0.20): разница меньше этой — не «дороже». */
+const STARS_ROUNDING_USD = 0.25;
+
 /** Панель оплаты Telegram Stars: сумма в звёздах, QR на бота и проверка счёта. */
 export function StarsPanel({
   periodNotice,
@@ -77,7 +80,7 @@ export function StarsPanel({
               : t('checkout.starsUsd', { usd: starsUsd.toFixed(2) })}
           </p>
         ) : null}
-        {starsUsd !== null && starsUsd > cardPriceUsd + 0.01 ? (
+        {starsUsd !== null && starsUsd - cardPriceUsd > STARS_ROUNDING_USD ? (
           <p className="text-[12px] leading-5 text-subtle">
             {t('checkout.starsDearer', { price: `$${cardPriceUsd}` })}
           </p>

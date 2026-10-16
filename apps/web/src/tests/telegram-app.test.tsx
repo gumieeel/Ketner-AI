@@ -48,24 +48,24 @@ function makeState(overrides: Partial<MiniAppState> = {}): MiniAppState {
         id: 'plus',
         title: 'Plus',
         priceUsd: 9,
-        stars: 580,
-        starsUsd: 11.59,
+        stars: 460,
+        starsUsd: 9.2,
         preview: { mode: 'switch', renewsAt: inDays(30), bonusDays: 33 },
       },
       {
         id: 'pro',
         title: 'Pro',
         priceUsd: 25,
-        stars: 1440,
-        starsUsd: 28.79,
+        stars: 1260,
+        starsUsd: 25.19,
         preview: { mode: 'extend', renewsAt: inDays(42), bonusDays: 0 },
       },
       {
         id: 'ultra',
         title: 'Ultra',
         priceUsd: 49,
-        stars: 2630,
-        starsUsd: 52.57,
+        stars: 2460,
+        starsUsd: 49.18,
         preview: { mode: 'switch', renewsAt: inDays(36), bonusDays: 6 },
       },
     ],
@@ -309,7 +309,7 @@ describe('кабинет в Telegram (/tg)', () => {
         return Response.json({
           invoiceId: 'stars_9',
           link: 'https://t.me/$inv',
-          stars: 2630,
+          stars: 2460,
           recurring: true,
         });
       if (url === '/api/telegram/miniapp/invoice/stars_9') return Response.json({ status: 'paid' });
@@ -322,21 +322,20 @@ describe('кабинет в Telegram (/tg)', () => {
     const ultra = screen.getByRole('article', { name: /Ultra/ });
     expect(within(ultra).getByText('+6 дн. за остаток текущего тарифа')).toBeInTheDocument();
     const pro = screen.getByRole('article', { name: /Pro/ });
-    expect(within(pro).getByRole('button', { name: /Продлить за 1\s440 ⭐/ })).toBeInTheDocument();
-    // Рядом с ценой в звёздах — сколько они стоят по официальному курсу Telegram, а не цена картой
-    expect(within(pro).getByText('≈ $28.79')).toBeInTheDocument();
+    // Pro $25 = 1 260 ⭐ по официальному курсу Telegram, рядом — сколько эти звёзды стоят у Telegram
+    expect(within(pro).getByRole('button', { name: /Продлить за 1\s260 ⭐/ })).toBeInTheDocument();
+    expect(within(pro).getByText('≈ $25.19')).toBeInTheDocument();
     expect(
       screen.getByText('Цены в звёздах — по официальному курсу Telegram: 1 000 ⭐ = $19.99.'),
     ).toBeInTheDocument();
-    expect(
-      screen.getByText(/Картой или криптой на сайте — \$9 \/ \$25 \/ \$49\./),
-    ).toBeInTheDocument();
+    // Цена в звёздах как картой: пометки «дороже» нет
+    expect(screen.queryByText(/В звёздах тариф дороже/)).not.toBeInTheDocument();
     expect(
       screen.getByText('На Fragment звёзды сейчас дешевле: ≈ $14.90 за 1 000 ⭐.'),
     ).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('radio', { name: 'С автопродлением' }));
-    fireEvent.click(within(ultra).getByRole('button', { name: /Подписаться · 2\s630 ⭐ в месяц/ }));
+    fireEvent.click(within(ultra).getByRole('button', { name: /Подписаться · 2\s460 ⭐ в месяц/ }));
     await waitFor(() =>
       expect(app.openInvoice).toHaveBeenCalledWith('https://t.me/$inv', expect.any(Function)),
     );

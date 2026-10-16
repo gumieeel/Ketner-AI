@@ -16,6 +16,9 @@ import {
   useMiniApp,
 } from './shared';
 
+/** Цена в звёздах округляется до 10 ⭐ (≈ $0.20): разница меньше этой — не «дороже». */
+const STARS_ROUNDING_USD = 0.25;
+
 type Mode = 'once' | 'auto';
 
 export function PlansTab({
@@ -195,7 +198,7 @@ export function PlansTab({
       <div className="flex flex-col gap-1.5 px-1 text-[12px] leading-5 text-subtle">
         <p>{t('tg.refundShort', { hours: refundPolicy.hours })}</p>
         <p>{t('tg.rate', { per1000: (rate.usdPerStar * 1000).toFixed(2) })}</p>
-        {plans.some((plan) => plan.starsUsd > plan.priceUsd + 0.01) ? (
+        {plans.some((plan) => plan.starsUsd - plan.priceUsd > STARS_ROUNDING_USD) ? (
           <p>
             {t('tg.starsDearer', {
               prices: plans.map((plan) => `$${plan.priceUsd}`).join(' / '),

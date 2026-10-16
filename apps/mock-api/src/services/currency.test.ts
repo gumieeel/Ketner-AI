@@ -6,7 +6,7 @@ import { LEGACY_PLANS, PLANS } from '../routes/billing.js';
 import { packStars, planStars } from '../telegram/bot.js';
 import { StarsRateService } from '../telegram/stars-rate.js';
 import type { PlanId } from '../types.js';
-import { packWorstCaseCostUsd, planWorstCaseCostUsd } from './margin.js';
+import { packWorstCaseCostUsd, planStarsWorstCaseCostUsd, planWorstCaseCostUsd } from './margin.js';
 import {
   FREE_TIER_SUBSIDY_USD,
   modelSpendCostUsd,
@@ -108,7 +108,7 @@ function starsAt(usdPerStar: number): StarsRateService {
 // Любой курс цены, который принимает stars-rate.ts: от $0.008 до $0.03, включая официальный.
 const STAR_RATES = [0.008, 0.013, 0.015, 0.018, STARS_OFFICIAL_USD_PER_STAR, 0.025, 0.03];
 
-test('Ни один тариф не уходит в минус ни в одном канале: 125% бюджета, комиссии и доля Free-тира', () => {
+test('Ни один тариф не уходит в минус ни в одном канале: 125% бюджета и комиссии', () => {
   const margins: string[] = [];
   const check = (what: string, net: number, cost: number) => {
     margins.push(`${what}: ${(net - cost).toFixed(2)}`);
@@ -134,17 +134,16 @@ test('Ни один тариф не уходит в минус ни в одно�
     );
   }
 
-  // Звёзды: Telegram платит фиксированные $0.013 за звезду, а курс покупки плавает. При любом
-  // курсе, который принимает stars-rate.ts, цена в звёздах не ниже точки безубыточности.
+  // Звёзды: Telegram платит фиксированные $0.013 за звезду. Тариф в звёздах продаётся за цену
+  // тарифа по официальному курсу, поэтому худший случай считается без доли Free-тира (см.
+  // services/margin.ts). При любом курсе, который принимает stars-rate.ts, — не в минусе.
   for (const usdPerStar of STAR_RATES) {
     const rates = starsAt(usdPerStar);
     for (const planId of ['plus', 'pro', 'ultra'] as const) {
       const stars = planStars(planId, rates);
-      check(
-        `${planId} звёздами (${stars} ⭐, курс ${usdPerStar})`,
-        starsNetUsd(stars),
-        planWorstCaseCostUsd(planId),
-      );
+      const worst = planStarsWorstCaseCostUsd(planId);
+      assert.ok(Math.abs(worst - planWorstCaseCostUsd(planId) + FREE_TIER_SUBSIDY_USD) < 1e-9);
+      check(`${planId} звёздами (${stars} ⭐, курс ${usdPerStar})`, starsNetUsd(stars), worst);
     }
     for (const pack of PREMIUM_PACKS) {
       const stars = packStars(pack, rates);
@@ -165,29 +164,35 @@ test('Ни один тариф не уходит в минус ни в одно�
   assert.ok(margins.length > 40, margins.join('\n'));
 });
 
-test('Цена в звёздах — по официальному курсу Telegram, но не ниже точки безубыточности', () => {
+test('Цена в звёздах — цена тарифа по официальному курсу Telegram (как картой)', () => {
   const official = new StarsRateService();
   assert.equal(official.rate.source, 'official');
   assert.equal(official.rate.usdPerStar, STARS_OFFICIAL_USD_PER_STAR);
-  // Звёзды тарифа по официальному курсу (460 / 1 260 / 2 460 ⭐) не покрывают худший расход с долей
-  // Free-тира: Telegram отдаёт $0.013 из $0.02. Поэтому действует минимум 580 / 1 440 / 2 630 ⭐.
+  // Plus $9 = 460 ⭐, Pro $25 = 1 260 ⭐, Ultra $49 = 2 460 ⭐: минимум без убытка ниже, не мешает.
+  for (const id of ['plus', 'pro', 'ultra'] as const) {
+    const stars = planStars(id, official);
+    assert.equal(stars, official.quote(PLAN_PRICE_USD[id]), id);
+    // Дороже цены тарифа только на округление до 10 звёзд (≈ $0.20).
+    assert.ok(official.toUsd(stars) - PLAN_PRICE_USD[id] < 0.2, id);
+  }
   assert.deepEqual(
-    (['plus', 'pro', 'ultra'] as const).map((id) => [
-      official.quote(PLAN_PRICE_USD[id]),
-      planStars(id, official),
-    ]),
-    [
-      [460, 580],
-      [1260, 1440],
-      [2460, 2630],
-    ],
+    (['plus', 'pro', 'ultra'] as const).map((id) => planStars(id, official)),
+    [460, 1260, 2460],
   );
-  assert.ok(starsNetUsd(580) >= planWorstCaseCostUsd('plus'));
-  assert.ok(
-    starsNetUsd(570) < planWorstCaseCostUsd('plus'),
-    '580 ⭐ — именно точка безубыточности',
+  // Худший случай без доли Free-тира — в плюсе: Plus +$1.66, Pro +$0.89, Ultra +$1.05.
+  assert.deepEqual(
+    (['plus', 'pro', 'ultra'] as const).map((id) =>
+      Number((starsNetUsd(planStars(id, official)) - planStarsWorstCaseCostUsd(id)).toFixed(2)),
+    ),
+    [1.66, 0.89, 1.05],
   );
-  // Пакеты по официальному курсу и так в плюсе: цена в звёздах равна цене в долларах.
+  // Минимум защищает от слишком дорогого курса в STARS_USD_RATE: при $0.03 Plus стоил бы 300 ⭐.
+  const expensive = starsAt(0.03);
+  assert.equal(expensive.quote(9), 300);
+  assert.equal(planStars('plus', expensive), 330);
+  assert.ok(starsNetUsd(330) >= planStarsWorstCaseCostUsd('plus'));
+  assert.ok(starsNetUsd(320) < planStarsWorstCaseCostUsd('plus'), '330 ⭐ — точка безубыточности');
+  // Пакеты: цена в звёздах равна цене в долларах по официальному курсу.
   for (const pack of PREMIUM_PACKS) {
     assert.equal(packStars(pack, official), official.quote(pack.priceUsd), pack.id);
     assert.ok(Math.abs(official.toUsd(packStars(pack, official)) - pack.priceUsd) < 0.25, pack.id);
