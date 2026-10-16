@@ -8,12 +8,15 @@ export interface TelegramSupportBotDeps {
   botToken?: string;
   botUsername?: string;
   adminUsername?: string;
+  /** Закреплённый чат администратора (SUPPORT_ADMIN_CHAT_ID): тогда username уже не даёт прав. */
+  adminChatId?: number;
 }
 
 export class TelegramSupportBotService {
   private token: string;
   private username: string;
   private adminUsername: string;
+  private pinnedAdminChatId: number | undefined;
   private store: SupportStore;
   private isPolling = false;
 
@@ -29,8 +32,9 @@ export class TelegramSupportBotService {
       .replace(/^@/, '')
       .toLowerCase();
 
-    if (config.supportAdminChatId && !this.store.getAdminChatId()) {
-      this.store.setAdminChatId(config.supportAdminChatId);
+    this.pinnedAdminChatId = deps.adminChatId ?? config.supportAdminChatId;
+    if (this.pinnedAdminChatId && !this.store.getAdminChatId()) {
+      this.store.setAdminChatId(this.pinnedAdminChatId);
     }
   }
 
@@ -235,9 +239,15 @@ export class TelegramSupportBotService {
     const text = (msg.text || msg.caption || mediaTypeLabel).trim();
 
     // Проверяем, является ли отправитель администратором
-    const isConfiguredAdmin = Boolean(fromUsername && fromUsername === this.adminUsername);
+    // Username в Telegram можно сменить, и его займёт другой человек. Если чат администратора
+    // закреплён (SUPPORT_ADMIN_CHAT_ID), права даёт только он, а username больше не учитывается.
+    const isConfiguredAdmin = this.pinnedAdminChatId
+      ? String(chatId) === String(this.pinnedAdminChatId)
+      : Boolean(fromUsername && fromUsername === this.adminUsername);
     const isSavedAdmin = Boolean(
-      this.store.getAdminChatId() && String(this.store.getAdminChatId()) === String(chatId),
+      !this.pinnedAdminChatId &&
+      this.store.getAdminChatId() &&
+      String(this.store.getAdminChatId()) === String(chatId),
     );
     const isAdmin = isConfiguredAdmin || isSavedAdmin;
 
@@ -305,7 +315,9 @@ export class TelegramSupportBotService {
           const lastMsg = t.messages[t.messages.length - 1];
           const userHandle = t.userUsername ? `@${t.userUsername}` : t.userFirstName || 'Аноним';
           const preview = lastMsg?.text ? lastMsg.text.slice(0, 80) : '—';
-          ticketsList += `🔹 <b>Тикет #${t.id}</b> от ${userHandle} (ID: <code>${t.userChatId}</code>)\n`;
+          // Имя в Telegram задаёт сам пользователь: без экранирования оно вставило бы в чат
+          // администратора свою разметку (ссылку) или сломало бы отправку всего списка.
+          ticketsList += `🔹 <b>Тикет #${t.id}</b> от ${escapeHtml(userHandle)} (ID: <code>${t.userChatId}</code>)\n`;
           ticketsList += `   <i>«${escapeHtml(preview)}»</i>\n`;
           ticketsList += `   👉 Ответить: <code>/reply ${t.id} текст</code>\n\n`;
         }

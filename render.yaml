@@ -47,6 +47,8 @@ services:
         generateValue: true
       - key: ADMIN_EMAILS
         sync: false
+      - key: SUPPORT_ADMIN_CHAT_ID
+        sync: false
       - key: VIP_EMAILS
         sync: false
       - key: SEED_ADMIN_EMAIL

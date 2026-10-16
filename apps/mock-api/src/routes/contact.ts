@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { Router, type Request, type Response } from 'express';
 import { sendError } from '../middleware/errors.js';
+import { RateLimiter, clientIp } from '../middleware/rate-limit.js';
 import { contactStore as defaultStore, type ContactMessage } from '../store/contact-store.js';
 import type { DocStore } from '../store/doc-store.js';
 
@@ -20,18 +21,10 @@ export function createContactRouter(deps: ContactRouterDeps = {}): Router {
   const router = Router();
   const store = deps.store ?? defaultStore;
   const now = deps.now ?? Date.now;
-  const hits = new Map<string, number[]>();
-
-  const limited = (key: string): boolean => {
-    const recent = (hits.get(key) ?? []).filter((time) => now() - time < WINDOW_MS);
-    if (recent.length >= MAX_PER_WINDOW) {
-      hits.set(key, recent);
-      return true;
-    }
-    recent.push(now());
-    hits.set(key, recent);
-    return false;
-  };
+  // Лимит по настоящему адресу клиента (за Cloudflare request.ip — адрес его узла, и все
+  // посетители делили бы один лимит) и по почте. RateLimiter сам вычищает старые записи.
+  const perIp = new RateLimiter(WINDOW_MS, MAX_PER_WINDOW, now);
+  const perEmail = new RateLimiter(WINDOW_MS, MAX_PER_WINDOW, now);
 
   router.post('/contact', async (request: Request, response: Response) => {
     const body = (request.body ?? {}) as Record<string, unknown>;
@@ -61,7 +54,7 @@ export function createContactRouter(deps: ContactRouterDeps = {}): Router {
         'invalid_request',
         'Сообщение слишком длинное (не более 4000 символов)',
       );
-    if (limited(`ip:${request.ip ?? 'unknown'}`) || limited(`email:${email}`)) {
+    if (perIp.hit(clientIp(request)) || perEmail.hit(email)) {
       return sendError(
         response,
         429,
