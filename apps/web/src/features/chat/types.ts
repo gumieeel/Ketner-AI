@@ -146,8 +146,10 @@ export interface ModelInfo {
   contextMessages: number;
   isPro?: boolean;
   requiredPlan?: PlanId;
-  /** Суточный лимит запросов к модели по тарифам: после него отвечает запасная модель. */
+  /** Суточная норма модели по тарифам: основа недельного пула (норма × 7). */
   dailyLimits?: Partial<Record<PlanId, number>>;
+  /** Недельный пул модели и сколько из него можно взять за сутки; после него отвечает запасная. */
+  weeklyLimits?: Partial<Record<PlanId, { pool: number; perDay: number }>>;
   /** Фиксированная глубина размышлений (модели Pro и Ultra): обычный режим и режим Max (Ultra). */
   reasoningEffort?: { standard: string; max: string };
 }

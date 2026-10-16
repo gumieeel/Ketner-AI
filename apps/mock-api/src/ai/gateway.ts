@@ -44,7 +44,7 @@ import { delay, streamText } from './stream.js';
 import { isProduction, type AiConfig } from '../config.js';
 import { EntitlementService, planAllowsModel } from '../services/entitlement.js';
 import { FairUseEngine } from '../services/fair-use.js';
-import { applyDailyLimits, isDailyLimitReached } from './daily-limit.js';
+import { applyModelLimits, isModelLimitReached } from './model-limits.js';
 import { applyPlanSubstitute } from './plan-substitute.js';
 import { AutoRouter } from './auto-router.js';
 import type { UsageStore } from '../store/usage-store.js';
@@ -599,8 +599,8 @@ export class AIGateway {
       routingReason = economy.reason ?? `Explicit user model selection (${requested.name})`;
     }
 
-    // Суточный лимит модели на тарифе: после него отвечает запасная модель (видно в routingReason).
-    // Гостевая модель бесплатна и лимитов не имеет.
+    // Лимит модели на тарифе (недельный пул и его суточная доля): после него отвечает запасная
+    // модель (видно в routingReason). Гостевая модель бесплатна и лимитов не имеет.
     if (!req.isAnonymous) {
       // Free: вместо платного Ketner Mini идёт бесплатный эндпоинт, платная модель остаётся запасной.
       const substitute = applyPlanSubstitute(targetModel, effectivePlan, 'chat', this.registry);
@@ -608,7 +608,7 @@ export class AIGateway {
         targetModel = substitute.model;
         routingReason = `${routingReason}; ${substitute.reason}`;
       }
-      const daily = applyDailyLimits(
+      const limited = applyModelLimits(
         targetModel,
         effectivePlan,
         activeUserId,
@@ -616,9 +616,9 @@ export class AIGateway {
         this.registry,
         reasoningMode,
       );
-      if (daily.reason) {
-        targetModel = daily.model;
-        routingReason = `${routingReason}; ${daily.reason}`;
+      if (limited.reason) {
+        targetModel = limited.model;
+        routingReason = `${routingReason}; ${limited.reason}`;
       }
     }
 
@@ -815,7 +815,7 @@ export class AIGateway {
               (m, index) =>
                 index === 0 ||
                 (this.isAllowedFallback(m, effectivePlan, economyState) &&
-                  !isDailyLimitReached(
+                  !isModelLimitReached(
                     m,
                     effectivePlan,
                     activeUserId,

@@ -608,12 +608,13 @@ test('семантический кэш не смешивает ответы р�
   assert.equal(cache.get('auto', 'ru', 'проанализируй проект', 'shared', 'h'), null);
 });
 
-test('суточный лимит: третий запрос к Sol на Plus уходит в GPT-6 Luna Pro, причина видна пользователю', async () => {
+test('суточная доля пула: шестой запрос к Sol на Plus за сутки уходит в GPT-6 Luna Pro, причина видна', async () => {
   const usage = newUsage();
   const calls: Call[] = [];
   const gateway = makeGateway(fakeOpenRouter(okStream('ответ', { cost: 0.02 }), calls), usage);
 
-  for (let i = 0; i < 2; i++) {
+  // Норма Sol на Plus — 2 в сутки, пул 14 в неделю, за сутки до 5 (40% пула).
+  for (let i = 0; i < 5; i++) {
     const ok = await run(
       gateway,
       request({ userId: 'u-dl', userPlan: 'plus', modelId: 'gpt-6.1-sol' }),
@@ -629,10 +630,13 @@ test('суточный лимит: третий запрос к Sol на Plus у
   assertNoError(second);
   assert.deepEqual(
     calls.map((c) => c.model),
-    ['openai/gpt-6.1-sol', 'openai/gpt-6.1-sol', 'openai/gpt-6-luna-pro'],
+    [...Array<string>(5).fill('openai/gpt-6.1-sol'), 'openai/gpt-6-luna-pro'],
   );
   assert.equal(second.done?.selectedModel?.id, 'gpt-6-luna-pro');
-  assert.match(second.done?.routingReason ?? '', /Daily limit reached for GPT-6\.1 Sol/);
+  assert.match(
+    second.done?.routingReason ?? '',
+    /Daily share of the weekly pool used up for GPT-6\.1 Sol/,
+  );
   assert.equal(
     usage.getByUser('u-dl')[0].modelId,
     'gpt-6-luna-pro',
@@ -813,7 +817,7 @@ test('экономный режим (80% бюджета): вместо моде�
   assert.equal(calls[0].model, 'xiaomi/mimo-v2.6-pro');
 });
 
-test('суточный лимит Pro: Opus → Sonnet → Ketner Pro', async () => {
+test('лимиты Pro: Opus → Sonnet → Ketner Pro, когда исчерпаны суточные доли пулов', async () => {
   const usage = newUsage();
   const calls: Call[] = [];
   const gateway = makeGateway(fakeOpenRouter(okStream('ок', { cost: 0.01 }), calls), usage);
@@ -821,32 +825,25 @@ test('суточный лимит Pro: Opus → Sonnet → Ketner Pro', async ()
     run(gateway, request({ userId: 'u-chain', userPlan: 'pro', modelId: 'claude-opus-5.5' }));
 
   const picked: string[] = [];
-  for (let i = 0; i < 10; i++) {
+  for (let i = 0; i < 25; i++) {
     const out = await ask();
     assertNoError(out);
     picked.push(out.done?.selectedModel?.id ?? '');
   }
-  // Opus 3 в сутки, затем Sonnet 6, затем Ketner Pro.
+  // Opus: норма 3 → пул 21, за сутки до 8; Sonnet: норма 6 → пул 42, за сутки до 16; затем Ketner Pro.
   assert.deepEqual(picked, [
-    'claude-opus-5.5',
-    'claude-opus-5.5',
-    'claude-opus-5.5',
-    'claude-sonnet-5.5',
-    'claude-sonnet-5.5',
-    'claude-sonnet-5.5',
-    'claude-sonnet-5.5',
-    'claude-sonnet-5.5',
-    'claude-sonnet-5.5',
+    ...Array<string>(8).fill('claude-opus-5.5'),
+    ...Array<string>(16).fill('claude-sonnet-5.5'),
     'ketner-pro',
   ]);
   const last = await ask();
   assert.match(
     last.done?.routingReason ?? '',
-    /Daily limit reached for Claude Opus 5\.5 \(3\/day on pro\)/,
+    /Daily share of the weekly pool used up for Claude Opus 5\.5 \(8\/day of 21\/week on pro\)/,
   );
 });
 
-test('режим Max считается за 2: на Ultra Opus в режиме Max — 3 раза в сутки из 7', async () => {
+test('режим Max считается за 2: на Ultra Opus в режиме Max — 9 раз за сутки из 19', async () => {
   const usage = newUsage();
   const calls: Call[] = [];
   const gateway = makeGateway(fakeOpenRouter(okStream('ок', { cost: 0.02 }), calls), usage);
@@ -861,9 +858,9 @@ test('режим Max считается за 2: на Ultra Opus в режиме 
       }),
     );
 
-  for (let i = 0; i < 3; i++)
+  for (let i = 0; i < 9; i++)
     assert.equal((await ask('max')).done?.selectedModel?.id, 'claude-opus-5.5');
-  assert.equal(usage.getModelUsesLastDay('u-maxu', ['claude-opus-5.5']), 6);
+  assert.equal(usage.getModelUsesLastDay('u-maxu', ['claude-opus-5.5']), 18);
   // Осталась 1 единица: запрос Max (2) уже не помещается, отвечает Sonnet.
   assert.equal((await ask('max')).done?.selectedModel?.id, 'claude-sonnet-5.5');
   // Обычный запрос (1 единица) ещё помещается.
@@ -875,14 +872,16 @@ test('GPT-6 Astra после лимита → GPT-6.1 Sol, Terra → Gemini 3.8 
   const usage = newUsage();
   const calls: Call[] = [];
   const gateway = makeGateway(fakeOpenRouter(okStream('ок', { cost: 0.01 }), calls), usage);
-  await run(gateway, request({ userId: 'u-ast', userPlan: 'pro', modelId: 'gpt-6-astra' }));
+  // Astra: норма 1 → пул 7, за сутки до 2; Terra: норма 2 → пул 14, за сутки до 5.
+  for (let i = 0; i < 2; i++)
+    await run(gateway, request({ userId: 'u-ast', userPlan: 'pro', modelId: 'gpt-6-astra' }));
   const second = await run(
     gateway,
     request({ userId: 'u-ast', userPlan: 'pro', modelId: 'gpt-6-astra' }),
   );
   assert.equal(second.done?.selectedModel?.id, 'gpt-6.1-sol');
 
-  for (let i = 0; i < 2; i++)
+  for (let i = 0; i < 5; i++)
     await run(gateway, request({ userId: 'u-ter', userPlan: 'pro', modelId: 'gpt-5.6-terra' }));
   const third = await run(
     gateway,

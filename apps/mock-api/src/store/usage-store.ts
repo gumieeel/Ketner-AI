@@ -329,11 +329,6 @@ export class UsageStore {
     return Number(total.toFixed(6));
   }
 
-  /**
-   * Сколько раз за последние 24 часа ответила одна из заданных моделей. Нужен суточным лимитам
-   * моделей. Считаются ответы провайдера (успешные и прерванные пользователем: токены уже потрачены),
-   * но не кэш, не отказы и не сбои. Запуск агента считается один раз, сколько бы шагов он ни сделал.
-   */
   /** Сколько картинок модели пользователь сгенерировал за последние 24 часа (успешных). */
   getImagesLastDay(userId: string, modelId: string): number {
     const userRecords = this.userIndex.get(userId) ?? [];
@@ -347,28 +342,55 @@ export class UsageStore {
     return count;
   }
 
+  /** Сколько единиц суточного лимита моделей израсходовано за последние 24 часа. */
   getModelUsesLastDay(userId: string, modelIds: Iterable<string>): number {
+    return this.getModelUsesSince(userId, modelIds, DAY_MS);
+  }
+
+  /** Сколько единиц лимита моделей израсходовано за последние `windowMs` (см. getModelUseEvents). */
+  getModelUsesSince(userId: string, modelIds: Iterable<string>, windowMs: number): number {
+    return this.getModelUseEvents(userId, modelIds, windowMs).reduce((sum, e) => sum + e.units, 0);
+  }
+
+  /**
+   * Использования моделей за последние `windowMs`, старые первыми: когда и сколько единиц лимита.
+   * Нужны лимитам моделей (суточным и недельному пулу) и подсказке «когда восстановится».
+   *
+   * Считаются ответы провайдера (успешные и прерванные пользователем: токены уже потрачены), но
+   * не кэш, не отказы и не сбои. Запуск агента считается один раз (по наибольшему весу его записей,
+   * по времени первой записи), сколько бы шагов он ни сделал.
+   */
+  getModelUseEvents(
+    userId: string,
+    modelIds: Iterable<string>,
+    windowMs: number,
+  ): Array<{ at: number; units: number }> {
     const wanted = new Set(modelIds);
-    if (wanted.size === 0) return 0;
+    if (wanted.size === 0) return [];
     const userRecords = this.userIndex.get(userId) ?? [];
-    const since = Date.now() - 24 * 60 * 60 * 1000;
-    let uses = 0;
-    // Запуск агента считается один раз (по наибольшему весу его записей).
-    const runs = new Map<string, number>();
+    const since = Date.now() - windowMs;
+    const events: Array<{ at: number; units: number }> = [];
+    const runs = new Map<string, { at: number; units: number }>();
     for (let i = userRecords.length - 1; i >= 0; i--) {
       const rec = userRecords[i];
-      if (new Date(rec.createdAt).getTime() < since) break;
+      const at = new Date(rec.createdAt).getTime();
+      if (at < since) break;
       if (!wanted.has(rec.modelId)) continue;
       const units = rec.limitUnits ?? 1;
       if (rec.kind === 'agent') {
-        if (rec.runId) runs.set(rec.runId, Math.max(runs.get(rec.runId) ?? 0, units));
+        if (!rec.runId) continue;
+        const run = runs.get(rec.runId);
+        runs.set(rec.runId, {
+          at: Math.min(run?.at ?? at, at),
+          units: Math.max(run?.units ?? 0, units),
+        });
         continue;
       }
       if (rec.source !== 'provider') continue;
-      if (rec.status === 'success' || rec.status === 'cancelled') uses += units;
+      if (rec.status === 'success' || rec.status === 'cancelled') events.push({ at, units });
     }
-    for (const units of runs.values()) uses += units;
-    return uses;
+    events.push(...runs.values());
+    return events.sort((a, b) => a.at - b.at);
   }
 
   /**

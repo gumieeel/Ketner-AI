@@ -39,7 +39,7 @@ import {
   toProviderReasoning,
 } from '../ai/reasoning-policy.js';
 import { applyPlanSubstitute } from '../ai/plan-substitute.js';
-import { applyDailyLimits, isDailyLimitReached } from '../ai/daily-limit.js';
+import { applyModelLimits, isModelLimitReached } from '../ai/model-limits.js';
 import { createStreamWatchdog, type WatchdogLimits } from '../ai/stream-watchdog.js';
 import { EntitlementService } from '../services/entitlement.js';
 import { FairUseEngine } from '../services/fair-use.js';
@@ -574,8 +574,8 @@ export class AgentRunner {
       choice.reason = choice.reason ? `${choice.reason}; ${substitute.reason}` : substitute.reason;
     }
 
-    // Суточный лимит модели на тарифе (тот же, что в чате): после него запуск идёт на запасной модели.
-    const daily = applyDailyLimits(
+    // Лимит модели на тарифе (тот же пул, что в чате): после него запуск идёт на запасной модели.
+    const limited = applyModelLimits(
       choice.model,
       plan,
       input.userId,
@@ -583,9 +583,9 @@ export class AgentRunner {
       this.registry,
       reasoningMode,
     );
-    if (daily.reason) {
-      choice.model = daily.model;
-      choice.reason = choice.reason ? `${choice.reason}; ${daily.reason}` : daily.reason;
+    if (limited.reason) {
+      choice.model = limited.model;
+      choice.reason = choice.reason ? `${choice.reason}; ${limited.reason}` : limited.reason;
     }
 
     // Запуски агента не считаются сообщениями чата (у них свой суточный лимит), поэтому счётчики
@@ -631,7 +631,7 @@ export class AgentRunner {
     };
     const canUse = (model: ModelRegistryEntry): boolean =>
       isAllowedFallback(model, plan, economyState) &&
-      !isDailyLimitReached(model, plan, input.userId, usageStore, this.registry, reasoningMode);
+      !isModelLimitReached(model, plan, input.userId, usageStore, this.registry, reasoningMode);
 
     let runBudget = allowanceFor(choice.model, true);
     if (runBudget < 0.0005) {

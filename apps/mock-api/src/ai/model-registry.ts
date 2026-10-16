@@ -16,7 +16,7 @@ import type {
   ModelReasoning,
 } from './gateway-types.js';
 import { getPlanLimits, planAllowsModel } from '../services/entitlement.js';
-import { DAILY_MODEL_LIMITS } from '../services/daily-limits.js';
+import { DAILY_MODEL_LIMITS, getModelLimit } from '../services/daily-limits.js';
 
 // ─────────────────────────────────────────────────────────────
 // Вспомогательные фабрики
@@ -784,13 +784,23 @@ export const LEGACY_MODEL_ALIASES: Readonly<Record<string, string>> = {
   'nvidia/nemotron-3-ultra-550b-a55b:free': 'nemotron-ultra',
 };
 
-/** Суточные лимиты модели по тарифам для /api/meta (пустой объект, если лимитов нет). */
-export function dailyLimitsOf(modelId: string): { dailyLimits?: Partial<Record<PlanId, number>> } {
-  const limits: Partial<Record<PlanId, number>> = {};
-  for (const [plan, byModel] of Object.entries(DAILY_MODEL_LIMITS)) {
-    if (modelId in byModel) limits[plan as PlanId] = byModel[modelId];
+/**
+ * Лимиты модели по тарифам для /api/meta (пустой объект, если лимитов нет): суточная норма,
+ * недельный пул и сколько из пула можно взять за сутки.
+ */
+export function dailyLimitsOf(modelId: string): {
+  dailyLimits?: Partial<Record<PlanId, number>>;
+  weeklyLimits?: Partial<Record<PlanId, { pool: number; perDay: number }>>;
+} {
+  const daily: Partial<Record<PlanId, number>> = {};
+  const weekly: Partial<Record<PlanId, { pool: number; perDay: number }>> = {};
+  for (const plan of Object.keys(DAILY_MODEL_LIMITS) as PlanId[]) {
+    const limit = getModelLimit(plan, modelId);
+    if (!limit) continue;
+    daily[plan] = limit.daily;
+    weekly[plan] = { pool: limit.weeklyPool, perDay: limit.dailyCap };
   }
-  return Object.keys(limits).length > 0 ? { dailyLimits: limits } : {};
+  return Object.keys(daily).length > 0 ? { dailyLimits: daily, weeklyLimits: weekly } : {};
 }
 
 // ─────────────────────────────────────────────────────────────

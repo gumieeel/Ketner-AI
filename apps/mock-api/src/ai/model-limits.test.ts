@@ -3,13 +3,14 @@ import test from 'node:test';
 import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { applyDailyLimits, isDailyLimitReached } from './daily-limit.js';
+import { applyModelLimits, isModelLimitReached, modelLimitStatus } from './model-limits.js';
 import { ModelRegistry } from './model-registry.js';
 import { UsageStore } from '../store/usage-store.js';
 import {
   DAILY_MODEL_LIMITS,
   getDailyModelLimit,
   getDailyModelLimits,
+  getModelLimit,
 } from '../services/daily-limits.js';
 
 const registry = new ModelRegistry();
@@ -41,7 +42,7 @@ function use(
   }
 }
 
-test('суточные лимиты: Plus, Pro и Ultra ограничены по моделям, Free — нет', () => {
+test('суточные нормы: Plus, Pro и Ultra ограничены по моделям, Free — нет', () => {
   assert.equal(getDailyModelLimit('plus', 'gpt-6.1-sol'), 2);
   assert.equal(getDailyModelLimit('plus', 'ketner-pro'), 20);
   assert.equal(getDailyModelLimit('plus', 'gemini-3.7-flash'), 5);
@@ -78,43 +79,110 @@ test('каждая модель с лимитом имеет запасную м
 test('пока лимит не исчерпан, модель остаётся запрошенной', () => {
   const usage = newUsage();
   const sol = registry.get('gpt-6.1-sol')!;
-  assert.equal(isDailyLimitReached(sol, 'plus', 'u1', usage, registry), false);
-  const decision = applyDailyLimits(sol, 'plus', 'u1', usage, registry);
+  assert.equal(isModelLimitReached(sol, 'plus', 'u1', usage, registry), false);
+  const decision = applyModelLimits(sol, 'plus', 'u1', usage, registry);
   assert.equal(decision.model.id, 'gpt-6.1-sol');
   assert.equal(decision.reason, null);
 });
 
-test('после лимита Sol отвечает GPT-6 Luna Pro, причина видна в routingReason', () => {
-  const usage = newUsage();
-  use(usage, 'u2', 'gpt-6.1-sol', 2);
-  const decision = applyDailyLimits(registry.get('gpt-6.1-sol')!, 'plus', 'u2', usage, registry);
-  assert.equal(decision.model.id, 'gpt-6-luna-pro');
-  assert.match(decision.reason ?? '', /Daily limit reached for GPT-6\.1 Sol \(2\/day on plus\)/);
+test('недельный пул: норма × 7, за сутки не больше 40% пула (но не меньше нормы)', () => {
+  assert.deepEqual(getModelLimit('plus', 'gpt-6.1-sol'), { daily: 2, weeklyPool: 14, dailyCap: 5 });
+  assert.deepEqual(getModelLimit('pro', 'claude-opus-5.5'), {
+    daily: 3,
+    weeklyPool: 21,
+    dailyCap: 8,
+  });
+  assert.deepEqual(getModelLimit('pro', 'gpt-6-astra'), { daily: 1, weeklyPool: 7, dailyCap: 2 });
+  assert.deepEqual(getModelLimit('ultra', 'claude-opus-5.5'), {
+    daily: 7,
+    weeklyPool: 49,
+    dailyCap: 19,
+  });
+  assert.equal(getModelLimit('plus', 'ketner-mini'), null);
+  // За 30 дней пул даёт столько же, сколько прежний суточный лимит: месячный бюджет не меняется.
+  for (const [plan, byModel] of Object.entries(DAILY_MODEL_LIMITS)) {
+    for (const id of Object.keys(byModel)) {
+      const limit = getModelLimit(plan, id)!;
+      assert.ok(Math.abs((limit.weeklyPool / 7) * 30 - limit.daily * 30) < 1e-9, `${plan}/${id}`);
+      assert.ok(limit.dailyCap >= limit.daily && limit.dailyCap <= limit.weeklyPool);
+    }
+  }
 });
 
-test('лимит считается по скользящим 24 часам: вчерашний запрос уже не в счёт', () => {
+test('квоту можно тратить неравномерно: за день больше прежней нормы, пока есть пул', () => {
   const usage = newUsage();
-  use(usage, 'u3', 'gpt-6.1-sol', 2, 25);
-  const decision = applyDailyLimits(registry.get('gpt-6.1-sol')!, 'plus', 'u3', usage, registry);
-  assert.equal(decision.model.id, 'gpt-6.1-sol');
+  // Раньше третий запрос Sol на Plus за сутки уходил на запасную модель; теперь до 5 в сутки.
+  use(usage, 'u2', 'gpt-6.1-sol', 4);
+  const sol = registry.get('gpt-6.1-sol')!;
+  assert.equal(applyModelLimits(sol, 'plus', 'u2', usage, registry).model.id, 'gpt-6.1-sol');
+  const status = modelLimitStatus(sol, 'plus', 'u2', usage, registry)!;
+  assert.equal(status.dayUsed, 4);
+  assert.equal(status.remaining, 1);
+  assert.equal(status.binding, null);
+});
+
+test('суточная доля пула исчерпана: отвечает запасная модель, причина и время восстановления видны', () => {
+  const usage = newUsage();
+  use(usage, 'u2', 'gpt-6.1-sol', 5, 3);
+  const sol = registry.get('gpt-6.1-sol')!;
+  const decision = applyModelLimits(sol, 'plus', 'u2', usage, registry);
+  assert.equal(decision.model.id, 'gpt-6-luna-pro');
+  assert.match(
+    decision.reason ?? '',
+    /Daily share of the weekly pool used up for GPT-6\.1 Sol \(5\/day of 14\/week on plus\)/,
+  );
+  const status = decision.limited!.status;
+  assert.equal(status.binding, 'day');
+  // Запросы сделаны 3 часа назад: доля вернётся через 21 час.
+  const restoresIn = Date.parse(status.dayRestoresAt!) - Date.now();
+  assert.ok(Math.abs(restoresIn - 21 * 3_600_000) < 60_000, `через ${restoresIn} мс`);
+});
+
+test('недельный пул исчерпан: запасная модель до тех пор, пока старые запросы не выпадут из 7 дней', () => {
+  const usage = newUsage();
+  use(usage, 'u3', 'gpt-6.1-sol', 5, 6 * 24 + 1); // 6 суток назад
+  use(usage, 'u3', 'gpt-6.1-sol', 5, 4 * 24);
+  use(usage, 'u3', 'gpt-6.1-sol', 4, 2 * 24);
+  const sol = registry.get('gpt-6.1-sol')!;
+  const decision = applyModelLimits(sol, 'plus', 'u3', usage, registry);
+  assert.equal(decision.model.id, 'gpt-6-luna-pro');
+  assert.match(decision.reason ?? '', /Weekly pool used up for GPT-6\.1 Sol \(14\/week on plus\)/);
+  const status = decision.limited!.status;
+  assert.equal(status.binding, 'week');
+  const restoresIn = Date.parse(status.weekRestoresAt!) - Date.now();
+  assert.ok(Math.abs(restoresIn - 23 * 3_600_000) < 60_000, 'первые запросы выпадут через ~23 ч');
+
+  // Запросы старше 7 дней в пул не входят.
+  const fresh = newUsage();
+  use(fresh, 'u3', 'gpt-6.1-sol', 14, 7 * 24 + 1);
+  assert.equal(isModelLimitReached(sol, 'plus', 'u3', fresh, registry), false);
+});
+
+test('режим Max стоит 2 единицы пула: при остатке в 1 единицу отвечает запасная модель', () => {
+  const usage = newUsage();
+  use(usage, 'u8', 'claude-opus-5.5', 18);
+  const opus = registry.get('claude-opus-5.5')!;
+  assert.equal(isModelLimitReached(opus, 'ultra', 'u8', usage, registry, 'standard'), false);
+  assert.equal(isModelLimitReached(opus, 'ultra', 'u8', usage, registry, 'max'), true);
 });
 
 test('лимит у каждого пользователя свой, а на тарифе без лимита замены нет', () => {
   const usage = newUsage();
   use(usage, 'u4', 'gpt-6.1-sol', 5);
   const sol = registry.get('gpt-6.1-sol')!;
-  assert.equal(applyDailyLimits(sol, 'plus', 'u5', usage, registry).model.id, 'gpt-6.1-sol');
-  assert.equal(applyDailyLimits(sol, 'pro', 'u4', usage, registry).model.id, 'gpt-6.1-sol');
+  assert.equal(applyModelLimits(sol, 'plus', 'u5', usage, registry).model.id, 'gpt-6.1-sol');
+  assert.equal(applyModelLimits(sol, 'pro', 'u4', usage, registry).model.id, 'gpt-6.1-sol');
 });
 
 test('Qwen 27B → Qwen3.8 Flash, Luna Pro → ketner-mini, Ketner Pro → Haiku', () => {
   const usage = newUsage();
-  use(usage, 'u6', 'qwen3.8-27b', 12);
-  use(usage, 'u6', 'gpt-5.6-luna-pro', 10);
-  use(usage, 'u6', 'ketner-pro', 20);
-  use(usage, 'u6', 'gemini-3.7-flash', 5);
+  // Суточная доля пула: 40% от нормы × 7
+  use(usage, 'u6', 'qwen3.8-27b', 33);
+  use(usage, 'u6', 'gpt-5.6-luna-pro', 28);
+  use(usage, 'u6', 'ketner-pro', 56);
+  use(usage, 'u6', 'gemini-3.7-flash', 14);
   const pick = (id: string) =>
-    applyDailyLimits(registry.get(id)!, 'plus', 'u6', usage, registry).model.id;
+    applyModelLimits(registry.get(id)!, 'plus', 'u6', usage, registry).model.id;
   assert.equal(pick('qwen3.8-27b'), 'qwen3.8-flash');
   assert.equal(pick('gpt-5.6-luna-pro'), 'ketner-mini');
   assert.equal(pick('ketner-pro'), 'claude-haiku-5.5');
