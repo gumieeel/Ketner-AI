@@ -302,11 +302,24 @@ export const config = {
   ),
 
   /**
-   * ИИ: единый ключ OpenRouter для всех моделей (GPT, Claude, Grok, Gemini, DeepSeek, MiMo).
-   * Прямые ключи OpenAI / Anthropic / Google не используются.
+   * ИИ: основной канал — один ключ OpenRouter для всех моделей (GPT, Claude, Grok, Gemini,
+   * DeepSeek, MiMo).
    */
   openRouterApiKey: optionalEnv('OPENROUTER_API_KEY'),
   openRouterBaseUrl: process.env.OPENROUTER_BASE_URL || 'https://openrouter.ai/api/v1',
+
+  /**
+   * Прямые API вендоров — дополнительный путь, по умолчанию выключен (пустой ключ). С ключом модели
+   * вендора идут напрямую (без комиссии пополнения OpenRouter 5.5%), при сбое — снова через
+   * OpenRouter (ai/providers/routed-provider.ts).
+   */
+  anthropicApiKey: optionalEnv('ANTHROPIC_API_KEY'),
+  openaiApiKey: optionalEnv('OPENAI_API_KEY'),
+  openaiBaseUrl: process.env.OPENAI_BASE_URL || 'https://api.openai.com/v1',
+  googleApiKey: optionalEnv('GOOGLE_API_KEY'),
+  /** OpenAI-совместимый эндпоинт Gemini API. */
+  googleBaseUrl:
+    process.env.GOOGLE_AI_BASE_URL || 'https://generativelanguage.googleapis.com/v1beta/openai',
 
   /**
    * Секрет для проверки подписи webhook-запросов.

@@ -181,8 +181,13 @@ export function prepareChatMessages(model: string, messages: ChatWireMessage[]):
           function: { name: call.name, arguments: call.arguments || '{}' },
         }));
       }
-      if (message.reasoningDetails && message.reasoningDetails.length > 0) {
-        wire.reasoning_details = message.reasoningDetails;
+      // Только блоки формата OpenRouter (`reasoning.*`): блоки размышлений прямого API Anthropic
+      // (если прошлый шаг шёл напрямую) ему не предназначены.
+      const details = (message.reasoningDetails ?? []).filter((item) =>
+        String((item as { type?: unknown } | null)?.type ?? '').startsWith('reasoning.'),
+      );
+      if (details.length > 0) {
+        wire.reasoning_details = details;
       }
       return wire;
     }
@@ -298,10 +303,10 @@ export function prepareAgentMessages(model: string, messages: AgentMessage[]): A
 
 export class OpenRouterProvider implements AIProvider, AgentCapableProvider {
   readonly type: AIProviderType = 'openrouter';
-  readonly name = 'OpenRouter';
+  readonly name: string = 'OpenRouter';
 
-  private apiKey: string;
-  private baseUrl: string;
+  protected apiKey: string;
+  protected baseUrl: string;
 
   constructor(config: OpenRouterProviderConfig) {
     this.apiKey = config.apiKey.trim();
@@ -312,7 +317,7 @@ export class OpenRouterProvider implements AIProvider, AgentCapableProvider {
     return this.apiKey.length > 0;
   }
 
-  private headers(): Record<string, string> {
+  protected headers(): Record<string, string> {
     return {
       Authorization: `Bearer ${this.apiKey}`,
       'Content-Type': 'application/json',

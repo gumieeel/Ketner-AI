@@ -8,6 +8,8 @@
 
 import type { PlanId, Language, ModelInfo, PlanLimits } from '../types.js';
 import type {
+  DirectProviderType,
+  DirectRoute,
   EffortProfile,
   ModelRegistryEntry,
   AIProviderType,
@@ -72,6 +74,22 @@ function makeCapabilities(overrides: Partial<ModelCapabilities> = {}): ModelCapa
   };
 }
 
+/**
+ * Прямой путь к модели через API вендора (если задан его ключ) и цены этого API, $ за 1M токенов:
+ * вход / выход / чтение из кэша. Прямые цены равны прайсу вендора (OpenRouter перепродаёт по нему же),
+ * экономия прямого пути — комиссия пополнения OpenRouter 5.5%. У Anthropic запись в кэш стоит
+ * вход × 1.25 (ai/engine-pricing.ts → directRequestCost).
+ */
+function direct(
+  provider: DirectProviderType,
+  modelId: string,
+  input: number,
+  output: number,
+  cached: number,
+): DirectRoute {
+  return { provider, modelId, pricing: makePricing(input, output, cached) };
+}
+
 function makePricing(input: number, output: number, cached: number = input * 0.5): ModelPricing {
   return {
     inputPricePerMillion: input,
@@ -107,8 +125,10 @@ const reasoning = (
 });
 
 /**
- * Набор моделей по умолчанию. Все модели идут через единый ключ OpenRouter, `providerModelId` —
- * это идентификатор модели в OpenRouter, ровно тот, что уходит в запрос (скрытых подмен нет).
+ * Набор моделей по умолчанию. Основной канал — единый ключ OpenRouter, `providerModelId` — это
+ * идентификатор модели в OpenRouter, ровно тот, что уходит в запрос (скрытых подмен нет). У моделей
+ * Anthropic, OpenAI и Google есть `direct` — та же модель через прямой API вендора и его цены: путь
+ * включается ключом вендора, при сбое запрос идёт через OpenRouter (ai/providers/routed-provider.ts).
  *
  * Цены — реальные цены OpenRouter на 12.10.2026, $ за 1M токенов (вход / выход / чтение из кэша).
  * Оценка качества — Artificial Analysis Intelligence Index из каталога OpenRouter, цена — типичный
@@ -230,6 +250,7 @@ const DEFAULT_REGISTRY_ENTRIES: ModelRegistryEntry[] = [
     contextWindow: 1050000,
     maxOutputTokens: 8192,
     pricing: makePricing(0.1, 0.5, 0.01),
+    direct: direct('openai', 'gpt-6-luna', 0.1, 0.5, 0.01),
     requiredPlan: null,
     contextMessages: 40,
     isPro: false,
@@ -258,6 +279,7 @@ const DEFAULT_REGISTRY_ENTRIES: ModelRegistryEntry[] = [
     contextWindow: 1000000,
     maxOutputTokens: 8192,
     pricing: makePricing(0.1, 0.5, 0.01),
+    direct: direct('anthropic', 'claude-haiku-5-5', 0.1, 0.5, 0.01),
     requiredPlan: 'plus',
     contextMessages: 40,
     isPro: true,
@@ -349,6 +371,7 @@ const DEFAULT_REGISTRY_ENTRIES: ModelRegistryEntry[] = [
     contextWindow: 1050000,
     maxOutputTokens: 16384,
     pricing: makePricing(0.2, 1.2, 0.02),
+    direct: direct('openai', 'gpt-5.6-luna-pro', 0.2, 1.2, 0.02),
     requiredPlan: 'plus',
     contextMessages: 60,
     isPro: true,
@@ -379,6 +402,7 @@ const DEFAULT_REGISTRY_ENTRIES: ModelRegistryEntry[] = [
     contextWindow: 1048576,
     maxOutputTokens: 16384,
     pricing: makePricing(0.75, 3.75, 0.075),
+    direct: direct('google', 'gemini-3.7-flash', 0.75, 3.75, 0.075),
     requiredPlan: 'plus',
     contextMessages: 60,
     isPro: true,
@@ -465,6 +489,7 @@ const DEFAULT_REGISTRY_ENTRIES: ModelRegistryEntry[] = [
     contextWindow: 1050000,
     maxOutputTokens: 16384,
     pricing: makePricing(0.1, 0.5, 0.01),
+    direct: direct('openai', 'gpt-6-luna-pro', 0.1, 0.5, 0.01),
     requiredPlan: 'plus',
     contextMessages: 40,
     isPro: true,
@@ -496,6 +521,7 @@ const DEFAULT_REGISTRY_ENTRIES: ModelRegistryEntry[] = [
     contextWindow: 1050000,
     maxOutputTokens: 16384,
     pricing: makePricing(2, 10, 0.1),
+    direct: direct('openai', 'gpt-6.1-sol', 2, 10, 0.1),
     requiredPlan: 'plus',
     contextMessages: 120,
     isPro: true,
@@ -529,6 +555,7 @@ const DEFAULT_REGISTRY_ENTRIES: ModelRegistryEntry[] = [
     contextWindow: 1000000,
     maxOutputTokens: 32768,
     pricing: makePricing(4, 20, 0.2),
+    direct: direct('anthropic', 'claude-opus-5-5', 4, 20, 0.2),
     requiredPlan: 'pro',
     contextMessages: 120,
     isPro: true,
@@ -561,6 +588,7 @@ const DEFAULT_REGISTRY_ENTRIES: ModelRegistryEntry[] = [
     contextWindow: 1000000,
     maxOutputTokens: 32768,
     pricing: makePricing(2, 10, 0.1),
+    direct: direct('anthropic', 'claude-sonnet-5-5', 2, 10, 0.2),
     requiredPlan: 'pro',
     contextMessages: 120,
     isPro: true,
@@ -594,6 +622,7 @@ const DEFAULT_REGISTRY_ENTRIES: ModelRegistryEntry[] = [
     contextWindow: 1050000,
     maxOutputTokens: 32768,
     pricing: makePricing(10, 50, 1),
+    direct: direct('openai', 'gpt-6-astra', 10, 50, 1),
     requiredPlan: 'pro',
     contextMessages: 120,
     isPro: true,
@@ -657,6 +686,7 @@ const DEFAULT_REGISTRY_ENTRIES: ModelRegistryEntry[] = [
     contextWindow: 1048576,
     maxOutputTokens: 32768,
     pricing: makePricing(2, 10, 0.1),
+    direct: direct('google', 'gemini-4-argon', 2, 10, 0.1),
     requiredPlan: 'pro',
     contextMessages: 120,
     isPro: true,
@@ -688,6 +718,7 @@ const DEFAULT_REGISTRY_ENTRIES: ModelRegistryEntry[] = [
     contextWindow: 1050000,
     maxOutputTokens: 32768,
     pricing: makePricing(2, 10, 0.2),
+    direct: direct('openai', 'gpt-5.6-sol', 2, 10, 0.2),
     requiredPlan: 'pro',
     contextMessages: 120,
     isPro: true,
@@ -721,6 +752,7 @@ const DEFAULT_REGISTRY_ENTRIES: ModelRegistryEntry[] = [
     contextWindow: 1050000,
     maxOutputTokens: 32768,
     pricing: makePricing(2, 12, 0.2),
+    direct: direct('openai', 'gpt-5.6-terra', 2, 12, 0.2),
     requiredPlan: 'pro',
     contextMessages: 120,
     isPro: true,
@@ -752,6 +784,7 @@ const DEFAULT_REGISTRY_ENTRIES: ModelRegistryEntry[] = [
     contextWindow: 1048576,
     maxOutputTokens: 16384,
     pricing: makePricing(0.75, 3.75, 0.075),
+    direct: direct('google', 'gemini-3.8-flash', 0.75, 3.75, 0.075),
     requiredPlan: 'pro',
     contextMessages: 120,
     isPro: true,

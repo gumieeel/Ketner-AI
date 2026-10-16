@@ -532,7 +532,10 @@ export class UsageStore {
    * Метрики по каждому провайдеру для мониторинга.
    */
   getProviderStats(): ProviderStatus[] {
-    const providers: UsageRecord['provider'][] = ['openrouter'];
+    // OpenRouter всегда в списке; прямые API вендоров — если через них уже шли запросы.
+    const providers = [
+      ...new Set<UsageRecord['provider']>(['openrouter', ...this.records.map((r) => r.provider)]),
+    ];
 
     return providers.map((provider) => {
       const recs = this.records.filter((r) => r.provider === provider);

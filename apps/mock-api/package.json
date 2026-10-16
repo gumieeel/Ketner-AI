@@ -19,6 +19,7 @@
     "db:test": "tsx src/scripts/test-db.ts"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "0.133.0",
     "@better-auth/infra": "^0.4.12",
     "better-auth": "^1.7.5",
     "cors": "^2.8.6",

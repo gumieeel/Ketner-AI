@@ -16,10 +16,23 @@ export type { PlanId, Language, MessageAttachment, WorkspaceContext };
 /**
  * Поддерживаемые AI провайдеры.
  *
- * Все модели идут через единый ключ OpenRouter (OPENROUTER_API_KEY): один счёт, один баланс,
- * одна точка учёта расходов. Прямых ключей OpenAI / Anthropic / Google в проекте нет.
+ * Основной канал — OpenRouter (OPENROUTER_API_KEY): у каждой модели в реестре `provider:
+ * 'openrouter'`. Прямые API вендоров (ANTHROPIC_API_KEY, OPENAI_API_KEY, GOOGLE_API_KEY) — по
+ * умолчанию выключенный дополнительный путь: если ключ задан, модель этого вендора идёт напрямую
+ * (`ModelRegistryEntry.direct`), а при сбое — снова через OpenRouter (ai/providers/routed-provider.ts).
+ * В учёт пишется канал, который реально ответил.
  */
-export type AIProviderType = 'openrouter';
+export type AIProviderType = 'openrouter' | DirectProviderType;
+
+/** Прямые API вендоров (дополнительный путь к их моделям в обход OpenRouter). */
+export type DirectProviderType = 'anthropic' | 'openai' | 'google';
+
+/** Прямой путь к модели: провайдер, id модели у него и его цены ($ за 1M токенов). */
+export interface DirectRoute {
+  provider: DirectProviderType;
+  modelId: string;
+  pricing: ModelPricing;
+}
 
 /** Tier модели: определяет стоимость и приоритет. */
 export type ModelTier = 'free' | 'standard' | 'premium' | 'flagship';
@@ -128,6 +141,11 @@ export interface ModelRegistryEntry {
   isPro: boolean;
   /** Fallback модель при недоступности. */
   fallbackModelId: string | null;
+  /**
+   * Прямой API вендора: используется, только если задан его ключ; при сбое — OpenRouter.
+   * Цены прямого API лежат здесь же, рядом с ценами OpenRouter (`pricing`).
+   */
+  direct?: DirectRoute;
   /** Системный промпт по умолчанию. */
   defaultSystemPrompt: Record<Language, string>;
   createdAt: string;
@@ -499,11 +517,15 @@ export interface ProviderResponse {
     outputTokens: number;
     cachedTokens?: number;
     reasoningTokens?: number;
+    /** Входные токены, записанные в кэш (Anthropic: запись дороже входа в 1.25 раза). */
+    cacheWriteTokens?: number;
   };
   /** Фактическая стоимость от провайдера в USD, если предоставлена. */
   cost?: number;
   /** Модель, которая реально ответила (провайдер мог переключиться на запасную). */
   model?: string;
+  /** Канал, который реально ответил: прямой API вендора или OpenRouter (по умолчанию). */
+  via?: AIProviderType;
   finishReason: 'stop' | 'length' | 'cancelled' | 'error';
 }
 
@@ -573,6 +595,8 @@ export interface ChatCompletionResult {
   usage: ProviderResponse['usage'];
   cost?: number;
   model?: string;
+  /** Канал, который реально ответил: прямой API вендора или OpenRouter (по умолчанию). */
+  via?: AIProviderType;
   finishReason: 'stop' | 'length' | 'tool_calls' | 'cancelled' | 'error';
 }
 

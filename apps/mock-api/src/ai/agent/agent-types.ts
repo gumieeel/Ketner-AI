@@ -7,7 +7,7 @@
  * подходят и сторонние клиенты (Cursor, Continue, Cline).
  */
 
-import type { ReasoningEffort } from '../gateway-types.js';
+import type { AIProviderType, ReasoningEffort } from '../gateway-types.js';
 
 export interface AgentToolCall {
   id: string;
@@ -60,6 +60,8 @@ export interface AgentProviderResult {
   cost?: number;
   /** Модель, которая реально ответила. */
   model?: string;
+  /** Канал, который реально ответил: прямой API вендора или OpenRouter (по умолчанию). */
+  via?: AIProviderType;
 }
 
 /** Провайдер, умеющий вызов функций. Реализует OpenRouterProvider. */

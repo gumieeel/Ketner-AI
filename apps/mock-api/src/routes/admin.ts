@@ -84,6 +84,8 @@ export function createAdminRouter({
       pricing?: ModelPricing;
       fallbackModelId?: string | null;
       providerModelId?: string;
+      /** Прямой путь: id модели у вендора и/или его цены (провайдер задан в реестре). */
+      direct?: { modelId?: string; pricing?: ModelPricing } | null;
     };
 
     if (typeof body.enabled === 'boolean') {
@@ -100,6 +102,18 @@ export function createAdminRouter({
 
     if (body.providerModelId) {
       model.providerModelId = body.providerModelId;
+    }
+
+    if (body.direct === null) {
+      delete model.direct;
+    } else if (body.direct && model.direct) {
+      model.direct = {
+        ...model.direct,
+        ...(typeof body.direct.modelId === 'string' && body.direct.modelId
+          ? { modelId: body.direct.modelId }
+          : {}),
+        ...(body.direct.pricing ? { pricing: body.direct.pricing } : {}),
+      };
     }
 
     registry.upsert(model);

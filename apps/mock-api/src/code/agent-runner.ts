@@ -1027,7 +1027,7 @@ export class AgentRunner {
               userId: input.userId,
               conversationId,
               modelId: candidate.id,
-              provider: candidate.provider,
+              provider: attemptResult.via ?? candidate.provider,
               premiumCreditUsd,
               ...(premiumStep && choice.fundedByCredits ? { fundedBy: 'credits' as const } : {}),
               inputTokens: usage.inputTokens,

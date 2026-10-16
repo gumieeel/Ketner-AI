@@ -714,7 +714,7 @@ export class AgentGateway {
       userId: req.userId,
       conversationId: ctx.conversationId,
       modelId: model.id,
-      provider: model.provider,
+      provider: result?.via ?? model.provider,
       premiumCreditUsd,
       ...(premium && ctx.fundedByCredits ? { fundedBy: 'credits' as const } : {}),
       inputTokens: result?.usage.inputTokens ?? 0,

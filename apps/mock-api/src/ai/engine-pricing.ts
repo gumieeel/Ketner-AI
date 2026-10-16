@@ -95,3 +95,32 @@ export function typicalRequestCost(
     effectivePricing(model),
   ).totalCost;
 }
+
+/** Запись в кэш у Anthropic стоит как вход × 1.25 (TTL 5 минут). */
+export const CACHE_WRITE_PRICE_MULTIPLIER = 1.25;
+
+/**
+ * Цена запроса через прямой API вендора по его ценам из реестра (`ModelRegistryEntry.direct`):
+ * прямые API, в отличие от OpenRouter, стоимость в ответе не сообщают. Учитывает чтение из кэша
+ * и запись в него (Anthropic).
+ */
+export function directRequestCost(
+  usage: {
+    inputTokens: number;
+    outputTokens: number;
+    cachedTokens?: number;
+    cacheWriteTokens?: number;
+  },
+  pricing: ModelPricing,
+): number {
+  const cached = Math.max(0, usage.cachedTokens ?? 0);
+  const written = Math.max(0, usage.cacheWriteTokens ?? 0);
+  const fresh = Math.max(0, usage.inputTokens - cached - written);
+  const usd =
+    (fresh * pricing.inputPricePerMillion +
+      written * pricing.inputPricePerMillion * CACHE_WRITE_PRICE_MULTIPLIER +
+      cached * pricing.cachedInputPricePerMillion +
+      usage.outputTokens * pricing.outputPricePerMillion) /
+    1_000_000;
+  return Number(usd.toFixed(6));
+}

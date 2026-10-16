@@ -1152,7 +1152,8 @@ export class AIGateway {
         userId: activeUserId,
         conversationId: req.conversationId,
         modelId: usedModel.id,
-        provider: usedModel.provider,
+        // Канал, который реально ответил: прямой API вендора или OpenRouter.
+        provider: streamedResponse?.via ?? usedModel.provider,
         inputTokens,
         outputTokens,
         cachedTokens: streamedResponse?.usage.cachedTokens,
