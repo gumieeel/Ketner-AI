@@ -679,6 +679,89 @@
   }
 }
 
+/*
+ * ВРЕМЕННО: тестовое окно оплаты звёздами в кабинете бота (pages/telegram-app/test-pay-dialog.tsx).
+ * Повторяет окно оплаты Telegram: цвета берутся из темы Telegram (--tg-theme-*), углы обычные,
+ * звёзды разлетаются от значка в стороны.
+ */
+.tg-pay-backdrop {
+  background: rgb(0 0 0 / 0.55);
+  animation: fadeIn 180ms ease-out both;
+}
+.tg-pay-card {
+  background: var(--tg-theme-bg-color, #17212b);
+  color: var(--tg-theme-text-color, #f5f5f5);
+  border-radius: 12px;
+  corner-shape: round;
+  box-shadow: 0 10px 40px rgb(0 0 0 / 0.45);
+  font-family:
+    -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Open Sans', 'Helvetica Neue', Arial,
+    sans-serif;
+  animation: tgPayIn 220ms cubic-bezier(0.2, 0.9, 0.3, 1.15) both;
+}
+.tg-pay-hint {
+  color: var(--tg-theme-hint-color, #708499);
+}
+.tg-pay-close {
+  border-radius: 9999px;
+  color: var(--tg-theme-hint-color, #708499);
+}
+.tg-pay-close:hover {
+  background: rgb(127 127 127 / 0.12);
+}
+.tg-pay-button {
+  background: var(--tg-theme-button-color, #2f6ea5);
+  color: var(--tg-theme-button-text-color, #ffffff);
+  border-radius: 8px;
+  corner-shape: round;
+}
+.tg-pay-button:hover:not(:disabled) {
+  filter: brightness(1.08);
+}
+.tg-pay-star {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  pointer-events: none;
+  opacity: 0;
+  animation: tgStarFly var(--dur) cubic-bezier(0.15, 0.6, 0.35, 1) var(--delay) infinite;
+}
+.tg-pay-star-static {
+  position: absolute;
+  pointer-events: none;
+  transform: translate(-50%, -50%) rotate(var(--rot));
+}
+
+@keyframes tgPayIn {
+  from {
+    opacity: 0;
+    transform: scale(0.92);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes tgStarFly {
+  0% {
+    opacity: 0;
+    transform: translate(-50%, -50%) translate(calc(var(--dx) * 0.15), calc(var(--dy) * 0.15))
+      scale(0.2) rotate(0deg);
+  }
+  18% {
+    opacity: 1;
+  }
+  70% {
+    opacity: 0.9;
+  }
+  100% {
+    opacity: 0;
+    transform: translate(-50%, -50%) translate(var(--dx), var(--dy)) scale(var(--scale))
+      rotate(var(--rot));
+  }
+}
+
 /* prefers-reduced-motion: никакого движения, только мгновенные состояния */
 @media (prefers-reduced-motion: reduce) {
   *,

@@ -380,11 +380,9 @@ describe('кабинет в Telegram (/tg)', () => {
     const dialog = await screen.findByRole('dialog', { name: 'Подтверждение покупки' });
     expect(within(dialog).getByText('Баланс')).toBeInTheDocument();
     expect(within(dialog).getByText(/1\s300/)).toBeInTheDocument();
-    expect(
-      within(dialog).getByText(
-        'Вы точно хотите приобрести «Ketner AI Plus · 30 дней» у Ketner_Kassa за 460 звёзд?',
-      ),
-    ).toBeInTheDocument();
+    expect(dialog).toHaveAccessibleDescription(
+      'Вы точно хотите приобрести «Ketner AI Plus · 30 дней» у Ketner_Kassa за 460 звёзд?',
+    );
     fireEvent.click(within(dialog).getByRole('button', { name: /Подтвердить и заплатить/ }));
 
     await waitFor(() =>
