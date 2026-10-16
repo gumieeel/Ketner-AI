@@ -108,8 +108,8 @@ export function GitHubApplyModal({
         });
         onClose();
       }
-    } catch (err: any) {
-      setError(err?.message || t('gh.errApply'));
+    } catch (err) {
+      setError((err instanceof Error && err.message) || t('gh.errApply'));
       setLoading(false);
     }
   };

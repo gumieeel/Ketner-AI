@@ -313,7 +313,10 @@ test('POST /api/chat/feedback сохраняет оценку ответа и GE
       headers: { 'x-admin-key': config.adminApiKey },
     });
     assert.equal(analyticsRes.status, 200);
-    const analytics = (await analyticsRes.json()) as any;
+    const analytics = (await analyticsRes.json()) as {
+      summary: { likes: number };
+      escalation?: { autoEscalateActive: unknown };
+    };
     assert.equal(analytics.summary.likes >= 1, true);
     assert.ok(analytics.escalation);
     assert.ok(typeof analytics.escalation.autoEscalateActive === 'boolean');

@@ -70,7 +70,26 @@ async function withServer(
   }
 }
 
-async function json<T = any>(response: Response): Promise<T> {
+/** Поля ответов API Ketner Code, которые проверяют тесты; каждый ответ содержит только часть. */
+interface CodeApiBody {
+  plan: string;
+  limits: { maxProjects: number };
+  commands: { available: boolean; reason?: string };
+  models: Array<{ id: string; locked: boolean }>;
+  project: { id: string; name: string; fileCount: number; userId?: string; source?: { type: string } };
+  projects: unknown[];
+  file: { language: string };
+  content: string;
+  files: Array<{ path: string }>;
+  removed: string[];
+  written: number;
+  skippedCount: number;
+  error: { code: string };
+  running: boolean;
+  items: unknown[];
+}
+
+async function json<T = CodeApiBody>(response: Response): Promise<T> {
   return (await response.json()) as T;
 }
 
@@ -225,7 +244,7 @@ test('импорт из GitHub: проверка адреса, лимиты и �
     const body = await json(ok);
     assert.equal(requested, 'https://api.github.com/repos/acme/widgets/zipball');
     assert.equal(body.project.name, 'widgets');
-    assert.equal(body.project.source.type, 'github');
+    assert.equal(body.project.source?.type, 'github');
     assert.equal(body.written, 2);
     assert.equal(body.skippedCount, 1);
   });
@@ -247,7 +266,7 @@ function fakeRunner(script: (input: Parameters<AgentRunner['run']>[0], emit: (e:
   } as unknown as AgentRunner;
 }
 
-async function readEvents(response: Response): Promise<Array<{ event: string; data: any }>> {
+async function readEvents(response: Response): Promise<Array<{ event: string; data: { status?: string } }>> {
   const text = await response.text();
   return text
     .split('\n\n')

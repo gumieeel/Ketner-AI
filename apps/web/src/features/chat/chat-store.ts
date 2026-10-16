@@ -390,7 +390,12 @@ export const useChat = create<ChatState>((set, get) => {
       set((state) => ({ attachedFiles: [...state.attachedFiles, ...files] })),
 
     removeAttachment: (id) =>
-      set((state) => ({ attachedFiles: state.attachedFiles.filter((f) => f.id !== id) })),
+      set((state) => {
+        // Вложение ещё не отправлено: его blob-URL больше нигде не показывается, память освобождаем.
+        const removed = state.attachedFiles.find((f) => f.id === id);
+        if (removed?.url.startsWith('blob:')) URL.revokeObjectURL(removed.url);
+        return { attachedFiles: state.attachedFiles.filter((f) => f.id !== id) };
+      }),
 
     clearAttachments: () => set({ attachedFiles: [] }),
 

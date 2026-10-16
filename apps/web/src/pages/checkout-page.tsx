@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useEffectEvent, useRef, useState, type ReactNode } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { useAuth } from '@/features/auth/auth-store';
 import { ArrowLeftIcon, CheckIcon, CryptoIcon, ShieldIcon, StarIcon } from '@/components/icons';
@@ -105,26 +105,38 @@ export function CheckoutPage() {
     return () => clearInterval(interval);
   }, [paymentMethod]);
 
+  // t меняется при смене языка — счёт из-за этого заново не выставляем, но текст ошибки берём актуальный.
+  const cryptoInvoiceError = useEffectEvent((err: unknown): string =>
+    err instanceof Error && err.message ? err.message : t('checkout.cryptoInvoiceFailed'),
+  );
+
   // Загрузка инвойса Криптовалюты
   useEffect(() => {
-    if (paymentMethod === 'crypto' && plan && plan.priceMonthly > 0) {
-      setCryptoLoading(true);
-      setCryptoError(null);
-      setCryptoInvoice(null);
-      createCryptoInvoice(plan.id, cryptoCurrency)
-        .then(({ invoice }) => {
-          setCryptoInvoice(invoice);
-          // Таймер по сроку счёта в шлюзе (у H2H-счёта он свой), иначе 30 минут.
-          const left = Math.floor((new Date(invoice.expiresAt).getTime() - Date.now()) / 1000);
-          setCryptoSecondsLeft(invoice.gatewayDetails && left > 0 ? left : 30 * 60);
-        })
-        .catch((err) => {
-          console.error('Failed to create Crypto invoice:', err);
-          setCryptoError(err instanceof Error && err.message ? err.message : t('checkout.cryptoInvoiceFailed'));
-        })
-        .finally(() => setCryptoLoading(false));
-    }
-    // t меняется при смене языка — счёт из-за этого заново не выставляем
+    if (paymentMethod !== 'crypto' || !plan || plan.priceMonthly <= 0) return;
+    // Быстрая смена монеты: ответ на устаревший запрос не должен подменить счёт новой монеты.
+    let stale = false;
+    setCryptoLoading(true);
+    setCryptoError(null);
+    setCryptoInvoice(null);
+    createCryptoInvoice(plan.id, cryptoCurrency)
+      .then(({ invoice }) => {
+        if (stale) return;
+        setCryptoInvoice(invoice);
+        // Таймер по сроку счёта в шлюзе (у H2H-счёта он свой), иначе 30 минут.
+        const left = Math.floor((new Date(invoice.expiresAt).getTime() - Date.now()) / 1000);
+        setCryptoSecondsLeft(invoice.gatewayDetails && left > 0 ? left : 30 * 60);
+      })
+      .catch((err) => {
+        if (stale) return;
+        console.error('Failed to create Crypto invoice:', err);
+        setCryptoError(cryptoInvoiceError(err));
+      })
+      .finally(() => {
+        if (!stale) setCryptoLoading(false);
+      });
+    return () => {
+      stale = true;
+    };
   }, [paymentMethod, cryptoCurrency, plan, cryptoAttempt]);
 
   // Загрузка инвойса Telegram Stars

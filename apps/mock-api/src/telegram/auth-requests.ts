@@ -101,7 +101,7 @@ export class TelegramAuthRequests {
   issueClaimCode(telegramUserId: number, username: string | undefined, now = Date.now()): { code: string; expiresAt: number } {
     this.sweep(now);
     for (const [code, claim] of this.claims) if (claim.telegramUserId === telegramUserId) this.claims.delete(code);
-    let code = '';
+    let code: string;
     do {
       code = Array.from({ length: 6 }, () => CLAIM_ALPHABET[randomInt(CLAIM_ALPHABET.length)]).join('');
     } while (this.claims.has(code));

@@ -195,6 +195,40 @@ interface PartialToolCall {
   arguments: string;
 }
 
+/** Фрагмент вызова инструмента в потоке OpenRouter: поля приходят частями. */
+interface StreamToolCallPart {
+  index?: unknown;
+  id?: unknown;
+  function?: { name?: unknown; arguments?: unknown };
+}
+
+/**
+ * Один SSE-чанк OpenRouter (формат OpenAI). Поля, которые приходят из сети, проверяются через
+ * typeof на месте; счётчики токенов по контракту API — числа.
+ */
+interface StreamChunk {
+  error?: { code?: unknown; message?: unknown };
+  model?: unknown;
+  choices?: Array<{
+    delta?: {
+      content?: unknown;
+      reasoning?: unknown;
+      reasoning_content?: unknown;
+      reasoning_details?: unknown;
+      tool_calls?: unknown;
+    };
+    finish_reason?: unknown;
+  }>;
+  usage?: {
+    cost?: unknown;
+    prompt_tokens?: number;
+    completion_tokens?: number;
+    completion_tokens_details?: { reasoning_tokens?: unknown };
+    prompt_tokens_details?: { cached_tokens?: unknown };
+    native_tokens_cached?: unknown;
+  };
+}
+
 type AgentWireMessage =
   | { role: 'system' | 'user'; content: string | CacheableContent }
   | Exclude<AgentMessage, { role: 'system' | 'user' }>;
@@ -363,7 +397,7 @@ export class OpenRouterProvider implements AIProvider, AgentCapableProvider {
         const dataStr = trimmed.slice(5).trim();
         if (!dataStr || dataStr === '[DONE]') return;
 
-        let parsed: Record<string, any>;
+        let parsed: StreamChunk;
         try {
           parsed = JSON.parse(dataStr);
         } catch {
@@ -400,7 +434,7 @@ export class OpenRouterProvider implements AIProvider, AgentCapableProvider {
 
           if (Array.isArray(delta.tool_calls)) {
             streamedAny = true;
-            for (const part of delta.tool_calls as Array<Record<string, any>>) {
+            for (const part of delta.tool_calls as StreamToolCallPart[]) {
               const index = typeof part.index === 'number' ? part.index : partialCalls.size;
               let call = partialCalls.get(index);
               if (!call) {
@@ -781,7 +815,7 @@ export class OpenRouterProvider implements AIProvider, AgentCapableProvider {
       let buffer = '';
 
       const handle = (dataStr: string): void => {
-        let parsed: any;
+        let parsed: StreamChunk;
         try {
           parsed = JSON.parse(dataStr);
         } catch {
@@ -811,8 +845,8 @@ export class OpenRouterProvider implements AIProvider, AgentCapableProvider {
             hooks.onEvent({ kind: 'content', text: delta.content });
           }
           if (Array.isArray(delta.tool_calls)) {
-            for (const part of delta.tool_calls) {
-              const index = Number.isInteger(part.index) ? part.index : 0;
+            for (const part of delta.tool_calls as StreamToolCallPart[]) {
+              const index = typeof part.index === 'number' && Number.isInteger(part.index) ? part.index : 0;
               const current = calls.get(index) ?? {
                 id: '',
                 type: 'function' as const,

@@ -208,7 +208,7 @@ export class ProjectStore {
   async list(userId: string): Promise<ProjectMeta[]> {
     const byId = new Map<string, ProjectMeta>();
     const dir = this.userDir(userId);
-    let names: string[] = [];
+    let names: string[];
     try {
       names = await readdir(dir);
     } catch {

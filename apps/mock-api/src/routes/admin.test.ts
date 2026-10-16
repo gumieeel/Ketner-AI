@@ -584,9 +584,10 @@ test('admin: метрики шлюза GET /api/admin/metrics (Фаза 4: да�
     assert.ok(typeof body.metrics.latency.averageLatencyMs === 'number');
     assert.ok(Array.isArray(body.alerts));
     assert.equal(typeof body.hasNegativeMarginAlert, 'boolean');
-    assert.ok((body as any).feedback);
-    assert.ok((body as any).escalation);
-    assert.ok(typeof (body as any).escalation.autoEscalateActive === 'boolean');
+    const extra = body as { feedback?: unknown; escalation?: { autoEscalateActive: unknown } };
+    assert.ok(extra.feedback);
+    assert.ok(extra.escalation);
+    assert.ok(typeof extra.escalation.autoEscalateActive === 'boolean');
   } finally {
     await server.close();
   }
@@ -604,7 +605,7 @@ test('admin: feedback-analytics и ручное управление auto-escala
     // 1. GET /api/admin/feedback-analytics
     const res = await fetch(`${server.baseUrl}/api/admin/feedback-analytics`, { headers });
     assert.equal(res.status, 200);
-    const analytics = (await res.json()) as any;
+    const analytics = (await res.json()) as { summary?: unknown; escalation?: unknown };
     assert.ok(analytics.summary);
     assert.ok(analytics.escalation);
 
@@ -615,7 +616,11 @@ test('admin: feedback-analytics и ручное управление auto-escala
       body: JSON.stringify({ active: true }),
     });
     assert.equal(overrideRes.status, 200);
-    const overrideData = (await overrideRes.json()) as any;
+    const overrideData = (await overrideRes.json()) as {
+      success: boolean;
+      override: boolean | null;
+      status: { autoEscalateActive: boolean };
+    };
     assert.equal(overrideData.success, true);
     assert.equal(overrideData.override, true);
     assert.equal(overrideData.status.autoEscalateActive, true);
@@ -627,7 +632,7 @@ test('admin: feedback-analytics и ручное управление auto-escala
       body: JSON.stringify({ active: null }),
     });
     assert.equal(resetRes.status, 200);
-    const resetData = (await resetRes.json()) as any;
+    const resetData = (await resetRes.json()) as { override: boolean | null };
     assert.equal(resetData.override, null);
   } finally {
     await server.close();

@@ -43,7 +43,7 @@ export function CodeTabs({ tabs, defaultTabId, className }: CodeTabsProps) {
   if (!activeTab) return null;
 
   const onKeyDown = (event: KeyboardEvent<HTMLDivElement>): void => {
-    let next = activeIndex;
+    let next: number;
     if (event.key === 'ArrowRight') next = (activeIndex + 1) % tabs.length;
     else if (event.key === 'ArrowLeft') next = (activeIndex - 1 + tabs.length) % tabs.length;
     else if (event.key === 'Home') next = 0;

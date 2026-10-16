@@ -47,7 +47,7 @@ const TOOLS: ChatToolDefinition[] = [
 
 test('streamChat собирает вызовы инструментов из кусков и сообщает стоимость', async () => {
   const provider = new OpenRouterProvider({ apiKey: 'k' });
-  const sent: Array<Record<string, any>> = [];
+  const sent: Array<Record<string, unknown>> = [];
   const text: string[] = [];
   const result = await withFetch(
     (async (_url: unknown, init?: RequestInit) => {

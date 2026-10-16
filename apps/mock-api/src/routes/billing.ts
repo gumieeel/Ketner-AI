@@ -664,7 +664,7 @@ export function createBillingRouter({
 
   router.post('/billing/crypto/confirm/:invoiceId', async (request: Request, response: Response) => {
     const invoiceId = getParamInvoiceId(request);
-    let invoice =
+    const invoice =
       activeInvoiceStore.findCryptoInvoice?.(invoiceId) ??
       activeInvoiceStore.getCryptoInvoice(invoiceId);
     if (!invoice || !isOwnInvoice(request, invoice)) {

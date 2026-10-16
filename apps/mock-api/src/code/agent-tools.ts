@@ -644,7 +644,7 @@ async function editFile(args: Record<string, unknown>, ctx: ToolContext): Promis
   }
 
   let updated: string;
-  let firstLine = lineNumberAt(original, positions[0]);
+  const firstLine = lineNumberAt(original, positions[0]);
   if (replaceAll) {
     updated = original.split(needle).join(replacement);
   } else {
@@ -661,7 +661,6 @@ async function editFile(args: Record<string, unknown>, ctx: ToolContext): Promis
   ctx.readPaths.add(filePath);
   const { additions, deletions } = countLineChanges(original, updated);
   const count = replaceAll ? positions.length : 1;
-  firstLine = newStartLine;
   return {
     ok: true,
     output:

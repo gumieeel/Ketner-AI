@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useEffectEvent, useState } from 'react';
 import {
   AlertIcon,
   CheckIcon,
@@ -72,18 +72,23 @@ export function FileProposalCard({ proposal: initialProposal, workspace }: FileP
           error: res.errors.join('; '),
         }));
       }
-    } catch (err: any) {
+    } catch (err) {
       setProposal((prev) => ({
         ...prev,
         status: 'error',
-        error: err?.message || t('proposal.applyError'),
+        error: (err instanceof Error && err.message) || t('proposal.applyError'),
       }));
     }
   };
 
+  // Автоприменение читает актуальные workspace и изменения, но запускается только сменой условий.
+  const autoApplyPending = useEffectEvent(() => {
+    void handleApply();
+  });
+
   useEffect(() => {
     if (autoApply && proposal.status === 'pending' && workspace?.type === 'local_folder') {
-      void handleApply();
+      autoApplyPending();
     }
   }, [autoApply, proposal.status, workspace?.type]);
 

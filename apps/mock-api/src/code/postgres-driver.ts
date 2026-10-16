@@ -85,7 +85,7 @@ function toMeta(row: ProjectRow): ProjectMeta {
 }
 
 /** PostgreSQL не хранит нулевой байт в text; в рабочей копии на диске файл остаётся как есть. */
-const forDb = (content: string): string => content.replace(/\u0000/g, '');
+const forDb = (content: string): string => content.replaceAll('\u0000', '');
 
 export function createPostgresProjectDriver(runner: SqlRunner): ProjectDbDriver {
   return {

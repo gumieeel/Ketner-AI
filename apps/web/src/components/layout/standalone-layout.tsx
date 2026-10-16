@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useEffectEvent, useRef, useState } from 'react';
 import { Link, NavLink, Outlet, useLocation } from 'react-router-dom';
 import { ChevronRightIcon, CloseIcon, MenuIcon } from '@/components/icons';
 import { buttonClasses } from '@/components/ui/button-classes';
@@ -39,13 +39,17 @@ export function StandaloneLayout() {
     setMobileMenuOpen(false);
   }, [location.pathname, location.hash]);
 
-  // Скроллить в начало страницы при переходе между страницами (если нет якоря #hash)
-  useEffect(() => {
+  // Скроллить в начало страницы при переходе между страницами (если нет якоря #hash).
+  // Смена одного только якоря на той же странице прокрутку наверх не вызывает.
+  const scrollToTopUnlessAnchor = useEffectEvent(() => {
     if (!location.hash) {
       window.scrollTo(0, 0);
       document.documentElement.scrollTop = 0;
       document.body.scrollTop = 0;
     }
+  });
+  useEffect(() => {
+    scrollToTopUnlessAnchor();
   }, [location.pathname]);
 
   // Закрывать по Escape

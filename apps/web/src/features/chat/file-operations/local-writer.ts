@@ -3,29 +3,49 @@ import { useWorkspace } from '../workspace-store';
 import { sanitizeChangePath } from './path-safety';
 import { applyTextEdits } from './text-patch';
 
-// Реестр хэндлов папок в памяти сессии
-const handleRegistry = new Map<string, any>();
+/** Права доступа к папке (File System Access API; в lib.dom TypeScript их пока нет). */
+type PermissionMode = { mode: 'read' | 'readwrite' };
 
-export function registerDirectoryHandle(workspaceId: string, handle: any): void {
+/** Файл внутри выбранной папки: то, что нужно для чтения и записи. */
+export interface LocalFileHandle {
+  getFile(): Promise<{ text(): Promise<string> }>;
+  createWritable(): Promise<{ write(data: string): Promise<void>; close(): Promise<void> }>;
+}
+
+/**
+ * Папка, выбранная через File System Access API. Структурный тип: ему соответствует
+ * FileSystemDirectoryHandle браузера, а в тестах — простые объекты-заглушки.
+ */
+export interface LocalDirectoryHandle {
+  getDirectoryHandle(name: string, options?: { create?: boolean }): Promise<LocalDirectoryHandle>;
+  getFileHandle(name: string, options?: { create?: boolean }): Promise<LocalFileHandle>;
+  removeEntry(name: string): Promise<void>;
+  queryPermission?(options: PermissionMode): Promise<PermissionState>;
+  requestPermission?(options: PermissionMode): Promise<PermissionState>;
+}
+
+// Реестр хэндлов папок в памяти сессии
+const handleRegistry = new Map<string, LocalDirectoryHandle>();
+
+export function registerDirectoryHandle(workspaceId: string, handle: LocalDirectoryHandle): void {
   handleRegistry.set(workspaceId, handle);
 }
 
-export function getDirectoryHandle(workspaceId: string): any | null {
-  return handleRegistry.get(workspaceId) || null;
+export function getDirectoryHandle(workspaceId: string): LocalDirectoryHandle | null {
+  return handleRegistry.get(workspaceId) ?? null;
 }
 
 /**
  * Проверяет и при необходимости запрашивает права на чтение и запись.
+ * Браузер без методов запроса прав выдаёт доступ уже при выборе папки.
  */
-async function verifyPermission(fileHandle: any, readWrite: boolean): Promise<boolean> {
-  const options = { mode: readWrite ? 'readwrite' : 'read' };
-  if ((await fileHandle.queryPermission(options)) === 'granted') {
+async function verifyPermission(handle: LocalDirectoryHandle, readWrite: boolean): Promise<boolean> {
+  if (!handle.queryPermission || !handle.requestPermission) return true;
+  const options: PermissionMode = { mode: readWrite ? 'readwrite' : 'read' };
+  if ((await handle.queryPermission(options)) === 'granted') {
     return true;
   }
-  if ((await fileHandle.requestPermission(options)) === 'granted') {
-    return true;
-  }
-  return false;
+  return (await handle.requestPermission(options)) === 'granted';
 }
 
 /** Путь внутри папки проекта; выход за её пределы (`..`) и служебные папки отклоняются. */
@@ -35,7 +55,11 @@ function safeRelativeParts(relativePath: string): string[] {
   return checked.path.split('/');
 }
 
-async function resolveDirectory(rootHandle: any, parts: string[], create: boolean): Promise<any> {
+async function resolveDirectory(
+  rootHandle: LocalDirectoryHandle,
+  parts: string[],
+  create: boolean,
+): Promise<LocalDirectoryHandle> {
   let currentDir = rootHandle;
   for (const part of parts) {
     currentDir = await currentDir.getDirectoryHandle(part, { create });
@@ -46,7 +70,7 @@ async function resolveDirectory(rootHandle: any, parts: string[], create: boolea
 /**
  * Читает текущее содержимое локального файла прямо с диска.
  */
-export async function readLocalFile(rootHandle: any, relativePath: string): Promise<string> {
+export async function readLocalFile(rootHandle: LocalDirectoryHandle, relativePath: string): Promise<string> {
   const parts = safeRelativeParts(relativePath);
   const fileName = parts.pop();
   if (!fileName) throw new Error('Некорректный путь к файлу');
@@ -60,7 +84,7 @@ export async function readLocalFile(rootHandle: any, relativePath: string): Prom
  * Записывает или перезаписывает локальный файл по относительному пути внутри папки проекта.
  */
 export async function writeLocalFile(
-  rootHandle: any,
+  rootHandle: LocalDirectoryHandle,
   relativePath: string,
   content: string,
 ): Promise<void> {
@@ -80,7 +104,7 @@ export async function writeLocalFile(
  * Удаляет локальный файл по относительному пути.
  */
 export async function deleteLocalFile(
-  rootHandle: any,
+  rootHandle: LocalDirectoryHandle,
   relativePath: string,
 ): Promise<void> {
   const parts = safeRelativeParts(relativePath);
@@ -97,9 +121,9 @@ export async function deleteLocalFile(
 export async function applyLocalChanges(
   workspace: WorkspaceContext,
   changes: FileChangeItem[],
-  customRootHandle?: any,
+  customRootHandle?: LocalDirectoryHandle,
 ): Promise<{ success: boolean; appliedCount: number; errors: string[] }> {
-  const rootHandle = customRootHandle || getDirectoryHandle(workspace.id);
+  const rootHandle = customRootHandle ?? getDirectoryHandle(workspace.id);
   if (!rootHandle) {
     throw new Error(
       'Доступ к локальной папке закрыт или истекла сессия. Пожалуйста, выберите папку проекта повторно для подтверждения записи.',
@@ -138,8 +162,9 @@ export async function applyLocalChanges(
         updatedFiles.push({ path: change.path, content: contentToWrite });
         appliedCount++;
       }
-    } catch (err: any) {
-      errors.push(`Ошибка записи ${change.path}: ${err?.message || 'неизвестная ошибка'}`);
+    } catch (err) {
+      const message = err instanceof Error && err.message ? err.message : 'неизвестная ошибка';
+      errors.push(`Ошибка записи ${change.path}: ${message}`);
     }
   }
 

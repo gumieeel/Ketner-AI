@@ -107,7 +107,7 @@ export async function readFileAsAttachment(file: File): Promise<MessageAttachmen
   const category = detectCategory(file);
   const id = createAttachmentId();
 
-  let url = '';
+  let url: string;
   let contentPreview: string | undefined = undefined;
 
   // В контекст ИИ попадает только настоящий текст. Бинарные форматы раньше читались как

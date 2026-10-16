@@ -221,7 +221,7 @@ export function createBetterAuth(options: BetterAuthInstanceOptions = {}) {
     // Только свои адреса: прокси OAuth возвращает зашифрованный профиль на домен, с которого
     // начат вход, поэтому доверять любому присланному Origin нельзя.
     trustedOrigins: (request) => {
-      let requestURLOrigin: string | null = null;
+      let requestURLOrigin: string | null;
       try {
         requestURLOrigin = request?.url ? new URL(request.url).origin : null;
       } catch {

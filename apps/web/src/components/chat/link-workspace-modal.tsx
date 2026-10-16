@@ -46,11 +46,11 @@ export function LinkWorkspaceModal({ isOpen, onClose, initialTab = 'folder' }: L
       setWorkspace(ws);
       setLoading(false);
       onClose();
-    } catch (err: any) {
-      if (err?.message === 'showDirectoryPicker_not_supported') {
+    } catch (err) {
+      if (err instanceof Error && err.message === 'showDirectoryPicker_not_supported') {
         // Fallback к input webkitdirectory
         fileInputRef.current?.click();
-      } else if (err?.name === 'AbortError') {
+      } else if (err instanceof Error && err.name === 'AbortError') {
         // Пользователь отменил диалог
         setLoading(false);
       } else {
@@ -73,8 +73,8 @@ export function LinkWorkspaceModal({ isOpen, onClose, initialTab = 'folder' }: L
       setWorkspace(ws);
       setLoading(false);
       onClose();
-    } catch (err: any) {
-      setError(err?.message || t('linkWs.errReadFolder'));
+    } catch (err) {
+      setError((err instanceof Error && err.message) || t('linkWs.errReadFolder'));
       setLoading(false);
     }
   };
@@ -88,8 +88,8 @@ export function LinkWorkspaceModal({ isOpen, onClose, initialTab = 'folder' }: L
       setWorkspace(ws);
       setLoading(false);
       onClose();
-    } catch (err: any) {
-      setError(err?.message || t('linkWs.errLoadRepo'));
+    } catch (err) {
+      setError((err instanceof Error && err.message) || t('linkWs.errLoadRepo'));
       setLoading(false);
     }
   };

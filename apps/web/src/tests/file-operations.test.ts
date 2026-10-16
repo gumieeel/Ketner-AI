@@ -7,6 +7,7 @@ import {
   commitDirectlyToGitHub,
   createGitHubPullRequest,
 } from '../features/chat/file-operations';
+import type { LocalDirectoryHandle } from '../features/chat/file-operations';
 import type { WorkspaceContext } from '../features/chat/types';
 import { useWorkspace } from '../features/chat/workspace-store';
 
@@ -171,12 +172,13 @@ const mode = "production";
         getFileHandle: vi.fn(async () => mockFileHandle),
       };
 
+      // Заглушка реализует только то, что нужно для записи одного файла.
       const mockRootHandle = {
-        queryPermission: vi.fn(async () => 'granted'),
-        requestPermission: vi.fn(async () => 'granted'),
+        queryPermission: vi.fn(async () => 'granted' as const),
+        requestPermission: vi.fn(async () => 'granted' as const),
         getDirectoryHandle: vi.fn(async () => mockSubDirHandle),
         getFileHandle: vi.fn(async () => mockFileHandle),
-      };
+      } as unknown as LocalDirectoryHandle;
 
       const result = await applyLocalChanges(
         mockWorkspace,
@@ -203,8 +205,8 @@ const mode = "production";
   describe('local-writer: безопасность записи', () => {
     function makeRoot(initial: Record<string, string>) {
       const disk: Record<string, string> = { ...initial };
-      // Явный `any`: фабрика рекурсивна (каталог возвращает вложенные каталоги), иначе TS7023.
-      const dirFor = (prefix: string): any => ({
+      // Явный тип результата: фабрика рекурсивна (каталог возвращает вложенные каталоги), иначе TS7023.
+      const dirFor = (prefix: string): LocalDirectoryHandle => ({
         getDirectoryHandle: vi.fn(async (name: string) => dirFor(prefix ? `${prefix}/${name}` : name)),
         getFileHandle: vi.fn(async (name: string, opts?: { create?: boolean }) => {
           const path = prefix ? `${prefix}/${name}` : name;
@@ -223,9 +225,9 @@ const mode = "production";
           delete disk[prefix ? `${prefix}/${name}` : name];
         }),
       });
-      const root = {
-        queryPermission: vi.fn(async () => 'granted'),
-        requestPermission: vi.fn(async () => 'granted'),
+      const root: LocalDirectoryHandle = {
+        queryPermission: vi.fn(async () => 'granted' as const),
+        requestPermission: vi.fn(async () => 'granted' as const),
         ...dirFor(''),
       };
       return { root, disk };
@@ -312,7 +314,7 @@ const mode = "production";
 
       useWorkspace.setState({ activeWorkspace: mockWorkspace });
 
-      global.fetch = vi.fn(async (url: any, opts?: any) => {
+      global.fetch = vi.fn(async (url: RequestInfo | URL, opts?: RequestInit) => {
         const u = url.toString();
         if (u.includes('/git/ref/heads/main')) {
           return Response.json({ object: { sha: 'base-commit-sha-123' } });
@@ -377,7 +379,7 @@ const mode = "production";
       useWorkspace.setState({ activeWorkspace: mockWorkspace });
 
       let committedBlob = '';
-      global.fetch = vi.fn(async (url: any, opts?: any) => {
+      global.fetch = vi.fn(async (url: RequestInfo | URL, opts?: RequestInit) => {
         const u = url.toString();
         if (u.includes('/git/ref/heads/main')) {
           return Response.json({ object: { sha: 'base-sha' } });
@@ -390,7 +392,7 @@ const mode = "production";
           return new Response('const a = 1;\nconst teammate = 42;\n');
         }
         if (u.includes('/git/blobs')) {
-          committedBlob = JSON.parse(opts.body).content;
+          committedBlob = JSON.parse(String(opts?.body)).content;
           return Response.json({ sha: 'blob' });
         }
         if (u.includes('/git/trees')) return Response.json({ sha: 'tree' });
@@ -432,7 +434,7 @@ const mode = "production";
         },
       });
       let blobCalls = 0;
-      global.fetch = vi.fn(async (url: any) => {
+      global.fetch = vi.fn(async (url: RequestInfo | URL) => {
         const u = url.toString();
         if (u.includes('/git/ref/heads/main')) return Response.json({ object: { sha: 'base-sha' } });
         if (u.includes('/git/commits/base-sha')) return Response.json({ tree: { sha: 'base-tree' } });
@@ -475,7 +477,7 @@ const mode = "production";
 
       useWorkspace.setState({ activeWorkspace: mockWorkspace });
 
-      global.fetch = vi.fn(async (url: any) => {
+      global.fetch = vi.fn(async (url: RequestInfo | URL) => {
         const u = url.toString();
         if (u.includes('/git/ref/heads/main')) {
           return Response.json({ object: { sha: 'base-commit-sha-123' } });
