@@ -1542,12 +1542,21 @@ export const en: Record<TranslationKey, string> = {
   'dev.paramStream': 'Stream the reply (SSE), ending with data: [DONE]',
   'dev.paramMaxTokens': 'Maximum reply length',
   'dev.paramTemperature': 'Temperature, 0 to 2',
+  'dev.paramTopP': 'Nucleus sampling, 0 to 1',
+  'dev.paramStop': 'Up to 4 strings where the model stops',
+  'dev.paramSeed': 'Seed for repeatable replies (if the model supports it)',
+  'dev.paramPenalties': 'Repetition penalties, −2 to 2',
+  'dev.paramResponseFormat': 'json_object or json_schema: reply strictly in JSON',
+  'dev.paramStreamOptions': '{"include_usage": true} adds a separate usage chunk before [DONE]',
+  'dev.structuredTitle': 'JSON replies',
+  'dev.structuredText':
+    '`response_format` with `json_schema` makes the model follow your schema; `json_object` returns any valid JSON. Handy for data extraction and integrations.',
   'dev.examplesTitle': 'Function calling example',
   'dev.modelsEndpointLead':
     'Returns models in OpenAI format. The available field shows whether a model is on your plan.',
   'dev.errorsTitle': 'Errors',
   'dev.errorsText':
-    'Errors use the OpenAI format: `{"error": {"message", "type", "code"}}`. 401 means a wrong or revoked key, 403 means the model or API isn’t on your plan, 429 means too many requests, retry later.',
+    'Errors use the OpenAI format: `{"error": {"message", "type", "code"}}`. 401 means a wrong or revoked key, 403 means the model or API isn’t on your plan, 429 means too many requests, retry after `Retry-After` seconds. Every response carries an `X-Request-Id` header — share it with support if something goes wrong.',
   'home.demoTitle': 'One chat, any model',
   'home.demoSummary':
     'Illustration: three requests in one chat, each answered by the chosen model: Claude Opus 5.5, GPT-6 Astra or Gemini 3.7 Flash.',

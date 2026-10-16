@@ -1,3 +1,4 @@
+import { randomBytes } from 'node:crypto';
 import express, { Router, type NextFunction, type Request, type Response } from 'express';
 import { AgentGateway, type AgentFailure, type AgentSuccess } from '../ai/agent-gateway.js';
 import type { AgentStreamEvent } from '../ai/agent/agent-types.js';
@@ -21,6 +22,8 @@ import type { UserStore } from '../store/user-store.js';
 
 /** Тело запроса не больше 8 МБ: история агента большая, но не бесконечная. */
 export const V1_BODY_LIMIT = '8mb';
+/** Заголовки, которые браузерный клиент может прочитать из ответа другого сайта. */
+export const V1_EXPOSED_HEADERS = ['X-Request-Id', 'Retry-After'];
 /** Если модель молчит дольше, поток открывается комментарием, чтобы прокси не оборвал соединение. */
 const KEEPALIVE_MS = 10_000;
 
@@ -68,6 +71,21 @@ function ketnerExtension(outcome: AgentSuccess): KetnerExtension {
   };
 }
 
+function toOpenAiModel(model: ReturnType<AgentGateway['describeModels']>[number]) {
+  return {
+    id: model.id,
+    object: 'model',
+    created: 1_760_000_000,
+    owned_by: 'ketner',
+    name: model.name,
+    context_window: model.context_window,
+    max_output_tokens: model.max_output_tokens,
+    cost_class: model.cost_class,
+    requires_plan: model.requires_plan,
+    available: model.available,
+  };
+}
+
 /**
  * OpenAI-совместимый API для программирования: `/v1/models`, `/v1/usage`, `/v1/chat/completions`.
  * Контракт: docs/agent-api.md. Авторизация только API-ключом (`Authorization: Bearer ketner_sk_…`).
@@ -75,6 +93,12 @@ function ketnerExtension(outcome: AgentSuccess): KetnerExtension {
 export function createV1Router(deps: V1RouterDeps): Router {
   const router = Router();
   const gateway = deps.gateway ?? new AgentGateway({ usageStore: deps.usageStore });
+
+  // У каждого ответа свой id: по нему поддержка находит запрос в логах.
+  router.use((_request: Request, response: Response, next: NextFunction) => {
+    response.setHeader('X-Request-Id', `req_${randomBytes(12).toString('hex')}`);
+    next();
+  });
 
   const authenticate = (request: Request, response: Response, next: NextFunction): void => {
     const match = /^Bearer\s+(\S+)$/i.exec(request.headers.authorization ?? '');
@@ -108,19 +132,25 @@ export function createV1Router(deps: V1RouterDeps): Router {
     const caller = response.locals.caller as AgentCaller;
     response.json({
       object: 'list',
-      data: gateway.describeModels(caller.plan).map((model) => ({
-        id: model.id,
-        object: 'model',
-        created: 1_760_000_000,
-        owned_by: 'ketner',
-        name: model.name,
-        context_window: model.context_window,
-        max_output_tokens: model.max_output_tokens,
-        cost_class: model.cost_class,
-        requires_plan: model.requires_plan,
-        available: model.available,
-      })),
+      data: gateway.describeModels(caller.plan).map(toOpenAiModel),
     });
+  });
+
+  router.get('/models/:id', authenticate, (request: Request, response: Response) => {
+    const caller = response.locals.caller as AgentCaller;
+    const id = String(request.params.id);
+    const model = gateway.describeModels(caller.plan).find((entry) => entry.id === id);
+    if (!model) {
+      sendOpenAiError(
+        response,
+        404,
+        'model_not_found',
+        `Модель "${id}" не найдена. Список моделей: GET /v1/models`,
+        { param: 'model' },
+      );
+      return;
+    }
+    response.json(toOpenAiModel(model));
   });
 
   router.get('/usage', authenticate, (_request: Request, response: Response) => {
@@ -238,6 +268,7 @@ export function createV1Router(deps: V1RouterDeps): Router {
             toolChoice: body.toolChoice,
             maxTokens: body.maxTokens,
             temperature: body.temperature,
+            sampling: body.sampling,
             reasoningEffort: body.reasoningEffort,
             signal: abort.signal,
           },
@@ -286,6 +317,7 @@ export function createV1Router(deps: V1RouterDeps): Router {
             })),
           });
         }
+        const ketner = ketnerExtension(outcome);
         if (outcome.finishReason === 'error') {
           writeData(
             buildErrorBody(502, 'upstream_error', 'Ответ модели оборвался. Повторите запрос.'),
@@ -298,18 +330,18 @@ export function createV1Router(deps: V1RouterDeps): Router {
               model: streamedModel,
               delta: {},
               finishReason: toOpenAiFinishReason(outcome.finishReason),
+              usage: outcome.usage,
+              ketner,
             }),
           );
         }
-        writeData(
-          buildUsageChunk({
-            id,
-            created,
-            model: streamedModel,
-            usage: outcome.usage,
-            ketner: ketnerExtension(outcome),
-          }),
-        );
+        // Кусок с пустым choices только по запросу, как у OpenAI: простые клиенты читают
+        // choices[0] у каждого куска и падали бы на нём.
+        if (body.includeUsage) {
+          writeData(
+            buildUsageChunk({ id, created, model: streamedModel, usage: outcome.usage, ketner }),
+          );
+        }
         writeData('[DONE]');
         response.end();
       } finally {

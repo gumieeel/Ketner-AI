@@ -9,6 +9,8 @@ import { randomBytes } from 'node:crypto';
 import type {
   AgentMessage,
   AgentProviderResult,
+  AgentResponseFormat,
+  AgentSamplingOptions,
   AgentToolCall,
   AgentToolChoice,
   AgentToolDefinition,
@@ -18,6 +20,8 @@ export const MAX_AGENT_MESSAGES = 4000;
 export const MAX_AGENT_TOOLS = 64;
 const MAX_MAX_TOKENS = 1_000_000;
 const TOOL_NAME = /^[a-zA-Z0-9_-]{1,64}$/;
+const MAX_STOP_SEQUENCES = 4;
+const MAX_STOP_LENGTH = 256;
 
 export type RequestedReasoningEffort = 'none' | 'minimal' | 'low' | 'medium' | 'high';
 const EFFORTS: readonly RequestedReasoningEffort[] = ['none', 'minimal', 'low', 'medium', 'high'];
@@ -30,6 +34,9 @@ export interface ParsedChatRequest {
   stream: boolean;
   maxTokens?: number;
   temperature?: number;
+  sampling: AgentSamplingOptions;
+  /** `stream_options.include_usage`: отдельный кусок с `choices: []` и расходом перед `[DONE]`. */
+  includeUsage: boolean;
   reasoningEffort: RequestedReasoningEffort;
 }
 
@@ -223,6 +230,77 @@ function readTools(
   return { ok: true, tools };
 }
 
+function readNumber(
+  body: Record<string, unknown>,
+  field: string,
+  min: number,
+  max: number,
+): { ok: true; value?: number } | { ok: false; message: string; param: string } {
+  const raw = body[field];
+  if (raw === undefined || raw === null) return { ok: true };
+  if (typeof raw !== 'number' || !(raw >= min && raw <= max)) {
+    return { ok: false, message: `${field}: число от ${min} до ${max}`, param: field };
+  }
+  return { ok: true, value: raw };
+}
+
+function readResponseFormat(
+  raw: unknown,
+): { ok: true; value?: AgentResponseFormat } | { ok: false; message: string } {
+  if (raw === undefined || raw === null) return { ok: true };
+  if (!isRecord(raw)) return { ok: false, message: 'response_format должен быть объектом' };
+  if (raw.type === 'text') return { ok: true, value: { type: 'text' } };
+  if (raw.type === 'json_object') return { ok: true, value: { type: 'json_object' } };
+  if (raw.type === 'json_schema') {
+    const spec = raw.json_schema;
+    if (!isRecord(spec) || typeof spec.name !== 'string' || !TOOL_NAME.test(spec.name)) {
+      return {
+        ok: false,
+        message:
+          'response_format.json_schema.name обязателен: латиница, цифры, _ и -, до 64 символов',
+      };
+    }
+    if (spec.schema !== undefined && !isRecord(spec.schema)) {
+      return { ok: false, message: 'response_format.json_schema.schema должен быть объектом' };
+    }
+    if (spec.strict !== undefined && spec.strict !== null && typeof spec.strict !== 'boolean') {
+      return {
+        ok: false,
+        message: 'response_format.json_schema.strict должен быть true или false',
+      };
+    }
+    return {
+      ok: true,
+      value: {
+        type: 'json_schema',
+        json_schema: {
+          name: spec.name,
+          ...(typeof spec.description === 'string' ? { description: spec.description } : {}),
+          ...(isRecord(spec.schema) ? { schema: spec.schema } : {}),
+          ...(typeof spec.strict === 'boolean' ? { strict: spec.strict } : {}),
+        },
+      },
+    };
+  }
+  return { ok: false, message: 'response_format.type: text, json_object или json_schema' };
+}
+
+function readStop(raw: unknown): { ok: true; value?: string[] } | { ok: false; message: string } {
+  if (raw === undefined || raw === null) return { ok: true };
+  const list = typeof raw === 'string' ? [raw] : raw;
+  if (
+    !Array.isArray(list) ||
+    list.length > MAX_STOP_SEQUENCES ||
+    !list.every((item) => typeof item === 'string' && item !== '' && item.length <= MAX_STOP_LENGTH)
+  ) {
+    return {
+      ok: false,
+      message: `stop: строка или массив до ${MAX_STOP_SEQUENCES} непустых строк до ${MAX_STOP_LENGTH} символов`,
+    };
+  }
+  return { ok: true, value: list.length > 0 ? (list as string[]) : undefined };
+}
+
 export function parseChatRequest(body: unknown): ParseResult {
   if (!isRecord(body)) return fail('Тело запроса должно быть объектом JSON');
 
@@ -283,12 +361,43 @@ export function parseChatRequest(body: unknown): ParseResult {
     maxTokens = rawMax;
   }
 
-  let temperature: number | undefined;
-  if (body.temperature !== undefined && body.temperature !== null) {
-    if (typeof body.temperature !== 'number' || !(body.temperature >= 0 && body.temperature <= 2)) {
-      return fail('temperature: число от 0 до 2', 'temperature');
+  const temperature = readNumber(body, 'temperature', 0, 2);
+  if (!temperature.ok) return fail(temperature.message, temperature.param);
+  const topP = readNumber(body, 'top_p', 0, 1);
+  if (!topP.ok) return fail(topP.message, topP.param);
+  const frequencyPenalty = readNumber(body, 'frequency_penalty', -2, 2);
+  if (!frequencyPenalty.ok) return fail(frequencyPenalty.message, frequencyPenalty.param);
+  const presencePenalty = readNumber(body, 'presence_penalty', -2, 2);
+  if (!presencePenalty.ok) return fail(presencePenalty.message, presencePenalty.param);
+
+  let seed: number | undefined;
+  if (body.seed !== undefined && body.seed !== null) {
+    if (typeof body.seed !== 'number' || !Number.isSafeInteger(body.seed)) {
+      return fail('seed должен быть целым числом', 'seed');
     }
-    temperature = body.temperature;
+    seed = body.seed;
+  }
+
+  const stop = readStop(body.stop);
+  if (!stop.ok) return fail(stop.message, 'stop');
+
+  const responseFormat = readResponseFormat(body.response_format);
+  if (!responseFormat.ok) return fail(responseFormat.message, 'response_format');
+
+  let includeUsage = false;
+  if (body.stream_options !== undefined && body.stream_options !== null) {
+    if (!isRecord(body.stream_options)) {
+      return fail('stream_options должен быть объектом', 'stream_options');
+    }
+    const include = body.stream_options.include_usage;
+    if (include !== undefined && include !== null && typeof include !== 'boolean') {
+      return fail('stream_options.include_usage должен быть true или false', 'stream_options');
+    }
+    includeUsage = include === true;
+  }
+
+  if (body.user !== undefined && body.user !== null && typeof body.user !== 'string') {
+    return fail('user должен быть строкой', 'user');
   }
 
   let reasoningEffort: RequestedReasoningEffort = 'low';
@@ -308,7 +417,18 @@ export function parseChatRequest(body: unknown): ParseResult {
       toolChoice,
       stream: body.stream === true,
       maxTokens,
-      temperature,
+      temperature: temperature.value,
+      sampling: {
+        ...(topP.value !== undefined ? { topP: topP.value } : {}),
+        ...(stop.value !== undefined ? { stop: stop.value } : {}),
+        ...(seed !== undefined ? { seed } : {}),
+        ...(frequencyPenalty.value !== undefined
+          ? { frequencyPenalty: frequencyPenalty.value }
+          : {}),
+        ...(presencePenalty.value !== undefined ? { presencePenalty: presencePenalty.value } : {}),
+        ...(responseFormat.value !== undefined ? { responseFormat: responseFormat.value } : {}),
+      },
+      includeUsage,
       reasoningEffort,
     },
   };
@@ -406,6 +526,9 @@ export function buildChunk(input: {
   model: string;
   delta: ChunkDelta;
   finishReason?: OpenAiFinishReason | null;
+  /** Расход в куске с finish_reason: клиенты без include_usage тоже узнают его. */
+  usage?: AgentProviderResult['usage'];
+  ketner?: KetnerExtension;
 }): Record<string, unknown> {
   return {
     id: input.id,
@@ -413,6 +536,8 @@ export function buildChunk(input: {
     created: input.created,
     model: input.model,
     choices: [{ index: 0, delta: input.delta, finish_reason: input.finishReason ?? null }],
+    ...(input.usage ? { usage: toOpenAiUsage(input.usage) } : {}),
+    ...(input.ketner ? { ketner: input.ketner } : {}),
   };
 }
 

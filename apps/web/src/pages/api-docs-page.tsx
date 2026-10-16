@@ -18,6 +18,7 @@ import {
   getContinueConfigSnippet,
   getModelsSnippet,
   getQuickstartSnippets,
+  getStructuredSnippet,
   getToolsSnippet,
 } from './api-docs/snippets';
 
@@ -59,6 +60,17 @@ export function ApiDocsPage() {
     { name: 'stream', type: 'boolean', default: 'false', description: t('dev.paramStream') },
     { name: 'max_tokens', type: 'integer', description: t('dev.paramMaxTokens') },
     { name: 'temperature', type: 'number', description: t('dev.paramTemperature') },
+    { name: 'top_p', type: 'number', description: t('dev.paramTopP') },
+    { name: 'stop', type: 'string | array', description: t('dev.paramStop') },
+    { name: 'seed', type: 'integer', description: t('dev.paramSeed') },
+    {
+      name: 'frequency_penalty, presence_penalty',
+      type: 'number',
+      default: '0',
+      description: t('dev.paramPenalties'),
+    },
+    { name: 'response_format', type: 'object', description: t('dev.paramResponseFormat') },
+    { name: 'stream_options', type: 'object', description: t('dev.paramStreamOptions') },
   ];
 
   return (
@@ -174,6 +186,13 @@ export function ApiDocsPage() {
           <div>
             <h3 className="mb-2 text-[15px] font-medium text-text">{t('dev.examplesTitle')}</h3>
             <CodeTabs className="my-0" tabs={getToolsSnippet(baseUrl, key)} />
+          </div>
+          <div>
+            <h3 className="mb-2 text-[15px] font-medium text-text">{t('dev.structuredTitle')}</h3>
+            <p className="mb-3 max-w-[70ch] text-[14px] leading-relaxed text-muted">
+              <RichText text={t('dev.structuredText')} />
+            </p>
+            <CodeTabs className="my-0" tabs={getStructuredSnippet(baseUrl, key)} />
           </div>
           <Callout tone="info" title={t('dev.errorsTitle')} className="my-0">
             <RichText text={t('dev.errorsText')} />
