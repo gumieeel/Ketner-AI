@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button';
 import { useAuth } from '@/features/auth/auth-store';
 import { TelegramAuthDialog } from './telegram-auth-dialog';
 
-/** «Войти через Telegram»: нового человека бот зарегистрирует сам, знакомого — впустит в его аккаунт. */
+/** «Войти через Telegram»: вход в аккаунт, к которому привязан Telegram (аккаунты через Telegram не создаются). */
 export function TelegramLoginButton({
   label,
   redirectUrl,

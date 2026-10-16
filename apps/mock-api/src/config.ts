@@ -319,6 +319,19 @@ export const config = {
   adminApiKey: secretEnv('ADMIN_API_KEY', 'dev-only-admin-key-not-for-production'),
 
   /**
+   * Почта (SMTP): коды привязки Telegram. Подходит любой SMTP-сервис. SMTP_SECURE=true — TLS сразу
+   * (порт 465), иначе STARTTLS (587). MAIL_FROM — адрес отправителя, например `Ketner AI <no-reply@ketner.org>`.
+   */
+  smtp: {
+    host: optionalEnv('SMTP_HOST'),
+    port: readNumber('SMTP_PORT', 587),
+    secure: optionalEnv('SMTP_SECURE') === 'true' || readNumber('SMTP_PORT', 587) === 465,
+    user: optionalEnv('SMTP_USER'),
+    pass: optionalEnv('SMTP_PASS'),
+    from: optionalEnv('MAIL_FROM'),
+  },
+
+  /**
    * Stripe Billing Credentials & Price IDs
    */
   stripeSecretKey: process.env.STRIPE_SECRET_KEY || '',

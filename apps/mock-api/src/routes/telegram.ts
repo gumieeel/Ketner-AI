@@ -11,6 +11,7 @@ import {
   type TelegramUpdate,
 } from '../telegram/bot.js';
 import { createMiniAppRouter } from './telegram-miniapp.js';
+import type { Mailer } from '../services/mailer.js';
 import { createTelegramAuthRouter } from './telegram-auth.js';
 import {
   TelegramSupportBotService,
@@ -59,6 +60,8 @@ function requireAdminUser(request: Request, response: Response, next: NextFuncti
 
 export interface TelegramRouterDeps extends TelegramBotDeps {
   botService?: TelegramBotService;
+  /** Письма с кодом привязки Telegram; в тестах — перехватчик. */
+  mailer?: Mailer;
   supportBotService?: TelegramSupportBotService;
   supportStore?: SupportStore;
 }
@@ -159,6 +162,7 @@ export function createTelegramRouter(deps: TelegramRouterDeps): Router {
       userStore: deps.userStore,
       subscriptionStore: deps.subscriptionStore,
       invoiceStore: deps.invoiceStore,
+      mailer: deps.mailer,
     }),
   );
 

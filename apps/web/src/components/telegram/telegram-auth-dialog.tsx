@@ -19,6 +19,7 @@ type Phase =
   | { kind: 'waiting'; request: TelegramAuthStart }
   | { kind: 'declined' }
   | { kind: 'expired' }
+  | { kind: 'unlinked' }
   | { kind: 'done' }
   | { kind: 'error'; message: string };
 
@@ -88,7 +89,11 @@ export function TelegramAuthDialog({
             setPhase({ kind: 'done' });
             if (result.mode === 'login') await handlers.current.onLogin?.(result);
             else handlers.current.onLinked?.(result.user);
-          } else if (result.status === 'declined' || result.status === 'expired') {
+          } else if (
+            result.status === 'declined' ||
+            result.status === 'expired' ||
+            result.status === 'unlinked'
+          ) {
             stopped = true;
             setPhase({ kind: result.status });
           }
@@ -171,7 +176,10 @@ export function TelegramAuthDialog({
           </p>
         ) : null}
 
-        {phase.kind === 'declined' || phase.kind === 'expired' || phase.kind === 'error' ? (
+        {phase.kind === 'declined' ||
+        phase.kind === 'expired' ||
+        phase.kind === 'unlinked' ||
+        phase.kind === 'error' ? (
           <>
             <p
               role="alert"
@@ -182,7 +190,9 @@ export function TelegramAuthDialog({
                 ? t('tgAuth.declined')
                 : phase.kind === 'expired'
                   ? t('tgAuth.expired')
-                  : phase.message}
+                  : phase.kind === 'unlinked'
+                    ? t('tgAuth.unlinked')
+                    : phase.message}
             </p>
             <Button fullWidth onClick={() => void start()}>
               {t('tgAuth.retry')}

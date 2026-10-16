@@ -11,6 +11,9 @@ import type { UserStore } from '../store/user-store.js';
 import { STARS_PLANS, planTitle, type TelegramBotService } from '../telegram/bot.js';
 import { isTelegramAccountEmail } from '../telegram/auth-requests.js';
 import { validateInitData, type TelegramWebAppUser } from '../telegram/webapp-auth.js';
+import { EmailLinkCodes, EMAIL_CODE_TTL_MS } from '../telegram/email-link-codes.js';
+import { RateLimiter, clientIp } from '../middleware/rate-limit.js';
+import { mailer as defaultMailer, type Mailer } from '../services/mailer.js';
 import type { PlanId, User } from '../types.js';
 
 export interface MiniAppRouterDeps {
@@ -18,6 +21,63 @@ export interface MiniAppRouterDeps {
   userStore: UserStore;
   subscriptionStore: SubscriptionStore;
   invoiceStore: InvoiceStore;
+  /** Письма с кодом привязки; в тестах — перехватчик. */
+  mailer?: Mailer;
+  emailCodes?: EmailLinkCodes;
+}
+
+const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
+
+/** Экранирование для HTML-версии письма. */
+function escapeMailHtml(text: string): string {
+  return text
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
+/** Кто в Telegram запросил код: показывается в письме, чтобы владелец почты узнал чужой запрос. */
+function telegramLabel(user: TelegramWebAppUser): string {
+  const name = [user.first_name, user.last_name].filter(Boolean).join(' ').trim();
+  return user.username ? `@${user.username}${name ? ` (${name})` : ''}` : name || `id ${user.id}`;
+}
+
+function linkCodeMail(to: string, code: string, requester: string) {
+  const minutes = Math.round(EMAIL_CODE_TTL_MS / 60_000);
+  const text = [
+    `Код для привязки Telegram к аккаунту Ketner AI: ${code}`,
+    '',
+    `Код запросили в боте Ketner AI из Telegram ${requester}. Введите его там же — Telegram`,
+    `подключится к вашему аккаунту. Код действует ${minutes} минут.`,
+    '',
+    'Никому не сообщайте этот код: с ним чужой Telegram получит доступ к вашей подписке.',
+    'Сотрудники Ketner никогда его не спрашивают.',
+    '',
+    'Если вы ничего не запрашивали, просто проигнорируйте письмо — без кода ничего не изменится.',
+  ].join('\n');
+  const html = `<div style="font-family:Arial,sans-serif;font-size:15px;line-height:1.5;color:#1b1f1d">
+<p>Код для привязки Telegram к аккаунту Ketner AI:</p>
+<p style="font-size:30px;font-weight:bold;letter-spacing:6px;margin:16px 0">${code}</p>
+<p>Код запросили в боте Ketner AI из Telegram <b>${escapeMailHtml(requester)}</b>. Введите его там же — Telegram подключится к вашему аккаунту. Код действует ${minutes} минут.</p>
+<p><b>Никому не сообщайте этот код</b>: с ним чужой Telegram получит доступ к вашей подписке. Сотрудники Ketner никогда его не спрашивают.</p>
+<p style="color:#5d6762">Если вы ничего не запрашивали, просто проигнорируйте письмо — без кода ничего не изменится.</p>
+</div>`;
+  return { to, subject: `${code} — код привязки Telegram к Ketner AI`, text, html };
+}
+
+function linkedNoticeMail(to: string, requester: string) {
+  const text = [
+    `К вашему аккаунту Ketner AI привязан Telegram ${requester}.`,
+    '',
+    'Если это сделали не вы, откройте ketner.org → Настройки → Telegram и нажмите «Отвязать»,',
+    'а затем смените пароль.',
+  ].join('\n');
+  const html = `<div style="font-family:Arial,sans-serif;font-size:15px;line-height:1.5;color:#1b1f1d">
+<p>К вашему аккаунту Ketner AI привязан Telegram <b>${escapeMailHtml(requester)}</b>.</p>
+<p style="color:#5d6762">Если это сделали не вы, откройте ketner.org → Настройки → Telegram и нажмите «Отвязать», а затем смените пароль.</p>
+</div>`;
+  return { to, subject: 'К аккаунту Ketner AI привязан Telegram', text, html };
 }
 
 /** Попытки входа по паролю из мини-приложения: не больше 5 за 10 минут на один Telegram. */
@@ -33,8 +93,14 @@ export function createMiniAppRouter({
   userStore,
   subscriptionStore,
   invoiceStore,
+  mailer = defaultMailer,
+  emailCodes = new EmailLinkCodes(),
 }: MiniAppRouterDeps): Router {
   const router = Router();
+  // Письма с кодом: не чаще 5 в час на одну почту и 20 в час с одного адреса — почтовый ящик
+  // нельзя завалить кодами, а сам код не подобрать (5 попыток на код).
+  const codeMailsPerEmail = new RateLimiter(60 * 60 * 1000, 5);
+  const codeMailsPerIp = new RateLimiter(60 * 60 * 1000, 20);
   const billing = botService.billing;
   const loginAttempts = new Map<number, number[]>();
 
@@ -159,12 +225,117 @@ export function createMiniAppRouter({
     response.json(session(user));
   });
 
-  /** «Продолжить с Telegram»: аккаунт создаётся в одно касание. */
-  router.post('/telegram/miniapp/register', (request: Request, response: Response) => {
+  /**
+   * Привязка по коду из письма, шаг 1: человек вводит почту своего аккаунта, на неё уходит код.
+   * Аккаунты в Telegram больше не создаются: регистрация — только на сайте.
+   * Ответ одинаковый, есть аккаунт с такой почтой или нет, — так нельзя перебирать чужие адреса.
+   */
+  router.post('/telegram/miniapp/email-code', async (request: Request, response: Response) => {
     const tgUser = telegramUserOf(request, response);
     if (!tgUser) return;
-    const user = botService.createTelegramAccount(tgUser);
-    response.json(session(user));
+    const raw = (request.body as { email?: unknown } | undefined)?.email;
+    const email = typeof raw === 'string' ? raw.trim().toLowerCase().slice(0, 320) : '';
+    if (!EMAIL_PATTERN.test(email)) {
+      sendError(
+        response,
+        400,
+        'invalid_email',
+        'Введите почту, с которой вы входите на ketner.org',
+      );
+      return;
+    }
+    if (mailer.kind === 'none') {
+      sendError(
+        response,
+        503,
+        'mail_unavailable',
+        'Отправка писем пока не настроена. Привяжите аккаунт по паролю или кодом на сайте.',
+      );
+      return;
+    }
+    const waitMs = emailCodes.resendIn(tgUser.id);
+    if (waitMs > 0) {
+      response.setHeader('Retry-After', String(Math.ceil(waitMs / 1000)));
+      sendError(
+        response,
+        429,
+        'too_many_requests',
+        `Новый код можно запросить через ${Math.ceil(waitMs / 1000)} с.`,
+      );
+      return;
+    }
+    if (codeMailsPerIp.hit(clientIp(request)) || codeMailsPerEmail.hit(email)) {
+      sendError(
+        response,
+        429,
+        'too_many_requests',
+        'Слишком много писем с кодом. Попробуйте через час.',
+      );
+      return;
+    }
+
+    const user = userStore.findByEmail(email);
+    if (user && !isTelegramAccountEmail(user.email)) {
+      const { code } = emailCodes.issue(tgUser.id, user.id);
+      try {
+        await mailer.send(linkCodeMail(user.email, code, telegramLabel(tgUser)));
+      } catch (error) {
+        console.error('[miniapp] Письмо с кодом не отправлено:', error);
+        sendError(
+          response,
+          502,
+          'mail_failed',
+          'Не получилось отправить письмо. Попробуйте ещё раз через минуту.',
+        );
+        return;
+      }
+    }
+    response.json({
+      sent: true,
+      expiresAt: Date.now() + EMAIL_CODE_TTL_MS,
+      resendAfterSec: Math.round(emailCodes.resendIn(tgUser.id) / 1000) || 60,
+    });
+  });
+
+  /** Привязка по коду из письма, шаг 2: верный код привязывает этот Telegram к аккаунту. */
+  router.post('/telegram/miniapp/email-verify', async (request: Request, response: Response) => {
+    const tgUser = telegramUserOf(request, response);
+    if (!tgUser) return;
+    const raw = (request.body as { code?: unknown } | undefined)?.code;
+    const result = emailCodes.check(tgUser.id, typeof raw === 'string' ? raw : '');
+    if (!result.ok) {
+      const messages = {
+        missing: 'Сначала запросите код: введите почту аккаунта.',
+        expired: 'Код устарел. Запросите новый.',
+        invalid: 'Код не подошёл. Проверьте цифры из письма.',
+        attempts: 'Слишком много неверных попыток. Запросите новый код.',
+      } as const;
+      sendError(response, 400, `code_${result.reason}`, messages[result.reason]);
+      return;
+    }
+    const user = userStore.findById(result.userId);
+    if (!user) {
+      sendError(response, 404, 'user_not_found', 'Аккаунт не найден');
+      return;
+    }
+    const previous = userStore.findByTelegramChatId(tgUser.id);
+    if (previous && previous.id !== user.id && isTelegramAccountEmail(previous.email)) {
+      sendError(
+        response,
+        409,
+        'telegram_in_use',
+        'Этот Telegram уже открывает отдельный аккаунт, созданный в Telegram. Его подписка осталась там.',
+      );
+      return;
+    }
+    const linked = botService.linkTelegram(user.id, tgUser.id, tgUser.username) ?? user;
+    // Владелец почты узнаёт о привязке: если код выманили, он сразу отвяжет чужой Telegram.
+    void mailer
+      .send(linkedNoticeMail(user.email, telegramLabel(tgUser)))
+      .catch((error: unknown) =>
+        console.error('[miniapp] Уведомление о привязке не отправлено:', error),
+      );
+    response.json(session(linked));
   });
 
   /** Вход по почте и паролю: существующий аккаунт привязывается к этому Telegram. */

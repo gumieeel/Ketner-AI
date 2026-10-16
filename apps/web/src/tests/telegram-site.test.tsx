@@ -134,7 +134,40 @@ describe('вход и привязка Telegram на сайте', () => {
     renderRoute('/login');
     fireEvent.click(await screen.findByRole('button', { name: 'Войти через Telegram' }));
     const dialog = await screen.findByRole('dialog', { name: 'Вход через Telegram' });
-    expect(within(dialog).getByText(/бот создаст его/)).toBeInTheDocument();
+    expect(
+      within(dialog).getByText(/в аккаунт, к которому привязан ваш Telegram/),
+    ).toBeInTheDocument();
+  });
+
+  it('регистрации через Telegram нет: на странице регистрации кнопки нет', async () => {
+    withTelegram(() => undefined);
+    renderRoute('/signup');
+    expect(await screen.findByRole('heading', { level: 1 })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Telegram/ })).not.toBeInTheDocument();
+  });
+
+  it('непривязанный Telegram: окно объясняет, как привязать', async () => {
+    vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval'] });
+    withTelegram((url) => {
+      if (url === '/api/auth/telegram/start') {
+        return Response.json({
+          requestId: 'req-u',
+          mode: 'login',
+          botUrl: 'https://t.me/Robo_kassa_bot?start=auth_u',
+          expiresAt: new Date(Date.now() + 300_000).toISOString(),
+        });
+      }
+      if (url.startsWith('/api/auth/telegram/poll/')) return Response.json({ status: 'unlinked' });
+      return undefined;
+    });
+    render(<TelegramAuthDialog mode="login" onClose={() => undefined} />);
+    await screen.findByRole('link', { name: /Открыть Telegram/ });
+    await act(async () => {
+      vi.advanceTimersByTime(2000);
+    });
+    expect(
+      await screen.findByText(/не привязан к аккаунту Ketner/, {}, { timeout: 5000 }),
+    ).toBeInTheDocument();
   });
 
   it('одноразовая ссылка из кабинета входит и ведёт дальше; повтор — понятная ошибка', async () => {

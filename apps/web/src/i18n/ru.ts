@@ -553,7 +553,7 @@ export const ru = {
 
   // Кабинет в Telegram (мини-приложение)
   'tgAuth.loginTitle': 'Вход через Telegram',
-  'tgAuth.loginLead': 'Без пароля. Если аккаунта ещё нет — бот создаст его.',
+  'tgAuth.loginLead': 'Без пароля — в аккаунт, к которому привязан ваш Telegram.',
   'tgAuth.linkTitle': 'Подключить Telegram',
   'tgAuth.linkLead': 'Входите через Telegram и управляйте подпиской в боте.',
   'tgAuth.openTelegram': 'Открыть Telegram',
@@ -566,6 +566,8 @@ export const ru = {
   'tgAuth.doneLink': 'Telegram подключён',
   'tgAuth.declined': 'Вход отклонён в Telegram.',
   'tgAuth.expired': 'Время на подтверждение вышло.',
+  'tgAuth.unlinked':
+    'Этот Telegram не привязан к аккаунту Ketner. Войдите по почте или через Google и подключите Telegram в настройках — или привяжите его в боте по коду из письма.',
   'tgAuth.errorStart': 'Не получилось начать вход через Telegram. Попробуйте ещё раз.',
   'tgAuth.retry': 'Начать заново',
   'tgAuth.magicTitle': 'Вход из Telegram',
@@ -587,11 +589,20 @@ export const ru = {
   'tg.welcomePoint1': 'Оплата звёздами Telegram в два касания, можно с автопродлением',
   'tg.welcomePoint2': 'Срок подписки, чеки и возвраты всегда под рукой',
   'tg.welcomePoint3': 'Вход на ketner.org одной кнопкой — без пароля',
-  'tg.continueTelegram': 'Продолжить с Telegram',
-  'tg.continueHint':
-    'Создадим аккаунт за секунду. На сайт потом можно входить кнопкой «Войти через Telegram».',
-  'tg.haveAccount': 'У меня уже есть аккаунт',
-  'tg.existingTitle': 'Подключим ваш аккаунт',
+  'tg.linkTitle': 'Подключите аккаунт ketner.org',
+  'tg.linkLead': 'Введите почту, с которой входите на сайт, — пришлём на неё код.',
+  'tg.sendCode': 'Прислать код',
+  'tg.codeSentTo':
+    'Если аккаунт с почтой {email} есть, код уже в письме. Не пришло за минуту — проверьте «Спам».',
+  'tg.emailCodeLabel': 'Код из письма',
+  'tg.emailCodeSubmit': 'Подключить',
+  'tg.changeEmail': 'Другая почта',
+  'tg.resend': 'Прислать ещё раз',
+  'tg.resendIn': 'Ещё раз через {sec} с',
+  'tg.otherWays': 'Другие способы подключения',
+  'tg.noAccount': 'Ещё нет аккаунта?',
+  'tg.signupOnSite': 'Зарегистрируйтесь на ketner.org',
+  'tg.existingTitle': 'Другие способы подключения',
   'tg.existingLead':
     'Подписка и история оплат перенесутся сюда, а напоминания будут приходить в Telegram.',
   'tg.existingHow': 'Как вы входите на сайт',

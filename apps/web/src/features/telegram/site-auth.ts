@@ -12,7 +12,7 @@ export interface TelegramAuthStart {
 }
 
 export type TelegramAuthPoll =
-  | { status: 'pending' | 'declined' | 'expired' }
+  | { status: 'pending' | 'declined' | 'expired' | 'unlinked' }
   | ({ status: 'approved'; mode: 'login' } & AuthSession)
   | { status: 'approved'; mode: 'link'; user: User };
 

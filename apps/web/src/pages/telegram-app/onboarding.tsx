@@ -1,5 +1,5 @@
 import { useEffect, useId, useRef, useState, type FormEvent } from 'react';
-import { ArrowLeftIcon, ExternalLinkIcon, LockIcon, TelegramIcon } from '@/components/icons';
+import { ArrowLeftIcon, ExternalLinkIcon, LockIcon } from '@/components/icons';
 import { Button } from '@/components/ui/button';
 import { CopyButton } from '@/components/ui/copy-button';
 import { Input } from '@/components/ui/input';
@@ -12,8 +12,9 @@ type Step = 'welcome' | 'existing';
 type ExistingWay = 'password' | 'code';
 
 /**
- * Первый запуск кабинета: «Продолжить с Telegram» создаёт аккаунт в одно касание;
- * у кого аккаунт уже есть — входят по почте или вводят код на сайте (если входят через Google/GitHub).
+ * Первый запуск кабинета. Аккаунты в Telegram не создаются: регистрация — только на сайте.
+ * Аккаунт подключается по коду из письма (почта → код → готово); пароль и код для сайта
+ * остаются запасными способами.
  */
 export function Onboarding({
   app,
@@ -28,24 +29,6 @@ export function Onboarding({
 }) {
   const { t } = useTranslation();
   const [step, setStep] = useState<Step>('welcome');
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  const register = async () => {
-    setBusy(true);
-    setError(null);
-    try {
-      const session = await miniAppApi.register(app.initData);
-      if (session.linked) {
-        haptic.success(app);
-        onLinked(session.token, session);
-      }
-    } catch (caught) {
-      haptic.error(app);
-      setError(caught instanceof ApiError ? caught.message : t('tg.errorGeneric'));
-      setBusy(false);
-    }
-  };
 
   if (step === 'existing') {
     return (
@@ -80,30 +63,172 @@ export function Onboarding({
         ))}
       </ul>
 
-      {error ? <Notice tone="danger">{error}</Notice> : null}
+      <EmailCodeFlow app={app} onLinked={onLinked} />
 
-      <div className="flex flex-col gap-2">
-        <Button
-          size="lg"
-          className="w-full"
-          loading={busy}
-          onClick={() => void register()}
-          leftIcon={<TelegramIcon className="size-5" />}
-        >
-          {t('tg.continueTelegram')}
-        </Button>
-        <p className="px-2 text-center text-[12px] leading-5 text-subtle">{t('tg.continueHint')}</p>
-      </div>
-
-      <Button
-        variant="outline"
-        className="w-full"
-        disabled={busy}
-        onClick={() => setStep('existing')}
-      >
-        {t('tg.haveAccount')}
+      <Button variant="outline" className="w-full" onClick={() => setStep('existing')}>
+        {t('tg.otherWays')}
       </Button>
+
+      <p className="px-2 text-center text-[13px] leading-5 text-muted">
+        {t('tg.noAccount')}{' '}
+        <button
+          type="button"
+          className="font-medium text-accent underline underline-offset-[3px]"
+          onClick={() => app.openLink(`${siteUrl}/signup`)}
+        >
+          {t('tg.signupOnSite')}
+        </button>
+      </p>
     </div>
+  );
+}
+
+/** Почта аккаунта → письмо с кодом → код в Telegram: аккаунт подключён. */
+function EmailCodeFlow({
+  app,
+  onLinked,
+}: {
+  app: TelegramWebApp;
+  onLinked: (token: string, state: MiniAppState) => void;
+}) {
+  const { t } = useTranslation();
+  const emailId = useId();
+  const codeId = useId();
+  const [email, setEmail] = useState('');
+  const [code, setCode] = useState('');
+  const [sentTo, setSentTo] = useState<string | null>(null);
+  const [resendAt, setResendAt] = useState(0);
+  const [now, setNow] = useState(() => Date.now());
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!sentTo || resendAt <= Date.now()) return;
+    const tick = window.setInterval(() => setNow(Date.now()), 1000);
+    return () => window.clearInterval(tick);
+  }, [sentTo, resendAt]);
+
+  const fail = (caught: unknown) => {
+    haptic.error(app);
+    setError(caught instanceof ApiError ? caught.message : t('tg.errorGeneric'));
+  };
+
+  const requestCode = async (address: string) => {
+    setBusy(true);
+    setError(null);
+    try {
+      const result = await miniAppApi.emailCode(app.initData, address);
+      setSentTo(address);
+      setCode('');
+      setResendAt(Date.now() + result.resendAfterSec * 1000);
+      setNow(Date.now());
+    } catch (caught) {
+      fail(caught);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const sendEmail = (event: FormEvent) => {
+    event.preventDefault();
+    void requestCode(email.trim());
+  };
+
+  const verify = async (event: FormEvent) => {
+    event.preventDefault();
+    setBusy(true);
+    setError(null);
+    try {
+      const session = await miniAppApi.emailVerify(app.initData, code);
+      if (session.linked) {
+        haptic.success(app);
+        onLinked(session.token, session);
+        return;
+      }
+    } catch (caught) {
+      fail(caught);
+    }
+    setBusy(false);
+  };
+
+  const waitSec = Math.max(0, Math.ceil((resendAt - now) / 1000));
+
+  return (
+    <Panel className="flex flex-col gap-3">
+      <header className="flex flex-col gap-1">
+        <h2 className="text-[17px] font-semibold tracking-tight">{t('tg.linkTitle')}</h2>
+        <p className="text-[14px] leading-5 text-muted">{t('tg.linkLead')}</p>
+      </header>
+
+      {sentTo === null ? (
+        <form onSubmit={sendEmail} className="flex flex-col gap-3">
+          <div className="flex flex-col gap-1.5">
+            <label htmlFor={emailId} className="text-[13px] font-medium">
+              {t('tg.email')}
+            </label>
+            <Input
+              id={emailId}
+              type="email"
+              inputMode="email"
+              autoComplete="email"
+              required
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+            />
+          </div>
+          <Button type="submit" size="lg" loading={busy} className="w-full">
+            {t('tg.sendCode')}
+          </Button>
+        </form>
+      ) : (
+        <form onSubmit={verify} className="flex flex-col gap-3">
+          <p className="text-[14px] leading-5" role="status">
+            {t('tg.codeSentTo', { email: sentTo })}
+          </p>
+          <div className="flex flex-col gap-1.5">
+            <label htmlFor={codeId} className="text-[13px] font-medium">
+              {t('tg.emailCodeLabel')}
+            </label>
+            <Input
+              id={codeId}
+              inputMode="numeric"
+              autoComplete="one-time-code"
+              pattern="[0-9 ]{6,11}"
+              maxLength={11}
+              required
+              className="text-center font-mono text-[22px] tracking-[0.3em]"
+              value={code}
+              onChange={(e) => setCode(e.target.value.replace(/[^\d ]/g, ''))}
+            />
+          </div>
+          <Button type="submit" size="lg" loading={busy} className="w-full">
+            {t('tg.emailCodeSubmit')}
+          </Button>
+          <div className="flex items-center justify-between gap-2 text-[13px]">
+            <button
+              type="button"
+              className="min-h-10 text-muted hover:text-text"
+              disabled={busy}
+              onClick={() => {
+                setSentTo(null);
+                setError(null);
+              }}
+            >
+              {t('tg.changeEmail')}
+            </button>
+            <button
+              type="button"
+              className="min-h-10 font-medium text-accent disabled:text-subtle"
+              disabled={busy || waitSec > 0}
+              onClick={() => void requestCode(sentTo)}
+            >
+              {waitSec > 0 ? t('tg.resendIn', { sec: String(waitSec) }) : t('tg.resend')}
+            </button>
+          </div>
+        </form>
+      )}
+      {error ? <Notice tone="danger">{error}</Notice> : null}
+    </Panel>
   );
 }
 

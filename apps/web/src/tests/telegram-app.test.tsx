@@ -156,14 +156,9 @@ describe('кабинет в Telegram (/tg)', () => {
     );
   });
 
-  it('«Продолжить с Telegram» создаёт аккаунт в одно касание', async () => {
+  it('регистрации в Telegram нет: аккаунт подключается кодом из письма', async () => {
     const app = fakeWebApp();
     window.Telegram = { WebApp: app };
-    const fresh = makeState({
-      user: { ...makeState().user, email: null, telegramOnly: true, plan: 'free', name: 'Анна' },
-      subscription: { plan: 'free', status: 'active', renewsAt: null },
-      payments: [],
-    });
     const calls = mockApi((url) => {
       if (url === '/api/telegram/miniapp/session') {
         return Response.json({
@@ -172,20 +167,49 @@ describe('кабинет в Telegram (/tg)', () => {
           siteUrl: 'https://ketner.org',
         });
       }
-      if (url === '/api/telegram/miniapp/register') return linkedSession(fresh);
+      if (url === '/api/telegram/miniapp/email-code')
+        return Response.json({ sent: true, expiresAt: Date.now() + 600_000, resendAfterSec: 60 });
+      if (url === '/api/telegram/miniapp/email-verify') return linkedSession(makeState());
       return undefined;
     });
     render(<TelegramAppPage />);
 
     expect(await screen.findByRole('heading', { name: 'Привет, Анна!' })).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'Продолжить с Telegram' }));
-    expect(await screen.findByRole('heading', { name: 'Привет, Анна' })).toBeInTheDocument();
-    expect(screen.getByText(/Платная подписка не активна/)).toBeInTheDocument();
-    expect(calls.find((call) => call.url.endsWith('/register'))?.body).toEqual({
-      initData: app.initData,
-    });
+    expect(screen.queryByRole('button', { name: /Продолжить с Telegram/ })).not.toBeInTheDocument();
 
-    // Аккаунт, созданный через Telegram, отвязать нельзя.
+    // Нет аккаунта — регистрация на сайте.
+    fireEvent.click(screen.getByRole('button', { name: 'Зарегистрируйтесь на ketner.org' }));
+    expect(app.openLink).toHaveBeenCalledWith('https://ketner.org/signup');
+
+    fireEvent.change(screen.getByLabelText('Почта'), { target: { value: ' anna@example.com ' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Прислать код' }));
+    expect(await screen.findByText(/код уже в письме/)).toBeInTheDocument();
+    expect(calls.find((call) => call.url.endsWith('/email-code'))?.body).toEqual({
+      initData: app.initData,
+      email: 'anna@example.com',
+    });
+    // Повторное письмо — только после паузы.
+    expect(screen.getByRole('button', { name: /Ещё раз через \d+ с/ })).toBeDisabled();
+
+    fireEvent.change(screen.getByLabelText('Код из письма'), { target: { value: '12a34 56' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Подключить' }));
+    expect(await screen.findByText(/осталось 12 дн\./)).toBeInTheDocument();
+    expect(calls.find((call) => call.url.endsWith('/email-verify'))?.body).toEqual({
+      initData: app.initData,
+      code: '1234 56',
+    });
+  });
+
+  it('старый аккаунт, созданный в Telegram, отвязать нельзя', async () => {
+    window.Telegram = { WebApp: fakeWebApp() };
+    const legacy = makeState({
+      user: { ...makeState().user, email: null, telegramOnly: true, plan: 'free', name: 'Анна' },
+      subscription: { plan: 'free', status: 'active', renewsAt: null },
+      payments: [],
+    });
+    mockApi((url) => (url === '/api/telegram/miniapp/session' ? linkedSession(legacy) : undefined));
+    render(<TelegramAppPage />);
+    expect(await screen.findByRole('heading', { name: 'Привет, Анна' })).toBeInTheDocument();
     fireEvent.click(screen.getByRole('tab', { name: 'Профиль' }));
     expect(screen.getByText('Аккаунт Telegram')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /Отвязать Telegram/ })).not.toBeInTheDocument();
@@ -209,7 +233,7 @@ describe('кабинет в Telegram (/tg)', () => {
     });
     render(<TelegramAppPage />);
 
-    fireEvent.click(await screen.findByRole('button', { name: 'У меня уже есть аккаунт' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Другие способы подключения' }));
     fireEvent.click(screen.getByRole('radio', { name: 'Google или GitHub' }));
     fireEvent.click(screen.getByRole('button', { name: 'Получить код' }));
     expect(await screen.findByText('K7M2QX')).toBeInTheDocument();

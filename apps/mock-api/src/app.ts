@@ -27,6 +27,7 @@ import type { ApiKeyStore } from './store/api-key-store.js';
 import type { AgentGateway } from './ai/agent-gateway.js';
 import type { AIGateway } from './ai/gateway.js';
 import type { RevokedTokenStore } from './store/revoked-token-store.js';
+import type { Mailer } from './services/mailer.js';
 import { createV1Router } from './routes/v1.js';
 import { createGithubCallbackHandler } from './routes/github.js';
 import type { GithubConnectionStore } from './github/connection-store.js';
@@ -79,6 +80,8 @@ export interface AppDeps {
   chatGateway?: AIGateway;
   /** Токены входа, отозванные при выходе; в тестах — временный файл. */
   revokedTokenStore?: RevokedTokenStore;
+  /** Отправка писем (коды привязки Telegram); в тестах — перехватчик. */
+  mailer?: Mailer;
 }
 
 const DEFAULT_BODY_LIMIT = '1mb';

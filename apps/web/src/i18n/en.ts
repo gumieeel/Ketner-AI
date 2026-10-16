@@ -550,7 +550,7 @@ export const en: Record<TranslationKey, string> = {
 
   // Кабинет в Telegram (мини-приложение)
   'tgAuth.loginTitle': 'Sign in with Telegram',
-  'tgAuth.loginLead': 'No password. If you have no account yet, the bot creates one.',
+  'tgAuth.loginLead': 'No password — into the account your Telegram is linked to.',
   'tgAuth.linkTitle': 'Connect Telegram',
   'tgAuth.linkLead': 'Sign in with Telegram and manage your subscription in the bot.',
   'tgAuth.openTelegram': 'Open Telegram',
@@ -564,6 +564,8 @@ export const en: Record<TranslationKey, string> = {
   'tgAuth.doneLink': 'Telegram connected',
   'tgAuth.declined': 'Sign-in was declined in Telegram.',
   'tgAuth.expired': 'Time to confirm has run out.',
+  'tgAuth.unlinked':
+    'This Telegram is not linked to a Ketner account. Sign in with email or Google and connect Telegram in settings — or link it in the bot with a code from your email.',
   'tgAuth.errorStart': 'Could not start Telegram sign-in. Please try again.',
   'tgAuth.retry': 'Start over',
   'tgAuth.magicTitle': 'Signing in from Telegram',
@@ -588,11 +590,20 @@ export const en: Record<TranslationKey, string> = {
   'tg.welcomePoint1': 'Pay with Telegram Stars in two taps, with optional auto-renewal',
   'tg.welcomePoint2': 'Subscription term, receipts and refunds always at hand',
   'tg.welcomePoint3': 'Sign in to ketner.org with one button — no password',
-  'tg.continueTelegram': 'Continue with Telegram',
-  'tg.continueHint':
-    'We will create an account in a second. Later, sign in on the website with “Sign in with Telegram”.',
-  'tg.haveAccount': 'I already have an account',
-  'tg.existingTitle': 'Connect your account',
+  'tg.linkTitle': 'Connect your ketner.org account',
+  'tg.linkLead': 'Enter the email you use on the website — we will send a code to it.',
+  'tg.sendCode': 'Send code',
+  'tg.codeSentTo':
+    'If an account with {email} exists, the code is in your inbox. Nothing within a minute? Check spam.',
+  'tg.emailCodeLabel': 'Code from the email',
+  'tg.emailCodeSubmit': 'Connect',
+  'tg.changeEmail': 'Different email',
+  'tg.resend': 'Send again',
+  'tg.resendIn': 'Again in {sec} s',
+  'tg.otherWays': 'Other ways to connect',
+  'tg.noAccount': 'No account yet?',
+  'tg.signupOnSite': 'Sign up on ketner.org',
+  'tg.existingTitle': 'Other ways to connect',
   'tg.existingLead':
     'Your subscription and payment history will show up here, and reminders will come to Telegram.',
   'tg.existingHow': 'How you sign in on the website',

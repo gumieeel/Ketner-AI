@@ -129,7 +129,14 @@ const enc = encodeURIComponent;
 /** API кабинета в Telegram: вход по initData, затем обычный токен сессии сайта. */
 export const miniAppApi = {
   session: (initData: string) => call<MiniAppSession>('/session', { body: { initData } }),
-  register: (initData: string) => call<MiniAppSession>('/register', { body: { initData } }),
+  /** Привязка по коду из письма: шаг 1 — письмо с кодом на почту аккаунта. */
+  emailCode: (initData: string, email: string) =>
+    call<{ sent: true; expiresAt: number; resendAfterSec: number }>('/email-code', {
+      body: { initData, email },
+    }),
+  /** Шаг 2 — код из письма привязывает этот Telegram к аккаунту. */
+  emailVerify: (initData: string, code: string) =>
+    call<MiniAppSession>('/email-verify', { body: { initData, code } }),
   link: (initData: string, email: string, password: string) =>
     call<MiniAppSession>('/link', { body: { initData, email, password } }),
   linkCode: (initData: string) =>

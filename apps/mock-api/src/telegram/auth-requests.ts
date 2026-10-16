@@ -14,7 +14,8 @@ import { randomBytes, randomInt } from 'node:crypto';
  */
 
 export type AuthMode = 'login' | 'link';
-export type AuthStatus = 'pending' | 'approved' | 'declined' | 'expired';
+/** `unlinked` — Telegram не привязан ни к одному аккаунту: войти им нельзя, аккаунты в Telegram не создаются. */
+export type AuthStatus = 'pending' | 'approved' | 'declined' | 'expired' | 'unlinked';
 
 export interface AuthRequest {
   id: string;
@@ -76,7 +77,7 @@ export class TelegramAuthRequests {
 
   resolve(
     code: string,
-    decision: { approve: true; userId: string } | { approve: false },
+    decision: { approve: true; userId: string } | { approve: false; unlinked?: boolean },
     now = Date.now(),
   ): AuthRequest | null {
     const id = this.byCode.get(code);
@@ -86,7 +87,7 @@ export class TelegramAuthRequests {
       request.status = 'approved';
       request.userId = decision.userId;
     } else {
-      request.status = 'declined';
+      request.status = decision.unlinked ? 'unlinked' : 'declined';
     }
     return { ...request };
   }

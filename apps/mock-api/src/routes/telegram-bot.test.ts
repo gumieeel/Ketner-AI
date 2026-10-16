@@ -9,7 +9,8 @@ import { createInvoiceStore } from '../store/invoice-store.js';
 import { createSubscriptionStore } from '../store/subscription-store.js';
 import { UsageStore } from '../store/usage-store.js';
 import { createUserStore } from '../store/user-store.js';
-import { TelegramAuthRequests } from '../telegram/auth-requests.js';
+import { TelegramAuthRequests, telegramAccountEmail } from '../telegram/auth-requests.js';
+import type { MailMessage, Mailer } from '../services/mailer.js';
 import {
   TelegramBotService,
   decodePayload,
@@ -86,6 +87,14 @@ async function harness() {
     fetchImpl: (async () => new Response('', { status: 500 })) as typeof fetch,
   });
   const authRequests = new TelegramAuthRequests();
+  /** Письма не уходят наружу: складываются сюда. */
+  const mails: MailMessage[] = [];
+  const mailer: Mailer = {
+    kind: 'smtp',
+    async send(message) {
+      mails.push(message);
+    },
+  };
   const bot = new RecordingBot({
     userStore,
     subscriptionStore,
@@ -101,7 +110,15 @@ async function harness() {
   });
   const server = await startTestServer(
     {},
-    { userStore, subscriptionStore, invoiceStore, usageStore, botService: bot, billingService },
+    {
+      userStore,
+      subscriptionStore,
+      invoiceStore,
+      usageStore,
+      botService: bot,
+      billingService,
+      mailer,
+    },
   );
   let counter = 0;
   const signup = async (): Promise<AuthSession> => {
@@ -217,7 +234,15 @@ async function harness() {
     mini,
     pay,
     linkedBuyer,
+    mails,
   };
+}
+
+/** Код из последнего письма о привязке Telegram. */
+function codeFromMail(mail: MailMessage | undefined): string {
+  const match = /: (\d{6})/.exec(mail?.text ?? '');
+  assert.ok(match, 'в письме есть шестизначный код');
+  return match[1]!;
 }
 
 // ───────────── базовые кирпичики ─────────────
@@ -294,64 +319,74 @@ test('коды привязки и payload счёта', () => {
 
 // ───────────── вход и привязка ─────────────
 
-test('вход на сайт через Telegram: новый человек получает аккаунт, сессия выдаётся один раз', async (t) => {
+test('вход на сайт через Telegram: без привязки аккаунт не создаётся, после привязки — вход и сессия один раз', async (t) => {
   const h = await harness();
   t.after(() => h.server.close());
-  const start = await readJson<{ requestId: string; botUrl: string }>(
-    await fetch(`${h.server.baseUrl}/api/auth/telegram/start`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0) Chrome/130.0',
-      },
-      body: JSON.stringify({ mode: 'login' }),
-    }),
-  );
-  assert.match(start.botUrl, /^https:\/\/t\.me\/ketner_test_bot\?start=auth_[A-Za-z0-9_-]{16}$/);
-  const poll = async () =>
-    readJson<{ status: string; token?: string; user?: User }>(
-      await fetch(`${h.server.baseUrl}/api/auth/telegram/poll/${start.requestId}`),
+  const startLogin = async () =>
+    readJson<{ requestId: string; botUrl: string }>(
+      await fetch(`${h.server.baseUrl}/api/auth/telegram/start`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0) Chrome/130.0',
+        },
+        body: JSON.stringify({ mode: 'login' }),
+      }),
     );
-  assert.equal((await poll()).status, 'pending');
+  const pollOf = async (requestId: string) =>
+    readJson<{ status: string; token?: string; user?: User }>(
+      await fetch(`${h.server.baseUrl}/api/auth/telegram/poll/${requestId}`),
+    );
+  const usersBefore = h.userStore.list().length;
 
-  const code = start.botUrl.split('start=auth_')[1]!;
+  // 1. Telegram не привязан: бот объясняет, как привязать, сайт получает «unlinked».
+  const first = await startLogin();
+  assert.match(first.botUrl, /^https:\/\/t\.me\/ketner_test_bot\?start=auth_[A-Za-z0-9_-]{16}$/);
+  assert.equal((await pollOf(first.requestId)).status, 'pending');
+  await h.message(7001, `/start auth_${first.botUrl.split('start=auth_')[1]!}`);
+  assert.match(String(h.bot.last('sendMessage')!.body.text), /не привязан к аккаунту/);
+  assert.equal((await pollOf(first.requestId)).status, 'unlinked');
+  assert.equal(h.userStore.list().length, usersBefore, 'аккаунт не создан');
+  assert.equal(h.userStore.findByTelegramChatId(7001), null);
+
+  // Старая кнопка подтверждения тоже ничего не создаёт.
+  const stale = await startLogin();
+  const staleCode = stale.botUrl.split('start=auth_')[1]!;
+  await h.callback(7001, `auth:y:${staleCode}`);
+  assert.equal((await pollOf(stale.requestId)).status, 'unlinked');
+  assert.equal(h.userStore.list().length, usersBefore);
+
+  // 2. Привязка по коду из письма, затем вход проходит в этот аккаунт.
+  const site = await h.signup();
+  await h.mini('email-code', { initData: h.initData(7001), email: site.user.email });
+  await h.mini('email-verify', { initData: h.initData(7001), code: codeFromMail(h.mails.at(0)) });
+  assert.equal(h.userStore.findByTelegramChatId(7001)?.id, site.user.id);
+
+  const login = await startLogin();
+  const code = login.botUrl.split('start=auth_')[1]!;
   await h.message(7001, `/start auth_${code}`);
-  const prompt = h.bot.last('sendMessage')!;
-  assert.match(String(prompt.body.text), /Chrome · Windows/);
-  assert.match(String(prompt.body.text), /создадим его/);
-
+  const prompt = String(h.bot.last('sendMessage')!.body.text);
+  assert.match(prompt, /Вход на ketner\.org/);
+  assert.match(prompt, /Chrome · Windows/);
   await h.callback(7001, `auth:y:${code}`);
-  const approved = await poll();
+  const approved = await pollOf(login.requestId);
   assert.equal(approved.status, 'approved');
-  assert.ok(approved.token);
-  assert.match(approved.user!.email, /@telegram\.invalid$/);
-  assert.equal(h.userStore.findByTelegramChatId(7001)?.id, approved.user!.id);
+  assert.equal(approved.user!.id, site.user.id);
   // Повторный опрос сессию не отдаёт.
-  assert.equal((await poll()).status, 'expired');
-
+  assert.equal((await pollOf(login.requestId)).status, 'expired');
   const me = await readJson<{ user: User }>(
     await fetch(`${h.server.baseUrl}/api/auth/me`, {
       headers: { Authorization: `Bearer ${approved.token}` },
     }),
   );
-  assert.equal(me.user.id, approved.user!.id);
+  assert.equal(me.user.id, site.user.id);
 
-  // Повторный вход тем же Telegram попадает в тот же аккаунт.
-  const again = await readJson<{ requestId: string; botUrl: string }>(
-    await fetch(`${h.server.baseUrl}/api/auth/telegram/start`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: '{}',
-    }),
-  );
+  // «Это не я» — отказ.
+  const again = await startLogin();
   const code2 = again.botUrl.split('start=auth_')[1]!;
   await h.message(7001, `/start auth_${code2}`);
-  assert.match(String(h.bot.last('sendMessage')!.body.text), /Вход на ketner\.org/);
   await h.callback(7001, `auth:n:${code2}`);
-  const declined = await readJson<{ status: string }>(
-    await fetch(`${h.server.baseUrl}/api/auth/telegram/poll/${again.requestId}`),
-  );
-  assert.equal(declined.status, 'declined');
+  assert.equal((await pollOf(again.requestId)).status, 'declined');
 });
 
 test('привязка из настроек: подтверждение в боте, код из кабинета, вход на сайт из кабинета', async (t) => {
@@ -428,28 +463,118 @@ test('привязка из настроек: подтверждение в бо
   assert.equal((await exchange()).status, 400);
 });
 
-test('кабинет: «Продолжить с Telegram» создаёт аккаунт, отвязать его нельзя', async (t) => {
+test('кабинет: регистрации в Telegram нет, привязка по коду из письма', async (t) => {
   const h = await harness();
   t.after(() => h.server.close());
   const guest = await h.mini<{ linked: boolean }>('session', { initData: h.initData(7301) });
   assert.equal(guest.body.linked, false);
-  const created = await h.mini<{ linked: boolean; token: string } & MiniState>('register', {
-    initData: h.initData(7301, 'Мария'),
+  // Создать аккаунт из Telegram больше нельзя.
+  const register = await h.mini<ApiErrorBody>('register', { initData: h.initData(7301) });
+  assert.equal(register.status, 404);
+
+  const site = await h.signup();
+  const bad = await h.mini<ApiErrorBody>('email-code', {
+    initData: h.initData(7301),
+    email: 'не почта',
   });
-  assert.equal(created.body.linked, true);
-  assert.equal(created.body.user.telegramOnly, true);
-  assert.equal(created.body.user.email, null);
-  // Повтор не плодит аккаунты.
-  const again = await h.mini<MiniState>('register', { initData: h.initData(7301) });
-  assert.equal(again.body.user.id, created.body.user.id);
-  const unlink = await h.mini<ApiErrorBody>('unlink', {}, created.body.token);
-  assert.equal(unlink.status, 409);
-  assert.equal(unlink.body.error.code, 'telegram_only_account');
+  assert.equal(bad.status, 400);
+
+  // Незнакомая почта: ответ тот же, но письма нет (адреса не перебрать).
+  const unknown = await h.mini<{ sent: boolean }>('email-code', {
+    initData: h.initData(7301),
+    email: 'nobody@example.com',
+  });
+  assert.equal(unknown.status, 200);
+  assert.equal(unknown.body.sent, true);
+  assert.equal(h.mails.length, 0);
+
+  const sent = await h.mini<{ sent: boolean }>('email-code', {
+    initData: h.initData(7301, 'Мария'),
+    email: ` ${site.user.email.toUpperCase()} `,
+  });
+  assert.equal(sent.status, 200);
+  assert.equal(h.mails.length, 1);
+  assert.equal(h.mails[0]!.to, site.user.email);
+  assert.match(h.mails[0]!.text, /@anna/);
+  assert.match(h.mails[0]!.text, /Никому не сообщайте/);
+  const code = codeFromMail(h.mails[0]);
+
+  // Повторно сразу нельзя.
+  const tooSoon = await h.mini<ApiErrorBody>('email-code', {
+    initData: h.initData(7301),
+    email: site.user.email,
+  });
+  assert.equal(tooSoon.status, 429);
+
+  // Чужой Telegram этим кодом не воспользуется.
+  const foreign = await h.mini<ApiErrorBody>('email-verify', { initData: h.initData(7399), code });
+  assert.equal(foreign.status, 400);
+
+  const wrong = await h.mini<ApiErrorBody>('email-verify', {
+    initData: h.initData(7301),
+    code: code === '000000' ? '111111' : '000000',
+  });
+  assert.equal(wrong.status, 400);
+  assert.equal(wrong.body.error.code, 'code_invalid');
+
+  const linked = await h.mini<{ linked: boolean; token: string } & MiniState>('email-verify', {
+    initData: h.initData(7301),
+    code: code.split('').join(' '),
+  });
+  assert.equal(linked.status, 200);
+  assert.equal(linked.body.linked, true);
+  assert.equal(linked.body.user.id, site.user.id);
+  assert.equal(h.userStore.findByTelegramChatId(7301)?.id, site.user.id);
+  // Владелец почты узнаёт о привязке.
+  assert.match(h.mails.at(-1)!.subject, /привязан Telegram/);
+  // Код одноразовый.
+  const reused = await h.mini<ApiErrorBody>('email-verify', { initData: h.initData(7301), code });
+  assert.equal(reused.status, 400);
 
   const forged = await h.mini<ApiErrorBody>('session', {
     initData: h.initData(7301).replace('Anna', 'Eve'),
   });
   assert.equal(forged.status, 401);
+});
+
+test('кабинет: код сгорает после 5 неверных попыток, служебные адреса Telegram не принимаются', async (t) => {
+  const h = await harness();
+  t.after(() => h.server.close());
+  const site = await h.signup();
+  await h.mini('email-code', { initData: h.initData(7501), email: site.user.email });
+  const code = codeFromMail(h.mails.at(-1));
+  const wrongCode = code === '000000' ? '111111' : '000000';
+  for (let i = 0; i < 4; i += 1) {
+    const r = await h.mini<ApiErrorBody>('email-verify', {
+      initData: h.initData(7501),
+      code: wrongCode,
+    });
+    assert.equal(r.body.error.code, 'code_invalid');
+  }
+  const burned = await h.mini<ApiErrorBody>('email-verify', {
+    initData: h.initData(7501),
+    code: wrongCode,
+  });
+  assert.equal(burned.body.error.code, 'code_attempts');
+  const late = await h.mini<ApiErrorBody>('email-verify', { initData: h.initData(7501), code });
+  assert.equal(late.body.error.code, 'code_missing');
+  assert.equal(h.userStore.findByTelegramChatId(7501), null);
+
+  // Старый аккаунт, созданный когда-то в Telegram: вход работает, отвязать нельзя,
+  // а его служебный адрес не годится для кода.
+  const legacy = h.userStore.create(telegramAccountEmail(7601), 'legacy-password-123456', 'Мария');
+  h.userStore.linkTelegram(legacy.id, 7601, 'maria');
+  const mailsBefore = h.mails.length;
+  await h.mini('email-code', { initData: h.initData(7602), email: legacy.email });
+  assert.equal(h.mails.length, mailsBefore);
+  const legacySession = await h.mini<{ linked: boolean; token: string } & MiniState>('session', {
+    initData: h.initData(7601),
+  });
+  assert.equal(legacySession.body.linked, true);
+  assert.equal(legacySession.body.user.telegramOnly, true);
+  const unlink = await h.mini<ApiErrorBody>('unlink', {}, legacySession.body.token);
+  assert.equal(unlink.status, 409);
+  assert.equal(unlink.body.error.code, 'telegram_only_account');
 });
 
 // ───────────── оплата, продление, смена тарифа ─────────────

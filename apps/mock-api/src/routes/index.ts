@@ -26,6 +26,7 @@ import { createContactRouter } from './contact.js';
 import { telegramBotService } from '../telegram/bot.js';
 import type { AIGateway } from '../ai/gateway.js';
 import type { RevokedTokenStore } from '../store/revoked-token-store.js';
+import type { Mailer } from '../services/mailer.js';
 import { createChatRouter } from './chat.js';
 import { createCodeRouter } from './code.js';
 import { createImagesRouter } from './images.js';
@@ -68,6 +69,8 @@ export interface ApiDeps {
   chatGateway?: AIGateway;
   /** Токены входа, отозванные при выходе; в тестах — временный файл. */
   revokedTokenStore?: RevokedTokenStore;
+  /** Отправка писем (коды привязки Telegram); в тестах — перехватчик. */
+  mailer?: Mailer;
 }
 
 /**
@@ -284,6 +287,7 @@ export function createApiRouter(deps: ApiDeps): Router {
       billingService: activeBilling,
       supportBotService: deps.supportBotService,
       supportStore: deps.supportStore,
+      mailer: deps.mailer,
     }),
   );
   router.use(

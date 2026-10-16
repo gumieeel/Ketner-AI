@@ -1,4 +1,4 @@
-import { createHash, randomBytes } from 'node:crypto';
+import { createHash } from 'node:crypto';
 import { config } from '../config.js';
 import { LEGACY_PLANS, PLANS } from '../routes/billing.js';
 import type { InvoiceStore } from '../store/invoice-store.js';
@@ -21,7 +21,6 @@ import {
 import { billingService as defaultBillingService } from '../billing/index.js';
 import {
   isTelegramAccountEmail,
-  telegramAccountEmail,
   telegramAuthRequests,
   type TelegramAuthRequests,
 } from './auth-requests.js';
@@ -147,6 +146,10 @@ export function encodePayload(payload: StarsPayload): string {
   if (payload.recurring) parts.push('r');
   return parts.join('|');
 }
+
+/** Ответ бота, когда на сайт пытаются войти Telegram'ом без привязанного аккаунта. */
+const UNLINKED_LOGIN_TEXT =
+  '🔐 <b>Этот Telegram не привязан к аккаунту Ketner</b>\n\nВойти им пока нельзя. Привяжите его один раз: откройте кабинет кнопкой ниже, введите почту своего аккаунта и код из письма. После этого вход на сайт через Telegram заработает в одно касание.\n\nЕщё нет аккаунта? Зарегистрируйтесь на ketner.org — по почте или через Google.';
 
 export function decodePayload(raw: string): StarsPayload | null {
   const [version, planId, stars, invoiceId, userId, flag] = raw.split('|');
@@ -744,7 +747,9 @@ export class TelegramBotService implements TelegramPaymentsPort {
       : [
           `👋 ${name ? `${name}, д` : 'Д'}обро пожаловать в Ketner AI!`,
           '',
-          'Все сильные модели в одной подписке. Нажмите кнопку ниже — создадим аккаунт или привяжем существующий, без паролей.',
+          'Все сильные модели в одной подписке. Чтобы управлять подпиской здесь, привяжите аккаунт ketner.org: откройте кабинет, введите почту и код из письма.',
+          '',
+          'Ещё нет аккаунта? Зарегистрируйтесь на ketner.org — по почте или через Google.',
         ].join('\n');
     await this.sendMessage(chatId, text, {
       reply_markup: { inline_keyboard: [[this.openAppButton()]] },
@@ -878,7 +883,7 @@ export class TelegramBotService implements TelegramPaymentsPort {
     const arg = rest.join(' ').trim();
 
     if (command === '/start' && arg.startsWith('auth_'))
-      return this.handleAuthStart(chatId, arg.slice(5), msg.from);
+      return this.handleAuthStart(chatId, arg.slice(5));
     if (command === '/start' && arg.startsWith('lnk_'))
       return this.handleLinkCode(chatId, arg.slice(4), msg.from);
     if (command === '/start' && arg.startsWith('stars_'))
@@ -943,7 +948,6 @@ export class TelegramBotService implements TelegramPaymentsPort {
   private async handleAuthStart(
     chatId: number | string,
     code: string,
-    from?: TelegramFrom,
   ): Promise<{ handled: boolean; action?: string }> {
     const request = this.auth.byStartCode(code);
     if (!request || request.status !== 'pending') {
@@ -997,12 +1001,12 @@ export class TelegramBotService implements TelegramPaymentsPort {
       );
       return { handled: true, action: 'auth_login_prompt' };
     }
-    await this.sendMessage(
-      chatId,
-      `🔐 <b>Вход на ketner.org через Telegram</b>\n\nУстройство: ${device}\n\nУ этого Telegram пока нет аккаунта Ketner — создадим его и сразу войдём${from?.first_name ? `, ${escapeHtml(from.first_name)}` : ''}.\n\nУже есть аккаунт с почтой или Google? Тогда войдите на сайте как обычно и подключите Telegram в настройках — так подписка останется на нём.`,
-      { reply_markup: { inline_keyboard: buttons('✅ Создать аккаунт и войти') } },
-    );
-    return { handled: true, action: 'auth_signup_prompt' };
+    // Аккаунты через Telegram не создаются: вход только в аккаунт, к которому Telegram привязан.
+    this.auth.resolve(code, { approve: false, unlinked: true });
+    await this.sendMessage(chatId, UNLINKED_LOGIN_TEXT, {
+      reply_markup: { inline_keyboard: [[this.openAppButton('🔗 Привязать аккаунт')]] },
+    });
+    return { handled: true, action: 'auth_unlinked' };
   }
 
   private async handleAuthDecision(
@@ -1047,7 +1051,15 @@ export class TelegramBotService implements TelegramPaymentsPort {
       this.linkTelegram(target.id, chatId, cb.from.username);
       userId = target.id;
     } else {
-      const linked = this.resolveUser(chatId) ?? this.createTelegramAccount(cb.from);
+      const linked = this.resolveUser(chatId);
+      if (!linked) {
+        this.auth.resolve(code!, { approve: false, unlinked: true });
+        await this.answerCallbackQuery(cb.id, 'Этот Telegram не привязан к аккаунту', true);
+        await this.sendMessage(chatId, UNLINKED_LOGIN_TEXT, {
+          reply_markup: { inline_keyboard: [[this.openAppButton('🔗 Привязать аккаунт')]] },
+        });
+        return { handled: true, action: 'auth_unlinked' };
+      }
       userId = linked.id;
     }
     this.auth.resolve(code!, { approve: true, userId });
@@ -1066,28 +1078,6 @@ export class TelegramBotService implements TelegramPaymentsPort {
       );
     }
     return { handled: true, action: request.mode === 'link' ? 'auth_linked' : 'auth_approved' };
-  }
-
-  /** Аккаунт Ketner для человека, который пришёл из Telegram (вход только через Telegram). */
-  createTelegramAccount(
-    from: Pick<TelegramFrom, 'id' | 'first_name' | 'last_name' | 'username'>,
-  ): User {
-    const existing =
-      this.resolveUser(from.id) ?? this.deps.userStore.findByEmail(telegramAccountEmail(from.id));
-    if (existing) {
-      if (!existing.telegramChatId) this.linkTelegram(existing.id, from.id, from.username);
-      return this.deps.userStore.findById(existing.id) ?? existing;
-    }
-    const name =
-      [from.first_name, from.last_name].filter(Boolean).join(' ').trim() ||
-      from.username ||
-      'Telegram';
-    const created = this.deps.userStore.create(
-      telegramAccountEmail(from.id),
-      randomBytes(24).toString('base64url'),
-      name,
-    );
-    return this.linkTelegram(created.id, from.id, from.username) ?? created;
   }
 
   /** Старые ссылки привязки из настроек (`/start lnk_<код>`). */
