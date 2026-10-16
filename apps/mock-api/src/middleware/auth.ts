@@ -5,6 +5,8 @@ import { defaultBetterAuth } from '../auth/better-auth.js';
 import { verifyMockToken } from '../auth/jwt.js';
 import { betterAuthSessionMayOpen } from '../auth/better-auth-sync.js';
 import type { UserStore } from '../store/user-store.js';
+import { revokedTokenStore as defaultRevokedTokenStore } from '../store/index.js';
+import type { RevokedTokenStore } from '../store/revoked-token-store.js';
 import type { SubscriptionStore } from '../store/subscription-store.js';
 import { applySubscriptionExpiry } from '../services/user-plan.js';
 import type { PlanId, User } from '../types.js';
@@ -31,6 +33,7 @@ export function createAuthMiddleware(
   userStore: UserStore,
   betterAuthInstance = defaultBetterAuth,
   subscriptionStore?: SubscriptionStore,
+  revokedTokens: RevokedTokenStore = defaultRevokedTokenStore,
 ) {
   /** Срок подписки: правило общее с API-ключами (services/user-plan.ts). */
   const applyExpiry = (userId: string, plan: PlanId, isVip: boolean): PlanId =>
@@ -45,7 +48,8 @@ export function createAuthMiddleware(
     const authHeader = request.headers.authorization;
     if (authHeader && authHeader.startsWith('Bearer ')) {
       const token = authHeader.slice(7).trim();
-      const payload = verifyMockToken(token);
+      // Токен, отозванный при выходе из аккаунта, не принимается, даже если подпись и срок в порядке.
+      const payload = revokedTokens.isRevoked(token) ? null : verifyMockToken(token);
       // Токен не принят (истёк, подпись не сошлась, пользователя нет): запрос идёт как гостевой, но клиент
       // получает заголовок и может сбросить устаревшую сессию вместо показа вошедшего пользователя.
       if (payload) {

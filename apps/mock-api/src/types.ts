@@ -52,6 +52,8 @@ export interface AuthTokenPayload {
   plan: PlanId;
   iat: number;
   exp: number;
+  /** Случайный id токена: два входа в одну секунду дают разные токены (выход отзывает только свой). */
+  jti?: string;
 }
 
 export type Language = 'ru' | 'en';

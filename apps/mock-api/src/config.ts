@@ -216,6 +216,10 @@ export const config = {
   apiKeyStoreFile:
     process.env.API_KEY_STORE_FILE ??
     fileURLToPath(new URL('../data/api-keys.json', import.meta.url)),
+  /** Отозванные при выходе токены входа: в файле только SHA-256 токена и срок. */
+  revokedTokenStoreFile:
+    process.env.REVOKED_TOKEN_STORE_FILE ??
+    fileURLToPath(new URL('../data/revoked-tokens.json', import.meta.url)),
   /** Привязанные аккаунты GitHub: токены в файле только в зашифрованном виде (AES-256-GCM). */
   githubConnectionStoreFile:
     process.env.GITHUB_CONNECTION_STORE_FILE ??

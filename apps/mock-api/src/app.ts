@@ -26,6 +26,7 @@ import {
 import type { ApiKeyStore } from './store/api-key-store.js';
 import type { AgentGateway } from './ai/agent-gateway.js';
 import type { AIGateway } from './ai/gateway.js';
+import type { RevokedTokenStore } from './store/revoked-token-store.js';
 import { createV1Router } from './routes/v1.js';
 import { createGithubCallbackHandler } from './routes/github.js';
 import type { GithubConnectionStore } from './github/connection-store.js';
@@ -76,6 +77,27 @@ export interface AppDeps {
   billingService?: BillingService;
   /** Шлюз ИИ для чата; в тестах — с явно включённым шаблонным движком. */
   chatGateway?: AIGateway;
+  /** Токены входа, отозванные при выходе; в тестах — временный файл. */
+  revokedTokenStore?: RevokedTokenStore;
+}
+
+const DEFAULT_BODY_LIMIT = '1mb';
+const LARGE_BODY_LIMIT = '50mb';
+
+/**
+ * Маршруты, которым нужно большое тело запроса: ответ чата (вложения и привязанный проект),
+ * запись и импорт файлов Ketner Code, прокси GitHub (коммит с содержимым файлов).
+ */
+const LARGE_BODY_ROUTES: ReadonlyArray<{ method: string; pattern: RegExp }> = [
+  { method: 'POST', pattern: /^\/api\/chat\/completions$/ },
+  { method: 'PUT', pattern: /^\/api\/code\/projects\/[^/]+\/file$/ },
+  { method: 'POST', pattern: /^\/api\/code\/projects\/[^/]+\/import$/ },
+  { method: 'POST', pattern: /^\/api\/github\/api\// },
+  { method: 'PATCH', pattern: /^\/api\/github\/api\// },
+];
+
+export function acceptsLargeBody(method: string, path: string): boolean {
+  return LARGE_BODY_ROUTES.some((route) => route.method === method && route.pattern.test(path));
 }
 
 const defaultDeps: AppDeps = {
@@ -206,15 +228,22 @@ export function createApp(overrides: Partial<AppDeps> = {}): Express {
     next();
   });
 
-  app.use(
-    express.json({
-      limit: '50mb',
-      verify: (req: express.Request & { rawBody?: Buffer }, _res, buf) => {
-        req.rawBody = buf;
-      },
-    }),
+  // Большое тело (до 50 МБ) разбирается только там, где оно нужно; остальным маршрутам, включая
+  // анонимные (вход, регистрация, вебхуки), хватает 1 МБ — иначе любой мог бы гонять серверу
+  // десятки мегабайт JSON на разбор и держать их в памяти.
+  const keepRawBody = (req: express.Request & { rawBody?: Buffer }, _res: unknown, buf: Buffer) => {
+    req.rawBody = buf;
+  };
+  const largeJson = express.json({ limit: LARGE_BODY_LIMIT, verify: keepRawBody });
+  const defaultJson = express.json({ limit: DEFAULT_BODY_LIMIT, verify: keepRawBody });
+  app.use((request, response, next) =>
+    (acceptsLargeBody(request.method, request.path) ? largeJson : defaultJson)(
+      request,
+      response,
+      next,
+    ),
   );
-  app.use(express.urlencoded({ extended: true, limit: '50mb' }));
+  app.use(express.urlencoded({ extended: true, limit: DEFAULT_BODY_LIMIT }));
 
   if (hasWebDist) {
     app.use(express.static(webDistPath, { index: false, dotfiles: 'ignore' }));

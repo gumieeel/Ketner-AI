@@ -105,12 +105,34 @@ test('auth: профиль текущего пользователя GET /api/au
   const meData = await readJson<{ user: User }>(meRes);
   assert.equal(meData.user.email, 'demo@ketner.ai');
 
+  // Второй вход (другое устройство) в ту же секунду получает свой токен.
+  const otherLogin = await fetch(`${server.baseUrl}/api/auth/login`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email: 'demo@ketner.ai', password: 'password123' }),
+  });
+  const { token: otherToken } = await readJson<AuthSession>(otherLogin);
+  assert.notEqual(otherToken, token);
+
   // 3. Logout возвращает 204
   const logoutRes = await fetch(`${server.baseUrl}/api/auth/logout`, {
     method: 'POST',
     headers: { Authorization: `Bearer ${token}` },
   });
   assert.equal(logoutRes.status, 204);
+
+  // 4. Токен после выхода отозван на сервере: его копия больше не открывает аккаунт.
+  const afterLogout = await fetch(`${server.baseUrl}/api/auth/me`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  assert.equal(afterLogout.status, 401);
+  assert.equal(afterLogout.headers.get('x-session-invalid'), '1');
+
+  // 5. Токен другого устройства продолжает работать.
+  const otherMe = await fetch(`${server.baseUrl}/api/auth/me`, {
+    headers: { Authorization: `Bearer ${otherToken}` },
+  });
+  assert.equal(otherMe.status, 200);
 });
 
 test('auth: эмуляция OAuth', async (t) => {

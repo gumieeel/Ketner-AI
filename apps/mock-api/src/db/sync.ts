@@ -4,6 +4,7 @@ import { config } from '../config.js';
 import {
   apiKeyStore,
   conversationStore,
+  revokedTokenStore,
   githubConnectionStore,
   userStore,
   subscriptionStore,
@@ -784,6 +785,34 @@ async function syncApiKeys(sql: postgres.Sql): Promise<void> {
 }
 
 /**
+ * Токены входа, отозванные при выходе. Истёкшие записи не нужны: удаляются при старте.
+ */
+async function syncRevokedTokens(sql: postgres.Sql): Promise<void> {
+  await sql.unsafe(`
+    CREATE TABLE IF NOT EXISTS "revoked_tokens" (
+      "token_hash" text PRIMARY KEY NOT NULL,
+      "expires_at" bigint NOT NULL
+    );
+  `);
+  await sql`DELETE FROM "revoked_tokens" WHERE "expires_at" <= ${Math.floor(Date.now() / 1000)}`;
+  const rows = await sql<
+    { token_hash: string; expires_at: string | number }[]
+  >`SELECT token_hash, expires_at FROM "revoked_tokens"`;
+  revokedTokenStore.loadExternal(
+    rows.map((r) => ({ hash: r.token_hash, expiresAt: Number(r.expires_at) })),
+  );
+  revokedTokenStore.setDbDriver({
+    async insert(record) {
+      await sql`
+        INSERT INTO "revoked_tokens" ("token_hash", "expires_at")
+        VALUES (${record.hash}, ${record.expiresAt})
+        ON CONFLICT ("token_hash") DO NOTHING
+      `;
+    },
+  });
+}
+
+/**
  * Привязанные аккаунты GitHub: токен лежит зашифрованным (AES-256-GCM), расшифровать его можно
  * только ключом из BETTER_AUTH_SECRET. Таблица нужна по той же причине: диск Render временный.
  */
@@ -970,6 +999,11 @@ export async function initDatabaseSync(): Promise<boolean> {
       await syncCryptoInvoices(sql);
     } catch (error) {
       console.error('❌ [db] Крипто-счета не синхронизированы с PostgreSQL:', error);
+    }
+    try {
+      await syncRevokedTokens(sql);
+    } catch (error) {
+      console.error('❌ [db] Отозванные токены не синхронизированы с PostgreSQL:', error);
     }
     try {
       await syncGithubConnections(sql);

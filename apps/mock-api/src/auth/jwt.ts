@@ -1,4 +1,4 @@
-import { createHmac, timingSafeEqual } from 'node:crypto';
+import { createHmac, randomBytes, timingSafeEqual } from 'node:crypto';
 import { config } from '../config.js';
 import type { AuthTokenPayload, User } from '../types.js';
 
@@ -37,6 +37,7 @@ export function createMockToken(
     plan: user.plan,
     iat: now,
     exp,
+    jti: randomBytes(12).toString('base64url'),
   };
 
   const headerB64 = toBase64Url(JSON.stringify(header));

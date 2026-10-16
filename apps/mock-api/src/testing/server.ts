@@ -10,6 +10,7 @@ import { createConversationStore } from '../store/conversation-store.js';
 import { createSubscriptionStore } from '../store/subscription-store.js';
 import { createUserStore } from '../store/user-store.js';
 import { createApiKeyStore, type ApiKeyStore } from '../store/api-key-store.js';
+import { createRevokedTokenStore } from '../store/revoked-token-store.js';
 import { UsageStore } from '../store/usage-store.js';
 import { createInvoiceStore } from '../store/invoice-store.js';
 import {
@@ -93,6 +94,7 @@ export async function startTestServer(
     ai: testAi,
     betterAuth: testBetterAuth,
     chatGateway,
+    revokedTokenStore: createRevokedTokenStore(join(tempDir, 'revoked-tokens.json')),
     ...extra,
   });
   const server = app.listen(0);

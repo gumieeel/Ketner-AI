@@ -1,10 +1,12 @@
 import { Router, type Request, type Response } from 'express';
 import { defaultBetterAuth } from '../auth/better-auth.js';
-import { createMockToken } from '../auth/jwt.js';
+import { createMockToken, verifyMockToken } from '../auth/jwt.js';
 import { telegramBotService } from '../telegram/bot.js';
 import { telegramLinkCodes } from '../telegram/link-codes.js';
 import { sendError } from '../middleware/errors.js';
 import { MAX_PASSWORD_LENGTH, type UserStore } from '../store/user-store.js';
+import { revokedTokenStore as defaultRevokedTokenStore } from '../store/index.js';
+import type { RevokedTokenStore } from '../store/revoked-token-store.js';
 import { syncBetterAuthCredential } from '../auth/better-auth-sync.js';
 import { RateLimiter, clientIp } from '../middleware/rate-limit.js';
 
@@ -17,6 +19,7 @@ const MIN_PASSWORD_LENGTH = 8;
 export function createAuthRouter(
   userStore: UserStore,
   betterAuthInstance = defaultBetterAuth,
+  revokedTokens: RevokedTokenStore = defaultRevokedTokenStore,
 ): Router {
   const router = Router();
 
@@ -178,7 +181,15 @@ export function createAuthRouter(
     response.json({ success: true, user: updated ?? request.user });
   });
 
-  router.post('/logout', (_request: Request, response: Response) => {
+  // Выход отзывает Bearer-токен на сервере: его копия (из другой вкладки, лога, украденная)
+  // больше не открывает аккаунт. Неподписанный или чужой мусор просто игнорируется.
+  router.post('/logout', (request: Request, response: Response) => {
+    const header = request.headers.authorization;
+    if (header?.startsWith('Bearer ')) {
+      const token = header.slice(7).trim();
+      const payload = verifyMockToken(token);
+      if (payload) revokedTokens.revoke(token, payload.exp);
+    }
     response.status(204).end();
   });
 

@@ -25,6 +25,7 @@ import { createBillingRouter } from './billing.js';
 import { createContactRouter } from './contact.js';
 import { telegramBotService } from '../telegram/bot.js';
 import type { AIGateway } from '../ai/gateway.js';
+import type { RevokedTokenStore } from '../store/revoked-token-store.js';
 import { createChatRouter } from './chat.js';
 import { createCodeRouter } from './code.js';
 import { createImagesRouter } from './images.js';
@@ -65,6 +66,8 @@ export interface ApiDeps {
   betterAuth?: typeof defaultBetterAuth;
   /** Шлюз ИИ для чата; в тестах — с явно включённым шаблонным движком. */
   chatGateway?: AIGateway;
+  /** Токены входа, отозванные при выходе; в тестах — временный файл. */
+  revokedTokenStore?: RevokedTokenStore;
 }
 
 /**
@@ -242,7 +245,14 @@ export function createApiRouter(deps: ApiDeps): Router {
           ledger: createBillingLedger(),
         }));
 
-  router.use(createAuthMiddleware(activeUserStore, deps.betterAuth, activeSubscriptionStore));
+  router.use(
+    createAuthMiddleware(
+      activeUserStore,
+      deps.betterAuth,
+      activeSubscriptionStore,
+      deps.revokedTokenStore,
+    ),
+  );
 
   router.get('/', (_request: Request, response: Response) => {
     response.json(describeService());
@@ -250,7 +260,7 @@ export function createApiRouter(deps: ApiDeps): Router {
 
   router.use(healthRouter);
   router.use(createMetaRouter());
-  router.use('/auth', createAuthRouter(activeUserStore, deps.betterAuth));
+  router.use('/auth', createAuthRouter(activeUserStore, deps.betterAuth, deps.revokedTokenStore));
   router.use(
     createContactRouter({
       notify: (message) =>

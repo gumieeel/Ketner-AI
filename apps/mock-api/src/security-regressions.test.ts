@@ -10,7 +10,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createBetterAuth, initAuthDatabase } from './auth/better-auth.js';
 import { betterAuthSessionMayOpen } from './auth/better-auth-sync.js';
-import { createApp } from './app.js';
+import { acceptsLargeBody, createApp } from './app.js';
 import { createConversationStore } from './store/conversation-store.js';
 import { createSubscriptionStore } from './store/subscription-store.js';
 import { createUserStore, type UserStore } from './store/user-store.js';
@@ -171,6 +171,35 @@ test('битый JSON — 400 без внутренних подробносте
     body: '{oops',
   });
   assert.equal(res.status, 400);
+});
+
+test('большое тело принимают только маршруты, которым оно нужно', async () => {
+  const big = JSON.stringify({ email: 'a@b.c', password: 'x'.repeat(2 * 1024 * 1024) });
+  const login = await fetch(`${base}/api/auth/login`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: big,
+  });
+  assert.equal(login.status, 413);
+  assert.equal(
+    ((await login.json()) as { error: { code: string } }).error.code,
+    'payload_too_large',
+  );
+
+  // Ответ чата с вложениями проходит разбор тела (дальше его проверяет PayloadGuard).
+  const chat = await fetch(`${base}/api/chat/completions`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ filler: 'x'.repeat(2 * 1024 * 1024) }),
+  });
+  assert.notEqual(chat.status, 413);
+
+  assert.equal(acceptsLargeBody('PUT', '/api/code/projects/abc12345/file'), true);
+  assert.equal(acceptsLargeBody('POST', '/api/code/projects/abc12345/import'), true);
+  assert.equal(acceptsLargeBody('POST', '/api/github/api/repos/o/r/git/blobs'), true);
+  assert.equal(acceptsLargeBody('POST', '/api/contact'), false);
+  assert.equal(acceptsLargeBody('POST', '/api/billing/cryptocloud/postback'), false);
+  assert.equal(acceptsLargeBody('GET', '/api/chat/completions'), false);
 });
 
 test('id сообщения из чужого диалога не переиспользуется', () => {

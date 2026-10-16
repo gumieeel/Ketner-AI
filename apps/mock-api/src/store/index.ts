@@ -1,4 +1,5 @@
 import { config } from '../config.js';
+import { createRevokedTokenStore } from './revoked-token-store.js';
 import { createApiKeyStore } from './api-key-store.js';
 import { createGithubConnectionStore } from '../github/connection-store.js';
 import { createConversationStore } from './conversation-store.js';
@@ -15,6 +16,11 @@ export const userStore = createUserStore(config.userStoreFile);
 export const apiKeyStore = createApiKeyStore(config.apiKeyStoreFile);
 export { createApiKeyStore } from './api-key-store.js';
 export type { ApiKeyStore, PublicApiKey } from './api-key-store.js';
+
+/** Токены входа, отозванные при выходе из аккаунта: файл из `config.revokedTokenStoreFile`. */
+export const revokedTokenStore = createRevokedTokenStore(config.revokedTokenStoreFile);
+export { createRevokedTokenStore } from './revoked-token-store.js';
+export type { RevokedTokenStore } from './revoked-token-store.js';
 
 /** Привязанные аккаунты GitHub (токены зашифрованы ключом из BETTER_AUTH_SECRET). */
 export const githubConnectionStore = createGithubConnectionStore({
