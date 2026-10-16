@@ -143,7 +143,11 @@ export const ru = {
   'checkout.starsChecking': 'Проверка транзакции Stars...',
   'checkout.starsNotice':
     'Платёж списывается мгновенно с баланса вашего Telegram аккаунта. Подписка активируется сразу после подтверждения.',
-  'checkout.starsPeriodNotice': '{price} за 30 дней подписки на {plan}',
+  'checkout.starsPeriodNotice': '30 дней подписки на {plan}',
+  'checkout.starsUsd': '≈ ${usd} по официальному курсу Telegram',
+  'checkout.starsUsdRate': '≈ ${usd} по официальному курсу Telegram (1 000 ⭐ = ${per1000})',
+  'checkout.starsDearer':
+    'Картой или криптой — {price}. В звёздах дороже: Telegram оставляет себе около трети стоимости звёзд.',
   'pricing.currentPlanBadge': 'Ваш текущий план',
   'settings.cancelSubscription': 'Отменить подписку',
   'settings.canceling': 'Отмена...',
@@ -210,7 +214,7 @@ export const ru = {
   'packs.price': 'Цена пакета',
   'packs.buy': 'Купить за ${price}',
   'packs.approx': '≈ {count} запросов {model}',
-  'packs.starsNotice': '{price} за +${quota} премиум-квоты на 30 дней',
+  'packs.starsNotice': '+${quota} премиум-квоты на 30 дней',
   'packs.perk1': 'Тратится после квоты тарифа, в бюджет тарифа не входит',
   'packs.perk2': 'Недельные лимиты моделей на запросы из пакета не действуют',
   'packs.perk3': 'Действует {days} дней с момента оплаты',
@@ -717,8 +721,10 @@ export const ru = {
   'tg.paymentFailed': 'Оплата не прошла. Попробуйте ещё раз.',
   'tg.refundShort':
     'Передумали? Вернуть оплату можно в течение {hours} часов, если вы ещё не пользовались моделями.',
-  'tg.rate': 'Курс: 1 ⭐ ≈ ${rate} ({source}), пересчитывается автоматически.',
-  'tg.rateDefault': 'по умолчанию',
+  'tg.rate': 'Цены в звёздах — по официальному курсу Telegram: 1 000 ⭐ = ${per1000}.',
+  'tg.rateMarket': 'На Fragment звёзды сейчас дешевле: ≈ ${per1000} за 1 000 ⭐.',
+  'tg.starsDearer':
+    'Картой или криптой на сайте — {prices}. В звёздах тариф дороже: Telegram оставляет себе около трети стоимости звёзд.',
   'tg.payCrypto': 'Оплатить криптовалютой на сайте',
   'tg.paymentsTitle': 'История оплат',
   'tg.paymentsEmpty': 'Платежей пока нет',

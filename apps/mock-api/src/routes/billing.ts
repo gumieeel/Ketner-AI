@@ -8,7 +8,13 @@ import type { UserStore } from '../store/user-store.js';
 import { packStars, planStars, telegramBotService } from '../telegram/bot.js';
 import { BillingService, createBillingLedger, planLabel } from '../billing/billing-service.js';
 import { isTrybitCurrency } from '../billing/trybit-currencies.js';
-import type { CryptoCurrency, CryptoInvoice, PlanId, PlanItem } from '../types.js';
+import type {
+  CryptoCurrency,
+  CryptoInvoice,
+  PlanId,
+  PlanItem,
+  TelegramStarsInvoice,
+} from '../types.js';
 import { isVipUser } from '../services/vip.js';
 import { stripeService } from '../services/stripe.js';
 import { cryptoCloudService } from '../services/cryptocloud.js';
@@ -377,15 +383,26 @@ export function createBillingRouter({
     response.json({ pct: Math.round(CRYPTO_PREMIUM_BONUS * 100), plans });
   });
 
+  /** Счёт в звёздах с ценой по официальному курсу Telegram — её показывает страница оплаты. */
+  const withStarsUsd = (invoice: TelegramStarsInvoice) => ({
+    ...invoice,
+    starsUsd: telegramBotService.rateService.toUsd(invoice.starsAmount),
+    usdPerStar: telegramBotService.rateService.rate.usdPerStar,
+  });
+
   // Пакеты премиум-квоты поверх подписки и кредиты пользователя.
   router.get('/billing/packs', (request: Request, response: Response) => {
     const userId = getUserId(request);
     response.json({
-      packs: PREMIUM_PACKS.map((pack) => ({
-        ...pack,
-        days: PREMIUM_PACK_DAYS,
-        stars: packStars(pack),
-      })),
+      packs: PREMIUM_PACKS.map((pack) => {
+        const stars = packStars(pack, telegramBotService.rateService);
+        return {
+          ...pack,
+          days: PREMIUM_PACK_DAYS,
+          stars,
+          starsUsd: telegramBotService.rateService.toUsd(stars),
+        };
+      }),
       credits: {
         ...billing.ledger.credits.balanceOf(userId),
         items: billing.ledger.credits.allOf(userId),
@@ -574,7 +591,7 @@ export function createBillingRouter({
           userId,
           request.user?.plan ?? 'free',
           0,
-          packStars(pack),
+          packStars(pack, telegramBotService.rateService),
           telegramBotService.botUsername || config.telegramBotUsername,
           pack.id,
         );
@@ -584,7 +601,7 @@ export function createBillingRouter({
             packInvoice = activeInvoiceStore.getTelegramStarsInvoice(packInvoice.id) ?? packInvoice;
           }
         }
-        response.json({ invoice: packInvoice });
+        response.json({ invoice: withStarsUsd(packInvoice) });
         return;
       }
 
@@ -602,7 +619,7 @@ export function createBillingRouter({
 
       // Цена в звёздах — по текущему курсу Telegram Stars, но не ниже точки безубыточности;
       // сумма фиксируется в счёте.
-      const starsAmount = planStars(plan.id);
+      const starsAmount = planStars(plan.id, telegramBotService.rateService);
       let invoice = activeInvoiceStore.createTelegramStarsInvoice(
         userId,
         plan.id,
@@ -616,7 +633,7 @@ export function createBillingRouter({
         if (link) invoice = activeInvoiceStore.getTelegramStarsInvoice(invoice.id) ?? invoice;
       }
 
-      response.json({ invoice });
+      response.json({ invoice: withStarsUsd(invoice) });
     },
   );
 

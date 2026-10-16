@@ -10,7 +10,14 @@ import { Notice, PanelShell, QrFrame, StatusRow } from './parts';
 export interface StarsPanelProps {
   /** Подпись под суммой: за что и на какой срок платёж. */
   periodNotice: string;
-  starsAmount: number;
+  /** Сумма в звёздах; null — счёт ещё готовится. */
+  starsAmount: number | null;
+  /** Сколько эти звёзды стоят по официальному курсу Telegram, $. */
+  starsUsd: number | null;
+  /** Официальный курс Telegram, $ за звезду (приходит со счётом). */
+  usdPerStar: number | null;
+  /** Цена картой или криптой — для сравнения. */
+  cardPriceUsd: number;
   botUsername: string;
   botDeepLink: string;
   loading: boolean;
@@ -23,6 +30,9 @@ export interface StarsPanelProps {
 export function StarsPanel({
   periodNotice,
   starsAmount,
+  starsUsd,
+  usdPerStar,
+  cardPriceUsd,
   botUsername,
   botDeepLink,
   loading,
@@ -51,10 +61,27 @@ export function StarsPanel({
       <div className="flex flex-col items-center gap-1.5 rounded-2xl border border-warning/25 bg-gradient-to-b from-warning-soft via-surface-2 to-surface-2 p-6 text-center">
         <p className="flex items-center justify-center gap-2.5 text-warning">
           <StarIcon aria-hidden="true" className="size-8 fill-warning" />
-          <span className="text-4xl font-semibold tracking-tight tabular-nums">{starsAmount}</span>
+          <span className="text-4xl font-semibold tracking-tight tabular-nums">
+            {starsAmount ?? '…'}
+          </span>
           <span className="text-xl text-muted">Stars</span>
         </p>
         <p className="text-[13px] text-muted">{periodNotice}</p>
+        {starsUsd !== null ? (
+          <p className="text-[13px] text-muted">
+            {usdPerStar
+              ? t('checkout.starsUsdRate', {
+                  usd: starsUsd.toFixed(2),
+                  per1000: (usdPerStar * 1000).toFixed(2),
+                })
+              : t('checkout.starsUsd', { usd: starsUsd.toFixed(2) })}
+          </p>
+        ) : null}
+        {starsUsd !== null && starsUsd > cardPriceUsd + 0.01 ? (
+          <p className="text-[12px] leading-5 text-subtle">
+            {t('checkout.starsDearer', { price: `$${cardPriceUsd}` })}
+          </p>
+        ) : null}
       </div>
 
       <div className="flex flex-col items-center gap-3">

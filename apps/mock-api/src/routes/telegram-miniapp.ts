@@ -8,7 +8,13 @@ import { planPriceUsd } from '../services/pricing.js';
 import type { InvoiceStore } from '../store/invoice-store.js';
 import type { SubscriptionStore } from '../store/subscription-store.js';
 import type { UserStore } from '../store/user-store.js';
-import { STARS_PLANS, planTitle, paymentTitle, type TelegramBotService } from '../telegram/bot.js';
+import {
+  STARS_PLANS,
+  planStars,
+  planTitle,
+  paymentTitle,
+  type TelegramBotService,
+} from '../telegram/bot.js';
 import { isTelegramAccountEmail } from '../telegram/auth-requests.js';
 import { validateInitData, type TelegramWebAppUser } from '../telegram/webapp-auth.js';
 import { EmailLinkCodes, EMAIL_CODE_TTL_MS } from '../telegram/email-link-codes.js';
@@ -178,11 +184,15 @@ export function createMiniAppRouter({
       plans: STARS_PLANS.map((planId) => {
         const priceUsd = planPriceUsd(planId);
         const preview = billing.preview(user.id, planId);
+        // Та же цена, что в счёте: по официальному курсу, но не ниже точки безубыточности.
+        const stars = planStars(planId, botService.rateService);
         return {
           id: planId,
           title: planTitle(planId),
           priceUsd,
-          stars: botService.rateService.quote(priceUsd),
+          stars,
+          /** Сколько эти звёзды стоят по официальному курсу Telegram. */
+          starsUsd: botService.rateService.toUsd(stars),
           highlight: getPlanItem(planId)?.modelsHighlight ?? '',
           bullets: getPlanItem(planId)?.bullets.ru ?? [],
           preview,

@@ -340,8 +340,13 @@ describe('billing-flow: каталог тарифов, чекаут и упра�
     const starsTab = screen.getByRole('button', { name: /Telegram Stars/i });
     fireEvent.click(starsTab);
 
-    // Должны появиться 2650 Stars и кнопка перехода в бота
-    expect(await screen.findByText('2650')).toBeInTheDocument();
+    // Должны появиться 2630 Stars, их цена по официальному курсу Telegram и кнопка перехода в бота
+    expect(await screen.findByText('2630')).toBeInTheDocument();
+    expect(
+      screen.getByText('≈ $52.57 по официальному курсу Telegram (1 000 ⭐ = $19.99)'),
+    ).toBeInTheDocument();
+    // В звёздах дороже, чем картой: это сказано прямо, с ценой картой
+    expect(screen.getByText(/Картой или криптой — \$49\. В звёздах дороже/)).toBeInTheDocument();
     expect(screen.getByRole('link', { name: /Оплатить в Telegram/i })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Подтвердить оплату Stars/i })).toBeInTheDocument();
   });

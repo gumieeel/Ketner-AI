@@ -10,6 +10,7 @@ import {
   LEGACY_PRICE_USD,
   PLAN_PRICE_RUB,
   PLAN_PRICE_USD,
+  STARS_OFFICIAL_USD_PER_STAR,
   ULTRA_LIST_PRICE_USD,
   planPriceCents,
   planPriceRub,
@@ -37,14 +38,15 @@ test('pricing: Stripe берёт центы, СБП рубли, Stars сходя
 
   for (const plan of PLANS) {
     if (plan.priceMonthly <= 0) continue;
-    // Звёзды считаются от цены в долларах по курсу Stars: по тому же курсу это не меньше цены тарифа.
+    // Доллары переводятся в звёзды по официальному курсу Telegram: по нему это не меньше цены
+    // тарифа и дороже не больше чем на округление до 10 звёзд.
     const stars = calculateStars(plan.priceMonthly);
     assert.ok(
-      stars * 0.015 >= plan.priceMonthly,
+      stars * STARS_OFFICIAL_USD_PER_STAR >= plan.priceMonthly,
       `${plan.id}: ${stars} ⭐ дешевле $${plan.priceMonthly}`,
     );
     assert.ok(
-      stars * 0.015 < plan.priceMonthly + 0.2,
+      stars * STARS_OFFICIAL_USD_PER_STAR < plan.priceMonthly + 0.2,
       `${plan.id}: ${stars} ⭐ заметно дороже $${plan.priceMonthly}`,
     );
     assert.equal(stars % 10, 0, 'цена в звёздах округляется до 10');

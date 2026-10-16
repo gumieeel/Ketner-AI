@@ -158,7 +158,7 @@ export function PlansTab({
                   {stars}
                   <StarIcon className="size-4 fill-warning text-warning" />
                 </p>
-                <p className="text-[12px] text-subtle">≈ ${plan.priceUsd}</p>
+                <p className="text-[12px] text-subtle">≈ ${plan.starsUsd.toFixed(2)}</p>
               </div>
             </div>
             <div className="rounded-lg bg-surface-2 px-3 py-2 text-[13px] leading-5">
@@ -194,12 +194,17 @@ export function PlansTab({
 
       <div className="flex flex-col gap-1.5 px-1 text-[12px] leading-5 text-subtle">
         <p>{t('tg.refundShort', { hours: refundPolicy.hours })}</p>
-        <p>
-          {t('tg.rate', {
-            rate: rate.usdPerStar.toFixed(4),
-            source: rate.source === 'fragment' ? 'Fragment' : t('tg.rateDefault'),
-          })}
-        </p>
+        <p>{t('tg.rate', { per1000: (rate.usdPerStar * 1000).toFixed(2) })}</p>
+        {plans.some((plan) => plan.starsUsd > plan.priceUsd + 0.01) ? (
+          <p>
+            {t('tg.starsDearer', {
+              prices: plans.map((plan) => `$${plan.priceUsd}`).join(' / '),
+            })}
+          </p>
+        ) : null}
+        {rate.market ? (
+          <p>{t('tg.rateMarket', { per1000: (rate.market.usdPerStar * 1000).toFixed(2) })}</p>
+        ) : null}
       </div>
       <Button
         variant="ghost"

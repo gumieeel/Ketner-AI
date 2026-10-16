@@ -19,6 +19,8 @@ export interface MiniAppPlan {
   title: string;
   priceUsd: number;
   stars: number;
+  /** Сколько эти звёзды стоят по официальному курсу Telegram, $. */
+  starsUsd: number;
   preview: PlanPreview;
 }
 
@@ -77,7 +79,13 @@ export interface MiniAppState {
     nextChargeAt: string | null;
   } | null;
   plans: MiniAppPlan[];
-  rate: { usdPerStar: number; source: 'fragment' | 'config'; updatedAt: string };
+  /** Курс цены в звёздах (официальный Telegram) и рыночный курс Fragment для сравнения. */
+  rate: {
+    usdPerStar: number;
+    source: 'official' | 'config';
+    updatedAt: string;
+    market: { usdPerStar: number; updatedAt: string } | null;
+  };
   payments: MiniAppPayment[];
   prefs: { reminders: boolean; receipts: boolean };
   /** Возврат — в течение стольких часов после оплаты и только без запросов к моделям. */

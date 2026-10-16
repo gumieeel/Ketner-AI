@@ -143,7 +143,11 @@ export const en: Record<TranslationKey, string> = {
   'checkout.starsChecking': 'Checking Stars transaction...',
   'checkout.starsNotice':
     'Payment is debited instantly from your Telegram account balance. Subscription activates immediately upon confirmation.',
-  'checkout.starsPeriodNotice': '{price} for 30 days of {plan}',
+  'checkout.starsPeriodNotice': '30 days of {plan}',
+  'checkout.starsUsd': '≈ ${usd} at the official Telegram rate',
+  'checkout.starsUsdRate': '≈ ${usd} at the official Telegram rate (1,000 ⭐ = ${per1000})',
+  'checkout.starsDearer':
+    'By card or crypto: {price}. Stars cost more because Telegram keeps about a third of their price.',
   'pricing.currentPlanBadge': 'Your current plan',
   'settings.cancelSubscription': 'Cancel subscription',
   'settings.canceling': 'Canceling...',
@@ -210,7 +214,7 @@ export const en: Record<TranslationKey, string> = {
   'packs.price': 'Pack price',
   'packs.buy': 'Buy for ${price}',
   'packs.approx': '≈ {count} {model} requests',
-  'packs.starsNotice': '{price} for +${quota} premium quota for 30 days',
+  'packs.starsNotice': '+${quota} premium quota for 30 days',
   'packs.perk1': 'Spent after the plan quota, not counted in the plan budget',
   'packs.perk2': 'Weekly model limits do not apply to pack requests',
   'packs.perk3': 'Valid for {days} days from payment',
@@ -719,8 +723,10 @@ export const en: Record<TranslationKey, string> = {
   'tg.paymentFailed': 'The payment did not go through. Please try again.',
   'tg.refundShort':
     'Changed your mind? You can get a refund within {hours} hours if you have not used the models yet.',
-  'tg.rate': 'Rate: 1 ⭐ ≈ ${rate} ({source}), updated automatically.',
-  'tg.rateDefault': 'default',
+  'tg.rate': 'Stars prices use the official Telegram rate: 1,000 ⭐ = ${per1000}.',
+  'tg.rateMarket': 'Stars are cheaper on Fragment right now: ≈ ${per1000} per 1,000 ⭐.',
+  'tg.starsDearer':
+    'By card or crypto on the website: {prices}. Plans cost more in Stars because Telegram keeps about a third of their price.',
   'tg.payCrypto': 'Pay with crypto on the website',
   'tg.paymentsTitle': 'Payment history',
   'tg.paymentsEmpty': 'No payments yet',

@@ -15,8 +15,10 @@ import {
   TelegramBotService,
   decodePayload,
   encodePayload,
+  planStars,
   type TelegramUpdate,
 } from '../telegram/bot.js';
+import { STARS_OFFICIAL_USD_PER_STAR } from '../services/pricing.js';
 import { TelegramLinkCodes, telegramLinkCodes } from '../telegram/link-codes.js';
 import { StarsRateService } from '../telegram/stars-rate.js';
 import { signInitData, validateInitData } from '../telegram/webapp-auth.js';
@@ -60,8 +62,10 @@ interface MiniState {
   plans: Array<{
     id: string;
     stars: number;
+    starsUsd: number;
     preview: { mode: string; bonusDays: number; renewsAt: string };
   }>;
+  rate: { usdPerStar: number; source: string };
   payments: Array<{
     id: string;
     status: string;
@@ -247,32 +251,42 @@ function codeFromMail(mail: MailMessage | undefined): string {
 
 // ───────────── базовые кирпичики ─────────────
 
-test('курс Stars: свежий курс Fragment применяется, устаревший или странный — нет', async () => {
+test('курс Stars: цена — по официальному курсу Telegram, Fragment только для сравнения', async () => {
   const now = Date.parse('2026-10-13T12:00:00Z');
   const feed = (body: unknown) => (async () => Response.json(body)) as unknown as typeof fetch;
   const fresh = new StarsRateService({
     now: () => now,
     fetchImpl: feed({ usdt_per_star: 0.0149, last_updated: '2026-10-12T00:00:00Z' }),
   });
-  assert.equal((await fresh.refresh()).source, 'fragment');
-  assert.equal(fresh.quote(9), 610);
+  const rate = await fresh.refresh();
+  assert.equal(rate.source, 'official');
+  assert.equal(rate.usdPerStar, STARS_OFFICIAL_USD_PER_STAR);
+  assert.deepEqual(rate.market, { usdPerStar: 0.0149, updatedAt: '2026-10-12T00:00:00.000Z' });
+  // Рыночный курс на цену не влияет: по нему Plus стоил бы 610 ⭐ ($12.19 по официальному курсу).
+  assert.deepEqual([fresh.quote(9), fresh.quote(25), fresh.quote(49)], [460, 1260, 2460]);
+  assert.equal(fresh.toUsd(1000), 19.99);
+
   const stale = new StarsRateService({
     now: () => now,
     fetchImpl: feed({ usdt_per_star: 0.0149, last_updated: '2026-01-09T00:00:00Z' }),
   });
-  assert.deepEqual([(await stale.refresh()).source, stale.rate.usdPerStar], ['config', 0.015]);
+  assert.equal((await stale.refresh()).market, null, 'устаревший курс не показывается');
   const absurd = new StarsRateService({
     now: () => now,
     fetchImpl: feed({ usdt_per_star: 2, last_updated: '2026-10-12T00:00:00Z' }),
   });
-  assert.equal((await absurd.refresh()).source, 'config');
+  assert.equal((await absurd.refresh()).market, null);
   const down = new StarsRateService({
     fetchImpl: (async () => {
       throw new Error('offline');
     }) as unknown as typeof fetch,
   });
   await down.refresh();
-  assert.deepEqual([down.quote(9), down.quote(25), down.quote(49)], [600, 1670, 3270]);
+  assert.deepEqual([down.quote(9), down.quote(25), down.quote(49)], [460, 1260, 2460]);
+
+  // Свой курс (если Telegram изменит прайс) — только в правдоподобных границах.
+  assert.equal(new StarsRateService({ usdPerStar: 0.025 }).rate.source, 'config');
+  assert.equal(new StarsRateService({ usdPerStar: 5 }).rate.source, 'official');
 });
 
 test('initData мини-приложения: подпись и срок действия проверяются', () => {
@@ -589,7 +603,7 @@ test('оплата звёздами: чек в журнале, продлени�
     { planId: 'plus' },
     token,
   );
-  assert.equal(invoice.body.stars, h.rateService.quote(9));
+  assert.equal(invoice.body.stars, planStars('plus', h.rateService));
   const linkCall = h.bot.last('createInvoiceLink')!;
   assert.equal(linkCall.body.subscription_period, undefined);
   const payload = String(linkCall.body.payload);
@@ -618,6 +632,14 @@ test('оплата звёздами: чек в журнале, продлени�
   assert.equal(state.body.payments[0]!.refundOption.kind, 'auto');
   const plusPlan = state.body.plans.find((plan) => plan.id === 'plus')!;
   assert.equal(plusPlan.preview.mode, 'extend');
+  // Кабинет показывает ту же цену, что попадёт в счёт, и её цену по официальному курсу Telegram.
+  assert.equal(plusPlan.stars, invoice.body.stars);
+  assert.equal(plusPlan.starsUsd, 11.59);
+  assert.deepEqual(
+    state.body.plans.map((plan) => plan.stars),
+    [580, 1440, 2630],
+  );
+  assert.equal(state.body.rate.source, 'official');
   const ultraPlan = state.body.plans.find((plan) => plan.id === 'ultra')!;
   assert.equal(ultraPlan.preview.mode, 'switch');
   // 30 дней Plus ($9) ≈ 5 дней Ultra ($49).
@@ -969,7 +991,7 @@ test('напоминания: с автопродлением — о списа�
   void token;
 });
 
-test('сайт: счёт в звёздах считается по текущему курсу', async (t) => {
+test('сайт: счёт в звёздах — по официальному курсу, не ниже точки безубыточности', async (t) => {
   const h = await harness();
   t.after(() => h.server.close());
   const buyer = await h.signup();
@@ -979,9 +1001,18 @@ test('сайт: счёт в звёздах считается по текуще�
     body: JSON.stringify({ planId: 'plus' }),
   });
   const { invoice } = await readJson<{
-    invoice: { starsAmount: number; botDeepLink: string; id: string };
+    invoice: {
+      starsAmount: number;
+      botDeepLink: string;
+      id: string;
+      starsUsd: number;
+      usdPerStar: number;
+    };
   }>(created);
-  assert.equal(invoice.starsAmount, 600);
+  // По официальному курсу Plus — 460 ⭐, но минимум без убытка — 580 ⭐ ($11.59 у Telegram).
+  assert.equal(invoice.starsAmount, 580);
+  assert.equal(invoice.starsUsd, 11.59);
+  assert.equal(invoice.usdPerStar, STARS_OFFICIAL_USD_PER_STAR);
   assert.match(invoice.botDeepLink, new RegExp(`\\?start=${invoice.id}$`));
 });
 

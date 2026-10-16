@@ -13,7 +13,10 @@ import {
   OPENROUTER_TOPUP_FEE,
   PACK_MAX_COST_SHARE,
   PAYMENT_NET_SHARE,
+  PLAN_PRICE_USD,
   PREMIUM_PACKS,
+  STARS_OFFICIAL_USD_PER_STAR,
+  STARS_PAYOUT_USD,
   starsNetUsd,
   TAX_RATE,
 } from './pricing.js';
@@ -95,24 +98,17 @@ test('Экономика тарифов: даже в худшем случае �
   }
 });
 
-/** Курс звёзд из источника (Fragment): от минимального до максимального правдоподобного. */
-async function starsAt(usdPerStar: number): Promise<StarsRateService> {
-  const now = Date.now();
-  const rates = new StarsRateService({
-    now: () => now,
-    fetchImpl: (async () =>
-      new Response(
-        JSON.stringify({ usdt_per_star: usdPerStar, last_updated: new Date(now).toISOString() }),
-      )) as typeof fetch,
-  });
-  const rate = await rates.refresh();
-  assert.equal(rate.usdPerStar, usdPerStar);
+/** Сервис курса с заданным курсом цены (официальный или переопределённый STARS_USD_RATE). */
+function starsAt(usdPerStar: number): StarsRateService {
+  const rates = new StarsRateService({ usdPerStar });
+  assert.equal(rates.rate.usdPerStar, usdPerStar);
   return rates;
 }
 
-const STAR_RATES = [0.008, 0.013, 0.015, 0.018, 0.02, 0.03];
+// Любой курс цены, который принимает stars-rate.ts: от $0.008 до $0.03, включая официальный.
+const STAR_RATES = [0.008, 0.013, 0.015, 0.018, STARS_OFFICIAL_USD_PER_STAR, 0.025, 0.03];
 
-test('Ни один тариф не уходит в минус ни в одном канале: 125% бюджета, комиссии и доля Free-тира', async () => {
+test('Ни один тариф не уходит в минус ни в одном канале: 125% бюджета, комиссии и доля Free-тира', () => {
   const margins: string[] = [];
   const check = (what: string, net: number, cost: number) => {
     margins.push(`${what}: ${(net - cost).toFixed(2)}`);
@@ -141,7 +137,7 @@ test('Ни один тариф не уходит в минус ни в одно�
   // Звёзды: Telegram платит фиксированные $0.013 за звезду, а курс покупки плавает. При любом
   // курсе, который принимает stars-rate.ts, цена в звёздах не ниже точки безубыточности.
   for (const usdPerStar of STAR_RATES) {
-    const rates = await starsAt(usdPerStar);
+    const rates = starsAt(usdPerStar);
     for (const planId of ['plus', 'pro', 'ultra'] as const) {
       const stars = planStars(planId, rates);
       check(
@@ -169,22 +165,35 @@ test('Ни один тариф не уходит в минус ни в одно�
   assert.ok(margins.length > 40, margins.join('\n'));
 });
 
-test('Цена в звёздах: по курсу, а не выше нужного — минимум включается только при дорогих звёздах', async () => {
-  const market = await starsAt(0.015);
-  for (const plan of PLANS) {
-    if (plan.priceMonthly <= 0) continue;
-    // При рыночном курсе Fragment цена — обычная цена по курсу (минимум ниже неё).
-    assert.equal(planStars(plan.id, market), market.quote(plan.priceMonthly), plan.id);
-  }
-  const expensive = await starsAt(0.03);
-  // При звёздах по $0.03 цена по курсу (300 ⭐ за Plus) дала бы $3.67 при худшем расходе $6.97.
-  assert.equal(expensive.quote(9), 300);
-  assert.equal(planStars('plus', expensive), 580);
+test('Цена в звёздах — по официальному курсу Telegram, но не ниже точки безубыточности', () => {
+  const official = new StarsRateService();
+  assert.equal(official.rate.source, 'official');
+  assert.equal(official.rate.usdPerStar, STARS_OFFICIAL_USD_PER_STAR);
+  // Звёзды тарифа по официальному курсу (460 / 1 260 / 2 460 ⭐) не покрывают худший расход с долей
+  // Free-тира: Telegram отдаёт $0.013 из $0.02. Поэтому действует минимум 580 / 1 440 / 2 630 ⭐.
+  assert.deepEqual(
+    (['plus', 'pro', 'ultra'] as const).map((id) => [
+      official.quote(PLAN_PRICE_USD[id]),
+      planStars(id, official),
+    ]),
+    [
+      [460, 580],
+      [1260, 1440],
+      [2460, 2630],
+    ],
+  );
   assert.ok(starsNetUsd(580) >= planWorstCaseCostUsd('plus'));
   assert.ok(
     starsNetUsd(570) < planWorstCaseCostUsd('plus'),
     '580 ⭐ — именно точка безубыточности',
   );
+  // Пакеты по официальному курсу и так в плюсе: цена в звёздах равна цене в долларах.
+  for (const pack of PREMIUM_PACKS) {
+    assert.equal(packStars(pack, official), official.quote(pack.priceUsd), pack.id);
+    assert.ok(Math.abs(official.toUsd(packStars(pack, official)) - pack.priceUsd) < 0.25, pack.id);
+  }
+  // Доля цены, которая доходит до нас со звёзд, — из выплаты и официальной цены, не отдельное число.
+  assert.equal(PAYMENT_NET_SHARE.stars, STARS_PAYOUT_USD / STARS_OFFICIAL_USD_PER_STAR);
 });
 
 test('CurrencyService.calculatePlanCostBudget: считает от цены в долларах', () => {

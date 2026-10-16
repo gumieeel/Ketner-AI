@@ -42,12 +42,6 @@ import { OrderSummary, PackSummary } from './checkout/order-summary';
 import { CheckoutSkeleton } from './checkout/parts';
 import { StarsPanel } from './checkout/stars-panel';
 
-/** Оценка цены в звёздах до выставления счёта: курс по умолчанию $0.015, округление до 10. */
-function calculateStars(priceUsd: number): number {
-  if (priceUsd <= 0) return 0;
-  return Math.max(10, Math.ceil(priceUsd / 0.015 / 10) * 10);
-}
-
 export function CheckoutPage() {
   const { t, language } = useTranslation();
   const navigate = useNavigate();
@@ -371,8 +365,10 @@ export function CheckoutPage() {
     }
   };
 
-  // Сумма в звёздах приходит со счётом (по текущему курсу Telegram Stars); до счёта — оценка.
-  const starsAmount = starsInvoice?.starsAmount ?? pack?.stars ?? calculateStars(priceUsd);
+  // Сумма в звёздах и её цена по официальному курсу Telegram приходят со счётом (у пакета — со
+  // списком пакетов); до счёта тарифа сумма неизвестна.
+  const starsAmount = starsInvoice?.starsAmount ?? pack?.stars ?? null;
+  const starsUsd = starsInvoice?.starsUsd ?? pack?.starsUsd ?? null;
   const rawBot = starsInvoice?.botUsername;
   const botUsername =
     rawBot && rawBot.trim() !== '' && rawBot !== 'KetnerAIBot'
@@ -410,8 +406,8 @@ export function CheckoutPage() {
     ? t('checkout.cryptoPlanChip', { plan: planName })
     : t('packs.chip', { quota: pack?.quotaUsd ?? 0, days: pack?.days ?? 30 });
   const periodNotice = plan
-    ? t('checkout.starsPeriodNotice', { price: `$${priceUsd}`, plan: planName })
-    : t('packs.starsNotice', { price: `$${priceUsd}`, quota: pack?.quotaUsd ?? 0 });
+    ? t('checkout.starsPeriodNotice', { plan: planName })
+    : t('packs.starsNotice', { quota: pack?.quotaUsd ?? 0 });
   const feedbackFor = (method: PaymentMethod): string | null =>
     checkFeedback && checkFeedback.method === method ? checkFeedback.message : null;
   const selectMethod = (method: PaymentMethod): void => {
@@ -642,6 +638,9 @@ export function CheckoutPage() {
             <StarsPanel
               periodNotice={periodNotice}
               starsAmount={starsAmount}
+              starsUsd={starsUsd}
+              usdPerStar={starsInvoice?.usdPerStar ?? null}
+              cardPriceUsd={priceUsd}
               botUsername={botUsername}
               botDeepLink={botDeepLink}
               loading={starsLoading}

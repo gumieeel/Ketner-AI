@@ -124,6 +124,10 @@ export interface TelegramStarsInvoice {
   botDeepLink: string;
   status: 'pending' | 'paid';
   expiresAt: string;
+  /** Сколько эти звёзды стоят по официальному курсу Telegram, $. */
+  starsUsd?: number;
+  /** Официальный курс Telegram, по которому считается цена, $ за звезду. */
+  usdPerStar?: number;
 }
 
 /** Пакет премиум-квоты поверх подписки (цены приходят с сервера: services/pricing.ts). */
@@ -134,8 +138,10 @@ export interface PremiumPack {
   priceUsd: number;
   /** Сколько дней действуют кредиты. */
   days: number;
-  /** Цена в звёздах по текущему курсу. */
+  /** Цена в звёздах по официальному курсу Telegram. */
   stars: number;
+  /** Сколько эти звёзды стоят по официальному курсу Telegram, $. */
+  starsUsd: number;
 }
 
 /** Кредиты докупленного пакета. */
