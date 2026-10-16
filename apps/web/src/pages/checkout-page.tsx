@@ -386,8 +386,7 @@ export function CheckoutPage() {
   ) {
     botDeepLink = starsInvoice.botDeepLink;
   }
-  // Ссылка на окно оплаты открывает оплату сразу, без переписки с ботом.
-  if (starsInvoice?.invoiceLink) botDeepLink = starsInvoice.invoiceLink;
+  // Кнопка и QR ведут в бота: он присылает сообщение со счётом, оплата — в чате с ботом.
 
   const currentCrypto = cryptoOption(cryptoCurrency);
   // Реквизиты от Trybit (H2H): точная сумма в криптовалюте приходит со счётом.

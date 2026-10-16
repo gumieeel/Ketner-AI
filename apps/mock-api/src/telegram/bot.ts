@@ -1240,6 +1240,26 @@ export class TelegramBotService implements TelegramPaymentsPort {
       );
       return { handled: true, action: invoice ? 'deep_link_paid' : 'deep_link_missing' };
     }
+    const pack = invoice.packId ? findPremiumPack(invoice.packId) : undefined;
+    const item = pack
+      ? `+$${pack.quotaUsd} премиум-квоты на ${PREMIUM_PACK_DAYS} дней`
+      : `Ketner AI ${planTitle(invoice.planId)} · 30 дней`;
+    const account = this.deps.userStore.findById(invoice.userId);
+    await this.sendMessage(
+      chatId,
+      [
+        '🧾 <b>Счёт на оплату</b>',
+        '',
+        `${item} — <b>${invoice.starsAmount} ⭐</b>`,
+        account ? `Аккаунт: ${escapeHtml(accountLabel(account))}` : '',
+        '',
+        pack
+          ? 'Нажмите «Заплатить» в счёте ниже — квота начислится сразу после оплаты.'
+          : 'Нажмите «Заплатить» в счёте ниже — тариф включится сразу после оплаты, страница на сайте обновится сама.',
+      ]
+        .filter((line, index, lines) => line || lines[index - 1])
+        .join('\n'),
+    );
     await this.sendStarsInvoice(chatId, invoice);
     return { handled: true, action: 'invoice_stars_sent' };
   }
