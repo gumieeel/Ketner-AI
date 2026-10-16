@@ -46,6 +46,7 @@ import { FairUseEngine } from '../services/fair-use.js';
 import { evaluateBudget, type BudgetStage } from '../services/budget-policy.js';
 import { getCodeLimits, quotaOf } from '../services/code-limits.js';
 import type { Language, PlanId } from '../types.js';
+import { getPremiumQuota } from '../services/premium-quota.js';
 import {
   agentToolDefinitions,
   executeTool,
@@ -541,12 +542,9 @@ export class AgentRunner {
       );
     }
 
-    const premiumSpent = usageStore.getCostLastMonthByModels(
-      input.userId,
-      this.registry.getPremiumModelIds(),
-    );
-    const premiumRemaining = entitlements.premiumBudget - premiumSpent;
-    const economyState = { stage: budget.stage, premiumAvailable: premiumRemaining > 0 };
+    const premium = getPremiumQuota(input.userId, plan, { usageStore, registry: this.registry });
+    const premiumRemaining = premium.remainingUsd;
+    const economyState = { stage: budget.stage, premiumAvailable: premium.available };
 
     const choice = selectAgentModel({
       plan,

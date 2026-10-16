@@ -20,6 +20,8 @@ export interface FakeApiOptions {
   rateLimitAfter?: number;
   /** Привязанный аккаунт GitHub: по умолчанию не подключён. */
   github?: { connected: boolean; login?: string };
+  /** Ответ GET /api/usage/quota (по умолчанию 404: строка остатка не показывается). */
+  quota?: (mode: 'standard' | 'max') => unknown;
 }
 
 export interface FakeApi {
@@ -733,6 +735,10 @@ export function installFakeApi(options: FakeApiOptions = {}): FakeApi {
             headers: { 'Content-Type': 'text/event-stream' },
           },
         );
+      }
+
+      if (url.startsWith('/api/usage/quota') && options.quota) {
+        return json(options.quota(url.includes('mode=max') ? 'max' : 'standard'));
       }
 
       if (url === '/api/github/status') {

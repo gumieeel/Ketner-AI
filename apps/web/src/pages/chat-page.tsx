@@ -3,6 +3,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { ChatEmptyState } from '@/components/chat/chat-empty-state';
 import { Composer } from '@/components/chat/composer';
 import { MessageList } from '@/components/chat/message-list';
+import { QuotaLine } from '@/components/chat/quota-line';
 import { AlertIcon } from '@/components/icons';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -40,6 +41,7 @@ export function ChatPage() {
 
   return (
     <div className="flex h-full flex-col">
+      <QuotaLine />
       {messagesStatus === 'loading' ? <MessagesSkeleton /> : null}
 
       {messagesStatus === 'error' ? (

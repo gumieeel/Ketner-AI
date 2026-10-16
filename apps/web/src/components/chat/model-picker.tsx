@@ -14,9 +14,11 @@ import {
 import { useChat } from '@/features/chat/chat-store';
 import type { ModelInfo } from '@/features/chat/types';
 import { usePreferences } from '@/features/preferences/preferences-store';
+import { useQuota } from '@/features/usage/quota-store';
 import { cn } from '@/lib/cn';
+import { pluralForm } from '@/lib/format-date';
 import { modelColor } from '@/lib/model-color';
-import { useTranslation } from '@/i18n';
+import { useTranslation, type TranslationKey } from '@/i18n';
 
 /** Модели по умолчанию: используются, пока каталог не загрузился. */
 const FALLBACK_MODELS: readonly ModelInfo[] = DEFAULT_MODELS;
@@ -34,11 +36,12 @@ function tierOf(model: ModelInfo): ModelTier {
 
 /** Переключатель моделей: логика ответа одна, меняется подпись и лимит контекста. */
 export function ModelPicker({ disabled = false }: { disabled?: boolean }) {
-  const { t } = useTranslation();
+  const { t, language } = useTranslation();
   const meta = useChat((state) => state.meta);
   const selectedId = usePreferences((state) => state.chatModelId);
   const setModelId = usePreferences((state) => state.setChatModelId);
   const user = useAuth((state) => state.user);
+  const quota = useQuota((state) => state.report);
   const [open, setOpen] = useState(false);
   const [focusedIndex, setFocusedIndex] = useState<number>(-1);
 
@@ -53,6 +56,10 @@ export function ModelPicker({ disabled = false }: { disabled?: boolean }) {
     const key = MODEL_NAME_KEYS[model.id];
     return key ? t(key) : model.name;
   };
+
+  /** Сколько запросов топ-модели примерно осталось (из GET /api/usage/quota). */
+  const remainingOf = (id: string): number | undefined =>
+    quota?.models.find((m) => m.id === id)?.remaining;
 
   const isFreeModel = (m: ModelInfo) => tierOf(m) === 'free';
   const isPlusModel = (m: ModelInfo) => tierOf(m) === 'plus';
@@ -199,6 +206,20 @@ export function ModelPicker({ disabled = false }: { disabled?: boolean }) {
               ) : null}
             </span>
           </span>
+          {accessible && remainingOf(model.id) !== undefined ? (
+            <span
+              className="shrink-0 text-xs text-subtle tabular-nums"
+              title={t(
+                `quota.remaining.${pluralForm(remainingOf(model.id)!, language)}` as TranslationKey,
+                {
+                  count: remainingOf(model.id)!,
+                  model: labelOf(model),
+                },
+              )}
+            >
+              {t('quota.badge', { count: remainingOf(model.id)! })}
+            </span>
+          ) : null}
           <span className="flex size-5 shrink-0 items-center justify-center">
             {!accessible ? (
               <LockIcon className="size-3.5 text-subtle" aria-label={t('chat.modelLocked')} />

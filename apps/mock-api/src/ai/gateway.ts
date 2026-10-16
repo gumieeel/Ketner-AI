@@ -62,6 +62,7 @@ import { CircuitBreaker, defaultCircuitBreaker } from './circuit-breaker.js';
 import { computeRequestCost } from './engine-pricing.js';
 import { createStreamWatchdog, DEFAULT_WATCHDOG_LIMITS } from './stream-watchdog.js';
 import { evaluateBudget, type BudgetStage } from '../services/budget-policy.js';
+import { getPremiumQuota } from '../services/premium-quota.js';
 import { PayloadGuard } from './payload-guard.js';
 import {
   buildAttachmentsBlock,
@@ -523,11 +524,10 @@ export class AIGateway {
     }
 
     // Квота премиум-запросов: сколько тариф разрешает потратить на сильные модели за 30 дней.
-    const premiumSpent = this.usageStore.getCostLastMonthByModels(
-      activeUserId,
-      this.registry.getPremiumModelIds(),
-    );
-    const premiumAvailable = entitlements.premiumBudget - premiumSpent > 0;
+    const premiumAvailable = getPremiumQuota(activeUserId, effectivePlan, {
+      usageStore: this.usageStore,
+      registry: this.registry,
+    }).available;
     const economyState = { stage, premiumAvailable };
 
     // 2. Анализ запроса

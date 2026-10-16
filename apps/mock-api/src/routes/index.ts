@@ -30,6 +30,7 @@ import type { Mailer } from '../services/mailer.js';
 import { createChatRouter } from './chat.js';
 import { createCodeRouter } from './code.js';
 import { createImagesRouter } from './images.js';
+import { createUsageRouter } from './usage.js';
 import { createConversationsRouter } from './conversations.js';
 import { healthRouter } from './health.js';
 import { createMetaRouter } from './meta.js';
@@ -153,6 +154,12 @@ export const API_ENDPOINTS = [
     path: '/api/code/projects/:id/run',
     status: 'ready',
     description: 'Ketner Code: запуск агента (SSE)',
+  },
+  {
+    method: 'GET',
+    path: '/api/usage/quota',
+    status: 'ready',
+    description: 'Остаток запросов топ-моделей и когда восстановится',
   },
   { method: 'GET', path: '/api/keys', status: 'ready', description: 'API-ключи пользователя' },
   {
@@ -324,6 +331,14 @@ export function createApiRouter(deps: ApiDeps): Router {
       usageStore: activeUsageStore,
       githubTokenOf: (userId) => activeGithubStore.tokenOf(userId),
       fetchImpl: deps.githubFetch,
+    }),
+  );
+  router.use(
+    '/usage',
+    createUsageRouter({
+      usageStore: activeUsageStore,
+      userStore: activeUserStore,
+      subscriptionStore: activeSubscriptionStore,
     }),
   );
   router.use(

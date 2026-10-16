@@ -329,6 +329,49 @@ export class UsageStore {
     return Number(total.toFixed(6));
   }
 
+  /**
+   * Траты пользователя за последние `windowMs` по заданным моделям (все модели, если null), старые
+   * первыми. По ним видно, когда скользящая квота вернётся: траты выпадают из окна по очереди.
+   */
+  getCostEvents(
+    userId: string,
+    modelIds: Iterable<string> | null,
+    windowMs: number,
+  ): Array<{ at: number; cost: number }> {
+    const wanted = modelIds ? new Set(modelIds) : null;
+    const userRecords = this.userIndex.get(userId) ?? [];
+    const since = Date.now() - windowMs;
+    const events: Array<{ at: number; cost: number }> = [];
+    for (let i = userRecords.length - 1; i >= 0; i--) {
+      const rec = userRecords[i];
+      const at = new Date(rec.createdAt).getTime();
+      if (at < since) break;
+      if (wanted && !wanted.has(rec.modelId)) continue;
+      const cost = wanted ? (rec.actualCost ?? rec.estimatedCost) : rec.estimatedCost;
+      if (cost > 0) events.push({ at, cost });
+    }
+    return events.reverse();
+  }
+
+  private observedCostCache: { at: number; byModel: Map<string, number> } | null = null;
+
+  /**
+   * Средняя фактическая цена запроса модели за 30 дней по всем пользователям, если запросов
+   * набралось не меньше 20 (иначе null: оценке по таблице цен верить больше, чем трём запросам).
+   * Пересчитывается не чаще раза в 10 минут.
+   */
+  getObservedRequestCost(modelId: string): number | null {
+    const now = Date.now();
+    if (!this.observedCostCache || now - this.observedCostCache.at > 10 * 60 * 1000) {
+      const byModel = new Map<string, number>();
+      for (const metric of this.getModelUsage30d({ now })) {
+        if (metric.requests >= 20) byModel.set(metric.modelId, metric.avgCostPerRequest);
+      }
+      this.observedCostCache = { at: now, byModel };
+    }
+    return this.observedCostCache.byModel.get(modelId) ?? null;
+  }
+
   /** Сколько картинок модели пользователь сгенерировал за последние 24 часа (успешных). */
   getImagesLastDay(userId: string, modelId: string): number {
     const userRecords = this.userIndex.get(userId) ?? [];

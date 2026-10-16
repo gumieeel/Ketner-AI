@@ -38,6 +38,7 @@ import {
 } from './agent/agent-types.js';
 import type { RequestedReasoningEffort } from './agent/openai-compat.js';
 import { evaluateBudget, type BudgetStage } from '../services/budget-policy.js';
+import { getPremiumQuota } from '../services/premium-quota.js';
 import { EntitlementService, planRank } from '../services/entitlement.js';
 import { FairUseEngine } from '../services/fair-use.js';
 import type { UsageStore } from '../store/usage-store.js';
@@ -226,6 +227,10 @@ export class AgentGateway {
     this.circuitBreaker = deps.circuitBreaker ?? defaultCircuitBreaker;
   }
 
+  private quotaDeps() {
+    return { usageStore: this.usageStore, registry: this.registry };
+  }
+
   /** Публичные модели каталога для агента (без `auto`). */
   listPublicModels(): ModelRegistryEntry[] {
     return PUBLIC_MODEL_IDS.flatMap((id) => {
@@ -269,10 +274,7 @@ export class AgentGateway {
     const entitlements = EntitlementService.getEntitlements(plan);
     const snapshot = this.usageStore.getFairUseSnapshot(userId);
     const budget = evaluateBudget(snapshot.estimatedCostLastMonth, entitlements.costBudget);
-    const premiumSpent = this.usageStore.getCostLastMonthByModels(
-      userId,
-      this.registry.getPremiumModelIds(),
-    );
+    const premium = getPremiumQuota(userId, plan, this.quotaDeps());
     const round = (value: number): number => Math.round(value * 10_000) / 10_000;
     return {
       plan,
@@ -283,9 +285,9 @@ export class AgentGateway {
         stage: budget.stage,
       },
       premium: {
-        limit_usd: entitlements.premiumBudget,
-        used_usd: round(premiumSpent),
-        available: entitlements.premiumBudget - premiumSpent > 0,
+        limit_usd: premium.budgetUsd,
+        used_usd: round(premium.spentUsd),
+        available: premium.available,
       },
       requests_last_day: snapshot.requestsLastDay,
       window: 'rolling_30_days' as const,
@@ -341,11 +343,7 @@ export class AgentGateway {
       );
     }
 
-    const premiumSpent = this.usageStore.getCostLastMonthByModels(
-      req.userId,
-      this.registry.getPremiumModelIds(),
-    );
-    const premiumAvailable = entitlements.premiumBudget - premiumSpent > 0;
+    const premiumAvailable = getPremiumQuota(req.userId, plan, this.quotaDeps()).available;
     const economyState = { stage, premiumAvailable };
 
     // 3. Модель: только публичный каталог; права проверяются по запрошенной модели до замен.
@@ -703,6 +701,7 @@ export class AgentGateway {
   private buildSuccess(
     req: AgentRunRequest,
     ctx: {
+      plan: PlanId;
       entitlements: ReturnType<typeof EntitlementService.getEntitlements>;
       routingReason: string;
       target: ModelRegistryEntry;
@@ -714,10 +713,7 @@ export class AgentGateway {
     // Бюджет после записи расхода: клиент видит, сколько осталось именно сейчас.
     const snapshot = this.usageStore.getFairUseSnapshot(req.userId);
     const after = evaluateBudget(snapshot.estimatedCostLastMonth, ctx.entitlements.costBudget);
-    const premiumSpent = this.usageStore.getCostLastMonthByModels(
-      req.userId,
-      this.registry.getPremiumModelIds(),
-    );
+    const premium = getPremiumQuota(req.userId, ctx.plan, this.quotaDeps());
     return {
       kind: 'ok',
       content: result.content,
@@ -734,7 +730,7 @@ export class AgentGateway {
       budget: {
         stage: after.stage,
         usedPct: Math.round(after.ratio * 1000) / 10,
-        premiumAvailable: ctx.entitlements.premiumBudget - premiumSpent > 0,
+        premiumAvailable: premium.available,
       },
     };
   }

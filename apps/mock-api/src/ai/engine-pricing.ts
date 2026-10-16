@@ -6,7 +6,7 @@
  * через платный deepseek/deepseek-chat и в учёте стоил $0, поэтому лимиты по бюджету не срабатывали.
  */
 
-import type { ModelPricing, ModelRegistryEntry } from './gateway-types.js';
+import type { ModelPricing, ModelRegistryEntry, ReasoningEffort } from './gateway-types.js';
 import { CostCalculator, type TokenBreakdown } from '../services/cost.js';
 
 /**
@@ -65,4 +65,33 @@ export function computeRequestCost(input: RequestCostInput): RequestCost {
   }
   const pricing = effectivePricing(input.model, input.engineId);
   return { usd: CostCalculator.calculate(input.tokens, pricing).totalCost, source: 'table' };
+}
+
+/**
+ * Типичный запрос для оценок «сколько запросов осталось» (и расчёта в docs/models-and-pricing.md):
+ * 7.6k токенов на входе (системный промпт, последние сообщения, сводка) и выход по глубине
+ * размышлений — размышления оплачиваются как выходные токены.
+ */
+export const TYPICAL_REQUEST_INPUT_TOKENS = 7_600;
+export const TYPICAL_OUTPUT_TOKENS_BY_EFFORT: Readonly<Record<ReasoningEffort, number>> = {
+  none: 700,
+  low: 1_200,
+  medium: 2_000,
+  high: 4_000,
+  xhigh: 7_000,
+  max: 7_000,
+};
+
+/** Цена типичного запроса к модели при заданной глубине размышлений, без кэша ($). */
+export function typicalRequestCost(
+  model: Pick<ModelRegistryEntry, 'pricing' | 'provider'>,
+  effort: ReasoningEffort,
+): number {
+  return CostCalculator.calculate(
+    {
+      inputTokens: TYPICAL_REQUEST_INPUT_TOKENS,
+      outputTokens: TYPICAL_OUTPUT_TOKENS_BY_EFFORT[effort],
+    },
+    effectivePricing(model),
+  ).totalCost;
 }
