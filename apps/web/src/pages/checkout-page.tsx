@@ -35,6 +35,7 @@ import { formatShortDate } from '@/lib/format-date';
 import { copyText } from '@/lib/clipboard';
 import { useTranslation } from '@/i18n';
 import { cn } from '@/lib/cn';
+import { trackPurchase } from '@/lib/ads';
 import { cryptoOption } from './checkout/crypto-options';
 import { CryptoPanel } from './checkout/crypto-panel';
 import { closeGatewayWindow } from './checkout/gateway-window';
@@ -237,7 +238,14 @@ export function CheckoutPage() {
       '',
       `/checkout/success${item ? `?item=${encodeURIComponent(item)}` : ''}`,
     );
-  }, [success, packId, planId]);
+    trackPurchase({
+      id: cryptoInvoice?.id ?? starsInvoice?.id ?? `${item}-${Date.now()}`,
+      item,
+      valueUsd: priceUsd,
+    });
+    // Отправляем один раз — в момент успешной оплаты.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [success]);
 
   // Polling статуса инвойса
   useEffect(() => {

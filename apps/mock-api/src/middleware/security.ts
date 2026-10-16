@@ -77,6 +77,28 @@ export function inlineScriptHashes(html: string): string[] {
   return hashes;
 }
 
+/** Источники тега Google (gtag.js) для Google Ads — по рекомендациям Google для CSP. */
+const GOOGLE_TAG_SCRIPTS = [
+  'https://www.googletagmanager.com',
+  'https://www.googleadservices.com',
+  'https://www.google.com',
+  'https://googleads.g.doubleclick.net',
+];
+const GOOGLE_TAG_CONNECT = [
+  'https://www.googletagmanager.com',
+  'https://www.googleadservices.com',
+  'https://www.google.com',
+  'https://googleads.g.doubleclick.net',
+  'https://*.google-analytics.com',
+  'https://*.analytics.google.com',
+  'https://*.doubleclick.net',
+];
+const GOOGLE_TAG_FRAMES = [
+  'https://www.googletagmanager.com',
+  'https://td.doubleclick.net',
+  'https://bid.g.doubleclick.net',
+];
+
 /**
  * Content-Security-Policy для веб-интерфейса. Главное — script-src: даже если в разметку попадёт
  * чужой код (XSS), браузер не выполнит ни inline-скрипт, ни скрипт с постороннего домена, и токен
@@ -92,15 +114,17 @@ export function buildContentSecurityPolicy(indexHtml: string | null): string {
     connect.add('ws://localhost:*');
   }
   const scriptHashes = indexHtml ? inlineScriptHashes(indexHtml) : [];
+  // Тег Google Ads (gtag.js): загрузка скрипта, отправка конверсий и служебные фреймы.
+  for (const origin of GOOGLE_TAG_CONNECT) connect.add(origin);
   return [
     "default-src 'self'",
-    `script-src 'self' https://telegram.org ${scriptHashes.join(' ')}`.trim(),
+    `script-src 'self' https://telegram.org ${GOOGLE_TAG_SCRIPTS.join(' ')} ${scriptHashes.join(' ')}`.trim(),
     "style-src 'self' 'unsafe-inline'",
     "img-src 'self' data: blob: https:",
     "font-src 'self' data:",
     "media-src 'self' data: blob:",
     `connect-src ${[...connect].join(' ')}`,
-    "frame-src 'self'",
+    `frame-src 'self' ${GOOGLE_TAG_FRAMES.join(' ')}`,
     "worker-src 'self' blob:",
     "object-src 'none'",
     "base-uri 'self'",
