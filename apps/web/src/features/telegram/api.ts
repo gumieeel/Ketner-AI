@@ -151,7 +151,7 @@ export const miniAppApi = {
     call<{ code: string; expiresAt: number }>('/link-code', { body: { initData } }),
   state: (token: string) => call<MiniAppState>('/state', { token }),
   invoice: (token: string, planId: PaidPlanId, recurring: boolean) =>
-    call<{ invoiceId: string; link: string; stars: number; recurring: boolean }>('/invoice', {
+    call<{ invoiceId: string; link: string; stars: number; recurring: boolean; free?: boolean }>('/invoice', {
       token,
       body: { planId, recurring },
     }),

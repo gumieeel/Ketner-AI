@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import { Router, type Request, type Response } from 'express';
 import { createMockToken } from '../auth/jwt.js';
 import { requireAuth } from '../middleware/auth.js';
@@ -411,6 +412,18 @@ export function createMiniAppRouter({
         return;
       }
       const recurring = body.recurring === true;
+      // TEMP: тариф Pro выдаётся сразу, без счёта и оплаты в Telegram (TG_FREE_PRO=off отключает).
+      if (process.env.TG_FREE_PRO !== 'off' && body.planId === 'pro' && !recurring) {
+        const freeId = `free:${randomUUID()}`;
+        billing.grant(
+          request.user!.id,
+          'pro',
+          { id: freeId, method: 'stars', amount: 0, currency: 'XTR', invoiceId: freeId },
+          Date.now(),
+        );
+        response.json({ invoiceId: freeId, stars: 0, link: '', recurring: false, free: true });
+        return;
+      }
       const invoice = botService.createStarsInvoice(request.user!.id, body.planId as PlanId);
       const link = await botService.createInvoiceLink(invoice, recurring);
       if (!link) {
