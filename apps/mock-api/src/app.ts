@@ -17,6 +17,7 @@ import {
 } from './middleware/security.js';
 import { sendError } from './middleware/errors.js';
 import { createApiRouter, describeService } from './routes/index.js';
+import { classifyPath, renderIndexHtml, robotsTxt, sitemapXml } from './seo/pages.js';
 import {
   apiKeyStore as defaultApiKeyStore,
   conversationStore,
@@ -248,9 +249,40 @@ export function createApp(overrides: Partial<AppDeps> = {}): Express {
   );
   app.use(express.urlencoded({ extended: true, limit: DEFAULT_BODY_LIMIT }));
 
+  // Для поисковиков: настоящие robots.txt и sitemap.xml (раньше на эти адреса отдавалась главная).
+  app.get('/robots.txt', (_request, response) => {
+    response.type('text/plain; charset=utf-8').setHeader('Cache-Control', 'public, max-age=3600');
+    response.send(robotsTxt());
+  });
+  app.get('/sitemap.xml', (_request, response) => {
+    response.type('application/xml; charset=utf-8').setHeader('Cache-Control', 'public, max-age=3600');
+    response.send(sitemapXml());
+  });
+
   if (hasWebDist) {
     app.use(express.static(webDistPath, { index: false, dotfiles: 'ignore' }));
   }
+
+  // index.html со своими title/description/canonical для каждого адреса (см. seo/pages.ts).
+  const pageCache = new Map<string, string>();
+  const sendPage = (request: express.Request, response: express.Response): void => {
+    if (!indexHtml) {
+      response.sendFile(indexHtmlPath, { dotfiles: 'allow' });
+      return;
+    }
+    const kind = classifyPath(request.path);
+    const key = kind === 'public' ? request.path.replace(/\/+$/, '') || '/' : kind;
+    let html = pageCache.get(key);
+    if (!html) {
+      html = renderIndexHtml(indexHtml, kind === 'public' ? request.path : '/__none__');
+      pageCache.set(key, html);
+    }
+    response
+      .status(kind === 'missing' ? 404 : 200)
+      .type('text/html; charset=utf-8')
+      .setHeader('Cache-Control', 'public, max-age=0');
+    response.send(html);
+  };
 
   app.use('/api', createApiRouter(deps));
 
@@ -261,7 +293,7 @@ export function createApp(overrides: Partial<AppDeps> = {}): Express {
       !request.headers.accept?.includes('text/html');
 
     if (hasWebDist && !wantsJson) {
-      return response.sendFile(indexHtmlPath, { dotfiles: 'allow' });
+      return sendPage(request, response);
     }
     response.json({
       ...describeService(),
@@ -277,7 +309,7 @@ export function createApp(overrides: Partial<AppDeps> = {}): Express {
       if (request.method !== 'GET' || request.path.startsWith('/api')) {
         return next();
       }
-      response.sendFile(indexHtmlPath, { dotfiles: 'allow' });
+      sendPage(request, response);
     });
   }
 
