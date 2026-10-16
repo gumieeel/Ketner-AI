@@ -1134,3 +1134,26 @@ test('бонус за крипту: действует на период, опл
   h.billingService.ledger.payments.put({ ...crypto, status: 'refunded' });
   assert.equal(h.billingService.cryptoBonusActive(buyer.user.id, 'pro', now - 5 * DAY_MS), false);
 });
+
+test('оплата с сайта: ссылка ведёт в бота, бот присылает сообщение и счёт', async (t) => {
+  const h = await harness();
+  t.after(() => h.server.close());
+  const buyer = await h.signup();
+  const invoice = h.bot.createStarsInvoice(buyer.user.id, 'plus');
+  assert.match(invoice.botDeepLink, new RegExp(`\\?start=${invoice.id}$`));
+
+  await h.message(7951, `/start ${invoice.id}`);
+  const texts = h.bot
+    .all('sendMessage')
+    .filter((call) => call.body.chat_id === 7951)
+    .map((call) => String(call.body.text));
+  assert.equal(texts.length, 1);
+  assert.match(texts[0]!, /Счёт на оплату/);
+  assert.match(texts[0]!, new RegExp(`Plus · 30 дней — <b>${invoice.starsAmount} ⭐</b>`));
+  const sent = h.bot.last('sendInvoice')!;
+  assert.equal(sent.body.chat_id, 7951);
+  assert.equal(sent.body.currency, 'XTR');
+  // Сообщение приходит раньше счёта.
+  const order = h.bot.calls.filter((call) => call.body.chat_id === 7951).map((call) => call.method);
+  assert.deepEqual(order, ['sendMessage', 'sendInvoice']);
+});
