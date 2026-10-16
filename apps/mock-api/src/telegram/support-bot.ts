@@ -1,6 +1,10 @@
 import { config } from '../config.js';
 import type { SupportStore, SupportTicket } from '../store/support-store.js';
-import { supportStore as defaultSupportStore } from '../store/index.js';
+import {
+  supportStore as defaultSupportStore,
+  userStore as defaultUserStore,
+} from '../store/index.js';
+import type { UserStore } from '../store/user-store.js';
 import type { TelegramUpdate } from './bot.js';
 
 /**
@@ -26,6 +30,11 @@ export interface TelegramSupportBotDeps {
   adminUsername?: string;
   /** Закреплённый чат администратора (SUPPORT_ADMIN_CHAT_ID): тогда username уже не даёт прав. */
   adminChatId?: number;
+  /**
+   * Администраторы сайта с привязанным Telegram — им тоже приходят уведомления. Список хранится
+   * в базе и переживает деплой (файл поддержки на Render стирается при каждом перезапуске).
+   */
+  userStore?: Pick<UserStore, 'list'>;
 }
 
 export class TelegramSupportBotService {
@@ -36,9 +45,12 @@ export class TelegramSupportBotService {
   private store: SupportStore;
   private isPolling = false;
   private refundDesk: RefundDesk | null = null;
+  private users: Pick<UserStore, 'list'> | null;
 
   constructor(deps: TelegramSupportBotDeps = {}) {
     this.store = deps.supportStore || defaultSupportStore;
+    // Без явного хранилища (тесты с собственным store) — только чат из store/env.
+    this.users = deps.userStore ?? (deps.supportStore ? null : defaultUserStore);
     this.token = deps.botToken || config.telegramSupportBotToken || '';
     this.username = (
       deps.botUsername ||
@@ -64,26 +76,28 @@ export class TelegramSupportBotService {
    * Ответ (Reply) на это сообщение уходит клиенту. false — чат администратора недоступен.
    */
   async postRefundNotice(ref: string, text: string, actionable: boolean): Promise<boolean> {
-    const adminChatId = this.store.getAdminChatId();
-    if (!adminChatId) return false;
-    const sent = await this.sendMessage(adminChatId, text, {
-      link_preview_options: { is_disabled: true },
-      ...(actionable
-        ? {
-            reply_markup: {
-              inline_keyboard: [
-                [
-                  { text: '✅ Одобрить возврат', callback_data: `rf:y:${ref}` },
-                  { text: '✖️ Отказать', callback_data: `rf:n:${ref}` },
+    let delivered = false;
+    for (const chatId of this.adminChats()) {
+      const sent = await this.sendMessage(chatId, text, {
+        link_preview_options: { is_disabled: true },
+        ...(actionable
+          ? {
+              reply_markup: {
+                inline_keyboard: [
+                  [
+                    { text: '✅ Одобрить возврат', callback_data: `rf:y:${ref}` },
+                    { text: '✖️ Отказать', callback_data: `rf:n:${ref}` },
+                  ],
                 ],
-              ],
-            },
-          }
-        : {}),
-    });
-    if (!sent?.message_id) return false;
-    this.store.linkAdminRefund(ref, sent.message_id);
-    return true;
+              },
+            }
+          : {}),
+      });
+      if (!sent?.message_id) continue;
+      this.store.linkAdminRefund(ref, sent.message_id);
+      delivered = true;
+    }
+    return delivered;
   }
 
   async answerCallbackQuery(id: string, text?: string, showAlert = false): Promise<unknown> {
@@ -108,9 +122,38 @@ export class TelegramSupportBotService {
     });
   }
 
+  /**
+   * Куда слать уведомления администратору. Закреплённый чат (SUPPORT_ADMIN_CHAT_ID) — только он.
+   * Иначе: чат, сохранённый после /start, и чаты администраторов сайта с привязанным Telegram
+   * (личный чат в Telegram = id пользователя, он одинаков для всех ботов).
+   */
+  adminChats(): Array<number | string> {
+    if (this.pinnedAdminChatId) return [this.pinnedAdminChatId];
+    const chats = new Map<string, number | string>();
+    const saved = this.store.getAdminChatId();
+    if (saved) chats.set(String(saved), saved);
+    for (const user of this.users?.list() ?? []) {
+      if (user.isAdmin && user.telegramChatId)
+        chats.set(String(user.telegramChatId), user.telegramChatId);
+    }
+    return [...chats.values()];
+  }
+
   private isAdminChat(chatId: number | string): boolean {
-    const admin = this.pinnedAdminChatId ?? this.store.getAdminChatId();
-    return Boolean(admin) && String(admin) === String(chatId);
+    return this.adminChats().some((admin) => String(admin) === String(chatId));
+  }
+
+  /** Уведомление всем администраторам. true — хотя бы одному доставлено. */
+  async notifyAdmins(text: string, extra: Record<string, unknown> = {}): Promise<boolean> {
+    let delivered = false;
+    for (const chatId of this.adminChats()) {
+      const sent = await this.sendMessage(chatId, text, {
+        link_preview_options: { is_disabled: true },
+        ...extra,
+      });
+      if (sent?.message_id) delivered = true;
+    }
+    return delivered;
   }
 
   /** Кнопки «Одобрить / Отказать» под заявкой на возврат. */
@@ -357,11 +400,7 @@ export class TelegramSupportBotService {
     const isConfiguredAdmin = this.pinnedAdminChatId
       ? String(chatId) === String(this.pinnedAdminChatId)
       : Boolean(fromUsername && fromUsername === this.adminUsername);
-    const isSavedAdmin = Boolean(
-      !this.pinnedAdminChatId &&
-      this.store.getAdminChatId() &&
-      String(this.store.getAdminChatId()) === String(chatId),
-    );
+    const isSavedAdmin = Boolean(!this.pinnedAdminChatId && this.isAdminChat(chatId));
     const isAdmin = isConfiguredAdmin || isSavedAdmin;
 
     // -------------------------------------------------------------
@@ -380,7 +419,7 @@ export class TelegramSupportBotService {
           `👑 <b>Здравствуйте, администратор @${this.adminUsername}!</b>`,
           '',
           'Вы успешно авторизованы в качестве главного оператора поддержки <b>Ketner AI</b>.',
-          'Сюда поступают все сообщения, вопросы, чеки и жалобы от пользователей, а также заявки на возврат.',
+          'Сюда поступают обращения в поддержку, заявки на возврат, новые оплаты и сообщения с сайта.',
           '',
           `📋 <b>Открытых обращений:</b> ${openTickets.length}`,
           '',
@@ -604,13 +643,7 @@ export class TelegramSupportBotService {
         `✅ Ваше обращение <b>#${activeTicket.id}</b> успешно закрыто. Если появятся вопросы — пишите!`,
       );
 
-      const adminChatId = this.store.getAdminChatId();
-      if (adminChatId) {
-        await this.sendMessage(
-          adminChatId,
-          `ℹ️ Пользователь закрыл обращение <b>#${activeTicket.id}</b>.`,
-        );
-      }
+      await this.notifyAdmins(`ℹ️ Пользователь закрыл обращение <b>#${activeTicket.id}</b>.`);
       return { handled: true, action: 'user_ticket_closed' };
     }
 
@@ -649,8 +682,8 @@ export class TelegramSupportBotService {
     await this.sendMessage(chatId, ackText);
 
     // Доставка уведомления администратору (@gumieeel)
-    const adminChatId = this.store.getAdminChatId();
-    if (adminChatId) {
+    const adminChats = this.adminChats();
+    for (const adminChatId of adminChats) {
       const senderTitle = fromUser?.username
         ? `@${fromUser.username}`
         : `${fromUser?.first_name || ''} ${fromUser?.last_name || ''}`.trim() || 'Пользователь';
@@ -678,9 +711,10 @@ export class TelegramSupportBotService {
           this.store.linkAdminNotification(ticket.id, copied.message_id);
         }
       }
-    } else {
+    }
+    if (adminChats.length === 0) {
       console.log(
-        `[SupportBot] Обращение #${ticket.id} сохранено, но adminChatId для @${this.adminUsername} ещё не зафиксирован (нажмите /start в боте с аккаунта @${this.adminUsername}).`,
+        `[SupportBot] Обращение #${ticket.id} сохранено, но чат администратора неизвестен: задайте SUPPORT_ADMIN_CHAT_ID или привяжите Telegram администратора на сайте.`,
       );
     }
 

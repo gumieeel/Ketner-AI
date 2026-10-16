@@ -1458,8 +1458,8 @@ test('возврат звёзд: заявка с кнопками в бот по
   );
   assert.equal(result.body.outcome, 'requested');
   assert.equal(h.bot.all('refundStarPayment').length, 0);
-  const notice = support.sent.find((m) => m.chatId === 9910)!;
-  assert.match(notice.text, /Заявка на возврат/);
+  const notice = support.sent.find((m) => m.chatId === 9910 && /Заявка на возврат/.test(m.text))!;
+  assert.ok(notice);
   const ref = /R-([A-Za-z0-9_-]{16})/.exec(notice.text)![1]!;
   await support.bot.processUpdate({
     update_id: 3,
@@ -1496,4 +1496,51 @@ test('сообщение по возврату: только своя заявк
   assert.equal(stranger.status, 404);
   const empty = await h.mini(path, { text: '   ' }, a.token);
   assert.equal(empty.status, 400);
+});
+
+test('бот поддержки: уведомления администратору сайта без SUPPORT_ADMIN_CHAT_ID (переживают деплой)', async (t) => {
+  const store = createSupportStore(join(mkdtempSync(join(tmpdir(), 'ketner-sup-')), 's.json'));
+  const sent: Array<{ chatId: number | string; text: string }> = [];
+  let userStoreRef: { list(): User[] } | undefined;
+  const support = new TelegramSupportBotService({
+    supportStore: store,
+    botToken: '',
+    userStore: { list: () => userStoreRef!.list() },
+  });
+  support.sendMessage = async (chatId, text) => {
+    sent.push({ chatId, text });
+    return { message_id: 7000 + sent.length };
+  };
+  const h = await harness({ supportBotService: support, supportStore: store });
+  userStoreRef = h.userStore;
+  t.after(() => h.server.close());
+  const admin = await h.linkedBuyer(9931);
+  h.userStore.setAdmin(admin.buyer.user.id, true);
+  assert.equal(store.getAdminChatId(), undefined, 'чат поддержки после «деплоя» пуст');
+
+  // Обращение в поддержку приходит администратору сайта.
+  await support.processUpdate(supportMessage(5551, 'Не работает вход'));
+  assert.ok(sent.some((m) => m.chatId === 9931 && /Новое сообщение в поддержку/.test(m.text)));
+
+  // Новая оплата — тоже.
+  const { buyer } = await h.linkedBuyer(9932);
+  h.billingService.grant(buyer.user.id, 'plus', {
+    id: 'stars:n-1',
+    method: 'stars',
+    amount: 460,
+    currency: 'XTR',
+  });
+  await new Promise((resolve) => setTimeout(resolve, 20));
+  const paid = sent.find((m) => m.chatId === 9931 && /Новая оплата/.test(m.text));
+  assert.ok(paid, 'уведомление об оплате');
+  assert.match(paid.text, /Plus · 460 ⭐/);
+
+  // Бесплатный Pro помечен отдельно.
+  await h.bot.grantFreePlan(h.userStore.findById(buyer.user.id)!, 'pro');
+  await new Promise((resolve) => setTimeout(resolve, 20));
+  assert.ok(sent.some((m) => m.chatId === 9931 && /бесплатный тариф/.test(m.text)));
+
+  // Администратор сайта в боте поддержки — оператор, а не клиент.
+  const result = await support.processUpdate(supportMessage(9931, '/refunds'));
+  assert.equal(result.action, 'admin_refunds_list_sent');
 });

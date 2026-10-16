@@ -525,13 +525,42 @@ export class TelegramBotService implements TelegramPaymentsPort {
       '',
       'Ответьте клиенту на почту.',
     ].join('\n');
+    if (await this.adminInbox?.notifyAdmins(text)) return;
     for (const admin of admins) await this.sendMessage(admin.telegramChatId!, text);
   }
 
   /** Чат администратора в боте поддержки: туда идут заявки на возврат, оттуда — ответы. */
   private adminInbox: {
     postRefundNotice(ref: string, text: string, actionable: boolean): Promise<boolean>;
+    notifyAdmins(text: string): Promise<boolean>;
   } | null = null;
+
+  /** Новая оплата — администратору в бот поддержки. */
+  async notifyAdminsAboutPayment(payment: PaymentRecord, user: User | null): Promise<void> {
+    if (!this.adminInbox) return;
+    const amount = payment.currency === 'XTR' ? `${payment.amount} ⭐` : `$${payment.amount}`;
+    const head = payment.free
+      ? '🎁 <b>Выдан бесплатный тариф</b> (временный режим, звёзды не списаны)'
+      : payment.recurring && payment.before.plan === payment.planId
+        ? '🔄 <b>Автопродление оплачено</b>'
+        : '💰 <b>Новая оплата</b>';
+    const until = payment.packId ? null : payment.after.renewsAt;
+    await this.adminInbox.notifyAdmins(
+      [
+        head,
+        '',
+        ...this.refundCard(payment, user),
+        until ? `Тариф до: ${formatDate(until)}` : '',
+        payment.bonusDays > 0 ? `Пересчёт прежнего тарифа: +${payment.bonusDays} дн.` : '',
+      ]
+        .filter(Boolean)
+        .join('\n')
+        .replace(
+          `Платёж: ${paymentTitle(payment)} · ${amount}`,
+          `Платёж: <b>${paymentTitle(payment)} · ${amount}</b>`,
+        ),
+    );
+  }
 
   attachAdminInbox(inbox: NonNullable<TelegramBotService['adminInbox']>): void {
     this.adminInbox = inbox;
@@ -831,7 +860,7 @@ export class TelegramBotService implements TelegramPaymentsPort {
       telegram_payment_charge_id: chargeId,
     };
     if (user.telegramChatId) {
-      await this.handleStarsPayment(user.telegramChatId, undefined, pay, now);
+      await this.handleStarsPayment(user.telegramChatId, undefined, pay, now, { free: true });
     } else {
       this.billing.grant(
         user.id,
@@ -843,13 +872,12 @@ export class TelegramBotService implements TelegramPaymentsPort {
           currency: 'XTR',
           invoiceId: invoice.id,
           chargeId,
+          free: true,
         },
         now,
       );
       this.deps.invoiceStore.markTelegramStarsPaid(invoice.id, chargeId);
     }
-    const payment = this.billing.findByCharge(chargeId);
-    if (payment) this.billing.markFree(payment.id);
     return invoice;
   }
 
@@ -859,6 +887,7 @@ export class TelegramBotService implements TelegramPaymentsPort {
     from: TelegramFrom | undefined,
     pay: SuccessfulPayment,
     now = Date.now(),
+    opts: { free?: boolean } = {},
   ): Promise<{ status: 'activated' | 'duplicate' | 'rejected'; subscription?: Subscription }> {
     const payload = decodePayload(pay.invoice_payload);
     if (
@@ -894,6 +923,7 @@ export class TelegramBotService implements TelegramPaymentsPort {
         chargeId: pay.telegram_payment_charge_id,
         telegramUserId,
         recurring,
+        ...(opts.free ? { free: true } : {}),
       },
       now,
     );

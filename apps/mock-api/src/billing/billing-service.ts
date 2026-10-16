@@ -147,6 +147,8 @@ export interface TelegramPaymentsPort {
     kind: 'receipt' | 'refund' | 'reminder' | 'system',
   ): Promise<void>;
   notifyAdminsAboutRefund(payment: PaymentRecord, user: User | null): Promise<void>;
+  /** Новая оплата (любым способом) — администраторам. */
+  notifyAdminsAboutPayment?(payment: PaymentRecord, user: User | null): Promise<void>;
 }
 
 export class BillingError extends Error {
@@ -269,6 +271,8 @@ export class BillingService {
       chargeId?: string;
       telegramUserId?: number;
       recurring?: boolean;
+      /** TEMP: тариф выдан без списания звёзд (TG_FREE_PRO). */
+      free?: boolean;
     },
     now = Date.now(),
   ): { duplicate: boolean; payment: PaymentRecord; subscription: Subscription; user: User | null } {
@@ -296,12 +300,9 @@ export class BillingService {
       after,
       bonusDays: preview.bonusDays,
     });
-    return {
-      duplicate: false,
-      payment: record,
-      subscription,
-      user: this.deps.userStore.findById(userId),
-    };
+    const user = this.deps.userStore.findById(userId);
+    this.announcePayment(record, user);
+    return { duplicate: false, payment: record, subscription, user };
   }
 
   /**
@@ -343,6 +344,7 @@ export class BillingService {
       after: snapshot,
       bonusDays: 0,
     });
+    this.announcePayment(record, this.deps.userStore.findById(userId));
     return { duplicate: false, payment: record, credit };
   }
 
@@ -399,6 +401,15 @@ export class BillingService {
     return { autoRenew };
   }
 
+  /** Новая оплата — администраторам (уведомление не мешает выдаче тарифа, ошибки глушатся). */
+  private announcePayment(payment: PaymentRecord, user: User | null): void {
+    const notify = this.telegram?.notifyAdminsAboutPayment;
+    if (!notify) return;
+    void notify.call(this.telegram, payment, user).catch((error: unknown) => {
+      console.error('[billing] Уведомление об оплате не отправлено:', error);
+    });
+  }
+
   /** Платёж с заявкой на возврат по короткому номеру (см. paymentRef). */
   findRefundByRef(ref: string): PaymentRecord | undefined {
     return this.deps.ledger.payments
@@ -433,13 +444,6 @@ export class BillingService {
         messages: [...messages, { from, text: clean, at: new Date(now).toISOString() }],
       },
     });
-  }
-
-  /** TEMP: помечает платёж как выданный без списания звёзд. */
-  markFree(paymentId: string): PaymentRecord | undefined {
-    const payment = this.deps.ledger.payments.get(paymentId);
-    if (!payment) return undefined;
-    return this.deps.ledger.payments.put({ ...payment, free: true });
   }
 
   /** Удаляет один чек из истории пользователя (тариф и срок не меняются). */
