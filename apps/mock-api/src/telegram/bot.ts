@@ -539,12 +539,16 @@ export class TelegramBotService implements TelegramPaymentsPort {
       '↩️ <b>Заявка на возврат</b>',
       '',
       `Клиент: ${escapeHtml(user ? `${user.name} · ${accountLabel(user)}` : payment.userId)}`,
-      `Платёж: ${paymentTitle(payment)} · ${amount} · ${payment.method === 'stars' ? 'звёзды' : 'криптовалюта'}`,
+      `Платёж: ${paymentTitle(payment)} · ${amount} · ${payment.test ? 'тестовая оплата' : payment.method === 'stars' ? 'звёзды' : 'криптовалюта'}`,
       `Оплачен: ${formatDate(payment.paidAt)}`,
       payment.refund?.reason ? `Причина: ${escapeHtml(payment.refund.reason)}` : '',
       payment.refund?.comment ? `Комментарий: ${escapeHtml(payment.refund.comment)}` : '',
       `Запросов к моделям после оплаты: ${this.billing.requestsSince(payment.userId, payment.paidAt)}`,
-      payment.method === 'crypto' ? '\nКриптовалюту возвращаете вручную на кошелёк клиента.' : '',
+      payment.test
+        ? '\nТестовая оплата: звёзды вернутся на тестовый баланс клиента. Срок рассмотрения — до 3 дней.'
+        : payment.method === 'crypto'
+          ? '\nКриптовалюту возвращаете вручную на кошелёк клиента.'
+          : '',
     ]
       .filter(Boolean)
       .join('\n');
