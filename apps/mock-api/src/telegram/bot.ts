@@ -1022,6 +1022,9 @@ export class TelegramBotService implements TelegramPaymentsPort {
       await this.sendTerms(chatId);
       return { handled: true, action: 'terms' };
     }
+    if (command === '/clearpayments') {
+      return this.handleClearPayments(chatId, arg);
+    }
 
     await this.sendMessage(
       chatId,
@@ -1269,6 +1272,39 @@ export class TelegramBotService implements TelegramPaymentsPort {
     const previous = this.deps.userStore.findByTelegramChatId(chatId);
     if (previous && previous.id !== userId) this.deps.userStore.unlinkTelegram(previous.id);
     return this.deps.userStore.linkTelegram(userId, chatId, username);
+  }
+
+  /** Только для администраторов: `/clearpayments @username` — удалить историю оплат аккаунта. */
+  private async handleClearPayments(
+    chatId: number | string,
+    arg: string,
+  ): Promise<{ handled: boolean; action?: string }> {
+    const admin = this.resolveUser(chatId);
+    if (!admin?.isAdmin) {
+      await this.sendMessage(chatId, 'Команда доступна только администраторам.');
+      return { handled: true, action: 'clear_payments_forbidden' };
+    }
+    const username = arg.replace(/^@/, '').trim().toLowerCase();
+    if (!username) {
+      await this.sendMessage(chatId, 'Укажите аккаунт: <code>/clearpayments @username</code>');
+      return { handled: true, action: 'clear_payments_usage' };
+    }
+    const target = this.deps.userStore
+      .list()
+      .find((candidate) => candidate.telegramUsername?.toLowerCase() === username);
+    if (!target) {
+      await this.sendMessage(
+        chatId,
+        `Аккаунт с Telegram @${escapeHtml(username)} не найден (он должен быть привязан к боту).`,
+      );
+      return { handled: true, action: 'clear_payments_not_found' };
+    }
+    const removed = this.billing.clearPayments(target.id);
+    await this.sendMessage(
+      chatId,
+      `🧹 История оплат @${escapeHtml(username)} очищена: удалено записей — ${removed}. Тариф и срок не менялись.`,
+    );
+    return { handled: true, action: 'clear_payments' };
   }
 
   // ───────────── возвраты: решения администратора ─────────────

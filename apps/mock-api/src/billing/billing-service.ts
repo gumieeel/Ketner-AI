@@ -357,6 +357,15 @@ export class BillingService {
       .sort((a, b) => b.paidAt.localeCompare(a.paidAt));
   }
 
+  /** Удаляет всю историю платежей пользователя (тариф и подписка не меняются). Возвращает число записей. */
+  clearPayments(userId: string): number {
+    const ids = this.deps.ledger.payments
+      .filter((payment) => payment.userId === userId)
+      .map((payment) => payment.id);
+    for (const id of ids) this.deps.ledger.payments.remove(id);
+    return ids.length;
+  }
+
   findPayment(paymentId: string): PaymentRecord | undefined {
     return this.deps.ledger.payments.get(paymentId);
   }
