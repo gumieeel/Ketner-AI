@@ -15,7 +15,6 @@ import {
   subscriptionInfo,
   useMiniApp,
 } from './shared';
-import { TestPayDialog, type TestInvoice } from './test-pay-dialog';
 
 /** Цена в звёздах округляется до 10 ⭐ (≈ $0.20): разница меньше этой — не «дороже». */
 const STARS_ROUNDING_USD = 0.25;
@@ -30,13 +29,10 @@ export function PlansTab({
   onRecurringChange: (value: boolean) => void;
 }) {
   const { t, language } = useTranslation();
-  const { app, token, state, setState, refresh, notify, openSite } = useMiniApp();
+  const { app, token, state, refresh, notify, openSite } = useMiniApp();
   const { user, plans, rate, autoRenew, refundPolicy } = state;
   const info = subscriptionInfo(state);
   const [paying, setPaying] = useState<string | null>(null);
-  const [testInvoice, setTestInvoice] = useState<(TestInvoice & { plan: MiniAppPlan }) | null>(
-    null,
-  );
   const mode: Mode = recurring ? 'auto' : 'once';
   const activeAuto = autoRenew?.status === 'active' ? autoRenew : null;
 
@@ -58,11 +54,6 @@ export function PlansTab({
     setPaying(plan.id);
     try {
       const invoice = await miniAppApi.invoice(token, plan.id, recurring);
-      if (invoice.test) {
-        // ВРЕМЕННО: тестовая оплата — своё окно подтверждения вместо окна Telegram.
-        setTestInvoice({ ...invoice, plan });
-        return;
-      }
       app.openInvoice(invoice.link, (status) => {
         if (status === 'paid') {
           notify('info', t('tg.paymentProcessing'));
@@ -114,29 +105,6 @@ export function PlansTab({
       <p className="px-1 text-[13px] leading-5 text-muted">
         {recurring ? t('tg.modeAutoHint') : t('tg.modeOnceHint')}
       </p>
-      {state.testPayments ? (
-        <Notice tone="info">
-          {t('tg.testPayBanner', {
-            stars: formatStars(state.testPayments.balance, language),
-          })}
-        </Notice>
-      ) : null}
-      {testInvoice ? (
-        <TestPayDialog
-          invoice={testInvoice}
-          onClose={() => {
-            setTestInvoice(null);
-            setPaying(null);
-          }}
-          onPaid={(next) => {
-            const plan = testInvoice.plan;
-            setTestInvoice(null);
-            setPaying(null);
-            setState(next);
-            notify('success', t('tg.paymentDone', { plan: plan.title }));
-          }}
-        />
-      ) : null}
       {recurring && activeAuto ? (
         <Notice tone="info">
           {t('tg.autoReplace', {

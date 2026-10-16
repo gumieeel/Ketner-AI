@@ -10,7 +10,7 @@
     "start": "node dist/server.js",
     "bot": "tsx src/telegram/runner.ts",
     "typecheck": "tsc --noEmit",
-    "test": "cross-env BETTER_AUTH_SECRET=test-secret-for-ci-at-least-32-chars-long ADMIN_EMAILS=test-admin@example.com VIP_EMAILS=test-vip@example.com TG_TEST_PAYMENTS=off tsx --test \"src/**/*.test.ts\"",
+    "test": "cross-env BETTER_AUTH_SECRET=test-secret-for-ci-at-least-32-chars-long ADMIN_EMAILS=test-admin@example.com VIP_EMAILS=test-vip@example.com tsx --test \"src/**/*.test.ts\"",
     "migrate": "tsx src/scripts/migrate.ts",
     "migrate:data": "tsx src/scripts/migrate-data.ts",
     "migrate:generate": "drizzle-kit generate",

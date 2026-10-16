@@ -348,55 +348,6 @@ describe('кабинет в Telegram (/tg)', () => {
     ).toBeInTheDocument();
   });
 
-  it('ВРЕМЕННО: тестовая оплата — окно подтверждения с баланса 1 300 ⭐', async () => {
-    const app = fakeWebApp({ openInvoice: vi.fn() });
-    window.Telegram = { WebApp: app };
-    const state = makeState({ testPayments: { balance: 1300 } });
-    const paidState = makeState({
-      testPayments: { balance: 840 },
-      payments: [payment({ id: 'test:stars_5', amount: 460, test: true, planId: 'plus' })],
-    });
-    const calls = mockApi((url) => {
-      if (url === '/api/telegram/miniapp/session') return linkedSession(state);
-      if (url === '/api/telegram/miniapp/invoice')
-        return Response.json({
-          test: true,
-          invoiceId: 'stars_5',
-          stars: 460,
-          title: 'Ketner AI Plus · 30 дней',
-          recurring: false,
-          balance: 1300,
-        });
-      if (url === '/api/telegram/miniapp/test-pay') return Response.json(paidState);
-      return undefined;
-    });
-    render(<TelegramAppPage />);
-
-    fireEvent.click(await screen.findByRole('tab', { name: 'Тарифы' }));
-    expect(screen.getByText(/тестовая оплата: на балансе 1\s300 ⭐/)).toBeInTheDocument();
-    const plus = screen.getByRole('article', { name: /Plus/ });
-    fireEvent.click(within(plus).getByRole('button'));
-
-    const dialog = await screen.findByRole('dialog', { name: 'Подтверждение покупки' });
-    expect(within(dialog).getByText('Баланс')).toBeInTheDocument();
-    expect(within(dialog).getByText(/1\s300/)).toBeInTheDocument();
-    expect(
-      within(dialog).getByText(
-        'Вы точно хотите приобрести «Ketner AI Plus · 30 дней» у Ketner_Kassa за 460 звёзд?',
-      ),
-    ).toBeInTheDocument();
-    fireEvent.click(within(dialog).getByRole('button', { name: /Подтвердить и заплатить/ }));
-
-    await waitFor(() =>
-      expect(calls.find((call) => call.url === '/api/telegram/miniapp/test-pay')?.body).toEqual({
-        invoiceId: 'stars_5',
-      }),
-    );
-    expect(await screen.findByText('Готово! Тариф Plus включён.')).toBeInTheDocument();
-    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
-    expect(app.openInvoice).not.toHaveBeenCalled();
-  });
-
   it('платежи: чек и мгновенный возврат звёзд с причиной', async () => {
     const app = fakeWebApp();
     window.Telegram = { WebApp: app };

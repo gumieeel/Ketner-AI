@@ -56,8 +56,6 @@ export interface PaymentRecord {
   telegramUserId?: number;
   /** Платёж по подписке со звёздами (автопродление). */
   recurring?: boolean;
-  /** ВРЕМЕННО: тестовая оплата с тестового баланса звёзд (настоящие звёзды не списывались). */
-  test?: boolean;
   refund?: {
     requestedAt?: string;
     reason?: string;
@@ -248,7 +246,6 @@ export class BillingService {
       chargeId?: string;
       telegramUserId?: number;
       recurring?: boolean;
-      test?: boolean;
     },
     now = Date.now(),
   ): { duplicate: boolean; payment: PaymentRecord; subscription: Subscription; user: User | null } {
@@ -392,11 +389,8 @@ export class BillingService {
       return { kind: 'none', reason: 'used' };
     }
     // Звёзды Telegram возвращает сам и сразу; криптовалюту администратор переводит вручную.
-    // Тестовую оплату возвращает администратор по заявке (рассмотрение до 3 дней).
     const instant =
-      !payment.test &&
-      payment.method === 'stars' &&
-      Boolean(payment.chargeId && payment.telegramUserId);
+      payment.method === 'stars' && Boolean(payment.chargeId && payment.telegramUserId);
     return instant ? { kind: 'auto' } : { kind: 'request' };
   }
 
@@ -474,7 +468,7 @@ export class BillingService {
       );
       return declined;
     }
-    if (payment.method === 'stars' && !payment.test) {
+    if (payment.method === 'stars') {
       if (!payment.chargeId || !payment.telegramUserId || !this.telegram) {
         throw new BillingError(
           'refund_unavailable',
@@ -493,11 +487,9 @@ export class BillingService {
     const refunded = this.completeRefund(payment, { auto: false, note }, now);
     await this.telegram?.notifyUser(
       payment.userId,
-      payment.test
-        ? `↩️ Возврат одобрен: <b>${payment.amount} ⭐</b> вернулись на тестовый баланс.`
-        : payment.method === 'stars'
-          ? `↩️ Возврат одобрен: <b>${payment.amount} ⭐</b> вернулись на ваш баланс в Telegram.`
-          : `↩️ Возврат одобрен: <b>$${payment.amount}</b> отправим на ваш кошелёк, напишите его в поддержку @ketner_support_bot, если ещё не указали.`,
+      payment.method === 'stars'
+        ? `↩️ Возврат одобрен: <b>${payment.amount} ⭐</b> вернулись на ваш баланс в Telegram.`
+        : `↩️ Возврат одобрен: <b>$${payment.amount}</b> отправим на ваш кошелёк, напишите его в поддержку @ketner_support_bot, если ещё не указали.`,
       'refund',
     );
     return refunded;

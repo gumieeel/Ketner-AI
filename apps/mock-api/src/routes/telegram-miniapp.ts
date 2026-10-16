@@ -34,20 +34,6 @@ export interface MiniAppRouterDeps {
 
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
 
-/**
- * ВРЕМЕННО, для проверки: тестовая оплата в кабинете бота. Вместо окна оплаты Telegram кабинет
- * показывает такое же окно подтверждения, звёзды списываются с тестового баланса (у каждого
- * аккаунта 1300 ⭐ минус тестовые покупки, возвращённые звёзды возвращаются на баланс), а возврат
- * идёт заявкой администратору. Отключить без правки кода: `TG_TEST_PAYMENTS=off` в Render.
- */
-export const TEST_STARS_BALANCE = 1300;
-
-export function testPaymentsEnabled(env: NodeJS.ProcessEnv = process.env): boolean {
-  const value = env.TG_TEST_PAYMENTS?.trim().toLowerCase();
-  if (value === undefined) return true;
-  return !(value === '' || value === 'off' || value === '0' || value === 'false');
-}
-
 /** Экранирование для HTML-версии письма. */
 function escapeMailHtml(text: string): string {
   return text
@@ -147,14 +133,6 @@ export function createMiniAppRouter({
     throw error;
   };
 
-  /** Тестовый баланс: 1300 ⭐ минус тестовые покупки, кроме возвращённых. */
-  const testBalance = (userId: string): number =>
-    TEST_STARS_BALANCE -
-    billing
-      .paymentsOf(userId)
-      .filter((payment) => payment.test && payment.status !== 'refunded')
-      .reduce((sum, payment) => sum + payment.amount, 0);
-
   const paymentView = (payment: PaymentRecord) => {
     const option = billing.refundOption(payment);
     return {
@@ -168,7 +146,6 @@ export function createMiniAppRouter({
       paidAt: payment.paidAt,
       status: payment.status,
       recurring: Boolean(payment.recurring),
-      test: Boolean(payment.test),
       periodEnd: payment.after.renewsAt,
       bonusDays: payment.bonusDays,
       chargeId: payment.chargeId ?? null,
@@ -222,8 +199,6 @@ export function createMiniAppRouter({
         };
       }),
       rate,
-      /** ВРЕМЕННО: тестовая оплата и тестовый баланс звёзд (см. testPaymentsEnabled). */
-      testPayments: testPaymentsEnabled() ? { balance: testBalance(user.id) } : null,
       payments: billing.paymentsOf(user.id).map(paymentView),
       prefs: billing.prefsOf(user.id),
       refundPolicy: { hours: Math.round(REFUND_POLICY.windowMs / 3600_000) },
@@ -435,20 +410,6 @@ export function createMiniAppRouter({
         sendError(response, 400, 'invalid_plan', 'Выберите тариф Plus, Pro или Ultra');
         return;
       }
-      const planId = body.planId as PlanId;
-      if (testPaymentsEnabled()) {
-        // ВРЕМЕННО: счёт без Telegram — кабинет покажет тестовое окно оплаты с баланса 1300 ⭐.
-        const invoice = botService.createStarsInvoice(request.user!.id, planId);
-        response.json({
-          test: true,
-          invoiceId: invoice.id,
-          stars: invoice.starsAmount,
-          title: `Ketner AI ${planTitle(planId)} · 30 дней`,
-          recurring: false,
-          balance: testBalance(request.user!.id),
-        });
-        return;
-      }
       const recurring = body.recurring === true;
       const invoice = botService.createStarsInvoice(request.user!.id, body.planId as PlanId);
       const link = await botService.createInvoiceLink(invoice, recurring);
@@ -475,70 +436,6 @@ export function createMiniAppRouter({
         return;
       }
       response.json({ status: invoice.status });
-    },
-  );
-
-  /** ВРЕМЕННО: «Подтвердить и заплатить» в тестовом окне — списание с тестового баланса. */
-  router.post(
-    '/telegram/miniapp/test-pay',
-    requireAuth,
-    async (request: Request, response: Response) => {
-      if (!testPaymentsEnabled()) {
-        sendError(response, 404, 'test_payments_off', 'Тестовая оплата выключена');
-        return;
-      }
-      const user = currentUser(request, response);
-      if (!user) return;
-      const invoiceId = (request.body as { invoiceId?: unknown } | undefined)?.invoiceId;
-      const invoice =
-        typeof invoiceId === 'string' ? invoiceStore.getTelegramStarsInvoice(invoiceId) : undefined;
-      if (!invoice || invoice.userId !== user.id || invoice.packId) {
-        sendError(response, 404, 'invoice_not_found', 'Счёт не найден');
-        return;
-      }
-      if (invoice.status === 'paid') {
-        sendError(response, 409, 'already_paid', 'Этот счёт уже оплачен');
-        return;
-      }
-      if (testBalance(user.id) < invoice.starsAmount) {
-        sendError(response, 402, 'insufficient_stars', 'Недостаточно звёзд на тестовом балансе');
-        return;
-      }
-      const chargeId = `test_${invoice.id}`;
-      const result = billing.grant(user.id, invoice.planId, {
-        id: `test:${invoice.id}`,
-        method: 'stars',
-        amount: invoice.starsAmount,
-        currency: 'XTR',
-        invoiceId: invoice.id,
-        chargeId,
-        test: true,
-      });
-      invoiceStore.markTelegramStarsPaid(invoice.id, chargeId);
-      if (!result.duplicate) {
-        const until = new Date(result.subscription.renewsAt ?? Date.now()).toLocaleDateString(
-          'ru-RU',
-          { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC' },
-        );
-        void botService
-          .notifyUser(
-            user.id,
-            [
-              '🎉 <b>Оплата прошла!</b> (тестовая)',
-              '',
-              `Тариф <b>${planTitle(invoice.planId)}</b> действует до <b>${until}</b>.`,
-              result.payment.bonusDays > 0
-                ? `За неиспользованные дни прежнего тарифа добавили ${result.payment.bonusDays} дн.`
-                : '',
-              `Списано ${invoice.starsAmount} ⭐ с тестового баланса.`,
-            ]
-              .filter(Boolean)
-              .join('\n'),
-            'receipt',
-          )
-          .catch(() => undefined);
-      }
-      response.json(stateOf(userStore.findById(user.id) ?? user));
     },
   );
 

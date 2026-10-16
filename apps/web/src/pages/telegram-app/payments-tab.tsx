@@ -166,11 +166,7 @@ function PaymentSheet({ payment, onClose }: { payment: MiniAppPayment; onClose: 
       haptic.success(app);
       notify(
         'success',
-        outcome === 'refunded'
-          ? t('tg.refundDone', { amount })
-          : payment.test
-            ? t('tg.refundRequestedTest')
-            : t('tg.refundRequested'),
+        outcome === 'refunded' ? t('tg.refundDone', { amount }) : t('tg.refundRequested'),
       );
       onClose();
     } catch (caught) {
@@ -182,9 +178,7 @@ function PaymentSheet({ payment, onClose }: { payment: MiniAppPayment; onClose: 
 
   const noneText: Record<string, string> = {
     refunded: t('tg.refundNoneRefunded', { date: formatDate(payment.refund?.decidedAt, language) }),
-    pending: t(payment.test ? 'tg.refundNonePendingTest' : 'tg.refundNonePending', {
-      date: formatDate(payment.refund?.requestedAt, language),
-    }),
+    pending: t('tg.refundNonePending', { date: formatDate(payment.refund?.requestedAt, language) }),
     declined: payment.refund?.note
       ? t('tg.refundNoneDeclinedNote', { note: payment.refund.note })
       : t('tg.refundNoneDeclined'),
@@ -216,7 +210,6 @@ function PaymentSheet({ payment, onClose }: { payment: MiniAppPayment; onClose: 
         </Field>
         <Field label={t('tg.fieldMethod')}>
           {payment.method === 'stars' ? 'Telegram Stars' : t('tg.methodCrypto')}
-          {payment.test ? <span className="ml-1 text-muted">· {t('tg.testMark')}</span> : null}
         </Field>
         <Field label={t('tg.fieldDate')}>{formatDateTime(payment.paidAt, language)}</Field>
         {payment.periodEnd ? (
@@ -249,11 +242,7 @@ function PaymentSheet({ payment, onClose }: { payment: MiniAppPayment; onClose: 
         ) : !form ? (
           <>
             <p className="text-[14px] leading-6 text-muted">
-              {option.kind === 'auto'
-                ? t('tg.refundAutoText')
-                : payment.test
-                  ? t('tg.refundTestText')
-                  : t('tg.refundCryptoText')}
+              {option.kind === 'auto' ? t('tg.refundAutoText') : t('tg.refundCryptoText')}
               {payment.recurring ? ` ${t('tg.refundAutoRenewOff')}` : ''}
             </p>
             <Notice tone="warning">{t('tg.refundDeadline', { date: deadline })}</Notice>

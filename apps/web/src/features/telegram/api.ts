@@ -40,8 +40,6 @@ export interface MiniAppPayment {
   paidAt: string;
   status: PaymentStatus;
   recurring: boolean;
-  /** ВРЕМЕННО: тестовая оплата с тестового баланса звёзд. */
-  test?: boolean;
   periodEnd: string | null;
   bonusDays: number;
   chargeId: string | null;
@@ -57,8 +55,6 @@ export interface MiniAppPayment {
 }
 
 export interface MiniAppState {
-  /** ВРЕМЕННО: тестовая оплата включена — баланс тестовых звёзд. */
-  testPayments?: { balance: number } | null;
   user: {
     id: string;
     /** null — аккаунт создан через Telegram (почты нет). */
@@ -155,25 +151,12 @@ export const miniAppApi = {
     call<{ code: string; expiresAt: number }>('/link-code', { body: { initData } }),
   state: (token: string) => call<MiniAppState>('/state', { token }),
   invoice: (token: string, planId: PaidPlanId, recurring: boolean) =>
-    call<
-      | { test?: false; invoiceId: string; link: string; stars: number; recurring: boolean }
-      | {
-          test: true;
-          invoiceId: string;
-          stars: number;
-          title: string;
-          recurring: false;
-          balance: number;
-        }
-    >('/invoice', {
+    call<{ invoiceId: string; link: string; stars: number; recurring: boolean }>('/invoice', {
       token,
       body: { planId, recurring },
     }),
   invoiceStatus: (token: string, invoiceId: string) =>
     call<{ status: 'pending' | 'paid' | 'expired' }>(`/invoice/${enc(invoiceId)}`, { token }),
-  /** ВРЕМЕННО: оплата счёта с тестового баланса звёзд. */
-  testPay: (token: string, invoiceId: string) =>
-    call<MiniAppState>('/test-pay', { token, body: { invoiceId } }),
   autoRenew: (token: string, enabled: boolean) =>
     call<MiniAppState>('/auto-renew', { token, body: { enabled } }),
   refund: (token: string, paymentId: string, reason: string, comment: string) =>
