@@ -1,9 +1,16 @@
 import { Router } from 'express';
-import { config } from '../config.js';
+import { config, isProduction } from '../config.js';
 import { createAuthMiddleware } from '../middleware/auth.js';
-import { invoiceStore as defaultInvoiceStore, subscriptionStore as defaultSubscriptionStore, userStore as defaultUserStore, } from '../store/index.js';
+import { apiKeyStore as defaultApiKeyStore, invoiceStore as defaultInvoiceStore, subscriptionStore as defaultSubscriptionStore, userStore as defaultUserStore, } from '../store/index.js';
+import { githubConnectionStore as defaultGithubConnectionStore } from '../store/index.js';
+import { BillingService, createBillingLedger } from '../billing/billing-service.js';
+import { billingService as defaultBillingService } from '../billing/index.js';
+import { createApiKeysRouter } from './api-keys.js';
+import { createGithubRouter } from './github.js';
 import { createAuthRouter } from './auth.js';
 import { createBillingRouter } from './billing.js';
+import { createContactRouter } from './contact.js';
+import { telegramBotService } from '../telegram/bot.js';
 import { createChatRouter } from './chat.js';
 import { createCodeRouter } from './code.js';
 import { createImagesRouter } from './images.js';
@@ -80,6 +87,22 @@ export const API_ENDPOINTS = [
     { method: 'GET', path: '/api/code/capabilities', status: 'ready', description: 'Ketner Code: лимиты тарифа и возможности' },
     { method: 'GET', path: '/api/code/projects', status: 'ready', description: 'Ketner Code: проекты пользователя' },
     { method: 'POST', path: '/api/code/projects/:id/run', status: 'ready', description: 'Ketner Code: запуск агента (SSE)' },
+    { method: 'GET', path: '/api/keys', status: 'ready', description: 'API-ключи пользователя' },
+    { method: 'POST', path: '/api/keys', status: 'ready', description: 'Создать API-ключ (секрет виден один раз)' },
+    { method: 'DELETE', path: '/api/keys/:id', status: 'ready', description: 'Отозвать API-ключ' },
+    { method: 'GET', path: '/api/github/status', status: 'ready', description: 'Привязанный аккаунт GitHub' },
+    { method: 'GET', path: '/api/github/connect-url', status: 'ready', description: 'Ссылка на подключение GitHub (OAuth)' },
+    { method: 'POST', path: '/api/github/confirm', status: 'ready', description: 'Завершить подключение GitHub' },
+    { method: 'DELETE', path: '/api/github/connection', status: 'ready', description: 'Отключить GitHub' },
+    { method: 'GET', path: '/api/github/api/*', status: 'ready', description: 'Прокси к GitHub REST от имени пользователя' },
+    { method: 'GET', path: '/v1/models', status: 'ready', description: 'Модели для агента (OpenAI-формат, ключ API)' },
+    { method: 'GET', path: '/v1/usage', status: 'ready', description: 'Бюджет и расход по ключу API' },
+    {
+        method: 'POST',
+        path: '/v1/chat/completions',
+        status: 'ready',
+        description: 'Чат с вызовом инструментов (OpenAI-формат, SSE, ключ API)',
+    },
 ];
 /**
  * Описание сервиса.
@@ -88,6 +111,10 @@ export const API_ENDPOINTS = [
  * браузере по ошибке, и там уместнее подсказка, чем 404.
  */
 export function describeService() {
+    // Карта API в production не публикуется: она только облегчает разведку.
+    if (isProduction) {
+        return { service: 'ketner-api', version: config.version };
+    }
     return {
         service: config.serviceName,
         version: config.version,
@@ -100,6 +127,16 @@ export function createApiRouter(deps) {
     const activeSubscriptionStore = deps.subscriptionStore ?? defaultSubscriptionStore;
     const activeInvoiceStore = deps.invoiceStore ?? defaultInvoiceStore;
     const activeUsageStore = deps.usageStore ?? defaultUsageStore;
+    // Журнал платежей работает с теми же хранилищами, что и роутеры (в тестах — с временными).
+    const activeBilling = deps.billingService ??
+        (activeUserStore === defaultUserStore && activeSubscriptionStore === defaultSubscriptionStore
+            ? defaultBillingService
+            : new BillingService({
+                userStore: activeUserStore,
+                subscriptionStore: activeSubscriptionStore,
+                usageStore: activeUsageStore,
+                ledger: createBillingLedger(),
+            }));
     router.use(createAuthMiddleware(activeUserStore, deps.betterAuth, activeSubscriptionStore));
     router.get('/', (_request, response) => {
         response.json(describeService());
@@ -107,16 +144,21 @@ export function createApiRouter(deps) {
     router.use(healthRouter);
     router.use(createMetaRouter());
     router.use('/auth', createAuthRouter(activeUserStore, deps.betterAuth));
+    router.use(createContactRouter({
+        notify: (message) => (deps.botService ?? telegramBotService).notifyAdminsAboutContact(message),
+    }));
     router.use(createBillingRouter({
         subscriptionStore: activeSubscriptionStore,
         userStore: activeUserStore,
         invoiceStore: activeInvoiceStore,
+        billingService: activeBilling,
     }));
     router.use(createTelegramRouter({
         subscriptionStore: activeSubscriptionStore,
         userStore: activeUserStore,
         invoiceStore: activeInvoiceStore,
         botService: deps.botService,
+        billingService: activeBilling,
         supportBotService: deps.supportBotService,
         supportStore: deps.supportStore,
     }));
@@ -129,12 +171,17 @@ export function createApiRouter(deps) {
         subscriptionStore: activeSubscriptionStore,
         userStore: activeUserStore,
     }));
+    router.use(createApiKeysRouter({ apiKeyStore: deps.apiKeyStore ?? defaultApiKeyStore }));
+    const activeGithubStore = deps.githubConnectionStore ?? defaultGithubConnectionStore;
+    router.use(createGithubRouter({ store: activeGithubStore, fetchImpl: deps.githubFetch, settings: deps.githubSettings }));
     router.use(createConversationsRouter(deps.store, deps.userId));
     router.use('/code', createCodeRouter({
         userId: deps.userId,
         userStore: activeUserStore,
         subscriptionStore: activeSubscriptionStore,
         usageStore: activeUsageStore,
+        githubTokenOf: (userId) => activeGithubStore.tokenOf(userId),
+        fetchImpl: deps.githubFetch,
     }));
     router.use('/images', createImagesRouter({
         userId: deps.userId,

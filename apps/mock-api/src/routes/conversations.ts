@@ -1,5 +1,6 @@
 import { Router, type NextFunction, type Request, type Response } from 'express';
-import { config } from '../config.js';
+import { config, isProduction } from '../config.js';
+import { RateLimiter, clientIp } from '../middleware/rate-limit.js';
 import { sendError } from '../middleware/errors.js';
 import { resolveGuestId } from '../middleware/guest.js';
 import type { ConversationStore } from '../store/conversation-store.js';
@@ -40,9 +41,16 @@ export function createConversationsRouter(
     response.json({ conversations: store.list(userId) });
   });
 
+  // Гости создают диалоги без аккаунта: ограничение по адресу, чтобы базу нельзя было забить мусором.
+  const guestCreatesPerIp = new RateLimiter(24 * 60 * 60 * 1000, 100);
+
   router.post('/conversations', (request: Request, response: Response) => {
+    if (!request.userId && isProduction && guestCreatesPerIp.hit(clientIp(request))) {
+      sendError(response, 429, 'too_many_requests', 'Слишком много новых диалогов. Войдите в аккаунт, чтобы продолжить.');
+      return;
+    }
     const userId = getUserId(request);
-    const title = typeof request.body?.title === 'string' ? request.body.title : '';
+    const title = typeof request.body?.title === 'string' ? request.body.title.slice(0, 200) : '';
     response.status(201).json({ conversation: store.create(userId, title) });
   });
 
@@ -66,7 +74,7 @@ export function createConversationsRouter(
     const userId = getUserId(request);
     const id = getParamId(request);
     const rawTitle: unknown = request.body?.title;
-    const title = typeof rawTitle === 'string' ? rawTitle.trim() : '';
+    const title = typeof rawTitle === 'string' ? rawTitle.trim().slice(0, 200) : '';
     if (!title) {
       sendError(response, 400, 'invalid_request', 'Поле title обязательно');
       return;

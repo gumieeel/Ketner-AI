@@ -1,19 +1,37 @@
 import { Router } from 'express';
 import { defaultBetterAuth } from '../auth/better-auth.js';
 import { createMockToken } from '../auth/jwt.js';
+import { telegramBotService } from '../telegram/bot.js';
+import { telegramLinkCodes } from '../telegram/link-codes.js';
 import { sendError } from '../middleware/errors.js';
+import { MAX_PASSWORD_LENGTH } from '../store/user-store.js';
+import { syncBetterAuthCredential } from '../auth/better-auth-sync.js';
+import { RateLimiter, clientIp } from '../middleware/rate-limit.js';
 import { config, isProduction } from '../config.js';
 import { isAdminEmail, isVipEmail } from '../services/vip.js';
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const MIN_PASSWORD_LENGTH = 8;
 export function createAuthRouter(userStore, betterAuthInstance = defaultBetterAuth) {
     const router = Router();
+    // Перебор паролей и массовые регистрации ради бесплатной квоты.
+    // Неудачные входы считаются и по адресу клиента, и по почте: второе не обойти сменой IP.
+    const signupsPerIp = new RateLimiter(60 * 60 * 1000, 5);
+    const failedLoginsPerIp = new RateLimiter(15 * 60 * 1000, 30);
+    const failedLoginsPerEmail = new RateLimiter(15 * 60 * 1000, 8);
+    const tooMany = (response, retryAfterSec, message) => {
+        response.setHeader('Retry-After', String(Math.max(1, retryAfterSec)));
+        sendError(response, 429, 'too_many_requests', message);
+    };
     router.post('/signup', async (request, response) => {
         const rawEmail = request.body?.email;
         const rawPassword = request.body?.password;
         const rawName = request.body?.name;
         if (typeof rawEmail !== 'string' || !EMAIL_REGEX.test(rawEmail.trim())) {
             sendError(response, 400, 'invalid_email', 'Введите корректный адрес электронной почты');
+            return;
+        }
+        if (typeof rawPassword === 'string' && rawPassword.length > MAX_PASSWORD_LENGTH) {
+            sendError(response, 400, 'invalid_password', `Пароль длиннее ${MAX_PASSWORD_LENGTH} символов`);
             return;
         }
         if (typeof rawPassword !== 'string' || rawPassword.length < MIN_PASSWORD_LENGTH) {
@@ -27,26 +45,27 @@ export function createAuthRouter(userStore, betterAuthInstance = defaultBetterAu
             sendError(response, 409, 'user_already_exists', 'Пользователь с таким email уже существует');
             return;
         }
+        const ipKey = clientIp(request);
+        if (signupsPerIp.isLimited(ipKey)) {
+            tooMany(response, signupsPerIp.retryAfterSec(ipKey), 'Слишком много регистраций с этого адреса. Попробуйте позже.');
+            return;
+        }
         const existing = userStore.findByEmail(email);
         if (existing) {
             sendError(response, 409, 'user_already_exists', 'Пользователь с таким email уже существует');
             return;
         }
-        const name = typeof rawName === 'string' ? rawName.trim() : undefined;
+        signupsPerIp.record(ipKey);
+        const name = typeof rawName === 'string' ? rawName.trim().slice(0, 100) : undefined;
         const user = userStore.create(email, rawPassword, name);
         const { token, expiresAt } = createMockToken(user);
-        // Синхронизируем пользователя с базой данных Better Auth
+        // Запись Better Auth (для cookie-сессии) получает тот же пароль; посторонняя запись с этой почтой,
+        // если её успели завести, перезаписывается, а её сессии отзываются.
         try {
-            await betterAuthInstance.api.signUpEmail({
-                body: {
-                    email,
-                    password: rawPassword,
-                    name: user.name,
-                },
-            });
+            await syncBetterAuthCredential(betterAuthInstance, email, rawPassword, user.name);
         }
-        catch {
-            // Игнорируем, если пользователь уже присутствует в базе Better Auth
+        catch (error) {
+            console.warn('[auth] Не удалось синхронизировать Better Auth при регистрации:', error);
         }
         response.status(201).json({ user, token, expiresAt });
     });
@@ -57,22 +76,27 @@ export function createAuthRouter(userStore, betterAuthInstance = defaultBetterAu
             sendError(response, 400, 'invalid_request', 'Поля email и password обязательны');
             return;
         }
+        const ipKey = clientIp(request);
+        const emailKey = rawEmail.trim().toLowerCase().slice(0, 320);
+        if (failedLoginsPerIp.isLimited(ipKey) || failedLoginsPerEmail.isLimited(emailKey)) {
+            const retry = Math.max(failedLoginsPerIp.retryAfterSec(ipKey), failedLoginsPerEmail.retryAfterSec(emailKey));
+            tooMany(response, retry, 'Слишком много неудачных попыток входа. Подождите несколько минут.');
+            return;
+        }
         const user = userStore.verifyPassword(rawEmail, rawPassword);
         if (!user) {
+            failedLoginsPerIp.record(ipKey);
+            failedLoginsPerEmail.record(emailKey);
             sendError(response, 401, 'invalid_credentials', 'Неверный адрес почты или пароль');
             return;
         }
-        // Синхронизируем сессию с Better Auth при необходимости
+        failedLoginsPerEmail.reset(emailKey);
+        // Запись Better Auth приводится к паролю владельца (см. syncBetterAuthCredential).
         try {
-            await betterAuthInstance.api.signInEmail({
-                body: {
-                    email: rawEmail,
-                    password: rawPassword,
-                },
-            });
+            await syncBetterAuthCredential(betterAuthInstance, user.email, rawPassword, user.name);
         }
-        catch {
-            // Fallback: авторизация по локальному хранилищу
+        catch (error) {
+            console.warn('[auth] Не удалось синхронизировать Better Auth при входе:', error);
         }
         const { token, expiresAt } = createMockToken(user);
         response.json({ user, token, expiresAt });
@@ -89,10 +113,11 @@ export function createAuthRouter(userStore, betterAuthInstance = defaultBetterAu
             sendError(response, 401, 'unauthorized', 'Сессия не найдена или истекла');
             return;
         }
-        const botUser = config.telegramBotUsername.replace(/^@/, '');
+        const botUser = (telegramBotService.botUsername || config.telegramBotUsername).replace(/^@/, '');
+        // Одноразовый код на 15 минут вместо id пользователя: ссылку нельзя подобрать или переслать.
         response.json({
             botUsername: botUser,
-            linkUrl: `https://t.me/${botUser}?start=link_${request.user.id}`,
+            linkUrl: `https://t.me/${botUser}?start=lnk_${telegramLinkCodes.issue(request.user.id)}`,
             isLinked: Boolean(request.user.telegramChatId),
             telegramUsername: request.user.telegramUsername,
         });

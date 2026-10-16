@@ -1,4 +1,6 @@
 import { config } from '../config.js';
+import { createApiKeyStore } from './api-key-store.js';
+import { createGithubConnectionStore } from '../github/connection-store.js';
 import { createConversationStore } from './conversation-store.js';
 import { createSubscriptionStore } from './subscription-store.js';
 import { createUserStore } from './user-store.js';
@@ -6,6 +8,14 @@ import { createUserStore } from './user-store.js';
 export const conversationStore = createConversationStore(config.storeFile);
 /** Хранилище пользователей по умолчанию: файл из `config.userStoreFile`. */
 export const userStore = createUserStore(config.userStoreFile);
+/** API-ключи для программирования (CLI, IDE): файл из `config.apiKeyStoreFile`. */
+export const apiKeyStore = createApiKeyStore(config.apiKeyStoreFile);
+export { createApiKeyStore } from './api-key-store.js';
+/** Привязанные аккаунты GitHub (токены зашифрованы ключом из BETTER_AUTH_SECRET). */
+export const githubConnectionStore = createGithubConnectionStore({
+    file: config.githubConnectionStoreFile,
+    secret: config.betterAuthSecret,
+});
 /** Хранилище подписок по умолчанию: файл из `config.subscriptionStoreFile`. */
 export const subscriptionStore = createSubscriptionStore(config.subscriptionStoreFile);
 /** Хранилище счетов (СБП, Telegram Stars). */
@@ -17,7 +27,6 @@ export const usageStore = new UsageStore(config.usageStoreFile);
 /** Хранилище обращений в службу поддержки (Telegram Support Bot). */
 export { supportStore, createSupportStore } from './support-store.js';
 /** Хранилище использованных блокчейн-транзакций (защита от replay-атак). */
-export { usedTxStore, createUsedTxStore } from './used-tx-store.js';
 /** Хранилище пользовательских оценок (лайки/дизлайки) и аналитика эскалации моделей. */
 import { FeedbackStore } from './feedback-store.js';
 export { FeedbackStore, createFeedbackStore } from './feedback-store.js';

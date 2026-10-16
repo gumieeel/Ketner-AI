@@ -1,7 +1,11 @@
 import { randomUUID } from 'node:crypto';
 import postgres from 'postgres';
 import { config } from '../config.js';
-import { conversationStore, userStore, subscriptionStore, feedbackStore } from '../store/index.js';
+import { apiKeyStore, conversationStore, githubConnectionStore, userStore, subscriptionStore, feedbackStore, } from '../store/index.js';
+import { invoiceStore } from '../store/invoice-store.js';
+import { billingLedger } from '../billing/index.js';
+import { usageStore } from '../store/index.js';
+import { contactStore } from '../store/contact-store.js';
 import { createPostgresProjectDriver, ensureCodeSchema } from '../code/postgres-driver.js';
 import { ensureImagesSchema } from '../images/image-store.js';
 import { attachImageDriver } from '../images/runtime.js';
@@ -438,6 +442,7 @@ function attachDatabaseDrivers(sql) {
           "title" = EXCLUDED."title",
           "context_summary" = EXCLUDED."context_summary",
           "updated_at" = NOW()
+        WHERE "conversations"."user_id" = EXCLUDED."user_id"
       `;
             // Insert all messages in the turn
             const allMessages = [...history, assistant];
@@ -467,6 +472,7 @@ function attachDatabaseDrivers(sql) {
             "feedback" = EXCLUDED."feedback",
             "metadata" = EXCLUDED."metadata",
             "updated_at" = NOW()
+          WHERE "messages"."conversation_id" = EXCLUDED."conversation_id"
         `;
             }
         },
@@ -604,6 +610,159 @@ function attachDatabaseDrivers(sql) {
         },
     });
 }
+/**
+ * API-ключи для CLI и IDE: в Postgres лежит только SHA-256 секрета. Без этой таблицы ключи
+ * пропадали бы при каждом деплое — диск Render временный.
+ */
+async function syncApiKeys(sql) {
+    await sql.unsafe(`
+    CREATE TABLE IF NOT EXISTS "api_keys" (
+      "id" text PRIMARY KEY NOT NULL,
+      "user_id" text NOT NULL,
+      "name" text NOT NULL,
+      "prefix" text NOT NULL,
+      "hash" text UNIQUE NOT NULL,
+      "created_at" timestamptz NOT NULL DEFAULT now(),
+      "last_used_at" timestamptz,
+      "revoked_at" timestamptz
+    );
+    CREATE INDEX IF NOT EXISTS "api_keys_user_idx" ON "api_keys" ("user_id");
+  `);
+    const rows = await sql `SELECT id, user_id, name, prefix, hash, created_at, last_used_at, revoked_at FROM "api_keys"`;
+    apiKeyStore.loadExternal(rows.map((r) => ({
+        id: r.id,
+        userId: r.user_id,
+        name: r.name,
+        prefix: r.prefix,
+        hash: r.hash,
+        createdAt: new Date(r.created_at).toISOString(),
+        lastUsedAt: r.last_used_at ? new Date(r.last_used_at).toISOString() : null,
+        revokedAt: r.revoked_at ? new Date(r.revoked_at).toISOString() : null,
+    })));
+    apiKeyStore.setDbDriver({
+        async upsert(record) {
+            await sql `
+        INSERT INTO "api_keys" ("id", "user_id", "name", "prefix", "hash", "created_at", "last_used_at", "revoked_at")
+        VALUES (${record.id}, ${record.userId}, ${record.name}, ${record.prefix}, ${record.hash},
+                ${record.createdAt}, ${record.lastUsedAt}, ${record.revokedAt})
+        ON CONFLICT ("id") DO UPDATE SET
+          "name" = EXCLUDED."name",
+          "last_used_at" = EXCLUDED."last_used_at",
+          "revoked_at" = EXCLUDED."revoked_at"
+      `;
+        },
+    });
+}
+/**
+ * Привязанные аккаунты GitHub: токен лежит зашифрованным (AES-256-GCM), расшифровать его можно
+ * только ключом из BETTER_AUTH_SECRET. Таблица нужна по той же причине: диск Render временный.
+ */
+async function syncGithubConnections(sql) {
+    await sql.unsafe(`
+    CREATE TABLE IF NOT EXISTS "github_connections" (
+      "user_id" text PRIMARY KEY NOT NULL,
+      "github_id" bigint NOT NULL,
+      "login" text NOT NULL,
+      "avatar_url" text,
+      "scopes" text NOT NULL DEFAULT '',
+      "token_enc" text NOT NULL,
+      "connected_at" timestamptz NOT NULL DEFAULT now()
+    );
+  `);
+    const rows = await sql `SELECT user_id, github_id, login, avatar_url, scopes, token_enc, connected_at FROM "github_connections"`;
+    githubConnectionStore.loadExternal(rows.map((r) => ({
+        userId: r.user_id,
+        githubId: Number(r.github_id),
+        login: r.login,
+        avatarUrl: r.avatar_url,
+        scopes: r.scopes.split(',').filter(Boolean),
+        tokenEnc: r.token_enc,
+        connectedAt: new Date(r.connected_at).toISOString(),
+    })));
+    githubConnectionStore.setDbDriver({
+        async upsert(record) {
+            await sql `
+        INSERT INTO "github_connections" ("user_id", "github_id", "login", "avatar_url", "scopes", "token_enc", "connected_at")
+        VALUES (${record.userId}, ${record.githubId}, ${record.login}, ${record.avatarUrl},
+                ${record.scopes.join(',')}, ${record.tokenEnc}, ${record.connectedAt})
+        ON CONFLICT ("user_id") DO UPDATE SET
+          "github_id" = EXCLUDED."github_id",
+          "login" = EXCLUDED."login",
+          "avatar_url" = EXCLUDED."avatar_url",
+          "scopes" = EXCLUDED."scopes",
+          "token_enc" = EXCLUDED."token_enc",
+          "connected_at" = EXCLUDED."connected_at"
+      `;
+        },
+        async remove(userId) {
+            await sql `DELETE FROM "github_connections" WHERE "user_id" = ${userId}`;
+        },
+    });
+}
+/**
+ * Крипто-счета (Trybit): postback может прийти после деплоя, а диск Render временный. Без таблицы
+ * сервер не нашёл бы счёт и не выдал тариф за уже оплаченный заказ.
+ */
+async function syncCryptoInvoices(sql) {
+    await sql.unsafe(`
+    CREATE TABLE IF NOT EXISTS "crypto_invoices" (
+      "id" text PRIMARY KEY NOT NULL,
+      "user_id" text NOT NULL,
+      "status" text NOT NULL,
+      "data" jsonb NOT NULL,
+      "created_at" timestamptz NOT NULL DEFAULT now(),
+      "updated_at" timestamptz NOT NULL DEFAULT now()
+    );
+  `);
+    const rows = await sql `
+    SELECT data FROM "crypto_invoices" WHERE created_at > now() - interval '60 days'
+  `;
+    invoiceStore.loadCryptoExternal?.(rows.map((row) => row.data));
+    invoiceStore.setCryptoDbDriver?.({
+        async upsert(invoice) {
+            await sql `
+        INSERT INTO "crypto_invoices" ("id", "user_id", "status", "data", "created_at", "updated_at")
+        VALUES (${invoice.id}, ${invoice.userId}, ${invoice.status}, ${sql.json(invoice)}, ${invoice.createdAt}, now())
+        ON CONFLICT ("id") DO UPDATE SET
+          "status" = EXCLUDED."status",
+          "data" = EXCLUDED."data",
+          "updated_at" = now()
+      `;
+        },
+    });
+}
+/**
+ * Небольшие хранилища документов (журнал платежей, подписки со звёздами, настройки уведомлений,
+ * счета в звёздах): одна таблица с пространствами имён, документы — JSON.
+ */
+async function syncDocStores(sql, stores) {
+    await sql.unsafe(`
+    CREATE TABLE IF NOT EXISTS "ketner_docs" (
+      "namespace" text NOT NULL,
+      "id" text NOT NULL,
+      "data" jsonb NOT NULL,
+      "updated_at" timestamptz NOT NULL DEFAULT now(),
+      PRIMARY KEY ("namespace", "id")
+    );
+  `);
+    const driver = {
+        async upsert(namespace, doc) {
+            await sql `
+        INSERT INTO "ketner_docs" ("namespace", "id", "data", "updated_at")
+        VALUES (${namespace}, ${doc.id}, ${sql.json(doc)}, now())
+        ON CONFLICT ("namespace", "id") DO UPDATE SET "data" = EXCLUDED."data", "updated_at" = now()
+      `;
+        },
+        async remove(namespace, id) {
+            await sql `DELETE FROM "ketner_docs" WHERE "namespace" = ${namespace} AND "id" = ${id}`;
+        },
+    };
+    for (const store of stores) {
+        const rows = await sql `SELECT data FROM "ketner_docs" WHERE "namespace" = ${store.namespace}`;
+        store.loadExternal(rows.map((row) => row.data));
+        store.setDbDriver(driver);
+    }
+}
 export async function initDatabaseSync() {
     if (!hasPostgresConfig()) {
         console.log('ℹ [db] DATABASE_URL не задан или локальный — работаем в режиме совместимости (Local File / In-Memory)');
@@ -630,6 +789,37 @@ export async function initDatabaseSync() {
         // Картинки: диск Render временный, поэтому храним их в Postgres.
         await ensureImagesSchema(codeRunner);
         attachImageDriver(codeRunner);
+        // API-ключи — отдельно: сбой этой таблицы не должен отключать остальные хранилища.
+        try {
+            await syncApiKeys(sql);
+        }
+        catch (error) {
+            console.error('❌ [db] API-ключи не синхронизированы с PostgreSQL:', error);
+        }
+        try {
+            await syncDocStores(sql, [
+                billingLedger.payments,
+                billingLedger.starsSubscriptions,
+                billingLedger.prefs,
+                usageStore,
+                contactStore,
+            ]);
+        }
+        catch (error) {
+            console.error('❌ [db] Журнал платежей не синхронизирован с PostgreSQL:', error);
+        }
+        try {
+            await syncCryptoInvoices(sql);
+        }
+        catch (error) {
+            console.error('❌ [db] Крипто-счета не синхронизированы с PostgreSQL:', error);
+        }
+        try {
+            await syncGithubConnections(sql);
+        }
+        catch (error) {
+            console.error('❌ [db] Подключения GitHub не синхронизированы с PostgreSQL:', error);
+        }
         console.log('🎉 [db] Все данные успешно синхронизированы с PostgreSQL / Supabase!');
         return true;
     }

@@ -3,6 +3,7 @@ import type { NextFunction, Request, Response } from 'express';
 import { fromNodeHeaders } from 'better-auth/node';
 import { defaultBetterAuth } from '../auth/better-auth.js';
 import { verifyMockToken } from '../auth/jwt.js';
+import { betterAuthSessionMayOpen } from '../auth/better-auth-sync.js';
 import type { UserStore } from '../store/user-store.js';
 import type { SubscriptionStore } from '../store/subscription-store.js';
 import { applySubscriptionExpiry } from '../services/user-plan.js';
@@ -81,8 +82,11 @@ export function createAuthMiddleware(
         headers: fromNodeHeaders(request.headers),
       });
 
-      if (session?.user) {
-        let stored = userStore.findByEmail(session.user.email);
+      let stored = session?.user ? userStore.findByEmail(session.user.email) : null;
+      // Сессия Better Auth открывает аккаунт сайта только если запись Better Auth точно принадлежит
+      // его владельцу (см. betterAuthSessionMayOpen): иначе чужая регистрация с той же почтой давала
+      // бы вход в чужой аккаунт.
+      if (session?.user && betterAuthSessionMayOpen(session.user, stored)) {
         if (!stored) {
           // Пароль локальной копии не используется для входа: вход идёт через Better Auth.
           stored = userStore.create(session.user.email, randomBytes(32).toString('hex'), session.user.name);

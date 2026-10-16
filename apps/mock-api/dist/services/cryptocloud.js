@@ -1,5 +1,23 @@
 import { createHmac, timingSafeEqual } from 'node:crypto';
 import { config } from '../config.js';
+/** `2026-10-14 15:04:01.555132` (UTC) → ISO. */
+function trybitDate(value) {
+    if (typeof value !== 'string' || !value.trim())
+        return undefined;
+    const iso = value.trim().replace(' ', 'T').replace(/(\.\d{3})\d*$/, '$1');
+    const date = new Date(/[zZ]|[+-]\d\d:?\d\d$/.test(iso) ? iso : `${iso}Z`);
+    return Number.isNaN(date.getTime()) ? undefined : date.toISOString();
+}
+function money(value) {
+    const number = Number(value);
+    return Number.isFinite(number) && number > 0 ? Math.round(number * 100) / 100 : 0;
+}
+function parseFees(result) {
+    const invoiceUsd = money(result.amount_usd);
+    if (!invoiceUsd)
+        return undefined;
+    return { serviceUsd: money(result.service_fee_usd), transferUsd: money(result.fee_usd), invoiceUsd };
+}
 export class CryptoCloudService {
     apiKey;
     shopId;
@@ -65,7 +83,7 @@ export class CryptoCloudService {
             };
         }
         try {
-            const response = await fetch('https://api.cryptocloud.plus/v2/invoice/create', {
+            const response = await fetch(`${config.cryptoCloudApiUrl}/v2/invoice/create`, {
                 method: 'POST',
                 headers: {
                     Authorization: `Token ${this.apiKey}`,
@@ -77,7 +95,8 @@ export class CryptoCloudService {
                     currency: 'USD',
                     order_id: options.orderId,
                     email: options.userEmail || undefined,
-                    cryptocurrency: options.cryptocurrency || undefined,
+                    // Дополнительные параметры Trybit принимает только внутри add_fields.
+                    ...(options.cryptocurrency ? { add_fields: { cryptocurrency: options.cryptocurrency } } : {}),
                 }),
             });
             if (!response.ok) {
@@ -89,11 +108,28 @@ export class CryptoCloudService {
             if (data.status !== 'success' || !data.result) {
                 throw new Error(data.message || 'CryptoCloud: не удалось создать счёт');
             }
+            const result = data.result;
+            const cryptoAmount = Number(result.amount);
+            const h2h = typeof result.address === 'string' && result.address.trim() && Number.isFinite(cryptoAmount) && cryptoAmount > 0
+                ? {
+                    address: result.address.trim(),
+                    amount: cryptoAmount,
+                    currencyCode: result.currency?.fullcode || result.currency?.code || options.cryptocurrency || '',
+                    network: [result.currency?.network?.fullname, result.currency?.network?.code]
+                        .filter(Boolean)
+                        .filter((value, index, all) => all.indexOf(value) === index)
+                        .join(' · '),
+                    expiresAt: trybitDate(result.expiry_date),
+                    memo: (result.memo || result.comment || '').trim() || undefined,
+                    fees: parseFees(result),
+                }
+                : undefined;
             return {
-                invoiceId: data.result.uuid,
-                link: data.result.link,
-                expiry: data.result.expiry,
-                status: data.result.status || 'created',
+                invoiceId: result.uuid,
+                link: result.link,
+                expiry: result.expiry,
+                status: result.status || 'created',
+                h2h,
             };
         }
         catch (error) {
@@ -111,14 +147,14 @@ export class CryptoCloudService {
     }
     /**
      * Проверяет статус счета через CryptoCloud API v2.
-     * Endpoint: POST https://api.cryptocloud.plus/v2/invoice/merchant/info
+     * Endpoint: POST <TRYBIT_API_URL>/v2/invoice/merchant/info
      */
     async checkInvoiceStatus(invoiceId) {
         if (!this.isConfigured()) {
             return 'pending';
         }
         try {
-            const response = await fetch('https://api.cryptocloud.plus/v2/invoice/merchant/info', {
+            const response = await fetch(`${config.cryptoCloudApiUrl}/v2/invoice/merchant/info`, {
                 method: 'POST',
                 headers: {
                     Authorization: `Token ${this.apiKey}`,
@@ -132,7 +168,8 @@ export class CryptoCloudService {
             }
             const data = (await response.json());
             if (data.status === 'success' && Array.isArray(data.result)) {
-                const item = data.result.find((inv) => inv.uuid === invoiceId);
+                const bare = (value) => value.replace(/^INV-/i, '');
+                const item = data.result.find((inv) => bare(inv.uuid) === bare(invoiceId));
                 if (item?.status) {
                     const rawStatus = item.status.toLowerCase();
                     return rawStatus; // 'paid', 'created', 'partial', 'overpaid', 'canceled'

@@ -138,11 +138,12 @@ export function createConversationStore(file) {
         saveTurn({ userId, conversationId, history, assistant }) {
             let conversation = findConversation(userId, conversationId);
             if (!conversation) {
-                conversation = snapshot.conversations.find((c) => c.id === conversationId);
-                if (conversation) {
-                    conversation.userId = userId;
+                // Диалог с таким id у другого пользователя не «переезжает» к вызывающему: раньше здесь
+                // владелец переписывался, и чужой диалог можно было присвоить, зная его id.
+                if (snapshot.conversations.some((c) => c.id === conversationId)) {
+                    return null;
                 }
-                else {
+                {
                     const now = new Date().toISOString();
                     const firstUserMsg = history.find((m) => m.role === 'user');
                     const title = deriveTitle(firstUserMsg?.content || 'Новый диалог');
@@ -162,8 +163,16 @@ export function createConversationStore(file) {
                 const existing = message.id
                     ? snapshot.messages.find((m) => m.id === message.id && m.conversationId === conversationId)
                     : undefined;
+                // id из запроса сохраняется, только если он новый или уже принадлежит этому диалогу:
+                // id сообщения из чужого диалога перезаписал бы его текст в базе (ON CONFLICT по id).
+                const takenElsewhere = !existing &&
+                    typeof message.id === 'string' &&
+                    snapshot.messages.some((m) => m.id === message.id && m.conversationId !== conversationId);
+                const safeId = typeof message.id === 'string' && /^[A-Za-z0-9_-]{1,100}$/.test(message.id) && !takenElsewhere
+                    ? message.id
+                    : randomUUID();
                 return {
-                    id: message.id ?? randomUUID(),
+                    id: safeId,
                     conversationId,
                     role: message.role,
                     content: message.content,
@@ -205,10 +214,7 @@ export function createConversationStore(file) {
             return { conversation: { ...conversation }, assistant: assistantMessage };
         },
         updateContextSummary(userId, conversationId, summary) {
-            let conversation = findConversation(userId, conversationId);
-            if (!conversation) {
-                conversation = snapshot.conversations.find((c) => c.id === conversationId);
-            }
+            const conversation = findConversation(userId, conversationId);
             if (conversation) {
                 conversation.contextSummary = summary;
                 conversation.updatedAt = new Date().toISOString();

@@ -1,6 +1,8 @@
 import { Router } from 'express';
-import { config } from '../config.js';
+import { config, isProduction } from '../config.js';
+import { RateLimiter, clientIp } from '../middleware/rate-limit.js';
 import { sendError } from '../middleware/errors.js';
+import { resolveGuestId } from '../middleware/guest.js';
 /**
  * Диалоги пользователя: список, создание, чтение, переименование, удаление.
  *
@@ -16,23 +18,27 @@ export function createConversationsRouter(store, defaultUserId, allowAnonymous =
         }
         next();
     });
-    const getUserId = (request) => {
-        if (request.userId)
-            return request.userId;
-        const guestHeader = request.headers['x-guest-id'] || request.headers['x-user-id'];
-        const guestId = Array.isArray(guestHeader) ? guestHeader[0] : guestHeader;
-        if (guestId && typeof guestId === 'string' && guestId.trim()) {
-            return guestId.trim();
+    router.use('/conversations', (request, response, next) => {
+        if (!request.userId && resolveGuestId(request, defaultUserId) === null) {
+            sendError(response, 400, 'invalid_guest_id', 'Не передан корректный идентификатор гостя');
+            return;
         }
-        return defaultUserId;
-    };
+        next();
+    });
+    const getUserId = (request) => request.userId ?? resolveGuestId(request, defaultUserId) ?? defaultUserId;
     router.get('/conversations', (request, response) => {
         const userId = getUserId(request);
         response.json({ conversations: store.list(userId) });
     });
+    // Гости создают диалоги без аккаунта: ограничение по адресу, чтобы базу нельзя было забить мусором.
+    const guestCreatesPerIp = new RateLimiter(24 * 60 * 60 * 1000, 100);
     router.post('/conversations', (request, response) => {
+        if (!request.userId && isProduction && guestCreatesPerIp.hit(clientIp(request))) {
+            sendError(response, 429, 'too_many_requests', 'Слишком много новых диалогов. Войдите в аккаунт, чтобы продолжить.');
+            return;
+        }
         const userId = getUserId(request);
-        const title = typeof request.body?.title === 'string' ? request.body.title : '';
+        const title = typeof request.body?.title === 'string' ? request.body.title.slice(0, 200) : '';
         response.status(201).json({ conversation: store.create(userId, title) });
     });
     const getParamId = (req) => {
@@ -53,7 +59,7 @@ export function createConversationsRouter(store, defaultUserId, allowAnonymous =
         const userId = getUserId(request);
         const id = getParamId(request);
         const rawTitle = request.body?.title;
-        const title = typeof rawTitle === 'string' ? rawTitle.trim() : '';
+        const title = typeof rawTitle === 'string' ? rawTitle.trim().slice(0, 200) : '';
         if (!title) {
             sendError(response, 400, 'invalid_request', 'Поле title обязательно');
             return;

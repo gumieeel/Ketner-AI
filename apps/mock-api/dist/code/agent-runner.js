@@ -284,7 +284,7 @@ export class AgentRunner {
             return reject('invalid_request', t(language, 'Проект не найден.', 'Project not found.'));
         // ── Лимиты: запуски в сутки, бюджеты, Fair Use ──
         if (usageStore.getAgentRunsLastDay(input.userId) >= limits.runsPerDay) {
-            return reject('run_limit', t(language, `Достигнут суточный лимит запусков агента (${limits.runsPerDay}). Он обновится в течение суток; больше запусков даёт тариф выше.`, `Daily agent run limit reached (${limits.runsPerDay}). It renews within 24 hours; a higher plan gives more runs.`));
+            return reject('run_limit', t(language, 'Запуски агента на сегодня закончились. Продолжите завтра или на тарифе выше.', 'Agent runs are used up for today. Continue tomorrow or on a higher plan.'));
         }
         const snapshot = usageStore.getFairUseSnapshot(input.userId);
         const budget = evaluateBudget(snapshot.estimatedCostLastMonth, entitlements.costBudget);
@@ -818,12 +818,12 @@ export class AgentRunner {
                 }
                 if (overBudget() && !continueCheaper('budget', step)) {
                     status = 'budget';
-                    finalMessage = t(language, 'Исчерпан бюджет запуска, в том числе на моделях дешевле. Сделанные правки сохранены; продолжите новым запросом.', 'The run budget is used up, including on cheaper models. The changes made are saved; continue with a new request.');
+                    finalMessage = t(language, 'Работа остановлена. Сделанные правки сохранены; продолжите новым запросом.', 'The run was stopped. The changes made are saved; continue with a new request.');
                     break;
                 }
                 if (step === stepLimit && !continueCheaper('steps', step)) {
                     status = 'step_limit';
-                    finalMessage = t(language, `Достигнут лимит шагов (${step}). Сделанные правки сохранены; продолжите новым запросом.`, `Step limit reached (${step}). The changes made are saved; continue with a new request.`);
+                    finalMessage = t(language, 'Работа остановлена. Сделанные правки сохранены; продолжите новым запросом.', 'The run was stopped. The changes made are saved; continue with a new request.');
                 }
             }
             if (status === 'completed' && !lastAssistantText.trim() && steps > 0) {

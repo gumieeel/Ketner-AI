@@ -159,16 +159,20 @@ export function createCodeRouter(deps) {
         const body = (request.body ?? {});
         const target = typeof body.url === 'string' ? parseGithubUrl(body.url) : null;
         if (!target) {
-            sendError(response, 400, 'invalid_request', 'Укажите адрес публичного репозитория GitHub, например https://github.com/owner/repo');
+            sendError(response, 400, 'invalid_request', 'Укажите репозиторий GitHub, например https://github.com/owner/repo');
             return;
         }
         if ((await store.count(caller.userId)) >= caller.limits.maxProjects) {
-            sendError(response, 413, 'quota_exceeded', `Достигнут лимит проектов тарифа (${caller.limits.maxProjects}).`);
+            sendError(response, 413, 'quota_exceeded', 'На вашем тарифе больше проектов создать нельзя. Удалите ненужный проект или повысьте тариф.');
             return;
         }
         let archive;
         try {
-            archive = await downloadGithubZip(target, { maxBytes: GITHUB_ARCHIVE_MAX_BYTES, fetchImpl: deps.fetchImpl });
+            archive = await downloadGithubZip(target, {
+                maxBytes: GITHUB_ARCHIVE_MAX_BYTES,
+                fetchImpl: deps.fetchImpl,
+                token: deps.githubTokenOf?.(caller.userId),
+            });
         }
         catch (error) {
             if (error instanceof GithubImportError) {

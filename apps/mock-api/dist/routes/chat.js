@@ -6,6 +6,8 @@ import { modelRegistry } from '../ai/model-registry.js';
 import { delay, randomBetween } from '../ai/stream.js';
 import { config, isProduction } from '../config.js';
 import { sendError } from '../middleware/errors.js';
+import { resolveGuestId } from '../middleware/guest.js';
+import { RateLimiter, clientIp } from '../middleware/rate-limit.js';
 import { usageStore as defaultUsageStore, feedbackStore as defaultFeedbackStore, } from '../store/index.js';
 import { isAdminUser } from '../services/vip.js';
 import { safeEqualStrings } from '../auth/safe-equal.js';
@@ -70,7 +72,7 @@ function parseCompletionRequest(body) {
  *
  * Событий ровно три (`delta`, `done`, `error`) — столько же разбирает фронтенд.
  */
-export function createChatRouter({ store, userId, ai, subscriptionStore, userStore, usageStore = defaultUsageStore, gateway, feedbackStore = defaultFeedbackStore, allowAnonymous = config.allowAnonymousChat, }) {
+export function createChatRouter({ store, userId, ai, subscriptionStore, userStore, usageStore = defaultUsageStore, gateway, feedbackStore = defaultFeedbackStore, allowAnonymous = config.allowAnonymousChat, limitGuestsByIp = isProduction, }) {
     const router = Router();
     const aiGateway = gateway ??
         new AIGateway({
@@ -78,6 +80,10 @@ export function createChatRouter({ store, userId, ai, subscriptionStore, userSto
             aiConfig: ai,
             feedbackStore,
         });
+    // Гостевой id придумывает сам браузер, поэтому лимит «на гостя» обходится сменой id.
+    // Поверх него — лимит на адрес клиента: бесплатный гостевой доступ не превращается в безлимит.
+    const guestPerIpHour = new RateLimiter(60 * 60 * 1000, 15);
+    const guestPerIpDay = new RateLimiter(24 * 60 * 60 * 1000, 40);
     router.post('/completions', async (request, response) => {
         const parsed = parseCompletionRequest(request.body);
         if (!parsed.ok) {
@@ -96,9 +102,12 @@ export function createChatRouter({ store, userId, ai, subscriptionStore, userSto
         // Личность и тариф — только из сессии и серверных хранилищ. Поля userId / userEmail / userPlan
         // из тела запроса не читаются: клиент не вправе назваться другим пользователем или поднять тариф.
         const sessionUser = request.user;
-        const guestHeader = request.headers['x-guest-id'] || request.headers['x-user-id'];
-        const guestId = Array.isArray(guestHeader) ? guestHeader[0] : guestHeader;
-        const effectiveAnonymousUserId = guestId && typeof guestId === 'string' && guestId.trim() ? guestId.trim() : userId;
+        const guestId = sessionUser ? null : resolveGuestId(request, userId);
+        if (!sessionUser && guestId === null) {
+            sendError(response, 400, 'invalid_guest_id', 'Не передан корректный идентификатор гостя');
+            return;
+        }
+        const effectiveAnonymousUserId = guestId ?? userId;
         const identity = resolveChatIdentity({
             sessionUser,
             storedUser: sessionUser ? userStore?.findById(sessionUser.id) : undefined,
@@ -112,6 +121,18 @@ export function createChatRouter({ store, userId, ai, subscriptionStore, userSto
             return;
         }
         const { userId: activeUserId, plan: userPlan, isVip } = identity;
+        if (identity.anonymous && limitGuestsByIp) {
+            const ip = clientIp(request);
+            if (guestPerIpHour.isLimited(ip) || guestPerIpDay.isLimited(ip)) {
+                response.setHeader('Retry-After', String(Math.max(guestPerIpHour.retryAfterSec(ip), guestPerIpDay.retryAfterSec(ip))));
+                sendError(response, 429, 'guest_limit', language === 'en'
+                    ? 'Guest message limit reached. Sign in to keep chatting for free.'
+                    : 'Лимит сообщений без входа исчерпан. Войдите, чтобы продолжить бесплатно.');
+                return;
+            }
+            guestPerIpHour.record(ip);
+            guestPerIpDay.record(ip);
+        }
         // Диалог ищется строго среди диалогов этого пользователя: чужой id даёт 404.
         if (!store.get(activeUserId, conversationId)) {
             sendError(response, 404, 'conversation_not_found', `Диалог ${conversationId} не найден`);
@@ -278,7 +299,11 @@ export function createChatRouter({ store, userId, ai, subscriptionStore, userSto
             sendError(response, 401, 'unauthorized', 'Войдите в аккаунт, чтобы оценивать ответы');
             return;
         }
-        const activeUserId = request.user?.id ?? userId;
+        const activeUserId = request.user?.id ?? resolveGuestId(request, userId);
+        if (!activeUserId) {
+            sendError(response, 400, 'invalid_guest_id', 'Не передан корректный идентификатор гостя');
+            return;
+        }
         // 1. Обновляем сообщение в хранилище диалогов
         const updatedMsg = store.updateMessageFeedback(activeUserId, conversationId, messageId, rating);
         if (!updatedMsg) {

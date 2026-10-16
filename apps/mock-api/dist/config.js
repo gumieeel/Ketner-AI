@@ -139,11 +139,6 @@ export const config = {
      * Stripe без ключей). Только вне production — в production их нет совсем.
      */
     enableMockBilling: !isProduction,
-    /**
-     * Ручное подтверждение прямого перевода на кошелёк (по TxID). В production выключено, пока
-     * владелец явно не задаст ENABLE_MANUAL_CRYPTO=true; даже тогда проверяется только USDT TRC-20.
-     */
-    manualCryptoEnabled: !isProduction || optionalEnv('ENABLE_MANUAL_CRYPTO') === 'true',
     enableDemoAccount: !isProduction || optionalEnv('ENABLE_DEMO_ACCOUNT') === 'true',
     /**
      * Анонимный доступ к чату и диалогам через бесплатную модель OpenRouter (nvidia/nemotron-3-ultra-550b-a55b:free).
@@ -168,12 +163,15 @@ export const config = {
     /** Хранилище счетов (СБП, Stars, Crypto): файл переживает перезапуск. */
     invoiceStoreFile: process.env.INVOICE_STORE_FILE ??
         fileURLToPath(new URL('../data/invoices.json', import.meta.url)),
-    /** Хранилище использованных блокчейн-транзакций (защита от повторного использования). */
-    usedTxStoreFile: process.env.USED_TX_STORE_FILE ??
-        fileURLToPath(new URL('../data/used_transactions.json', import.meta.url)),
     /** Хранилище тикетов поддержки: файл переживает перезапуск mock-API. */
     supportStoreFile: process.env.SUPPORT_STORE_FILE ??
         fileURLToPath(new URL('../data/support.json', import.meta.url)),
+    /** Хранилище API-ключей для программирования (CLI, IDE): в файле только SHA-256 ключей. */
+    apiKeyStoreFile: process.env.API_KEY_STORE_FILE ??
+        fileURLToPath(new URL('../data/api-keys.json', import.meta.url)),
+    /** Привязанные аккаунты GitHub: токены в файле только в зашифрованном виде (AES-256-GCM). */
+    githubConnectionStoreFile: process.env.GITHUB_CONNECTION_STORE_FILE ??
+        fileURLToPath(new URL('../data/github-connections.json', import.meta.url)),
     /** Хранилище оценок ответов (лайки/дизлайки) для анализа роутинга и эскалации моделей. */
     feedbackStoreFile: process.env.FEEDBACK_STORE_FILE ??
         fileURLToPath(new URL('../data/feedback.json', import.meta.url)),
@@ -233,9 +231,12 @@ export const config = {
         ? Number(process.env.SUPPORT_ADMIN_CHAT_ID)
         : undefined,
     /** CryptoCloud: Приём платежей в криптовалюте */
-    cryptoCloudApiKey: optionalEnv('CRYPTOCLOUD_API_KEY'),
-    cryptoCloudShopId: optionalEnv('CRYPTOCLOUD_SHOP_ID'),
-    cryptoCloudSecretKey: optionalEnv('CRYPTOCLOUD_SECRET_KEY'),
+    /** Trybit (бывший CryptoCloud): одинаковый API v2. Подходят оба набора переменных. */
+    cryptoCloudApiKey: optionalEnv('TRYBIT_API_KEY') || optionalEnv('CRYPTOCLOUD_API_KEY'),
+    cryptoCloudShopId: optionalEnv('TRYBIT_SHOP_ID') || optionalEnv('CRYPTOCLOUD_SHOP_ID'),
+    cryptoCloudSecretKey: optionalEnv('TRYBIT_SECRET_KEY') || optionalEnv('CRYPTOCLOUD_SECRET_KEY'),
+    /** Адрес API платёжного шлюза. */
+    cryptoCloudApiUrl: (process.env.TRYBIT_API_URL?.trim() || 'https://api.trybit.com').replace(/\/+$/, ''),
     /**
      * ИИ: единый ключ OpenRouter для всех моделей (GPT, Claude, Grok, Gemini, DeepSeek, MiMo).
      * Прямые ключи OpenAI / Anthropic / Google не используются.

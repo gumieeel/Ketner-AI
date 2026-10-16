@@ -8,7 +8,11 @@
 import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
 import { dirname } from 'node:path';
 import { randomUUID } from 'node:crypto';
+const MAX_RECORDS = 50000;
 export class UsageStore {
+    /** Пространство имён в `ketner_docs`; совместимо с syncDocStores. */
+    namespace = 'usage';
+    dbDriver = null;
     filePath;
     records = [];
     userIndex = new Map();
@@ -43,6 +47,21 @@ export class UsageStore {
             this.records = [];
         }
         this.rebuildIndex();
+    }
+    /** Подмешивает записи из базы (после перезапуска диск Render пуст): дубликаты по id отбрасываются. */
+    loadExternal(docs) {
+        const byId = new Map();
+        for (const record of this.records)
+            byId.set(record.id, record);
+        for (const record of docs)
+            byId.set(record.id, record);
+        this.records = [...byId.values()]
+            .sort((a, b) => a.createdAt.localeCompare(b.createdAt))
+            .slice(-MAX_RECORDS);
+        this.rebuildIndex();
+    }
+    setDbDriver(driver) {
+        this.dbDriver = driver;
     }
     persist() {
         const dir = dirname(this.filePath);
@@ -89,8 +108,8 @@ export class UsageStore {
         }
         userRecords.push(record);
         // Ограничиваем историю в памяти/файле (последние 50,000 записей)
-        if (this.records.length > 50000) {
-            this.records = this.records.slice(-50000);
+        if (this.records.length > MAX_RECORDS) {
+            this.records = this.records.slice(-MAX_RECORDS);
             this.rebuildIndex();
         }
         try {
@@ -99,6 +118,9 @@ export class UsageStore {
         catch (err) {
             console.error('[usage-store] Ошибка сохранения usage:', err);
         }
+        this.dbDriver?.upsert(this.namespace, record).catch((error) => {
+            console.error('[db] Ошибка записи usage:', error);
+        });
         return record;
     }
     /**

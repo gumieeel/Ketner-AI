@@ -143,6 +143,21 @@ export function applyEconomyRules(requested, state, registry) {
     }
     return { model: requested, reason: null };
 }
+/**
+ * Запасная модель допустима, если она не нарушает правил экономии: премиум-модель берётся
+ * только пока есть квота премиум-запросов, а при исчерпанном бюджете — только лёгкие модели.
+ * Прав доступа по тарифу для запасных не требуется: они дешевле выбранной, а пользователь
+ * видит в ответе, какая модель реально ответила.
+ */
+export function isAllowedFallbackModel(model, plan, state) {
+    if (state.stage === 'exhausted' || state.stage === 'hard_stop') {
+        return model.costClass === 'lite';
+    }
+    if (isPremiumClass(model.costClass)) {
+        return state.stage === 'normal' && state.premiumAvailable && planAllowsModel(plan, model.requiredPlan);
+    }
+    return true;
+}
 export class AIGateway {
     registry;
     providers;
@@ -221,22 +236,8 @@ export class AIGateway {
     getFeedbackStore() {
         return this.feedbackStore;
     }
-    /**
-     * Запасная модель допустима, если она не нарушает правил экономии: премиум-модель берётся
-     * только пока есть квота премиум-запросов, а при исчерпанном бюджете — только лёгкие модели.
-     * Прав доступа по тарифу для запасных не требуется: они дешевле выбранной, а пользователь
-     * видит в ответе, какая модель реально ответила.
-     */
     isAllowedFallback(model, plan, state) {
-        if (state.stage === 'exhausted' || state.stage === 'hard_stop') {
-            return model.costClass === 'lite';
-        }
-        if (isPremiumClass(model.costClass)) {
-            return (state.stage === 'normal' &&
-                state.premiumAvailable &&
-                planAllowsModel(plan, model.requiredPlan));
-        }
-        return true;
+        return isAllowedFallbackModel(model, plan, state);
     }
     /**
      * Стриминговая генерация ответа через AI Gateway.
