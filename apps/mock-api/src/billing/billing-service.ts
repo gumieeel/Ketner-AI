@@ -357,6 +357,25 @@ export class BillingService {
       .sort((a, b) => b.paidAt.localeCompare(a.paidAt));
   }
 
+  /**
+   * Обнуляет тариф: Free без срока, автопродление звёздами отключается.
+   * Платежи не возвращаются и остаются в истории.
+   */
+  async resetPlan(userId: string): Promise<{ autoRenew: 'none' | 'canceled' | 'failed' }> {
+    let autoRenew: 'none' | 'canceled' | 'failed' = 'none';
+    const stars = this.deps.ledger.starsSubscriptions.get(userId);
+    if (stars?.status === 'active') {
+      try {
+        await this.setAutoRenew(userId, false);
+        autoRenew = 'canceled';
+      } catch {
+        autoRenew = 'failed';
+      }
+    }
+    this.setSubscription(userId, { plan: 'free', renewsAt: null });
+    return { autoRenew };
+  }
+
   /** Удаляет всю историю платежей пользователя (тариф и подписка не меняются). Возвращает число записей. */
   clearPayments(userId: string): number {
     const ids = this.deps.ledger.payments

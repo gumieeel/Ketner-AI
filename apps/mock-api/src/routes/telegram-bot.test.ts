@@ -1185,3 +1185,44 @@ test('админ: /clearpayments @username очищает историю опл�
   const reply = h.bot.all('sendMessage').filter((call) => call.body.chat_id === 7801).at(-1)!;
   assert.match(String(reply.body.text), /удалено записей — 2/);
 });
+
+test('админ: /resetplan @username обнуляет тариф только после подтверждения', async (t) => {
+  const h = await harness();
+  t.after(() => h.server.close());
+  const admin = await h.linkedBuyer(7901);
+  h.userStore.setAdmin(admin.buyer.user.id, true);
+  const { buyer } = await h.linkedBuyer(7902);
+  h.userStore.linkTelegram(buyer.user.id, 7902, 'resetme');
+  h.billingService.grant(buyer.user.id, 'pro', {
+    id: 'stars:r-1',
+    method: 'stars',
+    amount: 100,
+    currency: 'XTR',
+  });
+
+  // Не администратор не может.
+  await h.message(7902, '/resetplan @resetme');
+  assert.equal(h.subscriptionStore.get(buyer.user.id).plan, 'pro');
+
+  await h.message(7901, '/resetplan @resetme');
+  const ask = h.bot.all('sendMessage').filter((call) => call.body.chat_id === 7901).at(-1)!;
+  assert.match(String(ask.body.text), /Обнулить тариф @resetme/);
+  assert.equal(h.subscriptionStore.get(buyer.user.id).plan, 'pro', 'без подтверждения не меняется');
+  const [yes, no] = (
+    ask.body.reply_markup as { inline_keyboard: Array<Array<{ callback_data: string }>> }
+  ).inline_keyboard[0]!;
+
+  await h.callback(7901, no!.callback_data);
+  assert.equal(h.subscriptionStore.get(buyer.user.id).plan, 'pro');
+
+  // Чужая кнопка не сработает.
+  await h.callback(7902, yes!.callback_data);
+  assert.equal(h.subscriptionStore.get(buyer.user.id).plan, 'pro');
+
+  await h.callback(7901, yes!.callback_data);
+  const sub = h.subscriptionStore.get(buyer.user.id);
+  assert.equal(sub.plan, 'free');
+  assert.equal(sub.renewsAt, null);
+  assert.equal(h.billingService.paymentsOf(buyer.user.id).length, 1, 'история оплат не тронута');
+  assert.match(String(h.bot.last('editMessageText')?.body.text), /обнулён/);
+});

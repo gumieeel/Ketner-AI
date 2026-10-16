@@ -1025,6 +1025,9 @@ export class TelegramBotService implements TelegramPaymentsPort {
     if (command === '/clearpayments') {
       return this.handleClearPayments(chatId, arg);
     }
+    if (command === '/resetplan') {
+      return this.handleResetPlanRequest(chatId, arg);
+    }
 
     await this.sendMessage(
       chatId,
@@ -1047,6 +1050,7 @@ export class TelegramBotService implements TelegramPaymentsPort {
     }
     if (data.startsWith('auth:')) return this.handleAuthDecision(cb, chatId, data);
     if (data.startsWith('rf:')) return this.handleRefundDecision(cb, chatId, data);
+    if (data.startsWith('rp:')) return this.handleResetPlanDecision(cb, chatId, data);
     if (data.startsWith('buy:')) {
       // Кнопки из старых напоминаний: оплата теперь в кабинете.
       await this.answerCallbackQuery(cb.id);
@@ -1305,6 +1309,108 @@ export class TelegramBotService implements TelegramPaymentsPort {
       `🧹 История оплат @${escapeHtml(username)} очищена: удалено записей — ${removed}. Тариф и срок не менялись.`,
     );
     return { handled: true, action: 'clear_payments' };
+  }
+
+  /**
+   * Только для администраторов: `/resetplan @username` (или без аргумента — свой аккаунт).
+   * Сначала бот показывает, что будет обнулено, и ждёт подтверждения кнопкой.
+   */
+  private async handleResetPlanRequest(
+    chatId: number | string,
+    arg: string,
+  ): Promise<{ handled: boolean; action?: string }> {
+    const admin = this.resolveUser(chatId);
+    if (!admin?.isAdmin) {
+      await this.sendMessage(chatId, 'Команда доступна только администраторам.');
+      return { handled: true, action: 'reset_plan_forbidden' };
+    }
+    const username = arg.replace(/^@/, '').trim().toLowerCase();
+    const target = username
+      ? this.deps.userStore
+          .list()
+          .find((candidate) => candidate.telegramUsername?.toLowerCase() === username)
+      : admin;
+    if (!target) {
+      await this.sendMessage(
+        chatId,
+        `Аккаунт с Telegram @${escapeHtml(username)} не найден (он должен быть привязан к боту).`,
+      );
+      return { handled: true, action: 'reset_plan_not_found' };
+    }
+    const sub = this.deps.subscriptionStore.get(target.id);
+    const label = target.telegramUsername
+      ? `@${escapeHtml(target.telegramUsername)}`
+      : escapeHtml(accountLabel(target));
+    if (sub.plan === 'free') {
+      await this.sendMessage(chatId, `У ${label} и так тариф Free — обнулять нечего.`);
+      return { handled: true, action: 'reset_plan_noop' };
+    }
+    const auto = this.billing.starsSubscriptionOf(target.id);
+    await this.sendMessage(
+      chatId,
+      [
+        `⚠️ <b>Обнулить тариф ${label}?</b>`,
+        '',
+        `Сейчас: ${planTitle(sub.plan)}${sub.renewsAt ? ` до ${formatDate(sub.renewsAt)}` : ''}.`,
+        'После: Free, оставшийся срок сгорит.',
+        auto?.status === 'active' ? 'Автопродление звёздами будет отключено.' : '',
+        'Оплаты не возвращаются, история платежей не меняется.',
+      ]
+        .filter(Boolean)
+        .join('\n'),
+      {
+        reply_markup: {
+          inline_keyboard: [
+            [
+              { text: '✅ Да, обнулить', callback_data: `rp:y:${target.id}` },
+              { text: '✖️ Отмена', callback_data: 'rp:n' },
+            ],
+          ],
+        },
+      },
+    );
+    return { handled: true, action: 'reset_plan_confirm' };
+  }
+
+  private async handleResetPlanDecision(
+    cb: NonNullable<TelegramUpdate['callback_query']>,
+    chatId: number | string,
+    data: string,
+  ): Promise<{ handled: boolean; action?: string }> {
+    const admin = this.resolveUser(chatId);
+    if (!admin?.isAdmin) {
+      await this.answerCallbackQuery(cb.id, 'Нет прав', true);
+      return { handled: true, action: 'reset_plan_forbidden' };
+    }
+    const messageId = cb.message?.message_id;
+    const [, decision, userId] = data.split(':');
+    if (decision !== 'y' || !userId) {
+      await this.answerCallbackQuery(cb.id, 'Отменено');
+      if (messageId) await this.editMessage(chatId, messageId, 'Обнуление тарифа отменено.');
+      return { handled: true, action: 'reset_plan_canceled' };
+    }
+    const target = this.deps.userStore.findById(userId);
+    if (!target) {
+      await this.answerCallbackQuery(cb.id, 'Аккаунт не найден', true);
+      return { handled: true, action: 'reset_plan_not_found' };
+    }
+    const { autoRenew } = await this.billing.resetPlan(target.id);
+    const label = target.telegramUsername
+      ? `@${escapeHtml(target.telegramUsername)}`
+      : escapeHtml(accountLabel(target));
+    const text = [
+      `🔄 Тариф ${label} обнулён: теперь Free.`,
+      autoRenew === 'canceled' ? 'Автопродление звёздами отключено.' : '',
+      autoRenew === 'failed'
+        ? '⚠️ Автопродление отключить не получилось — Telegram не ответил. Повторите /resetplan.'
+        : '',
+    ]
+      .filter(Boolean)
+      .join('\n');
+    await this.answerCallbackQuery(cb.id, 'Готово');
+    if (messageId) await this.editMessage(chatId, messageId, text);
+    else await this.sendMessage(chatId, text);
+    return { handled: true, action: 'reset_plan' };
   }
 
   // ───────────── возвраты: решения администратора ─────────────
