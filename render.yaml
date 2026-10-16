@@ -17,12 +17,6 @@ services:
         generateValue: true
       - key: DATABASE_URL
         sync: false
-      - key: SUPABASE_URL
-        sync: false
-      - key: SUPABASE_PUBLISHABLE_KEY
-        sync: false
-      - key: SUPABASE_SECRET_KEY
-        sync: false
       - key: BETTER_AUTH_API_KEY
         sync: false
       - key: OPENROUTER_API_KEY

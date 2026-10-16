@@ -467,18 +467,6 @@
   .text-gradient {
     color: var(--text);
   }
-  .text-gradient-animated {
-    animation: none;
-  }
-
-  /* Мелкая подпись: без капса и моноширинного — sentence case, табличные цифры */
-  .mono-label {
-    font-size: 12px;
-    line-height: 16px;
-    font-weight: 500;
-    letter-spacing: 0;
-    color: var(--subtle);
-  }
 
   .tabular {
     font-variant-numeric: tabular-nums;
@@ -513,14 +501,12 @@
 
   /* Атмосферные пятна и свечение отключены: глубина — от тона, не от размытия */
   .bg-aurora,
-  .hero-glow,
-  .bg-hero-glow {
+  .hero-glow {
     background-image: none;
   }
 
   /* Точечная сетка 24px — фон технических блоков */
-  .bg-grid,
-  .bg-dots {
+  .bg-grid {
     background-image: radial-gradient(var(--grid-line) 1px, transparent 1.2px);
     background-size: 24px 24px;
   }
@@ -529,9 +515,6 @@
   .gradient-border {
     position: relative;
     border: 1px solid color-mix(in srgb, var(--accent) 45%, transparent) !important;
-  }
-  .gradient-border-animated::before {
-    content: none;
   }
 
   /* Пунктирный разделитель секций */
@@ -573,64 +556,6 @@
     animation: caret-blink 1s steps(2, start) infinite;
   }
 
-  .typing-dots {
-    display: inline-flex;
-    align-items: center;
-    gap: 4px;
-  }
-  .typing-dots > span {
-    width: 6px;
-    height: 6px;
-    border-radius: 999px;
-    background-color: var(--accent);
-    animation: typingDot 1.2s var(--ease-smooth) infinite;
-  }
-  .typing-dots > span:nth-child(2) {
-    animation-delay: 150ms;
-  }
-  .typing-dots > span:nth-child(3) {
-    animation-delay: 300ms;
-  }
-
-  .reply-marker-pulse {
-    animation: reply-start-pulse 240ms ease-out forwards;
-  }
-
-  /* Появление нового сообщения в ленте — ответ на действие человека */
-  .msg-in {
-    animation: msgIn 260ms var(--ease-out-expo) both;
-  }
-
-  .drawer-transition {
-    transition: transform 220ms var(--ease-out-expo);
-  }
-
-  /* Бегущая строка (полоса провайдеров) */
-  .animate-marquee-ltr {
-    display: flex;
-    width: max-content;
-    animation: marquee-ltr 60s linear infinite;
-  }
-  .animate-marquee-ltr:hover {
-    animation-play-state: paused;
-  }
-
-  /*
-   * Секции больше не «всплывают» при прокрутке: единственный оркестрованный момент —
-   * демо роутера на главном экране. Класс оставлен, чтобы разметка не ломалась.
-   */
-  .reveal,
-  .reveal[data-visible='true'],
-  .reveal-eager {
-    opacity: 1;
-    transform: none;
-  }
-
-  .flow-line {
-    stroke-dasharray: 3 5;
-    animation: flow-dash 1.6s linear infinite;
-  }
-
   .status-pulse {
     animation: status-pulse 2.4s ease-in-out infinite;
   }
@@ -667,12 +592,6 @@
     color: transparent;
     -webkit-text-fill-color: transparent;
     animation: textShimmer 2.2s linear infinite;
-  }
-}
-
-@keyframes flow-dash {
-  to {
-    stroke-dashoffset: -16;
   }
 }
 
@@ -757,57 +676,9 @@
   }
 }
 
-@keyframes msgIn {
-  from {
-    opacity: 0;
-    transform: translateY(6px);
-  }
-  to {
-    opacity: 1;
-    transform: none;
-  }
-}
-
-@keyframes typingDot {
-  0%,
-  60%,
-  100% {
-    opacity: 0.35;
-    transform: translateY(0) scale(0.85);
-  }
-  30% {
-    opacity: 1;
-    transform: translateY(-3px) scale(1);
-  }
-}
-
 @keyframes caret-blink {
   50% {
     opacity: 0;
-  }
-}
-
-@keyframes reply-start-pulse {
-  0% {
-    opacity: 0.3;
-    transform: scale(0.92);
-  }
-  50% {
-    opacity: 1;
-    transform: scale(1.08);
-  }
-  100% {
-    opacity: 1;
-    transform: scale(1);
-  }
-}
-
-@keyframes marquee-ltr {
-  0% {
-    transform: translateX(-50%);
-  }
-  100% {
-    transform: translateX(0%);
   }
 }
 
@@ -820,10 +691,5 @@
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
     scroll-behavior: auto !important;
-  }
-
-  .animate-marquee-ltr {
-    animation: none;
-    transform: none;
   }
 }

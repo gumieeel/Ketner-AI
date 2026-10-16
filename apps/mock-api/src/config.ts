@@ -122,8 +122,6 @@ const authJwtSecret = optionalEnv('AUTH_JWT_SECRET')
   ? secretEnv('AUTH_JWT_SECRET', '')
   : deriveSecret(betterAuthSecret, 'ketner:auth-jwt:v1');
 
-const supabaseUrl = optionalEnv('SUPABASE_URL');
-
 /** Настройки заглушки ИИ: вынесены в тип, чтобы тесты могли подставить свои. */
 export interface AiConfig {
   /** Пауза перед первым чанком: интерфейс показывает «думает…». */
@@ -242,16 +240,6 @@ export const config = {
    * PostgreSQL / Supabase Database URL
    */
   databaseUrl: process.env.DATABASE_URL?.trim() || '',
-
-  /**
-   * Supabase Project Credentials
-   */
-  supabaseUrl,
-  supabaseAnonKey: optionalEnv('SUPABASE_PUBLISHABLE_KEY') || optionalEnv('SUPABASE_ANON_KEY'),
-  supabaseSecretKey: optionalEnv('SUPABASE_SECRET_KEY'),
-  supabaseJwksUrl:
-    optionalEnv('SUPABASE_JWKS_URL') ||
-    (supabaseUrl ? `${supabaseUrl.replace(/\/+$/, '')}/auth/v1/.well-known/jwks.json` : ''),
 
   /**
    * Better Auth API Key для подключения к Better Auth Infra / Dashboard.
