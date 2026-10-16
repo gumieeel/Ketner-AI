@@ -18,6 +18,8 @@ import {
 import { haptic } from '@/features/telegram/webapp';
 import { useTranslation, type TranslationKey } from '@/i18n';
 import { cn } from '@/lib/cn';
+import { RefundCase } from './refund-case';
+import { hasRefundCase, refundCaseSummary } from './refund-case-utils';
 import {
   Field,
   formatAmount,
@@ -51,6 +53,7 @@ export function PaymentsTab() {
   const [openId, setOpenId] = useState<string | null>(null);
   const { payments, refundPolicy } = state;
   const open = payments.find((payment) => payment.id === openId) ?? null;
+  const cases = payments.filter(hasRefundCase);
 
   return (
     <div className="flex flex-col gap-4">
@@ -66,53 +69,103 @@ export function PaymentsTab() {
           </Button>
         </Panel>
       ) : (
-        <section aria-labelledby="tg-payments-title" className="flex flex-col gap-2">
-          <SectionTitle id="tg-payments-title">{t('tg.paymentsTitle')}</SectionTitle>
-          <ul className="overflow-hidden rounded-xl border border-stroke bg-surface">
-            {payments.map((payment, index) => (
-              <li key={payment.id} className={cn(index > 0 && 'border-t border-stroke')}>
-                <button
-                  type="button"
-                  onClick={() => setOpenId(payment.id)}
-                  className="flex min-h-16 w-full items-center gap-3 px-4 py-3 text-left hover:bg-surface-2 focus-visible:bg-surface-2 focus-visible:outline-none"
-                >
-                  <span className="grid size-9 shrink-0 place-items-center rounded-full bg-surface-2 text-muted">
-                    {payment.method === 'stars' ? (
-                      <StarIcon className="size-4 fill-warning text-warning" />
-                    ) : (
-                      <CryptoIcon className="size-4" />
-                    )}
-                  </span>
-                  <span className="min-w-0 flex-1">
-                    <span className="flex items-center gap-1.5 text-[15px] font-medium">
-                      {payment.planTitle}
-                      {payment.recurring ? (
-                        <>
-                          <RefreshIcon className="size-3.5 text-muted" />
-                          <span className="sr-only">{t('tg.autoRenew')}</span>
-                        </>
+        <>
+          {cases.length > 0 ? (
+            <section aria-labelledby="tg-cases-title" className="flex flex-col gap-2">
+              <SectionTitle id="tg-cases-title" aside={String(cases.length)}>
+                {t('tg.casesTitle')}
+              </SectionTitle>
+              <ul className="flex flex-col gap-2">
+                {cases.map((payment) => {
+                  const fresh =
+                    payment.status === 'refund_requested' &&
+                    payment.refund?.messages?.at(-1)?.from === 'admin';
+                  return (
+                    <li key={payment.id}>
+                      <button
+                        type="button"
+                        onClick={() => setOpenId(payment.id)}
+                        className={cn(
+                          'flex min-h-16 w-full items-center gap-3 rounded-xl border bg-surface px-4 py-3 text-left hover:bg-surface-2 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent',
+                          payment.status === 'refund_requested'
+                            ? 'border-warning/50'
+                            : 'border-stroke',
+                        )}
+                      >
+                        <span className="min-w-0 flex-1">
+                          <span className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                            <span className="text-[15px] font-medium">
+                              {payment.planTitle} · {formatAmount(payment, language)}
+                            </span>
+                            <Badge tone={STATUS[payment.status].tone}>
+                              {t(STATUS[payment.status].key)}
+                            </Badge>
+                          </span>
+                          <span
+                            className={cn(
+                              'mt-1 block text-[13px] leading-5',
+                              fresh ? 'font-medium text-accent' : 'text-muted',
+                            )}
+                          >
+                            {refundCaseSummary(payment, t)}
+                          </span>
+                        </span>
+                        <ChevronRightIcon className="size-4 shrink-0 text-subtle" />
+                      </button>
+                    </li>
+                  );
+                })}
+              </ul>
+            </section>
+          ) : null}
+          <section aria-labelledby="tg-payments-title" className="flex flex-col gap-2">
+            <SectionTitle id="tg-payments-title">{t('tg.paymentsTitle')}</SectionTitle>
+            <ul className="overflow-hidden rounded-xl border border-stroke bg-surface">
+              {payments.map((payment, index) => (
+                <li key={payment.id} className={cn(index > 0 && 'border-t border-stroke')}>
+                  <button
+                    type="button"
+                    onClick={() => setOpenId(payment.id)}
+                    className="flex min-h-16 w-full items-center gap-3 px-4 py-3 text-left hover:bg-surface-2 focus-visible:bg-surface-2 focus-visible:outline-none"
+                  >
+                    <span className="grid size-9 shrink-0 place-items-center rounded-full bg-surface-2 text-muted">
+                      {payment.method === 'stars' ? (
+                        <StarIcon className="size-4 fill-warning text-warning" />
+                      ) : (
+                        <CryptoIcon className="size-4" />
+                      )}
+                    </span>
+                    <span className="min-w-0 flex-1">
+                      <span className="flex items-center gap-1.5 text-[15px] font-medium">
+                        {payment.planTitle}
+                        {payment.recurring ? (
+                          <>
+                            <RefreshIcon className="size-3.5 text-muted" />
+                            <span className="sr-only">{t('tg.autoRenew')}</span>
+                          </>
+                        ) : null}
+                      </span>
+                      <span className="mt-0.5 block text-[12px] text-subtle">
+                        {formatDateTime(payment.paidAt, language)}
+                      </span>
+                    </span>
+                    <span className="flex shrink-0 flex-col items-end gap-1">
+                      <span className="text-[14px] font-medium tabular-nums">
+                        {formatAmount(payment, language)}
+                      </span>
+                      {payment.status !== 'paid' ? (
+                        <Badge tone={STATUS[payment.status].tone}>
+                          {t(STATUS[payment.status].key)}
+                        </Badge>
                       ) : null}
                     </span>
-                    <span className="mt-0.5 block text-[12px] text-subtle">
-                      {formatDateTime(payment.paidAt, language)}
-                    </span>
-                  </span>
-                  <span className="flex shrink-0 flex-col items-end gap-1">
-                    <span className="text-[14px] font-medium tabular-nums">
-                      {formatAmount(payment, language)}
-                    </span>
-                    {payment.status !== 'paid' ? (
-                      <Badge tone={STATUS[payment.status].tone}>
-                        {t(STATUS[payment.status].key)}
-                      </Badge>
-                    ) : null}
-                  </span>
-                  <ChevronRightIcon className="size-4 shrink-0 text-subtle" />
-                </button>
-              </li>
-            ))}
-          </ul>
-        </section>
+                    <ChevronRightIcon className="size-4 shrink-0 text-subtle" />
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </section>
+        </>
       )}
 
       <RefundPolicy hours={refundPolicy.hours} />
@@ -249,9 +302,11 @@ function PaymentSheet({ payment, onClose }: { payment: MiniAppPayment; onClose: 
 
       <section aria-labelledby={`${commentId}-refund`} className="mt-4 flex flex-col gap-3">
         <h3 id={`${commentId}-refund`} className="text-[15px] font-semibold">
-          {t('tg.refundTitle')}
+          {hasRefundCase(payment) ? t('tg.caseTitle') : t('tg.refundTitle')}
         </h3>
-        {option.kind === 'none' ? (
+        {hasRefundCase(payment) ? (
+          <RefundCase payment={payment} />
+        ) : option.kind === 'none' ? (
           <Notice tone={option.reason === 'declined' ? 'warning' : 'info'}>
             {noneText[option.reason]}
           </Notice>

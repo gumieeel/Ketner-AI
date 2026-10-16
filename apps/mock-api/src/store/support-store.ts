@@ -44,6 +44,9 @@ export interface SupportStore {
     message: Omit<SupportMessage, 'id' | 'timestamp'>,
   ): SupportTicket | undefined;
   linkAdminNotification(ticketId: string, adminMessageId: number): void;
+  /** Сообщение администратору о заявке на возврат → номер заявки (для ответа через Reply). */
+  linkAdminRefund(ref: string, adminMessageId: number): void;
+  getRefundRefByAdminMessageId(msgId: number): string | undefined;
   closeTicket(ticketId: string): SupportTicket | undefined;
   listOpenTickets(): SupportTicket[];
   listAllTickets(): SupportTicket[];
@@ -194,6 +197,16 @@ export function createSupportStore(file?: string): SupportStore {
       ticket.updatedAt = fullMessage.timestamp;
       persist();
       return ticket;
+    },
+
+    linkAdminRefund(ref: string, adminMessageId: number): void {
+      adminMsgToTicketId.set(adminMessageId, `refund:${ref}`);
+      persist();
+    },
+
+    getRefundRefByAdminMessageId(msgId: number): string | undefined {
+      const target = adminMsgToTicketId.get(msgId);
+      return target?.startsWith('refund:') ? target.slice('refund:'.length) : undefined;
     },
 
     linkAdminNotification(ticketId: string, adminMessageId: number): void {

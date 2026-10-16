@@ -491,6 +491,33 @@ export function createMiniAppRouter({
     },
   );
 
+  /** Сообщение клиента по своей заявке на возврат: сохраняется в заявке и уходит в поддержку. */
+  router.post(
+    '/telegram/miniapp/payments/:id/refund/message',
+    requireAuth,
+    async (request: Request, response: Response) => {
+      const user = currentUser(request, response);
+      if (!user) return;
+      const text = (request.body as { text?: unknown } | undefined)?.text;
+      if (typeof text !== 'string' || !text.trim()) {
+        sendError(response, 400, 'empty_message', 'Напишите сообщение');
+        return;
+      }
+      const payment = billing.findPayment(String(request.params.id));
+      if (!payment || payment.userId !== user.id || !payment.refund) {
+        sendError(response, 404, 'refund_not_found', 'Заявка на возврат не найдена');
+        return;
+      }
+      try {
+        const updated = billing.addRefundMessage(payment.id, 'user', text);
+        await botService.notifyAdminsAboutRefundMessage(updated, user, text.trim().slice(0, 1000));
+        response.json(stateOf(user));
+      } catch (error) {
+        fail(response, error);
+      }
+    },
+  );
+
   /** Удалить чек из истории (только администраторам; тариф и срок не меняются). */
   router.delete(
     '/telegram/miniapp/payments/:id',

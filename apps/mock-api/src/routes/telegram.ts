@@ -71,6 +71,9 @@ export function createTelegramRouter(deps: TelegramRouterDeps): Router {
   const botService = deps.botService ?? new TelegramBotService(deps);
   const supportBot = deps.supportBotService ?? defaultSupportBotService;
   const supportStore = deps.supportStore ?? defaultSupportStore;
+  // Заявки на возврат приходят администратору в бот поддержки, как обращения; ответы — оттуда же.
+  botService.attachAdminInbox(supportBot);
+  supportBot.attachRefundDesk(botService.refundDesk());
 
   // -------------------------------------------------------------
   // 1. ПЛАТЁЖНЫЙ БОТ (@Robo_kassa_bot)

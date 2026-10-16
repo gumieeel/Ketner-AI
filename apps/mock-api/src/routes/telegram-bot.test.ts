@@ -6,6 +6,8 @@ import test from 'node:test';
 import { BillingService, createBillingLedger, DAY_MS } from '../billing/billing-service.js';
 import { config } from '../config.js';
 import { createInvoiceStore } from '../store/invoice-store.js';
+import { createSupportStore } from '../store/support-store.js';
+import { TelegramSupportBotService } from '../telegram/support-bot.js';
 import { createSubscriptionStore } from '../store/subscription-store.js';
 import { UsageStore } from '../store/usage-store.js';
 import { createUserStore } from '../store/user-store.js';
@@ -75,7 +77,7 @@ interface MiniState {
   prefs: { reminders: boolean; receipts: boolean };
 }
 
-async function harness() {
+async function harness(extra: Partial<Parameters<typeof startTestServer>[1]> = {}) {
   const dir = mkdtempSync(join(tmpdir(), 'ketner-tg-'));
   const userStore = createUserStore(join(dir, 'users.json'));
   const subscriptionStore = createSubscriptionStore(join(dir, 'subs.json'));
@@ -122,6 +124,7 @@ async function harness() {
       botService: bot,
       billingService,
       mailer,
+      ...extra,
     },
   );
   let counter = 0;
@@ -1182,7 +1185,10 @@ test('админ: /clearpayments @username очищает историю опл�
   await h.message(7801, '/clearpayments @djkskejd');
   assert.equal(h.billingService.paymentsOf(buyer.user.id).length, 0);
   assert.equal(h.subscriptionStore.get(buyer.user.id).plan, 'pro');
-  const reply = h.bot.all('sendMessage').filter((call) => call.body.chat_id === 7801).at(-1)!;
+  const reply = h.bot
+    .all('sendMessage')
+    .filter((call) => call.body.chat_id === 7801)
+    .at(-1)!;
   assert.match(String(reply.body.text), /удалено записей — 2/);
 });
 
@@ -1205,7 +1211,10 @@ test('админ: /resetplan @username обнуляет тариф только 
   assert.equal(h.subscriptionStore.get(buyer.user.id).plan, 'pro');
 
   await h.message(7901, '/resetplan @resetme');
-  const ask = h.bot.all('sendMessage').filter((call) => call.body.chat_id === 7901).at(-1)!;
+  const ask = h.bot
+    .all('sendMessage')
+    .filter((call) => call.body.chat_id === 7901)
+    .at(-1)!;
   assert.match(String(ask.body.text), /Обнулить тариф @resetme/);
   assert.equal(h.subscriptionStore.get(buyer.user.id).plan, 'pro', 'без подтверждения не меняется');
   const [yes, no] = (
@@ -1244,7 +1253,10 @@ test('бесплатный Pro (TEMP): в истории как обычная �
   assert.match(String((payment as unknown as { chargeId: string }).chargeId), /^stx/);
   assert.equal('free' in payment, false, 'клиенту пометка не видна');
   assert.equal(h.invoiceStore.getTelegramStarsInvoice(invoice.id)?.status, 'paid');
-  const receipt = h.bot.all('sendMessage').filter((call) => call.body.chat_id === 8001).at(-1)!;
+  const receipt = h.bot
+    .all('sendMessage')
+    .filter((call) => call.body.chat_id === 8001)
+    .at(-1)!;
   assert.match(String(receipt.body.text), /Оплата прошла/);
 
   const refund = await h.mini<{ outcome: string }>(
@@ -1279,4 +1291,181 @@ test('удалить чек из истории может только адми
   assert.equal(h.subscriptionStore.get(buyer.user.id).plan, 'pro', 'тариф не меняется');
   const missing = await h.mini(path, undefined, token, 'DELETE');
   assert.equal(missing.status, 404);
+});
+
+/** Бот поддержки с закреплённым чатом администратора; отправленное складывается в массивы. */
+function recordingSupportBot(adminChatId: number) {
+  const store = createSupportStore(join(mkdtempSync(join(tmpdir(), 'ketner-sup-')), 's.json'));
+  const bot = new TelegramSupportBotService({ supportStore: store, botToken: '', adminChatId });
+  const sent: Array<{ chatId: number | string; text: string; extra: Record<string, unknown> }> = [];
+  const edits: string[] = [];
+  bot.sendMessage = async (chatId, text, extra = {}) => {
+    sent.push({ chatId, text, extra });
+    return { message_id: 5000 + sent.length };
+  };
+  bot.answerCallbackQuery = async () => true;
+  bot.editMessageText = async (_chat, _id, text) => {
+    edits.push(text);
+    return true;
+  };
+  return { bot, store, sent, edits };
+}
+
+const supportMessage = (
+  chatId: number,
+  text: string,
+  replyTo?: { message_id: number; text?: string },
+): TelegramUpdate => ({
+  update_id: Date.now(),
+  message: {
+    message_id: 77,
+    date: 0,
+    chat: { id: chatId, type: 'private' },
+    from: { id: chatId, first_name: 'Admin', username: 'boss' },
+    text,
+    ...(replyTo ? { reply_to_message: replyTo } : {}),
+  },
+});
+
+test('возврат: заявка приходит в бот поддержки, ответ Reply доходит клиенту, решение кнопкой', async (t) => {
+  const support = recordingSupportBot(9900);
+  const h = await harness({ supportBotService: support.bot, supportStore: support.store });
+  t.after(() => h.server.close());
+  const { buyer, token } = await h.linkedBuyer(9901);
+  h.billingService.grant(buyer.user.id, 'pro', {
+    id: 'crypto:sup-1',
+    method: 'crypto',
+    amount: 25,
+    currency: 'USD',
+  });
+  const requested = await h.mini<{ outcome: string }>(
+    `payments/${encodeURIComponent('crypto:sup-1')}/refund`,
+    { reason: 'Не подошло', comment: 'Медленно отвечает' },
+    token,
+  );
+  assert.equal(requested.body.outcome, 'requested');
+
+  // Заявка — в чат поддержки администратора, с кнопками; в бот оплаты админам не дублируется.
+  const notice = support.sent.find((m) => m.chatId === 9900 && /Заявка на возврат/.test(m.text))!;
+  assert.ok(notice, 'заявка пришла в бот поддержки');
+  assert.match(notice.text, /Медленно отвечает/);
+  const ref = /R-([A-Za-z0-9_-]{16})/.exec(notice.text)![1]!;
+  const keyboard = (
+    notice.extra.reply_markup as {
+      inline_keyboard: Array<Array<{ callback_data: string }>>;
+    }
+  ).inline_keyboard[0]!;
+  assert.equal(keyboard[0]!.callback_data, `rf:y:${ref}`);
+
+  // Клиент пишет из кабинета — сообщение в заявке и в чате поддержки.
+  const fromUser = await h.mini<
+    MiniState & { payments: Array<{ refund: { messages?: unknown[] } }> }
+  >(
+    `payments/${encodeURIComponent('crypto:sup-1')}/refund/message`,
+    { text: 'Когда вернёте?' },
+    token,
+  );
+  assert.equal(fromUser.status, 200);
+  assert.equal(fromUser.body.payments[0]!.refund.messages?.length, 1);
+  assert.ok(support.sent.some((m) => m.chatId === 9900 && m.text.includes('Когда вернёте?')));
+
+  // Администратор отвечает Reply на заявку — клиенту в бот оплаты и в кабинет.
+  const noticeId = 5000 + support.sent.indexOf(notice) + 1;
+  await support.bot.processUpdate(
+    supportMessage(9900, 'Проверим и вернём сегодня', { message_id: noticeId, text: 'x' }),
+  );
+  const toClient = h.bot
+    .all('sendMessage')
+    .filter((call) => call.body.chat_id === 9901)
+    .at(-1)!;
+  assert.match(String(toClient.body.text), /Поддержка ответила/);
+  assert.match(String(toClient.body.text), /Проверим и вернём сегодня/);
+  const state = await h.mini<{
+    payments: Array<{ refund: { messages: Array<{ from: string }> } }>;
+  }>('state', undefined, token);
+  assert.deepEqual(
+    state.body.payments[0]!.refund.messages.map((m) => m.from),
+    ['user', 'admin'],
+  );
+
+  // Reply после перезапуска (связь сообщения потеряна) — номер заявки берётся из текста.
+  await support.bot.processUpdate(
+    supportMessage(9900, 'Ещё уточнение', { message_id: 1, text: `Заявка · R-${ref}` }),
+  );
+  assert.ok(
+    h.bot.all('sendMessage').some((call) => String(call.body.text).includes('Ещё уточнение')),
+  );
+
+  // Посторонний нажать кнопку не может.
+  await support.bot.processUpdate({
+    update_id: 1,
+    callback_query: {
+      id: 'x',
+      from: { id: 1234, first_name: 'Чужой' },
+      message: { message_id: noticeId, chat: { id: 1234 } },
+      data: `rf:y:${ref}`,
+    },
+  });
+  assert.equal(h.billingService.findPayment('crypto:sup-1')?.status, 'refund_requested');
+
+  await support.bot.processUpdate({
+    update_id: 2,
+    callback_query: {
+      id: 'y',
+      from: { id: 9900, first_name: 'Admin' },
+      message: { message_id: noticeId, chat: { id: 9900 }, text: 'Заявка' },
+      data: `rf:y:${ref}`,
+    },
+  });
+  assert.equal(h.billingService.findPayment('crypto:sup-1')?.status, 'refunded');
+  assert.match(support.edits.at(-1)!, /Возврат оформлен/);
+
+  // /refunds — открытых заявок больше нет.
+  await support.bot.processUpdate(supportMessage(9900, '/refunds'));
+  assert.match(support.sent.at(-1)!.text, /Открытых заявок на возврат нет/);
+});
+
+test('возврат звёзд автоматически — администратору приходит уведомление без кнопок', async (t) => {
+  const support = recordingSupportBot(9910);
+  const h = await harness({ supportBotService: support.bot, supportStore: support.store });
+  t.after(() => h.server.close());
+  const { buyer, token } = await h.linkedBuyer(9911);
+  h.billingService.grant(buyer.user.id, 'pro', {
+    id: 'stars:auto-1',
+    method: 'stars',
+    amount: 1260,
+    currency: 'XTR',
+    chargeId: 'auto-1',
+    telegramUserId: 9911,
+  });
+  const result = await h.mini<{ outcome: string }>(
+    `payments/${encodeURIComponent('stars:auto-1')}/refund`,
+    { reason: 'Не подошло' },
+    token,
+  );
+  assert.equal(result.body.outcome, 'refunded');
+  const notice = support.sent.find((m) => m.chatId === 9910)!;
+  assert.match(notice.text, /Возврат оформлен автоматически/);
+  assert.equal(notice.extra.reply_markup, undefined);
+});
+
+test('сообщение по возврату: только своя заявка и только при наличии заявки', async (t) => {
+  const h = await harness();
+  t.after(() => h.server.close());
+  const a = await h.linkedBuyer(9921);
+  const b = await h.linkedBuyer(9922);
+  h.billingService.grant(a.buyer.user.id, 'pro', {
+    id: 'crypto:own-1',
+    method: 'crypto',
+    amount: 25,
+    currency: 'USD',
+  });
+  const path = `payments/${encodeURIComponent('crypto:own-1')}/refund/message`;
+  const noRefund = await h.mini(path, { text: 'Привет' }, a.token);
+  assert.equal(noRefund.status, 404);
+  await h.mini(`payments/${encodeURIComponent('crypto:own-1')}/refund`, { reason: 'x' }, a.token);
+  const stranger = await h.mini(path, { text: 'Привет' }, b.token);
+  assert.equal(stranger.status, 404);
+  const empty = await h.mini(path, { text: '   ' }, a.token);
+  assert.equal(empty.status, 400);
 });

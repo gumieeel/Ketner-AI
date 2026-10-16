@@ -460,6 +460,96 @@ describe('кабинет в Telegram (/tg)', () => {
     ).not.toBeInTheDocument();
   });
 
+  it('возвраты: заявка видна отдельно, ход рассмотрения и переписка с поддержкой', async () => {
+    window.Telegram = { WebApp: fakeWebApp() };
+    const requestedAt = new Date(Date.now() - 1800_000).toISOString();
+    const pending = payment({
+      id: 'crypto:c-9',
+      method: 'crypto',
+      amount: 25,
+      currency: 'USD',
+      chargeId: null,
+      status: 'refund_requested',
+      refund: {
+        requestedAt,
+        reason: 'Ошибся тарифом',
+        comment: 'Хотел Plus',
+        messages: [{ from: 'admin', text: 'Проверяем, ответим сегодня', at: requestedAt }],
+      },
+      refundOption: { kind: 'none', reason: 'pending' },
+    });
+    const state = makeState({ payments: [pending, payment()] });
+    const calls = mockApi((url) => {
+      if (url === '/api/telegram/miniapp/session') return linkedSession(state);
+      if (url === '/api/telegram/miniapp/payments/crypto%3Ac-9/refund/message') {
+        return Response.json({
+          ...state,
+          payments: [
+            {
+              ...pending,
+              refund: {
+                ...pending.refund,
+                messages: [
+                  ...pending.refund!.messages!,
+                  { from: 'user', text: 'Спасибо, жду', at: new Date().toISOString() },
+                ],
+              },
+            },
+            payment(),
+          ],
+        });
+      }
+      return undefined;
+    });
+    window.history.replaceState(null, '', '/tg?tab=payments');
+    render(<TelegramAppPage />);
+
+    const cases = await screen.findByRole('region', { name: /Заявки на возврат/ });
+    expect(within(cases).getByText('Поддержка ответила — откройте заявку')).toBeInTheDocument();
+    fireEvent.click(within(cases).getByRole('button', { name: /Pro · \$25/ }));
+
+    const sheet = screen.getByRole('dialog', { name: 'Чек · Pro' });
+    const progress = within(sheet).getByRole('list', { name: 'Ход заявки' });
+    expect(within(progress).getByText('Заявка отправлена')).toBeInTheDocument();
+    expect(within(progress).getByText(/Рассматривает поддержка/)).toBeInTheDocument();
+    expect(within(sheet).getByText(/Хотел Plus/)).toBeInTheDocument();
+    expect(within(sheet).getByText('Проверяем, ответим сегодня')).toBeInTheDocument();
+    expect(within(sheet).queryByRole('button', { name: 'Вернуть деньги' })).not.toBeInTheDocument();
+
+    fireEvent.change(within(sheet).getByLabelText('Сообщение поддержке'), {
+      target: { value: 'Спасибо, жду' },
+    });
+    fireEvent.click(within(sheet).getByRole('button', { name: 'Отправить' }));
+    expect(await within(sheet).findByText('Спасибо, жду')).toBeInTheDocument();
+    expect(calls.find((call) => call.url.endsWith('/refund/message'))?.body).toEqual({
+      text: 'Спасибо, жду',
+    });
+  });
+
+  it('возвраты: отказ показывает причину решения', async () => {
+    window.Telegram = { WebApp: fakeWebApp() };
+    const declined = payment({
+      status: 'refund_declined',
+      refund: {
+        requestedAt: new Date(Date.now() - 7200_000).toISOString(),
+        decidedAt: new Date().toISOString(),
+        note: 'Пакет уже использован',
+      },
+      refundOption: { kind: 'none', reason: 'declined' },
+    });
+    const state = makeState({ payments: [declined] });
+    mockApi((url) => (url === '/api/telegram/miniapp/session' ? linkedSession(state) : undefined));
+    window.history.replaceState(null, '', '/tg?tab=payments');
+    render(<TelegramAppPage />);
+
+    const cases = await screen.findByRole('region', { name: /Заявки на возврат/ });
+    fireEvent.click(within(cases).getByRole('button', { name: /Pro/ }));
+    const sheet = screen.getByRole('dialog', { name: 'Чек · Pro' });
+    const progress = within(sheet).getByRole('list', { name: 'Ход заявки' });
+    expect(within(progress).getAllByText('В возврате отказано').length).toBeGreaterThan(0);
+    expect(within(progress).getByText(/Пакет уже использован/)).toBeInTheDocument();
+  });
+
   it('администратор: заявка на возврат одобряется из кабинета', async () => {
     window.Telegram = { WebApp: fakeWebApp() };
     const state = makeState({ user: { ...makeState().user, isAdmin: true }, pendingRefunds: 1 });

@@ -50,6 +50,8 @@ export interface MiniAppPayment {
     decidedAt?: string;
     auto?: boolean;
     note?: string;
+    /** Переписка с поддержкой по заявке. */
+    messages?: Array<{ from: 'user' | 'admin'; text: string; at: string }>;
   } | null;
   refundOption: RefundOption;
 }
@@ -151,10 +153,13 @@ export const miniAppApi = {
     call<{ code: string; expiresAt: number }>('/link-code', { body: { initData } }),
   state: (token: string) => call<MiniAppState>('/state', { token }),
   invoice: (token: string, planId: PaidPlanId, recurring: boolean) =>
-    call<{ invoiceId: string; link: string; stars: number; recurring: boolean; free?: boolean }>('/invoice', {
-      token,
-      body: { planId, recurring },
-    }),
+    call<{ invoiceId: string; link: string; stars: number; recurring: boolean; free?: boolean }>(
+      '/invoice',
+      {
+        token,
+        body: { planId, recurring },
+      },
+    ),
   invoiceStatus: (token: string, invoiceId: string) =>
     call<{ status: 'pending' | 'paid' | 'expired' }>(`/invoice/${enc(invoiceId)}`, { token }),
   autoRenew: (token: string, enabled: boolean) =>
@@ -167,6 +172,9 @@ export const miniAppApi = {
         body: { reason, comment },
       },
     ),
+  /** Сообщение поддержке по своей заявке на возврат. */
+  refundMessage: (token: string, paymentId: string, text: string) =>
+    call<MiniAppState>(`/payments/${enc(paymentId)}/refund/message`, { token, body: { text } }),
   /** Удалить чек из истории (только администратор). */
   deletePayment: (token: string, paymentId: string) =>
     call<MiniAppState>(`/payments/${enc(paymentId)}`, { token, method: 'DELETE' }),

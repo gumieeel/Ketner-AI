@@ -1,9 +1,10 @@
-import { createHash, randomBytes } from 'node:crypto';
+import { randomBytes } from 'node:crypto';
 import { config } from '../config.js';
 import { LEGACY_PLANS, PLANS } from '../routes/billing.js';
 import type { InvoiceStore } from '../store/invoice-store.js';
 import type { SubscriptionStore } from '../store/subscription-store.js';
 import type { UserStore } from '../store/user-store.js';
+import type { RefundDesk } from './support-bot.js';
 import {
   invoiceStore as defaultInvoiceStore,
   subscriptionStore as defaultSubscriptionStore,
@@ -20,6 +21,7 @@ import {
 import { packMinStars, planMinStars } from '../services/margin.js';
 import {
   BillingError,
+  paymentRef,
   REFUND_POLICY,
   type BillingService,
   type PaymentRecord,
@@ -147,7 +149,7 @@ export interface TelegramUpdate {
   callback_query?: {
     id: string;
     from: TelegramFrom;
-    message?: { message_id: number; chat: { id: number | string } };
+    message?: { message_id: number; chat: { id: number | string }; text?: string };
     data?: string;
   };
   pre_checkout_query?: {
@@ -224,9 +226,6 @@ function formatDate(iso: string | null | undefined): string {
 }
 
 /** Короткая ссылка на платёж для кнопок (callback_data — не больше 64 байт). */
-function paymentRef(paymentId: string): string {
-  return createHash('sha256').update(paymentId).digest('base64url').slice(0, 16);
-}
 
 const DAY_MS = 24 * 3600 * 1000;
 const REMINDER_INTERVAL_MS = 60 * 60 * 1000;
@@ -529,27 +528,62 @@ export class TelegramBotService implements TelegramPaymentsPort {
     for (const admin of admins) await this.sendMessage(admin.telegramChatId!, text);
   }
 
+  /** Чат администратора в боте поддержки: туда идут заявки на возврат, оттуда — ответы. */
+  private adminInbox: {
+    postRefundNotice(ref: string, text: string, actionable: boolean): Promise<boolean>;
+  } | null = null;
+
+  attachAdminInbox(inbox: NonNullable<TelegramBotService['adminInbox']>): void {
+    this.adminInbox = inbox;
+  }
+
+  private refundCard(payment: PaymentRecord, user: User | null): string[] {
+    const amount = payment.currency === 'XTR' ? `${payment.amount} ⭐` : `$${payment.amount}`;
+    const customer = user
+      ? `${user.name} · ${accountLabel(user)}${user.telegramUsername ? ` · @${user.telegramUsername}` : ''}`
+      : payment.userId;
+    return [
+      `Клиент: ${escapeHtml(customer)}`,
+      `Платёж: ${paymentTitle(payment)} · ${amount} · ${payment.method === 'stars' ? 'звёзды' : 'криптовалюта'}`,
+      `Оплачен: ${formatDate(payment.paidAt)}`,
+    ];
+  }
+
+  /**
+   * Заявка на возврат (или сообщение об автоматическом возврате) администраторам: в бот поддержки,
+   * как обращения. Если чат поддержки недоступен — администраторам в этот бот, как раньше.
+   */
   async notifyAdminsAboutRefund(payment: PaymentRecord, user: User | null): Promise<void> {
+    const ref = paymentRef(payment.id);
+    const actionable = payment.status === 'refund_requested';
+    const head = actionable
+      ? `↩️ <b>Заявка на возврат</b> · <code>R-${ref}</code>`
+      : `↩️ <b>Возврат оформлен автоматически</b> · <code>R-${ref}</code>`;
+    const text = [
+      head,
+      '',
+      ...this.refundCard(payment, user),
+      payment.refund?.reason ? `Причина: ${escapeHtml(payment.refund.reason)}` : '',
+      payment.refund?.comment ? `Комментарий: ${escapeHtml(payment.refund.comment)}` : '',
+      actionable
+        ? `Запросов к моделям после оплаты: ${this.billing.requestsSince(payment.userId, payment.paidAt)}`
+        : 'Звёзды вернулись клиенту, срок тарифа откатан. Решение не нужно.',
+      actionable && payment.method === 'crypto'
+        ? '\nКриптовалюту возвращаете вручную на кошелёк клиента.'
+        : '',
+      '',
+      '✍️ <i>Ответьте на это сообщение (Reply) — ответ придёт клиенту в бот оплаты и в кабинет.</i>',
+    ]
+      .filter((line, index, lines) => line !== '' || (index > 0 && lines[index - 1] !== ''))
+      .join('\n');
+    if (await this.adminInbox?.postRefundNotice(ref, text, actionable)) return;
+    if (!actionable) return;
+
     const admins = this.deps.userStore
       .list()
       .filter((candidate) => candidate.isAdmin && candidate.telegramChatId);
-    const ref = paymentRef(payment.id);
-    const amount = payment.currency === 'XTR' ? `${payment.amount} ⭐` : `$${payment.amount}`;
-    const text = [
-      '↩️ <b>Заявка на возврат</b>',
-      '',
-      `Клиент: ${escapeHtml(user ? `${user.name} · ${accountLabel(user)}` : payment.userId)}`,
-      `Платёж: ${paymentTitle(payment)} · ${amount} · ${payment.method === 'stars' ? 'звёзды' : 'криптовалюта'}`,
-      `Оплачен: ${formatDate(payment.paidAt)}`,
-      payment.refund?.reason ? `Причина: ${escapeHtml(payment.refund.reason)}` : '',
-      payment.refund?.comment ? `Комментарий: ${escapeHtml(payment.refund.comment)}` : '',
-      `Запросов к моделям после оплаты: ${this.billing.requestsSince(payment.userId, payment.paidAt)}`,
-      payment.method === 'crypto' ? '\nКриптовалюту возвращаете вручную на кошелёк клиента.' : '',
-    ]
-      .filter(Boolean)
-      .join('\n');
     for (const admin of admins) {
-      await this.sendMessage(admin.telegramChatId!, text, {
+      await this.sendMessage(admin.telegramChatId!, text.split('\n\n✍️')[0]!, {
         reply_markup: {
           inline_keyboard: [
             [
@@ -569,6 +603,100 @@ export class TelegramBotService implements TelegramPaymentsPort {
         },
       });
     }
+  }
+
+  /** Клиент написал по заявке из кабинета — пересылаем в чат поддержки. */
+  async notifyAdminsAboutRefundMessage(
+    payment: PaymentRecord,
+    user: User | null,
+    message: string,
+  ): Promise<void> {
+    const ref = paymentRef(payment.id);
+    const text = [
+      `💬 <b>Клиент пишет по заявке на возврат</b> · <code>R-${ref}</code>`,
+      '',
+      ...this.refundCard(payment, user),
+      '',
+      `«${escapeHtml(message)}»`,
+      '',
+      '✍️ <i>Ответьте на это сообщение (Reply), чтобы написать клиенту.</i>',
+    ].join('\n');
+    if (await this.adminInbox?.postRefundNotice(ref, text, false)) return;
+    const admins = this.deps.userStore
+      .list()
+      .filter((candidate) => candidate.isAdmin && candidate.telegramChatId);
+    for (const admin of admins) {
+      await this.sendMessage(admin.telegramChatId!, text.split('\n\n✍️')[0]!, {
+        reply_markup: {
+          inline_keyboard: [[this.openAppButton('📱 Заявки в кабинете', 'admin')]],
+        },
+      });
+    }
+  }
+
+  /** Заявки на возврат для бота поддержки: решения кнопками и ответы клиенту. */
+  refundDesk(): RefundDesk {
+    const amountOf = (payment: PaymentRecord) =>
+      payment.currency === 'XTR' ? `${payment.amount} ⭐` : `$${payment.amount}`;
+    return {
+      decide: async (ref, approve) => {
+        const payment = this.billing.findRefundByRef(ref);
+        if (!payment || payment.status !== 'refund_requested') {
+          throw new Error('Заявка уже обработана');
+        }
+        try {
+          await this.billing.decideRefund(payment.id, approve);
+        } catch (error) {
+          throw new Error(error instanceof BillingError ? error.message : 'Не получилось', {
+            cause: error,
+          });
+        }
+        return `${approve ? '✅ Возврат оформлен' : '✖️ В возврате отказано'}: ${paymentTitle(payment)} · ${amountOf(payment)}`;
+      },
+      reply: async (ref, text) => {
+        const payment = this.billing.findRefundByRef(ref);
+        if (!payment) throw new Error('Заявка не найдена');
+        try {
+          this.billing.addRefundMessage(payment.id, 'admin', text);
+        } catch (error) {
+          throw new Error(error instanceof BillingError ? error.message : 'Не получилось', {
+            cause: error,
+          });
+        }
+        const user = this.deps.userStore.findById(payment.userId);
+        if (user?.telegramChatId) {
+          await this.sendMessage(
+            user.telegramChatId,
+            [
+              `💬 <b>Поддержка ответила по заявке на возврат</b> за ${paymentTitle(payment)} · ${amountOf(payment)}`,
+              '',
+              escapeHtml(text),
+            ].join('\n'),
+            {
+              reply_markup: {
+                inline_keyboard: [[this.openAppButton('📄 Открыть заявку', 'payments')]],
+              },
+            },
+          );
+        }
+        if (!user) return payment.userId;
+        return user.telegramUsername ? `@${user.telegramUsername}` : accountLabel(user);
+      },
+      pendingSummary: () => {
+        const pending = this.billing.pendingRefunds();
+        if (pending.length === 0) return '✅ Открытых заявок на возврат нет.';
+        const lines = pending.map((payment) => {
+          const user = this.deps.userStore.findById(payment.userId);
+          const who = user
+            ? user.telegramUsername
+              ? `@${user.telegramUsername}`
+              : accountLabel(user)
+            : payment.userId;
+          return `🔹 <code>R-${paymentRef(payment.id)}</code> · ${escapeHtml(who)} · ${paymentTitle(payment)} · ${amountOf(payment)} · с ${formatDate(payment.refund?.requestedAt)}`;
+        });
+        return [`↩️ <b>Заявки на возврат (${pending.length}):</b>`, '', ...lines].join('\n');
+      },
+    };
   }
 
   // ───────────── счета в звёздах ─────────────

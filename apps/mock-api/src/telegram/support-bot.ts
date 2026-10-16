@@ -3,6 +3,22 @@ import type { SupportStore, SupportTicket } from '../store/support-store.js';
 import { supportStore as defaultSupportStore } from '../store/index.js';
 import type { TelegramUpdate } from './bot.js';
 
+/**
+ * Заявки на возврат в чате администратора поддержки. Реализует платёжный бот (у него биллинг):
+ * бот поддержки только показывает заявки, принимает решения кнопками и пересылает ответы.
+ */
+export interface RefundDesk {
+  /** Одобрить или отклонить заявку. Возвращает строку итога для сообщения администратора. */
+  decide(ref: string, approve: boolean): Promise<string>;
+  /** Ответ администратора клиенту по заявке. Возвращает подпись клиента для подтверждения. */
+  reply(ref: string, text: string): Promise<string>;
+  /** Список открытых заявок для команды /refunds. */
+  pendingSummary(): string;
+}
+
+/** Номер заявки в тексте сообщения бота: «R-<16 символов>». */
+const REFUND_TAG = /R-([A-Za-z0-9_-]{16})/;
+
 export interface TelegramSupportBotDeps {
   supportStore?: SupportStore;
   botToken?: string;
@@ -19,6 +35,7 @@ export class TelegramSupportBotService {
   private pinnedAdminChatId: number | undefined;
   private store: SupportStore;
   private isPolling = false;
+  private refundDesk: RefundDesk | null = null;
 
   constructor(deps: TelegramSupportBotDeps = {}) {
     this.store = deps.supportStore || defaultSupportStore;
@@ -35,6 +52,101 @@ export class TelegramSupportBotService {
     this.pinnedAdminChatId = deps.adminChatId ?? config.supportAdminChatId;
     if (this.pinnedAdminChatId && !this.store.getAdminChatId()) {
       this.store.setAdminChatId(this.pinnedAdminChatId);
+    }
+  }
+
+  attachRefundDesk(desk: RefundDesk): void {
+    this.refundDesk = desk;
+  }
+
+  /**
+   * Заявка на возврат в чат администратора. С кнопками «Одобрить / Отказать», если решение нужно.
+   * Ответ (Reply) на это сообщение уходит клиенту. false — чат администратора недоступен.
+   */
+  async postRefundNotice(ref: string, text: string, actionable: boolean): Promise<boolean> {
+    const adminChatId = this.store.getAdminChatId();
+    if (!adminChatId) return false;
+    const sent = await this.sendMessage(adminChatId, text, {
+      link_preview_options: { is_disabled: true },
+      ...(actionable
+        ? {
+            reply_markup: {
+              inline_keyboard: [
+                [
+                  { text: '✅ Одобрить возврат', callback_data: `rf:y:${ref}` },
+                  { text: '✖️ Отказать', callback_data: `rf:n:${ref}` },
+                ],
+              ],
+            },
+          }
+        : {}),
+    });
+    if (!sent?.message_id) return false;
+    this.store.linkAdminRefund(ref, sent.message_id);
+    return true;
+  }
+
+  async answerCallbackQuery(id: string, text?: string, showAlert = false): Promise<unknown> {
+    return this.callApi('answerCallbackQuery', {
+      callback_query_id: id,
+      text,
+      show_alert: showAlert,
+    });
+  }
+
+  async editMessageText(
+    chatId: number | string,
+    messageId: number,
+    text: string,
+  ): Promise<unknown> {
+    return this.callApi('editMessageText', {
+      chat_id: chatId,
+      message_id: messageId,
+      text,
+      parse_mode: 'HTML',
+      link_preview_options: { is_disabled: true },
+    });
+  }
+
+  private isAdminChat(chatId: number | string): boolean {
+    const admin = this.pinnedAdminChatId ?? this.store.getAdminChatId();
+    return Boolean(admin) && String(admin) === String(chatId);
+  }
+
+  /** Кнопки «Одобрить / Отказать» под заявкой на возврат. */
+  private async handleCallback(
+    cb: NonNullable<TelegramUpdate['callback_query']>,
+  ): Promise<{ handled: boolean; action?: string }> {
+    const chatId = cb.message?.chat.id;
+    const data = cb.data ?? '';
+    if (!data.startsWith('rf:') || chatId === undefined) {
+      await this.answerCallbackQuery(cb.id);
+      return { handled: false };
+    }
+    if (!this.isAdminChat(chatId) || !this.refundDesk) {
+      await this.answerCallbackQuery(cb.id, 'Нет прав', true);
+      return { handled: true, action: 'refund_forbidden' };
+    }
+    const [, decision, ref] = data.split(':');
+    try {
+      const result = await this.refundDesk.decide(ref ?? '', decision === 'y');
+      await this.answerCallbackQuery(cb.id, decision === 'y' ? 'Возврат оформлен' : 'Отказано');
+      if (cb.message?.message_id) {
+        const original = (cb.message as { text?: string }).text ?? '';
+        await this.editMessageText(
+          chatId,
+          cb.message.message_id,
+          `${escapeHtml(original)}\n\n<b>${escapeHtml(result)}</b>`,
+        );
+      }
+      return { handled: true, action: decision === 'y' ? 'refund_approved' : 'refund_declined' };
+    } catch (error) {
+      await this.answerCallbackQuery(
+        cb.id,
+        error instanceof Error ? error.message : 'Не получилось',
+        true,
+      );
+      return { handled: true, action: 'refund_failed' };
     }
   }
 
@@ -214,6 +326,7 @@ export class TelegramSupportBotService {
    * Обработка входящего обновления от пользователя или администратора.
    */
   async processUpdate(update: TelegramUpdate): Promise<{ handled: boolean; action?: string }> {
+    if (update.callback_query) return this.handleCallback(update.callback_query);
     if (!update.message) {
       return { handled: false };
     }
@@ -267,7 +380,7 @@ export class TelegramSupportBotService {
           `👑 <b>Здравствуйте, администратор @${this.adminUsername}!</b>`,
           '',
           'Вы успешно авторизованы в качестве главного оператора поддержки <b>Ketner AI</b>.',
-          'Сюда поступают все сообщения, вопросы, чеки и жалобы от пользователей.',
+          'Сюда поступают все сообщения, вопросы, чеки и жалобы от пользователей, а также заявки на возврат.',
           '',
           `📋 <b>Открытых обращений:</b> ${openTickets.length}`,
           '',
@@ -277,6 +390,7 @@ export class TelegramSupportBotService {
           '',
           '💡 <b>Команды оператора:</b>',
           '/tickets — список открытых обращений',
+          '/refunds — заявки на возврат',
           '/close &lt;ID&gt; — закрыть обращение',
           '/status — системная информация',
         ].join('\n');
@@ -300,6 +414,43 @@ export class TelegramSupportBotService {
 
         await this.sendMessage(chatId, statusMsg);
         return { handled: true, action: 'admin_status_sent' };
+      }
+
+      // Команда /refunds — открытые заявки на возврат
+      if (text === '/refunds') {
+        await this.sendMessage(
+          chatId,
+          this.refundDesk ? this.refundDesk.pendingSummary() : 'Заявки на возврат недоступны.',
+        );
+        return { handled: true, action: 'admin_refunds_list_sent' };
+      }
+
+      // Reply на заявку о возврате: ответ уходит клиенту в бот оплаты и в кабинет
+      if (msg.reply_to_message && this.refundDesk) {
+        const replied = msg.reply_to_message;
+        const ref =
+          this.store.getRefundRefByAdminMessageId(replied.message_id) ??
+          REFUND_TAG.exec(replied.text ?? replied.caption ?? '')?.[1];
+        if (ref) {
+          if (!msg.text || hasMedia) {
+            await this.sendMessage(chatId, 'По заявке на возврат можно ответить только текстом.');
+            return { handled: true, action: 'admin_refund_reply_media' };
+          }
+          try {
+            const customer = await this.refundDesk.reply(ref, msg.text.trim());
+            await this.sendMessage(
+              chatId,
+              `✅ Ответ по заявке <code>R-${escapeHtml(ref)}</code> отправлен клиенту ${escapeHtml(customer)}. Он увидит его в боте оплаты и в кабинете.`,
+            );
+            return { handled: true, action: 'admin_refund_reply_delivered' };
+          } catch (error) {
+            await this.sendMessage(
+              chatId,
+              `❌ ${escapeHtml(error instanceof Error ? error.message : 'Не получилось отправить ответ')}`,
+            );
+            return { handled: true, action: 'admin_refund_reply_failed' };
+          }
+        }
       }
 
       // Команда /tickets — список открытых обращений

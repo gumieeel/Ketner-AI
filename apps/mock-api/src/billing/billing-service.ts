@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { join } from 'node:path';
 import { dirname } from 'node:path';
 import { config } from '../config.js';
@@ -68,7 +69,24 @@ export interface PaymentRecord {
     decidedAt?: string;
     auto?: boolean;
     note?: string;
+    /** Переписка по заявке: клиент пишет из кабинета, поддержка отвечает из бота поддержки. */
+    messages?: RefundMessage[];
   };
+}
+
+export interface RefundMessage {
+  from: 'user' | 'admin';
+  text: string;
+  at: string;
+}
+
+/** Не больше стольких сообщений в одной заявке на возврат (защита от спама). */
+export const REFUND_THREAD_LIMIT = 40;
+export const REFUND_MESSAGE_MAX = 1000;
+
+/** Короткий номер заявки для администратора: «R-<ref>» в сообщениях бота и кнопках. */
+export function paymentRef(paymentId: string): string {
+  return createHash('sha256').update(paymentId).digest('base64url').slice(0, 16);
 }
 
 /** Автопродление звёздами: подписка Telegram Stars на 30 дней. */
@@ -381,6 +399,42 @@ export class BillingService {
     return { autoRenew };
   }
 
+  /** Платёж с заявкой на возврат по короткому номеру (см. paymentRef). */
+  findRefundByRef(ref: string): PaymentRecord | undefined {
+    return this.deps.ledger.payments
+      .filter((payment) => Boolean(payment.refund))
+      .find((payment) => paymentRef(payment.id) === ref);
+  }
+
+  /** Сообщение в переписку по заявке на возврат. */
+  addRefundMessage(
+    paymentId: string,
+    from: RefundMessage['from'],
+    text: string,
+    now = Date.now(),
+  ): PaymentRecord {
+    const payment = this.deps.ledger.payments.get(paymentId);
+    if (!payment?.refund)
+      throw new BillingError('refund_not_found', 'Заявка на возврат не найдена', 404);
+    const clean = text.trim().slice(0, REFUND_MESSAGE_MAX);
+    if (!clean) throw new BillingError('empty_message', 'Напишите сообщение', 400);
+    const messages = payment.refund.messages ?? [];
+    if (messages.length >= REFUND_THREAD_LIMIT) {
+      throw new BillingError(
+        'refund_thread_full',
+        'В этой заявке слишком много сообщений. Напишите в поддержку @ketner_support_bot.',
+        429,
+      );
+    }
+    return this.deps.ledger.payments.put({
+      ...payment,
+      refund: {
+        ...payment.refund,
+        messages: [...messages, { from, text: clean, at: new Date(now).toISOString() }],
+      },
+    });
+  }
+
   /** TEMP: помечает платёж как выданный без списания звёзд. */
   markFree(paymentId: string): PaymentRecord | undefined {
     const payment = this.deps.ledger.payments.get(paymentId);
@@ -476,6 +530,7 @@ export class BillingService {
         `↩️ Возврат за ${paymentLabel(payment)} оформлен, срок тарифа отменён.`,
         'refund',
       );
+      await this.telegram?.notifyAdminsAboutRefund(refunded, this.deps.userStore.findById(userId));
       return { outcome: 'refunded', payment: refunded };
     }
     if (option.kind === 'auto' && this.telegram) {
@@ -487,6 +542,7 @@ export class BillingService {
           `↩️ Вернули <b>${payment.amount} ⭐</b> за ${paymentLabel(payment)}. Звёзды уже на вашем балансе в Telegram.`,
           'refund',
         );
+        await this.telegram.notifyAdminsAboutRefund(refunded, this.deps.userStore.findById(userId));
         return { outcome: 'refunded', payment: refunded };
       }
       // Telegram не принял автоматический возврат — передаём заявку человеку.
