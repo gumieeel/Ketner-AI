@@ -384,7 +384,7 @@ export class AIGateway {
     });
     if (!guardResult.valid) {
       callbacks.onError({
-        code: (guardResult.code as any) ?? 'payload_too_large',
+        code: guardResult.code ?? 'payload_too_large',
         message: guardResult.message ?? ERROR_MESSAGES[language],
       });
       return;
@@ -727,10 +727,16 @@ export class AIGateway {
 
       // Шаблонные ответы-заглушки разрешены только вне production. В production любая из этих
       // настроек не может подменить реальную модель выдуманным ответом.
+      // Локально без ключа OpenRouter (ни один провайдер цепочки не настроен) чат работает в
+      // demo-режиме на шаблонах, как обещает README, а не отвечает ошибкой на каждое сообщение.
+      const noProviderConfigured = !modelsToTry.some(
+        (candidate) => this.providers.get(candidate.provider)?.isAvailable() ?? false,
+      );
       const isTestEnv =
         !isProduction &&
         (this.useMockEngine ??
           (process.env.NODE_ENV === 'test' ||
+            noProviderConfigured ||
             this.aiConfig.failureRate > 0 ||
             (this.aiConfig.thinkingMs[0] === 0 &&
               this.aiConfig.thinkingMs[1] === 0 &&
@@ -903,7 +909,7 @@ export class AIGateway {
           this.aiConfig.random,
           targetModel.name,
           activeAttachments ?? req.attachments,
-          (activeWorkspace ?? req.workspaceContext) as any,
+          activeWorkspace ?? req.workspaceContext,
         );
         await streamText(templateAnswer, {
           thinkingMs: this.aiConfig.thinkingMs,

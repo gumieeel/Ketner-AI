@@ -14,6 +14,7 @@ import { UsageStore } from '../store/usage-store.js';
 import { createInvoiceStore } from '../store/invoice-store.js';
 import { createGithubConnectionStore, type GithubConnectionStore } from '../github/connection-store.js';
 import { semanticCache } from '../ai/cache.js';
+import { AIGateway } from '../ai/gateway.js';
 import type { Conversation, Message } from '../types.js';
 
 import { createSupportStore } from '../store/support-store.js';
@@ -67,6 +68,15 @@ export async function startTestServer(
     secret: 'test-github-secret',
   });
 
+  const testAi: AiConfig = { ...FAST_AI, ...ai };
+  // Тесты не ходят к настоящим моделям, даже если в .env разработчика есть ключ OpenRouter:
+  // шаблонный движок включён явно, а не угадывается по нулевым задержкам.
+  const chatGateway = new AIGateway({
+    usageStore: extra.usageStore ?? testUsageStore,
+    aiConfig: testAi,
+    useMockEngine: true,
+  });
+
   const app = createApp({
     store: createConversationStore(storeFile),
     userStore: createUserStore(userStoreFile),
@@ -77,8 +87,9 @@ export async function startTestServer(
     invoiceStore: createInvoiceStore(join(tempDir, 'invoices.json')),
     supportStore: testSupportStore,
     supportBotService: testSupportBotService,
-    ai: { ...FAST_AI, ...ai },
+    ai: testAi,
     betterAuth: testBetterAuth,
+    chatGateway,
     ...extra,
   });
   const server = app.listen(0);

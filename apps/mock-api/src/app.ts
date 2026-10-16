@@ -20,6 +20,7 @@ import { createApiRouter, describeService } from './routes/index.js';
 import { apiKeyStore as defaultApiKeyStore, conversationStore, subscriptionStore, userStore } from './store/index.js';
 import type { ApiKeyStore } from './store/api-key-store.js';
 import type { AgentGateway } from './ai/agent-gateway.js';
+import type { AIGateway } from './ai/gateway.js';
 import { createV1Router } from './routes/v1.js';
 import { createGithubCallbackHandler } from './routes/github.js';
 import type { GithubConnectionStore } from './github/connection-store.js';
@@ -68,6 +69,8 @@ export interface AppDeps {
   invoiceStore?: InvoiceStore;
   /** Платежи, подписки и возвраты. */
   billingService?: BillingService;
+  /** Шлюз ИИ для чата; в тестах — с явно включённым шаблонным движком. */
+  chatGateway?: AIGateway;
 }
 
 const defaultDeps: AppDeps = {

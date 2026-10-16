@@ -24,6 +24,7 @@ import { createAuthRouter } from './auth.js';
 import { createBillingRouter } from './billing.js';
 import { createContactRouter } from './contact.js';
 import { telegramBotService } from '../telegram/bot.js';
+import type { AIGateway } from '../ai/gateway.js';
 import { createChatRouter } from './chat.js';
 import { createCodeRouter } from './code.js';
 import { createImagesRouter } from './images.js';
@@ -62,6 +63,8 @@ export interface ApiDeps {
   ai: AiConfig;
   userId: string;
   betterAuth?: typeof defaultBetterAuth;
+  /** Шлюз ИИ для чата; в тестах — с явно включённым шаблонным движком. */
+  chatGateway?: AIGateway;
 }
 
 /**
@@ -260,6 +263,7 @@ export function createApiRouter(deps: ApiDeps): Router {
     '/chat',
     createChatRouter({
       ...deps,
+      gateway: deps.chatGateway,
       subscriptionStore: activeSubscriptionStore,
       userStore: activeUserStore,
       usageStore: activeUsageStore,

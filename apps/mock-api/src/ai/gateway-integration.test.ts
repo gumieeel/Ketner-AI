@@ -615,3 +615,45 @@ test('GPT-6 Astra после лимита → GPT-6.1 Sol, Terra → Gemini 3.8 
   const third = await run(gateway, request({ userId: 'u-ter', userPlan: 'pro', modelId: 'gpt-5.6-terra' }));
   assert.equal(third.done?.selectedModel?.id, 'gemini-3.8-flash');
 });
+
+test('без ключа OpenRouter вне production чат отвечает шаблоном (demo), а не ошибкой', async () => {
+  const offline = { ...fakeOpenRouter(okStream('не должно вызываться'), []), isAvailable: () => false };
+  const providers = new ProviderManager();
+  providers.setProvider('openrouter', offline);
+  // Задержки как у локального dev-сервера: эвристика «нулевые задержки = тест» здесь не срабатывает.
+  const gateway = new AIGateway({
+    registry: new ModelRegistry(),
+    providers,
+    usageStore: newUsage(),
+    aiConfig: { thinkingMs: [1, 1], chunkMs: [1, 1], failureRate: 0, random: () => 0.5 },
+    circuitBreaker: new CircuitBreaker({ failureThreshold: 3, cooldownMs: 30_000 }),
+  });
+
+  const outcome = await run(gateway, request({ userId: 'dev-no-key', userPlan: 'free' }));
+
+  assert.equal(outcome.error, undefined);
+  assert.ok(outcome.text.length > 0, 'шаблонный ответ пришёл потоком');
+  assert.equal(outcome.done?.source, 'template');
+});
+
+test('провайдер настроен, но упал — честная ошибка, а не подмена шаблоном', async () => {
+  const providers = new ProviderManager();
+  providers.setProvider(
+    'openrouter',
+    fakeOpenRouter(async () => {
+      throw new OpenRouterError('ketner-pro', 500, 'boom');
+    }, []),
+  );
+  const gateway = new AIGateway({
+    registry: new ModelRegistry(),
+    providers,
+    usageStore: newUsage(),
+    aiConfig: { thinkingMs: [1, 1], chunkMs: [1, 1], failureRate: 0, random: () => 0.5 },
+    circuitBreaker: new CircuitBreaker({ failureThreshold: 3, cooldownMs: 30_000 }),
+  });
+
+  const outcome = await run(gateway, request({ userId: 'dev-with-key', userPlan: 'free' }));
+
+  assert.equal(outcome.error?.code, 'provider_error');
+  assert.equal(outcome.done, undefined);
+});
