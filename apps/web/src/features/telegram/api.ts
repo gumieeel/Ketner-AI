@@ -91,8 +91,7 @@ export interface MiniAppState {
   payments: MiniAppPayment[];
   prefs: { reminders: boolean; receipts: boolean };
   /** Возврат — в течение стольких часов после оплаты и только без запросов к моделям. */
-  /** `auto` — временно: заявки одобряются сразу, без администратора. */
-  refundPolicy: { hours: number; auto?: boolean };
+  refundPolicy: { hours: number };
   pendingRefunds: number;
   siteUrl: string;
   botUsername: string;
@@ -162,13 +161,10 @@ export const miniAppApi = {
     call<{ code: string; expiresAt: number }>('/link-code', { body: { initData } }),
   state: (token: string) => call<MiniAppState>('/state', { token }),
   invoice: (token: string, planId: PaidPlanId, recurring: boolean) =>
-    call<{ invoiceId: string; link: string; stars: number; recurring: boolean; free?: boolean }>(
-      '/invoice',
-      {
-        token,
-        body: { planId, recurring },
-      },
-    ),
+    call<{ invoiceId: string; link: string; stars: number; recurring: boolean }>('/invoice', {
+      token,
+      body: { planId, recurring },
+    }),
   invoiceStatus: (token: string, invoiceId: string) =>
     call<{ status: 'pending' | 'paid' | 'expired' }>(`/invoice/${enc(invoiceId)}`, { token }),
   autoRenew: (token: string, enabled: boolean) =>

@@ -4,10 +4,6 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
 import { BillingService, createBillingLedger, DAY_MS } from '../billing/billing-service.js';
-
-// Тесты описывают обычный порядок (возврат — заявкой администратору); временный автовозврат
-// проверяется отдельно и включается в нём явно.
-process.env.REFUND_AUTO_APPROVE = 'off';
 import { config } from '../config.js';
 import { createInvoiceStore } from '../store/invoice-store.js';
 import { createSupportStore } from '../store/support-store.js';
@@ -1144,43 +1140,6 @@ test('пакет за звёзды: возврат неиспользованн�
   assert.equal(h.subscriptionStore.get(buyer.user.id).plan, 'plus');
 });
 
-test('временный автовозврат: заявка одобряется сразу, правила 24 часов и «без запросов» действуют', async (t) => {
-  const h = await harness();
-  t.after(() => {
-    process.env.REFUND_AUTO_APPROVE = 'off';
-    h.server.close();
-  });
-  process.env.REFUND_AUTO_APPROVE = 'on';
-  const buyer = await h.signup();
-  const { payment } = h.billingService.grantPack(buyer.user.id, 'premium-3', {
-    id: 'stars:pack-auto',
-    method: 'stars',
-    amount: 400,
-    currency: 'XTR',
-    chargeId: 'pack-auto',
-    telegramUserId: 777003,
-  });
-  assert.equal(h.billingService.refundOption(payment).kind, 'auto');
-  const result = await h.billingService.requestRefund(buyer.user.id, payment.id);
-  assert.equal(result.outcome, 'refunded');
-  assert.equal(h.billingService.findPayment(payment.id)?.status, 'refunded');
-  assert.equal(h.billingService.pendingRefunds().length, 0);
-
-  // Просроченная оплата по-прежнему не возвращается.
-  const old = h.billingService.grant(buyer.user.id, 'plus', {
-    id: 'crypto:old-auto',
-    method: 'crypto',
-    amount: 9,
-    currency: 'USD',
-  });
-  const oldPayment = h.billingService.findPayment('crypto:old-auto')!;
-  void old;
-  assert.equal(
-    h.billingService.refundOption(oldPayment, Date.parse(oldPayment.paidAt) + 2 * DAY_MS).kind,
-    'none',
-  );
-});
-
 test('бонус за крипту: действует на период, оплаченный через Trybit, и не после возврата', async (t) => {
   const h = await harness();
   t.after(() => h.server.close());
@@ -1308,40 +1267,6 @@ test('админ: /resetplan @username обнуляет тариф только 
   assert.equal(sub.renewsAt, null);
   assert.equal(h.billingService.paymentsOf(buyer.user.id).length, 1, 'история оплат не тронута');
   assert.match(String(h.bot.last('editMessageText')?.body.text), /обнулён/);
-});
-
-test('бесплатный Pro (TEMP): в истории как обычная оплата звёздами, возврат без Telegram', async (t) => {
-  const h = await harness();
-  t.after(() => h.server.close());
-  const { buyer, token } = await h.linkedBuyer(8001);
-  const user = h.userStore.findById(buyer.user.id)!;
-  const invoice = await h.bot.grantFreePlan(user, 'pro');
-
-  const state = await h.mini<MiniState>('state', undefined, token);
-  assert.equal(state.body.subscription.plan, 'pro');
-  const [payment] = state.body.payments;
-  assert.ok(payment);
-  assert.equal(payment.amount, invoice.starsAmount);
-  assert.ok(invoice.starsAmount > 0);
-  assert.equal(payment.status, 'paid');
-  assert.match(String((payment as unknown as { chargeId: string }).chargeId), /^stx/);
-  assert.equal('free' in payment, false, 'клиенту пометка не видна');
-  assert.equal(h.invoiceStore.getTelegramStarsInvoice(invoice.id)?.status, 'paid');
-  const receipt = h.bot
-    .all('sendMessage')
-    .filter((call) => call.body.chat_id === 8001)
-    .at(-1)!;
-  assert.match(String(receipt.body.text), /Оплата прошла/);
-
-  const refund = await h.mini<{ outcome: string }>(
-    `payments/${encodeURIComponent(payment.id)}/refund`,
-    { reason: 'Тест' },
-    token,
-  );
-  assert.equal(refund.body.outcome, 'requested');
-  await h.billingService.decideRefund(payment.id, true);
-  assert.equal(h.bot.all('refundStarPayment').length, 0, 'Telegram не вызывается');
-  assert.equal(h.subscriptionStore.get(buyer.user.id).plan, 'free');
 });
 
 test('удалить чек из истории может только администратор', async (t) => {
@@ -1596,11 +1521,6 @@ test('бот поддержки: уведомления администрато
   const paid = sent.find((m) => m.chatId === 9931 && /Новая оплата/.test(m.text));
   assert.ok(paid, 'уведомление об оплате');
   assert.match(paid.text, /Plus · 460 ⭐/);
-
-  // Бесплатный Pro помечен отдельно.
-  await h.bot.grantFreePlan(h.userStore.findById(buyer.user.id)!, 'pro');
-  await new Promise((resolve) => setTimeout(resolve, 20));
-  assert.ok(sent.some((m) => m.chatId === 9931 && /бесплатный тариф/.test(m.text)));
 
   // Администратор сайта в боте поддержки — оператор, а не клиент.
   const result = await support.processUpdate(supportMessage(9931, '/refunds'));

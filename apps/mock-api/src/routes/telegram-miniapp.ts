@@ -2,12 +2,7 @@ import { Router, type Request, type Response } from 'express';
 import { createMockToken } from '../auth/jwt.js';
 import { requireAuth } from '../middleware/auth.js';
 import { sendError } from '../middleware/errors.js';
-import {
-  BillingError,
-  REFUND_POLICY,
-  refundAutoApprove,
-  type PaymentRecord,
-} from '../billing/billing-service.js';
+import { BillingError, REFUND_POLICY, type PaymentRecord } from '../billing/billing-service.js';
 import { getPlanItem } from '../telegram/bot.js';
 import { planPriceUsd } from '../services/pricing.js';
 import type { InvoiceStore } from '../store/invoice-store.js';
@@ -206,10 +201,7 @@ export function createMiniAppRouter({
       rate,
       payments: billing.paymentsOf(user.id).map(paymentView),
       prefs: billing.prefsOf(user.id),
-      refundPolicy: {
-        hours: Math.round(REFUND_POLICY.windowMs / 3600_000),
-        auto: refundAutoApprove(),
-      },
+      refundPolicy: { hours: Math.round(REFUND_POLICY.windowMs / 3600_000) },
       pendingRefunds: user.isAdmin ? billing.pendingRefunds().length : 0,
       siteUrl: botService.siteUrl,
       botUsername: botService.botUsername,
@@ -447,21 +439,6 @@ export function createMiniAppRouter({
         return;
       }
       const recurring = body.recurring === true;
-      // TEMP: тариф Pro выдаётся сразу, без окна оплаты Telegram (TG_FREE_PRO=off отключает).
-      // В истории и в чате это выглядит как обычная оплата звёздами.
-      if (process.env.TG_FREE_PRO !== 'off' && body.planId === 'pro' && !recurring) {
-        const user = currentUser(request, response);
-        if (!user) return;
-        const invoice = await botService.grantFreePlan(user, 'pro');
-        response.json({
-          invoiceId: invoice.id,
-          stars: invoice.starsAmount,
-          link: '',
-          recurring: false,
-          free: true,
-        });
-        return;
-      }
       const invoice = botService.createStarsInvoice(request.user!.id, body.planId as PlanId);
       const link = await botService.createInvoiceLink(invoice, recurring);
       if (!link) {

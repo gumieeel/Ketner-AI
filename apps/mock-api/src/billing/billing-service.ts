@@ -58,8 +58,8 @@ export interface PaymentRecord {
   /** Платёж по подписке со звёздами (автопродление). */
   recurring?: boolean;
   /**
-   * TEMP: тариф выдан без списания звёзд (TG_FREE_PRO). В истории выглядит как обычная оплата,
-   * но при возврате Telegram не вызывается — откатывается только срок.
+   * Тариф был выдан без списания звёзд (временный режим TG_FREE_PRO, уже отключён). Поле осталось
+   * для старых записей: при их возврате Telegram не вызывается — откатывается только срок.
    */
   free?: boolean;
   refund?: {
@@ -160,15 +160,6 @@ export class BillingError extends Error {
     super(message);
     this.name = 'BillingError';
   }
-}
-
-/**
- * ВРЕМЕННО: заявки на возврат одобряются автоматически, без администратора
- * (правила 24 часов и «без запросов» действуют как обычно). Выключить без деплоя кода:
- * `REFUND_AUTO_APPROVE=off` в переменных Render. Убрать вместе с этим флагом, когда не нужно.
- */
-export function refundAutoApprove(): boolean {
-  return (process.env.REFUND_AUTO_APPROVE ?? 'on').trim().toLowerCase() !== 'off';
 }
 
 export type RefundOption =
@@ -280,8 +271,6 @@ export class BillingService {
       chargeId?: string;
       telegramUserId?: number;
       recurring?: boolean;
-      /** TEMP: тариф выдан без списания звёзд (TG_FREE_PRO). */
-      free?: boolean;
     },
     now = Date.now(),
   ): { duplicate: boolean; payment: PaymentRecord; subscription: Subscription; user: User | null } {
@@ -503,10 +492,9 @@ export class BillingService {
     } else if (this.requestsSince(payment.userId, payment.paidAt) > 0) {
       return { kind: 'none', reason: 'used' };
     }
-    // Обычно любой возврат — заявкой: решение принимает администратор. После одобрения звёзды
+    // Любой возврат — только заявкой: решение принимает администратор. После одобрения звёзды
     // возвращает Telegram, криптовалюту администратор переводит вручную.
-    // ВРЕМЕННО (refundAutoApprove): заявка одобряется сразу.
-    return refundAutoApprove() ? { kind: 'auto' } : { kind: 'request' };
+    return { kind: 'request' };
   }
 
   /** Возврат по запросу клиента: всегда заявка администратору, он одобряет или отказывает. */
@@ -541,21 +529,8 @@ export class BillingService {
       status: 'refund_requested',
       refund,
     });
-    const owner = this.deps.userStore.findById(userId);
-    if (option.kind === 'auto') {
-      // ВРЕМЕННО: одобряем сразу. Если Telegram не принял возврат звёзд, заявка остаётся
-      // администратору, как раньше.
-      try {
-        const refunded = await this.decideRefund(paymentId, true, 'auto', now);
-        await this.telegram?.notifyAdminsAboutRefund(refunded, owner);
-        return { outcome: 'refunded', payment: refunded };
-      } catch (error) {
-        console.error('[billing] Автовозврат не прошёл, заявка уходит администратору:', error);
-      }
-    }
-    const pending = this.deps.ledger.payments.get(paymentId) ?? requested;
-    await this.telegram?.notifyAdminsAboutRefund(pending, owner);
-    return { outcome: 'requested', payment: pending };
+    await this.telegram?.notifyAdminsAboutRefund(requested, this.deps.userStore.findById(userId));
+    return { outcome: 'requested', payment: requested };
   }
 
   /** Решение администратора по заявке. Звёзды возвращаются через Telegram, крипта — вручную. */

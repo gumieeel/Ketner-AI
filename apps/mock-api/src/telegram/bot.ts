@@ -1,4 +1,3 @@
-import { randomBytes } from 'node:crypto';
 import { config } from '../config.js';
 import { LEGACY_PLANS, PLANS } from '../routes/billing.js';
 import type { InvoiceStore } from '../store/invoice-store.js';
@@ -539,9 +538,8 @@ export class TelegramBotService implements TelegramPaymentsPort {
   async notifyAdminsAboutPayment(payment: PaymentRecord, user: User | null): Promise<void> {
     if (!this.adminInbox) return;
     const amount = payment.currency === 'XTR' ? `${payment.amount} ⭐` : `$${payment.amount}`;
-    const head = payment.free
-      ? '🎁 <b>Выдан бесплатный тариф</b> (временный режим, звёзды не списаны)'
-      : payment.recurring && payment.before.plan === payment.planId
+    const head =
+      payment.recurring && payment.before.plan === payment.planId
         ? '🔄 <b>Автопродление оплачено</b>'
         : '💰 <b>Новая оплата</b>';
     const until = payment.packId ? null : payment.after.renewsAt;
@@ -841,53 +839,12 @@ export class TelegramBotService implements TelegramPaymentsPort {
     return { ok: true, payload };
   }
 
-  /**
-   * TEMP (TG_FREE_PRO): тариф выдаётся без списания звёзд, но проходит тот же путь, что настоящая
-   * оплата: счёт, запись в истории с ценой и номером платежа, чек в чате. Платёж помечается `free`.
-   */
-  async grantFreePlan(user: User, planId: PlanId, now = Date.now()): Promise<TelegramStarsInvoice> {
-    const invoice = this.createStarsInvoice(user.id, planId);
-    const chargeId = `stxF${randomBytes(18).toString('base64url')}`;
-    const pay: SuccessfulPayment = {
-      currency: 'XTR',
-      total_amount: invoice.starsAmount,
-      invoice_payload: encodePayload({
-        planId,
-        stars: invoice.starsAmount,
-        invoiceId: invoice.id,
-        userId: user.id,
-      }),
-      telegram_payment_charge_id: chargeId,
-    };
-    if (user.telegramChatId) {
-      await this.handleStarsPayment(user.telegramChatId, undefined, pay, now, { free: true });
-    } else {
-      this.billing.grant(
-        user.id,
-        planId,
-        {
-          id: `stars:${chargeId}`,
-          method: 'stars',
-          amount: invoice.starsAmount,
-          currency: 'XTR',
-          invoiceId: invoice.id,
-          chargeId,
-          free: true,
-        },
-        now,
-      );
-      this.deps.invoiceStore.markTelegramStarsPaid(invoice.id, chargeId);
-    }
-    return invoice;
-  }
-
   /** Оплата звёздами (первая, разовая или очередное автопродление). Повтор того же платежа — без изменений. */
   async handleStarsPayment(
     chatId: number | string,
     from: TelegramFrom | undefined,
     pay: SuccessfulPayment,
     now = Date.now(),
-    opts: { free?: boolean } = {},
   ): Promise<{ status: 'activated' | 'duplicate' | 'rejected'; subscription?: Subscription }> {
     const payload = decodePayload(pay.invoice_payload);
     if (
@@ -923,7 +880,6 @@ export class TelegramBotService implements TelegramPaymentsPort {
         chargeId: pay.telegram_payment_charge_id,
         telegramUserId,
         recurring,
-        ...(opts.free ? { free: true } : {}),
       },
       now,
     );

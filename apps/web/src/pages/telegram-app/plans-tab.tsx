@@ -54,14 +54,6 @@ export function PlansTab({
     setPaying(plan.id);
     try {
       const invoice = await miniAppApi.invoice(token, plan.id, recurring);
-      // TEMP: бесплатная выдача Pro — сразу подтверждаем, без окна оплаты Telegram.
-      if (invoice.free) {
-        await refresh();
-        haptic.success(app);
-        notify('success', t('tg.paymentDone', { plan: plan.title }));
-        setPaying(null);
-        return;
-      }
       app.openInvoice(invoice.link, (status) => {
         if (status === 'paid') {
           notify('info', t('tg.paymentProcessing'));

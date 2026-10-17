@@ -71,13 +71,12 @@
 
 ## Оплата
 
-| Переменная                                                                                                  | Назначение                                                                                                                               |                          |
-| ----------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- | ------------------------ |
-| `TRYBIT_API_KEY`, `TRYBIT_SHOP_ID`, `TRYBIT_SECRET_KEY`                                                     | Приём криптовалюты ([payments.md](payments.md)). Старые имена `CRYPTOCLOUD_*` тоже читаются                                              | **нужна**                |
-| `TRYBIT_API_URL`                                                                                            | Адрес API Trybit                                                                                                                         | `https://api.trybit.com` |
-| `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `STRIPE_PRICE_PLUS`, `STRIPE_PRICE_PRO`, `STRIPE_PRICE_ULTRA` | Stripe: код есть, на странице оплаты не показывается                                                                                     |                          |
-| `BILLING_LEDGER_DIR`                                                                                        | Папка файлов журнала платежей без БД                                                                                                     | рядом с `users.json`     |
-| `TG_FREE_PRO`                                                                                               | **Временно.** Пока не равна `off`, мини-приложение выдаёт Pro без оплаты ([payments.md](payments.md#временно-бесплатный-pro-в-telegram)) | не задана = **выдаёт**   |
+| Переменная                                                                                                  | Назначение                                                                                  |                          |
+| ----------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------- | ------------------------ |
+| `TRYBIT_API_KEY`, `TRYBIT_SHOP_ID`, `TRYBIT_SECRET_KEY`                                                     | Приём криптовалюты ([payments.md](payments.md)). Старые имена `CRYPTOCLOUD_*` тоже читаются | **нужна**                |
+| `TRYBIT_API_URL`                                                                                            | Адрес API Trybit                                                                            | `https://api.trybit.com` |
+| `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `STRIPE_PRICE_PLUS`, `STRIPE_PRICE_PRO`, `STRIPE_PRICE_ULTRA` | Stripe: код есть, на странице оплаты не показывается                                        |                          |
+| `BILLING_LEDGER_DIR`                                                                                        | Папка файлов журнала платежей без БД                                                        | рядом с `users.json`     |
 
 ## Telegram
 
