@@ -235,7 +235,6 @@ export const en: Record<TranslationKey, string> = {
   'quota.limitedBy.budget': 'monthly plan resource is running low',
   'quota.warning': '{pct}% of the 30-day premium quota used',
   'quota.warningRestore': 'the first part returns {when}',
-  'quota.badge': '~{count}',
   'chat.maxModeLocked': 'Max mode is available on Ultra',
   'chat.maxModeBadge': '⚡ Max mode',
   'chat.maxModeUpgradeTitle': 'Max mode is available on Ultra',

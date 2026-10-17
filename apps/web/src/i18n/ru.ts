@@ -235,7 +235,6 @@ export const ru = {
   'quota.limitedBy.budget': 'месячный ресурс тарифа на исходе',
   'quota.warning': 'Израсходовано {pct}% премиум-квоты за 30 дней',
   'quota.warningRestore': 'первая часть вернётся {when}',
-  'quota.badge': '~{count}',
   'chat.maxModeLocked': 'Режим Max доступен на тарифе Ultra',
   'chat.maxModeBadge': '⚡ Режим Max',
   'chat.maxModeUpgradeTitle': 'Режим Max доступен на Ultra',
