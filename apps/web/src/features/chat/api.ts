@@ -154,7 +154,7 @@ export interface CompletionRequest {
  * Отправляет историю и читает ответ потоком.
  *
  * Клиент разбирает ровно три события: `delta`, `done`, `error`. Провайдера
- * можно менять, не трогая этот код: контракт — docs/ai-integration-todo.md.
+ * можно менять, не трогая этот код: контракт — docs/api.md (раздел «Чат (SSE)»).
  */
 export async function streamCompletion(
   completion: CompletionRequest,

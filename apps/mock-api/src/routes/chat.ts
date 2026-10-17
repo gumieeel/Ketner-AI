@@ -31,7 +31,7 @@ import type { ReasoningMode } from '../ai/gateway-types.js';
 const MAX_MESSAGES = 200;
 const MAX_CONTENT_LENGTH = 200000;
 
-/** Тело запроса на генерацию. Контракт зафиксирован в docs/ai-integration-todo.md. */
+/** Тело запроса на генерацию. Контракт — docs/api.md, раздел «Чат (SSE)». */
 export interface CompletionRequest {
   conversationId: string;
   modelId: string;
