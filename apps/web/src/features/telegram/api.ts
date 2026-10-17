@@ -91,7 +91,8 @@ export interface MiniAppState {
   payments: MiniAppPayment[];
   prefs: { reminders: boolean; receipts: boolean };
   /** Возврат — в течение стольких часов после оплаты и только без запросов к моделям. */
-  refundPolicy: { hours: number };
+  /** `auto` — временно: заявки одобряются сразу, без администратора. */
+  refundPolicy: { hours: number; auto?: boolean };
   pendingRefunds: number;
   siteUrl: string;
   botUsername: string;

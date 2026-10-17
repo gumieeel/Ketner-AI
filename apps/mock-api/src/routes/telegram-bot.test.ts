@@ -4,6 +4,10 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
 import { BillingService, createBillingLedger, DAY_MS } from '../billing/billing-service.js';
+
+// Тесты описывают обычный порядок (возврат — заявкой администратору); временный автовозврат
+// проверяется отдельно и включается в нём явно.
+process.env.REFUND_AUTO_APPROVE = 'off';
 import { config } from '../config.js';
 import { createInvoiceStore } from '../store/invoice-store.js';
 import { createSupportStore } from '../store/support-store.js';
@@ -1138,6 +1142,43 @@ test('пакет за звёзды: возврат неиспользованн�
   assert.equal(h.billingService.findPayment(payment.id)?.status, 'refunded');
   assert.equal(h.billingService.ledger.credits.balanceOf(buyer.user.id).remainingUsd, 0);
   assert.equal(h.subscriptionStore.get(buyer.user.id).plan, 'plus');
+});
+
+test('временный автовозврат: заявка одобряется сразу, правила 24 часов и «без запросов» действуют', async (t) => {
+  const h = await harness();
+  t.after(() => {
+    process.env.REFUND_AUTO_APPROVE = 'off';
+    h.server.close();
+  });
+  process.env.REFUND_AUTO_APPROVE = 'on';
+  const buyer = await h.signup();
+  const { payment } = h.billingService.grantPack(buyer.user.id, 'premium-3', {
+    id: 'stars:pack-auto',
+    method: 'stars',
+    amount: 400,
+    currency: 'XTR',
+    chargeId: 'pack-auto',
+    telegramUserId: 777003,
+  });
+  assert.equal(h.billingService.refundOption(payment).kind, 'auto');
+  const result = await h.billingService.requestRefund(buyer.user.id, payment.id);
+  assert.equal(result.outcome, 'refunded');
+  assert.equal(h.billingService.findPayment(payment.id)?.status, 'refunded');
+  assert.equal(h.billingService.pendingRefunds().length, 0);
+
+  // Просроченная оплата по-прежнему не возвращается.
+  const old = h.billingService.grant(buyer.user.id, 'plus', {
+    id: 'crypto:old-auto',
+    method: 'crypto',
+    amount: 9,
+    currency: 'USD',
+  });
+  const oldPayment = h.billingService.findPayment('crypto:old-auto')!;
+  void old;
+  assert.equal(
+    h.billingService.refundOption(oldPayment, Date.parse(oldPayment.paidAt) + 2 * DAY_MS).kind,
+    'none',
+  );
 });
 
 test('бонус за крипту: действует на период, оплаченный через Trybit, и не после возврата', async (t) => {

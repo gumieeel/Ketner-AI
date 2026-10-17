@@ -744,6 +744,8 @@ export const en: Record<TranslationKey, string> = {
     'If the models were already used or the time has passed, the payment is not refunded.',
   'tg.policy3':
     'Every request is reviewed by an administrator, usually within a day. Once approved, stars go back to your Telegram balance and crypto to your wallet.',
+  'tg.policy3Auto':
+    'For now refunds go through right away: Stars return to your Telegram balance, crypto is sent to your wallet.',
   'tg.receiptTitle': 'Receipt · {plan}',
   'tg.fieldPlan': 'Plan',
   'tg.fieldMethod': 'Method',
@@ -814,6 +816,10 @@ export const en: Record<TranslationKey, string> = {
   'tg.caseMessagePlaceholder': 'Write to support about this request',
   'tg.caseMessageHint': 'The reply will appear here and in the bot.',
   'tg.caseSend': 'Send',
+  'tg.refundDoneCrypto':
+    'Refund of {amount} approved. Send your wallet address to support @ketner_support_bot.',
+  'tg.refundAutoCryptoText':
+    'The refund goes through right away: your subscription returns to what it was before this payment, and we send the money to your wallet.',
   'tg.refundDone': 'Done: {amount} went back to your Telegram balance.',
   'tg.refundRequested':
     'Request sent to the administrator. The decision will come to the bot, usually within a day.',

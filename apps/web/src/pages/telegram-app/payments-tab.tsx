@@ -168,14 +168,14 @@ export function PaymentsTab() {
         </>
       )}
 
-      <RefundPolicy hours={refundPolicy.hours} />
+      <RefundPolicy hours={refundPolicy.hours} auto={refundPolicy.auto} />
 
       {open ? <PaymentSheet payment={open} onClose={() => setOpenId(null)} /> : null}
     </div>
   );
 }
 
-export function RefundPolicy({ hours }: { hours: number }) {
+export function RefundPolicy({ hours, auto = false }: { hours: number; auto?: boolean }) {
   const { t } = useTranslation();
   return (
     <Panel aria-labelledby="tg-policy-title">
@@ -185,7 +185,7 @@ export function RefundPolicy({ hours }: { hours: number }) {
       <ul className="mt-2 flex flex-col gap-2 text-[13px] leading-5 text-muted">
         <li>{t('tg.policy1', { hours })}</li>
         <li>{t('tg.policy2')}</li>
-        <li>{t('tg.policy3')}</li>
+        <li>{auto ? t('tg.policy3Auto') : t('tg.policy3')}</li>
         <li>{t('tg.policy4')}</li>
       </ul>
     </Panel>
@@ -220,7 +220,11 @@ function PaymentSheet({ payment, onClose }: { payment: MiniAppPayment; onClose: 
       haptic.success(app);
       notify(
         'success',
-        outcome === 'refunded' ? t('tg.refundDone', { amount }) : t('tg.refundRequested'),
+        outcome === 'refunded'
+          ? payment.method === 'stars'
+            ? t('tg.refundDone', { amount })
+            : t('tg.refundDoneCrypto', { amount })
+          : t('tg.refundRequested'),
       );
       onClose();
     } catch (caught) {
@@ -314,7 +318,9 @@ function PaymentSheet({ payment, onClose }: { payment: MiniAppPayment; onClose: 
           <>
             <p className="text-[14px] leading-6 text-muted">
               {option.kind === 'auto'
-                ? t('tg.refundAutoText')
+                ? payment.method === 'stars'
+                  ? t('tg.refundAutoText')
+                  : t('tg.refundAutoCryptoText')
                 : payment.method === 'stars'
                   ? t('tg.refundStarsRequestText')
                   : t('tg.refundCryptoText')}

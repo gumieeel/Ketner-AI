@@ -162,6 +162,15 @@ export class BillingError extends Error {
   }
 }
 
+/**
+ * ВРЕМЕННО: заявки на возврат одобряются автоматически, без администратора
+ * (правила 24 часов и «без запросов» действуют как обычно). Выключить без деплоя кода:
+ * `REFUND_AUTO_APPROVE=off` в переменных Render. Убрать вместе с этим флагом, когда не нужно.
+ */
+export function refundAutoApprove(): boolean {
+  return (process.env.REFUND_AUTO_APPROVE ?? 'on').trim().toLowerCase() !== 'off';
+}
+
 export type RefundOption =
   | { kind: 'auto' }
   | { kind: 'request' }
@@ -494,9 +503,10 @@ export class BillingService {
     } else if (this.requestsSince(payment.userId, payment.paidAt) > 0) {
       return { kind: 'none', reason: 'used' };
     }
-    // Любой возврат — только заявкой: решение принимает администратор. После одобрения звёзды
+    // Обычно любой возврат — заявкой: решение принимает администратор. После одобрения звёзды
     // возвращает Telegram, криптовалюту администратор переводит вручную.
-    return { kind: 'request' };
+    // ВРЕМЕННО (refundAutoApprove): заявка одобряется сразу.
+    return refundAutoApprove() ? { kind: 'auto' } : { kind: 'request' };
   }
 
   /** Возврат по запросу клиента: всегда заявка администратору, он одобряет или отказывает. */
@@ -531,8 +541,21 @@ export class BillingService {
       status: 'refund_requested',
       refund,
     });
-    await this.telegram?.notifyAdminsAboutRefund(requested, this.deps.userStore.findById(userId));
-    return { outcome: 'requested', payment: requested };
+    const owner = this.deps.userStore.findById(userId);
+    if (option.kind === 'auto') {
+      // ВРЕМЕННО: одобряем сразу. Если Telegram не принял возврат звёзд, заявка остаётся
+      // администратору, как раньше.
+      try {
+        const refunded = await this.decideRefund(paymentId, true, 'auto', now);
+        await this.telegram?.notifyAdminsAboutRefund(refunded, owner);
+        return { outcome: 'refunded', payment: refunded };
+      } catch (error) {
+        console.error('[billing] Автовозврат не прошёл, заявка уходит администратору:', error);
+      }
+    }
+    const pending = this.deps.ledger.payments.get(paymentId) ?? requested;
+    await this.telegram?.notifyAdminsAboutRefund(pending, owner);
+    return { outcome: 'requested', payment: pending };
   }
 
   /** Решение администратора по заявке. Звёзды возвращаются через Telegram, крипта — вручную. */

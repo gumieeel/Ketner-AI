@@ -2,7 +2,12 @@ import { Router, type Request, type Response } from 'express';
 import { createMockToken } from '../auth/jwt.js';
 import { requireAuth } from '../middleware/auth.js';
 import { sendError } from '../middleware/errors.js';
-import { BillingError, REFUND_POLICY, type PaymentRecord } from '../billing/billing-service.js';
+import {
+  BillingError,
+  REFUND_POLICY,
+  refundAutoApprove,
+  type PaymentRecord,
+} from '../billing/billing-service.js';
 import { getPlanItem } from '../telegram/bot.js';
 import { planPriceUsd } from '../services/pricing.js';
 import type { InvoiceStore } from '../store/invoice-store.js';
@@ -201,7 +206,10 @@ export function createMiniAppRouter({
       rate,
       payments: billing.paymentsOf(user.id).map(paymentView),
       prefs: billing.prefsOf(user.id),
-      refundPolicy: { hours: Math.round(REFUND_POLICY.windowMs / 3600_000) },
+      refundPolicy: {
+        hours: Math.round(REFUND_POLICY.windowMs / 3600_000),
+        auto: refundAutoApprove(),
+      },
       pendingRefunds: user.isAdmin ? billing.pendingRefunds().length : 0,
       siteUrl: botService.siteUrl,
       botUsername: botService.botUsername,
