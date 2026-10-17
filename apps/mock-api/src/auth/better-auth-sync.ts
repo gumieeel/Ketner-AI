@@ -1,5 +1,6 @@
 import type { defaultBetterAuth } from './better-auth.js';
 import { isTelegramAccountEmail } from '../telegram/auth-requests.js';
+import type { SignupMethod } from '../services/signup-attribution.js';
 
 type BetterAuthInstance = typeof defaultBetterAuth;
 
@@ -74,4 +75,34 @@ export function betterAuthSessionMayOpen(
   const storedCreated = Date.parse(stored.createdAt);
   if (!Number.isFinite(sessionCreated) || !Number.isFinite(storedCreated)) return false;
   return Math.abs(sessionCreated - storedCreated) <= CREATED_TOGETHER_MS;
+}
+
+/** Способ входа по самой ранней привязке Better Auth: credential — почта, остальное — провайдер. */
+export function signupMethodFromProvider(providerId: string | null | undefined): SignupMethod {
+  if (providerId === 'credential') return 'email';
+  if (providerId === 'google' || providerId === 'github') return providerId;
+  return 'unknown';
+}
+
+/**
+ * Каким способом создан аккаунт, который заводится по cookie-сессии Better Auth.
+ * Ошибка чтения не мешает входу: способ просто остаётся неизвестным.
+ */
+export async function betterAuthSignupMethod(
+  auth: BetterAuthInstance,
+  email: string,
+): Promise<SignupMethod> {
+  try {
+    const ctx = await auth.$context;
+    const found = await ctx.internalAdapter.findUserByEmail(email.trim().toLowerCase(), {
+      includeAccounts: true,
+    });
+    const accounts = [...(found?.accounts ?? [])].sort(
+      (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime(),
+    );
+    const social = accounts.find((account) => account.providerId !== 'credential');
+    return signupMethodFromProvider(social?.providerId ?? accounts[0]?.providerId);
+  } catch {
+    return 'unknown';
+  }
 }

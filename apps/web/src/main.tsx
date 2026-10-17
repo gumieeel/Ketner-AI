@@ -1,7 +1,11 @@
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { App } from './App';
+import { captureAttribution } from './lib/attribution';
 import './index.css';
+
+// Источник посетителя (utm, сайт-источник) — до того, как роутер уберёт или сменит адрес.
+captureAttribution();
 
 const container = document.getElementById('root');
 

@@ -1,4 +1,5 @@
 import { Router, type Request, type Response } from 'express';
+import { attributionFromCookieHeader } from '../services/signup-attribution.js';
 import { defaultBetterAuth } from '../auth/better-auth.js';
 import { createMockToken, verifyMockToken } from '../auth/jwt.js';
 import { telegramBotService } from '../telegram/bot.js';
@@ -91,7 +92,10 @@ export function createAuthRouter(
 
     signupsPerIp.record(ipKey);
     const name = typeof rawName === 'string' ? rawName.trim().slice(0, 100) : undefined;
-    const user = userStore.create(email, rawPassword, name);
+    const user = userStore.create(email, rawPassword, name, {
+      method: 'email',
+      attribution: attributionFromCookieHeader(request.headers.cookie),
+    });
     const { token, expiresAt } = createMockToken(user);
 
     // Запись Better Auth (для cookie-сессии) получает тот же пароль; посторонняя запись с этой почтой,
@@ -213,6 +217,7 @@ export function createAuthRouter(
         providerEmail,
         'oauth-mock-secret-password-12345',
         provider === 'google' ? 'Google User' : 'GitHub User',
+        { method: provider, attribution: attributionFromCookieHeader(request.headers.cookie) },
       );
       try {
         await betterAuthInstance.api.signUpEmail({

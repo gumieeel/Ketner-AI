@@ -737,3 +737,64 @@ test('admin: circuit breaker мониторинг GET /api/admin/circuit-breaker
     await server.close();
   }
 });
+
+test('admin: регистрации по времени и источнику', async () => {
+  const server = await startTestServer();
+
+  try {
+    const denied = await fetch(`${server.baseUrl}/api/admin/registrations`);
+    assert.equal(denied.status, 403);
+
+    const attribution = {
+      utmSource: 'google',
+      utmMedium: 'cpc',
+      utmCampaign: 'launch',
+      landing: '/',
+    };
+    const email = `reg-${Date.now()}@example.com`;
+    const signup = await fetch(`${server.baseUrl}/api/auth/signup`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Cookie: `ketner_src=${encodeURIComponent(JSON.stringify(attribution))}`,
+      },
+      body: JSON.stringify({ email, password: 'correct-horse-battery', name: 'Reg' }),
+    });
+    assert.equal(signup.status, 201);
+
+    const res = await fetch(
+      `${server.baseUrl}/api/admin/registrations?period=7d&tz=Asia/Qyzylorda&channel=paid`,
+      { headers: { 'x-admin-key': config.adminApiKey } },
+    );
+    assert.equal(res.status, 200);
+    const body = (await res.json()) as {
+      period: string;
+      bucket: string;
+      timeZone: string;
+      series: Array<{ key: string; count: number }>;
+      bySource: Array<{ channel: string; source: string; count: number }>;
+      byCampaign: Array<{ campaign: string }>;
+      recent: Array<{
+        email: string;
+        method: string;
+        channel: string;
+        source: string;
+        campaign: string;
+      }>;
+    };
+    assert.equal(body.period, '7d');
+    assert.equal(body.bucket, 'day');
+    assert.equal(body.timeZone, 'Asia/Qyzylorda');
+    assert.equal(body.series.length, 7);
+    const row = body.recent.find((item) => item.email === email);
+    assert.ok(row, 'новая регистрация есть в списке');
+    assert.equal(row.method, 'email');
+    assert.equal(row.channel, 'paid');
+    assert.equal(row.source, 'google');
+    assert.equal(row.campaign, 'launch');
+    assert.ok(body.bySource.some((item) => item.channel === 'paid' && item.source === 'google'));
+    assert.ok(body.byCampaign.some((item) => item.campaign === 'launch'));
+  } finally {
+    await server.close();
+  }
+});

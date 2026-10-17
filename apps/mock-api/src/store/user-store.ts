@@ -4,6 +4,7 @@ import { dirname } from 'node:path';
 import { config, isProduction } from '../config.js';
 import type { PlanId, User } from '../types.js';
 import { isVipEmail, isAdminEmail } from '../services/vip.js';
+import type { SignupAttribution, SignupMethod } from '../services/signup-attribution.js';
 
 export interface StoredUser {
   id: string;
@@ -17,6 +18,16 @@ export interface StoredUser {
   isAdmin?: boolean;
   telegramChatId?: number | string;
   telegramUsername?: string;
+  /** Как создан аккаунт: почта, Google, GitHub… (у старых аккаунтов может отсутствовать). */
+  signupMethod?: SignupMethod;
+  /** Откуда пришёл человек перед регистрацией (utm, сайт-источник). */
+  signupAttribution?: SignupAttribution;
+}
+
+/** Сведения о регистрации, которые передаются при создании аккаунта. */
+export interface SignupInfo {
+  method: SignupMethod;
+  attribution?: SignupAttribution;
 }
 
 export interface UserStore {
@@ -24,7 +35,7 @@ export interface UserStore {
   findById(id: string): User | null;
   findByEmail(email: string): User | null;
   findByTelegramChatId(chatId: number | string): User | null;
-  create(email: string, password: string, name?: string): User;
+  create(email: string, password: string, name?: string, signup?: SignupInfo): User;
   verifyPassword(email: string, password: string): User | null;
   setPassword(email: string, password: string): User | null;
   updatePlan(id: string, plan: PlanId): User | null;
@@ -219,7 +230,7 @@ export function createUserStore(file: string): UserStore {
       return user ? toPublicUser(user) : null;
     },
 
-    create(email: string, password: string, name?: string) {
+    create(email: string, password: string, name?: string, signup?: SignupInfo) {
       const normalizedEmail = email.trim().toLowerCase();
       const resolvedName = name?.trim() || normalizedEmail.split('@')[0] || 'User';
       const salt = randomBytes(16).toString('hex');
@@ -239,6 +250,8 @@ export function createUserStore(file: string): UserStore {
         passwordHash,
         isVip,
         isAdmin,
+        signupMethod: signup?.method,
+        signupAttribution: signup?.attribution,
       };
 
       snapshot.users.push(newUser);
@@ -445,7 +458,7 @@ export function createUserStore(file: string): UserStore {
 
       const existing = snapshot.users.find((u) => u.email.toLowerCase() === email);
       if (!existing) {
-        const created = store.create(email, password, 'Administrator');
+        const created = store.create(email, password, 'Administrator', { method: 'admin' });
         store.setAdmin(created.id, true);
         store.setVip(created.id, true);
         console.log(`[auth] Создан первичный администратор ${email}`);

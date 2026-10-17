@@ -24,6 +24,7 @@ import {
 import { useTranslation, type TranslationKey } from '@/i18n';
 import { cn } from '@/lib/cn';
 import type { PlanId } from '@/features/auth/types';
+import { RegistrationsPanel } from './admin/registrations-panel';
 
 interface UserSummary {
   id: string;
@@ -470,6 +471,7 @@ export function AdminPage() {
   const [planFilter, setPlanFilter] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<Problem | null>(null);
+  const [reloadToken, setReloadToken] = useState(0);
 
   // Selected user for details & edit modal
   const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
@@ -689,6 +691,7 @@ export function AdminPage() {
             onClick={() => {
               void loadUsers();
               void loadMetrics();
+              setReloadToken((value) => value + 1);
             }}
           >
             {t('admin.refresh')}
@@ -769,6 +772,9 @@ export function AdminPage() {
           </ul>
         </div>
       )}
+
+      {/* Регистрации: по времени, способу входа и источнику */}
+      <RegistrationsPanel getHeaders={getHeaders} reloadToken={reloadToken} />
 
       {/* Phase 4: Метрики шлюза (Cache Hit Rate, Latency, TTFT, Источники и Тарифы) */}
       {metrics && (

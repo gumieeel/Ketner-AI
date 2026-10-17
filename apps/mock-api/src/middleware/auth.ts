@@ -3,7 +3,8 @@ import type { NextFunction, Request, Response } from 'express';
 import { fromNodeHeaders } from 'better-auth/node';
 import { defaultBetterAuth } from '../auth/better-auth.js';
 import { verifyMockToken } from '../auth/jwt.js';
-import { betterAuthSessionMayOpen } from '../auth/better-auth-sync.js';
+import { betterAuthSessionMayOpen, betterAuthSignupMethod } from '../auth/better-auth-sync.js';
+import { attributionFromCookieHeader } from '../services/signup-attribution.js';
 import type { UserStore } from '../store/user-store.js';
 import { revokedTokenStore as defaultRevokedTokenStore } from '../store/index.js';
 import type { RevokedTokenStore } from '../store/revoked-token-store.js';
@@ -97,6 +98,10 @@ export function createAuthMiddleware(
             session.user.email,
             randomBytes(32).toString('hex'),
             session.user.name,
+            {
+              method: await betterAuthSignupMethod(betterAuthInstance, session.user.email),
+              attribution: attributionFromCookieHeader(request.headers.cookie),
+            },
           );
         }
 

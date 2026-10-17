@@ -6,6 +6,7 @@ import {
   integer,
   boolean,
   json,
+  jsonb,
   numeric,
   index,
 } from 'drizzle-orm/pg-core';
@@ -111,6 +112,9 @@ export const users = pgTable(
     isAdmin: boolean('is_admin').default(false),
     telegramChatId: text('telegram_chat_id'),
     telegramUsername: text('telegram_username'),
+    // Способ регистрации (email, google, github, telegram, admin) и метки источника (utm, сайт)
+    signupMethod: text('signup_method'),
+    signupAttribution: jsonb('signup_attribution'),
     tokensUsedThisMonth: integer('tokens_used_this_month').default(0),
     totalTokensUsed: integer('total_tokens_used').default(0),
     totalCostUsd: numeric('total_cost_usd', { precision: 10, scale: 2 }).default('0'),

@@ -24,10 +24,36 @@ import type { UserStore } from '../store/user-store.js';
 import type { ModelPricing } from '../ai/gateway-types.js';
 import { CurrencyService } from '../services/currency.js';
 import { PLANS, LEGACY_PLANS } from './billing.js';
-import { isAdminUser } from '../services/vip.js';
+import { resolveBillingPlan } from '../services/plan-resolver.js';
+import { isAdminUser, isAdminEmail, isVipEmail } from '../services/vip.js';
 import { EntitlementService } from '../services/entitlement.js';
 import type { PlanId } from '../types.js';
 import { defaultCircuitBreaker, CircuitBreaker } from '../ai/circuit-breaker.js';
+import {
+  computeRegistrationStats,
+  REGISTRATION_PERIODS,
+  type RegistrationPeriod,
+} from '../services/registration-stats.js';
+import {
+  SIGNUP_METHODS,
+  type SignupChannel,
+  type SignupMethod,
+} from '../services/signup-attribution.js';
+
+const SIGNUP_CHANNELS: readonly SignupChannel[] = [
+  'paid',
+  'organic',
+  'social',
+  'referral',
+  'email',
+  'campaign',
+  'direct',
+  'unknown',
+];
+
+function queryString(value: unknown): string | undefined {
+  return typeof value === 'string' && value.trim() ? value.trim().slice(0, 120) : undefined;
+}
 
 export interface AdminRouterDeps {
   registry?: ModelRegistry;
@@ -390,6 +416,50 @@ export function createAdminRouter({
       pageSize,
       totalPages,
     });
+  });
+
+  // 8b. Регистрации: по времени, по способу входа и источнику, последние аккаунты
+  router.get('/registrations', (req: Request, res: Response): void => {
+    const rawPeriod = queryString(req.query.period);
+    const period: RegistrationPeriod = (REGISTRATION_PERIODS as readonly string[]).includes(
+      rawPeriod ?? '',
+    )
+      ? (rawPeriod as RegistrationPeriod)
+      : '30d';
+    const rawMethod = queryString(req.query.method);
+    const rawChannel = queryString(req.query.channel);
+    const method = (SIGNUP_METHODS as readonly string[]).includes(rawMethod ?? '')
+      ? (rawMethod as SignupMethod)
+      : undefined;
+    const channel = (SIGNUP_CHANNELS as readonly string[]).includes(rawChannel ?? '')
+      ? (rawChannel as SignupChannel)
+      : undefined;
+    const source =
+      typeof req.query.source === 'string' ? req.query.source.slice(0, 120) : undefined;
+    const limit = parseInt(String(req.query.limit ?? '50'), 10) || 50;
+    const offset = parseInt(String(req.query.offset ?? '0'), 10) || 0;
+
+    const stored = userStore.getAllStoredUsers?.() ?? [];
+    // Тариф профиля с проверкой срока подписки — то же правило, что при входе (без записи).
+    const planOf = (user: { id: string; plan: PlanId }): string =>
+      resolveBillingPlan({ storedPlan: user.plan, subscription: subscriptionStore.get(user.id) })
+        .plan;
+
+    const stats = computeRegistrationStats(stored, {
+      period,
+      timeZone: queryString(req.query.tz) ?? 'UTC',
+      filters: { method, channel, source },
+      limit,
+      offset,
+      planOf,
+      // VIP и администраторы получают тариф без оплаты — в конверсию не входят.
+      isPaid: (user) =>
+        !(user.isVip ?? isVipEmail(user.email)) &&
+        !(user.isAdmin ?? isAdminEmail(user.email)) &&
+        planOf(user) !== 'free',
+    });
+
+    res.json(stats);
   });
 
   // 9. Детальная карточка пользователя

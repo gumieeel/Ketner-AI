@@ -20,6 +20,13 @@ import type { CryptoInvoice } from '../types.js';
 import type { ApiKeyRecord } from '../store/api-key-store.js';
 import type { Conversation, Message, Subscription } from '../types.js';
 import type { StoredUser } from '../store/user-store.js';
+import {
+  sanitizeAttribution,
+  SIGNUP_METHODS,
+  type SignupMethod,
+} from '../services/signup-attribution.js';
+import { signupMethodFromProvider } from '../auth/better-auth-sync.js';
+import { isTelegramAccountEmail } from '../telegram/auth-requests.js';
 import type { FeedbackRecord } from '../store/feedback-store.js';
 import { createPostgresProjectDriver, ensureCodeSchema } from '../code/postgres-driver.js';
 import { ensureImagesSchema } from '../images/image-store.js';
@@ -209,6 +216,8 @@ export async function ensureDatabaseSchema(sql: postgres.Sql): Promise<void> {
     ALTER TABLE "ketner_users" ADD COLUMN IF NOT EXISTS "is_admin" boolean DEFAULT false;
     ALTER TABLE "ketner_users" ADD COLUMN IF NOT EXISTS "telegram_chat_id" text;
     ALTER TABLE "ketner_users" ADD COLUMN IF NOT EXISTS "telegram_username" text;
+    ALTER TABLE "ketner_users" ADD COLUMN IF NOT EXISTS "signup_method" text;
+    ALTER TABLE "ketner_users" ADD COLUMN IF NOT EXISTS "signup_attribution" jsonb;
     ALTER TABLE "conversations" ADD COLUMN IF NOT EXISTS "context_summary" text;
     ALTER TABLE "messages" ADD COLUMN IF NOT EXISTS "status" text DEFAULT 'complete';
     ALTER TABLE "messages" ADD COLUMN IF NOT EXISTS "finish_reason" text;
@@ -246,6 +255,27 @@ async function seedDefaultUsers(sql: postgres.Sql): Promise<void> {
   `;
 }
 
+/**
+ * Способ регистрации из БД. У аккаунтов, созданных до учёта, он восстанавливается:
+ * служебная почта Telegram — Telegram; есть привязка Google/GitHub в Better Auth — этот провайдер;
+ * есть только пароль Better Auth — почта.
+ */
+export function resolveStoredSignupMethod(
+  stored: string | null | undefined,
+  email: string,
+  firstProvider: string | null | undefined,
+): SignupMethod | undefined {
+  if (stored && (SIGNUP_METHODS as readonly string[]).includes(stored)) {
+    return stored as SignupMethod;
+  }
+  if (isTelegramAccountEmail(email)) return 'telegram';
+  if (firstProvider) {
+    const method = signupMethodFromProvider(firstProvider);
+    return method === 'unknown' ? undefined : method;
+  }
+  return undefined;
+}
+
 async function loadAndSyncUsers(sql: postgres.Sql): Promise<void> {
   const rows = await sql<
     {
@@ -260,10 +290,22 @@ async function loadAndSyncUsers(sql: postgres.Sql): Promise<void> {
       telegram_chat_id: string | null;
       telegram_username: string | null;
       created_at: Date;
+      signup_method: string | null;
+      signup_attribution: unknown;
+      first_provider: string | null;
     }[]
   >`
-    SELECT id, email, name, plan, password_hash, salt, is_vip, is_admin, telegram_chat_id, telegram_username, created_at
-    FROM "ketner_users"
+    SELECT ku.id, ku.email, ku.name, ku.plan, ku.password_hash, ku.salt, ku.is_vip, ku.is_admin,
+      ku.telegram_chat_id, ku.telegram_username, ku.created_at, ku.signup_method, ku.signup_attribution,
+      (
+        SELECT a."providerId"
+        FROM "user" bu
+        JOIN "account" a ON a."userId" = bu.id
+        WHERE lower(bu.email) = lower(ku.email)
+        ORDER BY (a."providerId" = 'credential'), a."createdAt" ASC
+        LIMIT 1
+      ) AS first_provider
+    FROM "ketner_users" ku
   `;
 
   const dbUsers: StoredUser[] = rows.map((r) => ({
@@ -278,6 +320,8 @@ async function loadAndSyncUsers(sql: postgres.Sql): Promise<void> {
     telegramChatId: r.telegram_chat_id || undefined,
     telegramUsername: r.telegram_username || undefined,
     createdAt: r.created_at ? new Date(r.created_at).toISOString() : new Date().toISOString(),
+    signupMethod: resolveStoredSignupMethod(r.signup_method, r.email, r.first_provider),
+    signupAttribution: sanitizeAttribution(r.signup_attribution),
   }));
 
   // Если локально были зарегистрированы пользователи, которых ещё нет в БД, переносим их в БД
@@ -289,7 +333,7 @@ async function loadAndSyncUsers(sql: postgres.Sql): Promise<void> {
       try {
         await sql`
           INSERT INTO "ketner_users" (
-            "id", "email", "name", "plan", "password_hash", "salt", "is_vip", "is_admin", "telegram_chat_id", "telegram_username", "created_at", "updated_at"
+            "id", "email", "name", "plan", "password_hash", "salt", "is_vip", "is_admin", "telegram_chat_id", "telegram_username", "created_at", "updated_at, "signup_method", "signup_attribution"
           ) VALUES (
             ${localUser.id},
             ${localUser.email},
@@ -302,7 +346,9 @@ async function loadAndSyncUsers(sql: postgres.Sql): Promise<void> {
             ${localUser.telegramChatId ? String(localUser.telegramChatId) : null},
             ${localUser.telegramUsername || null},
             ${new Date(localUser.createdAt)},
-            NOW()
+            NOW(),
+            ${localUser.signupMethod ?? null},
+            ${localUser.signupAttribution ? sql.json(localUser.signupAttribution as never) : null}
           ) ON CONFLICT ("email") DO NOTHING
         `;
         dbUsers.push(localUser);
@@ -605,7 +651,7 @@ function attachDatabaseDrivers(sql: postgres.Sql): void {
     async onUserCreated(user) {
       await sql`
         INSERT INTO "ketner_users" (
-          "id", "email", "name", "plan", "password_hash", "salt", "is_vip", "is_admin", "telegram_chat_id", "telegram_username", "created_at", "updated_at"
+          "id", "email", "name", "plan", "password_hash", "salt", "is_vip", "is_admin", "telegram_chat_id", "telegram_username", "created_at", "updated_at, "signup_method", "signup_attribution"
         ) VALUES (
           ${user.id},
           ${user.email},
@@ -618,7 +664,9 @@ function attachDatabaseDrivers(sql: postgres.Sql): void {
           ${user.telegramChatId ? String(user.telegramChatId) : null},
           ${user.telegramUsername || null},
           ${new Date(user.createdAt)},
-          NOW()
+          NOW(),
+          ${user.signupMethod ?? null},
+          ${user.signupAttribution ? sql.json(user.signupAttribution as never) : null}
         ) ON CONFLICT ("email") DO UPDATE SET
           "name" = EXCLUDED."name",
           "plan" = EXCLUDED."plan",
