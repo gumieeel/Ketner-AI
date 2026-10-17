@@ -577,8 +577,8 @@ test('кабинет: код сгорает после 5 неверных поп
   assert.equal(late.body.error.code, 'code_missing');
   assert.equal(h.userStore.findByTelegramChatId(7501), null);
 
-  // Старый аккаунт, созданный когда-то в Telegram: вход работает, отвязать нельзя,
-  // а его служебный адрес не годится для кода.
+  // Старый аккаунт, созданный когда-то в Telegram: вход работает, из него можно выйти
+  // и вернуться, а его служебный адрес не годится для кода.
   const legacy = h.userStore.create(telegramAccountEmail(7601), 'legacy-password-123456', 'Мария');
   h.userStore.linkTelegram(legacy.id, 7601, 'maria');
   const mailsBefore = h.mails.length;
@@ -589,9 +589,30 @@ test('кабинет: код сгорает после 5 неверных поп
   });
   assert.equal(legacySession.body.linked, true);
   assert.equal(legacySession.body.user.telegramOnly, true);
-  const unlink = await h.mini<ApiErrorBody>('unlink', {}, legacySession.body.token);
-  assert.equal(unlink.status, 409);
-  assert.equal(unlink.body.error.code, 'telegram_only_account');
+  const unlink = await h.mini<{ ok: boolean }>('unlink', {}, legacySession.body.token);
+  assert.equal(unlink.status, 200);
+  assert.equal(h.userStore.findByTelegramChatId(7601), null);
+
+  // После выхода новый аккаунт не создаётся: кабинет предлагает вернуться в прежний.
+  const usersBefore = h.userStore.list().length;
+  const out = await h.mini<{ linked: boolean; previousAccount: { name: string } | null }>(
+    'session',
+    { initData: h.initData(7601) },
+  );
+  assert.equal(out.body.linked, false);
+  assert.equal(out.body.previousAccount?.name, 'Мария');
+  assert.equal(h.userStore.list().length, usersBefore);
+
+  // Чужой Telegram вернуть этот аккаунт не может.
+  const stranger = await h.mini<ApiErrorBody>('restore', { initData: h.initData(7603) });
+  assert.equal(stranger.status, 404);
+
+  const back = await h.mini<{ linked: boolean } & MiniState>('restore', {
+    initData: h.initData(7601),
+  });
+  assert.equal(back.body.linked, true);
+  assert.equal(back.body.user.id, legacy.id);
+  assert.equal(h.userStore.list().length, usersBefore);
 });
 
 // ───────────── оплата, продление, смена тарифа ─────────────

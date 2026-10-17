@@ -208,19 +208,43 @@ describe('кабинет в Telegram (/tg)', () => {
     });
   });
 
-  it('старый аккаунт, созданный в Telegram, отвязать нельзя', async () => {
+  it('из старого аккаунта, созданного в Telegram, можно выйти и вернуться', async () => {
     window.Telegram = { WebApp: fakeWebApp() };
     const legacy = makeState({
       user: { ...makeState().user, email: null, telegramOnly: true, plan: 'free', name: 'Анна' },
       subscription: { plan: 'free', status: 'active', renewsAt: null },
       payments: [],
     });
-    mockApi((url) => (url === '/api/telegram/miniapp/session' ? linkedSession(legacy) : undefined));
+    let linked = true;
+    const calls = mockApi((url) => {
+      if (url === '/api/telegram/miniapp/session') {
+        return linked
+          ? linkedSession(legacy)
+          : Response.json({
+              linked: false,
+              telegram: { firstName: 'Анна', username: 'anna' },
+              siteUrl: 'https://ketner.org',
+              previousAccount: { name: 'Анна', plan: 'free' },
+            });
+      }
+      if (url === '/api/telegram/miniapp/unlink') {
+        linked = false;
+        return Response.json({ ok: true });
+      }
+      if (url === '/api/telegram/miniapp/restore') return linkedSession(legacy);
+      return undefined;
+    });
     render(<TelegramAppPage />);
     expect(await screen.findByRole('heading', { name: 'Привет, Анна' })).toBeInTheDocument();
     fireEvent.click(screen.getByRole('tab', { name: 'Профиль' }));
     expect(screen.getByText('Аккаунт Telegram')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /Отвязать Telegram/ })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Выйти из аккаунта' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Выйти' }));
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Вернуться в этот аккаунт' }));
+    expect(await screen.findByRole('heading', { name: 'Привет, Анна' })).toBeInTheDocument();
+    expect(calls.some((call) => call.url.endsWith('/restore'))).toBe(true);
   });
 
   it('есть аккаунт: вход по почте или код для сайта', async () => {

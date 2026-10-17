@@ -20,15 +20,36 @@ export function Onboarding({
   app,
   firstName,
   siteUrl,
+  previousAccount = null,
   onLinked,
 }: {
   app: TelegramWebApp;
   firstName: string;
   siteUrl: string;
+  previousAccount?: { name: string; plan: string } | null;
   onLinked: (token: string, state: MiniAppState) => void;
 }) {
   const { t } = useTranslation();
   const [step, setStep] = useState<Step>('welcome');
+  const [restoring, setRestoring] = useState(false);
+  const [restoreError, setRestoreError] = useState<string | null>(null);
+
+  const restore = async () => {
+    setRestoring(true);
+    setRestoreError(null);
+    try {
+      const session = await miniAppApi.restore(app.initData);
+      if (session.linked) {
+        haptic.success(app);
+        onLinked(session.token, session);
+        return;
+      }
+    } catch (caught) {
+      haptic.error(app);
+      setRestoreError(caught instanceof ApiError ? caught.message : t('tg.errorGeneric'));
+    }
+    setRestoring(false);
+  };
 
   if (step === 'existing') {
     return (
@@ -62,6 +83,24 @@ export function Onboarding({
           </li>
         ))}
       </ul>
+
+      {previousAccount ? (
+        <Panel className="flex flex-col gap-2">
+          <h2 className="text-[15px] font-semibold">{t('tg.restoreTitle')}</h2>
+          <p className="text-[13px] leading-5 text-muted">
+            {t('tg.restoreText', { name: previousAccount.name || 'Telegram' })}
+          </p>
+          {restoreError ? <Notice tone="danger">{restoreError}</Notice> : null}
+          <Button
+            variant="outline"
+            className="w-full"
+            loading={restoring}
+            onClick={() => void restore()}
+          >
+            {t('tg.restoreButton')}
+          </Button>
+        </Panel>
+      ) : null}
 
       <EmailCodeFlow app={app} onLinked={onLinked} />
 

@@ -152,15 +152,15 @@ export function ProfileTab({ onUnlinked }: { onUnlinked: () => void }) {
           {t('tg.support')}
           <ExternalLinkIcon className="size-3.5" />
         </Button>
-        {user.telegramOnly ? (
-          <p className="px-1 pt-1 text-[12px] leading-5 text-subtle">{t('tg.telegramOnlyNote')}</p>
-        ) : confirmUnlink ? (
+        {confirmUnlink ? (
           <div className="flex flex-col gap-2 rounded-lg border border-stroke bg-canvas p-3">
-            <p className="text-[13px] leading-5 text-text">{t('tg.unlinkConfirm')}</p>
+            <p className="text-[13px] leading-5 text-text">
+              {user.telegramOnly ? t('tg.logoutConfirm') : t('tg.unlinkConfirm')}
+            </p>
             {unlinkError ? <Notice tone="danger">{unlinkError}</Notice> : null}
             <div className="flex gap-2">
               <Button variant="danger" size="sm" className="flex-1" onClick={() => void unlink()}>
-                {t('tg.unlinkYes')}
+                {user.telegramOnly ? t('tg.logoutYes') : t('tg.unlinkYes')}
               </Button>
               <Button
                 variant="outline"
@@ -178,7 +178,7 @@ export function ProfileTab({ onUnlinked }: { onUnlinked: () => void }) {
             onClick={() => setConfirmUnlink(true)}
             className="min-h-10 text-[13px] text-muted hover:text-text"
           >
-            {t('tg.unlink')}
+            {user.telegramOnly ? t('tg.logout') : t('tg.unlink')}
           </button>
         )}
       </Panel>

@@ -842,8 +842,14 @@ export const en: Record<TranslationKey, string> = {
   'tg.notifyReceiptsHint': 'A message after every payment',
   'tg.notifyRefundsAlways': 'Refund answers and important account messages always arrive.',
   'tg.language': 'Language',
-  'tg.telegramOnlyNote':
-    'This account was created with Telegram, so it cannot be unlinked: Telegram is how you sign in.',
+  'tg.logout': 'Sign out of the account',
+  'tg.logoutConfirm':
+    'Sign out? The account and its subscription are kept: you can come back any time from this Telegram. After signing out you can connect an account from the website.',
+  'tg.logoutYes': 'Sign out',
+  'tg.restoreTitle': 'Your previous account',
+  'tg.restoreText':
+    'You signed out of “{name}”, an account created with Telegram. It is kept with its subscription.',
+  'tg.restoreButton': 'Return to this account',
   'tg.unlink': 'Unlink Telegram from the account',
   'tg.unlinkConfirm':
     'Unlink Telegram? Reminders and receipts will stop, and the account will ask you to sign in again.',

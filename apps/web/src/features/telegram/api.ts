@@ -99,7 +99,13 @@ export interface MiniAppState {
 
 export type MiniAppSession =
   | ({ linked: true; token: string; expiresAt: string } & MiniAppState)
-  | { linked: false; telegram: { firstName: string; username: string | null }; siteUrl: string };
+  | {
+      linked: false;
+      telegram: { firstName: string; username: string | null };
+      siteUrl: string;
+      /** Прежний аккаунт, созданный через Telegram, из которого человек вышел. */
+      previousAccount?: { name: string; plan: string } | null;
+    };
 
 export interface AdminRefund extends MiniAppPayment {
   /** Сколько раз модели ответили клиенту после оплаты. */
@@ -139,6 +145,8 @@ const enc = encodeURIComponent;
 /** API кабинета в Telegram: вход по initData, затем обычный токен сессии сайта. */
 export const miniAppApi = {
   session: (initData: string) => call<MiniAppSession>('/session', { body: { initData } }),
+  /** Вернуться в прежний аккаунт Telegram после выхода. */
+  restore: (initData: string) => call<MiniAppSession>('/restore', { body: { initData } }),
   /** Привязка по коду из письма: шаг 1 — письмо с кодом на почту аккаунта. */
   emailCode: (initData: string, email: string) =>
     call<{ sent: true; expiresAt: number; resendAfterSec: number }>('/email-code', {

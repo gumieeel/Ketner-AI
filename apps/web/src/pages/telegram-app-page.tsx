@@ -41,7 +41,12 @@ type Screen =
   | { kind: 'loading' }
   | { kind: 'outside' }
   | { kind: 'error'; message: string }
-  | { kind: 'onboarding'; firstName: string; siteUrl: string }
+  | {
+      kind: 'onboarding';
+      firstName: string;
+      siteUrl: string;
+      previousAccount: { name: string; plan: string } | null;
+    }
   | { kind: 'ready'; token: string; state: MiniAppState };
 
 interface Toast {
@@ -98,6 +103,7 @@ export function TelegramAppPage() {
           kind: 'onboarding',
           firstName: session.telegram.firstName,
           siteUrl: session.siteUrl,
+          previousAccount: session.previousAccount ?? null,
         });
     } catch (error) {
       setScreen({
@@ -168,6 +174,7 @@ export function TelegramAppPage() {
               app={app}
               firstName={screen.firstName}
               siteUrl={screen.siteUrl}
+              previousAccount={screen.previousAccount}
               onLinked={(token, state) => setScreen({ kind: 'ready', token, state })}
             />
           ) : null}

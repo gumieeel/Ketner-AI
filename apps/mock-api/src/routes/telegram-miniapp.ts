@@ -15,7 +15,7 @@ import {
   paymentTitle,
   type TelegramBotService,
 } from '../telegram/bot.js';
-import { isTelegramAccountEmail } from '../telegram/auth-requests.js';
+import { isTelegramAccountEmail, telegramAccountEmail } from '../telegram/auth-requests.js';
 import { validateInitData, type TelegramWebAppUser } from '../telegram/webapp-auth.js';
 import { EmailLinkCodes, EMAIL_CODE_TTL_MS } from '../telegram/email-link-codes.js';
 import { RateLimiter, clientIp } from '../middleware/rate-limit.js';
@@ -226,14 +226,42 @@ export function createMiniAppRouter({
     if (!tgUser) return;
     const user = userStore.findByTelegramChatId(tgUser.id);
     if (!user) {
+      const previous = previousTelegramAccount(tgUser.id);
       response.json({
         linked: false,
         telegram: { firstName: tgUser.first_name, username: tgUser.username ?? null },
         siteUrl: botService.siteUrl,
+        previousAccount: previous ? { name: previous.name, plan: previous.plan } : null,
       });
       return;
     }
     response.json(session(user));
+  });
+
+  /**
+   * Старый аккаунт, созданный когда-то через Telegram, из которого человек вышел.
+   * Новые такие аккаунты не создаются; вернуться можно только в свой (адрес `tg-<id>`).
+   */
+  const previousTelegramAccount = (telegramUserId: number): User | null => {
+    const user = userStore.findByEmail(telegramAccountEmail(telegramUserId));
+    return user && user.telegramChatId === undefined ? user : null;
+  };
+
+  /** Вернуться в свой прежний Telegram-аккаунт после выхода. */
+  router.post('/telegram/miniapp/restore', (request: Request, response: Response) => {
+    const tgUser = telegramUserOf(request, response);
+    if (!tgUser) return;
+    if (userStore.findByTelegramChatId(tgUser.id)) {
+      sendError(response, 409, 'already_linked', 'Этот Telegram уже подключён к аккаунту.');
+      return;
+    }
+    const previous = previousTelegramAccount(tgUser.id);
+    if (!previous) {
+      sendError(response, 404, 'no_previous_account', 'Прежний аккаунт Telegram не найден.');
+      return;
+    }
+    const linked = botService.linkTelegram(previous.id, tgUser.id, tgUser.username) ?? previous;
+    response.json(session(linked));
   });
 
   /**
@@ -335,7 +363,7 @@ export function createMiniAppRouter({
         response,
         409,
         'telegram_in_use',
-        'Этот Telegram уже открывает отдельный аккаунт, созданный в Telegram. Его подписка осталась там.',
+        'Этот Telegram уже открывает отдельный аккаунт, созданный в Telegram. Сначала выйдите из него: Профиль → «Выйти из аккаунта».',
       );
       return;
     }
@@ -565,15 +593,8 @@ export function createMiniAppRouter({
   router.post('/telegram/miniapp/unlink', requireAuth, (request: Request, response: Response) => {
     const user = currentUser(request, response);
     if (!user) return;
-    if (isTelegramAccountEmail(user.email)) {
-      sendError(
-        response,
-        409,
-        'telegram_only_account',
-        'Этот аккаунт создан через Telegram — без него в аккаунт не войти.',
-      );
-      return;
-    }
+    // Аккаунт, созданный через Telegram, тоже можно покинуть: он остаётся с подпиской,
+    // и вернуться в него можно с этого же Telegram (`/telegram/miniapp/restore`).
     userStore.unlinkTelegram(user.id);
     response.json({ ok: true });
   });
