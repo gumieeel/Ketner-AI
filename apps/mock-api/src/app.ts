@@ -16,7 +16,16 @@ import {
 } from './middleware/security.js';
 import { sendError } from './middleware/errors.js';
 import { createApiRouter, describeService } from './routes/index.js';
-import { classifyPath, llmsTxt, renderIndexHtml, robotsTxt, sitemapXml } from './seo/pages.js';
+import {
+  classifyPath,
+  llmsTxt,
+  renderIndexHtml,
+  robotsTxt,
+  sitemapXml,
+  setSeoBuildData,
+  type FaqByLanguage,
+  type SeoBuildData,
+} from './seo/pages.js';
 import {
   apiKeyStore as defaultApiKeyStore,
   conversationStore,
@@ -163,6 +172,19 @@ export function createApp(overrides: Partial<AppDeps> = {}): Express {
     }
   };
   const indexHtml = readIndexHtml();
+  // Вопросы с главной для разметки FAQPage: файл кладёт сборка веб-приложения (vite.config.ts).
+  let faqByLanguage: FaqByLanguage | undefined;
+  try {
+    if (hasWebDist) {
+      const data = JSON.parse(
+        fs.readFileSync(path.join(webDistPath, 'seo-faq.json'), 'utf8'),
+      ) as SeoBuildData;
+      faqByLanguage = data;
+      setSeoBuildData(data);
+    }
+  } catch {
+    // без файла страницы отдаются без блока FAQ
+  }
   const csp = buildContentSecurityPolicy(indexHtml);
   app.use(securityHeaders(() => csp));
 
@@ -268,7 +290,11 @@ export function createApp(overrides: Partial<AppDeps> = {}): Express {
     const key = kind === 'public' ? request.path.replace(/\/+$/, '') || '/' : kind;
     let html = pageCache.get(key);
     if (!html) {
-      html = renderIndexHtml(indexHtml, kind === 'public' ? request.path : '/__none__');
+      html = renderIndexHtml(
+        indexHtml,
+        kind === 'public' ? request.path : '/__none__',
+        faqByLanguage,
+      );
       pageCache.set(key, html);
     }
     response

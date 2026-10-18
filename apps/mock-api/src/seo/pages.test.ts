@@ -5,6 +5,7 @@ import {
   llmsTxt,
   renderIndexHtml,
   robotsTxt,
+  setSeoBuildData,
   sitemapXml,
   SEO_PAGES,
   SEO_PAGES_EN,
@@ -165,5 +166,34 @@ test('seo: список страниц с английской версией с
       SEO_PAGES_EN.some((en) => en.path === (page.path === '/' ? '/en' : `/en${page.path}`)),
       page.path,
     );
+  }
+});
+
+test('seo: на главной есть FAQPage и блок вопросов, на остальных — нет', () => {
+  const faq = {
+    ru: [{ q: 'Есть ли ограничения?', a: 'Да, <лимиты> тарифа.' }],
+    en: [{ q: 'Are there limits?', a: 'Yes, plan limits.' }],
+  };
+  const ru = renderIndexHtml(BASE, '/', faq);
+  assert.match(ru, /"@type":"FAQPage"/);
+  assert.match(ru, /"name":"Есть ли ограничения\?"/);
+  assert.match(ru, /<h3>Есть ли ограничения\?<\/h3><p>Да, &lt;лимиты&gt; тарифа\.<\/p>/);
+  assert.doesNotMatch(ru, /Are there limits/);
+  const en = renderIndexHtml(BASE, '/en', faq);
+  assert.match(en, /"inLanguage":"en","mainEntity"/);
+  assert.match(en, /<h3>Are there limits\?<\/h3>/);
+  assert.doesNotMatch(renderIndexHtml(BASE, '/pricing', faq), /FAQPage|Есть ли/);
+  assert.doesNotMatch(renderIndexHtml(BASE, '/'), /FAQPage/, 'без данных блока нет');
+});
+
+test('seo: lastmod у /changelog — дата последнего релиза, у остальных страниц его нет', () => {
+  setSeoBuildData({ changelogDate: '2026-10-18' });
+  try {
+    const sitemap = sitemapXml();
+    const changelog = sitemap.split('<url>').find((chunk) => chunk.includes('/changelog</loc>'));
+    assert.match(changelog ?? '', /<lastmod>2026-10-18<\/lastmod>/);
+    assert.equal(sitemap.match(/<lastmod>/g)?.length, 1);
+  } finally {
+    setSeoBuildData({});
   }
 });

@@ -10,6 +10,26 @@
 
 import { PLAN_PRICE_USD } from '../services/pricing.js';
 
+/** Вопрос и ответ с главной страницы (из seo-faq.json, который кладёт сборка веб-приложения). */
+export interface FaqEntry {
+  q: string;
+  a: string;
+}
+
+export type FaqByLanguage = Record<'ru' | 'en', FaqEntry[]>;
+
+/** Содержимое seo-faq.json. */
+export interface SeoBuildData extends FaqByLanguage {
+  /** Дата последнего релиза из журнала обновлений (YYYY-MM-DD). */
+  changelogDate?: string;
+}
+
+/** Подставляет в sitemap настоящие даты изменения, известные по данным сборки. */
+let knownLastmod: Readonly<Record<string, string>> = {};
+export function setSeoBuildData(data: Pick<SeoBuildData, 'changelogDate'>): void {
+  knownLastmod = data.changelogDate ? { '/changelog': data.changelogDate } : {};
+}
+
 export interface SeoPage {
   /** Язык страницы; без поля — русский. */
   lang?: 'ru' | 'en';
@@ -501,7 +521,7 @@ const PAGE_COPY_EN: Readonly<Record<string, PageCopy>> = {
 };
 
 /** Текст страницы для `<div id="root">`: React заменяет его при запуске, а краулер без JS видит содержимое. */
-function crawlerContent(page: SeoPage, base: string): string {
+function crawlerContent(page: SeoPage, base: string, faq: FaqEntry[]): string {
   const english = page.lang === 'en';
   const copyMap = english ? PAGE_COPY_EN : PAGE_COPY;
   const copy = copyMap[ruPathOf(page)] ?? { h1: page.title, paragraphs: [page.description] };
@@ -515,12 +535,19 @@ function crawlerContent(page: SeoPage, base: string): string {
     '<main>',
     `<h1>${escapeAttr(copy.h1)}</h1>`,
     ...copy.paragraphs.map((text) => `<p>${escapeAttr(text)}</p>`),
+    ...(faq.length > 0
+      ? [
+          `<section><h2>${english ? 'Frequently asked questions' : 'Частые вопросы'}</h2>`,
+          ...faq.map((item) => `<h3>${escapeAttr(item.q)}</h3><p>${escapeAttr(item.a)}</p>`),
+          '</section>',
+        ]
+      : []),
     `<nav aria-label="${english ? 'Site sections' : 'Разделы сайта'}"><ul>${links}</ul></nav>`,
     '</main>',
   ].join('');
 }
 
-function structuredData(base: string, english: boolean): string {
+function structuredData(base: string, english: boolean, faq: FaqEntry[]): string {
   const graph = [
     {
       '@type': 'Organization',
@@ -555,6 +582,19 @@ function structuredData(base: string, english: boolean): string {
         priceCurrency: 'USD',
       })),
     },
+    ...(faq.length > 0
+      ? [
+          {
+            '@type': 'FAQPage',
+            inLanguage: english ? 'en' : 'ru',
+            mainEntity: faq.map((item) => ({
+              '@type': 'Question',
+              name: item.q,
+              acceptedAnswer: { '@type': 'Answer', text: item.a },
+            })),
+          },
+        ]
+      : []),
   ];
   return jsonLd({ '@context': 'https://schema.org', '@graph': graph });
 }
@@ -573,7 +613,11 @@ function verificationTags(): string {
  * index.html для конкретного адреса: свой title, description, canonical, robots и превью ссылки.
  * Встроенные скрипты не меняются, поэтому хеши в CSP остаются верными.
  */
-export function renderIndexHtml(baseHtml: string, rawPath: string): string {
+export function renderIndexHtml(
+  baseHtml: string,
+  rawPath: string,
+  faqByLanguage?: FaqByLanguage,
+): string {
   const base = siteUrl();
   const kind = classifyPath(rawPath);
   const page = findSeoPage(rawPath);
@@ -582,6 +626,8 @@ export function renderIndexHtml(baseHtml: string, rawPath: string): string {
   const canonical = page ? `${base}${page.path === '/' ? '/' : page.path}` : null;
   const english = page?.lang === 'en';
   const alternates = page ? alternatesOf(page) : null;
+  // Вопросы и ответы показаны на главной, поэтому разметка FAQPage — только там.
+  const faq = page && ruPathOf(page) === '/' ? (faqByLanguage?.[english ? 'en' : 'ru'] ?? []) : [];
   const alternateUrl = (path: string): string => escapeAttr(`${base}${path}`);
   const image = `${base}/og-image.png`;
 
@@ -613,7 +659,7 @@ export function renderIndexHtml(baseHtml: string, rawPath: string): string {
     `<meta name="twitter:image" content="${escapeAttr(image)}" />`,
     verificationTags(),
     page && ruPathOf(page) === '/'
-      ? `<script type="application/ld+json">${structuredData(base, english)}</script>`
+      ? `<script type="application/ld+json">${structuredData(base, english, faq)}</script>`
       : '',
   ]
     .filter(Boolean)
@@ -628,7 +674,7 @@ export function renderIndexHtml(baseHtml: string, rawPath: string): string {
   if (page) {
     html = html.replace(
       /<div id="root"><\/div>/i,
-      () => `<div id="root">${crawlerContent(page, base)}</div>`,
+      () => `<div id="root">${crawlerContent(page, base, faq)}</div>`,
     );
   }
   return html.replace(/<\/head>/i, `    ${head}\n  </head>`);
@@ -650,6 +696,9 @@ export function robotsTxt(): string {
  * `lastmod` указывается только там, где известна настоящая дата изменения страницы (`SeoPage.lastmod`).
  * Подставлять сегодняшнюю дату всем страницам нельзя: поисковики перестают доверять такому полю.
  */
+const lastmodOf = (page: SeoPage): string | undefined =>
+  page.lastmod ?? (page.lang === 'en' ? undefined : knownLastmod[page.path]);
+
 export function sitemapXml(): string {
   const base = siteUrl();
   const loc = (path: string): string => escapeXml(`${base}${path}`);
@@ -662,7 +711,7 @@ export function sitemapXml(): string {
           `    <xhtml:link rel="alternate" hreflang="x-default" href="${loc(alternates.ru)}"/>`,
         ].join('\n') + '\n'
       : '';
-    return `  <url>\n    <loc>${loc(page.path)}</loc>\n${links}${page.lastmod ? `    <lastmod>${page.lastmod}</lastmod>\n` : ''}    <changefreq>${page.changefreq}</changefreq>\n    <priority>${page.priority.toFixed(1)}</priority>\n  </url>`;
+    return `  <url>\n    <loc>${loc(page.path)}</loc>\n${links}${lastmodOf(page) ? `    <lastmod>${lastmodOf(page)}</lastmod>\n` : ''}    <changefreq>${page.changefreq}</changefreq>\n    <priority>${page.priority.toFixed(1)}</priority>\n  </url>`;
   });
   return `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9" xmlns:xhtml="http://www.w3.org/1999/xhtml">\n${urls.join('\n')}\n</urlset>\n`;
 }
