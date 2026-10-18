@@ -164,6 +164,7 @@ export const SEO_PAGES: readonly SeoPage[] = [
  */
 const PRIVATE_PREFIXES = [
   '/login',
+  '/signup/verify',
   '/auth',
   '/chat',
   '/code',
@@ -191,6 +192,7 @@ const DISALLOW = [
   '/onboarding',
   '/admin',
   '/login',
+  '/signup/verify',
 ];
 
 export type PageKind = 'public' | 'private' | 'missing';

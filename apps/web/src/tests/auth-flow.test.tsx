@@ -45,6 +45,9 @@ describe('auth-flow: сценарии авторизации и сессии', (
     expect(
       await screen.findByRole('heading', { level: 1, name: 'Код для входа' }),
     ).toBeInTheDocument();
+    // Страница кода — в каркасе входа, без шапки сайта поверх
+    expect(screen.queryByRole('link', { name: 'Возможности' })).not.toBeInTheDocument();
+    expect(screen.getAllByRole('heading', { level: 1 })).toHaveLength(1);
     expect(screen.getByText(/d\*\*\*o@ketner\.ai/)).toBeInTheDocument();
     expect(screen.queryByText(/demo@ketner\.ai/)).not.toBeInTheDocument();
     expect(useAuth.getState().status).not.toBe('authenticated');

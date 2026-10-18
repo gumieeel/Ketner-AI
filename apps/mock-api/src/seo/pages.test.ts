@@ -29,6 +29,9 @@ test('seo: классификация адресов', () => {
   assert.equal(classifyPath('/docs/plans/pro'), 'public');
   assert.equal(classifyPath('/chat/abc'), 'private');
   assert.equal(classifyPath('/settings'), 'private');
+  // Ввод кода из письма — служебные страницы, а не 404.
+  assert.equal(classifyPath('/signup/verify'), 'private');
+  assert.equal(classifyPath('/login/verify'), 'private');
   assert.equal(classifyPath('/wp-admin'), 'missing');
 });
 

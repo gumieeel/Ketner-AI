@@ -75,7 +75,8 @@ export function StandaloneLayout() {
     };
   }, [mobileMenuOpen]);
 
-  const isAuthPage = location.pathname === '/login' || location.pathname === '/signup';
+  // Вход, регистрация и ввод кода из письма — свой каркас (AuthShell), без шапки и подвала сайта.
+  const isAuthPage = /^\/(login|signup)(\/verify)?\/?$/.test(location.pathname);
   const isLanding = location.pathname === '/';
   // Главная шире и с узкими полями — панели идут почти от края до края, как витрина.
   const containerClass = isLanding
