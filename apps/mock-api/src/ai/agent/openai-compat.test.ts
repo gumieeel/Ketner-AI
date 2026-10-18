@@ -148,6 +148,68 @@ test('числовые поля: границы temperature, max_tokens, n и re
   assert.equal(rejection('строка').param, undefined);
 });
 
+test('параметры генерации OpenAI: top_p, stop, seed, штрафы и response_format доходят до провайдера', () => {
+  const value = parse({
+    messages: [user('x')],
+    top_p: 0.9,
+    stop: '###',
+    seed: 42,
+    frequency_penalty: 0.5,
+    presence_penalty: -1,
+    user: 'end-user-17',
+    stream: true,
+    stream_options: { include_usage: true },
+    response_format: {
+      type: 'json_schema',
+      json_schema: {
+        name: 'answer',
+        strict: true,
+        schema: { type: 'object', properties: { ok: { type: 'boolean' } } },
+      },
+    },
+  });
+  assert.deepEqual(value.sampling, {
+    topP: 0.9,
+    stop: ['###'],
+    seed: 42,
+    frequencyPenalty: 0.5,
+    presencePenalty: -1,
+    responseFormat: {
+      type: 'json_schema',
+      json_schema: {
+        name: 'answer',
+        strict: true,
+        schema: { type: 'object', properties: { ok: { type: 'boolean' } } },
+      },
+    },
+  });
+  assert.equal(value.includeUsage, true);
+
+  const plain = parse({ messages: [user('x')], response_format: { type: 'json_object' } });
+  assert.deepEqual(plain.sampling, { responseFormat: { type: 'json_object' } });
+  assert.equal(plain.includeUsage, false);
+});
+
+test('неверные параметры генерации отклоняются с указанием поля', () => {
+  const m = [user('x')];
+  assert.equal(rejection({ messages: m, top_p: 1.5 }).param, 'top_p');
+  assert.equal(rejection({ messages: m, presence_penalty: 3 }).param, 'presence_penalty');
+  assert.equal(rejection({ messages: m, frequency_penalty: '1' }).param, 'frequency_penalty');
+  assert.equal(rejection({ messages: m, seed: 1.5 }).param, 'seed');
+  assert.equal(rejection({ messages: m, stop: ['a', 'b', 'c', 'd', 'e'] }).param, 'stop');
+  assert.equal(rejection({ messages: m, stop: [''] }).param, 'stop');
+  assert.equal(
+    rejection({ messages: m, response_format: { type: 'xml' } }).param,
+    'response_format',
+  );
+  assert.equal(
+    rejection({ messages: m, response_format: { type: 'json_schema', json_schema: {} } }).param,
+    'response_format',
+  );
+  assert.equal(rejection({ messages: m, stream_options: 'yes' }).param, 'stream_options');
+  assert.equal(rejection({ messages: m, user: 7 }).param, 'user');
+});
+
 test('ответ без стриминга: пустой текст с вызовами превращается в content: null', () => {
   const body = buildCompletionResponse({
     id: 'chatcmpl-1',

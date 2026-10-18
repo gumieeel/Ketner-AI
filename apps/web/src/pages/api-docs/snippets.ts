@@ -115,6 +115,55 @@ export function getToolsSnippet(baseUrl: string, apiKey: string): CodeTab[] {
   ];
 }
 
+export function getStructuredSnippet(baseUrl: string, apiKey: string): CodeTab[] {
+  return [
+    {
+      id: 'json-python',
+      label: 'Python',
+      language: 'python',
+      code: `import json, os
+from openai import OpenAI
+
+client = OpenAI(base_url="${baseUrl}", api_key=os.environ["KETNER_API_KEY"])
+
+reply = client.chat.completions.create(
+    model="ketner-pro",
+    messages=[{"role": "user", "content": "Отзыв: «Доставили быстро, но коробка мятая»"}],
+    response_format={
+        "type": "json_schema",
+        "json_schema": {
+            "name": "review",
+            "strict": True,
+            "schema": {
+                "type": "object",
+                "properties": {
+                    "sentiment": {"type": "string", "enum": ["positive", "neutral", "negative"]},
+                    "issues": {"type": "array", "items": {"type": "string"}},
+                },
+                "required": ["sentiment", "issues"],
+                "additionalProperties": False,
+            },
+        },
+    },
+)
+print(json.loads(reply.choices[0].message.content))`,
+    },
+    {
+      id: 'json-curl',
+      label: 'cURL',
+      language: 'bash',
+      code: `curl ${baseUrl}/chat/completions \\
+  -H "Authorization: Bearer ${apiKey}" \\
+  -H "Content-Type: application/json" \\
+  -d '{
+    "model": "ketner-pro",
+    "messages": [{"role": "user", "content": "Три идеи для стартапа, JSON: {\\"ideas\\": [...]}"}],
+    "response_format": {"type": "json_object"}
+  }'`,
+    },
+  ];
+}
+
 export function getModelsSnippet(baseUrl: string, apiKey: string): CodeTab[] {
   return [
     {

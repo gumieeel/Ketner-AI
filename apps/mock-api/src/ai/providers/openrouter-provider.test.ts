@@ -394,6 +394,37 @@ test('streamAgent: tools не отправляются без объявленн
   assert.equal(messages[1].content, null);
 });
 
+test('streamAgent: параметры генерации OpenAI уходят в тело запроса под своими именами', () => {
+  const provider = new OpenRouterProvider({ apiKey: 'k' });
+  const body = provider.buildAgentBody({
+    model: 'deepseek/deepseek-v4.1-flash',
+    messages: [{ role: 'user', content: 'x' }],
+    maxTokens: 100,
+    sampling: {
+      topP: 0.8,
+      stop: ['END'],
+      seed: 3,
+      frequencyPenalty: 0.1,
+      presencePenalty: 0.2,
+      responseFormat: { type: 'json_object' },
+    },
+  });
+  assert.equal(body.top_p, 0.8);
+  assert.deepEqual(body.stop, ['END']);
+  assert.equal(body.seed, 3);
+  assert.equal(body.frequency_penalty, 0.1);
+  assert.equal(body.presence_penalty, 0.2);
+  assert.deepEqual(body.response_format, { type: 'json_object' });
+
+  const bare = provider.buildAgentBody({
+    model: 'deepseek/deepseek-v4.1-flash',
+    messages: [{ role: 'user', content: 'x' }],
+    maxTokens: 100,
+  });
+  assert.equal('response_format' in bare, false);
+  assert.equal('stop' in bare, false);
+});
+
 test('streamAgent: для Anthropic кэшируются system и последний user, сообщения tool не трогаются', async () => {
   const provider = new OpenRouterProvider({ apiKey: 'k' });
   const body = provider.buildAgentBody({

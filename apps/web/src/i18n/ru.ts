@@ -1612,12 +1612,21 @@ export const ru = {
   'dev.paramStream': 'Ответ потоком (SSE), в конце data: [DONE]',
   'dev.paramMaxTokens': 'Предельная длина ответа',
   'dev.paramTemperature': 'Температура, от 0 до 2',
+  'dev.paramTopP': 'Nucleus sampling, от 0 до 1',
+  'dev.paramStop': 'До 4 строк, на которых модель остановится',
+  'dev.paramSeed': 'Зерно для повторяемых ответов (если модель умеет)',
+  'dev.paramPenalties': 'Штрафы за повторы, от −2 до 2',
+  'dev.paramResponseFormat': 'json_object или json_schema: ответ строго в JSON',
+  'dev.paramStreamOptions': '{"include_usage": true} — отдельный кусок с расходом перед [DONE]',
+  'dev.structuredTitle': 'Ответ в JSON',
+  'dev.structuredText':
+    '`response_format` с `json_schema` заставляет модель отвечать по вашей схеме, `json_object` — любым корректным JSON. Удобно для извлечения данных и интеграций.',
   'dev.examplesTitle': 'Пример с вызовом функции',
   'dev.modelsEndpointLead':
     'Возвращает модели в формате OpenAI. Поле available показывает, доступна ли модель на вашем тарифе.',
   'dev.errorsTitle': 'Ошибки',
   'dev.errorsText':
-    'Ошибки приходят в формате OpenAI: `{"error": {"message", "type", "code"}}`. 401 — неверный или отозванный ключ, 403 — модель или API недоступны на тарифе, 429 — слишком много запросов, повторите позже.',
+    'Ошибки приходят в формате OpenAI: `{"error": {"message", "type", "code"}}`. 401 — неверный или отозванный ключ, 403 — модель или API недоступны на тарифе, 429 — слишком много запросов, повторите через `Retry-After` секунд. У каждого ответа есть заголовок `X-Request-Id` — назовите его поддержке, если что-то пошло не так.',
   'home.demoTitle': 'Одна переписка, любая модель',
   'home.demoSummary':
     'Иллюстрация: три запроса в одном чате, на каждый отвечает выбранная модель — Claude Opus 5.5, GPT-6 Astra или Gemini 3.7 Flash.',

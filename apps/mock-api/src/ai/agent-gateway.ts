@@ -31,6 +31,7 @@ import {
   type AgentCapableProvider,
   type AgentMessage,
   type AgentProviderResult,
+  type AgentSamplingOptions,
   type AgentStreamEvent,
   type AgentToolCall,
   type AgentToolChoice,
@@ -79,6 +80,8 @@ export interface AgentRunRequest {
   toolChoice?: AgentToolChoice;
   maxTokens?: number;
   temperature?: number;
+  /** top_p, stop, seed, штрафы и response_format: передаются провайдеру без изменений. */
+  sampling?: AgentSamplingOptions;
   reasoningEffort: RequestedReasoningEffort;
   signal?: AbortSignal;
   watchdog?: Partial<WatchdogLimits>;
@@ -527,6 +530,7 @@ export class AgentGateway {
             toolChoice: req.toolChoice,
             maxTokens,
             temperature: req.temperature,
+            sampling: req.sampling,
             reasoning: withReasoning,
           },
           {

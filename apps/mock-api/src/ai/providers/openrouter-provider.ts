@@ -808,6 +808,17 @@ export class OpenRouterProvider implements AIProvider, AgentCapableProvider {
     }
     if (request.reasoning) body.reasoning = request.reasoning;
     if (request.temperature !== undefined) body.temperature = request.temperature;
+    const sampling = request.sampling;
+    if (sampling) {
+      if (sampling.topP !== undefined) body.top_p = sampling.topP;
+      if (sampling.stop !== undefined) body.stop = sampling.stop;
+      if (sampling.seed !== undefined) body.seed = sampling.seed;
+      if (sampling.frequencyPenalty !== undefined) {
+        body.frequency_penalty = sampling.frequencyPenalty;
+      }
+      if (sampling.presencePenalty !== undefined) body.presence_penalty = sampling.presencePenalty;
+      if (sampling.responseFormat !== undefined) body.response_format = sampling.responseFormat;
+    }
     return body;
   }
 

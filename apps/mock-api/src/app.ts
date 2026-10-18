@@ -37,7 +37,7 @@ import type { AgentGateway } from './ai/agent-gateway.js';
 import type { AIGateway } from './ai/gateway.js';
 import type { RevokedTokenStore } from './store/revoked-token-store.js';
 import type { Mailer } from './services/mailer.js';
-import { createV1Router } from './routes/v1.js';
+import { V1_EXPOSED_HEADERS, createV1Router } from './routes/v1.js';
 import { createGithubCallbackHandler } from './routes/github.js';
 import type { GithubConnectionStore } from './github/connection-store.js';
 import type { GithubOAuthSettings } from './github/oauth.js';
@@ -177,17 +177,28 @@ export function createApp(overrides: Partial<AppDeps> = {}): Express {
   const { pages: prerendered, lastmods } = readPrerenderedPages(webDistPath, hasWebDist);
   app.use(securityHeaders(() => csp));
 
-  // CORS: читать ответы с cookie пользователя могут только свои адреса (см. allowedCorsOrigins).
+  // CORS для /v1 открыт любому сайту: авторизация там только API-ключом в заголовке, cookie не
+  // читаются и не разрешаются, так что чужая страница может лишь то, что даёт ей сам ключ.
+  const v1Cors = cors({
+    origin: '*',
+    credentials: false,
+    // allowedHeaders не задан: разрешаются заголовки из preflight (SDK OpenAI шлёт свои x-stainless-*).
+    exposedHeaders: V1_EXPOSED_HEADERS,
+    maxAge: 86_400,
+  });
+  // CORS сайта: читать ответы с cookie пользователя могут только свои адреса (см. allowedCorsOrigins).
   // Чужой Origin не получает Access-Control-Allow-Origin, и браузер не отдаёт ответ странице.
-  app.use(
-    cors({
-      origin: (origin, callback) => {
-        if (!origin) return callback(null, true);
-        callback(null, isAllowedCorsOrigin(origin));
-      },
-      credentials: true,
-    }),
-  );
+  const siteCors = cors({
+    origin: (origin, callback) => {
+      if (!origin) return callback(null, true);
+      callback(null, isAllowedCorsOrigin(origin));
+    },
+    credentials: true,
+  });
+  app.use((request, response, next) => {
+    const isV1 = request.path === '/v1' || request.path.startsWith('/v1/');
+    (isV1 ? v1Cors : siteCors)(request, response, next);
+  });
 
   // OpenAI-совместимый API для CLI и IDE. Подключается до общего разбора JSON: у него свой лимит
   // тела (8 МБ), а авторизация идёт API-ключом, не сессией сайта.

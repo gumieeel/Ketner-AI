@@ -34,6 +34,30 @@ export type AgentStreamEvent =
   | { kind: 'reasoning'; text: string }
   | { kind: 'tool_call'; index: number; id?: string; name?: string; argumentsDelta?: string };
 
+/** Формат ответа OpenAI: обычный текст, любой JSON-объект или JSON по схеме (structured outputs). */
+export type AgentResponseFormat =
+  | { type: 'text' }
+  | { type: 'json_object' }
+  | {
+      type: 'json_schema';
+      json_schema: {
+        name: string;
+        description?: string;
+        schema?: Record<string, unknown>;
+        strict?: boolean;
+      };
+    };
+
+/** Параметры генерации OpenAI, которые сервер передаёт провайдеру как есть. */
+export interface AgentSamplingOptions {
+  topP?: number;
+  stop?: string[];
+  seed?: number;
+  frequencyPenalty?: number;
+  presencePenalty?: number;
+  responseFormat?: AgentResponseFormat;
+}
+
 export interface AgentProviderRequest {
   /** Идентификатор модели у провайдера (например, `xiaomi/mimo-v2.6-pro`). */
   model: string;
@@ -43,6 +67,7 @@ export interface AgentProviderRequest {
   maxTokens: number;
   temperature?: number;
   reasoning?: { effort: ReasoningEffort } | { enabled: boolean };
+  sampling?: AgentSamplingOptions;
   signal?: AbortSignal;
 }
 

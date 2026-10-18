@@ -276,6 +276,79 @@ test('GET /v1/models: auto и публичные модели, доступно�
   assert.equal(proList.data.find((m) => m.id === 'claude-opus-5.5')?.available, true);
 });
 
+test('GET /v1/models/:id: одна модель как в списке, неизвестная — 404 model_not_found', async (t) => {
+  const h = await harness(async () => result());
+  t.after(() => h.server.close());
+  const plus = await h.caller('plus');
+  const found = await get(h, plus.secret, '/v1/models/ketner-pro');
+  assert.equal(found.status, 200);
+  const model = await readJson<{ id: string; object: string; available: boolean }>(found);
+  assert.equal(model.id, 'ketner-pro');
+  assert.equal(model.object, 'model');
+  assert.equal(model.available, true);
+
+  const missing = await get(h, plus.secret, '/v1/models/gpt-2');
+  assert.equal(missing.status, 404);
+  assert.equal((await readJson<ErrorBody>(missing)).error.code, 'model_not_found');
+});
+
+test('/v1 для сторонних приложений: CORS с любого сайта без cookie и X-Request-Id у ответа', async (t) => {
+  const h = await harness(async () => result());
+  t.after(() => h.server.close());
+  const plus = await h.caller('plus');
+
+  const preflight = await fetch(`${h.server.baseUrl}/v1/chat/completions`, {
+    method: 'OPTIONS',
+    headers: {
+      Origin: 'https://my-app.example',
+      'Access-Control-Request-Method': 'POST',
+      'Access-Control-Request-Headers': 'authorization,content-type,x-stainless-os',
+    },
+  });
+  assert.equal(preflight.status, 204);
+  assert.equal(preflight.headers.get('access-control-allow-origin'), '*');
+  assert.match(preflight.headers.get('access-control-allow-headers') ?? '', /x-stainless-os/);
+  assert.equal(preflight.headers.get('access-control-allow-credentials'), null);
+
+  const response = await fetch(`${h.server.baseUrl}/v1/models`, {
+    headers: { Authorization: `Bearer ${plus.secret}`, Origin: 'https://my-app.example' },
+  });
+  assert.equal(response.status, 200);
+  assert.equal(response.headers.get('access-control-allow-origin'), '*');
+  assert.match(response.headers.get('access-control-expose-headers') ?? '', /X-Request-Id/);
+  assert.match(response.headers.get('x-request-id') ?? '', /^req_[0-9a-f]{24}$/);
+
+  const site = await fetch(`${h.server.baseUrl}/api/keys`, {
+    headers: { Origin: 'https://my-app.example' },
+  });
+  assert.equal(
+    site.headers.get('access-control-allow-origin'),
+    null,
+    'API сайта с cookie чужим сайтам по-прежнему закрыт',
+  );
+});
+
+test('параметры генерации OpenAI доходят до провайдера: response_format, stop, seed, top_p', async (t) => {
+  const h = await harness(async () => result({ content: '{"ok":true}' }));
+  t.after(() => h.server.close());
+  const plus = await h.caller('plus');
+  const response = await post(h, plus.secret, {
+    model: 'ketner-pro',
+    messages: [{ role: 'user', content: 'ответь JSON' }],
+    response_format: { type: 'json_object' },
+    stop: ['\n\n'],
+    seed: 7,
+    top_p: 0.5,
+  });
+  assert.equal(response.status, 200);
+  assert.deepEqual(h.calls[0].sampling, {
+    responseFormat: { type: 'json_object' },
+    stop: ['\n\n'],
+    seed: 7,
+    topP: 0.5,
+  });
+});
+
 test('POST /v1/chat/completions без стриминга: вызов функции, расход и решение маршрутизации', async (t) => {
   const h = await harness(async (_r, emit) => {
     emit({
@@ -461,8 +534,25 @@ test('стриминг: роль, размышления, вызов функц�
 
   const finish = typed.find((c) => c.choices[0]?.finish_reason);
   assert.equal(finish?.choices[0].finish_reason, 'tool_calls');
-  const tail = typed[typed.length - 1];
-  assert.deepEqual(tail.choices, []);
+  // Без stream_options.include_usage расход едет в куске с finish_reason, а у каждого куска
+  // есть choices[0]: так не падают клиенты, которые читают chunk.choices[0] не глядя.
+  assert.equal(finish?.usage?.total_tokens, 1280);
+  assert.equal((finish?.ketner as { cost_usd: number }).cost_usd, 0.02);
+  assert.ok(typed.every((c) => c.choices.length === 1));
+  assert.equal(typed[typed.length - 1], finish);
+
+  const withUsage = await post(h, dev.secret, {
+    model: 'ketner-pro',
+    stream: true,
+    stream_options: { include_usage: true },
+    messages: [{ role: 'user', content: 'открой b.ts' }],
+    tools: TOOLS,
+  });
+  const tailChunks = sseData(await withUsage.text()).filter(
+    (c): c is Record<string, unknown> => c !== '[DONE]',
+  ) as unknown as Chunk[];
+  const tail = tailChunks[tailChunks.length - 1];
+  assert.deepEqual(tail.choices, [], 'include_usage: отдельный кусок с расходом, как у OpenAI');
   assert.equal(tail.usage?.total_tokens, 1280);
   assert.equal((tail.ketner as { cost_usd: number }).cost_usd, 0.02);
 });
