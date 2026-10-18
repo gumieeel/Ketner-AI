@@ -45,3 +45,5 @@ yarn-error.log*
 .DS_Store
 Thumbs.db
 Desktop.ini
+# Локальные настройки Claude Code (личные, не коммитятся)
+.claude/settings.local.json
