@@ -7,9 +7,10 @@ import {
   robotsTxt,
   sitemapXml,
   SEO_PAGES,
+  SEO_PAGES_EN,
 } from './pages.js';
 
-const BASE = `<!doctype html><html><head><meta name="description" content="old" /><title>Ketner AI</title><script>x()</script></head><body><div id="root"></div></body></html>`;
+const BASE = `<!doctype html><html lang="ru"><head><meta name="description" content="old" /><title>Ketner AI</title><script>x()</script></head><body><div id="root"></div></body></html>`;
 
 test('seo: у каждой открытой страницы свой заголовок, canonical и index', () => {
   const html = renderIndexHtml(BASE, '/pricing');
@@ -89,4 +90,80 @@ test('seo: llms.txt перечисляет открытые страницы', (
   for (const page of SEO_PAGES)
     assert.ok(txt.includes(`${page.path === '/' ? '/' : page.path})`), page.path);
   assert.doesNotMatch(txt, /\/chat/);
+});
+
+test('seo: английские страницы — свой язык, canonical и пары hreflang', () => {
+  const html = renderIndexHtml(BASE.replace('<html>', '<html lang="ru">'), '/en/pricing');
+  assert.match(html, /<html lang="en">/);
+  assert.match(html, /<title>Ketner AI pricing/);
+  assert.match(html, /<link rel="canonical" href="https:\/\/ketner\.org\/en\/pricing" \/>/);
+  assert.match(html, /hreflang="ru" href="https:\/\/ketner\.org\/pricing"/);
+  assert.match(html, /hreflang="en" href="https:\/\/ketner\.org\/en\/pricing"/);
+  assert.match(html, /hreflang="x-default" href="https:\/\/ketner\.org\/pricing"/);
+  assert.match(html, /og:locale" content="en_US"/);
+  assert.match(html, /<h1>Ketner AI pricing<\/h1>/);
+  assert.match(html, /Pro is \$25 a month/);
+  // Русская версия указывает на английскую.
+  const ru = renderIndexHtml(BASE, '/pricing');
+  assert.match(ru, /hreflang="en" href="https:\/\/ketner\.org\/en\/pricing"/);
+  // Страница без перевода: без hreflang.
+  assert.doesNotMatch(renderIndexHtml(BASE, '/models'), /hreflang/);
+  // Разметка на английской главной.
+  assert.match(renderIndexHtml(BASE, '/en'), /"description":"An AI chat with GPT/);
+});
+
+test('seo: адреса /en классифицируются, непереведённые — нет', () => {
+  assert.equal(classifyPath('/en'), 'public');
+  assert.equal(classifyPath('/en/'), 'public');
+  assert.equal(classifyPath('/en/docs/plans/pro'), 'public');
+  assert.equal(classifyPath('/en/models'), 'missing');
+  assert.equal(classifyPath('/en/chat'), 'missing');
+  const titles = new Set([...SEO_PAGES, ...SEO_PAGES_EN].map((p) => p.title));
+  assert.equal(titles.size, SEO_PAGES.length + SEO_PAGES_EN.length, 'заголовки уникальны');
+});
+
+test('seo: sitemap содержит английские страницы с взаимными ссылками', () => {
+  const sitemap = sitemapXml();
+  assert.match(sitemap, /xmlns:xhtml="http:\/\/www\.w3\.org\/1999\/xhtml"/);
+  assert.match(sitemap, /<loc>https:\/\/ketner\.org\/en<\/loc>/);
+  assert.match(sitemap, /<loc>https:\/\/ketner\.org\/en\/pricing<\/loc>/);
+  const entry = sitemap
+    .split('<url>')
+    .find((chunk) => chunk.includes('<loc>https://ketner.org/en/pricing</loc>'));
+  assert.ok(
+    entry?.includes('hreflang="ru" href="https://ketner.org/pricing"'),
+    'есть ссылка на русскую',
+  );
+  assert.ok(
+    entry?.includes('hreflang="en" href="https://ketner.org/en/pricing"'),
+    'есть ссылка на себя',
+  );
+  const models = sitemap.split('<url>').find((chunk) => chunk.includes('/models</loc>'));
+  assert.ok(models && !models.includes('hreflang'));
+  assert.match(llmsTxt(), /## English[\s\S]*\/en\/pricing/);
+});
+
+test('seo: заголовки английской версии на клиенте совпадают с серверными', async () => {
+  const file = new URL('../../../web/src/lib/seo-titles.ts', import.meta.url).href;
+  const { PAGE_TITLES_EN } = (await import(file)) as { PAGE_TITLES_EN: Record<string, string> };
+  assert.deepEqual(
+    PAGE_TITLES_EN,
+    Object.fromEntries(
+      SEO_PAGES_EN.map((page) => [page.path === '/en' ? '/' : page.path.slice(3), page.title]),
+    ),
+  );
+});
+
+test('seo: список страниц с английской версией совпадает с клиентским', async () => {
+  const file = new URL('../../../web/src/lib/locale-path.ts', import.meta.url).href;
+  const { hasEnglishTwin } = (await import(file)) as {
+    hasEnglishTwin: (path: string) => boolean;
+  };
+  for (const page of SEO_PAGES) {
+    assert.equal(
+      hasEnglishTwin(page.path),
+      SEO_PAGES_EN.some((en) => en.path === (page.path === '/' ? '/en' : `/en${page.path}`)),
+      page.path,
+    );
+  }
 });

@@ -11,6 +11,8 @@
 import { PLAN_PRICE_USD } from '../services/pricing.js';
 
 export interface SeoPage {
+  /** Язык страницы; без поля — русский. */
+  lang?: 'ru' | 'en';
   path: string;
   title: string;
   description: string;
@@ -162,6 +164,94 @@ export const SEO_PAGES: readonly SeoPage[] = [
   },
 ];
 
+/** Адрес английской версии страницы (/en/...) строится из адреса русской. */
+export const EN_PREFIX = '/en';
+
+/**
+ * Английская версия есть только у страниц, переведённых целиком. Остальные (модели, о проекте,
+ * правовые документы, журнал, статус, контакты) остаются на русском и в /en не попадают.
+ */
+const EN_TWIN_PATHS = [
+  '/',
+  '/pricing',
+  '/docs',
+  '/docs/plans/free',
+  '/docs/plans/plus',
+  '/docs/plans/pro',
+  '/docs/plans/ultra',
+  '/docs/api',
+  '/signup',
+] as const;
+
+const EN_META: Readonly<Record<string, { title: string; description: string }>> = {
+  '/': {
+    title: 'Ketner AI — ChatGPT, Claude, Gemini and Grok in one AI chat',
+    description:
+      'GPT, Claude, Gemini, Grok and DeepSeek in a single AI chat. Auto mode picks the right model for each task, with image generation and AI for coding. Free plan, pay with Telegram Stars or crypto.',
+  },
+  '/pricing': {
+    title: 'Ketner AI pricing — ChatGPT, Claude and Gemini in one subscription',
+    description:
+      'A free plan and Plus, Pro and Ultra subscriptions: GPT, Claude Opus and Sonnet, Gemini and Grok without a separate subscription for each service. Pay with Telegram Stars or crypto.',
+  },
+  '/docs': {
+    title: 'How to use Ketner AI — models, plans and features',
+    description:
+      'Ketner AI help: which models each plan includes, Auto and Max modes, working with files and projects, image generation and Ketner Code.',
+  },
+  '/docs/plans/free': {
+    title: 'Ketner AI Free plan — AI chat at no cost',
+    description:
+      'What the Ketner AI Free plan includes: an AI chat, Auto mode, image generation and daily limits.',
+  },
+  '/docs/plans/plus': {
+    title: 'Ketner AI Plus plan — strong GPT models for less',
+    description:
+      'The Ketner AI Plus plan: strong GPT models, Claude Haiku, Gemini Flash and DeepSeek, more messages and API keys.',
+  },
+  '/docs/plans/pro': {
+    title: 'Ketner AI Pro plan — Claude Opus, Sonnet, GPT and Grok',
+    description:
+      'The Ketner AI Pro plan: flagship Claude Opus and Sonnet, GPT, Grok and Gemini models in one subscription, with higher priority.',
+  },
+  '/docs/plans/ultra': {
+    title: 'Ketner AI Ultra plan — every model and Max mode',
+    description:
+      'The Ketner AI Ultra plan: every Pro model, Max mode with deeper reasoning, a large context window and top priority.',
+  },
+  '/docs/api': {
+    title: 'Ketner AI API — OpenAI-compatible API for GPT and Claude',
+    description:
+      'The OpenAI-compatible Ketner AI API for CLIs, editors and your own apps: GPT, Claude, Gemini and other models with one key, tool calling and streaming.',
+  },
+  '/signup': {
+    title: 'Sign up for Ketner AI — start for free',
+    description:
+      'Create a Ketner AI account with Google, GitHub, Telegram or email and start using AI models for free.',
+  },
+};
+
+export function enPath(path: string): string {
+  return path === '/' ? EN_PREFIX : `${EN_PREFIX}${path}`;
+}
+
+/** Английские страницы: те же приоритет и частота обновления, что у русских. */
+export const SEO_PAGES_EN: readonly SeoPage[] = EN_TWIN_PATHS.map((path) => {
+  const ru = SEO_PAGES.find((page) => page.path === path)!;
+  return { ...ru, lang: 'en' as const, path: enPath(path), ...EN_META[path] };
+});
+
+/** Русский адрес страницы: /en/pricing → /pricing. */
+function ruPathOf(page: SeoPage): string {
+  return page.lang === 'en' ? page.path.slice(EN_PREFIX.length) || '/' : page.path;
+}
+
+/** Пара страниц на двух языках, если у страницы есть английская версия. */
+function alternatesOf(page: SeoPage): { ru: string; en: string } | null {
+  const ru = ruPathOf(page);
+  return (EN_TWIN_PATHS as readonly string[]).includes(ru) ? { ru, en: enPath(ru) } : null;
+}
+
 /**
  * Разделы приложения: существуют, но не для поиска (личные данные, оплата, служебные страницы).
  * Отдаются со статусом 200 и `noindex`.
@@ -207,7 +297,9 @@ function normalizePath(raw: string): string {
 
 export function findSeoPage(rawPath: string): SeoPage | undefined {
   const path = normalizePath(rawPath);
-  return SEO_PAGES.find((page) => page.path === path);
+  return (
+    SEO_PAGES.find((page) => page.path === path) ?? SEO_PAGES_EN.find((page) => page.path === path)
+  );
 }
 
 export function classifyPath(rawPath: string): PageKind {
@@ -347,25 +439,88 @@ const PAGE_COPY: Readonly<Record<string, PageCopy>> = {
   },
 };
 
+const PAGE_COPY_EN: Readonly<Record<string, PageCopy>> = {
+  '/': {
+    h1: 'Ketner AI — ChatGPT, Claude, Gemini and Grok in one AI chat',
+    paragraphs: [
+      'Ketner AI brings GPT, Claude, Gemini, Grok and DeepSeek into a single chat. You do not need a separate subscription for each service.',
+      'Auto mode picks the right model for each task. Beyond text there is image generation and Ketner Code, an AI for programming with projects and code execution.',
+      `A free plan with no payment, and paid plans Plus (${price('plus')}), Pro (${price('pro')}) and Ultra (${price('ultra')}) per month. Pay with Telegram Stars or crypto. Ketner AI does not train its own models: all of them come from third-party developers.`,
+    ],
+  },
+  '/pricing': {
+    h1: 'Ketner AI pricing',
+    paragraphs: [
+      `Free costs nothing, Plus is ${price('plus')} a month, Pro is ${price('pro')} a month, Ultra is ${price('ultra')} a month.`,
+      'Plus unlocks strong GPT models, Claude Haiku, Gemini Flash and DeepSeek. Pro adds Claude Opus and Sonnet, GPT, Grok and Gemini. Ultra includes Max mode with deeper reasoning and the best image models.',
+      'Pay with Telegram Stars or crypto. Subscriptions do not renew automatically unless you turn auto-renewal on.',
+    ],
+  },
+  '/docs': {
+    h1: 'How to use Ketner AI',
+    paragraphs: [
+      'Ketner AI help: which models each plan includes, how Auto and Max modes work, how to upload files and keep projects, how to generate images and write code in Ketner Code.',
+    ],
+  },
+  '/docs/plans/free': {
+    h1: 'Ketner AI Free plan',
+    paragraphs: [
+      'The Free plan gives you an AI chat, Auto mode and image generation within daily limits, with no payment and no card required.',
+    ],
+  },
+  '/docs/plans/plus': {
+    h1: 'Ketner AI Plus plan',
+    paragraphs: [
+      `Plus costs ${price('plus')} a month. It adds strong GPT models, Claude Haiku, Gemini Flash and DeepSeek, more messages per day and API keys.`,
+    ],
+  },
+  '/docs/plans/pro': {
+    h1: 'Ketner AI Pro plan',
+    paragraphs: [
+      `Pro costs ${price('pro')} a month. Flagship Claude Opus and Sonnet, GPT, Grok and Gemini models in one subscription, with higher priority.`,
+    ],
+  },
+  '/docs/plans/ultra': {
+    h1: 'Ketner AI Ultra plan',
+    paragraphs: [
+      `Ultra costs ${price('ultra')} a month. Every Pro model, Max mode with deeper reasoning, a large context window and top priority.`,
+    ],
+  },
+  '/docs/api': {
+    h1: 'Ketner AI API',
+    paragraphs: [
+      'An OpenAI-compatible API for CLIs, code editors and your own apps. GPT, Claude, Gemini and other models with one key, tool calling and streaming responses.',
+    ],
+  },
+  '/signup': {
+    h1: 'Sign up for Ketner AI',
+    paragraphs: [
+      'Create an account with Google, GitHub, Telegram or email and start using AI models for free.',
+    ],
+  },
+};
+
 /** Текст страницы для `<div id="root">`: React заменяет его при запуске, а краулер без JS видит содержимое. */
 function crawlerContent(page: SeoPage, base: string): string {
-  const copy = PAGE_COPY[page.path] ?? { h1: page.title, paragraphs: [page.description] };
-  const links = SEO_PAGES.filter((item) => PAGE_COPY[item.path] !== undefined)
+  const english = page.lang === 'en';
+  const copyMap = english ? PAGE_COPY_EN : PAGE_COPY;
+  const copy = copyMap[ruPathOf(page)] ?? { h1: page.title, paragraphs: [page.description] };
+  const links = (english ? SEO_PAGES_EN : SEO_PAGES)
+    .filter((item) => copyMap[ruPathOf(item)] !== undefined)
     .map(
-      (item) =>
-        `<li><a href="${escapeAttr(base + (item.path === '/' ? '/' : item.path))}">${escapeAttr(item.title)}</a></li>`,
+      (item) => `<li><a href="${escapeAttr(base + item.path)}">${escapeAttr(item.title)}</a></li>`,
     )
     .join('');
   return [
     '<main>',
     `<h1>${escapeAttr(copy.h1)}</h1>`,
     ...copy.paragraphs.map((text) => `<p>${escapeAttr(text)}</p>`),
-    `<nav aria-label="Разделы сайта"><ul>${links}</ul></nav>`,
+    `<nav aria-label="${english ? 'Site sections' : 'Разделы сайта'}"><ul>${links}</ul></nav>`,
     '</main>',
   ].join('');
 }
 
-function structuredData(base: string): string {
+function structuredData(base: string, english: boolean): string {
   const graph = [
     {
       '@type': 'Organization',
@@ -380,18 +535,19 @@ function structuredData(base: string): string {
       name: BRAND,
       alternateName: ['Кетнер', 'Ketner', 'Кетнер ИИ'],
       url: `${base}/`,
-      inLanguage: 'ru',
+      inLanguage: ['ru', 'en'],
       publisher: { '@id': `${base}/#organization` },
     },
     {
       '@type': 'WebApplication',
       name: BRAND,
-      url: `${base}/`,
+      url: english ? `${base}${EN_PREFIX}` : `${base}/`,
       applicationCategory: 'ProductivityApplication',
       operatingSystem: 'Web, iOS, Android',
       inLanguage: ['ru', 'en'],
-      description:
-        'ИИ-чат с нейросетями GPT, Claude, Gemini, Grok и DeepSeek в одной подписке, генерация изображений и ИИ для программирования.',
+      description: english
+        ? 'An AI chat with GPT, Claude, Gemini, Grok and DeepSeek in one subscription, plus image generation and AI for programming.'
+        : 'ИИ-чат с нейросетями GPT, Claude, Gemini, Grok и DeepSeek в одной подписке, генерация изображений и ИИ для программирования.',
       offers: (['free', 'plus', 'pro', 'ultra'] as const).map((plan) => ({
         '@type': 'Offer',
         name: plan.charAt(0).toUpperCase() + plan.slice(1),
@@ -424,6 +580,9 @@ export function renderIndexHtml(baseHtml: string, rawPath: string): string {
   const title = page?.title ?? BRAND;
   const description = page?.description ?? SEO_PAGES[0].description;
   const canonical = page ? `${base}${page.path === '/' ? '/' : page.path}` : null;
+  const english = page?.lang === 'en';
+  const alternates = page ? alternatesOf(page) : null;
+  const alternateUrl = (path: string): string => escapeAttr(`${base}${path}`);
   const image = `${base}/og-image.png`;
 
   const head = [
@@ -431,7 +590,17 @@ export function renderIndexHtml(baseHtml: string, rawPath: string): string {
     canonical ? `<link rel="canonical" href="${escapeAttr(canonical)}" />` : '',
     `<meta property="og:type" content="website" />`,
     `<meta property="og:site_name" content="${BRAND}" />`,
-    `<meta property="og:locale" content="ru_RU" />`,
+    `<meta property="og:locale" content="${english ? 'en_US' : 'ru_RU'}" />`,
+    alternates
+      ? `<meta property="og:locale:alternate" content="${english ? 'ru_RU' : 'en_US'}" />`
+      : '',
+    ...(alternates
+      ? [
+          `<link rel="alternate" hreflang="ru" href="${alternateUrl(alternates.ru)}" />`,
+          `<link rel="alternate" hreflang="en" href="${alternateUrl(alternates.en)}" />`,
+          `<link rel="alternate" hreflang="x-default" href="${alternateUrl(alternates.ru)}" />`,
+        ]
+      : []),
     `<meta property="og:title" content="${escapeAttr(title)}" />`,
     `<meta property="og:description" content="${escapeAttr(description)}" />`,
     canonical ? `<meta property="og:url" content="${escapeAttr(canonical)}" />` : '',
@@ -443,12 +612,15 @@ export function renderIndexHtml(baseHtml: string, rawPath: string): string {
     `<meta name="twitter:description" content="${escapeAttr(description)}" />`,
     `<meta name="twitter:image" content="${escapeAttr(image)}" />`,
     verificationTags(),
-    page?.path === '/' ? `<script type="application/ld+json">${structuredData(base)}</script>` : '',
+    page && ruPathOf(page) === '/'
+      ? `<script type="application/ld+json">${structuredData(base, english)}</script>`
+      : '',
   ]
     .filter(Boolean)
     .join('\n    ');
 
   let html = baseHtml.replace(/<title>[\s\S]*?<\/title>/i, `<title>${escapeAttr(title)}</title>`);
+  if (english) html = html.replace(/<html\s+lang="ru"/i, '<html lang="en"');
   html = html.replace(
     /<meta\s+name="description"[\s\S]*?\/>/i,
     `<meta name="description" content="${escapeAttr(description)}" />`,
@@ -480,11 +652,19 @@ export function robotsTxt(): string {
  */
 export function sitemapXml(): string {
   const base = siteUrl();
-  const urls = SEO_PAGES.map(
-    (page) =>
-      `  <url>\n    <loc>${escapeXml(`${base}${page.path === '/' ? '/' : page.path}`)}</loc>\n${page.lastmod ? `    <lastmod>${page.lastmod}</lastmod>\n` : ''}    <changefreq>${page.changefreq}</changefreq>\n    <priority>${page.priority.toFixed(1)}</priority>\n  </url>`,
-  );
-  return `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${urls.join('\n')}\n</urlset>\n`;
+  const loc = (path: string): string => escapeXml(`${base}${path}`);
+  const urls = [...SEO_PAGES, ...SEO_PAGES_EN].map((page) => {
+    const alternates = alternatesOf(page);
+    const links = alternates
+      ? [
+          `    <xhtml:link rel="alternate" hreflang="ru" href="${loc(alternates.ru)}"/>`,
+          `    <xhtml:link rel="alternate" hreflang="en" href="${loc(alternates.en)}"/>`,
+          `    <xhtml:link rel="alternate" hreflang="x-default" href="${loc(alternates.ru)}"/>`,
+        ].join('\n') + '\n'
+      : '';
+    return `  <url>\n    <loc>${loc(page.path)}</loc>\n${links}${page.lastmod ? `    <lastmod>${page.lastmod}</lastmod>\n` : ''}    <changefreq>${page.changefreq}</changefreq>\n    <priority>${page.priority.toFixed(1)}</priority>\n  </url>`;
+  });
+  return `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9" xmlns:xhtml="http://www.w3.org/1999/xhtml">\n${urls.join('\n')}\n</urlset>\n`;
 }
 
 /** llms.txt: краткая карта сайта для ИИ-ассистентов (https://llmstxt.org). */
@@ -519,6 +699,9 @@ export function llmsTxt(): string {
     '',
     '## Правовые документы',
     ...group(['/terms', '/privacy', '/payment-terms']),
+    '',
+    '## English',
+    ...SEO_PAGES_EN.map(link),
     '',
   ].join('\n');
 }

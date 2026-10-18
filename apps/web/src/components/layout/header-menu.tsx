@@ -1,5 +1,5 @@
 import { useEffect, useId, useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
-import { Link } from 'react-router-dom';
+import { LocalizedLink as Link } from '@/components/ui/localized-link';
 import {
   BookOpenIcon,
   CheckIcon,

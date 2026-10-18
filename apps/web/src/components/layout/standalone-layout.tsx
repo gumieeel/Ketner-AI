@@ -1,12 +1,15 @@
 import { useEffect, useEffectEvent, useRef, useState } from 'react';
-import { Link, NavLink, Outlet, useLocation } from 'react-router-dom';
+import { Outlet, useLocation } from 'react-router-dom';
+import { useLocaleSync } from '@/app/locale-sync';
+import { LocalizedLink as Link, LocalizedNavLink as NavLink } from '@/components/ui/localized-link';
+import { EN_PREFIX, isEnPath, stripEn } from '@/lib/locale-path';
 import { ChevronRightIcon, CloseIcon, MenuIcon } from '@/components/icons';
 import { buttonClasses } from '@/components/ui/button-classes';
 import { IconButton } from '@/components/ui/icon-button';
 import { useAuth } from '@/features/auth/auth-store';
 import { useTranslation } from '@/i18n';
 import { cn } from '@/lib/cn';
-import { PAGE_TITLES } from '@/lib/seo-titles';
+import { PAGE_TITLES, PAGE_TITLES_EN } from '@/lib/seo-titles';
 import { useFocusTrap } from '@/lib/use-focus-trap';
 import { Brand } from './brand';
 import { LanguageToggle } from './language-toggle';
@@ -32,13 +35,14 @@ export function StandaloneLayout() {
   const drawerRef = useRef<HTMLDivElement>(null);
   const touchStartX = useRef<number | null>(null);
   const location = useLocation();
+  useLocaleSync();
 
   useFocusTrap(drawerRef, mobileMenuOpen);
 
   // Заголовок вкладки для открытых страниц — тот же, что сервер отдал в HTML (при переходах внутри SPA).
   useEffect(() => {
-    const path = location.pathname.replace(/\/+$/, '') || '/';
-    const title = PAGE_TITLES[path];
+    const path = stripEn(location.pathname).replace(/\/+$/, '') || '/';
+    const title = (isEnPath(location.pathname) ? PAGE_TITLES_EN : PAGE_TITLES)[path];
     if (title) document.title = title;
   }, [location.pathname]);
 
@@ -84,8 +88,9 @@ export function StandaloneLayout() {
   }, [mobileMenuOpen]);
 
   // Вход, регистрация и ввод кода из письма — свой каркас (AuthShell), без шапки и подвала сайта.
+  const home = isEnPath(location.pathname) ? EN_PREFIX : '';
   const isAuthPage = /^\/(login|signup)(\/verify)?\/?$/.test(location.pathname);
-  const isLanding = location.pathname === '/';
+  const isLanding = stripEn(location.pathname) === '/';
   // Главная шире и с узкими полями — панели идут почти от края до края, как витрина.
   const containerClass = isLanding
     ? 'max-w-[1360px] px-3 sm:px-4 lg:px-5'
@@ -123,10 +128,10 @@ export function StandaloneLayout() {
               aria-label={t('nav.mainNavigation')}
               className="hidden items-center gap-0.5 md:flex"
             >
-              <a href="/#spaces" className={navLinkClass}>
+              <a href={`${home}#spaces`} className={navLinkClass}>
                 {t('home.navFeatures')}
               </a>
-              <a href="/#models" className={navLinkClass}>
+              <a href={`${home}#models`} className={navLinkClass}>
                 {t('nav.models')}
               </a>
               <Link to="/pricing" className={navLinkClass}>
@@ -210,7 +215,7 @@ export function StandaloneLayout() {
 
             <nav aria-label={t('nav.mainNavigation')} className="my-2 flex flex-col gap-1">
               <a
-                href="/#models"
+                href={`${home}#models`}
                 onClick={() => setMobileMenuOpen(false)}
                 className="group flex min-h-14 items-center justify-between rounded-md px-4 text-base font-medium text-text transition-colors duration-150 hover:bg-surface-2"
               >
@@ -340,7 +345,7 @@ export function StandaloneLayout() {
                   </Link>
                 </li>
                 <li>
-                  <a href="/#faq" className={footerLinkClass}>
+                  <a href={`${home}#faq`} className={footerLinkClass}>
                     {t('footer.faq')}
                   </a>
                 </li>

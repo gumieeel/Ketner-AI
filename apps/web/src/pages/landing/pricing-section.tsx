@@ -1,4 +1,4 @@
-import { Link } from 'react-router-dom';
+import { LocalizedLink as Link } from '@/components/ui/localized-link';
 import { PlanCards } from '@/components/pricing/plan-cards';
 import { useTranslation } from '@/i18n';
 import { SectionHead } from './section-head';

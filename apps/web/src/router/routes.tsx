@@ -41,6 +41,18 @@ const apiDocsPage = lazyPage(() => import('@/pages/api-docs-page'), 'ApiDocsPage
  * Разделены на три группы: маркетинговые и служебные страницы (StandaloneLayout),
  * рабочая область чата и настроек (AppShell) и 404. Полная карта — docs/screens.md.
  */
+/** Страницы, у которых есть английская версия (/en/...). Список — в lib/locale-path.ts. */
+function englishRoutes(): RouteObject[] {
+  return [
+    { index: true, element: <LandingPage /> },
+    { path: 'signup', element: <SignupPage /> },
+    { path: 'pricing', element: <PricingPage /> },
+    { path: 'docs', lazy: documentationPage },
+    { path: 'docs/plans/:planId', lazy: documentationPage },
+    { path: 'docs/api', lazy: apiDocsPage },
+  ];
+}
+
 export const routes: RouteObject[] = [
   {
     element: <StandaloneLayout />,
@@ -73,6 +85,7 @@ export const routes: RouteObject[] = [
       { path: 'docs', lazy: documentationPage },
       { path: 'docs/plans/:planId', lazy: documentationPage },
       { path: 'docs/api', lazy: apiDocsPage },
+      { path: 'en', children: englishRoutes() },
       {
         // Адрес после успешной оплаты на сайте (цель «Покупка» в рекламных кабинетах).
         path: 'checkout/success',

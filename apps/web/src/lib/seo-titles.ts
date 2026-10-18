@@ -22,3 +22,16 @@ export const PAGE_TITLES: Readonly<Record<string, string>> = {
   '/privacy': 'Политика конфиденциальности — Ketner AI',
   '/payment-terms': 'Условия оплаты и возврата — Ketner AI',
 };
+
+/** То же для английской версии (адреса /en/...), ключи — путь без префикса. */
+export const PAGE_TITLES_EN: Readonly<Record<string, string>> = {
+  '/': 'Ketner AI — ChatGPT, Claude, Gemini and Grok in one AI chat',
+  '/pricing': 'Ketner AI pricing — ChatGPT, Claude and Gemini in one subscription',
+  '/docs': 'How to use Ketner AI — models, plans and features',
+  '/docs/plans/free': 'Ketner AI Free plan — AI chat at no cost',
+  '/docs/plans/plus': 'Ketner AI Plus plan — strong GPT models for less',
+  '/docs/plans/pro': 'Ketner AI Pro plan — Claude Opus, Sonnet, GPT and Grok',
+  '/docs/plans/ultra': 'Ketner AI Ultra plan — every model and Max mode',
+  '/docs/api': 'Ketner AI API — OpenAI-compatible API for GPT and Claude',
+  '/signup': 'Sign up for Ketner AI — start for free',
+};

@@ -1,5 +1,5 @@
 import { useState, type ComponentType } from 'react';
-import { Link } from 'react-router-dom';
+import { LocalizedLink as Link } from '@/components/ui/localized-link';
 import { CheckIcon, CodeIcon, ImageIcon, MessagesIcon, SparkleIcon } from '@/components/icons';
 import { KnotRelief } from '@/components/marketing/knot-relief';
 import { buttonClasses } from '@/components/ui/button-classes';
