@@ -6,6 +6,8 @@ import { AuthProvider } from '@/features/auth/auth-provider';
 import { RELEASES } from '@/features/content/changelog';
 import { FAQ_ITEMS } from '@/features/content/faq';
 import { LEGAL_DOCUMENTS, LEGAL_UPDATED } from '@/features/content/legal';
+import { usePreferences } from '@/features/preferences/preferences-store';
+import { isEnPath } from '@/lib/locale-path';
 import { SEO_PAGES } from '@/lib/seo-pages';
 import { routes } from '@/router/routes';
 
@@ -64,20 +66,26 @@ function jsonLd(value: unknown): string {
 }
 
 /** Разметка вопросов и ответов (Schema.org FAQPage) — те же вопросы, что на главной. */
-function faqHead(): string {
+function faqHead(language: 'ru' | 'en'): string {
   const data = {
     '@context': 'https://schema.org',
     '@type': 'FAQPage',
     mainEntity: FAQ_ITEMS.map((item) => ({
       '@type': 'Question',
-      name: item.q.ru,
-      acceptedAnswer: { '@type': 'Answer', text: item.a.ru },
+      name: item.q[language],
+      acceptedAnswer: { '@type': 'Answer', text: item.a[language] },
     })),
   };
   return `<script type="application/ld+json">${jsonLd(data)}</script>`;
 }
 
 export async function render(url: string): Promise<{ html: string; head: string; status: number }> {
+  // Язык берётся из адреса: в Node эффекты не выполняются, и useLocaleSync не успел бы его включить.
+  // При серверной отрисовке zustand отдаёт компонентам не текущее, а начальное состояние, поэтому язык
+  // меняем и в нём (код работает только при сборке, в браузере entry-prerender не подключается).
+  const language = isEnPath(url) ? 'en' : 'ru';
+  Object.assign(usePreferences.getInitialState(), { language });
+  usePreferences.setState({ language });
   const handler = createStaticHandler(routes);
   const context = await handler.query(new Request(new URL(url, 'https://ketner.org')));
   if (context instanceof Response) {
@@ -93,6 +101,6 @@ export async function render(url: string): Promise<{ html: string; head: string;
       </AuthProvider>
     </StrictMode>,
   );
-  const head = url === '/' ? faqHead() : '';
+  const head = url === '/' || url === '/en' ? faqHead(language) : '';
   return { html, head, status: context.statusCode };
 }

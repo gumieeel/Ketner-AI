@@ -1,4 +1,4 @@
-﻿import { Link } from 'react-router-dom';
+﻿import { LocalizedLink as Link } from '@/components/ui/localized-link';
 import { cn } from '@/lib/cn';
 
 interface BrandProps {

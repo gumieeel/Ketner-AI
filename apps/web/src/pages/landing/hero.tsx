@@ -1,4 +1,4 @@
-import { Link } from 'react-router-dom';
+import { LocalizedLink as Link } from '@/components/ui/localized-link';
 import { KnotRelief } from '@/components/marketing/knot-relief';
 import { ModelDemo } from '@/components/marketing/model-demo';
 import { buttonClasses } from '@/components/ui/button-classes';

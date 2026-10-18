@@ -1,4 +1,4 @@
-import { Link } from 'react-router-dom';
+import { LocalizedLink as Link } from '@/components/ui/localized-link';
 import { Accordion } from '@/components/ui/accordion';
 import { FAQ_ITEMS } from '@/features/content/faq';
 import { useTranslation } from '@/i18n';

@@ -1,5 +1,5 @@
 {
-  "$comment": "Открытые страницы сайта для поисковиков: короткое имя (хлебные крошки), заголовок, описание, canonical, sitemap. Читают сервер (seo/pages.ts: HTML, robots.txt, sitemap.xml) и сайт (apps/web: заголовок вкладки при переходах и список страниц для предварительной отрисовки). canonical — адрес, который считается основным для этой страницы (если он другой); sitemap: false — не попадает в sitemap.xml.",
+  "$comment": "Открытые страницы сайта для поисковиков: короткое имя (хлебные крошки), заголовок, описание, canonical, sitemap. Читают сервер (seo/pages.ts: HTML, robots.txt, sitemap.xml) и сайт (apps/web: заголовок вкладки при переходах и список страниц для предварительной отрисовки). canonical — адрес, который считается основным для этой страницы (если он другой); sitemap: false — не попадает в sitemap.xml. Записи с lang: \"en\" — английские двойники (адрес /en/…): у русской страницы и её двойника один набор hreflang, остальные страницы только на русском.",
   "pages": [
     {
       "path": "/",
@@ -143,6 +143,95 @@
       "title": "Условия оплаты и возврата — Ketner AI",
       "description": "Условия оплаты подписки Ketner AI звёздами Telegram и криптовалютой, правила возврата.",
       "priority": 0.2,
+      "changefreq": "yearly"
+    },
+    {
+      "lang": "en",
+      "path": "/en",
+      "name": "Home",
+      "title": "Ketner AI — ChatGPT, Claude, Gemini and Grok in one AI chat",
+      "description": "GPT, Claude, Gemini, Grok and DeepSeek models in one chat. Auto mode picks the model for you, with image generation and AI for coding. Free plan, pay with Telegram Stars or crypto.",
+      "priority": 1,
+      "changefreq": "weekly"
+    },
+    {
+      "lang": "en",
+      "path": "/en/pricing",
+      "name": "Pricing",
+      "title": "Ketner AI pricing — ChatGPT, Claude and Gemini in one subscription",
+      "description": "A free plan and Plus $9, Pro $25 and Ultra $49 per month: GPT, Claude Opus and Sonnet, Gemini and Grok without a separate subscription for each service. All limits shown before you pay. Pay with Telegram Stars or crypto.",
+      "priority": 0.9,
+      "changefreq": "weekly"
+    },
+    {
+      "lang": "en",
+      "path": "/en/docs",
+      "name": "Documentation",
+      "title": "How to use Ketner AI — models, plans and features",
+      "description": "Ketner AI help: which models each plan includes, Auto and Max modes, working with files and projects, image generation and Ketner Code.",
+      "priority": 0.7,
+      "changefreq": "weekly"
+    },
+    {
+      "lang": "en",
+      "path": "/en/docs/plans/free",
+      "name": "Free plan",
+      "title": "Ketner AI Free plan — AI chat at no cost",
+      "description": "What the Ketner AI Free plan includes: an AI chat, Auto mode, image generation and daily limits.",
+      "priority": 0.5,
+      "changefreq": "monthly",
+      "canonical": "/en/docs",
+      "sitemap": false
+    },
+    {
+      "lang": "en",
+      "path": "/en/docs/plans/plus",
+      "name": "Plus plan",
+      "title": "Ketner AI Plus plan — GPT and strong models for less",
+      "description": "The Ketner AI Plus plan at $9 per month: GPT-6.1 Sol, Claude Haiku, Ketner Pro and DeepSeek, 500 messages a day and API keys.",
+      "priority": 0.5,
+      "changefreq": "monthly",
+      "canonical": "/en/docs",
+      "sitemap": false
+    },
+    {
+      "lang": "en",
+      "path": "/en/docs/plans/pro",
+      "name": "Pro plan",
+      "title": "Ketner AI Pro plan — Claude Opus, Sonnet, GPT and Grok",
+      "description": "The Ketner AI Pro plan at $25 per month: Claude Opus and Sonnet, GPT, Grok and Gemini in one subscription, Ketner Code and paid image models.",
+      "priority": 0.5,
+      "changefreq": "monthly",
+      "canonical": "/en/docs",
+      "sitemap": false
+    },
+    {
+      "lang": "en",
+      "path": "/en/docs/plans/ultra",
+      "name": "Ultra plan",
+      "title": "Ketner AI Ultra plan — every model and Max mode",
+      "description": "The Ketner AI Ultra plan at $49 per month: every Pro model with higher limits, Max mode with deeper reasoning and the best image models.",
+      "priority": 0.5,
+      "changefreq": "monthly",
+      "canonical": "/en/docs",
+      "sitemap": false
+    },
+    {
+      "lang": "en",
+      "path": "/en/docs/api",
+      "name": "API",
+      "title": "Ketner AI API — OpenAI-compatible API for GPT and Claude",
+      "description": "The OpenAI-compatible Ketner AI API for CLIs, IDEs and your own apps: GPT, Claude, Gemini and other models with one key, tool calling and streaming.",
+      "priority": 0.6,
+      "changefreq": "monthly"
+    },
+    {
+      "lang": "en",
+      "path": "/en/signup",
+      "name": "Sign up",
+      "title": "Sign up for Ketner AI — start for free",
+      "description": "Create a Ketner AI account with Google, GitHub or email (with a confirmation code) and start using AI models for free.",
+      "priority": 0.5,
       "changefreq": "yearly"
     }
   ]

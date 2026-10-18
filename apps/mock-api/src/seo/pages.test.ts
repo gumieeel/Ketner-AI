@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import {
   classifyPath,
   isNonCanonicalHost,
+  llmsTxt,
   renderIndexHtml,
   robotsTxt,
   sitemapXml,
@@ -113,4 +114,69 @@ test('seo: адрес со слэшем в конце ведёт на основ
   assert.equal(trailingSlashRedirect('/chat/'), null, 'закрытые разделы не перенаправляются');
   assert.equal(trailingSlashRedirect('/api/'), null);
   assert.equal(trailingSlashRedirect('//evil.example/'), null, 'чужой адрес не подставляется');
+});
+
+test('seo: английская версия — свой язык, canonical и пара hreflang', () => {
+  const en = renderIndexHtml('<html lang="ru"><head><title>x</title></head></html>', '/en/pricing');
+  assert.match(en, /<html lang="en"/);
+  assert.match(en, /<title>Ketner AI pricing/);
+  assert.match(en, /<link rel="canonical" href="https:\/\/ketner\.org\/en\/pricing" \/>/);
+  assert.match(en, /og:locale" content="en_US"/);
+  assert.match(en, /hreflang="ru" href="https:\/\/ketner\.org\/pricing"/);
+  assert.match(en, /hreflang="en" href="https:\/\/ketner\.org\/en\/pricing"/);
+  assert.match(en, /hreflang="x-default" href="https:\/\/ketner\.org\/pricing"/);
+  assert.match(en, /"name":"Pricing"/, 'хлебные крошки на английском');
+
+  const ru = renderIndexHtml(BASE, '/pricing');
+  assert.match(ru, /og:locale" content="ru_RU"/);
+  assert.match(ru, /hreflang="en" href="https:\/\/ketner\.org\/en\/pricing"/);
+  assert.doesNotMatch(
+    renderIndexHtml(BASE, '/models'),
+    /hreflang/,
+    'у страницы без двойника пары нет',
+  );
+});
+
+test('seo: у каждой английской страницы есть русская пара, дубли планов ведут на /en/docs', () => {
+  const english = SEO_PAGES.filter((page) => page.lang === 'en');
+  assert.ok(english.length >= 9);
+  for (const page of english) {
+    const ruPath = page.path === '/en' ? '/' : page.path.slice('/en'.length);
+    const ru = SEO_PAGES.find((candidate) => candidate.path === ruPath);
+    assert.ok(ru, `${page.path}: нет русской страницы ${ruPath}`);
+    assert.equal(page.sitemap, ru.sitemap, `${page.path}: sitemap как у русской`);
+    assert.ok(
+      !/[А-Яа-яЁё]/.test(`${page.title}${page.description}`),
+      `${page.path}: русские буквы`,
+    );
+  }
+  const html = renderIndexHtml(BASE, '/en/docs/plans/pro');
+  assert.match(html, /<link rel="canonical" href="https:\/\/ketner\.org\/en\/docs" \/>/);
+  assert.equal(classifyPath('/en/pricing'), 'public');
+  assert.equal(classifyPath('/en/models'), 'missing');
+  assert.equal(trailingSlashRedirect('/en/pricing/'), '/en/pricing');
+});
+
+test('seo: sitemap со ссылками hreflang и llms.txt с английским разделом', () => {
+  const sitemap = sitemapXml();
+  assert.match(sitemap, /xmlns:xhtml="http:\/\/www\.w3\.org\/1999\/xhtml"/);
+  assert.match(sitemap, /<loc>https:\/\/ketner\.org\/en\/pricing<\/loc>/);
+  assert.match(sitemap, /<loc>https:\/\/ketner\.org\/en<\/loc>/);
+  assert.doesNotMatch(sitemap, /en\/docs\/plans/);
+  assert.match(
+    sitemap,
+    /<loc>https:\/\/ketner\.org\/pricing<\/loc>\n\s+<xhtml:link rel="alternate" hreflang="ru" href="https:\/\/ketner\.org\/pricing"\/>\n\s+<xhtml:link rel="alternate" hreflang="en" href="https:\/\/ketner\.org\/en\/pricing"\/>/,
+  );
+  assert.doesNotMatch(
+    sitemap,
+    /<loc>https:\/\/ketner\.org\/models<\/loc>\n\s+<xhtml:link/,
+    'у страницы без двойника ссылок нет',
+  );
+  const llms = llmsTxt();
+  assert.match(llms, /^# Ketner AI\n/);
+  assert.match(
+    llms,
+    /## English\n- \[Ketner AI — ChatGPT, Claude, Gemini and Grok in one AI chat\]\(https:\/\/ketner\.org\/en\)/,
+  );
+  assert.doesNotMatch(llms, /\/chat|\/settings|\/admin/);
 });

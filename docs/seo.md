@@ -22,9 +22,14 @@
 - `/docs/plans/*` дублируют `/docs`, поэтому их canonical — `/docs`, в sitemap их нет.
 - Разделы приложения (`/chat`, `/settings`, `/checkout`…): `noindex, nofollow`, закрыты в robots.txt.
 - Несуществующие адреса — 404.
+- Английская версия (`/en`, `/en/pricing`, `/en/docs`, `/en/docs/api`, `/en/signup`, `/en/docs/plans/*`): записи с `"lang": "en"` в `seo-pages.json`, те же компоненты, текст из `i18n/en.ts`. У страницы и её двойника один набор `hreflang` (`ru`, `en`, `x-default` → русская) в `<head>` и в sitemap (`xhtml:link`), `og:locale` — `en_US`, `<html lang="en">`. Страницы без перевода (модели, о проекте, правовые, журнал, статус, контакты) остаются только на русском, адреса `/en/...` у них нет (404).
 - Дубли адресов: `/pricing/` (со слэшем) → 301 на `/pricing`, `/index.html` → 301 на `/`. Закрытые разделы со слэшем не перенаправляются.
 - `/favicon.ico` лежит в `apps/web/public` (PNG 128×128 внутри ICO): Яндекс и часть роботов запрашивают его по умолчанию, хотя страницы ссылаются на `/favicon.png`.
 - Запросы на `ketner-ai.onrender.com` (любой хост, кроме ketner.org и www) получают `X-Robots-Tag: noindex`, чтобы в выдаче не было копии сайта. `www` и `http` уже перенаправляются на `https://ketner.org` (301).
+
+**Язык и адрес.** Открыли `/en/...` — включается английский (и сохраняется в браузере); у посетителя с сохранённым английским русский адрес страницы с двойником ведёт на `/en/...`; переключатель RU/EN меняет и язык, и адрес. Посетитель без сохранённого языка видит русскую версию, автоопределения по браузеру нет. Логика: `app/locale-sync.tsx`, `lib/locale-path.ts`, `components/ui/localized-link.tsx`. При предварительной отрисовке язык берётся из адреса (`entry-prerender.tsx`).
+
+**llms.txt.** `/llms.txt` — краткая карта сайта для ИИ-ассистентов (https://llmstxt.org): русские разделы и раздел English, тексты те же, что в `<head>`. Собирается из `seo-pages.json`.
 
 **robots.txt.** Общий блок и отдельный блок для Яндекса с `Clean-param` для меток (`utm_*`, `gclid`, `yclid`, `fbclid`, `ysclid`, `from`): адреса с метками Яндекс склеивает с основным.
 
@@ -33,7 +38,7 @@
 ## Как добавить страницу
 
 1. Маршрут в `apps/web/src/router/routes.tsx` (внутри `StandaloneLayout`).
-2. Запись в `apps/mock-api/src/seo/seo-pages.json`: `path`, короткое `name`, `title` (до 75 символов, ключевая фраза в начале), `description` (до 250 символов, отвечает на вопрос «что здесь есть»), `priority`, `changefreq`.
+2. Запись в `apps/mock-api/src/seo/seo-pages.json`: `path`, короткое `name`, `title` (до 75 символов, ключевая фраза в начале), `description` (до 250 символов, отвечает на вопрос «что здесь есть»), `priority`, `changefreq`. Если страница переведена целиком: вторая запись с `"lang": "en"` и адресом `/en/...` (`canonical` и `sitemap` — как у русской) и маршрут в `englishRoutes()` (`router/routes.tsx`).
 3. На странице один `<h1>`. Свой `useDocumentTitle` не нужен: заголовок ставит раскладка.
 4. `npm run build` — страница отрисуется и попадёт в sitemap.
 

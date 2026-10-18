@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Link } from 'react-router-dom';
+import { LocalizedLink as Link } from '@/components/ui/localized-link';
 import { PlanCards } from '@/components/pricing/plan-cards';
 import { Tab, TabList, TabPanel, Tabs } from '@/components/ui/tabs';
 import type { TranslationKey } from '@/i18n';

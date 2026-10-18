@@ -8,6 +8,8 @@ import seoPagesData from '../../../mock-api/src/seo/seo-pages.json';
  * при сборке (entry-prerender.tsx). Иначе после загрузки скриптов поисковик видел бы другой title.
  */
 export interface SeoPageMeta {
+  /** Язык страницы; без поля — русский (английские двойники лежат под /en). */
+  lang?: 'ru' | 'en';
   path: string;
   title: string;
   description: string;
@@ -15,7 +17,7 @@ export interface SeoPageMeta {
   sitemap?: boolean;
 }
 
-export const SEO_PAGES: readonly SeoPageMeta[] = seoPagesData.pages;
+export const SEO_PAGES: readonly SeoPageMeta[] = seoPagesData.pages as SeoPageMeta[];
 
 export const DEFAULT_TITLE = 'Ketner AI';
 

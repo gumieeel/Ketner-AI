@@ -1,11 +1,16 @@
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { App, router } from './App';
+import { usePreferences } from './features/preferences/preferences-store';
 import { captureAttribution } from './lib/attribution';
+import { isEnPath } from './lib/locale-path';
 import './index.css';
 
 // Источник посетителя (utm, сайт-источник) — до того, как роутер уберёт или сменит адрес.
 captureAttribution();
+
+// Открыли английский адрес (/en/...) — интерфейс сразу на английском, без вспышки русского текста.
+if (isEnPath(window.location.pathname)) usePreferences.getState().setLanguage('en');
 
 const container = document.getElementById('root');
 

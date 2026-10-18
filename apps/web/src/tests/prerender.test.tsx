@@ -23,7 +23,23 @@ describe('предварительная отрисовка для поиско�
     expect(html).toContain('href="/pricing"');
   });
 
+  it('английские страницы отрисовываются на английском, русские после них — снова на русском', async () => {
+    expect(PRERENDER_PATHS).toEqual(expect.arrayContaining(['/en', '/en/pricing', '/en/docs/api']));
+    const en = await render('/en');
+    expect(en.head).toContain('"@type":"FAQPage"');
+    expect(en.head).not.toMatch(/[А-Яа-яЁё]/);
+    expect(en.html).toContain('href="/en/pricing"');
+    const enPricing = await render('/en/pricing');
+    expect(enPricing.html).toMatch(/<h1[^>]*>[^<]*Pricing/i);
+    expect(enPricing.html).toContain('href="/en/docs"');
+    const ru = await render('/pricing');
+    expect(ru.html).toMatch(/<h1[^>]*>Тарифы/);
+    expect(ru.html).toContain('href="/docs"');
+    expect(ru.html).not.toContain('href="/en/');
+  });
+
   it('заголовок вкладки берётся из того же списка, что у сервера', () => {
+    expect(seoTitleFor('/en/pricing')).toMatch(/^Ketner AI pricing/);
     expect(seoTitleFor('/pricing/')).toMatch(/^Тарифы Ketner AI/);
     expect(seoTitleFor('/chat')).toBeUndefined();
   });

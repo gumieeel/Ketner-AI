@@ -11,6 +11,8 @@
 import seoPagesData from './seo-pages.json' with { type: 'json' };
 
 export interface SeoPage {
+  /** Язык страницы; без поля — русский. Английские двойники лежат под /en (см. EN_PREFIX). */
+  lang?: 'ru' | 'en';
   path: string;
   /** Короткое имя для хлебных крошек: «Тарифы», «Модели». */
   name: string;
@@ -32,6 +34,22 @@ const BRAND = 'Ketner AI';
  * их же читает сайт (заголовок вкладки, список страниц для предварительной отрисовки).
  */
 export const SEO_PAGES: readonly SeoPage[] = seoPagesData.pages as SeoPage[];
+
+/** Английская версия страницы живёт под этим префиксом: /pricing → /en/pricing, / → /en. */
+export const EN_PREFIX = '/en';
+
+/** Русский адрес страницы: /en/pricing → /pricing, /en → /. */
+function ruPathOf(page: SeoPage): string {
+  return page.lang === 'en' ? page.path.slice(EN_PREFIX.length) || '/' : page.path;
+}
+
+/** Адреса страницы на двух языках, если у неё есть английский двойник; иначе null. */
+function alternatesOf(page: SeoPage): { ru: string; en: string } | null {
+  const ru = ruPathOf(page);
+  const en = ru === '/' ? EN_PREFIX : `${EN_PREFIX}${ru}`;
+  const has = (path: string): boolean => SEO_PAGES.some((candidate) => candidate.path === path);
+  return has(ru) && has(en) ? { ru, en } : null;
+}
 
 /**
  * Разделы приложения: существуют, но не для поиска (личные данные, оплата, служебные страницы).
@@ -190,12 +208,17 @@ function structuredData(base: string): string {
 
 /** Хлебные крошки для страниц второго уровня: в выдаче вместо адреса видно «Ketner AI › Тарифы». */
 function breadcrumbs(base: string, page: SeoPage): string {
-  if (page.path === '/' || page.canonical) return '';
+  if (ruPathOf(page) === '/' || page.canonical) return '';
   return jsonLd({
     '@context': 'https://schema.org',
     '@type': 'BreadcrumbList',
     itemListElement: [
-      { '@type': 'ListItem', position: 1, name: BRAND, item: `${base}/` },
+      {
+        '@type': 'ListItem',
+        position: 1,
+        name: BRAND,
+        item: `${base}${page.lang === 'en' ? EN_PREFIX : '/'}`,
+      },
       { '@type': 'ListItem', position: 2, name: page.name, item: `${base}${page.path}` },
     ],
   });
@@ -244,20 +267,33 @@ export function renderIndexHtml(
   const canonical = page ? absolute(base, page.canonical ?? page.path) : null;
   const image = `${base}/og-image.png`;
   const crumbs = page ? breadcrumbs(base, page) : '';
+  const english = page?.lang === 'en';
+  const alternates = page ? alternatesOf(page) : null;
+  const alternateUrl = (path: string): string => escapeAttr(absolute(base, path));
 
   const head = [
     `<meta name="robots" content="${kind === 'public' ? 'index, follow, max-image-preview:large, max-snippet:-1' : 'noindex, nofollow'}" />`,
     canonical ? `<link rel="canonical" href="${escapeAttr(canonical)}" />` : '',
     `<meta property="og:type" content="website" />`,
     `<meta property="og:site_name" content="${BRAND}" />`,
-    `<meta property="og:locale" content="ru_RU" />`,
+    `<meta property="og:locale" content="${english ? 'en_US' : 'ru_RU'}" />`,
+    alternates
+      ? `<meta property="og:locale:alternate" content="${english ? 'ru_RU' : 'en_US'}" />`
+      : '',
+    ...(alternates
+      ? [
+          `<link rel="alternate" hreflang="ru" href="${alternateUrl(alternates.ru)}" />`,
+          `<link rel="alternate" hreflang="en" href="${alternateUrl(alternates.en)}" />`,
+          `<link rel="alternate" hreflang="x-default" href="${alternateUrl(alternates.ru)}" />`,
+        ]
+      : []),
     `<meta property="og:title" content="${escapeAttr(title)}" />`,
     `<meta property="og:description" content="${escapeAttr(description)}" />`,
     canonical ? `<meta property="og:url" content="${escapeAttr(canonical)}" />` : '',
     `<meta property="og:image" content="${escapeAttr(image)}" />`,
     `<meta property="og:image:width" content="1200" />`,
     `<meta property="og:image:height" content="630" />`,
-    `<meta property="og:image:alt" content="${BRAND}: все сильные модели в одной подписке" />`,
+    `<meta property="og:image:alt" content="${BRAND}: ${english ? 'all the strong models in one subscription' : 'все сильные модели в одной подписке'}" />`,
     `<meta name="twitter:card" content="summary_large_image" />`,
     `<meta name="twitter:title" content="${escapeAttr(title)}" />`,
     `<meta name="twitter:description" content="${escapeAttr(description)}" />`,
@@ -271,6 +307,7 @@ export function renderIndexHtml(
     .join('\n    ');
 
   let html = baseHtml.replace(/<title>[\s\S]*?<\/title>/i, `<title>${escapeAttr(title)}</title>`);
+  if (english) html = html.replace(/<html\s+lang="ru"/i, '<html lang="en"');
   html = html.replace(
     /<meta\s+name="description"[\s\S]*?\/>/i,
     `<meta name="description" content="${escapeAttr(description)}" />`,
@@ -321,11 +358,56 @@ export function robotsTxt(): string {
  */
 export function sitemapXml(lastmods: PageLastmods = {}): string {
   const base = siteUrl();
+  const loc = (path: string): string => escapeXml(absolute(base, path));
   const urls = SEO_PAGES.filter((page) => page.sitemap !== false).map((page) => {
     const lastmod = lastmods[page.path];
-    return `  <url>\n    <loc>${escapeXml(absolute(base, page.path))}</loc>\n${lastmod ? `    <lastmod>${escapeXml(lastmod)}</lastmod>\n` : ''}    <changefreq>${page.changefreq}</changefreq>\n    <priority>${page.priority.toFixed(1)}</priority>\n  </url>`;
+    const alternates = alternatesOf(page);
+    // Страницы с английским двойником указывают друг на друга (hreflang), как и в <head>.
+    const links = alternates
+      ? `${[
+          `    <xhtml:link rel="alternate" hreflang="ru" href="${loc(alternates.ru)}"/>`,
+          `    <xhtml:link rel="alternate" hreflang="en" href="${loc(alternates.en)}"/>`,
+          `    <xhtml:link rel="alternate" hreflang="x-default" href="${loc(alternates.ru)}"/>`,
+        ].join('\n')}\n`
+      : '';
+    return `  <url>\n    <loc>${loc(page.path)}</loc>\n${links}${lastmod ? `    <lastmod>${escapeXml(lastmod)}</lastmod>\n` : ''}    <changefreq>${page.changefreq}</changefreq>\n    <priority>${page.priority.toFixed(1)}</priority>\n  </url>`;
   });
-  return `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${urls.join('\n')}\n</urlset>\n`;
+  return `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9" xmlns:xhtml="http://www.w3.org/1999/xhtml">\n${urls.join('\n')}\n</urlset>\n`;
+}
+
+/** llms.txt: краткая карта сайта для ИИ-ассистентов (https://llmstxt.org), тексты те же, что в <head>. */
+export function llmsTxt(): string {
+  const base = siteUrl();
+  const entry = (page: SeoPage): string =>
+    `- [${page.title}](${absolute(base, page.path)}): ${page.description}`;
+  const group = (lang: 'ru' | 'en', paths: readonly string[]): string[] =>
+    SEO_PAGES.filter((page) => (page.lang ?? 'ru') === lang && paths.includes(page.path)).map(
+      entry,
+    );
+  const english = SEO_PAGES.filter((page) => page.lang === 'en' && page.sitemap !== false).map(
+    entry,
+  );
+  return [
+    `# ${BRAND}`,
+    '',
+    '> Ketner AI — независимый сервис доступа к моделям разных разработчиков (OpenAI, Anthropic, Google, xAI и других) в одном чате.',
+    '',
+    '## Продукт',
+    ...group('ru', ['/', '/pricing', '/models', '/signup']),
+    '',
+    '## Документация',
+    ...group('ru', ['/docs', '/docs/api']),
+    '',
+    '## О сервисе',
+    ...group('ru', ['/about', '/changelog', '/status', '/contacts']),
+    '',
+    '## Правовые документы',
+    ...group('ru', ['/terms', '/privacy', '/payment-terms']),
+    '',
+    '## English',
+    ...english,
+    '',
+  ].join('\n');
 }
 
 /**

@@ -19,6 +19,7 @@ import { createApiRouter, describeService } from './routes/index.js';
 import {
   classifyPath,
   isNonCanonicalHost,
+  llmsTxt,
   renderIndexHtml,
   robotsTxt,
   sitemapXml,
@@ -271,6 +272,11 @@ export function createApp(overrides: Partial<AppDeps> = {}): Express {
       .type('application/xml; charset=utf-8')
       .setHeader('Cache-Control', 'public, max-age=3600');
     response.send(sitemapXml(lastmods));
+  });
+
+  app.get('/llms.txt', (_request, response) => {
+    response.type('text/plain; charset=utf-8').setHeader('Cache-Control', 'public, max-age=3600');
+    response.send(llmsTxt());
   });
 
   if (hasWebDist) {
