@@ -139,11 +139,6 @@ export function UpgradeModal() {
                   ${plan.priceMonthly}
                 </span>
                 <span className="text-xs text-muted">/{t('pricing.month')}</span>
-                {plan.originalPriceMonthly ? (
-                  <span className="ml-0.5 text-xs text-subtle line-through">
-                    ${plan.originalPriceMonthly}
-                  </span>
-                ) : null}
               </span>
             </button>
           ))}

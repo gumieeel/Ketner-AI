@@ -1,6 +1,5 @@
 import { Link } from 'react-router-dom';
 import { CheckIcon } from '@/components/icons';
-import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { buttonClasses } from '@/components/ui/button-classes';
 import { useAuth } from '@/features/auth/auth-store';
@@ -102,16 +101,6 @@ export function PlanCards({ variant = 'compact', className }: PlanCardsProps) {
                   {priceDisplay}
                 </span>
                 <span className="text-[14px] text-muted">/{t('pricing.month')}</span>
-                {plan.originalPriceMonthly ? (
-                  <span className="tabular text-[14px] text-subtle line-through">
-                    ${plan.originalPriceMonthly}
-                  </span>
-                ) : null}
-                {plan.discountBadge ? (
-                  <Badge tone="warning" className="ml-1 self-center">
-                    {plan.discountBadge[language]}
-                  </Badge>
-                ) : null}
               </div>
 
               {plan.modelsHighlight ? (

@@ -122,7 +122,7 @@ const PLANS_DATA: PlanCardInfo[] = [
   {
     id: 'ultra',
     name: 'Ultra',
-    price: { ru: '$49 / мес (скидка вместо $59)', en: '$49 / mo (discount from $59)' },
+    price: { ru: '$49 / мес', en: '$49 / mo' },
     badge: { ru: 'Максимум возможностей', en: 'Maximum power' },
     desc: {
       ru: 'Все модели Pro, режим Max, лучшие модели картинок и самые высокие лимиты.',

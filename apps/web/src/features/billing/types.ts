@@ -16,8 +16,6 @@ export interface Plan {
   id: PlanId;
   nameKey: TranslationKey;
   priceMonthly: number;
-  originalPriceMonthly?: number;
-  discountBadge?: Record<Language, string>;
   popular?: boolean;
   limitBadge?: Record<Language, string>;
   modelsHighlight?: Record<Language, string> | string;

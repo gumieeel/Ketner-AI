@@ -47,8 +47,8 @@ export const FAQ_ITEMS: FaqItem[] = [
       en: 'Are there any limits?',
     },
     a: {
-      ru: 'Ответы не заканчиваются, когда кончился лимит сильной модели. Например, на Pro можно отправить 21 запрос Claude Opus 5.5 в неделю, не больше 8 в сутки, — дальше отвечает модель попроще (какая именно, указано на странице «Модели»). Общий предел тарифа — сообщения в сутки: Free — 10, Plus — 500, Pro — 1 500, Ultra — 4 000. Все числа — на странице «Тарифы».',
-      en: 'Answers do not stop when a strong model hits its limit. On Pro, for example, you can send 21 Claude Opus 5.5 requests a week, at most 8 a day; after that a simpler model answers (which one is shown on the Models page). The overall plan limit is messages per day: Free 10, Plus 500, Pro 1,500, Ultra 4,000. All numbers are on the Pricing page.',
+      ru: 'Ответы не заканчиваются, когда кончился лимит сильной модели: дальше отвечает модель попроще (какая именно, указано на странице «Модели»). У каждого тарифа есть свой предел сообщений. Подробности — на странице «Тарифы».',
+      en: 'Answers do not stop when a strong model hits its limit: a simpler model answers instead (which one is shown on the Models page). Each plan has its own message limit. Details are on the Pricing page.',
     },
   },
   {

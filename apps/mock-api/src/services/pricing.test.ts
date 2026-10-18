@@ -11,7 +11,6 @@ import {
   PLAN_PRICE_RUB,
   PLAN_PRICE_USD,
   STARS_OFFICIAL_USD_PER_STAR,
-  ULTRA_LIST_PRICE_USD,
   planPriceCents,
   planPriceRub,
   planPriceUsd,
@@ -93,5 +92,5 @@ test('pricing: цены на сайте (apps/web/.../plans.ts) совпадаю
   assert.equal(priceOf('plus'), PLAN_PRICE_USD.plus);
   assert.equal(priceOf('pro'), PLAN_PRICE_USD.pro);
   assert.equal(priceOf('ultra'), PLAN_PRICE_USD.ultra);
-  assert.match(source, new RegExp(`originalPriceMonthly: ${ULTRA_LIST_PRICE_USD}`));
+  assert.doesNotMatch(source, /originalPriceMonthly|discountBadge/, 'скидки на тарифы нет');
 });

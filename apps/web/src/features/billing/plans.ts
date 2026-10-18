@@ -4,7 +4,7 @@ export type { Plan, PlanId };
 
 /**
  * Каталог тарифов Ketner AI.
- * 4 тарифа в долларах: Free ($0), Plus ($9), Pro ($25), Ultra ($49 со скидкой с $59).
+ * 4 тарифа в долларах: Free ($0), Plus ($9), Pro ($25), Ultra ($49).
  * Те же цены на бэкенде: apps/mock-api/src/services/pricing.ts.
  */
 export const PLANS: readonly Plan[] = [
@@ -126,11 +126,6 @@ export const PLANS: readonly Plan[] = [
     id: 'ultra',
     nameKey: 'pricing.ultra',
     priceMonthly: 49,
-    originalPriceMonthly: 59,
-    discountBadge: {
-      ru: '🔥 Скидка $10',
-      en: '🔥 $10 OFF',
-    },
     limitBadge: {
       ru: 'Максимум мощности',
       en: 'Maximum power',

@@ -37,9 +37,6 @@ export function OrderSummary({ plan, feeUsd = 0 }: { plan: Plan; feeUsd?: number
         <div>
           <div className="flex flex-wrap items-baseline justify-between gap-2">
             <h2 className="text-2xl font-semibold tracking-tight text-text">{t(plan.nameKey)}</h2>
-            {plan.discountBadge ? (
-              <Badge tone="success">{plan.discountBadge[language]}</Badge>
-            ) : null}
           </div>
           {highlight ? (
             <p className="mt-1.5 text-[13px] leading-5 text-muted">{highlight}</p>
@@ -49,12 +46,7 @@ export function OrderSummary({ plan, feeUsd = 0 }: { plan: Plan; feeUsd?: number
         <dl className="flex flex-col gap-2.5 rounded-xl border border-stroke bg-canvas p-4 text-[13px]">
           <div className="flex items-center justify-between gap-3">
             <dt className="text-muted">{t('checkout.planPrice')}</dt>
-            <dd className="font-semibold text-text tabular-nums">
-              {plan.originalPriceMonthly ? (
-                <s className="mr-1.5 font-normal text-subtle">${plan.originalPriceMonthly}</s>
-              ) : null}
-              ${plan.priceMonthly}
-            </dd>
+            <dd className="font-semibold text-text tabular-nums">${plan.priceMonthly}</dd>
           </div>
           <div className="flex items-center justify-between gap-3">
             <dt className="text-muted">{t('checkout.fee')}</dt>
