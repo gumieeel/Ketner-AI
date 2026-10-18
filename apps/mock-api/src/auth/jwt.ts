@@ -19,10 +19,12 @@ function sign(content: string, secret: string): string {
 
 /**
  * Создаёт mock-JWT токен, полностью соответствующий docs/data-model.md.
- * Содержит sub, email, name, plan, iat, exp.
+ * Содержит sub, email, name, plan, iat, exp и отпечаток пароля `cred`
+ * (`userStore.credentialStamp(user.id)`): после смены пароля токен перестаёт действовать.
  */
 export function createMockToken(
   user: User,
+  credential: string | null,
   expiresInSeconds = 7 * 24 * 3600,
 ): { token: string; expiresAt: string } {
   const now = Math.floor(Date.now() / 1000);
@@ -38,6 +40,7 @@ export function createMockToken(
     iat: now,
     exp,
     jti: randomBytes(12).toString('base64url'),
+    ...(credential ? { cred: credential } : {}),
   };
 
   const headerB64 = toBase64Url(JSON.stringify(header));

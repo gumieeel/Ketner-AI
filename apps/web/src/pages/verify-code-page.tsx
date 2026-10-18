@@ -5,26 +5,52 @@ import { AuthShell } from '@/components/layout/auth-shell';
 import { Button } from '@/components/ui/button';
 import { CodeInput, type CodeInputStatus } from '@/components/auth/code-input';
 import { Field } from '@/components/ui/input';
-import { resendCode } from '@/features/auth/api';
+import { resendCode, verifyPasswordResetCode } from '@/features/auth/api';
 import { useAuthNotice } from '@/features/auth/auth-notice';
 import { useAuth } from '@/features/auth/auth-store';
 import {
   clearPendingCode,
   readPendingCode,
   savePendingCode,
+  savePendingReset,
   type PendingCode,
 } from '@/features/auth/pending-code';
-import type { AuthFlow } from '@/features/auth/types';
+import type { CodeFlow } from '@/features/auth/types';
 import { ApiError } from '@/features/chat/api';
-import { useTranslation } from '@/i18n';
+import { useTranslation, type TranslationKey } from '@/i18n';
 
 const CODE_LENGTH = 6;
 
+const FLOW_TEXT: Record<
+  CodeFlow,
+  { formPath: string; title: TranslationKey; subtitle: TranslationKey; restart: TranslationKey }
+> = {
+  signup: {
+    formPath: '/signup',
+    title: 'auth.verifyTitle',
+    subtitle: 'auth.verifySubtitle',
+    restart: 'auth.signup',
+  },
+  login: {
+    formPath: '/login',
+    title: 'auth.verifyLoginTitle',
+    subtitle: 'auth.verifySubtitle',
+    restart: 'auth.login',
+  },
+  'password-reset': {
+    formPath: '/login/forgot',
+    title: 'auth.resetVerifyTitle',
+    subtitle: 'auth.resetVerifySubtitle',
+    restart: 'auth.resetRequestCode',
+  },
+};
+
 /**
- * Второй шаг входа и регистрации: 6-значный код, отправленный на почту. Сессия появляется только
- * после верного кода; без начатого входа (регистрации) страница возвращает на форму.
+ * Второй шаг входа, регистрации и восстановления пароля: 6-значный код, отправленный на почту.
+ * Сессия (или, при сбросе пароля, переход к новому паролю) — только после верного кода; без начатой
+ * заявки страница возвращает на форму.
  */
-export function VerifyCodePage({ flow }: { flow: AuthFlow }) {
+export function VerifyCodePage({ flow }: { flow: CodeFlow }) {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
@@ -33,9 +59,11 @@ export function VerifyCodePage({ flow }: { flow: AuthFlow }) {
     rawRedirect && rawRedirect.startsWith('/') && !rawRedirect.startsWith('//'),
   );
   const redirectUrl = isSafeRedirect && rawRedirect ? rawRedirect : '/chat';
+  const redirectQuery = isSafeRedirect ? `?redirect=${encodeURIComponent(redirectUrl)}` : '';
   const verifyCode = useAuth((state) => state.verifyCode);
   const showNotice = useAuthNotice((state) => state.show);
-  const formPath = flow === 'signup' ? '/signup' : '/login';
+  const text = FLOW_TEXT[flow];
+  const formPath = text.formPath;
 
   const [pending, setPending] = useState<PendingCode | null>(() => readPendingCode(flow));
   const [code, setCode] = useState('');
@@ -60,8 +88,7 @@ export function VerifyCodePage({ flow }: { flow: AuthFlow }) {
   }, [resendIn]);
 
   if (!pending) {
-    const query = isSafeRedirect ? `?redirect=${encodeURIComponent(redirectUrl)}` : '';
-    return <Navigate to={`${formPath}${query}`} replace />;
+    return <Navigate to={`${formPath}${redirectQuery}`} replace />;
   }
 
   const formLink = `${formPath}?${new URLSearchParams({
@@ -96,13 +123,27 @@ export function VerifyCodePage({ flow }: { flow: AuthFlow }) {
     setServerError(null);
     setNotice(null);
     try {
-      await verifyCode(flow, { challengeId: pending.challengeId, code: value });
-      clearPendingCode(flow);
-      showNotice(flow === 'signup' ? 'signed-up' : 'logged-in');
+      const payload = { challengeId: pending.challengeId, code: value };
+      if (flow === 'password-reset') {
+        const grant = await verifyPasswordResetCode(payload);
+        savePendingReset({
+          resetToken: grant.resetToken,
+          email: pending.email,
+          maskedEmail: grant.maskedEmail,
+          expiresAt: Date.parse(grant.expiresAt),
+        });
+        clearPendingCode(flow);
+      } else {
+        await verifyCode(flow, payload);
+        clearPendingCode(flow);
+        showNotice(flow === 'signup' ? 'signed-up' : 'logged-in');
+      }
       // Короткая вспышка клеток перед переходом: видно, что код принят.
       setCodeStatus('success');
       await new Promise((resolve) => window.setTimeout(resolve, 450));
-      navigate(redirectUrl, { replace: true });
+      navigate(flow === 'password-reset' ? `/login/forgot/new${redirectQuery}` : redirectUrl, {
+        replace: true,
+      });
     } catch (error) {
       handleError(error);
       fail();
@@ -142,8 +183,8 @@ export function VerifyCodePage({ flow }: { flow: AuthFlow }) {
 
   return (
     <AuthShell
-      title={flow === 'signup' ? t('auth.verifyTitle') : t('auth.verifyLoginTitle')}
-      subtitle={t('auth.verifySubtitle', { email: pending.maskedEmail })}
+      title={t(text.title)}
+      subtitle={t(text.subtitle, { email: pending.maskedEmail })}
       footer={
         <Link
           to={formLink}
@@ -169,7 +210,7 @@ export function VerifyCodePage({ flow }: { flow: AuthFlow }) {
                 to={formLink}
                 className="ml-6 inline-flex min-h-9 items-center text-xs font-semibold underline hover:opacity-85"
               >
-                {flow === 'signup' ? t('auth.signup') : t('auth.login')}
+                {t(text.restart)}
               </Link>
             )}
           </div>
@@ -256,4 +297,8 @@ export function VerifySignupPage() {
 
 export function VerifyLoginPage() {
   return <VerifyCodePage flow="login" />;
+}
+
+export function VerifyPasswordResetPage() {
+  return <VerifyCodePage flow="password-reset" />;
 }

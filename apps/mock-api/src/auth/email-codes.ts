@@ -1,7 +1,7 @@
 import { createHash, randomBytes, randomInt, timingSafeEqual } from 'node:crypto';
 
 /**
- * Подтверждение входа и регистрации кодом из письма.
+ * Подтверждение входа, регистрации и сброса пароля кодом из письма.
  *
  * Сначала человек вводит данные (форма регистрации или почта с паролем), сервер запоминает их как
  * заявку, отправляет на почту 6-значный код и отдаёт браузеру секретный id заявки. Аккаунт создаётся
@@ -68,9 +68,14 @@ export class EmailCodeChallenges<T extends { email: string }> {
     return { id, code, email: data.email, codeExpiresAt: now + EMAIL_CODE_TTL_MS };
   }
 
+  /** Данные заявки (null — заявки нет или она истекла). */
+  dataOf(id: string, now = Date.now()): T | null {
+    return this.live(id, now)?.data ?? null;
+  }
+
   /** Почта заявки (null — заявки нет или она истекла). */
   emailOf(id: string, now = Date.now()): string | null {
-    return this.live(id, now)?.data.email ?? null;
+    return this.dataOf(id, now)?.email ?? null;
   }
 
   /** Через сколько миллисекунд можно прислать новый код (0 — уже можно). */
@@ -144,7 +149,7 @@ export function maskEmail(email: string): string {
   return `${masked}${email.slice(at)}`;
 }
 
-export type EmailCodePurpose = 'signup' | 'login';
+export type EmailCodePurpose = 'signup' | 'login' | 'reset';
 
 const PURPOSE_TEXT: Record<EmailCodePurpose, { lead: string; action: string; ignore: string }> = {
   signup: {
@@ -157,8 +162,20 @@ const PURPOSE_TEXT: Record<EmailCodePurpose, { lead: string; action: string; ign
     lead: 'Код для входа в Ketner AI',
     action: 'Введите его на странице входа.',
     ignore:
-      'Если вы не входили в Ketner AI, кто-то знает ваш пароль: смените его в настройках. Без кода войти в аккаунт нельзя.',
+      'Если вы не входили в Ketner AI, кто-то знает ваш пароль: смените его — «Забыли пароль?» на странице входа. Без кода войти в аккаунт нельзя.',
   },
+  reset: {
+    lead: 'Код для сброса пароля в Ketner AI',
+    action: 'Введите его на странице восстановления пароля, затем задайте новый пароль.',
+    ignore:
+      'Если вы не запрашивали сброс пароля, просто проигнорируйте письмо — без кода пароль не изменить.',
+  },
+};
+
+const SUBJECT: Record<EmailCodePurpose, string> = {
+  signup: 'код подтверждения Ketner AI',
+  login: 'код входа в Ketner AI',
+  reset: 'код сброса пароля Ketner AI',
 };
 
 /**
@@ -187,9 +204,5 @@ export function emailCodeMail(purpose: EmailCodePurpose, to: string, code: strin
 <p><b>Никому не сообщайте этот код.</b> Сотрудники Ketner никогда его не спрашивают.</p>
 <p style="color:#5d6762">${copy.ignore}</p>
 </div>`;
-  const subject =
-    purpose === 'signup'
-      ? `${code} — код подтверждения Ketner AI`
-      : `${code} — код входа в Ketner AI`;
-  return { to, subject, text, html };
+  return { to, subject: `${code} — ${SUBJECT[purpose]}`, text, html };
 }

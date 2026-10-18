@@ -58,6 +58,19 @@ export const routes: RouteObject[] = [
         path: 'login/verify',
         lazy: lazyPage(() => import('@/pages/verify-code-page'), 'VerifyLoginPage'),
       },
+      // «Забыли пароль?»: почта → код из письма → новый пароль.
+      {
+        path: 'login/forgot',
+        lazy: lazyPage(() => import('@/pages/forgot-password-page'), 'ForgotPasswordPage'),
+      },
+      {
+        path: 'login/forgot/verify',
+        lazy: lazyPage(() => import('@/pages/verify-code-page'), 'VerifyPasswordResetPage'),
+      },
+      {
+        path: 'login/forgot/new',
+        lazy: lazyPage(() => import('@/pages/new-password-page'), 'NewPasswordPage'),
+      },
       { path: 'pricing', element: <PricingPage /> },
       { path: 'privacy', lazy: lazyLegal('privacy') },
       { path: 'terms', lazy: lazyLegal('terms') },

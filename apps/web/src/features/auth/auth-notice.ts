@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 
-/** Короткое уведомление после входа или регистрации (показывает AuthNoticeToast). */
-export type AuthNotice = 'signed-up' | 'logged-in';
+/** Короткое уведомление после входа, регистрации или смены пароля (показывает AuthNoticeToast). */
+export type AuthNotice = 'signed-up' | 'logged-in' | 'password-reset';
 
 interface AuthNoticeState {
   notice: AuthNotice | null;

@@ -214,6 +214,8 @@ export function createApp(overrides: Partial<AppDeps> = {}): Express {
       request.path.startsWith('/api/auth/signup/') ||
       request.path === '/api/auth/login' ||
       request.path.startsWith('/api/auth/login/') ||
+      request.path === '/api/auth/password-reset' ||
+      request.path.startsWith('/api/auth/password-reset/') ||
       request.path === '/api/auth/logout' ||
       request.path === '/api/auth/me' ||
       request.path === '/api/auth/demo' ||

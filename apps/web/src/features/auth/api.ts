@@ -4,7 +4,10 @@ import type {
   AuthFlow,
   AuthSession,
   CodeChallenge,
+  CodeFlow,
+  CompletePasswordResetPayload,
   LoginPayload,
+  PasswordResetGrant,
   SignupPayload,
   User,
   VerifyCodePayload,
@@ -69,10 +72,41 @@ export async function verifyCode(flow: AuthFlow, payload: VerifyCodePayload): Pr
   });
 }
 
-export async function resendCode(flow: AuthFlow, challengeId: string): Promise<CodeChallenge> {
+export async function resendCode(flow: CodeFlow, challengeId: string): Promise<CodeChallenge> {
   return request<CodeChallenge>(`/auth/${flow}/resend`, {
     method: 'POST',
     body: JSON.stringify({ challengeId }),
+  });
+}
+
+/**
+ * «Забыли пароль?»: код сброса уходит на почту, если такой аккаунт есть. Ответ одинаковый в обоих
+ * случаях — по нему нельзя узнать, зарегистрирована ли почта.
+ */
+export async function requestPasswordReset(email: string): Promise<CodeChallenge> {
+  return request<CodeChallenge>('/auth/password-reset', {
+    method: 'POST',
+    body: JSON.stringify({ email }),
+  });
+}
+
+/** Код сброса из письма → одноразовый токен для нового пароля. */
+export async function verifyPasswordResetCode(
+  payload: VerifyCodePayload,
+): Promise<PasswordResetGrant> {
+  return request<PasswordResetGrant>('/auth/password-reset/verify', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+}
+
+/** Новый пароль: сервер завершает прежние сессии и открывает новую (cookie Better Auth — тоже). */
+export async function completePasswordReset(
+  payload: CompletePasswordResetPayload,
+): Promise<AuthSession> {
+  return request<AuthSession>('/auth/password-reset/complete', {
+    method: 'POST',
+    body: JSON.stringify(payload),
   });
 }
 

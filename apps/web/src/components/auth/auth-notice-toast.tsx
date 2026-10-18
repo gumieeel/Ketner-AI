@@ -1,9 +1,15 @@
 import { useEffect } from 'react';
 import { CheckIcon, CloseIcon } from '@/components/icons';
-import { useAuthNotice } from '@/features/auth/auth-notice';
-import { useTranslation } from '@/i18n';
+import { useAuthNotice, type AuthNotice } from '@/features/auth/auth-notice';
+import { useTranslation, type TranslationKey } from '@/i18n';
 
-/** «Регистрация завершена» / «Вы вошли» после подтверждения кода из письма. */
+const NOTICE_TEXT: Record<AuthNotice, TranslationKey> = {
+  'signed-up': 'auth.noticeSignedUp',
+  'logged-in': 'auth.noticeLoggedIn',
+  'password-reset': 'auth.noticePasswordReset',
+};
+
+/** «Регистрация завершена» / «Вы вошли» / «Пароль изменён» после кода из письма или нового пароля. */
 export function AuthNoticeToast() {
   const { t } = useTranslation();
   const notice = useAuthNotice((state) => state.notice);
@@ -26,9 +32,7 @@ export function AuthNoticeToast() {
         <span className="mt-0.5 shrink-0 text-accent">
           <CheckIcon className="size-4" />
         </span>
-        <p className="min-w-0 flex-1 leading-5 text-text">
-          {notice === 'signed-up' ? t('auth.noticeSignedUp') : t('auth.noticeLoggedIn')}
-        </p>
+        <p className="min-w-0 flex-1 leading-5 text-text">{t(NOTICE_TEXT[notice])}</p>
         <button
           type="button"
           onClick={dismiss}

@@ -255,6 +255,146 @@ test('auth: вход — пароль, затем код из письма', asy
   assert.equal(early.status, 429);
 });
 
+test('auth: восстановление пароля — код из письма, новый пароль, прежние сессии завершены', async (t) => {
+  const server = await startTestServer();
+  t.after(() => server.close());
+  const api = (path: string) => `${server.baseUrl}/api/auth${path}`;
+  const me = (headers: Record<string, string>) => fetch(api('/me'), { headers });
+
+  const signup = await signupAndVerify(server.baseUrl, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email: 'owner@example.com', password: 'oldPassword123' }),
+  });
+  const oldSession = await readJson<AuthSession>(signup);
+  const oldCookie = (signup.headers.get('set-cookie') ?? '').split(';')[0]!;
+  assert.equal((await me({ Cookie: oldCookie })).status, 200);
+
+  // 1. Почта → код на почту; сессии нет, код в ответ не попадает
+  assert.equal((await postJson(api('/password-reset'), { email: 'not-an-email' })).status, 400);
+  const start = await postJson(api('/password-reset'), { email: 'Owner@Example.com' });
+  assert.equal(start.status, 202);
+  const challenge = await readJson<CodeChallenge>(start);
+  assert.equal(challenge.maskedEmail, 'o***r@example.com');
+  assert.equal(server.codeMails.at(-1)!.to, 'owner@example.com');
+  assert.match(server.codeMails.at(-1)!.subject, /код сброса пароля/);
+  const code = codeFor(server.baseUrl, 'owner@example.com');
+  assert.ok(!JSON.stringify(challenge).includes(code));
+
+  // 2. Неверный код не подходит, новый код — не раньше чем через минуту
+  const wrong = await postJson(api('/password-reset/verify'), {
+    challengeId: challenge.challengeId,
+    code: code === '000000' ? '111111' : '000000',
+  });
+  assert.equal((await readJson<{ error: { code: string } }>(wrong)).error.code, 'invalid_code');
+  const early = await postJson(api('/password-reset/resend'), {
+    challengeId: challenge.challengeId,
+  });
+  assert.equal(early.status, 429);
+
+  // 3. Верный код — одноразовый токен для нового пароля, но ещё не вход
+  const verified = await postJson(api('/password-reset/verify'), {
+    challengeId: challenge.challengeId,
+    code,
+  });
+  assert.equal(verified.status, 200);
+  const grant = await readJson<{ resetToken: string; token?: string }>(verified);
+  assert.ok(grant.resetToken.length >= 20);
+  assert.equal(grant.token, undefined);
+  const reused = await postJson(api('/password-reset/verify'), {
+    challengeId: challenge.challengeId,
+    code,
+  });
+  assert.equal(reused.status, 410);
+
+  // 4. Слабый пароль не принимается и токен не расходует; чужой токен не подходит
+  const weak = await postJson(api('/password-reset/complete'), {
+    resetToken: grant.resetToken,
+    password: 'short',
+  });
+  assert.equal((await readJson<{ error: { code: string } }>(weak)).error.code, 'weak_password');
+  const forged = await postJson(api('/password-reset/complete'), {
+    resetToken: 'forged-token',
+    password: 'newPassword456',
+  });
+  assert.equal(forged.status, 410);
+
+  // 5. Новый пароль: вход открыт, прежние токен и cookie-сессия больше не действуют
+  const done = await postJson(api('/password-reset/complete'), {
+    resetToken: grant.resetToken,
+    password: 'newPassword456',
+  });
+  assert.equal(done.status, 200);
+  const session = await readJson<AuthSession>(done);
+  assert.equal(session.user.email, 'owner@example.com');
+  assert.match(done.headers.get('set-cookie') ?? '', /better-auth\.session_token=/);
+  assert.equal((await me({ Authorization: `Bearer ${session.token}` })).status, 200);
+  const oldToken = await me({ Authorization: `Bearer ${oldSession.token}` });
+  assert.equal(oldToken.status, 401);
+  assert.equal(oldToken.headers.get('x-session-invalid'), '1');
+  assert.equal((await me({ Cookie: oldCookie })).status, 401);
+
+  const again = await postJson(api('/password-reset/complete'), {
+    resetToken: grant.resetToken,
+    password: 'anotherPassword789',
+  });
+  assert.equal(again.status, 410, 'Токен сброса одноразовый');
+
+  const oldLogin = await postJson(api('/login'), {
+    email: 'owner@example.com',
+    password: 'oldPassword123',
+  });
+  assert.equal(oldLogin.status, 401);
+  const newLogin = await loginAndVerify(server.baseUrl, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email: 'owner@example.com', password: 'newPassword456' }),
+  });
+  assert.equal(newLogin.status, 200);
+});
+
+test('auth: сброс пароля не показывает, есть ли аккаунт с этой почтой', async (t) => {
+  const server = await startTestServer();
+  t.after(() => server.close());
+  const api = (path: string) => `${server.baseUrl}/api/auth${path}`;
+
+  for (const email of ['nobody@example.com', 'tg-123@telegram.invalid']) {
+    const start = await postJson(api('/password-reset'), { email });
+    assert.equal(start.status, 202, 'Ответ такой же, как для существующего аккаунта');
+    const challenge = await readJson<CodeChallenge>(start);
+    assert.equal(challenge.status, 'verification_required');
+    assert.ok(challenge.challengeId.length >= 20);
+
+    const verify = await postJson(api('/password-reset/verify'), {
+      challengeId: challenge.challengeId,
+      code: '123456',
+    });
+    assert.equal((await readJson<{ error: { code: string } }>(verify)).error.code, 'invalid_code');
+  }
+  assert.equal(server.codeMails.length, 0, 'Письма на чужую почту не уходят');
+});
+
+test('auth: запросы сброса пароля на чужую почту не блокируют владельцу вход', async (t) => {
+  const server = await startTestServer();
+  t.after(() => server.close());
+  const api = (path: string) => `${server.baseUrl}/api/auth${path}`;
+
+  for (let attempt = 1; attempt <= 5; attempt += 1) {
+    const res = await postJson(api('/password-reset'), { email: 'demo@ketner.ai' });
+    assert.equal(res.status, 202);
+  }
+  const limited = await postJson(api('/password-reset'), { email: 'demo@ketner.ai' });
+  assert.equal(limited.status, 429);
+
+  // У входа свой лимит писем: владелец по-прежнему получает код
+  const login = await postJson(api('/login'), {
+    email: 'demo@ketner.ai',
+    password: 'password123',
+  });
+  assert.equal(login.status, 202);
+  assert.match(server.codeMails.at(-1)!.subject, /код входа/);
+});
+
 test('auth: профиль текущего пользователя GET /api/auth/me и выход', async (t) => {
   const server = await startTestServer();
   t.after(() => server.close());

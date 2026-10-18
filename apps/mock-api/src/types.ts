@@ -54,6 +54,8 @@ export interface AuthTokenPayload {
   exp: number;
   /** Случайный id токена: два входа в одну секунду дают разные токены (выход отзывает только свой). */
   jti?: string;
+  /** Отпечаток пароля на момент входа (UserStore.credentialStamp): после смены пароля токен не действует. */
+  cred?: string;
 }
 
 export type Language = 'ru' | 'en';

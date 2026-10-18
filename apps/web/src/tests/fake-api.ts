@@ -3,6 +3,8 @@ import type { ChatMeta, Conversation, ConversationSummary, Message } from '@/fea
 
 /** Код из «письма» входа и регистрации, который принимает фейковый API. */
 export const FAKE_SIGNUP_CODE = '123456';
+/** Токен, который фейковый сервер выдаёт после верного кода сброса пароля. */
+export const FAKE_RESET_TOKEN = 'fake-reset-token';
 
 function maskEmail(email: string): string {
   const at = email.lastIndexOf('@');
@@ -41,6 +43,8 @@ export interface FakeApi {
   completionBodies: Array<Record<string, unknown>>;
   /** Добавляет диалог с историей, как будто он уже сохранён на сервере. */
   seed: (input: { title: string; messages?: Message[]; updatedAt?: string }) => Conversation;
+  /** Новый пароль из последнего сброса пароля. */
+  resetPassword?: string;
 }
 
 /** Зеркало публичного каталога сервера (apps/mock-api/src/ai/models.ts): id, названия, requiredPlan. */
@@ -271,7 +275,9 @@ export function installFakeApi(options: FakeApiOptions = {}): FakeApi {
     },
   };
 
-  const pending: Partial<Record<'signup' | 'login', { email: string; name: string }>> = {};
+  const pending: Partial<
+    Record<'signup' | 'login' | 'password-reset', { email: string; name: string }>
+  > = {};
 
   vi.stubGlobal(
     'fetch',
@@ -286,7 +292,11 @@ export function installFakeApi(options: FakeApiOptions = {}): FakeApi {
       }
 
       // Вход и регистрация — через код из «письма» (FAKE_SIGNUP_CODE).
-      const challenge = (flow: 'signup' | 'login', email: string, status = 202) =>
+      const challenge = (
+        flow: 'signup' | 'login' | 'password-reset',
+        email: string,
+        status = 202,
+      ) =>
         json(
           {
             status: 'verification_required',
@@ -315,9 +325,37 @@ export function installFakeApi(options: FakeApiOptions = {}): FakeApi {
         return challenge('signup', pending.signup.email);
       }
 
-      const codeRoute = /^\/api\/auth\/(signup|login)\/(verify|resend)$/.exec(url);
+      // «Забыли пароль?»: код → одноразовый токен (FAKE_RESET_TOKEN) → новый пароль и сессия.
+      if (url === '/api/auth/password-reset' && method === 'POST') {
+        pending['password-reset'] = { email: String(body.email ?? ''), name: 'Демо Пользователь' };
+        return challenge('password-reset', pending['password-reset'].email);
+      }
+
+      if (url === '/api/auth/password-reset/complete' && method === 'POST') {
+        const who = pending['password-reset'];
+        if (!who || body.resetToken !== FAKE_RESET_TOKEN) {
+          return json(
+            { error: { code: 'reset_expired', message: 'Время на смену пароля истекло' } },
+            410,
+          );
+        }
+        api.resetPassword = String(body.password ?? '');
+        return json({
+          user: {
+            id: 'demo-user',
+            email: who.email,
+            name: who.name,
+            plan: 'free',
+            createdAt: new Date().toISOString(),
+          },
+          token: 'fake.reset.jwt.token',
+          expiresAt: new Date(Date.now() + 86400000).toISOString(),
+        });
+      }
+
+      const codeRoute = /^\/api\/auth\/(signup|login|password-reset)\/(verify|resend)$/.exec(url);
       if (codeRoute && method === 'POST') {
-        const flow = codeRoute[1] as 'signup' | 'login';
+        const flow = codeRoute[1] as 'signup' | 'login' | 'password-reset';
         const who = pending[flow];
         if (!who) {
           return json({ error: { code: 'challenge_expired', message: 'Попытка устарела' } }, 410);
@@ -328,6 +366,14 @@ export function installFakeApi(options: FakeApiOptions = {}): FakeApi {
             { error: { code: 'invalid_code', message: 'Неверный код. Осталось попыток: 4' } },
             400,
           );
+        }
+        if (flow === 'password-reset') {
+          return json({
+            status: 'code_verified',
+            resetToken: FAKE_RESET_TOKEN,
+            maskedEmail: maskEmail(who.email),
+            expiresAt: new Date(Date.now() + 900_000).toISOString(),
+          });
         }
         return json(
           {

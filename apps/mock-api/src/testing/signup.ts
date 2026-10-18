@@ -1,18 +1,18 @@
 import type { MailMessage } from '../services/mailer.js';
 
-/** Письма с кодами (регистрация и вход) по адресу тестового сервера. */
+/** Письма с кодами (регистрация, вход, сброс пароля) по адресу тестового сервера. */
 const mailsByServer = new Map<string, MailMessage[]>();
 
 export function rememberCodeMails(baseUrl: string, mails: MailMessage[]): void {
   mailsByServer.set(baseUrl, mails);
 }
 
-/** Письмо с кодом регистрации или входа: его перехватывает тестовый почтовик. */
+/** Письмо с кодом регистрации, входа или сброса пароля: его перехватывает тестовый почтовик. */
 export function isCodeMail(message: MailMessage): boolean {
-  return /код (подтверждения|входа)/.test(message.subject);
+  return /код (подтверждения|входа|сброса пароля)/.test(message.subject);
 }
 
-/** Код из последнего письма регистрации или входа на этот адрес. */
+/** Код из последнего письма с кодом на этот адрес. */
 export function codeFor(baseUrl: string, email: string): string {
   const target = email.trim().toLowerCase();
   const mail = [...(mailsByServer.get(baseUrl) ?? [])].reverse().find((item) => item.to === target);

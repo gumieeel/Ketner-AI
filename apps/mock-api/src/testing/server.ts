@@ -41,7 +41,7 @@ export interface TestServer {
   usageStore: UsageStore;
   apiKeyStore: ApiKeyStore;
   githubConnectionStore: GithubConnectionStore;
-  /** Письма с кодами регистрации и входа. */
+  /** Письма с кодами регистрации, входа и сброса пароля. */
   codeMails: MailMessage[];
 }
 

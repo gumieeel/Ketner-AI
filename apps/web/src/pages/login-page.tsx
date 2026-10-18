@@ -24,7 +24,7 @@ const MIN_PASSWORD_LENGTH = 8;
 
 /**
  * Страница входа: почта и пароль, затем код из письма на странице /login/verify.
- * Плюс вход через Google и GitHub (в тестах — mock-OAuth).
+ * Плюс вход через Google и GitHub (в тестах — mock-OAuth) и «Забыли пароль?» (/login/forgot).
  */
 export function LoginPage() {
   const { t } = useTranslation();
@@ -52,6 +52,12 @@ export function LoginPage() {
   const [passwordError, setPasswordError] = useState<string | null>(null);
   const [serverError, setServerError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+
+  const forgotParams = new URLSearchParams({
+    ...(email.trim() ? { email: email.trim() } : {}),
+    ...(isSafeRedirect ? { redirect: redirectUrl } : {}),
+  }).toString();
+  const forgotLink = forgotParams ? `/login/forgot?${forgotParams}` : '/login/forgot';
 
   const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -262,6 +268,15 @@ export function LoginPage() {
               </div>
             )}
           </Field>
+
+          <div className="-mt-2 flex justify-end">
+            <Link
+              to={forgotLink}
+              className="inline-flex min-h-11 items-center text-[13px] font-medium text-accent hover:underline"
+            >
+              {t('auth.forgotPassword')}
+            </Link>
+          </div>
 
           {/* 6. Кнопка «Войти» */}
           <Button size="lg" fullWidth loading={loading} type="submit" className="mt-2">

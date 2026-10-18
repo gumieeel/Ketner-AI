@@ -58,6 +58,15 @@ export function createAuthMiddleware(
         if (!user && payload.email) {
           user = userStore.findByEmail(payload.email);
         }
+        // Пароль сменили (например, через «Забыли пароль?») — токены со старым паролем не принимаются.
+        // У токенов, выданных до появления отпечатка, его нет: они действуют до своего срока.
+        if (
+          user &&
+          payload.cred !== undefined &&
+          payload.cred !== userStore.credentialStamp(user.id)
+        ) {
+          user = null;
+        }
         if (user) {
           const isVip = Boolean(user.isVip || (user.email && isVipEmail(user.email)));
           const isAdmin = Boolean(user.isAdmin || (user.email && isAdminEmail(user.email)));

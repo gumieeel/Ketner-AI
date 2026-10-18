@@ -116,6 +116,70 @@ describe('auth-flow: сценарии авторизации и сессии', (
     expect(useAuthNotice.getState().notice).toBe('signed-up');
   });
 
+  it('«Забыли пароль?»: почта → код из письма → новый пароль и вход', async () => {
+    const fakeApi = installFakeApi();
+    renderRoute('/login');
+
+    fireEvent.change(screen.getByLabelText(/Email/i), { target: { value: 'demo@ketner.ai' } });
+    fireEvent.click(screen.getByRole('link', { name: 'Забыли пароль?' }));
+
+    // Почта переносится из формы входа; страница — в каркасе входа, без шапки сайта
+    expect(
+      await screen.findByRole('heading', { level: 1, name: 'Восстановление пароля' }),
+    ).toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: 'Возможности' })).not.toBeInTheDocument();
+    expect(screen.getByLabelText('Email')).toHaveValue('demo@ketner.ai');
+    fireEvent.click(screen.getByRole('button', { name: 'Получить код' }));
+
+    expect(
+      await screen.findByRole('heading', { level: 1, name: 'Код для сброса пароля' }),
+    ).toBeInTheDocument();
+    expect(screen.getByText(/d\*\*\*o@ketner\.ai/)).toBeInTheDocument();
+    const codeInput = screen.getByLabelText('Код из письма');
+    fireEvent.change(codeInput, { target: { value: '000000' } });
+    expect(await screen.findByText(/Неверный код/)).toBeInTheDocument();
+    fireEvent.change(codeInput, { target: { value: FAKE_SIGNUP_CODE } });
+
+    // Код принят — ещё не вход, а экран нового пароля
+    expect(
+      await screen.findByRole('heading', { level: 1, name: 'Новый пароль' }, { timeout: 2000 }),
+    ).toBeInTheDocument();
+    expect(useAuth.getState().status).not.toBe('authenticated');
+
+    const save = screen.getByRole('button', { name: 'Сохранить пароль' });
+    fireEvent.change(screen.getByLabelText('Новый пароль'), { target: { value: 'short' } });
+    fireEvent.click(save);
+    expect(screen.getByText(/Пароль должен содержать/i)).toBeInTheDocument();
+
+    fireEvent.change(screen.getByLabelText('Новый пароль'), {
+      target: { value: 'brandNewPass1' },
+    });
+    fireEvent.change(screen.getByLabelText('Повторите пароль'), {
+      target: { value: 'brandNewPass2' },
+    });
+    fireEvent.click(save);
+    expect(screen.getByText('Пароли не совпадают')).toBeInTheDocument();
+    expect(fakeApi.resetPassword).toBeUndefined();
+
+    fireEvent.change(screen.getByLabelText('Повторите пароль'), {
+      target: { value: 'brandNewPass1' },
+    });
+    fireEvent.click(save);
+    await waitFor(() => {
+      expect(useAuth.getState().status).toBe('authenticated');
+      expect(useAuth.getState().token).toBe('fake.reset.jwt.token');
+    });
+    expect(fakeApi.resetPassword).toBe('brandNewPass1');
+    expect(useAuthNotice.getState().notice).toBe('password-reset');
+  });
+
+  it('страница нового пароля без принятого кода возвращает к восстановлению', async () => {
+    renderRoute('/login/forgot/new');
+    expect(
+      await screen.findByRole('heading', { level: 1, name: 'Восстановление пароля' }),
+    ).toBeInTheDocument();
+  });
+
   it('страница кода без начатой регистрации возвращает на форму', async () => {
     renderRoute('/signup/verify');
     expect(
