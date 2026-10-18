@@ -3,7 +3,8 @@ import { Link, Navigate, useNavigate, useSearchParams } from 'react-router-dom';
 import { AlertIcon, CheckIcon } from '@/components/icons';
 import { AuthShell } from '@/components/layout/auth-shell';
 import { Button } from '@/components/ui/button';
-import { Field, Input } from '@/components/ui/input';
+import { CodeInput, type CodeInputStatus } from '@/components/auth/code-input';
+import { Field } from '@/components/ui/input';
 import { resendCode } from '@/features/auth/api';
 import { useAuthNotice } from '@/features/auth/auth-notice';
 import { useAuth } from '@/features/auth/auth-store';
@@ -43,9 +44,12 @@ export function VerifyCodePage({ flow }: { flow: AuthFlow }) {
   const [expired, setExpired] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [codeStatus, setCodeStatus] = useState<CodeInputStatus>('idle');
+  const [errorKey, setErrorKey] = useState(0);
   const [resending, setResending] = useState(false);
   const [now, setNow] = useState(() => Date.now());
   const submitting = useRef(false);
+  const resetTimer = useRef<number | undefined>(undefined);
 
   const resendIn = pending ? Math.max(0, Math.ceil((pending.resendAt - now) / 1000)) : 0;
 
@@ -73,24 +77,40 @@ export function VerifyCodePage({ flow }: { flow: AuthFlow }) {
     setServerError(error instanceof Error ? error.message : t('auth.verifyFailed'));
   };
 
+  const fail = () => {
+    setCodeStatus('error');
+    setErrorKey((key) => key + 1);
+  };
+
   const submit = async (value: string) => {
     if (submitting.current) return;
     if (value.length !== CODE_LENGTH) {
       setCodeError(t('auth.verifyCodeInvalid'));
+      fail();
       return;
     }
+    window.clearTimeout(resetTimer.current);
     submitting.current = true;
     setLoading(true);
+    setCodeStatus('verifying');
     setServerError(null);
     setNotice(null);
     try {
       await verifyCode(flow, { challengeId: pending.challengeId, code: value });
       clearPendingCode(flow);
       showNotice(flow === 'signup' ? 'signed-up' : 'logged-in');
+      // Короткая вспышка клеток перед переходом: видно, что код принят.
+      setCodeStatus('success');
+      await new Promise((resolve) => window.setTimeout(resolve, 450));
       navigate(redirectUrl, { replace: true });
     } catch (error) {
       handleError(error);
-      setCode('');
+      fail();
+      // Красные цифры видны, пока ряд встряхивается, затем клетки очищаются под новый ввод.
+      resetTimer.current = window.setTimeout(() => {
+        setCode('');
+        setCodeStatus('idle');
+      }, 450);
     } finally {
       submitting.current = false;
       setLoading(false);
@@ -174,27 +194,27 @@ export function VerifyCodePage({ flow }: { flow: AuthFlow }) {
           }}
         >
           <Field id="verify-code" label={t('auth.verifyCode')} error={codeError ?? undefined}>
-            {({ id, invalid, 'aria-describedby': describedBy }) => (
-              <Input
+            {({ id, 'aria-describedby': describedBy }) => (
+              <CodeInput
                 id={id}
-                invalid={invalid}
                 aria-describedby={describedBy}
-                type="text"
-                inputMode="numeric"
-                autoComplete="one-time-code"
-                autoFocus
-                maxLength={CODE_LENGTH}
-                placeholder="000000"
+                length={CODE_LENGTH}
                 value={code}
-                className="text-center font-mono text-2xl tracking-[0.5em] md:text-2xl"
-                onChange={(event) => {
-                  const digits = event.target.value.replace(/\D/g, '').slice(0, CODE_LENGTH);
+                status={codeStatus}
+                errorKey={errorKey}
+                autoFocus
+                disabled={expired}
+                readOnly={loading || codeStatus === 'success'}
+                onChange={(digits) => {
+                  window.clearTimeout(resetTimer.current);
                   setCode(digits);
                   if (codeError) setCodeError(null);
-                  // Код целиком (ввели или вставили) — подтверждаем сразу.
-                  if (digits.length === CODE_LENGTH && !expired) void submit(digits);
+                  if (codeStatus === 'error') setCodeStatus('idle');
                 }}
-                disabled={loading || expired}
+                // Код целиком (ввели или вставили) — подтверждаем сразу.
+                onComplete={(digits) => {
+                  if (!expired) void submit(digits);
+                }}
               />
             )}
           </Field>

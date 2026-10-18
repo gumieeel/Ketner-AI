@@ -97,6 +97,13 @@
   --animate-slide-in-right: slideInRight 260ms var(--ease-out-expo) both;
   --animate-slide-in-left: slideInLeft 260ms var(--ease-out-expo) both;
   --animate-float: none;
+  /* Клетки кода из письма (components/auth/code-input.tsx) */
+  --animate-code-box-in: codeBoxIn 420ms var(--ease-spring) both;
+  --animate-code-pop: codePop 280ms var(--ease-spring) both;
+  --animate-code-shake: codeShake 420ms var(--ease-smooth) both;
+  --animate-code-wave: codeWave 900ms var(--ease-smooth) infinite;
+  --animate-code-success: codeSuccess 520ms var(--ease-spring) both;
+  --animate-caret-blink: caret-blink 1s steps(1) infinite;
 }
 
 @theme inline {
@@ -676,6 +683,73 @@
 @keyframes caret-blink {
   50% {
     opacity: 0;
+  }
+}
+
+@keyframes codeBoxIn {
+  from {
+    opacity: 0;
+    transform: translateY(12px) scale(0.85);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes codePop {
+  0% {
+    opacity: 0;
+    transform: translateY(8px) scale(0.5);
+  }
+  60% {
+    opacity: 1;
+    transform: translateY(-2px) scale(1.15);
+  }
+  100% {
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes codeShake {
+  0%,
+  100% {
+    transform: translateX(0);
+  }
+  20% {
+    transform: translateX(-8px);
+  }
+  40% {
+    transform: translateX(7px);
+  }
+  60% {
+    transform: translateX(-5px);
+  }
+  80% {
+    transform: translateX(3px);
+  }
+}
+
+@keyframes codeWave {
+  0%,
+  60%,
+  100% {
+    transform: translateY(0);
+  }
+  30% {
+    transform: translateY(-6px);
+  }
+}
+
+@keyframes codeSuccess {
+  0% {
+    transform: scale(1);
+  }
+  45% {
+    transform: scale(1.12);
+  }
+  100% {
+    transform: scale(1);
   }
 }
 
