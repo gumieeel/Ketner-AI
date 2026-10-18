@@ -33,6 +33,7 @@ test('seo: классификация адресов', () => {
   assert.equal(classifyPath('/signup/verify'), 'private');
   assert.equal(classifyPath('/login/verify'), 'private');
   assert.equal(classifyPath('/wp-admin'), 'missing');
+  assert.equal(classifyPath('/docs/plans/foo'), 'missing');
 });
 
 test('seo: robots.txt и sitemap.xml', () => {
@@ -40,8 +41,10 @@ test('seo: robots.txt и sitemap.xml', () => {
   assert.match(robots, /Disallow: \/api\//);
   assert.match(robots, /Disallow: \/chat/);
   assert.match(robots, /Sitemap: https:\/\/ketner\.org\/sitemap\.xml/);
-  const sitemap = sitemapXml(new Date('2026-10-16T00:00:00Z'));
+  const sitemap = sitemapXml();
   assert.match(sitemap, /<loc>https:\/\/ketner\.org\/<\/loc>/);
   assert.match(sitemap, /<loc>https:\/\/ketner\.org\/pricing<\/loc>/);
   assert.doesNotMatch(sitemap, /\/chat/);
+  assert.doesNotMatch(sitemap, /<lastmod>/, 'без настоящей даты lastmod не выводится');
+  assert.doesNotMatch(robots, /^Host:/m);
 });

@@ -12,6 +12,8 @@ export interface SeoPage {
   path: string;
   title: string;
   description: string;
+  /** Дата последнего изменения содержимого (YYYY-MM-DD). Если не известна — не указывать. */
+  lastmod?: string;
   /** Приоритет в sitemap.xml. */
   priority: number;
   changefreq: 'daily' | 'weekly' | 'monthly' | 'yearly';
@@ -176,7 +178,6 @@ const PRIVATE_PREFIXES = [
   '/developers',
   '/onboarding',
   '/admin',
-  '/docs/plans',
 ];
 
 const DISALLOW = [
@@ -345,18 +346,20 @@ export function robotsTxt(): string {
     'Allow: /',
     ...DISALLOW.map((path) => `Disallow: ${path}`),
     '',
-    `Host: ${new URL(base).host}`,
     `Sitemap: ${base}/sitemap.xml`,
     '',
   ].join('\n');
 }
 
-export function sitemapXml(lastModified = new Date()): string {
+/**
+ * `lastmod` указывается только там, где известна настоящая дата изменения страницы (`SeoPage.lastmod`).
+ * Подставлять сегодняшнюю дату всем страницам нельзя: поисковики перестают доверять такому полю.
+ */
+export function sitemapXml(): string {
   const base = siteUrl();
-  const lastmod = lastModified.toISOString().slice(0, 10);
   const urls = SEO_PAGES.map(
     (page) =>
-      `  <url>\n    <loc>${escapeXml(`${base}${page.path === '/' ? '/' : page.path}`)}</loc>\n    <lastmod>${lastmod}</lastmod>\n    <changefreq>${page.changefreq}</changefreq>\n    <priority>${page.priority.toFixed(1)}</priority>\n  </url>`,
+      `  <url>\n    <loc>${escapeXml(`${base}${page.path === '/' ? '/' : page.path}`)}</loc>\n${page.lastmod ? `    <lastmod>${page.lastmod}</lastmod>\n` : ''}    <changefreq>${page.changefreq}</changefreq>\n    <priority>${page.priority.toFixed(1)}</priority>\n  </url>`,
   );
   return `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${urls.join('\n')}\n</urlset>\n`;
 }
