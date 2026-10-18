@@ -312,7 +312,9 @@ export function createApp(overrides: Partial<AppDeps> = {}): Express {
   // SPA fallback для клиентских маршрутов (/chat, /pricing, /login, /settings и др.)
   if (hasWebDist) {
     app.use((request, response, next) => {
-      if (request.method !== 'GET' || request.path.startsWith('/api')) {
+      // HEAD — как GET без тела: роботы и проверки ссылок часто спрашивают так, раньше получали 404.
+      const readsPage = request.method === 'GET' || request.method === 'HEAD';
+      if (!readsPage || request.path.startsWith('/api')) {
         return next();
       }
       sendPage(request, response);
