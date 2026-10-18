@@ -5,7 +5,6 @@ import {
   SUPPORT_EMAIL,
   type LegalPageId,
 } from '@/features/content/legal';
-import { useDocumentTitle } from '@/lib/use-document-title';
 
 const LINKS: { id: LegalPageId; label: string }[] = [
   { id: 'terms', label: 'Соглашение и оферта' },
@@ -16,7 +15,6 @@ const LINKS: { id: LegalPageId; label: string }[] = [
 /** Правовые страницы: один шаблон, тексты — в features/content/legal.ts. */
 export function LegalPage({ id }: { id: LegalPageId }) {
   const doc = LEGAL_DOCUMENTS[id];
-  useDocumentTitle(`${doc.title} — Ketner AI`);
 
   return (
     <article className="mx-auto flex w-full max-w-3xl flex-col gap-8">

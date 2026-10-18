@@ -16,7 +16,14 @@ import {
 } from './middleware/security.js';
 import { sendError } from './middleware/errors.js';
 import { createApiRouter, describeService } from './routes/index.js';
-import { classifyPath, renderIndexHtml, robotsTxt, sitemapXml } from './seo/pages.js';
+import {
+  classifyPath,
+  isNonCanonicalHost,
+  renderIndexHtml,
+  robotsTxt,
+  sitemapXml,
+  type PrerenderedPage,
+} from './seo/pages.js';
 import {
   apiKeyStore as defaultApiKeyStore,
   conversationStore,
@@ -164,6 +171,10 @@ export function createApp(overrides: Partial<AppDeps> = {}): Express {
   };
   const indexHtml = readIndexHtml();
   const csp = buildContentSecurityPolicy(indexHtml);
+  // Разметка открытых страниц, отрисованная при сборке сайта (apps/web/scripts/prerender.mjs).
+  const prerendered = readPrerenderedPages(webDistPath, hasWebDist);
+  // Дата сборки сайта — для <lastmod> в sitemap.xml (время запроса там было бы неправдой).
+  const builtAt = hasWebDist ? safeMtime(indexHtmlPath) : new Date();
   app.use(securityHeaders(() => csp));
 
   // CORS: читать ответы с cookie пользователя могут только свои адреса (см. allowedCorsOrigins).
@@ -246,7 +257,7 @@ export function createApp(overrides: Partial<AppDeps> = {}): Express {
     response
       .type('application/xml; charset=utf-8')
       .setHeader('Cache-Control', 'public, max-age=3600');
-    response.send(sitemapXml());
+    response.send(sitemapXml(builtAt));
   });
 
   if (hasWebDist) {
@@ -264,13 +275,18 @@ export function createApp(overrides: Partial<AppDeps> = {}): Express {
     const key = kind === 'public' ? request.path.replace(/\/+$/, '') || '/' : kind;
     let html = pageCache.get(key);
     if (!html) {
-      html = renderIndexHtml(indexHtml, kind === 'public' ? request.path : '/__none__');
+      html =
+        kind === 'public'
+          ? renderIndexHtml(indexHtml, request.path, prerendered.get(key))
+          : renderIndexHtml(indexHtml, '/__none__');
       pageCache.set(key, html);
     }
     response
       .status(kind === 'missing' ? 404 : 200)
       .type('text/html; charset=utf-8')
       .setHeader('Cache-Control', 'public, max-age=0');
+    // Копия сайта на адресе Render не должна попасть в выдачу рядом с ketner.org.
+    if (isNonCanonicalHost(request.headers.host)) response.setHeader('X-Robots-Tag', 'noindex');
     response.send(html);
   };
 
@@ -307,4 +323,29 @@ export function createApp(overrides: Partial<AppDeps> = {}): Express {
   app.use(errorHandler);
 
   return app;
+}
+
+/** Читает dist/.prerender.json: { "/pricing": { html, head } }. Нет файла — страницы отдаются без разметки. */
+function readPrerenderedPages(dir: string, enabled: boolean): Map<string, PrerenderedPage> {
+  const pages = new Map<string, PrerenderedPage>();
+  if (!enabled) return pages;
+  try {
+    const raw = JSON.parse(fs.readFileSync(path.join(dir, '.prerender.json'), 'utf8')) as {
+      pages?: Record<string, PrerenderedPage>;
+    };
+    for (const [pagePath, page] of Object.entries(raw.pages ?? {})) {
+      if (page && typeof page.html === 'string') pages.set(pagePath, page);
+    }
+  } catch {
+    // файла нет (сайт собран без предварительной отрисовки) — это не ошибка
+  }
+  return pages;
+}
+
+function safeMtime(file: string): Date {
+  try {
+    return fs.statSync(file).mtime;
+  } catch {
+    return new Date();
+  }
 }

@@ -1,4 +1,4 @@
-import { useEffect, useEffectEvent, useRef, useState } from 'react';
+import { useEffect, useEffectEvent, useLayoutEffect, useRef, useState } from 'react';
 import { Link, NavLink, Outlet, useLocation } from 'react-router-dom';
 import { ChevronRightIcon, CloseIcon, MenuIcon } from '@/components/icons';
 import { buttonClasses } from '@/components/ui/button-classes';
@@ -7,6 +7,7 @@ import { useAuth } from '@/features/auth/auth-store';
 import { useTranslation } from '@/i18n';
 import { cn } from '@/lib/cn';
 import { useFocusTrap } from '@/lib/use-focus-trap';
+import { DEFAULT_TITLE, seoTitleFor } from '@/lib/seo-pages';
 import { Brand } from './brand';
 import { LanguageToggle } from './language-toggle';
 import { HeaderMenu } from './header-menu';
@@ -33,6 +34,13 @@ export function StandaloneLayout() {
   const location = useLocation();
 
   useFocusTrap(drawerRef, mobileMenuOpen);
+
+  // Заголовок вкладки при переходах внутри сайта — тот же, что сервер пишет в HTML (seo-pages.json).
+  // Эффект разметки срабатывает раньше обычных эффектов страниц, поэтому страница вне списка
+  // (например, «Оплата прошла») может поставить свой заголовок через useDocumentTitle.
+  useLayoutEffect(() => {
+    document.title = seoTitleFor(location.pathname) ?? DEFAULT_TITLE;
+  }, [location.pathname]);
 
   // Закрывать мобильное меню при переходе между страницами
   useEffect(() => {

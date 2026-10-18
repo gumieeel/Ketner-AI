@@ -7,7 +7,6 @@ import { INCIDENTS } from '@/features/content/incidents';
 import { KNOWN_ISSUES } from '@/features/content/known-issues';
 import { API_BASE } from '@/lib/api-config';
 import { cn } from '@/lib/cn';
-import { useDocumentTitle } from '@/lib/use-document-title';
 
 type ComponentState = 'operational' | 'degraded' | 'outage' | 'unavailable';
 
@@ -63,7 +62,6 @@ function formatTime(iso: string): string {
 
 /** Статус сервиса: проверка компонентов при открытии, известные проблемы и история сбоев. */
 export function StatusPage() {
-  useDocumentTitle('Статус сервиса — Ketner AI');
   const [report, setReport] = useState<StatusReport | null>(null);
   const [failed, setFailed] = useState(false);
   const [loading, setLoading] = useState(true);

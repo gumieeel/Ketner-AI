@@ -74,6 +74,7 @@ render.yaml   описание сервиса Render · Dockerfile — альт�
 | [architecture.md](docs/architecture.md)             | Как устроены сайт и сервер, путь запроса, хранение данных, стек    |
 | [environment.md](docs/environment.md)               | Все переменные окружения: что обязательно в production             |
 | [operations.md](docs/operations.md)                 | Деплой на Render, домен, вебхуки, секреты, админка, что проверять  |
+| [seo.md](docs/seo.md)                               | Поисковики: метатеги, отрисовка страниц в HTML, sitemap, кабинеты  |
 | [api.md](docs/api.md)                               | API сайта (`/api/*`): эндпоинты, формат ошибок, SSE чата           |
 | [agent-api.md](docs/agent-api.md)                   | OpenAI-совместимый API (`/v1/*`) для CLI и IDE                     |
 | [data-model.md](docs/data-model.md)                 | Сущности и таблицы Postgres                                        |
