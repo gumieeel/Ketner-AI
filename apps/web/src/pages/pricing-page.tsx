@@ -6,6 +6,7 @@ import { Tab, TabList, TabPanel, Tabs } from '@/components/ui/tabs';
 import type { TranslationKey } from '@/i18n';
 import { useTranslation } from '@/i18n';
 import { cn } from '@/lib/cn';
+import planFacts from '@/features/billing/plan-facts.json';
 
 type PlanKey = 'free' | 'plus' | 'pro' | 'ultra';
 
@@ -33,13 +34,70 @@ interface ComparisonRow {
   ultra: { ru: string; en: string };
 }
 
+type Localized = { ru: string; en: string };
+
+const same = (text: string): Localized => ({ ru: text, en: text });
+
+const formatNumber = (value: number, language: 'ru' | 'en') =>
+  value.toLocaleString(language === 'ru' ? 'ru-RU' : 'en-US');
+
+/** 150 000 → «150 тыс.», 1 500 000 → «1,5 млн». */
+function formatTokens(value: number, language: 'ru' | 'en'): string {
+  const millions = value >= 1_000_000;
+  const amount = millions ? value / 1_000_000 : value / 1_000;
+  const text = amount.toLocaleString(language === 'ru' ? 'ru-RU' : 'en-US', {
+    maximumFractionDigits: 1,
+  });
+  if (language === 'ru') return `${text} ${millions ? 'млн' : 'тыс.'}`;
+  return `${text}${millions ? 'M' : 'K'}`;
+}
+
+/** Строка сравнения из plan-facts.json: одно правило на все четыре тарифа. */
+function factRow(
+  feature: Localized,
+  cell: (plan: (typeof planFacts.plans)[PlanKey]) => Localized,
+): ComparisonRow {
+  return {
+    feature,
+    free: cell(planFacts.plans.free),
+    plus: cell(planFacts.plans.plus),
+    pro: cell(planFacts.plans.pro),
+    ultra: cell(planFacts.plans.ultra),
+  };
+}
+
+const IMAGE_NAMES: Record<string, string> = {
+  'flux-schnell': 'FLUX.1 schnell',
+  'flux-2-klein': 'FLUX.2 klein',
+  'flux-2-dev': 'FLUX.2 dev',
+  'seedream-5-flash': 'Seedream',
+  'flux-2-pro': 'FLUX.2 pro',
+  'nano-banana-2': 'Nano Banana 2',
+};
+
+/**
+ * Таблица сравнения — только проверяемые числа (их сверяет с сервером
+ * apps/mock-api/src/services/plan-facts.test.ts). Очереди по тарифам нет, поэтому строк
+ * «скорость» и «приоритет» тоже нет.
+ */
 const COMPARISON_ROWS: ComparisonRow[] = [
+  factRow({ ru: 'Цена', en: 'Price' }, (plan) =>
+    plan.priceUsd === 0
+      ? { ru: 'Бесплатно', en: 'Free' }
+      : {
+          ru: `$${plan.priceUsd} за 30 дней`,
+          en: `$${plan.priceUsd} per 30 days`,
+        },
+  ),
   {
-    feature: { ru: 'Доступные модели', en: 'Available models' },
-    free: { ru: 'Ketner Mini', en: 'Ketner Mini' },
+    feature: { ru: 'Модели', en: 'Models' },
+    free: {
+      ru: 'Бесплатная Nemotron 3 Ultra, запасная — Ketner Mini',
+      en: 'Free Nemotron 3 Ultra, Ketner Mini as backup',
+    },
     plus: {
-      ru: 'Ketner Pro, GPT-6.1 Sol, Claude Haiku 5.5, DeepSeek V4.1 Flash',
-      en: 'Ketner Pro, GPT-6.1 Sol, Claude Haiku 5.5, DeepSeek V4.1 Flash',
+      ru: 'Ketner Pro, GPT-6.1 Sol, Claude Haiku 5.5, DeepSeek V4.1 Flash, Gemini 3.7 Flash, GLM-5.3 и др.',
+      en: 'Ketner Pro, GPT-6.1 Sol, Claude Haiku 5.5, DeepSeek V4.1 Flash, Gemini 3.7 Flash, GLM-5.3 and more',
     },
     pro: {
       ru: 'Все из Plus + Claude Opus 5.5, Sonnet 5.5, GPT-6 Astra, GPT-5.6 Sol, GPT-5.6 Terra xhigh, Grok 4.7 xhigh',
@@ -47,34 +105,75 @@ const COMPARISON_ROWS: ComparisonRow[] = [
     },
     ultra: { ru: 'Все модели Pro + режим Max', en: 'All Pro models + Max mode' },
   },
-  {
-    feature: { ru: 'Скорость генерации', en: 'Generation speed' },
-    free: { ru: 'Базовая', en: 'Standard' },
-    plus: { ru: 'Быстрая', en: 'Fast' },
-    pro: { ru: 'Быстрая', en: 'Fast' },
-    ultra: { ru: 'Максимальная', en: 'Maximum' },
-  },
-  {
-    feature: { ru: 'Размер контекста', en: 'Context window' },
-    free: { ru: 'Базовый контекст', en: 'Basic context' },
-    plus: { ru: 'Стандартный', en: 'Standard' },
-    pro: { ru: 'Повышенный контекст', en: 'Extended context' },
-    ultra: { ru: 'Максимальный контекст', en: 'Maximum context' },
-  },
-  {
-    feature: { ru: 'Приоритет очереди', en: 'Queue priority' },
-    free: { ru: 'Стандартный', en: 'Standard' },
-    plus: { ru: 'Повышенный', en: 'Enhanced' },
-    pro: { ru: 'Высокий серверный', en: 'High server' },
-    ultra: { ru: 'Выделенный VIP-приоритет', en: 'Dedicated VIP priority' },
-  },
-  {
-    feature: { ru: 'API для редакторов и кода', en: 'API for editors and code' },
-    free: { ru: '—', en: '—' },
-    plus: { ru: 'По API-ключу', en: 'With an API key' },
-    pro: { ru: 'По API-ключу', en: 'With an API key' },
-    ultra: { ru: 'По API-ключу', en: 'With an API key' },
-  },
+  factRow({ ru: 'Сообщений в сутки', en: 'Messages per day' }, (plan) => ({
+    ru: formatNumber(plan.messagesPerDay, 'ru'),
+    en: formatNumber(plan.messagesPerDay, 'en'),
+  })),
+  factRow({ ru: 'Частота сообщений', en: 'Message rate' }, (plan) => ({
+    ru: `до ${plan.requestsPerMinute} в минуту и ${formatNumber(plan.requestsPerHour, 'ru')} в час`,
+    en: `up to ${plan.requestsPerMinute} a minute and ${formatNumber(plan.requestsPerHour, 'en')} an hour`,
+  })),
+  factRow({ ru: 'Что модель видит из диалога', en: 'What the model sees of a chat' }, () => ({
+    ru: 'Первое сообщение, краткую сводку и последние 8–13 сообщений',
+    en: 'The first message, a short summary and the last 8–13 messages',
+  })),
+  factRow({ ru: 'Квота премиум-моделей на 30 дней', en: 'Premium quota per 30 days' }, (plan) =>
+    plan.premiumExamples
+      ? {
+          ru: `$${plan.premiumQuotaUsd}: ${plan.premiumExamples.ru}`,
+          en: `$${plan.premiumQuotaUsd}: ${plan.premiumExamples.en}`,
+        }
+      : same('—'),
+  ),
+  factRow({ ru: 'Лимит флагманов в неделю', en: 'Flagship limit per week' }, (plan) =>
+    plan.flagship.length > 0
+      ? {
+          ru: plan.flagship
+            .map((m) => `${m.name}: ${m.weeklyPool}, до ${m.perDay} в сутки`)
+            .join('; '),
+          en: plan.flagship
+            .map((m) => `${m.name}: ${m.weeklyPool}, up to ${m.perDay} a day`)
+            .join('; '),
+        }
+      : same('—'),
+  ),
+  factRow({ ru: 'Запросов одновременно', en: 'Requests at once' }, (plan) =>
+    same(String(plan.concurrency)),
+  ),
+  factRow({ ru: 'Длина ответа', en: 'Answer length' }, (plan) => ({
+    ru: `до ${formatNumber(plan.maxAnswerTokens, 'ru')} токенов`,
+    en: `up to ${formatNumber(plan.maxAnswerTokens, 'en')} tokens`,
+  })),
+  factRow({ ru: 'Токены (вопрос + ответ)', en: 'Tokens (prompt + answer)' }, (plan) => ({
+    ru: `${formatTokens(plan.tokensPerHour, 'ru')} в час, ${formatTokens(plan.tokensPerDay, 'ru')} в сутки`,
+    en: `${formatTokens(plan.tokensPerHour, 'en')} an hour, ${formatTokens(plan.tokensPerDay, 'en')} a day`,
+  })),
+  factRow({ ru: 'Расход на модели', en: 'Model spend' }, (plan) => ({
+    ru: `до $${plan.dailyCostCapUsd} в сутки и $${plan.costBudgetUsd} за 30 дней`,
+    en: `up to $${plan.dailyCostCapUsd} a day and $${plan.costBudgetUsd} per 30 days`,
+  })),
+  factRow({ ru: 'Картинки в сутки', en: 'Images per day' }, (plan) =>
+    same(
+      Object.entries(plan.imagesPerDay as Record<string, number>)
+        .map(([id, count]) => `${IMAGE_NAMES[id] ?? id}: ${count}`)
+        .join(', '),
+    ),
+  ),
+  factRow({ ru: 'Ketner Code', en: 'Ketner Code' }, (plan) => ({
+    ru: `${plan.codeRunsPerDay} запусков в сутки, до $${plan.codeRunBudgetUsd} на запуск`,
+    en: `${plan.codeRunsPerDay} runs a day, up to $${plan.codeRunBudgetUsd} per run`,
+  })),
+  factRow({ ru: 'API для редакторов и кода', en: 'API for editors and code' }, (plan) =>
+    plan.api ? { ru: 'По API-ключу', en: 'With an API key' } : same('—'),
+  ),
+  factRow({ ru: 'Продление и отмена', en: 'Renewal and cancellation' }, (plan) =>
+    plan.priceUsd === 0
+      ? same('—')
+      : {
+          ru: 'Разовая оплата без автосписаний; автопродление звёздами — только если включить, отключается в любой момент',
+          en: 'One-off payment, no automatic charges; Stars auto-renewal only if you turn it on, off any time',
+        },
+  ),
 ];
 
 export function PricingPage() {
@@ -204,6 +303,8 @@ export function PricingPage() {
         </div>
       </div>
 
+      <LimitsExplained />
+
       {/* Нижняя сноска */}
       <div className="flex flex-col items-center gap-3 border-t border-stroke pt-8 text-center text-[13px] text-muted">
         <p className="max-w-[70ch] text-balance">{t('pricing.notice')}</p>
@@ -215,5 +316,81 @@ export function PricingPage() {
         </Link>
       </div>
     </div>
+  );
+}
+
+const pro = planFacts.plans.pro;
+const opus = pro.flagship[0];
+
+/**
+ * Как работают лимиты — на примерах тарифа Pro. Числа берутся из plan-facts.json, который тест
+ * сверяет с сервером.
+ */
+const LIMIT_EXAMPLES: { title: Localized; text: Localized }[] = [
+  {
+    title: { ru: 'Сообщения', en: 'Messages' },
+    text: {
+      ru: `Каждое отправленное сообщение — одно в лимите, на любой модели. На Pro это ${formatNumber(pro.messagesPerDay, 'ru')} за последние 24 часа, не больше ${pro.requestsPerHour} в час. Окна скользящие: сообщение, отправленное вчера в 15:00, перестаёт учитываться сегодня в 15:00.`,
+      en: `Every message you send counts as one, on any model. On Pro that is ${formatNumber(pro.messagesPerDay, 'en')} in the last 24 hours, at most ${pro.requestsPerHour} an hour. Windows are rolling: a message sent yesterday at 3 pm stops counting today at 3 pm.`,
+    },
+  },
+  {
+    title: { ru: 'Дорогие модели', en: 'Expensive models' },
+    text: {
+      ru: `У флагманов свой недельный лимит. На Pro можно отправить ${opus.weeklyPool} запрос ${opus.name} за 7 дней, но не больше ${opus.perDay} за сутки: например, 8 в понедельник и ни одного во вторник. Когда лимит исчерпан, отвечает запасная модель (для ${opus.name} — Claude Sonnet 5.5), и под ответом видно, какая модель ответила. Режим Max на Ultra считается за 2 запроса.`,
+      en: `Flagships have their own weekly limit. On Pro you can send ${opus.weeklyPool} ${opus.name} requests in 7 days, at most ${opus.perDay} a day: for example, 8 on Monday and none on Tuesday. When the limit runs out, a backup model answers (Claude Sonnet 5.5 for ${opus.name}), and the answer shows which model replied. Max mode on Ultra counts as 2 requests.`,
+    },
+  },
+  {
+    title: { ru: 'Квота премиум-моделей', en: 'Premium quota' },
+    text: {
+      ru: `Запросы к сильным моделям (Claude, GPT-6 Astra, GPT-5.6, Grok и др.) списываются ещё и с общей квоты в долларах по их реальной цене: длинный вопрос стоит дороже короткого. На Pro квота $${pro.premiumQuotaUsd} на 30 дней — ${pro.premiumExamples?.ru ?? ''}. Если пользоваться несколькими моделями, квота кончается раньше, дальше отвечает Ketner Pro. Её можно пополнить пакетом.`,
+      en: `Requests to strong models (Claude, GPT-6 Astra, GPT-5.6, Grok and others) also draw on a shared dollar quota at their real price: a long prompt costs more than a short one. On Pro the quota is $${pro.premiumQuotaUsd} per 30 days, ${pro.premiumExamples?.en ?? ''}. Using several models drains it sooner; after that Ketner Pro answers. You can top it up with a pack.`,
+    },
+  },
+  {
+    title: { ru: 'Общий расход', en: 'Overall spend' },
+    text: {
+      ru: `Чтобы один аккаунт не тратил больше, чем стоит подписка, расход на все модели ограничен по себестоимости: на Pro — $${pro.dailyCostCapUsd} в сутки и $${pro.costBudgetUsd} за 30 дней. После 80% бюджета ответы короче и идут на недорогие модели, после 100% — только на самые дешёвые, после 125% запросы не выполняются, пока расход за последние 30 дней не снизится. При обычной переписке до этих границ, как правило, не доходит: они срабатывают при очень активной работе с дорогими моделями или в Ketner Code.`,
+      en: `So that one account does not cost more than its subscription, spend on all models is capped at cost: on Pro, $${pro.dailyCostCapUsd} a day and $${pro.costBudgetUsd} per 30 days. Past 80% of the budget answers get shorter and go to cheaper models, past 100% only to the cheapest, and past 125% requests stop until 30-day spend drops. Normal chatting usually stays well below these caps; heavy use of expensive models or Ketner Code can.`,
+    },
+  },
+];
+
+function LimitsExplained() {
+  const { language } = useTranslation();
+  return (
+    <section aria-labelledby="limits-explained" className="flex w-full flex-col gap-6 text-left">
+      <div className="flex flex-col gap-1.5">
+        <h2 id="limits-explained" className="t-title text-text">
+          {language === 'ru' ? 'Как работают лимиты' : 'How limits work'}
+        </h2>
+        <p className="max-w-[70ch] text-sm text-muted md:text-[15px]">
+          {language === 'ru'
+            ? 'Безлимитного тарифа нет: модели стоят по-разному, поэтому лимитов несколько. Примеры — на тарифе Pro, числа для остальных тарифов — в таблице выше.'
+            : 'There is no unlimited plan: models cost differently, so there are several limits. Examples use Pro; numbers for other plans are in the table above.'}
+        </p>
+      </div>
+      <div className="grid gap-3 md:grid-cols-2">
+        {LIMIT_EXAMPLES.map((example) => (
+          <div
+            key={example.title.en}
+            className="flex flex-col gap-2 rounded-2xl border border-stroke bg-surface p-5"
+          >
+            <h3 className="text-[15px] font-semibold text-text">{example.title[language]}</h3>
+            <p className="text-[14px] leading-6 text-muted">{example.text[language]}</p>
+          </div>
+        ))}
+      </div>
+      <p className="text-[13px] text-subtle">
+        {language === 'ru'
+          ? 'Запасные модели и лимиты каждой модели — на странице '
+          : 'Backup models and per-model limits are on the '}
+        <Link to="/models" className="text-accent hover:underline">
+          {language === 'ru' ? '«Модели»' : 'Models page'}
+        </Link>
+        .
+      </p>
+    </section>
   );
 }

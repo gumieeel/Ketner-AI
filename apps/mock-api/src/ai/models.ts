@@ -1,5 +1,7 @@
 import type { ModelCatalog, ModelInfo, PlanId, PlanLimits } from '../types.js';
 import { dailyLimitsOf, modelRegistry } from './model-registry.js';
+import { disclosureOf } from './model-disclosure.js';
+import type { ModelRegistryEntry } from './gateway-types.js';
 
 /** Публичный каталог моделей для `GET /api/meta`. Источник правды — реестр моделей. */
 export const DEFAULT_MODEL_ID = 'auto';
@@ -32,12 +34,10 @@ export const PUBLIC_MODEL_IDS: readonly string[] = [
   'gpt-5.6-terra',
 ];
 
-export const MODELS: readonly ModelInfo[] = PUBLIC_MODEL_IDS.flatMap((id) => {
-  const entry = modelRegistry.get(id);
-  if (!entry || !entry.enabled) {
-    return [];
-  }
-  const info: ModelInfo = {
+/** Публичные сведения о модели: доступ, лимиты и прозрачность (разработчик, настоящая модель). */
+function toModelInfo(id: string, entry: ModelRegistryEntry): ModelInfo {
+  const disclosure = disclosureOf(entry);
+  return {
     id,
     name: entry.name,
     contextMessages: entry.contextMessages,
@@ -45,8 +45,31 @@ export const MODELS: readonly ModelInfo[] = PUBLIC_MODEL_IDS.flatMap((id) => {
     requiredPlan: entry.requiredPlan ?? undefined,
     ...dailyLimitsOf(id),
     ...(entry.effortProfile ? { reasoningEffort: { ...entry.effortProfile } } : {}),
+    ...(disclosure ?? {}),
+    contextWindow: entry.contextWindow,
+    ...(entry.fallbackModelId
+      ? {
+          fallbackModelId: entry.fallbackModelId,
+          fallbackModelName: modelRegistry.get(entry.fallbackModelId)?.name,
+        }
+      : {}),
   };
-  return [info];
+}
+
+export const MODELS: readonly ModelInfo[] = PUBLIC_MODEL_IDS.flatMap((id) => {
+  const entry = modelRegistry.get(id);
+  if (!entry || !entry.enabled) {
+    return [];
+  }
+  return [toModelInfo(id, entry)];
+});
+
+/** Бесплатные эндпоинты, которые отвечают на Free вместо Ketner Mini (ai/plan-substitute.ts). */
+export const FREE_TIER_MODEL_IDS: readonly string[] = ['nemotron-ultra', 'north-mini-code'];
+
+export const FREE_TIER_MODELS: readonly ModelInfo[] = FREE_TIER_MODEL_IDS.flatMap((id) => {
+  const entry = modelRegistry.get(id);
+  return entry && entry.enabled ? [toModelInfo(id, entry)] : [];
 });
 
 import { getPlanLimits, planAllowsModel } from '../services/entitlement.js';
@@ -64,6 +87,7 @@ export const MODEL_CATALOG: ModelCatalog = {
   models: [AUTO_MODEL, ...MODELS],
   defaultModelId: DEFAULT_MODEL_ID,
   limits: PLAN_LIMITS,
+  freeTierModels: [...FREE_TIER_MODELS],
 };
 
 /** Проверка доступности модели по текущему тарифу пользователя (единое правило в entitlement). */

@@ -97,17 +97,13 @@ test('ModelRegistry: получение, разрешение и проверк�
   // Brand Protection & дифференциация промптов:
   // 1. Brand protection во всех промптах
   assert.ok(ECONOMY_SYSTEM_PROMPT.ru.includes('Ketner AI'));
-  assert.ok(
-    ECONOMY_SYSTEM_PROMPT.ru.includes(
-      'Никогда не упоминай, что ты создан OpenAI, Anthropic или Google',
-    ),
-  );
   assert.ok(DEFAULT_SYSTEM_PROMPT.ru.includes('Ketner AI'));
-  assert.ok(
-    DEFAULT_SYSTEM_PROMPT.ru.includes(
-      'Никогда не упоминай, что ты создан OpenAI, Anthropic или Google',
-    ),
-  );
+  // Модель не выдаёт себя за разработку Ketner AI и не скрывает разработчика.
+  for (const prompt of [ECONOMY_SYSTEM_PROMPT, DEFAULT_SYSTEM_PROMPT]) {
+    assert.ok(prompt.ru.includes('не обучает собственные модели'));
+    assert.ok(!prompt.ru.includes('Никогда не упоминай'));
+    assert.ok(!prompt.en.includes('Never mention OpenAI'));
+  }
 
   // 2. Дешёвые модели используют ECONOMY_SYSTEM_PROMPT
   assert.equal(def.defaultSystemPrompt, ECONOMY_SYSTEM_PROMPT);
@@ -841,14 +837,11 @@ test('Фаза 3: OpenRouter payload — кэш промпта Anthropic, раз
 });
 
 test('Фаза 3: Системные промпты — общий слой бренда и однострочные модификаторы', () => {
-  // 1. Общий слой бренда защищает имя Ketner AI и скрывает внешние бренды
+  // 1. Общий слой называет сервис и честно говорит, что модели сторонние
   assert.ok(COMMON_BRAND_SYSTEM_LAYER.ru.includes('Ketner AI'));
-  assert.ok(
-    COMMON_BRAND_SYSTEM_LAYER.ru.includes(
-      'Никогда не упоминай, что ты создан OpenAI, Anthropic или Google',
-    ),
-  );
-  assert.ok(COMMON_BRAND_SYSTEM_LAYER.en.includes('Never mention OpenAI, Anthropic, or Google'));
+  assert.ok(COMMON_BRAND_SYSTEM_LAYER.ru.includes('модели сторонних разработчиков'));
+  assert.ok(COMMON_BRAND_SYSTEM_LAYER.en.includes('third-party models'));
+  assert.ok(!COMMON_BRAND_SYSTEM_LAYER.ru.includes('разработка Ketner AI'));
 
   // 2. Тарифные модификаторы лаконичны (одна строка)
   assert.ok(TIER_SYSTEM_MODIFIERS.economy.ru.includes('максимально кратко'));

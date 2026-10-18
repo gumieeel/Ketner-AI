@@ -2,7 +2,12 @@ import { randomUUID } from 'node:crypto';
 import { Router, type Request, type Response } from 'express';
 import { sendError } from '../middleware/errors.js';
 import { RateLimiter, clientIp } from '../middleware/rate-limit.js';
-import { contactStore as defaultStore, type ContactMessage } from '../store/contact-store.js';
+import {
+  CONTACT_TOPICS,
+  contactStore as defaultStore,
+  type ContactMessage,
+  type ContactTopic,
+} from '../store/contact-store.js';
 import type { DocStore } from '../store/doc-store.js';
 
 export interface ContactRouterDeps {
@@ -16,7 +21,10 @@ const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
 const WINDOW_MS = 60 * 60 * 1000;
 const MAX_PER_WINDOW = 5;
 
-/** Форма обратной связи: `POST /api/contact`. Доступна без входа, ограничена по IP и почте. */
+/**
+ * Форма обратной связи: `POST /api/contact`. Доступна без входа, ограничена по IP и почте.
+ * Тема (`topic`): bug — ошибка, idea — идея или запрос функции, payment — оплата, other — другое.
+ */
 export function createContactRouter(deps: ContactRouterDeps = {}): Router {
   const router = Router();
   const store = deps.store ?? defaultStore;
@@ -32,6 +40,9 @@ export function createContactRouter(deps: ContactRouterDeps = {}): Router {
     const email =
       typeof body.email === 'string' ? body.email.trim().toLowerCase().slice(0, 200) : '';
     const message = typeof body.message === 'string' ? body.message.trim() : '';
+    const topic: ContactTopic = CONTACT_TOPICS.includes(body.topic as ContactTopic)
+      ? (body.topic as ContactTopic)
+      : 'other';
     // Скрытое поле-ловушка для ботов: люди его не видят и не заполняют.
     if (typeof body.website === 'string' && body.website.trim()) {
       response.status(202).json({ ok: true });
@@ -65,6 +76,7 @@ export function createContactRouter(deps: ContactRouterDeps = {}): Router {
 
     const record: ContactMessage = {
       id: randomUUID(),
+      topic,
       name,
       email,
       message,

@@ -48,28 +48,32 @@ export const SEO_PAGES: readonly SeoPage[] = [
   {
     path: '/docs/plans/free',
     title: 'Бесплатный тариф Ketner AI — ИИ-чат без оплаты',
-    description: 'Что входит в бесплатный тариф Ketner AI: ИИ-чат на русском, режим Auto, генерация картинок и лимиты в день.',
+    description:
+      'Что входит в бесплатный тариф Ketner AI: ИИ-чат на русском, режим Auto, генерация картинок и лимиты в день.',
     priority: 0.6,
     changefreq: 'monthly',
   },
   {
     path: '/docs/plans/plus',
     title: 'Тариф Plus в Ketner AI — GPT и сильные модели недорого',
-    description: 'Тариф Plus в Ketner AI: доступ к сильным моделям GPT, Claude Haiku, Gemini Flash и DeepSeek, больше сообщений и API-ключи.',
+    description:
+      'Тариф Plus в Ketner AI: доступ к сильным моделям GPT, Claude Haiku, Gemini Flash и DeepSeek, больше сообщений и API-ключи.',
     priority: 0.6,
     changefreq: 'monthly',
   },
   {
     path: '/docs/plans/pro',
     title: 'Тариф Pro в Ketner AI — Claude Opus, Sonnet, GPT и Grok',
-    description: 'Тариф Pro в Ketner AI: флагманские модели Claude Opus и Sonnet, GPT, Grok и Gemini в одной подписке, повышенный приоритет.',
+    description:
+      'Тариф Pro в Ketner AI: флагманские модели Claude Opus и Sonnet, GPT, Grok и Gemini в одной подписке, повышенный приоритет.',
     priority: 0.6,
     changefreq: 'monthly',
   },
   {
     path: '/docs/plans/ultra',
     title: 'Тариф Ultra в Ketner AI — все модели и режим Max',
-    description: 'Тариф Ultra в Ketner AI: все модели Pro, режим Max с глубокими размышлениями, большой контекст и максимальный приоритет.',
+    description:
+      'Тариф Ultra в Ketner AI: все модели Pro, режим Max с глубокими размышлениями, большой контекст и максимальный приоритет.',
     priority: 0.6,
     changefreq: 'monthly',
   },
@@ -82,16 +86,50 @@ export const SEO_PAGES: readonly SeoPage[] = [
     changefreq: 'monthly',
   },
   {
+    path: '/models',
+    title: 'Модели Ketner AI — кто разработал каждую нейросеть и какие лимиты',
+    description:
+      'Все модели Ketner AI: разработчик (OpenAI, Anthropic, Google, xAI и другие), какая модель стоит за Ketner Mini и Ketner Pro, тариф, недельные лимиты и запасные модели.',
+    priority: 0.7,
+    changefreq: 'weekly',
+  },
+  {
+    path: '/about',
+    title: 'О проекте Ketner AI — кто мы и что делаем',
+    description:
+      'Ketner AI — независимый сервис доступа к моделям разных разработчиков в одном чате. Кто его делает, какую задачу решает, этап разработки и планы.',
+    priority: 0.5,
+    changefreq: 'monthly',
+  },
+  {
+    path: '/changelog',
+    title: 'Что нового в Ketner AI — журнал обновлений',
+    description:
+      'Журнал обновлений Ketner AI: даты выпусков, новые функции, исправления, известные ограничения и планы.',
+    priority: 0.5,
+    changefreq: 'weekly',
+  },
+  {
+    path: '/status',
+    title: 'Статус Ketner AI — работа сервиса и сбои',
+    description:
+      'Текущее состояние Ketner AI: сайт, база данных, модели, генерация изображений, оплата и бот, известные проблемы и история сбоев.',
+    priority: 0.3,
+    changefreq: 'daily',
+  },
+  {
     path: '/signup',
     title: 'Регистрация в Ketner AI — начать бесплатно',
-    description: 'Создайте аккаунт Ketner AI через Google, GitHub, Telegram или почту и начните пользоваться нейросетями бесплатно.',
+    description:
+      'Создайте аккаунт Ketner AI через Google, GitHub, Telegram или почту и начните пользоваться нейросетями бесплатно.',
     priority: 0.5,
     changefreq: 'yearly',
   },
   {
     path: '/contacts',
     title: 'Контакты Ketner AI — поддержка',
-    description: 'Как связаться с Ketner AI: форма обратной связи, почта и бот поддержки в Telegram.',
+    description:
+      'Как связаться с Ketner AI: форма обратной связи, почта и бот поддержки в Telegram.',
     priority: 0.3,
     changefreq: 'yearly',
   },
@@ -105,14 +143,16 @@ export const SEO_PAGES: readonly SeoPage[] = [
   {
     path: '/privacy',
     title: 'Политика конфиденциальности — Ketner AI',
-    description: 'Как Ketner AI обрабатывает и защищает персональные данные.',
+    description:
+      'Какие данные собирает Ketner AI, где хранит, кому передаёт запросы (OpenRouter и разработчики моделей), как обрабатывает файлы, историю чатов и платежи, когда удаляет.',
     priority: 0.2,
     changefreq: 'yearly',
   },
   {
     path: '/payment-terms',
     title: 'Условия оплаты и возврата — Ketner AI',
-    description: 'Условия оплаты подписки Ketner AI звёздами Telegram и криптовалютой, правила возврата.',
+    description:
+      'Условия оплаты подписки Ketner AI звёздами Telegram и криптовалютой, правила возврата.',
     priority: 0.2,
     changefreq: 'yearly',
   },
@@ -168,7 +208,8 @@ export function findSeoPage(rawPath: string): SeoPage | undefined {
 export function classifyPath(rawPath: string): PageKind {
   const path = normalizePath(rawPath);
   if (findSeoPage(path)) return 'public';
-  if (PRIVATE_PREFIXES.some((prefix) => path === prefix || path.startsWith(`${prefix}/`))) return 'private';
+  if (PRIVATE_PREFIXES.some((prefix) => path === prefix || path.startsWith(`${prefix}/`)))
+    return 'private';
   return 'missing';
 }
 

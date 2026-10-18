@@ -14,8 +14,8 @@ export const FAQ_ITEMS: FaqItem[] = [
       en: 'Are there any limits?',
     },
     a: {
-      ru: 'Тарифы рассчитаны на обычную работу человека: переписку, код, документы и картинки. Действует политика честного использования — она защищает сервис от автоматических массовых запросов, а не от вас.',
-      en: 'Plans are built for normal human use: chat, code, documents and images. A fair-use policy applies; it protects the service from automated bulk traffic, not from you.',
+      ru: 'Да, безлимита нет. У каждого тарифа есть лимит сообщений в сутки (Free — 10, Plus — 500, Pro — 1 500, Ultra — 4 000), а у дорогих моделей — свой лимит: например, на Pro это 21 запрос Claude Opus 5.5 в неделю, не больше 8 в сутки. Когда лимит модели исчерпан, отвечает запасная модель — какая именно, указано на странице «Модели». Все числа — на странице «Тарифы».',
+      en: 'Yes, there is no unlimited plan. Every plan has a daily message limit (Free 10, Plus 500, Pro 1,500, Ultra 4,000), and expensive models have their own limit: on Pro, for example, 21 Claude Opus 5.5 requests a week, at most 8 a day. When a model limit runs out, a backup model answers; which one is shown on the Models page. All numbers are on the Pricing page.',
     },
   },
   {
@@ -25,8 +25,8 @@ export const FAQ_ITEMS: FaqItem[] = [
       en: 'Which AI models are included in Ketner AI?',
     },
     a: {
-      ru: 'На тарифе Free доступна Ketner Mini. Plus добавляет Ketner Pro, GPT-6.1 Sol (OpenAI), Claude Haiku 5.5 (Anthropic) и DeepSeek V4.1 Flash. Pro открывает Claude Opus 5.5 и Sonnet 5.5 (Anthropic), GPT-6 Astra, GPT-5.6 Sol и GPT-5.6 Terra xhigh (OpenAI) и Grok 4.7 xhigh (xAI). Ultra добавляет режим Max, в котором модели думают глубже, и лучшие модели картинок. Новые модели появляются вскоре после официального релиза.',
-      en: 'The Free plan includes Ketner Mini. Plus adds Ketner Pro, GPT-6.1 Sol (OpenAI), Claude Haiku 5.5 (Anthropic) and DeepSeek V4.1 Flash. Pro unlocks Claude Opus 5.5 and Sonnet 5.5 (Anthropic), GPT-6 Astra, GPT-5.6 Sol and GPT-5.6 Terra xhigh (OpenAI) and Grok 4.7 xhigh (xAI). Ultra adds Max mode, where models think deeper, and the best image models. New models arrive soon after their official release.',
+      ru: 'На тарифе Free отвечают бесплатные версии моделей (сейчас NVIDIA Nemotron 3 Ultra), запасная — Ketner Mini (это GPT-6 Luna от OpenAI). Plus добавляет Ketner Pro (MiMo-V2.6 Pro от Xiaomi), GPT-6.1 Sol (OpenAI), Claude Haiku 5.5 (Anthropic) и DeepSeek V4.1 Flash. Pro открывает Claude Opus 5.5 и Sonnet 5.5 (Anthropic), GPT-6 Astra, GPT-5.6 Sol и GPT-5.6 Terra xhigh (OpenAI) и Grok 4.7 xhigh (xAI). Ultra добавляет режим Max, в котором модели думают глубже, и лучшие модели картинок. Ketner AI своих моделей не обучает: все они от сторонних разработчиков и подключены через OpenRouter. Полный список — на странице «Модели».',
+      en: 'On Free, free model versions answer (currently NVIDIA Nemotron 3 Ultra), with Ketner Mini (GPT-6 Luna by OpenAI) as backup. Plus adds Ketner Pro (MiMo-V2.6 Pro by Xiaomi), GPT-6.1 Sol (OpenAI), Claude Haiku 5.5 (Anthropic) and DeepSeek V4.1 Flash. Pro unlocks Claude Opus 5.5 and Sonnet 5.5 (Anthropic), GPT-6 Astra, GPT-5.6 Sol and GPT-5.6 Terra xhigh (OpenAI) and Grok 4.7 xhigh (xAI). Ultra adds Max mode, where models think deeper, and the best image models. Ketner AI does not train its own models: all of them come from third-party developers via OpenRouter. The full list is on the Models page.',
     },
   },
   {
@@ -69,8 +69,8 @@ export const FAQ_ITEMS: FaqItem[] = [
       en: 'Can I get a refund?',
     },
     a: {
-      ru: 'Да, в течение 24 часов после оплаты — если вы ещё не сделали ни одного запроса к моделям. Звёзды Telegram возвращаются сразу, кнопкой в кабинете бота @Robo_kassa_bot (раздел «Платежи»). Оплату криптовалютой возвращаем на ваш кошелёк по заявке, обычно в течение суток: оформите её в том же кабинете или напишите в поддержку @ketner_support_bot. Если моделями уже пользовались или прошло больше 24 часов, оплата не возвращается. После возврата дни этой оплаты снимаются с подписки, автопродление отключается.',
-      en: 'Yes, within 24 hours of paying — if you have not made a single request to the models yet. Telegram Stars are returned instantly with a button in the @Robo_kassa_bot account (the “Payments” tab). Crypto payments are returned to your wallet on request, usually within a day: request it in the same account or message support at @ketner_support_bot. If the models were already used or more than 24 hours have passed, the payment is not refunded. After a refund, the days from that payment are removed from the subscription and auto-renewal turns off.',
+      ru: 'Да, в течение 24 часов после оплаты — если вы ещё не сделали ни одного запроса к моделям. Оформите заявку кнопкой «Подать заявку на возврат» в кабинете бота @Robo_kassa_bot (раздел «Платежи») или напишите в поддержку @ketner_support_bot. Заявку проверяет администратор, обычно в течение суток; после одобрения звёзды возвращаются на баланс Telegram, а криптовалюта — на ваш кошелёк. Если моделями уже пользовались или прошло больше 24 часов, оплата не возвращается. После возврата дни этой оплаты снимаются с подписки, автопродление отключается.',
+      en: 'Yes, within 24 hours of paying — if you have not made a single request to the models yet. Use “Request a refund” in the @Robo_kassa_bot account (the “Payments” tab) or message support at @ketner_support_bot. An administrator reviews every request, usually within a day; once approved, Stars go back to your Telegram balance and crypto to your wallet. If the models were already used or more than 24 hours have passed, the payment is not refunded. After a refund, the days from that payment are removed from the subscription and auto-renewal turns off.',
     },
   },
 ];

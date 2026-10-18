@@ -70,6 +70,7 @@ import {
 } from '../services/premium-quota.js';
 import type { PremiumCreditSource } from '../store/premium-credit-store.js';
 import { PayloadGuard } from './payload-guard.js';
+import { modelIdentityPrompt } from './model-disclosure.js';
 import {
   buildAttachmentsBlock,
   buildWorkspaceContextBlock,
@@ -990,12 +991,23 @@ export class AIGateway {
             effort: wantedEffort,
           });
 
+          // Модель знает, кто она: строка о модели и её разработчике дописывается к системному
+          // промпту той модели цепочки, которая отвечает (запасная называет себя, а не исходную).
+          const identity = modelIdentityPrompt(candidateModel, language);
+          const candidateMessages =
+            identity && optimizedMessages[0]?.role === 'system'
+              ? [
+                  { ...optimizedMessages[0], content: optimizedMessages[0].content + identity },
+                  ...optimizedMessages.slice(1),
+                ]
+              : optimizedMessages;
+
           const runPass = (withReasoning: typeof reasoning) =>
             this.streamWithWatchdog(
               provider,
               {
                 model: engineId,
-                messages: optimizedMessages,
+                messages: candidateMessages,
                 maxTokens,
                 reasoning: withReasoning,
               },

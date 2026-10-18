@@ -235,6 +235,15 @@ const STARS_SUBSCRIPTION_PERIOD = 2592000;
  * Бот Ketner AI (@Robo_kassa_bot). Всё управление — в мини-приложении («Кабинет»); бот отвечает
  * за вход и привязку подтверждением, оплату звёздами, автопродление, возвраты и уведомления.
  */
+
+/** Заголовок уведомления администратору по теме обращения с сайта. */
+const CONTACT_TOPIC_TITLES: Record<string, string> = {
+  bug: '🐞 <b>Ошибка — сообщение с сайта</b>',
+  idea: '💡 <b>Идея — сообщение с сайта</b>',
+  payment: '💳 <b>Оплата — обращение с сайта</b>',
+  other: '✉️ <b>Обращение с сайта</b>',
+};
+
 export class TelegramBotService implements TelegramPaymentsPort {
   private token: string;
   private username: string;
@@ -508,6 +517,7 @@ export class TelegramBotService implements TelegramPaymentsPort {
   }
 
   async notifyAdminsAboutContact(message: {
+    topic?: string;
     name: string;
     email: string;
     message: string;
@@ -516,7 +526,7 @@ export class TelegramBotService implements TelegramPaymentsPort {
       .list()
       .filter((candidate) => candidate.isAdmin && candidate.telegramChatId);
     const text = [
-      '✉️ <b>Обращение с сайта</b>',
+      `${CONTACT_TOPIC_TITLES[message.topic ?? 'other'] ?? CONTACT_TOPIC_TITLES.other}`,
       '',
       `От: ${escapeHtml(message.name)} · ${escapeHtml(message.email)}`,
       '',

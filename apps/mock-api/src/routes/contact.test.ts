@@ -69,3 +69,29 @@ test('форма обратной связи: частые обращения с
     t.close();
   }
 });
+
+test('форма обратной связи: тема обращения сохраняется, неизвестная — «другое»', async () => {
+  const t = await start();
+  try {
+    const bug = await t.send({
+      topic: 'bug',
+      name: 'Олег',
+      email: 'oleg@example.com',
+      message: 'Кнопка «Продолжить» не появляется после обрыва ответа',
+    });
+    assert.equal(bug.status, 201);
+    const odd = await t.send({
+      topic: 'hack<script>',
+      name: 'Олег',
+      email: 'oleg2@example.com',
+      message: 'Сообщение без понятной темы, просто вопрос',
+    });
+    assert.equal(odd.status, 201);
+    assert.deepEqual(
+      t.notified.map((m) => m.topic),
+      ['bug', 'other'],
+    );
+  } finally {
+    t.close();
+  }
+});

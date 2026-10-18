@@ -152,6 +152,17 @@ export interface ModelInfo {
   weeklyLimits?: Partial<Record<PlanId, { pool: number; perDay: number }>>;
   /** Фиксированная глубина размышлений (модели Pro и Ultra): обычный режим и режим Max (Ultra). */
   reasoningEffort?: { standard: string; max: string };
+  /** Компания-разработчик: Ketner AI своих моделей не обучает. */
+  developer?: string;
+  /** Идентификатор модели у поставщика (OpenRouter). */
+  upstreamModel?: string;
+  /** Настоящее имя модели, если в Ketner она называется иначе (Ketner Mini → GPT-6 Luna). */
+  baseModelName?: string;
+  /** Окно контекста модели, токенов. */
+  contextWindow?: number;
+  /** Модель, которая отвечает после лимита или при сбое. */
+  fallbackModelId?: string;
+  fallbackModelName?: string;
 }
 
 export interface PlanLimits {
@@ -163,4 +174,6 @@ export interface ChatMeta {
   models: ModelInfo[];
   defaultModelId: string;
   limits: Record<PlanId, PlanLimits>;
+  /** Кто отвечает на Free вместо выбранной модели (бесплатные эндпоинты). */
+  freeTierModels?: ModelInfo[];
 }

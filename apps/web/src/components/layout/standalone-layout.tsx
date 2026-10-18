@@ -305,9 +305,9 @@ export function StandaloneLayout() {
                   </Link>
                 </li>
                 <li>
-                  <a href="/#models" className={footerLinkClass}>
+                  <Link to="/models" className={footerLinkClass}>
                     {t('home.footerLimits')}
-                  </a>
+                  </Link>
                 </li>
                 <li>
                   <Link to="/pricing" className={footerLinkClass}>
@@ -334,6 +334,21 @@ export function StandaloneLayout() {
                   <a href="/#faq" className={footerLinkClass}>
                     {t('footer.faq')}
                   </a>
+                </li>
+                <li>
+                  <Link to="/changelog" className={footerLinkClass}>
+                    {t('footer.changelog')}
+                  </Link>
+                </li>
+                <li>
+                  <Link to="/status" className={footerLinkClass}>
+                    {t('footer.status')}
+                  </Link>
+                </li>
+                <li>
+                  <Link to="/about" className={footerLinkClass}>
+                    {t('footer.about')}
+                  </Link>
                 </li>
                 <li>
                   <Link to="/terms" className={footerLinkClass}>

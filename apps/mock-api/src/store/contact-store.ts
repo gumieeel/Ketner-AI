@@ -2,8 +2,15 @@ import { fileURLToPath } from 'node:url';
 import { DocStore } from './doc-store.js';
 
 /** Обращение с формы обратной связи на сайте. */
+/** Тема обращения: ошибка, идея, оплата или другое. */
+export type ContactTopic = 'bug' | 'idea' | 'payment' | 'other';
+
+export const CONTACT_TOPICS: readonly ContactTopic[] = ['bug', 'idea', 'payment', 'other'];
+
 export interface ContactMessage {
   id: string;
+  /** Тема; у старых обращений её нет. */
+  topic?: ContactTopic;
   name: string;
   email: string;
   message: string;

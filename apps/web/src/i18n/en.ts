@@ -55,7 +55,7 @@ export const en: Record<TranslationKey, string> = {
 
   'pricing.title': 'Pricing',
   'pricing.subtitle': 'Start for free and upgrade when you need more.',
-  'pricing.month': 'mo',
+  'pricing.month': '30 days',
   'pricing.popular': 'Popular',
   'pricing.currentPlan': 'Current plan',
   'pricing.choosePlan': 'Choose plan',
@@ -76,7 +76,8 @@ export const en: Record<TranslationKey, string> = {
   'pricing.nextGenBadge': 'Next-generation plans',
   'pricing.allInclusive': 'All-in-one',
   'pricing.docsLink': 'More about plans and models in the docs',
-  'pricing.notice': 'All subscriptions are backed by secure checkout and instant access.',
+  'pricing.notice':
+    'A subscription is a one-off payment for 30 days and does not renew by itself. Stars auto-renewal is on only if you turn it on, and you can turn it off any time in the Telegram dashboard. Full refund if no more than 24 hours have passed and you have not sent a single request; see Payments and refunds.',
 
   'docs.title': 'Ketner AI Documentation',
   'docs.subtitle': 'Plans, models and answers to common questions.',
@@ -92,8 +93,7 @@ export const en: Record<TranslationKey, string> = {
   'docs.step2Desc':
     'Intelligent routing dynamically picks the optimal model (or you choose manually).',
   'docs.step3Title': 'Receive your answer',
-  'docs.step3Desc':
-    'Instant streaming response with zero delays and no token counting on paid tiers.',
+  'docs.step3Desc': 'The answer streams in as the model writes it, and shows which model replied.',
 
   'checkout.title': 'Checkout',
   'checkout.cardNumber': 'Card number',
@@ -346,6 +346,9 @@ export const en: Record<TranslationKey, string> = {
   'footer.account': 'Account',
   'footer.allModels': 'All models',
   'footer.faq': 'FAQ',
+  'footer.changelog': 'What’s new',
+  'footer.status': 'Service status',
+  'footer.about': 'About',
   'footer.rights': '© {year} Ketner AI',
 
   // Лендинг: hero
@@ -702,7 +705,7 @@ export const en: Record<TranslationKey, string> = {
   'tg.current': 'current',
   'tg.planPlusHint': 'Ketner Pro, Claude Haiku, DeepSeek and GPT-6.1 Sol',
   'tg.planProHint': 'Everything in Plus, plus Claude Opus and Sonnet, GPT-6 Astra and Grok',
-  'tg.planUltraHint': 'Everything in Pro, Max mode and top priority',
+  'tg.planUltraHint': 'Everything in Pro, Max mode and the highest limits',
   'tg.previewNew': '30 days from today — until {date}.',
   'tg.previewExtend': '+30 days to your current term — until {date}.',
   'tg.previewSwitch': 'Switch right away — until {date}.',
@@ -1228,7 +1231,7 @@ export const en: Record<TranslationKey, string> = {
   'docPage.whatLead':
     'One service instead of dozens of subscriptions. Access the world’s best AI models in a single place.',
   'docPage.whatText':
-    'Forget about switching between separate accounts, paying $20 to each provider, and managing API keys. Ketner AI brings together OpenAI GPT, Anthropic Claude, and Google Gemini under one seamless, unlimited subscription.',
+    'Forget about switching between separate accounts, paying $20 to each provider, and managing API keys. Ketner AI brings OpenAI GPT, Anthropic Claude, Google Gemini and other models together in one subscription with clear, published limits.',
   'docPage.step1Title': 'Type your question',
   'docPage.step1Text':
     'Ask for code, translation, writing, analysis, or any creative task in your regular language.',
@@ -1239,17 +1242,18 @@ export const en: Record<TranslationKey, string> = {
   'docPage.step3Text':
     'Streamed instantly to your screen with full markdown, code highlights, and preserved context.',
   'docPage.plansTitle': 'Plans',
-  'docPage.plansLead':
-    'Simple transparent plans categorized by speed, priority, and model capabilities — no token math.',
+  'docPage.plansLead': 'Plans differ by models and limits. Every limit is published up front.',
   'docPage.fairTitle': 'Fair Use Policy',
   'docPage.fairCallout': 'Plans are built for normal human use: chat, code, documents and images',
   'docPage.fair1Title': '1. For real people',
-  'docPage.fair1Text': 'Chat as much as you need for coding, writing, research, and learning.',
+  'docPage.fair1Text':
+    'Every plan has a daily message limit and weekly limits for expensive models, all listed on the Pricing page.',
   'docPage.fair2Title': '2. Protection from bots',
   'docPage.fair2Text':
     'Fair Use prevents automated web scraping and DDOS floods so servers stay fast for everyone.',
   'docPage.fair3Title': '3. Invisible and smooth',
-  'docPage.fair3Text': 'With normal use you won’t run into restrictions.',
+  'docPage.fair3Text':
+    'When a model limit runs out, its backup model answers; which one is shown on the Models page.',
   'docPage.faqTitle': 'Frequently Asked Questions',
   'docPage.tryFree': 'Try Free',
   'docPage.choosePlan': 'Choose {plan}',

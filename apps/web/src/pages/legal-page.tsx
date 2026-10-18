@@ -25,7 +25,7 @@ export function LegalPage({ id }: { id: LegalPageId }) {
           {doc.title}
         </h1>
         <p className="text-[15px] leading-7 text-muted">{doc.lead}</p>
-        <p className="text-[13px] text-subtle">Редакция от {LEGAL_UPDATED}</p>
+        <p className="text-[13px] text-subtle">Редакция от {doc.updated ?? LEGAL_UPDATED}</p>
         <nav
           aria-label="Правовая информация"
           className="flex flex-wrap gap-x-4 gap-y-1 text-[14px]"

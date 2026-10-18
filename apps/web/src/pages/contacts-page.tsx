@@ -2,6 +2,7 @@ import { useState, type FormEvent } from 'react';
 import { Link } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { KNOWN_ISSUES } from '@/features/content/known-issues';
 import { LEGAL_DOCUMENTS, SUPPORT_EMAIL } from '@/features/content/legal';
 import { API_BASE } from '@/lib/api-config';
 import { cn } from '@/lib/cn';
@@ -9,7 +10,34 @@ import { useDocumentTitle } from '@/lib/use-document-title';
 
 type Status = 'idle' | 'sending' | 'sent';
 
+/** Темы совпадают с сервером: apps/mock-api/src/store/contact-store.ts (CONTACT_TOPICS). */
+type Topic = 'bug' | 'idea' | 'payment' | 'other';
+
+const TOPICS: { id: Topic; label: string; hint: string; placeholder: string }[] = [
+  {
+    id: 'bug',
+    label: 'Ошибка',
+    hint: 'Что-то сломалось или работает не так',
+    placeholder:
+      'Что вы делали, что ожидали и что произошло. Укажите модель, раздел (чат, Code, картинки) и примерное время.',
+  },
+  {
+    id: 'idea',
+    label: 'Идея или функция',
+    hint: 'Чего не хватает в Ketner AI',
+    placeholder: 'Какую задачу хотите решить и как это могло бы работать.',
+  },
+  {
+    id: 'payment',
+    label: 'Оплата и возврат',
+    hint: 'Счёт, подписка, возврат',
+    placeholder: 'Почта аккаунта, тариф, способ и время оплаты. Номер карты не присылайте.',
+  },
+  { id: 'other', label: 'Другое', hint: 'Вопрос, данные, сотрудничество', placeholder: '' },
+];
+
 async function sendContact(payload: {
+  topic: Topic;
   name: string;
   email: string;
   message: string;
@@ -39,6 +67,7 @@ const textareaClass = cn(
 /** Контакты: почта поддержки, бот в Telegram и форма обратной связи. */
 export function ContactsPage() {
   useDocumentTitle('Контакты — Ketner AI');
+  const [topic, setTopic] = useState<Topic>('bug');
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [message, setMessage] = useState('');
@@ -51,7 +80,7 @@ export function ContactsPage() {
     setError(null);
     setStatus('sending');
     try {
-      await sendContact({ name, email, message, website });
+      await sendContact({ topic, name, email, message, website });
       setStatus('sent');
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : 'Не удалось отправить сообщение.');
@@ -64,8 +93,12 @@ export function ContactsPage() {
       <header className="flex flex-col gap-3">
         <h1 className="text-3xl font-semibold tracking-tight text-balance md:text-4xl">Контакты</h1>
         <p className="text-[15px] leading-7 text-muted">
-          Вопросы по оплате, возврату, работе сервиса или данным — пишите, ответим на почту, которую
-          вы укажете. Обычно в течение суток.
+          Нашли ошибку, не хватает функции, вопрос по оплате, возврату или данным — пишите, ответим
+          на почту, которую вы укажете. Обычно в течение суток. Ответы на частые вопросы — в{' '}
+          <a className="underline underline-offset-4" href="/#faq">
+            разделе FAQ
+          </a>
+          .
         </p>
       </header>
 
@@ -92,6 +125,44 @@ export function ContactsPage() {
         </div>
       </section>
 
+      <section aria-labelledby="known-issues-title" className="flex flex-col gap-3">
+        <h2 id="known-issues-title" className="text-xl font-semibold tracking-tight">
+          Уже знаем и работаем
+        </h2>
+        <p className="text-[15px] leading-7 text-muted">
+          Об этих проблемах писать не нужно — они в работе. Если ваша ошибка не похожа ни на одну из
+          них, сообщите через форму ниже. Состояние сервиса прямо сейчас — на странице{' '}
+          <Link className="underline underline-offset-4" to="/status">
+            «Статус»
+          </Link>
+          .
+        </p>
+        <details className="group rounded-xl border border-stroke bg-surface">
+          <summary className="flex min-h-11 cursor-pointer items-center justify-between gap-3 px-4 py-3 text-[15px] font-medium text-text">
+            Известные проблемы ({KNOWN_ISSUES.length})
+            <span
+              aria-hidden="true"
+              className="text-subtle transition-transform group-open:rotate-180"
+            >
+              ▾
+            </span>
+          </summary>
+          <ul className="flex flex-col divide-y divide-stroke/60 border-t border-stroke">
+            {KNOWN_ISSUES.map((issue) => (
+              <li key={issue.id} className="flex flex-col gap-1 px-4 py-3">
+                <span className="text-[14px] font-medium text-text">{issue.title}</span>
+                <span className="text-[14px] leading-6 text-muted">{issue.details}</span>
+                {issue.workaround ? (
+                  <span className="text-[14px] leading-6 text-muted">
+                    <span className="text-text">Что делать сейчас:</span> {issue.workaround}
+                  </span>
+                ) : null}
+              </li>
+            ))}
+          </ul>
+        </details>
+      </section>
+
       <section aria-labelledby="contact-form-title" className="flex flex-col gap-4">
         <h2 id="contact-form-title" className="text-xl font-semibold tracking-tight">
           Форма обратной связи
@@ -105,6 +176,34 @@ export function ContactsPage() {
           </p>
         ) : (
           <form onSubmit={(event) => void submit(event)} className="flex flex-col gap-4" noValidate>
+            <fieldset className="flex flex-col gap-2">
+              <legend className="mb-1.5 text-[14px] text-muted">Тема</legend>
+              <div className="grid gap-2 sm:grid-cols-2">
+                {TOPICS.map((option) => (
+                  <label
+                    key={option.id}
+                    className={cn(
+                      'flex min-h-11 cursor-pointer flex-col gap-0.5 rounded-xl border px-3.5 py-2.5 transition-colors',
+                      'has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-accent-soft',
+                      topic === option.id
+                        ? 'border-accent bg-accent-soft/40'
+                        : 'border-stroke bg-surface hover:border-stroke-strong',
+                    )}
+                  >
+                    <input
+                      type="radio"
+                      name="topic"
+                      value={option.id}
+                      checked={topic === option.id}
+                      onChange={() => setTopic(option.id)}
+                      className="sr-only"
+                    />
+                    <span className="text-[15px] font-medium text-text">{option.label}</span>
+                    <span className="text-[13px] text-subtle">{option.hint}</span>
+                  </label>
+                ))}
+              </div>
+            </fieldset>
             <label className="flex flex-col gap-1.5 text-[14px] text-muted">
               Имя
               <Input
@@ -130,6 +229,7 @@ export function ContactsPage() {
               <textarea
                 className={textareaClass}
                 value={message}
+                placeholder={TOPICS.find((option) => option.id === topic)?.placeholder}
                 onChange={(event) => setMessage(event.target.value)}
                 required
                 minLength={10}

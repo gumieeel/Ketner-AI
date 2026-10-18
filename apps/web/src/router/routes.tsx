@@ -59,6 +59,13 @@ export const routes: RouteObject[] = [
       { path: 'terms', lazy: lazyLegal('terms') },
       { path: 'payment-terms', lazy: lazyLegal('payment-terms') },
       { path: 'contacts', lazy: lazyPage(() => import('@/pages/contacts-page'), 'ContactsPage') },
+      { path: 'about', lazy: lazyPage(() => import('@/pages/about-page'), 'AboutPage') },
+      { path: 'models', lazy: lazyPage(() => import('@/pages/models-page'), 'ModelsPage') },
+      { path: 'status', lazy: lazyPage(() => import('@/pages/status-page'), 'StatusPage') },
+      {
+        path: 'changelog',
+        lazy: lazyPage(() => import('@/pages/changelog-page'), 'ChangelogPage'),
+      },
       { path: 'docs', lazy: documentationPage },
       { path: 'docs/plans/:planId', lazy: documentationPage },
       { path: 'docs/api', lazy: apiDocsPage },

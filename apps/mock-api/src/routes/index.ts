@@ -34,6 +34,7 @@ import { createUsageRouter } from './usage.js';
 import { createConversationsRouter } from './conversations.js';
 import { healthRouter } from './health.js';
 import { createMetaRouter } from './meta.js';
+import { createStatusRouter } from './status.js';
 import { createTelegramRouter } from './telegram.js';
 import { createAdminRouter } from './admin.js';
 import { createWebhookRouter } from './webhooks.js';
@@ -269,6 +270,7 @@ export function createApiRouter(deps: ApiDeps): Router {
   });
 
   router.use(healthRouter);
+  router.use(createStatusRouter());
   router.use(createMetaRouter());
   router.use('/auth', createAuthRouter(activeUserStore, deps.betterAuth, deps.revokedTokenStore));
   router.use(

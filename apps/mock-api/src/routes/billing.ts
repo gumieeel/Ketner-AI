@@ -42,12 +42,8 @@ export const PLANS: readonly PlanItem[] = [
     },
     modelsHighlight: 'Ketner Mini + Auto Mode',
     bullets: {
-      ru: [
-        'Ketner Mini (быстрая модель)',
-        'Интеллектуальный Auto Mode',
-        'Базовые функции и история чатов',
-      ],
-      en: ['Ketner Mini (fast model)', 'Intelligent Auto Mode', 'Basic features & chat history'],
+      ru: ['Бесплатные модели, запасная — Ketner Mini', '10 сообщений в сутки', 'История чатов'],
+      en: ['Free models, Ketner Mini as backup', '10 messages a day', 'Chat history'],
     },
   },
   {
@@ -63,13 +59,13 @@ export const PLANS: readonly PlanItem[] = [
       ru: [
         'Стандартные и продвинутые модели',
         'Auto Mode с оптимизацией себестоимости',
-        'Контекст до 60 сообщений',
+        '500 сообщений в сутки',
         '2 параллельных запроса',
       ],
       en: [
         'Standard and advanced models',
         'Auto Mode with cost optimization',
-        'Up to 60 context messages',
+        '500 messages a day',
         '2 concurrent requests',
       ],
     },
@@ -89,14 +85,14 @@ export const PLANS: readonly PlanItem[] = [
       ru: [
         'Флагманские модели Claude, GPT и Grok',
         'Без раздельных подписок на каждого провайдера',
-        'Контекст до 120 сообщений',
-        '4 параллельных запроса и повышенный приоритет',
+        '1 500 сообщений в сутки',
+        '4 параллельных запроса',
       ],
       en: [
         'Flagship Claude, GPT and Grok models',
         'No separate subscriptions per AI provider',
-        'Up to 120 context messages',
-        '4 concurrent requests & higher priority',
+        '1,500 messages a day',
+        '4 concurrent requests',
       ],
     },
   },
@@ -105,22 +101,20 @@ export const PLANS: readonly PlanItem[] = [
     nameKey: 'pricing.ultra',
     priceMonthly: PLAN_PRICE_USD.ultra,
     limitBadge: {
-      ru: 'Режим Max · Высший приоритет',
-      en: 'Max mode · Highest priority',
+      ru: 'Режим Max · Самые высокие лимиты',
+      en: 'Max mode · Highest limits',
     },
     modelsHighlight: 'Все модели Pro + режим Max',
     bullets: {
       ru: [
         'Всё из Pro и режим Max: модели думают глубже',
-        'До 500 сообщений контекста для больших файлов',
+        '4 000 сообщений в сутки',
         '8 параллельных запросов',
-        'Максимальная скорость и мгновенный отклик',
       ],
       en: [
         'Everything in Pro plus Max mode: models think deeper',
-        'Up to 500 context messages for large codebases',
+        '4,000 messages a day',
         '8 concurrent requests',
-        'Maximum processing speed & instant response',
       ],
     },
   },
