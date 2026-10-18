@@ -14,8 +14,8 @@ export const FAQ_ITEMS: FaqItem[] = [
       en: 'Are there any limits?',
     },
     a: {
-      ru: 'Да, безлимита нет. У каждого тарифа есть лимит сообщений в сутки (Free — 10, Plus — 500, Pro — 1 500, Ultra — 4 000), а у дорогих моделей — свой лимит: например, на Pro это 21 запрос Claude Opus 5.5 в неделю, не больше 8 в сутки. Когда лимит модели исчерпан, отвечает запасная модель — какая именно, указано на странице «Модели». Все числа — на странице «Тарифы».',
-      en: 'Yes, there is no unlimited plan. Every plan has a daily message limit (Free 10, Plus 500, Pro 1,500, Ultra 4,000), and expensive models have their own limit: on Pro, for example, 21 Claude Opus 5.5 requests a week, at most 8 a day. When a model limit runs out, a backup model answers; which one is shown on the Models page. All numbers are on the Pricing page.',
+      ru: 'Ответы не заканчиваются, когда кончился лимит сильной модели. Например, на Pro можно отправить 21 запрос Claude Opus 5.5 в неделю, не больше 8 в сутки, — дальше отвечает модель попроще (какая именно, указано на странице «Модели»). Общий предел тарифа — сообщения в сутки: Free — 10, Plus — 500, Pro — 1 500, Ultra — 4 000. Все числа — на странице «Тарифы».',
+      en: 'Answers do not stop when a strong model hits its limit. On Pro, for example, you can send 21 Claude Opus 5.5 requests a week, at most 8 a day; after that a simpler model answers (which one is shown on the Models page). The overall plan limit is messages per day: Free 10, Plus 500, Pro 1,500, Ultra 4,000. All numbers are on the Pricing page.',
     },
   },
   {

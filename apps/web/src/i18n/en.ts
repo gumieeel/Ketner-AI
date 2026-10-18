@@ -762,7 +762,7 @@ export const en: Record<TranslationKey, string> = {
   'tg.copyId': 'Copy number',
   'tg.refundTitle': 'Refund',
   'tg.refundAutoText':
-    'Stars go back to your Telegram balance right away, and your subscription returns to what it was before this payment.',
+    'Stars go back to your Telegram balance, and your subscription returns to what it was before this payment.',
   'tg.refundStarsRequestText':
     'An administrator will review the request, usually within a day. Once approved, the stars go back to your Telegram balance and your subscription returns to how it was before this payment.',
   'tg.refundCryptoText':

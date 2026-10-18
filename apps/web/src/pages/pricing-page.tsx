@@ -113,10 +113,6 @@ const COMPARISON_ROWS: ComparisonRow[] = [
     ru: `до ${plan.requestsPerMinute} в минуту и ${formatNumber(plan.requestsPerHour, 'ru')} в час`,
     en: `up to ${plan.requestsPerMinute} a minute and ${formatNumber(plan.requestsPerHour, 'en')} an hour`,
   })),
-  factRow({ ru: 'Что модель видит из диалога', en: 'What the model sees of a chat' }, () => ({
-    ru: 'Первое сообщение, краткую сводку и последние 8–13 сообщений',
-    en: 'The first message, a short summary and the last 8–13 messages',
-  })),
   factRow({ ru: 'Квота премиум-моделей на 30 дней', en: 'Premium quota per 30 days' }, (plan) =>
     plan.premiumExamples
       ? {
@@ -140,6 +136,10 @@ const COMPARISON_ROWS: ComparisonRow[] = [
   factRow({ ru: 'Запросов одновременно', en: 'Requests at once' }, (plan) =>
     same(String(plan.concurrency)),
   ),
+  factRow({ ru: 'Приоритет и скорость', en: 'Priority and speed' }, () => ({
+    ru: 'Одинаковые на всех тарифах: очереди нет, скорость зависит от модели',
+    en: 'Same on every plan: no queue, speed depends on the model',
+  })),
   factRow({ ru: 'Длина ответа', en: 'Answer length' }, (plan) => ({
     ru: `до ${formatNumber(plan.maxAnswerTokens, 'ru')} токенов`,
     en: `up to ${formatNumber(plan.maxAnswerTokens, 'en')} tokens`,
@@ -367,8 +367,8 @@ function LimitsExplained() {
         </h2>
         <p className="max-w-[70ch] text-sm text-muted md:text-[15px]">
           {language === 'ru'
-            ? 'Безлимитного тарифа нет: модели стоят по-разному, поэтому лимитов несколько. Примеры — на тарифе Pro, числа для остальных тарифов — в таблице выше.'
-            : 'There is no unlimited plan: models cost differently, so there are several limits. Examples use Pro; numbers for other plans are in the table above.'}
+            ? 'Когда кончается лимит сильной модели, ответы не прекращаются — дальше отвечает модель попроще. Ниже — как это устроено на примере тарифа Pro; числа для остальных тарифов — в таблице выше.'
+            : 'When a strong model hits its limit, answers do not stop: a simpler model takes over. Below is how it works on Pro; numbers for other plans are in the table above.'}
         </p>
       </div>
       <div className="grid gap-3 md:grid-cols-2">
