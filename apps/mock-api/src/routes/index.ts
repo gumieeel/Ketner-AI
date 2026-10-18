@@ -129,7 +129,24 @@ export const API_ENDPOINTS = [
     status: 'ready',
     description: 'Повторная отправка кода регистрации',
   },
-  { method: 'POST', path: '/api/auth/login', status: 'ready', description: 'Вход (заглушка)' },
+  {
+    method: 'POST',
+    path: '/api/auth/login/verify',
+    status: 'ready',
+    description: 'Подтверждение входа кодом из письма',
+  },
+  {
+    method: 'POST',
+    path: '/api/auth/login/resend',
+    status: 'ready',
+    description: 'Повторная отправка кода входа',
+  },
+  {
+    method: 'POST',
+    path: '/api/auth/login',
+    status: 'ready',
+    description: 'Вход: почта и пароль, затем код из письма',
+  },
   { method: 'GET', path: '/api/auth/me', status: 'ready', description: 'Текущий пользователь' },
   { method: 'GET', path: '/api/plans', status: 'ready', description: 'Каталог тарифов' },
   {
@@ -286,7 +303,9 @@ export function createApiRouter(deps: ApiDeps): Router {
   router.use(createMetaRouter());
   router.use(
     '/auth',
-    createAuthRouter(activeUserStore, deps.betterAuth, deps.revokedTokenStore, deps.mailer),
+    createAuthRouter(activeUserStore, deps.betterAuth, deps.revokedTokenStore, {
+      mailer: deps.mailer,
+    }),
   );
   router.use(
     createContactRouter({

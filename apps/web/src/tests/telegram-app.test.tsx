@@ -625,7 +625,7 @@ describe('кабинет в Telegram (/tg)', () => {
     });
   });
 
-  it('профиль: уведомления и вход на сайт одноразовой ссылкой', async () => {
+  it('профиль: уведомления и сайт без автоматического входа', async () => {
     const app = fakeWebApp();
     window.Telegram = { WebApp: app };
     const state = makeState();
@@ -633,8 +633,6 @@ describe('кабинет в Telegram (/tg)', () => {
       if (url === '/api/telegram/miniapp/session') return linkedSession(state);
       if (url === '/api/telegram/miniapp/prefs')
         return Response.json({ ...state, prefs: { reminders: false, receipts: true } });
-      if (url === '/api/telegram/miniapp/site-login')
-        return Response.json({ url: 'https://ketner.org/auth/telegram?t=abc&next=%2Fchat' });
       return undefined;
     });
     window.history.replaceState(null, '', '/tg?tab=profile');
@@ -650,12 +648,9 @@ describe('кабинет в Telegram (/tg)', () => {
     expect(calls.find((call) => call.url.endsWith('/prefs'))?.body).toEqual({ reminders: false });
 
     fireEvent.click(screen.getByRole('button', { name: /Открыть Ketner AI/ }));
-    await waitFor(() =>
-      expect(app.openLink).toHaveBeenCalledWith(
-        'https://ketner.org/auth/telegram?t=abc&next=%2Fchat',
-      ),
-    );
-    expect(calls.find((call) => call.url.endsWith('/site-login'))?.body).toEqual({ next: '/chat' });
+    // Входа на сайт через Telegram нет: открывается обычная страница, войти — по почте с кодом.
+    await waitFor(() => expect(app.openLink).toHaveBeenCalledWith('https://ketner.org/chat'));
+    expect(calls.some((call) => call.url.endsWith('/site-login'))).toBe(false);
     expect(screen.getByRole('button', { name: /Отвязать Telegram/ })).toBeInTheDocument();
   });
 });

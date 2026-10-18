@@ -7,19 +7,20 @@ import {
   logout as apiLogout,
   oauthLogin,
   signup as apiSignup,
-  verifySignup as apiVerifySignup,
+  verifyCode as apiVerifyCode,
 } from './api';
 import { ApiError } from '../chat/api';
 import { useUpgradeModal } from '../billing/upgrade-modal-store';
 import type {
+  AuthFlow,
   AuthSession,
   AuthStatus,
+  CodeChallenge,
   LoginPayload,
   PlanId,
   SignupPayload,
-  SignupStart,
   User,
-  VerifySignupPayload,
+  VerifyCodePayload,
 } from './types';
 
 interface AuthState {
@@ -27,22 +28,16 @@ interface AuthState {
   token: string | null;
   status: AuthStatus;
   error: string | null;
-  login: (payload: LoginPayload) => Promise<void>;
-  /** Отправляет форму регистрации; аккаунт появится после verifySignup с кодом из письма. */
-  signup: (payload: SignupPayload) => Promise<SignupStart>;
-  /**
-   * Подтверждение почты кодом: создаёт аккаунт и входит в него. Пароль (если страница его ещё помнит)
-   * нужен только для cookie-сессии Better Auth; без него вход работает по токену.
-   */
-  verifySignup: (
-    payload: VerifySignupPayload & { email: string; password?: string },
-  ) => Promise<void>;
+  /** Почта и пароль; сессия появится после verifyCode с кодом из письма. */
+  login: (payload: LoginPayload) => Promise<CodeChallenge>;
+  /** Форма регистрации; аккаунт появится после verifyCode с кодом из письма. */
+  signup: (payload: SignupPayload) => Promise<CodeChallenge>;
+  /** Код из письма: завершает вход или регистрацию и открывает сессию. */
+  verifyCode: (flow: AuthFlow, payload: VerifyCodePayload) => Promise<void>;
   mockOAuth: (provider: 'google' | 'github') => Promise<void>;
   logout: () => Promise<void>;
   restoreSession: () => Promise<void>;
   setUser: (user: User | null) => void;
-  /** Сессия, полученная не через форму: вход через Telegram или одноразовая ссылка из кабинета. */
-  applySession: (session: AuthSession) => Promise<void>;
   clearError: () => void;
 }
 
@@ -206,33 +201,13 @@ export const useAuth = create<AuthState>((set, get) => ({
   },
 
   login: async (payload: LoginPayload) => {
-    set({ status: 'loading', error: null });
+    set({ error: null });
     try {
-      const session = await apiLogin(payload);
-      const user = normalizeUser(session.user as unknown as Record<string, unknown>);
-      saveSession({ user, token: session.token, expiresAt: session.expiresAt });
-      useUpgradeModal.getState().close();
-      set({ user, token: session.token, status: 'authenticated', error: null });
-
-      // Синхронизируем сессию в Better Auth (куки). Сначала снимаем старую cookie-сессию: в браузере
-      // мог остаться вход другого аккаунта (например, через Google), и сервер видел бы его вместо этого.
-      try {
-        await authClient.signOut();
-      } catch {
-        // Игнорируем
-      }
-      try {
-        await authClient.signIn.email({
-          email: payload.email,
-          password: payload.password,
-        });
-      } catch {
-        // Игнорируем
-      }
+      return await apiLogin(payload);
     } catch (apiError) {
       const message =
         apiError instanceof Error ? apiError.message : 'Неверный адрес почты или пароль';
-      set({ status: 'unauthenticated', error: message });
+      set({ error: message });
       throw apiError;
     }
   },
@@ -248,29 +223,15 @@ export const useAuth = create<AuthState>((set, get) => ({
     }
   },
 
-  verifySignup: async ({ signupId, code, email, password }) => {
+  verifyCode: async (flow: AuthFlow, payload: VerifyCodePayload) => {
     set({ error: null });
     try {
-      const session = await apiVerifySignup({ signupId, code });
+      // Сервер в ответе ставит и cookie-сессию Better Auth этого аккаунта (вместо прежней, если была).
+      const session = await apiVerifyCode(flow, payload);
       const user = normalizeUser(session.user as unknown as Record<string, unknown>);
       saveSession({ user, token: session.token, expiresAt: session.expiresAt });
       useUpgradeModal.getState().close();
       set({ user, token: session.token, status: 'authenticated', error: null });
-
-      // Синхронизируем сессию в Better Auth (куки). Сначала снимаем старую cookie-сессию: в браузере
-      // мог остаться вход другого аккаунта (например, через Google), и сервер видел бы его вместо этого.
-      try {
-        await authClient.signOut();
-      } catch {
-        // Игнорируем
-      }
-      if (password) {
-        try {
-          await authClient.signIn.email({ email, password });
-        } catch {
-          // Игнорируем
-        }
-      }
     } catch (apiError) {
       const message = apiError instanceof Error ? apiError.message : 'Не удалось подтвердить код';
       set({ error: message });
@@ -305,19 +266,6 @@ export const useAuth = create<AuthState>((set, get) => ({
     if (token) {
       await apiLogout(token);
     }
-  },
-
-  applySession: async (session: AuthSession) => {
-    // Снимаем cookie-сессию прежнего входа (Google/GitHub): иначе сервер мог бы видеть другой аккаунт.
-    try {
-      await authClient.signOut();
-    } catch {
-      // Игнорируем
-    }
-    const user = normalizeUser(session.user as unknown as Record<string, unknown>);
-    saveSession({ user, token: session.token, expiresAt: session.expiresAt });
-    useUpgradeModal.getState().close();
-    set({ user, token: session.token, status: 'authenticated', error: null });
   },
 
   setUser: (user: User | null) => {

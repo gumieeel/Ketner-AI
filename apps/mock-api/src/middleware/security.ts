@@ -50,7 +50,8 @@ export function isAllowedCorsOrigin(origin: string, production = isProduction): 
 const BETTER_AUTH_PUBLIC: ReadonlyArray<{ methods: readonly string[]; pattern: RegExp }> = [
   { methods: ['GET'], pattern: /^\/api\/auth\/get-session$/ },
   { methods: ['POST'], pattern: /^\/api\/auth\/sign-out$/ },
-  { methods: ['POST'], pattern: /^\/api\/auth\/sign-in\/(email|social)$/ },
+  // Вход по паролю (sign-in/email) закрыт: сессию по паролю выдаёт сервер только после кода из письма.
+  { methods: ['POST'], pattern: /^\/api\/auth\/sign-in\/social$/ },
   { methods: ['GET', 'POST'], pattern: /^\/api\/auth\/callback\/[a-z0-9_-]+(\/oauth-proxy)?$/ },
   { methods: ['GET'], pattern: /^\/api\/auth\/oauth-proxy-callback$/ },
   { methods: ['GET'], pattern: /^\/api\/auth\/(error|ok)$/ },

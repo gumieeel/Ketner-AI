@@ -337,77 +337,30 @@ test('коды привязки и payload счёта', () => {
 
 // ───────────── вход и привязка ─────────────
 
-test('вход на сайт через Telegram: без привязки аккаунт не создаётся, после привязки — вход и сессия один раз', async (t) => {
+test('входа на сайт через Telegram нет: запрос входа отклоняется, аккаунт не создаётся', async (t) => {
   const h = await harness();
   t.after(() => h.server.close());
-  const startLogin = async () =>
-    readJson<{ requestId: string; botUrl: string }>(
-      await fetch(`${h.server.baseUrl}/api/auth/telegram/start`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0) Chrome/130.0',
-        },
-        body: JSON.stringify({ mode: 'login' }),
-      }),
-    );
-  const pollOf = async (requestId: string) =>
-    readJson<{ status: string; token?: string; user?: User }>(
-      await fetch(`${h.server.baseUrl}/api/auth/telegram/poll/${requestId}`),
-    );
   const usersBefore = h.userStore.list().length;
-
-  // 1. Telegram не привязан: бот объясняет, как привязать, сайт получает «unlinked».
-  const first = await startLogin();
-  assert.match(first.botUrl, /^https:\/\/t\.me\/ketner_test_bot\?start=auth_[A-Za-z0-9_-]{16}$/);
-  assert.equal((await pollOf(first.requestId)).status, 'pending');
-  await h.message(7001, `/start auth_${first.botUrl.split('start=auth_')[1]!}`);
-  assert.match(String(h.bot.last('sendMessage')!.body.text), /не привязан к аккаунту/);
-  assert.equal((await pollOf(first.requestId)).status, 'unlinked');
-  assert.equal(h.userStore.list().length, usersBefore, 'аккаунт не создан');
-  assert.equal(h.userStore.findByTelegramChatId(7001), null);
-
-  // Старая кнопка подтверждения тоже ничего не создаёт.
-  const stale = await startLogin();
-  const staleCode = stale.botUrl.split('start=auth_')[1]!;
-  await h.callback(7001, `auth:y:${staleCode}`);
-  assert.equal((await pollOf(stale.requestId)).status, 'unlinked');
-  assert.equal(h.userStore.list().length, usersBefore);
-
-  // 2. Привязка по коду из письма, затем вход проходит в этот аккаунт.
   const site = await h.signup();
-  await h.mini('email-code', { initData: h.initData(7001), email: site.user.email });
-  await h.mini('email-verify', { initData: h.initData(7001), code: codeFromMail(h.mails.at(0)) });
-  assert.equal(h.userStore.findByTelegramChatId(7001)?.id, site.user.id);
 
-  const login = await startLogin();
-  const code = login.botUrl.split('start=auth_')[1]!;
-  await h.message(7001, `/start auth_${code}`);
-  const prompt = String(h.bot.last('sendMessage')!.body.text);
-  assert.match(prompt, /Вход на ketner\.org/);
-  assert.match(prompt, /Chrome · Windows/);
-  await h.callback(7001, `auth:y:${code}`);
-  const approved = await pollOf(login.requestId);
-  assert.equal(approved.status, 'approved');
-  assert.equal(approved.user!.id, site.user.id);
-  // Повторный опрос сессию не отдаёт.
-  assert.equal((await pollOf(login.requestId)).status, 'expired');
-  const me = await readJson<{ user: User }>(
-    await fetch(`${h.server.baseUrl}/api/auth/me`, {
-      headers: { Authorization: `Bearer ${approved.token}` },
-    }),
-  );
-  assert.equal(me.user.id, site.user.id);
-
-  // «Это не я» — отказ.
-  const again = await startLogin();
-  const code2 = again.botUrl.split('start=auth_')[1]!;
-  await h.message(7001, `/start auth_${code2}`);
-  await h.callback(7001, `auth:n:${code2}`);
-  assert.equal((await pollOf(again.requestId)).status, 'declined');
+  for (const body of [{ mode: 'login' }, {}]) {
+    for (const headers of [
+      { 'Content-Type': 'application/json' },
+      { 'Content-Type': 'application/json', Authorization: `Bearer ${site.token}` },
+    ]) {
+      const res = await fetch(`${h.server.baseUrl}/api/auth/telegram/start`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify(body),
+      });
+      assert.equal(res.status, 410);
+      assert.equal((await readJson<ApiErrorBody>(res)).error.code, 'telegram_login_disabled');
+    }
+  }
+  assert.equal(h.userStore.list().length, usersBefore + 1, 'создан только аккаунт с сайта');
 });
 
-test('привязка из настроек: подтверждение в боте, код из кабинета, вход на сайт из кабинета', async (t) => {
+test('привязка из настроек: подтверждение в боте, код из кабинета; ссылок входа из кабинета нет', async (t) => {
   const h = await harness();
   t.after(() => h.server.close());
   const site = await h.signup();
@@ -460,25 +413,16 @@ test('привязка из настроек: подтверждение в бо
   });
   assert.equal(reused.status, 400);
 
-  // Кабинет открывает сайт уже войдя: ссылка одноразовая.
+  // Кабинет не открывает сайт уже войдя: одноразовых ссылок входа больше нет.
   const session = await h.mini<{ token: string }>('session', { initData: h.initData(7202) });
-  const magic = await h.mini<{ url: string }>(
-    'site-login',
-    { next: '/settings' },
-    session.body.token,
-  );
-  const url = new URL(magic.body.url);
-  assert.equal(url.origin + url.pathname, 'https://ketner.org/auth/telegram');
-  assert.equal(url.searchParams.get('next'), '/settings');
-  const exchange = () =>
-    fetch(`${h.server.baseUrl}/api/auth/telegram/magic`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ token: url.searchParams.get('t') }),
-    });
-  const first = await exchange();
-  assert.equal((await readJson<{ user: User }>(first)).user.id, other.user.id);
-  assert.equal((await exchange()).status, 400);
+  const magic = await h.mini<ApiErrorBody>('site-login', { next: '/settings' }, session.body.token);
+  assert.equal(magic.status, 404);
+  const exchange = await fetch(`${h.server.baseUrl}/api/auth/telegram/magic`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ token: 'anything' }),
+  });
+  assert.equal(exchange.status, 404);
 });
 
 test('кабинет: регистрации в Telegram нет, привязка по коду из письма', async (t) => {

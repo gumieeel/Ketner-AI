@@ -17,7 +17,7 @@ import { IconButton } from '@/components/ui/icon-button';
 import { Field, Input } from '@/components/ui/input';
 import { authClient } from '@/features/auth/auth-client';
 import { useAuth } from '@/features/auth/auth-store';
-import { savePendingSignup } from '@/features/auth/pending-signup';
+import { savePendingCode } from '@/features/auth/pending-code';
 import { useTranslation } from '@/i18n';
 import { cn } from '@/lib/cn';
 
@@ -93,15 +93,15 @@ export function SignupPage() {
 
     setLoading(true);
     try {
-      const pending = await signup({ email: trimmedEmail, password, name: trimmedName });
-      savePendingSignup({
-        signupId: pending.signupId,
-        email: pending.email,
-        resendAt: Date.now() + pending.resendAfterSec * 1000,
+      const challenge = await signup({ email: trimmedEmail, password, name: trimmedName });
+      savePendingCode('signup', {
+        challengeId: challenge.challengeId,
+        email: trimmedEmail,
+        maskedEmail: challenge.maskedEmail,
+        resendAt: Date.now() + challenge.resendAfterSec * 1000,
       });
       const query = isSafeRedirect ? `?redirect=${encodeURIComponent(redirectUrl)}` : '';
-      // Пароль — только в памяти: он нужен странице кода для cookie-сессии после подтверждения.
-      navigate(`/signup/verify${query}`, { state: { password } });
+      navigate(`/signup/verify${query}`);
     } catch (error) {
       setServerError(error instanceof Error ? error.message : t('auth.signupFailed'));
     } finally {

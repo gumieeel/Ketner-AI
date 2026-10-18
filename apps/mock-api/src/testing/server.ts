@@ -24,7 +24,7 @@ import type { Conversation, Message } from '../types.js';
 import { createSupportStore } from '../store/support-store.js';
 import { TelegramSupportBotService } from '../telegram/support-bot.js';
 import type { MailMessage, Mailer } from '../services/mailer.js';
-import { rememberSignupMail } from './signup.js';
+import { isCodeMail, rememberCodeMails } from './signup.js';
 
 /** Задержки без пауз: тесты не должны ждать стриминг. */
 export const FAST_AI: AiConfig = {
@@ -41,8 +41,8 @@ export interface TestServer {
   usageStore: UsageStore;
   apiKeyStore: ApiKeyStore;
   githubConnectionStore: GithubConnectionStore;
-  /** Письма с кодом подтверждения регистрации. */
-  signupMails: MailMessage[];
+  /** Письма с кодами регистрации и входа. */
+  codeMails: MailMessage[];
 }
 
 /** Поднимает приложение на свободном порту с временным файлом хранилища. */
@@ -85,15 +85,15 @@ export async function startTestServer(
     useMockEngine: true,
   });
 
-  // Письма с кодом регистрации перехватываются (их читает signupAndVerify), остальные уходят в
-  // почтовик теста, если он передан: его счётчики писем не должны меняться от регистраций.
-  const signupMails: MailMessage[] = [];
+  // Письма с кодом регистрации и входа перехватываются (их читают signupAndVerify / loginAndVerify),
+  // остальные уходят в почтовик теста, если он передан: его счётчики писем не должны меняться.
+  const codeMails: MailMessage[] = [];
   const innerMailer = extra.mailer;
   const testMailer: Mailer = {
     kind: innerMailer?.kind ?? 'console',
     async send(message) {
-      if (/код подтверждения Ketner AI/.test(message.subject)) {
-        signupMails.push(message);
+      if (isCodeMail(message)) {
+        codeMails.push(message);
         return;
       }
       await innerMailer?.send(message);
@@ -122,10 +122,10 @@ export async function startTestServer(
 
   const address = server.address() as AddressInfo;
   const baseUrl = `http://127.0.0.1:${address.port}`;
-  rememberSignupMail(baseUrl, signupMails);
+  rememberCodeMails(baseUrl, codeMails);
   return {
     baseUrl,
-    signupMails,
+    codeMails,
     usageStore: extra.usageStore ?? testUsageStore,
     apiKeyStore: extra.apiKeyStore ?? testApiKeyStore,
     githubConnectionStore: extra.githubConnectionStore ?? testGithubStore,

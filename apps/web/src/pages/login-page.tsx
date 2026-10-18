@@ -16,14 +16,15 @@ import { IconButton } from '@/components/ui/icon-button';
 import { Field, Input } from '@/components/ui/input';
 import { authClient } from '@/features/auth/auth-client';
 import { useAuth } from '@/features/auth/auth-store';
+import { savePendingCode } from '@/features/auth/pending-code';
 import { useTranslation } from '@/i18n';
 
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const MIN_PASSWORD_LENGTH = 8;
 
 /**
- * Страница входа.
- * Полноценная клиентская валидация, сохранение сессии и поддержка mock-OAuth.
+ * Страница входа: почта и пароль, затем код из письма на странице /login/verify.
+ * Плюс вход через Google и GitHub (в тестах — mock-OAuth).
  */
 export function LoginPage() {
   const { t } = useTranslation();
@@ -79,8 +80,16 @@ export function LoginPage() {
 
     setLoading(true);
     try {
-      await login({ email: trimmedEmail, password });
-      navigate(redirectUrl, { replace: true });
+      const challenge = await login({ email: trimmedEmail, password });
+      savePendingCode('login', {
+        challengeId: challenge.challengeId,
+        email: trimmedEmail,
+        maskedEmail: challenge.maskedEmail,
+        resendAt: Date.now() + challenge.resendAfterSec * 1000,
+      });
+      navigate(
+        `/login/verify${isSafeRedirect ? `?redirect=${encodeURIComponent(redirectUrl)}` : ''}`,
+      );
     } catch (error) {
       setServerError(error instanceof Error ? error.message : t('auth.loginFailed'));
     } finally {

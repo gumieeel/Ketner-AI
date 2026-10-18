@@ -1,14 +1,13 @@
 import { randomBytes, randomInt } from 'node:crypto';
 
 /**
- * Вход и привязка через Telegram без команд и паролей.
+ * Привязка Telegram к аккаунту сайта без команд и паролей.
  *
- * 1. Сайт создаёт запрос (`login` — войти, `link` — привязать Telegram к текущему аккаунту) и
- *    получает ссылку на бота `?start=auth_<код>`. Человек нажимает «Подтвердить» в боте, сайт
- *    раз в пару секунд опрашивает статус по секретному id и получает сессию.
+ * 1. Сайт создаёт запрос и получает ссылку на бота `?start=auth_<код>`. Человек нажимает
+ *    «Подтвердить» в боте, сайт раз в пару секунд опрашивает статус по секретному id.
+ *    Режим `login` (вход на сайт через Telegram) сайт больше не создаёт: входа через Telegram нет.
  * 2. Мини-приложение выдаёт короткий код, который вводят в настройках сайта (если аккаунт
  *    открыт на другом устройстве).
- * 3. Одноразовые ссылки входа на сайт из мини-приложения.
  *
  * Всё живёт минуты и хранится в памяти: после перезапуска достаточно начать заново.
  */
@@ -36,7 +35,6 @@ export interface AuthRequest {
 
 const REQUEST_TTL_MS = 5 * 60 * 1000;
 const CLAIM_TTL_MS = 10 * 60 * 1000;
-const MAGIC_TTL_MS = 2 * 60 * 1000;
 /** Без похожих символов (0/O, 1/I): код вводят руками. */
 const CLAIM_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 
@@ -47,7 +45,6 @@ export class TelegramAuthRequests {
     string,
     { telegramUserId: number; username?: string; expiresAt: number }
   >();
-  private magic = new Map<string, { userId: string; expiresAt: number }>();
 
   create(mode: AuthMode, device: string, siteUserId?: string, now = Date.now()): AuthRequest {
     this.sweep(now);
@@ -139,21 +136,6 @@ export class TelegramAuthRequests {
     return { telegramUserId: claim.telegramUserId, username: claim.username };
   }
 
-  /** Одноразовая ссылка входа на сайт (действует 2 минуты). */
-  issueMagic(userId: string, now = Date.now()): string {
-    this.sweep(now);
-    const token = randomBytes(24).toString('base64url');
-    this.magic.set(token, { userId, expiresAt: now + MAGIC_TTL_MS });
-    return token;
-  }
-
-  consumeMagic(token: string, now = Date.now()): string | null {
-    const entry = this.magic.get(token);
-    this.magic.delete(token);
-    if (!entry || entry.expiresAt < now) return null;
-    return entry.userId;
-  }
-
   private sweep(now: number): void {
     for (const [id, request] of this.byId) {
       if (request.expiresAt + REQUEST_TTL_MS < now) {
@@ -162,7 +144,6 @@ export class TelegramAuthRequests {
       }
     }
     for (const [code, claim] of this.claims) if (claim.expiresAt < now) this.claims.delete(code);
-    for (const [token, entry] of this.magic) if (entry.expiresAt < now) this.magic.delete(token);
   }
 }
 

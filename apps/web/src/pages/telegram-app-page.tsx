@@ -252,17 +252,12 @@ function Cabinet({
     [app],
   );
 
+  // Сайт открывается без автоматического входа: войти там можно по почте с кодом или через Google.
   const openSite = useCallback(
     async (path: string) => {
-      try {
-        const { url } = await miniAppApi.siteLogin(tokenRef.current, path);
-        app.openLink(url);
-      } catch {
-        app.openLink(`${state.siteUrl}${path}`);
-        notify('info', tRef.current('tg.siteLoginFallback'));
-      }
+      app.openLink(`${state.siteUrl}${path}`);
     },
-    [app, notify, state.siteUrl],
+    [app, state.siteUrl],
   );
 
   const context = useMemo<MiniApp>(

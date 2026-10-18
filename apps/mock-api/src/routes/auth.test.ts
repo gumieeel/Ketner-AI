@@ -1,13 +1,13 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { readJson, startTestServer } from '../testing/server.js';
-import { signupAndVerify, signupCodeFor } from '../testing/signup.js';
+import { codeFor, loginAndVerify, signupAndVerify } from '../testing/signup.js';
 import type { AuthSession, User } from '../types.js';
 
-interface SignupStart {
+interface CodeChallenge {
   status: string;
-  signupId: string;
-  email: string;
+  challengeId: string;
+  maskedEmail: string;
   codeExpiresAt: string;
   resendAfterSec: number;
 }
@@ -41,14 +41,14 @@ test('auth: регистрация с подтверждением почты к
     name: 'Иван Тестов',
   });
   assert.equal(start.status, 202);
-  const pending = await readJson<SignupStart>(start);
+  const pending = await readJson<CodeChallenge>(start);
   assert.equal(pending.status, 'verification_required');
-  assert.equal(pending.email, 'ivan@example.com');
-  assert.ok(pending.signupId.length >= 20);
-  assert.equal(server.signupMails.length, 1);
-  assert.equal(server.signupMails[0]!.to, 'ivan@example.com');
-  assert.doesNotMatch(server.signupMails[0]!.text, /Иван/, 'Имя из формы в письмо не попадает');
-  const code = signupCodeFor(server.baseUrl, 'ivan@example.com');
+  assert.equal(pending.maskedEmail, 'i***n@example.com', 'Почта на экране замаскирована');
+  assert.ok(pending.challengeId.length >= 20);
+  assert.equal(server.codeMails.length, 1);
+  assert.equal(server.codeMails[0]!.to, 'ivan@example.com');
+  assert.doesNotMatch(server.codeMails[0]!.text, /Иван/, 'Имя из формы в письмо не попадает');
+  const code = codeFor(server.baseUrl, 'ivan@example.com');
   assert.ok(!JSON.stringify(pending).includes(code), 'Код не отдаётся в ответе');
 
   const notYet = await postJson(api('/login'), {
@@ -60,21 +60,24 @@ test('auth: регистрация с подтверждением почты к
   // 3. Неверный код и чужой signupId не подходят
   const wrongDigit = code === '000000' ? '111111' : '000000';
   const wrong = await postJson(api('/signup/verify'), {
-    signupId: pending.signupId,
+    challengeId: pending.challengeId,
     code: wrongDigit,
   });
   assert.equal(wrong.status, 400);
   assert.equal((await readJson<{ error: { code: string } }>(wrong)).error.code, 'invalid_code');
-  const foreign = await postJson(api('/signup/verify'), { signupId: 'someone-else', code });
+  const foreign = await postJson(api('/signup/verify'), { challengeId: 'someone-else', code });
   assert.equal(foreign.status, 410);
 
   // 4. Повторная отправка — не раньше чем через минуту
-  const early = await postJson(api('/signup/resend'), { signupId: pending.signupId });
+  const early = await postJson(api('/signup/resend'), { challengeId: pending.challengeId });
   assert.equal(early.status, 429);
   assert.ok(Number(early.headers.get('retry-after')) > 0);
 
   // 5. Верный код создаёт аккаунт и сессию
-  const verified = await postJson(api('/signup/verify'), { signupId: pending.signupId, code });
+  const verified = await postJson(api('/signup/verify'), {
+    challengeId: pending.challengeId,
+    code,
+  });
   assert.equal(verified.status, 201);
   const data = await readJson<AuthSession>(verified);
   assert.equal(data.user.email, 'ivan@example.com');
@@ -84,13 +87,13 @@ test('auth: регистрация с подтверждением почты к
   assert.ok(data.expiresAt, 'Должно быть поле expiresAt');
 
   // Код одноразовый, вход по паролю работает
-  const reused = await postJson(api('/signup/verify'), { signupId: pending.signupId, code });
+  const reused = await postJson(api('/signup/verify'), { challengeId: pending.challengeId, code });
   assert.equal(reused.status, 410);
   const login = await postJson(api('/login'), {
     email: 'ivan@example.com',
     password: 'strongPassword123',
   });
-  assert.equal(login.status, 200);
+  assert.equal(login.status, 202, 'Пароль верный — дальше код на почту');
 
   // 6. Повторная регистрация с тем же email
   const duplicate = await postJson(api('/signup'), {
@@ -109,21 +112,21 @@ test('auth: код регистрации сгорает после 5 невер
     email: 'brute@example.com',
     password: 'password123',
   });
-  const { signupId } = await readJson<SignupStart>(start);
-  const code = signupCodeFor(server.baseUrl, 'brute@example.com');
+  const { challengeId } = await readJson<CodeChallenge>(start);
+  const code = codeFor(server.baseUrl, 'brute@example.com');
   const wrong = code === '000000' ? '111111' : '000000';
 
   for (let attempt = 1; attempt <= 4; attempt += 1) {
-    const res = await postJson(api('/signup/verify'), { signupId, code: wrong });
+    const res = await postJson(api('/signup/verify'), { challengeId, code: wrong });
     assert.equal((await readJson<{ error: { code: string } }>(res)).error.code, 'invalid_code');
   }
-  const last = await postJson(api('/signup/verify'), { signupId, code: wrong });
+  const last = await postJson(api('/signup/verify'), { challengeId, code: wrong });
   assert.equal(
     (await readJson<{ error: { code: string } }>(last)).error.code,
     'code_attempts_exceeded',
   );
   // Даже верный прежний код больше не подходит
-  const burned = await postJson(api('/signup/verify'), { signupId, code });
+  const burned = await postJson(api('/signup/verify'), { challengeId, code });
   assert.equal(
     (await readJson<{ error: { code: string } }>(burned)).error.code,
     'code_attempts_exceeded',
@@ -140,23 +143,23 @@ test('auth: заявка с чужой почтой не перехватыва�
     email: 'owner@example.com',
     password: 'attackerPassword1',
   });
-  const attackerSignup = await readJson<SignupStart>(attacker);
+  const attackerSignup = await readJson<CodeChallenge>(attacker);
 
   // Владелец регистрируется сам; его код к заявке постороннего не подходит
   const owner = await postJson(api('/signup'), {
     email: 'owner@example.com',
     password: 'ownerPassword123',
   });
-  const ownerSignup = await readJson<SignupStart>(owner);
-  const ownerCode = signupCodeFor(server.baseUrl, 'owner@example.com');
+  const ownerSignup = await readJson<CodeChallenge>(owner);
+  const ownerCode = codeFor(server.baseUrl, 'owner@example.com');
   const hijack = await postJson(api('/signup/verify'), {
-    signupId: attackerSignup.signupId,
+    challengeId: attackerSignup.challengeId,
     code: ownerCode,
   });
   assert.equal(hijack.status, 400);
 
   const verified = await postJson(api('/signup/verify'), {
-    signupId: ownerSignup.signupId,
+    challengeId: ownerSignup.challengeId,
     code: ownerCode,
   });
   assert.equal(verified.status, 201);
@@ -189,36 +192,67 @@ test('auth: без настроенной почты регистрация че
   assert.equal((await readJson<{ error: { code: string } }>(res)).error.code, 'mail_unavailable');
 });
 
-test('auth: вход по логину и паролю', async (t) => {
+test('auth: вход — пароль, затем код из письма', async (t) => {
   const server = await startTestServer();
   t.after(() => server.close());
+  const api = (path: string) => `${server.baseUrl}/api/auth${path}`;
 
-  // 1. Вход под дефолтным демо-пользователем
-  const demoLogin = await fetch(`${server.baseUrl}/api/auth/login`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ email: 'demo@ketner.ai', password: 'password123' }),
-  });
-  assert.equal(demoLogin.status, 200);
-  const demoData = await readJson<AuthSession>(demoLogin);
-  assert.equal(demoData.user.email, 'demo@ketner.ai');
-  assert.equal(demoData.user.name, 'Ketner Demo');
-
-  // 2. Вход с неверным паролем
-  const wrongPass = await fetch(`${server.baseUrl}/api/auth/login`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ email: 'demo@ketner.ai', password: 'wrongPassword' }),
+  // 1. Неверный пароль и несуществующая почта — 401, письма нет
+  const wrongPass = await postJson(api('/login'), {
+    email: 'demo@ketner.ai',
+    password: 'wrongPassword',
   });
   assert.equal(wrongPass.status, 401);
-
-  // 3. Вход с несуществующим email
-  const wrongEmail = await fetch(`${server.baseUrl}/api/auth/login`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ email: 'nonexistent@example.com', password: 'password123' }),
+  const wrongEmail = await postJson(api('/login'), {
+    email: 'nonexistent@example.com',
+    password: 'password123',
   });
   assert.equal(wrongEmail.status, 401);
+  assert.equal(server.codeMails.length, 0);
+
+  // 2. Верный пароль: сессии ещё нет, код ушёл на почту
+  const start = await postJson(api('/login'), {
+    email: 'Demo@Ketner.ai',
+    password: 'password123',
+  });
+  assert.equal(start.status, 202);
+  const challenge = await readJson<CodeChallenge & { token?: string }>(start);
+  assert.equal(challenge.token, undefined);
+  assert.equal(challenge.maskedEmail, 'd***o@ketner.ai');
+  assert.equal(start.headers.get('set-cookie'), null);
+  assert.equal(server.codeMails.at(-1)!.to, 'demo@ketner.ai');
+  assert.match(server.codeMails.at(-1)!.subject, /код входа/);
+  const code = codeFor(server.baseUrl, 'demo@ketner.ai');
+
+  // 3. Неверный код не входит; верный выдаёт токен и cookie-сессию
+  const wrong = await postJson(api('/login/verify'), {
+    challengeId: challenge.challengeId,
+    code: code === '000000' ? '111111' : '000000',
+  });
+  assert.equal(wrong.status, 400);
+  const verified = await postJson(api('/login/verify'), {
+    challengeId: challenge.challengeId,
+    code,
+  });
+  assert.equal(verified.status, 200);
+  const session = await readJson<AuthSession>(verified);
+  assert.equal(session.user.email, 'demo@ketner.ai');
+  assert.equal(session.user.name, 'Ketner Demo');
+  assert.match(verified.headers.get('set-cookie') ?? '', /better-auth\.session_token=/);
+
+  // Код одноразовый
+  const reused = await postJson(api('/login/verify'), {
+    challengeId: challenge.challengeId,
+    code,
+  });
+  assert.equal(reused.status, 410);
+
+  // 4. Повторная отправка кода входа — не раньше чем через минуту
+  const again = await readJson<CodeChallenge>(
+    await postJson(api('/login'), { email: 'demo@ketner.ai', password: 'password123' }),
+  );
+  const early = await postJson(api('/login/resend'), { challengeId: again.challengeId });
+  assert.equal(early.status, 429);
 });
 
 test('auth: профиль текущего пользователя GET /api/auth/me и выход', async (t) => {
@@ -230,7 +264,7 @@ test('auth: профиль текущего пользователя GET /api/au
   assert.equal(unauth.status, 401);
 
   // 2. С валидным токеном возвращается профиль
-  const loginRes = await fetch(`${server.baseUrl}/api/auth/login`, {
+  const loginRes = await loginAndVerify(server.baseUrl, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ email: 'demo@ketner.ai', password: 'password123' }),
@@ -245,7 +279,7 @@ test('auth: профиль текущего пользователя GET /api/au
   assert.equal(meData.user.email, 'demo@ketner.ai');
 
   // Второй вход (другое устройство) в ту же секунду получает свой токен.
-  const otherLogin = await fetch(`${server.baseUrl}/api/auth/login`, {
+  const otherLogin = await loginAndVerify(server.baseUrl, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ email: 'demo@ketner.ai', password: 'password123' }),
@@ -354,15 +388,16 @@ test('auth: регистрация напрямую в Better Auth закрыт�
   });
   assert.equal(siteSignup.status, 201);
 
-  // 3. Вход в Better Auth (cookie) и сессия.
+  // 3. Вход по паролю напрямую в Better Auth закрыт (обходил бы код), cookie-сессию ставит сайт
+  //    после подтверждения кодом.
   const signInRes = await fetch(`${server.baseUrl}/api/auth/sign-in/email`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', Origin: server.baseUrl },
     body: JSON.stringify({ email: 'better-auth-user@example.com', password: 'password123' }),
   });
-  assert.equal(signInRes.status, 200);
-  const setCookie = signInRes.headers.get('set-cookie');
-  assert.ok(setCookie && setCookie.includes('better-auth.session_token'));
+  assert.equal(signInRes.status, 404);
+  const setCookie = (siteSignup.headers.get('set-cookie') ?? '').split(';')[0]!;
+  assert.ok(setCookie.includes('better-auth.session_token'));
 
   const sessionRes = await fetch(`${server.baseUrl}/api/auth/get-session`, {
     headers: { Origin: server.baseUrl, Cookie: setCookie },
@@ -439,7 +474,7 @@ test('auth (C3): токены с поддельной подписью откл�
   }
 
   // Настоящий токен с подменённым payload (другой sub) тоже отклоняется
-  const login = await fetch(`${server.baseUrl}/api/auth/login`, {
+  const login = await loginAndVerify(server.baseUrl, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ email: 'demo@ketner.ai', password: 'password123' }),
@@ -457,8 +492,8 @@ test('auth: Bearer-токен важнее оставшейся cookie-сесс�
   const server = await startTestServer();
   t.after(() => server.close());
 
-  // Аккаунт A: регистрация на сайте и вход через Better Auth, в браузере остаётся его cookie.
-  await signupAndVerify(server.baseUrl, {
+  // Аккаунт A: регистрация на сайте, в браузере остаётся его cookie-сессия Better Auth.
+  const signUpA = await signupAndVerify(server.baseUrl, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
@@ -467,12 +502,7 @@ test('auth: Bearer-токен важнее оставшейся cookie-сесс�
       name: 'Cookie User',
     }),
   });
-  const signInA = await fetch(`${server.baseUrl}/api/auth/sign-in/email`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', Origin: server.baseUrl },
-    body: JSON.stringify({ email: 'cookie-user@example.com', password: 'password123' }),
-  });
-  const cookieA = signInA.headers.get('set-cookie') ?? '';
+  const cookieA = (signUpA.headers.get('set-cookie') ?? '').split(';')[0]!;
   assert.ok(cookieA.includes('better-auth.session_token'));
 
   // Аккаунт B: вход по паролю, клиент хранит его Bearer-токен.

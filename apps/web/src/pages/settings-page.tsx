@@ -724,7 +724,6 @@ export function SettingsPage() {
             )}
             {telegramDialog ? (
               <TelegramAuthDialog
-                mode="link"
                 token={token}
                 onClose={() => setTelegramDialog(false)}
                 onLinked={applyLinked}

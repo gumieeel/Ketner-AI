@@ -1,4 +1,5 @@
 import { useEffect, type ReactNode } from 'react';
+import { AuthNoticeToast } from '@/components/auth/auth-notice-toast';
 import { GithubNoticeToast } from '@/components/github/github-notice';
 import { useGithub } from '@/features/github/github-store';
 import { useAuth } from './auth-store';
@@ -26,6 +27,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     <>
       {children}
       <GithubNoticeToast />
+      <AuthNoticeToast />
     </>
   );
 }

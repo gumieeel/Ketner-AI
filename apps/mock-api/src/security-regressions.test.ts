@@ -2,6 +2,8 @@
  * Регрессии аудита безопасности 2026-10-16: захват аккаунта через Better Auth, CORS, перебор паролей,
  * подмена чужих сообщений по id.
  */
+import type { MailMessage } from './services/mailer.js';
+import { codeFor, isCodeMail, loginAndVerify, rememberCodeMails } from './testing/signup.js';
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdtempSync, writeFileSync } from 'node:fs';
@@ -24,6 +26,7 @@ import { RateLimiter } from './middleware/rate-limit.js';
 
 const ORIGIN = 'http://localhost:9999';
 let server: Server;
+const codeMails: MailMessage[] = [];
 let base = '';
 let auth: ReturnType<typeof createBetterAuth>['auth'];
 let userStore: UserStore;
@@ -67,9 +70,16 @@ before(async () => {
     subscriptionStore: createSubscriptionStore(join(dir, 's.json')),
     usageStore: new UsageStore(join(dir, 'u.json')),
     betterAuth: auth,
+    mailer: {
+      kind: 'smtp',
+      async send(message) {
+        if (isCodeMail(message)) codeMails.push(message);
+      },
+    },
   });
   server = app.listen(0);
   base = `http://localhost:${(server.address() as { port: number }).port}`;
+  rememberCodeMails(base, codeMails);
 });
 
 after(() => {
@@ -82,10 +92,17 @@ const json = (body: unknown, extra: Record<string, string> = {}) => ({
   body: JSON.stringify(body),
 });
 
+/** Cookie-сессия Better Auth по паролю — так её получил бы тот, кто знает пароль записи. */
 async function cookieSignIn(email: string, password: string): Promise<string | null> {
-  const res = await fetch(`${base}/api/auth/sign-in/email`, json({ email, password }));
-  if (!res.ok) return null;
-  return (res.headers.get('set-cookie') ?? '').split(';')[0] || null;
+  try {
+    const { headers } = await auth.api.signInEmail({
+      body: { email, password },
+      returnHeaders: true,
+    });
+    return (headers.get('set-cookie') ?? '').split(';')[0] || null;
+  } catch {
+    return null;
+  }
 }
 
 test('регистрация напрямую в Better Auth закрыта', async () => {
@@ -95,6 +112,8 @@ test('регистрация напрямую в Better Auth закрыта', as
   );
   assert.equal(res.status, 404);
   for (const path of [
+    // Вход по паролю напрямую в Better Auth обходил бы код из письма.
+    '/api/auth/sign-in/email',
     '/api/auth/update-user',
     '/api/auth/change-email',
     '/api/auth/delete-user',
@@ -115,12 +134,26 @@ test('чужая запись Better Auth с той же почтой не от�
   }
 });
 
-test('вход владельца по паролю перезаписывает посторонний пароль Better Auth', async () => {
+test('вход по паролю без кода из письма сессию не даёт', async () => {
   const login = await fetch(
     `${base}/api/auth/login`,
     json({ email: 'legacy@example.com', password: 'victim-password-1' }),
   );
+  assert.equal(login.status, 202);
+  const body = (await login.json()) as Record<string, unknown>;
+  assert.equal(body.token, undefined);
+  assert.equal(login.headers.get('set-cookie'), null);
+  assert.equal(body.maskedEmail, 'l***y@example.com');
+  assert.ok(!JSON.stringify(body).includes(codeFor(base, 'legacy@example.com')));
+});
+
+test('вход владельца по паролю перезаписывает посторонний пароль Better Auth', async () => {
+  const login = await loginAndVerify(
+    base,
+    json({ email: 'legacy@example.com', password: 'victim-password-1' }),
+  );
   assert.equal(login.status, 200);
+  assert.match(login.headers.get('set-cookie') ?? '', /better-auth\.session_token=/);
   assert.equal(await cookieSignIn('legacy@example.com', 'attacker-pass-123'), null);
   assert.ok(await cookieSignIn('legacy@example.com', 'victim-password-1'));
 });
@@ -240,7 +273,8 @@ test('id сообщения из чужого диалога не переисп
 
 test('правила: список открытых эндпоинтов Better Auth, хеши CSP, сессия Better Auth', () => {
   assert.equal(isPublicBetterAuthEndpoint('POST', '/api/auth/sign-up/email'), false);
-  assert.equal(isPublicBetterAuthEndpoint('POST', '/api/auth/sign-in/email'), true);
+  assert.equal(isPublicBetterAuthEndpoint('POST', '/api/auth/sign-in/email'), false);
+  assert.equal(isPublicBetterAuthEndpoint('POST', '/api/auth/sign-in/social'), true);
   assert.equal(isPublicBetterAuthEndpoint('GET', '/api/auth/get-session'), true);
   assert.equal(isPublicBetterAuthEndpoint('GET', '/api/auth/callback/google'), true);
   assert.deepEqual(

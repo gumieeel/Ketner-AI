@@ -49,15 +49,14 @@ export const routes: RouteObject[] = [
       { index: true, element: <LandingPage /> },
       { path: 'login', element: <LoginPage /> },
       { path: 'signup', element: <SignupPage /> },
-      // Ввод кода из письма — второй шаг регистрации.
+      // Ввод кода из письма — второй шаг регистрации и входа.
       {
         path: 'signup/verify',
-        lazy: lazyPage(() => import('@/pages/verify-email-page'), 'VerifyEmailPage'),
+        lazy: lazyPage(() => import('@/pages/verify-code-page'), 'VerifySignupPage'),
       },
-      // Вход по одноразовой ссылке из кабинета в Telegram.
       {
-        path: 'auth/telegram',
-        lazy: lazyPage(() => import('@/pages/telegram-magic-page'), 'TelegramMagicPage'),
+        path: 'login/verify',
+        lazy: lazyPage(() => import('@/pages/verify-code-page'), 'VerifyLoginPage'),
       },
       { path: 'pricing', element: <PricingPage /> },
       { path: 'privacy', lazy: lazyLegal('privacy') },

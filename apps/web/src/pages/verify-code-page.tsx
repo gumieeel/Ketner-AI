@@ -1,42 +1,42 @@
 import { useEffect, useRef, useState } from 'react';
-import { Link, Navigate, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
+import { Link, Navigate, useNavigate, useSearchParams } from 'react-router-dom';
 import { AlertIcon, CheckIcon } from '@/components/icons';
 import { AuthShell } from '@/components/layout/auth-shell';
 import { Button } from '@/components/ui/button';
 import { Field, Input } from '@/components/ui/input';
-import { resendSignupCode } from '@/features/auth/api';
+import { resendCode } from '@/features/auth/api';
+import { useAuthNotice } from '@/features/auth/auth-notice';
 import { useAuth } from '@/features/auth/auth-store';
 import {
-  clearPendingSignup,
-  readPendingSignup,
-  savePendingSignup,
-  type PendingSignup,
-} from '@/features/auth/pending-signup';
+  clearPendingCode,
+  readPendingCode,
+  savePendingCode,
+  type PendingCode,
+} from '@/features/auth/pending-code';
+import type { AuthFlow } from '@/features/auth/types';
 import { ApiError } from '@/features/chat/api';
 import { useTranslation } from '@/i18n';
 
 const CODE_LENGTH = 6;
 
 /**
- * Второй шаг регистрации: ввод 6-значного кода, отправленного на почту.
- * Аккаунт создаётся только после верного кода; без незавершённой регистрации страница
- * возвращает на форму.
+ * Второй шаг входа и регистрации: 6-значный код, отправленный на почту. Сессия появляется только
+ * после верного кода; без начатого входа (регистрации) страница возвращает на форму.
  */
-export function VerifyEmailPage() {
+export function VerifyCodePage({ flow }: { flow: AuthFlow }) {
   const { t } = useTranslation();
   const navigate = useNavigate();
-  const location = useLocation();
   const [searchParams] = useSearchParams();
   const rawRedirect = searchParams.get('redirect');
   const isSafeRedirect = Boolean(
     rawRedirect && rawRedirect.startsWith('/') && !rawRedirect.startsWith('//'),
   );
   const redirectUrl = isSafeRedirect && rawRedirect ? rawRedirect : '/chat';
-  const redirectQuery = isSafeRedirect ? `redirect=${encodeURIComponent(redirectUrl)}` : '';
-  const password = (location.state as { password?: string } | null)?.password;
-  const verifySignup = useAuth((state) => state.verifySignup);
+  const verifyCode = useAuth((state) => state.verifyCode);
+  const showNotice = useAuthNotice((state) => state.show);
+  const formPath = flow === 'signup' ? '/signup' : '/login';
 
-  const [pending, setPending] = useState<PendingSignup | null>(() => readPendingSignup());
+  const [pending, setPending] = useState<PendingCode | null>(() => readPendingCode(flow));
   const [code, setCode] = useState('');
   const [codeError, setCodeError] = useState<string | null>(null);
   const [serverError, setServerError] = useState<string | null>(null);
@@ -56,13 +56,22 @@ export function VerifyEmailPage() {
   }, [resendIn]);
 
   if (!pending) {
-    return <Navigate to={`/signup${redirectQuery ? `?${redirectQuery}` : ''}`} replace />;
+    const query = isSafeRedirect ? `?redirect=${encodeURIComponent(redirectUrl)}` : '';
+    return <Navigate to={`${formPath}${query}`} replace />;
   }
 
-  const signupLink = `/signup?${new URLSearchParams({
-    email: pending.email,
+  const formLink = `${formPath}?${new URLSearchParams({
+    ...(pending.email ? { email: pending.email } : {}),
     ...(isSafeRedirect ? { redirect: redirectUrl } : {}),
   }).toString()}`;
+
+  const handleError = (error: unknown) => {
+    if (error instanceof ApiError && error.code === 'challenge_expired') {
+      clearPendingCode(flow);
+      setExpired(true);
+    }
+    setServerError(error instanceof Error ? error.message : t('auth.verifyFailed'));
+  };
 
   const submit = async (value: string) => {
     if (submitting.current) return;
@@ -75,20 +84,12 @@ export function VerifyEmailPage() {
     setServerError(null);
     setNotice(null);
     try {
-      await verifySignup({
-        signupId: pending.signupId,
-        code: value,
-        email: pending.email,
-        password,
-      });
-      clearPendingSignup();
+      await verifyCode(flow, { challengeId: pending.challengeId, code: value });
+      clearPendingCode(flow);
+      showNotice(flow === 'signup' ? 'signed-up' : 'logged-in');
       navigate(redirectUrl, { replace: true });
     } catch (error) {
-      if (error instanceof ApiError && error.code === 'signup_expired') {
-        clearPendingSignup();
-        setExpired(true);
-      }
-      setServerError(error instanceof Error ? error.message : t('auth.verifyFailed'));
+      handleError(error);
       setCode('');
     } finally {
       submitting.current = false;
@@ -101,19 +102,19 @@ export function VerifyEmailPage() {
     setServerError(null);
     setNotice(null);
     try {
-      const result = await resendSignupCode(pending.signupId);
-      const next = { ...pending, resendAt: Date.now() + result.resendAfterSec * 1000 };
-      savePendingSignup(next);
+      const result = await resendCode(flow, pending.challengeId);
+      const next = {
+        ...pending,
+        maskedEmail: result.maskedEmail,
+        resendAt: Date.now() + result.resendAfterSec * 1000,
+      };
+      savePendingCode(flow, next);
       setPending(next);
       setNow(Date.now());
       setCode('');
       setNotice(t('auth.verifyResent'));
     } catch (error) {
-      if (error instanceof ApiError && error.code === 'signup_expired') {
-        clearPendingSignup();
-        setExpired(true);
-      }
-      setServerError(error instanceof Error ? error.message : t('auth.verifyFailed'));
+      handleError(error);
     } finally {
       setResending(false);
     }
@@ -121,12 +122,12 @@ export function VerifyEmailPage() {
 
   return (
     <AuthShell
-      title={t('auth.verifyTitle')}
-      subtitle={t('auth.verifySubtitle', { email: pending.email })}
+      title={flow === 'signup' ? t('auth.verifyTitle') : t('auth.verifyLoginTitle')}
+      subtitle={t('auth.verifySubtitle', { email: pending.maskedEmail })}
       footer={
         <Link
-          to={signupLink}
-          onClick={() => clearPendingSignup()}
+          to={formLink}
+          onClick={() => clearPendingCode(flow)}
           className="inline-flex min-h-11 items-center font-medium text-accent hover:underline"
         >
           {t('auth.verifyChangeEmail')}
@@ -145,10 +146,10 @@ export function VerifyEmailPage() {
             </div>
             {expired && (
               <Link
-                to={signupLink}
+                to={formLink}
                 className="ml-6 inline-flex min-h-9 items-center text-xs font-semibold underline hover:opacity-85"
               >
-                {t('auth.signup')}
+                {flow === 'signup' ? t('auth.signup') : t('auth.login')}
               </Link>
             )}
           </div>
@@ -227,4 +228,12 @@ export function VerifyEmailPage() {
       </div>
     </AuthShell>
   );
+}
+
+export function VerifySignupPage() {
+  return <VerifyCodePage flow="signup" />;
+}
+
+export function VerifyLoginPage() {
+  return <VerifyCodePage flow="login" />;
 }

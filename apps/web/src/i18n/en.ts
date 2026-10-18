@@ -50,7 +50,10 @@ export const en: Record<TranslationKey, string> = {
   'auth.signingUp': 'Signing up...',
   'auth.checkoutSignupNotice': 'Please sign in or create an account to complete your subscription.',
   'auth.verifyTitle': 'Confirm your email',
-  'auth.verifySubtitle': 'We sent a 6-digit code to {email}. Enter it to finish signing up.',
+  'auth.verifyLoginTitle': 'Sign-in code',
+  'auth.noticeSignedUp': 'Sign-up complete. Welcome to Ketner AI!',
+  'auth.noticeLoggedIn': 'You are signed in.',
+  'auth.verifySubtitle': 'We sent a 6-digit code to {email}. Enter it to continue.',
   'auth.verifyCode': 'Code from the email',
   'auth.verifyCodeInvalid': 'Enter the 6 digits from the email',
   'auth.verifySubmit': 'Confirm',
@@ -58,7 +61,7 @@ export const en: Record<TranslationKey, string> = {
   'auth.verifyResend': 'Send the code again',
   'auth.verifyResendIn': 'Send the code again in {seconds}s',
   'auth.verifyResent': 'A new code has been sent. The previous one no longer works.',
-  'auth.verifyHint': 'No email? Check your spam folder. The code is valid for 10 minutes.',
+  'auth.verifyHint': 'No email? Check your spam folder. The code is valid for 5 minutes.',
   'auth.verifyChangeEmail': 'Change email',
   'auth.verifyFailed': 'Could not confirm the code',
   'settings.loggedInAs': 'Logged in as',
@@ -541,7 +544,7 @@ export const en: Record<TranslationKey, string> = {
   'settings.telegramConnect': 'Connect Telegram',
   'settings.telegramLinkedAs': 'Linked Telegram:',
   'settings.telegramLinkedHint':
-    'Sign in on the website with “Sign in with Telegram”. In the bot, tap “Кабинет”: subscription, auto-renewal, receipts and refunds.',
+    'In the bot, tap “Кабинет”: subscription, auto-renewal, receipts and refunds. Sign in on the website with email and a code, or with Google.',
   'settings.telegramLinkTitle': 'How to connect',
   'settings.telegramLinkHint':
     'Click “Connect Telegram”, open the bot and confirm — this page updates by itself.',
@@ -549,10 +552,10 @@ export const en: Record<TranslationKey, string> = {
   'settings.telegramCodeSubmit': 'Connect',
   'settings.telegramCodeLabel': 'Code from the Telegram account',
   'settings.telegramOnlyHint':
-    'This account was created with Telegram: sign in with “Sign in with Telegram” on any device.',
+    'This account was created with Telegram: manage it in the Ketner AI bot.',
   'settings.telegramClaimFailed': 'Something went wrong. Please try again.',
   'settings.telegramLinkedDone':
-    'Telegram connected. You can now sign in with it, and manage the subscription in the bot.',
+    'Telegram connected. Manage the subscription and get notifications in the bot.',
   'settings.telegramAccountEmail': 'Telegram account',
   'settings.githubTitle': 'GitHub',
   'settings.githubDesc':
@@ -579,32 +582,20 @@ export const en: Record<TranslationKey, string> = {
   'github.noticeFailed': 'Could not connect GitHub. Please try again.',
 
   // Кабинет в Telegram (мини-приложение)
-  'tgAuth.loginTitle': 'Sign in with Telegram',
-  'tgAuth.loginLead': 'No password — into the account your Telegram is linked to.',
   'tgAuth.linkTitle': 'Connect Telegram',
-  'tgAuth.linkLead': 'Sign in with Telegram and manage your subscription in the bot.',
+  'tgAuth.linkLead': 'Manage your subscription and get notifications in the bot.',
   'tgAuth.openTelegram': 'Open Telegram',
   'tgAuth.orScan': 'or scan with your phone camera',
   'tgAuth.step1': 'Open the Ketner AI bot with the “Open Telegram” button.',
-  'tgAuth.step2Login':
-    'Confirm the sign-in with the button in the bot — this page signs in by itself.',
   'tgAuth.step2Link': 'Tap “Привязать” (Link) in the bot — this page updates by itself.',
   'tgAuth.waiting': 'Waiting for confirmation in Telegram…',
-  'tgAuth.doneLogin': 'Done, signing in…',
   'tgAuth.doneLink': 'Telegram connected',
-  'tgAuth.declined': 'Sign-in was declined in Telegram.',
+  'tgAuth.declined': 'Connecting was declined in Telegram.',
   'tgAuth.expired': 'Time to confirm has run out.',
   'tgAuth.unlinked':
     'This Telegram is not linked to a Ketner account. Sign in with email or Google and connect Telegram in settings — or link it in the bot with a code from your email.',
-  'tgAuth.errorStart': 'Could not start Telegram sign-in. Please try again.',
+  'tgAuth.errorStart': 'Could not start connecting Telegram. Please try again.',
   'tgAuth.retry': 'Start over',
-  'tgAuth.magicTitle': 'Signing in from Telegram',
-  'tgAuth.magicProgress': 'Signing in…',
-  'tgAuth.magicMissing':
-    'The link has no sign-in key. Open the website from the Telegram account again.',
-  'tgAuth.magicFailed':
-    'Could not sign in with this link. Open the website from the Telegram account again.',
-  'tgAuth.toLogin': 'Go to sign in',
   'tg.errorGeneric': 'Could not reach Ketner. Please try again.',
   'tg.retry': 'Try again',
   'tg.close': 'Close',
@@ -680,7 +671,6 @@ export const en: Record<TranslationKey, string> = {
   'tg.quickActions': 'Quick actions',
   'tg.openChat': 'Open Ketner AI',
   'tg.support': 'Support',
-  'tg.siteLoginFallback': 'Website opened. If it asks you to sign in, tap “Sign in with Telegram”.',
   'tg.plansTitle': 'Plans',
   'tg.payMode': 'How to pay',
   'tg.modeOnce': 'For 30 days',
@@ -825,9 +815,10 @@ export const en: Record<TranslationKey, string> = {
   'tg.telegramAccount': 'Telegram account',
   'tg.memberSince': 'since {date}',
   'tg.siteTitle': 'Ketner AI on the website',
-  'tg.siteText': 'We open ketner.org already signed in to your account — no password needed.',
+  'tg.siteText':
+    'We open ketner.org. If it asks you to sign in, use your email and the emailed code, or Google.',
   'tg.siteTextTelegram':
-    'We open ketner.org already signed in. On another device, tap “Sign in with Telegram”.',
+    'This account was created in Telegram and cannot sign in on the website: manage it here in the cabinet.',
   'tg.openSiteSettings': 'Account settings on the website',
   'tg.notifyTitle': 'Bot notifications',
   'tg.notifyReminders': 'Renewal reminders',

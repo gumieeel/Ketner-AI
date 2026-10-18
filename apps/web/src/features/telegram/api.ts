@@ -185,8 +185,6 @@ export const miniAppApi = {
     call<MiniAppState>(`/payments/${enc(paymentId)}`, { token, method: 'DELETE' }),
   prefs: (token: string, prefs: Partial<MiniAppState['prefs']>) =>
     call<MiniAppState>('/prefs', { token, body: prefs }),
-  siteLogin: (token: string, next: string) =>
-    call<{ url: string }>('/site-login', { token, body: { next } }),
   unlink: (token: string) => call<{ ok: boolean }>('/unlink', { token, body: {} }),
   adminRefunds: (token: string) => call<{ refunds: AdminRefund[] }>('/admin/refunds', { token }),
   adminDecide: (token: string, paymentId: string, approve: boolean, note: string) =>

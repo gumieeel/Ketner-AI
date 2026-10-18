@@ -8,7 +8,6 @@ import { defaultBetterAuth } from './auth/better-auth.js';
 import { config, isProduction } from './config.js';
 import type { AiConfig } from './config.js';
 import { errorHandler, notFoundHandler } from './middleware/errors.js';
-import { RateLimiter, clientIp } from './middleware/rate-limit.js';
 import {
   buildContentSecurityPolicy,
   isAllowedCorsOrigin,
@@ -196,15 +195,14 @@ export function createApp(overrides: Partial<AppDeps> = {}): Express {
   // колбэка входа, так его принимает то же OAuth-приложение), поэтому стоит до Better Auth.
   app.get('/api/auth/callback/github/repos', createGithubCallbackHandler());
 
-  // Вход по паролю напрямую в Better Auth: тот же предел попыток с адреса, что и у /api/auth/login.
-  const betterAuthSignInPerIp = new RateLimiter(15 * 60 * 1000, 30);
-
-  // Обработчик Better Auth для нативных эндпоинтов (sign-in, get-session и т.д.):
+  // Обработчик Better Auth для нативных эндпоинтов (вход через Google/GitHub, get-session и т.д.).
+  // Вход по паролю напрямую в Better Auth закрыт: он обходил бы код из письма (routes/auth.ts).
   app.use((request, response, next) => {
     if (
       request.path === '/api/auth/signup' ||
       request.path.startsWith('/api/auth/signup/') ||
       request.path === '/api/auth/login' ||
+      request.path.startsWith('/api/auth/login/') ||
       request.path === '/api/auth/logout' ||
       request.path === '/api/auth/me' ||
       request.path === '/api/auth/demo' ||
@@ -216,17 +214,6 @@ export function createApp(overrides: Partial<AppDeps> = {}): Express {
     if (request.path.startsWith('/api/auth')) {
       if (!isPublicBetterAuthEndpoint(request.method, request.path)) {
         return sendError(response, 404, 'not_found', 'Маршрут не найден');
-      }
-      if (
-        request.path === '/api/auth/sign-in/email' &&
-        betterAuthSignInPerIp.hit(clientIp(request))
-      ) {
-        return sendError(
-          response,
-          429,
-          'too_many_requests',
-          'Слишком много попыток входа. Подождите несколько минут.',
-        );
       }
       return toNodeHandler(betterAuthInstance)(request, response);
     }

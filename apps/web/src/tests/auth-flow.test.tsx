@@ -1,5 +1,6 @@
 import { fireEvent, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { useAuthNotice } from '@/features/auth/auth-notice';
 import { useAuth } from '@/features/auth/auth-store';
 import { FAKE_SIGNUP_CODE, installFakeApi } from './fake-api';
 import { renderRoute, resetAuth, resetChat, resetPreferences } from './test-utils';
@@ -40,10 +41,22 @@ describe('auth-flow: сценарии авторизации и сессии', (
     fireEvent.change(passwordInput, { target: { value: 'password123' } });
     fireEvent.click(submitButton);
 
+    // Пароль верный — дальше код из письма; почта на экране замаскирована
+    expect(
+      await screen.findByRole('heading', { level: 1, name: 'Код для входа' }),
+    ).toBeInTheDocument();
+    expect(screen.getByText(/d\*\*\*o@ketner\.ai/)).toBeInTheDocument();
+    expect(screen.queryByText(/demo@ketner\.ai/)).not.toBeInTheDocument();
+    expect(useAuth.getState().status).not.toBe('authenticated');
+
+    fireEvent.change(screen.getByLabelText('Код из письма'), {
+      target: { value: FAKE_SIGNUP_CODE },
+    });
     await waitFor(() => {
       expect(useAuth.getState().status).toBe('authenticated');
       expect(useAuth.getState().user?.email).toBe('demo@ketner.ai');
     });
+    expect(useAuthNotice.getState().notice).toBe('logged-in');
   });
 
   it('на странице входа нет демо-входа, но есть ссылки на условия', () => {
@@ -83,7 +96,7 @@ describe('auth-flow: сценарии авторизации и сессии', (
     expect(
       await screen.findByRole('heading', { level: 1, name: 'Подтвердите почту' }),
     ).toBeInTheDocument();
-    expect(screen.getByText(/alex@example\.com/)).toBeInTheDocument();
+    expect(screen.getByText(/a\*\*\*x@example\.com/)).toBeInTheDocument();
     expect(useAuth.getState().status).not.toBe('authenticated');
     expect(screen.getByRole('button', { name: /Отправить код ещё раз через/ })).toBeDisabled();
 
@@ -97,6 +110,7 @@ describe('auth-flow: сценарии авторизации и сессии', (
       expect(useAuth.getState().status).toBe('authenticated');
       expect(useAuth.getState().user?.name).toBe('Александр');
     });
+    expect(useAuthNotice.getState().notice).toBe('signed-up');
   });
 
   it('страница кода без начатой регистрации возвращает на форму', async () => {

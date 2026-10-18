@@ -5,13 +5,9 @@ import { buttonClasses } from '@/components/ui/button-classes';
 import { Modal, ModalHeader } from '@/components/ui/modal';
 import { QrCode } from '@/components/ui/qr-code';
 import { Spinner } from '@/components/ui/spinner';
-import type { AuthSession, User } from '@/features/auth/types';
+import type { User } from '@/features/auth/types';
 import { ApiError } from '@/features/chat/api';
-import {
-  telegramSiteAuth,
-  type TelegramAuthMode,
-  type TelegramAuthStart,
-} from '@/features/telegram/site-auth';
+import { telegramSiteAuth, type TelegramAuthStart } from '@/features/telegram/site-auth';
 import { useTranslation } from '@/i18n';
 
 type Phase =
@@ -26,21 +22,17 @@ type Phase =
 const POLL_MS = 2000;
 
 /**
- * Вход или привязка через Telegram без кодов и команд: ссылка (или QR с телефона) открывает бота,
- * человек жмёт «Подтвердить», окно само узнаёт об этом и завершает вход.
+ * Привязка Telegram к аккаунту без кодов и команд: ссылка (или QR с телефона) открывает бота,
+ * человек жмёт «Привязать», окно само узнаёт об этом. Входа на сайт через Telegram нет.
  */
 export function TelegramAuthDialog({
-  mode,
   token,
   onClose,
-  onLogin,
   onLinked,
 }: {
-  mode: TelegramAuthMode;
   /** Токен сессии сайта — нужен для привязки. */
   token?: string | null;
   onClose: () => void;
-  onLogin?: (session: AuthSession) => void | Promise<void>;
   onLinked?: (user: User) => void;
 }) {
   const { t } = useTranslation();
@@ -49,13 +41,13 @@ export function TelegramAuthDialog({
   const [now, setNow] = useState(() => Date.now());
   const tRef = useRef(t);
   tRef.current = t;
-  const handlers = useRef({ onLogin, onLinked });
-  handlers.current = { onLogin, onLinked };
+  const handlers = useRef({ onLinked });
+  handlers.current = { onLinked };
 
   const start = useCallback(async () => {
     setPhase({ kind: 'starting' });
     try {
-      const request = await telegramSiteAuth.start(mode, token);
+      const request = await telegramSiteAuth.start(token);
       setPhase({ kind: 'waiting', request });
       setNow(Date.now());
     } catch (error) {
@@ -64,7 +56,7 @@ export function TelegramAuthDialog({
         message: error instanceof ApiError ? error.message : tRef.current('tgAuth.errorStart'),
       });
     }
-  }, [mode, token]);
+  }, [token]);
 
   useEffect(() => {
     void start();
@@ -87,8 +79,7 @@ export function TelegramAuthDialog({
           if (result.status === 'approved') {
             stopped = true;
             setPhase({ kind: 'done' });
-            if (result.mode === 'login') await handlers.current.onLogin?.(result);
-            else handlers.current.onLinked?.(result.user);
+            handlers.current.onLinked?.(result.user);
           } else if (
             result.status === 'declined' ||
             result.status === 'expired' ||
@@ -121,8 +112,8 @@ export function TelegramAuthDialog({
       <ModalHeader
         titleId={titleId}
         icon={<TelegramIcon className="size-5" />}
-        title={mode === 'login' ? t('tgAuth.loginTitle') : t('tgAuth.linkTitle')}
-        description={mode === 'login' ? t('tgAuth.loginLead') : t('tgAuth.linkLead')}
+        title={t('tgAuth.linkTitle')}
+        description={t('tgAuth.linkLead')}
         onClose={onClose}
       />
       <div className="flex flex-col gap-4 overflow-y-auto px-5 py-5">
@@ -153,7 +144,7 @@ export function TelegramAuthDialog({
             </div>
             <ol className="flex flex-col gap-1.5 text-[14px] leading-5 text-text">
               <li>1. {t('tgAuth.step1')}</li>
-              <li>2. {mode === 'login' ? t('tgAuth.step2Login') : t('tgAuth.step2Link')}</li>
+              <li>2. {t('tgAuth.step2Link')}</li>
             </ol>
             <p
               role="status"
@@ -172,7 +163,7 @@ export function TelegramAuthDialog({
             className="flex min-h-32 items-center justify-center gap-2 text-[15px] font-medium text-text"
           >
             <CheckIcon className="size-5 text-accent" />
-            {mode === 'login' ? t('tgAuth.doneLogin') : t('tgAuth.doneLink')}
+            {t('tgAuth.doneLink')}
           </p>
         ) : null}
 

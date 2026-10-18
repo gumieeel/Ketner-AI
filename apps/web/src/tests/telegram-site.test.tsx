@@ -15,7 +15,7 @@ const USER = {
 
 type Handler = (url: string, init: RequestInit) => Response | undefined;
 
-/** Фейковый API сайта плюс ручки входа через Telegram. */
+/** Фейковый API сайта плюс ручки привязки Telegram. */
 function withTelegram(handler: Handler) {
   installFakeApi();
   const base = globalThis.fetch;
@@ -32,7 +32,7 @@ function withTelegram(handler: Handler) {
   return calls;
 }
 
-describe('вход и привязка Telegram на сайте', () => {
+describe('привязка Telegram на сайте (входа через Telegram нет)', () => {
   beforeEach(() => {
     resetPreferences();
     resetAuth();
@@ -42,14 +42,14 @@ describe('вход и привязка Telegram на сайте', () => {
     vi.unstubAllGlobals();
   });
 
-  it('окно входа: ссылка на бота, ожидание и вход после подтверждения', async () => {
+  it('окно привязки: ссылка на бота, ожидание и привязка после подтверждения', async () => {
     vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval'] });
     let polls = 0;
-    withTelegram((url) => {
+    const calls = withTelegram((url) => {
       if (url === '/api/auth/telegram/start') {
         return Response.json({
           requestId: 'req-1',
-          mode: 'login',
+          mode: 'link',
           botUrl: 'https://t.me/Robo_kassa_bot?start=auth_abc',
           expiresAt: new Date(Date.now() + 300_000).toISOString(),
         });
@@ -58,35 +58,33 @@ describe('вход и привязка Telegram на сайте', () => {
         polls += 1;
         return polls < 2
           ? Response.json({ status: 'pending' })
-          : Response.json({
-              status: 'approved',
-              mode: 'login',
-              token: 'tg-token',
-              expiresAt: '',
-              user: USER,
-            });
+          : Response.json({ status: 'approved', mode: 'link', user: USER });
       }
       return undefined;
     });
-    const onLogin = vi.fn();
-    render(<TelegramAuthDialog mode="login" onClose={() => undefined} onLogin={onLogin} />);
+    const onLinked = vi.fn();
+    render(
+      <TelegramAuthDialog token="session-token" onClose={() => undefined} onLinked={onLinked} />,
+    );
 
     const open = await screen.findByRole('link', { name: /Открыть Telegram/ });
     expect(open).toHaveAttribute('href', 'https://t.me/Robo_kassa_bot?start=auth_abc');
+    expect(calls.find((call) => call.url === '/api/auth/telegram/start')).toMatchObject({
+      body: { mode: 'link' },
+      auth: 'Bearer session-token',
+    });
     expect(screen.getByRole('img', { name: /QR/ })).toBeInTheDocument();
     expect(screen.getByText('Ждём подтверждения в Telegram…')).toBeInTheDocument();
 
     await act(async () => {
       vi.advanceTimersByTime(2000);
     });
-    expect(onLogin).not.toHaveBeenCalled();
+    expect(onLinked).not.toHaveBeenCalled();
     await act(async () => {
       vi.advanceTimersByTime(2000);
     });
-    await waitFor(() =>
-      expect(onLogin).toHaveBeenCalledWith(expect.objectContaining({ token: 'tg-token' })),
-    );
-    expect(screen.getByText('Готово, входим…')).toBeInTheDocument();
+    await waitFor(() => expect(onLinked).toHaveBeenCalledWith(USER));
+    expect(screen.getByText('Telegram подключён')).toBeInTheDocument();
   });
 
   it('отказ в боте: окно объясняет и начинает заново', async () => {
@@ -97,7 +95,7 @@ describe('вход и привязка Telegram на сайте', () => {
         starts += 1;
         return Response.json({
           requestId: `req-${starts}`,
-          mode: 'login',
+          mode: 'link',
           botUrl: 'https://t.me/Robo_kassa_bot?start=auth_x',
           expiresAt: new Date(Date.now() + 300_000).toISOString(),
         });
@@ -105,21 +103,21 @@ describe('вход и привязка Telegram на сайте', () => {
       if (url.startsWith('/api/auth/telegram/poll/')) return Response.json({ status: 'declined' });
       return undefined;
     });
-    render(<TelegramAuthDialog mode="login" onClose={() => undefined} />);
+    render(<TelegramAuthDialog token="session-token" onClose={() => undefined} />);
     await screen.findByRole('link', { name: /Открыть Telegram/ });
     await act(async () => {
       vi.advanceTimersByTime(2000);
     });
     // Ответ опроса обрабатывается асинхронно: под нагрузкой одной секунды ожидания мало.
     expect(
-      await screen.findByText('Вход отклонён в Telegram.', {}, { timeout: 5000 }),
+      await screen.findByText('Подключение отклонено в Telegram.', {}, { timeout: 5000 }),
     ).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Начать заново' }));
     await screen.findByRole('link', { name: /Открыть Telegram/ });
     expect(starts).toBe(2);
   });
 
-  it('входа и регистрации через Telegram на сайте нет', async () => {
+  it('входа через Telegram на сайте нет: ни кнопки, ни ссылки входа из кабинета', async () => {
     withTelegram(() => undefined);
     renderRoute('/login');
     expect(await screen.findByRole('heading', { level: 1 })).toBeInTheDocument();
@@ -133,60 +131,12 @@ describe('вход и привязка Telegram на сайте', () => {
     expect(screen.queryByRole('button', { name: /Telegram/ })).not.toBeInTheDocument();
   });
 
-  it('непривязанный Telegram: окно объясняет, как привязать', async () => {
-    vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval'] });
-    withTelegram((url) => {
-      if (url === '/api/auth/telegram/start') {
-        return Response.json({
-          requestId: 'req-u',
-          mode: 'login',
-          botUrl: 'https://t.me/Robo_kassa_bot?start=auth_u',
-          expiresAt: new Date(Date.now() + 300_000).toISOString(),
-        });
-      }
-      if (url.startsWith('/api/auth/telegram/poll/')) return Response.json({ status: 'unlinked' });
-      return undefined;
-    });
-    render(<TelegramAuthDialog mode="login" onClose={() => undefined} />);
-    await screen.findByRole('link', { name: /Открыть Telegram/ });
-    await act(async () => {
-      vi.advanceTimersByTime(2000);
-    });
-    expect(
-      await screen.findByText(/не привязан к аккаунту Ketner/, {}, { timeout: 5000 }),
-    ).toBeInTheDocument();
-  });
-
-  it('одноразовая ссылка из кабинета входит и ведёт дальше; повтор — понятная ошибка', async () => {
-    let used = false;
-    const calls = withTelegram((url) => {
-      if (url === '/api/auth/telegram/magic') {
-        if (used)
-          return Response.json(
-            { error: { code: 'invalid_token', message: 'Ссылка для входа устарела.' } },
-            { status: 400 },
-          );
-        used = true;
-        return Response.json({ token: 'magic-session', expiresAt: '', user: USER });
-      }
-      return undefined;
-    });
+  it('старая ссылка входа из кабинета Telegram больше не входит', async () => {
+    const calls = withTelegram(() => undefined);
     renderRoute('/auth/telegram?t=one-time&next=/pricing');
-    await waitFor(() => expect(useAuth.getState().token).toBe('magic-session'));
-    expect(calls.find((call) => call.url === '/api/auth/telegram/magic')?.body).toEqual({
-      token: 'one-time',
-    });
-    expect(
-      await screen.findByRole('heading', { level: 1, name: /Тариф|тариф|Plans|Цены|План/i }),
-    ).toBeInTheDocument();
-
-    resetAuth();
-    renderRoute('/auth/telegram?t=one-time');
-    expect(await screen.findByText('Ссылка для входа устарела.')).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'Перейти ко входу' })).toHaveAttribute(
-      'href',
-      '/login',
-    );
+    expect(await screen.findByRole('heading', { level: 1 })).toBeInTheDocument();
+    expect(useAuth.getState().status).toBe('unauthenticated');
+    expect(calls.some((call) => call.url.includes('/auth/telegram/magic'))).toBe(false);
   });
 
   it('настройки: свежий статус Telegram и привязка кодом из кабинета', async () => {
@@ -222,7 +172,7 @@ describe('вход и привязка Telegram на сайте', () => {
     fireEvent.click(within(section).getByRole('button', { name: 'Подключить' }));
 
     expect(
-      await within(section).findByText(/Telegram подключён\. Теперь можно входить/),
+      await within(section).findByText(/Telegram подключён\. Кабинет подписки/),
     ).toBeInTheDocument();
     expect(within(section).getByText('Подключён')).toBeInTheDocument();
     expect(within(section).getByText('@anna_tg')).toBeInTheDocument();

@@ -31,16 +31,20 @@ export interface SignupPayload {
   name?: string;
 }
 
-/** Ответ формы регистрации: аккаунт ещё не создан, на почту отправлен код. */
-export interface SignupStart {
+/** Вход и регистрация по почте — оба подтверждаются кодом из письма. */
+export type AuthFlow = 'signup' | 'login';
+
+/** Ответ формы входа или регистрации: сессии ещё нет, на почту отправлен код. */
+export interface CodeChallenge {
   status: 'verification_required';
-  signupId: string;
-  email: string;
+  challengeId: string;
+  /** Почта для показа: `i***v@example.com`. */
+  maskedEmail: string;
   codeExpiresAt: string;
   resendAfterSec: number;
 }
 
-export interface VerifySignupPayload {
-  signupId: string;
+export interface VerifyCodePayload {
+  challengeId: string;
   code: string;
 }

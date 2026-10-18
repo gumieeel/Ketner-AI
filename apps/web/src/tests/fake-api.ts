@@ -1,8 +1,15 @@
 import { vi } from 'vitest';
 import type { ChatMeta, Conversation, ConversationSummary, Message } from '@/features/chat/types';
 
-/** Код из «письма» регистрации, который принимает фейковый API. */
+/** Код из «письма» входа и регистрации, который принимает фейковый API. */
 export const FAKE_SIGNUP_CODE = '123456';
+
+function maskEmail(email: string): string {
+  const at = email.lastIndexOf('@');
+  if (at < 1) return email;
+  const local = email.slice(0, at);
+  return `${local[0]}***${local.length > 2 ? local[local.length - 1] : ''}${email.slice(at)}`;
+}
 
 export interface FakeApiOptions {
   /** Ответ ассистента по умолчанию. */
@@ -264,8 +271,7 @@ export function installFakeApi(options: FakeApiOptions = {}): FakeApi {
     },
   };
 
-  let pendingSignupEmail = '';
-  let pendingSignupName = '';
+  const pending: Partial<Record<'signup' | 'login', { email: string; name: string }>> = {};
 
   vi.stubGlobal(
     'fetch',
@@ -279,72 +285,63 @@ export function installFakeApi(options: FakeApiOptions = {}): FakeApi {
         return json(META);
       }
 
+      // Вход и регистрация — через код из «письма» (FAKE_SIGNUP_CODE).
+      const challenge = (flow: 'signup' | 'login', email: string, status = 202) =>
+        json(
+          {
+            status: 'verification_required',
+            challengeId: `${flow}-1`,
+            maskedEmail: maskEmail(email),
+            codeExpiresAt: new Date(Date.now() + 300_000).toISOString(),
+            resendAfterSec: 60,
+          },
+          status,
+        );
+
       if (url === '/api/auth/login' && method === 'POST') {
-        const email = String(body.email ?? '');
         const password = String(body.password ?? '');
         if (password === 'wrongPassword') {
           return json({ error: { code: 'invalid_credentials', message: 'Неверный пароль' } }, 401);
         }
-        return json({
-          user: {
-            id: 'demo-user',
-            email,
-            name: 'Демо Пользователь',
-            plan: 'free',
-            createdAt: new Date().toISOString(),
-          },
-          token: 'fake.jwt.token',
-          expiresAt: new Date(Date.now() + 86400000).toISOString(),
-        });
+        pending.login = { email: String(body.email ?? ''), name: 'Демо Пользователь' };
+        return challenge('login', pending.login.email);
       }
 
       if (url === '/api/auth/signup' && method === 'POST') {
-        const email = String(body.email ?? '');
-        pendingSignupName = String(body.name ?? 'Новый Пользователь');
-        pendingSignupEmail = email;
-        return json(
-          {
-            status: 'verification_required',
-            signupId: 'signup-1',
-            email,
-            codeExpiresAt: new Date(Date.now() + 600_000).toISOString(),
-            resendAfterSec: 60,
-          },
-          202,
-        );
+        pending.signup = {
+          email: String(body.email ?? ''),
+          name: String(body.name ?? 'Новый Пользователь'),
+        };
+        return challenge('signup', pending.signup.email);
       }
 
-      if (url === '/api/auth/signup/resend' && method === 'POST') {
-        return json({
-          status: 'verification_required',
-          email: pendingSignupEmail,
-          codeExpiresAt: new Date(Date.now() + 600_000).toISOString(),
-          resendAfterSec: 60,
-        });
-      }
-
-      if (url === '/api/auth/signup/verify' && method === 'POST') {
+      const codeRoute = /^\/api\/auth\/(signup|login)\/(verify|resend)$/.exec(url);
+      if (codeRoute && method === 'POST') {
+        const flow = codeRoute[1] as 'signup' | 'login';
+        const who = pending[flow];
+        if (!who) {
+          return json({ error: { code: 'challenge_expired', message: 'Попытка устарела' } }, 410);
+        }
+        if (codeRoute[2] === 'resend') return challenge(flow, who.email, 200);
         if (body.code !== FAKE_SIGNUP_CODE) {
           return json(
             { error: { code: 'invalid_code', message: 'Неверный код. Осталось попыток: 4' } },
             400,
           );
         }
-        const email = pendingSignupEmail;
-        const name = pendingSignupName;
         return json(
           {
             user: {
-              id: 'new-user',
-              email,
-              name,
+              id: flow === 'signup' ? 'new-user' : 'demo-user',
+              email: who.email,
+              name: who.name,
               plan: 'free',
               createdAt: new Date().toISOString(),
             },
             token: 'fake.jwt.token',
             expiresAt: new Date(Date.now() + 86400000).toISOString(),
           },
-          201,
+          flow === 'signup' ? 201 : 200,
         );
       }
 

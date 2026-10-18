@@ -41,11 +41,12 @@ curl -sI https://ketner.org/assets/<имя из index.html>.js | grep -i content
 
 1. **Переменные** — по [environment.md](environment.md). Обязательны `BETTER_AUTH_SECRET`, `WEBHOOK_SECRET`, `ADMIN_API_KEY`; без `DATABASE_URL` данные пропадают при каждом деплое.
 2. **База** — достаточно пустого Postgres: таблицы создаются при старте.
-3. **Администратор** — `SEED_ADMIN_EMAIL` + `SEED_ADMIN_PASSWORD` на один запуск или почта в `ADMIN_EMAILS`.
-4. **OAuth** — в консолях Google и GitHub колбэки `https://ketner.org/api/auth/callback/google` и `…/github` (с `BETTER_AUTH_URL=https://ketner.org`). Привязка репозиториев использует подкаталог `…/callback/github/repos`, его GitHub принимает без отдельной настройки.
-5. **Telegram** — [telegram.md](telegram.md#настройка). Вебхуки бот ставит сам при старте.
-6. **Trybit** — адреса успеха, неудачи и уведомлений ([payments.md](payments.md#trybit-криптовалюта)).
-7. **Cloudflare** — проксирование включено (оранжевое облако), SSL Full (strict). Если сайт открывается ещё по каким-то адресам — добавьте их в `CORS_EXTRA_ORIGINS`.
+3. **Почта (SMTP)** — `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`, `MAIL_FROM`. Обязательна: вход и регистрация по почте подтверждаются кодом из письма, без SMTP они отвечают `503 mail_unavailable` (войти можно будет только через Google / GitHub).
+4. **Администратор** — `SEED_ADMIN_EMAIL` + `SEED_ADMIN_PASSWORD` на один запуск или почта в `ADMIN_EMAILS`. Для входа администратору тоже нужен код из письма: адрес должен быть настоящим.
+5. **OAuth** — в консолях Google и GitHub колбэки `https://ketner.org/api/auth/callback/google` и `…/github` (с `BETTER_AUTH_URL=https://ketner.org`). Привязка репозиториев использует подкаталог `…/callback/github/repos`, его GitHub принимает без отдельной настройки.
+6. **Telegram** — [telegram.md](telegram.md#настройка). Вебхуки бот ставит сам при старте.
+7. **Trybit** — адреса успеха, неудачи и уведомлений ([payments.md](payments.md#trybit-криптовалюта)).
+8. **Cloudflare** — проксирование включено (оранжевое облако), SSL Full (strict). Если сайт открывается ещё по каким-то адресам — добавьте их в `CORS_EXTRA_ORIGINS`.
 
 ## Секреты
 

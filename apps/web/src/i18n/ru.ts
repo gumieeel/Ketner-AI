@@ -49,8 +49,10 @@ export const ru = {
   'auth.checkoutSignupNotice':
     'Для оформления подписки необходимо сначала войти или создать аккаунт.',
   'auth.verifyTitle': 'Подтвердите почту',
-  'auth.verifySubtitle':
-    'Мы отправили 6-значный код на {email}. Введите его, чтобы завершить регистрацию.',
+  'auth.verifyLoginTitle': 'Код для входа',
+  'auth.noticeSignedUp': 'Регистрация завершена. Добро пожаловать в Ketner AI!',
+  'auth.noticeLoggedIn': 'Вы вошли в аккаунт.',
+  'auth.verifySubtitle': 'Мы отправили 6-значный код на {email}. Введите его, чтобы продолжить.',
   'auth.verifyCode': 'Код из письма',
   'auth.verifyCodeInvalid': 'Введите 6 цифр из письма',
   'auth.verifySubmit': 'Подтвердить',
@@ -58,7 +60,7 @@ export const ru = {
   'auth.verifyResend': 'Отправить код ещё раз',
   'auth.verifyResendIn': 'Отправить код ещё раз через {seconds} с',
   'auth.verifyResent': 'Новый код отправлен. Прежний больше не действует.',
-  'auth.verifyHint': 'Не пришло письмо? Проверьте папку «Спам». Код действует 10 минут.',
+  'auth.verifyHint': 'Не пришло письмо? Проверьте папку «Спам». Код действует 5 минут.',
   'auth.verifyChangeEmail': 'Изменить почту',
   'auth.verifyFailed': 'Не удалось подтвердить код',
   'settings.loggedInAs': 'Вы вошли как',
@@ -545,7 +547,7 @@ export const ru = {
   'settings.telegramConnect': 'Подключить Telegram',
   'settings.telegramLinkedAs': 'Привязан Telegram:',
   'settings.telegramLinkedHint':
-    'Входите на сайт кнопкой «Войти через Telegram». В боте нажмите «Кабинет»: подписка, автопродление, чеки и возвраты.',
+    'В боте нажмите «Кабинет»: подписка, автопродление, чеки и возвраты. На сайт входите по почте с кодом из письма или через Google.',
   'settings.telegramLinkTitle': 'Как подключить',
   'settings.telegramLinkHint':
     'Нажмите «Подключить Telegram», откройте бота и подтвердите — страница обновится сама.',
@@ -553,10 +555,9 @@ export const ru = {
   'settings.telegramCodeSubmit': 'Подключить',
   'settings.telegramCodeLabel': 'Код из кабинета в Telegram',
   'settings.telegramOnlyHint':
-    'Аккаунт создан через Telegram: входите кнопкой «Войти через Telegram» на любом устройстве.',
+    'Аккаунт создан через Telegram: подписка и управление — в кабинете бота Ketner AI.',
   'settings.telegramClaimFailed': 'Не получилось. Попробуйте ещё раз.',
-  'settings.telegramLinkedDone':
-    'Telegram подключён. Теперь можно входить через него, а кабинет подписки — в боте.',
+  'settings.telegramLinkedDone': 'Telegram подключён. Кабинет подписки и уведомления — в боте.',
   'settings.telegramAccountEmail': 'Аккаунт Telegram',
   'settings.githubTitle': 'GitHub',
   'settings.githubDesc':
@@ -583,30 +584,20 @@ export const ru = {
   'github.noticeFailed': 'Не удалось подключить GitHub. Попробуйте ещё раз.',
 
   // Кабинет в Telegram (мини-приложение)
-  'tgAuth.loginTitle': 'Вход через Telegram',
-  'tgAuth.loginLead': 'Без пароля — в аккаунт, к которому привязан ваш Telegram.',
   'tgAuth.linkTitle': 'Подключить Telegram',
-  'tgAuth.linkLead': 'Входите через Telegram и управляйте подпиской в боте.',
+  'tgAuth.linkLead': 'Управляйте подпиской и получайте уведомления в боте.',
   'tgAuth.openTelegram': 'Открыть Telegram',
   'tgAuth.orScan': 'или отсканируйте камерой телефона',
   'tgAuth.step1': 'Откройте бота Ketner AI кнопкой «Открыть Telegram».',
-  'tgAuth.step2Login': 'Подтвердите вход кнопкой в боте — эта страница войдёт сама.',
   'tgAuth.step2Link': 'Нажмите в боте «Привязать» — эта страница обновится сама.',
   'tgAuth.waiting': 'Ждём подтверждения в Telegram…',
-  'tgAuth.doneLogin': 'Готово, входим…',
   'tgAuth.doneLink': 'Telegram подключён',
-  'tgAuth.declined': 'Вход отклонён в Telegram.',
+  'tgAuth.declined': 'Подключение отклонено в Telegram.',
   'tgAuth.expired': 'Время на подтверждение вышло.',
   'tgAuth.unlinked':
     'Этот Telegram не привязан к аккаунту Ketner. Войдите по почте или через Google и подключите Telegram в настройках — или привяжите его в боте по коду из письма.',
-  'tgAuth.errorStart': 'Не получилось начать вход через Telegram. Попробуйте ещё раз.',
+  'tgAuth.errorStart': 'Не получилось начать подключение Telegram. Попробуйте ещё раз.',
   'tgAuth.retry': 'Начать заново',
-  'tgAuth.magicTitle': 'Вход из Telegram',
-  'tgAuth.magicProgress': 'Входим в аккаунт…',
-  'tgAuth.magicMissing': 'В ссылке нет ключа входа. Откройте сайт из кабинета в Telegram ещё раз.',
-  'tgAuth.magicFailed':
-    'Не получилось войти по ссылке. Откройте сайт из кабинета в Telegram ещё раз.',
-  'tgAuth.toLogin': 'Перейти ко входу',
   'tg.errorGeneric': 'Не получилось связаться с Ketner. Попробуйте ещё раз.',
   'tg.retry': 'Повторить',
   'tg.close': 'Закрыть',
@@ -680,7 +671,6 @@ export const ru = {
   'tg.quickActions': 'Быстрые действия',
   'tg.openChat': 'Открыть Ketner AI',
   'tg.support': 'Поддержка',
-  'tg.siteLoginFallback': 'Открыли сайт. Если попросит войти — нажмите «Войти через Telegram».',
   'tg.plansTitle': 'Тарифы',
   'tg.payMode': 'Как оплатить',
   'tg.modeOnce': 'На 30 дней',
@@ -822,9 +812,10 @@ export const ru = {
   'tg.telegramAccount': 'Аккаунт Telegram',
   'tg.memberSince': 'с {date}',
   'tg.siteTitle': 'Ketner AI на сайте',
-  'tg.siteText': 'Откроем ketner.org уже войдя в ваш аккаунт — пароль вводить не нужно.',
+  'tg.siteText':
+    'Откроем ketner.org. Если сайт попросит войти — по почте с кодом из письма или через Google.',
   'tg.siteTextTelegram':
-    'Откроем ketner.org уже войдя в аккаунт. На другом устройстве нажмите «Войти через Telegram».',
+    'Аккаунт создан в Telegram и на сайт не входит: подписка и управление — здесь, в кабинете.',
   'tg.openSiteSettings': 'Настройки аккаунта на сайте',
   'tg.notifyTitle': 'Уведомления в боте',
   'tg.notifyReminders': 'Напоминания о продлении',

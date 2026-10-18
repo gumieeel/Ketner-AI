@@ -1,5 +1,4 @@
 import { Router, type Request, type Response } from 'express';
-import { createMockToken } from '../auth/jwt.js';
 import { requireAuth } from '../middleware/auth.js';
 import { sendError } from '../middleware/errors.js';
 import { RateLimiter, clientIp } from '../middleware/rate-limit.js';
@@ -13,8 +12,11 @@ export interface TelegramAuthRouterDeps {
 }
 
 /**
- * Вход и привязка через Telegram для сайта (`/api/auth/telegram/*`):
- * сайт создаёт запрос, человек подтверждает его кнопкой в боте, сайт забирает сессию опросом.
+ * Привязка Telegram к аккаунту сайта (`/api/auth/telegram/*`): сайт создаёт запрос, человек
+ * подтверждает его кнопкой в боте, сайт узнаёт результат опросом; либо вводит код из кабинета.
+ *
+ * Входа через Telegram на сайт нет: войти можно только по почте с кодом из письма или через
+ * Google / GitHub. Запросы входа (`mode: login`) и одноразовые ссылки входа из кабинета отключены.
  */
 export function createTelegramAuthRouter({
   botService,
@@ -26,7 +28,6 @@ export function createTelegramAuthRouter({
   // короткий (6 символов) — попытки ввода ограничены, чтобы его нельзя было подобрать.
   const startsPerIp = new RateLimiter(10 * 60 * 1000, 20);
   const claimAttempts = new RateLimiter(10 * 60 * 1000, 10);
-  const magicPerIp = new RateLimiter(10 * 60 * 1000, 30);
   const limited = (response: Response, limiter: RateLimiter, key: string): boolean => {
     if (!limiter.hit(key)) return false;
     response.setHeader('Retry-After', String(limiter.retryAfterSec(key)));
@@ -41,20 +42,27 @@ export function createTelegramAuthRouter({
 
   router.post('/auth/telegram/start', (request: Request, response: Response) => {
     if (limited(response, startsPerIp, clientIp(request))) return;
-    const mode =
-      (request.body as { mode?: unknown } | undefined)?.mode === 'link' ? 'link' : 'login';
-    if (mode === 'link' && !request.user) {
+    if ((request.body as { mode?: unknown } | undefined)?.mode !== 'link') {
+      sendError(
+        response,
+        410,
+        'telegram_login_disabled',
+        'Вход через Telegram отключён. Войдите по почте или через Google / GitHub.',
+      );
+      return;
+    }
+    if (!request.user) {
       sendError(response, 401, 'unauthorized', 'Войдите, чтобы подключить Telegram');
       return;
     }
     const created = requests.create(
-      mode,
+      'link',
       describeDevice(request.headers['user-agent']),
-      request.user?.id,
+      request.user.id,
     );
     response.json({
       requestId: created.id,
-      mode,
+      mode: 'link',
       botUrl: `https://t.me/${botService.botUsername}?start=auth_${created.code}`,
       expiresAt: new Date(created.expiresAt).toISOString(),
     });
@@ -67,16 +75,12 @@ export function createTelegramAuthRouter({
       return;
     }
     const user = userStore.findById(result.userId);
-    if (!user) {
+    // Сессию опрос не выдаёт никогда: это только привязка.
+    if (!user || result.mode !== 'link') {
       response.json({ status: 'expired' });
       return;
     }
-    if (result.mode === 'link') {
-      response.json({ status: 'approved', mode: 'link', user });
-      return;
-    }
-    const { token, expiresAt } = createMockToken(user);
-    response.json({ status: 'approved', mode: 'login', token, expiresAt, user });
+    response.json({ status: 'approved', mode: 'link', user });
   });
 
   /** Код из кабинета в Telegram, введённый в настройках сайта. */
@@ -113,25 +117,6 @@ export function createTelegramAuthRouter({
     }
     const user = botService.linkTelegram(request.user!.id, claim.telegramUserId, claim.username);
     response.json({ user });
-  });
-
-  /** Одноразовая ссылка входа из кабинета в Telegram. */
-  router.post('/auth/telegram/magic', (request: Request, response: Response) => {
-    if (limited(response, magicPerIp, clientIp(request))) return;
-    const token = (request.body as { token?: unknown } | undefined)?.token;
-    const userId = typeof token === 'string' ? requests.consumeMagic(token) : null;
-    const user = userId ? userStore.findById(userId) : null;
-    if (!user) {
-      sendError(
-        response,
-        400,
-        'invalid_token',
-        'Ссылка для входа устарела. Откройте сайт из кабинета в Telegram ещё раз.',
-      );
-      return;
-    }
-    const session = createMockToken(user);
-    response.json({ user, token: session.token, expiresAt: session.expiresAt });
   });
 
   return router;

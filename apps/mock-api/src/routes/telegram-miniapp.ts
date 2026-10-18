@@ -561,20 +561,6 @@ export function createMiniAppRouter({
     if (user) response.json(stateOf(user));
   });
 
-  /** Одноразовая ссылка: открывает сайт уже войдя в этот аккаунт. */
-  router.post(
-    '/telegram/miniapp/site-login',
-    requireAuth,
-    (request: Request, response: Response) => {
-      const next = (request.body as { next?: unknown } | undefined)?.next;
-      const path = typeof next === 'string' && /^\/[a-z0-9/_-]*$/i.test(next) ? next : '/chat';
-      const token = botService.authRequests.issueMagic(request.user!.id);
-      response.json({
-        url: `${botService.siteUrl}/auth/telegram?t=${token}&next=${encodeURIComponent(path)}`,
-      });
-    },
-  );
-
   router.post('/telegram/miniapp/unlink', requireAuth, (request: Request, response: Response) => {
     const user = currentUser(request, response);
     if (!user) return;

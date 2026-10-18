@@ -1,12 +1,13 @@
 import { ApiError } from '../chat/api';
 import { API_BASE } from '@/lib/api-config';
 import type {
+  AuthFlow,
   AuthSession,
+  CodeChallenge,
   LoginPayload,
   SignupPayload,
-  SignupStart,
   User,
-  VerifySignupPayload,
+  VerifyCodePayload,
 } from './types';
 
 const JSON_HEADERS = { 'Content-Type': 'application/json' };
@@ -41,33 +42,37 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   return (await response.json()) as T;
 }
 
-export async function login(payload: LoginPayload): Promise<AuthSession> {
-  return request<AuthSession>('/auth/login', {
+/** Первый шаг входа: почта и пароль. Сервер отправляет код на почту, сессии ещё нет. */
+export async function login(payload: LoginPayload): Promise<CodeChallenge> {
+  return request<CodeChallenge>('/auth/login', {
     method: 'POST',
     body: JSON.stringify(payload),
   });
 }
 
 /** Первый шаг регистрации: сервер отправляет код на почту, аккаунт ещё не создан. */
-export async function signup(payload: SignupPayload): Promise<SignupStart> {
-  return request<SignupStart>('/auth/signup', {
+export async function signup(payload: SignupPayload): Promise<CodeChallenge> {
+  return request<CodeChallenge>('/auth/signup', {
     method: 'POST',
     body: JSON.stringify(payload),
   });
 }
 
-/** Второй шаг: код из письма создаёт аккаунт и сессию. */
-export async function verifySignup(payload: VerifySignupPayload): Promise<AuthSession> {
-  return request<AuthSession>('/auth/signup/verify', {
+/**
+ * Второй шаг: код из письма. Регистрация создаёт аккаунт, вход — выдаёт сессию; cookie-сессию
+ * Better Auth сервер ставит сам.
+ */
+export async function verifyCode(flow: AuthFlow, payload: VerifyCodePayload): Promise<AuthSession> {
+  return request<AuthSession>(`/auth/${flow}/verify`, {
     method: 'POST',
     body: JSON.stringify(payload),
   });
 }
 
-export async function resendSignupCode(signupId: string): Promise<Omit<SignupStart, 'signupId'>> {
-  return request<Omit<SignupStart, 'signupId'>>('/auth/signup/resend', {
+export async function resendCode(flow: AuthFlow, challengeId: string): Promise<CodeChallenge> {
+  return request<CodeChallenge>(`/auth/${flow}/resend`, {
     method: 'POST',
-    body: JSON.stringify({ signupId }),
+    body: JSON.stringify({ challengeId }),
   });
 }
 

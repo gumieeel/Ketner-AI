@@ -1,19 +1,16 @@
 import { ApiError } from '../chat/api';
 import { API_BASE } from '@/lib/api-config';
-import type { AuthSession, User } from '../auth/types';
-
-export type TelegramAuthMode = 'login' | 'link';
+import type { User } from '../auth/types';
 
 export interface TelegramAuthStart {
   requestId: string;
-  mode: TelegramAuthMode;
+  mode: 'link';
   botUrl: string;
   expiresAt: string;
 }
 
 export type TelegramAuthPoll =
   | { status: 'pending' | 'declined' | 'expired' | 'unlinked' }
-  | ({ status: 'approved'; mode: 'login' } & AuthSession)
   | { status: 'approved'; mode: 'link'; user: User };
 
 /** Служебный адрес аккаунта, созданного через Telegram: показывать его не нужно. */
@@ -51,16 +48,14 @@ async function call<T>(
   return (await response.json()) as T;
 }
 
-/** Вход и привязка через бота: сайт создаёт запрос, человек подтверждает его в Telegram. */
+/** Привязка Telegram через бота: сайт создаёт запрос, человек подтверждает его в Telegram. */
 export const telegramSiteAuth = {
-  start: (mode: TelegramAuthMode, token?: string | null) =>
-    call<TelegramAuthStart>('/auth/telegram/start', { body: { mode }, token }),
+  start: (token?: string | null) =>
+    call<TelegramAuthStart>('/auth/telegram/start', { body: { mode: 'link' }, token }),
   poll: (requestId: string) =>
     call<TelegramAuthPoll>(`/auth/telegram/poll/${encodeURIComponent(requestId)}`),
   claim: (code: string, token?: string | null) =>
     call<{ user: User }>('/auth/telegram/claim', { body: { code }, token }),
-  magic: (magicToken: string) =>
-    call<AuthSession>('/auth/telegram/magic', { body: { token: magicToken } }),
   /** Свежий профиль (с полями Telegram) — и для входа по паролю, и для cookie-сессии Google/GitHub. */
   me: (token?: string | null) => call<{ user: User }>('/auth/me', { token }),
 };
