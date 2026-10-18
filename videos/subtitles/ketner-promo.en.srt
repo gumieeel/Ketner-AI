@@ -1,0 +1,53 @@
+1
+00:00:00,200 --> 00:00:01,480
+One AI subscription here,
+
+2
+00:00:01,640 --> 00:00:02,720
+another one there,
+
+3
+00:00:02,920 --> 00:00:03,880
+a third on top?
+
+4
+00:00:04,120 --> 00:00:04,720
+Enough.
+
+5
+00:00:05,000 --> 00:00:07,800
+Ketner AI — all the top models
+in one subscription.
+
+6
+00:00:08,040 --> 00:00:09,920
+GPT, Claude, Gemini,
+
+7
+00:00:10,040 --> 00:00:12,280
+Grok and DeepSeek — in one chat.
+
+8
+00:00:12,680 --> 00:00:14,640
+Auto mode picks the right
+model for your task.
+
+9
+00:00:14,840 --> 00:00:17,200
+Write code with an agent,
+generate images,
+
+10
+00:00:17,400 --> 00:00:19,600
+connect through an
+OpenAI-compatible API.
+
+11
+00:00:19,880 --> 00:00:21,800
+Plans from zero to forty-nine
+dollars a month.
+
+12
+00:00:22,040 --> 00:00:23,480
+Start for free
+at ketner.org.
