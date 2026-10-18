@@ -52,6 +52,16 @@ export async function syncBetterAuthCredential(
   }
 }
 
+/** Завершает все cookie-сессии Better Auth с этой почтой: пароль сброшен, прежние входы не действуют. */
+export async function revokeBetterAuthSessions(
+  auth: BetterAuthInstance,
+  email: string,
+): Promise<void> {
+  const ctx = await auth.$context;
+  const found = await ctx.internalAdapter.findUserByEmail(email.trim().toLowerCase());
+  if (found) await ctx.internalAdapter.deleteUserSessions(found.user.id);
+}
+
 /** Насколько могут расходиться даты создания записи Better Auth и аккаунта сайта при регистрации. */
 const CREATED_TOGETHER_MS = 2 * 60 * 1000;
 

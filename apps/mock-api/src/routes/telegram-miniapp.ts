@@ -209,7 +209,7 @@ export function createMiniAppRouter({
   };
 
   const session = (user: User) => {
-    const { token, expiresAt } = createMockToken(user);
+    const { token, expiresAt } = createMockToken(user, userStore.credentialStamp(user.id));
     return { linked: true as const, token, expiresAt, ...stateOf(user) };
   };
 

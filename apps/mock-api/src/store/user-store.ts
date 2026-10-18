@@ -1,4 +1,11 @@
-import { pbkdf2Sync, randomBytes, randomUUID, scryptSync, timingSafeEqual } from 'node:crypto';
+import {
+  createHash,
+  pbkdf2Sync,
+  randomBytes,
+  randomUUID,
+  scryptSync,
+  timingSafeEqual,
+} from 'node:crypto';
 import { mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
 import { dirname } from 'node:path';
 import { config, isProduction } from '../config.js';
@@ -38,6 +45,11 @@ export interface UserStore {
   create(email: string, password: string, name?: string, signup?: SignupInfo): User;
   verifyPassword(email: string, password: string): User | null;
   setPassword(email: string, password: string): User | null;
+  /**
+   * Отпечаток текущего пароля для токенов входа: меняется при каждой смене пароля, и токены,
+   * выданные со старым, перестают действовать. null — аккаунта нет.
+   */
+  credentialStamp(id: string): string | null;
   updatePlan(id: string, plan: PlanId): User | null;
   setVip(id: string, isVip: boolean): User | null;
   setAdmin(id: string, isAdmin: boolean): User | null;
@@ -315,6 +327,16 @@ export function createUserStore(file: string): UserStore {
         ?.onPasswordUpdated?.(user.id, user.salt, user.passwordHash)
         ?.catch?.((err) => console.error('[db] Error persisting updated password:', err));
       return toPublicUser(user);
+    },
+
+    credentialStamp(id: string) {
+      const user = snapshot.users.find((candidate) => candidate.id === id);
+      if (!user) return null;
+      // Соль меняется при каждой смене пароля (setPassword, пересчёт старого хеша).
+      return createHash('sha256')
+        .update(`${user.salt}:${user.passwordHash}`)
+        .digest('base64url')
+        .slice(0, 16);
     },
 
     updatePlan(id: string, plan: PlanId) {

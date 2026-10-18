@@ -83,8 +83,11 @@ export function StandaloneLayout() {
     };
   }, [mobileMenuOpen]);
 
-  // Вход, регистрация и ввод кода из письма — свой каркас (AuthShell), без шапки и подвала сайта.
-  const isAuthPage = /^\/(login|signup)(\/verify)?\/?$/.test(location.pathname);
+  // Вход, регистрация, ввод кода из письма и восстановление пароля — свой каркас (AuthShell),
+  // без шапки и подвала сайта.
+  const isAuthPage = /^\/(signup(\/verify)?|login(\/verify|\/forgot(\/verify|\/new)?)?)\/?$/.test(
+    location.pathname,
+  );
   const isLanding = location.pathname === '/';
   // Главная шире и с узкими полями — панели идут почти от края до края, как витрина.
   const containerClass = isLanding

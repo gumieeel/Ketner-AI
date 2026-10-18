@@ -147,6 +147,30 @@ export const API_ENDPOINTS = [
     status: 'ready',
     description: 'Вход: почта и пароль, затем код из письма',
   },
+  {
+    method: 'POST',
+    path: '/api/auth/password-reset',
+    status: 'ready',
+    description: 'Забыли пароль: отправляет код сброса на почту',
+  },
+  {
+    method: 'POST',
+    path: '/api/auth/password-reset/verify',
+    status: 'ready',
+    description: 'Код сброса пароля: выдаёт одноразовый токен для нового пароля',
+  },
+  {
+    method: 'POST',
+    path: '/api/auth/password-reset/resend',
+    status: 'ready',
+    description: 'Повторная отправка кода сброса пароля',
+  },
+  {
+    method: 'POST',
+    path: '/api/auth/password-reset/complete',
+    status: 'ready',
+    description: 'Новый пароль: завершает прежние сессии и открывает новую',
+  },
   { method: 'GET', path: '/api/auth/me', status: 'ready', description: 'Текущий пользователь' },
   { method: 'GET', path: '/api/plans', status: 'ready', description: 'Каталог тарифов' },
   {

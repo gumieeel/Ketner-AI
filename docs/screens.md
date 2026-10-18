@@ -10,6 +10,7 @@
 | `/pricing`                             | Тарифы Free, Plus, Pro, Ultra и как работают лимиты                                               |
 | `/login`, `/signup`                    | Вход и регистрация: почта и пароль, Google, GitHub                                                |
 | `/signup/verify`, `/login/verify`      | Второй шаг регистрации и входа: 6-значный код из письма, почта замаскирована, повтор через минуту |
+| `/login/forgot`, `…/verify`, `…/new`   | «Забыли пароль?»: почта → код из письма → новый пароль, после него — вход                         |
 | `/checkout/:planId`                    | Оплата тарифа: криптовалюта (Trybit) или Telegram Stars                                           |
 | `/checkout/success`                    | Оплата прошла (цель «Покупка» Google Ads)                                                         |
 | `/docs`, `/docs/plans/:planId`         | Справка для пользователей                                                                         |

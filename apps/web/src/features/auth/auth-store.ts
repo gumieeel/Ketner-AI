@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import { storage } from '@/lib/storage';
 import { authClient } from './auth-client';
 import {
+  completePasswordReset as apiCompletePasswordReset,
   fetchMe,
   login as apiLogin,
   logout as apiLogout,
@@ -16,6 +17,7 @@ import type {
   AuthSession,
   AuthStatus,
   CodeChallenge,
+  CompletePasswordResetPayload,
   LoginPayload,
   PlanId,
   SignupPayload,
@@ -34,6 +36,8 @@ interface AuthState {
   signup: (payload: SignupPayload) => Promise<CodeChallenge>;
   /** Код из письма: завершает вход или регистрацию и открывает сессию. */
   verifyCode: (flow: AuthFlow, payload: VerifyCodePayload) => Promise<void>;
+  /** Новый пароль после кода сброса: прежние сессии завершены, открывается новая. */
+  completePasswordReset: (payload: CompletePasswordResetPayload) => Promise<void>;
   mockOAuth: (provider: 'google' | 'github') => Promise<void>;
   logout: () => Promise<void>;
   restoreSession: () => Promise<void>;
@@ -125,6 +129,14 @@ export function normalizeUser(rawUser: Record<string, unknown>): User {
     ...(telegramChatId !== undefined ? { telegramChatId } : {}),
     ...(telegramUsername ? { telegramUsername } : {}),
   };
+}
+
+/** Сессия, выданная сервером после кода из письма или нового пароля: сохраняется и становится текущей. */
+function openSession(session: AuthSession): Partial<AuthState> {
+  const user = normalizeUser(session.user as unknown as Record<string, unknown>);
+  saveSession({ user, token: session.token, expiresAt: session.expiresAt });
+  useUpgradeModal.getState().close();
+  return { user, token: session.token, status: 'authenticated', error: null };
 }
 
 const initialSession = readStoredSession();
@@ -227,13 +239,20 @@ export const useAuth = create<AuthState>((set, get) => ({
     set({ error: null });
     try {
       // Сервер в ответе ставит и cookie-сессию Better Auth этого аккаунта (вместо прежней, если была).
-      const session = await apiVerifyCode(flow, payload);
-      const user = normalizeUser(session.user as unknown as Record<string, unknown>);
-      saveSession({ user, token: session.token, expiresAt: session.expiresAt });
-      useUpgradeModal.getState().close();
-      set({ user, token: session.token, status: 'authenticated', error: null });
+      set(openSession(await apiVerifyCode(flow, payload)));
     } catch (apiError) {
       const message = apiError instanceof Error ? apiError.message : 'Не удалось подтвердить код';
+      set({ error: message });
+      throw apiError;
+    }
+  },
+
+  completePasswordReset: async (payload: CompletePasswordResetPayload) => {
+    set({ error: null });
+    try {
+      set(openSession(await apiCompletePasswordReset(payload)));
+    } catch (apiError) {
+      const message = apiError instanceof Error ? apiError.message : 'Не удалось сменить пароль';
       set({ error: message });
       throw apiError;
     }
