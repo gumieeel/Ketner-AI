@@ -1,3 +1,4 @@
+import { signupAndVerify } from '../testing/signup.js';
 import assert from 'node:assert/strict';
 import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -130,7 +131,7 @@ async function harness(extra: Partial<Parameters<typeof startTestServer>[1]> = {
   let counter = 0;
   const signup = async (): Promise<AuthSession> => {
     counter += 1;
-    const response = await fetch(`${server.baseUrl}/api/auth/signup`, {
+    const response = await signupAndVerify(server.baseUrl, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({

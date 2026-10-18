@@ -10,6 +10,12 @@ import { revokedTokenStore as defaultRevokedTokenStore } from '../store/index.js
 import type { RevokedTokenStore } from '../store/revoked-token-store.js';
 import { syncBetterAuthCredential } from '../auth/better-auth-sync.js';
 import { RateLimiter, clientIp } from '../middleware/rate-limit.js';
+import {
+  PendingSignups,
+  SIGNUP_CODE_RESEND_MS,
+  signupCodeMail,
+} from '../auth/signup-verification.js';
+import { mailer as defaultMailer, type Mailer } from '../services/mailer.js';
 
 import { config, isProduction } from '../config.js';
 import { isAdminEmail, isVipEmail } from '../services/vip.js';
@@ -21,6 +27,8 @@ export function createAuthRouter(
   userStore: UserStore,
   betterAuthInstance = defaultBetterAuth,
   revokedTokens: RevokedTokenStore = defaultRevokedTokenStore,
+  mailer: Mailer = defaultMailer,
+  pendingSignups = new PendingSignups(),
 ): Router {
   const router = Router();
 
@@ -29,12 +37,38 @@ export function createAuthRouter(
   const signupsPerIp = new RateLimiter(60 * 60 * 1000, 5);
   const failedLoginsPerIp = new RateLimiter(15 * 60 * 1000, 30);
   const failedLoginsPerEmail = new RateLimiter(15 * 60 * 1000, 8);
+  // Письма с кодом: не больше 6 в час на один адрес, чтобы через форму нельзя было засыпать
+  // чужую почту. Попытки ввода кода ограничены и по адресу клиента (сам код — 5 попыток).
+  const codesPerEmail = new RateLimiter(60 * 60 * 1000, 6);
+  const verifyAttemptsPerIp = new RateLimiter(15 * 60 * 1000, 30);
 
   const tooMany = (response: Response, retryAfterSec: number, message: string): void => {
     response.setHeader('Retry-After', String(Math.max(1, retryAfterSec)));
     sendError(response, 429, 'too_many_requests', message);
   };
 
+  /** Отправляет письмо с кодом; при ошибке сам отвечает клиенту и возвращает false. */
+  const sendSignupCode = async (
+    response: Response,
+    email: string,
+    code: string,
+  ): Promise<boolean> => {
+    try {
+      await mailer.send(signupCodeMail(email, code));
+      return true;
+    } catch (error) {
+      console.error('[auth] Письмо с кодом регистрации не отправлено:', error);
+      sendError(
+        response,
+        502,
+        'mail_failed',
+        'Не получилось отправить письмо с кодом. Попробуйте ещё раз через минуту.',
+      );
+      return false;
+    }
+  };
+
+  // Регистрация в два шага: форма → код на почту → аккаунт (см. auth/signup-verification.ts).
   router.post('/signup', async (request: Request, response: Response) => {
     const rawEmail: unknown = request.body?.email;
     const rawPassword: unknown = request.body?.password;
@@ -67,8 +101,7 @@ export function createAuthRouter(
 
     const email = rawEmail.trim().toLowerCase();
 
-    // Адреса администраторов и VIP заводятся только через SEED_ADMIN_* / админ-панель:
-    // регистрация не подтверждает владение почтой, поэтому занять их нельзя.
+    // Адреса администраторов и VIP заводятся только через SEED_ADMIN_* / админ-панель.
     if (isProduction && (isAdminEmail(email) || isVipEmail(email))) {
       sendError(response, 409, 'user_already_exists', 'Пользователь с таким email уже существует');
       return;
@@ -90,23 +123,163 @@ export function createAuthRouter(
       return;
     }
 
-    signupsPerIp.record(ipKey);
-    const name = typeof rawName === 'string' ? rawName.trim().slice(0, 100) : undefined;
-    const user = userStore.create(email, rawPassword, name, {
-      method: 'email',
+    if (codesPerEmail.isLimited(email)) {
+      tooMany(
+        response,
+        codesPerEmail.retryAfterSec(email),
+        'На эту почту уже отправлено много писем. Попробуйте позже.',
+      );
+      return;
+    }
+
+    if (mailer.kind === 'none') {
+      sendError(
+        response,
+        503,
+        'mail_unavailable',
+        'Регистрация временно недоступна: не настроена отправка писем.',
+      );
+      return;
+    }
+
+    const name =
+      typeof rawName === 'string' ? rawName.trim().slice(0, 100) || undefined : undefined;
+    const issued = pendingSignups.create({
+      email,
+      password: rawPassword,
+      name,
       attribution: attributionFromCookieHeader(request.headers.cookie),
     });
+    signupsPerIp.record(ipKey);
+    codesPerEmail.record(email);
+
+    if (!(await sendSignupCode(response, issued.email, issued.code))) return;
+
+    response.status(202).json({
+      status: 'verification_required',
+      signupId: issued.signupId,
+      email,
+      codeExpiresAt: new Date(issued.codeExpiresAt).toISOString(),
+      resendAfterSec: Math.ceil(SIGNUP_CODE_RESEND_MS / 1000),
+    });
+  });
+
+  router.post('/signup/verify', async (request: Request, response: Response) => {
+    const ipKey = clientIp(request);
+    if (verifyAttemptsPerIp.isLimited(ipKey)) {
+      tooMany(
+        response,
+        verifyAttemptsPerIp.retryAfterSec(ipKey),
+        'Слишком много попыток ввода кода. Подождите несколько минут.',
+      );
+      return;
+    }
+    verifyAttemptsPerIp.record(ipKey);
+
+    const signupId: unknown = request.body?.signupId;
+    const code: unknown = request.body?.code;
+    if (typeof signupId !== 'string' || typeof code !== 'string' || !code.trim()) {
+      sendError(response, 400, 'invalid_request', 'Введите код из письма');
+      return;
+    }
+
+    const result = pendingSignups.check(signupId, code);
+    if (!result.ok) {
+      switch (result.reason) {
+        case 'missing':
+          sendError(
+            response,
+            410,
+            'signup_expired',
+            'Заявка на регистрацию устарела. Заполните форму регистрации ещё раз.',
+          );
+          break;
+        case 'expired':
+          sendError(
+            response,
+            400,
+            'code_expired',
+            'Срок действия кода истёк. Запросите новый код.',
+          );
+          break;
+        case 'used_up':
+          sendError(
+            response,
+            400,
+            'code_attempts_exceeded',
+            'Слишком много неверных попыток. Запросите новый код.',
+          );
+          break;
+        case 'invalid':
+          sendError(
+            response,
+            400,
+            'invalid_code',
+            `Неверный код. Осталось попыток: ${result.attemptsLeft}`,
+          );
+          break;
+      }
+      return;
+    }
+
+    const { email, password, name, attribution } = result.data;
+    // Пока письмо шло, аккаунт с этой почтой мог появиться (другая заявка, вход через Google).
+    if (userStore.findByEmail(email)) {
+      sendError(response, 409, 'user_already_exists', 'Пользователь с таким email уже существует');
+      return;
+    }
+
+    const user = userStore.create(email, password, name, { method: 'email', attribution });
     const { token, expiresAt } = createMockToken(user);
 
     // Запись Better Auth (для cookie-сессии) получает тот же пароль; посторонняя запись с этой почтой,
     // если её успели завести, перезаписывается, а её сессии отзываются.
     try {
-      await syncBetterAuthCredential(betterAuthInstance, email, rawPassword, user.name);
+      await syncBetterAuthCredential(betterAuthInstance, email, password, user.name);
     } catch (error) {
       console.warn('[auth] Не удалось синхронизировать Better Auth при регистрации:', error);
     }
 
     response.status(201).json({ user, token, expiresAt });
+  });
+
+  router.post('/signup/resend', async (request: Request, response: Response) => {
+    const signupId: unknown = request.body?.signupId;
+    const email = typeof signupId === 'string' ? pendingSignups.emailOf(signupId) : null;
+    if (typeof signupId !== 'string' || !email) {
+      sendError(
+        response,
+        410,
+        'signup_expired',
+        'Заявка на регистрацию устарела. Заполните форму регистрации ещё раз.',
+      );
+      return;
+    }
+
+    const waitMs = pendingSignups.resendIn(signupId);
+    if (waitMs > 0) {
+      tooMany(response, Math.ceil(waitMs / 1000), 'Новый код можно запросить чуть позже.');
+      return;
+    }
+    if (codesPerEmail.isLimited(email)) {
+      tooMany(
+        response,
+        codesPerEmail.retryAfterSec(email),
+        'На эту почту уже отправлено много писем. Попробуйте позже.',
+      );
+      return;
+    }
+
+    const issued = pendingSignups.reissue(signupId)!;
+    codesPerEmail.record(email);
+    if (!(await sendSignupCode(response, issued.email, issued.code))) return;
+
+    response.json({
+      status: 'verification_required',
+      email,
+      codeExpiresAt: new Date(issued.codeExpiresAt).toISOString(),
+      resendAfterSec: Math.ceil(SIGNUP_CODE_RESEND_MS / 1000),
+    });
   });
 
   router.post('/login', async (request: Request, response: Response) => {

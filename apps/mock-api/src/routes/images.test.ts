@@ -1,3 +1,4 @@
+import { signupAndVerify } from '../testing/signup.js';
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { readJson, startTestServer } from '../testing/server.js';
@@ -10,7 +11,7 @@ test('images: без входа — 401, с входом — возможнос�
   const anonymous = await fetch(`${server.baseUrl}/api/images/capabilities`);
   assert.equal(anonymous.status, 401);
 
-  const signup = await fetch(`${server.baseUrl}/api/auth/signup`, {
+  const signup = await signupAndVerify(server.baseUrl, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({

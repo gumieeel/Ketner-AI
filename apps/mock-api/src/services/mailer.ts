@@ -9,7 +9,7 @@ export interface MailMessage {
 }
 
 /**
- * Отправка писем (коды привязки Telegram и уведомления).
+ * Отправка писем (коды подтверждения регистрации, привязки Telegram и уведомления).
  *
  * - `smtp` — настоящий почтовый сервер из SMTP_* (подходит любой: Яндекс, Gmail, Mail.ru, Resend…);
  * - `console` — без SMTP вне production: письмо печатается в лог сервера, чтобы локально было
@@ -29,7 +29,7 @@ export function createMailer(): Mailer {
       port: smtp.port,
       secure: smtp.secure,
       auth: smtp.user ? { user: smtp.user, pass: smtp.pass } : undefined,
-      // Не висеть на недоступном сервере: человек ждёт ответа в Telegram.
+      // Не висеть на недоступном сервере: человек ждёт письмо с кодом.
       connectionTimeout: 10_000,
       greetingTimeout: 10_000,
       socketTimeout: 20_000,

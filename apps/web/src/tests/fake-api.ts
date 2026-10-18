@@ -1,6 +1,9 @@
 import { vi } from 'vitest';
 import type { ChatMeta, Conversation, ConversationSummary, Message } from '@/features/chat/types';
 
+/** Код из «письма» регистрации, который принимает фейковый API. */
+export const FAKE_SIGNUP_CODE = '123456';
+
 export interface FakeApiOptions {
   /** Ответ ассистента по умолчанию. */
   reply?: string;
@@ -261,6 +264,9 @@ export function installFakeApi(options: FakeApiOptions = {}): FakeApi {
     },
   };
 
+  let pendingSignupEmail = '';
+  let pendingSignupName = '';
+
   vi.stubGlobal(
     'fetch',
     async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
@@ -294,7 +300,38 @@ export function installFakeApi(options: FakeApiOptions = {}): FakeApi {
 
       if (url === '/api/auth/signup' && method === 'POST') {
         const email = String(body.email ?? '');
-        const name = String(body.name ?? 'Новый Пользователь');
+        pendingSignupName = String(body.name ?? 'Новый Пользователь');
+        pendingSignupEmail = email;
+        return json(
+          {
+            status: 'verification_required',
+            signupId: 'signup-1',
+            email,
+            codeExpiresAt: new Date(Date.now() + 600_000).toISOString(),
+            resendAfterSec: 60,
+          },
+          202,
+        );
+      }
+
+      if (url === '/api/auth/signup/resend' && method === 'POST') {
+        return json({
+          status: 'verification_required',
+          email: pendingSignupEmail,
+          codeExpiresAt: new Date(Date.now() + 600_000).toISOString(),
+          resendAfterSec: 60,
+        });
+      }
+
+      if (url === '/api/auth/signup/verify' && method === 'POST') {
+        if (body.code !== FAKE_SIGNUP_CODE) {
+          return json(
+            { error: { code: 'invalid_code', message: 'Неверный код. Осталось попыток: 4' } },
+            400,
+          );
+        }
+        const email = pendingSignupEmail;
+        const name = pendingSignupName;
         return json(
           {
             user: {

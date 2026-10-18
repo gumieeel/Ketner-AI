@@ -1,7 +1,7 @@
 import { fireEvent, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { useAuth } from '@/features/auth/auth-store';
-import { installFakeApi } from './fake-api';
+import { FAKE_SIGNUP_CODE, installFakeApi } from './fake-api';
 import { renderRoute, resetAuth, resetChat, resetPreferences } from './test-utils';
 
 describe('auth-flow: сценарии авторизации и сессии', () => {
@@ -79,10 +79,31 @@ describe('auth-flow: сценарии авторизации и сессии', (
     fireEvent.change(passwordInput, { target: { value: 'superSecret123' } });
     fireEvent.click(submitButton);
 
+    // Форма не создаёт аккаунт сразу: открывается страница ввода кода из письма
+    expect(
+      await screen.findByRole('heading', { level: 1, name: 'Подтвердите почту' }),
+    ).toBeInTheDocument();
+    expect(screen.getByText(/alex@example\.com/)).toBeInTheDocument();
+    expect(useAuth.getState().status).not.toBe('authenticated');
+    expect(screen.getByRole('button', { name: /Отправить код ещё раз через/ })).toBeDisabled();
+
+    const codeInput = screen.getByLabelText('Код из письма');
+    fireEvent.change(codeInput, { target: { value: '000000' } });
+    expect(await screen.findByText(/Неверный код/)).toBeInTheDocument();
+    expect(useAuth.getState().status).not.toBe('authenticated');
+
+    fireEvent.change(codeInput, { target: { value: FAKE_SIGNUP_CODE } });
     await waitFor(() => {
       expect(useAuth.getState().status).toBe('authenticated');
       expect(useAuth.getState().user?.name).toBe('Александр');
     });
+  });
+
+  it('страница кода без начатой регистрации возвращает на форму', async () => {
+    renderRoute('/signup/verify');
+    expect(
+      await screen.findByRole('heading', { level: 1, name: 'Создание аккаунта' }),
+    ).toBeInTheDocument();
   });
 
   it('mock-OAuth создаёт сессию по клику', async () => {
@@ -141,6 +162,10 @@ describe('auth-flow: сценарии авторизации и сессии', (
     fireEvent.change(emailInput, { target: { value: 'buyer@example.com' } });
     fireEvent.change(passwordInput, { target: { value: 'secretPassword123' } });
     fireEvent.click(submitButton);
+
+    fireEvent.change(await screen.findByLabelText('Код из письма'), {
+      target: { value: FAKE_SIGNUP_CODE },
+    });
 
     await waitFor(() => {
       expect(useAuth.getState().status).toBe('authenticated');

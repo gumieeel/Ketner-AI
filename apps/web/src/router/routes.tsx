@@ -49,6 +49,11 @@ export const routes: RouteObject[] = [
       { index: true, element: <LandingPage /> },
       { path: 'login', element: <LoginPage /> },
       { path: 'signup', element: <SignupPage /> },
+      // Ввод кода из письма — второй шаг регистрации.
+      {
+        path: 'signup/verify',
+        lazy: lazyPage(() => import('@/pages/verify-email-page'), 'VerifyEmailPage'),
+      },
       // Вход по одноразовой ссылке из кабинета в Telegram.
       {
         path: 'auth/telegram',

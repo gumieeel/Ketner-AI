@@ -81,7 +81,7 @@ export interface AppDeps {
   chatGateway?: AIGateway;
   /** Токены входа, отозванные при выходе; в тестах — временный файл. */
   revokedTokenStore?: RevokedTokenStore;
-  /** Отправка писем (коды привязки Telegram); в тестах — перехватчик. */
+  /** Отправка писем (коды регистрации и привязки Telegram); в тестах — перехватчик. */
   mailer?: Mailer;
 }
 
@@ -203,6 +203,7 @@ export function createApp(overrides: Partial<AppDeps> = {}): Express {
   app.use((request, response, next) => {
     if (
       request.path === '/api/auth/signup' ||
+      request.path.startsWith('/api/auth/signup/') ||
       request.path === '/api/auth/login' ||
       request.path === '/api/auth/logout' ||
       request.path === '/api/auth/me' ||
@@ -255,7 +256,9 @@ export function createApp(overrides: Partial<AppDeps> = {}): Express {
     response.send(robotsTxt());
   });
   app.get('/sitemap.xml', (_request, response) => {
-    response.type('application/xml; charset=utf-8').setHeader('Cache-Control', 'public, max-age=3600');
+    response
+      .type('application/xml; charset=utf-8')
+      .setHeader('Cache-Control', 'public, max-age=3600');
     response.send(sitemapXml());
   });
 

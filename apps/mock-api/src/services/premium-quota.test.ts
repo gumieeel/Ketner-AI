@@ -1,3 +1,4 @@
+import { signupAndVerify } from '../testing/signup.js';
 import assert from 'node:assert/strict';
 import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -149,7 +150,7 @@ test('GET /api/usage/quota: только со входом; тариф из се
 
   assert.equal((await fetch(`${server.baseUrl}/api/usage/quota`)).status, 401);
 
-  const signup = await fetch(`${server.baseUrl}/api/auth/signup`, {
+  const signup = await signupAndVerify(server.baseUrl, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ email: 'test-vip@example.com', password: 'password123', name: 'V' }),

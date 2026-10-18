@@ -30,7 +30,6 @@ export const ru = {
   'auth.signup': 'Зарегистрироваться',
   'auth.continueGoogle': 'Продолжить с Google',
   'auth.continueGitHub': 'Продолжить с GitHub',
-  'auth.continueTelegram': 'Войти через Telegram',
   'auth.orDivider': 'или',
   'auth.toSignup': 'Нет аккаунта? Зарегистрируйтесь',
   'auth.toLogin': 'Уже есть аккаунт? Войти',
@@ -49,6 +48,19 @@ export const ru = {
   'auth.signingUp': 'Регистрация...',
   'auth.checkoutSignupNotice':
     'Для оформления подписки необходимо сначала войти или создать аккаунт.',
+  'auth.verifyTitle': 'Подтвердите почту',
+  'auth.verifySubtitle':
+    'Мы отправили 6-значный код на {email}. Введите его, чтобы завершить регистрацию.',
+  'auth.verifyCode': 'Код из письма',
+  'auth.verifyCodeInvalid': 'Введите 6 цифр из письма',
+  'auth.verifySubmit': 'Подтвердить',
+  'auth.verifying': 'Проверяем...',
+  'auth.verifyResend': 'Отправить код ещё раз',
+  'auth.verifyResendIn': 'Отправить код ещё раз через {seconds} с',
+  'auth.verifyResent': 'Новый код отправлен. Прежний больше не действует.',
+  'auth.verifyHint': 'Не пришло письмо? Проверьте папку «Спам». Код действует 10 минут.',
+  'auth.verifyChangeEmail': 'Изменить почту',
+  'auth.verifyFailed': 'Не удалось подтвердить код',
   'settings.loggedInAs': 'Вы вошли как',
   'settings.registeredOn': 'Дата регистрации',
 

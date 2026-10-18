@@ -10,7 +10,6 @@ import {
 } from '@/components/icons';
 import { LegalNotice } from '@/components/auth/legal-notice';
 import { AuthShell } from '@/components/layout/auth-shell';
-import { TelegramLoginButton } from '@/components/telegram/telegram-login-button';
 import { Button } from '@/components/ui/button';
 import { Divider } from '@/components/ui/divider';
 import { IconButton } from '@/components/ui/icon-button';
@@ -163,11 +162,6 @@ export function LoginPage() {
 
         {/* 3. OAuth Кнопки */}
         <div className="flex flex-col gap-3">
-          <TelegramLoginButton
-            label={t('auth.continueTelegram')}
-            redirectUrl={redirectUrl}
-            disabled={loading}
-          />
           <div className="grid grid-cols-2 gap-3">
             <Button
               variant="outline"

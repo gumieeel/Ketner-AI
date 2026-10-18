@@ -332,8 +332,8 @@ export const config = {
   adminApiKey: secretEnv('ADMIN_API_KEY', 'dev-only-admin-key-not-for-production'),
 
   /**
-   * Почта (SMTP): коды привязки Telegram. Подходит любой SMTP-сервис. SMTP_SECURE=true — TLS сразу
-   * (порт 465), иначе STARTTLS (587). MAIL_FROM — адрес отправителя, например `Ketner AI <no-reply@ketner.org>`.
+   * Почта (SMTP): коды подтверждения регистрации и привязки Telegram. Подходит любой SMTP-сервис.
+   * SMTP_SECURE=true — TLS сразу (порт 465), иначе STARTTLS (587). MAIL_FROM — адрес отправителя, например `Ketner AI <no-reply@ketner.org>`.
    */
   smtp: {
     host: optionalEnv('SMTP_HOST'),

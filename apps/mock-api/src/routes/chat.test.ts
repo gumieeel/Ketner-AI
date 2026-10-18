@@ -1,3 +1,4 @@
+import { signupAndVerify } from '../testing/signup.js';
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { config } from '../config.js';
@@ -214,7 +215,7 @@ test('пользователь с тарифом Pro имеет доступ к�
 
   try {
     // Регистрация и оформление Pro тарифа
-    const regRes = await fetch(`${server.baseUrl}/api/auth/signup`, {
+    const regRes = await signupAndVerify(server.baseUrl, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({

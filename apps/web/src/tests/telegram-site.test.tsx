@@ -119,24 +119,11 @@ describe('вход и привязка Telegram на сайте', () => {
     expect(starts).toBe(2);
   });
 
-  it('страница входа предлагает «Войти через Telegram»', async () => {
-    withTelegram((url) => {
-      if (url === '/api/auth/telegram/start') {
-        return Response.json({
-          requestId: 'req-1',
-          mode: 'login',
-          botUrl: 'https://t.me/Robo_kassa_bot?start=auth_abc',
-          expiresAt: new Date(Date.now() + 300_000).toISOString(),
-        });
-      }
-      return undefined;
-    });
+  it('входа и регистрации через Telegram на сайте нет', async () => {
+    withTelegram(() => undefined);
     renderRoute('/login');
-    fireEvent.click(await screen.findByRole('button', { name: 'Войти через Telegram' }));
-    const dialog = await screen.findByRole('dialog', { name: 'Вход через Telegram' });
-    expect(
-      within(dialog).getByText(/в аккаунт, к которому привязан ваш Telegram/),
-    ).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { level: 1 })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Telegram/ })).not.toBeInTheDocument();
   });
 
   it('регистрации через Telegram нет: на странице регистрации кнопки нет', async () => {

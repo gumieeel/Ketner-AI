@@ -1,3 +1,4 @@
+import { signupAndVerify } from '../testing/signup.js';
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { config } from '../config.js';
@@ -9,7 +10,7 @@ async function signupAdmin(baseUrl: string): Promise<{ Authorization: string }> 
   const email = 'tg-admin@example.com';
   const admins = config.adminEmails as unknown as string[];
   if (!admins.includes(email)) admins.push(email);
-  const res = await fetch(`${baseUrl}/api/auth/signup`, {
+  const res = await signupAndVerify(baseUrl, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ email, password: 'password123', name: 'TG Admin' }),
@@ -37,7 +38,7 @@ test('billing: оплата по СБП (создание, статус и по�
   const server = await startTestServer();
   t.after(() => server.close());
 
-  const reg = await fetch(`${server.baseUrl}/api/auth/signup`, {
+  const reg = await signupAndVerify(server.baseUrl, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ email: 'sbp-user@example.com', password: 'password123', name: 'Pay' }),
@@ -237,7 +238,7 @@ test('telegram (C6): отладочные эндпоинты закрыты в p
   // Тикеты: без входа 401, обычный пользователь 403
   const anon = await fetch(`${server.baseUrl}/api/telegram/support/tickets`);
   assert.equal(anon.status, 401);
-  const reg = await fetch(`${server.baseUrl}/api/auth/signup`, {
+  const reg = await signupAndVerify(server.baseUrl, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({

@@ -71,7 +71,7 @@ export interface ApiDeps {
   chatGateway?: AIGateway;
   /** Токены входа, отозванные при выходе; в тестах — временный файл. */
   revokedTokenStore?: RevokedTokenStore;
-  /** Отправка писем (коды привязки Telegram); в тестах — перехватчик. */
+  /** Отправка писем (коды регистрации и привязки Telegram); в тестах — перехватчик. */
   mailer?: Mailer;
 }
 
@@ -115,7 +115,19 @@ export const API_ENDPOINTS = [
     method: 'POST',
     path: '/api/auth/signup',
     status: 'ready',
-    description: 'Регистрация (заглушка)',
+    description: 'Регистрация: отправляет код подтверждения на почту',
+  },
+  {
+    method: 'POST',
+    path: '/api/auth/signup/verify',
+    status: 'ready',
+    description: 'Подтверждение регистрации кодом из письма',
+  },
+  {
+    method: 'POST',
+    path: '/api/auth/signup/resend',
+    status: 'ready',
+    description: 'Повторная отправка кода регистрации',
   },
   { method: 'POST', path: '/api/auth/login', status: 'ready', description: 'Вход (заглушка)' },
   { method: 'GET', path: '/api/auth/me', status: 'ready', description: 'Текущий пользователь' },
@@ -272,7 +284,10 @@ export function createApiRouter(deps: ApiDeps): Router {
   router.use(healthRouter);
   router.use(createStatusRouter());
   router.use(createMetaRouter());
-  router.use('/auth', createAuthRouter(activeUserStore, deps.betterAuth, deps.revokedTokenStore));
+  router.use(
+    '/auth',
+    createAuthRouter(activeUserStore, deps.betterAuth, deps.revokedTokenStore, deps.mailer),
+  );
   router.use(
     createContactRouter({
       notify: (message) =>

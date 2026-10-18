@@ -2,6 +2,7 @@
  * Оплата через Trybit (бывший CryptoCloud): создание счёта, подписанный postback без префикса
  * INV- и без order_id, перепроверка оплаты через API шлюза и выдача тарифа.
  */
+import { signupAndVerify } from '../testing/signup.js';
 import assert from 'node:assert/strict';
 import { createHmac } from 'node:crypto';
 import test from 'node:test';
@@ -65,7 +66,7 @@ function fakeTrybit(
 }
 
 async function signup(baseUrl: string, email: string): Promise<AuthSession> {
-  const response = await fetch(`${baseUrl}/api/auth/signup`, {
+  const response = await signupAndVerify(baseUrl, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ email, password: 'password123', name: 'Buyer' }),

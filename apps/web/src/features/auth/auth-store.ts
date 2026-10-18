@@ -7,10 +7,20 @@ import {
   logout as apiLogout,
   oauthLogin,
   signup as apiSignup,
+  verifySignup as apiVerifySignup,
 } from './api';
 import { ApiError } from '../chat/api';
 import { useUpgradeModal } from '../billing/upgrade-modal-store';
-import type { AuthSession, AuthStatus, LoginPayload, PlanId, SignupPayload, User } from './types';
+import type {
+  AuthSession,
+  AuthStatus,
+  LoginPayload,
+  PlanId,
+  SignupPayload,
+  SignupStart,
+  User,
+  VerifySignupPayload,
+} from './types';
 
 interface AuthState {
   user: User | null;
@@ -18,7 +28,15 @@ interface AuthState {
   status: AuthStatus;
   error: string | null;
   login: (payload: LoginPayload) => Promise<void>;
-  signup: (payload: SignupPayload) => Promise<void>;
+  /** Отправляет форму регистрации; аккаунт появится после verifySignup с кодом из письма. */
+  signup: (payload: SignupPayload) => Promise<SignupStart>;
+  /**
+   * Подтверждение почты кодом: создаёт аккаунт и входит в него. Пароль (если страница его ещё помнит)
+   * нужен только для cookie-сессии Better Auth; без него вход работает по токену.
+   */
+  verifySignup: (
+    payload: VerifySignupPayload & { email: string; password?: string },
+  ) => Promise<void>;
   mockOAuth: (provider: 'google' | 'github') => Promise<void>;
   logout: () => Promise<void>;
   restoreSession: () => Promise<void>;
@@ -220,9 +238,20 @@ export const useAuth = create<AuthState>((set, get) => ({
   },
 
   signup: async (payload: SignupPayload) => {
-    set({ status: 'loading', error: null });
+    set({ error: null });
     try {
-      const session = await apiSignup(payload);
+      return await apiSignup(payload);
+    } catch (apiError) {
+      const message = apiError instanceof Error ? apiError.message : 'Ошибка регистрации';
+      set({ error: message });
+      throw apiError;
+    }
+  },
+
+  verifySignup: async ({ signupId, code, email, password }) => {
+    set({ error: null });
+    try {
+      const session = await apiVerifySignup({ signupId, code });
       const user = normalizeUser(session.user as unknown as Record<string, unknown>);
       saveSession({ user, token: session.token, expiresAt: session.expiresAt });
       useUpgradeModal.getState().close();
@@ -235,17 +264,16 @@ export const useAuth = create<AuthState>((set, get) => ({
       } catch {
         // Игнорируем
       }
-      try {
-        await authClient.signIn.email({
-          email: payload.email,
-          password: payload.password,
-        });
-      } catch {
-        // Игнорируем
+      if (password) {
+        try {
+          await authClient.signIn.email({ email, password });
+        } catch {
+          // Игнорируем
+        }
       }
     } catch (apiError) {
-      const message = apiError instanceof Error ? apiError.message : 'Ошибка регистрации';
-      set({ status: 'unauthenticated', error: message });
+      const message = apiError instanceof Error ? apiError.message : 'Не удалось подтвердить код';
+      set({ error: message });
       throw apiError;
     }
   },

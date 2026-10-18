@@ -1,3 +1,4 @@
+import { signupAndVerify } from '../testing/signup.js';
 import assert from 'node:assert/strict';
 import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -77,7 +78,7 @@ async function harness(script: Script): Promise<Harness> {
 
   const caller: Harness['caller'] = async (plan = 'plus') => {
     emailCounter += 1;
-    const signup = await fetch(`${server.baseUrl}/api/auth/signup`, {
+    const signup = await signupAndVerify(server.baseUrl, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({

@@ -1,3 +1,4 @@
+import { signupAndVerify } from '../testing/signup.js';
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { config } from '../config.js';
@@ -127,7 +128,7 @@ test('admin: доступ по роли пользователя — VIP изо�
 
   try {
     // 1. Создаём пользователя-администратора (test-admin@example.com входит в config.adminEmails)
-    const adminSignupRes = await fetch(`${server.baseUrl}/api/auth/signup`, {
+    const adminSignupRes = await signupAndVerify(server.baseUrl, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -149,7 +150,7 @@ test('admin: доступ по роли пользователя — VIP изо�
     assert.equal(adminAccess.status, 200);
 
     // 2. Создаём VIP-пользователя (входит в vipEmails, но НЕ в adminEmails)
-    const vipSignupRes = await fetch(`${server.baseUrl}/api/auth/signup`, {
+    const vipSignupRes = await signupAndVerify(server.baseUrl, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -179,7 +180,7 @@ test('admin: доступ по роли пользователя — VIP изо�
     assert.equal(vipDeniedBody.error.code, 'admin_access_denied');
 
     // 3. Обычный пользователь без VIP и Admin -> 403
-    const normalSignupRes = await fetch(`${server.baseUrl}/api/auth/signup`, {
+    const normalSignupRes = await signupAndVerify(server.baseUrl, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -214,7 +215,7 @@ test('admin: GET /api/admin/users — список, пагинация, филь
     assert.equal(denied.status, 403);
 
     // 2. Создадим нескольких пользователей
-    await fetch(`${server.baseUrl}/api/auth/signup`, {
+    await signupAndVerify(server.baseUrl, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -224,7 +225,7 @@ test('admin: GET /api/admin/users — список, пагинация, филь
       }),
     });
 
-    const bobRes = await fetch(`${server.baseUrl}/api/auth/signup`, {
+    const bobRes = await signupAndVerify(server.baseUrl, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -406,7 +407,7 @@ test('admin: GET /api/admin/users/:id — детальная карточка п
     assert.equal(emptyBody.profitability.aiCost, 0);
 
     // 3. Создадим пользователя и выполним запрос к AI
-    const signupRes = await fetch(`${server.baseUrl}/api/auth/signup`, {
+    const signupRes = await signupAndVerify(server.baseUrl, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -479,7 +480,7 @@ test('admin: PATCH /api/admin/users/:id — обновление плана, VIP
     const headers = { 'x-admin-key': config.adminApiKey };
 
     // 1. Создаём целевого пользователя
-    const userRes = await fetch(`${server.baseUrl}/api/auth/signup`, {
+    const userRes = await signupAndVerify(server.baseUrl, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -543,7 +544,7 @@ test('admin: PATCH /api/admin/users/:id — обновление плана, VIP
 
     // 7. Валидация: защита от снятия isAdmin с самого себя
     // Авторизуемся под администратором (email из config.adminEmails)
-    const adminSignupRes = await fetch(`${server.baseUrl}/api/auth/signup`, {
+    const adminSignupRes = await signupAndVerify(server.baseUrl, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -752,7 +753,7 @@ test('admin: регистрации по времени и источнику', 
       landing: '/',
     };
     const email = `reg-${Date.now()}@example.com`;
-    const signup = await fetch(`${server.baseUrl}/api/auth/signup`, {
+    const signup = await signupAndVerify(server.baseUrl, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',

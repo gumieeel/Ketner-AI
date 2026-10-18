@@ -1,3 +1,4 @@
+import { signupAndVerify } from '../testing/signup.js';
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { config } from '../config.js';
@@ -28,7 +29,7 @@ test('billing: получение подписки и оформление check
   t.after(() => server.close());
 
   // Регистрируем пользователя
-  const regRes = await fetch(`${server.baseUrl}/api/auth/signup`, {
+  const regRes = await signupAndVerify(server.baseUrl, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ email: 'bob@example.com', password: 'password123', name: 'Bob' }),
@@ -155,7 +156,7 @@ test('billing: криптовалюта только через Trybit — св�
 });
 
 async function signup(baseUrl: string, email: string): Promise<{ token: string; id: string }> {
-  const res = await fetch(`${baseUrl}/api/auth/signup`, {
+  const res = await signupAndVerify(baseUrl, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ email, password: 'password123', name: email.split('@')[0] }),

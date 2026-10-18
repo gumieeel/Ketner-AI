@@ -1,3 +1,4 @@
+import { signupAndVerify } from '../testing/signup.js';
 import assert from 'node:assert/strict';
 import { createHmac } from 'node:crypto';
 import test from 'node:test';
@@ -19,7 +20,7 @@ function signedWebhook(body: unknown, secret: string = config.webhookSecret) {
 }
 
 async function signup(baseUrl: string, email: string): Promise<{ token: string; id: string }> {
-  const res = await fetch(`${baseUrl}/api/auth/signup`, {
+  const res = await signupAndVerify(baseUrl, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ email, password: 'password123', name: 'Webhook User' }),

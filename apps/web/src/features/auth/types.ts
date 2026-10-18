@@ -30,3 +30,17 @@ export interface SignupPayload {
   password: string;
   name?: string;
 }
+
+/** Ответ формы регистрации: аккаунт ещё не создан, на почту отправлен код. */
+export interface SignupStart {
+  status: 'verification_required';
+  signupId: string;
+  email: string;
+  codeExpiresAt: string;
+  resendAfterSec: number;
+}
+
+export interface VerifySignupPayload {
+  signupId: string;
+  code: string;
+}

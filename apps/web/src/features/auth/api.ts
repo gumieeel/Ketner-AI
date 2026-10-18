@@ -1,6 +1,13 @@
 import { ApiError } from '../chat/api';
 import { API_BASE } from '@/lib/api-config';
-import type { AuthSession, LoginPayload, SignupPayload, User } from './types';
+import type {
+  AuthSession,
+  LoginPayload,
+  SignupPayload,
+  SignupStart,
+  User,
+  VerifySignupPayload,
+} from './types';
 
 const JSON_HEADERS = { 'Content-Type': 'application/json' };
 
@@ -41,10 +48,26 @@ export async function login(payload: LoginPayload): Promise<AuthSession> {
   });
 }
 
-export async function signup(payload: SignupPayload): Promise<AuthSession> {
-  return request<AuthSession>('/auth/signup', {
+/** Первый шаг регистрации: сервер отправляет код на почту, аккаунт ещё не создан. */
+export async function signup(payload: SignupPayload): Promise<SignupStart> {
+  return request<SignupStart>('/auth/signup', {
     method: 'POST',
     body: JSON.stringify(payload),
+  });
+}
+
+/** Второй шаг: код из письма создаёт аккаунт и сессию. */
+export async function verifySignup(payload: VerifySignupPayload): Promise<AuthSession> {
+  return request<AuthSession>('/auth/signup/verify', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function resendSignupCode(signupId: string): Promise<Omit<SignupStart, 'signupId'>> {
+  return request<Omit<SignupStart, 'signupId'>>('/auth/signup/resend', {
+    method: 'POST',
+    body: JSON.stringify({ signupId }),
   });
 }
 

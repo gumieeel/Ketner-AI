@@ -1,3 +1,4 @@
+import { signupAndVerify } from '../testing/signup.js';
 import assert from 'node:assert/strict';
 import { mkdtempSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -78,7 +79,7 @@ function fakeGithub(options: { scope?: string; userStatus?: number } = {}) {
 let counter = 0;
 async function signup(server: TestServer): Promise<AuthSession> {
   counter += 1;
-  const response = await fetch(`${server.baseUrl}/api/auth/signup`, {
+  const response = await signupAndVerify(server.baseUrl, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({

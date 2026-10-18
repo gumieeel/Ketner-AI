@@ -78,6 +78,7 @@ export function resetAuth(): void {
     error: null,
   });
   window.localStorage.clear();
+  window.sessionStorage.clear();
 }
 
 /** Сбрасывает состояние биллинга к исходному. */

@@ -23,6 +23,8 @@ import type { Conversation, Message } from '../types.js';
 
 import { createSupportStore } from '../store/support-store.js';
 import { TelegramSupportBotService } from '../telegram/support-bot.js';
+import type { MailMessage, Mailer } from '../services/mailer.js';
+import { rememberSignupMail } from './signup.js';
 
 /** Задержки без пауз: тесты не должны ждать стриминг. */
 export const FAST_AI: AiConfig = {
@@ -39,6 +41,8 @@ export interface TestServer {
   usageStore: UsageStore;
   apiKeyStore: ApiKeyStore;
   githubConnectionStore: GithubConnectionStore;
+  /** Письма с кодом подтверждения регистрации. */
+  signupMails: MailMessage[];
 }
 
 /** Поднимает приложение на свободном порту с временным файлом хранилища. */
@@ -81,6 +85,21 @@ export async function startTestServer(
     useMockEngine: true,
   });
 
+  // Письма с кодом регистрации перехватываются (их читает signupAndVerify), остальные уходят в
+  // почтовик теста, если он передан: его счётчики писем не должны меняться от регистраций.
+  const signupMails: MailMessage[] = [];
+  const innerMailer = extra.mailer;
+  const testMailer: Mailer = {
+    kind: innerMailer?.kind ?? 'console',
+    async send(message) {
+      if (/код подтверждения Ketner AI/.test(message.subject)) {
+        signupMails.push(message);
+        return;
+      }
+      await innerMailer?.send(message);
+    },
+  };
+
   const app = createApp({
     store: createConversationStore(storeFile),
     userStore: createUserStore(userStoreFile),
@@ -96,13 +115,17 @@ export async function startTestServer(
     chatGateway,
     revokedTokenStore: createRevokedTokenStore(join(tempDir, 'revoked-tokens.json')),
     ...extra,
+    mailer: testMailer,
   });
   const server = app.listen(0);
   await new Promise<void>((resolve) => server.once('listening', resolve));
 
   const address = server.address() as AddressInfo;
+  const baseUrl = `http://127.0.0.1:${address.port}`;
+  rememberSignupMail(baseUrl, signupMails);
   return {
-    baseUrl: `http://127.0.0.1:${address.port}`,
+    baseUrl,
+    signupMails,
     usageStore: extra.usageStore ?? testUsageStore,
     apiKeyStore: extra.apiKeyStore ?? testApiKeyStore,
     githubConnectionStore: extra.githubConnectionStore ?? testGithubStore,
