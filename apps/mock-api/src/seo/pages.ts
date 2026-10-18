@@ -250,6 +250,121 @@ function jsonLd(value: unknown): string {
   return JSON.stringify(value).replace(/</g, '\\u003c');
 }
 
+/** Заголовок и текст страницы для читателей без JavaScript (краулеры Яндекса, Bing, ИИ-ботов). */
+interface PageCopy {
+  h1: string;
+  paragraphs: string[];
+}
+
+const price = (plan: keyof typeof PLAN_PRICE_USD): string => `$${PLAN_PRICE_USD[plan]}`;
+
+const PAGE_COPY: Readonly<Record<string, PageCopy>> = {
+  '/': {
+    h1: 'Ketner AI — ChatGPT, Claude, Gemini и Grok в одном ИИ-чате',
+    paragraphs: [
+      'Ketner AI собирает нейросети GPT, Claude, Gemini, Grok и DeepSeek в одном чате на русском языке. Не нужно покупать отдельную подписку у каждого сервиса.',
+      'Режим Auto сам выбирает подходящую модель под задачу. Кроме текста, есть генерация изображений и Ketner Code — ИИ для программирования с проектами и запуском кода.',
+      `Бесплатный тариф без оплаты, платные — Plus (${price('plus')}), Pro (${price('pro')}) и Ultra (${price('ultra')}) в месяц. Оплата звёздами Telegram и криптовалютой. Ketner AI не обучает собственных моделей: все они от сторонних разработчиков.`,
+    ],
+  },
+  '/pricing': {
+    h1: 'Тарифы Ketner AI',
+    paragraphs: [
+      `Free — бесплатно, Plus — ${price('plus')} в месяц, Pro — ${price('pro')} в месяц, Ultra — ${price('ultra')} в месяц.`,
+      'Plus открывает сильные модели GPT, Claude Haiku, Gemini Flash и DeepSeek. Pro добавляет Claude Opus и Sonnet, GPT, Grok и Gemini. Ultra включает режим Max с глубокими размышлениями и лучшие модели картинок.',
+      'Оплата звёздами Telegram и криптовалютой, подписка без автоматических списаний, если не включить автопродление.',
+    ],
+  },
+  '/docs': {
+    h1: 'Как пользоваться Ketner AI',
+    paragraphs: [
+      'Справка по Ketner AI: какие нейросети доступны на каждом тарифе, как работают режимы Auto и Max, как загружать файлы и вести проекты, как генерировать изображения и писать код в Ketner Code.',
+    ],
+  },
+  '/docs/plans/free': {
+    h1: 'Бесплатный тариф Ketner AI',
+    paragraphs: [
+      'Бесплатный тариф даёт ИИ-чат на русском, режим Auto и генерацию картинок в пределах суточных лимитов, без оплаты и привязки карты.',
+    ],
+  },
+  '/docs/plans/plus': {
+    h1: 'Тариф Plus в Ketner AI',
+    paragraphs: [
+      `Plus стоит ${price('plus')} в месяц. Доступ к сильным моделям GPT, Claude Haiku, Gemini Flash и DeepSeek, больше сообщений в сутки и API-ключи.`,
+    ],
+  },
+  '/docs/plans/pro': {
+    h1: 'Тариф Pro в Ketner AI',
+    paragraphs: [
+      `Pro стоит ${price('pro')} в месяц. Флагманские модели Claude Opus и Sonnet, GPT, Grok и Gemini в одной подписке и повышенный приоритет.`,
+    ],
+  },
+  '/docs/plans/ultra': {
+    h1: 'Тариф Ultra в Ketner AI',
+    paragraphs: [
+      `Ultra стоит ${price('ultra')} в месяц. Все модели Pro, режим Max с глубокими размышлениями, большой контекст и максимальный приоритет.`,
+    ],
+  },
+  '/docs/api': {
+    h1: 'API Ketner AI',
+    paragraphs: [
+      'OpenAI-совместимый API для CLI, редакторов кода и собственных приложений. Модели GPT, Claude, Gemini и другие по одному ключу, вызов инструментов и потоковые ответы.',
+    ],
+  },
+  '/models': {
+    h1: 'Модели Ketner AI',
+    paragraphs: [
+      'Все модели Ketner AI: разработчик каждой нейросети (OpenAI, Anthropic, Google, xAI и другие), какая модель стоит за Ketner Mini и Ketner Pro, на каком тарифе доступна, недельные лимиты и запасные модели.',
+    ],
+  },
+  '/about': {
+    h1: 'О проекте Ketner AI',
+    paragraphs: [
+      'Ketner AI — независимый сервис доступа к моделям разных разработчиков в одном чате. На странице: кто делает сервис, какую задачу он решает, на каком этапе разработки находится и какие планы.',
+    ],
+  },
+  '/changelog': {
+    h1: 'Что нового в Ketner AI',
+    paragraphs: [
+      'Журнал обновлений: даты выпусков, новые функции, исправления, известные ограничения и планы.',
+    ],
+  },
+  '/status': {
+    h1: 'Статус Ketner AI',
+    paragraphs: [
+      'Текущее состояние сайта, базы данных, моделей, генерации изображений, оплаты и бота, известные проблемы и история сбоев.',
+    ],
+  },
+  '/signup': {
+    h1: 'Регистрация в Ketner AI',
+    paragraphs: [
+      'Создайте аккаунт через Google, GitHub, Telegram или почту и начните пользоваться нейросетями бесплатно.',
+    ],
+  },
+  '/contacts': {
+    h1: 'Контакты Ketner AI',
+    paragraphs: ['Форма обратной связи, почта и бот поддержки в Telegram.'],
+  },
+};
+
+/** Текст страницы для `<div id="root">`: React заменяет его при запуске, а краулер без JS видит содержимое. */
+function crawlerContent(page: SeoPage, base: string): string {
+  const copy = PAGE_COPY[page.path] ?? { h1: page.title, paragraphs: [page.description] };
+  const links = SEO_PAGES.filter((item) => PAGE_COPY[item.path] !== undefined)
+    .map(
+      (item) =>
+        `<li><a href="${escapeAttr(base + (item.path === '/' ? '/' : item.path))}">${escapeAttr(item.title)}</a></li>`,
+    )
+    .join('');
+  return [
+    '<main>',
+    `<h1>${escapeAttr(copy.h1)}</h1>`,
+    ...copy.paragraphs.map((text) => `<p>${escapeAttr(text)}</p>`),
+    `<nav aria-label="Разделы сайта"><ul>${links}</ul></nav>`,
+    '</main>',
+  ].join('');
+}
+
 function structuredData(base: string): string {
   const graph = [
     {
@@ -338,6 +453,12 @@ export function renderIndexHtml(baseHtml: string, rawPath: string): string {
     /<meta\s+name="description"[\s\S]*?\/>/i,
     `<meta name="description" content="${escapeAttr(description)}" />`,
   );
+  if (page) {
+    html = html.replace(
+      /<div id="root"><\/div>/i,
+      () => `<div id="root">${crawlerContent(page, base)}</div>`,
+    );
+  }
   return html.replace(/<\/head>/i, `    ${head}\n  </head>`);
 }
 
@@ -364,4 +485,40 @@ export function sitemapXml(): string {
       `  <url>\n    <loc>${escapeXml(`${base}${page.path === '/' ? '/' : page.path}`)}</loc>\n${page.lastmod ? `    <lastmod>${page.lastmod}</lastmod>\n` : ''}    <changefreq>${page.changefreq}</changefreq>\n    <priority>${page.priority.toFixed(1)}</priority>\n  </url>`,
   );
   return `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${urls.join('\n')}\n</urlset>\n`;
+}
+
+/** llms.txt: краткая карта сайта для ИИ-ассистентов (https://llmstxt.org). */
+export function llmsTxt(): string {
+  const base = siteUrl();
+  const link = (page: SeoPage): string =>
+    `- [${page.title}](${base}${page.path === '/' ? '/' : page.path}): ${page.description}`;
+  const group = (paths: string[]): string[] =>
+    SEO_PAGES.filter((page) => paths.includes(page.path)).map(link);
+  return [
+    `# ${BRAND}`,
+    '',
+    `> ${SEO_PAGES[0].description}`,
+    '',
+    'Ketner AI не обучает собственных моделей: все модели от сторонних разработчиков (OpenAI, Anthropic, Google, xAI и других).',
+    '',
+    '## Продукт',
+    ...group(['/', '/pricing', '/models', '/signup']),
+    '',
+    '## Документация',
+    ...group([
+      '/docs',
+      '/docs/plans/free',
+      '/docs/plans/plus',
+      '/docs/plans/pro',
+      '/docs/plans/ultra',
+      '/docs/api',
+    ]),
+    '',
+    '## О сервисе',
+    ...group(['/about', '/changelog', '/status', '/contacts']),
+    '',
+    '## Правовые документы',
+    ...group(['/terms', '/privacy', '/payment-terms']),
+    '',
+  ].join('\n');
 }

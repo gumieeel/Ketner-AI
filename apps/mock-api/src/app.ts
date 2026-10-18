@@ -16,7 +16,7 @@ import {
 } from './middleware/security.js';
 import { sendError } from './middleware/errors.js';
 import { createApiRouter, describeService } from './routes/index.js';
-import { classifyPath, renderIndexHtml, robotsTxt, sitemapXml } from './seo/pages.js';
+import { classifyPath, llmsTxt, renderIndexHtml, robotsTxt, sitemapXml } from './seo/pages.js';
 import {
   apiKeyStore as defaultApiKeyStore,
   conversationStore,
@@ -241,6 +241,10 @@ export function createApp(overrides: Partial<AppDeps> = {}): Express {
   app.get('/robots.txt', (_request, response) => {
     response.type('text/plain; charset=utf-8').setHeader('Cache-Control', 'public, max-age=3600');
     response.send(robotsTxt());
+  });
+  app.get('/llms.txt', (_request, response) => {
+    response.type('text/plain; charset=utf-8').setHeader('Cache-Control', 'public, max-age=3600');
+    response.send(llmsTxt());
   });
   app.get('/sitemap.xml', (_request, response) => {
     response

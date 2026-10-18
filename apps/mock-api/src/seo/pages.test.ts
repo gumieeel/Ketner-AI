@@ -1,6 +1,13 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { classifyPath, renderIndexHtml, robotsTxt, sitemapXml, SEO_PAGES } from './pages.js';
+import {
+  classifyPath,
+  llmsTxt,
+  renderIndexHtml,
+  robotsTxt,
+  sitemapXml,
+  SEO_PAGES,
+} from './pages.js';
 
 const BASE = `<!doctype html><html><head><meta name="description" content="old" /><title>Ketner AI</title><script>x()</script></head><body><div id="root"></div></body></html>`;
 
@@ -61,4 +68,25 @@ test('seo: заголовки на клиенте совпадают с серв
     PAGE_TITLES,
     Object.fromEntries(SEO_PAGES.map((page) => [page.path, page.title])),
   );
+});
+
+test('seo: в HTML публичной страницы есть текст для краулеров, у закрытой — пустой корень', () => {
+  const pricing = renderIndexHtml(BASE, '/pricing');
+  assert.match(pricing, /<div id="root"><main><h1>Тарифы Ketner AI<\/h1>/);
+  assert.match(pricing, /Pro — \$25 в месяц/);
+  assert.match(pricing, /<a href="https:\/\/ketner\.org\/models">/);
+  assert.match(renderIndexHtml(BASE, '/__none__'), /<div id="root"><\/div>/);
+  for (const page of SEO_PAGES) {
+    const html = renderIndexHtml(BASE, page.path);
+    assert.match(html, /<div id="root"><main><h1>/, page.path);
+  }
+});
+
+test('seo: llms.txt перечисляет открытые страницы', () => {
+  const txt = llmsTxt();
+  assert.match(txt, /^# Ketner AI/);
+  assert.match(txt, /\(https:\/\/ketner\.org\/pricing\)/);
+  for (const page of SEO_PAGES)
+    assert.ok(txt.includes(`${page.path === '/' ? '/' : page.path})`), page.path);
+  assert.doesNotMatch(txt, /\/chat/);
 });
