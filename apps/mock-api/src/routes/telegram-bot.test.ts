@@ -1050,39 +1050,39 @@ test('сайт: счёт в звёздах — цена тарифа по офи
   assert.match(invoice.botDeepLink, new RegExp(`\\?start=${invoice.id}$`));
 });
 
-// ───────────── пакеты премиум-квоты за звёзды ─────────────
+// ───────────── пакеты премиум-квоты (сняты с продажи 18.10.2026) ─────────────
 
-test('пакет за звёзды: только на платном тарифе; оплата начисляет кредиты, повтор — нет', async (t) => {
+test('пакет за звёзды: новые счета не выставляются; счёт до снятия с продажи засчитывается один раз', async (t) => {
   const h = await harness();
   t.after(() => h.server.close());
   const buyer = await h.signup();
   const auth = { Authorization: `Bearer ${buyer.token}`, 'Content-Type': 'application/json' };
-  const createPack = () =>
-    fetch(`${h.server.baseUrl}/api/billing/telegram-stars/create-invoice`, {
-      method: 'POST',
-      headers: auth,
-      body: JSON.stringify({ packId: 'premium-5' }),
-    });
-
-  // На Free премиум-моделей нет — пакет не продаётся.
-  const denied = await createPack();
-  assert.equal(denied.status, 403);
-  assert.equal((await readJson<ApiErrorBody>(denied)).error.code, 'plan_required');
-
   h.billingService.grant(buyer.user.id, 'pro', {
     id: 'crypto:plan-for-pack',
     method: 'crypto',
     amount: 25,
     currency: 'USD',
   });
-  const created = await createPack();
-  assert.equal(created.status, 200);
-  const { invoice } = await readJson<{
-    invoice: { id: string; packId: string; starsAmount: number };
-  }>(created);
-  assert.equal(invoice.packId, 'premium-5');
-  assert.equal(invoice.starsAmount, h.rateService.quote(9));
 
+  const denied = await fetch(`${h.server.baseUrl}/api/billing/telegram-stars/create-invoice`, {
+    method: 'POST',
+    headers: auth,
+    body: JSON.stringify({ packId: 'premium-5' }),
+  });
+  assert.equal(denied.status, 410);
+  assert.equal((await readJson<ApiErrorBody>(denied)).error.code, 'packs_discontinued');
+  const list = await fetch(`${h.server.baseUrl}/api/billing/packs`, { headers: auth });
+  assert.equal(list.status, 404);
+
+  // Счёт, выставленный до снятия с продажи, оплачен позже — кредиты начисляются, повтор — нет.
+  const invoice = h.invoiceStore.createTelegramStarsInvoice(
+    buyer.user.id,
+    'pro',
+    0,
+    460,
+    'Robo_kassa_bot',
+    'premium-5',
+  );
   const payload = encodePayload({
     packId: 'premium-5',
     stars: invoice.starsAmount,
@@ -1092,25 +1092,20 @@ test('пакет за звёзды: только на платном тариф�
   assert.equal(h.bot.validatePayment('XTR', invoice.starsAmount, payload).ok, true);
   await h.pay(777001, payload, invoice.starsAmount, 'charge-pack-1');
   await h.pay(777001, payload, invoice.starsAmount, 'charge-pack-1');
-
-  const packs = await readJson<{
-    packs: Array<{ id: string; priceUsd: number; quotaUsd: number }>;
-    credits: { remainingUsd: number; items: Array<{ id: string }> };
-  }>(await fetch(`${h.server.baseUrl}/api/billing/packs`, { headers: auth }));
-  assert.deepEqual(
-    packs.packs.map((p) => p.id),
-    ['premium-3', 'premium-5', 'premium-10'],
+  const credits = h.billingService.ledger.credits;
+  assert.equal(credits.balanceOf(buyer.user.id).remainingUsd, 5);
+  assert.equal(
+    credits.allOf(buyer.user.id).length,
+    1,
+    'повторная доставка не начисляет второй раз',
   );
-  assert.equal(packs.credits.remainingUsd, 5);
-  assert.equal(packs.credits.items.length, 1, 'повторная доставка платежа не начисляет второй раз');
-  // Подписка от пакета не меняется.
   assert.equal(h.subscriptionStore.get(buyer.user.id).plan, 'pro');
 
-  // Возврат: пока из пакета ничего не потрачено — звёзды возвращаются сразу; потом — нет.
+  // Возврат: пока из пакета ничего не потрачено — заявка; потом — нет.
   const payment = h.billingService.findPayment('stars:charge-pack-1')!;
   assert.equal(payment.packId, 'premium-5');
   assert.deepEqual(h.billingService.refundOption(payment), { kind: 'request' });
-  h.billingService.ledger.credits.debit(buyer.user.id, 0.01);
+  credits.debit(buyer.user.id, 0.01);
   assert.deepEqual(h.billingService.refundOption(payment), { kind: 'none', reason: 'used' });
 });
 

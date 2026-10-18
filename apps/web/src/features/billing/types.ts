@@ -80,8 +80,6 @@ export interface CryptoFees {
 export interface CryptoInvoice {
   id: string;
   planId: PlanId;
-  /** Счёт на пакет премиум-квоты, а не на тариф. */
-  packId?: string;
   currency: CryptoCurrency;
   amount: number;
   amountUsd: number;
@@ -114,8 +112,6 @@ export interface SbpInvoice {
 export interface TelegramStarsInvoice {
   id: string;
   planId: PlanId;
-  /** Счёт на пакет премиум-квоты, а не на тариф. */
-  packId?: string;
   priceRub: number;
   starsAmount: number;
   /** Прямая ссылка на окно оплаты звёздами в Telegram (если бот настроен). */
@@ -128,34 +124,4 @@ export interface TelegramStarsInvoice {
   starsUsd?: number;
   /** Официальный курс Telegram, по которому считается цена, $ за звезду. */
   usdPerStar?: number;
-}
-
-/** Пакет премиум-квоты поверх подписки (цены приходят с сервера: services/pricing.ts). */
-export interface PremiumPack {
-  id: string;
-  /** Сколько премиум-квоты даёт пакет, $. */
-  quotaUsd: number;
-  priceUsd: number;
-  /** Сколько дней действуют кредиты. */
-  days: number;
-  /** Цена в звёздах по официальному курсу Telegram. */
-  stars: number;
-  /** Сколько эти звёзды стоят по официальному курсу Telegram, $. */
-  starsUsd: number;
-}
-
-/** Кредиты докупленного пакета. */
-export interface PremiumCredit {
-  id: string;
-  packId: string;
-  amountUsd: number;
-  remainingUsd: number;
-  purchasedAt: string;
-  expiresAt: string;
-  status: 'active' | 'refunded';
-}
-
-export interface PacksResponse {
-  packs: PremiumPack[];
-  credits: { remainingUsd: number; nextExpiresAt: string | null; items: PremiumCredit[] };
 }

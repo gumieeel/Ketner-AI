@@ -78,10 +78,6 @@ export const routes: RouteObject[] = [
         path: 'checkout/:planId',
         lazy: lazyPage(() => import('@/pages/checkout-page'), 'CheckoutPage'),
       },
-      {
-        path: 'checkout/pack/:packId',
-        lazy: lazyPage(() => import('@/pages/checkout-page'), 'CheckoutPage'),
-      },
     ],
   },
   // Кабинет внутри Telegram (мини-приложение бота): без шапки и боковой панели сайта.

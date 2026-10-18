@@ -5,7 +5,7 @@ import { sendError } from '../middleware/errors.js';
 import { invoiceStore as defaultInvoiceStore, type InvoiceStore } from '../store/index.js';
 import type { SubscriptionStore } from '../store/subscription-store.js';
 import type { UserStore } from '../store/user-store.js';
-import { packStars, planStars, telegramBotService } from '../telegram/bot.js';
+import { planStars, telegramBotService } from '../telegram/bot.js';
 import { BillingService, createBillingLedger, planLabel } from '../billing/billing-service.js';
 import { isTrybitCurrency } from '../billing/trybit-currencies.js';
 import type {
@@ -19,16 +19,12 @@ import { isVipUser } from '../services/vip.js';
 import { stripeService } from '../services/stripe.js';
 import { cryptoCloudService } from '../services/cryptocloud.js';
 import {
-  findPremiumPack,
   LEGACY_PRICE_USD,
   PLAN_PRICE_USD,
   planPriceRub,
   planPriceUsd,
-  PREMIUM_PACK_DAYS,
-  PREMIUM_PACKS,
-  type PremiumPack,
 } from '../services/pricing.js';
-import { CRYPTO_PREMIUM_BONUS, EntitlementService, planRank } from '../services/entitlement.js';
+import { CRYPTO_PREMIUM_BONUS, EntitlementService } from '../services/entitlement.js';
 
 /** Каталог тарифов. `priceMonthly` везде в долларах США (см. services/pricing.ts). */
 export const PLANS: readonly PlanItem[] = [
@@ -244,27 +240,11 @@ export function createBillingRouter({
   };
 
   /**
-   * Пакет премиум-квоты из тела запроса и проверка, что его можно купить: только на платном
-   * тарифе (на Free премиум-моделей нет, кредиты нечем было бы тратить). null — ответ уже отправлен.
+   * Пакеты премиум-квоты больше не продаются (18.10.2026). Счета, выставленные раньше, по-прежнему
+   * засчитываются вебхуком и подтверждением, купленные кредиты тратятся до конца срока.
    */
-  const packForPurchase = (request: Request, response: Response): PremiumPack | null => {
-    const pack = findPremiumPack(request.body?.packId);
-    if (!pack) {
-      sendError(response, 400, 'invalid_pack', 'Такого пакета нет');
-      return null;
-    }
-    const user = request.user;
-    const plan = EntitlementService.resolveEffectivePlan(user?.plan, user?.email, isVipUser(user));
-    if (planRank(plan) < planRank('plus')) {
-      sendError(
-        response,
-        403,
-        'plan_required',
-        'Пакеты премиум-квоты докупаются к подписке Plus, Pro или Ultra',
-      );
-      return null;
-    }
-    return pack;
+  const rejectPackPurchase = (response: Response): void => {
+    sendError(response, 410, 'packs_discontinued', 'Пакеты премиум-квоты больше не продаются');
   };
 
   // Webhook & Postback от CryptoCloud.
@@ -382,26 +362,6 @@ export function createBillingRouter({
     ...invoice,
     starsUsd: telegramBotService.rateService.toUsd(invoice.starsAmount),
     usdPerStar: telegramBotService.rateService.rate.usdPerStar,
-  });
-
-  // Пакеты премиум-квоты поверх подписки и кредиты пользователя.
-  router.get('/billing/packs', (request: Request, response: Response) => {
-    const userId = getUserId(request);
-    response.json({
-      packs: PREMIUM_PACKS.map((pack) => {
-        const stars = packStars(pack, telegramBotService.rateService);
-        return {
-          ...pack,
-          days: PREMIUM_PACK_DAYS,
-          stars,
-          starsUsd: telegramBotService.rateService.toUsd(stars),
-        };
-      }),
-      credits: {
-        ...billing.ledger.credits.balanceOf(userId),
-        items: billing.ledger.credits.allOf(userId),
-      },
-    });
   });
 
   router.get('/billing/subscription', (request: Request, response: Response) => {
@@ -579,23 +539,7 @@ export function createBillingRouter({
     async (request: Request, response: Response) => {
       const userId = getUserId(request);
       if (request.body?.packId !== undefined) {
-        const pack = packForPurchase(request, response);
-        if (!pack) return;
-        let packInvoice = activeInvoiceStore.createTelegramStarsInvoice(
-          userId,
-          request.user?.plan ?? 'free',
-          0,
-          packStars(pack, telegramBotService.rateService),
-          telegramBotService.botUsername || config.telegramBotUsername,
-          pack.id,
-        );
-        if (telegramBotService.isConfigured) {
-          const link = await telegramBotService.createInvoiceLink(packInvoice);
-          if (link) {
-            packInvoice = activeInvoiceStore.getTelegramStarsInvoice(packInvoice.id) ?? packInvoice;
-          }
-        }
-        response.json({ invoice: withStarsUsd(packInvoice) });
+        rejectPackPurchase(response);
         return;
       }
 
@@ -730,12 +674,12 @@ export function createBillingRouter({
   // --- Crypto & CryptoCloud ---
 
   router.post('/billing/crypto/create-invoice', async (request: Request, response: Response) => {
-    // Счёт на тариф ({ planId }) или на пакет премиум-квоты ({ packId }).
-    const isPack = request.body?.packId !== undefined;
-    const pack = isPack ? packForPurchase(request, response) : null;
-    if (isPack && !pack) return;
-    const plan = isPack ? undefined : findPlan(request.body?.planId);
-    if (!isPack && (!plan || plan.priceMonthly <= 0)) {
+    if (request.body?.packId !== undefined) {
+      rejectPackPurchase(response);
+      return;
+    }
+    const plan = findPlan(request.body?.planId);
+    if (!plan || plan.priceMonthly <= 0) {
       sendError(response, 400, 'invalid_plan', 'Некорректный тариф для оплаты криптовалютой');
       return;
     }
@@ -761,10 +705,9 @@ export function createBillingRouter({
       return;
     }
 
-    // Цены в долларах: тарифы Plus $9, Pro $25, Ultra $49 и пакеты — services/pricing.ts
-    const amountUsd = pack ? pack.priceUsd : planPriceUsd(plan!.id);
-    // У счёта на пакет тариф — текущий тариф покупателя (подписка от пакета не меняется).
-    const invoicePlanId = pack ? (request.user?.plan ?? 'free') : plan!.id;
+    // Цены в долларах: Plus $9, Pro $25, Ultra $49 — services/pricing.ts
+    const amountUsd = planPriceUsd(plan.id);
+    const invoicePlanId = plan.id;
     const tempOrderId = `crypto_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
 
     const cryptocurrency: string = currency;
@@ -801,7 +744,6 @@ export function createBillingRouter({
       ccResult?.invoiceId,
       tempOrderId,
       ccResult?.h2h,
-      pack?.id,
     );
 
     response.json({ invoice });

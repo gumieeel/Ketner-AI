@@ -15,9 +15,8 @@ import {
   planPriceRub,
   planPriceUsd,
   PREMIUM_PACK_DAYS,
-  type PremiumPack,
 } from '../services/pricing.js';
-import { packMinStars, planMinStars } from '../services/margin.js';
+import { planMinStars } from '../services/margin.js';
 import {
   BillingError,
   paymentRef,
@@ -71,11 +70,6 @@ export function calculateStars(
  */
 export function planStars(planId: PlanId, rates: StarsRateService = starsRateService): number {
   return Math.max(rates.quote(planPriceUsd(planId)), planMinStars(planId));
-}
-
-/** Цена пакета премиум-квоты в звёздах: по курсу, но не ниже себестоимости пакета. */
-export function packStars(pack: PremiumPack, rates: StarsRateService = starsRateService): number {
-  return Math.max(rates.quote(pack.priceUsd), packMinStars(pack));
 }
 
 export function getPlanItem(planId: string): PlanItem | undefined {
@@ -747,21 +741,6 @@ export class TelegramBotService implements TelegramPaymentsPort {
       planPriceRub(planId),
       stars,
       this.username,
-    );
-  }
-
-  /** Счёт на пакет премиум-квоты по текущему курсу звёзд. */
-  createPackStarsInvoice(userId: string, packId: string): TelegramStarsInvoice | null {
-    const pack = findPremiumPack(packId);
-    if (!pack) return null;
-    const user = this.deps.userStore.findById(userId);
-    return this.deps.invoiceStore.createTelegramStarsInvoice(
-      userId,
-      user?.plan ?? 'free',
-      0,
-      packStars(pack, this.rates),
-      this.username,
-      pack.id,
     );
   }
 

@@ -134,13 +134,6 @@ function planRank(plan: string | undefined): number {
 
 const DEFAULT_REPLY = 'Ответ модели Ketner AI.';
 
-/** Зеркало каталога пакетов сервера (services/pricing.ts → PREMIUM_PACKS). */
-const PACKS = [
-  { id: 'premium-3', quotaUsd: 3, priceUsd: 6, days: 30, stars: 310, starsUsd: 6.2 },
-  { id: 'premium-5', quotaUsd: 5, priceUsd: 9, days: 30, stars: 460, starsUsd: 9.2 },
-  { id: 'premium-10', quotaUsd: 10, priceUsd: 18, days: 30, stars: 910, starsUsd: 18.19 },
-];
-
 function json(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), {
     status,
@@ -237,7 +230,6 @@ function streamOf(chunks: string[], delayMs: number, signal: AbortSignal | null)
 export function installFakeApi(options: FakeApiOptions = {}): FakeApi {
   const delayMs = options.chunkDelayMs ?? 1;
   let currentPlan = options.plan ?? 'free';
-  let lastCryptoPackId: string | null = null;
   let githubConnected = options.github?.connected ?? false;
   const githubStatus = () => ({
     available: true,
@@ -568,25 +560,10 @@ export function installFakeApi(options: FakeApiOptions = {}): FakeApi {
         });
       }
 
-      if (url === '/api/billing/packs' && method === 'GET') {
-        return json({
-          packs: PACKS,
-          credits: { remainingUsd: 0, nextExpiresAt: null, items: [] },
-        });
-      }
-
       if (url === '/api/billing/crypto/create-invoice' && method === 'POST') {
-        const pack = PACKS.find((p) => p.id === body.packId);
-        lastCryptoPackId = pack?.id ?? null;
-        const planId = pack ? currentPlan : (body.planId as string) || 'plus';
+        const planId = (body.planId as string) || 'plus';
         const currency = (body.currency as string) || 'USDT_TRC20';
-        const amountUsd = pack
-          ? pack.priceUsd
-          : planId === 'ultra'
-            ? 49
-            : planId === 'pro'
-              ? 25
-              : 9;
+        const amountUsd = planId === 'ultra' ? 49 : planId === 'pro' ? 25 : 9;
         const amount =
           currency === 'TON'
             ? +(amountUsd / 5.4).toFixed(2)
@@ -597,7 +574,6 @@ export function installFakeApi(options: FakeApiOptions = {}): FakeApi {
           invoice: {
             id: 'crypto_mock_123',
             planId,
-            ...(pack ? { packId: pack.id } : {}),
             currency,
             amount,
             amountUsd,
@@ -643,30 +619,6 @@ export function installFakeApi(options: FakeApiOptions = {}): FakeApi {
             expiresAt: new Date(Date.now() + 1800000).toISOString(),
             network: 'TRC-20',
             cryptoCloudUrl: 'https://cryptocloud.plus/pay/INV-DEMO123',
-          },
-        });
-      }
-
-      if (url.startsWith('/api/billing/crypto/confirm/') && method === 'POST' && lastCryptoPackId) {
-        const pack = PACKS.find((p) => p.id === lastCryptoPackId)!;
-        return json({
-          success: true,
-          subscription: {
-            userId: 'demo-user',
-            plan: currentPlan,
-            status: 'active',
-            renewsAt: new Date(Date.now() + 86400000 * 30).toISOString(),
-          },
-          user: { id: 'demo-user', plan: currentPlan },
-          invoice: { id: 'crypto_mock_123', planId: currentPlan, packId: pack.id, status: 'paid' },
-          credit: {
-            id: 'crypto:crypto_mock_123',
-            packId: pack.id,
-            amountUsd: pack.quotaUsd,
-            remainingUsd: pack.quotaUsd,
-            purchasedAt: new Date().toISOString(),
-            expiresAt: '2026-11-15T10:00:00.000Z',
-            status: 'active',
           },
         });
       }

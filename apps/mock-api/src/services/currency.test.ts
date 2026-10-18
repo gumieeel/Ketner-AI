@@ -3,18 +3,15 @@ import test from 'node:test';
 import { CurrencyService } from './currency.js';
 import { CRYPTO_PREMIUM_BONUS, PLAN_ENTITLEMENTS, withCryptoBonus } from './entitlement.js';
 import { LEGACY_PLANS, PLANS } from '../routes/billing.js';
-import { packStars, planStars } from '../telegram/bot.js';
+import { planStars } from '../telegram/bot.js';
 import { StarsRateService } from '../telegram/stars-rate.js';
 import type { PlanId } from '../types.js';
-import { packWorstCaseCostUsd, planStarsWorstCaseCostUsd, planWorstCaseCostUsd } from './margin.js';
+import { planStarsWorstCaseCostUsd, planWorstCaseCostUsd } from './margin.js';
 import {
   FREE_TIER_SUBSIDY_USD,
-  modelSpendCostUsd,
   OPENROUTER_TOPUP_FEE,
-  PACK_MAX_COST_SHARE,
   PAYMENT_NET_SHARE,
   PLAN_PRICE_USD,
-  PREMIUM_PACKS,
   STARS_OFFICIAL_USD_PER_STAR,
   STARS_PAYOUT_USD,
   starsNetUsd,
@@ -145,23 +142,8 @@ test('Ни один тариф не уходит в минус ни в одно�
       assert.ok(Math.abs(worst - planWorstCaseCostUsd(planId) + FREE_TIER_SUBSIDY_USD) < 1e-9);
       check(`${planId} звёздами (${stars} ⭐, курс ${usdPerStar})`, starsNetUsd(stars), worst);
     }
-    for (const pack of PREMIUM_PACKS) {
-      const stars = packStars(pack, rates);
-      check(
-        `${pack.id} звёздами (${stars} ⭐, курс ${usdPerStar})`,
-        starsNetUsd(stars),
-        packWorstCaseCostUsd(pack),
-      );
-    }
   }
-  for (const pack of PREMIUM_PACKS) {
-    check(
-      `${pack.id} криптой`,
-      pack.priceUsd * PAYMENT_NET_SHARE.crypto * (1 - TAX),
-      packWorstCaseCostUsd(pack),
-    );
-  }
-  assert.ok(margins.length > 40, margins.join('\n'));
+  assert.ok(margins.length >= 30, margins.join('\n'));
 });
 
 test('Цена в звёздах — цена тарифа по официальному курсу Telegram (как картой)', () => {
@@ -192,11 +174,6 @@ test('Цена в звёздах — цена тарифа по официаль
   assert.equal(planStars('plus', expensive), 330);
   assert.ok(starsNetUsd(330) >= planStarsWorstCaseCostUsd('plus'));
   assert.ok(starsNetUsd(320) < planStarsWorstCaseCostUsd('plus'), '330 ⭐ — точка безубыточности');
-  // Пакеты: цена в звёздах равна цене в долларах по официальному курсу.
-  for (const pack of PREMIUM_PACKS) {
-    assert.equal(packStars(pack, official), official.quote(pack.priceUsd), pack.id);
-    assert.ok(Math.abs(official.toUsd(packStars(pack, official)) - pack.priceUsd) < 0.25, pack.id);
-  }
   // Доля цены, которая доходит до нас со звёзд, — из выплаты и официальной цены, не отдельное число.
   assert.equal(PAYMENT_NET_SHARE.stars, STARS_PAYOUT_USD / STARS_OFFICIAL_USD_PER_STAR);
 });
@@ -205,29 +182,6 @@ test('CurrencyService.calculatePlanCostBudget: считает от цены в �
   assert.equal(CurrencyService.calculatePlanCostBudget(25), 10);
   assert.equal(CurrencyService.calculatePlanCostBudget(49, 0.4), 19.6);
   assert.equal(CurrencyService.calculatePlanCostBudget(0), 0.2);
-});
-
-test('Пакеты премиум-квоты: цена не ниже себестоимости / 0.6 и прибыльны в любом канале оплаты', () => {
-  assert.ok(PREMIUM_PACKS.length > 0);
-  for (const pack of PREMIUM_PACKS) {
-    // Себестоимость — квота с комиссией пополнения OpenRouter (пакет тратится только на модели).
-    const cost = modelSpendCostUsd(pack.quotaUsd);
-    assert.ok(
-      pack.priceUsd >= cost / PACK_MAX_COST_SHARE,
-      `${pack.id}: цена $${pack.priceUsd} ниже себестоимости $${cost.toFixed(2)} / ${PACK_MAX_COST_SHARE}`,
-    );
-    // Пакет выкуплен целиком: даже через Telegram Stars (≈72% цены) после налога остаётся прибыль.
-    for (const [method, share] of Object.entries(PAYMENT_NET_SHARE)) {
-      const net = pack.priceUsd * share * (1 - TAX);
-      assert.ok(
-        net - cost > 0,
-        `${pack.id} через ${method}: чистыми $${net.toFixed(2)} не покрывают $${cost.toFixed(2)}`,
-      );
-    }
-  }
-  // Чем больше пакет, тем не дороже доллар квоты.
-  const perQuota = PREMIUM_PACKS.map((p) => p.priceUsd / p.quotaUsd);
-  assert.ok(perQuota.every((v, i) => i === 0 || v <= perQuota[i - 1] + 1e-9));
 });
 
 test('Бонус за оплату криптой: +15% к квоте покрывается разницей комиссий звёзд и крипты', () => {

@@ -1,7 +1,6 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { PlanCards } from '@/components/pricing/plan-cards';
-import { PremiumPacks } from '@/components/pricing/premium-packs';
 import { Tab, TabList, TabPanel, Tabs } from '@/components/ui/tabs';
 import type { TranslationKey } from '@/i18n';
 import { useTranslation } from '@/i18n';
@@ -167,9 +166,6 @@ export function PricingPage() {
       {/* 4 Карточки тарифов */}
       <PlanCards variant="full" />
 
-      {/* Пакеты премиум-квоты поверх подписки (только для платных тарифов) */}
-      <PremiumPacks />
-
       {/* Таблица сравнения */}
       <div className="flex w-full flex-col gap-6 text-left">
         <div className="flex flex-col gap-1.5">
@@ -292,7 +288,6 @@ export function PricingPage() {
 }
 
 const pro = planFacts.plans.pro;
-const opus = pro.flagship[0];
 
 /**
  * Как работают лимиты — на примерах тарифа Pro. Числа берутся из plan-facts.json, который тест
@@ -307,24 +302,10 @@ const LIMIT_EXAMPLES: { title: Localized; text: Localized }[] = [
     },
   },
   {
-    title: { ru: 'Дорогие модели', en: 'Expensive models' },
-    text: {
-      ru: `У флагманов свой недельный лимит. На Pro можно отправить ${opus.weeklyPool} запрос ${opus.name} за 7 дней, но не больше ${opus.perDay} за сутки: например, 8 в понедельник и ни одного во вторник. Когда лимит исчерпан, отвечает запасная модель (для ${opus.name} — Claude Sonnet 5.5), и под ответом видно, какая модель ответила. Режим Max на Ultra считается за 2 запроса.`,
-      en: `Flagships have their own weekly limit. On Pro you can send ${opus.weeklyPool} ${opus.name} requests in 7 days, at most ${opus.perDay} a day: for example, 8 on Monday and none on Tuesday. When the limit runs out, a backup model answers (Claude Sonnet 5.5 for ${opus.name}), and the answer shows which model replied. Max mode on Ultra counts as 2 requests.`,
-    },
-  },
-  {
-    title: { ru: 'Квота премиум-моделей', en: 'Premium quota' },
-    text: {
-      ru: `Запросы к сильным моделям (Claude, GPT-6 Astra, GPT-5.6, Grok и др.) списываются ещё и с общей квоты в долларах по их реальной цене: длинный вопрос стоит дороже короткого. На Pro квота $${pro.premiumQuotaUsd} на 30 дней — ${pro.premiumExamples?.ru ?? ''}. Если пользоваться несколькими моделями, квота кончается раньше, дальше отвечает Ketner Pro. Её можно пополнить пакетом.`,
-      en: `Requests to strong models (Claude, GPT-6 Astra, GPT-5.6, Grok and others) also draw on a shared dollar quota at their real price: a long prompt costs more than a short one. On Pro the quota is $${pro.premiumQuotaUsd} per 30 days, ${pro.premiumExamples?.en ?? ''}. Using several models drains it sooner; after that Ketner Pro answers. You can top it up with a pack.`,
-    },
-  },
-  {
     title: { ru: 'Общий расход', en: 'Overall spend' },
     text: {
-      ru: `Чтобы один аккаунт не тратил больше, чем стоит подписка, расход на все модели ограничен по себестоимости: на Pro — $${pro.dailyCostCapUsd} в сутки и $${pro.costBudgetUsd} за 30 дней. После 80% бюджета ответы короче и идут на недорогие модели, после 100% — только на самые дешёвые, после 125% запросы не выполняются, пока расход за последние 30 дней не снизится. При обычной переписке до этих границ, как правило, не доходит: они срабатывают при очень активной работе с дорогими моделями или в Ketner Code.`,
-      en: `So that one account does not cost more than its subscription, spend on all models is capped at cost: on Pro, $${pro.dailyCostCapUsd} a day and $${pro.costBudgetUsd} per 30 days. Past 80% of the budget answers get shorter and go to cheaper models, past 100% only to the cheapest, and past 125% requests stop until 30-day spend drops. Normal chatting usually stays well below these caps; heavy use of expensive models or Ketner Code can.`,
+      ru: 'Чтобы один аккаунт не тратил больше, чем стоит подписка, общий расход на модели ограничен. Когда он подходит к пределу, ответы становятся короче и идут на недорогие модели, затем — только на самые дешёвые. При очень большом расходе запросы приостанавливаются, пока расход за последние 30 дней не снизится. При обычной переписке до этих границ, как правило, не доходит: они срабатывают при очень активной работе с дорогими моделями или в Ketner Code.',
+      en: 'So that one account does not cost more than its subscription, overall model spend is capped. As it nears the cap, answers get shorter and go to cheaper models, then only to the cheapest. With very heavy use, requests pause until 30-day spend drops. Normal chatting usually stays well below these caps; heavy use of expensive models or Ketner Code can reach them.',
     },
   },
 ];

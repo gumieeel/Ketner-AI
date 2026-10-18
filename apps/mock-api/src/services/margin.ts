@@ -18,12 +18,7 @@
 import type { PlanId } from '../types.js';
 import { BUDGET_HARD_STOP_RATIO } from './budget-policy.js';
 import { EntitlementService } from './entitlement.js';
-import {
-  breakEvenStars,
-  FREE_TIER_SUBSIDY_USD,
-  modelSpendCostUsd,
-  type PremiumPack,
-} from './pricing.js';
+import { breakEvenStars, FREE_TIER_SUBSIDY_USD, modelSpendCostUsd } from './pricing.js';
 
 /** Худший расход на платящего за 30 дней ($): предел бюджета с комиссией и доля Free-тира. */
 export function planWorstCaseCostUsd(
@@ -32,14 +27,6 @@ export function planWorstCaseCostUsd(
 ): number {
   const { costBudget } = EntitlementService.getEntitlements(planId, options);
   return modelSpendCostUsd(costBudget * BUDGET_HARD_STOP_RATIO) + FREE_TIER_SUBSIDY_USD;
-}
-
-/**
- * Худший расход на пакет ($): квота, выбранная целиком, с комиссией OpenRouter. Запрос, которому не
- * хватило кредитов, дописывается в расход тарифа и ограничен его бюджетом.
- */
-export function packWorstCaseCostUsd(pack: PremiumPack): number {
-  return modelSpendCostUsd(pack.quotaUsd);
 }
 
 /** Худший расход на платящего звёздами ($): предел бюджета с комиссией, без доли Free-тира. */
@@ -52,9 +39,4 @@ export function planStarsWorstCaseCostUsd(planId: PlanId): number {
 /** Минимальная цена тарифа в звёздах: дешевле — тариф в худшем случае уйдёт в минус. */
 export function planMinStars(planId: PlanId): number {
   return breakEvenStars(planStarsWorstCaseCostUsd(planId));
-}
-
-/** Минимальная цена пакета в звёздах. */
-export function packMinStars(pack: PremiumPack): number {
-  return breakEvenStars(packWorstCaseCostUsd(pack));
 }

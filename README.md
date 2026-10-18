@@ -14,7 +14,7 @@
 | Ketner Code (`/code`) | Проекты с файлами и агент, который читает и правит код по плану, импорт из ZIP и GitHub                                      | [code-workspace.md](docs/code-workspace.md)            |
 | Изображения           | FLUX через Cloudflare Workers AI, платные модели через Runware, обязательная модерация                                       | [models-and-pricing.md §5](docs/models-and-pricing.md) |
 | API для программ      | `/v1/chat/completions` в формате OpenAI, ключи `ketner_sk_…` (с тарифа Plus)                                                 | [agent-api.md](docs/agent-api.md)                      |
-| Оплата                | Криптовалюта через Trybit, Telegram Stars (с автопродлением), пакеты премиум-квоты, возвраты                                 | [payments.md](docs/payments.md)                        |
+| Оплата                | Криптовалюта через Trybit, Telegram Stars (с автопродлением), возвраты                                                       | [payments.md](docs/payments.md)                        |
 | Telegram              | Бот оплаты и кабинет `/tg`, вход на сайт через Telegram, бот поддержки                                                       | [telegram.md](docs/telegram.md)                        |
 | Админка (`/admin`)    | Пользователи и тарифы, расход и маржа, метрики моделей, регистрации по времени и источнику                                   | [operations.md](docs/operations.md)                    |
 
@@ -78,7 +78,7 @@ render.yaml   описание сервиса Render · Dockerfile — альт�
 | [agent-api.md](docs/agent-api.md)                   | OpenAI-совместимый API (`/v1/*`) для CLI и IDE                     |
 | [data-model.md](docs/data-model.md)                 | Сущности и таблицы Postgres                                        |
 | [auth-and-security.md](docs/auth-and-security.md)   | Вход и аккаунты, права, защита, известные риски                    |
-| [payments.md](docs/payments.md)                     | Trybit, Telegram Stars, пакеты, возвраты, вебхуки                  |
+| [payments.md](docs/payments.md)                     | Trybit, Telegram Stars, возвраты, вебхуки                          |
 | [telegram.md](docs/telegram.md)                     | Боты, мини-приложение, вход через Telegram                         |
 | [models-and-pricing.md](docs/models-and-pricing.md) | Модели, Auto, лимиты, бюджеты, цены и маржа, картинки              |
 | [code-workspace.md](docs/code-workspace.md)         | Ketner Code: проекты и агент                                       |
