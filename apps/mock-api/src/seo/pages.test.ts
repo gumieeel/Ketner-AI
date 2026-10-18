@@ -1,5 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { PLANS } from '../routes/billing.js';
+import { pricingMarkdown } from './pricing-md.js';
 import {
   classifyPath,
   llmsTxt,
@@ -196,4 +198,55 @@ test('seo: lastmod у /changelog — дата последнего релиза,
   } finally {
     setSeoBuildData({});
   }
+});
+
+test('seo: robots.txt даёт ботам ИИ-поиска собственную группу с теми же закрытыми разделами', () => {
+  const robots = robotsTxt();
+  for (const bot of ['OAI-SearchBot', 'ChatGPT-User', 'PerplexityBot', 'Claude-SearchBot']) {
+    assert.match(robots, new RegExp(`^User-agent: ${bot}$`, 'm'), bot);
+  }
+  assert.doesNotMatch(robots, /GPTBot$|ClaudeBot$/m, 'боты обучения не упоминаются');
+  const group = robots.split('# ИИ-поиск')[1];
+  assert.match(group, /Disallow: \/chat/);
+  assert.match(group, /Disallow: \/api\//);
+  assert.match(group, /Allow: \//);
+});
+
+test('seo: вопросы с главной называют те же цены, что и каталог тарифов', async () => {
+  const file = new URL('../../../web/src/features/content/faq.ts', import.meta.url).href;
+  const { FAQ_ITEMS } = (await import(file)) as {
+    FAQ_ITEMS: { id: string; a: Record<'ru' | 'en', string> }[];
+  };
+  const price = FAQ_ITEMS.find((item) => item.id === 'price');
+  assert.ok(price);
+  for (const language of ['ru', 'en'] as const) {
+    for (const plan of PLANS.filter((p) => p.priceMonthly > 0)) {
+      assert.ok(price.a[language].includes(`$${plan.priceMonthly}`), `${language} ${plan.id}`);
+    }
+  }
+});
+
+test('seo: pricing.md собирается из каталога тарифов', () => {
+  const ru = pricingMarkdown(PLANS, 'ru', 'https://ketner.org', new Date('2026-10-18T10:00:00Z'));
+  assert.match(ru, /^# Ketner AI — Тарифы/);
+  assert.match(ru, /Актуально на: 2026-10-18/);
+  assert.match(ru, /## Pro\n- Цена: \$25 в месяц \(30 дней\)/);
+  assert.match(ru, /## Free\n- Цена: Бесплатно \(\$0\)/);
+  assert.match(ru, /1 500 сообщений в сутки/);
+  assert.match(ru, /\(https:\/\/ketner\.org\/pricing\)/);
+  const en = pricingMarkdown(PLANS, 'en', 'https://ketner.org');
+  assert.match(en, /^# Ketner AI — Pricing/);
+  assert.match(en, /## Ultra\n- Price: \$49 per month \(30 days\)/);
+  assert.match(en, /1,500 messages a day/);
+  assert.match(en, /\(https:\/\/ketner\.org\/en\/pricing\)/);
+  assert.doesNotMatch(ru + en, /gpt-pro|claude-pro|gemini-pro/, 'устаревшие тарифы не включены');
+  assert.match(
+    renderIndexHtml(BASE, '/pricing'),
+    /rel="alternate" type="text\/markdown" href="https:\/\/ketner\.org\/pricing\.md"/,
+  );
+  assert.match(
+    renderIndexHtml(BASE, '/en/pricing'),
+    /href="https:\/\/ketner\.org\/en\/pricing\.md"/,
+  );
+  assert.match(llmsTxt(), /pricing\.md/);
 });

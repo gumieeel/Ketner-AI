@@ -23,9 +23,12 @@ import {
   robotsTxt,
   sitemapXml,
   setSeoBuildData,
+  siteUrl,
   type FaqByLanguage,
   type SeoBuildData,
 } from './seo/pages.js';
+import { PLANS } from './routes/billing.js';
+import { pricingMarkdown } from './seo/pricing-md.js';
 import {
   apiKeyStore as defaultApiKeyStore,
   conversationStore,
@@ -268,6 +271,17 @@ export function createApp(overrides: Partial<AppDeps> = {}): Express {
     response.type('text/plain; charset=utf-8').setHeader('Cache-Control', 'public, max-age=3600');
     response.send(llmsTxt());
   });
+  for (const [route, language] of [
+    ['/pricing.md', 'ru'],
+    ['/en/pricing.md', 'en'],
+  ] as const) {
+    app.get(route, (_request, response) => {
+      response
+        .type('text/markdown; charset=utf-8')
+        .setHeader('Cache-Control', 'public, max-age=3600');
+      response.send(pricingMarkdown(PLANS, language, siteUrl()));
+    });
+  }
   app.get('/sitemap.xml', (_request, response) => {
     response
       .type('application/xml; charset=utf-8')

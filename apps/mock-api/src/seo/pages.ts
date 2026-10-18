@@ -657,6 +657,9 @@ export function renderIndexHtml(
     `<meta name="twitter:title" content="${escapeAttr(title)}" />`,
     `<meta name="twitter:description" content="${escapeAttr(description)}" />`,
     `<meta name="twitter:image" content="${escapeAttr(image)}" />`,
+    page && ruPathOf(page) === '/pricing'
+      ? `<link rel="alternate" type="text/markdown" href="${escapeAttr(`${base}${english ? '/en' : ''}/pricing.md`)}" />`
+      : '',
     verificationTags(),
     page && ruPathOf(page) === '/'
       ? `<script type="application/ld+json">${structuredData(base, english, faq)}</script>`
@@ -680,12 +683,31 @@ export function renderIndexHtml(
   return html.replace(/<\/head>/i, `    ${head}\n  </head>`);
 }
 
+/**
+ * Боты ИИ-поиска и ассистентов, которые приходят за ответом пользователю (а не за обучением моделей).
+ * Для них выделена своя группа: у каждого бота правила берутся из его группы целиком, поэтому
+ * список закрытых разделов повторён. Боты обучения (GPTBot, ClaudeBot) здесь не упомянуты и
+ * подчиняются общей группе `*`.
+ */
+const AI_SEARCH_BOTS = [
+  'OAI-SearchBot',
+  'ChatGPT-User',
+  'PerplexityBot',
+  'Perplexity-User',
+  'Claude-SearchBot',
+  'Claude-User',
+] as const;
+
 export function robotsTxt(): string {
   const base = siteUrl();
+  const rules = ['Allow: /', ...DISALLOW.map((path) => `Disallow: ${path}`)];
   return [
     'User-agent: *',
-    'Allow: /',
-    ...DISALLOW.map((path) => `Disallow: ${path}`),
+    ...rules,
+    '',
+    '# ИИ-поиск и ассистенты: публичные страницы открыты',
+    ...AI_SEARCH_BOTS.map((bot) => `User-agent: ${bot}`),
+    ...rules,
     '',
     `Sitemap: ${base}/sitemap.xml`,
     '',
@@ -732,6 +754,7 @@ export function llmsTxt(): string {
     '',
     '## Продукт',
     ...group(['/', '/pricing', '/models', '/signup']),
+    `- [Тарифы простым текстом](${base}/pricing.md): цены, лимиты и модели каждого тарифа в Markdown`,
     '',
     '## Документация',
     ...group([
@@ -751,6 +774,7 @@ export function llmsTxt(): string {
     '',
     '## English',
     ...SEO_PAGES_EN.map(link),
+    `- [Pricing as plain text](${base}/en/pricing.md): prices, limits and models for every plan in Markdown`,
     '',
   ].join('\n');
 }

@@ -8,6 +8,39 @@ export interface FaqItem {
 
 export const FAQ_ITEMS: FaqItem[] = [
   {
+    id: 'what-is',
+    q: {
+      ru: 'Что такое Ketner AI?',
+      en: 'What is Ketner AI?',
+    },
+    a: {
+      ru: 'Ketner AI — сервис, в котором модели разных разработчиков (OpenAI, Anthropic, Google, xAI, DeepSeek и других) доступны в одном чате на русском языке по одной подписке. Режим Auto сам подбирает модель под вопрос, есть генерация изображений и Ketner Code для программирования. Собственных моделей Ketner AI не обучает.',
+      en: 'Ketner AI is a service where models from different developers (OpenAI, Anthropic, Google, xAI, DeepSeek and others) are available in one chat on a single subscription. Auto mode picks a model for each question, and there are image generation and Ketner Code for programming. Ketner AI does not train its own models.',
+    },
+  },
+  {
+    id: 'price',
+    q: {
+      ru: 'Сколько стоит Ketner AI?',
+      en: 'How much does Ketner AI cost?',
+    },
+    a: {
+      ru: 'Есть бесплатный тариф: 10 сообщений в сутки. Платные тарифы стоят в месяц (30 дней): Plus — $9 (500 сообщений в сутки), Pro — $25 (1 500 сообщений в сутки), Ultra — $49 (4 000 сообщений в сутки и режим Max). Подробности по моделям — на странице «Тарифы».',
+      en: 'There is a free plan: 10 messages a day. Paid plans cost per month (30 days): Plus is $9 (500 messages a day), Pro is $25 (1,500 messages a day), Ultra is $49 (4,000 messages a day and Max mode). Model details are on the Pricing page.',
+    },
+  },
+  {
+    id: 'payment',
+    q: {
+      ru: 'Как оплатить подписку?',
+      en: 'How do I pay for a subscription?',
+    },
+    a: {
+      ru: 'Оплата звёздами Telegram или криптовалютой. Платёж разовый, автоматических списаний нет: автопродление звёздами включается только по вашему желанию и отключается в любой момент.',
+      en: 'Pay with Telegram Stars or crypto. Payment is one-off with no automatic charges: Stars auto-renewal is only on if you turn it on, and you can turn it off at any time.',
+    },
+  },
+  {
     id: 'unlimited',
     q: {
       ru: 'Есть ли ограничения?',
