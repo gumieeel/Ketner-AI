@@ -2,7 +2,6 @@ import { Link } from 'react-router-dom';
 import { ROADMAP } from '@/features/content/changelog';
 import { SUPPORT_EMAIL } from '@/features/content/legal';
 import { PROJECT, SUPPORT_TELEGRAM_URL } from '@/features/content/project';
-import { useDocumentTitle } from '@/lib/use-document-title';
 
 const linkClass = 'text-text underline underline-offset-4 hover:text-accent';
 
@@ -17,8 +16,6 @@ const TIMELINE: { date: string; text: string }[] = [
 
 /** «О проекте»: кто делает Ketner AI, зачем, на каком этапе и что дальше. */
 export function AboutPage() {
-  useDocumentTitle('О проекте — Ketner AI');
-
   return (
     <article className="mx-auto flex w-full max-w-3xl flex-col gap-10">
       <header className="flex flex-col gap-3">

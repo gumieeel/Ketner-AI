@@ -6,7 +6,6 @@ import { KNOWN_ISSUES } from '@/features/content/known-issues';
 import { LEGAL_DOCUMENTS, SUPPORT_EMAIL } from '@/features/content/legal';
 import { API_BASE } from '@/lib/api-config';
 import { cn } from '@/lib/cn';
-import { useDocumentTitle } from '@/lib/use-document-title';
 
 type Status = 'idle' | 'sending' | 'sent';
 
@@ -66,7 +65,6 @@ const textareaClass = cn(
 
 /** Контакты: почта поддержки, бот в Telegram и форма обратной связи. */
 export function ContactsPage() {
-  useDocumentTitle('Контакты — Ketner AI');
   const [topic, setTopic] = useState<Topic>('bug');
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');

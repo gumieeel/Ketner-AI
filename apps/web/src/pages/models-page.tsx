@@ -5,7 +5,6 @@ import { Skeleton } from '@/components/ui/skeleton';
 import planFacts from '@/features/billing/plan-facts.json';
 import { fetchMeta } from '@/features/chat/api';
 import type { ChatMeta, ModelInfo } from '@/features/chat/types';
-import { useDocumentTitle } from '@/lib/use-document-title';
 
 type Tier = 'free' | 'plus' | 'pro' | 'ultra';
 
@@ -146,7 +145,6 @@ function ModelCard({ model }: { model: ModelInfo }) {
 
 /** Прозрачность моделей: кто разработал каждую модель, что стоит за нашими названиями и лимиты. */
 export function ModelsPage() {
-  useDocumentTitle('Модели — Ketner AI');
   const [meta, setMeta] = useState<ChatMeta | null>(null);
   const [failed, setFailed] = useState(false);
 

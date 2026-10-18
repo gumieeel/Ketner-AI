@@ -8,7 +8,6 @@ import {
   type ChangeKind,
 } from '@/features/content/changelog';
 import { KNOWN_ISSUES } from '@/features/content/known-issues';
-import { useDocumentTitle } from '@/lib/use-document-title';
 
 const KIND_TONE: Record<ChangeKind, BadgeTone> = {
   new: 'brand',
@@ -21,8 +20,6 @@ const navLinkClass = 'text-muted underline-offset-4 hover:text-text hover:underl
 
 /** «Что нового»: вышедшие обновления отдельно от планов и известных ограничений. */
 export function ChangelogPage() {
-  useDocumentTitle('Что нового — Ketner AI');
-
   return (
     <div className="mx-auto flex w-full max-w-3xl flex-col gap-12">
       <header className="flex flex-col gap-3">

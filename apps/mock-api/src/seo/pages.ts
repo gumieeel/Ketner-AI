@@ -8,6 +8,8 @@
  * адреса отвечают 404, а не копией главной.
  */
 
+import { PLAN_PRICE_USD } from '../services/pricing.js';
+
 export interface SeoPage {
   path: string;
   title: string;
@@ -275,12 +277,12 @@ function structuredData(base: string): string {
       inLanguage: ['ru', 'en'],
       description:
         'ИИ-чат с нейросетями GPT, Claude, Gemini, Grok и DeepSeek в одной подписке, генерация изображений и ИИ для программирования.',
-      offers: [
-        { '@type': 'Offer', name: 'Free', price: '0', priceCurrency: 'USD' },
-        { '@type': 'Offer', name: 'Plus', price: '9', priceCurrency: 'USD' },
-        { '@type': 'Offer', name: 'Pro', price: '25', priceCurrency: 'USD' },
-        { '@type': 'Offer', name: 'Ultra', price: '49', priceCurrency: 'USD' },
-      ],
+      offers: (['free', 'plus', 'pro', 'ultra'] as const).map((plan) => ({
+        '@type': 'Offer',
+        name: plan.charAt(0).toUpperCase() + plan.slice(1),
+        price: String(PLAN_PRICE_USD[plan]),
+        priceCurrency: 'USD',
+      })),
     },
   ];
   return jsonLd({ '@context': 'https://schema.org', '@graph': graph });

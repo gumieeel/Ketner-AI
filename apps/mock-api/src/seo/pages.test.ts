@@ -23,6 +23,11 @@ test('seo: главная содержит разметку Schema.org, закр
   assert.doesNotMatch(chat, /rel="canonical"/);
 });
 
+test('seo: цены в разметке берутся из тарифов', () => {
+  const html = renderIndexHtml(BASE, '/');
+  assert.match(html, /"name":"Pro","price":"25","priceCurrency":"USD"/);
+});
+
 test('seo: классификация адресов', () => {
   assert.equal(classifyPath('/'), 'public');
   assert.equal(classifyPath('/pricing/'), 'public');
@@ -47,4 +52,13 @@ test('seo: robots.txt и sitemap.xml', () => {
   assert.doesNotMatch(sitemap, /\/chat/);
   assert.doesNotMatch(sitemap, /<lastmod>/, 'без настоящей даты lastmod не выводится');
   assert.doesNotMatch(robots, /^Host:/m);
+});
+
+test('seo: заголовки на клиенте совпадают с серверными', async () => {
+  const file = new URL('../../../web/src/lib/seo-titles.ts', import.meta.url).href;
+  const { PAGE_TITLES } = (await import(file)) as { PAGE_TITLES: Record<string, string> };
+  assert.deepEqual(
+    PAGE_TITLES,
+    Object.fromEntries(SEO_PAGES.map((page) => [page.path, page.title])),
+  );
 });

@@ -6,6 +6,7 @@ import { IconButton } from '@/components/ui/icon-button';
 import { useAuth } from '@/features/auth/auth-store';
 import { useTranslation } from '@/i18n';
 import { cn } from '@/lib/cn';
+import { PAGE_TITLES } from '@/lib/seo-titles';
 import { useFocusTrap } from '@/lib/use-focus-trap';
 import { Brand } from './brand';
 import { LanguageToggle } from './language-toggle';
@@ -33,6 +34,13 @@ export function StandaloneLayout() {
   const location = useLocation();
 
   useFocusTrap(drawerRef, mobileMenuOpen);
+
+  // Заголовок вкладки для открытых страниц — тот же, что сервер отдал в HTML (при переходах внутри SPA).
+  useEffect(() => {
+    const path = location.pathname.replace(/\/+$/, '') || '/';
+    const title = PAGE_TITLES[path];
+    if (title) document.title = title;
+  }, [location.pathname]);
 
   // Закрывать мобильное меню при переходе между страницами
   useEffect(() => {
