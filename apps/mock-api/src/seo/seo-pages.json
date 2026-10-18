@@ -109,7 +109,7 @@
       "path": "/signup",
       "name": "Регистрация",
       "title": "Регистрация в Ketner AI — начать бесплатно",
-      "description": "Создайте аккаунт Ketner AI через Google, GitHub, Telegram или почту и начните пользоваться нейросетями бесплатно.",
+      "description": "Создайте аккаунт Ketner AI через Google, GitHub или почту с кодом подтверждения и начните пользоваться нейросетями бесплатно.",
       "priority": 0.5,
       "changefreq": "yearly"
     },

@@ -4,7 +4,8 @@
  * Запускается после `vite build` (см. "build" в package.json):
  * 1. собирает src/entry-prerender.tsx для Node в dist-ssr/ (не публикуется);
  * 2. рендерит каждую страницу из seo-pages.json в HTML;
- * 3. пишет dist/.prerender.json — сервер (apps/mock-api/src/seo/pages.ts) вставляет разметку в `#root`.
+ * 3. пишет dist/.prerender.json — сервер (apps/mock-api/src/seo/pages.ts) вставляет разметку в `#root`
+ *    и берёт даты изменения страниц для <lastmod> в sitemap.xml.
  *
  * Файл начинается с точки, поэтому express.static его не отдаёт. Если отрисовка страницы падает,
  * сборка останавливается: лучше заметить это сразу, чем выкатить сайт без разметки.
@@ -30,7 +31,7 @@ await build({
   },
 });
 
-const { render, PRERENDER_PATHS } = await import(
+const { render, PRERENDER_PATHS, PAGE_LASTMODS } = await import(
   pathToFileURL(path.join(ssrDir, 'entry-prerender.js')).href
 );
 
@@ -45,7 +46,7 @@ for (const pagePath of PRERENDER_PATHS) {
   totalBytes += html.length;
 }
 
-fs.writeFileSync(outFile, JSON.stringify({ pages }));
+fs.writeFileSync(outFile, JSON.stringify({ pages, lastmods: PAGE_LASTMODS }));
 fs.rmSync(ssrDir, { recursive: true, force: true });
 console.log(
   `prerender: ${PRERENDER_PATHS.length} страниц, ${Math.round(totalBytes / 1024)} КБ разметки → dist/.prerender.json`,

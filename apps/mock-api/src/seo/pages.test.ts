@@ -6,6 +6,7 @@ import {
   renderIndexHtml,
   robotsTxt,
   sitemapXml,
+  trailingSlashRedirect,
   SEO_PAGES,
 } from './pages.js';
 
@@ -47,7 +48,7 @@ test('seo: robots.txt и sitemap.xml', () => {
   assert.match(robots, /Disallow: \/api\//);
   assert.match(robots, /Disallow: \/chat/);
   assert.match(robots, /Sitemap: https:\/\/ketner\.org\/sitemap\.xml/);
-  const sitemap = sitemapXml(new Date('2026-10-16T00:00:00Z'));
+  const sitemap = sitemapXml();
   assert.match(sitemap, /<loc>https:\/\/ketner\.org\/<\/loc>/);
   assert.match(sitemap, /<loc>https:\/\/ketner\.org\/pricing<\/loc>/);
   assert.doesNotMatch(sitemap, /\/chat/);
@@ -75,9 +76,7 @@ test('seo: дубли тарифов в документации ссылают�
   const html = renderIndexHtml(BASE, '/docs/plans/pro');
   assert.match(html, /<link rel="canonical" href="https:\/\/ketner\.org\/docs" \/>/);
   assert.doesNotMatch(html, /BreadcrumbList/);
-  const sitemap = sitemapXml(new Date('2026-10-16T00:00:00Z'));
-  assert.doesNotMatch(sitemap, /docs\/plans/);
-  assert.match(sitemap, /<lastmod>2026-10-16<\/lastmod>/);
+  assert.doesNotMatch(sitemapXml(), /docs\/plans/);
   for (const page of SEO_PAGES) {
     assert.ok(page.description.length <= 250, `${page.path}: описание длиннее 250 символов`);
     assert.ok(page.title.length <= 75, `${page.path}: заголовок длиннее 75 символов`);
@@ -91,4 +90,24 @@ test('seo: Яндекс склеивает адреса с метками, ко�
   assert.equal(isNonCanonicalHost('localhost:8787'), false);
   assert.equal(isNonCanonicalHost('ketner-ai.onrender.com'), true);
   assert.equal(isNonCanonicalHost(undefined), false);
+});
+
+test('seo: lastmod пишется только для страниц с известной датой', () => {
+  const sitemap = sitemapXml({ '/changelog': '2026-10-18', '/docs/plans/pro': '2026-10-01' });
+  assert.match(
+    sitemap,
+    /<loc>https:\/\/ketner\.org\/changelog<\/loc>\n\s+<lastmod>2026-10-18<\/lastmod>/,
+  );
+  assert.equal(sitemap.match(/<lastmod>/g)?.length, 1, 'у остальных страниц lastmod нет');
+  assert.doesNotMatch(sitemapXml(), /<lastmod>/);
+});
+
+test('seo: адрес со слэшем в конце ведёт на основной, остальное не трогаем', () => {
+  assert.equal(trailingSlashRedirect('/pricing/'), '/pricing');
+  assert.equal(trailingSlashRedirect('/docs/plans/pro/'), '/docs/plans/pro');
+  assert.equal(trailingSlashRedirect('/pricing'), null);
+  assert.equal(trailingSlashRedirect('/'), null);
+  assert.equal(trailingSlashRedirect('/chat/'), null, 'закрытые разделы не перенаправляются');
+  assert.equal(trailingSlashRedirect('/api/'), null);
+  assert.equal(trailingSlashRedirect('//evil.example/'), null, 'чужой адрес не подставляется');
 });

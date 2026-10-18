@@ -22,6 +22,8 @@ import {
   renderIndexHtml,
   robotsTxt,
   sitemapXml,
+  trailingSlashRedirect,
+  type PageLastmods,
   type PrerenderedPage,
 } from './seo/pages.js';
 import {
@@ -172,9 +174,7 @@ export function createApp(overrides: Partial<AppDeps> = {}): Express {
   const indexHtml = readIndexHtml();
   const csp = buildContentSecurityPolicy(indexHtml);
   // Разметка открытых страниц, отрисованная при сборке сайта (apps/web/scripts/prerender.mjs).
-  const prerendered = readPrerenderedPages(webDistPath, hasWebDist);
-  // Дата сборки сайта — для <lastmod> в sitemap.xml (время запроса там было бы неправдой).
-  const builtAt = hasWebDist ? safeMtime(indexHtmlPath) : new Date();
+  const { pages: prerendered, lastmods } = readPrerenderedPages(webDistPath, hasWebDist);
   app.use(securityHeaders(() => csp));
 
   // CORS: читать ответы с cookie пользователя могут только свои адреса (см. allowedCorsOrigins).
@@ -257,10 +257,20 @@ export function createApp(overrides: Partial<AppDeps> = {}): Express {
     response
       .type('application/xml; charset=utf-8')
       .setHeader('Cache-Control', 'public, max-age=3600');
-    response.send(sitemapXml(builtAt));
+    response.send(sitemapXml(lastmods));
   });
 
   if (hasWebDist) {
+    // /index.html — тот же файл, что и «/», но без canonical: отдаём один адрес вместо дубля главной.
+    app.get('/index.html', (_request, response) => response.redirect(301, '/'));
+    // /pricing/ → /pricing: у открытой страницы один адрес.
+    app.use((request, response, next) => {
+      if (request.method !== 'GET' && request.method !== 'HEAD') return next();
+      const target = trailingSlashRedirect(request.path);
+      if (!target) return next();
+      const queryAt = request.originalUrl.indexOf('?');
+      response.redirect(301, target + (queryAt === -1 ? '' : request.originalUrl.slice(queryAt)));
+    });
     app.use(express.static(webDistPath, { index: false, dotfiles: 'ignore' }));
   }
 
@@ -327,27 +337,30 @@ export function createApp(overrides: Partial<AppDeps> = {}): Express {
   return app;
 }
 
-/** Читает dist/.prerender.json: { "/pricing": { html, head } }. Нет файла — страницы отдаются без разметки. */
-function readPrerenderedPages(dir: string, enabled: boolean): Map<string, PrerenderedPage> {
+/**
+ * Читает dist/.prerender.json: { pages: { "/pricing": { html, head } }, lastmods: { "/changelog": "2026-10-18" } }.
+ * Нет файла — страницы отдаются без разметки, а sitemap — без <lastmod>.
+ */
+function readPrerenderedPages(
+  dir: string,
+  enabled: boolean,
+): { pages: Map<string, PrerenderedPage>; lastmods: PageLastmods } {
   const pages = new Map<string, PrerenderedPage>();
-  if (!enabled) return pages;
+  const lastmods: Record<string, string> = {};
+  if (!enabled) return { pages, lastmods };
   try {
     const raw = JSON.parse(fs.readFileSync(path.join(dir, '.prerender.json'), 'utf8')) as {
       pages?: Record<string, PrerenderedPage>;
+      lastmods?: Record<string, string>;
     };
     for (const [pagePath, page] of Object.entries(raw.pages ?? {})) {
       if (page && typeof page.html === 'string') pages.set(pagePath, page);
     }
+    for (const [pagePath, date] of Object.entries(raw.lastmods ?? {})) {
+      if (typeof date === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(date)) lastmods[pagePath] = date;
+    }
   } catch {
     // файла нет (сайт собран без предварительной отрисовки) — это не ошибка
   }
-  return pages;
-}
-
-function safeMtime(file: string): Date {
-  try {
-    return fs.statSync(file).mtime;
-  } catch {
-    return new Date();
-  }
+  return { pages, lastmods };
 }

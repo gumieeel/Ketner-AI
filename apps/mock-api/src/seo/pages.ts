@@ -81,6 +81,16 @@ export function findSeoPage(rawPath: string): SeoPage | undefined {
   return SEO_PAGES.find((page) => page.path === path);
 }
 
+/**
+ * Адрес открытой страницы со слэшем в конце (/pricing/) — это дубль /pricing: возвращает основной адрес,
+ * на который нужен 301. Для остальных адресов (и для самих основных) — null.
+ */
+export function trailingSlashRedirect(rawPath: string): string | null {
+  const path = rawPath.split('?')[0].split('#')[0];
+  if (path.length < 2 || !path.endsWith('/')) return null;
+  return findSeoPage(path)?.path ?? null;
+}
+
 export function classifyPath(rawPath: string): PageKind {
   const path = normalizePath(rawPath);
   if (findSeoPage(path)) return 'public';
@@ -205,6 +215,9 @@ function absolute(base: string, path: string): string {
   return `${base}${path === '/' ? '/' : path}`;
 }
 
+/** Даты изменения страниц (ГГГГ-ММ-ДД) по адресам: попадают в <lastmod> sitemap.xml. */
+export type PageLastmods = Readonly<Record<string, string>>;
+
 /** Предварительно отрисованная страница (apps/web/scripts/prerender.mjs, файл dist/.prerender.json). */
 export interface PrerenderedPage {
   /** Разметка для `<div id="root">`. */
@@ -301,14 +314,17 @@ export function robotsTxt(): string {
   ].join('\n');
 }
 
-/** lastModified — время сборки сайта (дата изменения index.html), а не время запроса. */
-export function sitemapXml(lastModified = new Date()): string {
+/**
+ * lastmods — настоящие даты изменения страниц, известные при сборке (журнал обновлений, редакции
+ * правовых текстов). Для остальных страниц <lastmod> не пишется: дата сборки одна на все адреса, и
+ * поисковики перестают доверять такому полю.
+ */
+export function sitemapXml(lastmods: PageLastmods = {}): string {
   const base = siteUrl();
-  const lastmod = lastModified.toISOString().slice(0, 10);
-  const urls = SEO_PAGES.filter((page) => page.sitemap !== false).map(
-    (page) =>
-      `  <url>\n    <loc>${escapeXml(absolute(base, page.path))}</loc>\n    <lastmod>${lastmod}</lastmod>\n    <changefreq>${page.changefreq}</changefreq>\n    <priority>${page.priority.toFixed(1)}</priority>\n  </url>`,
-  );
+  const urls = SEO_PAGES.filter((page) => page.sitemap !== false).map((page) => {
+    const lastmod = lastmods[page.path];
+    return `  <url>\n    <loc>${escapeXml(absolute(base, page.path))}</loc>\n${lastmod ? `    <lastmod>${escapeXml(lastmod)}</lastmod>\n` : ''}    <changefreq>${page.changefreq}</changefreq>\n    <priority>${page.priority.toFixed(1)}</priority>\n  </url>`;
+  });
   return `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${urls.join('\n')}\n</urlset>\n`;
 }
 
