@@ -113,33 +113,9 @@ const COMPARISON_ROWS: ComparisonRow[] = [
     ru: `до ${plan.requestsPerMinute} в минуту и ${formatNumber(plan.requestsPerHour, 'ru')} в час`,
     en: `up to ${plan.requestsPerMinute} a minute and ${formatNumber(plan.requestsPerHour, 'en')} an hour`,
   })),
-  factRow({ ru: 'Квота премиум-моделей на 30 дней', en: 'Premium quota per 30 days' }, (plan) =>
-    plan.premiumExamples
-      ? {
-          ru: `$${plan.premiumQuotaUsd}: ${plan.premiumExamples.ru}`,
-          en: `$${plan.premiumQuotaUsd}: ${plan.premiumExamples.en}`,
-        }
-      : same('—'),
-  ),
-  factRow({ ru: 'Лимит флагманов в неделю', en: 'Flagship limit per week' }, (plan) =>
-    plan.flagship.length > 0
-      ? {
-          ru: plan.flagship
-            .map((m) => `${m.name}: ${m.weeklyPool}, до ${m.perDay} в сутки`)
-            .join('; '),
-          en: plan.flagship
-            .map((m) => `${m.name}: ${m.weeklyPool}, up to ${m.perDay} a day`)
-            .join('; '),
-        }
-      : same('—'),
-  ),
   factRow({ ru: 'Запросов одновременно', en: 'Requests at once' }, (plan) =>
     same(String(plan.concurrency)),
   ),
-  factRow({ ru: 'Приоритет и скорость', en: 'Priority and speed' }, () => ({
-    ru: 'Одинаковые на всех тарифах: очереди нет, скорость зависит от модели',
-    en: 'Same on every plan: no queue, speed depends on the model',
-  })),
   factRow({ ru: 'Длина ответа', en: 'Answer length' }, (plan) => ({
     ru: `до ${formatNumber(plan.maxAnswerTokens, 'ru')} токенов`,
     en: `up to ${formatNumber(plan.maxAnswerTokens, 'en')} tokens`,
@@ -147,10 +123,6 @@ const COMPARISON_ROWS: ComparisonRow[] = [
   factRow({ ru: 'Токены (вопрос + ответ)', en: 'Tokens (prompt + answer)' }, (plan) => ({
     ru: `${formatTokens(plan.tokensPerHour, 'ru')} в час, ${formatTokens(plan.tokensPerDay, 'ru')} в сутки`,
     en: `${formatTokens(plan.tokensPerHour, 'en')} an hour, ${formatTokens(plan.tokensPerDay, 'en')} a day`,
-  })),
-  factRow({ ru: 'Расход на модели', en: 'Model spend' }, (plan) => ({
-    ru: `до $${plan.dailyCostCapUsd} в сутки и $${plan.costBudgetUsd} за 30 дней`,
-    en: `up to $${plan.dailyCostCapUsd} a day and $${plan.costBudgetUsd} per 30 days`,
   })),
   factRow({ ru: 'Картинки в сутки', en: 'Images per day' }, (plan) =>
     same(
@@ -367,8 +339,8 @@ function LimitsExplained() {
         </h2>
         <p className="max-w-[70ch] text-sm text-muted md:text-[15px]">
           {language === 'ru'
-            ? 'Когда кончается лимит сильной модели, ответы не прекращаются — дальше отвечает модель попроще. Ниже — как это устроено на примере тарифа Pro; числа для остальных тарифов — в таблице выше.'
-            : 'When a strong model hits its limit, answers do not stop: a simpler model takes over. Below is how it works on Pro; numbers for other plans are in the table above.'}
+            ? 'Когда кончается лимит сильной модели, ответы не прекращаются — дальше отвечает модель попроще. Ниже — как это устроено на примере тарифа Pro; лимиты моделей на каждом тарифе — на странице «Модели».'
+            : 'When a strong model hits its limit, answers do not stop: a simpler model takes over. Below is how it works on Pro; per-plan model limits are on the Models page.'}
         </p>
       </div>
       <div className="grid gap-3 md:grid-cols-2">
