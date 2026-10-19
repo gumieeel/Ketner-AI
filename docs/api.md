@@ -45,6 +45,40 @@ data: {"code":"upgrade_required","message":"…"}
 
 Также: `POST /api/chat/feedback` (`messageId`, `rating: like|dislike`, `reason`, `comment`), `GET /api/chat/feedback/analytics` (админ).
 
+## Сравнение ответов (SSE)
+
+`POST /api/chat/compare` — один вопрос нескольким моделям. Только для аккаунтов с Plus и выше (Free и гости: `403 compare_plan_required` / `401`).
+
+```json
+{
+  "conversationId": "uuid",
+  "modelIds": ["claude-sonnet-5.5", "gpt-5.6-sol"],
+  "language": "ru",
+  "messages": [{ "id": "uuid", "role": "user", "content": "…" }]
+}
+```
+
+`modelIds` — от 2 до 4 разных моделей каталога (или `auto`); на Plus можно до 2, на Pro до 3, на Ultra до 4 (`400 too_many_models`). Недоступная по тарифу модель: `403 upgrade_required`. Второй запуск при идущем первом: `429 compare_in_progress`.
+
+Каждая колонка проходит тот же шлюз, что и обычный ответ (права, лимиты модели, квота, бюджет, учёт расхода), но **без подмены**: если вместо выбранной модели ответила бы запасная, колонка заканчивается ошибкой `model_limit_reached` или `model_unavailable`. Для `auto` подмена не применяется: Auto сам выбирает модель.
+
+События (`text/event-stream`, раз в 15 с приходит комментарий `: ping`):
+
+```
+event: compare_start       data: {"runId":"uuid","slots":[{"slot":0,"requestedModelId":"…","modelName":"…"}]}
+event: compare_delta       data: {"slot":0,"content":"порция текста"}
+event: compare_slot_done   data: {"slot":0,"selectedModel":{"id":"…","name":"…"},"routingReason":"…",
+                                  "finishReason":"stop","usage":{"inputTokens":1,"outputTokens":2},"latencyMs":1800,"ttftMs":420}
+event: compare_slot_error  data: {"slot":1,"code":"model_limit_reached","message":"…"}
+event: compare_done        data: {"runId":"uuid","savedMessageId":"uuid","defaultSlot":0}
+```
+
+По завершении в диалог сохраняется ответ первой успешной колонки (`defaultSlot`), если успешных нет, только вопрос. Закрытие соединения останавливает все колонки.
+
+`POST /api/chat/compare/pick` с `{ "runId": "uuid", "slot": 1 }` заменяет сохранённый ответ выбранным и записывает голос. Текст берётся из запуска, который сервер хранит 3 часа, а не из запроса; чужой, неизвестный или просроченный запуск: `410 compare_expired`, диалог уже продолжился: `409 compare_stale`, у колонки нет ответа: `400 invalid_slot`. Ответ: `{ "success": true, "runId", "slot", "messageId", "modelId" }`.
+
+`GET /api/chat/compare/stats` (админ): `{ totalVotes, models: [{ modelId, comparisons, wins, winRatePct }] }`: как часто ответ модели выбирают в сравнениях.
+
 ## Эндпоинты
 
 | Группа            | Эндпоинты                                                                                                                                                                                                                                                                                                                                                                                                     | Доступ             |

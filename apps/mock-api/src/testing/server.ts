@@ -1,3 +1,4 @@
+import { CompareVoteStore } from '../store/compare-vote-store.js';
 import { mkdtempSync } from 'node:fs';
 import type { AddressInfo } from 'node:net';
 import { tmpdir } from 'node:os';
@@ -39,6 +40,8 @@ export interface TestServer {
   close: () => Promise<void>;
   /** Хранилища сервера: тесты создают ключи и сеют расход напрямую. */
   usageStore: UsageStore;
+  /** Голоса сравнения этого сервера. */
+  compareVotes: CompareVoteStore;
   apiKeyStore: ApiKeyStore;
   githubConnectionStore: GithubConnectionStore;
   /** Письма с кодами регистрации, входа и сброса пароля. */
@@ -76,6 +79,7 @@ export async function startTestServer(
     secret: 'test-github-secret',
   });
 
+  const testCompareVotes = new CompareVoteStore(join(tempDir, 'compare-votes.json'));
   const testAi: AiConfig = { ...FAST_AI, ...ai };
   // Тесты не ходят к настоящим моделям, даже если в .env разработчика есть ключ OpenRouter:
   // шаблонный движок включён явно, а не угадывается по нулевым задержкам.
@@ -113,6 +117,7 @@ export async function startTestServer(
     ai: testAi,
     betterAuth: testBetterAuth,
     chatGateway,
+    compareVoteStore: testCompareVotes,
     revokedTokenStore: createRevokedTokenStore(join(tempDir, 'revoked-tokens.json')),
     ...extra,
     mailer: testMailer,
@@ -127,6 +132,7 @@ export async function startTestServer(
     baseUrl,
     codeMails,
     usageStore: extra.usageStore ?? testUsageStore,
+    compareVotes: extra.compareVoteStore ?? testCompareVotes,
     apiKeyStore: extra.apiKeyStore ?? testApiKeyStore,
     githubConnectionStore: extra.githubConnectionStore ?? testGithubStore,
     close: () =>

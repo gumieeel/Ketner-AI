@@ -34,6 +34,10 @@ export interface FakeApiOptions {
   github?: { connected: boolean; login?: string };
   /** Ответ GET /api/usage/quota (по умолчанию 404: строка остатка не показывается). */
   quota?: (mode: 'standard' | 'max') => unknown;
+  /** Сравнение ответов: текст каждой модели; модели без записи отвечают общим `reply`. */
+  compareReplies?: Record<string, string>;
+  /** Модели, у которых колонка сравнения заканчивается ошибкой (например, исчерпан лимит). */
+  compareFailModels?: string[];
 }
 
 export interface FakeApi {
@@ -41,6 +45,10 @@ export interface FakeApi {
   completions: number;
   /** Тела запросов на генерацию: так тесты проверяют контракт с сервером. */
   completionBodies: Array<Record<string, unknown>>;
+  /** Тела запросов на сравнение (POST /api/chat/compare). */
+  compareBodies: Array<Record<string, unknown>>;
+  /** Тела запросов на выбор лучшего ответа (POST /api/chat/compare/pick). */
+  pickBodies: Array<Record<string, unknown>>;
   /** Добавляет диалог с историей, как будто он уже сохранён на сервере. */
   seed: (input: { title: string; messages?: Message[]; updatedAt?: string }) => Conversation;
   /** Новый пароль из последнего сброса пароля. */
@@ -261,6 +269,8 @@ export function installFakeApi(options: FakeApiOptions = {}): FakeApi {
   const api: FakeApi = {
     completions: 0,
     completionBodies: [],
+    compareBodies: [],
+    pickBodies: [],
     seed({ title, messages = [], updatedAt }) {
       const now = updatedAt ?? new Date().toISOString();
       const conversation: Conversation = {
@@ -761,6 +771,99 @@ export function installFakeApi(options: FakeApiOptions = {}): FakeApi {
           return json({ conversation: found.conversation });
         }
         return json(found);
+      }
+
+      if (url === '/api/chat/compare' && method === 'POST') {
+        api.compareBodies.push(body);
+        const modelIds = Array.isArray(body.modelIds) ? (body.modelIds as string[]) : [];
+        if (Boolean(options.enforcePlans) && planRank(currentPlan) < 1) {
+          return json(
+            {
+              error: {
+                code: 'compare_plan_required',
+                message: 'Сравнение ответов доступно с тарифа Plus.',
+              },
+            },
+            403,
+          );
+        }
+        const convId = String(body.conversationId ?? '');
+        const found = conversations.get(convId);
+        const runNumber = api.compareBodies.length;
+        const chunks: string[] = [
+          `event: compare_start\ndata: ${JSON.stringify({
+            runId: `run-${runNumber}`,
+            slots: modelIds.map((id, slot) => ({
+              slot,
+              requestedModelId: id,
+              modelName: META.models.find((m) => m.id === id)?.name ?? id,
+            })),
+          })}\n\n`,
+        ];
+        const texts: Array<string | null> = [];
+        modelIds.forEach((id, slot) => {
+          if (options.compareFailModels?.includes(id)) {
+            texts.push(null);
+            chunks.push(
+              `event: compare_slot_error\ndata: ${JSON.stringify({
+                slot,
+                code: 'model_limit_reached',
+                message: `Лимит модели ${id} исчерпан`,
+              })}\n\n`,
+            );
+            return;
+          }
+          const text = options.compareReplies?.[id] ?? options.reply ?? DEFAULT_REPLY;
+          texts.push(text);
+          chunks.push(
+            `event: compare_delta\ndata: ${JSON.stringify({ slot, content: text })}\n\n`,
+            `event: compare_slot_done\ndata: ${JSON.stringify({
+              slot,
+              selectedModel: { id, name: META.models.find((m) => m.id === id)?.name ?? id },
+              usage: { inputTokens: 10, outputTokens: 20 + slot },
+              latencyMs: 1000 + slot * 500,
+              ttftMs: 300,
+            })}\n\n`,
+          );
+        });
+        const defaultSlot = texts.findIndex((text) => text !== null);
+        const savedId = `assistant-${runNumber}`;
+        if (found && defaultSlot >= 0) {
+          const incoming = Array.isArray(body.messages) ? (body.messages as Message[]) : [];
+          found.messages = [
+            ...incoming,
+            {
+              id: savedId,
+              conversationId: convId,
+              role: 'assistant',
+              content: texts[defaultSlot] ?? '',
+              createdAt: new Date().toISOString(),
+              status: 'complete',
+            },
+          ];
+        }
+        chunks.push(
+          `event: compare_done\ndata: ${JSON.stringify({
+            runId: `run-${runNumber}`,
+            savedMessageId: defaultSlot >= 0 ? savedId : null,
+            defaultSlot: defaultSlot >= 0 ? defaultSlot : null,
+          })}\n\n`,
+        );
+        return new Response(streamOf(chunks, delayMs, init?.signal ?? null), {
+          status: 200,
+          headers: { 'Content-Type': 'text/event-stream' },
+        });
+      }
+
+      if (url === '/api/chat/compare/pick' && method === 'POST') {
+        api.pickBodies.push(body);
+        return json({
+          success: true,
+          runId: String(body.runId ?? ''),
+          slot: body.slot,
+          messageId: `picked-${String(body.slot)}`,
+          modelId: 'picked-model',
+        });
       }
 
       if (url === '/api/chat/completions' && method === 'POST') {

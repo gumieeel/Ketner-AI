@@ -35,6 +35,7 @@ import {
 import type { ApiKeyStore } from './store/api-key-store.js';
 import type { AgentGateway } from './ai/agent-gateway.js';
 import type { AIGateway } from './ai/gateway.js';
+import type { CompareVoteStore } from './store/compare-vote-store.js';
 import type { RevokedTokenStore } from './store/revoked-token-store.js';
 import type { Mailer } from './services/mailer.js';
 import { V1_EXPOSED_HEADERS, createV1Router } from './routes/v1.js';
@@ -87,6 +88,8 @@ export interface AppDeps {
   billingService?: BillingService;
   /** Шлюз ИИ для чата; в тестах — с явно включённым шаблонным движком. */
   chatGateway?: AIGateway;
+  /** Голоса за лучший ответ в сравнении; в тестах — временный файл. */
+  compareVoteStore?: CompareVoteStore;
   /** Токены входа, отозванные при выходе; в тестах — временный файл. */
   revokedTokenStore?: RevokedTokenStore;
   /** Отправка писем (коды регистрации и привязки Telegram); в тестах — перехватчик. */
@@ -102,6 +105,7 @@ const LARGE_BODY_LIMIT = '50mb';
  */
 const LARGE_BODY_ROUTES: ReadonlyArray<{ method: string; pattern: RegExp }> = [
   { method: 'POST', pattern: /^\/api\/chat\/completions$/ },
+  { method: 'POST', pattern: /^\/api\/chat\/compare$/ },
   { method: 'PUT', pattern: /^\/api\/code\/projects\/[^/]+\/file$/ },
   { method: 'POST', pattern: /^\/api\/code\/projects\/[^/]+\/import$/ },
   { method: 'POST', pattern: /^\/api\/github\/api\// },

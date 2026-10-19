@@ -25,9 +25,11 @@ import { createBillingRouter } from './billing.js';
 import { createContactRouter } from './contact.js';
 import { telegramBotService } from '../telegram/bot.js';
 import type { AIGateway } from '../ai/gateway.js';
+import type { CompareVoteStore } from '../store/compare-vote-store.js';
 import type { RevokedTokenStore } from '../store/revoked-token-store.js';
 import type { Mailer } from '../services/mailer.js';
 import { createChatRouter } from './chat.js';
+import { createCompareRouter } from './compare.js';
 import { createCodeRouter } from './code.js';
 import { createImagesRouter } from './images.js';
 import { createUsageRouter } from './usage.js';
@@ -69,6 +71,8 @@ export interface ApiDeps {
   betterAuth?: typeof defaultBetterAuth;
   /** Шлюз ИИ для чата; в тестах — с явно включённым шаблонным движком. */
   chatGateway?: AIGateway;
+  /** Голоса за лучший ответ в сравнении; в тестах — временный файл. */
+  compareVoteStore?: CompareVoteStore;
   /** Токены входа, отозванные при выходе; в тестах — временный файл. */
   revokedTokenStore?: RevokedTokenStore;
   /** Отправка писем (коды регистрации и привязки Telegram); в тестах — перехватчик. */
@@ -409,6 +413,20 @@ export function createApiRouter(deps: ApiDeps): Router {
       userId: deps.userId,
       userStore: activeUserStore,
       subscriptionStore: activeSubscriptionStore,
+      usageStore: activeUsageStore,
+    }),
+  );
+  // Сравнение ответов моделей: монтируется раньше /chat, чтобы путь не попал в общий роутер чата.
+  router.use(
+    '/chat/compare',
+    createCompareRouter({
+      ...deps,
+      votes: deps.compareVoteStore,
+      gateway: deps.chatGateway,
+      premiumCredits: activeBilling.ledger.credits,
+      planBonus: activeBilling,
+      subscriptionStore: activeSubscriptionStore,
+      userStore: activeUserStore,
       usageStore: activeUsageStore,
     }),
   );

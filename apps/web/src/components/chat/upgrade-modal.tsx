@@ -79,7 +79,11 @@ export function UpgradeModal() {
             <div className="mb-3 inline-flex items-center gap-1.5 rounded-md border border-accent/30 bg-accent-soft px-3 py-1 text-xs font-semibold text-accent">
               <SparkleIcon className="size-3.5" aria-hidden="true" />
               <span>
-                {reason === 'max_mode' ? t('chat.maxModeBadge') : t('chat.paidModelBadge')}
+                {reason === 'max_mode'
+                  ? t('chat.maxModeBadge')
+                  : reason === 'compare'
+                    ? t('compare.upgradeBadge')
+                    : t('chat.paidModelBadge')}
               </span>
             </div>
           )}
@@ -89,7 +93,9 @@ export function UpgradeModal() {
               ? t('chat.freeLimitTitle')
               : reason === 'max_mode'
                 ? t('chat.maxModeUpgradeTitle')
-                : t('chat.paidModelTitle', { model: modelName || 'PRO' })}
+                : reason === 'compare'
+                  ? t('compare.upgradeTitle')
+                  : t('chat.paidModelTitle', { model: modelName || 'PRO' })}
           </h2>
 
           <p className="mt-2 text-sm leading-relaxed text-muted">
@@ -97,10 +103,12 @@ export function UpgradeModal() {
               ? t('chat.freeLimitDesc')
               : reason === 'max_mode'
                 ? t('chat.maxModeUpgradeDesc')
-                : t('chat.paidModelDesc', {
-                    model: modelName || 'PRO',
-                    plan: requiredPlan || 'PRO',
-                  })}
+                : reason === 'compare'
+                  ? t('compare.upgradeDesc')
+                  : t('chat.paidModelDesc', {
+                      model: modelName || 'PRO',
+                      plan: requiredPlan || 'PRO',
+                    })}
           </p>
         </div>
 

@@ -36,6 +36,10 @@ import { cn } from '@/lib/cn';
 import { ComposerAttachments } from './composer-attachments';
 import { LinkWorkspaceModal, type LinkWorkspaceTab } from './link-workspace-modal';
 import { WorkspaceBar } from './workspace-bar';
+import { CompareBar } from './compare-bar';
+import { useCompareSelection } from '@/features/chat/use-compare-selection';
+import { useCompare } from '@/features/chat/compare-store';
+import { maxCompareModels } from '@/features/chat/compare-policy';
 
 const attachItemClass =
   'flex min-h-11 w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-left text-[13px] font-medium text-text transition-colors hover:bg-surface-2 focus-visible:bg-surface-2 md:min-h-10';
@@ -76,8 +80,13 @@ export function Composer() {
     }
   }, [resumeIntent, consumeGithubIntent]);
 
+  const compareEnabled = useCompare((state) => state.enabled) && maxCompareModels(user?.plan) > 0;
+  const compareSelection = useCompareSelection();
+  const compareReady = !compareEnabled || compareSelection.ids.length >= 2;
+
   const currentModel = findModel(meta?.models, selectedModelId);
-  const hasAccess = canAccessModel(user?.plan, currentModel);
+  // В режиме сравнения модель из переключателя не участвует: доступ проверяется у каждой колонки.
+  const hasAccess = compareEnabled || canAccessModel(user?.plan, currentModel);
   const activeWorkspace = useWorkspace((state) => state.activeWorkspace);
 
   const labelOf = (model: ModelInfo): string => {
@@ -184,6 +193,9 @@ export function Composer() {
     if (draft.trim() === '' && attachedFiles.length === 0) {
       return;
     }
+    if (!compareReady) {
+      return;
+    }
     void send(draft, attachedFiles);
   };
 
@@ -195,7 +207,7 @@ export function Composer() {
     }
   };
 
-  const canSubmit = draft.trim() !== '' || attachedFiles.length > 0;
+  const canSubmit = (draft.trim() !== '' || attachedFiles.length > 0) && compareReady;
 
   const bannerClass =
     'mb-2.5 flex flex-wrap items-center justify-between gap-x-3 gap-y-2 rounded-xl border border-warning/30 bg-warning-soft px-3.5 py-2.5 text-[13px] text-text shadow-sm';
@@ -235,6 +247,9 @@ export function Composer() {
           <WorkspaceBar />
         </div>
       ) : null}
+
+      {/* Модели, которые ответят на вопрос в режиме сравнения */}
+      {compareEnabled ? <CompareBar disabled={streaming} /> : null}
 
       {/* Скрытый input для выбора файлов */}
       <input

@@ -639,6 +639,9 @@ export class AIGateway {
     // 3. Выбор модели
     let targetModel: ModelRegistryEntry;
     let routingReason: string;
+    // Явно запрошенная модель и причина её замены: нужны режиму `strictModel` (сравнение ответов).
+    let requestedModel: ModelRegistryEntry | undefined;
+    let substitution: 'limit' | 'unavailable' | null = null;
 
     if (
       req.isAnonymous &&
@@ -675,6 +678,8 @@ export class AIGateway {
       }
 
       const economy = applyEconomyRules(requested, economyState, this.registry);
+      requestedModel = requested;
+      if (economy.model.id !== requested.id) substitution = 'unavailable';
       targetModel = economy.model;
       fundedByCredits = Boolean(economy.fundedByCredits);
       routingReason = economy.reason ?? `Explicit user model selection (${requested.name})`;
@@ -688,6 +693,7 @@ export class AIGateway {
       if (substitute.reason) {
         targetModel = substitute.model;
         routingReason = `${routingReason}; ${substitute.reason}`;
+        substitution ??= 'unavailable';
       }
       const limited = applyModelLimits(
         targetModel,
@@ -708,7 +714,31 @@ export class AIGateway {
       } else if (limited.reason) {
         targetModel = limited.model;
         routingReason = `${routingReason}; ${limited.reason}`;
+        substitution ??= 'limit';
       }
+    }
+
+    // Сравнение ответов: запрошенная модель либо отвечает сама, либо честная ошибка. Подставлять
+    // запасную нельзя: в колонках сравнения две одинаковые модели ничего не сравнивают и стоят денег.
+    if (req.strictModel && requestedModel && targetModel.id !== requestedModel.id) {
+      callbacks.onError(
+        substitution === 'limit'
+          ? {
+              code: 'model_limit_reached',
+              message:
+                language === 'en'
+                  ? `The ${requestedModel.name} limit on your plan is used up. It restores gradually.`
+                  : `Лимит модели ${requestedModel.name} на вашем тарифе исчерпан. Он восстанавливается постепенно.`,
+            }
+          : {
+              code: 'model_unavailable',
+              message:
+                language === 'en'
+                  ? `${requestedModel.name} is unavailable right now because of the plan budget or quota, so a fallback model would answer. Comparison never substitutes models.`
+                  : `Модель ${requestedModel.name} сейчас недоступна из-за бюджета или квоты тарифа: ответила бы запасная модель, а в сравнении модели не подменяются.`,
+            },
+      );
+      return;
     }
 
     if (reasoningMode === 'max' && targetModel.effortProfile) {
@@ -896,24 +926,25 @@ export class AIGateway {
       }
 
       // 6. Генерация через провайдер с поддержкой Failover по цепочке запасных моделей из реестра
-      const modelsToTry = req.isAnonymous
-        ? [targetModel]
-        : this.registry
-            .getFallbackChain(targetModel.id)
-            .filter(
-              (m, index) =>
-                index === 0 ||
-                (this.isAllowedFallback(m, effectivePlan, economyState) &&
-                  ((fundedByCredits && isPremiumClass(m.costClass)) ||
-                    !isModelLimitReached(
-                      m,
-                      effectivePlan,
-                      activeUserId,
-                      this.usageStore,
-                      this.registry,
-                      reasoningMode,
-                    ))),
-            );
+      const modelsToTry =
+        req.isAnonymous || (req.strictModel && requestedModel)
+          ? [targetModel]
+          : this.registry
+              .getFallbackChain(targetModel.id)
+              .filter(
+                (m, index) =>
+                  index === 0 ||
+                  (this.isAllowedFallback(m, effectivePlan, economyState) &&
+                    ((fundedByCredits && isPremiumClass(m.costClass)) ||
+                      !isModelLimitReached(
+                        m,
+                        effectivePlan,
+                        activeUserId,
+                        this.usageStore,
+                        this.registry,
+                        reasoningMode,
+                      ))),
+              );
       let success = false;
       let streamedResponse: ProviderResponse | null = null;
       let usedModel = targetModel;

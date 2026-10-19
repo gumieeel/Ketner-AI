@@ -3,7 +3,9 @@ import { ChevronDownIcon } from '@/components/icons';
 import { useChat } from '@/features/chat/chat-store';
 import type { Message } from '@/features/chat/types';
 import { useTranslation } from '@/i18n';
+import { useCompare } from '@/features/chat/compare-store';
 import { AssistantMessage } from './assistant-message';
+import { CompareColumns } from './compare-columns';
 import { UserMessage } from './user-message';
 
 /** Ниже этого расстояния до низа лента считается «приклеенной» к последней реплике. */
@@ -22,6 +24,8 @@ function lastIndexOfRole(messages: readonly Message[], role: Message['role']): n
 export function MessageList() {
   const { t } = useTranslation();
   const messages = useChat((state) => state.messages);
+  const activeId = useChat((state) => state.activeId);
+  const compareRun = useCompare((state) => (activeId ? state.runs[activeId] : undefined));
   const containerRef = useRef<HTMLDivElement | null>(null);
   const [pinned, setPinned] = useState(true);
 
@@ -52,7 +56,7 @@ export function MessageList() {
     if (pinned) {
       scrollToBottom();
     }
-  }, [messages, pinned]);
+  }, [messages, compareRun, pinned]);
 
   const lastUser = lastIndexOfRole(messages, 'user');
   const lastAssistant = lastIndexOfRole(messages, 'assistant');
@@ -64,6 +68,8 @@ export function MessageList() {
           {messages.map((message, index) =>
             message.role === 'user' ? (
               <UserMessage key={message.id} message={message} editable={index === lastUser} />
+            ) : compareRun && compareRun.assistantId === message.id ? (
+              <CompareColumns key="compare-run" run={compareRun} />
             ) : (
               <AssistantMessage
                 key={message.id}

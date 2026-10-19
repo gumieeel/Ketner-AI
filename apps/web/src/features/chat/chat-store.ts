@@ -8,6 +8,8 @@ import { canAccessModel, findModel, getRequiredPlanName } from './can-access-mod
 import * as api from './api';
 import { ApiError } from './api';
 import { deriveTitle } from './derive-title';
+import { useCompare, type CompareSlotView } from './compare-store';
+import { maxCompareModels, sanitizeCompareModelIds } from './compare-policy';
 import type {
   ChatMeta,
   ConversationSummary,
@@ -51,7 +53,12 @@ interface ChatState {
   setSearch: (search: string) => void;
   setDraft: (draft: string) => void;
   loadMeta: () => Promise<void>;
-  send: (text?: string, attachmentsOverride?: MessageAttachment[]) => Promise<void>;
+  send: (
+    text?: string,
+    attachmentsOverride?: MessageAttachment[],
+    /** false — служебная реплика («продолжи»): в режиме сравнения она уходит одной моделью. */
+    allowCompare?: boolean,
+  ) => Promise<void>;
   stop: (id?: string) => void;
   regenerate: () => Promise<void>;
   /** Просит модель дописать ответ, оборванный лимитом длины или таймаутом. */
@@ -60,6 +67,10 @@ interface ChatState {
   rename: (id: string, title: string) => Promise<void>;
   remove: (id: string) => Promise<void>;
   sendFeedback: (messageId: string, rating: 'like' | 'dislike') => Promise<void>;
+  /** Выбрать лучший ответ сравнения: он заменяет ответ, сохранённый в диалоге. */
+  pickCompare: (slot: number) => Promise<void>;
+  /** Свернуть колонки сравнения: в ленте остаётся сохранённый ответ. */
+  dismissCompare: () => void;
 }
 
 /** Контроллеры отмены и таймеры сброса буфера живут per-conversation. */
@@ -186,6 +197,8 @@ export const useChat = create<ChatState>((set, get) => {
   ): Promise<void> {
     const controller = new AbortController();
     abortControllers.set(conversationId, controller);
+    // Новый ответ делает прежнее сравнение неактуальным: колонки сворачиваются.
+    useCompare.getState().clearRun(conversationId);
 
     set((state) => ({
       streamingConversations: { ...state.streamingConversations, [conversationId]: true },
@@ -384,6 +397,212 @@ export const useChat = create<ChatState>((set, get) => {
     }
   }
 
+  /** Правит сообщение диалога и в активной ленте, и в кэше диалогов. */
+  function patchMessage(conversationId: string, messageId: string, patch: Partial<Message>): void {
+    set((state) => {
+      const existing =
+        state.conversationMessages[conversationId] ??
+        (state.activeId === conversationId ? state.messages : []);
+      const updated = existing.map((message) =>
+        message.id === messageId ? { ...message, ...patch } : message,
+      );
+      const next: Partial<ChatState> = {
+        conversationMessages: { ...state.conversationMessages, [conversationId]: updated },
+      };
+      if (state.activeId === conversationId) {
+        next.messages = updated;
+      }
+      return next;
+    });
+  }
+
+  /**
+   * Сравнение ответов: один вопрос уходит нескольким моделям, колонки стримятся параллельно.
+   * Сервер сам сохраняет в диалог ответ первой успешной колонки; выбор лучшего (`pickCompare`)
+   * его заменяет. Пока колонки на экране, сообщение ассистента в ленте скрыто (см. MessageList).
+   */
+  async function runCompareTurn(
+    conversationId: string,
+    history: Message[],
+    assistantId: string,
+    modelIds: string[],
+  ): Promise<void> {
+    const controller = new AbortController();
+    abortControllers.set(conversationId, controller);
+    const compare = useCompare.getState();
+
+    set((state) => ({
+      streamingConversations: { ...state.streamingConversations, [conversationId]: true },
+      streaming: state.activeId === conversationId ? true : state.streaming,
+    }));
+
+    const catalog = get().meta?.models ?? [];
+    compare.putRun({
+      conversationId,
+      assistantId,
+      runId: '',
+      status: 'streaming',
+      savedSlot: null,
+      pickedSlot: null,
+      picking: false,
+      slots: modelIds.map((id, slot) => ({
+        slot,
+        requestedModelId: id,
+        modelId: id,
+        modelName: catalog.find((model) => model.id === id)?.name ?? id,
+        content: '',
+        status: 'streaming' as const,
+      })),
+    });
+
+    const pending = new Map<number, string>();
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const flush = (): void => {
+      if (timer) {
+        clearTimeout(timer);
+        timer = undefined;
+      }
+      if (pending.size === 0) return;
+      const chunks = new Map(pending);
+      pending.clear();
+      useCompare.getState().appendContent(conversationId, chunks);
+    };
+    const scheduleFlush = (): void => {
+      if (typeof document !== 'undefined' && document.hidden) flush();
+      else if (!timer) timer = setTimeout(flush, STREAM_FLUSH_MS);
+    };
+
+    let streamError: { code: string; message: string } | null = null;
+
+    try {
+      await api.streamCompare(
+        {
+          conversationId,
+          modelIds,
+          language: usePreferences.getState().language,
+          messages: history,
+          signal: controller.signal,
+          reasoningMode: reasoningModeFor(
+            useAuth.getState().user,
+            usePreferences.getState().maxMode,
+          ),
+        },
+        {
+          onStart: ({ runId, slots }) => {
+            useCompare.getState().patchRun(conversationId, { runId });
+            for (const info of slots) {
+              useCompare.getState().patchSlot(conversationId, info.slot, {
+                modelName: info.modelName,
+              });
+            }
+          },
+          onDelta: (slot, content) => {
+            pending.set(slot, (pending.get(slot) ?? '') + content);
+            scheduleFlush();
+          },
+          onSlotDone: (done) => {
+            flush();
+            useCompare.getState().patchSlot(conversationId, done.slot, {
+              status: 'done',
+              ...(done.selectedModelId ? { modelId: done.selectedModelId } : {}),
+              ...(done.modelName ? { modelName: done.modelName } : {}),
+              routingReason: done.routingReason,
+              inputTokens: done.inputTokens,
+              outputTokens: done.outputTokens,
+              latencyMs: done.latencyMs,
+              ttftMs: done.ttftMs,
+            });
+          },
+          onSlotError: ({ slot, code, message }) => {
+            flush();
+            useCompare.getState().patchSlot(conversationId, slot, {
+              status: 'error',
+              errorCode: code,
+              errorMessage: message,
+            });
+          },
+          onDone: ({ savedMessageId, defaultSlot }) => {
+            flush();
+            const run = useCompare.getState().runs[conversationId];
+            const saved: CompareSlotView | undefined =
+              defaultSlot === null
+                ? undefined
+                : run?.slots.find((slot) => slot.slot === defaultSlot);
+            if (saved) {
+              const id = savedMessageId ?? assistantId;
+              patchMessage(conversationId, assistantId, {
+                id,
+                content: saved.content,
+                modelId: saved.modelId,
+                status: 'complete',
+              });
+              useCompare.getState().patchRun(conversationId, {
+                status: 'done',
+                assistantId: id,
+                savedSlot: saved.slot,
+              });
+            } else {
+              const reason = run?.slots.find((slot) => slot.errorMessage)?.errorMessage;
+              patchMessage(conversationId, assistantId, {
+                status: 'error',
+                error: reason || translate(usePreferences.getState().language, 'chat.errorText'),
+              });
+              useCompare.getState().patchRun(conversationId, { status: 'failed' });
+            }
+          },
+          onError: (payload) => {
+            streamError = payload;
+          },
+        },
+      );
+      flush();
+      if (streamError !== null) {
+        const failure: { code: string; message: string } = streamError;
+        console.error('[chat] ошибка сравнения:', failure.code, failure.message);
+        useCompare.getState().clearRun(conversationId);
+        patchMessage(conversationId, assistantId, {
+          status: 'error',
+          error: failure.message || translate(usePreferences.getState().language, 'chat.errorText'),
+          errorCode: failure.code,
+        });
+      }
+    } catch (error) {
+      flush();
+      const run = useCompare.getState().runs[conversationId];
+      useCompare.getState().clearRun(conversationId);
+      if (isAbortError(error)) {
+        // Остановка: в ленте остаётся то, что успело прийти от первой колонки с текстом.
+        const partial = run?.slots.find((slot) => slot.content.trim() !== '');
+        patchMessage(conversationId, assistantId, {
+          content: partial?.content ?? '',
+          modelId: partial?.modelId,
+          status: 'complete',
+        });
+      } else {
+        if (error instanceof ApiError && error.code === 'compare_plan_required') {
+          useUpgradeModal.getState().open({ reason: 'compare', requiredPlan: 'PLUS' });
+        }
+        patchMessage(conversationId, assistantId, {
+          status: 'error',
+          error: describeError(error),
+          errorCode: error instanceof ApiError ? error.code : undefined,
+        });
+      }
+    } finally {
+      if (timer) clearTimeout(timer);
+      abortControllers.delete(conversationId);
+      set((state) => {
+        const nextStreaming = { ...state.streamingConversations };
+        delete nextStreaming[conversationId];
+        return {
+          streamingConversations: nextStreaming,
+          streaming: state.activeId === conversationId ? false : state.streaming,
+        };
+      });
+      void get().loadConversations(true);
+    }
+  }
+
   return {
     conversations: [],
     conversationsStatus: 'idle',
@@ -516,7 +735,7 @@ export const useChat = create<ChatState>((set, get) => {
       }
     },
 
-    send: async (text = '', attachmentsOverride?: MessageAttachment[]) => {
+    send: async (text = '', attachmentsOverride?: MessageAttachment[], allowCompare = true) => {
       const content = text.trim();
       const currentActiveId = get().activeId;
       const attachmentsToSend = attachmentsOverride ?? get().attachedFiles;
@@ -529,10 +748,28 @@ export const useChat = create<ChatState>((set, get) => {
       }
 
       const authUser = useAuth.getState().user;
-      const modelId = usePreferences.getState().chatModelId;
+      let modelId = usePreferences.getState().chatModelId;
       const currentModel = findModel(get().meta?.models, modelId);
 
-      if (!canAccessModel(authUser?.plan, currentModel)) {
+      // Режим сравнения: вопрос уходит нескольким моделям. Остальные тарифы получают предложение
+      // перейти на Plus; модель из переключателя в этом режиме не участвует.
+      let compareIds: string[] | null = null;
+      if (allowCompare && useCompare.getState().enabled) {
+        if (maxCompareModels(authUser?.plan) === 0) {
+          useUpgradeModal.getState().open({ reason: 'compare', requiredPlan: 'PLUS' });
+          return;
+        }
+        const ids = sanitizeCompareModelIds(
+          useCompare.getState().modelIds,
+          get().meta?.models ?? [],
+          authUser?.plan,
+        );
+        if (ids.length < 2) {
+          return;
+        }
+        compareIds = ids;
+        modelId = ids[0];
+      } else if (!canAccessModel(authUser?.plan, currentModel)) {
         // Модель недоступна на тарифе: сообщение не отправляется, предлагаем улучшить тариф.
         useUpgradeModal.getState().open({
           reason: 'paid_model',
@@ -617,7 +854,11 @@ export const useChat = create<ChatState>((set, get) => {
         0,
         -1,
       );
-      await runTurn(conversationId, historyToSend, assistant.id);
+      if (compareIds) {
+        await runCompareTurn(conversationId, historyToSend, assistant.id, compareIds);
+      } else {
+        await runTurn(conversationId, historyToSend, assistant.id);
+      }
     },
 
     stop: (id?: string) => {
@@ -671,7 +912,11 @@ export const useChat = create<ChatState>((set, get) => {
         return;
       }
       // Вложения черновика к служебной реплике не прикрепляются.
-      await get().send(translate(usePreferences.getState().language, 'chat.continuePrompt'), []);
+      await get().send(
+        translate(usePreferences.getState().language, 'chat.continuePrompt'),
+        [],
+        false,
+      );
     },
 
     editMessage: async (id, content) => {
@@ -730,6 +975,7 @@ export const useChat = create<ChatState>((set, get) => {
     },
 
     remove: async (id) => {
+      useCompare.getState().clearRun(id);
       if (abortControllers.has(id)) {
         abortControllers.get(id)?.abort();
         abortControllers.delete(id);
@@ -792,6 +1038,45 @@ export const useChat = create<ChatState>((set, get) => {
       } catch (error) {
         console.error('[chat] сбой отправки фидбека:', error);
       }
+    },
+
+    pickCompare: async (slot) => {
+      const conversationId = get().activeId;
+      if (conversationId === null) return;
+      const compare = useCompare.getState();
+      const run = compare.runs[conversationId];
+      if (!run || run.status !== 'done' || run.picking || run.runId === '') return;
+      const chosen = run.slots.find((item) => item.slot === slot);
+      if (!chosen || chosen.status !== 'done' || chosen.content.trim() === '') return;
+      if (run.pickedSlot === slot) return;
+
+      compare.patchRun(conversationId, { picking: true, pickError: undefined });
+      try {
+        const result = await api.pickCompareAnswer(run.runId, slot);
+        const id = result.messageId ?? run.assistantId;
+        patchMessage(conversationId, run.assistantId, {
+          id,
+          content: chosen.content,
+          modelId: chosen.modelId,
+          status: 'complete',
+        });
+        useCompare.getState().patchRun(conversationId, {
+          assistantId: id,
+          savedSlot: slot,
+          pickedSlot: slot,
+          picking: false,
+        });
+      } catch (error) {
+        useCompare.getState().patchRun(conversationId, {
+          picking: false,
+          pickError: describeError(error),
+        });
+      }
+    },
+
+    dismissCompare: () => {
+      const conversationId = get().activeId;
+      if (conversationId !== null) useCompare.getState().clearRun(conversationId);
     },
   };
 });

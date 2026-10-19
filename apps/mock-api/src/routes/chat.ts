@@ -41,9 +41,9 @@ export interface CompletionRequest {
   reasoningMode?: ReasoningMode;
 }
 
-type ParseResult = { ok: true; value: CompletionRequest } | { ok: false; message: string };
+export type ParseResult = { ok: true; value: CompletionRequest } | { ok: false; message: string };
 
-function parseCompletionRequest(body: unknown): ParseResult {
+export function parseCompletionRequest(body: unknown): ParseResult {
   if (typeof body !== 'object' || body === null) {
     return { ok: false, message: 'Тело запроса должно быть объектом JSON' };
   }
