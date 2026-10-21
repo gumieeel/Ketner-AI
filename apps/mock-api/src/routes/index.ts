@@ -30,6 +30,7 @@ import type { RevokedTokenStore } from '../store/revoked-token-store.js';
 import type { Mailer } from '../services/mailer.js';
 import { createChatRouter } from './chat.js';
 import { createCompareRouter } from './compare.js';
+import { createReviewRouter } from './review.js';
 import { createCodeRouter } from './code.js';
 import { createImagesRouter } from './images.js';
 import { createUsageRouter } from './usage.js';
@@ -393,6 +394,9 @@ export function createApiRouter(deps: ApiDeps): Router {
       userStore: activeUserStore,
       subscriptionStore: activeSubscriptionStore,
       usageStore: activeUsageStore,
+      gateway: deps.chatGateway,
+      premiumCredits: activeBilling.ledger.credits,
+      planBonus: activeBilling,
       githubTokenOf: (userId) => activeGithubStore.tokenOf(userId),
       fetchImpl: deps.githubFetch,
     }),
@@ -422,6 +426,19 @@ export function createApiRouter(deps: ApiDeps): Router {
     createCompareRouter({
       ...deps,
       votes: deps.compareVoteStore,
+      gateway: deps.chatGateway,
+      premiumCredits: activeBilling.ledger.credits,
+      planBonus: activeBilling,
+      subscriptionStore: activeSubscriptionStore,
+      userStore: activeUserStore,
+      usageStore: activeUsageStore,
+    }),
+  );
+  // Проверка ответа моделью другой компании: тоже раньше общего роутера чата.
+  router.use(
+    '/chat/review',
+    createReviewRouter({
+      ...deps,
       gateway: deps.chatGateway,
       premiumCredits: activeBilling.ledger.credits,
       planBonus: activeBilling,

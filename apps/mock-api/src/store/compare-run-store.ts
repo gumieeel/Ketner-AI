@@ -8,6 +8,8 @@
  */
 
 import { randomUUID } from 'node:crypto';
+import type { JudgeAgreement, JudgeDispute } from '../services/answer-review.js';
+import type { ReviewerInfo } from '../types.js';
 
 export type CompareSlotStatus = 'complete' | 'error' | 'cancelled';
 
@@ -33,10 +35,25 @@ export interface CompareSlotResult {
   errorMessage?: string;
 }
 
+/** Итог судьи («консилиум»): один ответ из нескольких и где модели расходятся. */
+export interface CompareJudgeResult {
+  id: string;
+  content: string;
+  agreement: JudgeAgreement;
+  consensus: string[];
+  disputes: JudgeDispute[];
+  judge: ReviewerInfo;
+  /** Колонки, чьи ответы видел судья. */
+  slots: number[];
+  createdAt: string;
+}
+
 export interface CompareRun {
   id: string;
   userId: string;
   conversationId: string;
+  /** Вопрос, на который отвечали колонки: его видит судья. */
+  question?: string;
   slots: CompareSlotResult[];
   /** Колонка, чей ответ сейчас сохранён в диалоге: сначала первая завершённая, потом выбранная. */
   savedSlot: number | null;
@@ -44,6 +61,9 @@ export interface CompareRun {
   savedMessageId: string | null;
   /** Колонка, которую человек выбрал лучшей. */
   pickedSlot: number | null;
+  /** Итог судьи, если его запрашивали; `judgeSaved` — он сейчас сохранён в диалоге. */
+  judge?: CompareJudgeResult;
+  judgeSaved?: boolean;
   createdAt: number;
 }
 

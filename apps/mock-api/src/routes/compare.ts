@@ -14,7 +14,11 @@ import type { PremiumCreditSource } from '../store/premium-credit-store.js';
 import type { PlanBonusSource } from '../services/premium-quota.js';
 import type { ConversationStore } from '../store/conversation-store.js';
 import { compareRunStore, type CompareRunStore } from '../store/compare-run-store.js';
-import type { CompareSlotResult } from '../store/compare-run-store.js';
+import type {
+  CompareJudgeResult,
+  CompareRun,
+  CompareSlotResult,
+} from '../store/compare-run-store.js';
 import { compareVoteStore, type CompareVoteStore } from '../store/compare-vote-store.js';
 import {
   usageStore as defaultUsageStore,
@@ -26,6 +30,17 @@ import type { SubscriptionStore } from '../store/subscription-store.js';
 import type { UserStore } from '../store/user-store.js';
 import type { IncomingMessage, Language } from '../types.js';
 import { parseCompletionRequest } from './chat.js';
+import { resolveReviewCaller, reviewQuota, sendReviewLimit } from './review.js';
+import { openSse } from './sse.js';
+import {
+  buildJudgeInput,
+  buildJudgePrompt,
+  JudgeStreamSplitter,
+  judgeTemplate,
+  parseJudgeTail,
+  runReviewTask,
+} from '../services/answer-review.js';
+import { pickReviewers } from '../services/review-policy.js';
 
 /** Как часто в поток уходит комментарий-«сердцебиение»: прокси не рвёт долгое молчание модели. */
 const HEARTBEAT_MS = 15_000;
@@ -452,6 +467,7 @@ export function createCompareRouter({
         id: runId,
         userId: identity.userId,
         conversationId,
+        question: [...messages].reverse().find((message) => message.role === 'user')?.content,
         slots,
         savedSlot: defaultSlot ? defaultSlot.slot : null,
         savedMessageId: saved?.assistant.id ?? null,
@@ -477,6 +493,67 @@ export function createCompareRouter({
       if (!response.writableEnded) response.end();
     }
   });
+
+  /**
+   * Заменяет ответ, сохранённый в диалоге при сравнении. Только пока диалог не продолжился:
+   * иначе замена переписала бы середину разговора.
+   */
+  function replaceSavedAnswer(
+    userId: string,
+    run: CompareRun,
+    answer: {
+      content: string;
+      modelId: string;
+      finishReason?: 'stop' | 'length' | 'cancelled' | 'error';
+      canContinue?: boolean;
+    },
+  ): { ok: true } | { ok: false; status: number; code: string; message: string } {
+    const conversation = store.get(userId, run.conversationId);
+    const lastMessage = conversation?.messages[conversation.messages.length - 1];
+    if (
+      !conversation ||
+      !lastMessage ||
+      lastMessage.role !== 'assistant' ||
+      lastMessage.id !== run.savedMessageId
+    ) {
+      return {
+        ok: false,
+        status: 409,
+        code: 'compare_stale',
+        message: 'Диалог уже продолжился: заменить ответ нельзя.',
+      };
+    }
+    const history: IncomingMessage[] = conversation.messages.slice(0, -1).map((message) => ({
+      id: message.id,
+      role: message.role,
+      content: message.content,
+      createdAt: message.createdAt,
+      attachments: message.attachments,
+      workspaceContext: message.workspaceContext,
+    }));
+    const saved = store.saveTurn({
+      userId,
+      conversationId: run.conversationId,
+      history,
+      assistant: {
+        content: answer.content,
+        modelId: answer.modelId,
+        status: 'complete',
+        finishReason: answer.finishReason,
+        canContinue: answer.canContinue,
+      },
+    });
+    if (!saved) {
+      return {
+        ok: false,
+        status: 404,
+        code: 'conversation_not_found',
+        message: 'Диалог не найден',
+      };
+    }
+    run.savedMessageId = saved.assistant.id;
+    return { ok: true };
+  }
 
   /**
    * Выбор лучшего ответа. Текст берётся из запуска, сохранённого на сервере, а не из запроса:
@@ -514,45 +591,19 @@ export function createCompareRouter({
       return;
     }
 
-    if (run.savedSlot !== chosen.slot) {
-      // Ответ заменяется, только пока диалог не продолжился: иначе выбор переписал бы середину.
-      const conversation = store.get(sessionUser.id, run.conversationId);
-      const lastMessage = conversation?.messages[conversation.messages.length - 1];
-      if (
-        !conversation ||
-        !lastMessage ||
-        lastMessage.role !== 'assistant' ||
-        lastMessage.id !== run.savedMessageId
-      ) {
-        sendError(response, 409, 'compare_stale', 'Диалог уже продолжился: заменить ответ нельзя.');
-        return;
-      }
-      const history: IncomingMessage[] = conversation.messages.slice(0, -1).map((message) => ({
-        id: message.id,
-        role: message.role,
-        content: message.content,
-        createdAt: message.createdAt,
-        attachments: message.attachments,
-        workspaceContext: message.workspaceContext,
-      }));
-      const saved = store.saveTurn({
-        userId: sessionUser.id,
-        conversationId: run.conversationId,
-        history,
-        assistant: {
-          content: chosen.content,
-          modelId: chosen.modelId,
-          status: 'complete',
-          finishReason: chosen.finishReason,
-          canContinue: chosen.canContinue,
-        },
+    if (run.savedSlot !== chosen.slot || run.judgeSaved) {
+      const replaced = replaceSavedAnswer(sessionUser.id, run, {
+        content: chosen.content,
+        modelId: chosen.modelId,
+        finishReason: chosen.finishReason,
+        canContinue: chosen.canContinue,
       });
-      if (!saved) {
-        sendError(response, 404, 'conversation_not_found', 'Диалог не найден');
+      if (!replaced.ok) {
+        sendError(response, replaced.status, replaced.code, replaced.message);
         return;
       }
       run.savedSlot = chosen.slot;
-      run.savedMessageId = saved.assistant.id;
+      run.judgeSaved = false;
     }
     run.pickedSlot = chosen.slot;
 
@@ -579,6 +630,200 @@ export function createCompareRouter({
       slot: chosen.slot,
       messageId: run.savedMessageId,
       modelId: chosen.modelId,
+    });
+  });
+
+  /** Один судья на человека за раз. */
+  const activeJudges = new Set<string>();
+
+  /**
+   * Судья сравнения («консилиум»): модель другой компании читает ответы колонок, пишет один
+   * итоговый ответ и показывает, где модели расходятся. Поток SSE:
+   *   judge_start    { judgeId, quota }
+   *   judge_reviewer { reviewer }
+   *   judge_delta    { content }
+   *   judge_done     { judge, quota }
+   *   error          { code, message }
+   * Итог хранится в запуске; в диалог он попадает только по `POST /judge/save`.
+   */
+  router.post('/judge', async (request: Request, response: Response): Promise<void> => {
+    const body = (request.body ?? {}) as Record<string, unknown>;
+    const language: Language = body.language === 'en' ? 'en' : 'ru';
+    if (typeof body.runId !== 'string' || body.runId.trim() === '') {
+      sendError(response, 400, 'invalid_request', 'Поле runId обязательно');
+      return;
+    }
+    const caller = resolveReviewCaller(
+      request,
+      response,
+      { userId, userStore, subscriptionStore },
+      language,
+    );
+    if (!caller) return;
+    const run = runs.get(body.runId.trim(), caller.userId);
+    if (!run) {
+      sendError(
+        response,
+        410,
+        'compare_expired',
+        text(
+          language,
+          'Результат сравнения устарел: запустите сравнение заново.',
+          'The comparison has expired: run it again.',
+        ),
+      );
+      return;
+    }
+    const answered = run.slots.filter(
+      (slot) => slot.status !== 'error' && slot.content.trim() !== '',
+    );
+    if (answered.length < 2) {
+      sendError(
+        response,
+        400,
+        'judge_needs_answers',
+        text(
+          language,
+          'Для итога нужны хотя бы два ответа.',
+          'At least two answers are needed for a verdict.',
+        ),
+      );
+      return;
+    }
+    const quota = reviewQuota(usageStore, caller.userId, caller.plan);
+    if (quota.remaining <= 0) {
+      sendReviewLimit(response, quota, language);
+      return;
+    }
+    if (activeJudges.has(caller.userId)) {
+      sendError(
+        response,
+        429,
+        'review_in_progress',
+        text(
+          language,
+          'Предыдущий итог ещё готовится',
+          'The previous verdict is still being prepared',
+        ),
+      );
+      return;
+    }
+
+    activeJudges.add(caller.userId);
+    const sse = openSse(response);
+    const judgeId = runs.newId();
+    const answers = answered.map((slot) => ({ modelName: slot.modelName, content: slot.content }));
+    const splitter = new JudgeStreamSplitter();
+    try {
+      sse.write('judge_start', { judgeId, quota });
+      const result = await runReviewTask({
+        gateway: aiGateway,
+        caller,
+        candidates: pickReviewers(
+          caller.plan,
+          answered.map((slot) => slot.modelId),
+          modelRegistry,
+        ),
+        reviewId: judgeId,
+        systemPrompt: buildJudgePrompt(language),
+        userContent: buildJudgeInput(run.question ?? '', answers, language),
+        templateOutput: judgeTemplate(answers, language),
+        language,
+        conversationId: run.conversationId,
+        signal: sse.signal,
+        onReviewer: (reviewer) => sse.write('judge_reviewer', { reviewer }),
+        onDelta: (delta) => {
+          const visible = splitter.push(delta);
+          if (visible) sse.write('judge_delta', { content: visible });
+        },
+      });
+      const rest = splitter.flush();
+      if (rest) sse.write('judge_delta', { content: rest });
+      if (!result.ok) {
+        sse.write('error', { code: result.code, message: result.message });
+        return;
+      }
+      if (result.cancelled || splitter.content === '') {
+        sse.write('error', {
+          code: result.cancelled ? 'cancelled' : 'judge_empty',
+          message: result.cancelled
+            ? text(language, 'Итог остановлен', 'Verdict stopped')
+            : text(
+                language,
+                'Судья не написал итог. Попробуйте ещё раз.',
+                'The judge returned no verdict. Try again.',
+              ),
+        });
+        return;
+      }
+      const tail = parseJudgeTail(splitter.tailText);
+      const judge: CompareJudgeResult = {
+        id: judgeId,
+        content: splitter.content,
+        ...tail,
+        judge: result.reviewer,
+        slots: answered.map((slot) => slot.slot),
+        createdAt: new Date().toISOString(),
+      };
+      run.judge = judge;
+      run.judgeSaved = false;
+      sse.write('judge_done', {
+        judge,
+        quota: reviewQuota(usageStore, caller.userId, caller.plan),
+      });
+    } catch (error) {
+      console.error('[compare] сбой судьи:', error);
+      sse.write('error', {
+        code: 'internal_error',
+        message: text(language, 'Внутренняя ошибка сервера', 'Internal server error'),
+      });
+    } finally {
+      activeJudges.delete(caller.userId);
+      sse.end();
+    }
+  });
+
+  /** Итог судьи становится ответом в диалоге (вместо ответа колонки). */
+  router.post('/judge/save', (request: Request, response: Response): void => {
+    const sessionUser = request.user;
+    if (!sessionUser) {
+      sendError(response, 401, 'unauthorized', 'Войдите в аккаунт');
+      return;
+    }
+    const body = (request.body ?? {}) as { runId?: unknown };
+    if (typeof body.runId !== 'string' || body.runId.trim() === '') {
+      sendError(response, 400, 'invalid_request', 'Поле runId обязательно');
+      return;
+    }
+    const run = runs.get(body.runId.trim(), sessionUser.id);
+    if (!run) {
+      sendError(response, 410, 'compare_expired', 'Результат сравнения устарел.');
+      return;
+    }
+    if (!run.judge) {
+      sendError(response, 400, 'judge_missing', 'Итога судьи для этого сравнения ещё нет');
+      return;
+    }
+    if (!run.judgeSaved) {
+      const replaced = replaceSavedAnswer(sessionUser.id, run, {
+        content: run.judge.content,
+        modelId: run.judge.judge.modelId,
+        finishReason: 'stop',
+        canContinue: false,
+      });
+      if (!replaced.ok) {
+        sendError(response, replaced.status, replaced.code, replaced.message);
+        return;
+      }
+      run.judgeSaved = true;
+      run.savedSlot = null;
+      run.pickedSlot = null;
+    }
+    response.json({
+      success: true,
+      runId: run.id,
+      messageId: run.savedMessageId,
+      modelId: run.judge.judge.modelId,
     });
   });
 

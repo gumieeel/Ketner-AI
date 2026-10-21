@@ -420,6 +420,7 @@ async function loadAndSyncConversations(sql: postgres.Sql): Promise<void> {
     feedback: (r.feedback as Message['feedback']) || undefined,
     attachments: (r.metadata?.attachments as Message['attachments']) || undefined,
     workspaceContext: (r.metadata?.workspaceContext as Message['workspaceContext']) || undefined,
+    review: (r.metadata?.review as Message['review']) || undefined,
     createdAt: r.created_at ? new Date(r.created_at).toISOString() : new Date().toISOString(),
   }));
 
@@ -460,7 +461,7 @@ async function loadAndSyncConversations(sql: postgres.Sql): Promise<void> {
               ${msg.finishReason || null},
               ${Boolean(msg.canContinue)},
               ${msg.feedback || null},
-              ${JSON.stringify({ attachments: msg.attachments || null, workspaceContext: msg.workspaceContext || null })}::jsonb,
+              ${JSON.stringify({ attachments: msg.attachments || null, workspaceContext: msg.workspaceContext || null, ...(msg.review ? { review: msg.review } : {}) })}::jsonb,
               ${new Date(msg.createdAt)},
               NOW()
             ) ON CONFLICT ("id") DO NOTHING
@@ -613,7 +614,7 @@ function attachDatabaseDrivers(sql: postgres.Sql): void {
             ${msg.finishReason || null},
             ${Boolean(msg.canContinue)},
             ${msg.feedback || null},
-            ${JSON.stringify({ attachments: msg.attachments || null, workspaceContext: msg.workspaceContext || null })}::jsonb,
+            ${JSON.stringify({ attachments: msg.attachments || null, workspaceContext: msg.workspaceContext || null, ...(msg.review ? { review: msg.review } : {}) })}::jsonb,
             ${new Date(msg.createdAt)},
             NOW()
           ) ON CONFLICT ("id") DO UPDATE SET
@@ -643,6 +644,15 @@ function attachDatabaseDrivers(sql: postgres.Sql): void {
         UPDATE "messages"
         SET "feedback" = ${feedback || null}, "updated_at" = NOW()
         WHERE "id" = ${messageId}
+      `;
+    },
+
+    async onMessageReviewUpdated(_userId, conversationId, messageId, review) {
+      await sql`
+        UPDATE "messages"
+        SET "metadata" = COALESCE("metadata", '{}'::jsonb) || jsonb_build_object('review', ${JSON.stringify(review)}::jsonb),
+            "updated_at" = NOW()
+        WHERE "id" = ${messageId} AND "conversation_id" = ${conversationId}
       `;
     },
   });

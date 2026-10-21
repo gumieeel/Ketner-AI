@@ -4,6 +4,7 @@ import {
   AlertIcon,
   CheckIcon,
   SendIcon,
+  ShieldIcon,
   SparkleIcon,
   StopIcon,
   TrashIcon,
@@ -11,7 +12,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { IconButton } from '@/components/ui/icon-button';
 import { Spinner } from '@/components/ui/spinner';
-import { useCode } from '@/features/code/code-store';
+import { reviewableRuns, useCode } from '@/features/code/code-store';
 import type { AgentRunStatus, ThreadItem } from '@/features/code/types';
 import { useTranslation, type TranslationKey } from '@/i18n';
 import { cn } from '@/lib/cn';
@@ -22,6 +23,155 @@ const Markdown = lazy(() => import('@/features/chat/markdown/markdown'));
 
 type ToolItem = Extract<ThreadItem, { kind: 'tool' }>;
 type RunItem = Extract<ThreadItem, { kind: 'run' }>;
+type ReviewItem = Extract<ThreadItem, { kind: 'review' }>;
+
+const SEVERITY_DOT: Record<ReviewItem['issues'][number]['severity'], string> = {
+  high: 'bg-danger',
+  medium: 'bg-warning',
+  low: 'bg-subtle',
+};
+
+const SEVERITY_KEYS: Record<ReviewItem['issues'][number]['severity'], TranslationKey> = {
+  high: 'review.severity.high',
+  medium: 'review.severity.medium',
+  low: 'review.severity.low',
+};
+
+const CODE_VERDICT_KEYS: Record<ReviewItem['verdict'], TranslationKey> = {
+  approve: 'code.review.approve',
+  changes: 'code.review.changes',
+  unknown: 'code.review.unknown',
+};
+
+const CODE_VERDICT_TONE: Record<ReviewItem['verdict'], string> = {
+  approve: 'border-success/30 bg-success-soft text-success',
+  changes: 'border-warning/30 bg-warning-soft text-warning',
+  unknown: 'border-stroke bg-surface-2 text-muted',
+};
+
+/** Кнопка «Проверить правки» под запуском, который менял файлы, и состояние ревью. */
+function RunReviewAction({ runId }: { runId: string }) {
+  const { t } = useTranslation();
+  const reviewing = useCode((state) => state.reviewing);
+  const reviewError = useCode((state) => state.reviewError);
+  const running = useCode((state) => state.running);
+  const reviewRun = useCode((state) => state.reviewRun);
+
+  if (reviewing?.runId === runId) {
+    return (
+      <div role="status" className="flex items-center gap-2 text-[13px] text-muted">
+        <Spinner className="size-3.5 text-accent" />
+        {reviewing.reviewer
+          ? t('code.review.running', {
+              model: reviewing.reviewer.modelName,
+              developer: reviewing.reviewer.developer,
+            })
+          : t('review.starting')}
+      </div>
+    );
+  }
+  return (
+    <div className="flex flex-col gap-1">
+      <button
+        type="button"
+        disabled={running || reviewing !== null}
+        onClick={() => void reviewRun(runId)}
+        title={t('code.review.hint')}
+        className="inline-flex w-fit items-center gap-1.5 rounded-lg border border-accent/40 px-2.5 py-1 text-[13px] font-medium text-accent transition-colors hover:bg-accent-soft disabled:cursor-not-allowed disabled:opacity-50"
+      >
+        <ShieldIcon className="size-3.5" />
+        {t('code.review.button')}
+      </button>
+      {reviewError?.runId === runId ? (
+        <p role="alert" className="text-[13px] leading-5 text-danger">
+          {reviewError.text}{' '}
+          {reviewError.code === 'review_limit' ? (
+            <Link to="/pricing" className="font-medium text-accent hover:underline">
+              {t('review.morePlans')}
+            </Link>
+          ) : null}
+        </p>
+      ) : null}
+    </div>
+  );
+}
+
+/** Итог ревью правок: вердикт, замечания по файлам и кнопка «Исправить замечания». */
+function ReviewCard({ item }: { item: ReviewItem }) {
+  const { t } = useTranslation();
+  const running = useCode((state) => state.running);
+  const fixReview = useCode((state) => state.fixReview);
+  return (
+    <section
+      aria-label={t('code.review.title')}
+      data-testid="code-review"
+      className="rounded-lg border border-stroke bg-surface text-[13px]"
+    >
+      <header className="flex flex-wrap items-center gap-x-2 gap-y-1 border-b border-stroke px-3 py-2">
+        <ShieldIcon className="size-3.5 shrink-0 text-accent" />
+        <span
+          className={cn(
+            'rounded-xs border px-1.5 py-0.5 text-[12px] font-semibold',
+            CODE_VERDICT_TONE[item.verdict],
+          )}
+        >
+          {t(CODE_VERDICT_KEYS[item.verdict])}
+        </span>
+        <span className="basis-full text-[12px] text-subtle">
+          {t('review.by', { model: item.reviewer.modelName, developer: item.reviewer.developer })}
+        </span>
+      </header>
+      <div className="flex flex-col gap-2 px-3 py-2.5">
+        {item.summary ? <p className="leading-5 text-text">{item.summary}</p> : null}
+        {item.issues.length > 0 ? (
+          <ol className="flex flex-col gap-2">
+            {item.issues.map((issue, index) => (
+              <li key={index} className="flex gap-2 leading-5">
+                <span
+                  className={cn(
+                    'mt-1.5 size-2 shrink-0 rounded-full',
+                    SEVERITY_DOT[issue.severity],
+                  )}
+                  title={t(SEVERITY_KEYS[issue.severity])}
+                  aria-label={t(SEVERITY_KEYS[issue.severity])}
+                />
+                <div className="min-w-0 flex-1">
+                  {issue.file ? (
+                    <p className="truncate font-mono text-[12px] text-muted">
+                      {issue.file}
+                      {issue.line ? `:${issue.line}` : ''}
+                    </p>
+                  ) : null}
+                  <p className="text-text">{issue.problem}</p>
+                  {issue.fix ? (
+                    <p className="text-muted">
+                      <span className="font-medium text-text/80">{t('review.fix')}</span>{' '}
+                      {issue.fix}
+                    </p>
+                  ) : null}
+                </div>
+              </li>
+            ))}
+          </ol>
+        ) : (
+          <p className="text-muted">{t('code.review.noIssues')}</p>
+        )}
+        {item.issues.length > 0 ? (
+          <Button
+            size="sm"
+            variant="secondary"
+            className="w-fit"
+            disabled={running}
+            onClick={() => void fixReview(item.id)}
+            leftIcon={<SparkleIcon className="size-4" />}
+          >
+            {t('code.review.fix')}
+          </Button>
+        ) : null}
+      </div>
+    </section>
+  );
+}
 
 const TOOL_KEYS: Record<string, TranslationKey> = {
   read_file: 'code.tool.read_file',
@@ -98,7 +248,7 @@ function ToolRow({ item }: { item: ToolItem }) {
   );
 }
 
-function RunFooter({ item }: { item: RunItem }) {
+function RunFooter({ item, reviewable }: { item: RunItem; reviewable: boolean }) {
   const { t } = useTranslation();
   const failed = item.status === 'error';
   const needsUpgrade =
@@ -131,6 +281,11 @@ function RunFooter({ item }: { item: RunItem }) {
           {t('code.agent.upgrade')}
         </Link>
       ) : null}
+      {reviewable ? (
+        <div className="mt-1">
+          <RunReviewAction runId={item.runId} />
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -159,6 +314,9 @@ export function AgentPanel() {
   const runAgent = useCode((state) => state.runAgent);
   const stopAgent = useCode((state) => state.stopAgent);
   const clearThread = useCode((state) => state.clearThread);
+  const autoReview = useCode((state) => state.autoReview);
+  const setAutoReview = useCode((state) => state.setAutoReview);
+  const reviewable = reviewableRuns(thread);
 
   const [draft, setDraft] = useState('');
   const endRef = useRef<HTMLDivElement | null>(null);
@@ -268,7 +426,13 @@ export function AgentPanel() {
           ) : group.item.kind === 'assistant' ? (
             <AssistantText key={group.item.id} text={group.item.text} />
           ) : group.item.kind === 'run' ? (
-            <RunFooter key={group.item.id} item={group.item} />
+            <RunFooter
+              key={group.item.id}
+              item={group.item}
+              reviewable={reviewable.has(group.item.runId)}
+            />
+          ) : group.item.kind === 'review' ? (
+            <ReviewCard key={group.item.id} item={group.item} />
           ) : null,
         )}
 
@@ -313,6 +477,19 @@ export function AgentPanel() {
                   </option>
                 ))}
               </select>
+            </label>
+            <label
+              className="flex shrink-0 cursor-pointer items-center gap-1.5 text-xs text-muted"
+              title={t('code.review.autoHint')}
+            >
+              <input
+                type="checkbox"
+                checked={autoReview}
+                onChange={(event) => setAutoReview(event.target.checked)}
+                className="size-3.5 accent-[var(--accent)]"
+              />
+              <ShieldIcon className="size-3.5" />
+              <span className="max-sm:sr-only">{t('code.review.auto')}</span>
             </label>
             {running ? (
               <Button

@@ -53,6 +53,12 @@ export function stripWorkspaceFileContents(
 export interface ConversationStore {
   list(userId: string): ConversationSummary[];
   get(userId: string, conversationId: string): ConversationWithMessages | null;
+  /**
+   * Диалог, только если он уже принадлежит этому пользователю. В отличие от `get`, не
+   * переназначает чужой диалог (перенос гостевых диалогов в аккаунт): для действий, которые
+   * тратят деньги или пишут в чужие данные.
+   */
+  getOwned(userId: string, conversationId: string): ConversationWithMessages | null;
   create(userId: string, title: string): Conversation;
   rename(userId: string, conversationId: string, title: string): Conversation | null;
   remove(userId: string, conversationId: string): boolean;
@@ -70,6 +76,13 @@ export interface ConversationStore {
     conversationId: string,
     messageId: string,
     feedback: import('../types.js').FeedbackRating | null,
+  ): Message | null;
+  /** Сохранить проверку ответа другой моделью у сообщения ассистента. */
+  updateMessageReview(
+    userId: string,
+    conversationId: string,
+    messageId: string,
+    review: import('../types.js').AnswerReview,
   ): Message | null;
   /** Загрузить диалоги и сообщения из внешнего источника (БД). */
   loadExternalSnapshot?(conversations: Conversation[], messages: Message[]): void;
@@ -98,6 +111,12 @@ export interface ConversationDbDriver {
     conversationId: string,
     messageId: string,
     feedback: import('../types.js').FeedbackRating | null,
+  ) => Promise<void> | void;
+  onMessageReviewUpdated?: (
+    userId: string,
+    conversationId: string,
+    messageId: string,
+    review: import('../types.js').AnswerReview,
   ) => Promise<void> | void;
 }
 
@@ -204,6 +223,13 @@ export function createConversationStore(file: string): ConversationStore {
       return { conversation: { ...conversation }, messages: messagesOf(conversationId) };
     },
 
+    getOwned(userId, conversationId) {
+      const conversation = findConversation(userId, conversationId);
+      return conversation
+        ? { conversation: { ...conversation }, messages: messagesOf(conversationId) }
+        : null;
+    },
+
     create(userId, title) {
       const now = new Date().toISOString();
       const conversation: Conversation = {
@@ -308,6 +334,9 @@ export function createConversationStore(file: string): ConversationStore {
           attachments: message.attachments,
           workspaceContext: stripWorkspaceFileContents(message.workspaceContext),
           feedback: existing?.feedback,
+          // Проверка относится к тексту ответа: после правки текста она уже не про него.
+          review:
+            existing?.review && existing.content === message.content ? existing.review : undefined,
         };
       });
 
@@ -379,6 +408,21 @@ export function createConversationStore(file: string): ConversationStore {
       dbDriver
         ?.onMessageFeedbackUpdated?.(userId, conversationId, messageId, feedback)
         ?.catch?.((err) => console.error('[db] Error persisting message feedback:', err));
+      return { ...message };
+    },
+
+    updateMessageReview(userId, conversationId, messageId, review) {
+      const conversation = findConversation(userId, conversationId);
+      if (!conversation) return null;
+      const message = snapshot.messages.find(
+        (m) => m.id === messageId && m.conversationId === conversationId,
+      );
+      if (!message || message.role !== 'assistant') return null;
+      message.review = review;
+      persist();
+      dbDriver
+        ?.onMessageReviewUpdated?.(userId, conversationId, messageId, review)
+        ?.catch?.((err) => console.error('[db] Error persisting message review:', err));
       return { ...message };
     },
 

@@ -1,4 +1,5 @@
 import type { Language } from '@/features/preferences/preferences-store';
+import type { AnswerReview } from '@/features/review/types';
 
 /**
  * Типы контракта чата. Совпадают по форме с mock-API и docs/data-model.md:
@@ -135,6 +136,8 @@ export interface Message {
   };
   /** Пользовательская оценка ответа: лайк / дизлайк */
   feedback?: 'like' | 'dislike';
+  /** Последняя проверка ответа моделью другой компании (сохраняется на сервере). */
+  review?: AnswerReview;
   /** Почему ответ закончился: `length` — оборван лимитом длины или таймаутом, ответ можно продолжить. */
   finishReason?: 'stop' | 'length' | 'cancelled' | 'error';
   canContinue?: boolean;

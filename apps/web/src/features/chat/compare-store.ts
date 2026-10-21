@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { storage } from '@/lib/storage';
+import type { JudgeResult, ReviewerInfo } from '@/features/review/types';
 
 export type CompareSlotStatus = 'streaming' | 'done' | 'error';
 
@@ -23,6 +24,21 @@ export interface CompareSlotView {
 
 export type CompareRunStatus = 'streaming' | 'done' | 'failed';
 
+/** Судья сравнения («консилиум»): итог из ответов колонок. */
+export interface CompareJudgeView {
+  status: 'streaming' | 'done' | 'error';
+  /** Итоговый ответ по мере генерации. */
+  content: string;
+  reviewer?: ReviewerInfo;
+  result?: JudgeResult;
+  error?: string;
+  errorCode?: string;
+  saving?: boolean;
+  /** Итог сейчас сохранён в диалоге вместо ответа колонки. */
+  saved?: boolean;
+  saveError?: string;
+}
+
 /** Сравнение, которое сейчас показано под вопросом диалога. */
 export interface CompareRunView {
   conversationId: string;
@@ -37,6 +53,7 @@ export interface CompareRunView {
   pickedSlot: number | null;
   picking: boolean;
   pickError?: string;
+  judge?: CompareJudgeView;
 }
 
 const MODE_KEY = 'compareMode';
@@ -74,6 +91,7 @@ interface CompareState {
   /** Дописывает порции текста нескольких колонок за одно обновление состояния. */
   appendContent: (conversationId: string, chunks: ReadonlyMap<number, string>) => void;
   clearRun: (conversationId: string) => void;
+  patchJudge: (conversationId: string, patch: Partial<CompareJudgeView> | null) => void;
 }
 
 export const useCompare = create<CompareState>((set) => ({
@@ -115,6 +133,16 @@ export const useCompare = create<CompareState>((set) => ({
         chunks.has(item.slot) ? { ...item, content: item.content + chunks.get(item.slot) } : item,
       );
       return { runs: { ...state.runs, [conversationId]: { ...run, slots } } };
+    }),
+
+  patchJudge: (conversationId, patch) =>
+    set((state) => {
+      const run = state.runs[conversationId];
+      if (!run) return state;
+      const judge: CompareJudgeView | undefined = patch
+        ? { ...(run.judge ?? { status: 'streaming', content: '' }), ...patch }
+        : undefined;
+      return { runs: { ...state.runs, [conversationId]: { ...run, judge } } };
     }),
 
   clearRun: (conversationId) =>

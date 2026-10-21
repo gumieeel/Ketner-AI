@@ -10,6 +10,7 @@ import { useTranslation } from '@/i18n';
 import { cn } from '@/lib/cn';
 import { modelColor } from '@/lib/model-color';
 import { parseThinking } from './thinking-block';
+import { ConsiliumPanel } from './consilium-panel';
 
 const Markdown = lazy(() => import('@/features/chat/markdown/markdown'));
 
@@ -169,6 +170,8 @@ export function CompareColumns({ run }: { run: CompareRunView }) {
           {run.pickError}
         </p>
       ) : null}
+
+      <ConsiliumPanel run={run} />
     </div>
   );
 }

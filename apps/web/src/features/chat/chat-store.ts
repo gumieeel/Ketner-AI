@@ -20,6 +20,8 @@ import type {
 } from './types';
 import { useWorkspace } from './workspace-store';
 import { isSensitivePath } from './file-operations/path-safety';
+import { saveJudge as saveJudgeAnswer, streamJudge } from '@/features/review/api';
+import { useReview } from '@/features/review/review-store';
 
 export type LoadStatus = 'idle' | 'loading' | 'ready' | 'error';
 
@@ -71,6 +73,10 @@ interface ChatState {
   pickCompare: (slot: number) => Promise<void>;
   /** Свернуть колонки сравнения: в ленте остаётся сохранённый ответ. */
   dismissCompare: () => void;
+  /** Консилиум: модель другой компании собирает итог из ответов колонок. */
+  runJudge: () => Promise<void>;
+  /** Итог консилиума становится ответом в диалоге. */
+  saveJudge: () => Promise<void>;
 }
 
 /** Контроллеры отмены и таймеры сброса буфера живут per-conversation. */
@@ -1066,6 +1072,9 @@ export const useChat = create<ChatState>((set, get) => {
           pickedSlot: slot,
           picking: false,
         });
+        if (useCompare.getState().runs[conversationId]?.judge?.saved) {
+          useCompare.getState().patchJudge(conversationId, { saved: false });
+        }
       } catch (error) {
         useCompare.getState().patchRun(conversationId, {
           picking: false,
@@ -1077,6 +1086,94 @@ export const useChat = create<ChatState>((set, get) => {
     dismissCompare: () => {
       const conversationId = get().activeId;
       if (conversationId !== null) useCompare.getState().clearRun(conversationId);
+    },
+
+    runJudge: async () => {
+      const conversationId = get().activeId;
+      if (conversationId === null) return;
+      const compare = useCompare.getState();
+      const run = compare.runs[conversationId];
+      if (!run || run.status !== 'done' || run.runId === '') return;
+      if (run.judge?.status === 'streaming') return;
+      const answered = run.slots.filter(
+        (item) => item.status === 'done' && item.content.trim() !== '',
+      );
+      if (answered.length < 2) return;
+
+      compare.patchJudge(conversationId, null);
+      compare.patchJudge(conversationId, { status: 'streaming', content: '' });
+      let buffer = '';
+      let timer: ReturnType<typeof setTimeout> | null = null;
+      const flush = () => {
+        timer = null;
+        if (buffer === '') return;
+        const chunk = buffer;
+        buffer = '';
+        const current = useCompare.getState().runs[conversationId]?.judge;
+        useCompare
+          .getState()
+          .patchJudge(conversationId, { content: (current?.content ?? '') + chunk });
+      };
+      try {
+        await streamJudge(
+          { runId: run.runId, language: usePreferences.getState().language },
+          {
+            onReviewer: (reviewer) =>
+              useCompare.getState().patchJudge(conversationId, { reviewer }),
+            onDelta: (content) => {
+              buffer += content;
+              timer ??= setTimeout(flush, STREAM_FLUSH_MS);
+            },
+            onDone: (result, quota) => {
+              if (timer) clearTimeout(timer);
+              flush();
+              useCompare.getState().patchJudge(conversationId, {
+                status: 'done',
+                content: result.content,
+                reviewer: result.judge,
+                result,
+              });
+              if (quota) useReview.getState().setQuota(quota);
+            },
+          },
+        );
+      } catch (error) {
+        if (timer) clearTimeout(timer);
+        useCompare.getState().patchJudge(conversationId, {
+          status: 'error',
+          error: describeError(error),
+          errorCode: error instanceof ApiError ? error.code : undefined,
+        });
+      }
+    },
+
+    saveJudge: async () => {
+      const conversationId = get().activeId;
+      if (conversationId === null) return;
+      const run = useCompare.getState().runs[conversationId];
+      const judge = run?.judge;
+      if (!run || !judge?.result || judge.saving || judge.saved) return;
+      useCompare.getState().patchJudge(conversationId, { saving: true, saveError: undefined });
+      try {
+        const result = await saveJudgeAnswer(run.runId);
+        const id = result.messageId ?? run.assistantId;
+        patchMessage(conversationId, run.assistantId, {
+          id,
+          content: judge.result.content,
+          modelId: result.modelId,
+          status: 'complete',
+        });
+        useCompare.getState().patchRun(conversationId, {
+          assistantId: id,
+          savedSlot: null,
+          pickedSlot: null,
+        });
+        useCompare.getState().patchJudge(conversationId, { saving: false, saved: true });
+      } catch (error) {
+        useCompare
+          .getState()
+          .patchJudge(conversationId, { saving: false, saveError: describeError(error) });
+      }
     },
   };
 });

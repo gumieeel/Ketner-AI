@@ -109,7 +109,29 @@ export type ThreadItem =
       /** Только на клиенте: код ошибки запуска, по нему подбирается подсказка. */
       code?: string;
       createdAt: string;
+    }
+  | {
+      id: string;
+      kind: 'review';
+      /** Запуск, правки которого проверялись. */
+      runId: string;
+      verdict: 'approve' | 'changes' | 'unknown';
+      summary: string;
+      issues: CodeReviewIssue[];
+      reviewer: { modelId: string; modelName: string; developer: string };
+      authorModelId?: string;
+      filesReviewed: number;
+      createdAt: string;
     };
+
+/** Замечание ревью правок агента моделью другой компании. */
+export interface CodeReviewIssue {
+  severity: 'high' | 'medium' | 'low';
+  file?: string;
+  line?: number;
+  problem: string;
+  fix?: string;
+}
 
 /** События SSE запуска агента. */
 export type AgentEvent =

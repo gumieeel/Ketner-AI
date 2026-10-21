@@ -129,6 +129,48 @@ export interface Message {
   canContinue?: boolean;
   /** Пользовательская оценка ответа: лайк / дизлайк */
   feedback?: FeedbackRating;
+  /** Последняя проверка ответа моделью другой компании (services/answer-review.ts). */
+  review?: AnswerReview;
+}
+
+// ─────────────────────────────────────────────────────────────
+// Проверка ответов другой моделью
+// ─────────────────────────────────────────────────────────────
+
+/** Кто проверял: модель каталога и её разработчик. */
+export interface ReviewerInfo {
+  modelId: string;
+  modelName: string;
+  developer: string;
+}
+
+export type ReviewSeverity = 'high' | 'medium' | 'low';
+
+/**
+ * Итог проверки ответа: ok — ошибок нет, minor — мелкие неточности, major — серьёзные ошибки
+ * при верной основе, wrong — ответ в целом неверен, unknown — рецензент ответил не по формату.
+ */
+export type AnswerVerdict = 'ok' | 'minor' | 'major' | 'wrong' | 'unknown';
+
+export interface AnswerReviewIssue {
+  severity: ReviewSeverity;
+  /** Точная цитата из ответа, к которой относится замечание. */
+  quote?: string;
+  problem: string;
+  fix?: string;
+}
+
+export interface AnswerReview {
+  id: string;
+  verdict: AnswerVerdict;
+  summary: string;
+  issues: AnswerReviewIssue[];
+  /** Исправленный ответ целиком (только при серьёзных ошибках). */
+  corrected?: string;
+  reviewer: ReviewerInfo;
+  /** Модель, чей ответ проверялся. */
+  authorModelId?: string;
+  createdAt: string;
 }
 
 /**

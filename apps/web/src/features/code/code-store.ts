@@ -3,6 +3,11 @@ import { usePreferences } from '@/features/preferences/preferences-store';
 import { useAuth } from '@/features/auth/auth-store';
 import { reasoningModeFor } from '@/features/chat/reasoning-mode';
 import { codeApi, streamAgentRun, ApiError } from './api';
+import { streamCodeReview } from '@/features/review/api';
+import { useReview } from '@/features/review/review-store';
+import type { ReviewerInfo } from '@/features/review/types';
+import { translate } from '@/i18n';
+import { storage } from '@/lib/storage';
 import { chunkFiles, readFolderFiles, readZipFile, type ReadLimits } from './import-readers';
 import { parentDirectories } from './tree';
 import type {
@@ -14,6 +19,36 @@ import type {
   PlanItem,
   ThreadItem,
 } from './types';
+
+type ReviewItem = Extract<ThreadItem, { kind: 'review' }>;
+
+const AUTO_REVIEW_KEY = 'codeAutoReview';
+
+/**
+ * Запуски, которые можно отдать на ревью: агент менял файлы (даже если запуск остановили или он
+ * оборвался) и их ещё не проверяли — после ревью кнопка уступает место карточке с итогом.
+ */
+export function reviewableRuns(thread: readonly ThreadItem[]): Set<string> {
+  const changed = new Set<string>();
+  const reviewed = new Set<string>();
+  const finished = new Set<string>();
+  for (const item of thread) {
+    if (item.kind === 'tool' && item.change) changed.add(item.runId);
+    else if (item.kind === 'review') reviewed.add(item.runId);
+    else if (item.kind === 'run' && item.runId) finished.add(item.runId);
+  }
+  return new Set([...finished].filter((runId) => changed.has(runId) && !reviewed.has(runId)));
+}
+
+/** Задача агенту «исправь замечания ревью»: каждое замечание проверить, настоящие исправить. */
+export function buildFixTask(item: ReviewItem, language: 'ru' | 'en'): string {
+  const lines = item.issues.map((issue, index) => {
+    const where = issue.file ? `${issue.file}${issue.line ? `:${issue.line}` : ''} — ` : '';
+    const fix = issue.fix ? ` ${translate(language, 'code.review.fixHow')} ${issue.fix}` : '';
+    return `${index + 1}. ${where}${issue.problem}${fix}`;
+  });
+  return `${translate(language, 'code.review.fixTask', { model: item.reviewer.modelName })}\n${lines.join('\n')}`;
+}
 
 export type LoadStatus = 'idle' | 'loading' | 'ready' | 'error';
 
@@ -91,8 +126,17 @@ interface CodeState {
   importIntoProject: (files: FileList | File[], zip?: boolean) => Promise<void>;
   exportZip: () => Promise<void>;
 
+  /** Идущее ревью правок запуска моделью другой компании. */
+  reviewing: { runId: string; reviewer?: ReviewerInfo } | null;
+  reviewError: { runId: string; text: string; code?: string } | null;
+  /** Проверять правки автоматически после каждого запуска с изменениями. */
+  autoReview: boolean;
+
   setModel: (modelId: string) => void;
   runAgent: (task: string) => Promise<void>;
+  reviewRun: (runId: string) => Promise<void>;
+  fixReview: (reviewId: string) => Promise<void>;
+  setAutoReview: (value: boolean) => void;
   stopAgent: () => void;
   clearThread: () => Promise<void>;
   dismissNotice: () => void;
@@ -206,6 +250,9 @@ export const useCode = create<CodeState>((set, get) => {
     modelId: 'auto',
     changed: {},
     notice: null,
+    reviewing: null,
+    reviewError: null,
+    autoReview: storage.get(AUTO_REVIEW_KEY) === '1',
 
     async loadCapabilities() {
       try {
@@ -295,6 +342,8 @@ export const useCode = create<CodeState>((set, get) => {
         live: null,
         changed: {},
         notice: null,
+        reviewing: null,
+        reviewError: null,
       });
       try {
         const [{ project }, { files }, { items }] = await Promise.all([
@@ -326,6 +375,8 @@ export const useCode = create<CodeState>((set, get) => {
         thread: [],
         live: null,
         running: false,
+        reviewing: null,
+        reviewError: null,
       });
     },
 
@@ -572,6 +623,10 @@ export const useCode = create<CodeState>((set, get) => {
 
       let pendingText = '';
       let flushTimer: ReturnType<typeof setTimeout> | null = null;
+      // Для автоматического ревью: какой запуск и менял ли он файлы.
+      let finishedRunId: string | null = null;
+      let finishedStatus: string | null = null;
+      let madeChanges = false;
       const flushText = (): void => {
         flushTimer = null;
         const text = pendingText;
@@ -685,6 +740,7 @@ export const useCode = create<CodeState>((set, get) => {
                 ? { ...state.changed, [event.change.path]: event.change.action }
                 : state.changed,
             }));
+            if (event.change) madeChanges = true;
             if (event.change || event.tool === 'run_command') scheduleRefresh();
             if (event.change) {
               const { path, action } = event.change;
@@ -704,6 +760,8 @@ export const useCode = create<CodeState>((set, get) => {
             set((state) => (state.live ? { live: { ...state.live, step: event.step } } : state));
             break;
           case 'done':
+            finishedRunId = event.runId;
+            finishedStatus = event.status;
             commitText(event.modelId);
             set((state) => ({
               thread: [
@@ -802,8 +860,67 @@ export const useCode = create<CodeState>((set, get) => {
           }
           await reloadCleanBuffers();
           void get().loadCapabilities();
+          if (
+            get().autoReview &&
+            madeChanges &&
+            finishedRunId &&
+            finishedStatus !== 'cancelled' &&
+            finishedStatus !== 'error' &&
+            !rejected
+          ) {
+            void get().reviewRun(finishedRunId);
+          }
         }
       }
+    },
+
+    async reviewRun(runId) {
+      const { project, running, reviewing } = get();
+      if (!project || running || reviewing) return;
+      const projectId = project.id;
+      set({ reviewing: { runId }, reviewError: null });
+      try {
+        await streamCodeReview<ReviewItem>(
+          { projectId, runId, language: usePreferences.getState().language },
+          {
+            onReviewer: (reviewer) => {
+              if (get().project?.id === projectId) set({ reviewing: { runId, reviewer } });
+            },
+            onDone: (item, quota) => {
+              if (quota) useReview.getState().setQuota(quota);
+              if (get().project?.id !== projectId) return;
+              set((state) => ({ thread: [...state.thread, item] }));
+            },
+          },
+        );
+      } catch (error) {
+        if (get().project?.id === projectId) {
+          set({
+            reviewError: {
+              runId,
+              text: errorText(error),
+              code: error instanceof ApiError ? error.code : undefined,
+            },
+          });
+        }
+      } finally {
+        if (get().project?.id === projectId) set({ reviewing: null });
+      }
+    },
+
+    async fixReview(reviewId) {
+      const item = get().thread.find(
+        (candidate): candidate is ReviewItem =>
+          candidate.kind === 'review' && candidate.id === reviewId,
+      );
+      if (!item || item.issues.length === 0) return;
+      const max = get().capabilities?.limits.maxTaskChars ?? 4000;
+      await get().runAgent(buildFixTask(item, usePreferences.getState().language).slice(0, max));
+    },
+
+    setAutoReview(value) {
+      storage.set(AUTO_REVIEW_KEY, value ? '1' : '0');
+      set({ autoReview: value });
     },
 
     stopAgent() {

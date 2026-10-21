@@ -79,6 +79,44 @@ event: compare_done        data: {"runId":"uuid","savedMessageId":"uuid","defaul
 
 `GET /api/chat/compare/stats` (админ): `{ totalVotes, models: [{ modelId, comparisons, wins, winRatePct }] }`: как часто ответ модели выбирают в сравнениях.
 
+## Перекрёстная проверка моделью другой компании (SSE)
+
+Ответ одной модели проверяет модель **другой компании**: у моделей одного разработчика общие слепые зоны. Рецензент берётся из списка тарифа (`services/review-policy.ts`), модели тех же разработчиков, что авторы ответа, пропускаются: Claude не проверяет Claude, а судья сравнения GPT и Claude — Grok или Gemini. Если модель недоступна по квоте или бюджету (`model_unavailable`, `model_limit_reached`) или все её провайдеры упали, берётся следующая из списка; лимит частоты и исчерпанный бюджет отвечают сразу.
+
+Только для аккаунтов (гость: `401`). Проверки ответа, ревью кода и судья сравнения — один суточный лимит: Free 2, Plus 10, Pro 30, Ultra 80 (`429 review_limit`). Лимит модели-рецензента и сообщения не тратятся; стоимость идёт в месячный бюджет тарифа, сильные модели расходуют квоту премиум-запросов. В учёте расхода такие запросы имеют `kind: "review"`. `GET /api/chat/review/quota` → `{ used, limit, remaining }`.
+
+**Проверка ответа в чате.** `POST /api/chat/review` с `{ "conversationId", "messageId", "language" }` (только готовый ответ ассистента своего диалога: иначе `404` / `400 invalid_message`; вторая проверка при идущей первой: `429 review_in_progress`):
+
+```
+event: review_start     data: {"reviewId":"uuid","quota":{"used":0,"limit":10,"remaining":10}}
+event: review_reviewer  data: {"reviewer":{"modelId":"claude-sonnet-5.5","modelName":"Claude Sonnet 5.5","developer":"Anthropic"}}
+event: review_done      data: {"review":{"id","verdict":"ok|minor|major|wrong|unknown","summary","issues":[{"severity":"high|medium|low","quote","problem","fix"}],"corrected","reviewer","authorModelId","createdAt"},"quota":{…}}
+event: error            data: {"code","message"}
+```
+
+`quote` — точная цитата из ответа (цитата, которой в ответе нет, уходит в текст замечания); `corrected` — исправленный ответ, только при `major` / `wrong`. Итог сохраняется у сообщения (`message.review`, в Postgres — `messages.metadata.review`) и приходит с диалогом; правка текста ответа или повторная генерация его сбрасывают.
+
+**Консилиум (судья сравнения).** `POST /api/chat/compare/judge` с `{ "runId", "language" }`: судья читает ответы колонок, пишет один итоговый ответ (приходит порциями) и после маркера — JSON с согласием и расхождениями. Нужны хотя бы два ответа (`400 judge_needs_answers`), просроченный запуск: `410 compare_expired`.
+
+```
+event: judge_start     data: {"judgeId":"uuid","quota":{…}}
+event: judge_reviewer  data: {"reviewer":{…}}
+event: judge_delta     data: {"content":"порция итога"}
+event: judge_done      data: {"judge":{"id","content","agreement":"full|partial|low|unknown","consensus":["…"],"disputes":[{"topic","positions":[{"model","claim"}],"resolution"}],"judge":{…},"slots":[0,1],"createdAt"}}
+```
+
+`POST /api/chat/compare/judge/save` с `{ "runId" }` ставит итог судьи ответом в диалоге (как `pick`; диалог продолжился — `409 compare_stale`). Выбор колонки после этого снова заменяет ответ колонкой.
+
+**Ревью правок Ketner Code.** `POST /api/code/projects/:id/review` с `{ "runId", "language" }`: рецензент получает задачу, итог агента и diff всех правок запуска (до 60 000 символов). Запуск без правок: `400 nothing_to_review`, нет в ленте: `404 run_not_found`, агент ещё работает: `409 run_in_progress`.
+
+```
+event: review_start     data: {"reviewId","quota","files":2}
+event: review_reviewer  data: {"reviewer":{…}}
+event: review_done      data: {"item":{"id","kind":"review","runId","verdict":"approve|changes|unknown","summary","issues":[{"severity","file","line","problem","fix"}],"reviewer","authorModelId","filesReviewed","createdAt"},"quota":{…}}
+```
+
+Запись `kind: "review"` остаётся в ленте проекта. «Исправить замечания» в интерфейсе — обычный запуск агента с задачей из списка замечаний; галочка «Ревью» запускает проверку автоматически после каждого запуска с правками.
+
 ## Эндпоинты
 
 | Группа            | Эндпоинты                                                                                                                                                                                                                                                                                                                                                                                                     | Доступ             |
@@ -94,7 +132,7 @@ event: compare_done        data: {"runId":"uuid","savedMessageId":"uuid","defaul
 | Без интерфейса    | `POST /billing/checkout`, `/billing/sbp/*`, `POST /billing/telegram-stars/confirm/:id`, `POST /billing/stripe/create-checkout`, `POST /telegram/simulate-payment`, `POST /telegram/support/simulate-message` — заглушки разработки и каналы, которых нет на странице оплаты (клиентские функции в `features/billing/api.ts` остались); в production заглушки отключены                                        | —                  |
 | Мини-приложение   | `/telegram/miniapp/*`: `session`, `email-code`, `email-verify`, `link`, `link-code`, `state`, `invoice`, `auto-renew`, `payments/:id/refund`, `prefs`, `unlink`, `admin/refunds`                                                                                                                                                                                                                              | подпись `initData` |
 | Telegram          | `GET /telegram/status`, `GET /telegram/support/status`, `GET /telegram/support/tickets` (админ)                                                                                                                                                                                                                                                                                                               |                    |
-| Ketner Code       | `/code/capabilities`, `/code/projects` (CRUD, `import-github`, `:id/files`, `:id/file`, `:id/move`, `:id/import`, `:id/export.zip`, `:id/thread`, `:id/run` — SSE, `:id/stop`)                                                                                                                                                                                                                                | вход               |
+| Ketner Code       | `/code/capabilities`, `/code/projects` (CRUD, `import-github`, `:id/files`, `:id/file`, `:id/move`, `:id/import`, `:id/export.zip`, `:id/thread`, `:id/run` — SSE, `:id/stop`, `:id/review` — SSE)                                                                                                                                                                                                            | вход               |
 | Картинки          | `GET /images/capabilities`, `GET /images`, `POST /images/generate`, `DELETE /images/:id`, `GET /images/:id/file?exp&sig` (подписанная ссылка)                                                                                                                                                                                                                                                                 | вход               |
 | GitHub            | `GET /github/status`, `GET /github/connect-url`, `POST /github/confirm`, `DELETE /github/connection`, `ALL /github/api/*` (прокси с белым списком)                                                                                                                                                                                                                                                            | вход               |
 | Ключи `/v1`       | `GET /keys`, `POST /keys`, `DELETE /keys/:id`                                                                                                                                                                                                                                                                                                                                                                 | вход, Plus+        |

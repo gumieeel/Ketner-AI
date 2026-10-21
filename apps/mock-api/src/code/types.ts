@@ -86,6 +86,26 @@ export type ThreadItem =
       /** План запуска на момент завершения: показывается в списке задач после перезагрузки. */
       plan?: PlanItem[];
       createdAt: string;
+    }
+  | {
+      id: string;
+      kind: 'review';
+      /** Запуск, правки которого проверялись. */
+      runId: string;
+      verdict: 'approve' | 'changes' | 'unknown';
+      summary: string;
+      issues: Array<{
+        severity: 'high' | 'medium' | 'low';
+        file?: string;
+        line?: number;
+        problem: string;
+        fix?: string;
+      }>;
+      reviewer: { modelId: string; modelName: string; developer: string };
+      /** Модель агента, чьи правки проверялись. */
+      authorModelId?: string;
+      filesReviewed: number;
+      createdAt: string;
     };
 
 export const MAX_THREAD_ITEMS = 600;

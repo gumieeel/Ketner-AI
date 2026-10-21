@@ -38,6 +38,10 @@ export interface FakeApiOptions {
   compareReplies?: Record<string, string>;
   /** Модели, у которых колонка сравнения заканчивается ошибкой (например, исчерпан лимит). */
   compareFailModels?: string[];
+  /** Ответ проверки ответа (POST /api/chat/review): по умолчанию — серьёзная ошибка с цитатой. */
+  review?: Record<string, unknown>;
+  /** Проверка отклоняется до начала потока (например, 429 review_limit). */
+  reviewReject?: { status: number; code: string; message: string };
 }
 
 export interface FakeApi {
@@ -49,6 +53,10 @@ export interface FakeApi {
   compareBodies: Array<Record<string, unknown>>;
   /** Тела запросов на выбор лучшего ответа (POST /api/chat/compare/pick). */
   pickBodies: Array<Record<string, unknown>>;
+  /** Тела запросов на проверку ответа (POST /api/chat/review). */
+  reviewBodies: Array<Record<string, unknown>>;
+  /** Тела запросов к судье сравнения (POST /api/chat/compare/judge и /judge/save). */
+  judgeBodies: Array<Record<string, unknown>>;
   /** Добавляет диалог с историей, как будто он уже сохранён на сервере. */
   seed: (input: { title: string; messages?: Message[]; updatedAt?: string }) => Conversation;
   /** Новый пароль из последнего сброса пароля. */
@@ -271,6 +279,8 @@ export function installFakeApi(options: FakeApiOptions = {}): FakeApi {
     completionBodies: [],
     compareBodies: [],
     pickBodies: [],
+    reviewBodies: [],
+    judgeBodies: [],
     seed({ title, messages = [], updatedAt }) {
       const now = updatedAt ?? new Date().toISOString();
       const conversation: Conversation = {
@@ -852,6 +862,96 @@ export function installFakeApi(options: FakeApiOptions = {}): FakeApi {
         return new Response(streamOf(chunks, delayMs, init?.signal ?? null), {
           status: 200,
           headers: { 'Content-Type': 'text/event-stream' },
+        });
+      }
+
+      if (url === '/api/chat/review' && method === 'POST') {
+        api.reviewBodies.push(body);
+        if (options.reviewReject) {
+          const { status, code, message } = options.reviewReject;
+          return json({ error: { code, message } }, status);
+        }
+        const reviewer = {
+          modelId: 'gemini-3.7-flash',
+          modelName: 'Gemini 3.7 Flash',
+          developer: 'Google',
+        };
+        const review = {
+          id: `review-${api.reviewBodies.length}`,
+          verdict: 'major',
+          summary: 'В ответе есть фактическая ошибка.',
+          issues: [
+            {
+              severity: 'high',
+              quote: 'Сидней',
+              problem: 'Столица Австралии — Канберра, а не Сидней.',
+              fix: 'Канберра',
+            },
+          ],
+          corrected: 'Столица Австралии — **Канберра**.',
+          reviewer,
+          createdAt: new Date().toISOString(),
+          ...options.review,
+        };
+        const quota = { used: 1, limit: 10, remaining: 9 };
+        const chunks = [
+          `event: review_start\ndata: ${JSON.stringify({ reviewId: review.id, quota })}\n\n`,
+          `event: review_reviewer\ndata: ${JSON.stringify({ reviewer })}\n\n`,
+          `event: review_done\ndata: ${JSON.stringify({ review, quota })}\n\n`,
+        ];
+        return new Response(streamOf(chunks, delayMs, init?.signal ?? null), {
+          status: 200,
+          headers: { 'Content-Type': 'text/event-stream' },
+        });
+      }
+
+      if (url === '/api/chat/compare/judge' && method === 'POST') {
+        api.judgeBodies.push(body);
+        const reviewer = {
+          modelId: 'gemini-3.7-flash',
+          modelName: 'Gemini 3.7 Flash',
+          developer: 'Google',
+        };
+        const content = 'Итог консилиума: рекурсия — это вызов функции из самой себя.';
+        const judge = {
+          id: 'judge-1',
+          content,
+          agreement: 'partial',
+          consensus: ['Обе модели объясняют базовый случай'],
+          disputes: [
+            {
+              topic: 'Нужен ли базовый случай',
+              positions: [
+                { model: 'Ketner Pro', claim: 'обязателен' },
+                { model: 'Claude Haiku 5.5', claim: 'желателен' },
+              ],
+              resolution: 'Обязателен, иначе переполнение стека.',
+            },
+          ],
+          judge: reviewer,
+          slots: [0, 1],
+          createdAt: new Date().toISOString(),
+        };
+        const chunks = [
+          `event: judge_start\ndata: ${JSON.stringify({ judgeId: 'judge-1' })}\n\n`,
+          `event: judge_reviewer\ndata: ${JSON.stringify({ reviewer })}\n\n`,
+          `event: judge_delta\ndata: ${JSON.stringify({ content: content.slice(0, 20) })}\n\n`,
+          `event: judge_delta\ndata: ${JSON.stringify({ content: content.slice(20) })}\n\n`,
+          `event: judge_done\ndata: ${JSON.stringify({ judge })}\n\n`,
+        ];
+        return new Response(streamOf(chunks, delayMs, init?.signal ?? null), {
+          status: 200,
+          headers: { 'Content-Type': 'text/event-stream' },
+        });
+      }
+
+      if (url === '/api/chat/compare/judge/save' && method === 'POST') {
+        api.judgeBodies.push(body);
+        return json({
+          success: true,
+          runId: String(body.runId ?? ''),
+          messageId: 'judge-message',
+          modelId: 'gemini-3.7-flash',
         });
       }
 

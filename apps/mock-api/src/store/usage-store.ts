@@ -282,7 +282,8 @@ export class UsageStore {
         rec.status !== 'error';
       // Шаги агента не считаются «сообщениями» (их десятки на запуск и у них свой дневной лимит
       // запусков), но токены и стоимость учитываются как у любого запроса.
-      const countsAsMessage = countsTowardLimits && rec.kind !== 'agent' && rec.kind !== 'image';
+      const countsAsMessage =
+        countsTowardLimits && rec.kind !== 'agent' && rec.kind !== 'image' && rec.kind !== 'review';
 
       if (countsAsMessage && time >= oneMinuteAgo) requestsLastMinute++;
       if (countsTowardLimits && time >= oneHourAgo) {
@@ -431,6 +432,8 @@ export class UsageStore {
       const at = new Date(rec.createdAt).getTime();
       if (at < since) break;
       if (!wanted.has(rec.modelId) || rec.fundedBy === 'credits') continue;
+      // Проверки ответов считаются своим суточным лимитом, а не лимитом модели-рецензента.
+      if (rec.kind === 'review') continue;
       const units = rec.limitUnits ?? 1;
       if (rec.kind === 'agent') {
         if (!rec.runId) continue;
@@ -462,6 +465,22 @@ export class UsageStore {
       if (rec.kind === 'agent' && rec.runId) runs.add(rec.runId);
     }
     return runs.size;
+  }
+
+  /**
+   * Сколько проверок ответов (чат и Ketner Code) пользователь сделал за последние 24 часа.
+   * Считаются только состоявшиеся: отказ или сбой рецензента проверку не расходуют.
+   */
+  getReviewsLastDay(userId: string): number {
+    const userRecords = this.userIndex.get(userId) ?? [];
+    const since = Date.now() - 24 * 60 * 60 * 1000;
+    const reviews = new Set<string>();
+    for (let i = userRecords.length - 1; i >= 0; i--) {
+      const rec = userRecords[i];
+      if (new Date(rec.createdAt).getTime() < since) break;
+      if (rec.kind === 'review' && rec.status === 'success') reviews.add(rec.runId ?? rec.id);
+    }
+    return reviews.size;
   }
 
   /**

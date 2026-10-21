@@ -686,8 +686,9 @@ export class AIGateway {
     }
 
     // Лимит модели на тарифе (недельный пул и его суточная доля): после него отвечает запасная
-    // модель (видно в routingReason). Гостевая модель бесплатна и лимитов не имеет.
-    if (!req.isAnonymous) {
+    // модель (видно в routingReason). Гостевая модель бесплатна и лимитов не имеет. Проверка ответа
+    // (`task.kind === 'review'`) лимит модели-рецензента не тратит: у проверок свой суточный лимит.
+    if (!req.isAnonymous && !req.task) {
       // Free: вместо платного Ketner Mini идёт бесплатный эндпоинт, платная модель остаётся запасной.
       const substitute = applyPlanSubstitute(targetModel, effectivePlan, 'chat', this.registry);
       if (substitute.reason) {
@@ -791,9 +792,9 @@ export class AIGateway {
       const promptMap = isEconomyTier
         ? ECONOMY_SYSTEM_PROMPT
         : (targetModel.defaultSystemPrompt ?? DEFAULT_SYSTEM_PROMPT);
-      const baseSystemPrompt = promptMap[language];
+      const baseSystemPrompt = req.task ? req.task.systemPrompt : promptMap[language];
       const systemPrompt =
-        stage !== 'normal'
+        stage !== 'normal' && !req.task
           ? `${baseSystemPrompt} ${language === 'en' ? 'Keep responses concise and direct.' : 'Отвечай максимально кратко и по существу.'}`
           : baseSystemPrompt;
 
@@ -873,7 +874,8 @@ export class AIGateway {
       const hasAttachments = Boolean(activeAttachments && activeAttachments.length > 0);
       // Ответ зависит от файлов проекта и вложений, а ключ кэша — только от текста вопроса:
       // с проектом/вложениями кэш не читаем и не пишем (иначе чужой или устаревший ответ).
-      const cacheable = !hasAttachments && !activeWorkspace;
+      // Служебные запросы (проверка ответа) в кэш не ходят: их результат хранится отдельно.
+      const cacheable = !hasAttachments && !activeWorkspace && !req.task;
 
       const cachedHit = cacheable
         ? semanticCache.get(cacheModelKey, language, prompt, userScope, historyHash)
@@ -1145,14 +1147,16 @@ export class AIGateway {
 
         // В test / dev режиме используем шаблонный генератор
         responseSource = 'template';
-        const templateAnswer = pickAnswer(
-          prompt,
-          language,
-          this.aiConfig.random,
-          targetModel.name,
-          activeAttachments ?? req.attachments,
-          activeWorkspace ?? req.workspaceContext,
-        );
+        const templateAnswer =
+          req.task?.templateOutput ??
+          pickAnswer(
+            prompt,
+            language,
+            this.aiConfig.random,
+            targetModel.name,
+            activeAttachments ?? req.attachments,
+            activeWorkspace ?? req.workspaceContext,
+          );
         await streamText(templateAnswer, {
           thinkingMs: this.aiConfig.thinkingMs,
           chunkMs: this.aiConfig.chunkMs,
@@ -1239,6 +1243,7 @@ export class AIGateway {
         ttftMs: firstTokenMs,
         status: isCancelled() ? 'cancelled' : 'success',
         source: responseSource,
+        ...(req.task ? { kind: req.task.kind, runId: req.task.id } : {}),
         limitUnits: limitUnitsFor(usedModel.effortProfile, reasoningMode),
         premiumCreditUsd,
         ...(fundedByCredits && isPremiumClass(usedModel.costClass)

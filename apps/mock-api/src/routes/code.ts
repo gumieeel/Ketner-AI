@@ -1,6 +1,21 @@
+import { randomUUID } from 'node:crypto';
 import { Router, type Request, type Response } from 'express';
+import { AIGateway } from '../ai/gateway.js';
 import { modelRegistry } from '../ai/model-registry.js';
 import { config } from '../config.js';
+import {
+  buildCodeReviewInput,
+  buildCodeReviewPrompt,
+  codeReviewTemplate,
+  parseCodeReview,
+  runReviewTask,
+  type ReviewedChange,
+} from '../services/answer-review.js';
+import type { PlanBonusSource } from '../services/premium-quota.js';
+import { pickReviewers } from '../services/review-policy.js';
+import type { PremiumCreditSource } from '../store/premium-credit-store.js';
+import { reviewQuota, sendReviewLimit } from './review.js';
+import { openSse } from './sse.js';
 import { sendError } from '../middleware/errors.js';
 import { resolveChatIdentity } from '../services/chat-identity.js';
 import { EntitlementService } from '../services/entitlement.js';
@@ -22,7 +37,7 @@ import type { ProjectStore } from '../code/project-store.js';
 import { getProjectStore, getSandbox } from '../code/runtime.js';
 import type { SandboxRunner } from '../code/sandbox.js';
 import { isTemplateId, TEMPLATE_IDS } from '../code/templates.js';
-import type { ProjectMeta } from '../code/types.js';
+import type { ProjectMeta, ThreadItem } from '../code/types.js';
 
 const MAX_IMPORT_FILES_PER_REQUEST = 5_000;
 const HEARTBEAT_MS = 15_000;
@@ -41,6 +56,34 @@ export interface CodeRouterDeps {
   fetchImpl?: typeof fetch;
   /** Токен привязанного GitHub: с ним импортируются и приватные репозитории. */
   githubTokenOf?: (userId: string) => string | undefined;
+  /** Шлюз чата: через него идёт ревью правок моделью другой компании. */
+  gateway?: AIGateway;
+  premiumCredits?: PremiumCreditSource;
+  planBonus?: PlanBonusSource;
+}
+
+type ToolThreadItem = Extract<ThreadItem, { kind: 'tool' }>;
+
+/**
+ * Что сделал запуск агента: задача (реплика пользователя перед первой записью запуска), итоговая
+ * реплика агента и правки файлов. Правки одного файла остаются отдельными шагами, как в ленте.
+ */
+export function collectRunChanges(
+  thread: readonly ThreadItem[],
+  runId: string,
+): { task: string; summary: string; changes: ReviewedChange[]; modelId?: string } | null {
+  const first = thread.findIndex((item) => 'runId' in item && item.runId === runId);
+  if (first === -1) return null;
+  const task =
+    [...thread.slice(0, first)].reverse().find((item) => item.kind === 'user')?.text ?? '';
+  const own = thread.filter((item) => 'runId' in item && item.runId === runId);
+  const summary = [...own].reverse().find((item) => item.kind === 'assistant')?.text ?? '';
+  const changes = own
+    .filter((item): item is ToolThreadItem => item.kind === 'tool' && Boolean(item.change))
+    .map((item) => item.change!)
+    .map((change) => ({ ...change }));
+  const runItem = own.find((item) => item.kind === 'run');
+  return { task, summary, changes, modelId: runItem?.kind === 'run' ? runItem.modelId : undefined };
 }
 
 interface Caller {
@@ -88,6 +131,16 @@ export function createCodeRouter(deps: CodeRouterDeps): Router {
   const allowAnonymous = deps.allowAnonymous ?? false;
   /** Запущенные агенты: один на проект. */
   const activeRuns = new Map<string, AbortController>();
+  /** Идущие ревью: одно на проект. */
+  const activeReviews = new Set<string>();
+  const gateway =
+    deps.gateway ??
+    new AIGateway({
+      usageStore,
+      aiConfig: config.ai,
+      premiumCredits: deps.premiumCredits,
+      planBonus: deps.planBonus,
+    });
   const runKey = (userId: string, projectId: string): string => `${userId}:${projectId}`;
 
   function identify(request: Request, response: Response): Caller | null {
@@ -642,6 +695,144 @@ export function createCodeRouter(deps: CodeRouterDeps): Router {
         activeRuns.delete(key);
         response.off('close', onClose);
         if (!response.writableEnded) response.end();
+      }
+    }),
+  );
+
+  // ───────────── ревью правок моделью другой компании ─────────────
+
+  /**
+   * POST /projects/:id/review { runId, language } — поток SSE:
+   *   review_start    { reviewId, quota, files }
+   *   review_reviewer { reviewer }
+   *   review_done     { item, quota }   — item: запись ленты kind 'review'
+   *   error           { code, message }
+   */
+  router.post(
+    '/projects/:id/review',
+    guarded(async (caller, request, response) => {
+      const meta = await requireProject(caller, request, response);
+      if (!meta) return;
+      const body = (request.body ?? {}) as Record<string, unknown>;
+      const language: Language = body.language === 'en' ? 'en' : 'ru';
+      const say = (ru: string, en: string): string => (language === 'en' ? en : ru);
+      if (typeof body.runId !== 'string' || body.runId.trim() === '') {
+        sendError(
+          response,
+          400,
+          'invalid_request',
+          say('Поле runId обязательно', 'runId is required'),
+        );
+        return;
+      }
+      const key = runKey(caller.userId, meta.id);
+      if (activeRuns.has(key)) {
+        sendError(
+          response,
+          409,
+          'run_in_progress',
+          say('Дождитесь завершения запуска агента', 'Wait for the agent run to finish'),
+        );
+        return;
+      }
+      if (activeReviews.has(key)) {
+        sendError(
+          response,
+          429,
+          'review_in_progress',
+          say('Ревью уже идёт', 'A review is already running'),
+        );
+        return;
+      }
+      const thread = await store.getThread(caller.userId, meta.id);
+      const collected = collectRunChanges(thread, body.runId.trim());
+      if (!collected) {
+        sendError(
+          response,
+          404,
+          'run_not_found',
+          say('Запуск не найден в ленте', 'Run not found in the thread'),
+        );
+        return;
+      }
+      if (collected.changes.length === 0) {
+        sendError(
+          response,
+          400,
+          'nothing_to_review',
+          say(
+            'В этом запуске агент не менял файлы',
+            'The agent did not change any files in this run',
+          ),
+        );
+        return;
+      }
+      const quota = reviewQuota(usageStore, caller.userId, caller.plan);
+      if (quota.remaining <= 0) {
+        sendReviewLimit(response, quota, language);
+        return;
+      }
+
+      activeReviews.add(key);
+      const sse = openSse(response);
+      const reviewId = randomUUID();
+      const files = new Set(collected.changes.map((change) => change.path)).size;
+      try {
+        sse.write('review_start', { reviewId, quota, files });
+        const result = await runReviewTask({
+          gateway,
+          caller,
+          candidates: pickReviewers(
+            caller.plan,
+            collected.modelId ? [collected.modelId] : [],
+            modelRegistry,
+          ),
+          reviewId,
+          systemPrompt: buildCodeReviewPrompt(language),
+          userContent: buildCodeReviewInput(
+            collected.task,
+            collected.summary,
+            collected.changes,
+            language,
+          ),
+          templateOutput: codeReviewTemplate(collected.changes, language),
+          language,
+          conversationId: `code:${meta.id}`,
+          signal: sse.signal,
+          onReviewer: (reviewer) => sse.write('review_reviewer', { reviewer }),
+        });
+        if (!result.ok || result.cancelled) {
+          sse.write('error', {
+            code: result.ok ? 'cancelled' : result.code,
+            message: result.ok ? say('Ревью остановлено', 'Review stopped') : result.message,
+          });
+          return;
+        }
+        const parsed = parseCodeReview(result.text);
+        const item: Extract<ThreadItem, { kind: 'review' }> = {
+          id: reviewId,
+          kind: 'review',
+          runId: body.runId.trim(),
+          ...parsed,
+          reviewer: result.reviewer,
+          ...(collected.modelId ? { authorModelId: collected.modelId } : {}),
+          filesReviewed: files,
+          createdAt: new Date().toISOString(),
+        };
+        await store.appendThread(caller.userId, meta.id, [item]);
+        sse.write('review_done', {
+          item,
+          quota: reviewQuota(usageStore, caller.userId, caller.plan),
+        });
+      } catch (error) {
+        console.error('[code] сбой ревью:', error);
+        sse.write('error', {
+          code: 'internal_error',
+          message: say('Внутренняя ошибка сервера', 'Internal server error'),
+        });
+      } finally {
+        activeReviews.delete(key);
+        sse.end();
       }
     }),
   );

@@ -11,6 +11,8 @@ import { extractZipText } from '../code/archive.js';
 import type { AgentEvent, AgentRunner } from '../code/agent-runner.js';
 import { LocalProcessSandbox } from '../code/sandbox.js';
 import { UsageStore } from '../store/usage-store.js';
+import { AIGateway } from '../ai/gateway.js';
+import { FAST_AI } from '../testing/server.js';
 import type { User } from '../types.js';
 import { createCodeRouter } from './code.js';
 
@@ -37,6 +39,7 @@ async function withServer(
 ): Promise<void> {
   const dir = await mkdtemp(path.join(tmpdir(), 'ketner-code-routes-'));
   const store = new ProjectStore({ rootDir: path.join(dir, 'projects') });
+  const usageStore = new UsageStore(path.join(dir, 'usage.json'));
   const app = express();
   app.use(express.json({ limit: '50mb' }));
   app.use((request, _response, next) => {
@@ -54,7 +57,8 @@ async function withServer(
     createCodeRouter({
       userId: 'demo-user',
       store,
-      usageStore: new UsageStore(path.join(dir, 'usage.json')),
+      usageStore,
+      gateway: new AIGateway({ usageStore, aiConfig: FAST_AI, useMockEngine: true }),
       sandbox: options.sandbox ?? null,
       runner: options.runner,
       allowAnonymous: options.allowAnonymous ?? false,
@@ -540,5 +544,81 @@ test('лента: чтение и очистка', async () => {
       (await json(await call('alice', 'free', 'GET', `/projects/${project.id}/thread`))).items,
       [],
     );
+  });
+});
+
+test('ревью правок: модель другой компании проверяет запуск, итог пишется в ленту', async () => {
+  await withServer({}, async ({ call, store }) => {
+    const { project } = await json(await call('rita', 'pro', 'POST', '/projects', { name: 'R' }));
+    const at = new Date().toISOString();
+    await store.appendThread('rita', project.id, [
+      { id: 'u1', kind: 'user', text: 'Добавь проверку пароля', createdAt: at },
+      {
+        id: 't1',
+        kind: 'tool',
+        runId: 'run-1',
+        step: 1,
+        tool: 'edit_file',
+        label: 'edit_file src/auth.ts',
+        ok: true,
+        summary: '',
+        change: {
+          path: 'src/auth.ts',
+          action: 'modify',
+          additions: 2,
+          deletions: 1,
+          patch: '-a\n+b\n+c',
+        },
+        createdAt: at,
+      },
+      { id: 'a1', kind: 'assistant', text: 'Готово', runId: 'run-1', createdAt: at },
+      {
+        id: 'r1',
+        kind: 'run',
+        runId: 'run-1',
+        status: 'completed',
+        steps: 1,
+        costUsd: 0,
+        modelId: 'gpt-6.1-sol',
+        createdAt: at,
+      },
+      { id: 'u2', kind: 'user', text: 'Объясни код', createdAt: at },
+      { id: 'a2', kind: 'assistant', text: 'Это…', runId: 'run-2', createdAt: at },
+    ]);
+    const url = `/projects/${project.id}/review`;
+
+    assert.equal((await call('rita', 'pro', 'POST', url, {})).status, 400);
+    assert.equal((await call('rita', 'pro', 'POST', url, { runId: 'nope' })).status, 404);
+    assert.equal(
+      (await call('rita', 'pro', 'POST', url, { runId: 'run-2' })).status,
+      400,
+      'запуск без правок не проверяется',
+    );
+    assert.equal((await call('bob', 'pro', 'POST', url, { runId: 'run-1' })).status, 404);
+
+    const response = await call('rita', 'pro', 'POST', url, { runId: 'run-1', language: 'ru' });
+    assert.equal(response.status, 200);
+    const text = await response.text();
+    const done = text
+      .split('\n\n')
+      .find((block) => block.startsWith('event: review_done'))
+      ?.split('\n')[1]
+      ?.slice(6);
+    assert.ok(done, text);
+    const { item } = JSON.parse(done) as {
+      item: {
+        kind: string;
+        verdict: string;
+        reviewer: { developer: string };
+        issues: Array<{ file: string }>;
+      };
+    };
+    assert.equal(item.kind, 'review');
+    assert.equal(item.verdict, 'changes');
+    assert.notEqual(item.reviewer.developer, 'OpenAI', 'GPT не проверяет GPT');
+    assert.equal(item.issues[0].file, 'src/auth.ts');
+
+    const thread = await store.getThread('rita', project.id);
+    assert.equal(thread[thread.length - 1].kind, 'review');
   });
 });
