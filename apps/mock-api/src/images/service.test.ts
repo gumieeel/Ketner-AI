@@ -9,9 +9,9 @@ import { ImageService, ImageServiceError } from './service.js';
 import { createLlmModerator, isObviouslyForbidden, type PromptModerator } from './moderation.js';
 import { createCloudflareGenerator, type ImageGenerator } from './cloudflare.js';
 import { combineGenerators, createRunwareGenerator } from './runware.js';
-import { PAID_IMAGE_BUDGET_USD } from './models.js';
 import type { AIProvider } from '../ai/gateway-types.js';
-import { PLAN_ENTITLEMENTS } from '../services/entitlement.js';
+import { toUsd } from '../services/credits.js';
+import { memoryCredits, setBalance } from '../services/credits-fixture.js';
 
 const JPEG = Buffer.concat([Buffer.from([0xff, 0xd8, 0xff]), Buffer.alloc(200, 1)]);
 
@@ -35,14 +35,16 @@ function setup(options: { moderator?: PromptModerator; generator?: Partial<Image
     check: async (p) => ({ allowed: true, promptEn: `EN: ${p}` }),
   };
   const store = new ImageStore(join(dir, 'images'));
+  const credits = memoryCredits();
   const service = new ImageService({
     store,
     usageStore: usage,
     generator,
     moderator,
     urlSecret: 'secret',
+    credits,
   });
-  return { service, usage, calls, store };
+  return { service, usage, calls, store, credits };
 }
 
 const caller = (plan: string, userId = 'u1') => ({ userId, plan, language: 'ru' as const });
@@ -156,33 +158,30 @@ test('модератор: модель не вызывается для явно
   assert.equal(called, 0);
 });
 
-test('бюджет: на 125% — отказ, при исчерпании — только schnell; сбой провайдера не тратит лимит', async () => {
-  const { service, usage } = setup();
-  const seed = (cost: number) => {
-    const rec = usage.recordUsage({
-      userId: 'u2',
-      conversationId: 'c',
-      modelId: 'ketner-pro',
-      provider: 'openrouter',
-      inputTokens: 1,
-      outputTokens: 1,
-      estimatedCost: cost,
-      latencyMs: 1,
-      status: 'success',
-    });
-    rec.createdAt = new Date(Date.now() - 3 * 86400000).toISOString();
-  };
-  seed(PLAN_ENTITLEMENTS.plus.costBudget * 1.05);
+test('кредиты: картинка списывает свою цену; когда кредиты кончились, рисует только schnell и не больше 5 в сутки', async () => {
+  const { service, usage, credits } = setup();
+  setBalance(credits, 'u2', 'plus', 0.5); // меньше одного кредита — кредитов нет
+  assert.equal(service.capabilities(caller('plus', 'u2')).credits.exhausted, true);
   const cheap = await service.generate(caller('plus', 'u2'), {
     prompt: 'кот',
     modelId: 'flux-2-klein',
   });
   assert.equal(cheap.image.modelId, 'flux-schnell');
-  seed(PLAN_ENTITLEMENTS.plus.costBudget * 0.3);
+  assert.equal(cheap.replacedBy, 'FLUX.1 schnell');
+  for (let i = 0; i < 4; i++)
+    await service.generate(caller('plus', 'u2'), { prompt: `кот ${i}`, modelId: 'flux-2-klein' });
   await assert.rejects(
     service.generate(caller('plus', 'u2'), { prompt: 'кот' }),
-    (e: unknown) => e instanceof ImageServiceError && e.code === 'fair_use_exceeded',
+    (e: unknown) => e instanceof ImageServiceError && e.code === 'image_limit',
   );
+
+  // Пока кредиты есть, картинка списывает свою себестоимость (schnell ≈ $0.00063)
+  const rich = setup();
+  const before = rich.credits.balance('u1', 'plus').remainingUsd;
+  await rich.service.generate(caller('plus'), { prompt: 'кот' });
+  const spent = before - rich.credits.balance('u1', 'plus').remainingUsd;
+  assert.ok(spent > 0 && spent < 0.001, `списано ${spent}`);
+  assert.ok(Math.abs((rich.usage.getByUser('u1')[0].creditsUsd ?? 0) - spent) < 1e-9);
 
   const failing = setup({
     generator: {
@@ -196,6 +195,12 @@ test('бюджет: на 125% — отказ, при исчерпании — т
     (e: unknown) => e instanceof ImageServiceError && e.code === 'provider_error',
   );
   assert.equal(failing.usage.getImagesLastDay('u1', 'flux-schnell'), 0);
+  assert.equal(
+    failing.credits.balance('u1', 'free').remainingUsd,
+    toUsd(300),
+    'неудачная попытка кредитов не списывает',
+  );
+  void usage;
 });
 
 test('Cloudflare: schnell — JSON, klein — multipart с размером; ответ base64 превращается в байты', async () => {
@@ -237,8 +242,8 @@ test('Pro: FLUX.2 dev и Seedream через Runware, цена из ответа
     [
       ['flux-schnell', false, 100],
       ['flux-2-klein', false, 50],
-      ['flux-2-dev', false, 10],
-      ['seedream-5-flash', false, 5],
+      ['flux-2-dev', false, 100],
+      ['seedream-5-flash', false, 100],
       ['flux-2-pro', true, 0],
       ['nano-banana-2', true, 0],
     ],
@@ -258,12 +263,10 @@ test('Pro: FLUX.2 dev и Seedream через Runware, цена из ответа
     ['seedream-5-flash', 1024],
     'Seedream пока только квадрат',
   );
-  assert.equal(
-    usage.getCostLastMonthByModels('u1', ['seedream-5-flash']),
-    0.0123,
-    'в учёт идёт цена от Runware',
-  );
-  for (let i = 0; i < 4; i++)
+  const record = usage.getByUser('u1')[0];
+  assert.equal(record.estimatedCost, 0.0123, 'в учёт идёт цена от Runware');
+  assert.equal(record.creditsUsd, 0.0123, 'и столько же списано с кредитов');
+  for (let i = 0; i < 99; i++)
     await service.generate(caller('pro'), { prompt: `кот ${i}`, modelId: 'seedream-5-flash' });
   const next = await service.generate(caller('pro'), {
     prompt: 'кот',
@@ -300,21 +303,9 @@ test('Ultra: FLUX.2 pro и Nano Banana 2; сбой Runware — картинку 
   assert.deepEqual([banana.image.modelId, banana.replacedBy], ['nano-banana-2', null]);
 });
 
-test('бюджет на платные картинки: после него отвечают модели Cloudflare; без ключа Runware платных моделей нет', async () => {
-  const { service, usage } = setup();
-  const rec = usage.recordUsage({
-    userId: 'u3',
-    conversationId: 'images',
-    modelId: 'flux-2-dev',
-    provider: 'openrouter',
-    inputTokens: 0,
-    outputTokens: 0,
-    estimatedCost: PAID_IMAGE_BUDGET_USD.pro,
-    latencyMs: 1,
-    status: 'success',
-    kind: 'image',
-  });
-  rec.createdAt = new Date(Date.now() - 3 * 86400000).toISOString();
+test('не хватает кредитов на платную картинку: отвечает модель дешевле; без ключа Runware платных моделей нет', async () => {
+  const { service, credits } = setup();
+  setBalance(credits, 'u3', 'pro', 5); // FLUX.2 dev стоит ≈ 9 кредитов, FLUX.2 klein ≈ 1
   const result = await service.generate(caller('pro', 'u3'), {
     prompt: 'кот',
     modelId: 'flux-2-dev',

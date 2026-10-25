@@ -32,8 +32,8 @@ export interface FakeApiOptions {
   rateLimitAfter?: number;
   /** Привязанный аккаунт GitHub: по умолчанию не подключён. */
   github?: { connected: boolean; login?: string };
-  /** Ответ GET /api/usage/quota (по умолчанию 404: строка остатка не показывается). */
-  quota?: (mode: 'standard' | 'max') => unknown;
+  /** Ответ GET /api/usage/credits (по умолчанию 404: строка остатка кредитов не показывается). */
+  credits?: (mode: 'standard' | 'max') => unknown;
   /** Сравнение ответов: текст каждой модели; модели без записи отвечают общим `reply`. */
   compareReplies?: Record<string, string>;
   /** Модели, у которых колонка сравнения заканчивается ошибкой (например, исчерпан лимит). */
@@ -651,11 +651,10 @@ export function installFakeApi(options: FakeApiOptions = {}): FakeApi {
 
       if (url === '/api/billing/crypto-bonus' && method === 'GET') {
         return json({
-          pct: 15,
           plans: {
-            plus: { quotaUsd: 1.3, bonusUsd: 0.2 },
-            pro: { quotaUsd: 8, bonusUsd: 1.2 },
-            ultra: { quotaUsd: 16.5, bonusUsd: 2.48 },
+            plus: { credits: 3000, bonusCredits: 200 },
+            pro: { credits: 11000, bonusCredits: 1200 },
+            ultra: { credits: 22000, bonusCredits: 2480 },
           },
         });
       }
@@ -1034,8 +1033,8 @@ export function installFakeApi(options: FakeApiOptions = {}): FakeApi {
         );
       }
 
-      if (url.startsWith('/api/usage/quota') && options.quota) {
-        return json(options.quota(url.includes('mode=max') ? 'max' : 'standard'));
+      if (url.startsWith('/api/usage/credits') && options.credits) {
+        return json(options.credits(url.includes('mode=max') ? 'max' : 'standard'));
       }
 
       if (url === '/api/github/status') {

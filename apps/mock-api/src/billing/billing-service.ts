@@ -2,9 +2,15 @@ import { createHash } from 'node:crypto';
 import { join } from 'node:path';
 import { dirname } from 'node:path';
 import { config } from '../config.js';
+import { CreditService, toCredits } from '../services/credits.js';
 import { findPremiumPack, planPriceUsd, PREMIUM_PACK_DAYS } from '../services/pricing.js';
+import {
+  CreditStore,
+  DAY_MS as CREDIT_DAY_MS,
+  type CreditGrant,
+  type LegacyPremiumCredit,
+} from '../store/credit-store.js';
 import { DocStore } from '../store/doc-store.js';
-import { PremiumCreditStore, type PremiumCredit } from '../store/premium-credit-store.js';
 import type { SubscriptionStore } from '../store/subscription-store.js';
 import type { UsageStore } from '../store/usage-store.js';
 import type { UserStore } from '../store/user-store.js';
@@ -116,8 +122,10 @@ export interface BillingLedger {
   payments: DocStore<PaymentRecord>;
   starsSubscriptions: DocStore<StarsSubscription>;
   prefs: DocStore<NotificationPrefs>;
-  /** Кредиты премиум-квоты из докупленных пакетов. */
-  credits: PremiumCreditStore;
+  /** Кредиты пользователей: гранты за тариф, бонусы, Free, пакеты, выдача администратором. */
+  credits: CreditStore;
+  /** Кредиты докупленных пакетов старой системы: остаток переходит в `credits` при первом обращении. */
+  legacyCredits: DocStore<LegacyPremiumCredit>;
 }
 
 export function createBillingLedger(dir?: string): BillingLedger {
@@ -129,7 +137,8 @@ export function createBillingLedger(dir?: string): BillingLedger {
       file('stars-subscriptions'),
     ),
     prefs: new DocStore<NotificationPrefs>('notification_prefs', file('notification-prefs')),
-    credits: new PremiumCreditStore(file('premium-credits')),
+    credits: new CreditStore(file('credit-grants')),
+    legacyCredits: new DocStore<LegacyPremiumCredit>('premium_credits', file('premium-credits')),
   };
 }
 
@@ -192,7 +201,12 @@ function isRunning(sub: Subscription, now: number): boolean {
 export class BillingService {
   telegram: TelegramPaymentsPort | null = null;
 
-  constructor(private readonly deps: BillingDeps) {}
+  /** Кредиты пользователей: начисление при оплате, остаток и списание. */
+  readonly credits: CreditService;
+
+  constructor(private readonly deps: BillingDeps) {
+    this.credits = new CreditService(deps.ledger.credits, deps.ledger.legacyCredits);
+  }
 
   get ledger(): BillingLedger {
     return this.deps.ledger;
@@ -298,14 +312,22 @@ export class BillingService {
       after,
       bonusDays: preview.bonusDays,
     });
+    // Оплата даёт кредиты на оплаченный период и ещё один (остаток переносится); криптой — с бонусом.
+    this.credits.grantForPayment(
+      { id: record.id, userId, method: record.method },
+      planId,
+      after.renewsAt,
+      now,
+    );
     const user = this.deps.userStore.findById(userId);
     this.announcePayment(record, user);
     return { duplicate: false, payment: record, subscription, user };
   }
 
   /**
-   * Оплачен пакет премиум-квоты: начисляет кредиты на 30 дней и записывает платёж. Подписка не
-   * меняется. Повторная доставка того же платежа (тот же id) ничего не меняет: `duplicate: true`.
+   * Оплачен пакет премиум-квоты (пакеты сняты с продажи 18.10.2026, но счета, выставленные раньше,
+   * ещё могут быть оплачены): сумма пакета начисляется кредитами на 30 дней, подписка не меняется.
+   * Повторная доставка того же платежа (тот же id) ничего не меняет: `duplicate: true`.
    */
   grantPack(
     userId: string,
@@ -320,12 +342,20 @@ export class BillingService {
       telegramUserId?: number;
     },
     now = Date.now(),
-  ): { duplicate: boolean; payment: PaymentRecord; credit: PremiumCredit } {
+  ): { duplicate: boolean; payment: PaymentRecord; credit: CreditGrant } {
     const pack = findPremiumPack(packId);
     if (!pack) throw new BillingError('unknown_pack', 'Такого пакета нет', 400);
     const existing = this.deps.ledger.payments.get(payment.id);
-    const { credit } = this.deps.ledger.credits.grant(
-      { id: payment.id, userId, packId, amountUsd: pack.quotaUsd, days: PREMIUM_PACK_DAYS },
+    const { grant: credit } = this.deps.ledger.credits.grant(
+      {
+        id: payment.id,
+        userId,
+        kind: 'pack',
+        paymentId: payment.id,
+        amountUsd: pack.quotaUsd,
+        expiresAt: new Date(now + PREMIUM_PACK_DAYS * CREDIT_DAY_MS).toISOString(),
+        note: packId,
+      },
       now,
     );
     if (existing) return { duplicate: true, payment: existing, credit };
@@ -344,34 +374,6 @@ export class BillingService {
     });
     this.announcePayment(record, this.deps.userStore.findById(userId));
     return { duplicate: false, payment: record, credit };
-  }
-
-  /**
-   * Оплачен ли текущий период тарифа криптовалютой: есть оплата тарифа через Trybit (не пакет, не
-   * возвращённая), чей период покрывает `now`. Период оплаты — от её даты (а при продлении того же
-   * тарифа — от прежнего срока) до срока, который она дала. Даёт бонус к премиум-квоте
-   * (services/entitlement.ts → CRYPTO_PREMIUM_BONUS).
-   */
-  cryptoBonusActive(userId: string, plan: PlanId, now = Date.now()): boolean {
-    return this.deps.ledger.payments
-      .filter(
-        (payment) =>
-          payment.userId === userId &&
-          payment.method === 'crypto' &&
-          !payment.packId &&
-          payment.status !== 'refunded' &&
-          payment.planId === plan,
-      )
-      .some((payment) => {
-        const end = payment.after.renewsAt ? Date.parse(payment.after.renewsAt) : NaN;
-        const paidAt = Date.parse(payment.paidAt);
-        const previousEnd =
-          payment.before.plan === payment.planId && payment.before.renewsAt
-            ? Date.parse(payment.before.renewsAt)
-            : NaN;
-        const start = previousEnd > paidAt ? previousEnd : paidAt;
-        return now >= start && now < end;
-      });
   }
 
   paymentsOf(userId: string): PaymentRecord[] {
@@ -486,9 +488,9 @@ export class BillingService {
     if (now - Date.parse(payment.paidAt) > REFUND_POLICY.windowMs)
       return { kind: 'none', reason: 'expired' };
     if (payment.packId) {
-      // Пакет возвращается, пока из него ничего не потрачено (запросы по квоте тарифа не в счёт).
-      const credit = this.deps.ledger.credits.get(payment.id);
-      if (credit && credit.remainingUsd < credit.amountUsd) return { kind: 'none', reason: 'used' };
+      // Пакет возвращается, пока из него ничего не потрачено.
+      if (this.deps.ledger.credits.spentFromPayment(payment.id) > 0)
+        return { kind: 'none', reason: 'used' };
     } else if (this.requestsSince(payment.userId, payment.paidAt) > 0) {
       return { kind: 'none', reason: 'used' };
     }
@@ -629,12 +631,10 @@ export class BillingService {
     });
   }
 
-  /** Снимает с подписки (или с кредитов пакета) то, что дала эта оплата. */
+  /** Снимает с подписки и с кредитов то, что дала эта оплата. */
   private revert(payment: PaymentRecord, now: number): void {
-    if (payment.packId) {
-      this.deps.ledger.credits.revoke(payment.id);
-      return;
-    }
+    this.deps.ledger.credits.revokeByPayment(payment.id);
+    if (payment.packId) return;
     const current = this.deps.subscriptionStore.get(payment.userId);
     const untouched =
       current.plan === payment.after.plan && current.renewsAt === payment.after.renewsAt;
@@ -753,7 +753,7 @@ export function planLabel(planId: string): string {
 /** Название пакета премиум-квоты для чеков и сообщений: «пакет +$5 премиум-квоты». */
 export function packLabel(packId: string): string {
   const pack = findPremiumPack(packId);
-  return pack ? `пакет +$${pack.quotaUsd} премиум-квоты` : 'пакет премиум-квоты';
+  return pack ? `пакет +${toCredits(pack.quotaUsd)} кредитов` : 'пакет кредитов';
 }
 
 /** За что платёж: тариф или пакет. */

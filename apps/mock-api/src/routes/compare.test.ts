@@ -8,6 +8,7 @@ import {
   type SseEvent,
 } from '../testing/server.js';
 import { signupAndVerify } from '../testing/signup.js';
+import { setBalance } from '../services/credits-fixture.js';
 import { maxCompareModels, parseCompareModelIds } from '../services/compare-policy.js';
 import { CompareRunStore, type CompareRun } from '../store/compare-run-store.js';
 import { CompareVoteStore } from '../store/compare-vote-store.js';
@@ -362,26 +363,14 @@ test('выбор лучшего ответа заменяет сохранённ
   }
 });
 
-test('строгий режим: если лимит модели исчерпан, колонка получает ошибку, а не подмену', async () => {
+test('строгий режим: если на модель не хватает кредитов, колонка получает ошибку, а не подмену', async () => {
   const server = await startTestServer();
   try {
     const plus = await account(server.baseUrl, 'plus-strict@example.com', 'plus');
     const conversationId = await newConversation(server.baseUrl, plus);
 
-    // Недельный пул Sol на Plus: 2 в сутки × 7 дней; выбираем его целиком.
-    for (let i = 0; i < 14; i++) {
-      server.usageStore.recordUsage({
-        userId: plus.userId,
-        conversationId: 'seed',
-        modelId: 'gpt-6.1-sol',
-        provider: 'openrouter',
-        inputTokens: 1,
-        outputTokens: 1,
-        estimatedCost: 0.001,
-        latencyMs: 1,
-        status: 'success',
-      });
-    }
+    // GPT-6.1 Sol стоит ≈ 35 кредитов за запрос, Ketner Mini — меньше двух.
+    setBalance(server.credits, plus.userId, 'plus', 10);
 
     const events = await readSseEvents(
       await compare(server.baseUrl, plus, conversationId, ['gpt-6.1-sol', 'ketner-mini']),
@@ -389,7 +378,7 @@ test('строгий режим: если лимит модели исчерпа
     const errors = payloads<{ slot: number; code: string }>(events, 'compare_slot_error');
     assert.equal(errors.length, 1);
     assert.equal(errors[0].slot, 0);
-    assert.equal(errors[0].code, 'model_limit_reached');
+    assert.equal(errors[0].code, 'insufficient_credits');
 
     const done = payloads<{ slot: number; selectedModel: { id: string } }>(
       events,

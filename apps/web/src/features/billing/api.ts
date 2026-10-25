@@ -184,10 +184,9 @@ export async function confirmCryptoPayment(invoiceId: string): Promise<{
 
 // --- Бонус за оплату криптой ---
 
-/** +N% к квоте топ-моделей при оплате тарифа через Trybit: процент и суммы по тарифам. */
+/** Бонусные кредиты при оплате тарифа через Trybit: месячная выдача и бонус по тарифам. */
 export async function fetchCryptoBonus(): Promise<{
-  pct: number;
-  plans: Record<string, { quotaUsd: number; bonusUsd: number }>;
+  plans: Record<string, { credits: number; bonusCredits: number }>;
 }> {
   return request('/billing/crypto-bonus');
 }

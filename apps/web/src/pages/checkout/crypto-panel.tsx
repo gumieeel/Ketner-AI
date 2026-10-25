@@ -22,7 +22,7 @@ import { CopyButton, Notice, PanelShell, QrFrame, StatusRow, StepLabel, TimerPil
 export interface CryptoPanelProps {
   /** Цена покупки (тарифа или пакета), $. */
   priceUsd: number;
-  /** Метка покупки: «Тариф Pro · 30 дней» или «+$5 премиум-квоты · 30 дней». */
+  /** Метка покупки: «Тариф Pro · 30 дней». */
   chipLabel: string;
   /** Пояснение бонуса за оплату криптой (только для тарифов). */
   bonusNote?: { title: string; text: string } | null;

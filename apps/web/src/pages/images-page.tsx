@@ -2,6 +2,7 @@ import { useEffect, useState, type CSSProperties, type KeyboardEvent } from 'rea
 import { Link } from 'react-router-dom';
 import {
   AlertIcon,
+  CreditsIcon,
   DownloadIcon,
   ImageIcon,
   InfoIcon,
@@ -21,6 +22,7 @@ import { useImages } from '@/features/images/images-store';
 import type { GeneratedImage, ImageAspect } from '@/features/images/types';
 import { useTranslation } from '@/i18n';
 import { cn } from '@/lib/cn';
+import { formatCredits } from '@/lib/format-date';
 
 const ASPECTS: readonly ImageAspect[] = ['1:1', '4:3', '3:4', '16:9', '9:16'];
 const RATIO: Record<ImageAspect, string> = {
@@ -127,7 +129,7 @@ function ImageCard({ image }: { image: GeneratedImage }) {
 
 /** `/images` — генерация картинок: описание, модель, формат и личная галерея. */
 export function ImagesPage() {
-  const { t } = useTranslation();
+  const { t, language } = useTranslation();
   const load = useImages((state) => state.load);
   const status = useImages((state) => state.status);
   const authRequired = useImages((state) => state.authRequired);
@@ -283,6 +285,12 @@ export function ImagesPage() {
                         <span className="text-[11px] text-subtle">
                           {t('images.lockedPlan', { plan: m.requiredPlan.toUpperCase() })}
                         </span>
+                      ) : m.priceCredits !== undefined ? (
+                        <span className="tabular text-[11px] text-subtle">
+                          {t('images.modelPrice', {
+                            price: formatCredits(m.priceCredits, language, 1),
+                          })}
+                        </span>
                       ) : null}
                     </button>
                   ))}
@@ -341,6 +349,42 @@ export function ImagesPage() {
               className="flex items-center gap-2 rounded-lg bg-surface-2 px-3 py-2 text-[13px] text-muted"
             >
               <InfoIcon className="size-4 shrink-0" /> {t('images.unavailable')}
+            </p>
+          ) : null}
+          {capabilities.credits ? (
+            <p
+              role="status"
+              data-testid="images-credits"
+              className={cn(
+                'flex flex-wrap items-center gap-x-2 gap-y-1 text-[13px]',
+                capabilities.credits.exhausted ? 'text-warning' : 'text-muted',
+              )}
+            >
+              {capabilities.credits.exhausted ? (
+                <AlertIcon className="size-3.5 shrink-0" aria-hidden="true" />
+              ) : (
+                <CreditsIcon className="size-3.5 shrink-0 text-accent" aria-hidden="true" />
+              )}
+              <span className="font-medium tabular text-text">
+                {t('credits.balance', {
+                  count: formatCredits(capabilities.credits.balance, language),
+                })}
+              </span>
+              <span>
+                {capabilities.credits.exhausted
+                  ? t('images.creditsExhausted', {
+                      model:
+                        capabilities.models.find((m) => m.id === capabilities.defaultModelId)
+                          ?.name ?? '',
+                      count: capabilities.credits.freePerDay,
+                    })
+                  : t('images.creditsHint')}
+              </span>
+              {capabilities.credits.exhausted ? (
+                <Link to="/pricing" className="font-medium text-accent hover:underline">
+                  {t('credits.plans')}
+                </Link>
+              ) : null}
             </p>
           ) : null}
           {model?.locked ? (

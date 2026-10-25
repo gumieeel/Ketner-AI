@@ -1049,6 +1049,7 @@ export async function initDatabaseSync(): Promise<boolean> {
         billingLedger.starsSubscriptions,
         billingLedger.prefs,
         billingLedger.credits,
+        billingLedger.legacyCredits,
         usageStore,
         contactStore,
         compareVoteStore,

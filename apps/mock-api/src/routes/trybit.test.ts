@@ -248,19 +248,19 @@ test('Trybit: пакеты премиум-квоты сняты с продаж�
   assert.equal(gateway.calls.length, 0, 'в шлюз ничего не ушло');
 });
 
-test('бонус за крипту: страница оплаты получает его в цифрах тарифа', async (t) => {
+test('бонус за крипту: страница оплаты получает его в кредитах тарифа', async (t) => {
   const server = await startTestServer();
   t.after(() => server.close());
   const buyer = await signup(server.baseUrl, 'bonus-info@example.com');
   const body = await readJson<{
-    pct: number;
-    plans: Record<string, { quotaUsd: number; bonusUsd: number }>;
+    plans: Record<string, { credits: number; bonusCredits: number }>;
   }>(
     await fetch(`${server.baseUrl}/api/billing/crypto-bonus`, {
       headers: { Authorization: `Bearer ${buyer.token}` },
     }),
   );
-  assert.equal(body.pct, 15);
   assert.deepEqual(Object.keys(body.plans), ['plus', 'pro', 'ultra']);
-  assert.equal(body.plans.pro.bonusUsd, Math.round(body.plans.pro.quotaUsd * 15) / 100);
+  assert.deepEqual(body.plans.plus, { credits: 3000, bonusCredits: 200 });
+  assert.deepEqual(body.plans.pro, { credits: 11_000, bonusCredits: 1200 });
+  assert.deepEqual(body.plans.ultra, { credits: 22_000, bonusCredits: 2480 });
 });

@@ -9,29 +9,30 @@
  *   простой вопрос               → ketner-mini (Luna), размышления выключены;
  *   обычная и сложная задача     → ketner-pro (MiMo-V2.6-Pro, открытые веса): уровень флагманов
  *                                  за ≈ $0.005;
- *   математика, логика, код      → glm-5.3 (открытые веса) за ≈ $0.019 из общего бюджета, квоту
- *   средней сложности (Pro, Ultra)  премиум-запросов не тратит;
- *   сложные математика, логика,  → gpt-6.1-sol, пока не исчерпана квота премиум-запросов тарифа,
- *   код (Pro, Ultra)               потом glm-5.3;
- *   бюджет на исходе             → только дешёвые модели.
+ *   математика, логика, код      → glm-5.3 (открытые веса) за ≈ $0.019 — в 2 раза дешевле Sol,
+ *   средней сложности (Pro, Ultra)  кредиты тратятся медленнее;
+ *   сложные математика, логика,  → gpt-6.1-sol, пока кредитов хватает на запрос, потом glm-5.3;
+ *   код (Pro, Ultra)
+ *   кредиты кончились            → бесплатная модель (Nemotron), кредиты не тратятся.
  *
  * Сложная (`hard`) — не любая задача с кодом или вопросом «почему»: это доказательства, проектирование
  * систем, гонки и утечки, длинные условия, работа с привязанным проектом (AutoRouter.isHard). Раньше
- * на премиум-модель шла любая задача по коду, математике и логике на Pro и Ultra, и квота уходила на
+ * на премиум-модель шла любая задача по коду, математике и логике на Pro и Ultra, и кредиты уходили на
  * «объясни, почему…» и «напиши функцию».
  *
  * Auto никогда не выбирает класс `top` (Claude Opus): он доступен только по явному выбору
- * пользователя и расходует ту же квоту премиум-запросов.
+ * пользователя и списывает кредиты по реальной цене запроса.
  *
  * ВАЖНО: AutoRouter используется ТОЛЬКО когда пользователь выбрал 'auto' или не указал модель.
  * Явно выбранная пользователем модель никогда не подменяется «скрытно»: если её приходится
- * заменить (квота премиум-запросов или бюджет), это видно в routingReason и в selectedModel.
+ * заменить (на неё не хватает кредитов), это видно в routingReason и в selectedModel.
  */
 
 import type { TaskCategory, TaskClassification } from './gateway-types.js';
 import { planAllowsModel, planRank } from '../services/entitlement.js';
 import { FLOOR_MODEL_ID, OPEN_FLAGSHIP_MODEL_ID, WORKHORSE_MODEL_ID } from './model-registry.js';
-import type { BudgetStage } from '../services/budget-policy.js';
+import type { CreditStage } from '../services/credit-policy.js';
+import { FREE_CHAT_MODEL_ID } from '../services/credit-policy.js';
 
 export type AutoComplexity = 'simple' | 'moderate' | 'complex';
 
@@ -40,13 +41,13 @@ export interface AutoRouteInput {
   plan: string;
   /** Сложность запроса (учитывает историю, вложения и проект). */
   level: AutoComplexity;
-  /** Сложная задача, ради которой стоит тратить квоту премиум-запросов (AutoRouter.isHard). */
+  /** Сложная задача, ради которой стоит тратить кредиты на премиум-модель (AutoRouter.isHard). */
   hard?: boolean;
   /** Категория задачи. */
   category: string;
-  /** Стадия месячного бюджета пользователя. */
-  stage: BudgetStage;
-  /** Осталась ли в квоте премиум-запросов тарифа хотя бы небольшая сумма. */
+  /** Стадия кредитов пользователя: `exhausted` — платить за ответ нечем. */
+  stage: CreditStage;
+  /** Хватает ли кредитов на запрос к премиум-модели Auto. */
   premiumAvailable: boolean;
 }
 
@@ -319,10 +320,10 @@ export class AutoRouter {
    * Выбрать модель для режима Auto. Результат всегда доступен по тарифу пользователя.
    */
   static route(input: AutoRouteInput): AutoRouteResult {
-    if (input.stage === 'exhausted' || input.stage === 'hard_stop') {
+    if (input.stage === 'exhausted') {
       return {
-        modelId: FLOOR_MODEL_ID,
-        reason: 'Auto: monthly budget exhausted, economy model',
+        modelId: FREE_CHAT_MODEL_ID,
+        reason: 'Auto: credits used up, free model',
       };
     }
 
@@ -336,7 +337,7 @@ export class AutoRouter {
       return { modelId: FLOOR_MODEL_ID, reason: 'Auto: simple query, fast economy model' };
     }
 
-    // Pro и Ultra: код, математика и логика идут на сильные модели, пока бюджет не на исходе.
+    // Pro и Ultra: код, математика и логика идут на сильные модели.
     const strongTask =
       input.level === 'complex' &&
       rank >= planRank('pro') &&
@@ -348,14 +349,14 @@ export class AutoRouter {
       if (input.hard && input.premiumAvailable) {
         return {
           modelId: AUTO_PREMIUM_MODEL_ID,
-          reason: `Auto: hard ${input.category} task, strong model from the premium quota`,
+          reason: `Auto: hard ${input.category} task, strong model`,
         };
       }
       return {
         modelId: AUTO_OPEN_MODEL_ID,
         reason: input.hard
-          ? `Auto: hard ${input.category} task, premium quota used up, open flagship model`
-          : `Auto: ${input.category} task of medium difficulty, open flagship model (premium quota saved)`,
+          ? `Auto: hard ${input.category} task, not enough credits for the strong model, open flagship model`
+          : `Auto: ${input.category} task of medium difficulty, open flagship model (credits saved)`,
       };
     }
 

@@ -1,7 +1,13 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { CurrencyService } from './currency.js';
-import { CRYPTO_PREMIUM_BONUS, PLAN_ENTITLEMENTS, withCryptoBonus } from './entitlement.js';
+import {
+  CRYPTO_BONUS_CREDITS,
+  PLAN_ENTITLEMENTS,
+  cryptoBonusCredits,
+  planCreditsUsd,
+  toUsd,
+} from './entitlement.js';
 import { LEGACY_PLANS, PLANS } from '../routes/billing.js';
 import { planStars } from '../telegram/bot.js';
 import { StarsRateService } from '../telegram/stars-rate.js';
@@ -37,16 +43,16 @@ test('CurrencyService: конвертация валют и динамическ
 
 // Допущения расчёта (docs/models-and-pricing.md): налог 6%, Stripe 3.9% + $0.30 (карта, международная),
 // комиссия пополнения OpenRouter 5.5%, субсидия Free-тира $3.01 на платящего (конверсия 5%, средний расход Free $0.15).
+// Расход платящего ограничен выдачей кредитов: 1 кредит = $0.001 себестоимости, дальше отвечает бесплатная модель.
 const TAX = TAX_RATE;
 const OPENROUTER_FEE = 1 + OPENROUTER_TOPUP_FEE;
 const FREE_SUBSIDY_PER_PAYER = FREE_TIER_SUBSIDY_USD;
-const HARD_STOP_MULTIPLIER = 1.25; // services/budget-policy.ts: после 125% бюджета запросы отклоняются
 
 function stripeNet(priceUsd: number): number {
   return priceUsd * (1 - TAX) - (priceUsd * 0.039 + 0.3);
 }
 
-test('Экономика тарифов: цены каталога в долларах и бюджет моделей не больше 45% цены', () => {
+test('Экономика тарифов: цены каталога в долларах и выдача кредитов не больше 45% цены', () => {
   assert.deepEqual(
     PLANS.map((p) => p.priceMonthly),
     [0, 9, 25, 49],
@@ -58,39 +64,34 @@ test('Экономика тарифов: цены каталога в долла
     assert.ok(entitlement, `План ${plan.id} должен присутствовать в PLAN_ENTITLEMENTS`);
     if (plan.priceMonthly <= 0) continue;
 
-    const ratio = entitlement.costBudget / plan.priceMonthly;
+    const credits = planCreditsUsd(plan.id);
+    assert.equal(credits, toUsd(entitlement.monthlyCredits));
+    const ratio = credits / plan.priceMonthly;
     assert.ok(
       ratio < 0.45,
-      `Для тарифа ${plan.id}: costBudget=$${entitlement.costBudget} составляет ${(ratio * 100).toFixed(1)}% цены $${plan.priceMonthly}, ожидается < 45%`,
-    );
-    // Квота премиум-моделей — часть бюджета, а не добавка к нему: даже у Pro и Ultra, где она основной
-    // ресурс, на Ketner Pro и лёгкие модели остаётся не меньше четверти бюджета.
-    assert.ok(
-      entitlement.premiumBudget <= entitlement.costBudget * 0.75,
-      `Для тарифа ${plan.id}: квота премиум-моделей не должна съедать больше 75% бюджета`,
+      `Для тарифа ${plan.id}: выдача ${entitlement.monthlyCredits} кредитов = $${credits} составляет ${(ratio * 100).toFixed(1)}% цены $${plan.priceMonthly}, ожидается < 45%`,
     );
   }
+  // Чем дороже тариф, тем больше кредитов.
+  const monthly = PLANS.map((p) => PLAN_ENTITLEMENTS[p.id].monthlyCredits);
+  assert.deepEqual(
+    monthly,
+    [...monthly].sort((x, y) => x - y),
+  );
 });
 
 test('Экономика тарифов: даже в худшем случае тариф прибылен', () => {
   for (const plan of PLANS) {
     if (plan.priceMonthly <= 0) continue;
-    const { costBudget } = PLAN_ENTITLEMENTS[plan.id];
+    const credits = planCreditsUsd(plan.id);
     const net = stripeNet(plan.priceMonthly);
 
-    // Пользователь выбрал весь бюджет, платит картой, плюс доля Free-тира: маржа не меньше 15% цены.
-    // (Free-тир теперь идёт на бесплатные эндпоинты, так что $3.01 — оценка сверху.)
-    const atBudget = costBudget * OPENROUTER_FEE + FREE_SUBSIDY_PER_PAYER;
+    // Пользователь потратил все кредиты, платит картой, плюс доля Free-тира: маржа не меньше 15% цены.
+    // (Free-тир идёт на бесплатные эндпоинты, так что $3.01 — оценка сверху.)
+    const atLimit = credits * OPENROUTER_FEE + FREE_SUBSIDY_PER_PAYER;
     assert.ok(
-      net - atBudget >= plan.priceMonthly * 0.15,
-      `Для тарифа ${plan.id}: чистыми $${net.toFixed(2)}, расход в худшем случае $${atBudget.toFixed(2)}, маржа ниже 15% цены`,
-    );
-
-    // Жёсткий предел (125% бюджета, дальше запросы отклоняются): тариф всё ещё не в минусе.
-    const atCeiling = costBudget * HARD_STOP_MULTIPLIER * OPENROUTER_FEE + FREE_SUBSIDY_PER_PAYER;
-    assert.ok(
-      net - atCeiling > 0,
-      `Для тарифа ${plan.id}: на пределе 125% бюджета расход $${atCeiling.toFixed(2)} превышает выручку $${net.toFixed(2)}`,
+      net - atLimit >= plan.priceMonthly * 0.15,
+      `Для тарифа ${plan.id}: чистыми $${net.toFixed(2)}, расход в худшем случае $${atLimit.toFixed(2)}, маржа ниже 15% цены`,
     );
   }
 });
@@ -105,7 +106,7 @@ function starsAt(usdPerStar: number): StarsRateService {
 // Любой курс цены, который принимает stars-rate.ts: от $0.008 до $0.03, включая официальный.
 const STAR_RATES = [0.008, 0.013, 0.015, 0.018, STARS_OFFICIAL_USD_PER_STAR, 0.025, 0.03];
 
-test('Ни один тариф не уходит в минус ни в одном канале: 125% бюджета и комиссии', () => {
+test('Ни один тариф не уходит в минус ни в одном канале: все кредиты и комиссии', () => {
   const margins: string[] = [];
   const check = (what: string, net: number, cost: number) => {
     margins.push(`${what}: ${(net - cost).toFixed(2)}`);
@@ -119,9 +120,12 @@ test('Ни один тариф не уходит в минус ни в одно�
     if (plan.priceMonthly <= 0) continue;
     const planId = plan.id as PlanId;
     const worst = planWorstCaseCostUsd(planId);
+    assert.ok(Math.abs(worst - (planCreditsUsd(planId) * OPENROUTER_FEE + 3.01)) < 1e-9);
     assert.ok(
-      Math.abs(worst - (PLAN_ENTITLEMENTS[planId].costBudget * 1.25 * OPENROUTER_FEE + 3.01)) <
-        1e-9,
+      Math.abs(
+        planWorstCaseCostUsd(planId, { cryptoBonus: true }) -
+          ((planCreditsUsd(planId) + toUsd(cryptoBonusCredits(planId))) * OPENROUTER_FEE + 3.01),
+      ) < 1e-9,
     );
     check(`${planId} картой`, stripeNet(plan.priceMonthly), worst);
     check(
@@ -161,19 +165,22 @@ test('Цена в звёздах — цена тарифа по официаль
     (['plus', 'pro', 'ultra'] as const).map((id) => planStars(id, official)),
     [460, 1260, 2460],
   );
-  // Худший случай без доли Free-тира — в плюсе: Plus +$1.66, Pro +$0.89, Ultra +$1.05.
+  // Худший случай без доли Free-тира — в плюсе: Plus +$2.46, Pro +$3.79, Ultra +$6.85.
   assert.deepEqual(
     (['plus', 'pro', 'ultra'] as const).map((id) =>
       Number((starsNetUsd(planStars(id, official)) - planStarsWorstCaseCostUsd(id)).toFixed(2)),
     ),
-    [1.66, 0.89, 1.05],
+    [2.46, 3.79, 6.85],
   );
-  // Минимум защищает от слишком дорогого курса в STARS_USD_RATE: при $0.03 Plus стоил бы 300 ⭐.
+  // Минимум защищает от слишком дорогого курса в STARS_USD_RATE: при $0.03 Pro стоил бы 840 ⭐.
   const expensive = starsAt(0.03);
-  assert.equal(expensive.quote(9), 300);
-  assert.equal(planStars('plus', expensive), 330);
-  assert.ok(starsNetUsd(330) >= planStarsWorstCaseCostUsd('plus'));
-  assert.ok(starsNetUsd(320) < planStarsWorstCaseCostUsd('plus'), '330 ⭐ — точка безубыточности');
+  assert.equal(expensive.quote(25), 840);
+  assert.equal(planStars('pro', expensive), 950);
+  assert.ok(starsNetUsd(950) >= planStarsWorstCaseCostUsd('pro'));
+  assert.ok(starsNetUsd(940) < planStarsWorstCaseCostUsd('pro'), '950 ⭐ — точка безубыточности');
+  // У Plus кредитов немного: даже при $0.03 его цена (300 ⭐) выше точки безубыточности.
+  assert.equal(planStars('plus', expensive), 300);
+  assert.ok(starsNetUsd(300) >= planStarsWorstCaseCostUsd('plus'));
   // Доля цены, которая доходит до нас со звёзд, — из выплаты и официальной цены, не отдельное число.
   assert.equal(PAYMENT_NET_SHARE.stars, STARS_PAYOUT_USD / STARS_OFFICIAL_USD_PER_STAR);
 });
@@ -184,36 +191,35 @@ test('CurrencyService.calculatePlanCostBudget: считает от цены в �
   assert.equal(CurrencyService.calculatePlanCostBudget(0), 0.2);
 });
 
-test('Бонус за оплату криптой: +15% к квоте покрывается разницей комиссий звёзд и крипты', () => {
-  assert.equal(CRYPTO_PREMIUM_BONUS, 0.15);
+test('Бонус за оплату криптой: дополнительные кредиты покрываются разницей комиссий звёзд и крипты', () => {
   for (const plan of PLANS) {
     if (plan.priceMonthly <= 0) continue;
     const base = PLAN_ENTITLEMENTS[plan.id];
-    const bonus = withCryptoBonus(base);
-    const extra = bonus.premiumBudget - base.premiumBudget;
-    assert.ok(Math.abs(extra - base.premiumBudget * CRYPTO_PREMIUM_BONUS) < 0.01, plan.id);
+    const bonus = cryptoBonusCredits(plan.id);
+    assert.equal(bonus, CRYPTO_BONUS_CREDITS[plan.id]);
+    assert.ok(bonus > 0, `${plan.id}: бонус за крипту должен быть`);
     assert.ok(
-      Math.abs(bonus.costBudget - base.costBudget - extra) < 1e-9,
-      'бюджет растёт на бонус',
+      bonus <= base.monthlyCredits * 0.15,
+      `${plan.id}: бонус ${bonus} кредитов больше 15% месячной выдачи ${base.monthlyCredits}`,
     );
 
+    const baseUsd = planCreditsUsd(plan.id);
+    const bonusUsd = toUsd(bonus);
     const cryptoNet = plan.priceMonthly * PAYMENT_NET_SHARE.crypto * (1 - TAX);
     const starsNet = plan.priceMonthly * PAYMENT_NET_SHARE.stars * (1 - TAX);
-    // Бонус (даже на жёстком пределе 125%) дешевле, чем разница комиссий звёзд и крипты.
-    const bonusCost = extra * OPENROUTER_FEE * HARD_STOP_MULTIPLIER;
+    // Бонус дешевле, чем разница комиссий звёзд и крипты.
+    const bonusCost = bonusUsd * OPENROUTER_FEE;
     assert.ok(
       bonusCost <= cryptoNet - starsNet,
       `${plan.id}: бонус $${bonusCost.toFixed(2)} дороже разницы комиссий $${(cryptoNet - starsNet).toFixed(2)}`,
     );
-    for (const ratio of [1, HARD_STOP_MULTIPLIER]) {
-      const cryptoMargin = cryptoNet - bonus.costBudget * ratio * OPENROUTER_FEE;
-      const starsMargin = starsNet - base.costBudget * ratio * OPENROUTER_FEE;
-      assert.ok(
-        cryptoMargin >= starsMargin,
-        `${plan.id}: крипта с бонусом ($${cryptoMargin.toFixed(2)}) хуже звёзд ($${starsMargin.toFixed(2)}) на ${ratio * 100}%`,
-      );
-      // И с учётом Free-тира крипта с бонусом в плюсе.
-      assert.ok(cryptoMargin - FREE_SUBSIDY_PER_PAYER > 0, `${plan.id}: убыток на ${ratio * 100}%`);
-    }
+    const cryptoMargin = cryptoNet - (baseUsd + bonusUsd) * OPENROUTER_FEE;
+    const starsMargin = starsNet - baseUsd * OPENROUTER_FEE;
+    assert.ok(
+      cryptoMargin >= starsMargin,
+      `${plan.id}: крипта с бонусом ($${cryptoMargin.toFixed(2)}) хуже звёзд ($${starsMargin.toFixed(2)})`,
+    );
+    // И с учётом Free-тира крипта с бонусом в плюсе.
+    assert.ok(cryptoMargin - FREE_SUBSIDY_PER_PAYER > 0, `${plan.id}: убыток`);
   }
 });

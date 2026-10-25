@@ -133,7 +133,7 @@ export interface CompletionHandlers {
     messageId: string;
     finishReason?: 'stop' | 'length' | 'cancelled' | 'error';
     canContinue?: boolean;
-    /** Модель, которая реально ответила (при Auto, замене по квоте или сбое она отличается от выбранной). */
+    /** Модель, которая реально ответила (при Auto, нехватке кредитов или сбое она отличается от выбранной). */
     selectedModelId?: string;
   }) => void;
   onError: (payload: { code: string; message: string }) => void;

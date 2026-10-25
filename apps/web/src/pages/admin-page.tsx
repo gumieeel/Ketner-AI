@@ -3,7 +3,7 @@ import { useAuth } from '@/features/auth/auth-store';
 import { Badge, type BadgeTone } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
-import { Input } from '@/components/ui/input';
+import { Field, Input } from '@/components/ui/input';
 import { Modal, ModalHeader } from '@/components/ui/modal';
 import { Skeleton } from '@/components/ui/skeleton';
 import { StatusDot } from '@/components/ui/status-dot';
@@ -13,6 +13,7 @@ import {
   ChartIcon,
   CheckIcon,
   CpuIcon,
+  CreditsIcon,
   EditIcon,
   KeyIcon,
   MessagesIcon,
@@ -25,6 +26,28 @@ import { useTranslation, type TranslationKey } from '@/i18n';
 import { cn } from '@/lib/cn';
 import type { PlanId } from '@/features/auth/types';
 import { RegistrationsPanel } from './admin/registrations-panel';
+
+interface AdminCredits {
+  /** Остаток, кредиты. */
+  balance: number;
+  /** Месячная выдача тарифа. */
+  monthly: number;
+  /** Потрачено за последние 30 дней. */
+  spentMonth: number;
+  nextExpiresAt: string | null;
+  usedPct: number;
+}
+
+interface AdminGrant {
+  id: string;
+  kind: 'plan' | 'bonus' | 'free' | 'auto' | 'pack' | 'admin';
+  amountUsd: number;
+  remainingUsd: number;
+  grantedAt: string;
+  expiresAt: string;
+  status: 'active' | 'revoked';
+  note?: string;
+}
 
 interface UserSummary {
   id: string;
@@ -43,16 +66,14 @@ interface UserSummary {
   limits: {
     requestsPerDay: number | null;
     tokensPerDay: number | null;
-    maxDailyCost: number | null;
-    costBudget: number | null;
+    monthlyCredits: number;
   };
   remaining: {
     requestsToday: number | null;
     tokensToday: number | null;
-    costToday: number | null;
-    costThisMonth: number | null;
   };
-  budgetUsedPct: number;
+  credits: AdminCredits;
+  creditsUsedPct: number;
 }
 
 interface UserDetail {
@@ -76,18 +97,16 @@ interface UserDetail {
     requestsPerDay: number | null;
     tokensPerHour: number | null;
     tokensPerDay: number | null;
-    maxDailyCost: number | null;
-    costBudget: number | null;
+    monthlyCredits: number;
   };
   remaining: {
     requestsLastHour: number | null;
     requestsToday: number | null;
     tokensLastHour: number | null;
     tokensToday: number | null;
-    costToday: number | null;
-    costThisMonth: number | null;
   };
-  budgetUsedPct: number;
+  credits: AdminCredits & { grants: AdminGrant[] };
+  creditsUsedPct: number;
   profitability: {
     userId: string;
     subscriptionRevenue: number;
@@ -415,19 +434,19 @@ function DetailSkeleton() {
   );
 }
 
-function BudgetMeter({ user, detailed = false }: { user: UserSummary; detailed?: boolean }) {
+function CreditsMeter({ user, detailed = false }: { user: UserSummary; detailed?: boolean }) {
   return (
     <div className="flex items-center gap-2.5">
       <div className="h-1.5 w-14 shrink-0 overflow-hidden rounded-full bg-surface-3 sm:w-20">
         <div
-          className={cn('h-full rounded-full', budgetTone(user.budgetUsedPct))}
-          style={{ width: `${Math.min(100, user.budgetUsedPct)}%` }}
+          className={cn('h-full rounded-full', budgetTone(user.creditsUsedPct))}
+          style={{ width: `${Math.min(100, user.creditsUsedPct)}%` }}
         />
       </div>
-      <span className="text-xs font-semibold tabular-nums">{user.budgetUsedPct}%</span>
+      <span className="text-xs font-semibold tabular-nums">{user.creditsUsedPct}%</span>
       {detailed ? (
         <span className="hidden text-xs text-muted tabular-nums xl:inline">
-          (${user.usage.costThisMonth} / ${user.limits.costBudget ?? 0})
+          ({user.credits.balance.toLocaleString()} / {user.credits.monthly.toLocaleString()})
         </span>
       ) : null}
     </div>
@@ -486,6 +505,12 @@ export function AdminPage() {
   const [saving, setSaving] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
   const [saveError, setSaveError] = useState<Problem | null>(null);
+  const [grantAmount, setGrantAmount] = useState('');
+  const [grantDays, setGrantDays] = useState('30');
+  const [grantNote, setGrantNote] = useState('');
+  const [granting, setGranting] = useState(false);
+  const [grantSuccess, setGrantSuccess] = useState(false);
+  const [grantError, setGrantError] = useState<Problem | null>(null);
 
   const closeDetail = useCallback(() => {
     setSelectedUserId(null);
@@ -576,6 +601,8 @@ export function AdminPage() {
     setDetailError(null);
     setSaveSuccess(false);
     setSaveError(null);
+    setGrantSuccess(false);
+    setGrantError(null);
     try {
       const res = await fetch(`/api/admin/users/${id}`, {
         headers: getHeaders(),
@@ -634,6 +661,43 @@ export function AdminPage() {
       setSaveError(toProblem(err, 'admin.errSaveFallback'));
     } finally {
       setSaving(false);
+    }
+  };
+
+  /** Ручная выдача кредитов: компенсация, подарок или проверка. */
+  const handleGrantCredits = async () => {
+    if (!selectedUserId) return;
+    setGranting(true);
+    setGrantError(null);
+    setGrantSuccess(false);
+    try {
+      const res = await fetch(`/api/admin/users/${selectedUserId}/credits`, {
+        method: 'POST',
+        headers: getHeaders(),
+        credentials: 'include',
+        body: JSON.stringify({
+          credits: Number(grantAmount),
+          days: Number(grantDays),
+          note: grantNote.trim() || undefined,
+        }),
+      });
+      if (!res.ok) {
+        const body = (await res.json()) as { error?: { message?: string } };
+        throw new ProblemError(
+          body.error?.message
+            ? { text: body.error.message }
+            : { key: 'admin.errUpdate', vars: { status: res.status } },
+        );
+      }
+      setGrantAmount('');
+      setGrantNote('');
+      await loadUserDetail(selectedUserId);
+      await loadUsers();
+      setGrantSuccess(true);
+    } catch (err: unknown) {
+      setGrantError(toProblem(err, 'admin.errSaveFallback'));
+    } finally {
+      setGranting(false);
     }
   };
 
@@ -1011,7 +1075,7 @@ export function AdminPage() {
                         <PlanBadges user={u} />
                       </div>
                       <div className="mt-2 sm:hidden">
-                        <BudgetMeter user={u} />
+                        <CreditsMeter user={u} />
                       </div>
                     </td>
                     <td className="hidden px-4 py-3 md:table-cell">
@@ -1028,7 +1092,7 @@ export function AdminPage() {
                       {u.usage.tokensToday.toLocaleString()}
                     </td>
                     <td className="hidden px-4 py-3 sm:table-cell">
-                      <BudgetMeter user={u} detailed />
+                      <CreditsMeter user={u} detailed />
                     </td>
                     <td className="hidden px-4 py-3 tabular-nums xl:table-cell">
                       {u.remaining.tokensToday !== null ? (
@@ -1209,6 +1273,147 @@ export function AdminPage() {
                       {saving ? t('admin.saving') : t('admin.apply')}
                     </Button>
                   </div>
+                </div>
+
+                {/* Credits: balance, grants and manual grant */}
+                <div className={cn(SUBTLE_PANEL, 'space-y-3')}>
+                  <PanelTitle icon={<CreditsIcon className="size-4 text-accent" />}>
+                    {t('admin.credits')}
+                  </PanelTitle>
+                  <dl className="grid grid-cols-2 gap-3 text-[13px] md:grid-cols-4">
+                    <div className="rounded-xl border border-stroke bg-surface p-3">
+                      <dt className="text-xs text-muted">{t('admin.creditsBalance')}</dt>
+                      <dd className="mt-1 text-lg font-semibold tabular-nums">
+                        {detailUser.credits.balance.toLocaleString()}
+                      </dd>
+                    </div>
+                    <div className="rounded-xl border border-stroke bg-surface p-3">
+                      <dt className="text-xs text-muted">{t('admin.creditsMonthly')}</dt>
+                      <dd className="mt-1 text-lg font-semibold tabular-nums">
+                        {detailUser.credits.monthly.toLocaleString()}
+                      </dd>
+                    </div>
+                    <div className="rounded-xl border border-stroke bg-surface p-3">
+                      <dt className="text-xs text-muted">{t('admin.creditsSpent')}</dt>
+                      <dd className="mt-1 text-lg font-semibold tabular-nums">
+                        {detailUser.credits.spentMonth.toLocaleString()}{' '}
+                        <span className="text-xs font-normal text-muted">
+                          ({detailUser.credits.usedPct}%)
+                        </span>
+                      </dd>
+                    </div>
+                    <div className="rounded-xl border border-stroke bg-surface p-3">
+                      <dt className="text-xs text-muted">{t('admin.creditsExpires')}</dt>
+                      <dd className="mt-1 text-sm font-semibold tabular-nums">
+                        {detailUser.credits.nextExpiresAt
+                          ? new Date(detailUser.credits.nextExpiresAt).toLocaleDateString()
+                          : '—'}
+                      </dd>
+                    </div>
+                  </dl>
+
+                  {detailUser.credits.grants.length > 0 ? (
+                    <div className="overflow-x-auto">
+                      <table className="w-full min-w-[420px] text-left text-xs">
+                        <thead className="text-muted">
+                          <tr>
+                            <th className="py-1.5 pr-3 font-medium">{t('admin.grantKind')}</th>
+                            <th className="py-1.5 pr-3 font-medium">{t('admin.grantRemaining')}</th>
+                            <th className="py-1.5 pr-3 font-medium">{t('admin.grantExpires')}</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-stroke/60 tabular-nums">
+                          {detailUser.credits.grants.map((grant) => (
+                            <tr
+                              key={grant.id}
+                              className={grant.status === 'revoked' ? 'text-subtle' : undefined}
+                            >
+                              <td className="py-1.5 pr-3">
+                                {t(`admin.grantKind.${grant.kind}` as TranslationKey)}
+                                {grant.status === 'revoked' ? ` · ${t('admin.grantRevoked')}` : ''}
+                                {grant.note ? (
+                                  <span className="text-muted"> · {grant.note}</span>
+                                ) : null}
+                              </td>
+                              <td className="py-1.5 pr-3">
+                                {Math.round(grant.remainingUsd * 1000).toLocaleString()} /{' '}
+                                {Math.round(grant.amountUsd * 1000).toLocaleString()}
+                              </td>
+                              <td className="py-1.5 pr-3">
+                                {new Date(grant.expiresAt).toLocaleDateString()}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  ) : null}
+
+                  <form
+                    className="grid gap-3 border-t border-stroke pt-3 sm:grid-cols-[1fr_6rem_1.5fr_auto] sm:items-end"
+                    onSubmit={(event) => {
+                      event.preventDefault();
+                      void handleGrantCredits();
+                    }}
+                  >
+                    <Field label={t('admin.grantAmount')} id="admin-grant-amount">
+                      {(props) => (
+                        <Input
+                          {...props}
+                          type="number"
+                          min={1}
+                          max={1_000_000}
+                          inputMode="numeric"
+                          value={grantAmount}
+                          onChange={(event) => setGrantAmount(event.target.value)}
+                        />
+                      )}
+                    </Field>
+                    <Field label={t('admin.grantDays')} id="admin-grant-days">
+                      {(props) => (
+                        <Input
+                          {...props}
+                          type="number"
+                          min={1}
+                          max={365}
+                          inputMode="numeric"
+                          value={grantDays}
+                          onChange={(event) => setGrantDays(event.target.value)}
+                        />
+                      )}
+                    </Field>
+                    <Field label={t('admin.grantNote')} id="admin-grant-note">
+                      {(props) => (
+                        <Input
+                          {...props}
+                          maxLength={200}
+                          value={grantNote}
+                          onChange={(event) => setGrantNote(event.target.value)}
+                        />
+                      )}
+                    </Field>
+                    <Button
+                      type="submit"
+                      variant="secondary"
+                      loading={granting}
+                      disabled={!(Number(grantAmount) >= 1) || !(Number(grantDays) >= 1)}
+                    >
+                      {t('admin.grantSubmit')}
+                    </Button>
+                  </form>
+                  {grantError ? (
+                    <p role="alert" className="text-[13px] font-medium text-danger">
+                      {describe(grantError)}
+                    </p>
+                  ) : null}
+                  {grantSuccess ? (
+                    <p
+                      role="status"
+                      className="flex items-center gap-1.5 text-[13px] font-medium text-success"
+                    >
+                      <CheckIcon className="size-3.5" /> {t('admin.grantDone')}
+                    </p>
+                  ) : null}
                 </div>
 
                 {/* Hourly & Daily Limits Comparison */}

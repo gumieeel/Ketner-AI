@@ -51,3 +51,11 @@ export function pluralForm(count: number, language: Language): 'one' | 'few' | '
   if (mod10 >= 2 && mod10 <= 4 && (mod100 < 12 || mod100 > 14)) return 'few';
   return 'many';
 }
+
+/** Кредиты с разделителем тысяч: 2 987; у цен запроса — с десятыми (1,8). */
+export function formatCredits(value: number, language: Language, fractionDigits = 0): string {
+  return value.toLocaleString(LOCALES[language], {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: fractionDigits,
+  });
+}

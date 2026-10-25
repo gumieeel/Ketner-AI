@@ -5,14 +5,15 @@ import test from 'node:test';
 import { fileURLToPath } from 'node:url';
 import { IMAGE_MODELS, imageDailyLimit } from '../images/models.js';
 import { CODE_LIMITS } from './code-limits.js';
-import { getModelLimit } from './daily-limits.js';
-import { PLAN_ENTITLEMENTS } from './entitlement.js';
+import { modelRegistry } from '../ai/model-registry.js';
+import { typicalRequestCredits } from './credits.js';
+import { cryptoBonusCredits, PLAN_ENTITLEMENTS } from './entitlement.js';
 import { PLAN_PRICE_USD } from './pricing.js';
 
 /**
  * Сайт показывает лимиты тарифов до оплаты (apps/web/.../plan-facts.json). Если число на сайте
  * разойдётся с тем, что сервер действительно применяет, человек заплатит за одно, а получит другое.
- * Тест держит их одинаковыми.
+ * Тест держит их одинаковыми, включая примеры «на сколько запросов хватит кредитов».
  */
 
 type Plan = 'free' | 'plus' | 'pro' | 'ultra';
@@ -24,12 +25,11 @@ interface PlanFacts {
   requestsPerHour: number;
   tokensPerHour: number;
   tokensPerDay: number;
-  dailyCostCapUsd: number;
-  costBudgetUsd: number;
+  monthlyCredits: number;
+  cryptoBonusCredits: number;
+  examples: { model: string; name: string; requestCredits: number; requests: number }[];
   concurrency: number;
   maxAnswerTokens: number;
-  premiumQuotaUsd: number;
-  flagship: { model: string; weeklyPool: number; perDay: number }[];
   imagesPerDay: Record<string, number>;
   codeRunsPerDay: number;
   codeRunBudgetUsd: number;
@@ -59,20 +59,25 @@ test('лимиты тарифов на сайте совпадают с серв
     assert.equal(site.requestsPerHour, server.requestsPerHour, `${plan}: запросов в час`);
     assert.equal(site.tokensPerHour, server.tokensPerHour, `${plan}: токенов в час`);
     assert.equal(site.tokensPerDay, server.tokensPerDay, `${plan}: токенов в сутки`);
-    assert.equal(site.dailyCostCapUsd, server.maxDailyCost, `${plan}: потолок расхода в сутки`);
-    assert.equal(site.costBudgetUsd, server.costBudget, `${plan}: бюджет расхода на 30 дней`);
+    assert.equal(site.monthlyCredits, server.monthlyCredits, `${plan}: кредитов в месяц`);
+    assert.equal(site.cryptoBonusCredits, cryptoBonusCredits(plan), `${plan}: бонус за крипту`);
     assert.equal(site.concurrency, server.maxConcurrency, `${plan}: параллельных запросов`);
     assert.equal(site.maxAnswerTokens, server.maxTokens, `${plan}: потолок ответа`);
-    assert.equal(site.premiumQuotaUsd, server.premiumBudget, `${plan}: квота премиум-моделей`);
     assert.equal(site.codeRunsPerDay, CODE_LIMITS[plan].runsPerDay, `${plan}: запусков Code`);
     assert.equal(site.codeRunBudgetUsd, CODE_LIMITS[plan].maxRunCostUsd, `${plan}: бюджет запуска`);
     assert.equal(site.api, plan !== 'free', `${plan}: API-ключи доступны с Plus`);
 
-    for (const flagship of site.flagship) {
-      const limit = getModelLimit(plan, flagship.model);
-      assert.ok(limit, `${plan}: у ${flagship.model} нет лимита`);
-      assert.equal(flagship.weeklyPool, limit.weeklyPool, `${plan}: ${flagship.model} в неделю`);
-      assert.equal(flagship.perDay, limit.dailyCap, `${plan}: ${flagship.model} за сутки`);
+    for (const example of site.examples) {
+      const model = modelRegistry.get(example.model);
+      assert.ok(model, `${plan}: нет модели ${example.model}`);
+      const price = typicalRequestCredits(model, 'standard');
+      assert.equal(example.name, model.name, `${plan}: название ${example.model}`);
+      assert.equal(example.requestCredits, price, `${plan}: цена запроса ${example.model}`);
+      assert.equal(
+        example.requests,
+        Math.floor(server.monthlyCredits / price),
+        `${plan}: запросов ${example.model} на месячные кредиты`,
+      );
     }
 
     const siteImages = Object.entries(site.imagesPerDay).sort();

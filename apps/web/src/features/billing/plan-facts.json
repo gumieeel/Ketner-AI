@@ -1,9 +1,11 @@
 {
-  "$comment": "Лимиты тарифов для страниц «Тарифы», «Модели» и оформления оплаты. Числа совпадают с сервером: тест apps/mock-api/src/services/plan-facts.test.ts сверяет их с entitlement.ts, daily-limits.ts, images/models.ts и code-limits.ts. Меняете лимит на сервере — поправьте и здесь.",
-  "periodDays": 30,
+  "$comment": "Лимиты тарифов для страниц «Тарифы», «Модели» и оформления оплаты. Числа совпадают с сервером: тест apps/mock-api/src/services/plan-facts.test.ts сверяет их с entitlement.ts, credits.ts, images/models.ts и code-limits.ts. Меняете лимит на сервере — поправьте и здесь.",
   "plans": {
     "free": {
       "priceUsd": 0,
+      "monthlyCredits": 300,
+      "cryptoBonusCredits": 0,
+      "examples": [],
       "messagesPerDay": 10,
       "requestsPerMinute": 5,
       "requestsPerHour": 10,
@@ -11,11 +13,6 @@
       "maxAnswerTokens": 2048,
       "tokensPerHour": 50000,
       "tokensPerDay": 150000,
-      "dailyCostCapUsd": 0.03,
-      "costBudgetUsd": 0.3,
-      "premiumQuotaUsd": 0,
-      "premiumExamples": null,
-      "flagship": [],
       "imagesPerDay": {
         "flux-schnell": 5
       },
@@ -25,6 +22,22 @@
     },
     "plus": {
       "priceUsd": 9,
+      "monthlyCredits": 3000,
+      "cryptoBonusCredits": 200,
+      "examples": [
+        {
+          "model": "gpt-6.1-sol",
+          "name": "GPT-6.1 Sol",
+          "requestCredits": 35.2,
+          "requests": 85
+        },
+        {
+          "model": "ketner-pro",
+          "name": "Ketner Pro",
+          "requestCredits": 5,
+          "requests": 600
+        }
+      ],
       "messagesPerDay": 500,
       "requestsPerMinute": 20,
       "requestsPerHour": 100,
@@ -32,21 +45,6 @@
       "maxAnswerTokens": 6144,
       "tokensPerHour": 300000,
       "tokensPerDay": 1500000,
-      "dailyCostCapUsd": 0.35,
-      "costBudgetUsd": 3,
-      "premiumQuotaUsd": 1.3,
-      "premiumExamples": {
-        "ru": "≈ 36 запросов GPT-6.1 Sol",
-        "en": "≈ 36 GPT-6.1 Sol requests"
-      },
-      "flagship": [
-        {
-          "model": "gpt-6.1-sol",
-          "name": "GPT-6.1 Sol",
-          "weeklyPool": 14,
-          "perDay": 5
-        }
-      ],
       "imagesPerDay": {
         "flux-schnell": 50,
         "flux-2-klein": 20
@@ -57,6 +55,28 @@
     },
     "pro": {
       "priceUsd": 25,
+      "monthlyCredits": 11000,
+      "cryptoBonusCredits": 1200,
+      "examples": [
+        {
+          "model": "claude-opus-5.5",
+          "name": "Claude Opus 5.5",
+          "requestCredits": 70.4,
+          "requests": 156
+        },
+        {
+          "model": "claude-sonnet-5.5",
+          "name": "Claude Sonnet 5.5",
+          "requestCredits": 35.2,
+          "requests": 312
+        },
+        {
+          "model": "ketner-pro",
+          "name": "Ketner Pro",
+          "requestCredits": 5,
+          "requests": 2200
+        }
+      ],
       "messagesPerDay": 1500,
       "requestsPerMinute": 40,
       "requestsPerHour": 300,
@@ -64,32 +84,11 @@
       "maxAnswerTokens": 12288,
       "tokensPerHour": 1500000,
       "tokensPerDay": 6000000,
-      "dailyCostCapUsd": 2.2,
-      "costBudgetUsd": 11,
-      "premiumQuotaUsd": 8,
-      "premiumExamples": {
-        "ru": "≈ 113 запросов Claude Opus 5.5 или 227 Claude Sonnet 5.5",
-        "en": "≈ 113 Claude Opus 5.5 or 227 Claude Sonnet 5.5 requests"
-      },
-      "flagship": [
-        {
-          "model": "claude-opus-5.5",
-          "name": "Claude Opus 5.5",
-          "weeklyPool": 21,
-          "perDay": 8
-        },
-        {
-          "model": "claude-sonnet-5.5",
-          "name": "Claude Sonnet 5.5",
-          "weeklyPool": 42,
-          "perDay": 16
-        }
-      ],
       "imagesPerDay": {
         "flux-schnell": 100,
         "flux-2-klein": 50,
-        "flux-2-dev": 10,
-        "seedream-5-flash": 5
+        "flux-2-dev": 100,
+        "seedream-5-flash": 100
       },
       "codeRunsPerDay": 40,
       "codeRunBudgetUsd": 2,
@@ -97,6 +96,28 @@
     },
     "ultra": {
       "priceUsd": 49,
+      "monthlyCredits": 22000,
+      "cryptoBonusCredits": 2480,
+      "examples": [
+        {
+          "model": "claude-opus-5.5",
+          "name": "Claude Opus 5.5",
+          "requestCredits": 70.4,
+          "requests": 312
+        },
+        {
+          "model": "claude-sonnet-5.5",
+          "name": "Claude Sonnet 5.5",
+          "requestCredits": 35.2,
+          "requests": 625
+        },
+        {
+          "model": "ketner-pro",
+          "name": "Ketner Pro",
+          "requestCredits": 5,
+          "requests": 4400
+        }
+      ],
       "messagesPerDay": 4000,
       "requestsPerMinute": 80,
       "requestsPerHour": 600,
@@ -104,38 +125,18 @@
       "maxAnswerTokens": 16384,
       "tokensPerHour": 4000000,
       "tokensPerDay": 20000000,
-      "dailyCostCapUsd": 4.4,
-      "costBudgetUsd": 22,
-      "premiumQuotaUsd": 16.5,
-      "premiumExamples": {
-        "ru": "≈ 234 запроса Claude Opus 5.5 или 468 Claude Sonnet 5.5",
-        "en": "≈ 234 Claude Opus 5.5 or 468 Claude Sonnet 5.5 requests"
-      },
-      "flagship": [
-        {
-          "model": "claude-opus-5.5",
-          "name": "Claude Opus 5.5",
-          "weeklyPool": 49,
-          "perDay": 19
-        },
-        {
-          "model": "claude-sonnet-5.5",
-          "name": "Claude Sonnet 5.5",
-          "weeklyPool": 98,
-          "perDay": 39
-        }
-      ],
       "imagesPerDay": {
         "flux-schnell": 200,
         "flux-2-klein": 120,
-        "flux-2-dev": 22,
-        "seedream-5-flash": 10,
-        "flux-2-pro": 4,
-        "nano-banana-2": 3
+        "flux-2-dev": 200,
+        "seedream-5-flash": 200,
+        "flux-2-pro": 100,
+        "nano-banana-2": 100
       },
       "codeRunsPerDay": 120,
       "codeRunBudgetUsd": 3,
       "api": true
     }
-  }
+  },
+  "creditsPeriodDays": 30
 }

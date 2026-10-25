@@ -1,11 +1,11 @@
 /**
  * Худший случай по марже: сколько может стоить нам один платящий пользователь за 30 дней.
  *
- * Пользователь выбирает весь бюджет тарифа и доходит до жёсткого предела (125% `costBudget`,
- * дальше запросы отклоняются, services/budget-policy.ts), каждый доллар расхода на модели стоит
- * $1.055 (комиссия пополнения OpenRouter), и на него приходится доля Free-тира. Выше предела
- * расход не растёт: после 100% бюджета отвечает только Ketner Mini, агент и картинки ограничены
- * остатком до 125%, а расход, оплаченный кредитами пакетов, в бюджет тарифа не входит.
+ * Пользователь тратит все кредиты тарифа (и бонус за крипту, если платил ей): больше кредитов нет,
+ * дальше отвечает бесплатная модель, которая ничего не стоит. Каждый доллар расхода на модели стоит
+ * $1.055 (комиссия пополнения OpenRouter), и на него приходится доля Free-тира. Остаток переносится
+ * на один период, но за новый период пользователь платит снова, поэтому выдача не складывается:
+ * в месяц с деньгами потрачено не больше одной выдачи плюс перенос из уже оплаченного.
  *
  * Карта и крипта проверяются с долей Free-тира. Звёзды — без неё: тариф в звёздах продаётся по
  * официальному курсу Telegram ровно за цену тарифа (решение владельца), и с верхней оценкой доли
@@ -16,24 +16,22 @@
  */
 
 import type { PlanId } from '../types.js';
-import { BUDGET_HARD_STOP_RATIO } from './budget-policy.js';
-import { EntitlementService } from './entitlement.js';
+import { cryptoBonusCredits, planCreditsUsd, toUsd } from './entitlement.js';
 import { breakEvenStars, FREE_TIER_SUBSIDY_USD, modelSpendCostUsd } from './pricing.js';
 
-/** Худший расход на платящего за 30 дней ($): предел бюджета с комиссией и доля Free-тира. */
+/** Худший расход на платящего за 30 дней ($): все кредиты с комиссией и доля Free-тира. */
 export function planWorstCaseCostUsd(
   planId: PlanId,
   options: { cryptoBonus?: boolean } = {},
 ): number {
-  const { costBudget } = EntitlementService.getEntitlements(planId, options);
-  return modelSpendCostUsd(costBudget * BUDGET_HARD_STOP_RATIO) + FREE_TIER_SUBSIDY_USD;
+  const credits =
+    planCreditsUsd(planId) + (options.cryptoBonus ? toUsd(cryptoBonusCredits(planId)) : 0);
+  return modelSpendCostUsd(credits) + FREE_TIER_SUBSIDY_USD;
 }
 
-/** Худший расход на платящего звёздами ($): предел бюджета с комиссией, без доли Free-тира. */
+/** Худший расход на платящего звёздами ($): все кредиты с комиссией, без доли Free-тира. */
 export function planStarsWorstCaseCostUsd(planId: PlanId): number {
-  return modelSpendCostUsd(
-    EntitlementService.getEntitlements(planId).costBudget * BUDGET_HARD_STOP_RATIO,
-  );
+  return modelSpendCostUsd(planCreditsUsd(planId));
 }
 
 /** Минимальная цена тарифа в звёздах: дешевле — тариф в худшем случае уйдёт в минус. */

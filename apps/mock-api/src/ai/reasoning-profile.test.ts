@@ -4,7 +4,6 @@ import {
   computeOutputCap,
   effectiveReasoningMode,
   isMaxModeAllowed,
-  limitUnitsFor,
   profileEffort,
   toProviderReasoning,
 } from './reasoning-policy.js';
@@ -22,18 +21,11 @@ test('режим Max доступен только на Ultra (и VIP, у кот
   assert.equal(effectiveReasoningMode(undefined, 'ultra'), 'standard');
 });
 
-test('глубина по профилю: medium / xhigh, при расходе бюджета — low', () => {
+test('глубина по профилю: medium / xhigh, когда кредиты кончились — low', () => {
   assert.equal(profileEffort(STD, 'standard', 'normal'), 'medium');
   assert.equal(profileEffort(STD, 'max', 'normal'), 'xhigh');
   assert.equal(profileEffort(XH, 'standard', 'normal'), 'xhigh');
-  assert.equal(profileEffort(STD, 'max', 'soft'), 'low');
-});
-
-test('единицы суточного лимита: Max у модели с профилем — 2, у xhigh-моделей и без профиля — 1', () => {
-  assert.equal(limitUnitsFor(STD, 'max'), 2);
-  assert.equal(limitUnitsFor(STD, 'standard'), 1);
-  assert.equal(limitUnitsFor(XH, 'max'), 1, 'Grok и Terra и так на xhigh: Max их не удорожает');
-  assert.equal(limitUnitsFor(undefined, 'max'), 1);
+  assert.equal(profileEffort(STD, 'max', 'exhausted'), 'low');
 });
 
 test('xhigh уходит провайдеру как есть, а модели без xhigh получают ближайшую глубину', () => {
@@ -65,7 +57,7 @@ test('глубоким размышлениям не ставится корот
 test('каталог /api/meta отдаёт профиль размышлений моделей Pro и не показывает выключенную Gemini 4 Argon', () => {
   const opus = MODELS.find((m) => m.id === 'claude-opus-5.5');
   assert.deepEqual(opus?.reasoningEffort, { standard: 'medium', max: 'xhigh' });
-  assert.deepEqual(opus?.dailyLimits, { pro: 3, ultra: 7 });
+  assert.equal('dailyLimits' in (opus ?? {}), false, 'дневных лимитов моделей больше нет');
   assert.equal(MODELS.find((m) => m.id === 'grok-4.7')?.name, 'Grok 4.7 xhigh');
   assert.equal(
     MODELS.some((m) => m.id === 'gemini-4-argon'),

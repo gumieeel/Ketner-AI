@@ -4,7 +4,6 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
 import {
-  AGENT_DAILY_COST_FACTOR,
   AgentGateway,
   chooseAgentEffort,
   type AgentFailure,
@@ -22,6 +21,8 @@ import type {
   AgentProviderResult,
   AgentStreamEvent,
 } from './agent/agent-types.js';
+import { toCredits } from '../services/credits.js';
+import { exhaust, memoryCredits, setBalance } from '../services/credits-fixture.js';
 import { PLAN_ENTITLEMENTS } from '../services/entitlement.js';
 import { UsageStore } from '../store/usage-store.js';
 import type { PlanId } from '../types.js';
@@ -67,13 +68,15 @@ function setup(script: Script) {
   const providers = new ProviderManager();
   providers.setProvider('openrouter', fakeProvider(script, calls));
   const usage = new UsageStore(join(mkdtempSync(join(tmpdir(), 'ketner-agent-')), 'usage.json'));
+  const credits = memoryCredits();
   const gateway = new AgentGateway({
     usageStore: usage,
     registry: new ModelRegistry(),
     providers,
     circuitBreaker: new CircuitBreaker({ failureThreshold: 3, cooldownMs: 30_000 }),
+    credits,
   });
-  return { gateway, usage, calls };
+  return { gateway, usage, calls, credits };
 }
 
 let counter = 0;
@@ -112,28 +115,6 @@ const asFail = (outcome: unknown): AgentFailure => {
   assert.equal(value.kind, 'error', 'ожидалась ошибка');
   return value as AgentFailure;
 };
-
-/** Расход «вчера»: входит в месячный бюджет, но не в суточный лимит. */
-function seed(
-  usage: UsageStore,
-  userId: string,
-  cost: number,
-  modelId = 'ketner-pro',
-  ageMs = 3 * 86_400_000,
-): void {
-  const record = usage.recordUsage({
-    userId,
-    conversationId: 'seed',
-    modelId,
-    provider: 'openrouter',
-    inputTokens: 1,
-    outputTokens: 1,
-    estimatedCost: cost,
-    latencyMs: 1,
-    status: 'success',
-  });
-  record.createdAt = new Date(Date.now() - ageMs).toISOString();
-}
 
 test('ответ с вызовом функции: события идут клиенту, расход пишется по цене провайдера в api:<ключ>', async () => {
   const { gateway, usage, calls } = setup(async (_r, emit) => {
@@ -216,51 +197,53 @@ test('auto выбирает Ketner Pro и честно называет это �
   assert.equal(calls[0].model, 'xiaomi/mimo-v2.6-pro');
 });
 
-test('квота премиум-запросов исчерпана: отвечает Ketner Pro, причина названа, цена по ответившей модели', async () => {
-  const { gateway, usage, calls } = setup(async () => okResult({ cost: 0.01 }));
+test('не хватает кредитов на премиум-модель: отвечает та, на которую хватает, причина названа', async () => {
+  const { gateway, usage, calls, credits } = setup(async () => okResult({ cost: 0.01 }));
   const req = request({ userPlan: 'pro', model: 'gpt-6.1-sol' });
-  seed(usage, req.userId, PLAN_ENTITLEMENTS.pro.premiumBudget + 0.01, 'gpt-6.1-sol');
+  setBalance(credits, req.userId, 'pro', 20); // типичный запрос GPT-6.1 Sol стоит ≈ 35 кредитов
 
   const out = asOk(await gateway.run(req, events().callbacks));
-  assert.equal(out.model.id, 'ketner-pro');
+  assert.notEqual(out.model.id, 'gpt-6.1-sol');
   assert.equal(out.requestedModel, 'gpt-6.1-sol');
-  assert.match(out.routingReason, /Premium quota used up/);
-  assert.equal(calls[0].model, 'xiaomi/mimo-v2.6-pro');
-  assert.equal(out.budget.premiumAvailable, false);
-  assert.equal(usage.getByUser(req.userId)[0].modelId, 'ketner-pro');
+  assert.match(out.routingReason, /Not enough credits for GPT-6\.1 Sol/);
+  assert.equal(calls[0].model !== 'openai/gpt-6.1-sol', true);
+  assert.equal(usage.getByUser(req.userId)[0].modelId, out.model.id);
+  assert.equal(out.credits.stage, 'normal');
+  assert.equal(out.credits.charged, 10, 'списано по цене ответа: $0.01 = 10 кредитов');
+  assert.equal(out.credits.balance, 10);
 });
 
-test('премиум-модель отвечает, пока квота есть', async () => {
-  const { gateway, calls } = setup(async () => okResult());
-  const out = asOk(
-    await gateway.run(request({ userPlan: 'pro', model: 'gpt-6.1-sol' }), events().callbacks),
-  );
+test('премиум-модель отвечает, пока кредиты есть, и списывает реальную цену запроса', async () => {
+  const { gateway, usage, calls, credits } = setup(async () => okResult({ cost: 0.05 }));
+  const req = request({ userPlan: 'pro', model: 'gpt-6.1-sol' });
+  const out = asOk(await gateway.run(req, events().callbacks));
   assert.equal(out.model.id, 'gpt-6.1-sol');
   assert.equal(calls[0].model, 'openai/gpt-6.1-sol');
-  assert.equal(out.budget.premiumAvailable, true);
+  assert.equal(out.credits.stage, 'normal');
+  assert.equal(out.credits.charged, 50);
+  assert.equal(out.credits.balance, PLAN_ENTITLEMENTS.pro.monthlyCredits - 50);
+  assert.equal(usage.getByUser(req.userId)[0].creditsUsd, 0.05);
+  assert.equal(toCredits(credits.balance(req.userId, 'pro').remainingUsd), out.credits.balance);
 });
 
-test('бюджет исчерпан (100%): только лёгкая модель; жёсткий потолок (125%): отказ 429 без вызова провайдера', async () => {
-  const { gateway, usage, calls } = setup(async () => okResult());
-  const budget = PLAN_ENTITLEMENTS.plus.costBudget;
+test('кредиты кончились: отвечает бесплатная модель агента, ничего не списывается и отказа нет', async () => {
+  const { gateway, usage, calls, credits } = setup(async () => okResult({ cost: 0 }));
+  const req = request();
+  exhaust(credits, req.userId, 'plus');
 
-  const exhausted = request();
-  seed(usage, exhausted.userId, budget * 1.05);
-  const out = asOk(await gateway.run(exhausted, events().callbacks));
-  assert.equal(out.model.id, 'ketner-mini');
-  assert.match(out.routingReason, /Budget protection/);
-  assert.equal(out.budget.stage === 'exhausted' || out.budget.stage === 'hard_stop', true);
-
-  const callsBefore = calls.length;
-  const stopped = request();
-  seed(usage, stopped.userId, budget * 1.3);
-  const refused = asFail(await gateway.run(stopped, events().callbacks));
-  assert.equal(refused.status, 429);
-  assert.equal(refused.code, 'insufficient_quota');
-  assert.equal(calls.length, callsBefore);
+  for (let i = 0; i < 3; i += 1) {
+    const out = asOk(await gateway.run({ ...req }, events().callbacks));
+    assert.equal(out.model.id, 'north-mini-code');
+    assert.match(out.routingReason, /Credits used up/);
+    assert.equal(out.credits.stage, 'exhausted');
+    assert.equal(out.credits.charged, 0);
+    assert.equal(out.credits.balance, 0);
+  }
+  assert.equal(calls[0].model, 'cohere/north-mini-code:free');
+  assert.equal(usage.getByUser(req.userId)[0].creditsUsd ?? 0, 0);
 });
 
-test('токенные окна чата для агента не действуют, а суточный лимит расхода втрое выше', async () => {
+test('токенные окна чата для агента не действуют: расход кредитов — единственный предел', async () => {
   const { gateway, usage } = setup(async () => okResult({ cost: 0.001 }));
 
   // 400k токенов за последний час при чатовом лимите Plus 300k: чат отказал бы.
@@ -277,18 +260,6 @@ test('токенные окна чата для агента не действу
     status: 'success',
   });
   asOk(await gateway.run(heavy, events().callbacks));
-
-  const dailyCap = PLAN_ENTITLEMENTS.plus.maxDailyCost!;
-  const mid = request();
-  seed(usage, mid.userId, dailyCap * 1.5, 'ketner-pro', 3_600_000);
-  asOk(await gateway.run(mid, events().callbacks));
-
-  const over = request();
-  seed(usage, over.userId, dailyCap * AGENT_DAILY_COST_FACTOR + 0.01, 'ketner-pro', 3_600_000);
-  const refused = asFail(await gateway.run(over, events().callbacks));
-  assert.equal(refused.status, 429);
-  assert.equal(refused.code, 'rate_limit_exceeded');
-  assert.equal(refused.retryAfterSec, 3600);
 });
 
 test('параллельный запрос сверх лимита тарифа отклоняется с Retry-After', async () => {
@@ -417,13 +388,13 @@ test('потолок ответа задаёт тариф (вдвое выше �
   assert.equal(calls[1].maxTokens, 500);
 });
 
-test('глубина размышлений: потолок по тарифу, в экономном режиме не выше low', () => {
+test('глубина размышлений: потолок по тарифу, когда кредиты кончились, не выше low', () => {
   assert.equal(chooseAgentEffort('high', 'plus', 'normal'), 'medium');
   assert.equal(chooseAgentEffort('high', 'pro', 'normal'), 'medium');
   assert.equal(chooseAgentEffort('high', 'ultra', 'normal'), 'high');
-  assert.equal(chooseAgentEffort('high', 'ultra', 'soft'), 'low');
+  assert.equal(chooseAgentEffort('high', 'ultra', 'exhausted'), 'low');
   assert.equal(chooseAgentEffort('minimal', 'plus', 'normal'), 'none');
-  assert.equal(chooseAgentEffort('none', 'ultra', 'soft'), 'none');
+  assert.equal(chooseAgentEffort('none', 'ultra', 'exhausted'), 'none');
   assert.equal(chooseAgentEffort('low', 'plus', 'normal'), 'low');
 });
 

@@ -51,7 +51,7 @@ export function AboutPage() {
         <ul className="flex list-disc flex-col gap-2 pl-5 text-[15px] leading-7 text-muted marker:text-subtle">
           <li>
             Сильные модели продаются отдельными подписками у каждой компании. В Ketner AI они
-            доступны по одной подписке — с лимитами, которые указаны на странице{' '}
+            доступны по одной подписке — за кредиты, которые указаны на странице{' '}
             <Link to="/pricing" className={linkClass}>
               «Тарифы»
             </Link>

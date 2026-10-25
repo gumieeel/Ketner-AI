@@ -77,7 +77,6 @@ export const DEFAULT_MODELS: ModelInfo[] = [
     contextMessages: 60,
     isPro: true,
     requiredPlan: 'plus',
-    dailyLimits: { plus: 20, pro: 60, ultra: 150 },
   },
   {
     id: 'claude-haiku-5.5',
@@ -99,7 +98,6 @@ export const DEFAULT_MODELS: ModelInfo[] = [
     contextMessages: 60,
     isPro: true,
     requiredPlan: 'plus',
-    dailyLimits: { plus: 10, pro: 30, ultra: 80 },
   },
   {
     id: 'qwen3.8-27b',
@@ -107,7 +105,6 @@ export const DEFAULT_MODELS: ModelInfo[] = [
     contextMessages: 60,
     isPro: true,
     requiredPlan: 'plus',
-    dailyLimits: { plus: 12, pro: 40, ultra: 100 },
   },
   {
     id: 'gemini-3.7-flash',
@@ -115,25 +112,22 @@ export const DEFAULT_MODELS: ModelInfo[] = [
     contextMessages: 60,
     isPro: true,
     requiredPlan: 'plus',
-    dailyLimits: { plus: 5, pro: 15, ultra: 40 },
   },
-  // GLM-5.3 — открытая флагманская модель: квоту премиум-запросов не тратит
+  // GLM-5.3 — открытая флагманская модель
   {
     id: 'glm-5.3',
     name: 'GLM-5.3',
     contextMessages: 60,
     isPro: true,
     requiredPlan: 'plus',
-    dailyLimits: { plus: 3, pro: 10, ultra: 25 },
   },
-  // GPT-6.1 Sol открыта с Plus, но тоже расходует квоту премиум-запросов
+  // GPT-6.1 Sol открыта с Plus
   {
     id: 'gpt-6.1-sol',
     name: 'GPT-6.1 Sol',
     contextMessages: 120,
     isPro: true,
     requiredPlan: 'plus',
-    dailyLimits: { plus: 2, pro: 6, ultra: 14 },
   },
   // Pro ($25) и Ultra ($49): фиксированная глубина размышлений (medium; на Ultra в режиме Max — xhigh)
   {
@@ -142,7 +136,6 @@ export const DEFAULT_MODELS: ModelInfo[] = [
     contextMessages: 120,
     isPro: true,
     requiredPlan: 'pro',
-    dailyLimits: { pro: 3, ultra: 7 },
     reasoningEffort: { standard: 'medium', max: 'xhigh' },
   },
   {
@@ -151,7 +144,6 @@ export const DEFAULT_MODELS: ModelInfo[] = [
     contextMessages: 120,
     isPro: true,
     requiredPlan: 'pro',
-    dailyLimits: { pro: 6, ultra: 14 },
     reasoningEffort: { standard: 'medium', max: 'xhigh' },
   },
 
@@ -161,7 +153,6 @@ export const DEFAULT_MODELS: ModelInfo[] = [
     contextMessages: 120,
     isPro: true,
     requiredPlan: 'pro',
-    dailyLimits: { pro: 1, ultra: 3 },
     reasoningEffort: { standard: 'medium', max: 'xhigh' },
   },
   {
@@ -170,7 +161,6 @@ export const DEFAULT_MODELS: ModelInfo[] = [
     contextMessages: 120,
     isPro: true,
     requiredPlan: 'pro',
-    dailyLimits: { pro: 4, ultra: 8 },
     reasoningEffort: { standard: 'xhigh', max: 'xhigh' },
   },
   {
@@ -179,7 +169,6 @@ export const DEFAULT_MODELS: ModelInfo[] = [
     contextMessages: 120,
     isPro: true,
     requiredPlan: 'pro',
-    dailyLimits: { pro: 6, ultra: 14 },
     reasoningEffort: { standard: 'medium', max: 'xhigh' },
   },
   {
@@ -188,7 +177,6 @@ export const DEFAULT_MODELS: ModelInfo[] = [
     contextMessages: 120,
     isPro: true,
     requiredPlan: 'pro',
-    dailyLimits: { pro: 2, ultra: 5 },
     reasoningEffort: { standard: 'xhigh', max: 'xhigh' },
   },
 ];

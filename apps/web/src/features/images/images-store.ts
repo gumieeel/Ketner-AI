@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import { usePreferences } from '@/features/preferences/preferences-store';
 import { ApiError, imagesApi } from './api';
-import type { GeneratedImage, ImageAspect, ImageCapabilities } from './types';
+import type { GeneratedImage, ImageAspect, ImageCapabilities, ImageCredits } from './types';
 
 type Status = 'idle' | 'loading' | 'ready' | 'error';
 
@@ -55,6 +55,15 @@ function writeStyle(style: string): void {
   } catch {
     // хранилище недоступно — стиль просто не запомнится
   }
+}
+
+/** Остаток кредитов после картинки: цена модели вычитается сразу, точное число придёт при загрузке. */
+function spendCredits(capabilities: ImageCapabilities, modelId: string): ImageCredits | undefined {
+  const credits = capabilities.credits;
+  if (!credits) return undefined;
+  const price = capabilities.models.find((m) => m.id === modelId)?.priceCredits ?? 0;
+  const balance = Math.max(0, Math.floor(credits.balance - price));
+  return { ...credits, balance, exhausted: balance < 1 };
 }
 
 export const useImages = create<ImagesState>((set, get) => ({
@@ -132,6 +141,9 @@ export const useImages = create<ImagesState>((set, get) => ({
         capabilities: state.capabilities
           ? {
               ...state.capabilities,
+              credits: state.capabilities.credits
+                ? spendCredits(state.capabilities, image.modelId)
+                : undefined,
               models: state.capabilities.models.map((m) =>
                 m.id === image.modelId ? { ...m, usedToday: m.usedToday + 1 } : m,
               ),

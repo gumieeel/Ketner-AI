@@ -5,15 +5,15 @@
  * - Model Registry (каталог моделей и их классы стоимости)
  * - Provider Manager (единый канал OpenRouter: один ключ на все модели)
  * - Entitlement Service (проверка прав и тарифов)
- * - Fair Use Engine (rate limits, concurrency, суточные квоты)
- * - Budget Policy (месячный бюджет себестоимости и квота премиум-запросов)
+ * - Fair Use Engine (rate limits, concurrency, технические суточные лимиты)
+ * - Credits (один пул кредитов на чат, картинки и Ketner Code: списание по реальной цене запроса)
  * - Reasoning Policy (глубина размышлений и потолок ответа)
  * - Context Optimizer (оптимизация контекста)
  * - Usage Accounting & Cost Calculator (учёт токенов и себестоимости)
  * - Fallback & Failover (запасные модели из реестра, предохранитель на каждую модель)
  *
  * Принцип: запрошенная пользователем модель не подменяется скрытно. Если её приходится заменить
- * (исчерпана квота премиум-запросов, бюджет на исходе, сбой провайдера), в ответе возвращается
+ * (не хватает кредитов, сбой провайдера), в ответе возвращается
  * реальная модель (`selectedModel`) и причина (`routingReason`), а расход пишется по цене именно
  * той модели, которая ответила.
  */
@@ -35,8 +35,6 @@ import {
   type ModelRegistry,
   ECONOMY_SYSTEM_PROMPT,
   DEFAULT_SYSTEM_PROMPT,
-  FLOOR_MODEL_ID,
-  WORKHORSE_MODEL_ID,
 } from './model-registry.js';
 import { providerManager, type ProviderManager } from './providers/provider-factory.js';
 import { OpenRouterError } from './providers/openrouter-provider.js';
@@ -44,31 +42,30 @@ import { delay, streamText } from './stream.js';
 import { isProduction, type AiConfig } from '../config.js';
 import { EntitlementService, planAllowsModel } from '../services/entitlement.js';
 import { FairUseEngine } from '../services/fair-use.js';
-import { applyModelLimits, describeLimit, isModelLimitReached } from './model-limits.js';
 import { applyPlanSubstitute } from './plan-substitute.js';
-import { AutoRouter } from './auto-router.js';
+import { AUTO_PREMIUM_MODEL_ID, AutoRouter } from './auto-router.js';
 import type { UsageStore } from '../store/usage-store.js';
 import { feedbackStore as defaultFeedbackStore, type FeedbackStore } from '../store/index.js';
 import {
   chooseReasoningEffort,
   computeOutputCap,
   effectiveReasoningMode,
-  isPremiumClass,
-  limitUnitsFor,
   profileEffort,
   toProviderReasoning,
 } from './reasoning-policy.js';
 import { CircuitBreaker, defaultCircuitBreaker } from './circuit-breaker.js';
 import { computeRequestCost } from './engine-pricing.js';
 import { createStreamWatchdog, DEFAULT_WATCHDOG_LIMITS } from './stream-watchdog.js';
-import { evaluateBudget, type BudgetStage } from '../services/budget-policy.js';
 import {
-  getPremiumQuota,
-  planEntitlements,
-  settlePremiumCost,
-  type PlanBonusSource,
-} from '../services/premium-quota.js';
-import type { PremiumCreditSource } from '../store/premium-credit-store.js';
+  canAfford,
+  creditStageOf,
+  isAffordableFallback,
+  isFreeModel,
+  pickAffordable,
+  type CreditStage,
+} from '../services/credit-policy.js';
+import type { CreditLedger } from '../services/credits.js';
+import { creditService } from '../billing/index.js';
 import { PayloadGuard } from './payload-guard.js';
 import { modelIdentityPrompt } from './model-disclosure.js';
 import {
@@ -88,7 +85,7 @@ export interface PromptComplexity {
   category: string;
   /**
    * Сложная задача (только при level `complex`): доказательство, проектирование, конкурентность,
-   * длинное условие, привязанный проект. Ради неё Auto тратит квоту премиум-запросов.
+   * длинное условие, привязанный проект. Ради неё Auto берёт сильную модель и тратит больше кредитов.
    */
   hard: boolean;
 }
@@ -283,109 +280,6 @@ export function convertLayoutIfInverted(input: string): string {
   return input;
 }
 
-/** Решение об экономии: какую модель реально использовать вместо запрошенной. */
-export interface EconomyDecision {
-  model: ModelRegistryEntry;
-  /** Причина замены; null, если запрошенная модель оставлена. */
-  reason: string | null;
-  /**
-   * Премиум-модель оставлена за счёт кредитов докупленных пакетов: квота тарифа исчерпана или
-   * бюджет тарифа на исходе. Стоимость запроса спишется с кредитов (services/premium-quota.ts).
-   */
-  fundedByCredits?: boolean;
-}
-
-/** Состояние экономии пользователя на момент запроса. */
-export interface EconomyState {
-  stage: BudgetStage;
-  /** Осталась квота премиум-моделей тарифа. */
-  premiumAvailable: boolean;
-  /** Есть кредиты докупленных пакетов: тратятся после квоты тарифа и вне его бюджета. */
-  creditsAvailable?: boolean;
-}
-
-/**
- * Правила экономии для явно выбранной модели. Вызывается после проверки прав доступа.
- *
- *  - бюджет исчерпан → любая модель, кроме лёгких, заменяется на самую дешёвую;
- *  - премиум-модель (классы strong и top): квота премиум-запросов тарифа исчерпана или бюджет на
- *    исходе (soft) → ответит рабочая модель, а не «ничего»: пользователь продолжает работать;
- *  - но если есть кредиты докупленных пакетов, премиум-модель остаётся и оплачивается ими: пакет
- *    оплачен отдельно и в бюджет тарифа не входит.
- */
-export function applyEconomyRules(
-  requested: ModelRegistryEntry,
-  state: EconomyState,
-  registry: ModelRegistry,
-): EconomyDecision {
-  const premium = isPremiumClass(requested.costClass);
-  const byCredits = (why: string): EconomyDecision => ({
-    model: requested,
-    reason: `${why}: ${requested.name} is paid from purchased premium credits`,
-    fundedByCredits: true,
-  });
-
-  if (state.stage === 'exhausted' || state.stage === 'hard_stop') {
-    if (premium && state.creditsAvailable) return byCredits('Plan budget is used up');
-    if (requested.costClass !== 'lite') {
-      const floor = registry.resolve(FLOOR_MODEL_ID);
-      return {
-        model: floor,
-        reason: `Budget protection: monthly quota is used up, ${floor.name} answers instead of ${requested.name}`,
-      };
-    }
-    return { model: requested, reason: null };
-  }
-
-  if (premium) {
-    if (!state.premiumAvailable) {
-      if (state.creditsAvailable) return byCredits('Plan premium quota used up');
-      const workhorse = registry.resolve(WORKHORSE_MODEL_ID);
-      return {
-        model: workhorse,
-        reason: `Premium quota used up: ${workhorse.name} answers instead of ${requested.name}`,
-      };
-    }
-    if (state.stage === 'soft') {
-      if (state.creditsAvailable) return byCredits('Budget protection');
-      const workhorse = registry.resolve(WORKHORSE_MODEL_ID);
-      return {
-        model: workhorse,
-        reason: `Budget protection: ${workhorse.name} answers instead of ${requested.name}`,
-      };
-    }
-  }
-
-  return { model: requested, reason: null };
-}
-
-/**
- * Запасная модель допустима, если она не нарушает правил экономии: премиум-модель берётся
- * только пока есть квота премиум-запросов (или кредиты пакетов), а при исчерпанном бюджете —
- * только лёгкие модели (или премиум за кредиты). Прав доступа по тарифу для непремиальных
- * запасных не требуется: они дешевле выбранной, а пользователь видит в ответе, какая модель
- * реально ответила.
- */
-export function isAllowedFallbackModel(
-  model: ModelRegistryEntry,
-  plan: string,
-  state: EconomyState,
-): boolean {
-  const premium = isPremiumClass(model.costClass);
-  if (premium && state.creditsAvailable && planAllowsModel(plan, model.requiredPlan)) return true;
-  if (state.stage === 'exhausted' || state.stage === 'hard_stop') {
-    return model.costClass === 'lite';
-  }
-  if (premium) {
-    return (
-      state.stage === 'normal' &&
-      state.premiumAvailable &&
-      planAllowsModel(plan, model.requiredPlan)
-    );
-  }
-  return true;
-}
-
 export interface AIGatewayDeps {
   registry?: ModelRegistry;
   providers?: ProviderManager;
@@ -398,10 +292,8 @@ export interface AIGatewayDeps {
    * По умолчанию определяется окружением. В production игнорируется: заглушка там невозможна.
    */
   useMockEngine?: boolean;
-  /** Кредиты докупленных пакетов; по умолчанию — общий журнал платежей. */
-  premiumCredits?: PremiumCreditSource;
-  /** Бонус к квоте за оплату криптой; по умолчанию — общий биллинг. */
-  planBonus?: PlanBonusSource;
+  /** Кредиты пользователей; по умолчанию — общий журнал биллинга. */
+  credits?: CreditLedger;
 }
 
 export class AIGateway {
@@ -412,13 +304,11 @@ export class AIGateway {
   private circuitBreaker: CircuitBreaker;
   private feedbackStore: FeedbackStore;
   private useMockEngine?: boolean;
-  private premiumCredits?: PremiumCreditSource;
-  private planBonus?: PlanBonusSource;
+  private credits: CreditLedger;
 
   constructor(deps: AIGatewayDeps) {
     this.useMockEngine = deps.useMockEngine;
-    this.premiumCredits = deps.premiumCredits;
-    this.planBonus = deps.planBonus;
+    this.credits = deps.credits ?? creditService;
     this.registry = deps.registry ?? modelRegistry;
     this.providers = deps.providers ?? providerManager;
     this.usageStore = deps.usageStore;
@@ -507,10 +397,6 @@ export class AIGateway {
     return this.feedbackStore;
   }
 
-  private isAllowedFallback(model: ModelRegistryEntry, plan: string, state: EconomyState): boolean {
-    return isAllowedFallbackModel(model, plan, state);
-  }
-
   /**
    * Стриминговая генерация ответа через AI Gateway.
    */
@@ -560,53 +446,16 @@ export class AIGateway {
     // Режим Max (глубина xhigh у моделей Pro и Ultra) действует только на Ultra; запрос max на другом
     // тарифе выполняется в обычном режиме.
     const reasoningMode = effectiveReasoningMode(req.reasoningMode, effectivePlan);
-    const quotaDeps = {
-      usageStore: this.usageStore,
-      registry: this.registry,
-      credits: this.premiumCredits,
-      bonus: this.planBonus,
-    };
-    // Период, оплаченный криптой, даёт бонус к квоте премиум-моделей и бюджету.
-    const entitlements = planEntitlements(activeUserId, effectivePlan, quotaDeps);
+    const entitlements = EntitlementService.getEntitlements(effectivePlan);
     const snapshot = this.usageStore.getFairUseSnapshot(activeUserId);
 
-    // Месячный бюджет себестоимости: soft (80%) → exhausted (100%, только дешёвые модели) →
-    // hard_stop (125%, запросы отклоняются). Без потолка «безлимит» мог уйти в убыток.
-    const budget = evaluateBudget(snapshot.estimatedCostLastMonth, entitlements.costBudget);
-    const stage = budget.stage;
-
-    if (stage === 'hard_stop') {
-      this.usageStore.recordUsage({
-        userId: activeUserId,
-        conversationId: req.conversationId,
-        modelId: req.modelId,
-        provider: 'openrouter',
-        inputTokens: 0,
-        outputTokens: 0,
-        estimatedCost: 0,
-        latencyMs: Date.now() - startTime,
-        status: 'rate_limited',
-        source: 'provider',
-      });
-      callbacks.onError({
-        code: 'fair_use_exceeded',
-        message:
-          language === 'en'
-            ? 'Your plan resource quota for this period is used up. It renews gradually; you can upgrade your plan for a higher quota.'
-            : 'Ресурсная квота вашего тарифа на этот период исчерпана. Она восстанавливается постепенно; для большей квоты можно повысить тариф.',
-      });
-      return;
-    }
-
-    // Квота премиум-запросов: сколько тариф разрешает потратить на сильные модели за 30 дней.
-    const premiumQuota = getPremiumQuota(activeUserId, effectivePlan, quotaDeps);
-    const economyState: EconomyState = {
-      stage,
-      premiumAvailable: premiumQuota.baseAvailable,
-      creditsAvailable: premiumQuota.creditsUsd > 0,
-    };
-    // Запрос оплачивается кредитами пакета (квота тарифа, бюджет или лимит модели исчерпаны).
-    let fundedByCredits = false;
+    // Кредиты: один пул на чат, картинки и Ketner Code. Остаток решает, какая модель ответит: на
+    // платную нужно хотя бы на один типичный запрос, а когда кредиты кончились, отвечает бесплатная
+    // модель, кредиты не тратятся. Гости кредитов не имеют, они всегда на бесплатной модели.
+    const balanceUsd = req.isAnonymous
+      ? 0
+      : this.credits.balance(activeUserId, effectivePlan).remainingUsd;
+    const stage: CreditStage = req.isAnonymous ? 'normal' : creditStageOf(balanceUsd);
 
     // 2. Анализ запроса
     const rawPrompt = [...req.messages].reverse().find((m) => m.role === 'user')?.content ?? '';
@@ -641,7 +490,7 @@ export class AIGateway {
     let routingReason: string;
     // Явно запрошенная модель и причина её замены: нужны режиму `strictModel` (сравнение ответов).
     let requestedModel: ModelRegistryEntry | undefined;
-    let substitution: 'limit' | 'unavailable' | null = null;
+    let substitution: 'credits' | 'unavailable' | null = null;
 
     if (
       req.isAnonymous &&
@@ -656,11 +505,25 @@ export class AIGateway {
         hard: taskInfo.hard,
         category: taskInfo.category,
         stage,
-        // Auto тратит только квоту тарифа: кредиты пакетов — для явного выбора модели.
-        premiumAvailable: premiumQuota.baseAvailable,
+        // Сильная модель Auto — только если кредитов хватает на её запрос.
+        premiumAvailable: canAfford(
+          this.registry.resolve(AUTO_PREMIUM_MODEL_ID),
+          balanceUsd,
+          reasoningMode,
+        ),
       });
       targetModel = this.registry.resolve(routed.modelId);
       routingReason = routed.reason;
+      const affordable = pickAffordable(targetModel, {
+        balanceUsd,
+        plan: effectivePlan,
+        mode: reasoningMode,
+        registry: this.registry,
+      });
+      if (affordable.reason) {
+        targetModel = affordable.model;
+        routingReason = `${routingReason}; ${affordable.reason}`;
+      }
     } else {
       const requested = this.registry.resolve(req.modelId);
 
@@ -677,17 +540,20 @@ export class AIGateway {
         return;
       }
 
-      const economy = applyEconomyRules(requested, economyState, this.registry);
+      // Не хватает кредитов на запрошенную модель: отвечает та, на которую хватает (в конце лестницы —
+      // бесплатная), и это видно в routingReason и selectedModel.
+      const affordable = pickAffordable(requested, {
+        balanceUsd,
+        plan: effectivePlan,
+        mode: reasoningMode,
+        registry: this.registry,
+      });
       requestedModel = requested;
-      if (economy.model.id !== requested.id) substitution = 'unavailable';
-      targetModel = economy.model;
-      fundedByCredits = Boolean(economy.fundedByCredits);
-      routingReason = economy.reason ?? `Explicit user model selection (${requested.name})`;
+      if (affordable.model.id !== requested.id) substitution = 'credits';
+      targetModel = affordable.model;
+      routingReason = affordable.reason ?? `Explicit user model selection (${requested.name})`;
     }
 
-    // Лимит модели на тарифе (недельный пул и его суточная доля): после него отвечает запасная
-    // модель (видно в routingReason). Гостевая модель бесплатна и лимитов не имеет. Проверка ответа
-    // (`task.kind === 'review'`) лимит модели-рецензента не тратит: у проверок свой суточный лимит.
     if (!req.isAnonymous && !req.task) {
       // Free: вместо платного Ketner Mini идёт бесплатный эндпоинт, платная модель остаётся запасной.
       const substitute = applyPlanSubstitute(targetModel, effectivePlan, 'chat', this.registry);
@@ -696,47 +562,26 @@ export class AIGateway {
         routingReason = `${routingReason}; ${substitute.reason}`;
         substitution ??= 'unavailable';
       }
-      const limited = applyModelLimits(
-        targetModel,
-        effectivePlan,
-        activeUserId,
-        this.usageStore,
-        this.registry,
-        reasoningMode,
-      );
-      if (
-        limited.limited &&
-        isPremiumClass(targetModel.costClass) &&
-        economyState.creditsAvailable
-      ) {
-        // Лимит модели защищает квоту тарифа; кредиты пакета им не ограничены.
-        fundedByCredits = true;
-        routingReason = `${routingReason}; ${describeLimit(limited.limited.model, effectivePlan, limited.limited.status)}: paid from purchased premium credits`;
-      } else if (limited.reason) {
-        targetModel = limited.model;
-        routingReason = `${routingReason}; ${limited.reason}`;
-        substitution ??= 'limit';
-      }
     }
 
     // Сравнение ответов: запрошенная модель либо отвечает сама, либо честная ошибка. Подставлять
     // запасную нельзя: в колонках сравнения две одинаковые модели ничего не сравнивают и стоят денег.
     if (req.strictModel && requestedModel && targetModel.id !== requestedModel.id) {
       callbacks.onError(
-        substitution === 'limit'
+        substitution === 'credits'
           ? {
-              code: 'model_limit_reached',
+              code: 'insufficient_credits',
               message:
                 language === 'en'
-                  ? `The ${requestedModel.name} limit on your plan is used up. It restores gradually.`
-                  : `Лимит модели ${requestedModel.name} на вашем тарифе исчерпан. Он восстанавливается постепенно.`,
+                  ? `Not enough credits for ${requestedModel.name}. Comparison never substitutes models; credits renew with your plan.`
+                  : `Кредитов не хватает на модель ${requestedModel.name}. В сравнении модели не подменяются; кредиты обновятся вместе с тарифом.`,
             }
           : {
               code: 'model_unavailable',
               message:
                 language === 'en'
-                  ? `${requestedModel.name} is unavailable right now because of the plan budget or quota, so a fallback model would answer. Comparison never substitutes models.`
-                  : `Модель ${requestedModel.name} сейчас недоступна из-за бюджета или квоты тарифа: ответила бы запасная модель, а в сравнении модели не подменяются.`,
+                  ? `${requestedModel.name} is unavailable right now, so a fallback model would answer. Comparison never substitutes models.`
+                  : `Модель ${requestedModel.name} сейчас недоступна: ответила бы запасная модель, а в сравнении модели не подменяются.`,
             },
       );
       return;
@@ -936,16 +781,8 @@ export class AIGateway {
               .filter(
                 (m, index) =>
                   index === 0 ||
-                  (this.isAllowedFallback(m, effectivePlan, economyState) &&
-                    ((fundedByCredits && isPremiumClass(m.costClass)) ||
-                      !isModelLimitReached(
-                        m,
-                        effectivePlan,
-                        activeUserId,
-                        this.usageStore,
-                        this.registry,
-                        reasoningMode,
-                      ))),
+                  ((isFreeModel(m) || planAllowsModel(effectivePlan, m.requiredPlan)) &&
+                    isAffordableFallback(m, balanceUsd, reasoningMode)),
               );
       let success = false;
       let streamedResponse: ProviderResponse | null = null;
@@ -1204,16 +1041,11 @@ export class AIGateway {
         providerCost: responseSource === 'provider' ? streamedResponse?.cost : undefined,
       });
       const totalEstimatedCost = Number(requestCost.usd.toFixed(6));
-      // Премиум-запрос сверх квоты тарифа (или за счёт пакета) списывается с кредитов пакетов.
-      const premiumCreditUsd =
-        responseSource === 'provider' && isPremiumClass(usedModel.costClass)
-          ? settlePremiumCost(
-              activeUserId,
-              effectivePlan,
-              totalEstimatedCost,
-              fundedByCredits,
-              quotaDeps,
-            )
+      // Кредиты списываются по реальной цене ответа провайдера. Бесплатная модель, кэш и шаблонные
+      // ответы ничего не стоят; гости кредитов не имеют.
+      const creditsUsd =
+        responseSource === 'provider' && !req.isAnonymous && !isFreeModel(usedModel)
+          ? this.credits.charge(activeUserId, totalEstimatedCost)
           : 0;
 
       // Остановка сторожем по таймауту — это обрыв, а не выбор пользователя: ответ можно продолжить.
@@ -1244,11 +1076,7 @@ export class AIGateway {
         status: isCancelled() ? 'cancelled' : 'success',
         source: responseSource,
         ...(req.task ? { kind: req.task.kind, runId: req.task.id } : {}),
-        limitUnits: limitUnitsFor(usedModel.effortProfile, reasoningMode),
-        premiumCreditUsd,
-        ...(fundedByCredits && isPremiumClass(usedModel.costClass)
-          ? { fundedBy: 'credits' as const }
-          : {}),
+        creditsUsd,
       });
 
       if (!isCancelled()) {

@@ -24,7 +24,7 @@ import {
   planPriceRub,
   planPriceUsd,
 } from '../services/pricing.js';
-import { CRYPTO_PREMIUM_BONUS, EntitlementService } from '../services/entitlement.js';
+import { cryptoBonusCredits, EntitlementService, toCredits } from '../services/entitlement.js';
 
 /** Каталог тарифов. `priceMonthly` везде в долларах США (см. services/pricing.ts). */
 export const PLANS: readonly PlanItem[] = [
@@ -172,7 +172,7 @@ export function createBillingRouter({
   const activateCrypto = (invoice: CryptoInvoice, txHash?: string) => {
     const updated = activeInvoiceStore.markCryptoPaid(invoice.id, txHash) ?? invoice;
     if (invoice.packId) {
-      // Пакет премиум-квоты: кредиты на 30 дней, подписка не меняется. Тот же id платежа — без повтора.
+      // Пакет кредитов: кредиты на 30 дней, подписка не меняется. Тот же id платежа — без повтора.
       const pack = billing.grantPack(invoice.userId, invoice.packId, {
         id: `crypto:${invoice.id}`,
         method: 'crypto',
@@ -183,7 +183,7 @@ export function createBillingRouter({
       if (!pack.duplicate) {
         void billing.telegram?.notifyUser(
           invoice.userId,
-          `✅ Оплата криптовалютой получена: начислили <b>+$${pack.credit.amountUsd}</b> премиум-квоты до <b>${new Date(pack.credit.expiresAt).toLocaleDateString('ru-RU', { day: 'numeric', month: 'long' })}</b>.`,
+          `✅ Оплата криптовалютой получена: начислили <b>+${toCredits(pack.credit.amountUsd)}</b> кредитов до <b>${new Date(pack.credit.expiresAt).toLocaleDateString('ru-RU', { day: 'numeric', month: 'long' })}</b>.`,
           'receipt',
         );
       }
@@ -240,11 +240,11 @@ export function createBillingRouter({
   };
 
   /**
-   * Пакеты премиум-квоты больше не продаются (18.10.2026). Счета, выставленные раньше, по-прежнему
+   * Пакеты кредитов больше не продаются (18.10.2026). Счета, выставленные раньше, по-прежнему
    * засчитываются вебхуком и подтверждением, купленные кредиты тратятся до конца срока.
    */
   const rejectPackPurchase = (response: Response): void => {
-    sendError(response, 410, 'packs_discontinued', 'Пакеты премиум-квоты больше не продаются');
+    sendError(response, 410, 'packs_discontinued', 'Пакеты кредитов больше не продаются');
   };
 
   // Webhook & Postback от CryptoCloud.
@@ -342,19 +342,18 @@ export function createBillingRouter({
     response.json({ plans: PLANS });
   });
 
-  // Бонус за оплату тарифа криптой: страница оплаты объясняет его в цифрах тарифа.
+  // Бонус за оплату тарифа криптой: страница оплаты объясняет его в кредитах тарифа.
   router.get('/billing/crypto-bonus', (_request: Request, response: Response) => {
-    const plans: Record<string, { quotaUsd: number; bonusUsd: number }> = {};
+    const plans: Record<string, { credits: number; bonusCredits: number }> = {};
     for (const plan of PLANS) {
-      const base = EntitlementService.getEntitlements(plan.id);
-      if (base.premiumBudget <= 0) continue;
-      const withBonus = EntitlementService.getEntitlements(plan.id, { cryptoBonus: true });
+      const bonusCredits = cryptoBonusCredits(plan.id);
+      if (bonusCredits <= 0) continue;
       plans[plan.id] = {
-        quotaUsd: base.premiumBudget,
-        bonusUsd: Number((withBonus.premiumBudget - base.premiumBudget).toFixed(2)),
+        credits: EntitlementService.getEntitlements(plan.id).monthlyCredits,
+        bonusCredits,
       };
     }
-    response.json({ pct: Math.round(CRYPTO_PREMIUM_BONUS * 100), plans });
+    response.json({ plans });
   });
 
   /** Счёт в звёздах с ценой по официальному курсу Telegram — её показывает страница оплаты. */

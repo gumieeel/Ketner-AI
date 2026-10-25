@@ -149,10 +149,12 @@ export interface ModelInfo {
   contextMessages: number;
   isPro?: boolean;
   requiredPlan?: PlanId;
-  /** Суточная норма модели по тарифам: основа недельного пула (норма × 7). */
-  dailyLimits?: Partial<Record<PlanId, number>>;
-  /** Недельный пул модели и сколько из него можно взять за сутки; после него отвечает запасная. */
-  weeklyLimits?: Partial<Record<PlanId, { pool: number; perDay: number }>>;
+  /** Примерная цена обычного запроса в кредитах (1 кредит = $0.001 себестоимости); 0 у бесплатных. */
+  requestCredits?: number;
+  /** Цена запроса в режиме Max, если она отличается от обычной. */
+  requestCreditsMax?: number;
+  /** Бесплатная модель: кредитов не тратит. */
+  free?: boolean;
   /** Фиксированная глубина размышлений (модели Pro и Ultra): обычный режим и режим Max (Ultra). */
   reasoningEffort?: { standard: string; max: string };
   /** Компания-разработчик: Ketner AI своих моделей не обучает. */
@@ -163,7 +165,7 @@ export interface ModelInfo {
   baseModelName?: string;
   /** Окно контекста модели, токенов. */
   contextWindow?: number;
-  /** Модель, которая отвечает после лимита или при сбое. */
+  /** Модель, которая отвечает вместо этой, когда кредитов не хватает или при сбое. */
   fallbackModelId?: string;
   fallbackModelName?: string;
 }

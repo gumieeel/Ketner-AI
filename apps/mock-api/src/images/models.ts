@@ -9,14 +9,12 @@
  *   12.10.2026): FLUX.2 [dev] $0.009, Seedream 5.0 Flash $0.019, FLUX.2 [pro] $0.045,
  *   Nano Banana 2 $0.069. Точную цену Runware возвращает в ответе, в учёт идёт она.
  *
- * Суточные лимиты (на пользователя, скользящие 24 часа). Платные модели считаются по тому же
- * принципу, что и чат: лимит = месячный бюджет тарифа на платные картинки / 30 / цена картинки,
- * то есть одной моделью до лимита каждый день бюджета хватает примерно на месяц.
- *   Pro   ($3 в месяц → $0.10 в день): FLUX.2 dev 10, Seedream 5.
- *   Ultra ($6 в месяц → $0.20 в день): FLUX.2 dev 22, Seedream 10, FLUX.2 pro 4, Nano Banana 2 3.
- * Бюджет на платные картинки общий для всех платных моделей: когда он исчерпан за 30 дней, отвечают
- * модели Cloudflare. Сам расход входит и в общий месячный бюджет тарифа (вместе с чатом).
+ * Картинки списывают кредиты из того же пула, что чат и Ketner Code (services/credits.ts): цена
+ * картинки — её себестоимость, у Runware берётся из ответа провайдера. Суточные лимиты (на
+ * пользователя, скользящие 24 часа) — защита от злоупотреблений и от перегрузки бесплатного объёма
+ * Cloudflare, а не способ делить бюджет: у платных моделей они высокие, и кредиты кончаются раньше.
  * Когда лимит модели исчерпан, картинку делает запасная модель; когда исчерпан и её лимит — следующая.
+ * Когда кредиты кончились, остаётся только FLUX.1 schnell и не больше FREE_IMAGES_PER_DAY в сутки.
  */
 
 import type { PlanId } from '../types.js';
@@ -75,7 +73,7 @@ export const IMAGE_MODELS: readonly ImageModel[] = [
     requiredPlan: 'pro',
     costPer1MpUsd: 0.009,
     fallbackModelId: 'flux-2-klein',
-    dailyLimits: { pro: 10, ultra: 22 },
+    dailyLimits: { pro: 100, ultra: 200 },
   },
   {
     id: 'seedream-5-flash',
@@ -87,7 +85,7 @@ export const IMAGE_MODELS: readonly ImageModel[] = [
     requiredPlan: 'pro',
     costPer1MpUsd: 0.019,
     fallbackModelId: 'flux-2-dev',
-    dailyLimits: { pro: 5, ultra: 10 },
+    dailyLimits: { pro: 100, ultra: 200 },
   },
   {
     id: 'flux-2-pro',
@@ -98,7 +96,7 @@ export const IMAGE_MODELS: readonly ImageModel[] = [
     requiredPlan: 'ultra',
     costPer1MpUsd: 0.045,
     fallbackModelId: 'seedream-5-flash',
-    dailyLimits: { ultra: 4 },
+    dailyLimits: { ultra: 100 },
   },
   {
     id: 'nano-banana-2',
@@ -110,7 +108,7 @@ export const IMAGE_MODELS: readonly ImageModel[] = [
     requiredPlan: 'ultra',
     costPer1MpUsd: 0.069,
     fallbackModelId: 'seedream-5-flash',
-    dailyLimits: { ultra: 3 },
+    dailyLimits: { ultra: 100 },
   },
 ];
 
@@ -149,21 +147,5 @@ export function imageCostUsd(model: ImageModel, width: number, height: number): 
   return Number(((model.costPer1MpUsd * width * height) / (1024 * 1024)).toFixed(6));
 }
 
-/**
- * Месячный бюджет на платные картинки (модели Runware) по тарифам, $ за скользящие 30 дней.
- * Около четверти общего бюджета тарифа, чтобы картинки не съедали чат.
- */
-export const PAID_IMAGE_BUDGET_USD: Readonly<Record<'free' | 'plus' | 'pro' | 'ultra', number>> = {
-  free: 0,
-  plus: 0,
-  pro: 3,
-  ultra: 6,
-};
-
-export function paidImageBudget(plan: string): number {
-  return PAID_IMAGE_BUDGET_USD[PLAN_KEY[plan] ?? 'free'];
-}
-
-export const PAID_IMAGE_MODEL_IDS: readonly string[] = IMAGE_MODELS.filter(
-  (m) => m.provider === 'runware',
-).map((m) => m.id);
+/** Сколько картинок FLUX.1 schnell в сутки доступно, когда кредиты кончились (как на Free). */
+export const FREE_IMAGES_PER_DAY = 5;

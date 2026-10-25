@@ -8,6 +8,16 @@ export interface ImageModelInfo {
   locked: boolean;
   dailyLimit: number;
   usedToday: number;
+  /** Цена одной картинки 1024×1024 в кредитах (с десятыми). */
+  priceCredits?: number;
+}
+
+/** Кредиты пользователя: общие с чатом и Ketner Code. */
+export interface ImageCredits {
+  balance: number;
+  /** Кредиты кончились: рисует только модель по умолчанию, не больше `freePerDay` в сутки. */
+  exhausted: boolean;
+  freePerDay: number;
 }
 
 export interface ImageCapabilities {
@@ -18,6 +28,7 @@ export interface ImageCapabilities {
   styles?: string[];
   defaultStyleId?: string;
   maxPromptChars: number;
+  credits?: ImageCredits;
   models: ImageModelInfo[];
 }
 

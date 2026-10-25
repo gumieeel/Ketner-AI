@@ -395,7 +395,7 @@ describe('бонус за оплату криптой', () => {
     installFakeApi();
   });
 
-  it('страница оплаты тарифа объясняет +15% к квоте в цифрах тарифа', async () => {
+  it('страница оплаты тарифа объясняет бонус за крипту в кредитах тарифа', async () => {
     useAuth.setState({
       status: 'authenticated',
       token: 'mock-token',
@@ -409,9 +409,11 @@ describe('бонус за оплату криптой', () => {
     });
     renderRoute('/checkout/pro');
     expect(
-      await screen.findByText('Бонус +15% к квоте топ-моделей за оплату криптой'),
+      await screen.findByText(/Бонус \+1[\s\u00a0]200 кредитов за оплату криптой/),
     ).toBeInTheDocument();
-    expect(screen.getByText(/вырастет с \$8\.00 до \$9\.20/)).toBeInTheDocument();
-    expect(screen.getByText(/Trybit · \+15% к квоте топ-моделей/)).toBeInTheDocument();
+    expect(
+      screen.getByText(/вместо 11[\s\u00a0]000 вы получите 12[\s\u00a0]200 кредитов/),
+    ).toBeInTheDocument();
+    expect(screen.getByText(/Trybit · \+1[\s\u00a0]200 кредитов в подарок/)).toBeInTheDocument();
   });
 });

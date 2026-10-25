@@ -543,6 +543,16 @@ export function BoltIcon(props: IconProps) {
   );
 }
 
+/** Монета с гранёным ромбом: кредиты. */
+export function CreditsIcon(props: IconProps) {
+  return (
+    <SvgIcon {...props}>
+      <circle cx="12" cy="12" r="9" />
+      <path d="M12 7.2 15.6 12 12 16.8 8.4 12z" />
+    </SvgIcon>
+  );
+}
+
 /** Две колонки со строками текста: сравнение ответов. */
 export function CompareIcon(props: IconProps) {
   return (

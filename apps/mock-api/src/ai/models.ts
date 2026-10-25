@@ -1,7 +1,21 @@
 import type { ModelCatalog, ModelInfo, PlanId, PlanLimits } from '../types.js';
-import { dailyLimitsOf, modelRegistry } from './model-registry.js';
+import { modelRegistry } from './model-registry.js';
 import { disclosureOf } from './model-disclosure.js';
 import type { ModelRegistryEntry } from './gateway-types.js';
+import { isFreeModel, requestPriceUsd } from '../services/credit-policy.js';
+import { CREDITS_PER_USD } from '../services/entitlement.js';
+
+const round1 = (value: number): number => Math.round(value * 10) / 10;
+
+/** Цена типичного запроса в кредитах: то, что показывают страницы «Модели» и «Тарифы». */
+function priceFields(
+  entry: ModelRegistryEntry,
+): Pick<ModelInfo, 'requestCredits' | 'requestCreditsMax' | 'free'> {
+  if (isFreeModel(entry)) return { requestCredits: 0, free: true };
+  const standard = round1(requestPriceUsd(entry, 'standard') * CREDITS_PER_USD);
+  const max = round1(requestPriceUsd(entry, 'max') * CREDITS_PER_USD);
+  return { requestCredits: standard, ...(max !== standard ? { requestCreditsMax: max } : {}) };
+}
 
 /** Публичный каталог моделей для `GET /api/meta`. Источник правды — реестр моделей. */
 export const DEFAULT_MODEL_ID = 'auto';
@@ -34,7 +48,7 @@ export const PUBLIC_MODEL_IDS: readonly string[] = [
   'gpt-5.6-terra',
 ];
 
-/** Публичные сведения о модели: доступ, лимиты и прозрачность (разработчик, настоящая модель). */
+/** Публичные сведения о модели: доступ и прозрачность (разработчик, настоящая модель). */
 function toModelInfo(id: string, entry: ModelRegistryEntry): ModelInfo {
   const disclosure = disclosureOf(entry);
   return {
@@ -43,10 +57,10 @@ function toModelInfo(id: string, entry: ModelRegistryEntry): ModelInfo {
     contextMessages: entry.contextMessages,
     isPro: entry.isPro,
     requiredPlan: entry.requiredPlan ?? undefined,
-    ...dailyLimitsOf(id),
     ...(entry.effortProfile ? { reasoningEffort: { ...entry.effortProfile } } : {}),
     ...(disclosure ?? {}),
     contextWindow: entry.contextWindow,
+    ...priceFields(entry),
     ...(entry.fallbackModelId
       ? {
           fallbackModelId: entry.fallbackModelId,

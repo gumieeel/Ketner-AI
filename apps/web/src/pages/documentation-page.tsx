@@ -19,6 +19,7 @@ import { Card, CardText, CardTitle } from '@/components/ui/card';
 import { FAQ_ITEMS } from '@/features/content/faq';
 import { useTranslation } from '@/i18n';
 import { cn } from '@/lib/cn';
+import planFacts from '@/features/billing/plan-facts.json';
 
 interface PlanCardInfo {
   id: string;
@@ -31,6 +32,25 @@ interface PlanCardInfo {
   context: { ru: string; en: string };
   features: { ru: string[]; en: string[] };
   popular?: boolean;
+}
+
+type PlanKey = keyof typeof planFacts.plans;
+
+/** Строка про кредиты тарифа; числа — из plan-facts.json, который тест сверяет с сервером. */
+function creditsLine(plan: PlanKey, language: 'ru' | 'en'): string {
+  const facts = planFacts.plans[plan];
+  const locale = language === 'ru' ? 'ru-RU' : 'en-US';
+  const credits = facts.monthlyCredits.toLocaleString(locale);
+  const first = facts.examples[0];
+  if (!first) {
+    return language === 'ru'
+      ? `${credits} кредитов каждые 30 дней (картинки)`
+      : `${credits} credits every 30 days (images)`;
+  }
+  const requests = first.requests.toLocaleString(locale);
+  return language === 'ru'
+    ? `${credits} кредитов каждые 30 дней — примерно ${requests} запросов ${first.name}; остаток переносится на один период`
+    : `${credits} credits every 30 days, about ${requests} ${first.name} requests; leftovers carry over for one period`;
 }
 
 const PLANS_DATA: PlanCardInfo[] = [
@@ -49,12 +69,14 @@ const PLANS_DATA: PlanCardInfo[] = [
     features: {
       ru: [
         'Бесплатная Nemotron 3 Ultra (NVIDIA), запасная — Ketner Mini',
+        creditsLine('free', 'ru'),
         'Интеллектуальный режим Best AI (Auto)',
         'Сохранение полной истории диалогов',
         'Синхронизация между всеми устройствами',
       ],
       en: [
         'Free Nemotron 3 Ultra (NVIDIA), Ketner Mini as backup',
+        creditsLine('free', 'en'),
         'Intelligent Best AI (Auto) mode',
         'Full conversation history saving',
         'Sync across all your devices',
@@ -77,13 +99,13 @@ const PLANS_DATA: PlanCardInfo[] = [
       ru: [
         'Модели: Ketner Pro, GPT-6.1 Sol, Claude Haiku 5.5, DeepSeek V4.1 Flash',
         'Картинки FLUX.2 klein в пяти форматах',
-        'GPT-6.1 Sol — 14 запросов в неделю, не больше 5 в сутки',
+        creditsLine('plus', 'ru'),
         'Доступ через режим Auto или ручной выбор модели',
       ],
       en: [
         'Models: Ketner Pro, GPT-6.1 Sol, Claude Haiku 5.5, DeepSeek V4.1 Flash',
         'FLUX.2 klein images in five aspect ratios',
-        'GPT-6.1 Sol: 14 requests a week, at most 5 a day',
+        creditsLine('plus', 'en'),
         'Access via Auto mode or manual model selection',
       ],
     },
@@ -106,14 +128,14 @@ const PLANS_DATA: PlanCardInfo[] = [
         'Все, что входит в тариф Plus',
         'Топовые модели: Claude Opus 5.5, Sonnet 5.5, GPT-6 Astra, GPT-5.6 Sol, GPT-5.6 Terra xhigh, Grok 4.7 xhigh',
         'Картинки FLUX.2 dev и Seedream',
-        'Claude Opus 5.5 — 21 запрос в неделю, Sonnet 5.5 — 42',
+        creditsLine('pro', 'ru'),
         'Ручной выбор любой модели, доступной на тарифе',
       ],
       en: [
         'All Plus tier features included',
         'Top models: Claude Opus 5.5, Sonnet 5.5, GPT-6 Astra, GPT-5.6 Sol, GPT-5.6 Terra xhigh, Grok 4.7 xhigh',
         'FLUX.2 dev and Seedream images',
-        'Claude Opus 5.5: 21 requests a week, Sonnet 5.5: 42',
+        creditsLine('pro', 'en'),
         'Manual selection of any model available on your plan',
       ],
     },
@@ -135,13 +157,13 @@ const PLANS_DATA: PlanCardInfo[] = [
         'Все, что входит в тариф Pro',
         'Режим Max: модели думают дольше и глубже',
         'Картинки FLUX.2 pro и Nano Banana 2',
-        'Claude Opus 5.5 — 49 запросов в неделю, Sonnet 5.5 — 98',
+        creditsLine('ultra', 'ru'),
       ],
       en: [
         'All Pro tier features included',
         'Max mode: models think longer and deeper',
         'FLUX.2 pro and Nano Banana 2 images',
-        'Claude Opus 5.5: 49 requests a week, Sonnet 5.5: 98',
+        creditsLine('ultra', 'en'),
       ],
     },
   },

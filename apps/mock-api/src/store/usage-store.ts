@@ -145,9 +145,7 @@ export class UsageStore {
     kind?: UsageRecord['kind'];
     runId?: string;
     step?: number;
-    limitUnits?: number;
-    premiumCreditUsd?: number;
-    fundedBy?: UsageRecord['fundedBy'];
+    creditsUsd?: number;
   }): UsageRecord {
     const record: UsageRecord = {
       id: randomUUID(),
@@ -168,12 +166,8 @@ export class UsageStore {
       source: params.source ?? 'provider',
       ...(params.kind ? { kind: params.kind } : {}),
       ...(params.runId ? { runId: params.runId } : {}),
-      ...(params.limitUnits && params.limitUnits !== 1 ? { limitUnits: params.limitUnits } : {}),
       ...(params.step !== undefined ? { step: params.step } : {}),
-      ...(params.premiumCreditUsd && params.premiumCreditUsd > 0
-        ? { premiumCreditUsd: params.premiumCreditUsd }
-        : {}),
-      ...(params.fundedBy ? { fundedBy: params.fundedBy } : {}),
+      ...(params.creditsUsd && params.creditsUsd > 0 ? { creditsUsd: params.creditsUsd } : {}),
       createdAt: new Date().toISOString(),
     };
 
@@ -290,8 +284,7 @@ export class UsageStore {
         if (countsAsMessage) requestsLastHour++;
         tokensLastHour += totalTokens;
       }
-      // Часть, оплаченная кредитами пакета, в бюджет тарифа не входит: пакет оплачен отдельно.
-      const planCost = rec.estimatedCost - (rec.premiumCreditUsd ?? 0);
+      const planCost = rec.estimatedCost;
       if (time >= oneDayAgo) {
         if (countsAsMessage) requestsLastDay++;
         if (countsTowardLimits) {
@@ -315,54 +308,6 @@ export class UsageStore {
       estimatedCostLastMonth: Number(estimatedCostLastMonth.toFixed(4)),
       activeConcurrentRequests: this.getActiveConcurrency(userId),
     };
-  }
-
-  /**
-   * Расход пользователя за скользящие 30 дней по заданным моделям.
-   * Нужен квоте премиум-запросов: сильные модели ограничены отдельным бюджетом тарифа.
-   * Берётся фактическая стоимость от провайдера, а если её нет — расчётная; часть, оплаченная
-   * кредитами пакета, в квоту тарифа не входит.
-   */
-  getCostLastMonthByModels(userId: string, modelIds: Iterable<string>): number {
-    const wanted = new Set(modelIds);
-    if (wanted.size === 0) return 0;
-    const userRecords = this.userIndex.get(userId) ?? [];
-    const since = Date.now() - 30 * 24 * 60 * 60 * 1000;
-    let total = 0;
-    for (let i = userRecords.length - 1; i >= 0; i--) {
-      const rec = userRecords[i];
-      if (new Date(rec.createdAt).getTime() < since) break;
-      if (wanted.has(rec.modelId)) {
-        total += (rec.actualCost ?? rec.estimatedCost) - (rec.premiumCreditUsd ?? 0);
-      }
-    }
-    return Number(total.toFixed(6));
-  }
-
-  /**
-   * Траты пользователя за последние `windowMs` по заданным моделям (все модели, если null), старые
-   * первыми. По ним видно, когда скользящая квота вернётся: траты выпадают из окна по очереди.
-   */
-  getCostEvents(
-    userId: string,
-    modelIds: Iterable<string> | null,
-    windowMs: number,
-  ): Array<{ at: number; cost: number }> {
-    const wanted = modelIds ? new Set(modelIds) : null;
-    const userRecords = this.userIndex.get(userId) ?? [];
-    const since = Date.now() - windowMs;
-    const events: Array<{ at: number; cost: number }> = [];
-    for (let i = userRecords.length - 1; i >= 0; i--) {
-      const rec = userRecords[i];
-      const at = new Date(rec.createdAt).getTime();
-      if (at < since) break;
-      if (wanted && !wanted.has(rec.modelId)) continue;
-      const cost =
-        (wanted ? (rec.actualCost ?? rec.estimatedCost) : rec.estimatedCost) -
-        (rec.premiumCreditUsd ?? 0);
-      if (cost > 0) events.push({ at, cost });
-    }
-    return events.reverse();
   }
 
   private observedCostCache: { at: number; byModel: Map<string, number> } | null = null;
@@ -395,60 +340,6 @@ export class UsageStore {
       if (rec.kind === 'image' && rec.modelId === modelId && rec.status === 'success') count += 1;
     }
     return count;
-  }
-
-  /** Сколько единиц суточного лимита моделей израсходовано за последние 24 часа. */
-  getModelUsesLastDay(userId: string, modelIds: Iterable<string>): number {
-    return this.getModelUsesSince(userId, modelIds, DAY_MS);
-  }
-
-  /** Сколько единиц лимита моделей израсходовано за последние `windowMs` (см. getModelUseEvents). */
-  getModelUsesSince(userId: string, modelIds: Iterable<string>, windowMs: number): number {
-    return this.getModelUseEvents(userId, modelIds, windowMs).reduce((sum, e) => sum + e.units, 0);
-  }
-
-  /**
-   * Использования моделей за последние `windowMs`, старые первыми: когда и сколько единиц лимита.
-   * Нужны лимитам моделей (суточным и недельному пулу) и подсказке «когда восстановится».
-   *
-   * Считаются ответы провайдера (успешные и прерванные пользователем: токены уже потрачены), но
-   * не кэш, не отказы и не сбои. Запуск агента считается один раз (по наибольшему весу его записей,
-   * по времени первой записи), сколько бы шагов он ни сделал. Запросы за счёт кредитов пакета
-   * (`fundedBy: 'credits'`) в лимиты моделей не входят.
-   */
-  getModelUseEvents(
-    userId: string,
-    modelIds: Iterable<string>,
-    windowMs: number,
-  ): Array<{ at: number; units: number }> {
-    const wanted = new Set(modelIds);
-    if (wanted.size === 0) return [];
-    const userRecords = this.userIndex.get(userId) ?? [];
-    const since = Date.now() - windowMs;
-    const events: Array<{ at: number; units: number }> = [];
-    const runs = new Map<string, { at: number; units: number }>();
-    for (let i = userRecords.length - 1; i >= 0; i--) {
-      const rec = userRecords[i];
-      const at = new Date(rec.createdAt).getTime();
-      if (at < since) break;
-      if (!wanted.has(rec.modelId) || rec.fundedBy === 'credits') continue;
-      // Проверки ответов считаются своим суточным лимитом, а не лимитом модели-рецензента.
-      if (rec.kind === 'review') continue;
-      const units = rec.limitUnits ?? 1;
-      if (rec.kind === 'agent') {
-        if (!rec.runId) continue;
-        const run = runs.get(rec.runId);
-        runs.set(rec.runId, {
-          at: Math.min(run?.at ?? at, at),
-          units: Math.max(run?.units ?? 0, units),
-        });
-        continue;
-      }
-      if (rec.source !== 'provider') continue;
-      if (rec.status === 'success' || rec.status === 'cancelled') events.push({ at, units });
-    }
-    events.push(...runs.values());
-    return events.sort((a, b) => a.at - b.at);
   }
 
   /**
@@ -602,7 +493,7 @@ export class UsageStore {
 
   /**
    * Phase 3: Пересчёт эмпирического бюджета тарифа по реальным накопленным данным расходов.
-   * Возвращает агрегаты по тарифам и рекомендуемый costBudget на основе 95-го перцентиля расходов.
+   * Возвращает агрегаты по тарифам и рекомендуемый месячный бюджет на основе 95-го перцентиля расходов.
    */
   getEmpiricalPlanBudget(planUsers: Array<{ userId: string; plan: string }>): Record<
     string,

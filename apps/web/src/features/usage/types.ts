@@ -1,33 +1,47 @@
-/** Ответ GET /api/usage/quota (apps/mock-api/src/services/premium-quota.ts). */
+/** Ответ GET /api/usage/credits (apps/mock-api/src/services/credits.ts → CreditsReport). */
 
-export type QuotaLimitedBy = 'quota' | 'week' | 'day' | 'budget' | null;
+/** `normal` — кредиты есть; `exhausted` — кончились, отвечает бесплатная модель. */
+export type CreditStage = 'normal' | 'exhausted';
 
-export interface ModelQuota {
+export interface ModelCredit {
   id: string;
   name: string;
-  requestCostUsd: number;
+  /** Примерная цена одного запроса, кредиты (с десятыми); 0 у бесплатных моделей. */
+  requestCredits: number;
   priceSource: 'observed' | 'estimate';
-  /** Сколько запросов примерно осталось. */
-  remaining: number;
-  remainingByQuota: number;
-  pool: { weekly: number; perDay: number; weekRemaining: number; dayRemaining: number } | null;
-  limitedBy: QuotaLimitedBy;
-  /** Когда вернётся хотя бы один запрос, если сейчас их 0. */
-  restoresAt: string | null;
+  /** Бесплатная модель: отвечает и кредитов не тратит. */
+  free: boolean;
+  /** На сколько запросов примерно хватит остатка; null у бесплатных моделей. */
+  remaining: number | null;
+  /** Хватает ли остатка хотя бы на один запрос. */
+  affordable: boolean;
 }
 
-export interface QuotaReport {
+export interface CreditGrantInfo {
+  id: string;
+  kind: 'plan' | 'bonus' | 'free' | 'auto' | 'pack' | 'admin';
+  amount: number;
+  remaining: number;
+  expiresAt: string;
+}
+
+export interface CreditsReport {
   plan: string;
   reasoningMode: 'standard' | 'max';
-  premium: {
-    budgetUsd: number;
-    spentUsd: number;
-    remainingUsd: number;
-    usedPct: number;
-    available: boolean;
-    warning: boolean;
-    restoresAt: string | null;
-  };
-  budget: { stage: 'normal' | 'soft' | 'exhausted' | 'hard_stop'; usedPct: number };
-  models: ModelQuota[];
+  /** Остаток, кредиты. */
+  balance: number;
+  /** Сколько кредитов тариф выдаёт за 30 дней. */
+  monthly: number;
+  stage: CreditStage;
+  /** Кредиты на исходе (меньше 15% месячной выдачи, но ещё есть). */
+  low: boolean;
+  /** Когда сгорает ближайший грант и сколько кредитов в нём. */
+  nextExpiresAt: string | null;
+  nextExpiring: number;
+  /** Когда тариф выдаст новые кредиты. */
+  refreshAt: string | null;
+  grants: CreditGrantInfo[];
+  /** Бесплатная модель, которая отвечает, когда кредиты кончились. */
+  freeModel: { id: string; name: string } | null;
+  models: ModelCredit[];
 }

@@ -14,10 +14,9 @@ import {
 } from '../services/answer-review.js';
 import { resolveChatIdentity } from '../services/chat-identity.js';
 import { EntitlementService } from '../services/entitlement.js';
-import type { PlanBonusSource } from '../services/premium-quota.js';
 import { dailyReviewLimit, pickReviewers } from '../services/review-policy.js';
 import type { ConversationStore } from '../store/conversation-store.js';
-import type { PremiumCreditSource } from '../store/premium-credit-store.js';
+import type { CreditLedger } from '../services/credits.js';
 import {
   usageStore as defaultUsageStore,
   feedbackStore as defaultFeedbackStore,
@@ -38,8 +37,8 @@ export interface ReviewRouterDeps {
   usageStore?: UsageStore;
   gateway?: AIGateway;
   feedbackStore?: FeedbackStore;
-  premiumCredits?: PremiumCreditSource;
-  planBonus?: PlanBonusSource;
+  /** Кредиты пользователей; по умолчанию — общий журнал биллинга. */
+  credits?: CreditLedger;
 }
 
 function text(language: Language, ru: string, en: string): string {
@@ -132,8 +131,7 @@ export function createReviewRouter(deps: ReviewRouterDeps): Router {
       usageStore,
       aiConfig: deps.ai,
       feedbackStore: deps.feedbackStore ?? defaultFeedbackStore,
-      premiumCredits: deps.premiumCredits,
-      planBonus: deps.planBonus,
+      credits: deps.credits,
     });
   /** Одна проверка на человека за раз: иначе пачка кликов съела бы весь лимит. */
   const activeUsers = new Set<string>();

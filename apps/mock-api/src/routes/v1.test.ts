@@ -18,6 +18,8 @@ import type {
 } from '../ai/agent/agent-types.js';
 import { PLAN_ENTITLEMENTS } from '../services/entitlement.js';
 import { UsageStore } from '../store/usage-store.js';
+import type { CreditService } from '../services/credits.js';
+import { exhaust, memoryCredits, setBalance } from '../services/credits-fixture.js';
 import { readJson, startTestServer, waitFor, type TestServer } from '../testing/server.js';
 import type { AuthSession } from '../types.js';
 
@@ -40,6 +42,8 @@ interface Harness {
   server: TestServer;
   calls: AgentProviderRequest[];
   usage: UsageStore;
+  /** Кредиты шлюза: тесты выдают и списывают их напрямую. */
+  credits: CreditService;
   /** Регистрирует пользователя на нужном тарифе и выдаёт ему API-ключ. */
   caller: (
     plan?: 'free' | 'plus' | 'pro' | 'ultra',
@@ -68,11 +72,13 @@ async function harness(script: Script): Promise<Harness> {
   const providers = new ProviderManager();
   providers.setProvider('openrouter', provider);
   const usage = new UsageStore(join(mkdtempSync(join(tmpdir(), 'ketner-v1-')), 'usage.json'));
+  const credits = memoryCredits();
   const gateway = new AgentGateway({
     usageStore: usage,
     registry: new ModelRegistry(),
     providers,
     circuitBreaker: new CircuitBreaker({ failureThreshold: 3, cooldownMs: 30_000 }),
+    credits,
   });
   const server = await startTestServer({}, { agentGateway: gateway, usageStore: usage });
 
@@ -100,7 +106,7 @@ async function harness(script: Script): Promise<Harness> {
     return { secret: created.secret, userId: user.id, token, keyId: created.key.id };
   };
 
-  return { server, calls, usage, caller };
+  return { server, calls, usage, credits, caller };
 }
 
 const post = (h: Harness, secret: string, body: unknown, init: RequestInit = {}) =>
@@ -400,7 +406,7 @@ test('POST /v1/chat/completions без стриминга: вызов функц
       cost_usd: number;
       requested_model: string;
       routing_reason: string;
-      budget: { stage: string; used_pct: number; premium_available: boolean };
+      credits: { charged: number; balance: number; stage: string };
     };
   }>(response);
 
@@ -416,8 +422,13 @@ test('POST /v1/chat/completions без стриминга: вызов функц
   assert.equal(body.usage.total_tokens, 1280);
   assert.equal(body.ketner.cost_usd, 0.0123);
   assert.equal(body.ketner.requested_model, 'ketner-pro');
-  assert.equal(body.ketner.budget.stage, 'normal');
-  assert.ok(body.ketner.budget.used_pct > 0);
+  assert.equal(body.ketner.credits.stage, 'normal');
+  assert.equal(body.ketner.credits.charged, 12.3, '$0.0123 = 12.3 кредита');
+  assert.equal(
+    body.ketner.credits.balance,
+    Math.floor(PLAN_ENTITLEMENTS.plus.monthlyCredits - 12.3),
+    'остаток показывается целыми кредитами, вниз',
+  );
 
   assert.equal(h.calls[0].model, 'xiaomi/mimo-v2.6-pro');
   assert.deepEqual(h.calls[0].tools, TOOLS);
@@ -644,7 +655,7 @@ test('Free: 403 upgrade_required; неверный JSON, ошибка тела �
   assert.equal(h.calls.length, 0, 'ни один отказ не дошёл до провайдера');
 });
 
-test('лимиты: параллельный запрос получает 429 с Retry-After, исчерпанный бюджет — insufficient_quota', async (t) => {
+test('лимиты: параллельный запрос получает 429 с Retry-After', async (t) => {
   const h = await harness(async () => result());
   t.after(() => h.server.close());
 
@@ -655,84 +666,71 @@ test('лимиты: параллельный запрос получает 429 �
   assert.equal(limited.status, 429);
   assert.equal(limited.headers.get('retry-after'), '5');
   assert.equal((await readJson<ErrorBody>(limited)).error.code, 'rate_limit_exceeded');
-
-  const broke = await h.caller('plus');
-  const seeded = h.usage.recordUsage({
-    userId: broke.userId,
-    conversationId: 'seed',
-    modelId: 'ketner-pro',
-    provider: 'openrouter',
-    inputTokens: 1,
-    outputTokens: 1,
-    estimatedCost: PLAN_ENTITLEMENTS.plus.costBudget * 1.3,
-    latencyMs: 1,
-    status: 'success',
-  });
-  seeded.createdAt = new Date(Date.now() - 3 * 86_400_000).toISOString();
-  const refused = await post(h, broke.secret, { messages: [{ role: 'user', content: 'x' }] });
-  assert.equal(refused.status, 429);
-  const refusedBody = await readJson<ErrorBody>(refused);
-  assert.equal(refusedBody.error.code, 'insufficient_quota');
-  assert.equal(refusedBody.error.type, 'insufficient_quota');
-  assert.equal(h.calls.length, 0);
 });
 
-test('подмена модели видна клиенту: исчерпана квота премиум-запросов — отвечает Ketner Pro', async (t) => {
+test('кредиты кончились: отвечает бесплатная модель агента, а не отказ insufficient_quota', async (t) => {
+  const h = await harness(async () => result({ cost: 0 }));
+  t.after(() => h.server.close());
+  const broke = await h.caller('plus');
+  exhaust(h.credits, broke.userId, 'plus');
+
+  for (let i = 0; i < 2; i++) {
+    const response = await post(h, broke.secret, { messages: [{ role: 'user', content: 'x' }] });
+    assert.equal(response.status, 200);
+    const body = await readJson<{
+      model: string;
+      ketner: {
+        routing_reason: string;
+        credits: { charged: number; balance: number; stage: string };
+      };
+    }>(response);
+    assert.equal(body.model, 'north-mini-code');
+    assert.match(body.ketner.routing_reason, /Credits used up/);
+    assert.deepEqual(body.ketner.credits, { charged: 0, balance: 0, stage: 'exhausted' });
+  }
+  assert.equal(h.calls[0].model, 'cohere/north-mini-code:free');
+});
+
+test('подмена модели видна клиенту: не хватает кредитов на выбранную — отвечает та, на которую хватает', async (t) => {
   const h = await harness(async () => result());
   t.after(() => h.server.close());
   const dev = await h.caller('pro');
-  const seeded = h.usage.recordUsage({
-    userId: dev.userId,
-    conversationId: 'seed',
-    modelId: 'gpt-6.1-sol',
-    provider: 'openrouter',
-    inputTokens: 1,
-    outputTokens: 1,
-    estimatedCost: PLAN_ENTITLEMENTS.pro.premiumBudget + 0.05,
-    latencyMs: 1,
-    status: 'success',
-  });
-  seeded.createdAt = new Date(Date.now() - 3 * 86_400_000).toISOString();
+  setBalance(h.credits, dev.userId, 'pro', 20); // GPT-6.1 Sol ≈ 35 кредитов за запрос
 
   const body = await readJson<{
     model: string;
-    ketner: {
-      requested_model: string;
-      routing_reason: string;
-      budget: { premium_available: boolean };
-    };
+    ketner: { requested_model: string; routing_reason: string };
   }>(
     await post(h, dev.secret, { model: 'gpt-6.1-sol', messages: [{ role: 'user', content: 'x' }] }),
   );
-  assert.equal(body.model, 'ketner-pro');
+  assert.notEqual(body.model, 'gpt-6.1-sol');
   assert.equal(body.ketner.requested_model, 'gpt-6.1-sol');
-  assert.match(body.ketner.routing_reason, /Premium quota used up/);
-  assert.equal(body.ketner.budget.premium_available, false);
-  assert.equal(h.calls[0].model, 'xiaomi/mimo-v2.6-pro');
+  assert.match(body.ketner.routing_reason, /Not enough credits for GPT-6\.1 Sol/);
+  assert.notEqual(h.calls[0].model, 'openai/gpt-6.1-sol');
 });
 
-test('GET /v1/usage: бюджет, премиум-квота и число запросов растут вместе с расходом', async (t) => {
+test('GET /v1/usage: остаток кредитов и число запросов меняются вместе с расходом', async (t) => {
   const h = await harness(async () => result({ cost: 0.5 }));
   t.after(() => h.server.close());
   const dev = await h.caller('plus');
 
   const before = await readJson<{
     plan: string;
-    budget: { limit_usd: number; used_usd: number; stage: string };
-    premium: { limit_usd: number; available: boolean };
+    credits: { balance: number; monthly: number; stage: string; next_expires_at: string | null };
     requests_last_day: number;
-    window: string;
+    period_days: number;
   }>(await get(h, dev.secret, '/v1/usage'));
   assert.equal(before.plan, 'plus');
-  assert.equal(before.budget.limit_usd, PLAN_ENTITLEMENTS.plus.costBudget);
-  assert.equal(before.budget.used_usd, 0);
-  assert.equal(before.premium.limit_usd, PLAN_ENTITLEMENTS.plus.premiumBudget);
+  assert.equal(before.credits.monthly, PLAN_ENTITLEMENTS.plus.monthlyCredits);
+  assert.equal(before.credits.balance, PLAN_ENTITLEMENTS.plus.monthlyCredits);
+  assert.equal(before.credits.stage, 'normal');
+  assert.ok(before.credits.next_expires_at, 'срок кредитов виден');
   assert.equal(before.requests_last_day, 0);
-  assert.equal(before.window, 'rolling_30_days');
+  assert.equal(before.period_days, 30);
 
   await post(h, dev.secret, { messages: [{ role: 'user', content: 'x' }] });
   const after = await readJson<typeof before>(await get(h, dev.secret, '/v1/usage'));
-  assert.equal(after.budget.used_usd, 0.5);
+  assert.equal(after.credits.balance, PLAN_ENTITLEMENTS.plus.monthlyCredits - 500);
   assert.equal(after.requests_last_day, 1);
 });
 

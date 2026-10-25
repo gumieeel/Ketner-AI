@@ -1,5 +1,6 @@
 /**
- * Fair Use Engine — защита от злоупотреблений, контроль нагрузки и себестоимости.
+ * Fair Use Engine — защита от злоупотреблений и контроль нагрузки. Расход на модели ограничивают
+ * кредиты (services/credits.ts), а не этот модуль.
  *
  * Анализирует активность пользователя в скользящих окнах (минута, час, день)
  * и сравнивает с лимитами его тарифного плана.
@@ -13,11 +14,9 @@ import { EntitlementService } from './entitlement.js';
 export interface FairUseOptions {
   /**
    * Не применять часовой и суточный лимит токенов: контекст агента растёт с каждым шагом, и
-   * честная работа над кодом упёрлась бы в лимит чата. Бюджет в долларах остаётся главным ограничением.
+   * честная работа над кодом упёрлась бы в лимит чата. Главное ограничение здесь — кредиты.
    */
   skipTokenWindows?: boolean;
-  /** Во сколько раз суточный лимит расхода выше чатового (работа над кодом идёт всплесками). */
-  dailyCostFactor?: number;
 }
 
 export class FairUseEngine {
@@ -91,23 +90,7 @@ export class FairUseEngine {
       };
     }
 
-    // 5. Проверка дневного лимита себестоимости (Cost Guard)
-    const dailyCostCap =
-      limits.maxDailyCost === null ? null : limits.maxDailyCost * (options.dailyCostFactor ?? 1);
-    if (dailyCostCap !== null && snapshot.estimatedCostLastDay >= dailyCostCap) {
-      const reason =
-        language === 'en'
-          ? `Usage is paused until tomorrow under the fair-use policy.`
-          : `По правилам честного использования работа продолжится завтра.`;
-
-      return {
-        action: 'deny',
-        code: 'fair_use_exceeded',
-        reason,
-      };
-    }
-
-    // 6. Проверка лимита токенов в час
+    // 5. Проверка лимита токенов в час
     if (options.skipTokenWindows) {
       return { action: 'allow' };
     }
@@ -125,7 +108,7 @@ export class FairUseEngine {
       };
     }
 
-    // 7. Проверка лимита токенов в сутки
+    // 6. Проверка лимита токенов в сутки
     if (limits.tokensPerDay !== null && snapshot.tokensLastDay >= limits.tokensPerDay) {
       const reason =
         language === 'en'

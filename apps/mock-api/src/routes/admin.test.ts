@@ -264,16 +264,20 @@ test('admin: GET /api/admin/users — список, пагинация, филь
         limits: {
           requestsPerDay: number | null;
           tokensPerDay: number | null;
-          maxDailyCost: number | null;
-          costBudget: number | null;
+          monthlyCredits: number;
         };
         remaining: {
           requestsToday: number | null;
           tokensToday: number | null;
-          costToday: number | null;
-          costThisMonth: number | null;
         };
-        budgetUsedPct: number;
+        credits: {
+          balance: number;
+          monthly: number;
+          spentMonth: number;
+          nextExpiresAt: string | null;
+          usedPct: number;
+        };
+        creditsUsedPct: number;
       }>;
       total: number;
       page: number;
@@ -292,9 +296,14 @@ test('admin: GET /api/admin/users — список, пагинация, филь
     assert.equal(demoCard.usage.tokensToday, 0);
     assert.equal(demoCard.usage.costToday, 0);
     assert.equal(demoCard.usage.costThisMonth, 0);
-    assert.equal(demoCard.budgetUsedPct, 0);
+    assert.equal(demoCard.creditsUsedPct, 0);
+    assert.equal(demoCard.credits.spentMonth, 0);
+    assert.equal(demoCard.credits.monthly, demoCard.limits.monthlyCredits);
     assert.equal(typeof demoCard.remaining.tokensToday, 'number');
-    assert.ok(!Number.isNaN(demoCard.budgetUsedPct));
+    assert.ok(!Number.isNaN(demoCard.creditsUsedPct));
+    const bobCard = listBody.users.find((u) => u.email === 'bob@example.com');
+    assert.equal(bobCard?.limits.monthlyCredits, 11_000, 'Pro: 11 000 кредитов в месяц');
+    assert.equal(bobCard?.credits.monthly, 11_000);
 
     // 4. Поиск по подстроке `search=alice`
     const searchRes = await fetch(`${server.baseUrl}/api/admin/users?search=alice`, { headers });
@@ -371,18 +380,16 @@ test('admin: GET /api/admin/users/:id — детальная карточка п
         requestsPerDay: number | null;
         tokensPerHour: number | null;
         tokensPerDay: number | null;
-        maxDailyCost: number | null;
-        costBudget: number | null;
+        monthlyCredits: number;
       };
       remaining: {
         requestsLastHour: number | null;
         requestsToday: number | null;
         tokensLastHour: number | null;
         tokensToday: number | null;
-        costToday: number | null;
-        costThisMonth: number | null;
       };
-      budgetUsedPct: number;
+      credits: { balance: number; monthly: number; grants: unknown[] };
+      creditsUsedPct: number;
       profitability: {
         userId: string;
         subscriptionRevenue: number;
@@ -400,7 +407,8 @@ test('admin: GET /api/admin/users/:id — детальная карточка п
     assert.equal(emptyBody.usage.tokensToday, 0);
     assert.equal(emptyBody.usage.costToday, 0);
     assert.equal(emptyBody.usage.costThisMonth, 0);
-    assert.equal(emptyBody.budgetUsedPct, 0);
+    assert.equal(emptyBody.creditsUsedPct, 0);
+    assert.ok(Array.isArray(emptyBody.credits.grants));
     assert.ok(Array.isArray(emptyBody.recentRequests));
     assert.equal(emptyBody.recentRequests.length, 0);
     assert.equal(emptyBody.profitability.userId, 'demo-user');
@@ -795,6 +803,78 @@ test('admin: регистрации по времени и источнику', 
     assert.equal(row.campaign, 'launch');
     assert.ok(body.bySource.some((item) => item.channel === 'paid' && item.source === 'google'));
     assert.ok(body.byCampaign.some((item) => item.campaign === 'launch'));
+  } finally {
+    await server.close();
+  }
+});
+
+test('admin: POST /api/admin/users/:id/credits — ручная выдача кредитов видна в карточке пользователя', async () => {
+  const server = await startTestServer();
+
+  try {
+    const headers = { 'x-admin-key': config.adminApiKey, 'Content-Type': 'application/json' };
+    const userRes = await signupAndVerify(server.baseUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        email: 'credits-target@example.com',
+        password: 'password123',
+        name: 'Credits Target',
+      }),
+    });
+    const { user } = (await userRes.json()) as { user: { id: string } };
+    const url = `${server.baseUrl}/api/admin/users/${user.id}/credits`;
+
+    const denied = await fetch(url, { method: 'POST', body: '{}' });
+    assert.equal(denied.status, 403);
+
+    for (const body of [
+      {},
+      { credits: 0 },
+      { credits: -5 },
+      { credits: 'много' },
+      { credits: 2_000_000 },
+    ]) {
+      const bad = await fetch(url, { method: 'POST', headers, body: JSON.stringify(body) });
+      assert.equal(bad.status, 400, JSON.stringify(body));
+      assert.equal(
+        ((await bad.json()) as { error: { code: string } }).error.code,
+        'invalid_credits',
+      );
+    }
+    const badDays = await fetch(url, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ credits: 100, days: 0 }),
+    });
+    assert.equal(badDays.status, 400);
+
+    const missing = await fetch(`${server.baseUrl}/api/admin/users/nobody-here/credits`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ credits: 100 }),
+    });
+    assert.equal(missing.status, 404);
+
+    const ok = await fetch(url, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ credits: 750, days: 10, note: 'компенсация за сбой' }),
+    });
+    assert.equal(ok.status, 201);
+    const granted = (await ok.json()) as {
+      grant: { kind: string; amountUsd: number; note?: string };
+    };
+    assert.equal(granted.grant.kind, 'admin');
+    assert.equal(granted.grant.amountUsd, 0.75);
+    assert.equal(granted.grant.note, 'компенсация за сбой');
+
+    const card = await fetch(`${server.baseUrl}/api/admin/users/${user.id}`, { headers });
+    const body = (await card.json()) as {
+      credits: { balance: number; grants: Array<{ kind: string }> };
+    };
+    assert.equal(body.credits.balance, 750);
+    assert.ok(body.credits.grants.some((g) => g.kind === 'admin'));
   } finally {
     await server.close();
   }

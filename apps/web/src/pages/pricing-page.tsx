@@ -65,6 +65,11 @@ function factRow(
   };
 }
 
+const FREE_MODEL_FALLBACK: Localized = {
+  ru: 'Отвечает бесплатная модель, кредиты не тратятся',
+  en: 'A free model answers, no credits are spent',
+};
+
 const IMAGE_NAMES: Record<string, string> = {
   'flux-schnell': 'FLUX.1 schnell',
   'flux-2-klein': 'FLUX.2 klein',
@@ -88,6 +93,40 @@ const COMPARISON_ROWS: ComparisonRow[] = [
           en: `$${plan.priceUsd} per 30 days`,
         },
   ),
+  factRow({ ru: 'Кредиты', en: 'Credits' }, (plan) => ({
+    ru: `${formatNumber(plan.monthlyCredits, 'ru')} каждые 30 дней`,
+    en: `${formatNumber(plan.monthlyCredits, 'en')} every 30 days`,
+  })),
+  factRow({ ru: 'Примерно на', en: 'Roughly enough for' }, (plan) =>
+    plan.examples.length === 0
+      ? {
+          ru: 'Бесплатные модели кредиты не тратят; кредиты уходят на картинки',
+          en: 'Free models spend no credits; credits go to images',
+        }
+      : {
+          ru: plan.examples
+            .map((item) => `${formatNumber(item.requests, 'ru')} запросов ${item.name}`)
+            .join(', '),
+          en: plan.examples
+            .map((item) => `${formatNumber(item.requests, 'en')} ${item.name} requests`)
+            .join(', '),
+        },
+  ),
+  factRow({ ru: 'Бонус за оплату криптой', en: 'Crypto payment bonus' }, (plan) =>
+    plan.cryptoBonusCredits > 0
+      ? {
+          ru: `+${formatNumber(plan.cryptoBonusCredits, 'ru')} кредитов`,
+          en: `+${formatNumber(plan.cryptoBonusCredits, 'en')} credits`,
+        }
+      : same('—'),
+  ),
+  {
+    feature: { ru: 'Когда кредиты кончились', en: 'When credits run out' },
+    free: FREE_MODEL_FALLBACK,
+    plus: FREE_MODEL_FALLBACK,
+    pro: FREE_MODEL_FALLBACK,
+    ultra: FREE_MODEL_FALLBACK,
+  },
   {
     feature: { ru: 'Модели', en: 'Models' },
     free: {
@@ -131,8 +170,8 @@ const COMPARISON_ROWS: ComparisonRow[] = [
     ),
   ),
   factRow({ ru: 'Ketner Code', en: 'Ketner Code' }, (plan) => ({
-    ru: `${plan.codeRunsPerDay} запусков в сутки, до $${plan.codeRunBudgetUsd} на запуск`,
-    en: `${plan.codeRunsPerDay} runs a day, up to $${plan.codeRunBudgetUsd} per run`,
+    ru: `${plan.codeRunsPerDay} запусков в сутки, до ${formatNumber(Math.round(plan.codeRunBudgetUsd * 1000), 'ru')} кредитов на запуск`,
+    en: `${plan.codeRunsPerDay} runs a day, up to ${formatNumber(Math.round(plan.codeRunBudgetUsd * 1000), 'en')} credits per run`,
   })),
   factRow({ ru: 'API для редакторов и кода', en: 'API for editors and code' }, (plan) =>
     plan.api ? { ru: 'По API-ключу', en: 'With an API key' } : same('—'),
@@ -271,7 +310,7 @@ export function PricingPage() {
         </div>
       </div>
 
-      <LimitsExplained />
+      <CreditsExplained />
 
       {/* Нижняя сноска */}
       <div className="flex flex-col items-center gap-3 border-t border-stroke pt-8 text-center text-[13px] text-muted">
@@ -289,56 +328,96 @@ export function PricingPage() {
 
 const pro = planFacts.plans.pro;
 
+/** «156 запросов Claude Opus 5.5, 312 запросов Claude Sonnet 5.5 и 2 200 запросов Ketner Pro». */
+function proExamples(language: 'ru' | 'en'): string {
+  const parts = pro.examples.map((item) =>
+    language === 'ru'
+      ? `${formatNumber(item.requests, 'ru')} запросов ${item.name}`
+      : `${formatNumber(item.requests, 'en')} ${item.name} requests`,
+  );
+  const last = parts.pop();
+  if (parts.length === 0) return last ?? '';
+  return `${parts.join(', ')} ${language === 'ru' ? 'или' : 'or'} ${last}`;
+}
+
 /**
- * Как работают лимиты — на примерах тарифа Pro. Числа берутся из plan-facts.json, который тест
- * сверяет с сервером.
+ * Как работают кредиты. Числа примера берутся из plan-facts.json, который тест сверяет с сервером
+ * (apps/mock-api/src/services/plan-facts.test.ts).
  */
-const LIMIT_EXAMPLES: { title: Localized; text: Localized }[] = [
+const CREDIT_EXPLAINERS: { title: Localized; text: (language: 'ru' | 'en') => string }[] = [
   {
-    title: { ru: 'Сообщения', en: 'Messages' },
-    text: {
-      ru: `Каждое отправленное сообщение — одно в лимите, на любой модели. На Pro это ${formatNumber(pro.messagesPerDay, 'ru')} за последние 24 часа, не больше ${pro.requestsPerHour} в час. Окна скользящие: сообщение, отправленное вчера в 15:00, перестаёт учитываться сегодня в 15:00.`,
-      en: `Every message you send counts as one, on any model. On Pro that is ${formatNumber(pro.messagesPerDay, 'en')} in the last 24 hours, at most ${pro.requestsPerHour} an hour. Windows are rolling: a message sent yesterday at 3 pm stops counting today at 3 pm.`,
-    },
+    title: { ru: 'Что такое кредит', en: 'What a credit is' },
+    text: (language) =>
+      language === 'ru'
+        ? 'Кредит — это одна тысячная доллара реальной стоимости запроса: столько с нас берёт поставщик модели. Короткий вопрос к Ketner Mini стоит около 2 кредитов, большой запрос к Claude Opus — десятки. Чем сложнее вопрос и длиннее диалог, тем больше кредитов уйдёт.'
+        : 'A credit is a thousandth of a dollar of the real cost of a request: what the model provider charges us. A short question to Ketner Mini costs about 2 credits, a big request to Claude Opus costs tens. The harder the question and the longer the chat, the more credits it takes.',
   },
   {
-    title: { ru: 'Общий расход', en: 'Overall spend' },
-    text: {
-      ru: 'Чтобы один аккаунт не тратил больше, чем стоит подписка, общий расход на модели ограничен. Когда он подходит к пределу, ответы становятся короче и идут на недорогие модели, затем — только на самые дешёвые. При очень большом расходе запросы приостанавливаются, пока расход за последние 30 дней не снизится. При обычной переписке до этих границ, как правило, не доходит: они срабатывают при очень активной работе с дорогими моделями или в Ketner Code.',
-      en: 'So that one account does not cost more than its subscription, overall model spend is capped. As it nears the cap, answers get shorter and go to cheaper models, then only to the cheapest. With very heavy use, requests pause until 30-day spend drops. Normal chatting usually stays well below these caps; heavy use of expensive models or Ketner Code can reach them.',
-    },
+    title: { ru: 'Примеры на Pro', en: 'Examples on Pro' },
+    text: (language) =>
+      language === 'ru'
+        ? `На Pro ${formatNumber(pro.monthlyCredits, 'ru')} кредитов хватит примерно на ${proExamples('ru')}. Остаток списывается ровно по стоимости каждого запроса, поэтому можно свободно смешивать модели. Цена запроса каждой модели — на странице «Модели».`
+        : `On Pro, ${formatNumber(pro.monthlyCredits, 'en')} credits cover about ${proExamples('en')}. Each request is charged at its real cost, so you can mix models freely. The price of each model is on the Models page.`,
+  },
+  {
+    title: { ru: 'Один пул на всё', en: 'One pool for everything' },
+    text: (language) =>
+      language === 'ru'
+        ? 'Чат, сравнение ответов, картинки и Ketner Code тратят одни и те же кредиты. Остаток и цена запроса выбранной модели видны под полем ввода в чате.'
+        : 'Chat, answer comparison, images and Ketner Code all spend the same credits. Your balance and the price of the selected model are shown under the chat input.',
+  },
+  {
+    title: { ru: '30 дней и перенос остатка', en: '30 days and carry-over' },
+    text: (language) =>
+      language === 'ru'
+        ? 'Кредиты выдаются на 30 дней оплаченного периода. Что не потратили, переносится ещё на один период, а потом сгорает; первыми тратятся те кредиты, которые сгорают раньше. Дата сгорания видна в чате.'
+        : 'Credits are issued for the 30-day paid period. Whatever you do not use carries over for one more period and then expires; credits that expire sooner are spent first. The expiry date is shown in the chat.',
+  },
+  {
+    title: { ru: 'Когда кредиты кончились', en: 'When credits run out' },
+    text: (language) =>
+      language === 'ru'
+        ? 'Работа не прекращается: чат отвечает бесплатная Nemotron 3 Ultra, в Ketner Code — бесплатная North Mini Code, кредиты не тратятся. Картинки — только FLUX.1 schnell, до 5 в сутки. Платные модели вернутся с новыми кредитами. Если кредитов не хватает на выбранную модель, но хватает на другую, отвечает модель подешевле.'
+        : 'Work does not stop: free Nemotron 3 Ultra answers in chat and free North Mini Code in Ketner Code, and no credits are spent. Images fall back to FLUX.1 schnell, up to 5 a day. Paid models come back with new credits. If the selected model is too expensive for your balance, a cheaper one answers instead.',
+  },
+  {
+    title: { ru: 'Технические лимиты', en: 'Technical limits' },
+    text: (language) =>
+      language === 'ru'
+        ? `Кроме кредитов есть защита от перегрузки: сообщений в сутки (на Pro — ${formatNumber(pro.messagesPerDay, 'ru')}), не больше ${pro.requestsPerHour} в час, токены и одновременные запросы. Окна скользящие: сообщение, отправленное вчера в 15:00, перестаёт учитываться сегодня в 15:00. При обычной работе до них не доходит.`
+        : `Besides credits there is protection against overload: messages per day (${formatNumber(pro.messagesPerDay, 'en')} on Pro), at most ${pro.requestsPerHour} an hour, tokens and concurrent requests. Windows are rolling: a message sent yesterday at 3 pm stops counting today at 3 pm. Normal use does not reach them.`,
   },
 ];
 
-function LimitsExplained() {
+function CreditsExplained() {
   const { language } = useTranslation();
   return (
-    <section aria-labelledby="limits-explained" className="flex w-full flex-col gap-6 text-left">
+    <section aria-labelledby="credits-explained" className="flex w-full flex-col gap-6 text-left">
       <div className="flex flex-col gap-1.5">
-        <h2 id="limits-explained" className="t-title text-text">
-          {language === 'ru' ? 'Как работают лимиты' : 'How limits work'}
+        <h2 id="credits-explained" className="t-title text-text">
+          {language === 'ru' ? 'Как работают кредиты' : 'How credits work'}
         </h2>
         <p className="max-w-[70ch] text-sm text-muted md:text-[15px]">
           {language === 'ru'
-            ? 'Когда кончается лимит сильной модели, ответы не прекращаются — дальше отвечает модель попроще. Ниже — как это устроено на примере тарифа Pro; лимиты моделей на каждом тарифе — на странице «Модели».'
-            : 'When a strong model hits its limit, answers do not stop: a simpler model takes over. Below is how it works on Pro; per-plan model limits are on the Models page.'}
+            ? 'Тариф даёт кредиты на 30 дней. Каждый запрос списывает свою настоящую стоимость, и дорогих моделей не надо бояться: вы сами решаете, на что потратить кредиты.'
+            : 'Your plan gives you credits for 30 days. Every request is charged its real cost, so you decide what to spend credits on.'}
         </p>
       </div>
-      <div className="grid gap-3 md:grid-cols-2">
-        {LIMIT_EXAMPLES.map((example) => (
+      <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+        {CREDIT_EXPLAINERS.map((item) => (
           <div
-            key={example.title.en}
+            key={item.title.en}
             className="flex flex-col gap-2 rounded-2xl border border-stroke bg-surface p-5"
           >
-            <h3 className="text-[15px] font-semibold text-text">{example.title[language]}</h3>
-            <p className="text-[14px] leading-6 text-muted">{example.text[language]}</p>
+            <h3 className="text-[15px] font-semibold text-text">{item.title[language]}</h3>
+            <p className="text-[14px] leading-6 text-muted">{item.text(language)}</p>
           </div>
         ))}
       </div>
       <p className="text-[13px] text-subtle">
         {language === 'ru'
-          ? 'Запасные модели и лимиты каждой модели — на странице '
-          : 'Backup models and per-model limits are on the '}
+          ? 'Цена запроса каждой модели — на странице '
+          : 'The price of every model is on the '}
         <Link to="/models" className="text-accent hover:underline">
           {language === 'ru' ? '«Модели»' : 'Models page'}
         </Link>

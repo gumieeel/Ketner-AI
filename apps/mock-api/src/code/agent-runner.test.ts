@@ -25,6 +25,8 @@ import {
 import { ProjectStore } from './project-store.js';
 import { getCodeLimits, quotaOf } from '../services/code-limits.js';
 import { modelRegistry } from '../ai/model-registry.js';
+import type { CreditService } from '../services/credits.js';
+import { memoryCredits, setBalance } from '../services/credits-fixture.js';
 
 interface Call {
   model: string;
@@ -78,7 +80,9 @@ function fakeProvider(script: Script): { provider: AIProvider; calls: Call[] } {
         index: calls.length,
       };
       calls.push(call);
-      const result = await script(call, options, callbacks);
+      const scripted = await script(call, options, callbacks);
+      // OpenRouter не берёт денег за :free-эндпоинты и сообщает нулевую цену.
+      const result = options.model.endsWith(':free') ? { ...scripted, cost: 0 } : scripted;
       if (result.content) callbacks.onDelta(result.content);
       return result;
     },
@@ -90,6 +94,7 @@ interface Harness {
   runner: AgentRunner;
   store: ProjectStore;
   usage: UsageStore;
+  credits: CreditService;
   projectId: string;
   calls: Call[];
   run: (
@@ -103,6 +108,8 @@ async function withHarness(
   run: (h: Harness) => Promise<void>,
   options: {
     plan?: PlanId;
+    /** Кредиты пользователя на старте; по умолчанию — полная месячная выдача тарифа. */
+    credits?: number;
     watchdog?: { firstTokenMs: number; idleMs: number; totalMs: number };
   } = {},
 ): Promise<void> {
@@ -116,6 +123,8 @@ async function withHarness(
       { maxProjects: 5, quota: quotaOf(getCodeLimits(plan)) },
     );
     const usage = new UsageStore(path.join(dir, 'usage.json'));
+    const credits = memoryCredits();
+    if (options.credits !== undefined) setBalance(credits, 'u1', plan, options.credits);
     const providers = new ProviderManager();
     const { provider, calls } = fakeProvider(script);
     providers.setProvider('openrouter', provider);
@@ -126,11 +135,13 @@ async function withHarness(
       providers,
       circuitBreaker: new CircuitBreaker(),
       watchdog: options.watchdog,
+      credits,
     });
     await run({
       runner,
       store,
       usage,
+      credits,
       projectId: meta.id,
       calls,
       run: async (task, overrides = {}) => {
@@ -264,19 +275,40 @@ test('лимит запусков в сутки по тарифу', () =>
     { plan: 'free' },
   ));
 
-test('остановка по стоимости запуска сохраняет сделанные правки', () =>
+test('Free: агент работает на бесплатной модели с первого шага, кредиты не тратятся, ограничивают только шаги', () =>
   withHarness(
     (call) => toolStep([['write_file', { path: `f${call.index}.txt`, content: 'x' }]], 0.05),
     async (h) => {
+      const before = h.credits.balance('u1', 'free').remainingUsd;
       const { events, result } = await h.run('write many files');
-      assert.equal(result.status, 'budget');
-      assert.equal(result.steps, 1);
+      assert.equal(h.calls[0].model, 'cohere/north-mini-code:free');
+      assert.equal(result.status, 'step_limit');
+      assert.equal(result.modelId, 'north-mini-code');
+      assert.equal(result.costUsd, 0, 'бесплатная модель ничего не стоит');
+      assert.equal(h.credits.balance('u1', 'free').remainingUsd, before);
       assert.ok((await h.store.listFiles('u1', h.projectId)).some((f) => f.path === 'f0.txt'));
-      const done = events.at(-1);
-      assert.equal(done?.type, 'done');
-      assert.ok(done?.type === 'done' && done.message);
+      assert.equal(events.at(-1)?.type, 'done');
     },
     { plan: 'free' },
+  ));
+
+test('бюджет запуска исчерпан: агент молча переходит на модель дешевле, правки сохранены', () =>
+  withHarness(
+    (call) =>
+      call.index === 0
+        ? toolStep([['write_file', { path: 'a.txt', content: 'x' }]], 0.5)
+        : finalStep('готово', 0.001),
+    async (h) => {
+      const { events, result } = await h.run('task');
+      // Шаг на Ketner Pro стоит $0.5 при бюджете запуска Plus $0.1: дальше работает модель дешевле.
+      assert.equal(h.calls[0].model, 'xiaomi/mimo-v2.6-pro');
+      assert.notEqual(h.calls[1].model, 'xiaomi/mimo-v2.6-pro');
+      assert.ok(events.some((e) => e.type === 'model_switch'));
+      assert.ok(!events.some((e) => e.type === 'error'), 'ошибки пользователь не видит');
+      assert.equal(result.status, 'completed');
+      assert.ok((await h.store.listFiles('u1', h.projectId)).some((f) => f.path === 'a.txt'));
+    },
+    { plan: 'plus' },
   ));
 
 test('остановка по числу шагов: лёгкая модель получает добавочные шаги, но не больше двойного лимита', () =>
@@ -463,28 +495,34 @@ test('задача проверяется: пустая и слишком дли
     },
   ));
 
-test('selectAgentModel: auto зависит от тарифа и экономии', () => {
-  const normal = { stage: 'normal' as const, premiumAvailable: true };
-  const base = { registry: modelRegistry, state: normal };
+test('selectAgentModel: auto зависит от тарифа и остатка кредитов', () => {
+  const base = { registry: modelRegistry, balanceUsd: 5 };
   assert.equal(selectAgentModel({ ...base, plan: 'free' }).model.id, 'ketner-mini');
   assert.equal(selectAgentModel({ ...base, plan: 'pro' }).model.id, 'ketner-pro');
-  assert.equal(
-    selectAgentModel({
-      ...base,
-      plan: 'pro',
-      state: { stage: 'exhausted', premiumAvailable: true },
-    }).model.id,
-    'ketner-mini',
-  );
+  // Кредитов нет: отвечает бесплатная модель агента, без отказа
+  const dry = selectAgentModel({ ...base, balanceUsd: 0, plan: 'pro' });
+  assert.equal(dry.model.id, 'north-mini-code');
+  assert.ok(dry.reason);
   assert.ok(selectAgentModel({ ...base, plan: 'free', requestedId: 'claude-opus-5.5' }).denied);
+
+  // Opus стоит ≈ 70 кредитов за шаг-запрос: на 20 кредитов хватает только Ketner Pro
   const premiumDry = selectAgentModel({
     ...base,
     plan: 'ultra',
     requestedId: 'claude-opus-5.5',
-    state: { stage: 'normal', premiumAvailable: false },
+    balanceUsd: 0.02,
   });
   assert.equal(premiumDry.model.id, 'ketner-pro');
   assert.ok(premiumDry.reason);
+  assert.equal(
+    selectAgentModel({ ...base, plan: 'ultra', requestedId: 'claude-opus-5.5', balanceUsd: 0 })
+      .model.id,
+    'north-mini-code',
+  );
+  assert.equal(
+    selectAgentModel({ ...base, plan: 'ultra', requestedId: 'claude-opus-5.5' }).model.id,
+    'claude-opus-5.5',
+  );
 });
 
 test('compactMessages сжимает старые результаты и большие аргументы, не трогая свежие', () => {
@@ -580,7 +618,6 @@ test('агент на модели Pro: medium, на Ultra в режиме Max �
     async (h) => {
       await h.run('task', { modelId: 'claude-opus-5.5', reasoningMode: 'max' });
       assert.deepEqual(efforts[1], { effort: 'xhigh' });
-      assert.equal(h.usage.getModelUsesLastDay('u1', ['claude-opus-5.5']), 2);
     },
     { plan: 'ultra' },
   );
@@ -621,7 +658,7 @@ test('бюджет выбранной модели исчерпан: агент 
     { plan: 'pro' },
   ));
 
-test('после рабочей модели — лёгкая; когда кончается и её бюджет, запуск останавливается честно', () =>
+test('Opus → Ketner Pro → Haiku → бесплатная модель: цепочка до бесплатной, расход равен списанным кредитам', () =>
   withHarness(
     (call) =>
       toolStep(
@@ -629,18 +666,47 @@ test('после рабочей модели — лёгкая; когда кон
         call.index < 2 ? 1.0 : 0.25,
       ),
     async (h) => {
+      const before = h.credits.balance('u1', 'pro').remainingUsd;
       const { events, result } = await h.run('endless', { modelId: 'claude-opus-5.5' });
-      assert.equal(result.status, 'budget');
+      assert.equal(
+        result.status,
+        'step_limit',
+        'последняя ступень — бесплатная, её ограничивают шаги',
+      );
       const switches = events
         .filter((e) => e.type === 'model_switch')
         .map((e) => (e.type === 'model_switch' ? e.modelId : ''));
-      assert.deepEqual(switches, ['ketner-pro', 'claude-haiku-5.5']);
+      assert.deepEqual(switches, ['ketner-pro', 'claude-haiku-5.5', 'north-mini-code']);
+      const spent = before - h.credits.balance('u1', 'pro').remainingUsd;
       assert.ok(
-        result.costUsd <= 2.2 * 1.25 + 0.25,
-        'расход не выходит за дневной потолок с запасом (плюс последний шаг)',
+        Math.abs(spent - result.costUsd) < 1e-6,
+        'с кредитов списано ровно столько, сколько стоил запуск',
+      );
+      assert.ok(
+        result.costUsd <=
+          getCodeLimits('pro').maxRunCostUsd +
+            getCodeLimits('pro').continueWorkUsd +
+            getCodeLimits('pro').continueLiteUsd +
+            1.0,
+        'платные ступени ограничены своими бюджетами (плюс последний шаг каждой)',
       );
     },
     { plan: 'pro' },
+  ));
+
+test('кредиты кончились до запуска: агент сразу работает на бесплатной модели и ничего не списывает', () =>
+  withHarness(
+    (call) => (call.index < 2 ? toolStep([['list_files', {}]], 0.5) : finalStep('готово', 0.5)),
+    async (h) => {
+      const { events, result } = await h.run('task');
+      assert.equal(result.status, 'completed');
+      assert.equal(result.modelId, 'north-mini-code');
+      assert.equal(h.calls[0].model, 'cohere/north-mini-code:free');
+      assert.equal(result.costUsd, 0);
+      assert.equal(h.credits.balance('u1', 'plus').remainingUsd, 0);
+      assert.ok(!events.some((e) => e.type === 'error'));
+    },
+    { plan: 'plus', credits: 0 },
   ));
 
 test('работа по плану: пока в плане есть пункты, агент не заканчивает', () =>

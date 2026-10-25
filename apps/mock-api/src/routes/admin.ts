@@ -27,6 +27,8 @@ import { PLANS, LEGACY_PLANS } from './billing.js';
 import { resolveBillingPlan } from '../services/plan-resolver.js';
 import { isAdminUser, isAdminEmail, isVipEmail } from '../services/vip.js';
 import { EntitlementService } from '../services/entitlement.js';
+import { creditService as defaultCreditService } from '../billing/index.js';
+import { planCreditsUsd, toCredits, type CreditService } from '../services/credits.js';
 import type { PlanId } from '../types.js';
 import { defaultCircuitBreaker, CircuitBreaker } from '../ai/circuit-breaker.js';
 import {
@@ -62,6 +64,7 @@ export interface AdminRouterDeps {
   userStore?: UserStore;
   circuitBreaker?: CircuitBreaker;
   feedbackStore?: FeedbackStore;
+  credits?: CreditService;
 }
 
 export function createAdminRouter({
@@ -71,8 +74,22 @@ export function createAdminRouter({
   userStore = defaultUserStore,
   circuitBreaker = defaultCircuitBreaker,
   feedbackStore = defaultFeedbackStore,
+  credits = defaultCreditService,
 }: AdminRouterDeps = {}): Router {
   const router = Router();
+
+  /** Кредиты пользователя для карточки: чтение без выдачи грантов (список не должен писать в базу). */
+  const creditsCard = (userId: string, plan: PlanId, spentMonthUsd: number) => {
+    const balance = credits.store.balanceOf(userId);
+    const monthlyUsd = planCreditsUsd(plan);
+    return {
+      balance: toCredits(balance.remainingUsd),
+      monthly: toCredits(monthlyUsd),
+      spentMonth: toCredits(spentMonthUsd),
+      nextExpiresAt: balance.nextExpiresAt,
+      usedPct: monthlyUsd > 0 ? Math.round((spentMonthUsd / monthlyUsd) * 100) : 0,
+    };
+  };
 
   // Middleware проверки прав администратора
   const requireAdmin = (req: Request, res: Response, next: NextFunction): void => {
@@ -347,12 +364,7 @@ export function createAdminRouter({
       const entitlements = EntitlementService.getEntitlements(effectivePlan);
       const snapshot = usageStore.getFairUseSnapshot(u.id);
 
-      const costBudget = entitlements.costBudget;
-      const estimatedCostLastMonth = snapshot.estimatedCostLastMonth ?? 0;
-      const budgetUsedPct =
-        typeof costBudget === 'number' && costBudget > 0
-          ? Math.round((estimatedCostLastMonth / costBudget) * 100)
-          : 0;
+      const creditsInfo = creditsCard(u.id, effectivePlan, snapshot.estimatedCostLastMonth ?? 0);
 
       return {
         id: u.id,
@@ -371,8 +383,7 @@ export function createAdminRouter({
         limits: {
           requestsPerDay: entitlements.requestsPerDay ?? null,
           tokensPerDay: entitlements.tokensPerDay ?? null,
-          maxDailyCost: entitlements.maxDailyCost ?? null,
-          costBudget: entitlements.costBudget ?? null,
+          monthlyCredits: entitlements.monthlyCredits,
         },
         remaining: {
           requestsToday:
@@ -383,23 +394,16 @@ export function createAdminRouter({
             entitlements.tokensPerDay !== null && entitlements.tokensPerDay !== undefined
               ? entitlements.tokensPerDay - snapshot.tokensLastDay
               : null,
-          costToday:
-            entitlements.maxDailyCost !== null && entitlements.maxDailyCost !== undefined
-              ? Number((entitlements.maxDailyCost - snapshot.estimatedCostLastDay).toFixed(4))
-              : null,
-          costThisMonth:
-            entitlements.costBudget !== null && entitlements.costBudget !== undefined
-              ? Number((entitlements.costBudget - snapshot.estimatedCostLastMonth).toFixed(4))
-              : null,
         },
-        budgetUsedPct,
+        credits: creditsInfo,
+        creditsUsedPct: creditsInfo.usedPct,
       };
     });
 
-    // Сортировка по умолчанию — по budgetUsedPct убыванию
+    // Сортировка по умолчанию — по доле потраченных кредитов, убывание
     userCards.sort((a, b) => {
-      if (b.budgetUsedPct !== a.budgetUsedPct) {
-        return b.budgetUsedPct - a.budgetUsedPct;
+      if (b.creditsUsedPct !== a.creditsUsedPct) {
+        return b.creditsUsedPct - a.creditsUsedPct;
       }
       return b.createdAt.localeCompare(a.createdAt);
     });
@@ -494,12 +498,7 @@ export function createAdminRouter({
     const profitability = usageStore.getUserProfitability(user.id, planPrice);
     const recentRequests = usageStore.getByUser(user.id, 20);
 
-    const costBudget = entitlements.costBudget;
-    const estimatedCostLastMonth = snapshot.estimatedCostLastMonth ?? 0;
-    const budgetUsedPct =
-      typeof costBudget === 'number' && costBudget > 0
-        ? Math.round((estimatedCostLastMonth / costBudget) * 100)
-        : 0;
+    const creditsInfo = creditsCard(user.id, effectivePlan, snapshot.estimatedCostLastMonth ?? 0);
 
     const profile = {
       id: user.id,
@@ -525,8 +524,7 @@ export function createAdminRouter({
       requestsPerDay: entitlements.requestsPerDay ?? null,
       tokensPerHour: entitlements.tokensPerHour ?? null,
       tokensPerDay: entitlements.tokensPerDay ?? null,
-      maxDailyCost: entitlements.maxDailyCost ?? null,
-      costBudget: entitlements.costBudget ?? null,
+      monthlyCredits: entitlements.monthlyCredits,
     };
 
     const remaining = {
@@ -546,14 +544,6 @@ export function createAdminRouter({
         entitlements.tokensPerDay !== null && entitlements.tokensPerDay !== undefined
           ? entitlements.tokensPerDay - snapshot.tokensLastDay
           : null,
-      costToday:
-        entitlements.maxDailyCost !== null && entitlements.maxDailyCost !== undefined
-          ? Number((entitlements.maxDailyCost - snapshot.estimatedCostLastDay).toFixed(4))
-          : null,
-      costThisMonth:
-        entitlements.costBudget !== null && entitlements.costBudget !== undefined
-          ? Number((entitlements.costBudget - snapshot.estimatedCostLastMonth).toFixed(4))
-          : null,
     };
 
     res.json({
@@ -562,7 +552,8 @@ export function createAdminRouter({
       usage,
       limits,
       remaining,
-      budgetUsedPct,
+      credits: { ...creditsInfo, grants: credits.grantsOf(user.id).slice(0, 20) },
+      creditsUsedPct: creditsInfo.usedPct,
       profitability: {
         ...profitability,
         plan: rawPlan,
@@ -660,6 +651,42 @@ export function createAdminRouter({
       success: true,
       user: updatedUser,
     });
+  });
+
+  // 11. Ручная выдача кредитов: компенсация, подарок, тест. Срок — `days` (по умолчанию 30).
+  router.post('/users/:id/credits', (req: Request, res: Response): void => {
+    const target = userStore.findById(String(req.params.id));
+    if (!target) {
+      sendError(res, 404, 'user_not_found', 'Пользователь не найден');
+      return;
+    }
+    const body = (req.body ?? {}) as { credits?: unknown; days?: unknown; note?: unknown };
+    const amount = Number(body.credits);
+    if (!Number.isFinite(amount) || amount <= 0 || amount > 1_000_000) {
+      sendError(res, 400, 'invalid_credits', 'credits: число кредитов от 1 до 1 000 000');
+      return;
+    }
+    const days = body.days === undefined ? 30 : Number(body.days);
+    if (!Number.isFinite(days) || days < 1 || days > 365) {
+      sendError(res, 400, 'invalid_days', 'days: срок действия от 1 до 365 дней');
+      return;
+    }
+    const note = typeof body.note === 'string' ? body.note.trim().slice(0, 200) : undefined;
+    const grant = credits.grantManually({
+      userId: target.id,
+      credits: Math.round(amount),
+      days: Math.round(days),
+      ...(note ? { note } : {}),
+    });
+    const actor = req.user
+      ? `${req.user.email} (${req.user.id})`
+      : req.headers['x-admin-key']
+        ? 'admin_key'
+        : 'admin';
+    console.log(
+      `[admin:audit] ${new Date().toISOString()} | Admin "${actor}" granted ${Math.round(amount)} credits to "${target.id}" (${target.email}) for ${Math.round(days)}d${note ? `: ${note}` : ''}`,
+    );
+    res.status(201).json({ success: true, grant });
   });
 
   return router;

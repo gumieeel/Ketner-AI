@@ -10,12 +10,15 @@ import { renderRoute, resetAuth, resetChat, resetPreferences } from './test-util
 const json = (body: unknown, status = 200): Response =>
   new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } });
 
+let credits: ImageCapabilities['credits'];
+
 function capabilities(plan: 'free' | 'plus'): ImageCapabilities {
   return {
     available: true,
     plan,
     defaultModelId: 'flux-schnell',
     maxPromptChars: 1000,
+    credits,
     models: [
       {
         id: 'flux-schnell',
@@ -25,6 +28,7 @@ function capabilities(plan: 'free' | 'plus'): ImageCapabilities {
         locked: false,
         dailyLimit: plan === 'free' ? 5 : 50,
         usedToday: 1,
+        priceCredits: 0.7,
       },
       {
         id: 'flux-2-klein',
@@ -34,6 +38,7 @@ function capabilities(plan: 'free' | 'plus'): ImageCapabilities {
         locked: plan === 'free',
         dailyLimit: plan === 'free' ? 0 : 20,
         usedToday: 0,
+        priceCredits: 4.6,
       },
     ],
   };
@@ -101,6 +106,7 @@ function loginAs(plan: 'free' | 'plus'): void {
 
 describe('страница «Изображения»', () => {
   beforeEach(() => {
+    credits = { balance: 300, exhausted: false, freePerDay: 5 };
     resetAuth();
     resetPreferences();
     resetChat();
@@ -142,6 +148,38 @@ describe('страница «Изображения»', () => {
       style: 'none',
     });
     expect(await screen.findByAltText('кот в космосе')).toBeInTheDocument();
+  });
+
+  it('показывает остаток кредитов и цену каждой модели, а после картинки уменьшает остаток', async () => {
+    credits = { balance: 3000, exhausted: false, freePerDay: 5 };
+    installImagesApi('plus');
+    loginAs('plus');
+    const user = userEvent.setup();
+    renderRoute('/images');
+
+    const line = await screen.findByTestId('images-credits');
+    expect(line).toHaveTextContent('Кредиты: 3 000');
+    expect(screen.getByRole('button', { name: /FLUX\.1 schnell/ })).toHaveTextContent('≈ 0,7 кр.');
+    expect(screen.getByRole('button', { name: /FLUX\.2 klein/ })).toHaveTextContent('≈ 4,6 кр.');
+
+    await user.type(screen.getByLabelText('Описание картинки'), 'кот в космосе');
+    await user.click(screen.getByRole('button', { name: 'Создать' }));
+    await screen.findByAltText('кот в космосе');
+    expect(screen.getByTestId('images-credits')).toHaveTextContent('Кредиты: 2 999');
+  });
+
+  it('когда кредиты кончились, говорит, что рисует только FLUX.1 schnell, и ведёт на тарифы', async () => {
+    credits = { balance: 0, exhausted: true, freePerDay: 5 };
+    installImagesApi('plus');
+    loginAs('plus');
+    renderRoute('/images');
+
+    const line = await screen.findByTestId('images-credits');
+    expect(line).toHaveTextContent('Кредиты: 0');
+    expect(line).toHaveTextContent(
+      'Кредиты закончились: рисует только FLUX.1 schnell, не больше 5 в сутки',
+    );
+    expect(within(line).getByRole('link', { name: 'Тарифы' })).toHaveAttribute('href', '/pricing');
   });
 
   it('выбранный стиль уходит на сервер и запоминается', async () => {

@@ -223,7 +223,7 @@ test('ответ без стриминга: пустой текст с вызо�
       cost_usd: 0.001,
       requested_model: 'auto',
       routing_reason: 'r',
-      budget: { stage: 'normal', used_pct: 1, premium_available: true },
+      credits: { charged: 1, balance: 2999, stage: 'normal' },
     },
   });
   const choice = (

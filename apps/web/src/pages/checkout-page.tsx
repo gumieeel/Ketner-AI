@@ -27,6 +27,7 @@ import type {
 import { copyText } from '@/lib/clipboard';
 import { useTranslation } from '@/i18n';
 import { cn } from '@/lib/cn';
+import { formatCredits } from '@/lib/format-date';
 import { trackPurchase } from '@/lib/ads';
 import { cryptoOption } from './checkout/crypto-options';
 import { CryptoPanel } from './checkout/crypto-panel';
@@ -36,7 +37,7 @@ import { CheckoutSkeleton } from './checkout/parts';
 import { StarsPanel } from './checkout/stars-panel';
 
 export function CheckoutPage() {
-  const { t } = useTranslation();
+  const { t, language } = useTranslation();
   const navigate = useNavigate();
   const { planId } = useParams<{ planId?: string }>();
   const authStatus = useAuth((state) => state.status);
@@ -47,9 +48,8 @@ export function CheckoutPage() {
 
   // Бонус за оплату тарифа криптой: суммы приходят с сервера (services/entitlement.ts).
   const [cryptoBonus, setCryptoBonus] = useState<{
-    pct: number;
-    quotaUsd: number;
-    bonusUsd: number;
+    credits: number;
+    bonusCredits: number;
   } | null>(null);
   useEffect(() => {
     if (!plan || !user) return;
@@ -57,7 +57,7 @@ export function CheckoutPage() {
     fetchCryptoBonus()
       .then((data) => {
         const forPlan = data.plans[plan.id];
-        if (!stale && forPlan) setCryptoBonus({ pct: data.pct, ...forPlan });
+        if (!stale && forPlan) setCryptoBonus(forPlan);
       })
       .catch(() => undefined);
     return () => {
@@ -514,7 +514,7 @@ export function CheckoutPage() {
                 title={t('checkout.tileCrypto')}
                 description={
                   cryptoBonus
-                    ? `${t('checkout.tileCryptoDesc')} · ${t('checkout.tileCryptoBonus', { pct: cryptoBonus.pct })}`
+                    ? `${t('checkout.tileCryptoDesc')} · ${t('checkout.tileCryptoBonus', { bonus: formatCredits(cryptoBonus.bonusCredits, language) })}`
                     : t('checkout.tileCryptoDesc')
                 }
               />
@@ -549,11 +549,16 @@ export function CheckoutPage() {
               bonusNote={
                 cryptoBonus
                   ? {
-                      title: t('checkout.cryptoBonusTitle', { pct: cryptoBonus.pct }),
+                      title: t('checkout.cryptoBonusTitle', {
+                        bonus: formatCredits(cryptoBonus.bonusCredits, language),
+                      }),
                       text: t('checkout.cryptoBonusText', {
                         plan: planName,
-                        quota: cryptoBonus.quotaUsd.toFixed(2),
-                        total: (cryptoBonus.quotaUsd + cryptoBonus.bonusUsd).toFixed(2),
+                        credits: formatCredits(cryptoBonus.credits, language),
+                        total: formatCredits(
+                          cryptoBonus.credits + cryptoBonus.bonusCredits,
+                          language,
+                        ),
                       }),
                     }
                   : null

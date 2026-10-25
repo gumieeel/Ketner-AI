@@ -5,6 +5,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import planFacts from '@/features/billing/plan-facts.json';
 import { fetchMeta } from '@/features/chat/api';
 import type { ChatMeta, ModelInfo } from '@/features/chat/types';
+import { formatCredits } from '@/lib/format-date';
 
 type Tier = 'free' | 'plus' | 'pro' | 'ultra';
 
@@ -87,20 +88,18 @@ function formatTokens(tokens: number | undefined): string | null {
   return `${Math.round(tokens / 1000)} тыс. токенов`;
 }
 
-function limitsLine(model: ModelInfo): string | null {
-  const weekly = model.weeklyLimits;
-  if (!weekly) return null;
-  const parts = TIERS.flatMap((tier) => {
-    const limit = weekly[tier];
-    return limit
-      ? [`${TIER_LABEL[tier]} — ${limit.pool} в неделю, до ${limit.perDay} в сутки`]
-      : [];
-  });
-  return parts.length > 0 ? parts.join(' · ') : null;
+/** Цена типичного запроса: «≈ 35,2 кр.» (в режиме Max — «≈ 85,2 кр.»), у бесплатных — без кредитов. */
+function priceLine(model: ModelInfo): string | null {
+  if (model.free) return 'бесплатно, кредиты не тратятся';
+  if (model.requestCredits === undefined) return null;
+  const standard = `≈ ${formatCredits(model.requestCredits, 'ru', 1)} кр.`;
+  return model.requestCreditsMax
+    ? `${standard} · в режиме Max ≈ ${formatCredits(model.requestCreditsMax, 'ru', 1)} кр.`
+    : standard;
 }
 
 function ModelCard({ model }: { model: ModelInfo }) {
-  const limits = limitsLine(model);
+  const price = priceLine(model);
   const context = formatTokens(model.contextWindow);
   return (
     <li className="flex flex-col gap-3 rounded-xl border border-stroke bg-surface p-4">
@@ -130,11 +129,15 @@ function ModelCard({ model }: { model: ModelInfo }) {
             <dd className="text-muted">{context}</dd>
           </>
         ) : null}
-        <dt className="text-subtle">Лимит</dt>
-        <dd className="text-muted">{limits ?? 'общий лимит сообщений тарифа'}</dd>
-        {model.fallbackModelName ? (
+        {price ? (
           <>
-            <dt className="text-subtle">После лимита</dt>
+            <dt className="text-subtle">Запрос стоит</dt>
+            <dd className="text-muted">{price}</dd>
+          </>
+        ) : null}
+        {model.fallbackModelName && !model.free ? (
+          <>
+            <dt className="text-subtle">Не хватает кредитов</dt>
             <dd className="text-muted">отвечает {model.fallbackModelName}</dd>
           </>
         ) : null}
@@ -143,7 +146,7 @@ function ModelCard({ model }: { model: ModelInfo }) {
   );
 }
 
-/** Прозрачность моделей: кто разработал каждую модель, что стоит за нашими названиями и лимиты. */
+/** Прозрачность моделей: кто разработал каждую модель, что стоит за нашими названиями и сколько стоит запрос в кредитах. */
 export function ModelsPage() {
   const [meta, setMeta] = useState<ChatMeta | null>(null);
   const [failed, setFailed] = useState(false);
@@ -173,6 +176,16 @@ export function ModelsPage() {
           Ketner AI не обучает собственные модели. Каждый ответ даёт модель стороннего разработчика:
           мы передаём запрос через OpenRouter или напрямую через API разработчика и возвращаем
           ответ. Под ответом в чате всегда видно, какая модель ответила на самом деле.
+        </p>
+        <p className="max-w-3xl text-[15px] leading-7 text-muted">
+          Запрос списывает кредиты по реальной стоимости: короткий вопрос к Ketner Mini обходится
+          примерно в 2 кредита, большой — к Claude Opus в десятки. Цена на карточках — для обычного
+          запроса; длинные диалоги и вложения стоят дороже. Когда кредитов не хватает, отвечает
+          модель дешевле, а когда они кончились — бесплатная модель.{' '}
+          <Link to="/pricing" className="text-text underline underline-offset-4">
+            Как работают кредиты
+          </Link>
+          .
         </p>
         {aliases.length > 0 ? (
           <p className="rounded-xl border border-accent/30 bg-accent-soft px-4 py-3 text-[15px] leading-7 text-text">
@@ -230,8 +243,9 @@ export function ModelsPage() {
       <section className="flex max-w-3xl flex-col gap-3">
         <h2 className="text-xl font-semibold tracking-tight">Кто отвечает на тарифе Free</h2>
         <p className="text-[15px] leading-7 text-muted">
-          На Free запросы идут не на Ketner Mini, а на бесплатные версии моделей у OpenRouter. Их
-          лимит общий на весь сервис; когда он исчерпан, отвечает Ketner Mini.
+          На Free запросы идут не на Ketner Mini, а на бесплатные версии моделей у OpenRouter. Они
+          не тратят кредиты. Их лимит общий на весь сервис; когда он исчерпан, отвечает Ketner Mini.
+          Эти же модели отвечают на любом тарифе, когда кредиты кончились.
         </p>
         {meta?.freeTierModels?.length ? (
           <ul className="flex list-disc flex-col gap-1.5 pl-5 text-[15px] leading-7 text-muted marker:text-subtle">
@@ -262,7 +276,7 @@ export function ModelsPage() {
           <li>Простые вопросы отвечает Ketner Mini, обычные задачи — Ketner Pro.</li>
           <li>
             На Pro и Ultra задачи по коду, математике и логике средней сложности получает GLM-5.3
-            (Z.ai), сложные — GPT-6.1 Sol (OpenAI), пока не кончилась квота премиум-моделей.
+            (Z.ai), сложные — GPT-6.1 Sol (OpenAI), пока хватает кредитов.
           </li>
           <li>Claude Opus 5.5 и GPT-6 Astra Auto не выбирает: только если выбрать их вручную.</li>
           <li>Какая модель ответила и почему, видно под ответом.</li>
@@ -273,7 +287,8 @@ export function ModelsPage() {
         <h2 className="text-xl font-semibold tracking-tight">Модели изображений</h2>
         <p className="max-w-3xl text-[15px] leading-7 text-muted">
           Подсказку перед генерацией проверяет и переводит на английский Ketner Mini; запрещённые
-          запросы не выполняются. Лимит — картинок в сутки.
+          запросы не выполняются. Картинки тоже тратят кредиты (по стоимости генерации), а в сутки
+          их можно сделать не больше лимита тарифа.
         </p>
         <div className="overflow-x-auto rounded-xl border border-stroke">
           <table className="w-full min-w-[640px] border-collapse text-left text-[13px]">

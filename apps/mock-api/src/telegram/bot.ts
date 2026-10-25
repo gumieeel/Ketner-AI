@@ -17,6 +17,7 @@ import {
   PREMIUM_PACK_DAYS,
 } from '../services/pricing.js';
 import { planMinStars } from '../services/margin.js';
+import { toCredits } from '../services/credits.js';
 import {
   BillingError,
   paymentRef,
@@ -48,10 +49,10 @@ export function planTitle(planId: string): string {
   return PLAN_TITLES[planId] ?? planId.toUpperCase();
 }
 
-/** За что платёж в сообщениях: тариф или пакет премиум-квоты. */
+/** За что платёж в сообщениях: тариф или пакет кредитов. */
 export function paymentTitle(payment: Pick<PaymentRecord, 'planId' | 'packId'>): string {
   const pack = payment.packId ? findPremiumPack(payment.packId) : undefined;
-  return pack ? `+$${pack.quotaUsd} премиум-квоты` : planTitle(payment.planId);
+  return pack ? `+${toCredits(pack.quotaUsd)} кредитов` : planTitle(payment.planId);
 }
 
 /** Сумма в долларах в звёздах по текущему курсу Telegram Stars (см. stars-rate.ts). */
@@ -158,7 +159,7 @@ export interface TelegramUpdate {
 export interface StarsPayload {
   /** Тариф счёта (для пакета премиум-квоты не передаётся). */
   planId?: PlanId;
-  /** Пакет премиум-квоты вместо тарифа (services/pricing.ts → PREMIUM_PACKS). */
+  /** Пакет кредитов вместо тарифа (services/pricing.ts → PREMIUM_PACKS). */
   packId?: string;
   stars: number;
   invoiceId: string;
@@ -751,8 +752,8 @@ export class TelegramBotService implements TelegramPaymentsPort {
     const pack = invoice.packId ? findPremiumPack(invoice.packId) : undefined;
     if (pack) {
       return {
-        title: `Ketner AI · +$${pack.quotaUsd} премиум-квоты`,
-        description: `Пакет запросов к топ-моделям поверх подписки: +$${pack.quotaUsd} премиум-квоты на ${PREMIUM_PACK_DAYS} дней. Тратится после квоты тарифа.`,
+        title: `Ketner AI · +${toCredits(pack.quotaUsd)} кредитов`,
+        description: `Пакет кредитов поверх подписки: +${toCredits(pack.quotaUsd)} кредитов на ${PREMIUM_PACK_DAYS} дней. Один пул на чат, картинки и Ketner Code.`,
         payload: encodePayload({
           packId: pack.id,
           stars: invoice.starsAmount,
@@ -760,7 +761,7 @@ export class TelegramBotService implements TelegramPaymentsPort {
           userId: invoice.userId,
         }),
         currency: 'XTR',
-        prices: [{ label: `+$${pack.quotaUsd} премиум-квоты`, amount: invoice.starsAmount }],
+        prices: [{ label: `+${toCredits(pack.quotaUsd)} кредитов`, amount: invoice.starsAmount }],
       };
     }
     const plan = getPlanItem(invoice.planId);
@@ -934,7 +935,7 @@ export class TelegramBotService implements TelegramPaymentsPort {
     return { status: 'activated', subscription: result.subscription };
   }
 
-  /** Оплата пакета премиум-квоты звёздами: кредиты на 30 дней, подписка не меняется. */
+  /** Оплата пакета кредитов звёздами: кредиты на 30 дней, подписка не меняется. */
   private async handlePackPayment(
     chatId: number | string,
     telegramUserId: number,
@@ -964,7 +965,7 @@ export class TelegramBotService implements TelegramPaymentsPort {
       [
         '🎉 <b>Оплата прошла!</b>',
         '',
-        `Начислили <b>+$${result.credit.amountUsd}</b> премиум-квоты до <b>${formatDate(result.credit.expiresAt)}</b>. Она тратится после квоты тарифа.`,
+        `Начислили <b>+${toCredits(result.credit.amountUsd)}</b> кредитов до <b>${formatDate(result.credit.expiresAt)}</b>. Они тратятся вместе с кредитами тарифа, раньше сгорают те, у которых срок короче.`,
       ].join('\n'),
       {
         reply_markup: {
@@ -1393,7 +1394,7 @@ export class TelegramBotService implements TelegramPaymentsPort {
     }
     const pack = invoice.packId ? findPremiumPack(invoice.packId) : undefined;
     const item = pack
-      ? `+$${pack.quotaUsd} премиум-квоты на ${PREMIUM_PACK_DAYS} дней`
+      ? `+${toCredits(pack.quotaUsd)} кредитов на ${PREMIUM_PACK_DAYS} дней`
       : `Ketner AI ${planTitle(invoice.planId)} · 30 дней`;
     const account = this.deps.userStore.findById(invoice.userId);
     await this.sendMessage(
@@ -1405,7 +1406,7 @@ export class TelegramBotService implements TelegramPaymentsPort {
         account ? `Аккаунт: ${escapeHtml(accountLabel(account))}` : '',
         '',
         pack
-          ? 'Нажмите «Заплатить» в счёте ниже — квота начислится сразу после оплаты.'
+          ? 'Нажмите «Заплатить» в счёте ниже — кредиты начислятся сразу после оплаты.'
           : 'Нажмите «Заплатить» в счёте ниже — тариф включится сразу после оплаты, страница на сайте обновится сама.',
       ]
         .filter((line, index, lines) => line || lines[index - 1])

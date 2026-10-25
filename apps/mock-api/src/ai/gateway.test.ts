@@ -16,7 +16,7 @@ import { CostCalculator } from '../services/cost.js';
 import { EntitlementService, planAllowsModel } from '../services/entitlement.js';
 import { FairUseEngine } from '../services/fair-use.js';
 import type { FairUseSnapshot } from './gateway-types.js';
-import { applyEconomyRules, classifyPromptComplexity } from './gateway.js';
+import { classifyPromptComplexity } from './gateway.js';
 import { SemanticCache } from './cache.js';
 import {
   chooseReasoningEffort,
@@ -130,7 +130,7 @@ test('AutoRouter: классификация задач', () => {
   );
 });
 
-test('AutoRouter.route: детерминированный выбор модели по тарифу, сложности и квотам', () => {
+test('AutoRouter.route: детерминированный выбор модели по тарифу, сложности и кредитам', () => {
   const registry = new ModelRegistry();
   const base = { stage: 'normal' as const, premiumAvailable: true };
 
@@ -142,7 +142,7 @@ test('AutoRouter.route: детерминированный выбор модел
     );
   }
 
-  // Plus: простое — дешёвая модель, остальное — рабочая; премиум Auto не тратит
+  // Plus: простое — дешёвая модель, остальное — рабочая; премиум Auto не берёт
   assert.equal(
     AutoRouter.route({ ...base, plan: 'plus', level: 'simple', category: 'general' }).modelId,
     'ketner-mini',
@@ -156,23 +156,23 @@ test('AutoRouter.route: детерминированный выбор модел
     'ketner-pro',
   );
 
-  // Plus: сложная задача тоже на рабочей модели — ни премиум-квоты, ни GLM Auto на Plus не тратит
+  // Plus: сложная задача тоже на рабочей модели — ни премиум-модель, ни GLM Auto на Plus не берёт
   assert.equal(
     AutoRouter.route({ ...base, plan: 'plus', level: 'complex', category: 'coding', hard: true })
       .modelId,
     'ketner-pro',
   );
 
-  // Pro и Ultra: код, математика и логика средней сложности — открытая флагманская модель (квота
-  // премиум-запросов не тратится), сложные — премиум-модель, пока есть квота
+  // Pro и Ultra: код, математика и логика средней сложности — открытая флагманская модель
+  // (дешевле премиум-модели в кредитах), сложные — премиум-модель, пока кредитов хватает на запрос
   for (const plan of ['pro', 'ultra', 'gpt-pro', 'claude-pro']) {
     for (const category of ['math', 'reasoning', 'coding']) {
       const medium = AutoRouter.route({ ...base, plan, level: 'complex', category });
       assert.equal(medium.modelId, 'glm-5.3', `${plan}/${category}`);
-      assert.match(medium.reason, /medium difficulty, open flagship model \(premium quota saved\)/);
+      assert.match(medium.reason, /medium difficulty, open flagship model \(credits saved\)/);
       const hard = AutoRouter.route({ ...base, plan, level: 'complex', category, hard: true });
       assert.equal(hard.modelId, 'gpt-6.1-sol', `${plan}/${category} hard`);
-      assert.match(hard.reason, /hard .* task, strong model from the premium quota/);
+      assert.match(hard.reason, /hard .* task, strong model/);
     }
     assert.equal(
       AutoRouter.route({ ...base, plan, level: 'moderate', category: 'coding' }).modelId,
@@ -192,37 +192,36 @@ test('AutoRouter.route: детерминированный выбор модел
       hard: true,
       premiumAvailable: false,
     });
-    assert.equal(noQuota.modelId, 'glm-5.3', 'квота исчерпана — открытая флагманская модель');
-    assert.match(noQuota.reason, /premium quota used up/);
+    assert.equal(
+      noQuota.modelId,
+      'glm-5.3',
+      'кредитов на премиум-модель мало — открытая флагманская',
+    );
+    assert.match(noQuota.reason, /not enough credits for the strong model/);
   }
 
-  // Бюджет на исходе: ни премиум, ни GLM не берутся; исчерпан — только самая дешёвая
-  for (const hard of [false, true]) {
-    assert.equal(
-      AutoRouter.route({
-        ...base,
-        plan: 'ultra',
-        level: 'complex',
-        category: 'math',
-        hard,
-        stage: 'soft',
-      }).modelId,
-      'ketner-pro',
-    );
-  }
-  for (const stage of ['exhausted', 'hard_stop'] as const) {
-    assert.equal(
-      AutoRouter.route({ ...base, plan: 'ultra', level: 'complex', category: 'math', stage })
-        .modelId,
-      'ketner-mini',
-    );
+  // Кредиты кончились: отвечает бесплатная модель без лимита, на любом тарифе и при любой сложности
+  for (const plan of ['free', 'plus', 'pro', 'ultra']) {
+    for (const hard of [false, true]) {
+      assert.equal(
+        AutoRouter.route({
+          ...base,
+          plan,
+          level: 'complex',
+          category: 'math',
+          hard,
+          stage: 'exhausted',
+        }).modelId,
+        'nemotron-ultra',
+      );
+    }
   }
 
   // Результат всегда доступен по тарифу, а класс top (Opus) Auto не выбирает никогда
   for (const plan of ['free', 'plus', 'pro', 'ultra', 'gpt-pro', 'claude-pro', 'gemini-pro']) {
     for (const level of ['simple', 'moderate', 'complex'] as const) {
       for (const category of ['general', 'coding', 'math', 'reasoning', 'creative']) {
-        for (const stage of ['normal', 'soft', 'exhausted'] as const) {
+        for (const stage of ['normal', 'exhausted'] as const) {
           for (const premiumAvailable of [true, false]) {
             for (const hard of [false, true]) {
               const { modelId } = AutoRouter.route({
@@ -239,8 +238,9 @@ test('AutoRouter.route: детерминированный выбор модел
                 `${plan} не имеет доступа к ${modelId}`,
               );
               assert.notEqual(model.costClass, 'top');
-              // Премиум-квоту Auto тратит только на сложные задачи
-              if (model.costClass === 'strong') assert.ok(hard && premiumAvailable);
+              // Премиум-модель Auto берёт только на сложные задачи
+              if (model.costClass === 'strong')
+                assert.ok(hard && premiumAvailable && stage === 'normal');
             }
           }
         }
@@ -467,11 +467,7 @@ test('Политика размышлений: глубина зависит о�
     'medium',
   );
 
-  // Бюджет на исходе: не глубже low
-  assert.equal(
-    effort({ level: 'complex', category: 'math', costClass: 'top', plan: 'ultra', stage: 'soft' }),
-    'low',
-  );
+  // Кредиты кончились: не глубже low
   assert.equal(effort({ level: 'complex', stage: 'exhausted' }), 'low');
   assert.equal(effort({ level: 'simple', stage: 'exhausted' }), 'none');
 
@@ -527,7 +523,6 @@ test('Потолок ответа: тариф, модель, бюджет и п�
 
   assert.equal(cap(), 12288);
   assert.equal(cap({ modelMaxOutputTokens: 8192 }), 8192);
-  assert.equal(cap({ stage: 'soft' }), 4096);
   assert.equal(cap({ stage: 'exhausted' }), 2048);
   assert.equal(cap({ level: 'simple' }), 2048);
   assert.equal(
@@ -536,45 +531,6 @@ test('Потолок ответа: тариф, модель, бюджет и п�
     'с проектом или файлами ответ может быть большим',
   );
   assert.equal(cap({ planMaxTokens: 512 }), 1024, 'ниже минимума ответ с размышлениями обрывается');
-});
-
-test('Правила экономии: премиум-модель заменяется рабочей, когда квота или бюджет на исходе', () => {
-  const registry = new ModelRegistry();
-  const sol = registry.get('gpt-6.1-sol')!;
-  const opus = registry.get('claude-opus-5.5')!;
-  const haiku = registry.get('claude-haiku-5.5')!;
-  const mimo = registry.get('ketner-pro')!;
-
-  const keep = applyEconomyRules(opus, { stage: 'normal', premiumAvailable: true }, registry);
-  assert.equal(keep.model.id, 'claude-opus-5.5');
-  assert.equal(keep.reason, null);
-
-  const noQuota = applyEconomyRules(sol, { stage: 'normal', premiumAvailable: false }, registry);
-  assert.equal(noQuota.model.id, 'ketner-pro');
-  assert.ok(noQuota.reason?.includes('Premium quota'));
-
-  assert.equal(
-    applyEconomyRules(opus, { stage: 'soft', premiumAvailable: true }, registry).model.id,
-    'ketner-pro',
-  );
-  assert.equal(
-    applyEconomyRules(mimo, { stage: 'soft', premiumAvailable: false }, registry).model.id,
-    'ketner-pro',
-  );
-
-  // Бюджет исчерпан: всё, кроме лёгких моделей, заменяется на самую дешёвую
-  assert.equal(
-    applyEconomyRules(mimo, { stage: 'exhausted', premiumAvailable: true }, registry).model.id,
-    'ketner-mini',
-  );
-  assert.equal(
-    applyEconomyRules(opus, { stage: 'hard_stop', premiumAvailable: true }, registry).model.id,
-    'ketner-mini',
-  );
-  assert.equal(
-    applyEconomyRules(haiku, { stage: 'exhausted', premiumAvailable: true }, registry).model.id,
-    'claude-haiku-5.5',
-  );
 });
 
 test('Реестр: каждая модель уходит в OpenRouter под своим id, без скрытых подмен', () => {
@@ -894,7 +850,7 @@ test('Фаза 3: Персистентный SemanticCache переживает 
   );
 });
 
-test('Фаза 3: Пересчёт эмпирического costBudget по реальным данным usage-store', () => {
+test('Фаза 3: Пересчёт эмпирического бюджета по реальным данным usage-store', () => {
   const tempDir = mkdtempSync(join(tmpdir(), 'ketner-usage-budget-'));
   const usageFile = join(tempDir, 'usage.json');
   const store = new UsageStore(usageFile);
@@ -933,17 +889,6 @@ test('Фаза 3: Пересчёт эмпирического costBudget по р
   assert.equal(empirical.plus.userCount, 2);
   assert.ok(empirical.plus.avgMonthlyCost > 0);
   assert.ok(empirical.plus.recommendedCostBudget >= empirical.plus.avgMonthlyCost);
-
-  // Проверяем динамическое обновление бюджета тарифа
-  const initialBudget = EntitlementService.getEntitlements('plus').costBudget;
-  EntitlementService.updatePlanCostBudget('plus', empirical.plus.recommendedCostBudget);
-  assert.equal(
-    EntitlementService.getEntitlements('plus').costBudget,
-    empirical.plus.recommendedCostBudget,
-  );
-
-  // Восстанавливаем исходный бюджет
-  EntitlementService.updatePlanCostBudget('plus', initialBudget);
 });
 
 test('Фаза 4: UsageStore.getGatewayMetrics — полная аналитика, TTFT, источники и алерт отрицательной маржи', () => {

@@ -4,8 +4,9 @@
  * Один запуск = задача пользователя, которую модель решает за несколько шагов: на каждом шаге
  * она читает файлы, правит их или запускает команды через инструменты (agent-tools.ts), пока не
  * ответит без вызова инструмента. Запуск встроен в общую экономику сервиса:
- *  - действуют дневной и месячный бюджеты себестоимости, квота премиум-моделей и Fair Use;
+ *  - расход списывается из того же пула кредитов, что у чата и картинок, плюс Fair Use;
  *  - у запуска есть свой потолок шагов и стоимости по тарифу (services/code-limits.ts);
+ *  - кредиты кончились (или потолок запуска выбран) — агент продолжает на бесплатной модели;
  *  - каждый шаг пишется в учёт расходов отдельной записью (`kind: 'agent'`), по цене провайдера.
  * Лента запуска сохраняется в проекте, поэтому её можно открыть позже и с другого устройства.
  */
@@ -20,7 +21,6 @@ import type {
   ReasoningEffort,
   ReasoningMode,
 } from '../ai/gateway-types.js';
-import { applyEconomyRules, type EconomyState } from '../ai/gateway.js';
 import { computeRequestCost } from '../ai/engine-pricing.js';
 import { CircuitBreaker, defaultCircuitBreaker } from '../ai/circuit-breaker.js';
 import {
@@ -34,25 +34,25 @@ import { providerManager, type ProviderManager } from '../ai/providers/provider-
 import {
   effectiveReasoningMode,
   isPremiumClass,
-  limitUnitsFor,
   profileEffort,
   toProviderReasoning,
 } from '../ai/reasoning-policy.js';
 import { applyPlanSubstitute } from '../ai/plan-substitute.js';
-import { applyModelLimits, isModelLimitReached } from '../ai/model-limits.js';
 import { createStreamWatchdog, type WatchdogLimits } from '../ai/stream-watchdog.js';
-import { EntitlementService } from '../services/entitlement.js';
+import { EntitlementService, planAllowsModel } from '../services/entitlement.js';
 import { FairUseEngine } from '../services/fair-use.js';
-import { evaluateBudget, type BudgetStage } from '../services/budget-policy.js';
+import {
+  canAfford,
+  creditStageOf,
+  FREE_AGENT_MODEL_ID,
+  isFreeModel,
+  pickAffordable,
+  type CreditStage,
+} from '../services/credit-policy.js';
+import type { CreditLedger } from '../services/credits.js';
+import { creditService } from '../billing/index.js';
 import { getCodeLimits, quotaOf } from '../services/code-limits.js';
 import type { Language, PlanId } from '../types.js';
-import {
-  getPremiumQuota,
-  planEntitlements,
-  settlePremiumCost,
-  type PlanBonusSource,
-} from '../services/premium-quota.js';
-import type { PremiumCreditSource } from '../store/premium-credit-store.js';
 import {
   agentToolDefinitions,
   executeTool,
@@ -122,10 +122,8 @@ export type AgentEvent =
 export interface AgentRunnerDeps {
   store: ProjectStore;
   usageStore: UsageStore;
-  /** Кредиты докупленных пакетов; по умолчанию — общий журнал платежей. */
-  premiumCredits?: PremiumCreditSource;
-  /** Бонус к квоте за оплату криптой; по умолчанию — общий биллинг. */
-  planBonus?: PlanBonusSource;
+  /** Кредиты пользователей; по умолчанию — общий журнал биллинга. */
+  credits?: CreditLedger;
   sandbox: SandboxRunner | null;
   allowSandboxNetwork?: boolean;
   providers?: ProviderManager;
@@ -172,31 +170,39 @@ export interface AgentModelChoice {
   model: ModelRegistryEntry;
   reason: string | null;
   denied?: { requiredPlan: string; message: string };
-  /** Премиум-модель оставлена за счёт кредитов докупленных пакетов. */
-  fundedByCredits?: boolean;
 }
 
 /**
  * Модель для запуска. Без явного выбора: Free получает самую дешёвую, остальные — рабочую
  * (она держит цикл инструментов дешевле премиум-моделей). Явный выбор проходит те же проверки
- * доступа и правила экономии, что и в чате.
+ * доступа, что и в чате. Если на выбранную модель не хватает кредитов, запуск идёт на модели,
+ * на которую хватает, а в конце лестницы — на бесплатной модели агента.
  */
 export function selectAgentModel(input: {
   plan: PlanId;
   email?: string;
   isVip?: boolean;
   requestedId?: string;
-  state: EconomyState;
+  /** Остаток кредитов, $. */
+  balanceUsd: number;
+  mode?: ReasoningMode;
   registry: ModelRegistry;
 }): AgentModelChoice {
-  const { registry, state } = input;
+  const { registry } = input;
   const requestedId = input.requestedId?.trim();
+  const affordable = (model: ModelRegistryEntry) =>
+    pickAffordable(model, {
+      balanceUsd: input.balanceUsd,
+      plan: input.plan,
+      mode: input.mode,
+      surface: 'code',
+      registry,
+    });
 
   if (!requestedId || requestedId === 'auto') {
     const base = registry.resolve(input.plan === 'free' ? FLOOR_MODEL_ID : WORKHORSE_MODEL_ID);
-    // Auto тратит только квоту тарифа, кредиты пакетов — для явного выбора модели.
-    const economy = applyEconomyRules(base, { ...state, creditsAvailable: false }, registry);
-    return { model: economy.model, reason: economy.reason };
+    const choice = affordable(base);
+    return { model: choice.model, reason: choice.reason };
   }
 
   const requested = registry.resolve(requestedId);
@@ -216,32 +222,13 @@ export function selectAgentModel(input: {
       },
     };
   }
-  const economy = applyEconomyRules(requested, state, registry);
-  return {
-    model: economy.model,
-    reason: economy.reason,
-    fundedByCredits: Boolean(economy.fundedByCredits),
-  };
-}
-
-/** Запасная модель не должна нарушать правил экономии (то же правило, что в AIGateway). */
-function isAllowedFallback(model: ModelRegistryEntry, plan: PlanId, state: EconomyState): boolean {
-  const allowed = EntitlementService.checkModelAccess(model, plan).allowed;
-  if (isPremiumClass(model.costClass) && state.creditsAvailable && allowed) return true;
-  if (state.stage === 'exhausted' || state.stage === 'hard_stop') return model.costClass === 'lite';
-  if (isPremiumClass(model.costClass)) {
-    return (
-      state.stage === 'normal' &&
-      state.premiumAvailable &&
-      EntitlementService.checkModelAccess(model, plan).allowed
-    );
-  }
-  return true;
+  const choice = affordable(requested);
+  return { model: choice.model, reason: choice.reason };
 }
 
 function agentEffort(
   costClass: ModelRegistryEntry['costClass'],
-  stage: BudgetStage,
+  stage: CreditStage,
 ): ReasoningEffort {
   if (costClass === 'lite') return 'none';
   if (isPremiumClass(costClass)) return 'low';
@@ -257,38 +244,42 @@ const CLASS_RANK: Record<ModelRegistryEntry['costClass'], number> = {
 
 /**
  * Модель, на которой агент продолжает работу, когда бюджет текущей ступени исчерпан: премиум →
- * рабочая (Ketner Pro), рабочая → лёгкая. Берётся из цепочки запасных текущей модели (так сохраняется
- * «семейство»: Opus → … → Ketner Pro → Haiku), а если там подходящей нет — общая рабочая или самая
- * дешёвая модель. null — текущая модель уже самая дешёвая ступень.
+ * рабочая (Ketner Pro), рабочая → лёгкая, лёгкая → бесплатная модель агента. Берётся из цепочки
+ * запасных текущей модели (так сохраняется «семейство»: Opus → … → Ketner Pro → Haiku), а если
+ * там подходящей нет — общая рабочая или самая дешёвая модель. null — текущая модель уже бесплатная.
  */
 export function continuationModel(
   current: ModelRegistryEntry,
   registry: ModelRegistry,
   canUse: (model: ModelRegistryEntry) => boolean,
 ): ModelRegistryEntry | null {
+  if (isFreeModel(current)) return null;
   const maxRank = isPremiumClass(current.costClass)
     ? CLASS_RANK.work
     : current.costClass === 'work'
       ? CLASS_RANK.lite
       : -1;
-  if (maxRank < 0) return null;
   const fits = (model: ModelRegistryEntry | undefined): model is ModelRegistryEntry =>
     Boolean(
       model &&
       model.enabled &&
       model.id !== current.id &&
+      !isFreeModel(model) &&
       CLASS_RANK[model.costClass] <= maxRank &&
       canUse(model),
     );
-  const fromChain = registry.getFallbackChain(current.id, 10).slice(1).find(fits);
-  if (fromChain) return fromChain;
-  for (const id of maxRank >= CLASS_RANK.work
-    ? [WORKHORSE_MODEL_ID, FLOOR_MODEL_ID]
-    : [FLOOR_MODEL_ID]) {
-    const model = registry.get(id);
-    if (fits(model)) return model;
+  if (maxRank >= 0) {
+    const fromChain = registry.getFallbackChain(current.id, 10).slice(1).find(fits);
+    if (fromChain) return fromChain;
+    for (const id of maxRank >= CLASS_RANK.work
+      ? [WORKHORSE_MODEL_ID, FLOOR_MODEL_ID]
+      : [FLOOR_MODEL_ID]) {
+      const model = registry.get(id);
+      if (fits(model)) return model;
+    }
   }
-  return null;
+  const free = registry.get(FREE_AGENT_MODEL_ID);
+  return free && free.enabled ? free : null;
 }
 
 /** План текстом для модели: [x] сделано, [>] в работе, [ ] впереди. */
@@ -485,8 +476,10 @@ export class AgentRunner {
   private readonly registry: ModelRegistry;
   private readonly providers: ProviderManager;
   private readonly breaker: CircuitBreaker;
+  private readonly credits: CreditLedger;
 
   constructor(private readonly deps: AgentRunnerDeps) {
+    this.credits = deps.credits ?? creditService;
     this.registry = deps.registry ?? modelRegistry;
     this.providers = deps.providers ?? providerManager;
     this.breaker = deps.circuitBreaker ?? defaultCircuitBreaker;
@@ -510,14 +503,6 @@ export class AgentRunner {
     const plan = EntitlementService.resolveEffectivePlan(input.plan, input.email, input.isVip);
     const reasoningMode = effectiveReasoningMode(input.reasoningMode, plan);
     const limits = getCodeLimits(plan);
-    const quotaDeps = {
-      usageStore,
-      registry: this.registry,
-      credits: this.deps.premiumCredits,
-      bonus: this.deps.planBonus,
-    };
-    // Период, оплаченный криптой, даёт бонус к квоте премиум-моделей и бюджету.
-    const entitlements = planEntitlements(input.userId, plan, quotaDeps);
 
     if (!task)
       return reject(
@@ -552,33 +537,17 @@ export class AgentRunner {
     }
 
     const snapshot = usageStore.getFairUseSnapshot(input.userId);
-    const budget = evaluateBudget(snapshot.estimatedCostLastMonth, entitlements.costBudget);
-    if (budget.stage === 'hard_stop') {
-      return reject(
-        'fair_use_exceeded',
-        t(
-          language,
-          'Ресурсная квота вашего тарифа на этот период исчерпана. Она восстанавливается постепенно; для большей квоты можно повысить тариф.',
-          'Your plan resource quota for this period is used up. It renews gradually; you can upgrade your plan for a higher quota.',
-        ),
-      );
-    }
-
-    const premium = getPremiumQuota(input.userId, plan, quotaDeps);
-    // На премиум-модели запуск может потратить остаток квоты тарифа и кредиты пакетов.
-    const premiumRemaining = premium.remainingUsd + premium.creditsUsd;
-    const economyState: EconomyState = {
-      stage: budget.stage,
-      premiumAvailable: premium.baseAvailable,
-      creditsAvailable: premium.creditsUsd > 0,
-    };
+    // Кредиты на старте запуска: по ним выбирается модель и считается потолок запуска.
+    const startBalanceUsd = this.credits.balance(input.userId, plan).remainingUsd;
+    const stage = creditStageOf(startBalanceUsd);
 
     const choice = selectAgentModel({
       plan,
       email: input.email,
       isVip: input.isVip,
       requestedId: input.modelId,
-      state: economyState,
+      balanceUsd: startBalanceUsd,
+      mode: reasoningMode,
       registry: this.registry,
     });
     if (choice.denied) {
@@ -599,29 +568,12 @@ export class AgentRunner {
       choice.reason = choice.reason ? `${choice.reason}; ${substitute.reason}` : substitute.reason;
     }
 
-    // Лимит модели на тарифе (тот же пул, что в чате): после него запуск идёт на запасной модели.
-    const limited = applyModelLimits(
-      choice.model,
-      plan,
-      input.userId,
-      usageStore,
-      this.registry,
-      reasoningMode,
-    );
-    if (limited.reason) {
-      choice.model = limited.model;
-      choice.reason = choice.reason ? `${choice.reason}; ${limited.reason}` : limited.reason;
-    }
-
     // Запуски агента не считаются сообщениями чата (у них свой суточный лимит), поэтому счётчики
-    // сообщений обнуляются; параллелизм и токены проверяются как обычно. Дневной потолок расхода здесь
-    // не отклоняет запуск: им управляют ступени ниже (выбранная модель → рабочая → лёгкая), а отказ
-    // остаётся только когда не осталось даже запаса на самую дешёвую модель.
+    // сообщений обнуляются; параллелизм и токены проверяются как обычно. Расход ограничивают кредиты.
     const decision = FairUseEngine.evaluate(
       { ...snapshot, requestsLastMinute: 0, requestsLastHour: 0, requestsLastDay: 0 },
       plan,
       language,
-      { dailyCostFactor: Infinity },
     );
     if (decision.action === 'deny') {
       const code: AgentErrorCode =
@@ -634,55 +586,28 @@ export class AgentRunner {
     }
 
     // ── Бюджеты запуска по ступеням ──
-    // Ступень 0 — выбранная модель: потолок тарифа на запуск, остаток дня и месяца и (для премиум-модели)
-    // квоты. Когда он исчерпан (или кончились шаги), агент не останавливается, а молча продолжает на модели
-    // дешевле: рабочей, затем лёгкой, у каждой свой добавочный бюджет (CodeLimits.continue*). Общий
-    // потолок запуска — остаток месячного бюджета и дневной потолок с запасом 25%: доделать задачу на
-    // дешёвой модели лучше, чем бросить её на полпути, а расход всё равно ограничен.
-    const monthlyRemaining = entitlements.costBudget * 1.25 - snapshot.estimatedCostLastMonth;
-    const dailyRemaining =
-      entitlements.maxDailyCost !== null
-        ? entitlements.maxDailyCost - snapshot.estimatedCostLastDay
-        : Infinity;
-    const hardCeiling = Math.min(
-      monthlyRemaining,
-      entitlements.maxDailyCost !== null
-        ? dailyRemaining + entitlements.maxDailyCost * 0.25
-        : Infinity,
-    );
+    // Ступень 0 — выбранная модель: потолок тарифа на запуск и остаток кредитов. Когда он исчерпан
+    // (или кончились шаги), агент не останавливается, а молча продолжает на модели дешевле: рабочей,
+    // затем лёгкой, у каждой свой добавочный бюджет (CodeLimits.continue*), и, наконец, на бесплатной
+    // модели агента, у которой бюджета нет (её ограничивают только шаги). Доделать задачу на дешёвой
+    // модели лучше, чем бросить её на полпути, а расход не выходит за остаток кредитов.
+    let totalCost = 0;
+    const remainingUsd = (): number => Math.max(0, startBalanceUsd - totalCost);
     const allowanceFor = (model: ModelRegistryEntry, first: boolean): number => {
-      if (!first)
-        return model.costClass === 'work' ? limits.continueWorkUsd : limits.continueLiteUsd;
-      let value = Math.min(limits.maxRunCostUsd, dailyRemaining, monthlyRemaining);
-      if (isPremiumClass(model.costClass)) value = Math.min(value, premiumRemaining);
-      return Number(value.toFixed(6));
+      if (isFreeModel(model)) return Infinity;
+      const cap = first
+        ? limits.maxRunCostUsd
+        : model.costClass === 'work'
+          ? limits.continueWorkUsd
+          : limits.continueLiteUsd;
+      return Number(Math.min(cap, remainingUsd()).toFixed(6));
     };
     const canUse = (model: ModelRegistryEntry): boolean =>
-      isAllowedFallback(model, plan, economyState) &&
-      !isModelLimitReached(model, plan, input.userId, usageStore, this.registry, reasoningMode);
+      isFreeModel(model) ||
+      (planAllowsModel(plan, model.requiredPlan) &&
+        canAfford(model, remainingUsd(), reasoningMode));
 
-    let runBudget = allowanceFor(choice.model, true);
-    if (runBudget < 0.0005) {
-      // Бюджет выбранной модели на сегодня исчерпан: запуск сразу идёт на ступени дешевле.
-      let cheaper = continuationModel(choice.model, this.registry, canUse);
-      while (cheaper && Math.min(allowanceFor(cheaper, false), hardCeiling) < 0.0005) {
-        cheaper = continuationModel(cheaper, this.registry, canUse);
-      }
-      if (!cheaper) {
-        return reject(
-          'fair_use_exceeded',
-          t(
-            language,
-            'На сегодня ресурсная квота тарифа исчерпана. Она восстановится позже.',
-            'The resource quota of your plan is used up for today. It renews later.',
-          ),
-        );
-      }
-      const reason = `Run budget of ${choice.model.name} is used up for today: ${cheaper.name} continues`;
-      choice.reason = choice.reason ? `${choice.reason}; ${reason}` : reason;
-      choice.model = cheaper;
-      runBudget = Number(Math.min(allowanceFor(cheaper, false), hardCeiling).toFixed(6));
-    }
+    const runBudget = allowanceFor(choice.model, true);
 
     const commandsAllowed = limits.commands && this.deps.sandbox !== null;
     const network = Boolean(this.deps.allowSandboxNetwork);
@@ -733,7 +658,6 @@ export class AgentRunner {
     const releaseSlot = usageStore.acquireConcurrencySlot(input.userId);
     const conversationId = `code:${input.projectId}`;
     let steps = 0;
-    let totalCost = 0;
     let status: AgentRunStatus = 'completed';
     let finalMessage: string | undefined;
     let activeModel = choice.model;
@@ -769,7 +693,6 @@ export class AgentRunner {
         kind: 'agent',
         runId,
         step: 0,
-        limitUnits: limitUnitsFor(choice.model.effortProfile, reasoningMode),
       });
       await flushThread();
 
@@ -779,7 +702,7 @@ export class AgentRunner {
         modelId: choice.model.id,
         modelName: choice.model.name,
         maxSteps: limits.maxSteps,
-        budgetUsd: runBudget,
+        budgetUsd: Number.isFinite(runBudget) ? runBudget : 0,
         commands: commandsAllowed,
         routingReason: choice.reason,
       });
@@ -820,11 +743,11 @@ export class AgentRunner {
        * только новую модель в шапке; модель получает заметку с текущим планом, чтобы продолжить с места.
        */
       const continueCheaper = (reason: 'budget' | 'steps', step: number): boolean => {
-        if (isCancelled() || totalCost >= hardCeiling - 0.0005) return false;
+        if (isCancelled()) return false;
         let next = continuationModel(activeModel, this.registry, canUse);
         let allowance = 0;
         while (next) {
-          allowance = Math.min(allowanceFor(next, false), hardCeiling - totalCost);
+          allowance = allowanceFor(next, false);
           if (allowance >= 0.0005) break;
           next = continuationModel(next, this.registry, canUse);
         }
@@ -846,11 +769,17 @@ export class AgentRunner {
           type: 'model_switch',
           modelId: next.id,
           modelName: next.name,
-          reason: t(
-            language,
-            'Продолжаю на модели дешевле, чтобы уложиться в лимит',
-            'Continuing on a cheaper model to stay within limits',
-          ),
+          reason: isFreeModel(next)
+            ? t(
+                language,
+                'Кредитов на платные модели не осталось — продолжаю на бесплатной',
+                'No credits left for paid models: continuing on the free model',
+              )
+            : t(
+                language,
+                'Продолжаю на модели дешевле, чтобы уложиться в лимит',
+                'Continuing on a cheaper model to stay within limits',
+              ),
         });
         messages.push({
           role: 'user',
@@ -861,7 +790,7 @@ export class AgentRunner {
         });
         return true;
       };
-      const overBudget = (): boolean => tierSpent >= tierAllowance || totalCost >= hardCeiling;
+      const overBudget = (): boolean => tierSpent >= tierAllowance;
 
       let consecutiveFailures = 0;
       let lengthNudges = 0;
@@ -912,14 +841,14 @@ export class AgentRunner {
             : toProviderReasoning(
                 candidate.reasoning,
                 candidate.effortProfile
-                  ? profileEffort(candidate.effortProfile, reasoningMode, budget.stage)
-                  : agentEffort(candidate.costClass, budget.stage),
+                  ? profileEffort(candidate.effortProfile, reasoningMode, stage)
+                  : agentEffort(candidate.costClass, stage),
               );
           const outputCap = Math.min(
             candidate.maxOutputTokens,
             plan === 'free'
               ? 4_096
-              : budget.stage === 'normal'
+              : stage === 'normal'
                 ? plan === 'ultra' || plan === 'pro'
                   ? 16_384
                   : 8_192
@@ -1015,24 +944,16 @@ export class AgentRunner {
             stepCost += cost.usd;
             totalCost += cost.usd;
             tierSpent += cost.usd;
-            // Премиум-шаг сверх квоты тарифа (или за счёт пакета) списывается с кредитов пакетов.
-            const premiumStep = isPremiumClass(candidate.costClass);
-            const premiumCreditUsd = premiumStep
-              ? settlePremiumCost(
-                  input.userId,
-                  plan,
-                  Number(cost.usd.toFixed(6)),
-                  Boolean(choice.fundedByCredits),
-                  quotaDeps,
-                )
-              : 0;
+            // Шаг списывается из кредитов по реальной цене; бесплатная модель ничего не стоит.
+            const creditsUsd = isFreeModel(candidate)
+              ? 0
+              : this.credits.charge(input.userId, Number(cost.usd.toFixed(6)));
             usageStore.recordUsage({
               userId: input.userId,
               conversationId,
               modelId: candidate.id,
               provider: attemptResult.via ?? candidate.provider,
-              premiumCreditUsd,
-              ...(premiumStep && choice.fundedByCredits ? { fundedBy: 'credits' as const } : {}),
+              creditsUsd,
               inputTokens: usage.inputTokens,
               outputTokens: usage.outputTokens,
               cachedTokens: usage.cachedTokens,
@@ -1053,7 +974,6 @@ export class AgentRunner {
               kind: 'agent',
               runId,
               step,
-              limitUnits: limitUnitsFor(candidate.effortProfile, reasoningMode),
             });
           }
 

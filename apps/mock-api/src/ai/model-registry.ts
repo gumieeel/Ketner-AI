@@ -18,7 +18,6 @@ import type {
   ModelReasoning,
 } from './gateway-types.js';
 import { getPlanLimits, planAllowsModel } from '../services/entitlement.js';
-import { DAILY_MODEL_LIMITS, getModelLimit } from '../services/daily-limits.js';
 
 // ─────────────────────────────────────────────────────────────
 // Вспомогательные фабрики
@@ -107,7 +106,7 @@ function makePricing(input: number, output: number, cached: number = input * 0.5
 
 /** Идентификатор самой дешёвой модели: база для Free, запасной вариант и «пол» при исчерпании бюджета. */
 export const FLOOR_MODEL_ID = 'ketner-mini';
-/** Рабочая лошадка: на неё переключаются премиум-запросы, когда квота премиум-моделей израсходована. */
+/** Рабочая лошадка: недорогая сильная модель, на которую Auto отдаёт задачи средней сложности. */
 export const WORKHORSE_MODEL_ID = 'ketner-pro';
 /**
  * Открытая флагманская модель (GLM-5.3, открытые веса): Auto на Pro и Ultra отдаёт ей задачи средней
@@ -151,12 +150,12 @@ const reasoning = (
  *   grok-4.7           Grok 4.7 xhigh      AA 46    $0.057
  *   gpt-5.6-terra      GPT-5.6 Terra xhigh AA 42    $0.099   модель для кода (AA Coding 77)
  *
- * Суточные лимиты и цепочки запасных моделей: services/daily-limits.ts и fallbackModelId ниже.
+ * Цены в кредитах считает services/credits.ts, цепочки запасных моделей — fallbackModelId ниже.
  * Не вошли: Claude Fable 5.1 (в 2.5 раза дороже Opus 5.5 при более низком AA), Kimi K3, Qwen3.8 Max,
  * Muse Spark, Nemotron 3 Ultra (хуже и дороже модели ketner-pro), DeepSeek V4 Pro (AA ≈ 36 на текущей
  * версии индекса — ниже Ketner Mini). Из открытых флагманов сильнее только MiMo-V2.6 Pro (это и есть
  * ketner-pro); GLM-5.3 почти вровень с ней (45 против 46) и сильна в коде, но в 4 раза дороже, поэтому
- * Auto берёт её только там, где иначе потратил бы квоту премиум-моделей.
+ * Auto берёт её только там, где иначе потратил бы много кредитов на премиум-модель.
  */
 const DEFAULT_REGISTRY_ENTRIES: ModelRegistryEntry[] = [
   {
@@ -423,7 +422,7 @@ const DEFAULT_REGISTRY_ENTRIES: ModelRegistryEntry[] = [
     updatedAt: now(),
   },
   // ── Открытая флагманская модель: Auto отдаёт ей задачи средней сложности по коду, математике и
-  // логике вместо премиум-модели (ai/auto-router.ts). Класс work — квоту премиум-запросов не тратит.
+  // логике вместо премиум-модели (ai/auto-router.ts). Класс work — недорогой в кредитах.
   {
     id: OPEN_FLAGSHIP_MODEL_ID,
     name: 'GLM-5.3',
@@ -541,7 +540,7 @@ const DEFAULT_REGISTRY_ENTRIES: ModelRegistryEntry[] = [
     createdAt: now(),
     updatedAt: now(),
   },
-  // ── Классы strong и top: премиум, расходуют квоту премиум-запросов тарифа ──
+  // ── Классы strong и top: премиум, за запрос списывают больше кредитов ──
   {
     id: 'gpt-6.1-sol',
     name: 'GPT-6.1 Sol',
@@ -860,25 +859,6 @@ export const LEGACY_MODEL_ALIASES: Readonly<Record<string, string>> = {
   'nvidia/nemotron-3-ultra-550b-a55b:free': 'nemotron-ultra',
 };
 
-/**
- * Лимиты модели по тарифам для /api/meta (пустой объект, если лимитов нет): суточная норма,
- * недельный пул и сколько из пула можно взять за сутки.
- */
-export function dailyLimitsOf(modelId: string): {
-  dailyLimits?: Partial<Record<PlanId, number>>;
-  weeklyLimits?: Partial<Record<PlanId, { pool: number; perDay: number }>>;
-} {
-  const daily: Partial<Record<PlanId, number>> = {};
-  const weekly: Partial<Record<PlanId, { pool: number; perDay: number }>> = {};
-  for (const plan of Object.keys(DAILY_MODEL_LIMITS) as PlanId[]) {
-    const limit = getModelLimit(plan, modelId);
-    if (!limit) continue;
-    daily[plan] = limit.daily;
-    weekly[plan] = { pool: limit.weeklyPool, perDay: limit.dailyCap };
-  }
-  return Object.keys(daily).length > 0 ? { dailyLimits: daily, weeklyLimits: weekly } : {};
-}
-
 // ─────────────────────────────────────────────────────────────
 // Model Registry
 // ─────────────────────────────────────────────────────────────
@@ -950,7 +930,7 @@ export class ModelRegistry {
 
   /**
    * Идентификаторы премиум-моделей (классы strong и top), включая старые id из истории расхода:
-   * по ним считается, сколько квоты премиум-запросов пользователь уже потратил за 30 дней.
+   * по ним считается доля расхода на премиум-модели в статистике.
    */
   getPremiumModelIds(): Set<string> {
     const ids = new Set<string>();
@@ -1031,7 +1011,6 @@ export class ModelRegistry {
         contextMessages: e.contextMessages,
         isPro: e.isPro,
         requiredPlan: e.requiredPlan ?? undefined,
-        ...dailyLimitsOf(e.id),
       }));
   }
 

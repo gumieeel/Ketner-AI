@@ -7,7 +7,7 @@ import {
   UNDECLARED_PAID_ENGINE_PRICING,
 } from './engine-pricing.js';
 import { modelRegistry } from './model-registry.js';
-import { BUDGET_HARD_STOP_RATIO, evaluateBudget } from '../services/budget-policy.js';
+import { creditStageOf } from '../services/credit-policy.js';
 import { createStreamWatchdog } from './stream-watchdog.js';
 
 test('стоимость от провайдера приоритетнее таблицы', () => {
@@ -112,12 +112,11 @@ test('отрицательная или NaN стоимость провайде�
   );
 });
 
-test('бюджет: стадии normal → soft → exhausted → hard_stop', () => {
-  assert.equal(evaluateBudget(0, 4).stage, 'normal');
-  assert.equal(evaluateBudget(3.3, 4).stage, 'soft');
-  assert.equal(evaluateBudget(4, 4).stage, 'exhausted');
-  assert.equal(evaluateBudget(4 * BUDGET_HARD_STOP_RATIO, 4).stage, 'hard_stop');
-  assert.equal(evaluateBudget(100, 0).stage, 'normal');
+test('стадия кредитов: normal, пока есть хотя бы кредит, иначе exhausted', () => {
+  assert.equal(creditStageOf(5), 'normal');
+  assert.equal(creditStageOf(0.001), 'normal');
+  assert.equal(creditStageOf(0.0009), 'exhausted');
+  assert.equal(creditStageOf(0), 'exhausted');
 });
 
 test('сторож: таймаут до первого токена, затем простой, непрерывный поток не обрывается', async () => {

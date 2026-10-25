@@ -65,3 +65,18 @@ test('прозрачность: модель называет себя и раз
   assert.match(mini, /"Ketner Mini"/);
   assert.equal(modelIdentityPrompt(modelRegistry.get('auto')!, 'ru'), '');
 });
+
+test('каталог /api/meta: цена запроса в кредитах, бесплатные модели без цены и режим Max дороже', () => {
+  const byId = (id: string) => MODEL_CATALOG.models.find((model) => model.id === id);
+  const mini = byId('ketner-mini');
+  const opus = byId('claude-opus-5.5');
+  assert.ok(mini?.requestCredits && mini.requestCredits > 0);
+  assert.ok(opus?.requestCredits && opus.requestCredits > mini.requestCredits);
+  assert.ok(opus.requestCreditsMax && opus.requestCreditsMax > opus.requestCredits);
+  assert.equal(mini?.free, undefined);
+  assert.equal(byId('auto')?.requestCredits, undefined);
+  for (const model of FREE_TIER_MODELS) {
+    assert.equal(model.free, true, model.id);
+    assert.equal(model.requestCredits, 0, model.id);
+  }
+});

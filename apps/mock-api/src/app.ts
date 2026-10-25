@@ -214,6 +214,7 @@ export function createApp(overrides: Partial<AppDeps> = {}): Express {
       subscriptionStore: deps.subscriptionStore,
       usageStore: deps.usageStore ?? defaultUsageStore,
       gateway: deps.agentGateway,
+      ...(deps.billingService ? { credits: deps.billingService.credits } : {}),
     }),
   );
 

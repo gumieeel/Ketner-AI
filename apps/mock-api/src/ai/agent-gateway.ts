@@ -1,29 +1,28 @@
 /**
  * Шлюз агента: ответы с вызовом инструментов для клиентов программирования (CLI `ketner`, IDE).
  *
- * Это отдельный от чата путь через те же правила экономики: тариф, месячный бюджет, квота
- * премиум-запросов, предохранитель по модели, учёт расходов по фактической цене OpenRouter.
+ * Это отдельный от чата путь через те же правила экономики: тариф, кредиты (один пул с чатом и
+ * Ketner Code), предохранитель по модели, учёт расходов по фактической цене OpenRouter.
  * Отличия от чата продиктованы работой агента:
  *  - историю ведёт клиент (сжимает контекст сам), сервер её не обрезает и не пересказывает;
  *  - в запросе нет проекта и вложений, инструменты объявляет клиент, исполняет тоже клиент;
  *  - кэш ответов не используется: ответ зависит от результатов инструментов;
  *  - запасная модель берётся только до первого отправленного клиенту фрагмента: иначе в
  *    ответе склеились бы два разных ответа;
- *  - лимит токенов в час и в сутки не применяется, суточный лимит расхода втрое выше чатового.
+ *  - лимит токенов в час и в сутки не применяется: расход ограничивают кредиты.
  *
  * Заглушек нет: без настроенного ключа OpenRouter клиент получает 503, а не выдуманный ответ.
  */
 
 import { ContextOptimizer } from './context.js';
 import type { ModelRegistryEntry, PlanId, ReasoningEffort } from './gateway-types.js';
-import { applyEconomyRules, isAllowedFallbackModel, type EconomyState } from './gateway.js';
 import { modelRegistry, type ModelRegistry, WORKHORSE_MODEL_ID } from './model-registry.js';
 import { PUBLIC_MODEL_IDS } from './models.js';
 import { providerManager, type ProviderManager } from './providers/provider-factory.js';
 import { OpenRouterError } from './providers/openrouter-provider.js';
 import { CircuitBreaker, defaultCircuitBreaker } from './circuit-breaker.js';
 import { computeRequestCost } from './engine-pricing.js';
-import { computeOutputCap, isPremiumClass, toProviderReasoning } from './reasoning-policy.js';
+import { computeOutputCap, toProviderReasoning } from './reasoning-policy.js';
 import { createStreamWatchdog, type WatchdogLimits } from './stream-watchdog.js';
 import { delay } from './stream.js';
 import {
@@ -38,15 +37,22 @@ import {
   type AgentToolDefinition,
 } from './agent/agent-types.js';
 import type { RequestedReasoningEffort } from './agent/openai-compat.js';
-import { evaluateBudget, type BudgetStage } from '../services/budget-policy.js';
 import {
-  getPremiumQuota,
-  planEntitlements,
-  settlePremiumCost,
-  type PlanBonusSource,
-} from '../services/premium-quota.js';
-import type { PremiumCreditSource } from '../store/premium-credit-store.js';
-import { EntitlementService, planRank } from '../services/entitlement.js';
+  canAfford,
+  creditStageOf,
+  isFreeModel,
+  pickAffordable,
+  type CreditStage,
+} from '../services/credit-policy.js';
+import type { CreditLedger } from '../services/credits.js';
+import { creditService } from '../billing/index.js';
+import {
+  EntitlementService,
+  planAllowsModel,
+  planRank,
+  toCredits,
+  CREDITS_PER_USD,
+} from '../services/entitlement.js';
 import { FairUseEngine } from '../services/fair-use.js';
 import type { UsageStore } from '../store/usage-store.js';
 
@@ -56,8 +62,6 @@ export const AGENT_MIN_PLAN: PlanId = 'plus';
 export const AGENT_DEFAULT_MODEL_ID = WORKHORSE_MODEL_ID;
 /** Потолок ответа агента относительно чатового: целые файлы не помещаются в чатовый потолок. */
 export const AGENT_OUTPUT_FACTOR = 2;
-/** Суточный лимит расхода агента относительно чатового. */
-export const AGENT_DAILY_COST_FACTOR = 3;
 
 /** Сроки сторожа для агента: размышления и большие файлы дольше, чем реплика чата. */
 export const AGENT_WATCHDOG_LIMITS: WatchdogLimits = {
@@ -115,7 +119,8 @@ export interface AgentSuccess {
   routingReason: string;
   usage: AgentProviderResult['usage'];
   costUsd: number;
-  budget: { stage: BudgetStage; usedPct: number; premiumAvailable: boolean };
+  /** Сколько кредитов списал запрос и сколько осталось после него. */
+  credits: { charged: number; balance: number; stage: CreditStage };
 }
 
 export type AgentOutcome = AgentSuccess | AgentFailure;
@@ -125,10 +130,8 @@ export interface AgentGatewayDeps {
   registry?: ModelRegistry;
   providers?: ProviderManager;
   circuitBreaker?: CircuitBreaker;
-  /** Кредиты докупленных пакетов; по умолчанию — общий журнал платежей. */
-  premiumCredits?: PremiumCreditSource;
-  /** Бонус к квоте за оплату криптой; по умолчанию — общий биллинг. */
-  planBonus?: PlanBonusSource;
+  /** Кредиты пользователей; по умолчанию — общий журнал биллинга. */
+  credits?: CreditLedger;
 }
 
 const fail = (
@@ -150,14 +153,14 @@ const EFFORT_INDEX: Record<AgentEffort, number> = { none: 0, low: 1, medium: 2, 
 const EFFORT_BY_INDEX: AgentEffort[] = ['none', 'low', 'medium', 'high'];
 
 /**
- * Глубина размышлений агента. Клиент просит уровень, сервер ограничивает его тарифом и бюджетом:
- * high стоит в 2.5–3.3 раза дороже low, поэтому он только у Ultra; на подходе бюджета к пределу
- * (soft и выше) глубина не выше low.
+ * Глубина размышлений агента. Клиент просит уровень, сервер ограничивает его тарифом и кредитами:
+ * high стоит в 2.5–3.3 раза дороже low, поэтому он только у Ultra; когда кредиты кончились и отвечает
+ * бесплатная модель, глубина не выше low.
  */
 export function chooseAgentEffort(
   requested: RequestedReasoningEffort,
   plan: string,
-  stage: BudgetStage,
+  stage: CreditStage,
 ): AgentEffort {
   const wanted: AgentEffort = requested === 'minimal' ? 'none' : requested;
   let index = EFFORT_INDEX[wanted];
@@ -232,25 +235,14 @@ export class AgentGateway {
   private readonly registry: ModelRegistry;
   private readonly providers: ProviderManager;
   private readonly circuitBreaker: CircuitBreaker;
-  private readonly premiumCredits?: PremiumCreditSource;
-  private readonly planBonus?: PlanBonusSource;
+  private readonly credits: CreditLedger;
 
   constructor(deps: AgentGatewayDeps) {
-    this.premiumCredits = deps.premiumCredits;
-    this.planBonus = deps.planBonus;
+    this.credits = deps.credits ?? creditService;
     this.usageStore = deps.usageStore;
     this.registry = deps.registry ?? modelRegistry;
     this.providers = deps.providers ?? providerManager;
     this.circuitBreaker = deps.circuitBreaker ?? defaultCircuitBreaker;
-  }
-
-  private quotaDeps() {
-    return {
-      usageStore: this.usageStore,
-      registry: this.registry,
-      credits: this.premiumCredits,
-      bonus: this.planBonus,
-    };
   }
 
   /** Публичные модели каталога для агента (без `auto`). */
@@ -291,28 +283,21 @@ export class AgentGateway {
     ];
   }
 
-  /** Сводка для `GET /v1/usage`: бюджет, квота премиум-запросов и число запросов за сутки. */
+  /** Сводка для `GET /v1/usage`: кредиты (остаток, выдача в месяц, срок) и число запросов за сутки. */
   summarizeUsage(userId: string, plan: PlanId) {
-    const entitlements = planEntitlements(userId, plan, this.quotaDeps());
+    const balance = this.credits.balance(userId, plan);
     const snapshot = this.usageStore.getFairUseSnapshot(userId);
-    const budget = evaluateBudget(snapshot.estimatedCostLastMonth, entitlements.costBudget);
-    const premium = getPremiumQuota(userId, plan, this.quotaDeps());
-    const round = (value: number): number => Math.round(value * 10_000) / 10_000;
     return {
       plan,
-      budget: {
-        limit_usd: entitlements.costBudget,
-        used_usd: round(snapshot.estimatedCostLastMonth),
-        used_pct: Math.round(budget.ratio * 1000) / 10,
-        stage: budget.stage,
-      },
-      premium: {
-        limit_usd: premium.budgetUsd,
-        used_usd: round(premium.spentUsd),
-        available: premium.available,
+      credits: {
+        balance: toCredits(balance.remainingUsd),
+        monthly: EntitlementService.getEntitlements(plan).monthlyCredits,
+        stage: creditStageOf(balance.remainingUsd),
+        next_expires_at: balance.nextExpiresAt,
+        next_expiring: toCredits(balance.nextExpiringUsd),
       },
       requests_last_day: snapshot.requestsLastDay,
-      window: 'rolling_30_days' as const,
+      period_days: 30 as const,
     };
   }
 
@@ -350,27 +335,12 @@ export class AgentGateway {
         'API для программирования доступен с тарифа Plus. Повысьте тариф в личном кабинете.',
       );
     }
-    const entitlements = planEntitlements(req.userId, plan, this.quotaDeps());
+    const entitlements = EntitlementService.getEntitlements(plan);
 
-    // 2. Бюджет: тот же месячный бюджет себестоимости, что и в чате.
+    // 2. Кредиты: тот же пул, что у чата. Когда они кончились, отвечает бесплатная модель агента.
     const snapshot = this.usageStore.getFairUseSnapshot(req.userId);
-    const budget = evaluateBudget(snapshot.estimatedCostLastMonth, entitlements.costBudget);
-    const stage = budget.stage;
-    if (stage === 'hard_stop') {
-      this.recordRefused(req, req.model, 'rate_limited', startTime);
-      return fail(
-        429,
-        'insufficient_quota',
-        'Ресурсная квота тарифа на этот период исчерпана. Она восстанавливается постепенно; для большей квоты повысьте тариф.',
-      );
-    }
-
-    const premium = getPremiumQuota(req.userId, plan, this.quotaDeps());
-    const economyState: EconomyState = {
-      stage,
-      premiumAvailable: premium.baseAvailable,
-      creditsAvailable: premium.creditsUsd > 0,
-    };
+    const balanceUsd = this.credits.balance(req.userId, plan).remainingUsd;
+    const stage = creditStageOf(balanceUsd);
 
     // 3. Модель: только публичный каталог; права проверяются по запрошенной модели до замен.
     let requested: ModelRegistryEntry;
@@ -395,10 +365,15 @@ export class AgentGateway {
         );
       }
     }
-    const economy = applyEconomyRules(requested, economyState, this.registry);
-    const target = economy.model;
+    const affordable = pickAffordable(requested, {
+      balanceUsd,
+      plan,
+      surface: 'code',
+      registry: this.registry,
+    });
+    const target = affordable.model;
     const routingReason =
-      economy.reason ??
+      affordable.reason ??
       (req.model === 'auto'
         ? `Auto: ${requested.name}`
         : `Explicit user model selection (${requested.name})`);
@@ -407,7 +382,11 @@ export class AgentGateway {
     const promptTokens = estimateAgentPromptTokens(req.messages, req.tools);
     const chain = this.registry
       .getFallbackChain(target.id)
-      .filter((m, index) => index === 0 || isAllowedFallbackModel(m, plan, economyState));
+      .filter(
+        (m, index) =>
+          index === 0 ||
+          ((isFreeModel(m) || planAllowsModel(plan, m.requiredPlan)) && canAfford(m, balanceUsd)),
+      );
     const candidates = chain.filter((m) => promptTokens < m.contextWindow);
     if (candidates.length === 0) {
       return fail(
@@ -417,11 +396,8 @@ export class AgentGateway {
       );
     }
 
-    // 5. Лимиты запросов и расхода (токенные окна чата для агента не действуют).
-    const decision = FairUseEngine.evaluate(snapshot, plan, 'ru', {
-      skipTokenWindows: true,
-      dailyCostFactor: AGENT_DAILY_COST_FACTOR,
-    });
+    // 5. Лимиты запросов (токенные окна чата для агента не действуют).
+    const decision = FairUseEngine.evaluate(snapshot, plan, 'ru', { skipTokenWindows: true });
     if (decision.action === 'deny') {
       const isConcurrency = decision.code === 'concurrency_limit';
       this.recordRefused(
@@ -430,7 +406,7 @@ export class AgentGateway {
         isConcurrency ? 'concurrency_limited' : 'rate_limited',
         startTime,
       );
-      const retryAfter = isConcurrency ? 5 : decision.code === 'fair_use_exceeded' ? 3600 : 300;
+      const retryAfter = isConcurrency ? 5 : 300;
       return fail(429, 'rate_limit_exceeded', decision.reason, retryAfter);
     }
     if (decision.action === 'throttle') {
@@ -441,10 +417,8 @@ export class AgentGateway {
     try {
       return await this.execute(req, callbacks, {
         plan,
-        fundedByCredits: Boolean(economy.fundedByCredits),
         entitlements,
         stage,
-        economyState,
         requested,
         target,
         candidates,
@@ -466,10 +440,8 @@ export class AgentGateway {
     callbacks: AgentRunCallbacks,
     ctx: {
       plan: PlanId;
-      fundedByCredits: boolean;
       entitlements: ReturnType<typeof EntitlementService.getEntitlements>;
-      stage: BudgetStage;
-      economyState: EconomyState;
+      stage: CreditStage;
       requested: ModelRegistryEntry;
       target: ModelRegistryEntry;
       candidates: ModelRegistryEntry[];
@@ -617,7 +589,7 @@ export class AgentGateway {
 
     if (!result) {
       if (isCancelled()) {
-        this.recordUsage(
+        const charged = this.recordUsage(
           req,
           ctx,
           usedModel,
@@ -639,6 +611,7 @@ export class AgentGateway {
             usage: { inputTokens: 0, outputTokens: 0 },
           },
           0,
+          charged,
         );
       }
       this.recordUsage(req, ctx, target, usedEngineId, null, 0, 'error', null, latencyMs());
@@ -684,7 +657,7 @@ export class AgentGateway {
       finishReason = 'length';
     }
 
-    this.recordUsage(
+    const charged = this.recordUsage(
       req,
       ctx,
       usedModel,
@@ -695,12 +668,13 @@ export class AgentGateway {
       firstEventMs,
       latencyMs(),
     );
-    return this.buildSuccess(req, ctx, usedModel, { ...result, finishReason }, costUsd);
+    return this.buildSuccess(req, ctx, usedModel, { ...result, finishReason }, costUsd, charged);
   }
 
+  /** Записывает расход и списывает его с кредитов; возвращает, сколько списано ($). */
   private recordUsage(
     req: AgentRunRequest,
-    ctx: { conversationId: string; plan: PlanId; fundedByCredits: boolean },
+    ctx: { conversationId: string; plan: PlanId },
     model: ModelRegistryEntry,
     _engineId: string | undefined,
     result: AgentProviderResult | null,
@@ -708,19 +682,15 @@ export class AgentGateway {
     status: 'success' | 'cancelled' | 'error',
     ttftMs: number | null,
     latencyMs: number,
-  ): void {
-    // Премиум-запрос сверх квоты тарифа (или за счёт пакета) списывается с кредитов пакетов.
-    const premium = isPremiumClass(model.costClass);
-    const premiumCreditUsd = premium
-      ? settlePremiumCost(req.userId, ctx.plan, costUsd, ctx.fundedByCredits, this.quotaDeps())
-      : 0;
+  ): number {
+    // Кредиты списываются по реальной цене ответа; бесплатная модель ничего не стоит.
+    const creditsUsd = isFreeModel(model) ? 0 : this.credits.charge(req.userId, costUsd);
     this.usageStore.recordUsage({
       userId: req.userId,
       conversationId: ctx.conversationId,
       modelId: model.id,
       provider: result?.via ?? model.provider,
-      premiumCreditUsd,
-      ...(premium && ctx.fundedByCredits ? { fundedBy: 'credits' as const } : {}),
+      creditsUsd,
       inputTokens: result?.usage.inputTokens ?? 0,
       outputTokens: result?.usage.outputTokens ?? 0,
       cachedTokens: result?.usage.cachedTokens,
@@ -732,6 +702,7 @@ export class AgentGateway {
       status,
       source: 'provider',
     });
+    return creditsUsd;
   }
 
   private buildSuccess(
@@ -745,11 +716,10 @@ export class AgentGateway {
     usedModel: ModelRegistryEntry,
     result: AgentProviderResult,
     costUsd: number,
+    chargedUsd: number,
   ): AgentSuccess {
-    // Бюджет после записи расхода: клиент видит, сколько осталось именно сейчас.
-    const snapshot = this.usageStore.getFairUseSnapshot(req.userId);
-    const after = evaluateBudget(snapshot.estimatedCostLastMonth, ctx.entitlements.costBudget);
-    const premium = getPremiumQuota(req.userId, ctx.plan, this.quotaDeps());
+    // Остаток после списания: клиент видит, сколько кредитов осталось именно сейчас.
+    const balance = this.credits.balance(req.userId, ctx.plan);
     return {
       kind: 'ok',
       content: result.content,
@@ -763,10 +733,10 @@ export class AgentGateway {
           : ctx.routingReason,
       usage: result.usage,
       costUsd,
-      budget: {
-        stage: after.stage,
-        usedPct: Math.round(after.ratio * 1000) / 10,
-        premiumAvailable: premium.available,
+      credits: {
+        charged: Math.round(chargedUsd * CREDITS_PER_USD * 10) / 10,
+        balance: toCredits(balance.remainingUsd),
+        stage: creditStageOf(balance.remainingUsd),
       },
     };
   }

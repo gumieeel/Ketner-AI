@@ -442,7 +442,8 @@ export interface KetnerExtension {
   cost_usd: number;
   requested_model: string;
   routing_reason: string;
-  budget: { stage: string; used_pct: number; premium_available: boolean };
+  /** Кредиты: сколько списал запрос (с десятыми) и сколько осталось. */
+  credits: { charged: number; balance: number; stage: string };
 }
 
 export type OpenAiFinishReason = 'stop' | 'length' | 'tool_calls';

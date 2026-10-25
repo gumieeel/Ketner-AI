@@ -18,7 +18,7 @@ import type {
   ReasoningEffort,
   ReasoningMode,
 } from './gateway-types.js';
-import type { BudgetStage } from '../services/budget-policy.js';
+import type { CreditStage } from '../services/credit-policy.js';
 import { planRank } from '../services/entitlement.js';
 
 export type PromptLevel = 'simple' | 'moderate' | 'complex';
@@ -31,7 +31,7 @@ const PREMIUM_CLASSES: ReadonlySet<ModelCostClass> = new Set<ModelCostClass>(['s
  * Категории, где глубина размышлений заметно влияет на правильность ответа. Только математика:
  * код и так идёт на сильную модель, а «рассуждения» классификатор отмечает по ключевым словам
  * («объясни», «почему», «сравни»), то есть почти любой вопрос. Глубина high стоит в 2.5–3.3 раза
- * дороже low, и тратить на каждое «объясни» квоту премиум-запросов тарифа нельзя.
+ * дороже low, и тратить на каждое «объясни» кредиты пользователя нельзя.
  */
 const HARD_CATEGORIES: ReadonlySet<string> = new Set(['math']);
 
@@ -39,7 +39,7 @@ export interface EffortInput {
   level: PromptLevel;
   category: string;
   plan: string;
-  stage: BudgetStage;
+  stage: CreditStage;
   costClass: ModelCostClass;
   /**
    * Пользователи часто ставят дизлайк на быстрые ответы лёгких моделей: поднимаем глубину на шаг.
@@ -57,7 +57,7 @@ export interface EffortInput {
  *   complex  → medium
  *   complex  → high   только если глубина реально окупается: Ultra на top-модели
  *                     либо математика на премиум-модели у Pro и выше.
- * При расходе бюджета (soft и выше) глубина ограничивается уровнем low.
+ * Когда кредиты кончились (отвечает бесплатная модель), глубина ограничивается уровнем low.
  */
 export function chooseReasoningEffort(input: EffortInput): ReasoningEffort {
   let index = input.level === 'simple' ? 0 : input.level === 'moderate' ? 1 : 2;
@@ -144,25 +144,16 @@ export function effectiveReasoningMode(
 
 /**
  * Глубина для модели с фиксированным профилем (модели Pro и Ultra): standard — medium, max — xhigh,
- * у моделей вроде «Grok 4.7 xhigh» оба режима одинаковые. При расходе бюджета (80%+) глубина не выше
- * low: экономия важнее, а цена размышлений растёт с глубиной в разы.
+ * у моделей вроде «Grok 4.7 xhigh» оба режима одинаковые. Когда кредиты кончились, глубина не выше
+ * low: цена размышлений растёт с глубиной в разы.
  */
 export function profileEffort(
   profile: EffortProfile,
   mode: ReasoningMode,
-  stage: BudgetStage,
+  stage: CreditStage,
 ): ReasoningEffort {
   const effort = mode === 'max' ? profile.max : profile.standard;
   return stage === 'normal' ? effort : 'low';
-}
-
-/**
- * Сколько единиц суточного лимита стоит запрос: режим Max поднимает глубину профиля
- * (medium → xhigh), запрос дорожает примерно в 2.4 раза и считается за 2.
- */
-export function limitUnitsFor(profile: EffortProfile | undefined, mode: ReasoningMode): number {
-  if (!profile || mode !== 'max') return 1;
-  return ORDER.indexOf(profile.max) > ORDER.indexOf(profile.standard) ? 2 : 1;
 }
 
 export function isPremiumClass(costClass: ModelCostClass): boolean {
@@ -174,7 +165,7 @@ export interface OutputCapInput {
   planMaxTokens: number;
   /** Потолок выходных токенов самой модели. */
   modelMaxOutputTokens: number;
-  stage: BudgetStage;
+  stage: CreditStage;
   level: PromptLevel;
   /** К запросу приложен проект или файлы: ответ может быть большим. */
   heavyContext: boolean;
@@ -188,15 +179,14 @@ const MIN_OUTPUT_CAP = 1024;
 /**
  * Предельное число выходных токенов (размышления входят в него).
  *
- * Выходные токены — самая дорогая часть запроса, поэтому потолок следует за расходом бюджета:
- * в экономном режиме ответ не длиннее 4096 токенов, при исчерпании бюджета — 2048. Простой
+ * Выходные токены — самая дорогая часть запроса, поэтому потолок следует за кредитами: когда они
+ * кончились, ответ бесплатной модели не длиннее 2048 токенов. Простой
  * вопрос без проекта и файлов тоже не требует длинного ответа. Платится только фактически
  * сгенерированное, потолок защищает от самого дорогого сценария: модель, которая «разговорилась».
  */
 export function computeOutputCap(input: OutputCapInput): number {
   let cap = Math.min(input.modelMaxOutputTokens, input.planMaxTokens);
-  if (input.stage === 'soft') cap = Math.min(cap, 4096);
-  if (input.stage === 'exhausted' || input.stage === 'hard_stop') cap = Math.min(cap, 2048);
+  if (input.stage === 'exhausted') cap = Math.min(cap, 2048);
   const deepReasoning =
     input.effort !== undefined && ORDER.indexOf(input.effort) >= ORDER.indexOf('high');
   if (input.level === 'simple' && !input.heavyContext && !deepReasoning) cap = Math.min(cap, 2048);

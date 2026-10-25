@@ -14,6 +14,8 @@ import { createApiKeyStore, type ApiKeyStore } from '../store/api-key-store.js';
 import { createRevokedTokenStore } from '../store/revoked-token-store.js';
 import { UsageStore } from '../store/usage-store.js';
 import { createInvoiceStore } from '../store/invoice-store.js';
+import { BillingService, createBillingLedger } from '../billing/billing-service.js';
+import type { CreditService } from '../services/credits.js';
 import {
   createGithubConnectionStore,
   type GithubConnectionStore,
@@ -46,6 +48,8 @@ export interface TestServer {
   githubConnectionStore: GithubConnectionStore;
   /** Письма с кодами регистрации, входа и сброса пароля. */
   codeMails: MailMessage[];
+  /** Кредиты этого сервера (в памяти): тесты выдают и списывают их напрямую. */
+  credits: CreditService;
 }
 
 /** Поднимает приложение на свободном порту с временным файлом хранилища. */
@@ -80,6 +84,18 @@ export async function startTestServer(
   });
 
   const testCompareVotes = new CompareVoteStore(join(tempDir, 'compare-votes.json'));
+  const testUserStore = extra.userStore ?? createUserStore(userStoreFile);
+  const testSubscriptionStore =
+    extra.subscriptionStore ?? createSubscriptionStore(subscriptionStoreFile);
+  // Кредиты и платежи каждого тестового сервера живут в памяти: общий журнал на диске не трогаем.
+  const testBilling =
+    extra.billingService ??
+    new BillingService({
+      userStore: testUserStore,
+      subscriptionStore: testSubscriptionStore,
+      usageStore: extra.usageStore ?? testUsageStore,
+      ledger: createBillingLedger(),
+    });
   const testAi: AiConfig = { ...FAST_AI, ...ai };
   // Тесты не ходят к настоящим моделям, даже если в .env разработчика есть ключ OpenRouter:
   // шаблонный движок включён явно, а не угадывается по нулевым задержкам.
@@ -87,6 +103,7 @@ export async function startTestServer(
     usageStore: extra.usageStore ?? testUsageStore,
     aiConfig: testAi,
     useMockEngine: true,
+    credits: testBilling.credits,
   });
 
   // Письма с кодом регистрации и входа перехватываются (их читают signupAndVerify / loginAndVerify),
@@ -106,8 +123,9 @@ export async function startTestServer(
 
   const app = createApp({
     store: createConversationStore(storeFile),
-    userStore: createUserStore(userStoreFile),
-    subscriptionStore: createSubscriptionStore(subscriptionStoreFile),
+    userStore: testUserStore,
+    subscriptionStore: testSubscriptionStore,
+    billingService: testBilling,
     usageStore: testUsageStore,
     apiKeyStore: testApiKeyStore,
     githubConnectionStore: testGithubStore,
@@ -131,6 +149,7 @@ export async function startTestServer(
   return {
     baseUrl,
     codeMails,
+    credits: testBilling.credits,
     usageStore: extra.usageStore ?? testUsageStore,
     compareVotes: extra.compareVoteStore ?? testCompareVotes,
     apiKeyStore: extra.apiKeyStore ?? testApiKeyStore,

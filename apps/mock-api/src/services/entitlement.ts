@@ -58,34 +58,28 @@ const LEGACY_PRO_BASE: Omit<PlanEntitlements, 'planId'> = {
   contextLimit: 120,
   maxTokens: 12288,
   streamingEnabled: true,
-  // Legacy Pro: 1199 ₽ ≈ $12.62, бюджет $5.00 ≈ 40% (новых оплат по старой цене нет).
-  maxDailyCost: 0.6,
-  costBudget: 5.0,
-  premiumBudget: 1.8,
+  // Legacy Pro: 1199 ₽ ≈ $12.62, 5 000 кредитов ($5.00) ≈ 40% (новых оплат по старой цене нет).
+  monthlyCredits: 5_000,
 };
 
 /**
  * Экономика тарифов. Цены в долларах: Plus $9, Pro $25, Ultra $49 (services/pricing.ts).
- * Расходы считаются за скользящие 30 дней. Полный расчёт: docs/models-and-pricing.md.
+ * Полный расчёт: docs/models-and-pricing.md.
  *
- * costBudget — потолок расхода на модели за 30 дней. Это 31% цены у Plus и 40–41% у Pro и Ultra:
- * из остального идут налог (~6%), эквайринг (Stripe ≈ 4% + $0.30, крипта ≈ 2%, Telegram Stars
- * отдаёт только ≈ $0.013 за звезду, то есть ≈ 72% цены), комиссия OpenRouter за пополнение
- * (5.5% от расхода), субсидия Free-тира (≈ $3 на платящего при конверсии 5%) и прибыль.
- * Поведение при подходе к потолку: 80% — экономный режим, 100% — только лёгкие модели,
- * 125% — отказ (services/budget-policy.ts), поэтому 1.25 × costBudget — жёсткий предел расхода.
+ * Тариф даёт кредиты на 30 дней (`monthlyCredits`), один пул на чат, картинки и Ketner Code.
+ * 1 кредит = $0.001 реальной себестоимости (services/credits.ts): запрос списывает ровно столько,
+ * сколько он стоил провайдеру. Кредитов дано на 33% цены у Plus и 44–45% у Pro и Ultra: из остального
+ * идут налог (~6%), эквайринг (Stripe ≈ 4% + $0.30, крипта ≈ 2%, Telegram Stars отдаёт ≈ 65% цены),
+ * комиссия OpenRouter за пополнение (5.5% от расхода), субсидия Free-тира и прибыль. Кредиты
+ * кончились — отвечает бесплатная модель, кредиты не тратятся, платные модели недоступны до обновления.
+ * Остаток не сгорает в конце периода и переносится на один следующий период.
  *
- * premiumBudget — часть costBudget на премиум-модели (классы strong и top, см. ModelCostClass).
- * Ориентиры по запросам в месяц при 7.6k токенов на входе:
- *   Plus  $1.30 ≈ 49 запросов GPT-6.1 Sol (низкая глубина размышлений; в сутки Sol ограничен 2 запросами);
- *   Pro   $7.00 ≈ 200 запросов Sonnet 5.5 или 100 запросов Opus 5.5 (medium);
- *   Ultra $15.00 ≈ 213 запросов Opus (medium) или 88 в режиме Max (xhigh).
- * Квота — главный ресурс Pro и Ultra, поэтому она больше половины бюджета (до 75%). Остаток costBudget
- * ($3 и $5) — на Ketner Pro и лёгкие модели: при $0.005 за запрос это 600–1 000 запросов. Общий бюджет
- * не менялся, поэтому худший случай по марже тот же. Суточные лимиты моделей: services/daily-limits.ts.
+ * Остальные поля — технические лимиты честного использования (запросы в минуту/час/сутки, токены,
+ * параллелизм): они защищают сервис от злоупотреблений и на расход кредитов не влияют.
  *
- * Тест services/currency.test.ts проверяет, что при любых изменениях бюджетов тариф не уходит в
- * минус в худшем случае (125% бюджета, доля Free-тира) ни в одном канале оплаты (services/margin.ts).
+ * Тест services/currency.test.ts проверяет, что при любых изменениях выдачи тариф не уходит в
+ * минус в худшем случае (потрачены все кредиты, доля Free-тира) ни в одном канале оплаты
+ * (services/margin.ts).
  */
 export const PLAN_ENTITLEMENTS: Record<PlanId, PlanEntitlements> = {
   free: {
@@ -105,11 +99,9 @@ export const PLAN_ENTITLEMENTS: Record<PlanId, PlanEntitlements> = {
     maxTokens: 2048,
     streamingEnabled: true,
     // Free идёт на бесплатные :free-эндпоинты (ai/plan-substitute.ts), платный GPT-6 Luna — только запасной
-    // при отказе общего пула OpenRouter. Худший случай: GPT-6 Luna без размышлений ≈ $0.001–0.0013 за запрос → 10 сообщений в день ≈ $0.3–0.4
-    // в месяц в худшем случае; средний пользователь тратит в 3–5 раз меньше. Премиум-моделей нет.
-    maxDailyCost: 0.03,
-    costBudget: 0.3,
-    premiumBudget: 0,
+    // при отказе общего пула OpenRouter. 300 кредитов ($0.30) — это худший случай: 10 сообщений в день
+    // на GPT-6 Luna стоят ≈ $0.3–0.4 в месяц, средний пользователь тратит в 3–5 раз меньше.
+    monthlyCredits: 300,
   },
   plus: {
     planId: 'plus',
@@ -125,13 +117,9 @@ export const PLAN_ENTITLEMENTS: Record<PlanId, PlanEntitlements> = {
     contextLimit: 60,
     maxTokens: 6144,
     streamingEnabled: true,
-    // Plus: $9 → бюджет $3.00 (33%): самый тесный тариф, из-за Free-субсидии и комиссии Stripe $0.30.
-    // В худшем случае (весь бюджет, Stripe, Free-тир по старой оценке $3.01) маржа ≈ 18%, на 125% ≈ 9%.
-    maxDailyCost: 0.35,
-    costBudget: 3.0,
-    // Премиум-квота $1.30 (потолок: половина costBudget, см. currency.test): ≈ 49 запросов Sol в месяц
-    // при лимите 2 в сутки. Общий costBudget не менялся, поэтому худший случай по марже прежний.
-    premiumBudget: 1.3,
+    // Plus: $9 → 3 000 кредитов ($3.00, 33%): самый тесный тариф, из-за Free-субсидии и комиссии Stripe
+    // $0.30. В худшем случае (все кредиты потрачены, Stripe, Free-тир по старой оценке $3.01) маржа ≈ 18%.
+    monthlyCredits: 3_000,
   },
   pro: {
     planId: 'pro',
@@ -147,13 +135,9 @@ export const PLAN_ENTITLEMENTS: Record<PlanId, PlanEntitlements> = {
     contextLimit: 120,
     maxTokens: 12288,
     streamingEnabled: true,
-    // Pro: $25 → бюджет $11.00 (44%), из них $8 — квота премиум-моделей. Худший случай (Stripe, Free-тир):
-    // маржа ≈ 30% на 100% бюджета и ≈ 19% на 125%. Дневной потолок $2.20 не ниже
-    // бюджета одного запуска агента ($2): иначе задача на GPT-6 Astra обрывалась бы на полпути.
-    // Месячный бюджет прежний, поэтому худший случай по марже не меняется.
-    maxDailyCost: 2.2,
-    costBudget: 11.0,
-    premiumBudget: 8.0,
+    // Pro: $25 → 11 000 кредитов ($11.00, 44%). Худший случай (Stripe, Free-тир): маржа ≈ 30%.
+    // Одного запуска агента ($2, services/code-limits.ts) хватает за счёт кредитов с запасом.
+    monthlyCredits: 11_000,
   },
   ultra: {
     planId: 'ultra',
@@ -169,12 +153,9 @@ export const PLAN_ENTITLEMENTS: Record<PlanId, PlanEntitlements> = {
     contextLimit: 500,
     maxTokens: 16384,
     streamingEnabled: true,
-    // Ultra: $49 → бюджет $22.00 (44.9%), из них $16.50 — квота премиум-моделей (режим Max тратит
-    // её быстрее). Худший случай (Stripe, Free-тир): маржа ≈ 36% на 100% бюджета и ≈ 24% на 125%.
-    // Дневной потолок $4.40 не ниже бюджета запуска агента ($3).
-    maxDailyCost: 4.4,
-    costBudget: 22.0,
-    premiumBudget: 16.5,
+    // Ultra: $49 → 22 000 кредитов ($22.00, 44.9%). Режим Max тратит кредиты быстрее: модели думают
+    // глубже. Худший случай (Stripe, Free-тир): маржа ≈ 36%.
+    monthlyCredits: 22_000,
   },
   // ── Legacy-планы для обратной совместимости ──
   'gpt-pro': { planId: 'gpt-pro', ...LEGACY_PRO_BASE },
@@ -183,26 +164,39 @@ export const PLAN_ENTITLEMENTS: Record<PlanId, PlanEntitlements> = {
 };
 
 /**
- * Бонус за оплату тарифа криптовалютой (Trybit): +15% к квоте премиум-моделей `premiumBudget` на
- * оплаченный период, и на ту же сумму растёт `costBudget` (иначе бонусная квота съедала бы бюджет
- * рабочих моделей и раньше включала экономный режим).
+ * Бонус за оплату тарифа криптовалютой (Trybit): отдельный грант кредитов на тот же срок, что и
+ * основной. Размер — 15% от прежней квоты премиум-моделей: Plus +200, Pro +1 200, Ultra +2 480.
  *
- * Откуда деньги: Telegram Stars отдаёт ≈ 72% цены, крипта ≈ 98% (services/pricing.ts →
- * PAYMENT_NET_SHARE). Бонус стоит 15% × premiumBudget × 1.055 (Pro ≈ $1.27, Ultra ≈ $2.61, даже на
- * пределе 125% — $1.58 и $3.26), а разница комиссий — 26% цены (Pro ≈ $6.1, Ultra ≈ $12):
- * оплата криптой с бонусом остаётся выгоднее для нас, чем оплата звёздами без него.
- * Проверка: services/currency.test.ts.
+ * Откуда деньги: Telegram Stars отдаёт ≈ 65% цены, крипта ≈ 98% (services/pricing.ts →
+ * PAYMENT_NET_SHARE). Бонус стоит не больше $2.48 × 1.055 ≈ $2.62 (Ultra), а разница комиссий — около
+ * 33% цены (Pro ≈ $8, Ultra ≈ $16): оплата криптой с бонусом остаётся выгоднее для нас, чем оплата
+ * звёздами без него. Проверка: services/currency.test.ts.
  */
-export const CRYPTO_PREMIUM_BONUS = 0.15;
+export const CRYPTO_BONUS_CREDITS: Readonly<Record<string, number>> = {
+  plus: 200,
+  pro: 1_200,
+  ultra: 2_480,
+  'gpt-pro': 270,
+  'claude-pro': 270,
+  'gemini-pro': 270,
+};
 
-/** Права тарифа с бонусом за оплату криптой (см. CRYPTO_PREMIUM_BONUS). */
-export function withCryptoBonus(entitlements: PlanEntitlements): PlanEntitlements {
-  const bonus = Math.round(entitlements.premiumBudget * CRYPTO_PREMIUM_BONUS * 100) / 100;
-  return {
-    ...entitlements,
-    premiumBudget: entitlements.premiumBudget + bonus,
-    costBudget: entitlements.costBudget + bonus,
-  };
+/** Сколько бонусных кредитов даёт оплата тарифа криптой (0 — бонуса нет). */
+export function cryptoBonusCredits(planId: PlanId | string): number {
+  return CRYPTO_BONUS_CREDITS[planId] ?? 0;
+}
+
+/** Сколько кредитов в одном долларе себестоимости: 1 кредит = $0.001. */
+export const CREDITS_PER_USD = 1000;
+
+/** Кредиты (целые) из долларов себестоимости. */
+export const toCredits = (usd: number): number => Math.floor(usd * CREDITS_PER_USD + 1e-6);
+/** Доллары себестоимости из кредитов. */
+export const toUsd = (credits: number): number => credits / CREDITS_PER_USD;
+
+/** Месячная выдача тарифа, $ себестоимости. */
+export function planCreditsUsd(planId: PlanId | string): number {
+  return toUsd((PLAN_ENTITLEMENTS[planId as PlanId] ?? PLAN_ENTITLEMENTS.free).monthlyCredits);
 }
 
 export class EntitlementService {
@@ -217,25 +211,9 @@ export class EntitlementService {
     return userPlan ?? 'free';
   }
 
-  /**
-   * Получить права доступа для тарифа. `cryptoBonus` — текущий период тарифа оплачен криптой
-   * (тогда квота премиум-моделей и бюджет больше, см. CRYPTO_PREMIUM_BONUS).
-   */
-  static getEntitlements(
-    planId: PlanId,
-    options: { cryptoBonus?: boolean } = {},
-  ): PlanEntitlements {
-    const base = PLAN_ENTITLEMENTS[planId] ?? PLAN_ENTITLEMENTS.free;
-    return options.cryptoBonus && base.premiumBudget > 0 ? withCryptoBonus(base) : base;
-  }
-
-  /**
-   * Phase 3: Динамический пересчёт или обновление costBudget тарифа по эмпирическим данным.
-   */
-  static updatePlanCostBudget(planId: PlanId, newBudget: number): void {
-    if (PLAN_ENTITLEMENTS[planId]) {
-      PLAN_ENTITLEMENTS[planId].costBudget = Math.max(0.01, newBudget);
-    }
+  /** Получить права доступа для тарифа (неизвестный тариф считается Free). */
+  static getEntitlements(planId: PlanId): PlanEntitlements {
+    return PLAN_ENTITLEMENTS[planId] ?? PLAN_ENTITLEMENTS.free;
   }
 
   /**

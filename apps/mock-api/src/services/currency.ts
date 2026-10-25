@@ -46,9 +46,9 @@ export class CurrencyService {
   }
 
   /**
-   * Предельный бюджет себестоимости AI для тарифа.
+   * Бюджет себестоимости AI для тарифа (из него выводится месячная выдача кредитов).
    *
-   * Формула: costBudget = priceMonthlyUsd * targetCostRatio. Доля 0.31–0.41 цены оставляет
+   * Формула: бюджет = priceMonthlyUsd * targetCostRatio. Доля 0.31–0.41 цены оставляет
    * на эквайринг и налоги ≈10–13% (для Stars до 28%), на комиссию OpenRouter 5.5% от расхода,
    * на субсидию Free-тира и прибыль остальное (расчёт в docs/models-and-pricing.md).
    */

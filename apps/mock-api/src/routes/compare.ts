@@ -10,8 +10,7 @@ import { EntitlementService } from '../services/entitlement.js';
 import { resolveChatIdentity } from '../services/chat-identity.js';
 import { maxCompareModels, parseCompareModelIds } from '../services/compare-policy.js';
 import { isAdminUser } from '../services/vip.js';
-import type { PremiumCreditSource } from '../store/premium-credit-store.js';
-import type { PlanBonusSource } from '../services/premium-quota.js';
+import type { CreditLedger } from '../services/credits.js';
 import type { ConversationStore } from '../store/conversation-store.js';
 import { compareRunStore, type CompareRunStore } from '../store/compare-run-store.js';
 import type {
@@ -54,8 +53,8 @@ export interface CompareRouterDeps {
   usageStore?: UsageStore;
   gateway?: AIGateway;
   feedbackStore?: FeedbackStore;
-  premiumCredits?: PremiumCreditSource;
-  planBonus?: PlanBonusSource;
+  /** Кредиты пользователей; по умолчанию — общий журнал биллинга. */
+  credits?: CreditLedger;
   runs?: CompareRunStore;
   votes?: CompareVoteStore;
 }
@@ -75,8 +74,8 @@ function text(language: Language, ru: string, en: string): string {
 /**
  * Сравнение ответов нескольких моделей на один вопрос.
  *
- * Каждая колонка — обычный запрос через тот же шлюз: те же права, лимиты модели, квота премиум-
- * запросов, бюджет тарифа и учёт расхода. Отличие одно: подмена модели запрещена (`strictModel`),
+ * Каждая колонка — обычный запрос через тот же шлюз: те же права, технические лимиты, списание
+ * кредитов и учёт расхода. Отличие одно: подмена модели запрещена (`strictModel`),
  * поэтому колонка либо отвечает выбранной моделью, либо показывает причину отказа.
  *
  * Поток SSE (события с префиксом `compare_`):
@@ -98,8 +97,7 @@ export function createCompareRouter({
   usageStore = defaultUsageStore,
   gateway,
   feedbackStore = defaultFeedbackStore,
-  premiumCredits,
-  planBonus,
+  credits,
   runs = compareRunStore,
   votes = compareVoteStore,
 }: CompareRouterDeps): Router {
@@ -110,8 +108,7 @@ export function createCompareRouter({
       usageStore,
       aiConfig: ai,
       feedbackStore,
-      premiumCredits,
-      planBonus,
+      credits,
     });
 
   /** Один запуск сравнения на человека: иначе он занял бы все параллельные запросы тарифа. */

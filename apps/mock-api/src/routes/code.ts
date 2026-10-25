@@ -11,9 +11,8 @@ import {
   runReviewTask,
   type ReviewedChange,
 } from '../services/answer-review.js';
-import type { PlanBonusSource } from '../services/premium-quota.js';
 import { pickReviewers } from '../services/review-policy.js';
-import type { PremiumCreditSource } from '../store/premium-credit-store.js';
+import type { CreditLedger } from '../services/credits.js';
 import { reviewQuota, sendReviewLimit } from './review.js';
 import { openSse } from './sse.js';
 import { sendError } from '../middleware/errors.js';
@@ -58,8 +57,8 @@ export interface CodeRouterDeps {
   githubTokenOf?: (userId: string) => string | undefined;
   /** Шлюз чата: через него идёт ревью правок моделью другой компании. */
   gateway?: AIGateway;
-  premiumCredits?: PremiumCreditSource;
-  planBonus?: PlanBonusSource;
+  /** Кредиты пользователей; по умолчанию — общий журнал биллинга. */
+  credits?: CreditLedger;
 }
 
 type ToolThreadItem = Extract<ThreadItem, { kind: 'tool' }>;
@@ -138,8 +137,7 @@ export function createCodeRouter(deps: CodeRouterDeps): Router {
     new AIGateway({
       usageStore,
       aiConfig: config.ai,
-      premiumCredits: deps.premiumCredits,
-      planBonus: deps.planBonus,
+      credits: deps.credits,
     });
   const runKey = (userId: string, projectId: string): string => `${userId}:${projectId}`;
 

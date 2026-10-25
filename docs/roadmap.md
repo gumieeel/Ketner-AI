@@ -21,7 +21,7 @@
 
 10. **Оплата картой (владелец + код).** Сейчас только криптовалюта и звёзды — большинство людей так не платит. Нужен эквайринг под юрлицо и рынок: Stripe (код почти готов), ЮKassa или CloudPayments, либо merchant of record (Paddle, Lemon Squeezy, Lava).
 11. **Поведение при неоплате и отмене (код).** Нет писем и напоминаний об окончании срока на сайте (только напоминание об автопродлении звёздами в боте).
-12. **Почистить мёртвые каналы (код):** после 17.11.2026 — остатки пакетов премиум-квоты (сняты с продажи 18.10.2026): `PREMIUM_PACKS`, `premium-credit-store`, ветки `packId` в `billing-service`, `telegram/bot.ts`, `routes/billing.ts` ([models-and-pricing.md](models-and-pricing.md)); а также маршруты и тексты СБП, тестовые эндпоинты `simulate-*`, старые имена `CRYPTOCLOUD_*` в `render.yaml` и `.env.example`.
+12. **Почистить мёртвые каналы (код):** после 17.11.2026 — остатки пакетов премиум-квоты (сняты с продажи 18.10.2026): `PREMIUM_PACKS`, `legacyCredits` (чтение `premium_credits`), ветки `packId` в `billing-service`, `telegram/bot.ts`, `routes/billing.ts` ([models-and-pricing.md](models-and-pricing.md)); а также маршруты и тексты СБП, тестовые эндпоинты `simulate-*`, старые имена `CRYPTOCLOUD_*` в `render.yaml` и `.env.example`.
 
 ## 4. Продукт
 

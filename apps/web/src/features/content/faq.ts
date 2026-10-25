@@ -8,14 +8,25 @@ export interface FaqItem {
 
 export const FAQ_ITEMS: FaqItem[] = [
   {
-    id: 'unlimited',
+    id: 'credits',
     q: {
-      ru: 'Есть ли ограничения?',
-      en: 'Are there any limits?',
+      ru: 'Как работают кредиты?',
+      en: 'How do credits work?',
     },
     a: {
-      ru: 'Ответы не заканчиваются, когда кончился лимит сильной модели. Например, на Pro можно отправить 21 запрос Claude Opus 5.5 в неделю, не больше 8 в сутки, — дальше отвечает модель попроще (какая именно, указано на странице «Модели»). Общий предел тарифа — сообщения в сутки: Free — 10, Plus — 500, Pro — 1 500, Ultra — 4 000. Все числа — на странице «Тарифы».',
-      en: 'Answers do not stop when a strong model hits its limit. On Pro, for example, you can send 21 Claude Opus 5.5 requests a week, at most 8 a day; after that a simpler model answers (which one is shown on the Models page). The overall plan limit is messages per day: Free 10, Plus 500, Pro 1,500, Ultra 4,000. All numbers are on the Pricing page.',
+      ru: 'Тариф даёт кредиты на 30 дней: Plus — 3 000, Pro — 11 000, Ultra — 22 000, Free — 300. Кредит — это одна тысячная доллара реальной стоимости запроса, поэтому каждый запрос списывает ровно столько, сколько он стоил: вопрос к Ketner Mini — около 2 кредитов, к Claude Opus — десятки. Чат, картинки и Ketner Code тратят общий пул. Неизрасходованный остаток переносится ещё на один период. Цена запроса каждой модели — на странице «Модели».',
+      en: 'Your plan gives you credits for 30 days: Plus 3,000, Pro 11,000, Ultra 22,000, Free 300. A credit is a thousandth of a dollar of the real cost of a request, so every request is charged exactly what it cost: a question to Ketner Mini is about 2 credits, to Claude Opus tens. Chat, images and Ketner Code spend one shared pool. Unused credits carry over for one more period. The price of every model is on the Models page.',
+    },
+  },
+  {
+    id: 'unlimited',
+    q: {
+      ru: 'Что будет, когда кредиты закончатся?',
+      en: 'What happens when I run out of credits?',
+    },
+    a: {
+      ru: 'Ответы не прекращаются: в чате отвечает бесплатная Nemotron 3 Ultra, в Ketner Code — бесплатная North Mini Code, кредиты не тратятся. Картинки — только FLUX.1 schnell, до 5 в сутки. Платные модели вернутся с новыми кредитами; дату видно в строке под полем ввода. Если кредитов не хватает на выбранную дорогую модель, но хватает на другую, ответит модель подешевле — какая именно, видно под ответом. Кроме кредитов есть лимиты от перегрузки: сообщения в сутки — Free 10, Plus 500, Pro 1 500, Ultra 4 000. Все числа — на странице «Тарифы».',
+      en: 'Answers do not stop: free Nemotron 3 Ultra answers in chat and free North Mini Code in Ketner Code, and no credits are spent. Images fall back to FLUX.1 schnell, up to 5 a day. Paid models come back with new credits; the date is shown in the line under the chat input. If your balance is too low for the selected premium model but enough for another, a cheaper model answers; which one is shown under the reply. Besides credits there are overload limits: messages per day, Free 10, Plus 500, Pro 1,500, Ultra 4,000. All numbers are on the Pricing page.',
     },
   },
   {

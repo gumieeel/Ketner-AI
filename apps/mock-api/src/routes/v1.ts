@@ -13,6 +13,7 @@ import {
   type ChunkDelta,
   type KetnerExtension,
 } from '../ai/agent/openai-compat.js';
+import type { CreditLedger } from '../services/credits.js';
 import type { PlanId, User } from '../types.js';
 import { resolveUserPlan } from '../services/user-plan.js';
 import type { ApiKeyStore } from '../store/api-key-store.js';
@@ -33,6 +34,8 @@ export interface V1RouterDeps {
   subscriptionStore?: SubscriptionStore;
   usageStore: UsageStore;
   gateway?: AgentGateway;
+  /** Кредиты пользователей; по умолчанию — общий журнал биллинга (в тестах свой). */
+  credits?: CreditLedger;
 }
 
 interface AgentCaller {
@@ -63,10 +66,10 @@ function ketnerExtension(outcome: AgentSuccess): KetnerExtension {
     cost_usd: outcome.costUsd,
     requested_model: outcome.requestedModel,
     routing_reason: outcome.routingReason,
-    budget: {
-      stage: outcome.budget.stage,
-      used_pct: outcome.budget.usedPct,
-      premium_available: outcome.budget.premiumAvailable,
+    credits: {
+      charged: outcome.credits.charged,
+      balance: outcome.credits.balance,
+      stage: outcome.credits.stage,
     },
   };
 }
@@ -92,7 +95,12 @@ function toOpenAiModel(model: ReturnType<AgentGateway['describeModels']>[number]
  */
 export function createV1Router(deps: V1RouterDeps): Router {
   const router = Router();
-  const gateway = deps.gateway ?? new AgentGateway({ usageStore: deps.usageStore });
+  const gateway =
+    deps.gateway ??
+    new AgentGateway({
+      usageStore: deps.usageStore,
+      ...(deps.credits ? { credits: deps.credits } : {}),
+    });
 
   // У каждого ответа свой id: по нему поддержка находит запрос в логах.
   router.use((_request: Request, response: Response, next: NextFunction) => {

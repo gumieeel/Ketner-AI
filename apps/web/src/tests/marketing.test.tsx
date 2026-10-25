@@ -33,7 +33,7 @@ describe('marketing: лендинг, шапка, футер и тарифные 
     expect(screen.getByRole('heading', { level: 3, name: 'Ultra' })).toBeInTheDocument();
 
     // FAQ аккордеон
-    expect(screen.getByText('Есть ли ограничения?')).toBeInTheDocument();
+    expect(screen.getByText('Как работают кредиты?')).toBeInTheDocument();
   });
 
   it('мобильное меню открывается по клику и закрывается по Escape', () => {

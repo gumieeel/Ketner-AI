@@ -995,7 +995,7 @@ test('сайт: счёт в звёздах — цена тарифа по офи
   assert.match(invoice.botDeepLink, new RegExp(`\\?start=${invoice.id}$`));
 });
 
-// ───────────── пакеты премиум-квоты (сняты с продажи 18.10.2026) ─────────────
+// ───────────── пакеты кредитов (сняты с продажи 18.10.2026) ─────────────
 
 test('пакет за звёзды: новые счета не выставляются; счёт до снятия с продажи засчитывается один раз', async (t) => {
   const h = await harness();
@@ -1038,11 +1038,13 @@ test('пакет за звёзды: новые счета не выставля�
   await h.pay(777001, payload, invoice.starsAmount, 'charge-pack-1');
   await h.pay(777001, payload, invoice.starsAmount, 'charge-pack-1');
   const credits = h.billingService.ledger.credits;
-  assert.equal(credits.balanceOf(buyer.user.id).remainingUsd, 5);
+  const packGrants = credits.allOf(buyer.user.id).filter((grant) => grant.kind === 'pack');
+  assert.equal(packGrants.length, 1, 'повторная доставка не начисляет второй раз');
+  assert.equal(packGrants[0]?.amountUsd, 5);
   assert.equal(
-    credits.allOf(buyer.user.id).length,
-    1,
-    'повторная доставка не начисляет второй раз',
+    credits.balanceOf(buyer.user.id).remainingUsd,
+    5 + 11 + 1.2,
+    'пакет лежит рядом с кредитами тарифа Pro и бонусом за крипту',
   );
   assert.equal(h.subscriptionStore.get(buyer.user.id).plan, 'pro');
 
@@ -1076,39 +1078,71 @@ test('пакет за звёзды: возврат неиспользованн�
   assert.equal(result.outcome, 'requested');
   await h.billingService.decideRefund(payment.id, true);
   assert.equal(h.billingService.findPayment(payment.id)?.status, 'refunded');
-  assert.equal(h.billingService.ledger.credits.balanceOf(buyer.user.id).remainingUsd, 0);
+  const credits = h.billingService.ledger.credits;
+  assert.equal(
+    credits.balanceOf(buyer.user.id).remainingUsd,
+    3 + 0.2,
+    'пакет снят, кредиты тарифа Plus и бонус за крипту на месте',
+  );
+  assert.equal(credits.get(payment.id)?.status, 'revoked');
   assert.equal(h.subscriptionStore.get(buyer.user.id).plan, 'plus');
 });
 
-test('бонус за крипту: действует на период, оплаченный через Trybit, и не после возврата', async (t) => {
+test('бонус за крипту: оплата Trybit даёт бонус к кредитам тарифа, звёзды — нет, возврат отзывает оба гранта', async (t) => {
   const h = await harness();
   t.after(() => h.server.close());
   const buyer = await h.signup();
-  const now = Date.now();
-  // Сначала оплата звёздами: бонуса нет.
-  h.billingService.grant(
-    buyer.user.id,
-    'pro',
-    { id: 'stars:bonus-1', method: 'stars', amount: 1350, currency: 'XTR' },
-    now - 40 * DAY_MS,
+  const credits = h.billingService.ledger.credits;
+  const grantsOf = (paymentId: string) =>
+    credits
+      .allOf(buyer.user.id)
+      .filter((grant) => grant.paymentId === paymentId)
+      .sort((a, b) => a.kind.localeCompare(b.kind));
+
+  // Оплата звёздами: только кредиты тарифа, бонуса нет.
+  h.billingService.grant(buyer.user.id, 'pro', {
+    id: 'stars:bonus-1',
+    method: 'stars',
+    amount: 1350,
+    currency: 'XTR',
+  });
+  assert.deepEqual(
+    grantsOf('stars:bonus-1').map((grant) => [grant.kind, grant.amountUsd]),
+    [['plan', 11]],
   );
-  assert.equal(h.billingService.cryptoBonusActive(buyer.user.id, 'pro', now - 20 * DAY_MS), false);
-  // Продление криптой: бонус — на добавленные 30 дней, а не на оставшиеся дни звёзд.
-  h.billingService.grant(
-    buyer.user.id,
-    'pro',
-    { id: 'crypto:bonus-2', method: 'crypto', amount: 25, currency: 'USD' },
-    now - 35 * DAY_MS,
+
+  // Продление криптой: кредиты тарифа и бонус +1 200 кредитов; повторная доставка ничего не добавляет.
+  const crypto = { id: 'crypto:bonus-2', method: 'crypto', amount: 25, currency: 'USD' } as const;
+  h.billingService.grant(buyer.user.id, 'pro', crypto);
+  h.billingService.grant(buyer.user.id, 'pro', crypto);
+  assert.deepEqual(
+    grantsOf('crypto:bonus-2').map((grant) => [grant.kind, grant.amountUsd]),
+    [
+      ['bonus', 1.2],
+      ['plan', 11],
+    ],
   );
-  assert.equal(h.billingService.cryptoBonusActive(buyer.user.id, 'pro', now - 20 * DAY_MS), false);
-  assert.equal(h.billingService.cryptoBonusActive(buyer.user.id, 'pro', now - 5 * DAY_MS), true);
-  assert.equal(h.billingService.cryptoBonusActive(buyer.user.id, 'ultra', now - 5 * DAY_MS), false);
-  // Срок истёк — бонуса нет.
-  assert.equal(h.billingService.cryptoBonusActive(buyer.user.id, 'pro', now + 30 * DAY_MS), false);
-  // Возвращённая оплата бонуса не даёт.
-  const crypto = h.billingService.findPayment('crypto:bonus-2')!;
-  h.billingService.ledger.payments.put({ ...crypto, status: 'refunded' });
-  assert.equal(h.billingService.cryptoBonusActive(buyer.user.id, 'pro', now - 5 * DAY_MS), false);
+  assert.equal(credits.balanceOf(buyer.user.id).remainingUsd, 11 + 11 + 1.2);
+
+  // Бонус и кредиты тарифа живут оплаченный период и ещё один (перенос остатка).
+  const [bonus] = grantsOf('crypto:bonus-2');
+  const sub = h.subscriptionStore.get(buyer.user.id);
+  assert.equal(
+    Date.parse(bonus!.expiresAt),
+    Date.parse(sub.renewsAt!) + 30 * DAY_MS,
+    'кредиты сгорают через период после конца подписки',
+  );
+
+  // Возврат криптоплатежа отзывает и тариф, и бонус.
+  const payment = h.billingService.findPayment('crypto:bonus-2')!;
+  const result = await h.billingService.requestRefund(buyer.user.id, payment.id);
+  assert.equal(result.outcome, 'requested');
+  await h.billingService.decideRefund(payment.id, true);
+  assert.deepEqual(
+    grantsOf('crypto:bonus-2').map((grant) => grant.status),
+    ['revoked', 'revoked'],
+  );
+  assert.equal(credits.balanceOf(buyer.user.id).remainingUsd, 11);
 });
 
 test('оплата с сайта: ссылка ведёт в бота, бот присылает сообщение и счёт', async (t) => {

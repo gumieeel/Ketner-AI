@@ -12,3 +12,6 @@ export const billingService = new BillingService({
   usageStore,
   ledger: billingLedger,
 });
+
+/** Кредиты пользователей (тот же журнал, что у биллинга): шлюз, агент и картинки списывают отсюда. */
+export const creditService = billingService.credits;

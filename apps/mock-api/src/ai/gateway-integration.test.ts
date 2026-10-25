@@ -10,8 +10,8 @@ import { ModelRegistry } from './model-registry.js';
 import { OpenRouterError } from './providers/openrouter-provider.js';
 import { SemanticCache } from './cache.js';
 import { UsageStore } from '../store/usage-store.js';
-import { PremiumCreditStore } from '../store/premium-credit-store.js';
-import { PLAN_ENTITLEMENTS } from '../services/entitlement.js';
+import { exhaust, memoryCredits, setBalance } from '../services/credits-fixture.js';
+import type { CreditService } from '../services/credits.js';
 import type {
   AIProvider,
   GatewayRequest,
@@ -70,7 +70,7 @@ function fakeOpenRouter(
 function makeGateway(
   provider: AIProvider,
   usage: UsageStore,
-  premiumCredits: PremiumCreditStore = new PremiumCreditStore(),
+  credits: CreditService = memoryCredits(),
 ): AIGateway {
   const providers = new ProviderManager();
   providers.setProvider('openrouter', provider);
@@ -81,36 +81,12 @@ function makeGateway(
     aiConfig,
     circuitBreaker: new CircuitBreaker({ failureThreshold: 3, cooldownMs: 30_000 }),
     useMockEngine: false,
-    premiumCredits,
+    credits,
   });
 }
-
-/** Бюджет Plus берётся из тарифа, а не зашит числом: пересчёт цен не должен ломать тесты. */
-const PLUS_BUDGET = PLAN_ENTITLEMENTS.plus.costBudget;
 
 function newUsage(): UsageStore {
   return new UsageStore(join(mkdtempSync(join(tmpdir(), 'ketner-gw-')), 'usage.json'));
-}
-
-/** Расход «за прошлые дни»: в месячный бюджет входит, а в суточную квоту — нет. */
-function seedMonthlyCost(
-  usage: UsageStore,
-  userId: string,
-  cost: number,
-  modelId = 'ketner-pro',
-): void {
-  const record = usage.recordUsage({
-    userId,
-    conversationId: 'seed',
-    modelId,
-    provider: 'openrouter',
-    inputTokens: 1,
-    outputTokens: 1,
-    estimatedCost: cost,
-    latencyMs: 1,
-    status: 'success',
-  });
-  record.createdAt = new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString();
 }
 
 function request(
@@ -196,95 +172,117 @@ test('без цены от провайдера расход считается 
   assert.equal(usage.getFairUseSnapshot('u-table').estimatedCostLastDay, 0.0002);
 });
 
-test('жёсткий потолок: при расходе ≥125% бюджета запрос отклоняется до обращения к провайдеру', async () => {
+test('кредиты кончились: платный тариф получает бесплатную модель вместо отказа, платные модели не вызываются', async () => {
   const usage = newUsage();
   const calls: Call[] = [];
-  const gateway = makeGateway(fakeOpenRouter(okStream('не должно прийти'), calls), usage);
-  seedMonthlyCost(usage, 'u-hard', PLUS_BUDGET * 1.27); // 127% бюджета Plus
-
-  const out = await run(gateway, request({ userId: 'u-hard', userPlan: 'plus' }));
-  assert.equal(out.error?.code, 'fair_use_exceeded');
-  assert.equal(calls.length, 0, 'провайдер вызываться не должен');
-});
-
-test('бюджет исчерпан (100–125%): явный выбор сильной модели понижается до самой дешёвой', async () => {
-  const usage = newUsage();
-  const calls: Call[] = [];
-  const gateway = makeGateway(fakeOpenRouter(okStream('ок'), calls), usage);
-  seedMonthlyCost(usage, 'u-ex', PLUS_BUDGET * 1.05); // 105% бюджета Plus
+  const credits = memoryCredits();
+  const gateway = makeGateway(fakeOpenRouter(okStream('ответ'), calls), usage, credits);
+  exhaust(credits, 'u-ex', 'plus');
 
   const out = await run(
     gateway,
     request({ userId: 'u-ex', userPlan: 'plus', modelId: 'gpt-6.1-sol' }),
   );
   assertNoError(out);
-  assert.match(out.done?.routingReason ?? '', /Budget protection/);
+  assert.match(out.done?.routingReason ?? '', /Credits used up/);
   assert.equal(
     out.done?.selectedModel?.id,
-    'ketner-mini',
+    'nemotron-ultra',
     'пользователь видит, какая модель ответила',
   );
   assert.deepEqual(
     calls.map((c) => c.model),
-    ['openai/gpt-6-luna'],
+    ['nvidia/nemotron-3-ultra-550b-a55b:free'],
   );
-  assert.ok((calls[0].maxTokens ?? 0) <= 2048, 'при исчерпанном бюджете ответ короткий');
+  assert.ok((calls[0].maxTokens ?? 0) <= 2048, 'когда кредиты кончились, ответ короткий');
+  assert.equal(
+    credits.balance('u-ex', 'plus').remainingUsd,
+    0,
+    'бесплатная модель ничего не списывает',
+  );
+  assert.equal(usage.getByUser('u-ex')[0].creditsUsd ?? 0, 0);
+
+  // И так сколько угодно раз: без лимита на количество ответов бесплатной модели.
+  for (let i = 0; i < 3; i++) {
+    const again = await run(gateway, request({ userId: 'u-ex', userPlan: 'plus' }));
+    assertNoError(again);
+    assert.equal(again.done?.selectedModel?.id, 'nemotron-ultra');
+  }
 });
 
-test('бюджет на исходе (80–100%): сильная модель заменяется рабочей, рабочая остаётся', async () => {
+test('кредитов мало: выбранная дорогая модель заменяется той, на которую хватает, причина видна', async () => {
   const usage = newUsage();
   const calls: Call[] = [];
-  const gateway = makeGateway(fakeOpenRouter(okStream('ок'), calls), usage);
-  seedMonthlyCost(usage, 'u-soft', PLUS_BUDGET * 0.85); // 85% бюджета Plus
+  const credits = memoryCredits();
+  const gateway = makeGateway(fakeOpenRouter(okStream('ок'), calls), usage, credits);
+  setBalance(credits, 'u-low', 'plus', 10); // типичный запрос GPT-6.1 Sol стоит ≈ 35 кредитов
 
-  const strong = await run(
+  const out = await run(
     gateway,
-    request({ userId: 'u-soft', userPlan: 'plus', modelId: 'gpt-6.1-sol' }),
+    request({ userId: 'u-low', userPlan: 'plus', modelId: 'gpt-6.1-sol' }),
   );
-  assert.equal(strong.done?.selectedModel?.id, 'ketner-pro');
-  assert.match(strong.done?.routingReason ?? '', /Budget protection/);
-
-  const work = await run(
-    gateway,
-    request({ userId: 'u-soft', userPlan: 'plus', modelId: 'ketner-pro' }),
-  );
-  assert.equal(work.done?.selectedModel?.id, 'ketner-pro');
-  assert.ok(
-    calls.every((c) => (c.maxTokens ?? 0) <= 4096),
-    'в экономном режиме ответ не длиннее 4096 токенов',
-  );
+  assertNoError(out);
+  assert.match(out.done?.routingReason ?? '', /Not enough credits for GPT-6\.1 Sol/);
+  assert.notEqual(out.done?.selectedModel?.id, 'gpt-6.1-sol');
+  assert.ok(!calls.some((c) => c.model === 'openai/gpt-6.1-sol'), 'дорогая модель не вызывалась');
 });
 
-test('квота премиум-запросов: пока есть остаток, отвечает выбранная модель, потом — рабочая', async () => {
+test('на запрос рабочей модели не хватает: отвечает дешёвая модель из цепочки, а когда и на неё нет — бесплатная', async () => {
   const usage = newUsage();
   const calls: Call[] = [];
-  const gateway = makeGateway(fakeOpenRouter(okStream('ок', { cost: 0.05 }), calls), usage);
+  const credits = memoryCredits();
+  const gateway = makeGateway(
+    fakeOpenRouter(okStream('ок', { cost: 0.0015 }), calls),
+    usage,
+    credits,
+  );
+  setBalance(credits, 'u-edge', 'plus', 3); // Ketner Pro ≈ 5 кредитов, Ketner Mini ≈ 1.8
 
-  // Plus: квота премиум-запросов (PLAN_ENTITLEMENTS.plus.premiumBudget) за 30 дней
   const first = await run(
     gateway,
-    request({ userId: 'u-prem', userPlan: 'plus', modelId: 'gpt-6.1-sol' }),
+    request({ userId: 'u-edge', userPlan: 'plus', modelId: 'ketner-pro' }),
   );
+  assert.equal(first.done?.selectedModel?.id, 'claude-haiku-5.5', 'первая запасная Ketner Pro');
+  assert.match(first.done?.routingReason ?? '', /Not enough credits for Ketner Pro/);
+  assert.equal(usage.getByUser('u-edge')[0].creditsUsd, 0.0015);
+
+  // Осталось 1.5 кредита: на Haiku и Ketner Mini (≈ 1.8) уже не хватает.
+  const second = await run(
+    gateway,
+    request({ userId: 'u-edge', userPlan: 'plus', modelId: 'ketner-pro' }),
+  );
+  assert.equal(second.done?.selectedModel?.id, 'nemotron-ultra');
+});
+
+test('кредиты списываются по реальной цене ответа; когда они кончаются, отвечает бесплатная модель', async () => {
+  const usage = newUsage();
+  const calls: Call[] = [];
+  const credits = memoryCredits();
+  const gateway = makeGateway(
+    fakeOpenRouter(okStream('ок', { cost: 0.05 }), calls),
+    usage,
+    credits,
+  );
+  setBalance(credits, 'u-prem', 'plus', 100);
+  const ask = () =>
+    run(gateway, request({ userId: 'u-prem', userPlan: 'plus', modelId: 'gpt-6.1-sol' }));
+
+  const first = await ask();
   assertNoError(first);
   assert.equal(first.done?.selectedModel?.id, 'gpt-6.1-sol');
   assert.equal(calls[0].model, 'openai/gpt-6.1-sol');
+  assert.equal(usage.getByUser('u-prem')[0].creditsUsd, 0.05);
+  assert.equal(credits.balance('u-prem', 'plus').remainingUsd, 0.05, '100 − 50 = 50 кредитов');
 
-  seedMonthlyCost(usage, 'u-prem', PLAN_ENTITLEMENTS.plus.premiumBudget + 0.1, 'gpt-6-astra'); // старый id в истории расхода тоже считается
-  const second = await run(
-    gateway,
-    request({ userId: 'u-prem', userPlan: 'plus', modelId: 'gpt-6.1-sol' }),
-  );
-  assertNoError(second);
-  assert.equal(second.done?.selectedModel?.id, 'ketner-pro');
-  assert.match(second.done?.routingReason ?? '', /Premium quota used up/);
-  assert.equal(calls[1].model, 'xiaomi/mimo-v2.6-pro');
+  const second = await ask();
+  assert.equal(second.done?.selectedModel?.id, 'gpt-6.1-sol', '50 кредитов ≥ цены запроса (35)');
+  assert.equal(credits.balance('u-prem', 'plus').remainingUsd, 0);
 
-  // Расход на рабочую модель квоту премиум-запросов не уменьшает и не блокирует работу
-  const third = await run(
-    gateway,
-    request({ userId: 'u-prem', userPlan: 'plus', modelId: 'ketner-pro' }),
-  );
-  assert.equal(third.done?.selectedModel?.id, 'ketner-pro');
+  const third = await ask();
+  assertNoError(third);
+  assert.equal(third.done?.selectedModel?.id, 'nemotron-ultra');
+  assert.match(third.done?.routingReason ?? '', /Credits used up/);
+  assert.equal(calls[2].model, 'nvidia/nemotron-3-ultra-550b-a55b:free');
 });
 
 test('права доступа проверяются по запрошенной модели до любой замены', async () => {
@@ -344,11 +342,10 @@ test('Auto: Free — бесплатная Nemotron, Plus — рабочая мо
   );
 });
 
-test('Auto на Pro: средняя задача по коду — открытая GLM-5.3 без расхода премиум-квоты, сложная — GPT-6.1 Sol', async () => {
+test('Auto на Pro: средняя задача по коду — открытая GLM-5.3 дешевле премиум-модели, сложная — GPT-6.1 Sol', async () => {
   const usage = newUsage();
   const calls: Call[] = [];
   const gateway = makeGateway(fakeOpenRouter(okStream('ок', { cost: 0.02 }), calls), usage);
-  const premiumIds = new ModelRegistry().getPremiumModelIds();
 
   const medium = await run(
     gateway,
@@ -362,9 +359,9 @@ test('Auto на Pro: средняя задача по коду — открыт�
   );
   assertNoError(medium);
   assert.equal(medium.done?.selectedModel?.id, 'glm-5.3', 'подмена видна в selectedModel');
-  assert.match(medium.done?.routingReason ?? '', /open flagship model \(premium quota saved\)/);
+  assert.match(medium.done?.routingReason ?? '', /open flagship model \(credits saved\)/);
   assert.equal(calls.at(-1)?.model, 'z-ai/glm-5.3');
-  assert.equal(usage.getCostLastMonthByModels('u-a-open', premiumIds), 0, 'квота не тронута');
+  assert.equal(usage.getByUser('u-a-open')[0].creditsUsd, 0.02, 'списано по цене ответа GLM');
 
   // Короткое «продолжи» в той же задаче остаётся на той же модели
   const followUp = await run(
@@ -384,11 +381,8 @@ test('Auto на Pro: средняя задача по коду — открыт�
   );
   assertNoError(followUp);
   assert.equal(followUp.done?.selectedModel?.id, 'gpt-6.1-sol');
-  assert.match(
-    followUp.done?.routingReason ?? '',
-    /hard reasoning task, strong model from the premium quota/,
-  );
-  assert.ok(usage.getCostLastMonthByModels('u-a-open', premiumIds) > 0);
+  assert.match(followUp.done?.routingReason ?? '', /hard reasoning task, strong model/);
+  assert.equal(usage.getByUser('u-a-open')[0].modelId, 'gpt-6.1-sol');
 });
 
 test('глубина размышлений и потолок ответа передаются провайдеру под конкретную модель', async () => {
@@ -456,21 +450,18 @@ test('сбой модели: берётся запасная из реестра
   assert.equal(out.done?.selectedModel?.id, 'gpt-6-luna-pro');
   assert.match(out.done?.routingReason ?? '', /fallback to GPT-6 Luna Pro/);
   assert.equal(usage.getByUser('u-fb')[0].modelId, 'gpt-6-luna-pro');
-  assert.equal(
-    usage.getCostLastMonthByModels('u-fb', ['gpt-6.1-sol']),
-    0,
-    'сильная модель квоту не тратит',
-  );
+  assert.equal(usage.getByUser('u-fb')[0].creditsUsd, 0.004, 'списано по цене ответившей модели');
 });
 
-test('бюджет и квота ограничивают и запасные модели: премиум-модель в запасные не попадает', async () => {
+test('кредиты ограничивают и запасные модели: платная модель, на которую не хватает, в цепочку не попадает', async () => {
   const usage = newUsage();
   const calls: Call[] = [];
   const failing = async (o: ProviderRequestOptions): Promise<ProviderResponse> => {
     throw new OpenRouterError(o.model, 500, 'boom');
   };
-  const gateway = makeGateway(fakeOpenRouter(failing, calls), usage);
-  seedMonthlyCost(usage, 'u-fbq', PLUS_BUDGET * 1.03); // бюджет Plus исчерпан: только лёгкие модели
+  const credits = memoryCredits();
+  const gateway = makeGateway(fakeOpenRouter(failing, calls), usage, credits);
+  setBalance(credits, 'u-fbq', 'plus', 3); // хватает на Haiku и Ketner Mini (≈ 1.8), на DeepSeek (≈ 4.7) нет
 
   const out = await run(
     gateway,
@@ -479,10 +470,14 @@ test('бюджет и квота ограничивают и запасные м
   assert.equal(out.error?.code, 'provider_error');
   assert.deepEqual(
     calls.map((c) => c.model),
-    ['openai/gpt-6-luna', 'anthropic/claude-haiku-5.5', 'deepseek/deepseek-v4.1-flash'],
-    'цепочка при исчерпанном бюджете состоит только из лёгких моделей',
+    ['anthropic/claude-haiku-5.5', 'openai/gpt-6-luna'],
+    'в цепочке только модели по карману',
   );
   assert.equal(usage.getByUser('u-fbq')[0].status, 'error');
+
+  // Кредитов нет совсем: платные запасные не вызываются, расход ограничен нулём.
+  const none = await run(gateway, request({ userId: 'u-fbq0', userPlan: 'free', modelId: 'auto' }));
+  assert.equal(none.error?.code, 'provider_error');
 });
 
 test('HTTP 402 от OpenRouter (кончились кредиты): цепочка не перебирается, пользователь получает честную ошибку', async () => {
@@ -501,6 +496,7 @@ test('HTTP 402 от OpenRouter (кончились кредиты): цепочк
     aiConfig,
     circuitBreaker: breaker,
     useMockEngine: false,
+    credits: memoryCredits(),
   });
 
   const out = await run(
@@ -661,57 +657,6 @@ test('семантический кэш не смешивает ответы р�
   assert.equal(cache.get('auto', 'ru', 'проанализируй проект', 'shared', 'h'), null);
 });
 
-test('суточная доля пула: шестой запрос к Sol на Plus за сутки уходит в GPT-6 Luna Pro, причина видна', async () => {
-  const usage = newUsage();
-  const calls: Call[] = [];
-  const gateway = makeGateway(fakeOpenRouter(okStream('ответ', { cost: 0.02 }), calls), usage);
-
-  // Норма Sol на Plus — 2 в сутки, пул 14 в неделю, за сутки до 5 (40% пула).
-  for (let i = 0; i < 5; i++) {
-    const ok = await run(
-      gateway,
-      request({ userId: 'u-dl', userPlan: 'plus', modelId: 'gpt-6.1-sol' }),
-    );
-    assertNoError(ok);
-    assert.equal(ok.done?.selectedModel?.id, 'gpt-6.1-sol');
-  }
-
-  const second = await run(
-    gateway,
-    request({ userId: 'u-dl', userPlan: 'plus', modelId: 'gpt-6.1-sol' }),
-  );
-  assertNoError(second);
-  assert.deepEqual(
-    calls.map((c) => c.model),
-    [...Array<string>(5).fill('openai/gpt-6.1-sol'), 'openai/gpt-6-luna-pro'],
-  );
-  assert.equal(second.done?.selectedModel?.id, 'gpt-6-luna-pro');
-  assert.match(
-    second.done?.routingReason ?? '',
-    /Daily share of the weekly pool used up for GPT-6\.1 Sol/,
-  );
-  assert.equal(
-    usage.getByUser('u-dl')[0].modelId,
-    'gpt-6-luna-pro',
-    'расход пишется на ту, что ответила',
-  );
-});
-
-test('суточный лимит не действует на тарифе без лимитов', async () => {
-  const usage = newUsage();
-  const calls: Call[] = [];
-  const gateway = makeGateway(fakeOpenRouter(okStream('ответ', { cost: 0.02 }), calls), usage);
-  for (let i = 0; i < 2; i++) {
-    assertNoError(
-      await run(gateway, request({ userId: 'u-dl-pro', userPlan: 'pro', modelId: 'gpt-6.1-sol' })),
-    );
-  }
-  assert.deepEqual(
-    calls.map((c) => c.model),
-    ['openai/gpt-6.1-sol', 'openai/gpt-6.1-sol'],
-  );
-});
-
 test('Free: Ketner Mini заменяется бесплатной Nemotron, расход ноль, причина видна', async () => {
   const usage = newUsage();
   const calls: Call[] = [];
@@ -777,7 +722,7 @@ test('платные тарифы бесплатную замену не пол�
   assert.equal(calls[0].model, 'openai/gpt-6-luna');
 });
 
-// ── Pro и Ultra: фиксированная глубина размышлений, режим Max и суточные лимиты ──
+// ── Pro и Ultra: фиксированная глубина размышлений, режим Max и цепочки по кредитам ──
 
 test('Pro: модели Pro размышляют на medium, Grok и Terra всегда на xhigh', async () => {
   const usage = newUsage();
@@ -855,53 +800,44 @@ test('режим Max: на Ultra xhigh, на Pro игнорируется', asyn
   assert.doesNotMatch(proMax.done?.routingReason ?? '', /Max mode/);
 });
 
-test('экономный режим (80% бюджета): вместо модели Pro отвечает рабочая', async () => {
+test('кредитов хватает не на всё: Opus → Sonnet → Ketner Pro по мере того, как кредиты убывают', async () => {
   const usage = newUsage();
   const calls: Call[] = [];
-  const gateway = makeGateway(fakeOpenRouter(okStream('ок'), calls), usage);
-  seedMonthlyCost(usage, 'u-psoft', PLAN_ENTITLEMENTS.pro.costBudget * 0.85, 'ketner-pro');
-  assertNoError(
-    await run(
+  const credits = memoryCredits();
+  const gateway = makeGateway(
+    fakeOpenRouter(okStream('ок', { cost: 0.001 }), calls),
+    usage,
+    credits,
+  );
+  const ask = (balance: number) => {
+    setBalance(credits, 'u-chain', 'pro', balance);
+    return run(
       gateway,
-      request({ userId: 'u-psoft', userPlan: 'pro', modelId: 'claude-sonnet-5.5' }),
-    ),
-  );
-  // В экономном режиме премиум-модель заменяется рабочей (Ketner Pro).
-  assert.equal(calls[0].model, 'xiaomi/mimo-v2.6-pro');
+      request({ userId: 'u-chain', userPlan: 'pro', modelId: 'claude-opus-5.5' }),
+    );
+  };
+
+  // Opus ≈ 70 кредитов, Sonnet ≈ 35, Ketner Pro ≈ 5
+  assert.equal((await ask(500)).done?.selectedModel?.id, 'claude-opus-5.5');
+  assert.equal((await ask(50)).done?.selectedModel?.id, 'claude-sonnet-5.5');
+  const low = await ask(20);
+  assert.equal(low.done?.selectedModel?.id, 'ketner-pro');
+  assert.match(low.done?.routingReason ?? '', /Not enough credits for Claude Opus 5\.5/);
+  assert.equal((await ask(0)).done?.selectedModel?.id, 'nemotron-ultra');
 });
 
-test('лимиты Pro: Opus → Sonnet → Ketner Pro, когда исчерпаны суточные доли пулов', async () => {
+test('режим Max дороже в кредитах: Opus в Max при 100 кредитах не по карману, обычный запрос — по карману', async () => {
   const usage = newUsage();
   const calls: Call[] = [];
-  const gateway = makeGateway(fakeOpenRouter(okStream('ок', { cost: 0.01 }), calls), usage);
-  const ask = () =>
-    run(gateway, request({ userId: 'u-chain', userPlan: 'pro', modelId: 'claude-opus-5.5' }));
-
-  const picked: string[] = [];
-  for (let i = 0; i < 25; i++) {
-    const out = await ask();
-    assertNoError(out);
-    picked.push(out.done?.selectedModel?.id ?? '');
-  }
-  // Opus: норма 3 → пул 21, за сутки до 8; Sonnet: норма 6 → пул 42, за сутки до 16; затем Ketner Pro.
-  assert.deepEqual(picked, [
-    ...Array<string>(8).fill('claude-opus-5.5'),
-    ...Array<string>(16).fill('claude-sonnet-5.5'),
-    'ketner-pro',
-  ]);
-  const last = await ask();
-  assert.match(
-    last.done?.routingReason ?? '',
-    /Daily share of the weekly pool used up for Claude Opus 5\.5 \(8\/day of 21\/week on pro\)/,
+  const credits = memoryCredits();
+  const gateway = makeGateway(
+    fakeOpenRouter(okStream('ок', { cost: 0.002 }), calls),
+    usage,
+    credits,
   );
-});
-
-test('режим Max считается за 2: на Ultra Opus в режиме Max — 9 раз за сутки из 19', async () => {
-  const usage = newUsage();
-  const calls: Call[] = [];
-  const gateway = makeGateway(fakeOpenRouter(okStream('ок', { cost: 0.02 }), calls), usage);
-  const ask = (mode?: 'max') =>
-    run(
+  const ask = (mode?: 'max') => {
+    setBalance(credits, 'u-maxu', 'ultra', 100);
+    return run(
       gateway,
       request({
         userId: 'u-maxu',
@@ -910,37 +846,37 @@ test('режим Max считается за 2: на Ultra Opus в режиме 
         ...(mode ? { reasoningMode: mode } : {}),
       }),
     );
+  };
 
-  for (let i = 0; i < 9; i++)
-    assert.equal((await ask('max')).done?.selectedModel?.id, 'claude-opus-5.5');
-  assert.equal(usage.getModelUsesLastDay('u-maxu', ['claude-opus-5.5']), 18);
-  // Осталась 1 единица: запрос Max (2) уже не помещается, отвечает Sonnet.
-  assert.equal((await ask('max')).done?.selectedModel?.id, 'claude-sonnet-5.5');
-  // Обычный запрос (1 единица) ещё помещается.
+  // Opus: ≈ 70 кредитов обычный запрос и ≈ 170 в Max; Sonnet в Max ≈ 85.
   assert.equal((await ask()).done?.selectedModel?.id, 'claude-opus-5.5');
-  assert.equal((await ask()).done?.selectedModel?.id, 'claude-sonnet-5.5');
+  const max = await ask('max');
+  assert.equal(max.done?.selectedModel?.id, 'claude-sonnet-5.5');
+  assert.equal(max.done?.reasoningMode, 'max');
 });
 
-test('GPT-6 Astra после лимита → GPT-6.1 Sol, Terra → Gemini 3.8 Flash', async () => {
+test('GPT-6 Astra при нехватке кредитов → GPT-6.1 Sol, Terra → Gemini 3.8 Flash', async () => {
   const usage = newUsage();
   const calls: Call[] = [];
-  const gateway = makeGateway(fakeOpenRouter(okStream('ок', { cost: 0.01 }), calls), usage);
-  // Astra: норма 1 → пул 7, за сутки до 2; Terra: норма 2 → пул 14, за сутки до 5.
-  for (let i = 0; i < 2; i++)
-    await run(gateway, request({ userId: 'u-ast', userPlan: 'pro', modelId: 'gpt-6-astra' }));
-  const second = await run(
+  const credits = memoryCredits();
+  const gateway = makeGateway(
+    fakeOpenRouter(okStream('ок', { cost: 0.001 }), calls),
+    usage,
+    credits,
+  );
+  setBalance(credits, 'u-ast', 'pro', 100); // Astra ≈ 176 кредитов, Sol ≈ 35
+  const astra = await run(
     gateway,
     request({ userId: 'u-ast', userPlan: 'pro', modelId: 'gpt-6-astra' }),
   );
-  assert.equal(second.done?.selectedModel?.id, 'gpt-6.1-sol');
+  assert.equal(astra.done?.selectedModel?.id, 'gpt-6.1-sol');
 
-  for (let i = 0; i < 5; i++)
-    await run(gateway, request({ userId: 'u-ter', userPlan: 'pro', modelId: 'gpt-5.6-terra' }));
-  const third = await run(
+  setBalance(credits, 'u-ter', 'pro', 50); // Terra ≈ 99 кредитов, Gemini 3.8 Flash ≈ 13
+  const terra = await run(
     gateway,
     request({ userId: 'u-ter', userPlan: 'pro', modelId: 'gpt-5.6-terra' }),
   );
-  assert.equal(third.done?.selectedModel?.id, 'gemini-3.8-flash');
+  assert.equal(terra.done?.selectedModel?.id, 'gemini-3.8-flash');
 });
 
 test('без ключа OpenRouter вне production чат отвечает шаблоном (demo), а не ошибкой', async () => {
@@ -957,6 +893,7 @@ test('без ключа OpenRouter вне production чат отвечает ш�
     usageStore: newUsage(),
     aiConfig: { thinkingMs: [1, 1], chunkMs: [1, 1], failureRate: 0, random: () => 0.5 },
     circuitBreaker: new CircuitBreaker({ failureThreshold: 3, cooldownMs: 30_000 }),
+    credits: memoryCredits(),
   });
 
   const outcome = await run(gateway, request({ userId: 'dev-no-key', userPlan: 'free' }));
@@ -980,131 +917,11 @@ test('провайдер настроен, но упал — честная ош
     usageStore: newUsage(),
     aiConfig: { thinkingMs: [1, 1], chunkMs: [1, 1], failureRate: 0, random: () => 0.5 },
     circuitBreaker: new CircuitBreaker({ failureThreshold: 3, cooldownMs: 30_000 }),
+    credits: memoryCredits(),
   });
 
   const outcome = await run(gateway, request({ userId: 'dev-with-key', userPlan: 'free' }));
 
   assert.equal(outcome.error?.code, 'provider_error');
   assert.equal(outcome.done, undefined);
-});
-
-// ─────────────── Докупленные пакеты премиум-квоты ───────────────
-
-function credits(userId: string, amountUsd: number): PremiumCreditStore {
-  const store = new PremiumCreditStore();
-  store.grant({ id: `pay-${userId}`, userId, packId: 'premium-5', amountUsd, days: 30 });
-  return store;
-}
-
-test('пакет: квота тарифа кончилась — премиум-модель отвечает за счёт кредитов, а не Ketner Pro', async () => {
-  const usage = newUsage();
-  const calls: Call[] = [];
-  const store = credits('u-pack', 5);
-  const gateway = makeGateway(fakeOpenRouter(okStream('ок', { cost: 0.07 }), calls), usage, store);
-  seedMonthlyCost(usage, 'u-pack', PLAN_ENTITLEMENTS.pro.premiumBudget + 0.5, 'claude-sonnet-5.5');
-
-  const out = await run(
-    gateway,
-    request({ userId: 'u-pack', userPlan: 'pro', modelId: 'claude-opus-5.5' }),
-  );
-  assertNoError(out);
-  assert.equal(out.done?.selectedModel?.id, 'claude-opus-5.5');
-  assert.match(out.done?.routingReason ?? '', /paid from purchased premium credits/);
-  assert.equal(store.balanceOf('u-pack').remainingUsd, 4.93, 'с кредитов списана цена запроса');
-  const record = usage.getByUser('u-pack')[0];
-  assert.equal(record.premiumCreditUsd, 0.07);
-  assert.equal(record.fundedBy, 'credits');
-  // Оплаченное кредитами не входит ни в квоту тарифа, ни в месячный бюджет.
-  assert.equal(
-    usage.getCostLastMonthByModels('u-pack', ['claude-opus-5.5', 'claude-sonnet-5.5']),
-    PLAN_ENTITLEMENTS.pro.premiumBudget + 0.5,
-  );
-});
-
-test('пакет: без кредитов при исчерпанной квоте по-прежнему отвечает рабочая модель', async () => {
-  const usage = newUsage();
-  const calls: Call[] = [];
-  const gateway = makeGateway(fakeOpenRouter(okStream('ок', { cost: 0.07 }), calls), usage);
-  seedMonthlyCost(
-    usage,
-    'u-nopack',
-    PLAN_ENTITLEMENTS.pro.premiumBudget + 0.5,
-    'claude-sonnet-5.5',
-  );
-  const out = await run(
-    gateway,
-    request({ userId: 'u-nopack', userPlan: 'pro', modelId: 'claude-opus-5.5' }),
-  );
-  assert.equal(out.done?.selectedModel?.id, 'ketner-pro');
-});
-
-test('пакет: лимит модели исчерпан — с кредитами модель остаётся, запрос в пул не входит', async () => {
-  const usage = newUsage();
-  const calls: Call[] = [];
-  const store = credits('u-packlim', 5);
-  const gateway = makeGateway(fakeOpenRouter(okStream('ок', { cost: 0.07 }), calls), usage, store);
-  const ask = () =>
-    run(gateway, request({ userId: 'u-packlim', userPlan: 'pro', modelId: 'claude-opus-5.5' }));
-
-  // 8 запросов — суточная доля пула Opus на Pro, оплачены квотой тарифа.
-  for (let i = 0; i < 8; i++)
-    assert.equal((await ask()).done?.selectedModel?.id, 'claude-opus-5.5');
-  assert.equal(
-    store.balanceOf('u-packlim').remainingUsd,
-    5,
-    'пока квота тарифа есть, кредиты целы',
-  );
-
-  const ninth = await ask();
-  assert.equal(ninth.done?.selectedModel?.id, 'claude-opus-5.5');
-  assert.match(
-    ninth.done?.routingReason ?? '',
-    /Daily share of the weekly pool used up for Claude Opus 5\.5.*paid from purchased premium credits/,
-  );
-  assert.equal(store.balanceOf('u-packlim').remainingUsd, 4.93);
-  assert.equal(usage.getModelUsesLastDay('u-packlim', ['claude-opus-5.5']), 8);
-});
-
-test('пакет: остаток квоты тарифа меньше цены запроса — разница списывается с кредитов', async () => {
-  const usage = newUsage();
-  const calls: Call[] = [];
-  const store = credits('u-split', 5);
-  const gateway = makeGateway(fakeOpenRouter(okStream('ок', { cost: 0.1 }), calls), usage, store);
-  seedMonthlyCost(
-    usage,
-    'u-split',
-    PLAN_ENTITLEMENTS.pro.premiumBudget - 0.04,
-    'claude-sonnet-5.5',
-  );
-  const out = await run(
-    gateway,
-    request({ userId: 'u-split', userPlan: 'pro', modelId: 'claude-opus-5.5' }),
-  );
-  assert.equal(out.done?.selectedModel?.id, 'claude-opus-5.5');
-  assert.equal(usage.getByUser('u-split')[0].premiumCreditUsd, 0.06);
-  assert.equal(store.balanceOf('u-split').remainingUsd, 4.94);
-});
-
-test('пакет: Auto кредиты не тратит — только квоту тарифа', async () => {
-  const usage = newUsage();
-  const calls: Call[] = [];
-  const store = credits('u-auto', 5);
-  const gateway = makeGateway(fakeOpenRouter(okStream('ок', { cost: 0.03 }), calls), usage, store);
-  seedMonthlyCost(usage, 'u-auto', PLAN_ENTITLEMENTS.pro.premiumBudget + 0.5, 'claude-sonnet-5.5');
-  const out = await run(
-    gateway,
-    request({
-      userId: 'u-auto',
-      userPlan: 'pro',
-      modelId: 'auto',
-      messages: [
-        {
-          role: 'user',
-          content: `Докажи теорему о сумме углов треугольника и вычисли интеграл ${'x'.repeat(200)}`,
-        },
-      ],
-    }),
-  );
-  assert.notEqual(out.done?.selectedModel?.id, 'gpt-6.1-sol');
-  assert.equal(store.balanceOf('u-auto').remainingUsd, 5);
 });

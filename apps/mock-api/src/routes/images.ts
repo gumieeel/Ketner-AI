@@ -15,12 +15,15 @@ import { getImageService } from '../images/runtime.js';
 import { ImageServiceError, type ImageCaller, type ImageService } from '../images/service.js';
 import type { ImageStore } from '../images/image-store.js';
 import { getImageStore } from '../images/runtime.js';
+import type { CreditLedger } from '../services/credits.js';
 
 export interface ImagesRouterDeps {
   userId: string;
   userStore?: UserStore;
   subscriptionStore?: SubscriptionStore;
   usageStore?: UsageStore;
+  /** Кредиты пользователей; в тестах — свои на каждый сервер. */
+  credits?: CreditLedger;
   service?: ImageService;
   store?: ImageStore;
 }
@@ -28,7 +31,7 @@ export interface ImagesRouterDeps {
 export function createImagesRouter(deps: ImagesRouterDeps): Router {
   const router = Router();
   const usageStore = deps.usageStore ?? defaultUsageStore;
-  const service = deps.service ?? getImageService(usageStore);
+  const service = deps.service ?? getImageService(usageStore, deps.credits);
   const store = deps.store ?? getImageStore();
 
   function identify(request: Request, response: Response): ImageCaller | null {

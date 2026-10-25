@@ -8,17 +8,17 @@
 
 ## Что умеет
 
-| Раздел                | Что внутри                                                                                                                   | Документ                                               |
-| --------------------- | ---------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------ |
-| Чат                   | 15 моделей через OpenRouter, режим Auto, кнопка Max (Ultra), вложения, привязка репозитория GitHub, недельные лимиты моделей | [models-and-pricing.md](docs/models-and-pricing.md)    |
-| Ketner Code (`/code`) | Проекты с файлами и агент, который читает и правит код по плану, импорт из ZIP и GitHub                                      | [code-workspace.md](docs/code-workspace.md)            |
-| Изображения           | FLUX через Cloudflare Workers AI, платные модели через Runware, обязательная модерация                                       | [models-and-pricing.md §5](docs/models-and-pricing.md) |
-| API для программ      | `/v1/chat/completions` в формате OpenAI, ключи `ketner_sk_…` (с тарифа Plus)                                                 | [agent-api.md](docs/agent-api.md)                      |
-| Оплата                | Криптовалюта через Trybit, Telegram Stars (с автопродлением), возвраты                                                       | [payments.md](docs/payments.md)                        |
-| Telegram              | Бот оплаты и кабинет `/tg`, вход на сайт через Telegram, бот поддержки                                                       | [telegram.md](docs/telegram.md)                        |
-| Админка (`/admin`)    | Пользователи и тарифы, расход и маржа, метрики моделей, регистрации по времени и источнику                                   | [operations.md](docs/operations.md)                    |
+| Раздел                | Что внутри                                                                                                                                   | Документ                                               |
+| --------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------ |
+| Чат                   | 15 моделей через OpenRouter, режим Auto, кнопка Max (Ultra), вложения, привязка репозитория GitHub, кредиты вместо отдельных лимитов моделей | [models-and-pricing.md](docs/models-and-pricing.md)    |
+| Ketner Code (`/code`) | Проекты с файлами и агент, который читает и правит код по плану, импорт из ZIP и GitHub                                                      | [code-workspace.md](docs/code-workspace.md)            |
+| Изображения           | FLUX через Cloudflare Workers AI, платные модели через Runware, обязательная модерация                                                       | [models-and-pricing.md §5](docs/models-and-pricing.md) |
+| API для программ      | `/v1/chat/completions` в формате OpenAI, ключи `ketner_sk_…` (с тарифа Plus)                                                                 | [agent-api.md](docs/agent-api.md)                      |
+| Оплата                | Криптовалюта через Trybit, Telegram Stars (с автопродлением), возвраты                                                                       | [payments.md](docs/payments.md)                        |
+| Telegram              | Бот оплаты и кабинет `/tg`, вход на сайт через Telegram, бот поддержки                                                                       | [telegram.md](docs/telegram.md)                        |
+| Админка (`/admin`)    | Пользователи и тарифы, расход и маржа, метрики моделей, регистрации по времени и источнику                                                   | [operations.md](docs/operations.md)                    |
 
-Тарифы: Free $0 · Plus $9 · Pro $25 · Ultra $49 в месяц. Лимиты, бюджеты и экономика — в [models-and-pricing.md](docs/models-and-pricing.md).
+Тарифы: Free $0 · Plus $9 · Pro $25 · Ultra $49 в месяц. Кредиты, лимиты и экономика — в [models-and-pricing.md](docs/models-and-pricing.md).
 
 > **Перед любым запуском рекламы прочитайте [roadmap.md](docs/roadmap.md)**: там список того, что ещё не готово, начиная с временной бесплатной выдачи Pro в Telegram.
 
@@ -81,7 +81,7 @@ render.yaml   описание сервиса Render · Dockerfile — альт�
 | [auth-and-security.md](docs/auth-and-security.md)   | Вход и аккаунты, права, защита, известные риски                    |
 | [payments.md](docs/payments.md)                     | Trybit, Telegram Stars, возвраты, вебхуки                          |
 | [telegram.md](docs/telegram.md)                     | Боты, мини-приложение, вход через Telegram                         |
-| [models-and-pricing.md](docs/models-and-pricing.md) | Модели, Auto, лимиты, бюджеты, цены и маржа, картинки              |
+| [models-and-pricing.md](docs/models-and-pricing.md) | Модели, Auto, кредиты, цены и маржа, картинки                      |
 | [code-workspace.md](docs/code-workspace.md)         | Ketner Code: проекты и агент                                       |
 | [screens.md](docs/screens.md)                       | Карта страниц сайта                                                |
 | [ux-checklist.md](docs/ux-checklist.md)             | Дизайн-система и чек-лист интерфейса                               |

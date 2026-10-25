@@ -1,11 +1,13 @@
 /**
- * Генерация картинок: тариф, суточные лимиты с запасной моделью, месячный бюджет, проверка запроса,
- * генерация, сохранение и учёт расхода (в тот же бюджет тарифа, что и чат).
+ * Генерация картинок: тариф, кредиты (один пул с чатом и Ketner Code), суточные лимиты с запасной
+ * моделью, проверка запроса, генерация, сохранение, списание кредитов и учёт расхода.
  */
 
 import { createHmac, timingSafeEqual } from 'node:crypto';
-import { evaluateBudget } from '../services/budget-policy.js';
-import { planEntitlements } from '../services/premium-quota.js';
+import { creditService } from '../billing/index.js';
+import { creditStageOf } from '../services/credit-policy.js';
+import type { CreditLedger } from '../services/credits.js';
+import { CREDITS_PER_USD, toCredits } from '../services/entitlement.js';
 import type { UsageStore } from '../store/usage-store.js';
 import type { ImageGenerator } from './cloudflare.js';
 import type { ImageMeta, ImageStore } from './image-store.js';
@@ -17,9 +19,8 @@ import {
   IMAGE_MODELS,
   getImageModel,
   imageCostUsd,
+  FREE_IMAGES_PER_DAY,
   imageDailyLimit,
-  PAID_IMAGE_MODEL_IDS,
-  paidImageBudget,
   type ImageAspect,
   type ImageModel,
 } from './models.js';
@@ -31,7 +32,6 @@ export type ImageErrorCode =
   | 'invalid_request'
   | 'upgrade_required'
   | 'image_limit'
-  | 'fair_use_exceeded'
   | 'concurrency_limit'
   | 'moderation_blocked'
   | 'moderation_unavailable'
@@ -105,16 +105,28 @@ export class ImageService {
       generator: ImageGenerator;
       moderator: PromptModerator;
       urlSecret: string;
+      /** Кредиты пользователей; по умолчанию — общий журнал биллинга. */
+      credits?: CreditLedger;
     },
   ) {}
+
+  private get credits(): CreditLedger {
+    return this.deps.credits ?? creditService;
+  }
 
   get available(): boolean {
     return this.deps.generator.available;
   }
 
   capabilities(caller: ImageCaller) {
+    const balance = this.credits.balance(caller.userId, caller.plan as never);
     return {
       available: this.available,
+      credits: {
+        balance: toCredits(balance.remainingUsd),
+        exhausted: creditStageOf(balance.remainingUsd) === 'exhausted',
+        freePerDay: FREE_IMAGES_PER_DAY,
+      },
       defaultModelId: DEFAULT_IMAGE_MODEL_ID,
       defaultStyleId: DEFAULT_IMAGE_STYLE_ID,
       styles: IMAGE_STYLES.map((style) => style.id),
@@ -131,6 +143,8 @@ export class ImageService {
           aspects: model.aspects,
           requiredPlan: model.requiredPlan,
           locked: dailyLimit === 0,
+          /** Цена одной картинки 1024×1024 в кредитах (с десятыми). */
+          priceCredits: Math.round(imageCostUsd(model, 1024, 1024) * CREDITS_PER_USD * 10) / 10,
           dailyLimit,
           usedToday: this.deps.usageStore.getImagesLastDay(caller.userId, model.id),
         };
@@ -143,39 +157,31 @@ export class ImageService {
     return generator.supports ? generator.supports(model) : generator.available;
   }
 
-  /** Потрачено на платные картинки за 30 дней сверх бюджета тарифа на них. */
-  private paidBudgetSpent(caller: ImageCaller): boolean {
-    const budget = paidImageBudget(caller.plan);
-    if (budget <= 0) return true;
-    return (
-      this.deps.usageStore.getCostLastMonthByModels(caller.userId, PAID_IMAGE_MODEL_IDS) >= budget
-    );
-  }
-
   /**
    * Модель, которая нарисует картинку: начиная с `start` по цепочке запасных. Пропускаются модели без
-   * настроенного провайдера, с исчерпанным суточным лимитом, платные при исчерпанном бюджете на них
-   * и всё, кроме самой дешёвой, когда исчерпан месячный бюджет тарифа. null — рисовать нечем.
+   * настроенного провайдера, с исчерпанным суточным лимитом и те, на которые не хватает кредитов.
+   * Когда кредитов нет совсем, рисует только FLUX.1 schnell и не больше FREE_IMAGES_PER_DAY в сутки.
+   * null — рисовать нечем.
    */
   private pickModel(
     start: ImageModel,
     caller: ImageCaller,
-    options: { cheapestOnly: boolean; skip?: ReadonlySet<string> },
+    options: { balanceUsd: number; skip?: ReadonlySet<string> },
   ): ImageModel | null {
-    const paidSpent = this.paidBudgetSpent(caller);
+    const exhausted = creditStageOf(options.balanceUsd) === 'exhausted';
     const seen = new Set<string>();
-    let model: ImageModel | undefined = options.cheapestOnly
-      ? getImageModel(DEFAULT_IMAGE_MODEL_ID)
-      : start;
+    let model: ImageModel | undefined = exhausted ? getImageModel(DEFAULT_IMAGE_MODEL_ID) : start;
     while (model && !seen.has(model.id)) {
       seen.add(model.id);
+      const dailyLimit = exhausted
+        ? Math.min(imageDailyLimit(model, caller.plan), FREE_IMAGES_PER_DAY)
+        : imageDailyLimit(model, caller.plan);
       const usable =
         !options.skip?.has(model.id) &&
         this.supports(model) &&
-        imageDailyLimit(model, caller.plan) > 0 &&
-        !(model.provider === 'runware' && paidSpent) &&
-        this.deps.usageStore.getImagesLastDay(caller.userId, model.id) <
-          imageDailyLimit(model, caller.plan);
+        dailyLimit > 0 &&
+        (exhausted || options.balanceUsd >= imageCostUsd(model, 1024, 1024)) &&
+        this.deps.usageStore.getImagesLastDay(caller.userId, model.id) < dailyLimit;
       if (usable) return model;
       model = model.fallbackModelId ? getImageModel(model.fallbackModelId) : undefined;
     }
@@ -267,26 +273,10 @@ export class ImageService {
       );
     }
 
-    // Месячный бюджет тарифа общий с чатом: на 125% — отказ, при исчерпании — только самая дешёвая модель.
-    // Период, оплаченный криптой, даёт бонус к бюджету (services/entitlement.ts → CRYPTO_PREMIUM_BONUS).
-    const entitlements = planEntitlements(caller.userId, caller.plan as never, {});
-    const snapshot = this.deps.usageStore.getFairUseSnapshot(caller.userId);
-    const budget = evaluateBudget(snapshot.estimatedCostLastMonth, entitlements.costBudget);
-    if (budget.stage === 'hard_stop') {
-      throw new ImageServiceError(
-        'fair_use_exceeded',
-        429,
-        t(
-          language,
-          'Ресурсная квота тарифа на этот период исчерпана.',
-          'Your plan resource quota for this period is used up.',
-        ),
-      );
-    }
-
-    // Суточные лимиты: когда лимит модели исчерпан, картинку делает запасная модель.
-    const cheapestOnly = budget.stage === 'exhausted';
-    const picked = this.pickModel(requested, caller, { cheapestOnly });
+    // Кредиты общие с чатом и Ketner Code. Не хватает на выбранную модель — рисует запасная из цепочки;
+    // кредитов нет совсем — только FLUX.1 schnell в пределах бесплатного суточного лимита.
+    const balanceUsd = this.credits.balance(caller.userId, caller.plan as never).remainingUsd;
+    const picked = this.pickModel(requested, caller, { balanceUsd });
     if (!picked) {
       throw new ImageServiceError(
         'image_limit',
@@ -370,7 +360,7 @@ export class ImageService {
           const next: ImageModel | null =
             signal?.aborted || model.provider !== 'runware'
               ? null
-              : this.pickModel(model, caller, { cheapestOnly, skip: failed });
+              : this.pickModel(model, caller, { balanceUsd, skip: failed });
           if (!next) {
             throw new ImageServiceError(
               'provider_error',
@@ -397,12 +387,14 @@ export class ImageService {
         },
         generated.bytes,
       );
+      const costUsd = generated.costUsd ?? imageCostUsd(model, size.width, size.height);
       this.record(
         caller.userId,
         model,
-        generated.costUsd ?? imageCostUsd(model, size.width, size.height),
+        costUsd,
         Date.now() - started,
         'success',
+        this.credits.charge(caller.userId, costUsd),
       );
       return {
         image: this.toPublic(meta),
@@ -419,10 +411,12 @@ export class ImageService {
     cost: number,
     latencyMs: number,
     status: 'success' | 'error',
+    creditsUsd = 0,
   ): void {
     this.deps.usageStore.recordUsage({
       userId,
       conversationId: 'images',
+      creditsUsd,
       modelId: model.id,
       // Тип провайдера в учёте один на все ИИ-запросы; провайдер картинки однозначно задаёт id модели.
       provider: 'openrouter',

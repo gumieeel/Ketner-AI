@@ -216,9 +216,9 @@ export const API_ENDPOINTS = [
   },
   {
     method: 'GET',
-    path: '/api/usage/quota',
+    path: '/api/usage/credits',
     status: 'ready',
-    description: 'Остаток запросов топ-моделей и когда восстановится',
+    description: 'Остаток кредитов, их сроки и цена запроса по моделям тарифа',
   },
   { method: 'GET', path: '/api/keys', status: 'ready', description: 'API-ключи пользователя' },
   {
@@ -395,8 +395,7 @@ export function createApiRouter(deps: ApiDeps): Router {
       subscriptionStore: activeSubscriptionStore,
       usageStore: activeUsageStore,
       gateway: deps.chatGateway,
-      premiumCredits: activeBilling.ledger.credits,
-      planBonus: activeBilling,
+      credits: activeBilling.credits,
       githubTokenOf: (userId) => activeGithubStore.tokenOf(userId),
       fetchImpl: deps.githubFetch,
     }),
@@ -407,8 +406,7 @@ export function createApiRouter(deps: ApiDeps): Router {
       usageStore: activeUsageStore,
       userStore: activeUserStore,
       subscriptionStore: activeSubscriptionStore,
-      credits: activeBilling.ledger.credits,
-      bonus: activeBilling,
+      credits: activeBilling.credits,
     }),
   );
   router.use(
@@ -418,6 +416,7 @@ export function createApiRouter(deps: ApiDeps): Router {
       userStore: activeUserStore,
       subscriptionStore: activeSubscriptionStore,
       usageStore: activeUsageStore,
+      credits: activeBilling.credits,
     }),
   );
   // Сравнение ответов моделей: монтируется раньше /chat, чтобы путь не попал в общий роутер чата.
@@ -427,8 +426,7 @@ export function createApiRouter(deps: ApiDeps): Router {
       ...deps,
       votes: deps.compareVoteStore,
       gateway: deps.chatGateway,
-      premiumCredits: activeBilling.ledger.credits,
-      planBonus: activeBilling,
+      credits: activeBilling.credits,
       subscriptionStore: activeSubscriptionStore,
       userStore: activeUserStore,
       usageStore: activeUsageStore,
@@ -440,8 +438,7 @@ export function createApiRouter(deps: ApiDeps): Router {
     createReviewRouter({
       ...deps,
       gateway: deps.chatGateway,
-      premiumCredits: activeBilling.ledger.credits,
-      planBonus: activeBilling,
+      credits: activeBilling.credits,
       subscriptionStore: activeSubscriptionStore,
       userStore: activeUserStore,
       usageStore: activeUsageStore,
@@ -452,8 +449,7 @@ export function createApiRouter(deps: ApiDeps): Router {
     createChatRouter({
       ...deps,
       gateway: deps.chatGateway,
-      premiumCredits: activeBilling.ledger.credits,
-      planBonus: activeBilling,
+      credits: activeBilling.credits,
       subscriptionStore: activeSubscriptionStore,
       userStore: activeUserStore,
       usageStore: activeUsageStore,

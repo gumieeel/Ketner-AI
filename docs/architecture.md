@@ -41,17 +41,17 @@ Cloudflare (ketner.org)  ──►  Render: один процесс Node (apps/m
 `POST /api/chat/completions` → `routes/chat.ts` → `AIGateway.stream` (`ai/gateway.ts`):
 
 1. **Права** (`services/entitlement.ts`) — тариф, доступные модели, потолок ответа.
-2. **Fair Use** (`services/fair-use.ts`) — сообщения и токены в сутки, параллельные запросы, дневной потолок расхода.
-3. **Бюджет** (`services/budget-policy.ts`) — расход за 30 дней: 80% экономный режим, 100% только дешёвые модели, 125% отказ.
-4. **Выбор модели** — Auto (`ai/auto-router.ts`) или явный выбор; недельный лимит модели (`ai/model-limits.ts`), квота премиум-моделей (`services/premium-quota.ts`), кредиты пакетов.
+2. **Fair Use** (`services/fair-use.ts`) — сообщения и токены в сутки, запросы в минуту и час, параллельные запросы.
+3. **Кредиты** (`services/credits.ts`, `services/credit-policy.ts`, `store/credit-store.ts`) — остаток и стадия: `normal` или `exhausted`.
+4. **Выбор модели** — Auto (`ai/auto-router.ts`) или явный выбор; если кредитов на модель не хватает, отвечает более дешёвая, а когда они кончились — бесплатная (`pickAffordable`).
 5. **Контекст** (`ai/context.ts`, `ai/workspace-context.ts`) — окно истории со сводкой, файлы привязанного проекта; точки кэша промпта (`ai/prompt-cache.ts`).
 6. **Глубина размышлений** (`ai/reasoning-policy.ts`), режим Max на Ultra.
 7. **Провайдер** — OpenRouter или прямой API вендора (`ai/providers/routed-provider.ts`), предохранитель на каждую модель (`ai/circuit-breaker.ts`), цепочка запасных моделей, сторож зависшего потока (`ai/stream-watchdog.ts`).
-8. **Учёт** (`store/usage-store.ts`) — фактическая стоимость (`usage.cost` OpenRouter) по модели, которая реально ответила.
+8. **Учёт и списание** (`store/usage-store.ts`, `CreditService.charge`) — фактическая стоимость (`usage.cost` OpenRouter) по модели, которая реально ответила, списывается кредитами.
 
 Ответ уходит потоком SSE (формат — [api.md](api.md#чат-sse)). Подробности моделей и экономики — [models-and-pricing.md](models-and-pricing.md).
 
-Ketner Code (`code/agent-runner.ts`) и `/v1` (`ai/agent-gateway.ts`) используют те же бюджеты, квоты и учёт, но свой цикл вызовов.
+Ketner Code (`code/agent-runner.ts`) и `/v1` (`ai/agent-gateway.ts`) используют тот же пул кредитов, технические лимиты и учёт, но свой цикл вызовов.
 
 ## Сервер: `apps/mock-api/src`
 
@@ -67,7 +67,7 @@ Ketner Code (`code/agent-runner.ts`) и `/v1` (`ai/agent-gateway.ts`) испол
 | `middleware/` | Аутентификация, гостевой id, лимиты частоты, заголовки безопасности и CORS, ошибки       |
 | `routes/`     | Эндпоинты (список — [api.md](api.md))                                                    |
 | `seo/`        | Мета-теги, robots, sitemap, статус 404 для несуществующих страниц                        |
-| `services/`   | Цены, тарифы и бюджеты, маржа, курсы, Stripe, Trybit, почта, регистрации, VIP и админы   |
+| `services/`   | Цены, тарифы и кредиты, маржа, курсы, Stripe, Trybit, почта, регистрации, VIP и админы   |
 | `store/`      | Хранилища в памяти с файлами и зеркалом в Postgres                                       |
 | `telegram/`   | Бот оплаты, бот поддержки, курс звёзд, подпись данных мини-приложения, коды привязки     |
 

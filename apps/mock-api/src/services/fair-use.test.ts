@@ -48,14 +48,10 @@ test('агент: токенные окна пропускаются, остал
   );
 });
 
-test('суточный лимит расхода умножается на коэффициент агента', () => {
-  const cap = PLAN_ENTITLEMENTS.plus.maxDailyCost!;
-  const between = snapshot({ estimatedCostLastDay: cap * 2 });
-  assert.equal(FairUseEngine.evaluate(between, 'plus').action, 'deny');
-  assert.equal(
-    FairUseEngine.evaluate(between, 'plus', 'ru', { dailyCostFactor: 3 }).action,
-    'allow',
-  );
-  const over = snapshot({ estimatedCostLastDay: cap * 3 });
-  assert.equal(FairUseEngine.evaluate(over, 'plus', 'ru', { dailyCostFactor: 3 }).action, 'deny');
+test('расход не ограничивается fair-use: решение зависит от частоты, токенов и параллелизма, а за деньги отвечают кредиты', () => {
+  const rich = snapshot({ estimatedCostLastDay: 1_000, estimatedCostLastMonth: 10_000 });
+  for (const plan of ['free', 'plus', 'pro', 'ultra'] as const) {
+    const decision = FairUseEngine.evaluate({ ...rich, requestsLastDay: 0 }, plan, 'ru');
+    assert.equal(decision.action, 'allow', plan);
+  }
 });

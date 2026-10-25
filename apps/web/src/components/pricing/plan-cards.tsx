@@ -1,12 +1,14 @@
 import { Link } from 'react-router-dom';
-import { CheckIcon } from '@/components/icons';
+import { CheckIcon, CreditsIcon } from '@/components/icons';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { buttonClasses } from '@/components/ui/button-classes';
 import { useAuth } from '@/features/auth/auth-store';
+import planFacts from '@/features/billing/plan-facts.json';
 import { PLANS, type Plan } from '@/features/billing/plans';
-import { useTranslation } from '@/i18n';
+import { useTranslation, type TranslationKey } from '@/i18n';
 import { cn } from '@/lib/cn';
+import { formatCredits, pluralForm } from '@/lib/format-date';
 
 export interface PlanCardsProps {
   variant?: 'compact' | 'full';
@@ -19,6 +21,10 @@ export interface PlanCardsProps {
  */
 export function PlanCards({ variant = 'compact', className }: PlanCardsProps) {
   const { t, language } = useTranslation();
+  const plural = (base: 'pricing.credits' | 'pricing.requests', count: number) =>
+    t(`${base}.${pluralForm(count, language)}` as TranslationKey, {
+      count: formatCredits(count, language),
+    });
   const user = useAuth((state) => state.user);
   const currentPlan = user?.plan ?? 'free';
   const isAuthenticated = Boolean(user);
@@ -114,6 +120,19 @@ export function PlanCards({ variant = 'compact', className }: PlanCardsProps) {
                 ) : null}
               </div>
 
+              <CreditsBlock
+                plan={plan}
+                emphasised={isPro}
+                plural={plural}
+                period={t('pricing.creditsPeriod')}
+                example={(model, requests) =>
+                  t('pricing.creditsExample', {
+                    requests: plural('pricing.requests', requests),
+                    model,
+                  })
+                }
+              />
+
               {plan.modelsHighlight ? (
                 <p className="mt-4 min-h-[2.8em] text-[14px] leading-snug text-muted">
                   {typeof plan.modelsHighlight === 'string'
@@ -171,6 +190,46 @@ export function PlanCards({ variant = 'compact', className }: PlanCardsProps) {
           </div>
         );
       })}
+    </div>
+  );
+}
+
+interface CreditFacts {
+  monthlyCredits: number;
+  examples: { name: string; requests: number }[];
+}
+
+interface CreditsBlockProps {
+  plan: Plan;
+  emphasised: boolean;
+  plural: (base: 'pricing.credits' | 'pricing.requests', count: number) => string;
+  period: string;
+  example: (model: string, requests: number) => string;
+}
+
+/** Выдача кредитов на 30 дней и пример «на сколько запросов хватит» (числа — из plan-facts.json). */
+function CreditsBlock({ plan, emphasised, plural, period, example }: CreditsBlockProps) {
+  const facts = (planFacts.plans as Record<string, CreditFacts | undefined>)[plan.id];
+  if (!facts) return null;
+  const first = facts.examples[0];
+  return (
+    <div
+      data-testid={`plan-credits-${plan.id}`}
+      className={cn(
+        'mt-5 flex items-start gap-3 rounded-lg px-3.5 py-3',
+        emphasised ? 'bg-surface-3' : 'bg-surface-2',
+      )}
+    >
+      <CreditsIcon className="mt-0.5 size-5 shrink-0 text-accent" aria-hidden="true" />
+      <div className="flex min-w-0 flex-col gap-0.5">
+        <p className="sharp tabular text-[17px] leading-tight font-medium text-text">
+          {plural('pricing.credits', facts.monthlyCredits)}
+        </p>
+        <p className="text-[12.5px] leading-snug text-muted">
+          {period}
+          {first ? ` · ${example(first.name, first.requests)}` : ''}
+        </p>
+      </div>
     </div>
   );
 }
