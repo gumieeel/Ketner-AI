@@ -15,14 +15,7 @@ export interface IconButtonProps extends ButtonHTMLAttributes<HTMLButtonElement>
 }
 
 export const IconButton = forwardRef<HTMLButtonElement, IconButtonProps>(function IconButton(
-  {
-    label,
-    size = 'md',
-    className,
-    children,
-    type = 'button',
-    ...props
-  },
+  { label, size = 'md', className, children, type = 'button', ...props },
   ref,
 ) {
   return (
@@ -33,7 +26,7 @@ export const IconButton = forwardRef<HTMLButtonElement, IconButtonProps>(functio
       title={label}
       className={cn(
         'relative inline-flex shrink-0 items-center justify-center rounded-md',
-        'transition-[background-color,color,transform] duration-200 active:scale-95',
+        'transition-[background-color,color] duration-150',
         'text-muted hover:bg-surface-2 hover:text-text',
         'disabled:cursor-not-allowed disabled:opacity-50',
         'after:absolute after:-inset-1.5 after:content-[""] max-md:after:block md:after:hidden',

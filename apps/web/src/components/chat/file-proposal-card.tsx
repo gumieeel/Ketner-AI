@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useEffectEvent, useState } from 'react';
 import {
   AlertIcon,
   CheckIcon,
@@ -9,9 +9,7 @@ import {
   SparkleIcon,
 } from '@/components/icons';
 import { Button } from '@/components/ui/button';
-import {
-  applyLocalChanges,
-} from '@/features/chat/file-operations';
+import { applyLocalChanges } from '@/features/chat/file-operations';
 import type { FileProposal, WorkspaceContext } from '@/features/chat/types';
 import { useWorkspace } from '@/features/chat/workspace-store';
 import { useTranslation } from '@/i18n';
@@ -72,18 +70,23 @@ export function FileProposalCard({ proposal: initialProposal, workspace }: FileP
           error: res.errors.join('; '),
         }));
       }
-    } catch (err: any) {
+    } catch (err) {
       setProposal((prev) => ({
         ...prev,
         status: 'error',
-        error: err?.message || t('proposal.applyError'),
+        error: (err instanceof Error && err.message) || t('proposal.applyError'),
       }));
     }
   };
 
+  // Автоприменение читает актуальные workspace и изменения, но запускается только сменой условий.
+  const autoApplyPending = useEffectEvent(() => {
+    void handleApply();
+  });
+
   useEffect(() => {
     if (autoApply && proposal.status === 'pending' && workspace?.type === 'local_folder') {
-      void handleApply();
+      autoApplyPending();
     }
   }, [autoApply, proposal.status, workspace?.type]);
 
@@ -182,7 +185,7 @@ export function FileProposalCard({ proposal: initialProposal, workspace }: FileP
             >
               <span
                 className={cn(
-                  'shrink-0 rounded-md px-1.5 py-0.5 font-mono text-[10px] font-bold uppercase',
+                  'shrink-0 rounded-xs px-1.5 py-0.5 font-mono text-[10px] font-bold uppercase',
                   change.action === 'write'
                     ? 'bg-success-soft text-success'
                     : change.action === 'replace'
@@ -194,14 +197,22 @@ export function FileProposalCard({ proposal: initialProposal, workspace }: FileP
               </span>
 
               <div className="min-w-0 flex-1">
-                <span className="block truncate font-mono text-[12px] text-text" title={change.path}>
+                <span
+                  className="block truncate font-mono text-[12px] text-text"
+                  title={change.path}
+                >
                   {change.path}
                 </span>
                 {change.description ? (
-                  <span className="block truncate text-[11px] text-muted">{change.description}</span>
+                  <span className="block truncate text-[11px] text-muted">
+                    {change.description}
+                  </span>
                 ) : null}
                 {change.warning ? (
-                  <span className="flex items-center gap-1 text-[11px] text-warning" title={change.warning}>
+                  <span
+                    className="flex items-center gap-1 text-[11px] text-warning"
+                    title={change.warning}
+                  >
                     <AlertIcon className="size-3 shrink-0" aria-hidden="true" />
                     <span className="truncate">{change.warning}</span>
                   </span>
@@ -254,7 +265,9 @@ export function FileProposalCard({ proposal: initialProposal, workspace }: FileP
               <div className="flex items-center gap-2">
                 <CheckIcon className="size-4 shrink-0" />
                 <span className="font-medium">
-                  {workspace?.type === 'git_repo' ? t('proposal.appliedGit') : t('proposal.appliedLocal')}
+                  {workspace?.type === 'git_repo'
+                    ? t('proposal.appliedGit')
+                    : t('proposal.appliedLocal')}
                 </span>
               </div>
               {proposal.gitResult?.url && (

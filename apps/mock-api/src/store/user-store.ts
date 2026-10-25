@@ -1,9 +1,17 @@
-import { pbkdf2Sync, randomBytes, randomUUID, timingSafeEqual } from 'node:crypto';
+import {
+  createHash,
+  pbkdf2Sync,
+  randomBytes,
+  randomUUID,
+  scryptSync,
+  timingSafeEqual,
+} from 'node:crypto';
 import { mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
 import { dirname } from 'node:path';
 import { config, isProduction } from '../config.js';
 import type { PlanId, User } from '../types.js';
 import { isVipEmail, isAdminEmail } from '../services/vip.js';
+import type { SignupAttribution, SignupMethod } from '../services/signup-attribution.js';
 
 export interface StoredUser {
   id: string;
@@ -17,6 +25,16 @@ export interface StoredUser {
   isAdmin?: boolean;
   telegramChatId?: number | string;
   telegramUsername?: string;
+  /** Как создан аккаунт: почта, Google, GitHub… (у старых аккаунтов может отсутствовать). */
+  signupMethod?: SignupMethod;
+  /** Откуда пришёл человек перед регистрацией (utm, сайт-источник). */
+  signupAttribution?: SignupAttribution;
+}
+
+/** Сведения о регистрации, которые передаются при создании аккаунта. */
+export interface SignupInfo {
+  method: SignupMethod;
+  attribution?: SignupAttribution;
 }
 
 export interface UserStore {
@@ -24,9 +42,14 @@ export interface UserStore {
   findById(id: string): User | null;
   findByEmail(email: string): User | null;
   findByTelegramChatId(chatId: number | string): User | null;
-  create(email: string, password: string, name?: string): User;
+  create(email: string, password: string, name?: string, signup?: SignupInfo): User;
   verifyPassword(email: string, password: string): User | null;
   setPassword(email: string, password: string): User | null;
+  /**
+   * Отпечаток текущего пароля для токенов входа: меняется при каждой смене пароля, и токены,
+   * выданные со старым, перестают действовать. null — аккаунта нет.
+   */
+  credentialStamp(id: string): string | null;
   updatePlan(id: string, plan: PlanId): User | null;
   setVip(id: string, isVip: boolean): User | null;
   setAdmin(id: string, isAdmin: boolean): User | null;
@@ -55,20 +78,54 @@ export interface UserDbDriver {
     chatId: number | string | null,
     username?: string | null,
   ) => Promise<void> | void;
-  onPasswordUpdated?: (
-    userId: string,
-    salt: string,
-    passwordHash: string,
-  ) => Promise<void> | void;
+  onPasswordUpdated?: (userId: string, salt: string, passwordHash: string) => Promise<void> | void;
 }
 
 interface Snapshot {
   users: StoredUser[];
 }
 
-function hashPassword(password: string, salt: string): string {
+/**
+ * Прежний формат хеша: PBKDF2-SHA256 на 1000 итераций (в сотни раз слабее рекомендаций OWASP).
+ * Остаётся только для проверки старых паролей: после удачного входа хеш пересчитывается в scrypt.
+ */
+function hashPasswordLegacy(password: string, salt: string): string {
   return pbkdf2Sync(password, salt, 1000, 32, 'sha256').toString('hex');
 }
+
+/** Параметры scrypt: N=2^15, r=8, p=1 (≈ 32 МБ памяти и десятки миллисекунд на попытку). */
+const SCRYPT_N = 1 << 15;
+const SCRYPT_R = 8;
+const SCRYPT_P = 1;
+const SCRYPT_PREFIX = `scrypt$${SCRYPT_N}$${SCRYPT_R}$${SCRYPT_P}$`;
+
+function hashPassword(password: string, salt: string): string {
+  const derived = scryptSync(password, salt, 32, {
+    N: SCRYPT_N,
+    r: SCRYPT_R,
+    p: SCRYPT_P,
+    maxmem: 64 * 1024 * 1024,
+  });
+  return `${SCRYPT_PREFIX}${derived.toString('hex')}`;
+}
+
+/** Проверка пароля против хеша любого поддерживаемого формата. */
+function passwordMatches(password: string, salt: string, storedHash: string): boolean {
+  if (storedHash.startsWith('scrypt$')) {
+    const [, n, r, p, hex] = storedHash.split('$');
+    const N = Number(n);
+    const R = Number(r);
+    const P = Number(p);
+    if (!Number.isInteger(N) || !Number.isInteger(R) || !Number.isInteger(P) || !hex) return false;
+    const derived = scryptSync(password, salt, 32, { N, r: R, p: P, maxmem: 64 * 1024 * 1024 });
+    return hashesEqual(derived.toString('hex'), hex);
+  }
+  return hashesEqual(hashPasswordLegacy(password, salt), storedHash);
+}
+
+/** Фиктивная проверка для несуществующего email: время ответа не выдаёт, есть ли такой аккаунт. */
+const DUMMY_SALT = randomBytes(16).toString('hex');
+const DUMMY_HASH = hashPassword(randomBytes(16).toString('hex'), DUMMY_SALT);
 
 /** Сравнение хешей за константное время. */
 function hashesEqual(left: string, right: string): boolean {
@@ -103,7 +160,7 @@ const DEFAULT_DEMO_USER: StoredUser = (() => {
     plan: 'free',
     createdAt: '2026-09-22T00:00:00.000Z',
     salt,
-    passwordHash: hashPassword('password123', salt),
+    passwordHash: hashPasswordLegacy('password123', salt),
   };
 })();
 
@@ -118,6 +175,8 @@ const COMPROMISED_SALTS: ReadonlySet<string> = new Set([
 ]);
 
 const DEMO_EMAIL = 'demo@ketner.ai';
+/** Длиннее пароли не хешируются: защита от DoS дорогим KDF на мегабайтных строках. */
+export const MAX_PASSWORD_LENGTH = 256;
 const MIN_SEED_PASSWORD_LENGTH = 12;
 const SEED_EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -183,7 +242,7 @@ export function createUserStore(file: string): UserStore {
       return user ? toPublicUser(user) : null;
     },
 
-    create(email: string, password: string, name?: string) {
+    create(email: string, password: string, name?: string, signup?: SignupInfo) {
       const normalizedEmail = email.trim().toLowerCase();
       const resolvedName = name?.trim() || normalizedEmail.split('@')[0] || 'User';
       const salt = randomBytes(16).toString('hex');
@@ -203,13 +262,15 @@ export function createUserStore(file: string): UserStore {
         passwordHash,
         isVip,
         isAdmin,
+        signupMethod: signup?.method,
+        signupAttribution: signup?.attribution,
       };
 
       snapshot.users.push(newUser);
       persist();
-      dbDriver?.onUserCreated?.({ ...newUser })?.catch?.((err) =>
-        console.error('[db] Error persisting created user:', err),
-      );
+      dbDriver
+        ?.onUserCreated?.({ ...newUser })
+        ?.catch?.((err) => console.error('[db] Error persisting created user:', err));
 
       return toPublicUser(newUser);
     },
@@ -219,7 +280,8 @@ export function createUserStore(file: string): UserStore {
       const stored = snapshot.users.find(
         (candidate) => candidate.email.toLowerCase() === normalizedEmail,
       );
-      if (!stored) {
+      if (!stored || typeof password !== 'string' || password.length > MAX_PASSWORD_LENGTH) {
+        passwordMatches(String(password).slice(0, MAX_PASSWORD_LENGTH), DUMMY_SALT, DUMMY_HASH);
         return null;
       }
 
@@ -229,9 +291,22 @@ export function createUserStore(file: string): UserStore {
         return null;
       }
 
-      const hash = hashPassword(password, stored.salt);
-      if (!hashesEqual(hash, stored.passwordHash)) {
+      if (
+        !stored.passwordHash ||
+        !stored.salt ||
+        !passwordMatches(password, stored.salt, stored.passwordHash)
+      ) {
         return null;
+      }
+
+      // Старый хеш (PBKDF2, 1000 итераций) прозрачно заменяется на scrypt при первом удачном входе.
+      if (!stored.passwordHash.startsWith('scrypt$') && !COMPROMISED_SALTS.has(stored.salt)) {
+        stored.salt = randomBytes(16).toString('hex');
+        stored.passwordHash = hashPassword(password, stored.salt);
+        persist();
+        dbDriver
+          ?.onPasswordUpdated?.(stored.id, stored.salt, stored.passwordHash)
+          ?.catch?.((err) => console.error('[db] Error persisting upgraded password hash:', err));
       }
 
       return toPublicUser(stored);
@@ -248,10 +323,20 @@ export function createUserStore(file: string): UserStore {
       user.salt = randomBytes(16).toString('hex');
       user.passwordHash = hashPassword(password, user.salt);
       persist();
-      dbDriver?.onPasswordUpdated?.(user.id, user.salt, user.passwordHash)?.catch?.((err) =>
-        console.error('[db] Error persisting updated password:', err),
-      );
+      dbDriver
+        ?.onPasswordUpdated?.(user.id, user.salt, user.passwordHash)
+        ?.catch?.((err) => console.error('[db] Error persisting updated password:', err));
       return toPublicUser(user);
+    },
+
+    credentialStamp(id: string) {
+      const user = snapshot.users.find((candidate) => candidate.id === id);
+      if (!user) return null;
+      // Соль меняется при каждой смене пароля (setPassword, пересчёт старого хеша).
+      return createHash('sha256')
+        .update(`${user.salt}:${user.passwordHash}`)
+        .digest('base64url')
+        .slice(0, 16);
     },
 
     updatePlan(id: string, plan: PlanId) {
@@ -264,9 +349,9 @@ export function createUserStore(file: string): UserStore {
       }
       user.plan = plan;
       persist();
-      dbDriver?.onPlanUpdated?.(user.id, plan)?.catch?.((err) =>
-        console.error('[db] Error persisting plan update:', err),
-      );
+      dbDriver
+        ?.onPlanUpdated?.(user.id, plan)
+        ?.catch?.((err) => console.error('[db] Error persisting plan update:', err));
       return toPublicUser(user);
     },
 
@@ -280,9 +365,9 @@ export function createUserStore(file: string): UserStore {
       }
       user.isVip = isVip;
       persist();
-      dbDriver?.onVipUpdated?.(user.id, isVip)?.catch?.((err) =>
-        console.error('[db] Error persisting VIP update:', err),
-      );
+      dbDriver
+        ?.onVipUpdated?.(user.id, isVip)
+        ?.catch?.((err) => console.error('[db] Error persisting VIP update:', err));
       return toPublicUser(user);
     },
 
@@ -296,9 +381,9 @@ export function createUserStore(file: string): UserStore {
       }
       user.isAdmin = isAdmin;
       persist();
-      dbDriver?.onAdminUpdated?.(user.id, isAdmin)?.catch?.((err) =>
-        console.error('[db] Error persisting admin update:', err),
-      );
+      dbDriver
+        ?.onAdminUpdated?.(user.id, isAdmin)
+        ?.catch?.((err) => console.error('[db] Error persisting admin update:', err));
       return toPublicUser(user);
     },
 
@@ -324,9 +409,9 @@ export function createUserStore(file: string): UserStore {
         user.telegramUsername = username.replace(/^@/, '');
       }
       persist();
-      dbDriver?.onTelegramUpdated?.(user.id, chatId, user.telegramUsername)?.catch?.((err) =>
-        console.error('[db] Error persisting Telegram link:', err),
-      );
+      dbDriver
+        ?.onTelegramUpdated?.(user.id, chatId, user.telegramUsername)
+        ?.catch?.((err) => console.error('[db] Error persisting Telegram link:', err));
       return toPublicUser(user);
     },
 
@@ -341,9 +426,9 @@ export function createUserStore(file: string): UserStore {
       delete user.telegramChatId;
       delete user.telegramUsername;
       persist();
-      dbDriver?.onTelegramUpdated?.(user.id, null, null)?.catch?.((err) =>
-        console.error('[db] Error persisting Telegram unlink:', err),
-      );
+      dbDriver
+        ?.onTelegramUpdated?.(user.id, null, null)
+        ?.catch?.((err) => console.error('[db] Error persisting Telegram unlink:', err));
       return toPublicUser(user);
     },
 
@@ -381,7 +466,9 @@ export function createUserStore(file: string): UserStore {
       }
       if (!SEED_EMAIL_PATTERN.test(email)) {
         // Значение намеренно не печатаем: при ошибке конфигурации там может оказаться пароль.
-        console.warn('[auth] SEED_ADMIN_EMAIL не похож на email: первичный администратор не создан');
+        console.warn(
+          '[auth] SEED_ADMIN_EMAIL не похож на email: первичный администратор не создан',
+        );
         return;
       }
       if (password.length < MIN_SEED_PASSWORD_LENGTH) {
@@ -393,7 +480,7 @@ export function createUserStore(file: string): UserStore {
 
       const existing = snapshot.users.find((u) => u.email.toLowerCase() === email);
       if (!existing) {
-        const created = store.create(email, password, 'Administrator');
+        const created = store.create(email, password, 'Administrator', { method: 'admin' });
         store.setAdmin(created.id, true);
         store.setVip(created.id, true);
         console.log(`[auth] Создан первичный администратор ${email}`);

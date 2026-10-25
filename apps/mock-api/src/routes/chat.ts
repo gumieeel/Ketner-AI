@@ -1,11 +1,15 @@
 import { Router, type Request, type Response } from 'express';
 import { ERROR_MESSAGES } from '../ai/answers.js';
 import { AIGateway, classifyPromptComplexity } from '../ai/gateway.js';
+import type { PremiumCreditSource } from '../store/premium-credit-store.js';
+import type { PlanBonusSource } from '../services/premium-quota.js';
 import { DEFAULT_MODEL_ID } from '../ai/models.js';
 import { modelRegistry } from '../ai/model-registry.js';
 import { delay, randomBetween } from '../ai/stream.js';
 import { config, isProduction, type AiConfig } from '../config.js';
 import { sendError } from '../middleware/errors.js';
+import { resolveGuestId } from '../middleware/guest.js';
+import { RateLimiter, clientIp } from '../middleware/rate-limit.js';
 import type { ConversationStore } from '../store/conversation-store.js';
 import {
   usageStore as defaultUsageStore,
@@ -22,21 +26,24 @@ import { EntitlementService } from '../services/entitlement.js';
 import { resolveChatIdentity } from '../services/chat-identity.js';
 import { PayloadGuard } from '../ai/payload-guard.js';
 import type { Language, IncomingMessage, MessageStatus, FeedbackRating } from '../types.js';
+import type { ReasoningMode } from '../ai/gateway-types.js';
 
 const MAX_MESSAGES = 200;
 const MAX_CONTENT_LENGTH = 200000;
 
-/** Тело запроса на генерацию. Контракт зафиксирован в docs/ai-integration-todo.md. */
+/** Тело запроса на генерацию. Контракт — docs/api.md, раздел «Чат (SSE)». */
 export interface CompletionRequest {
   conversationId: string;
   modelId: string;
   language: Language;
   messages: IncomingMessage[];
+  /** Режим размышлений: max действует только на Ultra (сервер проверяет тариф сам). */
+  reasoningMode?: ReasoningMode;
 }
 
-type ParseResult = { ok: true; value: CompletionRequest } | { ok: false; message: string };
+export type ParseResult = { ok: true; value: CompletionRequest } | { ok: false; message: string };
 
-function parseCompletionRequest(body: unknown): ParseResult {
+export function parseCompletionRequest(body: unknown): ParseResult {
   if (typeof body !== 'object' || body === null) {
     return { ok: false, message: 'Тело запроса должно быть объектом JSON' };
   }
@@ -60,7 +67,10 @@ function parseCompletionRequest(body: unknown): ParseResult {
     const hasAttachments = Array.isArray(raw.attachments) && raw.attachments.length > 0;
     const content = typeof raw.content === 'string' ? raw.content : '';
     if (!hasAttachments && content.trim() === '') {
-      return { ok: false, message: 'У каждого сообщения должен быть непустой content или вложения' };
+      return {
+        ok: false,
+        message: 'У каждого сообщения должен быть непустой content или вложения',
+      };
     }
     if (content.length > MAX_CONTENT_LENGTH) {
       return { ok: false, message: `Сообщение длиннее ${MAX_CONTENT_LENGTH} символов` };
@@ -87,6 +97,7 @@ function parseCompletionRequest(body: unknown): ParseResult {
       modelId: typeof candidate.modelId === 'string' ? candidate.modelId : DEFAULT_MODEL_ID,
       language: candidate.language === 'en' ? 'en' : 'ru',
       messages,
+      reasoningMode: candidate.reasoningMode === 'max' ? 'max' : 'standard',
     },
   };
 }
@@ -100,11 +111,17 @@ export interface ChatRouterDeps {
   usageStore?: UsageStore;
   gateway?: AIGateway;
   feedbackStore?: FeedbackStore;
+  /** Кредиты докупленных пакетов (тот же журнал, что у биллинга). */
+  premiumCredits?: PremiumCreditSource;
+  /** Бонус к квоте за оплату криптой (тот же биллинг). */
+  planBonus?: PlanBonusSource;
   /**
    * Разрешить анонимные вызовы через общий demo-user. По умолчанию — только вне production
    * (config.allowAnonymousChat); в production чат без сессии отвечает 401.
    */
   allowAnonymous?: boolean;
+  /** Лимит гостевых сообщений на адрес клиента (по умолчанию — в production). */
+  limitGuestsByIp?: boolean;
 }
 
 /**
@@ -121,7 +138,10 @@ export function createChatRouter({
   usageStore = defaultUsageStore,
   gateway,
   feedbackStore = defaultFeedbackStore,
+  premiumCredits,
+  planBonus,
   allowAnonymous = config.allowAnonymousChat,
+  limitGuestsByIp = isProduction,
 }: ChatRouterDeps): Router {
   const router = Router();
   const aiGateway =
@@ -130,7 +150,14 @@ export function createChatRouter({
       usageStore,
       aiConfig: ai,
       feedbackStore,
+      premiumCredits,
+      planBonus,
     });
+
+  // Гостевой id придумывает сам браузер, поэтому лимит «на гостя» обходится сменой id.
+  // Поверх него — лимит на адрес клиента: бесплатный гостевой доступ не превращается в безлимит.
+  const guestPerIpHour = new RateLimiter(60 * 60 * 1000, 15);
+  const guestPerIpDay = new RateLimiter(24 * 60 * 60 * 1000, 40);
 
   router.post('/completions', async (request: Request, response: Response): Promise<void> => {
     const parsed = parseCompletionRequest(request.body);
@@ -144,7 +171,12 @@ export function createChatRouter({
       workspace: parsed.value.messages[parsed.value.messages.length - 1]?.workspaceContext,
     });
     if (!guardResult.valid) {
-      sendError(response, 400, guardResult.code ?? 'payload_too_large', guardResult.message ?? 'Payload too large');
+      sendError(
+        response,
+        400,
+        guardResult.code ?? 'payload_too_large',
+        guardResult.message ?? 'Payload too large',
+      );
       return;
     }
 
@@ -153,11 +185,18 @@ export function createChatRouter({
     // Личность и тариф — только из сессии и серверных хранилищ. Поля userId / userEmail / userPlan
     // из тела запроса не читаются: клиент не вправе назваться другим пользователем или поднять тариф.
     const sessionUser = request.user;
+    const guestId = sessionUser ? null : resolveGuestId(request, userId);
+    if (!sessionUser && guestId === null) {
+      sendError(response, 400, 'invalid_guest_id', 'Не передан корректный идентификатор гостя');
+      return;
+    }
+    const effectiveAnonymousUserId = guestId ?? userId;
+
     const identity = resolveChatIdentity({
       sessionUser,
       storedUser: sessionUser ? userStore?.findById(sessionUser.id) : undefined,
       subscription: sessionUser ? subscriptionStore?.get(sessionUser.id) : undefined,
-      anonymousUserId: userId,
+      anonymousUserId: effectiveAnonymousUserId,
       anonymousPlan: config.demoPlan,
       allowAnonymous,
     });
@@ -167,6 +206,27 @@ export function createChatRouter({
     }
     const { userId: activeUserId, plan: userPlan, isVip } = identity;
 
+    if (identity.anonymous && limitGuestsByIp) {
+      const ip = clientIp(request);
+      if (guestPerIpHour.isLimited(ip) || guestPerIpDay.isLimited(ip)) {
+        response.setHeader(
+          'Retry-After',
+          String(Math.max(guestPerIpHour.retryAfterSec(ip), guestPerIpDay.retryAfterSec(ip))),
+        );
+        sendError(
+          response,
+          429,
+          'guest_limit',
+          language === 'en'
+            ? 'Guest message limit reached. Sign in to keep chatting for free.'
+            : 'Лимит сообщений без входа исчерпан. Войдите, чтобы продолжить бесплатно.',
+        );
+        return;
+      }
+      guestPerIpHour.record(ip);
+      guestPerIpDay.record(ip);
+    }
+
     // Диалог ищется строго среди диалогов этого пользователя: чужой id даёт 404.
     if (!store.get(activeUserId, conversationId)) {
       sendError(response, 404, 'conversation_not_found', `Диалог ${conversationId} не найден`);
@@ -175,8 +235,16 @@ export function createChatRouter({
 
     // Единый каталог: любая модель реестра выбирается как есть, неизвестная — это auto.
     const requestedEntry = modelId === 'auto' ? undefined : modelRegistry.get(modelId);
-    const model =
+    let model =
       requestedEntry && requestedEntry.enabled ? requestedEntry : modelRegistry.resolve('auto');
+
+    // Для пользователей без аккаунта:
+    // По умолчанию (auto) или при выборе бесплатной модели используется Nemotron Ultra через OpenRouter.
+    if (identity.anonymous) {
+      if (model.id === 'auto' || model.costClass === 'lite' || !model.isPro) {
+        model = modelRegistry.resolve('nemotron-ultra');
+      }
+    }
 
     // Проверка доступа к платным моделям (то же правило, что применяет шлюз)
     const access = EntitlementService.checkModelAccess(model, userPlan, identity.email, isVip);
@@ -259,6 +327,7 @@ export function createChatRouter({
           userPlan,
           userEmail: identity.email,
           isVip,
+          isAnonymous: Boolean(identity.anonymous),
           conversationId,
           modelId: model.id,
           messages: messages.map((m) => ({
@@ -271,6 +340,7 @@ export function createChatRouter({
           workspaceContext: messages[messages.length - 1]?.workspaceContext,
           language,
           stream: true,
+          reasoningMode: parsed.value.reasoningMode,
           cachedSummary: existingConversation?.conversation.contextSummary,
           signal: clientAbortController.signal,
         },
@@ -299,6 +369,7 @@ export function createChatRouter({
                 source: result.source,
                 finishReason: result.finishReason,
                 canContinue: result.canContinue,
+                reasoningMode: result.reasoningMode,
                 usage: {
                   inputTokens: result.inputTokens,
                   outputTokens: result.outputTokens,
@@ -353,7 +424,12 @@ export function createChatRouter({
       return;
     }
     if (body.rating !== 'like' && body.rating !== 'dislike' && body.rating !== null) {
-      sendError(response, 400, 'invalid_rating', 'Поле rating должно быть "like", "dislike" или null');
+      sendError(
+        response,
+        400,
+        'invalid_rating',
+        'Поле rating должно быть "like", "dislike" или null',
+      );
       return;
     }
 
@@ -364,7 +440,11 @@ export function createChatRouter({
       sendError(response, 401, 'unauthorized', 'Войдите в аккаунт, чтобы оценивать ответы');
       return;
     }
-    const activeUserId = request.user?.id ?? userId;
+    const activeUserId = request.user?.id ?? resolveGuestId(request, userId);
+    if (!activeUserId) {
+      sendError(response, 400, 'invalid_guest_id', 'Не передан корректный идентификатор гостя');
+      return;
+    }
 
     // 1. Обновляем сообщение в хранилище диалогов
     const updatedMsg = store.updateMessageFeedback(activeUserId, conversationId, messageId, rating);
@@ -391,9 +471,10 @@ export function createChatRouter({
         messageId,
         conversationId,
         userId: activeUserId,
-        modelId: typeof body.modelId === 'string' && body.modelId.trim()
-          ? body.modelId.trim()
-          : (updatedMsg.modelId ?? 'unknown'),
+        modelId:
+          typeof body.modelId === 'string' && body.modelId.trim()
+            ? body.modelId.trim()
+            : (updatedMsg.modelId ?? 'unknown'),
         engineModelId: updatedMsg.modelId,
         complexityLevel,
         rating,

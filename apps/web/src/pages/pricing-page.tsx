@@ -1,12 +1,11 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { PlanCards } from '@/components/pricing/plan-cards';
-import { Reveal } from '@/components/ui/reveal';
-import { SectionLabel } from '@/components/ui/section-label';
 import { Tab, TabList, TabPanel, Tabs } from '@/components/ui/tabs';
 import type { TranslationKey } from '@/i18n';
 import { useTranslation } from '@/i18n';
 import { cn } from '@/lib/cn';
+import planFacts from '@/features/billing/plan-facts.json';
 
 type PlanKey = 'free' | 'plus' | 'pro' | 'ultra';
 
@@ -34,49 +33,118 @@ interface ComparisonRow {
   ultra: { ru: string; en: string };
 }
 
+type Localized = { ru: string; en: string };
+
+const same = (text: string): Localized => ({ ru: text, en: text });
+
+const formatNumber = (value: number, language: 'ru' | 'en') =>
+  value.toLocaleString(language === 'ru' ? 'ru-RU' : 'en-US');
+
+/** 150 000 → «150 тыс.», 1 500 000 → «1,5 млн». */
+function formatTokens(value: number, language: 'ru' | 'en'): string {
+  const millions = value >= 1_000_000;
+  const amount = millions ? value / 1_000_000 : value / 1_000;
+  const text = amount.toLocaleString(language === 'ru' ? 'ru-RU' : 'en-US', {
+    maximumFractionDigits: 1,
+  });
+  if (language === 'ru') return `${text} ${millions ? 'млн' : 'тыс.'}`;
+  return `${text}${millions ? 'M' : 'K'}`;
+}
+
+/** Строка сравнения из plan-facts.json: одно правило на все четыре тарифа. */
+function factRow(
+  feature: Localized,
+  cell: (plan: (typeof planFacts.plans)[PlanKey]) => Localized,
+): ComparisonRow {
+  return {
+    feature,
+    free: cell(planFacts.plans.free),
+    plus: cell(planFacts.plans.plus),
+    pro: cell(planFacts.plans.pro),
+    ultra: cell(planFacts.plans.ultra),
+  };
+}
+
+const IMAGE_NAMES: Record<string, string> = {
+  'flux-schnell': 'FLUX.1 schnell',
+  'flux-2-klein': 'FLUX.2 klein',
+  'flux-2-dev': 'FLUX.2 dev',
+  'seedream-5-flash': 'Seedream',
+  'flux-2-pro': 'FLUX.2 pro',
+  'nano-banana-2': 'Nano Banana 2',
+};
+
+/**
+ * Таблица сравнения — только проверяемые числа (их сверяет с сервером
+ * apps/mock-api/src/services/plan-facts.test.ts). Очереди по тарифам нет, поэтому строк
+ * «скорость» и «приоритет» тоже нет.
+ */
 const COMPARISON_ROWS: ComparisonRow[] = [
+  factRow({ ru: 'Цена', en: 'Price' }, (plan) =>
+    plan.priceUsd === 0
+      ? { ru: 'Бесплатно', en: 'Free' }
+      : {
+          ru: `$${plan.priceUsd} за 30 дней`,
+          en: `$${plan.priceUsd} per 30 days`,
+        },
+  ),
   {
-    feature: { ru: 'Доступные модели', en: 'Available models' },
-    free: { ru: 'Ketner Mini + GPT-4o mini', en: 'Ketner Mini + GPT-4o mini' },
-    plus: { ru: 'DeepSeek v4.1 Flash, Claude Haiku 4.5, GPT-4o', en: 'DeepSeek v4.1 Flash, Claude Haiku 4.5, GPT-4o' },
-    pro: { ru: 'Все из Plus + GPT-6 Astra, Claude Fable 5.1, Gemini Flash 3.8, Grok 4.7', en: 'All Plus + GPT-6 Astra, Claude Fable 5.1, Gemini Flash 3.8, Grok 4.7' },
-    ultra: { ru: 'Все топовые модели на 100% без ограничений', en: 'All top models at 100% without limitations' },
+    feature: { ru: 'Модели', en: 'Models' },
+    free: {
+      ru: 'Бесплатная Nemotron 3 Ultra, запасная — Ketner Mini',
+      en: 'Free Nemotron 3 Ultra, Ketner Mini as backup',
+    },
+    plus: {
+      ru: 'Ketner Pro, GPT-6.1 Sol, Claude Haiku 5.5, DeepSeek V4.1 Flash, Gemini 3.7 Flash, GLM-5.3 и др.',
+      en: 'Ketner Pro, GPT-6.1 Sol, Claude Haiku 5.5, DeepSeek V4.1 Flash, Gemini 3.7 Flash, GLM-5.3 and more',
+    },
+    pro: {
+      ru: 'Все из Plus + Claude Opus 5.5, Sonnet 5.5, GPT-6 Astra, GPT-5.6 Sol, GPT-5.6 Terra xhigh, Grok 4.7 xhigh',
+      en: 'All Plus + Claude Opus 5.5, Sonnet 5.5, GPT-6 Astra, GPT-5.6 Sol, GPT-5.6 Terra xhigh, Grok 4.7 xhigh',
+    },
+    ultra: { ru: 'Все модели Pro + режим Max', en: 'All Pro models + Max mode' },
   },
-  {
-    feature: { ru: 'Скорость генерации', en: 'Generation speed' },
-    free: { ru: 'Базовая', en: 'Standard' },
-    plus: { ru: 'Быстрая', en: 'Fast' },
-    pro: { ru: 'Средняя (пониженная)', en: 'Standard (reduced vs Ultra)' },
-    ultra: { ru: 'Максимальная (100% скорость)', en: 'Maximum (100% speed)' },
-  },
-  {
-    feature: { ru: 'Размер контекста', en: 'Context window' },
-    free: { ru: 'Базовый контекст', en: 'Basic context' },
-    plus: { ru: 'Стандартный', en: 'Standard' },
-    pro: { ru: 'Повышенный контекст', en: 'Extended context' },
-    ultra: { ru: 'Максимальный контекст', en: 'Maximum context' },
-  },
-  {
-    feature: { ru: 'Использование моделей', en: 'Model capacity usage' },
-    free: { ru: 'Базовое (до 3 сообщ./час)', en: 'Basic (up to 3 msgs/hr)' },
-    plus: { ru: 'Стандартное без очередей', en: 'Standard without queuing' },
-    pro: { ru: 'Топовые модели с оптимизацией квот', en: 'Top models with quota optimization' },
-    ultra: { ru: '100% использование без ограничений', en: '100% usage without limitations' },
-  },
-  {
-    feature: { ru: 'Приоритет очереди', en: 'Queue priority' },
-    free: { ru: 'Стандартный', en: 'Standard' },
-    plus: { ru: 'Повышенный', en: 'Enhanced' },
-    pro: { ru: 'Высокий серверный', en: 'High server' },
-    ultra: { ru: 'Выделенный VIP-приоритет', en: 'Dedicated VIP priority' },
-  },
-  {
-    feature: { ru: 'API & Доступ для агентов', en: 'API & Agent access' },
-    free: { ru: '—', en: '—' },
-    plus: { ru: '—', en: '—' },
-    pro: { ru: 'Доступно по ключу', en: 'API key included' },
-    ultra: { ru: 'Высокие лимиты API + MCP', en: 'High limits API + MCP' },
-  },
+  factRow({ ru: 'Сообщений в сутки', en: 'Messages per day' }, (plan) => ({
+    ru: formatNumber(plan.messagesPerDay, 'ru'),
+    en: formatNumber(plan.messagesPerDay, 'en'),
+  })),
+  factRow({ ru: 'Частота сообщений', en: 'Message rate' }, (plan) => ({
+    ru: `до ${plan.requestsPerMinute} в минуту и ${formatNumber(plan.requestsPerHour, 'ru')} в час`,
+    en: `up to ${plan.requestsPerMinute} a minute and ${formatNumber(plan.requestsPerHour, 'en')} an hour`,
+  })),
+  factRow({ ru: 'Запросов одновременно', en: 'Requests at once' }, (plan) =>
+    same(String(plan.concurrency)),
+  ),
+  factRow({ ru: 'Длина ответа', en: 'Answer length' }, (plan) => ({
+    ru: `до ${formatNumber(plan.maxAnswerTokens, 'ru')} токенов`,
+    en: `up to ${formatNumber(plan.maxAnswerTokens, 'en')} tokens`,
+  })),
+  factRow({ ru: 'Токены (вопрос + ответ)', en: 'Tokens (prompt + answer)' }, (plan) => ({
+    ru: `${formatTokens(plan.tokensPerHour, 'ru')} в час, ${formatTokens(plan.tokensPerDay, 'ru')} в сутки`,
+    en: `${formatTokens(plan.tokensPerHour, 'en')} an hour, ${formatTokens(plan.tokensPerDay, 'en')} a day`,
+  })),
+  factRow({ ru: 'Картинки в сутки', en: 'Images per day' }, (plan) =>
+    same(
+      Object.entries(plan.imagesPerDay as Record<string, number>)
+        .map(([id, count]) => `${IMAGE_NAMES[id] ?? id}: ${count}`)
+        .join(', '),
+    ),
+  ),
+  factRow({ ru: 'Ketner Code', en: 'Ketner Code' }, (plan) => ({
+    ru: `${plan.codeRunsPerDay} запусков в сутки, до $${plan.codeRunBudgetUsd} на запуск`,
+    en: `${plan.codeRunsPerDay} runs a day, up to $${plan.codeRunBudgetUsd} per run`,
+  })),
+  factRow({ ru: 'API для редакторов и кода', en: 'API for editors and code' }, (plan) =>
+    plan.api ? { ru: 'По API-ключу', en: 'With an API key' } : same('—'),
+  ),
+  factRow({ ru: 'Продление и отмена', en: 'Renewal and cancellation' }, (plan) =>
+    plan.priceUsd === 0
+      ? same('—')
+      : {
+          ru: 'Разовая оплата без автосписаний; автопродление звёздами — только если включить, отключается в любой момент',
+          en: 'One-off payment, no automatic charges; Stars auto-renewal only if you turn it on, off any time',
+        },
+  ),
 ];
 
 export function PricingPage() {
@@ -84,21 +152,16 @@ export function PricingPage() {
   const [activeMobilePlan, setActiveMobilePlan] = useState<PlanKey>('pro');
 
   return (
-    <div className="relative mx-auto flex w-full max-w-7xl flex-col gap-14 px-4 py-12 text-center sm:px-6 md:gap-20 md:py-16 lg:px-8">
-      {/* Атмосфера за заголовком */}
-      <div
-        aria-hidden="true"
-        className="bg-aurora pointer-events-none absolute inset-x-0 -top-10 h-[360px] opacity-60 [mask-image:linear-gradient(to_bottom,black,transparent)]"
-      />
-
-      {/* Заголовок страницы */}
-      <Reveal eager className="relative flex flex-col items-center gap-4">
-        <SectionLabel>{t('pricing.nextGenBadge')}</SectionLabel>
-        <h1 className="t-headline text-text">{t('pricing.title')}</h1>
-        <p className="max-w-[56ch] text-[15px] leading-relaxed text-balance text-muted md:text-[17px]">
+    <div className="relative mx-auto flex w-full max-w-7xl flex-col gap-14 py-4 text-left md:gap-20 md:py-8">
+      {/* Заголовок страницы: крупно слева, пояснение справа — как секции главной */}
+      <div className="grid grid-cols-1 gap-5 md:grid-cols-12 md:items-end md:gap-8">
+        <h1 className="t-display text-[clamp(2.75rem,5vw+0.5rem,5rem)] text-text md:col-span-7">
+          {t('pricing.title')}
+        </h1>
+        <p className="max-w-[46ch] text-[17px] leading-relaxed text-muted md:col-span-5 md:justify-self-end">
           {t('pricing.subtitle')}
         </p>
-      </Reveal>
+      </div>
 
       {/* 4 Карточки тарифов */}
       <PlanCards variant="full" />
@@ -106,12 +169,16 @@ export function PricingPage() {
       {/* Таблица сравнения */}
       <div className="flex w-full flex-col gap-6 text-left">
         <div className="flex flex-col gap-1.5">
-          <h2 className="text-2xl font-semibold tracking-tight text-text">{t('pricing.compare')}</h2>
+          <h2 className="t-title text-text">{t('pricing.compare')}</h2>
           <p className="text-sm text-muted md:text-[15px]">{t('pricing.compareLead')}</p>
         </div>
 
         {/* Mobile: выбор тарифа и одна карточка со значениями */}
-        <Tabs value={activeMobilePlan} onValueChange={(value) => setActiveMobilePlan(value as PlanKey)} className="md:hidden">
+        <Tabs
+          value={activeMobilePlan}
+          onValueChange={(value) => setActiveMobilePlan(value as PlanKey)}
+          className="md:hidden"
+        >
           <TabList aria-label={t('pricing.planPicker')} className="w-full rounded-xl">
             {PLAN_KEYS.map((plan) => (
               <Tab key={plan} value={plan} className="flex-1 gap-1.5 px-2">
@@ -121,22 +188,33 @@ export function PricingPage() {
             ))}
           </TabList>
 
-          <TabPanel value={activeMobilePlan} className="mt-4 flex flex-col gap-4 rounded-2xl border border-stroke bg-surface p-5 shadow-sm">
+          <TabPanel
+            value={activeMobilePlan}
+            className="mt-4 flex flex-col gap-4 rounded-2xl border border-stroke bg-surface p-5 shadow-sm"
+          >
             <div className="flex items-center justify-between border-b border-stroke pb-3">
               <h3 className="flex items-center gap-2 text-lg font-semibold text-text">
-                <span aria-hidden="true" className={cn('size-2 rounded-full', TIER_DOT[activeMobilePlan])} />
+                <span
+                  aria-hidden="true"
+                  className={cn('size-2 rounded-full', TIER_DOT[activeMobilePlan])}
+                />
                 {t(PLAN_NAME_KEYS[activeMobilePlan])}
               </h3>
               {activeMobilePlan === 'pro' && (
-                <span className="rounded-full bg-accent-soft px-2.5 py-0.5 text-xs font-semibold text-accent">
+                <span className="rounded-xs bg-brand-gradient px-2 py-0.5 text-xs font-medium text-accent-text">
                   {t('pricing.popular')}
                 </span>
               )}
             </div>
             {COMPARISON_ROWS.map((row, idx) => (
-              <div key={idx} className="flex flex-col gap-1 border-b border-stroke/60 pb-3 last:border-b-0 last:pb-0">
+              <div
+                key={idx}
+                className="flex flex-col gap-1 border-b border-stroke/60 pb-3 last:border-b-0 last:pb-0"
+              >
                 <span className="text-xs font-medium text-subtle">{row.feature[language]}</span>
-                <span className="text-sm font-medium text-text">{row[activeMobilePlan][language]}</span>
+                <span className="text-sm font-medium text-text">
+                  {row[activeMobilePlan][language]}
+                </span>
               </div>
             ))}
           </TabPanel>
@@ -162,7 +240,10 @@ export function PricingPage() {
                     )}
                   >
                     <span className="inline-flex items-center gap-2">
-                      <span aria-hidden="true" className={cn('size-2 rounded-full', TIER_DOT[plan])} />
+                      <span
+                        aria-hidden="true"
+                        className={cn('size-2 rounded-full', TIER_DOT[plan])}
+                      />
                       {t('pricing.colPlan', { plan: t(PLAN_NAME_KEYS[plan]) })}
                     </span>
                   </th>
@@ -177,14 +258,20 @@ export function PricingPage() {
                   </td>
                   <td className="p-4 text-[13px] leading-5 text-muted">{row.free[language]}</td>
                   <td className="p-4 text-[13px] leading-5 text-muted">{row.plus[language]}</td>
-                  <td className="bg-accent-soft/40 p-4 text-[13px] leading-5 font-medium text-text">{row.pro[language]}</td>
-                  <td className="p-4 text-[13px] leading-5 font-medium text-text">{row.ultra[language]}</td>
+                  <td className="bg-accent-soft/40 p-4 text-[13px] leading-5 font-medium text-text">
+                    {row.pro[language]}
+                  </td>
+                  <td className="p-4 text-[13px] leading-5 font-medium text-text">
+                    {row.ultra[language]}
+                  </td>
                 </tr>
               ))}
             </tbody>
           </table>
         </div>
       </div>
+
+      <LimitsExplained />
 
       {/* Нижняя сноска */}
       <div className="flex flex-col items-center gap-3 border-t border-stroke pt-8 text-center text-[13px] text-muted">
@@ -197,5 +284,66 @@ export function PricingPage() {
         </Link>
       </div>
     </div>
+  );
+}
+
+const pro = planFacts.plans.pro;
+
+/**
+ * Как работают лимиты — на примерах тарифа Pro. Числа берутся из plan-facts.json, который тест
+ * сверяет с сервером.
+ */
+const LIMIT_EXAMPLES: { title: Localized; text: Localized }[] = [
+  {
+    title: { ru: 'Сообщения', en: 'Messages' },
+    text: {
+      ru: `Каждое отправленное сообщение — одно в лимите, на любой модели. На Pro это ${formatNumber(pro.messagesPerDay, 'ru')} за последние 24 часа, не больше ${pro.requestsPerHour} в час. Окна скользящие: сообщение, отправленное вчера в 15:00, перестаёт учитываться сегодня в 15:00.`,
+      en: `Every message you send counts as one, on any model. On Pro that is ${formatNumber(pro.messagesPerDay, 'en')} in the last 24 hours, at most ${pro.requestsPerHour} an hour. Windows are rolling: a message sent yesterday at 3 pm stops counting today at 3 pm.`,
+    },
+  },
+  {
+    title: { ru: 'Общий расход', en: 'Overall spend' },
+    text: {
+      ru: 'Чтобы один аккаунт не тратил больше, чем стоит подписка, общий расход на модели ограничен. Когда он подходит к пределу, ответы становятся короче и идут на недорогие модели, затем — только на самые дешёвые. При очень большом расходе запросы приостанавливаются, пока расход за последние 30 дней не снизится. При обычной переписке до этих границ, как правило, не доходит: они срабатывают при очень активной работе с дорогими моделями или в Ketner Code.',
+      en: 'So that one account does not cost more than its subscription, overall model spend is capped. As it nears the cap, answers get shorter and go to cheaper models, then only to the cheapest. With very heavy use, requests pause until 30-day spend drops. Normal chatting usually stays well below these caps; heavy use of expensive models or Ketner Code can reach them.',
+    },
+  },
+];
+
+function LimitsExplained() {
+  const { language } = useTranslation();
+  return (
+    <section aria-labelledby="limits-explained" className="flex w-full flex-col gap-6 text-left">
+      <div className="flex flex-col gap-1.5">
+        <h2 id="limits-explained" className="t-title text-text">
+          {language === 'ru' ? 'Как работают лимиты' : 'How limits work'}
+        </h2>
+        <p className="max-w-[70ch] text-sm text-muted md:text-[15px]">
+          {language === 'ru'
+            ? 'Когда кончается лимит сильной модели, ответы не прекращаются — дальше отвечает модель попроще. Ниже — как это устроено на примере тарифа Pro; лимиты моделей на каждом тарифе — на странице «Модели».'
+            : 'When a strong model hits its limit, answers do not stop: a simpler model takes over. Below is how it works on Pro; per-plan model limits are on the Models page.'}
+        </p>
+      </div>
+      <div className="grid gap-3 md:grid-cols-2">
+        {LIMIT_EXAMPLES.map((example) => (
+          <div
+            key={example.title.en}
+            className="flex flex-col gap-2 rounded-2xl border border-stroke bg-surface p-5"
+          >
+            <h3 className="text-[15px] font-semibold text-text">{example.title[language]}</h3>
+            <p className="text-[14px] leading-6 text-muted">{example.text[language]}</p>
+          </div>
+        ))}
+      </div>
+      <p className="text-[13px] text-subtle">
+        {language === 'ru'
+          ? 'Запасные модели и лимиты каждой модели — на странице '
+          : 'Backup models and per-model limits are on the '}
+        <Link to="/models" className="text-accent hover:underline">
+          {language === 'ru' ? '«Модели»' : 'Models page'}
+        </Link>
+        .
+      </p>
+    </section>
   );
 }

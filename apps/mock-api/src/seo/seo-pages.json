@@ -1,0 +1,149 @@
+{
+  "$comment": "Открытые страницы сайта для поисковиков: короткое имя (хлебные крошки), заголовок, описание, canonical, sitemap. Читают сервер (seo/pages.ts: HTML, robots.txt, sitemap.xml) и сайт (apps/web: заголовок вкладки при переходах и список страниц для предварительной отрисовки). canonical — адрес, который считается основным для этой страницы (если он другой); sitemap: false — не попадает в sitemap.xml.",
+  "pages": [
+    {
+      "path": "/",
+      "name": "Главная",
+      "title": "Ketner AI — ChatGPT, Claude, Gemini и Grok в одном ИИ-чате на русском",
+      "description": "Нейросети GPT, Claude, Gemini, Grok и DeepSeek в одном чате на русском языке. Режим Auto сам выбирает модель, генерация картинок, ИИ для кода. Бесплатный тариф, оплата звёздами Telegram и криптовалютой.",
+      "priority": 1,
+      "changefreq": "weekly"
+    },
+    {
+      "path": "/pricing",
+      "name": "Тарифы",
+      "title": "Тарифы Ketner AI — ChatGPT, Claude и Gemini по одной подписке",
+      "description": "Бесплатный тариф и подписки Plus $9, Pro $25 и Ultra $49 в месяц: GPT, Claude Opus и Sonnet, Gemini и Grok без отдельных подписок у каждого сервиса. Все лимиты до оплаты. Оплата звёздами Telegram и криптовалютой.",
+      "priority": 0.9,
+      "changefreq": "weekly"
+    },
+    {
+      "path": "/models",
+      "name": "Модели",
+      "title": "Модели Ketner AI — кто разработал каждую нейросеть и какие лимиты",
+      "description": "Все модели Ketner AI: разработчик (OpenAI, Anthropic, Google, xAI и другие), какая модель стоит за Ketner Mini и Ketner Pro, тариф, лимиты в неделю и в сутки и запасные модели.",
+      "priority": 0.8,
+      "changefreq": "weekly"
+    },
+    {
+      "path": "/docs",
+      "name": "Документация",
+      "title": "Как пользоваться Ketner AI — модели, тарифы и возможности",
+      "description": "Справка Ketner AI: какие нейросети доступны на каждом тарифе, режим Auto и режим Max, работа с файлами и проектами, генерация изображений, Ketner Code.",
+      "priority": 0.7,
+      "changefreq": "weekly"
+    },
+    {
+      "path": "/docs/plans/free",
+      "name": "Тариф Free",
+      "title": "Бесплатный тариф Ketner AI — ИИ-чат без оплаты",
+      "description": "Что входит в бесплатный тариф Ketner AI: ИИ-чат на русском, режим Auto, генерация картинок и лимиты в день.",
+      "priority": 0.5,
+      "changefreq": "monthly",
+      "canonical": "/docs",
+      "sitemap": false
+    },
+    {
+      "path": "/docs/plans/plus",
+      "name": "Тариф Plus",
+      "title": "Тариф Plus в Ketner AI — GPT и сильные модели недорого",
+      "description": "Тариф Plus в Ketner AI за $9 в месяц: GPT-6.1 Sol, Claude Haiku, Ketner Pro и DeepSeek, 500 сообщений в сутки и API-ключи.",
+      "priority": 0.5,
+      "changefreq": "monthly",
+      "canonical": "/docs",
+      "sitemap": false
+    },
+    {
+      "path": "/docs/plans/pro",
+      "name": "Тариф Pro",
+      "title": "Тариф Pro в Ketner AI — Claude Opus, Sonnet, GPT и Grok",
+      "description": "Тариф Pro в Ketner AI за $25 в месяц: Claude Opus и Sonnet, GPT, Grok и Gemini в одной подписке, Ketner Code и платные модели картинок.",
+      "priority": 0.5,
+      "changefreq": "monthly",
+      "canonical": "/docs",
+      "sitemap": false
+    },
+    {
+      "path": "/docs/plans/ultra",
+      "name": "Тариф Ultra",
+      "title": "Тариф Ultra в Ketner AI — все модели и режим Max",
+      "description": "Тариф Ultra в Ketner AI за $49 в месяц: все модели Pro с большими лимитами, режим Max с глубокими размышлениями и лучшие модели картинок.",
+      "priority": 0.5,
+      "changefreq": "monthly",
+      "canonical": "/docs",
+      "sitemap": false
+    },
+    {
+      "path": "/docs/api",
+      "name": "API",
+      "title": "API Ketner AI — OpenAI-совместимый API для GPT и Claude",
+      "description": "OpenAI-совместимый API Ketner AI для CLI, IDE и своих приложений: GPT, Claude, Gemini и другие модели по одному ключу, вызов инструментов и стриминг.",
+      "priority": 0.6,
+      "changefreq": "monthly"
+    },
+    {
+      "path": "/about",
+      "name": "О проекте",
+      "title": "О проекте Ketner AI — кто мы и что делаем",
+      "description": "Ketner AI — независимый сервис доступа к моделям разных разработчиков в одном чате. Кто его делает, какую задачу решает, этап разработки и планы.",
+      "priority": 0.5,
+      "changefreq": "monthly"
+    },
+    {
+      "path": "/changelog",
+      "name": "Что нового",
+      "title": "Что нового в Ketner AI — журнал обновлений",
+      "description": "Журнал обновлений Ketner AI: даты выпусков, новые функции, исправления, известные ограничения и планы.",
+      "priority": 0.5,
+      "changefreq": "weekly"
+    },
+    {
+      "path": "/status",
+      "name": "Статус",
+      "title": "Статус Ketner AI — работа сервиса и сбои",
+      "description": "Текущее состояние Ketner AI: сайт, база данных, модели, генерация изображений, оплата и бот, известные проблемы и история сбоев.",
+      "priority": 0.3,
+      "changefreq": "daily"
+    },
+    {
+      "path": "/signup",
+      "name": "Регистрация",
+      "title": "Регистрация в Ketner AI — начать бесплатно",
+      "description": "Создайте аккаунт Ketner AI через Google, GitHub или почту с кодом подтверждения и начните пользоваться нейросетями бесплатно.",
+      "priority": 0.5,
+      "changefreq": "yearly"
+    },
+    {
+      "path": "/contacts",
+      "name": "Контакты",
+      "title": "Контакты Ketner AI — поддержка",
+      "description": "Как связаться с Ketner AI: форма обратной связи, почта и бот поддержки в Telegram.",
+      "priority": 0.3,
+      "changefreq": "yearly"
+    },
+    {
+      "path": "/terms",
+      "name": "Пользовательское соглашение",
+      "title": "Пользовательское соглашение — Ketner AI",
+      "description": "Пользовательское соглашение и публичная оферта сервиса Ketner AI: права и обязанности сторон, правила использования моделей и ответственность.",
+      "priority": 0.2,
+      "changefreq": "yearly"
+    },
+    {
+      "path": "/privacy",
+      "name": "Политика конфиденциальности",
+      "title": "Политика конфиденциальности — Ketner AI",
+      "description": "Какие данные собирает Ketner AI, где хранит, кому передаёт запросы (OpenRouter и разработчики моделей), как обрабатывает файлы, историю чатов и платежи, когда удаляет.",
+      "priority": 0.2,
+      "changefreq": "yearly"
+    },
+    {
+      "path": "/payment-terms",
+      "name": "Оплата и возврат",
+      "title": "Условия оплаты и возврата — Ketner AI",
+      "description": "Условия оплаты подписки Ketner AI звёздами Telegram и криптовалютой, правила возврата.",
+      "priority": 0.2,
+      "changefreq": "yearly"
+    }
+  ]
+}

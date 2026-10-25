@@ -16,7 +16,8 @@ import { applyTextReplace } from './text-patch';
  * записывается в одну строку на значение (переводы строк экранированы), поэтому тройные
  * кавычки внутри содержимого файла (например, README.md) не обрывают блок.
  */
-const FILE_ACTIONS_BLOCK = /(`{3,})(?:file-actions|file-action)[ \t]*\r?\n([\s\S]*?)\r?\n[ \t]*\1(?!`)/gi;
+const FILE_ACTIONS_BLOCK =
+  /(`{3,})(?:file-actions|file-action)[ \t]*\r?\n([\s\S]*?)\r?\n[ \t]*\1(?!`)/gi;
 /** Незакрытый блок в конце текста — ответ ещё стримится или оборван. */
 const UNCLOSED_FILE_ACTIONS = /`{3,}(?:file-actions|file-action)[ \t]*\r?\n[\s\S]*$/i;
 
@@ -166,7 +167,11 @@ export function parseFileProposals(
     const path = checked.path;
 
     if (isSensitivePath(path)) {
-      reject(path, raw.action, 'файл с секретами: его содержимое не передаётся модели, менять его по её совету нельзя');
+      reject(
+        path,
+        raw.action,
+        'файл с секретами: его содержимое не передаётся модели, менять его по её совету нельзя',
+      );
       continue;
     }
 
@@ -244,10 +249,15 @@ export function parseFileProposals(
       state.applied = true;
       if (!state.rewritten) {
         state.kind = 'replace';
-        state.edits.push({ targetContent: raw.targetContent, replacementContent: raw.replacementContent });
+        state.edits.push({
+          targetContent: raw.targetContent,
+          replacementContent: raw.replacementContent,
+        });
       }
       if (result.occurrences > 1) {
-        state.warnings.push(`Фрагмент встречается ${result.occurrences} раз — заменено первое вхождение`);
+        state.warnings.push(
+          `Фрагмент встречается ${result.occurrences} раз — заменено первое вхождение`,
+        );
       }
     } else {
       // delete
@@ -338,8 +348,5 @@ export function parseFileProposals(
  */
 export function stripFileActionBlocks(content: string): string {
   if (!content) return '';
-  return content
-    .replace(FILE_ACTIONS_BLOCK, '')
-    .replace(UNCLOSED_FILE_ACTIONS, '')
-    .trim();
+  return content.replace(FILE_ACTIONS_BLOCK, '').replace(UNCLOSED_FILE_ACTIONS, '').trim();
 }

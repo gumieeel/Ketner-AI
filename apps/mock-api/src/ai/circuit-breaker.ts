@@ -10,7 +10,7 @@ export type CircuitBreakerState = 'closed' | 'open' | 'half-open';
 
 export interface CircuitBreakerOptions {
   failureThreshold?: number; // По умолчанию 3
-  cooldownMs?: number;        // По умолчанию 30_000 (30 сек)
+  cooldownMs?: number; // По умолчанию 30_000 (30 сек)
 }
 
 export interface ProviderCircuitStatus {
@@ -110,7 +110,7 @@ export class CircuitBreaker {
    */
   getAllStatuses(): ProviderCircuitStatus[] {
     // Ключи бывают двух видов: «openrouter» и «openrouter:модель» (предохранитель на движок).
-    const keys = new Set<string>(['openai', 'anthropic', 'google', 'openrouter']);
+    const keys = new Set<string>(['openrouter']);
     for (const key of this.states.keys()) keys.add(key);
     for (const key of this.failures.keys()) keys.add(key);
     return Array.from(keys).map((key) => this.getStatus(key));

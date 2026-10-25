@@ -1,7 +1,13 @@
-import { useEffect, useRef, useState, type ClipboardEvent, type DragEvent, type KeyboardEvent } from 'react';
+import {
+  useEffect,
+  useRef,
+  useState,
+  type ClipboardEvent,
+  type DragEvent,
+  type KeyboardEvent,
+} from 'react';
 import { Link } from 'react-router-dom';
 import {
-  AlertIcon,
   FolderIcon,
   GitHubIcon,
   PaperclipIcon,
@@ -12,27 +18,28 @@ import {
 import { buttonClasses } from '@/components/ui/button-classes';
 import { IconButton } from '@/components/ui/icon-button';
 import { useAuth } from '@/features/auth/auth-store';
-import { isFreeLimitReached } from '@/features/billing/free-usage';
 import { useUpgradeModal } from '@/features/billing/upgrade-modal-store';
 import { readFileAsAttachment } from '@/features/chat/attachment-utils';
-import { canAccessModel, findModel, getRequiredPlanName } from '@/features/chat/can-access-model';
+import {
+  MODEL_NAME_KEYS,
+  canAccessModel,
+  findModel,
+  getRequiredPlanName,
+} from '@/features/chat/can-access-model';
 import { useChat } from '@/features/chat/chat-store';
 import type { ModelInfo } from '@/features/chat/types';
 import { usePreferences } from '@/features/preferences/preferences-store';
+import { useWorkspace } from '@/features/chat/workspace-store';
+import { useGithub } from '@/features/github/github-store';
 import { useTranslation } from '@/i18n';
-import type { TranslationKey } from '@/i18n';
 import { cn } from '@/lib/cn';
 import { ComposerAttachments } from './composer-attachments';
-import { LinkWorkspaceModal } from './link-workspace-modal';
+import { LinkWorkspaceModal, type LinkWorkspaceTab } from './link-workspace-modal';
 import { WorkspaceBar } from './workspace-bar';
-
-const MODEL_NAME_KEYS: Record<string, TranslationKey> = {
-  'ketner-mini': 'chat.modelMini',
-  'gpt-6-astra': 'chat.modelGptAstra',
-  'claude-fable': 'chat.modelClaudeFable',
-  'gemini-pro': 'chat.modelGeminiPro',
-  'ketner-pro': 'chat.modelPro',
-};
+import { CompareBar } from './compare-bar';
+import { useCompareSelection } from '@/features/chat/use-compare-selection';
+import { useCompare } from '@/features/chat/compare-store';
+import { maxCompareModels } from '@/features/chat/compare-policy';
 
 const attachItemClass =
   'flex min-h-11 w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-left text-[13px] font-medium text-text transition-colors hover:bg-surface-2 focus-visible:bg-surface-2 md:min-h-10';
@@ -61,11 +68,26 @@ export function Composer() {
   const [isDragOver, setIsDragOver] = useState(false);
   const [isAttachMenuOpen, setIsAttachMenuOpen] = useState(false);
   const [isWorkspaceModalOpen, setIsWorkspaceModalOpen] = useState(false);
+  const [workspaceTab, setWorkspaceTab] = useState<LinkWorkspaceTab>('folder');
+  const resumeIntent = useGithub((state) => state.resumeIntent);
+  const consumeGithubIntent = useGithub((state) => state.consumeIntent);
+
+  useEffect(() => {
+    // Вернулись после подключения GitHub из окна привязки — открываем его снова на вкладке GitHub.
+    if (resumeIntent === 'link-repo' && consumeGithubIntent('link-repo')) {
+      setWorkspaceTab('git');
+      setIsWorkspaceModalOpen(true);
+    }
+  }, [resumeIntent, consumeGithubIntent]);
+
+  const compareEnabled = useCompare((state) => state.enabled) && maxCompareModels(user?.plan) > 0;
+  const compareSelection = useCompareSelection();
+  const compareReady = !compareEnabled || compareSelection.ids.length >= 2;
 
   const currentModel = findModel(meta?.models, selectedModelId);
-  const hasAccess = canAccessModel(user?.plan, currentModel);
-  const isFree = !user || !user.plan || user.plan === 'free';
-  const freeLimitReached = isFree && isFreeLimitReached(user?.id);
+  // В режиме сравнения модель из переключателя не участвует: доступ проверяется у каждой колонки.
+  const hasAccess = compareEnabled || canAccessModel(user?.plan, currentModel);
+  const activeWorkspace = useWorkspace((state) => state.activeWorkspace);
 
   const labelOf = (model: ModelInfo): string => {
     const key = MODEL_NAME_KEYS[model.id];
@@ -77,12 +99,6 @@ export function Composer() {
       reason: 'paid_model',
       modelName: labelOf(currentModel),
       requiredPlan: getRequiredPlanName(currentModel),
-    });
-  };
-
-  const handleFreeLimitAttempt = () => {
-    useUpgradeModal.getState().open({
-      reason: 'free_limit',
     });
   };
 
@@ -171,14 +187,13 @@ export function Composer() {
     if (streaming) {
       return;
     }
-    if (freeLimitReached) {
-      handleFreeLimitAttempt();
-      return;
-    }
     if (!hasAccess) {
       handlePaidModelAttempt();
     }
     if (draft.trim() === '' && attachedFiles.length === 0) {
+      return;
+    }
+    if (!compareReady) {
       return;
     }
     void send(draft, attachedFiles);
@@ -192,13 +207,7 @@ export function Composer() {
     }
   };
 
-  const onFieldClick = (): void => {
-    if (freeLimitReached) {
-      handleFreeLimitAttempt();
-    }
-  };
-
-  const canSubmit = draft.trim() !== '' || attachedFiles.length > 0;
+  const canSubmit = (draft.trim() !== '' || attachedFiles.length > 0) && compareReady;
 
   const bannerClass =
     'mb-2.5 flex flex-wrap items-center justify-between gap-x-3 gap-y-2 rounded-xl border border-warning/30 bg-warning-soft px-3.5 py-2.5 text-[13px] text-text shadow-sm';
@@ -211,21 +220,7 @@ export function Composer() {
         className="pointer-events-none absolute inset-x-0 -top-6 h-6 bg-gradient-to-t from-canvas to-transparent"
       />
 
-      {freeLimitReached ? (
-        <div role="alert" className={bannerClass}>
-          <div className="flex min-w-0 items-center gap-2">
-            <AlertIcon className="size-4 shrink-0 text-warning" aria-hidden="true" />
-            <span className="font-medium">{t('chat.freeLimitDesc')}</span>
-          </div>
-          <Link
-            to="/pricing"
-            onClick={handleFreeLimitAttempt}
-            className={buttonClasses({ variant: 'primary', size: 'sm' })}
-          >
-            {t('chat.upgradeButton')} →
-          </Link>
-        </div>
-      ) : !hasAccess ? (
+      {!hasAccess ? (
         <div role="alert" className={bannerClass}>
           <div className="flex min-w-0 items-center gap-2">
             <SparkleIcon className="size-4 shrink-0 text-warning" aria-hidden="true" />
@@ -241,15 +236,20 @@ export function Composer() {
             onClick={handlePaidModelAttempt}
             className={buttonClasses({ variant: 'primary', size: 'sm' })}
           >
-            {t('chat.upgradeButton')} →
+            {t('chat.upgradeButton')}
           </Link>
         </div>
       ) : null}
 
-      {/* Полоса привязанной рабочей папки / репозитория */}
-      <div className="mb-1.5">
-        <WorkspaceBar />
-      </div>
+      {/* Полоса привязанной рабочей папки / репозитория (только когда она привязана) */}
+      {activeWorkspace ? (
+        <div className="mb-1.5">
+          <WorkspaceBar />
+        </div>
+      ) : null}
+
+      {/* Модели, которые ответят на вопрос в режиме сравнения */}
+      {compareEnabled ? <CompareBar disabled={streaming} /> : null}
 
       {/* Скрытый input для выбора файлов */}
       <input
@@ -261,21 +261,20 @@ export function Composer() {
       />
 
       <div
-        onClick={onFieldClick}
         onDragOver={handleDragOver}
         onDragLeave={handleDragLeave}
         onDrop={handleDrop}
         className={cn(
-          'surface-glass relative rounded-2xl border p-2.5 shadow-lg',
+          'relative rounded-xl border bg-surface p-2.5 shadow-md',
           'transition-[border-color,box-shadow] duration-200',
-          'focus-within:border-accent/60 focus-within:ring-4 focus-within:ring-accent-soft',
-          isDragOver ? 'border-accent ring-4 ring-accent-soft' : 'border-stroke-strong',
+          'focus-within:border-accent/60 focus-within:ring-2 focus-within:ring-accent-soft',
+          isDragOver ? 'border-accent ring-2 ring-accent-soft' : 'border-stroke-strong',
         )}
       >
         {isDragOver ? (
           <div
             aria-hidden="true"
-            className="pointer-events-none absolute inset-0 z-10 grid place-items-center rounded-2xl bg-canvas/85 text-sm font-medium text-accent"
+            className="pointer-events-none absolute inset-0 z-10 grid place-items-center rounded-xl bg-canvas/85 text-sm font-medium text-accent"
           >
             <span className="inline-flex items-center gap-2">
               <PaperclipIcon className="size-4" />
@@ -285,10 +284,7 @@ export function Composer() {
         ) : null}
 
         {/* Превью прикреплённых файлов */}
-        <ComposerAttachments
-          attachments={attachedFiles}
-          onRemove={removeAttachment}
-        />
+        <ComposerAttachments attachments={attachedFiles} onRemove={removeAttachment} />
 
         <label htmlFor="composer" className="sr-only">
           {t('chat.placeholder')}
@@ -298,16 +294,8 @@ export function Composer() {
           ref={fieldRef}
           rows={1}
           value={draft}
-          onClick={onFieldClick}
-          onFocus={onFieldClick}
           onPaste={handlePaste}
-          onChange={(event) => {
-            if (freeLimitReached) {
-              handleFreeLimitAttempt();
-              return;
-            }
-            setDraft(event.target.value);
-          }}
+          onChange={(event) => setDraft(event.target.value)}
           onKeyDown={onKeyDown}
           placeholder={t('chat.placeholder')}
           className="block max-h-[120px] w-full resize-none bg-transparent px-1.5 py-1 text-base leading-6 max-md:-my-1.5 max-md:py-2.5 text-text outline-none placeholder:text-subtle md:text-[15px]"
@@ -323,7 +311,7 @@ export function Composer() {
               aria-expanded={isAttachMenuOpen}
               onClick={() => setIsAttachMenuOpen(!isAttachMenuOpen)}
               className={cn(
-                'rounded-xl border border-stroke bg-surface-2/70 text-text hover:border-stroke-strong hover:bg-surface-2',
+                'rounded-md border border-stroke text-text hover:border-stroke-strong hover:bg-surface-2',
                 isAttachMenuOpen && 'border-stroke-strong bg-surface-2',
               )}
             >
@@ -331,7 +319,7 @@ export function Composer() {
             </IconButton>
 
             {isAttachMenuOpen ? (
-              <div className="surface-glass bg-surface-2/95 absolute bottom-full left-0 z-[var(--z-dropdown)] mb-2 w-[min(18rem,calc(100vw-2rem))] origin-bottom-left animate-scale-in rounded-2xl border border-stroke-strong p-1.5 shadow-popover">
+              <div className="absolute bottom-full left-0 z-[var(--z-dropdown)] mb-2 w-[min(18rem,calc(100vw-2rem))] origin-bottom-left animate-scale-in rounded-lg border border-stroke-strong bg-surface-2 p-1.5 shadow-popover">
                 <button
                   type="button"
                   onClick={() => {
@@ -350,6 +338,7 @@ export function Composer() {
                   type="button"
                   onClick={() => {
                     setIsAttachMenuOpen(false);
+                    setWorkspaceTab('folder');
                     setIsWorkspaceModalOpen(true);
                   }}
                   className={attachItemClass}
@@ -362,6 +351,7 @@ export function Composer() {
                   type="button"
                   onClick={() => {
                     setIsAttachMenuOpen(false);
+                    setWorkspaceTab('git');
                     setIsWorkspaceModalOpen(true);
                   }}
                   className={attachItemClass}
@@ -373,7 +363,9 @@ export function Composer() {
             ) : null}
           </div>
 
-          <p className="ml-1 hidden min-w-0 truncate text-xs text-subtle md:block">{t('composer.hintSend')}</p>
+          <p className="ml-1 hidden min-w-0 truncate text-xs text-subtle md:block">
+            {t('composer.hintSend')}
+          </p>
 
           {streaming ? (
             <button
@@ -381,7 +373,7 @@ export function Composer() {
               aria-label={t('chat.stop')}
               title={t('chat.stop')}
               onClick={() => stop()}
-              className="ml-auto inline-flex size-11 shrink-0 items-center justify-center rounded-xl border border-stroke-strong bg-surface-2 text-text transition-[background-color,transform] duration-200 hover:bg-surface-3 active:scale-95"
+              className="ml-auto inline-flex size-11 shrink-0 items-center justify-center rounded-md border border-stroke-strong bg-surface-2 text-text transition-[background-color] duration-150 hover:bg-surface-3"
             >
               <StopIcon />
             </button>
@@ -393,11 +385,11 @@ export function Composer() {
               onClick={submit}
               disabled={!canSubmit}
               className={cn(
-                'ml-auto inline-flex size-11 shrink-0 items-center justify-center rounded-xl',
-                'bg-brand-gradient text-accent-text shadow-glow',
-                'transition-[transform,filter,box-shadow,background-color,color] duration-200 ease-out-expo',
-                'hover:-translate-y-px hover:brightness-110 active:translate-y-0 active:scale-95',
-                'disabled:translate-y-0 disabled:cursor-not-allowed disabled:bg-none disabled:bg-surface-3 disabled:text-subtle disabled:shadow-none disabled:hover:brightness-100',
+                'ml-auto inline-flex size-11 shrink-0 items-center justify-center rounded-md',
+                'bg-brand-gradient text-accent-text',
+                'transition-[background-color,color] duration-150',
+                'hover:bg-action-hover',
+                'disabled:cursor-not-allowed disabled:bg-surface-3 disabled:text-subtle disabled:shadow-none',
               )}
             >
               <SendIcon />
@@ -412,9 +404,9 @@ export function Composer() {
 
       <LinkWorkspaceModal
         isOpen={isWorkspaceModalOpen}
+        initialTab={workspaceTab}
         onClose={() => setIsWorkspaceModalOpen(false)}
       />
     </div>
   );
 }
-

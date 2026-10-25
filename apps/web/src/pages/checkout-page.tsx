@@ -1,19 +1,17 @@
-import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useEffectEvent, useRef, useState, type ReactNode } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { useAuth } from '@/features/auth/auth-store';
-import { ArrowLeftIcon, CheckIcon, CryptoIcon, SbpIcon, ShieldIcon, StarIcon } from '@/components/icons';
+import { ArrowLeftIcon, CheckIcon, CryptoIcon, ShieldIcon, StarIcon } from '@/components/icons';
 import { Badge, type BadgeTone } from '@/components/ui/badge';
 import { buttonClasses } from '@/components/ui/button-classes';
 import { Card } from '@/components/ui/card';
 import {
   confirmCryptoPayment,
-  confirmSbpPayment,
   confirmTelegramStarsPayment,
   createCryptoInvoice,
-  createSbpInvoice,
   createTelegramStarsInvoice,
+  fetchCryptoBonus,
   getCryptoInvoiceStatus,
-  getSbpInvoiceStatus,
   getTelegramStarsStatus,
 } from '@/features/billing/api';
 import { useBilling } from '@/features/billing/billing-store';
@@ -22,83 +20,65 @@ import type {
   CryptoCurrency,
   CryptoInvoice,
   PaymentMethod,
-  SbpInvoice,
+  PlanId,
+  Subscription,
   TelegramStarsInvoice,
 } from '@/features/billing/types';
 import { copyText } from '@/lib/clipboard';
 import { useTranslation } from '@/i18n';
 import { cn } from '@/lib/cn';
-import { CRYPTO_OPTIONS } from './checkout/crypto-options';
+import { trackPurchase } from '@/lib/ads';
+import { cryptoOption } from './checkout/crypto-options';
 import { CryptoPanel } from './checkout/crypto-panel';
+import { closeGatewayWindow } from './checkout/gateway-window';
 import { OrderSummary } from './checkout/order-summary';
 import { CheckoutSkeleton } from './checkout/parts';
-import { SbpPanel } from './checkout/sbp-panel';
 import { StarsPanel } from './checkout/stars-panel';
-
-function calculateStars(price: number): number {
-  if (price <= 0) return 0;
-  if (
-    price === 49 ||
-    price === 59 ||
-    price === 4890 ||
-    price === 2990 ||
-    price === 2499 ||
-    price === 30 ||
-    price === 39 ||
-    price === 40
-  ) {
-    return 2650;
-  }
-  if (
-    price === 25 ||
-    price === 2490 ||
-    price === 1990 ||
-    price === 1999 ||
-    price === 1199 ||
-    price === 20 ||
-    price === 29
-  ) {
-    return 1350;
-  }
-  if (price === 9 || price === 890 || price === 990 || price === 999 || price === 10) {
-    return 500;
-  }
-  if (price <= 100) return Math.round(price / 0.0185);
-  return Math.round((price / 99) / 0.0185);
-}
-
-function calculateRubPrice(priceUsd: number): number {
-  if (priceUsd === 9) return 890;
-  if (priceUsd === 25) return 2490;
-  if (priceUsd === 49) return 4890;
-  if (priceUsd === 10) return 990;
-  if (priceUsd === 20) return 1990;
-  if (priceUsd === 30) return 2990;
-  return Math.round(priceUsd * 99);
-}
 
 export function CheckoutPage() {
   const { t } = useTranslation();
   const navigate = useNavigate();
-  const { planId } = useParams<{ planId: string }>();
+  const { planId } = useParams<{ planId?: string }>();
   const authStatus = useAuth((state) => state.status);
   const user = useAuth((state) => state.user);
   const setUser = useAuth((state) => state.setUser);
   const plan = getPlan(planId);
   const setSubscription = useBilling((state) => state.setSubscription);
 
+  // Бонус за оплату тарифа криптой: суммы приходят с сервера (services/entitlement.ts).
+  const [cryptoBonus, setCryptoBonus] = useState<{
+    pct: number;
+    quotaUsd: number;
+    bonusUsd: number;
+  } | null>(null);
+  useEffect(() => {
+    if (!plan || !user) return;
+    let stale = false;
+    fetchCryptoBonus()
+      .then((data) => {
+        const forPlan = data.plans[plan.id];
+        if (!stale && forPlan) setCryptoBonus({ pct: data.pct, ...forPlan });
+      })
+      .catch(() => undefined);
+    return () => {
+      stale = true;
+    };
+  }, [plan, user]);
+  const purchaseKind: 'plan' | null = plan ? 'plan' : null;
+  const purchaseId = plan?.id ?? '';
+  const priceUsd = plan?.priceMonthly ?? 0;
+
   useEffect(() => {
     if (authStatus !== 'loading' && (!user || authStatus === 'unauthenticated')) {
-      const targetPlan = planId || 'gpt-pro';
-      navigate(`/signup?redirect=${encodeURIComponent(`/checkout/${targetPlan}`)}`, {
+      const target = planId || 'gpt-pro';
+      navigate(`/signup?redirect=${encodeURIComponent(`/checkout/${target}`)}`, {
         replace: true,
       });
     }
   }, [authStatus, user, planId, navigate]);
 
-  // Выбранный способ оплаты: по умолчанию криптовалюта (TryBit / CryptoCloud Gateway)
+  // Выбранный способ оплаты: по умолчанию криптовалюта (Trybit)
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('crypto');
-  const [cryptoTransferMode, setCryptoTransferMode] = useState<'gateway' | 'manual'>('gateway');
   const [payerEmail, setPayerEmail] = useState(user?.email || '');
   const [sendReceiptEmail, setSendReceiptEmail] = useState(true);
   const [gatewayOpened, setGatewayOpened] = useState(false);
@@ -109,18 +89,13 @@ export function CheckoutPage() {
     }
   }, [user?.email, payerEmail]);
 
-  // СБП
-  const [sbpInvoice, setSbpInvoice] = useState<SbpInvoice | null>(null);
-  const [sbpLoading, setSbpLoading] = useState(false);
-  const [sbpSecondsLeft, setSbpSecondsLeft] = useState(15 * 60);
-  const [copiedSbpSum, setCopiedSbpSum] = useState(false);
-
   // Криптовалюта
   const [cryptoCurrency, setCryptoCurrency] = useState<CryptoCurrency>('USDT_TRC20');
   const [cryptoInvoice, setCryptoInvoice] = useState<CryptoInvoice | null>(null);
   const [cryptoLoading, setCryptoLoading] = useState(false);
+  const [cryptoError, setCryptoError] = useState<string | null>(null);
+  const [cryptoAttempt, setCryptoAttempt] = useState(0);
   const [cryptoSecondsLeft, setCryptoSecondsLeft] = useState(30 * 60);
-  const [txHashInput, setTxHashInput] = useState('');
   const [copiedCryptoAddress, setCopiedCryptoAddress] = useState(false);
   const [copiedCryptoAmount, setCopiedCryptoAmount] = useState(false);
 
@@ -142,15 +117,6 @@ export function CheckoutPage() {
 
   const pollingRef = useRef<number | null>(null);
 
-  // Таймер СБП
-  useEffect(() => {
-    if (paymentMethod !== 'sbp') return;
-    const interval = window.setInterval(() => {
-      setSbpSecondsLeft((prev) => (prev > 0 ? prev - 1 : 0));
-    }, 1000);
-    return () => clearInterval(interval);
-  }, [paymentMethod]);
-
   // Таймер Криптовалюты
   useEffect(() => {
     if (paymentMethod !== 'crypto') return;
@@ -160,43 +126,45 @@ export function CheckoutPage() {
     return () => clearInterval(interval);
   }, [paymentMethod]);
 
-  // Загрузка инвойса СБП
-  useEffect(() => {
-    if (paymentMethod === 'sbp' && !sbpInvoice && plan && plan.priceMonthly > 0) {
-      setSbpLoading(true);
-      createSbpInvoice(plan.id)
-        .then(({ invoice }) => {
-          setSbpInvoice(invoice);
-          setSbpSecondsLeft(15 * 60);
-        })
-        .catch((err) => {
-          console.error('Failed to create SBP invoice:', err);
-        })
-        .finally(() => setSbpLoading(false));
-    }
-  }, [paymentMethod, sbpInvoice, plan]);
+  // t меняется при смене языка — счёт из-за этого заново не выставляем, но текст ошибки берём актуальный.
+  const cryptoInvoiceError = useEffectEvent((err: unknown): string =>
+    err instanceof Error && err.message ? err.message : t('checkout.cryptoInvoiceFailed'),
+  );
 
   // Загрузка инвойса Криптовалюты
   useEffect(() => {
-    if (paymentMethod === 'crypto' && plan && plan.priceMonthly > 0) {
-      setCryptoLoading(true);
-      createCryptoInvoice(plan.id, cryptoCurrency)
-        .then(({ invoice }) => {
-          setCryptoInvoice(invoice);
-          setCryptoSecondsLeft(30 * 60);
-        })
-        .catch((err) => {
-          console.error('Failed to create Crypto invoice:', err);
-        })
-        .finally(() => setCryptoLoading(false));
-    }
-  }, [paymentMethod, cryptoCurrency, plan]);
+    if (paymentMethod !== 'crypto' || !purchaseKind || priceUsd <= 0) return;
+    // Быстрая смена монеты: ответ на устаревший запрос не должен подменить счёт новой монеты.
+    let stale = false;
+    setCryptoLoading(true);
+    setCryptoError(null);
+    setCryptoInvoice(null);
+    createCryptoInvoice(purchaseId as PlanId, cryptoCurrency)
+      .then(({ invoice }) => {
+        if (stale) return;
+        setCryptoInvoice(invoice);
+        // Таймер по сроку счёта в шлюзе (у H2H-счёта он свой), иначе 30 минут.
+        const left = Math.floor((new Date(invoice.expiresAt).getTime() - Date.now()) / 1000);
+        setCryptoSecondsLeft(invoice.gatewayDetails && left > 0 ? left : 30 * 60);
+      })
+      .catch((err) => {
+        if (stale) return;
+        console.error('Failed to create Crypto invoice:', err);
+        setCryptoError(cryptoInvoiceError(err));
+      })
+      .finally(() => {
+        if (!stale) setCryptoLoading(false);
+      });
+    return () => {
+      stale = true;
+    };
+  }, [paymentMethod, cryptoCurrency, purchaseKind, purchaseId, priceUsd, cryptoAttempt]);
 
   // Загрузка инвойса Telegram Stars
   useEffect(() => {
-    if (paymentMethod === 'stars' && !starsInvoice && plan && plan.priceMonthly > 0) {
+    if (paymentMethod === 'stars' && !starsInvoice && purchaseKind && priceUsd > 0) {
       setStarsLoading(true);
-      createTelegramStarsInvoice(plan.id)
+      createTelegramStarsInvoice(purchaseId as PlanId)
         .then(({ invoice }) => {
           setStarsInvoice(invoice);
         })
@@ -205,35 +173,48 @@ export function CheckoutPage() {
         })
         .finally(() => setStarsLoading(false));
     }
-  }, [paymentMethod, starsInvoice, plan]);
+  }, [paymentMethod, starsInvoice, purchaseKind, purchaseId, priceUsd]);
+
+  /** Оплата подтверждена: обновляем подписку и профиль. */
+  const applyPaidResult = (conf: { subscription: Subscription; user: { plan: PlanId } }): void => {
+    setSubscription(conf.subscription, conf.user.plan);
+    if (user) setUser({ ...user, plan: conf.user.plan });
+  };
+  // Для опроса статуса в эффекте: свежие user и тариф без перезапуска таймера.
+  const applyPaid = useEffectEvent(applyPaidResult);
+
+  // Оплата прошла — закрываем окно виджета Trybit
+  // и меняем адрес на /checkout/success: по нему рекламные системы считают покупки
+  // (экран остаётся тем же, перезагрузка покажет общую страницу «Оплата прошла»).
+  useEffect(() => {
+    if (!success) return;
+    closeGatewayWindow();
+    const item = planId ?? '';
+    window.history.replaceState(
+      window.history.state,
+      '',
+      `/checkout/success${item ? `?item=${encodeURIComponent(item)}` : ''}`,
+    );
+    trackPurchase({
+      id: cryptoInvoice?.id ?? starsInvoice?.id ?? `${item}-${Date.now()}`,
+      item,
+      valueUsd: priceUsd,
+    });
+    // Отправляем один раз — в момент успешной оплаты.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [success]);
 
   // Polling статуса инвойса
   useEffect(() => {
     if (success) return;
 
-    if (paymentMethod === 'sbp' && sbpInvoice && sbpInvoice.status !== 'paid') {
-      pollingRef.current = window.setInterval(async () => {
-        try {
-          const res = await getSbpInvoiceStatus(sbpInvoice.id);
-          if (res.status === 'paid') {
-            const conf = await confirmSbpPayment(sbpInvoice.id);
-            setSubscription(conf.subscription, conf.user.plan);
-            if (user) setUser({ ...user, plan: conf.user.plan });
-            setPaidMethodName(t('checkout.methodSbp'));
-            setSuccess(true);
-          }
-        } catch {
-          // ignore network polling errors
-        }
-      }, 3000);
-    } else if (paymentMethod === 'crypto' && cryptoInvoice && cryptoInvoice.status !== 'paid') {
+    if (paymentMethod === 'crypto' && cryptoInvoice && cryptoInvoice.status !== 'paid') {
       pollingRef.current = window.setInterval(async () => {
         try {
           const res = await getCryptoInvoiceStatus(cryptoInvoice.id);
           if (res.status === 'paid') {
             const conf = await confirmCryptoPayment(cryptoInvoice.id);
-            setSubscription(conf.subscription, conf.user.plan);
-            if (user) setUser({ ...user, plan: conf.user.plan });
+            applyPaid(conf);
             setPaidMethodName(t('checkout.methodCrypto'));
             setSuccess(true);
           }
@@ -247,8 +228,7 @@ export function CheckoutPage() {
           const res = await getTelegramStarsStatus(starsInvoice.id);
           if (res.status === 'paid') {
             const conf = await confirmTelegramStarsPayment(starsInvoice.id);
-            setSubscription(conf.subscription, conf.user.plan);
-            if (user) setUser({ ...user, plan: conf.user.plan });
+            applyPaid(conf);
             setPaidMethodName(t('checkout.methodStars'));
             setSuccess(true);
           }
@@ -263,7 +243,7 @@ export function CheckoutPage() {
         clearInterval(pollingRef.current);
       }
     };
-  }, [paymentMethod, sbpInvoice, cryptoInvoice, starsInvoice, success, user, setUser, setSubscription, t]);
+  }, [paymentMethod, cryptoInvoice, starsInvoice, success, t]);
 
   if (authStatus === 'loading') {
     return <CheckoutSkeleton label={t('common.loading')} />;
@@ -273,7 +253,7 @@ export function CheckoutPage() {
     return null;
   }
 
-  if (!plan) {
+  if (!purchaseKind) {
     return (
       <div className="mx-auto flex w-full max-w-lg flex-col items-center gap-4 px-4 py-16 text-center">
         <h1 className="text-xl font-semibold text-text">{t('notFound.title')}</h1>
@@ -285,53 +265,14 @@ export function CheckoutPage() {
     );
   }
 
-  // Подтверждение СБП
-  const handleSbpConfirm = async () => {
-    const invoiceId = sbpInvoice?.id || `sbp_${plan.id}`;
-    setSubmitting(true);
-    setCheckFeedback(null);
-    try {
-      const res = await confirmSbpPayment(invoiceId);
-      setSubscription(res.subscription, res.user.plan);
-      if (user) setUser({ ...user, plan: res.user.plan });
-      setPaidMethodName(t('checkout.methodSbp'));
-      setSuccess(true);
-    } catch (err) {
-      console.error('Failed to confirm SBP payment:', err);
-      setCheckFeedback({
-        method: 'sbp',
-        type: 'warning',
-        message: t('checkout.sbpConfirmFailed'),
-      });
-    } finally {
-      setSubmitting(false);
-    }
-  };
-
   // Подтверждение Криптовалюты
   const handleCryptoConfirm = async () => {
-    const invoiceId = cryptoInvoice?.id || `crypto_${plan.id}`;
-    const cleanTx = txHashInput.trim();
-
-    if (cryptoTransferMode === 'manual' && !cleanTx) {
-      setCheckFeedback({
-        method: 'crypto',
-        type: 'warning',
-        message: t('checkout.cryptoNeedTx'),
-      });
-      return;
-    }
-
+    if (!cryptoInvoice) return;
     setSubmitting(true);
     setCheckFeedback(null);
     try {
-      const res = await confirmCryptoPayment(
-        invoiceId,
-        cleanTx || undefined,
-        cryptoTransferMode,
-      );
-      setSubscription(res.subscription, res.user.plan);
-      if (user) setUser({ ...user, plan: res.user.plan });
+      const res = await confirmCryptoPayment(cryptoInvoice.id);
+      applyPaidResult(res);
       setPaidMethodName(t('checkout.methodCrypto'));
       setSuccess(true);
     } catch (err) {
@@ -339,10 +280,7 @@ export function CheckoutPage() {
       setCheckFeedback({
         method: 'crypto',
         type: 'warning',
-        message:
-          err instanceof Error && err.message
-            ? err.message
-            : t('checkout.cryptoPending'),
+        message: err instanceof Error && err.message ? err.message : t('checkout.cryptoPending'),
       });
     } finally {
       setSubmitting(false);
@@ -351,15 +289,14 @@ export function CheckoutPage() {
 
   // Проверка и подтверждение Telegram Stars
   const handleStarsConfirm = async () => {
-    const invoiceId = starsInvoice?.id || `stars_${plan.id}`;
+    const invoiceId = starsInvoice?.id || `stars_${purchaseId}`;
     setSubmitting(true);
     setCheckFeedback(null);
     try {
       const statusRes = await getTelegramStarsStatus(invoiceId);
       if (statusRes.status === 'paid') {
         const res = await confirmTelegramStarsPayment(invoiceId);
-        setSubscription(res.subscription, res.user.plan);
-        if (user) setUser({ ...user, plan: res.user.plan });
+        applyPaidResult(res);
         setPaidMethodName(t('checkout.methodStars'));
         setSuccess(true);
       } else {
@@ -382,9 +319,12 @@ export function CheckoutPage() {
   };
 
   const formatTimer = (seconds: number) => {
-    const mins = Math.floor(seconds / 60);
+    const pad = (value: number) => value.toString().padStart(2, '0');
+    const hours = Math.floor(seconds / 3600);
+    const mins = Math.floor((seconds % 3600) / 60);
     const secs = seconds % 60;
-    return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+    // Счёт Trybit живёт сутки: часы показываем, только когда они есть.
+    return hours > 0 ? `${hours}:${pad(mins)}:${pad(secs)}` : `${pad(mins)}:${pad(secs)}`;
   };
 
   const copyToClipboard = async (text: string, setCopiedFn: (val: boolean) => void) => {
@@ -395,16 +335,17 @@ export function CheckoutPage() {
     }
   };
 
-  const rubAmount = calculateRubPrice(plan.priceMonthly);
-  const starsAmount = calculateStars(plan.priceMonthly);
+  // Сумма в звёздах и её цена по официальному курсу Telegram приходят со счётом.
+  const starsAmount = starsInvoice?.starsAmount ?? null;
+  const starsUsd = starsInvoice?.starsUsd ?? null;
   const rawBot = starsInvoice?.botUsername;
   const botUsername =
     rawBot && rawBot.trim() !== '' && rawBot !== 'KetnerAIBot'
       ? rawBot.replace(/^@/, '')
       : 'Robo_kassa_bot';
   const startParam = starsInvoice?.id
-    ? `pay_${plan.id}__${starsInvoice.id}`
-    : `pay_${plan.id}_${user.id}`;
+    ? `pay_${purchaseId}__${starsInvoice.id}`
+    : `pay_${purchaseId}_${user.id}`;
   let botDeepLink = `https://t.me/${botUsername}?start=${startParam}`;
   if (
     starsInvoice?.botDeepLink &&
@@ -414,15 +355,23 @@ export function CheckoutPage() {
   ) {
     botDeepLink = starsInvoice.botDeepLink;
   }
+  // Кнопка и QR ведут в бота: он присылает сообщение со счётом, оплата — в чате с ботом.
 
-  const currentCrypto =
-    CRYPTO_OPTIONS.find((c) => c.id === cryptoCurrency) || CRYPTO_OPTIONS[0];
-  const cryptoAmountStr = currentCrypto.formatAmount(plan.priceMonthly);
-  const cryptoAddress = cryptoInvoice?.address || currentCrypto.defaultAddress;
-  const cryptoQr =
-    cryptoInvoice?.qrPayload || `${currentCrypto.network.toLowerCase()}:${cryptoAddress}`;
+  const currentCrypto = cryptoOption(cryptoCurrency);
+  // Реквизиты от Trybit (H2H): точная сумма в криптовалюте приходит со счётом.
+  const gatewayDetails = Boolean(cryptoInvoice?.gatewayDetails);
+  const cryptoTicker = currentCrypto.ticker;
+  const cryptoAmountStr =
+    gatewayDetails && cryptoInvoice
+      ? `${cryptoInvoice.amount} ${cryptoTicker}`
+      : currentCrypto.formatAmount(priceUsd);
+  // Адрес и QR выдаёт только Trybit; своих кошельков на странице нет.
+  const cryptoAddress = cryptoInvoice?.address ?? '';
+  const cryptoQr = cryptoInvoice?.qrPayload ?? '';
 
-  const planName = t(plan.nameKey);
+  const planName = plan ? t(plan.nameKey) : '';
+  const chipLabel = t('checkout.cryptoPlanChip', { plan: planName });
+  const periodNotice = t('checkout.starsPeriodNotice', { plan: planName });
   const feedbackFor = (method: PaymentMethod): string | null =>
     checkFeedback && checkFeedback.method === method ? checkFeedback.message : null;
   const selectMethod = (method: PaymentMethod): void => {
@@ -456,23 +405,31 @@ export function CheckoutPage() {
             </div>
             <p className="mt-1 flex items-center gap-1.5 text-[13px] font-medium text-success">
               <span aria-hidden="true" className="size-2 animate-pulse rounded-full bg-success" />
-              {t('settings.statusActive')} · {t('checkout.accessActivated')}
+              {`${t('settings.statusActive')} · ${t('checkout.accessActivated')}`}
             </p>
           </div>
           <div className="text-right">
             <p className="text-xl font-semibold text-text tabular-nums">
-              ${plan.priceMonthly}
-              <span className="ml-1 text-xs font-normal text-muted">/{t('pricing.month')}</span>
+              ${priceUsd}
+              {plan ? (
+                <span className="ml-1 text-xs font-normal text-muted">/{t('pricing.month')}</span>
+              ) : null}
             </p>
             <p className="mt-0.5 text-xs text-muted">{paidMethodName || t('checkout.paid')}</p>
           </div>
         </Card>
 
         <div className="flex w-full flex-col gap-3 pt-2 sm:flex-row">
-          <Link to="/chat" className={buttonClasses({ variant: 'primary', size: 'lg', className: 'flex-1' })}>
+          <Link
+            to="/chat"
+            className={buttonClasses({ variant: 'primary', size: 'lg', className: 'flex-1' })}
+          >
             {t('checkout.goToChat')}
           </Link>
-          <Link to="/settings" className={buttonClasses({ variant: 'outline', size: 'lg', className: 'flex-1' })}>
+          <Link
+            to="/settings"
+            className={buttonClasses({ variant: 'outline', size: 'lg', className: 'flex-1' })}
+          >
             {t('checkout.goToSettings')}
           </Link>
         </div>
@@ -543,7 +500,11 @@ export function CheckoutPage() {
               <span className="text-xs text-muted">{t('checkout.chooseMethod')}</span>
             </div>
 
-            <div role="group" aria-labelledby="checkout-methods" className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+            <div
+              role="group"
+              aria-labelledby="checkout-methods"
+              className="grid grid-cols-1 gap-3 sm:grid-cols-2"
+            >
               <MethodTile
                 selected={paymentMethod === 'crypto'}
                 onSelect={() => selectMethod('crypto')}
@@ -551,16 +512,11 @@ export function CheckoutPage() {
                 badge={t('checkout.tileCryptoBadge')}
                 badgeTone="brand"
                 title={t('checkout.tileCrypto')}
-                description={t('checkout.tileCryptoDesc')}
-              />
-              <MethodTile
-                selected={paymentMethod === 'sbp'}
-                onSelect={() => selectMethod('sbp')}
-                icon={<SbpIcon className="size-[18px]" />}
-                iconClassName="bg-surface-2 ring-stroke"
-                badge={t('checkout.tileSbpBadge')}
-                title={t('checkout.tileSbp')}
-                description={t('checkout.tileSbpDesc')}
+                description={
+                  cryptoBonus
+                    ? `${t('checkout.tileCryptoDesc')} · ${t('checkout.tileCryptoBonus', { pct: cryptoBonus.pct })}`
+                    : t('checkout.tileCryptoDesc')
+                }
               />
               <MethodTile
                 selected={paymentMethod === 'stars'}
@@ -574,31 +530,38 @@ export function CheckoutPage() {
             </div>
           </div>
 
-          {paymentMethod === 'sbp' && (
-            <SbpPanel
-              plan={plan}
-              rubAmount={rubAmount}
-              timer={formatTimer(sbpSecondsLeft)}
-              invoice={sbpInvoice}
-              loading={sbpLoading}
-              copied={copiedSbpSum}
-              onCopyAmount={() => void copyToClipboard(String(rubAmount), setCopiedSbpSum)}
-              submitting={submitting}
-              feedback={feedbackFor('sbp')}
-              onConfirm={() => void handleSbpConfirm()}
-            />
-          )}
+          <p className="text-[12px] leading-5 text-subtle">
+            Оплачивая, вы принимаете{' '}
+            <Link to="/terms" className="underline underline-offset-4 hover:text-text">
+              оферту
+            </Link>{' '}
+            и{' '}
+            <Link to="/payment-terms" className="underline underline-offset-4 hover:text-text">
+              условия оплаты и возврата
+            </Link>
+            : в течение 24 часов, если моделями ещё не пользовались.
+          </p>
 
           {paymentMethod === 'crypto' && (
             <CryptoPanel
-              plan={plan}
-              planName={planName}
+              priceUsd={priceUsd}
+              chipLabel={chipLabel}
+              bonusNote={
+                cryptoBonus
+                  ? {
+                      title: t('checkout.cryptoBonusTitle', { pct: cryptoBonus.pct }),
+                      text: t('checkout.cryptoBonusText', {
+                        plan: planName,
+                        quota: cryptoBonus.quotaUsd.toFixed(2),
+                        total: (cryptoBonus.quotaUsd + cryptoBonus.bonusUsd).toFixed(2),
+                      }),
+                    }
+                  : null
+              }
               amount={cryptoAmountStr}
               timer={formatTimer(cryptoSecondsLeft)}
               currency={cryptoCurrency}
               onCurrencyChange={setCryptoCurrency}
-              mode={cryptoTransferMode}
-              onModeChange={setCryptoTransferMode}
               payerEmail={payerEmail}
               onPayerEmailChange={setPayerEmail}
               sendReceipt={sendReceiptEmail}
@@ -607,6 +570,8 @@ export function CheckoutPage() {
               onGatewayOpen={() => setGatewayOpened(true)}
               invoice={cryptoInvoice}
               loading={cryptoLoading}
+              invoiceError={cryptoError}
+              onRetryInvoice={() => setCryptoAttempt((attempt) => attempt + 1)}
               option={currentCrypto}
               address={cryptoAddress}
               qr={cryptoQr}
@@ -614,10 +579,15 @@ export function CheckoutPage() {
               copiedAmount={copiedCryptoAmount}
               onCopyAddress={() => void copyToClipboard(cryptoAddress, setCopiedCryptoAddress)}
               onCopyAmount={() =>
-                void copyToClipboard(String(currentCrypto.calcAmount(plan.priceMonthly)), setCopiedCryptoAmount)
+                void copyToClipboard(
+                  String(
+                    gatewayDetails && cryptoInvoice
+                      ? cryptoInvoice.amount
+                      : (currentCrypto.calcAmount(priceUsd) ?? priceUsd),
+                  ),
+                  setCopiedCryptoAmount,
+                )
               }
-              txHash={txHashInput}
-              onTxHashChange={setTxHashInput}
               submitting={submitting}
               feedback={feedbackFor('crypto')}
               onConfirm={() => void handleCryptoConfirm()}
@@ -626,9 +596,11 @@ export function CheckoutPage() {
 
           {paymentMethod === 'stars' && (
             <StarsPanel
-              plan={plan}
-              planName={planName}
+              periodNotice={periodNotice}
               starsAmount={starsAmount}
+              starsUsd={starsUsd}
+              usdPerStar={starsInvoice?.usdPerStar ?? null}
+              cardPriceUsd={priceUsd}
               botUsername={botUsername}
               botDeepLink={botDeepLink}
               loading={starsLoading}
@@ -644,7 +616,16 @@ export function CheckoutPage() {
           </p>
         </div>
 
-        <OrderSummary plan={plan} />
+        {plan ? (
+          <OrderSummary
+            plan={plan}
+            feeUsd={
+              paymentMethod === 'crypto' && !cryptoLoading
+                ? (cryptoInvoice?.fees?.payerUsd ?? 0)
+                : 0
+            }
+          />
+        ) : null}
       </div>
     </div>
   );

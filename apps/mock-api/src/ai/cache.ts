@@ -9,7 +9,14 @@
  *     запросы с вложениями.
  */
 
-import { existsSync, mkdirSync, readFileSync, renameSync, unlinkSync, writeFileSync } from 'node:fs';
+import {
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  renameSync,
+  unlinkSync,
+  writeFileSync,
+} from 'node:fs';
 import { dirname } from 'node:path';
 import type { ResponseSource } from './gateway-types.js';
 
@@ -30,11 +37,7 @@ export class SemanticCache {
   private ttlMs: number;
   private storagePath?: string;
 
-  constructor(
-    maxEntries = 5000,
-    ttlMs = 24 * 60 * 60 * 1000,
-    storagePath?: string,
-  ) {
+  constructor(maxEntries = 5000, ttlMs = 24 * 60 * 60 * 1000, storagePath?: string) {
     this.maxEntries = maxEntries;
     this.ttlMs = ttlMs;
     this.storagePath = storagePath;

@@ -6,6 +6,7 @@ import {
   integer,
   boolean,
   json,
+  jsonb,
   numeric,
   index,
 } from 'drizzle-orm/pg-core';
@@ -95,9 +96,13 @@ export const betterAuthVerification = pgTable(
 export const users = pgTable(
   'ketner_users',
   {
-    id: text('id').primaryKey().$defaultFn(() => randomUUID()),
+    id: text('id')
+      .primaryKey()
+      .$defaultFn(() => randomUUID()),
     // Связь с BetterAuth user по email
-    betterAuthId: text('better_auth_id').unique().references(() => betterAuthUser.id),
+    betterAuthId: text('better_auth_id')
+      .unique()
+      .references(() => betterAuthUser.id),
     email: text('email').unique().notNull(),
     name: text('name').notNull(),
     plan: text('plan').default('free').notNull(), // free, pro, ultra
@@ -107,6 +112,9 @@ export const users = pgTable(
     isAdmin: boolean('is_admin').default(false),
     telegramChatId: text('telegram_chat_id'),
     telegramUsername: text('telegram_username'),
+    // Способ регистрации (email, google, github, telegram, admin) и метки источника (utm, сайт)
+    signupMethod: text('signup_method'),
+    signupAttribution: jsonb('signup_attribution'),
     tokensUsedThisMonth: integer('tokens_used_this_month').default(0),
     totalTokensUsed: integer('total_tokens_used').default(0),
     totalCostUsd: numeric('total_cost_usd', { precision: 10, scale: 2 }).default('0'),
@@ -122,7 +130,9 @@ export const users = pgTable(
 export const conversations = pgTable(
   'conversations',
   {
-    id: text('id').primaryKey().$defaultFn(() => randomUUID()),
+    id: text('id')
+      .primaryKey()
+      .$defaultFn(() => randomUUID()),
     userId: text('user_id').notNull(),
     title: text('title'),
     selectedModel: text('selected_model').default('claude-3-5-sonnet-20241022'),
@@ -142,7 +152,9 @@ export const conversations = pgTable(
 export const messages = pgTable(
   'messages',
   {
-    id: text('id').primaryKey().$defaultFn(() => randomUUID()),
+    id: text('id')
+      .primaryKey()
+      .$defaultFn(() => randomUUID()),
     conversationId: text('conversation_id').notNull(),
     role: text('role').notNull(), // 'user' | 'assistant'
     content: text('content').notNull(),
@@ -172,7 +184,9 @@ export const messages = pgTable(
 export const subscriptions = pgTable(
   'subscriptions',
   {
-    id: text('id').primaryKey().$defaultFn(() => randomUUID()),
+    id: text('id')
+      .primaryKey()
+      .$defaultFn(() => randomUUID()),
     userId: text('user_id').notNull(),
     plan: text('plan').notNull(), // 'free', 'pro', 'ultra'
     status: text('status').default('active').notNull(), // active, canceled, past_due, incomplete
@@ -198,7 +212,9 @@ export const subscriptions = pgTable(
 export const feedbacks = pgTable(
   'feedbacks',
   {
-    id: text('id').primaryKey().$defaultFn(() => randomUUID()),
+    id: text('id')
+      .primaryKey()
+      .$defaultFn(() => randomUUID()),
     messageId: text('message_id').unique().notNull(),
     conversationId: text('conversation_id').notNull(),
     userId: text('user_id'),
@@ -219,7 +235,9 @@ export const feedbacks = pgTable(
 export const billingEvents = pgTable(
   'billing_events',
   {
-    id: text('id').primaryKey().$defaultFn(() => randomUUID()),
+    id: text('id')
+      .primaryKey()
+      .$defaultFn(() => randomUUID()),
     userId: text('user_id').notNull(),
     type: text('type').notNull(), // 'payment', 'refund', 'upgrade', 'downgrade', 'usage_overage'
     amountUsd: numeric('amount_usd', { precision: 10, scale: 2 }).notNull(),
@@ -239,7 +257,9 @@ export const billingEvents = pgTable(
 export const usageMetrics = pgTable(
   'usage_metrics',
   {
-    id: text('id').primaryKey().$defaultFn(() => randomUUID()),
+    id: text('id')
+      .primaryKey()
+      .$defaultFn(() => randomUUID()),
     userId: text('user_id').notNull(),
     conversationId: text('conversation_id'),
     model: text('model').notNull(),
@@ -263,16 +283,13 @@ export const usersRelations = relations(users, ({ many }) => ({
   usageMetrics: many(usageMetrics),
 }));
 
-export const conversationsRelations = relations(
-  conversations,
-  ({ one, many }) => ({
-    user: one(users, {
-      fields: [conversations.userId],
-      references: [users.id],
-    }),
-    messages: many(messages),
+export const conversationsRelations = relations(conversations, ({ one, many }) => ({
+  user: one(users, {
+    fields: [conversations.userId],
+    references: [users.id],
   }),
-);
+  messages: many(messages),
+}));
 
 export const messagesRelations = relations(messages, ({ one }) => ({
   conversation: one(conversations, {
@@ -281,15 +298,12 @@ export const messagesRelations = relations(messages, ({ one }) => ({
   }),
 }));
 
-export const subscriptionsRelations = relations(
-  subscriptions,
-  ({ one }) => ({
-    user: one(users, {
-      fields: [subscriptions.userId],
-      references: [users.id],
-    }),
+export const subscriptionsRelations = relations(subscriptions, ({ one }) => ({
+  user: one(users, {
+    fields: [subscriptions.userId],
+    references: [users.id],
   }),
-);
+}));
 
 export const billingEventsRelations = relations(billingEvents, ({ one }) => ({
   user: one(users, {
@@ -298,16 +312,13 @@ export const billingEventsRelations = relations(billingEvents, ({ one }) => ({
   }),
 }));
 
-export const usageMetricsRelations = relations(
-  usageMetrics,
-  ({ one }) => ({
-    user: one(users, {
-      fields: [usageMetrics.userId],
-      references: [users.id],
-    }),
-    conversation: one(conversations, {
-      fields: [usageMetrics.conversationId],
-      references: [conversations.id],
-    }),
+export const usageMetricsRelations = relations(usageMetrics, ({ one }) => ({
+  user: one(users, {
+    fields: [usageMetrics.userId],
+    references: [users.id],
   }),
-);
+  conversation: one(conversations, {
+    fields: [usageMetrics.conversationId],
+    references: [conversations.id],
+  }),
+}));

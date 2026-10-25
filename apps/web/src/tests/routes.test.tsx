@@ -11,8 +11,10 @@ describe('маршрутизация и каркас экранов', () => {
   it('лендинг открывается и ведёт в чат', () => {
     renderRoute('/');
 
-    expect(screen.getByRole('heading', { level: 1, name: 'Ketner AI' })).toBeInTheDocument();
-    const startLinks = screen.getAllByRole('link', { name: 'Начать чат' });
+    expect(
+      screen.getByRole('heading', { level: 1, name: 'Все сильные модели в одной подписке' }),
+    ).toBeInTheDocument();
+    const startLinks = screen.getAllByRole('link', { name: 'Начать бесплатно' });
     expect(startLinks.length).toBeGreaterThan(0);
     expect(startLinks[0]).toHaveAttribute('href', '/chat');
   });
@@ -55,17 +57,20 @@ describe('маршрутизация и каркас экранов', () => {
     expect(
       screen.getByRole('heading', { level: 1, name: 'Документация Ketner AI' }),
     ).toBeInTheDocument();
-    expect(screen.getByText('Тарифные планы и лимиты')).toBeInTheDocument();
+    expect(screen.getByText('Тарифные планы')).toBeInTheDocument();
   });
 
-  it('страница API и подключения агентов открывается по /api-docs', () => {
+  it('страница API для разработчиков открывается по /api-docs', () => {
     renderRoute('/api-docs');
 
     expect(
-      screen.getByRole('heading', { level: 1, name: /API & Подключение AI-агентов к машине/ }),
+      screen.getByRole('heading', { level: 1, name: 'API для разработчиков' }),
     ).toBeInTheDocument();
-    expect(screen.getByText('Секретные API-ключи')).toBeInTheDocument();
-    expect(screen.getByText('Base URL (OpenAI V1)')).toBeInTheDocument();
+    expect(screen.getByRole('heading', { level: 2, name: 'API-ключи' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { level: 2, name: 'Адрес API' })).toBeInTheDocument();
+    // Гость видит приглашение войти, а не выдуманные ключи
+    expect(screen.getByText('Войдите, чтобы создавать ключи и управлять ими.')).toBeInTheDocument();
+    expect(screen.queryByText(/ketner_sk_live/)).toBeNull();
   });
 
   it('страница входа показывает форму и кнопки OAuth-заглушек', () => {
@@ -106,7 +111,9 @@ describe('маршрутизация и каркас экранов', () => {
       screen.getByRole('heading', { level: 1, name: 'Оформление подписки' }),
     ).toBeInTheDocument();
     expect(screen.getByRole('heading', { level: 2, name: 'Plus' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /Подтвердить оплату криптовалютой/i })).toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: /Подтвердить оплату криптовалютой/i }),
+    ).toBeInTheDocument();
   });
 
   it('неавторизованный пользователь при попытке оформления подписки перенаправляется на регистрацию', () => {

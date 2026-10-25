@@ -1,165 +1,260 @@
-import { useState } from 'react';
-import { CheckIcon, CopyIcon, EyeIcon, EyeOffIcon, KeyIcon, PlusIcon } from '@/components/icons';
+import { useEffect, useId, useState } from 'react';
+import { Link } from 'react-router-dom';
+import { CheckIcon, CopyIcon, KeyIcon, PlusIcon } from '@/components/icons';
 import { Callout } from '@/components/docs/callout';
 import { DocSection } from '@/components/docs/doc-section';
-import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { IconButton } from '@/components/ui/icon-button';
+import { buttonClasses } from '@/components/ui/button-classes';
 import { Input } from '@/components/ui/input';
 import { RichText } from '@/components/ui/rich-text';
+import { useAuth } from '@/features/auth/auth-store';
+import { ApiError, apiKeysApi, type ApiKeyInfo } from '@/features/api-keys/api';
 import { useTranslation } from '@/i18n';
 import { copyText } from '@/lib/clipboard';
-
-export interface ApiKeyItem {
-  id: string;
-  name: string;
-  key: string;
-  createdAt: string;
-  permissions: string;
-}
+import { formatShortDate } from '@/lib/format-date';
 
 interface KeysSectionProps {
-  keys: ApiKeyItem[];
-  onAddKey: (name: string) => void;
-  onRevokeKey: (id: string) => void;
+  /** Новый секрет: страница подставляет его в примеры, пока не обновится. */
+  onSecretCreated: (secret: string | null) => void;
 }
 
-export function KeysSection({ keys, onAddKey, onRevokeKey }: KeysSectionProps) {
-  const { t } = useTranslation();
-  const [newKeyName, setNewKeyName] = useState('');
-  const [showKeyForm, setShowKeyForm] = useState(false);
-  const [revealedKeyIds, setRevealedKeyIds] = useState<Record<string, boolean>>({});
-  const [copiedKeyId, setCopiedKeyId] = useState<string | null>(null);
+/**
+ * Настоящие API-ключи: список, создание и отзыв через /api/keys. Секрет приходит с сервера
+ * один раз — при создании, и показывается до тех пор, пока человек не нажмёт «Готово».
+ */
+export function KeysSection({ onSecretCreated }: KeysSectionProps) {
+  const { t, language } = useTranslation();
+  const status = useAuth((state) => state.status);
+  const user = useAuth((state) => state.user);
+  const signedIn = status === 'authenticated' && Boolean(user);
+  const nameId = useId();
 
-  const handleCreateKey = (e: React.FormEvent) => {
-    e.preventDefault();
-    const name = newKeyName.trim() || `API Key #${keys.length + 1}`;
-    onAddKey(name);
-    setNewKeyName('');
-    setShowKeyForm(false);
+  const [keys, setKeys] = useState<ApiKeyInfo[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [formOpen, setFormOpen] = useState(false);
+  const [name, setName] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [secret, setSecret] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
+  const [confirmId, setConfirmId] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!signedIn) return;
+    let cancelled = false;
+    setLoading(true);
+    apiKeysApi
+      .list()
+      .then((list) => {
+        if (!cancelled) setKeys(list);
+      })
+      .catch(() => {
+        if (!cancelled) setError(t('dev.keysLoadError'));
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+    // t меняется вместе с языком, перезагружать ключи из-за этого не нужно
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [signedIn]);
+
+  const create = async (event: React.FormEvent) => {
+    event.preventDefault();
+    setBusy(true);
+    setError(null);
+    try {
+      const created = await apiKeysApi.create(name.trim());
+      setKeys((current) => [created.key, ...current]);
+      setSecret(created.secret);
+      onSecretCreated(created.secret);
+      setName('');
+      setFormOpen(false);
+    } catch (caught) {
+      setError(caught instanceof ApiError ? caught.message : t('dev.keysLoadError'));
+    } finally {
+      setBusy(false);
+    }
   };
 
-  const toggleReveal = (id: string) => {
-    setRevealedKeyIds((prev) => ({ ...prev, [id]: !prev[id] }));
+  const revoke = async (id: string) => {
+    setBusy(true);
+    setError(null);
+    try {
+      await apiKeysApi.revoke(id);
+      setKeys((current) => current.filter((key) => key.id !== id));
+      setConfirmId(null);
+    } catch (caught) {
+      setError(caught instanceof ApiError ? caught.message : t('dev.keysLoadError'));
+    } finally {
+      setBusy(false);
+    }
   };
 
-  const handleCopyKey = async (id: string, text: string) => {
-    await copyText(text);
-    setCopiedKeyId(id);
-    setTimeout(() => setCopiedKeyId(null), 2000);
+  const copySecret = async () => {
+    if (!secret) return;
+    await copyText(secret);
+    setCopied(true);
+    window.setTimeout(() => setCopied(false), 2000);
   };
 
   return (
     <DocSection
       id="keys"
       icon={<KeyIcon className="size-5" />}
-      title={t('apiDocs.keysTitle')}
-      description={t('apiDocs.keysDesc')}
+      title={t('dev.keysTitle')}
+      description={t('dev.keysDesc')}
       aside={
-        <Button
-          variant="primary"
-          size="sm"
-          aria-expanded={showKeyForm}
-          onClick={() => setShowKeyForm((v) => !v)}
-          className="gap-1.5"
-        >
-          <PlusIcon className="size-3.5" />
-          {t('apiDocs.createKey')}
-        </Button>
+        signedIn && !formOpen ? (
+          <Button
+            size="sm"
+            onClick={() => setFormOpen(true)}
+            leftIcon={<PlusIcon className="size-3.5" />}
+          >
+            {t('dev.keysCreate')}
+          </Button>
+        ) : null
       }
     >
-      {showKeyForm ? (
-        <form
-          onSubmit={handleCreateKey}
-          className="flex animate-fade-in flex-col items-stretch gap-2 rounded-xl border border-accent/30 bg-surface-2 p-3 @md:flex-row @md:items-center"
+      {!signedIn ? (
+        <div className="flex flex-col items-start gap-3 rounded-lg border border-stroke bg-canvas p-4">
+          <p className="text-[15px] text-text">{t('dev.keysSignIn')}</p>
+          <Link to="/login" className={buttonClasses({ size: 'sm' })}>
+            {t('dev.keysSignInCta')}
+          </Link>
+        </div>
+      ) : null}
+
+      {secret ? (
+        <div
+          role="status"
+          className="flex flex-col gap-3 rounded-lg border border-accent/50 bg-accent-soft p-4"
         >
-          <Input
-            type="text"
-            required
-            autoFocus
-            value={newKeyName}
-            onChange={(e) => setNewKeyName(e.target.value)}
-            placeholder={t('apiDocs.keyNamePlaceholder')}
-            aria-label={t('apiDocs.keyNamePlaceholder')}
-            className="flex-1"
-          />
-          <div className="flex items-center gap-2">
-            <Button type="submit" variant="primary" size="md">
-              {t('apiDocs.keyCreate')}
+          <div>
+            <p className="font-medium text-text">{t('dev.keysNewTitle')}</p>
+            <p className="mt-1 text-[14px] text-muted">{t('dev.keysNewText')}</p>
+          </div>
+          <code
+            tabIndex={0}
+            className="block overflow-x-auto rounded-md border border-stroke bg-surface px-3 py-2.5 font-mono text-[13px] whitespace-nowrap text-text select-all"
+          >
+            {secret}
+          </code>
+          <div className="flex flex-wrap gap-2">
+            <Button
+              size="sm"
+              onClick={copySecret}
+              leftIcon={
+                copied ? <CheckIcon className="size-3.5" /> : <CopyIcon className="size-3.5" />
+              }
+            >
+              {copied ? t('dev.keysCopied') : t('dev.keysCopy')}
             </Button>
-            <Button type="button" variant="outline" size="md" onClick={() => setShowKeyForm(false)}>
-              {t('apiDocs.keyCancel')}
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => {
+                setSecret(null);
+                setCopied(false);
+              }}
+            >
+              {t('dev.keysDone')}
+            </Button>
+          </div>
+        </div>
+      ) : null}
+
+      {formOpen ? (
+        <form
+          onSubmit={create}
+          className="flex flex-col gap-2 rounded-lg border border-stroke bg-canvas p-3 @md:flex-row @md:items-end"
+        >
+          <div className="flex min-w-0 flex-1 flex-col gap-1.5">
+            <label htmlFor={nameId} className="text-[13px] font-medium text-text">
+              {t('dev.keysName')}
+            </label>
+            <Input
+              id={nameId}
+              required
+              autoFocus
+              maxLength={60}
+              value={name}
+              onChange={(event) => setName(event.target.value)}
+              placeholder={t('dev.keysNamePlaceholder')}
+            />
+          </div>
+          <div className="flex gap-2">
+            <Button type="submit" loading={busy} disabled={busy || name.trim() === ''}>
+              {t('dev.keysSubmit')}
+            </Button>
+            <Button type="button" variant="outline" onClick={() => setFormOpen(false)}>
+              {t('dev.keysCancel')}
             </Button>
           </div>
         </form>
       ) : null}
 
-      <ul className="flex flex-col gap-2.5">
-        {keys.map((k) => {
-          const isRevealed = Boolean(revealedKeyIds[k.id]);
-          const isCopied = copiedKeyId === k.id;
-          const displayKey = isRevealed ? k.key : `${k.key.slice(0, 15)}••••••••••••••••••••••••••••`;
+      {error ? (
+        <p
+          role="alert"
+          className="rounded-md border border-danger/30 bg-danger-soft px-3 py-2 text-[14px] text-danger"
+        >
+          {error}
+        </p>
+      ) : null}
 
-          return (
-            <li
-              key={k.id}
-              className="flex flex-col justify-between gap-3 rounded-xl border border-stroke bg-canvas p-3.5 transition-colors hover:border-stroke-strong @md:flex-row @md:items-center"
-            >
+      {signedIn && loading ? (
+        <p className="text-[14px] text-muted">{t('dev.keysLoading')}</p>
+      ) : null}
+      {signedIn && !loading && keys.length === 0 && !error ? (
+        <p className="text-[14px] text-muted">{t('dev.keysEmpty')}</p>
+      ) : null}
+
+      {keys.length > 0 ? (
+        <ul className="flex flex-col divide-y divide-stroke rounded-lg border border-stroke bg-canvas">
+          {keys.map((key) => (
+            <li key={key.id} className="flex flex-col gap-3 p-4 @md:flex-row @md:items-center">
               <div className="min-w-0 flex-1">
-                <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1">
-                  <span className="truncate text-sm font-semibold text-text">{k.name}</span>
-                  <Badge tone="success" className="px-2 py-0 text-[11px]">
-                    {t('apiDocs.keyActive')}
-                  </Badge>
-                  <span className="font-mono text-xs text-subtle">{k.createdAt}</span>
-                </div>
-                <div className="mt-2 flex items-center gap-1.5">
-                  <code className="min-w-0 flex-1 truncate rounded-lg border border-stroke bg-surface px-2.5 py-1.5 font-mono text-xs text-text select-all @md:flex-none">
-                    {displayKey}
-                  </code>
-                  <IconButton
-                    size="sm"
-                    label={isRevealed ? t('apiDocs.keyHide') : t('apiDocs.keyShow')}
-                    aria-pressed={isRevealed}
-                    onClick={() => toggleReveal(k.id)}
-                  >
-                    {isRevealed ? <EyeOffIcon className="size-4" /> : <EyeIcon className="size-4" />}
-                  </IconButton>
-                </div>
+                <p className="truncate font-medium text-text">{key.name}</p>
+                <p className="mt-1 text-[13px] text-muted">
+                  <code className="font-mono text-text">{key.prefix}…</code>{' '}
+                  {t('dev.keysCreated', { date: formatShortDate(key.createdAt, language) })},{' '}
+                  {key.lastUsedAt
+                    ? t('dev.keysUsed', { date: formatShortDate(key.lastUsedAt, language) })
+                    : t('dev.keysNeverUsed')}
+                </p>
               </div>
-
-              <div className="flex shrink-0 items-center gap-2">
-                <Button variant="outline" size="sm" onClick={() => handleCopyKey(k.id, k.key)} className="gap-1.5">
-                  {isCopied ? (
-                    <>
-                      <CheckIcon className="size-3.5 text-accent" />
-                      <span className="text-accent">{t('apiDocs.keyCopied')}</span>
-                    </>
-                  ) : (
-                    <>
-                      <CopyIcon className="size-3.5" />
-                      <span>{t('apiDocs.keyCopy')}</span>
-                    </>
-                  )}
-                </Button>
-                {keys.length > 1 ? (
+              {confirmId === key.id ? (
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="text-[13px] text-text">
+                    {t('dev.keysRevokeConfirm', { name: key.name })}
+                  </span>
                   <Button
-                    variant="outline"
                     size="sm"
-                    onClick={() => onRevokeKey(k.id)}
-                    className="text-danger hover:border-danger/40 hover:bg-danger-soft"
+                    variant="danger"
+                    loading={busy}
+                    onClick={() => void revoke(key.id)}
                   >
-                    {t('apiDocs.revoke')}
+                    {t('dev.keysRevokeYes')}
                   </Button>
-                ) : null}
-              </div>
+                  <Button size="sm" variant="outline" onClick={() => setConfirmId(null)}>
+                    {t('dev.keysCancel')}
+                  </Button>
+                </div>
+              ) : (
+                <Button size="sm" variant="outline" onClick={() => setConfirmId(key.id)}>
+                  {t('dev.keysRevoke')}
+                </Button>
+              )}
             </li>
-          );
-        })}
-      </ul>
+          ))}
+        </ul>
+      ) : null}
 
-      <Callout tone="info" title={t('apiDocs.keysSecurityTitle')} className="my-0">
-        <RichText text={t('apiDocs.keysSecurityText')} />
+      <Callout tone="info" className="my-0">
+        <RichText text={t('dev.keysSafety')} />
       </Callout>
     </DocSection>
   );

@@ -1,3 +1,4 @@
+import { signupAndVerify } from '../testing/signup.js';
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { config } from '../config.js';
@@ -157,7 +158,7 @@ test('генерация на платной модели без подписк�
     const conversation = await createConversation(server.baseUrl, 'Платная модель');
     const response = await postCompletion(server.baseUrl, {
       conversationId: conversation.id,
-      modelId: 'gpt-6-astra',
+      modelId: 'gpt-6.1-sol',
       language: 'ru',
       messages: [{ role: 'user', content: 'Привет' }],
     });
@@ -168,7 +169,7 @@ test('генерация на платной модели без подписк�
     assert.ok(errorEvent, 'должно прийти событие error');
     const data = JSON.parse(errorEvent.data) as { code: string; message: string };
     assert.equal(data.code, 'upgrade_required');
-    assert.match(data.message, /Upgrade your plan|подписка|GPT-6 Astra/i);
+    assert.match(data.message, /Upgrade your plan|подписка|GPT-6\.1 Sol/i);
   } finally {
     await server.close();
   }
@@ -214,10 +215,14 @@ test('пользователь с тарифом Pro имеет доступ к�
 
   try {
     // Регистрация и оформление Pro тарифа
-    const regRes = await fetch(`${server.baseUrl}/api/auth/signup`, {
+    const regRes = await signupAndVerify(server.baseUrl, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email: 'pro-user@example.com', password: 'password123', name: 'Pro User' }),
+      body: JSON.stringify({
+        email: 'pro-user@example.com',
+        password: 'password123',
+        name: 'Pro User',
+      }),
     });
     const { token } = (await regRes.json()) as { token: string };
 
@@ -242,7 +247,7 @@ test('пользователь с тарифом Pro имеет доступ к�
     });
     const { conversation } = (await createConvRes.json()) as { conversation: { id: string } };
 
-    // Запрос к флагманской модели GPT-6 Astra
+    // Запрос к флагманской модели GPT-6.1 Sol
     const gptResponse = await fetch(`${server.baseUrl}/api/chat/completions`, {
       method: 'POST',
       headers: {
@@ -251,7 +256,7 @@ test('пользователь с тарифом Pro имеет доступ к�
       },
       body: JSON.stringify({
         conversationId: conversation.id,
-        modelId: 'gpt-6-astra',
+        modelId: 'gpt-6.1-sol',
         language: 'ru',
         messages: [{ role: 'user', content: 'Тестируем флагманскую модель GPT-6' }],
       }),
@@ -265,7 +270,7 @@ test('пользователь с тарифом Pro имеет доступ к�
     const doneEvent = events.find((e) => e.event === 'done');
     assert.ok(doneEvent, 'должен успешно завершиться со статусом done');
     const doneData = JSON.parse(doneEvent.data) as { selectedModel: { id: string } };
-    assert.equal(doneData.selectedModel.id, 'gpt-6-astra');
+    assert.equal(doneData.selectedModel.id, 'gpt-6.1-sol');
   } finally {
     await server.close();
   }
@@ -292,7 +297,7 @@ test('POST /api/chat/feedback сохраняет оценку ответа и GE
         conversationId: conversation.id,
         messageId,
         rating: 'like',
-        modelId: 'gpt-6-astra',
+        modelId: 'gpt-6.1-sol',
       }),
     });
     assert.equal(likeRes.status, 200);
@@ -313,7 +318,10 @@ test('POST /api/chat/feedback сохраняет оценку ответа и GE
       headers: { 'x-admin-key': config.adminApiKey },
     });
     assert.equal(analyticsRes.status, 200);
-    const analytics = (await analyticsRes.json()) as any;
+    const analytics = (await analyticsRes.json()) as {
+      summary: { likes: number };
+      escalation?: { autoEscalateActive: unknown };
+    };
     assert.equal(analytics.summary.likes >= 1, true);
     assert.ok(analytics.escalation);
     assert.ok(typeof analytics.escalation.autoEscalateActive === 'boolean');
@@ -321,4 +329,3 @@ test('POST /api/chat/feedback сохраняет оценку ответа и GE
     await server.close();
   }
 });
-

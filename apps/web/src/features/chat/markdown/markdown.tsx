@@ -1,5 +1,6 @@
 import { Fragment, useMemo, type ReactNode } from 'react';
 import { cn } from '@/lib/cn';
+import { safeHref } from '@/lib/safe-url';
 import { CodeBlock } from './code-block';
 import { parseInline, parseMarkdown, type InlineToken, type TableAlign } from './parse';
 
@@ -32,10 +33,13 @@ function toInlineNode(token: InlineToken): ReactNode {
           {token.text}
         </code>
       );
-    case 'link':
+    case 'link': {
+      const href = safeHref(token.href);
+      // Опасная схема (javascript:, data: …) — показываем просто текст, без ссылки.
+      if (!href) return token.text;
       return (
         <a
-          href={token.href}
+          href={href}
           target="_blank"
           rel="noreferrer"
           className="text-accent underline decoration-accent/40 underline-offset-[3px] transition-colors hover:decoration-accent"
@@ -43,6 +47,7 @@ function toInlineNode(token: InlineToken): ReactNode {
           {token.text}
         </a>
       );
+    }
     default:
       return token.text;
   }
@@ -92,7 +97,10 @@ export default function Markdown({ content }: { content: string }) {
         switch (block.type) {
           case 'heading':
             return (
-              <p key={index} className={cn('max-w-[68ch] first:mt-0', HEADING_CLASSES[block.level])}>
+              <p
+                key={index}
+                className={cn('max-w-[68ch] first:mt-0', HEADING_CLASSES[block.level])}
+              >
                 <Inline text={block.text} />
               </p>
             );

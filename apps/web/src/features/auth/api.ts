@@ -1,6 +1,17 @@
 import { ApiError } from '../chat/api';
 import { API_BASE } from '@/lib/api-config';
-import type { AuthSession, LoginPayload, SignupPayload, User } from './types';
+import type {
+  AuthFlow,
+  AuthSession,
+  CodeChallenge,
+  CodeFlow,
+  CompletePasswordResetPayload,
+  LoginPayload,
+  PasswordResetGrant,
+  SignupPayload,
+  User,
+  VerifyCodePayload,
+} from './types';
 
 const JSON_HEADERS = { 'Content-Type': 'application/json' };
 
@@ -34,15 +45,66 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   return (await response.json()) as T;
 }
 
-export async function login(payload: LoginPayload): Promise<AuthSession> {
-  return request<AuthSession>('/auth/login', {
+/** Первый шаг входа: почта и пароль. Сервер отправляет код на почту, сессии ещё нет. */
+export async function login(payload: LoginPayload): Promise<CodeChallenge> {
+  return request<CodeChallenge>('/auth/login', {
     method: 'POST',
     body: JSON.stringify(payload),
   });
 }
 
-export async function signup(payload: SignupPayload): Promise<AuthSession> {
-  return request<AuthSession>('/auth/signup', {
+/** Первый шаг регистрации: сервер отправляет код на почту, аккаунт ещё не создан. */
+export async function signup(payload: SignupPayload): Promise<CodeChallenge> {
+  return request<CodeChallenge>('/auth/signup', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+}
+
+/**
+ * Второй шаг: код из письма. Регистрация создаёт аккаунт, вход — выдаёт сессию; cookie-сессию
+ * Better Auth сервер ставит сам.
+ */
+export async function verifyCode(flow: AuthFlow, payload: VerifyCodePayload): Promise<AuthSession> {
+  return request<AuthSession>(`/auth/${flow}/verify`, {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function resendCode(flow: CodeFlow, challengeId: string): Promise<CodeChallenge> {
+  return request<CodeChallenge>(`/auth/${flow}/resend`, {
+    method: 'POST',
+    body: JSON.stringify({ challengeId }),
+  });
+}
+
+/**
+ * «Забыли пароль?»: код сброса уходит на почту, если такой аккаунт есть. Ответ одинаковый в обоих
+ * случаях — по нему нельзя узнать, зарегистрирована ли почта.
+ */
+export async function requestPasswordReset(email: string): Promise<CodeChallenge> {
+  return request<CodeChallenge>('/auth/password-reset', {
+    method: 'POST',
+    body: JSON.stringify({ email }),
+  });
+}
+
+/** Код сброса из письма → одноразовый токен для нового пароля. */
+export async function verifyPasswordResetCode(
+  payload: VerifyCodePayload,
+): Promise<PasswordResetGrant> {
+  return request<PasswordResetGrant>('/auth/password-reset/verify', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+}
+
+/** Новый пароль: сервер завершает прежние сессии и открывает новую (cookie Better Auth — тоже). */
+export async function completePasswordReset(
+  payload: CompletePasswordResetPayload,
+): Promise<AuthSession> {
+  return request<AuthSession>('/auth/password-reset/complete', {
     method: 'POST',
     body: JSON.stringify(payload),
   });
@@ -77,4 +139,3 @@ export async function unlinkTelegram(token?: string): Promise<User> {
   });
   return body.user;
 }
-

@@ -14,7 +14,7 @@ export interface ChatIdentityInput {
   /** Пользователь из сессии / подписанного токена (req.user). */
   sessionUser?: Pick<User, 'id' | 'email' | 'plan'> & Partial<Pick<User, 'isVip'>>;
   /** Свежая запись профиля из хранилища (если есть). */
-  storedUser?: Pick<User, 'plan'> & Partial<Pick<User, 'isVip' | 'email'>> | null;
+  storedUser?: (Pick<User, 'plan'> & Partial<Pick<User, 'isVip' | 'email'>>) | null;
   subscription?: Pick<Subscription, 'plan' | 'status' | 'renewsAt'> | null;
   /** Идентификатор общего demo-user для анонимного режима. */
   anonymousUserId: string;
@@ -57,8 +57,7 @@ export function resolveChatIdentity(input: ChatIdentityInput): ChatIdentity {
   }
 
   const email = sessionUser.email || input.storedUser?.email || undefined;
-  const isVip =
-    isVipUser(sessionUser) || isVipUser(input.storedUser) || isVipEmail(email);
+  const isVip = isVipUser(sessionUser) || isVipUser(input.storedUser) || isVipEmail(email);
 
   const plan = resolveBillingPlan({
     storedPlan: input.storedUser?.plan ?? sessionUser.plan,

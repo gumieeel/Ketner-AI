@@ -1,6 +1,18 @@
 import { vi } from 'vitest';
 import type { ChatMeta, Conversation, ConversationSummary, Message } from '@/features/chat/types';
 
+/** Код из «письма» входа и регистрации, который принимает фейковый API. */
+export const FAKE_SIGNUP_CODE = '123456';
+/** Токен, который фейковый сервер выдаёт после верного кода сброса пароля. */
+export const FAKE_RESET_TOKEN = 'fake-reset-token';
+
+function maskEmail(email: string): string {
+  const at = email.lastIndexOf('@');
+  if (at < 1) return email;
+  const local = email.slice(0, at);
+  return `${local[0]}***${local.length > 2 ? local[local.length - 1] : ''}${email.slice(at)}`;
+}
+
 export interface FakeApiOptions {
   /** Ответ ассистента по умолчанию. */
   reply?: string;
@@ -14,6 +26,22 @@ export interface FakeApiOptions {
   enforcePlans?: boolean;
   /** Начальный тариф пользователя. */
   plan?: string;
+  /** Модель, которая «реально ответила» (приходит в событии done, как у сервера). */
+  servedModelId?: string;
+  /** После скольких генераций сервер отвечает 429 rate_limited (лимиты считает сервер). */
+  rateLimitAfter?: number;
+  /** Привязанный аккаунт GitHub: по умолчанию не подключён. */
+  github?: { connected: boolean; login?: string };
+  /** Ответ GET /api/usage/quota (по умолчанию 404: строка остатка не показывается). */
+  quota?: (mode: 'standard' | 'max') => unknown;
+  /** Сравнение ответов: текст каждой модели; модели без записи отвечают общим `reply`. */
+  compareReplies?: Record<string, string>;
+  /** Модели, у которых колонка сравнения заканчивается ошибкой (например, исчерпан лимит). */
+  compareFailModels?: string[];
+  /** Ответ проверки ответа (POST /api/chat/review): по умолчанию — серьёзная ошибка с цитатой. */
+  review?: Record<string, unknown>;
+  /** Проверка отклоняется до начала потока (например, 429 review_limit). */
+  reviewReject?: { status: number; code: string; message: string };
 }
 
 export interface FakeApi {
@@ -21,48 +49,86 @@ export interface FakeApi {
   completions: number;
   /** Тела запросов на генерацию: так тесты проверяют контракт с сервером. */
   completionBodies: Array<Record<string, unknown>>;
+  /** Тела запросов на сравнение (POST /api/chat/compare). */
+  compareBodies: Array<Record<string, unknown>>;
+  /** Тела запросов на выбор лучшего ответа (POST /api/chat/compare/pick). */
+  pickBodies: Array<Record<string, unknown>>;
+  /** Тела запросов на проверку ответа (POST /api/chat/review). */
+  reviewBodies: Array<Record<string, unknown>>;
+  /** Тела запросов к судье сравнения (POST /api/chat/compare/judge и /judge/save). */
+  judgeBodies: Array<Record<string, unknown>>;
   /** Добавляет диалог с историей, как будто он уже сохранён на сервере. */
   seed: (input: { title: string; messages?: Message[]; updatedAt?: string }) => Conversation;
+  /** Новый пароль из последнего сброса пароля. */
+  resetPassword?: string;
 }
 
+/** Зеркало публичного каталога сервера (apps/mock-api/src/ai/models.ts): id, названия, requiredPlan. */
 const META: ChatMeta = {
   models: [
     {
-      id: 'ketner-mini',
-      name: 'Qwen 2.5 Coder',
-      contextMessages: 20,
+      id: 'auto',
+      name: '✨ Auto (Smart Router)',
+      contextMessages: 120,
       isPro: false,
     },
     {
-      id: 'gpt-6-astra',
-      name: 'GPT-6 Astra',
-      contextMessages: 120,
-      isPro: true,
-      requiredPlan: 'gpt-pro',
-    },
-    {
-      id: 'claude-fable',
-      name: 'Claude Fable 5.1',
-      contextMessages: 120,
-      isPro: true,
-      requiredPlan: 'claude-pro',
-    },
-    {
-      id: 'gemini-pro',
-      name: 'Gemini Flash 3.8',
-      contextMessages: 120,
-      isPro: true,
-      requiredPlan: 'gemini-pro',
+      id: 'ketner-mini',
+      name: 'Ketner Mini',
+      contextMessages: 40,
+      isPro: false,
     },
     {
       id: 'ketner-pro',
-      name: 'Qwen 3.8 Max',
+      name: 'Ketner Pro',
       contextMessages: 60,
       isPro: true,
-      requiredPlan: 'ultra',
+      requiredPlan: 'plus',
+    },
+    {
+      id: 'claude-haiku-5.5',
+      name: 'Claude Haiku 5.5',
+      contextMessages: 40,
+      isPro: true,
+      requiredPlan: 'plus',
+    },
+    {
+      id: 'deepseek-v4.1-flash',
+      name: 'DeepSeek V4.1 Flash',
+      contextMessages: 40,
+      isPro: true,
+      requiredPlan: 'plus',
+    },
+    {
+      id: 'gemini-3.8-flash',
+      name: 'Gemini 3.8 Flash',
+      contextMessages: 120,
+      isPro: true,
+      requiredPlan: 'pro',
+    },
+    {
+      id: 'grok-4.7',
+      name: 'Grok 4.7',
+      contextMessages: 120,
+      isPro: true,
+      requiredPlan: 'pro',
+    },
+    {
+      id: 'gpt-6.1-sol',
+      name: 'GPT-6.1 Sol',
+      contextMessages: 120,
+      isPro: true,
+      requiredPlan: 'plus',
+    },
+    {
+      id: 'claude-opus-5.5',
+      name: 'Claude Opus 5.5',
+      contextMessages: 120,
+      isPro: true,
+      requiredPlan: 'pro',
     },
   ],
-  defaultModelId: 'ketner-mini',
+  defaultModelId: 'auto',
   limits: {
     free: { messagesPerDay: 10, contextMessages: 20 },
     'gpt-pro': { messagesPerDay: null, contextMessages: 120 },
@@ -73,6 +139,28 @@ const META: ChatMeta = {
     pro: { messagesPerDay: null, contextMessages: 120 },
   },
 };
+
+/** Зеркало PLAN_RANKS сервера (apps/mock-api/src/services/entitlement.ts): модель доступна, если ранг тарифа не ниже требуемого. */
+const PLAN_RANKS: Record<string, number> = {
+  free: 0,
+  plus: 1,
+  pro: 2,
+  'gpt-pro': 2,
+  'claude-pro': 2,
+  'gemini-pro': 2,
+  ultra: 3,
+};
+
+const PLAN_LABELS: Record<string, string> = {
+  free: 'Free',
+  plus: 'Plus',
+  pro: 'Pro',
+  ultra: 'Ultra',
+};
+
+function planRank(plan: string | undefined): number {
+  return plan ? (PLAN_RANKS[plan] ?? 0) : 0;
+}
 
 const DEFAULT_REPLY = 'Ответ модели Ketner AI.';
 
@@ -88,7 +176,12 @@ function notFound(): Response {
 }
 
 /** Готовит поток SSE: несколько порций текста и финальное событие. */
-function sseChunks(reply: string, fail: boolean, messageId = 'assistant-1'): string[] {
+function sseChunks(
+  reply: string,
+  fail: boolean,
+  messageId = 'assistant-1',
+  servedModelId?: string,
+): string[] {
   if (fail) {
     return [
       `event: error\ndata: ${JSON.stringify({
@@ -111,6 +204,7 @@ function sseChunks(reply: string, fail: boolean, messageId = 'assistant-1'): str
   chunks.push(
     `event: done\ndata: ${JSON.stringify({
       messageId,
+      ...(servedModelId ? { selectedModel: { id: servedModelId, name: servedModelId } } : {}),
       usage: { inputTokens: 12, outputTokens: 24 },
     })}\n\n`,
   );
@@ -166,10 +260,27 @@ function streamOf(chunks: string[], delayMs: number, signal: AbortSignal | null)
 export function installFakeApi(options: FakeApiOptions = {}): FakeApi {
   const delayMs = options.chunkDelayMs ?? 1;
   let currentPlan = options.plan ?? 'free';
+  let githubConnected = options.github?.connected ?? false;
+  const githubStatus = () => ({
+    available: true,
+    connected: githubConnected,
+    account: githubConnected
+      ? {
+          login: options.github?.login ?? 'octo',
+          avatarUrl: null,
+          scopes: ['repo', 'read:user'],
+          connectedAt: '2026-10-01T10:00:00.000Z',
+        }
+      : null,
+  });
   const conversations = new Map<string, { conversation: Conversation; messages: Message[] }>();
   const api: FakeApi = {
     completions: 0,
     completionBodies: [],
+    compareBodies: [],
+    pickBodies: [],
+    reviewBodies: [],
+    judgeBodies: [],
     seed({ title, messages = [], updatedAt }) {
       const now = updatedAt ?? new Date().toISOString();
       const conversation: Conversation = {
@@ -184,6 +295,10 @@ export function installFakeApi(options: FakeApiOptions = {}): FakeApi {
     },
   };
 
+  const pending: Partial<
+    Record<'signup' | 'login' | 'password-reset', { email: string; name: string }>
+  > = {};
+
   vi.stubGlobal(
     'fetch',
     async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
@@ -196,41 +311,103 @@ export function installFakeApi(options: FakeApiOptions = {}): FakeApi {
         return json(META);
       }
 
+      // Вход и регистрация — через код из «письма» (FAKE_SIGNUP_CODE).
+      const challenge = (
+        flow: 'signup' | 'login' | 'password-reset',
+        email: string,
+        status = 202,
+      ) =>
+        json(
+          {
+            status: 'verification_required',
+            challengeId: `${flow}-1`,
+            maskedEmail: maskEmail(email),
+            codeExpiresAt: new Date(Date.now() + 300_000).toISOString(),
+            resendAfterSec: 60,
+          },
+          status,
+        );
+
       if (url === '/api/auth/login' && method === 'POST') {
-        const email = String(body.email ?? '');
         const password = String(body.password ?? '');
         if (password === 'wrongPassword') {
           return json({ error: { code: 'invalid_credentials', message: 'Неверный пароль' } }, 401);
         }
+        pending.login = { email: String(body.email ?? ''), name: 'Демо Пользователь' };
+        return challenge('login', pending.login.email);
+      }
+
+      if (url === '/api/auth/signup' && method === 'POST') {
+        pending.signup = {
+          email: String(body.email ?? ''),
+          name: String(body.name ?? 'Новый Пользователь'),
+        };
+        return challenge('signup', pending.signup.email);
+      }
+
+      // «Забыли пароль?»: код → одноразовый токен (FAKE_RESET_TOKEN) → новый пароль и сессия.
+      if (url === '/api/auth/password-reset' && method === 'POST') {
+        pending['password-reset'] = { email: String(body.email ?? ''), name: 'Демо Пользователь' };
+        return challenge('password-reset', pending['password-reset'].email);
+      }
+
+      if (url === '/api/auth/password-reset/complete' && method === 'POST') {
+        const who = pending['password-reset'];
+        if (!who || body.resetToken !== FAKE_RESET_TOKEN) {
+          return json(
+            { error: { code: 'reset_expired', message: 'Время на смену пароля истекло' } },
+            410,
+          );
+        }
+        api.resetPassword = String(body.password ?? '');
         return json({
           user: {
             id: 'demo-user',
-            email,
-            name: 'Демо Пользователь',
+            email: who.email,
+            name: who.name,
             plan: 'free',
             createdAt: new Date().toISOString(),
           },
-          token: 'fake.jwt.token',
+          token: 'fake.reset.jwt.token',
           expiresAt: new Date(Date.now() + 86400000).toISOString(),
         });
       }
 
-      if (url === '/api/auth/signup' && method === 'POST') {
-        const email = String(body.email ?? '');
-        const name = String(body.name ?? 'Новый Пользователь');
+      const codeRoute = /^\/api\/auth\/(signup|login|password-reset)\/(verify|resend)$/.exec(url);
+      if (codeRoute && method === 'POST') {
+        const flow = codeRoute[1] as 'signup' | 'login' | 'password-reset';
+        const who = pending[flow];
+        if (!who) {
+          return json({ error: { code: 'challenge_expired', message: 'Попытка устарела' } }, 410);
+        }
+        if (codeRoute[2] === 'resend') return challenge(flow, who.email, 200);
+        if (body.code !== FAKE_SIGNUP_CODE) {
+          return json(
+            { error: { code: 'invalid_code', message: 'Неверный код. Осталось попыток: 4' } },
+            400,
+          );
+        }
+        if (flow === 'password-reset') {
+          return json({
+            status: 'code_verified',
+            resetToken: FAKE_RESET_TOKEN,
+            maskedEmail: maskEmail(who.email),
+            expiresAt: new Date(Date.now() + 900_000).toISOString(),
+          });
+        }
         return json(
           {
             user: {
-              id: 'new-user',
-              email,
-              name,
+              id: flow === 'signup' ? 'new-user' : 'demo-user',
+              email: who.email,
+              name: who.name,
               plan: 'free',
               createdAt: new Date().toISOString(),
             },
             token: 'fake.jwt.token',
             expiresAt: new Date(Date.now() + 86400000).toISOString(),
           },
-          201,
+          flow === 'signup' ? 201 : 200,
         );
       }
 
@@ -285,20 +462,20 @@ export function installFakeApi(options: FakeApiOptions = {}): FakeApi {
             {
               id: 'plus',
               nameKey: 'pricing.plus',
-              priceMonthly: 990,
+              priceMonthly: 9,
               bullets: { ru: ['Быстрый отклик'], en: ['Fast speed'] },
             },
             {
               id: 'pro',
               nameKey: 'pricing.pro',
-              priceMonthly: 1990,
+              priceMonthly: 25,
               popular: true,
               bullets: { ru: ['Все флагманы AI'], en: ['All Flagship AIs'] },
             },
             {
               id: 'ultra',
               nameKey: 'pricing.ultra',
-              priceMonthly: 2990,
+              priceMonthly: 49,
               bullets: { ru: ['Максимум · VIP'], en: ['Maximum · VIP'] },
             },
           ],
@@ -411,13 +588,16 @@ export function installFakeApi(options: FakeApiOptions = {}): FakeApi {
       if (url === '/api/billing/telegram-stars/create-invoice' && method === 'POST') {
         const planId = (body.planId as string) || 'gpt-pro';
         const priceRub = planId === 'ultra' ? 4890 : planId === 'pro' ? 2490 : 890;
-        const starsAmount = planId === 'ultra' ? 2650 : planId === 'pro' ? 1350 : 500;
+        // Как на сервере: цена тарифа по официальному курсу Telegram.
+        const starsAmount = planId === 'ultra' ? 2460 : planId === 'pro' ? 1260 : 460;
         return json({
           invoice: {
             id: 'stars_mock_123',
             planId,
             priceRub,
             starsAmount,
+            starsUsd: Math.round(starsAmount * 0.01999 * 100) / 100,
+            usdPerStar: 0.01999,
             botUsername: 'Robo_kassa_bot',
             botDeepLink: `https://t.me/Robo_kassa_bot?start=pay_${planId}_demo-user`,
             status: 'pending',
@@ -433,7 +613,7 @@ export function installFakeApi(options: FakeApiOptions = {}): FakeApi {
             id: 'stars_mock_123',
             planId: 'gpt-pro',
             priceRub: 2490,
-            starsAmount: 1350,
+            starsAmount: 1260,
             botUsername: 'Robo_kassa_bot',
             botDeepLink: 'https://t.me/Robo_kassa_bot?start=pay_gpt-pro_demo-user',
             status: 'pending',
@@ -460,11 +640,22 @@ export function installFakeApi(options: FakeApiOptions = {}): FakeApi {
             id: 'stars_mock_123',
             planId: 'gpt-pro',
             priceRub: 2490,
-            starsAmount: 1350,
+            starsAmount: 1260,
             botUsername: 'Robo_kassa_bot',
             botDeepLink: 'https://t.me/Robo_kassa_bot?start=pay_gpt-pro_demo-user',
             status: 'paid',
             expiresAt: new Date(Date.now() + 1800000).toISOString(),
+          },
+        });
+      }
+
+      if (url === '/api/billing/crypto-bonus' && method === 'GET') {
+        return json({
+          pct: 15,
+          plans: {
+            plus: { quotaUsd: 1.3, bonusUsd: 0.2 },
+            pro: { quotaUsd: 8, bonusUsd: 1.2 },
+            ultra: { quotaUsd: 16.5, bonusUsd: 2.48 },
           },
         });
       }
@@ -488,18 +679,27 @@ export function installFakeApi(options: FakeApiOptions = {}): FakeApi {
             amountUsd,
             address:
               currency === 'USDT_TRC20'
-                ? 'TDyeGqX4ranC94g7RMw6cGsCPvRQ7XAtQP'
+                ? 'TTrybitH2hDemoAddrUsdtTrc20xxxxxx'
                 : currency === 'BTC'
-                  ? 'bc1qa27xsypxy7pstvh2yrmzrlwev36qrr5az3vr7h'
-                  : 'UQA6ebFQPlulDzarfUtQJX8T61BHknM76VVYZ-3j-8eLnbyS',
+                  ? 'bc1qtrybith2hdemoaddressbtc0000000000xx'
+                  : 'UQTrybitH2hDemoAddressTon000000000000000000000000',
             qrPayload:
               currency === 'USDT_TRC20'
-                ? `tron:TDyeGqX4ranC94g7RMw6cGsCPvRQ7XAtQP?amount=${amount}`
-                : `ton://transfer/UQA6ebFQPlulDzarfUtQJX8T61BHknM76VVYZ-3j-8eLnbyS?amount=${amount}`,
+                ? `tron:TTrybitH2hDemoAddrUsdtTrc20xxxxxx?amount=${amount}`
+                : `ton://transfer/UQTrybitH2hDemoAddressTon000000000000000000000000?amount=${amount}`,
             status: 'pending',
             expiresAt: new Date(Date.now() + 1800000).toISOString(),
             network: currency === 'USDT_TRC20' ? 'TRC-20' : currency === 'BTC' ? 'Bitcoin' : 'TON',
-            cryptoCloudUrl: 'https://cryptocloud.plus/pay/INV-DEMO123',
+            cryptoCloudUrl: 'https://pay.trybit.com/DEMO123',
+            // Trybit выдал реквизиты (H2H): оплата прямо на сайте.
+            gatewayDetails: true,
+            // Комиссии из счёта Trybit: сервис 1,9 % + перевод по Tron, обе на покупателе.
+            fees: {
+              serviceUsd: 0.17,
+              transferUsd: currency === 'USDT_TRC20' ? 1.4 : 0,
+              payerUsd: +(0.17 + (currency === 'USDT_TRC20' ? 1.4 : 0)).toFixed(2),
+              totalUsd: +(amountUsd + 0.17 + (currency === 'USDT_TRC20' ? 1.4 : 0)).toFixed(2),
+            },
           },
         });
       }
@@ -513,8 +713,8 @@ export function installFakeApi(options: FakeApiOptions = {}): FakeApi {
             currency: 'USDT_TRC20',
             amount: 10,
             amountUsd: 10,
-            address: 'TDyeGqX4ranC94g7RMw6cGsCPvRQ7XAtQP',
-            qrPayload: 'tron:TDyeGqX4ranC94g7RMw6cGsCPvRQ7XAtQP?amount=10',
+            address: 'TTrybitH2hDemoAddrUsdtTrc20xxxxxx',
+            qrPayload: 'tron:TTrybitH2hDemoAddrUsdtTrc20xxxxxx?amount=10',
             status: 'pending',
             expiresAt: new Date(Date.now() + 1800000).toISOString(),
             network: 'TRC-20',
@@ -543,8 +743,8 @@ export function installFakeApi(options: FakeApiOptions = {}): FakeApi {
             currency: 'USDT_TRC20',
             amount: 10,
             amountUsd: 10,
-            address: 'TDyeGqX4ranC94g7RMw6cGsCPvRQ7XAtQP',
-            qrPayload: 'tron:TDyeGqX4ranC94g7RMw6cGsCPvRQ7XAtQP?amount=10',
+            address: 'TTrybitH2hDemoAddrUsdtTrc20xxxxxx',
+            qrPayload: 'tron:TTrybitH2hDemoAddrUsdtTrc20xxxxxx?amount=10',
             status: 'paid',
             expiresAt: new Date(Date.now() + 1800000).toISOString(),
             network: 'TRC-20',
@@ -583,26 +783,217 @@ export function installFakeApi(options: FakeApiOptions = {}): FakeApi {
         return json(found);
       }
 
+      if (url === '/api/chat/compare' && method === 'POST') {
+        api.compareBodies.push(body);
+        const modelIds = Array.isArray(body.modelIds) ? (body.modelIds as string[]) : [];
+        if (Boolean(options.enforcePlans) && planRank(currentPlan) < 1) {
+          return json(
+            {
+              error: {
+                code: 'compare_plan_required',
+                message: 'Сравнение ответов доступно с тарифа Plus.',
+              },
+            },
+            403,
+          );
+        }
+        const convId = String(body.conversationId ?? '');
+        const found = conversations.get(convId);
+        const runNumber = api.compareBodies.length;
+        const chunks: string[] = [
+          `event: compare_start\ndata: ${JSON.stringify({
+            runId: `run-${runNumber}`,
+            slots: modelIds.map((id, slot) => ({
+              slot,
+              requestedModelId: id,
+              modelName: META.models.find((m) => m.id === id)?.name ?? id,
+            })),
+          })}\n\n`,
+        ];
+        const texts: Array<string | null> = [];
+        modelIds.forEach((id, slot) => {
+          if (options.compareFailModels?.includes(id)) {
+            texts.push(null);
+            chunks.push(
+              `event: compare_slot_error\ndata: ${JSON.stringify({
+                slot,
+                code: 'model_limit_reached',
+                message: `Лимит модели ${id} исчерпан`,
+              })}\n\n`,
+            );
+            return;
+          }
+          const text = options.compareReplies?.[id] ?? options.reply ?? DEFAULT_REPLY;
+          texts.push(text);
+          chunks.push(
+            `event: compare_delta\ndata: ${JSON.stringify({ slot, content: text })}\n\n`,
+            `event: compare_slot_done\ndata: ${JSON.stringify({
+              slot,
+              selectedModel: { id, name: META.models.find((m) => m.id === id)?.name ?? id },
+              usage: { inputTokens: 10, outputTokens: 20 + slot },
+              latencyMs: 1000 + slot * 500,
+              ttftMs: 300,
+            })}\n\n`,
+          );
+        });
+        const defaultSlot = texts.findIndex((text) => text !== null);
+        const savedId = `assistant-${runNumber}`;
+        if (found && defaultSlot >= 0) {
+          const incoming = Array.isArray(body.messages) ? (body.messages as Message[]) : [];
+          found.messages = [
+            ...incoming,
+            {
+              id: savedId,
+              conversationId: convId,
+              role: 'assistant',
+              content: texts[defaultSlot] ?? '',
+              createdAt: new Date().toISOString(),
+              status: 'complete',
+            },
+          ];
+        }
+        chunks.push(
+          `event: compare_done\ndata: ${JSON.stringify({
+            runId: `run-${runNumber}`,
+            savedMessageId: defaultSlot >= 0 ? savedId : null,
+            defaultSlot: defaultSlot >= 0 ? defaultSlot : null,
+          })}\n\n`,
+        );
+        return new Response(streamOf(chunks, delayMs, init?.signal ?? null), {
+          status: 200,
+          headers: { 'Content-Type': 'text/event-stream' },
+        });
+      }
+
+      if (url === '/api/chat/review' && method === 'POST') {
+        api.reviewBodies.push(body);
+        if (options.reviewReject) {
+          const { status, code, message } = options.reviewReject;
+          return json({ error: { code, message } }, status);
+        }
+        const reviewer = {
+          modelId: 'gemini-3.7-flash',
+          modelName: 'Gemini 3.7 Flash',
+          developer: 'Google',
+        };
+        const review = {
+          id: `review-${api.reviewBodies.length}`,
+          verdict: 'major',
+          summary: 'В ответе есть фактическая ошибка.',
+          issues: [
+            {
+              severity: 'high',
+              quote: 'Сидней',
+              problem: 'Столица Австралии — Канберра, а не Сидней.',
+              fix: 'Канберра',
+            },
+          ],
+          corrected: 'Столица Австралии — **Канберра**.',
+          reviewer,
+          createdAt: new Date().toISOString(),
+          ...options.review,
+        };
+        const quota = { used: 1, limit: 10, remaining: 9 };
+        const chunks = [
+          `event: review_start\ndata: ${JSON.stringify({ reviewId: review.id, quota })}\n\n`,
+          `event: review_reviewer\ndata: ${JSON.stringify({ reviewer })}\n\n`,
+          `event: review_done\ndata: ${JSON.stringify({ review, quota })}\n\n`,
+        ];
+        return new Response(streamOf(chunks, delayMs, init?.signal ?? null), {
+          status: 200,
+          headers: { 'Content-Type': 'text/event-stream' },
+        });
+      }
+
+      if (url === '/api/chat/compare/judge' && method === 'POST') {
+        api.judgeBodies.push(body);
+        const reviewer = {
+          modelId: 'gemini-3.7-flash',
+          modelName: 'Gemini 3.7 Flash',
+          developer: 'Google',
+        };
+        const content = 'Итог консилиума: рекурсия — это вызов функции из самой себя.';
+        const judge = {
+          id: 'judge-1',
+          content,
+          agreement: 'partial',
+          consensus: ['Обе модели объясняют базовый случай'],
+          disputes: [
+            {
+              topic: 'Нужен ли базовый случай',
+              positions: [
+                { model: 'Ketner Pro', claim: 'обязателен' },
+                { model: 'Claude Haiku 5.5', claim: 'желателен' },
+              ],
+              resolution: 'Обязателен, иначе переполнение стека.',
+            },
+          ],
+          judge: reviewer,
+          slots: [0, 1],
+          createdAt: new Date().toISOString(),
+        };
+        const chunks = [
+          `event: judge_start\ndata: ${JSON.stringify({ judgeId: 'judge-1' })}\n\n`,
+          `event: judge_reviewer\ndata: ${JSON.stringify({ reviewer })}\n\n`,
+          `event: judge_delta\ndata: ${JSON.stringify({ content: content.slice(0, 20) })}\n\n`,
+          `event: judge_delta\ndata: ${JSON.stringify({ content: content.slice(20) })}\n\n`,
+          `event: judge_done\ndata: ${JSON.stringify({ judge })}\n\n`,
+        ];
+        return new Response(streamOf(chunks, delayMs, init?.signal ?? null), {
+          status: 200,
+          headers: { 'Content-Type': 'text/event-stream' },
+        });
+      }
+
+      if (url === '/api/chat/compare/judge/save' && method === 'POST') {
+        api.judgeBodies.push(body);
+        return json({
+          success: true,
+          runId: String(body.runId ?? ''),
+          messageId: 'judge-message',
+          modelId: 'gemini-3.7-flash',
+        });
+      }
+
+      if (url === '/api/chat/compare/pick' && method === 'POST') {
+        api.pickBodies.push(body);
+        return json({
+          success: true,
+          runId: String(body.runId ?? ''),
+          slot: body.slot,
+          messageId: `picked-${String(body.slot)}`,
+          modelId: 'picked-model',
+        });
+      }
+
       if (url === '/api/chat/completions' && method === 'POST') {
         const index = api.completions;
         api.completions += 1;
         api.completionBodies.push(body);
 
+        if (options.rateLimitAfter !== undefined && index >= options.rateLimitAfter) {
+          return json(
+            {
+              error: {
+                code: 'rate_limited',
+                message: 'Сообщения на это время закончились. Попробуйте позже.',
+              },
+            },
+            429,
+          );
+        }
+
         const modelId = String(body.modelId ?? 'ketner-mini');
         const targetModel = META.models.find((m) => m.id === modelId) ?? META.models[0];
+        const requiredPlan = targetModel.isPro ? (targetModel.requiredPlan ?? 'plus') : undefined;
         const isUpgradeFail =
-          Boolean(options.enforcePlans) &&
-          Boolean(targetModel.isPro) &&
-          (currentPlan === 'free' ||
-            (targetModel.requiredPlan &&
-              currentPlan !== targetModel.requiredPlan &&
-              currentPlan !== 'ultra'));
+          Boolean(options.enforcePlans) && planRank(currentPlan) < planRank(requiredPlan);
 
         if (isUpgradeFail) {
           const upgradeChunks = [
             `event: error\ndata: ${JSON.stringify({
               code: 'upgrade_required',
-              message: `Для доступа к ${targetModel.name} требуется тариф ${targetModel.requiredPlan ?? 'PRO'} или Ultra. Пожалуйста, улучшите ваш тарифный план (Upgrade your plan).`,
+              message: `Доступ к модели ${targetModel.name} требует подписки ${PLAN_LABELS[requiredPlan ?? 'plus'] ?? requiredPlan} или выше. Пожалуйста, улучшите ваш тарифный план (Upgrade your plan).`,
             })}\n\n`,
           ];
           return new Response(streamOf(upgradeChunks, delayMs, init?.signal ?? null), {
@@ -631,12 +1022,31 @@ export function installFakeApi(options: FakeApiOptions = {}): FakeApi {
           ];
         }
         return new Response(
-          streamOf(sseChunks(reply, fail, `assistant-${index + 1}`), delayMs, init?.signal ?? null),
+          streamOf(
+            sseChunks(reply, fail, `assistant-${index + 1}`, options.servedModelId),
+            delayMs,
+            init?.signal ?? null,
+          ),
           {
             status: 200,
             headers: { 'Content-Type': 'text/event-stream' },
           },
         );
+      }
+
+      if (url.startsWith('/api/usage/quota') && options.quota) {
+        return json(options.quota(url.includes('mode=max') ? 'max' : 'standard'));
+      }
+
+      if (url === '/api/github/status') {
+        return json(githubStatus());
+      }
+      if (url === '/api/github/connection' && method === 'DELETE') {
+        githubConnected = false;
+        return json(githubStatus());
+      }
+      if (url.startsWith('/api/github/connect-url')) {
+        return json({ url: 'https://github.com/login/oauth/authorize?client_id=test' });
       }
 
       return json({ error: { code: 'not_found', message: `Нет обработчика для ${url}` } }, 404);

@@ -161,16 +161,11 @@ export async function createCryptoInvoice(
 export async function getCryptoInvoiceStatus(
   invoiceId: string,
 ): Promise<{ status: string; invoice: CryptoInvoice }> {
-  return request<{ status: string; invoice: CryptoInvoice }>(
-    `/billing/crypto/status/${invoiceId}`,
-  );
+  return request<{ status: string; invoice: CryptoInvoice }>(`/billing/crypto/status/${invoiceId}`);
 }
 
-export async function confirmCryptoPayment(
-  invoiceId: string,
-  txHash?: string,
-  mode?: 'gateway' | 'manual',
-): Promise<{
+/** Проверка оплаты счёта Trybit. Прямых переводов с TxID нет: подтверждает только шлюз. */
+export async function confirmCryptoPayment(invoiceId: string): Promise<{
   success: boolean;
   subscription: Subscription;
   user: { plan: PlanId };
@@ -183,8 +178,18 @@ export async function confirmCryptoPayment(
     invoice: CryptoInvoice;
   }>(`/billing/crypto/confirm/${invoiceId}`, {
     method: 'POST',
-    body: JSON.stringify({ txHash, mode }),
+    body: JSON.stringify({}),
   });
+}
+
+// --- Бонус за оплату криптой ---
+
+/** +N% к квоте топ-моделей при оплате тарифа через Trybit: процент и суммы по тарифам. */
+export async function fetchCryptoBonus(): Promise<{
+  pct: number;
+  plans: Record<string, { quotaUsd: number; bonusUsd: number }>;
+}> {
+  return request('/billing/crypto-bonus');
 }
 
 // --- Stripe ---

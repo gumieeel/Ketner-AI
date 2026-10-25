@@ -1,42 +1,78 @@
 import type { ModelCatalog, ModelInfo, PlanId, PlanLimits } from '../types.js';
-import { modelRegistry } from './model-registry.js';
+import { dailyLimitsOf, modelRegistry } from './model-registry.js';
+import { disclosureOf } from './model-disclosure.js';
+import type { ModelRegistryEntry } from './gateway-types.js';
 
 /** Публичный каталог моделей для `GET /api/meta`. Источник правды — реестр моделей. */
 export const DEFAULT_MODEL_ID = 'auto';
 
 /**
- * Публичный список моделей для переключателя в интерфейсе.
+ * Публичный список моделей для переключателя в интерфейсе: Free и Plus по возрастанию цены, затем
+ * модели Pro и Ultra. Выключенные в реестре модели (например, Gemini 4 Argon, пока её нет в
+ * OpenRouter) в каталог не попадают.
  *
- * Состав и отображаемые имена задаются здесь, а доступность по тарифу (isPro / requiredPlan)
- * и размер контекста берутся из реестра моделей. Второго источника правды нет: раньше этот файл
- * вёл свой каталог, и выбранная модель вне него молча превращалась в `auto`.
+ * Состав задаётся здесь, а отображаемое имя, доступность по тарифу (isPro / requiredPlan) и размер
+ * контекста берутся из реестра моделей. Второго источника правды нет: раньше этот файл вёл свой
+ * каталог, и выбранная модель вне него молча превращалась в `auto`.
  */
-const PUBLIC_MODELS: ReadonlyArray<{ id: string; name: string }> = [
-  { id: 'claude-3-haiku', name: 'Claude Haiku 4.5' },
-  { id: 'gpt-4o', name: 'GPT-4o' },
-  { id: 'deepseek-v4.1-flash', name: 'DeepSeek V4.1 Flash' },
-  { id: 'gpt-6-astra', name: 'GPT-6 Astra' },
-  { id: 'claude-fable', name: 'Claude Fable 5.1' },
-  { id: 'gemini-2.5-pro', name: 'Gemini Flash 3.8' },
-  { id: 'grok-4.7', name: 'Grok 4.7' },
+export const PUBLIC_MODEL_IDS: readonly string[] = [
+  'ketner-mini',
+  'ketner-pro',
+  'claude-haiku-5.5',
+  'deepseek-v4.1-flash',
+  'gpt-5.6-luna-pro',
+  'qwen3.8-27b',
+  'gemini-3.7-flash',
+  'glm-5.3',
+  'gpt-6.1-sol',
+  'claude-opus-5.5',
+  'claude-sonnet-5.5',
+  'gpt-6-astra',
+  'grok-4.7',
+  'gemini-4-argon',
+  'gpt-5.6-sol',
+  'gpt-5.6-terra',
 ];
 
-export const MODELS: readonly ModelInfo[] = PUBLIC_MODELS.flatMap(({ id, name }) => {
+/** Публичные сведения о модели: доступ, лимиты и прозрачность (разработчик, настоящая модель). */
+function toModelInfo(id: string, entry: ModelRegistryEntry): ModelInfo {
+  const disclosure = disclosureOf(entry);
+  return {
+    id,
+    name: entry.name,
+    contextMessages: entry.contextMessages,
+    isPro: entry.isPro,
+    requiredPlan: entry.requiredPlan ?? undefined,
+    ...dailyLimitsOf(id),
+    ...(entry.effortProfile ? { reasoningEffort: { ...entry.effortProfile } } : {}),
+    ...(disclosure ?? {}),
+    contextWindow: entry.contextWindow,
+    ...(entry.fallbackModelId
+      ? {
+          fallbackModelId: entry.fallbackModelId,
+          fallbackModelName: modelRegistry.get(entry.fallbackModelId)?.name,
+        }
+      : {}),
+  };
+}
+
+export const MODELS: readonly ModelInfo[] = PUBLIC_MODEL_IDS.flatMap((id) => {
   const entry = modelRegistry.get(id);
   if (!entry || !entry.enabled) {
     return [];
   }
-  const info: ModelInfo = {
-    id,
-    name,
-    contextMessages: entry.contextMessages,
-    isPro: entry.isPro,
-    requiredPlan: entry.requiredPlan ?? undefined,
-  };
-  return [info];
+  return [toModelInfo(id, entry)];
 });
 
-import { getPlanLimits } from '../services/entitlement.js';
+/** Бесплатные эндпоинты, которые отвечают на Free вместо Ketner Mini (ai/plan-substitute.ts). */
+export const FREE_TIER_MODEL_IDS: readonly string[] = ['nemotron-ultra', 'north-mini-code'];
+
+export const FREE_TIER_MODELS: readonly ModelInfo[] = FREE_TIER_MODEL_IDS.flatMap((id) => {
+  const entry = modelRegistry.get(id);
+  return entry && entry.enabled ? [toModelInfo(id, entry)] : [];
+});
+
+import { getPlanLimits, planAllowsModel } from '../services/entitlement.js';
 
 export const PLAN_LIMITS: Record<PlanId, PlanLimits> = getPlanLimits();
 
@@ -51,33 +87,23 @@ export const MODEL_CATALOG: ModelCatalog = {
   models: [AUTO_MODEL, ...MODELS],
   defaultModelId: DEFAULT_MODEL_ID,
   limits: PLAN_LIMITS,
+  freeTierModels: [...FREE_TIER_MODELS],
 };
 
-/** Проверка доступности модели по текущему тарифу пользователя. */
+/** Проверка доступности модели по текущему тарифу пользователя (единое правило в entitlement). */
 export function canAccessModel(userPlan: PlanId | undefined, model: ModelInfo): boolean {
   if (model.id === 'auto') return true;
-  if (!model.isPro) return true;
-  if (!userPlan || userPlan === 'free') return false;
-  if (userPlan === 'ultra') return true;
-  if (model.requiredPlan === 'plus') {
-    return userPlan === 'plus' || userPlan === 'pro';
-  }
-  if (model.requiredPlan === 'pro') {
-    return (
-      userPlan === 'pro' ||
-      userPlan === 'gpt-pro' ||
-      userPlan === 'claude-pro' ||
-      userPlan === 'gemini-pro'
-    );
-  }
-  if (model.requiredPlan && userPlan === model.requiredPlan) return true;
-  return false;
+  return planAllowsModel(userPlan, model.isPro ? (model.requiredPlan ?? 'plus') : null);
 }
 
-/** Неизвестный идентификатор модели не ломает запрос: берём модель по умолчанию. */
+/**
+ * Неизвестный идентификатор модели не ломает запрос: берём модель по умолчанию. Старые id из
+ * сохранённых диалогов (gpt-6-astra, claude-fable и др.) ведут на актуальные модели.
+ */
 export function resolveModel(modelId: string | undefined): ModelInfo {
   if (modelId === 'auto' || !modelId) {
     return AUTO_MODEL;
   }
-  return MODELS.find((model) => model.id === modelId) ?? AUTO_MODEL;
+  const currentId = modelRegistry.get(modelId)?.id;
+  return MODELS.find((model) => model.id === currentId) ?? AUTO_MODEL;
 }

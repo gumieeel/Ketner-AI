@@ -4,7 +4,8 @@ export type { Plan, PlanId };
 
 /**
  * Каталог тарифов Ketner AI.
- * 4 тарифа: Free, Plus ($10), Pro ($20), Ultra ($30).
+ * 4 тарифа в долларах: Free ($0), Plus ($9), Pro ($25), Ultra ($49 со скидкой с $59).
+ * Те же цены на бэкенде: apps/mock-api/src/services/pricing.ts.
  */
 export const PLANS: readonly Plan[] = [
   {
@@ -16,34 +17,26 @@ export const PLANS: readonly Plan[] = [
       en: 'Try AI',
     },
     modelsHighlight: {
-      ru: 'Ketner Mini + GPT-4o mini',
-      en: 'Ketner Mini + GPT-4o mini',
+      ru: 'Бесплатные модели, запасная — Ketner Mini',
+      en: 'Free models, Ketner Mini as backup',
     },
     bullets: {
       ru: [
-        'Базовые модели (Ketner Mini, GPT-4o mini)',
-        'Стандартная скорость ответа',
-        'Базовый контекст диалога',
-        'Интеллектуальный режим Best AI (Auto)',
+        'Отвечает бесплатная Nemotron 3 Ultra (NVIDIA), запасная — Ketner Mini',
+        '10 сообщений в сутки',
+        'Режим Auto и история чатов',
+        '5 картинок FLUX.1 schnell в сутки',
       ],
       en: [
-        'Basic models (Ketner Mini, GPT-4o mini)',
-        'Standard response speed',
-        'Basic conversation context',
-        'Intelligent Best AI (Auto) mode',
+        'Free Nemotron 3 Ultra (NVIDIA) answers, Ketner Mini as backup',
+        '10 messages a day',
+        'Auto mode and chat history',
+        '5 FLUX.1 schnell images a day',
       ],
     },
     highlights: {
-      ru: [
-        'Базовые модели',
-        'Стандартная скорость',
-        'Базовый контекст',
-      ],
-      en: [
-        'Basic models',
-        'Standard speed',
-        'Basic context',
-      ],
+      ru: ['Nemotron 3 Ultra и Ketner Mini', '10 сообщений в сутки', 'Режим Auto'],
+      en: ['Nemotron 3 Ultra and Ketner Mini', '10 messages a day', 'Auto mode'],
     },
   },
   {
@@ -55,33 +48,35 @@ export const PLANS: readonly Plan[] = [
       en: 'Fast models',
     },
     modelsHighlight: {
-      ru: 'DeepSeek v4.1 Flash, Claude Haiku 4.5, GPT-4o',
-      en: 'DeepSeek v4.1 Flash, Claude Haiku 4.5, GPT-4o',
+      ru: 'Ketner Pro, GPT-6.1 Sol, Claude Haiku 5.5, DeepSeek V4.1 Flash',
+      en: 'Ketner Pro, GPT-6.1 Sol, Claude Haiku 5.5, DeepSeek V4.1 Flash',
     },
     bullets: {
       ru: [
-        'Стандартные быстрые модели: DeepSeek v4.1 Flash, Claude Haiku 4.5, GPT-4o',
-        'Быстрая скорость генерации ответов',
-        'Стандартный контекст диалога',
-        'Доступ через Auto Mode или ручной выбор модели',
+        'Модели: Ketner Pro, GPT-6.1 Sol, Claude Haiku 5.5, DeepSeek V4.1 Flash',
+        'Картинки FLUX.2 klein в пяти форматах',
+        '500 сообщений в сутки, GPT-6.1 Sol — 14 в неделю',
+        '2 запроса одновременно',
+        'Режим Auto или ручной выбор модели',
       ],
       en: [
-        'Standard fast models: DeepSeek v4.1 Flash, Claude Haiku 4.5, GPT-4o',
-        'Fast response generation speed',
-        'Standard conversation context',
-        'Access via Auto Mode or manual model selection',
+        'Models: Ketner Pro, GPT-6.1 Sol, Claude Haiku 5.5, DeepSeek V4.1 Flash',
+        'FLUX.2 klein images in five aspect ratios',
+        '500 messages a day, GPT-6.1 Sol 14 a week',
+        '2 requests at once',
+        'Auto mode or manual model selection',
       ],
     },
     highlights: {
       ru: [
-        'DeepSeek v4.1, Haiku 4.5, GPT-4o',
-        'Быстрая скорость генерации',
-        'Приоритетная очередь',
+        'Ketner Pro, GPT-6.1 Sol, Haiku 5.5, DeepSeek',
+        '500 сообщений в сутки',
+        'GPT-6.1 Sol — 14 в неделю',
       ],
       en: [
-        'DeepSeek v4.1, Haiku 4.5, GPT-4o',
-        'Fast generation speed',
-        'Priority queue',
+        'Ketner Pro, GPT-6.1 Sol, Haiku 5.5, DeepSeek',
+        '500 messages a day',
+        'GPT-6.1 Sol: 14 a week',
       ],
     },
   },
@@ -95,35 +90,35 @@ export const PLANS: readonly Plan[] = [
       en: 'Top models',
     },
     modelsHighlight: {
-      ru: 'Все из Plus + GPT-6 Astra, Claude Fable 5.1, Gemini Flash 3.8, Grok 4.7',
-      en: 'All Plus + GPT-6 Astra, Claude Fable 5.1, Gemini Flash 3.8, Grok 4.7',
+      ru: 'Все из Plus + Claude Opus и Sonnet, GPT-6 Astra, GPT-5.6 Sol и Terra, Grok 4.7',
+      en: 'All Plus + Claude Opus & Sonnet, GPT-6 Astra, GPT-5.6 Sol & Terra, Grok 4.7',
     },
     bullets: {
       ru: [
         'Все, что входит в тариф Plus',
-        'Топовые модели: GPT-6 Astra, Claude Fable 5.1, Gemini Flash 3.8, Grok 4.7',
-        'Пониженный контекст и скорость по сравнению с Ultra',
-        'Высокий приоритет обработки запросов',
-        'Ручной выбор любой топовой модели',
+        'Топовые модели: Claude Opus 5.5, Sonnet 5.5, GPT-6 Astra, GPT-5.6 Sol, GPT-5.6 Terra xhigh, Grok 4.7 xhigh',
+        'Картинки FLUX.2 dev и Seedream',
+        'Claude Opus 5.5 — 21 запрос в неделю, Sonnet 5.5 — 42',
+        '1 500 сообщений в сутки, до 4 запросов одновременно',
       ],
       en: [
         'All Plus tier features included',
-        'Top models: GPT-6 Astra, Claude Fable 5.1, Gemini Flash 3.8, Grok 4.7',
-        'Reduced context and speed compared to Ultra',
-        'High request processing priority',
-        'Manual selection of any top model',
+        'Top models: Claude Opus 5.5, Sonnet 5.5, GPT-6 Astra, GPT-5.6 Sol, GPT-5.6 Terra xhigh, Grok 4.7 xhigh',
+        'FLUX.2 dev and Seedream images',
+        'Claude Opus 5.5: 21 requests a week, Sonnet 5.5: 42',
+        '1,500 messages a day, up to 4 requests at once',
       ],
     },
     highlights: {
       ru: [
         'Все возможности тарифа Plus',
-        'GPT-6 Astra, Claude Fable, Gemini, Grok',
-        'Пониженный контекст и скорость',
+        'Claude Opus, Sonnet, GPT-6 Astra, Grok 4.7',
+        'Картинки FLUX.2 dev и Seedream',
       ],
       en: [
         'All Plus tier features included',
-        'GPT-6 Astra, Claude Fable, Gemini, Grok',
-        'Reduced context and speed',
+        'Claude Opus, Sonnet, GPT-6 Astra, Grok 4.7',
+        'FLUX.2 dev and Seedream images',
       ],
     },
   },
@@ -141,38 +136,32 @@ export const PLANS: readonly Plan[] = [
       en: 'Maximum power',
     },
     modelsHighlight: {
-      ru: 'Все топовые модели на 100% + макс. контекст',
-      en: 'All top models at 100% + max context',
+      ru: 'Все модели Pro + режим Max и лучшие модели картинок',
+      en: 'All Pro models + Max mode and the best image models',
     },
     bullets: {
       ru: [
         'Все, что входит в тариф Pro',
-        'Все топовые модели: GPT-6 Astra, Claude Fable 5.1, Gemini Flash 3.8, Grok 4.7, Ketner Next',
-        'Максимальный контекст диалога',
-        'Использование моделей на 100% без ограничений скорости и контекста',
-        'Наивысший VIP-приоритет обработки запросов без ожидания',
-        'Параллельные запросы без задержек',
+        'Режим Max: модели думают дольше и глубже',
+        'Картинки FLUX.2 pro и Nano Banana 2',
+        'Claude Opus 5.5 — 49 запросов в неделю, Sonnet 5.5 — 98',
+        '4 000 сообщений в сутки, до 8 запросов одновременно',
       ],
       en: [
         'All Pro tier features included',
-        'All top models: GPT-6 Astra, Claude Fable 5.1, Gemini Flash 3.8, Grok 4.7, Ketner Next',
-        'Maximum conversation context',
-        '100% model usage without speed or context limitations',
-        'Top VIP queue priority with zero waiting',
-        'Parallel concurrent requests without delays',
+        'Max mode: models think longer and deeper',
+        'FLUX.2 pro and Nano Banana 2 images',
+        'Claude Opus 5.5: 49 requests a week, Sonnet 5.5: 98',
+        '4,000 messages a day, up to 8 requests at once',
       ],
     },
     highlights: {
       ru: [
-        'Все топовые модели на 100%',
-        'Максимальный контекст диалога',
-        'VIP-приоритет и максимальная скорость',
+        'Режим Max: модели думают глубже',
+        'FLUX.2 pro и Nano Banana 2',
+        '4 000 сообщений в сутки',
       ],
-      en: [
-        'All top models at 100%',
-        'Maximum conversation context',
-        'VIP priority & maximum speed',
-      ],
+      en: ['Max mode: deeper thinking', 'FLUX.2 pro and Nano Banana 2', '4,000 messages a day'],
     },
   },
 ];

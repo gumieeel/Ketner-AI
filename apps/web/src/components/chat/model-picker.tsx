@@ -4,97 +4,33 @@ import { Badge } from '@/components/ui/badge';
 import { Kbd } from '@/components/ui/kbd';
 import { ModelMark } from '@/components/ui/model-mark';
 import { useAuth } from '@/features/auth/auth-store';
-import { canAccessModel } from '@/features/chat/can-access-model';
+import {
+  DEFAULT_MODELS,
+  MODEL_NAME_KEYS,
+  canAccessModel,
+  planRank,
+  requiredPlanOf,
+} from '@/features/chat/can-access-model';
 import { useChat } from '@/features/chat/chat-store';
 import type { ModelInfo } from '@/features/chat/types';
 import { usePreferences } from '@/features/preferences/preferences-store';
 import { cn } from '@/lib/cn';
 import { modelColor } from '@/lib/model-color';
 import { useTranslation } from '@/i18n';
-import type { TranslationKey } from '@/i18n';
-
-/** Названия моделей живут в словаре; `name` от сервера — запасной вариант. */
-const MODEL_NAME_KEYS: Record<string, TranslationKey> = {
-  auto: 'chat.modelAuto',
-  'ketner-mini': 'chat.modelMini',
-  'ketner-pro': 'chat.modelPro',
-  'gpt-6-astra': 'chat.modelGptAstra',
-  'claude-fable': 'chat.modelClaudeFable',
-  'gemini-pro': 'chat.modelGeminiPro',
-  'gemini-2.5-pro': 'chat.modelGeminiPro',
-  'grok-4.7': 'chat.modelGrok',
-  'deepseek-v4.1-flash': 'chat.modelDeepSeek',
-  'claude-3-haiku': 'chat.modelHaiku',
-  'gpt-4o': 'chat.modelGpt4o',
-};
 
 /** Модели по умолчанию: используются, пока каталог не загрузился. */
-const FALLBACK_MODELS: readonly ModelInfo[] = [
-  {
-    id: 'auto',
-    name: '✨ Auto',
-    contextMessages: 120,
-    isPro: false,
-  },
-  // Plus ($10) — стандартные быстрые модели
-  {
-    id: 'deepseek-v4.1-flash',
-    name: 'DeepSeek v4.1 Flash',
-    contextMessages: 40,
-    isPro: true,
-    requiredPlan: 'plus',
-  },
-  {
-    id: 'claude-3-haiku',
-    name: 'Claude Haiku 4.5',
-    contextMessages: 40,
-    isPro: true,
-    requiredPlan: 'plus',
-  },
-  {
-    id: 'gpt-4o',
-    name: 'GPT-4o',
-    contextMessages: 60,
-    isPro: true,
-    requiredPlan: 'plus',
-  },
-  // Pro ($20) — топовые флагманские модели
-  {
-    id: 'gpt-6-astra',
-    name: 'GPT-6 Astra',
-    contextMessages: 120,
-    isPro: true,
-    requiredPlan: 'pro',
-  },
-  {
-    id: 'claude-fable',
-    name: 'Claude Fable 5.1',
-    contextMessages: 120,
-    isPro: true,
-    requiredPlan: 'pro',
-  },
-  {
-    id: 'gemini-2.5-pro',
-    name: 'Gemini Flash 3.8',
-    contextMessages: 120,
-    isPro: true,
-    requiredPlan: 'pro',
-  },
-  {
-    id: 'grok-4.7',
-    name: 'Grok 4.7',
-    contextMessages: 120,
-    isPro: true,
-    requiredPlan: 'pro',
-  },
-  {
-    id: 'ketner-pro',
-    name: 'Qwen 3.8 Max',
-    contextMessages: 120,
-    isPro: true,
-    requiredPlan: 'pro',
-  },
-];
+const FALLBACK_MODELS: readonly ModelInfo[] = DEFAULT_MODELS;
+
+type ModelTier = 'free' | 'plus' | 'pro';
+
+/** Группа списка определяется тарифом, с которого доступна модель (`requiredPlan` каталога). */
+function tierOf(model: ModelInfo): ModelTier {
+  const rank = planRank(requiredPlanOf(model));
+  if (rank <= 0) {
+    return 'free';
+  }
+  return rank === 1 ? 'plus' : 'pro';
+}
 
 /** Переключатель моделей: логика ответа одна, меняется подпись и лимит контекста. */
 export function ModelPicker({ disabled = false }: { disabled?: boolean }) {
@@ -118,15 +54,9 @@ export function ModelPicker({ disabled = false }: { disabled?: boolean }) {
     return key ? t(key) : model.name;
   };
 
-  const isPlusModel = (m: ModelInfo) =>
-    m.requiredPlan === 'plus' ||
-    ['gpt-4o', 'gpt-4o-mini', 'deepseek-v4.1-flash', 'gemini-2.5-flash', 'claude-3-haiku', 'glm-5.3-flash', 'nemotron-ultra'].includes(m.id);
-
-  const isFreeModel = (m: ModelInfo) =>
-    m.id === 'auto' ||
-    (!m.isPro && !isPlusModel(m) && (!m.requiredPlan || m.requiredPlan === 'free'));
-
-  const isProModel = (m: ModelInfo) => !isFreeModel(m) && !isPlusModel(m);
+  const isFreeModel = (m: ModelInfo) => tierOf(m) === 'free';
+  const isPlusModel = (m: ModelInfo) => tierOf(m) === 'plus';
+  const isProModel = (m: ModelInfo) => tierOf(m) === 'pro';
 
   const autoModel = models.find((m) => m.id === 'auto');
   const freeModels = models.filter((m) => m.id !== 'auto' && isFreeModel(m));
@@ -177,7 +107,12 @@ export function ModelPicker({ disabled = false }: { disabled?: boolean }) {
   }, [open]);
 
   const onTriggerKeyDown = (event: ReactKeyboardEvent) => {
-    if (event.key === 'ArrowDown' || event.key === 'ArrowUp' || event.key === 'Enter' || event.key === ' ') {
+    if (
+      event.key === 'ArrowDown' ||
+      event.key === 'ArrowUp' ||
+      event.key === 'Enter' ||
+      event.key === ' '
+    ) {
       event.preventDefault();
       openMenu();
     }
@@ -202,11 +137,6 @@ export function ModelPicker({ disabled = false }: { disabled?: boolean }) {
       triggerRef.current?.focus();
     }
   };
-
-  const subtitleOf = (model: ModelInfo): string =>
-    model.id === 'auto'
-      ? t('chat.modelAutoSubtitle')
-      : t('chat.modelContext', { count: model.contextMessages });
 
   const renderModelItem = (model: ModelInfo) => {
     const active = model.id === current.id;
@@ -243,13 +173,19 @@ export function ModelPicker({ disabled = false }: { disabled?: boolean }) {
               ? 'bg-accent-soft ring-1 ring-accent/30'
               : 'hover:bg-surface-2 focus-visible:bg-surface-2 focus-visible:ring-2 focus-visible:ring-accent/40',
             isFocused && !active && accessible && 'bg-surface-2',
-            !accessible && 'opacity-40 cursor-not-allowed hover:bg-transparent focus-visible:bg-transparent',
+            !accessible &&
+              'opacity-40 cursor-not-allowed hover:bg-transparent focus-visible:bg-transparent',
           )}
         >
           <ModelMark modelId={model.id} size="md" />
           <span className="min-w-0 flex-1">
             <span className="flex items-center gap-2">
-              <span className={cn('truncate text-sm', active ? 'font-semibold text-text' : 'font-medium text-text')}>
+              <span
+                className={cn(
+                  'truncate text-sm',
+                  active ? 'font-semibold text-text' : 'font-medium text-text',
+                )}
+              >
                 {labelOf(model)}
               </span>
               {isPlus ? (
@@ -262,7 +198,6 @@ export function ModelPicker({ disabled = false }: { disabled?: boolean }) {
                 </Badge>
               ) : null}
             </span>
-            <span className="mt-0.5 block truncate text-xs text-subtle">{subtitleOf(model)}</span>
           </span>
           <span className="flex size-5 shrink-0 items-center justify-center">
             {!accessible ? (
@@ -310,12 +245,19 @@ export function ModelPicker({ disabled = false }: { disabled?: boolean }) {
           'hover:border-stroke-strong hover:bg-surface-2 disabled:cursor-not-allowed disabled:opacity-60',
           open && 'border-stroke-strong bg-surface-2 shadow-sm',
         )}
-        style={open ? { boxShadow: `0 0 0 3px color-mix(in srgb, ${color} 18%, transparent)` } : undefined}
+        style={
+          open
+            ? { boxShadow: `0 0 0 3px color-mix(in srgb, ${color} 18%, transparent)` }
+            : undefined
+        }
       >
         <ModelMark modelId={current.id} size="sm" />
         <span className="truncate font-semibold">{labelOf(current)}</span>
         <ChevronDownIcon
-          className={cn('size-4 shrink-0 text-subtle transition-transform duration-200', open && 'rotate-180')}
+          className={cn(
+            'size-4 shrink-0 text-subtle transition-transform duration-200',
+            open && 'rotate-180',
+          )}
         />
       </button>
 
@@ -331,7 +273,11 @@ export function ModelPicker({ disabled = false }: { disabled?: boolean }) {
             'md:inset-x-auto md:left-0 md:w-[400px]',
           )}
         >
-          {renderGroup(t('chat.tierFree'), [...(autoModel ? [autoModel] : []), ...freeModels], false)}
+          {renderGroup(
+            t('chat.tierFree'),
+            [...(autoModel ? [autoModel] : []), ...freeModels],
+            false,
+          )}
           {plusModels.length > 0 ? renderGroup(t('chat.tierPlus'), plusModels, true) : null}
           {proModels.length > 0 ? renderGroup(t('chat.tierPro'), proModels, true) : null}
 

@@ -1,3 +1,4 @@
+import { signupAndVerify } from '../testing/signup.js';
 import assert from 'node:assert/strict';
 import { createHmac } from 'node:crypto';
 import test from 'node:test';
@@ -19,7 +20,7 @@ function signedWebhook(body: unknown, secret: string = config.webhookSecret) {
 }
 
 async function signup(baseUrl: string, email: string): Promise<{ token: string; id: string }> {
-  const res = await fetch(`${baseUrl}/api/auth/signup`, {
+  const res = await signupAndVerify(baseUrl, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ email, password: 'password123', name: 'Webhook User' }),
@@ -61,7 +62,10 @@ test('webhooks: активация подписки, отмена и идемп�
     // 2. Идемпотентность: то же событие повторно
     const replayRes = await fetch(`${server.baseUrl}/api/webhooks`, signedWebhook(paid));
     assert.equal(replayRes.status, 200);
-    const replayBody = (await replayRes.json()) as { received: boolean; idempotentReplay?: boolean };
+    const replayBody = (await replayRes.json()) as {
+      received: boolean;
+      idempotentReplay?: boolean;
+    };
     assert.equal(replayBody.idempotentReplay, true);
 
     // 3. Отмена подписки
@@ -103,10 +107,10 @@ test('webhooks (C6): запрос без подписи, с чужой подп�
     });
     assert.equal(unsigned.status, 401);
 
-    // Старый публичный секрет и «тестовая» подпись
+    // Заведомо неверный секрет и «тестовая» подпись
     const wrongSecret = await fetch(
       `${server.baseUrl}/api/webhooks`,
-      signedWebhook(event, 'ketner-ai-webhook-secret-dev'),
+      signedWebhook(event, 'definitely-wrong-secret-1234567890'),
     );
     assert.equal(wrongSecret.status, 401);
     const testSignature = await fetch(`${server.baseUrl}/api/webhooks`, {
@@ -149,7 +153,12 @@ test('cryptocloud postback (C6): без валидного токена тари
       const res = await fetch(`${server.baseUrl}/api/billing/cryptocloud/postback`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ status: 'success', order_id: invoice.id, invoice_id: invoice.id, token }),
+        body: JSON.stringify({
+          status: 'success',
+          order_id: invoice.id,
+          invoice_id: invoice.id,
+          token,
+        }),
       });
       assert.equal(res.status, 401);
     }

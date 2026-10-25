@@ -1,20 +1,31 @@
+import { CompareVoteStore } from '../store/compare-vote-store.js';
 import { mkdtempSync } from 'node:fs';
 import type { AddressInfo } from 'node:net';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createBetterAuth, initAuthDatabase } from '../auth/better-auth.js';
-import { createApp } from '../app.js';
+import { createApp, type AppDeps } from '../app.js';
 import type { AiConfig } from '../config.js';
 import { DEFAULT_MODEL_ID } from '../ai/models.js';
 import { createConversationStore } from '../store/conversation-store.js';
 import { createSubscriptionStore } from '../store/subscription-store.js';
 import { createUserStore } from '../store/user-store.js';
+import { createApiKeyStore, type ApiKeyStore } from '../store/api-key-store.js';
+import { createRevokedTokenStore } from '../store/revoked-token-store.js';
 import { UsageStore } from '../store/usage-store.js';
+import { createInvoiceStore } from '../store/invoice-store.js';
+import {
+  createGithubConnectionStore,
+  type GithubConnectionStore,
+} from '../github/connection-store.js';
 import { semanticCache } from '../ai/cache.js';
+import { AIGateway } from '../ai/gateway.js';
 import type { Conversation, Message } from '../types.js';
 
 import { createSupportStore } from '../store/support-store.js';
 import { TelegramSupportBotService } from '../telegram/support-bot.js';
+import type { MailMessage, Mailer } from '../services/mailer.js';
+import { isCodeMail, rememberCodeMails } from './signup.js';
 
 /** Задержки без пауз: тесты не должны ждать стриминг. */
 export const FAST_AI: AiConfig = {
@@ -27,10 +38,21 @@ export const FAST_AI: AiConfig = {
 export interface TestServer {
   baseUrl: string;
   close: () => Promise<void>;
+  /** Хранилища сервера: тесты создают ключи и сеют расход напрямую. */
+  usageStore: UsageStore;
+  /** Голоса сравнения этого сервера. */
+  compareVotes: CompareVoteStore;
+  apiKeyStore: ApiKeyStore;
+  githubConnectionStore: GithubConnectionStore;
+  /** Письма с кодами регистрации, входа и сброса пароля. */
+  codeMails: MailMessage[];
 }
 
 /** Поднимает приложение на свободном порту с временным файлом хранилища. */
-export async function startTestServer(ai: Partial<AiConfig> = {}): Promise<TestServer> {
+export async function startTestServer(
+  ai: Partial<AiConfig> = {},
+  extra: Partial<AppDeps> = {},
+): Promise<TestServer> {
   const tempDir = mkdtempSync(join(tmpdir(), 'ketner-mock-api-'));
   const storeFile = join(tempDir, 'store.json');
   const userStoreFile = join(tempDir, 'users.json');
@@ -50,22 +72,69 @@ export async function startTestServer(ai: Partial<AiConfig> = {}): Promise<TestS
     botToken: '', // mock mode for fast and isolated test execution
   });
 
+  const testUsageStore = new UsageStore(usageStoreFile);
+  const testApiKeyStore = createApiKeyStore(join(tempDir, 'api-keys.json'));
+  const testGithubStore = createGithubConnectionStore({
+    file: join(tempDir, 'github-connections.json'),
+    secret: 'test-github-secret',
+  });
+
+  const testCompareVotes = new CompareVoteStore(join(tempDir, 'compare-votes.json'));
+  const testAi: AiConfig = { ...FAST_AI, ...ai };
+  // Тесты не ходят к настоящим моделям, даже если в .env разработчика есть ключ OpenRouter:
+  // шаблонный движок включён явно, а не угадывается по нулевым задержкам.
+  const chatGateway = new AIGateway({
+    usageStore: extra.usageStore ?? testUsageStore,
+    aiConfig: testAi,
+    useMockEngine: true,
+  });
+
+  // Письма с кодом регистрации и входа перехватываются (их читают signupAndVerify / loginAndVerify),
+  // остальные уходят в почтовик теста, если он передан: его счётчики писем не должны меняться.
+  const codeMails: MailMessage[] = [];
+  const innerMailer = extra.mailer;
+  const testMailer: Mailer = {
+    kind: innerMailer?.kind ?? 'console',
+    async send(message) {
+      if (isCodeMail(message)) {
+        codeMails.push(message);
+        return;
+      }
+      await innerMailer?.send(message);
+    },
+  };
+
   const app = createApp({
     store: createConversationStore(storeFile),
     userStore: createUserStore(userStoreFile),
     subscriptionStore: createSubscriptionStore(subscriptionStoreFile),
-    usageStore: new UsageStore(usageStoreFile),
+    usageStore: testUsageStore,
+    apiKeyStore: testApiKeyStore,
+    githubConnectionStore: testGithubStore,
+    invoiceStore: createInvoiceStore(join(tempDir, 'invoices.json')),
     supportStore: testSupportStore,
     supportBotService: testSupportBotService,
-    ai: { ...FAST_AI, ...ai },
+    ai: testAi,
     betterAuth: testBetterAuth,
+    chatGateway,
+    compareVoteStore: testCompareVotes,
+    revokedTokenStore: createRevokedTokenStore(join(tempDir, 'revoked-tokens.json')),
+    ...extra,
+    mailer: testMailer,
   });
   const server = app.listen(0);
   await new Promise<void>((resolve) => server.once('listening', resolve));
 
   const address = server.address() as AddressInfo;
+  const baseUrl = `http://127.0.0.1:${address.port}`;
+  rememberCodeMails(baseUrl, codeMails);
   return {
-    baseUrl: `http://127.0.0.1:${address.port}`,
+    baseUrl,
+    codeMails,
+    usageStore: extra.usageStore ?? testUsageStore,
+    compareVotes: extra.compareVoteStore ?? testCompareVotes,
+    apiKeyStore: extra.apiKeyStore ?? testApiKeyStore,
+    githubConnectionStore: extra.githubConnectionStore ?? testGithubStore,
     close: () =>
       new Promise<void>((resolve, reject) => {
         try {
