@@ -1,96 +1,73 @@
 import { Link } from 'react-router-dom';
-import { ArrowRightIcon, BoltIcon, RefreshIcon, SparkleIcon } from '@/components/icons';
-import { AutoDemo } from '@/components/marketing/auto-demo';
+import { KnotRelief } from '@/components/marketing/knot-relief';
+import { ModelDemo } from '@/components/marketing/model-demo';
 import { buttonClasses } from '@/components/ui/button-classes';
-import { Reveal } from '@/components/ui/reveal';
-import { StatusDot } from '@/components/ui/status-dot';
 import { useAuth } from '@/features/auth/auth-store';
 import { useTranslation } from '@/i18n';
 
+/**
+ * Первый экран: слева — панель с обещанием и объёмным щитом Ketner, справа — демо
+ * переписки, в которой отвечает выбранная модель. Нижний правый угол панели срезан «ступенькой», как в фирменной
+ * геометрии срезов.
+ */
 export function LandingHero() {
   const { t } = useTranslation();
   const status = useAuth((state) => state.status);
   const user = useAuth((state) => state.user);
-
-  const facts = [
-    { key: 'landing.heroFact1', icon: <BoltIcon className="size-4" /> },
-    { key: 'landing.heroFact2', icon: <RefreshIcon className="size-4" /> },
-    { key: 'landing.heroFact3', icon: <SparkleIcon className="size-4" /> },
-  ] as const;
+  const signedIn = status === 'authenticated' && Boolean(user);
 
   return (
-    <div className="relative w-full pt-2 pb-4 md:pt-10 md:pb-8">
-      <div className="grid grid-cols-1 items-center gap-12 text-left lg:grid-cols-12 lg:gap-10">
-        {/* Левая колонка: заголовок, обещание, действия */}
-        <div className="flex flex-col items-start gap-6 lg:col-span-6">
-          <Reveal eager className="flex flex-wrap items-center gap-2">
-            <span className="gradient-border inline-flex items-center gap-2 rounded-full bg-surface/70 px-3.5 py-1.5 text-[13px] font-medium text-text backdrop-blur">
-              <StatusDot tone="brand" pulse />
-              {t('landing.heroBadge')}
+    <section aria-labelledby="hero-title" className="grid w-full grid-cols-1 gap-3 lg:grid-cols-12">
+      <div className="notch-br relative isolate flex min-h-[560px] flex-col overflow-hidden rounded-2xl bg-[var(--hero-panel)] px-6 pt-10 pb-8 [--notch:44px] sm:px-10 sm:pt-14 lg:col-span-8 lg:min-h-[640px] lg:px-14 lg:pt-16 lg:pb-12 lg:[--notch:72px]">
+        {/* Рельеф щита: крупно, со смещением за правый край */}
+        <KnotRelief className="absolute -right-[46%] -bottom-[18%] -z-10 w-[112%] max-w-none sm:-right-[24%] sm:-bottom-[30%] sm:w-[80%] lg:-right-[18%] lg:-bottom-[32%] lg:w-[68%]" />
+        {/* Подложка под текстом: рельеф не спорит с заголовком */}
+        <div
+          aria-hidden="true"
+          className="pointer-events-none absolute inset-0 -z-10 bg-[linear-gradient(100deg,var(--hero-panel)_30%,transparent_60%)] max-sm:bg-[linear-gradient(180deg,var(--hero-panel)_52%,transparent_78%)]"
+        />
+
+        <h1
+          id="hero-title"
+          className="t-display text-[clamp(2.625rem,4.6vw+0.4rem,4.75rem)] text-text"
+        >
+          <span className="block">{t('home.heroTitleA')}</span>{' '}
+          <span className="block">{t('home.heroTitleB')}</span>
+        </h1>
+        <p className="t-lead mt-6 max-w-[46ch] text-pretty">{t('home.heroLead')}</p>
+
+        <div className="mt-auto flex flex-col gap-3 pt-10 sm:flex-row sm:items-center">
+          <Link
+            to="/chat"
+            className={buttonClasses({
+              variant: 'primary',
+              size: 'lg',
+              className: 'w-full sm:w-auto sm:min-w-[200px]',
+            })}
+          >
+            {signedIn ? t('home.heroCtaSignedIn') : t('home.heroCta')}
+          </Link>
+          <Link
+            to="/pricing"
+            className={buttonClasses({
+              variant: 'outline',
+              size: 'lg',
+              className: 'w-full bg-[var(--hero-panel)] sm:w-auto',
+            })}
+          >
+            {t('home.heroSecondary')}
+          </Link>
+          {signedIn && user ? (
+            <span className="text-[14px] text-muted sm:ml-2">
+              {t('home.heroPlan', { plan: user.plan.charAt(0).toUpperCase() + user.plan.slice(1) })}
             </span>
-
-            {status === 'authenticated' && user ? (
-              <span className="inline-flex items-center gap-1.5 rounded-full border border-stroke bg-surface-2 px-3 py-1.5 text-[13px] font-medium text-accent">
-                <span>{user.name || user.email}</span>
-                <span aria-hidden="true" className="text-subtle">
-                  ·
-                </span>
-                <span>{user.plan.toUpperCase()}</span>
-              </span>
-            ) : null}
-          </Reveal>
-
-          <Reveal eager delayMs={60}>
-            <h1
-              aria-label="Ketner AI"
-              className="t-display text-[clamp(2.25rem,9.2vw,3.25rem)] text-text md:text-[clamp(3rem,5.2vw,4.5rem)]"
-            >
-              <span className="block">{t('landing.heroLine1')}</span>
-              <span className="text-gradient block">{t('landing.heroLine2')}</span>
-            </h1>
-          </Reveal>
-
-          <Reveal eager delayMs={120}>
-            <p className="t-lead max-w-[54ch]">{t('landing.heroLead')}</p>
-          </Reveal>
-
-          <Reveal eager delayMs={180} className="flex w-full flex-col gap-3 pt-1 sm:w-auto sm:flex-row">
-            <Link
-              to="/chat"
-              className={buttonClasses({ variant: 'primary', size: 'lg', className: 'w-full sm:w-auto' })}
-            >
-              {t('landing.cta')}
-              <ArrowRightIcon className="text-base" />
-            </Link>
-            <Link
-              to="/pricing"
-              className={buttonClasses({ variant: 'outline', size: 'lg', className: 'w-full sm:w-auto' })}
-            >
-              {t('landing.viewPlans')}
-            </Link>
-          </Reveal>
-
-          <Reveal eager delayMs={240}>
-            <ul className="flex flex-col gap-2.5 text-sm text-muted sm:flex-row sm:flex-wrap sm:gap-x-6">
-              {facts.map((fact) => (
-                <li key={fact.key} className="flex items-center gap-2">
-                  <span className="grid size-6 shrink-0 place-items-center rounded-full bg-accent-soft text-accent">
-                    {fact.icon}
-                  </span>
-                  <span>{t(fact.key)}</span>
-                </li>
-              ))}
-            </ul>
-          </Reveal>
+          ) : null}
         </div>
-
-        {/* Правая колонка: живое демо режима Auto */}
-        <Reveal delayMs={200} className="lg:col-span-6">
-          <div className="mx-auto w-full max-w-[560px] lg:ml-auto lg:mr-0">
-            <AutoDemo />
-          </div>
-        </Reveal>
       </div>
-    </div>
+
+      <div className="lg:col-span-4">
+        <ModelDemo />
+      </div>
+    </section>
   );
 }

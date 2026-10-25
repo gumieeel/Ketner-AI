@@ -1,0 +1,1 @@
+var e=`/api`;export{e as t};

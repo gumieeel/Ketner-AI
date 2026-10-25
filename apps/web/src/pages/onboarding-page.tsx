@@ -2,7 +2,6 @@ import { Link, useNavigate } from 'react-router-dom';
 import { ArrowRightIcon, ArrowUpRightIcon, SparkleIcon } from '@/components/icons';
 import { buttonClasses } from '@/components/ui/button-classes';
 import { Card } from '@/components/ui/card';
-import { SectionLabel } from '@/components/ui/section-label';
 import { useChat } from '@/features/chat/chat-store';
 import { EXAMPLE_PROMPTS } from '@/features/chat/example-prompts';
 import { useTranslation } from '@/i18n';
@@ -28,13 +27,11 @@ export function OnboardingPage() {
         />
 
         <div className="relative flex flex-col gap-3">
-          <SectionLabel>{t('onboarding.kicker')}</SectionLabel>
-
           <div className="flex items-center gap-3.5">
             <div className="grid size-11 shrink-0 place-items-center rounded-xl bg-accent-soft text-accent ring-1 ring-accent/25 ring-inset">
               <SparkleIcon className="size-5" />
             </div>
-            <h1 className="text-2xl font-semibold tracking-tight text-balance text-text md:text-[28px]">
+            <h1 className="t-title text-balance text-text md:text-[28px]">
               {t('onboarding.title')}
             </h1>
           </div>
@@ -56,8 +53,12 @@ export function OnboardingPage() {
                   className="lift group flex min-h-14 w-full items-center justify-between gap-3 rounded-xl border border-stroke bg-surface p-4 text-left shadow-xs hover:border-accent/40 hover:bg-surface-2 hover:shadow-md"
                 >
                   <span className="min-w-0">
-                    <span className="block text-sm font-medium text-text text-pretty">{prompt}</span>
-                    <span className="mt-0.5 block text-xs text-muted">{t('onboarding.startWith')}</span>
+                    <span className="block text-sm font-medium text-text text-pretty">
+                      {prompt}
+                    </span>
+                    <span className="mt-0.5 block text-xs text-muted">
+                      {t('onboarding.startWith')}
+                    </span>
                   </span>
                   <ArrowUpRightIcon className="size-4 shrink-0 text-subtle transition-[color,transform] duration-200 group-hover:-translate-y-0.5 group-hover:translate-x-0.5 group-hover:text-accent" />
                 </button>
@@ -69,7 +70,11 @@ export function OnboardingPage() {
         <div className="relative flex justify-end border-t border-stroke pt-5">
           <Link
             to="/chat"
-            className={buttonClasses({ variant: 'primary', size: 'lg', className: 'gap-2 max-sm:w-full' })}
+            className={buttonClasses({
+              variant: 'primary',
+              size: 'lg',
+              className: 'gap-2 max-sm:w-full',
+            })}
           >
             {t('landing.cta')}
             <ArrowRightIcon className="size-4" />

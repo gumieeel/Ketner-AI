@@ -49,7 +49,11 @@ test('оплаченный тариф действует, пока идёт пе
     allowAnonymous: false,
     sessionUser: { id: 'u2', email: 'u2@example.com', plan: 'pro' },
     storedUser: { plan: 'pro' },
-    subscription: { plan: 'pro', status: 'active', renewsAt: new Date(NOW + 86_400_000).toISOString() },
+    subscription: {
+      plan: 'pro',
+      status: 'active',
+      renewsAt: new Date(NOW + 86_400_000).toISOString(),
+    },
     now: NOW,
   });
   assert.ok(r.ok);
@@ -97,18 +101,42 @@ test('каталог для /api/meta согласован с реестром: 
   }
 });
 
-test('free не получает платные движки, plus получает стандартные, pro — флагманы', () => {
+test('free не получает платные движки, plus получает рабочие и Sol, Opus — только с Pro', () => {
   const check = (id: string, plan: 'free' | 'plus' | 'pro' | 'ultra'): boolean =>
     EntitlementService.checkModelAccess(modelRegistry.resolve(id), plan).allowed;
-  assert.equal(check('claude-3-haiku', 'free'), false);
+  assert.equal(check('claude-haiku-5.5', 'free'), false);
   assert.equal(check('deepseek-v4.1-flash', 'free'), false);
-  assert.equal(check('claude-3-haiku', 'plus'), true);
-  assert.equal(check('gpt-6-astra', 'plus'), false);
-  assert.equal(check('gpt-6-astra', 'pro'), true);
+  assert.equal(check('ketner-pro', 'free'), false);
+  assert.equal(check('claude-haiku-5.5', 'plus'), true);
+  assert.equal(check('ketner-pro', 'plus'), true);
+  assert.equal(check('gpt-6.1-sol', 'plus'), true);
+  assert.equal(check('claude-opus-5.5', 'plus'), false);
+  assert.equal(check('grok-4.7', 'plus'), false);
+  assert.equal(check('claude-opus-5.5', 'pro'), true);
+  assert.equal(check('grok-4.7', 'pro'), true);
+  assert.equal(check('gemini-3.8-flash', 'ultra'), true);
   assert.equal(check('ketner-mini', 'free'), true);
+  // Старые id ведут на актуальные модели и правила доступа не обходят
+  assert.equal(check('gpt-6-astra', 'free'), false);
+  assert.equal(check('claude-fable', 'plus'), false);
+  assert.equal(check('claude-fable', 'pro'), true);
+
+  const denied = EntitlementService.checkModelAccess(
+    modelRegistry.resolve('claude-opus-5.5'),
+    'plus',
+  );
+  assert.equal(denied.allowed, false);
+  if (!denied.allowed) {
+    assert.equal(denied.requiredPlan, 'Pro');
+    assert.match(denied.reason ?? '', /Claude Opus 5\.5/);
+  }
 });
 
-test('resolveModel для публичных id возвращает ту же модель, неизвестный id — auto', () => {
-  assert.equal(resolveModel('gpt-4o').id, 'gpt-4o');
+test('resolveModel для публичных id возвращает ту же модель, старые id — актуальную, неизвестный id — auto', () => {
+  assert.equal(resolveModel('gpt-6.1-sol').id, 'gpt-6.1-sol');
+  assert.equal(resolveModel('gpt-6-astra').id, 'gpt-6-astra');
+  assert.equal(resolveModel('claude-fable').id, 'claude-opus-5.5');
+  assert.equal(resolveModel('claude-fable-5.1').id, 'claude-opus-5.5');
+  assert.equal(resolveModel('gpt-4o').id, 'gpt-6.1-sol');
   assert.equal(resolveModel('нет-такой-модели').id, 'auto');
 });

@@ -1,6 +1,7 @@
 import { mkdirSync } from 'node:fs';
 import { dirname } from 'node:path';
 import { betterAuth } from 'better-auth';
+import { oAuthProxy } from 'better-auth/plugins';
 import { drizzleAdapter } from 'better-auth/adapters/drizzle';
 import { dash } from '@better-auth/infra';
 import { getMigrations } from 'better-auth/db/migration';
@@ -127,13 +128,12 @@ export function createBetterAuth(options: BetterAuthInstanceOptions = {}) {
     options.usePostgres ??
     Boolean(
       config.databaseUrl &&
-        config.databaseUrl.trim() !== '' &&
-        !config.databaseUrl.includes('user:password@localhost') &&
-        !options.dbPath,
+      config.databaseUrl.trim() !== '' &&
+      !config.databaseUrl.includes('user:password@localhost') &&
+      !options.dbPath,
     );
 
-  const dashApiKey =
-    options.apiKey ?? (config.betterAuthApiKey || process.env.BETTER_AUTH_API_KEY);
+  const dashApiKey = options.apiKey ?? (config.betterAuthApiKey || process.env.BETTER_AUTH_API_KEY);
 
   const auth = betterAuth({
     baseURL,
@@ -163,6 +163,9 @@ export function createBetterAuth(options: BetterAuthInstanceOptions = {}) {
             google: {
               clientId: config.googleClientId,
               clientSecret: config.googleClientSecret,
+              // Всегда показывать выбор аккаунта: без этого Google молча берёт тот, под которым
+              // браузер уже вошёл (на телефоне это часто не тот аккаунт).
+              prompt: 'select_account' as const,
             },
           }
         : {}),
@@ -207,18 +210,55 @@ export function createBetterAuth(options: BetterAuthInstanceOptions = {}) {
     },
     plugins: [
       ...(dashApiKey ? [dash({ apiKey: dashApiKey })] : []),
+      // Сайт открывают на ketner.org, а колбэк OAuth зарегистрирован на адресе Render. Без прокси
+      // cookie состояния ставилась на одном домене, а Google возвращал на другой: вход срывался
+      // («state mismatch») или сессия оставалась на чужом домене, и человек оказывался гостем.
+      // Прокси обменивает код на адресе колбэка и передаёт зашифрованный профиль обратно на
+      // домен, с которого начинали вход, — сессия создаётся там.
+      oAuthProxy({ productionURL: baseURL }),
     ],
+    // Только свои адреса: прокси OAuth возвращает зашифрованный профиль на домен, с которого
+    // начат вход, поэтому доверять любому присланному Origin нельзя.
     trustedOrigins: (request) => {
-      const origin = request?.headers?.get('origin');
-      const trusted = [baseURL, config.corsOrigin, config.webAppUrl].filter(Boolean);
-      if (origin) {
-        trusted.push(origin);
+      let requestURLOrigin: string | null;
+      try {
+        requestURLOrigin = request?.url ? new URL(request.url).origin : null;
+      } catch {
+        requestURLOrigin = null;
       }
-      return trusted;
+      return trustedAuthOrigins(baseURL, request?.headers?.get('origin') ?? null, requestURLOrigin);
     },
   });
 
   return { auth, db };
+}
+
+/** Адреса сайта, с которых можно входить. В разработке дополнительно localhost на любом порту. */
+export function trustedAuthOrigins(
+  baseURL: string,
+  requestOrigin: string | null,
+  requestURLOrigin: string | null = null,
+): string[] {
+  const trusted = new Set<string>(['https://ketner.org', 'https://www.ketner.org']);
+  for (const raw of [
+    baseURL,
+    config.corsOrigin,
+    config.webAppUrl,
+    process.env.RENDER_EXTERNAL_URL,
+  ]) {
+    if (!raw) continue;
+    try {
+      trusted.add(new URL(raw).origin);
+    } catch {
+      // не адрес — пропускаем
+    }
+  }
+  if (!isProduction) {
+    for (const origin of [requestOrigin, requestURLOrigin]) {
+      if (origin && /^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin)) trusted.add(origin);
+    }
+  }
+  return [...trusted];
 }
 
 /**
@@ -252,7 +292,9 @@ export async function initAuthDatabase(
 
   try {
     for (const vipEmail of config.vipEmails) {
-      defaultAuthDb?.prepare?.('UPDATE user SET plan = ? WHERE email = ?')?.run?.('ultra', vipEmail);
+      defaultAuthDb
+        ?.prepare?.('UPDATE user SET plan = ? WHERE email = ?')
+        ?.run?.('ultra', vipEmail);
     }
   } catch {
     // База данных может быть in-memory в тестах или без sqlite

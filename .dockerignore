@@ -15,5 +15,10 @@ apps/*/.env
 .DS_Store
 Thumbs.db
 coverage
+<<<<<<< HEAD
 .claude
 .taste-skill
+=======
+# локальные данные mock-API (пользователи, сессии, диалоги) в образ не копируются
+apps/mock-api/data
+>>>>>>> b31465b6170500ec0aadbda2fb9044027ce6ba86

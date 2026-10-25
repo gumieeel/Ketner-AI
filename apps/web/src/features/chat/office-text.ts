@@ -51,7 +51,9 @@ function readZipEntries(view: DataView): ZipEntry[] | null {
     const extraLength = view.getUint16(pos + 30, true);
     const commentLength = view.getUint16(pos + 32, true);
     const localOffset = view.getUint32(pos + 42, true);
-    const name = decoder.decode(new Uint8Array(view.buffer, view.byteOffset + pos + 46, nameLength));
+    const name = decoder.decode(
+      new Uint8Array(view.buffer, view.byteOffset + pos + 46, nameLength),
+    );
     entries.push({ name, method, compressedSize, uncompressedSize, localOffset });
     pos += 46 + nameLength + extraLength + commentLength;
   }
@@ -68,7 +70,11 @@ async function inflateRaw(data: Uint8Array): Promise<Uint8Array> {
   return new Uint8Array(await new Response(stream).arrayBuffer());
 }
 
-async function readEntry(view: DataView, bytes: Uint8Array, entry: ZipEntry): Promise<string | null> {
+async function readEntry(
+  view: DataView,
+  bytes: Uint8Array,
+  entry: ZipEntry,
+): Promise<string | null> {
   if (entry.uncompressedSize > MAX_ENTRY_BYTES) return null;
   const pos = entry.localOffset;
   if (pos + 30 > view.byteLength || view.getUint32(pos, true) !== 0x04034b50) return null;
@@ -114,14 +120,19 @@ function docxToText(xml: string): string {
   const paragraphs: string[] = [];
   for (const para of xml.matchAll(/<w:p[ >][\s\S]*?<\/w:p>/g)) {
     let text = '';
-    for (const token of para[0].matchAll(/<w:t(?:\s[^>]*)?>([\s\S]*?)<\/w:t>|<w:tab\/>|<w:br\/>|<w:cr\/>/g)) {
+    for (const token of para[0].matchAll(
+      /<w:t(?:\s[^>]*)?>([\s\S]*?)<\/w:t>|<w:tab\/>|<w:br\/>|<w:cr\/>/g,
+    )) {
       if (token[0].startsWith('<w:tab')) text += '\t';
       else if (token[0].startsWith('<w:br') || token[0].startsWith('<w:cr')) text += '\n';
       else text += decodeXml(token[1] ?? '');
     }
     paragraphs.push(text);
   }
-  return paragraphs.join('\n').replace(/\n{3,}/g, '\n\n').trim();
+  return paragraphs
+    .join('\n')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
 }
 
 function pptxSlideToText(xml: string): string {
@@ -262,7 +273,9 @@ export async function extractOfficeText(
 
     text = text.trim();
     if (!text) return null;
-    return text.length > maxChars ? `${text.slice(0, maxChars)}\n\n... [текст документа обрезан]` : text;
+    return text.length > maxChars
+      ? `${text.slice(0, maxChars)}\n\n... [текст документа обрезан]`
+      : text;
   } catch {
     return null;
   }

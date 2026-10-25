@@ -17,17 +17,21 @@ services:
         generateValue: true
       - key: DATABASE_URL
         sync: false
-      - key: SUPABASE_URL
-        sync: false
-      - key: SUPABASE_PUBLISHABLE_KEY
-        sync: false
-      - key: SUPABASE_SECRET_KEY
-        sync: false
       - key: BETTER_AUTH_API_KEY
+        sync: false
+      - key: OPENROUTER_API_KEY
         sync: false
       - key: ANTHROPIC_API_KEY
         sync: false
-      - key: OPENROUTER_API_KEY
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: GOOGLE_API_KEY
+        sync: false
+      - key: CLOUDFLARE_ACCOUNT_ID
+        sync: false
+      - key: CLOUDFLARE_API_TOKEN
+        sync: false
+      - key: RUNWARE_API_KEY
         sync: false
       - key: TELEGRAM_BOT_TOKEN
         sync: false
@@ -48,6 +52,18 @@ services:
       - key: ADMIN_API_KEY
         generateValue: true
       - key: ADMIN_EMAILS
+        sync: false
+      - key: SUPPORT_ADMIN_CHAT_ID
+        sync: false
+      - key: SMTP_HOST
+        sync: false
+      - key: SMTP_PORT
+        sync: false
+      - key: SMTP_USER
+        sync: false
+      - key: SMTP_PASS
+        sync: false
+      - key: MAIL_FROM
         sync: false
       - key: VIP_EMAILS
         sync: false

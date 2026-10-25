@@ -24,10 +24,36 @@ import type { UserStore } from '../store/user-store.js';
 import type { ModelPricing } from '../ai/gateway-types.js';
 import { CurrencyService } from '../services/currency.js';
 import { PLANS, LEGACY_PLANS } from './billing.js';
-import { isAdminUser } from '../services/vip.js';
+import { resolveBillingPlan } from '../services/plan-resolver.js';
+import { isAdminUser, isAdminEmail, isVipEmail } from '../services/vip.js';
 import { EntitlementService } from '../services/entitlement.js';
 import type { PlanId } from '../types.js';
 import { defaultCircuitBreaker, CircuitBreaker } from '../ai/circuit-breaker.js';
+import {
+  computeRegistrationStats,
+  REGISTRATION_PERIODS,
+  type RegistrationPeriod,
+} from '../services/registration-stats.js';
+import {
+  SIGNUP_METHODS,
+  type SignupChannel,
+  type SignupMethod,
+} from '../services/signup-attribution.js';
+
+const SIGNUP_CHANNELS: readonly SignupChannel[] = [
+  'paid',
+  'organic',
+  'social',
+  'referral',
+  'email',
+  'campaign',
+  'direct',
+  'unknown',
+];
+
+function queryString(value: unknown): string | undefined {
+  return typeof value === 'string' && value.trim() ? value.trim().slice(0, 120) : undefined;
+}
 
 export interface AdminRouterDeps {
   registry?: ModelRegistry;
@@ -84,6 +110,8 @@ export function createAdminRouter({
       pricing?: ModelPricing;
       fallbackModelId?: string | null;
       providerModelId?: string;
+      /** Прямой путь: id модели у вендора и/или его цены (провайдер задан в реестре). */
+      direct?: { modelId?: string; pricing?: ModelPricing } | null;
     };
 
     if (typeof body.enabled === 'boolean') {
@@ -100,6 +128,18 @@ export function createAdminRouter({
 
     if (body.providerModelId) {
       model.providerModelId = body.providerModelId;
+    }
+
+    if (body.direct === null) {
+      delete model.direct;
+    } else if (body.direct && model.direct) {
+      model.direct = {
+        ...model.direct,
+        ...(typeof body.direct.modelId === 'string' && body.direct.modelId
+          ? { modelId: body.direct.modelId }
+          : {}),
+        ...(body.direct.pricing ? { pricing: body.direct.pricing } : {}),
+      };
     }
 
     registry.upsert(model);
@@ -133,7 +173,9 @@ export function createAdminRouter({
     circuitBreaker.reset(provider);
     res.json({
       success: true,
-      message: provider ? `Circuit breaker для ${provider} сброшен` : 'Все circuit breakers сброшены',
+      message: provider
+        ? `Circuit breaker для ${provider} сброшен`
+        : 'Все circuit breakers сброшены',
     });
   });
 
@@ -154,7 +196,7 @@ export function createAdminRouter({
     const allUsers = userStore.list();
     const planPricesUsd: Record<string, number> = {};
     for (const plan of [...PLANS, ...LEGACY_PLANS]) {
-      planPricesUsd[plan.id] = CurrencyService.rubToUsd(plan.priceMonthly);
+      planPricesUsd[plan.id] = plan.priceMonthly;
     }
 
     const metrics = usageStore.getGatewayMetrics({
@@ -172,6 +214,11 @@ export function createAdminRouter({
         };
       }),
       planPricesUsd,
+      // Имя и движок модели нужны сводке за 30 дней: по движку видно вендора и порог его кэша.
+      describeModel: (modelId) => {
+        const entry = registry.get(modelId);
+        return { name: entry?.name ?? null, engineId: entry?.providerModelId ?? modelId };
+      },
     });
 
     const feedbackAnalytics = feedbackStore.getAnalytics({ from, to });
@@ -216,12 +263,12 @@ export function createAdminRouter({
     const currentUser = userStore.findById(userId);
     const userPlan = currentSub?.plan ?? currentUser?.plan ?? 'free';
 
-    // 2. Получение цены тарифа в рублях из каталога
+    // 2. Цена тарифа в долларах из каталога (каноническая валюта), рубли только для справки
     const planItem = [...PLANS, ...LEGACY_PLANS].find((p) => p.id === userPlan);
-    const priceRub = planItem?.priceMonthly ?? 0;
+    const autoPlanPriceUsd = planItem?.priceMonthly ?? 0;
+    const priceRub = Math.round(CurrencyService.usdToRub(autoPlanPriceUsd));
 
-    // 3. Автоматическая конвертация в USD по актуальному курсу
-    const autoPlanPriceUsd = CurrencyService.rubToUsd(priceRub);
+    // 3. Цена берётся напрямую, конвертация не нужна
 
     // 4. Опциональный ручной override через query.planPrice для тестирования
     const planPrice =
@@ -272,8 +319,10 @@ export function createAdminRouter({
 
   // 8. Список пользователей с кратким статусом, лимитами и расходом
   router.get('/users', (req: Request, res: Response): void => {
-    const search = typeof req.query.search === 'string' ? req.query.search.trim().toLowerCase() : '';
-    const planFilter = typeof req.query.plan === 'string' ? req.query.plan.trim().toLowerCase() : '';
+    const search =
+      typeof req.query.search === 'string' ? req.query.search.trim().toLowerCase() : '';
+    const planFilter =
+      typeof req.query.plan === 'string' ? req.query.plan.trim().toLowerCase() : '';
     const page = Math.max(1, parseInt(String(req.query.page ?? '1'), 10) || 1);
     const pageSize = Math.max(1, parseInt(String(req.query.pageSize ?? '50'), 10) || 50);
 
@@ -369,6 +418,50 @@ export function createAdminRouter({
     });
   });
 
+  // 8b. Регистрации: по времени, по способу входа и источнику, последние аккаунты
+  router.get('/registrations', (req: Request, res: Response): void => {
+    const rawPeriod = queryString(req.query.period);
+    const period: RegistrationPeriod = (REGISTRATION_PERIODS as readonly string[]).includes(
+      rawPeriod ?? '',
+    )
+      ? (rawPeriod as RegistrationPeriod)
+      : '30d';
+    const rawMethod = queryString(req.query.method);
+    const rawChannel = queryString(req.query.channel);
+    const method = (SIGNUP_METHODS as readonly string[]).includes(rawMethod ?? '')
+      ? (rawMethod as SignupMethod)
+      : undefined;
+    const channel = (SIGNUP_CHANNELS as readonly string[]).includes(rawChannel ?? '')
+      ? (rawChannel as SignupChannel)
+      : undefined;
+    const source =
+      typeof req.query.source === 'string' ? req.query.source.slice(0, 120) : undefined;
+    const limit = parseInt(String(req.query.limit ?? '50'), 10) || 50;
+    const offset = parseInt(String(req.query.offset ?? '0'), 10) || 0;
+
+    const stored = userStore.getAllStoredUsers?.() ?? [];
+    // Тариф профиля с проверкой срока подписки — то же правило, что при входе (без записи).
+    const planOf = (user: { id: string; plan: PlanId }): string =>
+      resolveBillingPlan({ storedPlan: user.plan, subscription: subscriptionStore.get(user.id) })
+        .plan;
+
+    const stats = computeRegistrationStats(stored, {
+      period,
+      timeZone: queryString(req.query.tz) ?? 'UTC',
+      filters: { method, channel, source },
+      limit,
+      offset,
+      planOf,
+      // VIP и администраторы получают тариф без оплаты — в конверсию не входят.
+      isPaid: (user) =>
+        !(user.isVip ?? isVipEmail(user.email)) &&
+        !(user.isAdmin ?? isAdminEmail(user.email)) &&
+        planOf(user) !== 'free',
+    });
+
+    res.json(stats);
+  });
+
   // 9. Детальная карточка пользователя
   router.get('/users/:id', (req: Request, res: Response): void => {
     const userId = String(req.params.id);
@@ -385,14 +478,12 @@ export function createAdminRouter({
     const entitlements = EntitlementService.getEntitlements(effectivePlan);
     const snapshot = usageStore.getFairUseSnapshot(user.id);
 
-    // 1. Получение цены тарифа в рублях из каталога
+    // 1. Цена тарифа в долларах из каталога (каноническая валюта), рубли только для справки
     const planItem =
       [...PLANS, ...LEGACY_PLANS].find((p) => p.id === effectivePlan) ??
       [...PLANS, ...LEGACY_PLANS].find((p) => p.id === rawPlan);
-    const priceRub = planItem?.priceMonthly ?? 0;
-
-    // 2. Автоматическая конвертация в USD по актуальному курсу
-    const autoPlanPriceUsd = CurrencyService.rubToUsd(priceRub);
+    const autoPlanPriceUsd = planItem?.priceMonthly ?? 0;
+    const priceRub = Math.round(CurrencyService.usdToRub(autoPlanPriceUsd));
 
     // 3. Опциональный ручной override через query.planPrice для тестирования
     const planPrice =
@@ -511,7 +602,15 @@ export function createAdminRouter({
       return;
     }
 
-    const VALID_PLANS: PlanId[] = ['free', 'gpt-pro', 'claude-pro', 'gemini-pro', 'ultra', 'plus', 'pro'];
+    const VALID_PLANS: PlanId[] = [
+      'free',
+      'gpt-pro',
+      'claude-pro',
+      'gemini-pro',
+      'ultra',
+      'plus',
+      'pro',
+    ];
     if (body.plan !== undefined) {
       if (typeof body.plan !== 'string' || !VALID_PLANS.includes(body.plan as PlanId)) {
         sendError(res, 400, 'invalid_plan', `Недопустимый тариф: ${body.plan}`);

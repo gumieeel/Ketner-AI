@@ -7,6 +7,7 @@ import {
   commitDirectlyToGitHub,
   createGitHubPullRequest,
 } from '../features/chat/file-operations';
+import type { LocalDirectoryHandle } from '../features/chat/file-operations';
 import type { WorkspaceContext } from '../features/chat/types';
 import { useWorkspace } from '../features/chat/workspace-store';
 
@@ -171,12 +172,13 @@ const mode = "production";
         getFileHandle: vi.fn(async () => mockFileHandle),
       };
 
+      // Заглушка реализует только то, что нужно для записи одного файла.
       const mockRootHandle = {
-        queryPermission: vi.fn(async () => 'granted'),
-        requestPermission: vi.fn(async () => 'granted'),
+        queryPermission: vi.fn(async () => 'granted' as const),
+        requestPermission: vi.fn(async () => 'granted' as const),
         getDirectoryHandle: vi.fn(async () => mockSubDirHandle),
         getFileHandle: vi.fn(async () => mockFileHandle),
-      };
+      } as unknown as LocalDirectoryHandle;
 
       const result = await applyLocalChanges(
         mockWorkspace,
@@ -196,16 +198,20 @@ const mode = "production";
 
       // Проверяем, что состояние стора обновилось
       const updatedWs = useWorkspace.getState().activeWorkspace;
-      expect(updatedWs?.files.find((f) => f.path === 'src/new.ts')?.content).toBe('export const X = 42;');
+      expect(updatedWs?.files.find((f) => f.path === 'src/new.ts')?.content).toBe(
+        'export const X = 42;',
+      );
     });
   });
 
   describe('local-writer: безопасность записи', () => {
     function makeRoot(initial: Record<string, string>) {
       const disk: Record<string, string> = { ...initial };
-      // Явный `any`: фабрика рекурсивна (каталог возвращает вложенные каталоги), иначе TS7023.
-      const dirFor = (prefix: string): any => ({
-        getDirectoryHandle: vi.fn(async (name: string) => dirFor(prefix ? `${prefix}/${name}` : name)),
+      // Явный тип результата: фабрика рекурсивна (каталог возвращает вложенные каталоги), иначе TS7023.
+      const dirFor = (prefix: string): LocalDirectoryHandle => ({
+        getDirectoryHandle: vi.fn(async (name: string) =>
+          dirFor(prefix ? `${prefix}/${name}` : name),
+        ),
         getFileHandle: vi.fn(async (name: string, opts?: { create?: boolean }) => {
           const path = prefix ? `${prefix}/${name}` : name;
           if (!(path in disk) && !opts?.create) throw new Error('NotFoundError');
@@ -223,9 +229,9 @@ const mode = "production";
           delete disk[prefix ? `${prefix}/${name}` : name];
         }),
       });
-      const root = {
-        queryPermission: vi.fn(async () => 'granted'),
-        requestPermission: vi.fn(async () => 'granted'),
+      const root: LocalDirectoryHandle = {
+        queryPermission: vi.fn(async () => 'granted' as const),
+        requestPermission: vi.fn(async () => 'granted' as const),
         ...dirFor(''),
       };
       return { root, disk };
@@ -312,34 +318,33 @@ const mode = "production";
 
       useWorkspace.setState({ activeWorkspace: mockWorkspace });
 
-      global.fetch = vi.fn(async (url: any, opts?: any) => {
+      global.fetch = vi.fn(async (url: RequestInfo | URL, opts?: RequestInit) => {
         const u = url.toString();
         if (u.includes('/git/ref/heads/main')) {
-          return { ok: true, json: async () => ({ object: { sha: 'base-commit-sha-123' } }) } as any;
+          return Response.json({ object: { sha: 'base-commit-sha-123' } });
         }
         if (u.includes('/git/commits/base-commit-sha-123')) {
-          return { ok: true, json: async () => ({ tree: { sha: 'base-tree-sha-456' } }) } as any;
+          return Response.json({ tree: { sha: 'base-tree-sha-456' } });
         }
         if (u.includes('/git/blobs')) {
-          return { ok: true, json: async () => ({ sha: 'new-blob-sha-789' }) } as any;
+          return Response.json({ sha: 'new-blob-sha-789' });
         }
         if (u.includes('/git/trees')) {
-          return { ok: true, json: async () => ({ sha: 'new-tree-sha-012' }) } as any;
+          return Response.json({ sha: 'new-tree-sha-012' });
         }
         if (u.includes('/git/commits')) {
-          return { ok: true, json: async () => ({ sha: 'final-commit-sha-345' }) } as any;
+          return Response.json({ sha: 'final-commit-sha-345' });
         }
         if (u.includes('/git/refs/heads/main') && opts?.method === 'PATCH') {
-          return { ok: true, json: async () => ({ object: { sha: 'final-commit-sha-345' } }) } as any;
+          return Response.json({ object: { sha: 'final-commit-sha-345' } });
         }
-        return { ok: false, status: 404 } as any;
+        return new Response(null, { status: 404 });
       });
 
       const res = await commitDirectlyToGitHub({
         owner: 'testowner',
         repo: 'testrepo',
         branch: 'main',
-        token: 'ghp_fake_token',
         changes: [
           {
             action: 'write',
@@ -350,7 +355,18 @@ const mode = "production";
       });
 
       expect(res.commitSha).toBe('final-commit-sha-345');
-      expect(res.url).toContain('https://github.com/testowner/testrepo/commit/final-commit-sha-345');
+      // Всё идёт через прокси сервера: токена в браузере нет, адрес GitHub напрямую не вызывается.
+      const calls = vi.mocked(global.fetch).mock.calls;
+      expect(calls.length).toBeGreaterThan(0);
+      for (const [url, init] of calls) {
+        expect(String(url)).toMatch(/^\/api\/github\/api\/repos\/testowner\/testrepo\//);
+        expect(JSON.stringify((init as RequestInit | undefined)?.headers ?? {})).not.toMatch(
+          /token /i,
+        );
+      }
+      expect(res.url).toContain(
+        'https://github.com/testowner/testrepo/commit/final-commit-sha-345',
+      );
 
       // Проверяем обновление стора
       const updatedWs = useWorkspace.getState().activeWorkspace;
@@ -371,33 +387,32 @@ const mode = "production";
       useWorkspace.setState({ activeWorkspace: mockWorkspace });
 
       let committedBlob = '';
-      global.fetch = vi.fn(async (url: any, opts?: any) => {
+      global.fetch = vi.fn(async (url: RequestInfo | URL, opts?: RequestInit) => {
         const u = url.toString();
         if (u.includes('/git/ref/heads/main')) {
-          return { ok: true, json: async () => ({ object: { sha: 'base-sha' } }) } as any;
+          return Response.json({ object: { sha: 'base-sha' } });
         }
         if (u.includes('/git/commits/base-sha')) {
-          return { ok: true, json: async () => ({ tree: { sha: 'base-tree' } }) } as any;
+          return Response.json({ tree: { sha: 'base-tree' } });
         }
         if (u.includes('/contents/src/a.ts?ref=base-sha')) {
           // В репозитории файл уже изменился другим человеком.
-          return { ok: true, text: async () => 'const a = 1;\nconst teammate = 42;\n' } as any;
+          return new Response('const a = 1;\nconst teammate = 42;\n');
         }
         if (u.includes('/git/blobs')) {
-          committedBlob = JSON.parse(opts.body).content;
-          return { ok: true, json: async () => ({ sha: 'blob' }) } as any;
+          committedBlob = JSON.parse(String(opts?.body)).content;
+          return Response.json({ sha: 'blob' });
         }
-        if (u.includes('/git/trees')) return { ok: true, json: async () => ({ sha: 'tree' }) } as any;
-        if (u.includes('/git/commits')) return { ok: true, json: async () => ({ sha: 'commit' }) } as any;
-        if (u.includes('/git/refs/heads/main')) return { ok: true, json: async () => ({}) } as any;
-        return { ok: false, status: 404 } as any;
+        if (u.includes('/git/trees')) return Response.json({ sha: 'tree' });
+        if (u.includes('/git/commits')) return Response.json({ sha: 'commit' });
+        if (u.includes('/git/refs/heads/main')) return Response.json({});
+        return new Response(null, { status: 404 });
       });
 
       await commitDirectlyToGitHub({
         owner: 'testowner',
         repo: 'testrepo',
         branch: 'main',
-        token: 'ghp_fake_token',
         changes: [
           {
             action: 'replace',
@@ -427,16 +442,18 @@ const mode = "production";
         },
       });
       let blobCalls = 0;
-      global.fetch = vi.fn(async (url: any) => {
+      global.fetch = vi.fn(async (url: RequestInfo | URL) => {
         const u = url.toString();
-        if (u.includes('/git/ref/heads/main')) return { ok: true, json: async () => ({ object: { sha: 'base-sha' } }) } as any;
-        if (u.includes('/git/commits/base-sha')) return { ok: true, json: async () => ({ tree: { sha: 'base-tree' } }) } as any;
-        if (u.includes('/contents/')) return { ok: true, text: async () => 'совсем другое содержимое' } as any;
+        if (u.includes('/git/ref/heads/main'))
+          return Response.json({ object: { sha: 'base-sha' } });
+        if (u.includes('/git/commits/base-sha'))
+          return Response.json({ tree: { sha: 'base-tree' } });
+        if (u.includes('/contents/')) return new Response('совсем другое содержимое');
         if (u.includes('/git/blobs')) {
           blobCalls++;
-          return { ok: true, json: async () => ({ sha: 'blob' }) } as any;
+          return Response.json({ sha: 'blob' });
         }
-        return { ok: false, status: 404 } as any;
+        return new Response(null, { status: 404 });
       });
 
       await expect(
@@ -444,7 +461,6 @@ const mode = "production";
           owner: 'testowner',
           repo: 'testrepo',
           branch: 'main',
-          token: 'ghp_fake_token',
           changes: [
             {
               action: 'replace',
@@ -471,43 +487,39 @@ const mode = "production";
 
       useWorkspace.setState({ activeWorkspace: mockWorkspace });
 
-      global.fetch = vi.fn(async (url: any) => {
+      global.fetch = vi.fn(async (url: RequestInfo | URL) => {
         const u = url.toString();
         if (u.includes('/git/ref/heads/main')) {
-          return { ok: true, json: async () => ({ object: { sha: 'base-commit-sha-123' } }) } as any;
+          return Response.json({ object: { sha: 'base-commit-sha-123' } });
         }
         if (u.includes('/git/commits/base-commit-sha-123')) {
-          return { ok: true, json: async () => ({ tree: { sha: 'base-tree-sha-456' } }) } as any;
+          return Response.json({ tree: { sha: 'base-tree-sha-456' } });
         }
         if (u.includes('/git/blobs')) {
-          return { ok: true, json: async () => ({ sha: 'blob-sha' }) } as any;
+          return Response.json({ sha: 'blob-sha' });
         }
         if (u.includes('/git/trees')) {
-          return { ok: true, json: async () => ({ sha: 'tree-sha' }) } as any;
+          return Response.json({ sha: 'tree-sha' });
         }
         if (u.includes('/git/commits')) {
-          return { ok: true, json: async () => ({ sha: 'commit-sha' }) } as any;
+          return Response.json({ sha: 'commit-sha' });
         }
         if (u.includes('/git/refs')) {
-          return { ok: true, json: async () => ({ ref: 'refs/heads/ai-patch-branch' }) } as any;
+          return Response.json({ ref: 'refs/heads/ai-patch-branch' });
         }
         if (u.includes('/pulls')) {
-          return {
-            ok: true,
-            json: async () => ({
-              number: 42,
-              html_url: 'https://github.com/testowner/testrepo/pull/42',
-            }),
-          } as any;
+          return Response.json({
+            number: 42,
+            html_url: 'https://github.com/testowner/testrepo/pull/42',
+          });
         }
-        return { ok: false, status: 404 } as any;
+        return new Response(null, { status: 404 });
       });
 
       const res = await createGitHubPullRequest({
         owner: 'testowner',
         repo: 'testrepo',
         branch: 'main',
-        token: 'ghp_fake_token',
         title: 'New AI feature',
         changes: [
           {

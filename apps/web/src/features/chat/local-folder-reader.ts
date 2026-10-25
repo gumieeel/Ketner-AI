@@ -1,18 +1,63 @@
 import type { WorkspaceContext, WorkspaceFile } from './types';
 import { getFileExtension } from './attachment-utils';
-import { registerDirectoryHandle } from './file-operations/local-writer';
+import { registerDirectoryHandle, type LocalDirectoryHandle } from './file-operations/local-writer';
 import { isSensitivePath } from './file-operations/path-safety';
 
 const IGNORED_NAMES = new Set([
-  'node_modules', '.git', 'dist', 'build', '.next', 'out', 'target',
-  '.turbo', '.cache', 'coverage', '.gemini', 'venv', '__pycache__',
-  '.idea', '.vscode', '.DS_Store', 'package-lock.json', 'yarn.lock', 'pnpm-lock.yaml',
+  'node_modules',
+  '.git',
+  'dist',
+  'build',
+  '.next',
+  'out',
+  'target',
+  '.turbo',
+  '.cache',
+  'coverage',
+  '.gemini',
+  'venv',
+  '__pycache__',
+  '.idea',
+  '.vscode',
+  '.DS_Store',
+  'package-lock.json',
+  'yarn.lock',
+  'pnpm-lock.yaml',
 ]);
 
 const CODE_EXTENSIONS = new Set([
-  'ts', 'tsx', 'js', 'jsx', 'json', 'py', 'rs', 'go', 'html', 'css', 'scss',
-  'c', 'cpp', 'h', 'hpp', 'cs', 'java', 'kt', 'swift', 'php', 'rb', 'sql',
-  'sh', 'bash', 'yaml', 'yml', 'toml', 'env', 'xml', 'md', 'graphql', 'txt',
+  'ts',
+  'tsx',
+  'js',
+  'jsx',
+  'json',
+  'py',
+  'rs',
+  'go',
+  'html',
+  'css',
+  'scss',
+  'c',
+  'cpp',
+  'h',
+  'hpp',
+  'cs',
+  'java',
+  'kt',
+  'swift',
+  'php',
+  'rb',
+  'sql',
+  'sh',
+  'bash',
+  'yaml',
+  'yml',
+  'toml',
+  'env',
+  'xml',
+  'md',
+  'graphql',
+  'txt',
 ]);
 
 const MAX_TOTAL_FILES = 120;
@@ -84,28 +129,43 @@ export async function readFolderFromFiles(fileList: FileList | File[]): Promise<
   };
 }
 
+/** Элемент папки при обходе (File System Access API). */
+type ScannedEntry =
+  | { kind: 'file'; name: string; getFile(): Promise<File> }
+  | ({ kind: 'directory'; name: string } & ScannableDirectory);
+
+/** Папка, которую можно обойти: `values()` описан в DOM.AsyncIterable, который проект не подключает. */
+interface ScannableDirectory {
+  name: string;
+  values(): AsyncIterable<ScannedEntry>;
+}
+
+type PickedDirectory = ScannableDirectory & LocalDirectoryHandle;
+
+type DirectoryPicker = (options: { mode: 'read' | 'readwrite' }) => Promise<PickedDirectory>;
+
 /**
  * Читает папку через File System Access API (window.showDirectoryPicker) в Chrome/Edge/Opera.
  */
 export async function pickFolderNative(): Promise<WorkspaceContext> {
-  if (typeof (window as unknown as { showDirectoryPicker?: unknown }).showDirectoryPicker !== 'function') {
+  const showDirectoryPicker = (window as Window & { showDirectoryPicker?: DirectoryPicker })
+    .showDirectoryPicker;
+  if (typeof showDirectoryPicker !== 'function') {
     throw new Error('showDirectoryPicker_not_supported');
   }
 
-  let rootHandle: any;
+  let rootHandle: PickedDirectory;
   try {
-    // @ts-expect-error File System Access API
-    rootHandle = await window.showDirectoryPicker({ mode: 'readwrite' });
-  } catch (err: any) {
-    if (err?.name === 'AbortError') throw err;
-    // @ts-expect-error File System Access API
-    rootHandle = await window.showDirectoryPicker({ mode: 'read' });
+    rootHandle = await showDirectoryPicker.call(window, { mode: 'readwrite' });
+  } catch (err) {
+    if (err instanceof Error && err.name === 'AbortError') throw err;
+    rootHandle = await showDirectoryPicker.call(window, { mode: 'read' });
   }
 
   const folderName = rootHandle.name || 'Локальный проект';
   const collected: WorkspaceFile[] = [];
 
-  async function scanDirectory(dirHandle: any, currentPath: string) {
+  async function scanDirectory(dirHandle: ScannableDirectory, currentPath: string): Promise<void> {
     if (collected.length >= MAX_TOTAL_FILES) return;
 
     for await (const entry of dirHandle.values()) {

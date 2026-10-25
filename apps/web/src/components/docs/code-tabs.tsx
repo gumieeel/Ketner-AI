@@ -31,7 +31,12 @@ const TOKEN_CLASSES: Record<TokenKind, string> = {
 export function CodeTabs({ tabs, defaultTabId, className }: CodeTabsProps) {
   const { t } = useTranslation();
   const baseId = useId();
-  const initialIndex = defaultTabId ? Math.max(0, tabs.findIndex((tab) => tab.id === defaultTabId)) : 0;
+  const initialIndex = defaultTabId
+    ? Math.max(
+        0,
+        tabs.findIndex((tab) => tab.id === defaultTabId),
+      )
+    : 0;
   const [activeIndex, setActiveIndex] = useState(initialIndex);
   const tabRefs = useRef<Array<HTMLButtonElement | null>>([]);
   const activeTab = tabs[activeIndex] ?? tabs[0];
@@ -43,7 +48,7 @@ export function CodeTabs({ tabs, defaultTabId, className }: CodeTabsProps) {
   if (!activeTab) return null;
 
   const onKeyDown = (event: KeyboardEvent<HTMLDivElement>): void => {
-    let next = activeIndex;
+    let next: number;
     if (event.key === 'ArrowRight') next = (activeIndex + 1) % tabs.length;
     else if (event.key === 'ArrowLeft') next = (activeIndex - 1 + tabs.length) % tabs.length;
     else if (event.key === 'Home') next = 0;
@@ -55,7 +60,12 @@ export function CodeTabs({ tabs, defaultTabId, className }: CodeTabsProps) {
   };
 
   return (
-    <div className={cn('code-block my-4 overflow-hidden rounded-xl border border-stroke bg-surface shadow-xs', className)}>
+    <div
+      className={cn(
+        'code-block my-4 overflow-hidden rounded-xl border border-stroke bg-surface shadow-xs',
+        className,
+      )}
+    >
       <div className="flex min-h-10 items-center justify-between gap-2 border-b border-stroke bg-surface-2/80 pr-1.5 pl-2">
         {tabs.length > 1 ? (
           <div

@@ -4,12 +4,15 @@ import { config } from '../config.js';
 import { requireAuth } from '../middleware/auth.js';
 import { sendError } from '../middleware/errors.js';
 import {
+  STARS_PLANS,
   TelegramBotService,
-  calculateStars,
-  getPlanItem,
+  encodePayload,
   type TelegramBotDeps,
   type TelegramUpdate,
 } from '../telegram/bot.js';
+import { createMiniAppRouter } from './telegram-miniapp.js';
+import type { Mailer } from '../services/mailer.js';
+import { createTelegramAuthRouter } from './telegram-auth.js';
 import {
   TelegramSupportBotService,
   telegramSupportBotService as defaultSupportBotService,
@@ -57,6 +60,8 @@ function requireAdminUser(request: Request, response: Response, next: NextFuncti
 
 export interface TelegramRouterDeps extends TelegramBotDeps {
   botService?: TelegramBotService;
+  /** Письма с кодом привязки Telegram; в тестах — перехватчик. */
+  mailer?: Mailer;
   supportBotService?: TelegramSupportBotService;
   supportStore?: SupportStore;
 }
@@ -66,6 +71,9 @@ export function createTelegramRouter(deps: TelegramRouterDeps): Router {
   const botService = deps.botService ?? new TelegramBotService(deps);
   const supportBot = deps.supportBotService ?? defaultSupportBotService;
   const supportStore = deps.supportStore ?? defaultSupportStore;
+  // Заявки на возврат приходят администратору в бот поддержки, как обращения; ответы — оттуда же.
+  botService.attachAdminInbox(supportBot);
+  supportBot.attachRefundDesk(botService.refundDesk());
 
   // -------------------------------------------------------------
   // 1. ПЛАТЁЖНЫЙ БОТ (@Robo_kassa_bot)
@@ -85,57 +93,81 @@ export function createTelegramRouter(deps: TelegramRouterDeps): Router {
   /**
    * Официальный Webhook для Telegram Bot API (платежи).
    */
-  router.post('/telegram/webhook', requireTelegramSecret(config.telegramWebhookSecret), async (request: Request, response: Response): Promise<void> => {
-    const update = request.body as TelegramUpdate;
-    if (!update || typeof update !== 'object') {
-      sendError(response, 400, 'invalid_update', 'Некорректное тело обновления Telegram');
-      return;
-    }
+  router.post(
+    '/telegram/webhook',
+    requireTelegramSecret(config.telegramWebhookSecret),
+    async (request: Request, response: Response): Promise<void> => {
+      const update = request.body as TelegramUpdate;
+      if (!update || typeof update !== 'object') {
+        sendError(response, 400, 'invalid_update', 'Некорректное тело обновления Telegram');
+        return;
+      }
 
-    try {
-      const result = await botService.processUpdate(update);
-      response.json({ ok: true, result });
-    } catch (error) {
-      console.error('[Telegram Router] Ошибка обработки webhook:', error);
-      response.status(500).json({ ok: false, error: 'Internal webhook error' });
-    }
-  });
+      try {
+        const result = await botService.processUpdate(update);
+        response.json({ ok: true, result });
+      } catch (error) {
+        console.error('[Telegram Router] Ошибка обработки webhook:', error);
+        response.status(500).json({ ok: false, error: 'Internal webhook error' });
+      }
+    },
+  );
 
   /**
    * Эмуляция оплаты через Telegram Stars (для локального тестирования и демо без реальных денег).
    */
-  router.post('/telegram/simulate-payment', devOnly, async (request: Request, response: Response): Promise<void> => {
-    const planId = (request.body?.planId || 'plus') as PlanId;
-    const userId = (request.body?.userId || 'demo-user') as string;
-    const planItem = getPlanItem(planId);
-    const stars = planItem ? calculateStars(planItem.priceMonthly) : 0;
-
-    const fakeUpdate: TelegramUpdate = {
-      update_id: Date.now(),
-      message: {
-        message_id: Math.floor(Math.random() * 10000),
-        chat: { id: 12345678, type: 'private' },
-        date: Math.floor(Date.now() / 1000),
-        successful_payment: {
-          currency: 'XTR',
-          total_amount: stars,
-          invoice_payload: JSON.stringify({ planId, userId }),
-          telegram_payment_charge_id: `tg_charge_${Date.now()}`,
+  router.post(
+    '/telegram/simulate-payment',
+    devOnly,
+    async (request: Request, response: Response): Promise<void> => {
+      const rawPlan = String(request.body?.planId || 'plus');
+      const planId = (
+        (STARS_PLANS as readonly string[]).includes(rawPlan) ? rawPlan : 'plus'
+      ) as PlanId;
+      const userId = String(request.body?.userId || 'demo-user');
+      const invoice = botService.createStarsInvoice(userId, planId);
+      const fakeUpdate: TelegramUpdate = {
+        update_id: Date.now(),
+        message: {
+          message_id: Math.floor(Math.random() * 10000),
+          chat: { id: 12345678, type: 'private' },
+          date: Math.floor(Date.now() / 1000),
+          successful_payment: {
+            currency: 'XTR',
+            total_amount: invoice.starsAmount,
+            invoice_payload: encodePayload({
+              planId,
+              stars: invoice.starsAmount,
+              invoiceId: invoice.id,
+              userId,
+            }),
+            telegram_payment_charge_id: `tg_charge_${Date.now()}`,
+          },
         },
-      },
-    };
+      };
+      const result = await botService.processUpdate(fakeUpdate);
+      response.json({
+        ok: true,
+        result,
+        subscription: deps.subscriptionStore.get(userId),
+        user: deps.userStore.findById(userId),
+      });
+    },
+  );
 
-    const result = await botService.processUpdate(fakeUpdate);
-    const subscription = deps.subscriptionStore.get(userId);
-    const user = deps.userStore.findById(userId);
+  // Вход и привязка через Telegram для сайта.
+  router.use(createTelegramAuthRouter({ botService, userStore: deps.userStore }));
 
-    response.json({
-      ok: true,
-      result,
-      subscription,
-      user,
-    });
-  });
+  // Мини-приложение Telegram: кабинет подписки.
+  router.use(
+    createMiniAppRouter({
+      botService,
+      userStore: deps.userStore,
+      subscriptionStore: deps.subscriptionStore,
+      invoiceStore: deps.invoiceStore,
+      mailer: deps.mailer,
+    }),
+  );
 
   // -------------------------------------------------------------
   // 2. SUPPORT БОТ (@ketner_support_bot)
@@ -158,65 +190,78 @@ export function createTelegramRouter(deps: TelegramRouterDeps): Router {
   /**
    * Официальный Webhook для Telegram Support Bot API.
    */
-  router.post('/telegram/support/webhook', requireTelegramSecret(config.telegramSupportWebhookSecret), async (request: Request, response: Response): Promise<void> => {
-    const update = request.body as TelegramUpdate;
-    if (!update || typeof update !== 'object') {
-      sendError(response, 400, 'invalid_update', 'Некорректное тело обновления Telegram');
-      return;
-    }
+  router.post(
+    '/telegram/support/webhook',
+    requireTelegramSecret(config.telegramSupportWebhookSecret),
+    async (request: Request, response: Response): Promise<void> => {
+      const update = request.body as TelegramUpdate;
+      if (!update || typeof update !== 'object') {
+        sendError(response, 400, 'invalid_update', 'Некорректное тело обновления Telegram');
+        return;
+      }
 
-    try {
-      const result = await supportBot.processUpdate(update);
-      response.json({ ok: true, result });
-    } catch (error) {
-      console.error('[SupportBot Router] Ошибка обработки webhook:', error);
-      response.status(500).json({ ok: false, error: 'Internal support webhook error' });
-    }
-  });
+      try {
+        const result = await supportBot.processUpdate(update);
+        response.json({ ok: true, result });
+      } catch (error) {
+        console.error('[SupportBot Router] Ошибка обработки webhook:', error);
+        response.status(500).json({ ok: false, error: 'Internal support webhook error' });
+      }
+    },
+  );
 
   /**
    * Список обращений (тикеты).
    */
-  router.get('/telegram/support/tickets', requireAuth, requireAdminUser, (_request: Request, response: Response) => {
-    response.json({
-      openTickets: supportStore.listOpenTickets(),
-      allTickets: supportStore.listAllTickets(),
-    });
-  });
+  router.get(
+    '/telegram/support/tickets',
+    requireAuth,
+    requireAdminUser,
+    (_request: Request, response: Response) => {
+      response.json({
+        openTickets: supportStore.listOpenTickets(),
+        allTickets: supportStore.listAllTickets(),
+      });
+    },
+  );
 
   /**
    * Эмуляция отправки сообщения в поддержку (для тестов).
    */
-  router.post('/telegram/support/simulate-message', devOnly, async (request: Request, response: Response): Promise<void> => {
-    const text = (request.body?.text as string) || 'Тестовая жалоба от пользователя';
-    const userChatId = Number(request.body?.chatId || 10000001);
-    const username = (request.body?.username as string) || 'test_user';
+  router.post(
+    '/telegram/support/simulate-message',
+    devOnly,
+    async (request: Request, response: Response): Promise<void> => {
+      const text = (request.body?.text as string) || 'Тестовая жалоба от пользователя';
+      const userChatId = Number(request.body?.chatId || 10000001);
+      const username = (request.body?.username as string) || 'test_user';
 
-    const fakeUpdate: TelegramUpdate = {
-      update_id: Date.now(),
-      message: {
-        message_id: Math.floor(Math.random() * 10000),
-        chat: { id: userChatId, type: 'private' },
-        from: {
-          id: userChatId,
-          is_bot: false,
-          first_name: 'Тестовый',
-          username,
+      const fakeUpdate: TelegramUpdate = {
+        update_id: Date.now(),
+        message: {
+          message_id: Math.floor(Math.random() * 10000),
+          chat: { id: userChatId, type: 'private' },
+          from: {
+            id: userChatId,
+            is_bot: false,
+            first_name: 'Тестовый',
+            username,
+          },
+          date: Math.floor(Date.now() / 1000),
+          text,
         },
-        date: Math.floor(Date.now() / 1000),
-        text,
-      },
-    };
+      };
 
-    const result = await supportBot.processUpdate(fakeUpdate);
-    const activeTicket = supportStore.getActiveTicketForUser(userChatId);
+      const result = await supportBot.processUpdate(fakeUpdate);
+      const activeTicket = supportStore.getActiveTicketForUser(userChatId);
 
-    response.json({
-      ok: true,
-      result,
-      ticket: activeTicket,
-    });
-  });
+      response.json({
+        ok: true,
+        result,
+        ticket: activeTicket,
+      });
+    },
+  );
 
   return router;
 }

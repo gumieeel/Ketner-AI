@@ -19,7 +19,6 @@ interface WorkspaceStore {
   setAutoApply: (autoApply: boolean) => void;
   updateWorkspaceFiles: (updatedFiles: Array<{ path: string; content?: string }>) => void;
   removeWorkspaceFile: (path: string) => void;
-  setGitToken: (token: string) => void;
 }
 
 function loadInitialAutoApply(): boolean {
@@ -36,7 +35,8 @@ function loadInitialAutoApply(): boolean {
  * приводятся к путям относительно корня.
  */
 export function normalizeWorkspacePaths(ws: WorkspaceContext): WorkspaceContext {
-  if (ws.type !== 'local_folder' || !ws.name || !Array.isArray(ws.files) || ws.files.length === 0) return ws;
+  if (ws.type !== 'local_folder' || !ws.name || !Array.isArray(ws.files) || ws.files.length === 0)
+    return ws;
   const prefix = `${ws.name}/`;
   if (!ws.files.every((f) => f.path.startsWith(prefix))) return ws;
   return {
@@ -49,7 +49,13 @@ function loadInitialWorkspace(): WorkspaceContext | null {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) return null;
-    return normalizeWorkspacePaths(JSON.parse(raw) as WorkspaceContext);
+    // Ранние версии хранили здесь личный токен GitHub. Теперь доступ идёт через привязанный
+    // аккаунт на сервере, а старый токен из браузера убираем.
+    const { gitToken: legacyToken, ...stored } = JSON.parse(raw) as WorkspaceContext & {
+      gitToken?: string;
+    };
+    if (legacyToken !== undefined) localStorage.setItem(STORAGE_KEY, JSON.stringify(stored));
+    return normalizeWorkspacePaths(stored);
   } catch {
     return null;
   }
@@ -118,22 +124,6 @@ export const useWorkspace = create<WorkspaceStore>((set) => ({
   selectFile: (file) => set({ selectedFile: file }),
   setIsLinking: (isLinking) => set({ isLinking }),
   setLinkError: (linkError) => set({ linkError }),
-
-  setGitToken: (token) => {
-    set((state) => {
-      if (!state.activeWorkspace) return state;
-      const updated: WorkspaceContext = {
-        ...state.activeWorkspace,
-        gitToken: token,
-      };
-      try {
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(sanitizeWorkspaceForStorage(updated)));
-      } catch {
-        // noop
-      }
-      return { activeWorkspace: updated };
-    });
-  },
 
   updateWorkspaceFiles: (updatedFiles) => {
     set((state) => {

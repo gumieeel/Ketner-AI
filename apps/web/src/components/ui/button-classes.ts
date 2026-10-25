@@ -1,36 +1,25 @@
 import { cn } from '@/lib/cn';
 
-export type ButtonVariant = 'primary' | 'secondary' | 'outline' | 'ghost' | 'danger';
+export type ButtonVariant = 'primary' | 'secondary' | 'outline' | 'ghost' | 'danger' | 'ink';
 export type ButtonSize = 'sm' | 'md' | 'lg';
 
 const variantClasses: Record<ButtonVariant, string> = {
-  // Градиент бренда + мягкое свечение; на hover — чуть ярче и выше, на active — вдавливается.
-  primary: [
-    'bg-brand-gradient text-accent-text shadow-glow',
-    'hover:brightness-[1.07] hover:shadow-glow-lg hover:-translate-y-px',
-    'active:translate-y-0 active:scale-[0.985] active:brightness-95',
-  ].join(' '),
-  secondary: [
-    'bg-surface-2 text-text border border-stroke shadow-xs',
-    'hover:border-stroke-strong hover:bg-surface-3',
-    'active:scale-[0.985]',
-  ].join(' '),
-  outline: [
-    'border border-stroke-strong text-text bg-transparent',
-    'hover:bg-surface-2 hover:border-muted/50',
-    'active:scale-[0.985]',
-  ].join(' '),
-  ghost: 'text-muted hover:text-text hover:bg-surface-2 active:bg-surface-3 active:scale-[0.985]',
-  danger: [
-    'bg-danger text-danger-text shadow-xs',
-    'hover:brightness-110 active:scale-[0.985] active:brightness-95',
-  ].join(' '),
+  // Пастельный нефрит с тёмным текстом. Без свечения и подпрыгивания: на hover — светлее.
+  primary: 'bg-brand-gradient text-accent-text hover:bg-action-hover active:brightness-95',
+  secondary:
+    'border border-stroke bg-surface-2 text-text hover:border-stroke-strong hover:bg-surface-3',
+  outline:
+    'border border-stroke-strong bg-transparent text-text hover:border-muted/60 hover:bg-surface-2',
+  ghost: 'text-muted hover:bg-surface-2 hover:text-text active:bg-surface-3',
+  danger: 'bg-danger-solid text-danger-solid-text hover:bg-danger-solid-hover active:brightness-95',
+  // Тёмная кнопка для нефритовых панелей — одинакова в обеих темах.
+  ink: 'bg-[#0f1a16] text-[#ecefea] hover:bg-[#24302b] active:brightness-95',
 };
 
 const sizeClasses: Record<ButtonSize, string> = {
-  sm: 'h-9 px-3.5 text-[13px] gap-1.5 max-md:min-h-11',
-  md: 'h-10 px-4 text-sm gap-2 max-md:min-h-11',
-  lg: 'h-12 px-6 text-[15px] gap-2.5',
+  sm: 'h-9 gap-1.5 px-3.5 text-[14px] max-md:min-h-11',
+  md: 'h-10 gap-2 px-4 text-[14px] max-md:min-h-11',
+  lg: 'h-12 gap-2.5 px-5 text-[16px]',
 };
 
 /** Классы кнопки для ссылок (`<Link>` / `<a>`), чтобы они выглядели и вели себя как Button. */
@@ -47,7 +36,7 @@ export function buttonClasses({
 } = {}): string {
   return cn(
     'inline-flex select-none items-center justify-center whitespace-nowrap rounded-md font-medium',
-    'transition-[transform,box-shadow,filter,background-color,border-color,color] duration-200 ease-out-expo',
+    'transition-[filter,background-color,border-color,color] duration-150 ease-out-expo',
     'disabled:pointer-events-none disabled:opacity-50 disabled:shadow-none',
     variantClasses[variant],
     sizeClasses[size],

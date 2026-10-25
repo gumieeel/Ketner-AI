@@ -1,126 +1,97 @@
 # Модель данных
 
-Сущности описаны так, чтобы mock-хранилище и будущая реальная база данных совпадали по форме. Типы — целевые: на этапе 1 часть полей ещё не используется.
+Сервер держит данные в памяти, пишет их в файлы `apps/mock-api/data/` и зеркалирует в Postgres (см. [architecture.md](architecture.md#хранение-данных-память--postgres)). Типы — `apps/mock-api/src/types.ts`; схема для справки — `db/schema.ts`; настоящие `CREATE TABLE` — `db/sync.ts`, `code/postgres-driver.ts`, `images/image-store.ts`.
 
-Общие правила:
+Общие правила: `id` — строка (обычно UUID), даты — ISO 8601 в UTC, роли сообщений — `user` и `assistant`, удаление диалога удаляет его сообщения.
 
-- `id` — строка UUID v4.
-- Все даты — ISO 8601 в UTC (`2026-09-22T16:41:57.000Z`).
-- `Message.role` — только `user` или `assistant`.
-- Порядок сообщений задаёт история из запроса, а не сортировка по `createdAt`: часы клиента и сервера расходятся, и сортировка ломала бы ленту после правки. `createdAt` нужен только для отображения.
-- Удаление диалога каскадно удаляет его сообщения.
-
-## User
+## Основные сущности
 
 ```ts
+type PlanId = 'free' | 'plus' | 'pro' | 'ultra' | 'gpt-pro' | 'claude-pro' | 'gemini-pro'; // три последних — старые, приравнены к Pro
+
 interface User {
   id: string;
-  email: string;
+  email: string; // у старых Telegram-аккаунтов служебный tg-<id>@telegram.invalid
   name: string;
-  plan: 'free' | 'plus' | 'pro';
+  plan: PlanId; // источник правды о тарифе; срок проверяется по подписке
   createdAt: string;
+  isVip?: boolean; // тариф Ultra без оплаты
+  isAdmin?: boolean;
+  telegramChatId?: number | string;
+  telegramUsername?: string;
 }
-```
-
-Хранится: mock-API (в памяти или SQLite) + профиль в `localStorage` для мгновенной отрисовки. Пароль в открытом виде не хранится даже в заглушке: на этапе 3 сохраняется только его хеш (или запись делегируется реальной auth-системе).
-
-## Conversation
-
-```ts
-interface Conversation {
-  id: string;
-  userId: string;
-  title: string;
-  createdAt: string;
-  updatedAt: string;
-}
-```
-
-`title` формируется из первого сообщения пользователя, обрезается до 60 символов. `updatedAt` меняется при добавлении сообщения и используется для сортировки списка.
-
-## Message
-
-```ts
-type MessageRole = 'user' | 'assistant';
-type MessageStatus = 'pending' | 'streaming' | 'complete' | 'error';
-
-interface Message {
-  id: string;
-  conversationId: string;
-  role: MessageRole;
-  content: string;
-  createdAt: string;
-  status: MessageStatus;
-  modelId?: string;
-}
-```
-
-`status` нужен интерфейсу: во время стриминга сообщение существует в состоянии `streaming`, при остановке генерации или ошибке — `error`. На бэкенде сохраняется только итоговый вариант (`complete`).
-
-`id` сообщения пользователя приходит с клиента: так правка и повторная генерация не создают дублей. Ответ ассистента сохраняется с тем `id`, который сервер вернул в событии `done` — интерфейс заменяет им локальный идентификатор.
-
-Запрос `POST /api/chat/completions` передаёт историю целиком, и сервер заменяет ею сохранённую. Это опорный контракт этапа 2: остановка генерации сохраняет частичный ответ, правка переписывает контекст, повторная генерация просто присылает ту же историю ещё раз.
-
-## Subscription
-
-```ts
-type SubscriptionStatus = 'active' | 'trialing' | 'past_due' | 'canceled';
+// В хранилище также: salt и passwordHash (scrypt), signupMethod и signupAttribution (источник регистрации).
 
 interface Subscription {
   userId: string;
-  plan: 'free' | 'plus' | 'pro';
-  status: SubscriptionStatus;
-  renewsAt: string | null;
+  plan: PlanId;
+  status: 'active' | 'trialing' | 'past_due' | 'canceled';
+  renewsAt: string | null; // конец оплаченного периода; после него + 24 ч льготы тариф сводится к free
+}
+
+interface Conversation {
+  id: string;
+  userId: string; // id аккаунта или подписанный гостевой guest_…
+  title: string;
+  createdAt: string;
+  updatedAt: string;
+  contextSummary?: string; // сводка старой истории для окна контекста
+}
+
+interface Message {
+  id: string; // id сообщения пользователя приходит с клиента — правка и перегенерация не плодят дубли
+  conversationId: string;
+  role: 'user' | 'assistant';
+  content: string;
+  createdAt: string;
+  status: 'pending' | 'streaming' | 'complete' | 'error';
+  modelId?: string; // модель, которая реально ответила
+  attachments?: MessageAttachment[];
+  workspaceContext?: WorkspaceContext; // привязанный репозиторий или проект
+  finishReason?: 'stop' | 'length' | 'cancelled' | 'error';
+  canContinue?: boolean; // кнопка «Продолжить»
+  feedback?: 'like' | 'dislike';
 }
 ```
 
-Даже в заглушке статусы совпадают с тем, что отдают платёжные системы (см. `payment-integration-todo.md`), чтобы после подключения реальной оплаты не переписывать интерфейс.
+Порядок сообщений задаёт история из запроса: `POST /api/chat/completions` присылает её целиком, и сервер заменяет ею сохранённую. На этом держатся правка, перегенерация и сохранение частичного ответа при остановке.
 
-## Plan
+Права тарифа (лимиты, бюджеты, квоты) не хранятся у пользователя: они вычисляются из `plan` (`services/entitlement.ts`) с учётом бонуса за оплату криптой и купленных пакетов.
 
-```ts
-interface Plan {
-  id: 'free' | 'plus' | 'pro';
-  nameKey: string;
-  priceMonthly: number;
-  popular?: boolean;
-  bullets: Record<'ru' | 'en', string[]>;
-}
-```
+## Таблицы Postgres
 
-Сейчас — статический каталог `apps/web/src/features/billing/plans.ts`. На этапе 4 переезжает в `GET /api/plans` без изменения формы.
+| Таблица                                      | Что хранит                                                                                                                                                                                                                                                     |
+| -------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `user`, `session`, `account`, `verification` | Better Auth: вход через Google и GitHub, cookie-сессии                                                                                                                                                                                                         |
+| `ketner_users`                               | Аккаунты сайта: тариф, хеш пароля, VIP, админ, Telegram, способ и источник регистрации                                                                                                                                                                         |
+| `conversations`, `messages`                  | Диалоги и сообщения                                                                                                                                                                                                                                            |
+| `subscriptions`                              | Текущая подписка и срок                                                                                                                                                                                                                                        |
+| `feedbacks`                                  | Лайки и дизлайки ответов                                                                                                                                                                                                                                       |
+| `api_keys`                                   | Ключи `/v1`: только SHA-256 и префикс                                                                                                                                                                                                                          |
+| `revoked_tokens`                             | Bearer-токены, отозванные при выходе (SHA-256 и срок)                                                                                                                                                                                                          |
+| `github_connections`                         | Токены GitHub, зашифрованные AES-256-GCM                                                                                                                                                                                                                       |
+| `crypto_invoices`                            | Счета Trybit                                                                                                                                                                                                                                                   |
+| `ketner_docs`                                | Документы по пространствам: `payments` (журнал платежей), `stars_subscriptions`, `notification_prefs`, `premium_credits` (кредиты пакетов), `usage` (учёт расхода — от него считаются бюджеты и лимиты), `contact_messages`, `support_tickets`, `support_meta` |
+| `code_projects`, `code_project_files`        | Проекты Ketner Code (рабочая копия на диске поднимается отсюда)                                                                                                                                                                                                |
+| `generated_images`                           | Картинки (байты в `bytea`), не больше 300 на пользователя                                                                                                                                                                                                      |
+| `usage_metrics`                              | Создаётся, но не используется: учёт живёт в `ketner_docs` (`usage`)                                                                                                                                                                                            |
 
-## Session
+Таблицы и новые колонки создаются при старте сервера. Отдельных миграций нет: `db/migrations/0000_init.sql` и `drizzle-kit` остались от первого этапа и не отражают текущую схему.
 
-```ts
-interface Session {
-  token: string;
-  userId: string;
-  expiresAt: string;
-}
-```
+## Что не переживает деплой
 
-На этапе 1 не используется. На этапе 3 появится мок-JWT: три части, где подпись — фиктивная строка, а payload содержит `sub`, `email`, `plan`, `iat`, `exp`. Структура payload сохраняется при переходе на реальный провайдер.
+На Render диск стирается при каждом деплое, поэтому эти данные теряются:
 
-## Где что хранится
+| Данные                                              | Где                        | Последствие                                                                                                              |
+| --------------------------------------------------- | -------------------------- | ------------------------------------------------------------------------------------------------------------------------ |
+| Неоплаченные счета Stars и СБП                      | `data/invoices.json`       | Ссылка на счёт, выставленный до деплоя, не найдёт его; оплата звёздами всё равно проходит — данные лежат в самом платеже |
+| Семантический кэш ответов                           | `data/semantic-cache.json` | Кэш начинается заново                                                                                                    |
+| Счётчики лимитов частоты (вход, регистрация, гости) | память                     | Сбрасываются                                                                                                             |
+| Запросы входа через Telegram и коды привязки        | память                     | Начатый вход или привязку нужно повторить                                                                                |
+| Рабочие копии проектов Ketner Code                  | `data/projects`            | Поднимаются из Postgres при первом открытии                                                                              |
 
-| Данные               | Этап 1         | Этап 2-3                                                                              | Продакшн                      |
-| -------------------- | -------------- | ------------------------------------------------------------------------------------- | ----------------------------- |
-| Пользователи         | —              | `localStorage` + память mock-API                                                      | Postgres / Supabase Auth      |
-| Диалоги и сообщения  | —              | JSON-файл mock-API (`apps/mock-api/data/store.json`); в браузере — состояние в памяти | Postgres                      |
-| Настройки интерфейса | `localStorage` | `localStorage`                                                                        | `localStorage` + профиль      |
-| Подписка             | `localStorage` | `localStorage` + память mock-API                                                      | Платёжный провайдер + вебхуки |
+Без `DATABASE_URL` (локально) всё хранится только в файлах `data/*.json`.
 
-Ключи в `localStorage` имеют префикс `ketner.` и не смешиваются с чужими данными: `ketner.theme`, `ketner.language`, далее `ketner.conversations`, `ketner.session`.
+## Браузер
 
-## Соответствие эндпоинтам
-
-| Сущность     | Эндпоинты                                                                                                            |
-| ------------ | -------------------------------------------------------------------------------------------------------------------- |
-| Conversation | `GET /api/conversations`, `POST /api/conversations`, `PATCH /api/conversations/:id`, `DELETE /api/conversations/:id` |
-| Message      | `GET /api/conversations/:id`, `POST /api/chat/completions` (SSE)                                                     |
-| User         | `POST /api/auth/signup`, `POST /api/auth/login`, `GET /api/auth/me`                                                  |
-| Plan         | `GET /api/plans`                                                                                                     |
-| Subscription | `POST /api/billing/checkout`, `GET /api/billing/subscription`, `POST /api/billing/cancel`                            |
-
-Актуальный список с пометками готовности отдаёт сам сервис: `GET /api`.
+Ключи `localStorage` с префиксом `ketner.`: `session` и `user` (вход), `theme`, `language`, выбранная модель и состояние сайдбара. Ключ администратора панели — `ketner_admin_key`. Cookie `ketner_src` (90 дней) — источник посетителя для учёта регистраций.

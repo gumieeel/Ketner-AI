@@ -6,7 +6,6 @@ const BRAND_COLOR: Record<ModelBrand, string> = {
   anthropic: 'var(--model-claude)',
   google: 'var(--model-gemini)',
   xai: 'var(--model-grok)',
-  qwen: 'var(--model-qwen)',
   deepseek: 'var(--model-deepseek)',
   ketner: 'var(--model-ketner)',
 };

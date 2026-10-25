@@ -16,6 +16,46 @@ export interface CryptoCloudInvoiceResult {
   link: string;
   expiry?: string;
   status: string;
+  /**
+   * Реквизиты для оплаты прямо на сайте (H2H): адрес, точная сумма в криптовалюте и сеть.
+   * Trybit выдаёт их, когда валюта выбрана при создании счёта; в тестовом режиме адреса нет.
+   */
+  h2h?: {
+    address: string;
+    amount: number;
+    currencyCode: string;
+    network: string;
+    expiresAt?: string;
+    memo?: string;
+    /** Комиссии из ответа шлюза (в долларах); недоступны в заглушке. */
+    fees?: { serviceUsd: number; transferUsd: number; invoiceUsd: number };
+  };
+}
+
+/** `2026-10-14 15:04:01.555132` (UTC) → ISO. */
+function trybitDate(value: unknown): string | undefined {
+  if (typeof value !== 'string' || !value.trim()) return undefined;
+  const iso = value
+    .trim()
+    .replace(' ', 'T')
+    .replace(/(\.\d{3})\d*$/, '$1');
+  const date = new Date(/[zZ]|[+-]\d\d:?\d\d$/.test(iso) ? iso : `${iso}Z`);
+  return Number.isNaN(date.getTime()) ? undefined : date.toISOString();
+}
+
+function money(value: unknown): number {
+  const number = Number(value);
+  return Number.isFinite(number) && number > 0 ? Math.round(number * 100) / 100 : 0;
+}
+
+function parseFees(result: { amount_usd?: unknown; fee_usd?: unknown; service_fee_usd?: unknown }) {
+  const invoiceUsd = money(result.amount_usd);
+  if (!invoiceUsd) return undefined;
+  return {
+    serviceUsd: money(result.service_fee_usd),
+    transferUsd: money(result.fee_usd),
+    invoiceUsd,
+  };
 }
 
 export class CryptoCloudService {
@@ -30,7 +70,11 @@ export class CryptoCloudService {
   }
 
   isConfigured(): boolean {
-    return Boolean(this.apiKey && this.shopId);
+    const key =
+      config.cryptoCloudApiKey !== undefined ? config.cryptoCloudApiKey.trim() : this.apiKey;
+    const shop =
+      config.cryptoCloudShopId !== undefined ? config.cryptoCloudShopId.trim() : this.shopId;
+    return Boolean(key && shop);
   }
 
   /**
@@ -78,7 +122,10 @@ export class CryptoCloudService {
         throw new Error('CryptoCloud не настроен (CRYPTOCLOUD_API_KEY / CRYPTOCLOUD_SHOP_ID)');
       }
       // Демо-ссылка для локальной разработки и тестов
-      const fakeUuid = `INV-${options.orderId.replace(/[^a-zA-Z0-9]/g, '').slice(-8).toUpperCase()}`;
+      const fakeUuid = `INV-${options.orderId
+        .replace(/[^a-zA-Z0-9]/g, '')
+        .slice(-8)
+        .toUpperCase()}`;
       return {
         invoiceId: fakeUuid,
         link: `https://cryptocloud.plus/pay/${fakeUuid}`,
@@ -87,7 +134,7 @@ export class CryptoCloudService {
     }
 
     try {
-      const response = await fetch('https://api.cryptocloud.plus/v2/invoice/create', {
+      const response = await fetch(`${config.cryptoCloudApiUrl}/v2/invoice/create`, {
         method: 'POST',
         headers: {
           Authorization: `Token ${this.apiKey}`,
@@ -99,7 +146,10 @@ export class CryptoCloudService {
           currency: 'USD',
           order_id: options.orderId,
           email: options.userEmail || undefined,
-          cryptocurrency: options.cryptocurrency || undefined,
+          // Дополнительные параметры Trybit принимает только внутри add_fields.
+          ...(options.cryptocurrency
+            ? { add_fields: { cryptocurrency: options.cryptocurrency } }
+            : {}),
         }),
       });
 
@@ -115,7 +165,20 @@ export class CryptoCloudService {
           uuid: string;
           link: string;
           expiry?: string;
+          expiry_date?: string;
           status?: string;
+          address?: string;
+          amount?: number | string;
+          memo?: string;
+          comment?: string;
+          amount_usd?: number | string;
+          fee_usd?: number | string;
+          service_fee_usd?: number | string;
+          currency?: {
+            code?: string;
+            fullcode?: string;
+            network?: { code?: string; fullname?: string };
+          };
         };
         message?: string;
       };
@@ -124,18 +187,43 @@ export class CryptoCloudService {
         throw new Error(data.message || 'CryptoCloud: не удалось создать счёт');
       }
 
+      const result = data.result;
+      const cryptoAmount = Number(result.amount);
+      const h2h =
+        typeof result.address === 'string' &&
+        result.address.trim() &&
+        Number.isFinite(cryptoAmount) &&
+        cryptoAmount > 0
+          ? {
+              address: result.address.trim(),
+              amount: cryptoAmount,
+              currencyCode:
+                result.currency?.fullcode || result.currency?.code || options.cryptocurrency || '',
+              network: [result.currency?.network?.fullname, result.currency?.network?.code]
+                .filter(Boolean)
+                .filter((value, index, all) => all.indexOf(value) === index)
+                .join(' · '),
+              expiresAt: trybitDate(result.expiry_date),
+              memo: (result.memo || result.comment || '').trim() || undefined,
+              fees: parseFees(result),
+            }
+          : undefined;
       return {
-        invoiceId: data.result.uuid,
-        link: data.result.link,
-        expiry: data.result.expiry,
-        status: data.result.status || 'created',
+        invoiceId: result.uuid,
+        link: result.link,
+        expiry: result.expiry,
+        status: result.status || 'created',
+        h2h,
       };
     } catch (error) {
       console.error('[cryptocloud] Ошибка вызова CryptoCloud API:', error);
       if (!config.enableMockBilling) {
         throw error;
       }
-      const fakeUuid = `INV-${options.orderId.replace(/[^a-zA-Z0-9]/g, '').slice(-8).toUpperCase()}`;
+      const fakeUuid = `INV-${options.orderId
+        .replace(/[^a-zA-Z0-9]/g, '')
+        .slice(-8)
+        .toUpperCase()}`;
       return {
         invoiceId: fakeUuid,
         link: `https://cryptocloud.plus/pay/${fakeUuid}`,
@@ -146,7 +234,7 @@ export class CryptoCloudService {
 
   /**
    * Проверяет статус счета через CryptoCloud API v2.
-   * Endpoint: POST https://api.cryptocloud.plus/v2/invoice/merchant/info
+   * Endpoint: POST <TRYBIT_API_URL>/v2/invoice/merchant/info
    */
   async checkInvoiceStatus(invoiceId: string): Promise<string> {
     if (!this.isConfigured()) {
@@ -154,7 +242,7 @@ export class CryptoCloudService {
     }
 
     try {
-      const response = await fetch('https://api.cryptocloud.plus/v2/invoice/merchant/info', {
+      const response = await fetch(`${config.cryptoCloudApiUrl}/v2/invoice/merchant/info`, {
         method: 'POST',
         headers: {
           Authorization: `Token ${this.apiKey}`,
@@ -179,7 +267,8 @@ export class CryptoCloudService {
       };
 
       if (data.status === 'success' && Array.isArray(data.result)) {
-        const item = data.result.find((inv) => inv.uuid === invoiceId);
+        const bare = (value: string) => value.replace(/^INV-/i, '');
+        const item = data.result.find((inv) => bare(inv.uuid) === bare(invoiceId));
         if (item?.status) {
           const rawStatus = item.status.toLowerCase();
           return rawStatus; // 'paid', 'created', 'partial', 'overpaid', 'canceled'

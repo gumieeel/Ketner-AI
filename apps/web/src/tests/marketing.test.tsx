@@ -13,21 +13,27 @@ describe('marketing: лендинг, шапка, футер и тарифные 
 
     const h1Headings = screen.getAllByRole('heading', { level: 1 });
     expect(h1Headings).toHaveLength(1);
-    expect(h1Headings[0]).toHaveAccessibleName('Ketner AI');
+    expect(h1Headings[0]).toHaveAccessibleName('Все сильные модели в одной подписке');
 
     // Проверяем наличие карточек моделей и секций
-    expect(screen.getAllByText(/GPT-6/i).length).toBeGreaterThan(0);
-    expect(screen.getAllByText(/Claude (Opus|Fable)/i).length).toBeGreaterThan(0);
-    expect(screen.getAllByText(/DeepSeek/i).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/GPT-6\.1 Sol/).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/Claude Opus 5\.5/).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/GPT-6 Astra/).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/DeepSeek V4\.1 Flash/).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/Ketner Pro/).length).toBeGreaterThan(0);
 
-    // 4 тарифа
-    expect(screen.getByRole('heading', { level: 2, name: 'Free' })).toBeInTheDocument();
-    expect(screen.getByRole('heading', { level: 2, name: 'Plus' })).toBeInTheDocument();
-    expect(screen.getByRole('heading', { level: 2, name: 'Pro' })).toBeInTheDocument();
-    expect(screen.getByRole('heading', { level: 2, name: 'Ultra' })).toBeInTheDocument();
+    // Моделей, которых нет в каталоге, на лендинге быть не должно
+    expect(screen.queryByText(/Gemini 3\.8|GPT-4o|Ketner Next/)).toBeNull();
+
+    // 4 тарифа — заголовки третьего уровня внутри секции «Тарифы»
+    expect(screen.getByRole('heading', { level: 2, name: 'Тарифы' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { level: 3, name: 'Free' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { level: 3, name: 'Plus' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { level: 3, name: 'Pro' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { level: 3, name: 'Ultra' })).toBeInTheDocument();
 
     // FAQ аккордеон
-    expect(screen.getByText('Это правда безлимитно?')).toBeInTheDocument();
+    expect(screen.getByText('Есть ли ограничения?')).toBeInTheDocument();
   });
 
   it('мобильное меню открывается по клику и закрывается по Escape', () => {

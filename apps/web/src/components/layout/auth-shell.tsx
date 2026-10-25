@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import { ArrowLeftIcon } from '@/components/icons';
-import { ModelHub } from '@/components/marketing/model-hub';
+import { KnotRelief } from '@/components/marketing/knot-relief';
 import { useTranslation } from '@/i18n';
 import { Brand } from './brand';
 import { LanguageToggle } from './language-toggle';
@@ -35,10 +35,8 @@ export function AuthShell({ title, subtitle, children, footer, aside }: AuthShel
           </div>
         </div>
 
-        <div className="mx-auto my-auto w-full max-w-[400px] animate-slide-up py-8">
-          <h1 className="text-balance text-[26px] font-semibold leading-tight tracking-tight text-text sm:text-[30px]">
-            {title}
-          </h1>
+        <div className="mx-auto my-auto w-full max-w-[400px] py-8">
+          <h1 className="t-title text-balance text-[28px] text-text sm:text-[34px]">{title}</h1>
           {subtitle ? <p className="mt-2 text-sm leading-6 text-muted">{subtitle}</p> : null}
           <div className="mt-8">{children}</div>
         </div>
@@ -55,25 +53,17 @@ export function AuthShell({ title, subtitle, children, footer, aside }: AuthShel
         </div>
       </div>
 
-      {/* Правая колонка — витрина (только lg+) */}
-      <div
-        aria-hidden="true"
-        className="relative hidden select-none flex-col items-center justify-center overflow-hidden border-l border-stroke bg-surface px-6 py-12 lg:flex xl:px-12"
-      >
-        <div className="bg-aurora pointer-events-none absolute inset-0 opacity-70" />
-        <div className="bg-grid pointer-events-none absolute inset-0 opacity-60 [mask-image:radial-gradient(ellipse_70%_60%_at_50%_45%,black,transparent)]" />
-
-        {aside ?? (
-          <div className="relative z-10 flex w-full max-w-[560px] flex-col items-center gap-10 text-center">
-            <ModelHub />
-            <div className="flex max-w-[420px] flex-col gap-2">
-              <p className="text-balance text-xl font-semibold tracking-tight text-text">
-                {t('auth.asideTitle')}
-              </p>
-              <p className="text-balance text-sm leading-6 text-muted">{t('auth.asideLead')}</p>
+      {/* Правая колонка — витрина (только lg+): панель с рельефом щита */}
+      <div aria-hidden="true" className="hidden p-3 lg:block">
+        <div className="notch-br relative isolate flex h-full flex-col justify-end overflow-hidden rounded-2xl bg-[var(--hero-panel)] p-12 [--notch:72px]">
+          <KnotRelief className="absolute -top-[6%] -right-[22%] -z-10 w-[96%] max-w-none" />
+          {aside ?? (
+            <div className="flex max-w-[30ch] flex-col gap-3">
+              <p className="t-title text-[30px] text-text">{t('auth.asideTitle')}</p>
+              <p className="text-[15px] leading-relaxed text-muted">{t('auth.asideLead')}</p>
             </div>
-          </div>
-        )}
+          )}
+        </div>
       </div>
     </div>
   );

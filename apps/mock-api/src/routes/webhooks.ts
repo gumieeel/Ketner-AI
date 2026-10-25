@@ -67,7 +67,12 @@ export function createWebhookRouter({
 
     const eventId = body.idempotencyKey ?? body.id;
     if (!eventId || !body.type || !body.data) {
-      sendError(response, 400, 'invalid_payload', 'Обязательные поля: id/idempotencyKey, type, data');
+      sendError(
+        response,
+        400,
+        'invalid_payload',
+        'Обязательные поля: id/idempotencyKey, type, data',
+      );
       return;
     }
 
@@ -139,7 +144,12 @@ export function createWebhookRouter({
     // Подпись Stripe считается по байтам запроса: без сырого тела проверять нечего.
     const rawBody = (request as unknown as { rawBody?: Buffer }).rawBody;
     if (!rawBody) {
-      sendError(response, 400, 'missing_raw_body', 'Не удалось получить тело запроса для проверки подписи');
+      sendError(
+        response,
+        400,
+        'missing_raw_body',
+        'Не удалось получить тело запроса для проверки подписи',
+      );
       return;
     }
 
@@ -150,7 +160,12 @@ export function createWebhookRouter({
     } catch (err: unknown) {
       const errorMsg = (err as Error)?.message || 'Неизвестная ошибка Stripe Webhook';
       console.error('[Stripe Webhook] Error:', errorMsg);
-      sendError(response, 400, 'webhook_error', `Ошибка валидации или обработки Stripe: ${errorMsg}`);
+      sendError(
+        response,
+        400,
+        'webhook_error',
+        `Ошибка валидации или обработки Stripe: ${errorMsg}`,
+      );
     }
   });
 

@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 
-export type UpgradeReason = 'free_limit' | 'paid_model';
+export type UpgradeReason = 'free_limit' | 'paid_model' | 'max_mode' | 'compare';
 
 interface UpgradeModalOptions {
   reason: UpgradeReason;

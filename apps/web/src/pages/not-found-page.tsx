@@ -22,19 +22,31 @@ export function NotFoundPage() {
           404
         </span>
 
-        <h1 className="animate-slide-up text-xl font-semibold tracking-tight text-balance text-text md:text-2xl" style={{ animationDelay: '60ms' }}>
+        <h1
+          className="animate-slide-up text-xl font-semibold tracking-tight text-balance text-text md:text-2xl"
+          style={{ animationDelay: '60ms' }}
+        >
           {t('notFound.title')}
         </h1>
 
-        <p className="animate-slide-up max-w-sm text-sm leading-6 text-muted" style={{ animationDelay: '100ms' }}>
+        <p
+          className="animate-slide-up max-w-sm text-sm leading-6 text-muted"
+          style={{ animationDelay: '100ms' }}
+        >
           {t('notFound.text')}
         </p>
 
-        <div className="animate-slide-up flex flex-wrap items-center justify-center gap-3 pt-4" style={{ animationDelay: '140ms' }}>
+        <div
+          className="animate-slide-up flex flex-wrap items-center justify-center gap-3 pt-4"
+          style={{ animationDelay: '140ms' }}
+        >
           <Link to="/" className={buttonClasses({ variant: 'primary', size: 'md' })}>
             {t('notFound.home')}
           </Link>
-          <Link to="/chat" className={buttonClasses({ variant: 'outline', size: 'md', className: 'gap-1.5' })}>
+          <Link
+            to="/chat"
+            className={buttonClasses({ variant: 'outline', size: 'md', className: 'gap-1.5' })}
+          >
             {t('notFound.openChat')}
             <ArrowRightIcon className="size-3.5" />
           </Link>

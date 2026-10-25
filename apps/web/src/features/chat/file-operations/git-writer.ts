@@ -1,3 +1,5 @@
+import { githubFetch } from '../../github/api';
+import { branchPath, repoPath } from '../git-repo-reader';
 import type { FileChangeItem } from '../types';
 import { useWorkspace } from '../workspace-store';
 import { sanitizeChangePath } from './path-safety';
@@ -7,7 +9,6 @@ export interface GitHubCommitParams {
   owner: string;
   repo: string;
   branch: string;
-  token: string;
   changes: FileChangeItem[];
   commitMessage?: string;
 }
@@ -31,12 +32,17 @@ export interface GitHubPRResponse {
   commitSha: string;
 }
 
-function getHeaders(token: string): Record<string, string> {
-  return {
-    Accept: 'application/vnd.github.v3+json',
-    Authorization: `token ${token.trim()}`,
-    'Content-Type': 'application/json',
-  };
+/** Ошибка записи: понятный текст по статусу GitHub. */
+function writeError(status: number, action: string): Error {
+  if (status === 403)
+    return new Error(
+      `${action}: у подключённого аккаунта GitHub нет прав на запись в этот репозиторий.`,
+    );
+  if (status === 404)
+    return new Error(`${action}: репозиторий или ветка не найдены, либо нет доступа на запись.`);
+  if (status === 409 || status === 422)
+    return new Error(`${action}: ветка изменилась, пока готовились правки. Отправьте ещё раз.`);
+  return new Error(`${action} (${status})`);
 }
 
 interface AtomicCommitResult {
@@ -47,18 +53,15 @@ interface AtomicCommitResult {
 }
 
 /** Текущее содержимое файла в базовом коммите (а не снимок, загруженный при привязке проекта). */
-async function fetchFileAtCommit(
-  baseUrl: string,
-  token: string,
-  path: string,
-  commitSha: string,
-): Promise<string> {
+async function fetchFileAtCommit(base: string, path: string, commitSha: string): Promise<string> {
   const encodedPath = path.split('/').map(encodeURIComponent).join('/');
-  const res = await fetch(`${baseUrl}/contents/${encodedPath}?ref=${commitSha}`, {
-    headers: { ...getHeaders(token), Accept: 'application/vnd.github.raw+json' },
+  const res = await githubFetch(`${base}/contents/${encodedPath}?ref=${commitSha}`, {
+    accept: 'application/vnd.github.raw+json',
   });
   if (!res.ok) {
-    throw new Error(`Не удалось получить актуальный файл ${path} из репозитория (${res.status}). Изменения не отправлены.`);
+    throw new Error(
+      `Не удалось получить актуальный файл ${path} из репозитория (${res.status}). Изменения не отправлены.`,
+    );
   }
   return await res.text();
 }
@@ -70,7 +73,6 @@ async function createAtomicCommit(
   owner: string,
   repo: string,
   baseBranch: string,
-  token: string,
   changes: FileChangeItem[],
   commitMessage: string,
 ): Promise<AtomicCommitResult> {
@@ -78,32 +80,32 @@ async function createAtomicCommit(
   for (const change of changes) {
     const checked = sanitizeChangePath(change.path);
     if (!checked.ok || checked.path !== change.path) {
-      throw new Error(`Недопустимый путь «${change.path}»: ${checked.ok ? 'путь не нормализован' : checked.reason}`);
+      throw new Error(
+        `Недопустимый путь «${change.path}»: ${checked.ok ? 'путь не нормализован' : checked.reason}`,
+      );
     }
   }
 
   const finalContents = new Map<string, string>();
-  const headers = getHeaders(token);
-  const baseUrl = `https://api.github.com/repos/${owner}/${repo}`;
+  const base = repoPath(owner, repo);
 
   // 1. Получаем SHA текущего коммита ветки
-  const refRes = await fetch(`${baseUrl}/git/ref/heads/${baseBranch}`, { headers });
+  const refRes = await githubFetch(`${base}/git/ref/heads/${branchPath(baseBranch)}`);
   if (!refRes.ok) {
-    if (refRes.status === 401) {
-      throw new Error('Неверный токен GitHub или истёк срок его действия.');
-    }
     if (refRes.status === 404) {
-      throw new Error(`Ветка "${baseBranch}" или репозиторий "${owner}/${repo}" не найдены (проверьте права токена на запись).`);
+      throw new Error(
+        `Ветка «${baseBranch}» или репозиторий «${owner}/${repo}» не найдены, либо у подключённого аккаунта GitHub нет к ним доступа.`,
+      );
     }
-    throw new Error(`Ошибка получения ветки GitHub (${refRes.status}): ${refRes.statusText}`);
+    throw new Error(`Ошибка получения ветки GitHub (${refRes.status})`);
   }
   const refData = (await refRes.json()) as { object: { sha: string } };
   const baseCommitSha = refData.object.sha;
 
   // 2. Получаем дерево базового коммита
-  const commitRes = await fetch(`${baseUrl}/git/commits/${baseCommitSha}`, { headers });
+  const commitRes = await githubFetch(`${base}/git/commits/${baseCommitSha}`);
   if (!commitRes.ok) {
-    throw new Error(`Ошибка получения коммита (${commitRes.status}): ${commitRes.statusText}`);
+    throw new Error(`Ошибка получения коммита (${commitRes.status})`);
   }
   const commitData = (await commitRes.json()) as { tree: { sha: string } };
   const baseTreeSha = commitData.tree.sha;
@@ -127,25 +129,23 @@ async function createAtomicCommit(
     } else {
       let content = change.modifiedContent ?? change.content ?? '';
       if (change.action === 'replace' && change.edits && change.edits.length > 0) {
-        const fresh = await fetchFileAtCommit(baseUrl, token, change.path, baseCommitSha);
+        const fresh = await fetchFileAtCommit(base, change.path, baseCommitSha);
         const result = applyTextEdits(fresh, change.edits);
         if (!result.ok) {
-          throw new Error(`${change.path}: ${result.reason}. Изменения не отправлены, файл в репозитории не тронут.`);
+          throw new Error(
+            `${change.path}: ${result.reason}. Изменения не отправлены, файл в репозитории не тронут.`,
+          );
         }
         content = result.text;
       }
       finalContents.set(change.path, content);
-      const blobRes = await fetch(`${baseUrl}/git/blobs`, {
+      const blobRes = await githubFetch(`${base}/git/blobs`, {
         method: 'POST',
-        headers,
-        body: JSON.stringify({
-          content,
-          encoding: 'utf-8',
-        }),
+        body: { content, encoding: 'utf-8' },
       });
 
       if (!blobRes.ok) {
-        throw new Error(`Не удалось создать blob для ${change.path} (${blobRes.status})`);
+        throw writeError(blobRes.status, `Не удалось записать ${change.path}`);
       }
       const blobData = (await blobRes.json()) as { sha: string };
 
@@ -159,34 +159,25 @@ async function createAtomicCommit(
   }
 
   // 4. Создаем новое дерево
-  const treeRes = await fetch(`${baseUrl}/git/trees`, {
+  const treeRes = await githubFetch(`${base}/git/trees`, {
     method: 'POST',
-    headers,
-    body: JSON.stringify({
-      base_tree: baseTreeSha,
-      tree: treeEntries,
-    }),
+    body: { base_tree: baseTreeSha, tree: treeEntries },
   });
 
   if (!treeRes.ok) {
-    throw new Error(`Не удалось создать Git-дерево (${treeRes.status}): ${treeRes.statusText}`);
+    throw writeError(treeRes.status, 'Не удалось создать Git-дерево');
   }
   const treeData = (await treeRes.json()) as { sha: string };
   const newTreeSha = treeData.sha;
 
   // 5. Создаем коммит
-  const newCommitRes = await fetch(`${baseUrl}/git/commits`, {
+  const newCommitRes = await githubFetch(`${base}/git/commits`, {
     method: 'POST',
-    headers,
-    body: JSON.stringify({
-      message: commitMessage,
-      tree: newTreeSha,
-      parents: [baseCommitSha],
-    }),
+    body: { message: commitMessage, tree: newTreeSha, parents: [baseCommitSha] },
   });
 
   if (!newCommitRes.ok) {
-    throw new Error(`Не удалось зафиксировать коммит (${newCommitRes.status}): ${newCommitRes.statusText}`);
+    throw writeError(newCommitRes.status, 'Не удалось зафиксировать коммит');
   }
   const newCommitData = (await newCommitRes.json()) as { sha: string };
 
@@ -203,33 +194,28 @@ async function createAtomicCommit(
 export async function commitDirectlyToGitHub(
   params: GitHubCommitParams,
 ): Promise<GitHubCommitResponse> {
-  const { owner, repo, branch, token, changes } = params;
+  const { owner, repo, branch, changes } = params;
   const commitMessage = params.commitMessage || `Ketner AI: обновление ${changes.length} файлов`;
 
   const { newCommitSha, finalContents } = await createAtomicCommit(
     owner,
     repo,
     branch,
-    token,
     changes,
     commitMessage,
   );
 
-  const headers = getHeaders(token);
-  const baseUrl = `https://api.github.com/repos/${owner}/${repo}`;
-
-  // Обновляем ссылку ветки
-  const updateRefRes = await fetch(`${baseUrl}/git/refs/heads/${branch}`, {
-    method: 'PATCH',
-    headers,
-    body: JSON.stringify({
-      sha: newCommitSha,
-      force: false,
-    }),
-  });
+  // Обновляем ссылку ветки (без force: если ветка ушла вперёд, GitHub откажет)
+  const updateRefRes = await githubFetch(
+    `${repoPath(owner, repo)}/git/refs/heads/${branchPath(branch)}`,
+    {
+      method: 'PATCH',
+      body: { sha: newCommitSha, force: false },
+    },
+  );
 
   if (!updateRefRes.ok) {
-    throw new Error(`Не удалось обновить ветку ${branch} (${updateRefRes.status}): ${updateRefRes.statusText}`);
+    throw writeError(updateRefRes.status, `Не удалось обновить ветку ${branch}`);
   }
 
   // Обновляем файлы в локальном сторе
@@ -245,18 +231,20 @@ export async function commitDirectlyToGitHub(
 /**
  * Создаёт отдельную ветку и открывает Pull Request на GitHub.
  */
-export async function createGitHubPullRequest(
-  params: GitHubPRParams,
-): Promise<GitHubPRResponse> {
-  const { owner, repo, branch, token, changes } = params;
+export async function createGitHubPullRequest(params: GitHubPRParams): Promise<GitHubPRResponse> {
+  const { owner, repo, branch, changes } = params;
   const newBranch = params.newBranch || `ai-patch-${Date.now().toString(36)}`;
-  const commitMessage = params.commitMessage || `Ketner AI: правки для ${changes.map((c) => c.path).join(', ')}`;
+  const commitMessage =
+    params.commitMessage || `Ketner AI: правки для ${changes.map((c) => c.path).join(', ')}`;
   const title = params.title || `Ketner AI: обновление ${changes.length} файлов`;
   const body =
     params.body ||
     `### Изменения от Ketner AI\n\nБыли внесены следующие изменения:\n` +
       changes
-        .map((c) => `- **${c.action.toUpperCase()}** \`${c.path}\`${c.description ? `: ${c.description}` : ''}`)
+        .map(
+          (c) =>
+            `- **${c.action.toUpperCase()}** \`${c.path}\`${c.description ? `: ${c.description}` : ''}`,
+        )
         .join('\n') +
       `\n\n*Сгенерировано автоматически Ketner AI Gateway.*`;
 
@@ -264,42 +252,29 @@ export async function createGitHubPullRequest(
     owner,
     repo,
     branch,
-    token,
     changes,
     commitMessage,
   );
-
-  const headers = getHeaders(token);
-  const baseUrl = `https://api.github.com/repos/${owner}/${repo}`;
+  const base = repoPath(owner, repo);
 
   // 1. Создаём новую ветку
-  const createRefRes = await fetch(`${baseUrl}/git/refs`, {
+  const createRefRes = await githubFetch(`${base}/git/refs`, {
     method: 'POST',
-    headers,
-    body: JSON.stringify({
-      ref: `refs/heads/${newBranch}`,
-      sha: newCommitSha,
-    }),
+    body: { ref: `refs/heads/${newBranch}`, sha: newCommitSha },
   });
 
   if (!createRefRes.ok) {
-    throw new Error(`Не удалось создать ветку ${newBranch} (${createRefRes.status}): ${createRefRes.statusText}`);
+    throw writeError(createRefRes.status, `Не удалось создать ветку ${newBranch}`);
   }
 
   // 2. Создаём Pull Request
-  const prRes = await fetch(`${baseUrl}/pulls`, {
+  const prRes = await githubFetch(`${base}/pulls`, {
     method: 'POST',
-    headers,
-    body: JSON.stringify({
-      title,
-      head: newBranch,
-      base: branch,
-      body,
-    }),
+    body: { title, head: newBranch, base: branch, body },
   });
 
   if (!prRes.ok) {
-    throw new Error(`Не удалось открыть Pull Request (${prRes.status}): ${prRes.statusText}`);
+    throw writeError(prRes.status, 'Не удалось открыть Pull Request');
   }
   const prData = (await prRes.json()) as { number: number; html_url: string };
 

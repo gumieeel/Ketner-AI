@@ -1,3 +1,4 @@
+import type { TrybitCurrency } from './billing/trybit-currencies.js';
 /**
  * Типы контракта mock-API.
  *
@@ -51,6 +52,10 @@ export interface AuthTokenPayload {
   plan: PlanId;
   iat: number;
   exp: number;
+  /** Случайный id токена: два входа в одну секунду дают разные токены (выход отзывает только свой). */
+  jti?: string;
+  /** Отпечаток пароля на момент входа (UserStore.credentialStamp): после смены пароля токен не действует. */
+  cred?: string;
 }
 
 export type Language = 'ru' | 'en';
@@ -70,13 +75,7 @@ export interface Conversation {
 }
 
 export type AttachmentCategory =
-  | 'image'
-  | 'video'
-  | 'audio'
-  | 'document'
-  | 'code'
-  | 'archive'
-  | 'file';
+  'image' | 'video' | 'audio' | 'document' | 'code' | 'archive' | 'file';
 
 export interface MessageAttachment {
   id: string;
@@ -130,6 +129,48 @@ export interface Message {
   canContinue?: boolean;
   /** Пользовательская оценка ответа: лайк / дизлайк */
   feedback?: FeedbackRating;
+  /** Последняя проверка ответа моделью другой компании (services/answer-review.ts). */
+  review?: AnswerReview;
+}
+
+// ─────────────────────────────────────────────────────────────
+// Проверка ответов другой моделью
+// ─────────────────────────────────────────────────────────────
+
+/** Кто проверял: модель каталога и её разработчик. */
+export interface ReviewerInfo {
+  modelId: string;
+  modelName: string;
+  developer: string;
+}
+
+export type ReviewSeverity = 'high' | 'medium' | 'low';
+
+/**
+ * Итог проверки ответа: ok — ошибок нет, minor — мелкие неточности, major — серьёзные ошибки
+ * при верной основе, wrong — ответ в целом неверен, unknown — рецензент ответил не по формату.
+ */
+export type AnswerVerdict = 'ok' | 'minor' | 'major' | 'wrong' | 'unknown';
+
+export interface AnswerReviewIssue {
+  severity: ReviewSeverity;
+  /** Точная цитата из ответа, к которой относится замечание. */
+  quote?: string;
+  problem: string;
+  fix?: string;
+}
+
+export interface AnswerReview {
+  id: string;
+  verdict: AnswerVerdict;
+  summary: string;
+  issues: AnswerReviewIssue[];
+  /** Исправленный ответ целиком (только при серьёзных ошибках). */
+  corrected?: string;
+  reviewer: ReviewerInfo;
+  /** Модель, чей ответ проверялся. */
+  authorModelId?: string;
+  createdAt: string;
 }
 
 /**
@@ -157,6 +198,23 @@ export interface ModelInfo {
   isPro?: boolean;
   /** Требуемый тариф для доступа. */
   requiredPlan?: PlanId;
+  /** Суточная норма модели по тарифам: основа недельного пула (норма × 7). */
+  dailyLimits?: Partial<Record<PlanId, number>>;
+  /** Недельный пул модели по тарифам и сколько из него можно взять за сутки. */
+  weeklyLimits?: Partial<Record<PlanId, { pool: number; perDay: number }>>;
+  /** Фиксированная глубина размышлений (модели Pro и Ultra): обычный режим и режим Max (Ultra). */
+  reasoningEffort?: { standard: string; max: string };
+  /** Компания-разработчик модели (Ketner AI своих моделей не обучает). */
+  developer?: string;
+  /** Идентификатор модели у поставщика (OpenRouter), который уходит в запрос. */
+  upstreamModel?: string;
+  /** Настоящее имя модели, если в Ketner она называется иначе (Ketner Mini → GPT-6 Luna). */
+  baseModelName?: string;
+  /** Окно контекста модели, токенов. */
+  contextWindow?: number;
+  /** Модель, которая отвечает после лимита или при сбое. */
+  fallbackModelId?: string;
+  fallbackModelName?: string;
 }
 
 export interface PlanLimits {
@@ -169,6 +227,11 @@ export interface ModelCatalog {
   models: ModelInfo[];
   defaultModelId: string;
   limits: Record<PlanId, PlanLimits>;
+  /**
+   * Модели, которые отвечают вместо выбранной на тарифе Free (бесплатные эндпоинты OpenRouter):
+   * в списке выбора их нет, но пользователь должен знать, кто ему отвечает.
+   */
+  freeTierModels?: ModelInfo[];
 }
 
 export interface SbpInvoice {
@@ -187,7 +250,10 @@ export interface SbpInvoice {
 export interface TelegramStarsInvoice {
   id: string;
   userId: string;
+  /** Тариф счёта; для пакета премиум-квоты — тариф на момент покупки. */
   planId: PlanId;
+  /** Счёт на пакет премиум-квоты (services/pricing.ts → PREMIUM_PACKS), а не на тариф. */
+  packId?: string;
   priceRub: number;
   starsAmount: number;
   botUsername: string;
@@ -195,14 +261,32 @@ export interface TelegramStarsInvoice {
   status: 'pending' | 'paid';
   expiresAt: string;
   createdAt: string;
+  /** Ссылка на оплату в Telegram (createInvoiceLink): открывает окно оплаты звёздами. */
+  invoiceLink?: string;
+  /** Номер платежа Telegram — для поддержки и возвратов. */
+  chargeId?: string;
+  paidAt?: string;
 }
 
-export type CryptoCurrency = 'USDT_TRC20' | 'USDT_TON' | 'TON' | 'BTC';
+export type CryptoCurrency = TrybitCurrency;
+
+/** Комиссии Trybit по счёту (в долларах) и часть, которую платит покупатель сверх цены тарифа. */
+export interface CryptoFees {
+  serviceUsd: number;
+  transferUsd: number;
+  /** На сколько счёт дороже цены тарифа: комиссия, лежащая на покупателе. */
+  payerUsd: number;
+  /** Итог к оплате в долларах (цена тарифа + payerUsd). */
+  totalUsd: number;
+}
 
 export interface CryptoInvoice {
   id: string;
   userId: string;
+  /** Тариф счёта; для пакета премиум-квоты — тариф на момент покупки. */
   planId: PlanId;
+  /** Счёт на пакет премиум-квоты (services/pricing.ts → PREMIUM_PACKS), а не на тариф. */
+  packId?: string;
   currency: CryptoCurrency;
   amount: number;
   amountUsd: number;
@@ -214,6 +298,11 @@ export interface CryptoInvoice {
   network: string;
   cryptoCloudUrl?: string;
   cryptoCloudInvoiceId?: string;
+  /** Реквизиты выдал Trybit: оплата прямо на сайте, без перехода на страницу шлюза. */
+  gatewayDetails?: boolean;
+  /** MEMO/комментарий к переводу (сеть TON). */
+  memo?: string;
   txHash?: string;
+  /** Комиссии Trybit по этому счёту (приходят в ответе шлюза). */
+  fees?: CryptoFees;
 }
-

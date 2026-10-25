@@ -15,6 +15,7 @@ import type {
   LatencyBreakdown,
   MetricAlert,
   ModelMetric,
+  ModelUsageMetric,
   PlanCostMetric,
   ProviderStatus,
   ResponseSource,
@@ -24,12 +25,38 @@ import type {
   UsageStatus,
   UserProfitability,
 } from '../ai/gateway-types.js';
+import { promptCachePolicy, vendorOf } from '../ai/prompt-cache.js';
 
 interface UsageStoreData {
   records: UsageRecord[];
 }
 
+/** Зеркало записей использования в Postgres (таблица `ketner_docs`, пространство `usage`). */
+interface UsageDbDriver {
+  upsert(namespace: string, doc: UsageRecord): Promise<void>;
+}
+
+const MAX_RECORDS = 50000;
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+/** Что метрикам нужно знать о модели из реестра: имя и движок (по нему — вендор и кэш). */
+export interface ModelDescriptor {
+  name: string | null;
+  engineId: string;
+}
+
+/** Сколько длинных запросов нужно, чтобы судить о кэше модели. */
+const CACHE_VERDICT_MIN_REQUESTS = 10;
+/** Если кэш есть меньше чем у этой доли длинных запросов, он, скорее всего, не срабатывает. */
+const CACHE_WORKING_MIN_HIT_RATE = 0.2;
+
+const pct = (part: number, whole: number): number =>
+  whole > 0 ? Number(((part / whole) * 100).toFixed(1)) : 0;
+
 export class UsageStore {
+  /** Пространство имён в `ketner_docs`; совместимо с syncDocStores. */
+  readonly namespace = 'usage';
+  private dbDriver: UsageDbDriver | null = null;
   private filePath: string;
   private records: UsageRecord[] = [];
   private userIndex = new Map<string, UsageRecord[]>();
@@ -69,6 +96,21 @@ export class UsageStore {
     this.rebuildIndex();
   }
 
+  /** Подмешивает записи из базы (после перезапуска диск Render пуст): дубликаты по id отбрасываются. */
+  loadExternal(docs: UsageRecord[]): void {
+    const byId = new Map<string, UsageRecord>();
+    for (const record of this.records) byId.set(record.id, record);
+    for (const record of docs) byId.set(record.id, record);
+    this.records = [...byId.values()]
+      .sort((a, b) => a.createdAt.localeCompare(b.createdAt))
+      .slice(-MAX_RECORDS);
+    this.rebuildIndex();
+  }
+
+  setDbDriver(driver: UsageDbDriver | null): void {
+    this.dbDriver = driver;
+  }
+
   private persist(): void {
     const dir = dirname(this.filePath);
     if (!existsSync(dir)) {
@@ -100,6 +142,12 @@ export class UsageStore {
     ttftMs?: number | null;
     status: UsageStatus;
     source?: ResponseSource;
+    kind?: UsageRecord['kind'];
+    runId?: string;
+    step?: number;
+    limitUnits?: number;
+    premiumCreditUsd?: number;
+    fundedBy?: UsageRecord['fundedBy'];
   }): UsageRecord {
     const record: UsageRecord = {
       id: randomUUID(),
@@ -118,6 +166,14 @@ export class UsageStore {
       ttftMs: params.ttftMs ?? null,
       status: params.status,
       source: params.source ?? 'provider',
+      ...(params.kind ? { kind: params.kind } : {}),
+      ...(params.runId ? { runId: params.runId } : {}),
+      ...(params.limitUnits && params.limitUnits !== 1 ? { limitUnits: params.limitUnits } : {}),
+      ...(params.step !== undefined ? { step: params.step } : {}),
+      ...(params.premiumCreditUsd && params.premiumCreditUsd > 0
+        ? { premiumCreditUsd: params.premiumCreditUsd }
+        : {}),
+      ...(params.fundedBy ? { fundedBy: params.fundedBy } : {}),
       createdAt: new Date().toISOString(),
     };
 
@@ -130,8 +186,8 @@ export class UsageStore {
     userRecords.push(record);
 
     // Ограничиваем историю в памяти/файле (последние 50,000 записей)
-    if (this.records.length > 50000) {
-      this.records = this.records.slice(-50000);
+    if (this.records.length > MAX_RECORDS) {
+      this.records = this.records.slice(-MAX_RECORDS);
       this.rebuildIndex();
     }
 
@@ -140,6 +196,9 @@ export class UsageStore {
     } catch (err) {
       console.error('[usage-store] Ошибка сохранения usage:', err);
     }
+    this.dbDriver?.upsert(this.namespace, record).catch((error: unknown) => {
+      console.error('[db] Ошибка записи usage:', error);
+    });
 
     return record;
   }
@@ -208,20 +267,40 @@ export class UsageStore {
       const time = new Date(rec.createdAt).getTime();
       if (time < oneMonthAgo) break;
 
-      const totalTokens = rec.inputTokens + rec.outputTokens;
+      // У шагов агента контекст повторно уходит на каждом шаге, а читается он из кэша почти
+      // бесплатно, поэтому в квоту токенов идёт только «свежая» часть входа и ответ.
+      const totalTokens =
+        rec.kind === 'agent'
+          ? Math.max(0, rec.inputTokens - (rec.cachedTokens ?? 0)) + rec.outputTokens
+          : rec.inputTokens + rec.outputTokens;
+      // Отказанные и упавшие запросы не потребляют лимит: иначе каждый отказ продлевал бы блокировку
+      // (пользователь упёрся в лимит → отказ записался → лимит «не отпускает»), а сбой провайдера
+      // списывал бы с человека сообщение, которого он не получил.
+      const countsTowardLimits =
+        rec.status !== 'rate_limited' &&
+        rec.status !== 'concurrency_limited' &&
+        rec.status !== 'error';
+      // Шаги агента не считаются «сообщениями» (их десятки на запуск и у них свой дневной лимит
+      // запусков), но токены и стоимость учитываются как у любого запроса.
+      const countsAsMessage =
+        countsTowardLimits && rec.kind !== 'agent' && rec.kind !== 'image' && rec.kind !== 'review';
 
-      if (time >= oneMinuteAgo) requestsLastMinute++;
-      if (time >= oneHourAgo) {
-        requestsLastHour++;
+      if (countsAsMessage && time >= oneMinuteAgo) requestsLastMinute++;
+      if (countsTowardLimits && time >= oneHourAgo) {
+        if (countsAsMessage) requestsLastHour++;
         tokensLastHour += totalTokens;
       }
+      // Часть, оплаченная кредитами пакета, в бюджет тарифа не входит: пакет оплачен отдельно.
+      const planCost = rec.estimatedCost - (rec.premiumCreditUsd ?? 0);
       if (time >= oneDayAgo) {
-        requestsLastDay++;
-        tokensLastDay += totalTokens;
-        estimatedCostLastDay += rec.estimatedCost;
+        if (countsAsMessage) requestsLastDay++;
+        if (countsTowardLimits) {
+          tokensLastDay += totalTokens;
+        }
+        estimatedCostLastDay += planCost;
       }
       if (time >= oneMonthAgo) {
-        estimatedCostLastMonth += rec.estimatedCost;
+        estimatedCostLastMonth += planCost;
       }
     }
 
@@ -236,6 +315,172 @@ export class UsageStore {
       estimatedCostLastMonth: Number(estimatedCostLastMonth.toFixed(4)),
       activeConcurrentRequests: this.getActiveConcurrency(userId),
     };
+  }
+
+  /**
+   * Расход пользователя за скользящие 30 дней по заданным моделям.
+   * Нужен квоте премиум-запросов: сильные модели ограничены отдельным бюджетом тарифа.
+   * Берётся фактическая стоимость от провайдера, а если её нет — расчётная; часть, оплаченная
+   * кредитами пакета, в квоту тарифа не входит.
+   */
+  getCostLastMonthByModels(userId: string, modelIds: Iterable<string>): number {
+    const wanted = new Set(modelIds);
+    if (wanted.size === 0) return 0;
+    const userRecords = this.userIndex.get(userId) ?? [];
+    const since = Date.now() - 30 * 24 * 60 * 60 * 1000;
+    let total = 0;
+    for (let i = userRecords.length - 1; i >= 0; i--) {
+      const rec = userRecords[i];
+      if (new Date(rec.createdAt).getTime() < since) break;
+      if (wanted.has(rec.modelId)) {
+        total += (rec.actualCost ?? rec.estimatedCost) - (rec.premiumCreditUsd ?? 0);
+      }
+    }
+    return Number(total.toFixed(6));
+  }
+
+  /**
+   * Траты пользователя за последние `windowMs` по заданным моделям (все модели, если null), старые
+   * первыми. По ним видно, когда скользящая квота вернётся: траты выпадают из окна по очереди.
+   */
+  getCostEvents(
+    userId: string,
+    modelIds: Iterable<string> | null,
+    windowMs: number,
+  ): Array<{ at: number; cost: number }> {
+    const wanted = modelIds ? new Set(modelIds) : null;
+    const userRecords = this.userIndex.get(userId) ?? [];
+    const since = Date.now() - windowMs;
+    const events: Array<{ at: number; cost: number }> = [];
+    for (let i = userRecords.length - 1; i >= 0; i--) {
+      const rec = userRecords[i];
+      const at = new Date(rec.createdAt).getTime();
+      if (at < since) break;
+      if (wanted && !wanted.has(rec.modelId)) continue;
+      const cost =
+        (wanted ? (rec.actualCost ?? rec.estimatedCost) : rec.estimatedCost) -
+        (rec.premiumCreditUsd ?? 0);
+      if (cost > 0) events.push({ at, cost });
+    }
+    return events.reverse();
+  }
+
+  private observedCostCache: { at: number; byModel: Map<string, number> } | null = null;
+
+  /**
+   * Средняя фактическая цена запроса модели за 30 дней по всем пользователям, если запросов
+   * набралось не меньше 20 (иначе null: оценке по таблице цен верить больше, чем трём запросам).
+   * Пересчитывается не чаще раза в 10 минут.
+   */
+  getObservedRequestCost(modelId: string): number | null {
+    const now = Date.now();
+    if (!this.observedCostCache || now - this.observedCostCache.at > 10 * 60 * 1000) {
+      const byModel = new Map<string, number>();
+      for (const metric of this.getModelUsage30d({ now })) {
+        if (metric.requests >= 20) byModel.set(metric.modelId, metric.avgCostPerRequest);
+      }
+      this.observedCostCache = { at: now, byModel };
+    }
+    return this.observedCostCache.byModel.get(modelId) ?? null;
+  }
+
+  /** Сколько картинок модели пользователь сгенерировал за последние 24 часа (успешных). */
+  getImagesLastDay(userId: string, modelId: string): number {
+    const userRecords = this.userIndex.get(userId) ?? [];
+    const since = Date.now() - 24 * 60 * 60 * 1000;
+    let count = 0;
+    for (let i = userRecords.length - 1; i >= 0; i--) {
+      const rec = userRecords[i];
+      if (new Date(rec.createdAt).getTime() < since) break;
+      if (rec.kind === 'image' && rec.modelId === modelId && rec.status === 'success') count += 1;
+    }
+    return count;
+  }
+
+  /** Сколько единиц суточного лимита моделей израсходовано за последние 24 часа. */
+  getModelUsesLastDay(userId: string, modelIds: Iterable<string>): number {
+    return this.getModelUsesSince(userId, modelIds, DAY_MS);
+  }
+
+  /** Сколько единиц лимита моделей израсходовано за последние `windowMs` (см. getModelUseEvents). */
+  getModelUsesSince(userId: string, modelIds: Iterable<string>, windowMs: number): number {
+    return this.getModelUseEvents(userId, modelIds, windowMs).reduce((sum, e) => sum + e.units, 0);
+  }
+
+  /**
+   * Использования моделей за последние `windowMs`, старые первыми: когда и сколько единиц лимита.
+   * Нужны лимитам моделей (суточным и недельному пулу) и подсказке «когда восстановится».
+   *
+   * Считаются ответы провайдера (успешные и прерванные пользователем: токены уже потрачены), но
+   * не кэш, не отказы и не сбои. Запуск агента считается один раз (по наибольшему весу его записей,
+   * по времени первой записи), сколько бы шагов он ни сделал. Запросы за счёт кредитов пакета
+   * (`fundedBy: 'credits'`) в лимиты моделей не входят.
+   */
+  getModelUseEvents(
+    userId: string,
+    modelIds: Iterable<string>,
+    windowMs: number,
+  ): Array<{ at: number; units: number }> {
+    const wanted = new Set(modelIds);
+    if (wanted.size === 0) return [];
+    const userRecords = this.userIndex.get(userId) ?? [];
+    const since = Date.now() - windowMs;
+    const events: Array<{ at: number; units: number }> = [];
+    const runs = new Map<string, { at: number; units: number }>();
+    for (let i = userRecords.length - 1; i >= 0; i--) {
+      const rec = userRecords[i];
+      const at = new Date(rec.createdAt).getTime();
+      if (at < since) break;
+      if (!wanted.has(rec.modelId) || rec.fundedBy === 'credits') continue;
+      // Проверки ответов считаются своим суточным лимитом, а не лимитом модели-рецензента.
+      if (rec.kind === 'review') continue;
+      const units = rec.limitUnits ?? 1;
+      if (rec.kind === 'agent') {
+        if (!rec.runId) continue;
+        const run = runs.get(rec.runId);
+        runs.set(rec.runId, {
+          at: Math.min(run?.at ?? at, at),
+          units: Math.max(run?.units ?? 0, units),
+        });
+        continue;
+      }
+      if (rec.source !== 'provider') continue;
+      if (rec.status === 'success' || rec.status === 'cancelled') events.push({ at, units });
+    }
+    events.push(...runs.values());
+    return events.sort((a, b) => a.at - b.at);
+  }
+
+  /**
+   * Сколько запусков агента пользователь начал за последние 24 часа. Запуск отмечается записью
+   * нулевого шага в момент старта, поэтому отменённый сразу после старта запуск тоже считается.
+   */
+  getAgentRunsLastDay(userId: string): number {
+    const userRecords = this.userIndex.get(userId) ?? [];
+    const since = Date.now() - 24 * 60 * 60 * 1000;
+    const runs = new Set<string>();
+    for (let i = userRecords.length - 1; i >= 0; i--) {
+      const rec = userRecords[i];
+      if (new Date(rec.createdAt).getTime() < since) break;
+      if (rec.kind === 'agent' && rec.runId) runs.add(rec.runId);
+    }
+    return runs.size;
+  }
+
+  /**
+   * Сколько проверок ответов (чат и Ketner Code) пользователь сделал за последние 24 часа.
+   * Считаются только состоявшиеся: отказ или сбой рецензента проверку не расходуют.
+   */
+  getReviewsLastDay(userId: string): number {
+    const userRecords = this.userIndex.get(userId) ?? [];
+    const since = Date.now() - 24 * 60 * 60 * 1000;
+    const reviews = new Set<string>();
+    for (let i = userRecords.length - 1; i >= 0; i--) {
+      const rec = userRecords[i];
+      if (new Date(rec.createdAt).getTime() < since) break;
+      if (rec.kind === 'review' && rec.status === 'success') reviews.add(rec.runId ?? rec.id);
+    }
+    return reviews.size;
   }
 
   /**
@@ -306,7 +551,10 @@ export class UsageStore {
    * Метрики по каждому провайдеру для мониторинга.
    */
   getProviderStats(): ProviderStatus[] {
-    const providers: UsageRecord['provider'][] = ['openai', 'anthropic', 'google', 'openrouter'];
+    // OpenRouter всегда в списке; прямые API вендоров — если через них уже шли запросы.
+    const providers = [
+      ...new Set<UsageRecord['provider']>(['openrouter', ...this.records.map((r) => r.provider)]),
+    ];
 
     return providers.map((provider) => {
       const recs = this.records.filter((r) => r.provider === provider);
@@ -356,12 +604,15 @@ export class UsageStore {
    * Phase 3: Пересчёт эмпирического бюджета тарифа по реальным накопленным данным расходов.
    * Возвращает агрегаты по тарифам и рекомендуемый costBudget на основе 95-го перцентиля расходов.
    */
-  getEmpiricalPlanBudget(planUsers: Array<{ userId: string; plan: string }>): Record<string, {
-    userCount: number;
-    avgMonthlyCost: number;
-    p95MonthlyCost: number;
-    recommendedCostBudget: number;
-  }> {
+  getEmpiricalPlanBudget(planUsers: Array<{ userId: string; plan: string }>): Record<
+    string,
+    {
+      userCount: number;
+      avgMonthlyCost: number;
+      p95MonthlyCost: number;
+      recommendedCostBudget: number;
+    }
+  > {
     const thirtyDaysAgo = Date.now() - 30 * 24 * 60 * 60 * 1000;
     const planToUserCosts = new Map<string, number[]>();
 
@@ -378,12 +629,15 @@ export class UsageStore {
       list.push(userCost);
     }
 
-    const result: Record<string, {
-      userCount: number;
-      avgMonthlyCost: number;
-      p95MonthlyCost: number;
-      recommendedCostBudget: number;
-    }> = {};
+    const result: Record<
+      string,
+      {
+        userCount: number;
+        avgMonthlyCost: number;
+        p95MonthlyCost: number;
+        recommendedCostBudget: number;
+      }
+    > = {};
 
     for (const [plan, costs] of planToUserCosts.entries()) {
       costs.sort((a, b) => a - b);
@@ -406,6 +660,107 @@ export class UsageStore {
   }
 
   /**
+   * Сводка по каждой модели за скользящие 30 дней: число запросов, средний вход и выход, доля
+   * кэшированных токенов, средняя цена запроса и доли тарифов в расходе на модель.
+   *
+   * Считаются только ответы провайдера (успешные и прерванные: токены оплачены). Семантический кэш
+   * не входит: у его ответов вход целиком помечен как «кэш», и он скрыл бы, срабатывает ли кэш
+   * промпта у самого провайдера. Картинки тоже не входят: у них нет токенов.
+   *
+   * Вердикт по кэшу (`cacheStatus`) строится по длинным запросам — тем, чей вход не короче порога
+   * кэша вендора: у коротких кэша не бывает в принципе.
+   */
+  getModelUsage30d(
+    params: {
+      userPlans?: ReadonlyMap<string, string>;
+      describeModel?: (modelId: string) => ModelDescriptor;
+      now?: number;
+    } = {},
+  ): ModelUsageMetric[] {
+    const since = (params.now ?? Date.now()) - 30 * DAY_MS;
+    const describe = params.describeModel ?? ((id: string) => ({ name: null, engineId: id }));
+    const byModel = new Map<
+      string,
+      {
+        requests: number;
+        input: number;
+        output: number;
+        cached: number;
+        cost: number;
+        eligible: number;
+        eligibleHits: number;
+        costByPlan: Map<string, number>;
+      }
+    >();
+    const minTokensOf = new Map<string, number>();
+
+    for (const r of this.records) {
+      if (new Date(r.createdAt).getTime() < since) continue;
+      if (r.kind === 'image' || (r.source ?? 'provider') !== 'provider') continue;
+      if (r.status !== 'success' && r.status !== 'cancelled') continue;
+      if (r.inputTokens <= 0 && r.outputTokens <= 0) continue;
+
+      let entry = byModel.get(r.modelId);
+      if (!entry) {
+        entry = {
+          requests: 0,
+          input: 0,
+          output: 0,
+          cached: 0,
+          cost: 0,
+          eligible: 0,
+          eligibleHits: 0,
+          costByPlan: new Map(),
+        };
+        byModel.set(r.modelId, entry);
+        minTokensOf.set(r.modelId, promptCachePolicy(describe(r.modelId).engineId).minTokens);
+      }
+      const cached = Math.min(r.inputTokens, Math.max(0, r.cachedTokens ?? 0));
+      entry.requests += 1;
+      entry.input += r.inputTokens;
+      entry.output += r.outputTokens;
+      entry.cached += cached;
+      entry.cost += r.estimatedCost;
+      if (r.inputTokens >= (minTokensOf.get(r.modelId) ?? Infinity)) {
+        entry.eligible += 1;
+        if (cached > 0) entry.eligibleHits += 1;
+      }
+      const plan = params.userPlans?.get(r.userId) ?? 'free';
+      entry.costByPlan.set(plan, (entry.costByPlan.get(plan) ?? 0) + r.estimatedCost);
+    }
+
+    return [...byModel.entries()]
+      .map(([modelId, m]): ModelUsageMetric => {
+        const model = describe(modelId);
+        const policy = promptCachePolicy(model.engineId);
+        let cacheStatus: ModelUsageMetric['cacheStatus'];
+        if (policy.mode === 'none') cacheStatus = 'not_expected';
+        else if (m.eligible < CACHE_VERDICT_MIN_REQUESTS) cacheStatus = 'no_data';
+        else
+          cacheStatus =
+            m.eligibleHits / m.eligible >= CACHE_WORKING_MIN_HIT_RATE ? 'working' : 'not_working';
+        const costShareByPlanPct: Record<string, number> = {};
+        for (const [plan, cost] of m.costByPlan) costShareByPlanPct[plan] = pct(cost, m.cost);
+        return {
+          modelId,
+          name: model.name,
+          vendor: vendorOf(model.engineId),
+          requests: m.requests,
+          avgInputTokens: Math.round(m.input / m.requests),
+          avgOutputTokens: Math.round(m.output / m.requests),
+          cachedTokenSharePct: pct(m.cached, m.input),
+          cacheHitRequestsPct: pct(m.eligibleHits, m.eligible),
+          cacheEligibleRequests: m.eligible,
+          cacheStatus,
+          avgCostPerRequest: Number((m.cost / m.requests).toFixed(6)),
+          totalCost: Number(m.cost.toFixed(4)),
+          costShareByPlanPct,
+        };
+      })
+      .sort((a, b) => b.totalCost - a.totalCost);
+  }
+
+  /**
    * Phase 4: Комплексные метрики шлюза для дашборда администратора (/api/admin/metrics).
    * Включает:
    * - Стоимость по источникам (cache vs provider vs template)
@@ -422,6 +777,7 @@ export class UsageStore {
     planPricesRub?: Record<string, number>;
     planPricesUsd?: Record<string, number>;
     rubToUsdRate?: number;
+    describeModel?: (modelId: string) => ModelDescriptor;
   }): GatewayMetrics {
     let records = this.records;
     if (params?.fromDate) {
@@ -444,14 +800,17 @@ export class UsageStore {
     };
 
     // 2. По моделям
-    const modelMap = new Map<string, {
-      modelId: string;
-      cost: number;
-      requests: number;
-      inputTokens: number;
-      outputTokens: number;
-      totalLatency: number;
-    }>();
+    const modelMap = new Map<
+      string,
+      {
+        modelId: string;
+        cost: number;
+        requests: number;
+        inputTokens: number;
+        outputTokens: number;
+        totalLatency: number;
+      }
+    >();
 
     // 3. Задержки и TTFT
     const latencies: number[] = [];
@@ -465,13 +824,16 @@ export class UsageStore {
       }
     }
 
-    const planCostMap = new Map<string, {
-      plan: string;
-      totalCost: number;
-      userIds: Set<string>;
-      requests: number;
-      totalTokens: number;
-    }>();
+    const planCostMap = new Map<
+      string,
+      {
+        plan: string;
+        totalCost: number;
+        userIds: Set<string>;
+        requests: number;
+        totalTokens: number;
+      }
+    >();
 
     for (const r of records) {
       totalCost += r.estimatedCost;
@@ -568,17 +930,17 @@ export class UsageStore {
     latencies.sort((a, b) => a - b);
     ttfts.sort((a, b) => a - b);
     const avgLatency =
-      latencies.length > 0 ? Math.round(latencies.reduce((a, b) => a + b, 0) / latencies.length) : 0;
+      latencies.length > 0
+        ? Math.round(latencies.reduce((a, b) => a + b, 0) / latencies.length)
+        : 0;
     const p95Latency =
       latencies.length > 0
-        ? latencies[Math.floor(latencies.length * 0.95)] ?? latencies[latencies.length - 1]
+        ? (latencies[Math.floor(latencies.length * 0.95)] ?? latencies[latencies.length - 1])
         : 0;
     const avgTtft =
       ttfts.length > 0 ? Math.round(ttfts.reduce((a, b) => a + b, 0) / ttfts.length) : null;
     const p95Ttft =
-      ttfts.length > 0
-        ? ttfts[Math.floor(ttfts.length * 0.95)] ?? ttfts[ttfts.length - 1]
-        : null;
+      ttfts.length > 0 ? (ttfts[Math.floor(ttfts.length * 0.95)] ?? ttfts[ttfts.length - 1]) : null;
 
     const latency: LatencyBreakdown = {
       averageLatencyMs: avgLatency,
@@ -597,8 +959,8 @@ export class UsageStore {
           usersCount,
           requests: p.requests,
           totalTokens: p.totalTokens,
-          averageCostPerUser:
-            usersCount > 0 ? Number((p.totalCost / usersCount).toFixed(4)) : 0,
+          averageCostPerUser: usersCount > 0 ? Number((p.totalCost / usersCount).toFixed(4)) : 0,
+          costSharePct: pct(p.totalCost, totalCost),
         };
       })
       .sort((a, b) => b.totalCost - a.totalCost);
@@ -644,6 +1006,10 @@ export class UsageStore {
       costBySource,
       costByModel,
       costByPlan,
+      models30d: this.getModelUsage30d({
+        userPlans: userPlanMap,
+        describeModel: params?.describeModel,
+      }),
       latency,
       alerts,
       hasNegativeMarginAlert: alerts.length > 0,

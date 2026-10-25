@@ -43,18 +43,18 @@ const PLANS_DATA: PlanCardInfo[] = [
       ru: 'Идеально для первого знакомства, быстрых вопросов и простых задач.',
       en: 'Ideal for trying out the platform, fast questions, and everyday queries.',
     },
-    speed: { ru: 'Стандартная скорость', en: 'Standard response speed' },
-    priority: { ru: 'Базовый приоритет', en: 'Standard queue priority' },
-    context: { ru: 'Базовый контекст', en: 'Basic conversation context' },
+    speed: { ru: '10 сообщений в сутки', en: '10 messages a day' },
+    priority: { ru: '1 запрос одновременно', en: '1 request at once' },
+    context: { ru: 'Режим Auto', en: 'Auto mode' },
     features: {
       ru: [
-        'Базовые модели: Ketner Mini, GPT-4o mini',
+        'Бесплатная Nemotron 3 Ultra (NVIDIA), запасная — Ketner Mini',
         'Интеллектуальный режим Best AI (Auto)',
         'Сохранение полной истории диалогов',
         'Синхронизация между всеми устройствами',
       ],
       en: [
-        'Basic models: Ketner Mini, GPT-4o mini',
+        'Free Nemotron 3 Ultra (NVIDIA), Ketner Mini as backup',
         'Intelligent Best AI (Auto) mode',
         'Full conversation history saving',
         'Sync across all your devices',
@@ -70,21 +70,21 @@ const PLANS_DATA: PlanCardInfo[] = [
       ru: 'Стандартные быстрые модели для комфортной ежедневной работы и учебы.',
       en: 'Standard fast models for smooth daily work and study.',
     },
-    speed: { ru: 'Быстрая скорость', en: 'Fast generation speed' },
-    priority: { ru: 'Повышенный приоритет', en: 'Enhanced queue priority' },
-    context: { ru: 'Стандартный контекст', en: 'Standard context' },
+    speed: { ru: '500 сообщений в сутки', en: '500 messages a day' },
+    priority: { ru: '2 запроса одновременно', en: '2 requests at once' },
+    context: { ru: 'GPT-6.1 Sol и Claude Haiku', en: 'GPT-6.1 Sol and Claude Haiku' },
     features: {
       ru: [
-        'Стандартные быстрые модели: DeepSeek v4.1 Flash, Claude Haiku 4.5, GPT-4o',
-        'Быстрая скорость ответа',
-        'Безлимитный доступ через режим Auto или ручной выбор',
-        'Отсутствие поминутных ограничений',
+        'Модели: Ketner Pro, GPT-6.1 Sol, Claude Haiku 5.5, DeepSeek V4.1 Flash',
+        'Картинки FLUX.2 klein в пяти форматах',
+        'GPT-6.1 Sol — 14 запросов в неделю, не больше 5 в сутки',
+        'Доступ через режим Auto или ручной выбор модели',
       ],
       en: [
-        'Standard fast models: DeepSeek v4.1 Flash, Claude Haiku 4.5, GPT-4o',
-        'Fast response speed',
-        'Unlimited access via Auto mode or manual selection',
-        'No per-minute limits',
+        'Models: Ketner Pro, GPT-6.1 Sol, Claude Haiku 5.5, DeepSeek V4.1 Flash',
+        'FLUX.2 klein images in five aspect ratios',
+        'GPT-6.1 Sol: 14 requests a week, at most 5 a day',
+        'Access via Auto mode or manual model selection',
       ],
     },
   },
@@ -94,27 +94,27 @@ const PLANS_DATA: PlanCardInfo[] = [
     price: { ru: '$25 / мес', en: '$25 / mo' },
     badge: { ru: 'Топовые модели', en: 'Top models' },
     desc: {
-      ru: 'Топовые мировые флагманы (пониженный контекст и скорость по сравнению с Ultra). Включает всё из Plus.',
-      en: 'World-class top flagship models (reduced context and speed compared to Ultra). Includes all Plus features.',
+      ru: 'Топовые мировые флагманы. Включает всё из Plus.',
+      en: 'World-class flagship models. Includes all Plus features.',
     },
-    speed: { ru: 'Средняя скорость (пониженная)', en: 'Standard speed (reduced)' },
-    priority: { ru: 'Высокий приоритет', en: 'High server priority' },
-    context: { ru: 'Пониженный контекст', en: 'Reduced context' },
+    speed: { ru: '1 500 сообщений в сутки', en: '1,500 messages a day' },
+    priority: { ru: '4 запроса одновременно', en: '4 requests at once' },
+    context: { ru: 'Claude Opus и Sonnet', en: 'Claude Opus and Sonnet' },
     popular: true,
     features: {
       ru: [
         'Все, что входит в тариф Plus',
-        'Топовые модели: GPT-6 Astra, Claude Fable 5.1, Gemini Flash 3.8, Grok 4.7',
-        'Пониженный контекст и скорость по сравнению с Ultra',
-        'Высокий серверный приоритет обработки запросов',
-        'Ручной выбор конкретной модели без ограничений',
+        'Топовые модели: Claude Opus 5.5, Sonnet 5.5, GPT-6 Astra, GPT-5.6 Sol, GPT-5.6 Terra xhigh, Grok 4.7 xhigh',
+        'Картинки FLUX.2 dev и Seedream',
+        'Claude Opus 5.5 — 21 запрос в неделю, Sonnet 5.5 — 42',
+        'Ручной выбор любой модели, доступной на тарифе',
       ],
       en: [
         'All Plus tier features included',
-        'Top models: GPT-6 Astra, Claude Fable 5.1, Gemini Flash 3.8, Grok 4.7',
-        'Reduced context and speed compared to Ultra tier',
-        'High server request priority',
-        'Manual model selection without restrictions',
+        'Top models: Claude Opus 5.5, Sonnet 5.5, GPT-6 Astra, GPT-5.6 Sol, GPT-5.6 Terra xhigh, Grok 4.7 xhigh',
+        'FLUX.2 dev and Seedream images',
+        'Claude Opus 5.5: 21 requests a week, Sonnet 5.5: 42',
+        'Manual selection of any model available on your plan',
       ],
     },
   },
@@ -124,28 +124,24 @@ const PLANS_DATA: PlanCardInfo[] = [
     price: { ru: '$49 / мес (скидка вместо $59)', en: '$49 / mo (discount from $59)' },
     badge: { ru: 'Максимум возможностей', en: 'Maximum power' },
     desc: {
-      ru: 'Все топовые модели на 100% мощности, максимальный контекст диалога и наивысший VIP-приоритет.',
-      en: 'All top models at 100% capacity, maximum conversation context, and top VIP priority.',
+      ru: 'Все модели Pro, режим Max, лучшие модели картинок и самые высокие лимиты.',
+      en: 'All Pro models, Max mode, the best image models and the highest limits.',
     },
-    speed: { ru: 'Максимальная скорость (100%)', en: 'Maximum speed (100%)' },
-    priority: { ru: 'Наивысший VIP-приоритет', en: 'Highest VIP priority' },
-    context: { ru: 'Максимальный контекст', en: 'Maximum context' },
+    speed: { ru: '4 000 сообщений в сутки', en: '4,000 messages a day' },
+    priority: { ru: '8 запросов одновременно', en: '8 requests at once' },
+    context: { ru: 'Режим Max', en: 'Max mode' },
     features: {
       ru: [
         'Все, что входит в тариф Pro',
-        'Все топовые модели: GPT-6 Astra, Claude Fable 5.1, Gemini Flash 3.8, Grok 4.7, Ketner Next',
-        'Максимальный контекст диалога',
-        'Использование моделей на 100% без ограничений скорости и контекста',
-        'Наивысший VIP-приоритет запросов без ожидания',
-        'Параллельные запросы без задержек',
+        'Режим Max: модели думают дольше и глубже',
+        'Картинки FLUX.2 pro и Nano Banana 2',
+        'Claude Opus 5.5 — 49 запросов в неделю, Sonnet 5.5 — 98',
       ],
       en: [
         'All Pro tier features included',
-        'All top models: GPT-6 Astra, Claude Fable 5.1, Gemini Flash 3.8, Grok 4.7, Ketner Next',
-        'Maximum conversation context',
-        '100% model usage without speed or context limitations',
-        'Top VIP queue priority with zero waiting',
-        'Parallel concurrent requests without delays',
+        'Max mode: models think longer and deeper',
+        'FLUX.2 pro and Nano Banana 2 images',
+        'Claude Opus 5.5: 49 requests a week, Sonnet 5.5: 98',
       ],
     },
   },
@@ -229,11 +225,12 @@ export function DocumentationPage() {
             <h1 className="text-[26px] font-semibold leading-tight tracking-tight text-balance text-text sm:text-3xl">
               {t('docPage.title')}
             </h1>
-            <p className="mt-1.5 max-w-[60ch] text-sm leading-6 text-muted">
-              {t('docPage.lead')}
-            </p>
+            <p className="mt-1.5 max-w-[60ch] text-sm leading-6 text-muted">{t('docPage.lead')}</p>
           </div>
-          <Link to="/pricing" className={cn(buttonClasses({ variant: 'primary', size: 'md' }), 'gap-1.5')}>
+          <Link
+            to="/pricing"
+            className={cn(buttonClasses({ variant: 'primary', size: 'md' }), 'gap-1.5')}
+          >
             <SparkleIcon className="size-4" />
             {t('docPage.viewPlans')}
           </Link>
@@ -295,16 +292,14 @@ export function DocumentationPage() {
         </div>
       </section>
 
-      {/* 3. Тарифные планы и лимиты */}
+      {/* 3. Тарифные планы */}
       <section id="plans" className={cn(sectionClass, 'gap-6')}>
         <div>
           <DocHeading id="plans-heading" className="mb-2">
             <StarIcon className="size-5 text-accent" />
             <span>{t('docPage.plansTitle')}</span>
           </DocHeading>
-          <p className="max-w-[68ch] text-sm leading-6 text-muted">
-            {t('docPage.plansLead')}
-          </p>
+          <p className="max-w-[68ch] text-sm leading-6 text-muted">{t('docPage.plansLead')}</p>
         </div>
 
         <div className="grid gap-3 md:gap-4 sm:grid-cols-2">
@@ -327,11 +322,13 @@ export function DocumentationPage() {
                   <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1.5">
                     <div className="flex flex-wrap items-center gap-2">
                       <CardTitle className="text-lg">{plan.name}</CardTitle>
-                      <Badge tone={plan.popular ? 'brand' : PLAN_TONES[plan.id] ?? 'neutral'}>
+                      <Badge tone={plan.popular ? 'brand' : (PLAN_TONES[plan.id] ?? 'neutral')}>
                         {plan.badge[language]}
                       </Badge>
                     </div>
-                    <span className="text-sm font-semibold text-text tabular-nums">{plan.price[language]}</span>
+                    <span className="text-sm font-semibold text-text tabular-nums">
+                      {plan.price[language]}
+                    </span>
                   </div>
 
                   <p className="mt-2 text-[13px] leading-5 text-muted">{plan.desc[language]}</p>
@@ -371,7 +368,9 @@ export function DocumentationPage() {
                       fullWidth: true,
                     })}
                   >
-                    {plan.id === 'free' ? t('docPage.tryFree') : t('docPage.choosePlan', { plan: plan.name })}
+                    {plan.id === 'free'
+                      ? t('docPage.tryFree')
+                      : t('docPage.choosePlan', { plan: plan.name })}
                   </Link>
                 </div>
               </Card>
@@ -386,13 +385,7 @@ export function DocumentationPage() {
           <ShieldIcon className="size-5 text-accent" />
           <span>{t('docPage.fairTitle')}</span>
         </DocHeading>
-        <Callout
-          tone="info"
-          className="my-0"
-          title={
-            t('docPage.fairCallout')
-          }
-        >
+        <Callout tone="info" className="my-0" title={t('docPage.fairCallout')}>
           <div className="mt-3 grid gap-3 sm:grid-cols-3">
             {[
               {

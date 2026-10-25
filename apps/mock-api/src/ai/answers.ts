@@ -580,7 +580,8 @@ export function pickAnswer(
   if (workspaceContext) {
     const isEn = language === 'en';
     const projName = workspaceContext.name;
-    const count = workspaceContext.filesCount || (workspaceContext.files ? workspaceContext.files.length : 0);
+    const count =
+      workspaceContext.filesCount || (workspaceContext.files ? workspaceContext.files.length : 0);
     const files = workspaceContext.files || [];
 
     // Проверяем, спрашивает ли пользователь про конкретный файл
@@ -601,7 +602,9 @@ export function pickAnswer(
           '```',
           '',
           `I reviewed \`${matchedFile.path}\`. How would you like me to refactor, debug, or extend this file?`,
-        ].filter(Boolean).join('\n');
+        ]
+          .filter(Boolean)
+          .join('\n');
       }
       return [
         `### Анализ файла: \`${matchedFile.path}\` (из проекта **${projName}**)`,
@@ -612,7 +615,9 @@ export function pickAnswer(
         '```',
         '',
         `Я проанализировал файл \`${matchedFile.path}\`. Что именно требуется в нём доработать, исправить или протестировать?`,
-      ].filter(Boolean).join('\n');
+      ]
+        .filter(Boolean)
+        .join('\n');
     }
 
     // Проверяем, спрашивает ли пользователь про package.json или запуск / зависимости
@@ -634,7 +639,9 @@ export function pickAnswer(
               .map(([k, v]) => `- \`npm run ${k}\`: \`${v}\``)
               .join('\n')
           : '';
-        const deps = parsed.dependencies ? Object.keys(parsed.dependencies).slice(0, 8).join(', ') : '';
+        const deps = parsed.dependencies
+          ? Object.keys(parsed.dependencies).slice(0, 8).join(', ')
+          : '';
 
         if (isEn) {
           return [
@@ -643,7 +650,9 @@ export function pickAnswer(
             scripts ? `**Available Scripts:**\n${scripts}\n` : '',
             deps ? `**Key Dependencies:** ${deps}\n` : '',
             'Ready to run, debug, or write commands for your project.',
-          ].filter(Boolean).join('\n');
+          ]
+            .filter(Boolean)
+            .join('\n');
         }
         return [
           `### Конфигурация проекта **${projName}** (\`package.json\`):`,
@@ -651,14 +660,20 @@ export function pickAnswer(
           scripts ? `**Доступные команды запуска и сборки:**\n${scripts}\n` : '',
           deps ? `**Ключевые зависимости:** ${deps}\n` : '',
           'Готов запустить сценарии, оптимизировать зависимости или дописать код.',
-        ].filter(Boolean).join('\n');
+        ]
+          .filter(Boolean)
+          .join('\n');
       } catch {
         // fall through
       }
     }
 
     // Общий ответ по привязанному проекту с деревом файлов
-    const sampleFiles = files.slice(0, 10).map((f) => `- \`${f.path}\``).join('\n') || '';
+    const sampleFiles =
+      files
+        .slice(0, 10)
+        .map((f) => `- \`${f.path}\``)
+        .join('\n') || '';
 
     if (isEn) {
       return [
@@ -680,8 +695,12 @@ export function pickAnswer(
         '- **Implementation & refactoring**: write idiomatic functions and fix errors',
         '- **Search**: locate classes, handlers, hooks, and endpoints across files',
         '',
-        prompt ? `**Current task:** *«${prompt}»* — ready to inspect specific files or generate code.` : 'Which file or feature shall we work on next?',
-      ].filter(Boolean).join('\n');
+        prompt
+          ? `**Current task:** *«${prompt}»* — ready to inspect specific files or generate code.`
+          : 'Which file or feature shall we work on next?',
+      ]
+        .filter(Boolean)
+        .join('\n');
     }
 
     return [
@@ -703,14 +722,20 @@ export function pickAnswer(
       '- **Разработка и рефакторинг**: напишу функции, компоненты или исправлю баги;',
       '- **Поиск по кодовой базе**: найду нужные функции, хуки или маршруты API.',
       '',
-      prompt ? `**Задача:** *«${prompt}»* — готов детально разобрать код или внести нужные правки. Что делаем дальше?` : 'С каким файлом или задачей начнём работу?',
-    ].filter(Boolean).join('\n');
+      prompt
+        ? `**Задача:** *«${prompt}»* — готов детально разобрать код или внести нужные правки. Что делаем дальше?`
+        : 'С каким файлом или задачей начнём работу?',
+    ]
+      .filter(Boolean)
+      .join('\n');
   }
 
   // 2. Если прикреплены файлы / фото / видео
   if (attachments && attachments.length > 0) {
     const isEn = language === 'en';
-    const filesOverview = attachments.map((a) => `- **${a.name}** (${a.category.toUpperCase()})`).join('\n');
+    const filesOverview = attachments
+      .map((a) => `- **${a.name}** (${a.category.toUpperCase()})`)
+      .join('\n');
 
     if (isEn) {
       return [
@@ -722,7 +747,9 @@ export function pickAnswer(
           ? 'I reviewed the file contents and code structure. The syntax and formatting look valid.'
           : 'Media files (images/videos) loaded successfully into the conversation.',
         '',
-        prompt ? `Regarding your prompt: "${prompt}": I am ready to analyze or process these files.` : 'How would you like me to process these attachments?',
+        prompt
+          ? `Regarding your prompt: "${prompt}": I am ready to analyze or process these files.`
+          : 'How would you like me to process these attachments?',
       ].join('\n');
     }
 
@@ -735,7 +762,9 @@ export function pickAnswer(
         ? 'Содержимое текстовых файлов и кода успешно прочитано и добавлено в контекст для анализа.'
         : 'Медиафайлы (фото / видео) успешно прикреплены к диалогу.',
       '',
-      prompt ? `По вашему запросу: *«${prompt}»* — готов выполнить анализ или доработку.` : 'Что требуется сделать с прикреплёнными файлами?',
+      prompt
+        ? `По вашему запросу: *«${prompt}»* — готов выполнить анализ или доработку.`
+        : 'Что требуется сделать с прикреплёнными файлами?',
     ].join('\n');
   }
 

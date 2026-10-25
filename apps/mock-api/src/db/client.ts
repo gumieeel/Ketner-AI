@@ -1,6 +1,6 @@
 /**
  * KETNER AI — DB Client для Drizzle
- * 
+ *
  * apps/mock-api/src/db/client.ts
  */
 

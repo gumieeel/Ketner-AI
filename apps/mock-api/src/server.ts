@@ -39,4 +39,3 @@ app.listen(config.port, async () => {
     }
   }
 });
-

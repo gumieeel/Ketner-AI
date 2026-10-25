@@ -11,6 +11,7 @@
 
 import type { IncomingMessage, Language } from '../types.js';
 import type { ProviderMessage } from './gateway-types.js';
+import { alignedWindowStart, HISTORY_RECENT_MIN } from './prompt-cache.js';
 
 export interface ContextOptimizationOptions {
   maxMessages: number;
@@ -126,17 +127,19 @@ export class ContextOptimizer {
    * Без вызова провайдера — детерминированная компрессия для стабильного prefix caching.
    * Реальная LLM-сводка добавляется в Phase 3.
    */
-  static generateSummary(
-    messages: IncomingMessage[],
-    language?: Language,
-  ): string {
+  static generateSummary(messages: IncomingMessage[], language?: Language): string {
     if (messages.length === 0) return '';
 
     const prefix = language === 'en' ? 'Conversation summary' : 'Краткий контекст беседы';
     const snippets = messages.map((m) => {
-      const role = m.role === 'user'
-        ? (language === 'en' ? 'User' : 'Пользователь')
-        : (language === 'en' ? 'Assistant' : 'Ассистент');
+      const role =
+        m.role === 'user'
+          ? language === 'en'
+            ? 'User'
+            : 'Пользователь'
+          : language === 'en'
+            ? 'Assistant'
+            : 'Ассистент';
       // Берём первые 200 символов — достаточно для понимания контекста
       const snippet = this.cleanText(
         m.role === 'assistant' ? this.stripReasoning(m.content) : m.content,
@@ -154,7 +157,8 @@ export class ContextOptimizer {
    *   1. system (системный промпт)
    *   2. system (сводка старых сообщений, если история длинная)
    *   3. Первое сообщение диалога (якорь для понимания темы)
-   *   4. Последние 6–8 сообщений
+   *   4. Последние 8–13 сообщений: окно сдвигается шагом в 6 сообщений, чтобы начало истории
+   *      совпадало с прошлым запросом и читалось из кэша провайдера (ai/prompt-cache.ts)
    */
   static optimize(
     messages: IncomingMessage[],
@@ -184,10 +188,7 @@ export class ContextOptimizer {
 
     if (!shouldSummarize) {
       const windowed = messages.slice(-maxMsgs);
-      let currentTokens = result.reduce(
-        (sum, m) => sum + this.estimateTokens(m.content),
-        0,
-      );
+      let currentTokens = result.reduce((sum, m) => sum + this.estimateTokens(m.content), 0);
 
       const chosenMessages: IncomingMessage[] = [];
       for (let i = windowed.length - 1; i >= 0; i--) {
@@ -214,9 +215,12 @@ export class ContextOptimizer {
       return result;
     }
 
-    const RECENT_COUNT = Math.min(8, maxMsgs);
-    const recentMessages = messages.slice(-RECENT_COUNT);
-    const olderMessages = messages.slice(0, messages.length - RECENT_COUNT);
+    // Окно сдвигается шагами, а не на каждом ходу: так начало истории совпадает с прошлым
+    // запросом и читается из кэша провайдера (см. ai/prompt-cache.ts).
+    const RECENT_COUNT = Math.min(HISTORY_RECENT_MIN, maxMsgs);
+    const windowStart = alignedWindowStart(messages.length, RECENT_COUNT, maxMsgs);
+    const recentMessages = messages.slice(windowStart);
+    const olderMessages = messages.slice(0, windowStart);
 
     // 3. Вставляем сводку старых сообщений
     if (olderMessages.length > 0) {
@@ -249,10 +253,7 @@ export class ContextOptimizer {
     }
 
     // 5. Последние RECENT_COUNT сообщений
-    let currentTokens = result.reduce(
-      (sum, m) => sum + this.estimateTokens(m.content),
-      0,
-    );
+    let currentTokens = result.reduce((sum, m) => sum + this.estimateTokens(m.content), 0);
 
     const chosenRecent: IncomingMessage[] = [];
     for (let i = recentMessages.length - 1; i >= 0; i--) {

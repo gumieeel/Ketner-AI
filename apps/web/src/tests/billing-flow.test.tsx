@@ -1,5 +1,5 @@
 import { fireEvent, screen, waitFor } from '@testing-library/react';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { useAuth } from '@/features/auth/auth-store';
 import { useBilling } from '@/features/billing/billing-store';
 import {
@@ -99,13 +99,15 @@ describe('billing-flow: каталог тарифов, чекаут и упра�
     resetAuth();
     renderRoute('/checkout/plus');
 
-    expect(screen.getByRole('heading', { level: 1, name: 'Создание аккаунта' })).toBeInTheDocument();
+    expect(
+      screen.getByRole('heading', { level: 1, name: 'Создание аккаунта' }),
+    ).toBeInTheDocument();
     expect(
       screen.getByText('Для оформления подписки необходимо сначала войти или создать аккаунт.'),
     ).toBeInTheDocument();
   });
 
-  it('чекаут: по умолчанию отображается криптовалюта как основной способ, а выбор СБП показывает реквизиты в рублях', async () => {
+  it('чекаут: по умолчанию отображается криптовалюта, СБП среди способов оплаты нет', async () => {
     useAuth.setState({
       status: 'authenticated',
       token: 'mock-token',
@@ -129,13 +131,9 @@ describe('billing-flow: каталог тарифов, чекаут и упра�
     const confirmCrypto = screen.getByRole('button', { name: /Подтвердить оплату криптовалютой/i });
     expect(confirmCrypto).toBeInTheDocument();
 
-    // Переключаемся на СБП
-    const sbpTab = screen.getByRole('button', { name: /СБП по QR/i });
-    fireEvent.click(sbpTab);
-
-    expect(await screen.findByText(/Оплата через СБП/i)).toBeInTheDocument();
-    expect(screen.getAllByText(/(?:890|990) ₽/i).length).toBeGreaterThan(0);
-    expect(screen.getByRole('button', { name: /Подтвердить оплату через СБП/i })).toBeInTheDocument();
+    // СБП пока убрана: остаются криптовалюта и Telegram Stars.
+    expect(screen.queryByRole('button', { name: /СБП/i })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Telegram Stars/i })).toBeInTheDocument();
   });
 
   it('чекаут: выбор способа оплаты Криптовалюта отображает реквизиты и подтверждает транзакцию', async () => {
@@ -159,8 +157,22 @@ describe('billing-flow: каталог тарифов, чекаут и упра�
 
     // Должны появиться заголовок криптовалюты, сеть и адрес кошелька
     expect(await screen.findByText(/Оплата криптовалютой/i)).toBeInTheDocument();
-    expect(screen.getByText(/USDT \(TRC-20\)/i)).toBeInTheDocument();
-    expect(screen.getByText(/TDyeGqX4ranC94g7RMw6cGsCPvRQ7XAtQP/i)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /USDT · Tron \(TRC-20\)/ })).toBeInTheDocument();
+    // Оплата — в виджете Trybit: окно открывается кнопкой, реквизиты и ввод TxID на сайте не показываются.
+    const openSpy = vi
+      .spyOn(window, 'open')
+      .mockReturnValue({ focus: vi.fn(), close: vi.fn() } as unknown as Window);
+    const widgetButton = await screen.findByRole('link', { name: /Оплатить в виджете Trybit/ });
+    fireEvent.click(widgetButton);
+    expect(openSpy).toHaveBeenCalledWith(
+      'https://pay.trybit.com/DEMO123',
+      'ketner-trybit-pay',
+      expect.stringContaining('popup=yes'),
+    );
+    expect(await screen.findByText(/Окно оплаты открыто/)).toBeInTheDocument();
+    expect(screen.queryByText(/TTrybitH2hDemoAddrUsdtTrc20xxxxxx/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Прямой перевод/)).not.toBeInTheDocument();
+    expect(screen.queryByLabelText(/TxID|хеш транзакции/i)).not.toBeInTheDocument();
 
     const confirmCryptoButton = screen.getByRole('button', {
       name: /Подтвердить оплату криптовалютой/i,
@@ -172,10 +184,104 @@ describe('billing-flow: каталог тарифов, чекаут и упра�
       expect(screen.getByText(/Перейти в чат/i)).toBeInTheDocument();
       expect(screen.getByText(/В настройки/i)).toBeInTheDocument();
     });
+    // Адрес после оплаты — для цели «Покупка» в рекламных кабинетах.
+    expect(window.location.pathname).toBe('/checkout/success');
+    expect(window.location.search).toBe('?item=plus');
 
     // Проверяем, что в auth-store план пользователя синхронизирован с 'plus'
     expect(useAuth.getState().user?.plan).toBe('plus');
     expect(useBilling.getState().subscription?.plan).toBe('plus');
+  });
+
+  it('чекаут: если Trybit не выставил счёт — понятная ошибка и повтор', async () => {
+    useAuth.setState({
+      status: 'authenticated',
+      token: 'mock-token',
+      user: {
+        id: 'demo-user',
+        email: 'demo@ketner.ai',
+        name: 'Демо',
+        plan: 'free',
+        createdAt: '2026-01-01T00:00:00.000Z',
+      },
+    });
+    const base = globalThis.fetch;
+    let attempts = 0;
+    vi.stubGlobal('fetch', async (input: RequestInfo | URL, init?: RequestInit) => {
+      if (String(input) === '/api/billing/crypto/create-invoice') {
+        attempts += 1;
+        if (attempts === 1) {
+          return Response.json(
+            {
+              error: {
+                code: 'gateway_unavailable',
+                message: 'Trybit не выставил счёт. Попробуйте ещё раз через минуту.',
+              },
+            },
+            { status: 502 },
+          );
+        }
+      }
+      return base(input, init);
+    });
+    renderRoute('/checkout/plus');
+    fireEvent.click(screen.getByRole('button', { name: /Криптовалюта/i }));
+
+    expect(
+      await screen.findByText('Trybit не выставил счёт. Попробуйте ещё раз через минуту.'),
+    ).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Выставить счёт заново' }));
+    expect(
+      await screen.findByRole('link', { name: /Оплатить в виджете Trybit/ }),
+    ).toBeInTheDocument();
+    expect(attempts).toBe(2);
+  });
+
+  it('чекаут: все монеты и сети Trybit, поиск и комиссии', async () => {
+    useAuth.setState({
+      status: 'authenticated',
+      token: 'mock-token',
+      user: {
+        id: 'demo-user',
+        email: 'demo@ketner.ai',
+        name: 'Демо',
+        plan: 'free',
+        createdAt: '2026-01-01T00:00:00.000Z',
+      },
+    });
+    const base = globalThis.fetch;
+    const requested: string[] = [];
+    vi.stubGlobal('fetch', async (input: RequestInfo | URL, init?: RequestInit) => {
+      if (String(input) === '/api/billing/crypto/create-invoice') {
+        requested.push((JSON.parse(String(init?.body)) as { currency: string }).currency);
+      }
+      return base(input, init);
+    });
+    renderRoute('/checkout/plus');
+    fireEvent.click(screen.getByRole('button', { name: /Криптовалюта/i }));
+
+    // Счёт по умолчанию — USDT в Tron: комиссии берутся из счёта Trybit
+    expect(await screen.findByText('Итого к оплате')).toBeInTheDocument();
+    expect(screen.getAllByText('$10.57').length).toBeGreaterThan(0);
+    expect(screen.getByText(/сервис \$0\.17, перевод \$1\.40/)).toBeInTheDocument();
+    expect(screen.getByText(/Комиссию сети блокчейна за отправку платите вы/)).toBeInTheDocument();
+
+    // Все монеты доступны; редкая находится поиском, сети выбираются отдельно
+    fireEvent.click(screen.getByRole('button', { name: /Показать все \(18\)/ }));
+    expect(screen.getByRole('button', { name: /TRUMP/ })).toBeInTheDocument();
+    fireEvent.change(screen.getByRole('searchbox'), { target: { value: 'bnb' } });
+    fireEvent.click(screen.getByRole('button', { name: /^BNB\s?BNB$/ }));
+    await waitFor(() => expect(requested).toContain('BNB'));
+    fireEvent.change(screen.getByRole('searchbox'), { target: { value: 'usdc' } });
+    fireEvent.click(screen.getByRole('button', { name: /^USDC\s?USD Coin/ }));
+    expect(
+      await screen.findByRole('button', { name: /USDC · Solana \(SOL\)/ }),
+    ).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /USDC · Ethereum \(ERC-20\)/ })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /USDC · Base/ }));
+    await waitFor(() => expect(requested).toContain('USDC_BASE'));
+    // В сети без комиссии перевода в счёте только комиссия сервиса
+    await waitFor(() => expect(screen.getAllByText('$9.17').length).toBeGreaterThan(0));
   });
 
   it('настройки: отображение платной подписки и отмена подписки', async () => {
@@ -218,42 +324,6 @@ describe('billing-flow: каталог тарифов, чекаут и упра�
     });
   });
 
-  it('чекаут: выбор способа оплаты СБП показывает QR-код и подтверждает оплату', async () => {
-    useAuth.setState({
-      status: 'authenticated',
-      token: 'mock-token',
-      user: {
-        id: 'demo-user',
-        email: 'demo@ketner.ai',
-        name: 'Демо Пользователь',
-        plan: 'free',
-        createdAt: '2026-01-01T00:00:00.000Z',
-      },
-    });
-
-    renderRoute('/checkout/gpt-pro');
-
-    // Кликаем по вкладке СБП
-    const sbpTab = screen.getByRole('button', { name: /СБП по QR/i });
-    fireEvent.click(sbpTab);
-
-    // Должен появиться блок СБП с кнопкой банка и кнопкой подтверждения
-    expect(await screen.findByText(/Оплата через СБП/i)).toBeInTheDocument();
-    expect(screen.getByText(/Отсканируйте QR-код в приложении любого банка/i)).toBeInTheDocument();
-
-    const confirmButton = screen.getByRole('button', { name: /Подтвердить оплату через СБП/i });
-    expect(confirmButton).toBeInTheDocument();
-
-    fireEvent.click(confirmButton);
-
-    await waitFor(() => {
-      expect(screen.getByText(/Подписка успешно оформлена/i)).toBeInTheDocument();
-      expect(screen.getByText(/Перейти в чат/i)).toBeInTheDocument();
-    });
-
-    expect(useAuth.getState().user?.plan).toBe('gpt-pro');
-  });
-
   it('чекаут: выбор Telegram Stars отображает количество звёзд и ссылку на бота', async () => {
     useAuth.setState({
       status: 'authenticated',
@@ -273,9 +343,75 @@ describe('billing-flow: каталог тарифов, чекаут и упра�
     const starsTab = screen.getByRole('button', { name: /Telegram Stars/i });
     fireEvent.click(starsTab);
 
-    // Должны появиться 2650 Stars и кнопка перехода в бота
-    expect(await screen.findByText('2650')).toBeInTheDocument();
+    // Должны появиться 2460 Stars, их цена по официальному курсу Telegram и кнопка перехода в бота
+    expect(await screen.findByText('2460')).toBeInTheDocument();
+    expect(
+      screen.getByText('≈ $49.18 по официальному курсу Telegram (1 000 ⭐ = $19.99)'),
+    ).toBeInTheDocument();
+    // Цена в звёздах — как картой (разница только в округлении), пометки «дороже» нет
+    expect(screen.queryByText(/В звёздах дороже/)).not.toBeInTheDocument();
     expect(screen.getByRole('link', { name: /Оплатить в Telegram/i })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Подтвердить оплату Stars/i })).toBeInTheDocument();
+  });
+});
+
+describe('докупки пакетов нет', () => {
+  beforeEach(() => {
+    resetPreferences();
+    resetChat();
+    resetAuth();
+    resetBilling();
+  });
+
+  it('на странице тарифов нет блока докупки, а старый адрес оплаты пакета не открывается', async () => {
+    installFakeApi({ plan: 'pro' });
+    useAuth.setState({
+      status: 'authenticated',
+      token: 'mock-token',
+      user: {
+        id: 'demo-user',
+        email: 'demo@ketner.ai',
+        name: 'Демо',
+        plan: 'pro',
+        createdAt: '2026-01-01T00:00:00.000Z',
+      },
+    });
+    const { unmount } = renderRoute('/pricing');
+    await screen.findAllByText(/Ultra/);
+    expect(screen.queryByText(/Докупить запросы|премиум-квоты/)).not.toBeInTheDocument();
+    unmount();
+    renderRoute('/checkout/pack/premium-5');
+    expect(await screen.findByRole('heading', { level: 1 })).toBeInTheDocument();
+    expect(screen.queryByText(/премиум-квоты/)).not.toBeInTheDocument();
+  });
+});
+
+describe('бонус за оплату криптой', () => {
+  beforeEach(() => {
+    resetPreferences();
+    resetChat();
+    resetAuth();
+    resetBilling();
+    installFakeApi();
+  });
+
+  it('страница оплаты тарифа объясняет +15% к квоте в цифрах тарифа', async () => {
+    useAuth.setState({
+      status: 'authenticated',
+      token: 'mock-token',
+      user: {
+        id: 'demo-user',
+        email: 'demo@ketner.ai',
+        name: 'Демо',
+        plan: 'free',
+        createdAt: '2026-01-01T00:00:00.000Z',
+      },
+    });
+    renderRoute('/checkout/pro');
+    expect(
+      await screen.findByText('Бонус +15% к квоте топ-моделей за оплату криптой'),
+    ).toBeInTheDocument();
+    expect(screen.getByText(/вырастет с \$8\.00 до \$9\.20/)).toBeInTheDocument();
+    expect(screen.getByText(/Trybit · \+15% к квоте топ-моделей/)).toBeInTheDocument();
   });
 });

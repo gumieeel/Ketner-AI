@@ -27,7 +27,7 @@ describe('FeedbackButtons: лайки и дизлайки ответов', () =>
     content: 'Отличный ответ',
     createdAt: new Date().toISOString(),
     status: 'complete',
-    modelId: 'gpt-6-astra',
+    modelId: 'gpt-6.1-sol',
   };
 
   it('отображает кнопки лайка и дизлайка', () => {
@@ -51,7 +51,7 @@ describe('FeedbackButtons: лайки и дизлайки ответов', () =>
       conversationId: 'conv-123',
       messageId: 'msg-1',
       rating: 'like',
-      modelId: 'gpt-6-astra',
+      modelId: 'gpt-6.1-sol',
     });
 
     const currentMsg = useChat.getState().messages.find((m) => m.id === 'msg-1');
@@ -74,7 +74,7 @@ describe('FeedbackButtons: лайки и дизлайки ответов', () =>
       conversationId: 'conv-123',
       messageId: 'msg-1',
       rating: 'dislike',
-      modelId: 'gpt-6-astra',
+      modelId: 'gpt-6.1-sol',
     });
 
     const currentMsg = useChat.getState().messages.find((m) => m.id === 'msg-1');
@@ -97,7 +97,7 @@ describe('FeedbackButtons: лайки и дизлайки ответов', () =>
       conversationId: 'conv-123',
       messageId: 'msg-1',
       rating: null,
-      modelId: 'gpt-6-astra',
+      modelId: 'gpt-6.1-sol',
     });
 
     const currentMsg = useChat.getState().messages.find((m) => m.id === 'msg-1');

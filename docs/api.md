@@ -1,0 +1,142 @@
+# API сайта (`/api/*`)
+
+Этот API обслуживает сайт и мини-приложение. Для программ и IDE есть отдельный OpenAI-совместимый `/v1` — [agent-api.md](agent-api.md).
+
+## Общее
+
+- **Авторизация:** `Authorization: Bearer <токен входа>` или cookie Better Auth (вход через Google и GitHub). Гость передаёт `X-Guest-Id: guest_…`.
+- **Ошибки:** `{ "error": { "code": "…", "message": "…" } }` с HTTP-статусом. Частые коды: `401 unauthorized`, `403 upgrade_required`, `403 admin_access_denied`, `404 not_found`, `429 too_many_requests` / `rate_limited` (с `Retry-After`).
+- **Тело** — JSON до 1 МБ (до 50 МБ у вложений и импорта).
+- `GET /api` вне production отдаёт список эндпоинтов; `GET /api/health` — проверка живости для Render.
+
+## Чат (SSE)
+
+`POST /api/chat/completions`
+
+```json
+{
+  "conversationId": "uuid",
+  "modelId": "auto",
+  "language": "ru",
+  "reasoningMode": "standard",
+  "messages": [
+    { "id": "uuid", "role": "user", "content": "…", "attachments": [], "workspaceContext": null }
+  ]
+}
+```
+
+`messages` — вся история: сервер заменяет ею сохранённую (так работают правка, перегенерация и остановка). `reasoningMode: "max"` действует только на Ultra.
+
+Ответ — `text/event-stream`:
+
+```
+event: delta
+data: {"content":"порция текста"}
+
+event: done
+data: {"messageId":"uuid","selectedModel":{"id":"glm-5.3","name":"GLM-5.3"},"routingReason":"…","source":"…",
+       "finishReason":"stop","canContinue":false,"reasoningMode":"standard","usage":{"inputTokens":123,"outputTokens":456}}
+
+event: error
+data: {"code":"upgrade_required","message":"…"}
+```
+
+`selectedModel` — модель, которая реально ответила; `routingReason` — почему (Auto, лимит, квота, бюджет). Интерфейс обязан показывать её пользователю.
+
+Также: `POST /api/chat/feedback` (`messageId`, `rating: like|dislike`, `reason`, `comment`), `GET /api/chat/feedback/analytics` (админ).
+
+## Сравнение ответов (SSE)
+
+`POST /api/chat/compare` — один вопрос нескольким моделям. Только для аккаунтов с Plus и выше (Free и гости: `403 compare_plan_required` / `401`).
+
+```json
+{
+  "conversationId": "uuid",
+  "modelIds": ["claude-sonnet-5.5", "gpt-5.6-sol"],
+  "language": "ru",
+  "messages": [{ "id": "uuid", "role": "user", "content": "…" }]
+}
+```
+
+`modelIds` — от 2 до 4 разных моделей каталога (или `auto`); на Plus можно до 2, на Pro до 3, на Ultra до 4 (`400 too_many_models`). Недоступная по тарифу модель: `403 upgrade_required`. Второй запуск при идущем первом: `429 compare_in_progress`.
+
+Каждая колонка проходит тот же шлюз, что и обычный ответ (права, лимиты модели, квота, бюджет, учёт расхода), но **без подмены**: если вместо выбранной модели ответила бы запасная, колонка заканчивается ошибкой `model_limit_reached` или `model_unavailable`. Для `auto` подмена не применяется: Auto сам выбирает модель.
+
+События (`text/event-stream`, раз в 15 с приходит комментарий `: ping`):
+
+```
+event: compare_start       data: {"runId":"uuid","slots":[{"slot":0,"requestedModelId":"…","modelName":"…"}]}
+event: compare_delta       data: {"slot":0,"content":"порция текста"}
+event: compare_slot_done   data: {"slot":0,"selectedModel":{"id":"…","name":"…"},"routingReason":"…",
+                                  "finishReason":"stop","usage":{"inputTokens":1,"outputTokens":2},"latencyMs":1800,"ttftMs":420}
+event: compare_slot_error  data: {"slot":1,"code":"model_limit_reached","message":"…"}
+event: compare_done        data: {"runId":"uuid","savedMessageId":"uuid","defaultSlot":0}
+```
+
+По завершении в диалог сохраняется ответ первой успешной колонки (`defaultSlot`), если успешных нет, только вопрос. Закрытие соединения останавливает все колонки.
+
+`POST /api/chat/compare/pick` с `{ "runId": "uuid", "slot": 1 }` заменяет сохранённый ответ выбранным и записывает голос. Текст берётся из запуска, который сервер хранит 3 часа, а не из запроса; чужой, неизвестный или просроченный запуск: `410 compare_expired`, диалог уже продолжился: `409 compare_stale`, у колонки нет ответа: `400 invalid_slot`. Ответ: `{ "success": true, "runId", "slot", "messageId", "modelId" }`.
+
+`GET /api/chat/compare/stats` (админ): `{ totalVotes, models: [{ modelId, comparisons, wins, winRatePct }] }`: как часто ответ модели выбирают в сравнениях.
+
+## Перекрёстная проверка моделью другой компании (SSE)
+
+Ответ одной модели проверяет модель **другой компании**: у моделей одного разработчика общие слепые зоны. Рецензент берётся из списка тарифа (`services/review-policy.ts`), модели тех же разработчиков, что авторы ответа, пропускаются: Claude не проверяет Claude, а судья сравнения GPT и Claude — Grok или Gemini. Если модель недоступна по квоте или бюджету (`model_unavailable`, `model_limit_reached`) или все её провайдеры упали, берётся следующая из списка; лимит частоты и исчерпанный бюджет отвечают сразу.
+
+Только для аккаунтов (гость: `401`). Проверки ответа, ревью кода и судья сравнения — один суточный лимит: Free 2, Plus 10, Pro 30, Ultra 80 (`429 review_limit`). Лимит модели-рецензента и сообщения не тратятся; стоимость идёт в месячный бюджет тарифа, сильные модели расходуют квоту премиум-запросов. В учёте расхода такие запросы имеют `kind: "review"`. `GET /api/chat/review/quota` → `{ used, limit, remaining }`.
+
+**Проверка ответа в чате.** `POST /api/chat/review` с `{ "conversationId", "messageId", "language" }` (только готовый ответ ассистента своего диалога: иначе `404` / `400 invalid_message`; вторая проверка при идущей первой: `429 review_in_progress`):
+
+```
+event: review_start     data: {"reviewId":"uuid","quota":{"used":0,"limit":10,"remaining":10}}
+event: review_reviewer  data: {"reviewer":{"modelId":"claude-sonnet-5.5","modelName":"Claude Sonnet 5.5","developer":"Anthropic"}}
+event: review_done      data: {"review":{"id","verdict":"ok|minor|major|wrong|unknown","summary","issues":[{"severity":"high|medium|low","quote","problem","fix"}],"corrected","reviewer","authorModelId","createdAt"},"quota":{…}}
+event: error            data: {"code","message"}
+```
+
+`quote` — точная цитата из ответа (цитата, которой в ответе нет, уходит в текст замечания); `corrected` — исправленный ответ, только при `major` / `wrong`. Итог сохраняется у сообщения (`message.review`, в Postgres — `messages.metadata.review`) и приходит с диалогом; правка текста ответа или повторная генерация его сбрасывают.
+
+**Консилиум (судья сравнения).** `POST /api/chat/compare/judge` с `{ "runId", "language" }`: судья читает ответы колонок, пишет один итоговый ответ (приходит порциями) и после маркера — JSON с согласием и расхождениями. Нужны хотя бы два ответа (`400 judge_needs_answers`), просроченный запуск: `410 compare_expired`.
+
+```
+event: judge_start     data: {"judgeId":"uuid","quota":{…}}
+event: judge_reviewer  data: {"reviewer":{…}}
+event: judge_delta     data: {"content":"порция итога"}
+event: judge_done      data: {"judge":{"id","content","agreement":"full|partial|low|unknown","consensus":["…"],"disputes":[{"topic","positions":[{"model","claim"}],"resolution"}],"judge":{…},"slots":[0,1],"createdAt"}}
+```
+
+`POST /api/chat/compare/judge/save` с `{ "runId" }` ставит итог судьи ответом в диалоге (как `pick`; диалог продолжился — `409 compare_stale`). Выбор колонки после этого снова заменяет ответ колонкой.
+
+**Ревью правок Ketner Code.** `POST /api/code/projects/:id/review` с `{ "runId", "language" }`: рецензент получает задачу, итог агента и diff всех правок запуска (до 60 000 символов). Запуск без правок: `400 nothing_to_review`, нет в ленте: `404 run_not_found`, агент ещё работает: `409 run_in_progress`.
+
+```
+event: review_start     data: {"reviewId","quota","files":2}
+event: review_reviewer  data: {"reviewer":{…}}
+event: review_done      data: {"item":{"id","kind":"review","runId","verdict":"approve|changes|unknown","summary","issues":[{"severity","file","line","problem","fix"}],"reviewer","authorModelId","filesReviewed","createdAt"},"quota":{…}}
+```
+
+Запись `kind: "review"` остаётся в ленте проекта. «Исправить замечания» в интерфейсе — обычный запуск агента с задачей из списка замечаний; галочка «Ревью» запускает проверку автоматически после каждого запуска с правками.
+
+## Эндпоинты
+
+| Группа            | Эндпоинты                                                                                                                                                                                                                                                                                                                                                                                                     | Доступ             |
+| ----------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------ |
+| Служебные         | `GET /health`, `GET /status` (состояние компонентов для `/status`, кэш 30 с), `GET /meta` (каталог моделей с разработчиком и настоящей моделью, лимиты, тарифы, `freeTierModels`), `GET /plans`                                                                                                                                                                                                               | все                |
+| Аккаунт           | `POST /auth/signup` и `POST /auth/login` (код на почту), `POST /auth/signup/verify`, `POST /auth/login/verify`, `POST /auth/signup/resend`, `POST /auth/login/resend`, «Забыли пароль?»: `POST /auth/password-reset` → `POST /auth/password-reset/verify` → `POST /auth/password-reset/complete` (и `…/resend`), `POST /auth/logout`, `GET /auth/me`, `GET /auth/telegram-link`, `POST /auth/telegram-unlink` | вход для `me`      |
+| Привязка Telegram | `POST /auth/telegram/start` (только `mode: link`), `GET /auth/telegram/poll/:id`, `POST /auth/telegram/claim`                                                                                                                                                                                                                                                                                                 | все / вход         |
+| Better Auth       | `GET /auth/get-session`, `POST /auth/sign-in/email`, `POST /auth/sign-in/social`, `POST /auth/sign-out`, `/auth/callback/*`, сессии — остальное закрыто                                                                                                                                                                                                                                                       | все                |
+| Диалоги           | `GET/POST /conversations`, `GET/PATCH/DELETE /conversations/:id`                                                                                                                                                                                                                                                                                                                                              | вход или гость     |
+| Расход            | `GET /usage/quota` — остаток лимитов модели, бюджета и квоты                                                                                                                                                                                                                                                                                                                                                  | вход               |
+| Оплата            | `GET /billing/subscription`, `GET /billing/packs`, `GET /billing/crypto-bonus`, `POST /billing/crypto/create-invoice`, `GET /billing/crypto/status/:id`, `POST /billing/crypto/confirm/:id`, `POST /billing/telegram-stars/create-invoice`, `GET /billing/telegram-stars/status/:id`, `POST /billing/cancel`                                                                                                  | вход               |
+| Вебхуки оплаты    | `POST /billing/trybit/webhook`, `POST /webhooks`, `POST /webhooks/stripe`, `POST /telegram/webhook`, `POST /telegram/support/webhook`                                                                                                                                                                                                                                                                         | подпись            |
+| Без интерфейса    | `POST /billing/checkout`, `/billing/sbp/*`, `POST /billing/telegram-stars/confirm/:id`, `POST /billing/stripe/create-checkout`, `POST /telegram/simulate-payment`, `POST /telegram/support/simulate-message` — заглушки разработки и каналы, которых нет на странице оплаты (клиентские функции в `features/billing/api.ts` остались); в production заглушки отключены                                        | —                  |
+| Мини-приложение   | `/telegram/miniapp/*`: `session`, `email-code`, `email-verify`, `link`, `link-code`, `state`, `invoice`, `auto-renew`, `payments/:id/refund`, `prefs`, `unlink`, `admin/refunds`                                                                                                                                                                                                                              | подпись `initData` |
+| Telegram          | `GET /telegram/status`, `GET /telegram/support/status`, `GET /telegram/support/tickets` (админ)                                                                                                                                                                                                                                                                                                               |                    |
+| Ketner Code       | `/code/capabilities`, `/code/projects` (CRUD, `import-github`, `:id/files`, `:id/file`, `:id/move`, `:id/import`, `:id/export.zip`, `:id/thread`, `:id/run` — SSE, `:id/stop`, `:id/review` — SSE)                                                                                                                                                                                                            | вход               |
+| Картинки          | `GET /images/capabilities`, `GET /images`, `POST /images/generate`, `DELETE /images/:id`, `GET /images/:id/file?exp&sig` (подписанная ссылка)                                                                                                                                                                                                                                                                 | вход               |
+| GitHub            | `GET /github/status`, `GET /github/connect-url`, `POST /github/confirm`, `DELETE /github/connection`, `ALL /github/api/*` (прокси с белым списком)                                                                                                                                                                                                                                                            | вход               |
+| Ключи `/v1`       | `GET /keys`, `POST /keys`, `DELETE /keys/:id`                                                                                                                                                                                                                                                                                                                                                                 | вход, Plus+        |
+| Контакты          | `POST /contact` (`topic`: bug, idea, payment, other)                                                                                                                                                                                                                                                                                                                                                          | все                |
+| Админ             | `/admin/models` (+ `PATCH :id`), `/admin/providers`, `/admin/circuit-breaker` (+ `reset`), `/admin/usage`, `/admin/metrics`, `/admin/feedback-analytics`, `/admin/escalation/override`, `/admin/profitability/:userId`, `/admin/user-usage/:userId`, `/admin/exchange-rate`, `/admin/users` (+ `:id`, `PATCH :id`), `/admin/registrations`                                                                    | админ              |
+
+Все пути выше — относительно `/api`. Формат событий агента Ketner Code — [code-workspace.md](code-workspace.md#как-идёт-запуск).
