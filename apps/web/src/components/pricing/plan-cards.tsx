@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom';
-import { CheckIcon } from '@/components/icons';
+import { BoltIcon, CheckIcon } from '@/components/icons';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { buttonClasses } from '@/components/ui/button-classes';
@@ -13,10 +13,14 @@ export interface PlanCardsProps {
   className?: string;
 }
 
-/**
- * Тарифы одной полосой: четыре ячейки с тонкими разделителями. Pro выделен тоном
- * поверхности и нефритовой вкладкой сверху, текущий тариф — рамкой акцента.
- */
+/** Цвет «точки тарифа» рядом с названием: те же токены, что и у Badge тарифов. */
+const TIER_DOT: Record<string, string> = {
+  free: 'bg-subtle',
+  plus: 'bg-tier-plus',
+  pro: 'bg-tier-pro',
+  ultra: 'bg-tier-ultra',
+};
+
 export function PlanCards({ variant = 'compact', className }: PlanCardsProps) {
   const { t, language } = useTranslation();
   const user = useAuth((state) => state.user);
@@ -26,7 +30,7 @@ export function PlanCards({ variant = 'compact', className }: PlanCardsProps) {
   return (
     <div
       className={cn(
-        'grid w-full grid-cols-1 gap-px overflow-hidden rounded-xl border border-stroke bg-stroke text-left md:grid-cols-2 xl:grid-cols-4',
+        'grid w-full grid-cols-1 items-stretch gap-5 text-left md:grid-cols-2 xl:grid-cols-4',
         className,
       )}
     >
@@ -53,105 +57,104 @@ export function PlanCards({ variant = 'compact', className }: PlanCardsProps) {
                 ? t('pricing.cta.pro')
                 : t('pricing.cta.ultra');
 
-        // На главной тарифы вложены в секцию с h2, на странице тарифов — сразу под h1.
-        const PlanHeading = variant === 'compact' ? 'h3' : 'h2';
-
-        const tabLabel = isCurrent
-          ? t('pricing.currentPlan')
-          : isPro
-            ? t('pricing.popular')
-            : isUltra && variant === 'full'
-              ? t('pricing.allInclusive')
-              : null;
-
         return (
           <div
             key={plan.id}
             className={cn(
-              'relative flex flex-col justify-between px-6 pt-12 pb-6',
-              !tabLabel && 'max-md:pt-7',
-              isPro ? 'bg-surface-2' : 'bg-surface',
-              isCurrent && 'shadow-[inset_0_0_0_1px_var(--accent)]',
+              'relative flex flex-col justify-between rounded-lg border p-6 transition-[transform,box-shadow,border-color] duration-300 ease-out-expo',
+              isPro
+                ? 'gradient-border border-transparent bg-surface-2 shadow-highlight xl:-translate-y-2'
+                : isUltra
+                  ? 'gradient-border gradient-border-animated border-transparent bg-surface shadow-md'
+                  : 'border-stroke bg-surface shadow-sm hover:border-stroke-strong hover:shadow-lg',
+              isCurrent && 'ring-2 ring-accent/40',
             )}
           >
-            {tabLabel ? (
-              <span
-                className={cn(
-                  'absolute top-0 left-6 px-2.5 py-1 text-[12px] font-medium [border-radius:0_0_7px_7px] [corner-shape:round_round_bevel_bevel]',
-                  isPro && !isCurrent
-                    ? 'bg-brand-gradient text-accent-text'
-                    : 'bg-surface-3 text-text',
-                )}
-              >
-                {tabLabel}
-              </span>
+            {isCurrent ? (
+              <div className="absolute -top-3 left-6 z-10">
+                <Badge tone="brand" className="bg-surface">
+                  {t('pricing.currentPlan')}
+                </Badge>
+              </div>
+            ) : isPro ? (
+              <div className="absolute -top-3 left-6 z-10">
+                <span className="inline-flex items-center rounded-full bg-brand-gradient px-3 py-0.5 text-[12px] font-semibold leading-5 text-accent-text shadow-glow">
+                  {t('pricing.popular')}
+                </span>
+              </div>
+            ) : isUltra && variant === 'full' ? (
+              <div className="absolute -top-3 left-6 z-10">
+                <Badge tone="ultra" className="bg-surface">
+                  {t('pricing.allInclusive')}
+                </Badge>
+              </div>
             ) : null}
 
             <div>
-              <div className="flex items-baseline justify-between gap-3">
-                <PlanHeading className="sharp text-[24px] font-medium tracking-[-0.02em] text-text">
+              <div className="mb-3 flex items-center justify-between gap-2">
+                <h2 className="flex items-center gap-2 text-lg font-semibold tracking-tight text-text">
+                  <span aria-hidden="true" className={cn('size-2 rounded-full', TIER_DOT[plan.id] ?? 'bg-subtle')} />
                   {t(plan.nameKey)}
-                </PlanHeading>
-                {plan.limitBadge ? (
-                  <span className="text-[13px] text-subtle">{plan.limitBadge[language]}</span>
-                ) : null}
+                </h2>
+                {plan.limitBadge && !isPro && (
+                  <div className="flex items-center gap-1 text-xs font-medium text-muted">
+                    <BoltIcon className="size-3.5 text-accent" />
+                    <span>{plan.limitBadge[language]}</span>
+                  </div>
+                )}
               </div>
 
-              <div className="mt-5 flex flex-wrap items-baseline gap-x-2 gap-y-1">
-                <span className="sharp tabular text-[48px] leading-none font-medium tracking-[-0.04em] text-text">
-                  {priceDisplay}
-                </span>
-                <span className="text-[14px] text-muted">/{t('pricing.month')}</span>
+              <div className="flex flex-wrap items-baseline gap-x-1.5 gap-y-1">
+                <span className="tabular text-4xl font-semibold tracking-tight text-text">{priceDisplay}</span>
+                <span className="text-sm text-muted">/{t('pricing.month')}</span>
                 {plan.originalPriceMonthly ? (
-                  <span className="tabular text-[14px] text-subtle line-through">
+                  <span className="ml-1 text-sm font-normal text-subtle line-through">
                     ${plan.originalPriceMonthly}
                   </span>
                 ) : null}
                 {plan.discountBadge ? (
-                  <Badge tone="warning" className="ml-1 self-center">
+                  <Badge tone="warning" className="ml-1">
                     {plan.discountBadge[language]}
                   </Badge>
                 ) : null}
               </div>
 
-              {plan.modelsHighlight ? (
-                <p className="mt-4 min-h-[2.8em] text-[14px] leading-snug text-muted">
+              {plan.modelsHighlight && (
+                <div className="mt-3 text-[13px] font-medium leading-snug text-accent">
                   {typeof plan.modelsHighlight === 'string'
                     ? plan.modelsHighlight
                     : plan.modelsHighlight[language]}
-                </p>
-              ) : null}
+                </div>
+              )}
 
-              <ul className="mt-6 flex flex-col gap-2.5 border-t border-stroke pt-6 text-[14px]">
+              <div className="my-5 h-px bg-stroke" />
+
+              <ul className="flex flex-col gap-3 text-sm">
                 {lines.map((item, index) => (
                   <li key={index} className="flex items-start gap-2.5">
-                    <CheckIcon className="mt-0.5 size-4 shrink-0 text-accent" />
-                    <span className="leading-relaxed text-text">{item}</span>
+                    <span className="mt-0.5 grid size-5 shrink-0 place-items-center rounded-full bg-accent-soft text-accent">
+                      <CheckIcon className="size-3.5" />
+                    </span>
+                    <span className="leading-relaxed text-muted">{item}</span>
                   </li>
                 ))}
               </ul>
             </div>
 
-            <div className="mt-8">
+            <div className="mt-8 pt-2">
               {variant === 'full' ? (
                 isCurrent ? (
                   <Button variant="outline" disabled fullWidth>
                     {t('pricing.currentPlan')}
                   </Button>
                 ) : isFree ? (
-                  <Link
-                    to="/chat"
-                    className={buttonClasses({ variant: 'outline', fullWidth: true })}
-                  >
+                  <Link to="/chat" className={buttonClasses({ variant: 'outline', fullWidth: true })}>
                     {t('landing.cta')}
                   </Link>
                 ) : (
                   <Link
                     to={`/checkout/${plan.id}`}
-                    className={buttonClasses({
-                      variant: emphasised ? 'primary' : 'outline',
-                      fullWidth: true,
-                    })}
+                    className={buttonClasses({ variant: emphasised ? 'primary' : 'outline', fullWidth: true })}
                   >
                     {t('pricing.choosePlan')}
                   </Link>
@@ -159,10 +162,7 @@ export function PlanCards({ variant = 'compact', className }: PlanCardsProps) {
               ) : (
                 <Link
                   to={isFree ? '/chat' : `/checkout/${plan.id}`}
-                  className={buttonClasses({
-                    variant: isPro ? 'primary' : 'outline',
-                    fullWidth: true,
-                  })}
+                  className={buttonClasses({ variant: emphasised ? 'primary' : 'outline', fullWidth: true })}
                 >
                   {compactCtaLabel}
                 </Link>

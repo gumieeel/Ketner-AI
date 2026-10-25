@@ -35,11 +35,7 @@ export function ModelMark({ modelId, size = 'md', className }: ModelMarkProps) {
   return (
     <span
       aria-hidden="true"
-      className={cn(
-        'inline-flex shrink-0 items-center justify-center',
-        boxClasses[size],
-        className,
-      )}
+      className={cn('inline-flex shrink-0 items-center justify-center', boxClasses[size], className)}
       style={{
         color,
         backgroundColor: `color-mix(in srgb, ${color} 14%, transparent)`,

@@ -50,7 +50,7 @@ export function PanelShell({
 /** Таймер счёта: подпись и обратный отсчёт табличными цифрами. */
 export function TimerPill({ label, value }: { label: string; value: string }) {
   return (
-    <div className="inline-flex shrink-0 items-center gap-2 self-start rounded-md border border-stroke bg-canvas px-3 py-1.5 text-xs sm:self-auto">
+    <div className="inline-flex shrink-0 items-center gap-2 self-start rounded-full border border-stroke bg-canvas px-3 py-1.5 text-xs sm:self-auto">
       <span className="text-muted">{label}</span>
       <span className="font-semibold text-accent tabular-nums">{value}</span>
     </div>
@@ -75,10 +75,7 @@ export function StatusRow({
     <div className="flex flex-col gap-2 rounded-xl border border-stroke bg-canvas px-3.5 py-3 text-[13px]">
       <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1">
         <span className="flex items-center gap-2">
-          <span
-            aria-hidden="true"
-            className={cn('size-2 shrink-0 animate-pulse rounded-full', dotClassName)}
-          />
+          <span aria-hidden="true" className={cn('size-2 shrink-0 animate-pulse rounded-full', dotClassName)} />
           <span className="text-muted">
             {t('checkout.statusLabel')} <strong className="font-medium text-text">{status}</strong>
           </span>
@@ -117,10 +114,7 @@ export function Notice({
   return (
     <div
       role={live ? (tone === 'warning' ? 'alert' : 'status') : undefined}
-      className={cn(
-        'flex items-start gap-2.5 rounded-xl border p-3.5 text-[13px] leading-5 text-text',
-        box,
-      )}
+      className={cn('flex items-start gap-2.5 rounded-xl border p-3.5 text-[13px] leading-5 text-text', box)}
     >
       <Icon className={cn('mt-0.5 size-4 shrink-0', icon)} />
       <div className="min-w-0 flex-1">{children}</div>
@@ -189,22 +183,11 @@ export function ChoiceTile({
 }
 
 /** Маленькая метка в углу плитки: на выбранной плитке становится акцентной. */
-export function TileTag({
-  selected = false,
-  tone,
-  children,
-}: {
-  selected?: boolean;
-  tone?: BadgeTone;
-  children: ReactNode;
-}) {
+export function TileTag({ selected = false, tone, children }: { selected?: boolean; tone?: BadgeTone; children: ReactNode }) {
   return (
     <Badge
       tone={tone ?? (selected ? 'brand' : 'neutral')}
-      className={cn(
-        'px-2 py-0 text-[11px] font-semibold',
-        (selected || tone === 'brand') && 'bg-surface',
-      )}
+      className={cn('px-2 py-0 text-[11px] font-semibold', (selected || tone === 'brand') && 'bg-surface')}
     >
       {children}
     </Badge>
@@ -262,11 +245,7 @@ export function CopyButton({
       className="shrink-0"
       onClick={onCopy}
       leftIcon={
-        copied ? (
-          <CheckIcon className="size-3.5 text-success" />
-        ) : (
-          <CopyIcon className="size-3.5 text-muted" />
-        )
+        copied ? <CheckIcon className="size-3.5 text-success" /> : <CopyIcon className="size-3.5 text-muted" />
       }
     >
       <span aria-live="polite">{copied ? t('checkout.cryptoCopied') : label}</span>
@@ -277,11 +256,7 @@ export function CopyButton({
 /** Каркас страницы оформления, пока восстанавливается сессия. */
 export function CheckoutSkeleton({ label }: { label: string }) {
   return (
-    <div
-      role="status"
-      aria-label={label}
-      className="mx-auto flex w-full max-w-5xl flex-col gap-6 md:gap-8"
-    >
+    <div role="status" aria-label={label} className="mx-auto flex w-full max-w-5xl flex-col gap-6 md:gap-8">
       <div className="flex items-center gap-3.5 border-b border-stroke pb-6">
         <Skeleton className="size-11 rounded-xl" />
         <div className="flex flex-col gap-2">

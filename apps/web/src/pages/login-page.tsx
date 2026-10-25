@@ -8,7 +8,6 @@ import {
   GoogleIcon,
   SparkleIcon,
 } from '@/components/icons';
-import { LegalNotice } from '@/components/auth/legal-notice';
 import { AuthShell } from '@/components/layout/auth-shell';
 import { Button } from '@/components/ui/button';
 import { Divider } from '@/components/ui/divider';
@@ -16,15 +15,14 @@ import { IconButton } from '@/components/ui/icon-button';
 import { Field, Input } from '@/components/ui/input';
 import { authClient } from '@/features/auth/auth-client';
 import { useAuth } from '@/features/auth/auth-store';
-import { savePendingCode } from '@/features/auth/pending-code';
 import { useTranslation } from '@/i18n';
 
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const MIN_PASSWORD_LENGTH = 8;
 
 /**
- * Страница входа: почта и пароль, затем код из письма на странице /login/verify.
- * Плюс вход через Google и GitHub (в тестах — mock-OAuth) и «Забыли пароль?» (/login/forgot).
+ * Страница входа.
+ * Полноценная клиентская валидация, сохранение сессии и поддержка mock-OAuth.
  */
 export function LoginPage() {
   const { t } = useTranslation();
@@ -53,12 +51,6 @@ export function LoginPage() {
   const [serverError, setServerError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
-  const forgotParams = new URLSearchParams({
-    ...(email.trim() ? { email: email.trim() } : {}),
-    ...(isSafeRedirect ? { redirect: redirectUrl } : {}),
-  }).toString();
-  const forgotLink = forgotParams ? `/login/forgot?${forgotParams}` : '/login/forgot';
-
   const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setServerError(null);
@@ -86,16 +78,8 @@ export function LoginPage() {
 
     setLoading(true);
     try {
-      const challenge = await login({ email: trimmedEmail, password });
-      savePendingCode('login', {
-        challengeId: challenge.challengeId,
-        email: trimmedEmail,
-        maskedEmail: challenge.maskedEmail,
-        resendAt: Date.now() + challenge.resendAfterSec * 1000,
-      });
-      navigate(
-        `/login/verify${isSafeRedirect ? `?redirect=${encodeURIComponent(redirectUrl)}` : ''}`,
-      );
+      await login({ email: trimmedEmail, password });
+      navigate(redirectUrl, { replace: true });
     } catch (error) {
       setServerError(error instanceof Error ? error.message : t('auth.loginFailed'));
     } finally {
@@ -140,12 +124,24 @@ export function LoginPage() {
     }
   };
 
+  const handleDemoFill = () => {
+    setEmail('demo@ketner.ai');
+    setPassword('password123');
+    setEmailError(null);
+    setPasswordError(null);
+    setServerError(null);
+  };
+
   return (
     <AuthShell
       title={t('auth.loginTitle')}
       footer={
         <Link
-          to={isSafeRedirect ? `/signup?redirect=${encodeURIComponent(redirectUrl)}` : '/signup'}
+          to={
+            isSafeRedirect
+              ? `/signup?redirect=${encodeURIComponent(redirectUrl)}`
+              : '/signup'
+          }
           className="inline-flex min-h-11 items-center font-medium text-accent hover:underline"
         >
           {t('auth.toSignup')}
@@ -176,36 +172,34 @@ export function LoginPage() {
         )}
 
         {/* 3. OAuth Кнопки */}
-        <div className="flex flex-col gap-3">
-          <div className="grid grid-cols-2 gap-3">
-            <Button
-              variant="outline"
-              size="lg"
-              fullWidth
-              disabled={loading}
-              onClick={() => void handleOAuth('google')}
-              aria-label={t('auth.continueGoogle')}
-              title={t('auth.oauthStub')}
-              className="gap-2 text-sm font-medium"
-            >
-              <GoogleIcon className="size-4 text-text shrink-0" />
-              <span>Google</span>
-            </Button>
+        <div className="grid grid-cols-2 gap-3">
+          <Button
+            variant="outline"
+            size="lg"
+            fullWidth
+            disabled={loading}
+            onClick={() => void handleOAuth('google')}
+            aria-label={t('auth.continueGoogle')}
+            title={t('auth.oauthStub')}
+            className="gap-2 text-sm font-medium"
+          >
+            <GoogleIcon className="size-4 text-text shrink-0" />
+            <span>Google</span>
+          </Button>
 
-            <Button
-              variant="outline"
-              size="lg"
-              fullWidth
-              disabled={loading}
-              onClick={() => void handleOAuth('github')}
-              aria-label={t('auth.continueGitHub')}
-              title={t('auth.oauthStub')}
-              className="gap-2 text-sm font-medium"
-            >
-              <GitHubIcon className="size-4 text-text shrink-0" />
-              <span>GitHub</span>
-            </Button>
-          </div>
+          <Button
+            variant="outline"
+            size="lg"
+            fullWidth
+            disabled={loading}
+            onClick={() => void handleOAuth('github')}
+            aria-label={t('auth.continueGitHub')}
+            title={t('auth.oauthStub')}
+            className="gap-2 text-sm font-medium"
+          >
+            <GitHubIcon className="size-4 text-text shrink-0" />
+            <span>GitHub</span>
+          </Button>
         </div>
 
         {/* 4. Разделитель */}
@@ -233,7 +227,11 @@ export function LoginPage() {
             )}
           </Field>
 
-          <Field id="login-password" label={t('auth.password')} error={passwordError ?? undefined}>
+          <Field
+            id="login-password"
+            label={t('auth.password')}
+            error={passwordError ?? undefined}
+          >
             {({ id, invalid, 'aria-describedby': describedBy }) => (
               <div className="relative flex items-center">
                 <Input
@@ -269,22 +267,34 @@ export function LoginPage() {
             )}
           </Field>
 
-          <div className="-mt-2 flex justify-end">
-            <Link
-              to={forgotLink}
-              className="inline-flex min-h-11 items-center text-[13px] font-medium text-accent hover:underline"
-            >
-              {t('auth.forgotPassword')}
-            </Link>
-          </div>
-
           {/* 6. Кнопка «Войти» */}
-          <Button size="lg" fullWidth loading={loading} type="submit" className="mt-2">
+          <Button
+            size="lg"
+            fullWidth
+            loading={loading}
+            type="submit"
+            className="mt-2"
+          >
             {loading ? t('auth.loggingIn') : t('auth.login')}
           </Button>
+
+          {/* 7. Быстрый демо-вход */}
+          <div className="flex justify-center pt-1">
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={handleDemoFill}
+              className="text-xs text-muted hover:text-text"
+            >
+              {t('auth.demoQuickLogin')}
+            </Button>
+          </div>
         </form>
 
-        <LegalNotice />
+        <p role="status" className="text-balance text-center text-xs leading-5 text-muted">
+          {t('auth.demoNotice')}
+        </p>
       </div>
     </AuthShell>
   );

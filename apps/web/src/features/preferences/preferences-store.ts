@@ -10,18 +10,12 @@ interface PreferencesState {
   sidebarOpen: boolean;
   /** Выбранная модель чата: переживает перезагрузку страницы. */
   chatModelId: string;
-  /**
-   * Режим Max (только Ultra): модели Pro и Ultra размышляют на уровне xhigh вместо medium.
-   * Хранится как желание пользователя; действует, только если тариф позволяет (см. reasoningModeFor).
-   */
-  maxMode: boolean;
   setTheme: (theme: Theme) => void;
   toggleTheme: () => void;
   setLanguage: (language: Language) => void;
   setSidebarOpen: (open: boolean) => void;
   toggleSidebar: () => void;
   setChatModelId: (modelId: string) => void;
-  setMaxMode: (on: boolean) => void;
 }
 
 export const DEFAULT_THEME: Theme = 'dark';
@@ -31,8 +25,8 @@ export const DEFAULT_MODEL_ID = 'auto';
 
 /** Цвет системной панели браузера: совпадает с токеном --canvas каждой темы. */
 export const THEME_COLOR: Record<Theme, string> = {
-  dark: '#1a1c1b',
-  light: '#eceee9',
+  dark: '#09090b',
+  light: '#fafafa',
 };
 
 export function applyTheme(theme: Theme): void {
@@ -60,10 +54,6 @@ function readStoredModelId(): string {
   return storage.get('model') ?? DEFAULT_MODEL_ID;
 }
 
-function readStoredMaxMode(): boolean {
-  return storage.get('maxMode') === '1';
-}
-
 /**
  * Пользовательские настройки интерфейса.
  *
@@ -76,7 +66,6 @@ export const usePreferences = create<PreferencesState>((set, get) => ({
   language: readStoredLanguage(),
   sidebarOpen: false,
   chatModelId: readStoredModelId(),
-  maxMode: readStoredMaxMode(),
 
   setTheme: (theme) => {
     storage.set('theme', theme);
@@ -100,10 +89,5 @@ export const usePreferences = create<PreferencesState>((set, get) => ({
   setChatModelId: (chatModelId) => {
     storage.set('model', chatModelId);
     set({ chatModelId });
-  },
-
-  setMaxMode: (maxMode) => {
-    storage.set('maxMode', maxMode ? '1' : '0');
-    set({ maxMode });
   },
 }));

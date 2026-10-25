@@ -24,7 +24,6 @@ import {
 import { useTranslation, type TranslationKey } from '@/i18n';
 import { cn } from '@/lib/cn';
 import type { PlanId } from '@/features/auth/types';
-import { RegistrationsPanel } from './admin/registrations-panel';
 
 interface UserSummary {
   id: string;
@@ -112,82 +111,6 @@ interface UserDetail {
   }>;
 }
 
-type CacheStatus = 'working' | 'not_working' | 'no_data' | 'not_expected';
-
-interface ModelUsage30d {
-  modelId: string;
-  name: string | null;
-  vendor: string;
-  requests: number;
-  avgInputTokens: number;
-  avgOutputTokens: number;
-  cachedTokenSharePct: number;
-  cacheHitRequestsPct: number;
-  cacheEligibleRequests: number;
-  cacheStatus: CacheStatus;
-  avgCostPerRequest: number;
-  totalCost: number;
-  costShareByPlanPct: Record<string, number>;
-}
-
-const CACHE_STATUS_TONE: Record<CacheStatus, string> = {
-  working: 'text-success',
-  not_working: 'text-danger',
-  no_data: 'text-muted',
-  not_expected: 'text-subtle',
-};
-
-/** Сводка по моделям за 30 дней: сколько запросов, какой вход и выход, срабатывает ли кэш. */
-function ModelUsageTable({ models }: { models: ModelUsage30d[] }) {
-  const { t } = useTranslation();
-  if (models.length === 0) {
-    return <p className="text-[13px] text-muted">{t('admin.models30dEmpty')}</p>;
-  }
-  return (
-    <div className="overflow-x-auto">
-      <table className="w-full min-w-[640px] text-left text-[13px] tabular-nums">
-        <thead className="text-muted">
-          <tr>
-            <th className="py-1.5 pr-3 font-medium">{t('admin.colModelName')}</th>
-            <th className="py-1.5 pr-3 font-medium">{t('admin.colModelRequests')}</th>
-            <th className="py-1.5 pr-3 font-medium">{t('admin.colAvgTokens')}</th>
-            <th className="py-1.5 pr-3 font-medium">{t('admin.colCached')}</th>
-            <th className="py-1.5 pr-3 font-medium">{t('admin.colAvgCost')}</th>
-            <th className="py-1.5 font-medium">{t('admin.colPlanShare')}</th>
-          </tr>
-        </thead>
-        <tbody>
-          {models.map((m) => (
-            <tr key={m.modelId} className="border-t border-border/60">
-              <td className="py-1.5 pr-3">
-                <span className="font-medium text-text">{m.name ?? m.modelId}</span>
-                <span className="ml-1.5 text-xs text-subtle">{m.vendor}</span>
-              </td>
-              <td className="py-1.5 pr-3">{m.requests}</td>
-              <td className="py-1.5 pr-3">
-                {m.avgInputTokens} / {m.avgOutputTokens}
-              </td>
-              <td className="py-1.5 pr-3">
-                {m.cachedTokenSharePct}%{' '}
-                <span className={cn('text-xs', CACHE_STATUS_TONE[m.cacheStatus])}>
-                  {t(`admin.cacheStatus.${m.cacheStatus}` as TranslationKey)}
-                </span>
-              </td>
-              <td className="py-1.5 pr-3">${m.avgCostPerRequest.toFixed(4)}</td>
-              <td className="py-1.5 text-xs text-muted">
-                {Object.entries(m.costShareByPlanPct)
-                  .sort((a, b) => b[1] - a[1])
-                  .map(([plan, share]) => `${plan} ${share}%`)
-                  .join(' · ')}
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
-  );
-}
-
 interface GatewayMetricsData {
   totalRequests: number;
   totalCost: number;
@@ -213,9 +136,7 @@ interface GatewayMetricsData {
     requests: number;
     totalTokens: number;
     averageCostPerUser: number;
-    costSharePct?: number;
   }>;
-  models30d?: ModelUsage30d[];
   latency: {
     averageLatencyMs: number;
     p95LatencyMs: number;
@@ -239,7 +160,9 @@ interface GatewayMetricsData {
  * Ошибка для показа в интерфейсе: либо ключ перевода (язык можно переключить
  * после появления ошибки), либо готовый текст, пришедший с сервера.
  */
-type Problem = { key: TranslationKey; vars?: Record<string, string | number> } | { text: string };
+type Problem =
+  | { key: TranslationKey; vars?: Record<string, string | number> }
+  | { text: string };
 
 class ProblemError extends Error {
   readonly problem: Problem;
@@ -267,15 +190,7 @@ const PLAN_TONES: Record<string, BadgeTone> = {
   ultra: 'ultra',
 };
 
-const PLAN_OPTIONS: PlanId[] = [
-  'free',
-  'plus',
-  'pro',
-  'ultra',
-  'gpt-pro',
-  'claude-pro',
-  'gemini-pro',
-];
+const PLAN_OPTIONS: PlanId[] = ['free', 'plus', 'pro', 'ultra', 'gpt-pro', 'claude-pro', 'gemini-pro'];
 
 const SELECT_CLASS =
   'h-11 rounded-md border border-stroke bg-surface px-3 text-sm text-text shadow-xs transition-[border-color,box-shadow] duration-200 hover:border-stroke-strong focus:border-accent focus:outline-none focus:ring-4 focus:ring-accent-soft';
@@ -345,15 +260,7 @@ function MetricCard({ title, children }: { title: string; children: ReactNode })
   );
 }
 
-function MetricRow({
-  label,
-  value,
-  tone,
-}: {
-  label: ReactNode;
-  value: ReactNode;
-  tone?: 'accent' | 'muted';
-}) {
+function MetricRow({ label, value, tone }: { label: ReactNode; value: ReactNode; tone?: 'accent' | 'muted' }) {
   return (
     <div className="flex items-baseline justify-between gap-3 text-[13px]">
       <span className="text-muted">{label}</span>
@@ -471,7 +378,6 @@ export function AdminPage() {
   const [planFilter, setPlanFilter] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<Problem | null>(null);
-  const [reloadToken, setReloadToken] = useState(0);
 
   // Selected user for details & edit modal
   const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
@@ -637,11 +543,7 @@ export function AdminPage() {
     }
   };
 
-  const isSelf =
-    detailUser &&
-    currentUser &&
-    (currentUser.id === detailUser.id ||
-      currentUser.email.toLowerCase() === detailUser.email.toLowerCase());
+  const isSelf = detailUser && currentUser && (currentUser.id === detailUser.id || currentUser.email.toLowerCase() === detailUser.email.toLowerCase());
 
   const hasData = users.length > 0;
   const showKpiSkeleton = loading && !hasData;
@@ -691,7 +593,6 @@ export function AdminPage() {
             onClick={() => {
               void loadUsers();
               void loadMetrics();
-              setReloadToken((value) => value + 1);
             }}
           >
             {t('admin.refresh')}
@@ -753,10 +654,7 @@ export function AdminPage() {
               >
                 <span className="flex min-w-0 flex-wrap items-center gap-2 text-text">
                   <span className="min-w-0 break-all">{alert.userEmail}</span>
-                  <Badge
-                    tone={PLAN_TONES[alert.plan] ?? 'outline'}
-                    className="px-2 py-0 text-[11px] uppercase"
-                  >
+                  <Badge tone={PLAN_TONES[alert.plan] ?? 'outline'} className="px-2 py-0 text-[11px] uppercase">
                     {alert.plan}
                   </Badge>
                 </span>
@@ -773,9 +671,6 @@ export function AdminPage() {
         </div>
       )}
 
-      {/* Регистрации: по времени, способу входа и источнику */}
-      <RegistrationsPanel getHeaders={getHeaders} reloadToken={reloadToken} />
-
       {/* Phase 4: Метрики шлюза (Cache Hit Rate, Latency, TTFT, Источники и Тарифы) */}
       {metrics && (
         <Card className="flex flex-col gap-4 rounded-2xl p-4 sm:p-5">
@@ -787,10 +682,7 @@ export function AdminPage() {
               {t('admin.gatewayTitle')}
             </h2>
             <p className="text-[13px] text-muted tabular-nums">
-              {t('admin.gatewayTotals', {
-                requests: metrics.totalRequests,
-                cost: metrics.totalCost,
-              })}
+              {t('admin.gatewayTotals', { requests: metrics.totalRequests, cost: metrics.totalCost })}
             </p>
           </div>
 
@@ -823,10 +715,7 @@ export function AdminPage() {
 
             <MetricCard title={t('admin.costBySource')}>
               <div className="flex flex-col gap-1">
-                <MetricRow
-                  label={t('admin.sourceProvider')}
-                  value={`$${metrics.costBySource.provider.cost}`}
-                />
+                <MetricRow label={t('admin.sourceProvider')} value={`$${metrics.costBySource.provider.cost}`} />
                 <MetricRow
                   label={t('admin.sourceCache')}
                   value={`$0.00 · ${t('admin.requestsShort', { count: metrics.costBySource.cache.requests })}`}
@@ -846,22 +735,12 @@ export function AdminPage() {
                   <MetricRow
                     key={p.plan}
                     label={<span className="capitalize">{p.plan}</span>}
-                    value={`$${p.totalCost}${p.costSharePct !== undefined ? ` (${p.costSharePct}%)` : ''} · ${t('admin.requestsShort', { count: p.requests })}`}
+                    value={`$${p.totalCost} · ${t('admin.requestsShort', { count: p.requests })}`}
                   />
                 ))}
               </div>
             </MetricCard>
           </div>
-
-          {metrics.models30d && (
-            <div className="flex flex-col gap-2">
-              <div>
-                <p className="text-sm font-semibold text-text">{t('admin.models30dTitle')}</p>
-                <p className="text-xs text-subtle">{t('admin.models30dHint')}</p>
-              </div>
-              <ModelUsageTable models={metrics.models30d} />
-            </div>
-          )}
         </Card>
       )}
 
@@ -954,27 +833,13 @@ export function AdminPage() {
           <table className="w-full text-left text-[13px]" aria-busy={loading}>
             <thead className="border-b border-stroke bg-surface-2 text-xs font-medium text-muted">
               <tr>
-                <th scope="col" className="px-4 py-3 font-medium">
-                  {t('admin.colUser')}
-                </th>
-                <th scope="col" className="hidden px-4 py-3 font-medium md:table-cell">
-                  {t('admin.colPlan')}
-                </th>
-                <th scope="col" className="hidden px-4 py-3 font-medium lg:table-cell">
-                  {t('admin.colRequests')}
-                </th>
-                <th scope="col" className="hidden px-4 py-3 font-medium lg:table-cell">
-                  {t('admin.colTokens')}
-                </th>
-                <th scope="col" className="hidden px-4 py-3 font-medium sm:table-cell">
-                  {t('admin.colBudget')}
-                </th>
-                <th scope="col" className="hidden px-4 py-3 font-medium xl:table-cell">
-                  {t('admin.colRemaining')}
-                </th>
-                <th scope="col" className="px-4 py-3 text-right font-medium">
-                  {t('admin.colAction')}
-                </th>
+                <th scope="col" className="px-4 py-3 font-medium">{t('admin.colUser')}</th>
+                <th scope="col" className="hidden px-4 py-3 font-medium md:table-cell">{t('admin.colPlan')}</th>
+                <th scope="col" className="hidden px-4 py-3 font-medium lg:table-cell">{t('admin.colRequests')}</th>
+                <th scope="col" className="hidden px-4 py-3 font-medium lg:table-cell">{t('admin.colTokens')}</th>
+                <th scope="col" className="hidden px-4 py-3 font-medium sm:table-cell">{t('admin.colBudget')}</th>
+                <th scope="col" className="hidden px-4 py-3 font-medium xl:table-cell">{t('admin.colRemaining')}</th>
+                <th scope="col" className="px-4 py-3 text-right font-medium">{t('admin.colAction')}</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-stroke">
@@ -1004,9 +869,7 @@ export function AdminPage() {
                   >
                     <td className="px-4 py-3">
                       <div className="font-medium text-text">{u.name || t('admin.noName')}</div>
-                      <div className="mt-0.5 max-w-[42vw] truncate text-xs text-muted sm:max-w-[260px]">
-                        {u.email}
-                      </div>
+                      <div className="mt-0.5 max-w-[42vw] truncate text-xs text-muted sm:max-w-[260px]">{u.email}</div>
                       <div className="mt-1.5 md:hidden">
                         <PlanBadges user={u} />
                       </div>
@@ -1019,10 +882,7 @@ export function AdminPage() {
                     </td>
                     <td className="hidden px-4 py-3 tabular-nums lg:table-cell">
                       <span className="font-semibold text-text">{u.usage.requestsToday}</span>
-                      <span className="text-muted">
-                        {' '}
-                        / {u.limits.requestsPerDay !== null ? u.limits.requestsPerDay : '∞'}
-                      </span>
+                      <span className="text-muted"> / {u.limits.requestsPerDay !== null ? u.limits.requestsPerDay : '∞'}</span>
                     </td>
                     <td className="hidden px-4 py-3 tabular-nums lg:table-cell">
                       {u.usage.tokensToday.toLocaleString()}
@@ -1034,7 +894,9 @@ export function AdminPage() {
                       {u.remaining.tokensToday !== null ? (
                         <span
                           className={
-                            u.remaining.tokensToday < 0 ? 'font-semibold text-danger' : 'text-text'
+                            u.remaining.tokensToday < 0
+                              ? 'font-semibold text-danger'
+                              : 'text-text'
                           }
                         >
                           {u.remaining.tokensToday.toLocaleString()}
@@ -1075,11 +937,7 @@ export function AdminPage() {
           <ModalHeader
             titleId="admin-user-title"
             title={t('admin.modalTitle')}
-            description={
-              <span className="break-all tabular-nums">
-                {t('admin.modalId', { id: selectedUserId })}
-              </span>
-            }
+            description={<span className="break-all tabular-nums">{t('admin.modalId', { id: selectedUserId })}</span>}
             icon={<UserIcon className="size-5" />}
             onClose={closeDetail}
           />
@@ -1088,10 +946,7 @@ export function AdminPage() {
             {detailLoading ? (
               <DetailSkeleton />
             ) : detailError ? (
-              <div
-                role="alert"
-                className="flex items-start gap-3 rounded-xl border border-danger/35 bg-danger-soft p-4 text-sm text-danger"
-              >
+              <div role="alert" className="flex items-start gap-3 rounded-xl border border-danger/35 bg-danger-soft p-4 text-sm text-danger">
                 <AlertIcon className="mt-0.5 size-4 shrink-0" />
                 {describe(detailError)}
               </div>
@@ -1101,21 +956,15 @@ export function AdminPage() {
                 <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                   {/* User Info */}
                   <div className={cn(SUBTLE_PANEL, 'space-y-3')}>
-                    <PanelTitle icon={<UserIcon className="size-4 text-accent" />}>
-                      {t('admin.profile')}
-                    </PanelTitle>
+                    <PanelTitle icon={<UserIcon className="size-4 text-accent" />}>{t('admin.profile')}</PanelTitle>
                     <dl className="space-y-2 text-[13px]">
                       <div className="flex justify-between gap-3">
                         <dt className="shrink-0 text-muted">{t('admin.email')}</dt>
-                        <dd className="min-w-0 text-right break-all text-text">
-                          {detailUser.email}
-                        </dd>
+                        <dd className="min-w-0 text-right break-all text-text">{detailUser.email}</dd>
                       </div>
                       <div className="flex justify-between gap-3">
                         <dt className="shrink-0 text-muted">{t('admin.name')}</dt>
-                        <dd className="min-w-0 text-right font-medium break-words text-text">
-                          {detailUser.name}
-                        </dd>
+                        <dd className="min-w-0 text-right font-medium break-words text-text">{detailUser.name}</dd>
                       </div>
                       <div className="flex justify-between gap-3">
                         <dt className="shrink-0 text-muted">{t('admin.registered')}</dt>
@@ -1126,10 +975,7 @@ export function AdminPage() {
                       <div className="flex items-center justify-between gap-3">
                         <dt className="shrink-0 text-muted">{t('admin.plan')}</dt>
                         <dd>
-                          <Badge
-                            tone={PLAN_TONES[detailUser.plan] ?? 'brand'}
-                            className="uppercase"
-                          >
+                          <Badge tone={PLAN_TONES[detailUser.plan] ?? 'brand'} className="uppercase">
                             {detailUser.plan}
                           </Badge>
                         </dd>
@@ -1140,9 +986,7 @@ export function AdminPage() {
                   {/* Quick Edit Form */}
                   <div className={cn(SUBTLE_PANEL, 'space-y-3')}>
                     <div className="flex items-center justify-between gap-2">
-                      <PanelTitle icon={<EditIcon className="size-4 text-accent" />}>
-                        {t('admin.manage')}
-                      </PanelTitle>
+                      <PanelTitle icon={<EditIcon className="size-4 text-accent" />}>{t('admin.manage')}</PanelTitle>
                       {isSelf ? <Badge tone="brand">{t('admin.yourAccount')}</Badge> : null}
                     </div>
 
@@ -1187,15 +1031,10 @@ export function AdminPage() {
                     </div>
 
                     {saveError ? (
-                      <p role="alert" className="text-[13px] font-medium text-danger">
-                        {describe(saveError)}
-                      </p>
+                      <p role="alert" className="text-[13px] font-medium text-danger">{describe(saveError)}</p>
                     ) : null}
                     {saveSuccess ? (
-                      <p
-                        role="status"
-                        className="flex items-center gap-1.5 text-[13px] font-medium text-success"
-                      >
+                      <p role="status" className="flex items-center gap-1.5 text-[13px] font-medium text-success">
                         <CheckIcon className="size-3.5" /> {t('admin.saved')}
                       </p>
                     ) : null}
@@ -1213,38 +1052,17 @@ export function AdminPage() {
 
                 {/* Hourly & Daily Limits Comparison */}
                 <div className={cn(SUBTLE_PANEL, 'space-y-3')}>
-                  <PanelTitle icon={<BoltIcon className="size-4 text-accent" />}>
-                    {t('admin.limits')}
-                  </PanelTitle>
+                  <PanelTitle icon={<BoltIcon className="size-4 text-accent" />}>{t('admin.limits')}</PanelTitle>
                   <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
                     {(
                       [
-                        [
-                          'admin.reqHour',
-                          detailUser.usage.requestsLastHour,
-                          detailUser.limits.requestsPerHour,
-                        ],
-                        [
-                          'admin.reqDay',
-                          detailUser.usage.requestsToday,
-                          detailUser.limits.requestsPerDay,
-                        ],
-                        [
-                          'admin.tokHour',
-                          detailUser.usage.tokensLastHour,
-                          detailUser.limits.tokensPerHour,
-                        ],
-                        [
-                          'admin.tokDay',
-                          detailUser.usage.tokensToday,
-                          detailUser.limits.tokensPerDay,
-                        ],
+                        ['admin.reqHour', detailUser.usage.requestsLastHour, detailUser.limits.requestsPerHour],
+                        ['admin.reqDay', detailUser.usage.requestsToday, detailUser.limits.requestsPerDay],
+                        ['admin.tokHour', detailUser.usage.tokensLastHour, detailUser.limits.tokensPerHour],
+                        ['admin.tokDay', detailUser.usage.tokensToday, detailUser.limits.tokensPerDay],
                       ] as const
                     ).map(([labelKey, used, limit]) => (
-                      <div
-                        key={labelKey}
-                        className="rounded-xl border border-stroke bg-surface p-3"
-                      >
+                      <div key={labelKey} className="rounded-xl border border-stroke bg-surface p-3">
                         <span className="block text-xs text-muted">{t(labelKey)}</span>
                         <p className="mt-1 text-lg font-semibold tabular-nums">
                           {used.toLocaleString()}{' '}
@@ -1260,9 +1078,7 @@ export function AdminPage() {
                 {/* Profitability Card */}
                 <div className={cn(SUBTLE_PANEL, 'space-y-3')}>
                   <div className="flex flex-wrap items-center justify-between gap-2">
-                    <PanelTitle icon={<ChartIcon className="size-4 text-accent" />}>
-                      {t('admin.profit')}
-                    </PanelTitle>
+                    <PanelTitle icon={<ChartIcon className="size-4 text-accent" />}>{t('admin.profit')}</PanelTitle>
                     <div className="flex items-center gap-1.5 text-[13px] font-medium">
                       <StatusDot
                         tone={
@@ -1287,9 +1103,7 @@ export function AdminPage() {
                       <dt className="text-xs text-muted">{t('admin.revenue')}</dt>
                       <dd className="mt-1 font-semibold text-text tabular-nums">
                         ${detailUser.profitability.subscriptionRevenue.toFixed(2)}{' '}
-                        <span className="font-normal text-muted">
-                          ({detailUser.profitability.priceRub} ₽)
-                        </span>
+                        <span className="font-normal text-muted">({detailUser.profitability.priceRub} ₽)</span>
                       </dd>
                     </div>
                     <div className="rounded-xl border border-stroke bg-surface p-3">
@@ -1303,9 +1117,7 @@ export function AdminPage() {
                       <dd
                         className={cn(
                           'mt-1 font-semibold tabular-nums',
-                          detailUser.profitability.contributionMargin >= 0
-                            ? 'text-success'
-                            : 'text-danger',
+                          detailUser.profitability.contributionMargin >= 0 ? 'text-success' : 'text-danger',
                         )}
                       >
                         ${detailUser.profitability.contributionMargin.toFixed(2)}
@@ -1321,34 +1133,18 @@ export function AdminPage() {
                   </PanelTitle>
                   <div className="max-h-64 overflow-auto rounded-lg border border-stroke bg-surface">
                     {detailUser.recentRequests.length === 0 ? (
-                      <p className="py-8 text-center text-[13px] text-muted">
-                        {t('admin.noRequests')}
-                      </p>
+                      <p className="py-8 text-center text-[13px] text-muted">{t('admin.noRequests')}</p>
                     ) : (
                       <table className="w-full min-w-[560px] text-left text-xs">
                         <thead className="sticky top-0 border-b border-stroke bg-surface-2 text-muted">
                           <tr>
-                            <th scope="col" className="px-3 py-2 font-medium">
-                              {t('admin.colTime')}
-                            </th>
-                            <th scope="col" className="px-3 py-2 font-medium">
-                              {t('admin.colModel')}
-                            </th>
-                            <th scope="col" className="px-3 py-2 font-medium">
-                              {t('admin.colProvider')}
-                            </th>
-                            <th scope="col" className="px-3 py-2 font-medium">
-                              {t('admin.colTokensShort')}
-                            </th>
-                            <th scope="col" className="px-3 py-2 font-medium">
-                              {t('admin.colCost')}
-                            </th>
-                            <th scope="col" className="px-3 py-2 font-medium">
-                              {t('admin.colLatency')}
-                            </th>
-                            <th scope="col" className="px-3 py-2 font-medium">
-                              {t('admin.colStatus')}
-                            </th>
+                            <th scope="col" className="px-3 py-2 font-medium">{t('admin.colTime')}</th>
+                            <th scope="col" className="px-3 py-2 font-medium">{t('admin.colModel')}</th>
+                            <th scope="col" className="px-3 py-2 font-medium">{t('admin.colProvider')}</th>
+                            <th scope="col" className="px-3 py-2 font-medium">{t('admin.colTokensShort')}</th>
+                            <th scope="col" className="px-3 py-2 font-medium">{t('admin.colCost')}</th>
+                            <th scope="col" className="px-3 py-2 font-medium">{t('admin.colLatency')}</th>
+                            <th scope="col" className="px-3 py-2 font-medium">{t('admin.colStatus')}</th>
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-stroke tabular-nums">
@@ -1363,11 +1159,7 @@ export function AdminPage() {
                               <td className="px-3 py-2">${r.estimatedCost.toFixed(5)}</td>
                               <td className="px-3 py-2 text-muted">{r.latencyMs}ms</td>
                               <td className="px-3 py-2">
-                                <span
-                                  className={
-                                    r.status === 'success' ? 'text-success' : 'text-danger'
-                                  }
-                                >
+                                <span className={r.status === 'success' ? 'text-success' : 'text-danger'}>
                                   {r.status}
                                 </span>
                               </td>

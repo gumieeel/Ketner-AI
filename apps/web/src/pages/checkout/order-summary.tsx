@@ -14,19 +14,15 @@ const PLAN_ACCENTS: Record<string, { card: string; bar: string }> = {
 const PERKS = ['checkout.perk1', 'checkout.perk2', 'checkout.perk3'] as const;
 
 /** Сводка заказа справа: тариф, цена, что входит и строка о безопасности. */
-export function OrderSummary({ plan, feeUsd = 0 }: { plan: Plan; feeUsd?: number }) {
+export function OrderSummary({ plan }: { plan: Plan }) {
   const { t, language } = useTranslation();
   const accent = PLAN_ACCENTS[plan.id] ?? { card: 'border-stroke', bar: 'bg-brand-gradient' };
   const highlight =
-    typeof plan.modelsHighlight === 'string'
-      ? plan.modelsHighlight
-      : plan.modelsHighlight?.[language];
+    typeof plan.modelsHighlight === 'string' ? plan.modelsHighlight : plan.modelsHighlight?.[language];
 
   return (
     <aside className="flex flex-col gap-4 lg:sticky lg:top-24">
-      <Card
-        className={cn('flex flex-col gap-5 overflow-hidden rounded-2xl p-5 sm:p-6', accent.card)}
-      >
+      <Card className={cn('flex flex-col gap-5 overflow-hidden rounded-2xl p-5 sm:p-6', accent.card)}>
         <div aria-hidden="true" className={cn('absolute inset-x-0 top-0 h-1', accent.bar)} />
 
         <div className="flex items-center justify-between gap-3 border-b border-stroke pb-4">
@@ -37,13 +33,9 @@ export function OrderSummary({ plan, feeUsd = 0 }: { plan: Plan; feeUsd?: number
         <div>
           <div className="flex flex-wrap items-baseline justify-between gap-2">
             <h2 className="text-2xl font-semibold tracking-tight text-text">{t(plan.nameKey)}</h2>
-            {plan.discountBadge ? (
-              <Badge tone="success">{plan.discountBadge[language]}</Badge>
-            ) : null}
+            {plan.discountBadge ? <Badge tone="success">{plan.discountBadge[language]}</Badge> : null}
           </div>
-          {highlight ? (
-            <p className="mt-1.5 text-[13px] leading-5 text-muted">{highlight}</p>
-          ) : null}
+          {highlight ? <p className="mt-1.5 text-[13px] leading-5 text-muted">{highlight}</p> : null}
         </div>
 
         <dl className="flex flex-col gap-2.5 rounded-xl border border-stroke bg-canvas p-4 text-[13px]">
@@ -58,20 +50,11 @@ export function OrderSummary({ plan, feeUsd = 0 }: { plan: Plan; feeUsd?: number
           </div>
           <div className="flex items-center justify-between gap-3">
             <dt className="text-muted">{t('checkout.fee')}</dt>
-            <dd
-              className={cn(
-                'font-semibold tabular-nums',
-                feeUsd > 0 ? 'text-text' : 'text-success',
-              )}
-            >
-              ${feeUsd.toFixed(2)}
-            </dd>
+            <dd className="font-semibold text-success tabular-nums">$0.00</dd>
           </div>
           <div className="flex items-center justify-between gap-3 border-t border-stroke pt-2.5 text-base font-semibold text-text">
             <dt>{t('checkout.total')}</dt>
-            <dd className="text-gradient tabular-nums">
-              ${feeUsd > 0 ? (plan.priceMonthly + feeUsd).toFixed(2) : plan.priceMonthly}
-            </dd>
+            <dd className="text-gradient tabular-nums">${plan.priceMonthly}</dd>
           </div>
         </dl>
 

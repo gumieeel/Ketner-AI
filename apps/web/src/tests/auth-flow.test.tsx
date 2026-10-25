@@ -1,8 +1,8 @@
 import { fireEvent, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { useAuthNotice } from '@/features/auth/auth-notice';
 import { useAuth } from '@/features/auth/auth-store';
-import { FAKE_SIGNUP_CODE, installFakeApi } from './fake-api';
+import { getFreeUsage, incrementFreeUsage, isFreeLimitReached } from '@/features/billing/free-usage';
+import { installFakeApi } from './fake-api';
 import { renderRoute, resetAuth, resetChat, resetPreferences } from './test-utils';
 
 describe('auth-flow: сценарии авторизации и сессии', () => {
@@ -41,39 +41,23 @@ describe('auth-flow: сценарии авторизации и сессии', (
     fireEvent.change(passwordInput, { target: { value: 'password123' } });
     fireEvent.click(submitButton);
 
-    // Пароль верный — дальше код из письма; почта на экране замаскирована
-    expect(
-      await screen.findByRole('heading', { level: 1, name: 'Код для входа' }),
-    ).toBeInTheDocument();
-    // Страница кода — в каркасе входа, без шапки сайта поверх
-    expect(screen.queryByRole('link', { name: 'Возможности' })).not.toBeInTheDocument();
-    expect(screen.getAllByRole('heading', { level: 1 })).toHaveLength(1);
-    expect(screen.getByText(/d\*\*\*o@ketner\.ai/)).toBeInTheDocument();
-    expect(screen.queryByText(/demo@ketner\.ai/)).not.toBeInTheDocument();
-    expect(useAuth.getState().status).not.toBe('authenticated');
-
-    fireEvent.change(screen.getByLabelText('Код из письма'), {
-      target: { value: FAKE_SIGNUP_CODE },
-    });
     await waitFor(() => {
       expect(useAuth.getState().status).toBe('authenticated');
       expect(useAuth.getState().user?.email).toBe('demo@ketner.ai');
     });
-    expect(useAuthNotice.getState().notice).toBe('logged-in');
   });
 
-  it('на странице входа нет демо-входа, но есть ссылки на условия', () => {
+  it('быстрый демо-вход по ссылке', async () => {
     renderRoute('/login');
 
-    expect(screen.queryByText(/Быстрый вход/i)).not.toBeInTheDocument();
-    expect(screen.getByRole('link', { name: /соглашение и оферту/i })).toHaveAttribute(
-      'href',
-      '/terms',
-    );
-    expect(screen.getByRole('link', { name: /политику конфиденциальности/i })).toHaveAttribute(
-      'href',
-      '/privacy',
-    );
+    const quickFill = screen.getByText(/Быстрый вход/i);
+    fireEvent.click(quickFill);
+
+    const emailInput = screen.getByLabelText(/Email/i) as HTMLInputElement;
+    const passwordInput = screen.getByLabelText(/Пароль/i) as HTMLInputElement;
+
+    expect(emailInput.value).toBe('demo@ketner.ai');
+    expect(passwordInput.value).toBe('password123');
   });
 
   it('валидация и успешная регистрация на странице /signup', async () => {
@@ -95,96 +79,10 @@ describe('auth-flow: сценарии авторизации и сессии', (
     fireEvent.change(passwordInput, { target: { value: 'superSecret123' } });
     fireEvent.click(submitButton);
 
-    // Форма не создаёт аккаунт сразу: открывается страница ввода кода из письма
-    expect(
-      await screen.findByRole('heading', { level: 1, name: 'Подтвердите почту' }),
-    ).toBeInTheDocument();
-    expect(screen.getByText(/a\*\*\*x@example\.com/)).toBeInTheDocument();
-    expect(useAuth.getState().status).not.toBe('authenticated');
-    expect(screen.getByRole('button', { name: /Отправить код ещё раз через/ })).toBeDisabled();
-
-    const codeInput = screen.getByLabelText('Код из письма');
-    fireEvent.change(codeInput, { target: { value: '000000' } });
-    expect(await screen.findByText(/Неверный код/)).toBeInTheDocument();
-    expect(useAuth.getState().status).not.toBe('authenticated');
-
-    fireEvent.change(codeInput, { target: { value: FAKE_SIGNUP_CODE } });
     await waitFor(() => {
       expect(useAuth.getState().status).toBe('authenticated');
       expect(useAuth.getState().user?.name).toBe('Александр');
     });
-    expect(useAuthNotice.getState().notice).toBe('signed-up');
-  });
-
-  it('«Забыли пароль?»: почта → код из письма → новый пароль и вход', async () => {
-    const fakeApi = installFakeApi();
-    renderRoute('/login');
-
-    fireEvent.change(screen.getByLabelText(/Email/i), { target: { value: 'demo@ketner.ai' } });
-    fireEvent.click(screen.getByRole('link', { name: 'Забыли пароль?' }));
-
-    // Почта переносится из формы входа; страница — в каркасе входа, без шапки сайта
-    expect(
-      await screen.findByRole('heading', { level: 1, name: 'Восстановление пароля' }),
-    ).toBeInTheDocument();
-    expect(screen.queryByRole('link', { name: 'Возможности' })).not.toBeInTheDocument();
-    expect(screen.getByLabelText('Email')).toHaveValue('demo@ketner.ai');
-    fireEvent.click(screen.getByRole('button', { name: 'Получить код' }));
-
-    expect(
-      await screen.findByRole('heading', { level: 1, name: 'Код для сброса пароля' }),
-    ).toBeInTheDocument();
-    expect(screen.getByText(/d\*\*\*o@ketner\.ai/)).toBeInTheDocument();
-    const codeInput = screen.getByLabelText('Код из письма');
-    fireEvent.change(codeInput, { target: { value: '000000' } });
-    expect(await screen.findByText(/Неверный код/)).toBeInTheDocument();
-    fireEvent.change(codeInput, { target: { value: FAKE_SIGNUP_CODE } });
-
-    // Код принят — ещё не вход, а экран нового пароля
-    expect(
-      await screen.findByRole('heading', { level: 1, name: 'Новый пароль' }, { timeout: 2000 }),
-    ).toBeInTheDocument();
-    expect(useAuth.getState().status).not.toBe('authenticated');
-
-    const save = screen.getByRole('button', { name: 'Сохранить пароль' });
-    fireEvent.change(screen.getByLabelText('Новый пароль'), { target: { value: 'short' } });
-    fireEvent.click(save);
-    expect(screen.getByText(/Пароль должен содержать/i)).toBeInTheDocument();
-
-    fireEvent.change(screen.getByLabelText('Новый пароль'), {
-      target: { value: 'brandNewPass1' },
-    });
-    fireEvent.change(screen.getByLabelText('Повторите пароль'), {
-      target: { value: 'brandNewPass2' },
-    });
-    fireEvent.click(save);
-    expect(screen.getByText('Пароли не совпадают')).toBeInTheDocument();
-    expect(fakeApi.resetPassword).toBeUndefined();
-
-    fireEvent.change(screen.getByLabelText('Повторите пароль'), {
-      target: { value: 'brandNewPass1' },
-    });
-    fireEvent.click(save);
-    await waitFor(() => {
-      expect(useAuth.getState().status).toBe('authenticated');
-      expect(useAuth.getState().token).toBe('fake.reset.jwt.token');
-    });
-    expect(fakeApi.resetPassword).toBe('brandNewPass1');
-    expect(useAuthNotice.getState().notice).toBe('password-reset');
-  });
-
-  it('страница нового пароля без принятого кода возвращает к восстановлению', async () => {
-    renderRoute('/login/forgot/new');
-    expect(
-      await screen.findByRole('heading', { level: 1, name: 'Восстановление пароля' }),
-    ).toBeInTheDocument();
-  });
-
-  it('страница кода без начатой регистрации возвращает на форму', async () => {
-    renderRoute('/signup/verify');
-    expect(
-      await screen.findByRole('heading', { level: 1, name: 'Создание аккаунта' }),
-    ).toBeInTheDocument();
   });
 
   it('mock-OAuth создаёт сессию по клику', async () => {
@@ -227,6 +125,43 @@ describe('auth-flow: сценарии авторизации и сессии', (
     });
   });
 
+  it('при входе в аккаунт лимит обновляется и у каждого аккаунта свои независимые лимиты', async () => {
+    // 1. Гость тратит 3 сообщения и исчерпывает лимит
+    incrementFreeUsage('guest');
+    incrementFreeUsage('guest');
+    incrementFreeUsage('guest');
+    expect(isFreeLimitReached('guest')).toBe(true);
+
+    // 2. Входим под аккаунтом demo@ketner.ai
+    renderRoute('/login');
+    const emailInput = screen.getByLabelText(/Email/i);
+    const passwordInput = screen.getByLabelText(/Пароль/i);
+    const submitButton = screen.getByRole('button', { name: 'Войти' });
+
+    fireEvent.change(emailInput, { target: { value: 'demo@ketner.ai' } });
+    fireEvent.change(passwordInput, { target: { value: 'password123' } });
+    fireEvent.click(submitButton);
+
+    await waitFor(() => {
+      expect(useAuth.getState().status).toBe('authenticated');
+    });
+
+    const activeUser = useAuth.getState().user!;
+    // Лимит для аккаунта обновился / свежий (не заблокирован гостевым лимитом)
+    expect(isFreeLimitReached(activeUser.id)).toBe(false);
+    expect(getFreeUsage(activeUser.id).remaining).toBe(3);
+
+    // 3. Аккаунт 1 тратит свои сообщения
+    incrementFreeUsage(activeUser.id);
+    incrementFreeUsage(activeUser.id);
+    incrementFreeUsage(activeUser.id);
+    expect(isFreeLimitReached(activeUser.id)).toBe(true);
+
+    // 4. Другой аккаунт 'user-2' имеет свой независимый лимит
+    expect(isFreeLimitReached('user-2')).toBe(false);
+    expect(getFreeUsage('user-2').remaining).toBe(3);
+  });
+
   it('регистрация с параметром ?redirect=/checkout/gpt-pro перенаправляет обратно на чекаут и показывает уведомление', async () => {
     renderRoute('/signup?redirect=%2Fcheckout%2Fgpt-pro');
 
@@ -244,15 +179,9 @@ describe('auth-flow: сценарии авторизации и сессии', (
     fireEvent.change(passwordInput, { target: { value: 'secretPassword123' } });
     fireEvent.click(submitButton);
 
-    fireEvent.change(await screen.findByLabelText('Код из письма'), {
-      target: { value: FAKE_SIGNUP_CODE },
-    });
-
     await waitFor(() => {
       expect(useAuth.getState().status).toBe('authenticated');
-      expect(
-        screen.getByRole('heading', { level: 1, name: 'Оформление подписки' }),
-      ).toBeInTheDocument();
+      expect(screen.getByRole('heading', { level: 1, name: 'Оформление подписки' })).toBeInTheDocument();
       expect(screen.getByText('GPT Pro')).toBeInTheDocument();
     });
   });
@@ -279,3 +208,4 @@ describe('auth-flow: сценарии авторизации и сессии', (
     expect(toggleButton).toHaveAttribute('aria-pressed', 'false');
   });
 });
+

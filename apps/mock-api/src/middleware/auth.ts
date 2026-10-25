@@ -3,13 +3,9 @@ import type { NextFunction, Request, Response } from 'express';
 import { fromNodeHeaders } from 'better-auth/node';
 import { defaultBetterAuth } from '../auth/better-auth.js';
 import { verifyMockToken } from '../auth/jwt.js';
-import { betterAuthSessionMayOpen, betterAuthSignupMethod } from '../auth/better-auth-sync.js';
-import { attributionFromCookieHeader } from '../services/signup-attribution.js';
 import type { UserStore } from '../store/user-store.js';
-import { revokedTokenStore as defaultRevokedTokenStore } from '../store/index.js';
-import type { RevokedTokenStore } from '../store/revoked-token-store.js';
 import type { SubscriptionStore } from '../store/subscription-store.js';
-import { applySubscriptionExpiry } from '../services/user-plan.js';
+import { resolveBillingPlan } from '../services/plan-resolver.js';
 import type { PlanId, User } from '../types.js';
 import { sendError } from './errors.js';
 import { isVipEmail, isAdminEmail } from '../services/vip.js';
@@ -34,104 +30,45 @@ export function createAuthMiddleware(
   userStore: UserStore,
   betterAuthInstance = defaultBetterAuth,
   subscriptionStore?: SubscriptionStore,
-  revokedTokens: RevokedTokenStore = defaultRevokedTokenStore,
 ) {
-  /** Срок подписки: правило общее с API-ключами (services/user-plan.ts). */
-  const applyExpiry = (userId: string, plan: PlanId, isVip: boolean): PlanId =>
-    applySubscriptionExpiry(userStore, subscriptionStore, userId, plan, isVip);
-
-  return async (request: Request, response: Response, next: NextFunction): Promise<void> => {
-    // 1. Bearer-токен, выданный при входе. Он важнее cookie: клиент показывает того пользователя, чей токен
-    //    хранит, а в браузере может остаться cookie-сессия другого аккаунта (вход через Google под Ultra,
-    //    потом вход по паролю под Free). Если брать cookie первым, интерфейс показывал бы Free, а сервер
-    //    отвечал бы как Ultra.
-    let bearerRejected = false;
-    const authHeader = request.headers.authorization;
-    if (authHeader && authHeader.startsWith('Bearer ')) {
-      const token = authHeader.slice(7).trim();
-      // Токен, отозванный при выходе из аккаунта, не принимается, даже если подпись и срок в порядке.
-      const payload = revokedTokens.isRevoked(token) ? null : verifyMockToken(token);
-      // Токен не принят (истёк, подпись не сошлась, пользователя нет): запрос идёт как гостевой, но клиент
-      // получает заголовок и может сбросить устаревшую сессию вместо показа вошедшего пользователя.
-      if (payload) {
-        let user = userStore.findById(payload.sub);
-        if (!user && payload.email) {
-          user = userStore.findByEmail(payload.email);
-        }
-        // Пароль сменили (например, через «Забыли пароль?») — токены со старым паролем не принимаются.
-        // У токенов, выданных до появления отпечатка, его нет: они действуют до своего срока.
-        if (
-          user &&
-          payload.cred !== undefined &&
-          payload.cred !== userStore.credentialStamp(user.id)
-        ) {
-          user = null;
-        }
-        if (user) {
-          const isVip = Boolean(user.isVip || (user.email && isVipEmail(user.email)));
-          const isAdmin = Boolean(user.isAdmin || (user.email && isAdminEmail(user.email)));
-          let plan: PlanId = user.plan;
-          if (isVip) {
-            plan = 'ultra';
-          } else {
-            plan = applyExpiry(user.id, plan, false);
-          }
-          request.user = {
-            ...user,
-            isVip,
-            isAdmin,
-            plan,
-          };
-          request.userId = user.id;
-          next();
-          return;
-        }
-      }
-      bearerRejected = true;
+  /**
+   * Срок подписки: если оплаченный период (и льготные сутки) закончился, тариф сводится к free
+   * и это сохраняется в профиле, чтобы интерфейс и лимиты видели одно и то же.
+   */
+  const applySubscriptionExpiry = (userId: string, plan: PlanId, isVip: boolean): PlanId => {
+    if (!subscriptionStore || isVip || plan === 'free') return plan;
+    const resolved = resolveBillingPlan({
+      storedPlan: plan,
+      subscription: subscriptionStore.get(userId),
+    });
+    if (resolved.expired) {
+      userStore.updatePlan(userId, 'free');
     }
+    return resolved.plan;
+  };
 
-    // 2. Сессия Better Auth через cookie (вход через Google/GitHub или токен сессии Better Auth).
+  return async (request: Request, _response: Response, next: NextFunction): Promise<void> => {
+    // 1. Проверяем сессию Better Auth через headers/cookies
     try {
       const session = await betterAuthInstance.api.getSession({
         headers: fromNodeHeaders(request.headers),
       });
 
-      let stored = session?.user ? userStore.findByEmail(session.user.email) : null;
-      // Сессия Better Auth открывает аккаунт сайта только если запись Better Auth точно принадлежит
-      // его владельцу (см. betterAuthSessionMayOpen): иначе чужая регистрация с той же почтой давала
-      // бы вход в чужой аккаунт.
-      if (session?.user && betterAuthSessionMayOpen(session.user, stored)) {
+      if (session?.user) {
+        let stored = userStore.findByEmail(session.user.email);
         if (!stored) {
           // Пароль локальной копии не используется для входа: вход идёт через Better Auth.
-          stored = userStore.create(
-            session.user.email,
-            randomBytes(32).toString('hex'),
-            session.user.name,
-            {
-              method: await betterAuthSignupMethod(betterAuthInstance, session.user.email),
-              attribution: attributionFromCookieHeader(request.headers.cookie),
-            },
-          );
+          stored = userStore.create(session.user.email, randomBytes(32).toString('hex'), session.user.name);
         }
 
         const rawPlan = (session.user as Record<string, unknown>).plan;
-        const VALID_PLANS: PlanId[] = [
-          'free',
-          'gpt-pro',
-          'claude-pro',
-          'gemini-pro',
-          'ultra',
-          'plus',
-          'pro',
-        ];
+        const VALID_PLANS: PlanId[] = ['free', 'gpt-pro', 'claude-pro', 'gemini-pro', 'ultra', 'plus', 'pro'];
         let plan: PlanId =
-          typeof rawPlan === 'string' &&
-          VALID_PLANS.includes(rawPlan as PlanId) &&
-          rawPlan !== 'free'
+          (typeof rawPlan === 'string' && VALID_PLANS.includes(rawPlan as PlanId) && rawPlan !== 'free')
             ? (rawPlan as PlanId)
-            : stored?.plan && stored.plan !== 'free'
+            : (stored?.plan && stored.plan !== 'free')
               ? stored.plan
-              : typeof rawPlan === 'string' && VALID_PLANS.includes(rawPlan as PlanId)
+              : (typeof rawPlan === 'string' && VALID_PLANS.includes(rawPlan as PlanId))
                 ? (rawPlan as PlanId)
                 : (stored?.plan ?? 'free');
 
@@ -140,7 +77,7 @@ export function createAuthMiddleware(
         if (isVip) {
           plan = 'ultra';
         } else if (stored) {
-          plan = applyExpiry(stored.id, plan, false);
+          plan = applySubscriptionExpiry(stored.id, plan, false);
         }
 
         request.user = {
@@ -148,11 +85,9 @@ export function createAuthMiddleware(
           email: session.user.email,
           name: stored?.name || session.user.name,
           plan,
-          createdAt:
-            stored?.createdAt ||
-            (session.user.createdAt
-              ? new Date(session.user.createdAt).toISOString()
-              : new Date().toISOString()),
+          createdAt: stored?.createdAt || (session.user.createdAt
+            ? new Date(session.user.createdAt).toISOString()
+            : new Date().toISOString()),
           isVip,
           isAdmin,
           telegramChatId: stored?.telegramChatId,
@@ -166,9 +101,36 @@ export function createAuthMiddleware(
       // Игнорируем ошибки Better Auth и переходим к проверке Bearer токена
     }
 
-    if (bearerRejected) {
-      // Токен не принят и cookie-сессии нет: запрос идёт как гостевой, клиент сбросит устаревший вход.
-      response.setHeader('X-Session-Invalid', '1');
+    // 2. Fallback: проверка Bearer токена для обратной совместимости
+    const authHeader = request.headers.authorization;
+    if (authHeader && authHeader.startsWith('Bearer ')) {
+      const token = authHeader.slice(7).trim();
+      const payload = verifyMockToken(token);
+      if (payload) {
+        let user = userStore.findById(payload.sub);
+        if (!user && payload.email) {
+          user = userStore.findByEmail(payload.email);
+        }
+        if (user) {
+          const isVip = Boolean(user.isVip || (user.email && isVipEmail(user.email)));
+          const isAdmin = Boolean(user.isAdmin || (user.email && isAdminEmail(user.email)));
+          let plan: PlanId = user.plan;
+          if (isVip) {
+            plan = 'ultra';
+          } else {
+            plan = applySubscriptionExpiry(user.id, plan, false);
+          }
+          request.user = {
+            ...user,
+            isVip,
+            isAdmin,
+            plan,
+          };
+          request.userId = user.id;
+          next();
+          return;
+        }
+      }
     }
 
     // Личность определяется только сессией Better Auth или подписанным Bearer-токеном.

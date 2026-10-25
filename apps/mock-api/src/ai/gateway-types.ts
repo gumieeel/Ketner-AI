@@ -13,68 +13,11 @@ export type { PlanId, Language, MessageAttachment, WorkspaceContext };
 // AI Provider & Model Registry
 // ─────────────────────────────────────────────────────────────
 
-/**
- * Поддерживаемые AI провайдеры.
- *
- * Основной канал — OpenRouter (OPENROUTER_API_KEY): у каждой модели в реестре `provider:
- * 'openrouter'`. Прямые API вендоров (ANTHROPIC_API_KEY, OPENAI_API_KEY, GOOGLE_API_KEY) — по
- * умолчанию выключенный дополнительный путь: если ключ задан, модель этого вендора идёт напрямую
- * (`ModelRegistryEntry.direct`), а при сбое — снова через OpenRouter (ai/providers/routed-provider.ts).
- * В учёт пишется канал, который реально ответил.
- */
-export type AIProviderType = 'openrouter' | DirectProviderType;
-
-/** Прямые API вендоров (дополнительный путь к их моделям в обход OpenRouter). */
-export type DirectProviderType = 'anthropic' | 'openai' | 'google';
-
-/** Прямой путь к модели: провайдер, id модели у него и его цены ($ за 1M токенов). */
-export interface DirectRoute {
-  provider: DirectProviderType;
-  modelId: string;
-  pricing: ModelPricing;
-}
+/** Поддерживаемые AI провайдеры. */
+export type AIProviderType = 'openai' | 'anthropic' | 'google' | 'openrouter';
 
 /** Tier модели: определяет стоимость и приоритет. */
 export type ModelTier = 'free' | 'standard' | 'premium' | 'flagship';
-
-/**
- * Класс стоимости модели — основа экономики тарифов.
- *   lite   — до ~$0.003 за типичный запрос: повседневные вопросы, Free;
- *   work   — ~$0.005: рабочая лошадка (код, анализ) для Plus и выше;
- *   strong — $0.03–0.04: сильные модели, расходуют квоту премиум-запросов;
- *   top    — $0.07–0.10: лучшие модели, расходуют ту же квоту.
- * Классы strong и top считаются «премиум»: их суммарный расход за 30 дней ограничен
- * `premiumBudget` тарифа (см. PlanEntitlements), после чего ответы дают модели класса work.
- */
-export type ModelCostClass = 'lite' | 'work' | 'strong' | 'top';
-
-/** Глубина размышлений модели. Размышления оплачиваются как выходные токены. */
-export type ReasoningEffort = 'none' | 'low' | 'medium' | 'high' | 'xhigh' | 'max';
-
-/**
- * Режим размышлений, который выбирает пользователь: standard для всех тарифов, max только на Ultra
- * (модели с профилем размышлений переходят на свою максимальную глубину, см. effortProfile).
- */
-export type ReasoningMode = 'standard' | 'max';
-
-/**
- * Фиксированная глубина размышлений модели в режимах standard и max. Для моделей Pro и Ultra
- * глубина не подстраивается под сложность запроса: пользователь платит за конкретный уровень.
- */
-export interface EffortProfile {
-  standard: ReasoningEffort;
-  max: ReasoningEffort;
-}
-
-/** Как у модели управляются размышления в OpenRouter (`reasoning` в теле запроса). */
-export interface ModelReasoning {
-  /** Размышления нельзя отключить (effort 'none' недопустим). */
-  mandatory: boolean;
-  /** Поддерживаемые значения `reasoning.effort` (пусто — effort не принимается). */
-  efforts: ReasoningEffort[];
-  /** Модель умеет только включать и выключать размышления (`reasoning.enabled`). */
-  toggle?: boolean;
-}
 
 /** Capability-флаги модели для Auto Mode роутинга. */
 export interface ModelCapabilities {
@@ -119,12 +62,6 @@ export interface ModelRegistryEntry {
   enabled: boolean;
   /** Tier модели. */
   tier: ModelTier;
-  /** Класс стоимости: определяет, расходует ли модель квоту премиум-запросов. */
-  costClass: ModelCostClass;
-  /** Управление размышлениями модели. */
-  reasoning: ModelReasoning;
-  /** Фиксированная глубина размышлений (модели Pro и Ultra). Без профиля глубина адаптивная. */
-  effortProfile?: EffortProfile;
   /** Capabilities для Auto Mode. */
   capabilities: ModelCapabilities;
   /** Максимальный размер контекста в токенах. */
@@ -141,11 +78,6 @@ export interface ModelRegistryEntry {
   isPro: boolean;
   /** Fallback модель при недоступности. */
   fallbackModelId: string | null;
-  /**
-   * Прямой API вендора: используется, только если задан его ключ; при сбое — OpenRouter.
-   * Цены прямого API лежат здесь же, рядом с ценами OpenRouter (`pricing`).
-   */
-  direct?: DirectRoute;
   /** Системный промпт по умолчанию. */
   defaultSystemPrompt: Record<Language, string>;
   createdAt: string;
@@ -163,6 +95,8 @@ export type FairUseLevel = 0 | 1 | 2 | 3;
 export interface PlanEntitlements {
   /** ID плана. */
   planId: PlanId;
+  /** Список доступных моделей (ID). Пустой массив = только бесплатные. */
+  allowedModels: string[];
   /** Максимальное количество одновременных AI-запросов. */
   maxConcurrency: number;
   /** Приоритет в очереди (0 — низший, 3 — высший). */
@@ -193,12 +127,6 @@ export interface PlanEntitlements {
   maxDailyCost: number | null;
   /** Месячный бюджет на пользователя в $ (для adaptive cost control). */
   costBudget: number;
-  /**
-   * Часть месячного бюджета ($ за 30 дней), которую можно потратить на премиум-модели
-   * (классы strong и top). Остальное остаётся на повседневные модели, поэтому один
-   * тяжёлый день на Opus не оставляет пользователя без ответов до конца месяца.
-   */
-  premiumBudget: number;
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -206,8 +134,7 @@ export interface PlanEntitlements {
 // ─────────────────────────────────────────────────────────────
 
 /** Статус учётной записи использования. */
-export type UsageStatus =
-  'success' | 'error' | 'cancelled' | 'rate_limited' | 'concurrency_limited';
+export type UsageStatus = 'success' | 'error' | 'cancelled' | 'rate_limited' | 'concurrency_limited';
 
 /** Источник ответа: реальный провайдер, кэш или шаблонная заглушка. */
 export type ResponseSource = 'provider' | 'cache' | 'template';
@@ -240,32 +167,6 @@ export interface UsageRecord {
   status: UsageStatus;
   /** Источник ответа: провайдер, кэш или шаблон. */
   source: ResponseSource;
-  /**
-   * Вид запроса. Шаги агента (`agent`) тратят бюджет и токены так же, как чат, но не расходуют
-   * дневной лимит СООБЩЕНИЙ: один запуск агента — это десятки обращений к модели.
-   * Проверка ответа другой моделью (`review`) тоже не считается сообщением и не тратит лимит
-   * модели-рецензента: у проверок свой суточный лимит (services/answer-review.ts).
-   */
-  kind?: 'chat' | 'agent' | 'image' | 'review';
-  /** Идентификатор запуска агента (для подсчёта запусков в сутки). */
-  runId?: string;
-  /** Номер шага внутри запуска агента (0 — отметка о старте запуска). */
-  step?: number;
-  /**
-   * Сколько единиц суточного лимита модели израсходовал запрос (по умолчанию 1). Запрос в режиме
-   * Max у модели с профилем размышлений стоит ~2.4 раза дороже и считается за 2.
-   */
-  limitUnits?: number;
-  /**
-   * Часть стоимости, оплаченная кредитами докупленных пакетов ($). Она не входит ни в квоту
-   * премиум-моделей тарифа, ни в месячный и дневной бюджет: пакет оплачен отдельно.
-   */
-  premiumCreditUsd?: number;
-  /**
-   * Запрос шёл за счёт кредитов пакета (квота тарифа или лимит модели исчерпаны): в лимиты моделей
-   * он не входит.
-   */
-  fundedBy?: 'credits';
   createdAt: string;
 }
 
@@ -297,38 +198,6 @@ export interface ModelMetric {
   averageLatencyMs: number;
 }
 
-/**
- * Кэш промпта у модели по данным учёта:
- *   working      — кэшированные токены приходят;
- *   not_working  — длинных запросов достаточно, а кэша почти нет (стоит разобраться);
- *   no_data      — длинных запросов слишком мало, чтобы судить;
- *   not_expected — модель не кэширует (бесплатные эндпоинты, неизвестный вендор).
- */
-export type PromptCacheStatus = 'working' | 'not_working' | 'no_data' | 'not_expected';
-
-/** Сводка по модели за скользящие 30 дней (только ответы провайдера, без семантического кэша). */
-export interface ModelUsageMetric {
-  modelId: string;
-  /** Имя из реестра (null — модели уже нет в реестре). */
-  name: string | null;
-  /** Вендор движка: anthropic, openai, google, x-ai... */
-  vendor: string;
-  requests: number;
-  avgInputTokens: number;
-  avgOutputTokens: number;
-  /** Доля кэшированных входных токенов, % от всех входных. */
-  cachedTokenSharePct: number;
-  /** Доля длинных запросов (вход от порога кэша), у которых был кэш, %. */
-  cacheHitRequestsPct: number;
-  /** Длинных запросов (вход не короче порога кэша вендора). */
-  cacheEligibleRequests: number;
-  cacheStatus: PromptCacheStatus;
-  avgCostPerRequest: number;
-  totalCost: number;
-  /** Доля расхода на эту модель по тарифам, % (сумма ≈ 100). */
-  costShareByPlanPct: Record<string, number>;
-}
-
 /** Phase 4: Распределение расходов по тарифам. */
 export interface PlanCostMetric {
   plan: string;
@@ -337,8 +206,6 @@ export interface PlanCostMetric {
   requests: number;
   totalTokens: number;
   averageCostPerUser: number;
-  /** Доля тарифа в общем расходе за период, %. */
-  costSharePct: number;
 }
 
 /** Phase 4: Разбивка задержек и TTFT. */
@@ -374,8 +241,6 @@ export interface GatewayMetrics {
   };
   costByModel: ModelMetric[];
   costByPlan: PlanCostMetric[];
-  /** По каждой модели за скользящие 30 дней: токены, кэш, цена запроса, доли тарифов. */
-  models30d: ModelUsageMetric[];
   latency: LatencyBreakdown;
   alerts: MetricAlert[];
   hasNegativeMarginAlert: boolean;
@@ -411,7 +276,6 @@ export interface GatewayRequest {
   userPlan: PlanId;
   userEmail?: string;
   isVip?: boolean;
-  isAnonymous?: boolean;
   conversationId: string;
   modelId: string;
   messages: Array<{
@@ -434,30 +298,6 @@ export interface GatewayRequest {
   signal?: AbortSignal;
   /** Таймаут на вызов провайдера в мс (Phase 5, по умолчанию 25_000). */
   providerTimeoutMs?: number;
-  /** Режим размышлений пользователя: max действует только на Ultra. */
-  reasoningMode?: ReasoningMode;
-  /**
-   * Отвечает только запрошенная модель (сравнение ответов): если из-за лимита модели, бюджета или
-   * квоты вместо неё ответила бы запасная, запрос завершается ошибкой `model_limit_reached` или
-   * `model_unavailable`, а цепочка запасных моделей при сбое провайдера не перебирается.
-   * Для `auto` не действует: Auto сам выбирает модель.
-   */
-  strictModel?: boolean;
-  /**
-   * Служебный запрос вместо обычного ответа в чате (проверка ответа другой моделью, судья
-   * сравнения, ревью кода): заменяет системный промпт чата, не читает и не пишет семантический
-   * кэш, не тратит лимит модели и пишется в учёт с `kind: 'review'` и `runId` = id проверки.
-   */
-  task?: {
-    kind: 'review';
-    id: string;
-    systemPrompt: string;
-    /**
-     * Что выдать в demo-режиме без настоящих моделей (локально без ключа и в тестах) вместо
-     * шаблонного ответа чата: у проверки свой формат, и шаблон чата его не соблюдает.
-     */
-    templateOutput?: string;
-  };
 }
 
 /** Результат завершения генерации (расширенный). */
@@ -474,8 +314,6 @@ export interface GatewayDoneResult {
   canContinue: boolean;
   /** Обновлённая сводка контекста для сохранения в БД (Phase 2). */
   contextSummary?: string;
-  /** Режим размышлений, который реально действовал (max только на Ultra). */
-  reasoningMode?: ReasoningMode;
 }
 
 /** Callback'и для стримингового ответа. */
@@ -520,11 +358,6 @@ export interface ProviderRequestOptions {
   temperature?: number;
   stream: boolean;
   signal?: AbortSignal;
-  /**
-   * Уже приведённое к возможностям модели значение размышлений: `reasoning.effort`
-   * либо `reasoning.enabled` для моделей, которые умеют только включать и выключать.
-   */
-  reasoning?: { effort: ReasoningEffort } | { enabled: boolean };
 }
 
 /** Callback'и для стримингового ответа провайдера. */
@@ -541,87 +374,12 @@ export interface ProviderResponse {
     outputTokens: number;
     cachedTokens?: number;
     reasoningTokens?: number;
-    /** Входные токены, записанные в кэш (Anthropic: запись дороже входа в 1.25 раза). */
-    cacheWriteTokens?: number;
   };
   /** Фактическая стоимость от провайдера в USD, если предоставлена. */
   cost?: number;
   /** Модель, которая реально ответила (провайдер мог переключиться на запасную). */
   model?: string;
-  /** Канал, который реально ответил: прямой API вендора или OpenRouter (по умолчанию). */
-  via?: AIProviderType;
   finishReason: 'stop' | 'length' | 'cancelled' | 'error';
-}
-
-// ─────────────────────────────────────────────────────────────
-// Tool calling (агентный режим)
-// ─────────────────────────────────────────────────────────────
-
-/** Описание инструмента в формате function calling (совместимо с OpenAI и OpenRouter). */
-export interface ChatToolDefinition {
-  type: 'function';
-  function: {
-    name: string;
-    description: string;
-    /** JSON Schema параметров. */
-    parameters: Record<string, unknown>;
-  };
-}
-
-/** Вызов инструмента, собранный из потока. `arguments` — JSON-строка, как её прислала модель. */
-export interface ChatToolCall {
-  id: string;
-  name: string;
-  arguments: string;
-}
-
-/**
- * Сообщение диалога с инструментами. Роль `tool` несёт результат вызова, `assistant` может нести
- * сами вызовы и непрозрачные `reasoningDetails`, которые провайдер просит вернуть без изменений
- * (иначе модели с размышлениями теряют цепочку рассуждений между шагами).
- */
-export type ChatWireMessage =
-  | { role: 'system'; content: string }
-  | { role: 'user'; content: string }
-  | {
-      role: 'assistant';
-      content: string;
-      toolCalls?: ChatToolCall[];
-      reasoningDetails?: unknown[];
-    }
-  | { role: 'tool'; toolCallId: string; content: string };
-
-export interface ChatCompletionOptions {
-  model: string;
-  messages: ChatWireMessage[];
-  tools?: ChatToolDefinition[];
-  maxTokens?: number;
-  temperature?: number;
-  signal?: AbortSignal;
-  reasoning?: ProviderRequestOptions['reasoning'];
-}
-
-export interface ChatCompletionCallbacks {
-  /** Текст ответа модели (без размышлений). */
-  onDelta: (content: string) => void;
-  /** Размышления модели, если провайдер их отдаёт. */
-  onReasoningDelta?: (content: string) => void;
-  /** Любой полученный фрагмент потока (в том числе части аргументов инструмента): для сторожа простоя. */
-  onActivity?: () => void;
-  isCancelled: () => boolean;
-}
-
-export interface ChatCompletionResult {
-  content: string;
-  toolCalls: ChatToolCall[];
-  /** Непрозрачные данные размышлений: вернуть в следующем запросе вместе с сообщением ассистента. */
-  reasoningDetails?: unknown[];
-  usage: ProviderResponse['usage'];
-  cost?: number;
-  model?: string;
-  /** Канал, который реально ответил: прямой API вендора или OpenRouter (по умолчанию). */
-  via?: AIProviderType;
-  finishReason: 'stop' | 'length' | 'tool_calls' | 'cancelled' | 'error';
 }
 
 /** Интерфейс адаптера AI провайдера. */
@@ -639,11 +397,6 @@ export interface AIProvider {
     options: ProviderRequestOptions,
     callbacks: ProviderStreamCallbacks,
   ): Promise<ProviderResponse>;
-  /** Один шаг диалога с инструментами (стриминг). Нужен агентному режиму. */
-  streamChat?(
-    options: ChatCompletionOptions,
-    callbacks: ChatCompletionCallbacks,
-  ): Promise<ChatCompletionResult>;
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -652,7 +405,14 @@ export interface AIProvider {
 
 /** Категория задачи для Auto Mode роутинга. */
 export type TaskCategory =
-  'coding' | 'reasoning' | 'creative' | 'math' | 'translation' | 'general' | 'research' | 'vision';
+  | 'coding'
+  | 'reasoning'
+  | 'creative'
+  | 'math'
+  | 'translation'
+  | 'general'
+  | 'research'
+  | 'vision';
 
 /** Результат классификации задачи. */
 export interface TaskClassification {

@@ -1,40 +1,30 @@
-import { useEffect, useRef, useState } from 'react';
-import { GithubRepoPicker, type PickedRepo } from '@/components/github/github-repo-picker';
-import { FolderIcon, GitHubIcon } from '@/components/icons';
+import { useRef, useState } from 'react';
+import { FolderIcon, GitHubIcon, RefreshIcon } from '@/components/icons';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { Modal, ModalHeader } from '@/components/ui/modal';
-import { fetchGitHubRepo } from '@/features/chat/git-repo-reader';
+import { fetchGitHubRepo, parseGitHubUrl } from '@/features/chat/git-repo-reader';
 import { pickFolderNative, readFolderFromFiles } from '@/features/chat/local-folder-reader';
 import { useWorkspace } from '@/features/chat/workspace-store';
 import { useTranslation } from '@/i18n';
 import { cn } from '@/lib/cn';
 
-export type LinkWorkspaceTab = 'folder' | 'git';
-
 interface LinkWorkspaceModalProps {
   isOpen: boolean;
   onClose: () => void;
-  /** Какую вкладку открыть: пункт меню «Папка» или «GitHub». */
-  initialTab?: LinkWorkspaceTab;
 }
 
-export function LinkWorkspaceModal({
-  isOpen,
-  onClose,
-  initialTab = 'folder',
-}: LinkWorkspaceModalProps) {
+export function LinkWorkspaceModal({ isOpen, onClose }: LinkWorkspaceModalProps) {
   const { t } = useTranslation();
   const setWorkspace = useWorkspace((state) => state.setWorkspace);
-  const [tab, setTab] = useState<LinkWorkspaceTab>(initialTab);
+  const [tab, setTab] = useState<'folder' | 'git'>('folder');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    if (isOpen) {
-      setTab(initialTab);
-      setError(null);
-    }
-  }, [isOpen, initialTab]);
+  // Git repo fields
+  const [repoUrl, setRepoUrl] = useState('');
+  const [branch, setBranch] = useState('main');
+  const [token, setToken] = useState('');
 
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
@@ -50,11 +40,11 @@ export function LinkWorkspaceModal({
       setWorkspace(ws);
       setLoading(false);
       onClose();
-    } catch (err) {
-      if (err instanceof Error && err.message === 'showDirectoryPicker_not_supported') {
+    } catch (err: any) {
+      if (err?.message === 'showDirectoryPicker_not_supported') {
         // Fallback к input webkitdirectory
         fileInputRef.current?.click();
-      } else if (err instanceof Error && err.name === 'AbortError') {
+      } else if (err?.name === 'AbortError') {
         // Пользователь отменил диалог
         setLoading(false);
       } else {
@@ -77,24 +67,66 @@ export function LinkWorkspaceModal({
       setWorkspace(ws);
       setLoading(false);
       onClose();
-    } catch (err) {
-      setError((err instanceof Error && err.message) || t('linkWs.errReadFolder'));
+    } catch (err: any) {
+      setError(err?.message || t('linkWs.errReadFolder'));
       setLoading(false);
     }
   };
 
-  // 2. Привязка репозитория из подключённого аккаунта GitHub (приватные тоже)
-  const handleLinkGitRepo = async ({ owner, repo, branch }: PickedRepo) => {
+  // 2. Привязка Git-репозитория
+  const handleLinkGitRepo = async (e: React.FormEvent) => {
+    e.preventDefault();
     setError(null);
+
+    const parsed = parseGitHubUrl(repoUrl);
+    if (!parsed) {
+      setError(t('linkWs.errBadUrl'));
+      return;
+    }
+
     setLoading(true);
     try {
-      const ws = await fetchGitHubRepo(owner, repo, branch);
+      const targetBranch = parsed.branch || branch || 'main';
+      const ws = await fetchGitHubRepo(parsed.owner, parsed.repo, targetBranch, token);
       setWorkspace(ws);
       setLoading(false);
       onClose();
-    } catch (err) {
-      setError((err instanceof Error && err.message) || t('linkWs.errLoadRepo'));
+    } catch (err: any) {
+      setError(err?.message || t('linkWs.errLoadRepo'));
       setLoading(false);
+    }
+  };
+
+  // 3. Подключение тестового демо-репозитория
+  const handleConnectSampleRepo = async () => {
+    setRepoUrl('https://github.com/gumieeel/Ketner-AI');
+    setBranch('main');
+    setError(null);
+    setLoading(true);
+    try {
+      const ws = await fetchGitHubRepo('gumieeel', 'Ketner-AI', 'main');
+      setWorkspace(ws);
+      setLoading(false);
+      onClose();
+    } catch {
+      // Создаем локальную структуру проекта, если лимит API исчерпан
+      setWorkspace({
+        id: `sample-${Date.now()}`,
+        type: 'git_repo',
+        name: 'Ketner-AI',
+        pathOrUrl: 'https://github.com/gumieeel/Ketner-AI',
+        branch: 'main',
+        filesCount: 48,
+        files: [
+          { path: 'package.json', size: 1820, language: 'json', content: '{\n  "name": "ketner-ai",\n  "version": "1.0.0"\n}' },
+          { path: 'apps/web/src/pages/chat-page.tsx', size: 3500, language: 'tsx', content: '// ChatPage implementation' },
+          { path: 'apps/web/src/features/chat/chat-store.ts', size: 8200, language: 'ts', content: '// Chat store' },
+          { path: 'apps/mock-api/src/ai/gateway.ts', size: 12000, language: 'ts', content: '// AI Gateway' },
+        ],
+        indexedAt: new Date().toISOString(),
+      });
+      setLoading(false);
+      onClose();
     }
   };
 
@@ -125,11 +157,7 @@ export function LinkWorkspaceModal({
         <div className="mb-5 flex rounded-xl border border-stroke bg-canvas p-1">
           {(
             [
-              {
-                id: 'folder',
-                label: t('linkWs.tabFolder'),
-                icon: <FolderIcon className="size-4 text-accent" />,
-              },
+              { id: 'folder', label: t('linkWs.tabFolder'), icon: <FolderIcon className="size-4 text-accent" /> },
               { id: 'git', label: t('linkWs.tabGit'), icon: <GitHubIcon className="size-4" /> },
             ] as const
           ).map((item) => (
@@ -155,10 +183,7 @@ export function LinkWorkspaceModal({
         </div>
 
         {error ? (
-          <div
-            role="alert"
-            className="mb-4 rounded-xl border border-danger/30 bg-danger-soft p-3 text-[13px] break-words text-danger"
-          >
+          <div role="alert" className="mb-4 rounded-xl border border-danger/30 bg-danger-soft p-3 text-[13px] break-words text-danger">
             {error}
           </div>
         ) : null}
@@ -171,29 +196,65 @@ export function LinkWorkspaceModal({
 
             <div className="space-y-1.5">
               <h3 className="text-sm font-semibold text-text">{t('linkWs.folderTitle')}</h3>
-              <p className="mx-auto max-w-sm text-[13px] leading-5 text-muted">
-                {t('linkWs.folderDesc')}
-              </p>
+              <p className="mx-auto max-w-sm text-[13px] leading-5 text-muted">{t('linkWs.folderDesc')}</p>
             </div>
 
-            <Button
-              size="lg"
-              loading={loading}
-              onClick={handleLinkLocalFolder}
-              className="mt-2 w-full gap-2"
-            >
+            <Button size="lg" loading={loading} onClick={handleLinkLocalFolder} className="mt-2 w-full gap-2">
               <FolderIcon className="size-4" />
               {loading ? t('linkWs.indexing') : t('linkWs.pickFolder')}
             </Button>
           </div>
         ) : (
-          <GithubRepoPicker
-            intent="link-repo"
-            busy={loading}
-            submitLabel={t('linkWs.submit')}
-            busyLabel={t('linkWs.connecting')}
-            onPick={(picked) => void handleLinkGitRepo(picked)}
-          />
+          <form onSubmit={handleLinkGitRepo} className="flex flex-col gap-4">
+            <div>
+              <label htmlFor="repoUrl" className="mb-1.5 block text-[13px] font-medium text-muted">
+                {t('linkWs.repoLabel')}
+              </label>
+              <Input
+                id="repoUrl"
+                placeholder={t('linkWs.repoPlaceholder')}
+                value={repoUrl}
+                onChange={(e) => setRepoUrl(e.target.value)}
+                autoFocus
+                required
+              />
+            </div>
+
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+              <div>
+                <label htmlFor="branch" className="mb-1.5 block text-[13px] font-medium text-muted">
+                  {t('linkWs.branch')}
+                </label>
+                <Input id="branch" placeholder="main" value={branch} onChange={(e) => setBranch(e.target.value)} />
+              </div>
+              <div>
+                <label htmlFor="token" className="mb-1.5 block text-[13px] font-medium text-muted">
+                  {t('linkWs.token')}
+                </label>
+                <Input
+                  id="token"
+                  type="password"
+                  placeholder={t('linkWs.tokenPlaceholder')}
+                  value={token}
+                  onChange={(e) => setToken(e.target.value)}
+                />
+              </div>
+            </div>
+
+            <div className="mt-1 flex flex-col-reverse gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <button
+                type="button"
+                onClick={handleConnectSampleRepo}
+                className="inline-flex min-h-10 items-center gap-1.5 self-start rounded-lg px-1 text-[13px] font-medium text-accent hover:underline max-md:min-h-11"
+              >
+                <RefreshIcon className="size-3.5" />
+                {t('linkWs.sample')}
+              </button>
+              <Button type="submit" loading={loading} className="max-sm:w-full">
+                {loading ? t('linkWs.connecting') : t('linkWs.submit')}
+              </Button>
+            </div>
+          </form>
         )}
       </div>
     </Modal>

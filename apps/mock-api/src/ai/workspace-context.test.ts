@@ -19,7 +19,7 @@ function ws(
     filesCount: files.length,
     files: files.map((f) => ({
       path: f.path,
-      size: f.size ?? f.content?.length ?? 0,
+      size: f.size ?? (f.content?.length ?? 0),
       content: f.content,
       ...(f.truncated ? { truncated: true } : {}),
     })),
@@ -37,14 +37,7 @@ test('бюджет проекта растёт с тарифом и урезае
 });
 
 test('секреты исключаются: .env, ключи, credentials', () => {
-  for (const p of [
-    '.env',
-    'apps/api/.env.production',
-    'deploy/id_rsa',
-    'certs/site.pem',
-    'config/secrets.json',
-    'gcp/service-account-prod.json',
-  ]) {
+  for (const p of ['.env', 'apps/api/.env.production', 'deploy/id_rsa', 'certs/site.pem', 'config/secrets.json', 'gcp/service-account-prod.json']) {
     assert.equal(isSensitivePath(p), true, p);
   }
   for (const p of ['src/env.ts', 'README.md', 'src/secrets-manager.ts', 'package.json']) {
@@ -66,14 +59,8 @@ test('содержимое .env никогда не попадает в пром
 });
 
 test('файлы, упомянутые в вопросе, попадают в промпт даже при малом бюджете', () => {
-  const filler = Array.from({ length: 30 }, (_, i) => ({
-    path: `src/mod${i}.ts`,
-    content: `// module ${i}\n`.repeat(200),
-  }));
-  const target = {
-    path: 'src/billing/invoice-service.ts',
-    content: 'export function createInvoice() { return 42; }',
-  };
+  const filler = Array.from({ length: 30 }, (_, i) => ({ path: `src/mod${i}.ts`, content: `// module ${i}\n`.repeat(200) }));
+  const target = { path: 'src/billing/invoice-service.ts', content: 'export function createInvoice() { return 42; }' };
   const { block, stats } = buildWorkspaceContextBlock(ws([...filler, target]), {
     language: 'en',
     query: 'Fix a bug in src/billing/invoice-service.ts please',
@@ -110,14 +97,11 @@ test('файл, который клиент передал не целиком, 
   );
   assert.match(en.block, /the rest of this file was not provided/);
 
-  const whole = buildWorkspaceContextBlock(
-    ws([{ path: 'src/ok.ts', content: 'export const ok = 1;' }]),
-    {
-      language: 'ru',
-      query: 'ok.ts',
-      maxContentChars: 100_000,
-    },
-  );
+  const whole = buildWorkspaceContextBlock(ws([{ path: 'src/ok.ts', content: 'export const ok = 1;' }]), {
+    language: 'ru',
+    query: 'ok.ts',
+    maxContentChars: 100_000,
+  });
   assert.ok(!whole.block.includes('не передана'));
 });
 
@@ -129,10 +113,7 @@ test('отступы кода и тройные кавычки внутри фа
     maxContentChars: 10_000,
   });
   assert.ok(block.includes('    return """doc"""'));
-  assert.ok(
-    block.includes('````'),
-    'ограждение должно быть длиннее любой серии кавычек внутри файла',
-  );
+  assert.ok(block.includes('````'), 'ограждение должно быть длиннее любой серии кавычек внутри файла');
 });
 
 test('промпт не обещает «полный доступ» и не разрешает врать про коммиты', () => {
@@ -147,10 +128,7 @@ test('промпт не обещает «полный доступ» и не р�
 });
 
 test('порядок стабилен: тот же проект и вопрос дают тот же блок (кэш префикса провайдера)', () => {
-  const files = Array.from({ length: 12 }, (_, i) => ({
-    path: `src/f${i}.ts`,
-    content: `export const v${i} = ${i};`,
-  }));
+  const files = Array.from({ length: 12 }, (_, i) => ({ path: `src/f${i}.ts`, content: `export const v${i} = ${i};` }));
   const opts = { language: 'ru' as const, query: 'обзор', maxContentChars: 8_000 };
   assert.equal(
     buildWorkspaceContextBlock(ws(files), opts).block,
@@ -168,30 +146,9 @@ test('looksBinary распознаёт PDF/ZIP и «мусор» от чтени
 test('вложения: картинки и бинарники не превращаются в мусор в промпте', () => {
   const block = buildAttachmentsBlock(
     [
-      {
-        id: '1',
-        name: 'photo.png',
-        size: 1000,
-        type: 'image/png',
-        category: 'image',
-        url: 'data:image/png;base64,AAAA',
-      },
-      {
-        id: '2',
-        name: 'doc.pdf',
-        size: 2000,
-        type: 'application/pdf',
-        category: 'document',
-        contentPreview: '%PDF-1.4 ��',
-      },
-      {
-        id: '3',
-        name: 'notes.txt',
-        size: 50,
-        type: 'text/plain',
-        category: 'document',
-        contentPreview: 'Важные заметки',
-      },
+      { id: '1', name: 'photo.png', size: 1000, type: 'image/png', category: 'image', url: 'data:image/png;base64,AAAA' },
+      { id: '2', name: 'doc.pdf', size: 2000, type: 'application/pdf', category: 'document', contentPreview: '%PDF-1.4 ��' },
+      { id: '3', name: 'notes.txt', size: 50, type: 'text/plain', category: 'document', contentPreview: 'Важные заметки' },
     ],
     'ru',
     10_000,
@@ -211,20 +168,10 @@ test('extractQueryTerms выделяет пути и слова', () => {
 import { PayloadGuard } from './payload-guard.js';
 
 test('PayloadGuard: вложения прошлых реплик и дубли последнего сообщения не складываются', () => {
-  const att = (i: number) => ({
-    id: `a${i}`,
-    name: `f${i}.txt`,
-    type: 'text/plain',
-    category: 'code' as const,
-    size: 10,
-  });
+  const att = (i: number) => ({ id: `a${i}`, name: `f${i}.txt`, type: 'text/plain', category: 'code' as const, size: 10 });
   const six = Array.from({ length: 6 }, (_, i) => att(i));
   const history = [
-    {
-      role: 'user',
-      content: 'старое',
-      attachments: Array.from({ length: 9 }, (_, i) => att(100 + i)),
-    },
+    { role: 'user', content: 'старое', attachments: Array.from({ length: 9 }, (_, i) => att(100 + i)) },
     { role: 'assistant', content: 'ответ' },
     { role: 'user', content: 'новое', attachments: six },
   ];

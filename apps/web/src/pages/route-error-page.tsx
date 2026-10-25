@@ -13,7 +13,11 @@ export function RouteErrorPage() {
   console.error('[ketner] route error', error);
 
   const errorMessage =
-    error instanceof Error ? error.message : typeof error === 'string' ? error : null;
+    error instanceof Error
+      ? error.message
+      : typeof error === 'string'
+        ? error
+        : null;
 
   return (
     <div className="relative mx-auto my-auto flex w-full max-w-xl flex-1 flex-col items-center justify-center px-2 py-16 text-center">
@@ -31,10 +35,7 @@ export function RouteErrorPage() {
           {t('error.title')}
         </h1>
 
-        <p
-          className="animate-slide-up max-w-sm text-sm leading-6 text-muted"
-          style={{ animationDelay: '60ms' }}
-        >
+        <p className="animate-slide-up max-w-sm text-sm leading-6 text-muted" style={{ animationDelay: '60ms' }}>
           {t('error.text')}
         </p>
 

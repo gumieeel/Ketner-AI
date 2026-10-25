@@ -16,7 +16,12 @@ const toneClasses: Record<StatusDotTone, { dot: string; ping: string }> = {
   neutral: { dot: 'bg-muted', ping: 'bg-muted/40' },
 };
 
-export function StatusDot({ tone = 'brand', pulse = false, className, ...props }: StatusDotProps) {
+export function StatusDot({
+  tone = 'brand',
+  pulse = false,
+  className,
+  ...props
+}: StatusDotProps) {
   const { dot, ping } = toneClasses[tone];
 
   return (
@@ -25,7 +30,14 @@ export function StatusDot({ tone = 'brand', pulse = false, className, ...props }
       aria-hidden="true"
       {...props}
     >
-      {pulse && <span className={cn('absolute inset-0 rounded-full status-pulse', ping)} />}
+      {pulse && (
+        <span
+          className={cn(
+            'absolute inset-0 rounded-full status-pulse',
+            ping,
+          )}
+        />
+      )}
       <span className={cn('size-1.5 rounded-full', dot)} />
     </span>
   );

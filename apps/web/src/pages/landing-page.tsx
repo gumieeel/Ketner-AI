@@ -1,12 +1,11 @@
 import { useEffect } from 'react';
-import { LandingFaq } from './landing/faq';
-import { LandingFinalCta } from './landing/final-cta';
 import { LandingHero } from './landing/hero';
 import { LandingModels } from './landing/models';
+import { LandingFeatures } from './landing/features';
+import { LandingHowItWorks } from './landing/how-it-works';
 import { LandingPricingSection } from './landing/pricing-section';
-import { LandingProviders } from './landing/providers';
-import { LandingSavings } from './landing/savings';
-import { LandingWorkspaces } from './landing/workspaces';
+import { LandingFaq } from './landing/faq';
+import { LandingFinalCta } from './landing/final-cta';
 
 export function LandingPage() {
   useEffect(() => {
@@ -18,12 +17,11 @@ export function LandingPage() {
   }, []);
 
   return (
-    <div className="flex w-full flex-col">
+    <div className="flex w-full flex-col items-center text-center">
       <LandingHero />
-      <LandingProviders />
-      <LandingWorkspaces />
       <LandingModels />
-      <LandingSavings />
+      <LandingFeatures />
+      <LandingHowItWorks />
       <LandingPricingSection />
       <LandingFaq />
       <LandingFinalCta />

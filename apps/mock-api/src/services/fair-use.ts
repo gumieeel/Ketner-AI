@@ -9,17 +9,6 @@ import type { Language, PlanId } from '../types.js';
 import type { FairUseDecision, FairUseSnapshot } from '../ai/gateway-types.js';
 import { EntitlementService } from './entitlement.js';
 
-/** Отличия правил для трафика агента (программирование через API-ключ). */
-export interface FairUseOptions {
-  /**
-   * Не применять часовой и суточный лимит токенов: контекст агента растёт с каждым шагом, и
-   * честная работа над кодом упёрлась бы в лимит чата. Бюджет в долларах остаётся главным ограничением.
-   */
-  skipTokenWindows?: boolean;
-  /** Во сколько раз суточный лимит расхода выше чатового (работа над кодом идёт всплесками). */
-  dailyCostFactor?: number;
-}
-
 export class FairUseEngine {
   /**
    * Оценить активность пользователя и принять решение (allow / throttle / deny).
@@ -28,7 +17,6 @@ export class FairUseEngine {
     snapshot: FairUseSnapshot,
     userPlan: PlanId,
     language: Language = 'ru',
-    options: FairUseOptions = {},
   ): FairUseDecision {
     const limits = EntitlementService.getEntitlements(userPlan);
 
@@ -36,8 +24,8 @@ export class FairUseEngine {
     if (snapshot.activeConcurrentRequests >= limits.maxConcurrency) {
       const reason =
         language === 'en'
-          ? `Another reply is still being written. Please wait for it to finish.`
-          : `Предыдущий ответ ещё пишется. Дождитесь его завершения.`;
+          ? `Concurrency limit reached (${limits.maxConcurrency} active request(s)). Please wait for the ongoing response to complete.`
+          : `Превышен лимит параллельных запросов (${limits.maxConcurrency} активных). Дождитесь завершения текущего ответа.`;
 
       return {
         action: 'deny',
@@ -47,14 +35,11 @@ export class FairUseEngine {
     }
 
     // 2. Проверка запросов в минуту (RPM)
-    if (
-      limits.requestsPerMinute !== null &&
-      snapshot.requestsLastMinute >= limits.requestsPerMinute
-    ) {
+    if (limits.requestsPerMinute !== null && snapshot.requestsLastMinute >= limits.requestsPerMinute) {
       const reason =
         language === 'en'
-          ? `Too many messages in a row. Please slow down a little.`
-          : `Слишком много сообщений подряд. Сделайте небольшую паузу.`;
+          ? `Too many requests per minute (${snapshot.requestsLastMinute}/${limits.requestsPerMinute}). Please slow down.`
+          : `Слишком много запросов в минуту (${snapshot.requestsLastMinute}/${limits.requestsPerMinute}). Пожалуйста, снизьте частоту запросов.`;
 
       return {
         action: 'throttle',
@@ -67,8 +52,8 @@ export class FairUseEngine {
     if (limits.requestsPerHour !== null && snapshot.requestsLastHour >= limits.requestsPerHour) {
       const reason =
         language === 'en'
-          ? `You have sent a lot of messages. Please try again later.`
-          : `Сообщений было много. Попробуйте чуть позже.`;
+          ? `Hourly request limit reached (${snapshot.requestsLastHour}/${limits.requestsPerHour}). Limit resets in an hour.`
+          : `Достигнут часовой лимит запросов (${snapshot.requestsLastHour}/${limits.requestsPerHour}). Лимит обновится в течение часа.`;
 
       return {
         action: 'deny',
@@ -81,8 +66,8 @@ export class FairUseEngine {
     if (limits.requestsPerDay !== null && snapshot.requestsLastDay >= limits.requestsPerDay) {
       const reason =
         language === 'en'
-          ? `Messages are used up for today. Try again tomorrow or upgrade your plan.`
-          : `Сообщения на сегодня закончились. Продолжите завтра или на платном тарифе.`;
+          ? `Daily request limit reached (${snapshot.requestsLastDay}/${limits.requestsPerDay}). Upgrade your plan for higher limits.`
+          : `Достигнут дневной лимит сообщений (${snapshot.requestsLastDay}/${limits.requestsPerDay}). Улучшите тариф для увеличения лимитов.`;
 
       return {
         action: 'deny',
@@ -92,13 +77,11 @@ export class FairUseEngine {
     }
 
     // 5. Проверка дневного лимита себестоимости (Cost Guard)
-    const dailyCostCap =
-      limits.maxDailyCost === null ? null : limits.maxDailyCost * (options.dailyCostFactor ?? 1);
-    if (dailyCostCap !== null && snapshot.estimatedCostLastDay >= dailyCostCap) {
+    if (limits.maxDailyCost !== null && snapshot.estimatedCostLastDay >= limits.maxDailyCost) {
       const reason =
         language === 'en'
-          ? `Usage is paused until tomorrow under the fair-use policy.`
-          : `По правилам честного использования работа продолжится завтра.`;
+          ? `Fair Use Policy: daily usage quota exceeded ($${snapshot.estimatedCostLastDay.toFixed(2)} / $${limits.maxDailyCost.toFixed(2)}). Service will resume tomorrow.`
+          : `Политика добросовестного использования (Fair Use): превышена дневная квота ресурсов ($${snapshot.estimatedCostLastDay.toFixed(2)} / $${limits.maxDailyCost.toFixed(2)}). Доступ восстановится завтра.`;
 
       return {
         action: 'deny',
@@ -108,29 +91,11 @@ export class FairUseEngine {
     }
 
     // 6. Проверка лимита токенов в час
-    if (options.skipTokenWindows) {
-      return { action: 'allow' };
-    }
-
     if (limits.tokensPerHour !== null && snapshot.tokensLastHour >= limits.tokensPerHour) {
       const reason =
         language === 'en'
-          ? `You have done a lot of work in the last hour. Please take a short break.`
-          : `За последний час было очень много работы. Сделайте небольшую паузу.`;
-
-      return {
-        action: 'deny',
-        code: 'rate_limited',
-        reason,
-      };
-    }
-
-    // 7. Проверка лимита токенов в сутки
-    if (limits.tokensPerDay !== null && snapshot.tokensLastDay >= limits.tokensPerDay) {
-      const reason =
-        language === 'en'
-          ? `Usage is paused for now. It will be available again within a day.`
-          : `Работа на время приостановлена. Доступ вернётся в течение суток.`;
+          ? `Hourly token quota reached (${Math.round(snapshot.tokensLastHour / 1000)}k tokens). Please wait before asking large tasks.`
+          : `Достигнута часовая квота токенов (${Math.round(snapshot.tokensLastHour / 1000)}k токенов). Сделайте небольшую паузу.`;
 
       return {
         action: 'deny',

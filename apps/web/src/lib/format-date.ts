@@ -30,24 +30,3 @@ export function dateGroupOf(iso: string, now: Date = new Date()): DateGroup {
   }
   return 'earlier';
 }
-
-/** Дата и время для подсказок «восстановится …»: «17 окт., 14:05» / «Oct 17, 2:05 PM». */
-export function formatDateTime(iso: string, language: Language): string {
-  return new Intl.DateTimeFormat(LOCALES[language], {
-    day: 'numeric',
-    month: 'short',
-    hour: '2-digit',
-    minute: '2-digit',
-  }).format(new Date(iso));
-}
-
-/** Форма слова по числу: 1 запрос, 2 запроса, 5 запросов (для английского — one / many). */
-export function pluralForm(count: number, language: Language): 'one' | 'few' | 'many' {
-  const n = Math.abs(Math.trunc(count));
-  if (language === 'en') return n === 1 ? 'one' : 'many';
-  const mod10 = n % 10;
-  const mod100 = n % 100;
-  if (mod10 === 1 && mod100 !== 11) return 'one';
-  if (mod10 >= 2 && mod10 <= 4 && (mod100 < 12 || mod100 > 14)) return 'few';
-  return 'many';
-}

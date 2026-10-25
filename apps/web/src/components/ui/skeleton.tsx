@@ -23,7 +23,13 @@ export function Skeleton({ className, tone = 'default' }: SkeletonProps) {
 }
 
 /** Несколько строк-заглушек; последняя короче — похоже на абзац текста. */
-export function SkeletonLines({ lines = 3, className }: { lines?: number; className?: string }) {
+export function SkeletonLines({
+  lines = 3,
+  className,
+}: {
+  lines?: number;
+  className?: string;
+}) {
   return (
     <div aria-hidden="true" className={cn('flex flex-col gap-2.5', className)}>
       {Array.from({ length: lines }, (_, index) => (

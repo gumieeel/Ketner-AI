@@ -1,474 +1,249 @@
 /**
- * Прямой провайдер Anthropic (Messages API через официальный SDK `@anthropic-ai/sdk`).
+ * Адаптер провайдера Anthropic Claude.
  *
- * Дополнительный путь к моделям Claude в обход OpenRouter: включается ключом ANTHROPIC_API_KEY,
- * а маршрутизатор (routed-provider.ts) при его сбое отправляет тот же запрос через OpenRouter.
- * Интерфейс тот же, что у OpenRouterProvider: стриминг, вызов инструментов, usage с кэшем.
- *
- * Особенности моделей Claude 5.5 (Opus, Sonnet, Haiku):
- *  - размышления адаптивные (`thinking: {type: 'adaptive'}`), отключить их нельзя: глубину задаёт
- *    `output_config.effort` (low…max). Наш `none` превращается в `low`. Сводка размышлений
- *    (`display: 'summarized'`) показывается в чате так же, как размышления через OpenRouter;
- *  - `temperature` и принудительный `tool_choice` эти модели не принимают — не отправляем;
- *  - блоки размышлений шага агента нужно вернуть в следующем запросе без изменений: они уходят
- *    в `reasoningDetails` и обратно (только блоки `thinking` / `redacted_thinking`);
- *  - кэш промпта — явными точками `cache_control` (до 4): конец системного промпта, якорь и
- *    история перед вопросом, как в ai/providers/openrouter-provider.ts; в цикле агента — системный
- *    промпт и последнее сообщение, чтобы следующий шаг читал всю историю из кэша.
- *
- * Цену запроса считает маршрутизатор по ценам прямого API из реестра: usage включает запись
- * в кэш (`cacheWriteTokens`, ×1.25 к цене входа) и чтение из него (`cachedTokens`).
+ * Поддерживает Messages API (Claude 3.5 Sonnet, Claude 3 Opus, Claude 3.5 Haiku),
+ * SSE streaming, кэширование промптов (prompt caching) и учёт токенов.
  */
 
-import Anthropic from '@anthropic-ai/sdk';
 import type {
   AIProvider,
   AIProviderType,
-  ChatCompletionCallbacks,
-  ChatCompletionOptions,
-  ChatCompletionResult,
-  ChatToolCall,
-  ChatWireMessage,
-  ProviderMessage,
   ProviderRequestOptions,
   ProviderResponse,
   ProviderStreamCallbacks,
-  ReasoningEffort,
 } from '../gateway-types.js';
-import { MAX_COMPLETION_TOKENS } from './openrouter-provider.js';
 
 export interface AnthropicProviderConfig {
   apiKey: string;
-  baseURL?: string;
-  /** Подмена fetch (тесты). */
-  fetch?: typeof fetch;
+  baseUrl?: string;
+  apiVersion?: string;
 }
-
-type Effort = NonNullable<Anthropic.OutputConfig['effort']>;
-type ThinkingBlock = Anthropic.ThinkingBlockParam | Anthropic.RedactedThinkingBlockParam;
-
-const EPHEMERAL = { type: 'ephemeral' } as const;
-
-/** Глубина размышлений шлюза → effort Claude. Размышления у Claude 5.5 не отключаются. */
-const EFFORT_BY_REASONING: Readonly<Record<ReasoningEffort, Effort>> = {
-  none: 'low',
-  low: 'low',
-  medium: 'medium',
-  high: 'high',
-  xhigh: 'xhigh',
-  max: 'max',
-};
-
-function reasoningParams(reasoning: ProviderRequestOptions['reasoning']): {
-  thinking: Anthropic.ThinkingConfigAdaptive;
-  output_config?: Anthropic.OutputConfig;
-} {
-  const thinking = { type: 'adaptive', display: 'summarized' } as const;
-  if (!reasoning) return { thinking };
-  const effort =
-    'effort' in reasoning
-      ? EFFORT_BY_REASONING[reasoning.effort]
-      : reasoning.enabled
-        ? 'medium'
-        : 'low';
-  return { thinking, output_config: { effort } };
-}
-
-function textBlock(text: string, cache = false): Anthropic.TextBlockParam {
-  return cache ? { type: 'text', text, cache_control: EPHEMERAL } : { type: 'text', text };
-}
-
-/** Блоки размышлений Claude из `reasoningDetails` (блоки OpenRouter сюда не попадают). */
-function thinkingBlocksOf(details: unknown[] | undefined): ThinkingBlock[] {
-  return (details ?? []).filter(
-    (item): item is ThinkingBlock =>
-      Boolean(item) &&
-      typeof item === 'object' &&
-      ((item as { type?: unknown }).type === 'thinking' ||
-        (item as { type?: unknown }).type === 'redacted_thinking'),
-  );
-}
-
-/** Последний блок сообщения получает точку кэша. */
-function withCacheOnLastBlock(message: Anthropic.MessageParam): Anthropic.MessageParam {
-  const blocks: Anthropic.ContentBlockParam[] =
-    typeof message.content === 'string' ? [textBlock(message.content)] : [...message.content];
-  const last = blocks.at(-1);
-  if (last && (last.type === 'text' || last.type === 'tool_result')) {
-    blocks[blocks.length - 1] = { ...last, cache_control: EPHEMERAL };
-  }
-  return { ...message, content: blocks };
-}
-
-/**
- * Модели Claude 5.5 не принимают последнее сообщение ассистента (prefill) и требуют, чтобы диалог
- * начинался с пользователя.
- */
-function normalizeTurns(messages: Anthropic.MessageParam[]): Anthropic.MessageParam[] {
-  const result = [...messages];
-  if (result[0]?.role !== 'user') result.unshift({ role: 'user', content: '…' });
-  if (result.at(-1)?.role === 'assistant') result.push({ role: 'user', content: 'Continue.' });
-  return result;
-}
-
-/**
- * Запрос чата: ведущие системные сообщения → `system`, остальное — диалог. Точки кэша — как у
- * OpenRouter для Claude: конец системного промпта, якорь (первое сообщение) и сообщение перед
- * последним вопросом.
- */
-export function toAnthropicChat(messages: ProviderMessage[]): {
-  system: Anthropic.TextBlockParam[];
-  messages: Anthropic.MessageParam[];
-} {
-  let index = 0;
-  const systemTexts: string[] = [];
-  while (index < messages.length && messages[index].role === 'system') {
-    if (messages[index].content) systemTexts.push(messages[index].content);
-    index += 1;
-  }
-  const dialogue = messages
-    .slice(index)
-    .map((m): Anthropic.MessageParam =>
-      m.role === 'system'
-        ? { role: 'user', content: `[System note] ${m.content}` }
-        : { role: m.role, content: m.content },
-    );
-  const breakpoints = new Set<number>();
-  if (dialogue.length >= 4) breakpoints.add(0);
-  if (dialogue.length > 2) breakpoints.add(dialogue.length - 2);
-  const cached = dialogue.map((m, i) =>
-    breakpoints.has(i) && typeof m.content === 'string' && m.content ? withCacheOnLastBlock(m) : m,
-  );
-  return {
-    system: systemTexts.map((text, i) => textBlock(text, i === systemTexts.length - 1)),
-    messages: normalizeTurns(cached),
-  };
-}
-
-/**
- * Шаг агента: сообщения инструментов → `tool_result`, вызовы → `tool_use`, размышления прошлого
- * шага — первыми в сообщении ассистента. Точки кэша: системный промпт и последнее сообщение.
- */
-export function toAnthropicAgentTurn(messages: ChatWireMessage[]): {
-  system: Anthropic.TextBlockParam[];
-  messages: Anthropic.MessageParam[];
-} {
-  const systemTexts: string[] = [];
-  const turns: Anthropic.MessageParam[] = [];
-  const pushUserBlocks = (blocks: Anthropic.ContentBlockParam[]): void => {
-    const last = turns.at(-1);
-    if (last?.role === 'user' && Array.isArray(last.content)) {
-      last.content = [...last.content, ...blocks];
-    } else {
-      turns.push({ role: 'user', content: blocks });
-    }
-  };
-
-  for (const message of messages) {
-    if (message.role === 'system') {
-      if (turns.length === 0) systemTexts.push(message.content);
-      else pushUserBlocks([textBlock(`[System note] ${message.content}`)]);
-      continue;
-    }
-    if (message.role === 'user') {
-      pushUserBlocks([textBlock(message.content || '…')]);
-      continue;
-    }
-    if (message.role === 'tool') {
-      pushUserBlocks([
-        { type: 'tool_result', tool_use_id: message.toolCallId, content: message.content },
-      ]);
-      continue;
-    }
-    const blocks: Anthropic.ContentBlockParam[] = [...thinkingBlocksOf(message.reasoningDetails)];
-    if (message.content) blocks.push(textBlock(message.content));
-    for (const call of message.toolCalls ?? []) {
-      let input: unknown;
-      try {
-        input = JSON.parse(call.arguments || '{}');
-      } catch {
-        input = {};
-      }
-      blocks.push({ type: 'tool_use', id: call.id, name: call.name, input });
-    }
-    if (blocks.length > 0) turns.push({ role: 'assistant', content: blocks });
-  }
-
-  const normalized = normalizeTurns(turns);
-  const lastIndex = normalized.length - 1;
-  return {
-    system: systemTexts.map((text, i) => textBlock(text, i === systemTexts.length - 1)),
-    messages: normalized.map((m, i) => (i === lastIndex ? withCacheOnLastBlock(m) : m)),
-  };
-}
-
-function usageOf(message: Anthropic.Message): ProviderResponse['usage'] & {
-  cacheWriteTokens?: number;
-} {
-  const usage = message.usage;
-  const cacheRead = usage.cache_read_input_tokens ?? 0;
-  const cacheWrite = usage.cache_creation_input_tokens ?? 0;
-  return {
-    // В Messages API input_tokens — только некэшированная часть входа после последней точки кэша.
-    inputTokens: usage.input_tokens + cacheRead + cacheWrite,
-    outputTokens: usage.output_tokens,
-    ...(cacheRead > 0 ? { cachedTokens: cacheRead } : {}),
-    ...(cacheWrite > 0 ? { cacheWriteTokens: cacheWrite } : {}),
-    ...(usage.output_tokens_details?.thinking_tokens
-      ? { reasoningTokens: usage.output_tokens_details.thinking_tokens }
-      : {}),
-  };
-}
-
-const isAbort = (error: unknown): boolean =>
-  error instanceof Anthropic.APIUserAbortError || (error as Error)?.name === 'AbortError';
 
 export class AnthropicProvider implements AIProvider {
   readonly type: AIProviderType = 'anthropic';
-  readonly name = 'Anthropic API';
-  private readonly client: Anthropic | null;
+  readonly name = 'Anthropic';
+
+  private apiKey: string;
+  private baseUrl: string;
+  private apiVersion: string;
 
   constructor(config: AnthropicProviderConfig) {
-    const apiKey = config.apiKey.trim();
-    this.client = apiKey
-      ? new Anthropic({
-          apiKey,
-          ...(config.baseURL ? { baseURL: config.baseURL } : {}),
-          ...(config.fetch ? { fetch: config.fetch } : {}),
-          // Повторять самому незачем: при сбое запрос сразу уходит через OpenRouter.
-          maxRetries: 0,
-        })
-      : null;
+    this.apiKey = config.apiKey.trim();
+    this.baseUrl = (config.baseUrl ?? 'https://api.anthropic.com/v1').replace(/\/+$/, '');
+    this.apiVersion = config.apiVersion ?? '2023-06-01';
   }
 
   isAvailable(): boolean {
-    return this.client !== null;
+    return this.apiKey.length > 0;
   }
 
-  private requireClient(): Anthropic {
-    if (!this.client) throw new Error('ANTHROPIC_API_KEY не задан');
-    return this.client;
-  }
+  private buildPayload(options: ProviderRequestOptions, stream: boolean) {
+    let systemPrompt: string | undefined = options.systemPrompt;
+    const messages: Array<{ role: 'user' | 'assistant'; content: string | any[] }> = [];
 
-  /** Параметры запроса чата. Отдельным методом, чтобы тесты видели реальный payload. */
-  buildParams(options: ProviderRequestOptions): Anthropic.MessageCreateParamsNonStreaming {
-    const { system, messages } = toAnthropicChat(options.messages);
-    return {
+    for (const msg of options.messages) {
+      if (msg.role === 'system') {
+        systemPrompt = systemPrompt ? `${systemPrompt}\n\n${msg.content}` : msg.content;
+      } else {
+        messages.push({
+          role: msg.role,
+          content: msg.content,
+        });
+      }
+    }
+
+    if (messages.length === 0) {
+      messages.push({ role: 'user', content: 'Hello' });
+    }
+
+    const payload: Record<string, unknown> = {
       model: options.model,
-      max_tokens: Math.min(options.maxTokens ?? 4096, MAX_COMPLETION_TOKENS),
-      ...(system.length > 0 ? { system } : {}),
       messages,
-      ...reasoningParams(options.reasoning),
+      max_tokens: options.maxTokens ?? 4096,
+      stream,
     };
+
+    if (systemPrompt) {
+      // Phase 3: Prompt caching для системного промпта
+      payload.system = [
+        {
+          type: 'text',
+          text: systemPrompt,
+          cache_control: { type: 'ephemeral' },
+        },
+      ];
+    }
+
+    // Phase 3: Prompt caching для стабильной части истории (сообщение перед последним вопросом)
+    if (messages.length > 2) {
+      const checkpointIndex = messages.length - 2;
+      const target = messages[checkpointIndex];
+      if (target && typeof target.content === 'string') {
+        (messages as any)[checkpointIndex] = {
+          role: target.role,
+          content: [
+            {
+              type: 'text',
+              text: target.content,
+              cache_control: { type: 'ephemeral' },
+            },
+          ],
+        };
+      }
+    }
+
+    if (options.temperature !== undefined) {
+      payload.temperature = options.temperature;
+    }
+
+    return payload;
   }
 
-  /** Параметры шага агента с инструментами. */
-  buildChatParams(options: ChatCompletionOptions): Anthropic.MessageCreateParamsNonStreaming {
-    const { system, messages } = toAnthropicAgentTurn(options.messages);
-    const tools: Anthropic.Tool[] | undefined = options.tools?.map((tool) => ({
-      name: tool.function.name,
-      description: tool.function.description,
-      input_schema: {
-        type: 'object',
-        ...(tool.function.parameters ?? {}),
-      } as Anthropic.Tool.InputSchema,
-      // Аргументы (например, содержимое файла) идут потоком: иначе сторож простоя видел бы
-      // минуты тишины, пока API копит большой вызов целиком.
-      eager_input_streaming: true,
-    }));
+  private getHeaders(): Record<string, string> {
     return {
-      model: options.model,
-      max_tokens: Math.min(options.maxTokens ?? 8192, MAX_COMPLETION_TOKENS),
-      ...(system.length > 0 ? { system } : {}),
-      messages,
-      ...(tools && tools.length > 0 ? { tools, tool_choice: { type: 'auto' } } : {}),
-      ...reasoningParams(options.reasoning),
+      'Content-Type': 'application/json',
+      'x-api-key': this.apiKey,
+      'anthropic-version': this.apiVersion,
+      'anthropic-beta': 'prompt-caching-2024-07-31',
     };
   }
 
   async generateText(options: ProviderRequestOptions): Promise<ProviderResponse> {
-    try {
-      const message = await this.requireClient().messages.create(this.buildParams(options), {
-        signal: options.signal,
-      });
-      const thinking = message.content
-        .map((block) => (block.type === 'thinking' ? block.thinking : ''))
-        .join('');
-      const text = message.content
-        .map((block) => (block.type === 'text' ? block.text : ''))
-        .join('');
-      return {
-        content: thinking ? `<think>\n${thinking}\n</think>\n\n${text}` : text,
-        usage: usageOf(message),
-        model: message.model,
-        via: this.type,
-        finishReason: message.stop_reason === 'max_tokens' ? 'length' : 'stop',
-      };
-    } catch (error) {
-      if (isAbort(error)) {
-        return {
-          content: '',
-          usage: { inputTokens: 0, outputTokens: 0 },
-          finishReason: 'cancelled',
-        };
-      }
-      throw error;
+    const payload = this.buildPayload(options, false);
+
+    const response = await fetch(`${this.baseUrl}/messages`, {
+      method: 'POST',
+      headers: this.getHeaders(),
+      body: JSON.stringify(payload),
+      signal: options.signal,
+    });
+
+    if (!response.ok) {
+      const errText = await response.text().catch(() => '');
+      throw new Error(`Anthropic API error [${response.status}]: ${errText}`);
     }
+
+    const json = (await response.json()) as {
+      content: Array<{ type: string; text?: string }>;
+      usage?: {
+        input_tokens?: number;
+        output_tokens?: number;
+        cache_read_input_tokens?: number;
+      };
+      stop_reason?: string;
+    };
+
+    const textBlocks = json.content?.filter((c) => c.type === 'text') ?? [];
+    const content = textBlocks.map((b) => b.text ?? '').join('');
+    const finishReason = json.stop_reason === 'max_tokens' ? 'length' : 'stop';
+    const cachedTokens = json.usage?.cache_read_input_tokens;
+    const baseInputTokens = json.usage?.input_tokens ?? Math.ceil(content.length / 4);
+
+    return {
+      content,
+      usage: {
+        inputTokens: baseInputTokens + (cachedTokens ?? 0),
+        outputTokens: json.usage?.output_tokens ?? Math.ceil(content.length / 4),
+        cachedTokens: cachedTokens && cachedTokens > 0 ? cachedTokens : undefined,
+      },
+      finishReason,
+    };
   }
 
   async streamText(
     options: ProviderRequestOptions,
     callbacks: ProviderStreamCallbacks,
   ): Promise<ProviderResponse> {
-    if (callbacks.isCancelled()) {
-      return { content: '', usage: { inputTokens: 0, outputTokens: 0 }, finishReason: 'cancelled' };
-    }
-    let content = '';
-    let insideThinking = false;
-    const emit = (text: string): void => {
-      content += text;
-      callbacks.onDelta(text);
-    };
-    const closeThinking = (): void => {
-      if (insideThinking) {
-        insideThinking = false;
-        emit('\n</think>\n\n');
-      }
-    };
-    const partial = (reason: 'cancelled' | 'error'): ProviderResponse => {
-      closeThinking();
-      return {
-        content,
-        usage: { inputTokens: 0, outputTokens: Math.ceil(content.length / 4) },
-        model: options.model,
-        via: this.type,
-        finishReason: reason,
-      };
-    };
+    const payload = this.buildPayload(options, true);
 
-    const stream = this.requireClient().messages.stream(this.buildParams(options), {
+    const response = await fetch(`${this.baseUrl}/messages`, {
+      method: 'POST',
+      headers: this.getHeaders(),
+      body: JSON.stringify(payload),
       signal: options.signal,
     });
+
+    if (!response.ok || !response.body) {
+      const errText = await response.text().catch(() => '');
+      throw new Error(`Anthropic Streaming API error [${response.status}]: ${errText}`);
+    }
+
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder('utf-8');
+    let buffer = '';
+    let accumulatedContent = '';
+    const finalUsage = {
+      inputTokens: 0,
+      outputTokens: 0,
+      cachedTokens: undefined as number | undefined,
+    };
+    let finishReason: 'stop' | 'length' | 'cancelled' | 'error' = 'stop';
+
     try {
-      for await (const event of stream) {
+      while (true) {
         if (callbacks.isCancelled()) {
-          stream.abort();
-          return partial('cancelled');
-        }
-        if (event.type !== 'content_block_delta') continue;
-        if (event.delta.type === 'thinking_delta' && event.delta.thinking) {
-          if (!insideThinking) {
-            insideThinking = true;
-            emit('<think>\n');
+          try {
+            await reader.cancel();
+          } catch {
+            // ignore
           }
-          emit(event.delta.thinking);
-        } else if (event.delta.type === 'text_delta' && event.delta.text) {
-          closeThinking();
-          emit(event.delta.text);
+          finishReason = 'cancelled';
+          break;
+        }
+
+        const { value, done } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n');
+        buffer = lines.pop() ?? '';
+
+        for (const line of lines) {
+          const trimmed = line.trim();
+          if (!trimmed.startsWith('data:')) continue;
+          const dataStr = trimmed.slice(5).trim();
+
+          try {
+            const parsed = JSON.parse(dataStr);
+            const type = parsed.type;
+
+            if (type === 'message_start' && parsed.message?.usage) {
+              const cached = parsed.message.usage.cache_read_input_tokens ?? 0;
+              finalUsage.inputTokens = (parsed.message.usage.input_tokens ?? 0) + cached;
+              finalUsage.cachedTokens = cached > 0 ? cached : undefined;
+            } else if (type === 'content_block_delta' && parsed.delta?.text) {
+              const delta = parsed.delta.text;
+              accumulatedContent += delta;
+              callbacks.onDelta(delta);
+            } else if (type === 'message_delta') {
+              if (parsed.usage?.output_tokens) {
+                finalUsage.outputTokens = parsed.usage.output_tokens;
+              }
+              if (parsed.delta?.stop_reason === 'max_tokens') {
+                finishReason = 'length';
+              }
+            }
+          } catch {
+            // ignore chunk parse errors
+          }
         }
       }
-      closeThinking();
-      const message = await stream.finalMessage();
-      // Отказ модели по правилам безопасности — это ответ модели, а не сбой канала: шлюз увидит
-      // пустой ответ и возьмёт следующую модель цепочки (видимо для пользователя).
-      const finishReason =
-        message.stop_reason === 'max_tokens' ||
-        message.stop_reason === 'model_context_window_exceeded'
-          ? 'length'
-          : message.stop_reason === 'refusal'
-            ? 'error'
-            : 'stop';
-      return {
-        content,
-        usage: usageOf(message),
-        model: message.model,
-        via: this.type,
-        finishReason,
-      };
-    } catch (error) {
-      if (isAbort(error) || callbacks.isCancelled()) return partial('cancelled');
-      // Обрыв после того, как пользователь уже что-то получил: отдаём полученное.
-      if (content) return partial('error');
-      throw error;
-    }
-  }
-
-  async streamChat(
-    options: ChatCompletionOptions,
-    callbacks: ChatCompletionCallbacks,
-  ): Promise<ChatCompletionResult> {
-    const empty = (reason: 'cancelled' | 'error', content = ''): ChatCompletionResult => ({
-      content,
-      toolCalls: [],
-      usage: { inputTokens: 0, outputTokens: Math.ceil(content.length / 4) },
-      model: options.model,
-      via: this.type,
-      finishReason: reason,
-    });
-    if (callbacks.isCancelled()) return empty('cancelled');
-
-    let content = '';
-    let streamedAny = false;
-    const stream = this.requireClient().messages.stream(this.buildChatParams(options), {
-      signal: options.signal,
-    });
-    try {
-      for await (const event of stream) {
-        if (callbacks.isCancelled()) {
-          stream.abort();
-          return empty('cancelled', content);
-        }
-        callbacks.onActivity?.();
-        if (event.type !== 'content_block_delta') continue;
-        if (event.delta.type === 'text_delta' && event.delta.text) {
-          streamedAny = true;
-          content += event.delta.text;
-          callbacks.onDelta(event.delta.text);
-        } else if (event.delta.type === 'thinking_delta' && event.delta.thinking) {
-          streamedAny = true;
-          callbacks.onReasoningDelta?.(event.delta.thinking);
-        } else if (event.delta.type === 'input_json_delta') {
-          streamedAny = true;
-        }
+    } catch (err: unknown) {
+      if ((err as Error)?.name === 'AbortError' || callbacks.isCancelled()) {
+        finishReason = 'cancelled';
+      } else {
+        throw err;
       }
-      const message = await stream.finalMessage();
-      const thinking = message.content.filter(
-        (block): block is Anthropic.ThinkingBlock | Anthropic.RedactedThinkingBlock =>
-          block.type === 'thinking' || block.type === 'redacted_thinking',
-      );
-      // Вызов, оборванный лимитом ответа или отказом, исполнять нельзя: аргументы могут быть
-      // обрезаны (с потоковой передачей аргументов API их не проверяет).
-      const truncated =
-        message.stop_reason === 'max_tokens' ||
-        message.stop_reason === 'model_context_window_exceeded' ||
-        message.stop_reason === 'refusal';
-      const toolCalls: ChatToolCall[] = truncated
-        ? []
-        : message.content.flatMap((block) =>
-            block.type === 'tool_use'
-              ? [{ id: block.id, name: block.name, arguments: JSON.stringify(block.input ?? {}) }]
-              : [],
-          );
-      return {
-        content,
-        toolCalls,
-        reasoningDetails: thinking.length > 0 ? thinking : undefined,
-        usage: usageOf(message),
-        model: message.model,
-        via: this.type,
-        finishReason:
-          message.stop_reason === 'refusal'
-            ? 'error'
-            : truncated
-              ? 'length'
-              : toolCalls.length > 0
-                ? 'tool_calls'
-                : 'stop',
-      };
-    } catch (error) {
-      if (isAbort(error) || callbacks.isCancelled()) return empty('cancelled', content);
-      if (streamedAny) return empty('error', content);
-      throw error;
     }
+
+    if (finalUsage.outputTokens === 0 && accumulatedContent.length > 0) {
+      finalUsage.outputTokens = Math.ceil(accumulatedContent.length / 4);
+    }
+
+    return {
+      content: accumulatedContent,
+      usage: finalUsage,
+      finishReason,
+    };
   }
 }

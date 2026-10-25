@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { FeedbackStore } from './feedback-store.js';
-import { chooseReasoningEffort } from '../ai/reasoning-policy.js';
+import { resolveEngineForModel } from '../ai/gateway.js';
 
 test('FeedbackStore: сохранение лайков/дизлайков и обновление существующей оценки', () => {
   const store = new FeedbackStore();
@@ -9,8 +9,8 @@ test('FeedbackStore: сохранение лайков/дизлайков и о�
   const r1 = store.recordFeedback({
     messageId: 'msg-1',
     conversationId: 'conv-1',
-    modelId: 'ketner-mini',
-    engineModelId: 'openai/gpt-6-luna',
+    modelId: 'gpt-6-astra',
+    engineModelId: 'deepseek/deepseek-chat',
     complexityLevel: 'simple',
     rating: 'like',
   });
@@ -22,8 +22,8 @@ test('FeedbackStore: сохранение лайков/дизлайков и о�
   const r2 = store.recordFeedback({
     messageId: 'msg-1',
     conversationId: 'conv-1',
-    modelId: 'ketner-mini',
-    engineModelId: 'openai/gpt-6-luna',
+    modelId: 'gpt-6-astra',
+    engineModelId: 'deepseek/deepseek-chat',
     complexityLevel: 'simple',
     rating: 'dislike',
     reason: 'hallucination',
@@ -41,8 +41,8 @@ test('FeedbackStore: расчёт аналитики и порога авто-э
   store.recordFeedback({
     messageId: 'msg-1',
     conversationId: 'c1',
-    modelId: 'claude-haiku-5.5',
-    engineModelId: 'openai/gpt-6-luna',
+    modelId: 'claude-fable',
+    engineModelId: 'deepseek/deepseek-chat',
     complexityLevel: 'simple',
     rating: 'dislike',
   });
@@ -51,22 +51,22 @@ test('FeedbackStore: расчёт аналитики и порога авто-э
   assert.equal(analytics.summary.total, 1);
   assert.equal(analytics.summary.dislikes, 1);
   assert.equal(analytics.escalation.autoEscalateActive, false);
-  assert.equal(store.shouldEscalateFromLightModel('claude-haiku-5.5', 'simple'), false);
+  assert.equal(store.shouldEscalateFromLightModel('claude-fable', 'simple'), false);
 
   // Добавляем ещё 2 дизлайка (всего 3 дизлайка из 3 оценок на light engine = 100% дизлайков)
   store.recordFeedback({
     messageId: 'msg-2',
     conversationId: 'c1',
-    modelId: 'claude-haiku-5.5',
-    engineModelId: 'openai/gpt-6-luna',
+    modelId: 'claude-fable',
+    engineModelId: 'deepseek/deepseek-chat',
     complexityLevel: 'simple',
     rating: 'dislike',
   });
   store.recordFeedback({
     messageId: 'msg-3',
     conversationId: 'c1',
-    modelId: 'ketner-mini',
-    engineModelId: 'openai/gpt-6-luna',
+    modelId: 'gpt-6-astra',
+    engineModelId: 'deepseek/deepseek-chat',
     complexityLevel: 'simple',
     rating: 'dislike',
   });
@@ -77,32 +77,17 @@ test('FeedbackStore: расчёт аналитики и порога авто-э
   assert.equal(analytics.escalation.lightEngineDislikeRate, 1.0);
   assert.equal(analytics.escalation.escalateToHeavyRecommended, true);
   assert.equal(analytics.escalation.autoEscalateActive, true);
-  assert.equal(store.shouldEscalateFromLightModel('claude-haiku-5.5', 'simple'), true);
+  assert.equal(store.shouldEscalateFromLightModel('claude-fable', 'simple'), true);
 
-  // При высокой доле дизлайков глубина размышлений простого запроса растёт на шаг, модель не меняется
-  const escalate = store.shouldEscalateFromLightModel('ketner-mini', 'simple');
-  assert.equal(
-    chooseReasoningEffort({
-      level: 'simple',
-      category: 'general',
-      plan: 'plus',
-      stage: 'normal',
-      costClass: 'lite',
-      escalate,
-    }),
-    'low',
-  );
-  assert.equal(
-    chooseReasoningEffort({
-      level: 'moderate',
-      category: 'general',
-      plan: 'plus',
-      stage: 'normal',
-      costClass: 'work',
-      escalate,
-    }),
-    'medium',
-  );
+  // Проверяем динамический роутер в gateway: простой запрос должен эскалироваться на Haiku 4.5
+  const escalatedClaude = resolveEngineForModel('claude-fable', 'Привет', undefined, store);
+  assert.equal(escalatedClaude.modelId, 'anthropic/claude-haiku-4.5');
+  assert.match(escalatedClaude.engineName, /Escalated from Light/);
+
+  // Проверяем роутер для GPT-6 Astra: простой запрос должен эскалироваться на Luna Pro
+  const escalatedAstra = resolveEngineForModel('gpt-6-astra', 'Привет', undefined, store);
+  assert.equal(escalatedAstra.modelId, 'openai/gpt-6-luna-pro');
+  assert.match(escalatedAstra.engineName, /Escalated from Light/);
 });
 
 test('FeedbackStore: высокая удовлетворённость не вызывает эскалацию', () => {
@@ -113,8 +98,8 @@ test('FeedbackStore: высокая удовлетворённость не вы
     store.recordFeedback({
       messageId: `msg-${i}`,
       conversationId: 'c2',
-      modelId: 'ketner-mini',
-      engineModelId: 'openai/gpt-6-luna',
+      modelId: 'gpt-6-astra',
+      engineModelId: 'deepseek/deepseek-chat',
       complexityLevel: 'simple',
       rating: 'like',
     });
@@ -126,19 +111,10 @@ test('FeedbackStore: высокая удовлетворённость не вы
   assert.equal(analytics.summary.satisfactionRate, 1.0);
   assert.equal(analytics.escalation.escalateToHeavyRecommended, false);
   assert.equal(analytics.escalation.autoEscalateActive, false);
-  assert.equal(store.shouldEscalateFromLightModel('ketner-mini', 'simple'), false);
+  assert.equal(store.shouldEscalateFromLightModel('gpt-6-astra', 'simple'), false);
 
-  // При отличных оценках простой запрос остаётся на быстром ответе без размышлений
-  const escalate = store.shouldEscalateFromLightModel('ketner-mini', 'simple');
-  assert.equal(
-    chooseReasoningEffort({
-      level: 'simple',
-      category: 'general',
-      plan: 'plus',
-      stage: 'normal',
-      costClass: 'lite',
-      escalate,
-    }),
-    'none',
-  );
+  // При отличных оценках простой запрос сохраняет лёгкий быстрый движок
+  const routedAstra = resolveEngineForModel('gpt-6-astra', 'Привет', undefined, store);
+  assert.equal(routedAstra.modelId, 'deepseek/deepseek-chat');
+  assert.match(routedAstra.engineName, /DeepSeek Chat/);
 });

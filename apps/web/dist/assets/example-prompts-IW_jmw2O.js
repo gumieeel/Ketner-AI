@@ -1,1 +1,0 @@
-var e={ru:[`Объясни разницу между SQL и NoSQL простыми словами`,`Составь план запуска продукта на 4 недели`,`Отрефактори этот код и объясни, что изменилось`],en:[`Explain the difference between SQL and NoSQL in simple terms`,`Draft a 4-week product launch plan`,`Refactor this code and explain what changed`]};export{e as t};

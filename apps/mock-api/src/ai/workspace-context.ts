@@ -12,13 +12,7 @@
  *  - промпт не обещает «полный доступ»: модель знает, какие файлы она видела, а какие нет.
  */
 
-import type {
-  Language,
-  MessageAttachment,
-  PlanId,
-  WorkspaceContext,
-  WorkspaceFile,
-} from '../types.js';
+import type { Language, MessageAttachment, PlanId, WorkspaceContext, WorkspaceFile } from '../types.js';
 
 // ─────────────────────────────────────────────────────────────
 // Бюджет
@@ -81,10 +75,7 @@ export function isSensitivePath(path: string): boolean {
 
 const STATIC_PRIORITY: Array<[RegExp, number]> = [
   [/^(src\/|apps\/[^/]+\/src\/)?(index|main|server|app)\.(ts|tsx|js|jsx|py|go|rs)$/i, 80],
-  [
-    /(^|\/)(pyproject\.toml|requirements\.txt|Cargo\.toml|go\.mod|pom\.xml|Gemfile|composer\.json)$/i,
-    70,
-  ],
+  [/(^|\/)(pyproject\.toml|requirements\.txt|Cargo\.toml|go\.mod|pom\.xml|Gemfile|composer\.json)$/i, 70],
   [/^package\.json$/i, 100],
   [/(^|\/)package\.json$/i, 60],
   [/(^|\/)(Dockerfile|docker-compose\.ya?ml)$/i, 55],
@@ -154,11 +145,7 @@ function fenceFor(content: string): string {
   return '`'.repeat(Math.max(3, longest + 1));
 }
 
-function renderFile(
-  file: WorkspaceFile,
-  language: Language,
-  remaining: number,
-): { text: string; used: number } {
+function renderFile(file: WorkspaceFile, language: Language, remaining: number): { text: string; used: number } {
   const full = file.content ?? '';
   const limit = Math.min(MAX_FILE_CHARS, remaining);
   const shown = full.length > limit ? full.slice(0, limit) : full;
@@ -192,148 +179,107 @@ export interface WorkspaceBlockStats {
   contentChars: number;
 }
 
-export interface WorkspaceBlock {
-  /** Весь контекст проекта одним блоком: `stableBlock + queryBlock`. */
-  block: string;
-  /**
-   * Часть, не зависящая от вопроса: дерево, постоянные и мелкие файлы, инструкции. Идёт в системный
-   * промпт и от хода к ходу не меняется, поэтому читается из кэша провайдера.
-   */
-  stableBlock: string;
-  /**
-   * Файлы, отобранные под текущий вопрос (пусто, если таких нет). Шлюз кладёт их в последнее
-   * сообщение пользователя, после кэшируемого префикса: иначе каждый новый вопрос менял бы
-   * системный промпт и сбрасывал кэш всего запроса.
-   */
-  queryBlock: string;
-  stats: WorkspaceBlockStats;
-}
-
-/** Доля бюджета, которая всегда остаётся под файлы текущего вопроса. */
-const QUERY_SHARE = 0.35;
-
 export function buildWorkspaceContextBlock(
   ws: WorkspaceContext,
   options: WorkspaceBlockOptions,
-): WorkspaceBlock {
+): { block: string; stats: WorkspaceBlockStats } {
   const { language, query } = options;
   const isEn = language === 'en';
   const files = Array.isArray(ws.files) ? ws.files : [];
   const typeLabel =
     ws.type === 'git_repo'
-      ? isEn
-        ? 'GitHub repository'
-        : 'GitHub-репозиторий'
-      : isEn
-        ? 'Local project folder'
-        : 'Локальная папка проекта';
+      ? isEn ? 'GitHub repository' : 'GitHub-репозиторий'
+      : isEn ? 'Local project folder' : 'Локальная папка проекта';
 
   // Секреты: путь виден, содержимое — нет.
   const readable = files.filter((f) => !isSensitivePath(f.path));
-  const withContent = readable.filter(
-    (f) => typeof f.content === 'string' && f.content.trim().length > 0,
-  );
+  const withContent = readable.filter((f) => typeof f.content === 'string' && f.content.trim().length > 0);
 
   const queryLower = query.toLowerCase();
   const terms = extractQueryTerms(query);
 
+  const chosen: WorkspaceFile[] = [];
   const chosenPaths = new Set<string>();
+  const rendered: string[] = [];
   let used = 0;
   const budget = Math.max(0, options.maxContentChars);
 
-  const take = (file: WorkspaceFile, cap: number, into: string[]): boolean => {
+  const take = (file: WorkspaceFile, cap: number): boolean => {
     if (chosenPaths.has(file.path)) return false;
     const remaining = cap - used;
     if (remaining < 400) return false;
     const { text, used: chars } = renderFile(file, language, remaining);
-    into.push(text);
+    rendered.push(text);
     used += chars;
+    chosen.push(file);
     chosenPaths.add(file.path);
     return true;
   };
 
-  // Постоянная часть не зависит от вопроса: стабильный порядок → стабильный префикс промпта.
-  // A. Файлы, нужные почти любому вопросу (README, package.json, точки входа).
-  const stableRendered: string[] = [];
+  // A. Постоянная часть: стабильный порядок → стабильный префикс промпта.
   const coreCap = Math.floor(budget * CORE_SHARE);
-  const stableCap = Math.floor(budget * (1 - QUERY_SHARE));
   const staticOrdered = withContent
     .map((f) => ({ f, s: staticScore(f.path) }))
     .filter((x) => x.s > 0)
     .sort((a, b) => b.s - a.s || a.f.path.localeCompare(b.f.path));
-  for (const { f } of staticOrdered) take(f, coreCap, stableRendered);
-
-  // B. Остаток постоянной части: мелкие файлы первыми, чтобы покрыть как можно больше проекта.
-  const rest = withContent
-    .filter((f) => !chosenPaths.has(f.path))
-    .sort((a, b) => a.content!.length - b.content!.length || a.path.localeCompare(b.path));
-  for (const f of rest) take(f, stableCap, stableRendered);
-  const stablePaths = new Set(chosenPaths);
-
-  // C. Файлы, о которых спрашивает пользователь, — в оставшийся бюджет (не меньше QUERY_SHARE).
-  const queryRendered: string[] = [];
   const queryOrdered = withContent
     .map((f) => ({ f, q: queryScore(f, queryLower, terms) }))
     .filter((x) => x.q > 0)
     .sort((a, b) => b.q - a.q || a.f.path.localeCompare(b.f.path));
-  const queryPaths: string[] = [];
-  for (const { f } of queryOrdered) {
-    if (take(f, budget, queryRendered)) queryPaths.push(f.path);
+  const queryTop = new Set(queryOrdered.slice(0, 8).map((x) => x.f.path));
+
+  for (const { f } of staticOrdered) {
+    if (queryTop.has(f.path)) continue; // релевантные запросу пойдут во вторую часть полностью
+    take(f, coreCap);
   }
 
-  // Дерево описывает постоянную часть: файлы под вопрос перечислены в своём блоке.
+  // B. Файлы, о которых спрашивает пользователь.
+  for (const { f } of queryOrdered) take(f, budget);
+
+  // C. Остаток бюджета: мелкие файлы первыми, чтобы покрыть как можно больше проекта.
+  const rest = withContent
+    .filter((f) => !chosenPaths.has(f.path))
+    .sort((a, b) => a.content!.length - b.content!.length || a.path.localeCompare(b.path));
+  for (const f of rest) take(f, budget);
+
+  // Дерево: помечаем файлы, которые модель НЕ видит.
+  const shownPaths = new Set(chosen.map((f) => f.path));
   const sortedFiles = [...files].sort((a, b) => (a.path < b.path ? -1 : a.path > b.path ? 1 : 0));
   const formatSize = (bytes: number): string =>
     bytes >= 1024 ? ` ${Math.round((bytes / 1024) * 10) / 10} KB` : bytes > 0 ? ` ${bytes} B` : '';
   const treeLines = sortedFiles.slice(0, MAX_TREE_ENTRIES).map((f) => {
     let note = '';
     if (isSensitivePath(f.path)) note = isEn ? ' (excluded: secrets)' : ' (исключён: секреты)';
-    else if (!stablePaths.has(f.path))
-      note = isEn ? ' (content not loaded)' : ' (содержимое не загружено)';
+    else if (!shownPaths.has(f.path)) note = isEn ? ' (content not loaded)' : ' (содержимое не загружено)';
     return `- ${f.path}${formatSize(f.size)}${note}`;
   });
   if (files.length > MAX_TREE_ENTRIES) {
     treeLines.push(
-      isEn
-        ? `... and ${files.length - MAX_TREE_ENTRIES} more files`
-        : `... и ещё ${files.length - MAX_TREE_ENTRIES} файлов`,
+      isEn ? `... and ${files.length - MAX_TREE_ENTRIES} more files` : `... и ещё ${files.length - MAX_TREE_ENTRIES} файлов`,
     );
   }
 
   const total = Math.max(ws.filesCount ?? 0, files.length);
   const source = `${ws.pathOrUrl || ws.name}${ws.branch ? (isEn ? ` (branch: ${ws.branch})` : ` (ветка: ${ws.branch})`) : ''}`;
 
-  let stableBlock = isEn
-    ? `\n\n[PROJECT CONTEXT: ${typeLabel} "${ws.name}"]\nSource: ${source}\nFiles in index: ${total}. Contents shown below: ${stablePaths.size}. Files relevant to the current question may be attached to the question itself. All other files are visible only as paths.\n`
-    : `\n\n[КОНТЕКСТ ПРОЕКТА: ${typeLabel} «${ws.name}»]\nИсточник: ${source}\nФайлов в индексе: ${total}. Содержимое показано у ${stablePaths.size}. Файлы, нужные для текущего вопроса, могут быть приложены к самому вопросу. Остальные файлы видны только как пути.\n`;
+  let block = isEn
+    ? `\n\n[PROJECT CONTEXT: ${typeLabel} "${ws.name}"]\nSource: ${source}\nFiles in index: ${total}. Contents shown below: ${chosen.length}. All other files are visible only as paths.\n`
+    : `\n\n[КОНТЕКСТ ПРОЕКТА: ${typeLabel} «${ws.name}»]\nИсточник: ${source}\nФайлов в индексе: ${total}. Содержимое показано у ${chosen.length}. Остальные файлы видны только как пути.\n`;
 
   if (treeLines.length > 0) {
-    stableBlock += isEn ? '\nFile tree:\n' : '\nДерево файлов:\n';
-    stableBlock += `${treeLines.join('\n')}\n`;
+    block += isEn ? '\nFile tree:\n' : '\nДерево файлов:\n';
+    block += `${treeLines.join('\n')}\n`;
   }
-  if (stableRendered.length > 0) {
-    stableBlock += isEn ? '\nFile contents:\n' : '\nСодержимое файлов:\n';
-    stableBlock += stableRendered.join('');
+  if (rendered.length > 0) {
+    block += isEn ? '\nFile contents:\n' : '\nСодержимое файлов:\n';
+    block += rendered.join('');
   }
-  stableBlock += isEn ? ENGLISH_INSTRUCTIONS : RUSSIAN_INSTRUCTIONS;
 
-  const queryBlock =
-    queryRendered.length > 0
-      ? (isEn
-          ? `[PROJECT FILES FOR THIS QUESTION: ${queryPaths.join(', ')} — in the tree above they are marked as not loaded, their contents are here]\n`
-          : `[ФАЙЛЫ ПРОЕКТА ДЛЯ ЭТОГО ВОПРОСА: ${queryPaths.join(', ')} — в дереве выше они помечены как незагруженные, их содержимое здесь]\n`) +
-        queryRendered.join('')
-      : '';
+  block += isEn ? ENGLISH_INSTRUCTIONS : RUSSIAN_INSTRUCTIONS;
 
   return {
-    block: queryBlock ? `${stableBlock}\n\n${queryBlock}` : stableBlock,
-    stableBlock,
-    queryBlock,
-    stats: {
-      filesListed: files.length,
-      filesWithContent: chosenPaths.size,
-      contentChars: used,
-    },
+    block,
+    stats: { filesListed: files.length, filesWithContent: chosen.length, contentChars: used },
   };
 }
 
@@ -375,7 +321,7 @@ export function looksBinary(text: string): boolean {
   let bad = 0;
   for (let i = 0; i < sample.length; i++) {
     const code = sample.charCodeAt(i);
-    if (code === 0xfffd || code === 0 || code < 9 || (code > 13 && code < 32)) bad++;
+    if (code === 0xfffd || code === 0 || (code < 9) || (code > 13 && code < 32)) bad++;
   }
   return bad / sample.length > 0.02;
 }
@@ -418,9 +364,7 @@ export function buildAttachmentsBlock(
       continue;
     }
     if (remaining < 500) {
-      block += isEn
-        ? '  [omitted: attachment budget exhausted]\n'
-        : '  [пропущено: исчерпан лимит на вложения]\n';
+      block += isEn ? '  [omitted: attachment budget exhausted]\n' : '  [пропущено: исчерпан лимит на вложения]\n';
       continue;
     }
 

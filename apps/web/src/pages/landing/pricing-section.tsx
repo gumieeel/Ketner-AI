@@ -1,33 +1,29 @@
 import { Link } from 'react-router-dom';
+import { ArrowRightIcon } from '@/components/icons';
+import { Section } from '@/components/marketing/section';
 import { PlanCards } from '@/components/pricing/plan-cards';
 import { useTranslation } from '@/i18n';
-import { SectionHead } from './section-head';
 
 export function LandingPricingSection() {
   const { t } = useTranslation();
 
   return (
-    <section
-      aria-labelledby="pricing-title"
+    <Section
       id="pricing"
-      className="w-full scroll-mt-20 pt-28 md:pt-36"
+      label={t('landing.pricingLabel')}
+      title={t('landing.pricingTitle')}
+      description={t('landing.pricingSubtitle')}
     >
-      <SectionHead
-        id="pricing-title"
-        title={t('home.pricingTitle')}
-        lead={
-          <>
-            <p>{t('home.pricingLead')}</p>
-            <Link
-              to="/pricing"
-              className="mt-3 inline-flex min-h-11 items-center text-[15px] font-medium text-accent underline decoration-accent/40 underline-offset-4 hover:decoration-accent"
-            >
-              {t('home.pricingCompare')}
-            </Link>
-          </>
-        }
-      />
-      <PlanCards variant="compact" className="mt-12" />
-    </section>
+      <div className="flex w-full flex-col items-center gap-8">
+        <PlanCards variant="compact" />
+        <Link
+          to="/pricing"
+          className="group inline-flex min-h-11 items-center gap-2 rounded-full px-4 py-2 text-sm font-medium text-muted transition-colors duration-200 hover:bg-surface-2 hover:text-text"
+        >
+          <span>{t('landing.pricingCompare')}</span>
+          <ArrowRightIcon className="size-4 transition-transform duration-200 group-hover:translate-x-0.5" />
+        </Link>
+      </div>
+    </Section>
   );
 }

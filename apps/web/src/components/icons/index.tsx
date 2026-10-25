@@ -526,17 +526,6 @@ export function BoltIcon(props: IconProps) {
   );
 }
 
-/** Две колонки со строками текста: сравнение ответов. */
-export function CompareIcon(props: IconProps) {
-  return (
-    <SvgIcon {...props}>
-      <rect x="3" y="4" width="7.5" height="16" rx="1.6" />
-      <rect x="13.5" y="4" width="7.5" height="16" rx="1.6" />
-      <path d="M6 9h2.5M6 12.5h2.5M16.5 9H19M16.5 12.5H19" />
-    </SvgIcon>
-  );
-}
-
 export function GlobeIcon(props: IconProps) {
   return (
     <SvgIcon {...props}>
@@ -670,3 +659,5 @@ export function ThumbsDownIcon(props: IconProps) {
     </SvgIcon>
   );
 }
+
+

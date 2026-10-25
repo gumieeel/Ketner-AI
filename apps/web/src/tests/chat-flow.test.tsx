@@ -4,7 +4,6 @@ import userEvent, { type UserEvent } from '@testing-library/user-event';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { useAuth } from '@/features/auth/auth-store';
 import { useChat } from '@/features/chat/chat-store';
-import { useUpgradeModal } from '@/features/billing/upgrade-modal-store';
 import { usePreferences } from '@/features/preferences/preferences-store';
 import type { Message } from '@/features/chat/types';
 import { installFakeApi } from './fake-api';
@@ -47,9 +46,7 @@ describe('чат: отправка, стриминг и управление о�
     await sendMessage(user, 'Как дела?');
 
     expect(await screen.findAllByText('Как дела?')).not.toHaveLength(0);
-    expect(
-      await screen.findByText('Привет от Ketner AI', {}, { timeout: 10000 }),
-    ).toBeInTheDocument();
+    expect(await screen.findByText('Привет от Ketner AI', {}, { timeout: 10000 })).toBeInTheDocument();
     // Ответ получает идентификатор с сервера: сохранённое сообщение и то, что
     // видно в ленте, — одна и та же сущность.
     expect(lastAssistant().id).toBe('assistant-1');
@@ -133,9 +130,7 @@ describe('чат: отправка, стриминг и управление о�
     const retryBtn = await screen.findByRole('button', { name: 'Повторить' });
     await user.click(retryBtn);
 
-    expect(
-      await screen.findByText('Ответ со второй попытки', {}, { timeout: 8000 }),
-    ).toBeInTheDocument();
+    expect(await screen.findByText('Ответ со второй попытки', {}, { timeout: 8000 })).toBeInTheDocument();
     await waitFor(() => expect(screen.queryByText('Не удалось получить ответ')).toBeNull());
     expect(api.completions).toBe(2);
   });
@@ -203,8 +198,10 @@ describe('чат: отправка, стриминг и управление о�
     await screen.findByRole('heading', { level: 2, name: EMPTY_TITLE });
 
     await user.click(screen.getByRole('button', { name: 'Выбрать модель' }));
-    await user.click(await screen.findByRole('option', { name: /Ketner Pro/ }));
-    expect(screen.getByRole('button', { name: 'Выбрать модель' })).toHaveTextContent(/Ketner Pro/);
+    await user.click(await screen.findByRole('option', { name: /Qwen (2\.5|3\.8) Max/ }));
+    expect(screen.getByRole('button', { name: 'Выбрать модель' })).toHaveTextContent(
+      /Qwen (2\.5|3\.8) Max/,
+    );
 
     await sendMessage(user, 'Вопрос');
     expect(await screen.findByText('Готово')).toBeInTheDocument();
@@ -250,40 +247,46 @@ describe('чат: отправка, стриминг и управление о�
     await screen.findByRole('heading', { level: 2, name: EMPTY_TITLE });
 
     await user.click(screen.getByRole('button', { name: 'Выбрать модель' }));
-    // Проверяем наличие всех моделей каталога
-    expect(await screen.findByRole('option', { name: /Ketner Mini/ })).toBeInTheDocument();
-    expect(screen.getByRole('option', { name: /Ketner Pro/ })).toBeInTheDocument();
-    expect(screen.getByRole('option', { name: /Claude Haiku 5\.5/ })).toBeInTheDocument();
-    expect(screen.getByRole('option', { name: /DeepSeek V4\.1 Flash/ })).toBeInTheDocument();
-    expect(screen.getByRole('option', { name: /GPT-6\.1 Sol/ })).toBeInTheDocument();
-    expect(screen.getByRole('option', { name: /Gemini 3\.8 Flash/ })).toBeInTheDocument();
-    expect(screen.getByRole('option', { name: /Grok 4\.7/ })).toBeInTheDocument();
-    expect(screen.getByRole('option', { name: /Claude Opus 5\.5/ })).toBeInTheDocument();
+    // Проверяем наличие всех моделей
+    expect(await screen.findByRole('option', { name: /Qwen 2\.5 Coder/ })).toBeInTheDocument();
+    expect(screen.getByRole('option', { name: /GPT-6 Astra/ })).toBeInTheDocument();
+    expect(screen.getByRole('option', { name: /Claude Fable 5\.[15]/ })).toBeInTheDocument();
+    expect(screen.getByRole('option', { name: /Gemini (Flash 3\.8|3\.8 Flash|3\.8 Pro)/ })).toBeInTheDocument();
+    expect(screen.getByRole('option', { name: /Qwen (2\.5|3\.8) Max/ })).toBeInTheDocument();
 
     await user.keyboard('{Escape}');
 
-    // Платная модель, выбранная раньше (например, под другим аккаунтом), на Free сбрасывается на Auto.
+    // Задаем платную модель GPT-6 Astra
     act(() => {
-      usePreferences.getState().setChatModelId('gpt-6.1-sol');
+      usePreferences.getState().setChatModelId('gpt-6-astra');
     });
-    await waitFor(() => expect(usePreferences.getState().chatModelId).toBe('auto'));
+
+    // Появляется плашка с предупреждением об апгрейде и ссылкой на тарифы
+    const alert = await screen.findByRole('alert');
+    expect(alert).toHaveTextContent(/GPT-6 Astra/);
+    expect(alert).toHaveTextContent(/GPT Pro/);
+    const upgradeLink = within(alert).getByRole('link', { name: /Улучшить план/ });
+    expect(upgradeLink).toHaveAttribute('href', '/pricing');
   });
 
-  it('на недоступной модели сообщение не отправляется: открывается предложение улучшить тариф', async () => {
-    const api = installFakeApi({ enforcePlans: true });
-    setupChat();
+  it('при попытке генерации на платной модели без подписки показывает ошибку апгрейда со ссылкой на тарифы', async () => {
+    installFakeApi({ enforcePlans: true });
+    const user = setupChat();
     await screen.findByRole('heading', { level: 2, name: EMPTY_TITLE });
 
-    // Модель выбрана и сообщение отправлено в одном такте, до сброса выбора.
-    await act(async () => {
-      usePreferences.getState().setChatModelId('claude-opus-5.5');
-      await useChat.getState().send('Тест платной модели', []);
-    });
+    // Задаем платную модель напрямую для проверки серверной ошибки
+    usePreferences.getState().setChatModelId('claude-fable');
 
-    expect(useUpgradeModal.getState().isOpen).toBe(true);
-    expect(useUpgradeModal.getState().modelName).toMatch(/Claude Opus 5\.5/);
-    expect(api.completions).toBe(0);
-    useUpgradeModal.getState().close();
+    // Отправляем сообщение
+    await sendMessage(user, 'Тест платной модели');
+
+    // Проверяем, что появилось сообщение об ошибке с требованием апгрейда
+    expect(await screen.findByText('Требуется подписка (Upgrade your plan)')).toBeInTheDocument();
+    expect(screen.getAllByText(/Claude Fable 5\.[15]/).length).toBeGreaterThan(0);
+    expect(screen.getAllByRole('link', { name: /Улучшить план/ })[0]).toHaveAttribute(
+      'href',
+      '/pricing',
+    );
   });
 
   it('недоступные платные модели в списке заблокированы и полупрозрачны, а клик по полю ввода не открывает модалку', async () => {
@@ -293,20 +296,10 @@ describe('чат: отправка, стриминг и управление о�
 
     // Открываем селектор моделей
     await user.click(await screen.findByRole('button', { name: 'Выбрать модель' }));
-    // Группа определяется тарифом из каталога: Sol открывается с Plus, Opus — с Pro
-    const solOption = await screen.findByRole('option', { name: /GPT-6\.1 Sol/ });
-    expect(solOption).toBeDisabled();
-    expect(solOption).toHaveClass('opacity-40');
-    expect(within(solOption).getByText('plus')).toBeInTheDocument();
-    const opusOption = screen.getByRole('option', { name: /Claude Opus 5\.5/ });
-    expect(opusOption).toBeDisabled();
-    expect(opusOption).toHaveClass('opacity-40');
-    expect(within(opusOption).getByText('pro')).toBeInTheDocument();
-    // Бесплатная Ketner Mini доступна и без бейджа тарифа
-    const miniOption = screen.getByRole('option', { name: /Ketner Mini/ });
-    expect(miniOption).toBeEnabled();
-    expect(within(miniOption).queryByText('plus')).toBeNull();
-    expect(within(miniOption).queryByText('pro')).toBeNull();
+    const gptOption = await screen.findByRole('option', { name: /GPT-6 Astra/ });
+    expect(gptOption).toBeDisabled();
+    expect(gptOption).toHaveClass('opacity-40');
+    expect(within(gptOption).getByText('pro')).toBeInTheDocument();
 
     // Закрываем меню кликом по фокусу или esc
     await user.keyboard('{Escape}');
@@ -317,118 +310,41 @@ describe('чат: отправка, стриминг и управление о�
     expect(screen.queryByRole('dialog')).toBeNull();
   });
 
-  it('после ответа в ленте видна модель, которая реально ответила, а не выбранная в переключателе', async () => {
-    installFakeApi({ reply: 'Ответ рабочей модели', servedModelId: 'ketner-pro' });
-    const user = setupChat();
-
-    await sendMessage(user, 'Реши задачу');
-
-    expect(
-      await screen.findByText('Ответ рабочей модели', {}, { timeout: 10000 }),
-    ).toBeInTheDocument();
-    await waitFor(() => expect(lastAssistant().status).toBe('complete'));
-    expect(usePreferences.getState().chatModelId).toBe('auto');
-    expect(lastAssistant().modelId).toBe('ketner-pro');
-  });
-
-  it('доступ к моделям определяется рангом тарифа: Plus открывает Sol, но не Opus, устаревший gpt-pro равен Pro', async () => {
-    installFakeApi({ plan: 'plus' });
-    useAuth.setState({
-      user: {
-        id: 'demo-user',
-        email: 'demo@ketner.ai',
-        name: 'Демо Пользователь',
-        plan: 'plus',
-        createdAt: new Date().toISOString(),
-      },
-      token: 'fake.jwt.token',
-      status: 'authenticated',
-    });
+  it('после 3 сообщений на бесплатном плане весь экран затемняется и выскакивает модалка исчерпания лимита', async () => {
+    installFakeApi({ reply: 'Ответ модели' });
     const user = setupChat();
     await screen.findByRole('heading', { level: 2, name: EMPTY_TITLE });
 
-    await user.click(screen.getByRole('button', { name: 'Выбрать модель' }));
-    expect(await screen.findByRole('option', { name: /GPT-6\.1 Sol/ })).toBeEnabled();
-    expect(screen.getByRole('option', { name: /Ketner Pro/ })).toBeEnabled();
-    expect(screen.getByRole('option', { name: /Claude Opus 5\.5/ })).toBeDisabled();
-    expect(screen.getByRole('option', { name: /Grok 4\.7/ })).toBeDisabled();
-    expect(screen.getByRole('option', { name: /Gemini 3\.8 Flash/ })).toBeDisabled();
-
-    // Устаревший тариф gpt-pro приравнен к Pro: открыты и Plus-, и Pro-модели
-    await user.keyboard('{Escape}');
-    act(() => {
-      useAuth.setState({
-        user: {
-          id: 'demo-user',
-          email: 'demo@ketner.ai',
-          name: 'Демо Пользователь',
-          plan: 'gpt-pro',
-          createdAt: new Date().toISOString(),
-        },
-      });
-    });
-    await user.click(screen.getByRole('button', { name: 'Выбрать модель' }));
-    expect(await screen.findByRole('option', { name: /Claude Opus 5\.5/ })).toBeEnabled();
-    expect(screen.getByRole('option', { name: /GPT-6\.1 Sol/ })).toBeEnabled();
-  });
-
-  it('сохранённая модель, которой нет в каталоге, после загрузки каталога сбрасывается на Auto', async () => {
-    installFakeApi({ reply: 'Готово' });
-    usePreferences.getState().setChatModelId('retired-model');
-    const user = setupChat();
-    await screen.findByRole('heading', { level: 2, name: EMPTY_TITLE });
-
-    await waitFor(() => expect(usePreferences.getState().chatModelId).toBe('auto'));
-
-    await sendMessage(user, 'Вопрос');
-    expect(await screen.findByText('Готово')).toBeInTheDocument();
-  });
-
-  it('когда сервер отказывает бесплатному аккаунту, весь экран затемняется и открывается предложение тарифа', async () => {
-    installFakeApi({ reply: 'Ответ модели', rateLimitAfter: 1 });
-    useAuth.setState({
-      user: {
-        id: 'free-user',
-        email: 'free@ketner.ai',
-        name: 'Бесплатный Пользователь',
-        plan: 'free',
-        createdAt: new Date().toISOString(),
-      },
-      token: 'fake.jwt.token',
-      status: 'authenticated',
-    });
-    const user = setupChat();
-    await screen.findByRole('heading', { level: 2, name: EMPTY_TITLE });
-
-    // Первое сообщение проходит: клиент сам ничего не считает
+    // Отправляем 1-е сообщение
     await sendMessage(user, 'Первое сообщение');
     expect(await screen.findAllByText('Первое сообщение')).not.toHaveLength(0);
     await waitFor(() => expect(useChat.getState().streaming).toBe(false));
-    expect(screen.queryByRole('dialog')).toBeNull();
 
-    // Второе сервер отклоняет (429 rate_limited) — открывается модалка без цифр лимита
+    // Отправляем 2-е сообщение
     await sendMessage(user, 'Второе сообщение');
-    const modal = await screen.findByRole('dialog');
-    expect(modal).toHaveClass('backdrop-blur-md');
-    expect(within(modal).getByText('Продолжите на платном тарифе')).toBeInTheDocument();
-    expect(within(modal).queryByText(/из 3/)).toBeNull();
+    expect(await screen.findAllByText('Второе сообщение')).not.toHaveLength(0);
+    await waitFor(() => expect(useChat.getState().streaming).toBe(false));
 
+    // Отправляем 3-е сообщение
+    await sendMessage(user, 'Третье сообщение');
+    expect(await screen.findAllByText('Третье сообщение')).not.toHaveLength(0);
+    await waitFor(() => expect(useChat.getState().streaming).toBe(false));
+
+    // После 3-го сообщения весь экран затемняется и открывается модалка лимита
+    const modal = await screen.findByRole('dialog');
+    expect(modal).toBeInTheDocument();
+    expect(modal).toHaveClass('backdrop-blur-md');
+    expect(within(modal).getByText('Лимит бесплатного плана исчерпан')).toBeInTheDocument();
+    expect(within(modal).getByText('3 из 3 сообщений использовано')).toBeInTheDocument();
+
+    // Закрываем модалку по кнопке закрытия
     await user.click(within(modal).getAllByRole('button', { name: 'Закрыть' })[0]);
     await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
-  });
 
-  it('гости без аккаунта отправляют сообщения, клиент их не блокирует', async () => {
-    installFakeApi({ reply: 'Ответ для гостя' });
-    const user = setupChat();
-    await screen.findByRole('heading', { level: 2, name: EMPTY_TITLE });
-
-    for (let i = 1; i <= 4; i++) {
-      await sendMessage(user, `Сообщение гостя ${i}`);
-      expect(await screen.findAllByText(`Сообщение гостя ${i}`)).not.toHaveLength(0);
-      await waitFor(() => expect(useChat.getState().streaming).toBe(false));
-    }
-
-    expect(screen.queryByRole('dialog')).toBeNull();
+    // Пытаемся отправить 4-е сообщение — поле блокируется, модалка снова открывается
+    const field = screen.getByLabelText(COMPOSER);
+    await user.click(field);
+    expect(await screen.findByRole('dialog')).toBeInTheDocument();
   });
 
   it('поддерживает навигацию с клавиатуры в ModelPicker и закрытие по Esc', async () => {
@@ -451,3 +367,4 @@ describe('чат: отправка, стриминг и управление о�
     expect(trigger).toHaveFocus();
   });
 });
+

@@ -3,10 +3,6 @@ dist
 coverage
 package-lock.json
 apps/mock-api/data
-<<<<<<< HEAD
 apps/mock-api/public
 .claude
 .taste-skill
-=======
-videos
->>>>>>> b31465b6170500ec0aadbda2fb9044027ce6ba86

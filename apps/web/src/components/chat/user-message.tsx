@@ -69,7 +69,7 @@ export function UserMessage({ message, editable }: UserMessageProps) {
   return (
     <div className="group flex flex-col items-end gap-1.5">
       {message.workspaceContext ? (
-        <div className="flex max-w-full items-center gap-1.5 rounded-md border border-stroke bg-surface px-2.5 py-1 text-xs text-muted shadow-xs">
+        <div className="flex max-w-full items-center gap-1.5 rounded-full border border-stroke bg-surface px-2.5 py-1 text-xs text-muted shadow-xs">
           {message.workspaceContext.type === 'git_repo' ? (
             <GitHubIcon className="size-3 text-accent" />
           ) : (

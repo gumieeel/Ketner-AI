@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { GitHubIcon } from '@/components/icons';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -10,7 +10,7 @@ import {
   type GitHubCommitResponse,
 } from '@/features/chat/file-operations';
 import type { FileChangeItem, WorkspaceContext } from '@/features/chat/types';
-import { useGithub } from '@/features/github/github-store';
+import { useWorkspace } from '@/features/chat/workspace-store';
 import { useTranslation } from '@/i18n';
 import { cn } from '@/lib/cn';
 
@@ -36,16 +36,9 @@ export function GitHubApplyModal({
   onSuccess,
 }: GitHubApplyModalProps) {
   const { t } = useTranslation();
-  const githubStatus = useGithub((state) => state.status);
-  const loadGithub = useGithub((state) => state.load);
-  const connectGithub = useGithub((state) => state.connect);
-  const connecting = useGithub((state) => state.busy);
-  const connected = Boolean(githubStatus?.connected);
+  const setGitToken = useWorkspace((state) => state.setGitToken);
 
-  useEffect(() => {
-    if (isOpen) void loadGithub();
-  }, [isOpen, loadGithub]);
-
+  const [token, setToken] = useState(workspace.gitToken || '');
   const [mode, setMode] = useState<'pr' | 'commit'>('pr');
   const [prTitle, setPrTitle] = useState(
     t('gh.defaultTitle', { files: changes.map((c) => c.path.split('/').pop()).join(', ') }),
@@ -61,8 +54,8 @@ export function GitHubApplyModal({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!connected) {
-      setError(t('gh.needConnect'));
+    if (!token.trim()) {
+      setError(t('gh.errNoToken'));
       return;
     }
     if (!owner || !repo) {
@@ -73,12 +66,16 @@ export function GitHubApplyModal({
     setLoading(true);
     setError(null);
 
+    // Сохраняем токен в воркспейсе
+    setGitToken(token.trim());
+
     try {
       if (mode === 'pr') {
         const res: GitHubPRResponse = await createGitHubPullRequest({
           owner,
           repo,
           branch: targetBranch,
+          token: token.trim(),
           changes,
           title: prTitle,
         });
@@ -96,6 +93,7 @@ export function GitHubApplyModal({
           owner,
           repo,
           branch: targetBranch,
+          token: token.trim(),
           changes,
           commitMessage: prTitle,
         });
@@ -108,8 +106,8 @@ export function GitHubApplyModal({
         });
         onClose();
       }
-    } catch (err) {
-      setError((err instanceof Error && err.message) || t('gh.errApply'));
+    } catch (err: any) {
+      setError(err?.message || t('gh.errApply'));
       setLoading(false);
     }
   };
@@ -126,10 +124,7 @@ export function GitHubApplyModal({
 
       <form onSubmit={handleSubmit} className="min-h-0 space-y-5 overflow-y-auto p-5">
         {error && (
-          <div
-            role="alert"
-            className="rounded-xl border border-danger/30 bg-danger-soft p-3 text-[13px] leading-relaxed break-words text-danger"
-          >
+          <div role="alert" className="rounded-xl border border-danger/30 bg-danger-soft p-3 text-[13px] leading-relaxed break-words text-danger">
             {error}
           </div>
         )}
@@ -141,11 +136,7 @@ export function GitHubApplyModal({
             {(
               [
                 { id: 'pr', title: t('gh.prOption'), hint: t('gh.prHint') },
-                {
-                  id: 'commit',
-                  title: t('gh.commitOption'),
-                  hint: t('gh.commitHint', { branch: targetBranch }),
-                },
+                { id: 'commit', title: t('gh.commitOption'), hint: t('gh.commitHint', { branch: targetBranch }) },
               ] as const
             ).map((option) => (
               <button
@@ -181,52 +172,37 @@ export function GitHubApplyModal({
           />
         </div>
 
-        {/* От чьего имени уйдут изменения */}
-        {connected ? (
-          <p className="flex items-center gap-2 rounded-xl border border-stroke bg-canvas px-3.5 py-3 text-[13px] text-muted">
-            {githubStatus?.account?.avatarUrl ? (
-              <img src={githubStatus.account.avatarUrl} alt="" className="size-5 rounded-full" />
-            ) : (
-              <GitHubIcon className="size-4" />
-            )}
-            <span className="min-w-0 truncate">
-              {t('gh.account', { login: githubStatus?.account?.login ?? '' })}
-            </span>
-          </p>
-        ) : (
-          <div className="flex flex-col gap-3 rounded-xl border border-stroke bg-canvas p-3.5">
-            <p className="text-[13px] leading-5 text-muted">{t('gh.needConnect')}</p>
-            <Button
-              type="button"
-              variant="secondary"
-              size="sm"
-              loading={connecting}
-              onClick={() => void connectGithub()}
-              leftIcon={<GitHubIcon className="size-3.5" />}
-              className="self-start"
+        {/* GitHub Token */}
+        <div>
+          <div className="mb-1.5 flex flex-wrap items-center justify-between gap-x-3">
+            <label htmlFor="gh-token" className="text-[13px] font-medium text-text">
+              {t('gh.tokenLabel')}
+            </label>
+            <a
+              href="https://github.com/settings/tokens/new?description=KetnerAI&scopes=repo"
+              target="_blank"
+              rel="noreferrer"
+              className="inline-flex min-h-8 items-center text-xs text-accent hover:underline max-md:min-h-10"
             >
-              {t('gh.connect')}
-            </Button>
+              {t('gh.tokenLink')}
+            </a>
           </div>
-        )}
+          <Input
+            id="gh-token"
+            type="password"
+            value={token}
+            onChange={(e) => setToken(e.target.value)}
+            placeholder="ghp_xxxxxxxxxxxx"
+            required
+          />
+          <p className="mt-1.5 text-xs leading-5 text-muted">{t('gh.tokenHint')}</p>
+        </div>
 
         <div className="flex flex-col-reverse gap-2 pt-1 sm:flex-row sm:justify-end">
-          <Button
-            variant="outline"
-            type="button"
-            onClick={onClose}
-            disabled={loading}
-            className="max-sm:w-full"
-          >
+          <Button variant="outline" type="button" onClick={onClose} disabled={loading} className="max-sm:w-full">
             {t('common.cancel')}
           </Button>
-          <Button
-            variant="primary"
-            type="submit"
-            loading={loading}
-            disabled={!connected}
-            className="gap-1.5 max-sm:w-full"
-          >
+          <Button variant="primary" type="submit" loading={loading} className="gap-1.5 max-sm:w-full">
             {loading ? t('gh.sending') : mode === 'pr' ? t('gh.prOption') : t('gh.submitCommit')}
           </Button>
         </div>

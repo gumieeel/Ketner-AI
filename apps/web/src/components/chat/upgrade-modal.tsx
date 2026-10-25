@@ -1,5 +1,5 @@
 import { Link, useNavigate } from 'react-router-dom';
-import { CloseIcon, SparkleIcon } from '@/components/icons';
+import { AlertIcon, CloseIcon, SparkleIcon } from '@/components/icons';
 import { buttonClasses } from '@/components/ui/button-classes';
 import { IconButton } from '@/components/ui/icon-button';
 import { Modal } from '@/components/ui/modal';
@@ -75,40 +75,31 @@ export function UpgradeModal() {
       <div className="relative min-h-0 overflow-y-auto">
         {/* Badge & Title */}
         <div className="mb-5 pr-8">
-          {reason === 'free_limit' ? null : (
-            <div className="mb-3 inline-flex items-center gap-1.5 rounded-md border border-accent/30 bg-accent-soft px-3 py-1 text-xs font-semibold text-accent">
+          {reason === 'free_limit' ? (
+            <div className="mb-3 inline-flex items-center gap-1.5 rounded-full border border-warning/30 bg-warning-soft px-3 py-1 text-xs font-semibold text-warning">
+              <AlertIcon className="size-3.5" aria-hidden="true" />
+              <span>{t('chat.freeLimitBadge')}</span>
+            </div>
+          ) : (
+            <div className="mb-3 inline-flex items-center gap-1.5 rounded-full border border-accent/30 bg-accent-soft px-3 py-1 text-xs font-semibold text-accent">
               <SparkleIcon className="size-3.5" aria-hidden="true" />
-              <span>
-                {reason === 'max_mode'
-                  ? t('chat.maxModeBadge')
-                  : reason === 'compare'
-                    ? t('compare.upgradeBadge')
-                    : t('chat.paidModelBadge')}
-              </span>
+              <span>{t('chat.paidModelBadge')}</span>
             </div>
           )}
 
           <h2 id="upgrade-modal-title" className="text-xl font-semibold tracking-tight text-text">
             {reason === 'free_limit'
               ? t('chat.freeLimitTitle')
-              : reason === 'max_mode'
-                ? t('chat.maxModeUpgradeTitle')
-                : reason === 'compare'
-                  ? t('compare.upgradeTitle')
-                  : t('chat.paidModelTitle', { model: modelName || 'PRO' })}
+              : t('chat.paidModelTitle', { model: modelName || 'PRO' })}
           </h2>
 
           <p className="mt-2 text-sm leading-relaxed text-muted">
             {reason === 'free_limit'
               ? t('chat.freeLimitDesc')
-              : reason === 'max_mode'
-                ? t('chat.maxModeUpgradeDesc')
-                : reason === 'compare'
-                  ? t('compare.upgradeDesc')
-                  : t('chat.paidModelDesc', {
-                      model: modelName || 'PRO',
-                      plan: requiredPlan || 'PRO',
-                    })}
+              : t('chat.paidModelDesc', {
+                  model: modelName || 'PRO',
+                  plan: requiredPlan || 'PRO',
+                })}
           </p>
         </div>
 
@@ -127,13 +118,10 @@ export function UpgradeModal() {
             >
               <span className="flex flex-col gap-1">
                 <span className="flex items-center gap-2 text-sm font-semibold text-text transition-colors group-hover:text-accent">
-                  <span
-                    aria-hidden="true"
-                    className={cn('size-2 rounded-full', TIER_DOT[plan.id] ?? 'bg-subtle')}
-                  />
+                  <span aria-hidden="true" className={cn('size-2 rounded-full', TIER_DOT[plan.id] ?? 'bg-subtle')} />
                   {t(plan.nameKey)}
                   {plan.popular ? (
-                    <span className="rounded-xs bg-accent-soft px-2 py-0.5 text-[11px] font-semibold text-accent">
+                    <span className="rounded-full bg-accent-soft px-2 py-0.5 text-[11px] font-semibold text-accent">
                       {t('pricing.popular')}
                     </span>
                   ) : null}
@@ -143,14 +131,10 @@ export function UpgradeModal() {
                 ) : null}
               </span>
               <span className="flex items-baseline gap-1 whitespace-nowrap">
-                <span className="tabular text-lg font-semibold text-text">
-                  ${plan.priceMonthly}
-                </span>
+                <span className="tabular text-lg font-semibold text-text">${plan.priceMonthly}</span>
                 <span className="text-xs text-muted">/{t('pricing.month')}</span>
                 {plan.originalPriceMonthly ? (
-                  <span className="ml-0.5 text-xs text-subtle line-through">
-                    ${plan.originalPriceMonthly}
-                  </span>
+                  <span className="ml-0.5 text-xs text-subtle line-through">${plan.originalPriceMonthly}</span>
                 ) : null}
               </span>
             </button>
@@ -162,11 +146,7 @@ export function UpgradeModal() {
           <Link
             to="/pricing"
             onClick={close}
-            className={buttonClasses({
-              variant: 'primary',
-              size: 'lg',
-              className: 'w-full sm:flex-1',
-            })}
+            className={buttonClasses({ variant: 'primary', size: 'lg', className: 'w-full sm:flex-1' })}
           >
             <span>{t('chat.viewPlans')}</span>
             <span aria-hidden="true">→</span>
@@ -179,8 +159,7 @@ export function UpgradeModal() {
               className={buttonClasses({
                 variant: 'outline',
                 size: 'lg',
-                className:
-                  'w-full whitespace-normal text-center text-[13px] leading-tight sm:flex-1',
+                className: 'w-full whitespace-normal text-center text-[13px] leading-tight sm:flex-1',
               })}
             >
               {t('chat.switchToFreeModel')}
@@ -189,11 +168,7 @@ export function UpgradeModal() {
             <button
               type="button"
               onClick={close}
-              className={buttonClasses({
-                variant: 'outline',
-                size: 'lg',
-                className: 'w-full sm:w-auto',
-              })}
+              className={buttonClasses({ variant: 'outline', size: 'lg', className: 'w-full sm:w-auto' })}
             >
               {t('chat.close')}
             </button>

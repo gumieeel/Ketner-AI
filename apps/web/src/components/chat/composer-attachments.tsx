@@ -1,9 +1,5 @@
 import { CloseIcon, CodeIcon, FileTextIcon, VideoIcon } from '@/components/icons';
-import {
-  attachmentHasText,
-  formatFileSize,
-  getFileExtension,
-} from '@/features/chat/attachment-utils';
+import { attachmentHasText, formatFileSize, getFileExtension } from '@/features/chat/attachment-utils';
 import type { MessageAttachment } from '@/features/chat/types';
 import { useTranslation } from '@/i18n';
 
@@ -63,10 +59,7 @@ export function ComposerAttachments({ attachments, onRemove }: ComposerAttachmen
                 <span>{formatFileSize(att.size)}</span>
               </div>
               {warning && (
-                <span
-                  className="truncate text-[11px] text-warning"
-                  title={t('attachment.modelGetsMeta')}
-                >
+                <span className="truncate text-[11px] text-warning" title={t('attachment.modelGetsMeta')}>
                   {warning}
                 </span>
               )}

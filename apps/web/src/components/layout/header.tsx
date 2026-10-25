@@ -5,12 +5,10 @@ import { StubAction } from '@/components/ui/stub-action';
 import { useChat } from '@/features/chat/chat-store';
 import { usePreferences } from '@/features/preferences/preferences-store';
 import { ModelPicker } from '@/components/chat/model-picker';
-import { MaxModeToggle } from '@/components/chat/max-mode-toggle';
-import { CompareToggle } from '@/components/chat/compare-toggle';
 import { useTranslation } from '@/i18n';
 import { cn } from '@/lib/cn';
 import { LanguageToggle } from './language-toggle';
-import { HeaderMenu } from './header-menu';
+import { ThemeToggle } from './theme-toggle';
 
 /** Шапка рабочей области: название диалога, «Поделиться», язык и тема. */
 export function Header() {
@@ -35,8 +33,6 @@ export function Header() {
       {inChat ? (
         <>
           <ModelPicker disabled={streaming} />
-          <MaxModeToggle disabled={streaming} />
-          <CompareToggle disabled={streaming} />
           <span aria-hidden="true" className="hidden h-5 w-px shrink-0 bg-stroke lg:block" />
         </>
       ) : null}
@@ -47,13 +43,7 @@ export function Header() {
           inChat ? 'text-muted max-lg:sr-only' : 'text-text',
         )}
       >
-        {inChat
-          ? title || t('chat.title')
-          : location.pathname.startsWith('/code')
-            ? t('code.title')
-            : location.pathname.startsWith('/images')
-              ? t('images.title')
-              : t('app.name')}
+        {inChat ? title || t('chat.title') : t('app.name')}
       </h1>
 
       <div className={cn('ml-auto flex shrink-0 items-center gap-1.5', inChat && 'max-sm:gap-0.5')}>
@@ -70,11 +60,7 @@ export function Header() {
               <PlusIcon className="size-4" />
             </IconButton>
             <span className="max-sm:hidden">
-              <StubAction
-                label={t('chat.share')}
-                hint={t('chat.composerNotice')}
-                placement="bottom"
-              >
+              <StubAction label={t('chat.share')} hint={t('chat.composerNotice')} placement="bottom">
                 <ShareIcon className="size-4" />
               </StubAction>
             </span>
@@ -82,7 +68,7 @@ export function Header() {
         ) : null}
         {/* На узких экранах язык переключается в боковом меню. */}
         <LanguageToggle className={inChat ? 'max-sm:hidden' : undefined} />
-        <HeaderMenu />
+        <ThemeToggle />
       </div>
     </header>
   );

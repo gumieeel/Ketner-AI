@@ -1,95 +1,136 @@
-import { Badge, type BadgeTone } from '@/components/ui/badge';
+import type { CSSProperties } from 'react';
+import { Section } from '@/components/marketing/section';
+import { Badge } from '@/components/ui/badge';
 import { ModelMark } from '@/components/ui/model-mark';
-import { DEFAULT_MODELS } from '@/features/chat/can-access-model';
+import { Reveal } from '@/components/ui/reveal';
 import { useTranslation, type TranslationKey } from '@/i18n';
-import { SectionHead } from './section-head';
+import { cn } from '@/lib/cn';
+import { modelColor } from '@/lib/model-color';
 
-/** Короткое «для чего» по id модели. Модели без записи в таблицу не попадают. */
-const GOOD_FOR: Record<string, TranslationKey> = {
-  'ketner-mini': 'home.good.ketnerMini',
-  'ketner-pro': 'home.good.ketnerPro',
-  'claude-haiku-5.5': 'home.good.haiku',
-  'deepseek-v4.1-flash': 'home.good.deepseek',
-  'gpt-5.6-luna-pro': 'home.good.luna',
-  'qwen3.8-27b': 'home.good.qwen',
-  'gemini-3.7-flash': 'home.good.gemini',
-  'glm-5.3': 'home.good.glm',
-  'gpt-6.1-sol': 'home.good.sol61',
-  'claude-opus-5.5': 'home.good.opus',
-  'claude-sonnet-5.5': 'home.good.sonnet',
-  'gpt-6-astra': 'home.good.astra',
-  'grok-4.7': 'home.good.grok',
-  'gpt-5.6-sol': 'home.good.sol56',
-  'gpt-5.6-terra': 'home.good.terra',
-};
-
-type Tier = 'free' | 'plus' | 'pro';
-const TIER_LABEL: Record<Tier, string> = { free: 'Free', plus: 'Plus', pro: 'Pro' };
-const TIER_TONE: Record<Tier, BadgeTone> = { free: 'neutral', plus: 'plus', pro: 'pro' };
-
-function tierOf(requiredPlan: string | undefined): Tier {
-  if (requiredPlan === 'plus') return 'plus';
-  if (requiredPlan === 'pro' || requiredPlan === 'ultra') return 'pro';
-  return 'free';
+interface LandingModel {
+  /** id модели из каталога: по нему подбирается цвет и иконка бренда. */
+  modelId: string;
+  name: string;
+  provider: string;
+  tagsKey: TranslationKey;
+  descKey: TranslationKey;
 }
 
-/** Каталог берётся из того же зеркала, что и выбор модели в чате. */
-const ROWS = DEFAULT_MODELS.filter((model) => GOOD_FOR[model.id]).map((model) => ({
-  id: model.id,
-  name: model.name,
-  tier: tierOf(model.requiredPlan),
-}));
+const MODELS: readonly LandingModel[] = [
+  {
+    modelId: 'gpt-6-astra',
+    name: 'GPT-6 Astra',
+    provider: 'OpenAI',
+    tagsKey: 'landing.model.gpt.tags',
+    descKey: 'landing.model.gpt.desc',
+  },
+  {
+    modelId: 'claude-fable',
+    name: 'Claude Fable 5.1',
+    provider: 'Anthropic',
+    tagsKey: 'landing.model.claude.tags',
+    descKey: 'landing.model.claude.desc',
+  },
+  {
+    modelId: 'gemini-2.5-pro',
+    name: 'Gemini Flash 3.8',
+    provider: 'Google',
+    tagsKey: 'landing.model.gemini.tags',
+    descKey: 'landing.model.gemini.desc',
+  },
+  {
+    modelId: 'grok-4.7',
+    name: 'Grok 4.7',
+    provider: 'xAI',
+    tagsKey: 'landing.model.grok.tags',
+    descKey: 'landing.model.grok.desc',
+  },
+  {
+    modelId: 'deepseek-v4.1-flash',
+    name: 'DeepSeek v4.1 Flash',
+    provider: 'DeepSeek',
+    tagsKey: 'landing.model.deepseek.tags',
+    descKey: 'landing.model.deepseek.desc',
+  },
+  {
+    modelId: 'qwen-3.8-max',
+    name: 'Qwen 3.8 Max',
+    provider: 'Alibaba',
+    tagsKey: 'landing.model.qwen.tags',
+    descKey: 'landing.model.qwen.desc',
+  },
+];
+
+const MINI: LandingModel = {
+  modelId: 'ketner-mini',
+  name: 'Ketner Mini',
+  provider: 'Ketner',
+  tagsKey: 'landing.model.mini.tags',
+  descKey: 'landing.model.mini.desc',
+};
+
+function ModelCard({ model, wide = false, free = false }: { model: LandingModel; wide?: boolean; free?: boolean }) {
+  const { t } = useTranslation();
+  const color = modelColor(model.modelId);
+
+  return (
+    <article
+      style={{ '--c': color } as CSSProperties}
+      className={cn(
+        'lift group relative flex h-full gap-4 overflow-hidden rounded-lg border border-stroke bg-surface p-5 text-left shadow-sm',
+        'hover:border-[color-mix(in_srgb,var(--c)_45%,transparent)] hover:shadow-lg',
+        wide ? 'flex-col sm:flex-row sm:items-center sm:gap-5' : 'flex-col',
+      )}
+    >
+      {/* Цветной ореол бренда в углу карточки */}
+      <div
+        aria-hidden="true"
+        className="pointer-events-none absolute inset-0 opacity-70 transition-opacity duration-500 group-hover:opacity-100"
+        style={{
+          backgroundImage:
+            'radial-gradient(110% 90% at 0% 0%, color-mix(in srgb, var(--c) 13%, transparent), transparent 62%)',
+        }}
+      />
+      <div className="relative flex items-center gap-3.5">
+        <ModelMark modelId={model.modelId} size="lg" />
+        <div className="min-w-0">
+          <h3 className="flex flex-wrap items-center gap-2 text-base font-semibold tracking-tight text-text">
+            {model.name}
+            {free ? <Badge tone="brand">Free</Badge> : null}
+          </h3>
+          <p className="text-[13px] text-subtle">{model.provider}</p>
+        </div>
+      </div>
+      <div className="relative flex-1">
+        <p className="mb-1.5 text-[13px] font-medium" style={{ color }}>
+          {t(model.tagsKey)}
+        </p>
+        <p className="text-sm leading-relaxed text-muted">{t(model.descKey)}</p>
+      </div>
+    </article>
+  );
+}
 
 export function LandingModels() {
   const { t } = useTranslation();
 
   return (
-    <section
-      aria-labelledby="models-title"
+    <Section
       id="models"
-      className="w-full scroll-mt-20 pt-28 md:pt-36"
+      label={t('landing.modelsLabel')}
+      title={t('landing.modelsTitle')}
+      description={t('landing.modelsLead')}
     >
-      <SectionHead id="models-title" title={t('home.modelsTitle')} lead={t('home.modelsLead')} />
-
-      <div className="mt-12 overflow-hidden rounded-xl border border-stroke bg-surface">
-        <table className="w-full border-collapse text-left">
-          <caption className="sr-only">{t('home.modelsTitle')}</caption>
-          <thead className="max-md:hidden">
-            <tr className="border-b border-stroke text-[13px] text-subtle">
-              <th scope="col" className="px-6 py-4 font-normal">
-                {t('home.modelsColModel')}
-              </th>
-              <th scope="col" className="px-4 py-4 font-normal">
-                {t('home.modelsColGood')}
-              </th>
-              <th scope="col" className="px-6 py-4 text-right font-normal">
-                {t('home.modelsColFrom')}
-              </th>
-            </tr>
-          </thead>
-          <tbody>
-            {ROWS.map((row) => (
-              <tr
-                key={row.id}
-                className="border-b border-stroke last:border-b-0 max-md:grid max-md:grid-cols-[1fr_auto] max-md:gap-x-4 max-md:gap-y-1 max-md:px-5 max-md:py-4"
-              >
-                <th scope="row" className="px-6 py-3.5 font-normal max-md:p-0">
-                  <span className="flex items-center gap-3">
-                    <ModelMark modelId={row.id} size="sm" />
-                    <span className="text-[15px] font-medium text-text">{row.name}</span>
-                  </span>
-                </th>
-                <td className="px-4 py-3.5 text-[14px] text-muted max-md:col-span-2 max-md:row-start-2 max-md:p-0 max-md:pl-9">
-                  {t(GOOD_FOR[row.id])}
-                </td>
-                <td className="px-6 py-3.5 text-right max-md:col-start-2 max-md:row-start-1 max-md:p-0">
-                  <Badge tone={TIER_TONE[row.tier]}>{TIER_LABEL[row.tier]}</Badge>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        {MODELS.map((model, index) => (
+          <Reveal key={model.modelId} delayMs={(index % 3) * 70} className="h-full">
+            <ModelCard model={model} />
+          </Reveal>
+        ))}
+        <Reveal className="h-full sm:col-span-2 lg:col-span-3">
+          <ModelCard model={MINI} wide free />
+        </Reveal>
       </div>
-    </section>
+    </Section>
   );
 }

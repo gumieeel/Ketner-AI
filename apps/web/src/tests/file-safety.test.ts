@@ -1,16 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import {
-  parseFileProposals,
-  stripFileActionBlocks,
-} from '../features/chat/file-operations/patch-parser';
+import { parseFileProposals, stripFileActionBlocks } from '../features/chat/file-operations/patch-parser';
 import { isSensitivePath, sanitizeChangePath } from '../features/chat/file-operations/path-safety';
 import { applyTextEdits, applyTextReplace } from '../features/chat/file-operations/text-patch';
 import type { WorkspaceContext, WorkspaceFile } from '../features/chat/types';
 
-function workspace(
-  files: WorkspaceFile[],
-  overrides: Partial<WorkspaceContext> = {},
-): WorkspaceContext {
+function workspace(files: WorkspaceFile[], overrides: Partial<WorkspaceContext> = {}): WorkspaceContext {
   return {
     id: 'ws',
     type: 'local_folder',
@@ -31,17 +25,7 @@ const MATH = 'export function add(a: number, b: number) {\n  return a + b;\n}\n'
 
 describe('path-safety: sanitizeChangePath', () => {
   it('отклоняет выход за пределы проекта, .git и абсолютные пути', () => {
-    for (const bad of [
-      '../secret.txt',
-      'src/../../etc/passwd',
-      '.git/config',
-      'a/.git/hooks/pre-commit',
-      'C:\\Windows\\x.dll',
-      '//host/share/x',
-      '',
-      '  ',
-      'src/',
-    ]) {
+    for (const bad of ['../secret.txt', 'src/../../etc/passwd', '.git/config', 'a/.git/hooks/pre-commit', 'C:\\Windows\\x.dll', '//host/share/x', '', '  ', 'src/']) {
       expect(sanitizeChangePath(bad).ok).toBe(false);
     }
     expect(sanitizeChangePath(42).ok).toBe(false);
@@ -54,28 +38,14 @@ describe('path-safety: sanitizeChangePath', () => {
 
   it('убирает имя корневой папки и подбирает регистр по файлам проекта', () => {
     const known = ['src/App.ts'];
-    expect(sanitizeChangePath('proj/src/App.ts', { knownPaths: known, rootName: 'proj' })).toEqual({
-      ok: true,
-      path: 'src/App.ts',
-    });
-    expect(sanitizeChangePath('SRC/app.ts', { knownPaths: known })).toEqual({
-      ok: true,
-      path: 'src/App.ts',
-    });
+    expect(sanitizeChangePath('proj/src/App.ts', { knownPaths: known, rootName: 'proj' })).toEqual({ ok: true, path: 'src/App.ts' });
+    expect(sanitizeChangePath('SRC/app.ts', { knownPaths: known })).toEqual({ ok: true, path: 'src/App.ts' });
     // Если вложенная папка с таким именем реально есть — это не корень.
-    expect(
-      sanitizeChangePath('proj/a.ts', { knownPaths: ['proj/a.ts'], rootName: 'proj' }),
-    ).toEqual({ ok: true, path: 'proj/a.ts' });
+    expect(sanitizeChangePath('proj/a.ts', { knownPaths: ['proj/a.ts'], rootName: 'proj' })).toEqual({ ok: true, path: 'proj/a.ts' });
   });
 
   it('распознаёт файлы с секретами', () => {
-    for (const secret of [
-      '.env',
-      'apps/api/.env.production',
-      'keys/server.pem',
-      '.ssh/id_rsa',
-      'config/credentials.json',
-    ]) {
+    for (const secret of ['.env', 'apps/api/.env.production', 'keys/server.pem', '.ssh/id_rsa', 'config/credentials.json']) {
       expect(isSensitivePath(secret)).toBe(true);
     }
     expect(isSensitivePath('src/environment.ts')).toBe(false);
@@ -153,14 +123,7 @@ describe('patch-parser: безопасное применение правок',
 
   it('не затирает файл, если фрагмент не найден', () => {
     const proposal = parseFileProposals(
-      actions([
-        {
-          action: 'replace',
-          path: 'src/math.ts',
-          targetContent: 'return a * b;',
-          replacementContent: 'return 0;',
-        },
-      ]),
+      actions([{ action: 'replace', path: 'src/math.ts', targetContent: 'return a * b;', replacementContent: 'return 0;' }]),
       'm1',
       ws,
     );
@@ -171,12 +134,7 @@ describe('patch-parser: безопасное применение правок',
   it('применяет часть правок и объясняет отказ по остальным', () => {
     const proposal = parseFileProposals(
       actions([
-        {
-          action: 'replace',
-          path: 'src/math.ts',
-          targetContent: 'a + b',
-          replacementContent: 'a - b',
-        },
+        { action: 'replace', path: 'src/math.ts', targetContent: 'a + b', replacementContent: 'a - b' },
         { action: 'write', path: '../outside.txt', content: 'x' },
         { action: 'write', path: '.env', content: 'KEY=1' },
         { action: 'write', path: 'src/new.ts', content: 'export {};' },
@@ -192,19 +150,8 @@ describe('patch-parser: безопасное применение правок',
   it('объединяет несколько правок одного файла последовательно', () => {
     const proposal = parseFileProposals(
       actions([
-        {
-          action: 'replace',
-          path: 'src/math.ts',
-          targetContent: 'add',
-          replacementContent: 'plus',
-          description: 'rename',
-        },
-        {
-          action: 'replace',
-          path: 'src/math.ts',
-          targetContent: 'a + b',
-          replacementContent: 'a + b + 0',
-        },
+        { action: 'replace', path: 'src/math.ts', targetContent: 'add', replacementContent: 'plus', description: 'rename' },
+        { action: 'replace', path: 'src/math.ts', targetContent: 'a + b', replacementContent: 'a + b + 0' },
       ]),
       'm3',
       ws,
@@ -271,11 +218,7 @@ describe('patch-parser: безопасное применение правок',
     );
     expect(noop).toBeNull();
 
-    const real = parseFileProposals(
-      actions([{ action: 'delete', path: 'src/math.ts' }]),
-      'm10',
-      ws,
-    );
+    const real = parseFileProposals(actions([{ action: 'delete', path: 'src/math.ts' }]), 'm10', ws);
     expect(real?.changes[0]).toMatchObject({ action: 'delete', path: 'src/math.ts', deletions: 4 });
   });
 
@@ -289,18 +232,9 @@ describe('patch-parser: безопасное применение правок',
   });
 
   it('повторный показ уже применённой правки не превращается в перезапись', () => {
-    const applied = workspace([
-      { path: 'src/math.ts', size: 10, content: MATH.replace('a + b', 'a - b') },
-    ]);
+    const applied = workspace([{ path: 'src/math.ts', size: 10, content: MATH.replace('a + b', 'a - b') }]);
     const proposal = parseFileProposals(
-      actions([
-        {
-          action: 'replace',
-          path: 'src/math.ts',
-          targetContent: 'a + b',
-          replacementContent: 'a - b',
-        },
-      ]),
+      actions([{ action: 'replace', path: 'src/math.ts', targetContent: 'a + b', replacementContent: 'a - b' }]),
       'm12',
       applied,
     );
@@ -310,17 +244,12 @@ describe('patch-parser: безопасное применение правок',
 
   it('тройные кавычки внутри содержимого файла не обрывают блок file-actions', () => {
     const readme = '# Title\n\n```bash\nnpm install\n```\n';
-    const proposal = parseFileProposals(
-      actions([{ action: 'write', path: 'README.md', content: readme }]),
-      'm13',
-      ws,
-    );
+    const proposal = parseFileProposals(actions([{ action: 'write', path: 'README.md', content: readme }]), 'm13', ws);
     expect(proposal?.changes[0].modifiedContent).toBe(readme);
   });
 
   it('Aider SEARCH/REPLACE: путь в первой строке блока поиска', () => {
-    const text =
-      '<<<<<<< SEARCH\n// path: src/math.ts\nreturn a + b;\n=======\nreturn b + a;\n>>>>>>>';
+    const text = '<<<<<<< SEARCH\n// path: src/math.ts\nreturn a + b;\n=======\nreturn b + a;\n>>>>>>>';
     const proposal = parseFileProposals(text, 'm14', ws);
     expect(proposal?.changes[0].path).toBe('src/math.ts');
     expect(proposal?.changes[0].modifiedContent).toContain('return b + a;');

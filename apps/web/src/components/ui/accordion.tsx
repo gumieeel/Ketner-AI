@@ -40,7 +40,7 @@ export function Accordion({
   };
 
   return (
-    <div className={cn('flex flex-col gap-2', className)}>
+    <div className={cn('flex flex-col gap-3', className)}>
       {items.map((item) => {
         const open = openIds.includes(item.id);
         const buttonId = `${baseId}-${item.id}-button`;
@@ -51,10 +51,10 @@ export function Accordion({
             key={item.id}
             data-open={open ? 'true' : 'false'}
             className={cn(
-              'rounded-lg border transition-[background-color,border-color] duration-200 ease-out-expo',
+              'rounded-lg border transition-[background-color,border-color,box-shadow] duration-300 ease-out-expo',
               open
-                ? 'border-stroke-strong bg-surface-2'
-                : 'border-stroke bg-surface hover:bg-surface-2',
+                ? 'border-stroke-strong bg-surface-2 shadow-md'
+                : 'border-stroke bg-surface hover:border-stroke-strong',
             )}
           >
             <h3 className="m-0">
@@ -64,15 +64,15 @@ export function Accordion({
                 aria-expanded={open}
                 aria-controls={panelId}
                 onClick={() => toggle(item.id)}
-                className="flex min-h-14 w-full items-center justify-between gap-4 rounded-lg px-5 py-4 text-left text-[16px] font-medium text-text"
+                className="flex min-h-14 w-full items-center justify-between gap-4 rounded-lg px-5 py-4 text-left text-base font-semibold text-text"
               >
                 <span className="text-balance">{item.title}</span>
                 <span
                   aria-hidden="true"
                   className={cn(
-                    'inline-flex size-7 shrink-0 items-center justify-center text-muted',
-                    'transition-[transform,color] duration-200 ease-out-expo',
-                    open && 'rotate-180 text-text',
+                    'inline-flex size-7 shrink-0 items-center justify-center rounded-full border border-stroke text-muted',
+                    'transition-[transform,background-color,color,border-color] duration-300 ease-out-expo',
+                    open && 'rotate-180 border-accent/30 bg-accent-soft text-accent',
                   )}
                 >
                   <ChevronDownIcon className="size-4" />
@@ -90,9 +90,7 @@ export function Accordion({
               )}
             >
               <div className="overflow-hidden">
-                <div className="max-w-[68ch] px-5 pb-5 text-[15px] leading-relaxed text-muted">
-                  {item.content}
-                </div>
+                <div className="px-5 pb-5 text-sm leading-relaxed text-muted">{item.content}</div>
               </div>
             </div>
           </div>

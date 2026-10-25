@@ -1,9 +1,7 @@
-import { useEffect, useState, type FormEvent, type ReactNode } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import {
   CreditCardIcon,
-  ExternalLinkIcon,
-  GitHubIcon,
   KeyIcon,
   LogoutIcon,
   MessagesIcon,
@@ -19,15 +17,9 @@ import { Button } from '@/components/ui/button';
 import { buttonClasses } from '@/components/ui/button-classes';
 import { Card, CardText, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
-import { TelegramAuthDialog } from '@/components/telegram/telegram-auth-dialog';
-import { Input } from '@/components/ui/input';
 import { unlinkTelegram } from '@/features/auth/api';
-import { normalizeUser, useAuth } from '@/features/auth/auth-store';
-import type { User } from '@/features/auth/types';
-import { ApiError } from '@/features/chat/api';
-import { isTelegramOnlyEmail, telegramSiteAuth } from '@/features/telegram/site-auth';
+import { useAuth } from '@/features/auth/auth-store';
 import { useBilling } from '@/features/billing/billing-store';
-import { useGithub } from '@/features/github/github-store';
 import { useTranslation, type TranslationKey } from '@/i18n';
 import { cn } from '@/lib/cn';
 import { formatShortDate } from '@/lib/format-date';
@@ -125,9 +117,7 @@ function SettingsSection({
                 {title}
               </CardTitle>
               {description ? (
-                <CardText className="mt-0.5 text-[13px] leading-5 break-words">
-                  {description}
-                </CardText>
+                <CardText className="mt-0.5 text-[13px] leading-5 break-words">{description}</CardText>
               ) : null}
             </div>
           </div>
@@ -152,12 +142,7 @@ function InfoTile({
   return (
     <div className="min-w-0 rounded-xl border border-stroke bg-canvas px-3.5 py-3">
       <div className="text-xs text-muted">{label}</div>
-      <div
-        className={cn(
-          'mt-0.5 truncate text-sm text-text',
-          mono && 'font-mono text-[13px] select-all',
-        )}
-      >
+      <div className={cn('mt-0.5 truncate text-sm text-text', mono && 'font-mono text-[13px] select-all')}>
         {children}
       </div>
     </div>
@@ -198,99 +183,23 @@ export function SettingsPage() {
   const loadSubscription = useBilling((state) => state.loadSubscription);
   const cancel = useBilling((state) => state.cancel);
 
-  const githubStatus = useGithub((state) => state.status);
-  const githubLoading = useGithub((state) => state.loading);
-  const githubBusy = useGithub((state) => state.busy);
-  const githubError = useGithub((state) => state.error);
-  const loadGithub = useGithub((state) => state.load);
-  const connectGithub = useGithub((state) => state.connect);
-  const disconnectGithub = useGithub((state) => state.disconnect);
-  const [confirmGithubDisconnect, setConfirmGithubDisconnect] = useState(false);
-
-  useEffect(() => {
-    if (user) void loadGithub();
-  }, [user, loadGithub]);
-
   const [canceling, setCanceling] = useState(false);
   const [unlinkingTelegram, setUnlinkingTelegram] = useState(false);
-  const [telegramDialog, setTelegramDialog] = useState(false);
-  const [telegramNotice, setTelegramNotice] = useState<{
-    tone: 'success' | 'danger';
-    text: string;
-  } | null>(null);
-  const [claimOpen, setClaimOpen] = useState(false);
-  const [claimCode, setClaimCode] = useState('');
-  const [claiming, setClaiming] = useState(false);
-  const telegramOnly = isTelegramOnlyEmail(user?.email);
-  const shownEmail = user ? (telegramOnly ? t('settings.telegramAccountEmail') : user.email) : '';
-
-  // Свежий статус Telegram: сохранённый профиль мог устареть (привязали в боте или в кабинете Telegram).
-  const userId = user?.id;
-  useEffect(() => {
-    if (!userId) return;
-    let cancelled = false;
-    void telegramSiteAuth
-      .me(token)
-      .then(({ user: fresh }) => {
-        if (cancelled) return;
-        const current = useAuth.getState().user;
-        if (
-          current?.telegramChatId !== fresh.telegramChatId ||
-          current?.telegramUsername !== fresh.telegramUsername
-        ) {
-          setUser(normalizeUser(fresh as unknown as Record<string, unknown>));
-        }
-      })
-      .catch(() => undefined);
-    return () => {
-      cancelled = true;
-    };
-  }, [userId, token, setUser]);
-
-  const applyLinked = (linked: User) => {
-    setUser(normalizeUser(linked as unknown as Record<string, unknown>));
-    setTelegramDialog(false);
-    setClaimOpen(false);
-    setClaimCode('');
-    setTelegramNotice({ tone: 'success', text: t('settings.telegramLinkedDone') });
-  };
-
-  const handleClaim = async (event: FormEvent) => {
-    event.preventDefault();
-    if (claimCode.trim().length < 4) return;
-    setClaiming(true);
-    setTelegramNotice(null);
-    try {
-      const { user: linked } = await telegramSiteAuth.claim(claimCode, token);
-      applyLinked(linked);
-    } catch (error) {
-      setTelegramNotice({
-        tone: 'danger',
-        text: error instanceof ApiError ? error.message : t('settings.telegramClaimFailed'),
-      });
-    } finally {
-      setClaiming(false);
-    }
-  };
 
   const handleUnlinkTelegram = async () => {
     if (!token) return;
     setUnlinkingTelegram(true);
-    setTelegramNotice(null);
     try {
       const updated = await unlinkTelegram(token);
-      setUser(normalizeUser(updated as unknown as Record<string, unknown>));
-    } catch (error) {
-      setTelegramNotice({
-        tone: 'danger',
-        text: error instanceof ApiError ? error.message : t('settings.telegramClaimFailed'),
-      });
+      setUser(updated);
+    } catch {
+      // ignore
     } finally {
       setUnlinkingTelegram(false);
     }
   };
-  const [adminKey, setAdminKey] = useState<string>(() =>
-    typeof window !== 'undefined' ? localStorage.getItem('ketner_admin_key') || '' : '',
+  const [adminKey, setAdminKey] = useState<string>(
+    () => (typeof window !== 'undefined' ? localStorage.getItem('ketner_admin_key') || '' : ''),
   );
   const [adminKeySaved, setAdminKeySaved] = useState(false);
 
@@ -323,14 +232,12 @@ export function SettingsPage() {
 
   const planKey = user?.plan ? PLAN_NAME_KEYS[user.plan] : undefined;
   const planLabel = planKey ? t(planKey) : user?.plan === 'ultra' ? 'Ultra' : t('pricing.free');
-  const planTone: BadgeTone =
-    (user?.plan && PLAN_TONES[user.plan]) || (user?.plan ? 'brand' : 'neutral');
+  const planTone: BadgeTone = (user?.plan && PLAN_TONES[user.plan]) || (user?.plan ? 'brand' : 'neutral');
 
   const sections: Array<{ id: string; label: string; danger?: boolean }> = [
     { id: 'account', label: t('settings.account') },
     { id: 'appearance', label: t('settings.appearance') },
     { id: 'subscription', label: t('settings.subscription') },
-    { id: 'github', label: 'GitHub' },
     { id: 'telegram', label: 'Telegram' },
     { id: 'support', label: t('settings.support') },
     ...(hasAdminAccess ? [{ id: 'admin', label: 'Admin API' }] : []),
@@ -362,13 +269,11 @@ export function SettingsPage() {
                     href={`#${section.id}`}
                     aria-current={isActive ? 'true' : undefined}
                     className={cn(
-                      'relative flex min-h-11 items-center rounded-md px-4 text-sm whitespace-nowrap transition-colors lg:min-h-10 lg:rounded-lg lg:px-3',
+                      'relative flex min-h-11 items-center rounded-full px-4 text-sm whitespace-nowrap transition-colors lg:min-h-10 lg:rounded-lg lg:px-3',
                       isActive
                         ? 'bg-surface-2 font-medium text-text ring-1 ring-stroke-strong ring-inset'
                         : 'text-muted hover:bg-surface hover:text-text',
-                      section.danger &&
-                        !isActive &&
-                        'text-danger hover:bg-danger-soft hover:text-danger',
+                      section.danger && !isActive && 'text-danger hover:bg-danger-soft hover:text-danger',
                       section.danger && isActive && 'text-danger',
                     )}
                   >
@@ -388,7 +293,7 @@ export function SettingsPage() {
             title={user ? user.name : t('settings.account')}
             description={
               user
-                ? `${shownEmail} · ${t('settings.registeredOn')}: ${formatShortDate(user.createdAt, language)}`
+                ? `${user.email} · ${t('settings.registeredOn')}: ${formatShortDate(user.createdAt, language)}`
                 : `${t('settings.guestTitle')}. ${t('settings.guestText')}`
             }
             action={
@@ -404,7 +309,7 @@ export function SettingsPage() {
                 <InfoTile label="User ID" mono>
                   {user.id}
                 </InfoTile>
-                <InfoTile label="Email">{shownEmail}</InfoTile>
+                <InfoTile label="Email">{user.email}</InfoTile>
               </div>
             ) : null}
           </SettingsSection>
@@ -445,10 +350,7 @@ export function SettingsPage() {
                   {canceling ? t('settings.canceling') : t('settings.cancelSubscription')}
                 </Button>
               ) : (
-                <Link
-                  to="/pricing"
-                  className={cn(buttonClasses({ variant: 'primary', size: 'sm' }), 'gap-1.5')}
-                >
+                <Link to="/pricing" className={cn(buttonClasses({ variant: 'primary', size: 'sm' }), 'gap-1.5')}>
                   <SparkleIcon className="size-3.5" />
                   {t('nav.upgrade')}
                 </Link>
@@ -479,120 +381,7 @@ export function SettingsPage() {
             )}
           </SettingsSection>
 
-          {/* GitHub: доступ к репозиториям, включая приватные */}
-          <SettingsSection
-            id="github"
-            icon={<GitHubIcon className="size-5" />}
-            title={t('settings.githubTitle')}
-            description={t('settings.githubDesc')}
-            action={
-              !user ? null : githubStatus?.connected ? (
-                confirmGithubDisconnect ? (
-                  <>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      loading={githubBusy}
-                      onClick={async () => {
-                        await disconnectGithub();
-                        setConfirmGithubDisconnect(false);
-                      }}
-                      className="text-danger hover:border-danger/40 hover:bg-danger-soft"
-                    >
-                      {t('settings.githubDisconnectYes')}
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => setConfirmGithubDisconnect(false)}
-                    >
-                      {t('common.cancel')}
-                    </Button>
-                  </>
-                ) : (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setConfirmGithubDisconnect(true)}
-                  >
-                    {t('settings.githubDisconnect')}
-                  </Button>
-                )
-              ) : githubStatus?.available ? (
-                <Button
-                  size="sm"
-                  loading={githubBusy}
-                  onClick={() => void connectGithub()}
-                  leftIcon={<GitHubIcon className="size-3.5" />}
-                >
-                  {t('settings.githubConnect')}
-                </Button>
-              ) : null
-            }
-          >
-            {!user ? (
-              <Note>{t('settings.githubSignIn')}</Note>
-            ) : githubLoading && !githubStatus ? (
-              <Skeleton className="h-16 w-full" />
-            ) : githubStatus?.connected && githubStatus.account ? (
-              <>
-                <div className="flex flex-wrap items-center gap-3">
-                  {githubStatus.account.avatarUrl ? (
-                    <img
-                      src={githubStatus.account.avatarUrl}
-                      alt=""
-                      className="size-9 rounded-full ring-1 ring-stroke"
-                    />
-                  ) : null}
-                  <div className="min-w-0">
-                    <a
-                      href={`https://github.com/${githubStatus.account.login}`}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="font-mono text-[14px] font-semibold text-text hover:text-accent"
-                    >
-                      @{githubStatus.account.login}
-                    </a>
-                    <p className="text-xs text-muted">
-                      {t('settings.githubSince', {
-                        date: formatShortDate(githubStatus.account.connectedAt, language),
-                      })}
-                    </p>
-                  </div>
-                  <Badge tone="success">{t('settings.githubConnected')}</Badge>
-                </div>
-                {confirmGithubDisconnect ? <Note>{t('settings.githubDisconnectHint')}</Note> : null}
-                <Note title={t('settings.githubAccessTitle')}>
-                  {t('settings.githubAccessHint')}{' '}
-                  <a
-                    href="https://github.com/settings/applications"
-                    target="_blank"
-                    rel="noreferrer"
-                    className="inline-flex items-center gap-1 text-accent hover:underline"
-                  >
-                    {t('settings.githubManage')}
-                    <ExternalLinkIcon className="size-3" />
-                  </a>
-                </Note>
-              </>
-            ) : githubStatus && !githubStatus.available ? (
-              <Note>{t('settings.githubUnavailable')}</Note>
-            ) : (
-              <>
-                <div className="flex flex-wrap items-center gap-2">
-                  <Badge tone="neutral">{t('settings.githubNotConnected')}</Badge>
-                </div>
-                <Note title={t('settings.githubWhyTitle')}>{t('settings.githubWhyHint')}</Note>
-              </>
-            )}
-            {githubError ? (
-              <p role="alert" className="text-[13px] text-danger">
-                {githubError}
-              </p>
-            ) : null}
-          </SettingsSection>
-
-          {/* Telegram: вход, кабинет подписки, уведомления */}
+          {/* Telegram: аккаунт и платежи */}
           <SettingsSection
             id="telegram"
             icon={<TelegramIcon className="size-5" />}
@@ -610,32 +399,26 @@ export function SettingsPage() {
                     <TelegramIcon className="size-3.5" />
                     {t('settings.telegramOpenBot')}
                   </a>
-                  {!telegramOnly ? (
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={handleUnlinkTelegram}
-                      disabled={unlinkingTelegram}
-                      className="text-danger hover:border-danger/40 hover:bg-danger-soft"
-                    >
-                      {unlinkingTelegram
-                        ? t('settings.telegramUnlinking')
-                        : t('settings.telegramUnlink')}
-                    </Button>
-                  ) : null}
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handleUnlinkTelegram}
+                    disabled={unlinkingTelegram}
+                    className="text-danger hover:border-danger/40 hover:bg-danger-soft"
+                  >
+                    {unlinkingTelegram ? t('settings.telegramUnlinking') : t('settings.telegramUnlink')}
+                  </Button>
                 </>
               ) : (
-                <Button
-                  size="sm"
-                  disabled={!user}
-                  onClick={() => {
-                    setTelegramNotice(null);
-                    setTelegramDialog(true);
-                  }}
-                  leftIcon={<TelegramIcon className="size-3.5" />}
+                <a
+                  href={`https://t.me/Robo_kassa_bot?start=link_${user?.id || 'demo'}`}
+                  target="_blank"
+                  rel="noreferrer"
+                  className={cn(buttonClasses({ variant: 'primary', size: 'sm' }), 'gap-1.5')}
                 >
+                  <TelegramIcon className="size-3.5" />
                   {t('settings.telegramConnect')}
-                </Button>
+                </a>
               )
             }
           >
@@ -644,91 +427,22 @@ export function SettingsPage() {
                 {telegramLinked ? t('settings.telegramConnected') : t('settings.telegramNotLinked')}
               </Badge>
             </div>
-            {telegramNotice ? (
-              <p
-                role={telegramNotice.tone === 'danger' ? 'alert' : 'status'}
-                className={cn(
-                  'rounded-xl border px-3.5 py-3 text-[13px] leading-5',
-                  telegramNotice.tone === 'success'
-                    ? 'border-accent/35 bg-accent-soft text-text'
-                    : 'border-danger/30 bg-danger-soft text-danger',
-                )}
-              >
-                {telegramNotice.text}
-              </p>
-            ) : null}
             {telegramLinked ? (
               <Note
                 title={
                   <>
                     {t('settings.telegramLinkedAs')}{' '}
                     <strong className="font-mono font-semibold text-accent">
-                      {user?.telegramUsername
-                        ? `@${user.telegramUsername}`
-                        : `ID: ${user?.telegramChatId}`}
+                      {user?.telegramUsername ? `@${user.telegramUsername}` : `ID: ${user?.telegramChatId}`}
                     </strong>
                   </>
                 }
               >
-                {telegramOnly ? t('settings.telegramOnlyHint') : t('settings.telegramLinkedHint')}
+                {t('settings.telegramLinkedHint')}
               </Note>
             ) : (
-              <>
-                <Note title={t('settings.telegramLinkTitle')}>
-                  {t('settings.telegramLinkHint')}
-                </Note>
-                {user ? (
-                  claimOpen ? (
-                    <form
-                      onSubmit={handleClaim}
-                      className="flex flex-col gap-2 sm:flex-row sm:items-end"
-                    >
-                      <div className="flex min-w-0 flex-1 flex-col gap-1.5">
-                        <label
-                          htmlFor="telegram-claim-code"
-                          className="text-[13px] font-medium text-text"
-                        >
-                          {t('settings.telegramCodeLabel')}
-                        </label>
-                        <Input
-                          id="telegram-claim-code"
-                          value={claimCode}
-                          onChange={(event) => setClaimCode(event.target.value.toUpperCase())}
-                          maxLength={8}
-                          autoComplete="one-time-code"
-                          autoCapitalize="characters"
-                          spellCheck={false}
-                          placeholder="K7M2QX"
-                          className="font-mono tracking-[0.2em]"
-                        />
-                      </div>
-                      <Button
-                        type="submit"
-                        loading={claiming}
-                        disabled={claimCode.trim().length < 4}
-                      >
-                        {t('settings.telegramCodeSubmit')}
-                      </Button>
-                    </form>
-                  ) : (
-                    <button
-                      type="button"
-                      onClick={() => setClaimOpen(true)}
-                      className="inline-flex min-h-10 items-center self-start text-[13px] font-medium text-accent hover:underline"
-                    >
-                      {t('settings.telegramHaveCode')}
-                    </button>
-                  )
-                ) : null}
-              </>
+              <Note title={t('settings.telegramLinkTitle')}>{t('settings.telegramLinkHint')}</Note>
             )}
-            {telegramDialog ? (
-              <TelegramAuthDialog
-                token={token}
-                onClose={() => setTelegramDialog(false)}
-                onLinked={applyLinked}
-              />
-            ) : null}
           </SettingsSection>
 
           {/* Поддержка */}
@@ -769,9 +483,7 @@ export function SettingsPage() {
             >
               {t('settings.supportBotHint')}
               {user ? (
-                <span className="mt-2 block font-mono text-xs text-subtle select-all">
-                  User ID: {user.id}
-                </span>
+                <span className="mt-2 block font-mono text-xs text-subtle select-all">User ID: {user.id}</span>
               ) : null}
             </Note>
           </SettingsSection>
@@ -818,14 +530,9 @@ export function SettingsPage() {
               tone="danger"
               icon={<LogoutIcon className="size-5" />}
               title={t('settings.logout')}
-              description={`${t('settings.loggedInAs')} ${shownEmail}`}
+              description={`${t('settings.loggedInAs')} ${user.email}`}
               action={
-                <Button
-                  variant="danger"
-                  size="sm"
-                  onClick={() => void logout()}
-                  className="gap-1.5"
-                >
+                <Button variant="danger" size="sm" onClick={() => void logout()} className="gap-1.5">
                   <LogoutIcon className="size-3.5" />
                   {t('settings.logout')}
                 </Button>

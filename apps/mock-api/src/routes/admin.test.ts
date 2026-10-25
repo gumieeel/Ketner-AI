@@ -1,4 +1,3 @@
-import { signupAndVerify } from '../testing/signup.js';
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { config } from '../config.js';
@@ -23,7 +22,7 @@ test('admin: проверка доступа по API ключу', async () => {
     assert.equal(allowed.status, 200);
     const modelsBody = (await allowed.json()) as { models: Array<{ id: string; name: string }> };
     assert.ok(Array.isArray(modelsBody.models));
-    assert.ok(modelsBody.models.some((m) => m.id === 'gpt-6.1-sol'));
+    assert.ok(modelsBody.models.some((m) => m.id === 'gpt-6-astra'));
   } finally {
     await server.close();
   }
@@ -33,7 +32,7 @@ test('admin: обновление модели (PATCH /api/admin/models/:id)', a
   const server = await startTestServer();
 
   try {
-    const updateRes = await fetch(`${server.baseUrl}/api/admin/models/gpt-6.1-sol`, {
+    const updateRes = await fetch(`${server.baseUrl}/api/admin/models/gpt-6-astra`, {
       method: 'PATCH',
       headers: {
         'Content-Type': 'application/json',
@@ -74,7 +73,7 @@ test('admin: метрики провайдеров, статистика и ре
     assert.equal(provRes.status, 200);
     const provBody = (await provRes.json()) as { providers: Array<{ provider: string }> };
     assert.ok(Array.isArray(provBody.providers));
-    assert.ok(provBody.providers.some((p) => p.provider === 'openrouter'));
+    assert.ok(provBody.providers.some((p) => p.provider === 'openai'));
 
     // Global Usage
     const usageRes = await fetch(`${server.baseUrl}/api/admin/usage`, { headers });
@@ -83,12 +82,9 @@ test('admin: метрики провайдеров, статистика и ре
     assert.ok(typeof usageBody.stats.totalRequests === 'number');
 
     // Profitability with manual override
-    const profRes = await fetch(
-      `${server.baseUrl}/api/admin/profitability/demo-user?planPrice=39.99`,
-      {
-        headers,
-      },
-    );
+    const profRes = await fetch(`${server.baseUrl}/api/admin/profitability/demo-user?planPrice=39.99`, {
+      headers,
+    });
     assert.equal(profRes.status, 200);
     const profBody = (await profRes.json()) as {
       profitability: { userId: string; subscriptionRevenue: number; status: string; plan: string };
@@ -103,12 +99,7 @@ test('admin: метрики провайдеров, статистика и ре
     });
     assert.equal(autoProfRes.status, 200);
     const autoProfBody = (await autoProfRes.json()) as {
-      profitability: {
-        userId: string;
-        subscriptionRevenue: number;
-        plan: string;
-        priceRub: number;
-      };
+      profitability: { userId: string; subscriptionRevenue: number; plan: string; priceRub: number };
     };
     assert.equal(autoProfBody.profitability.userId, 'demo-user');
     assert.equal(autoProfBody.profitability.plan, 'free');
@@ -128,7 +119,7 @@ test('admin: доступ по роли пользователя — VIP изо�
 
   try {
     // 1. Создаём пользователя-администратора (test-admin@example.com входит в config.adminEmails)
-    const adminSignupRes = await signupAndVerify(server.baseUrl, {
+    const adminSignupRes = await fetch(`${server.baseUrl}/api/auth/signup`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -150,7 +141,7 @@ test('admin: доступ по роли пользователя — VIP изо�
     assert.equal(adminAccess.status, 200);
 
     // 2. Создаём VIP-пользователя (входит в vipEmails, но НЕ в adminEmails)
-    const vipSignupRes = await signupAndVerify(server.baseUrl, {
+    const vipSignupRes = await fetch(`${server.baseUrl}/api/auth/signup`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -180,7 +171,7 @@ test('admin: доступ по роли пользователя — VIP изо�
     assert.equal(vipDeniedBody.error.code, 'admin_access_denied');
 
     // 3. Обычный пользователь без VIP и Admin -> 403
-    const normalSignupRes = await signupAndVerify(server.baseUrl, {
+    const normalSignupRes = await fetch(`${server.baseUrl}/api/auth/signup`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -215,7 +206,7 @@ test('admin: GET /api/admin/users — список, пагинация, филь
     assert.equal(denied.status, 403);
 
     // 2. Создадим нескольких пользователей
-    await signupAndVerify(server.baseUrl, {
+    await fetch(`${server.baseUrl}/api/auth/signup`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -225,7 +216,7 @@ test('admin: GET /api/admin/users — список, пагинация, филь
       }),
     });
 
-    const bobRes = await signupAndVerify(server.baseUrl, {
+    const bobRes = await fetch(`${server.baseUrl}/api/auth/signup`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -255,24 +246,9 @@ test('admin: GET /api/admin/users — список, пагинация, филь
         isVip: boolean;
         isAdmin: boolean;
         createdAt: string;
-        usage: {
-          requestsToday: number;
-          tokensToday: number;
-          costToday: number;
-          costThisMonth: number;
-        };
-        limits: {
-          requestsPerDay: number | null;
-          tokensPerDay: number | null;
-          maxDailyCost: number | null;
-          costBudget: number | null;
-        };
-        remaining: {
-          requestsToday: number | null;
-          tokensToday: number | null;
-          costToday: number | null;
-          costThisMonth: number | null;
-        };
+        usage: { requestsToday: number; tokensToday: number; costToday: number; costThisMonth: number };
+        limits: { requestsPerDay: number | null; tokensPerDay: number | null; maxDailyCost: number | null; costBudget: number | null };
+        remaining: { requestsToday: number | null; tokensToday: number | null; costToday: number | null; costThisMonth: number | null };
         budgetUsedPct: number;
       }>;
       total: number;
@@ -299,32 +275,21 @@ test('admin: GET /api/admin/users — список, пагинация, филь
     // 4. Поиск по подстроке `search=alice`
     const searchRes = await fetch(`${server.baseUrl}/api/admin/users?search=alice`, { headers });
     assert.equal(searchRes.status, 200);
-    const searchBody = (await searchRes.json()) as {
-      users: Array<{ email: string }>;
-      total: number;
-    };
+    const searchBody = (await searchRes.json()) as { users: Array<{ email: string }>; total: number };
     assert.equal(searchBody.total, 1);
     assert.equal(searchBody.users[0].email, 'alice@example.com');
 
     // 5. Фильтр по тарифу `plan=pro`
     const planRes = await fetch(`${server.baseUrl}/api/admin/users?plan=pro`, { headers });
     assert.equal(planRes.status, 200);
-    const planBody = (await planRes.json()) as {
-      users: Array<{ email: string; plan: string }>;
-      total: number;
-    };
+    const planBody = (await planRes.json()) as { users: Array<{ email: string; plan: string }>; total: number };
     assert.ok(planBody.users.every((u) => u.plan === 'pro'));
     assert.ok(planBody.users.some((u) => u.email === 'bob@example.com'));
 
     // 6. Пагинация `page=1&pageSize=2`
     const pageRes = await fetch(`${server.baseUrl}/api/admin/users?page=1&pageSize=2`, { headers });
     assert.equal(pageRes.status, 200);
-    const pageBody = (await pageRes.json()) as {
-      users: Array<unknown>;
-      total: number;
-      pageSize: number;
-      totalPages: number;
-    };
+    const pageBody = (await pageRes.json()) as { users: Array<unknown>; total: number; pageSize: number; totalPages: number };
     assert.equal(pageBody.users.length, 2);
     assert.equal(pageBody.pageSize, 2);
     assert.ok(pageBody.totalPages >= 2);
@@ -340,9 +305,7 @@ test('admin: GET /api/admin/users/:id — детальная карточка п
     const headers = { 'x-admin-key': config.adminApiKey };
 
     // 1. Несуществующий пользователь -> 404
-    const notFoundRes = await fetch(`${server.baseUrl}/api/admin/users/non-existent-user-123`, {
-      headers,
-    });
+    const notFoundRes = await fetch(`${server.baseUrl}/api/admin/users/non-existent-user-123`, { headers });
     assert.equal(notFoundRes.status, 404);
     const notFoundBody = (await notFoundRes.json()) as { error: { code: string } };
     assert.equal(notFoundBody.error.code, 'user_not_found');
@@ -383,12 +346,7 @@ test('admin: GET /api/admin/users/:id — детальная карточка п
         costThisMonth: number | null;
       };
       budgetUsedPct: number;
-      profitability: {
-        userId: string;
-        subscriptionRevenue: number;
-        aiCost: number;
-        status: string;
-      };
+      profitability: { userId: string; subscriptionRevenue: number; aiCost: number; status: string };
       recentRequests: unknown[];
     };
 
@@ -407,7 +365,7 @@ test('admin: GET /api/admin/users/:id — детальная карточка п
     assert.equal(emptyBody.profitability.aiCost, 0);
 
     // 3. Создадим пользователя и выполним запрос к AI
-    const signupRes = await signupAndVerify(server.baseUrl, {
+    const signupRes = await fetch(`${server.baseUrl}/api/auth/signup`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -450,18 +408,11 @@ test('admin: GET /api/admin/users/:id — детальная карточка п
     assert.ok(events.length > 0);
 
     // Проверяем детальную карточку активного пользователя
-    const activeRes = await fetch(`${server.baseUrl}/api/admin/users/${createdUser.id}`, {
-      headers,
-    });
+    const activeRes = await fetch(`${server.baseUrl}/api/admin/users/${createdUser.id}`, { headers });
     assert.equal(activeRes.status, 200);
     const activeBody = (await activeRes.json()) as {
       usage: { requestsToday: number; tokensToday: number; costToday: number };
-      recentRequests: Array<{
-        id: string;
-        userId: string;
-        inputTokens: number;
-        outputTokens: number;
-      }>;
+      recentRequests: Array<{ id: string; userId: string; inputTokens: number; outputTokens: number }>;
     };
 
     assert.ok(activeBody.usage.requestsToday >= 1);
@@ -480,7 +431,7 @@ test('admin: PATCH /api/admin/users/:id — обновление плана, VIP
     const headers = { 'x-admin-key': config.adminApiKey };
 
     // 1. Создаём целевого пользователя
-    const userRes = await signupAndVerify(server.baseUrl, {
+    const userRes = await fetch(`${server.baseUrl}/api/auth/signup`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -498,10 +449,7 @@ test('admin: PATCH /api/admin/users/:id — обновление плана, VIP
       body: JSON.stringify({ plan: 'pro' }),
     });
     assert.equal(patchPlanRes.status, 200);
-    const patchPlanBody = (await patchPlanRes.json()) as {
-      success: boolean;
-      user: { plan: string };
-    };
+    const patchPlanBody = (await patchPlanRes.json()) as { success: boolean; user: { plan: string } };
     assert.equal(patchPlanBody.success, true);
     assert.equal(patchPlanBody.user.plan, 'pro');
 
@@ -544,7 +492,7 @@ test('admin: PATCH /api/admin/users/:id — обновление плана, VIP
 
     // 7. Валидация: защита от снятия isAdmin с самого себя
     // Авторизуемся под администратором (email из config.adminEmails)
-    const adminSignupRes = await signupAndVerify(server.baseUrl, {
+    const adminSignupRes = await fetch(`${server.baseUrl}/api/auth/signup`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -633,29 +581,12 @@ test('admin: метрики шлюза GET /api/admin/metrics (Фаза 4: да�
     assert.ok(body.metrics.costBySource.template !== undefined);
     assert.ok(Array.isArray(body.metrics.costByModel));
     assert.ok(Array.isArray(body.metrics.costByPlan));
-    // Сводка по моделям за 30 дней: токены, доля кэша, цена запроса, доли тарифов
-    const models30d = (body.metrics as { models30d?: Array<Record<string, unknown>> }).models30d;
-    assert.ok(Array.isArray(models30d));
-    for (const model of models30d) {
-      for (const key of [
-        'requests',
-        'avgInputTokens',
-        'avgOutputTokens',
-        'cachedTokenSharePct',
-        'avgCostPerRequest',
-      ]) {
-        assert.equal(typeof model[key], 'number', key);
-      }
-      assert.equal(typeof model.costShareByPlanPct, 'object');
-      assert.equal(typeof model.cacheStatus, 'string');
-    }
     assert.ok(typeof body.metrics.latency.averageLatencyMs === 'number');
     assert.ok(Array.isArray(body.alerts));
     assert.equal(typeof body.hasNegativeMarginAlert, 'boolean');
-    const extra = body as { feedback?: unknown; escalation?: { autoEscalateActive: unknown } };
-    assert.ok(extra.feedback);
-    assert.ok(extra.escalation);
-    assert.ok(typeof extra.escalation.autoEscalateActive === 'boolean');
+    assert.ok((body as any).feedback);
+    assert.ok((body as any).escalation);
+    assert.ok(typeof (body as any).escalation.autoEscalateActive === 'boolean');
   } finally {
     await server.close();
   }
@@ -673,7 +604,7 @@ test('admin: feedback-analytics и ручное управление auto-escala
     // 1. GET /api/admin/feedback-analytics
     const res = await fetch(`${server.baseUrl}/api/admin/feedback-analytics`, { headers });
     assert.equal(res.status, 200);
-    const analytics = (await res.json()) as { summary?: unknown; escalation?: unknown };
+    const analytics = (await res.json()) as any;
     assert.ok(analytics.summary);
     assert.ok(analytics.escalation);
 
@@ -684,11 +615,7 @@ test('admin: feedback-analytics и ручное управление auto-escala
       body: JSON.stringify({ active: true }),
     });
     assert.equal(overrideRes.status, 200);
-    const overrideData = (await overrideRes.json()) as {
-      success: boolean;
-      override: boolean | null;
-      status: { autoEscalateActive: boolean };
-    };
+    const overrideData = (await overrideRes.json()) as any;
     assert.equal(overrideData.success, true);
     assert.equal(overrideData.override, true);
     assert.equal(overrideData.status.autoEscalateActive, true);
@@ -700,7 +627,7 @@ test('admin: feedback-analytics и ручное управление auto-escala
       body: JSON.stringify({ active: null }),
     });
     assert.equal(resetRes.status, 200);
-    const resetData = (await resetRes.json()) as { override: boolean | null };
+    const resetData = (await resetRes.json()) as any;
     assert.equal(resetData.override, null);
   } finally {
     await server.close();
@@ -723,13 +650,13 @@ test('admin: circuit breaker мониторинг GET /api/admin/circuit-breaker
       circuitBreakers: Array<{ provider: string; state: string; consecutiveFailures: number }>;
     };
     assert.ok(Array.isArray(getBody.circuitBreakers));
-    assert.ok(getBody.circuitBreakers.some((c) => c.provider === 'openrouter'));
+    assert.ok(getBody.circuitBreakers.some((c) => c.provider === 'openai'));
 
     // 2. Сброс предохранителя для конкретного провайдера
     const resetRes = await fetch(`${server.baseUrl}/api/admin/circuit-breaker/reset`, {
       method: 'POST',
       headers,
-      body: JSON.stringify({ provider: 'openrouter' }),
+      body: JSON.stringify({ provider: 'openai' }),
     });
     assert.equal(resetRes.status, 200);
     const resetBody = (await resetRes.json()) as { success: boolean };
@@ -739,63 +666,4 @@ test('admin: circuit breaker мониторинг GET /api/admin/circuit-breaker
   }
 });
 
-test('admin: регистрации по времени и источнику', async () => {
-  const server = await startTestServer();
 
-  try {
-    const denied = await fetch(`${server.baseUrl}/api/admin/registrations`);
-    assert.equal(denied.status, 403);
-
-    const attribution = {
-      utmSource: 'google',
-      utmMedium: 'cpc',
-      utmCampaign: 'launch',
-      landing: '/',
-    };
-    const email = `reg-${Date.now()}@example.com`;
-    const signup = await signupAndVerify(server.baseUrl, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Cookie: `ketner_src=${encodeURIComponent(JSON.stringify(attribution))}`,
-      },
-      body: JSON.stringify({ email, password: 'correct-horse-battery', name: 'Reg' }),
-    });
-    assert.equal(signup.status, 201);
-
-    const res = await fetch(
-      `${server.baseUrl}/api/admin/registrations?period=7d&tz=Asia/Qyzylorda&channel=paid`,
-      { headers: { 'x-admin-key': config.adminApiKey } },
-    );
-    assert.equal(res.status, 200);
-    const body = (await res.json()) as {
-      period: string;
-      bucket: string;
-      timeZone: string;
-      series: Array<{ key: string; count: number }>;
-      bySource: Array<{ channel: string; source: string; count: number }>;
-      byCampaign: Array<{ campaign: string }>;
-      recent: Array<{
-        email: string;
-        method: string;
-        channel: string;
-        source: string;
-        campaign: string;
-      }>;
-    };
-    assert.equal(body.period, '7d');
-    assert.equal(body.bucket, 'day');
-    assert.equal(body.timeZone, 'Asia/Qyzylorda');
-    assert.equal(body.series.length, 7);
-    const row = body.recent.find((item) => item.email === email);
-    assert.ok(row, 'новая регистрация есть в списке');
-    assert.equal(row.method, 'email');
-    assert.equal(row.channel, 'paid');
-    assert.equal(row.source, 'google');
-    assert.equal(row.campaign, 'launch');
-    assert.ok(body.bySource.some((item) => item.channel === 'paid' && item.source === 'google'));
-    assert.ok(body.byCampaign.some((item) => item.campaign === 'launch'));
-  } finally {
-    await server.close();
-  }
-});

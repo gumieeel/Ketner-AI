@@ -59,9 +59,7 @@ async function migrateData() {
   if (!config.databaseUrl) {
     console.error('❌ ОШИБКА: Переменная DATABASE_URL не задана!');
     console.error('Для запуска миграции укажите строку подключения в .env:');
-    console.error(
-      'DATABASE_URL=postgresql://postgres:[PASSWORD]@db.[PROJECT].supabase.co:5432/postgres\n',
-    );
+    console.error('DATABASE_URL=postgresql://postgres:[PASSWORD]@db.[PROJECT].supabase.co:5432/postgres\n');
     process.exit(1);
   }
 

@@ -33,11 +33,10 @@ test('cleanText: пробелы в конце строк внутри кода �
 });
 
 test('optimize: индентация системного промпта с кодом проекта доходит до модели', () => {
-  const systemPrompt =
-    'Ты помощник.\n\n--- File: a.py ---\n```python\nclass A:\n    def m(self):\n        pass\n```';
-  const result = ContextOptimizer.optimize([{ role: 'user', content: 'Что делает класс?' }], {
-    maxMessages: 10,
-    systemPrompt,
-  });
+  const systemPrompt = 'Ты помощник.\n\n--- File: a.py ---\n```python\nclass A:\n    def m(self):\n        pass\n```';
+  const result = ContextOptimizer.optimize(
+    [{ role: 'user', content: 'Что делает класс?' }],
+    { maxMessages: 10, systemPrompt },
+  );
   assert.ok(result[0].content.includes('class A:\n    def m(self):\n        pass'));
 });

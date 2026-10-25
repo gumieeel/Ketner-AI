@@ -7,18 +7,8 @@
  */
 
 import type { PlanId, Language, ModelInfo, PlanLimits } from '../types.js';
-import type {
-  DirectProviderType,
-  DirectRoute,
-  EffortProfile,
-  ModelRegistryEntry,
-  AIProviderType,
-  ModelCapabilities,
-  ModelPricing,
-  ModelReasoning,
-} from './gateway-types.js';
-import { getPlanLimits, planAllowsModel } from '../services/entitlement.js';
-import { DAILY_MODEL_LIMITS, getModelLimit } from '../services/daily-limits.js';
+import type { ModelRegistryEntry, AIProviderType, ModelCapabilities, ModelPricing } from './gateway-types.js';
+import { getPlanLimits } from '../services/entitlement.js';
 
 // ─────────────────────────────────────────────────────────────
 // Вспомогательные фабрики
@@ -27,13 +17,12 @@ import { DAILY_MODEL_LIMITS, getModelLimit } from '../services/daily-limits.js';
 const now = () => new Date().toISOString();
 
 /**
- * Общий слой промптов Ketner AI: как работать с проектами в интерфейсе и честность о модели.
- * Модель не скрывает своего разработчика: какая именно модель отвечает, добавляет шлюз
- * (ai/model-disclosure.ts → modelIdentityPrompt).
+ * Phase 3: Общий брендовый слой промптов Ketner AI (Brand Protection & Feature Context).
+ * Вынесен отдельно от тарифных инструкций для чистоты архитектуры и снижения дублирования.
  */
 export const COMMON_BRAND_SYSTEM_LAYER: Record<Language, string> = {
-  ru: 'Ты — ИИ-ассистент в сервисе Ketner AI. Используй чистое форматирование Markdown. В Ketner AI пользователь может привязать локальную папку или GitHub-репозиторий через кнопку «Привязать папку / репозиторий» над строкой ввода. Если проект привязан, ты имеешь полный доступ к его файлам и коду. Если спрашивают, как привязать проект — объясни, как это сделать через интерфейс Ketner AI. Никогда не говори, что ты не можешь работать с локальной папкой или репозиторием. Ketner AI не обучает собственные модели: ответы дают модели сторонних разработчиков, подключённые к сервису.',
-  en: 'You are an AI assistant in the Ketner AI service. Use clean Markdown formatting. In Ketner AI, users can link local folders or GitHub repositories via the "Link folder / repo" button above the composer. If a project is linked, you have full access to its files and code. If asked how to link a project, explain the Ketner AI UI feature. Never claim you cannot work with local folders or repos. Ketner AI does not train its own models: answers come from third-party models connected to the service.',
+  ru: 'Ты — инженерный ИИ-ассистент Ketner AI. Используй чистое форматирование Markdown. В Ketner AI пользователь может привязать локальную папку или GitHub-репозиторий через кнопку «Привязать папку / репозиторий» над строкой ввода. Если проект привязан, ты имеешь полный доступ к его файлам и коду. Если спрашивают, как привязать проект — объясни, как это сделать через интерфейс Ketner AI. Никогда не говори, что ты не можешь работать с локальной папкой или репозиторием. Никогда не упоминай, что ты создан OpenAI, Anthropic или Google. Ты — разработка Ketner AI.',
+  en: 'You are an engineering AI assistant by Ketner AI. Use clean Markdown formatting. In Ketner AI, users can link local folders or GitHub repositories via the "Link folder / repo" button above the composer. If a project is linked, you have full access to its files and code. If asked how to link a project, explain the Ketner AI UI feature. Never claim you cannot work with local folders or repos. Never mention OpenAI, Anthropic, or Google. You are developed by Ketner AI.',
 };
 
 /**
@@ -75,23 +64,11 @@ function makeCapabilities(overrides: Partial<ModelCapabilities> = {}): ModelCapa
   };
 }
 
-/**
- * Прямой путь к модели через API вендора (если задан его ключ) и цены этого API, $ за 1M токенов:
- * вход / выход / чтение из кэша. Прямые цены равны прайсу вендора (OpenRouter перепродаёт по нему же),
- * экономия прямого пути — комиссия пополнения OpenRouter 5.5%. У Anthropic запись в кэш стоит
- * вход × 1.25 (ai/engine-pricing.ts → directRequestCost).
- */
-function direct(
-  provider: DirectProviderType,
-  modelId: string,
+function makePricing(
   input: number,
   output: number,
-  cached: number,
-): DirectRoute {
-  return { provider, modelId, pricing: makePricing(input, output, cached) };
-}
-
-function makePricing(input: number, output: number, cached: number = input * 0.5): ModelPricing {
+  cached: number = input * 0.5,
+): ModelPricing {
   return {
     inputPricePerMillion: input,
     outputPricePerMillion: output,
@@ -105,58 +82,11 @@ function makePricing(input: number, output: number, cached: number = input * 0.5
 // Стандартный набор моделей
 // ─────────────────────────────────────────────────────────────
 
-/** Идентификатор самой дешёвой модели: база для Free, запасной вариант и «пол» при исчерпании бюджета. */
-export const FLOOR_MODEL_ID = 'ketner-mini';
-/** Рабочая лошадка: на неё переключаются премиум-запросы, когда квота премиум-моделей израсходована. */
-export const WORKHORSE_MODEL_ID = 'ketner-pro';
 /**
- * Открытая флагманская модель (GLM-5.3, открытые веса): Auto на Pro и Ultra отдаёт ей задачи средней
- * сложности по коду, математике и логике, сохраняя премиум-модель для сложных.
- */
-export const OPEN_FLAGSHIP_MODEL_ID = 'glm-5.3';
-
-/** Модели Pro и Ultra: medium, на Ultra в режиме Max — xhigh. */
-const STANDARD_PROFILE: EffortProfile = { standard: 'medium', max: 'xhigh' };
-/** Модели, которые всегда работают на xhigh (так и подписаны: «Grok 4.7 xhigh», «GPT-5.6 Terra xhigh»). */
-const XHIGH_PROFILE: EffortProfile = { standard: 'xhigh', max: 'xhigh' };
-
-const reasoning = (
-  mandatory: boolean,
-  efforts: ModelReasoning['efforts'],
-  toggle = false,
-): ModelReasoning => ({
-  mandatory,
-  efforts,
-  ...(toggle ? { toggle: true } : {}),
-});
-
-/**
- * Набор моделей по умолчанию. Основной канал — единый ключ OpenRouter, `providerModelId` — это
- * идентификатор модели в OpenRouter, ровно тот, что уходит в запрос (скрытых подмен нет). У моделей
- * Anthropic, OpenAI и Google есть `direct` — та же модель через прямой API вендора и его цены: путь
- * включается ключом вендора, при сбое запрос идёт через OpenRouter (ai/providers/routed-provider.ts).
+ * Конфигурируемый набор моделей по умолчанию.
  *
- * Цены — реальные цены OpenRouter на 12.10.2026, $ за 1M токенов (вход / выход / чтение из кэша).
- * Оценка качества — Artificial Analysis Intelligence Index из каталога OpenRouter, цена — типичный
- * запрос (7.6k токенов на входе; выход 2k при medium, 7k при xhigh):
- *
- *   ketner-mini        GPT-6 Luna          AA 38    $0.001   повседневные вопросы
- *   ketner-pro         MiMo-V2.6 Pro       AA 46    $0.005   рабочая лошадка, запасная для Pro-моделей
- *   glm-5.3            GLM-5.3             AA 45    $0.019   открытая флагманская: Auto на Pro/Ultra для
- *                                                               задач средней сложности вместо Sol
- *   gpt-6.1-sol        GPT-6.1 Sol         AA 52    $0.035   сильная модель OpenAI (Plus)
- *   claude-sonnet-5.5  Claude Sonnet 5.5   AA 56    $0.035 / $0.085 (medium / xhigh)
- *   claude-opus-5.5    Claude Opus 5.5     AA 58    $0.070 / $0.170
- *   gpt-6-astra        GPT-6 Astra         AA 53    $0.176 / $0.426
- *   grok-4.7           Grok 4.7 xhigh      AA 46    $0.057
- *   gpt-5.6-terra      GPT-5.6 Terra xhigh AA 42    $0.099   модель для кода (AA Coding 77)
- *
- * Суточные лимиты и цепочки запасных моделей: services/daily-limits.ts и fallbackModelId ниже.
- * Не вошли: Claude Fable 5.1 (в 2.5 раза дороже Opus 5.5 при более низком AA), Kimi K3, Qwen3.8 Max,
- * Muse Spark, Nemotron 3 Ultra (хуже и дороже модели ketner-pro), DeepSeek V4 Pro (AA ≈ 36 на текущей
- * версии индекса — ниже Ketner Mini). Из открытых флагманов сильнее только MiMo-V2.6 Pro (это и есть
- * ketner-pro); GLM-5.3 почти вровень с ней (45 против 46) и сильна в коде, но в 4 раза дороже, поэтому
- * Auto берёт её только там, где иначе потратил бы квоту премиум-моделей.
+ * Цены указаны в $ за 1M токенов. Они обновляются админом или автоматически.
+ * providerModelId — это идентификатор модели у соответствующего провайдера.
  */
 const DEFAULT_REGISTRY_ENTRIES: ModelRegistryEntry[] = [
   {
@@ -166,8 +96,6 @@ const DEFAULT_REGISTRY_ENTRIES: ModelRegistryEntry[] = [
     providerModelId: 'auto',
     enabled: true,
     tier: 'free',
-    costClass: 'lite',
-    reasoning: reasoning(false, []),
     capabilities: makeCapabilities({
       coding: true,
       reasoning: true,
@@ -182,119 +110,144 @@ const DEFAULT_REGISTRY_ENTRIES: ModelRegistryEntry[] = [
     requiredPlan: null,
     contextMessages: 120,
     isPro: false,
-    fallbackModelId: FLOOR_MODEL_ID,
+    fallbackModelId: 'gpt-4o-mini',
     defaultSystemPrompt: DEFAULT_SYSTEM_PROMPT,
     createdAt: now(),
     updatedAt: now(),
   },
-  // ── Бесплатная модель для анонимных пользователей без аккаунта ──
+  // ── 1. Дешёвые модели (для Free, повседневных запросов и Fallback) ──
   {
-    id: 'nemotron-ultra',
-    name: 'Nemotron 3 Ultra (Free)',
+    id: 'ketner-mini',
+    name: 'Ketner Mini (Qwen 3.8)',
     provider: 'openrouter',
-    providerModelId: 'nvidia/nemotron-3-ultra-550b-a55b:free',
+    providerModelId: 'deepseek/deepseek-chat',
     enabled: true,
     tier: 'free',
-    costClass: 'lite',
-    reasoning: reasoning(true, [], true),
-    capabilities: makeCapabilities({
-      coding: true,
-      reasoning: true,
-      math: true,
-      creative: true,
-      translation: true,
-    }),
-    contextWindow: 131072,
+    capabilities: makeCapabilities({ coding: true, reasoning: true, translation: true, creative: true }),
+    contextWindow: 32768,
     maxOutputTokens: 4096,
     pricing: makePricing(0, 0, 0),
     requiredPlan: null,
-    contextMessages: 40,
+    contextMessages: 20,
     isPro: false,
-    // Лимиты `:free` общие на аккаунт OpenRouter: при отказе отвечает платный Ketner Mini
-    // (гостям запасная не берётся, см. gateway: для анонимов цепочка из одной модели).
-    fallbackModelId: 'ketner-mini',
-    defaultSystemPrompt: DEFAULT_SYSTEM_PROMPT,
-    createdAt: now(),
-    updatedAt: now(),
-  },
-  // Бесплатная модель агента Ketner Code на Free (cohere/north-mini-code:free, 30B/3B активных,
-  // вызов инструментов). Размышления выключаются: так быстрее и не тратится лимит ответа.
-  {
-    id: 'north-mini-code',
-    name: 'North Mini Code (Free)',
-    provider: 'openrouter',
-    providerModelId: 'cohere/north-mini-code:free',
-    enabled: true,
-    tier: 'free',
-    costClass: 'lite',
-    reasoning: reasoning(false, [], true),
-    capabilities: makeCapabilities({ coding: true, reasoning: true }),
-    contextWindow: 128000,
-    maxOutputTokens: 8192,
-    pricing: makePricing(0, 0, 0),
-    requiredPlan: null,
-    contextMessages: 40,
-    isPro: false,
-    fallbackModelId: 'ketner-mini',
-    defaultSystemPrompt: DEFAULT_SYSTEM_PROMPT,
-    createdAt: now(),
-    updatedAt: now(),
-  },
-  // ── Класс lite: повседневные запросы, Free и запасные модели ──
-  {
-    id: 'ketner-mini',
-    name: 'Ketner Mini',
-    provider: 'openrouter',
-    providerModelId: 'openai/gpt-6-luna',
-    enabled: true,
-    tier: 'free',
-    costClass: 'lite',
-    reasoning: reasoning(false, ['none', 'low', 'medium', 'high']),
-    capabilities: makeCapabilities({
-      coding: true,
-      reasoning: true,
-      vision: true,
-      translation: true,
-      creative: true,
-      longContext: true,
-    }),
-    contextWindow: 1050000,
-    maxOutputTokens: 8192,
-    pricing: makePricing(0.1, 0.5, 0.01),
-    direct: direct('openai', 'gpt-6-luna', 0.1, 0.5, 0.01),
-    requiredPlan: null,
-    contextMessages: 40,
-    isPro: false,
-    fallbackModelId: 'claude-haiku-5.5',
+    fallbackModelId: 'gpt-4o-mini',
     defaultSystemPrompt: ECONOMY_SYSTEM_PROMPT,
     createdAt: now(),
     updatedAt: now(),
   },
   {
-    id: 'claude-haiku-5.5',
-    name: 'Claude Haiku 5.5',
+    id: 'nemotron-ultra',
+    name: 'Nemotron 3 Ultra',
     provider: 'openrouter',
-    providerModelId: 'anthropic/claude-haiku-5.5',
+    providerModelId: 'nvidia/nemotron-3-ultra-550b-a55b:free',
     enabled: true,
-    tier: 'standard',
-    costClass: 'lite',
-    reasoning: reasoning(false, ['low', 'medium', 'high']),
+    tier: 'free',
+    capabilities: makeCapabilities({ coding: true, reasoning: true, math: true, creative: true, translation: true }),
+    contextWindow: 131072,
+    maxOutputTokens: 4096,
+    pricing: makePricing(0, 0, 0),
+    requiredPlan: null,
+    contextMessages: 30,
+    isPro: false,
+    fallbackModelId: 'ketner-mini',
+    defaultSystemPrompt: ECONOMY_SYSTEM_PROMPT,
+    createdAt: now(),
+    updatedAt: now(),
+  },
+  {
+    id: 'gpt-4o-mini',
+    name: 'GPT-4o mini',
+    provider: 'openai',
+    providerModelId: 'gpt-4o-mini',
+    enabled: true,
+    tier: 'free',
+    capabilities: makeCapabilities({
+      coding: true,
+      reasoning: true,
+      translation: true,
+      creative: true,
+    }),
+    contextWindow: 128000,
+    maxOutputTokens: 4096,
+    pricing: makePricing(0.15, 0.6, 0.075),
+    requiredPlan: null,
+    contextMessages: 40,
+    isPro: false,
+    fallbackModelId: 'ketner-mini',
+    defaultSystemPrompt: ECONOMY_SYSTEM_PROMPT,
+    createdAt: now(),
+    updatedAt: now(),
+  },
+  {
+    id: 'gemini-2.5-flash',
+    name: 'Gemini 2.5 Flash',
+    provider: 'google',
+    providerModelId: 'gemini-2.5-flash',
+    enabled: true,
+    tier: 'free',
     capabilities: makeCapabilities({
       coding: true,
       reasoning: true,
       vision: true,
       translation: true,
-      creative: true,
       longContext: true,
     }),
-    contextWindow: 1000000,
-    maxOutputTokens: 8192,
-    pricing: makePricing(0.1, 0.5, 0.01),
-    direct: direct('anthropic', 'claude-haiku-5-5', 0.1, 0.5, 0.01),
+    contextWindow: 1048576,
+    maxOutputTokens: 2048,
+    pricing: makePricing(0.15, 0.6, 0.075),
+    requiredPlan: null,
+    contextMessages: 40,
+    isPro: false,
+    fallbackModelId: 'ketner-mini',
+    defaultSystemPrompt: ECONOMY_SYSTEM_PROMPT,
+    createdAt: now(),
+    updatedAt: now(),
+  },
+  {
+    id: 'claude-3-haiku',
+    name: 'Claude 3 Haiku',
+    provider: 'anthropic',
+    providerModelId: 'claude-3-haiku-20240307',
+    enabled: true,
+    tier: 'standard',
+    capabilities: makeCapabilities({
+      reasoning: true,
+      coding: true,
+      translation: true,
+      creative: true,
+    }),
+    contextWindow: 200000,
+    maxOutputTokens: 2048,
+    pricing: makePricing(0.25, 1.25, 0.125),
     requiredPlan: 'plus',
     contextMessages: 40,
     isPro: true,
-    fallbackModelId: 'deepseek-v4.1-flash',
+    fallbackModelId: 'ketner-mini',
+    defaultSystemPrompt: ECONOMY_SYSTEM_PROMPT,
+    createdAt: now(),
+    updatedAt: now(),
+  },
+  {
+    id: 'glm-5.3-flash',
+    name: 'GLM 5.3 Flash',
+    provider: 'openrouter',
+    providerModelId: 'z-ai/glm-5.3-flash',
+    enabled: true,
+    tier: 'free',
+    capabilities: makeCapabilities({
+      reasoning: true,
+      coding: true,
+      translation: true,
+      creative: true,
+      longContext: true,
+    }),
+    contextWindow: 1048576,
+    maxOutputTokens: 8192,
+    pricing: makePricing(0.15, 0.525, 0.05),
+    requiredPlan: null,
+    contextMessages: 40,
+    isPro: false,
+    fallbackModelId: 'nemotron-ultra',
     defaultSystemPrompt: ECONOMY_SYSTEM_PROMPT,
     createdAt: now(),
     updatedAt: now(),
@@ -306,8 +259,6 @@ const DEFAULT_REGISTRY_ENTRIES: ModelRegistryEntry[] = [
     providerModelId: 'deepseek/deepseek-v4.1-flash',
     enabled: true,
     tier: 'standard',
-    costClass: 'lite',
-    reasoning: reasoning(false, ['low', 'high']),
     capabilities: makeCapabilities({
       coding: true,
       reasoning: true,
@@ -317,489 +268,173 @@ const DEFAULT_REGISTRY_ENTRIES: ModelRegistryEntry[] = [
       vision: true,
     }),
     contextWindow: 1048576,
-    maxOutputTokens: 16384,
-    pricing: makePricing(0.3, 1.2, 0.006),
+    maxOutputTokens: 8192,
+    pricing: makePricing(0.15, 0.6, 0.003),
     requiredPlan: 'plus',
     contextMessages: 40,
     isPro: true,
-    fallbackModelId: FLOOR_MODEL_ID,
+    fallbackModelId: 'ketner-mini',
     defaultSystemPrompt: DEFAULT_SYSTEM_PROMPT,
     createdAt: now(),
     updatedAt: now(),
   },
-  // ── Класс work: рабочая лошадка для Plus и выше ──
   {
-    id: WORKHORSE_MODEL_ID,
-    name: 'Ketner Pro',
-    provider: 'openrouter',
-    providerModelId: 'xiaomi/mimo-v2.6-pro',
+    id: 'gpt-4o',
+    name: 'GPT-4o',
+    provider: 'openai',
+    providerModelId: 'gpt-4o',
     enabled: true,
-    tier: 'premium',
-    costClass: 'work',
-    // MiMo умеет только включать и выключать размышления (reasoning.enabled), без уровней effort.
-    reasoning: reasoning(false, [], true),
+    tier: 'standard',
     capabilities: makeCapabilities({
       coding: true,
       reasoning: true,
       vision: true,
+      creative: true,
       math: true,
       translation: true,
-      creative: true,
       research: true,
-      longContext: true,
     }),
-    contextWindow: 1050000,
-    maxOutputTokens: 16384,
-    pricing: makePricing(0.435, 0.87, 0.004),
+    contextWindow: 128000,
+    maxOutputTokens: 2048,
+    pricing: makePricing(2.5, 10, 1.25),
     requiredPlan: 'plus',
     contextMessages: 60,
     isPro: true,
-    fallbackModelId: 'claude-haiku-5.5',
+    fallbackModelId: 'gpt-4o-mini',
     defaultSystemPrompt: DEFAULT_SYSTEM_PROMPT,
     createdAt: now(),
     updatedAt: now(),
   },
-  // ── Суточные лимиты Plus: модели с лимитом и запасные модели, которые отвечают после него ──
+  // ── 2. Топовые модели (Флагманы — ядро продукта) ──
   {
-    id: 'gpt-5.6-luna-pro',
-    name: 'GPT-5.6 Luna Pro',
-    provider: 'openrouter',
-    providerModelId: 'openai/gpt-5.6-luna-pro',
+    id: 'gpt-6-astra',
+    name: 'GPT-6 Astra',
+    provider: 'openai',
+    providerModelId: 'gpt-4o',
     enabled: true,
-    tier: 'premium',
-    costClass: 'work',
-    reasoning: reasoning(false, ['low', 'medium', 'high']),
+    tier: 'flagship',
     capabilities: makeCapabilities({
-      coding: true,
       reasoning: true,
+      coding: true,
       vision: true,
+      creative: true,
       math: true,
       translation: true,
-      creative: true,
       research: true,
-      longContext: true,
     }),
-    contextWindow: 1050000,
-    maxOutputTokens: 16384,
-    pricing: makePricing(0.2, 1.2, 0.02),
-    direct: direct('openai', 'gpt-5.6-luna-pro', 0.2, 1.2, 0.02),
-    requiredPlan: 'plus',
-    contextMessages: 60,
+    contextWindow: 128000,
+    maxOutputTokens: 2048,
+    pricing: makePricing(2.5, 10, 1.25),
+    requiredPlan: 'pro',
+    contextMessages: 120,
     isPro: true,
-    fallbackModelId: FLOOR_MODEL_ID,
+    fallbackModelId: 'ketner-mini',
     defaultSystemPrompt: DEFAULT_SYSTEM_PROMPT,
     createdAt: now(),
     updatedAt: now(),
   },
   {
-    id: 'gemini-3.7-flash',
-    name: 'Gemini 3.7 Flash',
-    provider: 'openrouter',
-    providerModelId: 'google/gemini-3.7-flash',
+    id: 'claude-3.5-sonnet',
+    name: 'Claude 3.5 Sonnet',
+    provider: 'anthropic',
+    providerModelId: 'claude-3-5-sonnet-20241022',
     enabled: true,
-    tier: 'premium',
-    costClass: 'work',
-    reasoning: reasoning(true, ['low', 'medium', 'high']),
+    tier: 'flagship',
     capabilities: makeCapabilities({
-      coding: true,
       reasoning: true,
-      vision: true,
-      math: true,
-      translation: true,
-      creative: true,
-      research: true,
-      longContext: true,
-    }),
-    contextWindow: 1048576,
-    maxOutputTokens: 16384,
-    pricing: makePricing(0.75, 3.75, 0.075),
-    direct: direct('google', 'gemini-3.7-flash', 0.75, 3.75, 0.075),
-    requiredPlan: 'plus',
-    contextMessages: 60,
-    isPro: true,
-    fallbackModelId: 'claude-haiku-5.5',
-    defaultSystemPrompt: DEFAULT_SYSTEM_PROMPT,
-    createdAt: now(),
-    updatedAt: now(),
-  },
-  // ── Открытая флагманская модель: Auto отдаёт ей задачи средней сложности по коду, математике и
-  // логике вместо премиум-модели (ai/auto-router.ts). Класс work — квоту премиум-запросов не тратит.
-  {
-    id: OPEN_FLAGSHIP_MODEL_ID,
-    name: 'GLM-5.3',
-    provider: 'openrouter',
-    providerModelId: 'z-ai/glm-5.3',
-    enabled: true,
-    tier: 'premium',
-    costClass: 'work',
-    // GLM умеет только включать и выключать размышления, без уровней effort.
-    reasoning: reasoning(false, [], true),
-    capabilities: makeCapabilities({
       coding: true,
-      reasoning: true,
-      math: true,
-      translation: true,
       creative: true,
+      translation: true,
       research: true,
       longContext: true,
     }),
     contextWindow: 200000,
-    maxOutputTokens: 16384,
-    pricing: makePricing(1.4, 4.4, 0.26),
-    requiredPlan: 'plus',
-    contextMessages: 60,
-    isPro: true,
-    fallbackModelId: WORKHORSE_MODEL_ID,
-    defaultSystemPrompt: DEFAULT_SYSTEM_PROMPT,
-    createdAt: now(),
-    updatedAt: now(),
-  },
-  {
-    id: 'qwen3.8-27b',
-    name: 'Qwen3.8 27B',
-    provider: 'openrouter',
-    providerModelId: 'qwen/qwen3.8-27b',
-    enabled: true,
-    tier: 'premium',
-    costClass: 'work',
-    reasoning: reasoning(false, ['low', 'medium']),
-    capabilities: makeCapabilities({
-      coding: true,
-      reasoning: true,
-      vision: true,
-      translation: true,
-      creative: true,
-      longContext: true,
-    }),
-    contextWindow: 1000000,
-    maxOutputTokens: 16384,
-    pricing: makePricing(0.04, 2.3, 0.0198),
-    requiredPlan: 'plus',
-    contextMessages: 60,
-    isPro: true,
-    fallbackModelId: 'qwen3.8-flash',
-    defaultSystemPrompt: DEFAULT_SYSTEM_PROMPT,
-    createdAt: now(),
-    updatedAt: now(),
-  },
-  {
-    id: 'qwen3.8-flash',
-    name: 'Qwen3.8 Flash',
-    provider: 'openrouter',
-    providerModelId: 'qwen/qwen3.8-flash',
-    enabled: true,
-    tier: 'standard',
-    costClass: 'lite',
-    reasoning: reasoning(false, [], true),
-    capabilities: makeCapabilities({
-      coding: true,
-      reasoning: true,
-      vision: true,
-      translation: true,
-      creative: true,
-      longContext: true,
-    }),
-    contextWindow: 1000000,
-    maxOutputTokens: 16384,
-    pricing: makePricing(0.15, 0.47, 0.016),
-    requiredPlan: 'plus',
-    contextMessages: 40,
-    isPro: true,
-    fallbackModelId: FLOOR_MODEL_ID,
-    defaultSystemPrompt: DEFAULT_SYSTEM_PROMPT,
-    createdAt: now(),
-    updatedAt: now(),
-  },
-  {
-    id: 'gpt-6-luna-pro',
-    name: 'GPT-6 Luna Pro',
-    provider: 'openrouter',
-    providerModelId: 'openai/gpt-6-luna-pro',
-    enabled: true,
-    tier: 'standard',
-    costClass: 'lite',
-    reasoning: reasoning(false, ['low', 'medium', 'high']),
-    capabilities: makeCapabilities({
-      coding: true,
-      reasoning: true,
-      vision: true,
-      math: true,
-      translation: true,
-      creative: true,
-      research: true,
-      longContext: true,
-    }),
-    contextWindow: 1050000,
-    maxOutputTokens: 16384,
-    pricing: makePricing(0.1, 0.5, 0.01),
-    direct: direct('openai', 'gpt-6-luna-pro', 0.1, 0.5, 0.01),
-    requiredPlan: 'plus',
-    contextMessages: 40,
-    isPro: true,
-    fallbackModelId: FLOOR_MODEL_ID,
-    defaultSystemPrompt: DEFAULT_SYSTEM_PROMPT,
-    createdAt: now(),
-    updatedAt: now(),
-  },
-  // ── Классы strong и top: премиум, расходуют квоту премиум-запросов тарифа ──
-  {
-    id: 'gpt-6.1-sol',
-    name: 'GPT-6.1 Sol',
-    provider: 'openrouter',
-    providerModelId: 'openai/gpt-6.1-sol',
-    enabled: true,
-    tier: 'flagship',
-    costClass: 'strong',
-    reasoning: reasoning(true, ['low', 'medium', 'high']),
-    capabilities: makeCapabilities({
-      reasoning: true,
-      coding: true,
-      vision: true,
-      creative: true,
-      math: true,
-      translation: true,
-      research: true,
-      longContext: true,
-    }),
-    contextWindow: 1050000,
-    maxOutputTokens: 16384,
-    pricing: makePricing(2, 10, 0.1),
-    direct: direct('openai', 'gpt-6.1-sol', 2, 10, 0.1),
-    requiredPlan: 'plus',
-    contextMessages: 120,
-    isPro: true,
-    fallbackModelId: 'gpt-6-luna-pro',
-    defaultSystemPrompt: DEFAULT_SYSTEM_PROMPT,
-    createdAt: now(),
-    updatedAt: now(),
-  },
-  // ── Модели Pro и Ultra: фиксированная глубина размышлений (medium, на Ultra в режиме Max — xhigh) ──
-  // Запасные идут от дорогой к дешёвой с сохранением качества: Opus → Sonnet → Ketner Pro → Haiku.
-  {
-    id: 'claude-opus-5.5',
-    name: 'Claude Opus 5.5',
-    provider: 'openrouter',
-    providerModelId: 'anthropic/claude-opus-5.5',
-    enabled: true,
-    tier: 'flagship',
-    costClass: 'top',
-    reasoning: reasoning(true, ['low', 'medium', 'high', 'xhigh', 'max']),
-    effortProfile: STANDARD_PROFILE,
-    capabilities: makeCapabilities({
-      reasoning: true,
-      coding: true,
-      vision: true,
-      creative: true,
-      math: true,
-      translation: true,
-      research: true,
-      longContext: true,
-    }),
-    contextWindow: 1000000,
-    maxOutputTokens: 32768,
-    pricing: makePricing(4, 20, 0.2),
-    direct: direct('anthropic', 'claude-opus-5-5', 4, 20, 0.2),
+    maxOutputTokens: 2048,
+    pricing: makePricing(3.0, 15.0, 0.75),
     requiredPlan: 'pro',
     contextMessages: 120,
     isPro: true,
-    fallbackModelId: 'claude-sonnet-5.5',
+    fallbackModelId: 'claude-3-haiku',
     defaultSystemPrompt: DEFAULT_SYSTEM_PROMPT,
     createdAt: now(),
     updatedAt: now(),
   },
-  // AA 56 при цене вдвое ниже Opus: лучший выбор по цене и качеству среди сильных моделей.
   {
-    id: 'claude-sonnet-5.5',
-    name: 'Claude Sonnet 5.5',
-    provider: 'openrouter',
-    providerModelId: 'anthropic/claude-sonnet-5.5',
+    id: 'claude-fable',
+    name: 'Claude Fable 5.5',
+    provider: 'anthropic',
+    providerModelId: 'claude-3-5-sonnet-20241022',
     enabled: true,
     tier: 'flagship',
-    costClass: 'strong',
-    reasoning: reasoning(true, ['low', 'medium', 'high', 'xhigh', 'max']),
-    effortProfile: STANDARD_PROFILE,
     capabilities: makeCapabilities({
       reasoning: true,
       coding: true,
-      vision: true,
       creative: true,
-      math: true,
       translation: true,
       research: true,
       longContext: true,
     }),
-    contextWindow: 1000000,
-    maxOutputTokens: 32768,
-    pricing: makePricing(2, 10, 0.1),
-    direct: direct('anthropic', 'claude-sonnet-5-5', 2, 10, 0.2),
+    contextWindow: 200000,
+    maxOutputTokens: 2048,
+    pricing: makePricing(3.0, 15.0, 0.75),
     requiredPlan: 'pro',
     contextMessages: 120,
     isPro: true,
-    fallbackModelId: WORKHORSE_MODEL_ID,
+    fallbackModelId: 'claude-3-haiku',
     defaultSystemPrompt: DEFAULT_SYSTEM_PROMPT,
     createdAt: now(),
     updatedAt: now(),
   },
-
-  // Флагман OpenAI; после лимита — GPT-6.1 Sol (в 5 раз дешевле, AA почти тот же), затем GPT-6 Luna Pro.
   {
-    id: 'gpt-6-astra',
-    name: 'GPT-6 Astra',
-    provider: 'openrouter',
-    providerModelId: 'openai/gpt-6-astra',
+    id: 'gemini-2.5-pro',
+    name: 'Gemini 3.8 Flash',
+    provider: 'google',
+    providerModelId: 'google/gemini-3.8-flash',
     enabled: true,
     tier: 'flagship',
-    costClass: 'top',
-    reasoning: reasoning(true, ['low', 'medium', 'high', 'xhigh', 'max']),
-    effortProfile: STANDARD_PROFILE,
     capabilities: makeCapabilities({
       reasoning: true,
       coding: true,
       vision: true,
-      creative: true,
+      longContext: true,
       math: true,
       translation: true,
       research: true,
-      longContext: true,
-    }),
-    contextWindow: 1050000,
-    maxOutputTokens: 32768,
-    pricing: makePricing(10, 50, 1),
-    direct: direct('openai', 'gpt-6-astra', 10, 50, 1),
-    requiredPlan: 'pro',
-    contextMessages: 120,
-    isPro: true,
-    fallbackModelId: 'gpt-6.1-sol',
-    defaultSystemPrompt: DEFAULT_SYSTEM_PROMPT,
-    createdAt: now(),
-    updatedAt: now(),
-  },
-  // Grok работает всегда на xhigh (так и подписан). После лимита — Ketner Pro: AA почти как у Grok, в 11 раз дешевле.
-  {
-    id: 'grok-4.7',
-    name: 'Grok 4.7 xhigh',
-    provider: 'openrouter',
-    providerModelId: 'x-ai/grok-4.7',
-    enabled: true,
-    tier: 'flagship',
-    costClass: 'strong',
-    reasoning: reasoning(true, ['low', 'medium', 'high', 'xhigh']),
-    effortProfile: XHIGH_PROFILE,
-    capabilities: makeCapabilities({
-      reasoning: true,
-      coding: true,
-      vision: true,
-      math: true,
-      creative: true,
-      research: true,
-    }),
-    contextWindow: 500000,
-    maxOutputTokens: 32768,
-    pricing: makePricing(2, 6, 0.5),
-    requiredPlan: 'pro',
-    contextMessages: 120,
-    isPro: true,
-    fallbackModelId: WORKHORSE_MODEL_ID,
-    defaultSystemPrompt: DEFAULT_SYSTEM_PROMPT,
-    createdAt: now(),
-    updatedAt: now(),
-  },
-  // Анонсирована 30.09.2026, но в OpenRouter её пока нет (id не опубликован, endpoints отвечают 404).
-  // Включить, когда появится: проверить providerModelId, цену (вводная $2 / $10, потом $4 / $20) и глубины.
-  {
-    id: 'gemini-4-argon',
-    name: 'Gemini 4 Argon',
-    provider: 'openrouter',
-    providerModelId: 'google/gemini-4-argon',
-    enabled: false,
-    tier: 'flagship',
-    costClass: 'strong',
-    reasoning: reasoning(true, ['low', 'medium', 'high', 'xhigh', 'max']),
-    effortProfile: STANDARD_PROFILE,
-    capabilities: makeCapabilities({
-      reasoning: true,
-      coding: true,
-      vision: true,
-      creative: true,
-      math: true,
-      translation: true,
-      research: true,
-      longContext: true,
     }),
     contextWindow: 1048576,
-    maxOutputTokens: 32768,
-    pricing: makePricing(2, 10, 0.1),
-    direct: direct('google', 'gemini-4-argon', 2, 10, 0.1),
+    maxOutputTokens: 2048,
+    pricing: makePricing(0.15, 0.6, 0.0375),
     requiredPlan: 'pro',
     contextMessages: 120,
     isPro: true,
-    fallbackModelId: 'gemini-3.8-flash',
+    fallbackModelId: 'gpt-4o-mini',
     defaultSystemPrompt: DEFAULT_SYSTEM_PROMPT,
     createdAt: now(),
     updatedAt: now(),
   },
   {
-    id: 'gpt-5.6-sol',
-    name: 'GPT-5.6 Sol',
-    provider: 'openrouter',
-    providerModelId: 'openai/gpt-5.6-sol',
+    id: 'gemini-pro',
+    name: 'Gemini 3.8 Flash',
+    provider: 'google',
+    providerModelId: 'google/gemini-3.8-flash',
     enabled: true,
     tier: 'flagship',
-    costClass: 'strong',
-    reasoning: reasoning(false, ['none', 'low', 'medium', 'high', 'xhigh', 'max']),
-    effortProfile: STANDARD_PROFILE,
     capabilities: makeCapabilities({
       reasoning: true,
       coding: true,
       vision: true,
-      creative: true,
+      longContext: true,
       math: true,
       translation: true,
       research: true,
-      longContext: true,
     }),
-    contextWindow: 1050000,
-    maxOutputTokens: 32768,
-    pricing: makePricing(2, 10, 0.2),
-    direct: direct('openai', 'gpt-5.6-sol', 2, 10, 0.2),
+    contextWindow: 1048576,
+    maxOutputTokens: 2048,
+    pricing: makePricing(0.15, 0.6, 0.0375),
     requiredPlan: 'pro',
     contextMessages: 120,
     isPro: true,
-    fallbackModelId: WORKHORSE_MODEL_ID,
-    defaultSystemPrompt: DEFAULT_SYSTEM_PROMPT,
-    createdAt: now(),
-    updatedAt: now(),
-  },
-  // Terra — модель OpenAI для кода, всегда на xhigh. После лимита — Gemini 3.8 Flash (почти тот же
-  // Coding Index по AA, в 7 раз дешевле), затем Ketner Pro.
-  {
-    id: 'gpt-5.6-terra',
-    name: 'GPT-5.6 Terra xhigh',
-    provider: 'openrouter',
-    providerModelId: 'openai/gpt-5.6-terra',
-    enabled: true,
-    tier: 'flagship',
-    costClass: 'strong',
-    reasoning: reasoning(false, ['none', 'low', 'medium', 'high', 'xhigh', 'max']),
-    effortProfile: XHIGH_PROFILE,
-    capabilities: makeCapabilities({
-      reasoning: true,
-      coding: true,
-      vision: true,
-      creative: true,
-      math: true,
-      translation: true,
-      research: true,
-      longContext: true,
-    }),
-    contextWindow: 1050000,
-    maxOutputTokens: 32768,
-    pricing: makePricing(2, 12, 0.2),
-    direct: direct('openai', 'gpt-5.6-terra', 2, 12, 0.2),
-    requiredPlan: 'pro',
-    contextMessages: 120,
-    isPro: true,
-    fallbackModelId: 'gemini-3.8-flash',
+    fallbackModelId: 'gemini-2.5-flash',
     defaultSystemPrompt: DEFAULT_SYSTEM_PROMPT,
     createdAt: now(),
     updatedAt: now(),
@@ -810,11 +445,7 @@ const DEFAULT_REGISTRY_ENTRIES: ModelRegistryEntry[] = [
     provider: 'openrouter',
     providerModelId: 'google/gemini-3.8-flash',
     enabled: true,
-    tier: 'premium',
-    // Запасная модель для Terra и Gemini 4 Argon (в списке выбора не показывается). Цена запроса
-    // ≈ $0.013, как у Gemini 3.7 Flash в Plus, поэтому класс work, а не премиум.
-    costClass: 'work',
-    reasoning: reasoning(true, ['low', 'medium', 'high']),
+    tier: 'flagship',
     capabilities: makeCapabilities({
       reasoning: true,
       coding: true,
@@ -825,59 +456,61 @@ const DEFAULT_REGISTRY_ENTRIES: ModelRegistryEntry[] = [
       research: true,
     }),
     contextWindow: 1048576,
-    maxOutputTokens: 16384,
-    pricing: makePricing(0.75, 3.75, 0.075),
-    direct: direct('google', 'gemini-3.8-flash', 0.75, 3.75, 0.075),
+    maxOutputTokens: 2048,
+    pricing: makePricing(0.15, 0.6, 0.0375),
     requiredPlan: 'pro',
     contextMessages: 120,
     isPro: true,
-    fallbackModelId: WORKHORSE_MODEL_ID,
+    fallbackModelId: 'deepseek-v4.1-flash',
+    defaultSystemPrompt: DEFAULT_SYSTEM_PROMPT,
+    createdAt: now(),
+    updatedAt: now(),
+  },
+  {
+    id: 'grok-4.7',
+    name: 'Grok 4.7',
+    provider: 'openrouter',
+    providerModelId: 'x-ai/grok-4.7',
+    enabled: true,
+    tier: 'flagship',
+    capabilities: makeCapabilities({
+      reasoning: true,
+      coding: true,
+      math: true,
+      creative: true,
+      research: true,
+    }),
+    contextWindow: 131072,
+    maxOutputTokens: 2048,
+    pricing: makePricing(2.0, 10.0, 0.5),
+    requiredPlan: 'pro',
+    contextMessages: 120,
+    isPro: true,
+    fallbackModelId: 'deepseek-v4.1-flash',
+    defaultSystemPrompt: DEFAULT_SYSTEM_PROMPT,
+    createdAt: now(),
+    updatedAt: now(),
+  },
+  {
+    id: 'ketner-pro',
+    name: 'Qwen 2.5 Max',
+    provider: 'openrouter',
+    providerModelId: 'qwen/qwen-2.5-72b-instruct',
+    enabled: true,
+    tier: 'premium',
+    capabilities: makeCapabilities({ coding: true, reasoning: true, math: true }),
+    contextWindow: 65536,
+    maxOutputTokens: 8192,
+    pricing: makePricing(0.4, 1.2, 0.2),
+    requiredPlan: 'plus',
+    contextMessages: 60,
+    isPro: true,
+    fallbackModelId: 'ketner-mini',
     defaultSystemPrompt: DEFAULT_SYSTEM_PROMPT,
     createdAt: now(),
     updatedAt: now(),
   },
 ];
-
-/**
- * Старые идентификаторы моделей → актуальные. Нужны, чтобы сохранённый в браузере выбор модели,
- * старые диалоги и клиенты API не превращались молча в Auto.
- */
-export const LEGACY_MODEL_ALIASES: Readonly<Record<string, string>> = {
-  'gpt-4o': 'gpt-6.1-sol',
-  // Claude Fable 5.1 убрана из каталога (дороже Opus при более низкой оценке): старый выбор ведёт на Opus.
-  'claude-fable': 'claude-opus-5.5',
-  'claude-fable-5.1': 'claude-opus-5.5',
-  'claude-sonnet': 'claude-sonnet-5.5',
-  'claude-3.5-sonnet': 'claude-sonnet-5.5',
-  'claude-3-haiku': 'claude-haiku-5.5',
-  'gemini-2.5-pro': 'gemini-3.8-flash',
-  'gemini-pro': 'gemini-3.8-flash',
-  'gpt-4o-mini': 'ketner-mini',
-  'gemini-2.5-flash': 'ketner-mini',
-  'glm-5.3-flash': 'ketner-mini',
-  nemotron: 'nemotron-ultra',
-  'cohere/north-mini-code:free': 'north-mini-code',
-  'nvidia/nemotron-3-ultra-550b-a55b:free': 'nemotron-ultra',
-};
-
-/**
- * Лимиты модели по тарифам для /api/meta (пустой объект, если лимитов нет): суточная норма,
- * недельный пул и сколько из пула можно взять за сутки.
- */
-export function dailyLimitsOf(modelId: string): {
-  dailyLimits?: Partial<Record<PlanId, number>>;
-  weeklyLimits?: Partial<Record<PlanId, { pool: number; perDay: number }>>;
-} {
-  const daily: Partial<Record<PlanId, number>> = {};
-  const weekly: Partial<Record<PlanId, { pool: number; perDay: number }>> = {};
-  for (const plan of Object.keys(DAILY_MODEL_LIMITS) as PlanId[]) {
-    const limit = getModelLimit(plan, modelId);
-    if (!limit) continue;
-    daily[plan] = limit.daily;
-    weekly[plan] = { pool: limit.weeklyPool, perDay: limit.dailyCap };
-  }
-  return Object.keys(daily).length > 0 ? { dailyLimits: daily, weeklyLimits: weekly } : {};
-}
 
 // ─────────────────────────────────────────────────────────────
 // Model Registry
@@ -899,15 +532,15 @@ export class ModelRegistry {
     }
   }
 
-  /** Получить модель по ID (старые идентификаторы перенаправляются на актуальные). */
+  /** Получить модель по ID. */
   get(modelId: string): ModelRegistryEntry | undefined {
-    return this.entries.get(modelId) ?? this.entries.get(LEGACY_MODEL_ALIASES[modelId] ?? '');
+    return this.entries.get(modelId);
   }
 
   /** Получить модель или модель по умолчанию. */
   resolve(modelId: string | undefined): ModelRegistryEntry {
     if (modelId) {
-      const entry = this.get(modelId);
+      const entry = this.entries.get(modelId);
       if (entry && entry.enabled) return entry;
     }
     return this.getDefault();
@@ -915,7 +548,7 @@ export class ModelRegistry {
 
   /** Модель по умолчанию — ketner-mini (или первая бесплатная). */
   getDefault(): ModelRegistryEntry {
-    const mini = this.entries.get(FLOOR_MODEL_ID);
+    const mini = this.entries.get('ketner-mini');
     if (mini && mini.enabled) return mini;
     for (const entry of this.entries.values()) {
       if (entry.enabled && !entry.isPro && entry.id !== 'auto') return entry;
@@ -943,34 +576,20 @@ export class ModelRegistry {
     return this.getAll().filter((e) => e.provider === provider);
   }
 
-  /** Проверка доступа: по `requiredPlan` модели и рангу тарифа (единое правило в entitlement). */
+  /** Проверка доступа: флагманы (GPT-6, Claude 3.5, Gemini Pro) доступны только Pro/Ultra. */
   canAccess(userPlan: PlanId | undefined, entry: ModelRegistryEntry): boolean {
-    return planAllowsModel(userPlan, entry.requiredPlan);
-  }
-
-  /**
-   * Идентификаторы премиум-моделей (классы strong и top), включая старые id из истории расхода:
-   * по ним считается, сколько квоты премиум-запросов пользователь уже потратил за 30 дней.
-   */
-  getPremiumModelIds(): Set<string> {
-    const ids = new Set<string>();
-    for (const entry of this.entries.values()) {
-      if (entry.costClass === 'strong' || entry.costClass === 'top') ids.add(entry.id);
+    if (!entry.isPro) return true;
+    if (!userPlan || userPlan === 'free') return false;
+    if (entry.tier === 'flagship') {
+      return (
+        userPlan === 'pro' ||
+        userPlan === 'ultra' ||
+        userPlan === 'gpt-pro' ||
+        userPlan === 'claude-pro' ||
+        userPlan === 'gemini-pro'
+      );
     }
-    for (const [legacyId, targetId] of Object.entries(LEGACY_MODEL_ALIASES)) {
-      if (ids.has(targetId)) ids.add(legacyId);
-    }
-    return ids;
-  }
-
-  /** Идентификатор модели и её старые id: в истории расхода записи могут лежать под любым из них. */
-  getIdsWithAliases(modelId: string): string[] {
-    const canonical = this.get(modelId)?.id ?? modelId;
-    const ids = [canonical];
-    for (const [legacyId, targetId] of Object.entries(LEGACY_MODEL_ALIASES)) {
-      if (targetId === canonical) ids.push(legacyId);
-    }
-    return ids;
+    return true;
   }
 
   /** Добавить или обновить модель. */
@@ -1002,19 +621,16 @@ export class ModelRegistry {
     return true;
   }
 
-  /**
-   * Цепочка fallback-моделей. Каждая модель встречается один раз: раньше замкнутые ссылки
-   * (ketner-mini ↔ gpt-4o-mini) заставляли пробовать одну и ту же модель до пяти раз подряд.
-   */
+  /** Получить цепочку fallback-моделей. */
   getFallbackChain(modelId: string, maxDepth = 5): ModelRegistryEntry[] {
     const chain: ModelRegistryEntry[] = [];
-    const seen = new Set<string>();
-    let current: ModelRegistryEntry | undefined = this.get(modelId);
-    while (current && chain.length < maxDepth && !seen.has(current.id)) {
-      seen.add(current.id);
+    let current: ModelRegistryEntry | undefined = this.entries.get(modelId);
+    let depth = 0;
+    while (current && depth < maxDepth) {
       chain.push(current);
-      if (!current.fallbackModelId) break;
+      if (!current.fallbackModelId || current.fallbackModelId === current.id) break;
       current = this.entries.get(current.fallbackModelId);
+      depth++;
     }
     return chain;
   }
@@ -1031,7 +647,6 @@ export class ModelRegistry {
         contextMessages: e.contextMessages,
         isPro: e.isPro,
         requiredPlan: e.requiredPlan ?? undefined,
-        ...dailyLimitsOf(e.id),
       }));
   }
 

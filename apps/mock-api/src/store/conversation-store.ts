@@ -42,23 +42,13 @@ export function stripWorkspaceFileContents(
   if (!workspace) return undefined;
   return {
     ...workspace,
-    files: workspace.files?.map((file) => ({
-      path: file.path,
-      size: file.size,
-      language: file.language,
-    })),
+    files: workspace.files?.map((file) => ({ path: file.path, size: file.size, language: file.language })),
   };
 }
 
 export interface ConversationStore {
   list(userId: string): ConversationSummary[];
   get(userId: string, conversationId: string): ConversationWithMessages | null;
-  /**
-   * Диалог, только если он уже принадлежит этому пользователю. В отличие от `get`, не
-   * переназначает чужой диалог (перенос гостевых диалогов в аккаунт): для действий, которые
-   * тратят деньги или пишут в чужие данные.
-   */
-  getOwned(userId: string, conversationId: string): ConversationWithMessages | null;
   create(userId: string, title: string): Conversation;
   rename(userId: string, conversationId: string, title: string): Conversation | null;
   remove(userId: string, conversationId: string): boolean;
@@ -76,13 +66,6 @@ export interface ConversationStore {
     conversationId: string,
     messageId: string,
     feedback: import('../types.js').FeedbackRating | null,
-  ): Message | null;
-  /** Сохранить проверку ответа другой моделью у сообщения ассистента. */
-  updateMessageReview(
-    userId: string,
-    conversationId: string,
-    messageId: string,
-    review: import('../types.js').AnswerReview,
   ): Message | null;
   /** Загрузить диалоги и сообщения из внешнего источника (БД). */
   loadExternalSnapshot?(conversations: Conversation[], messages: Message[]): void;
@@ -111,12 +94,6 @@ export interface ConversationDbDriver {
     conversationId: string,
     messageId: string,
     feedback: import('../types.js').FeedbackRating | null,
-  ) => Promise<void> | void;
-  onMessageReviewUpdated?: (
-    userId: string,
-    conversationId: string,
-    messageId: string,
-    review: import('../types.js').AnswerReview,
   ) => Promise<void> | void;
 }
 
@@ -212,22 +189,15 @@ export function createConversationStore(file: string): ConversationStore {
         if (conversation && userId) {
           conversation.userId = userId;
           persist();
-          dbDriver
-            ?.onConversationCreated?.({ ...conversation })
-            ?.catch?.((err) => console.error('[db] Error persisting assigned conversation:', err));
+          dbDriver?.onConversationCreated?.({ ...conversation })?.catch?.((err) =>
+            console.error('[db] Error persisting assigned conversation:', err),
+          );
         }
       }
       if (!conversation) {
         return null;
       }
       return { conversation: { ...conversation }, messages: messagesOf(conversationId) };
-    },
-
-    getOwned(userId, conversationId) {
-      const conversation = findConversation(userId, conversationId);
-      return conversation
-        ? { conversation: { ...conversation }, messages: messagesOf(conversationId) }
-        : null;
     },
 
     create(userId, title) {
@@ -241,9 +211,9 @@ export function createConversationStore(file: string): ConversationStore {
       };
       snapshot.conversations.push(conversation);
       persist();
-      dbDriver
-        ?.onConversationCreated?.({ ...conversation })
-        ?.catch?.((err) => console.error('[db] Error persisting created conversation:', err));
+      dbDriver?.onConversationCreated?.({ ...conversation })?.catch?.((err) =>
+        console.error('[db] Error persisting created conversation:', err),
+      );
       return { ...conversation };
     },
 
@@ -255,9 +225,9 @@ export function createConversationStore(file: string): ConversationStore {
       conversation.title = deriveTitle(title);
       conversation.updatedAt = new Date().toISOString();
       persist();
-      dbDriver
-        ?.onConversationRenamed?.({ ...conversation })
-        ?.catch?.((err) => console.error('[db] Error persisting renamed conversation:', err));
+      dbDriver?.onConversationRenamed?.({ ...conversation })?.catch?.((err) =>
+        console.error('[db] Error persisting renamed conversation:', err),
+      );
       return { ...conversation };
     },
 
@@ -274,21 +244,19 @@ export function createConversationStore(file: string): ConversationStore {
         (message) => message.conversationId !== conversationId,
       );
       persist();
-      dbDriver
-        ?.onConversationRemoved?.(userId, conversationId)
-        ?.catch?.((err) => console.error('[db] Error persisting removed conversation:', err));
+      dbDriver?.onConversationRemoved?.(userId, conversationId)?.catch?.((err) =>
+        console.error('[db] Error persisting removed conversation:', err),
+      );
       return true;
     },
 
     saveTurn({ userId, conversationId, history, assistant }) {
       let conversation = findConversation(userId, conversationId);
       if (!conversation) {
-        // Диалог с таким id у другого пользователя не «переезжает» к вызывающему: раньше здесь
-        // владелец переписывался, и чужой диалог можно было присвоить, зная его id.
-        if (snapshot.conversations.some((c) => c.id === conversationId)) {
-          return null;
-        }
-        {
+        conversation = snapshot.conversations.find((c) => c.id === conversationId);
+        if (conversation) {
+          conversation.userId = userId;
+        } else {
           const now = new Date().toISOString();
           const firstUserMsg = history.find((m) => m.role === 'user');
           const title = deriveTitle(firstUserMsg?.content || 'Новый диалог');
@@ -307,24 +275,10 @@ export function createConversationStore(file: string): ConversationStore {
       const now = new Date().toISOString();
       const restored: Message[] = history.map((message) => {
         const existing = message.id
-          ? snapshot.messages.find(
-              (m) => m.id === message.id && m.conversationId === conversationId,
-            )
+          ? snapshot.messages.find((m) => m.id === message.id && m.conversationId === conversationId)
           : undefined;
-        // id из запроса сохраняется, только если он новый или уже принадлежит этому диалогу:
-        // id сообщения из чужого диалога перезаписал бы его текст в базе (ON CONFLICT по id).
-        const takenElsewhere =
-          !existing &&
-          typeof message.id === 'string' &&
-          snapshot.messages.some((m) => m.id === message.id && m.conversationId !== conversationId);
-        const safeId =
-          typeof message.id === 'string' &&
-          /^[A-Za-z0-9_-]{1,100}$/.test(message.id) &&
-          !takenElsewhere
-            ? message.id
-            : randomUUID();
         return {
-          id: safeId,
+          id: message.id ?? randomUUID(),
           conversationId,
           role: message.role,
           content: message.content,
@@ -334,9 +288,6 @@ export function createConversationStore(file: string): ConversationStore {
           attachments: message.attachments,
           workspaceContext: stripWorkspaceFileContents(message.workspaceContext),
           feedback: existing?.feedback,
-          // Проверка относится к тексту ответа: после правки текста она уже не про него.
-          review:
-            existing?.review && existing.content === message.content ? existing.review : undefined,
         };
       });
 
@@ -369,22 +320,25 @@ export function createConversationStore(file: string): ConversationStore {
       conversation.updatedAt = now;
       persist();
 
-      dbDriver
-        ?.onTurnSaved?.({ ...conversation }, restored, { ...assistantMessage })
-        ?.catch?.((err) => console.error('[db] Error persisting turn:', err));
+      dbDriver?.onTurnSaved?.({ ...conversation }, restored, { ...assistantMessage })?.catch?.((err) =>
+        console.error('[db] Error persisting turn:', err),
+      );
 
       return { conversation: { ...conversation }, assistant: assistantMessage };
     },
 
     updateContextSummary(userId, conversationId, summary) {
-      const conversation = findConversation(userId, conversationId);
+      let conversation = findConversation(userId, conversationId);
+      if (!conversation) {
+        conversation = snapshot.conversations.find((c) => c.id === conversationId);
+      }
       if (conversation) {
         conversation.contextSummary = summary;
         conversation.updatedAt = new Date().toISOString();
         persist();
-        dbDriver
-          ?.onContextSummaryUpdated?.(userId, conversationId, summary)
-          ?.catch?.((err) => console.error('[db] Error persisting context summary:', err));
+        dbDriver?.onContextSummaryUpdated?.(userId, conversationId, summary)?.catch?.((err) =>
+          console.error('[db] Error persisting context summary:', err),
+        );
       }
     },
 
@@ -405,24 +359,9 @@ export function createConversationStore(file: string): ConversationStore {
       message.feedback = feedback ?? undefined;
       conversation.updatedAt = new Date().toISOString();
       persist();
-      dbDriver
-        ?.onMessageFeedbackUpdated?.(userId, conversationId, messageId, feedback)
-        ?.catch?.((err) => console.error('[db] Error persisting message feedback:', err));
-      return { ...message };
-    },
-
-    updateMessageReview(userId, conversationId, messageId, review) {
-      const conversation = findConversation(userId, conversationId);
-      if (!conversation) return null;
-      const message = snapshot.messages.find(
-        (m) => m.id === messageId && m.conversationId === conversationId,
+      dbDriver?.onMessageFeedbackUpdated?.(userId, conversationId, messageId, feedback)?.catch?.((err) =>
+        console.error('[db] Error persisting message feedback:', err),
       );
-      if (!message || message.role !== 'assistant') return null;
-      message.review = review;
-      persist();
-      dbDriver
-        ?.onMessageReviewUpdated?.(userId, conversationId, messageId, review)
-        ?.catch?.((err) => console.error('[db] Error persisting message review:', err));
       return { ...message };
     },
 

@@ -7,12 +7,7 @@
  */
 
 export type ReplaceResult =
-  | {
-      ok: true;
-      text: string;
-      occurrences: number;
-      strategy: 'exact' | 'trailing-space' | 'trimmed';
-    }
+  | { ok: true; text: string; occurrences: number; strategy: 'exact' | 'trailing-space' | 'trimmed' }
   | { ok: false; reason: string };
 
 function toLf(text: string): string {
@@ -58,11 +53,7 @@ function findLineBlocks(lines: string[], block: string[]): number[] {
   return hits;
 }
 
-export function applyTextReplace(
-  original: string,
-  target: string,
-  replacement: string,
-): ReplaceResult {
+export function applyTextReplace(original: string, target: string, replacement: string): ReplaceResult {
   if (!target || target.trim() === '') {
     return { ok: false, reason: 'пустой фрагмент для замены (targetContent)' };
   }
@@ -92,12 +83,7 @@ export function applyTextReplace(
     const replLines = trimBlankEdges(replacementLf.split('\n'));
     const at = hits[0];
     const next = [...lines.slice(0, at), ...replLines, ...lines.slice(at + targetLines.length)];
-    return {
-      ok: true,
-      text: finish(next.join('\n')),
-      occurrences: hits.length,
-      strategy: 'trailing-space',
-    };
+    return { ok: true, text: finish(next.join('\n')), occurrences: hits.length, strategy: 'trailing-space' };
   }
 
   // 3. Фрагмент без краевых пробелов (отступ первой строки мог не попасть в ответ модели).
@@ -132,8 +118,7 @@ export function applyTextEdits(
     if (!result.ok) {
       return {
         ok: false,
-        reason:
-          edits.length > 1 ? `правка ${i + 1} из ${edits.length}: ${result.reason}` : result.reason,
+        reason: edits.length > 1 ? `правка ${i + 1} из ${edits.length}: ${result.reason}` : result.reason,
       };
     }
     text = result.text;

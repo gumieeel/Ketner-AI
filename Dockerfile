@@ -3,7 +3,7 @@
 # ==============================================================================
 
 # Stage 1: Dependencies & Build
-FROM node:24-alpine AS builder
+FROM node:20-alpine AS builder
 
 WORKDIR /app
 
@@ -24,11 +24,8 @@ COPY . .
 # Сборка веб-интерфейса Vite и backend API (TypeScript -> dist)
 RUN npm run build
 
-# Каталог данных mock-API: в образ не попадают локальные данные (.dockerignore), но он нужен на запуске
-RUN mkdir -p apps/mock-api/data
-
 # Stage 2: Production Runner
-FROM node:24-alpine AS runner
+FROM node:20-alpine AS runner
 
 WORKDIR /app
 

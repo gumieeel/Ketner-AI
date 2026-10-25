@@ -1,0 +1,182 @@
+/**
+ * Semantic & Query Cache для AI Gateway.
+ *
+ * Phase 0: добавлен source field в UsageRecord.
+ * Phase 1:
+ *   - Ключ кэша включает хэш последних 2–3 сообщений истории (изолирует «продолжи» в разных чатах).
+ *   - Платные тарифы получают пользовательский кэш (scope = userId), free — общий (scope = 'shared').
+ *   - Не кэшируем: шаблонные ответы (source === 'template'), обрывы (finishReason === 'length'),
+ *     запросы с вложениями.
+ */
+import { existsSync, mkdirSync, readFileSync, renameSync, unlinkSync, writeFileSync } from 'node:fs';
+import { dirname } from 'node:path';
+export class SemanticCache {
+    cache = new Map();
+    maxEntries;
+    ttlMs;
+    storagePath;
+    constructor(maxEntries = 5000, ttlMs = 24 * 60 * 60 * 1000, storagePath) {
+        this.maxEntries = maxEntries;
+        this.ttlMs = ttlMs;
+        this.storagePath = storagePath;
+        if (this.storagePath) {
+            this.load();
+        }
+    }
+    /**
+     * Phase 3: Загрузка кэша с диска при старте сервера с отсечением просроченных записей по TTL.
+     */
+    load() {
+        if (!this.storagePath || !existsSync(this.storagePath))
+            return;
+        try {
+            const raw = readFileSync(this.storagePath, 'utf-8');
+            const data = JSON.parse(raw);
+            const now = Date.now();
+            if (Array.isArray(data)) {
+                for (const entry of data) {
+                    if (entry.key && now - entry.createdAt <= this.ttlMs) {
+                        this.cache.set(entry.key, entry);
+                    }
+                }
+            }
+        }
+        catch (err) {
+            console.warn('[semantic-cache] Ошибка загрузки персистентного кэша:', err);
+        }
+    }
+    /**
+     * Phase 3: Сохранение кэша на диск для переживания рестартов контейнера.
+     */
+    persist() {
+        if (!this.storagePath)
+            return;
+        try {
+            const dir = dirname(this.storagePath);
+            if (!existsSync(dir)) {
+                mkdirSync(dir, { recursive: true });
+            }
+            const tmpPath = `${this.storagePath}.tmp`;
+            const entries = Array.from(this.cache.values());
+            writeFileSync(tmpPath, JSON.stringify(entries, null, 2), 'utf-8');
+            renameSync(tmpPath, this.storagePath);
+        }
+        catch (err) {
+            console.warn('[semantic-cache] Ошибка сохранения персистентного кэша:', err);
+        }
+    }
+    /**
+     * Нормализовать текст запроса для поиска эквивалентных формулировок.
+     */
+    static normalize(text) {
+        return text
+            .trim()
+            .toLowerCase()
+            .replace(/[\s\t\r\n]+/g, ' ')
+            .replace(/[?!.,;:]+$/g, '');
+    }
+    /**
+     * Вычислить хэш последних N сообщений истории (djb2).
+     * Позволяет отличить «продолжи» в чате A от «продолжи» в чате B.
+     */
+    static computeHistoryHash(history, n = 3) {
+        const tail = history.slice(-n);
+        const raw = tail.map((m) => `${m.role}:${m.content.slice(0, 120)}`).join('|');
+        let hash = 5381;
+        for (let i = 0; i < raw.length; i++) {
+            hash = ((hash << 5) + hash + raw.charCodeAt(i)) >>> 0;
+        }
+        return hash.toString(36);
+    }
+    /**
+     * Сформировать ключ кэша.
+     *
+     * Для paid-тарифов userScope = userId (изолированный кэш).
+     * Для free-тарифа userScope = 'shared' (общий пул).
+     */
+    makeKey(modelId, language, prompt, userScope, historyHash) {
+        const norm = SemanticCache.normalize(prompt);
+        return `${userScope}:${modelId}:${language}:${historyHash}:${norm}`;
+    }
+    /**
+     * Найти кэшированный ответ.
+     */
+    get(modelId, language, prompt, userScope, historyHash) {
+        // Не кэшируем слишком короткие запросы (< 4 символов)
+        if (prompt.trim().length < 4)
+            return null;
+        const key = this.makeKey(modelId, language, prompt, userScope, historyHash);
+        const entry = this.cache.get(key);
+        if (!entry)
+            return null;
+        // Проверка срока жизни (TTL)
+        if (Date.now() - entry.createdAt > this.ttlMs) {
+            this.cache.delete(key);
+            return null;
+        }
+        entry.hits++;
+        return entry;
+    }
+    /**
+     * Сохранить ответ в кэш.
+     *
+     * Не сохраняем:
+     *   - шаблонные ответы (source === 'template')
+     *   - обрезанные ответы (finishReason === 'length')
+     *   - запросы с вложениями (hasAttachments === true)
+     */
+    set(modelId, language, prompt, response, usage, options) {
+        if (prompt.trim().length < 4 || response.trim().length < 10)
+            return;
+        // Phase 1: фильтры — не кэшировать шаблоны, обрывы и вложения
+        if (options.source === 'template')
+            return;
+        if (options.finishReason === 'length')
+            return;
+        if (options.hasAttachments)
+            return;
+        // LRU очистка при переполнении
+        if (this.cache.size >= this.maxEntries) {
+            const oldestKey = this.cache.keys().next().value;
+            if (oldestKey)
+                this.cache.delete(oldestKey);
+        }
+        const key = this.makeKey(modelId, language, prompt, options.userScope, options.historyHash);
+        this.cache.set(key, {
+            key,
+            normalizedQuery: SemanticCache.normalize(prompt),
+            response,
+            modelId,
+            inputTokens: usage.inputTokens,
+            outputTokens: usage.outputTokens,
+            createdAt: Date.now(),
+            hits: 0,
+        });
+        this.persist();
+    }
+    /**
+     * Очистить кэш.
+     */
+    clear() {
+        this.cache.clear();
+        if (this.storagePath && existsSync(this.storagePath)) {
+            try {
+                unlinkSync(this.storagePath);
+            }
+            catch {
+                // ignore
+            }
+        }
+    }
+    /**
+     * Статистика кэша.
+     */
+    getStats() {
+        let totalHits = 0;
+        for (const entry of this.cache.values()) {
+            totalHits += entry.hits;
+        }
+        return { size: this.cache.size, totalHits };
+    }
+}
+export const semanticCache = new SemanticCache(5000, 24 * 60 * 60 * 1000, process.env.SEMANTIC_CACHE_PATH ?? 'data/semantic-cache.json');

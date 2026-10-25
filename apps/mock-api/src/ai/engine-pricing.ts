@@ -6,7 +6,7 @@
  * через платный deepseek/deepseek-chat и в учёте стоил $0, поэтому лимиты по бюджету не срабатывали.
  */
 
-import type { ModelPricing, ModelRegistryEntry, ReasoningEffort } from './gateway-types.js';
+import type { ModelPricing, ModelRegistryEntry } from './gateway-types.js';
 import { CostCalculator, type TokenBreakdown } from '../services/cost.js';
 
 /**
@@ -56,71 +56,9 @@ export interface RequestCost {
 }
 
 export function computeRequestCost(input: RequestCostInput): RequestCost {
-  if (
-    typeof input.providerCost === 'number' &&
-    Number.isFinite(input.providerCost) &&
-    input.providerCost >= 0
-  ) {
+  if (typeof input.providerCost === 'number' && Number.isFinite(input.providerCost) && input.providerCost >= 0) {
     return { usd: Number(input.providerCost.toFixed(6)), source: 'provider' };
   }
   const pricing = effectivePricing(input.model, input.engineId);
   return { usd: CostCalculator.calculate(input.tokens, pricing).totalCost, source: 'table' };
-}
-
-/**
- * Типичный запрос для оценок «сколько запросов осталось» (и расчёта в docs/models-and-pricing.md):
- * 7.6k токенов на входе (системный промпт, последние сообщения, сводка) и выход по глубине
- * размышлений — размышления оплачиваются как выходные токены.
- */
-export const TYPICAL_REQUEST_INPUT_TOKENS = 7_600;
-export const TYPICAL_OUTPUT_TOKENS_BY_EFFORT: Readonly<Record<ReasoningEffort, number>> = {
-  none: 700,
-  low: 1_200,
-  medium: 2_000,
-  high: 4_000,
-  xhigh: 7_000,
-  max: 7_000,
-};
-
-/** Цена типичного запроса к модели при заданной глубине размышлений, без кэша ($). */
-export function typicalRequestCost(
-  model: Pick<ModelRegistryEntry, 'pricing' | 'provider'>,
-  effort: ReasoningEffort,
-): number {
-  return CostCalculator.calculate(
-    {
-      inputTokens: TYPICAL_REQUEST_INPUT_TOKENS,
-      outputTokens: TYPICAL_OUTPUT_TOKENS_BY_EFFORT[effort],
-    },
-    effectivePricing(model),
-  ).totalCost;
-}
-
-/** Запись в кэш у Anthropic стоит как вход × 1.25 (TTL 5 минут). */
-export const CACHE_WRITE_PRICE_MULTIPLIER = 1.25;
-
-/**
- * Цена запроса через прямой API вендора по его ценам из реестра (`ModelRegistryEntry.direct`):
- * прямые API, в отличие от OpenRouter, стоимость в ответе не сообщают. Учитывает чтение из кэша
- * и запись в него (Anthropic).
- */
-export function directRequestCost(
-  usage: {
-    inputTokens: number;
-    outputTokens: number;
-    cachedTokens?: number;
-    cacheWriteTokens?: number;
-  },
-  pricing: ModelPricing,
-): number {
-  const cached = Math.max(0, usage.cachedTokens ?? 0);
-  const written = Math.max(0, usage.cacheWriteTokens ?? 0);
-  const fresh = Math.max(0, usage.inputTokens - cached - written);
-  const usd =
-    (fresh * pricing.inputPricePerMillion +
-      written * pricing.inputPricePerMillion * CACHE_WRITE_PRICE_MULTIPLIER +
-      cached * pricing.cachedInputPricePerMillion +
-      usage.outputTokens * pricing.outputPricePerMillion) /
-    1_000_000;
-  return Number(usd.toFixed(6));
 }

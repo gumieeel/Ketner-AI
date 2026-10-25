@@ -30,11 +30,7 @@ export function isSensitivePath(path: string): boolean {
 }
 
 /** Убирает дублирующий корень проекта (`my-app/src/a.ts` → `src/a.ts`), если все файлы лежат под ним. */
-export function stripRootPrefix(
-  path: string,
-  rootName: string | undefined,
-  knownPaths: string[],
-): string {
+export function stripRootPrefix(path: string, rootName: string | undefined, knownPaths: string[]): string {
   if (!rootName) return path;
   const prefix = `${rootName}/`;
   if (!path.startsWith(prefix)) return path;
@@ -56,26 +52,20 @@ export interface SanitizeOptions {
 export function sanitizeChangePath(raw: unknown, options: SanitizeOptions = {}): PathCheck {
   if (typeof raw !== 'string') return { ok: false, reason: 'путь не указан' };
   // eslint-disable-next-line no-control-regex
-  if (/[\u0000-\u001f\u007f]/.test(raw))
-    return { ok: false, reason: 'недопустимые символы в пути' };
+  if (/[\u0000-\u001f\u007f]/.test(raw)) return { ok: false, reason: 'недопустимые символы в пути' };
 
   let path = raw.trim().replace(/\\/g, '/');
   if (/^[a-zA-Z]:/.test(path) || path.startsWith('//')) {
     return { ok: false, reason: 'абсолютный путь вне проекта' };
   }
-  path = path
-    .replace(/^(\.\/)+/, '')
-    .replace(/^\/+/, '')
-    .replace(/\/{2,}/g, '/');
+  path = path.replace(/^(\.\/)+/, '').replace(/^\/+/, '').replace(/\/{2,}/g, '/');
   if (path.endsWith('/')) return { ok: false, reason: 'путь указывает на папку, а не на файл' };
   if (!path || path === '.') return { ok: false, reason: 'пустой путь' };
   if (path.length > MAX_PATH_LENGTH) return { ok: false, reason: 'слишком длинный путь' };
 
   const segments = path.split('/');
-  if (segments.some((s) => s === '..'))
-    return { ok: false, reason: 'путь выходит за пределы проекта (..)' };
-  if (segments.some((s) => s === '.git'))
-    return { ok: false, reason: 'изменение служебной папки .git запрещено' };
+  if (segments.some((s) => s === '..')) return { ok: false, reason: 'путь выходит за пределы проекта (..)' };
+  if (segments.some((s) => s === '.git')) return { ok: false, reason: 'изменение служебной папки .git запрещено' };
   if (segments.some((s) => s === '.')) path = segments.filter((s) => s !== '.').join('/');
   if (!path) return { ok: false, reason: 'пустой путь' };
 

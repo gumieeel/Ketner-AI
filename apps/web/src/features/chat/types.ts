@@ -1,5 +1,4 @@
 import type { Language } from '@/features/preferences/preferences-store';
-import type { AnswerReview } from '@/features/review/types';
 
 /**
  * Типы контракта чата. Совпадают по форме с mock-API и docs/data-model.md:
@@ -26,7 +25,13 @@ export interface ConversationSummary extends Conversation {
 }
 
 export type AttachmentCategory =
-  'image' | 'video' | 'audio' | 'document' | 'code' | 'archive' | 'file';
+  | 'image'
+  | 'video'
+  | 'audio'
+  | 'document'
+  | 'code'
+  | 'archive'
+  | 'file';
 
 export interface MessageAttachment {
   id: string;
@@ -55,6 +60,7 @@ export interface WorkspaceContext {
   name: string;
   pathOrUrl: string;
   branch?: string;
+  gitToken?: string;
   filesCount: number;
   files: WorkspaceFile[];
   indexedAt: string;
@@ -136,8 +142,6 @@ export interface Message {
   };
   /** Пользовательская оценка ответа: лайк / дизлайк */
   feedback?: 'like' | 'dislike';
-  /** Последняя проверка ответа моделью другой компании (сохраняется на сервере). */
-  review?: AnswerReview;
   /** Почему ответ закончился: `length` — оборван лимитом длины или таймаутом, ответ можно продолжить. */
   finishReason?: 'stop' | 'length' | 'cancelled' | 'error';
   canContinue?: boolean;
@@ -149,23 +153,6 @@ export interface ModelInfo {
   contextMessages: number;
   isPro?: boolean;
   requiredPlan?: PlanId;
-  /** Суточная норма модели по тарифам: основа недельного пула (норма × 7). */
-  dailyLimits?: Partial<Record<PlanId, number>>;
-  /** Недельный пул модели и сколько из него можно взять за сутки; после него отвечает запасная. */
-  weeklyLimits?: Partial<Record<PlanId, { pool: number; perDay: number }>>;
-  /** Фиксированная глубина размышлений (модели Pro и Ultra): обычный режим и режим Max (Ultra). */
-  reasoningEffort?: { standard: string; max: string };
-  /** Компания-разработчик: Ketner AI своих моделей не обучает. */
-  developer?: string;
-  /** Идентификатор модели у поставщика (OpenRouter). */
-  upstreamModel?: string;
-  /** Настоящее имя модели, если в Ketner она называется иначе (Ketner Mini → GPT-6 Luna). */
-  baseModelName?: string;
-  /** Окно контекста модели, токенов. */
-  contextWindow?: number;
-  /** Модель, которая отвечает после лимита или при сбое. */
-  fallbackModelId?: string;
-  fallbackModelName?: string;
 }
 
 export interface PlanLimits {
@@ -177,6 +164,4 @@ export interface ChatMeta {
   models: ModelInfo[];
   defaultModelId: string;
   limits: Record<PlanId, PlanLimits>;
-  /** Кто отвечает на Free вместо выбранной модели (бесплатные эндпоинты). */
-  freeTierModels?: ModelInfo[];
 }

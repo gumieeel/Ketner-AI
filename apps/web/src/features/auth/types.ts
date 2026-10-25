@@ -30,37 +30,3 @@ export interface SignupPayload {
   password: string;
   name?: string;
 }
-
-/** Вход и регистрация по почте — оба подтверждаются кодом из письма. */
-export type AuthFlow = 'signup' | 'login';
-
-/** Всё, что подтверждается кодом из письма: вход, регистрация и восстановление пароля. */
-export type CodeFlow = AuthFlow | 'password-reset';
-
-/** Ответ формы входа, регистрации или «Забыли пароль?»: сессии ещё нет, на почту отправлен код. */
-export interface CodeChallenge {
-  status: 'verification_required';
-  challengeId: string;
-  /** Почта для показа: `i***v@example.com`. */
-  maskedEmail: string;
-  codeExpiresAt: string;
-  resendAfterSec: number;
-}
-
-export interface VerifyCodePayload {
-  challengeId: string;
-  code: string;
-}
-
-/** Код сброса пароля принят: с этим токеном можно задать новый пароль (одноразовый, 15 минут). */
-export interface PasswordResetGrant {
-  status: 'code_verified';
-  resetToken: string;
-  maskedEmail: string;
-  expiresAt: string;
-}
-
-export interface CompletePasswordResetPayload {
-  resetToken: string;
-  password: string;
-}

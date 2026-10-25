@@ -22,10 +22,7 @@ describe('workspace-store: пути и обрезанные файлы', () => {
 
   it('старые проекты с именем корня в путях приводятся к путям относительно корня', () => {
     const legacy = folder([{ path: 'my-app/src/a.ts' }, { path: 'my-app/package.json' }]);
-    expect(normalizeWorkspacePaths(legacy).files.map((f) => f.path)).toEqual([
-      'src/a.ts',
-      'package.json',
-    ]);
+    expect(normalizeWorkspacePaths(legacy).files.map((f) => f.path)).toEqual(['src/a.ts', 'package.json']);
 
     const mixed = folder([{ path: 'my-app/src/a.ts' }, { path: 'other/b.ts' }]);
     expect(normalizeWorkspacePaths(mixed)).toBe(mixed);
@@ -36,12 +33,7 @@ describe('workspace-store: пути и обрезанные файлы', () => {
 
   it('в localStorage длинные файлы сохраняются с пометкой truncated, в памяти — целиком', () => {
     const long = 'x'.repeat(9000);
-    useWorkspace.getState().setWorkspace(
-      folder([
-        { path: 'big.ts', content: long },
-        { path: 'small.ts', content: 'ok' },
-      ]),
-    );
+    useWorkspace.getState().setWorkspace(folder([{ path: 'big.ts', content: long }, { path: 'small.ts', content: 'ok' }]));
 
     const stored = JSON.parse(localStorage.getItem('ketner.workspace') ?? '{}') as WorkspaceContext;
     const big = stored.files.find((f) => f.path === 'big.ts');

@@ -4,9 +4,7 @@ import {
   BookOpenIcon,
   CheckIcon,
   CloseIcon,
-  CodeIcon,
   EditIcon,
-  ImageIcon,
   PlusIcon,
   SearchIcon,
   SettingsIcon,
@@ -45,9 +43,9 @@ const GROUP_LABELS: Record<DateGroup, TranslationKey> = {
 
 const navLinkClasses = ({ isActive }: { isActive: boolean }) =>
   cn(
-    'relative flex min-h-10 items-center gap-2.5 rounded-md px-3 text-[14px] transition-colors duration-150 max-md:min-h-11',
+    'flex min-h-10 items-center gap-2.5 rounded-lg px-3 text-sm transition-colors max-md:min-h-11',
     isActive
-      ? 'bg-surface-3 font-medium text-text [&>svg]:text-accent'
+      ? 'bg-surface-2 font-medium text-text shadow-xs [&>svg]:text-accent'
       : 'text-muted hover:bg-surface-2 hover:text-text',
   );
 
@@ -63,9 +61,7 @@ export function Sidebar() {
   useEffect(() => {
     if (open && window.innerWidth < 768) document.body.style.overflow = 'hidden';
     else document.body.style.overflow = '';
-    return () => {
-      document.body.style.overflow = '';
-    };
+    return () => { document.body.style.overflow = ''; };
   }, [open]);
   const conversations = useChat((state) => state.conversations);
   const status = useChat((state) => state.conversationsStatus);
@@ -103,7 +99,9 @@ export function Sidebar() {
     const visible =
       query === ''
         ? conversations
-        : conversations.filter((conversation) => conversation.title.toLowerCase().includes(query));
+        : conversations.filter((conversation) =>
+            conversation.title.toLowerCase().includes(query),
+          );
 
     return GROUP_ORDER.map((group) => ({
       group,
@@ -123,7 +121,7 @@ export function Sidebar() {
         <div
           aria-hidden="true"
           onClick={close}
-          className="fixed inset-0 z-[var(--z-drawer)] bg-overlay md:hidden"
+          className="fixed inset-0 z-[var(--z-drawer)] bg-black/60 backdrop-blur-[2px] md:hidden"
         />
       ) : null}
 
@@ -151,43 +149,25 @@ export function Sidebar() {
           </IconButton>
         </div>
 
-        <div className="flex shrink-0 flex-col gap-3 p-3">
+        <div className="flex shrink-0 flex-col gap-2.5 p-3">
           <Link
             to="/chat"
             onClick={handleNewChat}
-            className={buttonClasses({ variant: 'primary', size: 'md', fullWidth: true })}
+            className={buttonClasses({ variant: 'secondary', size: 'md', fullWidth: true, className: 'rounded-xl' })}
           >
-            <PlusIcon className="size-4" />
+            <PlusIcon className="size-4 text-accent" />
             <span>{t('nav.newChat')}</span>
           </Link>
-
-          <nav aria-label={t('nav.mainNavigation')} className="flex flex-col gap-0.5">
-            <NavLink to="/code" onClick={close} className={navLinkClasses}>
-              <CodeIcon className="size-4 shrink-0" />
-              <span>{t('nav.code')}</span>
-            </NavLink>
-            <NavLink to="/images" onClick={close} className={navLinkClasses}>
-              <ImageIcon className="size-4 shrink-0" />
-              <span>{t('nav.images')}</span>
-            </NavLink>
-          </nav>
 
           <div className="relative">
             <SearchIcon className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-subtle" />
             <input
               type="search"
-              name="ketner-chat-search"
-              autoComplete="off"
-              autoCorrect="off"
-              spellCheck={false}
-              data-1p-ignore=""
-              data-lpignore="true"
-              data-form-type="other"
               value={search}
               onChange={(event) => setSearch(event.target.value)}
               aria-label={t('nav.searchChats')}
               placeholder={t('nav.searchChats')}
-              className="h-10 w-full rounded-md border border-stroke bg-canvas pr-3 pl-9 text-[14px] text-text outline-none transition-[border-color,box-shadow] placeholder:text-subtle focus:border-accent/60 focus:ring-2 focus:ring-accent-soft max-md:h-11"
+              className="h-10 w-full rounded-xl border border-stroke bg-canvas pr-3 pl-9 text-sm text-text outline-none transition-[border-color,box-shadow] placeholder:text-subtle focus:border-accent/60 focus:ring-4 focus:ring-accent-soft max-md:h-11"
             />
           </div>
         </div>
@@ -210,9 +190,12 @@ export function Sidebar() {
           ) : null}
 
           {status !== 'loading' && status !== 'error' && conversations.length === 0 ? (
-            <div className="px-3 py-4">
+            <div className="my-auto rounded-xl border border-dashed border-stroke-strong p-5 text-center">
+              <span className="mx-auto mb-3 grid size-9 place-items-center rounded-xl bg-accent-soft text-accent">
+                <SparkleIcon className="size-4" />
+              </span>
               <p className="text-[13px] font-medium text-text">{t('nav.empty')}</p>
-              <p className="mt-1 text-[13px] leading-5 text-muted">{t('nav.emptyHint')}</p>
+              <p className="mt-1 text-xs leading-5 text-muted">{t('nav.emptyHint')}</p>
             </div>
           ) : null}
 
@@ -225,7 +208,7 @@ export function Sidebar() {
 
           {groups.map(({ group, items }) => (
             <section key={group} className="flex flex-col gap-0.5">
-              <span className="px-3 pt-3.5 pb-1 text-[12px] text-subtle">
+              <span className="px-2.5 pt-3.5 pb-1 text-xs font-semibold text-subtle">
                 {t(GROUP_LABELS[group])}
               </span>
               {items.map((conversation) => (
@@ -256,8 +239,9 @@ export function Sidebar() {
           </NavLink>
           {hasAdminAccess ? (
             <NavLink to="/admin" onClick={close} className={navLinkClasses}>
-              <UserIcon className="size-4 shrink-0" />
-              <span className="flex-1">{t('nav.adminPanel')}</span>
+              <UserIcon className="size-4 shrink-0 text-accent" />
+              <span className="flex-1 font-semibold text-accent">{t('nav.adminPanel')}</span>
+              <Badge tone="brand">{t('nav.adminBadge')}</Badge>
             </NavLink>
           ) : null}
 
@@ -271,19 +255,14 @@ export function Sidebar() {
               >
                 <span
                   aria-hidden="true"
-                  className="grid size-9 shrink-0 place-items-center rounded-full bg-surface-3 text-[12px] font-medium text-text"
+                  className="grid size-9 shrink-0 place-items-center rounded-full bg-accent-soft text-xs font-semibold text-accent ring-1 ring-accent/30 transition-[box-shadow] group-hover/user:ring-accent/60"
                 >
                   {user.name ? user.name.slice(0, 2).toUpperCase() : 'U'}
                 </span>
                 <span className="min-w-0 flex-1">
-                  <span className="block truncate text-[13px] font-medium text-text">
-                    {user.name}
-                  </span>
+                  <span className="block truncate text-[13px] font-medium text-text">{user.name}</span>
                   <span className="block pt-0.5">
-                    <Badge
-                      tone={PLAN_TONES[user.plan] ?? 'neutral'}
-                      className="px-1.5 py-0 text-[11px] capitalize leading-[18px]"
-                    >
+                    <Badge tone={PLAN_TONES[user.plan] ?? 'neutral'} className="px-2 py-0 text-[11px] uppercase leading-[18px]">
                       {user.plan}
                     </Badge>
                   </span>
@@ -377,9 +356,7 @@ function ConversationRow({
   if (confirming) {
     return (
       <div className="flex min-h-10 items-center gap-1.5 rounded-lg border border-danger/30 bg-danger-soft px-2 text-danger max-md:min-h-11">
-        <span className="min-w-0 flex-1 truncate py-2 text-[13px] leading-5">
-          {t('chats.deleteConfirm')}
-        </span>
+        <span className="min-w-0 flex-1 truncate py-2 text-[13px] leading-5">{t('chats.deleteConfirm')}</span>
         <button
           type="button"
           onClick={() => {
@@ -403,27 +380,35 @@ function ConversationRow({
   return (
     <div
       className={cn(
-        'group relative flex min-h-10 items-center gap-1.5 rounded-md pr-1 pl-3 text-sm transition-colors max-md:min-h-11',
+        'group relative flex min-h-10 items-center gap-1.5 rounded-lg pr-1 pl-3 text-sm transition-colors max-md:min-h-11',
         active
           ? 'bg-surface-3 font-medium text-text'
           : 'text-muted hover:bg-surface-2 hover:text-text',
       )}
     >
       {active ? (
-        <span aria-hidden="true" className="absolute top-2.5 bottom-2.5 left-0 w-[2px] bg-accent" />
+        <span
+          aria-hidden="true"
+          className="absolute top-2.5 bottom-2.5 left-0 w-[3px] rounded-full bg-brand-gradient"
+        />
       ) : null}
 
       <NavLink
         to={`/chat/${conversation.id}`}
         onClick={onNavigate}
         title={conversation.title}
-        className="min-w-0 flex-1 truncate py-3.5 text-[13px] md:py-2.5"
+        className="min-w-0 flex-1 truncate py-3.5 text-xs md:py-3"
       >
         {conversation.title === '' ? t('chat.title') : conversation.title}
       </NavLink>
 
       {isStreaming ? (
-        <StatusDot tone="brand" pulse className="mr-1" aria-label={t('chat.thinking')} />
+        <StatusDot
+          tone="brand"
+          pulse
+          className="mr-1"
+          aria-label={t('chat.thinking')}
+        />
       ) : null}
 
       {showDate ? (
@@ -438,9 +423,7 @@ function ConversationRow({
           // На десктопе кнопки появляются поверх названия при наведении или фокусе и не отнимают у него места.
           'md:absolute md:top-1/2 md:right-1 md:-translate-y-1/2 md:rounded-lg md:opacity-0 md:shadow-[-12px_0_10px_-4px_var(--row-bg)] md:transition-opacity',
           'md:group-focus-within:opacity-100 md:group-hover:opacity-100',
-          active
-            ? 'md:bg-surface-3 md:[--row-bg:var(--surface-3)]'
-            : 'md:bg-surface-2 md:[--row-bg:var(--surface-2)]',
+          active ? 'md:bg-surface-3 md:[--row-bg:var(--surface-3)]' : 'md:bg-surface-2 md:[--row-bg:var(--surface-2)]',
         )}
       >
         <IconButton
@@ -453,7 +436,11 @@ function ConversationRow({
         >
           <EditIcon className="size-3.5" />
         </IconButton>
-        <IconButton label={t('chats.delete')} size="sm" onClick={() => setConfirming(true)}>
+        <IconButton
+          label={t('chats.delete')}
+          size="sm"
+          onClick={() => setConfirming(true)}
+        >
           <TrashIcon className="size-3.5" />
         </IconButton>
       </div>

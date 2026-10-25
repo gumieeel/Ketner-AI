@@ -1,0 +1,433 @@
+=== counts: slate/cyan/emerald/zinc/sky/amber/red/gray/white/black/teal/green/hex per file === 
+5 E:\другое\Ketner English\Ketner-AI\apps\web\src\components\chat\assistant-message.tsx 
+6 E:\другое\Ketner English\Ketner-AI\apps\web\src\components\chat\composer.tsx 
+1 E:\другое\Ketner English\Ketner-AI\apps\web\src\components\chat\message-list.tsx 
+5 E:\другое\Ketner English\Ketner-AI\apps\web\src\components\chat\model-picker.tsx 
+7 E:\другое\Ketner English\Ketner-AI\apps\web\src\components\chat\upgrade-modal.tsx 
+2 E:\другое\Ketner English\Ketner-AI\apps\web\src\components\chat\user-message.tsx 
+3 E:\другое\Ketner English\Ketner-AI\apps\web\src\components\icons\index.tsx 
+1 E:\другое\Ketner English\Ketner-AI\apps\web\src\components\layout\app-shell.tsx 
+1 E:\другое\Ketner English\Ketner-AI\apps\web\src\components\layout\auth-shell.tsx 
+1 E:\другое\Ketner English\Ketner-AI\apps\web\src\components\layout\brand.tsx 
+2 E:\другое\Ketner English\Ketner-AI\apps\web\src\components\layout\language-toggle.tsx 
+16 E:\другое\Ketner English\Ketner-AI\apps\web\src\components\layout\sidebar.tsx 
+6 E:\другое\Ketner English\Ketner-AI\apps\web\src\components\layout\standalone-layout.tsx 
+2 E:\другое\Ketner English\Ketner-AI\apps\web\src\components\ui\button.tsx 
+2 E:\другое\Ketner English\Ketner-AI\apps\web\src\components\ui\card.tsx 
+1 E:\другое\Ketner English\Ketner-AI\apps\web\src\components\ui\copy-button.tsx 
+1 E:\другое\Ketner English\Ketner-AI\apps\web\src\components\ui\icon-button.tsx 
+5 E:\другое\Ketner English\Ketner-AI\apps\web\src\components\ui\input.tsx 
+4 E:\другое\Ketner English\Ketner-AI\apps\web\src\components\ui\qr-code.tsx 
+1 E:\другое\Ketner English\Ketner-AI\apps\web\src\components\ui\skeleton.tsx 
+3 E:\другое\Ketner English\Ketner-AI\apps\web\src\components\ui\stub-action.tsx 
+6 E:\другое\Ketner English\Ketner-AI\apps\web\src\features\chat\markdown\code-block.tsx 
+2 E:\другое\Ketner English\Ketner-AI\apps\web\src\features\chat\markdown\markdown.tsx 
+1 E:\другое\Ketner English\Ketner-AI\apps\web\src\features\preferences\preferences-store.ts 
+10 E:\другое\Ketner English\Ketner-AI\apps\web\src\pages\admin-page.tsx 
+45 E:\другое\Ketner English\Ketner-AI\apps\web\src\pages\api-docs-page.tsx 
+5 E:\другое\Ketner English\Ketner-AI\apps\web\src\pages\chat-page.tsx 
+25 E:\другое\Ketner English\Ketner-AI\apps\web\src\pages\checkout-page.tsx 
+3 E:\другое\Ketner English\Ketner-AI\apps\web\src\pages\documentation-page.tsx 
+108 E:\другое\Ketner English\Ketner-AI\apps\web\src\pages\landing-page.tsx 
+4 E:\другое\Ketner English\Ketner-AI\apps\web\src\pages\login-page.tsx 
+2 E:\другое\Ketner English\Ketner-AI\apps\web\src\pages\not-found-page.tsx 
+4 E:\другое\Ketner English\Ketner-AI\apps\web\src\pages\onboarding-page.tsx 
+2 E:\другое\Ketner English\Ketner-AI\apps\web\src\pages\pricing-page.tsx 
+1 E:\другое\Ketner English\Ketner-AI\apps\web\src\pages\route-error-page.tsx 
+3 E:\другое\Ketner English\Ketner-AI\apps\web\src\pages\settings-page.tsx 
+5 E:\другое\Ketner English\Ketner-AI\apps\web\src\pages\signup-page.tsx 
+=== emoji-ish === 
+components\chat\assistant-message.tsx:44:        {thinking ? (
+components\chat\assistant-message.tsx:51:        {hasContent ? (
+components\chat\assistant-message.tsx:64:        {message.status === 'streaming' ? (
+components\chat\assistant-message.tsx:68:        {failed ? (
+components\chat\assistant-message.tsx:73:                ? 'border border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-300'
+components\chat\assistant-message.tsx:78:              {isUpgradeError ? (
+components\chat\assistant-message.tsx:85:              {isUpgradeError ? t('chat.upgradeRequired') : t('chat.errorTitle')}
+components\chat\assistant-message.tsx:87:            <p className="mt-1 text-text/85">{message.error ?? t('chat.errorText')}</p>
+components\chat\assistant-message.tsx:88:            {isUpgradeError ? (
+components\chat\assistant-message.tsx:97:            ) : canRegenerate ? (
+components\chat\assistant-message.tsx:112:        {hasContent && !thinking && !failed ? (
+components\chat\assistant-message.tsx:115:            {canRegenerate ? (
+components\chat\composer.tsx:42:  const currentModel = findModel(meta?.models, selectedModelId);
+components\chat\composer.tsx:43:  const hasAccess = canAccessModel(user?.plan, currentModel);
+components\chat\composer.tsx:45:  const freeLimitReached = isFree && isFreeLimitReached(user?.id);
+components\chat\composer.tsx:49:    return key ? t(key) : model.name;
+components\chat\composer.tsx:111:      {freeLimitReached ? (
+components\chat\composer.tsx:132:      ) : !hasAccess ? (
+components\chat\composer.tsx:193:          {streaming ? (
+components\chat\message-list.tsx:65:            message.role === 'user' ? (
+components\chat\message-list.tsx:78:      {!pinned && messages.length > 0 ? (
+components\chat\model-picker.tsx:84:export function ModelPicker({ disabled = false }: { disabled?: boolean }) {
+components\chat\model-picker.tsx:92:  const models = meta && meta.models.length > 0 ? meta.models : FALLBACK_MODELS;
+components\chat\model-picker.tsx:93:  const current = models.find((model) => model.id === selectedId) ?? models[0];
+components\chat\model-picker.tsx:97:    return key ? t(key) : model.name;
+components\chat\model-picker.tsx:154:              ? 'bg-accent/10 text-text font-medium'
+components\chat\model-picker.tsx:159:            {active ? <CheckIcon /> : null}
+components\chat\model-picker.tsx:182:          {current.id === 'auto' ? (
+components\chat\model-picker.tsx:196:      {open ? (
+components\chat\model-picker.tsx:208:              {autoModel ? renderModelItem(autoModel) : null}
+components\chat\model-picker.tsx:215:            {plusModels.length > 0 ? (
+components\chat\model-picker.tsx:227:            {proModels.length > 0 ? (
+components\chat\upgrade-modal.tsx:14:  badge?: string;
+components\chat\upgrade-modal.tsx:95:      navigate(`/signup?redirect=${encodeURIComponent(`/checkout/${planId}`)}`);
+components\chat\upgrade-modal.tsx:130:          {reason === 'free_limit' ? (
+components\chat\upgrade-modal.tsx:144:              ? t('chat.freeLimitTitle')
+components\chat\upgrade-modal.tsx:150:              ? t('chat.freeLimitDesc')
+components\chat\upgrade-modal.tsx:167:              {plan.badge ? (
+components\chat\upgrade-modal.tsx:193:          {reason === 'paid_model' ? (
+components\chat\user-message.tsx:73:      {editable && !streaming ? (
+components\layout\auth-shell.tsx:8:  footer?: ReactNode;
+components\layout\brand.tsx:5:  className?: string;
+components\layout\brand.tsx:6:  to?: string;
+components\layout\brand.tsx:8:  iconOnly?: boolean;
+components\layout\header.tsx:23:  const title = conversations.find((conversation) => conversation.id === activeId)?.title;
+components\layout\header.tsx:32:        {inChat ? title || t('chat.title') : t('app.name')}
+components\layout\header.tsx:39:        {inChat ? (
+components\layout\language-toggle.tsx:10:export function LanguageToggle({ className }: { className?: string }) {
+components\layout\language-toggle.tsx:34:              active ? 'bg-surface text-text' : 'text-muted hover:text-text',
+components\layout\sidebar.tsx:44:      ? 'bg-accent/10 font-medium text-text'
+components\layout\sidebar.tsx:56:      user.email?.toLowerCase() === 'artemsinyakov09@gmail.com' ||
+components\layout\sidebar.tsx:57:      user.email?.toLowerCase().startsWith('admin@') ||
+components\layout\sidebar.tsx:58:      user.email?.toLowerCase().startsWith('admin.')
+components\layout\sidebar.tsx:84:    closeButtonRef.current?.focus();
+components\layout\sidebar.tsx:99:        ? conversations
+components\layout\sidebar.tsx:110:      {open ? (
+components\layout\sidebar.tsx:120:        aria-hidden={!open ? undefined : false}
+components\layout\sidebar.tsx:125:          open ? 'translate-x-0 shadow-lg md:shadow-none' : '-translate-x-full',
+components\layout\sidebar.tsx:174:          {status === 'loading' ? <ConversationsSkeleton /> : null}
+components\layout\sidebar.tsx:176:          {status === 'error' ? (
+components\layout\sidebar.tsx:190:          {status !== 'loading' && status !== 'error' && conversations.length === 0 ? (
+components\layout\sidebar.tsx:201:          groups.length === 0 ? (
+components\layout\sidebar.tsx:236:          {hasAdminAccess ? (
+components\layout\sidebar.tsx:247:            {user ? (
+components\layout\sidebar.tsx:267:                      ? 'Ultra'
+components\layout\sidebar.tsx:269:                        ? 'GPT Pro'
+components\layout\sidebar.tsx:271:                          ? 'Claude Pro'
+components\layout\sidebar.tsx:273:                            ? 'Gemini Pro'
+components\layout\sidebar.tsx:275:                              ? t('pricing.free')
+components\layout\sidebar.tsx:387:        active ? 'bg-accent/10 text-text' : 'hover:bg-canvas text-muted hover:text-text',
+components\layout\sidebar.tsx:390:      {active ? <CornerMark size={11} className="shrink-0 ml-2.5 text-accent" /> : null}
+components\layout\sidebar.tsx:398:          active ? 'font-medium text-text' : 'text-text/80 hover:text-text',
+components\layout\sidebar.tsx:401:        {conversation.title === '' ? t('chat.title') : conversation.title}
+components\layout\sidebar.tsx:404:      {isStreaming ? (
+components\layout\sidebar.tsx:412:      {showDate ? (
+components\layout\standalone-layout.tsx:26:            {language === 'ru' ? 'Модели' : 'Models'}
+components\layout\standalone-layout.tsx:40:          {status === 'authenticated' ? (
+components\layout\standalone-layout.tsx:45:              {user?.name ? user.name.split(' ')[0] : (language === 'ru' ? 'В чат' : 'Chat')}
+components\layout\standalone-layout.tsx:59:                {language === 'ru' ? 'Начать' : 'Start'}
+components\layout\theme-toggle.tsx:11:  const nextThemeLabel = theme === 'dark' ? t('settings.themeLight') : t('settings.themeDark');
+components\layout\theme-toggle.tsx:15:      {theme === 'dark' ? <SunIcon /> : <MoonIcon />}
+components\ui\badge.tsx:13:  tone?: BadgeTone;
+components\ui\button.tsx:25:  variant?: ButtonVariant;
+components\ui\button.tsx:26:  size?: ButtonSize;
+components\ui\button.tsx:27:  loading?: boolean;
+components\ui\button.tsx:43:      disabled={disabled ?? loading}
+components\ui\button.tsx:54:      {loading ? <Spinner /> : null}
+components\ui\copy-button.tsx:13:  size?: 'sm' | 'md';
+components\ui\copy-button.tsx:14:  className?: string;
+components\ui\copy-button.tsx:45:      label={copied ? t('chat.copied') : label}
+components\ui\copy-button.tsx:50:      {copied ? <CheckIcon className="text-brand-600 dark:text-brand-300" /> : <CopyIcon />}
+components\ui\corner-mark.tsx:4:  className?: string;
+components\ui\corner-mark.tsx:5:  size?: number;
+components\ui\icon-button.tsx:14:  size?: IconButtonSize;
+components\ui\input.tsx:5:  invalid?: boolean;
+components\ui\input.tsx:15:        invalid ? 'border-red-500 dark:border-red-500' : 'border-stroke/60 focus:border-accent',
+components\ui\input.tsx:34:  error?: string;
+components\ui\input.tsx:35:  hint?: string;
+components\ui\input.tsx:44:  const messageId = error ? `${id}-error` : hint ? `${id}-hint` : undefined;
+components\ui\input.tsx:52:      {error ? (
+components\ui\input.tsx:57:      {!error && hint ? (
+components\ui\qr-code.tsx:5:  size?: number;
+components\ui\qr-code.tsx:6:  className?: string;
+components\ui\qr-code.tsx:7:  badge?: React.ReactNode;
+components\ui\qr-code.tsx:133:      {badge ? (
+components\ui\skeleton.tsx:4:  className?: string;
+components\ui\spinner.tsx:4:  className?: string;
+components\ui\spinner.tsx:5:  label?: string;
+components\ui\stub-action.tsx:10:  hint?: string;
+components\ui\stub-action.tsx:11:  size?: StubSize;
+components\ui\stub-action.tsx:13:  block?: boolean;
+components\ui\stub-action.tsx:14:  className?: string;
+components\ui\stub-action.tsx:45:    <span className={cn('relative', block ? 'block' : 'inline-flex')}>
+components\ui\stub-action.tsx:59:          block ? 'h-10 w-full justify-start gap-2 px-3 text-sm' : sizeClasses[size],
+components\ui\stub-action.tsx:65:      {visible ? (
+components\ui\stub-action.tsx:70:          {hint ?? t('common.soon')}
+features\chat\markdown\code-block.tsx:29:        <span className="text-xs text-muted">{language ?? t('chat.codePlain')}</span>
+features\chat\markdown\markdown.tsx:63:  const className = cn('my-2 flex flex-col gap-1 pl-5', ordered ? 'list-decimal' : 'list-disc');
+features\chat\markdown\markdown.tsx:70:  return ordered ? (
+pages\admin-page.tsx:150:      const res = await fetch(`/api/admin/users?${params.toString()}`, {
+pages\admin-page.tsx:159:        const body = (await res.json()) as { error?: { message?: string } };
+pages\admin-page.tsx:160:        throw new Error(body.error?.message || `Ошибка сервера (${res.status})`);
+pages\admin-page.tsx:172:      setError(err instanceof Error ? err.message : 'Не удалось загрузить пользователей');
+pages\admin-page.tsx:194:        const body = (await res.json()) as { error?: { message?: string } };
+pages\admin-page.tsx:195:        throw new Error(body.error?.message || `Ошибка загрузки (${res.status})`);
+pages\admin-page.tsx:203:      setDetailError(err instanceof Error ? err.message : 'Ошибка загрузки карточки пользователя');
+pages\admin-page.tsx:227:        const body = (await res.json()) as { error?: { message?: string } };
+pages\admin-page.tsx:228:        throw new Error(body.error?.message || `Ошибка обновления (${res.status})`);
+pages\admin-page.tsx:235:      setSaveError(err instanceof Error ? err.message : 'Не удалось сохранить изменения');
+pages\admin-page.tsx:285:            {users.reduce((sum, u) => sum + (u.usage?.requestsToday || 0), 0)}
+pages\admin-page.tsx:291:            {users.reduce((sum, u) => sum + (u.usage?.tokensToday || 0), 0).toLocaleString()}
+pages\admin-page.tsx:297:            ${users.reduce((sum, u) => sum + (u.usage?.costThisMonth || 0), 0).toFixed(2)}
+pages\admin-page.tsx:343:      {error ? (
+pages\admin-page.tsx:386:              {loading ? (
+pages\admin-page.tsx:392:              ) : users.length === 0 ? (
+pages\admin-page.tsx:414:                              ? 'brand'
+pages\admin-page.tsx:416:                                ? 'neutral'
+pages\admin-page.tsx:422:                        {u.isVip ? (
+pages\admin-page.tsx:427:                        {u.isAdmin ? (
+pages\admin-page.tsx:436:                      {u.limits.requestsPerDay !== null ? (
+pages\admin-page.tsx:451:                                ? 'bg-rose-500'
+pages\admin-page.tsx:453:                                  ? 'bg-amber-500'
+pages\admin-page.tsx:461:                          (${u.usage.costThisMonth} / ${u.limits.costBudget ?? 0})
+pages\admin-page.tsx:466:                      {u.remaining.tokensToday !== null ? (
+pages\admin-page.tsx:470:                              ? 'font-bold text-rose-400'
+pages\admin-page.tsx:501:      {selectedUserId ? (
+pages\admin-page.tsx:523:              {detailLoading ? (
+pages\admin-page.tsx:527:              ) : detailError ? (
+pages\admin-page.tsx:531:              ) : detailUser ? (
+pages\admin-page.tsx:566:                        {isSelf ? (
+pages\admin-page.tsx:615:                      {saveError ? (
+pages\admin-page.tsx:618:                      {saveSuccess ? (
+pages\admin-page.tsx:631:                        {saving ? 'Сохранение...' : 'Применить изменения'}
+pages\admin-page.tsx:645:                            / {detailUser.limits.requestsPerHour ?? '∞'}
+pages\admin-page.tsx:655:                            / {detailUser.limits.requestsPerDay ?? '∞'}
+pages\admin-page.tsx:665:                            / {detailUser.limits.tokensPerHour?.toLocaleString() ?? '∞'}
+pages\admin-page.tsx:675:                            / {detailUser.limits.tokensPerDay?.toLocaleString() ?? '∞'}
+pages\admin-page.tsx:704:                              ? 'text-emerald-400'
+pages\admin-page.tsx:716:                              ? 'brand'
+pages\admin-page.tsx:718:                                ? 'neutral'
+pages\admin-page.tsx:734:                      {detailUser.recentRequests.length === 0 ? (
+pages\admin-page.tsx:767:                                        ? 'text-emerald-400 font-sans'
+pages\api-docs-page.tsx:56:  language?: string;
+pages\api-docs-page.tsx:57:  title?: string;
+pages\api-docs-page.tsx:85:          {copied ? (
+pages\api-docs-page.tsx:127:  const activeApiKey = keys[0]?.key || 'ketner_sk_live_your_api_key_here';
+pages\api-docs-page.tsx:249:        {showKeyForm ? (
+pages\api-docs-page.tsx:284:              ? k.key
+pages\api-docs-page.tsx:309:                      title={isRevealed ? 'Скрыть' : 'Показать'}
+pages\api-docs-page.tsx:312:                      {isRevealed ? (
+pages\api-docs-page.tsx:328:                    {isCopied ? (
+pages\api-docs-page.tsx:340:                  {keys.length > 1 ? (
+pages\api-docs-page.tsx:431:                    ? 'bg-accent text-[var(--color-accent-text)] font-semibold shadow-sm'
+pages\api-docs-page.tsx:443:                    ? 'bg-accent text-[var(--color-accent-text)] font-semibold shadow-sm'
+pages\api-docs-page.tsx:455:                    ? 'bg-accent text-[var(--color-accent-text)] font-semibold shadow-sm'
+pages\api-docs-page.tsx:467:                    ? 'bg-accent text-[var(--color-accent-text)] font-semibold shadow-sm'
+pages\api-docs-page.tsx:479:                    ? 'bg-accent text-[var(--color-accent-text)] font-semibold shadow-sm'
+pages\api-docs-page.tsx:498:                      ? 'bg-surface border border-accent text-accent'
+pages\api-docs-page.tsx:502:                  {osKey === 'windows' ? 'Windows' : osKey === 'macos' ? 'macOS' : 'Linux'}
+pages\api-docs-page.tsx:535:              {os === 'windows' ? (
+pages\api-docs-page.tsx:545:              ) : os === 'macos' ? (
+pages\api-docs-page.tsx:582:              {os === 'windows' ? (
+pages\api-docs-page.tsx:833:        "${os === 'windows' ? 'C:\\\\Users\\\\admin\\\\Projects' : '/Users/admin/projects'}"
+pages\api-docs-page.tsx:940:    process.stdout.write(chunk.choices[0]?.delta?.content || '');
+pages\api-docs-page.tsx:1085:              {testLoading ? (
+pages\chat-page.tsx:43:      {messagesStatus === 'loading' ? <MessagesSkeleton /> : null}
+pages\chat-page.tsx:45:      {messagesStatus === 'error' ? (
+pages\chat-page.tsx:57:              onClick={() => void openConversation(activeId ?? undefined, true)}
+pages\chat-page.tsx:65:      {messagesStatus !== 'loading' && messagesStatus !== 'error' ? (
+pages\chat-page.tsx:66:        messages.length === 0 ? (
+pages\checkout-page.tsx:67:      navigate(`/signup?redirect=${encodeURIComponent(`/checkout/${targetPlan}`)}`, { replace: true });
+pages\checkout-page.tsx:78:    cardNumber?: string;
+pages\checkout-page.tsx:79:    expiry?: string;
+pages\checkout-page.tsx:80:    cvc?: string;
+pages\checkout-page.tsx:81:    general?: string;
+pages\checkout-page.tsx:104:      setSbpSecondsLeft((prev) => (prev > 0 ? prev - 1 : 0));
+pages\checkout-page.tsx:233:        general: error instanceof Error ? error.message : 'Ошибка при оформлении подписки',
+pages\checkout-page.tsx:242:    const invoiceId = sbpInvoice?.id || `sbp_${plan.id}`;
+pages\checkout-page.tsx:258:    const invoiceId = starsInvoice?.id || `stars_${plan.id}`;
+pages\checkout-page.tsx:291:            {paidMethodName ? ` · ${paidMethodName}` : ''}
+pages\checkout-page.tsx:329:  const botUsername = starsInvoice?.botUsername || 'Robo_kassa_bot';
+pages\checkout-page.tsx:331:    starsInvoice?.botDeepLink ||
+pages\checkout-page.tsx:332:    `https://t.me/${botUsername}?start=pay_${plan.id}`;
+pages\checkout-page.tsx:361:              ? plan.modelsHighlight
+pages\checkout-page.tsx:362:              : plan.modelsHighlight?.[language]}
+pages\checkout-page.tsx:371:            {language === 'ru' ? `или ${starsAmount} ⭐️ Stars` : `or ${starsAmount} ⭐️ Stars`}
+pages\checkout-page.tsx:387:                ? 'bg-accent text-white shadow-sm font-semibold scale-[1.02]'
+pages\checkout-page.tsx:400:                ? 'bg-accent text-white shadow-sm font-semibold scale-[1.02]'
+pages\checkout-page.tsx:416:                ? 'bg-accent text-white shadow-sm font-semibold scale-[1.02]'
+pages\checkout-page.tsx:427:      <div className={paymentMethod === 'card' ? 'block' : 'hidden'}>
+pages\checkout-page.tsx:429:          {cardErrors.general ? (
+pages\checkout-page.tsx:504:            {submitting ? t('checkout.processing') : t('checkout.pay')}
+pages\checkout-page.tsx:526:            {sbpLoading ? (
+pages\checkout-page.tsx:533:                  sbpInvoice?.qrPayload ||
+pages\checkout-page.tsx:534:                  `https://qr.nspk.ru/AD10000KETNERAI_${plan.id}?amount=${plan.priceMonthly}`
+pages\checkout-page.tsx:556:            {sbpInvoice?.deepLink && (
+pages\checkout-page.tsx:575:              {submitting ? t('checkout.sbpChecking') : t('checkout.sbpConfirm')}
+pages\checkout-page.tsx:607:              {starsLoading ? (
+pages\checkout-page.tsx:609:                  {language === 'ru' ? 'Подготовка бота...' : 'Preparing bot...'}
+pages\checkout-page.tsx:634:              {language === 'ru' ? `Оплатить в Telegram (@${botUsername})` : `Pay in Telegram (@${botUsername})`}
+pages\checkout-page.tsx:644:              {submitting ? t('checkout.starsChecking') : t('checkout.starsConfirm')}
+pages\documentation-page.tsx:20:  popular?: boolean;
+pages\documentation-page.tsx:143:      ru: 'Это правда безлимитно?',
+pages\documentation-page.tsx:144:      en: 'Is it really unlimited?',
+pages\documentation-page.tsx:153:      ru: 'Какие модели доступны в Ketner AI?',
+pages\documentation-page.tsx:154:      en: 'Which AI models are included in Ketner AI?',
+pages\documentation-page.tsx:163:      ru: 'Почему ответы приходят так быстро?',
+pages\documentation-page.tsx:164:      en: 'Why are responses so fast?',
+pages\documentation-page.tsx:173:      ru: 'Могу ли я выбрать модель самостоятельно?',
+pages\documentation-page.tsx:174:      en: 'Can I choose the model manually?',
+pages\documentation-page.tsx:183:      ru: 'Чем Ketner AI отличается от ChatGPT Plus?',
+pages\documentation-page.tsx:184:      en: 'How does Ketner AI differ from ChatGPT Plus?',
+pages\documentation-page.tsx:219:          {isEn ? 'Back to chat' : 'Вернуться в чат'}
+pages\documentation-page.tsx:224:              {isEn ? 'Ketner AI Documentation' : 'Документация Ketner AI'}
+pages\documentation-page.tsx:228:                ? 'Everything you need to know about Ketner AI, plans, and fair usage.'
+pages\documentation-page.tsx:235:              {isEn ? 'View plans' : 'Перейти к тарифам'}
+pages\documentation-page.tsx:246:            {isEn ? '✨ What is Ketner' : '✨ Что такое Ketner'}
+pages\documentation-page.tsx:252:            {isEn ? '⚡ How it works' : '⚡ Как это работает'}
+pages\documentation-page.tsx:258:            {isEn ? '💎 Plans & Speeds' : '💎 Тарифные планы и лимиты'}
+pages\documentation-page.tsx:264:            {isEn ? '🛡️ Fair Use' : '🛡️ Честное использование (Fair Use)'}
+pages\documentation-page.tsx:270:            {isEn ? '❓ FAQ' : '❓ Часто задаваемые вопросы'}
+pages\documentation-page.tsx:280:            {isEn ? 'What is Ketner' : 'Что такое Ketner'}
+pages\documentation-page.tsx:286:              ? 'One service instead of dozens of subscriptions. Access the world’s best AI models in a single place.'
+pages\documentation-page.tsx:291:              ? 'Forget about switching between separate accounts, paying $20 to each provider, and managing API keys. Ketner AI brings together OpenAI GPT, Anthropic Claude, and Google Gemini under one seamless, unlimited subscription.'
+pages\documentation-page.tsx:302:            {isEn ? 'How it works' : 'Как это работает'}
+pages\documentation-page.tsx:311:              {isEn ? 'Type your question' : 'Вы пишете вопрос'}
+pages\documentation-page.tsx:315:                ? 'Ask for code, translation, writing, analysis, or any creative task in your regular language.'
+pages\documentation-page.tsx:325:              {isEn ? 'We pick the best model' : 'Система подбирает модель'}
+pages\documentation-page.tsx:329:                ? 'Smart Auto Router chooses the best model for your task, or you can pick your favorite model manually.'
+pages\documentation-page.tsx:339:              {isEn ? 'You get the answer' : 'Вы получаете ответ'}
+pages\documentation-page.tsx:343:                ? 'Streamed instantly to your screen with full markdown, code highlights, and preserved context.'
+pages\documentation-page.tsx:356:              {isEn ? 'Plans & Speeds' : 'Тарифные планы и лимиты'}
+pages\documentation-page.tsx:361:              ? 'Simple transparent plans categorized by speed, priority, and model capabilities — no token math.'
+pages\documentation-page.tsx:373:                  ? 'border-accent bg-gradient-to-b from-accent/5 via-surface to-surface shadow-md'
+pages\documentation-page.tsx:381:                    <Badge tone={plan.popular ? 'brand' : 'neutral'}>
+pages\documentation-page.tsx:415:                <Link to={plan.id === 'free' ? '/chat' : `/checkout/${plan.id}`}>
+pages\documentation-page.tsx:417:                    variant={plan.popular ? 'primary' : 'outline'}
+pages\documentation-page.tsx:422:                      ? isEn
+pages\documentation-page.tsx:423:                        ? 'Try Free'
+pages\documentation-page.tsx:426:                        ? `Choose ${plan.name}`
+pages\documentation-page.tsx:441:            {isEn ? 'Fair Use Policy' : 'Честное использование (Fair Use)'}
+pages\documentation-page.tsx:447:              ? '“Unlimited” means normal human usage without restrictions.'
+pages\documentation-page.tsx:453:                {isEn ? '1. For real people' : '1. Для реальных людей'}
+pages\documentation-page.tsx:457:                  ? 'Chat as much as you need for coding, writing, research, and learning.'
+pages\documentation-page.tsx:463:                {isEn ? '2. Protection from bots' : '2. Защита от спам-ботов'}
+pages\documentation-page.tsx:467:                  ? 'Fair Use prevents automated web scraping and DDOS floods so servers stay fast for everyone.'
+pages\documentation-page.tsx:473:                {isEn ? '3. Invisible and smooth' : '3. Без внезапных блокировок'}
+pages\documentation-page.tsx:477:                  ? 'If you use Ketner AI normally, you will never see any limits or roadblocks.'
+pages\documentation-page.tsx:490:            {isEn ? 'Frequently Asked Questions' : 'Часто задаваемые вопросы (FAQ)'}
+pages\landing-page.tsx:14:function OpenAiIcon({ className = 'size-4' }: { className?: string }) {
+pages\landing-page.tsx:22:function ClaudeIcon({ className = 'size-4' }: { className?: string }) {
+pages\landing-page.tsx:30:function GeminiIcon({ className = 'size-4' }: { className?: string }) {
+pages\landing-page.tsx:38:function DeepSeekIcon({ className = 'size-4' }: { className?: string }) {
+pages\landing-page.tsx:46:function QwenIcon({ className = 'size-4' }: { className?: string }) {
+pages\landing-page.tsx:54:function GrokIcon({ className = 'size-4' }: { className?: string }) {
+pages\landing-page.tsx:70:  popular?: boolean;
+pages\landing-page.tsx:71:  popularBadge?: Record<Language, string>;
+pages\landing-page.tsx:72:  buttonText?: Record<Language, string>;
+pages\landing-page.tsx:85:    price: plan.priceMonthly === 0 ? '$0' : `$${plan.priceMonthly}`,
+pages\landing-page.tsx:89:        ? { ru: 'Базовая скорость ответов', en: 'Standard response speed' }
+pages\landing-page.tsx:91:          ? { ru: 'Быстрая скорость генерации', en: 'Fast response speed' }
+pages\landing-page.tsx:93:            ? { ru: 'Средняя скорость обработки', en: 'Standard processing speed' }
+pages\landing-page.tsx:97:        ? { ru: 'Стандартная очередь', en: 'Standard queue priority' }
+pages\landing-page.tsx:99:          ? { ru: 'Повышенный приоритет очереди', en: 'Enhanced queue priority' }
+pages\landing-page.tsx:101:            ? { ru: 'Высокий приоритет без ожидания', en: 'High priority processing' }
+pages\landing-page.tsx:105:        ? { ru: 'Стандартный контекст диалога', en: 'Standard context window' }
+pages\landing-page.tsx:108:    popularBadge: plan.popular ? { ru: 'Популярный', en: 'Most Popular' } : undefined,
+pages\landing-page.tsx:111:        ? { ru: 'Начать чат', en: 'Start chatting' }
+pages\landing-page.tsx:113:          ? { ru: 'Выбрать Plus', en: 'Get Plus' }
+pages\landing-page.tsx:115:            ? { ru: 'Выбрать Pro', en: 'Get Pro' }
+pages\landing-page.tsx:117:    href: plan.id === 'free' ? '/chat' : `/checkout/${plan.id}`,
+pages\landing-page.tsx:276:          {status === 'authenticated' && user ? (
+pages\landing-page.tsx:301:              <span>{language === 'ru' ? 'Без токенов' : 'No tokens'}</span>
+pages\landing-page.tsx:308:                  ? 'Без переключения между сервисами'
+pages\landing-page.tsx:322:            {language === 'ru' ? 'Лучшие модели для любых задач' : 'Top models for any task'}
+pages\landing-page.tsx:333:                  {language === 'ru' ? 'Тексты и контент' : 'Writing & Content'}
+pages\landing-page.tsx:337:                    ? 'Письма, статьи, идеи, переводы'
+pages\landing-page.tsx:350:                  {language === 'ru' ? 'Программирование' : 'Software Engineering'}
+pages\landing-page.tsx:354:                    ? 'Код, отладка, архитектура'
+pages\landing-page.tsx:367:                  {language === 'ru' ? 'Изображения' : 'Image Generation'}
+pages\landing-page.tsx:371:                    ? 'Генерация и редактирование'
+pages\landing-page.tsx:384:                  {language === 'ru' ? 'Анализ и исследования' : 'Analysis & Research'}
+pages\landing-page.tsx:388:                    ? 'Данные, документы, сложные задачи'
+pages\landing-page.tsx:449:                    {language === 'ru' ? 'Вы' : 'You'}
+pages\landing-page.tsx:453:                      ? 'Объясни разницу между квантовыми и классическими вычислениями в 2 предложениях.'
+pages\landing-page.tsx:470:                        ? 'Классические компьютеры обрабатывают данные последовательно с помощью бинарных битов (0 или 1). Квантовые компьютеры используют кубиты и суперпозицию для одновременной обработки множества состояний.'
+pages\landing-page.tsx:482:                    {language === 'ru' ? 'Напишите сообщение...' : 'Type a message...'}
+pages\landing-page.tsx:517:                  ? 'border-emerald-500 bg-emerald-500/10 shadow-lg relative'
+pages\landing-page.tsx:523:                  {plan.popularBadge ? plan.popularBadge[language] : (language === 'ru' ? 'Популярный' : 'Most Popular')}
+pages\landing-page.tsx:553:                    variant={plan.popular ? 'primary' : 'outline'}
+pages\landing-page.tsx:557:                    {plan.buttonText ? plan.buttonText[language] : (plan.id === 'free' ? t('landing.cta') : `Get ${plan.name}`)}
+pages\login-page.tsx:24:  const redirectUrl = isSafeRedirect && rawRedirect ? rawRedirect : '/chat';
+pages\login-page.tsx:73:      setServerError(error instanceof Error ? error.message : 'Ошибка входа');
+pages\login-page.tsx:87:      if (res?.data?.url) {
+pages\login-page.tsx:91:      if (res?.error) {
+pages\login-page.tsx:110:      setServerError(error instanceof Error ? error.message : 'Ошибка OAuth');
+pages\login-page.tsx:129:          to={isSafeRedirect ? `/signup?redirect=${encodeURIComponent(redirectUrl)}` : '/signup'}
+pages\login-page.tsx:148:        {serverError ? (
+pages\login-page.tsx:157:        <Field id="login-email" label={t('auth.email')} error={emailError ?? undefined}>
+pages\login-page.tsx:176:        <Field id="login-password" label={t('auth.password')} error={passwordError ?? undefined}>
+pages\login-page.tsx:183:                type={showPassword ? 'text' : 'password'}
+pages\login-page.tsx:198:                aria-label={showPassword ? 'Скрыть' : 'Показать'}
+pages\login-page.tsx:201:                {showPassword ? (
+pages\login-page.tsx:212:          {loading ? t('auth.loggingIn') : t('auth.login')}
+pages\pricing-page.tsx:14:  const currentPlan = user?.plan ?? 'free';
+pages\pricing-page.tsx:52:                  {isCurrent ? (
+pages\pricing-page.tsx:54:                  ) : isUltra ? (
+pages\pricing-page.tsx:56:                  ) : plan.popular ? (
+pages\pricing-page.tsx:65:                      ? plan.priceMonthly === 0
+pages\pricing-page.tsx:66:                        ? '0 ₽'
+pages\pricing-page.tsx:69:                        ? '$0'
+pages\pricing-page.tsx:71:                          ? '$9.99'
+pages\pricing-page.tsx:73:                            ? '$19.99'
+pages\pricing-page.tsx:84:                        ? plan.modelsHighlight
+pages\pricing-page.tsx:120:                  {isCurrent ? (
+pages\pricing-page.tsx:124:                  ) : plan.id === 'free' ? (
+pages\pricing-page.tsx:133:                        variant={isUltra || plan.popular ? 'primary' : 'outline'}
+pages\settings-page.tsx:24:    () => (typeof window !== 'undefined' ? localStorage.getItem('ketner_admin_key') || '' : ''),
+pages\settings-page.tsx:39:      user.email?.toLowerCase() === 'artemsinyakov09@gmail.com' ||
+pages\settings-page.tsx:40:      user.email?.toLowerCase().startsWith('admin@') ||
+pages\settings-page.tsx:41:      user.email?.toLowerCase().startsWith('admin.')
+pages\settings-page.tsx:49:  const isPaid = user?.plan && user.plan !== 'free';
+pages\settings-page.tsx:50:  const isCanceled = subscription?.status === 'canceled';
+pages\settings-page.tsx:66:        {user ? (
+pages\settings-page.tsx:88:        {!user ? (
+pages\settings-page.tsx:114:                {user?.plan === 'pro'
+pages\settings-page.tsx:115:                  ? t('pricing.pro')
+pages\settings-page.tsx:116:                  : user?.plan === 'plus'
+pages\settings-page.tsx:117:                    ? t('pricing.plus')
+pages\settings-page.tsx:122:                  ({isCanceled ? t('settings.statusCanceled') : t('settings.statusActive')})
+pages\settings-page.tsx:128:                ? isCanceled
+pages\settings-page.tsx:129:                  ? t('settings.canceledNotice')
+pages\settings-page.tsx:131:                      subscription?.renewsAt ?? new Date().toISOString(),
+pages\settings-page.tsx:139:            {isPaid && !isCanceled ? (
+pages\settings-page.tsx:147:                {canceling ? t('settings.canceling') : t('settings.cancelSubscription')}
+pages\settings-page.tsx:162:      {hasAdminAccess ? (
+pages\settings-page.tsx:199:                {adminKeySaved ? 'Сохранено ✓' : 'Сохранить ключ'}
+pages\settings-page.tsx:206:      {user ? (
+pages\signup-page.tsx:24:  const redirectUrl = isSafeRedirect && rawRedirect ? rawRedirect : '/chat';
+pages\signup-page.tsx:83:      setServerError(error instanceof Error ? error.message : 'Ошибка регистрации');
+pages\signup-page.tsx:97:      if (res?.data?.url) {
+pages\signup-page.tsx:101:      if (res?.error) {
+pages\signup-page.tsx:120:      setServerError(error instanceof Error ? error.message : 'Ошибка OAuth');
+pages\signup-page.tsx:131:          to={isSafeRedirect ? `/login?redirect=${encodeURIComponent(redirectUrl)}` : '/login'}
+pages\signup-page.tsx:150:        {serverError ? (
+pages\signup-page.tsx:157:            serverError.toLowerCase().includes('already exists') ? (
+pages\signup-page.tsx:159:                to={`/login?email=${encodeURIComponent(email.trim())}`}
+pages\signup-page.tsx:168:        <Field id="signup-name" label={t('auth.name')} error={nameError ?? undefined}>
+pages\signup-page.tsx:187:        <Field id="signup-email" label={t('auth.email')} error={emailError ?? undefined}>
+pages\signup-page.tsx:206:        <Field id="signup-password" label={t('auth.password')} error={passwordError ?? undefined}>
+pages\signup-page.tsx:213:                type={showPassword ? 'text' : 'password'}
+pages\signup-page.tsx:228:                aria-label={showPassword ? 'Скрыть' : 'Показать'}
+pages\signup-page.tsx:231:                {showPassword ? (
+pages\signup-page.tsx:242:          {loading ? t('auth.signingUp') : t('auth.signup')}
+tests\auth-flow.test.tsx:46:      expect(useAuth.getState().user?.email).toBe('demo@ketner.ai');
+tests\auth-flow.test.tsx:84:      expect(useAuth.getState().user?.name).toBe('Александр');
+tests\auth-flow.test.tsx:96:      expect(useAuth.getState().user?.name).toBe('google User');
+tests\auth-flow.test.tsx:165:  it('регистрация с параметром ?redirect=/checkout/gpt-pro перенаправляет обратно на чекаут и показывает уведомление', async () => {
+tests\auth-flow.test.tsx:166:    renderRoute('/signup?redirect=%2Fcheckout%2Fgpt-pro');
+tests\billing-flow.test.tsx:175:    expect(useAuth.getState().user?.plan).toBe('plus');
+tests\billing-flow.test.tsx:176:    expect(useBilling.getState().subscription?.plan).toBe('plus');
+tests\billing-flow.test.tsx:214:      expect(useAuth.getState().user?.plan).toBe('free');
+tests\billing-flow.test.tsx:215:      expect(useBilling.getState().subscription?.status).toBe('canceled');
+tests\billing-flow.test.tsx:252:    expect(useAuth.getState().user?.plan).toBe('gpt-pro');
+tests\chat-flow.test.tsx:13:const EMPTY_TITLE = 'С чего начнём?';
+tests\chat-flow.test.tsx:43:    await sendMessage(user, 'Как дела?');
+tests\chat-flow.test.tsx:45:    expect(await screen.findAllByText('Как дела?')).not.toHaveLength(0);
+tests\chat-flow.test.tsx:53:    expect(screen.getByRole('link', { name: 'Как дела?' })).toHaveAttribute(
+tests\chat-flow.test.tsx:69:    expect((body.messages as Message[]).map((message) => message.content)).toEqual(['Как дела?']);
+tests\preferences.test.tsx:36:      screen.getByRole('heading', { level: 2, name: 'What shall we work on?' }),
+tests\routes.test.tsx:25:    expect(screen.getByRole('heading', { level: 2, name: 'С чего начнём?' })).toBeInTheDocument();
+tests\sidebar.test.tsx:91:    expect(screen.getByText('Удалить чат?')).toBeInTheDocument();
+tests\sidebar.test.tsx:137:      await screen.findByRole('heading', { level: 2, name: 'С чего начнём?' }),
+DONE 

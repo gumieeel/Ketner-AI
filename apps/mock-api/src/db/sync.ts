@@ -1,46 +1,18 @@
 import { randomUUID } from 'node:crypto';
 import postgres from 'postgres';
 import { config } from '../config.js';
-import {
-  apiKeyStore,
-  conversationStore,
-  revokedTokenStore,
-  githubConnectionStore,
-  userStore,
-  subscriptionStore,
-  feedbackStore,
-} from '../store/index.js';
-import type { StoredGithubConnection } from '../github/connection-store.js';
-import { invoiceStore } from '../store/invoice-store.js';
-import { billingLedger } from '../billing/index.js';
-import { supportStore, usageStore } from '../store/index.js';
-import { contactStore } from '../store/contact-store.js';
-import { compareVoteStore } from '../store/compare-vote-store.js';
-import type { DocStore } from '../store/doc-store.js';
-import type { CryptoInvoice } from '../types.js';
-import type { ApiKeyRecord } from '../store/api-key-store.js';
+import { conversationStore, userStore, subscriptionStore, feedbackStore } from '../store/index.js';
 import type { Conversation, Message, Subscription } from '../types.js';
 import type { StoredUser } from '../store/user-store.js';
-import {
-  sanitizeAttribution,
-  SIGNUP_METHODS,
-  type SignupMethod,
-} from '../services/signup-attribution.js';
-import { signupMethodFromProvider } from '../auth/better-auth-sync.js';
-import { isTelegramAccountEmail } from '../telegram/auth-requests.js';
 import type { FeedbackRecord } from '../store/feedback-store.js';
-import { createPostgresProjectDriver, ensureCodeSchema } from '../code/postgres-driver.js';
-import { ensureImagesSchema } from '../images/image-store.js';
-import { attachImageDriver } from '../images/runtime.js';
-import { attachProjectDriver } from '../code/runtime.js';
 
 export function hasPostgresConfig(): boolean {
   const url = (config.databaseUrl || process.env.DATABASE_URL || '').trim();
   return Boolean(
     url &&
-    !url.includes('postgres:postgres@localhost') &&
-    !url.includes('user:password@localhost') &&
-    (url.startsWith('postgres://') || url.startsWith('postgresql://')),
+      !url.includes('postgres:postgres@localhost') &&
+      !url.includes('user:password@localhost') &&
+      (url.startsWith('postgres://') || url.startsWith('postgresql://')),
   );
 }
 
@@ -217,8 +189,6 @@ export async function ensureDatabaseSchema(sql: postgres.Sql): Promise<void> {
     ALTER TABLE "ketner_users" ADD COLUMN IF NOT EXISTS "is_admin" boolean DEFAULT false;
     ALTER TABLE "ketner_users" ADD COLUMN IF NOT EXISTS "telegram_chat_id" text;
     ALTER TABLE "ketner_users" ADD COLUMN IF NOT EXISTS "telegram_username" text;
-    ALTER TABLE "ketner_users" ADD COLUMN IF NOT EXISTS "signup_method" text;
-    ALTER TABLE "ketner_users" ADD COLUMN IF NOT EXISTS "signup_attribution" jsonb;
     ALTER TABLE "conversations" ADD COLUMN IF NOT EXISTS "context_summary" text;
     ALTER TABLE "messages" ADD COLUMN IF NOT EXISTS "status" text DEFAULT 'complete';
     ALTER TABLE "messages" ADD COLUMN IF NOT EXISTS "finish_reason" text;
@@ -256,27 +226,6 @@ async function seedDefaultUsers(sql: postgres.Sql): Promise<void> {
   `;
 }
 
-/**
- * Способ регистрации из БД. У аккаунтов, созданных до учёта, он восстанавливается:
- * служебная почта Telegram — Telegram; есть привязка Google/GitHub в Better Auth — этот провайдер;
- * есть только пароль Better Auth — почта.
- */
-export function resolveStoredSignupMethod(
-  stored: string | null | undefined,
-  email: string,
-  firstProvider: string | null | undefined,
-): SignupMethod | undefined {
-  if (stored && (SIGNUP_METHODS as readonly string[]).includes(stored)) {
-    return stored as SignupMethod;
-  }
-  if (isTelegramAccountEmail(email)) return 'telegram';
-  if (firstProvider) {
-    const method = signupMethodFromProvider(firstProvider);
-    return method === 'unknown' ? undefined : method;
-  }
-  return undefined;
-}
-
 async function loadAndSyncUsers(sql: postgres.Sql): Promise<void> {
   const rows = await sql<
     {
@@ -291,22 +240,10 @@ async function loadAndSyncUsers(sql: postgres.Sql): Promise<void> {
       telegram_chat_id: string | null;
       telegram_username: string | null;
       created_at: Date;
-      signup_method: string | null;
-      signup_attribution: unknown;
-      first_provider: string | null;
     }[]
   >`
-    SELECT ku.id, ku.email, ku.name, ku.plan, ku.password_hash, ku.salt, ku.is_vip, ku.is_admin,
-      ku.telegram_chat_id, ku.telegram_username, ku.created_at, ku.signup_method, ku.signup_attribution,
-      (
-        SELECT a."providerId"
-        FROM "user" bu
-        JOIN "account" a ON a."userId" = bu.id
-        WHERE lower(bu.email) = lower(ku.email)
-        ORDER BY (a."providerId" = 'credential'), a."createdAt" ASC
-        LIMIT 1
-      ) AS first_provider
-    FROM "ketner_users" ku
+    SELECT id, email, name, plan, password_hash, salt, is_vip, is_admin, telegram_chat_id, telegram_username, created_at
+    FROM "ketner_users"
   `;
 
   const dbUsers: StoredUser[] = rows.map((r) => ({
@@ -321,8 +258,6 @@ async function loadAndSyncUsers(sql: postgres.Sql): Promise<void> {
     telegramChatId: r.telegram_chat_id || undefined,
     telegramUsername: r.telegram_username || undefined,
     createdAt: r.created_at ? new Date(r.created_at).toISOString() : new Date().toISOString(),
-    signupMethod: resolveStoredSignupMethod(r.signup_method, r.email, r.first_provider),
-    signupAttribution: sanitizeAttribution(r.signup_attribution),
   }));
 
   // Если локально были зарегистрированы пользователи, которых ещё нет в БД, переносим их в БД
@@ -334,7 +269,7 @@ async function loadAndSyncUsers(sql: postgres.Sql): Promise<void> {
       try {
         await sql`
           INSERT INTO "ketner_users" (
-            "id", "email", "name", "plan", "password_hash", "salt", "is_vip", "is_admin", "telegram_chat_id", "telegram_username", "created_at", "updated_at, "signup_method", "signup_attribution"
+            "id", "email", "name", "plan", "password_hash", "salt", "is_vip", "is_admin", "telegram_chat_id", "telegram_username", "created_at", "updated_at"
           ) VALUES (
             ${localUser.id},
             ${localUser.email},
@@ -347,9 +282,7 @@ async function loadAndSyncUsers(sql: postgres.Sql): Promise<void> {
             ${localUser.telegramChatId ? String(localUser.telegramChatId) : null},
             ${localUser.telegramUsername || null},
             ${new Date(localUser.createdAt)},
-            NOW(),
-            ${localUser.signupMethod ?? null},
-            ${localUser.signupAttribution ? sql.json(localUser.signupAttribution as never) : null}
+            NOW()
           ) ON CONFLICT ("email") DO NOTHING
         `;
         dbUsers.push(localUser);
@@ -420,7 +353,6 @@ async function loadAndSyncConversations(sql: postgres.Sql): Promise<void> {
     feedback: (r.feedback as Message['feedback']) || undefined,
     attachments: (r.metadata?.attachments as Message['attachments']) || undefined,
     workspaceContext: (r.metadata?.workspaceContext as Message['workspaceContext']) || undefined,
-    review: (r.metadata?.review as Message['review']) || undefined,
     createdAt: r.created_at ? new Date(r.created_at).toISOString() : new Date().toISOString(),
   }));
 
@@ -461,7 +393,7 @@ async function loadAndSyncConversations(sql: postgres.Sql): Promise<void> {
               ${msg.finishReason || null},
               ${Boolean(msg.canContinue)},
               ${msg.feedback || null},
-              ${JSON.stringify({ attachments: msg.attachments || null, workspaceContext: msg.workspaceContext || null, ...(msg.review ? { review: msg.review } : {}) })}::jsonb,
+              ${JSON.stringify({ attachments: msg.attachments || null, workspaceContext: msg.workspaceContext || null })}::jsonb,
               ${new Date(msg.createdAt)},
               NOW()
             ) ON CONFLICT ("id") DO NOTHING
@@ -595,7 +527,6 @@ function attachDatabaseDrivers(sql: postgres.Sql): void {
           "title" = EXCLUDED."title",
           "context_summary" = EXCLUDED."context_summary",
           "updated_at" = NOW()
-        WHERE "conversations"."user_id" = EXCLUDED."user_id"
       `;
 
       // Insert all messages in the turn
@@ -614,7 +545,7 @@ function attachDatabaseDrivers(sql: postgres.Sql): void {
             ${msg.finishReason || null},
             ${Boolean(msg.canContinue)},
             ${msg.feedback || null},
-            ${JSON.stringify({ attachments: msg.attachments || null, workspaceContext: msg.workspaceContext || null, ...(msg.review ? { review: msg.review } : {}) })}::jsonb,
+            ${JSON.stringify({ attachments: msg.attachments || null, workspaceContext: msg.workspaceContext || null })}::jsonb,
             ${new Date(msg.createdAt)},
             NOW()
           ) ON CONFLICT ("id") DO UPDATE SET
@@ -626,7 +557,6 @@ function attachDatabaseDrivers(sql: postgres.Sql): void {
             "feedback" = EXCLUDED."feedback",
             "metadata" = EXCLUDED."metadata",
             "updated_at" = NOW()
-          WHERE "messages"."conversation_id" = EXCLUDED."conversation_id"
         `;
       }
     },
@@ -646,15 +576,6 @@ function attachDatabaseDrivers(sql: postgres.Sql): void {
         WHERE "id" = ${messageId}
       `;
     },
-
-    async onMessageReviewUpdated(_userId, conversationId, messageId, review) {
-      await sql`
-        UPDATE "messages"
-        SET "metadata" = COALESCE("metadata", '{}'::jsonb) || jsonb_build_object('review', ${JSON.stringify(review)}::jsonb),
-            "updated_at" = NOW()
-        WHERE "id" = ${messageId} AND "conversation_id" = ${conversationId}
-      `;
-    },
   });
 
   // 2. User driver
@@ -662,7 +583,7 @@ function attachDatabaseDrivers(sql: postgres.Sql): void {
     async onUserCreated(user) {
       await sql`
         INSERT INTO "ketner_users" (
-          "id", "email", "name", "plan", "password_hash", "salt", "is_vip", "is_admin", "telegram_chat_id", "telegram_username", "created_at", "updated_at, "signup_method", "signup_attribution"
+          "id", "email", "name", "plan", "password_hash", "salt", "is_vip", "is_admin", "telegram_chat_id", "telegram_username", "created_at", "updated_at"
         ) VALUES (
           ${user.id},
           ${user.email},
@@ -675,9 +596,7 @@ function attachDatabaseDrivers(sql: postgres.Sql): void {
           ${user.telegramChatId ? String(user.telegramChatId) : null},
           ${user.telegramUsername || null},
           ${new Date(user.createdAt)},
-          NOW(),
-          ${user.signupMethod ?? null},
-          ${user.signupAttribution ? sql.json(user.signupAttribution as never) : null}
+          NOW()
         ) ON CONFLICT ("email") DO UPDATE SET
           "name" = EXCLUDED."name",
           "plan" = EXCLUDED."plan",
@@ -786,221 +705,6 @@ function attachDatabaseDrivers(sql: postgres.Sql): void {
   });
 }
 
-/**
- * API-ключи для CLI и IDE: в Postgres лежит только SHA-256 секрета. Без этой таблицы ключи
- * пропадали бы при каждом деплое — диск Render временный.
- */
-async function syncApiKeys(sql: postgres.Sql): Promise<void> {
-  await sql.unsafe(`
-    CREATE TABLE IF NOT EXISTS "api_keys" (
-      "id" text PRIMARY KEY NOT NULL,
-      "user_id" text NOT NULL,
-      "name" text NOT NULL,
-      "prefix" text NOT NULL,
-      "hash" text UNIQUE NOT NULL,
-      "created_at" timestamptz NOT NULL DEFAULT now(),
-      "last_used_at" timestamptz,
-      "revoked_at" timestamptz
-    );
-    CREATE INDEX IF NOT EXISTS "api_keys_user_idx" ON "api_keys" ("user_id");
-  `);
-  const rows = await sql<
-    {
-      id: string;
-      user_id: string;
-      name: string;
-      prefix: string;
-      hash: string;
-      created_at: Date;
-      last_used_at: Date | null;
-      revoked_at: Date | null;
-    }[]
-  >`SELECT id, user_id, name, prefix, hash, created_at, last_used_at, revoked_at FROM "api_keys"`;
-  apiKeyStore.loadExternal(
-    rows.map((r): ApiKeyRecord => ({
-      id: r.id,
-      userId: r.user_id,
-      name: r.name,
-      prefix: r.prefix,
-      hash: r.hash,
-      createdAt: new Date(r.created_at).toISOString(),
-      lastUsedAt: r.last_used_at ? new Date(r.last_used_at).toISOString() : null,
-      revokedAt: r.revoked_at ? new Date(r.revoked_at).toISOString() : null,
-    })),
-  );
-  apiKeyStore.setDbDriver({
-    async upsert(record) {
-      await sql`
-        INSERT INTO "api_keys" ("id", "user_id", "name", "prefix", "hash", "created_at", "last_used_at", "revoked_at")
-        VALUES (${record.id}, ${record.userId}, ${record.name}, ${record.prefix}, ${record.hash},
-                ${record.createdAt}, ${record.lastUsedAt}, ${record.revokedAt})
-        ON CONFLICT ("id") DO UPDATE SET
-          "name" = EXCLUDED."name",
-          "last_used_at" = EXCLUDED."last_used_at",
-          "revoked_at" = EXCLUDED."revoked_at"
-      `;
-    },
-  });
-}
-
-/**
- * Токены входа, отозванные при выходе. Истёкшие записи не нужны: удаляются при старте.
- */
-async function syncRevokedTokens(sql: postgres.Sql): Promise<void> {
-  await sql.unsafe(`
-    CREATE TABLE IF NOT EXISTS "revoked_tokens" (
-      "token_hash" text PRIMARY KEY NOT NULL,
-      "expires_at" bigint NOT NULL
-    );
-  `);
-  await sql`DELETE FROM "revoked_tokens" WHERE "expires_at" <= ${Math.floor(Date.now() / 1000)}`;
-  const rows = await sql<
-    { token_hash: string; expires_at: string | number }[]
-  >`SELECT token_hash, expires_at FROM "revoked_tokens"`;
-  revokedTokenStore.loadExternal(
-    rows.map((r) => ({ hash: r.token_hash, expiresAt: Number(r.expires_at) })),
-  );
-  revokedTokenStore.setDbDriver({
-    async insert(record) {
-      await sql`
-        INSERT INTO "revoked_tokens" ("token_hash", "expires_at")
-        VALUES (${record.hash}, ${record.expiresAt})
-        ON CONFLICT ("token_hash") DO NOTHING
-      `;
-    },
-  });
-}
-
-/**
- * Привязанные аккаунты GitHub: токен лежит зашифрованным (AES-256-GCM), расшифровать его можно
- * только ключом из BETTER_AUTH_SECRET. Таблица нужна по той же причине: диск Render временный.
- */
-async function syncGithubConnections(sql: postgres.Sql): Promise<void> {
-  await sql.unsafe(`
-    CREATE TABLE IF NOT EXISTS "github_connections" (
-      "user_id" text PRIMARY KEY NOT NULL,
-      "github_id" bigint NOT NULL,
-      "login" text NOT NULL,
-      "avatar_url" text,
-      "scopes" text NOT NULL DEFAULT '',
-      "token_enc" text NOT NULL,
-      "connected_at" timestamptz NOT NULL DEFAULT now()
-    );
-  `);
-  const rows = await sql<
-    {
-      user_id: string;
-      github_id: string | number;
-      login: string;
-      avatar_url: string | null;
-      scopes: string;
-      token_enc: string;
-      connected_at: Date;
-    }[]
-  >`SELECT user_id, github_id, login, avatar_url, scopes, token_enc, connected_at FROM "github_connections"`;
-  githubConnectionStore.loadExternal(
-    rows.map((r): StoredGithubConnection => ({
-      userId: r.user_id,
-      githubId: Number(r.github_id),
-      login: r.login,
-      avatarUrl: r.avatar_url,
-      scopes: r.scopes.split(',').filter(Boolean),
-      tokenEnc: r.token_enc,
-      connectedAt: new Date(r.connected_at).toISOString(),
-    })),
-  );
-  githubConnectionStore.setDbDriver({
-    async upsert(record) {
-      await sql`
-        INSERT INTO "github_connections" ("user_id", "github_id", "login", "avatar_url", "scopes", "token_enc", "connected_at")
-        VALUES (${record.userId}, ${record.githubId}, ${record.login}, ${record.avatarUrl},
-                ${record.scopes.join(',')}, ${record.tokenEnc}, ${record.connectedAt})
-        ON CONFLICT ("user_id") DO UPDATE SET
-          "github_id" = EXCLUDED."github_id",
-          "login" = EXCLUDED."login",
-          "avatar_url" = EXCLUDED."avatar_url",
-          "scopes" = EXCLUDED."scopes",
-          "token_enc" = EXCLUDED."token_enc",
-          "connected_at" = EXCLUDED."connected_at"
-      `;
-    },
-    async remove(userId) {
-      await sql`DELETE FROM "github_connections" WHERE "user_id" = ${userId}`;
-    },
-  });
-}
-
-/**
- * Крипто-счета (Trybit): postback может прийти после деплоя, а диск Render временный. Без таблицы
- * сервер не нашёл бы счёт и не выдал тариф за уже оплаченный заказ.
- */
-async function syncCryptoInvoices(sql: postgres.Sql): Promise<void> {
-  await sql.unsafe(`
-    CREATE TABLE IF NOT EXISTS "crypto_invoices" (
-      "id" text PRIMARY KEY NOT NULL,
-      "user_id" text NOT NULL,
-      "status" text NOT NULL,
-      "data" jsonb NOT NULL,
-      "created_at" timestamptz NOT NULL DEFAULT now(),
-      "updated_at" timestamptz NOT NULL DEFAULT now()
-    );
-  `);
-  const rows = await sql<{ data: CryptoInvoice }[]>`
-    SELECT data FROM "crypto_invoices" WHERE created_at > now() - interval '60 days'
-  `;
-  invoiceStore.loadCryptoExternal?.(rows.map((row) => row.data));
-  invoiceStore.setCryptoDbDriver?.({
-    async upsert(invoice) {
-      await sql`
-        INSERT INTO "crypto_invoices" ("id", "user_id", "status", "data", "created_at", "updated_at")
-        VALUES (${invoice.id}, ${invoice.userId}, ${invoice.status}, ${sql.json(invoice as never)}, ${invoice.createdAt}, now())
-        ON CONFLICT ("id") DO UPDATE SET
-          "status" = EXCLUDED."status",
-          "data" = EXCLUDED."data",
-          "updated_at" = now()
-      `;
-    },
-  });
-}
-
-/**
- * Небольшие хранилища документов (журнал платежей, подписки со звёздами, настройки уведомлений,
- * счета в звёздах): одна таблица с пространствами имён, документы — JSON.
- */
-async function syncDocStores(
-  sql: postgres.Sql,
-  stores: Array<DocStore<{ id: string }>>,
-): Promise<void> {
-  await sql.unsafe(`
-    CREATE TABLE IF NOT EXISTS "ketner_docs" (
-      "namespace" text NOT NULL,
-      "id" text NOT NULL,
-      "data" jsonb NOT NULL,
-      "updated_at" timestamptz NOT NULL DEFAULT now(),
-      PRIMARY KEY ("namespace", "id")
-    );
-  `);
-  const driver = {
-    async upsert(namespace: string, doc: { id: string }) {
-      await sql`
-        INSERT INTO "ketner_docs" ("namespace", "id", "data", "updated_at")
-        VALUES (${namespace}, ${doc.id}, ${sql.json(doc as never)}, now())
-        ON CONFLICT ("namespace", "id") DO UPDATE SET "data" = EXCLUDED."data", "updated_at" = now()
-      `;
-    },
-    async remove(namespace: string, id: string) {
-      await sql`DELETE FROM "ketner_docs" WHERE "namespace" = ${namespace} AND "id" = ${id}`;
-    },
-  };
-  for (const store of stores) {
-    const rows = await sql<
-      { data: { id: string } }[]
-    >`SELECT data FROM "ketner_docs" WHERE "namespace" = ${store.namespace}`;
-    store.loadExternal(rows.map((row) => row.data));
-    store.setDbDriver(driver);
-  }
-}
-
 export async function initDatabaseSync(): Promise<boolean> {
   if (!hasPostgresConfig()) {
     console.log(
@@ -1026,61 +730,6 @@ export async function initDatabaseSync(): Promise<boolean> {
     await loadAndSyncFeedbacks(sql);
 
     attachDatabaseDrivers(sql);
-
-    // Ketner Code: проекты переживают перезапуск сервера (поднимаются из БД при первом обращении)
-    const codeRunner = {
-      query: (text: string, params?: unknown[]) =>
-        sql.unsafe(text, params as never[]) as unknown as Promise<never[]>,
-    };
-    await ensureCodeSchema(codeRunner);
-    attachProjectDriver(createPostgresProjectDriver(codeRunner));
-    // Картинки: диск Render временный, поэтому храним их в Postgres.
-    await ensureImagesSchema(codeRunner);
-    attachImageDriver(codeRunner);
-    // API-ключи — отдельно: сбой этой таблицы не должен отключать остальные хранилища.
-    try {
-      await syncApiKeys(sql);
-    } catch (error) {
-      console.error('❌ [db] API-ключи не синхронизированы с PostgreSQL:', error);
-    }
-    try {
-      await syncDocStores(sql, [
-        billingLedger.payments,
-        billingLedger.starsSubscriptions,
-        billingLedger.prefs,
-        billingLedger.credits,
-        usageStore,
-        contactStore,
-        compareVoteStore,
-      ] as unknown as Array<DocStore<{ id: string }>>);
-    } catch (error) {
-      console.error('❌ [db] Журнал платежей не синхронизирован с PostgreSQL:', error);
-    }
-    // Обращения в поддержку: файл на Render стирается при деплое, база — нет.
-    try {
-      await syncDocStores(sql, [
-        supportStore.mirror.tickets,
-        supportStore.mirror.meta,
-      ] as unknown as Array<DocStore<{ id: string }>>);
-      supportStore.hydrateFromMirror();
-    } catch (error) {
-      console.error('❌ [db] Обращения в поддержку не синхронизированы с PostgreSQL:', error);
-    }
-    try {
-      await syncCryptoInvoices(sql);
-    } catch (error) {
-      console.error('❌ [db] Крипто-счета не синхронизированы с PostgreSQL:', error);
-    }
-    try {
-      await syncRevokedTokens(sql);
-    } catch (error) {
-      console.error('❌ [db] Отозванные токены не синхронизированы с PostgreSQL:', error);
-    }
-    try {
-      await syncGithubConnections(sql);
-    } catch (error) {
-      console.error('❌ [db] Подключения GitHub не синхронизированы с PostgreSQL:', error);
-    }
     console.log('🎉 [db] Все данные успешно синхронизированы с PostgreSQL / Supabase!');
     return true;
   } catch (error) {

@@ -27,55 +27,7 @@ export interface Plan {
 
 export type PaymentMethod = 'sbp' | 'crypto' | 'stars' | 'card';
 
-/** Валюты и сети Trybit; полный справочник — trybit-currencies.ts. */
-export type CryptoCurrency =
-  | 'BTC'
-  | 'LTC'
-  | 'TRX'
-  | 'SOL'
-  | 'TON'
-  | 'BNB'
-  | 'ETH'
-  | 'ETH_ARB'
-  | 'ETH_BASE'
-  | 'ETH_OPT'
-  | 'USDT_TRC20'
-  | 'USDT_BSC'
-  | 'USDT_TON'
-  | 'USDT_ERC20'
-  | 'USDT_ARB'
-  | 'USDT_OPT'
-  | 'USDT_SOL'
-  | 'USDC_BSC'
-  | 'USDC_ERC20'
-  | 'USDC_BASE'
-  | 'USDC_ARB'
-  | 'USDC_OPT'
-  | 'USDC_SOL'
-  | 'DAI_BSC'
-  | 'DAI_ERC20'
-  | 'DAI_BASE'
-  | 'DAI_ARB'
-  | 'DAI_OPT'
-  | 'PYUSD_ERC20'
-  | 'PYUSD_SOL'
-  | 'USDD_TRC20'
-  | 'XAUT_ERC20'
-  | 'ARB_ARB'
-  | 'OP_OPT'
-  | 'SHIB_ERC20'
-  | 'SHIB_BSC'
-  | 'PEPE_ERC20'
-  | 'TRUMP_SOL';
-
-/** Комиссии Trybit по счёту, в долларах. */
-export interface CryptoFees {
-  serviceUsd: number;
-  transferUsd: number;
-  /** Сколько счёт дороже цены тарифа: эту часть комиссии платит покупатель. */
-  payerUsd: number;
-  totalUsd: number;
-}
+export type CryptoCurrency = 'USDT_TRC20' | 'USDT_TON' | 'TON' | 'BTC';
 
 export interface CryptoInvoice {
   id: string;
@@ -90,12 +42,7 @@ export interface CryptoInvoice {
   network: string;
   cryptoCloudUrl?: string;
   cryptoCloudInvoiceId?: string;
-  /** Trybit выдал реквизиты: оплата прямо на сайте, без перехода на страницу шлюза. */
-  gatewayDetails?: boolean;
-  /** MEMO/комментарий к переводу (сеть TON). */
-  memo?: string;
   txHash?: string;
-  fees?: CryptoFees;
 }
 
 export interface SbpInvoice {
@@ -114,14 +61,8 @@ export interface TelegramStarsInvoice {
   planId: PlanId;
   priceRub: number;
   starsAmount: number;
-  /** Прямая ссылка на окно оплаты звёздами в Telegram (если бот настроен). */
-  invoiceLink?: string;
   botUsername: string;
   botDeepLink: string;
   status: 'pending' | 'paid';
   expiresAt: string;
-  /** Сколько эти звёзды стоят по официальному курсу Telegram, $. */
-  starsUsd?: number;
-  /** Официальный курс Telegram, по которому считается цена, $ за звезду. */
-  usdPerStar?: number;
 }

@@ -1,7 +1,4 @@
 import { config } from '../config.js';
-import { createRevokedTokenStore } from './revoked-token-store.js';
-import { createApiKeyStore } from './api-key-store.js';
-import { createGithubConnectionStore } from '../github/connection-store.js';
 import { createConversationStore } from './conversation-store.js';
 import { createSubscriptionStore } from './subscription-store.js';
 import { createUserStore } from './user-store.js';
@@ -11,23 +8,6 @@ export const conversationStore = createConversationStore(config.storeFile);
 
 /** Хранилище пользователей по умолчанию: файл из `config.userStoreFile`. */
 export const userStore = createUserStore(config.userStoreFile);
-
-/** API-ключи для программирования (CLI, IDE): файл из `config.apiKeyStoreFile`. */
-export const apiKeyStore = createApiKeyStore(config.apiKeyStoreFile);
-export { createApiKeyStore } from './api-key-store.js';
-export type { ApiKeyStore, PublicApiKey } from './api-key-store.js';
-
-/** Токены входа, отозванные при выходе из аккаунта: файл из `config.revokedTokenStoreFile`. */
-export const revokedTokenStore = createRevokedTokenStore(config.revokedTokenStoreFile);
-export { createRevokedTokenStore } from './revoked-token-store.js';
-export type { RevokedTokenStore } from './revoked-token-store.js';
-
-/** Привязанные аккаунты GitHub (токены зашифрованы ключом из BETTER_AUTH_SECRET). */
-export const githubConnectionStore = createGithubConnectionStore({
-  file: config.githubConnectionStoreFile,
-  secret: config.betterAuthSecret,
-});
-export type { GithubConnectionStore } from '../github/connection-store.js';
 
 /** Хранилище подписок по умолчанию: файл из `config.subscriptionStoreFile`. */
 export const subscriptionStore = createSubscriptionStore(config.subscriptionStoreFile);
@@ -45,6 +25,8 @@ export { supportStore, createSupportStore } from './support-store.js';
 export type { SupportStore, SupportTicket, SupportMessage } from './support-store.js';
 
 /** Хранилище использованных блокчейн-транзакций (защита от replay-атак). */
+export { usedTxStore, createUsedTxStore } from './used-tx-store.js';
+export type { UsedTxStore, UsedTxRecord } from './used-tx-store.js';
 
 /** Хранилище пользовательских оценок (лайки/дизлайки) и аналитика эскалации моделей. */
 import { FeedbackStore } from './feedback-store.js';

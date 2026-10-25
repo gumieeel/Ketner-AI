@@ -2,7 +2,6 @@ import crypto from 'node:crypto';
 import { mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
 import { dirname } from 'node:path';
 import { config } from '../config.js';
-import { DocStore } from './doc-store.js';
 
 export interface SupportMessage {
   id: string;
@@ -45,29 +44,10 @@ export interface SupportStore {
     message: Omit<SupportMessage, 'id' | 'timestamp'>,
   ): SupportTicket | undefined;
   linkAdminNotification(ticketId: string, adminMessageId: number): void;
-  /** Сообщение администратору о заявке на возврат → номер заявки (для ответа через Reply). */
-  linkAdminRefund(ref: string, adminMessageId: number): void;
-  getRefundRefByAdminMessageId(msgId: number): string | undefined;
   closeTicket(ticketId: string): SupportTicket | undefined;
   listOpenTickets(): SupportTicket[];
   listAllTickets(): SupportTicket[];
-  /**
-   * Зеркало в Postgres (таблица ketner_docs): файл на Render стирается при каждом деплое,
-   * поэтому обращения и чат администратора дублируются в базу и загружаются оттуда при старте.
-   */
-  readonly mirror: { tickets: DocStore<SupportTicket>; meta: DocStore<SupportMeta> };
-  /** Подхватить данные из зеркала после загрузки из базы. */
-  hydrateFromMirror(): void;
 }
-
-export interface SupportMeta {
-  id: 'meta';
-  adminChatId?: number | string;
-  adminMessageMap: Array<[number, string]>;
-}
-
-/** Сколько связей «сообщение администратора → обращение» хранить (старые не нужны). */
-const ADMIN_MESSAGE_MAP_LIMIT = 3000;
 
 interface SupportSnapshot {
   adminChatId?: number | string;
@@ -118,19 +98,6 @@ export function createSupportStore(file?: string): SupportStore {
     }
   }
 
-  const mirror = {
-    tickets: new DocStore<SupportTicket>('support_tickets'),
-    meta: new DocStore<SupportMeta>('support_meta'),
-  };
-
-  const trimMessageMap = (): void => {
-    while (adminMsgToTicketId.size > ADMIN_MESSAGE_MAP_LIMIT) {
-      const oldest = adminMsgToTicketId.keys().next().value;
-      if (oldest === undefined) break;
-      adminMsgToTicketId.delete(oldest);
-    }
-  };
-
   const persist = (): void => {
     if (!file) return;
     writeSnapshot(file, {
@@ -139,60 +106,15 @@ export function createSupportStore(file?: string): SupportStore {
       adminMessageMap: Array.from(adminMsgToTicketId.entries()),
     });
   };
-  const saveTicket = (ticket: SupportTicket): void => {
-    persist();
-    mirror.tickets.put(ticket);
-  };
-  const saveMeta = (): void => {
-    trimMessageMap();
-    persist();
-    mirror.meta.put({
-      id: 'meta',
-      adminChatId,
-      adminMessageMap: Array.from(adminMsgToTicketId.entries()),
-    });
-  };
-  const nextTicketNumber = (): number => {
-    let max = 1000;
-    for (const id of tickets.keys()) {
-      const n = Number(/^T-(\d+)$/.exec(id)?.[1]);
-      if (Number.isFinite(n) && n > max) max = n;
-    }
-    return max + 1;
-  };
 
   return {
-    mirror,
-
-    hydrateFromMirror(): void {
-      for (const ticket of mirror.tickets.all()) {
-        const local = tickets.get(ticket.id);
-        if (!local || local.updatedAt < ticket.updatedAt) tickets.set(ticket.id, ticket);
-      }
-      const meta = mirror.meta.get('meta');
-      if (meta) {
-        if (meta.adminChatId !== undefined && adminChatId === undefined) {
-          adminChatId = meta.adminChatId;
-        }
-        for (const [msgId, target] of meta.adminMessageMap ?? []) {
-          if (!adminMsgToTicketId.has(msgId)) adminMsgToTicketId.set(msgId, target);
-        }
-      }
-      // То, что было только в локальном файле, — в базу.
-      for (const ticket of tickets.values()) {
-        const stored = mirror.tickets.get(ticket.id);
-        if (!stored || stored.updatedAt < ticket.updatedAt) mirror.tickets.put(ticket);
-      }
-      saveMeta();
-    },
-
     getAdminChatId(): number | string | undefined {
       return adminChatId;
     },
 
     setAdminChatId(chatId: number | string): void {
       adminChatId = chatId;
-      saveMeta();
+      persist();
     },
 
     getTicket(id: string): SupportTicket | undefined {
@@ -225,7 +147,7 @@ export function createSupportStore(file?: string): SupportStore {
       text: string;
       telegramMessageId?: number;
     }): SupportTicket {
-      const ticketNum = nextTicketNumber();
+      const ticketNum = 1000 + tickets.size + 1;
       const id = `T-${ticketNum}`;
       const now = new Date().toISOString();
 
@@ -251,7 +173,7 @@ export function createSupportStore(file?: string): SupportStore {
       };
 
       tickets.set(id, ticket);
-      saveTicket(ticket);
+      persist();
       return ticket;
     },
 
@@ -270,28 +192,17 @@ export function createSupportStore(file?: string): SupportStore {
 
       ticket.messages.push(fullMessage);
       ticket.updatedAt = fullMessage.timestamp;
-      saveTicket(ticket);
+      persist();
       return ticket;
-    },
-
-    linkAdminRefund(ref: string, adminMessageId: number): void {
-      adminMsgToTicketId.set(adminMessageId, `refund:${ref}`);
-      saveMeta();
-    },
-
-    getRefundRefByAdminMessageId(msgId: number): string | undefined {
-      const target = adminMsgToTicketId.get(msgId);
-      return target?.startsWith('refund:') ? target.slice('refund:'.length) : undefined;
     },
 
     linkAdminNotification(ticketId: string, adminMessageId: number): void {
       const ticket = tickets.get(ticketId);
       if (ticket) {
         ticket.adminNotificationMessageId = adminMessageId;
-        mirror.tickets.put(ticket);
       }
       adminMsgToTicketId.set(adminMessageId, ticketId);
-      saveMeta();
+      persist();
     },
 
     closeTicket(ticketId: string): SupportTicket | undefined {
@@ -299,7 +210,7 @@ export function createSupportStore(file?: string): SupportStore {
       if (!ticket) return undefined;
       ticket.status = 'closed';
       ticket.updatedAt = new Date().toISOString();
-      saveTicket(ticket);
+      persist();
       return ticket;
     },
 

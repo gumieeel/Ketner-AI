@@ -37,8 +37,7 @@ export function parseThinking(rawContent: string): ParsedMessageContent {
   }
 
   const thinkingText = afterStart.slice(0, thinkEndIdx).trim();
-  const restContent =
-    (prefix ? prefix + '\n\n' : '') + afterStart.slice(thinkEndIdx + '</think>'.length).trim();
+  const restContent = (prefix ? prefix + '\n\n' : '') + afterStart.slice(thinkEndIdx + '</think>'.length).trim();
 
   return {
     thinking: thinkingText,
@@ -110,7 +109,7 @@ export function ThinkingBlock({
       ? workspaceName
         ? t('chat.thinkingAnalyzingWorkspace', { name: workspaceName })
         : t('chat.thinkingActive')
-      : (durationDisplay ?? t('chat.thinkingProcess'));
+      : durationDisplay ?? t('chat.thinkingProcess');
 
   return (
     <div
@@ -138,7 +137,7 @@ export function ThinkingBlock({
             {titleText}
           </span>
           {isActive ? (
-            <span className="flex shrink-0 items-center gap-1.5 rounded-xs border border-accent/25 bg-accent-soft px-1.5 py-0.5 font-mono text-[11px] font-semibold text-accent tabular-nums">
+            <span className="flex shrink-0 items-center gap-1.5 rounded-md border border-accent/25 bg-accent-soft px-1.5 py-0.5 font-mono text-[11px] font-semibold text-accent tabular-nums">
               <span aria-hidden="true" className="size-1.5 rounded-full bg-accent animate-pulse" />
               {elapsedSeconds > 0 ? `${elapsedSeconds.toFixed(1)}s` : '0.1s'}
             </span>
@@ -168,12 +167,7 @@ export function ThinkingBlock({
             ) : isActive ? (
               <div className="animate-pulse space-y-1.5 text-xs text-subtle">
                 <p>• {t('chat.thinking')}</p>
-                <p>
-                  •{' '}
-                  {workspaceName
-                    ? t('chat.thinkingAnalyzingWorkspace', { name: workspaceName })
-                    : t('chat.thinkStepAnalyse')}
-                </p>
+                <p>• {workspaceName ? t('chat.thinkingAnalyzingWorkspace', { name: workspaceName }) : t('chat.thinkStepAnalyse')}</p>
                 <p>• {t('chat.thinkStepCompose')}</p>
               </div>
             ) : null}

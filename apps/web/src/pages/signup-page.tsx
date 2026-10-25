@@ -9,7 +9,6 @@ import {
   GoogleIcon,
   SparkleIcon,
 } from '@/components/icons';
-import { LegalNotice } from '@/components/auth/legal-notice';
 import { AuthShell } from '@/components/layout/auth-shell';
 import { Button } from '@/components/ui/button';
 import { Divider } from '@/components/ui/divider';
@@ -17,7 +16,6 @@ import { IconButton } from '@/components/ui/icon-button';
 import { Field, Input } from '@/components/ui/input';
 import { authClient } from '@/features/auth/auth-client';
 import { useAuth } from '@/features/auth/auth-store';
-import { savePendingCode } from '@/features/auth/pending-code';
 import { useTranslation } from '@/i18n';
 import { cn } from '@/lib/cn';
 
@@ -26,8 +24,7 @@ const MIN_PASSWORD_LENGTH = 8;
 
 /**
  * Страница регистрации.
- * Клиентская валидация и индикатор требований пароля. После отправки формы сервер присылает код
- * на почту, и открывается страница ввода кода (/signup/verify) — аккаунт создаётся там.
+ * Клиентская валидация, индикатор требований пароля и сохранение сессии.
  */
 export function SignupPage() {
   const { t } = useTranslation();
@@ -49,7 +46,7 @@ export function SignupPage() {
   }, [status, navigate, redirectUrl]);
 
   const [name, setName] = useState('');
-  const [email, setEmail] = useState(() => searchParams.get('email') || '');
+  const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [nameError, setNameError] = useState<string | null>(null);
@@ -93,15 +90,8 @@ export function SignupPage() {
 
     setLoading(true);
     try {
-      const challenge = await signup({ email: trimmedEmail, password, name: trimmedName });
-      savePendingCode('signup', {
-        challengeId: challenge.challengeId,
-        email: trimmedEmail,
-        maskedEmail: challenge.maskedEmail,
-        resendAt: Date.now() + challenge.resendAfterSec * 1000,
-      });
-      const query = isSafeRedirect ? `?redirect=${encodeURIComponent(redirectUrl)}` : '';
-      navigate(`/signup/verify${query}`);
+      await signup({ email: trimmedEmail, password, name: trimmedName });
+      navigate(redirectUrl, { replace: true });
     } catch (error) {
       setServerError(error instanceof Error ? error.message : t('auth.signupFailed'));
     } finally {
@@ -151,7 +141,11 @@ export function SignupPage() {
       title={t('auth.signupTitle')}
       footer={
         <Link
-          to={isSafeRedirect ? `/login?redirect=${encodeURIComponent(redirectUrl)}` : '/login'}
+          to={
+            isSafeRedirect
+              ? `/login?redirect=${encodeURIComponent(redirectUrl)}`
+              : '/login'
+          }
           className="inline-flex min-h-11 items-center font-medium text-accent hover:underline"
         >
           {t('auth.toLogin')}
@@ -193,36 +187,34 @@ export function SignupPage() {
         )}
 
         {/* 3. OAuth Кнопки */}
-        <div className="flex flex-col gap-3">
-          <div className="grid grid-cols-2 gap-3">
-            <Button
-              variant="outline"
-              size="lg"
-              fullWidth
-              disabled={loading}
-              onClick={() => void handleOAuth('google')}
-              aria-label={t('auth.continueGoogle')}
-              title={t('auth.oauthStub')}
-              className="gap-2 text-sm font-medium"
-            >
-              <GoogleIcon className="size-4 text-text shrink-0" />
-              <span>Google</span>
-            </Button>
+        <div className="grid grid-cols-2 gap-3">
+          <Button
+            variant="outline"
+            size="lg"
+            fullWidth
+            disabled={loading}
+            onClick={() => void handleOAuth('google')}
+            aria-label={t('auth.continueGoogle')}
+            title={t('auth.oauthStub')}
+            className="gap-2 text-sm font-medium"
+          >
+            <GoogleIcon className="size-4 text-text shrink-0" />
+            <span>Google</span>
+          </Button>
 
-            <Button
-              variant="outline"
-              size="lg"
-              fullWidth
-              disabled={loading}
-              onClick={() => void handleOAuth('github')}
-              aria-label={t('auth.continueGitHub')}
-              title={t('auth.oauthStub')}
-              className="gap-2 text-sm font-medium"
-            >
-              <GitHubIcon className="size-4 text-text shrink-0" />
-              <span>GitHub</span>
-            </Button>
-          </div>
+          <Button
+            variant="outline"
+            size="lg"
+            fullWidth
+            disabled={loading}
+            onClick={() => void handleOAuth('github')}
+            aria-label={t('auth.continueGitHub')}
+            title={t('auth.oauthStub')}
+            className="gap-2 text-sm font-medium"
+          >
+            <GitHubIcon className="size-4 text-text shrink-0" />
+            <span>GitHub</span>
+          </Button>
         </div>
 
         {/* 4. Разделитель */}
@@ -269,7 +261,11 @@ export function SignupPage() {
             )}
           </Field>
 
-          <Field id="signup-password" label={t('auth.password')} error={passwordError ?? undefined}>
+          <Field
+            id="signup-password"
+            label={t('auth.password')}
+            error={passwordError ?? undefined}
+          >
             {({ id, invalid, 'aria-describedby': describedBy }) => (
               <div className="flex flex-col gap-2">
                 <div className="relative flex items-center">
@@ -309,12 +305,16 @@ export function SignupPage() {
                   <CheckIcon
                     className={cn(
                       'size-3.5',
-                      password.length >= MIN_PASSWORD_LENGTH ? 'text-success' : 'text-subtle',
+                      password.length >= MIN_PASSWORD_LENGTH
+                        ? 'text-success'
+                        : 'text-subtle',
                     )}
                   />
                   <span
                     className={
-                      password.length >= MIN_PASSWORD_LENGTH ? 'text-muted' : 'text-subtle'
+                      password.length >= MIN_PASSWORD_LENGTH
+                        ? 'text-muted'
+                        : 'text-subtle'
                     }
                   >
                     {t('auth.passwordRequirement')}
@@ -325,12 +325,20 @@ export function SignupPage() {
           </Field>
 
           {/* 6. Кнопка «Зарегистрироваться» */}
-          <Button size="lg" fullWidth loading={loading} type="submit" className="mt-2">
+          <Button
+            size="lg"
+            fullWidth
+            loading={loading}
+            type="submit"
+            className="mt-2"
+          >
             {loading ? t('auth.signingUp') : t('auth.signup')}
           </Button>
         </form>
 
-        <LegalNotice />
+        <p role="status" className="text-balance text-center text-xs leading-5 text-muted">
+          {t('auth.demoNotice')}
+        </p>
       </div>
     </AuthShell>
   );

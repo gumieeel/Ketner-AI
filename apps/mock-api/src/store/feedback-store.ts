@@ -10,8 +10,8 @@ export interface FeedbackRecord {
   messageId: string;
   conversationId: string;
   userId?: string;
-  modelId: string; // Запрошенная модель (например: 'gpt-6.1-sol', 'claude-opus-5.5')
-  engineModelId?: string; // Реально исполненный движок (например: 'openai/gpt-6-luna', 'anthropic/claude-opus-5.5')
+  modelId: string; // Запрошенная модель (например: 'gpt-6-astra', 'claude-fable')
+  engineModelId?: string; // Реально исполненный движок (например: 'deepseek/deepseek-chat', 'openai/gpt-6-luna-pro')
   complexityLevel?: PromptComplexityLevel;
   rating: FeedbackRating;
   reason?: string;
@@ -36,7 +36,7 @@ export interface EscalationStatus {
   dislikeThreshold: number;
   /** Минимальное количество оценок на лёгких моделях для принятия решения (по умолчанию 3) */
   minSamplesThreshold: number;
-  /** Всего оценок на лёгких движках (класс lite: Luna, Haiku, DeepSeek Flash) */
+  /** Всего оценок на лёгких движках (DeepSeek Chat и лёгкий тир) */
   lightEngineFeedbackCount: number;
   /** Количество дизлайков на лёгких движках */
   lightEngineDislikeCount: number;
@@ -66,14 +66,13 @@ export interface RecordFeedbackInput {
   comment?: string;
 }
 
-/** Идентификаторы движков/моделей, считающихся «лёгкими» в шлюзе (класс lite). */
+/** Идентификаторы движков/моделей, считающихся «лёгкими» в шлюзе */
 export const LIGHT_ENGINES = new Set([
-  'openai/gpt-6-luna',
-  'anthropic/claude-haiku-5.5',
-  'deepseek/deepseek-v4.1-flash',
-  'ketner-mini',
-  'claude-haiku-5.5',
+  'deepseek/deepseek-chat',
   'deepseek-v4.1-flash',
+  'google/gemini-2.5-flash',
+  'openai/gpt-4o-mini',
+  'anthropic/claude-haiku-4.5',
 ]);
 
 export interface FeedbackDbDriver {
@@ -163,9 +162,9 @@ export class FeedbackStore {
       };
       this.records[existingIndex] = updated;
       this.persist();
-      this.dbDriver
-        ?.onFeedbackRecorded?.({ ...updated })
-        ?.catch?.((err) => console.error('[db] Error persisting updated feedback:', err));
+      this.dbDriver?.onFeedbackRecorded?.({ ...updated })?.catch?.((err) =>
+        console.error('[db] Error persisting updated feedback:', err),
+      );
       return updated;
     }
 
@@ -185,9 +184,9 @@ export class FeedbackStore {
 
     this.records.push(record);
     this.persist();
-    this.dbDriver
-      ?.onFeedbackRecorded?.({ ...record })
-      ?.catch?.((err) => console.error('[db] Error persisting created feedback:', err));
+    this.dbDriver?.onFeedbackRecorded?.({ ...record })?.catch?.((err) =>
+      console.error('[db] Error persisting created feedback:', err),
+    );
     return record;
   }
 
@@ -217,8 +216,8 @@ export class FeedbackStore {
   /**
    * Принятие решения в реальном времени: нужно ли эскалировать простой запрос с лёгкой модели на тяжёлую?
    *
-   * Если лёгкий движок (Luna, Haiku, DeepSeek Flash) получает много дизлайков (dislikeRate >= 25% при min 3 оценках),
-   * шлюз повышает глубину размышлений на один шаг (модель пользователя не подменяется).
+   * Если лёгкий движок (DeepSeek Chat и т.д.) получает много дизлайков (dislikeRate >= 25% при min 3 оценках),
+   * шлюз автоматически эскалирует обработку на следующий уровень (Luna Pro / Haiku 4.5 / Sol Pro / Opus 5.5).
    */
   public shouldEscalateFromLightModel(
     _requestedModelId?: string,
@@ -297,9 +296,7 @@ export class FeedbackStore {
     for (const r of filtered) {
       const engineKey = r.engineModelId || 'default';
       if (!byEngine[engineKey]) {
-        const engineRecords = filtered.filter(
-          (item) => (item.engineModelId || 'default') === engineKey,
-        );
+        const engineRecords = filtered.filter((item) => (item.engineModelId || 'default') === engineKey);
         byEngine[engineKey] = calcGroup(engineRecords);
       }
     }
@@ -326,13 +323,15 @@ export class FeedbackStore {
       lightCount >= this.minSamplesThreshold && lightDislikeRate >= this.dislikeThreshold;
 
     const activeEscalation =
-      this.autoEscalateOverride !== null ? this.autoEscalateOverride : escalateRecommended;
+      this.autoEscalateOverride !== null
+        ? this.autoEscalateOverride
+        : escalateRecommended;
 
     let recommendation: string;
     if (lightCount < this.minSamplesThreshold) {
       recommendation = `Недостаточно данных для переключения (${lightCount}/${this.minSamplesThreshold} оценок). Лёгкие модели работают в штатном режиме экономии токенов.`;
     } else if (escalateRecommended) {
-      recommendation = `Высокая доля негативных оценок лёгких моделей (${Math.round(lightDislikeRate * 100)}% при пороге ${Math.round(this.dislikeThreshold * 100)}%). Рекомендуется эскалация простых запросов на флагманские модели (рабочая модель вместо лёгкой). Шлюз автоматически повышает глубину размышлений на один шаг.`;
+      recommendation = `Высокая доля негативных оценок лёгких моделей (${Math.round(lightDislikeRate * 100)}% при пороге ${Math.round(this.dislikeThreshold * 100)}%). Рекомендуется эскалация простых запросов на флагманские модели (Luna Pro / Haiku 4.5). Шлюз автоматически повышает класс моделей.`;
     } else {
       recommendation = `Лёгкие модели показывают отличную удовлетворённость пользователей (${Math.round((1 - lightDislikeRate) * 100)}%). Эскалация не требуется, маршрутизация простых задач на лёгкие модели сохраняет максимальную экономию себестоимости.`;
     }

@@ -84,9 +84,7 @@ function secretEnv(name: string, devFallback: string): string {
     throw new Error(`[config] Переменная окружения ${name} обязательна в production`);
   }
   if (value.length < MIN_SECRET_LENGTH) {
-    throw new Error(
-      `[config] ${name} слишком короткий: нужно минимум ${MIN_SECRET_LENGTH} символов`,
-    );
+    throw new Error(`[config] ${name} слишком короткий: нужно минимум ${MIN_SECRET_LENGTH} символов`);
   }
   if (COMPROMISED_SECRETS.has(value)) {
     // Осознанное исключение владельца: ключ был опубликован в репозитории, поэтому
@@ -123,6 +121,8 @@ const betterAuthSecret = secretEnv(
 const authJwtSecret = optionalEnv('AUTH_JWT_SECRET')
   ? secretEnv('AUTH_JWT_SECRET', '')
   : deriveSecret(betterAuthSecret, 'ketner:auth-jwt:v1');
+
+const supabaseUrl = optionalEnv('SUPABASE_URL');
 
 /** Настройки заглушки ИИ: вынесены в тип, чтобы тесты могли подставить свои. */
 export interface AiConfig {
@@ -177,12 +177,17 @@ export const config = {
    * Stripe без ключей). Только вне production — в production их нет совсем.
    */
   enableMockBilling: !isProduction,
+  /**
+   * Ручное подтверждение прямого перевода на кошелёк (по TxID). В production выключено, пока
+   * владелец явно не задаст ENABLE_MANUAL_CRYPTO=true; даже тогда проверяется только USDT TRC-20.
+   */
+  manualCryptoEnabled: !isProduction || optionalEnv('ENABLE_MANUAL_CRYPTO') === 'true',
   enableDemoAccount: !isProduction || optionalEnv('ENABLE_DEMO_ACCOUNT') === 'true',
   /**
-   * Анонимный доступ к чату и диалогам через бесплатную модель OpenRouter (nvidia/nemotron-3-ultra-550b-a55b:free).
-   * Разрешён по умолчанию (отключается явно через ALLOW_ANONYMOUS_CHAT=false).
+   * Анонимный доступ к чату и диалогам через общий demo-user. Только вне production:
+   * в production каждый вызов ИИ требует сессии, иначе любой может жечь бюджет провайдера.
    */
-  allowAnonymousChat: optionalEnv('ALLOW_ANONYMOUS_CHAT') === 'false' ? false : true,
+  allowAnonymousChat: !isProduction,
 
   /** Пользователь и план заглушки: реальные аккаунты появятся на этапе 3. */
   demoUserId: 'demo-user',
@@ -200,7 +205,8 @@ export const config = {
     fileURLToPath(new URL('../data/subscriptions.json', import.meta.url)),
   /** Хранилище использования AI (usage & cost): файл переживает перезапуск. */
   usageStoreFile:
-    process.env.USAGE_STORE_FILE ?? fileURLToPath(new URL('../data/usage.json', import.meta.url)),
+    process.env.USAGE_STORE_FILE ??
+    fileURLToPath(new URL('../data/usage.json', import.meta.url)),
   /** База данных Better Auth (SQLite). */
   authDbFile:
     process.env.AUTH_DB_FILE ?? fileURLToPath(new URL('../data/auth.sqlite', import.meta.url)),
@@ -208,22 +214,14 @@ export const config = {
   invoiceStoreFile:
     process.env.INVOICE_STORE_FILE ??
     fileURLToPath(new URL('../data/invoices.json', import.meta.url)),
+  /** Хранилище использованных блокчейн-транзакций (защита от повторного использования). */
+  usedTxStoreFile:
+    process.env.USED_TX_STORE_FILE ??
+    fileURLToPath(new URL('../data/used_transactions.json', import.meta.url)),
   /** Хранилище тикетов поддержки: файл переживает перезапуск mock-API. */
   supportStoreFile:
     process.env.SUPPORT_STORE_FILE ??
     fileURLToPath(new URL('../data/support.json', import.meta.url)),
-  /** Хранилище API-ключей для программирования (CLI, IDE): в файле только SHA-256 ключей. */
-  apiKeyStoreFile:
-    process.env.API_KEY_STORE_FILE ??
-    fileURLToPath(new URL('../data/api-keys.json', import.meta.url)),
-  /** Отозванные при выходе токены входа: в файле только SHA-256 токена и срок. */
-  revokedTokenStoreFile:
-    process.env.REVOKED_TOKEN_STORE_FILE ??
-    fileURLToPath(new URL('../data/revoked-tokens.json', import.meta.url)),
-  /** Привязанные аккаунты GitHub: токены в файле только в зашифрованном виде (AES-256-GCM). */
-  githubConnectionStoreFile:
-    process.env.GITHUB_CONNECTION_STORE_FILE ??
-    fileURLToPath(new URL('../data/github-connections.json', import.meta.url)),
   /** Хранилище оценок ответов (лайки/дизлайки) для анализа роутинга и эскалации моделей. */
   feedbackStoreFile:
     process.env.FEEDBACK_STORE_FILE ??
@@ -245,6 +243,16 @@ export const config = {
    * PostgreSQL / Supabase Database URL
    */
   databaseUrl: process.env.DATABASE_URL?.trim() || '',
+
+  /**
+   * Supabase Project Credentials
+   */
+  supabaseUrl,
+  supabaseAnonKey: optionalEnv('SUPABASE_PUBLISHABLE_KEY') || optionalEnv('SUPABASE_ANON_KEY'),
+  supabaseSecretKey: optionalEnv('SUPABASE_SECRET_KEY'),
+  supabaseJwksUrl:
+    optionalEnv('SUPABASE_JWKS_URL') ||
+    (supabaseUrl ? `${supabaseUrl.replace(/\/+$/, '')}/auth/v1/.well-known/jwks.json` : ''),
 
   /**
    * Better Auth API Key для подключения к Better Auth Infra / Dashboard.
@@ -275,51 +283,39 @@ export const config = {
    * заголовке X-Telegram-Bot-Api-Secret-Token. Выводится из корневого секрета (hex, 64 символа).
    */
   telegramWebhookSecret: deriveSecret(betterAuthSecret, 'ketner:telegram-webhook:payments:v1'),
-  telegramSupportWebhookSecret: deriveSecret(
-    betterAuthSecret,
-    'ketner:telegram-webhook:support:v1',
-  ),
+  telegramSupportWebhookSecret: deriveSecret(betterAuthSecret, 'ketner:telegram-webhook:support:v1'),
 
   /** Telegram Support Bot для приёма жалоб и поддержки пользователей. */
   telegramSupportBotToken: optionalEnv('TELEGRAM_SUPPORT_BOT_TOKEN'),
-  telegramSupportBotUsername: process.env.TELEGRAM_SUPPORT_BOT_USERNAME || 'ketner_support_bot',
-  supportAdminUsername: (process.env.SUPPORT_ADMIN_USERNAME || 'gumieeel')
-    .replace(/^@/, '')
-    .toLowerCase(),
+  telegramSupportBotUsername:
+    process.env.TELEGRAM_SUPPORT_BOT_USERNAME || 'ketner_support_bot',
+  supportAdminUsername:
+    (process.env.SUPPORT_ADMIN_USERNAME || 'gumieeel').replace(/^@/, '').toLowerCase(),
   supportAdminChatId: process.env.SUPPORT_ADMIN_CHAT_ID
     ? Number(process.env.SUPPORT_ADMIN_CHAT_ID)
     : undefined,
 
   /** CryptoCloud: Приём платежей в криптовалюте */
-  /** Trybit (бывший CryptoCloud): одинаковый API v2. Подходят оба набора переменных. */
-  cryptoCloudApiKey: optionalEnv('TRYBIT_API_KEY') || optionalEnv('CRYPTOCLOUD_API_KEY'),
-  cryptoCloudShopId: optionalEnv('TRYBIT_SHOP_ID') || optionalEnv('CRYPTOCLOUD_SHOP_ID'),
-  cryptoCloudSecretKey: optionalEnv('TRYBIT_SECRET_KEY') || optionalEnv('CRYPTOCLOUD_SECRET_KEY'),
-  /** Адрес API платёжного шлюза. */
-  cryptoCloudApiUrl: (process.env.TRYBIT_API_URL?.trim() || 'https://api.trybit.com').replace(
-    /\/+$/,
-    '',
-  ),
+  cryptoCloudApiKey: optionalEnv('CRYPTOCLOUD_API_KEY'),
+  cryptoCloudShopId: optionalEnv('CRYPTOCLOUD_SHOP_ID'),
+  cryptoCloudSecretKey: optionalEnv('CRYPTOCLOUD_SECRET_KEY'),
 
-  /**
-   * ИИ: основной канал — один ключ OpenRouter для всех моделей (GPT, Claude, Grok, Gemini,
-   * DeepSeek, MiMo).
-   */
+  /** AI Providers: OpenRouter */
   openRouterApiKey: optionalEnv('OPENROUTER_API_KEY'),
   openRouterBaseUrl: process.env.OPENROUTER_BASE_URL || 'https://openrouter.ai/api/v1',
+  openRouterModel: process.env.OPENROUTER_MODEL || 'openai/gpt-4o-mini',
 
-  /**
-   * Прямые API вендоров — дополнительный путь, по умолчанию выключен (пустой ключ). С ключом модели
-   * вендора идут напрямую (без комиссии пополнения OpenRouter 5.5%), при сбое — снова через
-   * OpenRouter (ai/providers/routed-provider.ts).
-   */
-  anthropicApiKey: optionalEnv('ANTHROPIC_API_KEY'),
-  openaiApiKey: optionalEnv('OPENAI_API_KEY'),
+  /** AI Providers: OpenAI */
+  openaiApiKey: process.env.OPENAI_API_KEY || '',
   openaiBaseUrl: process.env.OPENAI_BASE_URL || 'https://api.openai.com/v1',
-  googleApiKey: optionalEnv('GOOGLE_API_KEY'),
-  /** OpenAI-совместимый эндпоинт Gemini API. */
-  googleBaseUrl:
-    process.env.GOOGLE_AI_BASE_URL || 'https://generativelanguage.googleapis.com/v1beta/openai',
+
+  /** AI Providers: Anthropic */
+  anthropicApiKey: process.env.ANTHROPIC_API_KEY || '',
+  anthropicBaseUrl: process.env.ANTHROPIC_BASE_URL || 'https://api.anthropic.com/v1',
+
+  /** AI Providers: Google Gemini */
+  googleApiKey: process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY || '',
+  googleBaseUrl: process.env.GOOGLE_BASE_URL || 'https://generativelanguage.googleapis.com/v1beta',
 
   /**
    * Секрет для проверки подписи webhook-запросов.
@@ -332,19 +328,6 @@ export const config = {
   adminApiKey: secretEnv('ADMIN_API_KEY', 'dev-only-admin-key-not-for-production'),
 
   /**
-   * Почта (SMTP): коды подтверждения регистрации и привязки Telegram. Подходит любой SMTP-сервис.
-   * SMTP_SECURE=true — TLS сразу (порт 465), иначе STARTTLS (587). MAIL_FROM — адрес отправителя, например `Ketner AI <no-reply@ketner.org>`.
-   */
-  smtp: {
-    host: optionalEnv('SMTP_HOST'),
-    port: readNumber('SMTP_PORT', 587),
-    secure: optionalEnv('SMTP_SECURE') === 'true' || readNumber('SMTP_PORT', 587) === 465,
-    user: optionalEnv('SMTP_USER'),
-    pass: optionalEnv('SMTP_PASS'),
-    from: optionalEnv('MAIL_FROM'),
-  },
-
-  /**
    * Stripe Billing Credentials & Price IDs
    */
   stripeSecretKey: process.env.STRIPE_SECRET_KEY || '',
@@ -352,34 +335,6 @@ export const config = {
   stripePricePlus: process.env.STRIPE_PRICE_PLUS || '',
   stripePricePro: process.env.STRIPE_PRICE_PRO || '',
   stripePriceUltra: process.env.STRIPE_PRICE_ULTRA || '',
-
-  /**
-   * Ketner Code: серверные проекты и агент.
-   * SANDBOX_MODE: off (по умолчанию, команды недоступны) | local (только для разработки) | docker.
-   */
-  /** Генерация изображений: Cloudflare Workers AI (FLUX). Без токена раздел показывает «недоступно». */
-  images: {
-    cloudflareAccountId: process.env.CLOUDFLARE_ACCOUNT_ID?.trim() || '',
-    cloudflareApiToken: process.env.CLOUDFLARE_API_TOKEN?.trim() || '',
-    runwareApiKey: process.env.RUNWARE_API_KEY?.trim() || '',
-    /** Папка для картинок без БД (локально и в тестах). С DATABASE_URL картинки хранятся в Postgres. */
-    dir:
-      process.env.IMAGES_DIR?.trim() || fileURLToPath(new URL('../data/images', import.meta.url)),
-  },
-
-  code: {
-    projectsDir:
-      process.env.CODE_PROJECTS_DIR?.trim() ||
-      fileURLToPath(new URL('../data/projects', import.meta.url)),
-    sandboxMode: ((): 'off' | 'local' | 'docker' => {
-      const raw = (process.env.SANDBOX_MODE ?? 'off').trim().toLowerCase();
-      return raw === 'local' || raw === 'docker' ? raw : 'off';
-    })(),
-    sandboxDockerImage: process.env.SANDBOX_DOCKER_IMAGE?.trim() || '',
-    sandboxAllowLocalInProduction: process.env.SANDBOX_ALLOW_LOCAL_IN_PRODUCTION === 'true',
-    /** Сеть внутри команд агента (npm install). По умолчанию выключена. */
-    sandboxAllowNetwork: process.env.SANDBOX_ALLOW_NETWORK === 'true',
-  },
 
   ai: {
     thinkingMs: [

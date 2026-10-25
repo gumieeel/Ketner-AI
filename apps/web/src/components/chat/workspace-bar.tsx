@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { BoltIcon, CloseIcon, FolderIcon, GitHubIcon } from '@/components/icons';
+import { BoltIcon, CloseIcon, FolderIcon, GitHubIcon, PlusIcon } from '@/components/icons';
+import { LinkWorkspaceModal } from './link-workspace-modal';
 import { WorkspaceModal } from './workspace-modal';
 import { useWorkspace } from '@/features/chat/workspace-store';
 import { useTranslation } from '@/i18n';
@@ -12,12 +13,8 @@ export function WorkspaceBar() {
   const autoApply = useWorkspace((state) => state.autoApply);
   const setAutoApply = useWorkspace((state) => state.setAutoApply);
 
+  const [isLinkModalOpen, setIsLinkModalOpen] = useState(false);
   const [isViewModalOpen, setIsViewModalOpen] = useState(false);
-
-  // Без привязанной папки полоса не показывается: привязать можно через скрепку в поле ввода.
-  if (!activeWorkspace) {
-    return null;
-  }
 
   return (
     <>
@@ -41,7 +38,7 @@ export function WorkspaceBar() {
                 <span className="max-w-[130px] truncate font-mono text-[11px] sm:max-w-[240px]">
                   {activeWorkspace.name}
                 </span>
-                <span className="rounded-xs bg-accent-soft px-2 py-0.5 text-[11px] font-medium text-accent">
+                <span className="rounded-full bg-accent-soft px-2 py-0.5 text-[11px] font-medium text-accent">
                   {t('workspace.filesCount', { count: activeWorkspace.filesCount })}
                 </span>
               </button>
@@ -77,10 +74,28 @@ export function WorkspaceBar() {
               <span>{autoApply ? t('workspace.autoOn') : t('workspace.autoOff')}</span>
             </button>
           </>
-        ) : null}
+        ) : (
+          <button
+            type="button"
+            onClick={() => setIsLinkModalOpen(true)}
+            className="inline-flex min-h-9 items-center gap-1.5 rounded-xl border border-dashed border-stroke-strong bg-transparent px-3 text-xs text-muted transition-colors hover:border-accent hover:bg-surface-2/60 hover:text-text max-md:min-h-11"
+            title={t('workspace.linkHint')}
+          >
+            <PlusIcon className="size-3 text-accent" />
+            <span>{t('workspace.link')}</span>
+          </button>
+        )}
       </div>
 
-      <WorkspaceModal isOpen={isViewModalOpen} onClose={() => setIsViewModalOpen(false)} />
+      <LinkWorkspaceModal
+        isOpen={isLinkModalOpen}
+        onClose={() => setIsLinkModalOpen(false)}
+      />
+
+      <WorkspaceModal
+        isOpen={isViewModalOpen}
+        onClose={() => setIsViewModalOpen(false)}
+      />
     </>
   );
 }
