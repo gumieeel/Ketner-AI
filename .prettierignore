@@ -4,3 +4,5 @@ coverage
 package-lock.json
 apps/mock-api/data
 apps/mock-api/public
+.claude
+.taste-skill
