@@ -2,8 +2,8 @@ import {
   ClaudeIcon,
   DeepSeekIcon,
   GeminiIcon,
-  GrokIcon,
   OpenAiIcon,
+  XaiIcon,
 } from '@/components/icons/brands';
 import { useTranslation } from '@/i18n';
 
@@ -11,7 +11,7 @@ const PROVIDERS = [
   { name: 'OpenAI', icon: OpenAiIcon },
   { name: 'Anthropic', icon: ClaudeIcon },
   { name: 'Google', icon: GeminiIcon },
-  { name: 'xAI', icon: GrokIcon },
+  { name: 'xAI', icon: XaiIcon },
   { name: 'DeepSeek', icon: DeepSeekIcon },
 ] as const;
 

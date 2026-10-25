@@ -151,6 +151,9 @@
   --color-model-gemini: var(--model-gemini);
   --color-model-grok: var(--model-grok);
   --color-model-deepseek: var(--model-deepseek);
+  --color-model-qwen: var(--model-qwen);
+  --color-model-zai: var(--model-zai);
+  --color-model-nvidia: var(--model-nvidia);
   --color-model-ketner: var(--model-ketner);
 
   /* Тени: плоские. Глубину дают тон поверхности и граница, а не размытие */
@@ -242,6 +245,9 @@
     --model-gemini: #1f5cc7;
     --model-grok: #3d4440;
     --model-deepseek: #3b52d9;
+    --model-qwen: #5b46d6;
+    --model-zai: #39496a;
+    --model-nvidia: #4d7a00;
     --model-ketner: #0a6a4f;
 
     /* Глубина */
@@ -341,6 +347,9 @@
     --model-gemini: #93b4ff;
     --model-grok: #d3d9d5;
     --model-deepseek: #9aa7ff;
+    --model-qwen: #b3a6ff;
+    --model-zai: #b5c4e0;
+    --model-nvidia: #a8e05a;
     --model-ketner: #86e3bd;
 
     --elev-1: 0 1px 0 rgba(0, 0, 0, 0.25);

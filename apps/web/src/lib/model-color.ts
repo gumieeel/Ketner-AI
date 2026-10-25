@@ -7,6 +7,9 @@ const BRAND_COLOR: Record<ModelBrand, string> = {
   google: 'var(--model-gemini)',
   xai: 'var(--model-grok)',
   deepseek: 'var(--model-deepseek)',
+  qwen: 'var(--model-qwen)',
+  zai: 'var(--model-zai)',
+  nvidia: 'var(--model-nvidia)',
   ketner: 'var(--model-ketner)',
 };
 
