@@ -306,6 +306,23 @@ export function ArrowRightIcon(props: IconProps) {
   );
 }
 
+export function SidebarIcon(props: IconProps) {
+  return (
+    <SvgIcon {...props}>
+      <rect x="3" y="4.5" width="18" height="15" rx="3.5" />
+      <path d="M9.5 4.5v15" />
+    </SvgIcon>
+  );
+}
+
+export function ArrowDownIcon(props: IconProps) {
+  return (
+    <SvgIcon {...props}>
+      <path d="M12 5v14M5 12l7 7 7-7" />
+    </SvgIcon>
+  );
+}
+
 export function TelegramIcon(props: IconProps) {
   return (
     <svg

@@ -9,7 +9,7 @@ const variantClasses: Record<ButtonVariant, string> = {
   secondary:
     'border border-stroke bg-surface-2 text-text hover:border-stroke-strong hover:bg-surface-3',
   outline:
-    'border border-stroke-strong bg-transparent text-text hover:border-muted/60 hover:bg-surface-2',
+    'border border-stroke-strong bg-transparent text-text hover:border-muted/60 hover:bg-surface-2/70',
   ghost: 'text-muted hover:bg-surface-2 hover:text-text active:bg-surface-3',
   danger: 'bg-danger-solid text-danger-solid-text hover:bg-danger-solid-hover active:brightness-95',
   // Тёмная кнопка для нефритовых панелей — одинакова в обеих темах.
@@ -17,9 +17,9 @@ const variantClasses: Record<ButtonVariant, string> = {
 };
 
 const sizeClasses: Record<ButtonSize, string> = {
-  sm: 'h-9 gap-1.5 px-3.5 text-[14px] max-md:min-h-11',
-  md: 'h-10 gap-2 px-4 text-[14px] max-md:min-h-11',
-  lg: 'h-12 gap-2.5 px-5 text-[16px]',
+  sm: 'h-10 gap-1.5 px-4 text-[14px] max-md:min-h-11',
+  md: 'h-11 gap-2 px-5 text-[14px] max-md:min-h-11',
+  lg: 'h-[54px] gap-2.5 px-7 text-[15px]',
 };
 
 /** Классы кнопки для ссылок (`<Link>` / `<a>`), чтобы они выглядели и вели себя как Button. */
@@ -35,7 +35,7 @@ export function buttonClasses({
   className?: string;
 } = {}): string {
   return cn(
-    'inline-flex select-none items-center justify-center whitespace-nowrap rounded-md font-medium',
+    'inline-flex select-none items-center justify-center whitespace-nowrap rounded-full font-medium',
     'transition-[filter,background-color,border-color,color] duration-150 ease-out-expo',
     'disabled:pointer-events-none disabled:opacity-50 disabled:shadow-none',
     variantClasses[variant],

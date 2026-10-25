@@ -8,6 +8,8 @@ interface PreferencesState {
   theme: Theme;
   language: Language;
   sidebarOpen: boolean;
+  /** Список чатов закреплён слева на широких экранах; по умолчанию свёрнут. */
+  sidebarDocked: boolean;
   /** Выбранная модель чата: переживает перезагрузку страницы. */
   chatModelId: string;
   /**
@@ -20,6 +22,7 @@ interface PreferencesState {
   setLanguage: (language: Language) => void;
   setSidebarOpen: (open: boolean) => void;
   toggleSidebar: () => void;
+  toggleSidebarDocked: () => void;
   setChatModelId: (modelId: string) => void;
   setMaxMode: (on: boolean) => void;
 }
@@ -60,6 +63,10 @@ function readStoredModelId(): string {
   return storage.get('model') ?? DEFAULT_MODEL_ID;
 }
 
+function readStoredSidebarDocked(): boolean {
+  return storage.get('sidebarDocked') === '1';
+}
+
 function readStoredMaxMode(): boolean {
   return storage.get('maxMode') === '1';
 }
@@ -75,6 +82,7 @@ export const usePreferences = create<PreferencesState>((set, get) => ({
   theme: readStoredTheme(),
   language: readStoredLanguage(),
   sidebarOpen: false,
+  sidebarDocked: readStoredSidebarDocked(),
   chatModelId: readStoredModelId(),
   maxMode: readStoredMaxMode(),
 
@@ -96,6 +104,12 @@ export const usePreferences = create<PreferencesState>((set, get) => ({
   setSidebarOpen: (sidebarOpen) => set({ sidebarOpen }),
 
   toggleSidebar: () => set((state) => ({ sidebarOpen: !state.sidebarOpen })),
+
+  toggleSidebarDocked: () => {
+    const sidebarDocked = !get().sidebarDocked;
+    storage.set('sidebarDocked', sidebarDocked ? '1' : '0');
+    set({ sidebarDocked });
+  },
 
   setChatModelId: (chatModelId) => {
     storage.set('model', chatModelId);

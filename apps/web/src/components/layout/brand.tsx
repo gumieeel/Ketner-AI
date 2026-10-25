@@ -6,9 +6,12 @@ interface BrandProps {
   to?: string;
   /** Скрывает название и оставляет только знак — для узких мест вроде сайдбара. */
   iconOnly?: boolean;
+  /** `lg` — крупный знак для шапки витрины. */
+  size?: 'md' | 'lg';
 }
 
-export function Brand({ className, to = '/', iconOnly = false }: BrandProps) {
+export function Brand({ className, to = '/', iconOnly = false, size = 'md' }: BrandProps) {
+  const large = size === 'lg';
   return (
     <Link
       to={to}
@@ -17,8 +20,19 @@ export function Brand({ className, to = '/', iconOnly = false }: BrandProps) {
         className,
       )}
     >
-      <img src="/logo-mark-160.png" alt="Ketner AI" className="size-8 shrink-0 object-contain" />
-      <span className={cn('text-base font-semibold tracking-tight', iconOnly && 'sr-only')}>
+      <img
+        src="/logo-mark-160.png"
+        alt="Ketner AI"
+        className={cn('shrink-0 object-contain', large ? 'size-9 md:size-10' : 'size-8')}
+      />
+      <span
+        className={cn(
+          large
+            ? 'text-[20px] font-normal tracking-[-0.01em] md:text-[22px]'
+            : 'text-base font-semibold tracking-tight',
+          iconOnly && 'sr-only',
+        )}
+      >
         Ketner AI
       </span>
     </Link>

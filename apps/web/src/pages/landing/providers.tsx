@@ -15,30 +15,28 @@ const PROVIDERS = [
   { name: 'DeepSeek', icon: DeepSeekIcon },
 ] as const;
 
-/** Полоса разработчиков моделей под первым экраном. */
+/** Полоса разработчиков моделей под первым экраном: без рамки, только знаки и названия. */
 export function LandingProviders() {
   const { t } = useTranslation();
 
   return (
     <section
       aria-label={t('home.providersLabel')}
-      className="mt-3 flex w-full flex-col gap-4 rounded-xl border border-stroke px-6 py-5 lg:flex-row lg:items-center lg:justify-between lg:px-10"
+      className="flex w-full flex-col gap-8 py-16 lg:flex-row lg:items-center lg:justify-between lg:gap-16"
     >
-      <ul className="grid grid-cols-2 gap-x-6 gap-y-4 sm:grid-cols-3 lg:flex lg:flex-1 lg:items-center lg:justify-between lg:gap-8 lg:pr-12">
+      <p className="text-[14px] text-subtle lg:max-w-[22ch]">{t('home.providersLabel')}</p>
+      <ul className="grid grid-cols-2 gap-x-6 gap-y-6 sm:grid-cols-3 lg:flex lg:flex-1 lg:items-center lg:justify-between lg:gap-8">
         {PROVIDERS.map(({ name, icon: Icon }) => (
-          <li key={name} className="flex items-center gap-2.5 text-text">
-            <Icon className="size-5 shrink-0 text-muted" />
-            <span className="sharp text-[19px] font-medium tracking-[-0.01em]">{name}</span>
+          <li key={name} className="flex items-center gap-3 text-muted">
+            <Icon className="size-[22px] shrink-0" />
+            <span className="text-[18px] tracking-[-0.01em] text-text">{name}</span>
           </li>
         ))}
-        <li className="flex items-center gap-2.5 text-text">
-          <img src="/logo-mark-160.png" alt="" className="size-5 shrink-0" />
-          <span className="sharp text-[19px] font-medium tracking-[-0.01em]">Ketner</span>
+        <li className="flex items-center gap-3 text-muted">
+          <img src="/logo-mark-160.png" alt="" className="size-[22px] shrink-0" />
+          <span className="text-[18px] tracking-[-0.01em] text-text">Ketner</span>
         </li>
       </ul>
-      <p className="text-[13px] text-subtle lg:max-w-[18ch] lg:text-right">
-        {t('home.providersLabel')}
-      </p>
     </section>
   );
 }

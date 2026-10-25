@@ -23,7 +23,7 @@ export function Card({ variant = 'default', className, children, ...props }: Car
   return (
     <div
       className={cn(
-        'relative rounded-lg border p-6 transition-colors',
+        'relative rounded-2xl border p-6 transition-colors',
         variantClasses[variant],
         className,
       )}

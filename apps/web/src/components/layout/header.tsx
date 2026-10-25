@@ -1,5 +1,5 @@
 import { useLocation, useNavigate } from 'react-router-dom';
-import { MenuIcon, PlusIcon, ShareIcon } from '@/components/icons';
+import { MenuIcon, PlusIcon, ShareIcon, SidebarIcon } from '@/components/icons';
 import { IconButton } from '@/components/ui/icon-button';
 import { StubAction } from '@/components/ui/stub-action';
 import { useChat } from '@/features/chat/chat-store';
@@ -9,15 +9,21 @@ import { MaxModeToggle } from '@/components/chat/max-mode-toggle';
 import { CompareToggle } from '@/components/chat/compare-toggle';
 import { useTranslation } from '@/i18n';
 import { cn } from '@/lib/cn';
-import { LanguageToggle } from './language-toggle';
+import { Brand } from './brand';
 import { HeaderMenu } from './header-menu';
+import { ThemeToggle } from './theme-toggle';
 
-/** Шапка рабочей области: название диалога, «Поделиться», язык и тема. */
+/**
+ * Шапка рабочей области: логотип, выбор модели, тема и профиль.
+ * Список чатов открывается кнопкой слева: на узких экранах шторкой, на широких — панелью.
+ */
 export function Header() {
   const { t } = useTranslation();
   const location = useLocation();
   const navigate = useNavigate();
   const toggleSidebar = usePreferences((state) => state.toggleSidebar);
+  const sidebarDocked = usePreferences((state) => state.sidebarDocked);
+  const toggleSidebarDocked = usePreferences((state) => state.toggleSidebarDocked);
   const activeId = useChat((state) => state.activeId);
   const streaming = useChat((state) => state.streaming);
   const conversations = useChat((state) => state.conversations);
@@ -27,24 +33,38 @@ export function Header() {
   const title = conversations.find((conversation) => conversation.id === activeId)?.title;
 
   return (
-    <header className="sticky top-0 z-[var(--z-header)] flex h-14 shrink-0 items-center gap-2 border-b border-stroke bg-canvas px-3 text-text md:px-5">
+    <header className="sticky top-0 z-[var(--z-header)] flex h-16 shrink-0 items-center gap-2 border-b border-stroke bg-canvas/85 px-3 text-text backdrop-blur-xl md:gap-3 md:px-6">
       <IconButton label={t('nav.openSidebar')} className="md:hidden" onClick={toggleSidebar}>
         <MenuIcon className="size-4" />
       </IconButton>
+      <IconButton
+        label={sidebarDocked ? t('nav.closeSidebar') : t('nav.openSidebar')}
+        aria-pressed={sidebarDocked}
+        className={cn('max-md:hidden', sidebarDocked && 'bg-surface-2 text-text')}
+        onClick={toggleSidebarDocked}
+      >
+        <SidebarIcon className="size-[18px]" />
+      </IconButton>
+
+      <Brand className="max-md:hidden" />
 
       {inChat ? (
         <>
           <ModelPicker disabled={streaming} />
           <MaxModeToggle disabled={streaming} />
           <CompareToggle disabled={streaming} />
-          <span aria-hidden="true" className="hidden h-5 w-px shrink-0 bg-stroke lg:block" />
+          <span aria-hidden="true" className="hidden h-5 w-px shrink-0 bg-stroke xl:block" />
         </>
       ) : null}
+
+      {inChat ? null : (
+        <span aria-hidden="true" className="hidden h-5 w-px shrink-0 bg-stroke md:block" />
+      )}
 
       <h1
         className={cn(
           'min-w-0 truncate text-sm font-medium',
-          inChat ? 'text-muted max-lg:sr-only' : 'text-text',
+          inChat ? 'text-muted max-xl:sr-only' : 'text-text',
         )}
       >
         {inChat
@@ -80,9 +100,8 @@ export function Header() {
             </span>
           </>
         ) : null}
-        {/* На узких экранах язык переключается в боковом меню. */}
-        <LanguageToggle className={inChat ? 'max-sm:hidden' : undefined} />
-        <HeaderMenu />
+        <ThemeToggle className="max-md:hidden" />
+        <HeaderMenu variant="avatar" />
       </div>
     </header>
   );

@@ -3,7 +3,7 @@ import { IconButton } from '@/components/ui/icon-button';
 import { usePreferences } from '@/features/preferences/preferences-store';
 import { useTranslation } from '@/i18n';
 
-export function ThemeToggle() {
+export function ThemeToggle({ className }: { className?: string }) {
   const theme = usePreferences((state) => state.theme);
   const toggleTheme = usePreferences((state) => state.toggleTheme);
   const { t } = useTranslation();
@@ -11,7 +11,11 @@ export function ThemeToggle() {
   const nextThemeLabel = theme === 'dark' ? t('settings.themeLight') : t('settings.themeDark');
 
   return (
-    <IconButton label={`${t('settings.theme')}: ${nextThemeLabel}`} onClick={toggleTheme}>
+    <IconButton
+      label={`${t('settings.theme')}: ${nextThemeLabel}`}
+      onClick={toggleTheme}
+      className={className}
+    >
       {theme === 'dark' ? <SunIcon /> : <MoonIcon />}
     </IconButton>
   );

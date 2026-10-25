@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import { ArrowLeftIcon } from '@/components/icons';
-import { KnotRelief } from '@/components/marketing/knot-relief';
+import { HeroArc } from '@/components/marketing/hero-arc';
 import { useTranslation } from '@/i18n';
 import { Brand } from './brand';
 import { LanguageToggle } from './language-toggle';
@@ -55,10 +55,10 @@ export function AuthShell({ title, subtitle, children, footer, aside }: AuthShel
 
       {/* Правая колонка — витрина (только lg+): панель с рельефом щита */}
       <div aria-hidden="true" className="hidden p-3 lg:block">
-        <div className="notch-br relative isolate flex h-full flex-col justify-end overflow-hidden rounded-2xl bg-[var(--hero-panel)] p-12 [--notch:72px]">
-          <KnotRelief className="absolute -top-[6%] -right-[22%] -z-10 w-[96%] max-w-none" />
+        <div className="hero-stage flex h-full flex-col justify-end overflow-hidden rounded-[28px] p-12">
+          <HeroArc />
           {aside ?? (
-            <div className="flex max-w-[30ch] flex-col gap-3">
+            <div className="relative flex max-w-[30ch] flex-col gap-3">
               <p className="t-title text-[30px] text-text">{t('auth.asideTitle')}</p>
               <p className="text-[15px] leading-relaxed text-muted">{t('auth.asideLead')}</p>
             </div>

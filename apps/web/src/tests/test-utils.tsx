@@ -45,6 +45,7 @@ export function resetPreferences(): void {
     theme: 'dark',
     language: 'ru',
     sidebarOpen: false,
+    sidebarDocked: false,
     chatModelId: DEFAULT_MODEL_ID,
     maxMode: false,
   });

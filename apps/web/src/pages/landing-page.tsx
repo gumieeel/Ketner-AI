@@ -1,4 +1,5 @@
 import { useEffect } from 'react';
+import { STAGE_GUTTER } from '@/components/layout/stage';
 import { LandingFaq } from './landing/faq';
 import { LandingFinalCta } from './landing/final-cta';
 import { LandingHero } from './landing/hero';
@@ -20,13 +21,18 @@ export function LandingPage() {
   return (
     <div className="flex w-full flex-col">
       <LandingHero />
-      <LandingProviders />
-      <LandingWorkspaces />
-      <LandingModels />
-      <LandingSavings />
-      <LandingPricingSection />
-      <LandingFaq />
-      <LandingFinalCta />
+      <div
+        id="hero-next"
+        className={`mx-auto flex w-full max-w-[1920px] flex-col pb-8 ${STAGE_GUTTER}`}
+      >
+        <LandingProviders />
+        <LandingWorkspaces />
+        <LandingModels />
+        <LandingSavings />
+        <LandingPricingSection />
+        <LandingFaq />
+        <LandingFinalCta />
+      </div>
     </div>
   );
 }
