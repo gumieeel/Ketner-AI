@@ -45,6 +45,3 @@ yarn-error.log*
 .DS_Store
 Thumbs.db
 Desktop.ini
-
-# design-taste-frontend skill: рабочие файлы (выбранное направление, скриншоты проверки)
-.taste-skill/
