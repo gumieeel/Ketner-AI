@@ -10,10 +10,10 @@
  * утилиты Tailwind (bg-canvas, text-muted, border-stroke …) — без самоссылок.
  *
  * Принципы:
- * - Фон — угольный графит, не чёрный; поверхности — плоский сланец без стекла и свечения.
- * - Нефрит (пастельный цвет щита Ketner) — только для действий и выбранного состояния.
- * - Геометрия — срез 45° вместо скругления (corner-shape: bevel). Где свойство не
- *   поддерживается, остаются обычные скругления тех же размеров.
+ * - Фон — нейтральный угольный графит, не чёрный; поверхности — ровные тона без стекла.
+ * - Нефрит (цвет щита Ketner) — для действий, выбранного состояния и единственной
+ *   светящейся линии на первом экране. Больше нигде не светится.
+ * - Геометрия — пилюли: кнопки, поля и композер скруглены полностью, панели — мягко.
  * - Шрифт — Geologica: заголовки с осью Sharpness 100 (срезанные окончания букв),
  *   текст и интерфейс — Sharpness 0. JetBrains Mono — только для кода.
  */
@@ -74,17 +74,14 @@
     'Geologica', system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
   --font-mono: 'JetBrains Mono Variable', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
 
-  /*
-   * Радиусы = размер среза угла. Срез читается крупнее скругления того же размера,
-   * поэтому шкала мельче прежней: контролы 5–7, панели 10–14, крупные блоки 18+.
-   */
-  --radius-xs: 3px;
-  --radius-sm: 5px;
-  --radius-md: 7px;
-  --radius-lg: 10px;
-  --radius-xl: 14px;
-  --radius-2xl: 18px;
-  --radius-3xl: 24px;
+  /* Радиусы: контролы — пилюли (rounded-full), панели — мягкие 16–28px */
+  --radius-xs: 4px;
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+  --radius-xl: 20px;
+  --radius-2xl: 24px;
+  --radius-3xl: 32px;
 
   /* Движение */
   --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
@@ -226,6 +223,13 @@
     --relief-side-b: #b9d9cb;
     --relief-edge: rgba(10, 106, 79, 0.4);
     --hero-panel: #d9e6df;
+    /* Первый экран: подсветка сцены, яркость дуги и «мятный» хвост заголовка */
+    --stage-glow: rgba(255, 255, 255, 0.7);
+    --stage-shade: rgba(21, 24, 22, 0.05);
+    --arc-core: rgba(10, 106, 79, 0.75);
+    --arc-glow: rgba(10, 106, 79, 0.25);
+    --arc-faint: rgba(21, 24, 22, 0.14);
+    --mint-ink: #0a6a4f;
 
     /* Тарифы */
     --tier-plus: #0b6273;
@@ -275,27 +279,27 @@
     color-scheme: dark;
 
     /* Поверхности: угольный графит с едва заметной зеленью — не чистый чёрный */
-    --canvas: #1a1c1b;
-    --surface: #212423;
-    --surface-2: #282b2a;
-    --surface-3: #2e3230;
-    --stroke: rgba(236, 239, 234, 0.085);
-    --stroke-strong: rgba(236, 239, 234, 0.16);
-    --glass: #212423;
+    --canvas: #1d1f21;
+    --surface: #232527;
+    --surface-2: #2a2c2f;
+    --surface-3: #323538;
+    --stroke: rgba(236, 240, 244, 0.09);
+    --stroke-strong: rgba(236, 240, 244, 0.17);
+    --glass: #232527;
 
-    --text: #ecefea;
-    --muted: #a3aba6;
-    --subtle: #959d98;
+    --text: #eceef0;
+    --muted: #a9aeb3;
+    --subtle: #8e939a;
 
-    --accent: #9eefd0;
-    --accent-hover: #b9f5de;
-    --accent-soft: rgba(158, 239, 208, 0.11);
+    --accent: #86e3bd;
+    --accent-hover: #a3ecd0;
+    --accent-soft: rgba(134, 227, 189, 0.12);
     --accent-2: #9ad9e6;
     --accent-2-soft: rgba(154, 217, 230, 0.11);
     --accent-3: #c2b8ff;
 
-    --action: #9eefd0;
-    --action-hover: #b9f5de;
+    --action: #9fd9c0;
+    --action-hover: #b4e5d1;
     --action-text: #0f1a16;
     --action-ring: none;
     --accent-text: #0f1a16;
@@ -308,19 +312,25 @@
     --danger-solid-text: #ffffff;
     --warning: #f2c46b;
     --warning-soft: rgba(242, 196, 107, 0.12);
-    --success: #9eefd0;
-    --success-soft: rgba(158, 239, 208, 0.11);
+    --success: #86e3bd;
+    --success-soft: rgba(134, 227, 189, 0.12);
     --info: #9cc2ff;
     --info-soft: rgba(156, 194, 255, 0.12);
     --overlay: rgba(10, 12, 11, 0.7);
-    --grid-line: rgba(236, 239, 234, 0.06);
+    --grid-line: rgba(236, 240, 244, 0.06);
 
     --relief-top-a: #5a8473;
     --relief-top-b: #34564a;
     --relief-side-a: #111715;
     --relief-side-b: #1f2b27;
-    --relief-edge: rgba(158, 239, 208, 0.55);
-    --hero-panel: #212a27;
+    --relief-edge: rgba(134, 227, 189, 0.55);
+    --hero-panel: #202326;
+    --stage-glow: rgba(255, 255, 255, 0.06);
+    --stage-shade: rgba(0, 0, 0, 0.34);
+    --arc-core: rgba(142, 232, 196, 0.95);
+    --arc-glow: rgba(110, 220, 178, 0.38);
+    --arc-faint: rgba(236, 240, 244, 0.26);
+    --mint-ink: #a9ddc9;
 
     --tier-plus: #9ad9e6;
     --tier-pro: #c2b8ff;
@@ -331,7 +341,7 @@
     --model-gemini: #93b4ff;
     --model-grok: #d3d9d5;
     --model-deepseek: #9aa7ff;
-    --model-ketner: #9eefd0;
+    --model-ketner: #86e3bd;
 
     --elev-1: 0 1px 0 rgba(0, 0, 0, 0.25);
     --elev-2: 0 1px 0 rgba(0, 0, 0, 0.25), 0 14px 30px -16px rgba(0, 0, 0, 0.55);
@@ -416,15 +426,6 @@
     scrollbar-width: thin;
     scrollbar-color: var(--stroke-strong) transparent;
   }
-
-  /*
-   * Фирменная геометрия: у всех скруглений, кроме круглых (аватары, точки, переключатели),
-   * правый верхний и левый нижний углы срезаны под 45°, два других остаются скруглёнными.
-   * Диагональ срезов повторяет перекрещенные ленты щита Ketner.
-   */
-  :where([class*='rounded']):not([class~='rounded-full']) {
-    corner-shape: round bevel round bevel;
-  }
 }
 
 @layer components {
@@ -441,15 +442,15 @@
     font-size: clamp(2.75rem, 5.2vw + 0.5rem, 5.5rem);
     line-height: 0.98;
     letter-spacing: -0.04em;
-    font-weight: 540;
+    font-weight: 500;
     font-variation-settings: 'SHRP' 100;
     text-wrap: balance;
   }
   .t-headline {
-    font-size: clamp(2.25rem, 3.4vw + 0.9rem, 3.75rem);
-    line-height: 1.02;
+    font-size: clamp(2.125rem, 3.2vw + 0.9rem, 3.5rem);
+    line-height: 1.08;
     letter-spacing: -0.035em;
-    font-weight: 540;
+    font-weight: 500;
     font-variation-settings: 'SHRP' 100;
     text-wrap: balance;
   }
@@ -457,7 +458,7 @@
     font-size: clamp(1.3125rem, 0.6vw + 1.1rem, 1.5rem);
     line-height: 1.2;
     letter-spacing: -0.02em;
-    font-weight: 560;
+    font-weight: 520;
     font-variation-settings: 'SHRP' 100;
   }
   .t-lead {
@@ -528,25 +529,123 @@
     background-size: 6px 1px;
   }
 
-  /*
-   * Панель со «ступенькой» в правом нижнем углу (как вкладка, из которой выходит кнопка).
-   * Срез делает clip-path, поэтому граница рисуется отдельным ::after по той же форме.
-   */
-  .notch-br {
-    --notch: 64px;
-    clip-path: polygon(
-      0 0,
-      100% 0,
-      100% calc(100% - var(--notch)),
-      calc(100% - var(--notch)) 100%,
-      0 100%
-    );
+  /* ──────────────── Первый экран ──────────────── */
+
+  /* Сцена: ровный графит, мягкий свет справа и затемнение по краям. Свет — один слой. */
+  .hero-stage {
+    position: relative;
+    isolation: isolate;
+    background-color: var(--canvas);
+    background-image:
+      radial-gradient(70% 80% at 72% 58%, var(--stage-glow), transparent 70%),
+      radial-gradient(90% 110% at 0% 0%, transparent 55%, var(--stage-shade) 100%),
+      radial-gradient(90% 110% at 100% 100%, transparent 55%, var(--stage-shade) 100%);
   }
 
-  /* Ярлык-вкладка над панелью: срез справа */
-  .tab-label {
-    corner-shape: round bevel round bevel;
-    border-radius: 0 10px 0 0;
+  /* Пустой экран чата: тот же мягкий свет, что и на первом экране, но один и по центру */
+  .chat-stage {
+    background-image: radial-gradient(52% 46% at 50% 46%, var(--stage-glow), transparent 72%);
+  }
+
+  /* Надзаголовок с вертикальной чертой акцента (как на макете первого экрана) */
+  .eyebrow-bar {
+    position: relative;
+    padding-left: 14px;
+    font-size: 12px;
+    line-height: 1.2;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: var(--muted);
+  }
+  .eyebrow-bar::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: -3px;
+    bottom: -3px;
+    width: 2px;
+    border-radius: 2px;
+    background-color: var(--accent);
+  }
+
+  /* Хвост заголовка уходит из белого в мятный; подчёркивание рисуется один раз */
+  .mint-tail {
+    background-image: linear-gradient(
+      90deg,
+      var(--text) 0%,
+      var(--text) 22%,
+      var(--mint-ink) 62%,
+      var(--mint-ink) 100%
+    );
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+    -webkit-text-fill-color: transparent;
+  }
+  .hero-underline {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: -0.12em;
+    height: 0.04em;
+    min-height: 2px;
+    pointer-events: none;
+    background-image: linear-gradient(
+      90deg,
+      transparent 0%,
+      var(--arc-core) 24%,
+      var(--arc-core) 76%,
+      transparent 100%
+    );
+    border-radius: 999px;
+    filter: drop-shadow(0 0 4px var(--arc-glow));
+    transform-origin: left center;
+    animation: underlineDraw 1100ms var(--ease-out-expo) 500ms both;
+  }
+
+  /* Светящаяся дуга: две линии, ядро и ореол. Рисуется один раз, дальше мягко дышит */
+  .arc-line {
+    fill: none;
+    stroke-linecap: round;
+  }
+  .arc-faint {
+    stroke-width: 1.25;
+  }
+  .arc-core {
+    stroke-width: 2.4;
+  }
+  .arc-glow {
+    stroke-width: 16;
+    opacity: 0.55;
+  }
+  .arc-draw {
+    stroke-dasharray: 1;
+    stroke-dashoffset: 1;
+    animation: arcDraw 2200ms var(--ease-out-expo) 150ms both;
+  }
+  .arc-breathe {
+    animation: arcBreathe 7s ease-in-out 2.4s infinite;
+  }
+  html[data-prerendered] .arc-draw {
+    animation: none;
+    stroke-dashoffset: 0;
+  }
+  html[data-prerendered] .hero-underline {
+    animation: none;
+  }
+
+  /* Строка списка моделей: точка на линии слева и значок бренда в цвете состояния */
+  .model-rail {
+    position: relative;
+  }
+  .model-rail::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    width: 1px;
+    background-color: var(--stroke-strong);
   }
 
   /* ──────────────── Движение ──────────────── */
@@ -750,6 +849,55 @@
   }
   100% {
     transform: scale(1);
+  }
+}
+
+@keyframes underlineDraw {
+  from {
+    transform: scaleX(0);
+    opacity: 0;
+  }
+  to {
+    transform: scaleX(1);
+    opacity: 1;
+  }
+}
+
+@keyframes arcDraw {
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+@keyframes arcBreathe {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.72;
+  }
+}
+
+@keyframes statusPing {
+  0% {
+    transform: scale(1);
+    opacity: 0.55;
+  }
+  100% {
+    transform: scale(2.6);
+    opacity: 0;
+  }
+}
+
+@keyframes railDot {
+  from {
+    transform: translateY(-6px) scale(0.6);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0) scale(1);
+    opacity: 1;
   }
 }
 

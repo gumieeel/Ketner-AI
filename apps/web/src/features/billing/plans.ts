@@ -128,8 +128,8 @@ export const PLANS: readonly Plan[] = [
     priceMonthly: 49,
     originalPriceMonthly: 59,
     discountBadge: {
-      ru: '🔥 Скидка $10',
-      en: '🔥 $10 OFF',
+      ru: 'Скидка $10',
+      en: '$10 off',
     },
     limitBadge: {
       ru: 'Максимум мощности',

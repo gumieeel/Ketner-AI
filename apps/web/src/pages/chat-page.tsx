@@ -39,6 +39,9 @@ export function ChatPage() {
     prevActiveIdRef.current = activeId;
   }, [activeId, conversationId, navigate]);
 
+  const showEmptyState =
+    messagesStatus !== 'loading' && messagesStatus !== 'error' && messages.length === 0;
+
   return (
     <div className="flex h-full flex-col">
       <QuotaLine />
@@ -75,7 +78,7 @@ export function ChatPage() {
         )
       ) : null}
 
-      <Composer />
+      {showEmptyState ? null : <Composer />}
     </div>
   );
 }

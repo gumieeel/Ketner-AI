@@ -20,16 +20,31 @@ import { cn } from '@/lib/cn';
 const itemClass =
   'flex min-h-10 w-full items-center gap-3 rounded-md px-2.5 text-left text-[14px] text-text outline-none transition-colors duration-150 hover:bg-surface-3 focus-visible:bg-surface-3 max-md:min-h-11';
 
+const LANGUAGES: ReadonlyArray<{ id: 'ru' | 'en'; label: string }> = [
+  { id: 'ru', label: 'Русский' },
+  { id: 'en', label: 'English' },
+];
+
 const sectionLabelClass = 'px-2.5 pt-1.5 pb-1 text-[12px] text-subtle';
 
 /**
  * Меню в правом верхнем углу (три полоски): тема и быстрые переходы.
  * Обычное меню с клавиатуры: стрелки ходят по пунктам, Escape закрывает и возвращает фокус.
  */
-export function HeaderMenu({ className }: { className?: string }) {
+export function HeaderMenu({
+  className,
+  variant = 'icon',
+}: {
+  className?: string;
+  /** `avatar` — круглая кнопка с инициалами (рабочая область), `icon` — три полоски (витрина). */
+  variant?: 'icon' | 'avatar';
+}) {
   const { t } = useTranslation();
   const theme = usePreferences((state) => state.theme);
   const setTheme = usePreferences((state) => state.setTheme);
+  const language = usePreferences((state) => state.language);
+  const setLanguage = usePreferences((state) => state.setLanguage);
+  const userName = useAuth((state) => state.user?.name);
   const signedIn = useAuth((state) => state.status === 'authenticated' && Boolean(state.user));
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
@@ -111,11 +126,22 @@ export function HeaderMenu({ className }: { className?: string }) {
           }
         }}
         className={cn(
-          'grid size-9 place-items-center rounded-md text-muted transition-colors duration-150 hover:bg-surface-2 hover:text-text max-md:size-11',
+          'grid place-items-center rounded-full transition-colors duration-150 max-md:size-11',
+          variant === 'avatar'
+            ? 'size-10 border border-stroke-strong text-[12px] font-medium text-text hover:bg-surface-2'
+            : 'size-9 text-muted hover:bg-surface-2 hover:text-text',
           open && 'bg-surface-2 text-text',
         )}
       >
-        <MenuIcon className="size-5" />
+        {variant === 'avatar' ? (
+          userName ? (
+            <span aria-hidden="true">{userName.slice(0, 2).toUpperCase()}</span>
+          ) : (
+            <UserIcon className="size-[18px]" />
+          )
+        ) : (
+          <MenuIcon className="size-5" />
+        )}
       </button>
 
       {open ? (
@@ -125,7 +151,7 @@ export function HeaderMenu({ className }: { className?: string }) {
           role="menu"
           aria-label={t('nav.menu')}
           onKeyDown={onMenuKeyDown}
-          className="absolute top-full right-0 z-[var(--z-dropdown)] mt-2 w-64 origin-top-right animate-scale-in rounded-lg border border-stroke-strong bg-surface-2 p-1.5 shadow-popover"
+          className="absolute top-full right-0 z-[var(--z-dropdown)] mt-2 w-64 origin-top-right animate-scale-in rounded-2xl border border-stroke-strong bg-surface-2 p-1.5 shadow-popover"
         >
           <div role="group" aria-label={t('settings.theme')}>
             <p aria-hidden="true" className={sectionLabelClass}>
@@ -144,6 +170,28 @@ export function HeaderMenu({ className }: { className?: string }) {
                 <span className="text-muted">{item.icon}</span>
                 <span className="flex-1">{item.label}</span>
                 {theme === item.id ? <CheckIcon className="size-4 text-accent" /> : null}
+              </button>
+            ))}
+          </div>
+
+          <div role="separator" className="my-1.5 border-t border-stroke" />
+
+          <div role="group" aria-label={t('settings.language')}>
+            <p aria-hidden="true" className={sectionLabelClass}>
+              {t('settings.language')}
+            </p>
+            {LANGUAGES.map((item) => (
+              <button
+                key={item.id}
+                type="button"
+                role="menuitemradio"
+                aria-checked={language === item.id}
+                tabIndex={-1}
+                onClick={() => setLanguage(item.id)}
+                className={itemClass}
+              >
+                <span className="flex-1">{item.label}</span>
+                {language === item.id ? <CheckIcon className="size-4 text-accent" /> : null}
               </button>
             ))}
           </div>

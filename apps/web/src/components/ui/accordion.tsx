@@ -51,10 +51,8 @@ export function Accordion({
             key={item.id}
             data-open={open ? 'true' : 'false'}
             className={cn(
-              'rounded-lg border transition-[background-color,border-color] duration-200 ease-out-expo',
-              open
-                ? 'border-stroke-strong bg-surface-2'
-                : 'border-stroke bg-surface hover:bg-surface-2',
+              'rounded-xl transition-[background-color] duration-200 ease-out-expo',
+              open ? 'bg-surface-3' : 'bg-surface hover:bg-surface-2',
             )}
           >
             <h3 className="m-0">

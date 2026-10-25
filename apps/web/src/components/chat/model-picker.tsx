@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from 'react';
-import { CheckIcon, ChevronDownIcon, LockIcon } from '@/components/icons';
+import { CheckIcon, ChevronDownIcon, LockIcon, SparkleIcon } from '@/components/icons';
 import { Badge } from '@/components/ui/badge';
 import { Kbd } from '@/components/ui/kbd';
 import { ModelMark } from '@/components/ui/model-mark';
@@ -15,7 +15,6 @@ import { useChat } from '@/features/chat/chat-store';
 import type { ModelInfo } from '@/features/chat/types';
 import { usePreferences } from '@/features/preferences/preferences-store';
 import { cn } from '@/lib/cn';
-import { modelColor } from '@/lib/model-color';
 import { useTranslation } from '@/i18n';
 
 /** Модели по умолчанию: используются, пока каталог не загрузился. */
@@ -32,8 +31,23 @@ function tierOf(model: ModelInfo): ModelTier {
   return rank === 1 ? 'plus' : 'pro';
 }
 
+export interface ModelPickerProps {
+  disabled?: boolean;
+  /** `pill` — кнопка в шапке; `chip` — компактная метка внутри поля ввода. */
+  variant?: 'pill' | 'chip';
+  /** Куда раскрывается список. Для поля ввода у нижнего края — вверх. */
+  placement?: 'down' | 'up';
+  /** Подпись кнопки для скринридеров, если на странице несколько переключателей. */
+  ariaLabel?: string;
+}
+
 /** Переключатель моделей: логика ответа одна, меняется подпись и лимит контекста. */
-export function ModelPicker({ disabled = false }: { disabled?: boolean }) {
+export function ModelPicker({
+  disabled = false,
+  variant = 'pill',
+  placement = 'down',
+  ariaLabel,
+}: ModelPickerProps) {
   const { t } = useTranslation();
   const meta = useChat((state) => state.meta);
   const selectedId = usePreferences((state) => state.chatModelId);
@@ -220,16 +234,17 @@ export function ModelPicker({ disabled = false }: { disabled?: boolean }) {
     </div>
   );
 
-  const color = modelColor(current.id);
-
   return (
-    <div ref={containerRef} className="min-w-0 md:relative">
+    <div
+      ref={containerRef}
+      className={cn('min-w-0', variant === 'chip' ? 'relative' : 'md:relative')}
+    >
       <button
         ref={triggerRef}
         type="button"
         aria-haspopup="listbox"
         aria-expanded={open}
-        aria-label={t('chat.modelMenu')}
+        aria-label={ariaLabel ?? t('chat.modelMenu')}
         disabled={disabled}
         onClick={() => {
           if (open) {
@@ -240,19 +255,24 @@ export function ModelPicker({ disabled = false }: { disabled?: boolean }) {
         }}
         onKeyDown={onTriggerKeyDown}
         className={cn(
-          'group inline-flex h-10 max-w-full items-center gap-2 rounded-xl border border-stroke bg-surface-2/70 pr-2.5 pl-1.5 text-sm text-text',
-          'transition-[background-color,border-color,box-shadow] duration-200 max-md:h-11',
-          'hover:border-stroke-strong hover:bg-surface-2 disabled:cursor-not-allowed disabled:opacity-60',
-          open && 'border-stroke-strong bg-surface-2 shadow-sm',
+          'group inline-flex max-w-full items-center rounded-full text-[14px] transition-[background-color,border-color,color] duration-200 disabled:cursor-not-allowed disabled:opacity-60',
+          variant === 'pill'
+            ? 'h-10 gap-2 border border-stroke pr-3 pl-3.5 text-text hover:border-stroke-strong hover:bg-surface-2/70 max-md:h-11'
+            : 'h-10 gap-1.5 pr-2.5 pl-3 text-muted hover:bg-surface-3/70 hover:text-text max-md:h-11',
+          open &&
+            (variant === 'pill'
+              ? 'border-stroke-strong bg-surface-2/70'
+              : 'bg-surface-3/70 text-text'),
         )}
-        style={
-          open
-            ? { boxShadow: `0 0 0 3px color-mix(in srgb, ${color} 18%, transparent)` }
-            : undefined
-        }
       >
-        <ModelMark modelId={current.id} size="sm" />
-        <span className="truncate font-semibold">{labelOf(current)}</span>
+        {current.id === 'auto' ? (
+          <SparkleIcon className="size-4 shrink-0 text-muted" />
+        ) : (
+          <ModelMark modelId={current.id} size="sm" />
+        )}
+        <span className={cn('truncate', variant === 'chip' && 'max-w-[9rem] max-sm:sr-only')}>
+          {labelOf(current)}
+        </span>
         <ChevronDownIcon
           className={cn(
             'size-4 shrink-0 text-subtle transition-transform duration-200',
@@ -268,9 +288,16 @@ export function ModelPicker({ disabled = false }: { disabled?: boolean }) {
           tabIndex={-1}
           onKeyDown={onListKeyDown}
           className={cn(
-            'surface-glass bg-surface-2/95 absolute inset-x-3 top-full z-[var(--z-dropdown)] mt-2 max-h-[min(70vh,520px)] overflow-y-auto',
-            'rounded-2xl border border-stroke-strong p-1.5 shadow-popover animate-scale-in origin-top',
-            'md:inset-x-auto md:left-0 md:w-[400px]',
+            'surface-glass bg-surface-2/95 absolute z-[var(--z-dropdown)] max-h-[min(70vh,520px)] overflow-y-auto',
+            'rounded-2xl border border-stroke-strong p-1.5 shadow-popover animate-scale-in',
+            variant === 'pill'
+              ? 'inset-x-3 top-full mt-2 origin-top md:inset-x-auto md:left-0 md:w-[400px]'
+              : cn(
+                  'right-0 w-[min(400px,calc(100vw-2rem))]',
+                  placement === 'up'
+                    ? 'bottom-full mb-3 origin-bottom-right'
+                    : 'top-full mt-3 origin-top-right',
+                ),
           )}
         >
           {renderGroup(

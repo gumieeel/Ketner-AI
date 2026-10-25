@@ -45,7 +45,7 @@ const GROUP_LABELS: Record<DateGroup, TranslationKey> = {
 
 const navLinkClasses = ({ isActive }: { isActive: boolean }) =>
   cn(
-    'relative flex min-h-10 items-center gap-2.5 rounded-md px-3 text-[14px] transition-colors duration-150 max-md:min-h-11',
+    'relative flex min-h-10 items-center gap-2.5 rounded-full px-3.5 text-[14px] transition-colors duration-150 max-md:min-h-11',
     isActive
       ? 'bg-surface-3 font-medium text-text [&>svg]:text-accent'
       : 'text-muted hover:bg-surface-2 hover:text-text',
@@ -59,6 +59,7 @@ export function Sidebar() {
   const hasAdminAccess = Boolean(user?.isAdmin);
 
   const open = usePreferences((state) => state.sidebarOpen);
+  const docked = usePreferences((state) => state.sidebarDocked);
   const setOpen = usePreferences((state) => state.setSidebarOpen);
   useEffect(() => {
     if (open && window.innerWidth < 768) document.body.style.overflow = 'hidden';
@@ -137,10 +138,15 @@ export function Sidebar() {
           'border-r border-stroke bg-surface text-text',
           'transition-transform duration-[260ms] ease-out-expo md:static md:z-auto md:translate-x-0',
           open ? 'translate-x-0 shadow-2xl md:shadow-none' : '-translate-x-full',
+          // На широких экранах панель либо закреплена, либо скрыта: открывает её кнопка в шапке.
+          !docked && 'md:hidden',
         )}
       >
-        <div className="flex h-14 shrink-0 items-center justify-between border-b border-stroke px-4">
-          <Brand />
+        <div className="flex h-16 shrink-0 items-center justify-between border-b border-stroke px-4">
+          <Brand className="md:hidden" />
+          <span className="hidden text-[15px] font-medium text-text md:block">
+            {t('nav.chats')}
+          </span>
           <IconButton
             ref={closeButtonRef}
             label={t('nav.closeSidebar')}
@@ -173,7 +179,7 @@ export function Sidebar() {
           </nav>
 
           <div className="relative">
-            <SearchIcon className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-subtle" />
+            <SearchIcon className="pointer-events-none absolute top-1/2 left-4 size-4 -translate-y-1/2 text-subtle" />
             <input
               type="search"
               name="ketner-chat-search"
@@ -187,7 +193,7 @@ export function Sidebar() {
               onChange={(event) => setSearch(event.target.value)}
               aria-label={t('nav.searchChats')}
               placeholder={t('nav.searchChats')}
-              className="h-10 w-full rounded-md border border-stroke bg-canvas pr-3 pl-9 text-[14px] text-text outline-none transition-[border-color,box-shadow] placeholder:text-subtle focus:border-accent/60 focus:ring-2 focus:ring-accent-soft max-md:h-11"
+              className="h-10 w-full rounded-full border border-stroke bg-canvas pr-3 pl-10 text-[14px] text-text outline-none transition-[border-color,box-shadow] placeholder:text-subtle focus:border-accent/60 focus:ring-2 focus:ring-accent-soft max-md:h-11"
             />
           </div>
         </div>
@@ -403,7 +409,7 @@ function ConversationRow({
   return (
     <div
       className={cn(
-        'group relative flex min-h-10 items-center gap-1.5 rounded-md pr-1 pl-3 text-sm transition-colors max-md:min-h-11',
+        'group relative flex min-h-10 items-center gap-1.5 rounded-xl pr-1 pl-3 text-sm transition-colors max-md:min-h-11',
         active
           ? 'bg-surface-3 font-medium text-text'
           : 'text-muted hover:bg-surface-2 hover:text-text',

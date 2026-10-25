@@ -26,7 +26,7 @@ export function PlanCards({ variant = 'compact', className }: PlanCardsProps) {
   return (
     <div
       className={cn(
-        'grid w-full grid-cols-1 gap-px overflow-hidden rounded-xl border border-stroke bg-stroke text-left md:grid-cols-2 xl:grid-cols-4',
+        'grid w-full grid-cols-1 gap-3 text-left md:grid-cols-2 xl:grid-cols-4',
         className,
       )}
     >
@@ -68,16 +68,16 @@ export function PlanCards({ variant = 'compact', className }: PlanCardsProps) {
           <div
             key={plan.id}
             className={cn(
-              'relative flex flex-col justify-between px-6 pt-12 pb-6',
+              'relative flex flex-col justify-between rounded-xl px-6 pt-12 pb-6',
               !tabLabel && 'max-md:pt-7',
               isPro ? 'bg-surface-2' : 'bg-surface',
-              isCurrent && 'shadow-[inset_0_0_0_1px_var(--accent)]',
+              isCurrent && 'shadow-[inset_0_0_0_1px_var(--accent)]', // taste-skill-ignore: current-plan ring
             )}
           >
             {tabLabel ? (
               <span
                 className={cn(
-                  'absolute top-0 left-6 px-2.5 py-1 text-[12px] font-medium [border-radius:0_0_7px_7px] [corner-shape:round_round_bevel_bevel]',
+                  'absolute top-5 left-6 rounded-full px-2.5 py-1 text-[12px] font-medium',
                   isPro && !isCurrent
                     ? 'bg-brand-gradient text-accent-text'
                     : 'bg-surface-3 text-text',
@@ -122,7 +122,7 @@ export function PlanCards({ variant = 'compact', className }: PlanCardsProps) {
                 </p>
               ) : null}
 
-              <ul className="mt-6 flex flex-col gap-2.5 border-t border-stroke pt-6 text-[14px]">
+              <ul className="mt-7 flex flex-col gap-2.5 text-[14px]">
                 {lines.map((item, index) => (
                   <li key={index} className="flex items-start gap-2.5">
                     <CheckIcon className="mt-0.5 size-4 shrink-0 text-accent" />

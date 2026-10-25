@@ -56,7 +56,7 @@ export function LandingSavings() {
 
       <div className="mt-12 grid grid-cols-1 gap-3 lg:grid-cols-12">
         {/* Выбор подписок */}
-        <fieldset className="m-0 flex flex-col gap-2 rounded-xl border border-stroke bg-surface p-3 lg:col-span-5">
+        <fieldset className="m-0 flex flex-col gap-2 rounded-xl bg-surface p-3 lg:col-span-5">
           <legend className="sr-only">{t('home.saveLead')}</legend>
           {SERVICES.map((service) => {
             const checked = picked.has(service.id);
@@ -103,7 +103,7 @@ export function LandingSavings() {
 
         {/* Сравнение */}
         <div className="flex flex-col gap-3 lg:col-span-7">
-          <div className="flex flex-col gap-6 rounded-xl border border-stroke bg-surface p-6 sm:p-8">
+          <div className="flex flex-col gap-6 rounded-xl bg-surface p-6 sm:p-8">
             {[
               { label: t('home.saveSeparately'), value: separate, strong: false },
               { label: t('home.saveKetner'), value: KETNER_PRO, strong: true },
@@ -135,11 +135,9 @@ export function LandingSavings() {
 
           <div
             aria-live="polite"
-            className="relative flex min-h-[148px] flex-col justify-end rounded-xl bg-brand-gradient p-6 text-accent-text sm:p-8"
+            className="flex min-h-[176px] flex-col justify-between gap-6 rounded-xl bg-brand-gradient p-6 text-accent-text sm:p-8"
           >
-            <span className="tab-label absolute top-0 left-0 bg-canvas px-4 py-1.5 text-[13px] text-muted [border-radius:0_0_10px_0] [corner-shape:round_round_bevel_round]">
-              {t('home.saveYouSave')}
-            </span>
+            <span className="text-[14px] text-accent-text/75">{t('home.saveYouSave')}</span>
             {separate === 0 ? (
               <p className="text-[18px] font-medium">{t('home.saveNone')}</p>
             ) : saved <= 0 ? (

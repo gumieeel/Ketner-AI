@@ -1,21 +1,11 @@
 import { ArrowUpRightIcon } from '@/components/icons';
-import { ModelMark } from '@/components/ui/model-mark';
 import { EXAMPLE_PROMPTS } from '@/features/chat/example-prompts';
 import { useChat } from '@/features/chat/chat-store';
 import { useTranslation } from '@/i18n';
-
-/** Модели «оркестра»: показываются как декоративный ряд над заголовком. */
-const ORCHESTRA = [
-  'gpt-6.1-sol',
-  'claude-opus-5.5',
-  'gpt-6-astra',
-  'grok-4.7',
-  'deepseek-v4.1-flash',
-  'ketner-mini',
-];
+import { Composer } from './composer';
 
 /**
- * Пустое состояние нового чата: приветствие и карточки-примеры.
+ * Пустое состояние нового чата: вопрос, поле ввода по центру и примеры запросов.
  * Примеры подставляются в поле ввода, а не отправляются — их можно поправить.
  */
 export function ChatEmptyState() {
@@ -23,31 +13,38 @@ export function ChatEmptyState() {
   const setDraft = useChat((state) => state.setDraft);
 
   return (
-    <div className="relative flex min-h-0 flex-1 flex-col overflow-y-auto">
-      <div className="relative mx-auto my-auto flex w-full max-w-[760px] flex-col items-center px-4 py-8 text-center md:py-12">
-        <span aria-hidden="true" className="flex items-center gap-1.5">
-          {ORCHESTRA.map((id) => (
-            <ModelMark key={id} modelId={id} size="sm" />
-          ))}
-        </span>
+    <div className="chat-stage relative flex min-h-0 flex-1 flex-col overflow-y-auto">
+      <div className="mx-auto my-auto flex w-full flex-col items-center pt-10 pb-[10vh] max-md:pb-8">
+        <div className="px-4 text-center">
+          <h2 className="t-title text-[clamp(1.875rem,1.6vw+1.4rem,2.5rem)] leading-[1.15] font-[470] tracking-[-0.025em] text-text">
+            {t('chat.emptyTitle')}
+          </h2>
+          <p className="mt-3 text-[15px] leading-6 text-muted md:text-base">
+            {t('chat.emptyHint')}
+          </p>
+        </div>
 
-        <h2 className="t-headline mt-6 text-text">{t('chat.emptyTitle')}</h2>
-        <p className="mt-4 max-w-[52ch] text-[15px] leading-6 text-muted">{t('chat.emptyHint')}</p>
+        <div className="mt-9 w-full">
+          <Composer variant="hero" />
+        </div>
 
-        <div className="mt-8 grid w-full grid-cols-1 gap-2.5 text-left md:grid-cols-3 md:gap-3">
+        <ul
+          aria-label={t('chat.examplesLabel')}
+          className="mx-auto mt-5 flex w-full max-w-[824px] flex-wrap justify-center gap-2 px-4"
+        >
           {EXAMPLE_PROMPTS[language].map((prompt) => (
-            <div key={prompt} className="flex">
+            <li key={prompt} className="max-w-full">
               <button
                 type="button"
                 onClick={() => setDraft(prompt)}
-                className="group relative flex min-h-14 flex-1 items-start justify-between gap-3 rounded-lg border border-stroke bg-surface p-4 text-left text-[14px] leading-5 text-text transition-colors duration-150 hover:border-stroke-strong hover:bg-surface-2 md:min-h-28 md:flex-col md:justify-between"
+                className="group inline-flex min-h-10 max-w-full items-center gap-2 rounded-full border border-stroke px-4 py-2 text-left text-[14px] leading-5 text-muted transition-[background-color,border-color,color] duration-200 hover:border-stroke-strong hover:bg-surface-2/70 hover:text-text max-md:min-h-11"
               >
-                <span className="text-pretty">{prompt}</span>
-                <ArrowUpRightIcon className="size-4 shrink-0 text-subtle transition-colors duration-150 group-hover:text-accent md:self-end" />
+                <span className="truncate">{prompt}</span>
+                <ArrowUpRightIcon className="size-3.5 shrink-0 text-subtle transition-colors duration-200 group-hover:text-accent" />
               </button>
-            </div>
+            </li>
           ))}
-        </div>
+        </ul>
       </div>
     </div>
   );

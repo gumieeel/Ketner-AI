@@ -11,6 +11,7 @@ import {
   FolderIcon,
   GitHubIcon,
   PaperclipIcon,
+  PlusIcon,
   SendIcon,
   SparkleIcon,
   StopIcon,
@@ -34,6 +35,7 @@ import { useGithub } from '@/features/github/github-store';
 import { useTranslation } from '@/i18n';
 import { cn } from '@/lib/cn';
 import { ComposerAttachments } from './composer-attachments';
+import { ModelPicker } from './model-picker';
 import { LinkWorkspaceModal, type LinkWorkspaceTab } from './link-workspace-modal';
 import { WorkspaceBar } from './workspace-bar';
 import { CompareBar } from './compare-bar';
@@ -47,8 +49,13 @@ const attachItemClass =
 /** Высота поля ввода (до 5 строк), после которой появляется прокрутка. */
 const MAX_HEIGHT_PX = 120;
 
+export interface ComposerProps {
+  /** `hero` — по центру пустого экрана; `dock` — внизу, под лентой сообщений. */
+  variant?: 'hero' | 'dock';
+}
+
 /** Поле ввода сообщения: отправка, вложения фото/видео/файлов, привязка папки/репо и переключатель модели. */
-export function Composer() {
+export function Composer({ variant = 'dock' }: ComposerProps) {
   const { t } = useTranslation();
   const draft = useChat((state) => state.draft);
   const setDraft = useChat((state) => state.setDraft);
@@ -210,15 +217,24 @@ export function Composer() {
   const canSubmit = (draft.trim() !== '' || attachedFiles.length > 0) && compareReady;
 
   const bannerClass =
-    'mb-2.5 flex flex-wrap items-center justify-between gap-x-3 gap-y-2 rounded-xl border border-warning/30 bg-warning-soft px-3.5 py-2.5 text-[13px] text-text shadow-sm';
+    'mb-2.5 flex flex-wrap items-center justify-between gap-x-3 gap-y-2 rounded-2xl border border-warning/30 bg-warning-soft px-3.5 py-2.5 text-[13px] text-text';
+
+  const hero = variant === 'hero';
 
   return (
-    <div className="relative mx-auto w-full max-w-[792px] shrink-0 px-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] md:px-4 md:pb-5">
+    <div
+      className={cn(
+        'relative mx-auto w-full max-w-[824px] shrink-0 px-3 md:px-4',
+        !hero && 'pb-[max(0.75rem,env(safe-area-inset-bottom))] md:pb-5',
+      )}
+    >
       {/* Плавное «растворение» ленты под композером */}
-      <div
-        aria-hidden="true"
-        className="pointer-events-none absolute inset-x-0 -top-6 h-6 bg-gradient-to-t from-canvas to-transparent"
-      />
+      {hero ? null : (
+        <div
+          aria-hidden="true"
+          className="pointer-events-none absolute inset-x-0 -top-6 h-6 bg-gradient-to-t from-canvas to-transparent" // taste-skill-ignore: neutral scrim over the message list
+        />
+      )}
 
       {!hasAccess ? (
         <div role="alert" className={bannerClass}>
@@ -265,16 +281,16 @@ export function Composer() {
         onDragLeave={handleDragLeave}
         onDrop={handleDrop}
         className={cn(
-          'relative rounded-xl border bg-surface p-2.5 shadow-md',
-          'transition-[border-color,box-shadow] duration-200',
-          'focus-within:border-accent/60 focus-within:ring-2 focus-within:ring-accent-soft',
-          isDragOver ? 'border-accent ring-2 ring-accent-soft' : 'border-stroke-strong',
+          'relative rounded-[32px] border bg-surface-2/60 p-2 shadow-sm',
+          'transition-[border-color,box-shadow,background-color] duration-200',
+          'focus-within:border-accent/50 focus-within:bg-surface-2 focus-within:ring-4 focus-within:ring-accent-soft',
+          isDragOver ? 'border-accent ring-4 ring-accent-soft' : 'border-stroke-strong',
         )}
       >
         {isDragOver ? (
           <div
             aria-hidden="true"
-            className="pointer-events-none absolute inset-0 z-10 grid place-items-center rounded-xl bg-canvas/85 text-sm font-medium text-accent"
+            className="pointer-events-none absolute inset-0 z-10 grid place-items-center rounded-[32px] bg-canvas/85 text-sm font-medium text-accent"
           >
             <span className="inline-flex items-center gap-2">
               <PaperclipIcon className="size-4" />
@@ -289,37 +305,30 @@ export function Composer() {
         <label htmlFor="composer" className="sr-only">
           {t('chat.placeholder')}
         </label>
-        <textarea
-          id="composer"
-          ref={fieldRef}
-          rows={1}
-          value={draft}
-          onPaste={handlePaste}
-          onChange={(event) => setDraft(event.target.value)}
-          onKeyDown={onKeyDown}
-          placeholder={t('chat.placeholder')}
-          className="block max-h-[120px] w-full resize-none bg-transparent px-1.5 py-1 text-base leading-6 max-md:-my-1.5 max-md:py-2.5 text-text outline-none placeholder:text-subtle md:text-[15px]"
-        />
 
-        <div className="flex items-center gap-1.5 pt-1.5">
-          {/* Кнопка скрепки с меню прикрепления */}
-          <div ref={attachRef} className="relative">
+        <div className="flex items-end gap-1.5">
+          {/* Кнопка «+» с меню прикрепления */}
+          <div ref={attachRef} className="relative shrink-0">
             <IconButton
               label={t('composer.attachAria')}
-              size="sm"
               aria-haspopup="true"
               aria-expanded={isAttachMenuOpen}
               onClick={() => setIsAttachMenuOpen(!isAttachMenuOpen)}
               className={cn(
-                'rounded-md border border-stroke text-text hover:border-stroke-strong hover:bg-surface-2',
-                isAttachMenuOpen && 'border-stroke-strong bg-surface-2',
+                'size-11 bg-surface-3/70 text-text hover:bg-surface-3',
+                isAttachMenuOpen && 'bg-surface-3',
               )}
             >
-              <PaperclipIcon />
+              <PlusIcon className="size-[18px]" />
             </IconButton>
 
             {isAttachMenuOpen ? (
-              <div className="absolute bottom-full left-0 z-[var(--z-dropdown)] mb-2 w-[min(18rem,calc(100vw-2rem))] origin-bottom-left animate-scale-in rounded-lg border border-stroke-strong bg-surface-2 p-1.5 shadow-popover">
+              <div
+                className={cn(
+                  'absolute left-0 z-[var(--z-dropdown)] w-[min(18rem,calc(100vw-2rem))] animate-scale-in rounded-2xl border border-stroke-strong bg-surface-2 p-1.5 shadow-popover',
+                  hero ? 'top-full mt-3 origin-top-left' : 'bottom-full mb-3 origin-bottom-left',
+                )}
+              >
                 <button
                   type="button"
                   onClick={() => {
@@ -363,9 +372,26 @@ export function Composer() {
             ) : null}
           </div>
 
-          <p className="ml-1 hidden min-w-0 truncate text-xs text-subtle md:block">
-            {t('composer.hintSend')}
-          </p>
+          <textarea
+            id="composer"
+            ref={fieldRef}
+            rows={1}
+            value={draft}
+            onPaste={handlePaste}
+            onChange={(event) => setDraft(event.target.value)}
+            onKeyDown={onKeyDown}
+            placeholder={t('chat.placeholder')}
+            className="block max-h-[120px] min-h-11 min-w-0 flex-1 resize-none bg-transparent px-2.5 py-[10px] text-base leading-6 text-text outline-none placeholder:text-subtle md:text-[15px]"
+          />
+
+          <span className="contents max-sm:hidden">
+            <ModelPicker
+              variant="chip"
+              placement={hero ? 'down' : 'up'}
+              disabled={streaming}
+              ariaLabel={`${t('chat.modelChip')}: ${labelOf(currentModel)}`}
+            />
+          </span>
 
           {streaming ? (
             <button
@@ -373,7 +399,7 @@ export function Composer() {
               aria-label={t('chat.stop')}
               title={t('chat.stop')}
               onClick={() => stop()}
-              className="ml-auto inline-flex size-11 shrink-0 items-center justify-center rounded-md border border-stroke-strong bg-surface-2 text-text transition-[background-color] duration-150 hover:bg-surface-3"
+              className="inline-flex size-11 shrink-0 items-center justify-center rounded-full bg-surface-3 text-text transition-[background-color] duration-150 hover:bg-surface-3/70"
             >
               <StopIcon />
             </button>
@@ -385,20 +411,21 @@ export function Composer() {
               onClick={submit}
               disabled={!canSubmit}
               className={cn(
-                'ml-auto inline-flex size-11 shrink-0 items-center justify-center rounded-md',
+                'inline-flex size-11 shrink-0 items-center justify-center rounded-full',
                 'bg-brand-gradient text-accent-text',
-                'transition-[background-color,color] duration-150',
-                'hover:bg-action-hover',
-                'disabled:cursor-not-allowed disabled:bg-surface-3 disabled:text-subtle disabled:shadow-none',
+                'transition-[background-color,color,transform] duration-200',
+                'hover:bg-action-hover active:scale-95',
+                'disabled:cursor-not-allowed disabled:bg-surface-3 disabled:text-subtle disabled:shadow-none disabled:active:scale-100',
               )}
             >
-              <SendIcon />
+              <SendIcon className="size-[18px]" />
             </button>
           )}
         </div>
       </div>
 
-      <p className="mt-2 text-center text-xs leading-[18px] text-subtle">
+      <p className="mt-3 text-center text-xs leading-[18px] text-subtle">
+        <span className="max-md:hidden">{t('composer.hintSend')} · </span>
         {t('chat.composerNotice')}
       </p>
 

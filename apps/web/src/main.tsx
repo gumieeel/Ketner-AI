@@ -30,6 +30,9 @@ function whenRouterReady(): Promise<void> {
 }
 
 void whenRouterReady().then(() => {
+  // Страница пришла с готовой разметкой: React пересоздаст узлы, и вводная анимация (дуга,
+  // подчёркивание) началась бы заново поверх уже нарисованного. Для таких страниц она отключена.
+  if (container.firstElementChild) document.documentElement.dataset.prerendered = '';
   createRoot(container).render(
     <StrictMode>
       <App />

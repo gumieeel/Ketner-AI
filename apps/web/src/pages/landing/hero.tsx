@@ -1,72 +1,109 @@
 import { Link } from 'react-router-dom';
-import { KnotRelief } from '@/components/marketing/knot-relief';
-import { ModelDemo } from '@/components/marketing/model-demo';
+import { ArrowDownIcon, ArrowRightIcon } from '@/components/icons';
+import { HeroArc } from '@/components/marketing/hero-arc';
+import { HeroModels } from '@/components/marketing/hero-models';
+import { HeroStatus } from '@/components/marketing/hero-status';
+import { STAGE_GUTTER } from '@/components/layout/stage';
 import { buttonClasses } from '@/components/ui/button-classes';
 import { useAuth } from '@/features/auth/auth-store';
 import { useTranslation } from '@/i18n';
+import { useReducedMotion } from '@/lib/use-reduced-motion';
 
 /**
- * Первый экран: слева — панель с обещанием и объёмным щитом Ketner, справа — демо
- * переписки, в которой отвечает выбранная модель. Нижний правый угол панели срезан «ступенькой», как в фирменной
- * геометрии срезов.
+ * Первый экран на всю высоту окна: слева обещание и два действия, справа — список
+ * моделей, между ними светящаяся дуга. Статус сервисов и подсказка «листайте вниз»
+ * лежат на нижней кромке. Шапка сайта прозрачная и ложится поверх этой сцены.
  */
 export function LandingHero() {
   const { t } = useTranslation();
-  const status = useAuth((state) => state.status);
+  const reduced = useReducedMotion();
   const user = useAuth((state) => state.user);
+  const status = useAuth((state) => state.status);
   const signedIn = status === 'authenticated' && Boolean(user);
 
+  const scrollOn = () => {
+    document
+      .getElementById('hero-next')
+      ?.scrollIntoView({ behavior: reduced ? 'auto' : 'smooth', block: 'start' });
+  };
+
   return (
-    <section aria-labelledby="hero-title" className="grid w-full grid-cols-1 gap-3 lg:grid-cols-12">
-      <div className="notch-br relative isolate flex min-h-[560px] flex-col overflow-hidden rounded-2xl bg-[var(--hero-panel)] px-6 pt-10 pb-8 [--notch:44px] sm:px-10 sm:pt-14 lg:col-span-8 lg:min-h-[640px] lg:px-14 lg:pt-16 lg:pb-12 lg:[--notch:72px]">
-        {/* Рельеф щита: крупно, со смещением за правый край */}
-        <KnotRelief className="absolute -right-[46%] -bottom-[18%] -z-10 w-[112%] max-w-none sm:-right-[24%] sm:-bottom-[30%] sm:w-[80%] lg:-right-[18%] lg:-bottom-[32%] lg:w-[68%]" />
-        {/* Подложка под текстом: рельеф не спорит с заголовком */}
+    <section
+      aria-labelledby="hero-title"
+      className="hero-stage flex min-h-[max(100svh,720px)] w-full flex-col overflow-hidden"
+    >
+      <HeroArc className="max-lg:opacity-30" />
+
+      <div className="relative flex flex-1 items-center pt-28 pb-28 md:pt-32 md:pb-32">
         <div
-          aria-hidden="true"
-          className="pointer-events-none absolute inset-0 -z-10 bg-[linear-gradient(100deg,var(--hero-panel)_30%,transparent_60%)] max-sm:bg-[linear-gradient(180deg,var(--hero-panel)_52%,transparent_78%)]"
-        />
-
-        <h1
-          id="hero-title"
-          className="t-display text-[clamp(2.625rem,4.6vw+0.4rem,4.75rem)] text-text"
+          className={`mx-auto flex w-full max-w-[1920px] flex-col gap-14 lg:grid lg:grid-cols-[minmax(0,1fr)_auto] lg:items-start lg:gap-10 ${STAGE_GUTTER}`}
         >
-          <span className="block">{t('home.heroTitleA')}</span>{' '}
-          <span className="block">{t('home.heroTitleB')}</span>
-        </h1>
-        <p className="t-lead mt-6 max-w-[46ch] text-pretty">{t('home.heroLead')}</p>
+          <div className="lg:pl-[clamp(0px,7.2vw,8rem)]">
+            <p
+              className="eyebrow-bar" // taste-skill-ignore: the eyebrow is part of the supplied reference
+            >
+              {t('home.heroEyebrow')}
+            </p>
+            <h1
+              id="hero-title"
+              className="t-display mt-6 text-[clamp(2.0625rem,4.3vw+0.2rem,4.5rem)] leading-[1.1] font-[470] text-text"
+            >
+              <span className="block">{t('home.heroTitleA')}</span>{' '}
+              <span className="relative block w-fit">
+                <span className="mint-tail">{t('home.heroTitleB')}</span>
+                <span aria-hidden="true" className="hero-underline left-[38%]" />
+              </span>
+            </h1>
+            <p className="t-lead mt-8 max-w-[34rem]">{t('home.heroLead')}</p>
 
-        <div className="mt-auto flex flex-col gap-3 pt-10 sm:flex-row sm:items-center">
-          <Link
-            to="/chat"
-            className={buttonClasses({
-              variant: 'primary',
-              size: 'lg',
-              className: 'w-full sm:w-auto sm:min-w-[200px]',
-            })}
-          >
-            {signedIn ? t('home.heroCtaSignedIn') : t('home.heroCta')}
-          </Link>
-          <Link
-            to="/pricing"
-            className={buttonClasses({
-              variant: 'outline',
-              size: 'lg',
-              className: 'w-full bg-[var(--hero-panel)] sm:w-auto',
-            })}
-          >
-            {t('home.heroSecondary')}
-          </Link>
-          {signedIn && user ? (
-            <span className="text-[14px] text-muted sm:ml-2">
-              {t('home.heroPlan', { plan: user.plan.charAt(0).toUpperCase() + user.plan.slice(1) })}
-            </span>
-          ) : null}
+            <div className="mt-10 flex flex-col gap-3 sm:flex-row sm:items-center">
+              <Link
+                to="/chat"
+                className={buttonClasses({
+                  variant: 'primary',
+                  size: 'lg',
+                  className: 'group w-full sm:w-auto sm:min-w-[206px]',
+                })}
+              >
+                {t('home.heroCtaSignedIn')}
+                <ArrowRightIcon className="size-[18px] transition-transform duration-200 group-hover:translate-x-0.5" />
+              </Link>
+              <Link
+                to="/pricing"
+                className={buttonClasses({
+                  variant: 'outline',
+                  size: 'lg',
+                  className: 'w-full sm:w-auto',
+                })}
+              >
+                {t('home.heroSecondary')}
+              </Link>
+            </div>
+            {signedIn && user ? (
+              <p className="mt-5 text-[14px] text-subtle">
+                {t('home.heroPlan', {
+                  plan: user.plan.charAt(0).toUpperCase() + user.plan.slice(1),
+                })}
+              </p>
+            ) : null}
+          </div>
+
+          <HeroModels className="lg:mt-[-8px]" />
         </div>
       </div>
 
-      <div className="lg:col-span-4">
-        <ModelDemo />
+      <div
+        className={`absolute inset-x-0 bottom-0 mx-auto flex w-full max-w-[1920px] items-end justify-between pb-8 ${STAGE_GUTTER}`}
+      >
+        <HeroStatus />
+        <button
+          type="button"
+          onClick={scrollOn}
+          className="group hidden items-center gap-3 rounded-full py-2 pl-3 text-[13px] text-subtle transition-colors duration-200 hover:text-text md:inline-flex"
+        >
+          {t('home.heroScroll')}
+          <ArrowDownIcon className="size-[22px] transition-transform duration-300 group-hover:translate-y-0.5" />
+        </button>
       </div>
     </section>
   );

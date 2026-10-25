@@ -54,21 +54,24 @@ export function CompareToggle({ disabled = false }: { disabled?: boolean }) {
       title={hint}
       onClick={toggle}
       className={cn(
-        'inline-flex h-10 shrink-0 items-center gap-1.5 rounded-xl border px-2.5 text-xs font-semibold max-md:h-11',
+        'inline-flex h-10 shrink-0 items-center justify-center gap-1.5 rounded-full border px-3.5 text-[13px] font-medium max-md:h-11 max-lg:size-10 max-lg:px-0 max-md:max-lg:size-11',
         'transition-[background-color,border-color,color,box-shadow] duration-200',
         'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40',
         'disabled:cursor-not-allowed disabled:opacity-60',
         on
           ? 'border-accent/50 bg-accent-soft text-accent shadow-glow'
-          : 'border-stroke bg-surface-2/70 text-muted hover:border-stroke-strong hover:bg-surface-2 hover:text-text',
+          : 'border-stroke text-muted hover:border-stroke-strong hover:bg-surface-2/70 hover:text-text',
       )}
     >
       {allowed ? (
         <CompareIcon className="size-3.5" aria-hidden="true" />
       ) : (
-        <LockIcon className="size-3.5" aria-hidden="true" />
+        <>
+          <LockIcon className="size-3.5 max-lg:hidden" aria-hidden="true" />
+          <CompareIcon className="size-4 opacity-70 lg:hidden" aria-hidden="true" />
+        </>
       )}
-      <span className="max-sm:sr-only">{t('compare.toggle')}</span>
+      <span className="max-lg:sr-only">{t('compare.toggle')}</span>
     </button>
   );
 }

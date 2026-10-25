@@ -10,7 +10,7 @@ export function Input({ invalid = false, className, ...props }: InputProps) {
     <input
       aria-invalid={invalid || undefined}
       className={cn(
-        'h-12 w-full rounded-md border border-stroke bg-surface px-3.5 text-base text-text placeholder:text-subtle md:h-11 md:text-[15px]',
+        'h-12 w-full rounded-xl border border-stroke bg-surface px-4 text-base text-text placeholder:text-subtle md:h-11 md:text-[15px]',
         'transition-[border-color,box-shadow,background-color] duration-200',
         'hover:border-stroke-strong focus:border-accent focus:outline-none focus:ring-2 focus:ring-accent-soft',
         'disabled:cursor-not-allowed disabled:opacity-60',

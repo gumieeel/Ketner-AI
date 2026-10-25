@@ -10,16 +10,28 @@ import { useFocusTrap } from '@/lib/use-focus-trap';
 import { DEFAULT_TITLE, seoTitleFor } from '@/lib/seo-pages';
 import { Brand } from './brand';
 import { LanguageToggle } from './language-toggle';
-import { HeaderMenu } from './header-menu';
+import { STAGE_GUTTER } from './stage';
 import { ThemeToggle } from './theme-toggle';
 
 const navLinkClass =
-  'inline-flex h-9 items-center rounded-sm px-3 text-[14px] text-muted transition-colors duration-150 hover:bg-surface-2 hover:text-text';
+  'inline-flex h-10 items-center rounded-full px-4 text-[14px] text-muted transition-colors duration-200 hover:bg-surface-2/70 hover:text-text';
 
 const footerLinkClass =
   'inline-flex min-h-8 items-center text-[14px] text-muted transition-colors duration-150 hover:text-text max-md:min-h-11';
 
 const footerHeadClass = 'text-[13px] text-subtle';
+
+/** Страница прокручена хотя бы немного: шапка из прозрачной становится плотной. */
+function useScrolled(threshold = 8): boolean {
+  const [scrolled, setScrolled] = useState(false);
+  useEffect(() => {
+    const update = () => setScrolled(window.scrollY > threshold);
+    update();
+    window.addEventListener('scroll', update, { passive: true });
+    return () => window.removeEventListener('scroll', update);
+  }, [threshold]);
+  return scrolled;
+}
 
 /**
  * Каркас страниц вне приложения: лендинг, вход, тарифы, оформление подписки, документация.
@@ -32,6 +44,7 @@ export function StandaloneLayout() {
   const drawerRef = useRef<HTMLDivElement>(null);
   const touchStartX = useRef<number | null>(null);
   const location = useLocation();
+  const scrolled = useScrolled();
 
   useFocusTrap(drawerRef, mobileMenuOpen);
 
@@ -89,10 +102,10 @@ export function StandaloneLayout() {
     location.pathname,
   );
   const isLanding = location.pathname === '/';
-  // Главная шире и с узкими полями — панели идут почти от края до края, как витрина.
-  const containerClass = isLanding
-    ? 'max-w-[1360px] px-3 sm:px-4 lg:px-5'
-    : 'max-w-[1200px] px-4 sm:px-6 lg:px-8';
+  // Главная — витрина на всю ширину: шапка прозрачная и лежит поверх первого экрана.
+  const containerClass = 'max-w-[1200px] px-4 sm:px-6 lg:px-8';
+  const headerContainerClass = isLanding ? `max-w-[1920px] ${STAGE_GUTTER}` : containerClass;
+  const stageContainerClass = `max-w-[1920px] ${STAGE_GUTTER}`;
 
   if (isAuthPage) {
     return (
@@ -118,14 +131,21 @@ export function StandaloneLayout() {
   return (
     <div className="relative flex min-h-screen flex-col overflow-x-clip bg-canvas text-text selection:bg-accent/20 selection:text-text">
       {/* Шапка */}
-      <header className="sticky top-0 z-40 h-14 w-full border-b border-stroke bg-canvas">
-        <div className={cn('mx-auto flex h-full items-center justify-between', containerClass)}>
-          <div className="flex items-center gap-6 lg:gap-10">
-            <Brand />
-            <nav
-              aria-label={t('nav.mainNavigation')}
-              className="hidden items-center gap-0.5 md:flex"
-            >
+      <header
+        className={cn(
+          'sticky top-0 z-40 w-full border-b transition-[background-color,border-color,backdrop-filter] duration-300',
+          isLanding ? 'h-[72px] -mb-[72px] md:h-[88px] md:-mb-[88px]' : 'h-16',
+          isLanding && !scrolled
+            ? 'border-transparent bg-transparent'
+            : 'border-stroke bg-canvas/85 backdrop-blur-xl',
+        )}
+      >
+        <div
+          className={cn('mx-auto flex h-full items-center justify-between', headerContainerClass)}
+        >
+          <div className="flex items-center gap-8 lg:gap-14">
+            <Brand size={isLanding ? 'lg' : 'md'} />
+            <nav aria-label={t('nav.mainNavigation')} className="hidden items-center gap-1 lg:flex">
               <a href="/#spaces" className={navLinkClass}>
                 {t('home.navFeatures')}
               </a>
@@ -142,22 +162,29 @@ export function StandaloneLayout() {
           </div>
 
           {/* Desktop Right Controls */}
-          <div className="hidden items-center gap-2 md:flex">
+          <div className="hidden items-center gap-2.5 lg:flex">
+            {isLanding ? null : (
+              <>
+                <LanguageToggle />
+                <ThemeToggle />
+                <div className="mx-1 h-5 w-px bg-stroke" aria-hidden="true" />
+              </>
+            )}
             {status === 'authenticated' && user ? null : (
-              <Link to="/login" className={buttonClasses({ variant: 'ghost', size: 'sm' })}>
+              <Link to="/login" className={buttonClasses({ variant: 'outline', size: 'sm' })}>
                 {t('nav.login')}
               </Link>
             )}
-            <Link to="/chat" className={buttonClasses({ variant: 'primary', size: 'sm' })}>
-              {startLabel}
+            <Link
+              to={status === 'authenticated' && user ? '/chat' : '/signup'}
+              className={buttonClasses({ variant: 'primary', size: 'sm' })}
+            >
+              {status === 'authenticated' && user ? startLabel : t('nav.signup')}
             </Link>
-            <div className="mx-1.5 h-5 w-px bg-stroke" aria-hidden="true" />
-            <LanguageToggle />
-            <HeaderMenu />
           </div>
 
           {/* Mobile Menu Button */}
-          <div className="flex items-center gap-1 md:hidden">
+          <div className="flex items-center gap-1 lg:hidden">
             <IconButton
               label={mobileMenuOpen ? t('nav.closeMenu') : t('nav.openMenu')}
               onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
@@ -170,7 +197,7 @@ export function StandaloneLayout() {
 
       {/* Мобильное всплывающее меню (Drawer) */}
       {mobileMenuOpen && (
-        <div className="fixed inset-0 z-50 md:hidden">
+        <div className="fixed inset-0 z-50 lg:hidden">
           {/* Backdrop */}
           <div
             className="fixed inset-0 animate-fade-in bg-overlay"
@@ -276,20 +303,24 @@ export function StandaloneLayout() {
         </div>
       )}
 
-      {/* Контент страницы */}
+      {/* Контент страницы. Главная сама раскладывает полосы: первый экран идёт во всю ширину. */}
       <main
         className={cn(
-          'relative z-10 mx-auto flex w-full flex-1 flex-col',
-          containerClass,
-          isLanding ? 'pt-3 pb-8' : 'py-8 md:py-12',
+          'relative z-10 flex w-full flex-1 flex-col',
+          isLanding ? '' : cn('mx-auto py-8 md:py-12', containerClass),
         )}
       >
         <Outlet />
       </main>
 
-      {/* Футер: колонки ссылок и крупный знак Ketner */}
-      <footer className="relative z-10 mt-20 w-full border-t border-stroke text-left">
-        <div className={cn('mx-auto flex flex-col gap-12 pt-14', containerClass)}>
+      {/* Футер: колонки ссылок и нижняя строка */}
+      <footer className="relative z-10 mt-28 w-full text-left">
+        <div
+          className={cn(
+            'mx-auto flex flex-col gap-12 pt-14',
+            isLanding ? stageContainerClass : containerClass,
+          )}
+        >
           <div className="grid grid-cols-2 gap-x-6 gap-y-10 md:grid-cols-[1.5fr_1fr_1fr_1fr]">
             <div className="col-span-2 flex flex-col gap-4 md:col-span-1">
               <Brand />
@@ -407,15 +438,7 @@ export function StandaloneLayout() {
             </nav>
           </div>
 
-          {/* Крупный знак — логотип во всю ширину. Текст в псевдоэлементе: он декоративный и не читается вслух */}
-          <div aria-hidden="true" className="select-none overflow-hidden">
-            <span
-              data-wordmark="Ketner"
-              className="sharp block text-[clamp(5rem,29.5vw,27.5rem)] leading-[0.78] font-medium tracking-[-0.055em] text-surface-3 before:content-[attr(data-wordmark)]"
-            />
-          </div>
-
-          <div className="flex flex-wrap items-center justify-between gap-4 border-t border-stroke py-6 text-[14px] text-muted">
+          <div className="flex flex-wrap items-center justify-between gap-4 py-8 text-[14px] text-muted">
             <span>{t('footer.rights', { year: new Date().getFullYear() })}</span>
             <div className="flex items-center gap-2">
               <LanguageToggle />
