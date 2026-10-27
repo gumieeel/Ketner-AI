@@ -1,6 +1,8 @@
 import { useId, useState } from 'react';
 import { CheckIcon } from '@/components/icons';
+import { DEFAULT_PACK_ID, getPack, PACK_VALID_DAYS } from '@/features/billing/plans';
 import { useTranslation } from '@/i18n';
+import { formatCredits } from '@/lib/format-date';
 import { cn } from '@/lib/cn';
 import { SectionHead } from './section-head';
 
@@ -12,15 +14,18 @@ const SERVICES = [
   { id: 'grok', name: 'SuperGrok', price: 30 },
 ] as const;
 
-/** Ketner Pro: Claude Opus и Sonnet, GPT-6 Astra, Grok 4.7, Gemini 3.7 Flash в одной подписке. */
-const KETNER_PRO = 25;
+/** Пакет $10 вместо подписок: один платёж, все модели, кредиты действуют год (plan-facts.json). */
+const PACK = getPack(DEFAULT_PACK_ID);
+const KETNER_PACK = PACK?.priceUsd ?? 10;
+const exampleRequests = (model: string): number =>
+  PACK?.examples.find((example) => example.model === model)?.requests ?? 0;
 
 function money(value: number): string {
   return `$${value}`;
 }
 
 export function LandingSavings() {
-  const { t } = useTranslation();
+  const { t, language } = useTranslation();
   const baseId = useId();
   const [picked, setPicked] = useState<ReadonlySet<string>>(
     () => new Set(SERVICES.map((service) => service.id)),
@@ -42,9 +47,9 @@ export function LandingSavings() {
     (sum, service) => sum + service.price,
     0,
   );
-  const saved = separate - KETNER_PRO;
+  const saved = separate - KETNER_PACK;
   const pct = separate > 0 ? Math.round((saved / separate) * 100) : 0;
-  const max = Math.max(separate, KETNER_PRO, 1);
+  const max = Math.max(separate, KETNER_PACK, 1);
 
   return (
     <section
@@ -97,7 +102,12 @@ export function LandingSavings() {
             );
           })}
           <p className="mt-auto px-4 pt-6 pb-2 text-[13px] leading-relaxed text-subtle">
-            {t('home.saveFine')}
+            {t('home.saveFine', {
+              credits: formatCredits(PACK?.credits ?? 0, language),
+              sol: formatCredits(exampleRequests('gpt-6.1-sol'), language),
+              pro: formatCredits(exampleRequests('ketner-pro'), language),
+              days: PACK_VALID_DAYS,
+            })}
           </p>
         </fieldset>
 
@@ -106,7 +116,7 @@ export function LandingSavings() {
           <div className="flex flex-col gap-6 rounded-xl bg-surface p-6 sm:p-8">
             {[
               { label: t('home.saveSeparately'), value: separate, strong: false },
-              { label: t('home.saveKetner'), value: KETNER_PRO, strong: true },
+              { label: t('home.saveKetner'), value: KETNER_PACK, strong: true },
             ].map((row) => (
               <div key={row.label}>
                 <div className="flex items-baseline justify-between gap-4">
@@ -141,13 +151,17 @@ export function LandingSavings() {
             {separate === 0 ? (
               <p className="text-[18px] font-medium">{t('home.saveNone')}</p>
             ) : saved <= 0 ? (
-              <p className="max-w-[40ch] text-[18px] font-medium">{t('home.saveNoGain')}</p>
+              <p className="max-w-[40ch] text-[18px] font-medium">
+                {t('home.saveNoGain', { days: PACK_VALID_DAYS })}
+              </p>
             ) : (
               <div className="flex flex-wrap items-end justify-between gap-x-6 gap-y-1">
                 <span className="sharp tabular text-[64px] leading-[0.95] font-medium tracking-[-0.04em] sm:text-[88px]">
                   {money(saved)}
                 </span>
-                <span className="pb-2 text-[15px]">{t('home.saveLess', { pct })}</span>
+                <span className="pb-2 text-[15px]">
+                  {t('home.saveLess', { pct, days: PACK_VALID_DAYS })}
+                </span>
               </div>
             )}
           </div>

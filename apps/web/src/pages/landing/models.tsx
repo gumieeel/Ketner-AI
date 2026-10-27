@@ -1,19 +1,22 @@
 import { Badge } from '@/components/ui/badge';
 import { ModelMark } from '@/components/ui/model-mark';
-import { DEFAULT_MODELS } from '@/features/chat/can-access-model';
+import { DEFAULT_MODELS } from '@/features/chat/model-catalog';
+import planFacts from '@/features/billing/plan-facts.json';
 import { useTranslation } from '@/i18n';
-import { GOOD_FOR, TIER_LABEL, TIER_TONE, tierOf } from './model-facts';
+import { formatCredits } from '@/lib/format-date';
+import { GOOD_FOR } from './model-facts';
 import { SectionHead } from './section-head';
 
 /** Каталог берётся из того же зеркала, что и выбор модели в чате. */
 const ROWS = DEFAULT_MODELS.filter((model) => GOOD_FOR[model.id]).map((model) => ({
   id: model.id,
   name: model.name,
-  tier: tierOf(model.requiredPlan),
+  /** Цена обычного запроса, кредиты: из plan-facts.json, который сервер сверяет с реальными ценами. */
+  price: (planFacts.modelPrices as Record<string, number>)[model.id],
 }));
 
 export function LandingModels() {
-  const { t } = useTranslation();
+  const { t, language } = useTranslation();
 
   return (
     <section
@@ -57,7 +60,11 @@ export function LandingModels() {
                   {t(GOOD_FOR[row.id])}
                 </td>
                 <td className="px-6 py-3.5 text-right max-md:col-start-2 max-md:row-start-1 max-md:p-0">
-                  <Badge tone={TIER_TONE[row.tier]}>{TIER_LABEL[row.tier]}</Badge>
+                  {row.price !== undefined ? (
+                    <Badge tone="neutral" className="tabular-nums">
+                      {t('home.modelsPrice', { price: formatCredits(row.price, language, 1) })}
+                    </Badge>
+                  ) : null}
                 </td>
               </tr>
             ))}

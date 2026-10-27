@@ -4,9 +4,7 @@ import { API_BASE } from '@/lib/api-config';
 import type {
   CryptoCurrency,
   CryptoInvoice,
-  Plan,
   PlanId,
-  SbpInvoice,
   Subscription,
   TelegramStarsInvoice,
 } from './types';
@@ -52,25 +50,12 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   return (await response.json()) as T;
 }
 
-export async function fetchPlans(): Promise<Plan[]> {
-  const data = await request<{ plans: Plan[] }>('/plans');
-  return data.plans;
-}
-
 export async function fetchSubscription(): Promise<Subscription> {
   const data = await request<{ subscription: Subscription }>('/billing/subscription');
   return data.subscription;
 }
 
-export async function checkout(
-  planId: PlanId,
-): Promise<{ subscription: Subscription; user: { plan: PlanId } }> {
-  return request<{ subscription: Subscription; user: { plan: PlanId } }>('/billing/checkout', {
-    method: 'POST',
-    body: JSON.stringify({ planId }),
-  });
-}
-
+/** Отмена подписки прежней системы: новых подписок нет, но действующую можно отключить. */
 export async function cancelSubscription(): Promise<{
   subscription: Subscription;
   user: { plan: PlanId };
@@ -80,45 +65,22 @@ export async function cancelSubscription(): Promise<{
   });
 }
 
-// --- СБП ---
-
-export async function createSbpInvoice(planId: PlanId): Promise<{ invoice: SbpInvoice }> {
-  return request<{ invoice: SbpInvoice }>('/billing/sbp/create-invoice', {
-    method: 'POST',
-    body: JSON.stringify({ planId }),
-  });
-}
-
-export async function getSbpInvoiceStatus(
-  invoiceId: string,
-): Promise<{ status: string; invoice: SbpInvoice }> {
-  return request<{ status: string; invoice: SbpInvoice }>(`/billing/sbp/status/${invoiceId}`);
-}
-
-export async function confirmSbpPayment(invoiceId: string): Promise<{
+/** Ответ на подтверждение оплаты: профиль уже с актуальным уровнем доступа. */
+interface PaidResult<Invoice> {
   success: boolean;
-  subscription: Subscription;
+  subscription: Subscription | null;
   user: { plan: PlanId };
-  invoice: SbpInvoice;
-}> {
-  return request<{
-    success: boolean;
-    subscription: Subscription;
-    user: { plan: PlanId };
-    invoice: SbpInvoice;
-  }>(`/billing/sbp/confirm/${invoiceId}`, {
-    method: 'POST',
-  });
+  invoice: Invoice;
 }
 
 // --- Telegram Stars ---
 
 export async function createTelegramStarsInvoice(
-  planId: PlanId,
+  packId: string,
 ): Promise<{ invoice: TelegramStarsInvoice }> {
   return request<{ invoice: TelegramStarsInvoice }>('/billing/telegram-stars/create-invoice', {
     method: 'POST',
-    body: JSON.stringify({ planId }),
+    body: JSON.stringify({ packId }),
   });
 }
 
@@ -130,18 +92,10 @@ export async function getTelegramStarsStatus(
   );
 }
 
-export async function confirmTelegramStarsPayment(invoiceId: string): Promise<{
-  success: boolean;
-  subscription: Subscription;
-  user: { plan: PlanId };
-  invoice: TelegramStarsInvoice;
-}> {
-  return request<{
-    success: boolean;
-    subscription: Subscription;
-    user: { plan: PlanId };
-    invoice: TelegramStarsInvoice;
-  }>(`/billing/telegram-stars/confirm/${invoiceId}`, {
+export async function confirmTelegramStarsPayment(
+  invoiceId: string,
+): Promise<PaidResult<TelegramStarsInvoice>> {
+  return request<PaidResult<TelegramStarsInvoice>>(`/billing/telegram-stars/confirm/${invoiceId}`, {
     method: 'POST',
   });
 }
@@ -149,12 +103,12 @@ export async function confirmTelegramStarsPayment(invoiceId: string): Promise<{
 // --- Crypto ---
 
 export async function createCryptoInvoice(
-  planId: PlanId,
+  packId: string,
   currency: CryptoCurrency = 'USDT_TRC20',
 ): Promise<{ invoice: CryptoInvoice }> {
   return request<{ invoice: CryptoInvoice }>('/billing/crypto/create-invoice', {
     method: 'POST',
-    body: JSON.stringify({ planId, currency }),
+    body: JSON.stringify({ packId, currency }),
   });
 }
 
@@ -165,42 +119,9 @@ export async function getCryptoInvoiceStatus(
 }
 
 /** Проверка оплаты счёта Trybit. Прямых переводов с TxID нет: подтверждает только шлюз. */
-export async function confirmCryptoPayment(invoiceId: string): Promise<{
-  success: boolean;
-  subscription: Subscription;
-  user: { plan: PlanId };
-  invoice: CryptoInvoice;
-}> {
-  return request<{
-    success: boolean;
-    subscription: Subscription;
-    user: { plan: PlanId };
-    invoice: CryptoInvoice;
-  }>(`/billing/crypto/confirm/${invoiceId}`, {
+export async function confirmCryptoPayment(invoiceId: string): Promise<PaidResult<CryptoInvoice>> {
+  return request<PaidResult<CryptoInvoice>>(`/billing/crypto/confirm/${invoiceId}`, {
     method: 'POST',
     body: JSON.stringify({}),
   });
-}
-
-// --- Бонус за оплату криптой ---
-
-/** Бонусные кредиты при оплате тарифа через Trybit: месячная выдача и бонус по тарифам. */
-export async function fetchCryptoBonus(): Promise<{
-  plans: Record<string, { credits: number; bonusCredits: number }>;
-}> {
-  return request('/billing/crypto-bonus');
-}
-
-// --- Stripe ---
-
-export async function createStripeCheckout(
-  planId: PlanId,
-): Promise<{ url: string; sessionId?: string; mock?: boolean }> {
-  return request<{ url: string; sessionId?: string; mock?: boolean }>(
-    '/billing/stripe/create-checkout',
-    {
-      method: 'POST',
-      body: JSON.stringify({ planId }),
-    },
-  );
 }

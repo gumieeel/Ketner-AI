@@ -6,7 +6,6 @@ import {
   DownloadIcon,
   ImageIcon,
   InfoIcon,
-  LockIcon,
   RefreshIcon,
   SparkleIcon,
   TrashIcon,
@@ -200,8 +199,7 @@ export function ImagesPage() {
     ? IMAGE_STYLE_IDS.filter((id) => capabilities.styles?.includes(id))
     : IMAGE_STYLE_IDS;
   const maxChars = capabilities.maxPromptChars;
-  const canGenerate =
-    capabilities.available && prompt.trim().length > 0 && !generating && !model?.locked;
+  const canGenerate = capabilities.available && prompt.trim().length > 0 && !generating;
   const onKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>): void => {
     if (event.key === 'Enter' && (event.metaKey || event.ctrlKey)) {
       event.preventDefault();
@@ -266,26 +264,15 @@ export function ImagesPage() {
                       aria-pressed={m.id === modelId}
                       disabled={generating}
                       onClick={() => setModel(m.id)}
-                      title={
-                        m.locked
-                          ? t('images.lockedPlan', { plan: m.requiredPlan.toUpperCase() })
-                          : undefined
-                      }
                       className={cn(
                         'inline-flex min-h-10 items-center gap-1.5 rounded-lg border px-3 text-[13px] font-medium transition-colors',
                         m.id === modelId
                           ? 'border-accent/50 bg-accent-soft text-accent'
                           : 'border-stroke text-text hover:bg-surface-2',
-                        m.locked && 'text-muted',
                       )}
                     >
-                      {m.locked ? <LockIcon className="size-3.5" aria-hidden="true" /> : null}
                       {m.name}
-                      {m.locked ? (
-                        <span className="text-[11px] text-subtle">
-                          {t('images.lockedPlan', { plan: m.requiredPlan.toUpperCase() })}
-                        </span>
-                      ) : m.priceCredits !== undefined ? (
+                      {m.priceCredits !== undefined ? (
                         <span className="tabular text-[11px] text-subtle">
                           {t('images.modelPrice', {
                             price: formatCredits(m.priceCredits, language, 1),
@@ -382,18 +369,9 @@ export function ImagesPage() {
               </span>
               {capabilities.credits.exhausted ? (
                 <Link to="/pricing" className="font-medium text-accent hover:underline">
-                  {t('credits.plans')}
+                  {t('credits.buy')}
                 </Link>
               ) : null}
-            </p>
-          ) : null}
-          {model?.locked ? (
-            <p className="flex flex-wrap items-center gap-2 text-[13px] text-muted">
-              <LockIcon className="size-3.5" />{' '}
-              {t('images.lockedPlan', { plan: model.requiredPlan.toUpperCase() })}
-              <Link to="/pricing" className="font-medium text-accent hover:underline">
-                {t('images.upgrade')}
-              </Link>
             </p>
           ) : null}
           {notice ? (

@@ -1,5 +1,6 @@
 import { Link } from 'react-router-dom';
-import { PlanCards } from '@/components/pricing/plan-cards';
+import { PackCards } from '@/components/pricing/pack-cards';
+import { TRIAL } from '@/features/billing/plans';
 import { useTranslation } from '@/i18n';
 import { SectionHead } from './section-head';
 
@@ -17,7 +18,7 @@ export function LandingPricingSection() {
         title={t('home.pricingTitle')}
         lead={
           <>
-            <p>{t('home.pricingLead')}</p>
+            <p>{t('home.pricingLead', { credits: TRIAL.credits })}</p>
             <Link
               to="/pricing"
               className="mt-3 inline-flex min-h-11 items-center text-[15px] font-medium text-accent underline decoration-accent/40 underline-offset-4 hover:decoration-accent"
@@ -27,7 +28,7 @@ export function LandingPricingSection() {
           </>
         }
       />
-      <PlanCards variant="compact" className="mt-12" />
+      <PackCards variant="compact" className="mt-12" />
     </section>
   );
 }

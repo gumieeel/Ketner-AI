@@ -1,13 +1,12 @@
 import type { Language } from '@/features/preferences/preferences-store';
 import type { AnswerReview } from '@/features/review/types';
+import type { PlanId } from '../billing/types';
 
 /**
  * Типы контракта чата. Совпадают по форме с mock-API и docs/data-model.md:
  * при переходе на реальный бэкенд меняется источник данных, а не структуры.
  */
-export type { Language };
-
-export type PlanId = 'free' | 'gpt-pro' | 'claude-pro' | 'gemini-pro' | 'ultra' | 'plus' | 'pro';
+export type { Language, PlanId };
 export type MessageRole = 'user' | 'assistant';
 
 /** `pending` и `streaming` живут только на клиенте во время генерации. */
@@ -147,15 +146,13 @@ export interface ModelInfo {
   id: string;
   name: string;
   contextMessages: number;
-  isPro?: boolean;
-  requiredPlan?: PlanId;
   /** Примерная цена обычного запроса в кредитах (1 кредит = $0.001 себестоимости); 0 у бесплатных. */
   requestCredits?: number;
   /** Цена запроса в режиме Max, если она отличается от обычной. */
   requestCreditsMax?: number;
   /** Бесплатная модель: кредитов не тратит. */
   free?: boolean;
-  /** Фиксированная глубина размышлений (модели Pro и Ultra): обычный режим и режим Max (Ultra). */
+  /** Фиксированная глубина размышлений (модели Pro и Ultra): обычный режим и режим Max. */
   reasoningEffort?: { standard: string; max: string };
   /** Компания-разработчик: Ketner AI своих моделей не обучает. */
   developer?: string;
@@ -178,7 +175,7 @@ export interface PlanLimits {
 export interface ChatMeta {
   models: ModelInfo[];
   defaultModelId: string;
-  limits: Record<PlanId, PlanLimits>;
+  limits: Record<string, PlanLimits>;
   /** Кто отвечает на Free вместо выбранной модели (бесплатные эндпоинты). */
   freeTierModels?: ModelInfo[];
 }

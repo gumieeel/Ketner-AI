@@ -40,7 +40,6 @@ export interface CodeModelOption {
   id: string;
   name: string;
   costClass: 'lite' | 'work' | 'strong' | 'top';
-  locked: boolean;
 }
 
 export interface CodeCapabilities {

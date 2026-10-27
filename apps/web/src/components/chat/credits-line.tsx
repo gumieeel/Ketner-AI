@@ -17,8 +17,8 @@ const EXPIRY_NOTICE_DAYS = 7;
 /**
  * Строка под выбором модели: сколько кредитов осталось, сколько стоит запрос выбранной модели и на
  * сколько запросов хватит остатка. Когда кредитов мало или они кончились, строка говорит, кто
- * отвечает дальше (бесплатная модель, кредиты не тратятся) и когда придут новые. Остаток считает сервер
- * (GET /api/usage/credits); строка обновляется после каждого ответа.
+ * отвечает дальше (бесплатная модель, кредиты не тратятся), и ведёт к покупке пакета. Остаток
+ * считает сервер (GET /api/usage/credits); строка обновляется после каждого ответа.
  */
 export function CreditsLine() {
   const { t, language } = useTranslation();
@@ -51,7 +51,10 @@ export function CreditsLine() {
   const exhausted = report.stage === 'exhausted';
   const attention = exhausted || report.low;
   const model = report.models.find((m) => m.id === modelId);
-  const fill = Math.max(0, Math.min(100, Math.round((report.balance / report.monthly) * 100)));
+  const fill =
+    report.granted > 0
+      ? Math.max(0, Math.min(100, Math.round((report.balance / report.granted) * 100)))
+      : 0;
 
   return (
     <div
@@ -81,9 +84,6 @@ export function CreditsLine() {
         </span>
       </span>
       <span>{describe(report, model, t, language)}</span>
-      {exhausted && report.refreshAt ? (
-        <span>{t('credits.refresh', { when: formatDateTime(report.refreshAt, language) })}</span>
-      ) : null}
       {!exhausted && expiresSoon(report) ? (
         <span>
           {t('credits.expires', {
@@ -92,9 +92,9 @@ export function CreditsLine() {
           })}
         </span>
       ) : null}
-      {attention ? (
+      {attention || !report.purchased ? (
         <Link to="/pricing" className="font-medium text-accent hover:underline">
-          {t('credits.plans')}
+          {t('credits.buy')}
         </Link>
       ) : null}
     </div>
@@ -116,7 +116,7 @@ function describeModel(
   t: Translate,
   language: 'ru' | 'en',
 ): string {
-  if (!model) return t('credits.ofMonthly', { monthly: formatCredits(report.monthly, language) });
+  if (!model) return t('credits.ofGranted', { granted: formatCredits(report.granted, language) });
   if (model.free) return t('credits.modelFree', { model: model.name });
   const price = formatCredits(model.requestCredits, language, 1);
   if (!model.affordable) return t('credits.notEnough', { model: model.name, price });
@@ -137,7 +137,7 @@ function describe(
   if (report.stage === 'exhausted') return t('credits.exhausted', { free });
   if (!report.low) return describeModel(report, model, t, language);
   // Кредиты на исходе: предупреждение, а про выбранную модель — только если на неё уже не хватает.
-  const low = t('credits.low', { monthly: formatCredits(report.monthly, language), free });
+  const low = t('credits.low', { free });
   return model && !model.free && !model.affordable
     ? `${low}. ${describeModel(report, model, t, language)}`
     : low;

@@ -1,11 +1,11 @@
 import { useAuth } from '@/features/auth/auth-store';
-import { DEFAULT_MODELS } from './can-access-model';
+import { DEFAULT_MODELS } from './model-catalog';
 import { useChat } from './chat-store';
 import { maxCompareModels, sanitizeCompareModelIds } from './compare-policy';
 import { useCompare } from './compare-store';
 import type { ModelInfo } from './types';
 
-/** Модели, отобранные для сравнения: из сохранённого выбора остаются доступные на тарифе. */
+/** Модели, отобранные для сравнения: из сохранённого выбора остаются модели, которые есть в каталоге. */
 export function useCompareSelection(): {
   ids: string[];
   max: number;

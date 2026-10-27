@@ -2,10 +2,10 @@ import { useEffect } from 'react';
 import { Outlet } from 'react-router-dom';
 import { useAuth } from '@/features/auth/auth-store';
 import { useChat } from '@/features/chat/chat-store';
-import { canAccessModel, findModel } from '@/features/chat/can-access-model';
+import { findModel } from '@/features/chat/model-catalog';
 import { usePreferences } from '@/features/preferences/preferences-store';
 import { useTranslation } from '@/i18n';
-import { UpgradeModal } from '@/components/chat/upgrade-modal';
+import { CreditsModal } from '@/components/chat/credits-modal';
 import { Header } from './header';
 import { Sidebar } from './sidebar';
 
@@ -31,14 +31,13 @@ export function AppShell() {
   }, [loadConversations, loadMeta, user]);
 
   useEffect(() => {
-    // Выбор модели хранится в браузере и переживает смену аккаунта: после входа под тарифом ниже
-    // (или выхода) недоступная модель сбрасывается на Auto, а не остаётся выбранной с замком.
+    // Выбор модели хранится в браузере: если модели больше нет в каталоге, возвращаем Auto.
     if (authStatus === 'loading') return;
     const model = findModel(meta?.models, chatModelId);
-    if (model.id !== chatModelId || !canAccessModel(user?.plan, model)) {
+    if (model.id !== chatModelId) {
       if (chatModelId !== 'auto') setChatModelId('auto');
     }
-  }, [authStatus, user?.plan, meta, chatModelId, setChatModelId]);
+  }, [authStatus, meta, chatModelId, setChatModelId]);
 
   const { t } = useTranslation();
 
@@ -61,7 +60,7 @@ export function AppShell() {
           <Outlet />
         </main>
       </div>
-      <UpgradeModal />
+      <CreditsModal />
     </div>
   );
 }

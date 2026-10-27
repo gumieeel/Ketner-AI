@@ -6,27 +6,17 @@ import {
   type DragEvent,
   type KeyboardEvent,
 } from 'react';
-import { Link } from 'react-router-dom';
 import {
   FolderIcon,
   GitHubIcon,
   PaperclipIcon,
   PlusIcon,
   SendIcon,
-  SparkleIcon,
   StopIcon,
 } from '@/components/icons';
-import { buttonClasses } from '@/components/ui/button-classes';
 import { IconButton } from '@/components/ui/icon-button';
-import { useAuth } from '@/features/auth/auth-store';
-import { useUpgradeModal } from '@/features/billing/upgrade-modal-store';
 import { readFileAsAttachment } from '@/features/chat/attachment-utils';
-import {
-  MODEL_NAME_KEYS,
-  canAccessModel,
-  findModel,
-  getRequiredPlanName,
-} from '@/features/chat/can-access-model';
+import { MODEL_NAME_KEYS, findModel } from '@/features/chat/model-catalog';
 import { useChat } from '@/features/chat/chat-store';
 import type { ModelInfo } from '@/features/chat/types';
 import { usePreferences } from '@/features/preferences/preferences-store';
@@ -41,7 +31,6 @@ import { WorkspaceBar } from './workspace-bar';
 import { CompareBar } from './compare-bar';
 import { useCompareSelection } from '@/features/chat/use-compare-selection';
 import { useCompare } from '@/features/chat/compare-store';
-import { maxCompareModels } from '@/features/chat/compare-policy';
 
 const attachItemClass =
   'flex min-h-11 w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-left text-[13px] font-medium text-text transition-colors hover:bg-surface-2 focus-visible:bg-surface-2 md:min-h-10';
@@ -67,7 +56,6 @@ export function Composer({ variant = 'dock' }: ComposerProps) {
   const addAttachments = useChat((state) => state.addAttachments);
   const removeAttachment = useChat((state) => state.removeAttachment);
   const selectedModelId = usePreferences((state) => state.chatModelId);
-  const user = useAuth((state) => state.user);
 
   const fieldRef = useRef<HTMLTextAreaElement | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
@@ -87,26 +75,16 @@ export function Composer({ variant = 'dock' }: ComposerProps) {
     }
   }, [resumeIntent, consumeGithubIntent]);
 
-  const compareEnabled = useCompare((state) => state.enabled) && maxCompareModels(user?.plan) > 0;
+  const compareEnabled = useCompare((state) => state.enabled);
   const compareSelection = useCompareSelection();
   const compareReady = !compareEnabled || compareSelection.ids.length >= 2;
 
   const currentModel = findModel(meta?.models, selectedModelId);
-  // В режиме сравнения модель из переключателя не участвует: доступ проверяется у каждой колонки.
-  const hasAccess = compareEnabled || canAccessModel(user?.plan, currentModel);
   const activeWorkspace = useWorkspace((state) => state.activeWorkspace);
 
   const labelOf = (model: ModelInfo): string => {
     const key = MODEL_NAME_KEYS[model.id];
     return key ? t(key) : model.name;
-  };
-
-  const handlePaidModelAttempt = () => {
-    useUpgradeModal.getState().open({
-      reason: 'paid_model',
-      modelName: labelOf(currentModel),
-      requiredPlan: getRequiredPlanName(currentModel),
-    });
   };
 
   const attachRef = useRef<HTMLDivElement | null>(null);
@@ -194,9 +172,6 @@ export function Composer({ variant = 'dock' }: ComposerProps) {
     if (streaming) {
       return;
     }
-    if (!hasAccess) {
-      handlePaidModelAttempt();
-    }
     if (draft.trim() === '' && attachedFiles.length === 0) {
       return;
     }
@@ -216,9 +191,6 @@ export function Composer({ variant = 'dock' }: ComposerProps) {
 
   const canSubmit = (draft.trim() !== '' || attachedFiles.length > 0) && compareReady;
 
-  const bannerClass =
-    'mb-2.5 flex flex-wrap items-center justify-between gap-x-3 gap-y-2 rounded-2xl border border-warning/30 bg-warning-soft px-3.5 py-2.5 text-[13px] text-text';
-
   const hero = variant === 'hero';
 
   return (
@@ -235,27 +207,6 @@ export function Composer({ variant = 'dock' }: ComposerProps) {
           className="pointer-events-none absolute inset-x-0 -top-6 h-6 bg-gradient-to-t from-canvas to-transparent" // taste-skill-ignore: neutral scrim over the message list
         />
       )}
-
-      {!hasAccess ? (
-        <div role="alert" className={bannerClass}>
-          <div className="flex min-w-0 items-center gap-2">
-            <SparkleIcon className="size-4 shrink-0 text-warning" aria-hidden="true" />
-            <span className="font-medium">
-              {t('chat.upgradeBanner', {
-                model: labelOf(currentModel),
-                plan: getRequiredPlanName(currentModel),
-              })}
-            </span>
-          </div>
-          <Link
-            to="/pricing"
-            onClick={handlePaidModelAttempt}
-            className={buttonClasses({ variant: 'primary', size: 'sm' })}
-          >
-            {t('chat.upgradeButton')}
-          </Link>
-        </div>
-      ) : null}
 
       {/* Полоса привязанной рабочей папки / репозитория (только когда она привязана) */}
       {activeWorkspace ? (

@@ -105,8 +105,8 @@ export function sendReviewLimit(response: Response, quota: ReviewQuota, language
     'review_limit',
     text(
       language,
-      `Проверки на сегодня закончились (${quota.limit} в сутки на вашем тарифе). Лимит восстанавливается постепенно, а на старших тарифах он больше.`,
-      `You have used today's reviews (${quota.limit} per day on your plan). The limit restores gradually; higher plans get more.`,
+      `Проверки на сегодня закончились (${quota.limit} в сутки). Лимит восстанавливается постепенно; после первой покупки кредитов он больше.`,
+      `You have used today's reviews (${quota.limit} per day). The limit restores gradually and is higher after your first credit purchase.`,
     ),
   );
 }

@@ -264,7 +264,7 @@ export class ProjectStore {
     if ((await this.count(userId)) >= limits.maxProjects) {
       throw new CodeError(
         'quota_exceeded',
-        'На вашем тарифе больше проектов создать нельзя. Удалите ненужный проект или повысьте тариф.',
+        'Достигнут лимит проектов. Удалите ненужный проект, чтобы создать новый; после первой покупки кредитов лимит выше.',
       );
     }
     const template: TemplateId = isTemplateId(input.template) ? input.template : 'empty';

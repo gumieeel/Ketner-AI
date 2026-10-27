@@ -92,7 +92,7 @@ export const routes: RouteObject[] = [
         lazy: lazyPage(() => import('@/pages/checkout-success-page'), 'CheckoutSuccessPage'),
       },
       {
-        path: 'checkout/:planId',
+        path: 'checkout/:packId',
         lazy: lazyPage(() => import('@/pages/checkout-page'), 'CheckoutPage'),
       },
     ],

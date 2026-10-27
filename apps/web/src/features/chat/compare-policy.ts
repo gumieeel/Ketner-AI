@@ -1,19 +1,22 @@
 import type { ModelInfo, PlanId } from './types';
-import { canAccessModel, planRank } from './can-access-model';
+import { planRank } from './model-catalog';
 import type { CompareSlotView } from './compare-store';
 
 /** Зеркало серверных правил (apps/mock-api/src/services/compare-policy.ts). */
 export const COMPARE_MIN_MODELS = 2;
-const MAX_MODELS_BY_RANK: readonly number[] = [0, 2, 3, 4];
+const MAX_MODELS_BY_RANK: readonly number[] = [2, 2, 3, 4];
 
-/** Сколько моделей тариф сравнивает за раз: у Free сравнения нет. */
+/**
+ * Сколько моделей уровень доступа сравнивает за раз. Сравнение открыто всем: до первой покупки —
+ * две модели, после неё — до четырёх.
+ */
 export function maxCompareModels(plan: string | null | undefined): number {
-  return MAX_MODELS_BY_RANK[planRank(plan)] ?? 0;
+  return MAX_MODELS_BY_RANK[planRank(plan)] ?? MAX_MODELS_BY_RANK[0];
 }
 
 /**
  * Модели, которые предлагаются по умолчанию, когда человек включил сравнение впервые: разные
- * семейства, чтобы разница была заметна. Берутся только доступные на тарифе.
+ * семейства, чтобы разница была заметна.
  */
 const DEFAULT_PICKS: readonly string[] = [
   'claude-sonnet-5.5',
@@ -30,9 +33,7 @@ export function defaultCompareModelIds(
   plan: PlanId | undefined,
 ): string[] {
   const limit = Math.max(maxCompareModels(plan), COMPARE_MIN_MODELS);
-  const available = new Set(
-    models.filter((model) => model.id !== 'auto' && canAccessModel(plan, model)).map((m) => m.id),
-  );
+  const available = new Set(models.filter((model) => model.id !== 'auto').map((m) => m.id));
   const ids = DEFAULT_PICKS.filter((id) => available.has(id));
   for (const id of available) {
     if (!ids.includes(id)) ids.push(id);
@@ -40,7 +41,7 @@ export function defaultCompareModelIds(
   return ids.slice(0, Math.min(limit, 3));
 }
 
-/** Оставляет только доступные и существующие модели, не больше лимита тарифа. */
+/** Оставляет только существующие модели без повторов, не больше лимита уровня доступа. */
 export function sanitizeCompareModelIds(
   ids: readonly string[],
   models: readonly ModelInfo[],
@@ -50,7 +51,7 @@ export function sanitizeCompareModelIds(
   const result: string[] = [];
   for (const id of ids) {
     const model = models.find((candidate) => candidate.id === id);
-    if (!model || id === 'auto' || result.includes(id) || !canAccessModel(plan, model)) continue;
+    if (!model || id === 'auto' || result.includes(id)) continue;
     result.push(id);
     if (result.length >= max) break;
   }

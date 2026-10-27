@@ -64,9 +64,9 @@ class Collector {
   precheck(path: string, size: number): boolean {
     const reason = skipReason(path);
     if (reason) return this.skip(path, reason);
-    if (size > this.limits.maxFileBytes) return this.skip(path, 'файл больше лимита вашего тарифа');
+    if (size > this.limits.maxFileBytes) return this.skip(path, 'файл больше допустимого размера');
     if (this.result.files.length >= this.limits.maxFiles)
-      return this.skip(path, 'превышено число файлов тарифа');
+      return this.skip(path, 'превышено допустимое число файлов');
     if (this.total + size > this.limits.maxTotalBytes)
       return this.skip(path, 'превышен общий размер проекта');
     return true;

@@ -3,13 +3,12 @@ import { translate } from '@/i18n';
 import { usePreferences } from '@/features/preferences/preferences-store';
 import { useAuth } from '@/features/auth/auth-store';
 import { reasoningModeFor } from '@/features/chat/reasoning-mode';
-import { useUpgradeModal } from '@/features/billing/upgrade-modal-store';
-import { canAccessModel, findModel, getRequiredPlanName } from './can-access-model';
+import { useCreditsModal } from '@/features/billing/credits-modal-store';
 import * as api from './api';
 import { ApiError } from './api';
 import { deriveTitle } from './derive-title';
 import { useCompare, type CompareSlotView } from './compare-store';
-import { maxCompareModels, sanitizeCompareModelIds } from './compare-policy';
+import { sanitizeCompareModelIds } from './compare-policy';
 import type {
   ChatMeta,
   ConversationSummary,
@@ -310,13 +309,13 @@ export const useChat = create<ChatState>((set, get) => {
           onError: ({ code, message }) => {
             flush();
             console.error('[chat] ошибка генерации:', code, message);
-            // Лимиты считает сервер. Когда он отказал бесплатному аккаунту, предлагаем перейти на платный тариф.
+            // Лимиты считает сервер. Когда он отказал аккаунту без купленных кредитов, предлагаем пополнить баланс.
             const refusedUser = useAuth.getState().user;
             if (
               (code === 'rate_limited' || code === 'fair_use_exceeded') &&
               (!refusedUser || !refusedUser.plan || refusedUser.plan === 'free')
             ) {
-              useUpgradeModal.getState().open({ reason: 'free_limit' });
+              useCreditsModal.getState().open();
             }
             updateAssistant({
               status: 'error',
@@ -379,7 +378,7 @@ export const useChat = create<ChatState>((set, get) => {
         ) {
           const refusedUser = useAuth.getState().user;
           if (!refusedUser || !refusedUser.plan || refusedUser.plan === 'free') {
-            useUpgradeModal.getState().open({ reason: 'free_limit' });
+            useCreditsModal.getState().open();
           }
         }
         updateAssistant({ status: 'error', error: describeError(error) });
@@ -585,9 +584,6 @@ export const useChat = create<ChatState>((set, get) => {
           status: 'complete',
         });
       } else {
-        if (error instanceof ApiError && error.code === 'compare_plan_required') {
-          useUpgradeModal.getState().open({ reason: 'compare', requiredPlan: 'PLUS' });
-        }
         patchMessage(conversationId, assistantId, {
           status: 'error',
           error: describeError(error),
@@ -755,16 +751,11 @@ export const useChat = create<ChatState>((set, get) => {
 
       const authUser = useAuth.getState().user;
       let modelId = usePreferences.getState().chatModelId;
-      const currentModel = findModel(get().meta?.models, modelId);
 
-      // Режим сравнения: вопрос уходит нескольким моделям. Остальные тарифы получают предложение
-      // перейти на Plus; модель из переключателя в этом режиме не участвует.
+      // Режим сравнения: вопрос уходит нескольким моделям (до первой покупки — двум, после — до
+      // четырёх); модель из переключателя в этом режиме не участвует.
       let compareIds: string[] | null = null;
       if (allowCompare && useCompare.getState().enabled) {
-        if (maxCompareModels(authUser?.plan) === 0) {
-          useUpgradeModal.getState().open({ reason: 'compare', requiredPlan: 'PLUS' });
-          return;
-        }
         const ids = sanitizeCompareModelIds(
           useCompare.getState().modelIds,
           get().meta?.models ?? [],
@@ -775,14 +766,6 @@ export const useChat = create<ChatState>((set, get) => {
         }
         compareIds = ids;
         modelId = ids[0];
-      } else if (!canAccessModel(authUser?.plan, currentModel)) {
-        // Модель недоступна на тарифе: сообщение не отправляется, предлагаем улучшить тариф.
-        useUpgradeModal.getState().open({
-          reason: 'paid_model',
-          modelName: currentModel.name,
-          requiredPlan: getRequiredPlanName(currentModel),
-        });
-        return;
       }
 
       const activeWs = useWorkspace.getState().activeWorkspace;
@@ -880,20 +863,6 @@ export const useChat = create<ChatState>((set, get) => {
         return;
       }
 
-      const authUser = useAuth.getState().user;
-      const modelId = usePreferences.getState().chatModelId;
-      const currentModel = findModel(get().meta?.models, modelId);
-
-      if (!canAccessModel(authUser?.plan, currentModel)) {
-        // Модель недоступна на тарифе: сообщение не отправляется, предлагаем улучшить тариф.
-        useUpgradeModal.getState().open({
-          reason: 'paid_model',
-          modelName: currentModel.name,
-          requiredPlan: getRequiredPlanName(currentModel),
-        });
-        return;
-      }
-
       const index = lastAssistantIndex(messages);
       if (index < 1) {
         return;
@@ -931,18 +900,6 @@ export const useChat = create<ChatState>((set, get) => {
       const index = messages.findIndex((message) => message.id === id);
       if (activeId === null || streamingConversations[activeId] || trimmed === '' || index === -1) {
         return;
-      }
-
-      const authUser = useAuth.getState().user;
-      const modelId = usePreferences.getState().chatModelId;
-      const currentModel = findModel(get().meta?.models, modelId);
-
-      if (!canAccessModel(authUser?.plan, currentModel)) {
-        useUpgradeModal.getState().open({
-          reason: 'paid_model',
-          modelName: currentModel.name,
-          requiredPlan: getRequiredPlanName(currentModel),
-        });
       }
 
       // Правка обрезает ленту до этого сообщения: как в ChatGPT, всё, что было

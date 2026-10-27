@@ -34,7 +34,7 @@ function useScrolled(threshold = 8): boolean {
 }
 
 /**
- * Каркас страниц вне приложения: лендинг, вход, тарифы, оформление подписки, документация.
+ * Каркас страниц вне приложения: лендинг, вход, кредиты, оформление покупки, документация.
  */
 export function StandaloneLayout() {
   const { t } = useTranslation();

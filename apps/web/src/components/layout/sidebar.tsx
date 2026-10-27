@@ -14,7 +14,7 @@ import {
   TrashIcon,
   UserIcon,
 } from '@/components/icons';
-import { Badge, type BadgeTone } from '@/components/ui/badge';
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { buttonClasses } from '@/components/ui/button-classes';
 import { IconButton } from '@/components/ui/icon-button';
@@ -23,6 +23,7 @@ import { StatusDot } from '@/components/ui/status-dot';
 import { useAuth } from '@/features/auth/auth-store';
 import { useChat } from '@/features/chat/chat-store';
 import type { ConversationSummary } from '@/features/chat/types';
+import { planBadge } from '@/features/billing/plan-badge';
 import { usePreferences } from '@/features/preferences/preferences-store';
 import { cn } from '@/lib/cn';
 import { dateGroupOf, formatShortDate, type DateGroup } from '@/lib/format-date';
@@ -31,8 +32,6 @@ import type { TranslationKey } from '@/i18n';
 import { Brand } from './brand';
 import { LanguageToggle } from './language-toggle';
 import { ThemeToggle } from './theme-toggle';
-
-const PLAN_TONES: Record<string, BadgeTone> = { plus: 'plus', pro: 'pro', ultra: 'ultra' };
 
 const GROUP_ORDER: readonly DateGroup[] = ['today', 'yesterday', 'week', 'earlier'];
 
@@ -287,10 +286,10 @@ export function Sidebar() {
                   </span>
                   <span className="block pt-0.5">
                     <Badge
-                      tone={PLAN_TONES[user.plan] ?? 'neutral'}
-                      className="px-1.5 py-0 text-[11px] capitalize leading-[18px]"
+                      tone={planBadge(user.plan, t).tone}
+                      className="px-1.5 py-0 text-[11px] leading-[18px]"
                     >
-                      {user.plan}
+                      {planBadge(user.plan, t).label}
                     </Badge>
                   </span>
                 </span>

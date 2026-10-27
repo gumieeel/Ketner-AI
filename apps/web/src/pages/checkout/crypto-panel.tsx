@@ -20,11 +20,11 @@ import { openGatewayWindow } from './gateway-window';
 import { CopyButton, Notice, PanelShell, QrFrame, StatusRow, StepLabel, TimerPill } from './parts';
 
 export interface CryptoPanelProps {
-  /** Цена покупки (тарифа или пакета), $. */
+  /** Цена пакета кредитов, $. */
   priceUsd: number;
-  /** Метка покупки: «Тариф Pro · 30 дней». */
+  /** Метка покупки: «Пакет 4 700 кредитов · 365 дней». */
   chipLabel: string;
-  /** Пояснение бонуса за оплату криптой (только для тарифов). */
+  /** Пояснение бонуса кредитами за оплату криптой. */
   bonusNote?: { title: string; text: string } | null;
   amount: string;
   timer: string;

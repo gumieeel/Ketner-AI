@@ -11,7 +11,7 @@ import {
   verifyCode as apiVerifyCode,
 } from './api';
 import { ApiError } from '../chat/api';
-import { useUpgradeModal } from '../billing/upgrade-modal-store';
+import { useCreditsModal } from '../billing/credits-modal-store';
 import type {
   AuthFlow,
   AuthSession,
@@ -75,6 +75,7 @@ function saveSession(session: AuthSession | null): void {
 function parsePlan(raw: unknown): PlanId {
   const VALID_PLANS: PlanId[] = [
     'free',
+    'credits',
     'gpt-pro',
     'claude-pro',
     'gemini-pro',
@@ -135,7 +136,7 @@ export function normalizeUser(rawUser: Record<string, unknown>): User {
 function openSession(session: AuthSession): Partial<AuthState> {
   const user = normalizeUser(session.user as unknown as Record<string, unknown>);
   saveSession({ user, token: session.token, expiresAt: session.expiresAt });
-  useUpgradeModal.getState().close();
+  useCreditsModal.getState().close();
   return { user, token: session.token, status: 'authenticated', error: null };
 }
 
@@ -154,8 +155,8 @@ export const useAuth = create<AuthState>((set, get) => ({
   restoreSession: async () => {
     const { token } = get();
     // Сервер ответил «нет»: токен отклонён или Better Auth-сессии (cookie) нет. В этом случае
-    // сохранённой копии доверять нельзя: иначе интерфейс показывает вошедшего пользователя (например,
-    // Ultra), а все запросы уходят на сервер как гостевые (чат просит подписку, проекты просят войти).
+    // сохранённой копии доверять нельзя: иначе интерфейс показывает вошедшего пользователя
+    // (с остатком кредитов), а все запросы уходят на сервер как гостевые (чат и проекты просят войти).
     let rejectedByServer = false;
     let cookieSessionMissing = false;
 
@@ -263,7 +264,7 @@ export const useAuth = create<AuthState>((set, get) => ({
     try {
       const session = await oauthLogin(provider);
       saveSession(session);
-      useUpgradeModal.getState().close();
+      useCreditsModal.getState().close();
       set({ user: session.user, token: session.token, status: 'authenticated', error: null });
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Ошибка авторизации через соцсеть';
@@ -280,7 +281,7 @@ export const useAuth = create<AuthState>((set, get) => ({
       // Игнорируем сетевые ошибки при выходе
     }
     saveSession(null);
-    useUpgradeModal.getState().close();
+    useCreditsModal.getState().close();
     set({ user: null, token: null, status: 'unauthenticated', error: null });
     if (token) {
       await apiLogout(token);

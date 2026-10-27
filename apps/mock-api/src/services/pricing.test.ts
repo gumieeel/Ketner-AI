@@ -11,7 +11,6 @@ import {
   PLAN_PRICE_RUB,
   PLAN_PRICE_USD,
   STARS_OFFICIAL_USD_PER_STAR,
-  ULTRA_LIST_PRICE_USD,
   planPriceCents,
   planPriceRub,
   planPriceUsd,
@@ -71,9 +70,9 @@ test('pricing: старые тарифы платят прежние 1199 ₽ (�
   }
 });
 
-test('pricing: цены на сайте (apps/web/.../plans.ts) совпадают с бэкендом', (t) => {
-  // Сайт и сервер хранят каталог раздельно, и однажды они разошлись (доллары против рублей).
-  // Тест читает исходник каталога сайта и сравнивает цены платных тарифов и скидочную цену Ultra.
+test('pricing: сайт берёт цены пакетов из общего plan-facts.json, а не хранит свои', (t) => {
+  // Подписки сняты с продажи: цены пакетов сверяет plan-facts.test.ts. Здесь следим, чтобы каталог
+  // сайта снова не обзавёлся собственными ценами (раньше они расходились: доллары против рублей).
   const webPlans = resolve(
     dirname(fileURLToPath(import.meta.url)),
     '../../../web/src/features/billing/plans.ts',
@@ -83,15 +82,6 @@ test('pricing: цены на сайте (apps/web/.../plans.ts) совпадаю
     return;
   }
   const source = readFileSync(webPlans, 'utf8');
-  const priceOf = (id: string): number | undefined => {
-    const block = source.match(
-      new RegExp(`id: '${id}',[\\s\\S]*?priceMonthly: (\\d+(?:\\.\\d+)?)`),
-    );
-    return block ? Number(block[1]) : undefined;
-  };
-  assert.equal(priceOf('free'), PLAN_PRICE_USD.free);
-  assert.equal(priceOf('plus'), PLAN_PRICE_USD.plus);
-  assert.equal(priceOf('pro'), PLAN_PRICE_USD.pro);
-  assert.equal(priceOf('ultra'), PLAN_PRICE_USD.ultra);
-  assert.match(source, new RegExp(`originalPriceMonthly: ${ULTRA_LIST_PRICE_USD}`));
+  assert.match(source, /plan-facts\.json/);
+  assert.doesNotMatch(source, /priceMonthly|originalPriceMonthly/);
 });

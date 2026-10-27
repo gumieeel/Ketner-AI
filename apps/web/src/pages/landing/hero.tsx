@@ -6,6 +6,8 @@ import { HeroStatus } from '@/components/marketing/hero-status';
 import { STAGE_GUTTER } from '@/components/layout/stage';
 import { buttonClasses } from '@/components/ui/button-classes';
 import { useAuth } from '@/features/auth/auth-store';
+import { planBadge } from '@/features/billing/plan-badge';
+import { TRIAL } from '@/features/billing/plans';
 import { useTranslation } from '@/i18n';
 import { useReducedMotion } from '@/lib/use-reduced-motion';
 
@@ -54,7 +56,9 @@ export function LandingHero() {
                 <span aria-hidden="true" className="hero-underline left-[38%]" />
               </span>
             </h1>
-            <p className="t-lead mt-8 max-w-[34rem]">{t('home.heroLead')}</p>
+            <p className="t-lead mt-8 max-w-[34rem]">
+              {t('home.heroLead', { credits: TRIAL.credits })}
+            </p>
 
             <div className="mt-10 flex flex-col gap-3 sm:flex-row sm:items-center">
               <Link
@@ -81,9 +85,7 @@ export function LandingHero() {
             </div>
             {signedIn && user ? (
               <p className="mt-5 text-[14px] text-subtle">
-                {t('home.heroPlan', {
-                  plan: user.plan.charAt(0).toUpperCase() + user.plan.slice(1),
-                })}
+                {t('home.heroPlan', { plan: planBadge(user.plan, t).label })}
               </p>
             ) : null}
           </div>

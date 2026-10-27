@@ -13,8 +13,8 @@ interface PreferencesState {
   /** Выбранная модель чата: переживает перезагрузку страницы. */
   chatModelId: string;
   /**
-   * Режим Max (только Ultra): модели Pro и Ultra размышляют на уровне xhigh вместо medium.
-   * Хранится как желание пользователя; действует, только если тариф позволяет (см. reasoningModeFor).
+   * Режим Max: модели Pro и Ultra размышляют на уровне xhigh вместо medium, запрос стоит дороже.
+   * Хранится как выбор пользователя; для гостя не действует (см. reasoningModeFor).
    */
   maxMode: boolean;
   setTheme: (theme: Theme) => void;

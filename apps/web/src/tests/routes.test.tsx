@@ -12,7 +12,7 @@ describe('маршрутизация и каркас экранов', () => {
     renderRoute('/');
 
     expect(
-      screen.getByRole('heading', { level: 1, name: 'Все сильные модели в одной подписке' }),
+      screen.getByRole('heading', { level: 1, name: 'Все сильные модели без подписки' }),
     ).toBeInTheDocument();
     const startLinks = screen.getAllByRole('link', { name: 'Начать бесплатно' });
     expect(startLinks.length).toBeGreaterThan(0);
@@ -35,19 +35,17 @@ describe('маршрутизация и каркас экранов', () => {
     expect(screen.getByRole('complementary', { name: 'Чаты' })).toBeInTheDocument();
   });
 
-  it('страница тарифов перечисляет планы и ведёт на оформление', () => {
+  it('страница «Кредиты» перечисляет пакеты и ведёт на оформление', () => {
     renderRoute('/pricing');
 
-    expect(screen.getByRole('heading', { level: 1, name: 'Тарифы' })).toBeInTheDocument();
-    for (const plan of ['Free', 'Plus', 'Pro', 'Ultra']) {
-      expect(screen.getByRole('heading', { level: 2, name: plan })).toBeInTheDocument();
-    }
-
-    const paidLinks = screen.getAllByRole('link', { name: 'Выбрать план' });
-    expect(paidLinks.map((link) => link.getAttribute('href'))).toEqual([
-      '/checkout/plus',
-      '/checkout/pro',
-      '/checkout/ultra',
+    expect(screen.getByRole('heading', { level: 1, name: 'Кредиты' })).toBeInTheDocument();
+    const buyLinks = screen.getAllByRole('link', { name: 'Купить' });
+    expect(buyLinks.map((link) => link.getAttribute('href'))).toEqual([
+      '/checkout/credits-5',
+      '/checkout/credits-10',
+      '/checkout/credits-25',
+      '/checkout/credits-50',
+      '/checkout/credits-100',
     ]);
   });
 
@@ -57,7 +55,7 @@ describe('маршрутизация и каркас экранов', () => {
     expect(
       screen.getByRole('heading', { level: 1, name: 'Документация Ketner AI' }),
     ).toBeInTheDocument();
-    expect(screen.getByText('Тарифные планы')).toBeInTheDocument();
+    expect(screen.getByText('Кредиты и пакеты')).toBeInTheDocument();
   });
 
   it('страница API для разработчиков открывается по /api-docs', () => {
@@ -92,7 +90,7 @@ describe('маршрутизация и каркас экранов', () => {
     expect(screen.getAllByRole('button', { name: /Тема/ }).length).toBeGreaterThan(0);
   });
 
-  it('оформление подписки показывает выбранный план', () => {
+  it('оформление показывает выбранный пакет кредитов', () => {
     useAuth.setState({
       status: 'authenticated',
       token: 'mock-token',
@@ -105,26 +103,25 @@ describe('маршрутизация и каркас экранов', () => {
       },
     });
 
-    renderRoute('/checkout/plus');
+    renderRoute('/checkout/credits-10');
 
-    expect(
-      screen.getByRole('heading', { level: 1, name: 'Оформление подписки' }),
-    ).toBeInTheDocument();
-    expect(screen.getByRole('heading', { level: 2, name: 'Plus' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { level: 1, name: 'Покупка кредитов' })).toBeInTheDocument();
+    expect(screen.getByText('Выбранный пакет')).toBeInTheDocument();
+    expect(screen.getAllByText(/4[\s\u00a0]700 кредитов/).length).toBeGreaterThan(0);
     expect(
       screen.getByRole('button', { name: /Подтвердить оплату криптовалютой/i }),
     ).toBeInTheDocument();
   });
 
-  it('неавторизованный пользователь при попытке оформления подписки перенаправляется на регистрацию', () => {
+  it('неавторизованный пользователь при попытке оформления пакета перенаправляется на регистрацию', () => {
     resetAuth();
-    renderRoute('/checkout/gpt-pro');
+    renderRoute('/checkout/credits-10');
 
     expect(
       screen.getByRole('heading', { level: 1, name: 'Создание аккаунта' }),
     ).toBeInTheDocument();
     expect(
-      screen.getByText('Для оформления подписки необходимо сначала войти или создать аккаунт.'),
+      screen.getByText('Чтобы купить кредиты, сначала войдите или создайте аккаунт.'),
     ).toBeInTheDocument();
   });
 

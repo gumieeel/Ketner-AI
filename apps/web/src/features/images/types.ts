@@ -4,8 +4,6 @@ export interface ImageModelInfo {
   id: string;
   name: string;
   aspects: ImageAspect[];
-  requiredPlan: string;
-  locked: boolean;
   dailyLimit: number;
   usedToday: number;
   /** Цена одной картинки 1024×1024 в кредитах (с десятыми). */

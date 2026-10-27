@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { ModelBrandIcon } from '@/components/icons/brands';
-import { DEFAULT_MODELS } from '@/features/chat/can-access-model';
+import { DEFAULT_MODELS } from '@/features/chat/model-catalog';
 import { useTranslation } from '@/i18n';
 import { cn } from '@/lib/cn';
 import { useReducedMotion } from '@/lib/use-reduced-motion';

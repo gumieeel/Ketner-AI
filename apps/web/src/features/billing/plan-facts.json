@@ -234,5 +234,22 @@
         }
       ]
     }
-  ]
+  ],
+  "modelPrices": {
+    "ketner-mini": 1.8,
+    "ketner-pro": 5,
+    "claude-haiku-5.5": 1.8,
+    "deepseek-v4.1-flash": 4.7,
+    "gpt-5.6-luna-pro": 3.9,
+    "qwen3.8-27b": 4.9,
+    "gemini-3.7-flash": 13.2,
+    "glm-5.3": 19.4,
+    "gpt-6.1-sol": 35.2,
+    "claude-opus-5.5": 70.4,
+    "claude-sonnet-5.5": 35.2,
+    "gpt-6-astra": 176,
+    "grok-4.7": 57.2,
+    "gpt-5.6-sol": 35.2,
+    "gpt-5.6-terra": 99.2
+  }
 }

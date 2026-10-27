@@ -10,7 +10,7 @@ import { useScrollSpy } from '@/components/docs/use-scroll-spy';
 import { CopyButton } from '@/components/ui/copy-button';
 import { RichText } from '@/components/ui/rich-text';
 import { apiBaseUrl } from '@/features/api-keys/api';
-import { DEFAULT_MODELS } from '@/features/chat/can-access-model';
+import { DEFAULT_MODELS } from '@/features/chat/model-catalog';
 import { useTranslation, type TranslationKey } from '@/i18n';
 import { KeysSection } from './api-docs/keys-section';
 import {

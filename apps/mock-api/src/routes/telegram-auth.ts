@@ -111,7 +111,7 @@ export function createTelegramAuthRouter({
         response,
         409,
         'telegram_in_use',
-        'Этот Telegram уже открывает отдельный аккаунт, созданный в Telegram. Войдите через Telegram на сайте — подписка там.',
+        'Этот Telegram уже открывает отдельный аккаунт, созданный в Telegram. Войдите через Telegram на сайте — кредиты там.',
       );
       return;
     }

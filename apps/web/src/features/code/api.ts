@@ -133,7 +133,7 @@ export interface RunRequest {
   modelId: string;
   language: 'ru' | 'en';
   signal: AbortSignal;
-  /** Режим размышлений: max действует только на Ultra. */
+  /** Режим размышлений: max доступен всем, запрос в нём стоит дороже. */
   reasoningMode?: 'standard' | 'max';
 }
 

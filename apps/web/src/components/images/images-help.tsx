@@ -1,9 +1,9 @@
 import { InfoIcon } from '@/components/icons';
-import { Badge, type BadgeTone } from '@/components/ui/badge';
+import { Badge } from '@/components/ui/badge';
 import { Modal, ModalHeader } from '@/components/ui/modal';
 import type { ImageModelInfo } from '@/features/images/types';
 import { useTranslation, type TranslationKey } from '@/i18n';
-import { cn } from '@/lib/cn';
+import { formatCredits } from '@/lib/format-date';
 
 /** Описания моделей для пользователей: для чего подходит и что умеет. */
 const MODEL_TEXT: Record<string, { about: TranslationKey; best: TranslationKey }> = {
@@ -33,13 +33,6 @@ const MODEL_TEXT: Record<string, { about: TranslationKey; best: TranslationKey }
   },
 };
 
-const PLAN_TONE: Record<string, BadgeTone> = {
-  free: 'neutral',
-  plus: 'plus',
-  pro: 'pro',
-  ultra: 'ultra',
-};
-
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <section className="flex flex-col gap-2.5">
@@ -57,8 +50,7 @@ export function ImagesHelp({
   models: readonly ImageModelInfo[];
   onClose: () => void;
 }) {
-  const { t } = useTranslation();
-  const planName = (plan: string) => plan.charAt(0).toUpperCase() + plan.slice(1);
+  const { t, language } = useTranslation();
 
   return (
     <Modal labelledBy="images-help-title" onClose={onClose} size="lg">
@@ -78,18 +70,17 @@ export function ImagesHelp({
               return (
                 <li
                   key={model.id}
-                  className={cn(
-                    'flex flex-col gap-2 rounded-xl border border-stroke bg-canvas p-3.5',
-                    model.locked && 'opacity-80',
-                  )}
+                  className="flex flex-col gap-2 rounded-xl border border-stroke bg-canvas p-3.5"
                 >
                   <div className="flex items-center justify-between gap-2">
                     <span className="text-[15px] font-semibold text-text">{model.name}</span>
-                    <Badge tone={PLAN_TONE[model.requiredPlan] ?? 'neutral'}>
-                      {model.requiredPlan === 'free'
-                        ? t('images.help.free')
-                        : t('images.help.fromPlan', { plan: planName(model.requiredPlan) })}
-                    </Badge>
+                    {model.priceCredits !== undefined ? (
+                      <Badge tone="neutral">
+                        {t('images.modelPrice', {
+                          price: formatCredits(model.priceCredits, language, 1),
+                        })}
+                      </Badge>
+                    ) : null}
                   </div>
                   {text ? (
                     <>
@@ -103,11 +94,6 @@ export function ImagesHelp({
                   <p className="text-xs text-subtle">
                     {square ? t('images.help.formatsSquare') : t('images.help.formatsAll')}
                   </p>
-                  {model.locked ? (
-                    <p className="mt-auto text-xs font-medium text-muted">
-                      {t('images.help.locked', { plan: planName(model.requiredPlan) })}
-                    </p>
-                  ) : null}
                 </li>
               );
             })}

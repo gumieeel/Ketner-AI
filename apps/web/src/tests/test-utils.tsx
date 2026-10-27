@@ -3,7 +3,7 @@ import { RouterProvider, createMemoryRouter, type RouteObject } from 'react-rout
 import { ThemeSync } from '@/app/theme-sync';
 import { useAuth } from '@/features/auth/auth-store';
 import { useBilling } from '@/features/billing/billing-store';
-import { useUpgradeModal } from '@/features/billing/upgrade-modal-store';
+import { useCreditsModal } from '@/features/billing/credits-modal-store';
 import { useChat } from '@/features/chat/chat-store';
 import { useCompare } from '@/features/chat/compare-store';
 import { DEFAULT_MODEL_ID, usePreferences } from '@/features/preferences/preferences-store';
@@ -55,7 +55,7 @@ export function resetPreferences(): void {
 
 /** Возвращает стор чата к исходному состоянию: он живёт на уровне модуля. */
 export function resetChat(): void {
-  useUpgradeModal.getState().close();
+  useCreditsModal.getState().close();
   useCompare.setState({ enabled: false, modelIds: [], runs: {} });
   useChat.setState({
     conversations: [],

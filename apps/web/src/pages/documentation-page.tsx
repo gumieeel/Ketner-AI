@@ -5,176 +5,92 @@ import {
   BoltIcon,
   CheckIcon,
   ChevronDownIcon,
-  CpuIcon,
   InfoIcon,
-  RocketIcon,
   ShieldIcon,
   SparkleIcon,
   StarIcon,
 } from '@/components/icons';
 import { Callout, DocHeading, DocsLayout, useScrollSpy } from '@/components/docs';
-import { Badge, type BadgeTone } from '@/components/ui/badge';
+import { PackCards } from '@/components/pricing/pack-cards';
+import { Badge } from '@/components/ui/badge';
 import { buttonClasses } from '@/components/ui/button-classes';
 import { Card, CardText, CardTitle } from '@/components/ui/card';
 import { FAQ_ITEMS } from '@/features/content/faq';
 import { useTranslation } from '@/i18n';
 import { cn } from '@/lib/cn';
 import planFacts from '@/features/billing/plan-facts.json';
+import { PACK_VALID_DAYS, TRIAL } from '@/features/billing/plans';
+import { maxCompareModels } from '@/features/chat/compare-policy';
 
-interface PlanCardInfo {
-  id: string;
-  name: string;
-  price: { ru: string; en: string };
-  badge: { ru: string; en: string };
-  desc: { ru: string; en: string };
-  speed: { ru: string; en: string };
-  priority: { ru: string; en: string };
-  context: { ru: string; en: string };
+type Localized = { ru: string; en: string };
+
+interface LevelCard {
+  id: 'free' | 'credits';
+  title: Localized;
+  badge: Localized;
+  desc: Localized;
   features: { ru: string[]; en: string[] };
-  popular?: boolean;
 }
 
-type PlanKey = keyof typeof planFacts.plans;
+const fmt = (value: number, language: 'ru' | 'en'): string =>
+  value.toLocaleString(language === 'ru' ? 'ru-RU' : 'en-US');
 
-/** Строка про кредиты тарифа; числа — из plan-facts.json, который тест сверяет с сервером. */
-function creditsLine(plan: PlanKey, language: 'ru' | 'en'): string {
-  const facts = planFacts.plans[plan];
-  const locale = language === 'ru' ? 'ru-RU' : 'en-US';
-  const credits = facts.monthlyCredits.toLocaleString(locale);
-  const first = facts.examples[0];
-  if (!first) {
-    return language === 'ru'
-      ? `${credits} кредитов каждые 30 дней (картинки)`
-      : `${credits} credits every 30 days (images)`;
-  }
-  const requests = first.requests.toLocaleString(locale);
-  return language === 'ru'
-    ? `${credits} кредитов каждые 30 дней — примерно ${requests} запросов ${first.name}; остаток переносится на один период`
-    : `${credits} credits every 30 days, about ${requests} ${first.name} requests; leftovers carry over for one period`;
-}
+const free = planFacts.levels.free;
+const bought = planFacts.levels.credits;
 
-const PLANS_DATA: PlanCardInfo[] = [
+/** Два уровня доступа вместо четырёх тарифов; числа — из plan-facts.json, который тест сверяет с сервером. */
+const LEVEL_CARDS: LevelCard[] = [
   {
     id: 'free',
-    name: 'Free',
-    price: { ru: '$0', en: '$0' },
-    badge: { ru: 'Попробуйте AI', en: 'Try AI' },
+    title: { ru: 'Пробные кредиты', en: 'Trial credits' },
+    badge: { ru: 'Бесплатно', en: 'Free' },
     desc: {
-      ru: 'Идеально для первого знакомства, быстрых вопросов и простых задач.',
-      en: 'Ideal for trying out the platform, fast questions, and everyday queries.',
+      ru: `Каждому новому аккаунту — ${fmt(TRIAL.credits, 'ru')} кредитов один раз, на ${TRIAL.days} дней. Все модели открыты, пока хватает кредитов.`,
+      en: `Every new account gets ${fmt(TRIAL.credits, 'en')} credits once, valid for ${TRIAL.days} days. All models are open while credits last.`,
     },
-    speed: { ru: '10 сообщений в сутки', en: '10 messages a day' },
-    priority: { ru: '1 запрос одновременно', en: '1 request at once' },
-    context: { ru: 'Режим Auto', en: 'Auto mode' },
     features: {
       ru: [
-        'Бесплатная Nemotron 3 Ultra (NVIDIA), запасная — Ketner Mini',
-        creditsLine('free', 'ru'),
-        'Интеллектуальный режим Best AI (Auto)',
-        'Сохранение полной истории диалогов',
-        'Синхронизация между всеми устройствами',
+        `Любая модель, режим Max и сравнение ответов до ${maxCompareModels('free')} моделей`,
+        `${free.messagesPerDay} сообщений в сутки, ${free.concurrency} запрос одновременно`,
+        `Картинки: до ${free.imagesPerDay['flux-schnell']} в сутки на модель`,
+        `Ketner Code: ${free.codeRunsPerDay} запусков в сутки`,
+        'Когда кредиты кончились, отвечает бесплатная модель',
       ],
       en: [
-        'Free Nemotron 3 Ultra (NVIDIA), Ketner Mini as backup',
-        creditsLine('free', 'en'),
-        'Intelligent Best AI (Auto) mode',
-        'Full conversation history saving',
-        'Sync across all your devices',
+        `Any model, Max mode and comparing up to ${maxCompareModels('free')} models`,
+        `${free.messagesPerDay} messages a day, ${free.concurrency} request at once`,
+        `Images: up to ${free.imagesPerDay['flux-schnell']} a day per model`,
+        `Ketner Code: ${free.codeRunsPerDay} runs a day`,
+        'When credits run out, a free model answers',
       ],
     },
   },
   {
-    id: 'plus',
-    name: 'Plus',
-    price: { ru: '$9 / мес', en: '$9 / mo' },
-    badge: { ru: 'Быстрые модели', en: 'Fast models' },
+    id: 'credits',
+    title: { ru: 'После покупки пакета', en: 'After buying a pack' },
+    badge: { ru: `${PACK_VALID_DAYS} дней`, en: `${PACK_VALID_DAYS} days` },
     desc: {
-      ru: 'Стандартные быстрые модели для комфортной ежедневной работы и учебы.',
-      en: 'Standard fast models for smooth daily work and study.',
+      ru: `Пакет оплачивается один раз, подписки нет. Пока остаются купленные кредиты, технические лимиты намного выше.`,
+      en: `A pack is paid once, with no subscription. While purchased credits remain, the technical limits are much higher.`,
     },
-    speed: { ru: '500 сообщений в сутки', en: '500 messages a day' },
-    priority: { ru: '2 запроса одновременно', en: '2 requests at once' },
-    context: { ru: 'GPT-6.1 Sol и Claude Haiku', en: 'GPT-6.1 Sol and Claude Haiku' },
     features: {
       ru: [
-        'Модели: Ketner Pro, GPT-6.1 Sol, Claude Haiku 5.5, DeepSeek V4.1 Flash',
-        'Картинки FLUX.2 klein в пяти форматах',
-        creditsLine('plus', 'ru'),
-        'Доступ через режим Auto или ручной выбор модели',
+        `Сравнение ответов до ${maxCompareModels('credits')} моделей`,
+        `${fmt(bought.messagesPerDay, 'ru')} сообщений в сутки, ${bought.concurrency} запросов одновременно`,
+        `Картинки: до ${bought.imagesPerDay['flux-schnell']} в сутки на модель`,
+        `Ketner Code: ${bought.codeRunsPerDay} запусков в сутки`,
+        'API-ключи для редакторов и своих программ',
       ],
       en: [
-        'Models: Ketner Pro, GPT-6.1 Sol, Claude Haiku 5.5, DeepSeek V4.1 Flash',
-        'FLUX.2 klein images in five aspect ratios',
-        creditsLine('plus', 'en'),
-        'Access via Auto mode or manual model selection',
-      ],
-    },
-  },
-  {
-    id: 'pro',
-    name: 'Pro',
-    price: { ru: '$25 / мес', en: '$25 / mo' },
-    badge: { ru: 'Топовые модели', en: 'Top models' },
-    desc: {
-      ru: 'Топовые мировые флагманы. Включает всё из Plus.',
-      en: 'World-class flagship models. Includes all Plus features.',
-    },
-    speed: { ru: '1 500 сообщений в сутки', en: '1,500 messages a day' },
-    priority: { ru: '4 запроса одновременно', en: '4 requests at once' },
-    context: { ru: 'Claude Opus и Sonnet', en: 'Claude Opus and Sonnet' },
-    popular: true,
-    features: {
-      ru: [
-        'Все, что входит в тариф Plus',
-        'Топовые модели: Claude Opus 5.5, Sonnet 5.5, GPT-6 Astra, GPT-5.6 Sol, GPT-5.6 Terra xhigh, Grok 4.7 xhigh',
-        'Картинки FLUX.2 dev и Seedream',
-        creditsLine('pro', 'ru'),
-        'Ручной выбор любой модели, доступной на тарифе',
-      ],
-      en: [
-        'All Plus tier features included',
-        'Top models: Claude Opus 5.5, Sonnet 5.5, GPT-6 Astra, GPT-5.6 Sol, GPT-5.6 Terra xhigh, Grok 4.7 xhigh',
-        'FLUX.2 dev and Seedream images',
-        creditsLine('pro', 'en'),
-        'Manual selection of any model available on your plan',
-      ],
-    },
-  },
-  {
-    id: 'ultra',
-    name: 'Ultra',
-    price: { ru: '$49 / мес (скидка вместо $59)', en: '$49 / mo (discount from $59)' },
-    badge: { ru: 'Максимум возможностей', en: 'Maximum power' },
-    desc: {
-      ru: 'Все модели Pro, режим Max, лучшие модели картинок и самые высокие лимиты.',
-      en: 'All Pro models, Max mode, the best image models and the highest limits.',
-    },
-    speed: { ru: '4 000 сообщений в сутки', en: '4,000 messages a day' },
-    priority: { ru: '8 запросов одновременно', en: '8 requests at once' },
-    context: { ru: 'Режим Max', en: 'Max mode' },
-    features: {
-      ru: [
-        'Все, что входит в тариф Pro',
-        'Режим Max: модели думают дольше и глубже',
-        'Картинки FLUX.2 pro и Nano Banana 2',
-        creditsLine('ultra', 'ru'),
-      ],
-      en: [
-        'All Pro tier features included',
-        'Max mode: models think longer and deeper',
-        'FLUX.2 pro and Nano Banana 2 images',
-        creditsLine('ultra', 'en'),
+        `Comparing up to ${maxCompareModels('credits')} models`,
+        `${fmt(bought.messagesPerDay, 'en')} messages a day, ${bought.concurrency} requests at once`,
+        `Images: up to ${bought.imagesPerDay['flux-schnell']} a day per model`,
+        `Ketner Code: ${bought.codeRunsPerDay} runs a day`,
+        'API keys for editors and your own programs',
       ],
     },
   },
 ];
-
-const PLAN_TONES: Record<string, BadgeTone> = {
-  free: 'neutral',
-  plus: 'plus',
-  pro: 'pro',
-  ultra: 'ultra',
-};
 
 export function DocumentationPage() {
   const { t, language } = useTranslation();
@@ -185,7 +101,8 @@ export function DocumentationPage() {
 
   useEffect(() => {
     if (planId) {
-      const el = document.getElementById(`plan-${planId}`) || document.getElementById('plans');
+      // Ссылки на прежние тарифы (/docs/plans/pro) ведут к разделу про кредиты.
+      const el = document.getElementById('plans');
       if (el) {
         el.scrollIntoView({ behavior: 'smooth' });
       }
@@ -324,81 +241,38 @@ export function DocumentationPage() {
           <p className="max-w-[68ch] text-sm leading-6 text-muted">{t('docPage.plansLead')}</p>
         </div>
 
-        <div className="grid gap-3 md:gap-4 sm:grid-cols-2">
-          {PLANS_DATA.map((plan) => {
-            const isHighlighted = planId === plan.id;
-            return (
-              <Card
-                key={plan.id}
-                id={`plan-${plan.id}`}
-                className={cn(
-                  'flex scroll-mt-32 flex-col justify-between rounded-2xl bg-surface p-5 transition-[border-color,box-shadow] xl:scroll-mt-24',
-                  isHighlighted
-                    ? 'border-accent ring-2 ring-accent-soft'
-                    : plan.popular
-                      ? 'border-accent/50'
-                      : 'border-stroke',
-                )}
-              >
-                <div>
-                  <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1.5">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <CardTitle className="text-lg">{plan.name}</CardTitle>
-                      <Badge tone={plan.popular ? 'brand' : (PLAN_TONES[plan.id] ?? 'neutral')}>
-                        {plan.badge[language]}
-                      </Badge>
-                    </div>
-                    <span className="text-sm font-semibold text-text tabular-nums">
-                      {plan.price[language]}
-                    </span>
-                  </div>
-
-                  <p className="mt-2 text-[13px] leading-5 text-muted">{plan.desc[language]}</p>
-
-                  <ul className="mt-3.5 flex flex-wrap gap-1.5 text-xs">
-                    {[
-                      { icon: BoltIcon, text: plan.speed[language] },
-                      { icon: RocketIcon, text: plan.priority[language] },
-                      { icon: CpuIcon, text: plan.context[language] },
-                    ].map(({ icon: Icon, text }) => (
-                      <li
-                        key={text}
-                        className="inline-flex items-center gap-1.5 rounded-lg border border-stroke bg-surface-2 px-2 py-1 text-text"
-                      >
-                        <Icon className="size-3.5 shrink-0 text-accent" />
-                        {text}
-                      </li>
-                    ))}
-                  </ul>
-
-                  <ul className="mt-4 space-y-2 text-[13px] leading-5 text-text/85">
-                    {plan.features[language].map((f) => (
-                      <li key={f} className="flex items-start gap-2">
-                        <CheckIcon className="mt-0.5 size-4 shrink-0 text-accent" />
-                        <span>{f}</span>
-                      </li>
-                    ))}
-                  </ul>
+        <div className="grid gap-3 sm:grid-cols-2 md:gap-4">
+          {LEVEL_CARDS.map((card) => (
+            <Card
+              key={card.id}
+              id={`plan-${card.id}`}
+              className={cn(
+                'flex flex-col justify-between rounded-2xl bg-surface p-5',
+                card.id === 'credits' ? 'border-accent/50' : 'border-stroke',
+              )}
+            >
+              <div>
+                <div className="flex flex-wrap items-center gap-2">
+                  <CardTitle className="text-lg">{card.title[language]}</CardTitle>
+                  <Badge tone={card.id === 'credits' ? 'brand' : 'neutral'}>
+                    {card.badge[language]}
+                  </Badge>
                 </div>
-
-                <div className="mt-5 border-t border-stroke pt-4">
-                  <Link
-                    to={plan.id === 'free' ? '/chat' : `/checkout/${plan.id}`}
-                    className={buttonClasses({
-                      variant: plan.popular || isHighlighted ? 'primary' : 'outline',
-                      size: 'md',
-                      fullWidth: true,
-                    })}
-                  >
-                    {plan.id === 'free'
-                      ? t('docPage.tryFree')
-                      : t('docPage.choosePlan', { plan: plan.name })}
-                  </Link>
-                </div>
-              </Card>
-            );
-          })}
+                <p className="mt-2 text-[13px] leading-5 text-muted">{card.desc[language]}</p>
+                <ul className="mt-4 space-y-2 text-[13px] leading-5 text-text/85">
+                  {card.features[language].map((feature) => (
+                    <li key={feature} className="flex items-start gap-2">
+                      <CheckIcon className="mt-0.5 size-4 shrink-0 text-accent" />
+                      <span>{feature}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            </Card>
+          ))}
         </div>
+
+        <PackCards variant="compact" />
       </section>
 
       {/* 4. Честное использование (Fair Use) */}

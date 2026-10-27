@@ -1,39 +1,14 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Badge, type BadgeTone } from '@/components/ui/badge';
+import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import planFacts from '@/features/billing/plan-facts.json';
 import { fetchMeta } from '@/features/chat/api';
 import type { ChatMeta, ModelInfo } from '@/features/chat/types';
 import { formatCredits } from '@/lib/format-date';
 
-type Tier = 'free' | 'plus' | 'pro' | 'ultra';
-
-const TIERS: readonly Tier[] = ['free', 'plus', 'pro', 'ultra'];
-
-const TIER_LABEL: Record<Tier, string> = {
-  free: 'Free',
-  plus: 'Plus',
-  pro: 'Pro',
-  ultra: 'Ultra',
-};
-
-const TIER_TONE: Record<Tier, BadgeTone> = {
-  free: 'neutral',
-  plus: 'plus',
-  pro: 'pro',
-  ultra: 'ultra',
-};
-
-const TIER_HEADING: Record<Tier, string> = {
-  free: 'Доступны на всех тарифах',
-  plus: 'С тарифа Plus',
-  pro: 'С тарифа Pro',
-  ultra: 'Только Ultra',
-};
-
 interface ImageModelInfo {
-  id: keyof typeof planFacts.plans.ultra.imagesPerDay;
+  id: keyof typeof planFacts.levels.credits.imagesPerDay;
   name: string;
   developer: string;
   provider: string;
@@ -72,12 +47,6 @@ const IMAGE_MODELS: readonly ImageModelInfo[] = [
     note: 'пока только квадрат',
   },
 ];
-
-function tierOf(model: ModelInfo): Tier {
-  if (!model.isPro && !model.requiredPlan) return 'free';
-  const plan = model.requiredPlan ?? 'plus';
-  return (TIERS as readonly string[]).includes(plan) ? (plan as Tier) : 'pro';
-}
 
 function formatTokens(tokens: number | undefined): string | null {
   if (!tokens) return null;
@@ -178,10 +147,11 @@ export function ModelsPage() {
           ответ. Под ответом в чате всегда видно, какая модель ответила на самом деле.
         </p>
         <p className="max-w-3xl text-[15px] leading-7 text-muted">
-          Запрос списывает кредиты по реальной стоимости: короткий вопрос к Ketner Mini обходится
-          примерно в 2 кредита, большой — к Claude Opus в десятки. Цена на карточках — для обычного
-          запроса; длинные диалоги и вложения стоят дороже. Когда кредитов не хватает, отвечает
-          модель дешевле, а когда они кончились — бесплатная модель.{' '}
+          Все модели открыты каждому, платят только кредиты. Запрос списывает их по реальной
+          стоимости: короткий вопрос к Ketner Mini обходится примерно в 2 кредита, большой — к
+          Claude Opus в десятки. Цена на карточках — для обычного запроса; длинные диалоги и
+          вложения стоят дороже. Когда кредитов не хватает, отвечает модель дешевле, а когда они
+          кончились — бесплатная модель.{' '}
           <Link to="/pricing" className="text-text underline underline-offset-4">
             Как работают кредиты
           </Link>
@@ -219,33 +189,27 @@ export function ModelsPage() {
           ))}
         </div>
       ) : (
-        TIERS.map((tier) => {
-          const group = models.filter((model) => tierOf(model) === tier);
-          if (group.length === 0) return null;
-          return (
-            <section key={tier} aria-labelledby={`tier-${tier}`} className="flex flex-col gap-4">
-              <div className="flex items-center gap-3">
-                <h2 id={`tier-${tier}`} className="text-xl font-semibold tracking-tight">
-                  {TIER_HEADING[tier]}
-                </h2>
-                <Badge tone={TIER_TONE[tier]}>{TIER_LABEL[tier]}</Badge>
-              </div>
-              <ul className="grid gap-3 md:grid-cols-2">
-                {group.map((model) => (
-                  <ModelCard key={model.id} model={model} />
-                ))}
-              </ul>
-            </section>
-          );
-        })
+        <section aria-labelledby="models-all" className="flex flex-col gap-4">
+          <div className="flex items-center gap-3">
+            <h2 id="models-all" className="text-xl font-semibold tracking-tight">
+              Доступны всем
+            </h2>
+            <Badge tone="brand">Кредиты</Badge>
+          </div>
+          <ul className="grid gap-3 md:grid-cols-2">
+            {models.map((model) => (
+              <ModelCard key={model.id} model={model} />
+            ))}
+          </ul>
+        </section>
       )}
 
       <section className="flex max-w-3xl flex-col gap-3">
-        <h2 className="text-xl font-semibold tracking-tight">Кто отвечает на тарифе Free</h2>
+        <h2 className="text-xl font-semibold tracking-tight">Кто отвечает бесплатно</h2>
         <p className="text-[15px] leading-7 text-muted">
-          На Free запросы идут не на Ketner Mini, а на бесплатные версии моделей у OpenRouter. Они
-          не тратят кредиты. Их лимит общий на весь сервис; когда он исчерпан, отвечает Ketner Mini.
-          Эти же модели отвечают на любом тарифе, когда кредиты кончились.
+          Пока у вас нет купленных кредитов, запрос к Ketner Mini идёт не на него, а на бесплатные
+          версии моделей у OpenRouter. Они не тратят кредиты. Их лимит общий на весь сервис; когда
+          он исчерпан, отвечает Ketner Mini. Эти же модели отвечают, когда кредиты кончились.
         </p>
         {meta?.freeTierModels?.length ? (
           <ul className="flex list-disc flex-col gap-1.5 pl-5 text-[15px] leading-7 text-muted marker:text-subtle">
@@ -262,7 +226,7 @@ export function ModelsPage() {
         ) : null}
         <p className="text-[15px] leading-7 text-muted">
           Поставщики бесплатных моделей могут сохранять запросы и использовать их для обучения. Не
-          отправляйте на Free личные данные, пароли и коммерческую тайну. Подробнее — в{' '}
+          отправляйте им личные данные, пароли и коммерческую тайну. Подробнее — в{' '}
           <Link to="/privacy" className="text-text underline underline-offset-4">
             политике конфиденциальности
           </Link>
@@ -275,8 +239,9 @@ export function ModelsPage() {
         <ul className="flex list-disc flex-col gap-1.5 pl-5 text-[15px] leading-7 text-muted marker:text-subtle">
           <li>Простые вопросы отвечает Ketner Mini, обычные задачи — Ketner Pro.</li>
           <li>
-            На Pro и Ultra задачи по коду, математике и логике средней сложности получает GLM-5.3
-            (Z.ai), сложные — GPT-6.1 Sol (OpenAI), пока хватает кредитов.
+            До первой покупки Auto всегда выбирает Ketner Mini, чтобы пробные кредиты не уходили
+            зря. После покупки задачи по коду, математике и логике средней сложности получает
+            GLM-5.3 (Z.ai), сложные — GPT-6.1 Sol (OpenAI), пока хватает кредитов.
           </li>
           <li>Claude Opus 5.5 и GPT-6 Astra Auto не выбирает: только если выбрать их вручную.</li>
           <li>Какая модель ответила и почему, видно под ответом.</li>
@@ -288,7 +253,7 @@ export function ModelsPage() {
         <p className="max-w-3xl text-[15px] leading-7 text-muted">
           Подсказку перед генерацией проверяет и переводит на английский Ketner Mini; запрещённые
           запросы не выполняются. Картинки тоже тратят кредиты (по стоимости генерации), а в сутки
-          их можно сделать не больше лимита тарифа.
+          их можно сделать не больше лимита: он выше после первой покупки.
         </p>
         <div className="overflow-x-auto rounded-xl border border-stroke">
           <table className="w-full min-w-[640px] border-collapse text-left text-[13px]">
@@ -303,11 +268,12 @@ export function ModelsPage() {
                 <th scope="col" className="p-3 font-semibold">
                   Через
                 </th>
-                {TIERS.map((tier) => (
-                  <th key={tier} scope="col" className="p-3 font-semibold">
-                    {TIER_LABEL[tier]}
-                  </th>
-                ))}
+                <th scope="col" className="p-3 font-semibold">
+                  До покупки
+                </th>
+                <th scope="col" className="p-3 font-semibold">
+                  После покупки
+                </th>
               </tr>
             </thead>
             <tbody className="divide-y divide-stroke bg-surface text-muted">
@@ -323,10 +289,10 @@ export function ModelsPage() {
                   </th>
                   <td className="p-3">{model.developer}</td>
                   <td className="p-3">{model.provider}</td>
-                  {TIERS.map((tier) => {
-                    const limits = planFacts.plans[tier].imagesPerDay as Record<string, number>;
+                  {(['free', 'credits'] as const).map((level) => {
+                    const limits = planFacts.levels[level].imagesPerDay as Record<string, number>;
                     return (
-                      <td key={tier} className="p-3 tabular-nums">
+                      <td key={level} className="p-3 tabular-nums">
                         {limits[model.id] ?? '—'}
                       </td>
                     );

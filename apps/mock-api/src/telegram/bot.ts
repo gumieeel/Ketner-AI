@@ -1304,7 +1304,7 @@ export class TelegramBotService implements TelegramPaymentsPort {
       if (linked && linked.id !== target.id && isTelegramAccountEmail(linked.email)) {
         await this.sendMessage(
           chatId,
-          'Этот Telegram уже открывает отдельный аккаунт Ketner, созданный через Telegram. Чтобы подключить другой аккаунт, сначала выйдите из этого: кабинет → Профиль → «Выйти из аккаунта» (он сохранится вместе с подпиской).',
+          'Этот Telegram уже открывает отдельный аккаунт Ketner, созданный через Telegram. Чтобы подключить другой аккаунт, сначала выйдите из этого: кабинет → Профиль → «Выйти из аккаунта» (он сохранится вместе с кредитами).',
           { reply_markup: { inline_keyboard: [[this.openAppButton()]] } },
         );
         return { handled: true, action: 'auth_link_conflict' };

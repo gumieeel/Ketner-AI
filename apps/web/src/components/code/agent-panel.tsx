@@ -278,7 +278,7 @@ function RunFooter({ item, reviewable }: { item: RunItem; reviewable: boolean })
       {item.message ? <p className="leading-5">{item.message}</p> : null}
       {needsUpgrade ? (
         <Link to="/pricing" className="font-medium text-accent hover:underline">
-          {t('code.agent.upgrade')}
+          {t('credits.buy')}
         </Link>
       ) : null}
       {reviewable ? (
@@ -471,9 +471,8 @@ export function AgentPanel() {
               >
                 <option value="auto">{t('code.agent.modelAuto')}</option>
                 {(capabilities?.models ?? []).map((model) => (
-                  <option key={model.id} value={model.id} disabled={model.locked}>
+                  <option key={model.id} value={model.id}>
                     {model.name}
-                    {model.locked ? ` — ${t('code.agent.modelLocked')}` : ''}
                   </option>
                 ))}
               </select>

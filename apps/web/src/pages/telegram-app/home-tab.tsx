@@ -1,9 +1,9 @@
 import { useState } from 'react';
 import {
   ChevronRightIcon,
+  CreditsIcon,
   FileTextIcon,
   MessagesIcon,
-  RefreshIcon,
   ShieldIcon,
   StarIcon,
   TelegramIcon,
@@ -11,7 +11,9 @@ import {
 import { Button } from '@/components/ui/button';
 import { ApiError, miniAppApi } from '@/features/telegram/api';
 import { haptic } from '@/features/telegram/webapp';
+import { legacyPlanName } from '@/features/billing/plan-badge';
 import { useTranslation } from '@/i18n';
+import { formatCredits } from '@/lib/format-date';
 import { cn } from '@/lib/cn';
 import {
   formatDate,
@@ -27,20 +29,21 @@ import {
 export function HomeTab() {
   const { t, language } = useTranslation();
   const { app, token, state, setState, notify, goTo, openSite } = useMiniApp();
-  const { user, autoRenew, plans, payments } = state;
+  const { user, autoRenew, credits, payments } = state;
   const info = subscriptionInfo(state);
-  const planTitle = (id: string) =>
-    plans.find((plan) => plan.id === id)?.title ?? (id === 'free' ? 'Free' : id);
   const [savingAuto, setSavingAuto] = useState(false);
   const [opening, setOpening] = useState(false);
   const pendingRefund = payments.find((payment) => payment.status === 'refund_requested');
+  const hasPurchases = payments.some((payment) => payment.status === 'paid');
+  const activeAuto = autoRenew?.status === 'active' ? autoRenew : null;
 
-  const toggleAuto = async (enabled: boolean) => {
+  // Автопродление прежней подписки можно только выключить: новых подписок нет.
+  const stopAuto = async () => {
     setSavingAuto(true);
     try {
-      setState(await miniAppApi.autoRenew(token, enabled));
+      setState(await miniAppApi.autoRenew(token, false));
       haptic.success(app);
-      notify('success', enabled ? t('tg.autoOnDone') : t('tg.autoOffDone'));
+      notify('success', t('tg.autoOffDone'));
     } catch (error) {
       haptic.error(app);
       notify('danger', error instanceof ApiError ? error.message : t('tg.errorGeneric'));
@@ -60,85 +63,55 @@ export function HomeTab() {
 
   return (
     <div className="flex flex-col gap-4">
-      <Panel aria-labelledby="tg-sub-title">
-        <p id="tg-sub-title" className="text-[13px] text-muted">
-          {t('tg.subscription')}
+      <Panel aria-labelledby="tg-credits-title">
+        <p id="tg-credits-title" className="text-[13px] text-muted">
+          {t('tg.creditsTitle')}
         </p>
-        <p className="mt-1 text-[24px] font-semibold tracking-tight">
-          {user.isVip ? 'Ultra · VIP' : planTitle(info.plan)}
+        <p className="mt-1 flex items-center gap-2 text-[28px] font-semibold tracking-tight tabular-nums">
+          <CreditsIcon className="size-6 text-accent" aria-hidden="true" />
+          {formatCredits(credits.balance, language)}
         </p>
-        {user.isVip ? (
-          <p className="mt-1 text-[14px] text-muted">{t('tg.vip')}</p>
-        ) : info.running ? (
-          <>
-            <p className="mt-1 text-[14px] text-muted">
-              {t('tg.until', { date: formatDate(info.endsAt, language), days: info.daysLeft })}
-            </p>
-            <div
-              className="mt-3 h-1.5 overflow-hidden rounded-full bg-surface-3"
-              role="progressbar"
-              aria-valuemin={0}
-              aria-valuemax={30}
-              aria-valuenow={Math.min(30, info.daysLeft)}
-              aria-label={t('tg.daysLeft', { days: info.daysLeft })}
-            >
-              <div
-                className={cn(
-                  'h-full rounded-full',
-                  info.daysLeft <= 3 ? 'bg-warning' : 'bg-accent',
-                )}
-                style={{ width: `${Math.min(100, (info.daysLeft / 30) * 100)}%` }}
-              />
-            </div>
-          </>
-        ) : (
-          <p className="mt-1 text-[14px] leading-6 text-muted">{t('tg.freeText')}</p>
-        )}
-
-        {!user.isVip && autoRenew ? (
-          <div className="mt-3 border-t border-stroke pt-1">
-            <Toggle
-              label={t('tg.autoRenew')}
-              description={
-                autoRenew.status === 'active'
-                  ? t('tg.autoOnHint', {
-                      plan: planTitle(autoRenew.planId),
-                      stars: formatStars(autoRenew.stars, language),
-                      date: formatDate(autoRenew.nextChargeAt ?? info.endsAt, language),
-                    })
-                  : t('tg.autoOffHint', { date: formatDate(info.endsAt, language) })
-              }
-              checked={autoRenew.status === 'active'}
-              disabled={savingAuto}
-              onChange={(next) => void toggleAuto(next)}
-            />
-          </div>
-        ) : null}
-
+        <p className="mt-1 text-[14px] leading-6 text-muted">
+          {user.isVip
+            ? t('tg.vip')
+            : hasPurchases
+              ? t('tg.creditsText', { days: credits.validDays })
+              : t('tg.creditsTrial', { trial: formatCredits(credits.trialCredits, language) })}
+        </p>
         {!user.isVip ? (
           <div className="mt-3 flex flex-col gap-2">
-            {info.running ? (
-              <Button className="w-full" onClick={() => goTo('plans')}>
-                {t('tg.renewOrSwitch')}
-              </Button>
-            ) : (
-              <Button className="w-full" onClick={() => goTo('plans')}>
-                {t('tg.choosePlan')}
-              </Button>
-            )}
-            {info.running && !autoRenew ? (
-              <Button
-                variant="outline"
-                className="w-full gap-2"
-                onClick={() => goTo('plans', { recurring: true })}
-              >
-                <RefreshIcon className="size-4" />
-                {t('tg.enableAuto')}
-              </Button>
-            ) : null}
+            <Button className="w-full" onClick={() => goTo('plans')}>
+              {t('tg.topUp')}
+            </Button>
           </div>
         ) : null}
       </Panel>
+
+      {!user.isVip && info.running ? (
+        <Panel aria-labelledby="tg-legacy-title">
+          <p id="tg-legacy-title" className="text-[13px] text-muted">
+            {t('tg.legacyTitle')}
+          </p>
+          <p className="mt-1 text-[17px] font-semibold">{legacyPlanName(info.plan)}</p>
+          <p className="mt-1 text-[14px] leading-6 text-muted">
+            {t('tg.until', { date: formatDate(info.endsAt, language), days: info.daysLeft })}
+          </p>
+          {activeAuto ? (
+            <div className="mt-3 border-t border-stroke pt-1">
+              <Toggle
+                label={t('tg.autoRenew')}
+                description={t('tg.legacyAutoHint', {
+                  stars: formatStars(activeAuto.stars, language),
+                  date: formatDate(activeAuto.nextChargeAt ?? info.endsAt, language),
+                })}
+                checked
+                disabled={savingAuto}
+                onChange={() => void stopAuto()}
+              />
+            </div>
+          ) : null}
+        </Panel>
+      ) : null}
 
       {pendingRefund ? (
         <Notice tone="info">
@@ -170,7 +143,7 @@ export function HomeTab() {
         />
         <QuickAction
           icon={<StarIcon className="size-5" />}
-          label={t('tg.tabPlans')}
+          label={t('tg.tabCredits')}
           onClick={() => goTo('plans')}
         />
         <QuickAction

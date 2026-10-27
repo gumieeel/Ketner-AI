@@ -8,7 +8,8 @@ import { resetAuth, resetPreferences } from './test-utils';
 
 const credits = {
   balance: 2987,
-  monthly: 11000,
+  granted: 11900,
+  purchased: true,
   spentMonth: 8013,
   nextExpiresAt: '2026-11-20T10:00:00Z',
   usedPct: 73,
@@ -58,7 +59,7 @@ const detail = {
     grants: [
       {
         id: 'pay_1',
-        kind: 'plan',
+        kind: 'pack',
         amountUsd: 11,
         remainingUsd: 2.987,
         grantedAt: '2026-10-20T10:00:00Z',
@@ -168,6 +169,11 @@ describe('админка: кредиты пользователей', () => {
     const dialog = await screen.findByRole('dialog');
     await within(dialog).findByText('Потрачено за 30 дней');
     expect(within(dialog).getByText('Остаток')).toBeInTheDocument();
+    // Сколько выдано по действующим грантам и есть ли купленные кредиты (они открывают полный уровень лимитов)
+    expect(within(dialog).getByText('Выдано действующими грантами')).toBeInTheDocument();
+    expect(within(dialog).getAllByText(/11[\s\u00a0,]900/).length).toBeGreaterThan(0);
+    expect(within(dialog).getByText('есть купленные')).toBeInTheDocument();
+    expect(within(dialog).getByText('Пакет кредитов')).toBeInTheDocument();
     expect(within(dialog).getAllByText(/2[\s\u00a0,]987/).length).toBeGreaterThan(0);
     expect(within(dialog).getByText('Откуда')).toBeInTheDocument();
     expect(within(dialog).getByText(/Вручную/)).toBeInTheDocument();

@@ -1,4 +1,3 @@
-import type { BadgeTone } from '@/components/ui/badge';
 import type { TranslationKey } from '@/i18n';
 
 /** Короткое «для чего» по id модели. Модели без записи в таблицу не попадают в списки на главной. */
@@ -19,13 +18,3 @@ export const GOOD_FOR: Record<string, TranslationKey> = {
   'gpt-5.6-sol': 'home.good.sol56',
   'gpt-5.6-terra': 'home.good.terra',
 };
-
-export type Tier = 'free' | 'plus' | 'pro';
-export const TIER_LABEL: Record<Tier, string> = { free: 'Free', plus: 'Plus', pro: 'Pro' };
-export const TIER_TONE: Record<Tier, BadgeTone> = { free: 'neutral', plus: 'plus', pro: 'pro' };
-
-export function tierOf(requiredPlan: string | undefined): Tier {
-  if (requiredPlan === 'plus') return 'plus';
-  if (requiredPlan === 'pro' || requiredPlan === 'ultra') return 'pro';
-  return 'free';
-}

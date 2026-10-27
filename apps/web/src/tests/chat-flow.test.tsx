@@ -4,7 +4,7 @@ import userEvent, { type UserEvent } from '@testing-library/user-event';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { useAuth } from '@/features/auth/auth-store';
 import { useChat } from '@/features/chat/chat-store';
-import { useUpgradeModal } from '@/features/billing/upgrade-modal-store';
+import { useCreditsModal } from '@/features/billing/credits-modal-store';
 import { usePreferences } from '@/features/preferences/preferences-store';
 import type { Message } from '@/features/chat/types';
 import { installFakeApi } from './fake-api';
@@ -187,13 +187,13 @@ describe('чат: отправка, стриминг и управление о�
   });
 
   it('переключатель модели меняет модель в запросе', async () => {
-    const api = installFakeApi({ reply: 'Готово', plan: 'ultra' });
+    const api = installFakeApi({ reply: 'Готово', plan: 'free' });
     useAuth.setState({
       user: {
         id: 'demo-user',
         email: 'demo@ketner.ai',
         name: 'Демо Пользователь',
-        plan: 'ultra',
+        plan: 'free',
         createdAt: new Date().toISOString(),
       },
       token: 'fake.jwt.token',
@@ -244,72 +244,82 @@ describe('чат: отправка, стриминг и управление о�
     expect(await screen.findByText('Фоновый ответ без прерывания')).toBeInTheDocument();
   });
 
-  it('показывает список моделей со звёздочками у платных и плашку апгрейда при выборе платной модели', async () => {
+  it('все модели каталога открыты без покупки: нет замков и бейджей тарифов, выбор платной модели сохраняется', async () => {
     installFakeApi();
     const user = setupChat();
     await screen.findByRole('heading', { level: 2, name: EMPTY_TITLE });
 
     await user.click(screen.getByRole('button', { name: 'Выбрать модель' }));
     // Проверяем наличие всех моделей каталога
-    expect(await screen.findByRole('option', { name: /Ketner Mini/ })).toBeInTheDocument();
-    expect(screen.getByRole('option', { name: /Ketner Pro/ })).toBeInTheDocument();
-    expect(screen.getByRole('option', { name: /Claude Haiku 5\.5/ })).toBeInTheDocument();
-    expect(screen.getByRole('option', { name: /DeepSeek V4\.1 Flash/ })).toBeInTheDocument();
-    expect(screen.getByRole('option', { name: /GPT-6\.1 Sol/ })).toBeInTheDocument();
-    expect(screen.getByRole('option', { name: /Gemini 3\.8 Flash/ })).toBeInTheDocument();
-    expect(screen.getByRole('option', { name: /Grok 4\.7/ })).toBeInTheDocument();
-    expect(screen.getByRole('option', { name: /Claude Opus 5\.5/ })).toBeInTheDocument();
+    expect(await screen.findByRole('option', { name: /Ketner Mini/ })).toBeEnabled();
+    for (const name of [
+      /Ketner Pro/,
+      /Claude Haiku 5\.5/,
+      /DeepSeek V4\.1 Flash/,
+      /GPT-6\.1 Sol/,
+      /Gemini 3\.8 Flash/,
+      /Grok 4\.7/,
+      /Claude Opus 5\.5/,
+    ]) {
+      const option = screen.getByRole('option', { name });
+      expect(option).toBeEnabled();
+      expect(option).not.toHaveClass('opacity-40');
+    }
+    // Названия тарифов у моделей не пишем: платит только баланс кредитов
+    expect(screen.queryByText(/^(plus|pro|ultra)$/i)).toBeNull();
 
     await user.keyboard('{Escape}');
 
-    // Платная модель, выбранная раньше (например, под другим аккаунтом), на Free сбрасывается на Auto.
+    // Платная модель, выбранная раньше, остаётся: на Free её не сбрасывают.
     act(() => {
       usePreferences.getState().setChatModelId('gpt-6.1-sol');
     });
-    await waitFor(() => expect(usePreferences.getState().chatModelId).toBe('auto'));
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(usePreferences.getState().chatModelId).toBe('gpt-6.1-sol');
   });
 
-  it('на недоступной модели сообщение не отправляется: открывается предложение улучшить тариф', async () => {
-    const api = installFakeApi({ enforcePlans: true });
-    setupChat();
+  it('когда на балансе не хватает кредитов, ответ — ошибка с кнопкой покупки, и она открывает пакеты', async () => {
+    const api = installFakeApi({ insufficientCredits: true });
+    const user = setupChat();
     await screen.findByRole('heading', { level: 2, name: EMPTY_TITLE });
 
-    // Модель выбрана и сообщение отправлено в одном такте, до сброса выбора.
-    await act(async () => {
+    act(() => {
       usePreferences.getState().setChatModelId('claude-opus-5.5');
-      await useChat.getState().send('Тест платной модели', []);
     });
+    await sendMessage(user, 'Тест дорогой модели');
 
-    expect(useUpgradeModal.getState().isOpen).toBe(true);
-    expect(useUpgradeModal.getState().modelName).toMatch(/Claude Opus 5\.5/);
-    expect(api.completions).toBe(0);
-    useUpgradeModal.getState().close();
+    // Запрос ушёл на сервер: клиент сам кредиты не считает и модель не блокирует
+    await waitFor(() => expect(api.completions).toBe(1));
+    expect(api.completionBodies[0].modelId).toBe('claude-opus-5.5');
+    expect(await screen.findByText('Нужны кредиты')).toBeInTheDocument();
+    expect(
+      screen.getByText('Не хватает кредитов. Пополните баланс, чтобы продолжить.'),
+    ).toBeInTheDocument();
+    expect(useCreditsModal.getState().isOpen).toBe(false);
+
+    await user.click(screen.getByRole('button', { name: 'Купить кредиты' }));
+    const modal = await screen.findByRole('dialog');
+    expect(within(modal).getByText('Пополните кредиты, чтобы продолжить')).toBeInTheDocument();
+    expect(within(modal).getByTestId('modal-pack-credits-5')).toBeInTheDocument();
+    expect(within(modal).getByTestId('modal-pack-credits-25')).toBeInTheDocument();
+    useCreditsModal.getState().close();
   });
 
-  it('недоступные платные модели в списке заблокированы и полупрозрачны, а клик по полю ввода не открывает модалку', async () => {
+  it('дорогие модели в списке не заблокированы, а клик по полю ввода не открывает модалку', async () => {
     installFakeApi();
     const user = setupChat();
     await screen.findByRole('heading', { level: 2, name: EMPTY_TITLE });
 
     // Открываем селектор моделей
     await user.click(await screen.findByRole('button', { name: 'Выбрать модель' }));
-    // Группа определяется тарифом из каталога: Sol открывается с Plus, Opus — с Pro
     const solOption = await screen.findByRole('option', { name: /GPT-6\.1 Sol/ });
-    expect(solOption).toBeDisabled();
-    expect(solOption).toHaveClass('opacity-40');
-    expect(within(solOption).getByText('plus')).toBeInTheDocument();
+    expect(solOption).toBeEnabled();
     const opusOption = screen.getByRole('option', { name: /Claude Opus 5\.5/ });
-    expect(opusOption).toBeDisabled();
-    expect(opusOption).toHaveClass('opacity-40');
-    expect(within(opusOption).getByText('pro')).toBeInTheDocument();
-    // Бесплатная Ketner Mini доступна и без бейджа тарифа
-    const miniOption = screen.getByRole('option', { name: /Ketner Mini/ });
-    expect(miniOption).toBeEnabled();
-    expect(within(miniOption).queryByText('plus')).toBeNull();
-    expect(within(miniOption).queryByText('pro')).toBeNull();
-
-    // Закрываем меню кликом по фокусу или esc
-    await user.keyboard('{Escape}');
+    expect(opusOption).toBeEnabled();
+    // Выбор дорогой модели ничего не спрашивает: цена видна в списке, когда загружен отчёт о кредитах
+    await user.click(opusOption);
+    expect(usePreferences.getState().chatModelId).toBe('claude-opus-5.5');
+    expect(screen.queryByRole('dialog')).toBeNull();
 
     // Кликаем в поле ввода — модалка не появляется
     const field = await screen.findByLabelText(COMPOSER);
@@ -331,14 +341,14 @@ describe('чат: отправка, стриминг и управление о�
     expect(lastAssistant().modelId).toBe('ketner-pro');
   });
 
-  it('доступ к моделям определяется рангом тарифа: Plus открывает Sol, но не Opus, устаревший gpt-pro равен Pro', async () => {
-    installFakeApi({ plan: 'plus' });
+  it('покупатель кредитов и подписчик прежнего тарифа видят тот же список моделей, открытый целиком', async () => {
+    installFakeApi({ plan: 'credits' });
     useAuth.setState({
       user: {
         id: 'demo-user',
         email: 'demo@ketner.ai',
         name: 'Демо Пользователь',
-        plan: 'plus',
+        plan: 'credits',
         createdAt: new Date().toISOString(),
       },
       token: 'fake.jwt.token',
@@ -349,12 +359,10 @@ describe('чат: отправка, стриминг и управление о�
 
     await user.click(screen.getByRole('button', { name: 'Выбрать модель' }));
     expect(await screen.findByRole('option', { name: /GPT-6\.1 Sol/ })).toBeEnabled();
-    expect(screen.getByRole('option', { name: /Ketner Pro/ })).toBeEnabled();
-    expect(screen.getByRole('option', { name: /Claude Opus 5\.5/ })).toBeDisabled();
-    expect(screen.getByRole('option', { name: /Grok 4\.7/ })).toBeDisabled();
-    expect(screen.getByRole('option', { name: /Gemini 3\.8 Flash/ })).toBeDisabled();
+    expect(screen.getByRole('option', { name: /Claude Opus 5\.5/ })).toBeEnabled();
+    expect(screen.getByRole('option', { name: /Grok 4\.7/ })).toBeEnabled();
 
-    // Устаревший тариф gpt-pro приравнен к Pro: открыты и Plus-, и Pro-модели
+    // Устаревший тариф gpt-pro: список тот же
     await user.keyboard('{Escape}');
     act(() => {
       useAuth.setState({
@@ -369,7 +377,7 @@ describe('чат: отправка, стриминг и управление о�
     });
     await user.click(screen.getByRole('button', { name: 'Выбрать модель' }));
     expect(await screen.findByRole('option', { name: /Claude Opus 5\.5/ })).toBeEnabled();
-    expect(screen.getByRole('option', { name: /GPT-6\.1 Sol/ })).toBeEnabled();
+    expect(screen.getByRole('option', { name: /Gemini 3\.8 Flash/ })).toBeEnabled();
   });
 
   it('сохранённая модель, которой нет в каталоге, после загрузки каталога сбрасывается на Auto', async () => {
@@ -384,7 +392,7 @@ describe('чат: отправка, стриминг и управление о�
     expect(await screen.findByText('Готово')).toBeInTheDocument();
   });
 
-  it('когда сервер отказывает бесплатному аккаунту, весь экран затемняется и открывается предложение тарифа', async () => {
+  it('когда сервер отказывает бесплатному аккаунту, весь экран затемняется и открывается покупка кредитов', async () => {
     installFakeApi({ reply: 'Ответ модели', rateLimitAfter: 1 });
     useAuth.setState({
       user: {
@@ -410,7 +418,7 @@ describe('чат: отправка, стриминг и управление о�
     await sendMessage(user, 'Второе сообщение');
     const modal = await screen.findByRole('dialog');
     expect(modal).toHaveClass('backdrop-blur-md');
-    expect(within(modal).getByText('Продолжите на платном тарифе')).toBeInTheDocument();
+    expect(within(modal).getByText('Пополните кредиты, чтобы продолжить')).toBeInTheDocument();
     expect(within(modal).queryByText(/из 3/)).toBeNull();
 
     await user.click(within(modal).getAllByRole('button', { name: 'Закрыть' })[0]);

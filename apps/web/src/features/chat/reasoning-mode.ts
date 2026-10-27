@@ -3,11 +3,12 @@ import type { User } from '../auth/types';
 export type ReasoningMode = 'standard' | 'max';
 
 /**
- * Режим Max доступен только на Ultra (VIP получает Ultra на сервере). Сервер проверяет тариф сам:
- * клиентская проверка нужна, чтобы не показывать включённый режим тем, у кого он не действует.
+ * Режим Max открыт всем, у кого есть аккаунт: платят только кредиты (Max дороже обычного режима,
+ * цену запроса показывает строка кредитов). Сервер проверяет сам, клиентская проверка нужна
+ * гостю, у которого режим не действует.
  */
 export function canUseMaxMode(user: Pick<User, 'plan' | 'isVip'> | null | undefined): boolean {
-  return Boolean(user && (user.plan === 'ultra' || user.isVip));
+  return Boolean(user);
 }
 
 /** Режим, который уходит на сервер с запросом чата и запуском агента. */

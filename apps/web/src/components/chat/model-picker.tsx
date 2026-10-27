@@ -1,35 +1,18 @@
 import { useEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from 'react';
-import { CheckIcon, ChevronDownIcon, LockIcon, SparkleIcon } from '@/components/icons';
-import { Badge } from '@/components/ui/badge';
+import { CheckIcon, ChevronDownIcon, SparkleIcon } from '@/components/icons';
 import { Kbd } from '@/components/ui/kbd';
 import { ModelMark } from '@/components/ui/model-mark';
-import { useAuth } from '@/features/auth/auth-store';
-import {
-  DEFAULT_MODELS,
-  MODEL_NAME_KEYS,
-  canAccessModel,
-  planRank,
-  requiredPlanOf,
-} from '@/features/chat/can-access-model';
+import { DEFAULT_MODELS, MODEL_NAME_KEYS } from '@/features/chat/model-catalog';
 import { useChat } from '@/features/chat/chat-store';
 import type { ModelInfo } from '@/features/chat/types';
 import { usePreferences } from '@/features/preferences/preferences-store';
+import { useCredits } from '@/features/usage/credits-store';
 import { cn } from '@/lib/cn';
+import { formatCredits } from '@/lib/format-date';
 import { useTranslation } from '@/i18n';
 
 /** Модели по умолчанию: используются, пока каталог не загрузился. */
 const FALLBACK_MODELS: readonly ModelInfo[] = DEFAULT_MODELS;
-
-type ModelTier = 'free' | 'plus' | 'pro';
-
-/** Группа списка определяется тарифом, с которого доступна модель (`requiredPlan` каталога). */
-function tierOf(model: ModelInfo): ModelTier {
-  const rank = planRank(requiredPlanOf(model));
-  if (rank <= 0) {
-    return 'free';
-  }
-  return rank === 1 ? 'plus' : 'pro';
-}
 
 export interface ModelPickerProps {
   disabled?: boolean;
@@ -48,11 +31,11 @@ export function ModelPicker({
   placement = 'down',
   ariaLabel,
 }: ModelPickerProps) {
-  const { t } = useTranslation();
+  const { t, language } = useTranslation();
   const meta = useChat((state) => state.meta);
   const selectedId = usePreferences((state) => state.chatModelId);
   const setModelId = usePreferences((state) => state.setChatModelId);
-  const user = useAuth((state) => state.user);
+  const report = useCredits((state) => state.report);
   const [open, setOpen] = useState(false);
   const [focusedIndex, setFocusedIndex] = useState<number>(-1);
 
@@ -68,21 +51,18 @@ export function ModelPicker({
     return key ? t(key) : model.name;
   };
 
-  const isFreeModel = (m: ModelInfo) => tierOf(m) === 'free';
-  const isPlusModel = (m: ModelInfo) => tierOf(m) === 'plus';
-  const isProModel = (m: ModelInfo) => tierOf(m) === 'pro';
+  /** Цена запроса из отчёта о кредитах; пока отчёта нет (гость, загрузка), цену не показываем. */
+  const priceOf = (model: ModelInfo): string | null => {
+    const price = report?.models.find((item) => item.id === model.id);
+    if (!price) return null;
+    if (price.free) return t('chat.modelPriceFree');
+    return t('chat.modelPriceCredits', { price: formatCredits(price.requestCredits, language, 1) });
+  };
 
   const autoModel = models.find((m) => m.id === 'auto');
-  const freeModels = models.filter((m) => m.id !== 'auto' && isFreeModel(m));
-  const plusModels = models.filter((m) => m.id !== 'auto' && isPlusModel(m));
-  const proModels = models.filter((m) => m.id !== 'auto' && isProModel(m));
+  const otherModels = models.filter((m) => m.id !== 'auto');
 
-  const allModels: ModelInfo[] = [
-    ...(autoModel ? [autoModel] : []),
-    ...freeModels,
-    ...plusModels,
-    ...proModels,
-  ];
+  const allModels: ModelInfo[] = [...(autoModel ? [autoModel] : []), ...otherModels];
 
   const openMenu = () => {
     setOpen(true);
@@ -154,11 +134,9 @@ export function ModelPicker({
 
   const renderModelItem = (model: ModelInfo) => {
     const active = model.id === current.id;
-    const accessible = canAccessModel(user?.plan, model);
     const index = allModels.findIndex((m) => m.id === model.id);
     const isFocused = focusedIndex === index;
-    const isPlus = isPlusModel(model);
-    const isPro = isProModel(model);
+    const price = priceOf(model);
 
     return (
       <li key={model.id} role="none">
@@ -168,14 +146,9 @@ export function ModelPicker({
           }}
           type="button"
           role="option"
-          tabIndex={isFocused && accessible ? 0 : -1}
+          tabIndex={isFocused ? 0 : -1}
           aria-selected={active}
-          aria-disabled={!accessible}
-          disabled={!accessible}
           onClick={() => {
-            if (!accessible) {
-              return;
-            }
             setModelId(model.id);
             setOpen(false);
             triggerRef.current?.focus();
@@ -186,9 +159,7 @@ export function ModelPicker({
             active
               ? 'bg-accent-soft ring-1 ring-accent/30'
               : 'hover:bg-surface-2 focus-visible:bg-surface-2 focus-visible:ring-2 focus-visible:ring-accent/40',
-            isFocused && !active && accessible && 'bg-surface-2',
-            !accessible &&
-              'opacity-40 cursor-not-allowed hover:bg-transparent focus-visible:bg-transparent',
+            isFocused && !active && 'bg-surface-2',
           )}
         >
           <ModelMark modelId={model.id} size="md" />
@@ -202,31 +173,19 @@ export function ModelPicker({
               >
                 {labelOf(model)}
               </span>
-              {isPlus ? (
-                <Badge tone="plus" className="px-2 py-0 text-[11px] leading-[18px]">
-                  plus
-                </Badge>
-              ) : isPro ? (
-                <Badge tone="pro" className="px-2 py-0 text-[11px] leading-[18px]">
-                  pro
-                </Badge>
-              ) : null}
             </span>
           </span>
+          {price ? <span className="tabular shrink-0 text-xs text-subtle">{price}</span> : null}
           <span className="flex size-5 shrink-0 items-center justify-center">
-            {!accessible ? (
-              <LockIcon className="size-3.5 text-subtle" aria-label={t('chat.modelLocked')} />
-            ) : active ? (
-              <CheckIcon className="size-4 text-accent" />
-            ) : null}
+            {active ? <CheckIcon className="size-4 text-accent" /> : null}
           </span>
         </button>
       </li>
     );
   };
 
-  const renderGroup = (label: string, items: readonly ModelInfo[], withDivider: boolean) => (
-    <div className={cn(withDivider && 'mt-1.5 border-t border-stroke pt-1.5')}>
+  const renderGroup = (label: string, items: readonly ModelInfo[]) => (
+    <div>
       <div className="px-2.5 pt-1.5 pb-1 text-xs font-semibold text-subtle">{label}</div>
       <ul className="flex flex-col gap-0.5" role="none">
         {items.map(renderModelItem)}
@@ -300,13 +259,7 @@ export function ModelPicker({
                 ),
           )}
         >
-          {renderGroup(
-            t('chat.tierFree'),
-            [...(autoModel ? [autoModel] : []), ...freeModels],
-            false,
-          )}
-          {plusModels.length > 0 ? renderGroup(t('chat.tierPlus'), plusModels, true) : null}
-          {proModels.length > 0 ? renderGroup(t('chat.tierPro'), proModels, true) : null}
+          {renderGroup(t('chat.modelsGroup'), allModels)}
 
           <div className="mt-1.5 hidden items-center gap-3 border-t border-stroke px-2.5 pt-2 pb-1 text-xs text-subtle md:flex">
             <span className="inline-flex items-center gap-1.5">

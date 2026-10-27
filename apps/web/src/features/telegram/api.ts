@@ -4,24 +4,28 @@ import type { PlanId } from '../billing/types';
 
 export { ApiError };
 
-export type PaidPlanId = Exclude<PlanId, 'free'>;
+/** Прежние подписки (у платежей и автопродления до перехода на кредиты). */
+export type PaidPlanId = Exclude<PlanId, 'free' | 'credits'>;
 
-export interface PlanPreview {
-  /** new — новая подписка, extend — продление того же тарифа, switch — смена тарифа. */
-  mode: 'new' | 'extend' | 'switch';
-  renewsAt: string;
-  /** Дни за остаток прежнего тарифа при смене. */
-  bonusDays: number;
-}
-
-export interface MiniAppPlan {
-  id: PaidPlanId;
-  title: string;
+/** Пакет кредитов в кабинете: цена в звёздах уже посчитана сервером по курсу Telegram. */
+export interface MiniAppPack {
+  id: string;
   priceUsd: number;
+  credits: number;
   stars: number;
   /** Сколько эти звёзды стоят по официальному курсу Telegram, $. */
   starsUsd: number;
-  preview: PlanPreview;
+  /** Цена за 1 000 кредитов, $. */
+  pricePerThousandUsd: number;
+}
+
+export interface MiniAppCredits {
+  /** Остаток, кредиты. */
+  balance: number;
+  /** Пробные кредиты, которые даются один раз. */
+  trialCredits: number;
+  /** Сколько дней действует купленный пакет. */
+  validDays: number;
 }
 
 export type PaymentStatus = 'paid' | 'refund_requested' | 'refunded' | 'refund_declined';
@@ -34,7 +38,10 @@ export interface MiniAppPayment {
   id: string;
   method: 'stars' | 'crypto';
   planId: PaidPlanId;
+  /** Что оплачено: «2 300 кредитов» у пакета, название тарифа у прежней подписки. */
   planTitle: string;
+  /** Пакет кредитов, если платёж за него. */
+  packId?: string;
   amount: number;
   currency: 'XTR' | 'USD';
   paidAt: string;
@@ -80,7 +87,9 @@ export interface MiniAppState {
     stars: number;
     nextChargeAt: string | null;
   } | null;
-  plans: MiniAppPlan[];
+  /** Остаток кредитов и условия пробных. */
+  credits: MiniAppCredits;
+  packs: MiniAppPack[];
   /** Курс цены в звёздах (официальный Telegram) и рыночный курс Fragment для сравнения. */
   rate: {
     usdPerStar: number;
@@ -160,13 +169,15 @@ export const miniAppApi = {
   linkCode: (initData: string) =>
     call<{ code: string; expiresAt: number }>('/link-code', { body: { initData } }),
   state: (token: string) => call<MiniAppState>('/state', { token }),
-  invoice: (token: string, planId: PaidPlanId, recurring: boolean) =>
-    call<{ invoiceId: string; link: string; stars: number; recurring: boolean }>('/invoice', {
+  /** Счёт в звёздах на пакет кредитов. */
+  invoice: (token: string, packId: string) =>
+    call<{ invoiceId: string; link: string; stars: number }>('/invoice', {
       token,
-      body: { planId, recurring },
+      body: { packId },
     }),
   invoiceStatus: (token: string, invoiceId: string) =>
     call<{ status: 'pending' | 'paid' | 'expired' }>(`/invoice/${enc(invoiceId)}`, { token }),
+  /** Отключить автопродление прежней подписки (включить его заново нельзя). */
   autoRenew: (token: string, enabled: boolean) =>
     call<MiniAppState>('/auto-renew', { token, body: { enabled } }),
   refund: (token: string, paymentId: string, reason: string, comment: string) =>

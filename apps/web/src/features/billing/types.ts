@@ -1,7 +1,10 @@
-import type { Language } from '../preferences/preferences-store';
-import type { TranslationKey } from '@/i18n';
-
-export type PlanId = 'free' | 'gpt-pro' | 'claude-pro' | 'gemini-pro' | 'ultra' | 'plus' | 'pro';
+/**
+ * Уровень доступа. `credits` — у тех, кто купил пакет кредитов и ещё не израсходовал его:
+ * вычисляется сервером, в профиле не хранится. `plus`, `pro`, `ultra` остались у подписчиков
+ * прежней системы до конца оплаченного периода.
+ */
+export type PlanId =
+  'free' | 'credits' | 'gpt-pro' | 'claude-pro' | 'gemini-pro' | 'ultra' | 'plus' | 'pro';
 
 export type SubscriptionStatus = 'active' | 'trialing' | 'past_due' | 'canceled';
 
@@ -12,20 +15,28 @@ export interface Subscription {
   renewsAt: string | null;
 }
 
-export interface Plan {
-  id: PlanId;
-  nameKey: TranslationKey;
-  priceMonthly: number;
-  originalPriceMonthly?: number;
-  discountBadge?: Record<Language, string>;
-  popular?: boolean;
-  limitBadge?: Record<Language, string>;
-  modelsHighlight?: Record<Language, string> | string;
-  bullets: Record<Language, readonly string[]>;
-  highlights?: Record<Language, readonly string[]>;
+/** Пакет кредитов из GET /packs: цены в долларах и звёздах, бонус за криптовалюту, скидка к первому пакету. */
+export interface CreditPack {
+  id: string;
+  priceUsd: number;
+  credits: number;
+  stars: number;
+  /** Дополнительные кредиты при оплате криптовалютой (+15 %). */
+  cryptoBonusCredits: number;
+  /** Цена за 1 000 кредитов, $. */
+  pricePerThousandUsd: number;
+  /** Скидка относительно самого маленького пакета, %. */
+  discountPct: number;
 }
 
-export type PaymentMethod = 'sbp' | 'crypto' | 'stars' | 'card';
+export interface PacksCatalog {
+  packs: CreditPack[];
+  trialCredits: number;
+  cryptoBonusRate: number;
+  validDays: number;
+}
+
+export type PaymentMethod = 'crypto' | 'stars';
 
 /** Валюты и сети Trybit; полный справочник — trybit-currencies.ts. */
 export type CryptoCurrency =
@@ -72,7 +83,7 @@ export type CryptoCurrency =
 export interface CryptoFees {
   serviceUsd: number;
   transferUsd: number;
-  /** Сколько счёт дороже цены тарифа: эту часть комиссии платит покупатель. */
+  /** Сколько счёт дороже цены пакета: эту часть комиссии платит покупатель. */
   payerUsd: number;
   totalUsd: number;
 }
@@ -80,6 +91,8 @@ export interface CryptoFees {
 export interface CryptoInvoice {
   id: string;
   planId: PlanId;
+  /** Пакет кредитов, который оплачивает счёт. */
+  packId?: string;
   currency: CryptoCurrency;
   amount: number;
   amountUsd: number;
@@ -98,20 +111,11 @@ export interface CryptoInvoice {
   fees?: CryptoFees;
 }
 
-export interface SbpInvoice {
-  id: string;
-  planId: PlanId;
-  amount: number;
-  currency: 'RUB';
-  status: 'pending' | 'paid' | 'expired';
-  qrPayload: string;
-  deepLink: string;
-  expiresAt: string;
-}
-
 export interface TelegramStarsInvoice {
   id: string;
   planId: PlanId;
+  /** Пакет кредитов, который оплачивает счёт. */
+  packId?: string;
   priceRub: number;
   starsAmount: number;
   /** Прямая ссылка на окно оплаты звёздами в Telegram (если бот настроен). */

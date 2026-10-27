@@ -164,7 +164,7 @@ function NetworkTile({
   );
 }
 
-/** Состав суммы: цена тарифа и комиссии Trybit — точные из счёта или оценка до его выставления. */
+/** Состав суммы: цена пакета и комиссии Trybit — точные из счёта или оценка до его выставления. */
 export function CryptoFeeBreakdown({
   priceUsd,
   currency,

@@ -1,15 +1,14 @@
 import { createContext, useContext, useEffect, useId, useRef, type ReactNode } from 'react';
 import { CloseIcon } from '@/components/icons';
-import type { BadgeTone } from '@/components/ui/badge';
 import type { MiniAppPayment, MiniAppState } from '@/features/telegram/api';
 import type { TelegramWebApp } from '@/features/telegram/webapp';
-import type { TranslationKey } from '@/i18n';
 import { cn } from '@/lib/cn';
 
 export const DAY_MS = 24 * 3600 * 1000;
 export const BOT_URL = 'https://t.me/Robo_kassa_bot';
 export const SUPPORT_URL = 'https://t.me/ketner_support_bot';
 
+/** Вкладка кредитов называется `plans` по-прежнему: на этот id ссылаются кнопки бота. */
 export type TabId = 'home' | 'plans' | 'payments' | 'profile' | 'admin';
 
 export interface MiniApp {
@@ -19,7 +18,7 @@ export interface MiniApp {
   setState: (state: MiniAppState) => void;
   refresh: () => Promise<void>;
   notify: (tone: 'success' | 'danger' | 'info', text: string) => void;
-  goTo: (tab: TabId, options?: { recurring?: boolean }) => void;
+  goTo: (tab: TabId) => void;
   /** Открыть сайт уже войдя в аккаунт (одноразовая ссылка). */
   openSite: (path: string) => Promise<void>;
 }
@@ -32,18 +31,6 @@ export function useMiniApp(): MiniApp {
   if (!value) throw new Error('useMiniApp вне кабинета');
   return value;
 }
-
-export const PLAN_TONE: Record<string, BadgeTone> = {
-  free: 'neutral',
-  plus: 'plus',
-  pro: 'pro',
-  ultra: 'ultra',
-};
-export const PLAN_HINT: Record<string, TranslationKey> = {
-  plus: 'tg.planPlusHint',
-  pro: 'tg.planProHint',
-  ultra: 'tg.planUltraHint',
-};
 
 const locale = (language: string) => (language === 'en' ? 'en-US' : 'ru-RU');
 
@@ -82,7 +69,7 @@ export function formatAmount(
     : `$${payment.amount}`;
 }
 
-/** Состояние подписки «на сейчас»: действует ли, сколько осталось дней. */
+/** Прежняя подписка «на сейчас»: действует ли, сколько осталось дней. Новых подписок нет. */
 export function subscriptionInfo(state: MiniAppState, now = Date.now()) {
   const { user, subscription } = state;
   const end = subscription.renewsAt ? Date.parse(subscription.renewsAt) : NaN;

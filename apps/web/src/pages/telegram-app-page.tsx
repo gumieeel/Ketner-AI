@@ -20,22 +20,15 @@ import {
 } from '@/features/telegram/webapp';
 import { usePreferences } from '@/features/preferences/preferences-store';
 import { useTranslation, type TranslationKey } from '@/i18n';
+import { formatCredits } from '@/lib/format-date';
 import { cn } from '@/lib/cn';
 import { AdminTab } from './telegram-app/admin-tab';
 import { HomeTab } from './telegram-app/home-tab';
 import { Onboarding } from './telegram-app/onboarding';
+import { PacksTab } from './telegram-app/packs-tab';
 import { PaymentsTab } from './telegram-app/payments-tab';
-import { PlansTab } from './telegram-app/plans-tab';
 import { ProfileTab } from './telegram-app/profile-tab';
-import {
-  BOT_URL,
-  MiniAppProvider,
-  Panel,
-  PLAN_TONE,
-  subscriptionInfo,
-  type MiniApp,
-  type TabId,
-} from './telegram-app/shared';
+import { BOT_URL, MiniAppProvider, Panel, type MiniApp, type TabId } from './telegram-app/shared';
 
 type Screen =
   | { kind: 'loading' }
@@ -61,7 +54,7 @@ const TABS: Array<{
   icon: (props: { className?: string }) => ReactNode;
 }> = [
   { id: 'home', label: 'tg.tabHome', icon: SparkleIcon },
-  { id: 'plans', label: 'tg.tabPlans', icon: StarIcon },
+  { id: 'plans', label: 'tg.tabCredits', icon: StarIcon },
   { id: 'payments', label: 'tg.tabPayments', icon: FileTextIcon },
   { id: 'profile', label: 'tg.tabProfile', icon: UserIcon },
   { id: 'admin', label: 'tg.tabAdmin', icon: ShieldIcon },
@@ -197,12 +190,11 @@ function Cabinet({
   onState: (state: MiniAppState) => void;
   onUnlinked: () => void;
 }) {
-  const { t } = useTranslation();
+  const { t, language } = useTranslation();
   const [tab, setTab] = useState<TabId>(() => {
     const first = initialTab(app);
     return first === 'admin' && !state.user.isAdmin ? 'home' : first;
   });
-  const [recurring, setRecurring] = useState(false);
   const [toast, setToast] = useState<Toast | null>(null);
   const toastTimer = useRef<number | null>(null);
   const tRef = useRef(t);
@@ -243,8 +235,7 @@ function Cabinet({
   }, [refresh]);
 
   const goTo = useCallback(
-    (next: TabId, options?: { recurring?: boolean }) => {
-      if (options?.recurring !== undefined) setRecurring(options.recurring);
+    (next: TabId) => {
       haptic.select(app);
       setTab(next);
       window.scrollTo({ top: 0 });
@@ -266,12 +257,11 @@ function Cabinet({
   );
 
   const tabs = TABS.filter((item) => item.id !== 'admin' || state.user.isAdmin);
-  const info = subscriptionInfo(state);
   const name =
     state.user.name || (state.user.telegramUsername ? `@${state.user.telegramUsername}` : '');
   const titles: Record<TabId, string> = {
     home: name ? t('tg.hello', { name: name.split(' ')[0] ?? name }) : t('tg.tabHome'),
-    plans: t('tg.plansTitle'),
+    plans: t('tg.packsTitle'),
     payments: t('tg.tabPayments'),
     profile: t('tg.tabProfile'),
     admin: t('tg.adminTitle'),
@@ -284,18 +274,16 @@ function Cabinet({
           <h1 className="min-w-0 truncate text-[22px] font-semibold tracking-tight">
             {titles[tab]}
           </h1>
-          <Badge tone={PLAN_TONE[info.plan] ?? 'neutral'}>
+          <Badge tone={state.user.isVip ? 'ultra' : 'brand'}>
             {state.user.isVip
               ? 'VIP'
-              : (state.plans.find((plan) => plan.id === info.plan)?.title ?? 'Free')}
+              : t('tg.balanceBadge', { count: formatCredits(state.credits.balance, language) })}
           </Badge>
         </header>
 
         <div role="tabpanel" id={`tg-panel-${tab}`} aria-labelledby={`tg-tab-${tab}`}>
           {tab === 'home' ? <HomeTab /> : null}
-          {tab === 'plans' ? (
-            <PlansTab recurring={recurring} onRecurringChange={setRecurring} />
-          ) : null}
+          {tab === 'plans' ? <PacksTab /> : null}
           {tab === 'payments' ? <PaymentsTab /> : null}
           {tab === 'profile' ? <ProfileTab onUnlinked={onUnlinked} /> : null}
           {tab === 'admin' && state.user.isAdmin ? <AdminTab /> : null}

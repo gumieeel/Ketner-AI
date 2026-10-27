@@ -23,8 +23,8 @@ const CAPABILITIES: CodeCapabilities = {
   commands: { available: false, reason: 'plan', network: false },
   templates: ['empty', 'node'],
   models: [
-    { id: 'ketner-mini', name: 'Ketner Mini', costClass: 'lite', locked: false },
-    { id: 'ketner-pro', name: 'Ketner Pro', costClass: 'work', locked: true },
+    { id: 'ketner-mini', name: 'Ketner Mini', costClass: 'lite' },
+    { id: 'ketner-pro', name: 'Ketner Pro', costClass: 'work' },
   ],
   defaultModelId: 'auto',
 };
@@ -228,11 +228,11 @@ describe('Ketner Code: проекты и агент', () => {
       screen.getByText('Опишите задачу — агент изучит проект, внесёт правки и проверит результат.'),
     ).toBeInTheDocument();
     expect(
-      screen.getByText('Запуск команд (тесты, сборка) доступен на тарифах Pro и Ultra.'),
+      screen.getByText('Запуск команд (тесты, сборка) открывается после первой покупки кредитов.'),
     ).toBeInTheDocument();
-    // Модель, недоступная на тарифе, видна, но выбрать её нельзя.
-    const locked = screen.getByRole('option', { name: /Ketner Pro/ });
-    expect(locked).toBeDisabled();
+    // Все модели открыты: платит только баланс кредитов, замков и «недоступных» пунктов нет.
+    const pro = screen.getByRole('option', { name: /Ketner Pro/ });
+    expect(pro).toBeEnabled();
   });
 
   it('запускает агента: показывает правку с diff, итог и обновляет файлы', async () => {
@@ -377,7 +377,7 @@ describe('Ketner Code: проекты и агент', () => {
     expect(within(tasks).queryByText('Подключить Button в Header')).toBeNull();
   });
 
-  it('ошибка лимита запуска предлагает улучшить план', async () => {
+  it('ошибка лимита запуска предлагает купить кредиты', async () => {
     installCodeApi({
       run: [
         { type: 'error', code: 'upgrade_required', message: 'Лимит запусков на сегодня исчерпан' },
@@ -394,7 +394,7 @@ describe('Ketner Code: проекты и агент', () => {
     await user.click(screen.getByRole('button', { name: 'Запустить' }));
 
     const upgrade = await within(screen.getByRole('region', { name: 'Агент' })).findByRole('link', {
-      name: 'Улучшить план',
+      name: 'Купить кредиты',
     });
     expect(upgrade).toHaveAttribute('href', '/pricing');
     expect(screen.getByText('Лимит запусков на сегодня исчерпан')).toBeInTheDocument();

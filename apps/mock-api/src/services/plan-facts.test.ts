@@ -47,6 +47,8 @@ interface Facts {
   trial: { credits: number; days: number; examples: Example[] };
   packValidDays: number;
   cryptoBonusRate: number;
+  /** Цена обычного запроса к моделям из таблицы на главной, кредиты. */
+  modelPrices: Record<string, number>;
   levels: { free: LevelFacts; credits: LevelFacts };
   packs: Array<{
     id: string;
@@ -92,6 +94,13 @@ test('лимиты и пакеты кредитов на сайте совпад
   checkExamples('trial', TRIAL_CREDITS, facts.trial.examples);
   const astra = facts.trial.examples.find((e) => e.model === 'gpt-6-astra');
   assert.equal(astra?.requests, 1, 'пробных кредитов хватает ровно на один запрос GPT-6 Astra');
+
+  // Цены запросов в таблице моделей на главной
+  for (const [id, price] of Object.entries(facts.modelPrices)) {
+    const model = modelRegistry.get(id);
+    assert.ok(model, `modelPrices: нет модели ${id}`);
+    assert.equal(price, typicalRequestCredits(model, 'standard'), `modelPrices: цена ${id}`);
+  }
 
   // Условия пакетов
   assert.equal(facts.packValidDays, CREDIT_PACK_VALID_DAYS, 'срок кредитов пакета');

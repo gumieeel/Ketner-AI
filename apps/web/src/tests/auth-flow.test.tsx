@@ -227,11 +227,11 @@ describe('auth-flow: сценарии авторизации и сессии', (
     });
   });
 
-  it('регистрация с параметром ?redirect=/checkout/gpt-pro перенаправляет обратно на чекаут и показывает уведомление', async () => {
-    renderRoute('/signup?redirect=%2Fcheckout%2Fgpt-pro');
+  it('регистрация с параметром ?redirect=/checkout/credits-10 перенаправляет обратно на чекаут и показывает уведомление', async () => {
+    renderRoute('/signup?redirect=%2Fcheckout%2Fcredits-10');
 
     expect(
-      screen.getByText('Для оформления подписки необходимо сначала войти или создать аккаунт.'),
+      screen.getByText('Чтобы купить кредиты, сначала войдите или создайте аккаунт.'),
     ).toBeInTheDocument();
 
     const nameInput = screen.getByLabelText(/Имя/i);
@@ -251,9 +251,9 @@ describe('auth-flow: сценарии авторизации и сессии', (
     await waitFor(() => {
       expect(useAuth.getState().status).toBe('authenticated');
       expect(
-        screen.getByRole('heading', { level: 1, name: 'Оформление подписки' }),
+        screen.getByRole('heading', { level: 1, name: 'Покупка кредитов' }),
       ).toBeInTheDocument();
-      expect(screen.getByText('GPT Pro')).toBeInTheDocument();
+      expect(screen.getByText('Выбранный пакет')).toBeInTheDocument();
     });
   });
 

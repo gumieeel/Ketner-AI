@@ -2,7 +2,7 @@ import { Suspense, lazy, useMemo } from 'react';
 import { AlertIcon, CheckIcon, CloseIcon, CompareIcon } from '@/components/icons';
 import { buttonClasses } from '@/components/ui/button-classes';
 import { ModelMark } from '@/components/ui/model-mark';
-import { MODEL_NAME_KEYS } from '@/features/chat/can-access-model';
+import { MODEL_NAME_KEYS } from '@/features/chat/model-catalog';
 import { useChat } from '@/features/chat/chat-store';
 import { fastestSlot } from '@/features/chat/compare-policy';
 import type { CompareRunView, CompareSlotView } from '@/features/chat/compare-store';

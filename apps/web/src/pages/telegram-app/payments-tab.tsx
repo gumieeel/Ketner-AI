@@ -41,7 +41,7 @@ const STATUS: Record<PaymentStatus, { tone: BadgeTone; key: TranslationKey }> = 
 
 const REASONS: TranslationKey[] = [
   'tg.reasonNotFit',
-  'tg.reasonWrongPlan',
+  'tg.reasonWrongPack',
   'tg.reasonNoUse',
   'tg.reasonExpensive',
   'tg.reasonOther',
@@ -65,7 +65,7 @@ export function PaymentsTab() {
           <p className="text-[15px] font-medium">{t('tg.paymentsEmpty')}</p>
           <p className="text-[13px] leading-5 text-muted">{t('tg.paymentsEmptyText')}</p>
           <Button className="mt-1" onClick={() => goTo('plans')}>
-            {t('tg.choosePlan')}
+            {t('tg.topUp')}
           </Button>
         </Panel>
       ) : (
@@ -281,10 +281,11 @@ function PaymentSheet({ payment, onClose }: { payment: MiniAppPayment; onClose: 
           {payment.method === 'stars' ? 'Telegram Stars' : t('tg.methodCrypto')}
         </Field>
         <Field label={t('tg.fieldDate')}>{formatDateTime(payment.paidAt, language)}</Field>
-        {payment.periodEnd ? (
+        {/* Срок и бонусные дни есть только у платежей за прежнюю подписку, не у пакетов кредитов. */}
+        {!payment.packId && payment.periodEnd ? (
           <Field label={t('tg.fieldPeriod')}>{formatDate(payment.periodEnd, language, true)}</Field>
         ) : null}
-        {payment.bonusDays > 0 ? (
+        {!payment.packId && payment.bonusDays > 0 ? (
           <Field label={t('tg.fieldBonus')}>
             {t('tg.bonusValue', { days: payment.bonusDays })}
           </Field>

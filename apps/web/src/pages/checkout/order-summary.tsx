@@ -1,68 +1,71 @@
 import { CheckIcon, LockIcon } from '@/components/icons';
 import { Badge } from '@/components/ui/badge';
 import { Card } from '@/components/ui/card';
-import type { Plan } from '@/features/billing/types';
-import { useTranslation } from '@/i18n';
-import { cn } from '@/lib/cn';
-
-const PLAN_ACCENTS: Record<string, { card: string; bar: string }> = {
-  ultra: { card: 'border-tier-ultra/40 ring-1 ring-tier-ultra/20', bar: 'bg-tier-ultra' },
-  pro: { card: 'border-tier-pro/40 ring-1 ring-tier-pro/20', bar: 'bg-tier-pro' },
-  plus: { card: 'border-tier-plus/40 ring-1 ring-tier-plus/15', bar: 'bg-tier-plus' },
-};
+import { PACK_VALID_DAYS, type PackFacts } from '@/features/billing/plans';
+import { useTranslation, type TranslationKey } from '@/i18n';
+import { formatCredits, pluralForm } from '@/lib/format-date';
 
 const PERKS = ['checkout.perk1', 'checkout.perk2', 'checkout.perk3'] as const;
 
-/** Сводка заказа справа: тариф, цена, что входит и строка о безопасности. */
-export function OrderSummary({ plan, feeUsd = 0 }: { plan: Plan; feeUsd?: number }) {
+export interface OrderSummaryProps {
+  pack: PackFacts;
+  /** Бонус кредитами за оплату криптовалютой; 0, если выбран другой способ. */
+  bonusCredits?: number;
+  feeUsd?: number;
+}
+
+/** Сводка заказа справа: пакет, кредиты, цена, что входит и строка о безопасности. */
+export function OrderSummary({ pack, bonusCredits = 0, feeUsd = 0 }: OrderSummaryProps) {
   const { t, language } = useTranslation();
-  const accent = PLAN_ACCENTS[plan.id] ?? { card: 'border-stroke', bar: 'bg-brand-gradient' };
-  const highlight =
-    typeof plan.modelsHighlight === 'string'
-      ? plan.modelsHighlight
-      : plan.modelsHighlight?.[language];
+  const credits = (count: number): string =>
+    t(`pricing.credits.${pluralForm(count, language)}` as TranslationKey, {
+      count: formatCredits(count, language),
+    });
+  const total = pack.priceUsd + feeUsd;
 
   return (
     <aside className="flex flex-col gap-4 lg:sticky lg:top-24">
-      <Card
-        className={cn('flex flex-col gap-5 overflow-hidden rounded-2xl p-5 sm:p-6', accent.card)}
-      >
-        <div aria-hidden="true" className={cn('absolute inset-x-0 top-0 h-1', accent.bar)} />
+      <Card className="flex flex-col gap-5 overflow-hidden rounded-2xl border-accent/30 p-5 ring-1 ring-accent/15 sm:p-6">
+        <div aria-hidden="true" className="absolute inset-x-0 top-0 h-1 bg-brand-gradient" />
 
         <div className="flex items-center justify-between gap-3 border-b border-stroke pb-4">
-          <span className="text-[13px] font-medium text-muted">{t('checkout.selectedPlan')}</span>
-          <Badge tone="brand">{t('checkout.days30')}</Badge>
+          <span className="text-[13px] font-medium text-muted">{t('checkout.selectedPack')}</span>
+          <Badge tone="brand">{t('checkout.validDays', { days: PACK_VALID_DAYS })}</Badge>
         </div>
 
         <div>
           <div className="flex flex-wrap items-baseline justify-between gap-2">
-            <h2 className="text-2xl font-semibold tracking-tight text-text">{t(plan.nameKey)}</h2>
-            {plan.discountBadge ? (
-              <Badge tone="success">{plan.discountBadge[language]}</Badge>
-            ) : null}
+            <h2 className="text-2xl font-semibold tracking-tight text-text tabular-nums">
+              {credits(pack.credits)}
+            </h2>
+            {pack.discountPct > 0 ? <Badge tone="success">−{pack.discountPct}%</Badge> : null}
           </div>
-          {highlight ? (
-            <p className="mt-1.5 text-[13px] leading-5 text-muted">{highlight}</p>
-          ) : null}
+          <p className="mt-1.5 text-[13px] leading-5 text-muted">
+            {t('pricing.perThousand', { price: `$${pack.pricePerThousandUsd.toFixed(2)}` })}
+          </p>
         </div>
 
         <dl className="flex flex-col gap-2.5 rounded-xl border border-stroke bg-canvas p-4 text-[13px]">
           <div className="flex items-center justify-between gap-3">
-            <dt className="text-muted">{t('checkout.planPrice')}</dt>
-            <dd className="font-semibold text-text tabular-nums">
-              {plan.originalPriceMonthly ? (
-                <s className="mr-1.5 font-normal text-subtle">${plan.originalPriceMonthly}</s>
-              ) : null}
-              ${plan.priceMonthly}
-            </dd>
+            <dt className="text-muted">{t('checkout.packPrice')}</dt>
+            <dd className="font-semibold text-text tabular-nums">${pack.priceUsd}</dd>
           </div>
+          {bonusCredits > 0 ? (
+            <div className="flex items-center justify-between gap-3">
+              <dt className="text-muted">{t('checkout.cryptoBonusLine')}</dt>
+              <dd className="font-semibold text-success tabular-nums">
+                +{formatCredits(bonusCredits, language)}
+              </dd>
+            </div>
+          ) : null}
           <div className="flex items-center justify-between gap-3">
             <dt className="text-muted">{t('checkout.fee')}</dt>
             <dd
-              className={cn(
-                'font-semibold tabular-nums',
-                feeUsd > 0 ? 'text-text' : 'text-success',
-              )}
+              className={
+                feeUsd > 0
+                  ? 'font-semibold text-text tabular-nums'
+                  : 'font-semibold text-success tabular-nums'
+              }
             >
               ${feeUsd.toFixed(2)}
             </dd>
@@ -70,7 +73,7 @@ export function OrderSummary({ plan, feeUsd = 0 }: { plan: Plan; feeUsd?: number
           <div className="flex items-center justify-between gap-3 border-t border-stroke pt-2.5 text-base font-semibold text-text">
             <dt>{t('checkout.total')}</dt>
             <dd className="text-gradient tabular-nums">
-              ${feeUsd > 0 ? (plan.priceMonthly + feeUsd).toFixed(2) : plan.priceMonthly}
+              ${feeUsd > 0 ? total.toFixed(2) : pack.priceUsd}
             </dd>
           </div>
         </dl>
@@ -81,7 +84,7 @@ export function OrderSummary({ plan, feeUsd = 0 }: { plan: Plan; feeUsd?: number
             {PERKS.map((key) => (
               <li key={key} className="flex items-start gap-2">
                 <CheckIcon className="mt-0.5 size-4 shrink-0 text-accent" />
-                <span>{t(key)}</span>
+                <span>{t(key, { days: PACK_VALID_DAYS })}</span>
               </li>
             ))}
           </ul>

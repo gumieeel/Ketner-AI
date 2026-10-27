@@ -1,4 +1,5 @@
 import { vi } from 'vitest';
+import { getPack } from '@/features/billing/plans';
 import type { ChatMeta, Conversation, ConversationSummary, Message } from '@/features/chat/types';
 
 /** Код из «письма» входа и регистрации, который принимает фейковый API. */
@@ -22,9 +23,9 @@ export interface FakeApiOptions {
   chunkDelayMs?: number;
   /** Сколько первых запросов завершить событием error. */
   failTimes?: number;
-  /** Проверять ли доступность моделей по тарифу. */
-  enforcePlans?: boolean;
-  /** Начальный тариф пользователя. */
+  /** Сервер отказывает в генерации: на балансе не хватает кредитов (событие insufficient_credits). */
+  insufficientCredits?: boolean;
+  /** Начальный уровень доступа пользователя: free, credits или тариф прежней системы. */
   plan?: string;
   /** Модель, которая «реально ответила» (приходит в событии done, как у сервера). */
   servedModelId?: string;
@@ -63,104 +64,25 @@ export interface FakeApi {
   resetPassword?: string;
 }
 
-/** Зеркало публичного каталога сервера (apps/mock-api/src/ai/models.ts): id, названия, requiredPlan. */
+/** Зеркало публичного каталога сервера (apps/mock-api/src/ai/models.ts): id и названия. Все модели открыты всем. */
 const META: ChatMeta = {
   models: [
-    {
-      id: 'auto',
-      name: '✨ Auto (Smart Router)',
-      contextMessages: 120,
-      isPro: false,
-    },
-    {
-      id: 'ketner-mini',
-      name: 'Ketner Mini',
-      contextMessages: 40,
-      isPro: false,
-    },
-    {
-      id: 'ketner-pro',
-      name: 'Ketner Pro',
-      contextMessages: 60,
-      isPro: true,
-      requiredPlan: 'plus',
-    },
-    {
-      id: 'claude-haiku-5.5',
-      name: 'Claude Haiku 5.5',
-      contextMessages: 40,
-      isPro: true,
-      requiredPlan: 'plus',
-    },
-    {
-      id: 'deepseek-v4.1-flash',
-      name: 'DeepSeek V4.1 Flash',
-      contextMessages: 40,
-      isPro: true,
-      requiredPlan: 'plus',
-    },
-    {
-      id: 'gemini-3.8-flash',
-      name: 'Gemini 3.8 Flash',
-      contextMessages: 120,
-      isPro: true,
-      requiredPlan: 'pro',
-    },
-    {
-      id: 'grok-4.7',
-      name: 'Grok 4.7',
-      contextMessages: 120,
-      isPro: true,
-      requiredPlan: 'pro',
-    },
-    {
-      id: 'gpt-6.1-sol',
-      name: 'GPT-6.1 Sol',
-      contextMessages: 120,
-      isPro: true,
-      requiredPlan: 'plus',
-    },
-    {
-      id: 'claude-opus-5.5',
-      name: 'Claude Opus 5.5',
-      contextMessages: 120,
-      isPro: true,
-      requiredPlan: 'pro',
-    },
+    { id: 'auto', name: '✨ Auto (Smart Router)', contextMessages: 120 },
+    { id: 'ketner-mini', name: 'Ketner Mini', contextMessages: 40 },
+    { id: 'ketner-pro', name: 'Ketner Pro', contextMessages: 60 },
+    { id: 'claude-haiku-5.5', name: 'Claude Haiku 5.5', contextMessages: 40 },
+    { id: 'deepseek-v4.1-flash', name: 'DeepSeek V4.1 Flash', contextMessages: 40 },
+    { id: 'gemini-3.8-flash', name: 'Gemini 3.8 Flash', contextMessages: 120 },
+    { id: 'grok-4.7', name: 'Grok 4.7', contextMessages: 120 },
+    { id: 'gpt-6.1-sol', name: 'GPT-6.1 Sol', contextMessages: 120 },
+    { id: 'claude-opus-5.5', name: 'Claude Opus 5.5', contextMessages: 120 },
   ],
   defaultModelId: 'auto',
   limits: {
     free: { messagesPerDay: 10, contextMessages: 20 },
-    'gpt-pro': { messagesPerDay: null, contextMessages: 120 },
-    'claude-pro': { messagesPerDay: null, contextMessages: 120 },
-    'gemini-pro': { messagesPerDay: null, contextMessages: 120 },
-    ultra: { messagesPerDay: null, contextMessages: 500 },
-    plus: { messagesPerDay: null, contextMessages: 60 },
-    pro: { messagesPerDay: null, contextMessages: 120 },
+    credits: { messagesPerDay: 4000, contextMessages: 120 },
   },
 };
-
-/** Зеркало PLAN_RANKS сервера (apps/mock-api/src/services/entitlement.ts): модель доступна, если ранг тарифа не ниже требуемого. */
-const PLAN_RANKS: Record<string, number> = {
-  free: 0,
-  plus: 1,
-  pro: 2,
-  'gpt-pro': 2,
-  'claude-pro': 2,
-  'gemini-pro': 2,
-  ultra: 3,
-};
-
-const PLAN_LABELS: Record<string, string> = {
-  free: 'Free',
-  plus: 'Plus',
-  pro: 'Pro',
-  ultra: 'Ultra',
-};
-
-function planRank(plan: string | undefined): number {
-  return plan ? (PLAN_RANKS[plan] ?? 0) : 0;
-}
 
 const DEFAULT_REPLY = 'Ответ модели Ketner AI.';
 
@@ -259,7 +181,7 @@ function streamOf(chunks: string[], delayMs: number, signal: AbortSignal | null)
  */
 export function installFakeApi(options: FakeApiOptions = {}): FakeApi {
   const delayMs = options.chunkDelayMs ?? 1;
-  let currentPlan = options.plan ?? 'free';
+  const currentPlan = options.plan ?? 'free';
   let githubConnected = options.github?.connected ?? false;
   const githubStatus = () => ({
     available: true,
@@ -450,68 +372,19 @@ export function installFakeApi(options: FakeApiOptions = {}): FakeApi {
         });
       }
 
-      if (url === '/api/plans') {
-        return json({
-          plans: [
-            {
-              id: 'free',
-              nameKey: 'pricing.free',
-              priceMonthly: 0,
-              bullets: { ru: ['Базовая скорость'], en: ['Standard speed'] },
-            },
-            {
-              id: 'plus',
-              nameKey: 'pricing.plus',
-              priceMonthly: 9,
-              bullets: { ru: ['Быстрый отклик'], en: ['Fast speed'] },
-            },
-            {
-              id: 'pro',
-              nameKey: 'pricing.pro',
-              priceMonthly: 25,
-              popular: true,
-              bullets: { ru: ['Все флагманы AI'], en: ['All Flagship AIs'] },
-            },
-            {
-              id: 'ultra',
-              nameKey: 'pricing.ultra',
-              priceMonthly: 49,
-              bullets: { ru: ['Максимум · VIP'], en: ['Maximum · VIP'] },
-            },
-          ],
-        });
-      }
-
       if (url === '/api/billing/subscription' && method === 'GET') {
         return json({
           subscription: {
             userId: 'demo-user',
-            plan: 'free',
+            plan: currentPlan,
             status: 'active',
             renewsAt: null,
           },
         });
       }
 
-      if (url === '/api/billing/checkout' && method === 'POST') {
-        const planId = (body.planId as string) || 'plus';
-        currentPlan = planId;
-        return json({
-          subscription: {
-            userId: 'demo-user',
-            plan: planId,
-            status: 'active',
-            renewsAt: new Date(Date.now() + 86400000 * 30).toISOString(),
-          },
-          user: {
-            id: 'demo-user',
-            plan: planId,
-          },
-        });
-      }
-
+      // Отмена подписки прежней системы: уровень доступа возвращается к free.
       if (url === '/api/billing/cancel' && method === 'POST') {
-        currentPlan = 'free';
         return json({
           subscription: {
             userId: 'demo-user',
@@ -526,80 +399,22 @@ export function installFakeApi(options: FakeApiOptions = {}): FakeApi {
         });
       }
 
-      if (url === '/api/billing/sbp/create-invoice' && method === 'POST') {
-        const planId = (body.planId as string) || 'gpt-pro';
-        return json({
-          invoice: {
-            id: 'sbp_mock_123',
-            planId,
-            amount: 1199,
-            currency: 'RUB',
-            status: 'pending',
-            qrPayload: 'https://qr.nspk.ru/AD10000KETNERAI_sbp_mock_123',
-            deepLink: 'https://qr.nspk.ru/AD10000KETNERAI_sbp_mock_123',
-            expiresAt: new Date(Date.now() + 900000).toISOString(),
-          },
-        });
-      }
-
-      if (url.startsWith('/api/billing/sbp/status/') && method === 'GET') {
-        return json({
-          status: 'pending',
-          invoice: {
-            id: 'sbp_mock_123',
-            planId: 'gpt-pro',
-            amount: 1199,
-            currency: 'RUB',
-            status: 'pending',
-            qrPayload: 'https://qr.nspk.ru/AD10000KETNERAI_sbp_mock_123',
-            deepLink: 'https://qr.nspk.ru/AD10000KETNERAI_sbp_mock_123',
-            expiresAt: new Date(Date.now() + 900000).toISOString(),
-          },
-        });
-      }
-
-      if (url.startsWith('/api/billing/sbp/confirm/') && method === 'POST') {
-        currentPlan = 'gpt-pro';
-        return json({
-          success: true,
-          subscription: {
-            userId: 'demo-user',
-            plan: 'gpt-pro',
-            status: 'active',
-            renewsAt: new Date(Date.now() + 86400000 * 30).toISOString(),
-          },
-          user: {
-            id: 'demo-user',
-            plan: 'gpt-pro',
-          },
-          invoice: {
-            id: 'sbp_mock_123',
-            planId: 'gpt-pro',
-            amount: 1199,
-            currency: 'RUB',
-            status: 'paid',
-            qrPayload: 'https://qr.nspk.ru/AD10000KETNERAI_sbp_mock_123',
-            deepLink: 'https://qr.nspk.ru/AD10000KETNERAI_sbp_mock_123',
-            expiresAt: new Date(Date.now() + 900000).toISOString(),
-          },
-        });
-      }
-
       if (url === '/api/billing/telegram-stars/create-invoice' && method === 'POST') {
-        const planId = (body.planId as string) || 'gpt-pro';
-        const priceRub = planId === 'ultra' ? 4890 : planId === 'pro' ? 2490 : 890;
-        // Как на сервере: цена тарифа по официальному курсу Telegram.
-        const starsAmount = planId === 'ultra' ? 2460 : planId === 'pro' ? 1260 : 460;
+        const pack = getPack(String(body.packId ?? ''));
+        if (!pack) {
+          return json({ error: { code: 'pack_not_found', message: 'Пакет не найден' } }, 400);
+        }
         return json({
           invoice: {
             id: 'stars_mock_123',
-            planId,
-            priceRub,
-            starsAmount,
-            starsUsd: Math.round(starsAmount * 0.01999 * 100) / 100,
+            planId: 'free',
+            packId: pack.id,
+            priceRub: 0,
+            starsAmount: pack.stars,
+            starsUsd: Math.round(pack.stars * 0.01999 * 100) / 100,
             usdPerStar: 0.01999,
             botUsername: 'Robo_kassa_bot',
-            botDeepLink: `https://t.me/Robo_kassa_bot?start=pay_${planId}_demo-user`,
+            botDeepLink: `https://t.me/Robo_kassa_bot?start=pay_${pack.id}_demo-user`,
             status: 'pending',
             expiresAt: new Date(Date.now() + 1800000).toISOString(),
           },
@@ -611,11 +426,12 @@ export function installFakeApi(options: FakeApiOptions = {}): FakeApi {
           status: 'pending',
           invoice: {
             id: 'stars_mock_123',
-            planId: 'gpt-pro',
-            priceRub: 2490,
-            starsAmount: 1260,
+            planId: 'free',
+            packId: 'credits-10',
+            priceRub: 0,
+            starsAmount: 510,
             botUsername: 'Robo_kassa_bot',
-            botDeepLink: 'https://t.me/Robo_kassa_bot?start=pay_gpt-pro_demo-user',
+            botDeepLink: 'https://t.me/Robo_kassa_bot?start=pay_credits-10_demo-user',
             status: 'pending',
             expiresAt: new Date(Date.now() + 1800000).toISOString(),
           },
@@ -623,46 +439,34 @@ export function installFakeApi(options: FakeApiOptions = {}): FakeApi {
       }
 
       if (url.startsWith('/api/billing/telegram-stars/confirm/') && method === 'POST') {
-        currentPlan = 'gpt-pro';
         return json({
           success: true,
-          subscription: {
-            userId: 'demo-user',
-            plan: 'gpt-pro',
-            status: 'active',
-            renewsAt: new Date(Date.now() + 86400000 * 30).toISOString(),
-          },
+          subscription: null,
           user: {
             id: 'demo-user',
-            plan: 'gpt-pro',
+            plan: 'credits',
           },
           invoice: {
             id: 'stars_mock_123',
-            planId: 'gpt-pro',
-            priceRub: 2490,
-            starsAmount: 1260,
+            planId: 'free',
+            packId: 'credits-10',
+            priceRub: 0,
+            starsAmount: 510,
             botUsername: 'Robo_kassa_bot',
-            botDeepLink: 'https://t.me/Robo_kassa_bot?start=pay_gpt-pro_demo-user',
+            botDeepLink: 'https://t.me/Robo_kassa_bot?start=pay_credits-10_demo-user',
             status: 'paid',
             expiresAt: new Date(Date.now() + 1800000).toISOString(),
           },
         });
       }
 
-      if (url === '/api/billing/crypto-bonus' && method === 'GET') {
-        return json({
-          plans: {
-            plus: { credits: 3000, bonusCredits: 200 },
-            pro: { credits: 11000, bonusCredits: 1200 },
-            ultra: { credits: 22000, bonusCredits: 2480 },
-          },
-        });
-      }
-
       if (url === '/api/billing/crypto/create-invoice' && method === 'POST') {
-        const planId = (body.planId as string) || 'plus';
+        const pack = getPack(String(body.packId ?? ''));
+        if (!pack) {
+          return json({ error: { code: 'pack_not_found', message: 'Пакет не найден' } }, 400);
+        }
         const currency = (body.currency as string) || 'USDT_TRC20';
-        const amountUsd = planId === 'ultra' ? 49 : planId === 'pro' ? 25 : 9;
+        const amountUsd = pack.priceUsd;
         const amount =
           currency === 'TON'
             ? +(amountUsd / 5.4).toFixed(2)
@@ -672,7 +476,8 @@ export function installFakeApi(options: FakeApiOptions = {}): FakeApi {
         return json({
           invoice: {
             id: 'crypto_mock_123',
-            planId,
+            planId: 'free',
+            packId: pack.id,
             currency,
             amount,
             amountUsd,
@@ -692,12 +497,12 @@ export function installFakeApi(options: FakeApiOptions = {}): FakeApi {
             cryptoCloudUrl: 'https://pay.trybit.com/DEMO123',
             // Trybit выдал реквизиты (H2H): оплата прямо на сайте.
             gatewayDetails: true,
-            // Комиссии из счёта Trybit: сервис 1,9 % + перевод по Tron, обе на покупателе.
+            // Комиссии из счёта Trybit: сервис 1,9 % + перевод по Tron, обе на стороне сервиса.
             fees: {
               serviceUsd: 0.17,
               transferUsd: currency === 'USDT_TRC20' ? 1.4 : 0,
-              payerUsd: +(0.17 + (currency === 'USDT_TRC20' ? 1.4 : 0)).toFixed(2),
-              totalUsd: +(amountUsd + 0.17 + (currency === 'USDT_TRC20' ? 1.4 : 0)).toFixed(2),
+              payerUsd: 0,
+              totalUsd: amountUsd,
             },
           },
         });
@@ -708,7 +513,8 @@ export function installFakeApi(options: FakeApiOptions = {}): FakeApi {
           status: 'pending',
           invoice: {
             id: 'crypto_mock_123',
-            planId: 'plus',
+            planId: 'free',
+            packId: 'credits-10',
             currency: 'USDT_TRC20',
             amount: 10,
             amountUsd: 10,
@@ -723,22 +529,17 @@ export function installFakeApi(options: FakeApiOptions = {}): FakeApi {
       }
 
       if (url.startsWith('/api/billing/crypto/confirm/') && method === 'POST') {
-        currentPlan = 'plus';
         return json({
           success: true,
-          subscription: {
-            userId: 'demo-user',
-            plan: 'plus',
-            status: 'active',
-            renewsAt: new Date(Date.now() + 86400000 * 30).toISOString(),
-          },
+          subscription: null,
           user: {
             id: 'demo-user',
-            plan: 'plus',
+            plan: 'credits',
           },
           invoice: {
             id: 'crypto_mock_123',
-            planId: 'plus',
+            planId: 'free',
+            packId: 'credits-10',
             currency: 'USDT_TRC20',
             amount: 10,
             amountUsd: 10,
@@ -785,17 +586,6 @@ export function installFakeApi(options: FakeApiOptions = {}): FakeApi {
       if (url === '/api/chat/compare' && method === 'POST') {
         api.compareBodies.push(body);
         const modelIds = Array.isArray(body.modelIds) ? (body.modelIds as string[]) : [];
-        if (Boolean(options.enforcePlans) && planRank(currentPlan) < 1) {
-          return json(
-            {
-              error: {
-                code: 'compare_plan_required',
-                message: 'Сравнение ответов доступно с тарифа Plus.',
-              },
-            },
-            403,
-          );
-        }
         const convId = String(body.conversationId ?? '');
         const found = conversations.get(convId);
         const runNumber = api.compareBodies.length;
@@ -982,20 +772,14 @@ export function installFakeApi(options: FakeApiOptions = {}): FakeApi {
           );
         }
 
-        const modelId = String(body.modelId ?? 'ketner-mini');
-        const targetModel = META.models.find((m) => m.id === modelId) ?? META.models[0];
-        const requiredPlan = targetModel.isPro ? (targetModel.requiredPlan ?? 'plus') : undefined;
-        const isUpgradeFail =
-          Boolean(options.enforcePlans) && planRank(currentPlan) < planRank(requiredPlan);
-
-        if (isUpgradeFail) {
-          const upgradeChunks = [
+        if (options.insufficientCredits) {
+          const refusal = [
             `event: error\ndata: ${JSON.stringify({
-              code: 'upgrade_required',
-              message: `Доступ к модели ${targetModel.name} требует подписки ${PLAN_LABELS[requiredPlan ?? 'plus'] ?? requiredPlan} или выше. Пожалуйста, улучшите ваш тарифный план (Upgrade your plan).`,
+              code: 'insufficient_credits',
+              message: 'Не хватает кредитов. Пополните баланс, чтобы продолжить.',
             })}\n\n`,
           ];
-          return new Response(streamOf(upgradeChunks, delayMs, init?.signal ?? null), {
+          return new Response(streamOf(refusal, delayMs, init?.signal ?? null), {
             status: 200,
             headers: { 'Content-Type': 'text/event-stream' },
           });

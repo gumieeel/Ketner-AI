@@ -30,8 +30,10 @@ import { RegistrationsPanel } from './admin/registrations-panel';
 interface AdminCredits {
   /** Остаток, кредиты. */
   balance: number;
-  /** Месячная выдача тарифа. */
-  monthly: number;
+  /** Сколько кредитов выдано по действующим грантам (пакеты, бонусы, пробные). */
+  granted: number;
+  /** Остались ли купленные кредиты: у пользователя полный уровень доступа. */
+  purchased: boolean;
   /** Потрачено за последние 30 дней. */
   spentMonth: number;
   nextExpiresAt: string | null;
@@ -281,6 +283,7 @@ function toProblem(error: unknown, fallback: TranslationKey): Problem {
 
 const PLAN_TONES: Record<string, BadgeTone> = {
   free: 'neutral',
+  credits: 'brand',
   plus: 'plus',
   pro: 'pro',
   ultra: 'ultra',
@@ -446,7 +449,7 @@ function CreditsMeter({ user, detailed = false }: { user: UserSummary; detailed?
       <span className="text-xs font-semibold tabular-nums">{user.creditsUsedPct}%</span>
       {detailed ? (
         <span className="hidden text-xs text-muted tabular-nums xl:inline">
-          ({user.credits.balance.toLocaleString()} / {user.credits.monthly.toLocaleString()})
+          ({user.credits.balance.toLocaleString()} / {user.credits.granted.toLocaleString()})
         </span>
       ) : null}
     </div>
@@ -1279,6 +1282,11 @@ export function AdminPage() {
                 <div className={cn(SUBTLE_PANEL, 'space-y-3')}>
                   <PanelTitle icon={<CreditsIcon className="size-4 text-accent" />}>
                     {t('admin.credits')}
+                    {detailUser.credits.purchased ? (
+                      <Badge tone="success" className="ml-2 px-2 py-0 text-[11px]">
+                        {t('admin.creditsPurchased')}
+                      </Badge>
+                    ) : null}
                   </PanelTitle>
                   <dl className="grid grid-cols-2 gap-3 text-[13px] md:grid-cols-4">
                     <div className="rounded-xl border border-stroke bg-surface p-3">
@@ -1288,9 +1296,9 @@ export function AdminPage() {
                       </dd>
                     </div>
                     <div className="rounded-xl border border-stroke bg-surface p-3">
-                      <dt className="text-xs text-muted">{t('admin.creditsMonthly')}</dt>
+                      <dt className="text-xs text-muted">{t('admin.creditsGranted')}</dt>
                       <dd className="mt-1 text-lg font-semibold tabular-nums">
-                        {detailUser.credits.monthly.toLocaleString()}
+                        {detailUser.credits.granted.toLocaleString()}
                       </dd>
                     </div>
                     <div className="rounded-xl border border-stroke bg-surface p-3">

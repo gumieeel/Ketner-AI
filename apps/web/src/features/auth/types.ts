@@ -1,4 +1,6 @@
-export type PlanId = 'free' | 'gpt-pro' | 'claude-pro' | 'gemini-pro' | 'ultra' | 'plus' | 'pro';
+import type { PlanId } from '../billing/types';
+
+export type { PlanId };
 
 export interface User {
   id: string;

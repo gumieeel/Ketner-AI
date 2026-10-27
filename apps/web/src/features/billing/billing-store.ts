@@ -1,42 +1,31 @@
 import { create } from 'zustand';
 import { useAuth } from '../auth/auth-store';
-import {
-  cancelSubscription as apiCancel,
-  checkout as apiCheckout,
-  createStripeCheckout,
-  fetchSubscription,
-} from './api';
-import { PLANS } from './plans';
-import type { Plan, PlanId, Subscription } from './types';
+import { cancelSubscription as apiCancel, fetchSubscription } from './api';
+import type { PlanId, Subscription } from './types';
 
+/**
+ * Подписка прежней системы. Новые подписки не продаются, но у тех, кто оплатил период раньше,
+ * она действует до конца срока — её видно в настройках и можно отключить.
+ */
 interface BillingState {
   subscription: Subscription | null;
-  plans: Plan[];
   loading: boolean;
   error: string | null;
   loadSubscription: () => Promise<void>;
-  checkout: (planId: PlanId) => Promise<void>;
-  startStripeCheckout: (planId: PlanId) => Promise<void>;
   cancel: () => Promise<void>;
-  setSubscription: (subscription: Subscription, userPlan: PlanId) => void;
+  setSubscription: (subscription: Subscription | null, userPlan: PlanId) => void;
 }
 
 export const useBilling = create<BillingState>((set) => ({
   subscription: null,
-  plans: [...PLANS],
   loading: false,
   error: null,
 
-  setSubscription: (subscription: Subscription, userPlan: PlanId) => {
+  setSubscription: (subscription, userPlan) => {
     set({ subscription, loading: false });
     const currentUser = useAuth.getState().user;
     if (currentUser) {
-      useAuth.setState({
-        user: {
-          ...currentUser,
-          plan: userPlan,
-        },
-      });
+      useAuth.setState({ user: { ...currentUser, plan: userPlan } });
     }
   },
 
@@ -50,58 +39,14 @@ export const useBilling = create<BillingState>((set) => ({
     }
   },
 
-  checkout: async (planId: PlanId) => {
-    set({ loading: true, error: null });
-    try {
-      const result = await apiCheckout(planId);
-      set({ subscription: result.subscription, loading: false });
-
-      // Обновляем план у текущего пользователя в auth-store
-      const currentUser = useAuth.getState().user;
-      if (currentUser) {
-        useAuth.setState({
-          user: {
-            ...currentUser,
-            plan: result.user.plan,
-          },
-        });
-      }
-    } catch (error) {
-      const message = error instanceof Error ? error.message : 'Ошибка оформления подписки';
-      set({ loading: false, error: message });
-      throw error;
-    }
-  },
-
-  startStripeCheckout: async (planId: PlanId) => {
-    set({ loading: true, error: null });
-    try {
-      const result = await createStripeCheckout(planId);
-      set({ loading: false });
-      if (result.url && typeof window !== 'undefined') {
-        window.location.href = result.url;
-      }
-    } catch (error) {
-      const message = error instanceof Error ? error.message : 'Ошибка создания Stripe Checkout';
-      set({ loading: false, error: message });
-      throw error;
-    }
-  },
-
   cancel: async () => {
     set({ loading: true, error: null });
     try {
       const result = await apiCancel();
       set({ subscription: result.subscription, loading: false });
-
       const currentUser = useAuth.getState().user;
       if (currentUser) {
-        useAuth.setState({
-          user: {
-            ...currentUser,
-            plan: result.user.plan,
-          },
-        });
+        useAuth.setState({ user: { ...currentUser, plan: result.user.plan } });
       }
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Ошибка отмены подписки';

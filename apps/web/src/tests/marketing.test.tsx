@@ -2,7 +2,7 @@ import { fireEvent, screen } from '@testing-library/react';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { renderRoute, resetAuth, resetPreferences } from './test-utils';
 
-describe('marketing: лендинг, шапка, футер и тарифные карточки', () => {
+describe('marketing: лендинг, шапка, футер и пакеты кредитов', () => {
   beforeEach(() => {
     resetPreferences();
     resetAuth();
@@ -13,7 +13,7 @@ describe('marketing: лендинг, шапка, футер и тарифные 
 
     const h1Headings = screen.getAllByRole('heading', { level: 1 });
     expect(h1Headings).toHaveLength(1);
-    expect(h1Headings[0]).toHaveAccessibleName('Все сильные модели в одной подписке');
+    expect(h1Headings[0]).toHaveAccessibleName('Все сильные модели без подписки');
 
     // Проверяем наличие карточек моделей и секций
     expect(screen.getAllByText(/GPT-6\.1 Sol/).length).toBeGreaterThan(0);
@@ -25,12 +25,13 @@ describe('marketing: лендинг, шапка, футер и тарифные 
     // Моделей, которых нет в каталоге, на лендинге быть не должно
     expect(screen.queryByText(/Gemini 3\.8|GPT-4o|Ketner Next/)).toBeNull();
 
-    // 4 тарифа — заголовки третьего уровня внутри секции «Тарифы»
-    expect(screen.getByRole('heading', { level: 2, name: 'Тарифы' })).toBeInTheDocument();
-    expect(screen.getByRole('heading', { level: 3, name: 'Free' })).toBeInTheDocument();
-    expect(screen.getByRole('heading', { level: 3, name: 'Plus' })).toBeInTheDocument();
-    expect(screen.getByRole('heading', { level: 3, name: 'Pro' })).toBeInTheDocument();
-    expect(screen.getByRole('heading', { level: 3, name: 'Ultra' })).toBeInTheDocument();
+    // Пять пакетов кредитов — заголовки третьего уровня внутри секции «Кредиты»
+    expect(screen.getByRole('heading', { level: 2, name: 'Кредиты' })).toBeInTheDocument();
+    for (const price of ['$5', '$10', '$25', '$50', '$100']) {
+      expect(screen.getByRole('heading', { level: 3, name: price })).toBeInTheDocument();
+    }
+    // Подписочных тарифов на лендинге нет
+    expect(screen.queryByRole('heading', { level: 3, name: /^(Plus|Pro|Ultra)$/ })).toBeNull();
 
     // FAQ аккордеон
     expect(screen.getByText('Как работают кредиты?')).toBeInTheDocument();
@@ -54,12 +55,13 @@ describe('marketing: лендинг, шапка, футер и тарифные 
     expect(screen.queryByRole('dialog', { name: 'Навигация' })).not.toBeInTheDocument();
   });
 
-  it('страница /pricing отображает 4 карточки и матрицу сравнения', () => {
+  it('страница /pricing отображает пять пакетов и сравнение уровней', () => {
     renderRoute('/pricing');
 
-    expect(screen.getByRole('heading', { level: 1, name: 'Тарифы' })).toBeInTheDocument();
-    expect(screen.getByText('Сравнение возможностей')).toBeInTheDocument();
-    expect(screen.getByText('Тариф Free')).toBeInTheDocument();
-    expect(screen.getByText('Тариф Pro')).toBeInTheDocument();
+    expect(screen.getByRole('heading', { level: 1, name: 'Кредиты' })).toBeInTheDocument();
+    expect(screen.getByTestId('pack-list').children).toHaveLength(5);
+    expect(screen.getByText('Что меняется после первой покупки')).toBeInTheDocument();
+    expect(screen.getByText('Без покупок')).toBeInTheDocument();
+    expect(screen.getByText('Есть купленные кредиты')).toBeInTheDocument();
   });
 });

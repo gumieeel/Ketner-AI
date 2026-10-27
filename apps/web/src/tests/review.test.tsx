@@ -71,13 +71,13 @@ describe('проверка ответа другой моделью', () => {
     expect(screen.getByRole('button', { name: 'Проверить ещё раз' })).toBeInTheDocument();
   });
 
-  it('сохранённая проверка видна сразу, а лимит проверок предлагает тарифы', async () => {
+  it('сохранённая проверка видна сразу, а лимит проверок предлагает купить кредиты', async () => {
     const api = installFakeApi({
       plan: 'free',
       reviewReject: {
         status: 429,
         code: 'review_limit',
-        message: 'Проверки на сегодня закончились (2 в сутки на вашем тарифе).',
+        message: 'Проверки на сегодня закончились (2 в сутки).',
       },
     });
     loginAs('free');
@@ -125,10 +125,9 @@ describe('проверка ответа другой моделью', () => {
     await user.click(screen.getByRole('button', { name: 'Проверить ещё раз' }));
     const alert = await screen.findByRole('alert');
     expect(alert).toHaveTextContent('Проверки на сегодня закончились');
-    expect(within(alert).getByRole('link', { name: /Больше проверок/ })).toHaveAttribute(
-      'href',
-      '/pricing',
-    );
+    expect(
+      within(alert).getByRole('link', { name: /После покупки кредитов проверок больше/ }),
+    ).toHaveAttribute('href', '/pricing');
   });
 });
 

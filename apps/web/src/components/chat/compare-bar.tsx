@@ -1,8 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { CloseIcon, PlusIcon } from '@/components/icons';
 import { ModelMark } from '@/components/ui/model-mark';
-import { useAuth } from '@/features/auth/auth-store';
-import { MODEL_NAME_KEYS, canAccessModel } from '@/features/chat/can-access-model';
+import { MODEL_NAME_KEYS } from '@/features/chat/model-catalog';
 import { useCompare } from '@/features/chat/compare-store';
 import type { ModelInfo } from '@/features/chat/types';
 import { useCompareSelection } from '@/features/chat/use-compare-selection';
@@ -13,7 +12,6 @@ import { modelColor } from '@/lib/model-color';
 /** Полоса над полем ввода: какие модели ответят на следующий вопрос. */
 export function CompareBar({ disabled = false }: { disabled?: boolean }) {
   const { t } = useTranslation();
-  const user = useAuth((state) => state.user);
   const setModelIds = useCompare((state) => state.setModelIds);
   const { ids, max, models } = useCompareSelection();
   const [open, setOpen] = useState(false);
@@ -45,9 +43,7 @@ export function CompareBar({ disabled = false }: { disabled?: boolean }) {
   const selected = ids
     .map((id) => models.find((model) => model.id === id))
     .filter((model): model is ModelInfo => model !== undefined);
-  const candidates = models.filter(
-    (model) => model.id !== 'auto' && !ids.includes(model.id) && canAccessModel(user?.plan, model),
-  );
+  const candidates = models.filter((model) => model.id !== 'auto' && !ids.includes(model.id));
   const full = ids.length >= max;
 
   return (

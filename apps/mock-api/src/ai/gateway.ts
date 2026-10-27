@@ -573,8 +573,8 @@ export class AIGateway {
               code: 'insufficient_credits',
               message:
                 language === 'en'
-                  ? `Not enough credits for ${requestedModel.name}. Comparison never substitutes models; credits renew with your plan.`
-                  : `Кредитов не хватает на модель ${requestedModel.name}. В сравнении модели не подменяются; кредиты обновятся вместе с тарифом.`,
+                  ? `Not enough credits for ${requestedModel.name}. Comparison never substitutes models; top up credits to continue.`
+                  : `Кредитов не хватает на модель ${requestedModel.name}. В сравнении модели не подменяются; пополните кредиты, чтобы продолжить.`,
             }
           : {
               code: 'model_unavailable',

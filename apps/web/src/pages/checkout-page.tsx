@@ -1,5 +1,5 @@
 import { useEffect, useEffectEvent, useRef, useState, type ReactNode } from 'react';
-import { Link, useNavigate, useParams } from 'react-router-dom';
+import { Link, Navigate, useNavigate, useParams } from 'react-router-dom';
 import { useAuth } from '@/features/auth/auth-store';
 import { ArrowLeftIcon, CheckIcon, CryptoIcon, ShieldIcon, StarIcon } from '@/components/icons';
 import { Badge, type BadgeTone } from '@/components/ui/badge';
@@ -10,12 +10,11 @@ import {
   confirmTelegramStarsPayment,
   createCryptoInvoice,
   createTelegramStarsInvoice,
-  fetchCryptoBonus,
   getCryptoInvoiceStatus,
   getTelegramStarsStatus,
 } from '@/features/billing/api';
 import { useBilling } from '@/features/billing/billing-store';
-import { getPlan } from '@/features/billing/plans';
+import { DEFAULT_PACK_ID, PACK_VALID_DAYS, getPack } from '@/features/billing/plans';
 import type {
   CryptoCurrency,
   CryptoInvoice,
@@ -24,10 +23,11 @@ import type {
   Subscription,
   TelegramStarsInvoice,
 } from '@/features/billing/types';
+import { useCredits } from '@/features/usage/credits-store';
 import { copyText } from '@/lib/clipboard';
-import { useTranslation } from '@/i18n';
+import { useTranslation, type TranslationKey } from '@/i18n';
 import { cn } from '@/lib/cn';
-import { formatCredits } from '@/lib/format-date';
+import { formatCredits, pluralForm } from '@/lib/format-date';
 import { trackPurchase } from '@/lib/ads';
 import { cryptoOption } from './checkout/crypto-options';
 import { CryptoPanel } from './checkout/crypto-panel';
@@ -36,46 +36,41 @@ import { OrderSummary } from './checkout/order-summary';
 import { CheckoutSkeleton } from './checkout/parts';
 import { StarsPanel } from './checkout/stars-panel';
 
+/** Идентификаторы прежних тарифов: ссылки на них остались в письмах и сообщениях бота. */
+const LEGACY_PLAN_IDS: ReadonlySet<string> = new Set([
+  'plus',
+  'pro',
+  'ultra',
+  'gpt-pro',
+  'claude-pro',
+  'gemini-pro',
+]);
+
 export function CheckoutPage() {
   const { t, language } = useTranslation();
   const navigate = useNavigate();
-  const { planId } = useParams<{ planId?: string }>();
+  const { packId } = useParams<{ packId?: string }>();
   const authStatus = useAuth((state) => state.status);
   const user = useAuth((state) => state.user);
   const setUser = useAuth((state) => state.setUser);
-  const plan = getPlan(planId);
+  const pack = getPack(packId);
   const setSubscription = useBilling((state) => state.setSubscription);
 
-  // Бонус за оплату тарифа криптой: суммы приходят с сервера (services/entitlement.ts).
-  const [cryptoBonus, setCryptoBonus] = useState<{
-    credits: number;
-    bonusCredits: number;
-  } | null>(null);
-  useEffect(() => {
-    if (!plan || !user) return;
-    let stale = false;
-    fetchCryptoBonus()
-      .then((data) => {
-        const forPlan = data.plans[plan.id];
-        if (!stale && forPlan) setCryptoBonus(forPlan);
-      })
-      .catch(() => undefined);
-    return () => {
-      stale = true;
-    };
-  }, [plan, user]);
-  const purchaseKind: 'plan' | null = plan ? 'plan' : null;
-  const purchaseId = plan?.id ?? '';
-  const priceUsd = plan?.priceMonthly ?? 0;
+  // Бонус за оплату криптой: +15 % кредитов отдельным начислением (числа — из plan-facts.json).
+  const cryptoBonus = pack
+    ? { credits: pack.credits, bonusCredits: pack.cryptoBonusCredits }
+    : null;
+  const purchaseId = pack?.id ?? '';
+  const priceUsd = pack?.priceUsd ?? 0;
 
   useEffect(() => {
     if (authStatus !== 'loading' && (!user || authStatus === 'unauthenticated')) {
-      const target = planId || 'gpt-pro';
+      const target = packId || DEFAULT_PACK_ID;
       navigate(`/signup?redirect=${encodeURIComponent(`/checkout/${target}`)}`, {
         replace: true,
       });
     }
-  }, [authStatus, user, planId, navigate]);
+  }, [authStatus, user, packId, navigate]);
 
   // Выбранный способ оплаты: по умолчанию криптовалюта (Trybit)
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('crypto');
@@ -133,13 +128,13 @@ export function CheckoutPage() {
 
   // Загрузка инвойса Криптовалюты
   useEffect(() => {
-    if (paymentMethod !== 'crypto' || !purchaseKind || priceUsd <= 0) return;
+    if (paymentMethod !== 'crypto' || !pack) return;
     // Быстрая смена монеты: ответ на устаревший запрос не должен подменить счёт новой монеты.
     let stale = false;
     setCryptoLoading(true);
     setCryptoError(null);
     setCryptoInvoice(null);
-    createCryptoInvoice(purchaseId as PlanId, cryptoCurrency)
+    createCryptoInvoice(purchaseId, cryptoCurrency)
       .then(({ invoice }) => {
         if (stale) return;
         setCryptoInvoice(invoice);
@@ -158,13 +153,13 @@ export function CheckoutPage() {
     return () => {
       stale = true;
     };
-  }, [paymentMethod, cryptoCurrency, purchaseKind, purchaseId, priceUsd, cryptoAttempt]);
+  }, [paymentMethod, cryptoCurrency, pack, purchaseId, cryptoAttempt]);
 
   // Загрузка инвойса Telegram Stars
   useEffect(() => {
-    if (paymentMethod === 'stars' && !starsInvoice && purchaseKind && priceUsd > 0) {
+    if (paymentMethod === 'stars' && !starsInvoice && pack) {
       setStarsLoading(true);
-      createTelegramStarsInvoice(purchaseId as PlanId)
+      createTelegramStarsInvoice(purchaseId)
         .then(({ invoice }) => {
           setStarsInvoice(invoice);
         })
@@ -173,12 +168,20 @@ export function CheckoutPage() {
         })
         .finally(() => setStarsLoading(false));
     }
-  }, [paymentMethod, starsInvoice, purchaseKind, purchaseId, priceUsd]);
+  }, [paymentMethod, starsInvoice, pack, purchaseId]);
 
-  /** Оплата подтверждена: обновляем подписку и профиль. */
-  const applyPaidResult = (conf: { subscription: Subscription; user: { plan: PlanId } }): void => {
-    setSubscription(conf.subscription, conf.user.plan);
-    if (user) setUser({ ...user, plan: conf.user.plan });
+  /**
+   * Оплата подтверждена: кредиты зачислены. В профиле сервер хранит прежний уровень, а покупателю
+   * без платной подписки открывается уровень `credits`, так что сайт показывает его сразу.
+   */
+  const applyPaidResult = (conf: {
+    subscription: Subscription | null;
+    user: { plan: PlanId };
+  }): void => {
+    const plan: PlanId = conf.user.plan === 'free' ? 'credits' : conf.user.plan;
+    setSubscription(conf.subscription, plan);
+    if (user) setUser({ ...user, plan });
+    void useCredits.getState().refresh('standard');
   };
   // Для опроса статуса в эффекте: свежие user и тариф без перезапуска таймера.
   const applyPaid = useEffectEvent(applyPaidResult);
@@ -189,7 +192,7 @@ export function CheckoutPage() {
   useEffect(() => {
     if (!success) return;
     closeGatewayWindow();
-    const item = planId ?? '';
+    const item = purchaseId;
     window.history.replaceState(
       window.history.state,
       '',
@@ -253,7 +256,11 @@ export function CheckoutPage() {
     return null;
   }
 
-  if (!purchaseKind) {
+  if (!pack) {
+    // Ссылки на прежние тарифы (/checkout/pro и т. п.) ведут на страницу пакетов.
+    if (packId && LEGACY_PLAN_IDS.has(packId)) {
+      return <Navigate to="/pricing" replace />;
+    }
     return (
       <div className="mx-auto flex w-full max-w-lg flex-col items-center gap-4 px-4 py-16 text-center">
         <h1 className="text-xl font-semibold text-text">{t('notFound.title')}</h1>
@@ -369,9 +376,14 @@ export function CheckoutPage() {
   const cryptoAddress = cryptoInvoice?.address ?? '';
   const cryptoQr = cryptoInvoice?.qrPayload ?? '';
 
-  const planName = plan ? t(plan.nameKey) : '';
-  const chipLabel = t('checkout.cryptoPlanChip', { plan: planName });
-  const periodNotice = t('checkout.starsPeriodNotice', { plan: planName });
+  const creditsText = t(`pricing.credits.${pluralForm(pack.credits, language)}` as TranslationKey, {
+    count: formatCredits(pack.credits, language),
+  });
+  const chipLabel = t('checkout.cryptoPackChip', { credits: creditsText, days: PACK_VALID_DAYS });
+  const periodNotice = t('checkout.starsPackNotice', {
+    credits: creditsText,
+    days: PACK_VALID_DAYS,
+  });
   const feedbackFor = (method: PaymentMethod): string | null =>
     checkFeedback && checkFeedback.method === method ? checkFeedback.message : null;
   const selectMethod = (method: PaymentMethod): void => {
@@ -400,21 +412,16 @@ export function CheckoutPage() {
         <Card className="flex w-full flex-wrap items-center justify-between gap-x-4 gap-y-3 rounded-2xl p-5 text-left">
           <div>
             <div className="flex items-center gap-2">
-              <h2 className="text-lg font-semibold text-text">{planName}</h2>
-              <Badge tone="brand">{t('checkout.days30')}</Badge>
+              <h2 className="text-lg font-semibold text-text">{creditsText}</h2>
+              <Badge tone="brand">{t('checkout.validDays', { days: PACK_VALID_DAYS })}</Badge>
             </div>
             <p className="mt-1 flex items-center gap-1.5 text-[13px] font-medium text-success">
               <span aria-hidden="true" className="size-2 animate-pulse rounded-full bg-success" />
-              {`${t('settings.statusActive')} · ${t('checkout.accessActivated')}`}
+              {t('checkout.creditsAdded')}
             </p>
           </div>
           <div className="text-right">
-            <p className="text-xl font-semibold text-text tabular-nums">
-              ${priceUsd}
-              {plan ? (
-                <span className="ml-1 text-xs font-normal text-muted">/{t('pricing.month')}</span>
-              ) : null}
-            </p>
+            <p className="text-xl font-semibold text-text tabular-nums">${priceUsd}</p>
             <p className="mt-0.5 text-xs text-muted">{paidMethodName || t('checkout.paid')}</p>
           </div>
         </Card>
@@ -468,7 +475,7 @@ export function CheckoutPage() {
               <span className="grid size-6 place-items-center rounded-full border border-stroke bg-surface-2 text-xs font-semibold">
                 <CheckIcon className="size-3.5 text-accent" />
               </span>
-              <span>{t('checkout.stepPlan')}</span>
+              <span>{t('checkout.stepPack')}</span>
             </Link>
           </li>
           <li aria-hidden="true" className="h-px w-5 bg-stroke-strong" />
@@ -553,7 +560,7 @@ export function CheckoutPage() {
                         bonus: formatCredits(cryptoBonus.bonusCredits, language),
                       }),
                       text: t('checkout.cryptoBonusText', {
-                        plan: planName,
+                        price: `$${pack.priceUsd}`,
                         credits: formatCredits(cryptoBonus.credits, language),
                         total: formatCredits(
                           cryptoBonus.credits + cryptoBonus.bonusCredits,
@@ -621,16 +628,13 @@ export function CheckoutPage() {
           </p>
         </div>
 
-        {plan ? (
-          <OrderSummary
-            plan={plan}
-            feeUsd={
-              paymentMethod === 'crypto' && !cryptoLoading
-                ? (cryptoInvoice?.fees?.payerUsd ?? 0)
-                : 0
-            }
-          />
-        ) : null}
+        <OrderSummary
+          pack={pack}
+          bonusCredits={paymentMethod === 'crypto' ? pack.cryptoBonusCredits : 0}
+          feeUsd={
+            paymentMethod === 'crypto' && !cryptoLoading ? (cryptoInvoice?.fees?.payerUsd ?? 0) : 0
+          }
+        />
       </div>
     </div>
   );

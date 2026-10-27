@@ -26,20 +26,23 @@ export interface CreditGrantInfo {
 }
 
 export interface CreditsReport {
+  /** Уровень доступа: `credits` у покупателя с неистраченными кредитами, иначе `free` или тариф подписчика. */
   plan: string;
   reasoningMode: 'standard' | 'max';
   /** Остаток, кредиты. */
   balance: number;
-  /** Сколько кредитов тариф выдаёт за 30 дней. */
-  monthly: number;
+  /** Сколько кредитов выдано по действующим грантам (знаменатель шкалы остатка). */
+  granted: number;
+  /** Пробные кредиты, которые получает каждый пользователь один раз. */
+  trialCredits: number;
+  /** Есть ли неистраченные купленные кредиты (они открывают полный уровень лимитов). */
+  purchased: boolean;
   stage: CreditStage;
-  /** Кредиты на исходе (меньше 15% месячной выдачи, но ещё есть). */
+  /** Кредиты на исходе (меньше 15% выданных, но ещё есть). */
   low: boolean;
   /** Когда сгорает ближайший грант и сколько кредитов в нём. */
   nextExpiresAt: string | null;
   nextExpiring: number;
-  /** Когда тариф выдаст новые кредиты. */
-  refreshAt: string | null;
   grants: CreditGrantInfo[];
   /** Бесплатная модель, которая отвечает, когда кредиты кончились. */
   freeModel: { id: string; name: string } | null;

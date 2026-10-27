@@ -2,6 +2,7 @@ import { Link } from 'react-router-dom';
 import { ArrowRightIcon } from '@/components/icons';
 import { HeroArc } from '@/components/marketing/hero-arc';
 import { buttonClasses } from '@/components/ui/button-classes';
+import { TRIAL } from '@/features/billing/plans';
 import { useTranslation } from '@/i18n';
 
 /**
@@ -19,7 +20,9 @@ export function LandingFinalCta() {
           <h2 id="final-title" className="t-headline max-w-[14ch] text-text">
             {t('home.finalTitle')}
           </h2>
-          <p className="t-lead mt-6 max-w-[40ch]">{t('home.finalLead')}</p>
+          <p className="t-lead mt-6 max-w-[40ch]">
+            {t('home.finalLead', { credits: TRIAL.credits })}
+          </p>
           <div className="mt-10 flex flex-col gap-3 sm:flex-row">
             <Link
               to="/chat"

@@ -1,20 +1,15 @@
-import { CompareIcon, LockIcon } from '@/components/icons';
+import { CompareIcon } from '@/components/icons';
 import { useAuth } from '@/features/auth/auth-store';
-import { useUpgradeModal } from '@/features/billing/upgrade-modal-store';
 import { useChat } from '@/features/chat/chat-store';
-import {
-  defaultCompareModelIds,
-  maxCompareModels,
-  sanitizeCompareModelIds,
-} from '@/features/chat/compare-policy';
+import { defaultCompareModelIds, sanitizeCompareModelIds } from '@/features/chat/compare-policy';
 import { useCompare } from '@/features/chat/compare-store';
-import { DEFAULT_MODELS } from '@/features/chat/can-access-model';
+import { DEFAULT_MODELS } from '@/features/chat/model-catalog';
 import { useTranslation } from '@/i18n';
 import { cn } from '@/lib/cn';
 
 /**
  * Переключатель режима сравнения. Включённый, он отправляет следующий вопрос нескольким моделям
- * сразу. На Free и у гостей кнопка видна с замком и открывает окно перехода на Plus.
+ * сразу. Открыт всем: до первой покупки кредитов сравниваются две модели, после неё — до четырёх.
  */
 export function CompareToggle({ disabled = false }: { disabled?: boolean }) {
   const { t } = useTranslation();
@@ -23,19 +18,13 @@ export function CompareToggle({ disabled = false }: { disabled?: boolean }) {
   const enabled = useCompare((state) => state.enabled);
   const setEnabled = useCompare((state) => state.setEnabled);
   const setModelIds = useCompare((state) => state.setModelIds);
-  const openUpgrade = useUpgradeModal((state) => state.open);
 
-  const allowed = maxCompareModels(user?.plan) > 0;
-  const on = allowed && enabled;
-  const hint = !allowed ? t('compare.locked') : on ? t('compare.toggleOn') : t('compare.toggleOff');
+  const on = enabled;
+  const hint = on ? t('compare.toggleOn') : t('compare.toggleOff');
 
   const toggle = (): void => {
-    if (!allowed) {
-      openUpgrade({ reason: 'compare', requiredPlan: 'PLUS' });
-      return;
-    }
     if (!enabled) {
-      // Первое включение (или выбранные модели стали недоступны): предлагаем разумный набор.
+      // Первое включение (или выбранных моделей больше нет в каталоге): предлагаем разумный набор.
       const models = meta && meta.models.length > 0 ? meta.models : DEFAULT_MODELS;
       const current = sanitizeCompareModelIds(useCompare.getState().modelIds, models, user?.plan);
       if (current.length < 2) {
@@ -49,7 +38,7 @@ export function CompareToggle({ disabled = false }: { disabled?: boolean }) {
     <button
       type="button"
       disabled={disabled}
-      aria-pressed={allowed ? on : undefined}
+      aria-pressed={on}
       aria-label={`${t('compare.toggle')}: ${hint}`}
       title={hint}
       onClick={toggle}
@@ -63,14 +52,7 @@ export function CompareToggle({ disabled = false }: { disabled?: boolean }) {
           : 'border-stroke text-muted hover:border-stroke-strong hover:bg-surface-2/70 hover:text-text',
       )}
     >
-      {allowed ? (
-        <CompareIcon className="size-3.5" aria-hidden="true" />
-      ) : (
-        <>
-          <LockIcon className="size-3.5 max-lg:hidden" aria-hidden="true" />
-          <CompareIcon className="size-4 opacity-70 lg:hidden" aria-hidden="true" />
-        </>
-      )}
+      <CompareIcon className="size-3.5 max-lg:size-4" aria-hidden="true" />
       <span className="max-lg:sr-only">{t('compare.toggle')}</span>
     </button>
   );

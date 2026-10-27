@@ -1,6 +1,6 @@
 # Ketner AI
 
-**Одна подписка — все топовые модели.** GPT, Claude, Gemini, Grok, GLM, Qwen и другие в одном чате, режим Auto сам выбирает модель под задачу. Плюс агент для кода, генерация картинок, OpenAI-совместимый API и Telegram-бот с оплатой.
+**Один баланс кредитов — все топовые модели, без подписки.** GPT, Claude, Gemini, Grok, GLM, Qwen и другие в одном чате, режим Auto сам выбирает модель под задачу. Плюс агент для кода, генерация картинок, OpenAI-совместимый API и Telegram-бот с оплатой.
 
 Сайт: [ketner.org](https://ketner.org) · хостинг Render (`ketner-ai.onrender.com`) · БД Supabase Postgres.
 
@@ -8,17 +8,17 @@
 
 ## Что умеет
 
-| Раздел                | Что внутри                                                                                                                                   | Документ                                               |
-| --------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------ |
-| Чат                   | 15 моделей через OpenRouter, режим Auto, кнопка Max (Ultra), вложения, привязка репозитория GitHub, кредиты вместо отдельных лимитов моделей | [models-and-pricing.md](docs/models-and-pricing.md)    |
-| Ketner Code (`/code`) | Проекты с файлами и агент, который читает и правит код по плану, импорт из ZIP и GitHub                                                      | [code-workspace.md](docs/code-workspace.md)            |
-| Изображения           | FLUX через Cloudflare Workers AI, платные модели через Runware, обязательная модерация                                                       | [models-and-pricing.md §5](docs/models-and-pricing.md) |
-| API для программ      | `/v1/chat/completions` в формате OpenAI, ключи `ketner_sk_…` (с тарифа Plus)                                                                 | [agent-api.md](docs/agent-api.md)                      |
-| Оплата                | Криптовалюта через Trybit, Telegram Stars (с автопродлением), возвраты                                                                       | [payments.md](docs/payments.md)                        |
-| Telegram              | Бот оплаты и кабинет `/tg`, вход на сайт через Telegram, бот поддержки                                                                       | [telegram.md](docs/telegram.md)                        |
-| Админка (`/admin`)    | Пользователи и тарифы, расход и маржа, метрики моделей, регистрации по времени и источнику                                                   | [operations.md](docs/operations.md)                    |
+| Раздел                | Что внутри                                                                                                                           | Документ                                               |
+| --------------------- | ------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------ |
+| Чат                   | 15 моделей через OpenRouter, режим Auto, кнопка Max, вложения, привязка репозитория GitHub, кредиты вместо отдельных лимитов моделей | [models-and-pricing.md](docs/models-and-pricing.md)    |
+| Ketner Code (`/code`) | Проекты с файлами и агент, который читает и правит код по плану, импорт из ZIP и GitHub                                              | [code-workspace.md](docs/code-workspace.md)            |
+| Изображения           | FLUX через Cloudflare Workers AI, платные модели через Runware, обязательная модерация                                               | [models-and-pricing.md §5](docs/models-and-pricing.md) |
+| API для программ      | `/v1/chat/completions` в формате OpenAI, ключи `ketner_sk_…` (после покупки кредитов)                                                | [agent-api.md](docs/agent-api.md)                      |
+| Оплата                | Пакеты кредитов за криптовалюту (Trybit, +15% бонус) и Telegram Stars, возвраты                                                      | [payments.md](docs/payments.md)                        |
+| Telegram              | Бот оплаты и кабинет `/tg`, вход на сайт через Telegram, бот поддержки                                                               | [telegram.md](docs/telegram.md)                        |
+| Админка (`/admin`)    | Пользователи и кредиты, расход и маржа, метрики моделей, регистрации по времени и источнику                                          | [operations.md](docs/operations.md)                    |
 
-Тарифы: Free $0 · Plus $9 · Pro $25 · Ultra $49 в месяц. Кредиты, лимиты и экономика — в [models-and-pricing.md](docs/models-and-pricing.md).
+Цены: подписок нет, кредиты покупаются пакетами $5 / $10 / $25 / $50 / $100 (2 300 – 57 500 кредитов, действуют 365 дней, пакет $100 — скидка 20%); новый аккаунт один раз получает 200 пробных кредитов. Все модели и функции открыты всем, ограничивает только баланс. Пакеты, лимиты и экономика — в [models-and-pricing.md](docs/models-and-pricing.md); оплата — в [payments.md](docs/payments.md).
 
 > **Перед любым запуском рекламы прочитайте [roadmap.md](docs/roadmap.md)**: там список того, что ещё не готово, начиная с временной бесплатной выдачи Pro в Telegram.
 

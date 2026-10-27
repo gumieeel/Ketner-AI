@@ -1,12 +1,11 @@
 import { Suspense, lazy, useMemo } from 'react';
-import { Link } from 'react-router-dom';
-import { AlertIcon, RefreshIcon, SparkleIcon } from '@/components/icons';
+import { AlertIcon, CreditsIcon, RefreshIcon } from '@/components/icons';
 import { Button } from '@/components/ui/button';
-import { buttonClasses } from '@/components/ui/button-classes';
 import { ModelMark } from '@/components/ui/model-mark';
 import { CopyButton } from '@/components/ui/copy-button';
 import { IconButton } from '@/components/ui/icon-button';
-import { findModel } from '@/features/chat/can-access-model';
+import { useCreditsModal } from '@/features/billing/credits-modal-store';
+import { findModel } from '@/features/chat/model-catalog';
 import { useChat } from '@/features/chat/chat-store';
 import type { Message } from '@/features/chat/types';
 import { useTranslation } from '@/i18n';
@@ -65,11 +64,9 @@ export function AssistantMessage({ message, canRegenerate }: AssistantMessagePro
     !isPending &&
     !isStreaming &&
     (message.canContinue === true || message.finishReason === 'length');
-  const isUpgradeError =
-    message.errorCode === 'upgrade_required' ||
-    (typeof message.error === 'string' &&
-      (message.error.toLowerCase().includes('upgrade') ||
-        message.error.toLowerCase().includes('подписк')));
+  // Ошибки про деньги: кредитов не хватает, и ответ возможен только после пополнения.
+  const needsCredits =
+    message.errorCode === 'upgrade_required' || message.errorCode === 'insufficient_credits';
 
   const foundModel = message.modelId ? findModel(meta?.models, message.modelId) : null;
   const modelName =
@@ -121,25 +118,29 @@ export function AssistantMessage({ message, canRegenerate }: AssistantMessagePro
           <div
             className={cn(
               'mt-2 rounded-xl p-4 text-sm leading-5',
-              isUpgradeError
+              needsCredits
                 ? 'border border-warning/30 bg-warning-soft text-warning'
                 : 'border border-danger/30 bg-danger-soft text-danger',
             )}
           >
             <p className="flex items-center gap-2 font-medium">
-              {isUpgradeError ? (
-                <SparkleIcon className="size-4 text-warning" aria-hidden="true" />
+              {needsCredits ? (
+                <CreditsIcon className="size-4 text-warning" aria-hidden="true" />
               ) : (
                 <AlertIcon />
               )}
-              {isUpgradeError ? t('chat.upgradeRequired') : t('chat.errorTitle')}
+              {needsCredits ? t('chat.creditsRequired') : t('chat.errorTitle')}
             </p>
             <p className="mt-1 text-text/85">{message.error ?? t('chat.errorText')}</p>
-            {isUpgradeError ? (
+            {needsCredits ? (
               <div className="mt-3">
-                <Link to="/pricing" className={buttonClasses({ variant: 'primary', size: 'sm' })}>
-                  {t('chat.upgradeButton')}
-                </Link>
+                <Button
+                  size="sm"
+                  onClick={() => useCreditsModal.getState().open()}
+                  leftIcon={<CreditsIcon className="size-3.5" />}
+                >
+                  {t('credits.buy')}
+                </Button>
               </div>
             ) : canRegenerate ? (
               <Button

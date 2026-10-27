@@ -14,7 +14,7 @@ import {
 } from '@/components/icons';
 import { LanguageToggle } from '@/components/layout/language-toggle';
 import { ThemeToggle } from '@/components/layout/theme-toggle';
-import { Badge, type BadgeTone } from '@/components/ui/badge';
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { buttonClasses } from '@/components/ui/button-classes';
 import { Card, CardText, CardTitle } from '@/components/ui/card';
@@ -27,10 +27,13 @@ import type { User } from '@/features/auth/types';
 import { ApiError } from '@/features/chat/api';
 import { isTelegramOnlyEmail, telegramSiteAuth } from '@/features/telegram/site-auth';
 import { useBilling } from '@/features/billing/billing-store';
+import { planBadge } from '@/features/billing/plan-badge';
+import { PACK_VALID_DAYS } from '@/features/billing/plans';
+import { useCredits } from '@/features/usage/credits-store';
 import { useGithub } from '@/features/github/github-store';
-import { useTranslation, type TranslationKey } from '@/i18n';
+import { useTranslation } from '@/i18n';
 import { cn } from '@/lib/cn';
-import { formatShortDate } from '@/lib/format-date';
+import { formatCredits, formatShortDate } from '@/lib/format-date';
 
 /** Подсвечивает в навигации раздел, который сейчас в верхней трети экрана. */
 function useActiveSection(ids: readonly string[]): string {
@@ -174,19 +177,6 @@ function Note({ title, children }: { title?: ReactNode; children: ReactNode }) {
   );
 }
 
-const PLAN_TONES: Record<string, BadgeTone> = {
-  free: 'neutral',
-  plus: 'plus',
-  pro: 'pro',
-  ultra: 'ultra',
-};
-
-const PLAN_NAME_KEYS: Record<string, TranslationKey> = {
-  free: 'pricing.free',
-  plus: 'pricing.plus',
-  pro: 'pricing.pro',
-};
-
 export function SettingsPage() {
   const { t, language } = useTranslation();
   const user = useAuth((state) => state.user);
@@ -197,6 +187,8 @@ export function SettingsPage() {
   const billingLoading = useBilling((state) => state.loading);
   const loadSubscription = useBilling((state) => state.loadSubscription);
   const cancel = useBilling((state) => state.cancel);
+  const creditsReport = useCredits((state) => state.report);
+  const refreshCredits = useCredits((state) => state.refresh);
 
   const githubStatus = useGithub((state) => state.status);
   const githubLoading = useGithub((state) => state.loading);
@@ -308,7 +300,12 @@ export function SettingsPage() {
     void loadSubscription();
   }, [loadSubscription, user]);
 
-  const isPaid = user?.plan && user.plan !== 'free';
+  useEffect(() => {
+    if (user) void refreshCredits('standard');
+  }, [refreshCredits, user]);
+
+  // Подписки сняты с продажи: платный уровень остаётся только у прежних подписчиков.
+  const isPaid = Boolean(user?.plan && user.plan !== 'free' && user.plan !== 'credits');
   const isCanceled = subscription?.status === 'canceled';
   const telegramLinked = Boolean(user?.telegramChatId || user?.telegramUsername);
 
@@ -321,15 +318,12 @@ export function SettingsPage() {
     }
   };
 
-  const planKey = user?.plan ? PLAN_NAME_KEYS[user.plan] : undefined;
-  const planLabel = planKey ? t(planKey) : user?.plan === 'ultra' ? 'Ultra' : t('pricing.free');
-  const planTone: BadgeTone =
-    (user?.plan && PLAN_TONES[user.plan]) || (user?.plan ? 'brand' : 'neutral');
+  const { label: planLabel, tone: planTone } = planBadge(user?.plan ?? 'free', t);
 
   const sections: Array<{ id: string; label: string; danger?: boolean }> = [
     { id: 'account', label: t('settings.account') },
     { id: 'appearance', label: t('settings.appearance') },
-    { id: 'subscription', label: t('settings.subscription') },
+    { id: 'credits', label: t('settings.credits') },
     { id: 'github', label: 'GitHub' },
     { id: 'telegram', label: 'Telegram' },
     { id: 'support', label: t('settings.support') },
@@ -428,31 +422,20 @@ export function SettingsPage() {
             </div>
           </SettingsSection>
 
-          {/* Подписка */}
+          {/* Кредиты: остаток, срок действия и покупка пакетов */}
           <SettingsSection
-            id="subscription"
+            id="credits"
             icon={<CreditCardIcon className="size-5" />}
-            title={t('settings.subscription')}
+            title={t('settings.credits')}
+            description={t('settings.creditsText')}
             action={
-              isPaid && !isCanceled ? (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={handleCancel}
-                  disabled={canceling}
-                  className="text-danger hover:border-danger/40 hover:bg-danger-soft"
-                >
-                  {canceling ? t('settings.canceling') : t('settings.cancelSubscription')}
-                </Button>
-              ) : (
-                <Link
-                  to="/pricing"
-                  className={cn(buttonClasses({ variant: 'primary', size: 'sm' }), 'gap-1.5')}
-                >
-                  <SparkleIcon className="size-3.5" />
-                  {t('nav.upgrade')}
-                </Link>
-              )
+              <Link
+                to="/pricing"
+                className={cn(buttonClasses({ variant: 'primary', size: 'sm' }), 'gap-1.5')}
+              >
+                <SparkleIcon className="size-3.5" />
+                {t('credits.buy')}
+              </Link>
             }
           >
             <div className="flex flex-wrap items-center gap-2">
@@ -463,20 +446,62 @@ export function SettingsPage() {
                 </Badge>
               ) : null}
             </div>
-            {isPaid && !subscription && billingLoading ? (
-              <Skeleton className="h-4 w-56 max-w-full" />
+            {!user ? (
+              <Note>{t('settings.creditsSignIn')}</Note>
+            ) : !creditsReport ? (
+              <Skeleton className="h-16 w-full" />
             ) : (
-              <CardText className="text-[13px] leading-5">
-                {isPaid
-                  ? isCanceled
-                    ? t('settings.canceledNotice')
-                    : `${t('settings.renewsAt')}: ${formatShortDate(
-                        subscription?.renewsAt ?? new Date().toISOString(),
-                        language,
-                      )}`
-                  : t('settings.subscriptionText')}
-              </CardText>
+              <>
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                  <InfoTile label={t('settings.creditsBalance')}>
+                    {formatCredits(creditsReport.balance, language)}
+                  </InfoTile>
+                  <InfoTile label={t('settings.creditsExpiry')}>
+                    {creditsReport.nextExpiresAt && creditsReport.nextExpiring > 0
+                      ? t('settings.creditsExpiryValue', {
+                          count: formatCredits(creditsReport.nextExpiring, language),
+                          date: formatShortDate(creditsReport.nextExpiresAt, language),
+                        })
+                      : '—'}
+                  </InfoTile>
+                </div>
+                <CardText className="text-[13px] leading-5">
+                  {creditsReport.purchased
+                    ? t('settings.creditsPurchasedNote', { days: PACK_VALID_DAYS })
+                    : t('settings.creditsTrialNote', { trial: creditsReport.trialCredits })}
+                </CardText>
+              </>
             )}
+            {isPaid ? (
+              <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-stroke bg-canvas px-3.5 py-3">
+                {!subscription && billingLoading ? (
+                  <Skeleton className="h-4 w-56 max-w-full" />
+                ) : (
+                  <CardText className="text-[13px] leading-5">
+                    {isCanceled
+                      ? t('settings.canceledNotice')
+                      : t('settings.legacySubscription', {
+                          plan: planLabel,
+                          date: formatShortDate(
+                            subscription?.renewsAt ?? new Date().toISOString(),
+                            language,
+                          ),
+                        })}
+                  </CardText>
+                )}
+                {!isCanceled ? (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handleCancel}
+                    disabled={canceling}
+                    className="text-danger hover:border-danger/40 hover:bg-danger-soft"
+                  >
+                    {canceling ? t('settings.canceling') : t('settings.cancelSubscription')}
+                  </Button>
+                ) : null}
+              </div>
+            ) : null}
           </SettingsSection>
 
           {/* GitHub: доступ к репозиториям, включая приватные */}

@@ -12,7 +12,7 @@ const json = (body: unknown, status = 200): Response =>
 
 let credits: ImageCapabilities['credits'];
 
-function capabilities(plan: 'free' | 'plus'): ImageCapabilities {
+function capabilities(plan: 'free' | 'credits'): ImageCapabilities {
   return {
     available: true,
     plan,
@@ -24,9 +24,7 @@ function capabilities(plan: 'free' | 'plus'): ImageCapabilities {
         id: 'flux-schnell',
         name: 'FLUX.1 schnell',
         aspects: ['1:1'],
-        requiredPlan: 'free',
-        locked: false,
-        dailyLimit: plan === 'free' ? 5 : 50,
+        dailyLimit: plan === 'free' ? 5 : 200,
         usedToday: 1,
         priceCredits: 0.7,
       },
@@ -34,9 +32,7 @@ function capabilities(plan: 'free' | 'plus'): ImageCapabilities {
         id: 'flux-2-klein',
         name: 'FLUX.2 klein',
         aspects: ['1:1', '4:3', '3:4', '16:9', '9:16'],
-        requiredPlan: 'plus',
-        locked: plan === 'free',
-        dailyLimit: plan === 'free' ? 0 : 20,
+        dailyLimit: plan === 'free' ? 5 : 120,
         usedToday: 0,
         priceCredits: 4.6,
       },
@@ -63,7 +59,7 @@ interface ImagesFake {
 }
 
 function installImagesApi(
-  plan: 'free' | 'plus',
+  plan: 'free' | 'credits',
   options: { generate?: () => Response } = {},
 ): ImagesFake {
   installFakeApi({ reply: 'ok', plan });
@@ -90,7 +86,7 @@ function installImagesApi(
   return fake;
 }
 
-function loginAs(plan: 'free' | 'plus'): void {
+function loginAs(plan: 'free' | 'credits'): void {
   useAuth.setState({
     user: {
       id: 'demo-user',
@@ -125,7 +121,7 @@ describe('страница «Изображения»', () => {
     });
   });
 
-  it('генерирует картинку на Free и добавляет её в галерею', async () => {
+  it('генерирует картинку на Free без замков на моделях и добавляет её в галерею', async () => {
     const fake = installImagesApi('free');
     loginAs('free');
     const user = userEvent.setup();
@@ -134,8 +130,10 @@ describe('страница «Изображения»', () => {
     expect(await screen.findByAltText('старая картинка')).toBeInTheDocument();
     // Счётчик использования на странице не показывается: лимиты считает сервер
     expect(screen.queryByText(/Сегодня \d+ из \d+/)).toBeNull();
-    // Free: FLUX.2 закрыта, у FLUX.1 только квадрат.
-    expect(screen.getByRole('button', { name: /FLUX\.2 klein/ })).toHaveTextContent('PLUS');
+    // Free: все модели открыты, без замков и бейджей тарифов; у FLUX.1 только квадрат.
+    const klein = screen.getByRole('button', { name: /FLUX\.2 klein/ });
+    expect(klein).toBeEnabled();
+    expect(klein).not.toHaveTextContent(/PLUS|PRO/i);
     expect(screen.getByRole('button', { name: /16:9/ })).toBeDisabled();
 
     await user.type(screen.getByLabelText('Описание картинки'), 'кот в космосе');
@@ -152,8 +150,8 @@ describe('страница «Изображения»', () => {
 
   it('показывает остаток кредитов и цену каждой модели, а после картинки уменьшает остаток', async () => {
     credits = { balance: 3000, exhausted: false, freePerDay: 5 };
-    installImagesApi('plus');
-    loginAs('plus');
+    installImagesApi('credits');
+    loginAs('credits');
     const user = userEvent.setup();
     renderRoute('/images');
 
@@ -168,10 +166,10 @@ describe('страница «Изображения»', () => {
     expect(screen.getByTestId('images-credits')).toHaveTextContent('Кредиты: 2 999');
   });
 
-  it('когда кредиты кончились, говорит, что рисует только FLUX.1 schnell, и ведёт на тарифы', async () => {
+  it('когда кредиты кончились, говорит, что рисует только FLUX.1 schnell, и ведёт к покупке', async () => {
     credits = { balance: 0, exhausted: true, freePerDay: 5 };
-    installImagesApi('plus');
-    loginAs('plus');
+    installImagesApi('credits');
+    loginAs('credits');
     renderRoute('/images');
 
     const line = await screen.findByTestId('images-credits');
@@ -179,7 +177,10 @@ describe('страница «Изображения»', () => {
     expect(line).toHaveTextContent(
       'Кредиты закончились: рисует только FLUX.1 schnell, не больше 5 в сутки',
     );
-    expect(within(line).getByRole('link', { name: 'Тарифы' })).toHaveAttribute('href', '/pricing');
+    expect(within(line).getByRole('link', { name: 'Купить кредиты' })).toHaveAttribute(
+      'href',
+      '/pricing',
+    );
   });
 
   it('выбранный стиль уходит на сервер и запоминается', async () => {
@@ -203,7 +204,7 @@ describe('страница «Изображения»', () => {
     expect(fake.generateBodies[0]).toMatchObject({ prompt: 'кот в космосе', style: 'watercolor' });
   });
 
-  it('показывает отказ модерации и ссылку на тариф при исчерпанном лимите', async () => {
+  it('показывает отказ модерации и ссылку на покупку кредитов при исчерпанном лимите', async () => {
     let call = 0;
     installImagesApi('free', {
       generate: () => {
@@ -247,7 +248,10 @@ describe('страница «Изображения»', () => {
       within(dialog).getByText('Самая быстрая модель: картинка готова за несколько секунд.'),
     ).toBeInTheDocument();
     expect(within(dialog).queryByText(/лимит/i)).toBeNull();
-    expect(within(dialog).getByText('Доступна с тарифа Plus')).toBeInTheDocument();
+    // У каждой модели — цена картинки в кредитах, а не название тарифа
+    expect(within(dialog).getByText('≈ 0,7 кр.')).toBeInTheDocument();
+    expect(within(dialog).getByText('≈ 4,6 кр.')).toBeInTheDocument();
+    expect(within(dialog).queryByText(/тариф/i)).toBeNull();
     expect(within(dialog).getByText('Только квадрат 1:1')).toBeInTheDocument();
     await user.keyboard('{Escape}');
     expect(screen.queryByRole('dialog')).toBeNull();

@@ -146,7 +146,7 @@ export interface CompletionRequest {
   /** История целиком: сервер приводит к ней своё состояние. */
   messages: readonly Message[];
   signal: AbortSignal;
-  /** Режим размышлений: max действует только на Ultra (сервер проверяет тариф сам). */
+  /** Режим размышлений: max доступен всем, запрос в нём стоит дороже. */
   reasoningMode?: 'standard' | 'max';
 }
 
@@ -167,7 +167,7 @@ export async function streamCompletion(
   } else {
     headers['X-Guest-Id'] = getGuestId();
   }
-  // Личность и тариф определяет сервер по сессии; клиент их не присылает.
+  // Личность и уровень доступа определяет сервер по сессии; клиент их не присылает.
   const response = await fetch(`${API_BASE}/chat/completions`, {
     method: 'POST',
     headers,

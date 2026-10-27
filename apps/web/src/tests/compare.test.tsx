@@ -2,7 +2,7 @@ import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { useAuth } from '@/features/auth/auth-store';
-import { useUpgradeModal } from '@/features/billing/upgrade-modal-store';
+import { useCreditsModal } from '@/features/billing/credits-modal-store';
 import { useChat } from '@/features/chat/chat-store';
 import {
   defaultCompareModelIds,
@@ -10,13 +10,13 @@ import {
   maxCompareModels,
 } from '@/features/chat/compare-policy';
 import { useCompare } from '@/features/chat/compare-store';
-import { DEFAULT_MODELS } from '@/features/chat/can-access-model';
+import { DEFAULT_MODELS } from '@/features/chat/model-catalog';
 import { installFakeApi } from './fake-api';
 import { renderRoute, resetAuth, resetChat, resetPreferences } from './test-utils';
 
 const COMPOSER = 'Спросите что-нибудь…';
 
-function loginAs(plan: 'free' | 'plus' | 'pro' | 'ultra'): void {
+function loginAs(plan: 'free' | 'credits' | 'plus' | 'pro' | 'ultra'): void {
   useAuth.setState({
     user: {
       id: 'demo-user',
@@ -31,22 +31,25 @@ function loginAs(plan: 'free' | 'plus' | 'pro' | 'ultra'): void {
 }
 
 describe('правила сравнения на клиенте', () => {
-  it('число моделей по тарифам совпадает с сервером', () => {
-    expect(maxCompareModels('free')).toBe(0);
-    expect(maxCompareModels(undefined)).toBe(0);
+  it('число моделей по уровням доступа совпадает с сервером: сравнение открыто всем', () => {
+    // Без покупок — две модели, после покупки кредитов — до четырёх
+    expect(maxCompareModels('free')).toBe(2);
+    expect(maxCompareModels(undefined)).toBe(2);
+    expect(maxCompareModels('credits')).toBe(4);
+    // Подписки прежней системы доживают срок с прежними лимитами
     expect(maxCompareModels('plus')).toBe(2);
     expect(maxCompareModels('pro')).toBe(3);
     expect(maxCompareModels('gpt-pro')).toBe(3);
     expect(maxCompareModels('ultra')).toBe(4);
   });
 
-  it('набор по умолчанию: только доступные модели, не больше трёх и не больше тарифа', () => {
-    const plus = defaultCompareModelIds(DEFAULT_MODELS, 'plus');
-    expect(plus.length).toBeGreaterThanOrEqual(2);
-    expect(plus).not.toContain('claude-opus-5.5');
-    expect(plus).not.toContain('auto');
-    const ultra = defaultCompareModelIds(DEFAULT_MODELS, 'ultra');
-    expect(ultra.length).toBeLessThanOrEqual(3);
+  it('набор по умолчанию: без auto, не больше трёх и не больше лимита уровня', () => {
+    const free = defaultCompareModelIds(DEFAULT_MODELS, 'free');
+    expect(free.length).toBe(2);
+    expect(free).not.toContain('auto');
+    const credits = defaultCompareModelIds(DEFAULT_MODELS, 'credits');
+    expect(credits.length).toBeLessThanOrEqual(3);
+    expect(credits.length).toBeGreaterThanOrEqual(2);
   });
 
   it('самый быстрый ответ определяется только при двух и более завершённых', () => {
@@ -72,24 +75,29 @@ describe('сравнение ответов в чате', () => {
     resetChat();
   });
 
-  it('на Free кнопка с замком открывает переход на Plus, а вопрос уходит обычным запросом', async () => {
+  it('на Free сравнение открыто: переключатель включает его, без окна покупки, не больше двух моделей', async () => {
     const api = installFakeApi({ reply: 'Обычный ответ', plan: 'free' });
     loginAs('free');
     const user = userEvent.setup();
     renderRoute('/chat');
 
-    const toggle = await screen.findByRole('button', { name: /^Сравнить:.*Plus/ });
-    expect(toggle).not.toHaveAttribute('aria-pressed');
+    const toggle = await screen.findByRole('button', { name: /^Сравнить:/ });
+    expect(toggle).not.toHaveAttribute('aria-pressed', 'true');
     await user.click(toggle);
-    expect(useUpgradeModal.getState().isOpen).toBe(true);
-    expect(useUpgradeModal.getState().reason).toBe('compare');
-    expect(useCompare.getState().enabled).toBe(false);
-    useUpgradeModal.getState().close();
+    expect(useCreditsModal.getState().isOpen).toBe(false);
+    expect(useCompare.getState().enabled).toBe(true);
+    expect(toggle).toHaveAttribute('aria-pressed', 'true');
 
+    // До первой покупки сравниваются две модели
+    const bar = await screen.findByTestId('compare-bar');
+    expect(within(bar).getByText('Не больше 2 моделей сразу')).toBeInTheDocument();
+
+    // Обычный вопрос уходит сразу двум моделям
+    useCompare.setState({ modelIds: ['ketner-mini', 'ketner-pro'] });
     await user.type(await screen.findByLabelText(COMPOSER), 'Привет');
     await user.click(screen.getByRole('button', { name: 'Отправить' }));
-    await waitFor(() => expect(api.completionBodies.length).toBe(1));
-    expect(api.compareBodies.length).toBe(0);
+    await waitFor(() => expect(api.compareBodies.length).toBe(1));
+    expect(api.completionBodies.length).toBe(0);
   });
 
   it('на Plus вопрос уходит выбранным моделям, колонки показывают ответы, выбор заменяет ответ', async () => {
@@ -185,18 +193,19 @@ describe('сравнение ответов в чате', () => {
     expect(api.compareBodies.length).toBe(0);
   });
 
-  it('модели из чужого тарифа отсеиваются: на Plus нельзя оставить Opus', async () => {
-    installFakeApi({ plan: 'plus' });
-    loginAs('plus');
+  it('дорогие модели остаются в сравнении, а лишние сверх лимита уровня отсеиваются', async () => {
+    installFakeApi({ plan: 'free' });
+    loginAs('free');
     useCompare.setState({
       enabled: true,
       modelIds: ['claude-opus-5.5', 'ketner-pro', 'claude-haiku-5.5'],
     });
     renderRoute('/chat');
 
+    // На Free — две модели: Opus не закрыт, но третья сверх лимита убирается
     const bar = await screen.findByTestId('compare-bar');
-    expect(within(bar).queryByText('Claude Opus 5.5')).not.toBeInTheDocument();
+    expect(within(bar).getByText('Claude Opus 5.5')).toBeInTheDocument();
     expect(within(bar).getByText('Ketner Pro')).toBeInTheDocument();
-    expect(within(bar).getByText('Claude Haiku 5.5')).toBeInTheDocument();
+    expect(within(bar).queryByText('Claude Haiku 5.5')).not.toBeInTheDocument();
   });
 });

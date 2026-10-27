@@ -8,7 +8,7 @@ type Status = 'idle' | 'loading' | 'ready' | 'error';
 export interface ImageNotice {
   tone: 'error' | 'info';
   text: string;
-  /** Код ошибки сервера: по нему интерфейс предлагает улучшить тариф. */
+  /** Код ошибки сервера: по нему интерфейс предлагает купить кредиты. */
   code?: string;
 }
 
@@ -86,7 +86,7 @@ export const useImages = create<ImagesState>((set, get) => ({
         imagesApi.capabilities(),
         imagesApi.list(),
       ]);
-      const current = capabilities.models.find((m) => m.id === get().modelId && !m.locked);
+      const current = capabilities.models.find((m) => m.id === get().modelId);
       const style =
         capabilities.styles && !capabilities.styles.includes(get().style)
           ? (capabilities.defaultStyleId ?? 'none')

@@ -102,6 +102,7 @@ const CHANNEL_KEYS: Record<Channel, TranslationKey> = {
 
 const PLAN_TONES: Record<string, BadgeTone> = {
   free: 'neutral',
+  credits: 'brand',
   plus: 'plus',
   pro: 'pro',
   ultra: 'ultra',
