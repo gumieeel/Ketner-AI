@@ -23,6 +23,7 @@ const DEVELOPERS: Readonly<Record<string, string>> = {
   qwen: 'Alibaba (Qwen)',
   nvidia: 'NVIDIA',
   cohere: 'Cohere',
+  moonshotai: 'Moonshot AI',
 };
 
 /**

@@ -15,6 +15,7 @@ const KNOWN_DEVELOPERS = new Set([
   'Alibaba (Qwen)',
   'NVIDIA',
   'Cohere',
+  'Moonshot AI',
 ]);
 
 test('прозрачность: у каждой включённой модели известен разработчик', () => {
