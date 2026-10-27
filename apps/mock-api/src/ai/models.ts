@@ -34,6 +34,7 @@ export const PUBLIC_MODEL_IDS: readonly string[] = [
   'ketner-pro',
   'claude-haiku-5.5',
   'deepseek-v4.1-flash',
+  'minimax-m3.1-flash',
   'glm-5.3-flash',
   'qwen3.8-flash',
   'gpt-5.6-luna-pro',

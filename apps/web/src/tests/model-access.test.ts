@@ -23,6 +23,7 @@ describe('каталог моделей: доступ открыт всем, п�
       ['ketner-pro', 'Ketner Pro'],
       ['claude-haiku-5.5', 'Claude Haiku 5.5'],
       ['deepseek-v4.1-flash', 'DeepSeek V4.1 Flash'],
+      ['minimax-m3.1-flash', 'MiniMax M3.1 Flash'],
       ['glm-5.3-flash', 'GLM-5.3 Flash'],
       ['qwen3.8-flash', 'Qwen3.8 Flash'],
       ['gpt-5.6-luna-pro', 'GPT-5.6 Luna Pro'],
@@ -37,6 +38,7 @@ describe('каталог моделей: доступ открыт всем, п�
       ['claude-sonnet-5.5', 'Claude Sonnet 5.5'],
       ['gpt-6-astra', 'GPT-6 Astra'],
       ['grok-4.7', 'Grok 4.7 xhigh'],
+      ['gemini-4-argon', 'Gemini 4 Argon'],
       ['gpt-5.6-sol', 'GPT-5.6 Sol'],
       ['gpt-5.6-terra', 'GPT-5.6 Terra xhigh'],
     ]);

@@ -151,7 +151,7 @@ const reasoning = (
  *   gpt-5.6-terra      GPT-5.6 Terra xhigh AA 42    $0.099   модель для кода (AA Coding 77)
  *
  * Цены в кредитах считает services/credits.ts, цепочки запасных моделей — fallbackModelId ниже.
- * Добавлены 27.10.2026: GLM-5.3 Flash, Qwen3.8 Flash и Max, Kimi K3.1 Pro, GPT-6.1 Terra.
+ * Добавлены 27.10.2026: MiniMax M3.1 Flash, включена Gemini 4 Argon, GLM-5.3 Flash, Qwen3.8 Flash и Max, Kimi K3.1 Pro, GPT-6.1 Terra.
  * Не вошли: Claude Fable 5.1 (в 2.5 раза дороже Opus 5.5 при более низком AA), Kimi K3 (вытеснена K3.1),
  * Muse Spark, Nemotron 3 Ultra (хуже и дороже модели ketner-pro), DeepSeek V4 Pro (AA ≈ 36 на текущей
  * версии индекса — ниже Ketner Mini). Из открытых флагманов сильнее только MiMo-V2.6 Pro (это и есть
@@ -319,6 +319,35 @@ const DEFAULT_REGISTRY_ENTRIES: ModelRegistryEntry[] = [
     contextWindow: 1048576,
     maxOutputTokens: 16384,
     pricing: makePricing(0.3, 1.2, 0.006),
+    requiredPlan: null,
+    contextMessages: 40,
+    isPro: false,
+    fallbackModelId: FLOOR_MODEL_ID,
+    defaultSystemPrompt: DEFAULT_SYSTEM_PROMPT,
+    createdAt: now(),
+    updatedAt: now(),
+  },
+  // MiniMax M3.1 Flash: быстрая мультимодальная модель, одна из самых используемых в OpenRouter.
+  {
+    id: 'minimax-m3.1-flash',
+    name: 'MiniMax M3.1 Flash',
+    provider: 'openrouter',
+    providerModelId: 'minimax/minimax-m3.1-flash',
+    enabled: true,
+    tier: 'standard',
+    costClass: 'lite',
+    reasoning: reasoning(false, [], true),
+    capabilities: makeCapabilities({
+      coding: true,
+      reasoning: true,
+      vision: true,
+      translation: true,
+      creative: true,
+      longContext: true,
+    }),
+    contextWindow: 1048576,
+    maxOutputTokens: 16384,
+    pricing: makePricing(0.15, 0.6, 0.015),
     requiredPlan: null,
     contextMessages: 40,
     isPro: false,
@@ -827,14 +856,14 @@ const DEFAULT_REGISTRY_ENTRIES: ModelRegistryEntry[] = [
     createdAt: now(),
     updatedAt: now(),
   },
-  // Анонсирована 30.09.2026, но в OpenRouter её пока нет (id не опубликован, endpoints отвечают 404).
-  // Включить, когда появится: проверить providerModelId, цену (вводная $2 / $10, потом $4 / $20) и глубины.
+  // Анонсирована 30.09.2026, в OpenRouter с 13.10.2026 (`google/gemini-4-argon`, $2 / $10). Вводная цена
+  // может смениться на $4 / $20: сверять с каталогом.
   {
     id: 'gemini-4-argon',
     name: 'Gemini 4 Argon',
     provider: 'openrouter',
     providerModelId: 'google/gemini-4-argon',
-    enabled: false,
+    enabled: true,
     tier: 'flagship',
     costClass: 'strong',
     reasoning: reasoning(true, ['low', 'medium', 'high', 'xhigh', 'max']),

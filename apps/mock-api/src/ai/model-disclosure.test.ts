@@ -16,6 +16,7 @@ const KNOWN_DEVELOPERS = new Set([
   'NVIDIA',
   'Cohere',
   'Moonshot AI',
+  'MiniMax',
 ]);
 
 test('прозрачность: у каждой включённой модели известен разработчик', () => {

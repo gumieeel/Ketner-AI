@@ -82,31 +82,32 @@
 
 ### Каталог
 
-| id                    | Модель                     | Класс  | OpenRouter                     | Вход / выход $/M    |
-| --------------------- | -------------------------- | ------ | ------------------------------ | ------------------- |
-| `ketner-mini`         | Ketner Mini                | lite   | `openai/gpt-6-luna`            | 0.10 / 0.50         |
-| `ketner-pro`          | Ketner Pro                 | work   | `xiaomi/mimo-v2.6-pro`         | 0.435 / 0.87        |
-| `claude-haiku-5.5`    | Claude Haiku 5.5           | lite   | `anthropic/claude-haiku-5.5`   | 0.10 / 0.50         |
-| `deepseek-v4.1-flash` | DeepSeek V4.1 Flash        | lite   | `deepseek/deepseek-v4.1-flash` | 0.30 / 1.20         |
-| `glm-5.3-flash`       | GLM-5.3 Flash              | lite   | `z-ai/glm-5.3-flash`           | 0.15 / 0.50         |
-| `qwen3.8-flash`       | Qwen3.8 Flash              | lite   | `qwen/qwen3.8-flash`           | 0.15 / 0.47         |
-| `gpt-5.6-luna-pro`    | GPT-5.6 Luna Pro           | work   | `openai/gpt-5.6-luna-pro`      | 0.20 / 1.20         |
-| `qwen3.8-27b`         | Qwen3.8 27B                | work   | `qwen/qwen3.8-27b`             | 0.04 / 2.30         |
-| `gemini-3.7-flash`    | Gemini 3.7 Flash           | work   | `google/gemini-3.7-flash`      | 0.75 / 3.75         |
-| `gpt-6.1-terra`       | GPT-6.1 Terra              | work   | `openai/gpt-6.1-terra`         | 1.00 / 5.00         |
-| `glm-5.3`             | GLM-5.3                    | work   | `z-ai/glm-5.3`                 | 1.40 / 4.40         |
-| `qwen3.8-max`         | Qwen3.8 Max                | work   | `qwen/qwen3.8-max-0902`        | 2.00 / 6.00         |
-| `kimi-k3.1`           | Kimi K3.1 Pro              | strong | `moonshotai/kimi-k3.1-pro`     | 2.00 / 10.00        |
-| `gpt-6.1-sol`         | GPT-6.1 Sol                | strong | `openai/gpt-6.1-sol`           | 2.00 / 10.00        |
-| `claude-opus-5.5`     | Claude Opus 5.5            | top    | `anthropic/claude-opus-5.5`    | 4.00 / 20.00        |
-| `claude-sonnet-5.5`   | Claude Sonnet 5.5          | strong | `anthropic/claude-sonnet-5.5`  | 2.00 / 10.00        |
-| `gpt-6-astra`         | GPT-6 Astra                | top    | `openai/gpt-6-astra`           | 10.00 / 50.00       |
-| `grok-4.7`            | Grok 4.7 xhigh             | strong | `x-ai/grok-4.7`                | 2.00 / 6.00         |
-| `gpt-5.6-sol`         | GPT-5.6 Sol                | strong | `openai/gpt-5.6-sol`           | 2.00 / 10.00        |
-| `gpt-5.6-terra`       | GPT-5.6 Terra xhigh        | strong | `openai/gpt-5.6-terra`         | 2.00 / 12.00        |
-| `gemini-4-argon`      | Gemini 4 Argon (выключена) | strong | нет в OpenRouter               | анонс: 2.00 / 10.00 |
+| id                    | Модель              | Класс  | OpenRouter                     | Вход / выход $/M |
+| --------------------- | ------------------- | ------ | ------------------------------ | ---------------- |
+| `ketner-mini`         | Ketner Mini         | lite   | `openai/gpt-6-luna`            | 0.10 / 0.50      |
+| `ketner-pro`          | Ketner Pro          | work   | `xiaomi/mimo-v2.6-pro`         | 0.435 / 0.87     |
+| `claude-haiku-5.5`    | Claude Haiku 5.5    | lite   | `anthropic/claude-haiku-5.5`   | 0.10 / 0.50      |
+| `deepseek-v4.1-flash` | DeepSeek V4.1 Flash | lite   | `deepseek/deepseek-v4.1-flash` | 0.30 / 1.20      |
+| `minimax-m3.1-flash`  | MiniMax M3.1 Flash  | lite   | `minimax/minimax-m3.1-flash`   | 0.15 / 0.60      |
+| `glm-5.3-flash`       | GLM-5.3 Flash       | lite   | `z-ai/glm-5.3-flash`           | 0.15 / 0.50      |
+| `qwen3.8-flash`       | Qwen3.8 Flash       | lite   | `qwen/qwen3.8-flash`           | 0.15 / 0.47      |
+| `gpt-5.6-luna-pro`    | GPT-5.6 Luna Pro    | work   | `openai/gpt-5.6-luna-pro`      | 0.20 / 1.20      |
+| `qwen3.8-27b`         | Qwen3.8 27B         | work   | `qwen/qwen3.8-27b`             | 0.04 / 2.30      |
+| `gemini-3.7-flash`    | Gemini 3.7 Flash    | work   | `google/gemini-3.7-flash`      | 0.75 / 3.75      |
+| `gpt-6.1-terra`       | GPT-6.1 Terra       | work   | `openai/gpt-6.1-terra`         | 1.00 / 5.00      |
+| `glm-5.3`             | GLM-5.3             | work   | `z-ai/glm-5.3`                 | 1.40 / 4.40      |
+| `qwen3.8-max`         | Qwen3.8 Max         | work   | `qwen/qwen3.8-max-0902`        | 2.00 / 6.00      |
+| `kimi-k3.1`           | Kimi K3.1 Pro       | strong | `moonshotai/kimi-k3.1-pro`     | 2.00 / 10.00     |
+| `gpt-6.1-sol`         | GPT-6.1 Sol         | strong | `openai/gpt-6.1-sol`           | 2.00 / 10.00     |
+| `claude-opus-5.5`     | Claude Opus 5.5     | top    | `anthropic/claude-opus-5.5`    | 4.00 / 20.00     |
+| `claude-sonnet-5.5`   | Claude Sonnet 5.5   | strong | `anthropic/claude-sonnet-5.5`  | 2.00 / 10.00     |
+| `gpt-6-astra`         | GPT-6 Astra         | top    | `openai/gpt-6-astra`           | 10.00 / 50.00    |
+| `grok-4.7`            | Grok 4.7 xhigh      | strong | `x-ai/grok-4.7`                | 2.00 / 6.00      |
+| `gpt-5.6-sol`         | GPT-5.6 Sol         | strong | `openai/gpt-5.6-sol`           | 2.00 / 10.00     |
+| `gpt-5.6-terra`       | GPT-5.6 Terra xhigh | strong | `openai/gpt-5.6-terra`         | 2.00 / 12.00     |
+| `gemini-4-argon`      | Gemini 4 Argon      | strong | `google/gemini-4-argon`        | 2.00 / 10.00     |
 
-Gemini 4 Argon анонсирована Google 30.09.2026, но в OpenRouter её пока нет (публичного id нет, `/api/v1/models/google/gemini-4-argon/endpoints` отвечает 404). Запись в реестре выключена: когда модель появится, нужно вписать её `providerModelId`, проверить цену и глубины размышлений и включить её — она сразу появится в списке Pro. Gemini 3.8 Flash убрана из списка выбора и осталась запасной моделью для Terra и Argon (класс work).
+Gemini 4 Argon анонсирована Google 30.09.2026, в OpenRouter с 13.10.2026 (`google/gemini-4-argon`, 2.00 / 10.00); включена 27.10.2026. Вводная цена может смениться на 4.00 / 20.00 — сверяйте с каталогом. Gemini 3.8 Flash убрана из списка выбора и осталась запасной моделью для Terra и Argon (класс work).
 
 **GLM-5.3 — открытая флагманская модель.** Выбиралась среди открытых DeepSeek, Qwen, Kimi и GLM по Artificial Analysis Intelligence Index и цене на октябрь 2026:
 

@@ -267,6 +267,7 @@ test('GET /v1/models: auto и публичные модели; у покупат
     'ketner-pro',
     'claude-haiku-5.5',
     'deepseek-v4.1-flash',
+    'minimax-m3.1-flash',
     'glm-5.3-flash',
     'qwen3.8-flash',
     'gpt-5.6-luna-pro',
@@ -281,6 +282,7 @@ test('GET /v1/models: auto и публичные модели; у покупат
     'claude-sonnet-5.5',
     'gpt-6-astra',
     'grok-4.7',
+    'gemini-4-argon',
     'gpt-5.6-sol',
     'gpt-5.6-terra',
   ]);

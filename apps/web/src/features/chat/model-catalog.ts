@@ -53,6 +53,11 @@ export const DEFAULT_MODELS: ModelInfo[] = [
     contextMessages: 40,
   },
   {
+    id: 'minimax-m3.1-flash',
+    name: 'MiniMax M3.1 Flash',
+    contextMessages: 40,
+  },
+  {
     id: 'glm-5.3-flash',
     name: 'GLM-5.3 Flash',
     contextMessages: 40,
@@ -128,6 +133,12 @@ export const DEFAULT_MODELS: ModelInfo[] = [
     reasoningEffort: { standard: 'xhigh', max: 'xhigh' },
   },
   {
+    id: 'gemini-4-argon',
+    name: 'Gemini 4 Argon',
+    contextMessages: 120,
+    reasoningEffort: { standard: 'medium', max: 'xhigh' },
+  },
+  {
     id: 'gpt-5.6-sol',
     name: 'GPT-5.6 Sol',
     contextMessages: 120,
@@ -157,6 +168,7 @@ export const MODEL_NAME_KEYS: Readonly<Record<string, TranslationKey>> = {
   'gemini-3.7-flash': 'chat.modelGemini37',
   'glm-5.3': 'chat.modelGlm',
   'glm-5.3-flash': 'chat.modelGlmFlash',
+  'minimax-m3.1-flash': 'chat.modelMiniMax',
   'qwen3.8-flash': 'chat.modelQwenFlash',
   'qwen3.8-max': 'chat.modelQwenMax',
   'gpt-6.1-terra': 'chat.modelGpt61Terra',

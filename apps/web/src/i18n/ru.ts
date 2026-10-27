@@ -217,6 +217,7 @@ export const ru = {
   'chat.modelGemini37': 'Gemini 3.7 Flash',
   'chat.modelGlm': 'GLM-5.3',
   'chat.modelGlmFlash': 'GLM-5.3 Flash',
+  'chat.modelMiniMax': 'MiniMax M3.1 Flash',
   'chat.modelQwenFlash': 'Qwen3.8 Flash',
   'chat.modelQwenMax': 'Qwen3.8 Max',
   'chat.modelGpt61Terra': 'GPT-6.1 Terra',

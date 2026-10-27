@@ -53,15 +53,15 @@ test('глубоким размышлениям не ставится корот
   assert.equal(computeOutputCap({ ...base, effort: 'xhigh' }), 16384);
 });
 
-test('каталог /api/meta отдаёт профиль размышлений моделей Pro и не показывает выключенную Gemini 4 Argon', () => {
+test('каталог /api/meta отдаёт профиль размышлений моделей Pro и показывает включённую Gemini 4 Argon', () => {
   const opus = MODELS.find((m) => m.id === 'claude-opus-5.5');
   assert.deepEqual(opus?.reasoningEffort, { standard: 'medium', max: 'xhigh' });
   assert.equal('dailyLimits' in (opus ?? {}), false, 'дневных лимитов моделей больше нет');
   assert.equal(MODELS.find((m) => m.id === 'grok-4.7')?.name, 'Grok 4.7 xhigh');
-  assert.equal(
-    MODELS.some((m) => m.id === 'gemini-4-argon'),
-    false,
-  );
+  assert.deepEqual(MODELS.find((m) => m.id === 'gemini-4-argon')?.reasoningEffort, {
+    standard: 'medium',
+    max: 'xhigh',
+  });
   assert.equal(
     MODELS.some((m) => m.id === 'gemini-3.8-flash'),
     false,
