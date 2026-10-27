@@ -1,6 +1,6 @@
 /**
  * Оплата через Trybit (бывший CryptoCloud): создание счёта, подписанный postback без префикса
- * INV- и без order_id, перепроверка оплаты через API шлюза и выдача тарифа.
+ * INV- и без order_id, перепроверка оплаты через API шлюза и выдача кредитов пакета с бонусом.
  */
 import { signupAndVerify } from '../testing/signup.js';
 import assert from 'node:assert/strict';
@@ -12,6 +12,9 @@ process.env.TRYBIT_SHOP_ID = 'shop-42';
 process.env.TRYBIT_SECRET_KEY = 'trybit-secret';
 
 const { readJson, startTestServer } = await import('../testing/server.js');
+const { TRIAL_CREDITS } = await import('../services/entitlement.js');
+const { CREDIT_PACKS, packCryptoBonusCredits } = await import('../services/pricing.js');
+type CreditsReport = import('../services/credits.js').CreditsReport;
 type AuthSession = import('../types.js').AuthSession;
 
 function sign(payload: Record<string, unknown>, secret = 'trybit-secret'): string {
@@ -74,7 +77,7 @@ async function signup(baseUrl: string, email: string): Promise<AuthSession> {
   return readJson<AuthSession>(response);
 }
 
-test('Trybit: счёт создаётся на api.trybit.com, подписанный postback выдаёт тариф', async (t) => {
+test('Trybit: счёт создаётся на api.trybit.com, подписанный postback выдаёт кредиты пакета и бонус +15%', async (t) => {
   const gateway = fakeTrybit('paid');
   const server = await startTestServer();
   t.after(async () => {
@@ -87,7 +90,7 @@ test('Trybit: счёт создаётся на api.trybit.com, подписан�
   const created = await fetch(`${server.baseUrl}/api/billing/crypto/create-invoice`, {
     method: 'POST',
     headers: { ...auth, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ planId: 'plus', currency: 'USDT_TRC20' }),
+    body: JSON.stringify({ packId: 'credits-10', currency: 'USDT_TRC20' }),
   });
   assert.equal(created.status, 200);
   const { invoice } = await readJson<{ invoice: { id: string; cryptoCloudUrl: string } }>(created);
@@ -97,10 +100,11 @@ test('Trybit: счёт создаётся на api.trybit.com, подписан�
   assert.equal(create.headers.Authorization, 'Token trybit-api-key');
   assert.equal(create.body.shop_id, 'shop-42');
   assert.equal(create.body.currency, 'USD');
+  assert.equal(create.body.amount, 10, 'в счёте полная цена пакета без наценки');
   assert.deepEqual(create.body.add_fields, { cryptocurrency: 'USDT_TRC20' });
   assert.equal(typeof create.body.order_id, 'string');
 
-  // Поддельная подпись — отказ, тариф не меняется.
+  // Поддельная подпись — отказ, кредиты не выдаются.
   const forged = await fetch(`${server.baseUrl}/api/billing/trybit/webhook`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -119,7 +123,7 @@ test('Trybit: счёт создаётся на api.trybit.com, подписан�
     body: new URLSearchParams({
       status: 'success',
       invoice_id: 'ABC12345',
-      amount_crypto: '9',
+      amount_crypto: '10',
       currency: 'USDT_TRC20',
       order_id: '',
       token: sign({ id: 'ABC12345', exp: Math.floor(Date.now() / 1000) + 300 }),
@@ -128,10 +132,35 @@ test('Trybit: счёт создаётся на api.trybit.com, подписан�
   assert.equal(postback.status, 200);
   assert.ok(gateway.calls.some((call) => call.url.endsWith('/v2/invoice/merchant/info')));
 
-  const me = await readJson<{ user: { plan: string } }>(
-    await fetch(`${server.baseUrl}/api/auth/me`, { headers: auth }),
+  const pack = CREDIT_PACKS[1]!;
+  const bonus = packCryptoBonusCredits(pack);
+  const report = await readJson<CreditsReport>(
+    await fetch(`${server.baseUrl}/api/usage/credits`, { headers: auth }),
   );
-  assert.equal(me.user.plan, 'plus');
+  assert.equal(report.plan, 'credits');
+  assert.equal(report.purchased, true);
+  assert.equal(report.balance, pack.credits + bonus + TRIAL_CREDITS);
+  assert.deepEqual(report.grants.map((g) => g.kind).sort(), ['bonus', 'free', 'pack']);
+  assert.equal(report.grants.find((g) => g.kind === 'bonus')?.amount, bonus);
+
+  // Повторная доставка postback не дублирует кредиты.
+  const repeat = await fetch(`${server.baseUrl}/api/billing/trybit/webhook`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams({
+      status: 'success',
+      invoice_id: 'ABC12345',
+      amount_crypto: '10',
+      currency: 'USDT_TRC20',
+      order_id: '',
+      token: sign({ id: 'ABC12345', exp: Math.floor(Date.now() / 1000) + 300 }),
+    }),
+  });
+  assert.equal(repeat.status, 200);
+  const again = await readJson<CreditsReport>(
+    await fetch(`${server.baseUrl}/api/usage/credits`, { headers: auth }),
+  );
+  assert.equal(again.balance, report.balance);
 
   const status = await readJson<{ status: string }>(
     await fetch(`${server.baseUrl}/api/billing/crypto/status/${invoice.id}`, { headers: auth }),
@@ -139,7 +168,7 @@ test('Trybit: счёт создаётся на api.trybit.com, подписан�
   assert.equal(status.status, 'paid');
 });
 
-test('Trybit: postback без подтверждения оплаты в API шлюза тариф не выдаёт', async (t) => {
+test('Trybit: postback без подтверждения оплаты в API шлюза кредиты не выдаёт', async (t) => {
   const gateway = fakeTrybit('created');
   const server = await startTestServer();
   t.after(async () => {
@@ -151,7 +180,7 @@ test('Trybit: postback без подтверждения оплаты в API ш�
   await fetch(`${server.baseUrl}/api/billing/crypto/create-invoice`, {
     method: 'POST',
     headers: { ...auth, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ planId: 'pro', currency: 'USDT_TRC20' }),
+    body: JSON.stringify({ packId: 'credits-25', currency: 'USDT_TRC20' }),
   });
 
   const postback = await fetch(`${server.baseUrl}/api/billing/cryptocloud/webhook`, {
@@ -165,16 +194,17 @@ test('Trybit: postback без подтверждения оплаты в API ш�
     }),
   });
   assert.equal(postback.status, 200);
-  const me = await readJson<{ user: { plan: string } }>(
-    await fetch(`${server.baseUrl}/api/auth/me`, { headers: auth }),
+  const report = await readJson<CreditsReport>(
+    await fetch(`${server.baseUrl}/api/usage/credits`, { headers: auth }),
   );
-  assert.equal(me.user.plan, 'free');
+  assert.equal(report.purchased, false);
+  assert.equal(report.balance, TRIAL_CREDITS);
 });
 
 test('Trybit H2H: реквизиты для оплаты на сайте приходят в счёте', async (t) => {
   const gateway = fakeTrybit('created', {
     address: 'TXyzGatewayAddress123',
-    amount: 9.42,
+    amount: 5.42,
     expiry_date: '2026-10-14 15:04:01.555132',
     currency: {
       code: 'USDT',
@@ -191,7 +221,7 @@ test('Trybit H2H: реквизиты для оплаты на сайте при�
   const created = await fetch(`${server.baseUrl}/api/billing/crypto/create-invoice`, {
     method: 'POST',
     headers: { Authorization: `Bearer ${buyer.token}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ planId: 'plus', currency: 'USDT_TRC20' }),
+    body: JSON.stringify({ packId: 'credits-5', currency: 'USDT_TRC20' }),
   });
   const { invoice } = await readJson<{
     invoice: {
@@ -205,7 +235,7 @@ test('Trybit H2H: реквизиты для оплаты на сайте при�
   }>(created);
   assert.equal(invoice.gatewayDetails, true);
   assert.equal(invoice.address, 'TXyzGatewayAddress123');
-  assert.equal(invoice.amount, 9.42);
+  assert.equal(invoice.amount, 5.42);
   assert.equal(invoice.network, 'Tron · TRC20');
   assert.equal(invoice.expiresAt, '2026-10-14T15:04:01.555Z');
   assert.equal(invoice.qrPayload, 'TXyzGatewayAddress123');
@@ -222,7 +252,7 @@ test('Trybit без адреса (тестовый режим): остаётся
   const created = await fetch(`${server.baseUrl}/api/billing/crypto/create-invoice`, {
     method: 'POST',
     headers: { Authorization: `Bearer ${buyer.token}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ planId: 'plus', currency: 'USDT_TRC20' }),
+    body: JSON.stringify({ packId: 'credits-5', currency: 'USDT_TRC20' }),
   });
   const { invoice } = await readJson<{
     invoice: { gatewayDetails?: boolean; cryptoCloudUrl: string };
@@ -231,7 +261,7 @@ test('Trybit без адреса (тестовый режим): остаётся
   assert.equal(invoice.cryptoCloudUrl, 'https://pay.trybit.com/INV-ABC12345');
 });
 
-test('Trybit: пакеты премиум-квоты сняты с продажи — счёт на пакет не выставляется', async (t) => {
+test('Trybit: снятые с продажи пакеты и тарифы — счёт не выставляется, в шлюз ничего не уходит', async (t) => {
   const gateway = fakeTrybit('paid');
   const server = await startTestServer();
   t.after(async () => {
@@ -239,28 +269,39 @@ test('Trybit: пакеты премиум-квоты сняты с продаж�
     await server.close();
   });
   const buyer = await signup(server.baseUrl, 'test-vip@example.com');
-  const created = await fetch(`${server.baseUrl}/api/billing/crypto/create-invoice`, {
-    method: 'POST',
-    headers: { Authorization: `Bearer ${buyer.token}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ packId: 'premium-10', currency: 'USDT_TRC20' }),
-  });
-  assert.equal(created.status, 410);
+  const create = (body: Record<string, unknown>) =>
+    fetch(`${server.baseUrl}/api/billing/crypto/create-invoice`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${buyer.token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ currency: 'USDT_TRC20', ...body }),
+    });
+
+  const oldPack = await create({ packId: 'premium-10' });
+  assert.equal(oldPack.status, 400);
+  assert.equal((await readJson<{ error: { code: string } }>(oldPack)).error.code, 'invalid_pack');
+
+  const plan = await create({ planId: 'plus' });
+  assert.equal(plan.status, 410);
+  assert.equal(
+    (await readJson<{ error: { code: string } }>(plan)).error.code,
+    'subscriptions_discontinued',
+  );
   assert.equal(gateway.calls.length, 0, 'в шлюз ничего не ушло');
 });
 
-test('бонус за крипту: страница оплаты получает его в кредитах тарифа', async (t) => {
+test('бонус за крипту виден в каталоге пакетов, отдельной ручки бонуса больше нет', async (t) => {
   const server = await startTestServer();
   t.after(() => server.close());
   const buyer = await signup(server.baseUrl, 'bonus-info@example.com');
-  const body = await readJson<{
-    plans: Record<string, { credits: number; bonusCredits: number }>;
-  }>(
-    await fetch(`${server.baseUrl}/api/billing/crypto-bonus`, {
-      headers: { Authorization: `Bearer ${buyer.token}` },
-    }),
+  const body = await readJson<{ packs: Array<{ id: string; cryptoBonusCredits: number }> }>(
+    await fetch(`${server.baseUrl}/api/packs`),
   );
-  assert.deepEqual(Object.keys(body.plans), ['plus', 'pro', 'ultra']);
-  assert.deepEqual(body.plans.plus, { credits: 3000, bonusCredits: 200 });
-  assert.deepEqual(body.plans.pro, { credits: 11_000, bonusCredits: 1200 });
-  assert.deepEqual(body.plans.ultra, { credits: 22_000, bonusCredits: 2480 });
+  assert.deepEqual(
+    body.packs.map((p) => [p.id, p.cryptoBonusCredits]),
+    CREDIT_PACKS.map((p) => [p.id, packCryptoBonusCredits(p)]),
+  );
+  const old = await fetch(`${server.baseUrl}/api/billing/crypto-bonus`, {
+    headers: { Authorization: `Bearer ${buyer.token}` },
+  });
+  assert.equal(old.status, 404);
 });

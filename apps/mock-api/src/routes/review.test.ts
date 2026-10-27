@@ -9,11 +9,7 @@ interface Account {
   headers: Record<string, string>;
 }
 
-async function account(
-  baseUrl: string,
-  email: string,
-  plan: 'plus' | 'pro' | null,
-): Promise<Account> {
+async function account(baseUrl: string, email: string, plan: 'credits' | null): Promise<Account> {
   const registered = await signupAndVerify(baseUrl, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -25,7 +21,7 @@ async function account(
     const checkout = await fetch(`${baseUrl}/api/billing/checkout`, {
       method: 'POST',
       headers,
-      body: JSON.stringify({ planId: plan }),
+      body: JSON.stringify({ packId: 'credits-5' }),
     });
     assert.equal(checkout.status, 200);
   }
@@ -95,7 +91,7 @@ function review(baseUrl: string, who: Account | null, body: unknown): Promise<Re
 test('проверка ответа: модель другой компании, итог сохраняется у сообщения', async () => {
   const server = await startTestServer();
   try {
-    const plus = await account(server.baseUrl, 'review-plus@example.com', 'plus');
+    const plus = await account(server.baseUrl, 'review-plus@example.com', 'credits');
     const { conversationId, answer } = await conversationWithAnswer(
       server.baseUrl,
       plus,
@@ -114,7 +110,7 @@ test('проверка ответа: модель другой компании,
       'review_start',
     );
     assert.ok(start.reviewId);
-    assert.equal(start.quota.limit, 10);
+    assert.equal(start.quota.limit, 80, 'купленные кредиты открывают лимит уровня Ultra');
 
     const [reviewer] = payloads<{ reviewer: { developer: string } }>(events, 'review_reviewer');
     assert.notEqual(reviewer.reviewer.developer, 'Anthropic', 'Claude не проверяет Claude');
@@ -126,7 +122,7 @@ test('проверка ответа: модель другой компании,
     assert.ok(done, 'проверка завершилась');
     assert.equal(done.review.verdict, 'minor');
     assert.equal(done.review.authorModelId, 'claude-haiku-5.5');
-    assert.equal(done.quota.remaining, 9, 'проверка списана из суточного лимита');
+    assert.equal(done.quota.remaining, 79, 'проверка списана из суточного лимита');
     assert.ok(done.review.issues[0].quote && answer.content.includes(done.review.issues[0].quote));
 
     const messages = await readMessages(server.baseUrl, plus, conversationId);
@@ -134,7 +130,7 @@ test('проверка ответа: модель другой компании,
     assert.equal(stored?.review?.id, done.review.id, 'итог виден после перезагрузки');
 
     const quota = await fetch(`${server.baseUrl}/api/chat/review/quota`, { headers: plus.headers });
-    assert.deepEqual(await quota.json(), { used: 1, limit: 10, remaining: 9 });
+    assert.deepEqual(await quota.json(), { used: 1, limit: 80, remaining: 79 });
   } finally {
     await server.close();
   }
@@ -180,8 +176,8 @@ test('проверка ответа: гость 401, чужое и не то с�
 test('консилиум: судья пишет итог по ответам колонок, итог можно сохранить в диалог', async () => {
   const server = await startTestServer();
   try {
-    const plus = await account(server.baseUrl, 'judge-plus@example.com', 'plus');
-    const other = await account(server.baseUrl, 'judge-other@example.com', 'plus');
+    const plus = await account(server.baseUrl, 'judge-plus@example.com', 'credits');
+    const other = await account(server.baseUrl, 'judge-other@example.com', 'credits');
     const created = await fetch(`${server.baseUrl}/api/conversations`, {
       method: 'POST',
       headers: plus.headers,

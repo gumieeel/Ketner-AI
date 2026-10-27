@@ -259,7 +259,8 @@ test('лимит запусков в сутки по тарифу', () =>
   withHarness(
     () => finalStep('ok', 0.0005),
     async (h) => {
-      for (let i = 0; i < 3; i += 1)
+      const perDay = getCodeLimits('free').runsPerDay;
+      for (let i = 0; i < perDay; i += 1)
         assert.equal((await h.run(`task ${i}`)).result.status, 'completed');
       const { events, result } = await h.run('one too many');
       assert.equal(result.status, 'rejected');
@@ -270,7 +271,7 @@ test('лимит запусков в сутки по тарифу', () =>
           message: events[0].type === 'error' ? events[0].message : '',
         },
       ]);
-      assert.equal(h.calls.length, 3, 'модель не вызывалась');
+      assert.equal(h.calls.length, perDay, 'модель не вызывалась');
     },
     { plan: 'free' },
   ));
@@ -379,16 +380,16 @@ test('отказ ключа OpenRouter (402) завершает запуск о�
     },
   ));
 
-test('недоступная по тарифу модель отклоняется до обращения к провайдеру', () =>
+test('Opus открыт и на Free: с пробными кредитами запрошенная модель используется как есть', () =>
   withHarness(
-    () => finalStep('no'),
+    () => finalStep('opus here', 0.01),
     async (h) => {
-      const { events, result } = await h.run('use opus', { modelId: 'claude-opus-5.5' });
-      assert.equal(result.status, 'rejected');
-      assert.ok(events[0].type === 'error' && events[0].code === 'upgrade_required');
-      assert.equal(h.calls.length, 0);
+      const { result } = await h.run('use opus', { modelId: 'claude-opus-5.5' });
+      assert.equal(result.status, 'completed');
+      assert.equal(result.modelId, 'claude-opus-5.5');
+      assert.equal(h.calls[0].model, 'anthropic/claude-opus-5.5');
     },
-    { plan: 'free' },
+    { plan: 'free', credits: 200 },
   ));
 
 test('явно выбранная доступная модель используется как есть', () =>
@@ -503,7 +504,14 @@ test('selectAgentModel: auto зависит от тарифа и остатка 
   const dry = selectAgentModel({ ...base, balanceUsd: 0, plan: 'pro' });
   assert.equal(dry.model.id, 'north-mini-code');
   assert.ok(dry.reason);
-  assert.ok(selectAgentModel({ ...base, plan: 'free', requestedId: 'claude-opus-5.5' }).denied);
+  // Модели открыты на любом уровне: ограничивают только кредиты
+  const freeOpus = selectAgentModel({ ...base, plan: 'free', requestedId: 'claude-opus-5.5' });
+  assert.equal(freeOpus.denied, undefined);
+  assert.equal(freeOpus.model.id, 'claude-opus-5.5');
+  assert.equal(
+    selectAgentModel({ ...base, plan: 'credits', requestedId: 'claude-opus-5.5' }).model.id,
+    'claude-opus-5.5',
+  );
 
   // Opus стоит ≈ 70 кредитов за шаг-запрос: на 20 кредитов хватает только Ketner Pro
   const premiumDry = selectAgentModel({

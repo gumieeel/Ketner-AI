@@ -2,14 +2,9 @@ import { createHash } from 'node:crypto';
 import { join } from 'node:path';
 import { dirname } from 'node:path';
 import { config } from '../config.js';
-import { CreditService, toCredits } from '../services/credits.js';
-import { findPremiumPack, planPriceUsd, PREMIUM_PACK_DAYS } from '../services/pricing.js';
-import {
-  CreditStore,
-  DAY_MS as CREDIT_DAY_MS,
-  type CreditGrant,
-  type LegacyPremiumCredit,
-} from '../store/credit-store.js';
+import { CreditService } from '../services/credits.js';
+import { findCreditPack, planPriceUsd } from '../services/pricing.js';
+import { CreditStore, type CreditGrant, type LegacyPremiumCredit } from '../store/credit-store.js';
 import { DocStore } from '../store/doc-store.js';
 import type { SubscriptionStore } from '../store/subscription-store.js';
 import type { UsageStore } from '../store/usage-store.js';
@@ -45,7 +40,7 @@ export interface PaymentRecord {
   method: PaymentMethod;
   /** Тариф, который дала оплата; для пакета — тариф на момент покупки (подписка не меняется). */
   planId: PlanId;
-  /** Оплачен пакет премиум-квоты (services/pricing.ts), а не тариф. */
+  /** Оплачен пакет кредитов (services/pricing.ts → CREDIT_PACKS), а не подписка. */
   packId?: string;
   /** Звёзды (XTR) или доллары (USD). */
   amount: number;
@@ -325,9 +320,9 @@ export class BillingService {
   }
 
   /**
-   * Оплачен пакет премиум-квоты (пакеты сняты с продажи 18.10.2026, но счета, выставленные раньше,
-   * ещё могут быть оплачены): сумма пакета начисляется кредитами на 30 дней, подписка не меняется.
-   * Повторная доставка того же платежа (тот же id) ничего не меняет: `duplicate: true`.
+   * Оплачен пакет кредитов: кредиты на год (при оплате криптой — ещё и бонус +15% отдельным грантом),
+   * подписка не меняется. Повторная доставка того же платежа (тот же id) ничего не меняет:
+   * `duplicate: true`.
    */
   grantPack(
     userId: string,
@@ -342,23 +337,21 @@ export class BillingService {
       telegramUserId?: number;
     },
     now = Date.now(),
-  ): { duplicate: boolean; payment: PaymentRecord; credit: CreditGrant } {
-    const pack = findPremiumPack(packId);
+  ): {
+    duplicate: boolean;
+    payment: PaymentRecord;
+    credit: CreditGrant;
+    bonus: CreditGrant | null;
+  } {
+    const pack = findCreditPack(packId);
     if (!pack) throw new BillingError('unknown_pack', 'Такого пакета нет', 400);
     const existing = this.deps.ledger.payments.get(payment.id);
-    const { grant: credit } = this.deps.ledger.credits.grant(
-      {
-        id: payment.id,
-        userId,
-        kind: 'pack',
-        paymentId: payment.id,
-        amountUsd: pack.quotaUsd,
-        expiresAt: new Date(now + PREMIUM_PACK_DAYS * CREDIT_DAY_MS).toISOString(),
-        note: packId,
-      },
+    const { pack: credit, bonus } = this.credits.grantForPack(
+      { id: payment.id, userId, method: payment.method },
+      pack,
       now,
     );
-    if (existing) return { duplicate: true, payment: existing, credit };
+    if (existing) return { duplicate: true, payment: existing, credit, bonus };
     const current = this.deps.subscriptionStore.get(userId);
     const snapshot: PlanSnapshot = { plan: current.plan, renewsAt: current.renewsAt };
     const record = this.deps.ledger.payments.put({
@@ -373,7 +366,7 @@ export class BillingService {
       bonusDays: 0,
     });
     this.announcePayment(record, this.deps.userStore.findById(userId));
-    return { duplicate: false, payment: record, credit };
+    return { duplicate: false, payment: record, credit, bonus };
   }
 
   paymentsOf(userId: string): PaymentRecord[] {
@@ -519,7 +512,11 @@ export class BillingService {
         expired: 'Вернуть оплату можно только в течение 24 часов после неё.',
         used: 'После этой оплаты моделями уже пользовались, поэтому вернуть её нельзя. Возврат возможен в течение 24 часов, если не было ни одного запроса.',
       } as const;
-      throw new BillingError(`refund_${option.reason}`, messages[option.reason], 409);
+      const message =
+        option.reason === 'used' && payment.packId
+          ? 'Кредиты из этого пакета уже тратились, поэтому вернуть оплату нельзя. Возврат возможен в течение 24 часов, пока ни один кредит пакета не потрачен.'
+          : messages[option.reason];
+      throw new BillingError(`refund_${option.reason}`, message, 409);
     }
     const refund = {
       requestedAt: new Date(now).toISOString(),
@@ -699,6 +696,41 @@ export class BillingService {
     return this.deps.ledger.starsSubscriptions.put({ ...sub, nextChargeAt });
   }
 
+  /**
+   * Подписки сняты с продажи: автопродление звёздами у прежних подписчиков отключается, чтобы
+   * Telegram не списывал звёзды за тариф, которого больше нет. Оплаченный срок доживает. Возвращает,
+   * сколько подписок отключено и сколько Telegram не принял (их можно повторить позже).
+   */
+  async cancelAllStarsAutoRenew(): Promise<{ canceled: number; failed: number }> {
+    let canceled = 0;
+    let failed = 0;
+    if (!this.telegram) return { canceled, failed };
+    for (const sub of this.deps.ledger.starsSubscriptions.filter(
+      (item) => item.status === 'active',
+    )) {
+      try {
+        const ok = await this.telegram.setStarsSubscriptionCanceled(
+          sub.telegramUserId,
+          sub.chargeId,
+          true,
+        );
+        if (ok) {
+          this.deps.ledger.starsSubscriptions.put({
+            ...sub,
+            status: 'canceled',
+            canceledAt: new Date().toISOString(),
+          });
+          canceled += 1;
+        } else {
+          failed += 1;
+        }
+      } catch {
+        failed += 1;
+      }
+    }
+    return { canceled, failed };
+  }
+
   async setAutoRenew(
     userId: string,
     enabled: boolean,
@@ -750,10 +782,10 @@ export function planLabel(planId: string): string {
   return PLAN_LABELS[planId] ?? planId.toUpperCase();
 }
 
-/** Название пакета премиум-квоты для чеков и сообщений: «пакет +$5 премиум-квоты». */
+/** Название пакета кредитов для чеков и сообщений: «пакет 2 300 кредитов». */
 export function packLabel(packId: string): string {
-  const pack = findPremiumPack(packId);
-  return pack ? `пакет +${toCredits(pack.quotaUsd)} кредитов` : 'пакет кредитов';
+  const pack = findCreditPack(packId);
+  return pack ? `пакет ${pack.credits.toLocaleString('ru-RU')} кредитов` : 'пакет кредитов';
 }
 
 /** За что платёж: тариф или пакет. */

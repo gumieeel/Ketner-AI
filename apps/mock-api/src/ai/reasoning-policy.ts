@@ -129,12 +129,16 @@ export function toProviderReasoning(
   return undefined;
 }
 
-/** Режим Max доступен только на Ultra (VIP получает Ultra как эффективный тариф). */
-export function isMaxModeAllowed(plan: string): boolean {
-  return planRank(plan) >= planRank('ultra');
+/**
+ * Режим Max открыт всем: он тратит кредиты быстрее (модели думают глубже), а цену запроса в этом
+ * режиме показывают заранее и учитывают при проверке остатка. Параметр `plan` оставлен, чтобы
+ * ограничить режим тарифом можно было в одном месте.
+ */
+export function isMaxModeAllowed(_plan: string): boolean {
+  return true;
 }
 
-/** Режим, который реально действует: max на тарифе ниже Ultra превращается в standard. */
+/** Режим, который реально действует: max, если он запрошен и разрешён, иначе standard. */
 export function effectiveReasoningMode(
   requested: ReasoningMode | undefined,
   plan: string,

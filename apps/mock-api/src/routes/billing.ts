@@ -5,7 +5,7 @@ import { sendError } from '../middleware/errors.js';
 import { invoiceStore as defaultInvoiceStore, type InvoiceStore } from '../store/index.js';
 import type { SubscriptionStore } from '../store/subscription-store.js';
 import type { UserStore } from '../store/user-store.js';
-import { planStars, telegramBotService } from '../telegram/bot.js';
+import { packStars, telegramBotService } from '../telegram/bot.js';
 import { BillingService, createBillingLedger, planLabel } from '../billing/billing-service.js';
 import { isTrybitCurrency } from '../billing/trybit-currencies.js';
 import type {
@@ -16,15 +16,18 @@ import type {
   TelegramStarsInvoice,
 } from '../types.js';
 import { isVipUser } from '../services/vip.js';
-import { stripeService } from '../services/stripe.js';
 import { cryptoCloudService } from '../services/cryptocloud.js';
 import {
+  CREDIT_PACK_VALID_DAYS,
+  CREDIT_PACKS,
+  CRYPTO_PACK_BONUS_RATE,
+  findCreditPack,
   LEGACY_PRICE_USD,
   PLAN_PRICE_USD,
-  planPriceRub,
-  planPriceUsd,
+  packCryptoBonusCredits,
+  packPricePerThousand,
 } from '../services/pricing.js';
-import { cryptoBonusCredits, EntitlementService, toCredits } from '../services/entitlement.js';
+import { TRIAL_CREDITS } from '../services/entitlement.js';
 
 /** Каталог тарифов. `priceMonthly` везде в долларах США (см. services/pricing.ts). */
 export const PLANS: readonly PlanItem[] = [
@@ -172,7 +175,7 @@ export function createBillingRouter({
   const activateCrypto = (invoice: CryptoInvoice, txHash?: string) => {
     const updated = activeInvoiceStore.markCryptoPaid(invoice.id, txHash) ?? invoice;
     if (invoice.packId) {
-      // Пакет кредитов: кредиты на 30 дней, подписка не меняется. Тот же id платежа — без повтора.
+      // Пакет кредитов: кредиты на год и бонус за крипту, подписка не меняется. Тот же id платежа — без повтора.
       const pack = billing.grantPack(invoice.userId, invoice.packId, {
         id: `crypto:${invoice.id}`,
         method: 'crypto',
@@ -181,9 +184,11 @@ export function createBillingRouter({
         invoiceId: invoice.id,
       });
       if (!pack.duplicate) {
+        const credits = Math.round(pack.credit.amountUsd * 1000);
+        const bonus = pack.bonus ? Math.round(pack.bonus.amountUsd * 1000) : 0;
         void billing.telegram?.notifyUser(
           invoice.userId,
-          `✅ Оплата криптовалютой получена: начислили <b>+${toCredits(pack.credit.amountUsd)}</b> кредитов до <b>${new Date(pack.credit.expiresAt).toLocaleDateString('ru-RU', { day: 'numeric', month: 'long' })}</b>.`,
+          `✅ Оплата криптовалютой получена: начислили <b>${credits.toLocaleString('ru-RU')}</b> кредитов${bonus > 0 ? ` и бонус <b>+${bonus.toLocaleString('ru-RU')}</b>` : ''} до <b>${new Date(pack.credit.expiresAt).toLocaleDateString('ru-RU', { day: 'numeric', month: 'long', year: 'numeric' })}</b>.`,
           'receipt',
         );
       }
@@ -235,16 +240,33 @@ export function createBillingRouter({
     return true;
   };
 
-  const findPlan = (rawPlanId: unknown): PlanItem | undefined => {
-    return PLANS.find((p) => p.id === rawPlanId) ?? LEGACY_PLANS.find((p) => p.id === rawPlanId);
+  /**
+   * Подписки больше не продаются (26.10.2026): кредиты покупают пакетами. Счета, выставленные
+   * раньше, по-прежнему засчитываются вебхуком и подтверждением; действующие подписчики доживают
+   * оплаченный срок.
+   */
+  const rejectSubscriptionPurchase = (response: Response): void => {
+    sendError(
+      response,
+      410,
+      'subscriptions_discontinued',
+      'Подписок больше нет: кредиты покупаются пакетами. Выберите пакет на странице «Кредиты».',
+    );
   };
 
-  /**
-   * Пакеты кредитов больше не продаются (18.10.2026). Счета, выставленные раньше, по-прежнему
-   * засчитываются вебхуком и подтверждением, купленные кредиты тратятся до конца срока.
-   */
-  const rejectPackPurchase = (response: Response): void => {
-    sendError(response, 410, 'packs_discontinued', 'Пакеты кредитов больше не продаются');
+  /** Пакет из тела запроса или `null` (ответ с ошибкой уже отправлен). */
+  const packFromBody = (request: Request, response: Response) => {
+    const pack = findCreditPack(request.body?.packId);
+    if (!pack) {
+      sendError(
+        response,
+        400,
+        'invalid_pack',
+        'Выберите пакет кредитов: $5, $10, $25, $50 или $100',
+      );
+      return null;
+    }
+    return pack;
   };
 
   // Webhook & Postback от CryptoCloud.
@@ -315,7 +337,7 @@ export function createBillingRouter({
     }
 
     activateCrypto(invoice);
-    console.log(`[cryptocloud] Подписка ${invoice.planId} активирована для ${invoice.userId}`);
+    console.log(`[cryptocloud] Счёт ${invoice.id} оплачен, начислено для ${invoice.userId}`);
     response.json({ status: 'ok' });
   };
 
@@ -334,26 +356,36 @@ export function createBillingRouter({
   // (вебхуки защищаются подписью, см. C6).
   router.use('/billing', requireAuth);
 
+  /**
+   * Пакеты кредитов: цена в долларах и звёздах, кредиты, бонус за криптовалюту. Открыт без входа:
+   * страница «Кредиты» и лендинг показывают его всем.
+   */
+  router.get('/packs', (_request: Request, response: Response) => {
+    const base = CREDIT_PACKS[0];
+    response.json({
+      packs: CREDIT_PACKS.map((pack) => ({
+        id: pack.id,
+        priceUsd: pack.priceUsd,
+        credits: pack.credits,
+        stars: packStars(pack, telegramBotService.rateService),
+        cryptoBonusCredits: packCryptoBonusCredits(pack),
+        pricePerThousandUsd: Number(packPricePerThousand(pack).toFixed(3)),
+        discountPct: Math.round(
+          (1 - packPricePerThousand(pack) / packPricePerThousand(base)) * 100,
+        ),
+      })),
+      trialCredits: TRIAL_CREDITS,
+      cryptoBonusRate: CRYPTO_PACK_BONUS_RATE,
+      validDays: CREDIT_PACK_VALID_DAYS,
+    });
+  });
+
   router.get('/plans', (request: Request, response: Response) => {
     if (request.query.includeLegacy === 'true') {
       response.json({ plans: [...PLANS, ...LEGACY_PLANS] });
       return;
     }
     response.json({ plans: PLANS });
-  });
-
-  // Бонус за оплату тарифа криптой: страница оплаты объясняет его в кредитах тарифа.
-  router.get('/billing/crypto-bonus', (_request: Request, response: Response) => {
-    const plans: Record<string, { credits: number; bonusCredits: number }> = {};
-    for (const plan of PLANS) {
-      const bonusCredits = cryptoBonusCredits(plan.id);
-      if (bonusCredits <= 0) continue;
-      plans[plan.id] = {
-        credits: EntitlementService.getEntitlements(plan.id).monthlyCredits,
-        bonusCredits,
-      };
-    }
-    response.json({ plans });
   });
 
   /** Счёт в звёздах с ценой по официальному курсу Telegram — её показывает страница оплаты. */
@@ -379,31 +411,32 @@ export function createBillingRouter({
   });
 
   router.post('/billing/checkout', (request: Request, response: Response) => {
-    // Оформление без платежа — заглушка для разработки; в production тариф даёт только оплата.
+    // Оформление без платежа — заглушка для разработки; в production кредиты даёт только оплата.
     if (
       rejectMockInProduction(
         response,
-        'Оформление без оплаты недоступно. Выберите способ оплаты на странице тарифов.',
+        'Оформление без оплаты недоступно. Выберите способ оплаты на странице кредитов.',
       )
     ) {
       return;
     }
-    const rawPlanId: unknown = request.body?.planId;
-    const validPlanIds = ['plus', 'pro', 'ultra', 'gpt-pro', 'claude-pro', 'gemini-pro'];
-    if (!validPlanIds.includes(rawPlanId as string)) {
-      sendError(response, 400, 'invalid_plan', 'Допустимые тарифы для оплаты: plus, pro, ultra');
+    if (request.body?.packId === undefined) {
+      rejectSubscriptionPurchase(response);
       return;
     }
-
-    const planId = rawPlanId as PlanId;
+    const pack = packFromBody(request, response);
+    if (!pack) return;
     const userId = getUserId(request);
-
-    const subscription = subscriptionStore.checkout(userId, planId);
-    const user = userStore.updatePlan(userId, planId);
-
+    const granted = billing.grantPack(userId, pack.id, {
+      id: `mock:${userId}:${Date.now()}`,
+      method: 'stars',
+      amount: pack.priceUsd,
+      currency: 'USD',
+    });
     response.json({
-      subscription,
-      user: user ?? { id: userId, plan: planId },
+      subscription: subscriptionStore.get(userId),
+      user: userStore.findById(userId) ?? { id: userId, plan: 'free' },
+      credit: granted.credit,
     });
   });
 
@@ -421,69 +454,15 @@ export function createBillingRouter({
 
   // --- Stripe Checkout ---
 
-  router.post(
-    '/billing/stripe/create-checkout',
-    async (request: Request, response: Response): Promise<void> => {
-      const rawPlanId: unknown = request.body?.planId;
-      const validPlanIds = ['plus', 'pro', 'ultra', 'gpt-pro', 'claude-pro', 'gemini-pro'];
-      if (!validPlanIds.includes(rawPlanId as string)) {
-        sendError(response, 400, 'invalid_plan', 'Допустимые тарифы для оплаты: plus, pro, ultra');
-        return;
-      }
-
-      const planId = rawPlanId as PlanId;
-      const userId = getUserId(request);
-      const user = userStore.findById(userId);
-
-      if (!stripeService.isAvailable()) {
-        if (rejectMockInProduction(response, 'Оплата картой временно недоступна')) {
-          return;
-        }
-        const subscription = subscriptionStore.checkout(userId, planId);
-        const updatedUser = userStore.updatePlan(userId, planId);
-        response.json({
-          mock: true,
-          subscription,
-          user: updatedUser ?? { id: userId, plan: planId },
-          url: `${config.webAppUrl}/chat?billing_success=true&plan=${planId}`,
-        });
-        return;
-      }
-
-      try {
-        const session = await stripeService.createCheckoutSession({
-          userId,
-          userEmail: user?.email,
-          planId,
-          successUrl: `${config.webAppUrl}/chat?session_id={CHECKOUT_SESSION_ID}&billing_success=true`,
-          cancelUrl: `${config.webAppUrl}/pricing?canceled=true`,
-        });
-
-        response.json({ url: session.url, sessionId: session.sessionId });
-      } catch (err: unknown) {
-        const msg = (err as Error)?.message || 'Ошибка создания сессии Stripe';
-        sendError(response, 500, 'stripe_checkout_failed', msg);
-      }
-    },
-  );
+  router.post('/billing/stripe/create-checkout', (_request: Request, response: Response) => {
+    // Оплата картой отключена вместе с подписками: пакеты оплачиваются звёздами и криптовалютой.
+    rejectSubscriptionPurchase(response);
+  });
 
   // --- СБП (Система быстрых платежей) ---
 
-  router.post('/billing/sbp/create-invoice', (request: Request, response: Response) => {
-    if (rejectMockInProduction(response, 'Оплата через СБП временно недоступна')) {
-      return;
-    }
-    const rawPlanId: unknown = request.body?.planId;
-    const plan = findPlan(rawPlanId);
-    if (!plan || plan.priceMonthly <= 0) {
-      sendError(response, 400, 'invalid_plan', 'Некорректный тариф для оплаты через СБП');
-      return;
-    }
-
-    const userId = getUserId(request);
-    const invoice = activeInvoiceStore.createSbpInvoice(userId, plan.id, planPriceRub(plan.id));
-
-    response.json({ invoice });
+  router.post('/billing/sbp/create-invoice', (_request: Request, response: Response) => {
+    rejectSubscriptionPurchase(response);
   });
 
   const getParamInvoiceId = (req: Request): string => {
@@ -537,32 +516,22 @@ export function createBillingRouter({
     '/billing/telegram-stars/create-invoice',
     async (request: Request, response: Response) => {
       const userId = getUserId(request);
-      if (request.body?.packId !== undefined) {
-        rejectPackPurchase(response);
+      if (request.body?.packId === undefined) {
+        rejectSubscriptionPurchase(response);
         return;
       }
+      const pack = packFromBody(request, response);
+      if (!pack) return;
 
-      const rawPlanId: unknown = request.body?.planId;
-      const plan = findPlan(rawPlanId);
-      if (!plan || plan.priceMonthly <= 0) {
-        sendError(
-          response,
-          400,
-          'invalid_plan',
-          'Некорректный тариф для оплаты через Telegram Stars',
-        );
-        return;
-      }
-
-      // Цена в звёздах — по текущему курсу Telegram Stars, но не ниже точки безубыточности;
+      // Цена в звёздах — по официальному курсу Telegram Stars, но не ниже точки безубыточности;
       // сумма фиксируется в счёте.
-      const starsAmount = planStars(plan.id, telegramBotService.rateService);
       let invoice = activeInvoiceStore.createTelegramStarsInvoice(
         userId,
-        plan.id,
-        planPriceRub(plan.id),
-        starsAmount,
+        'free',
+        Math.round(pack.priceUsd * 99),
+        packStars(pack, telegramBotService.rateService),
         telegramBotService.botUsername || config.telegramBotUsername,
+        pack.id,
       );
       // Прямая ссылка на окно оплаты в Telegram; без бота остаётся ссылка на чат с ботом.
       if (telegramBotService.isConfigured) {
@@ -673,15 +642,12 @@ export function createBillingRouter({
   // --- Crypto & CryptoCloud ---
 
   router.post('/billing/crypto/create-invoice', async (request: Request, response: Response) => {
-    if (request.body?.packId !== undefined) {
-      rejectPackPurchase(response);
+    if (request.body?.packId === undefined) {
+      rejectSubscriptionPurchase(response);
       return;
     }
-    const plan = findPlan(request.body?.planId);
-    if (!plan || plan.priceMonthly <= 0) {
-      sendError(response, 400, 'invalid_plan', 'Некорректный тариф для оплаты криптовалютой');
-      return;
-    }
+    const pack = packFromBody(request, response);
+    if (!pack) return;
 
     const userId = getUserId(request);
     const user = userStore.findById(userId) || userStore.findByEmail(userId);
@@ -704,9 +670,9 @@ export function createBillingRouter({
       return;
     }
 
-    // Цены в долларах: Plus $9, Pro $25, Ultra $49 — services/pricing.ts
-    const amountUsd = planPriceUsd(plan.id);
-    const invoicePlanId = plan.id;
+    // Цена пакета в долларах — services/pricing.ts → CREDIT_PACKS.
+    const amountUsd = pack.priceUsd;
+    const invoicePlanId: PlanId = 'free';
     const tempOrderId = `crypto_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
 
     const cryptocurrency: string = currency;
@@ -743,6 +709,7 @@ export function createBillingRouter({
       ccResult?.invoiceId,
       tempOrderId,
       ccResult?.h2h,
+      pack.id,
     );
 
     response.json({ invoice });
@@ -765,7 +732,7 @@ export function createBillingRouter({
         if (ccStatus === 'paid' || ccStatus === 'success' || ccStatus === 'overpaid') {
           invoice = activateCrypto(invoice).invoice;
           console.log(
-            `[billing:crypto] Счёт ${invoice.id} оплачен через CryptoCloud. План ${invoice.planId} активирован.`,
+            `[billing:crypto] Счёт ${invoice.id} оплачен через CryptoCloud, кредиты начислены.`,
           );
         }
       } catch (err) {

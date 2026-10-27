@@ -3,24 +3,23 @@ import { createMockToken } from '../auth/jwt.js';
 import { requireAuth } from '../middleware/auth.js';
 import { sendError } from '../middleware/errors.js';
 import { BillingError, REFUND_POLICY, type PaymentRecord } from '../billing/billing-service.js';
-import { getPlanItem } from '../telegram/bot.js';
-import { planPriceUsd } from '../services/pricing.js';
+import {
+  CREDIT_PACK_VALID_DAYS,
+  CREDIT_PACKS,
+  findCreditPack,
+  packPricePerThousand,
+} from '../services/pricing.js';
+import { toCredits, TRIAL_CREDITS } from '../services/credits.js';
 import type { InvoiceStore } from '../store/invoice-store.js';
 import type { SubscriptionStore } from '../store/subscription-store.js';
 import type { UserStore } from '../store/user-store.js';
-import {
-  STARS_PLANS,
-  planStars,
-  planTitle,
-  paymentTitle,
-  type TelegramBotService,
-} from '../telegram/bot.js';
+import { packStars, paymentTitle, type TelegramBotService } from '../telegram/bot.js';
 import { isTelegramAccountEmail, telegramAccountEmail } from '../telegram/auth-requests.js';
 import { validateInitData, type TelegramWebAppUser } from '../telegram/webapp-auth.js';
 import { EmailLinkCodes, EMAIL_CODE_TTL_MS } from '../telegram/email-link-codes.js';
 import { RateLimiter, clientIp } from '../middleware/rate-limit.js';
 import { mailer as defaultMailer, type Mailer } from '../services/mailer.js';
-import type { PlanId, User } from '../types.js';
+import type { User } from '../types.js';
 
 export interface MiniAppRouterDeps {
   botService: TelegramBotService;
@@ -57,7 +56,7 @@ function linkCodeMail(to: string, code: string, requester: string) {
     `Код запросили в боте Ketner AI из Telegram ${requester}. Введите его там же — Telegram`,
     `подключится к вашему аккаунту. Код действует ${minutes} минут.`,
     '',
-    'Никому не сообщайте этот код: с ним чужой Telegram получит доступ к вашей подписке.',
+    'Никому не сообщайте этот код: с ним чужой Telegram получит доступ к вашему аккаунту и кредитам.',
     'Сотрудники Ketner никогда его не спрашивают.',
     '',
     'Если вы ничего не запрашивали, просто проигнорируйте письмо — без кода ничего не изменится.',
@@ -66,7 +65,7 @@ function linkCodeMail(to: string, code: string, requester: string) {
 <p>Код для привязки Telegram к аккаунту Ketner AI:</p>
 <p style="font-size:30px;font-weight:bold;letter-spacing:6px;margin:16px 0">${code}</p>
 <p>Код запросили в боте Ketner AI из Telegram <b>${escapeMailHtml(requester)}</b>. Введите его там же — Telegram подключится к вашему аккаунту. Код действует ${minutes} минут.</p>
-<p><b>Никому не сообщайте этот код</b>: с ним чужой Telegram получит доступ к вашей подписке. Сотрудники Ketner никогда его не спрашивают.</p>
+<p><b>Никому не сообщайте этот код</b>: с ним чужой Telegram получит доступ к вашему аккаунту и кредитам. Сотрудники Ketner никогда его не спрашивают.</p>
 <p style="color:#5d6762">Если вы ничего не запрашивали, просто проигнорируйте письмо — без кода ничего не изменится.</p>
 </div>`;
   return { to, subject: `${code} — код привязки Telegram к Ketner AI`, text, html };
@@ -181,21 +180,22 @@ export function createMiniAppRouter({
             nextChargeAt: auto.nextChargeAt,
           }
         : null,
-      plans: STARS_PLANS.map((planId) => {
-        const priceUsd = planPriceUsd(planId);
-        const preview = billing.preview(user.id, planId);
+      credits: {
+        balance: toCredits(billing.credits.balance(user.id, user.plan).remainingUsd),
+        trialCredits: TRIAL_CREDITS,
+        validDays: CREDIT_PACK_VALID_DAYS,
+      },
+      packs: CREDIT_PACKS.map((pack) => {
         // Та же цена, что в счёте: по официальному курсу, но не ниже точки безубыточности.
-        const stars = planStars(planId, botService.rateService);
+        const stars = packStars(pack, botService.rateService);
         return {
-          id: planId,
-          title: planTitle(planId),
-          priceUsd,
+          id: pack.id,
+          priceUsd: pack.priceUsd,
+          credits: pack.credits,
           stars,
           /** Сколько эти звёзды стоят по официальному курсу Telegram. */
           starsUsd: botService.rateService.toUsd(stars),
-          highlight: getPlanItem(planId)?.modelsHighlight ?? '',
-          bullets: getPlanItem(planId)?.bullets.ru ?? [],
-          preview,
+          pricePerThousandUsd: Number(packPricePerThousand(pack).toFixed(3)),
         };
       }),
       rate,
@@ -425,22 +425,28 @@ export function createMiniAppRouter({
     if (user) response.json(stateOf(user));
   });
 
-  /** Счёт в звёздах: на 30 дней или подписка с автопродлением. */
+  /** Счёт в звёздах на пакет кредитов. */
   router.post(
     '/telegram/miniapp/invoice',
     requireAuth,
     async (request: Request, response: Response) => {
-      const body = (request.body ?? {}) as { planId?: unknown; recurring?: unknown };
-      if (
-        typeof body.planId !== 'string' ||
-        !(STARS_PLANS as readonly string[]).includes(body.planId)
-      ) {
-        sendError(response, 400, 'invalid_plan', 'Выберите тариф Plus, Pro или Ultra');
+      const body = (request.body ?? {}) as { packId?: unknown };
+      if (body.packId === undefined) {
+        sendError(
+          response,
+          410,
+          'subscriptions_discontinued',
+          'Подписок больше нет: кредиты покупаются пакетами.',
+        );
         return;
       }
-      const recurring = body.recurring === true;
-      const invoice = botService.createStarsInvoice(request.user!.id, body.planId as PlanId);
-      const link = await botService.createInvoiceLink(invoice, recurring);
+      const pack = findCreditPack(body.packId);
+      if (!pack) {
+        sendError(response, 400, 'invalid_pack', 'Выберите пакет кредитов');
+        return;
+      }
+      const invoice = botService.createStarsPackInvoice(request.user!.id, pack);
+      const link = await botService.createInvoiceLink(invoice);
       if (!link) {
         sendError(
           response,
@@ -450,7 +456,7 @@ export function createMiniAppRouter({
         );
         return;
       }
-      response.json({ invoiceId: invoice.id, stars: invoice.starsAmount, link, recurring });
+      response.json({ invoiceId: invoice.id, stars: invoice.starsAmount, link });
     },
   );
 
@@ -474,6 +480,15 @@ export function createMiniAppRouter({
       const enabled = (request.body as { enabled?: unknown } | undefined)?.enabled;
       if (typeof enabled !== 'boolean') {
         sendError(response, 400, 'invalid_request', 'Укажите enabled: true или false');
+        return;
+      }
+      if (enabled) {
+        sendError(
+          response,
+          410,
+          'subscriptions_discontinued',
+          'Подписок больше нет, автопродление включить нельзя.',
+        );
         return;
       }
       try {

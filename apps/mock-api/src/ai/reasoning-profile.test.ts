@@ -12,13 +12,12 @@ import { MODELS } from './models.js';
 const STD = { standard: 'medium', max: 'xhigh' } as const;
 const XH = { standard: 'xhigh', max: 'xhigh' } as const;
 
-test('режим Max доступен только на Ultra (и VIP, у которого эффективный тариф Ultra)', () => {
-  assert.equal(isMaxModeAllowed('ultra'), true);
-  assert.equal(isMaxModeAllowed('pro'), false);
-  assert.equal(isMaxModeAllowed('plus'), false);
-  assert.equal(effectiveReasoningMode('max', 'ultra'), 'max');
-  assert.equal(effectiveReasoningMode('max', 'pro'), 'standard');
-  assert.equal(effectiveReasoningMode(undefined, 'ultra'), 'standard');
+test('режим Max открыт на любом уровне доступа: его цена видна заранее и ограничена кредитами', () => {
+  for (const plan of ['free', 'credits', 'plus', 'pro', 'ultra']) {
+    assert.equal(isMaxModeAllowed(plan), true, plan);
+    assert.equal(effectiveReasoningMode('max', plan), 'max', plan);
+    assert.equal(effectiveReasoningMode(undefined, plan), 'standard', plan);
+  }
 });
 
 test('глубина по профилю: medium / xhigh, когда кредиты кончились — low', () => {

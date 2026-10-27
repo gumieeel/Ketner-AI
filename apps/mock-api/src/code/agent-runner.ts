@@ -849,7 +849,7 @@ export class AgentRunner {
             plan === 'free'
               ? 4_096
               : stage === 'normal'
-                ? plan === 'ultra' || plan === 'pro'
+                ? plan === 'ultra' || plan === 'pro' || plan === 'credits'
                   ? 16_384
                   : 8_192
                 : 8_192,

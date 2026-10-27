@@ -1,5 +1,5 @@
 /**
- * Лимиты Ketner Code по тарифам: проекты, размер файлов, число запусков агента и бюджет запуска.
+ * Лимиты Ketner Code по уровням доступа (free — до первой покупки кредитов, credits — после, plus / pro / ultra — прежние подписчики): проекты, размер файлов, число запусков агента и бюджет запуска.
  *
  * Лимиты агента лежат поверх общих (services/entitlement.ts): запуск агента тратит тот же пул
  * кредитов, что чат и картинки, поэтому здесь ограничивается то, чего общие лимиты не видят: сколько проектов хранить, сколько запусков в сутки и сколько можно потратить
@@ -46,19 +46,21 @@ const MB = 1024 * 1024;
 const KB = 1024;
 
 export const CODE_LIMITS: Record<'free' | 'plus' | 'pro' | 'ultra', CodeLimits> = {
+  // До первой покупки кредитов: агент открыт, а запуск ограничен пробными кредитами ($0.20 вместе
+  // с комиссией ≈ $0.21), поэтому потолок запуска равен им целиком. Команды в песочнице — после покупки.
   free: {
-    maxProjects: 1,
-    maxFiles: 200,
-    maxProjectBytes: 1 * MB,
-    maxFileBytes: 200 * KB,
-    runsPerDay: 3,
-    maxSteps: 8,
-    maxRunCostUsd: 0.02,
-    continueWorkUsd: 0,
-    continueLiteUsd: 0.01,
+    maxProjects: 3,
+    maxFiles: 500,
+    maxProjectBytes: 5 * MB,
+    maxFileBytes: 500 * KB,
+    runsPerDay: 10,
+    maxSteps: 20,
+    maxRunCostUsd: 0.2,
+    continueWorkUsd: 0.05,
+    continueLiteUsd: 0.02,
     commands: false,
     commandTimeoutSec: 30,
-    maxTaskChars: 4_000,
+    maxTaskChars: 8_000,
   },
   plus: {
     maxProjects: 5,
@@ -106,6 +108,8 @@ export const CODE_LIMITS: Record<'free' | 'plus' | 'pro' | 'ultra', CodeLimits> 
 
 export function getCodeLimits(plan: PlanId | string | undefined): CodeLimits {
   switch (plan) {
+    // Купленные кредиты ещё остались: лимиты Ultra, расход всё равно ограничен остатком кредитов.
+    case 'credits':
     case 'ultra':
       return CODE_LIMITS.ultra;
     case 'pro':

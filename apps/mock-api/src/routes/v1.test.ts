@@ -16,7 +16,8 @@ import type {
   AgentProviderResult,
   AgentStreamEvent,
 } from '../ai/agent/agent-types.js';
-import { PLAN_ENTITLEMENTS } from '../services/entitlement.js';
+import { PLAN_ENTITLEMENTS, TRIAL_CREDITS } from '../services/entitlement.js';
+import { CREDIT_PACKS } from '../services/pricing.js';
 import { UsageStore } from '../store/usage-store.js';
 import type { CreditService } from '../services/credits.js';
 import { exhaust, memoryCredits, setBalance } from '../services/credits-fixture.js';
@@ -44,13 +45,16 @@ interface Harness {
   usage: UsageStore;
   /** Кредиты шлюза: тесты выдают и списывают их напрямую. */
   credits: CreditService;
-  /** Регистрирует пользователя на нужном тарифе и выдаёт ему API-ключ. */
+  /** Регистрирует пользователя (по умолчанию — с купленным пакетом кредитов) и выдаёт ему API-ключ. */
   caller: (
-    plan?: 'free' | 'plus' | 'pro' | 'ultra',
+    plan?: 'free' | 'credits',
   ) => Promise<{ secret: string; userId: string; token: string; keyId: string }>;
 }
 
 let emailCounter = 0;
+
+/** Остаток после покупки самого малого пакета: пакет и пробные кредиты, выданные при первом запросе. */
+const START_BALANCE = CREDIT_PACKS[0]!.credits + TRIAL_CREDITS;
 
 async function harness(script: Script): Promise<Harness> {
   const calls: AgentProviderRequest[] = [];
@@ -82,7 +86,7 @@ async function harness(script: Script): Promise<Harness> {
   });
   const server = await startTestServer({}, { agentGateway: gateway, usageStore: usage });
 
-  const caller: Harness['caller'] = async (plan = 'plus') => {
+  const caller: Harness['caller'] = async (plan = 'credits') => {
     emailCounter += 1;
     const signup = await signupAndVerify(server.baseUrl, {
       method: 'POST',
@@ -98,9 +102,14 @@ async function harness(script: Script): Promise<Harness> {
       const checkout = await fetch(`${server.baseUrl}/api/billing/checkout`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ planId: plan }),
+        body: JSON.stringify({ packId: CREDIT_PACKS[0]!.id }),
       });
       assert.equal(checkout.status, 200);
+      // Шлюз агента считает кредиты в своём журнале: покупка зеркалится туда же, где её видит сайт.
+      credits.grantForPack(
+        { id: `harness:${user.id}`, userId: user.id, method: 'stars' },
+        CREDIT_PACKS[0]!,
+      );
     }
     const created = server.apiKeyStore.create(user.id, 'тест');
     return { secret: created.secret, userId: user.id, token, keyId: created.key.id };
@@ -148,7 +157,7 @@ function sseData(text: string): Array<Record<string, unknown> | '[DONE]'> {
     });
 }
 
-test('/api/keys: Free ключ не создаст, Plus создаёт, секрет виден один раз, отзыв и лимит 10', async (t) => {
+test('/api/keys: Free (только пробные кредиты) ключ не создаст, покупатель создаёт, секрет виден один раз, отзыв и лимит 10', async (t) => {
   const h = await harness(async () => result());
   t.after(() => h.server.close());
 
@@ -160,8 +169,8 @@ test('/api/keys: Free ключ не создаст, Plus создаёт, сек�
   });
   assert.equal(denied.status, 403);
 
-  const plus = await h.caller('plus');
-  const auth = { 'Content-Type': 'application/json', Authorization: `Bearer ${plus.token}` };
+  const buyer = await h.caller('credits');
+  const auth = { 'Content-Type': 'application/json', Authorization: `Bearer ${buyer.token}` };
   const created = await fetch(`${h.server.baseUrl}/api/keys`, {
     method: 'POST',
     headers: auth,
@@ -225,7 +234,7 @@ test('/api/keys: Free ключ не создаст, Plus создаёт, сек�
 test('/v1: без ключа, с чужим ключом и с токеном сессии вместо ключа — 401 в формате OpenAI', async (t) => {
   const h = await harness(async () => result());
   t.after(() => h.server.close());
-  const me = await h.caller('plus');
+  const me = await h.caller('credits');
 
   const none = await fetch(`${h.server.baseUrl}/v1/models`);
   assert.equal(none.status, 401);
@@ -242,10 +251,10 @@ test('/v1: без ключа, с чужим ключом и с токеном с
   assert.equal((await get(h, me.secret, '/v1/models')).status, 200);
 });
 
-test('GET /v1/models: auto и публичные модели, доступность зависит от тарифа', async (t) => {
+test('GET /v1/models: auto и публичные модели; у покупателя кредитов доступны все, у Free — нет', async (t) => {
   const h = await harness(async () => result());
   t.after(() => h.server.close());
-  const plus = await h.caller('plus');
+  const plus = await h.caller('credits');
   const list = await readJson<{
     object: string;
     data: Array<{ id: string; available: boolean; requires_plan: string; object: string }>;
@@ -271,21 +280,26 @@ test('GET /v1/models: auto и публичные модели, доступно�
     'gpt-5.6-terra',
   ]);
   const byId = Object.fromEntries(list.data.map((m) => [m.id, m]));
-  assert.equal(byId['ketner-pro'].available, true);
-  assert.equal(byId['ketner-mini'].requires_plan, 'plus');
-  assert.equal(byId['claude-opus-5.5'].available, false);
-  assert.equal(byId['claude-opus-5.5'].requires_plan, 'pro');
+  assert.ok(
+    list.data.every((m) => m.available),
+    'все модели доступны покупателю кредитов',
+  );
+  assert.ok(list.data.every((m) => m.requires_plan === 'credits'));
+  assert.equal(byId['claude-opus-5.5'].available, true);
   assert.equal(byId['ketner-pro'].object, 'model');
 
-  const pro = await h.caller('pro');
-  const proList = await readJson<typeof list>(await get(h, pro.secret, '/v1/models'));
-  assert.equal(proList.data.find((m) => m.id === 'claude-opus-5.5')?.available, true);
+  const free = await h.caller('free');
+  const freeList = await readJson<typeof list>(await get(h, free.secret, '/v1/models'));
+  assert.ok(
+    freeList.data.every((m) => !m.available),
+    'до первой покупки API закрыт',
+  );
 });
 
 test('GET /v1/models/:id: одна модель как в списке, неизвестная — 404 model_not_found', async (t) => {
   const h = await harness(async () => result());
   t.after(() => h.server.close());
-  const plus = await h.caller('plus');
+  const plus = await h.caller('credits');
   const found = await get(h, plus.secret, '/v1/models/ketner-pro');
   assert.equal(found.status, 200);
   const model = await readJson<{ id: string; object: string; available: boolean }>(found);
@@ -301,7 +315,7 @@ test('GET /v1/models/:id: одна модель как в списке, неиз
 test('/v1 для сторонних приложений: CORS с любого сайта без cookie и X-Request-Id у ответа', async (t) => {
   const h = await harness(async () => result());
   t.after(() => h.server.close());
-  const plus = await h.caller('plus');
+  const plus = await h.caller('credits');
 
   const preflight = await fetch(`${h.server.baseUrl}/v1/chat/completions`, {
     method: 'OPTIONS',
@@ -337,7 +351,7 @@ test('/v1 для сторонних приложений: CORS с любого �
 test('параметры генерации OpenAI доходят до провайдера: response_format, stop, seed, top_p', async (t) => {
   const h = await harness(async () => result({ content: '{"ok":true}' }));
   t.after(() => h.server.close());
-  const plus = await h.caller('plus');
+  const plus = await h.caller('credits');
   const response = await post(h, plus.secret, {
     model: 'ketner-pro',
     messages: [{ role: 'user', content: 'ответь JSON' }],
@@ -378,7 +392,7 @@ test('POST /v1/chat/completions без стриминга: вызов функц
     });
   });
   t.after(() => h.server.close());
-  const dev = await h.caller('plus');
+  const dev = await h.caller('credits');
 
   const response = await post(h, dev.secret, {
     model: 'ketner-pro',
@@ -426,7 +440,7 @@ test('POST /v1/chat/completions без стриминга: вызов функц
   assert.equal(body.ketner.credits.charged, 12.3, '$0.0123 = 12.3 кредита');
   assert.equal(
     body.ketner.credits.balance,
-    Math.floor(PLAN_ENTITLEMENTS.plus.monthlyCredits - 12.3),
+    Math.floor(START_BALANCE - 12.3),
     'остаток показывается целыми кредитами, вниз',
   );
 
@@ -465,7 +479,7 @@ test('круг инструмента: ответ tool возвращается 
     return result({ content: 'В файле одна строка.' });
   });
   t.after(() => h.server.close());
-  const dev = await h.caller('plus');
+  const dev = await h.caller('credits');
   const messages: unknown[] = [{ role: 'user', content: 'что в a?' }];
 
   const first = await readJson<{ choices: Array<{ message: Record<string, unknown> }> }>(
@@ -504,7 +518,7 @@ test('стриминг: роль, размышления, вызов функц�
     });
   });
   t.after(() => h.server.close());
-  const dev = await h.caller('plus');
+  const dev = await h.caller('credits');
 
   const response = await post(h, dev.secret, {
     model: 'ketner-pro',
@@ -578,7 +592,7 @@ test('отказ до начала ответа остаётся обычным 
     throw new OpenRouterError(r.model, 500, 'boom');
   });
   t.after(() => h.server.close());
-  const dev = await h.caller('plus');
+  const dev = await h.caller('credits');
 
   const response = await post(h, dev.secret, {
     stream: true,
@@ -600,7 +614,7 @@ test('обрыв посреди потока: событие error, затем �
     throw new Error('socket hang up');
   });
   t.after(() => h.server.close());
-  const dev = await h.caller('plus');
+  const dev = await h.caller('credits');
 
   const chunks = sseData(
     await (
@@ -631,7 +645,7 @@ test('Free: 403 upgrade_required; неверный JSON, ошибка тела �
   assert.equal(deniedBody.error.code, 'upgrade_required');
   assert.equal(deniedBody.error.type, 'permission_error');
 
-  const dev = await h.caller('plus');
+  const dev = await h.caller('credits');
   const badJson = await post(h, dev.secret, '{"messages": [');
   assert.equal(badJson.status, 400);
   assert.equal((await readJson<ErrorBody>(badJson)).error.type, 'invalid_request_error');
@@ -659,8 +673,8 @@ test('лимиты: параллельный запрос получает 429 �
   const h = await harness(async () => result());
   t.after(() => h.server.close());
 
-  const busy = await h.caller('plus');
-  for (let i = 0; i < PLAN_ENTITLEMENTS.plus.maxConcurrency; i++)
+  const busy = await h.caller('credits');
+  for (let i = 0; i < PLAN_ENTITLEMENTS.credits.maxConcurrency; i++)
     h.usage.acquireConcurrencySlot(busy.userId);
   const limited = await post(h, busy.secret, { messages: [{ role: 'user', content: 'x' }] });
   assert.equal(limited.status, 429);
@@ -671,8 +685,8 @@ test('лимиты: параллельный запрос получает 429 �
 test('кредиты кончились: отвечает бесплатная модель агента, а не отказ insufficient_quota', async (t) => {
   const h = await harness(async () => result({ cost: 0 }));
   t.after(() => h.server.close());
-  const broke = await h.caller('plus');
-  exhaust(h.credits, broke.userId, 'plus');
+  const broke = await h.caller('credits');
+  exhaust(h.credits, broke.userId, 'credits');
 
   for (let i = 0; i < 2; i++) {
     const response = await post(h, broke.secret, { messages: [{ role: 'user', content: 'x' }] });
@@ -694,8 +708,8 @@ test('кредиты кончились: отвечает бесплатная �
 test('подмена модели видна клиенту: не хватает кредитов на выбранную — отвечает та, на которую хватает', async (t) => {
   const h = await harness(async () => result());
   t.after(() => h.server.close());
-  const dev = await h.caller('pro');
-  setBalance(h.credits, dev.userId, 'pro', 20); // GPT-6.1 Sol ≈ 35 кредитов за запрос
+  const dev = await h.caller('credits');
+  setBalance(h.credits, dev.userId, 'credits', 20); // GPT-6.1 Sol ≈ 35 кредитов за запрос
 
   const body = await readJson<{
     model: string;
@@ -712,25 +726,24 @@ test('подмена модели видна клиенту: не хватает
 test('GET /v1/usage: остаток кредитов и число запросов меняются вместе с расходом', async (t) => {
   const h = await harness(async () => result({ cost: 0.5 }));
   t.after(() => h.server.close());
-  const dev = await h.caller('plus');
+  const dev = await h.caller('credits');
 
   const before = await readJson<{
     plan: string;
-    credits: { balance: number; monthly: number; stage: string; next_expires_at: string | null };
+    credits: { balance: number; stage: string; next_expires_at: string | null };
     requests_last_day: number;
-    period_days: number;
   }>(await get(h, dev.secret, '/v1/usage'));
-  assert.equal(before.plan, 'plus');
-  assert.equal(before.credits.monthly, PLAN_ENTITLEMENTS.plus.monthlyCredits);
-  assert.equal(before.credits.balance, PLAN_ENTITLEMENTS.plus.monthlyCredits);
+  assert.equal(before.plan, 'credits');
+  assert.equal(before.credits.balance, START_BALANCE);
   assert.equal(before.credits.stage, 'normal');
   assert.ok(before.credits.next_expires_at, 'срок кредитов виден');
   assert.equal(before.requests_last_day, 0);
-  assert.equal(before.period_days, 30);
+  assert.equal('monthly' in before.credits, false, 'месячной выдачи больше нет');
+  assert.equal('period_days' in before, false);
 
   await post(h, dev.secret, { messages: [{ role: 'user', content: 'x' }] });
   const after = await readJson<typeof before>(await get(h, dev.secret, '/v1/usage'));
-  assert.equal(after.credits.balance, PLAN_ENTITLEMENTS.plus.monthlyCredits - 500);
+  assert.equal(after.credits.balance, START_BALANCE - 500);
   assert.equal(after.requests_last_day, 1);
 });
 
@@ -747,7 +760,7 @@ test('клиент оборвал соединение: генерация ос�
       }),
   );
   t.after(() => h.server.close());
-  const dev = await h.caller('plus');
+  const dev = await h.caller('credits');
 
   const controller = new AbortController();
   const response = await post(

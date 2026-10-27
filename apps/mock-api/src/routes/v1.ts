@@ -13,9 +13,10 @@ import {
   type ChunkDelta,
   type KetnerExtension,
 } from '../ai/agent/openai-compat.js';
+import { creditService } from '../billing/index.js';
 import type { CreditLedger } from '../services/credits.js';
 import type { PlanId, User } from '../types.js';
-import { resolveUserPlan } from '../services/user-plan.js';
+import { resolveUserPlan, type PurchasedCreditsLookup } from '../services/user-plan.js';
 import type { ApiKeyStore } from '../store/api-key-store.js';
 import type { SubscriptionStore } from '../store/subscription-store.js';
 import type { UsageStore } from '../store/usage-store.js';
@@ -102,6 +103,12 @@ export function createV1Router(deps: V1RouterDeps): Router {
       ...(deps.credits ? { credits: deps.credits } : {}),
     });
 
+  // Купленные кредиты открывают полный уровень доступа (ключи API — тоже).
+  const ledger = deps.credits ?? creditService;
+  const purchasedCredits: PurchasedCreditsLookup | undefined = ledger.hasPurchased
+    ? { hasPurchased: (userId, now) => ledger.hasPurchased!(userId, now) }
+    : undefined;
+
   // У каждого ответа свой id: по нему поддержка находит запрос в логах.
   router.use((_request: Request, response: Response, next: NextFunction) => {
     response.setHeader('X-Request-Id', `req_${randomBytes(12).toString('hex')}`);
@@ -130,7 +137,12 @@ export function createV1Router(deps: V1RouterDeps): Router {
       );
       return;
     }
-    const { plan, isVip } = resolveUserPlan(user, deps.userStore, deps.subscriptionStore);
+    const { plan, isVip } = resolveUserPlan(
+      user,
+      deps.userStore,
+      deps.subscriptionStore,
+      purchasedCredits,
+    );
     deps.apiKeyStore.touch(record.id);
     response.locals.caller = { keyId: record.id, user, plan, isVip } satisfies AgentCaller;
     next();

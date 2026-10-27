@@ -12,6 +12,7 @@ import { combineGenerators, createRunwareGenerator } from './runware.js';
 import type { AIProvider } from '../ai/gateway-types.js';
 import { toUsd } from '../services/credits.js';
 import { memoryCredits, setBalance } from '../services/credits-fixture.js';
+import { TRIAL_CREDITS } from '../services/entitlement.js';
 
 const JPEG = Buffer.concat([Buffer.from([0xff, 0xd8, 0xff]), Buffer.alloc(200, 1)]);
 
@@ -71,13 +72,9 @@ test('Free: FLUX.1 schnell, 5 в сутки, картинка сохраняет
   assert.equal((await service.list(caller('free'))).length, 5);
 });
 
-test('Free: FLUX.2 klein закрыта, на Plus — с размером; после лимита klein отвечает schnell', async () => {
+test('Free: FLUX.2 klein открыта с размером, 5 в сутки; после лимита klein отвечает schnell', async () => {
   const { service, usage } = setup();
-  await assert.rejects(
-    service.generate(caller('free'), { prompt: 'кот', modelId: 'flux-2-klein' }),
-    (e: unknown) => e instanceof ImageServiceError && e.code === 'upgrade_required',
-  );
-  const first = await service.generate(caller('plus'), {
+  const first = await service.generate(caller('free'), {
     prompt: 'кот',
     modelId: 'flux-2-klein',
     aspect: '16:9',
@@ -86,9 +83,9 @@ test('Free: FLUX.2 klein закрыта, на Plus — с размером; по
     [first.image.modelId, first.image.width, first.image.height],
     ['flux-2-klein', 1344, 768],
   );
-  for (let i = 0; i < 19; i++)
-    await service.generate(caller('plus'), { prompt: `кот ${i}`, modelId: 'flux-2-klein' });
-  const over = await service.generate(caller('plus'), { prompt: 'кот', modelId: 'flux-2-klein' });
+  for (let i = 0; i < 4; i++)
+    await service.generate(caller('free'), { prompt: `кот ${i}`, modelId: 'flux-2-klein' });
+  const over = await service.generate(caller('free'), { prompt: 'кот', modelId: 'flux-2-klein' });
   assert.equal(over.image.modelId, 'flux-schnell');
   assert.equal(over.replacedBy, 'FLUX.1 schnell');
   assert.ok(usage.getFairUseSnapshot('u1').estimatedCostLastDay > 0, 'расход идёт в бюджет тарифа');
@@ -97,6 +94,13 @@ test('Free: FLUX.2 klein закрыта, на Plus — с размером; по
     0,
     'картинки не тратят лимит сообщений чата',
   );
+
+  // Покупатель кредитов и подписчик Plus рисуют той же моделью с более высоким лимитом.
+  const plus = await service.generate(caller('plus', 'u9'), {
+    prompt: 'кот',
+    modelId: 'flux-2-klein',
+  });
+  assert.equal(plus.image.modelId, 'flux-2-klein');
 });
 
 test('проверка запроса: запрещённое не генерируется, без проверки — тоже', async () => {
@@ -197,7 +201,7 @@ test('кредиты: картинка списывает свою цену; к�
   assert.equal(failing.usage.getImagesLastDay('u1', 'flux-schnell'), 0);
   assert.equal(
     failing.credits.balance('u1', 'free').remainingUsd,
-    toUsd(300),
+    toUsd(TRIAL_CREDITS),
     'неудачная попытка кредитов не списывает',
   );
   void usage;
@@ -244,14 +248,13 @@ test('Pro: FLUX.2 dev и Seedream через Runware, цена из ответа
       ['flux-2-klein', false, 50],
       ['flux-2-dev', false, 100],
       ['seedream-5-flash', false, 100],
-      ['flux-2-pro', true, 0],
-      ['nano-banana-2', true, 0],
+      ['flux-2-pro', false, 30],
+      ['nano-banana-2', false, 30],
     ],
   );
-  await assert.rejects(
-    service.generate(caller('pro'), { prompt: 'x', modelId: 'flux-2-pro' }),
-    (e: unknown) => e instanceof ImageServiceError && e.code === 'upgrade_required',
-  );
+  // Дорогая модель доступна и на Pro: ограничивают суточный лимит и кредиты.
+  const pro = await service.generate(caller('pro'), { prompt: 'x', modelId: 'flux-2-pro' });
+  assert.equal(pro.image.modelId, 'flux-2-pro');
 
   const seedream = await service.generate(caller('pro'), {
     prompt: 'кот',

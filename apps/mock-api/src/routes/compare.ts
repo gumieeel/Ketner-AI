@@ -184,8 +184,8 @@ export function createCompareRouter({
         'compare_plan_required',
         text(
           language,
-          'Сравнение ответов доступно с тарифа Plus.',
-          'Answer comparison is available from the Plus plan.',
+          'Сравнение ответов сейчас недоступно для вашего аккаунта.',
+          'Answer comparison is not available for your account right now.',
         ),
       );
       return;
@@ -197,8 +197,8 @@ export function createCompareRouter({
         'too_many_models',
         text(
           language,
-          `На вашем тарифе можно сравнивать до ${maxModels} моделей за раз.`,
-          `Your plan compares up to ${maxModels} models at once.`,
+          `Сейчас можно сравнивать до ${maxModels} моделей за раз; после покупки кредитов — до 4.`,
+          `You can compare up to ${maxModels} models at once; after buying credits, up to 4.`,
         ),
       );
       return;

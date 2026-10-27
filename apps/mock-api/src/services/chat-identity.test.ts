@@ -43,6 +43,45 @@ test('тариф берётся из профиля, а не из чего-ли�
   }
 });
 
+test('купленные кредиты: уровень credits берётся из сессии, но только без платной подписки', () => {
+  const buyer = resolveChatIdentity({
+    ...base,
+    allowAnonymous: false,
+    sessionUser: { id: 'u3', email: 'u3@example.com', plan: 'credits' },
+    storedUser: { plan: 'free' },
+    now: NOW,
+  });
+  assert.ok(buyer.ok);
+  if (buyer.ok) assert.equal(buyer.plan, 'credits');
+
+  // Профиль в базе хранит free: клиент не может повысить уровень сам, а сессию собирает сервер.
+  const plain = resolveChatIdentity({
+    ...base,
+    allowAnonymous: false,
+    sessionUser: { id: 'u4', email: 'u4@example.com', plan: 'free' },
+    storedUser: { plan: 'free' },
+    now: NOW,
+  });
+  assert.ok(plain.ok);
+  if (plain.ok) assert.equal(plain.plan, 'free');
+
+  // Подписчик прежней системы остаётся на своём тарифе, даже если в сессии указано credits.
+  const subscriber = resolveChatIdentity({
+    ...base,
+    allowAnonymous: false,
+    sessionUser: { id: 'u5', email: 'u5@example.com', plan: 'credits' },
+    storedUser: { plan: 'plus' },
+    subscription: {
+      plan: 'plus',
+      status: 'active',
+      renewsAt: new Date(NOW + 86_400_000).toISOString(),
+    },
+    now: NOW,
+  });
+  assert.ok(subscriber.ok);
+  if (subscriber.ok) assert.equal(subscriber.plan, 'plus');
+});
+
 test('оплаченный тариф действует, пока идёт период', () => {
   const r = resolveChatIdentity({
     ...base,
@@ -101,35 +140,26 @@ test('каталог для /api/meta согласован с реестром: 
   }
 });
 
-test('free не получает платные движки, plus получает рабочие и Sol, Opus — только с Pro', () => {
-  const check = (id: string, plan: 'free' | 'plus' | 'pro' | 'ultra'): boolean =>
+test('все модели открыты на любом уровне доступа: Free, купленные кредиты и прежние подписчики', () => {
+  const check = (id: string, plan: 'free' | 'credits' | 'plus' | 'pro' | 'ultra'): boolean =>
     EntitlementService.checkModelAccess(modelRegistry.resolve(id), plan).allowed;
-  assert.equal(check('claude-haiku-5.5', 'free'), false);
-  assert.equal(check('deepseek-v4.1-flash', 'free'), false);
-  assert.equal(check('ketner-pro', 'free'), false);
-  assert.equal(check('claude-haiku-5.5', 'plus'), true);
-  assert.equal(check('ketner-pro', 'plus'), true);
-  assert.equal(check('gpt-6.1-sol', 'plus'), true);
-  assert.equal(check('claude-opus-5.5', 'plus'), false);
-  assert.equal(check('grok-4.7', 'plus'), false);
-  assert.equal(check('claude-opus-5.5', 'pro'), true);
-  assert.equal(check('grok-4.7', 'pro'), true);
-  assert.equal(check('gemini-3.8-flash', 'ultra'), true);
-  assert.equal(check('ketner-mini', 'free'), true);
-  // Старые id ведут на актуальные модели и правила доступа не обходят
-  assert.equal(check('gpt-6-astra', 'free'), false);
-  assert.equal(check('claude-fable', 'plus'), false);
-  assert.equal(check('claude-fable', 'pro'), true);
-
-  const denied = EntitlementService.checkModelAccess(
-    modelRegistry.resolve('claude-opus-5.5'),
-    'plus',
-  );
-  assert.equal(denied.allowed, false);
-  if (!denied.allowed) {
-    assert.equal(denied.requiredPlan, 'Pro');
-    assert.match(denied.reason ?? '', /Claude Opus 5\.5/);
+  for (const plan of ['free', 'credits', 'plus', 'pro', 'ultra'] as const) {
+    for (const id of [
+      'ketner-mini',
+      'claude-haiku-5.5',
+      'deepseek-v4.1-flash',
+      'ketner-pro',
+      'gpt-6.1-sol',
+      'claude-opus-5.5',
+      'grok-4.7',
+      'gpt-6-astra',
+      'gemini-3.8-flash',
+    ]) {
+      assert.equal(check(id, plan), true, `${id} на ${plan}`);
+    }
   }
+  // Старые id ведут на актуальные модели, и правила доступа их тоже не закрывают
+  assert.equal(check('claude-fable', 'free'), true);
 });
 
 test('resolveModel для публичных id возвращает ту же модель, старые id — актуальную, неизвестный id — auto', () => {

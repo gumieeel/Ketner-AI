@@ -56,8 +56,13 @@ import {
 import { FairUseEngine } from '../services/fair-use.js';
 import type { UsageStore } from '../store/usage-store.js';
 
-/** Минимальный тариф для API агента: на Free дорогой цикл из десятков запросов не окупается. */
+/**
+ * API агента открыт тем, кто платил: подписчикам Plus и выше и покупателям кредитов, пока те не
+ * потрачены. На Free (только пробные кредиты) дорогой цикл из десятков запросов не окупается.
+ * `requires_plan` в `GET /v1/models` для всех моделей — `credits`.
+ */
 export const AGENT_MIN_PLAN: PlanId = 'plus';
+export const AGENT_REQUIRED_PLAN_LABEL = 'credits';
 /** Модель агента по умолчанию (`auto`): рабочая лошадка с лучшим качеством кода на доллар. */
 export const AGENT_DEFAULT_MODEL_ID = WORKHORSE_MODEL_ID;
 /** Потолок ответа агента относительно чатового: целые файлы не помещаются в чатовый потолок. */
@@ -265,15 +270,15 @@ export class AgentGateway {
   }> {
     const minRank = planRank(AGENT_MIN_PLAN);
     const toItem = (entry: ModelRegistryEntry, id: string, name: string) => {
-      const needed = planRank(entry.requiredPlan) > minRank ? entry.requiredPlan! : AGENT_MIN_PLAN;
+      const needed = Math.max(planRank(entry.requiredPlan), minRank);
       return {
         id,
         name,
         context_window: entry.contextWindow,
         max_output_tokens: entry.maxOutputTokens,
         cost_class: entry.costClass,
-        requires_plan: needed,
-        available: planRank(plan) >= planRank(needed),
+        requires_plan: AGENT_REQUIRED_PLAN_LABEL,
+        available: planRank(plan) >= needed,
       };
     };
     const workhorse = this.registry.resolve(AGENT_DEFAULT_MODEL_ID);
@@ -283,7 +288,7 @@ export class AgentGateway {
     ];
   }
 
-  /** Сводка для `GET /v1/usage`: кредиты (остаток, выдача в месяц, срок) и число запросов за сутки. */
+  /** Сводка для `GET /v1/usage`: кредиты (остаток, ближайший срок сгорания) и число запросов за сутки. */
   summarizeUsage(userId: string, plan: PlanId) {
     const balance = this.credits.balance(userId, plan);
     const snapshot = this.usageStore.getFairUseSnapshot(userId);
@@ -291,13 +296,11 @@ export class AgentGateway {
       plan,
       credits: {
         balance: toCredits(balance.remainingUsd),
-        monthly: EntitlementService.getEntitlements(plan).monthlyCredits,
         stage: creditStageOf(balance.remainingUsd),
         next_expires_at: balance.nextExpiresAt,
         next_expiring: toCredits(balance.nextExpiringUsd),
       },
       requests_last_day: snapshot.requestsLastDay,
-      period_days: 30 as const,
     };
   }
 
@@ -326,13 +329,13 @@ export class AgentGateway {
     const conversationId = `api:${req.keyId}`;
     const isCancelled = (): boolean => Boolean(req.signal?.aborted);
 
-    // 1. Тариф. API агента открыт с Plus.
+    // 1. Доступ. API агента открыт тем, кто платил (покупатели кредитов и подписчики Plus и выше).
     const plan = EntitlementService.resolveEffectivePlan(req.userPlan, req.userEmail, req.isVip);
     if (planRank(plan) < planRank(AGENT_MIN_PLAN)) {
       return fail(
         403,
         'upgrade_required',
-        'API для программирования доступен с тарифа Plus. Повысьте тариф в личном кабинете.',
+        'API для программирования доступен после покупки кредитов. Купите пакет кредитов в личном кабинете.',
       );
     }
     const entitlements = EntitlementService.getEntitlements(plan);
@@ -361,7 +364,7 @@ export class AgentGateway {
         return fail(
           403,
           'upgrade_required',
-          `Модель ${requested.name} требует тарифа ${access.requiredPlan} или выше.`,
+          `Модель ${requested.name} недоступна для вашего аккаунта.`,
         );
       }
     }

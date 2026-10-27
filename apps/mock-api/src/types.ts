@@ -6,7 +6,14 @@ import type { TrybitCurrency } from './billing/trybit-currencies.js';
  * провайдера ИИ меняется источник данных, а не структуры.
  */
 
-export type PlanId = 'free' | 'gpt-pro' | 'claude-pro' | 'gemini-pro' | 'ultra' | 'plus' | 'pro';
+/**
+ * Тариф пользователя. Подписки сняты с продажи: действующие подписчики доживают оплаченный срок
+ * (plus / pro / ultra / gpt-pro / claude-pro / gemini-pro). Все остальные — `free` (пока купленных
+ * кредитов нет) или `credits` (купленные кредиты ещё остались). `credits` вычисляется на каждом
+ * запросе (services/user-plan.ts) и в профиле никогда не хранится.
+ */
+export type PlanId =
+  'free' | 'credits' | 'gpt-pro' | 'claude-pro' | 'gemini-pro' | 'ultra' | 'plus' | 'pro';
 
 export type SubscriptionStatus = 'active' | 'trialing' | 'past_due' | 'canceled';
 

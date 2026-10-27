@@ -1,3 +1,4 @@
+import { TRIAL_CREDITS } from '../services/entitlement.js';
 import { signupAndVerify } from '../testing/signup.js';
 import assert from 'node:assert/strict';
 import { createHmac } from 'node:crypto';
@@ -135,7 +136,7 @@ test('webhooks (C6): запрос без подписи, с чужой подп�
   }
 });
 
-test('cryptocloud postback (C6): без валидного токена тариф не выдаётся', async () => {
+test('cryptocloud postback (C6): без валидного токена кредиты пакета не выдаются', async () => {
   const server = await startTestServer();
 
   try {
@@ -145,7 +146,7 @@ test('cryptocloud postback (C6): без валидного токена тари
     const created = await fetch(`${server.baseUrl}/api/billing/crypto/create-invoice`, {
       method: 'POST',
       headers: auth,
-      body: JSON.stringify({ planId: 'plus', currency: 'USDT_TRC20' }),
+      body: JSON.stringify({ packId: 'credits-5', currency: 'USDT_TRC20' }),
     });
     const { invoice } = await readJson<{ invoice: { id: string } }>(created);
 
@@ -165,6 +166,11 @@ test('cryptocloud postback (C6): без валидного токена тари
 
     const sub = await currentSubscription(server.baseUrl, user.token);
     assert.equal(sub.plan, 'free');
+    const report = await readJson<{ purchased: boolean; granted: number }>(
+      await fetch(`${server.baseUrl}/api/usage/credits`, { headers: auth }),
+    );
+    assert.equal(report.purchased, false, 'купленных кредитов нет');
+    assert.equal(report.granted, TRIAL_CREDITS, 'только пробные');
   } finally {
     await server.close();
   }

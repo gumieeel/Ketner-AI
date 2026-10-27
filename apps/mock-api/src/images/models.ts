@@ -31,11 +31,12 @@ export interface ImageModel {
   request?: 'json' | 'multipart';
   /** Поддерживает ли модель размер, отличный от квадрата 1024×1024. */
   aspects: readonly ImageAspect[];
+  /** Тариф, с которого доступна модель; сейчас у всех `free`: картинки платные кредитами, а не тарифом. */
   requiredPlan: PlanId;
   /** Себестоимость картинки 1024×1024 в $ (у Cloudflare — по цене сверх бесплатного объёма). */
   costPer1MpUsd: number;
   fallbackModelId: string | null;
-  /** Суточный лимит картинок по тарифам. */
+  /** Суточный лимит картинок по уровню доступа: free — до первой покупки кредитов, ultra — после (`credits`). */
   dailyLimits: Readonly<Partial<Record<'free' | 'plus' | 'pro' | 'ultra', number>>>;
 }
 
@@ -59,10 +60,10 @@ export const IMAGE_MODELS: readonly ImageModel[] = [
     engine: '@cf/black-forest-labs/flux-2-klein-4b',
     request: 'multipart',
     aspects: ['1:1', '4:3', '3:4', '16:9', '9:16'],
-    requiredPlan: 'plus',
+    requiredPlan: 'free',
     costPer1MpUsd: 0.00115,
     fallbackModelId: 'flux-schnell',
-    dailyLimits: { plus: 20, pro: 50, ultra: 120 },
+    dailyLimits: { free: 5, plus: 20, pro: 50, ultra: 120 },
   },
   {
     id: 'flux-2-dev',
@@ -70,10 +71,10 @@ export const IMAGE_MODELS: readonly ImageModel[] = [
     provider: 'runware',
     engine: 'runware:400@1',
     aspects: ['1:1', '4:3', '3:4', '16:9', '9:16'],
-    requiredPlan: 'pro',
+    requiredPlan: 'free',
     costPer1MpUsd: 0.009,
     fallbackModelId: 'flux-2-klein',
-    dailyLimits: { pro: 100, ultra: 200 },
+    dailyLimits: { free: 5, plus: 20, pro: 100, ultra: 200 },
   },
   {
     id: 'seedream-5-flash',
@@ -82,10 +83,10 @@ export const IMAGE_MODELS: readonly ImageModel[] = [
     engine: 'bytedance:seedream@5.0-flash',
     // Допустимые размеры Seedream отличаются от общих (1K — только квадрат), поэтому пока квадрат.
     aspects: ['1:1'],
-    requiredPlan: 'pro',
+    requiredPlan: 'free',
     costPer1MpUsd: 0.019,
     fallbackModelId: 'flux-2-dev',
-    dailyLimits: { pro: 100, ultra: 200 },
+    dailyLimits: { free: 5, plus: 20, pro: 100, ultra: 200 },
   },
   {
     id: 'flux-2-pro',
@@ -93,10 +94,10 @@ export const IMAGE_MODELS: readonly ImageModel[] = [
     provider: 'runware',
     engine: 'bfl:5@1',
     aspects: ['1:1', '4:3', '3:4', '16:9', '9:16'],
-    requiredPlan: 'ultra',
+    requiredPlan: 'free',
     costPer1MpUsd: 0.045,
     fallbackModelId: 'seedream-5-flash',
-    dailyLimits: { ultra: 100 },
+    dailyLimits: { free: 5, plus: 10, pro: 30, ultra: 100 },
   },
   {
     id: 'nano-banana-2',
@@ -105,10 +106,10 @@ export const IMAGE_MODELS: readonly ImageModel[] = [
     engine: 'google:4@3',
     // Gemini принимает фиксированный набор размеров; квадрат 1024×1024 поддерживается всегда.
     aspects: ['1:1'],
-    requiredPlan: 'ultra',
+    requiredPlan: 'free',
     costPer1MpUsd: 0.069,
     fallbackModelId: 'seedream-5-flash',
-    dailyLimits: { ultra: 100 },
+    dailyLimits: { free: 5, plus: 10, pro: 30, ultra: 100 },
   },
 ];
 
@@ -129,6 +130,7 @@ export function getImageModel(id: string | undefined): ImageModel | undefined {
 
 const PLAN_KEY: Readonly<Record<string, 'free' | 'plus' | 'pro' | 'ultra'>> = {
   free: 'free',
+  credits: 'ultra',
   plus: 'plus',
   pro: 'pro',
   ultra: 'ultra',

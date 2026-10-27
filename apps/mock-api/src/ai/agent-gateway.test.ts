@@ -165,7 +165,7 @@ test('ответ с вызовом функции: события идут кл�
   assert.equal(record.status, 'success');
 });
 
-test('Free не допускается; неизвестная модель и модель выше тарифа получают понятные отказы без вызова провайдера', async () => {
+test('Free (только пробные кредиты) не допускается; неизвестная модель получает понятный отказ без вызова провайдера', async () => {
   const { gateway, calls } = setup(async () => okResult());
   const free = asFail(await gateway.run(request({ userPlan: 'free' }), events().callbacks));
   assert.equal(free.status, 403);
@@ -179,13 +179,16 @@ test('Free не допускается; неизвестная модель и �
     await gateway.run(request({ model: 'gemini-3.8-flash' }), events().callbacks),
   );
   assert.equal(legacy.code, 'model_not_found', 'старые id вне публичного каталога не принимаются');
-
-  const tooHigh = asFail(
-    await gateway.run(request({ model: 'claude-opus-5.5' }), events().callbacks),
-  );
-  assert.equal(tooHigh.status, 403);
-  assert.match(tooHigh.message, /Pro/);
   assert.equal(calls.length, 0);
+});
+
+test('покупатель кредитов получает любую публичную модель, Opus тоже: ограничивает только остаток', async () => {
+  const { gateway, calls, credits } = setup(async () => okResult({ cost: 0.01 }));
+  const req = request({ userPlan: 'credits', model: 'claude-opus-5.5' });
+  setBalance(credits, req.userId, 'credits', 5_000);
+  const out = asOk(await gateway.run(req, events().callbacks));
+  assert.equal(out.model.id, 'claude-opus-5.5');
+  assert.equal(calls.length, 1);
 });
 
 test('auto выбирает Ketner Pro и честно называет это в routing_reason', async () => {

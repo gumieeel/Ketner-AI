@@ -34,7 +34,7 @@ test('images: без входа — 401, с входом — возможнос�
     body.models.map((m) => [m.id, m.locked, m.dailyLimit]),
     [
       ['flux-schnell', false, 5],
-      ['flux-2-klein', true, 0],
+      ['flux-2-klein', false, 5],
     ],
   );
 

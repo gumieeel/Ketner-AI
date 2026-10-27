@@ -59,12 +59,17 @@ export function resolveChatIdentity(input: ChatIdentityInput): ChatIdentity {
   const email = sessionUser.email || input.storedUser?.email || undefined;
   const isVip = isVipUser(sessionUser) || isVipUser(input.storedUser) || isVipEmail(email);
 
-  const plan = resolveBillingPlan({
+  const billingPlan = resolveBillingPlan({
     storedPlan: input.storedUser?.plan ?? sessionUser.plan,
     subscription: input.subscription,
     isVip,
     now: input.now,
   }).plan;
+  // Купленные кредиты открывают уровень `credits`. Его вычисляет middleware/auth.ts по журналу
+  // кредитов и кладёт в сессию (req.user); в профиле он не хранится, поэтому берём его из сессии, но
+  // только для тех, у кого платной подписки нет (подписчик остаётся на своём тарифе).
+  const plan: PlanId =
+    billingPlan === 'free' && sessionUser.plan === 'credits' ? 'credits' : billingPlan;
 
   return { ok: true, userId: sessionUser.id, email, plan, isVip, anonymous: false };
 }

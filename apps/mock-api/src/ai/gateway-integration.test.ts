@@ -285,29 +285,21 @@ test('кредиты списываются по реальной цене от�
   assert.equal(calls[2].model, 'nvidia/nemotron-3-ultra-550b-a55b:free');
 });
 
-test('права доступа проверяются по запрошенной модели до любой замены', async () => {
+test('модели открыты на любом уровне: Free с пробными кредитами и подписчики получают запрошенную модель', async () => {
   const usage = newUsage();
   const calls: Call[] = [];
   const gateway = makeGateway(fakeOpenRouter(okStream('ок'), calls), usage);
 
-  const free = await run(
-    gateway,
-    request({ userId: 'u-free', userPlan: 'free', modelId: 'gpt-6.1-sol' }),
-  );
-  assert.equal(free.error?.code, 'upgrade_required');
-  const plus = await run(
-    gateway,
-    request({ userId: 'u-plus', userPlan: 'plus', modelId: 'claude-opus-5.5' }),
-  );
-  assert.equal(plus.error?.code, 'upgrade_required');
-  assert.match(plus.error?.message ?? '', /Pro/);
-  assert.equal(calls.length, 0, 'запрещённая модель не вызывается и не подменяется молча');
-
-  const legacy = await run(
-    gateway,
-    request({ userId: 'u-legacy', userPlan: 'gpt-pro', modelId: 'claude-opus-5.5' }),
-  );
-  assertNoError(legacy);
+  for (const [userId, userPlan, modelId] of [
+    ['u-free', 'free', 'gpt-6.1-sol'],
+    ['u-plus', 'plus', 'claude-opus-5.5'],
+    ['u-credits', 'credits', 'claude-opus-5.5'],
+    ['u-legacy', 'gpt-pro', 'claude-opus-5.5'],
+  ] as const) {
+    const result = await run(gateway, request({ userId, userPlan, modelId }));
+    assertNoError(result);
+  }
+  assert.equal(calls.length, 4, 'каждая модель вызвана, подмены по тарифу нет');
 });
 
 test('Auto: Free — бесплатная Nemotron, Plus — рабочая модель, премиум-модели Plus Auto не выбирает', async () => {
@@ -757,7 +749,7 @@ test('Pro: модели Pro размышляют на medium, Grok и Terra вс
   assert.deepEqual(calls[3].reasoning, { effort: 'medium' });
 });
 
-test('режим Max: на Ultra xhigh, на Pro игнорируется', async () => {
+test('режим Max: xhigh на любом уровне доступа, стандартный режим — medium', async () => {
   const usage = newUsage();
   const calls: Call[] = [];
   const gateway = makeGateway(fakeOpenRouter(okStream('ок'), calls), usage);
@@ -785,19 +777,22 @@ test('режим Max: на Ultra xhigh, на Pro игнорируется', asyn
   assert.deepEqual(calls[1].reasoning, { effort: 'medium' });
   assert.equal(ultraStd.done?.reasoningMode, 'standard');
 
-  const proMax = await run(
-    gateway,
-    request({
-      userId: 'u-pm',
-      userPlan: 'pro',
-      modelId: 'claude-sonnet-5.5',
-      reasoningMode: 'max',
-    }),
-  );
-  assertNoError(proMax);
-  assert.deepEqual(calls[2].reasoning, { effort: 'medium' }, 'Max на Pro не действует');
-  assert.equal(proMax.done?.reasoningMode, 'standard');
-  assert.doesNotMatch(proMax.done?.routingReason ?? '', /Max mode/);
+  // Max открыт и тем, кто с пробными кредитами, и покупателям кредитов, и прежним подписчикам Pro.
+  for (const [i, plan] of (['pro', 'credits', 'free'] as const).entries()) {
+    const max = await run(
+      gateway,
+      request({
+        userId: `u-max-${plan}`,
+        userPlan: plan,
+        modelId: 'claude-sonnet-5.5',
+        reasoningMode: 'max',
+      }),
+    );
+    assertNoError(max);
+    assert.deepEqual(calls[2 + i].reasoning, { effort: 'xhigh' }, `Max на ${plan} действует`);
+    assert.equal(max.done?.reasoningMode, 'max');
+    assert.match(max.done?.routingReason ?? '', /Max mode/);
+  }
 });
 
 test('кредитов хватает не на всё: Opus → Sonnet → Ketner Pro по мере того, как кредиты убывают', async () => {

@@ -12,10 +12,12 @@ import {
   CreditService,
   LOW_CREDITS_RATIO,
   PERIOD_DAYS,
+  TRIAL_DAYS,
   toCredits,
   toUsd,
 } from './credits.js';
-import { PLAN_ENTITLEMENTS, cryptoBonusCredits, planCreditsUsd } from './entitlement.js';
+import { PLAN_ENTITLEMENTS, TRIAL_CREDITS, cryptoBonusCredits } from './entitlement.js';
+import { CREDIT_PACKS, CREDIT_PACK_VALID_DAYS, packCryptoBonusCredits } from './pricing.js';
 
 const NOW = Date.parse('2026-10-01T12:00:00Z');
 const newUsageStore = () =>
@@ -23,23 +25,44 @@ const newUsageStore = () =>
 const newService = (legacy?: DocStore<LegacyPremiumCredit>) =>
   new CreditService(new CreditStore(), legacy);
 
-test('Free получает месячный грант сам и не получает второй, пока первый не истёк', () => {
+test('Free получает пробные кредиты один раз и не получает новых, когда они кончились или истекли', () => {
   const credits = newService();
   const balance = credits.balance('u1', 'free', NOW);
-  assert.equal(toCredits(balance.remainingUsd), PLAN_ENTITLEMENTS.free.monthlyCredits);
+  assert.equal(toCredits(balance.remainingUsd), TRIAL_CREDITS);
   assert.equal(
     balance.nextExpiresAt,
-    new Date(NOW + PERIOD_DAYS * DAY_MS).toISOString(),
-    'грант живёт 30 дней',
+    new Date(NOW + TRIAL_DAYS * DAY_MS).toISOString(),
+    'пробные кредиты живут 30 дней',
   );
+  const [trial] = credits.grantsOf('u1');
+  assert.equal(trial?.id, 'trial:u1');
+  assert.equal(trial?.kind, 'free');
 
-  // Потратил всё — до конца периода новых кредитов нет.
-  credits.charge('u1', planCreditsUsd('free'), NOW);
+  // Потратил всё — новых кредитов нет, ни завтра, ни через месяц.
+  credits.charge('u1', toUsd(TRIAL_CREDITS), NOW);
   assert.equal(credits.balance('u1', 'free', NOW + DAY_MS).remainingUsd, 0);
   assert.equal(credits.balance('u1', 'free', NOW + 29 * DAY_MS).remainingUsd, 0);
-  // Через 30 дней — новый грант.
-  const next = credits.balance('u1', 'free', NOW + 30 * DAY_MS + 1000);
-  assert.equal(toCredits(next.remainingUsd), PLAN_ENTITLEMENTS.free.monthlyCredits);
+  assert.equal(credits.balance('u1', 'free', NOW + 31 * DAY_MS).remainingUsd, 0);
+  assert.equal(credits.grantsOf('u1').length, 1, 'грант один на пользователя');
+
+  // Не потратил — через 30 дней кредиты сгорают и тоже не возобновляются.
+  const idle = newService();
+  idle.balance('u2', 'free', NOW);
+  assert.equal(idle.balance('u2', 'free', NOW + 31 * DAY_MS).remainingUsd, 0);
+});
+
+test('пробные кредиты получает и покупатель, а подписчик прежней системы — нет', () => {
+  const credits = newService();
+  credits.balance('buyer', 'credits', NOW);
+  assert.deepEqual(
+    credits.grantsOf('buyer').map((g) => g.id),
+    ['trial:buyer'],
+  );
+  credits.balance('sub', 'plus', NOW);
+  assert.deepEqual(
+    credits.grantsOf('sub').map((g) => g.kind),
+    ['auto'],
+  );
 });
 
 test('платный тариф без платежа (VIP, выдан админом) получает грант auto и обновляет его после срока', () => {
@@ -204,6 +227,66 @@ test('остатки пакетов старой системы переходя
   assert.equal(credits.grantsOf('u1').filter((g) => g.kind === 'pack').length, 1);
 });
 
+test('пакет: кредиты на год, повторная доставка платежа не дублирует', () => {
+  const credits = newService();
+  const pack = CREDIT_PACKS[0]!;
+  const first = credits.grantForPack({ id: 'stars:1', userId: 'u1', method: 'stars' }, pack, NOW);
+  assert.equal(first.bonus, null, 'звёзды бонуса не дают');
+  assert.equal(first.pack.kind, 'pack');
+  assert.equal(toCredits(first.pack.amountUsd), pack.credits);
+  assert.equal(first.pack.expiresAt, new Date(NOW + CREDIT_PACK_VALID_DAYS * DAY_MS).toISOString());
+  credits.grantForPack({ id: 'stars:1', userId: 'u1', method: 'stars' }, pack, NOW + 1000);
+  assert.equal(credits.grantsOf('u1').length, 1);
+});
+
+test('пакет, оплаченный криптой, получает бонус +15% отдельным грантом на тот же срок', () => {
+  const credits = newService();
+  for (const pack of CREDIT_PACKS) {
+    const { pack: main, bonus } = credits.grantForPack(
+      { id: `crypto:${pack.id}`, userId: 'u1', method: 'crypto' },
+      pack,
+      NOW,
+    );
+    assert.ok(bonus, pack.id);
+    assert.equal(bonus.id, `crypto:${pack.id}:bonus`);
+    assert.equal(bonus.kind, 'bonus');
+    assert.equal(bonus.paymentId, main.paymentId, 'возврат отзывает оба гранта');
+    assert.equal(bonus.expiresAt, main.expiresAt);
+    assert.equal(toCredits(bonus.amountUsd), packCryptoBonusCredits(pack));
+    const share = packCryptoBonusCredits(pack) / pack.credits;
+    assert.ok(share > 0.149 && share < 0.151, `${pack.id}: бонус ${share}`);
+  }
+});
+
+test('купленные кредиты открывают полный доступ, пока они есть; пробные и истёкшие — нет', () => {
+  const credits = newService();
+  const pack = CREDIT_PACKS[0]!;
+  credits.balance('u1', 'free', NOW);
+  assert.equal(credits.hasPurchased('u1', NOW), false, 'пробные кредиты доступа не открывают');
+
+  credits.grantForPack({ id: 'stars:1', userId: 'u1', method: 'stars' }, pack, NOW);
+  assert.equal(credits.hasPurchased('u1', NOW), true);
+  assert.equal(credits.hasPurchased('someone', NOW), false);
+
+  // Пробные тратятся первыми (сгорают раньше), покупные остаются.
+  credits.charge('u1', toUsd(TRIAL_CREDITS + 100), NOW);
+  assert.equal(credits.hasPurchased('u1', NOW), true);
+  assert.equal(toCredits(credits.balance('u1', 'credits', NOW).remainingUsd), pack.credits - 100);
+
+  // Потратил всё — доступ возвращается к Free-уровню.
+  credits.charge('u1', toUsd(pack.credits), NOW);
+  assert.equal(credits.hasPurchased('u1', NOW), false);
+
+  // Через год кредиты сгорают.
+  credits.grantForPack({ id: 'stars:2', userId: 'u2', method: 'stars' }, pack, NOW);
+  assert.equal(credits.hasPurchased('u2', NOW + 364 * DAY_MS), true);
+  assert.equal(credits.hasPurchased('u2', NOW + 366 * DAY_MS), false);
+
+  // Возврат отзывает кредиты и доступ.
+  credits.store.revokeByPayment('stars:2');
+  assert.equal(credits.hasPurchased('u2', NOW), false);
+});
+
 test('ручная выдача: кредиты с заданным сроком', () => {
   const credits = newService();
   const grant = credits.grantManually(
@@ -219,15 +302,18 @@ test('ручная выдача: кредиты с заданным сроком
 test('отчёт: остаток в кредитах, ступень, цены моделей и бесплатная модель', () => {
   const credits = newService();
   const usageStore = newUsageStore();
-  const full = buildCreditsReport('u1', 'pro', { credits, usageStore }, undefined, NOW);
-  assert.equal(full.plan, 'pro');
-  assert.equal(full.balance, PLAN_ENTITLEMENTS.pro.monthlyCredits);
-  assert.equal(full.monthly, PLAN_ENTITLEMENTS.pro.monthlyCredits);
+  const pack = CREDIT_PACKS[1]!;
+  credits.grantForPack({ id: 'stars:1', userId: 'u1', method: 'stars' }, pack, NOW);
+  const full = buildCreditsReport('u1', 'credits', { credits, usageStore }, undefined, NOW);
+  assert.equal(full.plan, 'credits');
+  // Пробные кредиты выдаются при первом обращении к балансу вместе с пакетом.
+  assert.equal(full.balance, pack.credits + TRIAL_CREDITS);
+  assert.equal(full.granted, pack.credits + TRIAL_CREDITS);
+  assert.equal(full.trialCredits, TRIAL_CREDITS);
+  assert.equal(full.purchased, true);
   assert.equal(full.stage, 'normal');
   assert.equal(full.low, false);
-  assert.equal(full.grants.length, 1);
-  assert.equal(full.grants[0]?.kind, 'auto');
-  assert.equal(full.refreshAt, new Date(NOW + PERIOD_DAYS * DAY_MS).toISOString());
+  assert.deepEqual(full.grants.map((g) => g.kind).sort(), ['free', 'pack']);
   assert.deepEqual(full.freeModel && Object.keys(full.freeModel).sort(), ['id', 'name']);
 
   const mini = full.models.find((m) => m.id === 'ketner-mini');
@@ -245,24 +331,25 @@ test('отчёт: остаток в кредитах, ступень, цены �
   );
 
   // Кредиты на исходе.
-  const monthly = PLAN_ENTITLEMENTS.pro.monthlyCredits;
-  credits.charge('u1', toUsd(monthly - Math.floor(monthly * LOW_CREDITS_RATIO) + 100), NOW);
-  const low = buildCreditsReport('u1', 'pro', { credits, usageStore }, undefined, NOW);
+  const granted = pack.credits + TRIAL_CREDITS;
+  credits.charge('u1', toUsd(granted - Math.floor(granted * LOW_CREDITS_RATIO) + 100), NOW);
+  const low = buildCreditsReport('u1', 'credits', { credits, usageStore }, undefined, NOW);
   assert.equal(low.stage, 'normal');
   assert.equal(low.low, true);
 
-  // Кредиты кончились: отвечает бесплатная модель, платные не по карману.
-  credits.charge('u1', 1000, NOW);
-  const empty = buildCreditsReport('u1', 'pro', { credits, usageStore }, undefined, NOW);
+  // Кредиты кончились: отвечает бесплатная модель, платные не по карману, доступ вернулся к Free.
+  credits.charge('u1', 100_000, NOW);
+  const empty = buildCreditsReport('u1', 'free', { credits, usageStore }, undefined, NOW);
   assert.equal(empty.balance, 0);
   assert.equal(empty.stage, 'exhausted');
   assert.equal(empty.low, false);
+  assert.equal(empty.purchased, false);
   assert.equal(empty.grants.length, 0);
   assert.ok(empty.models.filter((m) => !m.free).every((m) => !m.affordable && m.remaining === 0));
   assert.ok(empty.models.filter((m) => m.free).every((m) => m.affordable));
 });
 
-test('отчёт: режим Max дороже стандартного, Free не видит платные модели старших тарифов', () => {
+test('отчёт: режим Max дороже стандартного и открыт всем; у Free все платные модели в списке', () => {
   const credits = newService();
   const usageStore = newUsageStore();
   const standard = buildCreditsReport('u1', 'ultra', { credits, usageStore }, 'standard', NOW);
@@ -272,25 +359,24 @@ test('отчёт: режим Max дороже стандартного, Free н�
     report.models.find((m) => m.id === 'claude-opus-5.5')?.requestCredits ?? 0;
   assert.ok(price(max) > price(standard));
 
-  const freePlan = buildCreditsReport('f1', 'free', { credits, usageStore }, undefined, NOW);
-  assert.equal(
-    freePlan.models.find((m) => m.id === 'claude-opus-5.5'),
-    undefined,
-  );
+  // Free: пробные 200 кредитов, все модели доступны, Max тоже.
+  const freeMax = buildCreditsReport('f1', 'free', { credits, usageStore }, 'max', NOW);
+  assert.equal(freeMax.reasoningMode, 'max');
+  assert.equal(freeMax.balance, TRIAL_CREDITS);
+  assert.equal(freeMax.purchased, false);
+  const opus = freeMax.models.find((m) => m.id === 'claude-opus-5.5');
+  assert.ok(opus, 'Opus в списке');
 });
 
-test('отчёт: когда придут новые кредиты — конец периода, а не срок переноса остатка', () => {
+test('пробных кредитов хватает на один запрос GPT-6 Astra, но не на два', () => {
   const credits = newService();
   const usageStore = newUsageStore();
-  const renewsAt = new Date(NOW + 12 * DAY_MS).toISOString();
-  credits.grantForPayment({ id: 'pay_1', userId: 'u1', method: 'card' }, 'plus', renewsAt, NOW);
-  const report = buildCreditsReport('u1', 'plus', { credits, usageStore }, undefined, NOW);
-  assert.equal(report.refreshAt, renewsAt);
-  assert.equal(report.nextExpiresAt, new Date(NOW + (12 + CARRY_DAYS) * DAY_MS).toISOString());
-
-  // Кредиты потрачены, а дата продления известна.
-  credits.charge('u1', 1000, NOW);
-  const spent = buildCreditsReport('u1', 'plus', { credits, usageStore }, undefined, NOW);
-  assert.equal(spent.stage, 'exhausted');
-  assert.equal(spent.refreshAt, renewsAt);
+  const report = buildCreditsReport('f1', 'free', { credits, usageStore }, undefined, NOW);
+  const astra = report.models.find((m) => m.id === 'gpt-6-astra');
+  assert.ok(astra, 'GPT-6 Astra в списке Free');
+  assert.equal(astra.affordable, true, 'один запрос по карману');
+  assert.ok(
+    (astra.remaining ?? 0) >= 1 && (astra.remaining ?? 0) <= 2,
+    `ровно один-два запроса: ${astra.remaining}`,
+  );
 });

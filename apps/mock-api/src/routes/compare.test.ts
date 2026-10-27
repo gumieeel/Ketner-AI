@@ -19,11 +19,7 @@ interface Account {
   headers: Record<string, string>;
 }
 
-async function account(
-  baseUrl: string,
-  email: string,
-  plan: 'plus' | 'pro' | 'ultra' | null,
-): Promise<Account> {
+async function account(baseUrl: string, email: string, plan: 'credits' | null): Promise<Account> {
   const registered = await signupAndVerify(baseUrl, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -35,7 +31,7 @@ async function account(
     const checkout = await fetch(`${baseUrl}/api/billing/checkout`, {
       method: 'POST',
       headers,
-      body: JSON.stringify({ planId: plan }),
+      body: JSON.stringify({ packId: 'credits-5' }),
     });
     assert.equal(checkout.status, 200);
   }
@@ -75,13 +71,14 @@ function payloads<T>(events: SseEvent[], name: string): T[] {
   return events.filter((event) => event.event === name).map((event) => JSON.parse(event.data) as T);
 }
 
-test('политика: число моделей зависит от тарифа, форма списка проверяется', () => {
-  assert.equal(maxCompareModels('free'), 0);
+test('политика: число моделей зависит от уровня доступа (сравнение открыто всем), форма списка проверяется', () => {
+  assert.equal(maxCompareModels('free'), 2, 'Free сравнивает две модели');
   assert.equal(maxCompareModels('plus'), 2);
   assert.equal(maxCompareModels('pro'), 3);
   assert.equal(maxCompareModels('gpt-pro'), 3, 'старые тарифы считаются как Pro');
   assert.equal(maxCompareModels('ultra'), 4);
-  assert.equal(maxCompareModels(undefined), 0);
+  assert.equal(maxCompareModels('credits'), 4, 'после покупки кредитов — до четырёх');
+  assert.equal(maxCompareModels(undefined), 2);
 
   assert.deepEqual(parseCompareModelIds(['a', ' b ', 'a']), { ok: true, ids: ['a', 'b'] });
   assert.equal(parseCompareModelIds('a').ok, false);
@@ -143,7 +140,7 @@ test('голоса: победы и участие считаются по мо�
   assert.deepEqual(stats.models[1], { modelId: 'b', comparisons: 3, wins: 0, winRatePct: 0 });
 });
 
-test('сравнение: без входа 401, на Free 403, лишние модели и неизвестная модель 400', async () => {
+test('сравнение: без входа 401, Free сравнивает две модели, лишние и неизвестная модель 400', async () => {
   const server = await startTestServer();
   try {
     const anonymousConversation = await createConversation(server.baseUrl, 'Гость');
@@ -157,22 +154,17 @@ test('сравнение: без входа 401, на Free 403, лишние м�
     });
     assert.equal(guest.status, 401);
 
+    // Free: сравнение открыто, две модели за раз
     const free = await account(server.baseUrl, 'free-compare@example.com', null);
     const freeConversation = await newConversation(server.baseUrl, free);
     const freeResponse = await compare(server.baseUrl, free, freeConversation, [
       'ketner-mini',
       'claude-haiku-5.5',
     ]);
-    assert.equal(freeResponse.status, 403);
-    assert.equal(
-      ((await freeResponse.json()) as { error: { code: string } }).error.code,
-      'compare_plan_required',
-    );
+    assert.equal(freeResponse.status, 200);
+    await readSseEvents(freeResponse);
 
-    const plus = await account(server.baseUrl, 'plus-compare@example.com', 'plus');
-    const plusConversation = await newConversation(server.baseUrl, plus);
-
-    const tooMany = await compare(server.baseUrl, plus, plusConversation, [
+    const tooMany = await compare(server.baseUrl, free, freeConversation, [
       'ketner-mini',
       'claude-haiku-5.5',
       'deepseek-v4.1-flash',
@@ -182,6 +174,9 @@ test('сравнение: без входа 401, на Free 403, лишние м�
       ((await tooMany.json()) as { error: { code: string } }).error.code,
       'too_many_models',
     );
+
+    const plus = await account(server.baseUrl, 'plus-compare@example.com', 'credits');
+    const plusConversation = await newConversation(server.baseUrl, plus);
 
     const unknown = await compare(server.baseUrl, plus, plusConversation, [
       'ketner-mini',
@@ -200,11 +195,8 @@ test('сравнение: без входа 401, на Free 403, лишние м�
       'ketner-mini',
       'claude-opus-5.5',
     ]);
-    assert.equal(premium.status, 403, 'Opus недоступен на Plus');
-    assert.equal(
-      ((await premium.json()) as { error: { code: string } }).error.code,
-      'upgrade_required',
-    );
+    assert.equal(premium.status, 200, 'Opus открыт: ограничивают только кредиты');
+    await readSseEvents(premium);
 
     const missing = await compare(server.baseUrl, plus, 'нет-диалога', [
       'ketner-mini',
@@ -219,7 +211,7 @@ test('сравнение: без входа 401, на Free 403, лишние м�
 test('сравнение: каждая колонка отвечает своей моделью, первый ответ сохраняется в диалог', async () => {
   const server = await startTestServer();
   try {
-    const plus = await account(server.baseUrl, 'plus-stream@example.com', 'plus');
+    const plus = await account(server.baseUrl, 'plus-stream@example.com', 'credits');
     const conversationId = await newConversation(server.baseUrl, plus);
 
     const response = await compare(server.baseUrl, plus, conversationId, [
@@ -280,8 +272,8 @@ test('сравнение: каждая колонка отвечает свое�
 test('выбор лучшего ответа заменяет сохранённый ответ и записывает голос; чужой и повторный выбор', async () => {
   const server = await startTestServer();
   try {
-    const plus = await account(server.baseUrl, 'plus-pick@example.com', 'plus');
-    const other = await account(server.baseUrl, 'other-pick@example.com', 'plus');
+    const plus = await account(server.baseUrl, 'plus-pick@example.com', 'credits');
+    const other = await account(server.baseUrl, 'other-pick@example.com', 'credits');
     const conversationId = await newConversation(server.baseUrl, plus);
 
     const events = await readSseEvents(
@@ -366,11 +358,11 @@ test('выбор лучшего ответа заменяет сохранённ
 test('строгий режим: если на модель не хватает кредитов, колонка получает ошибку, а не подмену', async () => {
   const server = await startTestServer();
   try {
-    const plus = await account(server.baseUrl, 'plus-strict@example.com', 'plus');
+    const plus = await account(server.baseUrl, 'plus-strict@example.com', 'credits');
     const conversationId = await newConversation(server.baseUrl, plus);
 
     // GPT-6.1 Sol стоит ≈ 35 кредитов за запрос, Ketner Mini — меньше двух.
-    setBalance(server.credits, plus.userId, 'plus', 10);
+    setBalance(server.credits, plus.userId, 'credits', 10);
 
     const events = await readSseEvents(
       await compare(server.baseUrl, plus, conversationId, ['gpt-6.1-sol', 'ketner-mini']),
@@ -397,7 +389,7 @@ test('строгий режим: если на модель не хватает 
 test('GET /api/chat/compare/stats доступен только администратору', async () => {
   const server = await startTestServer();
   try {
-    const plus = await account(server.baseUrl, 'plus-stats@example.com', 'plus');
+    const plus = await account(server.baseUrl, 'plus-stats@example.com', 'credits');
     const response = await fetch(`${server.baseUrl}/api/chat/compare/stats`, {
       headers: plus.headers,
     });

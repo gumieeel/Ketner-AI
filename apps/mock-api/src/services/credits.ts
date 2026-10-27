@@ -3,10 +3,10 @@
  *
  * 1 кредит = $0.001 реальной себестоимости запроса (то, что провайдер берёт с нас). Запрос списывает
  * ровно свою стоимость, поэтому короткий вопрос к Ketner Mini стоит около 1 кредита, а большой запрос
- * к Claude Opus — сотни. Тариф даёт кредиты на 30 дней (`monthlyCredits`); оплаченные кредиты живут
- * весь период и ещё один (остаток переносится), на списании первыми идут те, что сгорают раньше.
- * Free получает свой месячный грант сам; тариф без платежа (VIP, выданный администратором, переход со
- * старой системы) — грант на 30 дней, который обновляется, пока тариф действует.
+ * к Claude Opus — сотни. Кредиты покупают пакетами (services/pricing.ts → CREDIT_PACKS), они действуют
+ * год; на списании первыми идут те, что сгорают раньше. Каждому пользователю один раз выдаются
+ * пробные кредиты (`TRIAL_CREDITS`). Подписчикам прежней системы тариф по-прежнему выдаёт кредиты на
+ * 30 дней (грант `plan` / `auto`), пока подписка действует.
  *
  * Здесь лежит всё, что нужно шлюзу, агенту, картинкам и интерфейсу: начисления, остаток, списание и
  * отчёт «сколько запросов осталось».
@@ -17,6 +17,7 @@ import { modelRegistry, type ModelRegistry } from '../ai/model-registry.js';
 import { effectiveReasoningMode } from '../ai/reasoning-policy.js';
 import type { DocStore } from '../store/doc-store.js';
 import {
+  ACCESS_GRANT_KINDS,
   CreditStore,
   DAY_MS,
   type CreditBalance,
@@ -27,6 +28,7 @@ import type { UsageStore } from '../store/usage-store.js';
 import type { PlanId } from '../types.js';
 import {
   creditStageOf,
+  EXHAUSTED_BELOW_USD,
   FREE_CHAT_MODEL_ID,
   isFreeModel,
   requestPriceUsd,
@@ -35,27 +37,32 @@ import {
 import {
   CREDITS_PER_USD,
   cryptoBonusCredits,
-  EntitlementService,
   planAllowsModel,
   planCreditsUsd,
   toCredits,
   toUsd,
+  TRIAL_CREDITS,
 } from './entitlement.js';
+import { CREDIT_PACK_VALID_DAYS, packCryptoBonusCredits, type CreditPack } from './pricing.js';
 
-/** Длина оплаченного периода и срок переноса остатка, дней. */
+/** Длина оплаченного периода подписки и срок переноса остатка, дней (прежние подписки). */
 export const PERIOD_DAYS = 30;
 export const CARRY_DAYS = 30;
-/** С этой доли месячной выдачи интерфейс предупреждает, что кредиты на исходе. */
+/** Сколько дней действуют пробные кредиты с момента выдачи. */
+export const TRIAL_DAYS = 30;
+/** С этой доли выданных кредитов интерфейс предупреждает, что кредиты на исходе. */
 export const LOW_CREDITS_RATIO = 0.15;
 
-export { CREDITS_PER_USD, planCreditsUsd, toCredits, toUsd };
+export { CREDITS_PER_USD, planCreditsUsd, toCredits, toUsd, TRIAL_CREDITS };
 
 /** Что шлюзу, агенту и картинкам нужно от кредитов. */
 export interface CreditLedger {
-  /** Остаток пользователя; выдаёт месячный грант Free и грант тарифа без платежа, если пора. */
+  /** Остаток пользователя; выдаёт пробные кредиты и грант подписки без платежа, если пора. */
   balance(userId: string, plan: PlanId, now?: number): CreditBalance;
   /** Списать до `amountUsd`; возвращает, сколько реально списано. */
   charge(userId: string, amountUsd: number, now?: number): number;
+  /** Остались ли купленные кредиты: пока да, у пользователя полный уровень доступа. */
+  hasPurchased?(userId: string, now?: number): boolean;
 }
 
 export class CreditService implements CreditLedger {
@@ -75,43 +82,51 @@ export class CreditService implements CreditLedger {
     return this.store.debit(userId, amountUsd, now);
   }
 
+  hasPurchased(userId: string, now = Date.now()): boolean {
+    return this.store.hasPurchased(userId, now);
+  }
+
   /** Все гранты пользователя (для кабинета и администратора). */
   grantsOf(userId: string): CreditGrant[] {
     return this.store.allOf(userId);
   }
 
   /**
-   * Свой грант тарифа, когда платежа за него нет: Free — раз в 30 дней; платный тариф без живого
-   * гранта тарифа (VIP, выдан администратором, подписчик на момент перехода) — на 30 дней.
-   * Потраченный грант не возобновляется раньше срока: срок отсчитывается от выдачи.
+   * Свои гранты, когда платежа за них нет. Free и покупатели кредитов получают пробные кредиты один
+   * раз (идентификатор гранта привязан к пользователю, повторно он не создаётся; срок — 30 дней с
+   * выдачи). Подписчик прежней системы без живого гранта подписки (VIP, выдан администратором,
+   * подписчик на момент перехода) получает грант на 30 дней, который обновляется, пока подписка
+   * действует. Потраченный грант не возобновляется раньше срока: срок отсчитывается от выдачи.
    */
   private ensureGrants(userId: string, plan: PlanId, now: number): void {
     this.migrateLegacy(userId, now);
-    const live = this.store.liveOf(userId, now);
-    const day = Math.floor(now / DAY_MS);
-    if (plan === 'free') {
-      if (live.some((grant) => grant.kind === 'free')) return;
+    if (plan === 'free' || plan === 'credits') {
       this.store.grant(
         {
-          id: `free:${userId}:${day}`,
+          id: `trial:${userId}`,
           userId,
           kind: 'free',
           planId: 'free',
-          amountUsd: planCreditsUsd('free'),
-          expiresAt: new Date(now + PERIOD_DAYS * DAY_MS).toISOString(),
+          amountUsd: toUsd(TRIAL_CREDITS),
+          expiresAt: new Date(now + TRIAL_DAYS * DAY_MS).toISOString(),
+          note: 'trial',
         },
         now,
       );
       return;
     }
+    const monthly = planCreditsUsd(plan);
+    if (!(monthly > 0)) return;
+    const live = this.store.liveOf(userId, now);
     if (live.some((grant) => grant.kind === 'plan' || grant.kind === 'auto')) return;
+    const day = Math.floor(now / DAY_MS);
     this.store.grant(
       {
         id: `auto:${userId}:${plan}:${day}`,
         userId,
         kind: 'auto',
         planId: plan,
-        amountUsd: planCreditsUsd(plan),
+        amountUsd: monthly,
         expiresAt: new Date(now + PERIOD_DAYS * DAY_MS).toISOString(),
       },
       now,
@@ -187,6 +202,47 @@ export class CreditService implements CreditLedger {
     return { plan: main, bonus };
   }
 
+  /**
+   * Кредиты за купленный пакет: основной грант на год и, при оплате криптой, бонусный грант на тот же
+   * срок. Повторная доставка платежа ничего не создаёт: id гранта совпадает с id платежа.
+   */
+  grantForPack(
+    payment: { id: string; userId: string; method: string },
+    pack: CreditPack,
+    now = Date.now(),
+  ): { pack: CreditGrant; bonus: CreditGrant | null } {
+    const expiresAt = new Date(now + CREDIT_PACK_VALID_DAYS * DAY_MS).toISOString();
+    const main = this.store.grant(
+      {
+        id: payment.id,
+        userId: payment.userId,
+        kind: 'pack',
+        paymentId: payment.id,
+        amountUsd: toUsd(pack.credits),
+        expiresAt,
+        note: pack.id,
+      },
+      now,
+    ).grant;
+    const bonusCredits = payment.method === 'crypto' ? packCryptoBonusCredits(pack) : 0;
+    const bonus =
+      bonusCredits > 0
+        ? this.store.grant(
+            {
+              id: `${payment.id}:bonus`,
+              userId: payment.userId,
+              kind: 'bonus',
+              paymentId: payment.id,
+              amountUsd: toUsd(bonusCredits),
+              expiresAt,
+              note: pack.id,
+            },
+            now,
+          ).grant
+        : null;
+    return { pack: main, bonus };
+  }
+
   /** Ручная выдача кредитов администратором (`days` — срок действия). */
   grantManually(
     input: { userId: string; credits: number; days: number; note?: string },
@@ -235,16 +291,18 @@ export interface CreditsReport {
   reasoningMode: ReasoningMode;
   /** Остаток, кредиты. */
   balance: number;
-  /** Сколько кредитов тариф выдаёт в месяц. */
-  monthly: number;
+  /** Сколько кредитов выдано по действующим грантам (знаменатель шкалы остатка). */
+  granted: number;
+  /** Пробные кредиты, которые получает каждый пользователь один раз. */
+  trialCredits: number;
+  /** Есть ли неистраченные купленные кредиты (открывают полный уровень доступа). */
+  purchased: boolean;
   stage: CreditStage;
-  /** Кредиты на исходе (меньше 15% месячной выдачи, но ещё есть). */
+  /** Кредиты на исходе (меньше 15% выданных, но ещё есть). */
   low: boolean;
   /** Когда сгорает ближайший грант и сколько кредитов в нём. */
   nextExpiresAt: string | null;
   nextExpiring: number;
-  /** Когда тариф выдаст новые кредиты (конец текущего периода); null, если выдача не запланирована. */
-  refreshAt: string | null;
   /** Действующие гранты: откуда кредиты и когда они сгорают. */
   grants: Array<{
     id: string;
@@ -281,7 +339,6 @@ export function buildCreditsReport(
   const registry = deps.registry ?? modelRegistry;
   const mode = effectiveReasoningMode(requestedMode, plan);
   const balance = deps.credits.balance(userId, plan, now);
-  const monthly = EntitlementService.getEntitlements(plan).monthlyCredits;
 
   const models = registry
     .getAll()
@@ -314,21 +371,25 @@ export function buildCreditsReport(
   const freeModel = registry.get(FREE_CHAT_MODEL_ID);
   const stage = creditStageOf(balance.remainingUsd);
   const grants = deps.credits.grantsOf(userId);
+  const live = grants.filter(
+    (grant) => grant.status === 'active' && Date.parse(grant.expiresAt) > now,
+  );
+  const grantedUsd = live.reduce((sum, grant) => sum + grant.amountUsd, 0);
+  const active = live.filter((grant) => grant.remainingUsd > 0);
   return {
     plan,
     reasoningMode: mode,
     balance: toCredits(balance.remainingUsd),
-    monthly,
+    granted: toCredits(grantedUsd),
+    trialCredits: TRIAL_CREDITS,
+    purchased: active.some(
+      (grant) => ACCESS_GRANT_KINDS.has(grant.kind) && grant.remainingUsd >= EXHAUSTED_BELOW_USD,
+    ),
     stage,
-    low: stage === 'normal' && balance.remainingUsd < toUsd(monthly) * LOW_CREDITS_RATIO,
+    low: stage === 'normal' && balance.remainingUsd < grantedUsd * LOW_CREDITS_RATIO,
     nextExpiresAt: balance.nextExpiresAt,
     nextExpiring: toCredits(balance.nextExpiringUsd),
-    refreshAt: refreshAtOf(grants, now),
-    grants: grants
-      .filter(
-        (grant) =>
-          grant.status === 'active' && grant.remainingUsd > 0 && Date.parse(grant.expiresAt) > now,
-      )
+    grants: active
       .sort((a, b) => a.expiresAt.localeCompare(b.expiresAt))
       .map((grant) => ({
         id: grant.id,
@@ -340,22 +401,6 @@ export function buildCreditsReport(
     freeModel: freeModel?.enabled ? { id: freeModel.id, name: freeModel.name } : null,
     models,
   };
-}
-
-/**
- * Конец текущего периода тарифа — когда придут новые кредиты. У Free и гранта без платежа это срок
- * гранта, у оплаченного тарифа — срок минус месяц переноса (платёж продлевает период).
- */
-function refreshAtOf(grants: CreditGrant[], now: number): string | null {
-  const ends = grants
-    .filter((grant) => grant.status === 'active')
-    .flatMap((grant) => {
-      if (grant.kind === 'free' || grant.kind === 'auto') return [Date.parse(grant.expiresAt)];
-      if (grant.kind === 'plan') return [Date.parse(grant.expiresAt) - CARRY_DAYS * DAY_MS];
-      return [];
-    })
-    .filter((end) => Number.isFinite(end) && end > now);
-  return ends.length > 0 ? new Date(Math.min(...ends)).toISOString() : null;
 }
 
 /** Цена типичного запроса к модели в кредитах (для оценок вне отчёта). */

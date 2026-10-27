@@ -133,11 +133,11 @@ export interface ModelRegistryEntry {
   maxOutputTokens: number;
   /** Ценообразование. */
   pricing: ModelPricing;
-  /** Требуемый план (null — доступна всем). */
+  /** Требуемый план (null — доступна всем; сейчас у всех моделей null: платные модели тратят кредиты). */
   requiredPlan: PlanId | null;
   /** Сколько последних сообщений отправлять (обратная совместимость). */
   contextMessages: number;
-  /** Является ли модель платной (обратная совместимость). */
+  /** Устаревший признак «платная модель» (обратная совместимость): всегда false, доступ ограничивают кредиты. */
   isPro: boolean;
   /** Fallback модель при недоступности. */
   fallbackModelId: string | null;

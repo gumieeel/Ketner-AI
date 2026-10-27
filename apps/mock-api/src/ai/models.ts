@@ -21,11 +21,11 @@ function priceFields(
 export const DEFAULT_MODEL_ID = 'auto';
 
 /**
- * Публичный список моделей для переключателя в интерфейсе: Free и Plus по возрастанию цены, затем
- * модели Pro и Ultra. Выключенные в реестре модели (например, Gemini 4 Argon, пока её нет в
+ * Публичный список моделей для переключателя в интерфейсе: по возрастанию цены. Все модели доступны
+ * всем: платные тратят кредиты. Выключенные в реестре модели (например, Gemini 4 Argon, пока её нет в
  * OpenRouter) в каталог не попадают.
  *
- * Состав задаётся здесь, а отображаемое имя, доступность по тарифу (isPro / requiredPlan) и размер
+ * Состав задаётся здесь, а отображаемое имя, доступность (requiredPlan, сейчас у всех моделей пусто) и размер
  * контекста берутся из реестра моделей. Второго источника правды нет: раньше этот файл вёл свой
  * каталог, и выбранная модель вне него молча превращалась в `auto`.
  */
@@ -107,7 +107,7 @@ export const MODEL_CATALOG: ModelCatalog = {
 /** Проверка доступности модели по текущему тарифу пользователя (единое правило в entitlement). */
 export function canAccessModel(userPlan: PlanId | undefined, model: ModelInfo): boolean {
   if (model.id === 'auto') return true;
-  return planAllowsModel(userPlan, model.isPro ? (model.requiredPlan ?? 'plus') : null);
+  return planAllowsModel(userPlan, model.requiredPlan ?? null);
 }
 
 /**

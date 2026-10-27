@@ -11,12 +11,13 @@ import {
 } from '../store/index.js';
 import type { PlanId, PlanItem, Subscription, TelegramStarsInvoice, User } from '../types.js';
 import {
-  findPremiumPack,
+  CREDIT_PACK_VALID_DAYS,
+  findCreditPack,
   planPriceRub,
   planPriceUsd,
-  PREMIUM_PACK_DAYS,
+  type CreditPack,
 } from '../services/pricing.js';
-import { planMinStars } from '../services/margin.js';
+import { packMinStars, planMinStars } from '../services/margin.js';
 import { toCredits } from '../services/credits.js';
 import {
   BillingError,
@@ -49,10 +50,20 @@ export function planTitle(planId: string): string {
   return PLAN_TITLES[planId] ?? planId.toUpperCase();
 }
 
-/** За что платёж в сообщениях: тариф или пакет кредитов. */
+/** Срок действия кредитов пакета словами: «год» или «N дней». */
+function packValidity(): string {
+  return CREDIT_PACK_VALID_DAYS === 365 ? 'год' : `${CREDIT_PACK_VALID_DAYS} дн.`;
+}
+
+/** Кредиты числом с пробелами между тысячами: «2 300». */
+export function formatCredits(credits: number): string {
+  return credits.toLocaleString('ru-RU').replace(/\u00a0/g, ' ');
+}
+
+/** За что платёж в сообщениях: пакет кредитов или (у прежних платежей) подписка. */
 export function paymentTitle(payment: Pick<PaymentRecord, 'planId' | 'packId'>): string {
-  const pack = payment.packId ? findPremiumPack(payment.packId) : undefined;
-  return pack ? `+${toCredits(pack.quotaUsd)} кредитов` : planTitle(payment.planId);
+  const pack = payment.packId ? findCreditPack(payment.packId) : undefined;
+  return pack ? `${formatCredits(pack.credits)} кредитов` : planTitle(payment.planId);
 }
 
 /** Сумма в долларах в звёздах по текущему курсу Telegram Stars (см. stars-rate.ts). */
@@ -71,6 +82,14 @@ export function calculateStars(
  */
 export function planStars(planId: PlanId, rates: StarsRateService = starsRateService): number {
   return Math.max(rates.quote(planPriceUsd(planId)), planMinStars(planId));
+}
+
+/**
+ * Цена пакета в звёздах: цена пакета по официальному курсу Telegram ($5 = 260 ⭐), но не ниже точки
+ * безубыточности (если в STARS_USD_RATE задан слишком дорогой курс, худший случай пакета ушёл бы в минус).
+ */
+export function packStars(pack: CreditPack, rates: StarsRateService = starsRateService): number {
+  return Math.max(rates.quote(pack.priceUsd), packMinStars(pack));
 }
 
 export function getPlanItem(planId: string): PlanItem | undefined {
@@ -159,7 +178,7 @@ export interface TelegramUpdate {
 export interface StarsPayload {
   /** Тариф счёта (для пакета премиум-квоты не передаётся). */
   planId?: PlanId;
-  /** Пакет кредитов вместо тарифа (services/pricing.ts → PREMIUM_PACKS). */
+  /** Пакет кредитов вместо тарифа (services/pricing.ts → CREDIT_PACKS). */
   packId?: string;
   stars: number;
   invoiceId: string;
@@ -193,7 +212,7 @@ export function decodePayload(raw: string): StarsPayload | null {
     return null;
   if (planId.startsWith('pack:')) {
     const packId = planId.slice('pack:'.length);
-    if (!findPremiumPack(packId) || flag === 'r') return null;
+    if (!findCreditPack(packId) || flag === 'r') return null;
     return { packId, stars: amount, invoiceId, userId };
   }
   if (!(STARS_PLANS as readonly string[]).includes(planId)) return null;
@@ -324,18 +343,18 @@ export class TelegramBotService implements TelegramPaymentsPort {
       await this.callApi('setMyCommands', {
         commands: [
           { command: 'start', description: 'Открыть кабинет Ketner' },
-          { command: 'status', description: 'Моя подписка' },
+          { command: 'status', description: 'Мой баланс кредитов' },
           { command: 'paysupport', description: 'Помощь с оплатой и возвраты' },
           { command: 'terms', description: 'Условия оплаты и возврата' },
         ],
       });
       await this.callApi('setMyShortDescription', {
         short_description:
-          'Ketner AI: подписка, оплата звёздами, возвраты и вход на сайт без пароля.',
+          'Ketner AI: кредиты, оплата звёздами, возвраты и вход на сайт без пароля.',
       });
       await this.callApi('setMyDescription', {
         description:
-          'Официальный бот Ketner AI.\n\nНажмите «Начать», затем «Открыть Ketner»: там подписка, оплата звёздами, автопродление, история платежей и возвраты. Аккаунт создаётся или привязывается в одно касание.',
+          'Официальный бот Ketner AI.\n\nНажмите «Начать», затем «Открыть Ketner»: там баланс кредитов, покупка пакетов звёздами, история платежей и возвраты. Аккаунт создаётся или привязывается в одно касание.',
       });
       await this.callApi('setChatMenuButton', {
         menu_button: { type: 'web_app', text: 'Кабинет', web_app: { url: this.miniAppUrl } },
@@ -362,8 +381,26 @@ export class TelegramBotService implements TelegramPaymentsPort {
       }
       this.rates.start();
       this.startReminders();
+      void this.stopLegacyAutoRenewals();
     } catch (error) {
       console.error('⚠️ [TelegramBot] Ошибка инициализации бота:', error);
+    }
+  }
+
+  /**
+   * Подписки сняты с продажи: автопродление звёздами у прежних подписчиков отключается (оплаченный
+   * срок доживает). Если Telegram не принял часть подписок, это повторится при следующем запуске.
+   */
+  async stopLegacyAutoRenewals(): Promise<void> {
+    try {
+      const { canceled, failed } = await this.billing.cancelAllStarsAutoRenew();
+      if (canceled > 0 || failed > 0) {
+        console.log(
+          `🔕 [TelegramBot] Автопродление звёздами отключено: ${canceled}, не получилось: ${failed}`,
+        );
+      }
+    } catch (error) {
+      console.error('⚠️ [TelegramBot] Не удалось отключить автопродление:', error);
     }
   }
 
@@ -745,15 +782,28 @@ export class TelegramBotService implements TelegramPaymentsPort {
     );
   }
 
+  /** Счёт на пакет кредитов по текущему курсу. Сумма фиксируется в счёте и не меняется при смене курса. */
+  createStarsPackInvoice(userId: string, pack: CreditPack): TelegramStarsInvoice {
+    return this.deps.invoiceStore.createTelegramStarsInvoice(
+      userId,
+      'free',
+      Math.round(pack.priceUsd * 99),
+      packStars(pack, this.rates),
+      this.username,
+      pack.id,
+    );
+  }
+
   private invoiceParams(
     invoice: TelegramStarsInvoice,
     recurring: boolean,
   ): Record<string, unknown> {
-    const pack = invoice.packId ? findPremiumPack(invoice.packId) : undefined;
+    const pack = invoice.packId ? findCreditPack(invoice.packId) : undefined;
     if (pack) {
+      const label = `${formatCredits(pack.credits)} кредитов`;
       return {
-        title: `Ketner AI · +${toCredits(pack.quotaUsd)} кредитов`,
-        description: `Пакет кредитов поверх подписки: +${toCredits(pack.quotaUsd)} кредитов на ${PREMIUM_PACK_DAYS} дней. Один пул на чат, картинки и Ketner Code.`,
+        title: `Ketner AI · ${label}`,
+        description: `Пакет кредитов: ${label}, действуют ${packValidity()}. Один пул на чат, картинки и Ketner Code, все модели открыты. Платите только за то, что тратите.`,
         payload: encodePayload({
           packId: pack.id,
           stars: invoice.starsAmount,
@@ -761,7 +811,7 @@ export class TelegramBotService implements TelegramPaymentsPort {
           userId: invoice.userId,
         }),
         currency: 'XTR',
-        prices: [{ label: `+${toCredits(pack.quotaUsd)} кредитов`, amount: invoice.starsAmount }],
+        prices: [{ label, amount: invoice.starsAmount }],
       };
     }
     const plan = getPlanItem(invoice.planId);
@@ -935,7 +985,7 @@ export class TelegramBotService implements TelegramPaymentsPort {
     return { status: 'activated', subscription: result.subscription };
   }
 
-  /** Оплата пакета кредитов звёздами: кредиты на 30 дней, подписка не меняется. */
+  /** Оплата пакета кредитов звёздами: кредиты на год, подписка (если есть) не меняется. */
   private async handlePackPayment(
     chatId: number | string,
     telegramUserId: number,
@@ -965,7 +1015,7 @@ export class TelegramBotService implements TelegramPaymentsPort {
       [
         '🎉 <b>Оплата прошла!</b>',
         '',
-        `Начислили <b>+${toCredits(result.credit.amountUsd)}</b> кредитов до <b>${formatDate(result.credit.expiresAt)}</b>. Они тратятся вместе с кредитами тарифа, раньше сгорают те, у которых срок короче.`,
+        `Начислили <b>${formatCredits(Math.round(result.credit.amountUsd * 1000))}</b> кредитов, они действуют до <b>${formatDate(result.credit.expiresAt)}</b>. Все модели, картинки и Ketner Code открыты. Раньше тратятся кредиты с более близким сроком.`,
       ].join('\n'),
       {
         reply_markup: {
@@ -983,15 +1033,18 @@ export class TelegramBotService implements TelegramPaymentsPort {
   }
 
   private statusLine(user: User): string {
-    if (user.isVip) return 'Тариф <b>Ultra</b> (VIP) без срока.';
     const sub = this.deps.subscriptionStore.get(user.id);
     const end = sub.renewsAt ? Date.parse(sub.renewsAt) : NaN;
-    if (sub.plan === 'free' || !Number.isFinite(end) || end <= Date.now())
-      return 'Тариф <b>Free</b>, платная подписка не активна.';
-    const auto = this.billing.starsSubscriptionOf(user.id);
-    const autoText =
-      auto?.status === 'active' && auto.planId === sub.plan ? ', автопродление включено' : '';
-    return `Тариф <b>${planTitle(sub.plan)}</b> до <b>${formatDate(sub.renewsAt)}</b>${autoText}.`;
+    const running = sub.plan !== 'free' && Number.isFinite(end) && end > Date.now();
+    const plan: PlanId = user.isVip ? 'ultra' : running ? sub.plan : 'free';
+    const balance = toCredits(this.billing.credits.balance(user.id, plan).remainingUsd);
+    const lines = [`Баланс: <b>${formatCredits(balance)}</b> кредитов.`];
+    if (user.isVip) lines.push('Статус VIP: кредиты обновляются сами.');
+    else if (running)
+      lines.push(
+        `Подписка <b>${planTitle(sub.plan)}</b> действует до <b>${formatDate(sub.renewsAt)}</b>. Продлить её нельзя: дальше кредиты покупаются пакетами.`,
+      );
+    return lines.join('\n');
   }
 
   async sendStart(chatId: number | string, from?: TelegramFrom): Promise<void> {
@@ -1003,12 +1056,12 @@ export class TelegramBotService implements TelegramPaymentsPort {
           '',
           this.statusLine(user),
           '',
-          'Подписка, оплата, возвраты и вход на сайт — в кабинете:',
+          'Покупка кредитов, платежи, возвраты и вход на сайт — в кабинете:',
         ].join('\n')
       : [
           `👋 ${name ? `${name}, д` : 'Д'}обро пожаловать в Ketner AI!`,
           '',
-          'Все сильные модели в одной подписке. Чтобы управлять подпиской здесь, привяжите аккаунт ketner.org: откройте кабинет, введите почту и код из письма.',
+          'Все сильные модели в одном месте, платите только за то, что тратите. Чтобы пополнять кредиты здесь, привяжите аккаунт ketner.org: откройте кабинет, введите почту и код из письма.',
           '',
           'Ещё нет аккаунта? Зарегистрируйтесь на ketner.org — по почте или через Google.',
         ].join('\n');
@@ -1025,9 +1078,9 @@ export class TelegramBotService implements TelegramPaymentsPort {
     }
     await this.sendMessage(
       chatId,
-      ['📊 <b>Ваша подписка</b>', '', this.statusLine(user)].join('\n'),
+      ['📊 <b>Ваши кредиты</b>', '', this.statusLine(user)].join('\n'),
       {
-        reply_markup: { inline_keyboard: [[this.openAppButton('📱 Управлять подпиской')]] },
+        reply_markup: { inline_keyboard: [[this.openAppButton('⭐ Купить кредиты', 'plans')]] },
       },
     );
   }
@@ -1035,10 +1088,10 @@ export class TelegramBotService implements TelegramPaymentsPort {
   private refundPolicyText(): string {
     const hours = Math.round(REFUND_POLICY.windowMs / 3600_000);
     return [
-      `• Вернуть оплату можно в течение ${hours} часов, если после неё вы не сделали ни одного запроса к моделям.`,
-      '• Если моделями уже пользовались или прошло больше 24 часов, оплата не возвращается.',
+      `• Вернуть оплату можно в течение ${hours} часов, пока ни один кредит пакета не потрачен.`,
+      '• Если кредиты из пакета уже тратились или прошло больше 24 часов, оплата не возвращается. Пробные кредиты расходуются первыми и возврату не мешают.',
       '• Звёзды возвращаются сразу, кнопкой в кабинете. Криптовалюту возвращаем на ваш кошелёк по заявке, обычно в течение суток.',
-      '• После возврата дни этой оплаты снимаются с подписки, автопродление отключается.',
+      '• Пакет кредитов возвращается, пока из него не потрачен ни один кредит. После возврата кредиты пакета (и бонус за криптовалюту) снимаются.',
     ].join('\n');
   }
 
@@ -1071,9 +1124,9 @@ export class TelegramBotService implements TelegramPaymentsPort {
       [
         '📄 <b>Условия оплаты</b>',
         '',
-        '• Подписка даёт доступ к моделям тарифа на 30 дней с момента оплаты.',
-        '• Продление того же тарифа добавляет 30 дней к сроку. При смене тарифа неиспользованные дни пересчитываются в дни нового.',
-        '• Автопродление звёздами списывает оплату раз в 30 дней; отключить можно в кабинете или в настройках Telegram.',
+        '• Кредиты покупаются пакетами ($5, $10, $25, $50, $100): подписок и автопродления нет, платите только за то, что тратите.',
+        '• Кредиты действуют год с момента оплаты. Чем больше пакет, тем дешевле тысяча кредитов. При оплате криптовалютой к пакету добавляется бонус +15% кредитов.',
+        '• Все модели, картинки и Ketner Code открыты для всех: платные ответы списывают кредиты по реальной стоимости запроса. Когда кредиты кончились, отвечает бесплатная модель.',
         '',
         '<b>Возвраты</b>',
         this.refundPolicyText(),
@@ -1133,7 +1186,7 @@ export class TelegramBotService implements TelegramPaymentsPort {
         await this.sendMessage(
           chatId,
           payment.packId
-            ? `↩️ Возврат ${payment.amount} ⭐ за ${paymentTitle(payment)} оформлен, кредиты пакета сняты.`
+            ? `↩️ Возврат ${payment.amount} ⭐ за пакет ${paymentTitle(payment)} оформлен, кредиты пакета сняты.`
             : `↩️ Возврат ${payment.amount} ⭐ за ${planTitle(payment.planId)} оформлен, дни этой оплаты сняты с подписки.`,
         );
       }
@@ -1176,7 +1229,7 @@ export class TelegramBotService implements TelegramPaymentsPort {
 
     await this.sendMessage(
       chatId,
-      'Всё управление — в кабинете: подписка, оплата, возвраты и вход на сайт.',
+      'Всё управление — в кабинете: кредиты, оплата, возвраты и вход на сайт.',
       {
         reply_markup: { inline_keyboard: [[this.openAppButton()]] },
       },
@@ -1199,9 +1252,13 @@ export class TelegramBotService implements TelegramPaymentsPort {
     if (data.startsWith('buy:')) {
       // Кнопки из старых напоминаний: оплата теперь в кабинете.
       await this.answerCallbackQuery(cb.id);
-      await this.sendMessage(chatId, 'Продление и смена тарифа — в кабинете:', {
-        reply_markup: { inline_keyboard: [[this.openAppButton('⭐ Выбрать тариф', 'plans')]] },
-      });
+      await this.sendMessage(
+        chatId,
+        'Подписок больше нет — кредиты покупаются пакетами в кабинете:',
+        {
+          reply_markup: { inline_keyboard: [[this.openAppButton('⭐ Купить кредиты', 'plans')]] },
+        },
+      );
       return { handled: true, action: 'buy_redirect' };
     }
     if (data === 'status') {
@@ -1385,16 +1442,16 @@ export class TelegramBotService implements TelegramPaymentsPort {
     if (!invoice || invoice.status === 'paid') {
       await this.sendMessage(
         chatId,
-        invoice ? 'Этот счёт уже оплачен ✅' : 'Счёт не найден или устарел. Выберите тариф заново.',
+        invoice ? 'Этот счёт уже оплачен ✅' : 'Счёт не найден или устарел. Выберите пакет заново.',
         {
-          reply_markup: { inline_keyboard: [[this.openAppButton('⭐ Тарифы', 'plans')]] },
+          reply_markup: { inline_keyboard: [[this.openAppButton('⭐ Кредиты', 'plans')]] },
         },
       );
       return { handled: true, action: invoice ? 'deep_link_paid' : 'deep_link_missing' };
     }
-    const pack = invoice.packId ? findPremiumPack(invoice.packId) : undefined;
+    const pack = invoice.packId ? findCreditPack(invoice.packId) : undefined;
     const item = pack
-      ? `+${toCredits(pack.quotaUsd)} кредитов на ${PREMIUM_PACK_DAYS} дней`
+      ? `${formatCredits(pack.credits)} кредитов`
       : `Ketner AI ${planTitle(invoice.planId)} · 30 дней`;
     const account = this.deps.userStore.findById(invoice.userId);
     await this.sendMessage(
@@ -1631,14 +1688,14 @@ export class TelegramBotService implements TelegramPaymentsPort {
       const text = autoActive
         ? `🔄 ${formatDate(sub.renewsAt)} автоматически продлим <b>${planTitle(sub.plan)}</b> за ${auto!.stars} ⭐. Отключить автопродление можно в кабинете.`
         : kind === 'ended'
-          ? `⏰ Подписка <b>${planTitle(sub.plan)}</b> закончилась. Продлите её, чтобы вернуть доступ к моделям тарифа.`
-          : `⏰ Подписка <b>${planTitle(sub.plan)}</b> закончится ${kind === '1d' ? '<b>завтра</b>' : `<b>${formatDate(sub.renewsAt)}</b>`}. Продлите заранее — оставшиеся дни сохранятся.`;
+          ? `⏰ Подписка <b>${planTitle(sub.plan)}</b> закончилась. Подписок больше нет: все модели открыты, кредиты покупаются пакетами. Неизрасходованные кредиты подписки сохранятся ещё на 30 дней.`
+          : `⏰ Подписка <b>${planTitle(sub.plan)}</b> закончится ${kind === '1d' ? '<b>завтра</b>' : `<b>${formatDate(sub.renewsAt)}</b>`}. Продлить её нельзя: дальше кредиты покупаются пакетами, неизрасходованный остаток подписки сохранится ещё на 30 дней.`;
       await this.sendMessage(user.telegramChatId, text, {
         reply_markup: {
           inline_keyboard: [
             [
               this.openAppButton(
-                autoActive ? '📱 Кабинет' : `⭐ Продлить ${planTitle(sub.plan)}`,
+                autoActive ? '📱 Кабинет' : '⭐ Купить кредиты',
                 autoActive ? undefined : 'plans',
               ),
             ],

@@ -12,16 +12,27 @@ import { LEGACY_PLANS, PLANS } from '../routes/billing.js';
 import { planStars } from '../telegram/bot.js';
 import { StarsRateService } from '../telegram/stars-rate.js';
 import type { PlanId } from '../types.js';
-import { planStarsWorstCaseCostUsd, planWorstCaseCostUsd } from './margin.js';
 import {
+  packListStars,
+  packMinStars,
+  packProfitUsd,
+  planStarsWorstCaseCostUsd,
+  planWorstCaseCostUsd,
+  trialBreakEvenConversion,
+} from './margin.js';
+import {
+  CREDIT_PACKS,
   FREE_TIER_SUBSIDY_USD,
   OPENROUTER_TOPUP_FEE,
   PAYMENT_NET_SHARE,
   PLAN_PRICE_USD,
   STARS_OFFICIAL_USD_PER_STAR,
   STARS_PAYOUT_USD,
+  packCryptoBonusCredits,
+  packPricePerThousand,
   starsNetUsd,
   TAX_RATE,
+  TRIAL_COST_USD,
 } from './pricing.js';
 
 test('CurrencyService: конвертация валют и динамическое обновление курса', () => {
@@ -222,4 +233,76 @@ test('Бонус за оплату криптой: дополнительные 
     // И с учётом Free-тира крипта с бонусом в плюсе.
     assert.ok(cryptoMargin - FREE_SUBSIDY_PER_PAYER > 0, `${plan.id}: убыток`);
   }
+});
+
+test('Экономика пакетов: ни один пакет не уходит в минус ни в одном канале', () => {
+  for (const pack of CREDIT_PACKS) {
+    for (const channel of ['stars', 'crypto', 'card'] as const) {
+      const profit = packProfitUsd(pack, channel);
+      assert.ok(
+        profit > 0,
+        `${pack.id} / ${channel}: прибыль $${profit.toFixed(2)} не положительна`,
+      );
+    }
+    // Звёзды считаются по официальному курсу, но не дешевле точки безубыточности.
+    assert.ok(
+      packListStars(pack) >= packMinStars(pack),
+      `${pack.id}: цена в звёздах ниже точки безубыточности`,
+    );
+  }
+});
+
+test('Экономика пакетов: маржа в звёздах 10–15% на малых пакетах, на $100 — около нуля по решению владельца', () => {
+  const margin = (pack: (typeof CREDIT_PACKS)[number]) =>
+    packProfitUsd(pack, 'stars') / pack.priceUsd;
+  for (const pack of CREDIT_PACKS.filter((item) => item.priceUsd <= 50)) {
+    assert.ok(margin(pack) >= 0.1, `${pack.id}: маржа ${(margin(pack) * 100).toFixed(1)}% < 10%`);
+  }
+  const big = CREDIT_PACKS.find((item) => item.priceUsd === 100)!;
+  assert.ok(
+    margin(big) > 0 && margin(big) < 0.02,
+    `$100: маржа ${(margin(big) * 100).toFixed(2)}%`,
+  );
+  assert.ok(packProfitUsd(big, 'stars') < 1, '$100 в звёздах почти не приносит прибыли');
+});
+
+test('Экономика пакетов: скидка за объём — цена тысячи кредитов падает, пакет $100 на 20% дешевле пакета $5', () => {
+  const prices = CREDIT_PACKS.map(packPricePerThousand);
+  for (let i = 1; i < prices.length; i += 1) {
+    assert.ok(prices[i]! < prices[i - 1]!, `${CREDIT_PACKS[i]!.id}: цена за тысячу не падает`);
+  }
+  assert.ok(Math.abs(1 - prices[4]! / prices[0]! - 0.2) < 0.005);
+});
+
+test('Бонус за крипту по пакетам: +15%, и пакет с бонусом всё равно прибылен', () => {
+  for (const pack of CREDIT_PACKS) {
+    const bonus = packCryptoBonusCredits(pack);
+    assert.ok(Math.abs(bonus / pack.credits - 0.15) < 0.001, `${pack.id}: бонус ${bonus}`);
+    assert.equal(bonus % 5, 0, 'бонус округлён до 5 кредитов');
+    assert.ok(packProfitUsd(pack, 'crypto') > 0);
+  }
+});
+
+test('Пробные кредиты: себестоимость $0.21 на пользователя; окупаемость по каналам и пакетам', () => {
+  assert.ok(Math.abs(TRIAL_COST_USD - 0.211) < 0.001);
+  // Криптой и картой любой пакет окупает пробные кредиты, если их покупает 12% зарегистрированных.
+  for (const pack of CREDIT_PACKS) {
+    for (const channel of ['crypto', 'card'] as const) {
+      const conversion = trialBreakEvenConversion(pack, channel);
+      assert.ok(
+        conversion < 0.12,
+        `${pack.id} / ${channel}: нужно ${(conversion * 100).toFixed(1)}% покупателей`,
+      );
+    }
+  }
+  // Звёзды: чем крупнее пакет (до $50), тем меньше покупателей нужно. Пакет $5 в звёздах окупает
+  // пробные кредиты, только если его покупает больше четверти зарегистрированных.
+  const stars = CREDIT_PACKS.filter((item) => item.priceUsd <= 50).map((pack) =>
+    trialBreakEvenConversion(pack, 'stars'),
+  );
+  for (let i = 1; i < stars.length; i += 1) assert.ok(stars[i]! < stars[i - 1]!);
+  assert.ok(stars[0]! > 0.2 && stars[0]! < 0.3, `$5: ${(stars[0]! * 100).toFixed(1)}%`);
+  // Пакет $100 в звёздах почти без прибыли: пробные кредиты им не окупить — известный риск скидки 20%.
+  const big = CREDIT_PACKS.find((item) => item.priceUsd === 100)!;
+  assert.ok(trialBreakEvenConversion(big, 'stars') > 0.3);
 });

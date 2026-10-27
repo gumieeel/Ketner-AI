@@ -26,7 +26,7 @@ export function createApiKeysRouter({ apiKeyStore }: ApiKeysRouterDeps): Router 
         response,
         403,
         'upgrade_required',
-        'API-ключи доступны с тарифа Plus. Повысьте тариф, чтобы подключить CLI и редакторы.',
+        'API-ключи доступны после покупки кредитов. Купите пакет кредитов, чтобы подключить CLI и редакторы.',
       );
       return;
     }

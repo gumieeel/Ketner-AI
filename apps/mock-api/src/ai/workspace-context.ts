@@ -29,6 +29,7 @@ const PLAN_WORKSPACE_CHARS: Record<string, number> = {
   plus: 48_000,
   pro: 100_000,
   ultra: 200_000,
+  credits: 200_000,
   'gpt-pro': 100_000,
   'claude-pro': 100_000,
   'gemini-pro': 100_000,

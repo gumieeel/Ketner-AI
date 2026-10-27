@@ -320,6 +320,7 @@ export function createApiRouter(deps: ApiDeps): Router {
       deps.betterAuth,
       activeSubscriptionStore,
       deps.revokedTokenStore,
+      activeBilling.credits,
     ),
   );
 

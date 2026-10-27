@@ -15,11 +15,12 @@ export const COMPARE_MIN_MODELS = 2;
 export const COMPARE_ABSOLUTE_MAX_MODELS = 4;
 
 /**
- * Сколько моделей можно сравнивать за один запрос, по рангу тарифа (Free, Plus, Pro, Ultra).
- * Число не больше параллельных запросов тарифа (2 / 4 / 8), чтобы сравнение не упиралось в
- * `concurrency_limit`; у Free сравнения нет: все его запросы идут на одну бесплатную модель.
+ * Сколько моделей можно сравнивать за один запрос, по рангу уровня доступа (Free, Plus, Pro,
+ * Ultra и покупатели кредитов). Сравнение доступно всем: до первой покупки — две модели (параллельных
+ * запросов у Free один, второй ждёт очереди), после — до четырёх. Каждая модель стоит кредитов по
+ * реальной цене, так что число моделей — это ещё и расход.
  */
-const MAX_MODELS_BY_RANK: readonly number[] = [0, 2, 3, 4];
+const MAX_MODELS_BY_RANK: readonly number[] = [2, 2, 3, 4];
 
 export function maxCompareModels(plan: string | null | undefined): number {
   const max = MAX_MODELS_BY_RANK[planRank(plan)] ?? 0;

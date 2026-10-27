@@ -272,7 +272,8 @@ test('admin: GET /api/admin/users — список, пагинация, филь
         };
         credits: {
           balance: number;
-          monthly: number;
+          granted: number;
+          purchased: boolean;
           spentMonth: number;
           nextExpiresAt: string | null;
           usedPct: number;
@@ -298,12 +299,17 @@ test('admin: GET /api/admin/users — список, пагинация, филь
     assert.equal(demoCard.usage.costThisMonth, 0);
     assert.equal(demoCard.creditsUsedPct, 0);
     assert.equal(demoCard.credits.spentMonth, 0);
-    assert.equal(demoCard.credits.monthly, demoCard.limits.monthlyCredits);
+    assert.equal(
+      demoCard.credits.granted,
+      0,
+      'грантов у нового пользователя ещё нет: читаем без выдачи',
+    );
+    assert.equal(demoCard.credits.purchased, false);
     assert.equal(typeof demoCard.remaining.tokensToday, 'number');
     assert.ok(!Number.isNaN(demoCard.creditsUsedPct));
     const bobCard = listBody.users.find((u) => u.email === 'bob@example.com');
     assert.equal(bobCard?.limits.monthlyCredits, 11_000, 'Pro: 11 000 кредитов в месяц');
-    assert.equal(bobCard?.credits.monthly, 11_000);
+    assert.equal(bobCard?.credits.purchased, false, 'Pro без пакета: купленных кредитов нет');
 
     // 4. Поиск по подстроке `search=alice`
     const searchRes = await fetch(`${server.baseUrl}/api/admin/users?search=alice`, { headers });
@@ -388,7 +394,7 @@ test('admin: GET /api/admin/users/:id — детальная карточка п
         tokensLastHour: number | null;
         tokensToday: number | null;
       };
-      credits: { balance: number; monthly: number; grants: unknown[] };
+      credits: { balance: number; granted: number; purchased: boolean; grants: unknown[] };
       creditsUsedPct: number;
       profitability: {
         userId: string;

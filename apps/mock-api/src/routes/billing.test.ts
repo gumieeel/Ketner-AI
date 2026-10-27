@@ -3,7 +3,10 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { config } from '../config.js';
 import { TRYBIT_CURRENCIES } from '../billing/trybit-currencies.js';
+import { TRIAL_CREDITS } from '../services/entitlement.js';
+import { CREDIT_PACKS } from '../services/pricing.js';
 import { readJson, startTestServer } from '../testing/server.js';
+import type { CreditsReport } from '../services/credits.js';
 import type { AuthSession, PlanItem, Subscription } from '../types.js';
 
 test('billing: каталог тарифов GET /api/plans', async (t) => {
@@ -24,7 +27,43 @@ test('billing: каталог тарифов GET /api/plans', async (t) => {
   assert.equal(plans[3]?.priceMonthly, 49);
 });
 
-test('billing: получение подписки и оформление checkout', async (t) => {
+test('billing: каталог пакетов кредитов GET /api/packs — публичный, цены и бонус за крипту', async (t) => {
+  const server = await startTestServer();
+  t.after(() => server.close());
+
+  const response = await fetch(`${server.baseUrl}/api/packs`);
+  assert.equal(response.status, 200);
+  const body = await readJson<{
+    packs: Array<{
+      id: string;
+      priceUsd: number;
+      credits: number;
+      stars: number;
+      cryptoBonusCredits: number;
+      pricePerThousandUsd: number;
+      discountPct: number;
+    }>;
+    trialCredits: number;
+    cryptoBonusRate: number;
+    validDays: number;
+  }>(response);
+  assert.deepEqual(
+    body.packs.map((p) => [p.id, p.priceUsd, p.credits]),
+    CREDIT_PACKS.map((p) => [p.id, p.priceUsd, p.credits]),
+  );
+  assert.equal(body.trialCredits, TRIAL_CREDITS);
+  assert.equal(body.cryptoBonusRate, 0.15);
+  assert.equal(body.validDays, 365);
+  assert.equal(body.packs[0]?.discountPct, 0);
+  assert.ok(
+    body.packs.every((p, i) => i === 0 || p.discountPct > body.packs[i - 1]!.discountPct),
+    'чем больше пакет, тем выше скидка',
+  );
+  assert.equal(body.packs[4]?.discountPct, 20, 'пакет $100 — скидка 20% к цене пакета $5');
+  assert.ok(body.packs.every((p) => p.stars > 0 && p.cryptoBonusCredits > 0));
+});
+
+test('billing: подписок больше нет, оформление пакета кредитов даёт кредиты и открывает полный доступ', async (t) => {
   const server = await startTestServer();
   t.after(() => server.close());
 
@@ -36,63 +75,51 @@ test('billing: получение подписки и оформление check
   });
   const { token, user } = await readJson<AuthSession>(regRes);
   assert.equal(user.plan, 'free');
+  const headers = { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` };
+  const checkout = (body: unknown) =>
+    fetch(`${server.baseUrl}/api/billing/checkout`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify(body),
+    });
+  const report = async () =>
+    readJson<CreditsReport>(await fetch(`${server.baseUrl}/api/usage/credits`, { headers }));
 
   // Проверяем текущую подписку — по умолчанию free
-  const initialSubRes = await fetch(`${server.baseUrl}/api/billing/subscription`, {
-    headers: { Authorization: `Bearer ${token}` },
-  });
+  const initialSubRes = await fetch(`${server.baseUrl}/api/billing/subscription`, { headers });
   assert.equal(initialSubRes.status, 200);
   const initialSub = await readJson<{ subscription: Subscription }>(initialSubRes);
   assert.equal(initialSub.subscription.plan, 'free');
   assert.equal(initialSub.subscription.status, 'active');
+  const before = await report();
+  assert.equal(before.purchased, false);
+  assert.equal(before.balance, TRIAL_CREDITS);
 
-  // Попытка оформить некорректный план
-  const badCheckout = await fetch(`${server.baseUrl}/api/billing/checkout`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${token}`,
-    },
-    body: JSON.stringify({ planId: 'invalid-nonexistent-plan' }),
-  });
-  assert.equal(badCheckout.status, 400);
+  // Подписки сняты с продажи: любой тариф — 410, неизвестный пакет — 400
+  for (const planId of ['plus', 'pro', 'ultra']) {
+    const res = await checkout({ planId });
+    assert.equal(res.status, 410, planId);
+    assert.equal(
+      (await readJson<{ error: { code: string } }>(res)).error.code,
+      'subscriptions_discontinued',
+    );
+  }
+  assert.equal((await checkout({ packId: 'credits-7' })).status, 400);
+  assert.equal((await report()).purchased, false, 'ничего не выдано');
 
-  // Оформляем Plus / GPT Pro
-  const checkoutRes = await fetch(`${server.baseUrl}/api/billing/checkout`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${token}`,
-    },
-    body: JSON.stringify({ planId: 'plus' }),
-  });
+  // Оформляем пакет $10
+  const pack = CREDIT_PACKS[1]!;
+  const checkoutRes = await checkout({ packId: pack.id });
   assert.equal(checkoutRes.status, 200);
-  const checkoutData = await readJson<{ subscription: Subscription; user: { plan: string } }>(
-    checkoutRes,
-  );
-  assert.equal(checkoutData.subscription.plan, 'plus');
-  assert.equal(checkoutData.subscription.status, 'active');
-  assert.ok(checkoutData.subscription.renewsAt);
-  assert.equal(checkoutData.user.plan, 'plus');
+  const after = await report();
+  assert.equal(after.plan, 'credits', 'купленные кредиты открывают полный доступ');
+  assert.equal(after.purchased, true);
+  assert.equal(after.balance, pack.credits + TRIAL_CREDITS);
+  assert.ok(after.grants.some((g) => g.kind === 'pack' && g.amount === pack.credits));
 
-  // Проверяем, что /api/auth/me теперь отдаёт обновлённый plan: plus
-  const meRes = await fetch(`${server.baseUrl}/api/auth/me`, {
-    headers: { Authorization: `Bearer ${token}` },
-  });
-  const meData = await readJson<{ user: { plan: string } }>(meRes);
-  assert.equal(meData.user.plan, 'plus');
-
-  // Отменяем подписку
-  const cancelRes = await fetch(`${server.baseUrl}/api/billing/cancel`, {
-    method: 'POST',
-    headers: { Authorization: `Bearer ${token}` },
-  });
-  assert.equal(cancelRes.status, 200);
-  const cancelData = await readJson<{ subscription: Subscription; user: { plan: string } }>(
-    cancelRes,
-  );
-  assert.equal(cancelData.subscription.status, 'canceled');
-  assert.equal(cancelData.user.plan, 'free');
+  // Подписка при этом остаётся бесплатной: тариф не покупался
+  const sub = await fetch(`${server.baseUrl}/api/billing/subscription`, { headers });
+  assert.equal((await readJson<{ subscription: Subscription }>(sub)).subscription.plan, 'free');
 });
 
 test('billing: криптовалюта только через Trybit — своих адресов нет, переводы с TxID не принимаются', async (t) => {
@@ -104,7 +131,7 @@ test('billing: криптовалюта только через Trybit — св�
   const created = await fetch(`${server.baseUrl}/api/billing/crypto/create-invoice`, {
     method: 'POST',
     headers,
-    body: JSON.stringify({ planId: 'plus', currency: 'USDT_TRC20' }),
+    body: JSON.stringify({ packId: 'credits-5', currency: 'USDT_TRC20' }),
   });
   assert.equal(created.status, 200);
   const { invoice } = await readJson<{
@@ -116,7 +143,7 @@ test('billing: криптовалюта только через Trybit — св�
       cryptoCloudInvoiceId?: string;
     };
   }>(created);
-  assert.equal(invoice.amountUsd, 9);
+  assert.equal(invoice.amountUsd, 5);
   // Счёт выставлен в Trybit; своего кошелька для прямого перевода в нём нет.
   assert.ok(invoice.cryptoCloudInvoiceId);
   assert.equal(invoice.address, '');
@@ -139,7 +166,7 @@ test('billing: криптовалюта только через Trybit — св�
     );
   }
 
-  // Без подтверждения Trybit тариф не включается.
+  // Без подтверждения Trybit кредиты не выдаются.
   const unpaid = await fetch(`${server.baseUrl}/api/billing/crypto/confirm/${invoice.id}`, {
     method: 'POST',
     headers,
@@ -151,8 +178,11 @@ test('billing: криптовалюта только через Trybit — св�
     'payment_not_received',
   );
 
-  const sub = await fetch(`${server.baseUrl}/api/billing/subscription`, { headers });
-  assert.equal((await readJson<{ subscription: Subscription }>(sub)).subscription.plan, 'free');
+  const report = await readJson<CreditsReport>(
+    await fetch(`${server.baseUrl}/api/usage/credits`, { headers }),
+  );
+  assert.equal(report.purchased, false);
+  assert.equal(report.granted, TRIAL_CREDITS);
 });
 
 async function signup(baseUrl: string, email: string): Promise<{ token: string; id: string }> {
@@ -201,7 +231,7 @@ test('billing (C5): чужой счёт недоступен ни для ста�
   const created = await fetch(`${server.baseUrl}/api/billing/telegram-stars/create-invoice`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${owner.token}` },
-    body: JSON.stringify({ planId: 'plus' }),
+    body: JSON.stringify({ packId: 'credits-5' }),
   });
   assert.equal(created.status, 200);
   const { invoice } = await readJson<{ invoice: { id: string } }>(created);
@@ -226,15 +256,15 @@ test('billing (C5): чужой счёт недоступен ни для ста�
   });
   assert.equal(own.status, 200);
 
-  // Тариф у постороннего не изменился
-  const sub = await fetch(`${server.baseUrl}/api/billing/subscription`, {
-    headers: strangerHeaders,
-  });
-  const { subscription } = await readJson<{ subscription: Subscription }>(sub);
-  assert.equal(subscription.plan, 'free');
+  // У постороннего кредитов не прибавилось
+  const report = await readJson<CreditsReport>(
+    await fetch(`${server.baseUrl}/api/usage/credits`, { headers: strangerHeaders }),
+  );
+  assert.equal(report.purchased, false);
+  assert.equal(report.granted, TRIAL_CREDITS);
 });
 
-test('billing (C5): в production заглушки оплаты выключены, тариф без платежа не выдаётся', async (t) => {
+test('billing (C5): в production заглушки оплаты выключены, кредиты без платежа не выдаются', async (t) => {
   const server = await startTestServer();
   t.after(() => server.close());
   const user = await signup(server.baseUrl, 'c5-prod@example.com');
@@ -244,7 +274,7 @@ test('billing (C5): в production заглушки оплаты выключен
   const created = await fetch(`${server.baseUrl}/api/billing/telegram-stars/create-invoice`, {
     method: 'POST',
     headers,
-    body: JSON.stringify({ planId: 'pro' }),
+    body: JSON.stringify({ packId: 'credits-10' }),
   });
   const { invoice } = await readJson<{ invoice: { id: string } }>(created);
 
@@ -255,7 +285,7 @@ test('billing (C5): в production заглушки оплаты выключен
     const checkout = await fetch(`${server.baseUrl}/api/billing/checkout`, {
       method: 'POST',
       headers,
-      body: JSON.stringify({ planId: 'ultra' }),
+      body: JSON.stringify({ packId: 'credits-100' }),
     });
     assert.equal(checkout.status, 501);
 
@@ -264,14 +294,14 @@ test('billing (C5): в production заглушки оплаты выключен
       headers,
       body: JSON.stringify({ planId: 'ultra' }),
     });
-    assert.ok(stripe.status === 501 || stripe.status === 500);
+    assert.equal(stripe.status, 410, 'оплата картой снята вместе с подписками');
 
     const sbpCreate = await fetch(`${server.baseUrl}/api/billing/sbp/create-invoice`, {
       method: 'POST',
       headers,
       body: JSON.stringify({ planId: 'plus' }),
     });
-    assert.equal(sbpCreate.status, 501);
+    assert.equal(sbpCreate.status, 410, 'СБП снята вместе с подписками');
 
     // Stars: подтверждение до реальной оплаты (successful_payment от Telegram) не проходит.
     const confirm = await fetch(
@@ -286,9 +316,11 @@ test('billing (C5): в production заглушки оплаты выключен
     mutable.enableMockBilling = previous;
   }
 
-  const sub = await fetch(`${server.baseUrl}/api/billing/subscription`, { headers });
-  const { subscription } = await readJson<{ subscription: Subscription }>(sub);
-  assert.equal(subscription.plan, 'free');
+  const report = await readJson<CreditsReport>(
+    await fetch(`${server.baseUrl}/api/usage/credits`, { headers }),
+  );
+  assert.equal(report.purchased, false);
+  assert.equal(report.granted, TRIAL_CREDITS);
 });
 
 test('billing (C7): без шлюза Trybit в production крипто-счёт не создаётся ни в какой валюте', async (t) => {
@@ -311,7 +343,7 @@ test('billing (C7): без шлюза Trybit в production крипто-счёт
       const create = await fetch(`${server.baseUrl}/api/billing/crypto/create-invoice`, {
         method: 'POST',
         headers,
-        body: JSON.stringify({ planId: 'plus', currency }),
+        body: JSON.stringify({ packId: 'credits-5', currency }),
       });
       assert.equal(create.status, 501, currency);
     }
@@ -319,9 +351,10 @@ test('billing (C7): без шлюза Trybit в production крипто-счёт
     Object.assign(mutable, previous);
   }
 
-  const sub = await fetch(`${server.baseUrl}/api/billing/subscription`, { headers });
-  const { subscription } = await readJson<{ subscription: Subscription }>(sub);
-  assert.equal(subscription.plan, 'free');
+  const report = await readJson<CreditsReport>(
+    await fetch(`${server.baseUrl}/api/usage/credits`, { headers }),
+  );
+  assert.equal(report.purchased, false);
 });
 
 test('billing: все валюты и сети Trybit принимаются, незнакомые отклоняются', async (t) => {
@@ -333,7 +366,7 @@ test('billing: все валюты и сети Trybit принимаются, н
     fetch(`${server.baseUrl}/api/billing/crypto/create-invoice`, {
       method: 'POST',
       headers,
-      body: JSON.stringify({ planId: 'plus', currency }),
+      body: JSON.stringify({ packId: 'credits-5', currency }),
     });
 
   assert.equal(TRYBIT_CURRENCIES.length, 38);
@@ -366,8 +399,8 @@ test('billing: комиссии Trybit из ответа шлюза попада
           link: 'https://pay.trybit.com/FEES1234',
           status: 'created',
           address: 'TFeeTestAddress000000000000000000',
-          amount: 10.4,
-          amount_usd: 10.4,
+          amount: 6.4,
+          amount_usd: 6.4,
           fee_usd: 1.4,
           service_fee_usd: 0.17,
           currency: {
@@ -388,7 +421,7 @@ test('billing: комиссии Trybit из ответа шлюза попада
   const res = await fetch(`${server.baseUrl}/api/billing/crypto/create-invoice`, {
     method: 'POST',
     headers,
-    body: JSON.stringify({ planId: 'plus', currency: 'USDT_TRC20' }),
+    body: JSON.stringify({ packId: 'credits-5', currency: 'USDT_TRC20' }),
   });
   assert.equal(res.status, 200);
   const { invoice } = await readJson<{
@@ -397,11 +430,11 @@ test('billing: комиссии Trybit из ответа шлюза попада
       fees?: { serviceUsd: number; transferUsd: number; payerUsd: number; totalUsd: number };
     };
   }>(res);
-  assert.equal(invoice.amount, 10.4);
+  assert.equal(invoice.amount, 6.4);
   assert.deepEqual(invoice.fees, {
     serviceUsd: 0.17,
     transferUsd: 1.4,
     payerUsd: 1.4,
-    totalUsd: 10.4,
+    totalUsd: 6.4,
   });
 });

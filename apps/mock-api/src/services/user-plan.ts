@@ -1,6 +1,7 @@
 /**
- * Эффективный тариф сохранённого пользователя: VIP получает Ultra, у платного тарифа проверяется срок.
- * Одно правило для сессии сайта (middleware/auth.ts) и для API-ключей (routes/v1.ts).
+ * Эффективный тариф сохранённого пользователя: VIP получает Ultra, у платной подписки проверяется
+ * срок, а у остальных, пока остались купленные кредиты, уровень `credits` (полные технические
+ * лимиты). Одно правило для сессии сайта (middleware/auth.ts) и для API-ключей (routes/v1.ts).
  */
 
 import type { PlanId, User } from '../types.js';
@@ -31,15 +32,32 @@ export function applySubscriptionExpiry(
   return resolved.plan;
 }
 
+/** Что нужно правилу доступа от кредитов: остались ли у пользователя купленные. */
+export interface PurchasedCreditsLookup {
+  hasPurchased(userId: string, now?: number): boolean;
+}
+
+/**
+ * Free с неистраченными купленными кредитами получает уровень `credits`. Подписчики остаются на
+ * своём тарифе: кредиты у них и так есть, а лимиты определяет подписка.
+ */
+export function applyPurchasedAccess(
+  plan: PlanId,
+  userId: string,
+  credits: PurchasedCreditsLookup | undefined,
+): PlanId {
+  if (plan !== 'free' || !credits) return plan;
+  return credits.hasPurchased(userId) ? 'credits' : plan;
+}
+
 export function resolveUserPlan(
   user: User,
   userStore: UserStore,
   subscriptionStore: SubscriptionStore | undefined,
+  credits?: PurchasedCreditsLookup,
 ): { plan: PlanId; isVip: boolean } {
   const isVip = Boolean(user.isVip || isVipEmail(user.email));
   if (isVip) return { plan: 'ultra', isVip: true };
-  return {
-    plan: applySubscriptionExpiry(userStore, subscriptionStore, user.id, user.plan, false),
-    isVip: false,
-  };
+  const plan = applySubscriptionExpiry(userStore, subscriptionStore, user.id, user.plan, false);
+  return { plan: applyPurchasedAccess(plan, user.id, credits), isVip: false };
 }

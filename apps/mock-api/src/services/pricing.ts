@@ -1,9 +1,10 @@
 /**
- * Единый источник цен подписок.
+ * Единый источник цен: пакеты кредитов (CREDIT_PACKS) и цены прежних подписок, по которым
+ * доживают действующие подписчики.
  *
  * Каноническая валюта — доллар: именно эти цены показаны на сайте, их же берут Stripe и
  * CryptoCloud. Рубли нужны только для СБП (сумма перевода в банке), Stars считаются отдельно
- * в `telegram/bot.ts` (`planStars`, `packStars`: по курсу, но не ниже точки безубыточности).
+ * в `telegram/bot.ts` (`planStars`, `packStars`: по официальному курсу, но не ниже точки безубыточности).
  *
  * Бюджеты расходов на модели в `services/entitlement.ts` рассчитаны от этих цен
  * (см. docs/models-and-pricing.md). Меняя цену, пересчитайте и бюджеты.
@@ -110,40 +111,70 @@ export function breakEvenStars(costUsd: number): number {
 }
 
 /**
- * Субсидия Free-тира на одного платящего, оценка сверху: конверсия 5%, средний расход Free $0.15
- * ($0.15 × 19 бесплатных на платящего, с комиссией OpenRouter). Сейчас Free идёт на бесплатные
- * эндпоинты OpenRouter, так что реальная субсидия ближе к нулю.
+ * Субсидия Free-тира на одного платящего подписчика, оценка сверху: конверсия 5%, средний расход Free
+ * $0.15 ($0.15 × 19 бесплатных на платящего, с комиссией OpenRouter). Нужна только расчётам прежних
+ * подписок; пакеты считаются без неё, пробные кредиты — отдельно (`TRIAL_COST_USD`).
  */
 export const FREE_TIER_SUBSIDY_USD = 3.01;
 
+/**
+ * Самое большее, что стоит нам один пробный кредит (200 кредитов, потрачены целиком, с комиссией
+ * OpenRouter): ≈ $0.21 на каждого зарегистрированного. Окупается долей зарегистрированных, которые
+ * потом покупают пакет: см. `trialBreakEvenConversion` (services/margin.ts).
+ */
+export const TRIAL_COST_USD = 0.2 * (1 + OPENROUTER_TOPUP_FEE);
+
 // ─────────────────────────────────────────────────────────────
-// Пакеты кредитов (бывшие пакеты премиум-квоты) — СНЯТЫ С ПРОДАЖИ 18.10.2026
+// Пакеты кредитов — единственный способ платить (подписки сняты с продажи 26.10.2026)
 // ─────────────────────────────────────────────────────────────
 
 /**
- * Пакет докупки: `quotaUsd` долларов кредитов за `priceUsd`, кредиты действуют
- * `PREMIUM_PACK_DAYS` дней. Новые пакеты не продаются (POST create-invoice с `packId` → 410).
- * Каталог остаётся, пока живы старые записи: счета, выставленные до 18.10.2026 и оплаченные позже,
- * кредиты (тратятся до 17.11.2026), возвраты и названия платежей в истории. После 17.11.2026
- * можно удалить каталог, `legacyCredits` (billing-service) и ветки `packId` в billing-service, bot и routes.
+ * Пакет кредитов: `credits` кредитов за `priceUsd`. Чем больше пакет, тем дешевле тысяча кредитов
+ * (скидка к ставке пакета $5: $10 −2%, $25 −3.4%, $50 −5.4%, $100 −20%). Кредиты действуют
+ * `CREDIT_PACK_VALID_DAYS` дней, при оплате криптой к ним добавляется бонус `CRYPTO_PACK_BONUS_RATE`.
+ *
+ * Маржа считается от худшего случая (потрачены все кредиты и бонус), налога 6%, комиссии OpenRouter
+ * 5.5% и выплаты Telegram $0.013 за звезду (services/margin.ts, проверка в currency.test.ts):
+ *
+ *   пакет   кредитов   $/1000   звёзды   маржа ⭐   крипта (с бонусом)   карта
+ *   $5       2 300     2.17      260     ≈ 15%        ≈ 36%            ≈ 36%
+ *   $10      4 700     2.13      510     ≈ 13%        ≈ 35%            ≈ 38%
+ *   $25     11 900     2.10     1 260    ≈ 11%        ≈ 34%            ≈ 39%
+ *   $50     24 300     2.06     2 510    ≈ 10%        ≈ 33%            ≈ 38%
+ *   $100    57 500     1.74     5 010    ≈ 1%         ≈ 22%            ≈ 29%
+ *
+ * Пакет $100 со скидкой 20% решение владельца: в звёздах он почти на нуле, но остаётся в плюсе.
  */
-export interface PremiumPack {
+export interface CreditPack {
   id: string;
-  quotaUsd: number;
   priceUsd: number;
+  credits: number;
 }
 
-export const PREMIUM_PACKS: readonly PremiumPack[] = [
-  { id: 'premium-3', quotaUsd: 3, priceUsd: 6 },
-  { id: 'premium-5', quotaUsd: 5, priceUsd: 9 },
-  { id: 'premium-10', quotaUsd: 10, priceUsd: 18 },
+export const CREDIT_PACKS: readonly CreditPack[] = [
+  { id: 'credits-5', priceUsd: 5, credits: 2_300 },
+  { id: 'credits-10', priceUsd: 10, credits: 4_700 },
+  { id: 'credits-25', priceUsd: 25, credits: 11_900 },
+  { id: 'credits-50', priceUsd: 50, credits: 24_300 },
+  { id: 'credits-100', priceUsd: 100, credits: 57_500 },
 ];
 
-/** Срок действия кредитов пакета. */
-export const PREMIUM_PACK_DAYS = 30;
-/** Себестоимость пакета — не больше этой доли его цены. */
-export const PACK_MAX_COST_SHARE = 0.6;
+/** Сколько дней действуют купленные кредиты (дольше — меньше обязательств перед покупателем, короче — стимул тратить). */
+export const CREDIT_PACK_VALID_DAYS = 365;
 
-export function findPremiumPack(id: unknown): PremiumPack | undefined {
-  return PREMIUM_PACKS.find((pack) => pack.id === id);
+/** Бонус за оплату пакета криптовалютой: доля от кредитов пакета, отдельный грант на тот же срок. */
+export const CRYPTO_PACK_BONUS_RATE = 0.15;
+
+export function findCreditPack(id: unknown): CreditPack | undefined {
+  return CREDIT_PACKS.find((pack) => pack.id === id);
+}
+
+/** Бонусные кредиты за оплату пакета криптовалютой (округление до 5 кредитов). */
+export function packCryptoBonusCredits(pack: Pick<CreditPack, 'credits'>): number {
+  return Math.round((pack.credits * CRYPTO_PACK_BONUS_RATE) / 5) * 5;
+}
+
+/** Сколько долларов стоит тысяча кредитов пакета. */
+export function packPricePerThousand(pack: CreditPack): number {
+  return (pack.priceUsd / pack.credits) * 1000;
 }

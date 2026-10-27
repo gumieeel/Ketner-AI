@@ -28,7 +28,7 @@ import { resolveBillingPlan } from '../services/plan-resolver.js';
 import { isAdminUser, isAdminEmail, isVipEmail } from '../services/vip.js';
 import { EntitlementService } from '../services/entitlement.js';
 import { creditService as defaultCreditService } from '../billing/index.js';
-import { planCreditsUsd, toCredits, type CreditService } from '../services/credits.js';
+import { toCredits, type CreditService } from '../services/credits.js';
 import type { PlanId } from '../types.js';
 import { defaultCircuitBreaker, CircuitBreaker } from '../ai/circuit-breaker.js';
 import {
@@ -79,15 +79,20 @@ export function createAdminRouter({
   const router = Router();
 
   /** Кредиты пользователя для карточки: чтение без выдачи грантов (список не должен писать в базу). */
-  const creditsCard = (userId: string, plan: PlanId, spentMonthUsd: number) => {
+  const creditsCard = (userId: string, spentMonthUsd: number) => {
     const balance = credits.store.balanceOf(userId);
-    const monthlyUsd = planCreditsUsd(plan);
+    const grantedUsd = credits.store
+      .liveOf(userId)
+      .reduce((sum, grant) => sum + grant.amountUsd, 0);
     return {
       balance: toCredits(balance.remainingUsd),
-      monthly: toCredits(monthlyUsd),
+      /** Сколько кредитов выдано по действующим грантам (пакеты, бонусы, пробные, прежние подписки). */
+      granted: toCredits(grantedUsd),
+      /** Остались ли купленные кредиты: у пользователя полный уровень доступа. */
+      purchased: credits.store.hasPurchased(userId),
       spentMonth: toCredits(spentMonthUsd),
       nextExpiresAt: balance.nextExpiresAt,
-      usedPct: monthlyUsd > 0 ? Math.round((spentMonthUsd / monthlyUsd) * 100) : 0,
+      usedPct: grantedUsd > 0 ? Math.round((spentMonthUsd / grantedUsd) * 100) : 0,
     };
   };
 
@@ -364,7 +369,7 @@ export function createAdminRouter({
       const entitlements = EntitlementService.getEntitlements(effectivePlan);
       const snapshot = usageStore.getFairUseSnapshot(u.id);
 
-      const creditsInfo = creditsCard(u.id, effectivePlan, snapshot.estimatedCostLastMonth ?? 0);
+      const creditsInfo = creditsCard(u.id, snapshot.estimatedCostLastMonth ?? 0);
 
       return {
         id: u.id,
@@ -498,7 +503,7 @@ export function createAdminRouter({
     const profitability = usageStore.getUserProfitability(user.id, planPrice);
     const recentRequests = usageStore.getByUser(user.id, 20);
 
-    const creditsInfo = creditsCard(user.id, effectivePlan, snapshot.estimatedCostLastMonth ?? 0);
+    const creditsInfo = creditsCard(user.id, snapshot.estimatedCostLastMonth ?? 0);
 
     const profile = {
       id: user.id,

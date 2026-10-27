@@ -45,18 +45,18 @@ test('ModelRegistry: получение, разрешение и проверк�
   const sol = registry.get('gpt-6.1-sol');
   assert.ok(sol);
   assert.equal(sol.provider, 'openrouter');
-  assert.equal(sol.isPro, true);
+  assert.equal(sol.isPro, false, 'платной «про»-ступени больше нет: модель открыта всем');
+  assert.equal(sol.requiredPlan, null);
   assert.equal(sol.costClass, 'strong');
   const opus = registry.get('claude-opus-5.5')!;
   assert.equal(opus.costClass, 'top');
 
-  // Проверка доступа: единое правило по рангу тарифа
-  assert.equal(registry.canAccess('free', def), true);
-  assert.equal(registry.canAccess('free', sol), false);
-  assert.equal(registry.canAccess('plus', sol), true);
-  assert.equal(registry.canAccess('plus', opus), false);
-  assert.equal(registry.canAccess('gpt-pro', opus), true, 'старый тариф gpt-pro равен Pro');
-  assert.equal(registry.canAccess('ultra', opus), true);
+  // Доступ: все модели открыты на любом уровне, ограничивают только кредиты
+  for (const plan of ['free', 'credits', 'plus', 'pro', 'gpt-pro', 'ultra'] as const) {
+    assert.equal(registry.canAccess(plan, def), true, plan);
+    assert.equal(registry.canAccess(plan, sol), true, plan);
+    assert.equal(registry.canAccess(plan, opus), true, plan);
+  }
 
   // Fallback chain: каждая модель встречается один раз, цепочка заканчивается самой дешёвой
   const chain = registry.getFallbackChain('gpt-6.1-sol');

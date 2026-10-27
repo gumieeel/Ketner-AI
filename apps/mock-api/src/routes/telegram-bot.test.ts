@@ -18,10 +18,11 @@ import {
   TelegramBotService,
   decodePayload,
   encodePayload,
-  planStars,
+  packStars,
   type TelegramUpdate,
 } from '../telegram/bot.js';
-import { STARS_OFFICIAL_USD_PER_STAR } from '../services/pricing.js';
+import { TRIAL_CREDITS } from '../services/entitlement.js';
+import { CREDIT_PACKS, STARS_OFFICIAL_USD_PER_STAR } from '../services/pricing.js';
 import { TelegramLinkCodes, telegramLinkCodes } from '../telegram/link-codes.js';
 import { StarsRateService } from '../telegram/stars-rate.js';
 import { signInitData, validateInitData } from '../telegram/webapp-auth.js';
@@ -62,11 +63,14 @@ interface MiniState {
   user: { id: string; email: string | null; telegramOnly: boolean; isAdmin: boolean };
   subscription: Subscription;
   autoRenew: { status: string; stars: number; nextChargeAt: string | null } | null;
-  plans: Array<{
+  credits: { balance: number; trialCredits: number; validDays: number };
+  packs: Array<{
     id: string;
+    priceUsd: number;
+    credits: number;
     stars: number;
     starsUsd: number;
-    preview: { mode: string; bonusDays: number; renewsAt: string };
+    pricePerThousandUsd: number;
   }>;
   rate: { usdPerStar: number; source: string };
   payments: Array<{
@@ -562,20 +566,31 @@ test('кабинет: код сгорает после 5 неверных поп
 
 // ───────────── оплата, продление, смена тарифа ─────────────
 
-test('оплата звёздами: чек в журнале, продление добавляет дни, смена тарифа пересчитывает остаток', async (t) => {
+/** Баланс покупателя в кредитах (пробные кредиты выдаются при первом обращении). */
+const creditsOf = (h: Awaited<ReturnType<typeof harness>>, userId: string, plan = 'free') =>
+  Math.round(h.billingService.credits.balance(userId, plan as 'free').remainingUsd * 1000);
+
+test('оплата пакета звёздами: счёт, чек в журнале, повторная доставка не дублирует, кредиты на год', async (t) => {
   const h = await harness();
   t.after(() => h.server.close());
   const { buyer, token } = await h.linkedBuyer(7401);
+  const pack = CREDIT_PACKS[1]!;
 
   const invoice = await h.mini<{ invoiceId: string; link: string; stars: number }>(
     'invoice',
-    { planId: 'plus' },
+    { packId: pack.id },
     token,
   );
-  assert.equal(invoice.body.stars, planStars('plus', h.rateService));
+  assert.equal(invoice.body.stars, packStars(pack, h.rateService));
+  assert.equal(
+    invoice.body.stars,
+    510,
+    '$10 по официальному курсу Telegram с округлением до 10 ⭐',
+  );
   const linkCall = h.bot.last('createInvoiceLink')!;
-  assert.equal(linkCall.body.subscription_period, undefined);
+  assert.equal(linkCall.body.subscription_period, undefined, 'пакет — разовая оплата');
   const payload = String(linkCall.body.payload);
+  assert.equal(decodePayload(payload)?.packId, pack.id);
 
   // Перед списанием сумма сверяется со счётом.
   await h.send({
@@ -591,128 +606,130 @@ test('оплата звёздами: чек в журнале, продлени�
 
   await h.pay(7401, payload, invoice.body.stars, 'ch-1');
   await h.pay(7401, payload, invoice.body.stars, 'ch-1'); // повторная доставка
-  const afterFirst = h.subscriptionStore.get(buyer.user.id);
-  assert.equal(afterFirst.plan, 'plus');
-  const firstEnd = Date.parse(afterFirst.renewsAt!);
-  assert.ok(Math.abs(firstEnd - (Date.now() + 30 * DAY_MS)) < 60_000);
+  const grants = h.billingService.ledger.credits
+    .allOf(buyer.user.id)
+    .filter((grant) => grant.kind === 'pack');
+  assert.equal(grants.length, 1, 'повторная доставка не начисляет второй раз');
+  assert.equal(grants[0]?.amountUsd, pack.credits / 1000);
+  assert.ok(
+    Math.abs(Date.parse(grants[0]!.expiresAt) - (Date.now() + 365 * DAY_MS)) < 60_000,
+    'кредиты действуют год',
+  );
+  assert.equal(creditsOf(h, buyer.user.id), pack.credits + TRIAL_CREDITS);
+  assert.equal(
+    h.subscriptionStore.get(buyer.user.id).plan,
+    'free',
+    'подписка не появляется: куплены кредиты, а не тариф',
+  );
+  assert.match(String(h.bot.last('sendMessage')!.body.text), /Начислили <b>4[  ]700<\/b> кредитов/);
 
   const state = await h.mini<MiniState>('state', undefined, token);
   assert.equal(state.body.payments.length, 1);
   assert.equal(state.body.payments[0]!.refundOption.kind, 'request');
-  const plusPlan = state.body.plans.find((plan) => plan.id === 'plus')!;
-  assert.equal(plusPlan.preview.mode, 'extend');
+  assert.equal(state.body.credits.balance, pack.credits + TRIAL_CREDITS);
+  assert.equal(state.body.credits.trialCredits, TRIAL_CREDITS);
+  assert.equal(state.body.credits.validDays, 365);
   // Кабинет показывает ту же цену, что попадёт в счёт, и её цену по официальному курсу Telegram.
-  assert.equal(plusPlan.stars, invoice.body.stars);
-  assert.equal(plusPlan.starsUsd, 9.2);
+  const packView = state.body.packs.find((item) => item.id === pack.id)!;
+  assert.equal(packView.stars, invoice.body.stars);
+  assert.equal(packView.starsUsd, h.rateService.toUsd(invoice.body.stars));
   assert.deepEqual(
-    state.body.plans.map((plan) => plan.stars),
-    [460, 1260, 2460],
+    state.body.packs.map((item) => item.stars),
+    [260, 510, 1260, 2510, 5010],
   );
   assert.equal(state.body.rate.source, 'official');
-  const ultraPlan = state.body.plans.find((plan) => plan.id === 'ultra')!;
-  assert.equal(ultraPlan.preview.mode, 'switch');
-  // 30 дней Plus ($9) ≈ 5 дней Ultra ($49).
-  assert.equal(ultraPlan.preview.bonusDays, 5);
 
-  // Продление того же тарифа: +30 дней к сроку.
-  const renew = await h.mini<{ invoiceId: string; stars: number }>(
-    'invoice',
-    { planId: 'plus' },
-    token,
-  );
-  await h.pay(
-    7401,
-    String(h.bot.last('createInvoiceLink')!.body.payload),
-    renew.body.stars,
-    'ch-2',
-  );
-  const extended = Date.parse(h.subscriptionStore.get(buyer.user.id).renewsAt!);
-  assert.ok(Math.abs(extended - firstEnd - 30 * DAY_MS) < 60_000);
-
-  // Смена на Ultra: 30 дней + пересчёт ~60 дней Plus.
-  const upgrade = await h.mini<{ invoiceId: string; stars: number }>(
-    'invoice',
-    { planId: 'ultra' },
-    token,
-  );
-  await h.pay(
-    7401,
-    String(h.bot.last('createInvoiceLink')!.body.payload),
-    upgrade.body.stars,
-    'ch-3',
-  );
-  const ultra = h.subscriptionStore.get(buyer.user.id);
-  assert.equal(ultra.plan, 'ultra');
-  const ultraDays = Math.round((Date.parse(ultra.renewsAt!) - Date.now()) / DAY_MS);
-  assert.ok(ultraDays >= 40 && ultraDays <= 41, `ultraDays=${ultraDays}`);
-  assert.match(String(h.bot.last('sendMessage')!.body.text), /добавили 1[01] дн\./);
-  assert.equal(h.userStore.findById(buyer.user.id)?.plan, 'ultra');
+  // Подписки сняты с продажи, неизвестный пакет отклоняется.
+  const legacy = await h.mini<ApiErrorBody>('invoice', { planId: 'plus' }, token);
+  assert.equal(legacy.status, 410);
+  assert.equal(legacy.body.error.code, 'subscriptions_discontinued');
+  const unknown = await h.mini<ApiErrorBody>('invoice', { packId: 'premium-5' }, token);
+  assert.equal(unknown.status, 400);
 });
 
-test('автопродление звёздами: подписка, очередное списание, отключение', async (t) => {
+test('прежняя подписка: счёт на тариф, выставленный до перехода на кредиты, засчитывается один раз', async (t) => {
+  const h = await harness();
+  t.after(() => h.server.close());
+  const buyer = await h.signup();
+  const invoice = h.invoiceStore.createTelegramStarsInvoice(
+    buyer.user.id,
+    'plus',
+    0,
+    460,
+    'ketner_test_bot',
+  );
+  const payload = encodePayload({
+    planId: 'plus',
+    stars: invoice.starsAmount,
+    invoiceId: invoice.id,
+    userId: buyer.user.id,
+  });
+  assert.equal(h.bot.validatePayment('XTR', invoice.starsAmount, payload).ok, true);
+  await h.pay(7411, payload, invoice.starsAmount, 'legacy-1');
+  await h.pay(7411, payload, invoice.starsAmount, 'legacy-1');
+  const sub = h.subscriptionStore.get(buyer.user.id);
+  assert.equal(sub.plan, 'plus');
+  assert.ok(Math.abs(Date.parse(sub.renewsAt!) - (Date.now() + 30 * DAY_MS)) < 60_000);
+  assert.equal(
+    h.billingService.ledger.credits.allOf(buyer.user.id).filter((g) => g.kind === 'plan').length,
+    1,
+  );
+  // Оплаченный счёт повторно не принимается.
+  assert.equal(h.bot.validatePayment('XTR', invoice.starsAmount, payload).ok, false);
+});
+
+test('автопродление звёздами у прежних подписчиков отключается, включить его снова нельзя', async (t) => {
   const h = await harness();
   t.after(() => h.server.close());
   const { buyer, token } = await h.linkedBuyer(7501);
 
-  const invoice = await h.mini<{ stars: number; recurring: boolean }>(
-    'invoice',
-    { planId: 'pro', recurring: true },
-    token,
-  );
-  assert.equal(invoice.body.recurring, true);
-  const linkCall = h.bot.last('createInvoiceLink')!;
-  assert.equal(linkCall.body.subscription_period, 2592000);
-  const payload = String(linkCall.body.payload);
-  assert.equal(decodePayload(payload)?.recurring, true);
-
-  const firstExpiry = Math.floor((Date.now() + 30 * DAY_MS) / 1000);
-  await h.pay(7501, payload, invoice.body.stars, 'sub-1', {
-    is_recurring: true,
-    is_first_recurring: true,
-    subscription_expiration_date: firstExpiry,
+  const ends = new Date(Date.now() + 20 * DAY_MS).toISOString();
+  h.subscriptionStore.set({ userId: buyer.user.id, plan: 'pro', status: 'active', renewsAt: ends });
+  await h.billingService.startStarsSubscription({
+    userId: buyer.user.id,
+    planId: 'pro',
+    telegramUserId: 7501,
+    chargeId: 'sub-1',
+    invoiceId: 'i',
+    stars: 1670,
+    nextChargeAt: ends,
   });
   let state = await h.mini<MiniState>('state', undefined, token);
   assert.equal(state.body.autoRenew?.status, 'active');
-  assert.equal(state.body.autoRenew?.stars, invoice.body.stars);
-  const firstEnd = Date.parse(state.body.subscription.renewsAt!);
 
-  // Через 30 дней Telegram списывает сам и присылает платёж с тем же payload.
-  await h.pay(7501, payload, invoice.body.stars, 'sub-2', {
-    is_recurring: true,
-    subscription_expiration_date: firstExpiry + 30 * 86400,
-  });
-  state = await h.mini<MiniState>('state', undefined, token);
-  assert.ok(
-    Math.abs(Date.parse(state.body.subscription.renewsAt!) - firstEnd - 30 * DAY_MS) < 60_000,
-  );
-  assert.equal(state.body.payments.length, 2);
-  assert.match(String(h.bot.last('sendMessage')!.body.text), /Автопродление прошло/);
-
-  const off = await h.mini<MiniState>('auto-renew', { enabled: false }, token);
-  assert.equal(off.body.autoRenew?.status, 'canceled');
-  const edit = h.bot.last('editUserStarSubscription')!;
-  assert.deepEqual(edit.body, {
+  // При запуске бот отключает автопродление у всех: оплаченный срок доживает, новых списаний нет.
+  await h.bot.stopLegacyAutoRenewals();
+  assert.deepEqual(h.bot.last('editUserStarSubscription')!.body, {
     user_id: 7501,
     telegram_payment_charge_id: 'sub-1',
     is_canceled: true,
   });
+  state = await h.mini<MiniState>('state', undefined, token);
+  assert.equal(state.body.autoRenew?.status, 'canceled');
   assert.equal(h.subscriptionStore.get(buyer.user.id).plan, 'pro');
+  assert.equal(Date.parse(h.subscriptionStore.get(buyer.user.id).renewsAt!), Date.parse(ends));
+
+  // Включить автопродление нельзя: подписок больше нет.
+  const enable = await h.mini<ApiErrorBody>('auto-renew', { enabled: true }, token);
+  assert.equal(enable.status, 410);
+  assert.equal(enable.body.error.code, 'subscriptions_discontinued');
 });
 
 // ───────────── возвраты ─────────────
 
-test('возврат звёзд: только после одобрения администратора, затем срок откатывается', async (t) => {
+test('возврат звёзд: только после одобрения администратора, затем кредиты пакета снимаются', async (t) => {
   const h = await harness();
   t.after(() => h.server.close());
   const { buyer, token } = await h.linkedBuyer(7601);
-  const invoice = await h.mini<{ stars: number }>('invoice', { planId: 'pro' }, token);
+  const pack = CREDIT_PACKS[2]!;
+  const invoice = await h.mini<{ stars: number }>('invoice', { packId: pack.id }, token);
   await h.pay(
     7601,
     String(h.bot.last('createInvoiceLink')!.body.payload),
     invoice.body.stars,
     'rf-1',
   );
-  assert.equal(h.subscriptionStore.get(buyer.user.id).plan, 'pro');
+  assert.equal(creditsOf(h, buyer.user.id), pack.credits + TRIAL_CREDITS);
 
   const paymentId = encodeURIComponent('stars:rf-1');
   const refund = await h.mini<{ outcome: string } & MiniState>(
@@ -726,7 +743,7 @@ test('возврат звёзд: только после одобрения ад
     0,
     'без решения администратора звёзды не возвращаются',
   );
-  assert.equal(h.subscriptionStore.get(buyer.user.id).plan, 'pro');
+  assert.equal(creditsOf(h, buyer.user.id), pack.credits + TRIAL_CREDITS, 'кредиты на месте');
   assert.equal(refund.body.payments[0]!.status, 'refund_requested');
 
   await h.billingService.decideRefund('stars:rf-1', true);
@@ -734,8 +751,8 @@ test('возврат звёзд: только после одобрения ад
     user_id: 7601,
     telegram_payment_charge_id: 'rf-1',
   });
-  assert.equal(h.subscriptionStore.get(buyer.user.id).plan, 'free');
-  assert.equal(h.userStore.findById(buyer.user.id)?.plan, 'free');
+  assert.equal(creditsOf(h, buyer.user.id), TRIAL_CREDITS, 'остались только пробные кредиты');
+  assert.equal(h.billingService.credits.hasPurchased(buyer.user.id), false, 'полный доступ снят');
   const after = await h.mini<MiniState>('state', undefined, token);
   assert.equal(after.body.payments[0]!.status, 'refunded');
   assert.deepEqual(after.body.payments[0]!.refundOption, { kind: 'none', reason: 'refunded' });
@@ -890,13 +907,14 @@ test('возврат криптовалюты: заявка администра
   );
 });
 
-test('возврат, оформленный Telegram (refunded_payment), откатывает срок', async (t) => {
+test('возврат, оформленный Telegram (refunded_payment), снимает кредиты пакета', async (t) => {
   const h = await harness();
   t.after(() => h.server.close());
   const { buyer, token } = await h.linkedBuyer(7801);
-  const invoice = await h.mini<{ stars: number }>('invoice', { planId: 'plus' }, token);
+  const invoice = await h.mini<{ stars: number }>('invoice', { packId: 'credits-5' }, token);
   const payload = String(h.bot.last('createInvoiceLink')!.body.payload);
   await h.pay(7801, payload, invoice.body.stars, 'tg-ref');
+  assert.equal(creditsOf(h, buyer.user.id), 2300 + TRIAL_CREDITS);
   await h.send({
     message: {
       message_id: 3,
@@ -911,6 +929,7 @@ test('возврат, оформленный Telegram (refunded_payment), отк
     },
   });
   assert.equal(h.billingService.findPayment('stars:tg-ref')?.status, 'refunded');
+  assert.equal(creditsOf(h, buyer.user.id), TRIAL_CREDITS);
   assert.equal(h.subscriptionStore.get(buyer.user.id).plan, 'free');
 });
 
@@ -928,10 +947,11 @@ test('бот: /start ведёт в кабинет, /paysupport и /terms объ�
   await h.message(7901, '/paysupport');
   assert.match(
     String(h.bot.last('sendMessage')!.body.text),
-    /в течение 24 часов, если после неё вы не сделали ни одного запроса/,
+    /в течение 24 часов, пока ни один кредит пакета не потрачен/,
   );
   await h.message(7901, '/terms');
   assert.match(String(h.bot.last('sendMessage')!.body.text), /оплата не возвращается/);
+  assert.match(String(h.bot.last('sendMessage')!.body.text), /Пробные кредиты расходуются первыми/);
 });
 
 test('напоминания: с автопродлением — о списании, отключённые — не приходят', async (t) => {
@@ -970,66 +990,61 @@ test('напоминания: с автопродлением — о списа�
   void token;
 });
 
-test('сайт: счёт в звёздах — цена тарифа по официальному курсу Telegram', async (t) => {
+test('сайт: счёт в звёздах — цена пакета по официальному курсу Telegram', async (t) => {
   const h = await harness();
   t.after(() => h.server.close());
   const buyer = await h.signup();
-  const created = await fetch(`${h.server.baseUrl}/api/billing/telegram-stars/create-invoice`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${buyer.token}` },
-    body: JSON.stringify({ planId: 'plus' }),
-  });
-  const { invoice } = await readJson<{
-    invoice: {
-      starsAmount: number;
-      botDeepLink: string;
-      id: string;
-      starsUsd: number;
-      usdPerStar: number;
-    };
-  }>(created);
-  // Plus $9 по официальному курсу Telegram — 460 ⭐ ($9.20 у Telegram, округление до 10 ⭐).
-  assert.equal(invoice.starsAmount, 460);
-  assert.equal(invoice.starsUsd, 9.2);
-  assert.equal(invoice.usdPerStar, STARS_OFFICIAL_USD_PER_STAR);
-  assert.match(invoice.botDeepLink, new RegExp(`\\?start=${invoice.id}$`));
+  const create = (body: unknown) =>
+    fetch(`${h.server.baseUrl}/api/billing/telegram-stars/create-invoice`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${buyer.token}` },
+      body: JSON.stringify(body),
+    });
+  const stars: number[] = [];
+  for (const pack of CREDIT_PACKS) {
+    const { invoice } = await readJson<{
+      invoice: {
+        starsAmount: number;
+        botDeepLink: string;
+        id: string;
+        starsUsd: number;
+        usdPerStar: number;
+        packId?: string;
+      };
+    }>(await create({ packId: pack.id }));
+    stars.push(invoice.starsAmount);
+    assert.equal(invoice.packId, pack.id);
+    assert.equal(invoice.usdPerStar, STARS_OFFICIAL_USD_PER_STAR);
+    assert.match(invoice.botDeepLink, new RegExp(`\\?start=${invoice.id}$`));
+    if (pack.priceUsd === 5) {
+      // $5 по официальному курсу Telegram — 260 ⭐ ($5.20 у Telegram, округление до 10 ⭐).
+      assert.equal(invoice.starsAmount, 260);
+      assert.equal(invoice.starsUsd, 5.2);
+    }
+  }
+  assert.deepEqual(stars, [260, 510, 1260, 2510, 5010]);
+  assert.equal((await create({ planId: 'plus' })).status, 410, 'подписок больше нет');
+  assert.equal((await create({ packId: 'nope' })).status, 400);
 });
 
-// ───────────── пакеты кредитов (сняты с продажи 18.10.2026) ─────────────
+// ───────────── пакеты кредитов ─────────────
 
-test('пакет за звёзды: новые счета не выставляются; счёт до снятия с продажи засчитывается один раз', async (t) => {
+test('пакет за звёзды: оплата засчитывается один раз, возврат возможен, пока из пакета ничего не потрачено', async (t) => {
   const h = await harness();
   t.after(() => h.server.close());
   const buyer = await h.signup();
   const auth = { Authorization: `Bearer ${buyer.token}`, 'Content-Type': 'application/json' };
-  h.billingService.grant(buyer.user.id, 'pro', {
-    id: 'crypto:plan-for-pack',
-    method: 'crypto',
-    amount: 25,
-    currency: 'USD',
-  });
+  const pack = CREDIT_PACKS[4]!;
 
-  const denied = await fetch(`${h.server.baseUrl}/api/billing/telegram-stars/create-invoice`, {
+  const created = await fetch(`${h.server.baseUrl}/api/billing/telegram-stars/create-invoice`, {
     method: 'POST',
     headers: auth,
-    body: JSON.stringify({ packId: 'premium-5' }),
+    body: JSON.stringify({ packId: pack.id }),
   });
-  assert.equal(denied.status, 410);
-  assert.equal((await readJson<ApiErrorBody>(denied)).error.code, 'packs_discontinued');
-  const list = await fetch(`${h.server.baseUrl}/api/billing/packs`, { headers: auth });
-  assert.equal(list.status, 404);
-
-  // Счёт, выставленный до снятия с продажи, оплачен позже — кредиты начисляются, повтор — нет.
-  const invoice = h.invoiceStore.createTelegramStarsInvoice(
-    buyer.user.id,
-    'pro',
-    0,
-    460,
-    'Robo_kassa_bot',
-    'premium-5',
-  );
+  assert.equal(created.status, 200);
+  const { invoice } = await readJson<{ invoice: { id: string; starsAmount: number } }>(created);
   const payload = encodePayload({
-    packId: 'premium-5',
+    packId: pack.id,
     stars: invoice.starsAmount,
     invoiceId: invoice.id,
     userId: buyer.user.id,
@@ -1040,19 +1055,25 @@ test('пакет за звёзды: новые счета не выставля�
   const credits = h.billingService.ledger.credits;
   const packGrants = credits.allOf(buyer.user.id).filter((grant) => grant.kind === 'pack');
   assert.equal(packGrants.length, 1, 'повторная доставка не начисляет второй раз');
-  assert.equal(packGrants[0]?.amountUsd, 5);
+  assert.equal(packGrants[0]?.amountUsd, 57.5);
+  assert.equal(creditsOf(h, buyer.user.id), 57_500 + TRIAL_CREDITS);
   assert.equal(
-    credits.balanceOf(buyer.user.id).remainingUsd,
-    5 + 11 + 1.2,
-    'пакет лежит рядом с кредитами тарифа Pro и бонусом за крипту',
+    h.bot.validatePayment('XTR', invoice.starsAmount, payload).ok,
+    false,
+    'счёт оплачен',
   );
-  assert.equal(h.subscriptionStore.get(buyer.user.id).plan, 'pro');
 
-  // Возврат: пока из пакета ничего не потрачено — заявка; потом — нет.
+  // Возврат: пробные кредиты тратятся первыми и не мешают; как только тронут пакет — нет.
   const payment = h.billingService.findPayment('stars:charge-pack-1')!;
-  assert.equal(payment.packId, 'premium-5');
+  assert.equal(payment.packId, pack.id);
   assert.deepEqual(h.billingService.refundOption(payment), { kind: 'request' });
-  credits.debit(buyer.user.id, 0.01);
+  credits.debit(buyer.user.id, 0.1);
+  assert.deepEqual(
+    h.billingService.refundOption(payment),
+    { kind: 'request' },
+    'списаны пробные кредиты, пакет цел',
+  );
+  credits.debit(buyer.user.id, 0.2);
   assert.deepEqual(h.billingService.refundOption(payment), { kind: 'none', reason: 'used' });
 });
 
@@ -1066,14 +1087,15 @@ test('пакет за звёзды: возврат неиспользованн�
     amount: 9,
     currency: 'USD',
   });
-  const { payment } = h.billingService.grantPack(buyer.user.id, 'premium-3', {
+  const { payment } = h.billingService.grantPack(buyer.user.id, 'credits-5', {
     id: 'stars:pack-refund',
     method: 'stars',
-    amount: 400,
+    amount: 260,
     currency: 'XTR',
     chargeId: 'pack-refund',
     telegramUserId: 777002,
   });
+  assert.equal(creditsOf(h, buyer.user.id, 'plus'), 3000 + 200 + 2300);
   const result = await h.billingService.requestRefund(buyer.user.id, payment.id);
   assert.equal(result.outcome, 'requested');
   await h.billingService.decideRefund(payment.id, true);
@@ -1086,6 +1108,30 @@ test('пакет за звёзды: возврат неиспользованн�
   );
   assert.equal(credits.get(payment.id)?.status, 'revoked');
   assert.equal(h.subscriptionStore.get(buyer.user.id).plan, 'plus');
+});
+
+test('пакет за звёзды: нельзя вернуть пакет, из которого уже тратили кредиты', async (t) => {
+  const h = await harness();
+  t.after(() => h.server.close());
+  const { buyer, token } = await h.linkedBuyer(7701);
+  const { payment } = h.billingService.grantPack(buyer.user.id, 'credits-10', {
+    id: 'stars:pack-used',
+    method: 'stars',
+    amount: 510,
+    currency: 'XTR',
+    chargeId: 'pack-used',
+    telegramUserId: 7701,
+  });
+  creditsOf(h, buyer.user.id); // пробные кредиты выдаются при первом обращении
+  h.billingService.credits.charge(buyer.user.id, 0.5); // пробные 0.2 и ещё 0.3 из пакета
+  const used = await h.mini<ApiErrorBody>(
+    `payments/${encodeURIComponent(payment.id)}/refund`,
+    {},
+    token,
+  );
+  assert.equal(used.status, 409);
+  assert.equal(used.body.error.code, 'refund_used');
+  assert.equal(h.bot.all('refundStarPayment').length, 0);
 });
 
 test('бонус за крипту: оплата Trybit даёт бонус к кредитам тарифа, звёзды — нет, возврат отзывает оба гранта', async (t) => {

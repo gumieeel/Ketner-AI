@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { config } from '../config.js';
 import { readJson, startTestServer } from '../testing/server.js';
-import type { AuthSession, SbpInvoice, Subscription, User } from '../types.js';
+import type { AuthSession, Subscription } from '../types.js';
 
 /** Регистрирует администратора сайта (адрес из ADMIN_EMAILS) и возвращает заголовок авторизации. */
 async function signupAdmin(baseUrl: string): Promise<{ Authorization: string }> {
@@ -34,7 +34,7 @@ test('telegram: статус бота GET /api/telegram/status', async (t) => {
   assert.ok(data.botUrl.includes('t.me/'));
 });
 
-test('billing: оплата по СБП (создание, статус и подтверждение)', async (t) => {
+test('billing: оплата по СБП снята вместе с подписками — счёт не создаётся, чужих и старых счетов нет', async (t) => {
   const server = await startTestServer();
   t.after(() => server.close());
 
@@ -46,45 +46,34 @@ test('billing: оплата по СБП (создание, статус и по�
   const { token } = await readJson<AuthSession>(reg);
   const auth = { Authorization: `Bearer ${token}` };
 
-  // 1. Создание инвойса СБП
-  const createRes = await fetch(`${server.baseUrl}/api/billing/sbp/create-invoice`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...auth },
-    body: JSON.stringify({ planId: 'gpt-pro' }),
-  });
-  assert.equal(createRes.status, 200);
-  const { invoice } = await readJson<{ invoice: SbpInvoice }>(createRes);
+  // 1. Создание счёта СБП: подписок больше нет, кредиты покупаются пакетами
+  for (const body of [{ planId: 'gpt-pro' }, { packId: 'credits-5' }]) {
+    const createRes = await fetch(`${server.baseUrl}/api/billing/sbp/create-invoice`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...auth },
+      body: JSON.stringify(body),
+    });
+    assert.equal(createRes.status, 410);
+    assert.equal(
+      (await readJson<{ error: { code: string } }>(createRes)).error.code,
+      'subscriptions_discontinued',
+    );
+  }
 
-  assert.ok(invoice.id.startsWith('sbp_'));
-  assert.equal(invoice.planId, 'gpt-pro');
-  assert.equal(invoice.amount, 1199);
-  assert.equal(invoice.status, 'pending');
-  assert.ok(invoice.qrPayload.startsWith('https://qr.nspk.ru/'));
-  assert.ok(invoice.deepLink.startsWith('https://qr.nspk.ru/'));
-
-  // 2. Проверка статуса
-  const statusRes = await fetch(`${server.baseUrl}/api/billing/sbp/status/${invoice.id}`, {
+  // 2. Статус и подтверждение несуществующего счёта — 404, тариф не меняется
+  const statusRes = await fetch(`${server.baseUrl}/api/billing/sbp/status/sbp_unknown`, {
     headers: auth,
   });
-  assert.equal(statusRes.status, 200);
-  const statusData = await readJson<{ status: string; invoice: SbpInvoice }>(statusRes);
-  assert.equal(statusData.status, 'pending');
-
-  // 3. Подтверждение оплаты СБП
-  const confirmRes = await fetch(`${server.baseUrl}/api/billing/sbp/confirm/${invoice.id}`, {
+  assert.equal(statusRes.status, 404);
+  const confirmRes = await fetch(`${server.baseUrl}/api/billing/sbp/confirm/sbp_unknown`, {
     method: 'POST',
     headers: auth,
   });
-  assert.equal(confirmRes.status, 200);
-  const confirmData = await readJson<{
-    success: boolean;
-    subscription: Subscription;
-    user: User;
-  }>(confirmRes);
-  assert.equal(confirmData.success, true);
-  assert.equal(confirmData.subscription.plan, 'gpt-pro');
-  assert.equal(confirmData.subscription.status, 'active');
-  assert.equal(confirmData.user.plan, 'gpt-pro');
+  assert.equal(confirmRes.status, 404);
+  const sub = await readJson<{ subscription: Subscription }>(
+    await fetch(`${server.baseUrl}/api/billing/subscription`, { headers: auth }),
+  );
+  assert.equal(sub.subscription.plan, 'free');
 });
 
 test('telegram support bot: создание тикета, отправка админу gumieeel и ответ пользователю', async (t) => {

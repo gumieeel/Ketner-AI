@@ -131,7 +131,7 @@ test('capabilities отражает тариф: команды недоступ�
   await withServer({}, async ({ call }) => {
     const free = await json(await call('a', 'free', 'GET', '/capabilities'));
     assert.equal(free.plan, 'free');
-    assert.equal(free.limits.maxProjects, 1);
+    assert.equal(free.limits.maxProjects, 3);
     assert.deepEqual([free.commands.available, free.commands.reason], [false, 'plan']);
     const pro = await json(await call('a', 'pro', 'GET', '/capabilities'));
     assert.deepEqual([pro.commands.available, pro.commands.reason], [false, 'server_disabled']);
@@ -142,8 +142,16 @@ test('capabilities отражает тариф: команды недоступ�
     );
     assert.ok(
       free.models.some(
-        (m: { id: string; locked: boolean }) => m.id === 'claude-opus-5.5' && m.locked === true,
+        (m: { id: string; locked: boolean }) => m.id === 'claude-opus-5.5' && m.locked === false,
       ),
+      'модели открыты и на Free: ограничивают только кредиты',
+    );
+    assert.ok(free.models.every((m: { locked: boolean }) => m.locked === false));
+    const credits = await json(await call('a', 'credits', 'GET', '/capabilities'));
+    assert.equal(
+      credits.limits.maxProjects,
+      100,
+      'купленные кредиты открывают лимиты уровня Ultra',
     );
   });
   await withServer(
@@ -166,9 +174,11 @@ test('проекты: создание, список, переименовани
     assert.ok(project.fileCount >= 4);
     assert.equal(project.userId, undefined, 'владелец наружу не отдаётся');
 
-    const second = await call('alice', 'free', 'POST', '/projects', { name: 'Второй' });
-    assert.equal(second.status, 413);
-    assert.equal((await json(second)).error.code, 'quota_exceeded');
+    for (const name of ['Второй', 'Третий'])
+      assert.equal((await call('alice', 'free', 'POST', '/projects', { name })).status, 201);
+    const fourth = await call('alice', 'free', 'POST', '/projects', { name: 'Четвёртый' });
+    assert.equal(fourth.status, 413);
+    assert.equal((await json(fourth)).error.code, 'quota_exceeded');
 
     assert.equal(
       (await call('alice', 'free', 'POST', '/projects', { name: 'x', template: 'nope' })).status,
@@ -183,7 +193,7 @@ test('проекты: создание, список, переименовани
     assert.equal((await call('bob', 'free', 'GET', `/projects/${project.id}`)).status, 404);
     assert.equal((await call('bob', 'free', 'DELETE', `/projects/${project.id}`)).status, 404);
     assert.deepEqual((await json(await call('bob', 'free', 'GET', '/projects'))).projects, []);
-    assert.equal((await json(await call('alice', 'free', 'GET', '/projects'))).projects.length, 1);
+    assert.equal((await json(await call('alice', 'free', 'GET', '/projects'))).projects.length, 3);
 
     assert.equal((await call('alice', 'free', 'DELETE', `/projects/${project.id}`)).status, 204);
     assert.equal((await call('alice', 'free', 'GET', `/projects/${project.id}`)).status, 404);
@@ -251,7 +261,7 @@ test('файлы: чтение, запись, перемещение, удале
 
     const tooBig = await call('alice', 'free', 'PUT', `/projects/${id}/file`, {
       path: 'big.txt',
-      content: 'x'.repeat(250_000),
+      content: 'x'.repeat(600_000),
     });
     assert.equal(tooBig.status, 413);
 

@@ -267,8 +267,8 @@ export class ImageService {
         403,
         t(
           language,
-          `Модель ${requested.name} доступна с тарифа ${requested.requiredPlan.toUpperCase()}.`,
-          `${requested.name} requires the ${requested.requiredPlan.toUpperCase()} plan.`,
+          `Модель ${requested.name} сейчас недоступна для вашего аккаунта.`,
+          `${requested.name} is not available for your account right now.`,
         ),
       );
     }
@@ -283,8 +283,8 @@ export class ImageService {
         429,
         t(
           language,
-          'Суточный лимит картинок исчерпан. Он обновится в течение суток; больше картинок даёт тариф выше.',
-          'Daily image limit reached. It renews within 24 hours; a higher plan gives more images.',
+          'Суточный лимит картинок исчерпан. Он обновится в течение суток; после покупки кредитов лимит выше.',
+          'Daily image limit reached. It renews within 24 hours; buying credits raises the limit.',
         ),
       );
     }

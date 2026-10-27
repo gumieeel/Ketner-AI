@@ -9,7 +9,11 @@ import type { UserStore } from '../store/user-store.js';
 import { revokedTokenStore as defaultRevokedTokenStore } from '../store/index.js';
 import type { RevokedTokenStore } from '../store/revoked-token-store.js';
 import type { SubscriptionStore } from '../store/subscription-store.js';
-import { applySubscriptionExpiry } from '../services/user-plan.js';
+import {
+  applyPurchasedAccess,
+  applySubscriptionExpiry,
+  type PurchasedCreditsLookup,
+} from '../services/user-plan.js';
 import type { PlanId, User } from '../types.js';
 import { sendError } from './errors.js';
 import { isVipEmail, isAdminEmail } from '../services/vip.js';
@@ -35,10 +39,17 @@ export function createAuthMiddleware(
   betterAuthInstance = defaultBetterAuth,
   subscriptionStore?: SubscriptionStore,
   revokedTokens: RevokedTokenStore = defaultRevokedTokenStore,
+  credits?: PurchasedCreditsLookup,
 ) {
-  /** Срок подписки: правило общее с API-ключами (services/user-plan.ts). */
+  /**
+   * Срок подписки и доступ по купленным кредитам: правило общее с API-ключами (services/user-plan.ts).
+   */
   const applyExpiry = (userId: string, plan: PlanId, isVip: boolean): PlanId =>
-    applySubscriptionExpiry(userStore, subscriptionStore, userId, plan, isVip);
+    applyPurchasedAccess(
+      applySubscriptionExpiry(userStore, subscriptionStore, userId, plan, isVip),
+      userId,
+      credits,
+    );
 
   return async (request: Request, response: Response, next: NextFunction): Promise<void> => {
     // 1. Bearer-токен, выданный при входе. Он важнее cookie: клиент показывает того пользователя, чей токен

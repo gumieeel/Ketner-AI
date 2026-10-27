@@ -151,25 +151,69 @@ test('генерация для неизвестного диалога отве
   }
 });
 
-test('генерация на платной модели без подписки возвращает событие ошибки upgrade_required', async () => {
+test('платная модель открыта и без покупки: гостю отвечает бесплатная модель, вошедшему Free — выбранная за пробные кредиты', async () => {
   const server = await startTestServer();
 
   try {
+    // Гость (без входа): пробных кредитов нет, отвечает бесплатная модель, ошибки доступа нет.
     const conversation = await createConversation(server.baseUrl, 'Платная модель');
-    const response = await postCompletion(server.baseUrl, {
+    const guest = await postCompletion(server.baseUrl, {
       conversationId: conversation.id,
       modelId: 'gpt-6.1-sol',
       language: 'ru',
       messages: [{ role: 'user', content: 'Привет' }],
     });
+    assert.equal(guest.status, 200);
+    const guestEvents = await readSseEvents(guest);
+    assert.equal(
+      guestEvents.find((e) => e.event === 'error'),
+      undefined,
+    );
+    const guestDone = JSON.parse(guestEvents.find((e) => e.event === 'done')!.data) as {
+      selectedModel: { id: string };
+    };
+    assert.equal(guestDone.selectedModel.id, 'nemotron-ultra');
 
+    // Вошедший пользователь на Free: пробные 200 кредитов покрывают один запрос к GPT-6.1 Sol.
+    const regRes = await signupAndVerify(server.baseUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        email: 'free-user@example.com',
+        password: 'password123',
+        name: 'Free User',
+      }),
+    });
+    const { token } = (await regRes.json()) as { token: string };
+    const authed = { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` };
+    const convRes = await fetch(`${server.baseUrl}/api/conversations`, {
+      method: 'POST',
+      headers: authed,
+      body: JSON.stringify({ title: 'Free GPT-6.1 Sol' }),
+    });
+    const { conversation: own } = (await convRes.json()) as { conversation: { id: string } };
+    const response = await fetch(`${server.baseUrl}/api/chat/completions`, {
+      method: 'POST',
+      headers: authed,
+      body: JSON.stringify({
+        conversationId: own.id,
+        modelId: 'gpt-6.1-sol',
+        language: 'ru',
+        messages: [{ role: 'user', content: 'Привет' }],
+      }),
+    });
     assert.equal(response.status, 200);
     const events = await readSseEvents(response);
-    const errorEvent = events.find((e) => e.event === 'error');
-    assert.ok(errorEvent, 'должно прийти событие error');
-    const data = JSON.parse(errorEvent.data) as { code: string; message: string };
-    assert.equal(data.code, 'upgrade_required');
-    assert.match(data.message, /Upgrade your plan|подписка|GPT-6\.1 Sol/i);
+    assert.equal(
+      events.find((e) => e.event === 'error'),
+      undefined,
+      'ошибки доступа нет: модели открыты всем, ограничивают только кредиты',
+    );
+    const done = JSON.parse(events.find((e) => e.event === 'done')!.data) as {
+      selectedModel: { id: string };
+      routingReason: string;
+    };
+    assert.equal(done.selectedModel.id, 'gpt-6.1-sol', done.routingReason);
   } finally {
     await server.close();
   }
@@ -210,11 +254,11 @@ test('генерация возвращает selectedModel, routingReason и us
   }
 });
 
-test('пользователь с тарифом Pro имеет доступ ко всем премиум моделям (нет per-model paywall)', async () => {
+test('покупатель кредитов имеет доступ ко всем премиум моделям (нет per-model paywall)', async () => {
   const server = await startTestServer();
 
   try {
-    // Регистрация и оформление Pro тарифа
+    // Регистрация и покупка пакета кредитов
     const regRes = await signupAndVerify(server.baseUrl, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -232,11 +276,11 @@ test('пользователь с тарифом Pro имеет доступ к�
         'Content-Type': 'application/json',
         Authorization: `Bearer ${token}`,
       },
-      body: JSON.stringify({ planId: 'pro' }),
+      body: JSON.stringify({ packId: 'credits-5' }),
     });
     assert.equal(checkoutRes.status, 200);
 
-    // Создаём диалог от имени Pro пользователя
+    // Создаём диалог от имени покупателя
     const createConvRes = await fetch(`${server.baseUrl}/api/conversations`, {
       method: 'POST',
       headers: {
@@ -265,7 +309,7 @@ test('пользователь с тарифом Pro имеет доступ к�
     assert.equal(gptResponse.status, 200);
     const events = await readSseEvents(gptResponse);
     const errorEvent = events.find((e) => e.event === 'error');
-    assert.equal(errorEvent, undefined, 'Pro пользователь не должен получать ошибку доступа');
+    assert.equal(errorEvent, undefined, 'покупатель не должен получать ошибку доступа');
 
     const doneEvent = events.find((e) => e.event === 'done');
     assert.ok(doneEvent, 'должен успешно завершиться со статусом done');
