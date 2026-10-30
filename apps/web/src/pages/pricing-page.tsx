@@ -8,6 +8,7 @@ import { PACKS, PACK_VALID_DAYS, TRIAL } from '@/features/billing/plans';
 import { maxCompareModels } from '@/features/chat/compare-policy';
 import { useTranslation, type TranslationKey } from '@/i18n';
 import { formatCredits, pluralForm } from '@/lib/format-date';
+import { LandingFaq } from '@/pages/landing/faq';
 
 type Localized = { ru: string; en: string };
 type Level = (typeof planFacts.levels)[keyof typeof planFacts.levels];
@@ -238,6 +239,9 @@ export function PricingPage() {
 
       <CreditsExplained />
 
+      {/* Вопросы и ответы — раздел прежней главной агрегатора. */}
+      <LandingFaq />
+
       {/* Нижняя сноска */}
       <div className="flex flex-col items-center gap-3 border-t border-stroke pt-8 text-center text-[13px] text-muted">
         <p className="max-w-[70ch] text-balance">{t('pricing.notice')}</p>
@@ -400,7 +404,10 @@ function CreditsExplained() {
         {language === 'ru'
           ? 'Цена запроса каждой модели — на странице '
           : 'The price of every model is on the '}
-        <Link to="/models" className="text-accent hover:underline">
+        <Link
+          to="/models"
+          className="text-accent underline decoration-accent/40 underline-offset-4 hover:decoration-accent"
+        >
           {language === 'ru' ? '«Модели»' : 'Models page'}
         </Link>
         .

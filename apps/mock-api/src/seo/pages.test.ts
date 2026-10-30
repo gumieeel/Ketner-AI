@@ -83,6 +83,10 @@ test('seo: дубли тарифов в документации ссылают�
   for (const page of SEO_PAGES) {
     assert.ok(page.description.length <= 250, `${page.path}: описание длиннее 250 символов`);
     assert.ok(page.title.length <= 75, `${page.path}: заголовок длиннее 75 символов`);
+    if (page.discovery) {
+      assert.ok(page.discovery.description.length <= 250, `${page.path}: описание (discovery)`);
+      assert.ok(page.discovery.title.length <= 75, `${page.path}: заголовок (discovery)`);
+    }
   }
 });
 
@@ -113,4 +117,43 @@ test('seo: адрес со слэшем в конце ведёт на основ
   assert.equal(trailingSlashRedirect('/chat/'), null, 'закрытые разделы не перенаправляются');
   assert.equal(trailingSlashRedirect('/api/'), null);
   assert.equal(trailingSlashRedirect('//evil.example/'), null, 'чужой адрес не подставляется');
+});
+
+test('seo: метка возможностей и заголовок главной зависят от флага платформы решений', () => {
+  const off = renderIndexHtml(BASE, '/');
+  assert.match(off, /<meta name="ketner-features" content="" \/>/);
+  assert.match(off, /<title>Ketner AI — ChatGPT, Claude, Gemini и Grok/);
+
+  const on = renderIndexHtml(BASE, '/', undefined, { discovery: true });
+  assert.match(on, /<meta name="ketner-features" content="discovery" \/>/);
+  assert.match(on, /<title>Ketner AI — найдите, где ИИ поможет/);
+  assert.match(on, /<meta name="description" content="Опишите задачу/);
+  assert.match(on, /помогает найти, где искусственный интеллект/);
+
+  // Прежний посыл остаётся на странице моделей при любом флаге.
+  for (const features of [{ discovery: false }, { discovery: true }]) {
+    assert.match(
+      renderIndexHtml(BASE, '/models', undefined, features),
+      /<title>Модели Ketner AI — ChatGPT, Claude, Gemini и Grok в одном чате/,
+    );
+  }
+});
+
+test('seo: Schema.org главной — пакеты кредитов, а не снятые подписки', () => {
+  const html = renderIndexHtml(BASE, '/');
+  const json = /<script type="application\/ld\+json">([^<]+)<\/script>/.exec(html)?.[1] ?? '';
+  const graph = (JSON.parse(json) as { '@graph': Array<Record<string, unknown>> })['@graph'];
+  const app = graph.find((node) => node['@type'] === 'WebApplication') as {
+    offers: Array<{ name: string; price: string }>;
+  };
+  assert.deepEqual(
+    app.offers.map((offer) => offer.price),
+    ['0', '5', '10', '25', '50', '100'],
+  );
+  assert.ok(!app.offers.some((offer) => /Plus|Pro|Ultra/.test(offer.name)));
+});
+
+test('seo: раздел анализов закрыт от индексации', () => {
+  assert.equal(classifyPath('/analyses/new'), 'private');
+  assert.match(robotsTxt(), /Disallow: \/analyses/);
 });

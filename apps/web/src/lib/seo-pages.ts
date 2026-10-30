@@ -1,4 +1,5 @@
 import seoPagesData from '../../../mock-api/src/seo/seo-pages.json';
+import { siteFeatures, type SiteFeatures } from './features';
 
 /**
  * Открытые страницы сайта: заголовок и описание для поисковиков.
@@ -13,6 +14,8 @@ export interface SeoPageMeta {
   description: string;
   canonical?: string;
   sitemap?: boolean;
+  /** Заголовок и описание при включённой платформе решений (`DISCOVERY_ENABLED`). */
+  discovery?: { title: string; description: string };
 }
 
 export const SEO_PAGES: readonly SeoPageMeta[] = seoPagesData.pages;
@@ -24,7 +27,11 @@ function normalize(pathname: string): string {
 }
 
 /** Заголовок вкладки для адреса; для страниц вне списка — undefined (страница задаёт свой). */
-export function seoTitleFor(pathname: string): string | undefined {
+export function seoTitleFor(
+  pathname: string,
+  features: SiteFeatures = siteFeatures(),
+): string | undefined {
   const path = normalize(pathname);
-  return SEO_PAGES.find((page) => page.path === path)?.title;
+  const page = SEO_PAGES.find((item) => item.path === path);
+  return (features.discovery ? page?.discovery?.title : undefined) ?? page?.title;
 }

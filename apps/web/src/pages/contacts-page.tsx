@@ -6,6 +6,7 @@ import { KNOWN_ISSUES } from '@/features/content/known-issues';
 import { LEGAL_DOCUMENTS, SUPPORT_EMAIL } from '@/features/content/legal';
 import { API_BASE } from '@/lib/api-config';
 import { cn } from '@/lib/cn';
+import { sectionLinks } from '@/lib/site-links';
 
 type Status = 'idle' | 'sending' | 'sent';
 
@@ -94,7 +95,7 @@ export function ContactsPage() {
         <p className="text-[15px] leading-7 text-muted">
           Нашли ошибку, не хватает функции, вопрос по оплате, возврату или данным — пишите, ответим
           на почту, которую вы укажете. Обычно в течение суток. Ответы на частые вопросы — в{' '}
-          <a className="underline underline-offset-4" href="/#faq">
+          <a className="underline underline-offset-4" href={sectionLinks().faq}>
             разделе FAQ
           </a>
           .

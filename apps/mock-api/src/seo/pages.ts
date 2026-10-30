@@ -9,6 +9,7 @@
  */
 
 import seoPagesData from './seo-pages.json' with { type: 'json' };
+import { CREDIT_PACKS } from '../services/pricing.js';
 
 export interface SeoPage {
   path: string;
@@ -23,7 +24,22 @@ export interface SeoPage {
   canonical?: string;
   /** false — страница не попадает в sitemap.xml. */
   sitemap?: boolean;
+  /** Заголовок и описание, когда включена платформа решений (`DISCOVERY_ENABLED`). */
+  discovery?: { title: string; description: string };
 }
+
+/** Возможности сайта, которые меняют страницы: сервер пишет их в HTML (`ketner-features`). */
+export interface SiteFeatures {
+  discovery: boolean;
+}
+
+/** Метка для сайта (apps/web/src/lib/features.ts): включённые возможности, через пробел. */
+export function featuresMetaTag(features: SiteFeatures): string {
+  return `<meta name="ketner-features" content="${features.discovery ? 'discovery' : ''}" />`;
+}
+
+/** Ключ варианта главной в `.prerender.json`, когда включена платформа решений. */
+export const DISCOVERY_HOME_PRERENDER_KEY = 'discovery:/';
 
 const BRAND = 'Ketner AI';
 
@@ -51,6 +67,7 @@ const PRIVATE_PREFIXES = [
   '/developers',
   '/onboarding',
   '/admin',
+  '/analyses',
 ];
 
 const DISALLOW = [
@@ -65,6 +82,7 @@ const DISALLOW = [
   '/auth',
   '/onboarding',
   '/admin',
+  '/analyses',
   '/login',
   '/signup/verify',
 ];
@@ -131,7 +149,14 @@ function jsonLd(value: unknown): string {
   return JSON.stringify(value).replace(/</g, '\\u003c');
 }
 
-function structuredData(base: string): string {
+/** Описание сервиса для Schema.org: при включённой платформе решений — новое позиционирование. */
+function appDescription(features: SiteFeatures): string {
+  return features.discovery
+    ? 'Ketner AI помогает найти, где искусственный интеллект улучшит вашу работу, бизнес или учёбу: разбирает задачу, проверяет, что реально сделать, и составляет план внедрения. Плюс чат с нейросетями GPT, Claude, Gemini и Grok.'
+    : 'ИИ-чат с нейросетями GPT, Claude, Gemini, Grok и DeepSeek без подписки, генерация изображений и ИИ для программирования.';
+}
+
+function structuredData(base: string, features: SiteFeatures): string {
   const graph = [
     {
       '@type': 'Organization',
@@ -168,14 +193,15 @@ function structuredData(base: string): string {
       browserRequirements: 'Современный браузер с поддержкой JavaScript',
       inLanguage: ['ru', 'en'],
       image: `${base}/og-image.png`,
-      description:
-        'ИИ-чат с нейросетями GPT, Claude, Gemini, Grok и DeepSeek в одной подписке, генерация изображений и ИИ для программирования.',
+      description: appDescription(features),
       publisher: { '@id': `${base}/#organization` },
+      // Подписок нет с 26.10.2026: бесплатный вход и пакеты кредитов (services/pricing.ts).
       offers: [
-        { name: 'Free', price: '0' },
-        { name: 'Plus', price: '9' },
-        { name: 'Pro', price: '25' },
-        { name: 'Ultra', price: '49' },
+        { name: 'Бесплатно', price: '0' },
+        ...CREDIT_PACKS.map((pack) => ({
+          name: `${pack.credits.toLocaleString('ru-RU')} кредитов`,
+          price: String(pack.priceUsd),
+        })),
       ].map((offer) => ({
         '@type': 'Offer',
         ...offer,
@@ -235,12 +261,14 @@ export function renderIndexHtml(
   baseHtml: string,
   rawPath: string,
   prerendered?: PrerenderedPage,
+  features: SiteFeatures = { discovery: false },
 ): string {
   const base = siteUrl();
   const kind = classifyPath(rawPath);
   const page = findSeoPage(rawPath);
-  const title = page?.title ?? BRAND;
-  const description = page?.description ?? SEO_PAGES[0].description;
+  const variant = features.discovery ? page?.discovery : undefined;
+  const title = variant?.title ?? page?.title ?? BRAND;
+  const description = variant?.description ?? page?.description ?? SEO_PAGES[0].description;
   const canonical = page ? absolute(base, page.canonical ?? page.path) : null;
   const image = `${base}/og-image.png`;
   const crumbs = page ? breadcrumbs(base, page) : '';
@@ -257,13 +285,16 @@ export function renderIndexHtml(
     `<meta property="og:image" content="${escapeAttr(image)}" />`,
     `<meta property="og:image:width" content="1200" />`,
     `<meta property="og:image:height" content="630" />`,
-    `<meta property="og:image:alt" content="${BRAND}: все сильные модели в одной подписке" />`,
+    `<meta property="og:image:alt" content="${BRAND}: ${features.discovery ? 'где ИИ поможет в вашей работе' : 'все сильные модели без подписки'}" />`,
     `<meta name="twitter:card" content="summary_large_image" />`,
     `<meta name="twitter:title" content="${escapeAttr(title)}" />`,
     `<meta name="twitter:description" content="${escapeAttr(description)}" />`,
     `<meta name="twitter:image" content="${escapeAttr(image)}" />`,
     verificationTags(),
-    page?.path === '/' ? `<script type="application/ld+json">${structuredData(base)}</script>` : '',
+    featuresMetaTag(features),
+    page?.path === '/'
+      ? `<script type="application/ld+json">${structuredData(base, features)}</script>`
+      : '',
     crumbs ? `<script type="application/ld+json">${crumbs}</script>` : '',
     kind === 'public' && prerendered?.head ? prerendered.head : '',
   ]

@@ -19,6 +19,7 @@ import { createApiRouter, describeService } from './routes/index.js';
 import {
   classifyPath,
   isNonCanonicalHost,
+  DISCOVERY_HOME_PRERENDER_KEY,
   renderIndexHtml,
   robotsTxt,
   sitemapXml,
@@ -94,6 +95,8 @@ export interface AppDeps {
   revokedTokenStore?: RevokedTokenStore;
   /** Отправка писем (коды регистрации и привязки Telegram); в тестах — перехватчик. */
   mailer?: Mailer;
+  /** Платформа решений (флаг DISCOVERY_ENABLED); в тестах задаётся явно. */
+  discoveryEnabled?: boolean;
 }
 
 const DEFAULT_BODY_LIMIT = '1mb';
@@ -294,6 +297,7 @@ export function createApp(overrides: Partial<AppDeps> = {}): Express {
 
   // index.html со своими title/description/canonical для каждого адреса (см. seo/pages.ts).
   const pageCache = new Map<string, string>();
+  const siteFeatures = { discovery: deps.discoveryEnabled ?? config.discoveryEnabled };
   const sendPage = (request: express.Request, response: express.Response): void => {
     if (!indexHtml) {
       response.sendFile(indexHtmlPath, { dotfiles: 'allow' });
@@ -303,10 +307,15 @@ export function createApp(overrides: Partial<AppDeps> = {}): Express {
     const key = kind === 'public' ? request.path.replace(/\/+$/, '') || '/' : kind;
     let html = pageCache.get(key);
     if (!html) {
+      // Главная при включённой платформе решений — свой вариант разметки (собирается заранее).
+      const prerenderedPage =
+        key === '/' && siteFeatures.discovery
+          ? (prerendered.get(DISCOVERY_HOME_PRERENDER_KEY) ?? prerendered.get(key))
+          : prerendered.get(key);
       html =
         kind === 'public'
-          ? renderIndexHtml(indexHtml, request.path, prerendered.get(key))
-          : renderIndexHtml(indexHtml, '/__none__');
+          ? renderIndexHtml(indexHtml, request.path, prerenderedPage, siteFeatures)
+          : renderIndexHtml(indexHtml, '/__none__', undefined, siteFeatures);
       pageCache.set(key, html);
     }
     response

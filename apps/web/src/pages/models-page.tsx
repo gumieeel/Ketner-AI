@@ -5,7 +5,11 @@ import { Skeleton } from '@/components/ui/skeleton';
 import planFacts from '@/features/billing/plan-facts.json';
 import { fetchMeta } from '@/features/chat/api';
 import type { ChatMeta, ModelInfo } from '@/features/chat/types';
+import { useTranslation } from '@/i18n';
 import { formatCredits } from '@/lib/format-date';
+import { LandingProviders } from '@/pages/landing/providers';
+import { LandingSavings } from '@/pages/landing/savings';
+import { LandingWorkspaces } from '@/pages/landing/workspaces';
 
 interface ImageModelInfo {
   id: keyof typeof planFacts.levels.credits.imagesPerDay;
@@ -117,6 +121,7 @@ function ModelCard({ model }: { model: ModelInfo }) {
 
 /** Прозрачность моделей: кто разработал каждую модель, что стоит за нашими названиями и сколько стоит запрос в кредитах. */
 export function ModelsPage() {
+  const { t } = useTranslation();
   const [meta, setMeta] = useState<ChatMeta | null>(null);
   const [failed, setFailed] = useState(false);
 
@@ -140,7 +145,10 @@ export function ModelsPage() {
   return (
     <div className="mx-auto flex w-full max-w-5xl flex-col gap-12">
       <header className="flex max-w-3xl flex-col gap-3">
-        <h1 className="text-3xl font-semibold tracking-tight text-balance md:text-4xl">Модели</h1>
+        {/* Посыл прежней главной агрегатора: все модели в одном чате, без подписки. */}
+        <h1 className="text-3xl font-semibold tracking-tight text-balance md:text-4xl">
+          {t('home.heroTitleA')} {t('home.heroTitleB')}
+        </h1>
         <p className="text-[17px] leading-8 text-muted">
           Ketner AI не обучает собственные модели. Каждый ответ даёт модель стороннего разработчика:
           мы передаём запрос через OpenRouter или напрямую через API разработчика и возвращаем
@@ -170,6 +178,8 @@ export function ModelsPage() {
           </p>
         ) : null}
       </header>
+
+      <LandingProviders />
 
       {failed ? (
         <p
@@ -203,6 +213,10 @@ export function ModelsPage() {
           </ul>
         </section>
       )}
+
+      {/* Разделы прежней главной: что умеет сервис и сколько стоили бы отдельные подписки. */}
+      <LandingWorkspaces />
+      <LandingSavings />
 
       <section className="flex max-w-3xl flex-col gap-3">
         <h2 className="text-xl font-semibold tracking-tight">Кто отвечает бесплатно</h2>

@@ -2,7 +2,7 @@ import type { ComponentType } from 'react';
 import type { RouteObject } from 'react-router-dom';
 import { AppShell } from '@/components/layout/app-shell';
 import { StandaloneLayout } from '@/components/layout/standalone-layout';
-import { LandingPage } from '@/pages/landing-page';
+import { RootPage } from '@/pages/home/root-page';
 import { LoginPage } from '@/pages/login-page';
 import { NotFoundPage } from '@/pages/not-found-page';
 import { PricingPage } from '@/pages/pricing-page';
@@ -46,7 +46,11 @@ export const routes: RouteObject[] = [
     element: <StandaloneLayout />,
     errorElement: <RouteErrorPage />,
     children: [
-      { index: true, element: <LandingPage /> },
+      { index: true, element: <RootPage /> },
+      {
+        path: 'analyses/new',
+        lazy: lazyPage(() => import('@/pages/home/analysis-start-page'), 'AnalysisStartPage'),
+      },
       { path: 'login', element: <LoginPage /> },
       { path: 'signup', element: <SignupPage /> },
       // Ввод кода из письма — второй шаг регистрации и входа.

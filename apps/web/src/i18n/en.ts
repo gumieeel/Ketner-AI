@@ -1765,4 +1765,31 @@ export const en: Record<TranslationKey, string> = {
   'checkout.cryptoBonusLine': 'Crypto bonus',
   'admin.creditsGranted': 'Granted by active grants',
   'admin.creditsPurchased': 'has purchased',
+
+  'discoveryHome.title': 'What do you want to improve?',
+  'discoveryHome.subtitle':
+    'Tell us about your work, business, studies or personal goals. Ketner AI will help you find where AI can help and build solutions for your tasks.',
+  'discoveryHome.fieldLabel': 'Describe your task',
+  'discoveryHome.placeholder':
+    'Describe a task you want to solve or a process you want to improve...',
+  'discoveryHome.hint': 'More detail means a more precise analysis.',
+  'discoveryHome.hintShortcut': 'Ctrl + Enter to send.',
+  'discoveryHome.empty': 'Write at least a couple of sentences about the task.',
+  'discoveryHome.counter': '{count} of {max} characters',
+  'discoveryHome.tooLong':
+    'The description is {over} characters over the {max} limit. Please shorten it.',
+  'discoveryHome.submit': 'Find opportunities',
+  'discoveryHome.examplesLabel': 'Example tasks',
+  'discoveryHome.freeNote': 'One analysis a day is free, no sign-up needed.',
+  'discoveryHome.chatLink': 'Or open the chat with models',
+  'analysisStart.title': 'Task analysis is coming soon',
+  'analysisStart.lead':
+    'We are preparing the analysis launch. Your description is saved in this browser: once analysis is available, it will start from it.',
+  'analysisStart.emptyTitle': 'No description found',
+  'analysisStart.emptyLead':
+    'To start an analysis, describe a task or a process you want to improve.',
+  'analysisStart.savedLabel': 'Your description',
+  'analysisStart.edit': 'Edit description',
+  'analysisStart.describe': 'Describe a task',
+  'analysisStart.openChat': 'Open chat',
 };

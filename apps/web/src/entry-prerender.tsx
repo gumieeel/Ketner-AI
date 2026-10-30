@@ -6,6 +6,7 @@ import { AuthProvider } from '@/features/auth/auth-provider';
 import { RELEASES } from '@/features/content/changelog';
 import { FAQ_ITEMS } from '@/features/content/faq';
 import { LEGAL_DOCUMENTS, LEGAL_UPDATED } from '@/features/content/legal';
+import { setSiteFeatures, type SiteFeatures } from '@/lib/features';
 import { SEO_PAGES } from '@/lib/seo-pages';
 import { routes } from '@/router/routes';
 
@@ -20,6 +21,16 @@ import { routes } from '@/router/routes';
 
 /** Адреса для отрисовки — все открытые страницы из seo-pages.json. */
 export const PRERENDER_PATHS: readonly string[] = SEO_PAGES.map((page) => page.path);
+
+/**
+ * Дополнительные варианты страниц: главная при включённой платформе решений. Сервер отдаёт её
+ * вместо обычной, когда задан DISCOVERY_ENABLED (apps/mock-api/src/app.ts).
+ */
+export const PRERENDER_VARIANTS: ReadonlyArray<{
+  key: string;
+  path: string;
+  features: SiteFeatures;
+}> = [{ key: 'discovery:/', path: '/', features: { discovery: true } }];
 
 const RU_MONTHS = [
   'января',
@@ -77,7 +88,22 @@ function faqHead(): string {
   return `<script type="application/ld+json">${jsonLd(data)}</script>`;
 }
 
-export async function render(url: string): Promise<{ html: string; head: string; status: number }> {
+export async function render(
+  url: string,
+  features: SiteFeatures = { discovery: false },
+): Promise<{ html: string; head: string; status: number }> {
+  setSiteFeatures(features);
+  try {
+    return await renderPage(url, features);
+  } finally {
+    setSiteFeatures(null);
+  }
+}
+
+async function renderPage(
+  url: string,
+  features: SiteFeatures,
+): Promise<{ html: string; head: string; status: number }> {
   const handler = createStaticHandler(routes);
   const context = await handler.query(new Request(new URL(url, 'https://ketner.org')));
   if (context instanceof Response) {
@@ -93,6 +119,7 @@ export async function render(url: string): Promise<{ html: string; head: string;
       </AuthProvider>
     </StrictMode>,
   );
-  const head = url === '/' ? faqHead() : '';
+  // Вопросы и ответы живут на главной агрегатора и на странице кредитов.
+  const head = (url === '/' && !features.discovery) || url === '/pricing' ? faqHead() : '';
   return { html, head, status: context.statusCode };
 }

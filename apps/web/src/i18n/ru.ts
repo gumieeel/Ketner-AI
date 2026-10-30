@@ -1758,6 +1758,32 @@ export const ru = {
   'checkout.cryptoBonusLine': 'Бонус за криптовалюту',
   'admin.creditsGranted': 'Выдано действующими грантами',
   'admin.creditsPurchased': 'есть купленные',
+
+  'discoveryHome.title': 'Что вы хотите улучшить?',
+  'discoveryHome.subtitle':
+    'Расскажите о своей работе, бизнесе, учёбе или личных целях. Ketner AI поможет найти возможности применения ИИ и создать решения под ваши задачи.',
+  'discoveryHome.fieldLabel': 'Опишите задачу',
+  'discoveryHome.placeholder':
+    'Опишите задачу, которую хотите решить, или процесс, который хотите улучшить...',
+  'discoveryHome.hint': 'Чем подробнее, тем точнее анализ.',
+  'discoveryHome.hintShortcut': 'Ctrl + Enter — отправить.',
+  'discoveryHome.empty': 'Напишите хотя бы пару предложений о задаче.',
+  'discoveryHome.counter': '{count} из {max} символов',
+  'discoveryHome.tooLong': 'Описание длиннее {max} символов на {over}. Сократите его.',
+  'discoveryHome.submit': 'Найти возможности',
+  'discoveryHome.examplesLabel': 'Примеры задач',
+  'discoveryHome.freeNote': 'Один анализ в день — бесплатно и без регистрации.',
+  'discoveryHome.chatLink': 'Или откройте чат с моделями',
+  'analysisStart.title': 'Анализ задач скоро заработает',
+  'analysisStart.lead':
+    'Мы готовим запуск анализа. Ваше описание сохранено в этом браузере: когда анализ заработает, он начнётся с него.',
+  'analysisStart.emptyTitle': 'Описание не найдено',
+  'analysisStart.emptyLead':
+    'Чтобы начать анализ, опишите задачу или процесс, который хотите улучшить.',
+  'analysisStart.savedLabel': 'Ваше описание',
+  'analysisStart.edit': 'Изменить описание',
+  'analysisStart.describe': 'Описать задачу',
+  'analysisStart.openChat': 'Открыть чат',
 } as const;
 
 export type TranslationKey = keyof typeof ru;

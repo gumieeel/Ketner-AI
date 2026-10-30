@@ -7,7 +7,9 @@ import { useAuth } from '@/features/auth/auth-store';
 import { useTranslation } from '@/i18n';
 import { cn } from '@/lib/cn';
 import { useFocusTrap } from '@/lib/use-focus-trap';
+import { siteFeatures } from '@/lib/features';
 import { DEFAULT_TITLE, seoTitleFor } from '@/lib/seo-pages';
+import { sectionLinks } from '@/lib/site-links';
 import { Brand } from './brand';
 import { LanguageToggle } from './language-toggle';
 import { STAGE_GUTTER } from './stage';
@@ -101,7 +103,11 @@ export function StandaloneLayout() {
   const isAuthPage = /^\/(signup(\/verify)?|login(\/verify|\/forgot(\/verify|\/new)?)?)\/?$/.test(
     location.pathname,
   );
-  const isLanding = location.pathname === '/';
+  const discovery = siteFeatures().discovery;
+  const links = sectionLinks();
+  // Прозрачная шапка поверх первого экрана — только у лендинга агрегатора. У главной платформы
+  // решений шапка обычная, компактная.
+  const isLanding = location.pathname === '/' && !discovery;
   // Главная — витрина на всю ширину: шапка прозрачная и лежит поверх первого экрана.
   const containerClass = 'max-w-[1200px] px-4 sm:px-6 lg:px-8';
   const headerContainerClass = isLanding ? `max-w-[1920px] ${STAGE_GUTTER}` : containerClass;
@@ -146,18 +152,31 @@ export function StandaloneLayout() {
           <div className="flex items-center gap-8 lg:gap-14">
             <Brand size={isLanding ? 'lg' : 'md'} />
             <nav aria-label={t('nav.mainNavigation')} className="hidden items-center gap-1 lg:flex">
-              <a href="/#spaces" className={navLinkClass}>
-                {t('home.navFeatures')}
-              </a>
-              <a href="/#models" className={navLinkClass}>
-                {t('nav.models')}
-              </a>
+              {discovery ? (
+                <Link to="/models" className={navLinkClass}>
+                  {t('nav.models')}
+                </Link>
+              ) : (
+                <>
+                  <a href={links.spaces} className={navLinkClass}>
+                    {t('home.navFeatures')}
+                  </a>
+                  <a href={links.models} className={navLinkClass}>
+                    {t('nav.models')}
+                  </a>
+                </>
+              )}
               <Link to="/pricing" className={navLinkClass}>
                 {t('nav.pricing')}
               </Link>
               <Link to="/docs" className={navLinkClass}>
                 {t('nav.docs')}
               </Link>
+              {discovery ? (
+                <Link to="/chat" className={navLinkClass}>
+                  {t('nav.chat')}
+                </Link>
+              ) : null}
             </nav>
           </div>
 
@@ -240,7 +259,7 @@ export function StandaloneLayout() {
 
             <nav aria-label={t('nav.mainNavigation')} className="my-2 flex flex-col gap-1">
               <a
-                href="/#models"
+                href={links.models}
                 onClick={() => setMobileMenuOpen(false)}
                 className="group flex min-h-14 items-center justify-between rounded-md px-4 text-base font-medium text-text transition-colors duration-150 hover:bg-surface-2"
               >
@@ -374,7 +393,7 @@ export function StandaloneLayout() {
                   </Link>
                 </li>
                 <li>
-                  <a href="/#faq" className={footerLinkClass}>
+                  <a href={links.faq} className={footerLinkClass}>
                     {t('footer.faq')}
                   </a>
                 </li>

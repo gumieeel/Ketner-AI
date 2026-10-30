@@ -31,7 +31,7 @@ await build({
   },
 });
 
-const { render, PRERENDER_PATHS, PAGE_LASTMODS } = await import(
+const { render, PRERENDER_PATHS, PRERENDER_VARIANTS, PAGE_LASTMODS } = await import(
   pathToFileURL(path.join(ssrDir, 'entry-prerender.js')).href
 );
 
@@ -46,8 +46,17 @@ for (const pagePath of PRERENDER_PATHS) {
   totalBytes += html.length;
 }
 
+for (const variant of PRERENDER_VARIANTS) {
+  const { html, head, status } = await render(variant.path, variant.features);
+  if (status !== 200 || !html) {
+    throw new Error(`prerender: ${variant.key} → статус ${status}, разметка пустая`);
+  }
+  pages[variant.key] = head ? { html, head } : { html };
+  totalBytes += html.length;
+}
+
 fs.writeFileSync(outFile, JSON.stringify({ pages, lastmods: PAGE_LASTMODS }));
 fs.rmSync(ssrDir, { recursive: true, force: true });
 console.log(
-  `prerender: ${PRERENDER_PATHS.length} страниц, ${Math.round(totalBytes / 1024)} КБ разметки → dist/.prerender.json`,
+  `prerender: ${PRERENDER_PATHS.length} страниц и ${PRERENDER_VARIANTS.length} вариант, ${Math.round(totalBytes / 1024)} КБ разметки → dist/.prerender.json`,
 );
