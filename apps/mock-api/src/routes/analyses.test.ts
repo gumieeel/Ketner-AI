@@ -23,6 +23,8 @@ type AnalysisView = ReturnType<typeof publicAnalysis>;
 /** Ответ API анализа: анализ, список или ошибка с подробностями отказа. */
 interface ApiBody {
   analysis: AnalysisView;
+  /** GET: цена обновления анализа; continue: запущен ли повторный поиск. */
+  rerun: unknown;
   analyses: Array<{ id: string }>;
   error: {
     code: string;
@@ -152,6 +154,26 @@ test('гость проходит анализ целиком; чужой гос
     });
     assert.equal(stranger.status, 404);
 
+    // Черновик ответов: сохраняется, переживает перезагрузку; чужому гостю — 404.
+    const draft = await fetch(`${app.base}/api/analyses/${id}/answers`, {
+      method: 'PUT',
+      headers: guestHeaders(guest),
+      body: JSON.stringify({ answers: { q2: { value: 'В табли' } } }),
+    });
+    assert.equal(draft.status, 200);
+    const reloaded = await fetch(`${app.base}/api/analyses/${id}`, {
+      headers: guestHeaders(guest),
+    });
+    assert.deepEqual(((await reloaded.json()) as ApiBody).analysis.answers, {
+      q2: { value: 'В табли' },
+    });
+    const foreignDraft = await fetch(`${app.base}/api/analyses/${id}/answers`, {
+      method: 'PUT',
+      headers: guestHeaders('guest_stranger01'),
+      body: JSON.stringify({ answers: { q2: { value: 'x' } } }),
+    });
+    assert.equal(foreignDraft.status, 404);
+
     const continued = await post(
       app.base,
       `/api/analyses/${id}/continue`,
@@ -168,6 +190,30 @@ test('гость проходит анализ целиком; чужой гос
       ['ready', 'needs_setup', 'not_supported'],
     );
     assert.deepEqual(report.cost, { chargedCredits: 0, sponsored: true });
+    // Цена обновления при изменении ответов видна заранее; гостю — через вход.
+    const rerunQuote = (
+      (await (
+        await fetch(`${app.base}/api/analyses/${id}`, { headers: guestHeaders(guest) })
+      ).json()) as ApiBody
+    ).rerun as { model: string; loginRequired: boolean } | null;
+    assert.equal(rerunQuote?.model, 'GPT-6 Luna');
+    assert.equal(rerunQuote?.loginRequired, true);
+    const same = await post(
+      app.base,
+      `/api/analyses/${id}/continue`,
+      { answers: { q2: { value: 'В таблицах' } } },
+      guestHeaders(guest),
+    );
+    assert.equal(same.status, 200);
+    assert.equal(same.json.rerun, false);
+    const changed = await post(
+      app.base,
+      `/api/analyses/${id}/continue`,
+      { answers: { q2: { value: 'В CRM' } }, confirm: true },
+      guestHeaders(guest),
+    );
+    assert.equal(changed.status, 401);
+    assert.equal(changed.json.error.code, 'login_required');
 
     const list = await fetch(`${app.base}/api/analyses`, { headers: guestHeaders(guest) });
     assert.equal(((await list.json()) as ApiBody).analyses.length, 1);

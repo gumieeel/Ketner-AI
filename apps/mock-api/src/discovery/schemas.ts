@@ -144,17 +144,24 @@ export const createAnalysisBodySchema = z.object({
   confirm: z.boolean().optional(),
 });
 
+const answersRecord = z
+  .record(
+    z.string().max(8),
+    z.union([
+      z.object({ skipped: z.literal(true) }),
+      z.object({ value: z.string().trim().min(1).max(ANSWER_MAX) }),
+    ]),
+  )
+  .default({});
+
 export const answersBodySchema = z.object({
-  answers: z
-    .record(
-      z.string().max(8),
-      z.union([
-        z.object({ skipped: z.literal(true) }),
-        z.object({ value: z.string().trim().min(1).max(ANSWER_MAX) }),
-      ]),
-    )
-    .default({}),
+  answers: answersRecord,
+  /** Согласие на списание: повторный поиск возможностей после изменения ответов платный. */
+  confirm: z.boolean().optional(),
 });
+
+/** Черновик ответов: сохраняется без запуска модели, чтобы прогресс пережил перезагрузку. */
+export const answersDraftBodySchema = z.object({ answers: answersRecord });
 
 export type CreateAnalysisBody = z.infer<typeof createAnalysisBodySchema>;
 export type AnswersBody = z.infer<typeof answersBodySchema>;

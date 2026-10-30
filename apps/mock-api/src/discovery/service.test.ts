@@ -496,3 +496,201 @@ test('чужой анализ не виден и не продолжается',
   assert.equal(result.ok, false);
   if (!result.ok) assert.equal(result.status, 404);
 });
+
+test('черновик ответов сохраняется без вызова модели и переживает перезагрузку', async () => {
+  const { service, requests } = setup();
+  const caller = guest();
+  const created = await create(service, caller);
+  assert.equal(created.ok, true);
+  if (!created.ok) return;
+  await service.whenIdle();
+  const calls = requests.length;
+
+  const saved = await service.saveAnswers(caller, created.analysis.id, {
+    q1: { value: 'В Excel' },
+    q2: { skipped: true },
+    zz: { value: 'чужой вопрос отбрасывается' },
+  });
+  assert.equal(saved.ok, true);
+  const view = await service.get(caller.userId, created.analysis.id);
+  assert.deepEqual(view?.analysis.answers, { q1: { value: 'В Excel' }, q2: { skipped: true } });
+  assert.equal(view?.analysis.status, 'needs_answers');
+  assert.equal(requests.length, calls, 'модель не вызывалась');
+
+  // Правка черновика — тоже без модели.
+  await service.saveAnswers(caller, created.analysis.id, { q1: { value: 'В Google Таблицах' } });
+  const edited = await service.get(caller.userId, created.analysis.id);
+  assert.deepEqual(edited?.analysis.answers, { q1: { value: 'В Google Таблицах' } });
+  assert.equal(requests.length, calls);
+
+  // Чужой черновик не меняется.
+  const stranger = await service.saveAnswers(guest(), created.analysis.id, { q1: { value: 'x' } });
+  assert.equal(stranger.ok, false);
+  if (!stranger.ok) assert.equal(stranger.status, 404);
+
+  // После запуска поиска черновик не принимается.
+  await service.continue(caller, created.analysis.id, { answers: { q1: { value: 'В Excel' } } });
+  await service.whenIdle();
+  const late = await service.saveAnswers(caller, created.analysis.id, { q1: { value: 'y' } });
+  assert.equal(late.ok, false);
+  if (!late.ok) assert.equal(late.code, 'analysis_not_waiting');
+});
+
+test('после отчёта: те же ответы — модель не вызывается; изменённые — повторный поиск за кредиты с согласием', async () => {
+  const { service, budget, requests } = setup({ balanceUsd: 1 });
+  const caller = account('user-rerun');
+  const created = await create(service, caller);
+  assert.equal(created.ok, true);
+  if (!created.ok) return;
+  await service.whenIdle();
+  await service.continue(caller, created.analysis.id, { answers: { q1: { value: 'В Excel' } } });
+  await service.whenIdle();
+  const id = created.analysis.id;
+  const before = await service.get(caller.userId, id);
+  assert.equal(before?.analysis.status, 'ready');
+  const firstOpportunityIds = before?.opportunities.map((item) => item.id);
+  const calls = requests.length;
+  const budgetBefore = await budget.day(service.today());
+
+  // Те же ответы (пробелы и явный пропуск необязательного не в счёт) — ничего не запускается.
+  const variants: Array<Record<string, { value: string } | { skipped: true }>> = [
+    { q1: { value: 'В Excel' } },
+    { q1: { value: '  В Excel ' }, q2: { skipped: true } },
+  ];
+  for (const answers of variants) {
+    const same = await service.continue(caller, id, { answers, confirm: true });
+    assert.equal(same.ok, true);
+    if (same.ok) assert.equal(same.rerun, false);
+  }
+  assert.equal(requests.length, calls);
+
+  // Изменённые ответы без согласия — цена и отказ, модель не вызывается.
+  const unconfirmed = await service.continue(caller, id, {
+    answers: { q1: { value: 'В 1С' } },
+  });
+  assert.equal(unconfirmed.ok, false);
+  if (!unconfirmed.ok) {
+    assert.equal(unconfirmed.code, 'confirmation_required');
+    const quote = service.rerunQuote(before!.analysis, caller);
+    assert.equal(unconfirmed.details?.maxCredits, quote.maxCredits);
+    assert.equal(quote.model, 'GPT-6 Luna');
+  }
+  assert.equal(requests.length, calls);
+
+  // С согласием — один повторный поиск той же моделью, за кредиты, не из бюджета бесплатных.
+  const [rerun, doubleClick] = await Promise.all([
+    service.continue(caller, id, { answers: { q1: { value: 'В 1С' } }, confirm: true }),
+    service.continue(caller, id, { answers: { q1: { value: 'В 1С' } }, confirm: true }),
+  ]);
+  assert.equal(rerun.ok && doubleClick.ok, true);
+  if (rerun.ok && doubleClick.ok) assert.equal(Number(rerun.rerun) + Number(doubleClick.rerun), 1);
+  await service.whenIdle();
+  assert.equal(requests.length, calls + 1);
+  const last = requests.at(-1);
+  assert.equal(last?.task?.billing, 'user');
+  assert.equal(last?.modelId, 'ketner-mini');
+  assert.equal(last?.task?.id, `${id}:discovery:2`);
+  assert.match(last?.messages[0].content ?? '', /В 1С/);
+  assert.deepEqual(await budget.day(service.today()), budgetBefore, 'бюджет бесплатных не тронут');
+
+  const after = await service.get(caller.userId, id);
+  assert.equal(after?.analysis.status, 'ready');
+  assert.deepEqual(after?.analysis.answers.q1, { value: 'В 1С' });
+  assert.equal(chargedCredits(after!.analysis), 4);
+  assert.notDeepEqual(
+    after?.opportunities.map((item) => item.id),
+    firstOpportunityIds,
+    'возможности пересчитаны',
+  );
+});
+
+test('изменить ответы после отчёта: гостю — вход, без баланса — отказ; упавший повторный поиск повторяется за кредиты', async () => {
+  const guestCaller = guest();
+  const first = setup();
+  const created = await create(first.service, guestCaller);
+  assert.equal(created.ok, true);
+  if (!created.ok) return;
+  await first.service.whenIdle();
+  await first.service.continue(guestCaller, created.analysis.id, {
+    answers: { q1: { value: 'A' } },
+  });
+  await first.service.whenIdle();
+  const asGuest = await first.service.continue(guestCaller, created.analysis.id, {
+    answers: { q1: { value: 'B' } },
+    confirm: true,
+  });
+  assert.equal(asGuest.ok, false);
+  if (!asGuest.ok) assert.equal(asGuest.code, 'login_required');
+
+  // Без баланса — отказ с суммой.
+  const poor = setup({ balanceUsd: 0 });
+  const user = account('user-poor');
+  const made = await create(poor.service, user);
+  if (!made.ok) return assert.fail('анализ не создан');
+  await poor.service.whenIdle();
+  await poor.service.continue(user, made.analysis.id, { answers: { q1: { value: 'A' } } });
+  await poor.service.whenIdle();
+  const noMoney = await poor.service.continue(user, made.analysis.id, {
+    answers: { q1: { value: 'B' } },
+    confirm: true,
+  });
+  assert.equal(noMoney.ok, false);
+  if (!noMoney.ok) assert.equal(noMoney.code, 'insufficient_credits');
+
+  // Повторный поиск упал — повтор идёт снова за кредиты, без резерва бесплатного бюджета.
+  const flaky = setup({ balanceUsd: 1, script: {} });
+  const owner = account('user-flaky');
+  const analysis = await create(flaky.service, owner);
+  if (!analysis.ok) return assert.fail('анализ не создан');
+  await flaky.service.whenIdle();
+  await flaky.service.continue(owner, analysis.analysis.id, { answers: { q1: { value: 'A' } } });
+  await flaky.service.whenIdle();
+  const reservationsBefore = (await flaky.budget.forAnalysis(analysis.analysis.id)).length;
+  // Повторный поиск после изменения ответов упал (как его записал бы failStage).
+  const stored = await flaky.store.get(owner.userId, analysis.analysis.id);
+  assert.ok(stored);
+  await flaky.store.update(
+    {
+      ...stored!,
+      status: 'failed',
+      answers: { q1: { value: 'B' }, q2: { skipped: true } },
+      stages: {
+        ...stored!.stages,
+        discovery: {
+          ...stored!.stages.discovery!,
+          status: 'failed',
+          taskId: `${analysis.analysis.id}:discovery:2`,
+          billing: 'user',
+          error: { code: 'provider_error', message: 'Модель недоступна' },
+        },
+      },
+    },
+    stored!.version,
+  );
+  const failedView = await flaky.service.get(owner.userId, analysis.analysis.id);
+  assert.deepEqual(flaky.service.retryQuote(failedView!.analysis, owner), {
+    stage: 'discovery',
+    sponsored: false,
+    model: 'GPT-6 Luna',
+    ...(({ typicalCredits, maxCredits }) => ({ typicalCredits, maxCredits }))(
+      flaky.service.rerunQuote(failedView!.analysis, owner),
+    ),
+    loginRequired: false,
+  });
+  const retried = await flaky.service.retry(owner, analysis.analysis.id);
+  assert.equal(retried.ok, true);
+  await flaky.service.whenIdle();
+  assert.equal((await flaky.budget.forAnalysis(analysis.analysis.id)).length, reservationsBefore);
+  const call = flaky.requests.at(-1);
+  assert.equal(call?.task?.billing, 'user');
+  assert.equal(call?.task?.id, `${analysis.analysis.id}:discovery:3`);
+  const done = await flaky.service.get(owner.userId, analysis.analysis.id);
+  assert.equal(done?.analysis.status, 'ready');
+});
+
+test('бюджет меньше одного сценария: предложение сразу говорит, что бесплатного анализа нет', async () => {
+  const { service } = setup({ freeDailyUsd: 0.001 });
+  const offer = await service.offer(guest(), 'ru');
+  assert.equal(offer.free.available, false);
+  if (!offer.free.available) assert.equal(offer.free.reason, 'budget_exhausted');
+});

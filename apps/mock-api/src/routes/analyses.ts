@@ -5,7 +5,9 @@
  *   POST /api/analyses                создать анализ (Idempotency-Key — повтор вернёт тот же)
  *   GET  /api/analyses                анализы владельца
  *   GET  /api/analyses/:id            статус, контекст, вопросы, отчёт
- *   POST /api/analyses/:id/continue   ответы на вопросы и поиск возможностей
+ *   PUT  /api/analyses/:id/answers    черновик ответов (без вызова модели)
+ *   POST /api/analyses/:id/continue   ответы на вопросы и поиск возможностей; после отчёта —
+ *                                     повторный поиск, только если ответы изменились (за кредиты)
  *   POST /api/analyses/:id/retry      повторить упавший этап
  *
  * Доступно гостю с `X-Guest-Id` (весь анализ и отчёт, решение владельца) и вошедшему пользователю.
@@ -28,7 +30,11 @@ import type { UserStore } from '../store/user-store.js';
 import type { Language } from '../types.js';
 import { CREATES_PER_MINUTE, hashIp, isYoungAccount } from '../discovery/limits.js';
 import { getDiscoveryStores, type DiscoveryStores } from '../discovery/runtime.js';
-import { answersBodySchema, createAnalysisBodySchema } from '../discovery/schemas.js';
+import {
+  answersBodySchema,
+  answersDraftBodySchema,
+  createAnalysisBodySchema,
+} from '../discovery/schemas.js';
 import { chargedCredits, DiscoveryService, type DiscoveryCaller } from '../discovery/service.js';
 import type { Analysis, Opportunity } from '../discovery/types.js';
 
@@ -108,6 +114,7 @@ export function createAnalysesRouter(deps: AnalysesRouterDeps): Router {
   const stores = deps.stores ?? getDiscoveryStores;
   const createLimiter = new RateLimiter(60_000, CREATES_PER_MINUTE);
   const actionLimiter = new RateLimiter(60_000, 20);
+  const draftLimiter = new RateLimiter(60_000, 60);
   let service: DiscoveryService | null = deps.service ?? null;
 
   const gateway =
@@ -349,7 +356,48 @@ export function createAnalysesRouter(deps: AnalysesRouterDeps): Router {
       sendError(response, 404, 'analysis_not_found', `Анализ ${id} не найден`);
       return;
     }
-    response.json({ analysis: publicAnalysis(found.analysis, found.opportunities) });
+    response.json({
+      analysis: publicAnalysis(found.analysis, found.opportunities),
+      // Цена обновления анализа при изменении ответов — до запуска, как у моделей чата.
+      rerun:
+        found.analysis.status === 'ready' && found.analysis.questions.length > 0
+          ? ready.rerunQuote(found.analysis, resolved.caller)
+          : null,
+      // Цена повтора упавшего этапа.
+      retry: ready.retryQuote(found.analysis, resolved.caller),
+    });
+  });
+
+  router.put('/:id/answers', async (request: Request, response: Response) => {
+    const ready = withService(response);
+    if (!ready) return;
+    const resolved = resolveCaller(request, response);
+    if (!resolved) return;
+    // Черновик сохраняется по мере ввода: лимит выше, чем у действий с моделью.
+    if (draftLimiter.hit(resolved.caller.userId)) {
+      sendError(
+        response,
+        429,
+        'too_many_requests',
+        'Слишком много запросов подряд. Подождите минуту.',
+      );
+      return;
+    }
+    const parsed = answersDraftBodySchema.safeParse(request.body ?? {});
+    if (!parsed.success) {
+      sendError(response, 400, 'validation_failed', 'Некорректные ответы.');
+      return;
+    }
+    const result = await ready.saveAnswers(
+      resolved.caller,
+      String(request.params.id),
+      parsed.data.answers,
+    );
+    if (!result.ok) {
+      sendServiceError(response, result);
+      return;
+    }
+    response.json({ analysis: publicAnalysis(result.analysis) });
   });
 
   router.post('/:id/continue', async (request: Request, response: Response) => {
@@ -376,7 +424,9 @@ export function createAnalysesRouter(deps: AnalysesRouterDeps): Router {
       sendServiceError(response, result);
       return;
     }
-    response.status(202).json({ analysis: publicAnalysis(result.analysis) });
+    response
+      .status(result.rerun ? 202 : 200)
+      .json({ analysis: publicAnalysis(result.analysis), rerun: result.rerun });
   });
 
   router.post('/:id/retry', async (request: Request, response: Response) => {

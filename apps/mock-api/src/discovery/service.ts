@@ -56,6 +56,7 @@ import {
   type AnswersBody,
   type ContextOutput,
   type DiscoveryOutput,
+  type Question,
 } from './schemas.js';
 import type { DiscoveryStore } from './store.js';
 import { contextTemplate, discoveryTemplate } from './templates.js';
@@ -184,7 +185,9 @@ export class DiscoveryService {
     }
     const budget = await this.deps.budget.day(day);
     const need = this.freeReservationCaps('ru').reduce((sum, item) => sum + item.capUsd, 0);
-    if (budget && budget.spentUsd + budget.reservedUsd + need > this.deps.freeDailyUsd) {
+    // Суток в базе ещё нет — бюджет не тронут, но и он может быть меньше одного сценария.
+    const used = budget ? budget.spentUsd + budget.reservedUsd : 0;
+    if (used + need > this.deps.freeDailyUsd) {
       return { ok: false, reason: 'budget_exhausted' };
     }
     return { ok: true };
@@ -475,36 +478,83 @@ export class DiscoveryService {
     return this.deps.store.claimGuest(userId, guestId, id);
   }
 
-  /** Ответы на вопросы и запуск поиска возможностей. Повтор после старта ничего не запускает. */
+  /** Цена повторного поиска возможностей после изменения ответов (показывается до запуска). */
+  rerunQuote(analysis: Analysis, caller: DiscoveryCaller) {
+    const estimate = estimateStages(analysis.mode, ['discovery'], analysis.language, this.registry);
+    return {
+      model: realModelName(
+        stagePolicy(analysis.mode, 'discovery', analysis.language, this.registry).modelId,
+        this.registry,
+      ),
+      typicalCredits: estimate.typicalCredits,
+      maxCredits: estimate.maxCredits,
+      loginRequired: caller.guest,
+    };
+  }
+
+  /** Цена повтора упавшего этапа: бесплатный этап повторяется за счёт сервиса, платный — за кредиты. */
+  retryQuote(analysis: Analysis, caller: DiscoveryCaller) {
+    const stage = STAGE_ORDER.find((name) => analysis.stages[name]?.status === 'failed');
+    if (analysis.status !== 'failed' || !stage) return null;
+    const run = analysis.stages[stage] as StageRun;
+    if (analysis.mode === 'free' && run.billing !== 'user') return { stage, sponsored: true };
+    const estimate = estimateStages(analysis.mode, [stage], analysis.language, this.registry);
+    return {
+      stage,
+      sponsored: false,
+      model: realModelName(
+        stagePolicy(analysis.mode, stage, analysis.language, this.registry).modelId,
+        this.registry,
+      ),
+      typicalCredits: estimate.typicalCredits,
+      maxCredits: estimate.maxCredits,
+      loginRequired: caller.guest,
+    };
+  }
+
+  /**
+   * Черновик ответов, пока анализ ждёт их: модель не вызывается, прогресс переживает перезагрузку
+   * страницы и вход в аккаунт. Неизвестные вопросы отбрасываются.
+   */
+  async saveAnswers(
+    caller: DiscoveryCaller,
+    id: string,
+    given: AnswersBody['answers'],
+  ): Promise<Ok<{ analysis: Analysis }> | ServiceError> {
+    const current = await this.deps.store.get(caller.userId, id);
+    if (!current) return notFound(id);
+    if (current.status !== 'needs_answers') return notWaiting(current.language);
+    const answers = normalizeAnswers(current.questions, given, false);
+    const updated = await this.mutate(caller.userId, id, (analysis) =>
+      analysis.status === 'needs_answers' && !sameAnswers(analysis.answers, answers)
+        ? { ...analysis, answers }
+        : analysis,
+    );
+    if (!updated) return notFound(id);
+    return { ok: true, analysis: updated };
+  }
+
+  /**
+   * Ответы на вопросы и запуск поиска возможностей.
+   *
+   * - Анализ ждёт ответов — ответы сохраняются, поиск возможностей запускается.
+   * - Отчёт готов, ответы изменены — поиск возможностей запускается заново. Это новая генерация,
+   *   поэтому она платная даже у бесплатного анализа (той же моделью, за кредиты, с согласием
+   *   `confirm`), а гостю нужен вход.
+   * - Ответы не изменились или поиск уже идёт — модель не вызывается (`rerun: false`).
+   */
   async continue(
     caller: DiscoveryCaller,
     id: string,
     body: AnswersBody,
-  ): Promise<Ok<{ analysis: Analysis }> | ServiceError> {
+  ): Promise<Ok<{ analysis: Analysis; rerun: boolean }> | ServiceError> {
     const current = await this.deps.store.get(caller.userId, id);
     if (!current) return notFound(id);
-    if (current.status === 'discovering' || current.status === 'ready') {
-      return { ok: true, analysis: current };
+    if (current.status === 'discovering') return { ok: true, analysis: current, rerun: false };
+    if (current.status !== 'needs_answers' && current.status !== 'ready') {
+      return notWaiting(current.language);
     }
-    if (current.status !== 'needs_answers') {
-      return {
-        ok: false,
-        status: 409,
-        code: 'analysis_not_waiting',
-        message: text(
-          current.language,
-          'Анализ сейчас не ждёт ответов.',
-          'The analysis is not waiting for answers now.',
-        ),
-      };
-    }
-    const answers: Record<string, AnswerRecord> = {};
-    for (const question of current.questions) {
-      const given = body.answers[question.id];
-      if (given && 'value' in given) answers[question.id] = { value: given.value };
-      else if (question.optional || (given && 'skipped' in given))
-        answers[question.id] = { skipped: true };
-    }
+    const answers = normalizeAnswers(current.questions, body.answers, true);
     const missing = current.questions.filter(
       (question) => !question.optional && !answers[question.id],
     );
@@ -521,6 +571,8 @@ export class DiscoveryService {
         details: { questionIds: missing.map((question) => question.id) },
       };
     }
+    if (current.status === 'ready') return this.rerunDiscovery(caller, current, answers, body);
+
     // Бесплатный анализ: резерв поиска возможностей держится 2 часа. Если пользователь вернулся
     // позже и резерв уже вернулся в бюджет — берём новый или честно говорим, что бюджет исчерпан.
     let discoveryReservation = current.stages.discovery?.reservationId;
@@ -543,8 +595,11 @@ export class DiscoveryService {
         if (!reserved) return this.freeUnavailable('budget_exhausted', caller, current.language);
       }
     }
-    const updated = await this.mutate(caller.userId, id, (analysis) =>
-      analysis.status === 'needs_answers'
+    // Запускает поиск только тот запрос, чья запись перевела анализ в «поиск» (двойной клик).
+    let applied = false;
+    const updated = await this.mutate(caller.userId, id, (analysis) => {
+      applied = analysis.status === 'needs_answers';
+      return applied
         ? {
             ...analysis,
             answers,
@@ -561,13 +616,82 @@ export class DiscoveryService {
                 : {}),
             },
           }
-        : analysis,
-    );
+        : analysis;
+    });
     if (!updated) return notFound(id);
-    if (updated.status === 'discovering' && updated.stages.discovery?.status === 'pending') {
-      this.schedule(caller, id, 'discovery');
+    if (applied) this.schedule(caller, id, 'discovery');
+    return { ok: true, analysis: updated, rerun: applied };
+  }
+
+  private async rerunDiscovery(
+    caller: DiscoveryCaller,
+    current: Analysis,
+    answers: Record<string, AnswerRecord>,
+    body: AnswersBody,
+  ): Promise<Ok<{ analysis: Analysis; rerun: boolean }> | ServiceError> {
+    if (sameAnswers(current.answers, answers)) return { ok: true, analysis: current, rerun: false };
+    const language = current.language;
+    if (caller.guest) {
+      return {
+        ok: false,
+        status: 401,
+        code: 'login_required',
+        message: text(
+          language,
+          'Обновить анализ с новыми ответами можно после входа: повторный поиск возможностей идёт за кредиты.',
+          'Sign in to update the analysis with new answers: a repeated search for opportunities costs credits.',
+        ),
+      };
     }
-    return { ok: true, analysis: updated };
+    if (!body.confirm) {
+      const quote = this.rerunQuote(current, caller);
+      return {
+        ok: false,
+        status: 409,
+        code: 'confirmation_required',
+        message: text(
+          language,
+          `Обновление анализа с новыми ответами стоит ≈ ${quote.typicalCredits} кредитов, не больше ${quote.maxCredits}. Подтвердите запуск.`,
+          `Updating the analysis with new answers costs ≈ ${quote.typicalCredits} credits, at most ${quote.maxCredits}. Confirm to start.`,
+        ),
+        details: {
+          model: quote.model,
+          typicalCredits: quote.typicalCredits,
+          maxCredits: quote.maxCredits,
+        },
+      };
+    }
+    const check = this.checkPaid(caller, current.mode, ['discovery'], language, true);
+    if (!check.ok) return check;
+
+    const previous = current.stages.discovery as StageRun;
+    const taskId = `${current.id}:discovery:${attemptOf(previous.taskId) + 1}`;
+    let applied = false;
+    const updated = await this.mutate(caller.userId, current.id, (analysis) => {
+      applied = analysis.status === 'ready' && !sameAnswers(analysis.answers, answers);
+      return applied
+        ? {
+            ...analysis,
+            answers,
+            status: 'discovering',
+            stages: {
+              ...analysis.stages,
+              discovery: {
+                status: 'pending',
+                taskId,
+                costUsd: analysis.stages.discovery?.costUsd ?? 0,
+                creditsUsd: analysis.stages.discovery?.creditsUsd ?? 0,
+                attempts: analysis.stages.discovery?.attempts ?? 0,
+                billing: 'user',
+              },
+            },
+          }
+        : analysis;
+    });
+    if (!updated) return notFound(current.id);
+    // Двойной клик: второй запрос видит уже запущенный поиск и ничего не запускает.
+    if (applied) this.schedule(caller, current.id, 'discovery');
+    return { ok: true, analysis: updated, rerun: applied };
   }
 
   /** Повтор упавшего этапа: бесплатный — с новым резервом бюджета, платный — с проверкой баланса. */
@@ -582,10 +706,12 @@ export class DiscoveryService {
     const stage = STAGE_ORDER.find((name) => current.stages[name]?.status === 'failed');
     if (!stage) return { ok: true, analysis: current };
     const previous = current.stages[stage] as StageRun;
-    const attemptNo = Number(previous.taskId.split(':').at(-1) ?? '1') + 1;
+    const attemptNo = attemptOf(previous.taskId) + 1;
     let reservationId: string | undefined;
+    // Повтор платного запуска (в том числе повторного поиска у бесплатного анализа) — за кредиты.
+    const sponsored = current.mode === 'free' && previous.billing !== 'user';
 
-    if (current.mode === 'free') {
+    if (sponsored) {
       const capUsd = stagePolicy('free', stage, current.language, this.registry).capUsd;
       reservationId = `${id}:${stage}:${attemptNo}`;
       const reserved = await this.deps.budget.reserve(this.today(), this.deps.freeDailyUsd, [
@@ -615,6 +741,7 @@ export class DiscoveryService {
           creditsUsd: previous.creditsUsd,
           attempts: previous.attempts,
           ...(reservationId ? { reservationId } : {}),
+          ...(previous.billing ? { billing: previous.billing } : {}),
         },
       },
     }));
@@ -668,7 +795,7 @@ export class DiscoveryService {
     const run = started?.stages[stage];
     if (!started || !run || run.status !== 'running' || run.startedAt !== startedAt) return;
 
-    const sponsored = started.mode === 'free';
+    const sponsored = started.mode === 'free' && run.billing !== 'user';
     if (sponsored && run.reservationId) {
       await this.deps.budget.start(
         run.reservationId,
@@ -891,6 +1018,58 @@ export class DiscoveryService {
     }
     throw new Error(`discovery: не удалось сохранить анализ ${id} — запись постоянно меняется`);
   }
+}
+
+function notWaiting(language: Language): ServiceError {
+  return {
+    ok: false,
+    status: 409,
+    code: 'analysis_not_waiting',
+    message: text(
+      language,
+      'Анализ сейчас не ждёт ответов.',
+      'The analysis is not waiting for answers now.',
+    ),
+  };
+}
+
+/** Номер запуска этапа из его id (`<анализ>:<этап>:<номер>`). */
+function attemptOf(taskId: string): number {
+  const value = Number(taskId.split(':').at(-1));
+  return Number.isFinite(value) && value > 0 ? value : 1;
+}
+
+/**
+ * Ответы в форме, которую хранит анализ: только вопросы этого анализа. `complete` — итоговая
+ * отправка: необязательный вопрос без ответа считается пропущенным.
+ */
+export function normalizeAnswers(
+  questions: readonly Question[],
+  given: AnswersBody['answers'],
+  complete: boolean,
+): Record<string, AnswerRecord> {
+  const answers: Record<string, AnswerRecord> = {};
+  for (const question of questions) {
+    const answer = given[question.id];
+    if (answer && 'value' in answer) answers[question.id] = { value: answer.value };
+    else if ((answer && 'skipped' in answer) || (complete && question.optional))
+      answers[question.id] = { skipped: true };
+  }
+  return answers;
+}
+
+/** Совпадают ли ответы по смыслу: пропуск и пустой ответ — одно и то же, пробелы по краям не важны. */
+export function sameAnswers(
+  a: Record<string, AnswerRecord>,
+  b: Record<string, AnswerRecord>,
+): boolean {
+  const valueOf = (record: AnswerRecord | undefined) =>
+    record && 'value' in record ? record.value.trim() : '';
+  const ids = new Set([...Object.keys(a), ...Object.keys(b)]);
+  for (const id of ids) {
+    if (valueOf(a[id]) !== valueOf(b[id])) return false;
+  }
+  return true;
 }
 
 function notFound(id: string): ServiceError {
