@@ -191,6 +191,11 @@ export const config = {
   discoveryEnabled: isProduction
     ? optionalEnv('DISCOVERY_ENABLED') === 'true'
     : optionalEnv('DISCOVERY_ENABLED') !== 'false',
+  /** Бюджет и сутки бесплатных анализов (docs/discovery-models.md, раздел 3). */
+  discovery: {
+    freeDailyUsd: readNumber('DISCOVERY_FREE_DAILY_USD', 5),
+    budgetTimeZone: optionalEnv('DISCOVERY_BUDGET_TZ') || 'UTC',
+  },
 
   /** Пользователь и план заглушки: реальные аккаунты появятся на этапе 3. */
   demoUserId: 'demo-user',

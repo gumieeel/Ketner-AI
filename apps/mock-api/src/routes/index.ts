@@ -29,6 +29,7 @@ import type { CompareVoteStore } from '../store/compare-vote-store.js';
 import type { RevokedTokenStore } from '../store/revoked-token-store.js';
 import type { Mailer } from '../services/mailer.js';
 import { createChatRouter } from './chat.js';
+import { createAnalysesRouter, type AnalysesRouterDeps } from './analyses.js';
 import { createCompareRouter } from './compare.js';
 import { createReviewRouter } from './review.js';
 import { createCodeRouter } from './code.js';
@@ -78,6 +79,10 @@ export interface ApiDeps {
   revokedTokenStore?: RevokedTokenStore;
   /** Отправка писем (коды регистрации и привязки Telegram); в тестах — перехватчик. */
   mailer?: Mailer;
+  /** Платформа решений (DISCOVERY_ENABLED); в тестах задаётся явно. */
+  discoveryEnabled?: boolean;
+  /** Подмена частей анализа задач в тестах (хранилища, время, бюджет). */
+  discovery?: Partial<AnalysesRouterDeps>;
 }
 
 /**
@@ -434,6 +439,21 @@ export function createApiRouter(deps: ApiDeps): Router {
     }),
   );
   // Проверка ответа моделью другой компании: тоже раньше общего роутера чата.
+  // Анализ задач (платформа решений): за флагом DISCOVERY_ENABLED.
+  router.use(
+    '/analyses',
+    createAnalysesRouter({
+      ai: deps.ai,
+      userStore: activeUserStore,
+      subscriptionStore: activeSubscriptionStore,
+      usageStore: activeUsageStore,
+      credits: activeBilling.credits,
+      ...(deps.chatGateway ? { gateway: deps.chatGateway } : {}),
+      githubConnected: (userId) => activeGithubStore.tokenOf(userId) !== undefined,
+      ...(deps.discoveryEnabled !== undefined ? { enabled: deps.discoveryEnabled } : {}),
+      ...deps.discovery,
+    }),
+  );
   router.use(
     '/chat/review',
     createReviewRouter({

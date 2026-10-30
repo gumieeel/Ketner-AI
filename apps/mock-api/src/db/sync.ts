@@ -35,6 +35,7 @@ import { attachImageDriver } from '../images/runtime.js';
 import { attachProjectDriver } from '../code/runtime.js';
 import { runMigrations, setMigrationState, type MigrationDb } from './migrate.js';
 import { MIGRATIONS } from './migration-list.js';
+import { attachDiscoveryDriver, expectDiscoveryDatabase } from '../discovery/runtime.js';
 
 /** postgres.js как база для раннера миграций: запросы и транзакция `sql.begin`. */
 function createMigrationDb(sql: postgres.Sql): MigrationDb {
@@ -1042,6 +1043,8 @@ export async function initDatabaseSync(): Promise<boolean> {
       return false;
     }
 
+    // Discovery работает только на базе: пока миграции не применились, его API отвечает 503.
+    expectDiscoveryDatabase();
     console.log('🔄 [db] Подключение к PostgreSQL (Supabase)...');
     await ensureDatabaseSchema(sql);
     console.log('✅ [db] Схема базы данных проверена (таблицы готовы)');
@@ -1116,6 +1119,7 @@ export async function initDatabaseSync(): Promise<boolean> {
         console.log(message),
       );
       setMigrationState({ status: 'ok', result });
+      attachDiscoveryDriver(codeRunner);
     } catch (error) {
       setMigrationState({
         status: 'failed',

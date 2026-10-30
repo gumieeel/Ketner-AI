@@ -15,7 +15,7 @@ import {
   securityHeaders,
 } from './middleware/security.js';
 import { sendError } from './middleware/errors.js';
-import { createApiRouter, describeService } from './routes/index.js';
+import { createApiRouter, describeService, type ApiDeps } from './routes/index.js';
 import {
   classifyPath,
   isNonCanonicalHost,
@@ -97,6 +97,8 @@ export interface AppDeps {
   mailer?: Mailer;
   /** Платформа решений (флаг DISCOVERY_ENABLED); в тестах задаётся явно. */
   discoveryEnabled?: boolean;
+  /** Подмена частей анализа задач в тестах. */
+  discovery?: ApiDeps['discovery'];
 }
 
 const DEFAULT_BODY_LIMIT = '1mb';
