@@ -17,6 +17,11 @@ export interface FairUseOptions {
    * честная работа над кодом упёрлась бы в лимит чата. Главное ограничение здесь — кредиты.
    */
   skipTokenWindows?: boolean;
+  /**
+   * Не применять лимиты СООБЩЕНИЙ в минуту, час и сутки: служебная задача (этап анализа Discovery)
+   * не сообщение чата, у неё свои квоты (discovery/limits.ts). Параллельность проверяется всегда.
+   */
+  skipMessageWindows?: boolean;
 }
 
 export class FairUseEngine {
@@ -47,6 +52,7 @@ export class FairUseEngine {
 
     // 2. Проверка запросов в минуту (RPM)
     if (
+      !options.skipMessageWindows &&
       limits.requestsPerMinute !== null &&
       snapshot.requestsLastMinute >= limits.requestsPerMinute
     ) {
@@ -63,7 +69,11 @@ export class FairUseEngine {
     }
 
     // 3. Проверка запросов в час (RPH)
-    if (limits.requestsPerHour !== null && snapshot.requestsLastHour >= limits.requestsPerHour) {
+    if (
+      !options.skipMessageWindows &&
+      limits.requestsPerHour !== null &&
+      snapshot.requestsLastHour >= limits.requestsPerHour
+    ) {
       const reason =
         language === 'en'
           ? `You have sent a lot of messages. Please try again later.`
@@ -77,7 +87,11 @@ export class FairUseEngine {
     }
 
     // 4. Проверка запросов в день (RPD)
-    if (limits.requestsPerDay !== null && snapshot.requestsLastDay >= limits.requestsPerDay) {
+    if (
+      !options.skipMessageWindows &&
+      limits.requestsPerDay !== null &&
+      snapshot.requestsLastDay >= limits.requestsPerDay
+    ) {
       const reason =
         language === 'en'
           ? `Messages are used up for today. Try again tomorrow or upgrade your plan.`

@@ -920,3 +920,212 @@ test('провайдер настроен, но упал — честная ош
   assert.equal(outcome.error?.code, 'provider_error');
   assert.equal(outcome.done, undefined);
 });
+
+// ─── Этапы анализа Discovery (task.kind = 'discovery') ───────────────────────────────
+
+function discoveryTask(billing: 'user' | 'sponsored', id = `an-${Math.random()}`) {
+  return {
+    kind: 'discovery' as const,
+    id,
+    systemPrompt: 'Ответь JSON.',
+    billing,
+    maxOutputTokens: 2500,
+    reasoningEffort: 'low' as const,
+  };
+}
+
+test('бесплатный анализ (sponsored): кредиты не списываются и не меняют модель, цена в учёте и в onDone', async () => {
+  const usage = newUsage();
+  const credits = memoryCredits();
+  const calls: Call[] = [];
+  const gateway = makeGateway(
+    fakeOpenRouter(okStream('{"ok":true}', { cost: 0.0031 }), calls),
+    usage,
+    credits,
+  );
+  exhaust(credits, 'u-sponsored', 'free');
+
+  const out = await run(
+    gateway,
+    request({
+      userId: 'u-sponsored',
+      userPlan: 'free',
+      modelId: 'ketner-mini',
+      strictModel: true,
+      task: discoveryTask('sponsored', 'an-1'),
+    }),
+  );
+  assertNoError(out);
+  // Нулевой баланс не подменил GPT-6 Luna бесплатной моделью.
+  assert.deepEqual(
+    calls.map((c) => c.model),
+    ['openai/gpt-6-luna'],
+  );
+  assert.equal(out.done?.costUsd, 0.0031);
+  assert.equal(out.done?.creditsUsd, 0);
+  const record = usage.getRunRecords('u-sponsored', 'an-1').at(-1);
+  assert.equal(record?.kind, 'discovery');
+  assert.equal(record?.sponsored, true);
+  assert.equal(record?.runId, 'an-1');
+  assert.equal(record?.estimatedCost, 0.0031);
+});
+
+test('гость получает бесплатный анализ на запрошенной модели, а не на бесплатной модели чата', async () => {
+  const calls: Call[] = [];
+  const gateway = makeGateway(fakeOpenRouter(okStream('{}', { cost: 0.002 }), calls), newUsage());
+  const out = await run(
+    gateway,
+    request({
+      userId: 'guest_abcdefgh12',
+      userPlan: 'free',
+      isAnonymous: true,
+      modelId: 'ketner-mini',
+      strictModel: true,
+      task: discoveryTask('sponsored'),
+    }),
+  );
+  assertNoError(out);
+  assert.deepEqual(
+    calls.map((c) => c.model),
+    ['openai/gpt-6-luna'],
+  );
+});
+
+test('анализ за кредиты списывает реальную цену; при нехватке кредитов — ошибка, а не подмена модели', async () => {
+  const credits = memoryCredits();
+  const calls: Call[] = [];
+  const gateway = makeGateway(
+    fakeOpenRouter(okStream('{}', { cost: 0.0088 }), calls),
+    newUsage(),
+    credits,
+  );
+  setBalance(credits, 'u-paid', 'credits', 100);
+  const paid = await run(
+    gateway,
+    request({
+      userId: 'u-paid',
+      userPlan: 'credits',
+      modelId: 'ketner-pro',
+      strictModel: true,
+      task: discoveryTask('user'),
+    }),
+  );
+  assertNoError(paid);
+  assert.equal(paid.done?.creditsUsd, 0.0088);
+  assert.equal(Math.round(credits.balance('u-paid', 'credits').remainingUsd * 1e6), 91_200);
+
+  exhaust(credits, 'u-paid', 'credits');
+  const poor = await run(
+    gateway,
+    request({
+      userId: 'u-paid',
+      userPlan: 'credits',
+      modelId: 'claude-sonnet-5.5',
+      strictModel: true,
+      task: discoveryTask('user'),
+    }),
+  );
+  assert.equal(poor.error?.code, 'insufficient_credits');
+  assert.ok(!calls.some((c) => c.model === 'anthropic/claude-sonnet-5.5'));
+});
+
+test('этап анализа: потолок ответа и глубина размышлений из задачи доходят до провайдера', async () => {
+  const calls: Call[] = [];
+  const gateway = makeGateway(fakeOpenRouter(okStream('{}'), calls), newUsage());
+  // Free: потолок тарифа 2048, а задаче нужно 2500 — берётся потолок задачи.
+  const out = await run(
+    gateway,
+    request({
+      userId: 'u-cap',
+      userPlan: 'free',
+      modelId: 'ketner-mini',
+      strictModel: true,
+      task: discoveryTask('sponsored'),
+    }),
+  );
+  assertNoError(out);
+  assert.equal(calls[0]?.maxTokens, 2500);
+  assert.deepEqual(calls[0]?.reasoning, { effort: 'low' });
+});
+
+test('этап анализа не блокируется исчерпанными сообщениями чата и сам их не тратит', async () => {
+  const usage = newUsage();
+  const gateway = makeGateway(fakeOpenRouter(okStream('{}'), []), usage);
+  // Расход «два часа назад»: в сутки входит, в час и минуту — нет.
+  for (let i = 0; i < 10; i++) {
+    const seeded = usage.recordUsage({
+      userId: 'u-chat-done',
+      conversationId: 'seed',
+      modelId: 'ketner-mini',
+      provider: 'openrouter',
+      inputTokens: 10,
+      outputTokens: 10,
+      estimatedCost: 0.0001,
+      latencyMs: 1,
+      status: 'success',
+    });
+    seeded.createdAt = new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString();
+  }
+  const chat = await run(
+    gateway,
+    request({ userId: 'u-chat-done', userPlan: 'free', modelId: 'ketner-mini' }),
+  );
+  assert.equal(chat.error?.code, 'rate_limited');
+
+  const analysis = await run(
+    gateway,
+    request({
+      userId: 'u-chat-done',
+      userPlan: 'free',
+      modelId: 'ketner-mini',
+      strictModel: true,
+      task: discoveryTask('sponsored'),
+    }),
+  );
+  assertNoError(analysis);
+  assert.equal(usage.getFairUseSnapshot('u-chat-done').requestsLastDay, 10);
+});
+
+test('этап анализа: модель недоступна — ошибка model_unavailable, запасная модель не вызывается', async () => {
+  const calls: Call[] = [];
+  const failing = async (o: ProviderRequestOptions): Promise<ProviderResponse> => {
+    throw new OpenRouterError(o.model, 503, 'down');
+  };
+  const gateway = makeGateway(fakeOpenRouter(failing, calls), newUsage());
+  const out = await run(
+    gateway,
+    request({
+      userId: 'u-down',
+      userPlan: 'credits',
+      modelId: 'ketner-pro',
+      strictModel: true,
+      task: discoveryTask('sponsored'),
+    }),
+  );
+  assert.equal(out.error?.code, 'provider_error');
+  assert.deepEqual(
+    calls.map((c) => c.model),
+    ['xiaomi/mimo-v2.6-pro'],
+  );
+});
+
+test('с пользователя списывается не больше обещанного потолка операции, учёт — полная цена', async () => {
+  const credits = memoryCredits();
+  const usage = newUsage();
+  const gateway = makeGateway(fakeOpenRouter(okStream('{}', { cost: 0.05 }), []), usage, credits);
+  setBalance(credits, 'u-capped', 'credits', 1000);
+  const out = await run(
+    gateway,
+    request({
+      userId: 'u-capped',
+      userPlan: 'credits',
+      modelId: 'ketner-pro',
+      strictModel: true,
+      task: { ...discoveryTask('user', 'an-cap'), maxChargeUsd: 0.01 },
+    }),
+  );
+  assertNoError(out);
+  assert.equal(out.done?.creditsUsd, 0.01);
+  assert.equal(out.done?.costUsd, 0.05);
+  assert.equal(usage.getRunRecords('u-capped', 'an-cap').at(-1)?.estimatedCost, 0.05);
+});

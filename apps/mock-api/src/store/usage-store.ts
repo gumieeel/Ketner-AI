@@ -143,6 +143,7 @@ export class UsageStore {
     status: UsageStatus;
     source?: ResponseSource;
     kind?: UsageRecord['kind'];
+    sponsored?: boolean;
     runId?: string;
     step?: number;
     creditsUsd?: number;
@@ -165,6 +166,7 @@ export class UsageStore {
       status: params.status,
       source: params.source ?? 'provider',
       ...(params.kind ? { kind: params.kind } : {}),
+      ...(params.sponsored ? { sponsored: true } : {}),
       ...(params.runId ? { runId: params.runId } : {}),
       ...(params.step !== undefined ? { step: params.step } : {}),
       ...(params.creditsUsd && params.creditsUsd > 0 ? { creditsUsd: params.creditsUsd } : {}),
@@ -270,7 +272,9 @@ export class UsageStore {
       // Отказанные и упавшие запросы не потребляют лимит: иначе каждый отказ продлевал бы блокировку
       // (пользователь упёрся в лимит → отказ записался → лимит «не отпускает»), а сбой провайдера
       // списывал бы с человека сообщение, которого он не получил.
+      // Этапы анализа Discovery не тратят ни сообщения, ни токены чата: у анализа свои квоты и бюджет.
       const countsTowardLimits =
+        rec.kind !== 'discovery' &&
         rec.status !== 'rate_limited' &&
         rec.status !== 'concurrency_limited' &&
         rec.status !== 'error';
@@ -372,6 +376,14 @@ export class UsageStore {
       if (rec.kind === 'review' && rec.status === 'success') reviews.add(rec.runId ?? rec.id);
     }
     return reviews.size;
+  }
+
+  /**
+   * Записи одного запуска пользователя (`runId`): все вызовы модели этапа анализа или проверки,
+   * включая повторы. По ним считается фактическая стоимость операции.
+   */
+  getRunRecords(userId: string, runId: string): UsageRecord[] {
+    return (this.userIndex.get(userId) ?? []).filter((rec) => rec.runId === runId);
   }
 
   /**

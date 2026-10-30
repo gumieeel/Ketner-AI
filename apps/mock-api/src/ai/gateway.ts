@@ -456,6 +456,8 @@ export class AIGateway {
       ? 0
       : this.credits.balance(activeUserId, effectivePlan).remainingUsd;
     const stage: CreditStage = req.isAnonymous ? 'normal' : creditStageOf(balanceUsd);
+    // Бесплатный анализ Discovery оплачивает сервис: кредиты не влияют на выбор модели и не списываются.
+    const sponsored = req.task?.billing === 'sponsored';
 
     // 2. Анализ запроса
     const rawPrompt = [...req.messages].reverse().find((m) => m.role === 'user')?.content ?? '';
@@ -542,12 +544,14 @@ export class AIGateway {
 
       // Не хватает кредитов на запрошенную модель: отвечает та, на которую хватает (в конце лестницы —
       // бесплатная), и это видно в routingReason и selectedModel.
-      const affordable = pickAffordable(requested, {
-        balanceUsd,
-        plan: effectivePlan,
-        mode: reasoningMode,
-        registry: this.registry,
-      });
+      const affordable = sponsored
+        ? { model: requested, reason: null }
+        : pickAffordable(requested, {
+            balanceUsd,
+            plan: effectivePlan,
+            mode: reasoningMode,
+            registry: this.registry,
+          });
       requestedModel = requested;
       if (affordable.model.id !== requested.id) substitution = 'credits';
       targetModel = affordable.model;
@@ -593,7 +597,14 @@ export class AIGateway {
     }
 
     // 4. Проверка Fair Use и захват concurrency слота
-    const decision = FairUseEngine.evaluate(snapshot, effectivePlan, language);
+    // Этап анализа — не сообщение чата: лимиты сообщений и токенов чата к нему не применяются
+    // (у анализа свои квоты и бюджет), параллельность проверяется как обычно.
+    const decision = FairUseEngine.evaluate(
+      snapshot,
+      effectivePlan,
+      language,
+      req.task?.kind === 'discovery' ? { skipMessageWindows: true, skipTokenWindows: true } : {},
+    );
 
     if (decision.action === 'deny') {
       this.usageStore.recordUsage({
@@ -841,25 +852,29 @@ export class AIGateway {
           // у каждой свой набор допустимых значений и своя цена выходных токенов.
           // У моделей Pro и Ultra глубина фиксирована профилем (medium, в режиме Max — xhigh),
           // у остальных подстраивается под сложность запроса.
-          const wantedEffort = candidateModel.effortProfile
-            ? profileEffort(candidateModel.effortProfile, reasoningMode, stage)
-            : chooseReasoningEffort({
-                level: taskInfo.level,
-                category: taskInfo.category,
-                plan: effectivePlan,
-                stage,
-                costClass: candidateModel.costClass,
-                escalate,
-              });
+          const wantedEffort = req.task?.reasoningEffort
+            ? req.task.reasoningEffort
+            : candidateModel.effortProfile
+              ? profileEffort(candidateModel.effortProfile, reasoningMode, stage)
+              : chooseReasoningEffort({
+                  level: taskInfo.level,
+                  category: taskInfo.category,
+                  plan: effectivePlan,
+                  stage,
+                  costClass: candidateModel.costClass,
+                  escalate,
+                });
           const reasoning = toProviderReasoning(candidateModel.reasoning, wantedEffort);
-          const maxTokens = computeOutputCap({
-            planMaxTokens: entitlements.maxTokens,
-            modelMaxOutputTokens: candidateModel.maxOutputTokens,
-            stage,
-            level: taskInfo.level,
-            heavyContext: hasWorkspaceOrAttachments,
-            effort: wantedEffort,
-          });
+          const maxTokens = req.task?.maxOutputTokens
+            ? Math.min(req.task.maxOutputTokens, candidateModel.maxOutputTokens)
+            : computeOutputCap({
+                planMaxTokens: entitlements.maxTokens,
+                modelMaxOutputTokens: candidateModel.maxOutputTokens,
+                stage,
+                level: taskInfo.level,
+                heavyContext: hasWorkspaceOrAttachments,
+                effort: wantedEffort,
+              });
 
           // Модель знает, кто она: строка о модели и её разработчике дописывается к системному
           // промпту той модели цепочки, которая отвечает (запасная называет себя, а не исходную).
@@ -1044,8 +1059,13 @@ export class AIGateway {
       // Кредиты списываются по реальной цене ответа провайдера. Бесплатная модель, кэш и шаблонные
       // ответы ничего не стоят; гости кредитов не имеют.
       const creditsUsd =
-        responseSource === 'provider' && !req.isAnonymous && !isFreeModel(usedModel)
-          ? this.credits.charge(activeUserId, totalEstimatedCost)
+        responseSource === 'provider' && !req.isAnonymous && !isFreeModel(usedModel) && !sponsored
+          ? this.credits.charge(
+              activeUserId,
+              req.task?.maxChargeUsd !== undefined
+                ? Math.min(totalEstimatedCost, Math.max(0, req.task.maxChargeUsd))
+                : totalEstimatedCost,
+            )
           : 0;
 
       // Остановка сторожем по таймауту — это обрыв, а не выбор пользователя: ответ можно продолжить.
@@ -1076,6 +1096,7 @@ export class AIGateway {
         status: isCancelled() ? 'cancelled' : 'success',
         source: responseSource,
         ...(req.task ? { kind: req.task.kind, runId: req.task.id } : {}),
+        ...(sponsored ? { sponsored: true } : {}),
         creditsUsd,
       });
 
@@ -1112,6 +1133,8 @@ export class AIGateway {
           canContinue,
           contextSummary: generatedSummary,
           reasoningMode,
+          costUsd: totalEstimatedCost,
+          creditsUsd,
         });
       }
     } catch (error) {
