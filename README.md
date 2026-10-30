@@ -89,6 +89,7 @@ render.yaml   описание сервиса Render · Dockerfile — альт�
 | [PROJECT_AUDIT.md](docs/PROJECT_AUDIT.md)               | Аудит перед трансформацией в платформу решений (фаза 0)            |
 | [MIGRATION_PLAN.md](docs/MIGRATION_PLAN.md)             | План миграции: этапы, миграции БД, регрессии, критерии             |
 | [PRODUCT_ARCHITECTURE.md](docs/PRODUCT_ARCHITECTURE.md) | Целевая архитектура: Discovery, Builder, данные, API, безопасность |
+| [discovery-models.md](docs/discovery-models.md)         | Модели и стоимость анализа задачи (на согласование)                |
 
 ## Соглашения
 
