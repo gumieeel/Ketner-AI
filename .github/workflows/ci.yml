@@ -1,0 +1,55 @@
+# Проверки на каждый пуш в main и на каждый pull request.
+# Render выкатывает main сам, поэтому красная сборка здесь — сигнал, что на сайт ушла ошибка.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # Даты изменения страниц для sitemap берутся из истории git.
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Установка зависимостей
+        run: npm ci --no-audit --no-fund
+
+      - name: Форматирование
+        run: npm run format:check
+
+      - name: Типы
+        run: npm run typecheck
+
+      - name: ESLint
+        run: npm run lint
+
+      - name: Тесты
+        run: npm test
+
+      - name: Сборка
+        run: npm run build
+
+      - name: Закоммиченный apps/web/dist совпадает со сборкой
+        # .prerender.json содержит даты изменения страниц, они зависят от времени сборки.
+        run: |
+          git status --porcelain -- apps/web/dist ':!apps/web/dist/.prerender.json'
+          git diff --exit-code --stat -- apps/web/dist ':!apps/web/dist/.prerender.json'
+          test -z "$(git ls-files --others --exclude-standard -- apps/web/dist)"
+
+      - name: Уязвимости в рабочих зависимостях
+        run: npm audit --omit=dev --audit-level=high

@@ -183,6 +183,14 @@ export const config = {
    * Разрешён по умолчанию (отключается явно через ALLOW_ANONYMOUS_CHAT=false).
    */
   allowAnonymousChat: optionalEnv('ALLOW_ANONYMOUS_CHAT') === 'false' ? false : true,
+  /**
+   * Платформа решений (анализ задачи, отчёт о возможностях, планы, Ketner Builder) — в разработке,
+   * docs/MIGRATION_PLAN.md. В production выключена, пока её не включат явно `DISCOVERY_ENABLED=true`;
+   * вне production включена, `DISCOVERY_ENABLED=false` выключает.
+   */
+  discoveryEnabled: isProduction
+    ? optionalEnv('DISCOVERY_ENABLED') === 'true'
+    : optionalEnv('DISCOVERY_ENABLED') !== 'false',
 
   /** Пользователь и план заглушки: реальные аккаунты появятся на этапе 3. */
   demoUserId: 'demo-user',

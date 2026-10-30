@@ -33,6 +33,25 @@ import { createPostgresProjectDriver, ensureCodeSchema } from '../code/postgres-
 import { ensureImagesSchema } from '../images/image-store.js';
 import { attachImageDriver } from '../images/runtime.js';
 import { attachProjectDriver } from '../code/runtime.js';
+import { runMigrations, setMigrationState, type MigrationDb } from './migrate.js';
+import { MIGRATIONS } from './migration-list.js';
+
+/** postgres.js как база для раннера миграций: запросы и транзакция `sql.begin`. */
+function createMigrationDb(sql: postgres.Sql): MigrationDb {
+  const asRows = <T>(rows: unknown): T[] => rows as T[];
+  return {
+    query: async <T>(text: string, params?: unknown[]) =>
+      asRows<T>(await sql.unsafe(text, (params ?? []) as never[])),
+    transaction: async <T>(run: (tx: MigrationDb) => Promise<T>) =>
+      (await sql.begin((tx) =>
+        run({
+          query: async <R>(text: string, params?: unknown[]) =>
+            asRows<R>(await tx.unsafe(text, (params ?? []) as never[])),
+          transaction: () => Promise.reject(new Error('Вложенные транзакции не поддерживаются')),
+        }),
+      )) as T,
+  };
+}
 
 export function hasPostgresConfig(): boolean {
   const url = (config.databaseUrl || process.env.DATABASE_URL || '').trim();
@@ -1089,6 +1108,20 @@ export async function initDatabaseSync(): Promise<boolean> {
       await syncGithubConnections(sql);
     } catch (error) {
       console.error('❌ [db] Подключения GitHub не синхронизированы с PostgreSQL:', error);
+    }
+    // Версионные миграции (новые таблицы платформы решений). Отдельно от остального: их сбой
+    // выключает только функции, которым нужны эти таблицы, а чат, оплата и Code работают дальше.
+    try {
+      const result = await runMigrations(createMigrationDb(sql), MIGRATIONS, (message) =>
+        console.log(message),
+      );
+      setMigrationState({ status: 'ok', result });
+    } catch (error) {
+      setMigrationState({
+        status: 'failed',
+        error: error instanceof Error ? error.message : String(error),
+      });
+      console.error('❌ [db] Версионные миграции не применены:', error);
     }
     console.log('🎉 [db] Все данные успешно синхронизированы с PostgreSQL / Supabase!');
     return true;
