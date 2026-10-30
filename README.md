@@ -69,23 +69,26 @@ render.yaml   описание сервиса Render · Dockerfile — альт�
 
 ## Документация
 
-| Документ                                            | О чём                                                              |
-| --------------------------------------------------- | ------------------------------------------------------------------ |
-| [architecture.md](docs/architecture.md)             | Как устроены сайт и сервер, путь запроса, хранение данных, стек    |
-| [environment.md](docs/environment.md)               | Все переменные окружения: что обязательно в production             |
-| [operations.md](docs/operations.md)                 | Деплой на Render, домен, вебхуки, секреты, админка, что проверять  |
-| [seo.md](docs/seo.md)                               | Поисковики: метатеги, отрисовка страниц в HTML, sitemap, кабинеты  |
-| [api.md](docs/api.md)                               | API сайта (`/api/*`): эндпоинты, формат ошибок, SSE чата           |
-| [agent-api.md](docs/agent-api.md)                   | OpenAI-совместимый API (`/v1/*`) для CLI и IDE                     |
-| [data-model.md](docs/data-model.md)                 | Сущности и таблицы Postgres                                        |
-| [auth-and-security.md](docs/auth-and-security.md)   | Вход и аккаунты, права, защита, известные риски                    |
-| [payments.md](docs/payments.md)                     | Trybit, Telegram Stars, возвраты, вебхуки                          |
-| [telegram.md](docs/telegram.md)                     | Боты, мини-приложение, вход через Telegram                         |
-| [models-and-pricing.md](docs/models-and-pricing.md) | Модели, Auto, кредиты, цены и маржа, картинки                      |
-| [code-workspace.md](docs/code-workspace.md)         | Ketner Code: проекты и агент                                       |
-| [screens.md](docs/screens.md)                       | Карта страниц сайта                                                |
-| [ux-checklist.md](docs/ux-checklist.md)             | Дизайн-система и чек-лист интерфейса                               |
-| [roadmap.md](docs/roadmap.md)                       | Что не готово и что нужно для полноценного продукта, по приоритету |
+| Документ                                                | О чём                                                              |
+| ------------------------------------------------------- | ------------------------------------------------------------------ |
+| [architecture.md](docs/architecture.md)                 | Как устроены сайт и сервер, путь запроса, хранение данных, стек    |
+| [environment.md](docs/environment.md)                   | Все переменные окружения: что обязательно в production             |
+| [operations.md](docs/operations.md)                     | Деплой на Render, домен, вебхуки, секреты, админка, что проверять  |
+| [seo.md](docs/seo.md)                                   | Поисковики: метатеги, отрисовка страниц в HTML, sitemap, кабинеты  |
+| [api.md](docs/api.md)                                   | API сайта (`/api/*`): эндпоинты, формат ошибок, SSE чата           |
+| [agent-api.md](docs/agent-api.md)                       | OpenAI-совместимый API (`/v1/*`) для CLI и IDE                     |
+| [data-model.md](docs/data-model.md)                     | Сущности и таблицы Postgres                                        |
+| [auth-and-security.md](docs/auth-and-security.md)       | Вход и аккаунты, права, защита, известные риски                    |
+| [payments.md](docs/payments.md)                         | Trybit, Telegram Stars, возвраты, вебхуки                          |
+| [telegram.md](docs/telegram.md)                         | Боты, мини-приложение, вход через Telegram                         |
+| [models-and-pricing.md](docs/models-and-pricing.md)     | Модели, Auto, кредиты, цены и маржа, картинки                      |
+| [code-workspace.md](docs/code-workspace.md)             | Ketner Code: проекты и агент                                       |
+| [screens.md](docs/screens.md)                           | Карта страниц сайта                                                |
+| [ux-checklist.md](docs/ux-checklist.md)                 | Дизайн-система и чек-лист интерфейса                               |
+| [roadmap.md](docs/roadmap.md)                           | Что не готово и что нужно для полноценного продукта, по приоритету |
+| [PROJECT_AUDIT.md](docs/PROJECT_AUDIT.md)               | Аудит перед трансформацией в платформу решений (фаза 0)            |
+| [MIGRATION_PLAN.md](docs/MIGRATION_PLAN.md)             | План миграции: этапы, миграции БД, регрессии, критерии             |
+| [PRODUCT_ARCHITECTURE.md](docs/PRODUCT_ARCHITECTURE.md) | Целевая архитектура: Discovery, Builder, данные, API, безопасность |
 
 ## Соглашения
 
