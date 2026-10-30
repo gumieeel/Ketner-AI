@@ -26,25 +26,32 @@
 
 ## 2. Модули сервера
 
-Все модули — внутри `apps/mock-api/src`, вызовы моделей только через существующий `AIGateway.stream` со служебной задачей `task`.
+Все модули — внутри `apps/mock-api/src`, вызовы моделей только через существующий `AIGateway.stream` со служебной задачей `task`. Этапы 1–2 (анализ контекста и поиск возможностей) сделаны 30.10.2026; план (`plan-generator.ts`) и Builder — следующие этапы.
 
 ```
-routes/analyses.ts ─┐                      ┌─ discovery/context-analyzer.ts ─┐
-routes/plans.ts ────┼─ discovery/service.ts ┼─ discovery/discovery-engine.ts ├─ discovery/run-task.ts ─ AIGateway.stream
-routes/solutions.ts ┘  builder/service.ts   ├─ discovery/plan-generator.ts ──┘   (task.kind, учёт, кредиты)
-                                            ├─ discovery/feasibility.ts ── discovery/capabilities.ts
-                                            └─ discovery/impact.ts
-          хранилища: discovery/store.ts, builder/store.ts (Postgres; в памяти — локально и в тестах)
+routes/analyses.ts ── discovery/service.ts ─┬─ discovery/run-task.ts ── AIGateway.stream
+                                            │    (task.kind 'discovery', strictModel, max_tokens,
+                                            │     billing 'user' | 'sponsored', maxChargeUsd)
+                                            ├─ prompts.ts, schemas.ts (zod), templates.ts (демо)
+                                            ├─ model-policy.ts — модели и потолки цены этапов
+                                            ├─ feasibility.ts ── capabilities.ts (код, без модели)
+                                            ├─ impact.ts (код, без модели)
+                                            ├─ limits.ts — квоты, адрес, одноразовая почта
+                                            ├─ budget.ts — суточный бюджет бесплатных анализов
+                                            └─ store.ts — анализы и возможности
+хранилища: Postgres после миграции 0001_discovery; без DATABASE_URL — память (runtime.ts)
 ```
+
+Разбор задачи (A) и поиск возможностей (B) — промпты и схемы в `prompts.ts` и `schemas.ts`, а не отдельные файлы: их логика — один вызов модели и разбор ответа.
 
 ### Общий вызов модели — `discovery/run-task.ts`
 
-- Принимает: пользователя (из сессии), вид задачи, системный промпт этапа, пользовательские данные, схему ответа, бюджет `maxCostUsd`.
-- Вызывает `AIGateway.stream` с `task: { kind, id, systemPrompt, templateOutput }`, собирает текст из `onDelta`.
-- Разбирает `extractJsonObject` (из `services/answer-review.ts`) и проверяет схемой. Невалидно — один повтор с описанием ошибки разбора; снова невалидно — ошибка этапа `model_output_invalid`, кредиты за неудачный вызов уже списаны шлюзом и видны в учёте.
-- Ничего не делает в обход шлюза: выбор модели, fallback, предохранитель, сторож, цена, списание и учёт — штатные.
+- Принимает: пользователя (из сессии или гостевого id), политику этапа (модель, `max_tokens`, глубина размышлений, потолок цены), системный промпт, пользовательские данные, схему ответа.
+- Вызывает `AIGateway.stream` с `task: { kind: 'discovery', id, systemPrompt, templateOutput, billing, maxOutputTokens, reasoningEffort, maxChargeUsd }` и `strictModel`, собирает текст из `onDelta`, цену — из `onDone` (`costUsd`, `creditsUsd`).
+- Разбирает `extractJsonObject` (из `services/answer-review.ts`) и проверяет схемой. Невалидно — один повтор с описанием ошибки; снова невалидно — ошибка этапа `model_output_invalid`. Ошибка шлюза (модель недоступна, нет кредитов) — без повтора.
+- Ничего не делает в обход шлюза. Расширения шлюза — аддитивные: `billing: 'sponsored'` (кредиты не списываются и не влияют на выбор модели, учёт с пометкой `sponsored`), потолок ответа и глубина из задачи, `maxChargeUsd`, этапы анализа не тратят и не проверяют лимиты сообщений и токенов чата (параллельность проверяется).
 
-### A. Context Analyzer — `discovery/context-analyzer.ts`
+### A. Context Analyzer — промпт и схема `contextOutputSchema`
 
 Вход: текст задачи (до 8 000 символов), язык, ответы на вопросы. Выход (схема `AnalysisContext`):
 
@@ -62,7 +69,7 @@ routes/solutions.ts ┘  builder/service.ts   ├─ discovery/plan-generator.ts
 
 Каждое значение помечается `source: 'user' | 'inferred'`: в отчёте предположения показываются как предположения.
 
-### B. Discovery Engine — `discovery/discovery-engine.ts`
+### B. Discovery Engine — промпт и схема `discoveryOutputSchema`
 
 Вход: `AnalysisContext` и ответы. Выход: 3–7 возможностей:
 
@@ -159,18 +166,18 @@ active ⇄ paused        любая правка конфигурации → н
 
 Новые таблицы создаются версионными миграциями `0001`–`0003` (`db/migration-list.ts`, см. план). Во всех: `id text PRIMARY KEY`, `user_id text NOT NULL`, `created_at`, `updated_at timestamptz`; индекс `(user_id, updated_at DESC)`; каждый запрос фильтрует по `user_id`.
 
-| Таблица                         | Ключевые колонки                                                                                                                                                                                                                                                                                                                              |
-| ------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `discovery_analyses`            | `status` (`created`, `analyzing`, `needs_answers`, `discovering`, `ready`, `failed`, `archived`), `input_text`, `language`, `context jsonb`, `questions jsonb`, `answers jsonb`, `answers_hash`, `summary jsonb`, `stage_runs jsonb` (этап → `{ status, taskId, costUsd, startedAt, finishedAt, error }`), `saved boolean`, `version integer` |
-| `discovery_opportunities`       | `analysis_id`, `position`, `title`, `data jsonb` (поля раздела 2B), `feasibility_status`, `feasibility jsonb`, `impact jsonb`, `priority integer`                                                                                                                                                                                             |
-| `implementation_plans`          | `analysis_id`, `opportunity_id`, `status`, `data jsonb` (цель, условия, инструменты, риски, расходы, ограничения), `version integer`                                                                                                                                                                                                          |
-| `implementation_plan_steps`     | `plan_id`, `position`, `title`, `description`, `depends_on text[]`, `status`, `done_criteria`                                                                                                                                                                                                                                                 |
-| `solutions`                     | `type`, `name`, `description`, `status`, `active_version_id`, `latest_version_id`, `opportunity_id` (может быть пустым)                                                                                                                                                                                                                       |
-| `solution_versions`             | `solution_id`, `version integer`, `config jsonb`, `change_note`, `created_at`; запись не меняется после создания — это история изменений                                                                                                                                                                                                      |
-| `solution_test_cases`           | `solution_id`, `position`, `input jsonb`, `checks jsonb`, `required boolean`                                                                                                                                                                                                                                                                  |
-| `solution_runs`                 | `solution_id`, `version_id`, `kind` (`test`, `run`), `status`, `input jsonb`, `output text`, `checks jsonb`, `model_id`, `cost_usd`, `credits_usd`, `task_id`, `idempotency_key`, `error`; уникальный индекс `(user_id, idempotency_key)`                                                                                                     |
-| `discovery_budget_days`         | `day date` (сутки в поясе `DISCOVERY_BUDGET_TZ`), `limit_usd`, `spent_usd`, `reserved_usd`; резерв — один `UPDATE … WHERE spent + reserved + :amount <= limit`                                                                                                                                                                                |
-| `discovery_budget_reservations` | `day`, `analysis_id`, `stage`, `cap_usd`, `actual_usd`, `status` (`held`, `settled`, `released`, `expired`), `expires_at`                                                                                                                                                                                                                     |
+| Таблица                         | Ключевые колонки                                                                                                                                                                                                                                                                                                                                                                                                    |
+| ------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `discovery_analyses`            | `status` (`analyzing`, `needs_answers`, `discovering`, `ready`, `failed`), `guest`, `ip_hash` (HMAC адреса, IPv6 — /64), `ip_limited`, `mode` (`free`, `paid`, `deep`), `input_text`, `language`, `context jsonb`, `questions jsonb`, `answers jsonb`, `answers_hash`, `summary jsonb`, `stage_runs jsonb` (этап → `{ status, taskId, costUsd, startedAt, finishedAt, error }`), `saved boolean`, `version integer` |
+| `discovery_opportunities`       | `analysis_id`, `position`, `title`, `data jsonb` (поля раздела 2B), `feasibility_status`, `feasibility jsonb`, `impact jsonb`, `priority integer`                                                                                                                                                                                                                                                                   |
+| `implementation_plans`          | `analysis_id`, `opportunity_id`, `status`, `data jsonb` (цель, условия, инструменты, риски, расходы, ограничения), `version integer`                                                                                                                                                                                                                                                                                |
+| `implementation_plan_steps`     | `plan_id`, `position`, `title`, `description`, `depends_on text[]`, `status`, `done_criteria`                                                                                                                                                                                                                                                                                                                       |
+| `solutions`                     | `type`, `name`, `description`, `status`, `active_version_id`, `latest_version_id`, `opportunity_id` (может быть пустым)                                                                                                                                                                                                                                                                                             |
+| `solution_versions`             | `solution_id`, `version integer`, `config jsonb`, `change_note`, `created_at`; запись не меняется после создания — это история изменений                                                                                                                                                                                                                                                                            |
+| `solution_test_cases`           | `solution_id`, `position`, `input jsonb`, `checks jsonb`, `required boolean`                                                                                                                                                                                                                                                                                                                                        |
+| `solution_runs`                 | `solution_id`, `version_id`, `kind` (`test`, `run`), `status`, `input jsonb`, `output text`, `checks jsonb`, `model_id`, `cost_usd`, `credits_usd`, `task_id`, `idempotency_key`, `error`; уникальный индекс `(user_id, idempotency_key)`                                                                                                                                                                           |
+| `discovery_budget_days`         | `day date` (сутки в поясе `DISCOVERY_BUDGET_TZ`), `limit_usd`, `spent_usd`, `reserved_usd`; резерв — один `UPDATE … WHERE spent + reserved + :amount <= limit`                                                                                                                                                                                                                                                      |
+| `discovery_budget_reservations` | `day`, `analysis_id`, `stage`, `cap_usd`, `actual_usd`, `status` (`held`, `running`, `settled`, `released`), `expires_at`                                                                                                                                                                                                                                                                                           |
 
 Учёт расхода и кредиты остаются в существующих хранилищах: `solution_runs.task_id` и `discovery_analyses.stage_runs[].taskId` совпадают с `runId` записи учёта.
 
@@ -178,10 +185,14 @@ active ⇄ paused        любая правка конфигурации → н
 
 ## 5. API
 
+Сделано на этапе 2: `offer`, `POST /api/analyses`, `GET` списка и анализа, `continue` (ответы передаются в нём же), `retry`. Остальные строки таблицы — следующие этапы. Ошибки отказа в бесплатном анализе: `409 free_unavailable` с `details.reason` (`daily_limit`, `ip_limit`, `disposable_email`, `budget_exhausted`), `details.resetsAt`, `details.paid` (модель, ≈ и не больше кредитов) и `details.loginRequired`; платного — `401 login_required`, `402 insufficient_credits`, `409 confirmation_required`.
+
 Анализы и отчёты (`/api/analyses/*`) доступны гостю с `X-Guest-Id` (ограничение по IP, как у гостевого чата); после входа анализ переносится в аккаунт по тому же правилу, что диалоги (`claimGuest…`: только записи гостя этого браузера). Планы с сохранением и решения (`/api/plans/*`, `/api/solutions/*`) требуют входа (`requireAuth`). Ответы и ошибки — в существующем формате `{ error: { code, message } }`. Изменяющие запросы принимают заголовок `Idempotency-Key`. Тела проверяются схемой, чужая запись — `404 not_found` (а не 403, чтобы не раскрывать существование).
 
 | Метод и путь                                               | Что делает                                                                                              | Важные ошибки                                                 |
 | ---------------------------------------------------------- | ------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------- |
+| `GET /api/analyses/offer`                                  | что доступно сейчас: бесплатный анализ (или причина и время сброса), модели и цены за кредиты           | —                                                             |
+| `POST /api/analyses/:id/retry`                             | повторить упавший этап: бесплатный — с новым резервом бюджета, платный — с проверкой баланса            | `free_unavailable`, `insufficient_credits`                    |
 | `POST /api/analyses`                                       | создать анализ из текста, запустить анализ контекста                                                    | `quota_exceeded`, `insufficient_credits`, `payload_too_large` |
 | `GET /api/analyses`                                        | список анализов пользователя                                                                            | —                                                             |
 | `GET /api/analyses/:id`                                    | статус, контекст, вопросы, ответы, результаты готовых этапов                                            | `not_found`                                                   |

@@ -15,6 +15,17 @@ jobs:
   check:
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    # Настоящий Postgres для тестов SQL (бюджет бесплатных анализов, хранилище анализов):
+    # без него эти тесты пропускаются.
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready --health-interval 5s --health-timeout 5s --health-retries 10
     steps:
       - uses: actions/checkout@v4
         with:
@@ -40,6 +51,8 @@ jobs:
 
       - name: Тесты
         run: npm test
+        env:
+          TEST_DATABASE_URL: postgresql://postgres:ci@localhost:5432/postgres
 
       - name: Сборка
         run: npm run build
