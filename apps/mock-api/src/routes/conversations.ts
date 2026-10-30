@@ -2,7 +2,7 @@ import { Router, type NextFunction, type Request, type Response } from 'express'
 import { config, isProduction } from '../config.js';
 import { RateLimiter, clientIp } from '../middleware/rate-limit.js';
 import { sendError } from '../middleware/errors.js';
-import { resolveGuestId } from '../middleware/guest.js';
+import { readGuestId, resolveGuestId } from '../middleware/guest.js';
 import type { ConversationStore } from '../store/conversation-store.js';
 
 /**
@@ -68,6 +68,9 @@ export function createConversationsRouter(
   router.get('/conversations/:id', (request: Request, response: Response) => {
     const userId = getUserId(request);
     const id = getParamId(request);
+    // Вошедший пользователь открывает диалог, начатый в этом браузере до входа: переносим его в
+    // аккаунт. Чужой диалог (другого аккаунта или другого гостя) так не переносится.
+    if (request.userId) store.claimGuestConversation(userId, id, readGuestId(request));
     const found = store.get(userId, id);
     if (!found) {
       sendError(response, 404, 'conversation_not_found', `Диалог ${id} не найден`);

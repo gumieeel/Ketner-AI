@@ -3,7 +3,13 @@
  * подмена чужих сообщений по id.
  */
 import type { MailMessage } from './services/mailer.js';
-import { codeFor, isCodeMail, loginAndVerify, rememberCodeMails } from './testing/signup.js';
+import {
+  codeFor,
+  isCodeMail,
+  loginAndVerify,
+  rememberCodeMails,
+  signupAndVerify,
+} from './testing/signup.js';
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdtempSync, writeFileSync } from 'node:fs';
@@ -308,4 +314,94 @@ test('RateLimiter: окно и сброс', () => {
   assert.equal(limiter.hit('k'), true);
   now = 1500;
   assert.equal(limiter.hit('k'), false);
+});
+
+test('чужой диалог нельзя забрать по id: get не переназначает, перенос — только своего гостевого', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'ketner-claim-'));
+  const store = createConversationStore(join(dir, 'c.json'));
+  const alice = store.create('alice', 'A');
+  const guest = store.create('guest_browser_one', 'G');
+
+  // Боб знает id диалога Алисы: ни чтение, ни «перенос» не отдают его.
+  assert.equal(store.get('bob', alice.id), null);
+  assert.equal(store.claimGuestConversation('bob', alice.id, 'alice'), false);
+  assert.equal(store.claimGuestConversation('bob', alice.id, 'guest_browser_one'), false);
+  assert.equal(store.get('alice', alice.id)?.conversation.userId, 'alice');
+
+  // Чужой гость не забирает гостевой диалог; гость не забирает его у гостя.
+  assert.equal(store.claimGuestConversation('bob', guest.id, 'guest_browser_two'), false);
+  assert.equal(
+    store.claimGuestConversation('guest_browser_two', guest.id, 'guest_browser_one'),
+    false,
+  );
+  assert.equal(store.get('guest_browser_one', guest.id)?.conversation.userId, 'guest_browser_one');
+
+  // Свой гостевой диалог (тот же браузер) после входа переходит в аккаунт, один раз.
+  assert.equal(store.claimGuestConversation('carol', guest.id, 'guest_browser_one'), true);
+  assert.equal(store.get('carol', guest.id)?.conversation.userId, 'carol');
+  assert.equal(store.get('guest_browser_one', guest.id), null);
+  assert.equal(store.claimGuestConversation('dave', guest.id, 'guest_browser_one'), false);
+});
+
+test('HTTP: чужой диалог по id — 404, свой гостевой переносится в аккаунт после входа', async () => {
+  const signup = async (email: string, guestId?: string) => {
+    const response = await signupAndVerify(
+      base,
+      json(
+        { email, password: 'password123', name: 'Test' },
+        guestId ? { 'X-Guest-Id': guestId } : {},
+      ),
+    );
+    assert.equal(response.status, 201);
+    return ((await response.json()) as { token: string }).token;
+  };
+  const owner = await signup('conv-owner@example.com');
+  const thief = await signup('conv-thief@example.com');
+  const auth = (token: string, guestId = 'guest_thief_browser') => ({
+    Authorization: `Bearer ${token}`,
+    'X-Guest-Id': guestId,
+    Origin: ORIGIN,
+  });
+
+  const created = await fetch(`${base}/api/conversations`, {
+    ...json({ title: 'Секрет владельца' }, { Authorization: `Bearer ${owner}` }),
+  });
+  assert.equal(created.status, 201);
+  const ownerConversation = ((await created.json()) as { conversation: { id: string } })
+    .conversation.id;
+
+  const stolen = await fetch(`${base}/api/conversations/${ownerConversation}`, {
+    headers: auth(thief),
+  });
+  assert.equal(stolen.status, 404);
+  const stillOwned = await fetch(`${base}/api/conversations/${ownerConversation}`, {
+    headers: auth(owner, 'guest_owner_browser'),
+  });
+  assert.equal(stillOwned.status, 200);
+
+  // Гость начал диалог, потом зарегистрировался в том же браузере.
+  const guestId = 'guest_new_user_browser';
+  const guestCreated = await fetch(`${base}/api/conversations`, {
+    ...json({ title: 'До входа' }, { 'X-Guest-Id': guestId }),
+  });
+  assert.equal(guestCreated.status, 201);
+  const guestConversation = ((await guestCreated.json()) as { conversation: { id: string } })
+    .conversation.id;
+
+  // Другой аккаунт с чужим гостевым id его не получает.
+  const foreign = await fetch(`${base}/api/conversations/${guestConversation}`, {
+    headers: auth(thief),
+  });
+  assert.equal(foreign.status, 404);
+
+  const newcomer = await signup('conv-newcomer@example.com', guestId);
+  const claimed = await fetch(`${base}/api/conversations/${guestConversation}`, {
+    headers: auth(newcomer, guestId),
+  });
+  assert.equal(claimed.status, 200);
+  const list = await fetch(`${base}/api/conversations`, { headers: auth(newcomer, guestId) });
+  const ids = ((await list.json()) as { conversations: Array<{ id: string }> }).conversations.map(
+    (item) => item.id,
+  );
+  assert.ok(ids.includes(guestConversation));
 });

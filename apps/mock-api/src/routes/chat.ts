@@ -7,7 +7,7 @@ import { modelRegistry } from '../ai/model-registry.js';
 import { delay, randomBetween } from '../ai/stream.js';
 import { config, isProduction, type AiConfig } from '../config.js';
 import { sendError } from '../middleware/errors.js';
-import { resolveGuestId } from '../middleware/guest.js';
+import { readGuestId, resolveGuestId } from '../middleware/guest.js';
 import { RateLimiter, clientIp } from '../middleware/rate-limit.js';
 import type { ConversationStore } from '../store/conversation-store.js';
 import {
@@ -222,7 +222,11 @@ export function createChatRouter({
       guestPerIpDay.record(ip);
     }
 
-    // Диалог ищется строго среди диалогов этого пользователя: чужой id даёт 404.
+    // Диалог ищется строго среди диалогов этого пользователя: чужой id даёт 404. Свой гостевой
+    // диалог, начатый в этом браузере до входа, переносится в аккаунт.
+    if (!identity.anonymous) {
+      store.claimGuestConversation(activeUserId, conversationId, readGuestId(request));
+    }
     if (!store.get(activeUserId, conversationId)) {
       sendError(response, 404, 'conversation_not_found', `Диалог ${conversationId} не найден`);
       return;

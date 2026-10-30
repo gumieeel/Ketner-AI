@@ -570,6 +570,14 @@ function attachDatabaseDrivers(sql: postgres.Sql): void {
       `;
     },
 
+    async onConversationClaimed(conv, previousUserId) {
+      await sql`
+        UPDATE "conversations"
+        SET "user_id" = ${conv.userId}, "updated_at" = NOW()
+        WHERE "id" = ${conv.id} AND "user_id" = ${previousUserId}
+      `;
+    },
+
     async onConversationRemoved(_userId, conversationId) {
       await sql`
         DELETE FROM "messages" WHERE "conversation_id" = ${conversationId}

@@ -8,10 +8,15 @@ import { isProduction } from '../config.js';
  */
 const GUEST_ID_PATTERN = /^guest_[a-z0-9_]{8,64}$/;
 
+/** Идентификатор гостя (а не аккаунта): только такие записи можно перенести в аккаунт после входа. */
+export function isGuestUserId(value: string): boolean {
+  return GUEST_ID_PATTERN.test(value);
+}
+
 export function readGuestId(request: Request): string | null {
   const header = request.headers['x-guest-id'];
   const value = Array.isArray(header) ? header[0] : header;
-  return typeof value === 'string' && GUEST_ID_PATTERN.test(value.trim()) ? value.trim() : null;
+  return typeof value === 'string' && isGuestUserId(value.trim()) ? value.trim() : null;
 }
 
 /**

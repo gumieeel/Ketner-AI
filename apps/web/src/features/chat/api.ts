@@ -59,11 +59,10 @@ async function toApiError(response: Response): Promise<ApiError> {
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const token = getAuthToken();
   const headers: Record<string, string> = { ...JSON_HEADERS };
-  if (token) {
-    headers['Authorization'] = `Bearer ${token}`;
-  } else {
-    headers['X-Guest-Id'] = getGuestId();
-  }
+  if (token) headers['Authorization'] = `Bearer ${token}`;
+  // Гостевой id уходит и после входа: по нему сервер переносит в аккаунт диалоги, начатые в этом
+  // браузере до входа. Личность вошедшего пользователя он не меняет.
+  headers['X-Guest-Id'] = getGuestId();
   if (init?.headers) {
     Object.assign(headers, init.headers);
   }
@@ -162,11 +161,10 @@ export async function streamCompletion(
 ): Promise<void> {
   const token = getAuthToken();
   const headers: Record<string, string> = { ...JSON_HEADERS };
-  if (token) {
-    headers['Authorization'] = `Bearer ${token}`;
-  } else {
-    headers['X-Guest-Id'] = getGuestId();
-  }
+  if (token) headers['Authorization'] = `Bearer ${token}`;
+  // Гостевой id уходит и после входа: по нему сервер переносит в аккаунт диалоги, начатые в этом
+  // браузере до входа. Личность вошедшего пользователя он не меняет.
+  headers['X-Guest-Id'] = getGuestId();
   // Личность и уровень доступа определяет сервер по сессии; клиент их не присылает.
   const response = await fetch(`${API_BASE}/chat/completions`, {
     method: 'POST',
@@ -300,7 +298,7 @@ export async function streamCompare(
   const token = getAuthToken();
   const headers: Record<string, string> = { ...JSON_HEADERS };
   if (token) headers['Authorization'] = `Bearer ${token}`;
-  else headers['X-Guest-Id'] = getGuestId();
+  headers['X-Guest-Id'] = getGuestId();
 
   const response = await fetch(`${API_BASE}/chat/compare`, {
     method: 'POST',

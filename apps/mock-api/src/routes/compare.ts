@@ -6,6 +6,7 @@ import { PayloadGuard } from '../ai/payload-guard.js';
 import { safeEqualStrings } from '../auth/safe-equal.js';
 import { config, type AiConfig } from '../config.js';
 import { sendError } from '../middleware/errors.js';
+import { readGuestId } from '../middleware/guest.js';
 import { EntitlementService } from '../services/entitlement.js';
 import { resolveChatIdentity } from '../services/chat-identity.js';
 import { maxCompareModels, parseCompareModelIds } from '../services/compare-policy.js';
@@ -204,7 +205,9 @@ export function createCompareRouter({
       return;
     }
 
-    // Диалог ищется строго среди диалогов этого пользователя.
+    // Диалог ищется строго среди диалогов этого пользователя; свой гостевой диалог из этого
+    // браузера переносится в аккаунт.
+    store.claimGuestConversation(identity.userId, conversationId, readGuestId(request));
     if (!store.get(identity.userId, conversationId)) {
       sendError(response, 404, 'conversation_not_found', `Диалог ${conversationId} не найден`);
       return;

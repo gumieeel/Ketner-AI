@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
 import { dirname } from 'node:path';
+import { isGuestUserId } from '../middleware/guest.js';
 import type { Conversation, IncomingMessage, Message, MessageStatus } from '../types.js';
 
 /** Длина автоматического заголовка диалога: см. docs/data-model.md. */
@@ -52,13 +53,17 @@ export function stripWorkspaceFileContents(
 
 export interface ConversationStore {
   list(userId: string): ConversationSummary[];
+  /** Диалог, только если он принадлежит этому пользователю; чужой id даёт null. */
   get(userId: string, conversationId: string): ConversationWithMessages | null;
-  /**
-   * Диалог, только если он уже принадлежит этому пользователю. В отличие от `get`, не
-   * переназначает чужой диалог (перенос гостевых диалогов в аккаунт): для действий, которые
-   * тратят деньги или пишут в чужие данные.
-   */
+  /** То же, что `get`: оставлено для совместимости с вызовами, написанными до 30.10.2026. */
   getOwned(userId: string, conversationId: string): ConversationWithMessages | null;
+  /**
+   * Перенос гостевого диалога в аккаунт после входа. Срабатывает, только если диалог сейчас
+   * принадлежит именно гостю `guestId` (вида `guest_…`, из заголовка X-Guest-Id этого браузера),
+   * а `userId` — не гость. Диалог другого аккаунта так забрать нельзя. Возвращает true, если
+   * диалог теперь принадлежит `userId` (перенесён сейчас или уже был его).
+   */
+  claimGuestConversation(userId: string, conversationId: string, guestId: string | null): boolean;
   create(userId: string, title: string): Conversation;
   rename(userId: string, conversationId: string, title: string): Conversation | null;
   remove(userId: string, conversationId: string): boolean;
@@ -95,6 +100,11 @@ export interface ConversationStore {
 export interface ConversationDbDriver {
   onConversationCreated?: (conversation: Conversation) => Promise<void> | void;
   onConversationRenamed?: (conversation: Conversation) => Promise<void> | void;
+  /** Гостевой диалог перенесён в аккаунт: владелец меняется только с `previousUserId`. */
+  onConversationClaimed?: (
+    conversation: Conversation,
+    previousUserId: string,
+  ) => Promise<void> | void;
   onConversationRemoved?: (userId: string, conversationId: string) => Promise<void> | void;
   onTurnSaved?: (
     conversation: Conversation,
@@ -206,21 +216,23 @@ export function createConversationStore(file: string): ConversationStore {
     },
 
     get(userId, conversationId) {
-      let conversation = findConversation(userId, conversationId);
-      if (!conversation) {
-        conversation = snapshot.conversations.find((c) => c.id === conversationId);
-        if (conversation && userId) {
-          conversation.userId = userId;
-          persist();
-          dbDriver
-            ?.onConversationCreated?.({ ...conversation })
-            ?.catch?.((err) => console.error('[db] Error persisting assigned conversation:', err));
-        }
-      }
-      if (!conversation) {
-        return null;
-      }
-      return { conversation: { ...conversation }, messages: messagesOf(conversationId) };
+      const conversation = findConversation(userId, conversationId);
+      return conversation
+        ? { conversation: { ...conversation }, messages: messagesOf(conversationId) }
+        : null;
+    },
+
+    claimGuestConversation(userId, conversationId, guestId) {
+      if (findConversation(userId, conversationId)) return true;
+      if (!guestId || !isGuestUserId(guestId) || !userId || isGuestUserId(userId)) return false;
+      const conversation = findConversation(guestId, conversationId);
+      if (!conversation) return false;
+      conversation.userId = userId;
+      persist();
+      void Promise.resolve(dbDriver?.onConversationClaimed?.({ ...conversation }, guestId)).catch(
+        (err: unknown) => console.error('[db] Error persisting claimed conversation:', err),
+      );
+      return true;
     },
 
     getOwned(userId, conversationId) {
