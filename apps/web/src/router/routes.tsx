@@ -49,7 +49,11 @@ export const routes: RouteObject[] = [
       { index: true, element: <RootPage /> },
       {
         path: 'analyses/new',
-        lazy: lazyPage(() => import('@/pages/home/analysis-start-page'), 'AnalysisStartPage'),
+        lazy: lazyPage(() => import('@/pages/analysis/analysis-new-page'), 'AnalysisNewPage'),
+      },
+      {
+        path: 'analyses/:analysisId',
+        lazy: lazyPage(() => import('@/pages/analysis/analysis-page'), 'AnalysisPage'),
       },
       { path: 'login', element: <LoginPage /> },
       { path: 'signup', element: <SignupPage /> },

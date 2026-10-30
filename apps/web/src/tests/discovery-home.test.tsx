@@ -99,7 +99,7 @@ describe('главная платформы решений (DISCOVERY_ENABLED)',
 
     fireEvent.click(screen.getByRole('button', { name: 'Найти возможности' }));
     expect(
-      await screen.findByRole('heading', { level: 1, name: 'Анализ задач скоро заработает' }),
+      await screen.findByRole('heading', { level: 1, name: 'Проверим, где ИИ поможет' }),
     ).toBeInTheDocument();
     expect(screen.getByText('Веду учёт заказов в таблице вручную.')).toBeInTheDocument();
   });
