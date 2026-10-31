@@ -10,6 +10,8 @@
 
 import { z } from 'zod';
 import { PLATFORM_LIMITS } from '../services/discovery-limits.js';
+import { AREA_IDS, RECIPE_IDS } from './analysis-map.js';
+import { findSiteUrl } from './site-url.js';
 import { CAPABILITY_IDS } from './capabilities.js';
 
 /** Строка: обрезаются пробелы, длина ограничивается обрезкой, а не отказом. */
@@ -100,6 +102,10 @@ const capabilityId = z.enum(CAPABILITY_IDS).catch('other');
 
 export const opportunityOutputSchema = z.object({
   title: requiredText(100),
+  /** Область карты анализа (discovery/analysis-map.ts); неизвестная — null. */
+  area: z.enum(AREA_IDS).nullable().optional().default(null).catch(null),
+  /** Готовая автоматизация, к которой сводится возможность; сервер оставляет только доступную. */
+  recipe: z.enum(RECIPE_IDS).nullable().optional().default(null).catch(null),
   problem: requiredText(400),
   solution: requiredText(500),
   requires: list(capabilityId, 6).transform((ids) => [...new Set(ids)]),
@@ -123,9 +129,32 @@ export const opportunityOutputSchema = z.object({
   firstStep: text(220).default(''),
 });
 
+/** Сколько возможностей просим у модели: меньше — ответ не принимается и идёт повтор. */
+export const OPPORTUNITIES_MIN = 3;
+export const OPPORTUNITIES_MAX = 7;
+
+const coverageItemSchema = z.object({
+  area: z.enum(AREA_IDS),
+  status: z.enum(['found', 'not_relevant', 'unclear']).catch('unclear'),
+  note: text(200).default(''),
+});
+
 export const discoveryOutputSchema = z.object({
   summary: requiredText(600),
-  opportunities: list(opportunityOutputSchema, 7),
+  /** Что модель увидела в каждой области карты; неизвестные области отбрасываются. */
+  coverage: z
+    .array(z.unknown())
+    .default([])
+    .transform((items) =>
+      items.flatMap((item) => {
+        const parsed = coverageItemSchema.safeParse(item);
+        return parsed.success ? [parsed.data] : [];
+      }),
+    ),
+  opportunities: list(opportunityOutputSchema, OPPORTUNITIES_MAX).refine(
+    (items) => items.length >= OPPORTUNITIES_MIN,
+    `at least ${OPPORTUNITIES_MIN} opportunities`,
+  ),
 });
 
 export type OpportunityOutput = z.infer<typeof opportunityOutputSchema>;
@@ -163,8 +192,12 @@ export const createAnalysisBodySchema = z.object({
   text: z
     .string()
     .trim()
-    .min(ANALYSIS_TEXT_MIN, 'text_too_short')
-    .max(ANALYSIS_TEXT_MAX, 'text_too_long'),
+    .max(ANALYSIS_TEXT_MAX, 'text_too_long')
+    // Короче 20 символов можно только ссылку: сайт прочитает сервер (discovery/site-reader.ts).
+    .refine(
+      (value) => value.length >= ANALYSIS_TEXT_MIN || findSiteUrl(value) !== null,
+      'text_too_short',
+    ),
   language: z.enum(['ru', 'en']).default('ru'),
   /** Не указан — бесплатный анализ, если он доступен. */
   mode: z.enum(['free', 'paid', 'deep']).optional(),

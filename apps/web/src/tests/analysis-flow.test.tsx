@@ -52,6 +52,8 @@ function analysis(patch: Partial<AnalysisView> = {}): AnalysisView {
     questions: QUESTIONS,
     answers: {},
     summary: null,
+    coverage: null,
+    source: null,
     saved: false,
     stages: { context: stage('done'), discovery: stage('pending') },
     opportunities: [],
@@ -72,6 +74,8 @@ const READY_PATCH: Partial<AnalysisView> = {
       id: 'o1',
       position: 1,
       title: 'Черновики ответов',
+      area: null,
+      recipe: null,
       problem: 'Однотипные вопросы',
       solution: 'ИИ пишет черновик, вы проверяете',
       requires: ['text_generation'],
@@ -110,6 +114,8 @@ const READY_PATCH: Partial<AnalysisView> = {
       id: 'o2',
       position: 0,
       title: 'Автоответы в почте',
+      area: null,
+      recipe: null,
       problem: 'Однотипные письма',
       solution: 'ИИ отвечает сам',
       requires: ['email'],
@@ -478,6 +484,54 @@ describe('анализ задачи: начало, вопросы, резуль�
     expect(sent?.body).toEqual({ answers: { q1: { skipped: true } } });
   });
 
+  it('анализ по плану: главная рекомендация с «Приступить к автоматизации», карта областей, сайт', async () => {
+    const [draftsCard, mailCard] = READY_PATCH.opportunities ?? [];
+    installDiscoveryApi({
+      view: analysis({
+        ...READY_PATCH,
+        source: { url: 'https://www.lisa.kz/', ok: true, title: 'Лиса' },
+        coverage: [
+          { area: 'clients', status: 'found', opportunities: 2, note: 'Вопросы покупателей' },
+          { area: 'sales', status: 'unclear', opportunities: 0, note: '' },
+          { area: 'content', status: 'not_relevant', opportunities: 0, note: 'Не ведёт соцсети' },
+          { area: 'documents', status: 'unclear', opportunities: 0, note: '' },
+          { area: 'routine', status: 'unclear', opportunities: 0, note: '' },
+        ],
+        opportunities: [
+          { ...mailCard!, area: 'clients', recipe: null },
+          { ...draftsCard!, area: 'clients', recipe: 'personal_assistant' },
+        ],
+      }),
+    });
+    renderRoute('/analyses/a1');
+
+    expect(
+      await screen.findByRole('heading', { name: 'Главная рекомендация' }),
+    ).toBeInTheDocument();
+    expect(screen.getByText('Прочитали сайт lisa.kz.')).toBeInTheDocument();
+    const main = screen.getByRole('heading', { name: 'Главная рекомендация' }).closest('section')!;
+    expect(within(main).getByRole('heading', { name: 'Черновики ответов' })).toBeInTheDocument();
+    expect(
+      within(main).getByText('Клиенты и переписка · Готовая автоматизация: личный помощник'),
+    ).toBeInTheDocument();
+    // Гость: запуск автоматизации — после входа, с возвратом к отчёту.
+    expect(
+      within(main).getByRole('link', { name: 'Войти и приступить к автоматизации' }),
+    ).toHaveAttribute('href', `/login?redirect=${encodeURIComponent('/analyses/a1')}`);
+
+    const map = screen.getByRole('heading', { name: 'Что проверил анализ' }).closest('section')!;
+    const areas = within(map).getAllByRole('listitem');
+    expect(areas).toHaveLength(5);
+    expect(within(areas[0]!).getByText('Нашли: 2')).toBeInTheDocument();
+    expect(within(areas[2]!).getByText('Не относится')).toBeInTheDocument();
+    expect(within(areas[1]!).getByText('Мало сведений')).toBeInTheDocument();
+
+    // Остальные возможности — ниже; у возможности без рецепта кнопки запуска нет.
+    expect(screen.getByRole('heading', { name: 'Ещё возможности' })).toBeInTheDocument();
+    const others = screen.getByRole('heading', { name: 'Автоответы в почте' }).closest('li')!;
+    expect(within(others).queryByText(/приступить/i)).not.toBeInTheDocument();
+  });
+
   it('результат: возможности со статусом реализуемости, цена; правка ответов — только при изменении и с ценой', async () => {
     const api = installDiscoveryApi({
       view: analysis({ ...READY_PATCH, guest: false }),
@@ -497,8 +551,13 @@ describe('анализ задачи: начало, вопросы, резуль�
     expect(within(cards[0]).getAllByText('Можно сделать сейчас')[0]).toBeVisible();
     expect(within(cards[1]).getAllByText('Пока не поддерживается')[0]).toBeVisible();
     expect(within(cards[0]).getAllByText(/≈ 2–4 ч в неделю/)[0]).toBeVisible();
-    // Шаги: всё готово, модель названа настоящим именем.
-    expect(screen.getAllByText('готово · GPT-6 Luna')).toHaveLength(2);
+    // Модели — в «Подробнее», а не в статусе этапа.
+    expect(screen.queryByText(/готово · GPT-6 Luna/)).not.toBeInTheDocument();
+    expect(
+      screen.getByText(
+        'Модели анализа: Разбор задачи — GPT-6 Luna; Поиск возможностей — GPT-6 Luna.',
+      ),
+    ).not.toBeVisible();
 
     fireEvent.click(screen.getByRole('button', { name: 'Изменить ответы' }));
     const update = screen.getByRole('button', { name: 'Обновить анализ' });
@@ -613,7 +672,7 @@ describe('анализ задачи: начало, вопросы, резуль�
       within(supported).getByRole('link', { name: 'Войти, чтобы создать помощника' }),
     ).toHaveAttribute('href', '/login?redirect=%2Fanalyses%2Fa1');
     expect(
-      within(supported).getByText('Бесплатно для одной возможности этого анализа · GPT-6 Luna'),
+      within(supported).getByText('Бесплатно для одной возможности этого анализа'),
     ).toBeVisible();
     fireEvent.click(
       within(supported).getByRole('button', { name: 'Составить краткий план — бесплатно' }),
@@ -661,9 +720,7 @@ describe('анализ задачи: начало, вопросы, резуль�
     const first = renderRoute('/analyses/a1');
     await screen.findByRole('heading', { name: 'Где ИИ поможет' });
     const card = screen.getByRole('heading', { name: 'Черновики ответов' }).closest('li')!;
-    expect(
-      within(card).getByText('Подробный план: ≈ 5, не больше 15 кредитов · MiMo-V2.6 Pro'),
-    ).toBeVisible();
+    expect(within(card).getByText('Подробный план: ≈ 5, не больше 15 кредитов')).toBeVisible();
     fireEvent.click(within(card).getByRole('button', { name: 'Составить план за кредиты' }));
     await screen.findByRole('heading', { level: 1, name: 'План: Черновики ответов' });
     expect(api.calls.find((call) => call.path.endsWith('/plan'))?.body).toEqual({ confirm: true });

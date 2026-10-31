@@ -91,11 +91,24 @@ export function publicAnalysis(analysis: Analysis, opportunities: Opportunity[] 
     questions: analysis.questions,
     answers: analysis.answers,
     summary: analysis.summary,
+    /** Карта анализа: пять областей и что в каждой нашлось (null — анализ не готов или старый). */
+    coverage: analysis.coverage ?? null,
+    /** Прочитанный сайт: адрес и название, без сохранённого текста страницы. */
+    source: analysis.source
+      ? analysis.source.ok
+        ? { url: analysis.source.url, ok: true, title: analysis.source.title }
+        : { url: analysis.source.url, ok: false, reason: analysis.source.reason }
+      : null,
     saved: analysis.saved,
     stages: { context: stage('context'), discovery: stage('discovery') },
     opportunities: [...opportunities]
       .sort((a, b) => a.priority - b.priority)
-      .map(({ ownerId: _owner, analysisId: _analysis, ...item }) => item),
+      // У возможностей до этапа A области и рецепта нет — отдаём null, а не пропуск поля.
+      .map(({ ownerId: _owner, analysisId: _analysis, ...item }) => ({
+        ...item,
+        area: item.area ?? null,
+        recipe: item.recipe ?? null,
+      })),
     cost: {
       /** Списано с кредитов пользователя (0 у бесплатного анализа). */
       chargedCredits: chargedCredits(analysis),

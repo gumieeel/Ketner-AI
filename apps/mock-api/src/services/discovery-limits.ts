@@ -22,7 +22,7 @@ export const PLATFORM_LIMITS = {
     /** Запусков анализа в минуту. */
     startsPerMinute: 3,
     /** Уточняющих вопросов за раз. */
-    maxQuestions: 3,
+    maxQuestions: 1,
     /** Длина описания задачи, символов. */
     textChars: 8000,
   },

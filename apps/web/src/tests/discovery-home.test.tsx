@@ -32,7 +32,7 @@ describe('главная платформы решений (DISCOVERY_ENABLED)',
     const field = screen.getByRole('textbox', { name: 'Опишите задачу' });
     expect(field).toHaveAttribute(
       'placeholder',
-      'Опишите задачу, которую хотите решить, или процесс, который хотите улучшить...',
+      'Расскажите о своём деле или работе — или вставьте ссылку на сайт...',
     );
     expect(screen.getByRole('button', { name: 'Найти возможности' })).toBeInTheDocument();
 

@@ -154,41 +154,54 @@ function stepStates(analysis: AnalysisView): Array<{ key: string; state: StepSta
 
 function ProgressSteps({ analysis }: { analysis: AnalysisView }) {
   const { t } = useTranslation();
-  const models: Record<string, string | undefined> = {
-    context: analysis.stages.context?.model?.name,
-    discovery: analysis.stages.discovery?.model?.name,
-  };
+  // Названия моделей — в «Подробнее»: человеку без интереса к моделям они не нужны.
+  const models = (['context', 'discovery'] as const).flatMap((key) => {
+    const name = analysis.stages[key]?.model?.name;
+    return name ? [`${t(`analysis.steps.${key}` as TranslationKey)} — ${name}`] : [];
+  });
   return (
-    <ol aria-label={t('analysis.steps.label')} className="mt-8 grid gap-2 sm:grid-cols-3 sm:gap-3">
-      {stepStates(analysis).map(({ key, state }, index) => (
-        <li
-          key={key}
-          aria-current={state === 'running' || state === 'waiting' ? 'step' : undefined}
-          className={cn(
-            'flex items-center gap-3 rounded-xl border px-4 py-3 sm:flex-col sm:items-start sm:gap-1',
-            state === 'running' || state === 'waiting'
-              ? 'border-accent/40 bg-accent-soft/40'
-              : state === 'failed'
-                ? 'border-danger/30'
-                : 'border-stroke',
-          )}
-        >
-          <span className="text-[14px] font-medium text-text">
-            <span className="text-subtle">{index + 1}. </span>
-            {t(`analysis.steps.${key}` as TranslationKey)}
-          </span>
-          <span
+    <>
+      <ol
+        aria-label={t('analysis.steps.label')}
+        className="mt-8 grid gap-2 sm:grid-cols-3 sm:gap-3"
+      >
+        {stepStates(analysis).map(({ key, state }, index) => (
+          <li
+            key={key}
+            aria-current={state === 'running' || state === 'waiting' ? 'step' : undefined}
             className={cn(
-              'ml-auto text-[13px] sm:ml-0',
-              state === 'failed' ? 'text-danger' : 'text-subtle',
+              'flex items-center gap-3 rounded-xl border px-4 py-3 sm:flex-col sm:items-start sm:gap-1',
+              state === 'running' || state === 'waiting'
+                ? 'border-accent/40 bg-accent-soft/40'
+                : state === 'failed'
+                  ? 'border-danger/30'
+                  : 'border-stroke',
             )}
           >
-            {t(`analysis.steps.${state}` as TranslationKey)}
-            {state === 'done' && models[key] ? ` · ${models[key]}` : ''}
-          </span>
-        </li>
-      ))}
-    </ol>
+            <span className="text-[14px] font-medium text-text">
+              <span className="text-subtle">{index + 1}. </span>
+              {t(`analysis.steps.${key}` as TranslationKey)}
+            </span>
+            <span
+              className={cn(
+                'ml-auto text-[13px] sm:ml-0',
+                state === 'failed' ? 'text-danger' : 'text-subtle',
+              )}
+            >
+              {t(`analysis.steps.${state}` as TranslationKey)}
+            </span>
+          </li>
+        ))}
+      </ol>
+      {models.length > 0 ? (
+        <details className="mt-2 text-[13px] text-subtle">
+          <summary className="inline-flex min-h-11 cursor-pointer items-center underline underline-offset-4 hover:text-text md:min-h-0">
+            {t('analysis.steps.details')}
+          </summary>
+          <p className="mt-1">{t('analysis.steps.models', { list: models.join('; ') })}</p>
+        </details>
+      ) : null}
+    </>
   );
 }
 

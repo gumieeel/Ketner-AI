@@ -10,6 +10,7 @@ import { runStructuredTask } from './run-task.js';
 import {
   contextOutputSchema,
   discoveryOutputSchema,
+  opportunityOutputSchema,
   type ContextOutput,
   type OpportunityOutput,
 } from './schemas.js';
@@ -83,18 +84,13 @@ test('числа задачи остаются, только если цитат
 });
 
 function opportunity(taskId: string | null, share: 'low' | 'medium' | 'high'): OpportunityOutput {
-  return discoveryOutputSchema.parse({
-    summary: 's',
-    opportunities: [
-      {
-        title: 'Черновики ответов',
-        problem: 'Долго',
-        solution: 'ИИ пишет черновик',
-        requires: ['text_generation'],
-        impact: { taskId, automationShare: share, benefit: 'Меньше времени на письма' },
-      },
-    ],
-  }).opportunities[0];
+  return opportunityOutputSchema.parse({
+    title: 'Черновики ответов',
+    problem: 'Долго',
+    solution: 'ИИ пишет черновик',
+    requires: ['text_generation'],
+    impact: { taskId, automationShare: share, benefit: 'Меньше времени на письма' },
+  });
 }
 
 test('польза: часы — только из чисел пользователя, с формулой и допущениями; без чисел — словами', () => {
@@ -144,7 +140,8 @@ test('схемы терпимы к форме и строги к смыслу', 
       summary: 's',
       questions: Array(5).fill({ id: 'q', text: 't' }),
     }).data?.questions.length,
-    3,
+    1,
+    'не больше одного уточняющего вопроса',
   );
   // Неправдоподобные числа — null.
   const task = contextOutputSchema.parse({

@@ -46,15 +46,6 @@ export function contextTemplate(inputText: string, language: Language): string {
       ? [
           {
             id: 'q1',
-            text: en
-              ? 'How often do you do this task and how long does it take each time?'
-              : 'Как часто вы делаете эту задачу и сколько времени она занимает за раз?',
-            reason: en ? 'To estimate the time saved' : 'Чтобы оценить экономию времени',
-            optional: true,
-            kind: 'text',
-          },
-          {
-            id: 'q2',
             text: en ? 'Where is your data stored now?' : 'Где сейчас хранятся ваши данные?',
             reason: en
               ? 'To check which integrations are needed'
@@ -76,9 +67,18 @@ export function discoveryTemplate(language: Language): string {
     summary: en
       ? 'Demo analysis without a model: the opportunities below show the report format.'
       : 'Демо-анализ без модели: возможности ниже показывают формат отчёта.',
+    coverage: [
+      { area: 'clients', status: 'found', note: en ? 'Similar emails' : 'Однотипные письма' },
+      { area: 'sales', status: 'unclear', note: en ? 'Not described' : 'Не описано' },
+      { area: 'content', status: 'unclear', note: en ? 'Not described' : 'Не описано' },
+      { area: 'documents', status: 'found', note: en ? 'Routine texts' : 'Типовые тексты' },
+      { area: 'routine', status: 'found', note: en ? 'Manual processing' : 'Ручная обработка' },
+    ],
     opportunities: [
       {
         title: en ? 'Drafts of routine texts' : 'Черновики типовых текстов',
+        area: 'documents',
+        recipe: 'personal_assistant',
         problem: en
           ? 'Routine texts take time every day.'
           : 'Типовые тексты каждый день отнимают время.',
@@ -105,6 +105,8 @@ export function discoveryTemplate(language: Language): string {
       },
       {
         title: en ? 'Your own program calls AI' : 'Своя программа обращается к ИИ',
+        area: 'routine',
+        recipe: null,
         problem: en
           ? 'Repetitive processing inside your tools.'
           : 'Повторяющаяся обработка внутри ваших инструментов.',
@@ -133,6 +135,8 @@ export function discoveryTemplate(language: Language): string {
       },
       {
         title: en ? 'Automatic email replies' : 'Автоматические ответы на письма',
+        area: 'clients',
+        recipe: null,
         problem: en ? 'Many similar emails.' : 'Много однотипных писем.',
         solution: en ? 'AI reads the mailbox and replies.' : 'ИИ читает почту и отвечает сам.',
         requires: ['email', 'text_generation'],

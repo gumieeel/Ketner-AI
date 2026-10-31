@@ -22,6 +22,8 @@ function analysis(overrides: Partial<Analysis> = {}): Analysis {
     questions: [],
     answers: {},
     summary: null,
+    coverage: null,
+    source: null,
     stages: {
       context: { status: 'pending', taskId: 't1', costUsd: 0, creditsUsd: 0, attempts: 0 },
     },
@@ -42,6 +44,8 @@ function opportunity(analysisId: string, ownerId: string, position: number): Opp
     ownerId,
     position,
     title: `Возможность ${position}`,
+    area: null,
+    recipe: null,
     problem: 'п',
     solution: 'р',
     requires: ['text_generation'],
@@ -101,6 +105,26 @@ async function storeContract(store: DiscoveryStore): Promise<void> {
   );
   assert.equal(updated?.version, 2);
   assert.equal(updated?.context?.domain, 'd');
+
+  // Карта анализа и прочитанный сайт сохраняются и читаются объектами (этап A).
+  const coverage = [
+    { area: 'clients' as const, status: 'found' as const, opportunities: 2, note: 'вопросы' },
+  ];
+  const source = {
+    url: 'https://lisa.kz/',
+    ok: true as const,
+    title: 'Лиса',
+    description: '',
+    text: 'Доставка',
+    fetchedAt: '2026-11-01T10:00:00.000Z',
+  };
+  const mapped = await store.update({ ...(updated as Analysis), coverage, source }, 2);
+  assert.deepEqual(mapped?.coverage, coverage);
+  assert.deepEqual(mapped?.source, source);
+  assert.deepEqual((await store.get('alice', 'k1'))?.coverage, coverage);
+  const back = await store.update({ ...(mapped as Analysis), coverage: null, source: null }, 3);
+  assert.equal(back?.coverage, null);
+  assert.equal(back?.source, null);
   assert.equal(await store.update({ ...mine, status: 'ready' }, 1), null, 'устаревшая версия');
 
   // Возможности — только владельца.

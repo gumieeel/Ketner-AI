@@ -171,6 +171,8 @@ export class MemoryDiscoveryStore implements DiscoveryStore {
       questions: [],
       answers: {},
       summary: null,
+      coverage: null,
+      source: null,
       saved: false,
       updatedAt: at,
       version: found.version + 1,
@@ -220,6 +222,8 @@ interface AnalysisRow {
   questions: unknown;
   answers: unknown;
   summary: string | null;
+  coverage: unknown;
+  source: unknown;
   stage_runs: unknown;
   budget_day: string | Date;
   idempotency_key: string | null;
@@ -274,6 +278,8 @@ function toAnalysis(row: AnalysisRow): Analysis {
     questions: json(row.questions, []),
     answers: json(row.answers, {}),
     summary: row.summary,
+    coverage: json(row.coverage, null),
+    source: json(row.source, null),
     stages: json(row.stage_runs, {}),
     budgetDay: day(row.budget_day),
     idempotencyKey: row.idempotency_key,
@@ -366,7 +372,7 @@ function toPlan(row: PlanRow): Plan {
 
 const ANALYSIS_COLUMNS = `id, user_id, guest, ip_hash, ip_limited, mode, language, status, input_text,
   context, questions, answers, summary, stage_runs, budget_day, idempotency_key, created_at,
-  updated_at, version`;
+  updated_at, version, coverage, source`;
 
 /** Колонки чтения: те же плюс `saved` (при создании — значение по умолчанию). */
 const SELECT_COLUMNS = `${ANALYSIS_COLUMNS}, saved`;
@@ -379,7 +385,8 @@ export class PostgresDiscoveryStore implements DiscoveryStore {
     const rows = await this.db.query<AnalysisRow>(
       `INSERT INTO discovery_analyses (${ANALYSIS_COLUMNS})
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10::text::jsonb, $11::text::jsonb, $12::text::jsonb, $13,
-               $14::text::jsonb, $15::date, $16, $17::timestamptz, $18::timestamptz, $19)
+               $14::text::jsonb, $15::date, $16, $17::timestamptz, $18::timestamptz, $19,
+               $20::text::jsonb, $21::text::jsonb)
        ON CONFLICT (user_id, idempotency_key) WHERE idempotency_key IS NOT NULL DO NOTHING
        RETURNING ${SELECT_COLUMNS}`,
       [
@@ -402,6 +409,8 @@ export class PostgresDiscoveryStore implements DiscoveryStore {
         analysis.createdAt,
         analysis.updatedAt,
         analysis.version,
+        JSON.stringify(analysis.coverage ?? null),
+        JSON.stringify(analysis.source ?? null),
       ],
     );
     if (rows[0]) return { analysis: toAnalysis(rows[0]), duplicate: false };
@@ -435,7 +444,7 @@ export class PostgresDiscoveryStore implements DiscoveryStore {
       `UPDATE discovery_analyses SET
          status = $3, context = $4::text::jsonb, questions = $5::text::jsonb, answers = $6::text::jsonb,
          summary = $7, stage_runs = $8::text::jsonb, updated_at = $9::timestamptz, saved = $11,
-         version = version + 1
+         coverage = $12::text::jsonb, source = $13::text::jsonb, version = version + 1
        WHERE id = $1 AND user_id = $2 AND version = $10 AND ${ALIVE}
        RETURNING ${SELECT_COLUMNS}`,
       [
@@ -450,6 +459,8 @@ export class PostgresDiscoveryStore implements DiscoveryStore {
         analysis.updatedAt,
         expectedVersion,
         analysis.saved,
+        JSON.stringify(analysis.coverage ?? null),
+        JSON.stringify(analysis.source ?? null),
       ],
     );
     return rows[0] ? toAnalysis(rows[0]) : null;
@@ -548,7 +559,7 @@ export class PostgresDiscoveryStore implements DiscoveryStore {
     const rows = await this.db.query<{ id: string }>(
       `UPDATE discovery_analyses SET deleted_at = $3::timestamptz, updated_at = $3::timestamptz,
          input_text = '', context = NULL, questions = '[]'::jsonb, answers = '{}'::jsonb,
-         summary = NULL, saved = false, version = version + 1
+         summary = NULL, coverage = NULL, source = NULL, saved = false, version = version + 1
        WHERE id = $1 AND user_id = $2 AND ${ALIVE} RETURNING id`,
       [id, ownerId, at],
     );

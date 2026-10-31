@@ -190,4 +190,13 @@ export const MIGRATIONS: readonly Migration[] = [
       CREATE INDEX solution_messages_thread ON solution_messages (thread_id, created_at);
     `,
   },
+  {
+    // Анализ по плану (docs/AUTOMATION_PLAN.md, этап A): карта из пяти областей и прочитанный
+    // сайт из описания. Область и рецепт возможности лежат в её `data`.
+    id: '0005_discovery_coverage',
+    sql: `
+      ALTER TABLE discovery_analyses ADD COLUMN coverage jsonb;
+      ALTER TABLE discovery_analyses ADD COLUMN source jsonb;
+    `,
+  },
 ];

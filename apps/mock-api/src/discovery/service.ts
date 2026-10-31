@@ -26,7 +26,10 @@ import {
   type BudgetStore,
   type ReservationRequest,
 } from './budget.js';
+import { acceptedRecipe, normalizeCoverage } from './analysis-map.js';
 import { assessFeasibility, feasibilityRank, type UserCapabilities } from './feasibility.js';
+import { readSite, type SiteResult } from './site-reader.js';
+import { findSiteUrl } from './site-url.js';
 import { estimateImpact, verifyTaskNumbers } from './impact.js';
 import {
   ANALYSES_PER_OWNER_PER_DAY,
@@ -73,6 +76,7 @@ import type {
   Plan,
   PlanStep,
   PlanStepStatus,
+  SiteSource,
   StageRun,
 } from './types.js';
 
@@ -98,6 +102,8 @@ export interface DiscoveryServiceDeps {
   now?: () => Date;
   /** Таймаут ответа провайдера, мс. */
   providerTimeoutMs?: number;
+  /** Чтение сайта по ссылке из описания (по умолчанию — настоящий запрос с защитой от SSRF). */
+  readSite?: (url: string) => Promise<SiteResult>;
 }
 
 export type ServiceError = {
@@ -360,6 +366,8 @@ export class DiscoveryService {
       questions: [],
       answers: {},
       summary: null,
+      coverage: null,
+      source: null,
       stages,
       budgetDay: day,
       idempotencyKey: input.idempotencyKey,
@@ -1414,10 +1422,11 @@ export class DiscoveryService {
     };
 
     if (stage === 'context') {
+      const site = await this.siteFor(caller.userId, id, started);
       const result = await runStructuredTask({
         ...common,
         systemPrompt: contextSystemPrompt(started.language),
-        userMessage: contextUserMessage(started.inputText),
+        userMessage: contextUserMessage(started.inputText, site),
         schema: contextOutputSchema,
         templateOutput: contextTemplate(started.inputText, started.language),
       });
@@ -1489,9 +1498,14 @@ export class DiscoveryService {
       }
       const opportunities = this.buildOpportunities(started, context, result.data, caller);
       await this.deps.store.setOpportunities(caller.userId, id, opportunities);
+      const coverage = normalizeCoverage(
+        result.data.coverage,
+        opportunities.map((item) => item.area),
+      );
       await this.mutate(caller.userId, id, (analysis) => ({
         ...analysis,
         summary: result.data.summary,
+        coverage,
         status: 'ready',
         stages: {
           ...analysis.stages,
@@ -1507,6 +1521,32 @@ export class DiscoveryService {
         },
       }));
     }
+  }
+
+  /**
+   * Сайт из описания: читается один раз перед разбором задачи, результат сохраняется в анализе
+   * (повтор этапа сайт заново не открывает). Сайт не открылся — анализ идёт по тексту, а отчёт
+   * честно говорит, что сайт прочитать не удалось.
+   */
+  private async siteFor(
+    ownerId: string,
+    id: string,
+    analysis: Analysis,
+  ): Promise<{ url: string; title: string; description: string; text: string } | null> {
+    if (analysis.source) return analysis.source.ok ? analysis.source : null;
+    const url = findSiteUrl(analysis.inputText);
+    if (!url) return null;
+    const result = await (this.deps.readSite ?? readSite)(url).catch((): SiteResult => ({
+      ok: false,
+      url,
+      reason: 'unreachable',
+    }));
+    const fetchedAt = this.now().toISOString();
+    const source: SiteSource = result.ok
+      ? { ...result, fetchedAt }
+      : { url: result.url, ok: false, reason: result.reason, fetchedAt };
+    await this.mutate(ownerId, id, (current) => ({ ...current, source }));
+    return result.ok ? result : null;
   }
 
   private buildOpportunities(
@@ -1531,6 +1571,8 @@ export class DiscoveryService {
         ownerId: analysis.ownerId,
         position,
         title: item.title,
+        area: item.area ?? null,
+        recipe: acceptedRecipe(item.recipe, feasibility.status),
         problem: item.problem,
         solution: item.solution,
         requires: item.requires,
@@ -1550,12 +1592,13 @@ export class DiscoveryService {
         createdAt,
       };
     });
-    // Порядок отчёта: что можно сделать сейчас, затем по оценке пользы, затем по сложности, затем
-    // по порядку модели.
+    // Порядок отчёта: сначала то, что запускается готовым рецептом (главная рекомендация — первая
+    // из них), затем что можно сделать сейчас, по оценке пользы, по сложности, по порядку модели.
     const hours = (item: Opportunity) =>
       item.impact.kind === 'estimate' ? item.impact.hoursPerWeek[1] : 0;
     const ranked = [...built].sort(
       (a, b) =>
+        Number(a.recipe === null) - Number(b.recipe === null) ||
         feasibilityRank(a.feasibilityStatus) - feasibilityRank(b.feasibilityStatus) ||
         hours(b) - hours(a) ||
         effortRank[a.effort] - effortRank[b.effort] ||

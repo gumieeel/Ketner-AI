@@ -1,6 +1,7 @@
 import type { Language } from '../types.js';
 import type { CapabilityId } from './capabilities.js';
 import type { Feasibility, FeasibilityStatus } from './feasibility.js';
+import type { AreaCoverage, AreaId, RecipeId } from './analysis-map.js';
 import type { Impact } from './impact.js';
 import type { AnalysisMode, StageName } from './model-policy.js';
 import type { ContextOutput, Question } from './schemas.js';
@@ -58,6 +59,10 @@ export interface Analysis {
   questions: Question[];
   answers: Record<string, AnswerRecord>;
   summary: string | null;
+  /** Карта анализа: что найдено в каждой из пяти областей (null — анализ до этапа A или не готов). */
+  coverage: AreaCoverage[] | null;
+  /** Сайт из описания, который прочитал сервер (null — ссылки не было). */
+  source: SiteSource | null;
   stages: Partial<Record<StageName, StageRun>>;
   /** Сутки бюджета бесплатных анализов (`YYYY-MM-DD` в поясе бюджета); у платных — тоже, для квот. */
   budgetDay: string;
@@ -76,6 +81,10 @@ export interface Opportunity {
   ownerId: string;
   position: number;
   title: string;
+  /** Область карты анализа; у возможностей до этапа A — null. */
+  area: AreaId | null;
+  /** Доступная готовая автоматизация (кнопка «Приступить к автоматизации»), иначе null. */
+  recipe: RecipeId | null;
   problem: string;
   solution: string;
   requires: CapabilityId[];
@@ -135,3 +144,8 @@ export interface Plan {
   updatedAt: string;
   version: number;
 }
+
+/** Прочитанный сайт: текст хранится, чтобы повтор этапа не открывал сайт заново. */
+export type SiteSource =
+  | { url: string; ok: true; title: string; description: string; text: string; fetchedAt: string }
+  | { url: string; ok: false; reason: string; fetchedAt: string };

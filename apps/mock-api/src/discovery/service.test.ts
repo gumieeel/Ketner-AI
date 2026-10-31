@@ -35,13 +35,6 @@ const CONTEXT_WITH_QUESTIONS = JSON.stringify({
       optional: false,
       kind: 'text',
     },
-    {
-      id: 'q2',
-      text: 'Сколько вопросов в неделю?',
-      reason: 'Польза',
-      optional: true,
-      kind: 'text',
-    },
   ],
 });
 const CONTEXT_NO_QUESTIONS = JSON.stringify({
@@ -230,7 +223,7 @@ test('бесплатный сценарий гостя: разбор → воп�
 
   let view = await service.get(caller.userId, created.analysis.id);
   assert.equal(view?.analysis.status, 'needs_answers');
-  assert.equal(view?.analysis.questions.length, 2);
+  assert.equal(view?.analysis.questions.length, 1);
   // Разбор закрыт по факту: потрачено 0.002, а не потолок.
   const contextReservation = (await budget.forAnalysis(created.analysis.id)).find(
     (item) => item.stage === 'context',
@@ -238,7 +231,7 @@ test('бесплатный сценарий гостя: разбор → воп�
   assert.equal(contextReservation?.status, 'settled');
   assert.equal(contextReservation?.actualUsd, 0.002);
 
-  // Обязательный вопрос без ответа — нельзя; необязательный можно пропустить.
+  // Обязательный вопрос без ответа — нельзя.
   const missing = await service.continue(caller, created.analysis.id, { answers: {} });
   assert.equal(missing.ok, false);
   if (!missing.ok) assert.equal(missing.code, 'answers_required');
@@ -250,10 +243,7 @@ test('бесплатный сценарий гостя: разбор → воп�
 
   view = await service.get(caller.userId, created.analysis.id);
   assert.equal(view?.analysis.status, 'ready');
-  assert.deepEqual(view?.analysis.answers, {
-    q1: { value: 'В таблице Google' },
-    q2: { skipped: true },
-  });
+  assert.deepEqual(view?.analysis.answers, { q1: { value: 'В таблице Google' } });
   assert.equal(view?.analysis.summary, 'Больше всего поможет ИИ в ответах покупателям.');
   // Ответы ушли модели в поиске возможностей.
   assert.match(requests.at(-1)?.messages[0].content ?? '', /В таблице Google/);
@@ -534,12 +524,11 @@ test('черновик ответов сохраняется без вызова
 
   const saved = await service.saveAnswers(caller, created.analysis.id, {
     q1: { value: 'В Excel' },
-    q2: { skipped: true },
     zz: { value: 'чужой вопрос отбрасывается' },
   });
   assert.equal(saved.ok, true);
   const view = await service.get(caller.userId, created.analysis.id);
-  assert.deepEqual(view?.analysis.answers, { q1: { value: 'В Excel' }, q2: { skipped: true } });
+  assert.deepEqual(view?.analysis.answers, { q1: { value: 'В Excel' } });
   assert.equal(view?.analysis.status, 'needs_answers');
   assert.equal(requests.length, calls, 'модель не вызывалась');
 
@@ -578,10 +567,10 @@ test('после отчёта: те же ответы — модель не вы
   const calls = requests.length;
   const budgetBefore = await budget.day(service.today());
 
-  // Те же ответы (пробелы и явный пропуск необязательного не в счёт) — ничего не запускается.
+  // Те же ответы (пробелы по краям не в счёт) — ничего не запускается.
   const variants: Array<Record<string, { value: string } | { skipped: true }>> = [
     { q1: { value: 'В Excel' } },
-    { q1: { value: '  В Excel ' }, q2: { skipped: true } },
+    { q1: { value: '  В Excel ' } },
   ];
   for (const answers of variants) {
     const same = await service.continue(caller, id, { answers, confirm: true });

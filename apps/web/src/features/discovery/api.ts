@@ -54,10 +54,27 @@ export type Impact =
     }
   | { kind: 'qualitative'; benefit: string; missing: string; note: string };
 
+/** Области карты анализа (сервер: discovery/analysis-map.ts). */
+export type AreaId = 'clients' | 'sales' | 'content' | 'documents' | 'routine';
+/** Готовые автоматизации; сервер отдаёт только доступные. */
+export type RecipeId = 'personal_assistant' | 'customer_bot' | 'weekly_content';
+
+export interface AreaCoverage {
+  area: AreaId;
+  status: 'found' | 'not_relevant' | 'unclear';
+  opportunities: number;
+  note: string;
+}
+
+export type SiteSourceView =
+  { url: string; ok: true; title: string } | { url: string; ok: false; reason: string };
+
 export interface OpportunityView {
   id: string;
   position: number;
   title: string;
+  area: AreaId | null;
+  recipe: RecipeId | null;
   problem: string;
   solution: string;
   requires: string[];
@@ -91,6 +108,8 @@ export interface AnalysisView {
   questions: Question[];
   answers: Answers;
   summary: string | null;
+  coverage: AreaCoverage[] | null;
+  source: SiteSourceView | null;
   saved: boolean;
   stages: { context: StageView | null; discovery: StageView | null };
   opportunities: OpportunityView[];

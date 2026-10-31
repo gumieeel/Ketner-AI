@@ -267,7 +267,7 @@
         "youngAccountDays": 7,
         "perDay": 20,
         "startsPerMinute": 3,
-        "maxQuestions": 3,
+        "maxQuestions": 1,
         "textChars": 8000
       },
       "plans": {
@@ -291,12 +291,12 @@
       "analysisPaid": {
         "model": "MiMo-V2.6 Pro",
         "typicalCredits": 9,
-        "maxCredits": 27
+        "maxCredits": 28
       },
       "analysisDeep": {
         "model": "Claude Sonnet 5.5",
         "typicalCredits": 79,
-        "maxCredits": 322
+        "maxCredits": 326
       },
       "planPaid": {
         "model": "MiMo-V2.6 Pro",

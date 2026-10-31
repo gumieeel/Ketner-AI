@@ -11,6 +11,7 @@ import {
   type FeasibilityItem,
   type FeasibilityStatus,
   type OpportunityView,
+  type AreaCoverage,
 } from '@/features/discovery/api';
 import { creditsText, priceText } from '@/features/discovery/format';
 import { useTranslation, type TranslationKey } from '@/i18n';
@@ -30,6 +31,9 @@ const FEASIBILITY_TONE: Record<FeasibilityStatus, BadgeTone> = {
   needs_integration: 'warning',
   not_supported: 'neutral',
 };
+
+/** Кнопки действий в карточке: длинная надпись переносится, а не вылезает за карточку на телефоне. */
+const ACTION_WRAP = 'self-start max-w-full whitespace-normal h-auto min-h-9 py-2 text-center';
 
 /** Сколько первых шагов показать в «С чего начать». */
 const START_STEPS = 3;
@@ -51,10 +55,41 @@ export function Report({
   const translator = useTranslation();
   const { t } = translator;
   const builder = useBuilderSummary();
-  const opportunities = [...analysis.opportunities].sort((a, b) => a.priority - b.priority);
-  const startWith = opportunities
+  const sorted = [...analysis.opportunities].sort((a, b) => a.priority - b.priority);
+  // Анализ по плану (этап A): главная рекомендация — первая возможность с готовым рецептом.
+  const planned = analysis.coverage !== null;
+  const main = planned ? (sorted.find((item) => item.recipe !== null) ?? null) : null;
+  const opportunities = main ? sorted.filter((item) => item.id !== main.id) : sorted;
+  const startWith = sorted
     .filter((item) => item.feasibilityStatus !== 'not_supported' && item.firstStep)
     .slice(0, START_STEPS);
+  const actionFor = (item: OpportunityView, featured: boolean) =>
+    item.feasibilityStatus === 'not_supported' ? null : (
+      <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-start">
+        {/* Готовая автоматизация — первым действием; у возможности без рецепта — только план. */}
+        {item.recipe === 'personal_assistant' ? (
+          <SolutionAction
+            analysis={analysis}
+            opportunity={item}
+            builder={builder}
+            primary={featured}
+            start
+          />
+        ) : null}
+        {plans ? (
+          <PlanAction
+            analysis={analysis}
+            opportunity={item}
+            plans={plans}
+            secondary={item.recipe !== null}
+          />
+        ) : null}
+        {!planned ? (
+          <SolutionAction analysis={analysis} opportunity={item} builder={builder} />
+        ) : null}
+      </div>
+    );
+  const situation = analysis.context?.summary ?? analysis.inputText;
 
   return (
     <section aria-labelledby="result-title" className="mt-10">
@@ -74,6 +109,25 @@ export function Report({
               amount: creditsText(translator, analysis.cost.chargedCredits),
             })}
       </p>
+      <SourceNote analysis={analysis} />
+
+      {main ? (
+        <section aria-labelledby="main-title" className="mt-8">
+          <h3 id="main-title" className="text-[18px] font-medium text-text">
+            {t('analysis.main.title')}
+          </h3>
+          <ul className="mt-3">
+            <OpportunityCard
+              item={main}
+              featured
+              situation={situation}
+              action={actionFor(main, true)}
+            />
+          </ul>
+        </section>
+      ) : null}
+
+      {analysis.coverage ? <AnalysisMap coverage={analysis.coverage} /> : null}
 
       {startWith.length > 0 ? (
         <section aria-labelledby="start-title" className="mt-8">
@@ -100,7 +154,7 @@ export function Report({
       ) : null}
 
       <h3 className="mt-10 text-[18px] font-medium text-text">
-        {t('analysis.report.opportunitiesTitle')}
+        {main ? t('analysis.main.others') : t('analysis.report.opportunitiesTitle')}
       </h3>
       {opportunities.length === 0 ? (
         <p className="mt-3 text-[15px] leading-6 text-muted">{t('analysis.ready.empty')}</p>
@@ -110,17 +164,8 @@ export function Report({
             <OpportunityCard
               key={item.id}
               item={item}
-              situation={analysis.context?.summary ?? analysis.inputText}
-              action={
-                item.feasibilityStatus === 'not_supported' ? null : (
-                  <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-start">
-                    {plans ? (
-                      <PlanAction analysis={analysis} opportunity={item} plans={plans} />
-                    ) : null}
-                    <SolutionAction analysis={analysis} opportunity={item} builder={builder} />
-                  </div>
-                )
-              }
+              situation={situation}
+              action={actionFor(item, false)}
             />
           ))}
         </ul>
@@ -177,10 +222,12 @@ function OpportunityCard({
   item,
   action,
   situation,
+  featured = false,
 }: {
   item: OpportunityView;
   action: ReactNode;
   situation: string;
+  featured?: boolean;
 }) {
   const { t } = useTranslation();
   const [open, setOpen] = useState(false);
@@ -188,9 +235,27 @@ function OpportunityCard({
   const headingId = useId();
 
   return (
-    <li className="rounded-xl border border-stroke bg-surface px-5 py-4">
+    <li
+      className={cn(
+        'rounded-xl border bg-surface px-5 py-4',
+        featured ? 'border-accent/50 shadow-sm' : 'border-stroke',
+      )}
+    >
+      {item.area || item.recipe ? (
+        <p className="mb-1 text-[13px] text-subtle">
+          {item.area ? t(`analysis.map.area.${item.area}` as TranslationKey) : null}
+          {item.area && item.recipe ? ' · ' : null}
+          {item.recipe ? t(`analysis.recipe.${item.recipe}` as TranslationKey) : null}
+        </p>
+      ) : null}
       <div className="flex flex-wrap items-start justify-between gap-2">
-        <h4 id={headingId} className="min-w-0 text-[16px] leading-6 font-medium text-text">
+        <h4
+          id={headingId}
+          className={cn(
+            'min-w-0 leading-6 font-medium text-text',
+            featured ? 'text-[18px]' : 'text-[16px]',
+          )}
+        >
           {item.title}
         </h4>
         <Badge tone={FEASIBILITY_TONE[item.feasibilityStatus]}>
@@ -223,30 +288,32 @@ function OpportunityCard({
       ) : null}
 
       {action}
-      <Link
-        to="/chat"
-        state={{
-          prompt: t('analysis.chat.opportunityPrompt', {
-            title: item.title,
-            problem: item.problem,
-            solution: item.solution,
-            situation: situation.slice(0, 600),
-          }),
-        }}
-        className="mt-3 inline-flex min-h-11 items-center text-[14px] text-muted underline underline-offset-4 hover:text-text md:min-h-0"
-      >
-        {t('analysis.chat.discuss')}
-      </Link>
+      <div className="mt-3 flex flex-wrap gap-x-5">
+        <Link
+          to="/chat"
+          state={{
+            prompt: t('analysis.chat.opportunityPrompt', {
+              title: item.title,
+              problem: item.problem,
+              solution: item.solution,
+              situation: situation.slice(0, 600),
+            }),
+          }}
+          className="inline-flex min-h-11 items-center text-[14px] text-muted underline underline-offset-4 hover:text-text md:min-h-0"
+        >
+          {t('analysis.chat.discuss')}
+        </Link>
 
-      <button
-        type="button"
-        aria-expanded={open}
-        aria-controls={detailsId}
-        onClick={() => setOpen((value) => !value)}
-        className="mt-3 inline-flex min-h-11 items-center text-[14px] font-medium text-muted underline underline-offset-4 hover:text-text md:min-h-0"
-      >
-        {open ? t('analysis.report.less') : t('analysis.report.more')}
-      </button>
+        <button
+          type="button"
+          aria-expanded={open}
+          aria-controls={detailsId}
+          onClick={() => setOpen((value) => !value)}
+          className="inline-flex min-h-11 items-center text-[14px] font-medium text-muted underline underline-offset-4 hover:text-text md:min-h-0"
+        >
+          {open ? t('analysis.report.less') : t('analysis.report.more')}
+        </button>
+      </div>
 
       <div id={detailsId} hidden={!open} className="mt-3 border-t border-stroke pt-4">
         <dl className="flex flex-col gap-4 text-[14px] leading-6">
@@ -307,10 +374,13 @@ function PlanAction({
   analysis,
   opportunity,
   plans,
+  secondary = false,
 }: {
   analysis: AnalysisView;
   opportunity: OpportunityView;
   plans: PlansSummary;
+  /** Рядом есть «Приступить к автоматизации»: план — второстепенное действие. */
+  secondary?: boolean;
 }) {
   const translator = useTranslation();
   const { t } = translator;
@@ -353,21 +423,20 @@ function PlanAction({
         <>
           <Button
             size="sm"
-            className="self-start"
+            variant={secondary ? 'outline' : 'primary'}
+            className={ACTION_WRAP}
             loading={busy}
             disabled={busy}
             onClick={() => start(false)}
           >
             {t('analysis.plan.makeFree')}
           </Button>
-          <p className="text-[13px] text-subtle">
-            {t('analysis.plan.freeNote', { model: free.model })}
-          </p>
+          <p className="text-[13px] text-subtle">{t('analysis.plan.freeNote')}</p>
         </>
       ) : paid.loginRequired ? (
         <Link
           to={`/login?redirect=${encodeURIComponent(base)}`}
-          className={buttonClasses({ variant: 'outline', size: 'sm', className: 'self-start' })}
+          className={buttonClasses({ variant: 'outline', size: 'sm', className: ACTION_WRAP })}
         >
           {t('analysis.plan.loginToMake')}
         </Link>
@@ -376,7 +445,7 @@ function PlanAction({
           <Button
             variant="outline"
             size="sm"
-            className="self-start"
+            className={ACTION_WRAP}
             loading={busy}
             disabled={busy}
             onClick={() => start(true)}
@@ -386,7 +455,6 @@ function PlanAction({
           <p className="text-[13px] text-subtle">
             {t('analysis.plan.paidNote', {
               price: priceText(translator, paid.typicalCredits, paid.maxCredits),
-              model: paid.model,
             })}
           </p>
         </>
@@ -428,10 +496,16 @@ function SolutionAction({
   analysis,
   opportunity,
   builder,
+  primary = false,
+  start = false,
 }: {
   analysis: AnalysisView;
   opportunity: OpportunityView;
   builder: BuilderSummary;
+  /** Главная рекомендация: основная кнопка страницы. */
+  primary?: boolean;
+  /** Возможность с готовым рецептом: «Приступить к автоматизации». */
+  start?: boolean;
 }) {
   const translator = useTranslation();
   const { t } = translator;
@@ -444,9 +518,13 @@ function SolutionAction({
     return (
       <Link
         to={`/login?redirect=${encodeURIComponent(`/analyses/${analysis.id}`)}`}
-        className={buttonClasses({ variant: 'ghost', size: 'sm', className: 'self-start' })}
+        className={buttonClasses({
+          variant: primary ? 'primary' : start ? 'outline' : 'ghost',
+          size: 'sm',
+          className: ACTION_WRAP,
+        })}
       >
-        {t('builder.report.loginToCreate')}
+        {start ? t('builder.report.loginToStart') : t('builder.report.loginToCreate')}
       </Link>
     );
   }
@@ -454,18 +532,18 @@ function SolutionAction({
     return (
       <Link
         to={`/solutions/${existing.id}`}
-        className={buttonClasses({ variant: 'secondary', size: 'sm', className: 'self-start' })}
+        className={buttonClasses({ variant: 'secondary', size: 'sm', className: ACTION_WRAP })}
       >
         {t('builder.report.open')}
       </Link>
     );
   }
   return (
-    <div className="flex flex-col gap-2">
+    <div className="mt-3 flex flex-col gap-2">
       <Button
-        variant="outline"
+        variant={primary ? 'primary' : 'outline'}
         size="sm"
-        className="self-start"
+        className={ACTION_WRAP}
         loading={busy}
         disabled={busy || !builder.quote}
         onClick={() => {
@@ -479,18 +557,80 @@ function SolutionAction({
             });
         }}
       >
-        {busy ? t('builder.report.creating') : t('builder.report.create')}
+        {busy
+          ? t('builder.report.creating')
+          : start
+            ? t('builder.report.start')
+            : t('builder.report.create')}
       </Button>
       {builder.quote ? (
         <p className="text-[13px] text-subtle">
           {t('builder.report.draftNote', {
             price: priceText(translator, builder.quote.typicalCredits, builder.quote.maxCredits),
-            model: builder.quote.model,
           })}
         </p>
       ) : null}
       {error ? <ErrorNotice error={error} redirect={`/analyses/${analysis.id}`} /> : null}
     </div>
+  );
+}
+
+/** Сайт из описания: прочитан или нет — человек должен знать, на чём основан отчёт. */
+function SourceNote({ analysis }: { analysis: AnalysisView }) {
+  const { t } = useTranslation();
+  const source = analysis.source;
+  if (!source) return null;
+  const site = siteName(source.url);
+  return (
+    <p className="mt-1 text-[13px] text-subtle">
+      {source.ok ? t('analysis.source.read', { site }) : t('analysis.source.failed', { site })}
+    </p>
+  );
+}
+
+function siteName(url: string): string {
+  try {
+    return new URL(url).hostname.replace(/^www\./, '');
+  } catch {
+    return url;
+  }
+}
+
+const COVERAGE_TONE: Record<AreaCoverage['status'], BadgeTone> = {
+  found: 'success',
+  not_relevant: 'neutral',
+  unclear: 'warning',
+};
+
+/** Карта анализа: пять областей, которые анализ проверяет всегда, и что в каждой нашлось. */
+function AnalysisMap({ coverage }: { coverage: AreaCoverage[] }) {
+  const { t } = useTranslation();
+  return (
+    <section aria-labelledby="map-title" className="mt-8">
+      <h3 id="map-title" className="text-[18px] font-medium text-text">
+        {t('analysis.map.title')}
+      </h3>
+      <ul className="mt-3 grid gap-2 sm:grid-cols-2">
+        {coverage.map((item) => (
+          <li
+            key={item.area}
+            className="flex flex-col gap-1 rounded-xl border border-stroke px-4 py-3"
+          >
+            <span className="flex flex-wrap items-center justify-between gap-2">
+              <span className="text-[15px] font-medium text-text">
+                {t(`analysis.map.area.${item.area}` as TranslationKey)}
+              </span>
+              <Badge tone={COVERAGE_TONE[item.status]}>
+                {item.status === 'found'
+                  ? t('analysis.map.found', { count: item.opportunities })
+                  : t(`analysis.map.${item.status}` as TranslationKey)}
+              </Badge>
+            </span>
+            {item.note ? <span className="text-[13px] text-subtle">{item.note}</span> : null}
+          </li>
+        ))}
+      </ul>
+    </section>
   );
 }
 

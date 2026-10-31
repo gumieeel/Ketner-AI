@@ -163,26 +163,26 @@ test('гость проходит анализ целиком; чужой гос
     const draft = await fetch(`${app.base}/api/analyses/${id}/answers`, {
       method: 'PUT',
       headers: guestHeaders(guest),
-      body: JSON.stringify({ answers: { q2: { value: 'В табли' } } }),
+      body: JSON.stringify({ answers: { q1: { value: 'В табли' } } }),
     });
     assert.equal(draft.status, 200);
     const reloaded = await fetch(`${app.base}/api/analyses/${id}`, {
       headers: guestHeaders(guest),
     });
     assert.deepEqual(((await reloaded.json()) as ApiBody).analysis.answers, {
-      q2: { value: 'В табли' },
+      q1: { value: 'В табли' },
     });
     const foreignDraft = await fetch(`${app.base}/api/analyses/${id}/answers`, {
       method: 'PUT',
       headers: guestHeaders('guest_stranger01'),
-      body: JSON.stringify({ answers: { q2: { value: 'x' } } }),
+      body: JSON.stringify({ answers: { q1: { value: 'x' } } }),
     });
     assert.equal(foreignDraft.status, 404);
 
     const continued = await post(
       app.base,
       `/api/analyses/${id}/continue`,
-      { answers: { q2: { value: 'В таблицах' } } },
+      { answers: { q1: { value: 'В таблицах' } } },
       guestHeaders(guest),
     );
     assert.equal(continued.status, 202);
@@ -206,7 +206,7 @@ test('гость проходит анализ целиком; чужой гос
     const same = await post(
       app.base,
       `/api/analyses/${id}/continue`,
-      { answers: { q2: { value: 'В таблицах' } } },
+      { answers: { q1: { value: 'В таблицах' } } },
       guestHeaders(guest),
     );
     assert.equal(same.status, 200);
@@ -214,7 +214,7 @@ test('гость проходит анализ целиком; чужой гос
     const changed = await post(
       app.base,
       `/api/analyses/${id}/continue`,
-      { answers: { q2: { value: 'В CRM' } }, confirm: true },
+      { answers: { q1: { value: 'В CRM' } }, confirm: true },
       guestHeaders(guest),
     );
     assert.equal(changed.status, 401);
@@ -371,7 +371,7 @@ test('план по HTTP: бесплатный краткий план, стат
     await post(
       app.base,
       `/api/analyses/${id}/continue`,
-      { answers: { q2: { value: 'В таблицах' } } },
+      { answers: { q1: { value: 'В таблицах' } } },
       guestHeaders(guest),
     );
     await app.service.whenIdle();

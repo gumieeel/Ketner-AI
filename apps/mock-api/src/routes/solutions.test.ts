@@ -132,7 +132,7 @@ test('Builder по HTTP: только после входа; помощник и
     await fetch(`${app.base}/api/analyses/${analysisId}/continue`, {
       method: 'POST',
       headers: auth,
-      body: JSON.stringify({ answers: { q2: { value: 'В таблицах' } } }),
+      body: JSON.stringify({ answers: { q1: { value: 'В таблицах' } } }),
     });
     await app.discovery.whenIdle();
     const report = (await (
