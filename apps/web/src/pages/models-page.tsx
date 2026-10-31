@@ -269,7 +269,13 @@ export function ModelsPage() {
           запросы не выполняются. Картинки тоже тратят кредиты (по стоимости генерации), а в сутки
           их можно сделать не больше лимита: он выше после первой покупки.
         </p>
-        <div className="overflow-x-auto rounded-xl border border-stroke">
+        {/* Таблица прокручивается на узком экране: область доступна с клавиатуры. */}
+        <div
+          className="overflow-x-auto rounded-xl border border-stroke focus-visible:outline-2 focus-visible:outline-accent"
+          tabIndex={0}
+          role="region"
+          aria-label="Модели изображений"
+        >
           <table className="w-full min-w-[640px] border-collapse text-left text-[13px]">
             <thead className="bg-surface-2 text-text">
               <tr>

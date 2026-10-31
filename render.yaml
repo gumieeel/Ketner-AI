@@ -21,6 +21,9 @@ services:
         sync: false
       - key: OPENROUTER_API_KEY
         sync: false
+      # Платформа решений (docs/ACCEPTANCE.md): `true` ставится в панели после приёмки.
+      - key: DISCOVERY_ENABLED
+        sync: false
       - key: ANTHROPIC_API_KEY
         sync: false
       - key: OPENAI_API_KEY
