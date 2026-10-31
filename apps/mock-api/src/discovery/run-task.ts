@@ -31,6 +31,8 @@ export interface StructuredTaskInput<T> {
   taskId: string;
   conversationId: string;
   billing: 'user' | 'sponsored';
+  /** Вид служебной задачи в учёте: этап анализа или проверка (Builder: черновик, судья). */
+  kind?: 'discovery' | 'review';
   policy: StagePolicy;
   language: Language;
   systemPrompt: string;
@@ -99,7 +101,7 @@ async function callOnce(
       ...(input.signal ? { signal: input.signal } : {}),
       providerTimeoutMs: input.providerTimeoutMs ?? 90_000,
       task: {
-        kind: 'discovery',
+        kind: input.kind ?? 'discovery',
         id: input.taskId,
         systemPrompt: input.systemPrompt,
         templateOutput: input.templateOutput,

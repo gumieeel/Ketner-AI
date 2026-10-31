@@ -30,6 +30,8 @@ import type { RevokedTokenStore } from '../store/revoked-token-store.js';
 import type { Mailer } from '../services/mailer.js';
 import { createChatRouter } from './chat.js';
 import { createAnalysesRouter, type AnalysesRouterDeps } from './analyses.js';
+import { createSolutionsRouter } from './solutions.js';
+import type { BuilderService } from '../builder/service.js';
 import { createCompareRouter } from './compare.js';
 import { createReviewRouter } from './review.js';
 import { createCodeRouter } from './code.js';
@@ -83,6 +85,8 @@ export interface ApiDeps {
   discoveryEnabled?: boolean;
   /** Подмена частей анализа задач в тестах (хранилища, время, бюджет). */
   discovery?: Partial<AnalysesRouterDeps>;
+  /** Готовый сервис Builder (тесты). */
+  builder?: BuilderService;
 }
 
 /**
@@ -452,6 +456,21 @@ export function createApiRouter(deps: ApiDeps): Router {
       githubConnected: (userId) => activeGithubStore.tokenOf(userId) !== undefined,
       ...(deps.discoveryEnabled !== undefined ? { enabled: deps.discoveryEnabled } : {}),
       ...deps.discovery,
+    }),
+  );
+  // Builder (этап 6): персональные помощники — после входа, за тем же флагом.
+  router.use(
+    '/solutions',
+    createSolutionsRouter({
+      ai: deps.ai,
+      userStore: activeUserStore,
+      subscriptionStore: activeSubscriptionStore,
+      usageStore: activeUsageStore,
+      credits: activeBilling.credits,
+      ...(deps.chatGateway ? { gateway: deps.chatGateway } : {}),
+      ...(deps.discoveryEnabled !== undefined ? { enabled: deps.discoveryEnabled } : {}),
+      ...(deps.discovery?.stores ? { stores: deps.discovery.stores } : {}),
+      ...(deps.builder ? { service: deps.builder } : {}),
     }),
   );
   router.use(

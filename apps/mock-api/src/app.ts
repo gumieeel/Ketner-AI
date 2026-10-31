@@ -99,6 +99,7 @@ export interface AppDeps {
   discoveryEnabled?: boolean;
   /** Подмена частей анализа задач в тестах. */
   discovery?: ApiDeps['discovery'];
+  builder?: ApiDeps['builder'];
 }
 
 const DEFAULT_BODY_LIMIT = '1mb';

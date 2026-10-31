@@ -113,4 +113,81 @@ export const MIGRATIONS: readonly Migration[] = [
       CREATE INDEX discovery_plans_analysis ON discovery_plans (analysis_id, user_id);
     `,
   },
+  {
+    // Этап 6: Builder — персональные помощники. Настройки хранятся версиями, тест-кейсы и прогоны
+    // привязаны к версии, у помощника свой чат. Всё удаляется вместе с помощником.
+    id: '0004_solutions',
+    sql: `
+      CREATE TABLE solutions (
+        id text PRIMARY KEY,
+        user_id text NOT NULL,
+        type text NOT NULL CHECK (type IN ('assistant')),
+        status text NOT NULL CHECK (status IN ('draft', 'active', 'paused')),
+        name text NOT NULL,
+        current_version integer NOT NULL,
+        active_version integer,
+        source jsonb,
+        version integer NOT NULL DEFAULT 1,
+        created_at timestamptz NOT NULL DEFAULT now(),
+        updated_at timestamptz NOT NULL DEFAULT now()
+      );
+      CREATE INDEX solutions_user ON solutions (user_id, updated_at DESC);
+
+      CREATE TABLE solution_versions (
+        solution_id text NOT NULL REFERENCES solutions (id) ON DELETE CASCADE,
+        number integer NOT NULL,
+        config jsonb NOT NULL,
+        created_at timestamptz NOT NULL DEFAULT now(),
+        PRIMARY KEY (solution_id, number)
+      );
+
+      CREATE TABLE solution_test_cases (
+        id text PRIMARY KEY,
+        solution_id text NOT NULL REFERENCES solutions (id) ON DELETE CASCADE,
+        user_id text NOT NULL,
+        position integer NOT NULL,
+        input text NOT NULL,
+        criteria jsonb NOT NULL,
+        created_at timestamptz NOT NULL DEFAULT now(),
+        updated_at timestamptz NOT NULL DEFAULT now()
+      );
+      CREATE INDEX solution_test_cases_solution ON solution_test_cases (solution_id, position);
+
+      CREATE TABLE solution_test_runs (
+        id text PRIMARY KEY,
+        solution_id text NOT NULL REFERENCES solutions (id) ON DELETE CASCADE,
+        user_id text NOT NULL,
+        version_number integer NOT NULL,
+        cases_hash text NOT NULL,
+        status text NOT NULL CHECK (status IN ('running', 'done')),
+        results jsonb NOT NULL,
+        version integer NOT NULL DEFAULT 1,
+        created_at timestamptz NOT NULL DEFAULT now(),
+        finished_at timestamptz
+      );
+      CREATE INDEX solution_test_runs_solution ON solution_test_runs (solution_id, created_at DESC);
+
+      CREATE TABLE solution_threads (
+        id text PRIMARY KEY,
+        solution_id text NOT NULL REFERENCES solutions (id) ON DELETE CASCADE,
+        user_id text NOT NULL,
+        title text NOT NULL,
+        created_at timestamptz NOT NULL DEFAULT now(),
+        updated_at timestamptz NOT NULL DEFAULT now()
+      );
+      CREATE INDEX solution_threads_solution ON solution_threads (solution_id, updated_at DESC);
+
+      CREATE TABLE solution_messages (
+        id text PRIMARY KEY,
+        thread_id text NOT NULL REFERENCES solution_threads (id) ON DELETE CASCADE,
+        user_id text NOT NULL,
+        role text NOT NULL CHECK (role IN ('user', 'assistant')),
+        content text NOT NULL,
+        data jsonb NOT NULL DEFAULT '{}'::jsonb,
+        status text NOT NULL CHECK (status IN ('complete', 'error')),
+        created_at timestamptz NOT NULL DEFAULT now()
+      );
+      CREATE INDEX solution_messages_thread ON solution_messages (thread_id, created_at);
+    `,
+  },
 ];

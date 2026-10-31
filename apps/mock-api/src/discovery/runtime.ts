@@ -9,10 +9,13 @@
 import type { SqlRunner } from '../code/postgres-driver.js';
 import { MemoryBudgetStore, PostgresBudgetStore, type BudgetStore } from './budget.js';
 import { MemoryDiscoveryStore, PostgresDiscoveryStore, type DiscoveryStore } from './store.js';
+import { MemoryBuilderStore, PostgresBuilderStore, type BuilderStore } from '../builder/store.js';
 
 export interface DiscoveryStores {
   store: DiscoveryStore;
   budget: BudgetStore;
+  /** Builder (этап 6): помощники, версии, тесты, чат — миграция `0004_solutions`. */
+  builder: BuilderStore;
 }
 
 let databaseExpected = false;
@@ -25,13 +28,21 @@ export function expectDiscoveryDatabase(): void {
 }
 
 export function attachDiscoveryDriver(runner: SqlRunner): void {
-  postgres = { store: new PostgresDiscoveryStore(runner), budget: new PostgresBudgetStore(runner) };
+  postgres = {
+    store: new PostgresDiscoveryStore(runner),
+    budget: new PostgresBudgetStore(runner),
+    builder: new PostgresBuilderStore(runner),
+  };
 }
 
 /** null — база настроена, но таблицы недоступны (миграции не применились). */
 export function getDiscoveryStores(): DiscoveryStores | null {
   if (postgres) return postgres;
   if (databaseExpected) return null;
-  memory ??= { store: new MemoryDiscoveryStore(), budget: new MemoryBudgetStore() };
+  memory ??= {
+    store: new MemoryDiscoveryStore(),
+    budget: new MemoryBudgetStore(),
+    builder: new MemoryBuilderStore(),
+  };
   return memory;
 }

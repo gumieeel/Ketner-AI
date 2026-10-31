@@ -126,6 +126,36 @@ export function stagePolicy(
   };
 }
 
+/**
+ * Потолок и типичная цена одного служебного вызова вне этапов анализа (Builder: черновик
+ * помощника, судья тест-кейса, ответ помощника в тесте) — по той же формуле, что этапы.
+ */
+export function callCost(
+  modelId: string,
+  input: { systemChars: number; payloadChars: number; maxOutputTokens: number; attempts: number },
+  typical: { inputTokens: number; outputTokens: number },
+  registry: ModelRegistry = modelRegistry,
+): { capUsd: number; typicalUsd: number; maxOutputTokens: number } {
+  const model = registry.resolve(modelId);
+  const maxOutputTokens = Math.min(input.maxOutputTokens, model.maxOutputTokens);
+  const firstInput = tokensOf(input.systemChars + input.payloadChars + 600);
+  const retryInput = firstInput + tokensOf(REPAIR_ECHO_CHARS + 600);
+  let capUsd = priceUsd(model.pricing, firstInput, maxOutputTokens);
+  if (input.attempts > 1) capUsd += priceUsd(model.pricing, retryInput, maxOutputTokens);
+  const typicalUsd =
+    priceUsd(model.pricing, typical.inputTokens, Math.min(typical.outputTokens, maxOutputTokens)) *
+    (input.attempts > 1 ? 1 + TYPICAL_RETRY_SHARE : 1);
+  return { capUsd: round6(capUsd), typicalUsd: round6(typicalUsd), maxOutputTokens };
+}
+
+/** Кредиты из долларов: ≈ — округление, «не больше» — вверх. */
+export function toCreditRange(typicalUsd: number, capUsd: number) {
+  return {
+    typicalCredits: Math.max(1, Math.round(typicalUsd * CREDITS_PER_USD)),
+    maxCredits: Math.ceil(capUsd * CREDITS_PER_USD),
+  };
+}
+
 /** Разбор и поиск возможностей: то, что запускается вместе как «анализ». */
 export const ANALYSIS_STAGES: readonly StageName[] = ['context', 'discovery'];
 
