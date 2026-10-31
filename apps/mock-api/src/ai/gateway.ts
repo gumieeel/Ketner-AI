@@ -603,7 +603,9 @@ export class AIGateway {
       snapshot,
       effectivePlan,
       language,
-      req.task?.kind === 'discovery' ? { skipMessageWindows: true, skipTokenWindows: true } : {},
+      req.task?.kind === 'discovery' || req.assistant?.testRunId
+        ? { skipMessageWindows: true, skipTokenWindows: true }
+        : {},
     );
 
     if (decision.action === 'deny') {
@@ -649,10 +651,15 @@ export class AIGateway {
         ? ECONOMY_SYSTEM_PROMPT
         : (targetModel.defaultSystemPrompt ?? DEFAULT_SYSTEM_PROMPT);
       const baseSystemPrompt = req.task ? req.task.systemPrompt : promptMap[language];
-      const systemPrompt =
+      const concisePrompt =
         stage !== 'normal' && !req.task
           ? `${baseSystemPrompt} ${language === 'en' ? 'Keep responses concise and direct.' : 'Отвечай максимально кратко и по существу.'}`
           : baseSystemPrompt;
+      // Помощник Builder: его настройки — после правил чата, правила чата остаются в силе.
+      const systemPrompt =
+        req.assistant && !req.task
+          ? `${concisePrompt}\n\n${req.assistant.instructions}`
+          : concisePrompt;
 
       // Бюджет проекта зависит от тарифа, окна и цены модели: большой контекст на дорогой модели —
       // главный источник убытка в безлимите.
@@ -731,7 +738,7 @@ export class AIGateway {
       // Ответ зависит от файлов проекта и вложений, а ключ кэша — только от текста вопроса:
       // с проектом/вложениями кэш не читаем и не пишем (иначе чужой или устаревший ответ).
       // Служебные запросы (проверка ответа) в кэш не ходят: их результат хранится отдельно.
-      const cacheable = !hasAttachments && !activeWorkspace && !req.task;
+      const cacheable = !hasAttachments && !activeWorkspace && !req.task && !req.assistant;
 
       const cachedHit = cacheable
         ? semanticCache.get(cacheModelKey, language, prompt, userScope, historyHash)
@@ -865,8 +872,9 @@ export class AIGateway {
                   escalate,
                 });
           const reasoning = toProviderReasoning(candidateModel.reasoning, wantedEffort);
-          const maxTokens = req.task?.maxOutputTokens
-            ? Math.min(req.task.maxOutputTokens, candidateModel.maxOutputTokens)
+          const fixedMaxTokens = req.task?.maxOutputTokens ?? req.assistant?.maxOutputTokens;
+          const maxTokens = fixedMaxTokens
+            ? Math.min(fixedMaxTokens, candidateModel.maxOutputTokens)
             : computeOutputCap({
                 planMaxTokens: entitlements.maxTokens,
                 modelMaxOutputTokens: candidateModel.maxOutputTokens,
@@ -1056,14 +1064,15 @@ export class AIGateway {
         providerCost: responseSource === 'provider' ? streamedResponse?.cost : undefined,
       });
       const totalEstimatedCost = Number(requestCost.usd.toFixed(6));
+      const chargeCap = req.task?.maxChargeUsd ?? req.assistant?.maxChargeUsd;
       // Кредиты списываются по реальной цене ответа провайдера. Бесплатная модель, кэш и шаблонные
       // ответы ничего не стоят; гости кредитов не имеют.
       const creditsUsd =
         responseSource === 'provider' && !req.isAnonymous && !isFreeModel(usedModel) && !sponsored
           ? this.credits.charge(
               activeUserId,
-              req.task?.maxChargeUsd !== undefined
-                ? Math.min(totalEstimatedCost, Math.max(0, req.task.maxChargeUsd))
+              chargeCap !== undefined
+                ? Math.min(totalEstimatedCost, Math.max(0, chargeCap))
                 : totalEstimatedCost,
             )
           : 0;
@@ -1095,7 +1104,13 @@ export class AIGateway {
         ttftMs: firstTokenMs,
         status: isCancelled() ? 'cancelled' : 'success',
         source: responseSource,
-        ...(req.task ? { kind: req.task.kind, runId: req.task.id } : {}),
+        ...(req.task
+          ? { kind: req.task.kind, runId: req.task.id }
+          : req.assistant
+            ? req.assistant.testRunId
+              ? { kind: 'assistant_test' as const, runId: req.assistant.testRunId }
+              : { kind: 'assistant' as const, runId: req.assistant.id }
+            : {}),
         ...(sponsored ? { sponsored: true } : {}),
         creditsUsd,
       });

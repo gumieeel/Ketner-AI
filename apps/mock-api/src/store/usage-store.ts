@@ -275,6 +275,7 @@ export class UsageStore {
       // Этапы анализа Discovery не тратят ни сообщения, ни токены чата: у анализа свои квоты и бюджет.
       const countsTowardLimits =
         rec.kind !== 'discovery' &&
+        rec.kind !== 'assistant_test' &&
         rec.status !== 'rate_limited' &&
         rec.status !== 'concurrency_limited' &&
         rec.status !== 'error';

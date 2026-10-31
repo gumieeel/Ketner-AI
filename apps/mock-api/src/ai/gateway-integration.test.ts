@@ -1129,3 +1129,95 @@ test('с пользователя списывается не больше об�
   assert.equal(out.done?.costUsd, 0.05);
   assert.equal(usage.getRunRecords('u-capped', 'an-cap').at(-1)?.estimatedCost, 0.05);
 });
+
+// ─── Помощник Builder (assistant) ────────────────────────────────────────────────────
+
+test('помощник: настройки дописываются к промпту чата, модель выбирает Auto, кэш не используется', async () => {
+  const usage = newUsage();
+  const credits = memoryCredits();
+  const calls: Call[] = [];
+  const gateway = makeGateway(
+    fakeOpenRouter(okStream('Ответ помощника', { cost: 0.002 }), calls),
+    usage,
+    credits,
+  );
+  setBalance(credits, 'u-assistant', 'credits', 100);
+  const ask = () =>
+    run(
+      gateway,
+      request({
+        userId: 'u-assistant',
+        userPlan: 'credits',
+        modelId: 'auto',
+        assistant: { id: 'sol-1', instructions: 'НАСТРОЙКИ-ПОМОЩНИКА: отвечай как продавец.' },
+      }),
+    );
+  assertNoError(await ask());
+  assertNoError(await ask());
+  assert.equal(calls.length, 2, 'второй одинаковый вопрос не взят из кэша');
+  const system = calls[0].messages.find((message) => message.role === 'system')?.content ?? '';
+  assert.match(system, /НАСТРОЙКИ-ПОМОЩНИКА/);
+  assert.ok(system.indexOf('НАСТРОЙКИ-ПОМОЩНИКА') > 0, 'правила чата остаются перед настройками');
+  const record = usage.getRunRecords('u-assistant', 'sol-1').at(-1);
+  assert.equal(record?.kind, 'assistant');
+  assert.ok((record?.creditsUsd ?? 0) > 0, 'ответ помощника списывается как сообщение чата');
+});
+
+test('тест помощника: не тратит сообщения чата, потолок ответа и списания, учёт assistant_test', async () => {
+  const usage = newUsage();
+  const credits = memoryCredits();
+  const calls: Call[] = [];
+  const gateway = makeGateway(
+    fakeOpenRouter(okStream('ok', { cost: 0.05 }), calls),
+    usage,
+    credits,
+  );
+  setBalance(credits, 'u-assistant-test', 'credits', 1000);
+  for (let i = 0; i < 10; i++) {
+    const seeded = usage.recordUsage({
+      userId: 'u-assistant-test',
+      conversationId: 'seed',
+      modelId: 'ketner-mini',
+      provider: 'openrouter',
+      inputTokens: 10,
+      outputTokens: 10,
+      estimatedCost: 0.0001,
+      latencyMs: 1,
+      status: 'success',
+    });
+    seeded.createdAt = new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString();
+  }
+  const out = await run(
+    gateway,
+    request({
+      userId: 'u-assistant-test',
+      userPlan: 'free',
+      modelId: 'auto',
+      assistant: {
+        id: 'sol-2',
+        instructions: 'Настройки',
+        testRunId: 'run-1',
+        maxOutputTokens: 1500,
+        maxChargeUsd: 0.01,
+      },
+    }),
+  );
+  assertNoError(out);
+  assert.equal(calls[0]?.maxTokens, 1500);
+  const record = usage.getRunRecords('u-assistant-test', 'run-1').at(-1);
+  assert.equal(record?.kind, 'assistant_test');
+  assert.equal(usage.getFairUseSnapshot('u-assistant-test').requestsLastDay, 10);
+
+  // С кредитами: ответ дороже потолка — списывается потолок.
+  const paid = await run(
+    gateway,
+    request({
+      userId: 'u-assistant-test',
+      userPlan: 'credits',
+      modelId: 'auto',
+      assistant: { id: 'sol-2', instructions: 'Настройки', testRunId: 'run-2', maxChargeUsd: 0.01 },
+    }),
+  );
+  assertNoError(paid);
+  assert.equal(paid.done?.creditsUsd, 0.01, 'списано не больше потолка');
+});
