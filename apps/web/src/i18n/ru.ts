@@ -340,6 +340,8 @@ export const ru = {
   'nav.models': 'Модели',
   'nav.start': 'Начать',
   'nav.toChat': 'В чат',
+  'nav.analyses': 'Анализы',
+  'nav.solutions': 'Помощники',
   'nav.chat': 'Чат',
   'nav.goToChat': 'Перейти в чат',
   'nav.signup': 'Регистрация',
@@ -2083,6 +2085,12 @@ export const ru = {
   'builder.chat.imageAlt': 'Картинка от помощника',
   'builder.chat.download': 'Скачать картинку',
 
+  'analysis.chat.discuss': 'Обсудить в чате',
+  'analysis.chat.discussPlan': 'Обсудить план в чате',
+  'analysis.chat.opportunityPrompt':
+    'Помоги внедрить: «{title}».\nЧто хочу решить: {problem}\nКак это может работать: {solution}\nМоя ситуация: {situation}\nС чего мне начать?',
+  'analysis.chat.planPrompt':
+    'Помоги выполнить план «{title}». Шаги и их статус:\n{steps}\nЧто мне сделать дальше?',
   'analysis.answers.title': 'Ваши ответы',
   'analysis.answers.skipped': 'Пропущен',
   'analysis.answers.edit': 'Изменить ответы',

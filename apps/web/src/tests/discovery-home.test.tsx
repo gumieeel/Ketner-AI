@@ -104,15 +104,16 @@ describe('главная платформы решений (DISCOVERY_ENABLED)',
     expect(screen.getByText('Веду учёт заказов в таблице вручную.')).toBeInTheDocument();
   });
 
-  it('шапка компактная: модели, кредиты, документация и чат; ссылки на разделы ведут на /models', () => {
+  it('шапка платформы: анализы, помощники, чат, модели и кредиты', () => {
     renderRoute('/');
     const nav = screen.getAllByRole('navigation', { name: 'Навигация' })[0];
     const links = within(nav).getAllByRole('link');
     expect(links.map((link) => [link.textContent, link.getAttribute('href')])).toEqual([
+      ['Анализы', '/analyses'],
+      ['Помощники', '/solutions'],
+      ['Чат', '/chat'],
       ['Модели', '/models'],
       ['Кредиты', '/pricing'],
-      ['Документация', '/docs'],
-      ['Чат', '/chat'],
     ]);
   });
 

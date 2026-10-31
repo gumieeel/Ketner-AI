@@ -110,6 +110,7 @@ export function Report({
             <OpportunityCard
               key={item.id}
               item={item}
+              situation={analysis.context?.summary ?? analysis.inputText}
               action={
                 item.feasibilityStatus === 'not_supported' ? null : (
                   <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-start">
@@ -172,7 +173,15 @@ function SaveControl({
   );
 }
 
-function OpportunityCard({ item, action }: { item: OpportunityView; action: ReactNode }) {
+function OpportunityCard({
+  item,
+  action,
+  situation,
+}: {
+  item: OpportunityView;
+  action: ReactNode;
+  situation: string;
+}) {
   const { t } = useTranslation();
   const [open, setOpen] = useState(false);
   const detailsId = useId();
@@ -214,6 +223,20 @@ function OpportunityCard({ item, action }: { item: OpportunityView; action: Reac
       ) : null}
 
       {action}
+      <Link
+        to="/chat"
+        state={{
+          prompt: t('analysis.chat.opportunityPrompt', {
+            title: item.title,
+            problem: item.problem,
+            solution: item.solution,
+            situation: situation.slice(0, 600),
+          }),
+        }}
+        className="mt-3 inline-flex min-h-11 items-center text-[14px] text-muted underline underline-offset-4 hover:text-text md:min-h-0"
+      >
+        {t('analysis.chat.discuss')}
+      </Link>
 
       <button
         type="button"

@@ -18,6 +18,10 @@ import { ThemeToggle } from './theme-toggle';
 const navLinkClass =
   'inline-flex h-10 items-center rounded-full px-4 text-[14px] text-muted transition-colors duration-200 hover:bg-surface-2/70 hover:text-text';
 
+/** Пункт шапки платформы решений: текущий раздел подсвечен (aria-current ставит NavLink). */
+const desktopNavClass = ({ isActive }: { isActive: boolean }) =>
+  cn(navLinkClass, isActive && 'bg-surface-2 text-text');
+
 const footerLinkClass =
   'inline-flex min-h-8 items-center text-[14px] text-muted transition-colors duration-150 hover:text-text max-md:min-h-11';
 
@@ -149,13 +153,29 @@ export function StandaloneLayout() {
         <div
           className={cn('mx-auto flex h-full items-center justify-between', headerContainerClass)}
         >
-          <div className="flex items-center gap-8 lg:gap-14">
+          <div
+            className={cn(
+              'flex items-center gap-8',
+              discovery ? 'lg:gap-6 xl:gap-14' : 'lg:gap-14',
+            )}
+          >
             <Brand size={isLanding ? 'lg' : 'md'} />
             <nav aria-label={t('nav.mainNavigation')} className="hidden items-center gap-1 lg:flex">
               {discovery ? (
-                <Link to="/models" className={navLinkClass}>
-                  {t('nav.models')}
-                </Link>
+                <>
+                  <NavLink to="/analyses" className={desktopNavClass}>
+                    {t('nav.analyses')}
+                  </NavLink>
+                  <NavLink to="/solutions" className={desktopNavClass}>
+                    {t('nav.solutions')}
+                  </NavLink>
+                  <NavLink to="/chat" className={desktopNavClass}>
+                    {t('nav.chat')}
+                  </NavLink>
+                  <NavLink to="/models" className={desktopNavClass}>
+                    {t('nav.models')}
+                  </NavLink>
+                </>
               ) : (
                 <>
                   <a href={links.spaces} className={navLinkClass}>
@@ -166,17 +186,20 @@ export function StandaloneLayout() {
                   </a>
                 </>
               )}
-              <Link to="/pricing" className={navLinkClass}>
-                {t('nav.pricing')}
-              </Link>
-              <Link to="/docs" className={navLinkClass}>
-                {t('nav.docs')}
-              </Link>
               {discovery ? (
-                <Link to="/chat" className={navLinkClass}>
-                  {t('nav.chat')}
-                </Link>
-              ) : null}
+                <NavLink to="/pricing" className={desktopNavClass}>
+                  {t('nav.pricing')}
+                </NavLink>
+              ) : (
+                <>
+                  <Link to="/pricing" className={navLinkClass}>
+                    {t('nav.pricing')}
+                  </Link>
+                  <Link to="/docs" className={navLinkClass}>
+                    {t('nav.docs')}
+                  </Link>
+                </>
+              )}
             </nav>
           </div>
 
@@ -184,7 +207,10 @@ export function StandaloneLayout() {
           <div className="hidden items-center gap-2.5 lg:flex">
             {isLanding ? null : (
               <>
-                <LanguageToggle />
+                {/* В шапке платформы пять разделов: на 1024–1279 px язык переключается в подвале. */}
+                <div className={discovery ? 'hidden xl:block' : undefined}>
+                  <LanguageToggle />
+                </div>
                 <ThemeToggle />
                 <div className="mx-1 h-5 w-px bg-stroke" aria-hidden="true" />
               </>
@@ -258,6 +284,25 @@ export function StandaloneLayout() {
             </div>
 
             <nav aria-label={t('nav.mainNavigation')} className="my-2 flex flex-col gap-1">
+              {discovery
+                ? (
+                    [
+                      ['/analyses', 'nav.analyses'],
+                      ['/solutions', 'nav.solutions'],
+                      ['/chat', 'nav.chat'],
+                    ] as const
+                  ).map(([to, key]) => (
+                    <NavLink
+                      key={to}
+                      to={to}
+                      onClick={() => setMobileMenuOpen(false)}
+                      className={mobileLinkClass}
+                    >
+                      {t(key)}
+                      <ChevronRightIcon className="size-4 text-subtle transition-transform duration-200 group-hover:translate-x-0.5" />
+                    </NavLink>
+                  ))
+                : null}
               <a
                 href={links.models}
                 onClick={() => setMobileMenuOpen(false)}
@@ -351,6 +396,20 @@ export function StandaloneLayout() {
             <nav aria-label={t('home.footerProduct')} className="flex flex-col gap-3">
               <span className={footerHeadClass}>{t('home.footerProduct')}</span>
               <ul className="flex flex-col gap-1.5 max-md:gap-0">
+                {discovery ? (
+                  <>
+                    <li>
+                      <Link to="/analyses" className={footerLinkClass}>
+                        {t('nav.analyses')}
+                      </Link>
+                    </li>
+                    <li>
+                      <Link to="/solutions" className={footerLinkClass}>
+                        {t('nav.solutions')}
+                      </Link>
+                    </li>
+                  </>
+                ) : null}
                 <li>
                   <Link to="/chat" className={footerLinkClass}>
                     {t('nav.chat')}

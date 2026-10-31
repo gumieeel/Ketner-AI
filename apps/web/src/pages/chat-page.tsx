@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import { ChatEmptyState } from '@/components/chat/chat-empty-state';
 import { Composer } from '@/components/chat/composer';
 import { MessageList } from '@/components/chat/message-list';
@@ -24,10 +24,23 @@ export function ChatPage() {
   const messages = useChat((state) => state.messages);
   const messagesStatus = useChat((state) => state.messagesStatus);
   const openConversation = useChat((state) => state.openConversation);
+  const setDraft = useChat((state) => state.setDraft);
+  const location = useLocation();
+  // Переход из отчёта анализа или плана: текст вопроса подставляется в новый чат, отправляет его
+  // сам пользователь.
+  const prompt = (location.state as { prompt?: unknown } | null)?.prompt;
   const prevActiveIdRef = useRef<string | null>(activeId);
 
   useEffect(() => {
-    void openConversation(conversationId);
+    void openConversation(conversationId).then(() => {
+      if (conversationId === undefined && typeof prompt === 'string' && prompt.trim()) {
+        setDraft(prompt);
+        // Вопрос подставляется один раз: после перезагрузки или «назад» поле не заполняется снова.
+        navigate('/chat', { replace: true, state: null });
+      }
+    });
+    // Подстановка — только при открытии экрана, а не при каждом изменении состояния адреса.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [conversationId, openConversation]);
 
   useEffect(() => {

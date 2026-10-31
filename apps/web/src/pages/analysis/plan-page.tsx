@@ -281,6 +281,24 @@ function ReadyPlan({ plan, onChange }: { plan: PlanView; onChange: (plan: PlanVi
         ))}
       </ol>
 
+      <Link
+        to="/chat"
+        state={{
+          prompt: t('analysis.chat.planPrompt', {
+            title: plan.opportunityTitle,
+            steps: plan.steps
+              .map(
+                (step, index) =>
+                  `${index + 1}. ${step.title} — ${t(`analysis.plan.status.${step.status}` as TranslationKey).toLowerCase()}`,
+              )
+              .join('\n'),
+          }),
+        }}
+        className={buttonClasses({ variant: 'outline', size: 'sm', className: 'mt-6 self-start' })}
+      >
+        {t('analysis.chat.discussPlan')}
+      </Link>
+
       {plan.successCriteria.length > 0 ? (
         <section className="mt-8">
           <h2 className="text-[18px] font-medium text-text">{t('analysis.report.success')}</h2>

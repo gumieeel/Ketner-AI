@@ -342,6 +342,8 @@ export const en: Record<TranslationKey, string> = {
   'nav.models': 'Models',
   'nav.start': 'Start',
   'nav.toChat': 'Chat',
+  'nav.analyses': 'Analyses',
+  'nav.solutions': 'Assistants',
   'nav.chat': 'Chat',
   'nav.goToChat': 'Go to Chat',
   'nav.signup': 'Sign up',
@@ -2093,6 +2095,12 @@ export const en: Record<TranslationKey, string> = {
   'builder.chat.imageAlt': 'Picture from the assistant',
   'builder.chat.download': 'Download picture',
 
+  'analysis.chat.discuss': 'Discuss in chat',
+  'analysis.chat.discussPlan': 'Discuss the plan in chat',
+  'analysis.chat.opportunityPrompt':
+    'Help me implement: “{title}”.\nWhat I want to solve: {problem}\nHow it could work: {solution}\nMy situation: {situation}\nWhere should I start?',
+  'analysis.chat.planPrompt':
+    'Help me carry out the plan “{title}”. Steps and their status:\n{steps}\nWhat should I do next?',
   'analysis.answers.title': 'Your answers',
   'analysis.answers.skipped': 'Skipped',
   'analysis.answers.edit': 'Edit answers',

@@ -26,6 +26,7 @@ import type { ConversationSummary } from '@/features/chat/types';
 import { planBadge } from '@/features/billing/plan-badge';
 import { usePreferences } from '@/features/preferences/preferences-store';
 import { cn } from '@/lib/cn';
+import { siteFeatures } from '@/lib/features';
 import { dateGroupOf, formatShortDate, type DateGroup } from '@/lib/format-date';
 import { useTranslation } from '@/i18n';
 import type { TranslationKey } from '@/i18n';
@@ -167,6 +168,18 @@ export function Sidebar() {
           </Link>
 
           <nav aria-label={t('nav.mainNavigation')} className="flex flex-col gap-0.5">
+            {siteFeatures().discovery ? (
+              <>
+                <NavLink to="/analyses" onClick={close} className={navLinkClasses}>
+                  <SparkleIcon className="size-4 shrink-0" />
+                  <span>{t('nav.analyses')}</span>
+                </NavLink>
+                <NavLink to="/solutions" onClick={close} className={navLinkClasses}>
+                  <UserIcon className="size-4 shrink-0" />
+                  <span>{t('nav.solutions')}</span>
+                </NavLink>
+              </>
+            ) : null}
             <NavLink to="/code" onClick={close} className={navLinkClasses}>
               <CodeIcon className="size-4 shrink-0" />
               <span>{t('nav.code')}</span>
