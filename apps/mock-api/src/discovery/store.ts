@@ -29,12 +29,18 @@ export interface DiscoveryStore {
   count(filter: AnalysisCountFilter): Promise<number>;
   /** Перенос анализа гостя этого браузера в аккаунт после входа. */
   claimGuest(userId: string, guestId: string, analysisId: string): Promise<boolean>;
+  /**
+   * Удалить: содержимое стирается, возможности удаляются, запись остаётся скрытой — она нужна
+   * суточным лимитам (`count` её учитывает). Чужой или уже удалённый — false.
+   */
+  remove(ownerId: string, id: string, at: string): Promise<boolean>;
 }
 
 const clone = <T>(value: T): T => structuredClone(value);
 
 export class MemoryDiscoveryStore implements DiscoveryStore {
   private readonly analyses = new Map<string, Analysis>();
+  private readonly deleted = new Set<string>();
   private readonly opportunityMap = new Map<string, Opportunity[]>();
 
   async create(analysis: Analysis) {
@@ -51,12 +57,12 @@ export class MemoryDiscoveryStore implements DiscoveryStore {
 
   async get(ownerId: string, id: string) {
     const found = this.analyses.get(id);
-    return found && found.ownerId === ownerId ? clone(found) : null;
+    return found && found.ownerId === ownerId && !this.deleted.has(id) ? clone(found) : null;
   }
 
   async list(ownerId: string, limit: number) {
     return [...this.analyses.values()]
-      .filter((item) => item.ownerId === ownerId)
+      .filter((item) => item.ownerId === ownerId && !this.deleted.has(item.id))
       .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
       .slice(0, limit)
       .map(clone);
@@ -64,7 +70,12 @@ export class MemoryDiscoveryStore implements DiscoveryStore {
 
   async update(analysis: Analysis, expectedVersion: number) {
     const current = this.analyses.get(analysis.id);
-    if (!current || current.ownerId !== analysis.ownerId || current.version !== expectedVersion) {
+    if (
+      !current ||
+      this.deleted.has(analysis.id) ||
+      current.ownerId !== analysis.ownerId ||
+      current.version !== expectedVersion
+    ) {
       return null;
     }
     const next = { ...clone(analysis), version: expectedVersion + 1 };
@@ -95,9 +106,28 @@ export class MemoryDiscoveryStore implements DiscoveryStore {
     ).length;
   }
 
+  async remove(ownerId: string, id: string, at: string) {
+    const found = this.analyses.get(id);
+    if (!found || found.ownerId !== ownerId || this.deleted.has(id)) return false;
+    this.deleted.add(id);
+    this.analyses.set(id, {
+      ...found,
+      inputText: '',
+      context: null,
+      questions: [],
+      answers: {},
+      summary: null,
+      saved: false,
+      updatedAt: at,
+      version: found.version + 1,
+    });
+    this.opportunityMap.delete(id);
+    return true;
+  }
+
   async claimGuest(userId: string, guestId: string, analysisId: string) {
     const found = this.analyses.get(analysisId);
-    if (!found) return false;
+    if (!found || this.deleted.has(analysisId)) return false;
     if (found.ownerId === userId) return true;
     if (found.ownerId !== guestId) return false;
     this.analyses.set(analysisId, {
@@ -135,6 +165,7 @@ interface AnalysisRow {
   stage_runs: unknown;
   budget_day: string | Date;
   idempotency_key: string | null;
+  saved: boolean;
   created_at: string | Date;
   updated_at: string | Date;
   version: number | string;
@@ -188,6 +219,7 @@ function toAnalysis(row: AnalysisRow): Analysis {
     stages: json(row.stage_runs, {}),
     budgetDay: day(row.budget_day),
     idempotencyKey: row.idempotency_key,
+    saved: Boolean(row.saved),
     createdAt: iso(row.created_at),
     updatedAt: iso(row.updated_at),
     version: Number(row.version),
@@ -225,6 +257,10 @@ const ANALYSIS_COLUMNS = `id, user_id, guest, ip_hash, ip_limited, mode, languag
   context, questions, answers, summary, stage_runs, budget_day, idempotency_key, created_at,
   updated_at, version`;
 
+/** Колонки чтения: те же плюс `saved` (при создании — значение по умолчанию). */
+const SELECT_COLUMNS = `${ANALYSIS_COLUMNS}, saved`;
+const ALIVE = 'deleted_at IS NULL';
+
 export class PostgresDiscoveryStore implements DiscoveryStore {
   constructor(private readonly db: SqlRunner) {}
 
@@ -234,7 +270,7 @@ export class PostgresDiscoveryStore implements DiscoveryStore {
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10::text::jsonb, $11::text::jsonb, $12::text::jsonb, $13,
                $14::text::jsonb, $15::date, $16, $17::timestamptz, $18::timestamptz, $19)
        ON CONFLICT (user_id, idempotency_key) WHERE idempotency_key IS NOT NULL DO NOTHING
-       RETURNING ${ANALYSIS_COLUMNS}`,
+       RETURNING ${SELECT_COLUMNS}`,
       [
         analysis.id,
         analysis.ownerId,
@@ -259,7 +295,7 @@ export class PostgresDiscoveryStore implements DiscoveryStore {
     );
     if (rows[0]) return { analysis: toAnalysis(rows[0]), duplicate: false };
     const existing = await this.db.query<AnalysisRow>(
-      `SELECT ${ANALYSIS_COLUMNS} FROM discovery_analyses WHERE user_id = $1 AND idempotency_key = $2`,
+      `SELECT ${SELECT_COLUMNS} FROM discovery_analyses WHERE user_id = $1 AND idempotency_key = $2`,
       [analysis.ownerId, analysis.idempotencyKey],
     );
     if (!existing[0]) throw new Error('discovery: запись не создана и не найдена');
@@ -268,7 +304,7 @@ export class PostgresDiscoveryStore implements DiscoveryStore {
 
   async get(ownerId: string, id: string) {
     const rows = await this.db.query<AnalysisRow>(
-      `SELECT ${ANALYSIS_COLUMNS} FROM discovery_analyses WHERE id = $1 AND user_id = $2`,
+      `SELECT ${SELECT_COLUMNS} FROM discovery_analyses WHERE id = $1 AND user_id = $2 AND ${ALIVE}`,
       [id, ownerId],
     );
     return rows[0] ? toAnalysis(rows[0]) : null;
@@ -276,7 +312,7 @@ export class PostgresDiscoveryStore implements DiscoveryStore {
 
   async list(ownerId: string, limit: number) {
     const rows = await this.db.query<AnalysisRow>(
-      `SELECT ${ANALYSIS_COLUMNS} FROM discovery_analyses WHERE user_id = $1
+      `SELECT ${SELECT_COLUMNS} FROM discovery_analyses WHERE user_id = $1 AND ${ALIVE}
        ORDER BY created_at DESC LIMIT $2`,
       [ownerId, limit],
     );
@@ -287,9 +323,10 @@ export class PostgresDiscoveryStore implements DiscoveryStore {
     const rows = await this.db.query<AnalysisRow>(
       `UPDATE discovery_analyses SET
          status = $3, context = $4::text::jsonb, questions = $5::text::jsonb, answers = $6::text::jsonb,
-         summary = $7, stage_runs = $8::text::jsonb, updated_at = $9::timestamptz, version = version + 1
-       WHERE id = $1 AND user_id = $2 AND version = $10
-       RETURNING ${ANALYSIS_COLUMNS}`,
+         summary = $7, stage_runs = $8::text::jsonb, updated_at = $9::timestamptz, saved = $11,
+         version = version + 1
+       WHERE id = $1 AND user_id = $2 AND version = $10 AND ${ALIVE}
+       RETURNING ${SELECT_COLUMNS}`,
       [
         analysis.id,
         analysis.ownerId,
@@ -301,6 +338,7 @@ export class PostgresDiscoveryStore implements DiscoveryStore {
         JSON.stringify(analysis.stages),
         analysis.updatedAt,
         expectedVersion,
+        analysis.saved,
       ],
     );
     return rows[0] ? toAnalysis(rows[0]) : null;
@@ -374,7 +412,7 @@ export class PostgresDiscoveryStore implements DiscoveryStore {
   async claimGuest(userId: string, guestId: string, analysisId: string) {
     const rows = await this.db.query<{ user_id: string }>(
       `UPDATE discovery_analyses SET user_id = $1, guest = false, version = version + 1
-       WHERE id = $3 AND user_id = $2 RETURNING user_id`,
+       WHERE id = $3 AND user_id = $2 AND ${ALIVE} RETURNING user_id`,
       [userId, guestId, analysisId],
     );
     if (rows[0]) {
@@ -385,9 +423,22 @@ export class PostgresDiscoveryStore implements DiscoveryStore {
       return true;
     }
     const own = await this.db.query(
-      `SELECT 1 FROM discovery_analyses WHERE id = $1 AND user_id = $2`,
+      `SELECT 1 FROM discovery_analyses WHERE id = $1 AND user_id = $2 AND ${ALIVE}`,
       [analysisId, userId],
     );
     return own.length > 0;
+  }
+
+  async remove(ownerId: string, id: string, at: string) {
+    const rows = await this.db.query<{ id: string }>(
+      `UPDATE discovery_analyses SET deleted_at = $3::timestamptz, updated_at = $3::timestamptz,
+         input_text = '', context = NULL, questions = '[]'::jsonb, answers = '{}'::jsonb,
+         summary = NULL, saved = false, version = version + 1
+       WHERE id = $1 AND user_id = $2 AND ${ALIVE} RETURNING id`,
+      [id, ownerId, at],
+    );
+    if (!rows[0]) return false;
+    await this.db.query(`DELETE FROM discovery_opportunities WHERE analysis_id = $1`, [id]);
+    return true;
   }
 }

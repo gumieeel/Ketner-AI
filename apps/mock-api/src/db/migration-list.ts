@@ -78,4 +78,15 @@ export const MIGRATIONS: readonly Migration[] = [
         ON discovery_budget_reservations (analysis_id);
     `,
   },
+  {
+    // Этап 4: удаление анализа. Запись остаётся без содержимого (текст, контекст, ответы, отчёт
+    // стираются, возможности удаляются), чтобы удаление не обнуляло суточные лимиты бесплатных
+    // анализов: они считают и удалённые анализы.
+    id: '0002_discovery_deleted',
+    sql: `
+      ALTER TABLE discovery_analyses ADD COLUMN deleted_at timestamptz;
+      CREATE INDEX discovery_analyses_saved ON discovery_analyses (user_id, saved)
+        WHERE deleted_at IS NULL;
+    `,
+  },
 ];

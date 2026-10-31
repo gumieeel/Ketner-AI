@@ -34,17 +34,49 @@ export interface StageView {
   finishedAt: string | null;
 }
 
+export interface FeasibilityItem {
+  capability: string;
+  label: string;
+  /** Что сделать или почему нельзя. */
+  hint: string;
+  status: FeasibilityStatus;
+}
+
+export type Impact =
+  | {
+      kind: 'estimate';
+      hoursPerWeek: [number, number];
+      formula: string;
+      inputs: Array<{ label: string; value: string; source: 'user' }>;
+      assumptions: string[];
+      benefit: string;
+      note: string;
+    }
+  | { kind: 'qualitative'; benefit: string; missing: string; note: string };
+
 export interface OpportunityView {
   id: string;
+  position: number;
   title: string;
   problem: string;
   solution: string;
-  firstStep: string;
+  requires: string[];
+  otherRequirement: string | null;
+  dataNeeded: string[];
+  integrationsNeeded: string[];
   effort: 'low' | 'medium' | 'high';
+  effortReason: string;
+  risks: string[];
+  limitations: string[];
+  successCriteria: string[];
+  firstStep: string;
   feasibilityStatus: FeasibilityStatus;
-  impact:
-    | { kind: 'estimate'; hoursPerWeek: [number, number]; benefit: string }
-    | { kind: 'qualitative'; benefit: string };
+  feasibility: {
+    status: FeasibilityStatus;
+    blockers: FeasibilityItem[];
+    available: FeasibilityItem[];
+  };
+  impact: Impact;
   priority: number;
 }
 
@@ -59,6 +91,7 @@ export interface AnalysisView {
   questions: Question[];
   answers: Answers;
   summary: string | null;
+  saved: boolean;
   stages: { context: StageView | null; discovery: StageView | null };
   opportunities: OpportunityView[];
   cost: { chargedCredits: number; sponsored: boolean };
@@ -167,6 +200,30 @@ export interface AnalysisResponse {
 
 export function fetchAnalysis(id: string): Promise<AnalysisResponse> {
   return call(`/${encodeURIComponent(id)}`);
+}
+
+export interface AnalysisListItem {
+  id: string;
+  status: AnalysisStatus;
+  mode: AnalysisMode;
+  title: string;
+  excerpt: string;
+  saved: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export async function listAnalyses(): Promise<AnalysisListItem[]> {
+  const body = await call<{ analyses: AnalysisListItem[] }>('');
+  return body.analyses;
+}
+
+export async function setAnalysisSaved(id: string, saved: boolean): Promise<void> {
+  await call(`/${encodeURIComponent(id)}`, { method: 'PATCH', body: JSON.stringify({ saved }) });
+}
+
+export async function deleteAnalysis(id: string): Promise<void> {
+  await call(`/${encodeURIComponent(id)}`, { method: 'DELETE' });
 }
 
 export async function saveAnswersDraft(id: string, answers: Answers): Promise<void> {

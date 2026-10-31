@@ -694,3 +694,43 @@ test('бюджет меньше одного сценария: предложе�
   assert.equal(offer.free.available, false);
   if (!offer.free.available) assert.equal(offer.free.reason, 'budget_exhausted');
 });
+
+test('«Сохранить анализ» — только в аккаунте; удаление стирает анализ, но не обнуляет лимит', async () => {
+  const { service, budget, store } = setup();
+  const visitor = guest();
+  const created = await create(service, visitor);
+  if (!created.ok) return assert.fail('анализ не создан');
+  const id = created.analysis.id;
+
+  // Пока этап идёт — удалить нельзя.
+  const busy = await service.remove(visitor, id);
+  assert.equal(busy.ok, false);
+  if (!busy.ok) assert.equal(busy.code, 'analysis_busy');
+  await service.whenIdle();
+
+  const asGuest = await service.setSaved(visitor, id, true);
+  assert.equal(asGuest.ok, false);
+  if (!asGuest.ok) assert.equal(asGuest.code, 'login_required');
+
+  // После входа анализ переходит в аккаунт и сохраняется.
+  const user = account('user-saver');
+  assert.equal(await service.claimGuest(user.userId, visitor.userId, id), true);
+  const saved = await service.setSaved(user, id, true);
+  assert.equal(saved.ok && saved.analysis.saved, true);
+  const stranger = await service.setSaved(account('user-stranger'), id, true);
+  assert.equal(stranger.ok, false);
+  if (!stranger.ok) assert.equal(stranger.status, 404);
+
+  // Удаление: чужой — 404; своё — анализ пропал, резерв плана вернулся в бюджет.
+  assert.equal((await service.remove(account('user-stranger'), id)).ok, false);
+  const removed = await service.remove(user, id);
+  assert.equal(removed.ok, true);
+  assert.equal(await service.get(user.userId, id), null);
+  const plan = (await budget.forAnalysis(id)).find((item) => item.stage === 'plan');
+  assert.equal(plan?.status, 'released');
+  // Бесплатный анализ дня уже использован — удаление его не возвращает.
+  assert.equal(
+    await store.count({ ownerId: user.userId, budgetDay: service.today(), mode: 'free' }),
+    1,
+  );
+});

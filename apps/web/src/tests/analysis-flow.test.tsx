@@ -45,6 +45,7 @@ function analysis(patch: Partial<AnalysisView> = {}): AnalysisView {
     questions: QUESTIONS,
     answers: {},
     summary: null,
+    saved: false,
     stages: { context: stage('done'), discovery: stage('pending') },
     opportunities: [],
     cost: { chargedCredits: 0, sponsored: true },
@@ -62,24 +63,77 @@ const READY_PATCH: Partial<AnalysisView> = {
   opportunities: [
     {
       id: 'o1',
+      position: 1,
       title: 'Черновики ответов',
       problem: 'Однотипные вопросы',
       solution: 'ИИ пишет черновик, вы проверяете',
-      firstStep: 'Соберите 10 частых вопросов',
+      requires: ['text_generation'],
+      otherRequirement: null,
+      dataNeeded: ['Примеры прошлых ответов'],
+      integrationsNeeded: [],
       effort: 'low',
+      effortReason: 'Хватит чата',
+      risks: ['Неточный ответ без проверки'],
+      limitations: ['Не видит заказы'],
+      successCriteria: ['Ответ готов за минуту'],
+      firstStep: 'Соберите 10 частых вопросов',
       feasibilityStatus: 'ready',
-      impact: { kind: 'qualitative', benefit: 'Быстрее отвечать' },
+      feasibility: {
+        status: 'ready',
+        blockers: [],
+        available: [
+          { capability: 'text_generation', label: 'Текст', hint: 'Есть в чате', status: 'ready' },
+        ],
+      },
+      impact: {
+        kind: 'estimate',
+        hoursPerWeek: [2, 4],
+        formula: '40 раз в неделю × 10 мин × 30–60% работы берёт на себя ИИ',
+        inputs: [
+          { label: 'Как часто', value: '40 раз в неделю', source: 'user' },
+          { label: 'Время за раз', value: '10 мин', source: 'user' },
+        ],
+        assumptions: ['Время на настройку решения не учтено.'],
+        benefit: 'Быстрее отвечать',
+        note: 'Это прогноз, а не измеренный результат.',
+      },
       priority: 0,
     },
     {
       id: 'o2',
+      position: 0,
       title: 'Автоответы в почте',
       problem: 'Однотипные письма',
       solution: 'ИИ отвечает сам',
-      firstStep: '',
+      requires: ['email'],
+      otherRequirement: null,
+      dataNeeded: [],
+      integrationsNeeded: ['Почта'],
       effort: 'high',
+      effortReason: '',
+      risks: [],
+      limitations: [],
+      successCriteria: [],
+      firstStep: 'Подключите почту',
       feasibilityStatus: 'not_supported',
-      impact: { kind: 'estimate', hoursPerWeek: [2, 4], benefit: 'Меньше ручных ответов' },
+      feasibility: {
+        status: 'not_supported',
+        blockers: [
+          {
+            capability: 'email',
+            label: 'Работа с почтой',
+            hint: 'Ketner не подключается к почте',
+            status: 'not_supported',
+          },
+        ],
+        available: [],
+      },
+      impact: {
+        kind: 'qualitative',
+        benefit: 'Меньше ручных ответов',
+        missing: 'Чтобы оценить экономию времени, укажите, как часто вы делаете задачу.',
+        note: 'Это прогноз, а не измеренный результат.',
+      },
       priority: 1,
     },
   ],
@@ -131,6 +185,23 @@ function installDiscoveryApi(options: {
     });
     const path = url.pathname.replace(/^\/api\/analyses/, '');
     if (path === '/offer') return json(200, options.offer ?? FREE_OFFER);
+    if (path === '' && method === 'GET') {
+      const items = state.view
+        ? [
+            {
+              id: state.view.id,
+              status: state.view.status,
+              mode: state.view.mode,
+              title: state.view.context?.domain ?? state.view.inputText,
+              excerpt: state.view.inputText,
+              saved: state.view.saved,
+              createdAt: state.view.createdAt,
+              updatedAt: state.view.updatedAt,
+            },
+          ]
+        : [];
+      return json(200, { analyses: items });
+    }
     if (path === '' && method === 'POST') {
       if (options.createError) {
         const { status, ...error } = options.createError;
@@ -149,6 +220,14 @@ function installDiscoveryApi(options: {
         rerun: options.rerun ?? null,
         retry: options.retry ?? null,
       });
+    }
+    if (path === `/${view.id}` && method === 'PATCH') {
+      state.view = { ...view, saved: body?.saved === true };
+      return json(200, { analysis: state.view });
+    }
+    if (path === `/${view.id}` && method === 'DELETE') {
+      state.view = null;
+      return new Response(null, { status: 204 });
     }
     if (path.endsWith('/answers') && method === 'PUT') {
       state.view = { ...view, answers: body?.answers as AnalysisView['answers'] };
@@ -303,9 +382,9 @@ describe('анализ задачи: начало, вопросы, резуль�
       'Черновики ответов',
       'Автоответы в почте',
     ]);
-    expect(within(cards[0]).getByText('Можно сделать сейчас')).toBeInTheDocument();
-    expect(within(cards[1]).getByText('Пока не поддерживается')).toBeInTheDocument();
-    expect(within(cards[1]).getByText(/≈ 2–4 ч в неделю/)).toBeInTheDocument();
+    expect(within(cards[0]).getAllByText('Можно сделать сейчас')[0]).toBeVisible();
+    expect(within(cards[1]).getAllByText('Пока не поддерживается')[0]).toBeVisible();
+    expect(within(cards[0]).getAllByText(/≈ 2–4 ч в неделю/)[0]).toBeVisible();
     // Шаги: всё готово, модель названа настоящим именем.
     expect(screen.getAllByText('готово · GPT-6 Luna')).toHaveLength(2);
 
@@ -326,6 +405,87 @@ describe('анализ задачи: начало, вопросы, резуль�
         confirm: true,
       }),
     );
+  });
+
+  it('отчёт: с чего начать, все поля возможности, польза с формулой; неподдерживаемое честно названо', async () => {
+    installDiscoveryApi({ view: analysis({ ...READY_PATCH, guest: false }) });
+    renderRoute('/analyses/a1');
+    await screen.findByRole('heading', { name: 'Где ИИ поможет' });
+
+    // «С чего начать» — только то, что можно сделать: шаг неподдерживаемой возможности не предлагается.
+    const start = screen.getByRole('heading', { name: 'С чего начать' }).nextElementSibling!;
+    expect(within(start as HTMLElement).getByText('Соберите 10 частых вопросов')).toBeVisible();
+    expect(within(start as HTMLElement).queryByText('Подключите почту')).toBeNull();
+
+    const card = screen.getByRole('heading', { name: 'Черновики ответов' }).closest('li')!;
+    const more = within(card).getByRole('button', { name: 'Подробнее' });
+    expect(more).toHaveAttribute('aria-expanded', 'false');
+    expect(within(card).getByText('Примеры прошлых ответов')).not.toBeVisible();
+    fireEvent.click(more);
+    expect(within(card).getByRole('button', { name: 'Свернуть' })).toHaveAttribute(
+      'aria-expanded',
+      'true',
+    );
+    for (const text of [
+      'Однотипные вопросы',
+      'Примеры прошлых ответов',
+      'Сложность низкая. Хватит чата',
+      'Неточный ответ без проверки',
+      'Не видит заказы',
+      'Ответ готов за минуту',
+      '40 раз в неделю × 10 мин × 30–60% работы берёт на себя ИИ',
+      'Время на настройку решения не учтено.',
+    ]) {
+      expect(within(card).getByText(text)).toBeVisible();
+    }
+    expect(within(card).getByText(/Как часто: 40 раз в неделю/)).toBeVisible();
+    expect(within(card).getAllByText(/из вашего описания/)).toHaveLength(2);
+
+    // Неподдерживаемое: что именно Ketner не умеет; кнопок создания решения нет нигде.
+    const unsupported = screen.getByRole('heading', { name: 'Автоответы в почте' }).closest('li')!;
+    expect(
+      within(unsupported).getByText(/Ketner пока не умеет этого сам: Работа с почтой\./),
+    ).toBeVisible();
+    expect(screen.queryByRole('button', { name: /Создать решение/ })).toBeNull();
+  });
+
+  it('«Сохранить анализ»: в аккаунте — переключатель, гостю — вход', async () => {
+    const api = installDiscoveryApi({ view: analysis({ ...READY_PATCH, guest: false }) });
+    const first = renderRoute('/analyses/a1');
+    const save = await screen.findByRole('button', { name: 'Сохранить анализ' });
+    expect(save).toHaveAttribute('aria-pressed', 'false');
+    fireEvent.click(save);
+    expect(await screen.findByRole('button', { name: 'Сохранён' })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    );
+    expect(api.calls.find((call) => call.method === 'PATCH')?.body).toEqual({ saved: true });
+    first.unmount();
+
+    installDiscoveryApi({ view: analysis(READY_PATCH) });
+    renderRoute('/analyses/a1');
+    expect(await screen.findByRole('link', { name: 'Войти, чтобы сохранить' })).toHaveAttribute(
+      'href',
+      '/login?redirect=%2Fanalyses%2Fa1',
+    );
+  });
+
+  it('«Мои анализы»: сохранённые сверху, открыть и удалить с подтверждением', async () => {
+    const api = installDiscoveryApi({ view: analysis({ ...READY_PATCH, saved: true }) });
+    renderRoute('/analyses');
+    expect(await screen.findByRole('heading', { level: 1, name: 'Мои анализы' })).toBeVisible();
+    const saved = await screen.findByRole('heading', { level: 2, name: 'Сохранённые' });
+    const link = within(saved.parentElement!).getByRole('link', { name: 'Интернет-магазин' });
+    expect(link).toHaveAttribute('href', '/analyses/a1');
+    expect(screen.getByText(/Готов ·/)).toBeVisible();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Удалить: Интернет-магазин' }));
+    const dialog = screen.getByRole('dialog', { name: 'Удалить анализ?' });
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Удалить' }));
+    expect(await screen.findByText(/Анализов пока нет/)).toBeVisible();
+    expect(
+      api.calls.some((call) => call.method === 'DELETE' && call.path === '/api/analyses/a1'),
+    ).toBe(true);
   });
 
   it('гость меняет ответы после отчёта — вход, а не списание', async () => {

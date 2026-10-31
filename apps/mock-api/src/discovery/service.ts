@@ -349,6 +349,7 @@ export class DiscoveryService {
       stages,
       budgetDay: day,
       idempotencyKey: input.idempotencyKey,
+      saved: false,
       createdAt: iso,
       updatedAt: iso,
       version: 1,
@@ -748,6 +749,62 @@ export class DiscoveryService {
     if (!updated) return notFound(id);
     this.schedule(caller, id, stage);
     return { ok: true, analysis: updated };
+  }
+
+  /** «Сохранить анализ»: только в аккаунте — гостю нужен вход (анализ перейдёт в аккаунт). */
+  async setSaved(
+    caller: DiscoveryCaller,
+    id: string,
+    saved: boolean,
+  ): Promise<Ok<{ analysis: Analysis }> | ServiceError> {
+    const current = await this.deps.store.get(caller.userId, id);
+    if (!current) return notFound(id);
+    if (caller.guest) {
+      return {
+        ok: false,
+        status: 401,
+        code: 'login_required',
+        message: text(
+          current.language,
+          'Сохранить анализ можно после входа: он перейдёт в ваш аккаунт.',
+          'Sign in to save the analysis: it will move to your account.',
+        ),
+      };
+    }
+    const updated = await this.mutate(caller.userId, id, (analysis) =>
+      analysis.saved === saved ? analysis : { ...analysis, saved },
+    );
+    if (!updated) return notFound(id);
+    return { ok: true, analysis: updated };
+  }
+
+  /**
+   * Удалить анализ. Пока этап выполняется — нельзя (иначе этап запишет результат в пустоту и
+   * спишет за него). Неиспользованные резервы бесплатного бюджета возвращаются. Суточные лимиты
+   * удаление не обнуляет: запись остаётся без содержимого.
+   */
+  async remove(caller: DiscoveryCaller, id: string): Promise<Ok<object> | ServiceError> {
+    const current = await this.get(caller.userId, id);
+    if (!current) return notFound(id);
+    const { analysis } = current;
+    if (analysis.status === 'analyzing' || analysis.status === 'discovering') {
+      return {
+        ok: false,
+        status: 409,
+        code: 'analysis_busy',
+        message: text(
+          analysis.language,
+          'Анализ ещё выполняется. Удалить его можно, когда этап закончится.',
+          'The analysis is still running. You can delete it once the step finishes.',
+        ),
+      };
+    }
+    const removed = await this.deps.store.remove(caller.userId, id, this.now().toISOString());
+    if (!removed) return notFound(id);
+    for (const reservation of await this.deps.budget.forAnalysis(id)) {
+      if (reservation.status === 'held') await this.deps.budget.release(reservation.id);
+    }
+    return { ok: true };
   }
 
   /** Все этапы, запущенные в фоне, завершились (для тестов и остановки сервера). */

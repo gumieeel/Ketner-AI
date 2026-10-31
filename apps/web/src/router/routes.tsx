@@ -48,6 +48,10 @@ export const routes: RouteObject[] = [
     children: [
       { index: true, element: <RootPage /> },
       {
+        path: 'analyses',
+        lazy: lazyPage(() => import('@/pages/analysis/analyses-list-page'), 'AnalysesListPage'),
+      },
+      {
         path: 'analyses/new',
         lazy: lazyPage(() => import('@/pages/analysis/analysis-new-page'), 'AnalysisNewPage'),
       },

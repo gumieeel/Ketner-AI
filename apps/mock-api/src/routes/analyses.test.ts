@@ -217,6 +217,26 @@ test('гость проходит анализ целиком; чужой гос
 
     const list = await fetch(`${app.base}/api/analyses`, { headers: guestHeaders(guest) });
     assert.equal(((await list.json()) as ApiBody).analyses.length, 1);
+
+    // Сохранить гостю нельзя; удалить своё — можно, чужое — 404.
+    const save = await fetch(`${app.base}/api/analyses/${id}`, {
+      method: 'PATCH',
+      headers: guestHeaders(guest),
+      body: JSON.stringify({ saved: true }),
+    });
+    assert.equal(save.status, 401);
+    const foreignDelete = await fetch(`${app.base}/api/analyses/${id}`, {
+      method: 'DELETE',
+      headers: guestHeaders('guest_stranger01'),
+    });
+    assert.equal(foreignDelete.status, 404);
+    const deleted = await fetch(`${app.base}/api/analyses/${id}`, {
+      method: 'DELETE',
+      headers: guestHeaders(guest),
+    });
+    assert.equal(deleted.status, 204);
+    const gone = await fetch(`${app.base}/api/analyses/${id}`, { headers: guestHeaders(guest) });
+    assert.equal(gone.status, 404);
   } finally {
     app.close();
   }
@@ -315,6 +335,19 @@ test('после входа анализ, начатый гостем в это�
     assert.equal(claimed.status, 200);
     const view = ((await claimed.json()) as ApiBody).analysis;
     assert.equal(view.guest, false);
+    const saved = await fetch(`${app.base}/api/analyses/${id}`, {
+      method: 'PATCH',
+      headers: { ...authed(guest), 'Content-Type': 'application/json' },
+      body: JSON.stringify({ saved: true }),
+    });
+    assert.equal(saved.status, 200);
+    const listed = await fetch(`${app.base}/api/analyses`, { headers: authed(guest) });
+    const items = ((await listed.json()) as { analyses: Array<{ id: string; saved: boolean }> })
+      .analyses;
+    assert.deepEqual(
+      items.map((item) => [item.id, item.saved]),
+      [[id, true]],
+    );
     // Гостевой id больше не владелец.
     const asGuest = await fetch(`${app.base}/api/analyses/${id}`, { headers: guestHeaders(guest) });
     assert.equal(asGuest.status, 404);

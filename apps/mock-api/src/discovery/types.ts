@@ -60,6 +60,8 @@ export interface Analysis {
   /** Сутки бюджета бесплатных анализов (`YYYY-MM-DD` в поясе бюджета); у платных — тоже, для квот. */
   budgetDay: string;
   idempotencyKey: string | null;
+  /** Пользователь сохранил анализ (раздел «Сохранённые» в списке). */
+  saved: boolean;
   createdAt: string;
   updatedAt: string;
   /** Номер версии записи: защищает от одновременной записи двух этапов. */

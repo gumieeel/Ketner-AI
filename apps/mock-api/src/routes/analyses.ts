@@ -5,6 +5,8 @@
  *   POST /api/analyses                создать анализ (Idempotency-Key — повтор вернёт тот же)
  *   GET  /api/analyses                анализы владельца
  *   GET  /api/analyses/:id            статус, контекст, вопросы, отчёт
+ *   PATCH /api/analyses/:id           «Сохранить анализ» (`{ saved }`, только после входа)
+ *   DELETE /api/analyses/:id          удалить анализ (не во время этапа)
  *   PUT  /api/analyses/:id/answers    черновик ответов (без вызова модели)
  *   POST /api/analyses/:id/continue   ответы на вопросы и поиск возможностей; после отчёта —
  *                                     повторный поиск, только если ответы изменились (за кредиты)
@@ -83,6 +85,7 @@ export function publicAnalysis(analysis: Analysis, opportunities: Opportunity[] 
     questions: analysis.questions,
     answers: analysis.answers,
     summary: analysis.summary,
+    saved: analysis.saved,
     stages: { context: stage('context'), discovery: stage('discovery') },
     opportunities: [...opportunities]
       .sort((a, b) => a.priority - b.priority)
@@ -336,6 +339,8 @@ export function createAnalysesRouter(deps: AnalysesRouterDeps): Router {
         status: item.status,
         mode: item.mode,
         title: item.context?.domain ?? item.inputText.slice(0, 80),
+        excerpt: item.inputText.slice(0, 160),
+        saved: item.saved,
         createdAt: item.createdAt,
         updatedAt: item.updatedAt,
       })),
@@ -366,6 +371,46 @@ export function createAnalysesRouter(deps: AnalysesRouterDeps): Router {
       // Цена повтора упавшего этапа.
       retry: ready.retryQuote(found.analysis, resolved.caller),
     });
+  });
+
+  router.patch('/:id', async (request: Request, response: Response) => {
+    const ready = withService(response);
+    if (!ready) return;
+    const resolved = resolveCaller(request, response);
+    if (!resolved) return;
+    const saved = (request.body as { saved?: unknown } | undefined)?.saved;
+    if (typeof saved !== 'boolean') {
+      sendError(response, 400, 'validation_failed', 'Ожидается { saved: true | false }.');
+      return;
+    }
+    const result = await ready.setSaved(resolved.caller, String(request.params.id), saved);
+    if (!result.ok) {
+      sendServiceError(response, result);
+      return;
+    }
+    response.json({ analysis: publicAnalysis(result.analysis) });
+  });
+
+  router.delete('/:id', async (request: Request, response: Response) => {
+    const ready = withService(response);
+    if (!ready) return;
+    const resolved = resolveCaller(request, response);
+    if (!resolved) return;
+    if (actionLimiter.hit(resolved.caller.userId)) {
+      sendError(
+        response,
+        429,
+        'too_many_requests',
+        'Слишком много запросов подряд. Подождите минуту.',
+      );
+      return;
+    }
+    const result = await ready.remove(resolved.caller, String(request.params.id));
+    if (!result.ok) {
+      sendServiceError(response, result);
+      return;
+    }
+    response.status(204).end();
   });
 
   router.put('/:id/answers', async (request: Request, response: Response) => {

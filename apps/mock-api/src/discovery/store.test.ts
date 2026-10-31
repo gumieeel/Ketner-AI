@@ -27,6 +27,7 @@ function analysis(overrides: Partial<Analysis> = {}): Analysis {
     },
     budgetDay: '2026-10-30',
     idempotencyKey: null,
+    saved: false,
     createdAt: now,
     updatedAt: now,
     version: 1,
@@ -137,6 +138,27 @@ async function storeContract(store: DiscoveryStore): Promise<void> {
 
   const list = await store.list('alice', 10);
   assert.ok(list.every((item) => item.ownerId === 'alice'));
+
+  // «Сохранить анализ» хранится вместе с записью.
+  const current = (await store.get('alice', 'k1')) as Analysis;
+  const saved = await store.update({ ...current, saved: true }, current.version);
+  assert.equal(saved?.saved, true);
+  assert.equal((await store.get('alice', 'k1'))?.saved, true);
+
+  // Удаление: чужой не удаляет; запись скрыта, содержимое и возможности стёрты, лимиты помнят её.
+  const before = await store.count({ ownerId: 'alice', budgetDay: '2026-10-30', mode: 'free' });
+  assert.equal(await store.remove('bob', 'k1', '2026-10-30T12:00:00.000Z'), false);
+  assert.equal(await store.remove('alice', 'k1', '2026-10-30T12:00:00.000Z'), true);
+  assert.equal(await store.remove('alice', 'k1', '2026-10-30T12:00:00.000Z'), false, 'уже удалён');
+  assert.equal(await store.get('alice', 'k1'), null);
+  assert.ok((await store.list('alice', 10)).every((item) => item.id !== 'k1'));
+  assert.deepEqual(await store.opportunities('alice', 'k1'), []);
+  assert.equal(await store.update({ ...current, saved: false }, (saved?.version ?? 0) + 1), null);
+  assert.equal(
+    await store.count({ ownerId: 'alice', budgetDay: '2026-10-30', mode: 'free' }),
+    before,
+    'удаление не обнуляет суточный лимит',
+  );
 }
 
 test('хранилище анализов в памяти: владелец, идемпотентность, версии, перенос гостя', async () => {
@@ -153,9 +175,13 @@ test('хранилище анализов в Postgres: та же логика, J
     await runMigrations(sql.db, MIGRATIONS);
     await storeContract(new PostgresDiscoveryStore(sql.runner));
     const rows = await sql.runner.query<{ kind: string }>(
-      `SELECT jsonb_typeof(context) AS kind FROM discovery_analyses WHERE id = 'k1'`,
+      `SELECT jsonb_typeof(stage_runs) AS kind FROM discovery_analyses WHERE id = 'k3'`,
     );
     assert.equal(rows[0]?.kind, 'object', 'jsonb — объект, а не строка с JSON');
+    const wiped = await sql.runner.query<{ input_text: string; deleted: boolean }>(
+      `SELECT input_text, deleted_at IS NOT NULL AS deleted FROM discovery_analyses WHERE id = 'k1'`,
+    );
+    assert.deepEqual(wiped[0], { input_text: '', deleted: true }, 'текст удалённого стёрт');
   } finally {
     await sql.close();
   }

@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import { Badge, type BadgeTone } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { buttonClasses } from '@/components/ui/button-classes';
 import { Spinner } from '@/components/ui/spinner';
@@ -11,12 +10,10 @@ import {
   saveAnswersDraft,
   type AnalysisView,
   type Answers,
-  type FeasibilityStatus,
-  type OpportunityView,
   type RerunQuote,
   type RetryQuote,
 } from '@/features/discovery/api';
-import { creditsText, priceText } from '@/features/discovery/format';
+import { priceText } from '@/features/discovery/format';
 import { useAnalysis } from '@/features/discovery/use-analysis';
 import { useTranslation, type TranslationKey } from '@/i18n';
 import { cn } from '@/lib/cn';
@@ -24,6 +21,7 @@ import { siteFeatures } from '@/lib/features';
 import { NotFoundPage } from '@/pages/not-found-page';
 import { ErrorNotice } from './error-notice';
 import { QuestionsForm } from './questions-form';
+import { Report } from './report';
 
 /** Страница анализа: ход этапов, уточняющие вопросы, результат, правка ответов. */
 export function AnalysisPage() {
@@ -114,7 +112,7 @@ function AnalysisScreen({ id }: { id: string }) {
 
       {analysis.status === 'ready' ? (
         <>
-          <Result analysis={analysis} />
+          <Report analysis={analysis} onChanged={refresh} />
           {analysis.questions.length > 0 ? (
             <AnswersSection analysis={analysis} quote={load.rerun} onDone={refresh} />
           ) : null}
@@ -351,79 +349,6 @@ function FailedStage({
   );
 }
 
-const FEASIBILITY_TONE: Record<FeasibilityStatus, BadgeTone> = {
-  ready: 'success',
-  needs_setup: 'info',
-  needs_integration: 'warning',
-  not_supported: 'neutral',
-};
-
-function Result({ analysis }: { analysis: AnalysisView }) {
-  const translator = useTranslation();
-  const { t } = translator;
-  return (
-    <section aria-labelledby="result-title" className="mt-10">
-      <h2 id="result-title" className="text-[24px] font-[480] tracking-[-0.02em] text-text">
-        {t('analysis.ready.title')}
-      </h2>
-      {analysis.summary ? (
-        <p className="mt-3 text-[16px] leading-[1.65] text-text">{analysis.summary}</p>
-      ) : null}
-      <p className="mt-2 text-[13px] text-subtle">
-        {analysis.cost.sponsored && analysis.cost.chargedCredits === 0
-          ? t('analysis.ready.free')
-          : t('analysis.ready.charged', {
-              amount: creditsText(translator, analysis.cost.chargedCredits),
-            })}
-      </p>
-      {analysis.opportunities.length === 0 ? (
-        <p className="mt-6 text-[15px] leading-6 text-muted">{t('analysis.ready.empty')}</p>
-      ) : (
-        <ul className="mt-6 flex flex-col gap-3">
-          {analysis.opportunities.map((item) => (
-            <OpportunityCard key={item.id} item={item} />
-          ))}
-        </ul>
-      )}
-    </section>
-  );
-}
-
-function OpportunityCard({ item }: { item: OpportunityView }) {
-  const { t } = useTranslation();
-  return (
-    <li className="rounded-xl border border-stroke bg-surface px-5 py-4">
-      <div className="flex flex-wrap items-start justify-between gap-2">
-        <h3 className="min-w-0 text-[16px] leading-6 font-medium text-text">{item.title}</h3>
-        <Badge tone={FEASIBILITY_TONE[item.feasibilityStatus]}>
-          {t(`analysis.feasibility.${item.feasibilityStatus}` as TranslationKey)}
-        </Badge>
-      </div>
-      <p className="mt-2 text-[15px] leading-6 text-muted">{item.solution}</p>
-      <dl className="mt-3 grid gap-2 text-[14px] leading-6">
-        <div>
-          <dt className="inline text-subtle">{t('analysis.ready.benefit')}: </dt>
-          <dd className="inline text-text">
-            {item.impact.kind === 'estimate'
-              ? `${t('analysis.ready.hours', {
-                  from: item.impact.hoursPerWeek[0],
-                  to: item.impact.hoursPerWeek[1],
-                })}. `
-              : ''}
-            {item.impact.benefit}
-          </dd>
-        </div>
-        {item.firstStep ? (
-          <div>
-            <dt className="inline text-subtle">{t('analysis.ready.firstStep')}: </dt>
-            <dd className="inline text-text">{item.firstStep}</dd>
-          </div>
-        ) : null}
-      </dl>
-    </li>
-  );
-}
-
 function AnswersSection({
   analysis,
   quote,
@@ -536,6 +461,12 @@ function Shell({ title, children }: { title?: string; children: ReactNode }) {
       aria-labelledby="analysis-title"
       className="mx-auto flex w-full max-w-[44rem] flex-col px-4 pt-[clamp(2.5rem,8vh,5rem)] pb-20 sm:px-6"
     >
+      <Link
+        to="/analyses"
+        className="mb-3 self-start text-[14px] text-muted underline underline-offset-4 hover:text-text"
+      >
+        {t('analysis.page.allAnalyses')}
+      </Link>
       <h1
         id="analysis-title"
         className="text-[clamp(1.75rem,1.6vw+1.25rem,2.375rem)] leading-tight font-[480] tracking-[-0.03em] text-text"
