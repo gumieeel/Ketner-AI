@@ -9,6 +9,7 @@
  */
 
 import { z } from 'zod';
+import { PLATFORM_LIMITS } from '../services/discovery-limits.js';
 import { CAPABILITY_IDS } from './capabilities.js';
 
 /** Строка: обрезаются пробелы, длина ограничивается обрезкой, а не отказом. */
@@ -80,7 +81,7 @@ export const contextOutputSchema = z.object({
   constraints: list(sourced(220), 6),
   availableData: list(sourced(220), 6),
   missing: list(z.object({ field: requiredText(80), why: text(220).default('') }), 6),
-  questions: list(questionSchema, 3),
+  questions: list(questionSchema, PLATFORM_LIMITS.analyses.maxQuestions),
 });
 
 export type ContextOutput = z.infer<typeof contextOutputSchema>;
@@ -148,7 +149,7 @@ export type PlanOutput = z.infer<typeof planOutputSchema>;
 // ─── Тела запросов API ────────────────────────────────────────────────────────
 
 /** Совпадает с лимитом сайта (apps/web/src/features/discovery/draft.ts). */
-export const ANALYSIS_TEXT_MAX = 8000;
+export const ANALYSIS_TEXT_MAX = PLATFORM_LIMITS.analyses.textChars;
 export const ANALYSIS_TEXT_MIN = 20;
 export const ANSWER_MAX = 2000;
 

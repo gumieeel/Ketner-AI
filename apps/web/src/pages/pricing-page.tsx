@@ -1,6 +1,7 @@
 import { Link } from 'react-router-dom';
 import { CreditsIcon } from '@/components/icons';
 import { PackCards } from '@/components/pricing/pack-cards';
+import { PlatformPricing } from '@/components/pricing/platform-pricing';
 import { buttonClasses } from '@/components/ui/button-classes';
 import { useAuth } from '@/features/auth/auth-store';
 import planFacts from '@/features/billing/plan-facts.json';
@@ -8,6 +9,7 @@ import { PACKS, PACK_VALID_DAYS, TRIAL } from '@/features/billing/plans';
 import { maxCompareModels } from '@/features/chat/compare-policy';
 import { useTranslation, type TranslationKey } from '@/i18n';
 import { formatCredits, pluralForm } from '@/lib/format-date';
+import { siteFeatures } from '@/lib/features';
 import { LandingFaq } from '@/pages/landing/faq';
 
 type Localized = { ru: string; en: string };
@@ -169,6 +171,9 @@ export function PricingPage() {
         </div>
         <PackCards variant="full" />
       </section>
+
+      {/* Анализ задач, планы и помощники — только при включённой платформе решений. */}
+      {siteFeatures().discovery ? <PlatformPricing /> : null}
 
       {/* Что меняется после первой покупки */}
       <div className="flex w-full flex-col gap-6 text-left">

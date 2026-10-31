@@ -9,12 +9,14 @@
 
 import { createHmac } from 'node:crypto';
 import { isIPv6 } from 'node:net';
+import { PLATFORM_LIMITS } from '../services/discovery-limits.js';
 
-export const FREE_PER_OWNER_PER_DAY = 1;
-export const FREE_PER_IP_PER_DAY = 5;
-export const YOUNG_ACCOUNT_MS = 7 * 24 * 60 * 60 * 1000;
-export const ANALYSES_PER_OWNER_PER_DAY = 20;
-export const CREATES_PER_MINUTE = 3;
+// Числа — из services/discovery-limits.ts (одно место для сервера и сайта).
+export const FREE_PER_OWNER_PER_DAY = PLATFORM_LIMITS.analyses.freePerDay;
+export const FREE_PER_IP_PER_DAY = PLATFORM_LIMITS.analyses.freePerIpPerDay;
+export const YOUNG_ACCOUNT_MS = PLATFORM_LIMITS.analyses.youngAccountDays * 24 * 60 * 60 * 1000;
+export const ANALYSES_PER_OWNER_PER_DAY = PLATFORM_LIMITS.analyses.perDay;
+export const CREATES_PER_MINUTE = PLATFORM_LIMITS.analyses.startsPerMinute;
 
 /** Одноразовые почтовые домены: с них бесплатный анализ недоступен (список пополняется). */
 const DISPOSABLE_DOMAINS = new Set([

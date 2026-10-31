@@ -46,7 +46,8 @@ const templateGateway = {
         name: request.modelId,
       },
       costUsd: 0.001,
-      creditsUsd: 0.001,
+      // Как в шлюзе: бесплатный (sponsored) вызов кредиты не списывает.
+      creditsUsd: request.task?.billing === 'sponsored' ? 0 : 0.001,
     });
   },
 };
@@ -140,6 +141,26 @@ test('Builder по HTTP: только после входа; помощник и
     const opportunity = report.analysis.opportunities.find(
       (item) => item.feasibilityStatus === 'ready',
     )!;
+
+    // Новый бесплатный пользователь проходит полный анализ и получает краткий план без кредитов.
+    const free = (await (
+      await fetch(`${app.base}/api/analyses/${analysisId}`, { headers: auth })
+    ).json()) as {
+      analysis: { status: string; cost: { chargedCredits: number; sponsored: boolean } };
+    };
+    assert.equal(free.analysis.status, 'ready');
+    assert.deepEqual(free.analysis.cost, { chargedCredits: 0, sponsored: true });
+    const brief = await fetch(
+      `${app.base}/api/analyses/${analysisId}/opportunities/${opportunity.id}/plan`,
+      { method: 'POST', headers: auth, body: '{}' },
+    );
+    assert.equal(brief.status, 202);
+    const briefPlan = (await brief.json()) as {
+      plan: { kind: string; cost: { sponsored: boolean } };
+    };
+    assert.equal(briefPlan.plan.kind, 'brief');
+    assert.equal(briefPlan.plan.cost.sponsored, true);
+    await app.discovery.whenIdle();
 
     const quote = (await (await call('/draft-quote')).json()) as { model: string };
     assert.equal(quote.model, 'MiMo-V2.6 Pro');

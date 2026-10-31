@@ -1,3 +1,4 @@
+import planFacts from '@/features/billing/plan-facts.json';
 import { storage } from '@/lib/storage';
 
 /**
@@ -5,8 +6,8 @@ import { storage } from '@/lib/storage';
  * при перезагрузке страницы, входе в аккаунт или переходе к анализу.
  */
 
-/** Совпадает с лимитом сервера на текст задачи (docs/discovery-models.md). */
-export const DISCOVERY_TEXT_MAX = 8000;
+/** Лимит сервера на текст задачи: plan-facts.json (сверяется тестом с services/discovery-limits.ts). */
+export const DISCOVERY_TEXT_MAX = planFacts.platform.limits.analyses.textChars;
 /** С какой длины показывать счётчик символов. */
 export const DISCOVERY_TEXT_WARN = 7000;
 

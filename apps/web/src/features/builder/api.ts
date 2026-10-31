@@ -1,4 +1,5 @@
 import { getAuthToken } from '@/features/auth/auth-store';
+import planFacts from '@/features/billing/plan-facts.json';
 import { checkSessionInvalid, getGuestId } from '@/features/chat/api';
 import { readSseStream } from '@/features/chat/sse';
 import { DiscoveryApiError } from '@/features/discovery/api';
@@ -20,21 +21,23 @@ export interface AssistantConfig {
   language: Language;
 }
 
-/** Лимиты — как на сервере (builder/schemas.ts). */
+const PLATFORM = planFacts.platform.limits.assistants;
+
+/** Лимиты — как на сервере: plan-facts.json сверяется тестом с services/discovery-limits.ts. */
 export const LIMITS = {
   name: 80,
   purpose: 400,
-  instructions: 3000,
-  knowledge: 8000,
-  examples: 6,
+  instructions: PLATFORM.instructionsChars,
+  knowledge: PLATFORM.knowledgeChars,
+  examples: PLATFORM.examples,
   exampleChars: 1200,
-  restrictions: 8,
+  restrictions: PLATFORM.restrictions,
   restrictionChars: 200,
-  cases: 10,
+  cases: PLATFORM.testCases,
   caseInput: 1000,
-  criteria: 5,
+  criteria: PLATFORM.criteriaPerCase,
   criterionChars: 200,
-  message: 4000,
+  message: PLATFORM.messageChars,
 } as const;
 
 export type SolutionStatus = 'draft' | 'active' | 'paused';

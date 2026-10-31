@@ -23,6 +23,7 @@ import { callCost, toCreditRange, CONFIRM_ABOVE_CREDITS } from '../discovery/mod
 import { runStructuredTask, type TaskCaller } from '../discovery/run-task.js';
 import { realModelName } from '../discovery/service.js';
 import type { DiscoveryStore } from '../discovery/store.js';
+import { PLATFORM_LIMITS } from '../services/discovery-limits.js';
 import { toCredits } from '../services/entitlement.js';
 import type { Language, PlanId } from '../types.js';
 import {
@@ -173,21 +174,22 @@ export class BuilderService {
   // ─── Цены ──────────────────────────────────────────────────────────────────
 
   draftQuote(language: Language) {
-    const cost = callCost(
-      DRAFT_MODEL_ID,
-      {
-        systemChars: draftSystemPrompt(language).length,
-        payloadChars: DRAFT_PAYLOAD_CHARS,
-        maxOutputTokens: DRAFT_OUTPUT_TOKENS,
-        attempts: 2,
-      },
-      { inputTokens: 3_500, outputTokens: 2_000 },
-      this.registry,
-    );
+    return draftQuote(language, this.registry);
+  }
+
+  /** Помощников у пользователя не больше лимита (services/discovery-limits.ts). */
+  private async overLimit(caller: BuilderCaller): Promise<BuilderError | null> {
+    const count = (await this.deps.store.listSolutions(caller.userId)).length;
+    if (count < PLATFORM_LIMITS.assistants.perUser) return null;
     return {
-      model: realModelName(DRAFT_MODEL_ID, this.registry),
-      capUsd: cost.capUsd,
-      ...toCreditRange(cost.typicalUsd, cost.capUsd),
+      ok: false,
+      status: 409,
+      code: 'assistants_limit',
+      message: text(
+        caller.language,
+        `Помощников может быть не больше ${PLATFORM_LIMITS.assistants.perUser}. Удалите ненужного, чтобы создать нового.`,
+        `You can have at most ${PLATFORM_LIMITS.assistants.perUser} assistants. Delete one to create a new one.`,
+      ),
     };
   }
 
@@ -287,7 +289,12 @@ export class BuilderService {
 
   // ─── Создание ──────────────────────────────────────────────────────────────
 
-  async createBlank(caller: BuilderCaller, name: string): Promise<Solution> {
+  async createBlank(
+    caller: BuilderCaller,
+    name: string,
+  ): Promise<Ok<{ solution: Solution }> | BuilderError> {
+    const limit = await this.overLimit(caller);
+    if (limit) return limit;
     const id = randomUUID();
     const iso = this.now().toISOString();
     const solution: Solution = {
@@ -308,7 +315,7 @@ export class BuilderService {
       { solutionId: id, number: 1, config: defaultConfig(name, caller.language), createdAt: iso },
       [],
     );
-    return solution;
+    return { ok: true, solution };
   }
 
   /**
@@ -350,6 +357,8 @@ export class BuilderService {
       (item) => item.source?.opportunityId === opportunity.id,
     );
     if (existing) return { ok: true, solution: existing, created: false };
+    const limit = await this.overLimit(caller);
+    if (limit) return limit;
 
     const quote = this.draftQuote(language);
     if (!input.confirm) {
@@ -938,6 +947,26 @@ export class BuilderService {
     const version = await this.deps.store.getVersion(ownerId, id, solution.activeVersion);
     return version ? { solution, config: version.config } : null;
   }
+}
+
+/** Цена черновика помощника: показывается до запуска и на странице «Кредиты». */
+export function draftQuote(language: Language, registry: ModelRegistry = modelRegistry) {
+  const cost = callCost(
+    DRAFT_MODEL_ID,
+    {
+      systemChars: draftSystemPrompt(language).length,
+      payloadChars: DRAFT_PAYLOAD_CHARS,
+      maxOutputTokens: DRAFT_OUTPUT_TOKENS,
+      attempts: 2,
+    },
+    { inputTokens: 3_500, outputTokens: 2_000 },
+    registry,
+  );
+  return {
+    model: realModelName(DRAFT_MODEL_ID, registry),
+    capUsd: cost.capUsd,
+    ...toCreditRange(cost.typicalUsd, cost.capUsd),
+  };
 }
 
 function notFound(id: string): BuilderError {

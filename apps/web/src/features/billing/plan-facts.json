@@ -1,5 +1,5 @@
 {
-  "$comment": "Лимиты и пакеты кредитов для страниц «Кредиты», «Модели» и оформления оплаты. Числа совпадают с сервером: тест apps/mock-api/src/services/plan-facts.test.ts сверяет их с entitlement.ts, pricing.ts, margin.ts, credits.ts, images/models.ts и code-limits.ts. Меняете лимит или пакет на сервере — поправьте и здесь.",
+  "$comment": "Лимиты и пакеты кредитов для страниц «Кредиты», «Модели» и оформления оплаты. Числа совпадают с сервером: тест apps/mock-api/src/services/plan-facts.test.ts сверяет их с entitlement.ts, pricing.ts, margin.ts, credits.ts, images/models.ts, code-limits.ts, а раздел platform — с services/discovery-limits.ts и ценами этапов анализа, планов и черновика помощника. Меняете лимит или пакет на сервере — поправьте и здесь.",
   "trial": {
     "credits": 200,
     "days": 30,
@@ -258,5 +258,61 @@
     "gemini-4-argon": 35.2,
     "gpt-5.6-sol": 35.2,
     "gpt-5.6-terra": 99.2
+  },
+  "platform": {
+    "limits": {
+      "analyses": {
+        "freePerDay": 1,
+        "freePerIpPerDay": 5,
+        "youngAccountDays": 7,
+        "perDay": 20,
+        "startsPerMinute": 3,
+        "maxQuestions": 3,
+        "textChars": 8000
+      },
+      "plans": {
+        "freeBriefPerAnalysis": 1,
+        "briefSteps": 5,
+        "fullSteps": 10
+      },
+      "assistants": {
+        "perUser": 20,
+        "testCases": 10,
+        "criteriaPerCase": 5,
+        "instructionsChars": 3000,
+        "knowledgeChars": 8000,
+        "examples": 6,
+        "restrictions": 8,
+        "messageChars": 4000
+      }
+    },
+    "prices": {
+      "freeModel": "GPT-6 Luna",
+      "analysisPaid": {
+        "model": "MiMo-V2.6 Pro",
+        "typicalCredits": 9,
+        "maxCredits": 27
+      },
+      "analysisDeep": {
+        "model": "Claude Sonnet 5.5",
+        "typicalCredits": 79,
+        "maxCredits": 322
+      },
+      "planPaid": {
+        "model": "MiMo-V2.6 Pro",
+        "typicalCredits": 5,
+        "maxCredits": 15
+      },
+      "planDeep": {
+        "model": "Claude Sonnet 5.5",
+        "typicalCredits": 48,
+        "maxCredits": 158
+      },
+      "assistantDraft": {
+        "model": "MiMo-V2.6 Pro",
+        "typicalCredits": 4,
+        "maxCredits": 15
+      }
+    }
   }
 }

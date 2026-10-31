@@ -4,22 +4,23 @@
  */
 
 import { z } from 'zod';
+import { PLATFORM_LIMITS } from '../services/discovery-limits.js';
 
 /** Сумма текста настроек ограничена: настройки уходят в каждый запрос помощника. */
 export const LIMITS = {
   name: 80,
   purpose: 400,
-  instructions: 3000,
-  knowledge: 8000,
-  examples: 6,
+  instructions: PLATFORM_LIMITS.assistants.instructionsChars,
+  knowledge: PLATFORM_LIMITS.assistants.knowledgeChars,
+  examples: PLATFORM_LIMITS.assistants.examples,
   exampleChars: 1200,
-  restrictions: 8,
+  restrictions: PLATFORM_LIMITS.assistants.restrictions,
   restrictionChars: 200,
-  cases: 10,
+  cases: PLATFORM_LIMITS.assistants.testCases,
   caseInput: 1000,
-  criteria: 5,
+  criteria: PLATFORM_LIMITS.assistants.criteriaPerCase,
   criterionChars: 200,
-  message: 4000,
+  message: PLATFORM_LIMITS.assistants.messageChars,
 } as const;
 
 const text = (max: number) =>

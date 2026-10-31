@@ -2101,6 +2101,39 @@ export const en: Record<TranslationKey, string> = {
     'Help me implement: “{title}”.\nWhat I want to solve: {problem}\nHow it could work: {solution}\nMy situation: {situation}\nWhere should I start?',
   'analysis.chat.planPrompt':
     'Help me carry out the plan “{title}”. Steps and their status:\n{steps}\nWhat should I do next?',
+  'platformPricing.title': 'Task analysis, plans and assistants',
+  'platformPricing.lead':
+    'The price of every paid step is shown before it starts: “≈” is usual, “at most” is the cap that is never exceeded. The actual cost is charged.',
+  'platformPricing.freeTitle': 'Free every day',
+  'platformPricing.freeAnalysis': '{count} task analysis per day on {model}',
+  'platformPricing.freePlan':
+    'A brief implementation plan (up to {steps} steps) for one opportunity of that analysis',
+  'platformPricing.freeGuest': 'No sign-up needed: guests get the analysis and the report too',
+  'platformPricing.freeNote':
+    'Trial credits are not spent. The number of free analyses per day across the service is limited — when they run out, an analysis can be run for credits.',
+  'platformPricing.start': 'Start an analysis',
+  'platformPricing.paidTitle': 'For credits',
+  'platformPricing.analysisPaid': 'Task analysis',
+  'platformPricing.analysisDeep': 'Deep analysis',
+  'platformPricing.planPaid': 'Detailed implementation plan',
+  'platformPricing.planDeep': 'Detailed plan for a deep analysis',
+  'platformPricing.assistantDraft': 'Assistant draft from an opportunity',
+  'platformPricing.assistantTests': 'Testing an assistant on test cases',
+  'platformPricing.assistantTestsPrice':
+    'depends on the number of cases, price shown before the run',
+  'platformPricing.assistantChat': 'Assistant chat',
+  'platformPricing.assistantChatPrice': 'like regular chat: the price of the model Ketner picked',
+  'platformPricing.paidNote':
+    'Changing answers after a ready report is a new search for opportunities, also for credits. Assistants require signing in.',
+  'platformPricing.limitsTitle': 'Limits',
+  'platformPricing.limitAnalyses': 'Up to {count} analyses per day',
+  'platformPricing.limitIp':
+    'Free ones — at most {count} per day from one connection for guests and accounts younger than {days} days',
+  'platformPricing.limitText': 'Task description — up to {count} characters',
+  'platformPricing.limitPlans': 'Brief plan — up to {brief} steps, detailed — up to {full}',
+  'platformPricing.limitAssistants': 'Up to {count} assistants',
+  'platformPricing.limitCases': 'Up to {count} test cases per assistant',
+  'platformPricing.limitKnowledge': 'Assistant knowledge — up to {count} characters',
   'analysis.answers.title': 'Your answers',
   'analysis.answers.skipped': 'Skipped',
   'analysis.answers.edit': 'Edit answers',

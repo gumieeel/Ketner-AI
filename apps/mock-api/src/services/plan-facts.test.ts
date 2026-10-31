@@ -9,6 +9,10 @@ import { modelRegistry } from '../ai/model-registry.js';
 import { TRIAL_DAYS, typicalRequestCredits } from './credits.js';
 import { PLAN_ENTITLEMENTS, TRIAL_CREDITS } from './entitlement.js';
 import { packListStars } from './margin.js';
+import { draftQuote } from '../builder/service.js';
+import { ANALYSIS_STAGES, estimateStages, type AnalysisMode } from '../discovery/model-policy.js';
+import { realModelName } from '../discovery/service.js';
+import { PLATFORM_LIMITS } from './discovery-limits.js';
 import {
   CREDIT_PACKS,
   CREDIT_PACK_VALID_DAYS,
@@ -58,6 +62,10 @@ interface Facts {
     stars: number;
     examples: Example[];
   }>;
+  platform: {
+    limits: unknown;
+    prices: Record<string, unknown>;
+  };
 }
 
 const factsPath = resolve(
@@ -151,4 +159,39 @@ test('лимиты и пакеты кредитов на сайте совпад
     assert.equal(site.stars, packListStars(pack), `${pack.id}: звёзд`);
     checkExamples(pack.id, pack.credits, site.examples);
   }
+});
+
+test('лимиты и цены платформы решений на сайте совпадают с сервером', (t) => {
+  if (!existsSync(factsPath)) {
+    t.skip('исходники сайта недоступны в этом окружении');
+    return;
+  }
+  const facts = JSON.parse(readFileSync(factsPath, 'utf8')) as Facts;
+  assert.deepEqual(facts.platform.limits, PLATFORM_LIMITS, 'лимиты: services/discovery-limits.ts');
+
+  const quote = (
+    mode: AnalysisMode,
+    stages: readonly ('context' | 'discovery' | 'plan')[],
+    modelId: string,
+  ) => {
+    const estimate = estimateStages(mode, stages, 'ru');
+    return {
+      model: realModelName(modelId),
+      typicalCredits: estimate.typicalCredits,
+      maxCredits: estimate.maxCredits,
+    };
+  };
+  const draft = draftQuote('ru');
+  assert.deepEqual(facts.platform.prices, {
+    freeModel: realModelName('ketner-mini'),
+    analysisPaid: quote('paid', ANALYSIS_STAGES, 'ketner-pro'),
+    analysisDeep: quote('deep', ANALYSIS_STAGES, 'claude-sonnet-5.5'),
+    planPaid: quote('paid', ['plan'], 'ketner-pro'),
+    planDeep: quote('deep', ['plan'], 'claude-sonnet-5.5'),
+    assistantDraft: {
+      model: draft.model,
+      typicalCredits: draft.typicalCredits,
+      maxCredits: draft.maxCredits,
+    },
+  });
 });

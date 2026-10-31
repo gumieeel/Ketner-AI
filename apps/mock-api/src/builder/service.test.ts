@@ -311,7 +311,9 @@ test('тесты и включение: только после прохожде
 
 test('чужой помощник не читается, не меняется и не удаляется', async () => {
   const { service } = await setup();
-  const mine = await service.createBlank(alice, 'Мой помощник');
+  const created = await service.createBlank(alice, 'Мой помощник');
+  if (!created.ok) return assert.fail('помощник не создан');
+  const mine = created.solution;
   assert.equal(await service.get('bob', mine.id), null);
   const edit = await service.updateConfig(bob, mine.id, {
     name: 'x',
@@ -336,7 +338,9 @@ test('чужой помощник не читается, не меняется �
 
 test('цена тестов: на каждый кейс — ответ и проверка; «не больше» не меньше типичной', async () => {
   const { service } = await setup();
-  const mine = await service.createBlank(alice, 'Помощник');
+  const created = await service.createBlank(alice, 'Помощник');
+  if (!created.ok) return assert.fail('помощник не создан');
+  const mine = created.solution;
   await service.saveCase(alice, mine.id, { input: 'Вопрос', criteria: ['Критерий'] });
   await service.saveCase(alice, mine.id, { input: 'Вопрос 2', criteria: ['Критерий'] });
   const view = await service.get('alice', mine.id);
@@ -345,4 +349,24 @@ test('цена тестов: на каждый кейс — ответ и про
   assert.equal(quote.judgeModel, 'MiMo-V2.6 Pro');
   assert.ok(quote.maxCredits >= quote.typicalCredits);
   assert.ok(quote.maxCredits > 0);
+});
+
+test('помощников не больше лимита из services/discovery-limits.ts', async () => {
+  const { service } = await setup();
+  const { PLATFORM_LIMITS } = await import('../services/discovery-limits.js');
+  for (let index = 0; index < PLATFORM_LIMITS.assistants.perUser; index += 1) {
+    const made = await service.createBlank(alice, `Помощник ${index}`);
+    assert.equal(made.ok, true);
+  }
+  const over = await service.createBlank(alice, 'Лишний');
+  assert.equal(over.ok, false);
+  if (!over.ok) assert.equal(over.code, 'assistants_limit');
+  const fromOpportunity = await service.createFromOpportunity(alice, {
+    analysisId: 'an-1',
+    opportunityId: 'o-ok',
+    confirm: true,
+  });
+  assert.equal(fromOpportunity.ok, false);
+  // У другого пользователя свой лимит.
+  assert.equal((await service.createBlank(bob, 'Помощник Боба')).ok, true);
 });

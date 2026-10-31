@@ -2091,6 +2091,38 @@ export const ru = {
     'Помоги внедрить: «{title}».\nЧто хочу решить: {problem}\nКак это может работать: {solution}\nМоя ситуация: {situation}\nС чего мне начать?',
   'analysis.chat.planPrompt':
     'Помоги выполнить план «{title}». Шаги и их статус:\n{steps}\nЧто мне сделать дальше?',
+  'platformPricing.title': 'Анализ задач, планы и помощники',
+  'platformPricing.lead':
+    'Цена каждого платного шага видна до запуска: «≈» — обычно, «не больше» — потолок, выше которого не спишется. Списывается фактическая стоимость.',
+  'platformPricing.freeTitle': 'Бесплатно каждый день',
+  'platformPricing.freeAnalysis': '{count} анализ задачи в сутки на модели {model}',
+  'platformPricing.freePlan':
+    'Краткий план внедрения (до {steps} шагов) для одной возможности из этого анализа',
+  'platformPricing.freeGuest': 'Без регистрации: анализ и отчёт доступны и гостю',
+  'platformPricing.freeNote':
+    'Пробные кредиты при этом не тратятся. Число бесплатных анализов в сутки на весь сервис ограничено — если они закончились, анализ можно запустить за кредиты.',
+  'platformPricing.start': 'Начать анализ',
+  'platformPricing.paidTitle': 'За кредиты',
+  'platformPricing.analysisPaid': 'Анализ задачи',
+  'platformPricing.analysisDeep': 'Глубокий анализ',
+  'platformPricing.planPaid': 'Подробный план внедрения',
+  'platformPricing.planDeep': 'Подробный план к глубокому анализу',
+  'platformPricing.assistantDraft': 'Черновик помощника из возможности',
+  'platformPricing.assistantTests': 'Проверка помощника на тест-кейсах',
+  'platformPricing.assistantTestsPrice': 'зависит от числа кейсов, цена — до запуска',
+  'platformPricing.assistantChat': 'Чат помощника',
+  'platformPricing.assistantChatPrice': 'как обычный чат: по цене модели, которую подобрал Ketner',
+  'platformPricing.paidNote':
+    'Изменить ответы после готового отчёта — новый поиск возможностей, тоже за кредиты. Помощники — после входа.',
+  'platformPricing.limitsTitle': 'Лимиты',
+  'platformPricing.limitAnalyses': 'До {count} анализов в сутки',
+  'platformPricing.limitIp':
+    'Бесплатных — не больше {count} в сутки с одного подключения для гостей и аккаунтов младше {days} дней',
+  'platformPricing.limitText': 'Описание задачи — до {count} символов',
+  'platformPricing.limitPlans': 'Краткий план — до {brief} шагов, подробный — до {full}',
+  'platformPricing.limitAssistants': 'До {count} помощников',
+  'platformPricing.limitCases': 'До {count} тест-кейсов у помощника',
+  'platformPricing.limitKnowledge': 'Знания помощника — до {count} символов',
   'analysis.answers.title': 'Ваши ответы',
   'analysis.answers.skipped': 'Пропущен',
   'analysis.answers.edit': 'Изменить ответы',

@@ -271,11 +271,12 @@ export function createSolutionsRouter(deps: SolutionsRouterDeps): Router {
         return;
       }
       if (limited(actionLimiter, response, caller.userId)) return;
-      const solution = await builder.createBlank(
+      const result = await builder.createBlank(
         { ...caller, language: parsed.data.language },
         parsed.data.name,
       );
-      response.status(201).json({ solution: publicSolution(solution) });
+      if (!result.ok) return fail(response, result);
+      response.status(201).json({ solution: publicSolution(result.solution) });
     }),
   );
 
