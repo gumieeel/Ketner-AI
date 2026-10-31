@@ -607,6 +607,11 @@ describe('анализ задачи: начало, вопросы, резуль�
     const supported = screen.getByRole('heading', { name: 'Черновики ответов' }).closest('li')!;
     const unsupported = screen.getByRole('heading', { name: 'Автоответы в почте' }).closest('li')!;
     expect(within(unsupported).queryByRole('button', { name: /план/i })).toBeNull();
+    // «Создать помощника» — только у того, что Ketner умеет; гостю — через вход.
+    expect(within(unsupported).queryByRole('link', { name: /помощника/ })).toBeNull();
+    expect(
+      within(supported).getByRole('link', { name: 'Войти, чтобы создать помощника' }),
+    ).toHaveAttribute('href', '/login?redirect=%2Fanalyses%2Fa1');
     expect(
       within(supported).getByText('Бесплатно для одной возможности этого анализа · GPT-6 Luna'),
     ).toBeVisible();

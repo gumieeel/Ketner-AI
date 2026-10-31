@@ -1,4 +1,4 @@
-import { useId, useState, type ReactNode } from 'react';
+import { useEffect, useId, useState, type ReactNode } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Badge, type BadgeTone } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -15,6 +15,13 @@ import {
 import { creditsText, priceText } from '@/features/discovery/format';
 import { useTranslation, type TranslationKey } from '@/i18n';
 import { cn } from '@/lib/cn';
+import { useAuth } from '@/features/auth/auth-store';
+import {
+  createFromOpportunity,
+  fetchDraftQuote,
+  listSolutions,
+  type SolutionView,
+} from '@/features/builder/api';
 import { ErrorNotice } from './error-notice';
 
 const FEASIBILITY_TONE: Record<FeasibilityStatus, BadgeTone> = {
@@ -43,6 +50,7 @@ export function Report({
 }) {
   const translator = useTranslation();
   const { t } = translator;
+  const builder = useBuilderSummary();
   const opportunities = [...analysis.opportunities].sort((a, b) => a.priority - b.priority);
   const startWith = opportunities
     .filter((item) => item.feasibilityStatus !== 'not_supported' && item.firstStep)
@@ -103,8 +111,13 @@ export function Report({
               key={item.id}
               item={item}
               action={
-                item.feasibilityStatus === 'not_supported' || !plans ? null : (
-                  <PlanAction analysis={analysis} opportunity={item} plans={plans} />
+                item.feasibilityStatus === 'not_supported' ? null : (
+                  <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-start">
+                    {plans ? (
+                      <PlanAction analysis={analysis} opportunity={item} plans={plans} />
+                    ) : null}
+                    <SolutionAction analysis={analysis} opportunity={item} builder={builder} />
+                  </div>
                 )
               }
             />
@@ -356,6 +369,104 @@ function PlanAction({
         </>
       )}
       {error ? <ErrorNotice error={error} redirect={base} /> : null}
+    </div>
+  );
+}
+
+interface BuilderSummary {
+  authenticated: boolean;
+  solutions: SolutionView[];
+  quote: { model: string; typicalCredits: number; maxCredits: number } | null;
+}
+
+/** Помощники пользователя и цена черновика: Builder — только после входа. */
+function useBuilderSummary(): BuilderSummary {
+  const status = useAuth((state) => state.status);
+  const [data, setData] = useState<Omit<BuilderSummary, 'authenticated'>>({
+    solutions: [],
+    quote: null,
+  });
+  useEffect(() => {
+    if (status !== 'authenticated') return;
+    let alive = true;
+    Promise.all([listSolutions(), fetchDraftQuote()]).then(
+      ([solutions, quote]) => alive && setData({ solutions, quote }),
+      () => undefined,
+    );
+    return () => {
+      alive = false;
+    };
+  }, [status]);
+  return { authenticated: status === 'authenticated', ...data };
+}
+
+/** «Создать помощника»: черновик пишет модель за кредиты, цена — у кнопки; гостю — вход. */
+function SolutionAction({
+  analysis,
+  opportunity,
+  builder,
+}: {
+  analysis: AnalysisView;
+  opportunity: OpportunityView;
+  builder: BuilderSummary;
+}) {
+  const translator = useTranslation();
+  const { t } = translator;
+  const navigate = useNavigate();
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<unknown>(null);
+  const existing = builder.solutions.find((item) => item.source?.opportunityId === opportunity.id);
+
+  if (!builder.authenticated) {
+    return (
+      <Link
+        to={`/login?redirect=${encodeURIComponent(`/analyses/${analysis.id}`)}`}
+        className={buttonClasses({ variant: 'ghost', size: 'sm', className: 'self-start' })}
+      >
+        {t('builder.report.loginToCreate')}
+      </Link>
+    );
+  }
+  if (existing) {
+    return (
+      <Link
+        to={`/solutions/${existing.id}`}
+        className={buttonClasses({ variant: 'secondary', size: 'sm', className: 'self-start' })}
+      >
+        {t('builder.report.open')}
+      </Link>
+    );
+  }
+  return (
+    <div className="flex flex-col gap-2">
+      <Button
+        variant="outline"
+        size="sm"
+        className="self-start"
+        loading={busy}
+        disabled={busy || !builder.quote}
+        onClick={() => {
+          setBusy(true);
+          setError(null);
+          createFromOpportunity(analysis.id, opportunity.id)
+            .then((solution) => navigate(`/solutions/${solution.id}`))
+            .catch((caught: unknown) => {
+              setError(caught);
+              setBusy(false);
+            });
+        }}
+      >
+        {busy ? t('builder.report.creating') : t('builder.report.create')}
+      </Button>
+      {builder.quote ? (
+        <p className="text-[13px] text-subtle">
+          {t('builder.report.draftNote', {
+            price: priceText(translator, builder.quote.typicalCredits, builder.quote.maxCredits),
+            model: builder.quote.model,
+          })}
+        </p>
+      ) : null}
+      {error ? <ErrorNotice error={error} redirect={`/analyses/${analysis.id}`} /> : null}
     </div>
   );
 }
