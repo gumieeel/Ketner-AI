@@ -1,8 +1,9 @@
 import {
   createContext,
   useContext,
-  useState,
+  useId,
   useRef,
+  useState,
   type ReactNode,
   type KeyboardEvent,
   type HTMLAttributes,
@@ -29,7 +30,9 @@ export function Tabs({ defaultValue = '', value, onValueChange, children, classN
   const [internalValue, setInternalValue] = useState(defaultValue);
   const isControlled = value !== undefined;
   const selected = isControlled ? value : internalValue;
-  const baseIdRef = useRef(`tabs-${Math.random().toString(36).substring(2, 9)}`);
+  // useId, а не случайное число: id одинаковы в пререндере и после гидратации, а сборка
+  // воспроизводима (CI сверяет закоммиченный dist со сборкой).
+  const baseId = `tabs-${useId().replace(/[^a-zA-Z0-9]/g, '')}`;
 
   const selectTab = (id: string) => {
     if (!isControlled) {
@@ -39,7 +42,7 @@ export function Tabs({ defaultValue = '', value, onValueChange, children, classN
   };
 
   return (
-    <TabsContext.Provider value={{ selected, selectTab, baseId: baseIdRef.current }}>
+    <TabsContext.Provider value={{ selected, selectTab, baseId }}>
       <div className={cn('flex flex-col', className)}>{children}</div>
     </TabsContext.Provider>
   );
