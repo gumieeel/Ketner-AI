@@ -105,7 +105,7 @@ export const en: Record<TranslationKey, string> = {
   'pricing.modelsBadge': 'Models',
   'pricing.docsLink': 'More about credits and models in the documentation',
   'pricing.notice':
-    'A pack is paid once: there is no subscription and no auto-renewal. Full refund if no more than 24 hours have passed and the pack’s credits are unspent; see Payments and refunds.',
+    'A pack is paid once: there is no subscription and no auto-renewal. Full refund if no more than 14 days have passed and the pack’s credits are unspent; see Payments and refunds.',
 
   'docs.title': 'Ketner AI Documentation',
   'docs.subtitle': 'Plans, models and answers to common questions.',
@@ -681,7 +681,7 @@ export const en: Record<TranslationKey, string> = {
     'Payment received. Your credits will arrive within a minute — refresh the dashboard.',
   'tg.paymentFailed': 'The payment did not go through. Please try again.',
   'tg.refundShort':
-    'Changed your mind? You can get a refund within {hours} hours, as long as the pack’s credits are unspent.',
+    'Changed your mind? You can get a refund within {days} days, as long as the pack’s credits are unspent.',
   'tg.rate': 'Stars prices use the official Telegram rate: 1,000 ⭐ = ${per1000}.',
   'tg.rateMarket': 'Stars are cheaper on Fragment right now: ≈ ${per1000} per 1,000 ⭐.',
   'tg.starsDearer':
@@ -698,7 +698,7 @@ export const en: Record<TranslationKey, string> = {
   'tg.policyTitle': 'How refunds work',
   'tg.policy4': 'After a refund, this pack’s credits are removed from your balance.',
   'tg.policy1':
-    'You can get a refund within {hours} hours of paying, as long as you have not spent this pack’s credits.',
+    'You can get a refund within {days} days of paying, as long as you have not spent this pack’s credits.',
   'tg.policy2':
     'If the pack’s credits have been used or the time has passed, the payment is not refunded.',
   'tg.policy3':
@@ -781,11 +781,11 @@ export const en: Record<TranslationKey, string> = {
   'tg.refundNoneDeclined': 'The refund was declined. If you disagree, contact support.',
   'tg.refundNoneDeclinedNote': 'The refund was declined: {note}. If you disagree, contact support.',
   'tg.refundNoneExpired':
-    'The refund window has passed: refunds are possible within {hours} hours of paying.',
+    'The refund window has passed: refunds are possible within {days} days of paying.',
   'tg.refundDeadline':
     'You can refund until {date}, as long as you have not spent this pack’s credits. Once they are used, the refund closes.',
   'tg.refundNoneUsed':
-    'This pack’s credits have already been used, so the payment cannot be refunded. A refund is possible within {hours} hours and only while the pack’s credits are intact.',
+    'This pack’s credits have already been used, so the payment cannot be refunded. A refund is possible within {days} days and only while the pack’s credits are intact.',
   'tg.telegramAccount': 'Telegram account',
   'tg.memberSince': 'since {date}',
   'tg.siteTitle': 'Ketner AI on the website',
@@ -2143,4 +2143,60 @@ export const en: Record<TranslationKey, string> = {
     'Updating the analysis with new answers: {price} · {model}. A repeated search for opportunities costs credits, even if the analysis was free. Opportunities will be found anew, and plans written for them will be deleted.',
   'analysis.answers.rerun': 'Update analysis',
   'analysis.answers.loginToRerun': 'Sign in to update the analysis',
+  // Legal pages, footer and Contacts
+  'legal.nav': 'Legal information',
+  'legal.terms': 'Terms and Offer',
+  'legal.privacy': 'Privacy',
+  'legal.paymentTerms': 'Payments and Refunds',
+  'legal.contacts': 'Contacts',
+  'legal.updated': 'Last updated: {date}',
+  'legal.questions': 'Questions:',
+  'contacts.title': 'Contact us',
+  'contacts.lead':
+    'Found a bug, missing a feature, or have a question about payment, refunds or your data — write to us and we will reply to the email you give. Usually within a day. Answers to common questions are in the',
+  'contacts.leadFaq': 'FAQ section',
+  'contacts.waysLabel': 'Ways to reach us',
+  'contacts.supportEmail': 'Support email',
+  'contacts.telegram': 'Telegram',
+  'contacts.knownTitle': 'Already known and being worked on',
+  'contacts.knownLead':
+    'No need to report these problems — we are on them. If your bug does not look like any of these, tell us through the form below. The current state of the service is on the',
+  'contacts.knownStatus': 'Status page',
+  'contacts.knownSummary': 'Known issues ({count})',
+  'contacts.workaround': 'What to do for now:',
+  'contacts.formTitle': 'Feedback form',
+  'contacts.sent': 'Thank you, your message has been sent. We will reply to {email}.',
+  'contacts.topic': 'Topic',
+  'contacts.topicBug': 'Bug',
+  'contacts.topicBugHint': 'Something is broken or works wrong',
+  'contacts.topicBugPlaceholder':
+    'What you did, what you expected and what happened. Include the model, the section (chat, Code, images) and the approximate time.',
+  'contacts.topicIdea': 'Idea or feature',
+  'contacts.topicIdeaHint': 'What Ketner AI is missing',
+  'contacts.topicIdeaPlaceholder': 'What problem you want to solve and how it could work.',
+  'contacts.topicPayment': 'Payments and refunds',
+  'contacts.topicPaymentHint': 'Invoice, credits, refund',
+  'contacts.topicPaymentPlaceholder':
+    'Account email, credit pack, payment method and time. Do not send a card number.',
+  'contacts.topicOther': 'Other',
+  'contacts.topicOtherHint': 'A question, data, partnership',
+  'contacts.name': 'Name',
+  'contacts.email': 'Email for the reply',
+  'contacts.message': 'Message',
+  'contacts.consent': 'By sending the form you agree to the',
+  'contacts.consentLink': 'privacy policy',
+  'contacts.submit': 'Send',
+  'contacts.errorSend': 'Could not send the message. Please email us.',
+  'contacts.errorName': 'Enter your name',
+  'contacts.errorEmail': 'Enter a valid email for the reply',
+  'contacts.errorShort': 'Describe your question in more detail (at least 10 characters)',
+  // Consent to immediate delivery (right of withdrawal in the EU and UK)
+  'checkout.withdrawalConsent':
+    'I want the credits right after I pay and I understand that, by law, I lose the right to withdraw from the contract for credits I have already spent. Unspent credits can be refunded within {days} days.',
+  'checkout.withdrawalRequired': 'Tick the box above to continue to payment.',
+  'checkout.legalNotice': 'By paying you accept the',
+  'checkout.legalOffer': 'terms',
+  'checkout.legalAnd': 'and the',
+  'checkout.legalRefundTerms': 'payment and refund terms',
+  'checkout.legalRefundNote': 'Refund: within {days} days if the pack’s credits are unspent.',
 };

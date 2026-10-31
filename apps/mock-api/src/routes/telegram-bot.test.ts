@@ -776,12 +776,12 @@ function useModel(usageStore: UsageStore, userId: string, status: 'success' | 'e
   });
 }
 
-test('возврат: только 24 часа и без единого запроса к моделям', async (t) => {
+test('возврат: только 14 дней и без единого запроса к моделям', async (t) => {
   const h = await harness();
   t.after(() => h.server.close());
   const { buyer, token } = await h.linkedBuyer(7650);
 
-  // Оплата двое суток назад — срок вышел.
+  // Оплата 15 дней назад — срок вышел.
   h.billingService.grant(
     buyer.user.id,
     'plus',
@@ -793,7 +793,7 @@ test('возврат: только 24 часа и без единого запр
       chargeId: 'old-1',
       telegramUserId: 7650,
     },
-    Date.now() - 2 * DAY_MS,
+    Date.now() - 15 * DAY_MS,
   );
   const expired = await h.mini<ApiErrorBody>(
     `payments/${encodeURIComponent('stars:old-1')}/refund`,
@@ -825,7 +825,7 @@ test('возврат: только 24 часа и без единого запр
     token,
   );
   assert.equal(used.body.error.code, 'refund_used');
-  assert.match(used.body.error.message, /24 часов/);
+  assert.match(used.body.error.message, /14 дней/);
   assert.equal(h.bot.all('refundStarPayment').length, 0);
 });
 
@@ -947,7 +947,7 @@ test('бот: /start ведёт в кабинет, /paysupport и /terms объ�
   await h.message(7901, '/paysupport');
   assert.match(
     String(h.bot.last('sendMessage')!.body.text),
-    /в течение 24 часов, пока ни один кредит пакета не потрачен/,
+    /в течение 14 дней, пока ни один кредит пакета не потрачен/,
   );
   await h.message(7901, '/terms');
   assert.match(String(h.bot.last('sendMessage')!.body.text), /оплата не возвращается/);

@@ -24,6 +24,8 @@ import type {
   TelegramStarsInvoice,
 } from '@/features/billing/types';
 import { useCredits } from '@/features/usage/credits-store';
+import { WithdrawalConsent } from '@/components/billing/withdrawal-consent';
+import { REFUND_DAYS } from '@/features/content/legal';
 import { copyText } from '@/lib/clipboard';
 import { useTranslation, type TranslationKey } from '@/i18n';
 import { cn } from '@/lib/cn';
@@ -76,6 +78,8 @@ export function CheckoutPage() {
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('crypto');
   const [payerEmail, setPayerEmail] = useState(user?.email || '');
   const [sendReceiptEmail, setSendReceiptEmail] = useState(true);
+  // Согласие на мгновенное предоставление услуги: без него способы оплаты не открываются.
+  const [withdrawalConsent, setWithdrawalConsent] = useState(false);
   const [gatewayOpened, setGatewayOpened] = useState(false);
 
   useEffect(() => {
@@ -538,18 +542,26 @@ export function CheckoutPage() {
           </div>
 
           <p className="text-[12px] leading-5 text-subtle">
-            Оплачивая, вы принимаете{' '}
+            {t('checkout.legalNotice')}{' '}
             <Link to="/terms" className="underline underline-offset-4 hover:text-text">
-              оферту
+              {t('checkout.legalOffer')}
             </Link>{' '}
-            и{' '}
+            {t('checkout.legalAnd')}{' '}
             <Link to="/payment-terms" className="underline underline-offset-4 hover:text-text">
-              условия оплаты и возврата
+              {t('checkout.legalRefundTerms')}
             </Link>
-            : в течение 24 часов, если моделями ещё не пользовались.
+            . {t('checkout.legalRefundNote', { days: REFUND_DAYS })}
           </p>
 
-          {paymentMethod === 'crypto' && (
+          <WithdrawalConsent checked={withdrawalConsent} onChange={setWithdrawalConsent} />
+
+          {!withdrawalConsent && (
+            <p role="status" className="text-[13px] leading-5 text-muted">
+              {t('checkout.withdrawalRequired')}
+            </p>
+          )}
+
+          {withdrawalConsent && paymentMethod === 'crypto' && (
             <CryptoPanel
               priceUsd={priceUsd}
               chipLabel={chipLabel}
@@ -606,7 +618,7 @@ export function CheckoutPage() {
             />
           )}
 
-          {paymentMethod === 'stars' && (
+          {withdrawalConsent && paymentMethod === 'stars' && (
             <StarsPanel
               periodNotice={periodNotice}
               starsAmount={starsAmount}

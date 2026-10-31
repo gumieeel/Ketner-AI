@@ -473,22 +473,22 @@ export function StandaloneLayout() {
                 </li>
                 <li>
                   <Link to="/terms" className={footerLinkClass}>
-                    Соглашение и оферта
+                    {t('legal.terms')}
                   </Link>
                 </li>
                 <li>
                   <Link to="/privacy" className={footerLinkClass}>
-                    Конфиденциальность
+                    {t('legal.privacy')}
                   </Link>
                 </li>
                 <li>
                   <Link to="/payment-terms" className={footerLinkClass}>
-                    Оплата и возврат
+                    {t('legal.paymentTerms')}
                   </Link>
                 </li>
                 <li>
                   <Link to="/contacts" className={footerLinkClass}>
-                    Контакты
+                    {t('legal.contacts')}
                   </Link>
                 </li>
               </ul>

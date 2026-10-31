@@ -1,5 +1,6 @@
 import planFacts from '../billing/plan-facts.json';
 import type { Language } from '../preferences/preferences-store';
+import { REFUND_DAYS } from './legal';
 
 export interface FaqItem {
   id: string;
@@ -99,8 +100,8 @@ export const FAQ_ITEMS: FaqItem[] = [
       en: 'Can I get a refund?',
     },
     a: {
-      ru: 'Да, в течение 24 часов после оплаты — если вы ещё не потратили кредиты этого пакета (пробные кредиты возврат не закрывают). Оформите заявку кнопкой «Подать заявку на возврат» в кабинете бота @Robo_kassa_bot (раздел «Платежи») или напишите в поддержку @ketner_support_bot. Заявку проверяет администратор, обычно в течение суток; после одобрения звёзды возвращаются на баланс Telegram, а криптовалюта — на ваш кошелёк, кредиты пакета списываются. Если кредиты пакета уже тратились или прошло больше 24 часов, оплата не возвращается.',
-      en: 'Yes, within 24 hours of paying — if you have not spent this pack’s credits yet (trial credits do not block a refund). Use “Request a refund” in the @Robo_kassa_bot account (the “Payments” tab) or message support at @ketner_support_bot. An administrator reviews every request, usually within a day; once approved, Stars go back to your Telegram balance and crypto to your wallet, and the pack’s credits are removed. If the pack’s credits were already used or more than 24 hours have passed, the payment is not refunded.',
+      ru: `Да. В течение ${REFUND_DAYS} дней после оплаты пакет можно вернуть полностью, если вы ещё не потратили его кредиты (пробные кредиты возврат не закрывают). Оформите заявку кнопкой «Подать заявку на возврат» в кабинете бота @Robo_kassa_bot (раздел «Платежи») или напишите в поддержку @ketner_support_bot. Заявку проверяет администратор, обычно в течение суток; после одобрения звёзды возвращаются на баланс Telegram, а криптовалюта — на ваш кошелёк (комиссию сети за возврат платим мы), кредиты пакета списываются. Если кредиты пакета уже тратились или прошло больше ${REFUND_DAYS} дней, оплата не возвращается, кроме случаев сбоя или двойного списания. Права покупателей из ЕС и Великобритании на отказ от договора описаны на странице «Оплата и возврат».`,
+      en: `Yes. Within ${REFUND_DAYS} days of paying you can get a pack refunded in full, if you have not spent its credits yet (trial credits do not block a refund). Use “Request a refund” in the @Robo_kassa_bot account (the “Payments” tab) or message support at @ketner_support_bot. An administrator reviews every request, usually within a day; once approved, Stars go back to your Telegram balance and crypto to your wallet (we pay the network fee for the refund), and the pack’s credits are removed. If the pack’s credits were already used or more than ${REFUND_DAYS} days have passed, the payment is not refunded, except in case of a failure or a double charge. The withdrawal rights of buyers in the EU and UK are described on the Payments and Refunds page.`,
     },
   },
 ];

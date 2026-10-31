@@ -98,7 +98,7 @@ function makeState(overrides: Partial<MiniAppState> = {}): MiniAppState {
     },
     payments: [payment()],
     prefs: { reminders: true, receipts: true },
-    refundPolicy: { hours: 24 },
+    refundPolicy: { hours: 336 },
     pendingRefunds: 0,
     siteUrl: 'https://ketner.org',
     botUsername: 'Robo_kassa_bot',
@@ -411,6 +411,9 @@ describe('кабинет в Telegram (/tg)', () => {
       screen.getByText('На Fragment звёзды сейчас дешевле: ≈ $14.90 за 1 000 ⭐.'),
     ).toBeInTheDocument();
 
+    // Без согласия на мгновенное начисление кредитов кнопка покупки неактивна
+    expect(within(mid).getByRole('button', { name: /Оплатить 1\s260 ⭐/ })).toBeDisabled();
+    fireEvent.click(screen.getByRole('checkbox', { name: /Я хочу получить кредиты сразу/ }));
     fireEvent.click(within(mid).getByRole('button', { name: /Оплатить 1\s260 ⭐/ }));
     await waitFor(() =>
       expect(app.openInvoice).toHaveBeenCalledWith('https://t.me/$inv', expect.any(Function)),
@@ -497,7 +500,7 @@ describe('кабинет в Telegram (/tg)', () => {
 
     expect(
       await screen.findByText(
-        /Вернуть оплату можно в течение 24 часов после неё — пока вы не потратили кредиты этого пакета/,
+        /Вернуть оплату можно в течение 14 дней после неё — пока вы не потратили кредиты этого пакета/,
       ),
     ).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: /11 900 кредитов.*1\s260 ⭐/ }));

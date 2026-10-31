@@ -1,4 +1,4 @@
-import { screen } from '@testing-library/react';
+import { fireEvent, screen } from '@testing-library/react';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { useAuth } from '@/features/auth/auth-store';
 import { renderRoute, resetAuth, resetPreferences } from './test-utils';
@@ -104,6 +104,7 @@ describe('маршрутизация и каркас экранов', () => {
     });
 
     renderRoute('/checkout/credits-10');
+    fireEvent.click(screen.getByRole('checkbox', { name: /Я хочу получить кредиты сразу/ }));
 
     expect(screen.getByRole('heading', { level: 1, name: 'Покупка кредитов' })).toBeInTheDocument();
     expect(screen.getByText('Выбранный пакет')).toBeInTheDocument();

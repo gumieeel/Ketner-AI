@@ -1,9 +1,11 @@
 import { useState } from 'react';
 import { CreditsIcon, CryptoIcon, StarIcon } from '@/components/icons';
 import { Badge } from '@/components/ui/badge';
+import { WithdrawalConsent } from '@/components/billing/withdrawal-consent';
 import { Button } from '@/components/ui/button';
 import { CRYPTO_BONUS_RATE, DEFAULT_PACK_ID, getPack } from '@/features/billing/plans';
 import { ApiError, miniAppApi, type MiniAppPack } from '@/features/telegram/api';
+import { refundDays } from '@/features/telegram/refund-days';
 import { haptic } from '@/features/telegram/webapp';
 import { useTranslation } from '@/i18n';
 import { formatCredits } from '@/lib/format-date';
@@ -18,6 +20,7 @@ export function PacksTab() {
   const { app, token, state, refresh, notify, openSite } = useMiniApp();
   const { user, packs, rate, credits, refundPolicy } = state;
   const [paying, setPaying] = useState<string | null>(null);
+  const [withdrawalConsent, setWithdrawalConsent] = useState(false);
 
   const waitForPayment = async (invoiceId: string) => {
     for (let attempt = 0; attempt < 20; attempt += 1) {
@@ -85,6 +88,8 @@ export function PacksTab() {
         {t('tg.packsBuy')}
       </SectionTitle>
 
+      <WithdrawalConsent checked={withdrawalConsent} onChange={setWithdrawalConsent} />
+
       {packs.map((pack) => {
         const facts = getPack(pack.id);
         const stars = formatStars(pack.stars, language);
@@ -121,7 +126,7 @@ export function PacksTab() {
             <Button
               className="w-full"
               loading={paying === pack.id}
-              disabled={paying !== null}
+              disabled={paying !== null || !withdrawalConsent}
               onClick={() => void pay(pack)}
             >
               {t('tg.buyPack', { stars })}
@@ -131,7 +136,7 @@ export function PacksTab() {
       })}
 
       <div className="flex flex-col gap-1.5 px-1 text-[12px] leading-5 text-subtle">
-        <p>{t('tg.refundShort', { hours: refundPolicy.hours })}</p>
+        <p>{t('tg.refundShort', { days: refundDays(refundPolicy.hours) })}</p>
         <p>{t('tg.rate', { per1000: (rate.usdPerStar * 1000).toFixed(2) })}</p>
         {starsDearer ? (
           <p>

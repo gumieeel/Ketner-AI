@@ -57,6 +57,11 @@ const AUTH_USER = {
   createdAt: '2026-01-01T00:00:00.000Z',
 };
 
+/** Панели оплаты открываются после согласия на мгновенное начисление кредитов. */
+function acceptWithdrawal(): void {
+  fireEvent.click(screen.getByRole('checkbox', { name: /Я хочу получить кредиты сразу/ }));
+}
+
 function signIn(plan: 'free' | 'credits' | 'plus' = 'free'): void {
   useAuth.setState({
     status: 'authenticated',
@@ -145,6 +150,7 @@ describe('billing-flow: пакеты кредитов, оформление и �
   it('чекаут: по умолчанию криптовалюта, СБП среди способов оплаты нет', async () => {
     signIn();
     renderRoute('/checkout/credits-10');
+    acceptWithdrawal();
 
     expect(screen.getByRole('heading', { level: 1, name: 'Покупка кредитов' })).toBeInTheDocument();
     expect(await screen.findByText(/Оплата криптовалютой/i)).toBeInTheDocument();
@@ -161,6 +167,7 @@ describe('billing-flow: пакеты кредитов, оформление и �
   it('чекаут: криптовалюта показывает виджет Trybit и после оплаты начисляет кредиты', async () => {
     signIn();
     renderRoute('/checkout/credits-10');
+    acceptWithdrawal();
 
     fireEvent.click(screen.getByRole('button', { name: /Криптовалюта/i }));
 
@@ -220,6 +227,7 @@ describe('billing-flow: пакеты кредитов, оформление и �
       return base(input, init);
     });
     renderRoute('/checkout/credits-10');
+    acceptWithdrawal();
     fireEvent.click(screen.getByRole('button', { name: /Криптовалюта/i }));
 
     expect(
@@ -246,6 +254,7 @@ describe('billing-flow: пакеты кредитов, оформление и �
       return base(input, init);
     });
     renderRoute('/checkout/credits-10');
+    acceptWithdrawal();
     fireEvent.click(screen.getByRole('button', { name: /Криптовалюта/i }));
 
     // Счёт по умолчанию — USDT в Tron: покупатель платит ровно цену пакета, комиссия шлюза на сервисе
@@ -306,6 +315,7 @@ describe('billing-flow: пакеты кредитов, оформление и �
     signIn();
 
     renderRoute('/checkout/credits-100');
+    acceptWithdrawal();
 
     fireEvent.click(screen.getByRole('button', { name: /Telegram Stars/i }));
 
@@ -345,6 +355,7 @@ describe('бонус за оплату криптой', () => {
   it('страница оплаты пакета объясняет бонус +15 % кредитами и называет итог', async () => {
     signIn();
     renderRoute('/checkout/credits-25');
+    acceptWithdrawal();
     expect(
       await screen.findByText(/Бонус \+1\s785 кредитов за оплату криптой/),
     ).toBeInTheDocument();

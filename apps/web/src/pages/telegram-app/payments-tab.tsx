@@ -15,6 +15,7 @@ import {
   type MiniAppPayment,
   type PaymentStatus,
 } from '@/features/telegram/api';
+import { refundDays } from '@/features/telegram/refund-days';
 import { haptic } from '@/features/telegram/webapp';
 import { useTranslation, type TranslationKey } from '@/i18n';
 import { cn } from '@/lib/cn';
@@ -168,14 +169,14 @@ export function PaymentsTab() {
         </>
       )}
 
-      <RefundPolicy hours={refundPolicy.hours} />
+      <RefundPolicy days={refundDays(refundPolicy.hours)} />
 
       {open ? <PaymentSheet payment={open} onClose={() => setOpenId(null)} /> : null}
     </div>
   );
 }
 
-export function RefundPolicy({ hours }: { hours: number }) {
+export function RefundPolicy({ days }: { days: number }) {
   const { t } = useTranslation();
   return (
     <Panel aria-labelledby="tg-policy-title">
@@ -183,7 +184,7 @@ export function RefundPolicy({ hours }: { hours: number }) {
         {t('tg.policyTitle')}
       </h2>
       <ul className="mt-2 flex flex-col gap-2 text-[13px] leading-5 text-muted">
-        <li>{t('tg.policy1', { hours })}</li>
+        <li>{t('tg.policy1', { days })}</li>
         <li>{t('tg.policy2')}</li>
         <li>{t('tg.policy3')}</li>
         <li>{t('tg.policy4')}</li>
@@ -251,8 +252,8 @@ function PaymentSheet({ payment, onClose }: { payment: MiniAppPayment; onClose: 
     declined: payment.refund?.note
       ? t('tg.refundNoneDeclinedNote', { note: payment.refund.note })
       : t('tg.refundNoneDeclined'),
-    expired: t('tg.refundNoneExpired', { hours: state.refundPolicy.hours }),
-    used: t('tg.refundNoneUsed', { hours: state.refundPolicy.hours }),
+    expired: t('tg.refundNoneExpired', { days: refundDays(state.refundPolicy.hours) }),
+    used: t('tg.refundNoneUsed', { days: refundDays(state.refundPolicy.hours) }),
   };
   const deadline = formatDateTime(
     new Date(Date.parse(payment.paidAt) + state.refundPolicy.hours * 3600_000).toISOString(),
