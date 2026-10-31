@@ -185,12 +185,10 @@ export const config = {
   allowAnonymousChat: optionalEnv('ALLOW_ANONYMOUS_CHAT') === 'false' ? false : true,
   /**
    * Платформа решений (анализ задачи, отчёт о возможностях, планы, Ketner Builder) — в разработке,
-   * docs/MIGRATION_PLAN.md. В production выключена, пока её не включат явно `DISCOVERY_ENABLED=true`;
-   * вне production включена, `DISCOVERY_ENABLED=false` выключает.
+   * docs/MIGRATION_PLAN.md. Включена везде, в том числе в production (решение владельца 01.11.2026:
+   * ketner.org открывается главной «Что вы хотите улучшить?»); `DISCOVERY_ENABLED=false` выключает.
    */
-  discoveryEnabled: isProduction
-    ? optionalEnv('DISCOVERY_ENABLED') === 'true'
-    : optionalEnv('DISCOVERY_ENABLED') !== 'false',
+  discoveryEnabled: optionalEnv('DISCOVERY_ENABLED') !== 'false',
   /** Бюджет и сутки бесплатных анализов (docs/discovery-models.md, раздел 3). */
   discovery: {
     freeDailyUsd: readNumber('DISCOVERY_FREE_DAILY_USD', 5),
