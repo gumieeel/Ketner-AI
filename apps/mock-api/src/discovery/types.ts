@@ -33,6 +33,8 @@ export interface StageRun {
    * той же моделью, но за кредиты пользователя (бесплатный сценарий не генерирует повторно).
    */
   billing?: 'user';
+  /** Бесплатный план (этап `plan` бесплатного анализа): для какой возможности он использован. */
+  opportunityId?: string;
   startedAt?: string;
   finishedAt?: string;
 }
@@ -92,4 +94,44 @@ export interface Opportunity {
   /** Порядок в отчёте: меньше — выше. */
   priority: number;
   createdAt: string;
+}
+
+export type PlanStepStatus = 'todo' | 'in_progress' | 'done' | 'skipped';
+
+export interface PlanStep {
+  id: string;
+  title: string;
+  description: string;
+  /** id шагов, которые нужно сделать раньше (только предыдущие шаги). */
+  dependsOn: string[];
+  /** Критерий готовности шага. */
+  doneWhen: string;
+  status: PlanStepStatus;
+  updatedAt: string | null;
+}
+
+/**
+ * План внедрения одной возможности. Краткий (`brief`) — бесплатный план бесплатного анализа,
+ * полный (`full`) — за кредиты. На одну возможность — один план.
+ */
+export interface Plan {
+  id: string;
+  analysisId: string;
+  opportunityId: string;
+  ownerId: string;
+  kind: 'brief' | 'full';
+  /** Чья модель: free — GPT-6 Luna, paid — MiMo-V2.6 Pro, deep — Claude Sonnet 5.5. */
+  mode: AnalysisMode;
+  /** Оплачивает сервис из бюджета бесплатных анализов. */
+  sponsored: boolean;
+  status: 'generating' | 'ready' | 'failed';
+  opportunityTitle: string;
+  summary: string | null;
+  steps: PlanStep[];
+  risks: string[];
+  successCriteria: string[];
+  run: StageRun;
+  createdAt: string;
+  updatedAt: string;
+  version: number;
 }

@@ -190,8 +190,55 @@ export type RetryQuote =
   | { stage: 'context' | 'discovery'; sponsored: true }
   | ({ stage: 'context' | 'discovery'; sponsored: false } & RerunQuote);
 
+export type PlanStepStatus = 'todo' | 'in_progress' | 'done' | 'skipped';
+
+export interface PlanStep {
+  id: string;
+  title: string;
+  description: string;
+  dependsOn: string[];
+  doneWhen: string;
+  status: PlanStepStatus;
+  updatedAt: string | null;
+}
+
+export interface PlanView {
+  id: string;
+  analysisId: string;
+  opportunityId: string;
+  opportunityTitle: string;
+  kind: 'brief' | 'full';
+  status: 'generating' | 'ready' | 'failed';
+  summary: string | null;
+  steps: PlanStep[];
+  risks: string[];
+  successCriteria: string[];
+  model: { id: string; name: string } | null;
+  error: { code: string; message: string } | null;
+  cost: { chargedCredits: number; sponsored: boolean };
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface PlansSummary {
+  offer: {
+    free: { available: true; model: string } | { available: false; usedFor: string | null };
+    paid: PaidOffer & { confirmationRequired: boolean };
+  };
+  items: Array<{
+    id: string;
+    opportunityId: string;
+    kind: 'brief' | 'full';
+    status: PlanView['status'];
+  }>;
+}
+
+export type PlanRetryQuote = { sponsored: true } | ({ sponsored: false } & RerunQuote);
+
 export interface AnalysisResponse {
   analysis: AnalysisView;
+  /** Планы внедрения: что составлено и что доступно (только у готового анализа). */
+  plans: PlansSummary | null;
   /** Цена обновления анализа при изменении ответов (только у готового анализа с вопросами). */
   rerun: RerunQuote | null;
   /** Цена повтора упавшего этапа. */
@@ -224,6 +271,48 @@ export async function setAnalysisSaved(id: string, saved: boolean): Promise<void
 
 export async function deleteAnalysis(id: string): Promise<void> {
   await call(`/${encodeURIComponent(id)}`, { method: 'DELETE' });
+}
+
+const planPath = (analysisId: string, planId: string) =>
+  `/${encodeURIComponent(analysisId)}/plans/${encodeURIComponent(planId)}`;
+
+export async function createPlan(
+  analysisId: string,
+  opportunityId: string,
+  confirm = false,
+): Promise<PlanView> {
+  const body = await call<{ plan: PlanView }>(
+    `/${encodeURIComponent(analysisId)}/opportunities/${encodeURIComponent(opportunityId)}/plan`,
+    { method: 'POST', body: JSON.stringify(confirm ? { confirm: true } : {}) },
+  );
+  return body.plan;
+}
+
+export function fetchPlan(
+  analysisId: string,
+  planId: string,
+): Promise<{ plan: PlanView; retry: PlanRetryQuote | null }> {
+  return call(planPath(analysisId, planId));
+}
+
+export async function setPlanStepStatus(
+  analysisId: string,
+  planId: string,
+  stepId: string,
+  status: PlanStepStatus,
+): Promise<PlanView> {
+  const body = await call<{ plan: PlanView }>(
+    `${planPath(analysisId, planId)}/steps/${encodeURIComponent(stepId)}`,
+    { method: 'PATCH', body: JSON.stringify({ status }) },
+  );
+  return body.plan;
+}
+
+export async function retryPlan(analysisId: string, planId: string, confirm = false) {
+  await call(`${planPath(analysisId, planId)}/retry`, {
+    method: 'POST',
+    body: JSON.stringify(confirm ? { confirm: true } : {}),
+  });
 }
 
 export async function saveAnswersDraft(id: string, answers: Answers): Promise<void> {

@@ -89,4 +89,28 @@ export const MIGRATIONS: readonly Migration[] = [
         WHERE deleted_at IS NULL;
     `,
   },
+  {
+    // Этап 5: планы внедрения. Один план на возможность (уникальный индекс защищает от двойного
+    // запуска); план удаляется вместе с возможностью (повторный поиск возможностей, удаление
+    // анализа). Шаги со статусами — в `data`, запись защищена версией, как анализ.
+    id: '0003_discovery_plans',
+    sql: `
+      CREATE TABLE discovery_plans (
+        id text PRIMARY KEY,
+        analysis_id text NOT NULL REFERENCES discovery_analyses (id) ON DELETE CASCADE,
+        opportunity_id text NOT NULL REFERENCES discovery_opportunities (id) ON DELETE CASCADE,
+        user_id text NOT NULL,
+        kind text NOT NULL CHECK (kind IN ('brief', 'full')),
+        mode text NOT NULL CHECK (mode IN ('free', 'paid', 'deep')),
+        sponsored boolean NOT NULL DEFAULT false,
+        status text NOT NULL CHECK (status IN ('generating', 'ready', 'failed')),
+        data jsonb NOT NULL,
+        version integer NOT NULL DEFAULT 1,
+        created_at timestamptz NOT NULL DEFAULT now(),
+        updated_at timestamptz NOT NULL DEFAULT now()
+      );
+      CREATE UNIQUE INDEX discovery_plans_opportunity ON discovery_plans (opportunity_id);
+      CREATE INDEX discovery_plans_analysis ON discovery_plans (analysis_id, user_id);
+    `,
+  },
 ];

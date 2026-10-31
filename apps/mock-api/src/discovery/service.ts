@@ -37,6 +37,7 @@ import {
 import {
   ANALYSIS_STAGES,
   CONFIRM_ABOVE_CREDITS,
+  MODEL_BY_MODE,
   estimateStages,
   stagePolicy,
   type AnalysisMode,
@@ -48,6 +49,9 @@ import {
   contextUserMessage,
   discoverySystemPrompt,
   discoveryUserMessage,
+  PLAN_STEPS,
+  planSystemPrompt,
+  planUserMessage,
 } from './prompts.js';
 import { runStructuredTask, type TaskCaller } from './run-task.js';
 import {
@@ -56,11 +60,21 @@ import {
   type AnswersBody,
   type ContextOutput,
   type DiscoveryOutput,
+  planOutputSchema,
+  type PlanOutput,
   type Question,
 } from './schemas.js';
 import type { DiscoveryStore } from './store.js';
-import { contextTemplate, discoveryTemplate } from './templates.js';
-import type { Analysis, AnswerRecord, Opportunity, StageRun } from './types.js';
+import { contextTemplate, discoveryTemplate, planTemplate } from './templates.js';
+import type {
+  Analysis,
+  AnswerRecord,
+  Opportunity,
+  Plan,
+  PlanStep,
+  PlanStepStatus,
+  StageRun,
+} from './types.js';
 
 /** Кто делает запрос: личность только из сессии или гостевого id (routes/analyses.ts). */
 export interface DiscoveryCaller extends TaskCaller {
@@ -632,6 +646,20 @@ export class DiscoveryService {
   ): Promise<Ok<{ analysis: Analysis; rerun: boolean }> | ServiceError> {
     if (sameAnswers(current.answers, answers)) return { ok: true, analysis: current, rerun: false };
     const language = current.language;
+    // Повторный поиск заменяет возможности, а с ними и планы: пока план составляется — нельзя.
+    const plans = await this.deps.store.plans(caller.userId, current.id);
+    if (plans.some((plan) => plan.status === 'generating')) {
+      return {
+        ok: false,
+        status: 409,
+        code: 'plan_in_progress',
+        message: text(
+          language,
+          'Сейчас составляется план. Обновить анализ можно, когда он будет готов.',
+          'A plan is being written now. You can update the analysis once it is ready.',
+        ),
+      };
+    }
     if (caller.guest) {
       return {
         ok: false,
@@ -805,6 +833,520 @@ export class DiscoveryService {
       if (reservation.status === 'held') await this.deps.budget.release(reservation.id);
     }
     return { ok: true };
+  }
+
+  // ─── Планы внедрения ────────────────────────────────────────────────────────
+
+  /**
+   * Что доступно для планов анализа. Бесплатный анализ включает один краткий план (GPT-6 Luna,
+   * за счёт сервиса); остальные планы — полные, за кредиты: у бесплатного и платного анализа —
+   * MiMo-V2.6 Pro, у «Глубокого анализа» — Claude Sonnet 5.5.
+   */
+  planOffer(analysis: Analysis, caller: DiscoveryCaller) {
+    const ledger = analysis.stages.plan;
+    const mode = paidPlanMode(analysis);
+    const estimate = estimateStages(mode, ['plan'], analysis.language, this.registry);
+    return {
+      free:
+        analysis.mode === 'free' && ledger?.status === 'pending'
+          ? { available: true as const, model: realModelName(MODEL_BY_MODE.free, this.registry) }
+          : {
+              available: false as const,
+              usedFor: analysis.mode === 'free' ? (ledger?.opportunityId ?? null) : null,
+            },
+      paid: {
+        model: realModelName(MODEL_BY_MODE[mode], this.registry),
+        typicalCredits: estimate.typicalCredits,
+        maxCredits: estimate.maxCredits,
+        loginRequired: caller.guest,
+        confirmationRequired: estimate.maxCredits > CONFIRM_ABOVE_CREDITS,
+      },
+    };
+  }
+
+  plansOf(ownerId: string, analysisId: string): Promise<Plan[]> {
+    return this.deps.store.plans(ownerId, analysisId);
+  }
+
+  /**
+   * План для возможности. Уже есть — возвращается без вызова модели. Неподдерживаемой
+   * возможности план не составляется. Бесплатный анализ: первый план — краткий и бесплатный
+   * (резерв бюджета взят при создании анализа), следующие — за кредиты.
+   */
+  async createPlan(input: {
+    caller: DiscoveryCaller;
+    analysisId: string;
+    opportunityId: string;
+    confirm?: boolean;
+  }): Promise<Ok<{ plan: Plan; created: boolean }> | ServiceError> {
+    const { caller, analysisId, opportunityId } = input;
+    const analysis = await this.deps.store.get(caller.userId, analysisId);
+    if (!analysis) return notFound(analysisId);
+    const language = analysis.language;
+    if (analysis.status !== 'ready') {
+      return {
+        ok: false,
+        status: 409,
+        code: 'analysis_not_ready',
+        message: text(
+          language,
+          'План можно составить, когда анализ готов.',
+          'A plan can be written once the analysis is ready.',
+        ),
+      };
+    }
+    const opportunity = (await this.deps.store.opportunities(caller.userId, analysisId)).find(
+      (item) => item.id === opportunityId,
+    );
+    if (!opportunity) {
+      return {
+        ok: false,
+        status: 404,
+        code: 'opportunity_not_found',
+        message: text(language, 'Возможность не найдена.', 'Opportunity not found.'),
+      };
+    }
+    if (opportunity.feasibilityStatus === 'not_supported') {
+      return {
+        ok: false,
+        status: 409,
+        code: 'opportunity_not_supported',
+        message: text(
+          language,
+          'Ketner пока не умеет этого, поэтому план внедрения здесь не составляется.',
+          'Ketner cannot do this yet, so no implementation plan is written here.',
+        ),
+      };
+    }
+    const existing = (await this.deps.store.plans(caller.userId, analysisId)).find(
+      (plan) => plan.opportunityId === opportunityId,
+    );
+    if (existing) return { ok: true, plan: existing, created: false };
+
+    const id = randomUUID();
+    const useFree = analysis.mode === 'free' && analysis.stages.plan?.status === 'pending';
+    const mode: AnalysisMode = useFree ? 'free' : paidPlanMode(analysis);
+    let reservationId: string | undefined;
+
+    if (useFree) {
+      // Резерв краткого плана держится 2 часа после создания анализа; истёк — берём новый.
+      await this.deps.budget.expire(this.now().toISOString());
+      const ledgerReservation = analysis.stages.plan?.reservationId;
+      const held = (await this.deps.budget.forAnalysis(analysisId)).find(
+        (item) => item.id === ledgerReservation && item.status === 'held',
+      );
+      reservationId = held?.id;
+      if (!held) {
+        reservationId = `${analysisId}:plan:${randomUUID().slice(0, 8)}`;
+        const reserved = await this.deps.budget.reserve(this.today(), this.deps.freeDailyUsd, [
+          {
+            id: reservationId,
+            analysisId,
+            stage: 'plan',
+            capUsd: stagePolicy('free', 'plan', language, this.registry).capUsd,
+            expiresAt: new Date(this.now().getTime() + RUNNING_MS).toISOString(),
+          },
+        ]);
+        if (!reserved) return this.freePlanUnavailable(analysis, caller);
+      }
+      // Бесплатный план — один на анализ: отмечаем, для какой возможности он использован.
+      let claimed = false;
+      await this.mutate(caller.userId, analysisId, (current) => {
+        const ledger = current.stages.plan;
+        claimed = ledger?.status === 'pending';
+        if (!claimed || !ledger) return current;
+        return {
+          ...current,
+          stages: {
+            ...current.stages,
+            plan: {
+              ...ledger,
+              // done — «бесплатный план использован»; ход генерации — в самом плане.
+              status: 'done',
+              opportunityId,
+              ...(reservationId ? { reservationId } : {}),
+              startedAt: this.now().toISOString(),
+            },
+          },
+        };
+      });
+      if (!claimed) {
+        // Бесплатный план только что использован другим запросом: дальше — только за кредиты
+        // и только с согласием, поэтому отвечаем ценой, а не списываем молча.
+        if (reservationId && reservationId !== ledgerReservation)
+          await this.deps.budget.release(reservationId);
+        return this.paidPlanConfirmation(analysis, caller);
+      }
+    } else {
+      // План за кредиты — всегда с явным согласием: сайт показывает цену и передаёт `confirm`.
+      if (caller.guest)
+        return this.checkPaid(caller, mode, ['plan'], language, true) as ServiceError;
+      if (!input.confirm) return this.paidPlanConfirmation(analysis, caller);
+      const check = this.checkPaid(caller, mode, ['plan'], language, true);
+      if (!check.ok) return check;
+    }
+
+    const iso = this.now().toISOString();
+    const created = await this.deps.store.createPlan({
+      id,
+      analysisId,
+      opportunityId,
+      ownerId: caller.userId,
+      kind: useFree ? 'brief' : 'full',
+      mode,
+      sponsored: useFree,
+      status: 'generating',
+      opportunityTitle: opportunity.title,
+      summary: null,
+      steps: [],
+      risks: [],
+      successCriteria: [],
+      run: {
+        status: 'pending',
+        taskId: `${id}:plan:1`,
+        costUsd: 0,
+        creditsUsd: 0,
+        attempts: 0,
+        ...(useFree ? {} : { billing: 'user' as const }),
+        ...(reservationId ? { reservationId } : {}),
+      },
+      createdAt: iso,
+      updatedAt: iso,
+      version: 1,
+    });
+    if (!created || created.duplicate) {
+      // Гонка: план этой возможности уже создан другим запросом — бесплатный план не тратим.
+      if (useFree) {
+        await this.mutate(caller.userId, analysisId, (current) =>
+          current.stages.plan?.opportunityId === opportunityId
+            ? {
+                ...current,
+                stages: {
+                  ...current.stages,
+                  plan: { ...current.stages.plan, status: 'pending', opportunityId: undefined },
+                },
+              }
+            : current,
+        );
+      }
+      if (!created) return notFound(analysisId);
+      return { ok: true, plan: created.plan, created: false };
+    }
+    this.schedulePlan(caller, created.plan.id);
+    return { ok: true, plan: created.plan, created: true };
+  }
+
+  private paidPlanConfirmation(analysis: Analysis, caller: DiscoveryCaller): ServiceError {
+    const { paid } = this.planOffer(analysis, caller);
+    return {
+      ok: false,
+      status: 409,
+      code: 'confirmation_required',
+      message: text(
+        analysis.language,
+        `План за кредиты: ≈ ${paid.typicalCredits}, не больше ${paid.maxCredits} кредитов (${paid.model}). Подтвердите запуск.`,
+        `A plan for credits: ≈ ${paid.typicalCredits}, at most ${paid.maxCredits} credits (${paid.model}). Confirm to start.`,
+      ),
+      details: {
+        model: paid.model,
+        typicalCredits: paid.typicalCredits,
+        maxCredits: paid.maxCredits,
+      },
+    };
+  }
+
+  private freePlanUnavailable(analysis: Analysis, caller: DiscoveryCaller): ServiceError {
+    const offer = this.planOffer(analysis, caller);
+    return {
+      ok: false,
+      status: 409,
+      code: 'free_unavailable',
+      message: text(
+        analysis.language,
+        'Бесплатные анализы и планы на сегодня закончились — их число в сутки ограничено.',
+        'Free analyses and plans for today have run out — their number per day is limited.',
+      ),
+      details: {
+        reason: 'budget_exhausted',
+        resetsAt: this.resetsAt(),
+        loginRequired: caller.guest,
+        paid: {
+          model: offer.paid.model,
+          typicalCredits: offer.paid.typicalCredits,
+          maxCredits: offer.paid.maxCredits,
+        },
+      },
+    };
+  }
+
+  /** План владельца; генерация, зависшая дольше `RUNNING_MS`, считается прерванной. */
+  async getPlan(ownerId: string, planId: string): Promise<Plan | null> {
+    const plan = await this.deps.store.getPlan(ownerId, planId);
+    if (!plan) return null;
+    const run = plan.run;
+    if (
+      !this.running.has(planId) &&
+      run.status === 'running' &&
+      run.startedAt &&
+      this.now().getTime() - Date.parse(run.startedAt) > RUNNING_MS
+    ) {
+      return (
+        (await this.mutatePlan(ownerId, planId, (current) =>
+          current.run.status === 'running'
+            ? {
+                ...current,
+                status: 'failed',
+                run: {
+                  ...current.run,
+                  status: 'failed',
+                  finishedAt: this.now().toISOString(),
+                  error: {
+                    code: 'interrupted',
+                    message: text(
+                      'ru',
+                      'Составление плана прервалось. Повторите его.',
+                      'Writing the plan was interrupted. Retry it.',
+                    ),
+                  },
+                },
+              }
+            : current,
+        )) ?? plan
+      );
+    }
+    return plan;
+  }
+
+  /** Цена повтора упавшего плана: бесплатный повторяется за счёт сервиса, платный — за кредиты. */
+  planRetryQuote(plan: Plan, caller: DiscoveryCaller, language: Language) {
+    if (plan.status !== 'failed') return null;
+    if (plan.sponsored) return { sponsored: true as const };
+    const estimate = estimateStages(plan.mode, ['plan'], language, this.registry);
+    return {
+      sponsored: false as const,
+      model: realModelName(MODEL_BY_MODE[plan.mode], this.registry),
+      typicalCredits: estimate.typicalCredits,
+      maxCredits: estimate.maxCredits,
+      loginRequired: caller.guest,
+    };
+  }
+
+  async retryPlan(
+    caller: DiscoveryCaller,
+    planId: string,
+    confirm?: boolean,
+  ): Promise<Ok<{ plan: Plan }> | ServiceError> {
+    const plan = await this.getPlan(caller.userId, planId);
+    if (!plan) return planNotFound(planId);
+    if (plan.status !== 'failed') return { ok: true, plan };
+    const analysis = await this.deps.store.get(caller.userId, plan.analysisId);
+    if (!analysis) return planNotFound(planId);
+    const attemptNo = attemptOf(plan.run.taskId) + 1;
+    let reservationId: string | undefined;
+    if (plan.sponsored) {
+      reservationId = `${plan.id}:plan:${attemptNo}`;
+      const reserved = await this.deps.budget.reserve(this.today(), this.deps.freeDailyUsd, [
+        {
+          id: reservationId,
+          analysisId: plan.analysisId,
+          stage: 'plan',
+          capUsd: stagePolicy('free', 'plan', analysis.language, this.registry).capUsd,
+          expiresAt: new Date(this.now().getTime() + RUNNING_MS).toISOString(),
+        },
+      ]);
+      if (!reserved) return this.freePlanUnavailable(analysis, caller);
+    } else {
+      const check = this.checkPaid(caller, plan.mode, ['plan'], analysis.language, confirm);
+      if (!check.ok) return check;
+    }
+    let applied = false;
+    const updated = await this.mutatePlan(caller.userId, planId, (current) => {
+      applied = current.status === 'failed';
+      if (!applied) return current;
+      return {
+        ...current,
+        status: 'generating',
+        run: {
+          status: 'pending',
+          taskId: `${current.id}:plan:${attemptNo}`,
+          costUsd: current.run.costUsd,
+          creditsUsd: current.run.creditsUsd,
+          attempts: current.run.attempts,
+          ...(current.run.billing ? { billing: current.run.billing } : {}),
+          ...(reservationId ? { reservationId } : {}),
+        },
+      };
+    });
+    if (!updated) return planNotFound(planId);
+    if (applied) this.schedulePlan(caller, planId);
+    else if (reservationId) await this.deps.budget.release(reservationId);
+    return { ok: true, plan: updated };
+  }
+
+  /** Статус шага плана: сохраняется сразу, модель не вызывается. */
+  async updatePlanStep(
+    caller: DiscoveryCaller,
+    planId: string,
+    stepId: string,
+    status: PlanStepStatus,
+  ): Promise<Ok<{ plan: Plan }> | ServiceError> {
+    const plan = await this.deps.store.getPlan(caller.userId, planId);
+    if (!plan) return planNotFound(planId);
+    if (plan.status !== 'ready' || !plan.steps.some((step) => step.id === stepId)) {
+      return {
+        ok: false,
+        status: 404,
+        code: 'step_not_found',
+        message: text('ru', 'Шаг плана не найден.', 'Plan step not found.'),
+      };
+    }
+    const at = this.now().toISOString();
+    const updated = await this.mutatePlan(caller.userId, planId, (current) => ({
+      ...current,
+      steps: current.steps.map((step) =>
+        step.id === stepId && step.status !== status ? { ...step, status, updatedAt: at } : step,
+      ),
+    }));
+    if (!updated) return planNotFound(planId);
+    return { ok: true, plan: updated };
+  }
+
+  private schedulePlan(caller: DiscoveryCaller, planId: string): void {
+    const job = this.runPlan(caller, planId)
+      .catch(async (error: unknown) => {
+        console.error(`[discovery] план ${planId} упал`, error);
+        await this.mutatePlan(caller.userId, planId, (plan) => ({
+          ...plan,
+          status: 'failed',
+          run: {
+            ...plan.run,
+            status: 'failed',
+            finishedAt: this.now().toISOString(),
+            error: { code: 'internal_error', message: 'Внутренняя ошибка. Повторите.' },
+          },
+        }));
+      })
+      .finally(() => {
+        if (this.running.get(planId) === job) this.running.delete(planId);
+      });
+    this.running.set(planId, job);
+  }
+
+  private async runPlan(caller: DiscoveryCaller, planId: string): Promise<void> {
+    const startedAt = this.now().toISOString();
+    const started = await this.mutatePlan(caller.userId, planId, (plan) =>
+      plan.run.status === 'pending'
+        ? { ...plan, run: { ...plan.run, status: 'running', startedAt } }
+        : plan,
+    );
+    if (!started || started.run.status !== 'running' || started.run.startedAt !== startedAt) return;
+    const run = started.run;
+    if (started.sponsored && run.reservationId) {
+      await this.deps.budget.start(
+        run.reservationId,
+        new Date(this.now().getTime() + RUNNING_MS).toISOString(),
+      );
+    }
+    const analysis = await this.deps.store.get(caller.userId, started.analysisId);
+    const opportunity = analysis
+      ? (await this.deps.store.opportunities(caller.userId, started.analysisId)).find(
+          (item) => item.id === started.opportunityId,
+        )
+      : undefined;
+    if (!analysis || !opportunity) {
+      if (started.sponsored && run.reservationId) await this.deps.budget.release(run.reservationId);
+      return;
+    }
+    const language = analysis.language;
+    const answers = analysis.questions.map((question) => {
+      const answer = analysis.answers[question.id];
+      return { question, value: answer && 'value' in answer ? answer.value : null };
+    });
+    const result = await runStructuredTask({
+      gateway: this.deps.gateway,
+      caller,
+      taskId: run.taskId,
+      conversationId: `discovery:${analysis.id}`,
+      billing: started.sponsored ? 'sponsored' : 'user',
+      policy: stagePolicy(started.mode, 'plan', language, this.registry),
+      language,
+      ...(this.deps.providerTimeoutMs ? { providerTimeoutMs: this.deps.providerTimeoutMs } : {}),
+      systemPrompt: planSystemPrompt(language, started.kind),
+      userMessage: planUserMessage(language, analysis.context, answers, {
+        title: opportunity.title,
+        problem: opportunity.problem,
+        solution: opportunity.solution,
+        whatItTakes: [
+          ...opportunity.feasibility.blockers,
+          ...opportunity.feasibility.available,
+        ].map((item) => ({ need: item.label, status: item.status, hint: item.hint })),
+        dataNeeded: opportunity.dataNeeded,
+        integrationsNeeded: opportunity.integrationsNeeded,
+        effort: opportunity.effort,
+        risks: opportunity.risks,
+        limitations: opportunity.limitations,
+        successCriteria: opportunity.successCriteria,
+        firstStep: opportunity.firstStep,
+      }),
+      schema: planOutputSchema,
+      templateOutput: planTemplate(language),
+    });
+    if (started.sponsored && run.reservationId)
+      await this.deps.budget.settle(run.reservationId, result.costUsd);
+    const finishedAt = this.now().toISOString();
+    await this.mutatePlan(caller.userId, planId, (plan) => {
+      const costs = {
+        costUsd: round6(plan.run.costUsd + result.costUsd),
+        creditsUsd: round6(plan.run.creditsUsd + result.creditsUsd),
+        attempts: plan.run.attempts + result.attempts.length,
+        finishedAt,
+      };
+      if (!result.ok) {
+        return {
+          ...plan,
+          status: 'failed',
+          run: {
+            ...plan.run,
+            ...costs,
+            status: 'failed',
+            error: { code: result.code, message: result.message },
+          },
+        };
+      }
+      return {
+        ...plan,
+        status: 'ready',
+        summary: result.data.summary,
+        steps: normalizePlanSteps(result.data.steps, plan.kind),
+        risks: result.data.risks,
+        successCriteria: result.data.successCriteria,
+        run: {
+          ...plan.run,
+          ...costs,
+          status: 'done',
+          model: { id: result.model.id, name: realModelName(result.model.id, this.registry) },
+        },
+      };
+    });
+  }
+
+  private async mutatePlan(
+    ownerId: string,
+    planId: string,
+    change: (plan: Plan) => Plan,
+  ): Promise<Plan | null> {
+    for (let attempt = 0; attempt < 5; attempt += 1) {
+      const current = await this.deps.store.getPlan(ownerId, planId);
+      if (!current) return null;
+      const next = change(current);
+      if (next === current) return current;
+      const saved = await this.deps.store.updatePlan(
+        { ...next, updatedAt: this.now().toISOString() },
+        current.version,
+      );
+      if (saved) return saved;
+    }
+    throw new Error(`discovery: не удалось сохранить план ${planId} — запись постоянно меняется`);
   }
 
   /** Все этапы, запущенные в фоне, завершились (для тестов и остановки сервера). */
@@ -1075,6 +1617,43 @@ export class DiscoveryService {
     }
     throw new Error(`discovery: не удалось сохранить анализ ${id} — запись постоянно меняется`);
   }
+}
+
+function planNotFound(id: string): ServiceError {
+  return { ok: false, status: 404, code: 'plan_not_found', message: `План ${id} не найден` };
+}
+
+/** Модель плана за кредиты: у бесплатного анализа — модель анализа за кредиты. */
+function paidPlanMode(analysis: Analysis): AnalysisMode {
+  return analysis.mode === 'free' ? 'paid' : analysis.mode;
+}
+
+/**
+ * Шаги плана: не больше лимита вида плана, id по порядку (s1, s2…), зависимости — только на
+ * предыдущие шаги (циклов и ссылок вперёд не бывает), без повторов. Все шаги начинаются «не начат».
+ */
+export function normalizePlanSteps(steps: PlanOutput['steps'], kind: Plan['kind']): PlanStep[] {
+  const items = steps.slice(0, PLAN_STEPS[kind]);
+  const idOf = new Map<string, number>();
+  items.forEach((step, index) => {
+    if (!idOf.has(step.id)) idOf.set(step.id, index);
+  });
+  return items.map((step, index) => ({
+    id: `s${index + 1}`,
+    title: step.title,
+    description: step.description,
+    dependsOn: [
+      ...new Set(
+        step.dependsOn
+          .map((ref) => idOf.get(ref))
+          .filter((at): at is number => at !== undefined && at < index)
+          .map((at) => `s${at + 1}`),
+      ),
+    ],
+    doneWhen: step.doneWhen,
+    status: 'todo',
+    updatedAt: null,
+  }));
 }
 
 function notWaiting(language: Language): ServiceError {

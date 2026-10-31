@@ -112,7 +112,7 @@ function AnalysisScreen({ id }: { id: string }) {
 
       {analysis.status === 'ready' ? (
         <>
-          <Report analysis={analysis} onChanged={refresh} />
+          <Report analysis={analysis} plans={load.plans} onChanged={refresh} />
           {analysis.questions.length > 0 ? (
             <AnswersSection analysis={analysis} quote={load.rerun} onDone={refresh} />
           ) : null}

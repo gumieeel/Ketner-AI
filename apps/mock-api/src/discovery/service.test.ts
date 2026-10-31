@@ -3,7 +3,12 @@ import test from 'node:test';
 import type { GatewayRequest, GatewayStreamCallbacks } from '../ai/gateway-types.js';
 import { MemoryBudgetStore } from './budget.js';
 import { stagePolicy } from './model-policy.js';
-import { DiscoveryService, chargedCredits, type DiscoveryCaller } from './service.js';
+import {
+  DiscoveryService,
+  chargedCredits,
+  normalizePlanSteps,
+  type DiscoveryCaller,
+} from './service.js';
 import { MemoryDiscoveryStore } from './store.js';
 
 const SHORT = 'Веду интернет-магазин, много однотипных вопросов от покупателей.';
@@ -83,9 +88,22 @@ const DISCOVERY = JSON.stringify({
   ],
 });
 
+const PLAN = JSON.stringify({
+  summary: 'Начните с черновиков в чате.',
+  steps: [
+    { id: 'a', title: 'Соберите вопросы', dependsOn: ['c'], doneWhen: 'Есть список' },
+    { id: 'b', title: 'Попробуйте в чате', dependsOn: ['a', 'a', 'b'], doneWhen: 'Есть черновик' },
+    { id: 'c', title: 'Сравните время', dependsOn: ['b', 'zz'], doneWhen: 'Есть замер' },
+  ],
+  risks: ['Ошибки в ответах'],
+  successCriteria: ['Ответ за минуту'],
+});
+
 interface Script {
   context?: string;
   discovery?: string;
+  plan?: string;
+  failPlan?: number;
   failDiscovery?: number;
   costUsd?: number;
   creditsUsd?: number;
@@ -94,6 +112,7 @@ interface Script {
 function fakeGateway(script: Script) {
   const requests: GatewayRequest[] = [];
   let discoveryFailures = script.failDiscovery ?? 0;
+  let planFailures = script.failPlan ?? 0;
   return {
     requests,
     gateway: {
@@ -105,10 +124,17 @@ function fakeGateway(script: Script) {
           callbacks.onError({ code: 'provider_error', message: 'Модель недоступна' });
           return;
         }
+        if (stage === 'plan' && planFailures > 0) {
+          planFailures -= 1;
+          callbacks.onError({ code: 'provider_error', message: 'Модель недоступна' });
+          return;
+        }
         const text =
           stage === 'context'
             ? (script.context ?? CONTEXT_WITH_QUESTIONS)
-            : (script.discovery ?? DISCOVERY);
+            : stage === 'plan'
+              ? (script.plan ?? PLAN)
+              : (script.discovery ?? DISCOVERY);
         callbacks.onDelta(text);
         callbacks.onDone({
           inputTokens: 100,
@@ -733,4 +759,205 @@ test('«Сохранить анализ» — только в аккаунте; 
     await store.count({ ownerId: user.userId, budgetDay: service.today(), mode: 'free' }),
     1,
   );
+});
+
+async function readyAnalysis(service: DiscoveryService, caller: DiscoveryCaller) {
+  const created = await create(service, caller);
+  if (!created.ok) throw new Error('анализ не создан');
+  await service.whenIdle();
+  await service.continue(caller, created.analysis.id, { answers: { q1: { value: 'В Excel' } } });
+  await service.whenIdle();
+  const view = await service.get(caller.userId, created.analysis.id);
+  const byTitle = (title: string) => view!.opportunities.find((item) => item.title === title)!.id;
+  return { id: created.analysis.id, view: view!, byTitle };
+}
+
+test('шаги плана: id по порядку, зависимости только на предыдущие, краткий план — не больше 5', () => {
+  const steps = normalizePlanSteps(JSON.parse(PLAN).steps, 'full');
+  assert.deepEqual(
+    steps.map((step) => [step.id, step.dependsOn, step.status]),
+    [
+      ['s1', [], 'todo'],
+      ['s2', ['s1'], 'todo'],
+      ['s3', ['s2'], 'todo'],
+    ],
+  );
+  const many = Array.from({ length: 9 }, (_, index) => ({
+    id: `x${index}`,
+    title: `Шаг ${index}`,
+    description: '',
+    dependsOn: [],
+    doneWhen: '',
+  }));
+  assert.equal(normalizePlanSteps(many, 'brief').length, 5);
+  assert.equal(normalizePlanSteps(many, 'full').length, 9);
+});
+
+test('бесплатный анализ: один краткий план бесплатно из резерва, повтор — без модели, другой — за кредиты с согласием', async () => {
+  const { service, budget, requests } = setup({ balanceUsd: 1 });
+  const visitor = guest();
+  const { id, view, byTitle } = await readyAnalysis(service, visitor);
+  assert.equal(service.planOffer(view.analysis, visitor).free.available, true);
+
+  // Неподдерживаемой возможности план не составляется.
+  const unsupported = await service.createPlan({
+    caller: visitor,
+    analysisId: id,
+    opportunityId: byTitle('Автоответы в почте'),
+  });
+  assert.equal(unsupported.ok, false);
+  if (!unsupported.ok) assert.equal(unsupported.code, 'opportunity_not_supported');
+
+  const drafts = byTitle('Черновики ответов');
+  const calls = requests.length;
+  const created = await service.createPlan({
+    caller: visitor,
+    analysisId: id,
+    opportunityId: drafts,
+  });
+  assert.equal(created.ok && created.created, true);
+  await service.whenIdle();
+  assert.equal(requests.length, calls + 1);
+  const call = requests.at(-1)!;
+  assert.equal(call.task?.billing, 'sponsored');
+  assert.equal(call.modelId, 'ketner-mini');
+  assert.equal(call.task?.maxOutputTokens, 2000, 'краткий план');
+  // План учитывает ответы пользователя и что нужно для возможности.
+  assert.match(call.messages[0].content, /В Excel/);
+  assert.match(call.messages[0].content, /Черновики ответов/);
+
+  if (!created.ok) return;
+  const plan = await service.getPlan(visitor.userId, created.plan.id);
+  assert.equal(plan?.status, 'ready');
+  assert.equal(plan?.kind, 'brief');
+  assert.deepEqual(
+    plan?.steps.map((step) => step.id),
+    ['s1', 's2', 's3'],
+  );
+  assert.equal(plan?.run.creditsUsd, 0);
+  // Резерв плана, взятый при создании анализа, закрыт по факту.
+  const reservation = (await budget.forAnalysis(id)).find((item) => item.stage === 'plan');
+  assert.equal(reservation?.status, 'settled');
+
+  // Повторный запрос к той же возможности — тот же план, модель не вызывается.
+  const again = await service.createPlan({
+    caller: visitor,
+    analysisId: id,
+    opportunityId: drafts,
+  });
+  assert.equal(again.ok && !again.created && again.plan.id === created.plan.id, true);
+  assert.equal(requests.length, calls + 1);
+
+  // Другая возможность: бесплатный план уже использован — гостю вход.
+  const script = byTitle('Свой скрипт через API');
+  const asGuest = await service.createPlan({
+    caller: visitor,
+    analysisId: id,
+    opportunityId: script,
+  });
+  assert.equal(asGuest.ok, false);
+  if (!asGuest.ok) assert.equal(asGuest.code, 'login_required');
+
+  // В аккаунте — без согласия только цена; с согласием — полный план MiMo-V2.6 Pro за кредиты.
+  const user = account('user-planner');
+  await service.claimGuest(user.userId, visitor.userId, id);
+  const after = await service.get(user.userId, id);
+  const offer = service.planOffer(after!.analysis, user);
+  assert.equal(offer.free.available, false);
+  assert.equal(offer.paid.model, 'MiMo-V2.6 Pro');
+  const unconfirmed = await service.createPlan({
+    caller: user,
+    analysisId: id,
+    opportunityId: script,
+  });
+  assert.equal(unconfirmed.ok, false);
+  if (!unconfirmed.ok) {
+    assert.equal(unconfirmed.code, 'confirmation_required');
+    assert.equal(unconfirmed.details?.maxCredits, offer.paid.maxCredits);
+  }
+  assert.equal(requests.length, calls + 1);
+  const paid = await service.createPlan({
+    caller: user,
+    analysisId: id,
+    opportunityId: script,
+    confirm: true,
+  });
+  assert.equal(paid.ok && paid.created, true);
+  await service.whenIdle();
+  assert.equal(requests.at(-1)?.task?.billing, 'user');
+  assert.equal(requests.at(-1)?.modelId, 'ketner-pro');
+  if (paid.ok) {
+    const full = await service.getPlan(user.userId, paid.plan.id);
+    assert.equal(full?.kind, 'full');
+    assert.equal(full?.run.creditsUsd, 0.004);
+  }
+  assert.equal((await service.plansOf(user.userId, id)).length, 2);
+});
+
+test('статус шага плана сохраняется; чужой план и чужой шаг недоступны', async () => {
+  const { service } = setup();
+  const visitor = guest();
+  const { id, byTitle } = await readyAnalysis(service, visitor);
+  const created = await service.createPlan({
+    caller: visitor,
+    analysisId: id,
+    opportunityId: byTitle('Черновики ответов'),
+  });
+  if (!created.ok) return assert.fail('план не создан');
+  await service.whenIdle();
+
+  const done = await service.updatePlanStep(visitor, created.plan.id, 's1', 'done');
+  assert.equal(done.ok, true);
+  const reloaded = await service.getPlan(visitor.userId, created.plan.id);
+  assert.equal(reloaded?.steps[0].status, 'done');
+  assert.ok(reloaded?.steps[0].updatedAt);
+  assert.equal(reloaded?.steps[1].status, 'todo');
+
+  const stranger = guest();
+  assert.equal(await service.getPlan(stranger.userId, created.plan.id), null);
+  const foreign = await service.updatePlanStep(stranger, created.plan.id, 's1', 'todo');
+  assert.equal(foreign.ok, false);
+  if (!foreign.ok) assert.equal(foreign.status, 404);
+  const unknown = await service.updatePlanStep(visitor, created.plan.id, 's9', 'done');
+  assert.equal(unknown.ok, false);
+});
+
+test('план упал: причина, бесплатный повтор с новым резервом; повторный поиск возможностей заменяет планы', async () => {
+  const { service, budget, requests } = setup({ balanceUsd: 1, script: { failPlan: 1 } });
+  const user = account('user-plan-fail');
+  const { id, byTitle } = await readyAnalysis(service, user);
+  const created = await service.createPlan({
+    caller: user,
+    analysisId: id,
+    opportunityId: byTitle('Черновики ответов'),
+  });
+  if (!created.ok) return assert.fail('план не создан');
+  await service.whenIdle();
+  const failed = await service.getPlan(user.userId, created.plan.id);
+  assert.equal(failed?.status, 'failed');
+  assert.equal(failed?.run.error?.code, 'provider_error');
+  assert.deepEqual(service.planRetryQuote(failed!, user, 'ru'), { sponsored: true });
+
+  const retried = await service.retryPlan(user, created.plan.id);
+  assert.equal(retried.ok, true);
+  await service.whenIdle();
+  assert.equal((await service.getPlan(user.userId, created.plan.id))?.status, 'ready');
+  assert.equal(requests.at(-1)?.task?.id, `${created.plan.id}:plan:2`);
+  assert.equal(requests.at(-1)?.task?.billing, 'sponsored');
+  assert.ok(
+    (await budget.forAnalysis(id)).some((item) => item.id === `${created.plan.id}:plan:2`),
+    'новый резерв под повтор',
+  );
+
+  // Повторный поиск возможностей заменяет возможности, а с ними и их планы.
+  const rerun = await service.continue(user, id, {
+    answers: { q1: { value: 'В 1С' } },
+    confirm: true,
+  });
+  assert.equal(rerun.ok && rerun.rerun, true);
+  await service.whenIdle();
+  assert.deepEqual(await service.plansOf(user.userId, id), []);
+  // Бесплатный план этого анализа уже использован: следующий — за кредиты.
+  const view = await service.get(user.userId, id);
+  assert.equal(service.planOffer(view!.analysis, user).free.available, false);
 });

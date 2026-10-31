@@ -19,6 +19,7 @@ import {
   contextSystemPrompt,
   discoverySystemPrompt,
   PAYLOAD_LIMITS,
+  planSystemPrompt,
   REPAIR_ECHO_CHARS,
 } from './prompts.js';
 
@@ -46,11 +47,6 @@ const EFFORT: Readonly<Record<AnalysisMode, ReasoningEffort>> = {
 
 /** Попыток на этап: первая и один повтор при ответе, не прошедшем схему. */
 export const STAGE_ATTEMPTS = 2;
-
-/** Полезная нагрузка плана (этап 5): контекст, ответы, выбранная возможность. */
-const PLAN_PAYLOAD_CHARS = 10_000;
-/** Системный промпт плана ещё не написан (этап 5): запас по длине. */
-const PLAN_SYSTEM_CHARS = 5_000;
 
 /**
  * Токенов на символ — с запасом: кириллица ≈ 2.5 символа на токен, латиница ≈ 4. Для потолка берём
@@ -80,13 +76,14 @@ export interface StagePolicy {
 function systemChars(stage: StageName, language: Language): number {
   if (stage === 'context') return contextSystemPrompt(language).length;
   if (stage === 'discovery') return discoverySystemPrompt(language).length;
-  return PLAN_SYSTEM_CHARS;
+  // Бесплатный план — краткий, за кредиты — полный (промпт чуть длиннее, считаем по нему).
+  return planSystemPrompt(language, 'full').length;
 }
 
 function payloadChars(stage: StageName): number {
   if (stage === 'context') return PAYLOAD_LIMITS.context;
   if (stage === 'discovery') return PAYLOAD_LIMITS.discovery;
-  return PLAN_PAYLOAD_CHARS;
+  return PAYLOAD_LIMITS.plan;
 }
 
 function priceUsd(

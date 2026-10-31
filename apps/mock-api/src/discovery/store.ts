@@ -7,7 +7,7 @@
  */
 
 import type { SqlRunner } from '../code/postgres-driver.js';
-import type { Analysis, Opportunity } from './types.js';
+import type { Analysis, Opportunity, Plan } from './types.js';
 
 export interface AnalysisCountFilter {
   ownerId?: string;
@@ -34,6 +34,12 @@ export interface DiscoveryStore {
    * суточным лимитам (`count` её учитывает). Чужой или уже удалённый — false.
    */
   remove(ownerId: string, id: string, at: string): Promise<boolean>;
+  /** Создать план; если план этой возможности уже есть — вернуть его (`duplicate`). */
+  createPlan(plan: Plan): Promise<{ plan: Plan; duplicate: boolean } | null>;
+  getPlan(ownerId: string, planId: string): Promise<Plan | null>;
+  plans(ownerId: string, analysisId: string): Promise<Plan[]>;
+  /** Записать, только если версия — `expectedVersion`; иначе null. */
+  updatePlan(plan: Plan, expectedVersion: number): Promise<Plan | null>;
 }
 
 const clone = <T>(value: T): T => structuredClone(value);
@@ -41,6 +47,53 @@ const clone = <T>(value: T): T => structuredClone(value);
 export class MemoryDiscoveryStore implements DiscoveryStore {
   private readonly analyses = new Map<string, Analysis>();
   private readonly deleted = new Set<string>();
+  private readonly planMap = new Map<string, Plan>();
+
+  /** Как ON DELETE CASCADE в Postgres: планы исчезнувших возможностей удаляются. */
+  private dropOrphanPlans(analysisId: string): void {
+    const alive = new Set((this.opportunityMap.get(analysisId) ?? []).map((item) => item.id));
+    for (const [id, plan] of this.planMap) {
+      if (plan.analysisId === analysisId && !alive.has(plan.opportunityId)) this.planMap.delete(id);
+    }
+  }
+
+  async createPlan(plan: Plan) {
+    const analysis = this.analyses.get(plan.analysisId);
+    const opportunity = (this.opportunityMap.get(plan.analysisId) ?? []).find(
+      (item) => item.id === plan.opportunityId,
+    );
+    if (!analysis || analysis.ownerId !== plan.ownerId || this.deleted.has(analysis.id))
+      return null;
+    if (!opportunity) return null;
+    const existing = [...this.planMap.values()].find(
+      (item) => item.opportunityId === plan.opportunityId,
+    );
+    if (existing) return { plan: clone(existing), duplicate: true };
+    this.planMap.set(plan.id, clone(plan));
+    return { plan: clone(plan), duplicate: false };
+  }
+
+  async getPlan(ownerId: string, planId: string) {
+    const found = this.planMap.get(planId);
+    return found && found.ownerId === ownerId ? clone(found) : null;
+  }
+
+  async plans(ownerId: string, analysisId: string) {
+    return [...this.planMap.values()]
+      .filter((item) => item.ownerId === ownerId && item.analysisId === analysisId)
+      .sort((a, b) => a.createdAt.localeCompare(b.createdAt))
+      .map(clone);
+  }
+
+  async updatePlan(plan: Plan, expectedVersion: number) {
+    const current = this.planMap.get(plan.id);
+    if (!current || current.ownerId !== plan.ownerId || current.version !== expectedVersion) {
+      return null;
+    }
+    const next = { ...clone(plan), version: expectedVersion + 1 };
+    this.planMap.set(plan.id, next);
+    return clone(next);
+  }
   private readonly opportunityMap = new Map<string, Opportunity[]>();
 
   async create(analysis: Analysis) {
@@ -87,6 +140,7 @@ export class MemoryDiscoveryStore implements DiscoveryStore {
     const owner = this.analyses.get(analysisId);
     if (!owner || owner.ownerId !== ownerId) return;
     this.opportunityMap.set(analysisId, clone(items));
+    this.dropOrphanPlans(analysisId);
   }
 
   async opportunities(ownerId: string, analysisId: string) {
@@ -122,6 +176,7 @@ export class MemoryDiscoveryStore implements DiscoveryStore {
       version: found.version + 1,
     });
     this.opportunityMap.delete(id);
+    this.dropOrphanPlans(id);
     return true;
   }
 
@@ -136,6 +191,9 @@ export class MemoryDiscoveryStore implements DiscoveryStore {
       guest: false,
       version: found.version + 1,
     });
+    for (const [planId, plan] of this.planMap) {
+      if (plan.analysisId === analysisId) this.planMap.set(planId, { ...plan, ownerId: userId });
+    }
     const items = this.opportunityMap.get(analysisId);
     if (items)
       this.opportunityMap.set(
@@ -250,6 +308,59 @@ function toOpportunity(row: OpportunityRow): Opportunity {
     feasibilityStatus: row.feasibility_status,
     priority: Number(row.priority),
     createdAt: iso(row.created_at),
+  };
+}
+
+interface PlanRow {
+  id: string;
+  analysis_id: string;
+  opportunity_id: string;
+  user_id: string;
+  kind: Plan['kind'];
+  mode: Plan['mode'];
+  sponsored: boolean;
+  status: Plan['status'];
+  data: unknown;
+  version: number | string;
+  created_at: string | Date;
+  updated_at: string | Date;
+}
+
+type PlanData = Pick<
+  Plan,
+  'opportunityTitle' | 'summary' | 'steps' | 'risks' | 'successCriteria' | 'run'
+>;
+
+const PLAN_COLUMNS = `id, analysis_id, opportunity_id, user_id, kind, mode, sponsored, status, data,
+  version, created_at, updated_at`;
+
+function planData(plan: Plan): string {
+  const data: PlanData = {
+    opportunityTitle: plan.opportunityTitle,
+    summary: plan.summary,
+    steps: plan.steps,
+    risks: plan.risks,
+    successCriteria: plan.successCriteria,
+    run: plan.run,
+  };
+  return JSON.stringify(data);
+}
+
+function toPlan(row: PlanRow): Plan {
+  const data = json<PlanData>(row.data, {} as PlanData);
+  return {
+    ...data,
+    id: row.id,
+    analysisId: row.analysis_id,
+    opportunityId: row.opportunity_id,
+    ownerId: row.user_id,
+    kind: row.kind,
+    mode: row.mode,
+    sponsored: row.sponsored,
+    status: row.status,
+    version: Number(row.version),
+    createdAt: iso(row.created_at),
+    updatedAt: iso(row.updated_at),
   };
 }
 
@@ -420,6 +531,10 @@ export class PostgresDiscoveryStore implements DiscoveryStore {
         `UPDATE discovery_opportunities SET user_id = $1 WHERE analysis_id = $3 AND user_id = $2`,
         [userId, guestId, analysisId],
       );
+      await this.db.query(
+        `UPDATE discovery_plans SET user_id = $1 WHERE analysis_id = $3 AND user_id = $2`,
+        [userId, guestId, analysisId],
+      );
       return true;
     }
     const own = await this.db.query(
@@ -440,5 +555,75 @@ export class PostgresDiscoveryStore implements DiscoveryStore {
     if (!rows[0]) return false;
     await this.db.query(`DELETE FROM discovery_opportunities WHERE analysis_id = $1`, [id]);
     return true;
+  }
+
+  async createPlan(plan: Plan) {
+    // Анализ и возможность — этого владельца и не удалены; иначе null.
+    const rows = await this.db.query<PlanRow>(
+      `INSERT INTO discovery_plans (${PLAN_COLUMNS})
+       SELECT $1, $2, $3, $4, $5, $6, $7, $8, $9::text::jsonb, $10, $11::timestamptz, $12::timestamptz
+       WHERE EXISTS (
+         SELECT 1 FROM discovery_opportunities o JOIN discovery_analyses a ON a.id = o.analysis_id
+         WHERE o.id = $3 AND o.analysis_id = $2 AND a.user_id = $4 AND a.deleted_at IS NULL
+       )
+       ON CONFLICT (opportunity_id) DO NOTHING
+       RETURNING ${PLAN_COLUMNS}`,
+      [
+        plan.id,
+        plan.analysisId,
+        plan.opportunityId,
+        plan.ownerId,
+        plan.kind,
+        plan.mode,
+        plan.sponsored,
+        plan.status,
+        planData(plan),
+        plan.version,
+        plan.createdAt,
+        plan.updatedAt,
+      ],
+    );
+    if (rows[0]) return { plan: toPlan(rows[0]), duplicate: false };
+    const existing = await this.db.query<PlanRow>(
+      `SELECT ${PLAN_COLUMNS} FROM discovery_plans WHERE opportunity_id = $1 AND user_id = $2`,
+      [plan.opportunityId, plan.ownerId],
+    );
+    return existing[0] ? { plan: toPlan(existing[0]), duplicate: true } : null;
+  }
+
+  async getPlan(ownerId: string, planId: string) {
+    const rows = await this.db.query<PlanRow>(
+      `SELECT ${PLAN_COLUMNS} FROM discovery_plans WHERE id = $1 AND user_id = $2`,
+      [planId, ownerId],
+    );
+    return rows[0] ? toPlan(rows[0]) : null;
+  }
+
+  async plans(ownerId: string, analysisId: string) {
+    const rows = await this.db.query<PlanRow>(
+      `SELECT ${PLAN_COLUMNS} FROM discovery_plans WHERE analysis_id = $1 AND user_id = $2
+       ORDER BY created_at`,
+      [analysisId, ownerId],
+    );
+    return rows.map(toPlan);
+  }
+
+  async updatePlan(plan: Plan, expectedVersion: number) {
+    const rows = await this.db.query<PlanRow>(
+      `UPDATE discovery_plans SET status = $3, data = $4::text::jsonb, sponsored = $5,
+         updated_at = $6::timestamptz, version = version + 1
+       WHERE id = $1 AND user_id = $2 AND version = $7
+       RETURNING ${PLAN_COLUMNS}`,
+      [
+        plan.id,
+        plan.ownerId,
+        plan.status,
+        planData(plan),
+        plan.sponsored,
+        plan.updatedAt,
+        expectedVersion,
+      ],
+    );
+    return rows[0] ? toPlan(rows[0]) : null;
   }
 }

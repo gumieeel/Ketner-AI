@@ -124,6 +124,27 @@ export const discoveryOutputSchema = z.object({
 export type OpportunityOutput = z.infer<typeof opportunityOutputSchema>;
 export type DiscoveryOutput = z.infer<typeof discoveryOutputSchema>;
 
+// ─── Этап 3: план внедрения (Plan Generator) ──────────────────────────────────
+
+export const planStepOutputSchema = z.object({
+  id: requiredText(8),
+  title: requiredText(120),
+  description: text(600).default(''),
+  /** id шагов, которые нужно сделать раньше; сервер оставляет только ссылки на предыдущие шаги. */
+  dependsOn: list(text(8), 6),
+  /** Критерий готовности шага. */
+  doneWhen: text(220).default(''),
+});
+
+export const planOutputSchema = z.object({
+  summary: requiredText(400),
+  steps: list(planStepOutputSchema, 10).refine((steps) => steps.length > 0, 'at least one step'),
+  risks: list(requiredText(200), 4),
+  successCriteria: list(requiredText(200), 4),
+});
+
+export type PlanOutput = z.infer<typeof planOutputSchema>;
+
 // ─── Тела запросов API ────────────────────────────────────────────────────────
 
 /** Совпадает с лимитом сайта (apps/web/src/features/discovery/draft.ts). */
@@ -162,6 +183,10 @@ export const answersBodySchema = z.object({
 
 /** Черновик ответов: сохраняется без запуска модели, чтобы прогресс пережил перезагрузку. */
 export const answersDraftBodySchema = z.object({ answers: answersRecord });
+
+export const PLAN_STEP_STATUSES = ['todo', 'in_progress', 'done', 'skipped'] as const;
+
+export const planStepBodySchema = z.object({ status: z.enum(PLAN_STEP_STATUSES) });
 
 export type CreateAnalysisBody = z.infer<typeof createAnalysisBodySchema>;
 export type AnswersBody = z.infer<typeof answersBodySchema>;

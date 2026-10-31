@@ -1,6 +1,13 @@
 import { fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { AnalysisView, Offer, Question } from '@/features/discovery/api';
+import type {
+  AnalysisView,
+  Offer,
+  PlanStepStatus,
+  PlansSummary,
+  PlanView,
+  Question,
+} from '@/features/discovery/api';
 import { readDraft, saveDraft } from '@/features/discovery/draft';
 import { setSiteFeatures } from '@/lib/features';
 import { renderRoute, resetAuth, resetPreferences } from './test-utils';
@@ -139,6 +146,69 @@ const READY_PATCH: Partial<AnalysisView> = {
   ],
 };
 
+function plan(patch: Partial<PlanView> = {}): PlanView {
+  return {
+    id: 'p1',
+    analysisId: 'a1',
+    opportunityId: 'o1',
+    opportunityTitle: 'Черновики ответов',
+    kind: 'brief',
+    status: 'ready',
+    summary: 'Начните с черновиков в чате.',
+    steps: [
+      {
+        id: 's1',
+        title: 'Соберите вопросы',
+        description: 'Десять частых вопросов',
+        dependsOn: [],
+        doneWhen: 'Есть список',
+        status: 'todo',
+        updatedAt: null,
+      },
+      {
+        id: 's2',
+        title: 'Попробуйте в чате',
+        description: '',
+        dependsOn: ['s1'],
+        doneWhen: 'Есть черновик',
+        status: 'todo',
+        updatedAt: null,
+      },
+      {
+        id: 's3',
+        title: 'Сравните время',
+        description: '',
+        dependsOn: ['s1', 's2'],
+        doneWhen: '',
+        status: 'todo',
+        updatedAt: null,
+      },
+    ],
+    risks: ['Ошибки в ответах'],
+    successCriteria: ['Ответ за минуту'],
+    model: { id: 'ketner-mini', name: 'GPT-6 Luna' },
+    error: null,
+    cost: { chargedCredits: 0, sponsored: true },
+    createdAt: '2026-10-30T11:00:00.000Z',
+    updatedAt: '2026-10-30T11:00:00.000Z',
+    ...patch,
+  };
+}
+
+const FREE_PLANS: PlansSummary = {
+  offer: {
+    free: { available: true, model: 'GPT-6 Luna' },
+    paid: {
+      model: 'MiMo-V2.6 Pro',
+      typicalCredits: 5,
+      maxCredits: 15,
+      loginRequired: true,
+      confirmationRequired: false,
+    },
+  },
+  items: [],
+};
+
 const FREE_OFFER: Offer = {
   free: { available: true, model: 'GPT-6 Luna' },
   paid: { model: 'MiMo-V2.6 Pro', typicalCredits: 9, maxCredits: 27, loginRequired: true },
@@ -165,9 +235,13 @@ function installDiscoveryApi(options: {
   rerun?: unknown;
   retry?: unknown;
   createError?: { status: number; code: string; message: string; details?: unknown };
+  plans?: PlansSummary | null;
 }) {
   const calls: Call[] = [];
-  const state = { view: options.view ?? null };
+  const state: { view: AnalysisView | null; plan: PlanView | null } = {
+    view: options.view ?? null,
+    plan: null,
+  };
   const json = (status: number, body: unknown) =>
     new Response(JSON.stringify(body), {
       status,
@@ -219,6 +293,21 @@ function installDiscoveryApi(options: {
         analysis: view,
         rerun: options.rerun ?? null,
         retry: options.retry ?? null,
+        plans: options.plans
+          ? {
+              ...options.plans,
+              items: state.plan
+                ? [
+                    {
+                      id: state.plan.id,
+                      opportunityId: state.plan.opportunityId,
+                      kind: state.plan.kind,
+                      status: state.plan.status,
+                    },
+                  ]
+                : options.plans.items,
+            }
+          : null,
       });
     }
     if (path === `/${view.id}` && method === 'PATCH') {
@@ -228,6 +317,29 @@ function installDiscoveryApi(options: {
     if (path === `/${view.id}` && method === 'DELETE') {
       state.view = null;
       return new Response(null, { status: 204 });
+    }
+    const planMatch = path.match(/^\/[^/]+\/opportunities\/([^/]+)\/plan$/);
+    if (planMatch && method === 'POST') {
+      state.plan = plan({
+        opportunityId: planMatch[1],
+        kind: body?.confirm ? 'full' : 'brief',
+      });
+      return json(202, { plan: state.plan });
+    }
+    const planPath = path.match(/^\/[^/]+\/plans\/([^/]+)(\/steps\/([^/]+))?$/);
+    if (planPath) {
+      if (!state.plan || state.plan.id !== planPath[1]) {
+        return json(404, { error: { code: 'plan_not_found', message: '' } });
+      }
+      if (planPath[3] && method === 'PATCH') {
+        state.plan = {
+          ...state.plan,
+          steps: state.plan.steps.map((step) =>
+            step.id === planPath[3] ? { ...step, status: body?.status as PlanStepStatus } : step,
+          ),
+        };
+      }
+      return json(200, { plan: state.plan, retry: null });
     }
     if (path.endsWith('/answers') && method === 'PUT') {
       state.view = { ...view, answers: body?.answers as AnalysisView['answers'] };
@@ -486,6 +598,96 @@ describe('анализ задачи: начало, вопросы, резуль�
     expect(
       api.calls.some((call) => call.method === 'DELETE' && call.path === '/api/analyses/a1'),
     ).toBe(true);
+  });
+
+  it('план: бесплатный краткий для одной возможности, у неподдерживаемой — нет; шаги со статусами', async () => {
+    const api = installDiscoveryApi({ view: analysis(READY_PATCH), plans: FREE_PLANS });
+    renderRoute('/analyses/a1');
+    await screen.findByRole('heading', { name: 'Где ИИ поможет' });
+    const supported = screen.getByRole('heading', { name: 'Черновики ответов' }).closest('li')!;
+    const unsupported = screen.getByRole('heading', { name: 'Автоответы в почте' }).closest('li')!;
+    expect(within(unsupported).queryByRole('button', { name: /план/i })).toBeNull();
+    expect(
+      within(supported).getByText('Бесплатно для одной возможности этого анализа · GPT-6 Luna'),
+    ).toBeVisible();
+    fireEvent.click(
+      within(supported).getByRole('button', { name: 'Составить краткий план — бесплатно' }),
+    );
+
+    expect(
+      await screen.findByRole('heading', { level: 1, name: 'План: Черновики ответов' }),
+    ).toBeVisible();
+    const create = api.calls.find((call) => call.path.endsWith('/opportunities/o1/plan'));
+    expect(create?.body).toEqual({});
+    expect(screen.getByText('Сделано 0 из 3')).toBeVisible();
+    expect(screen.getByText('Краткий план · бесплатно · GPT-6 Luna')).toBeVisible();
+    const third = screen.getByRole('heading', { name: /Сравните время/ }).closest('li')!;
+    expect(within(third).getByText('1, 2')).toBeVisible();
+
+    fireEvent.change(screen.getByRole('combobox', { name: 'Статус шага 1' }), {
+      target: { value: 'done' },
+    });
+    expect(await screen.findByText('Сделано 1 из 3')).toBeVisible();
+    await waitFor(() =>
+      expect(api.calls.find((call) => call.method === 'PATCH')).toMatchObject({
+        path: '/api/analyses/a1/plans/p1/steps/s1',
+        body: { status: 'done' },
+      }),
+    );
+    // Пропущенный шаг не считается в прогрессе.
+    fireEvent.change(screen.getByRole('combobox', { name: 'Статус шага 3' }), {
+      target: { value: 'skipped' },
+    });
+    expect(await screen.findByText('Сделано 1 из 2')).toBeVisible();
+  });
+
+  it('бесплатный план использован: следующий — за кредиты с ценой и согласием; гостю — вход', async () => {
+    const paidPlans: PlansSummary = {
+      offer: {
+        free: { available: false, usedFor: 'o9' },
+        paid: { ...FREE_PLANS.offer.paid, loginRequired: false },
+      },
+      items: [],
+    };
+    const api = installDiscoveryApi({
+      view: analysis({ ...READY_PATCH, guest: false }),
+      plans: paidPlans,
+    });
+    const first = renderRoute('/analyses/a1');
+    await screen.findByRole('heading', { name: 'Где ИИ поможет' });
+    const card = screen.getByRole('heading', { name: 'Черновики ответов' }).closest('li')!;
+    expect(
+      within(card).getByText('Подробный план: ≈ 5, не больше 15 кредитов · MiMo-V2.6 Pro'),
+    ).toBeVisible();
+    fireEvent.click(within(card).getByRole('button', { name: 'Составить план за кредиты' }));
+    await screen.findByRole('heading', { level: 1, name: 'План: Черновики ответов' });
+    expect(api.calls.find((call) => call.path.endsWith('/plan'))?.body).toEqual({ confirm: true });
+    first.unmount();
+
+    installDiscoveryApi({
+      view: analysis(READY_PATCH),
+      plans: { ...paidPlans, offer: { ...paidPlans.offer, paid: FREE_PLANS.offer.paid } },
+    });
+    renderRoute('/analyses/a1');
+    await screen.findByRole('heading', { name: 'Где ИИ поможет' });
+    expect(
+      screen.getAllByRole('link', { name: 'Войти и составить план за кредиты' })[0],
+    ).toHaveAttribute('href', '/login?redirect=%2Fanalyses%2Fa1');
+  });
+
+  it('составленный план открывается из отчёта', async () => {
+    installDiscoveryApi({
+      view: analysis(READY_PATCH),
+      plans: {
+        ...FREE_PLANS,
+        items: [{ id: 'p7', opportunityId: 'o1', kind: 'brief', status: 'ready' }],
+      },
+    });
+    renderRoute('/analyses/a1');
+    expect(await screen.findByRole('link', { name: 'Открыть план' })).toHaveAttribute(
+      'href',
+      '/analyses/a1/plans/p7',
+    );
   });
 
   it('гость меняет ответы после отчёта — вход, а не списание', async () => {

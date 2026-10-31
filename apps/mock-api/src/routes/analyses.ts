@@ -11,6 +11,10 @@
  *   POST /api/analyses/:id/continue   ответы на вопросы и поиск возможностей; после отчёта —
  *                                     повторный поиск, только если ответы изменились (за кредиты)
  *   POST /api/analyses/:id/retry      повторить упавший этап
+ *   POST /api/analyses/:id/opportunities/:oppId/plan   план внедрения возможности
+ *   GET  /api/analyses/:id/plans/:planId               план
+ *   PATCH /api/analyses/:id/plans/:planId/steps/:stepId статус шага `{ status }`
+ *   POST /api/analyses/:id/plans/:planId/retry         повторить упавший план
  *
  * Доступно гостю с `X-Guest-Id` (весь анализ и отчёт, решение владельца) и вошедшему пользователю.
  * Чужой анализ — 404. Без включённого DISCOVERY_ENABLED маршрутов нет (404).
@@ -36,9 +40,11 @@ import {
   answersBodySchema,
   answersDraftBodySchema,
   createAnalysisBodySchema,
+  planStepBodySchema,
 } from '../discovery/schemas.js';
 import { chargedCredits, DiscoveryService, type DiscoveryCaller } from '../discovery/service.js';
-import type { Analysis, Opportunity } from '../discovery/types.js';
+import type { Analysis, Opportunity, Plan } from '../discovery/types.js';
+import { CREDITS_PER_USD } from '../services/entitlement.js';
 
 export interface AnalysesRouterDeps {
   ai: AiConfig;
@@ -98,6 +104,30 @@ export function publicAnalysis(analysis: Analysis, opportunities: Opportunity[] 
     },
     createdAt: analysis.createdAt,
     updatedAt: analysis.updatedAt,
+  };
+}
+
+/** Публичный вид плана: без id владельца и служебных полей запуска. */
+export function publicPlan(plan: Plan) {
+  return {
+    id: plan.id,
+    analysisId: plan.analysisId,
+    opportunityId: plan.opportunityId,
+    opportunityTitle: plan.opportunityTitle,
+    kind: plan.kind,
+    status: plan.status,
+    summary: plan.summary,
+    steps: plan.steps,
+    risks: plan.risks,
+    successCriteria: plan.successCriteria,
+    model: plan.run.model ?? null,
+    error: plan.run.error ?? null,
+    cost: {
+      chargedCredits: Math.round(plan.run.creditsUsd * CREDITS_PER_USD * 10) / 10,
+      sponsored: plan.sponsored,
+    },
+    createdAt: plan.createdAt,
+    updatedAt: plan.updatedAt,
   };
 }
 
@@ -370,6 +400,19 @@ export function createAnalysesRouter(deps: AnalysesRouterDeps): Router {
           : null,
       // Цена повтора упавшего этапа.
       retry: ready.retryQuote(found.analysis, resolved.caller),
+      // Планы внедрения: что уже составлено и что доступно (бесплатный краткий, цена полного).
+      plans:
+        found.analysis.status === 'ready'
+          ? {
+              offer: ready.planOffer(found.analysis, resolved.caller),
+              items: (await ready.plansOf(resolved.caller.userId, id)).map((plan) => ({
+                id: plan.id,
+                opportunityId: plan.opportunityId,
+                kind: plan.kind,
+                status: plan.status,
+              })),
+            }
+          : null,
     });
   });
 
@@ -495,6 +538,127 @@ export function createAnalysesRouter(deps: AnalysesRouterDeps): Router {
       return;
     }
     response.status(202).json({ analysis: publicAnalysis(result.analysis) });
+  });
+
+  const limited = (response: Response, userId: string): boolean => {
+    if (!actionLimiter.hit(userId)) return false;
+    sendError(
+      response,
+      429,
+      'too_many_requests',
+      'Слишком много запросов подряд. Подождите минуту.',
+    );
+    return true;
+  };
+
+  router.post('/:id/opportunities/:oppId/plan', async (request: Request, response: Response) => {
+    const ready = withService(response);
+    if (!ready) return;
+    const resolved = resolveCaller(request, response);
+    if (!resolved) return;
+    if (limited(response, resolved.caller.userId)) return;
+    const confirm = (request.body as { confirm?: unknown } | undefined)?.confirm === true;
+    const result = await ready.createPlan({
+      caller: resolved.caller,
+      analysisId: String(request.params.id),
+      opportunityId: String(request.params.oppId),
+      confirm,
+    });
+    if (!result.ok) {
+      sendServiceError(response, result);
+      return;
+    }
+    response.status(result.created ? 202 : 200).json({ plan: publicPlan(result.plan) });
+  });
+
+  /** План этого анализа и этого владельца; иначе 404. */
+  const ownPlan = async (
+    service: DiscoveryService,
+    request: Request,
+    response: Response,
+    userId: string,
+  ): Promise<Plan | null> => {
+    const plan = await service.getPlan(userId, String(request.params.planId));
+    if (!plan || plan.analysisId !== String(request.params.id)) {
+      sendError(response, 404, 'plan_not_found', 'План не найден');
+      return null;
+    }
+    return plan;
+  };
+
+  router.get('/:id/plans/:planId', async (request: Request, response: Response) => {
+    const ready = withService(response);
+    if (!ready) return;
+    const resolved = resolveCaller(request, response);
+    if (!resolved) return;
+    if (!resolved.caller.guest)
+      await ready.claimGuest(
+        resolved.caller.userId,
+        readGuestId(request),
+        String(request.params.id),
+      );
+    const plan = await ownPlan(ready, request, response, resolved.caller.userId);
+    if (!plan) return;
+    response.json({
+      plan: publicPlan(plan),
+      retry: ready.planRetryQuote(plan, resolved.caller, languageOf(request)),
+    });
+  });
+
+  router.patch('/:id/plans/:planId/steps/:stepId', async (request: Request, response: Response) => {
+    const ready = withService(response);
+    if (!ready) return;
+    const resolved = resolveCaller(request, response);
+    if (!resolved) return;
+    if (draftLimiter.hit(resolved.caller.userId)) {
+      sendError(
+        response,
+        429,
+        'too_many_requests',
+        'Слишком много запросов подряд. Подождите минуту.',
+      );
+      return;
+    }
+    const parsed = planStepBodySchema.safeParse(request.body ?? {});
+    if (!parsed.success) {
+      sendError(
+        response,
+        400,
+        'validation_failed',
+        'Ожидается { status: todo | in_progress | done | skipped }.',
+      );
+      return;
+    }
+    const plan = await ownPlan(ready, request, response, resolved.caller.userId);
+    if (!plan) return;
+    const result = await ready.updatePlanStep(
+      resolved.caller,
+      plan.id,
+      String(request.params.stepId),
+      parsed.data.status,
+    );
+    if (!result.ok) {
+      sendServiceError(response, result);
+      return;
+    }
+    response.json({ plan: publicPlan(result.plan) });
+  });
+
+  router.post('/:id/plans/:planId/retry', async (request: Request, response: Response) => {
+    const ready = withService(response);
+    if (!ready) return;
+    const resolved = resolveCaller(request, response);
+    if (!resolved) return;
+    if (limited(response, resolved.caller.userId)) return;
+    const plan = await ownPlan(ready, request, response, resolved.caller.userId);
+    if (!plan) return;
+    const confirm = (request.body as { confirm?: unknown } | undefined)?.confirm === true;
+    const result = await ready.retryPlan(resolved.caller, plan.id, confirm);
+    if (!result.ok) {
+      sendServiceError(response, result);
+      return;
+    }
+    response.status(202).json({ plan: publicPlan(result.plan) });
   });
 
   return router;

@@ -4,7 +4,7 @@ import { runMigrations } from '../db/migrate.js';
 import { MIGRATIONS } from '../db/migration-list.js';
 import { openTestSql } from '../testing/sql.js';
 import { MemoryDiscoveryStore, PostgresDiscoveryStore, type DiscoveryStore } from './store.js';
-import type { Analysis, Opportunity } from './types.js';
+import type { Analysis, Opportunity, Plan } from './types.js';
 
 function analysis(overrides: Partial<Analysis> = {}): Analysis {
   const now = '2026-10-30T10:00:00.000Z';
@@ -139,6 +139,73 @@ async function storeContract(store: DiscoveryStore): Promise<void> {
   const list = await store.list('alice', 10);
   assert.ok(list.every((item) => item.ownerId === 'alice'));
 
+  // Планы: один на возможность, только владельца; шаги сохраняются с версией.
+  const plan = (overrides: Partial<Plan> = {}): Plan => ({
+    id: `p-${Math.random().toString(36).slice(2, 10)}`,
+    analysisId: 'k1',
+    opportunityId: 'o-k1-0',
+    ownerId: 'alice',
+    kind: 'brief',
+    mode: 'free',
+    sponsored: true,
+    status: 'generating',
+    opportunityTitle: 'Возможность 0',
+    summary: null,
+    steps: [],
+    risks: [],
+    successCriteria: [],
+    run: { status: 'pending', taskId: 'p:plan:1', costUsd: 0, creditsUsd: 0, attempts: 0 },
+    createdAt: '2026-10-30T11:00:00.000Z',
+    updatedAt: '2026-10-30T11:00:00.000Z',
+    version: 1,
+    ...overrides,
+  });
+  const firstPlan = await store.createPlan(plan({ id: 'p1' }));
+  assert.equal(firstPlan?.duplicate, false);
+  const samePlan = await store.createPlan(plan({ id: 'p2' }));
+  assert.equal(samePlan?.duplicate, true);
+  assert.equal(samePlan?.plan.id, 'p1');
+  assert.equal(await store.createPlan(plan({ id: 'p3', ownerId: 'bob' })), null, 'чужой анализ');
+  assert.equal(
+    await store.createPlan(plan({ id: 'p4', opportunityId: 'o-missing' })),
+    null,
+    'нет такой возможности',
+  );
+  assert.equal(await store.getPlan('bob', 'p1'), null);
+  const stored = (await store.getPlan('alice', 'p1')) as Plan;
+  const withSteps = await store.updatePlan(
+    {
+      ...stored,
+      status: 'ready',
+      steps: [
+        {
+          id: 's1',
+          title: 'Шаг',
+          description: '',
+          dependsOn: [],
+          doneWhen: '',
+          status: 'done',
+          updatedAt: '2026-10-30T12:00:00.000Z',
+        },
+      ],
+    },
+    stored.version,
+  );
+  assert.equal(withSteps?.steps[0].status, 'done');
+  assert.equal(await store.updatePlan({ ...stored, status: 'failed' }, stored.version), null);
+  assert.deepEqual(
+    (await store.plans('alice', 'k1')).map((item) => item.id),
+    ['p1'],
+  );
+  // Возможности заменены (повторный поиск) — план исчезнувшей возможности удаляется.
+  await store.setOpportunities('alice', 'k1', [opportunity('k1', 'alice', 1)]);
+  assert.deepEqual(await store.plans('alice', 'k1'), []);
+  await store.setOpportunities('alice', 'k1', [
+    opportunity('k1', 'alice', 0),
+    opportunity('k1', 'alice', 1),
+  ]);
+  assert.equal((await store.createPlan(plan({ id: 'p5' })))?.duplicate, false);
+
   // «Сохранить анализ» хранится вместе с записью.
   const current = (await store.get('alice', 'k1')) as Analysis;
   const saved = await store.update({ ...current, saved: true }, current.version);
@@ -153,6 +220,7 @@ async function storeContract(store: DiscoveryStore): Promise<void> {
   assert.equal(await store.get('alice', 'k1'), null);
   assert.ok((await store.list('alice', 10)).every((item) => item.id !== 'k1'));
   assert.deepEqual(await store.opportunities('alice', 'k1'), []);
+  assert.deepEqual(await store.plans('alice', 'k1'), [], 'планы удалённого анализа удалены');
   assert.equal(await store.update({ ...current, saved: false }, (saved?.version ?? 0) + 1), null);
   assert.equal(
     await store.count({ ownerId: 'alice', budgetDay: '2026-10-30', mode: 'free' }),

@@ -1,16 +1,18 @@
 import { useId, useState, type ReactNode } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { Badge, type BadgeTone } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { buttonClasses } from '@/components/ui/button-classes';
 import {
+  createPlan,
   setAnalysisSaved,
+  type PlansSummary,
   type AnalysisView,
   type FeasibilityItem,
   type FeasibilityStatus,
   type OpportunityView,
 } from '@/features/discovery/api';
-import { creditsText } from '@/features/discovery/format';
+import { creditsText, priceText } from '@/features/discovery/format';
 import { useTranslation, type TranslationKey } from '@/i18n';
 import { cn } from '@/lib/cn';
 import { ErrorNotice } from './error-notice';
@@ -32,9 +34,11 @@ const START_STEPS = 3;
  */
 export function Report({
   analysis,
+  plans,
   onChanged,
 }: {
   analysis: AnalysisView;
+  plans: PlansSummary | null;
   onChanged: () => Promise<void>;
 }) {
   const translator = useTranslation();
@@ -95,7 +99,15 @@ export function Report({
       ) : (
         <ul className="mt-3 flex flex-col gap-3">
           {opportunities.map((item) => (
-            <OpportunityCard key={item.id} item={item} />
+            <OpportunityCard
+              key={item.id}
+              item={item}
+              action={
+                item.feasibilityStatus === 'not_supported' || !plans ? null : (
+                  <PlanAction analysis={analysis} opportunity={item} plans={plans} />
+                )
+              }
+            />
           ))}
         </ul>
       )}
@@ -147,7 +159,7 @@ function SaveControl({
   );
 }
 
-function OpportunityCard({ item }: { item: OpportunityView }) {
+function OpportunityCard({ item, action }: { item: OpportunityView; action: ReactNode }) {
   const { t } = useTranslation();
   const [open, setOpen] = useState(false);
   const detailsId = useId();
@@ -187,6 +199,8 @@ function OpportunityCard({ item }: { item: OpportunityView }) {
           })}
         </p>
       ) : null}
+
+      {action}
 
       <button
         type="button"
@@ -246,6 +260,103 @@ function OpportunityCard({ item }: { item: OpportunityView }) {
         </dl>
       </div>
     </li>
+  );
+}
+
+/**
+ * План внедрения возможности: открыть составленный, бесплатный краткий (один на бесплатный
+ * анализ) или полный за кредиты с ценой до запуска. Нажатие на кнопку с ценой — согласие.
+ */
+function PlanAction({
+  analysis,
+  opportunity,
+  plans,
+}: {
+  analysis: AnalysisView;
+  opportunity: OpportunityView;
+  plans: PlansSummary;
+}) {
+  const translator = useTranslation();
+  const { t } = translator;
+  const navigate = useNavigate();
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<unknown>(null);
+  const existing = plans.items.find((plan) => plan.opportunityId === opportunity.id);
+  const base = `/analyses/${analysis.id}`;
+
+  if (existing) {
+    return (
+      <div className="mt-3">
+        <Link
+          to={`${base}/plans/${existing.id}`}
+          className={buttonClasses({ variant: 'secondary', size: 'sm' })}
+        >
+          {existing.status === 'generating'
+            ? t('analysis.plan.openGenerating')
+            : t('analysis.plan.open')}
+        </Link>
+      </div>
+    );
+  }
+
+  const { free, paid } = plans.offer;
+  const start = (confirm: boolean) => {
+    setBusy(true);
+    setError(null);
+    createPlan(analysis.id, opportunity.id, confirm)
+      .then((plan) => navigate(`${base}/plans/${plan.id}`))
+      .catch((caught: unknown) => {
+        setError(caught);
+        setBusy(false);
+      });
+  };
+
+  return (
+    <div className="mt-3 flex flex-col gap-2">
+      {free.available ? (
+        <>
+          <Button
+            size="sm"
+            className="self-start"
+            loading={busy}
+            disabled={busy}
+            onClick={() => start(false)}
+          >
+            {t('analysis.plan.makeFree')}
+          </Button>
+          <p className="text-[13px] text-subtle">
+            {t('analysis.plan.freeNote', { model: free.model })}
+          </p>
+        </>
+      ) : paid.loginRequired ? (
+        <Link
+          to={`/login?redirect=${encodeURIComponent(base)}`}
+          className={buttonClasses({ variant: 'outline', size: 'sm', className: 'self-start' })}
+        >
+          {t('analysis.plan.loginToMake')}
+        </Link>
+      ) : (
+        <>
+          <Button
+            variant="outline"
+            size="sm"
+            className="self-start"
+            loading={busy}
+            disabled={busy}
+            onClick={() => start(true)}
+          >
+            {t('analysis.plan.makePaid')}
+          </Button>
+          <p className="text-[13px] text-subtle">
+            {t('analysis.plan.paidNote', {
+              price: priceText(translator, paid.typicalCredits, paid.maxCredits),
+              model: paid.model,
+            })}
+          </p>
+        </>
+      )}
+      {error ? <ErrorNotice error={error} redirect={base} /> : null}
+    </div>
   );
 }
 

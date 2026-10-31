@@ -156,3 +156,45 @@ export function discoveryTemplate(language: Language): string {
     ],
   });
 }
+
+export function planTemplate(language: Language): string {
+  const en = language === 'en';
+  return JSON.stringify({
+    summary: en
+      ? 'Demo plan without a model: the steps below show the plan format.'
+      : 'Демо-план без модели: шаги ниже показывают формат плана.',
+    steps: [
+      {
+        id: 's1',
+        title: en ? 'Collect examples' : 'Соберите примеры',
+        description: en
+          ? 'Pick 3–5 typical cases from the last week.'
+          : 'Выберите 3–5 типичных случаев за последнюю неделю.',
+        dependsOn: [],
+        doneWhen: en ? 'Examples are in one document.' : 'Примеры собраны в одном документе.',
+      },
+      {
+        id: 's2',
+        title: en ? 'Try it in chat' : 'Попробуйте в чате',
+        description: en
+          ? 'Give the examples to the model and ask for a draft for a new case.'
+          : 'Дайте модели примеры и попросите черновик для нового случая.',
+        dependsOn: ['s1'],
+        doneWhen: en
+          ? 'The draft needs only small edits.'
+          : 'Черновик требует только мелких правок.',
+      },
+      {
+        id: 's3',
+        title: en ? 'Make it a habit' : 'Сделайте это привычкой',
+        description: en
+          ? 'For a week, start every such task with a draft.'
+          : 'Неделю начинайте каждую такую задачу с черновика.',
+        dependsOn: ['s2'],
+        doneWhen: en ? 'You compared the time spent.' : 'Вы сравнили потраченное время.',
+      },
+    ],
+    risks: [en ? 'Mistakes in facts' : 'Ошибки в фактах'],
+    successCriteria: [en ? 'Less time per task' : 'Меньше времени на задачу'],
+  });
+}

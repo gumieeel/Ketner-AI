@@ -10,7 +10,7 @@ import { publicAnalysis } from './analyses.js';
 import { MemoryBudgetStore } from '../discovery/budget.js';
 import { DiscoveryService } from '../discovery/service.js';
 import { MemoryDiscoveryStore } from '../discovery/store.js';
-import { contextTemplate, discoveryTemplate } from '../discovery/templates.js';
+import { contextTemplate, discoveryTemplate, planTemplate } from '../discovery/templates.js';
 import type { MailMessage } from '../services/mailer.js';
 import { createConversationStore } from '../store/conversation-store.js';
 import { createSubscriptionStore } from '../store/subscription-store.js';
@@ -49,7 +49,12 @@ const templateGateway = {
   async stream(request: GatewayRequest, callbacks: GatewayStreamCallbacks) {
     const stage = request.task?.id.split(':')[1];
     const input = request.messages[0]?.content ?? '';
-    const text = stage === 'context' ? contextTemplate(input, 'ru') : discoveryTemplate('ru');
+    const text =
+      stage === 'context'
+        ? contextTemplate(input, 'ru')
+        : stage === 'plan'
+          ? planTemplate('ru')
+          : discoveryTemplate('ru');
     callbacks.onDelta(text);
     callbacks.onDone({
       inputTokens: 1,
@@ -351,6 +356,104 @@ test('после входа анализ, начатый гостем в это�
     // Гостевой id больше не владелец.
     const asGuest = await fetch(`${app.base}/api/analyses/${id}`, { headers: guestHeaders(guest) });
     assert.equal(asGuest.status, 404);
+  } finally {
+    app.close();
+  }
+});
+
+test('план по HTTP: бесплатный краткий план, статус шага, чужой — 404', async () => {
+  const app = await start();
+  try {
+    const guest = 'guest_planflow01';
+    const created = await post(app.base, '/api/analyses', { text: TEXT }, guestHeaders(guest));
+    const id = created.json.analysis.id;
+    await app.service.whenIdle();
+    await post(
+      app.base,
+      `/api/analyses/${id}/continue`,
+      { answers: { q2: { value: 'В таблицах' } } },
+      guestHeaders(guest),
+    );
+    await app.service.whenIdle();
+    const view = (await (
+      await fetch(`${app.base}/api/analyses/${id}`, { headers: guestHeaders(guest) })
+    ).json()) as {
+      analysis: { opportunities: Array<{ id: string; feasibilityStatus: string }> };
+      plans: { offer: { free: { available: boolean; model?: string } }; items: unknown[] };
+    };
+    assert.equal(view.plans.offer.free.available, true);
+    assert.equal(view.plans.offer.free.model, 'GPT-6 Luna');
+    const ready = view.analysis.opportunities.find((item) => item.feasibilityStatus === 'ready')!;
+    const unsupported = view.analysis.opportunities.find(
+      (item) => item.feasibilityStatus === 'not_supported',
+    )!;
+
+    const refused = await post(
+      app.base,
+      `/api/analyses/${id}/opportunities/${unsupported.id}/plan`,
+      {},
+      guestHeaders(guest),
+    );
+    assert.equal(refused.status, 409);
+    assert.equal(refused.json.error.code, 'opportunity_not_supported');
+
+    const made = await fetch(`${app.base}/api/analyses/${id}/opportunities/${ready.id}/plan`, {
+      method: 'POST',
+      headers: guestHeaders(guest),
+      body: '{}',
+    });
+    assert.equal(made.status, 202);
+    const planId = ((await made.json()) as { plan: { id: string } }).plan.id;
+    await app.service.whenIdle();
+
+    const got = await fetch(`${app.base}/api/analyses/${id}/plans/${planId}`, {
+      headers: guestHeaders(guest),
+    });
+    const body = (await got.json()) as {
+      plan: {
+        status: string;
+        kind: string;
+        steps: Array<{ id: string; status: string }>;
+        cost: unknown;
+      };
+    };
+    assert.equal(body.plan.status, 'ready');
+    assert.equal(body.plan.kind, 'brief');
+    assert.deepEqual(body.plan.cost, { chargedCredits: 0, sponsored: true });
+    assert.ok(!('ownerId' in body.plan));
+
+    const step = await fetch(`${app.base}/api/analyses/${id}/plans/${planId}/steps/s1`, {
+      method: 'PATCH',
+      headers: guestHeaders(guest),
+      body: JSON.stringify({ status: 'in_progress' }),
+    });
+    assert.equal(step.status, 200);
+    const bad = await fetch(`${app.base}/api/analyses/${id}/plans/${planId}/steps/s1`, {
+      method: 'PATCH',
+      headers: guestHeaders(guest),
+      body: JSON.stringify({ status: 'finished' }),
+    });
+    assert.equal(bad.status, 400);
+    const again = (await (
+      await fetch(`${app.base}/api/analyses/${id}/plans/${planId}`, {
+        headers: guestHeaders(guest),
+      })
+    ).json()) as typeof body;
+    assert.equal(again.plan.steps[0].status, 'in_progress');
+
+    for (const [path, who] of [
+      [`/api/analyses/${id}/plans/${planId}`, 'guest_stranger01'],
+      [`/api/analyses/other-analysis/plans/${planId}`, guest],
+    ]) {
+      const response = await fetch(`${app.base}${path}`, { headers: guestHeaders(who) });
+      assert.equal(response.status, 404, path);
+    }
+    const foreignStep = await fetch(`${app.base}/api/analyses/${id}/plans/${planId}/steps/s1`, {
+      method: 'PATCH',
+      headers: guestHeaders('guest_stranger01'),
+      body: JSON.stringify({ status: 'done' }),
+    });
+    assert.equal(foreignStep.status, 404);
   } finally {
     app.close();
   }
