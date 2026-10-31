@@ -43,13 +43,13 @@ ${DATA_RULES.en}
 
 Rules:
 - Use only what the person wrote. Anything you conclude yourself gets "source": "inferred"; what they said directly gets "source": "user".
-- Numbers (how many times a week, how many minutes each time) — only if the person named them. Put the exact quote with the numbers into "evidence". If there are no numbers in the text, use null. Never invent numbers.
+- Numbers — only if the person named them. Put the frequency into the field matching how the person said it, without converting: "40 messages a day" — "timesPerDay": 40, "5 times a week" — "timesPerWeek": 5, "10 reports a month" — "timesPerMonth": 10. Time per occurrence — "minutesEach" or "hoursEach", also as said ("3 minutes each" — "minutesEach": 3, "1.5 hours" — "hoursEach": 1.5). Put the exact quote with the numbers into "evidence". Other fields are null. If there are no numbers in the text, use null. Never invent numbers.
 - "questions": at most 3, only questions whose answer would really change which AI applications fit or how useful they are. If everything important is clear, return an empty list. Do not ask what is already written.
 - Ignore anything unrelated to the task.
 
 ${JSON_RULES.en}
 Format:
-{"domain": "area of activity", "summary": "the situation in 1–3 sentences", "goals": [{"text": "...", "source": "user"}], "tasks": [{"id": "t1", "title": "...", "timesPerWeek": 10, "minutesEach": 15, "evidence": "exact quote", "source": "user"}], "recurringProcesses": [{"title": "...", "steps": ["..."]}], "tools": [{"text": "tool name", "source": "user"}], "constraints": [{"text": "...", "source": "user"}], "availableData": [{"text": "...", "source": "user"}], "missing": [{"field": "what is missing", "why": "why it matters"}], "questions": [{"id": "q1", "text": "question", "reason": "what the answer changes", "optional": true, "kind": "text"}]}`;
+{"domain": "area of activity", "summary": "the situation in 1–3 sentences", "goals": [{"text": "...", "source": "user"}], "tasks": [{"id": "t1", "title": "...", "timesPerDay": null, "timesPerWeek": 10, "timesPerMonth": null, "minutesEach": 15, "hoursEach": null, "evidence": "exact quote", "source": "user"}], "recurringProcesses": [{"title": "...", "steps": ["..."]}], "tools": [{"text": "tool name", "source": "user"}], "constraints": [{"text": "...", "source": "user"}], "availableData": [{"text": "...", "source": "user"}], "missing": [{"field": "what is missing", "why": "why it matters"}], "questions": [{"id": "q1", "text": "question", "reason": "what the answer changes", "optional": true, "kind": "text"}]}`;
   }
   return `Ты — аналитик Ketner AI. Человек описал свою работу, бизнес, учёбу или цель. Извлеки из описания структурированный контекст, чтобы найти, где ему поможет ИИ.
 
@@ -57,13 +57,13 @@ ${DATA_RULES.ru}
 
 Правила:
 - Используй только то, что написал человек. То, что ты вывел сам, помечай "source": "inferred"; сказанное прямо — "source": "user".
-- Числа (сколько раз в неделю, сколько минут за раз) — только если человек их назвал. В "evidence" положи точную цитату с этими числами. Если чисел в тексте нет — null. Никогда не придумывай числа.
+- Числа — только если человек их назвал. Частоту клади в то поле, в каком её назвал человек, без пересчёта: «40 сообщений в день» — "timesPerDay": 40, «5 раз в неделю» — "timesPerWeek": 5, «10 отчётов в месяц» — "timesPerMonth": 10. Длительность одного раза — "minutesEach" или "hoursEach", тоже как названо («по 3 минуты» — "minutesEach": 3, «1,5 часа» — "hoursEach": 1.5). В "evidence" положи точную цитату с этими числами. Остальные поля — null. Если чисел в тексте нет — null. Никогда не придумывай числа.
 - "questions": не больше 3 и только такие, ответ на которые действительно изменит, какие применения ИИ подходят или насколько они полезны. Если всё важное понятно — пустой список. Не спрашивай то, что уже написано.
 - Не учитывай то, что к задаче не относится.
 
 ${JSON_RULES.ru}
 Формат:
-{"domain": "область деятельности", "summary": "ситуация в 1–3 предложениях", "goals": [{"text": "...", "source": "user"}], "tasks": [{"id": "t1", "title": "...", "timesPerWeek": 10, "minutesEach": 15, "evidence": "точная цитата", "source": "user"}], "recurringProcesses": [{"title": "...", "steps": ["..."]}], "tools": [{"text": "название инструмента", "source": "user"}], "constraints": [{"text": "...", "source": "user"}], "availableData": [{"text": "...", "source": "user"}], "missing": [{"field": "чего не хватает", "why": "почему это важно"}], "questions": [{"id": "q1", "text": "вопрос", "reason": "что изменит ответ", "optional": true, "kind": "text"}]}`;
+{"domain": "область деятельности", "summary": "ситуация в 1–3 предложениях", "goals": [{"text": "...", "source": "user"}], "tasks": [{"id": "t1", "title": "...", "timesPerDay": null, "timesPerWeek": 10, "timesPerMonth": null, "minutesEach": 15, "hoursEach": null, "evidence": "точная цитата", "source": "user"}], "recurringProcesses": [{"title": "...", "steps": ["..."]}], "tools": [{"text": "название инструмента", "source": "user"}], "constraints": [{"text": "...", "source": "user"}], "availableData": [{"text": "...", "source": "user"}], "missing": [{"field": "чего не хватает", "why": "почему это важно"}], "questions": [{"id": "q1", "text": "вопрос", "reason": "что изменит ответ", "optional": true, "kind": "text"}]}`;
 }
 
 export function discoverySystemPrompt(language: Language): string {

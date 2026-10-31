@@ -290,3 +290,60 @@ test('вызов модели: ошибка шлюза (модель недос�
   if (!result.ok) assert.equal(result.code, 'insufficient_credits');
   assert.equal(requests.length, 1);
 });
+
+test('польза: «40 сообщений в день по 3 минуты» и «по 1,5 часа в месяц» считаются с допущением пересчёта', () => {
+  const text =
+    'Каждый день отвечаю покупателям в Директе, это примерно 40 сообщений в день по 3 минуты. ' +
+    'Отчёт о браке — 8 в месяц, по 1,5 часа каждый.';
+  const context = verifyTaskNumbers(
+    contextOutputSchema.parse({
+      domain: 'Магазин',
+      summary: 's',
+      tasks: [
+        {
+          id: 't1',
+          title: 'Ответы покупателям',
+          timesPerDay: 40,
+          minutesEach: 3,
+          evidence: 'это примерно 40 сообщений в день по 3 минуты',
+          source: 'user',
+        },
+        {
+          id: 't2',
+          title: 'Отчёты',
+          timesPerMonth: 8,
+          hoursEach: 1.5,
+          evidence: 'Отчёт о браке — 8 в месяц, по 1,5 часа каждый',
+          source: 'user',
+        },
+        {
+          id: 't3',
+          title: 'Выдуманное',
+          timesPerDay: 100,
+          minutesEach: 5,
+          evidence: 'это примерно 40 сообщений в день по 3 минуты',
+          source: 'user',
+        },
+      ],
+    }),
+    text,
+  );
+  const daily = estimateImpact(opportunity('t1', 'medium'), context, 'ru');
+  assert.equal(daily.kind, 'estimate');
+  if (daily.kind === 'estimate') {
+    // 40 × 5 дней × 3 мин = 600 мин/нед; 30–60% → 3–6 ч.
+    assert.deepEqual(daily.hoursPerWeek, [3, 6]);
+    assert.match(daily.formula, /40 раз в день × 5 дней × 3 мин × 30–60%/);
+    assert.ok(daily.assumptions.some((item) => /5 рабочих дней/.test(item)));
+  }
+  const monthly = estimateImpact(opportunity('t2', 'high'), context, 'ru');
+  assert.equal(monthly.kind, 'estimate');
+  if (monthly.kind === 'estimate') {
+    // 8 ÷ 4,3 × 90 мин ≈ 167 мин/нед; 60–80% → 1.5–2 ч.
+    assert.deepEqual(monthly.hoursPerWeek, [1.5, 2]);
+    assert.match(monthly.formula, /8 раз в месяц ÷ 4,3 × 1,5 ч/);
+  }
+  // Числа, которых нет в цитате, сбрасываются — как и раньше.
+  assert.equal(context.tasks[2].timesPerDay, null);
+  assert.equal(estimateImpact(opportunity('t3', 'high'), context, 'ru').kind, 'qualitative');
+});

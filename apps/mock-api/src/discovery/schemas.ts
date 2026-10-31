@@ -49,10 +49,16 @@ const positive = (max: number) =>
 export const contextTaskSchema = z.object({
   id: requiredText(8),
   title: requiredText(160),
-  /** Сколько раз в неделю — только если пользователь сам назвал. */
+  /**
+   * Как часто — только если пользователь сам назвал, и в том поле, в каком назвал («40 в день» —
+   * `timesPerDay: 40`). Неделю из дней и месяцев считает код, с явным допущением (impact.ts).
+   */
+  timesPerDay: positive(500),
   timesPerWeek: positive(500),
-  /** Сколько минут занимает один раз — только если пользователь сам назвал. */
+  timesPerMonth: positive(2000),
+  /** Сколько занимает один раз — минуты или часы, как назвал пользователь. */
   minutesEach: positive(24 * 60),
+  hoursEach: positive(24),
   /** Дословная цитата из описания, откуда взяты числа (сервер проверяет, что она там есть). */
   evidence: text(240).nullable().optional().default(null),
   source,
