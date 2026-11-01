@@ -1,4 +1,6 @@
 import { Router, type Request, type Response } from 'express';
+import { LowCreditsNotifier } from '../services/low-credits-notifier.js';
+import { siteUrl } from '../seo/pages.js';
 import { config, isProduction } from '../config.js';
 import type { AiConfig } from '../config.js';
 import { createAuthMiddleware } from '../middleware/auth.js';
@@ -323,6 +325,20 @@ export function createApiRouter(deps: ApiDeps): Router {
           usageStore: activeUsageStore,
           ledger: createBillingLedger(),
         }));
+
+  // Письмо «кредиты на исходе» (этап C): после списания, один раз на набор начислений.
+  const notices = activeBilling.ledger.lowCreditNotices;
+  if (deps.mailer && deps.mailer.kind !== 'none' && notices) {
+    const notifier = new LowCreditsNotifier({
+      credits: activeBilling.credits.store,
+      notices,
+      users: activeUserStore,
+      mailer: deps.mailer,
+      remindersOff: (userId) => activeBilling.ledger.prefs.get(userId)?.reminders === false,
+      siteUrl: siteUrl(),
+    });
+    activeBilling.credits.onCharged = (userId) => notifier.check(userId);
+  }
 
   router.use(
     createAuthMiddleware(

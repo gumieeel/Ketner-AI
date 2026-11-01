@@ -208,6 +208,7 @@ describe('кабинет бота: ссылка, код для сайта, за�
     let overview: BotOverview = {
       settings: details.solution.bot!,
       today: { replies: 3, credits: 7, newLeads: 1 },
+      balance: { credits: 4200, dailyCredits: 600, daysLeft: 7 },
       publicUrl: 'https://ketner.org/b/lisa-shop',
     };
     const calls = stubFetch((call) => {
@@ -290,6 +291,12 @@ describe('кабинет бота: ссылка, код для сайта, за�
       'href',
       '/b/lisa-shop',
     );
+    // Этап C: остаток и «хватит на N дней» при среднем расходе ботов.
+    expect(
+      screen.getByText(
+        /На балансе 4 ?200 кредитов\. Боты тратят в среднем 600 кредитов в день — хватит примерно на 7 дн\./,
+      ),
+    ).toBeVisible();
     // У бота нет чата владельца: он отвечает на своей странице.
     expect(screen.queryByRole('link', { name: 'Открыть чат' })).toBeNull();
     expect(await screen.findByText('Букет на завтра')).toBeVisible();

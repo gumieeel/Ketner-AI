@@ -209,7 +209,15 @@ const json = (body: unknown): RequestInit => ({ body: JSON.stringify(body) });
 const enc = encodeURIComponent;
 
 export async function listSolutions(): Promise<SolutionView[]> {
-  return (await call<{ solutions: SolutionView[] }>('')).solutions;
+  return (await listAutomations()).solutions;
+}
+
+/** «Мои автоматизации»: решения и, если есть боты, остаток и «хватит на N дней». */
+export function listAutomations(): Promise<{
+  solutions: SolutionView[];
+  runway: BotRunway | null;
+}> {
+  return call('');
 }
 
 export function fetchDraftQuote(): Promise<{
@@ -359,9 +367,17 @@ export async function sendMessage(
 
 // ─── Бот для клиентов: кабинет владельца ─────────────────────────────────────
 
+/** Остаток владельца и «хватит на N дней» при среднем расходе ботов за неделю (этап C). */
+export interface BotRunway {
+  credits: number;
+  dailyCredits: number;
+  daysLeft: number | null;
+}
+
 export interface BotOverview {
   settings: BotSettings;
   today: BotToday;
+  balance: BotRunway;
   publicUrl: string;
 }
 

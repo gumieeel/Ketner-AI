@@ -235,6 +235,8 @@ export const en: Record<TranslationKey, string> = {
     'Max mode is on: models think longer and answer deeper, and a request costs more.',
   'chat.maxModeOff':
     'Max mode: models think longer and answer deeper on hard tasks, and a request costs more.',
+  'credits.headerLabel': 'Balance: {count} credits. Open Credits',
+  'credits.headerLow': 'Credits running low: {count}. Top up',
   'credits.balance': 'Credits: {count}',
   'credits.modelPrice': '{model} ≈ {price} cr. per request, enough for about {count}',
   'credits.modelFree': '{model} is free: no credits are spent',
@@ -2107,6 +2109,11 @@ export const en: Record<TranslationKey, string> = {
   'builder.bot.today.leads': 'New requests',
   'builder.bot.today.cap':
     'Daily cap — {amount}. When it is reached or credits run out, the bot does not answer by itself but offers the customer to leave a contact.',
+  'builder.bot.runway.days':
+    'Balance: {amount}. Bots spend {daily} a day on average — enough for about {days} days.',
+  'builder.bot.runway.noSpend':
+    'Balance: {amount}. How many days it lasts will show after the first bot replies.',
+  'builder.bot.runway.topUp': 'Top up',
   'builder.bot.preview.title': 'Try as a customer',
   'builder.bot.preview.lead':
     'Write to the bot as a customer would. The current settings version answers, even before it is on; nothing is saved. A reply costs up to {max} credits.',

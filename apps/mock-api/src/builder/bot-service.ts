@@ -29,6 +29,9 @@ import type {
 /** С владельца за один ответ бота не списывается больше, $ (≈ 30 кредитов). */
 export const BOT_REPLY_CAP_USD = 0.03;
 export const BOT_REPLY_TOKENS = 600;
+/** За сколько дней считается средний расход ботов для «хватит на N дней». */
+export const RUNWAY_DAYS = 7;
+const DAY_MS = 86_400_000;
 /** Сколько последних сообщений диалога видит бот. */
 export const BOT_HISTORY = 12;
 export const BOT_LIMITS = {
@@ -346,6 +349,36 @@ export class BotService {
         credits: toCredits(usage.creditsUsd),
         newLeads: await this.deps.store.countNewLeads(ownerId, id),
       },
+      balance: await this.runway(ownerId),
+    };
+  }
+
+  /**
+   * Остаток владельца и «хватит на N дней» (этап C): средний расход всех его ботов за последние
+   * 7 дней (или за срок жизни, если ботам меньше недели). Без расхода дней не считаем.
+   */
+  async runway(ownerId: string) {
+    const owner = this.deps.owner(ownerId);
+    const balanceUsd = owner ? this.deps.balanceUsd(owner.userId, owner.plan) : 0;
+    const now = this.now();
+    const weekAgo = new Date(dayStart(now)).getTime() - (RUNWAY_DAYS - 1) * DAY_MS;
+    const bots = (await this.deps.store.listSolutions(ownerId)).filter(
+      (item) => item.type === 'customer_bot',
+    );
+    let spentUsd = 0;
+    let firstMs = Number.POSITIVE_INFINITY;
+    for (const bot of bots) {
+      spentUsd += (await this.deps.store.botUsageSince(bot.id, new Date(weekAgo).toISOString()))
+        .creditsUsd;
+      firstMs = Math.min(firstMs, Date.parse(bot.createdAt));
+    }
+    const since = Math.max(weekAgo, Number.isFinite(firstMs) ? firstMs : now.getTime());
+    const days = Math.min(RUNWAY_DAYS, Math.max(1, Math.ceil((now.getTime() - since) / DAY_MS)));
+    const dailyUsd = spentUsd / days;
+    return {
+      credits: toCredits(balanceUsd),
+      dailyCredits: toCredits(dailyUsd),
+      daysLeft: dailyUsd > 0 ? Math.floor(balanceUsd / dailyUsd) : null,
     };
   }
 

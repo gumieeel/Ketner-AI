@@ -1080,6 +1080,7 @@ export async function initDatabaseSync(): Promise<boolean> {
         billingLedger.prefs,
         billingLedger.credits,
         billingLedger.legacyCredits,
+        ...(billingLedger.lowCreditNotices ? [billingLedger.lowCreditNotices] : []),
         usageStore,
         contactStore,
         compareVoteStore,

@@ -5,7 +5,8 @@ import { buttonClasses } from '@/components/ui/button-classes';
 import { Spinner } from '@/components/ui/spinner';
 import {
   createBlankSolution,
-  listSolutions,
+  listAutomations,
+  type BotRunway,
   LIMITS,
   type SolutionView,
 } from '@/features/builder/api';
@@ -13,6 +14,7 @@ import { creditsText } from '@/features/discovery/format';
 import { useTranslation, type TranslationKey } from '@/i18n';
 import { formatDateTime } from '@/lib/format-date';
 import { ErrorNotice } from '@/pages/analysis/error-notice';
+import { RunwayNote } from './bot-panel';
 import { BuilderGate, Page, StatusBadge } from './shared';
 
 /** «Мои помощники»: список, создание с нуля, переход в чат включённого. */
@@ -29,13 +31,16 @@ function SolutionsList() {
   const { t, language } = translator;
   const navigate = useNavigate();
   const [items, setItems] = useState<SolutionView[] | null>(null);
+  const [runway, setRunway] = useState<BotRunway | null>(null);
   const [error, setError] = useState<unknown>(null);
   const [name, setName] = useState('');
   const [creating, setCreating] = useState(false);
 
   const refresh = useCallback(async () => {
     try {
-      setItems(await listSolutions());
+      const result = await listAutomations();
+      setItems(result.solutions);
+      setRunway(result.runway ?? null);
     } catch (caught) {
       setError(caught);
     }
@@ -60,6 +65,7 @@ function SolutionsList() {
   return (
     <Page title={t('builder.list.title')}>
       <p className="t-lead mt-4">{t('builder.list.lead')}</p>
+      {runway ? <RunwayNote runway={runway} /> : null}
 
       <form onSubmit={create} className="mt-8 flex flex-col gap-3 sm:flex-row sm:items-end">
         <label className="flex min-w-0 flex-1 flex-col gap-1">

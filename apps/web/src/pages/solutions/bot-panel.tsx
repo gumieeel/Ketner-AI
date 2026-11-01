@@ -1,4 +1,6 @@
 import { useCallback, useEffect, useId, useState, type FormEvent, type ReactNode } from 'react';
+import { Link } from 'react-router-dom';
+import { buttonClasses } from '@/components/ui/button-classes';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { CopyButton } from '@/components/ui/copy-button';
@@ -17,6 +19,7 @@ import {
   type BotLeadView,
   type BotMessageView,
   type BotOverview,
+  type BotRunway,
   type BotSettings,
   type SolutionDetails,
 } from '@/features/builder/api';
@@ -176,9 +179,48 @@ function ShareSection({ details, overview }: { details: SolutionDetails; overvie
           amount: creditsText(translator, overview.settings.dailyCapCredits),
         })}
       </p>
+      <RunwayNote runway={overview.balance} />
     </Section>
   );
 }
+
+/** Остаток владельца и на сколько дней его хватит ботам (этап C). */
+export function RunwayNote({ runway }: { runway: BotRunway }) {
+  const translator = useTranslation();
+  const { t } = translator;
+  const short = runway.daysLeft !== null && runway.daysLeft <= RUNWAY_WARN_DAYS;
+  return (
+    <div
+      className={cn(
+        'mt-4 flex flex-col gap-2 rounded-xl border px-4 py-3 sm:flex-row sm:items-center sm:justify-between',
+        short || runway.credits <= 0 ? 'border-warning/40 bg-warning-soft' : 'border-stroke',
+      )}
+    >
+      <p className="text-[14px] leading-6 text-text">
+        {runway.daysLeft !== null
+          ? t('builder.bot.runway.days', {
+              amount: creditsText(translator, runway.credits),
+              daily: creditsText(translator, runway.dailyCredits),
+              days: runway.daysLeft,
+            })
+          : t('builder.bot.runway.noSpend', { amount: creditsText(translator, runway.credits) })}
+      </p>
+      <Link
+        to="/pricing"
+        className={buttonClasses({
+          variant: short ? 'primary' : 'outline',
+          size: 'sm',
+          className: 'shrink-0 self-start sm:self-auto',
+        })}
+      >
+        {t('builder.bot.runway.topUp')}
+      </Link>
+    </div>
+  );
+}
+
+/** «Хватит на N дней» с этого порога подсвечивается и зовёт пополнить. */
+const RUNWAY_WARN_DAYS = 3;
 
 // ─── Проба «как клиент» ──────────────────────────────────────────────────────
 

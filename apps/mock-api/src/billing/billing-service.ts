@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto';
+import type { LowCreditsNotice } from '../services/low-credits-notifier.js';
 import { join } from 'node:path';
 import { dirname } from 'node:path';
 import { config } from '../config.js';
@@ -123,6 +124,8 @@ export interface BillingLedger {
   credits: CreditStore;
   /** Кредиты докупленных пакетов старой системы: остаток переходит в `credits` при первом обращении. */
   legacyCredits: DocStore<LegacyPremiumCredit>;
+  /** Отметки о письме «кредиты на исходе» (services/low-credits-notifier.ts). */
+  lowCreditNotices?: DocStore<LowCreditsNotice>;
 }
 
 export function createBillingLedger(dir?: string): BillingLedger {
@@ -136,6 +139,10 @@ export function createBillingLedger(dir?: string): BillingLedger {
     prefs: new DocStore<NotificationPrefs>('notification_prefs', file('notification-prefs')),
     credits: new CreditStore(file('credit-grants')),
     legacyCredits: new DocStore<LegacyPremiumCredit>('premium_credits', file('premium-credits')),
+    lowCreditNotices: new DocStore<LowCreditsNotice>(
+      'low_credit_notices',
+      file('low-credit-notices'),
+    ),
   };
 }
 

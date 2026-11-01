@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { BalanceChip } from './balance-chip';
 import { Link, NavLink, useNavigate } from 'react-router-dom';
 import {
   BookOpenIcon,
@@ -279,6 +280,11 @@ export function Sidebar() {
             </NavLink>
           ) : null}
 
+          {user ? (
+            <div className="px-1 pt-1">
+              <BalanceChip onNavigate={close} className="w-full justify-start" />
+            </div>
+          ) : null}
           <div className="mt-1.5 flex items-center justify-between gap-2 border-t border-stroke px-1 pt-3">
             {user ? (
               <Link

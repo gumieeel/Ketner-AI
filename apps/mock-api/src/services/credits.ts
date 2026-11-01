@@ -67,6 +67,8 @@ export interface CreditLedger {
 
 export class CreditService implements CreditLedger {
   private readonly migrated = new Set<string>();
+  /** Вызывается после каждого списания (письмо «кредиты на исходе», этап C). */
+  onCharged: ((userId: string) => void) | null = null;
 
   constructor(
     readonly store: CreditStore,
@@ -79,7 +81,15 @@ export class CreditService implements CreditLedger {
   }
 
   charge(userId: string, amountUsd: number, now = Date.now()): number {
-    return this.store.debit(userId, amountUsd, now);
+    const charged = this.store.debit(userId, amountUsd, now);
+    if (charged > 0 && this.onCharged) {
+      try {
+        this.onCharged(userId);
+      } catch (error) {
+        console.error('[credits] обработчик списания упал', error);
+      }
+    }
+    return charged;
   }
 
   hasPurchased(userId: string, now = Date.now()): boolean {

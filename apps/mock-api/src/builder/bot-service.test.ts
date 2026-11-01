@@ -366,3 +366,33 @@ test('настройки и проба: адрес проверяется, пр�
   assert.equal(poor.ok, false);
   if (!poor.ok) assert.equal(poor.status, 402);
 });
+
+test('«хватит на N дней»: остаток владельца делится на средний расход его ботов', async () => {
+  const { service, store, setBalance } = await setup();
+  setBalance(1);
+  assert.deepEqual(await service.runway(OWNER.userId), {
+    credits: 1000,
+    dailyCredits: 0,
+    daysLeft: null,
+  });
+  await store.addBotMessage({
+    id: 'spent-today',
+    conversationId: 'c-1',
+    solutionId: 'bot-1',
+    ownerId: OWNER.userId,
+    role: 'assistant',
+    content: 'ответ',
+    model: null,
+    offerContact: false,
+    creditsUsd: 0.1,
+    status: 'complete',
+    createdAt: NOW.toISOString(),
+  });
+  // Боту меньше суток: расход за день — 100 кредитов, на балансе 1 000.
+  assert.deepEqual(await service.runway(OWNER.userId), {
+    credits: 1000,
+    dailyCredits: 100,
+    daysLeft: 10,
+  });
+  assert.equal((await service.overview(OWNER.userId, 'bot-1'))?.balance.daysLeft, 10);
+});
