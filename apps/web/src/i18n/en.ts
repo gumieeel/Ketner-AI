@@ -237,6 +237,21 @@ export const en: Record<TranslationKey, string> = {
     'Max mode: models think longer and answer deeper on hard tasks, and a request costs more.',
   'credits.headerLabel': 'Balance: {count} credits. Open Credits',
   'credits.headerLow': 'Credits running low: {count}. Top up',
+  'automation.title': 'Automations — ${price} a month',
+  'automation.lead':
+    '{credits} credits a month for customer bots, analyses and checks. The first {days} days are free — {trial} credits; a card is needed right away.',
+  'automation.terms':
+    'Payments are processed by Dodo Payments. You get an email {days} days before the trial ends; cancel in one click and you will not be charged. Unused credits expire at the end of the month.',
+  'automation.start': 'Start: {days} days free',
+  'automation.manage': 'Manage subscription',
+  'automation.unavailable':
+    'Card payments are coming soon. Meanwhile you can buy a credit pack below.',
+  'automation.failed': 'Checkout is not opening right now. Try again in a minute.',
+  'automation.status.trial': 'Trial until {date}.',
+  'automation.status.active': 'Subscription active, next charge {date}.',
+  'automation.status.cancelling': 'Subscription cancelled, ends {date}.',
+  'automation.status.inactive': 'Subscription inactive: update your card in the billing portal.',
+  'automation.required': 'To launch an automation, subscribe — the first month is free.',
   'credits.balance': 'Credits: {count}',
   'credits.modelPrice': '{model} ≈ {price} cr. per request, enough for about {count}',
   'credits.modelFree': '{model} is free: no credits are spent',

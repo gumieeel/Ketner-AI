@@ -1,4 +1,15 @@
 import { Router, type Request, type Response } from 'express';
+import DodoPayments from 'dodopayments';
+import {
+  AUTOMATION_PLAN,
+  AutomationSubscriptionService,
+  hasAccess,
+  type AutomationSubscription,
+  type DodoClientPort,
+  type ProcessedWebhook,
+} from '../billing/automation-subscription.js';
+import { DocStore } from '../store/doc-store.js';
+import { createAutomationRouter } from './automation.js';
 import { LowCreditsNotifier } from '../services/low-credits-notifier.js';
 import { siteUrl } from '../seo/pages.js';
 import { config, isProduction } from '../config.js';
@@ -84,6 +95,8 @@ export interface ApiDeps {
   revokedTokenStore?: RevokedTokenStore;
   /** Отправка писем (коды регистрации и привязки Telegram); в тестах — перехватчик. */
   mailer?: Mailer;
+  /** Dodo Payments в тестах; иначе клиент, продукт и обязательность — из окружения (config.dodo). */
+  dodo?: { client: DodoClientPort | null; productId: string; required: boolean };
   /** Платформа решений (DISCOVERY_ENABLED); в тестах задаётся явно. */
   discoveryEnabled?: boolean;
   /** Подмена частей анализа задач в тестах (хранилища, время, бюджет). */
@@ -326,6 +339,7 @@ export function createApiRouter(deps: ApiDeps): Router {
           ledger: createBillingLedger(),
         }));
 
+  const automation = createAutomationService(activeBilling, activeUserStore, deps);
   // Письмо «кредиты на исходе» (этап C): после списания, один раз на набор начислений.
   const notices = activeBilling.ledger.lowCreditNotices;
   if (deps.mailer && deps.mailer.kind !== 'none' && notices) {
@@ -369,6 +383,8 @@ export function createApiRouter(deps: ApiDeps): Router {
         (deps.botService ?? telegramBotService).notifyAdminsAboutContact(message),
     }),
   );
+  // Подписка «Автоматизации» через Dodo Payments (этап E).
+  router.use(createAutomationRouter({ service: automation }));
   router.use(
     createBillingRouter({
       subscriptionStore: activeSubscriptionStore,
@@ -500,6 +516,17 @@ export function createApiRouter(deps: ApiDeps): Router {
       ...(deps.discoveryEnabled !== undefined ? { enabled: deps.discoveryEnabled } : {}),
       ...(deps.discovery?.stores ? { stores: deps.discovery.stores } : {}),
       runtime: builderRuntime,
+      subscriptionRequired: (userId) =>
+        (deps.dodo?.required ?? config.dodo.required) &&
+        automation.available &&
+        !hasAccess(automation.of(userId))
+          ? {
+              priceUsd: AUTOMATION_PLAN.priceUsd,
+              trialDays: AUTOMATION_PLAN.trialDays,
+              monthlyCredits: AUTOMATION_PLAN.monthlyCredits,
+              trialCredits: AUTOMATION_PLAN.trialCredits,
+            }
+          : null,
     }),
   );
   // Публичная страница бота для клиентов: без входа, за тем же флагом.
@@ -534,4 +561,42 @@ export function createApiRouter(deps: ApiDeps): Router {
   );
 
   return router;
+}
+
+let reminderTimer: NodeJS.Timeout | null = null;
+
+/** Сервис подписки: клиент Dodo из ключей окружения (или из тестов); напоминания — раз в час. */
+function createAutomationService(
+  billing: BillingService,
+  users: UserStore,
+  deps: ApiDeps,
+): AutomationSubscriptionService {
+  const ledger = billing.ledger;
+  const fromEnv = deps.dodo === undefined;
+  const client: DodoClientPort | null = fromEnv
+    ? config.dodo.apiKey
+      ? (new DodoPayments({
+          bearerToken: config.dodo.apiKey,
+          environment: config.dodo.environment,
+          webhookKey: config.dodo.webhookKey || null,
+        }) as unknown as DodoClientPort)
+      : null
+    : (deps.dodo?.client ?? null);
+  const service = new AutomationSubscriptionService({
+    client,
+    productId: deps.dodo?.productId ?? config.dodo.productId,
+    credits: billing.credits.store,
+    subscriptions:
+      ledger.automationSubscriptions ??
+      new DocStore<AutomationSubscription>('automation_subscriptions'),
+    webhooks: ledger.dodoWebhooks ?? new DocStore<ProcessedWebhook>('dodo_webhooks'),
+    users,
+    ...(deps.mailer ? { mailer: deps.mailer } : {}),
+    siteUrl: siteUrl(),
+  });
+  if (fromEnv && service.available && !reminderTimer) {
+    reminderTimer = setInterval(() => void service.sendTrialReminders(), 60 * 60_000);
+    reminderTimer.unref?.();
+  }
+  return service;
 }

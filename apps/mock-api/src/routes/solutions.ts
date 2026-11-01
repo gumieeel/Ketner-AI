@@ -83,6 +83,13 @@ export interface SolutionsRouterDeps {
   service?: BuilderService;
   images?: ImageService;
   mailer?: Mailer;
+  /**
+   * Нужна ли подписка «Автоматизации» перед созданием автоматизации из анализа (этап E): `null` —
+   * не нужна (подписка действует или не обязательна), иначе — условия для ответа 402.
+   */
+  subscriptionRequired?: (
+    userId: string,
+  ) => { priceUsd: number; trialDays: number; monthlyCredits: number; trialCredits: number } | null;
   /** Общие сервисы Builder и ботов (routes/index.ts создаёт один на оба роутера). */
   runtime?: BuilderRuntime;
 }
@@ -414,6 +421,18 @@ export function createSolutionsRouter(deps: SolutionsRouterDeps): Router {
         return;
       }
       if (limited(actionLimiter, response, caller.userId)) return;
+      // «Приступить к автоматизации» — с подпиской (пробный месяц с картой), когда она обязательна.
+      const gate = deps.subscriptionRequired?.(caller.userId) ?? null;
+      if (gate) {
+        response.status(402).json({
+          error: {
+            code: 'subscription_required',
+            message: `Автоматизации работают по подписке: первый месяц бесплатно, дальше $${gate.priceUsd} в месяц.`,
+            details: gate,
+          },
+        });
+        return;
+      }
       const result = await builder.createFromOpportunity(caller, parsed.data);
       if (!result.ok) return fail(response, result);
       response

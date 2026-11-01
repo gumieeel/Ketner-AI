@@ -1,4 +1,6 @@
 import { useEffect, useId, useState, type ReactNode } from 'react';
+import { AutomationPlan } from '@/components/pricing/automation-plan';
+import { DiscoveryApiError } from '@/features/discovery/api';
 import { Link, useNavigate } from 'react-router-dom';
 import { Badge, type BadgeTone } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -213,7 +215,15 @@ function SaveControl({
       >
         {analysis.saved ? t('analysis.report.saved') : t('analysis.report.save')}
       </Button>
-      {error ? <ErrorNotice error={error} redirect={`/analyses/${analysis.id}`} /> : null}
+      {error instanceof DiscoveryApiError && error.code === 'subscription_required' ? (
+        // Этап E: автоматизация — по подписке с пробным месяцем; после оплаты — назад в отчёт.
+        <div className="mt-1 flex flex-col gap-2">
+          <p className="text-[14px] text-text">{t('automation.required')}</p>
+          <AutomationPlan compact returnPath={`/analyses/${analysis.id}`} />
+        </div>
+      ) : error ? (
+        <ErrorNotice error={error} redirect={`/analyses/${analysis.id}`} />
+      ) : null}
     </div>
   );
 }

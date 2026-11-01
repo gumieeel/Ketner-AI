@@ -1081,6 +1081,8 @@ export async function initDatabaseSync(): Promise<boolean> {
         billingLedger.credits,
         billingLedger.legacyCredits,
         ...(billingLedger.lowCreditNotices ? [billingLedger.lowCreditNotices] : []),
+        ...(billingLedger.automationSubscriptions ? [billingLedger.automationSubscriptions] : []),
+        ...(billingLedger.dodoWebhooks ? [billingLedger.dodoWebhooks] : []),
         usageStore,
         contactStore,
         compareVoteStore,

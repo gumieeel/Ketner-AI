@@ -62,13 +62,14 @@
 
 ## Вебхуки
 
-| Путь                                 | Кто присылает            | Проверка                                             |
-| ------------------------------------ | ------------------------ | ---------------------------------------------------- |
-| `POST /api/billing/trybit/webhook`   | Trybit                   | Подпись JWT + перепроверка у Trybit                  |
-| `POST /api/telegram/webhook`         | Telegram (бот оплаты)    | Заголовок `X-Telegram-Bot-Api-Secret-Token`          |
-| `POST /api/telegram/support/webhook` | Telegram (бот поддержки) | То же                                                |
-| `POST /api/webhooks/stripe`          | Stripe                   | Подпись `STRIPE_WEBHOOK_SECRET`                      |
-| `POST /api/webhooks`                 | свои сервисы             | HMAC `WEBHOOK_SECRET`, идемпотентность по id события |
+| Путь                                 | Кто присылает                            | Проверка                                                                                              |
+| ------------------------------------ | ---------------------------------------- | ----------------------------------------------------------------------------------------------------- |
+| `POST /api/billing/trybit/webhook`   | Trybit                                   | Подпись JWT + перепроверка у Trybit                                                                   |
+| `POST /api/telegram/webhook`         | Telegram (бот оплаты)                    | Заголовок `X-Telegram-Bot-Api-Secret-Token`                                                           |
+| `POST /api/telegram/support/webhook` | Telegram (бот поддержки)                 | То же                                                                                                 |
+| `POST /api/webhooks/stripe`          | Stripe                                   | Подпись `STRIPE_WEBHOOK_SECRET`                                                                       |
+| `POST /api/webhooks/dodo`            | Dodo Payments (подписка «Автоматизации») | Standard Webhooks `DODO_PAYMENTS_WEBHOOK_KEY`, один раз на `webhook-id`, гранты по подписке и периоду |
+| `POST /api/webhooks`                 | свои сервисы                             | HMAC `WEBHOOK_SECRET`, идемпотентность по id события                                                  |
 
 ## Что осталось
 

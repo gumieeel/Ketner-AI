@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto';
+import type { AutomationSubscription, ProcessedWebhook } from './automation-subscription.js';
 import type { LowCreditsNotice } from '../services/low-credits-notifier.js';
 import { join } from 'node:path';
 import { dirname } from 'node:path';
@@ -126,6 +127,9 @@ export interface BillingLedger {
   legacyCredits: DocStore<LegacyPremiumCredit>;
   /** Отметки о письме «кредиты на исходе» (services/low-credits-notifier.ts). */
   lowCreditNotices?: DocStore<LowCreditsNotice>;
+  /** Подписки «Автоматизации» через Dodo Payments и обработанные вебхуки Dodo (этап E). */
+  automationSubscriptions?: DocStore<AutomationSubscription>;
+  dodoWebhooks?: DocStore<ProcessedWebhook>;
 }
 
 export function createBillingLedger(dir?: string): BillingLedger {
@@ -143,6 +147,11 @@ export function createBillingLedger(dir?: string): BillingLedger {
       'low_credit_notices',
       file('low-credit-notices'),
     ),
+    automationSubscriptions: new DocStore<AutomationSubscription>(
+      'automation_subscriptions',
+      file('automation-subscriptions'),
+    ),
+    dodoWebhooks: new DocStore<ProcessedWebhook>('dodo_webhooks', file('dodo-webhooks')),
   };
 }
 

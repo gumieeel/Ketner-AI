@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { AUTOMATION_PLAN } from '../billing/automation-subscription.js';
 import { existsSync, readFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import test from 'node:test';
@@ -194,4 +195,13 @@ test('лимиты и цены платформы решений на сайте
       maxCredits: draft.maxCredits,
     },
   });
+});
+
+test('подписка «Автоматизации» на сайте совпадает с сервером', (t) => {
+  if (!existsSync(factsPath)) {
+    t.skip('исходники сайта недоступны в этом окружении');
+    return;
+  }
+  const facts = JSON.parse(readFileSync(factsPath, 'utf8')) as { automation: unknown };
+  assert.deepEqual(facts.automation, AUTOMATION_PLAN, 'billing/automation-subscription.ts');
 });

@@ -1,6 +1,7 @@
 import { Link } from 'react-router-dom';
 import { CreditsIcon } from '@/components/icons';
 import { PackCards } from '@/components/pricing/pack-cards';
+import { AutomationPlan } from '@/components/pricing/automation-plan';
 import { PlatformPricing } from '@/components/pricing/platform-pricing';
 import { buttonClasses } from '@/components/ui/button-classes';
 import { useAuth } from '@/features/auth/auth-store';
@@ -156,6 +157,11 @@ export function PricingPage() {
           {t('pricing.subtitle', { days: PACK_VALID_DAYS })}
         </p>
       </div>
+
+      {/* Подписка «Автоматизации» (этап E) — при включённой платформе решений. */}
+      {siteFeatures().discovery && siteFeatures().cardPayments ? (
+        <AutomationPlan returnPath="/solutions" />
+      ) : null}
 
       <TrialBanner />
 

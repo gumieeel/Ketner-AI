@@ -125,3 +125,42 @@ export async function confirmCryptoPayment(invoiceId: string): Promise<PaidResul
     body: JSON.stringify({}),
   });
 }
+
+// ─── Подписка «Автоматизации» через Dodo Payments (этап E) ───────────────────
+
+export interface AutomationInfo {
+  /** Оплата картой подключена на сервере. */
+  available: boolean;
+  plan: {
+    priceUsd: number;
+    monthlyCredits: number;
+    trialCredits: number;
+    trialDays: number;
+  };
+  subscription: {
+    status:
+      'pending' | 'active' | 'past_due' | 'on_hold' | 'paused' | 'cancelled' | 'failed' | 'expired';
+    trialEndsAt: string | null;
+    nextBillingDate: string | null;
+    cancelAtPeriodEnd: boolean;
+  } | null;
+}
+
+export function fetchAutomation(): Promise<AutomationInfo> {
+  return request('/billing/automation');
+}
+
+/** Сессия оплаты Dodo (пробный месяц с картой): браузер уходит на страницу оплаты. */
+export async function startAutomationCheckout(returnPath: string): Promise<string> {
+  return (
+    await request<{ url: string }>('/billing/automation/checkout', {
+      method: 'POST',
+      body: JSON.stringify({ returnPath }),
+    })
+  ).url;
+}
+
+/** Портал клиента Dodo: карта, счета, отмена подписки. */
+export async function openAutomationPortal(): Promise<string> {
+  return (await request<{ url: string }>('/billing/automation/portal', { method: 'POST' })).url;
+}

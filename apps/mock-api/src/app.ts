@@ -102,6 +102,8 @@ export interface AppDeps {
   /** Подмена частей анализа задач в тестах. */
   discovery?: ApiDeps['discovery'];
   builder?: ApiDeps['builder'];
+  /** Dodo Payments в тестах: клиент, продукт подписки, обязательность подписки. */
+  dodo?: ApiDeps['dodo'];
 }
 
 const DEFAULT_BODY_LIMIT = '1mb';
@@ -302,7 +304,12 @@ export function createApp(overrides: Partial<AppDeps> = {}): Express {
 
   // index.html со своими title/description/canonical для каждого адреса (см. seo/pages.ts).
   const pageCache = new Map<string, string>();
-  const siteFeatures = { discovery: deps.discoveryEnabled ?? config.discoveryEnabled };
+  const siteFeatures = {
+    discovery: deps.discoveryEnabled ?? config.discoveryEnabled,
+    cardPayments: deps.dodo
+      ? deps.dodo.client !== null && deps.dodo.productId !== ''
+      : config.dodo.apiKey !== '' && config.dodo.productId !== '',
+  };
   const sendPage = (request: express.Request, response: express.Response): void => {
     if (!indexHtml) {
       response.sendFile(indexHtmlPath, { dotfiles: 'allow' });
