@@ -42,9 +42,44 @@ export const LIMITS = {
 
 export type SolutionStatus = 'draft' | 'active' | 'paused';
 
+export type SolutionType = 'assistant' | 'customer_bot';
+
+/** Настройки страницы бота для клиентов (этап B): не версионируются, меняются сразу. */
+export interface BotSettings {
+  slug: string;
+  greeting: string;
+  quickReplies: string[];
+  dailyCapCredits: number;
+  corrections: Array<{ question: string; answer: string }>;
+}
+
+export const BOT_LIMITS = {
+  slugMin: 3,
+  slugMax: 40,
+  greeting: 300,
+  quickReplies: 4,
+  quickReply: 60,
+  dailyCapMin: 50,
+  dailyCapMax: 50_000,
+  corrections: 30,
+  correctionChars: 600,
+  message: 1000,
+  /** Не больше стольких кредитов за один ответ бота (BOT_REPLY_CAP_USD на сервере). */
+  replyMaxCredits: 30,
+} as const;
+
+export interface BotToday {
+  replies: number;
+  credits: number;
+  newLeads: number;
+}
+
 export interface SolutionView {
   id: string;
-  type: 'assistant';
+  type: SolutionType;
+  bot: BotSettings | null;
+  /** Только в списке: расход и заявки бота за сегодня. */
+  today?: BotToday | null;
   status: SolutionStatus;
   name: string;
   currentVersion: number;
@@ -320,4 +355,95 @@ export async function sendMessage(
         new DiscoveryApiError(String(data.code ?? 'error'), String(data.message ?? ''), 200),
       );
   });
+}
+
+// ─── Бот для клиентов: кабинет владельца ─────────────────────────────────────
+
+export interface BotOverview {
+  settings: BotSettings;
+  today: BotToday;
+  publicUrl: string;
+}
+
+export interface BotConversationView {
+  id: string;
+  solutionId: string;
+  messageCount: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface BotMessageView {
+  id: string;
+  conversationId: string;
+  role: 'user' | 'assistant';
+  content: string;
+  model: { id: string; name: string } | null;
+  offerContact: boolean;
+  status: 'complete' | 'error';
+  chargedCredits: number;
+  createdAt: string;
+}
+
+export interface BotLeadView {
+  id: string;
+  solutionId: string;
+  conversationId: string | null;
+  name: string;
+  contact: string;
+  question: string;
+  status: 'new' | 'done';
+  createdAt: string;
+  updatedAt: string;
+}
+
+export function fetchBot(id: string): Promise<BotOverview> {
+  return call(`/${enc(id)}/bot`);
+}
+
+export function saveBot(id: string, patch: Partial<BotSettings>): Promise<BotOverview> {
+  return call(`/${enc(id)}/bot`, { method: 'PUT', ...json(patch) });
+}
+
+export async function previewBot(
+  id: string,
+  messages: Array<{ role: 'user' | 'assistant'; content: string }>,
+): Promise<{ content: string; offerContact: boolean; chargedCredits: number }> {
+  return (
+    await call<{ reply: { content: string; offerContact: boolean; chargedCredits: number } }>(
+      `/${enc(id)}/bot/preview`,
+      { method: 'POST', ...json({ messages }) },
+    )
+  ).reply;
+}
+
+export async function listBotConversations(id: string): Promise<BotConversationView[]> {
+  return (await call<{ conversations: BotConversationView[] }>(`/${enc(id)}/conversations`))
+    .conversations;
+}
+
+export async function fetchBotConversation(
+  id: string,
+  conversationId: string,
+): Promise<BotMessageView[]> {
+  return (
+    await call<{ messages: BotMessageView[] }>(`/${enc(id)}/conversations/${enc(conversationId)}`)
+  ).messages;
+}
+
+export async function listBotLeads(id: string): Promise<BotLeadView[]> {
+  return (await call<{ leads: BotLeadView[] }>(`/${enc(id)}/leads`)).leads;
+}
+
+export async function setBotLeadStatus(
+  id: string,
+  leadId: string,
+  status: BotLeadView['status'],
+): Promise<BotLeadView> {
+  return (
+    await call<{ lead: BotLeadView }>(`/${enc(id)}/leads/${enc(leadId)}`, {
+      method: 'PATCH',
+      ...json({ status }),
+    })
+  ).lead;
 }

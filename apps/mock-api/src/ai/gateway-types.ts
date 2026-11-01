@@ -450,6 +450,11 @@ export interface GatewayRequest {
     maxOutputTokens?: number;
     /** С пользователя не списывается больше этой суммы, $. */
     maxChargeUsd?: number;
+    /**
+     * Бот для клиентов (docs/AUTOMATION_PLAN.md, этап B): настройки бота — весь системный промпт,
+     * без правил чата Ketner: бот отвечает от имени бизнеса, а не как ассистент Ketner AI.
+     */
+    replaceSystemPrompt?: boolean;
   };
   /**
    * Служебный запрос вместо обычного ответа в чате (проверка ответа другой моделью, судья

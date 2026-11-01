@@ -87,7 +87,7 @@ export const RECIPES: Readonly<Record<RecipeId, Recipe>> = {
   },
   customer_bot: {
     id: 'customer_bot',
-    available: false,
+    available: true,
     label: { ru: 'Бот для клиентов', en: 'Customer bot' },
     description: {
       ru: 'бот на странице Ketner отвечает клиентам бизнеса и собирает заявки',

@@ -68,6 +68,8 @@ const PRIVATE_PREFIXES = [
   '/onboarding',
   '/admin',
   '/analyses',
+  '/solutions',
+  '/b',
 ];
 
 const DISALLOW = [
@@ -83,6 +85,8 @@ const DISALLOW = [
   '/onboarding',
   '/admin',
   '/analyses',
+  '/solutions',
+  '/b/',
   '/login',
   '/signup/verify',
 ];
@@ -370,4 +374,12 @@ export function isNonCanonicalHost(host: string | undefined): boolean {
   if (hostname === canonical || hostname === `www.${canonical}`) return false;
   if (hostname === 'localhost' || hostname === '127.0.0.1' || hostname === '[::1]') return false;
   return true;
+}
+
+/** Разметка без тега Google Ads (gtag.js): для страниц бота, которые встраиваются на чужие сайты. */
+export function withoutAdsTag(html: string): string {
+  return html.replace(
+    /\s*<!-- Google tag \(gtag\.js\) -->\s*<script[^>]*googletagmanager[^>]*><\/script>\s*<script>[\s\S]*?gtag\('config'[^)]*\);\s*<\/script>/,
+    '',
+  );
 }

@@ -9,7 +9,8 @@ import {
   LIMITS,
   type SolutionView,
 } from '@/features/builder/api';
-import { useTranslation } from '@/i18n';
+import { creditsText } from '@/features/discovery/format';
+import { useTranslation, type TranslationKey } from '@/i18n';
 import { formatDateTime } from '@/lib/format-date';
 import { ErrorNotice } from '@/pages/analysis/error-notice';
 import { BuilderGate, Page, StatusBadge } from './shared';
@@ -24,7 +25,8 @@ export function SolutionsListPage() {
 }
 
 function SolutionsList() {
-  const { t, language } = useTranslation();
+  const translator = useTranslation();
+  const { t, language } = translator;
   const navigate = useNavigate();
   const [items, setItems] = useState<SolutionView[] | null>(null);
   const [error, setError] = useState<unknown>(null);
@@ -106,6 +108,16 @@ function SolutionsList() {
                   </Link>
                   <StatusBadge status={item.status} />
                 </div>
+                <p className="mt-1 text-[13px] text-muted">
+                  {t(`builder.type.${item.type}` as TranslationKey)}
+                  {item.today
+                    ? ` · ${t('builder.list.today', {
+                        replies: item.today.replies,
+                        credits: creditsText(translator, item.today.credits),
+                        leads: item.today.newLeads,
+                      })}`
+                    : ''}
+                </p>
                 <p className="mt-1 text-[13px] text-subtle">
                   {item.source
                     ? t('builder.list.fromOpportunity', { title: item.source.title })
@@ -114,7 +126,20 @@ function SolutionsList() {
                   {formatDateTime(item.updatedAt, language)}
                 </p>
               </div>
-              {item.status === 'active' ? (
+              {item.type === 'customer_bot' && item.bot && item.status !== 'draft' ? (
+                <a
+                  href={`/b/${item.bot.slug}`}
+                  target="_blank"
+                  rel="noopener"
+                  className={buttonClasses({
+                    variant: 'secondary',
+                    size: 'sm',
+                    className: 'shrink-0',
+                  })}
+                >
+                  {t('builder.list.openPage')}
+                </a>
+              ) : item.status === 'active' ? (
                 <Link
                   to={`/solutions/${item.id}/chat`}
                   className={buttonClasses({

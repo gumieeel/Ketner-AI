@@ -134,6 +134,9 @@ export function buildContentSecurityPolicy(indexHtml: string | null): string {
   ].join('; ');
 }
 
+/** Публичная страница бота: /b/<адрес>. */
+export const EMBEDDABLE_PAGE = /^\/b\/[a-z0-9-]{3,40}\/?$/;
+
 /** Заголовки безопасности для всех ответов; CSP — только для HTML-страниц. */
 export function securityHeaders(getCsp: () => string) {
   return (request: Request, response: Response, next: NextFunction): void => {
@@ -151,6 +154,13 @@ export function securityHeaders(getCsp: () => string) {
     if (request.path.startsWith('/api/') || request.path.startsWith('/v1/')) {
       response.setHeader('X-Frame-Options', 'DENY');
       response.setHeader('Cache-Control', response.getHeader('Cache-Control') ?? 'no-store');
+    } else if (EMBEDDABLE_PAGE.test(request.path)) {
+      // Страница бота для клиентов встраивается на сайты бизнеса (виджет). На ней нет входа и
+      // ссылок внутрь кабинета — ссылки открываются в новой вкладке.
+      response.setHeader(
+        'Content-Security-Policy',
+        getCsp().replace(/frame-ancestors [^;]*/, 'frame-ancestors *'),
+      );
     } else {
       response.setHeader('Content-Security-Policy', getCsp());
     }

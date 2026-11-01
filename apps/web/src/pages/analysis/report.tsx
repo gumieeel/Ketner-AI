@@ -67,7 +67,7 @@ export function Report({
     item.feasibilityStatus === 'not_supported' ? null : (
       <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-start">
         {/* Готовая автоматизация — первым действием; у возможности без рецепта — только план. */}
-        {item.recipe === 'personal_assistant' ? (
+        {item.recipe === 'personal_assistant' || item.recipe === 'customer_bot' ? (
           <SolutionAction
             analysis={analysis}
             opportunity={item}

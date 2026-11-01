@@ -101,6 +101,9 @@ export const draftOutputSchema = z.object({
     LIMITS.examples,
   ),
   restrictions: list(requiredText(LIMITS.restrictionChars), LIMITS.restrictions),
+  /** Только у бота для клиентов: приветствие и кнопки частых вопросов. */
+  greeting: text(300).default(''),
+  quickReplies: list(requiredText(60), 4),
   testCases: list(
     z.object({
       input: requiredText(LIMITS.caseInput),
@@ -127,3 +130,54 @@ export const judgeOutputSchema = z.object({
 
 export type DraftOutput = z.infer<typeof draftOutputSchema>;
 export type JudgeOutput = z.infer<typeof judgeOutputSchema>;
+
+// ─── Бот для клиентов (этап B) ───────────────────────────────────────────────
+
+/** Анонимный id посетителя страницы бота: создаёт его браузер, хранится там же. */
+export const VISITOR_ID = /^v_[a-z0-9]{12,40}$/;
+
+export const botSettingsBodySchema = z
+  .object({
+    slug: z.string().trim().toLowerCase().min(3).max(40),
+    greeting: z.string().trim().max(300),
+    quickReplies: z.array(z.string().trim().min(1).max(60)).max(4),
+    dailyCapCredits: z.number().int().min(50).max(50_000),
+    corrections: z
+      .array(
+        z.object({
+          question: z.string().trim().min(1).max(600),
+          answer: z.string().trim().min(1).max(600),
+        }),
+      )
+      .max(30),
+  })
+  .partial();
+
+export const botPreviewBodySchema = z.object({
+  messages: z
+    .array(
+      z.object({
+        role: z.enum(['user', 'assistant']),
+        content: z.string().trim().min(1).max(1000),
+      }),
+    )
+    .min(1)
+    .max(12)
+    .refine((items) => items.at(-1)?.role === 'user', 'last message must be from the user'),
+});
+
+export const leadStatusBodySchema = z.object({ status: z.enum(['new', 'done']) });
+
+export const botMessageBodySchema = z.object({
+  visitorId: z.string().regex(VISITOR_ID),
+  conversationId: z.string().min(1).max(100).optional(),
+  content: z.string().trim().min(1).max(1000),
+});
+
+export const botLeadBodySchema = z.object({
+  visitorId: z.string().regex(VISITOR_ID),
+  conversationId: z.string().min(1).max(100).optional(),
+  name: z.string().trim().min(1).max(80),
+  contact: z.string().trim().min(3).max(120),
+  question: z.string().trim().max(1000).default(''),
+});

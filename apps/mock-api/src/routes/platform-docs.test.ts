@@ -9,6 +9,7 @@ import test from 'node:test';
 import type { Router } from 'express';
 import { config } from '../config.js';
 import { createAnalysesRouter } from './analyses.js';
+import { createBotsRouter } from './bots.js';
 import { createSolutionsRouter } from './solutions.js';
 
 const API_MD = new URL('../../../../docs/api.md', import.meta.url);
@@ -95,6 +96,15 @@ test('api.md описывает ровно те маршруты Builder, что
   const code = routesOf('/solutions', createSolutionsRouter({ ai: config.ai, enabled: true }));
   assert.ok(code.size >= 20, `маршрутов Builder: ${code.size}`);
   assert.deepEqual(compare(code, documented('Помощники (Builder)')), {
+    undocumented: [],
+    missingInCode: [],
+  });
+});
+
+test('api.md описывает ровно те маршруты публичной страницы бота, что есть в коде', () => {
+  const code = routesOf('/b', createBotsRouter({ bots: () => null, enabled: true }));
+  assert.equal(code.size, 4, `маршрутов бота: ${code.size}`);
+  assert.deepEqual(compare(code, documented('Бот для клиентов')), {
     undocumented: [],
     missingInCode: [],
   });

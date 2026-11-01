@@ -10,6 +10,7 @@ import type { AiConfig } from './config.js';
 import { errorHandler, notFoundHandler } from './middleware/errors.js';
 import {
   buildContentSecurityPolicy,
+  EMBEDDABLE_PAGE,
   isAllowedCorsOrigin,
   isPublicBetterAuthEndpoint,
   securityHeaders,
@@ -24,6 +25,7 @@ import {
   robotsTxt,
   sitemapXml,
   trailingSlashRedirect,
+  withoutAdsTag,
   type PageLastmods,
   type PrerenderedPage,
 } from './seo/pages.js';
@@ -307,8 +309,19 @@ export function createApp(overrides: Partial<AppDeps> = {}): Express {
       return;
     }
     const kind = classifyPath(request.path);
-    const key = kind === 'public' ? request.path.replace(/\/+$/, '') || '/' : kind;
+    // Страница бота для клиентов открывается у посетителей бизнеса и на чужих сайтах: рекламный
+    // тег Ketner там не загружается.
+    const botPage = EMBEDDABLE_PAGE.test(request.path);
+    const key = botPage
+      ? 'bot'
+      : kind === 'public'
+        ? request.path.replace(/\/+$/, '') || '/'
+        : kind;
     let html = pageCache.get(key);
+    if (!html && botPage) {
+      html = withoutAdsTag(renderIndexHtml(indexHtml, '/__none__', undefined, siteFeatures));
+      pageCache.set(key, html);
+    }
     if (!html) {
       // Главная при включённой платформе решений — свой вариант разметки (собирается заранее).
       const prerenderedPage =

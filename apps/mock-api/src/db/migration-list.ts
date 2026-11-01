@@ -199,4 +199,57 @@ export const MIGRATIONS: readonly Migration[] = [
       ALTER TABLE discovery_analyses ADD COLUMN source jsonb;
     `,
   },
+  {
+    // Бот для клиентов (docs/AUTOMATION_PLAN.md, этап B): тип решения `customer_bot`, его
+    // настройки и адрес страницы, диалоги посетителей и заявки владельцу.
+    id: '0006_customer_bots',
+    sql: `
+      ALTER TABLE solutions DROP CONSTRAINT IF EXISTS solutions_type_check;
+      ALTER TABLE solutions ADD CONSTRAINT solutions_type_check
+        CHECK (type IN ('assistant', 'customer_bot'));
+      ALTER TABLE solutions ADD COLUMN bot jsonb;
+      ALTER TABLE solutions ADD COLUMN slug text;
+      CREATE UNIQUE INDEX solutions_slug ON solutions (slug) WHERE slug IS NOT NULL;
+
+      CREATE TABLE bot_conversations (
+        id text PRIMARY KEY,
+        solution_id text NOT NULL REFERENCES solutions (id) ON DELETE CASCADE,
+        user_id text NOT NULL,
+        visitor_id text NOT NULL,
+        message_count integer NOT NULL DEFAULT 0,
+        created_at timestamptz NOT NULL DEFAULT now(),
+        updated_at timestamptz NOT NULL DEFAULT now()
+      );
+      CREATE INDEX bot_conversations_solution ON bot_conversations (solution_id, updated_at DESC);
+
+      CREATE TABLE bot_messages (
+        id text PRIMARY KEY,
+        conversation_id text NOT NULL REFERENCES bot_conversations (id) ON DELETE CASCADE,
+        solution_id text NOT NULL,
+        user_id text NOT NULL,
+        role text NOT NULL CHECK (role IN ('user', 'assistant')),
+        content text NOT NULL,
+        data jsonb NOT NULL DEFAULT '{}'::jsonb,
+        credits_usd numeric(12, 6) NOT NULL DEFAULT 0,
+        status text NOT NULL CHECK (status IN ('complete', 'error')),
+        created_at timestamptz NOT NULL DEFAULT now()
+      );
+      CREATE INDEX bot_messages_conversation ON bot_messages (conversation_id, created_at);
+      CREATE INDEX bot_messages_solution_day ON bot_messages (solution_id, created_at);
+
+      CREATE TABLE bot_leads (
+        id text PRIMARY KEY,
+        solution_id text NOT NULL REFERENCES solutions (id) ON DELETE CASCADE,
+        user_id text NOT NULL,
+        conversation_id text,
+        name text NOT NULL,
+        contact text NOT NULL,
+        question text NOT NULL DEFAULT '',
+        status text NOT NULL CHECK (status IN ('new', 'done')),
+        created_at timestamptz NOT NULL DEFAULT now(),
+        updated_at timestamptz NOT NULL DEFAULT now()
+      );
+      CREATE INDEX bot_leads_solution ON bot_leads (solution_id, created_at DESC);
+    `,
+  },
 ];

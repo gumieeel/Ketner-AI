@@ -30,7 +30,8 @@ import type { RevokedTokenStore } from '../store/revoked-token-store.js';
 import type { Mailer } from '../services/mailer.js';
 import { createChatRouter } from './chat.js';
 import { createAnalysesRouter, type AnalysesRouterDeps } from './analyses.js';
-import { createSolutionsRouter } from './solutions.js';
+import { createBuilderRuntime, createSolutionsRouter } from './solutions.js';
+import { createBotsRouter } from './bots.js';
 import type { BuilderService } from '../builder/service.js';
 import { createCompareRouter } from './compare.js';
 import { createReviewRouter } from './review.js';
@@ -458,7 +459,19 @@ export function createApiRouter(deps: ApiDeps): Router {
       ...deps.discovery,
     }),
   );
-  // Builder (этап 6): персональные помощники — после входа, за тем же флагом.
+  // Builder (этап 6): помощники и боты для клиентов — после входа, за тем же флагом. Один runtime
+  // на оба роутера: кабинет владельца (/solutions) и публичная страница бота (/b).
+  const builderRuntime = createBuilderRuntime({
+    ai: deps.ai,
+    userStore: activeUserStore,
+    subscriptionStore: activeSubscriptionStore,
+    usageStore: activeUsageStore,
+    credits: activeBilling.credits,
+    ...(deps.chatGateway ? { gateway: deps.chatGateway } : {}),
+    ...(deps.discovery?.stores ? { stores: deps.discovery.stores } : {}),
+    ...(deps.builder ? { service: deps.builder } : {}),
+    ...(deps.mailer ? { mailer: deps.mailer } : {}),
+  });
   router.use(
     '/solutions',
     createSolutionsRouter({
@@ -470,7 +483,15 @@ export function createApiRouter(deps: ApiDeps): Router {
       ...(deps.chatGateway ? { gateway: deps.chatGateway } : {}),
       ...(deps.discoveryEnabled !== undefined ? { enabled: deps.discoveryEnabled } : {}),
       ...(deps.discovery?.stores ? { stores: deps.discovery.stores } : {}),
-      ...(deps.builder ? { service: deps.builder } : {}),
+      runtime: builderRuntime,
+    }),
+  );
+  // Публичная страница бота для клиентов: без входа, за тем же флагом.
+  router.use(
+    '/b',
+    createBotsRouter({
+      bots: builderRuntime.bots,
+      ...(deps.discoveryEnabled !== undefined ? { enabled: deps.discoveryEnabled } : {}),
     }),
   );
   router.use(

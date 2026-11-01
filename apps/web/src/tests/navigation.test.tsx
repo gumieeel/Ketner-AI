@@ -77,7 +77,7 @@ describe('навигация платформы решений', () => {
     installFakeApi();
     renderRoute('/solutions');
     const nav = screen.getAllByRole('navigation', { name: 'Навигация' })[0];
-    expect(within(nav).getByRole('link', { name: 'Помощники' })).toHaveAttribute(
+    expect(within(nav).getByRole('link', { name: 'Мои автоматизации' })).toHaveAttribute(
       'aria-current',
       'page',
     );
@@ -94,7 +94,7 @@ describe('навигация платформы решений', () => {
       'href',
       '/analyses',
     );
-    expect(links.find((link) => link.textContent === 'Помощники')).toHaveAttribute(
+    expect(links.find((link) => link.textContent === 'Мои автоматизации')).toHaveAttribute(
       'href',
       '/solutions',
     );

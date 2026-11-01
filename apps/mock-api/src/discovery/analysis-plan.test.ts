@@ -41,9 +41,11 @@ test('рецепт: только доступный и только у выпо�
   assert.equal(acceptedRecipe('personal_assistant', 'ready'), 'personal_assistant');
   assert.equal(acceptedRecipe('personal_assistant', 'needs_setup'), 'personal_assistant');
   assert.equal(acceptedRecipe('personal_assistant', 'not_supported'), null);
-  // Бот на сайте появится на этапе B: до этого рецепт снимается.
-  assert.equal(RECIPES.customer_bot.available, false);
-  assert.equal(acceptedRecipe('customer_bot', 'ready'), null);
+  // Бот для клиентов (этап B) доступен; контент на неделю (этап F) — ещё нет.
+  assert.equal(RECIPES.customer_bot.available, true);
+  assert.equal(acceptedRecipe('customer_bot', 'ready'), 'customer_bot');
+  assert.equal(RECIPES.weekly_content.available, false);
+  assert.equal(acceptedRecipe('weekly_content', 'ready'), null);
   assert.equal(acceptedRecipe(null, 'ready'), null);
 });
 
@@ -365,8 +367,16 @@ test('анализ по плану: сайт прочитан один раз и
     null,
     'почта не поддерживается — рецепта нет',
   );
-  assert.equal(byTitle['Бот для покупателей']?.recipe, null, 'бот на сайте ещё недоступен');
-  assert.equal(byTitle['Черновики ответов']?.priority, 0, 'главная рекомендация — с рецептом');
+  assert.equal(byTitle['Бот для покупателей']?.recipe, 'customer_bot');
+  // Возможности с рецептом — выше остальных в отчёте.
+  const withRecipe = (view?.opportunities ?? []).filter((item) => item.recipe !== null);
+  const without = (view?.opportunities ?? []).filter((item) => item.recipe === null);
+  assert.equal(withRecipe.length, 2);
+  assert.ok(
+    Math.max(...withRecipe.map((item) => item.priority)) <
+      Math.min(...without.map((item) => item.priority)),
+    'главная рекомендация — с рецептом',
+  );
 });
 
 test('сайт не открылся — анализ идёт по тексту, а причина сохраняется', async () => {

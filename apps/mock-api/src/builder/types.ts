@@ -39,10 +39,31 @@ export interface SolutionSource {
   title: string;
 }
 
+export type SolutionType = 'assistant' | 'customer_bot';
+
+/**
+ * Настройки бота для клиентов (этап B), не версионируются: меняются сразу, без повторной
+ * проверки. Поведение бота — в настройках версии (`AssistantConfig`), как у помощника.
+ */
+export interface BotSettings {
+  /** Адрес страницы бота: ketner.org/b/<slug>. */
+  slug: string;
+  /** Первое сообщение на странице бота. */
+  greeting: string;
+  /** Кнопки с частыми вопросами. */
+  quickReplies: string[];
+  /** Потолок расхода за сутки (UTC), кредитов; дальше бот только собирает заявки. */
+  dailyCapCredits: number;
+  /** Исправленные владельцем ответы: бот отвечает так на похожие вопросы. */
+  corrections: Array<{ question: string; answer: string }>;
+}
+
 export interface Solution {
   id: string;
   ownerId: string;
-  type: 'assistant';
+  type: SolutionType;
+  /** Только у `customer_bot`. */
+  bot: BotSettings | null;
   status: SolutionStatus;
   name: string;
   /** Номер последней сохранённой версии настроек. */
@@ -132,4 +153,44 @@ export interface ChatMessage {
   image: { id: string; url: string; downloadUrl: string; modelName: string } | null;
   status: 'complete' | 'error';
   createdAt: string;
+}
+
+/** Диалог посетителя со страницей бота: посетитель — анонимный id из его браузера. */
+export interface BotConversation {
+  id: string;
+  solutionId: string;
+  ownerId: string;
+  visitorId: string;
+  messageCount: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface BotMessage {
+  id: string;
+  conversationId: string;
+  solutionId: string;
+  ownerId: string;
+  role: 'user' | 'assistant';
+  content: string;
+  model: { id: string; name: string } | null;
+  /** Бот предложил оставить контакт (не знает ответа, клиент просит человека, кончились кредиты). */
+  offerContact: boolean;
+  /** Списано с кредитов владельца, $. */
+  creditsUsd: number;
+  status: 'complete' | 'error';
+  createdAt: string;
+}
+
+export interface BotLead {
+  id: string;
+  solutionId: string;
+  ownerId: string;
+  conversationId: string | null;
+  name: string;
+  contact: string;
+  question: string;
+  status: 'new' | 'done';
+  createdAt: string;
+  updatedAt: string;
 }

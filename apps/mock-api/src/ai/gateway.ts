@@ -656,9 +656,12 @@ export class AIGateway {
           ? `${baseSystemPrompt} ${language === 'en' ? 'Keep responses concise and direct.' : 'Отвечай максимально кратко и по существу.'}`
           : baseSystemPrompt;
       // Помощник Builder: его настройки — после правил чата, правила чата остаются в силе.
+      // Бот для клиентов: его промпт целиком заменяет правила чата.
       const systemPrompt =
         req.assistant && !req.task
-          ? `${concisePrompt}\n\n${req.assistant.instructions}`
+          ? req.assistant.replaceSystemPrompt
+            ? req.assistant.instructions
+            : `${concisePrompt}\n\n${req.assistant.instructions}`
           : concisePrompt;
 
       // Бюджет проекта зависит от тарифа, окна и цены модели: большой контекст на дорогой модели —

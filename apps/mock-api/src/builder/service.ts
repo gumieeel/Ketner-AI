@@ -43,8 +43,15 @@ import {
   type JudgeOutput,
 } from './schemas.js';
 import type { BuilderStore } from './store.js';
+import {
+  botDraftSystemPrompt,
+  buildBotInstructions,
+  parseBotReply,
+  slugFromName,
+} from './bot-prompt.js';
 import type {
   AssistantConfig,
+  BotSettings,
   Solution,
   SolutionVersion,
   TestCase,
@@ -84,6 +91,8 @@ const DRAFT_OUTPUT_TOKENS = 4000;
 const JUDGE_OUTPUT_TOKENS = 1200;
 /** Сколько последних сообщений чата помощник видит. */
 export const CHAT_HISTORY = 20;
+/** Потолок расхода бота для клиентов в сутки по умолчанию, кредитов (≈ 300 ответов). */
+export const DEFAULT_BOT_DAILY_CAP = 1000;
 
 const text = (language: Language, ru: string, en: string) => (language === 'en' ? en : ru);
 const round6 = (value: number) => Math.round(value * 1e6) / 1e6;
@@ -94,6 +103,18 @@ function chatPromptChars(): number {
       (value) => value.length,
     ),
   );
+}
+
+/** Системный промпт ответа: помощник — правила чата + настройки, бот — только свой промпт. */
+export function answerInstructions(config: AssistantConfig, bot: BotSettings | null) {
+  return bot
+    ? { instructions: buildBotInstructions(config, bot), replaceSystemPrompt: true }
+    : { instructions: buildAssistantInstructions(config), replaceSystemPrompt: false };
+}
+
+function promptChars(config: AssistantConfig, bot: BotSettings | null): number {
+  const { instructions, replaceSystemPrompt } = answerInstructions(config, bot);
+  return (replaceSystemPrompt ? 0 : chatPromptChars()) + instructions.length;
 }
 
 export function defaultConfig(name: string, language: Language): AssistantConfig {
@@ -194,18 +215,18 @@ export class BuilderService {
   }
 
   /** Потолок одного кейса: ответ помощника (худший случай Auto) и проверка судьёй. */
-  private caseCaps(config: AssistantConfig, item: TestCase) {
-    const instructions = buildAssistantInstructions(config).length;
+  private caseCaps(config: AssistantConfig, item: TestCase, bot: BotSettings | null) {
+    const system = promptChars(config, bot);
     const answer = callCost(
       AUTO_PREMIUM_MODEL_ID,
       {
-        systemChars: chatPromptChars() + instructions,
+        systemChars: system,
         payloadChars: item.input.length,
         maxOutputTokens: TEST_ANSWER_TOKENS,
         attempts: 1,
       },
       {
-        inputTokens: Math.ceil((chatPromptChars() + instructions + item.input.length) / 3),
+        inputTokens: Math.ceil((system + item.input.length) / 3),
         outputTokens: 600,
       },
       this.registry,
@@ -215,7 +236,7 @@ export class BuilderService {
       DRAFT_MODEL_ID,
       { systemChars: 0, payloadChars: 0, maxOutputTokens: TEST_ANSWER_TOKENS, attempts: 1 },
       {
-        inputTokens: Math.ceil((chatPromptChars() + instructions + item.input.length) / 3),
+        inputTokens: Math.ceil((system + item.input.length) / 3),
         outputTokens: 600,
       },
       this.registry,
@@ -238,11 +259,11 @@ export class BuilderService {
     };
   }
 
-  testQuote(config: AssistantConfig, cases: readonly TestCase[]) {
+  testQuote(config: AssistantConfig, cases: readonly TestCase[], bot: BotSettings | null = null) {
     let capUsd = 0;
     let typicalUsd = 0;
     for (const item of cases) {
-      const caps = this.caseCaps(config, item);
+      const caps = this.caseCaps(config, item, bot);
       capUsd += caps.answerCapUsd + caps.judgeCapUsd;
       typicalUsd += caps.typicalUsd;
     }
@@ -301,6 +322,7 @@ export class BuilderService {
       id,
       ownerId: caller.userId,
       type: 'assistant',
+      bot: null,
       status: 'draft',
       name,
       currentVersion: 1,
@@ -396,6 +418,17 @@ export class BuilderService {
   ): Promise<Ok<{ solution: Solution; created: boolean }> | BuilderError> {
     const language = caller.language;
     const id = randomUUID();
+    // Рецепт «бот для клиентов» (этап B): другой черновик и тип решения.
+    const isBot = opportunity.recipe === 'customer_bot';
+    const site =
+      analysis.source && analysis.source.ok
+        ? {
+            url: analysis.source.url,
+            title: analysis.source.title,
+            description: analysis.source.description,
+            text: analysis.source.text,
+          }
+        : null;
     const answers = analysis.questions
       .map((question) => {
         const answer = analysis.answers[question.id];
@@ -419,8 +452,9 @@ export class BuilderService {
         typicalUsd: 0,
       },
       language,
-      systemPrompt: draftSystemPrompt(language),
+      systemPrompt: isBot ? botDraftSystemPrompt(language) : draftSystemPrompt(language),
       userMessage: draftUserMessage({
+        ...(isBot && site ? { website: site } : {}),
         situation: analysis.context
           ? { domain: analysis.context.domain, summary: analysis.context.summary }
           : null,
@@ -441,7 +475,7 @@ export class BuilderService {
         language,
       }),
       schema: draftOutputSchema,
-      templateOutput: draftTemplate(opportunity.title, language),
+      templateOutput: draftTemplate(opportunity.title, language, isBot),
     });
     if (!result.ok) {
       return {
@@ -464,10 +498,26 @@ export class BuilderService {
       restrictions: draft.restrictions,
       language,
     };
+    const bot: BotSettings | null = isBot
+      ? {
+          slug: await this.freeSlug(draft.name),
+          greeting:
+            draft.greeting ||
+            text(
+              language,
+              `Здравствуйте! Я бот «${draft.name}». Чем помочь?`,
+              `Hello! I am the "${draft.name}" bot. How can I help?`,
+            ),
+          quickReplies: draft.quickReplies,
+          dailyCapCredits: DEFAULT_BOT_DAILY_CAP,
+          corrections: [],
+        }
+      : null;
     const solution: Solution = {
       id,
       ownerId: caller.userId,
-      type: 'assistant',
+      type: isBot ? 'customer_bot' : 'assistant',
+      bot,
       status: 'draft',
       name: draft.name,
       currentVersion: 1,
@@ -492,6 +542,17 @@ export class BuilderService {
       cases,
     );
     return { ok: true, solution, created: true };
+  }
+
+  /** Свободный адрес страницы бота: из имени, при занятости — с коротким суффиксом. */
+  async freeSlug(name: string): Promise<string> {
+    const base = slugFromName(name);
+    if (!(await this.deps.store.slugTaken(base))) return base;
+    for (let attempt = 0; attempt < 20; attempt += 1) {
+      const candidate = `${base.slice(0, 33)}-${randomUUID().slice(0, 6)}`;
+      if (!(await this.deps.store.slugTaken(candidate))) return candidate;
+    }
+    return `bot-${randomUUID().slice(0, 12)}`;
   }
 
   // ─── Чтение и настройки ────────────────────────────────────────────────────
@@ -631,7 +692,7 @@ export class BuilderService {
         message: text(language, 'Тесты уже идут.', 'Tests are already running.'),
       };
     }
-    const quote = this.testQuote(view.config, view.cases);
+    const quote = this.testQuote(view.config, view.cases, view.solution.bot);
     if (!confirm)
       return this.confirmation(language, { ru: 'Прогон тестов', en: 'Test run' }, quote, {
         cases: quote.cases,
@@ -665,7 +726,7 @@ export class BuilderService {
       version: 1,
     };
     if (!(await this.deps.store.createRun(run))) return notFound(id);
-    const job = this.executeRun(caller, run, view.config, view.cases)
+    const job = this.executeRun(caller, run, view.config, view.cases, view.solution.bot)
       .catch((error: unknown) => console.error(`[builder] прогон ${run.id} упал`, error))
       .finally(() => this.running.delete(run.id));
     this.running.set(run.id, job);
@@ -677,10 +738,11 @@ export class BuilderService {
     run: TestRun,
     config: AssistantConfig,
     cases: readonly TestCase[],
+    bot: BotSettings | null,
   ): Promise<void> {
-    const instructions = buildAssistantInstructions(config);
+    const { instructions, replaceSystemPrompt } = answerInstructions(config, bot);
     for (const item of cases) {
-      const caps = this.caseCaps(config, item);
+      const caps = this.caseCaps(config, item, bot);
       await this.updateResult(caller.userId, run.id, item.id, { status: 'running' });
       const answer = await this.answer(
         caller,
@@ -692,8 +754,16 @@ export class BuilderService {
           maxOutputTokens: TEST_ANSWER_TOKENS,
           maxChargeUsd: caps.answerCapUsd,
           solutionId: run.solutionId,
+          replaceSystemPrompt,
         },
       );
+      // Бот: метка заявки — не текст ответа; судья видит, что клиенту предложена форма.
+      if (bot) {
+        const parsed = parseBotReply(answer.text);
+        answer.text = parsed.offerContact
+          ? `${parsed.text}\n\n${config.language === 'en' ? '[The bot showed the customer the "Leave your contact" form]' : '[Бот показал клиенту форму «Оставьте контакт»]'}`
+          : parsed.text;
+      }
       if (answer.error) {
         await this.updateResult(caller.userId, run.id, item.id, {
           status: 'failed',
@@ -770,7 +840,13 @@ export class BuilderService {
     conversationId: string,
     instructions: string,
     messages: Array<{ role: 'user' | 'assistant'; content: string }>,
-    options: { maxOutputTokens?: number; maxChargeUsd?: number; solutionId: string },
+    options: {
+      maxOutputTokens?: number;
+      maxChargeUsd?: number;
+      solutionId: string;
+      /** Бот для клиентов: его промпт заменяет правила чата Ketner. */
+      replaceSystemPrompt?: boolean;
+    },
     onDelta?: (delta: string) => void,
     signal?: AbortSignal,
   ): Promise<{
@@ -806,6 +882,7 @@ export class BuilderService {
           ...(runId ? { testRunId: runId } : {}),
           ...(options.maxOutputTokens ? { maxOutputTokens: options.maxOutputTokens } : {}),
           ...(options.maxChargeUsd !== undefined ? { maxChargeUsd: options.maxChargeUsd } : {}),
+          ...(options.replaceSystemPrompt ? { replaceSystemPrompt: true } : {}),
         },
       },
       {
@@ -954,7 +1031,10 @@ export function draftQuote(language: Language, registry: ModelRegistry = modelRe
   const cost = callCost(
     DRAFT_MODEL_ID,
     {
-      systemChars: draftSystemPrompt(language).length,
+      systemChars: Math.max(
+        draftSystemPrompt(language).length,
+        botDraftSystemPrompt(language).length,
+      ),
       payloadChars: DRAFT_PAYLOAD_CHARS,
       maxOutputTokens: DRAFT_OUTPUT_TOKENS,
       attempts: 2,
@@ -987,10 +1067,18 @@ function conflict(language: Language): BuilderError {
 }
 
 /** Демо-черновик для работы без ключей моделей (локально и в тестах). */
-export function draftTemplate(title: string, language: Language): string {
+export function draftTemplate(title: string, language: Language, bot = false): string {
   const en = language === 'en';
   return JSON.stringify({
     name: title.slice(0, LIMITS.name),
+    ...(bot
+      ? {
+          greeting: en
+            ? 'Hello! This is a demo bot without a model. Ask about delivery or prices.'
+            : 'Здравствуйте! Это демо-бот без модели. Спросите о доставке или ценах.',
+          quickReplies: en ? ['Delivery', 'Prices', 'Contacts'] : ['Доставка', 'Цены', 'Контакты'],
+        }
+      : {}),
     purpose: en
       ? 'Demo assistant without a model: helps with this opportunity.'
       : 'Демо-помощник без модели: помогает с этой возможностью.',

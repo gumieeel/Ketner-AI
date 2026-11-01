@@ -8,6 +8,9 @@
 import type { SqlRunner } from '../code/postgres-driver.js';
 import type {
   AssistantConfig,
+  BotConversation,
+  BotLead,
+  BotMessage,
   ChatMessage,
   ChatThread,
   Solution,
@@ -45,6 +48,39 @@ export interface BuilderStore {
   addMessage(message: ChatMessage): Promise<boolean>;
   /** Последние `limit` сообщений по времени (старые — первыми). */
   listMessages(ownerId: string, threadId: string, limit: number): Promise<ChatMessage[]>;
+
+  // ─── Бот для клиентов (этап B) ─────────────────────────────────────────────
+  /** Бот по адресу страницы — без владельца: публичная страница бота. */
+  getSolutionBySlug(slug: string): Promise<Solution | null>;
+  slugTaken(slug: string): Promise<boolean>;
+  createConversation(conversation: BotConversation): Promise<void>;
+  /** Диалог этого бота (публичная сторона знает только бот и id диалога). */
+  getConversation(solutionId: string, id: string): Promise<BotConversation | null>;
+  /** Сохранить сообщение и обновить счётчик и время диалога. */
+  addBotMessage(message: BotMessage): Promise<void>;
+  /** Последние `limit` сообщений диалога (старые — первыми). */
+  botHistory(solutionId: string, conversationId: string, limit: number): Promise<BotMessage[]>;
+  listConversations(ownerId: string, solutionId: string, limit: number): Promise<BotConversation[]>;
+  listBotMessages(
+    ownerId: string,
+    solutionId: string,
+    conversationId: string,
+  ): Promise<BotMessage[]>;
+  /** Ответы бота и списанные кредиты начиная с `since` (ISO). */
+  botUsageSince(
+    solutionId: string,
+    since: string,
+  ): Promise<{ replies: number; creditsUsd: number }>;
+  createLead(lead: BotLead): Promise<void>;
+  listLeads(ownerId: string, solutionId: string, limit: number): Promise<BotLead[]>;
+  setLeadStatus(
+    ownerId: string,
+    solutionId: string,
+    leadId: string,
+    status: BotLead['status'],
+    at: string,
+  ): Promise<BotLead | null>;
+  countNewLeads(ownerId: string, solutionId: string): Promise<number>;
 }
 
 const clone = <T>(value: T): T => structuredClone(value);
@@ -56,12 +92,17 @@ export class MemoryBuilderStore implements BuilderStore {
   private readonly runs = new Map<string, TestRun>();
   private readonly threads = new Map<string, ChatThread>();
   private readonly messages = new Map<string, ChatMessage>();
+  private readonly conversations = new Map<string, BotConversation>();
+  private readonly botMessages: BotMessage[] = [];
+  private readonly leads = new Map<string, BotLead>();
 
   private owns(ownerId: string, solutionId: string): boolean {
     return this.solutions.get(solutionId)?.ownerId === ownerId;
   }
 
   async createSolution(solution: Solution, version: SolutionVersion, cases: TestCase[]) {
+    const slug = solution.bot?.slug;
+    if (slug && (await this.slugTaken(slug))) throw new Error('builder: адрес бота занят');
     this.solutions.set(solution.id, clone(solution));
     this.versions.set(solution.id, [clone(version)]);
     for (const item of cases) this.cases.set(item.id, clone(item));
@@ -83,6 +124,14 @@ export class MemoryBuilderStore implements BuilderStore {
     const current = this.solutions.get(solution.id);
     if (!current || current.ownerId !== solution.ownerId || current.version !== expectedVersion)
       return null;
+    const slug = solution.bot?.slug;
+    if (
+      slug &&
+      [...this.solutions.values()].some(
+        (item) => item.id !== solution.id && item.bot?.slug === slug,
+      )
+    )
+      throw new Error('builder: адрес бота занят');
     const next = { ...clone(solution), version: expectedVersion + 1 };
     this.solutions.set(solution.id, next);
     return clone(next);
@@ -94,6 +143,11 @@ export class MemoryBuilderStore implements BuilderStore {
     this.versions.delete(id);
     for (const [key, item] of this.cases) if (item.solutionId === id) this.cases.delete(key);
     for (const [key, item] of this.runs) if (item.solutionId === id) this.runs.delete(key);
+    for (const [key, item] of this.conversations)
+      if (item.solutionId === id) this.conversations.delete(key);
+    for (let index = this.botMessages.length - 1; index >= 0; index -= 1)
+      if (this.botMessages[index]!.solutionId === id) this.botMessages.splice(index, 1);
+    for (const [key, item] of this.leads) if (item.solutionId === id) this.leads.delete(key);
     for (const [key, thread] of this.threads) {
       if (thread.solutionId !== id) continue;
       this.threads.delete(key);
@@ -215,6 +269,100 @@ export class MemoryBuilderStore implements BuilderStore {
       .slice(-limit)
       .map(clone);
   }
+
+  async getSolutionBySlug(slug: string) {
+    const found = [...this.solutions.values()].find((item) => item.bot?.slug === slug);
+    return found ? clone(found) : null;
+  }
+
+  async slugTaken(slug: string) {
+    return [...this.solutions.values()].some((item) => item.bot?.slug === slug);
+  }
+
+  async createConversation(conversation: BotConversation) {
+    this.conversations.set(conversation.id, clone(conversation));
+  }
+
+  async getConversation(solutionId: string, id: string) {
+    const found = this.conversations.get(id);
+    return found && found.solutionId === solutionId ? clone(found) : null;
+  }
+
+  async addBotMessage(message: BotMessage) {
+    this.botMessages.push(clone(message));
+    const conversation = this.conversations.get(message.conversationId);
+    if (conversation) {
+      conversation.messageCount += 1;
+      conversation.updatedAt = message.createdAt;
+    }
+  }
+
+  async botHistory(solutionId: string, conversationId: string, limit: number) {
+    return this.botMessages
+      .filter((item) => item.solutionId === solutionId && item.conversationId === conversationId)
+      .slice(-limit)
+      .map(clone);
+  }
+
+  async listConversations(ownerId: string, solutionId: string, limit: number) {
+    if (!this.owns(ownerId, solutionId)) return [];
+    return [...this.conversations.values()]
+      .filter((item) => item.solutionId === solutionId)
+      .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
+      .slice(0, limit)
+      .map(clone);
+  }
+
+  async listBotMessages(ownerId: string, solutionId: string, conversationId: string) {
+    if (!this.owns(ownerId, solutionId)) return [];
+    return this.botMessages
+      .filter((item) => item.solutionId === solutionId && item.conversationId === conversationId)
+      .map(clone);
+  }
+
+  async botUsageSince(solutionId: string, since: string) {
+    const items = this.botMessages.filter(
+      (item) =>
+        item.solutionId === solutionId && item.role === 'assistant' && item.createdAt >= since,
+    );
+    return {
+      replies: items.length,
+      creditsUsd: Math.round(items.reduce((sum, item) => sum + item.creditsUsd, 0) * 1e6) / 1e6,
+    };
+  }
+
+  async createLead(lead: BotLead) {
+    this.leads.set(lead.id, clone(lead));
+  }
+
+  async listLeads(ownerId: string, solutionId: string, limit: number) {
+    if (!this.owns(ownerId, solutionId)) return [];
+    return [...this.leads.values()]
+      .filter((item) => item.solutionId === solutionId)
+      .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+      .slice(0, limit)
+      .map(clone);
+  }
+
+  async setLeadStatus(
+    ownerId: string,
+    solutionId: string,
+    leadId: string,
+    status: BotLead['status'],
+    at: string,
+  ) {
+    const found = this.leads.get(leadId);
+    if (!found || found.solutionId !== solutionId || found.ownerId !== ownerId) return null;
+    found.status = status;
+    found.updatedAt = at;
+    return clone(found);
+  }
+
+  async countNewLeads(ownerId: string, solutionId: string) {
+    return [...this.leads.values()].filter(
+      (item) => item.solutionId === solutionId && item.ownerId === ownerId && item.status === 'new',
+    ).length;
+  }
 }
 
 // ─── Postgres ─────────────────────────────────────────────────────────────────
@@ -236,7 +384,8 @@ const iso = (value: string | Date): string => new Date(value).toISOString();
 interface SolutionRow {
   id: string;
   user_id: string;
-  type: 'assistant';
+  type: Solution['type'];
+  bot: unknown;
   status: Solution['status'];
   name: string;
   current_version: number | string;
@@ -248,13 +397,14 @@ interface SolutionRow {
 }
 
 const SOLUTION_COLUMNS = `id, user_id, type, status, name, current_version, active_version, source,
-  version, created_at, updated_at`;
+  version, created_at, updated_at, bot`;
 
 function toSolution(row: SolutionRow): Solution {
   return {
     id: row.id,
     ownerId: row.user_id,
     type: row.type,
+    bot: json(row.bot, null),
     status: row.status,
     name: row.name,
     currentVersion: Number(row.current_version),
@@ -373,13 +523,102 @@ const toMessage = (row: MessageRow): ChatMessage => {
   };
 };
 
+interface ConversationRow {
+  id: string;
+  solution_id: string;
+  user_id: string;
+  visitor_id: string;
+  message_count: number | string;
+  created_at: string | Date;
+  updated_at: string | Date;
+}
+
+const CONVERSATION_COLUMNS =
+  'id, solution_id, user_id, visitor_id, message_count, created_at, updated_at';
+
+const toConversation = (row: ConversationRow): BotConversation => ({
+  id: row.id,
+  solutionId: row.solution_id,
+  ownerId: row.user_id,
+  visitorId: row.visitor_id,
+  messageCount: Number(row.message_count),
+  createdAt: iso(row.created_at),
+  updatedAt: iso(row.updated_at),
+});
+
+interface BotMessageRow {
+  id: string;
+  conversation_id: string;
+  solution_id: string;
+  user_id: string;
+  role: BotMessage['role'];
+  content: string;
+  data: unknown;
+  credits_usd: number | string;
+  status: BotMessage['status'];
+  created_at: string | Date;
+}
+
+const BOT_MESSAGE_COLUMNS =
+  'id, conversation_id, solution_id, user_id, role, content, data, credits_usd, status, created_at';
+
+const toBotMessage = (row: BotMessageRow): BotMessage => {
+  const data = json<Pick<BotMessage, 'model' | 'offerContact'>>(row.data, {
+    model: null,
+    offerContact: false,
+  });
+  return {
+    id: row.id,
+    conversationId: row.conversation_id,
+    solutionId: row.solution_id,
+    ownerId: row.user_id,
+    role: row.role,
+    content: row.content,
+    model: data.model ?? null,
+    offerContact: Boolean(data.offerContact),
+    creditsUsd: Number(row.credits_usd),
+    status: row.status,
+    createdAt: iso(row.created_at),
+  };
+};
+
+interface LeadRow {
+  id: string;
+  solution_id: string;
+  user_id: string;
+  conversation_id: string | null;
+  name: string;
+  contact: string;
+  question: string;
+  status: BotLead['status'];
+  created_at: string | Date;
+  updated_at: string | Date;
+}
+
+const LEAD_COLUMNS =
+  'id, solution_id, user_id, conversation_id, name, contact, question, status, created_at, updated_at';
+
+const toLead = (row: LeadRow): BotLead => ({
+  id: row.id,
+  solutionId: row.solution_id,
+  ownerId: row.user_id,
+  conversationId: row.conversation_id,
+  name: row.name,
+  contact: row.contact,
+  question: row.question,
+  status: row.status,
+  createdAt: iso(row.created_at),
+  updatedAt: iso(row.updated_at),
+});
+
 export class PostgresBuilderStore implements BuilderStore {
   constructor(private readonly db: SqlRunner) {}
 
   async createSolution(solution: Solution, version: SolutionVersion, cases: TestCase[]) {
     await this.db.query(
-      `INSERT INTO solutions (${SOLUTION_COLUMNS})
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8::text::jsonb, $9, $10::timestamptz, $11::timestamptz)`,
+      `INSERT INTO solutions (${SOLUTION_COLUMNS}, slug)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8::text::jsonb, $9, $10::timestamptz, $11::timestamptz,
+               $12::text::jsonb, $13)`,
       [
         solution.id,
         solution.ownerId,
@@ -392,6 +631,8 @@ export class PostgresBuilderStore implements BuilderStore {
         solution.version,
         solution.createdAt,
         solution.updatedAt,
+        JSON.stringify(solution.bot ?? null),
+        solution.bot?.slug ?? null,
       ],
     );
     await this.addVersion(solution.ownerId, version);
@@ -417,7 +658,7 @@ export class PostgresBuilderStore implements BuilderStore {
   async updateSolution(solution: Solution, expectedVersion: number) {
     const rows = await this.db.query<SolutionRow>(
       `UPDATE solutions SET status = $3, name = $4, current_version = $5, active_version = $6,
-         updated_at = $7::timestamptz, version = version + 1
+         updated_at = $7::timestamptz, bot = $9::text::jsonb, slug = $10, version = version + 1
        WHERE id = $1 AND user_id = $2 AND version = $8
        RETURNING ${SOLUTION_COLUMNS}`,
       [
@@ -429,6 +670,8 @@ export class PostgresBuilderStore implements BuilderStore {
         solution.activeVersion,
         solution.updatedAt,
         expectedVersion,
+        JSON.stringify(solution.bot ?? null),
+        solution.bot?.slug ?? null,
       ],
     );
     return rows[0] ? toSolution(rows[0]) : null;
@@ -652,5 +895,160 @@ export class PostgresBuilderStore implements BuilderStore {
       [threadId, ownerId, limit],
     );
     return rows.map(toMessage);
+  }
+
+  async getSolutionBySlug(slug: string) {
+    const rows = await this.db.query<SolutionRow>(
+      `SELECT ${SOLUTION_COLUMNS} FROM solutions WHERE slug = $1`,
+      [slug],
+    );
+    return rows[0] ? toSolution(rows[0]) : null;
+  }
+
+  async slugTaken(slug: string) {
+    const rows = await this.db.query<{ id: string }>(`SELECT id FROM solutions WHERE slug = $1`, [
+      slug,
+    ]);
+    return rows.length > 0;
+  }
+
+  async createConversation(conversation: BotConversation) {
+    await this.db.query(
+      `INSERT INTO bot_conversations (${CONVERSATION_COLUMNS})
+       VALUES ($1, $2, $3, $4, $5, $6::timestamptz, $7::timestamptz)`,
+      [
+        conversation.id,
+        conversation.solutionId,
+        conversation.ownerId,
+        conversation.visitorId,
+        conversation.messageCount,
+        conversation.createdAt,
+        conversation.updatedAt,
+      ],
+    );
+  }
+
+  async getConversation(solutionId: string, id: string) {
+    const rows = await this.db.query<ConversationRow>(
+      `SELECT ${CONVERSATION_COLUMNS} FROM bot_conversations WHERE id = $1 AND solution_id = $2`,
+      [id, solutionId],
+    );
+    return rows[0] ? toConversation(rows[0]) : null;
+  }
+
+  async addBotMessage(message: BotMessage) {
+    await this.db.query(
+      `INSERT INTO bot_messages (${BOT_MESSAGE_COLUMNS})
+       VALUES ($1, $2, $3, $4, $5, $6, $7::text::jsonb, $8, $9, $10::timestamptz)`,
+      [
+        message.id,
+        message.conversationId,
+        message.solutionId,
+        message.ownerId,
+        message.role,
+        message.content,
+        JSON.stringify({ model: message.model, offerContact: message.offerContact }),
+        message.creditsUsd,
+        message.status,
+        message.createdAt,
+      ],
+    );
+    await this.db.query(
+      `UPDATE bot_conversations SET message_count = message_count + 1, updated_at = $2::timestamptz
+       WHERE id = $1`,
+      [message.conversationId, message.createdAt],
+    );
+  }
+
+  async botHistory(solutionId: string, conversationId: string, limit: number) {
+    const rows = await this.db.query<BotMessageRow>(
+      `SELECT ${BOT_MESSAGE_COLUMNS} FROM (
+         SELECT ${BOT_MESSAGE_COLUMNS} FROM bot_messages
+         WHERE conversation_id = $1 AND solution_id = $2 ORDER BY created_at DESC LIMIT $3
+       ) last ORDER BY created_at`,
+      [conversationId, solutionId, limit],
+    );
+    return rows.map(toBotMessage);
+  }
+
+  async listConversations(ownerId: string, solutionId: string, limit: number) {
+    const rows = await this.db.query<ConversationRow>(
+      `SELECT ${CONVERSATION_COLUMNS} FROM bot_conversations
+       WHERE solution_id = $1 AND user_id = $2 ORDER BY updated_at DESC LIMIT $3`,
+      [solutionId, ownerId, limit],
+    );
+    return rows.map(toConversation);
+  }
+
+  async listBotMessages(ownerId: string, solutionId: string, conversationId: string) {
+    const rows = await this.db.query<BotMessageRow>(
+      `SELECT ${BOT_MESSAGE_COLUMNS} FROM bot_messages
+       WHERE conversation_id = $1 AND solution_id = $2 AND user_id = $3 ORDER BY created_at LIMIT 500`,
+      [conversationId, solutionId, ownerId],
+    );
+    return rows.map(toBotMessage);
+  }
+
+  async botUsageSince(solutionId: string, since: string) {
+    const rows = await this.db.query<{ replies: number | string; credits: number | string | null }>(
+      `SELECT count(*) AS replies, sum(credits_usd) AS credits FROM bot_messages
+       WHERE solution_id = $1 AND role = 'assistant' AND created_at >= $2::timestamptz`,
+      [solutionId, since],
+    );
+    return {
+      replies: Number(rows[0]?.replies ?? 0),
+      creditsUsd: Math.round(Number(rows[0]?.credits ?? 0) * 1e6) / 1e6,
+    };
+  }
+
+  async createLead(lead: BotLead) {
+    await this.db.query(
+      `INSERT INTO bot_leads (${LEAD_COLUMNS})
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9::timestamptz, $10::timestamptz)`,
+      [
+        lead.id,
+        lead.solutionId,
+        lead.ownerId,
+        lead.conversationId,
+        lead.name,
+        lead.contact,
+        lead.question,
+        lead.status,
+        lead.createdAt,
+        lead.updatedAt,
+      ],
+    );
+  }
+
+  async listLeads(ownerId: string, solutionId: string, limit: number) {
+    const rows = await this.db.query<LeadRow>(
+      `SELECT ${LEAD_COLUMNS} FROM bot_leads WHERE solution_id = $1 AND user_id = $2
+       ORDER BY created_at DESC LIMIT $3`,
+      [solutionId, ownerId, limit],
+    );
+    return rows.map(toLead);
+  }
+
+  async setLeadStatus(
+    ownerId: string,
+    solutionId: string,
+    leadId: string,
+    status: BotLead['status'],
+    at: string,
+  ) {
+    const rows = await this.db.query<LeadRow>(
+      `UPDATE bot_leads SET status = $4, updated_at = $5::timestamptz
+       WHERE id = $1 AND solution_id = $2 AND user_id = $3 RETURNING ${LEAD_COLUMNS}`,
+      [leadId, solutionId, ownerId, status, at],
+    );
+    return rows[0] ? toLead(rows[0]) : null;
+  }
+
+  async countNewLeads(ownerId: string, solutionId: string) {
+    const rows = await this.db.query<{ count: number | string }>(
+      `SELECT count(*) AS count FROM bot_leads WHERE solution_id = $1 AND user_id = $2 AND status = 'new'`,
+      [solutionId, ownerId],
+    );
+    return Number(rows[0]?.count ?? 0);
   }
 }

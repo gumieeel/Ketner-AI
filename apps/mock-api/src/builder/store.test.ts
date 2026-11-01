@@ -5,7 +5,7 @@ import { MIGRATIONS } from '../db/migration-list.js';
 import { openTestSql } from '../testing/sql.js';
 import { defaultConfig } from './service.js';
 import { MemoryBuilderStore, PostgresBuilderStore, type BuilderStore } from './store.js';
-import type { Solution, TestCase, TestRun } from './types.js';
+import type { BotMessage, Solution, TestCase, TestRun } from './types.js';
 
 const NOW = '2026-10-31T10:00:00.000Z';
 
@@ -14,6 +14,7 @@ function solution(id: string, ownerId: string): Solution {
     id,
     ownerId,
     type: 'assistant',
+    bot: null,
     status: 'draft',
     name: `Помощник ${id}`,
     currentVersion: 1,
@@ -202,6 +203,163 @@ async function contract(store: BuilderStore): Promise<void> {
   assert.equal(await store.getRun('alice', 'r1'), null);
   assert.deepEqual(await store.listCases('alice', 's1'), []);
 }
+
+function botSolution(id: string, ownerId: string, slug: string): Solution {
+  return {
+    ...solution(id, ownerId),
+    type: 'customer_bot',
+    name: `Бот ${id}`,
+    bot: {
+      slug,
+      greeting: 'Здравствуйте!',
+      quickReplies: ['Цены'],
+      dailyCapCredits: 1000,
+      corrections: [],
+    },
+  };
+}
+
+function botMessage(
+  id: string,
+  conversationId: string,
+  role: BotMessage['role'],
+  createdAt: string,
+  creditsUsd = 0,
+): BotMessage {
+  return {
+    id,
+    conversationId,
+    solutionId: 'b1',
+    ownerId: 'alice',
+    role,
+    content: `${role} ${id}`,
+    model: role === 'assistant' ? { id: 'auto', name: 'Auto' } : null,
+    offerContact: role === 'assistant' && id.endsWith('x'),
+    creditsUsd,
+    status: 'complete',
+    createdAt,
+  };
+}
+
+async function botContract(store: BuilderStore): Promise<void> {
+  await store.createSolution(
+    botSolution('b1', 'alice', 'lisa-shop'),
+    { solutionId: 'b1', number: 1, config: defaultConfig('Бот', 'ru'), createdAt: NOW },
+    [],
+  );
+  // Адрес: найден без владельца, занят; помощник без бота адрес не занимает.
+  assert.equal((await store.getSolutionBySlug('lisa-shop'))?.id, 'b1');
+  assert.equal((await store.getSolutionBySlug('lisa-shop'))?.bot?.quickReplies[0], 'Цены');
+  assert.equal(await store.getSolutionBySlug('nobody'), null);
+  assert.equal(await store.slugTaken('lisa-shop'), true);
+  assert.equal(await store.slugTaken('other'), false);
+  // Второй бот с тем же адресом не записывается.
+  await assert.rejects(
+    store.createSolution(
+      botSolution('b2', 'bob', 'lisa-shop'),
+      { solutionId: 'b2', number: 1, config: defaultConfig('Бот', 'ru'), createdAt: NOW },
+      [],
+    ),
+  );
+
+  // Смена адреса и настроек — через обычное обновление с версией записи.
+  const current = (await store.getSolution('alice', 'b1'))!;
+  const renamed = await store.updateSolution(
+    {
+      ...current,
+      bot: { ...current.bot!, slug: 'lisa', corrections: [{ question: 'q', answer: 'a' }] },
+    },
+    current.version,
+  );
+  assert.equal(renamed?.bot?.slug, 'lisa');
+  assert.equal(await store.slugTaken('lisa-shop'), false);
+  assert.deepEqual((await store.getSolution('alice', 'b1'))?.bot?.corrections, [
+    { question: 'q', answer: 'a' },
+  ]);
+
+  // Диалоги и сообщения.
+  await store.createConversation({
+    id: 'c1',
+    solutionId: 'b1',
+    ownerId: 'alice',
+    visitorId: 'v_visitor000001',
+    messageCount: 0,
+    createdAt: NOW,
+    updatedAt: NOW,
+  });
+  await store.addBotMessage(botMessage('m1', 'c1', 'user', '2026-10-31T10:00:01.000Z'));
+  await store.addBotMessage(
+    botMessage('m2x', 'c1', 'assistant', '2026-10-31T10:00:02.000Z', 0.004),
+  );
+  await store.addBotMessage(botMessage('m3', 'c1', 'user', '2026-10-31T10:00:03.000Z'));
+  await store.addBotMessage(botMessage('m4', 'c1', 'assistant', '2026-10-31T10:00:04.000Z', 0.002));
+  assert.equal((await store.getConversation('b1', 'c1'))?.visitorId, 'v_visitor000001');
+  assert.equal(await store.getConversation('other', 'c1'), null);
+  const conversation = (await store.listConversations('alice', 'b1', 10))[0];
+  assert.equal(conversation?.messageCount, 4);
+  assert.equal(conversation?.updatedAt, '2026-10-31T10:00:04.000Z');
+  assert.deepEqual(await store.listConversations('bob', 'b1', 10), []);
+  const history = await store.botHistory('b1', 'c1', 2);
+  assert.deepEqual(
+    history.map((item) => item.id),
+    ['m3', 'm4'],
+  );
+  const all = await store.listBotMessages('alice', 'b1', 'c1');
+  assert.equal(all.length, 4);
+  assert.equal(all[1]?.offerContact, true);
+  assert.equal(all[1]?.model?.name, 'Auto');
+  assert.deepEqual(await store.listBotMessages('bob', 'b1', 'c1'), []);
+  const usage = await store.botUsageSince('b1', '2026-10-31T10:00:03.000Z');
+  assert.equal(usage.replies, 1);
+  assert.ok(Math.abs(usage.creditsUsd - 0.002) < 1e-9);
+  const dayUsage = await store.botUsageSince('b1', '2026-10-31T00:00:00.000Z');
+  assert.equal(dayUsage.replies, 2);
+  assert.ok(Math.abs(dayUsage.creditsUsd - 0.006) < 1e-9);
+
+  // Заявки: видит и меняет только владелец.
+  await store.createLead({
+    id: 'l1',
+    solutionId: 'b1',
+    ownerId: 'alice',
+    conversationId: 'c1',
+    name: 'Анна',
+    contact: '+7 700 000 00 00',
+    question: 'Есть ли доставка?',
+    status: 'new',
+    createdAt: NOW,
+    updatedAt: NOW,
+  });
+  assert.equal(await store.countNewLeads('alice', 'b1'), 1);
+  assert.equal((await store.listLeads('alice', 'b1', 10))[0]?.contact, '+7 700 000 00 00');
+  assert.deepEqual(await store.listLeads('bob', 'b1', 10), []);
+  assert.equal(await store.setLeadStatus('bob', 'b1', 'l1', 'done', NOW), null);
+  assert.equal((await store.setLeadStatus('alice', 'b1', 'l1', 'done', NOW))?.status, 'done');
+  assert.equal(await store.countNewLeads('alice', 'b1'), 0);
+
+  // Удаление бота — с диалогами и заявками; адрес освобождается.
+  assert.equal(await store.deleteSolution('alice', 'b1'), true);
+  assert.equal(await store.getConversation('b1', 'c1'), null);
+  assert.deepEqual(await store.listLeads('alice', 'b1', 10), []);
+  assert.equal(await store.slugTaken('lisa'), false);
+}
+
+test('бот для клиентов в памяти: адрес, диалоги, расход, заявки', async () => {
+  await botContract(new MemoryBuilderStore());
+});
+
+test('бот для клиентов в Postgres: та же логика', async (t) => {
+  const sql = await openTestSql();
+  if (!sql) {
+    t.skip('нет PGlite и TEST_DATABASE_URL');
+    return;
+  }
+  try {
+    await runMigrations(sql.db, MIGRATIONS);
+    await botContract(new PostgresBuilderStore(sql.runner));
+  } finally {
+    await sql.close();
+  }
+});
 
 test('хранилище Builder в памяти: владелец, версии, кейсы, прогоны, чат, удаление', async () => {
   await contract(new MemoryBuilderStore());

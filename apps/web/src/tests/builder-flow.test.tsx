@@ -67,6 +67,7 @@ function details(patch: Partial<SolutionDetails> = {}): SolutionDetails {
     solution: {
       id: 's1',
       type: 'assistant',
+      bot: null,
       status: 'draft',
       name: CONFIG.name,
       currentVersion: 1,
@@ -217,7 +218,9 @@ describe('Builder: помощник — настройки, проверка, в
 
   it('без входа Builder предлагает войти', () => {
     renderRoute('/solutions');
-    const main = screen.getByRole('heading', { level: 1, name: 'Помощники' }).closest('section')!;
+    const main = screen
+      .getByRole('heading', { level: 1, name: 'Автоматизации' })
+      .closest('section')!;
     expect(within(main).getByRole('link', { name: 'Войти' })).toHaveAttribute(
       'href',
       '/login?redirect=%2Fsolutions',
@@ -231,7 +234,7 @@ describe('Builder: помощник — настройки, проверка, в
     expect(await screen.findByRole('heading', { level: 1, name: CONFIG.name })).toBeVisible();
     expect(screen.getByText(/Модель не выбирается вручную/)).toBeVisible();
     expect(
-      screen.getByText('Проверьте помощника на тест-кейсах — после этого его можно включить.'),
+      screen.getByText('Проверьте на тест-кейсах — после этого можно включить.'),
     ).toBeVisible();
     expect(screen.queryByRole('button', { name: 'Включить помощника' })).toBeNull();
 
@@ -268,7 +271,7 @@ describe('Builder: помощник — настройки, проверка, в
     fireEvent.click(screen.getByRole('button', { name: 'Засчитать' }));
     expect(await screen.findByText('Пройден · вручную')).toBeVisible();
     fireEvent.click(await screen.findByRole('button', { name: 'Включить помощника' }));
-    expect(await screen.findByText('Помощник включён и работает на текущей версии.')).toBeVisible();
+    expect(await screen.findByText('Включено и работает на текущей версии.')).toBeVisible();
     expect(screen.getAllByRole('link', { name: 'Открыть чат' })[0]).toHaveAttribute(
       'href',
       '/solutions/s1/chat',

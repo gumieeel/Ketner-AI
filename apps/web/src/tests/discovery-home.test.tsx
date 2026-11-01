@@ -110,7 +110,7 @@ describe('главная платформы решений (DISCOVERY_ENABLED)',
     const links = within(nav).getAllByRole('link');
     expect(links.map((link) => [link.textContent, link.getAttribute('href')])).toEqual([
       ['Анализы', '/analyses'],
-      ['Помощники', '/solutions'],
+      ['Мои автоматизации', '/solutions'],
       ['Чат', '/chat'],
       ['Модели', '/models'],
       ['Кредиты', '/pricing'],

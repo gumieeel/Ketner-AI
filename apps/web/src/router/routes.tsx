@@ -125,6 +125,12 @@ export const routes: RouteObject[] = [
       },
     ],
   },
+  // Страница бота для клиентов: без шапки и меню сайта, встраивается на сайты бизнеса.
+  {
+    path: 'b/:slug',
+    lazy: lazyPage(() => import('@/pages/bot/bot-page'), 'BotPage'),
+    errorElement: <RouteErrorPage />,
+  },
   // Кабинет внутри Telegram (мини-приложение бота): без шапки и боковой панели сайта.
   {
     path: 'tg',

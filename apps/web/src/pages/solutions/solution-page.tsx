@@ -39,6 +39,7 @@ import { useTranslation, type TranslationKey } from '@/i18n';
 import { cn } from '@/lib/cn';
 import { formatDateTime } from '@/lib/format-date';
 import { ErrorNotice } from '@/pages/analysis/error-notice';
+import { BotPanel } from './bot-panel';
 import { BuilderGate, Page, StatusBadge } from './shared';
 
 const TONES: readonly AssistantTone[] = ['friendly', 'neutral', 'formal', 'concise'];
@@ -114,12 +115,24 @@ function SolutionEditor({ id }: { id: string }) {
   }
 
   const { solution } = details;
+  const isBot = solution.type === 'customer_bot';
   return (
     <Page
       title={solution.name}
       back={{ to: '/solutions', label: t('builder.back') }}
       actions={
-        solution.status === 'active' ? (
+        isBot ? (
+          solution.status !== 'draft' && solution.bot ? (
+            <a
+              href={`/b/${solution.bot.slug}`}
+              target="_blank"
+              rel="noopener"
+              className={buttonClasses({ variant: 'primary', size: 'md' })}
+            >
+              {t('builder.bot.openPage')}
+            </a>
+          ) : null
+        ) : solution.status === 'active' ? (
           <Link
             to={`/solutions/${id}/chat`}
             className={buttonClasses({ variant: 'primary', size: 'md' })}
@@ -131,6 +144,8 @@ function SolutionEditor({ id }: { id: string }) {
     >
       <div className="mt-3 flex flex-wrap items-center gap-2 text-[13px] text-subtle">
         <StatusBadge status={solution.status} />
+        <span>{t(`builder.type.${solution.type}` as TranslationKey)}</span>
+        <span aria-hidden="true">·</span>
         <span>{t('builder.versionLine', { version: solution.currentVersion })}</span>
         {solution.activeVersion !== null && solution.activeVersion !== solution.currentVersion ? (
           <span>· {t('builder.activeVersionLine', { version: solution.activeVersion })}</span>
@@ -147,7 +162,9 @@ function SolutionEditor({ id }: { id: string }) {
           </span>
         ) : null}
       </div>
-      <p className="mt-3 text-[14px] leading-6 text-muted">{t('builder.autoModelNote')}</p>
+      {!isBot ? (
+        <p className="mt-3 text-[14px] leading-6 text-muted">{t('builder.autoModelNote')}</p>
+      ) : null}
 
       {error ? (
         <div className="mt-6">
@@ -156,6 +173,7 @@ function SolutionEditor({ id }: { id: string }) {
       ) : null}
 
       <ReadinessPanel details={details} onAct={act} />
+      {isBot ? <BotPanel details={details} /> : null}
       <ConfigSection key={solution.currentVersion} details={details} onAct={act} />
       <CasesSection details={details} onAct={act} />
       <RunSection details={details} onAct={act} />
@@ -223,7 +241,9 @@ function ReadinessPanel({ details, onAct }: { details: SolutionDetails; onAct: A
           >
             {solution.status === 'active'
               ? t('builder.activateNew', { version: solution.currentVersion })
-              : t('builder.activate')}
+              : solution.type === 'customer_bot'
+                ? t('builder.bot.activate')
+                : t('builder.activate')}
           </Button>
         ) : null}
       </div>
@@ -847,19 +867,22 @@ function DangerZone({ details }: { details: SolutionDetails }) {
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<unknown>(null);
+  const bot = details.solution.type === 'customer_bot';
   return (
     <Section title={t('builder.delete.title')}>
       <Button variant="outline" size="sm" className="mt-4" onClick={() => setOpen(true)}>
-        {t('builder.delete.button')}
+        {bot ? t('builder.bot.delete.button') : t('builder.delete.button')}
       </Button>
       {open ? (
         <Modal labelledBy="delete-solution-title" size="sm" onClose={() => setOpen(false)}>
           <div className="flex flex-col gap-4 p-6">
             <h2 id="delete-solution-title" className="text-[18px] font-medium text-text">
-              {t('builder.delete.confirmTitle')}
+              {bot ? t('builder.bot.delete.confirmTitle') : t('builder.delete.confirmTitle')}
             </h2>
             <p className="text-[14px] leading-6 text-muted">
-              {t('builder.delete.confirmText', { name: details.solution.name })}
+              {t(bot ? 'builder.bot.delete.confirmText' : 'builder.delete.confirmText', {
+                name: details.solution.name,
+              })}
             </p>
             {error ? <ErrorNotice error={error} redirect="/solutions" /> : null}
             <div className="flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
@@ -880,7 +903,7 @@ function DangerZone({ details }: { details: SolutionDetails }) {
                     });
                 }}
               >
-                {t('builder.delete.button')}
+                {bot ? t('builder.bot.delete.button') : t('builder.delete.button')}
               </Button>
             </div>
           </div>

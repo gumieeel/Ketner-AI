@@ -18,6 +18,12 @@
  *   GET    /api/solutions/:id/threads/:threadId/messages
  *   POST   /api/solutions/:id/threads/:threadId/messages  сообщение → SSE (delta, image, done, error)
  *
+ * Бот для клиентов (тип `customer_bot`, этап B):
+ *   GET|PUT /api/solutions/:id/bot                 настройки страницы и расход за сегодня
+ *   POST   /api/solutions/:id/bot/preview          проба «как клиент» `{ messages }` (за кредиты)
+ *   GET    /api/solutions/:id/conversations        диалоги посетителей; GET …/conversations/:conversationId
+ *   GET    /api/solutions/:id/leads                заявки; PATCH …/leads/:leadId `{ status }`
+ *
  * Чужой помощник — 404.
  */
 
@@ -33,12 +39,23 @@ import {
   assistantConfigBodySchema,
   createSolutionBodySchema,
   draftBodySchema,
+  botPreviewBodySchema,
+  botSettingsBodySchema,
+  leadStatusBodySchema,
   messageBodySchema,
   testCaseBodySchema,
   verdictBodySchema,
 } from '../builder/schemas.js';
+import { BotService, type BotOwner } from '../builder/bot-service.js';
 import { BuilderService, CHAT_HISTORY, type BuilderCaller } from '../builder/service.js';
-import type { ChatMessage, Solution, TestRun } from '../builder/types.js';
+import type {
+  BotConversation,
+  BotLead,
+  BotMessage,
+  ChatMessage,
+  Solution,
+  TestRun,
+} from '../builder/types.js';
 import { getDiscoveryStores, type DiscoveryStores } from '../discovery/runtime.js';
 import { getImageService } from '../images/runtime.js';
 import { ImageServiceError, type ImageService } from '../images/service.js';
@@ -49,6 +66,9 @@ import { usageStore as defaultUsageStore } from '../store/index.js';
 import type { SubscriptionStore } from '../store/subscription-store.js';
 import type { UsageStore } from '../store/usage-store.js';
 import type { UserStore } from '../store/user-store.js';
+import type { Mailer } from '../services/mailer.js';
+import { resolveUserPlan } from '../services/user-plan.js';
+import { siteUrl } from '../seo/pages.js';
 
 export interface SolutionsRouterDeps {
   ai: AiConfig;
@@ -62,6 +82,96 @@ export interface SolutionsRouterDeps {
   /** Готовый сервис (тесты). */
   service?: BuilderService;
   images?: ImageService;
+  mailer?: Mailer;
+  /** Общие сервисы Builder и ботов (routes/index.ts создаёт один на оба роутера). */
+  runtime?: BuilderRuntime;
+}
+
+export interface BuilderRuntime {
+  builder: () => BuilderService | null;
+  bots: () => BotService | null;
+}
+
+/**
+ * Сервисы создаются при первом запросе: хранилища появляются после подключения к базе. Бот
+ * отвечает за кредиты владельца с его действующим тарифом, заявка уходит владельцу письмом.
+ */
+export function createBuilderRuntime(deps: SolutionsRouterDeps): BuilderRuntime {
+  const stores = deps.stores ?? getDiscoveryStores;
+  const usageStore = deps.usageStore ?? defaultUsageStore;
+  const gateway =
+    deps.gateway ??
+    new AIGateway({
+      usageStore,
+      aiConfig: deps.ai,
+      ...(deps.credits ? { credits: deps.credits } : {}),
+    });
+  let builder: BuilderService | null = deps.service ?? null;
+  let bots: BotService | null = null;
+  const balanceUsd = (userId: string, plan: Parameters<CreditService['balance']>[1]) =>
+    deps.credits?.balance(userId, plan).remainingUsd ?? 0;
+  const getBuilder = (): BuilderService | null => {
+    if (builder) return builder;
+    const ready = stores();
+    if (!ready) return null;
+    builder = new BuilderService({
+      store: ready.builder,
+      discovery: ready.store,
+      gateway,
+      balanceUsd,
+    });
+    return builder;
+  };
+  const owner = (ownerId: string): BotOwner | null => {
+    const user = deps.userStore?.findById(ownerId);
+    if (!user || !deps.userStore) return null;
+    const resolved = resolveUserPlan(user, deps.userStore, deps.subscriptionStore, deps.credits);
+    return {
+      userId: user.id,
+      plan: EntitlementService.resolveEffectivePlan(resolved.plan, user.email, resolved.isVip),
+      ...(user.email ? { email: user.email } : {}),
+      isVip: resolved.isVip,
+    };
+  };
+  const getBots = (): BotService | null => {
+    if (bots) return bots;
+    const ready = stores();
+    const service = getBuilder();
+    if (!ready || !service) return null;
+    bots = new BotService({
+      store: ready.builder,
+      builder: service,
+      balanceUsd,
+      owner,
+      ...(deps.mailer
+        ? {
+            notifyLead: async (target, solution, lead) => {
+              if (!target.email) return;
+              const link = `${siteUrl()}/solutions/${solution.id}`;
+              const lines = [
+                `Новая заявка от бота «${solution.name}».`,
+                '',
+                `Имя: ${lead.name}`,
+                `Контакт: ${lead.contact}`,
+                ...(lead.question ? [`Вопрос: ${lead.question}`] : []),
+                '',
+                `Все заявки и диалоги: ${link}`,
+              ];
+              const escape = (value: string) =>
+                value.replace(/[&<>"]/g, (char) => `&#${char.charCodeAt(0)};`);
+              await deps.mailer!.send({
+                to: target.email,
+                subject: `Новая заявка: ${lead.name.replace(/\s+/g, ' ')}`,
+                text: lines.join('\n'),
+                html: lines.map((line) => `<p>${escape(line)}</p>`).join(''),
+              });
+            },
+          }
+        : {}),
+    });
+    return bots;
+  };
+  return { builder: getBuilder, bots: getBots };
 }
 
 const charged = (usd: number) => Math.round(usd * CREDITS_PER_USD * 10) / 10;
@@ -92,6 +202,21 @@ function publicMessage(message: ChatMessage) {
   return rest;
 }
 
+function ownerConversation(item: BotConversation) {
+  const { ownerId: _owner, visitorId: _visitor, ...rest } = item;
+  return rest;
+}
+
+function ownerBotMessage(item: BotMessage) {
+  const { ownerId: _owner, creditsUsd, ...rest } = item;
+  return { ...rest, chargedCredits: charged(creditsUsd) };
+}
+
+function ownerLead(item: BotLead) {
+  const { ownerId: _owner, ...rest } = item;
+  return rest;
+}
+
 export function createSolutionsRouter(deps: SolutionsRouterDeps): Router {
   const router = Router();
   const enabled = deps.enabled ?? config.discoveryEnabled;
@@ -99,27 +224,8 @@ export function createSolutionsRouter(deps: SolutionsRouterDeps): Router {
   const usageStore = deps.usageStore ?? defaultUsageStore;
   const actionLimiter = new RateLimiter(60_000, 10);
   const editLimiter = new RateLimiter(60_000, 60);
-  let service: BuilderService | null = deps.service ?? null;
-  const gateway =
-    deps.gateway ??
-    new AIGateway({
-      usageStore,
-      aiConfig: deps.ai,
-      ...(deps.credits ? { credits: deps.credits } : {}),
-    });
-
-  const getService = (): BuilderService | null => {
-    if (service) return service;
-    const ready = stores();
-    if (!ready) return null;
-    service = new BuilderService({
-      store: ready.builder,
-      discovery: ready.store,
-      gateway,
-      balanceUsd: (userId, plan) => deps.credits?.balance(userId, plan).remainingUsd ?? 0,
-    });
-    return service;
-  };
+  const runtime = deps.runtime ?? createBuilderRuntime(deps);
+  const getService = runtime.builder;
   const images = (): ImageService => deps.images ?? getImageService(usageStore, deps.credits);
 
   router.use((request, response, next) => {
@@ -242,7 +348,10 @@ export function createSolutionsRouter(deps: SolutionsRouterDeps): Router {
       cases: view.cases.map(({ solutionId: _s, ...item }) => item),
       run: publicRun(view.run),
       readiness: view.readiness,
-      testQuote: view.cases.length > 0 ? builder.testQuote(view.config, view.cases) : null,
+      testQuote:
+        view.cases.length > 0
+          ? builder.testQuote(view.config, view.cases, view.solution.bot)
+          : null,
     });
   };
 
@@ -250,7 +359,18 @@ export function createSolutionsRouter(deps: SolutionsRouterDeps): Router {
     '/',
     handle(async (builder, caller, _request, response) => {
       const items = await builder.list(caller.userId);
-      response.json({ solutions: items.map(publicSolution) });
+      const bots = runtime.bots();
+      // «Мои автоматизации»: у бота — расход и заявки за сегодня прямо в карточке.
+      const solutions = await Promise.all(
+        items.map(async (item) => ({
+          ...publicSolution(item),
+          today:
+            item.type === 'customer_bot' && bots
+              ? ((await bots.overview(caller.userId, item.id))?.today ?? null)
+              : null,
+        })),
+      );
+      response.json({ solutions });
     }),
   );
 
@@ -484,6 +604,17 @@ export function createSolutionsRouter(deps: SolutionsRouterDeps): Router {
     handle(async (builder, caller, request, response) => {
       const id = String(request.params.id);
       const active = await builder.activeConfig(caller.userId, id);
+      if (active?.solution.type === 'customer_bot') {
+        sendError(
+          response,
+          409,
+          'bot_has_public_page',
+          caller.language === 'en'
+            ? 'A customer bot talks on its own page, not in a private chat.'
+            : 'Бот для клиентов отвечает на своей странице, а не в личном чате.',
+        );
+        return;
+      }
       if (!active) {
         sendError(
           response,
@@ -665,6 +796,143 @@ export function createSolutionsRouter(deps: SolutionsRouterDeps): Router {
         response.off('close', onClose);
         response.end();
       }
+    }),
+  );
+
+  // ─── Бот для клиентов: сторона владельца (этап B) ──────────────────────────
+
+  const botsReady = (response: Response): BotService | null => {
+    const value = runtime.bots();
+    if (!value)
+      sendError(response, 503, 'builder_unavailable', 'Builder временно недоступен. Чат работает.');
+    return value;
+  };
+  const botNotFound = (response: Response) =>
+    sendError(response, 404, 'not_found', 'Бот не найден');
+
+  router.get(
+    '/:id/bot',
+    handle(async (_builder, caller, request, response) => {
+      const bots = botsReady(response);
+      if (!bots) return;
+      const overview = await bots.overview(caller.userId, String(request.params.id));
+      if (!overview) return botNotFound(response);
+      response.json({ ...overview, publicUrl: `${siteUrl()}/b/${overview.settings.slug}` });
+    }),
+  );
+
+  router.put(
+    '/:id/bot',
+    handle(async (_builder, caller, request, response) => {
+      const bots = botsReady(response);
+      if (!bots) return;
+      const parsed = botSettingsBodySchema.safeParse(request.body ?? {});
+      if (!parsed.success) {
+        const issue = parsed.error.issues[0];
+        sendError(
+          response,
+          400,
+          'validation_failed',
+          `Проверьте поле ${issue?.path.join('.') ?? ''}: ${issue?.message ?? ''}`.trim(),
+        );
+        return;
+      }
+      if (limited(editLimiter, response, caller.userId)) return;
+      const patch = Object.fromEntries(
+        Object.entries(parsed.data).filter(([, value]) => value !== undefined),
+      );
+      const result = await bots.updateSettings(caller, String(request.params.id), patch);
+      if (!result.ok) return fail(response, result);
+      const overview = await bots.overview(caller.userId, String(request.params.id));
+      if (!overview) return botNotFound(response);
+      response.json({ ...overview, publicUrl: `${siteUrl()}/b/${overview.settings.slug}` });
+    }),
+  );
+
+  router.post(
+    '/:id/bot/preview',
+    handle(async (_builder, caller, request, response) => {
+      const bots = botsReady(response);
+      if (!bots) return;
+      const parsed = botPreviewBodySchema.safeParse(request.body ?? {});
+      if (!parsed.success) {
+        sendError(
+          response,
+          400,
+          'validation_failed',
+          'Нужно сообщение клиента (до 1000 символов).',
+        );
+        return;
+      }
+      if (limited(actionLimiter, response, caller.userId)) return;
+      const result = await bots.preview(caller, String(request.params.id), parsed.data.messages);
+      if (!result.ok) return fail(response, result);
+      const { ok: _ok, ...reply } = result;
+      response.json({ reply });
+    }),
+  );
+
+  router.get(
+    '/:id/conversations',
+    handle(async (_builder, caller, request, response) => {
+      const bots = botsReady(response);
+      if (!bots) return;
+      const items = await bots.conversations(caller.userId, String(request.params.id));
+      if (!items) return botNotFound(response);
+      response.json({ conversations: items.map(ownerConversation) });
+    }),
+  );
+
+  router.get(
+    '/:id/conversations/:conversationId',
+    handle(async (_builder, caller, request, response) => {
+      const bots = botsReady(response);
+      if (!bots) return;
+      const messages = await bots.conversationMessages(
+        caller.userId,
+        String(request.params.id),
+        String(request.params.conversationId),
+      );
+      if (!messages) {
+        sendError(response, 404, 'not_found', 'Диалог не найден');
+        return;
+      }
+      response.json({ messages: messages.map(ownerBotMessage) });
+    }),
+  );
+
+  router.get(
+    '/:id/leads',
+    handle(async (_builder, caller, request, response) => {
+      const bots = botsReady(response);
+      if (!bots) return;
+      const items = await bots.leads(caller.userId, String(request.params.id));
+      if (!items) return botNotFound(response);
+      response.json({ leads: items.map(ownerLead) });
+    }),
+  );
+
+  router.patch(
+    '/:id/leads/:leadId',
+    handle(async (_builder, caller, request, response) => {
+      const bots = botsReady(response);
+      if (!bots) return;
+      const parsed = leadStatusBodySchema.safeParse(request.body ?? {});
+      if (!parsed.success) {
+        sendError(response, 400, 'validation_failed', 'Ожидается { status: new | done }.');
+        return;
+      }
+      const lead = await bots.setLeadStatus(
+        caller.userId,
+        String(request.params.id),
+        String(request.params.leadId),
+        parsed.data.status,
+      );
+      if (!lead) {
+        sendError(response, 404, 'not_found', 'Заявка не найдена');
+        return;
+      }
+      response.json({ lead: ownerLead(lead) });
     }),
   );
 
