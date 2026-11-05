@@ -27,7 +27,8 @@ import { useTranslation } from '@/i18n';
 import { cn } from '@/lib/cn';
 import { resolveImageUrl } from '@/features/images/api';
 import { ErrorNotice } from '@/pages/analysis/error-notice';
-import { BuilderGate, Page } from './shared';
+import { solutionInterface } from '@/features/solutions/registry';
+import { BuilderGate, Page, UnsupportedSolution } from './shared';
 
 const Markdown = lazy(() => import('@/features/chat/markdown/markdown'));
 
@@ -174,6 +175,9 @@ function SolutionChat({ id }: { id: string }) {
     );
   }
 
+  if (solutionInterface(details.solution) !== 'assistant') {
+    return <UnsupportedSolution />;
+  }
   const active = details.solution.status === 'active';
   return (
     <Page

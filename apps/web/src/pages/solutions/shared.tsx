@@ -94,3 +94,13 @@ export function StatusBadge({ status }: { status: SolutionStatus }) {
     <Badge tone={STATUS_TONE[status]}>{t(`builder.status.${status}` as TranslationKey)}</Badge>
   );
 }
+
+/** Решение, которое этот сайт не умеет показывать (новый вид или шаблон): честно, без подмены чатом. */
+export function UnsupportedSolution() {
+  const { t } = useTranslation();
+  return (
+    <Page title={t('builder.unsupported')} back={{ to: '/solutions', label: t('builder.back') }}>
+      <p className="t-lead mt-4">{t('builder.unsupportedLead')}</p>
+    </Page>
+  );
+}

@@ -67,6 +67,8 @@ function details(patch: Partial<SolutionDetails> = {}): SolutionDetails {
     solution: {
       id: 's1',
       type: 'assistant',
+      kind: 'assistant',
+      template: 'personal_assistant',
       bot: null,
       status: 'draft',
       name: CONFIG.name,
@@ -307,5 +309,18 @@ describe('Builder: помощник — настройки, проверка, в
     renderRoute('/solutions/s1/chat');
     expect(await screen.findByText('Помощник выключен — чат недоступен.')).toBeVisible();
     expect(screen.getByRole('textbox', { name: 'Сообщение помощнику' })).toBeDisabled();
+  });
+
+  it('решение без интерфейса на сайте: честное «не поддерживается», а не настройки или чат помощника', async () => {
+    signIn();
+    const unknown = details({
+      solution: { ...details().solution, type: 'tool', kind: 'tool', template: 'future_tool' },
+    });
+    installBuilderApi(unknown);
+    renderRoute('/solutions/s1');
+    expect(
+      await screen.findByRole('heading', { level: 1, name: 'Это решение здесь не открывается' }),
+    ).toBeVisible();
+    expect(screen.queryByRole('button', { name: 'Сохранить как новую версию' })).toBeNull();
   });
 });

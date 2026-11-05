@@ -105,6 +105,7 @@ test('бот по HTTP: страница без входа, заявка вла�
         id: 'http-bot',
         ownerId: owner.userId,
         type: 'customer_bot',
+        template: 'customer_bot',
         bot: {
           slug: 'lisa-http',
           greeting: 'Здравствуйте!',
@@ -267,6 +268,7 @@ test('лимит сообщений посетителя: 21-е за 10 мину
         id: 'limit-bot',
         ownerId: owner.userId,
         type: 'customer_bot',
+        template: 'customer_bot',
         bot: {
           slug: 'limit-bot',
           greeting: 'Привет',

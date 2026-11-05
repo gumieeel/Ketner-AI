@@ -385,6 +385,7 @@ interface SolutionRow {
   id: string;
   user_id: string;
   type: Solution['type'];
+  template: string;
   bot: unknown;
   status: Solution['status'];
   name: string;
@@ -397,13 +398,14 @@ interface SolutionRow {
 }
 
 const SOLUTION_COLUMNS = `id, user_id, type, status, name, current_version, active_version, source,
-  version, created_at, updated_at, bot`;
+  version, created_at, updated_at, bot, template`;
 
 function toSolution(row: SolutionRow): Solution {
   return {
     id: row.id,
     ownerId: row.user_id,
     type: row.type,
+    template: row.template,
     bot: json(row.bot, null),
     status: row.status,
     name: row.name,
@@ -618,7 +620,7 @@ export class PostgresBuilderStore implements BuilderStore {
     await this.db.query(
       `INSERT INTO solutions (${SOLUTION_COLUMNS}, slug)
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8::text::jsonb, $9, $10::timestamptz, $11::timestamptz,
-               $12::text::jsonb, $13)`,
+               $12::text::jsonb, $14, $13)`,
       [
         solution.id,
         solution.ownerId,
@@ -633,6 +635,7 @@ export class PostgresBuilderStore implements BuilderStore {
         solution.updatedAt,
         JSON.stringify(solution.bot ?? null),
         solution.bot?.slug ?? null,
+        solution.template,
       ],
     );
     await this.addVersion(solution.ownerId, version);

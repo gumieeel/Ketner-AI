@@ -186,6 +186,12 @@ test('Builder по HTTP: только после входа; помощник и
     assert.equal(view.readiness.ready, false);
     assert.ok(view.testQuote.maxCredits > 0);
     assert.ok(!('ownerId' in view.solution));
+    // Вид и шаблон решения — в ответе: по ним сайт выбирает интерфейс.
+    assert.equal(view.solution.kind, 'assistant');
+    assert.equal(view.solution.template, 'personal_assistant');
+    const listed = (await (await call('')).json()) as { solutions: Array<Record<string, unknown>> };
+    assert.equal(listed.solutions[0]?.kind, 'assistant');
+    assert.equal(listed.solutions[0]?.template, 'personal_assistant');
 
     // Чат до включения недоступен.
     const early = await call(`/${id}/threads`, { method: 'POST' });

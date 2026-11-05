@@ -40,7 +40,8 @@ import { cn } from '@/lib/cn';
 import { formatDateTime } from '@/lib/format-date';
 import { ErrorNotice } from '@/pages/analysis/error-notice';
 import { BotPanel } from './bot-panel';
-import { BuilderGate, Page, StatusBadge } from './shared';
+import { solutionInterface } from '@/features/solutions/registry';
+import { BuilderGate, Page, StatusBadge, UnsupportedSolution } from './shared';
 
 const TONES: readonly AssistantTone[] = ['friendly', 'neutral', 'formal', 'concise'];
 
@@ -115,6 +116,7 @@ function SolutionEditor({ id }: { id: string }) {
   }
 
   const { solution } = details;
+  if (solutionInterface(solution) !== 'assistant') return <UnsupportedSolution />;
   const isBot = solution.type === 'customer_bot';
   return (
     <Page

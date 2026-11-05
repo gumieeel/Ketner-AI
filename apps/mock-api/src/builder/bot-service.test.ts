@@ -29,6 +29,7 @@ function bot(status: Solution['status'] = 'active'): Solution {
     id: 'bot-1',
     ownerId: OWNER.userId,
     type: 'customer_bot',
+    template: 'customer_bot',
     bot: {
       slug: 'lisa-shop',
       greeting: 'Здравствуйте! Чем помочь?',

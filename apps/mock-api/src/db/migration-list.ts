@@ -252,4 +252,19 @@ export const MIGRATIONS: readonly Migration[] = [
       CREATE INDEX bot_leads_solution ON bot_leads (solution_id, created_at DESC);
     `,
   },
+  {
+    // Builder: виды решений (помощник, инструмент, процесс) и шаблон из реестра
+    // builder/templates.ts. Существующие решения получают шаблон по своему типу и работают как раньше.
+    id: '0007_solution_templates',
+    sql: `
+      ALTER TABLE solutions DROP CONSTRAINT IF EXISTS solutions_type_check;
+      ALTER TABLE solutions ADD CONSTRAINT solutions_type_check
+        CHECK (type IN ('assistant', 'customer_bot', 'tool', 'workflow'));
+      ALTER TABLE solutions ADD COLUMN template text;
+      UPDATE solutions
+        SET template = CASE type WHEN 'customer_bot' THEN 'customer_bot' ELSE 'personal_assistant' END
+        WHERE template IS NULL;
+      ALTER TABLE solutions ALTER COLUMN template SET NOT NULL;
+    `,
+  },
 ];

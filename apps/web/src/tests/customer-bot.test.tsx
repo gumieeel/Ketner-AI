@@ -174,6 +174,8 @@ describe('кабинет бота: ссылка, код для сайта, за�
       solution: {
         id: 'b1',
         type: 'customer_bot',
+        kind: 'assistant',
+        template: 'customer_bot',
         bot: {
           slug: 'lisa-shop',
           greeting: 'Здравствуйте!',

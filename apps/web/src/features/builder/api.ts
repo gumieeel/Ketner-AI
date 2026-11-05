@@ -42,7 +42,11 @@ export const LIMITS = {
 
 export type SolutionStatus = 'draft' | 'active' | 'paused';
 
-export type SolutionType = 'assistant' | 'customer_bot';
+/** Колонка `solutions.type` на сервере; у бота для клиентов исторически свой тип. */
+export type SolutionType = 'assistant' | 'customer_bot' | 'tool' | 'workflow';
+
+/** Вид решения: как им пользуются (разговор, инструмент, процесс). */
+export type SolutionKind = 'assistant' | 'tool' | 'workflow';
 
 /** Настройки страницы бота для клиентов (этап B): не версионируются, меняются сразу. */
 export interface BotSettings {
@@ -77,6 +81,9 @@ export interface BotToday {
 export interface SolutionView {
   id: string;
   type: SolutionType;
+  kind: SolutionKind;
+  /** Шаблон из реестра сервера (builder/templates.ts). */
+  template: string;
   bot: BotSettings | null;
   /** Только в списке: расход и заявки бота за сегодня. */
   today?: BotToday | null;

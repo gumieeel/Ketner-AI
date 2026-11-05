@@ -2011,6 +2011,9 @@ export const en: Record<TranslationKey, string> = {
   'builder.back': 'My automations',
   'builder.notFound': 'Assistant not found',
   'builder.notFoundLead': 'It may have been deleted or created in another account.',
+  'builder.unsupported': 'This solution cannot be opened here',
+  'builder.unsupportedLead':
+    'Solutions of this kind are not supported on the site yet. Reload the page: a new version may be out.',
   'builder.openChat': 'Open chat',
   'builder.versionLine': 'Version {version}',
   'builder.activeVersionLine': 'version {version} is running',

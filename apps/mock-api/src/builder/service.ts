@@ -43,6 +43,7 @@ import {
   type JudgeOutput,
 } from './schemas.js';
 import type { BuilderStore } from './store.js';
+import { TEMPLATES } from './templates.js';
 import {
   botDraftSystemPrompt,
   buildBotInstructions,
@@ -318,10 +319,12 @@ export class BuilderService {
     if (limit) return limit;
     const id = randomUUID();
     const iso = this.now().toISOString();
+    const template = TEMPLATES.personal_assistant;
     const solution: Solution = {
       id,
       ownerId: caller.userId,
-      type: 'assistant',
+      type: template.storageType,
+      template: template.id,
       bot: null,
       status: 'draft',
       name,
@@ -513,10 +516,12 @@ export class BuilderService {
           corrections: [],
         }
       : null;
+    const template = isBot ? TEMPLATES.customer_bot : TEMPLATES.personal_assistant;
     const solution: Solution = {
       id,
       ownerId: caller.userId,
-      type: isBot ? 'customer_bot' : 'assistant',
+      type: template.storageType,
+      template: template.id,
       bot,
       status: 'draft',
       name: draft.name,

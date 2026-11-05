@@ -56,6 +56,7 @@ import type {
   Solution,
   TestRun,
 } from '../builder/types.js';
+import { KIND_BY_TYPE } from '../builder/templates.js';
 import { getDiscoveryStores, type DiscoveryStores } from '../discovery/runtime.js';
 import { getImageService } from '../images/runtime.js';
 import { ImageServiceError, type ImageService } from '../images/service.js';
@@ -201,7 +202,8 @@ function publicRun(run: TestRun | null) {
 
 function publicSolution(solution: Solution) {
   const { ownerId: _owner, version: _version, ...rest } = solution;
-  return rest;
+  // Вид решения (помощник, инструмент, процесс): по нему сайт выбирает интерфейс.
+  return { ...rest, kind: KIND_BY_TYPE[solution.type] };
 }
 
 function publicMessage(message: ChatMessage) {

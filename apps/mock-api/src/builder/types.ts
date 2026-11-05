@@ -39,7 +39,11 @@ export interface SolutionSource {
   title: string;
 }
 
-export type SolutionType = 'assistant' | 'customer_bot';
+/**
+ * Значение колонки `solutions.type`. Вид решения (помощник, инструмент, процесс) выводится из него
+ * (`KIND_BY_TYPE` в builder/templates.ts); `customer_bot` — помощник со своей страницей.
+ */
+export type SolutionType = 'assistant' | 'customer_bot' | 'tool' | 'workflow';
 
 /**
  * Настройки бота для клиентов (этап B), не версионируются: меняются сразу, без повторной
@@ -62,6 +66,11 @@ export interface Solution {
   id: string;
   ownerId: string;
   type: SolutionType;
+  /**
+   * Шаблон решения (builder/templates.ts). Строка, а не `TemplateId`: запись, созданная шаблоном,
+   * которого нет в этой версии кода, читается как есть и не подменяется другим шаблоном.
+   */
+  template: string;
   /** Только у `customer_bot`. */
   bot: BotSettings | null;
   status: SolutionStatus;

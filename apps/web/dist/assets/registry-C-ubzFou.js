@@ -1,0 +1,1 @@
+var e={personal_assistant:`assistant`,customer_bot:`assistant`};function t(t){let n=e[t.template];return n&&n===t.kind?n:null}export{t};

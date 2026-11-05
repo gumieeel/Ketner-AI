@@ -2000,6 +2000,9 @@ export const ru = {
   'builder.back': 'Мои автоматизации',
   'builder.notFound': 'Помощник не найден',
   'builder.notFoundLead': 'Возможно, он удалён или создан в другом аккаунте.',
+  'builder.unsupported': 'Это решение здесь не открывается',
+  'builder.unsupportedLead':
+    'Решения этого вида пока не поддерживаются на сайте. Обновите страницу: возможно, вышла новая версия.',
   'builder.openChat': 'Открыть чат',
   'builder.versionLine': 'Версия {version}',
   'builder.activeVersionLine': 'работает версия {version}',

@@ -14,6 +14,7 @@ function solution(id: string, ownerId: string): Solution {
     id,
     ownerId,
     type: 'assistant',
+    template: 'personal_assistant',
     bot: null,
     status: 'draft',
     name: `Помощник ${id}`,
@@ -52,6 +53,9 @@ async function contract(store: BuilderStore): Promise<void> {
 
   // Владелец видит своё, чужое — нет.
   assert.equal((await store.getSolution('alice', 's1'))?.source?.opportunityId, 'o-1');
+  // Шаблон решения сохраняется и читается как есть.
+  assert.equal((await store.getSolution('alice', 's1'))?.template, 'personal_assistant');
+  assert.equal((await store.listSolutions('alice'))[0]?.template, 'personal_assistant');
   assert.equal(await store.getSolution('alice', 's2'), null);
   assert.deepEqual(
     (await store.listSolutions('alice')).map((item) => item.id),
@@ -208,6 +212,7 @@ function botSolution(id: string, ownerId: string, slug: string): Solution {
   return {
     ...solution(id, ownerId),
     type: 'customer_bot',
+    template: 'customer_bot',
     name: `Бот ${id}`,
     bot: {
       slug,
@@ -374,6 +379,63 @@ test('хранилище Builder в Postgres: та же логика', async (t)
   try {
     await runMigrations(sql.db, MIGRATIONS);
     await contract(new PostgresBuilderStore(sql.runner));
+  } finally {
+    await sql.close();
+  }
+});
+
+test('миграция 0007: существующие решения получают шаблон, тип проверяется базой', async (t) => {
+  const sql = await openTestSql();
+  if (!sql) {
+    t.skip('нет PGlite и TEST_DATABASE_URL');
+    return;
+  }
+  try {
+    // Состояние базы до 0007 (как в production): решения обоих типов без шаблона.
+    const before = MIGRATIONS.findIndex((migration) => migration.id === '0007_solution_templates');
+    assert.ok(before > 0);
+    await runMigrations(sql.db, MIGRATIONS.slice(0, before));
+    for (const [id, type, slug] of [
+      ['old-assistant', 'assistant', null],
+      ['old-bot', 'customer_bot', 'old-bot'],
+    ] as const) {
+      await sql.runner.query(
+        `INSERT INTO solutions (id, user_id, type, status, name, current_version, slug)
+         VALUES ($1, 'alice', $2, 'draft', $1, 1, $3)`,
+        [id, type, slug],
+      );
+    }
+
+    const result = await runMigrations(sql.db, MIGRATIONS);
+    assert.deepEqual(result.applied, ['0007_solution_templates']);
+
+    const store = new PostgresBuilderStore(sql.runner);
+    const assistant = await store.getSolution('alice', 'old-assistant');
+    const bot = await store.getSolution('alice', 'old-bot');
+    assert.equal(assistant?.type, 'assistant');
+    assert.equal(assistant?.template, 'personal_assistant');
+    assert.equal(bot?.type, 'customer_bot');
+    assert.equal(bot?.template, 'customer_bot');
+
+    // Новые виды разрешены, неизвестный тип и пустой шаблон — нет.
+    await sql.runner.query(
+      `INSERT INTO solutions (id, user_id, type, template, status, name, current_version)
+       VALUES ('new-tool', 'alice', 'tool', 'future_tool', 'draft', 'Инструмент', 1)`,
+    );
+    await assert.rejects(
+      sql.runner.query(
+        `INSERT INTO solutions (id, user_id, type, template, status, name, current_version)
+         VALUES ('bad-type', 'alice', 'chatbot', 'personal_assistant', 'draft', 'x', 1)`,
+      ),
+    );
+    await assert.rejects(
+      sql.runner.query(
+        `INSERT INTO solutions (id, user_id, type, status, name, current_version)
+         VALUES ('no-template', 'alice', 'assistant', 'draft', 'x', 1)`,
+      ),
+    );
+    // Решение с шаблоном, которого нет в этой версии кода, читается как есть.
+    assert.equal((await store.getSolution('alice', 'new-tool'))?.template, 'future_tool');
   } finally {
     await sql.close();
   }
