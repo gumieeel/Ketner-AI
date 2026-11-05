@@ -1,17 +1,20 @@
+import { useState } from 'react';
 import { Badge } from '@/components/ui/badge';
 import type { ToolSolutionDetails } from '@/features/builder/api';
 import { useTranslation } from '@/i18n';
 import { Page } from '../shared';
+import { CreatePanel } from './create-panel';
 import { MaterialsPanel } from './materials-panel';
+import { RunsPanel } from './runs-panel';
 
 /**
- * Учебный помощник — инструмент со своей страницей, а не чат. Сейчас — материалы (загрузка,
- * просмотр, удаление); операции над ними (конспект, таблица, вопросы, тест) и прогресс добавляются
- * следующими этапами на этой же странице.
+ * Учебный помощник — инструмент со своей страницей, а не чат: материалы, создание конспекта или
+ * таблицы с ценой до запуска и история результатов, каждый из которых открывается своей страницей.
  */
 export function StudyAssistantPage({ details }: { details: ToolSolutionDetails }) {
   const { t } = useTranslation();
-  const { solution } = details;
+  const { solution, config } = details;
+  const [materialsVersion, setMaterialsVersion] = useState(0);
   return (
     <Page
       title={solution.name}
@@ -19,7 +22,16 @@ export function StudyAssistantPage({ details }: { details: ToolSolutionDetails }
       actions={<Badge>{t('study.badge')}</Badge>}
     >
       <p className="t-lead mt-4">{t('study.lead')}</p>
-      <MaterialsPanel solutionId={solution.id} />
+      <MaterialsPanel
+        solutionId={solution.id}
+        onChange={() => setMaterialsVersion((value) => value + 1)}
+      />
+      <CreatePanel
+        solutionId={solution.id}
+        defaultSubject={config.subject}
+        materialsVersion={materialsVersion}
+      />
+      <RunsPanel solutionId={solution.id} />
     </Page>
   );
 }

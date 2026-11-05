@@ -58,6 +58,13 @@ import type {
 } from '../builder/types.js';
 import { KIND_BY_TYPE } from '../builder/templates.js';
 import { MaterialService } from '../builder/tools/material-service.js';
+import {
+  publicRun as publicToolRun,
+  runQuoteBodySchema,
+  runStartBodySchema,
+  runSummary,
+  ToolExecutor,
+} from '../builder/tools/executor.js';
 import { extractedDocumentSchema } from '../builder/tools/materials.js';
 import { getDiscoveryStores, type DiscoveryStores } from '../discovery/runtime.js';
 import { getImageService } from '../images/runtime.js';
@@ -102,6 +109,8 @@ export interface BuilderRuntime {
   bots: () => BotService | null;
   /** Материалы инструментов (учебный помощник). */
   materials: () => MaterialService | null;
+  /** Запуски операций инструментов. */
+  tools: () => ToolExecutor | null;
 }
 
 /**
@@ -191,7 +200,22 @@ export function createBuilderRuntime(deps: SolutionsRouterDeps): BuilderRuntime 
     materials = new MaterialService({ materials: ready.materials, solutions: ready.builder });
     return materials;
   };
-  return { builder: getBuilder, bots: getBots, materials: getMaterials };
+  let tools: ToolExecutor | null = null;
+  const getTools = (): ToolExecutor | null => {
+    if (tools) return tools;
+    const ready = stores();
+    if (!ready) return null;
+    tools = new ToolExecutor({
+      runs: ready.runs,
+      materials: ready.materials,
+      solutions: ready.builder,
+      gateway,
+      balanceUsd,
+      usage: usageStore,
+    });
+    return tools;
+  };
+  return { builder: getBuilder, bots: getBots, materials: getMaterials, tools: getTools };
 }
 
 const charged = (usd: number) => Math.round(usd * CREDITS_PER_USD * 10) / 10;
@@ -697,6 +721,99 @@ export function createSolutionsRouter(deps: SolutionsRouterDeps): Router {
         caller,
         String(request.params.id),
         String(request.params.materialId),
+      );
+      if (!result.ok) return fail(response, result);
+      response.status(204).end();
+    }),
+  );
+
+  // ─── Запуски операций инструмента ───────────────────────────────────────────
+  // Цена до запуска, подтверждение, ключ идемпотентности; списывает только AI Gateway.
+
+  const toolsOf = (response: Response): ToolExecutor | null => {
+    const value = runtime.tools();
+    if (!value)
+      sendError(response, 503, 'builder_unavailable', 'Builder временно недоступен. Чат работает.');
+    return value;
+  };
+
+  router.post(
+    '/:id/runs/quote',
+    handle(async (_builder, caller, request, response) => {
+      if (limited(editLimiter, response, caller.userId)) return;
+      const executor = toolsOf(response);
+      if (!executor) return;
+      const parsed = runQuoteBodySchema.safeParse(request.body ?? {});
+      if (!parsed.success) {
+        sendError(response, 400, 'invalid_input', 'Неверный запрос цены запуска');
+        return;
+      }
+      const result = await executor.quote(
+        caller,
+        String(request.params.id),
+        parsed.data.operation,
+        parsed.data.input,
+      );
+      if (!result.ok) return fail(response, result);
+      response.json({ quote: result.quote });
+    }),
+  );
+
+  router.post(
+    '/:id/runs',
+    handle(async (_builder, caller, request, response) => {
+      if (limited(actionLimiter, response, caller.userId)) return;
+      const executor = toolsOf(response);
+      if (!executor) return;
+      const parsed = runStartBodySchema.safeParse(request.body ?? {});
+      if (!parsed.success) {
+        sendError(response, 400, 'invalid_input', 'Неверный запрос запуска');
+        return;
+      }
+      const result = await executor.start(caller, String(request.params.id), parsed.data);
+      if (!result.ok) return fail(response, result);
+      response
+        .status(result.duplicate ? 200 : 202)
+        .json({ run: publicToolRun(result.run), duplicate: result.duplicate });
+    }),
+  );
+
+  router.get(
+    '/:id/runs',
+    handle(async (_builder, caller, request, response) => {
+      const executor = toolsOf(response);
+      if (!executor) return;
+      const result = await executor.list(caller, String(request.params.id));
+      if (!result.ok) return fail(response, result);
+      response.json({ runs: result.runs.map(runSummary) });
+    }),
+  );
+
+  router.get(
+    '/:id/runs/:runId',
+    handle(async (_builder, caller, request, response) => {
+      const executor = toolsOf(response);
+      if (!executor) return;
+      const result = await executor.get(
+        caller,
+        String(request.params.id),
+        String(request.params.runId),
+      );
+      if (!result.ok) return fail(response, result);
+      response.json({ run: publicToolRun(result.run) });
+    }),
+  );
+
+  router.delete(
+    '/:id/runs/:runId',
+    handle(async (_builder, caller, request, response) => {
+      if (limited(editLimiter, response, caller.userId)) return;
+      const executor = toolsOf(response);
+      if (!executor) return;
+      const result = await executor.remove(
+        caller,
+        String(request.params.id),
+        String(request.params.runId),
       );
       if (!result.ok) return fail(response, result);
       response.status(204).end();

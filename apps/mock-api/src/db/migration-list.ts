@@ -289,4 +289,42 @@ export const MIGRATIONS: readonly Migration[] = [
       CREATE INDEX solution_materials_owner ON solution_materials (user_id, solution_id, created_at DESC);
     `,
   },
+  {
+    // Запуски операций инструментов (конспект, таблица…): вход, источники без текста, цена до запуска,
+    // результат и фактическое списание. Идемпотентность — уникальный ключ пользователя; в одном
+    // инструменте одновременно идёт не больше одного запуска (частичный уникальный индекс).
+    id: '0009_solution_runs',
+    sql: `
+      CREATE TABLE solution_runs (
+        id text PRIMARY KEY,
+        solution_id text NOT NULL REFERENCES solutions (id) ON DELETE CASCADE,
+        user_id text NOT NULL,
+        operation text NOT NULL,
+        status text NOT NULL CHECK (status IN ('queued', 'running', 'done', 'failed')),
+        version_number integer NOT NULL,
+        input jsonb NOT NULL,
+        input_hash text NOT NULL,
+        sources jsonb NOT NULL,
+        quote jsonb NOT NULL,
+        result jsonb,
+        result_schema integer NOT NULL DEFAULT 1,
+        model jsonb,
+        cost_usd numeric(12, 6) NOT NULL DEFAULT 0,
+        credits_usd numeric(12, 6) NOT NULL DEFAULT 0,
+        error jsonb,
+        idempotency_key text NOT NULL,
+        claim_token text,
+        lease_expires_at timestamptz NOT NULL,
+        created_at timestamptz NOT NULL DEFAULT now(),
+        started_at timestamptz,
+        finished_at timestamptz
+      );
+      CREATE UNIQUE INDEX solution_runs_idempotency ON solution_runs (user_id, idempotency_key);
+      CREATE UNIQUE INDEX solution_runs_one_active ON solution_runs (solution_id)
+        WHERE status IN ('queued', 'running');
+      CREATE INDEX solution_runs_solution ON solution_runs (solution_id, user_id, created_at DESC);
+      CREATE INDEX solution_runs_active_owner ON solution_runs (user_id)
+        WHERE status IN ('queued', 'running');
+    `,
+  },
 ];

@@ -9,6 +9,7 @@ import { createApp } from '../app.js';
 import { BuilderService, defaultConfig, draftTemplate } from '../builder/service.js';
 import { MemoryBuilderStore } from '../builder/store.js';
 import { MemoryMaterialStore } from '../builder/tools/material-store.js';
+import { MemoryRunStore } from '../builder/tools/run-store.js';
 import { STUDY_CONFIG, toolSolution } from '../testing/builder-fixtures.js';
 import { MemoryBudgetStore } from '../discovery/budget.js';
 import { DiscoveryService } from '../discovery/service.js';
@@ -61,7 +62,8 @@ async function start() {
   const budget = new MemoryBudgetStore();
   const builderStore = new MemoryBuilderStore();
   const materials = new MemoryMaterialStore((ownerId, id) => builderStore.getSolution(ownerId, id));
-  const stores = () => ({ store, budget, builder: builderStore, materials });
+  const runs = new MemoryRunStore((ownerId, id) => builderStore.getSolution(ownerId, id));
+  const stores = () => ({ store, budget, builder: builderStore, materials, runs });
   const discovery = new DiscoveryService({
     store,
     budget,
@@ -419,6 +421,156 @@ test('материалы инструмента по HTTP: загрузка, д�
       204,
     );
     assert.equal((await call(owner, `/materials/${material.id}`)).status, 404);
+  } finally {
+    app.close();
+  }
+});
+
+test('запуски инструмента по HTTP: цена, подтверждение, запуск, результат, история, ключ, чужой — 404', async () => {
+  const app = await start();
+  try {
+    const owner = await signup(app.base, 'runs-owner@example.com');
+    const stranger = await signup(app.base, 'runs-stranger@example.com');
+    const headers = (token: string) => ({
+      Authorization: `Bearer ${token}`,
+      'Content-Type': 'application/json',
+    });
+    const me = (await (
+      await fetch(`${app.base}/api/auth/me`, { headers: headers(owner) })
+    ).json()) as { user: { id: string } };
+    await app.builderStore.createSolution(
+      toolSolution('study-runs', me.user.id),
+      {
+        solutionId: 'study-runs',
+        number: 1,
+        config: STUDY_CONFIG,
+        createdAt: new Date().toISOString(),
+      },
+      [],
+    );
+    const call = (token: string, path: string, init: RequestInit = {}) =>
+      fetch(`${app.base}/api/solutions/study-runs${path}`, { ...init, headers: headers(token) });
+    const uploaded = (await (
+      await call(owner, '/materials', {
+        method: 'POST',
+        body: JSON.stringify({
+          name: 'История.docx',
+          format: 'docx',
+          sizeBytes: 5000,
+          sections: [
+            { label: 'Часть 1', text: 'Реформы Петра I начались в 1700 году.' },
+            { label: 'Часть 2', text: 'В 1703 году основан Санкт-Петербург.' },
+          ],
+        }),
+      })
+    ).json()) as { material: { id: string } };
+    const input = { subject: 'История', materials: [{ id: uploaded.material.id }] };
+
+    const quoted = await call(owner, '/runs/quote', {
+      method: 'POST',
+      body: JSON.stringify({ operation: 'table', input }),
+    });
+    assert.equal(quoted.status, 200);
+    const { quote } = (await quoted.json()) as {
+      quote: { maxCredits: number; typicalCredits: number; model: string; inputChars: number };
+    };
+    assert.ok(quote.maxCredits >= quote.typicalCredits && quote.maxCredits > 0);
+    assert.equal(quote.model, 'MiMo-V2.6 Pro');
+
+    // Без принятой цены — 409 с ценой, запуска нет.
+    const unconfirmed = await call(owner, '/runs', {
+      method: 'POST',
+      body: JSON.stringify({
+        operation: 'table',
+        input,
+        idempotencyKey: 'http-key-0001',
+        acceptedMaxCredits: 0,
+      }),
+    });
+    assert.equal(unconfirmed.status, 409);
+    assert.equal(
+      ((await unconfirmed.json()) as { error: { code: string } }).error.code,
+      'confirmation_required',
+    );
+    // Неверное тело — 400.
+    const malformed = await call(owner, '/runs', {
+      method: 'POST',
+      body: JSON.stringify({ operation: 'table', input, idempotencyKey: 'x' }),
+    });
+    assert.equal(malformed.status, 400);
+
+    const body = JSON.stringify({
+      operation: 'table',
+      input,
+      idempotencyKey: 'http-key-0002',
+      acceptedMaxCredits: quote.maxCredits,
+    });
+    const started = await call(owner, '/runs', { method: 'POST', body });
+    assert.equal(started.status, 202, await started.clone().text());
+    const { run } = (await started.json()) as { run: { id: string; status: string } };
+    assert.equal(run.status, 'queued');
+
+    // Повтор с тем же ключом — тот же запуск.
+    const repeated = await call(owner, '/runs', { method: 'POST', body });
+    assert.equal(repeated.status, 200);
+    const again = (await repeated.json()) as { run: { id: string }; duplicate: boolean };
+    assert.equal(again.run.id, run.id);
+    assert.equal(again.duplicate, true);
+
+    // Результат: таблица со ссылками на части документа.
+    let view: {
+      status: string;
+      result: { columns: string[]; rows: Array<{ cells: string[]; sources: string[] }> } | null;
+      sources: Array<{ ref: string; label: string; materialName: string }>;
+      chargedCredits: number;
+    } & Record<string, unknown> = {
+      status: 'queued',
+      result: null,
+      sources: [],
+      chargedCredits: 0,
+    };
+    // Демо-режим шлюза (без ключа модели) имитирует поток с паузами — ждём до 15 секунд.
+    for (let i = 0; i < 300 && view.status !== 'done' && view.status !== 'failed'; i += 1) {
+      await new Promise((resolve) => setTimeout(resolve, 50));
+      view = ((await (await call(owner, `/runs/${run.id}`)).json()) as { run: typeof view }).run;
+    }
+    assert.equal(view.status, 'done', JSON.stringify(view));
+    assert.equal(view.result?.columns.length, 2);
+    assert.deepEqual(view.result?.rows[0]?.sources, ['S1']);
+    assert.deepEqual(
+      view.sources.map((source) => [source.ref, source.label, source.materialName]),
+      [
+        ['S1', 'Часть 1', 'История.docx'],
+        ['S2', 'Часть 2', 'История.docx'],
+      ],
+    );
+    for (const hidden of ['ownerId', 'claimToken', 'inputHash', 'idempotencyKey', 'costUsd']) {
+      assert.ok(!(hidden in view), hidden);
+    }
+
+    const history = (await (await call(owner, '/runs')).json()) as {
+      runs: Array<{ id: string; title: string | null; subject: string } & Record<string, unknown>>;
+    };
+    assert.equal(history.runs.length, 1);
+    assert.equal(history.runs[0]?.subject, 'История');
+    assert.ok(!('result' in history.runs[0]!));
+
+    // Чужой — 404 везде.
+    assert.equal((await call(stranger, '/runs')).status, 404);
+    assert.equal((await call(stranger, `/runs/${run.id}`)).status, 404);
+    assert.equal(
+      (
+        await call(stranger, '/runs/quote', {
+          method: 'POST',
+          body: JSON.stringify({ operation: 'table', input }),
+        })
+      ).status,
+      404,
+    );
+    assert.equal((await call(stranger, `/runs/${run.id}`, { method: 'DELETE' })).status, 404);
+
+    assert.equal((await call(owner, `/runs/${run.id}`, { method: 'DELETE' })).status, 204);
+    assert.equal((await call(owner, `/runs/${run.id}`)).status, 404);
   } finally {
     app.close();
   }

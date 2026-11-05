@@ -32,7 +32,7 @@ export interface StructuredTaskInput<T> {
   conversationId: string;
   billing: 'user' | 'sponsored';
   /** Вид служебной задачи в учёте: этап анализа или проверка (Builder: черновик, судья). */
-  kind?: 'discovery' | 'review';
+  kind?: 'discovery' | 'review' | 'tool';
   policy: StagePolicy;
   language: Language;
   systemPrompt: string;

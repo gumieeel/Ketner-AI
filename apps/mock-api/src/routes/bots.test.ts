@@ -14,6 +14,7 @@ import { createApp } from '../app.js';
 import { BuilderService, defaultConfig } from '../builder/service.js';
 import { MemoryBuilderStore } from '../builder/store.js';
 import { MemoryMaterialStore } from '../builder/tools/material-store.js';
+import { MemoryRunStore } from '../builder/tools/run-store.js';
 import { MemoryBudgetStore } from '../discovery/budget.js';
 import { MemoryDiscoveryStore } from '../discovery/store.js';
 import type { MailMessage } from '../services/mailer.js';
@@ -51,6 +52,7 @@ async function start() {
     budget: new MemoryBudgetStore(),
     builder: builderStore,
     materials,
+    runs: new MemoryRunStore((ownerId, id) => builderStore.getSolution(ownerId, id)),
   });
   const builder = new BuilderService({
     store: builderStore,

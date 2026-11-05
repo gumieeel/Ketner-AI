@@ -241,7 +241,16 @@ export interface UsageRecord {
    * Проверка ответа другой моделью (`review`) тоже не считается сообщением и не тратит лимит
    * модели-рецензента: у проверок свой суточный лимит (services/answer-review.ts).
    */
-  kind?: 'chat' | 'agent' | 'image' | 'review' | 'discovery' | 'assistant' | 'assistant_test';
+  kind?:
+    | 'chat'
+    | 'agent'
+    | 'image'
+    | 'review'
+    | 'discovery'
+    | 'assistant'
+    | 'assistant_test'
+    /** Запуск операции инструмента Builder (конспект, таблица…): `runId` — id запуска. */
+    | 'tool';
   /**
    * Вызов оплатил сервис, а не пользователь (бесплатный анализ Discovery): кредиты не списаны,
    * себестоимость учтена в суточном бюджете бесплатных анализов (discovery/budget.ts).
@@ -463,7 +472,7 @@ export interface GatewayRequest {
    */
   task?: {
     /** `review` — проверка ответа, судья, ревью кода; `discovery` — этапы анализа задачи. */
-    kind: 'review' | 'discovery';
+    kind: 'review' | 'discovery' | 'tool';
     id: string;
     systemPrompt: string;
     /**

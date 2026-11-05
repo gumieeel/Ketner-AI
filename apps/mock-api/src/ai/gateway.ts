@@ -597,13 +597,13 @@ export class AIGateway {
     }
 
     // 4. Проверка Fair Use и захват concurrency слота
-    // Этап анализа — не сообщение чата: лимиты сообщений и токенов чата к нему не применяются
-    // (у анализа свои квоты и бюджет), параллельность проверяется как обычно.
+    // Этап анализа и запуск инструмента — не сообщения чата: лимиты сообщений и токенов чата к ним
+    // не применяются (у них свои квоты и потолок цены), параллельность проверяется как обычно.
     const decision = FairUseEngine.evaluate(
       snapshot,
       effectivePlan,
       language,
-      req.task?.kind === 'discovery' || req.assistant?.testRunId
+      req.task?.kind === 'discovery' || req.task?.kind === 'tool' || req.assistant?.testRunId
         ? { skipMessageWindows: true, skipTokenWindows: true }
         : {},
     );

@@ -61,7 +61,14 @@ type Step =
 
 type Notice = { tone: 'success' | 'warning'; text: string } | null;
 
-export function MaterialsPanel({ solutionId }: { solutionId: string }) {
+export function MaterialsPanel({
+  solutionId,
+  onChange,
+}: {
+  solutionId: string;
+  /** Документы добавили или удалили: другие разделы страницы обновляют выбор. */
+  onChange?: () => void;
+}) {
   const translator = useTranslation();
   const { t, language } = translator;
   const inputId = useId();
@@ -75,12 +82,16 @@ export function MaterialsPanel({ solutionId }: { solutionId: string }) {
   const [removing, setRemoving] = useState<MaterialSummary | null>(null);
 
   const number = (value: number) => value.toLocaleString(language === 'en' ? 'en-US' : 'ru-RU');
+  // Последний обработчик — в ref: новый обработчик на каждой отрисовке не перезапускает загрузку.
+  const onChangeRef = useRef(onChange);
+  onChangeRef.current = onChange;
 
   const refresh = useCallback(async () => {
     try {
       const result = await listMaterials(solutionId);
       setMaterials(result.materials);
       setUsage(result.usage);
+      onChangeRef.current?.();
     } catch (caught) {
       setError(caught);
     }

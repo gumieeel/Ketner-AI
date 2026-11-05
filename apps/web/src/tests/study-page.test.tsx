@@ -69,6 +69,7 @@ function installStudyApi(options: { uploadError?: { status: number; code: string
     calls.push({ method, path: url.pathname, body });
     const path = url.pathname.replace(/^\/api\/solutions/, '');
     if (path === '/s1' && method === 'GET') return json(200, TOOL);
+    if (path === '/s1/runs' && method === 'GET') return json(200, { runs: [] });
     if (path === '/s1/materials' && method === 'GET') {
       return json(200, { materials: materials.map(summary), usage: usage() });
     }

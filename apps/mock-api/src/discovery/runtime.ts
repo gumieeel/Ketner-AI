@@ -15,6 +15,7 @@ import {
   PostgresMaterialStore,
   type MaterialStore,
 } from '../builder/tools/material-store.js';
+import { MemoryRunStore, PostgresRunStore, type RunStore } from '../builder/tools/run-store.js';
 
 export interface DiscoveryStores {
   store: DiscoveryStore;
@@ -23,6 +24,8 @@ export interface DiscoveryStores {
   builder: BuilderStore;
   /** Материалы инструментов Builder — миграция `0008_solution_materials`. */
   materials: MaterialStore;
+  /** Запуски операций инструментов — миграция `0009_solution_runs`. */
+  runs: RunStore;
 }
 
 let databaseExpected = false;
@@ -40,6 +43,7 @@ export function attachDiscoveryDriver(runner: SqlRunner): void {
     budget: new PostgresBudgetStore(runner),
     builder: new PostgresBuilderStore(runner),
     materials: new PostgresMaterialStore(runner),
+    runs: new PostgresRunStore(runner),
   };
 }
 
@@ -54,6 +58,7 @@ export function getDiscoveryStores(): DiscoveryStores | null {
       budget: new MemoryBudgetStore(),
       builder,
       materials: new MemoryMaterialStore((ownerId, id) => builder.getSolution(ownerId, id)),
+      runs: new MemoryRunStore((ownerId, id) => builder.getSolution(ownerId, id)),
     };
   }
   return memory;

@@ -292,7 +292,12 @@
         "materialSections": 1000,
         "fileBytes": 26214400,
         "nameChars": 200,
-        "sectionLabelChars": 120
+        "sectionLabelChars": 120,
+        "runChars": 60000,
+        "runMaterials": 5,
+        "activeRunsPerUser": 2,
+        "subjectChars": 80,
+        "focusChars": 300
       }
     },
     "prices": {
