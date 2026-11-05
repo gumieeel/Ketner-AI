@@ -188,10 +188,10 @@ function sheetToTsv(xml: string, shared: string[]): string {
   return rows.join('\n');
 }
 
-async function xlsxToText(
+async function xlsxSheets(
   entries: Map<string, ZipEntry>,
   read: (name: string) => Promise<string | null>,
-): Promise<string> {
+): Promise<Array<{ name: string; text: string }>> {
   const shared = parseSharedStrings(await read('xl/sharedStrings.xml'));
   const workbook = (await read('xl/workbook.xml')) ?? '';
   const rels = (await read('xl/_rels/workbook.xml.rels')) ?? '';
@@ -218,14 +218,52 @@ async function xlsxToText(
     names.forEach((path, i) => sheets.push({ name: `Лист ${i + 1}`, path }));
   }
 
-  const parts: string[] = [];
+  const parts: Array<{ name: string; text: string }> = [];
   for (const sheet of sheets) {
     const xml = await read(sheet.path);
     if (!xml) continue;
     const tsv = sheetToTsv(xml, shared);
-    if (tsv) parts.push(`## ${sheet.name}\n${tsv}`);
+    if (tsv) parts.push({ name: sheet.name, text: tsv });
   }
-  return parts.join('\n\n');
+  return parts;
+}
+
+/** Содержимое документа по частям: слайды, листы или весь текст DOCX. */
+type OfficeContent =
+  | { format: 'docx'; text: string }
+  | { format: 'pptx'; slides: Array<{ number: number; text: string }> }
+  | { format: 'xlsx'; sheets: Array<{ name: string; text: string }> };
+
+async function readOffice(file: Blob, format: OfficeFormat): Promise<OfficeContent | null> {
+  if (file.size > MAX_OFFICE_BYTES) return null;
+  const buffer = await file.arrayBuffer();
+  const bytes = new Uint8Array(buffer);
+  const view = new DataView(buffer);
+
+  const list = readZipEntries(view);
+  if (!list) return null;
+  const entries = new Map(list.map((e) => [e.name, e]));
+  const read = async (name: string): Promise<string | null> => {
+    const entry = entries.get(name);
+    return entry ? readEntry(view, bytes, entry) : null;
+  };
+
+  if (format === 'docx') {
+    const xml = await read('word/document.xml');
+    return xml ? { format, text: docxToText(xml) } : null;
+  }
+  if (format === 'pptx') {
+    const names = [...entries.keys()]
+      .filter((n) => /^ppt\/slides\/slide\d+\.xml$/.test(n))
+      .sort((a, b) => Number(/(\d+)\.xml$/.exec(a)?.[1]) - Number(/(\d+)\.xml$/.exec(b)?.[1]));
+    const slides: Array<{ number: number; text: string }> = [];
+    for (let i = 0; i < names.length; i++) {
+      const xml = await read(names[i]);
+      slides.push({ number: i + 1, text: xml ? pptxSlideToText(xml) : '' });
+    }
+    return { format, slides };
+  }
+  return { format, sheets: await xlsxSheets(entries, read) };
 }
 
 /**
@@ -238,37 +276,17 @@ export async function extractOfficeText(
   maxChars = 200_000,
 ): Promise<string | null> {
   try {
-    if (file.size > MAX_OFFICE_BYTES) return null;
-    const buffer = await file.arrayBuffer();
-    const bytes = new Uint8Array(buffer);
-    const view = new DataView(buffer);
-
-    const list = readZipEntries(view);
-    if (!list) return null;
-    const entries = new Map(list.map((e) => [e.name, e]));
-    const read = async (name: string): Promise<string | null> => {
-      const entry = entries.get(name);
-      return entry ? readEntry(view, bytes, entry) : null;
-    };
-
+    const content = await readOffice(file, format);
+    if (!content) return null;
     let text = '';
-    if (format === 'docx') {
-      const xml = await read('word/document.xml');
-      if (!xml) return null;
-      text = docxToText(xml);
-    } else if (format === 'pptx') {
-      const slides = [...entries.keys()]
-        .filter((n) => /^ppt\/slides\/slide\d+\.xml$/.test(n))
-        .sort((a, b) => Number(/(\d+)\.xml$/.exec(a)?.[1]) - Number(/(\d+)\.xml$/.exec(b)?.[1]));
-      const parts: string[] = [];
-      for (let i = 0; i < slides.length; i++) {
-        const xml = await read(slides[i]);
-        const slideText = xml ? pptxSlideToText(xml) : '';
-        if (slideText) parts.push(`## Слайд ${i + 1}\n${slideText}`);
-      }
-      text = parts.join('\n\n');
+    if (content.format === 'docx') text = content.text;
+    else if (content.format === 'pptx') {
+      text = content.slides
+        .filter((slide) => slide.text)
+        .map((slide) => `## Слайд ${slide.number}\n${slide.text}`)
+        .join('\n\n');
     } else {
-      text = await xlsxToText(entries, read);
+      text = content.sheets.map((sheet) => `## ${sheet.name}\n${sheet.text}`).join('\n\n');
     }
 
     text = text.trim();
@@ -276,6 +294,68 @@ export async function extractOfficeText(
     return text.length > maxChars
       ? `${text.slice(0, maxChars)}\n\n... [текст документа обрезан]`
       : text;
+  } catch {
+    return null;
+  }
+}
+
+export interface DocumentSection {
+  label: string;
+  text: string;
+}
+
+/** Длина части длинного сплошного текста (DOCX, TXT), символов. */
+export const CHUNK_CHARS = 4000;
+
+/**
+ * Делит сплошной текст на части примерно по `size` символов, по границам абзацев: на части
+ * ссылаются результаты инструментов, и пользователь выбирает, какие из них взять.
+ */
+export function chunkText(text: string, size = CHUNK_CHARS): string[] {
+  const chunks: string[] = [];
+  let current = '';
+  for (const paragraph of text.split(/\n/)) {
+    if (current && current.length + paragraph.length + 1 > size) {
+      chunks.push(current);
+      current = '';
+    }
+    // Один абзац длиннее части — режется по длине, чтобы часть не разрасталась.
+    let rest = paragraph;
+    while (rest.length > size) {
+      if (current) {
+        chunks.push(current);
+        current = '';
+      }
+      chunks.push(rest.slice(0, size));
+      rest = rest.slice(size);
+    }
+    current = current ? `${current}\n${rest}` : rest;
+  }
+  if (current.trim()) chunks.push(current);
+  return chunks.filter((chunk) => chunk.trim().length > 0);
+}
+
+/**
+ * Части документа для инструментов: слайды PPTX, листы XLSX, фрагменты DOCX. `null` — файл не
+ * прочитался; пустой массив — текста в нём нет.
+ */
+export async function extractOfficeSections(
+  file: Blob,
+  format: OfficeFormat,
+  labels: { slide: (n: number) => string; part: (n: number) => string },
+): Promise<DocumentSection[] | null> {
+  try {
+    const content = await readOffice(file, format);
+    if (!content) return null;
+    if (content.format === 'pptx') {
+      return content.slides
+        .filter((slide) => slide.text.trim())
+        .map((slide) => ({ label: labels.slide(slide.number), text: slide.text }));
+    }
+    if (content.format === 'xlsx') {
+      return content.sheets.map((sheet) => ({ label: sheet.name, text: sheet.text }));
+    }
+    return chunkText(content.text).map((text, i) => ({ label: labels.part(i + 1), text }));
   } catch {
     return null;
   }

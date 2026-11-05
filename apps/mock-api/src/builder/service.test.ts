@@ -5,6 +5,7 @@ import { MemoryDiscoveryStore } from '../discovery/store.js';
 import type { Analysis, Opportunity } from '../discovery/types.js';
 import { BuilderService, judgeVerdict, type BuilderCaller } from './service.js';
 import { MemoryBuilderStore } from './store.js';
+import { isToolConfig } from './types.js';
 
 const DRAFT = JSON.stringify({
   name: 'Помощник магазина',
@@ -197,7 +198,8 @@ test('черновик из возможности: цена и согласие
   assert.equal(requests[0].task?.kind, 'review');
   if (!created.ok) return;
   const view = await service.get('alice', created.solution.id);
-  assert.equal(view?.config.name, 'Помощник магазина');
+  assert.ok(view?.kind === 'assistant' && !isToolConfig(view.config));
+  assert.equal(view.config.name, 'Помощник магазина');
   assert.equal(view?.cases.length, 2);
   assert.equal(view?.solution.status, 'draft');
   assert.deepEqual(view?.readiness, { ready: false, reason: 'not_tested' });
@@ -306,7 +308,9 @@ test('тесты и включение: только после прохожде
 
   // Изменили кейсы — прошлый прогон не подтверждает версию.
   await service.saveCase(alice, id, { input: 'Новый вопрос', criteria: ['Отвечает вежливо'] });
-  assert.equal((await service.get('alice', id))?.readiness.ready, false);
+  const afterEdit = await service.get('alice', id);
+  assert.ok(afterEdit?.kind === 'assistant');
+  assert.equal(afterEdit.readiness.ready, false);
 
   // Выключить — чат недоступен.
   await service.pause(alice, id);
@@ -348,7 +352,8 @@ test('цена тестов: на каждый кейс — ответ и про
   await service.saveCase(alice, mine.id, { input: 'Вопрос', criteria: ['Критерий'] });
   await service.saveCase(alice, mine.id, { input: 'Вопрос 2', criteria: ['Критерий'] });
   const view = await service.get('alice', mine.id);
-  const quote = service.testQuote(view!.config, view!.cases);
+  assert.ok(view?.kind === 'assistant' && !isToolConfig(view.config));
+  const quote = service.testQuote(view.config, view.cases);
   assert.equal(quote.cases, 2);
   assert.equal(quote.judgeModel, 'MiMo-V2.6 Pro');
   assert.ok(quote.maxCredits >= quote.typicalCredits);

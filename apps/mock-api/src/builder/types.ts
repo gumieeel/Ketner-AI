@@ -86,10 +86,30 @@ export interface Solution {
   version: number;
 }
 
+/**
+ * Настройки инструмента (вид `tool`). Поле `tool` — id шаблона: по нему настройки инструмента
+ * отличаются от настроек помощника, у которых такого поля нет.
+ */
+export interface StudyToolConfig {
+  tool: 'study_assistant';
+  language: Language;
+  /** Предмет по умолчанию для новых запусков; пусто — спросить при запуске. */
+  subject: string;
+}
+
+export type ToolConfig = StudyToolConfig;
+
+/** Содержимое версии настроек: помощника или инструмента — по виду решения. */
+export type SolutionConfig = AssistantConfig | ToolConfig;
+
+export function isToolConfig(config: SolutionConfig): config is ToolConfig {
+  return 'tool' in config;
+}
+
 export interface SolutionVersion {
   solutionId: string;
   number: number;
-  config: AssistantConfig;
+  config: SolutionConfig;
   createdAt: string;
 }
 

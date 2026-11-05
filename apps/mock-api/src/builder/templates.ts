@@ -20,7 +20,7 @@ import type { SolutionType } from './types.js';
 export const SOLUTION_KINDS = ['assistant', 'tool', 'workflow'] as const;
 export type SolutionKind = (typeof SOLUTION_KINDS)[number];
 
-export const TEMPLATE_IDS = ['personal_assistant', 'customer_bot'] as const;
+export const TEMPLATE_IDS = ['personal_assistant', 'customer_bot', 'study_assistant'] as const;
 export type TemplateId = (typeof TEMPLATE_IDS)[number];
 
 export interface SolutionTemplate {
@@ -35,6 +35,8 @@ export interface SolutionTemplate {
   available: boolean;
   /** Что нужно от платформы (проверяется выполнимостью Discovery). */
   requires: readonly CapabilityId[];
+  /** Принимает материалы — документы пользователя (builder/tools/materials.ts). */
+  materials: boolean;
   label: Record<Language, string>;
   description: Record<Language, string>;
 }
@@ -46,6 +48,7 @@ export const TEMPLATES: Readonly<Record<TemplateId, SolutionTemplate>> = {
     storageType: 'assistant',
     available: true,
     requires: ['text_generation'],
+    materials: false,
     label: { ru: 'Личный помощник', en: 'Personal assistant' },
     description: {
       ru: 'помощник в чате Ketner со знаниями и стилем человека: отвечает, пишет письма, документы, посты',
@@ -58,10 +61,27 @@ export const TEMPLATES: Readonly<Record<TemplateId, SolutionTemplate>> = {
     storageType: 'customer_bot',
     available: true,
     requires: ['text_generation'],
+    materials: false,
     label: { ru: 'Бот для клиентов', en: 'Customer bot' },
     description: {
       ru: 'бот на странице Ketner отвечает клиентам бизнеса и собирает заявки',
       en: "a bot on a Ketner page answers the business's customers and collects requests",
+    },
+  },
+  study_assistant: {
+    id: 'study_assistant',
+    kind: 'tool',
+    storageType: 'tool',
+    // Создать нельзя, пока не работают все операции (конспект, таблица, вопросы, тест, прогресс).
+    // Возможность «документы в инструментах» появится в каталоге вместе с доступностью шаблона:
+    // она меняет промпт Discovery.
+    available: false,
+    requires: ['text_generation'],
+    materials: true,
+    label: { ru: 'Учебный помощник', en: 'Study assistant' },
+    description: {
+      ru: 'инструмент для учёбы: загрузите учебные материалы — конспект, таблицы, вопросы для самопроверки и тесты с результатами и прогрессом',
+      en: 'a study tool: upload study materials to get notes, tables, self-check questions and quizzes with scores and progress',
     },
   },
 };

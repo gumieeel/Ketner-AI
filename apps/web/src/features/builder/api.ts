@@ -142,6 +142,22 @@ export type Readiness =
       failed?: number;
     };
 
+/** Настройки учебного помощника (инструмент); поле `tool` отличает их от настроек помощника. */
+export interface StudyToolConfig {
+  tool: 'study_assistant';
+  language: Language;
+  subject: string;
+}
+
+export type ToolConfig = StudyToolConfig;
+
+/** Страница инструмента: свои настройки; материалы и запуски — отдельными запросами. */
+export interface ToolSolutionDetails {
+  solution: SolutionView;
+  config: ToolConfig;
+  versions: Array<{ number: number; createdAt: string }>;
+}
+
 export interface SolutionDetails {
   solution: SolutionView;
   config: AssistantConfig;
@@ -185,6 +201,11 @@ function headers(extra: Record<string, string> = {}): Record<string, string> {
   const token = getAuthToken();
   if (token) result.Authorization = `Bearer ${token}`;
   return result;
+}
+
+/** Запрос к `/api/solutions…` с сессией; ошибка — DiscoveryApiError с кодом сервера. */
+export async function callSolutions<T>(path: string, init: RequestInit = {}): Promise<T> {
+  return call<T>(path, init);
 }
 
 async function call<T>(path: string, init: RequestInit = {}): Promise<T> {
@@ -250,7 +271,14 @@ export async function createFromOpportunity(analysisId: string, opportunityId: s
   ).solution;
 }
 
-export function fetchSolution(id: string): Promise<SolutionDetails> {
+export type AnySolutionDetails = SolutionDetails | ToolSolutionDetails;
+
+export function isAssistantDetails(details: AnySolutionDetails): details is SolutionDetails {
+  return details.solution.kind === 'assistant' && !('tool' in details.config);
+}
+
+/** Помощник или инструмент — по `solution.kind`; интерфейс выбирает features/solutions/registry. */
+export function fetchSolution(id: string): Promise<AnySolutionDetails> {
   return call(`/${enc(id)}`);
 }
 

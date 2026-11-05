@@ -25,6 +25,7 @@ import type {
   BotSettings,
   Solution,
 } from './types.js';
+import { isToolConfig } from './types.js';
 
 /** С владельца за один ответ бота не списывается больше, $ (≈ 30 кредитов). */
 export const BOT_REPLY_CAP_USD = 0.03;
@@ -121,7 +122,7 @@ export class BotService {
       solution.id,
       solution.activeVersion,
     );
-    return version?.config ?? null;
+    return version && !isToolConfig(version.config) ? version.config : null;
   }
 
   async publicInfo(slug: string) {
@@ -461,7 +462,7 @@ export class BotService {
       solution.id,
       solution.currentVersion,
     );
-    if (!version) return notFound();
+    if (!version || isToolConfig(version.config)) return notFound();
     if (this.deps.balanceUsd(caller.userId, caller.plan) < BOT_REPLY_CAP_USD) {
       return {
         ok: false,

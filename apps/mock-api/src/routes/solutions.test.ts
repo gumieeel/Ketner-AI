@@ -6,8 +6,10 @@ import { join } from 'node:path';
 import test from 'node:test';
 import type { GatewayRequest, GatewayStreamCallbacks } from '../ai/gateway-types.js';
 import { createApp } from '../app.js';
-import { BuilderService, draftTemplate } from '../builder/service.js';
+import { BuilderService, defaultConfig, draftTemplate } from '../builder/service.js';
 import { MemoryBuilderStore } from '../builder/store.js';
+import { MemoryMaterialStore } from '../builder/tools/material-store.js';
+import { STUDY_CONFIG, toolSolution } from '../testing/builder-fixtures.js';
 import { MemoryBudgetStore } from '../discovery/budget.js';
 import { DiscoveryService } from '../discovery/service.js';
 import { MemoryDiscoveryStore } from '../discovery/store.js';
@@ -58,7 +60,8 @@ async function start() {
   const store = new MemoryDiscoveryStore();
   const budget = new MemoryBudgetStore();
   const builderStore = new MemoryBuilderStore();
-  const stores = () => ({ store, budget, builder: builderStore });
+  const materials = new MemoryMaterialStore((ownerId, id) => builderStore.getSolution(ownerId, id));
+  const stores = () => ({ store, budget, builder: builderStore, materials });
   const discovery = new DiscoveryService({
     store,
     budget,
@@ -92,7 +95,7 @@ async function start() {
   const server: Server = app.listen(0);
   const base = `http://localhost:${(server.address() as { port: number }).port}`;
   rememberCodeMails(base, mails);
-  return { base, discovery, builder, close: () => server.close() };
+  return { base, discovery, builder, builderStore, close: () => server.close() };
 }
 
 async function signup(base: string, email: string): Promise<string> {
@@ -250,6 +253,172 @@ test('Builder по HTTP: только после входа; помощник и
       { method: 'POST', headers: other, body: JSON.stringify({ content: 'Привет' }) },
     );
     assert.equal(foreignMessage.status, 404);
+  } finally {
+    app.close();
+  }
+});
+
+test('материалы инструмента по HTTP: загрузка, дубль, просмотр, удаление; чужой — 404; действия помощника — 409', async () => {
+  const app = await start();
+  try {
+    const owner = await signup(app.base, 'study-owner@example.com');
+    const stranger = await signup(app.base, 'study-stranger@example.com');
+    const headers = (token: string) => ({
+      Authorization: `Bearer ${token}`,
+      'Content-Type': 'application/json',
+    });
+    const me = (await (
+      await fetch(`${app.base}/api/auth/me`, { headers: headers(owner) })
+    ).json()) as { user: { id: string } };
+    // Шаблон пока недоступен для создания через API — инструмент кладётся прямо в хранилище.
+    await app.builderStore.createSolution(
+      toolSolution('study-1', me.user.id),
+      {
+        solutionId: 'study-1',
+        number: 1,
+        config: STUDY_CONFIG,
+        createdAt: new Date().toISOString(),
+      },
+      [],
+    );
+    const call = (token: string, path: string, init: RequestInit = {}) =>
+      fetch(`${app.base}/api/solutions/study-1${path}`, { ...init, headers: headers(token) });
+    const document = {
+      name: 'Биология.pdf',
+      format: 'pdf',
+      sizeBytes: 120_000,
+      sections: [
+        { label: 'Стр. 1', text: 'Клетка — основная единица живого.' },
+        { label: 'Стр. 2', text: '' },
+        { label: 'Стр. 3', text: 'Ядро хранит ДНК.' },
+      ],
+    };
+
+    assert.equal((await fetch(`${app.base}/api/solutions/study-1/materials`)).status, 401);
+
+    // Страница инструмента: вид, шаблон и его настройки, без кейсов и тестов помощника.
+    const view = (await (await call(owner, '')).json()) as Record<string, unknown> & {
+      solution: Record<string, unknown>;
+    };
+    assert.equal(view.solution.kind, 'tool');
+    assert.equal(view.solution.template, 'study_assistant');
+    assert.deepEqual(view.config, STUDY_CONFIG);
+    assert.ok(!('cases' in view) && !('readiness' in view));
+
+    const created = await call(owner, '/materials', {
+      method: 'POST',
+      body: JSON.stringify(document),
+    });
+    assert.equal(created.status, 201);
+    const { material } = (await created.json()) as {
+      material: { id: string; sections: Array<{ id: string; label: string }> } & Record<
+        string,
+        unknown
+      >;
+    };
+    assert.deepEqual(
+      material.sections.map((section) => [section.id, section.label]),
+      [
+        ['s1', 'Стр. 1'],
+        ['s2', 'Стр. 3'],
+      ],
+    );
+    assert.ok(!('ownerId' in material) && !('contentHash' in material));
+
+    const duplicate = await call(owner, '/materials', {
+      method: 'POST',
+      body: JSON.stringify(document),
+    });
+    assert.equal(duplicate.status, 200);
+    assert.equal(((await duplicate.json()) as { duplicate: boolean }).duplicate, true);
+
+    // Неверное тело и скан без текста.
+    const invalid = await call(owner, '/materials', {
+      method: 'POST',
+      body: JSON.stringify({ ...document, format: 'exe' }),
+    });
+    assert.equal(invalid.status, 400);
+    const scan = await call(owner, '/materials', {
+      method: 'POST',
+      body: JSON.stringify({ ...document, sections: [{ label: '1', text: '  ' }] }),
+    });
+    assert.equal(scan.status, 422);
+    assert.equal(
+      ((await scan.json()) as { error: { code: string } }).error.code,
+      'material_no_text',
+    );
+
+    // Тело больше 1 МБ, но в пределах 2 МБ принимается; больше 2 МБ — 413 до разбора.
+    const near = 'ж'.repeat(190_000); // ≈ 380 КБ в UTF-8 — плюс экранирование
+    const large = await call(owner, '/materials', {
+      method: 'POST',
+      body: JSON.stringify({
+        ...document,
+        sections: [
+          { label: '1', text: near },
+          { label: '2', text: '"\\'.repeat(5_000) },
+        ],
+      }),
+    });
+    assert.equal(large.status, 201);
+    const huge = await call(owner, '/materials', {
+      method: 'POST',
+      body: JSON.stringify({
+        ...document,
+        sections: [{ label: '1', text: '\u0001'.repeat(400_000) }],
+      }),
+    });
+    assert.equal(huge.status, 413);
+
+    const list = (await (await call(owner, '/materials')).json()) as {
+      materials: Array<{ id: string }>;
+      usage: { count: number; maxCount: number };
+    };
+    assert.equal(list.materials.length, 2);
+    assert.equal(list.usage.count, 2);
+    assert.ok(!JSON.stringify(list).includes('Клетка'));
+
+    const full = (await (await call(owner, `/materials/${material.id}`)).json()) as {
+      material: { sections: Array<{ text: string }> };
+    };
+    assert.equal(full.material.sections[0]?.text, 'Клетка — основная единица живого.');
+
+    // Чужой пользователь не видит ни инструмента, ни материалов.
+    assert.equal((await call(stranger, '/materials')).status, 404);
+    assert.equal((await call(stranger, `/materials/${material.id}`)).status, 404);
+    assert.equal(
+      (await call(stranger, '/materials', { method: 'POST', body: JSON.stringify(document) }))
+        .status,
+      404,
+    );
+    assert.equal(
+      (await call(stranger, `/materials/${material.id}`, { method: 'DELETE' })).status,
+      404,
+    );
+
+    // Действия помощника над инструментом — 409, а не чат или тесты.
+    for (const [path, init] of [
+      ['/config', { method: 'PUT', body: JSON.stringify({ config: defaultConfig('Чат', 'ru') }) }],
+      [
+        '/cases',
+        { method: 'POST', body: JSON.stringify({ input: 'вопрос', criteria: ['ответ'] }) },
+      ],
+      ['/test-runs', { method: 'POST', body: JSON.stringify({ confirm: true }) }],
+      ['/activate', { method: 'POST' }],
+      ['/pause', { method: 'POST' }],
+      ['/threads', { method: 'GET' }],
+    ] as const) {
+      const response = await call(owner, path, init);
+      assert.equal(response.status, 409, path);
+      const body = (await response.json()) as { error: { code: string } };
+      assert.equal(body.error.code, 'wrong_solution_kind', path);
+    }
+
+    assert.equal(
+      (await call(owner, `/materials/${material.id}`, { method: 'DELETE' })).status,
+      204,
+    );
+    assert.equal((await call(owner, `/materials/${material.id}`)).status, 404);
   } finally {
     app.close();
   }

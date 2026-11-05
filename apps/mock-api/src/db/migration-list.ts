@@ -267,4 +267,26 @@ export const MIGRATIONS: readonly Migration[] = [
       ALTER TABLE solutions ALTER COLUMN template SET NOT NULL;
     `,
   },
+  {
+    // Материалы инструментов (учебный помощник): извлечённый браузером текст документа по частям.
+    // Исходный файл не хранится. outline — части без текста, для списков.
+    id: '0008_solution_materials',
+    sql: `
+      CREATE TABLE solution_materials (
+        id text PRIMARY KEY,
+        solution_id text NOT NULL REFERENCES solutions (id) ON DELETE CASCADE,
+        user_id text NOT NULL,
+        name text NOT NULL,
+        format text NOT NULL CHECK (format IN ('pdf', 'docx', 'pptx', 'xlsx', 'txt')),
+        size_bytes integer NOT NULL CHECK (size_bytes > 0),
+        char_count integer NOT NULL CHECK (char_count > 0),
+        outline jsonb NOT NULL,
+        sections jsonb NOT NULL,
+        content_hash text NOT NULL,
+        created_at timestamptz NOT NULL DEFAULT now()
+      );
+      CREATE UNIQUE INDEX solution_materials_content ON solution_materials (solution_id, content_hash);
+      CREATE INDEX solution_materials_owner ON solution_materials (user_id, solution_id, created_at DESC);
+    `,
+  },
 ];

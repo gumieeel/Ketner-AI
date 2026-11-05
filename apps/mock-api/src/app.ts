@@ -126,6 +126,17 @@ export function acceptsLargeBody(method: string, path: string): boolean {
   return LARGE_BODY_ROUTES.some((route) => route.method === method && route.pattern.test(path));
 }
 
+/**
+ * Загрузка материала инструмента: извлечённый текст до 200 000 символов (лимит проверяет сервис).
+ * 2 МБ хватает с запасом на экранирование JSON; 50 МБ этому маршруту не нужны.
+ */
+const MATERIAL_BODY_LIMIT = '2mb';
+const MATERIAL_ROUTE = /^\/api\/solutions\/[^/]+\/materials$/;
+
+export function acceptsMaterialBody(method: string, path: string): boolean {
+  return method === 'POST' && MATERIAL_ROUTE.test(path);
+}
+
 const defaultDeps: AppDeps = {
   store: conversationStore,
   userStore,
@@ -267,12 +278,13 @@ export function createApp(overrides: Partial<AppDeps> = {}): Express {
   };
   const largeJson = express.json({ limit: LARGE_BODY_LIMIT, verify: keepRawBody });
   const defaultJson = express.json({ limit: DEFAULT_BODY_LIMIT, verify: keepRawBody });
+  const materialJson = express.json({ limit: MATERIAL_BODY_LIMIT });
   app.use((request, response, next) =>
-    (acceptsLargeBody(request.method, request.path) ? largeJson : defaultJson)(
-      request,
-      response,
-      next,
-    ),
+    (acceptsLargeBody(request.method, request.path)
+      ? largeJson
+      : acceptsMaterialBody(request.method, request.path)
+        ? materialJson
+        : defaultJson)(request, response, next),
   );
   app.use(express.urlencoded({ extended: true, limit: DEFAULT_BODY_LIMIT }));
 

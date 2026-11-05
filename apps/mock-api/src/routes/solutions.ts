@@ -57,6 +57,8 @@ import type {
   TestRun,
 } from '../builder/types.js';
 import { KIND_BY_TYPE } from '../builder/templates.js';
+import { MaterialService } from '../builder/tools/material-service.js';
+import { extractedDocumentSchema } from '../builder/tools/materials.js';
 import { getDiscoveryStores, type DiscoveryStores } from '../discovery/runtime.js';
 import { getImageService } from '../images/runtime.js';
 import { ImageServiceError, type ImageService } from '../images/service.js';
@@ -98,6 +100,8 @@ export interface SolutionsRouterDeps {
 export interface BuilderRuntime {
   builder: () => BuilderService | null;
   bots: () => BotService | null;
+  /** Материалы инструментов (учебный помощник). */
+  materials: () => MaterialService | null;
 }
 
 /**
@@ -179,7 +183,15 @@ export function createBuilderRuntime(deps: SolutionsRouterDeps): BuilderRuntime 
     });
     return bots;
   };
-  return { builder: getBuilder, bots: getBots };
+  let materials: MaterialService | null = null;
+  const getMaterials = (): MaterialService | null => {
+    if (materials) return materials;
+    const ready = stores();
+    if (!ready) return null;
+    materials = new MaterialService({ materials: ready.materials, solutions: ready.builder });
+    return materials;
+  };
+  return { builder: getBuilder, bots: getBots, materials: getMaterials };
 }
 
 const charged = (usd: number) => Math.round(usd * CREDITS_PER_USD * 10) / 10;
@@ -348,6 +360,15 @@ export function createSolutionsRouter(deps: SolutionsRouterDeps): Router {
     const view = await builder.get(caller.userId, id);
     if (!view) {
       sendError(response, 404, 'not_found', 'Помощник не найден');
+      return;
+    }
+    if (view.kind !== 'assistant') {
+      // Инструмент: свои настройки; материалы и запуски — своими эндпоинтами.
+      response.json({
+        solution: publicSolution(view.solution),
+        config: view.config,
+        versions: view.versions,
+      });
       return;
     }
     response.json({
@@ -605,6 +626,83 @@ export function createSolutionsRouter(deps: SolutionsRouterDeps): Router {
     }),
   );
 
+  // ─── Материалы инструмента ─────────────────────────────────────────────────
+  // Текст документа извлекает браузер; сервер проверяет схему, размеры и владельца.
+
+  const materialsOf = (response: Response): MaterialService | null => {
+    const value = runtime.materials();
+    if (!value)
+      sendError(response, 503, 'builder_unavailable', 'Builder временно недоступен. Чат работает.');
+    return value;
+  };
+
+  router.get(
+    '/:id/materials',
+    handle(async (_builder, caller, request, response) => {
+      const service = materialsOf(response);
+      if (!service) return;
+      const result = await service.list(caller, String(request.params.id));
+      if (!result.ok) return fail(response, result);
+      response.json({ materials: result.materials, usage: result.usage });
+    }),
+  );
+
+  router.post(
+    '/:id/materials',
+    handle(async (_builder, caller, request, response) => {
+      if (limited(editLimiter, response, caller.userId)) return;
+      const service = materialsOf(response);
+      if (!service) return;
+      const parsed = extractedDocumentSchema.safeParse(request.body ?? {});
+      if (!parsed.success) {
+        sendError(
+          response,
+          400,
+          'invalid_material',
+          'Документ не прошёл проверку: проверьте файл.',
+        );
+        return;
+      }
+      const result = await service.add(caller, String(request.params.id), parsed.data);
+      if (!result.ok) return fail(response, result);
+      response
+        .status(result.duplicate ? 200 : 201)
+        .json({ material: result.material, duplicate: result.duplicate });
+    }),
+  );
+
+  router.get(
+    '/:id/materials/:materialId',
+    handle(async (_builder, caller, request, response) => {
+      const service = materialsOf(response);
+      if (!service) return;
+      const result = await service.get(
+        caller,
+        String(request.params.id),
+        String(request.params.materialId),
+      );
+      if (!result.ok) return fail(response, result);
+      const { ownerId: _owner, contentHash: _hash, ...material } = result.material;
+      response.json({ material });
+    }),
+  );
+
+  router.delete(
+    '/:id/materials/:materialId',
+    handle(async (_builder, caller, request, response) => {
+      if (limited(editLimiter, response, caller.userId)) return;
+      const service = materialsOf(response);
+      if (!service) return;
+      const result = await service.remove(
+        caller,
+        String(request.params.id),
+        String(request.params.materialId),
+      );
+      if (!result.ok) return fail(response, result);
+      response.status(204).end();
+    }),
+  );
+
   // ─── Чат помощника ─────────────────────────────────────────────────────────
 
   const storeOf = () => stores()?.builder ?? null;
@@ -616,6 +714,10 @@ export function createSolutionsRouter(deps: SolutionsRouterDeps): Router {
       const view = await builder.get(caller.userId, id);
       if (!view) {
         sendError(response, 404, 'not_found', 'Помощник не найден');
+        return;
+      }
+      if (view.kind !== 'assistant') {
+        sendError(response, 409, 'wrong_solution_kind', 'Чат есть только у помощников');
         return;
       }
       const threads = (await storeOf()?.listThreads(caller.userId, id)) ?? [];

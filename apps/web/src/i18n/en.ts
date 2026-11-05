@@ -2014,6 +2014,56 @@ export const en: Record<TranslationKey, string> = {
   'builder.unsupported': 'This solution cannot be opened here',
   'builder.unsupportedLead':
     'Solutions of this kind are not supported on the site yet. Reload the page: a new version may be out.',
+  'study.badge': 'Study assistant',
+  'study.lead':
+    'Upload your study materials — the assistant will turn them into notes, tables, questions and quizzes.',
+  'study.materials.title': 'Materials',
+  'study.materials.lead':
+    'The document is read right in your browser: only its text is sent to the server, the file itself is not stored. Scans and photos of pages are not recognized — you need a document with text.',
+  'study.materials.upload': 'Upload a document',
+  'study.materials.formats': 'PDF, DOCX, PPTX, XLSX, TXT · up to {max}',
+  'study.materials.reading': 'Reading "{name}"…',
+  'study.materials.uploading': 'Uploading "{name}"…',
+  'study.materials.uploaded': 'Uploaded: "{name}".',
+  'study.materials.duplicate': '"{name}" is already uploaded — not added again.',
+  'study.materials.skipped': 'Parts without text skipped: {count} (scans are not recognized).',
+  'study.materials.empty': 'No documents yet.',
+  'study.materials.meta': 'Parts: {sections} · characters: {chars} · {size} · {date}',
+  'study.materials.usage':
+    'Documents: {count} of {max} · document storage: {used} of {total} characters',
+  'study.materials.view': 'Text',
+  'study.materials.viewerLead': 'This is how the assistant sees the document: text by parts.',
+  'study.materials.close': 'Close',
+  'study.materials.delete': 'Delete',
+  'study.materials.deleteTitle': 'Delete the document?',
+  'study.materials.deleteText':
+    'The text of "{name}" will be deleted from the server. This cannot be undone.',
+  'study.materials.oversize':
+    '"{name}" has {chars} characters; one document holds up to {max}. Choose which parts to upload.',
+  'study.materials.rangeFrom': 'From part',
+  'study.materials.rangeTo': 'To part (of {total})',
+  'study.materials.rangeSummary': 'Selected: {first} — {last}, characters: {chars} of {max}.',
+  'study.materials.uploadRange': 'Upload selection',
+  'study.materials.section.page': 'Page {n}',
+  'study.materials.section.slide': 'Slide {n}',
+  'study.materials.section.part': 'Part {n}',
+  'study.materials.error.unsupported':
+    'This format is not supported. Use PDF, DOCX, PPTX, XLSX or TXT.',
+  'study.materials.error.fileTooBig': 'The file is larger than {max}. Split it into parts.',
+  'study.materials.error.unreadable':
+    'The file could not be read. It may be damaged or in another format.',
+  'study.materials.error.encrypted':
+    'The PDF is password-protected. Remove the protection and upload again.',
+  'study.materials.error.tooManyPages':
+    'The document has more than {pages} pages. Split it into parts.',
+  'study.materials.error.noText':
+    'No text was found in the document. If it is a scan or photos of pages: text recognition (OCR) is not supported yet.',
+  'study.materials.error.tooLarge': 'The document is over {max} characters. Upload it in parts.',
+  'study.materials.error.limit':
+    'This tool already has the maximum number of documents. Delete ones you no longer need.',
+  'study.materials.error.storage':
+    'Document storage is full. Delete documents you no longer need in your tools.',
+  'study.materials.error.invalid': 'The document did not pass validation. Try another file.',
   'builder.openChat': 'Open chat',
   'builder.versionLine': 'Version {version}',
   'builder.activeVersionLine': 'version {version} is running',

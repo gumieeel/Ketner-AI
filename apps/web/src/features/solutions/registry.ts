@@ -7,11 +7,18 @@ import type { SolutionView } from '@/features/builder/api';
  * Шаблон без интерфейса (например, решение нового вида, а сайт старее сервера) получает честное
  * «не поддерживается», а не чат помощника.
  */
-export type SolutionInterface = 'assistant';
+export type SolutionInterface = 'assistant' | 'study';
 
 const INTERFACE_BY_TEMPLATE: Readonly<Record<string, SolutionInterface>> = {
   personal_assistant: 'assistant',
   customer_bot: 'assistant',
+  study_assistant: 'study',
+};
+
+/** Какому виду решения соответствует интерфейс. */
+const KIND_OF_INTERFACE: Readonly<Record<SolutionInterface, SolutionView['kind']>> = {
+  assistant: 'assistant',
+  study: 'tool',
 };
 
 export function solutionInterface(
@@ -19,5 +26,5 @@ export function solutionInterface(
 ): SolutionInterface | null {
   const ui = INTERFACE_BY_TEMPLATE[solution.template];
   // Вид решения должен совпадать с интерфейсом: шаблон помощника с видом «инструмент» — ошибка данных.
-  return ui && ui === solution.kind ? ui : null;
+  return ui && KIND_OF_INTERFACE[ui] === solution.kind ? ui : null;
 }

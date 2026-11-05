@@ -14,6 +14,7 @@ import { Spinner } from '@/components/ui/spinner';
 import {
   createThread,
   fetchSolution,
+  isAssistantDetails,
   listMessages,
   listThreads,
   LIMITS,
@@ -46,6 +47,7 @@ function SolutionChat({ id }: { id: string }) {
   const translator = useTranslation();
   const { t } = translator;
   const [details, setDetails] = useState<SolutionDetails | null>(null);
+  const [unsupported, setUnsupported] = useState(false);
   const [threads, setThreads] = useState<ChatThread[]>([]);
   const [threadId, setThreadId] = useState<string | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -58,15 +60,19 @@ function SolutionChat({ id }: { id: string }) {
 
   useEffect(() => {
     let alive = true;
-    Promise.all([fetchSolution(id), listThreads(id)]).then(
-      ([solution, list]) => {
-        if (!alive) return;
-        setDetails(solution);
-        setThreads(list);
-        setThreadId(list[0]?.id ?? null);
-      },
-      (caught: unknown) => alive && setError(caught),
-    );
+    (async () => {
+      const solution = await fetchSolution(id);
+      // Чат — только у помощников; инструмент получает честное «не поддерживается».
+      if (solutionInterface(solution.solution) !== 'assistant' || !isAssistantDetails(solution)) {
+        if (alive) setUnsupported(true);
+        return;
+      }
+      const list = await listThreads(id);
+      if (!alive) return;
+      setDetails(solution);
+      setThreads(list);
+      setThreadId(list[0]?.id ?? null);
+    })().catch((caught: unknown) => alive && setError(caught));
     return () => {
       alive = false;
     };
@@ -156,6 +162,7 @@ function SolutionChat({ id }: { id: string }) {
     }
   };
 
+  if (unsupported) return <UnsupportedSolution />;
   if (!details) {
     return (
       <Page
@@ -175,9 +182,6 @@ function SolutionChat({ id }: { id: string }) {
     );
   }
 
-  if (solutionInterface(details.solution) !== 'assistant') {
-    return <UnsupportedSolution />;
-  }
   const active = details.solution.status === 'active';
   return (
     <Page

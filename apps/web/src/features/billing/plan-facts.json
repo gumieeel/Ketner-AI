@@ -284,6 +284,15 @@
         "examples": 6,
         "restrictions": 8,
         "messageChars": 4000
+      },
+      "tools": {
+        "materialsPerSolution": 20,
+        "materialChars": 200000,
+        "materialCharsPerUser": 3000000,
+        "materialSections": 1000,
+        "fileBytes": 26214400,
+        "nameChars": 200,
+        "sectionLabelChars": 120
       }
     },
     "prices": {

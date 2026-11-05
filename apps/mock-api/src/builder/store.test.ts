@@ -6,6 +6,7 @@ import { openTestSql } from '../testing/sql.js';
 import { defaultConfig } from './service.js';
 import { MemoryBuilderStore, PostgresBuilderStore, type BuilderStore } from './store.js';
 import type { BotMessage, Solution, TestCase, TestRun } from './types.js';
+import { isToolConfig } from './types.js';
 
 const NOW = '2026-10-31T10:00:00.000Z';
 
@@ -90,7 +91,9 @@ async function contract(store: BuilderStore): Promise<void> {
     }),
     false,
   );
-  assert.equal((await store.getVersion('alice', 's1', 2))?.config.instructions, 'Кратко');
+  const second = (await store.getVersion('alice', 's1', 2))?.config;
+  assert.ok(second && !isToolConfig(second));
+  assert.equal(second.instructions, 'Кратко');
   assert.equal(await store.getVersion('bob', 's1', 2), null);
   assert.deepEqual(
     (await store.listVersions('alice', 's1')).map((item) => item.number),
@@ -406,7 +409,7 @@ test('миграция 0007: существующие решения получ�
       );
     }
 
-    const result = await runMigrations(sql.db, MIGRATIONS);
+    const result = await runMigrations(sql.db, MIGRATIONS.slice(0, before + 1));
     assert.deepEqual(result.applied, ['0007_solution_templates']);
 
     const store = new PostgresBuilderStore(sql.runner);

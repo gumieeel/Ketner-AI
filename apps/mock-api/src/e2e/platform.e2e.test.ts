@@ -25,6 +25,7 @@ import { ModelRegistry } from '../ai/model-registry.js';
 import { ProviderManager } from '../ai/providers/provider-factory.js';
 import { BillingService, createBillingLedger } from '../billing/billing-service.js';
 import { MemoryBuilderStore } from '../builder/store.js';
+import { MemoryMaterialStore } from '../builder/tools/material-store.js';
 import { MemoryBudgetStore } from '../discovery/budget.js';
 import { MemoryDiscoveryStore } from '../discovery/store.js';
 import { CREDIT_PACKS } from '../services/pricing.js';
@@ -170,10 +171,12 @@ test('сквозной путь: главная → анализ → вопро�
     useMockEngine: false,
     credits: billing.credits,
   });
+  const builderStore = new MemoryBuilderStore();
   const stores = {
     store: new MemoryDiscoveryStore(),
     budget: new MemoryBudgetStore(),
-    builder: new MemoryBuilderStore(),
+    builder: builderStore,
+    materials: new MemoryMaterialStore((ownerId, id) => builderStore.getSolution(ownerId, id)),
   };
   const server = await startTestServer(
     {},

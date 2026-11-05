@@ -10,12 +10,19 @@ import type { SqlRunner } from '../code/postgres-driver.js';
 import { MemoryBudgetStore, PostgresBudgetStore, type BudgetStore } from './budget.js';
 import { MemoryDiscoveryStore, PostgresDiscoveryStore, type DiscoveryStore } from './store.js';
 import { MemoryBuilderStore, PostgresBuilderStore, type BuilderStore } from '../builder/store.js';
+import {
+  MemoryMaterialStore,
+  PostgresMaterialStore,
+  type MaterialStore,
+} from '../builder/tools/material-store.js';
 
 export interface DiscoveryStores {
   store: DiscoveryStore;
   budget: BudgetStore;
   /** Builder (этап 6): помощники, версии, тесты, чат — миграция `0004_solutions`. */
   builder: BuilderStore;
+  /** Материалы инструментов Builder — миграция `0008_solution_materials`. */
+  materials: MaterialStore;
 }
 
 let databaseExpected = false;
@@ -32,6 +39,7 @@ export function attachDiscoveryDriver(runner: SqlRunner): void {
     store: new PostgresDiscoveryStore(runner),
     budget: new PostgresBudgetStore(runner),
     builder: new PostgresBuilderStore(runner),
+    materials: new PostgresMaterialStore(runner),
   };
 }
 
@@ -39,10 +47,14 @@ export function attachDiscoveryDriver(runner: SqlRunner): void {
 export function getDiscoveryStores(): DiscoveryStores | null {
   if (postgres) return postgres;
   if (databaseExpected) return null;
-  memory ??= {
-    store: new MemoryDiscoveryStore(),
-    budget: new MemoryBudgetStore(),
-    builder: new MemoryBuilderStore(),
-  };
+  if (!memory) {
+    const builder = new MemoryBuilderStore();
+    memory = {
+      store: new MemoryDiscoveryStore(),
+      budget: new MemoryBudgetStore(),
+      builder,
+      materials: new MemoryMaterialStore((ownerId, id) => builder.getSolution(ownerId, id)),
+    };
+  }
   return memory;
 }

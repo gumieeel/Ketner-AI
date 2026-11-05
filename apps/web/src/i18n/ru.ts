@@ -2003,6 +2003,53 @@ export const ru = {
   'builder.unsupported': 'Это решение здесь не открывается',
   'builder.unsupportedLead':
     'Решения этого вида пока не поддерживаются на сайте. Обновите страницу: возможно, вышла новая версия.',
+  'study.badge': 'Учебный помощник',
+  'study.lead':
+    'Загрузите учебные материалы — по ним помощник будет делать конспекты, таблицы, вопросы и тесты.',
+  'study.materials.title': 'Материалы',
+  'study.materials.lead':
+    'Текст документа читается прямо в браузере: на сервер отправляется только текст, сам файл не хранится. Сканы и фотографии страниц не распознаются — нужен документ с текстом.',
+  'study.materials.upload': 'Загрузить документ',
+  'study.materials.formats': 'PDF, DOCX, PPTX, XLSX, TXT · до {max}',
+  'study.materials.reading': 'Читаю «{name}»…',
+  'study.materials.uploading': 'Загружаю «{name}»…',
+  'study.materials.uploaded': 'Загружено: «{name}».',
+  'study.materials.duplicate': '«{name}» уже загружен — повторно не добавлен.',
+  'study.materials.skipped': 'Частей без текста пропущено: {count} (сканы не распознаются).',
+  'study.materials.empty': 'Документов пока нет.',
+  'study.materials.meta': 'Частей: {sections} · символов: {chars} · {size} · {date}',
+  'study.materials.usage':
+    'Документов: {count} из {max} · место под документы: {used} из {total} символов',
+  'study.materials.view': 'Текст',
+  'study.materials.viewerLead': 'Так помощник видит этот документ: текст по частям.',
+  'study.materials.close': 'Закрыть',
+  'study.materials.delete': 'Удалить',
+  'study.materials.deleteTitle': 'Удалить документ?',
+  'study.materials.deleteText': 'Текст документа «{name}» будет удалён с сервера. Отменить нельзя.',
+  'study.materials.oversize':
+    'В «{name}» {chars} символов, а в один документ помещается до {max}. Выберите части, которые загрузить.',
+  'study.materials.rangeFrom': 'С части',
+  'study.materials.rangeTo': 'По часть (всего {total})',
+  'study.materials.rangeSummary': 'Выбрано: {first} — {last}, символов: {chars} из {max}.',
+  'study.materials.uploadRange': 'Загрузить выбранное',
+  'study.materials.section.page': 'Стр. {n}',
+  'study.materials.section.slide': 'Слайд {n}',
+  'study.materials.section.part': 'Часть {n}',
+  'study.materials.error.unsupported':
+    'Этот формат не поддерживается. Подойдут PDF, DOCX, PPTX, XLSX и TXT.',
+  'study.materials.error.fileTooBig': 'Файл больше {max}. Разделите его на части.',
+  'study.materials.error.unreadable':
+    'Файл не удалось прочитать. Возможно, он повреждён или это другой формат.',
+  'study.materials.error.encrypted': 'PDF защищён паролем. Снимите защиту и загрузите снова.',
+  'study.materials.error.tooManyPages':
+    'В документе больше {pages} страниц. Разделите его на части.',
+  'study.materials.error.noText':
+    'В документе не нашлось текста. Если это скан или фотографии страниц: распознавание текста (OCR) пока не поддерживается.',
+  'study.materials.error.tooLarge': 'Документ больше {max} символов. Загрузите его частями.',
+  'study.materials.error.limit': 'В инструменте уже максимум документов. Удалите ненужные.',
+  'study.materials.error.storage':
+    'Место под документы закончилось. Удалите ненужные документы в своих инструментах.',
+  'study.materials.error.invalid': 'Документ не прошёл проверку. Попробуйте другой файл.',
   'builder.openChat': 'Открыть чат',
   'builder.versionLine': 'Версия {version}',
   'builder.activeVersionLine': 'работает версия {version}',

@@ -25,6 +25,8 @@ import {
   saveConfig,
   setVerdict,
   startTestRun,
+  isAssistantDetails,
+  type AnySolutionDetails,
   type AssistantConfig,
   type AssistantTone,
   type SolutionDetails,
@@ -40,38 +42,91 @@ import { cn } from '@/lib/cn';
 import { formatDateTime } from '@/lib/format-date';
 import { ErrorNotice } from '@/pages/analysis/error-notice';
 import { BotPanel } from './bot-panel';
+import { StudyAssistantPage } from './study/study-page';
 import { solutionInterface } from '@/features/solutions/registry';
 import { BuilderGate, Page, StatusBadge, UnsupportedSolution } from './shared';
 
 const TONES: readonly AssistantTone[] = ['friendly', 'neutral', 'formal', 'concise'];
 
-/** Помощник: настройки версиями, тест-кейсы, проверка, включение. */
+/** Страница решения: интерфейс выбирается по шаблону (features/solutions/registry.ts). */
 export function SolutionPage() {
   const { solutionId = '' } = useParams();
   return (
     <BuilderGate>
-      <SolutionEditor key={solutionId} id={solutionId} />
+      <SolutionLoader key={solutionId} id={solutionId} />
     </BuilderGate>
   );
 }
 
-function SolutionEditor({ id }: { id: string }) {
+function SolutionLoader({ id }: { id: string }) {
+  const { t } = useTranslation();
+  const [details, setDetails] = useState<AnySolutionDetails | null>(null);
+  const [missing, setMissing] = useState(false);
+  const [error, setError] = useState<unknown>(null);
+
+  useEffect(() => {
+    let alive = true;
+    fetchSolution(id).then(
+      (loaded) => alive && setDetails(loaded),
+      (caught: unknown) => {
+        if (!alive) return;
+        if (caught instanceof DiscoveryApiError && caught.status === 404) setMissing(true);
+        else setError(caught);
+      },
+    );
+    return () => {
+      alive = false;
+    };
+  }, [id]);
+
+  if (missing) {
+    return (
+      <Page title={t('builder.notFound')} back={{ to: '/solutions', label: t('builder.back') }}>
+        <p className="t-lead mt-4">{t('builder.notFoundLead')}</p>
+      </Page>
+    );
+  }
+  if (!details) {
+    return (
+      <Page title={t('builder.title')} back={{ to: '/solutions', label: t('builder.back') }}>
+        {error ? (
+          <div className="mt-8">
+            <ErrorNotice error={error} redirect={`/solutions/${id}`} />
+          </div>
+        ) : (
+          <p className="mt-8 flex items-center gap-2 text-[14px] text-muted">
+            <Spinner /> {t('analysis.page.loading')}
+          </p>
+        )}
+      </Page>
+    );
+  }
+  const ui = solutionInterface(details.solution);
+  if (ui === 'assistant' && isAssistantDetails(details)) {
+    return <SolutionEditor id={id} initial={details} />;
+  }
+  if (ui === 'study' && !isAssistantDetails(details)) {
+    return <StudyAssistantPage details={details} />;
+  }
+  return <UnsupportedSolution />;
+}
+
+/** Помощник: настройки версиями, тест-кейсы, проверка, включение. */
+function SolutionEditor({ id, initial }: { id: string; initial: SolutionDetails }) {
   const { t, language } = useTranslation();
-  const [details, setDetails] = useState<SolutionDetails | null>(null);
+  const [details, setDetails] = useState<SolutionDetails>(initial);
   const [missing, setMissing] = useState(false);
   const [error, setError] = useState<unknown>(null);
 
   const refresh = useCallback(async () => {
     try {
-      setDetails(await fetchSolution(id));
+      const next = await fetchSolution(id);
+      if (isAssistantDetails(next)) setDetails(next);
     } catch (caught) {
       if (caught instanceof DiscoveryApiError && caught.status === 404) setMissing(true);
       else setError(caught);
     }
   }, [id]);
-  useEffect(() => {
-    void refresh();
-  }, [refresh]);
 
   const running = details?.run?.status === 'running';
   useEffect(() => {
@@ -99,24 +154,8 @@ function SolutionEditor({ id }: { id: string }) {
       </Page>
     );
   }
-  if (!details) {
-    return (
-      <Page title={t('builder.title')} back={{ to: '/solutions', label: t('builder.back') }}>
-        {error ? (
-          <div className="mt-8">
-            <ErrorNotice error={error} redirect={`/solutions/${id}`} />
-          </div>
-        ) : (
-          <p className="mt-8 flex items-center gap-2 text-[14px] text-muted">
-            <Spinner /> {t('analysis.page.loading')}
-          </p>
-        )}
-      </Page>
-    );
-  }
 
   const { solution } = details;
-  if (solutionInterface(solution) !== 'assistant') return <UnsupportedSolution />;
   const isBot = solution.type === 'customer_bot';
   return (
     <Page

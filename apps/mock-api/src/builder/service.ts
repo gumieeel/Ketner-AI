@@ -43,7 +43,7 @@ import {
   type JudgeOutput,
 } from './schemas.js';
 import type { BuilderStore } from './store.js';
-import { TEMPLATES } from './templates.js';
+import { KIND_BY_TYPE, TEMPLATES } from './templates.js';
 import {
   botDraftSystemPrompt,
   buildBotInstructions,
@@ -60,6 +60,7 @@ import type {
   TestRun,
   Verdict,
 } from './types.js';
+import { isToolConfig } from './types.js';
 
 export interface BuilderCaller extends TaskCaller {
   language: Language;
@@ -576,14 +577,27 @@ export class BuilderService {
       this.deps.store.listVersions(ownerId, id),
     ]);
     if (!current) return null;
-    return {
-      solution,
-      config: current.config,
-      cases,
-      run,
-      versions: versions.map((item) => ({ number: item.number, createdAt: item.createdAt })),
-      readiness: readiness(solution, cases, run),
-    };
+    const versionList = versions.map((item) => ({
+      number: item.number,
+      createdAt: item.createdAt,
+    }));
+    const kind = KIND_BY_TYPE[solution.type];
+    if (kind === 'assistant' && !isToolConfig(current.config)) {
+      return {
+        kind,
+        solution,
+        config: current.config,
+        cases,
+        run,
+        versions: versionList,
+        readiness: readiness(solution, cases, run),
+      };
+    }
+    if (kind !== 'assistant' && isToolConfig(current.config)) {
+      return { kind, solution, config: current.config, versions: versionList };
+    }
+    // Вид решения и его настройки не совпадают — запись повреждена; не показываем её как другую.
+    return null;
   }
 
   getVersion(ownerId: string, id: string, number: number): Promise<SolutionVersion | null> {
@@ -598,8 +612,9 @@ export class BuilderService {
   ): Promise<Ok<{ solution: Solution; changed: boolean }> | BuilderError> {
     const solution = await this.deps.store.getSolution(caller.userId, id);
     if (!solution) return notFound(id);
+    if (KIND_BY_TYPE[solution.type] !== 'assistant') return wrongKind(caller.language);
     const current = await this.deps.store.getVersion(caller.userId, id, solution.currentVersion);
-    if (current && sameConfig(current.config, config))
+    if (current && !isToolConfig(current.config) && sameConfig(current.config, config))
       return { ok: true, solution, changed: false };
     const number = solution.currentVersion + 1;
     const iso = this.now().toISOString();
@@ -626,6 +641,7 @@ export class BuilderService {
   ): Promise<Ok<{ solution: Solution; changed: boolean }> | BuilderError> {
     const version = await this.deps.store.getVersion(caller.userId, id, number);
     if (!version) return notFound(id);
+    if (isToolConfig(version.config)) return wrongKind(caller.language);
     return this.updateConfig(caller, id, version.config);
   }
 
@@ -636,6 +652,7 @@ export class BuilderService {
   ): Promise<Ok<{ item: TestCase }> | BuilderError> {
     const solution = await this.deps.store.getSolution(caller.userId, id);
     if (!solution) return notFound(id);
+    if (KIND_BY_TYPE[solution.type] !== 'assistant') return wrongKind(caller.language);
     const cases = await this.deps.store.listCases(caller.userId, id);
     const existing = input.caseId ? cases.find((item) => item.id === input.caseId) : undefined;
     if (input.caseId && !existing) return notFound(input.caseId);
@@ -680,6 +697,7 @@ export class BuilderService {
   ): Promise<Ok<{ run: TestRun }> | BuilderError> {
     const view = await this.get(caller.userId, id);
     if (!view) return notFound(id);
+    if (view.kind !== 'assistant') return wrongKind(caller.language);
     const language = caller.language;
     if (view.cases.length === 0) {
       return {
@@ -961,6 +979,7 @@ export class BuilderService {
   ): Promise<Ok<{ solution: Solution }> | BuilderError> {
     const view = await this.get(caller.userId, id);
     if (!view) return notFound(id);
+    if (view.kind !== 'assistant') return wrongKind(caller.language);
     if (!view.readiness.ready) {
       const messages: Record<string, { ru: string; en: string }> = {
         no_cases: {
@@ -1008,6 +1027,7 @@ export class BuilderService {
   ): Promise<Ok<{ solution: Solution }> | BuilderError> {
     const solution = await this.deps.store.getSolution(caller.userId, id);
     if (!solution) return notFound(id);
+    if (KIND_BY_TYPE[solution.type] !== 'assistant') return wrongKind(caller.language);
     if (solution.status !== 'active') return { ok: true, solution };
     const updated = await this.deps.store.updateSolution(
       { ...solution, status: 'paused', updatedAt: this.now().toISOString() },
@@ -1027,7 +1047,8 @@ export class BuilderService {
     const solution = await this.deps.store.getSolution(ownerId, id);
     if (!solution || solution.status !== 'active' || solution.activeVersion === null) return null;
     const version = await this.deps.store.getVersion(ownerId, id, solution.activeVersion);
-    return version ? { solution, config: version.config } : null;
+    // Чат и бот работают только на настройках помощника.
+    return version && !isToolConfig(version.config) ? { solution, config: version.config } : null;
   }
 }
 
@@ -1051,6 +1072,20 @@ export function draftQuote(language: Language, registry: ModelRegistry = modelRe
     model: realModelName(DRAFT_MODEL_ID, registry),
     capUsd: cost.capUsd,
     ...toCreditRange(cost.typicalUsd, cost.capUsd),
+  };
+}
+
+/** Действие помощника (настройки, тесты, включение, чат) над инструментом или процессом. */
+function wrongKind(language: Language): BuilderError {
+  return {
+    ok: false,
+    status: 409,
+    code: 'wrong_solution_kind',
+    message: text(
+      language,
+      'Это действие есть только у помощников.',
+      'This action is only available for assistants.',
+    ),
   };
 }
 
