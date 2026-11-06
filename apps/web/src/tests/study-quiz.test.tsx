@@ -377,7 +377,10 @@ describe('Учебный помощник: тест, самопроверка, �
     expect(await screen.findByText('Вопросов: 2. Темы: Ядро.')).toBeVisible();
     expect(screen.getByText(/Проверка отбросила вопросов: 2/)).toBeVisible();
     fireEvent.click(screen.getByRole('button', { name: 'Пройти тест' }));
-    expect(await screen.findByRole('heading', { level: 1, name: 'Клетка' })).toBeVisible();
+    // Заголовок «Клетка» есть и на странице теста — ждём то, что есть только у попытки.
+    expect(await screen.findByRole('button', { name: 'Сдать ответы' })).toBeVisible();
+    expect(screen.getByRole('heading', { level: 1, name: 'Клетка' })).toBeVisible();
+    expect(screen.queryByRole('button', { name: 'Пройти тест' })).toBeNull();
     expect(
       api.calls.some(
         (call) => call.method === 'POST' && call.path === '/api/solutions/s1/runs/r1/attempts',
