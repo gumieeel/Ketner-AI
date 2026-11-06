@@ -2115,6 +2115,8 @@ export const en: Record<TranslationKey, string> = {
   'study.result.deleteTitle': 'Delete the result?',
   'study.result.deleteText':
     'The result will be deleted. The documents stay. This cannot be undone.',
+  'study.result.deleteQuestionsText':
+    'The questions will be deleted together with all attempts — they will no longer count toward progress. The documents stay. This cannot be undone.',
   'study.operation.quiz': 'Quiz',
   'study.operation.quizHint':
     'Multiple-choice and open questions — with a score and a review of mistakes.',

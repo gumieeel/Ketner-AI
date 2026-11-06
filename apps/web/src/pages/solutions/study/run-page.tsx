@@ -164,6 +164,7 @@ function RunView({ solutionId, runId }: { solutionId: string; runId: string }) {
       {removing ? (
         <Modal labelledBy="delete-run-title" size="sm" onClose={() => setRemoving(false)}>
           <DeleteRun
+            withAttempts={isQuestionRun(run.operation)}
             onCancel={() => setRemoving(false)}
             onConfirm={async () => {
               await deleteRun(solutionId, runId);
@@ -177,9 +178,12 @@ function RunView({ solutionId, runId }: { solutionId: string; runId: string }) {
 }
 
 function DeleteRun({
+  withAttempts,
   onCancel,
   onConfirm,
 }: {
+  /** Тест или самопроверка: вместе с вопросами удаляются попытки и их вклад в прогресс. */
+  withAttempts: boolean;
   onCancel: () => void;
   onConfirm: () => Promise<void>;
 }) {
@@ -191,7 +195,9 @@ function DeleteRun({
       <h2 id="delete-run-title" className="text-[18px] font-medium text-text">
         {t('study.result.deleteTitle')}
       </h2>
-      <p className="text-[14px] leading-6 text-muted">{t('study.result.deleteText')}</p>
+      <p className="text-[14px] leading-6 text-muted">
+        {t(withAttempts ? 'study.result.deleteQuestionsText' : 'study.result.deleteText')}
+      </p>
       {error ? <ErrorNotice error={error} redirect="/solutions" /> : null}
       <div className="flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
         <Button variant="outline" onClick={onCancel}>

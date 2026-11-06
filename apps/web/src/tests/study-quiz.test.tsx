@@ -385,6 +385,20 @@ describe('Учебный помощник: тест, самопроверка, �
     ).toBe(true);
   });
 
+  it('удаление теста предупреждает, что попытки и их вклад в прогресс тоже удалятся', async () => {
+    signIn();
+    installApi();
+    renderRoute('/solutions/s1/runs/r1');
+    await screen.findByText('Вопросов: 2. Темы: Ядро.');
+    fireEvent.click(screen.getByRole('button', { name: 'Удалить результат' }));
+    const dialog = await screen.findByRole('dialog');
+    expect(
+      within(dialog).getByText(
+        /вместе со всеми попытками — они перестанут учитываться в прогрессе/,
+      ),
+    ).toBeVisible();
+  });
+
   it('попытка: до сдачи ключей нет; ответы сохраняются сами; сдача — разбор с ключом, цитатой и страницей', async () => {
     signIn();
     const api = installApi({ attempts: [inProgress, submitted] });

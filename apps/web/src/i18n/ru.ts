@@ -2099,6 +2099,8 @@ export const ru = {
   'study.result.delete': 'Удалить результат',
   'study.result.deleteTitle': 'Удалить результат?',
   'study.result.deleteText': 'Результат будет удалён. Документы останутся. Отменить нельзя.',
+  'study.result.deleteQuestionsText':
+    'Вопросы будут удалены вместе со всеми попытками — они перестанут учитываться в прогрессе. Документы останутся. Отменить нельзя.',
   'study.operation.quiz': 'Тест',
   'study.operation.quizHint': 'Вопросы с вариантами и открытые — с баллами и разбором ошибок.',
   'study.operation.self_check': 'Самопроверка',
