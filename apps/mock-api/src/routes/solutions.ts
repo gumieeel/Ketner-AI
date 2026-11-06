@@ -509,7 +509,9 @@ export function createSolutionsRouter(deps: SolutionsRouterDeps): Router {
       }
       if (limited(actionLimiter, response, caller.userId)) return;
       // «Приступить к автоматизации» — с подпиской (пробный месяц с картой), когда она обязательна.
-      const gate = deps.subscriptionRequired?.(caller.userId) ?? null;
+      // Исключение — шаблоны с бесплатным созданием (учебный помощник): из анализа, как из галереи.
+      const free = await builder.isFreeCreation(caller, parsed.data);
+      const gate = free ? null : (deps.subscriptionRequired?.(caller.userId) ?? null);
       if (gate) {
         response.status(402).json({
           error: {

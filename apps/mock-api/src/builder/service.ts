@@ -401,6 +401,24 @@ export class BuilderService {
   }
 
   /**
+   * Создаётся ли решение из этой возможности без подписки: только если возможность есть у этого
+   * пользователя и её рецепт — шаблон с `freeCreation` (учебный помощник). Иначе — `false`,
+   * и действует обычная проверка подписки.
+   */
+  async isFreeCreation(
+    caller: BuilderCaller,
+    input: { analysisId: string; opportunityId: string },
+  ): Promise<boolean> {
+    const analysis = await this.deps.discovery.get(caller.userId, input.analysisId);
+    if (!analysis) return false;
+    const opportunity = (
+      await this.deps.discovery.opportunities(caller.userId, input.analysisId)
+    ).find((item) => item.id === input.opportunityId);
+    if (!opportunity?.recipe) return false;
+    return getTemplate(opportunity.recipe)?.freeCreation === true;
+  }
+
+  /**
    * Черновик помощника из возможности анализа: модель предлагает настройки и тест-кейсы.
    * Из одной возможности — один помощник: повторный запрос возвращает уже созданного.
    */

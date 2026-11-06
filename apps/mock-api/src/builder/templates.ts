@@ -38,6 +38,11 @@ export interface SolutionTemplate {
   rollout?: keyof Rollout;
   /** Что нужно от платформы (проверяется выполнимостью Discovery). */
   requires: readonly CapabilityId[];
+  /**
+   * Создание из рекомендации анализа без подписки «Автоматизации» (как из галереи). Только само
+   * создание: операции инструмента по-прежнему идут за кредиты с ценой до запуска.
+   */
+  freeCreation?: true;
   /** Принимает материалы — документы пользователя (builder/tools/materials.ts). */
   materials: boolean;
   label: Record<Language, string>;
@@ -79,6 +84,7 @@ export const TEMPLATES: Readonly<Record<TemplateId, SolutionTemplate>> = {
     // прогресс); в продукте — после включения STUDY_ASSISTANT_ENABLED.
     available: true,
     rollout: 'studyAssistant',
+    freeCreation: true,
     requires: ['text_generation', 'document_tools'],
     materials: true,
     label: { ru: 'Учебный помощник', en: 'Study assistant' },
