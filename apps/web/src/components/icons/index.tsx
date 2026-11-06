@@ -697,3 +697,29 @@ export function ThumbsDownIcon(props: IconProps) {
     </SvgIcon>
   );
 }
+
+export function ClockIcon(props: IconProps) {
+  return (
+    <SvgIcon {...props}>
+      <circle cx="12" cy="12" r="9" />
+      <path d="M12 7v5l3 2" />
+    </SvgIcon>
+  );
+}
+
+export function BookmarkIcon(props: IconProps) {
+  return (
+    <SvgIcon {...props}>
+      <path d="M6 4h12v17l-6-4-6 4z" />
+    </SvgIcon>
+  );
+}
+
+export function MapIcon(props: IconProps) {
+  return (
+    <SvgIcon {...props}>
+      <path d="M9 4 3 6v14l6-2 6 2 6-2V4l-6 2-6-2z" />
+      <path d="M9 4v14M15 6v14" />
+    </SvgIcon>
+  );
+}

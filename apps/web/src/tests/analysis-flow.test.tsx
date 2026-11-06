@@ -533,6 +533,61 @@ describe('анализ задачи: начало, вопросы, резуль�
     ).toBeInTheDocument();
   });
 
+  it('экран результата: итог, время анализа, экономия по числам, «Рекомендуем начать», остальное по кнопке', async () => {
+    const [drafts, mail] = READY_PATCH.opportunities ?? [];
+    const extra = (id: string, title: string, priority: number) => ({
+      ...drafts!,
+      id,
+      title,
+      priority,
+      impact: { kind: 'qualitative' as const, benefit: 'польза', missing: '', note: '' },
+    });
+    installDiscoveryApi({
+      view: analysis({
+        ...READY_PATCH,
+        stages: {
+          context: stage('done', {
+            startedAt: '2026-11-06T10:00:00.000Z',
+            finishedAt: '2026-11-06T10:00:40.000Z',
+          }),
+          discovery: stage('done', {
+            startedAt: '2026-11-06T10:05:00.000Z',
+            finishedAt: '2026-11-06T10:06:34.000Z',
+          }),
+        },
+        opportunities: [drafts!, mail!, extra('o3', 'Третья', 3), extra('o4', 'Четвёртая', 4)],
+      }),
+    });
+    renderRoute('/analyses/a1');
+
+    expect(
+      await screen.findByRole('heading', { level: 1, name: 'Анализ завершён' }),
+    ).toBeInTheDocument();
+    // Время — только работа этапов (40 с + 94 с), без паузы на ответы.
+    expect(screen.getByText('2 мин 14 сек')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Назад к анализам' })).toHaveAttribute(
+      'href',
+      '/analyses',
+    );
+    const summary = screen.getByRole('heading', { name: 'Краткое резюме' }).closest('section')!;
+    expect(within(summary).getByText('Потенциальная экономия времени')).toBeInTheDocument();
+    expect(within(summary).getByText('≈ 2–4 ч в неделю')).toBeInTheDocument();
+
+    const featured = screen.getByText('Рекомендуем начать').closest('li')!;
+    expect(within(featured).getByRole('heading', { name: 'Черновики ответов' })).toBeVisible();
+    expect(screen.queryByRole('heading', { name: 'Четвёртая' })).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Ещё возможности: 1' }));
+    expect(screen.getByRole('heading', { name: 'Четвёртая' })).toBeVisible();
+
+    const aside = screen.getByRole('complementary', { name: 'Что дальше' });
+    expect(within(aside).getByRole('heading', { name: 'Ваш план внедрения' })).toBeVisible();
+    expect(within(aside).getByRole('heading', { name: 'Сохранить анализ' })).toBeVisible();
+    expect(within(aside).getByRole('link', { name: 'Войти и перейти к решениям' })).toHaveAttribute(
+      'href',
+      '/login?redirect=%2Fanalyses%2Fa1',
+    );
+  });
+
   it('пропуск: необязательный — «Пропустить», обязательный — «Не знаю»; результат по кнопке', async () => {
     const api = installDiscoveryApi({ view: analysis() });
     renderRoute('/analyses/a1');
@@ -549,7 +604,7 @@ describe('анализ задачи: начало, вопросы, резуль�
     expect(api.calls.some((call) => call.path.endsWith('/continue'))).toBe(false);
 
     fireEvent.click(screen.getByRole('button', { name: 'Показать результат' }));
-    expect(await screen.findByRole('heading', { name: 'Где ИИ поможет' })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: 'Возможности для вас' })).toBeInTheDocument();
     const sent = api.calls.find((call) => call.path.endsWith('/continue'));
     expect(sent?.body).toEqual({ answers: { q1: { skipped: true }, q2: { skipped: true } } });
   });
@@ -575,11 +630,9 @@ describe('анализ задачи: начало, вопросы, резуль�
     });
     renderRoute('/analyses/a1');
 
-    expect(
-      await screen.findByRole('heading', { name: 'Главная рекомендация' }),
-    ).toBeInTheDocument();
+    expect(await screen.findByText('Рекомендуем начать')).toBeInTheDocument();
     expect(screen.getByText('Прочитали сайт lisa.kz.')).toBeInTheDocument();
-    const main = screen.getByRole('heading', { name: 'Главная рекомендация' }).closest('section')!;
+    const main = screen.getByText('Рекомендуем начать').closest('li')!;
     expect(within(main).getByRole('heading', { name: 'Черновики ответов' })).toBeInTheDocument();
     expect(
       within(main).getByText('Клиенты и переписка · Готовая автоматизация: личный помощник'),
@@ -596,9 +649,9 @@ describe('анализ задачи: начало, вопросы, резуль�
     expect(within(areas[2]!).getByText('Не относится')).toBeInTheDocument();
     expect(within(areas[1]!).getByText('Мало сведений')).toBeInTheDocument();
 
-    // Остальные возможности — ниже; у возможности без рецепта кнопки запуска нет.
-    expect(screen.getByRole('heading', { name: 'Ещё возможности' })).toBeInTheDocument();
+    // Остальные возможности — ниже, без пометки; у возможности без рецепта кнопки запуска нет.
     const others = screen.getByRole('heading', { name: 'Автоответы в почте' }).closest('li')!;
+    expect(within(others).queryByText('Рекомендуем начать')).toBeNull();
     expect(within(others).queryByText(/приступить/i)).not.toBeInTheDocument();
   });
 
@@ -657,9 +710,7 @@ describe('анализ задачи: начало, вопросы, резуль�
     });
     renderRoute('/analyses/a1');
 
-    const main = (await screen.findByRole('heading', { name: 'Главная рекомендация' })).closest(
-      'section',
-    )!;
+    const main = (await screen.findByText('Рекомендуем начать')).closest('li')!;
     expect(
       within(main).getByText('Документы и отчёты · Готовый инструмент: учебный помощник'),
     ).toBeInTheDocument();
@@ -679,8 +730,9 @@ describe('анализ задачи: начало, вопросы, резуль�
     });
     renderRoute('/analyses/a1');
 
-    expect(await screen.findByRole('heading', { name: 'Где ИИ поможет' })).toBeInTheDocument();
-    expect(screen.getByText('Бесплатный анализ — кредиты не списаны.')).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: 'Возможности для вас' })).toBeInTheDocument();
+    expect(screen.getByText('Бесплатно')).toBeInTheDocument();
+    expect(screen.getByText('Анализ дня — кредиты не списаны')).toBeInTheDocument();
     const cards = screen
       .getAllByRole('listitem')
       .filter((item) => within(item).queryByRole('heading'));
@@ -721,10 +773,10 @@ describe('анализ задачи: начало, вопросы, резуль�
   it('отчёт: с чего начать, все поля возможности, польза с формулой; неподдерживаемое честно названо', async () => {
     installDiscoveryApi({ view: analysis({ ...READY_PATCH, guest: false }) });
     renderRoute('/analyses/a1');
-    await screen.findByRole('heading', { name: 'Где ИИ поможет' });
+    await screen.findByRole('heading', { name: 'Возможности для вас' });
 
-    // «С чего начать» — только то, что можно сделать: шаг неподдерживаемой возможности не предлагается.
-    const start = screen.getByRole('heading', { name: 'С чего начать' }).nextElementSibling!;
+    // План внедрения — только то, что можно сделать: шаг неподдерживаемой возможности не предлагается.
+    const start = screen.getByRole('heading', { name: 'Ваш план внедрения' }).closest('section')!;
     expect(within(start as HTMLElement).getByText('Соберите 10 частых вопросов')).toBeVisible();
     expect(within(start as HTMLElement).queryByText('Подключите почту')).toBeNull();
 
@@ -802,12 +854,13 @@ describe('анализ задачи: начало, вопросы, резуль�
   it('план: бесплатный краткий для одной возможности, у неподдерживаемой — нет; шаги со статусами', async () => {
     const api = installDiscoveryApi({ view: analysis(READY_PATCH), plans: FREE_PLANS });
     renderRoute('/analyses/a1');
-    await screen.findByRole('heading', { name: 'Где ИИ поможет' });
+    await screen.findByRole('heading', { name: 'Возможности для вас' });
     const supported = screen.getByRole('heading', { name: 'Черновики ответов' }).closest('li')!;
     const unsupported = screen.getByRole('heading', { name: 'Автоответы в почте' }).closest('li')!;
     expect(within(unsupported).queryByRole('button', { name: /план/i })).toBeNull();
-    // «Создать помощника» — только у того, что Ketner умеет; гостю — через вход.
+    // «Создать помощника» — только у того, что Ketner умеет; гостю — через вход (в «Подробнее»).
     expect(within(unsupported).queryByRole('link', { name: /помощника/ })).toBeNull();
+    fireEvent.click(within(supported).getByRole('button', { name: 'Подробнее' }));
     expect(
       within(supported).getByRole('link', { name: 'Войти, чтобы создать помощника' }),
     ).toHaveAttribute('href', '/login?redirect=%2Fanalyses%2Fa1');
@@ -858,7 +911,7 @@ describe('анализ задачи: начало, вопросы, резуль�
       plans: paidPlans,
     });
     const first = renderRoute('/analyses/a1');
-    await screen.findByRole('heading', { name: 'Где ИИ поможет' });
+    await screen.findByRole('heading', { name: 'Возможности для вас' });
     const card = screen.getByRole('heading', { name: 'Черновики ответов' }).closest('li')!;
     expect(within(card).getByText('Подробный план: ≈ 5, не больше 15 кредитов')).toBeVisible();
     fireEvent.click(within(card).getByRole('button', { name: 'Составить план за кредиты' }));
@@ -871,7 +924,7 @@ describe('анализ задачи: начало, вопросы, резуль�
       plans: { ...paidPlans, offer: { ...paidPlans.offer, paid: FREE_PLANS.offer.paid } },
     });
     renderRoute('/analyses/a1');
-    await screen.findByRole('heading', { name: 'Где ИИ поможет' });
+    await screen.findByRole('heading', { name: 'Возможности для вас' });
     expect(
       screen.getAllByRole('link', { name: 'Войти и составить план за кредиты' })[0],
     ).toHaveAttribute('href', '/login?redirect=%2Fanalyses%2Fa1');
@@ -886,10 +939,10 @@ describe('анализ задачи: начало, вопросы, резуль�
       },
     });
     renderRoute('/analyses/a1');
-    expect(await screen.findByRole('link', { name: 'Открыть план' })).toHaveAttribute(
-      'href',
-      '/analyses/a1/plans/p7',
-    );
+    // В карточке возможности и в «Вашем плане внедрения» справа.
+    const links = await screen.findAllByRole('link', { name: 'Открыть план' });
+    expect(links).toHaveLength(2);
+    for (const link of links) expect(link).toHaveAttribute('href', '/analyses/a1/plans/p7');
   });
 
   it('гость меняет ответы после отчёта — вход, а не списание', async () => {
@@ -927,7 +980,7 @@ describe('анализ задачи: начало, вопросы, резуль�
     expect(screen.getByText('Модель временно недоступна.')).toBeInTheDocument();
     expect(screen.getByText('Повтор бесплатный.')).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Повторить этап' }));
-    expect(await screen.findByRole('heading', { name: 'Где ИИ поможет' })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: 'Возможности для вас' })).toBeInTheDocument();
     expect(api.calls.some((call) => call.path.endsWith('/retry'))).toBe(true);
   });
 

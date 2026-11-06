@@ -120,7 +120,9 @@ describe('навигация платформы решений', () => {
     setSiteFeatures({ discovery: true });
     installWithAnalysis();
     renderRoute('/analyses/a1');
-    fireEvent.click(await screen.findByRole('link', { name: 'Обсудить в чате' }));
+    // Ссылка — в «Подробнее» карточки возможности.
+    fireEvent.click(await screen.findByRole('button', { name: 'Подробнее' }));
+    fireEvent.click(screen.getByRole('link', { name: 'Обсудить в чате' }));
     await waitFor(() =>
       expect((screen.getByLabelText('Спросите что-нибудь…') as HTMLTextAreaElement).value).toMatch(
         /«Черновики ответов»/,

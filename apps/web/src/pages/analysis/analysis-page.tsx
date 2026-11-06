@@ -2,6 +2,7 @@ import { useState, type ReactNode } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { buttonClasses } from '@/components/ui/button-classes';
+import { ArrowLeftIcon, CheckIcon, ClockIcon, CreditsIcon } from '@/components/icons';
 import { Spinner } from '@/components/ui/spinner';
 import {
   continueAnalysis,
@@ -11,7 +12,7 @@ import {
   type RerunQuote,
   type RetryQuote,
 } from '@/features/discovery/api';
-import { priceText } from '@/features/discovery/format';
+import { creditsText, priceText } from '@/features/discovery/format';
 import { useAnalysis } from '@/features/discovery/use-analysis';
 import { useTranslation, type TranslationKey } from '@/i18n';
 import { cn } from '@/lib/cn';
@@ -71,6 +72,43 @@ function AnalysisScreen({ id }: { id: string }) {
   }
 
   const { analysis } = load;
+
+  // Готовый анализ — отдельный экран результата: шире, с колонкой действий справа.
+  if (analysis.status === 'ready') {
+    return (
+      <section
+        aria-labelledby="analysis-title"
+        className="mx-auto flex w-full max-w-[76rem] flex-col px-4 pt-[clamp(1.5rem,5vh,3rem)] pb-20 sm:px-6"
+      >
+        <Link
+          to="/analyses"
+          className="mb-5 inline-flex min-h-11 items-center gap-1.5 self-start text-[14px] text-accent hover:underline md:min-h-0"
+        >
+          <ArrowLeftIcon className="size-4" />
+          {t('analysis.result.back')}
+        </Link>
+        <ResultHeader analysis={analysis} />
+        <Report analysis={analysis} plans={load.plans} onChanged={refresh}>
+          <details className="rounded-xl border border-stroke bg-surface px-5 py-3">
+            <summary className="cursor-pointer text-[14px] font-medium text-muted hover:text-text">
+              {t('analysis.page.yourTask')}
+              {analysis.context?.domain ? (
+                <span className="font-normal text-subtle"> · {analysis.context.domain}</span>
+              ) : null}
+            </summary>
+            <p className="mt-2 text-[15px] leading-[1.6] break-words whitespace-pre-wrap text-text">
+              {analysis.inputText}
+            </p>
+          </details>
+          <ModelsNote analysis={analysis} />
+          {analysis.questions.length > 0 ? (
+            <AnswersSection analysis={analysis} quote={load.rerun} onDone={refresh} />
+          ) : null}
+        </Report>
+      </section>
+    );
+  }
+
   return (
     <Shell>
       <details className="mt-6 rounded-xl border border-stroke bg-surface px-5 py-3">
@@ -108,16 +146,85 @@ function AnalysisScreen({ id }: { id: string }) {
       {analysis.status === 'failed' ? (
         <FailedStage analysis={analysis} quote={load.retry} onDone={refresh} />
       ) : null}
-
-      {analysis.status === 'ready' ? (
-        <>
-          <Report analysis={analysis} plans={load.plans} onChanged={refresh} />
-          {analysis.questions.length > 0 ? (
-            <AnswersSection analysis={analysis} quote={load.rerun} onDone={refresh} />
-          ) : null}
-        </>
-      ) : null}
     </Shell>
+  );
+}
+
+/** Сколько длились этапы анализа (без времени, пока человек отвечал на вопросы), мс. */
+function analysisDurationMs(analysis: AnalysisView): number | null {
+  let total = 0;
+  for (const stage of [analysis.stages.context, analysis.stages.discovery]) {
+    if (!stage?.startedAt || !stage.finishedAt) return null;
+    const ms = Date.parse(stage.finishedAt) - Date.parse(stage.startedAt);
+    if (!Number.isFinite(ms) || ms < 0) return null;
+    total += ms;
+  }
+  return total;
+}
+
+/** Заголовок готового анализа: итог и карточка «Потрачено» / «Время анализа». */
+function ResultHeader({ analysis }: { analysis: AnalysisView }) {
+  const translator = useTranslation();
+  const { t } = translator;
+  const duration = analysisDurationMs(analysis);
+  const free = analysis.cost.sponsored && analysis.cost.chargedCredits === 0;
+  const seconds = duration === null ? 0 : Math.max(1, Math.round(duration / 1000));
+
+  return (
+    <div className="flex flex-col gap-6 lg:flex-row lg:items-start lg:justify-between">
+      <div className="flex gap-5">
+        <span
+          aria-hidden="true"
+          className="flex size-14 shrink-0 items-center justify-center rounded-full bg-accent text-canvas sm:size-[4.5rem]"
+        >
+          <CheckIcon className="size-7 sm:size-9" />
+        </span>
+        <div className="min-w-0">
+          <h1
+            id="analysis-title"
+            className="text-[clamp(1.75rem,1.6vw+1.25rem,2.375rem)] leading-tight font-[480] tracking-[-0.03em] text-text"
+          >
+            {t('analysis.result.title')}
+          </h1>
+          <p className="mt-2 max-w-[36rem] text-[16px] leading-6 text-muted">
+            {t('analysis.result.lead', { count: analysis.opportunities.length })}
+          </p>
+        </div>
+      </div>
+
+      <dl className="grid shrink-0 grid-cols-2 divide-x divide-stroke rounded-2xl border border-stroke bg-surface px-1 py-4 lg:min-w-[30rem]">
+        <div className="flex gap-3 px-4">
+          <CreditsIcon aria-hidden="true" className="mt-0.5 size-6 shrink-0 text-muted" />
+          <div>
+            <dt className="text-[13px] text-subtle">{t('analysis.result.spent')}</dt>
+            <dd className="mt-1 text-[20px] font-medium text-text">
+              {free
+                ? t('analysis.result.free')
+                : `≈ ${creditsText(translator, analysis.cost.chargedCredits)}`}
+            </dd>
+            <dd className="mt-1 text-[12px] leading-4 text-subtle">
+              {free ? t('analysis.result.freeNote') : t('analysis.result.spentNote')}
+            </dd>
+          </div>
+        </div>
+        <div className="flex gap-3 px-4">
+          <ClockIcon aria-hidden="true" className="mt-0.5 size-6 shrink-0 text-muted" />
+          <div>
+            <dt className="text-[13px] text-subtle">{t('analysis.result.duration')}</dt>
+            <dd className="mt-1 text-[20px] font-medium text-text">
+              {duration === null
+                ? '—'
+                : seconds >= 60
+                  ? t('analysis.result.minSec', {
+                      min: Math.floor(seconds / 60),
+                      sec: seconds % 60,
+                    })
+                  : t('analysis.result.sec', { sec: seconds })}
+            </dd>
+          </div>
+        </div>
+      </dl>
+    </div>
   );
 }
 
@@ -151,13 +258,26 @@ function stepStates(analysis: AnalysisView): Array<{ key: string; state: StepSta
   ];
 }
 
-function ProgressSteps({ analysis }: { analysis: AnalysisView }) {
+/** Названия моделей этапов — в «Подробнее»: человеку без интереса к моделям они не нужны. */
+function ModelsNote({ analysis }: { analysis: AnalysisView }) {
   const { t } = useTranslation();
-  // Названия моделей — в «Подробнее»: человеку без интереса к моделям они не нужны.
   const models = (['context', 'discovery'] as const).flatMap((key) => {
     const name = analysis.stages[key]?.model?.name;
     return name ? [`${t(`analysis.steps.${key}` as TranslationKey)} — ${name}`] : [];
   });
+  if (models.length === 0) return null;
+  return (
+    <details className="mt-2 text-[13px] text-subtle">
+      <summary className="inline-flex min-h-11 cursor-pointer items-center underline underline-offset-4 hover:text-text md:min-h-0">
+        {t('analysis.steps.details')}
+      </summary>
+      <p className="mt-1">{t('analysis.steps.models', { list: models.join('; ') })}</p>
+    </details>
+  );
+}
+
+function ProgressSteps({ analysis }: { analysis: AnalysisView }) {
+  const { t } = useTranslation();
   return (
     <>
       <ol
@@ -192,14 +312,7 @@ function ProgressSteps({ analysis }: { analysis: AnalysisView }) {
           </li>
         ))}
       </ol>
-      {models.length > 0 ? (
-        <details className="mt-2 text-[13px] text-subtle">
-          <summary className="inline-flex min-h-11 cursor-pointer items-center underline underline-offset-4 hover:text-text md:min-h-0">
-            {t('analysis.steps.details')}
-          </summary>
-          <p className="mt-1">{t('analysis.steps.models', { list: models.join('; ') })}</p>
-        </details>
-      ) : null}
+      <ModelsNote analysis={analysis} />
     </>
   );
 }

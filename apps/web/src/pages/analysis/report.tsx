@@ -1,4 +1,19 @@
 import { useEffect, useId, useState, type ReactNode } from 'react';
+import {
+  ArrowRightIcon,
+  BoltIcon,
+  BookmarkIcon,
+  ChartIcon,
+  ChevronDownIcon,
+  ClockIcon,
+  EditIcon,
+  FileTextIcon,
+  InfoIcon,
+  MapIcon,
+  MessagesIcon,
+  RocketIcon,
+  SparkleIcon,
+} from '@/components/icons';
 import { AutomationPlan } from '@/components/pricing/automation-plan';
 import { DiscoveryApiError } from '@/features/discovery/api';
 import { Link, useNavigate } from 'react-router-dom';
@@ -15,7 +30,7 @@ import {
   type OpportunityView,
   type AreaCoverage,
 } from '@/features/discovery/api';
-import { creditsText, priceText } from '@/features/discovery/format';
+import { priceText } from '@/features/discovery/format';
 import { useTranslation, type TranslationKey } from '@/i18n';
 import { cn } from '@/lib/cn';
 import { useAuth } from '@/features/auth/auth-store';
@@ -50,10 +65,13 @@ export function Report({
   analysis,
   plans,
   onChanged,
+  children,
 }: {
   analysis: AnalysisView;
   plans: PlansSummary | null;
   onChanged: () => Promise<void>;
+  /** Под отчётом в основной колонке: описание задачи, ответы. */
+  children?: ReactNode;
 }) {
   const translator = useTranslation();
   const { t } = translator;
@@ -66,128 +84,342 @@ export function Report({
   const startWith = sorted
     .filter((item) => item.feasibilityStatus !== 'not_supported' && item.firstStep)
     .slice(0, START_STEPS);
-  const actionFor = (item: OpportunityView, featured: boolean) =>
-    item.feasibilityStatus === 'not_supported' ? null : (
-      <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-start">
-        {/* Готовая автоматизация — первым действием; у возможности без рецепта — только план. */}
-        {item.recipe === 'personal_assistant' ||
-        item.recipe === 'customer_bot' ||
-        item.recipe === 'study_assistant' ? (
-          <SolutionAction
-            analysis={analysis}
-            opportunity={item}
-            builder={builder}
-            primary={featured}
-            start
-          />
-        ) : null}
-        {plans ? (
-          <PlanAction
-            analysis={analysis}
-            opportunity={item}
-            plans={plans}
-            secondary={item.recipe !== null}
-          />
-        ) : null}
-        {!planned ? (
-          <SolutionAction analysis={analysis} opportunity={item} builder={builder} />
-        ) : null}
-      </div>
-    );
+  /**
+   * Действия возможности. У рекомендуемой главное действие — на виду (готовая автоматизация или
+   * план), остальное — в «Подробнее»; у остальных возможностей все действия — в «Подробнее».
+   */
+  const actionsFor = (
+    item: OpportunityView,
+    featured: boolean,
+  ): { row: ReactNode; details: ReactNode } => {
+    if (item.feasibilityStatus === 'not_supported') return { row: null, details: null };
+    const solution =
+      item.recipe === 'personal_assistant' ||
+      item.recipe === 'customer_bot' ||
+      item.recipe === 'study_assistant' ? (
+        <SolutionAction
+          analysis={analysis}
+          opportunity={item}
+          builder={builder}
+          primary={featured}
+          start
+        />
+      ) : null;
+    const plan = plans ? (
+      <PlanAction
+        analysis={analysis}
+        opportunity={item}
+        plans={plans}
+        secondary={featured ? solution !== null : true}
+      />
+    ) : null;
+    // Анализ до этапа A (без карты областей): помощник создаётся из любой возможности.
+    const legacy = !planned ? (
+      <SolutionAction analysis={analysis} opportunity={item} builder={builder} />
+    ) : null;
+    const group = (...nodes: ReactNode[]) =>
+      nodes.some(Boolean) ? (
+        <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-start">{nodes}</div>
+      ) : null;
+    if (featured) {
+      return {
+        row: solution ?? plan,
+        details: group(solution ? plan : null, legacy),
+      };
+    }
+    return { row: null, details: group(solution, plan, legacy) };
+  };
   const situation = analysis.context?.summary ?? analysis.inputText;
 
+  const [showAll, setShowAll] = useState(false);
+  const listed = main ? [main, ...opportunities] : opportunities;
+  const visible = showAll ? listed : listed.slice(0, VISIBLE_OPPORTUNITIES);
+  // Рекомендуем начать: главная рекомендация, а у анализа без неё — первая выполнимая.
+  const featuredId =
+    main?.id ?? listed.find((item) => item.feasibilityStatus !== 'not_supported')?.id ?? null;
+  const hidden = listed.length - visible.length;
+
   return (
-    <section aria-labelledby="result-title" className="mt-10">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <h2 id="result-title" className="text-[24px] font-[480] tracking-[-0.02em] text-text">
-          {t('analysis.ready.title')}
-        </h2>
-        <SaveControl analysis={analysis} onChanged={onChanged} />
+    <div className="mt-8 grid gap-6 lg:grid-cols-[minmax(0,1fr)_21rem] lg:items-start">
+      <div className="flex min-w-0 flex-col gap-8">
+        <SummaryCard analysis={analysis} />
+
+        <section aria-labelledby="result-title">
+          <h2
+            id="result-title"
+            className="flex items-center gap-2.5 text-[20px] font-medium tracking-[-0.01em] text-text"
+          >
+            <SparkleIcon aria-hidden="true" className="size-5 text-accent" />
+            {t('analysis.ready.title')}
+          </h2>
+          {listed.length === 0 ? (
+            <p className="mt-3 text-[15px] leading-6 text-muted">{t('analysis.ready.empty')}</p>
+          ) : (
+            <ul className="mt-4 flex flex-col gap-3">
+              {visible.map((item) => {
+                const featured = item.id === featuredId;
+                const actions = actionsFor(item, featured);
+                return (
+                  <OpportunityCard
+                    key={item.id}
+                    item={item}
+                    featured={featured}
+                    situation={situation}
+                    action={actions.row}
+                    moreActions={actions.details}
+                  />
+                );
+              })}
+            </ul>
+          )}
+          {hidden > 0 || showAll ? (
+            <button
+              type="button"
+              aria-expanded={showAll}
+              onClick={() => setShowAll((value) => !value)}
+              className="mt-3 inline-flex min-h-11 items-center gap-1.5 text-[14px] text-muted hover:text-text md:min-h-0"
+            >
+              <ChevronDownIcon
+                aria-hidden="true"
+                className={cn('size-4 transition-transform', showAll && 'rotate-180')}
+              />
+              {showAll
+                ? t('analysis.result.showLess')
+                : t('analysis.result.showMore', { count: hidden })}
+            </button>
+          ) : null}
+          {listed.length > 0 ? (
+            <div className="mt-4 flex items-start gap-3 rounded-2xl border border-stroke bg-surface px-5 py-4">
+              <InfoIcon aria-hidden="true" className="mt-0.5 size-5 shrink-0 text-accent" />
+              <p className="text-[14px] leading-6 text-text">{t('analysis.result.choose')}</p>
+            </div>
+          ) : null}
+          <p className="mt-3 text-[13px] leading-5 text-subtle">
+            {t('analysis.report.statusNote')}
+          </p>
+        </section>
+
+        <SourceNote analysis={analysis} />
+        <BusinessProfile analysis={analysis} />
+        {analysis.coverage ? <AnalysisMap coverage={analysis.coverage} /> : null}
+        {children}
       </div>
-      {analysis.summary ? (
-        <p className="mt-3 text-[16px] leading-[1.65] text-text">{analysis.summary}</p>
-      ) : null}
-      <p className="mt-2 text-[13px] text-subtle">
-        {analysis.cost.sponsored && analysis.cost.chargedCredits === 0
-          ? t('analysis.ready.free')
-          : t('analysis.ready.charged', {
-              amount: creditsText(translator, analysis.cost.chargedCredits),
-            })}
-      </p>
-      <SourceNote analysis={analysis} />
 
-      <BusinessProfile analysis={analysis} />
+      <aside
+        aria-label={t('analysis.result.asideLabel')}
+        className="flex flex-col gap-4 lg:sticky lg:top-24"
+      >
+        <PlanCard analysis={analysis} plans={plans} steps={startWith} />
+        <SideCard
+          icon={<BookmarkIcon className="size-5" />}
+          titleId="save-title"
+          title={t('analysis.result.saveTitle')}
+          text={t('analysis.result.saveText')}
+        >
+          <SaveControl analysis={analysis} onChanged={onChanged} block />
+        </SideCard>
+        <SideCard
+          icon={<RocketIcon className="size-5" />}
+          titleId="next-title"
+          title={t('analysis.result.nextTitle')}
+          text={t('analysis.result.nextText')}
+        >
+          {builder.authenticated ? (
+            <Link
+              to="/solutions"
+              className={buttonClasses({ variant: 'primary', size: 'md', fullWidth: true })}
+            >
+              {t('analysis.result.toSolutions')}
+              <ArrowRightIcon aria-hidden="true" className="size-4" />
+            </Link>
+          ) : (
+            <Link
+              to={`/login?redirect=${encodeURIComponent(`/analyses/${analysis.id}`)}`}
+              className={buttonClasses({ variant: 'primary', size: 'md', fullWidth: true })}
+            >
+              {t('analysis.result.loginToSolutions')}
+            </Link>
+          )}
+        </SideCard>
+      </aside>
+    </div>
+  );
+}
 
-      {main ? (
-        <section aria-labelledby="main-title" className="mt-8">
-          <h3 id="main-title" className="text-[18px] font-medium text-text">
-            {t('analysis.main.title')}
-          </h3>
-          <ul className="mt-3">
-            <OpportunityCard
-              item={main}
-              featured
-              situation={situation}
-              action={actionFor(main, true)}
-            />
-          </ul>
-        </section>
-      ) : null}
+/** Сколько возможностей видно сразу (с главной рекомендацией); остальные — по кнопке. */
+const VISIBLE_OPPORTUNITIES = 3;
 
-      {analysis.coverage ? <AnalysisMap coverage={analysis.coverage} /> : null}
+/**
+ * «Краткое резюме»: вывод анализа и справа — экономия времени, только если её посчитал сервер
+ * по числам самого человека; иначе — сколько возможностей можно запустить сразу.
+ */
+function SummaryCard({ analysis }: { analysis: AnalysisView }) {
+  const { t } = useTranslation();
+  const doable = analysis.opportunities.filter(
+    (item) => item.feasibilityStatus !== 'not_supported',
+  );
+  const hours = doable.reduce<[number, number] | null>((sum, item) => {
+    if (item.impact.kind !== 'estimate') return sum;
+    const [from, to] = item.impact.hoursPerWeek;
+    return sum ? [sum[0] + from, sum[1] + to] : [from, to];
+  }, null);
+  const readyNow = analysis.opportunities.filter(
+    (item) => item.feasibilityStatus === 'ready',
+  ).length;
+  const round = (value: number) => Math.round(value * 10) / 10;
 
-      {startWith.length > 0 ? (
-        <section aria-labelledby="start-title" className="mt-8">
-          <h3 id="start-title" className="text-[18px] font-medium text-text">
-            {t('analysis.report.startTitle')}
-          </h3>
-          <ol className="mt-3 flex flex-col gap-2">
-            {startWith.map((item, index) => (
-              <li
-                key={item.id}
-                className="flex gap-3 rounded-xl border border-stroke px-4 py-3 text-[15px] leading-6"
-              >
-                <span aria-hidden="true" className="font-medium text-accent">
-                  {index + 1}
-                </span>
-                <span className="min-w-0">
-                  <span className="text-text">{item.firstStep}</span>
-                  <span className="block text-[13px] text-subtle">{item.title}</span>
-                </span>
-              </li>
-            ))}
-          </ol>
-        </section>
-      ) : null}
-
-      <h3 className="mt-10 text-[18px] font-medium text-text">
-        {main ? t('analysis.main.others') : t('analysis.report.opportunitiesTitle')}
-      </h3>
-      {opportunities.length === 0 ? (
-        <p className="mt-3 text-[15px] leading-6 text-muted">{t('analysis.ready.empty')}</p>
-      ) : (
-        <ul className="mt-3 flex flex-col gap-3">
-          {opportunities.map((item) => (
-            <OpportunityCard
-              key={item.id}
-              item={item}
-              situation={situation}
-              action={actionFor(item, false)}
-            />
-          ))}
-        </ul>
-      )}
-      <p className="mt-4 text-[13px] leading-5 text-subtle">{t('analysis.report.statusNote')}</p>
+  return (
+    <section
+      aria-labelledby="summary-title"
+      className="grid gap-5 rounded-2xl border border-stroke bg-surface px-5 py-5 sm:grid-cols-[minmax(0,1fr)_auto] sm:gap-0"
+    >
+      <div className="flex gap-4 sm:pr-6">
+        <SparkleIcon aria-hidden="true" className="mt-0.5 size-6 shrink-0 text-accent" />
+        <div className="min-w-0">
+          <h2 id="summary-title" className="text-[18px] font-medium text-text">
+            {t('analysis.result.summaryTitle')}
+          </h2>
+          <p className="mt-2 text-[15px] leading-6 text-muted">
+            {analysis.summary ?? analysis.context?.summary ?? ''}
+          </p>
+        </div>
+      </div>
+      <div className="flex gap-3 border-stroke max-sm:border-t max-sm:pt-4 sm:min-w-[13rem] sm:border-l sm:pl-6">
+        <ClockIcon aria-hidden="true" className="mt-0.5 size-6 shrink-0 text-muted" />
+        {hours ? (
+          <div>
+            <p className="text-[13px] leading-5 text-subtle">{t('analysis.result.savingTitle')}</p>
+            <p className="mt-1 text-[24px] font-medium tracking-[-0.01em] text-text">
+              {t('analysis.ready.hours', { from: round(hours[0]), to: round(hours[1]) })}
+            </p>
+            <p className="text-[13px] leading-5 text-subtle">{t('analysis.result.savingNote')}</p>
+          </div>
+        ) : (
+          <div>
+            <p className="text-[13px] leading-5 text-subtle">{t('analysis.result.readyTitle')}</p>
+            <p className="mt-1 text-[24px] font-medium tracking-[-0.01em] text-text">
+              {t('analysis.result.readyCount', {
+                ready: readyNow,
+                total: analysis.opportunities.length,
+              })}
+            </p>
+            <p className="text-[13px] leading-5 text-subtle">{t('analysis.result.readyNote')}</p>
+          </div>
+        )}
+      </div>
     </section>
   );
 }
 
+/** «Ваш план внедрения»: первые шаги лучших возможностей и составленный план, если он есть. */
+function PlanCard({
+  analysis,
+  plans,
+  steps,
+}: {
+  analysis: AnalysisView;
+  plans: PlansSummary | null;
+  steps: OpportunityView[];
+}) {
+  const { t } = useTranslation();
+  const existing = plans?.items[0] ?? null;
+  if (steps.length === 0 && !existing) return null;
+  return (
+    <SideCard
+      icon={<MapIcon className="size-5" />}
+      titleId="start-title"
+      title={t('analysis.report.startTitle')}
+    >
+      <ol className="flex flex-col">
+        {steps.map((item, index) => (
+          <li key={item.id} className="relative flex gap-3 pb-4 last:pb-0">
+            {index < steps.length - 1 ? (
+              <span
+                aria-hidden="true"
+                className="absolute top-7 bottom-0 left-[0.8125rem] w-px bg-accent/40"
+              />
+            ) : null}
+            <span
+              aria-hidden="true"
+              className="flex size-[1.625rem] shrink-0 items-center justify-center rounded-full bg-accent-soft text-[13px] font-medium text-accent"
+            >
+              {index + 1}
+            </span>
+            <span className="min-w-0 pt-0.5">
+              <span className="block text-[14px] leading-5 font-medium text-text">
+                {item.firstStep}
+              </span>
+              <span className="mt-0.5 block text-[13px] leading-5 text-subtle">{item.title}</span>
+            </span>
+          </li>
+        ))}
+      </ol>
+      {existing ? (
+        <Link
+          to={`/analyses/${analysis.id}/plans/${existing.id}`}
+          className={buttonClasses({
+            variant: 'outline',
+            size: 'md',
+            fullWidth: true,
+            className: 'mt-4',
+          })}
+        >
+          {t('analysis.plan.open')}
+          <ArrowRightIcon aria-hidden="true" className="size-4" />
+        </Link>
+      ) : null}
+    </SideCard>
+  );
+}
+
+function SideCard({
+  icon,
+  titleId,
+  title,
+  text,
+  children,
+}: {
+  icon: ReactNode;
+  titleId: string;
+  title: string;
+  text?: string;
+  children: ReactNode;
+}) {
+  return (
+    <section aria-labelledby={titleId} className="rounded-2xl border border-stroke bg-surface p-5">
+      <div className="flex gap-3">
+        <span aria-hidden="true" className="mt-0.5 text-accent">
+          {icon}
+        </span>
+        <div className="min-w-0">
+          <h3 id={titleId} className="text-[16px] font-medium text-text">
+            {title}
+          </h3>
+          {text ? <p className="mt-1 text-[14px] leading-5 text-muted">{text}</p> : null}
+        </div>
+      </div>
+      <div className="mt-4">{children}</div>
+    </section>
+  );
+}
+
+const AREA_ICON: Record<NonNullable<OpportunityView['area']>, typeof SparkleIcon> = {
+  clients: MessagesIcon,
+  sales: ChartIcon,
+  content: EditIcon,
+  documents: FileTextIcon,
+  routine: BoltIcon,
+};
+
 function SaveControl({
   analysis,
   onChanged,
+  block = false,
 }: {
   analysis: AnalysisView;
   onChanged: () => Promise<void>;
+  /** Во всю ширину карточки справа. */
+  block?: boolean;
 }) {
   const { t } = useTranslation();
   const [busy, setBusy] = useState(false);
@@ -196,16 +428,24 @@ function SaveControl({
 
   if (analysis.guest) {
     return (
-      <Link to={href} className={buttonClasses({ variant: 'outline', size: 'sm' })}>
+      <Link
+        to={href}
+        className={buttonClasses({
+          variant: 'outline',
+          size: block ? 'md' : 'sm',
+          fullWidth: block,
+        })}
+      >
         {t('analysis.report.loginToSave')}
       </Link>
     );
   }
   return (
-    <div className="flex flex-col items-end gap-2">
+    <div className={cn('flex flex-col gap-2', block ? 'items-stretch' : 'items-end')}>
       <Button
         variant={analysis.saved ? 'secondary' : 'outline'}
-        size="sm"
+        size={block ? 'md' : 'sm'}
+        fullWidth={block}
         loading={busy}
         disabled={busy}
         aria-pressed={analysis.saved}
@@ -236,11 +476,15 @@ function SaveControl({
 function OpportunityCard({
   item,
   action,
+  moreActions,
   situation,
   featured = false,
 }: {
   item: OpportunityView;
+  /** Главное действие на виду (у рекомендуемой возможности). */
   action: ReactNode;
+  /** Остальные действия — в «Подробнее». */
+  moreActions: ReactNode;
   situation: string;
   featured?: boolean;
 }) {
@@ -251,86 +495,102 @@ function OpportunityCard({
 
   return (
     <li
+      aria-labelledby={headingId}
       className={cn(
-        'rounded-xl border bg-surface px-5 py-4',
-        featured ? 'border-accent/50 shadow-sm' : 'border-stroke',
+        'relative rounded-2xl border bg-surface px-5 py-5',
+        featured ? 'border-accent/60 shadow-sm' : 'border-stroke',
       )}
     >
-      {item.area || item.recipe ? (
-        <p className="mb-1 text-[13px] text-subtle">
-          {item.area ? t(`analysis.map.area.${item.area}` as TranslationKey) : null}
-          {item.area && item.recipe ? ' · ' : null}
-          {item.recipe ? t(`analysis.recipe.${item.recipe}` as TranslationKey) : null}
-        </p>
+      {featured ? (
+        <span className="absolute -top-3 left-4 rounded-md bg-accent px-2 py-0.5 text-[12px] font-medium text-canvas">
+          {t('analysis.result.recommended')}
+        </span>
       ) : null}
-      <div className="flex flex-wrap items-start justify-between gap-2">
-        <h4
-          id={headingId}
+      <div className="flex flex-col gap-4 md:flex-row md:items-start">
+        <div className="flex min-w-0 flex-1 gap-4">
+          <span
+            aria-hidden="true"
+            className="flex size-14 shrink-0 items-center justify-center rounded-xl bg-accent-soft text-accent max-sm:size-11"
+          >
+            <AreaIconView area={item.area} />
+          </span>
+          <div className="min-w-0">
+            {item.area || item.recipe ? (
+              <p className="mb-0.5 text-[13px] text-subtle">
+                {item.area ? t(`analysis.map.area.${item.area}` as TranslationKey) : null}
+                {item.area && item.recipe ? ' · ' : null}
+                {item.recipe ? t(`analysis.recipe.${item.recipe}` as TranslationKey) : null}
+              </p>
+            ) : null}
+            <h4
+              id={headingId}
+              className={cn(
+                'leading-6 font-medium text-text',
+                featured ? 'text-[18px]' : 'text-[16px]',
+              )}
+            >
+              {item.title}
+            </h4>
+            <p className="mt-1 text-[14px] leading-6 text-muted">{item.solution}</p>
+            <ul className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1.5 text-[13px] text-muted">
+              <li className="inline-flex items-center gap-1.5">
+                <ChartIcon aria-hidden="true" className="size-4 text-accent" />
+                {t(`analysis.report.effort.${item.effort}` as TranslationKey)}
+              </li>
+              {item.impact.kind === 'estimate' ? (
+                <li className="inline-flex items-center gap-1.5">
+                  <ClockIcon aria-hidden="true" className="size-4" />
+                  {t('analysis.ready.hours', {
+                    from: item.impact.hoursPerWeek[0],
+                    to: item.impact.hoursPerWeek[1],
+                  })}
+                </li>
+              ) : null}
+              <li>
+                <Badge tone={FEASIBILITY_TONE[item.feasibilityStatus]}>
+                  {t(`analysis.feasibility.${item.feasibilityStatus}` as TranslationKey)}
+                </Badge>
+              </li>
+            </ul>
+            {item.feasibilityStatus === 'not_supported' ? (
+              <p className="mt-2 text-[14px] leading-6 text-muted">
+                {t('analysis.report.notSupported', {
+                  what: item.feasibility.blockers.map((blocker) => blocker.label).join(', '),
+                })}
+              </p>
+            ) : null}
+          </div>
+        </div>
+
+        <div
           className={cn(
-            'min-w-0 leading-6 font-medium text-text',
-            featured ? 'text-[18px]' : 'text-[16px]',
+            'flex shrink-0 flex-col gap-1 [&>div]:mt-0',
+            action ? 'md:w-60 md:items-stretch' : 'md:items-end',
           )}
         >
-          {item.title}
-        </h4>
-        <Badge tone={FEASIBILITY_TONE[item.feasibilityStatus]}>
-          {t(`analysis.feasibility.${item.feasibilityStatus}` as TranslationKey)}
-        </Badge>
-      </div>
-      <p className="mt-2 text-[15px] leading-6 text-muted">{item.solution}</p>
-      <p className="mt-2 text-[14px] leading-6">
-        <span className="text-subtle">{t('analysis.ready.benefit')}: </span>
-        <span className="text-text">
-          {item.impact.kind === 'estimate'
-            ? `${t('analysis.ready.hours', {
-                from: item.impact.hoursPerWeek[0],
-                to: item.impact.hoursPerWeek[1],
-              })}. `
-            : ''}
-          {item.impact.benefit}
-        </span>
-        <span className="text-subtle">
-          {' · '}
-          {t(`analysis.report.effort.${item.effort}` as TranslationKey)}
-        </span>
-      </p>
-      {item.feasibilityStatus === 'not_supported' ? (
-        <p className="mt-2 text-[14px] leading-6 text-muted">
-          {t('analysis.report.notSupported', {
-            what: item.feasibility.blockers.map((blocker) => blocker.label).join(', '),
-          })}
-        </p>
-      ) : null}
-
-      {action}
-      <div className="mt-3 flex flex-wrap gap-x-5">
-        <Link
-          to="/chat"
-          state={{
-            prompt: t('analysis.chat.opportunityPrompt', {
-              title: item.title,
-              problem: item.problem,
-              solution: item.solution,
-              situation: situation.slice(0, 600),
-            }),
-          }}
-          className="inline-flex min-h-11 items-center text-[14px] text-muted underline underline-offset-4 hover:text-text md:min-h-0"
-        >
-          {t('analysis.chat.discuss')}
-        </Link>
-
-        <button
-          type="button"
-          aria-expanded={open}
-          aria-controls={detailsId}
-          onClick={() => setOpen((value) => !value)}
-          className="inline-flex min-h-11 items-center text-[14px] font-medium text-muted underline underline-offset-4 hover:text-text md:min-h-0"
-        >
-          {open ? t('analysis.report.less') : t('analysis.report.more')}
-        </button>
+          {action}
+          <button
+            type="button"
+            aria-expanded={open}
+            aria-controls={detailsId}
+            onClick={() => setOpen((value) => !value)}
+            className={
+              action
+                ? 'inline-flex min-h-11 items-center gap-1 self-start text-[14px] font-medium text-accent hover:underline md:min-h-9 md:self-center'
+                : buttonClasses({ variant: 'outline', size: 'sm', className: 'self-start gap-1' })
+            }
+          >
+            {open ? t('analysis.report.less') : t('analysis.report.more')}
+            <ChevronDownIcon
+              aria-hidden="true"
+              className={cn('size-4 transition-transform', open && 'rotate-180')}
+            />
+          </button>
+        </div>
       </div>
 
-      <div id={detailsId} hidden={!open} className="mt-3 border-t border-stroke pt-4">
+      <div id={detailsId} hidden={!open} className="mt-4 border-t border-stroke pt-4">
+        {moreActions ? <div className="mb-5">{moreActions}</div> : null}
         <dl className="flex flex-col gap-4 text-[14px] leading-6">
           <Field label={t('analysis.report.problem')}>{item.problem}</Field>
           <Field label={t('analysis.report.needs')}>
@@ -376,9 +636,28 @@ function OpportunityCard({
             <Field label={t('analysis.ready.firstStep')}>{item.firstStep}</Field>
           ) : null}
         </dl>
+        <Link
+          to="/chat"
+          state={{
+            prompt: t('analysis.chat.opportunityPrompt', {
+              title: item.title,
+              problem: item.problem,
+              solution: item.solution,
+              situation: situation.slice(0, 600),
+            }),
+          }}
+          className="mt-4 inline-flex min-h-11 items-center text-[14px] text-muted underline underline-offset-4 hover:text-text md:min-h-0"
+        >
+          {t('analysis.chat.discuss')}
+        </Link>
       </div>
     </li>
   );
+}
+
+function AreaIconView({ area }: { area: OpportunityView['area'] }) {
+  const Icon = area ? AREA_ICON[area] : SparkleIcon;
+  return <Icon className="size-6" />;
 }
 
 /**
