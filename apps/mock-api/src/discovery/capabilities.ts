@@ -9,7 +9,7 @@
  * (discovery/feasibility.test.ts); пропала — переведите в `unavailable`.
  */
 
-import { rollout } from '../services/rollout.js';
+import { rollout, type Rollout } from '../services/rollout.js';
 import type { Language } from '../types.js';
 
 export type CapabilityAvailability =
@@ -28,6 +28,11 @@ export interface Capability {
   label: Record<Language, string>;
   /** Что сделать пользователю: для `setup` и `integration` — шаг, для `unavailable` — обходной путь. */
   hint: Record<Language, string>;
+  /**
+   * Возможность ещё не выпущена и включается отдельно (services/rollout.ts). До включения её нет
+   * нигде: ни в каталоге для модели, ни в требованиях возможностей, ни в подсказках пользователю.
+   */
+  rollout?: keyof Rollout;
 }
 
 export const CAPABILITY_IDS = [
@@ -71,27 +76,19 @@ export const CAPABILITIES: Readonly<Record<CapabilityId, Capability>> = {
     },
     hint: { ru: 'Приложите файл в чате.', en: 'Attach the file in chat.' },
   },
-  // Учебный помощник (Builder): доступность — по включению функции (services/rollout.ts), поэтому
-  // выключенный шаблон анализ честно считает недоступным.
+  // Учебный помощник (Builder): виден только после включения (services/rollout.ts). Выключенный
+  // не упоминается вовсе — даже как «пока нет».
   document_tools: {
     id: 'document_tools',
-    get availability(): CapabilityAvailability {
-      return rollout().studyAssistant ? 'available' : 'unavailable';
-    },
+    availability: 'available',
+    rollout: 'studyAssistant',
     label: {
       ru: 'Учёба по своим документам (PDF, DOCX, PPTX, XLSX, TXT): конспекты, таблицы, тесты, самопроверка, прогресс',
       en: 'Studying from your own documents (PDF, DOCX, PPTX, XLSX, TXT): notes, tables, quizzes, self-checks, progress',
     },
-    get hint(): Record<Language, string> {
-      return rollout().studyAssistant
-        ? {
-            ru: 'Учебный помощник в разделе «Автоматизации»: загрузите материалы.',
-            en: 'The study assistant in the Automations section: upload your materials.',
-          }
-        : {
-            ru: 'Пока нет: учебный помощник ещё не включён.',
-            en: 'Not yet: the study assistant is not enabled.',
-          };
+    hint: {
+      ru: 'Учебный помощник в разделе «Автоматизации»: загрузите материалы.',
+      en: 'The study assistant in the Automations section: upload your materials.',
     },
   },
   image_generation: {
@@ -240,7 +237,18 @@ export const CAPABILITIES: Readonly<Record<CapabilityId, Capability>> = {
   },
 };
 
-/** Каталог для промпта поиска возможностей: id, что это, доступно ли. */
+/** Возможность выпущена: без флага выпуска или с включённым флагом. */
+export function isCapabilityReleased(id: CapabilityId): boolean {
+  const flag = CAPABILITIES[id].rollout;
+  return flag ? rollout()[flag] : true;
+}
+
+/** Выпущенные возможности по порядку каталога. */
+export function releasedCapabilityIds(): CapabilityId[] {
+  return CAPABILITY_IDS.filter(isCapabilityReleased);
+}
+
+/** Каталог для промпта: выпущенные возможности — id, что это, доступно ли. */
 export function catalogForPrompt(language: Language): string {
   const status: Record<CapabilityAvailability, Record<Language, string>> = {
     available: { ru: 'есть', en: 'available' },
@@ -248,8 +256,10 @@ export function catalogForPrompt(language: Language): string {
     integration: { ru: 'есть после подключения', en: 'available after connecting' },
     unavailable: { ru: 'нет', en: 'not available' },
   };
-  return CAPABILITY_IDS.map((id) => {
-    const capability = CAPABILITIES[id];
-    return `- ${id}: ${capability.label[language]} (${status[capability.availability][language]})`;
-  }).join('\n');
+  return releasedCapabilityIds()
+    .map((id) => {
+      const capability = CAPABILITIES[id];
+      return `- ${id}: ${capability.label[language]} (${status[capability.availability][language]})`;
+    })
+    .join('\n');
 }

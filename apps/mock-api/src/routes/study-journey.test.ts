@@ -69,7 +69,8 @@ function journeyGateway(planMessages: string[]) {
     async stream(request: GatewayRequest, callbacks: GatewayStreamCallbacks) {
       const stage = (request.task?.id ?? '').split(':')[1];
       const input = String(request.messages[0]?.content ?? '');
-      if (stage === 'plan') planMessages.push(input);
+      // Для проверок — весь запрос плана: системный промпт и данные.
+      if (stage === 'plan') planMessages.push(`${request.task?.systemPrompt ?? ''}\n${input}`);
       const text =
         stage === 'context'
           ? contextTemplate(input, 'ru')
@@ -394,11 +395,28 @@ test('учебный помощник от анализа до прогресс�
 
 test('учебный помощник выключен: нет в рекомендациях, в галерее и при создании — без подмены чатом', async () => {
   setRolloutForTests({ studyAssistant: false });
-  const app = await start();
+  const planMessages: string[] = [];
+  const app = await start(planMessages);
   try {
     const api = await client(app, 'journey-off@example.com');
     const { analysisId, opportunities } = await report(app, api);
     assert.ok(opportunities.every((item) => item.recipe !== 'study_assistant'));
+    // Модель назвала требование document_tools, но в отчёт оно не попало — ни как «есть», ни как «пока нет».
+    const reportText = JSON.stringify(opportunities);
+    assert.ok(!reportText.includes('document_tools'));
+    assert.ok(!/учебный помощник|Учёба по своим документам/i.test(reportText));
+    // План по бывшей «учебной» возможности не получает ни возможности, ни готового инструмента.
+    const plan = await api.call(
+      `/analyses/${analysisId}/opportunities/${opportunities.find((item) => item.title.startsWith('Подготовка'))!.id}/plan`,
+      { method: 'POST', body: '{}' },
+    );
+    assert.equal(plan.status, 202);
+    await app.discovery.whenIdle();
+    const planRequest = planMessages.at(-1) ?? '';
+    assert.ok(planRequest.length > 0);
+    assert.ok(!planRequest.includes('document_tools'));
+    assert.ok(!planRequest.includes('study_assistant'));
+    assert.match(planRequest, /"readyTool":null/);
 
     const gallery = await api.json<{ templates: unknown[] }>('/solutions/templates');
     assert.deepEqual(gallery.templates, []);

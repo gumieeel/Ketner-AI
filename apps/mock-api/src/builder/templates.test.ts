@@ -1,7 +1,16 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { acceptedRecipe, RECIPE_IDS, RECIPES } from '../discovery/analysis-map.js';
-import { CAPABILITIES, CAPABILITY_IDS } from '../discovery/capabilities.js';
+import {
+  CAPABILITIES,
+  CAPABILITY_IDS,
+  catalogForPrompt,
+  isCapabilityReleased,
+  releasedCapabilityIds,
+} from '../discovery/capabilities.js';
+import { discoverySystemPrompt, planSystemPrompt } from '../discovery/prompts.js';
+import { opportunityOutputSchema } from '../discovery/schemas.js';
+import { discoveryTemplate } from '../discovery/templates.js';
 import { setRolloutForTests } from '../services/rollout.js';
 import {
   galleryTemplates,
@@ -56,7 +65,7 @@ test('учебный помощник за флагом: выключен — н
   setRolloutForTests({ studyAssistant: false });
   assert.equal(isTemplateEnabled('study_assistant'), false);
   assert.deepEqual(galleryTemplates(), []);
-  assert.equal(CAPABILITIES.document_tools.availability, 'unavailable');
+  assert.equal(isCapabilityReleased('document_tools'), false);
   assert.equal(RECIPES.study_assistant.available, false);
   assert.equal(
     acceptedRecipe('study_assistant', 'ready', ['text_generation', 'document_tools']),
@@ -72,8 +81,57 @@ test('учебный помощник за флагом: выключен — н
     galleryTemplates().map((item) => item.id),
     ['study_assistant'],
   );
+  assert.equal(isCapabilityReleased('document_tools'), true);
   assert.equal(CAPABILITIES.document_tools.availability, 'available');
   assert.equal(RECIPES.study_assistant.available, true);
+});
+
+const opportunity = (requires: string[]) => ({
+  ...(JSON.parse(discoveryTemplate('ru')) as { opportunities: Array<Record<string, unknown>> })
+    .opportunities[0],
+  recipe: 'study_assistant',
+  requires,
+});
+
+test('выключенный учебный помощник: возможности нет ни в каталоге, ни в промптах, ни в требованиях', (t) => {
+  t.after(() => setRolloutForTests(null));
+  setRolloutForTests({ studyAssistant: false });
+  assert.ok(!releasedCapabilityIds().includes('document_tools'));
+  assert.deepEqual(
+    releasedCapabilityIds(),
+    CAPABILITY_IDS.filter((id) => id !== 'document_tools'),
+  );
+  for (const language of ['ru', 'en'] as const) {
+    const prompts = [
+      catalogForPrompt(language),
+      discoverySystemPrompt(language),
+      planSystemPrompt(language, 'full'),
+      planSystemPrompt(language, 'brief'),
+    ];
+    for (const prompt of prompts) {
+      assert.ok(!prompt.includes('document_tools'), language);
+      assert.ok(!prompt.includes('study_assistant'), language);
+      assert.ok(!prompt.includes(CAPABILITIES.document_tools.label[language]), language);
+      assert.ok(!/учебн|study assistant/i.test(prompt), `${language}: упоминание функции`);
+    }
+  }
+  // Модель всё же назвала требование — оно отбрасывается, рецепт не принимается.
+  const parsed = opportunityOutputSchema.parse(opportunity(['text_generation', 'document_tools']));
+  assert.deepEqual(parsed.requires, ['text_generation']);
+  assert.equal(acceptedRecipe('study_assistant', 'ready', parsed.requires), null);
+});
+
+test('включённый учебный помощник: возможность и рецепт видны модели и принимаются', (t) => {
+  t.after(() => setRolloutForTests(null));
+  setRolloutForTests({ studyAssistant: true });
+  for (const language of ['ru', 'en'] as const) {
+    assert.ok(catalogForPrompt(language).includes(`- document_tools: `));
+    assert.ok(discoverySystemPrompt(language).includes('- study_assistant: '));
+    assert.ok(planSystemPrompt(language, 'full').includes('document_tools'));
+  }
+  const parsed = opportunityOutputSchema.parse(opportunity(['text_generation', 'document_tools']));
+  assert.deepEqual(parsed.requires, ['text_generation', 'document_tools']);
+  assert.equal(acceptedRecipe('study_assistant', 'ready', parsed.requires), 'study_assistant');
 });
 
 test('рецепт учебного помощника — только задаче, которой нужны документы', (t) => {

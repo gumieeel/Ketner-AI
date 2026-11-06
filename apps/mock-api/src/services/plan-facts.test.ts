@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { setRolloutForTests } from './rollout.js';
 import { AUTOMATION_PLAN } from '../billing/automation-subscription.js';
 import { existsSync, readFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
@@ -167,6 +168,9 @@ test('лимиты и цены платформы решений на сайте
     t.skip('исходники сайта недоступны в этом окружении');
     return;
   }
+  // Сайт показывает цены production: учебный помощник выключен (STUDY_ASSISTANT_ENABLED).
+  setRolloutForTests({ studyAssistant: false });
+  t.after(() => setRolloutForTests(null));
   const facts = JSON.parse(readFileSync(factsPath, 'utf8')) as Facts;
   assert.deepEqual(facts.platform.limits, PLATFORM_LIMITS, 'лимиты: services/discovery-limits.ts');
 
@@ -195,6 +199,33 @@ test('лимиты и цены платформы решений на сайте
       maxCredits: draft.maxCredits,
     },
   });
+});
+
+test('цена планов на сайте не зависит от включения учебного помощника', (t) => {
+  if (!existsSync(factsPath)) {
+    t.skip('исходники сайта недоступны в этом окружении');
+    return;
+  }
+  const facts = JSON.parse(readFileSync(factsPath, 'utf8')) as Facts;
+  t.after(() => setRolloutForTests(null));
+  for (const studyAssistant of [false, true]) {
+    setRolloutForTests({ studyAssistant });
+    for (const [key, mode, modelId] of [
+      ['planPaid', 'paid', 'ketner-pro'],
+      ['planDeep', 'deep', 'claude-sonnet-5.5'],
+    ] as const) {
+      const estimate = estimateStages(mode, ['plan'], 'ru');
+      assert.deepEqual(
+        facts.platform.prices[key],
+        {
+          model: realModelName(modelId),
+          typicalCredits: estimate.typicalCredits,
+          maxCredits: estimate.maxCredits,
+        },
+        `${key}, учебный помощник ${studyAssistant ? 'включён' : 'выключен'}`,
+      );
+    }
+  }
 });
 
 test('подписка «Автоматизации» на сайте совпадает с сервером', (t) => {

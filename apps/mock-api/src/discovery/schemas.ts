@@ -12,7 +12,7 @@ import { z } from 'zod';
 import { PLATFORM_LIMITS } from '../services/discovery-limits.js';
 import { AREA_IDS, RECIPE_IDS } from './analysis-map.js';
 import { findSiteUrl } from './site-url.js';
-import { CAPABILITY_IDS } from './capabilities.js';
+import { CAPABILITY_IDS, isCapabilityReleased } from './capabilities.js';
 
 /** Строка: обрезаются пробелы, длина ограничивается обрезкой, а не отказом. */
 const text = (max: number) =>
@@ -108,7 +108,11 @@ export const opportunityOutputSchema = z.object({
   recipe: z.enum(RECIPE_IDS).nullable().optional().default(null).catch(null),
   problem: requiredText(400),
   solution: requiredText(500),
-  requires: list(capabilityId, 6).transform((ids) => [...new Set(ids)]),
+  // Невыпущенная возможность (services/rollout.ts) отбрасывается: модель её не видела, а
+  // требование к выключенной функции не должно попасть ни в отчёт, ни в рецепт.
+  requires: list(capabilityId, 6).transform((ids) =>
+    [...new Set(ids)].filter(isCapabilityReleased),
+  ),
   /** Что именно нужно, если в `requires` есть `other`. */
   otherRequirement: text(200).nullable().optional().default(null),
   dataNeeded: list(requiredText(160), 5),

@@ -17,6 +17,7 @@ import type { AIGateway } from '../ai/gateway.js';
 import { modelRegistry, type ModelRegistry } from '../ai/model-registry.js';
 import { disclosureOf } from '../ai/model-disclosure.js';
 import { galleryTemplates } from '../builder/templates.js';
+import { isCapabilityReleased } from './capabilities.js';
 import { CREDITS_PER_USD, toCredits } from '../services/entitlement.js';
 import type { Language, PlanId } from '../types.js';
 import {
@@ -1285,10 +1286,10 @@ export class DiscoveryService {
         title: opportunity.title,
         problem: opportunity.problem,
         solution: opportunity.solution,
-        whatItTakes: [
-          ...opportunity.feasibility.blockers,
-          ...opportunity.feasibility.available,
-        ].map((item) => ({ need: item.label, status: item.status, hint: item.hint })),
+        // Анализ мог быть сделан, пока функция была включена: выключенную возможность план не видит.
+        whatItTakes: [...opportunity.feasibility.blockers, ...opportunity.feasibility.available]
+          .filter((item) => isCapabilityReleased(item.capability))
+          .map((item) => ({ need: item.label, status: item.status, hint: item.hint })),
         dataNeeded: opportunity.dataNeeded,
         integrationsNeeded: opportunity.integrationsNeeded,
         effort: opportunity.effort,
