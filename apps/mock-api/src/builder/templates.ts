@@ -14,6 +14,7 @@
  * только когда вся его функциональность работает.
  */
 import type { CapabilityId } from '../discovery/capabilities.js';
+import { rollout, type Rollout } from '../services/rollout.js';
 import type { Language } from '../types.js';
 import type { SolutionType } from './types.js';
 
@@ -31,8 +32,10 @@ export interface SolutionTemplate {
    * (builder/bot-service.ts, routes/bots.ts) проверяет `type === 'customer_bot'`.
    */
   storageType: SolutionType;
-  /** Шаблон можно создать сейчас: вся его функциональность работает. */
+  /** Вся функциональность шаблона реализована и проверена. */
   available: boolean;
+  /** Включается отдельно (services/rollout.ts): до включения шаблон не создаётся и не виден. */
+  rollout?: keyof Rollout;
   /** Что нужно от платформы (проверяется выполнимостью Discovery). */
   requires: readonly CapabilityId[];
   /** Принимает материалы — документы пользователя (builder/tools/materials.ts). */
@@ -72,11 +75,11 @@ export const TEMPLATES: Readonly<Record<TemplateId, SolutionTemplate>> = {
     id: 'study_assistant',
     kind: 'tool',
     storageType: 'tool',
-    // Создать нельзя, пока не работают все операции (конспект, таблица, вопросы, тест, прогресс).
-    // Возможность «документы в инструментах» появится в каталоге вместе с доступностью шаблона:
-    // она меняет промпт Discovery.
-    available: false,
-    requires: ['text_generation'],
+    // Все операции реализованы (материалы, конспект, таблица, тест, самопроверка, проверка ответов,
+    // прогресс); в продукте — после включения STUDY_ASSISTANT_ENABLED.
+    available: true,
+    rollout: 'studyAssistant',
+    requires: ['text_generation', 'document_tools'],
     materials: true,
     label: { ru: 'Учебный помощник', en: 'Study assistant' },
     description: {
@@ -101,4 +104,18 @@ export function isTemplateId(value: unknown): value is TemplateId {
 /** Шаблон по id; `null` — такого шаблона в этой версии кода нет. */
 export function getTemplate(id: string): SolutionTemplate | null {
   return isTemplateId(id) ? TEMPLATES[id] : null;
+}
+
+/** Шаблон можно создать сейчас: реализован и включён. Иначе — отказ, а не подмена другим шаблоном. */
+export function isTemplateEnabled(id: string): boolean {
+  const template = getTemplate(id);
+  if (!template?.available) return false;
+  return template.rollout ? rollout()[template.rollout] : true;
+}
+
+/** Шаблоны-инструменты, которые сейчас можно создать из галереи. */
+export function galleryTemplates(): SolutionTemplate[] {
+  return TEMPLATE_IDS.map((id) => TEMPLATES[id]).filter(
+    (template) => template.kind === 'tool' && isTemplateEnabled(template.id),
+  );
 }

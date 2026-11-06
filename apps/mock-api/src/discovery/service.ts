@@ -16,6 +16,7 @@ import { randomUUID } from 'node:crypto';
 import type { AIGateway } from '../ai/gateway.js';
 import { modelRegistry, type ModelRegistry } from '../ai/model-registry.js';
 import { disclosureOf } from '../ai/model-disclosure.js';
+import { galleryTemplates } from '../builder/templates.js';
 import { CREDITS_PER_USD, toCredits } from '../services/entitlement.js';
 import type { Language, PlanId } from '../types.js';
 import {
@@ -1295,6 +1296,11 @@ export class DiscoveryService {
         limitations: opportunity.limitations,
         successCriteria: opportunity.successCriteria,
         firstStep: opportunity.firstStep,
+        // Готовый инструмент — только если он сейчас реализован и включён (иначе план «вручную»).
+        readyTool:
+          opportunity.recipe && galleryTemplates().some((item) => item.id === opportunity.recipe)
+            ? opportunity.recipe
+            : null,
       }),
       schema: planOutputSchema,
       templateOutput: planTemplate(language),
@@ -1572,7 +1578,7 @@ export class DiscoveryService {
         position,
         title: item.title,
         area: item.area ?? null,
-        recipe: acceptedRecipe(item.recipe, feasibility.status),
+        recipe: acceptedRecipe(item.recipe, feasibility.status, item.requires),
         problem: item.problem,
         solution: item.solution,
         requires: item.requires,

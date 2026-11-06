@@ -24,6 +24,9 @@ services:
       # Платформа решений (docs/ACCEPTANCE.md): включена по умолчанию; `false` в панели — откат.
       - key: DISCOVERY_ENABLED
         sync: false
+      # Учебный помощник (шаблон-инструмент): выключен, пока его не одобрят; `true` в панели — включить.
+      - key: STUDY_ASSISTANT_ENABLED
+        sync: false
       - key: ANTHROPIC_API_KEY
         sync: false
       - key: OPENAI_API_KEY

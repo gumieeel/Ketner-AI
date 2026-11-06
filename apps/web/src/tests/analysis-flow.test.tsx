@@ -8,6 +8,7 @@ import type {
   PlanView,
   Question,
 } from '@/features/discovery/api';
+import { useAuth } from '@/features/auth/auth-store';
 import { readDraft, saveDraft } from '@/features/discovery/draft';
 import { setSiteFeatures } from '@/lib/features';
 import { renderRoute, resetAuth, resetPreferences } from './test-utils';
@@ -530,6 +531,76 @@ describe('анализ задачи: начало, вопросы, резуль�
     expect(screen.getByRole('heading', { name: 'Ещё возможности' })).toBeInTheDocument();
     const others = screen.getByRole('heading', { name: 'Автоответы в почте' }).closest('li')!;
     expect(within(others).queryByText(/приступить/i)).not.toBeInTheDocument();
+  });
+
+  it('учебный помощник в отчёте: создать сразу, бесплатно и без цены черновика; создаётся инструмент', async () => {
+    useAuth.setState({
+      status: 'authenticated',
+      token: 'mock-token',
+      user: { id: 'u1', email: 'student@example.com', name: 'Student', plan: 'credits' } as never,
+    });
+    const [draftsCard, mailCard] = READY_PATCH.opportunities ?? [];
+    installDiscoveryApi({
+      view: analysis({
+        ...READY_PATCH,
+        coverage: [
+          { area: 'clients', status: 'unclear', opportunities: 0, note: '' },
+          { area: 'sales', status: 'unclear', opportunities: 0, note: '' },
+          { area: 'content', status: 'unclear', opportunities: 0, note: '' },
+          { area: 'documents', status: 'found', opportunities: 2, note: 'Учебные материалы' },
+          { area: 'routine', status: 'unclear', opportunities: 0, note: '' },
+        ],
+        opportunities: [
+          {
+            ...draftsCard!,
+            title: 'Подготовка к экзамену',
+            area: 'documents',
+            recipe: 'study_assistant',
+          },
+          { ...mailCard!, area: 'documents', recipe: null },
+        ],
+      }),
+    });
+    const discoveryFetch = globalThis.fetch;
+    const posted: Array<Record<string, unknown> | null> = [];
+    const reply = (status: number, body: unknown) =>
+      new Response(JSON.stringify(body), {
+        status,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    vi.stubGlobal('fetch', async (input: RequestInfo | URL, init: RequestInit = {}) => {
+      const path = new URL(String(input), 'http://localhost').pathname;
+      if (path === '/api/solutions') return reply(200, { solutions: [], runway: null });
+      // Цена черновика помощника недоступна — учебному помощнику она и не нужна.
+      if (path === '/api/solutions/draft-quote') {
+        return reply(503, { error: { code: 'unavailable', message: '' } });
+      }
+      if (path === '/api/solutions/from-opportunity') {
+        posted.push(init.body ? (JSON.parse(String(init.body)) as Record<string, unknown>) : null);
+        return reply(201, {
+          solution: { id: 's9', type: 'tool', kind: 'tool', template: 'study_assistant' },
+        });
+      }
+      if (path.startsWith('/api/solutions/s9')) {
+        return reply(404, { error: { code: 'solution_not_found', message: '' } });
+      }
+      return discoveryFetch(input, init);
+    });
+    renderRoute('/analyses/a1');
+
+    const main = (await screen.findByRole('heading', { name: 'Главная рекомендация' })).closest(
+      'section',
+    )!;
+    expect(
+      within(main).getByText('Документы и отчёты · Готовый инструмент: учебный помощник'),
+    ).toBeInTheDocument();
+    expect(within(main).getByText(/Создаётся бесплатно/)).toBeInTheDocument();
+    expect(within(main).queryByText(/Модель подготовит настройки/)).not.toBeInTheDocument();
+    const create = within(main).getByRole('button', { name: 'Создать учебного помощника' });
+    await waitFor(() => expect(create).toBeEnabled());
+    fireEvent.click(create);
+    await waitFor(() => expect(posted).toHaveLength(1));
+    expect(posted[0]).toMatchObject({ analysisId: 'a1', opportunityId: draftsCard!.id });
   });
 
   it('результат: возможности со статусом реализуемости, цена; правка ответов — только при изменении и с ценой', async () => {

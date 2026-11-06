@@ -1,9 +1,12 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { RECIPE_IDS } from '../discovery/analysis-map.js';
-import { CAPABILITY_IDS } from '../discovery/capabilities.js';
+import { acceptedRecipe, RECIPE_IDS, RECIPES } from '../discovery/analysis-map.js';
+import { CAPABILITIES, CAPABILITY_IDS } from '../discovery/capabilities.js';
+import { setRolloutForTests } from '../services/rollout.js';
 import {
+  galleryTemplates,
   getTemplate,
+  isTemplateEnabled,
   isTemplateId,
   KIND_BY_TYPE,
   SOLUTION_KINDS,
@@ -46,4 +49,46 @@ test('неизвестный шаблон не подменяется други
   assert.equal(getTemplate(''), null);
   assert.equal(getTemplate('personal_assistant')?.kind, 'assistant');
   assert.equal(getTemplate('customer_bot')?.storageType, 'customer_bot');
+});
+
+test('учебный помощник за флагом: выключен — нет ни в галерее, ни в каталоге, ни в рецептах', (t) => {
+  t.after(() => setRolloutForTests(null));
+  setRolloutForTests({ studyAssistant: false });
+  assert.equal(isTemplateEnabled('study_assistant'), false);
+  assert.deepEqual(galleryTemplates(), []);
+  assert.equal(CAPABILITIES.document_tools.availability, 'unavailable');
+  assert.equal(RECIPES.study_assistant.available, false);
+  assert.equal(
+    acceptedRecipe('study_assistant', 'ready', ['text_generation', 'document_tools']),
+    null,
+  );
+  // Помощники от флага не зависят.
+  assert.equal(isTemplateEnabled('personal_assistant'), true);
+  assert.equal(isTemplateEnabled('customer_bot'), true);
+
+  setRolloutForTests({ studyAssistant: true });
+  assert.equal(isTemplateEnabled('study_assistant'), true);
+  assert.deepEqual(
+    galleryTemplates().map((item) => item.id),
+    ['study_assistant'],
+  );
+  assert.equal(CAPABILITIES.document_tools.availability, 'available');
+  assert.equal(RECIPES.study_assistant.available, true);
+});
+
+test('рецепт учебного помощника — только задаче, которой нужны документы', (t) => {
+  t.after(() => setRolloutForTests(null));
+  setRolloutForTests({ studyAssistant: true });
+  assert.equal(
+    acceptedRecipe('study_assistant', 'ready', ['text_generation', 'document_tools']),
+    'study_assistant',
+  );
+  assert.equal(acceptedRecipe('study_assistant', 'ready', ['text_generation']), null);
+  assert.equal(acceptedRecipe('study_assistant', 'not_supported', ['document_tools']), null);
+  // Рецепты помощников требований не добавляют.
+  assert.equal(
+    acceptedRecipe('personal_assistant', 'ready', ['text_generation']),
+    'personal_assistant',
+  );
+  assert.equal(isTemplateEnabled('weekly_content'), false);
 });

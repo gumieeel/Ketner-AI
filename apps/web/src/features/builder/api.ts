@@ -262,6 +262,28 @@ export async function createBlankSolution(name: string, language: Language) {
   ).solution;
 }
 
+/** Карточка галереи: шаблон-инструмент, реализованный и включённый на сервере. */
+export interface TemplateCard {
+  id: string;
+  kind: SolutionKind;
+  label: string;
+  description: string;
+}
+
+export async function listTemplates(): Promise<TemplateCard[]> {
+  return (await call<{ templates: TemplateCard[] }>('/templates')).templates;
+}
+
+/** Инструмент из шаблона галереи: сервер создаёт его включённым, вид `tool`. */
+export async function createFromTemplate(template: string, language: Language, name?: string) {
+  return (
+    await call<{ solution: SolutionView }>('', {
+      method: 'POST',
+      ...json({ template, language, ...(name ? { name } : {}) }),
+    })
+  ).solution;
+}
+
 export async function createFromOpportunity(analysisId: string, opportunityId: string) {
   return (
     await call<{ solution: SolutionView }>('/from-opportunity', {

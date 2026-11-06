@@ -320,7 +320,7 @@
       "planDeep": {
         "model": "Claude Sonnet 5.5",
         "typicalCredits": 48,
-        "maxCredits": 158
+        "maxCredits": 159
       },
       "assistantDraft": {
         "model": "MiMo-V2.6 Pro",

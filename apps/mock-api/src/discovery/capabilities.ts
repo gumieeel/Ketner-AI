@@ -9,6 +9,7 @@
  * (discovery/feasibility.test.ts); пропала — переведите в `unavailable`.
  */
 
+import { rollout } from '../services/rollout.js';
 import type { Language } from '../types.js';
 
 export type CapabilityAvailability =
@@ -32,6 +33,7 @@ export interface Capability {
 export const CAPABILITY_IDS = [
   'text_generation',
   'document_text',
+  'document_tools',
   'image_generation',
   'cross_check',
   'model_compare',
@@ -68,6 +70,29 @@ export const CAPABILITIES: Readonly<Record<CapabilityId, Capability>> = {
       en: 'Text from TXT, DOCX, XLSX, PPTX files',
     },
     hint: { ru: 'Приложите файл в чате.', en: 'Attach the file in chat.' },
+  },
+  // Учебный помощник (Builder): доступность — по включению функции (services/rollout.ts), поэтому
+  // выключенный шаблон анализ честно считает недоступным.
+  document_tools: {
+    id: 'document_tools',
+    get availability(): CapabilityAvailability {
+      return rollout().studyAssistant ? 'available' : 'unavailable';
+    },
+    label: {
+      ru: 'Учёба по своим документам (PDF, DOCX, PPTX, XLSX, TXT): конспекты, таблицы, тесты, самопроверка, прогресс',
+      en: 'Studying from your own documents (PDF, DOCX, PPTX, XLSX, TXT): notes, tables, quizzes, self-checks, progress',
+    },
+    get hint(): Record<Language, string> {
+      return rollout().studyAssistant
+        ? {
+            ru: 'Учебный помощник в разделе «Автоматизации»: загрузите материалы.',
+            en: 'The study assistant in the Automations section: upload your materials.',
+          }
+        : {
+            ru: 'Пока нет: учебный помощник ещё не включён.',
+            en: 'Not yet: the study assistant is not enabled.',
+          };
+    },
   },
   image_generation: {
     id: 'image_generation',

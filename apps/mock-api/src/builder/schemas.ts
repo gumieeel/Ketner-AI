@@ -68,10 +68,20 @@ export const testCaseBodySchema = z.object({
     .max(LIMITS.criteria),
 });
 
-export const createSolutionBodySchema = z.object({
-  name: z.string().trim().min(1).max(LIMITS.name),
-  language: z.enum(['ru', 'en']).default('ru'),
-});
+/**
+ * Новое решение: пустой помощник `{ name }` или инструмент из галереи `{ template, name? }`
+ * (без имени — название шаблона). Какие шаблоны можно создать, решает сервер.
+ */
+export const createSolutionBodySchema = z
+  .object({
+    name: z.string().trim().min(1).max(LIMITS.name).optional(),
+    template: z.string().trim().min(1).max(60).optional(),
+    language: z.enum(['ru', 'en']).default('ru'),
+  })
+  .refine((body) => body.template !== undefined || body.name !== undefined, {
+    message: 'name required',
+    path: ['name'],
+  });
 
 export const draftBodySchema = z.object({
   analysisId: z.string().min(1).max(100),

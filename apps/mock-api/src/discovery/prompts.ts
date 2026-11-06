@@ -147,6 +147,7 @@ Rules:
 - "dependsOn": ids of earlier steps that must be done first.
 - "doneWhen": how to tell the step is done (observable result).
 - Take the person's answers and constraints into account. Do not invent facts, numbers or tools they did not mention.
+- If the opportunity has "readyTool" (a ready Ketner tool, e.g. study_assistant), the plan uses it: create it in "My automations", upload the person's documents, then use its operations. Without "readyTool" do not promise a ready tool.
 
 ${JSON_RULES.en}
 Format:
@@ -165,6 +166,7 @@ ${catalogForPrompt('ru')}
 - "dependsOn": id предыдущих шагов, которые нужно сделать раньше.
 - "doneWhen": по чему понять, что шаг сделан (наблюдаемый результат).
 - Учитывай ответы и ограничения человека. Не придумывай факты, числа и инструменты, которых он не называл.
+- Если у возможности есть "readyTool" (готовый инструмент Ketner, например study_assistant), план опирается на него: создать его в «Моих автоматизациях», загрузить документы человека, дальше — его операции. Без "readyTool" готовый инструмент не обещай.
 
 ${JSON_RULES.ru}
 Формат:

@@ -9,6 +9,8 @@
  */
 
 import type { Language } from '../types.js';
+import { rollout } from '../services/rollout.js';
+import type { CapabilityId } from './capabilities.js';
 import type { FeasibilityStatus } from './feasibility.js';
 
 export const AREA_IDS = ['clients', 'sales', 'content', 'documents', 'routine'] as const;
@@ -64,7 +66,12 @@ export interface AreaCoverage {
   note: string;
 }
 
-export const RECIPE_IDS = ['personal_assistant', 'customer_bot', 'weekly_content'] as const;
+export const RECIPE_IDS = [
+  'personal_assistant',
+  'customer_bot',
+  'study_assistant',
+  'weekly_content',
+] as const;
 export type RecipeId = (typeof RECIPE_IDS)[number];
 
 export interface Recipe {
@@ -73,6 +80,11 @@ export interface Recipe {
   available: boolean;
   label: Record<Language, string>;
   description: Record<Language, string>;
+  /**
+   * Возможности каталога, без которых рецепт к возможности не подходит: модель могла приписать
+   * рецепт, но сервер принимает его, только если возможность действительно их требует.
+   */
+  needs?: readonly CapabilityId[];
 }
 
 export const RECIPES: Readonly<Record<RecipeId, Recipe>> = {
@@ -94,6 +106,18 @@ export const RECIPES: Readonly<Record<RecipeId, Recipe>> = {
       en: "a bot on a Ketner page answers the business's customers and collects requests",
     },
   },
+  study_assistant: {
+    id: 'study_assistant',
+    get available() {
+      return rollout().studyAssistant;
+    },
+    label: { ru: 'Учебный помощник', en: 'Study assistant' },
+    description: {
+      ru: 'инструмент для учёбы по своим учебным файлам (PDF, DOCX, PPTX, XLSX, TXT): конспекты, таблицы, тесты с вариантами и открытыми вопросами, самопроверка с разбором ошибок и прогресс по темам. Подходит, только если у человека есть учебные материалы в файлах (учебник, лекции, конспекты, методички) и цель — выучить, подготовиться к экзамену (ЕНТ, сессия, сертификация) или проверить знания. Не подходит для общих советов по учёбе, поиска курсов, расписания и навыков без учебных материалов (спорт, музыка, разговорная практика)',
+      en: 'a tool for studying from your own study files (PDF, DOCX, PPTX, XLSX, TXT): notes, tables, quizzes with multiple-choice and open questions, self-checks with feedback on mistakes and progress by topic. Fits only if the person has study materials in files (textbook, lectures, notes, handouts) and the goal is to learn, prepare for an exam (school finals, university exams, certification) or check their knowledge. Does not fit general study advice, finding courses, schedules or skills without study materials (sports, music, conversation practice)',
+    },
+    needs: ['document_tools'],
+  },
   weekly_content: {
     id: 'weekly_content',
     available: false,
@@ -113,8 +137,11 @@ export function availableRecipes(): Recipe[] {
 export function acceptedRecipe(
   recipe: RecipeId | null | undefined,
   status: FeasibilityStatus,
+  requires: readonly CapabilityId[] = [],
 ): RecipeId | null {
   if (!recipe || !RECIPES[recipe].available || status === 'not_supported') return null;
+  // Рецепт со своими требованиями — только для возможности, которой они действительно нужны.
+  if (RECIPES[recipe].needs?.some((need) => !requires.includes(need))) return null;
   return recipe;
 }
 

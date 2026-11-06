@@ -43,7 +43,7 @@ import {
   type JudgeOutput,
 } from './schemas.js';
 import type { BuilderStore } from './store.js';
-import { KIND_BY_TYPE, TEMPLATES } from './templates.js';
+import { getTemplate, isTemplateEnabled, KIND_BY_TYPE, TEMPLATES } from './templates.js';
 import {
   botDraftSystemPrompt,
   buildBotInstructions,
@@ -60,7 +60,7 @@ import type {
   TestRun,
   Verdict,
 } from './types.js';
-import { isToolConfig } from './types.js';
+import { isToolConfig, type StudyToolConfig } from './types.js';
 
 export interface BuilderCaller extends TaskCaller {
   language: Language;
@@ -345,6 +345,62 @@ export class BuilderService {
   }
 
   /**
+   * Инструмент из шаблона (галерея или рекомендация анализа): вид `tool`, id шаблона, настройки по
+   * умолчанию. Создаётся включённым — его операции идут с ценой до запуска, тест-кейсы помощника ему
+   * не нужны. Шаблон не инструмент, не реализован или не включён — отказ.
+   */
+  async createTool(
+    caller: BuilderCaller,
+    templateId: string,
+    options: { name?: string; subject?: string; source?: Solution['source'] } = {},
+  ): Promise<Ok<{ solution: Solution; created: boolean }> | BuilderError> {
+    const template = getTemplate(templateId);
+    if (!template || template.kind !== 'tool' || !isTemplateEnabled(template.id)) {
+      return {
+        ok: false,
+        status: 409,
+        code: 'template_unavailable',
+        message: text(
+          caller.language,
+          'Этот инструмент пока недоступен.',
+          'This tool is not available yet.',
+        ),
+      };
+    }
+    const limit = await this.overLimit(caller);
+    if (limit) return limit;
+    const id = randomUUID();
+    const iso = this.now().toISOString();
+    const clip = (value: string | undefined, max: number) => (value ?? '').trim().slice(0, max);
+    const solution: Solution = {
+      id,
+      ownerId: caller.userId,
+      type: template.storageType,
+      template: template.id,
+      bot: null,
+      status: 'active',
+      name: clip(options.name, LIMITS.name) || template.label[caller.language],
+      currentVersion: 1,
+      activeVersion: 1,
+      source: options.source ?? null,
+      createdAt: iso,
+      updatedAt: iso,
+      version: 1,
+    };
+    const config: StudyToolConfig = {
+      tool: 'study_assistant',
+      language: caller.language,
+      subject: clip(options.subject, PLATFORM_LIMITS.tools.subjectChars),
+    };
+    await this.deps.store.createSolution(
+      solution,
+      { solutionId: id, number: 1, config, createdAt: iso },
+      [],
+    );
+    return { ok: true, solution, created: true };
+  }
+
+  /**
    * Черновик помощника из возможности анализа: модель предлагает настройки и тест-кейсы.
    * Из одной возможности — один помощник: повторный запрос возвращает уже созданного.
    */
@@ -385,6 +441,21 @@ export class BuilderService {
     if (existing) return { ok: true, solution: existing, created: false };
     const limit = await this.overLimit(caller);
     if (limit) return limit;
+
+    // Рецепт-инструмент (учебный помощник): создаётся из шаблона сразу и бесплатно — черновик
+    // моделью ему не нужен. Выключенный шаблон — отказ, а не помощник в чате вместо него.
+    const template = opportunity.recipe ? getTemplate(opportunity.recipe) : null;
+    if (template && template.kind !== 'assistant') {
+      return this.createTool(caller, template.id, {
+        name: opportunity.title,
+        subject: analysis.context?.domain ?? '',
+        source: {
+          analysisId: analysis.id,
+          opportunityId: opportunity.id,
+          title: opportunity.title,
+        },
+      });
+    }
 
     const quote = this.draftQuote(language);
     if (!input.confirm) {

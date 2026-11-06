@@ -57,7 +57,7 @@ export type Impact =
 /** Области карты анализа (сервер: discovery/analysis-map.ts). */
 export type AreaId = 'clients' | 'sales' | 'content' | 'documents' | 'routine';
 /** Готовые автоматизации; сервер отдаёт только доступные. */
-export type RecipeId = 'personal_assistant' | 'customer_bot' | 'weekly_content';
+export type RecipeId = 'personal_assistant' | 'customer_bot' | 'study_assistant' | 'weekly_content';
 
 export interface AreaCoverage {
   area: AreaId;

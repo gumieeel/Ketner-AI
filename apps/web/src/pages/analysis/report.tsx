@@ -69,7 +69,9 @@ export function Report({
     item.feasibilityStatus === 'not_supported' ? null : (
       <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-start">
         {/* Готовая автоматизация — первым действием; у возможности без рецепта — только план. */}
-        {item.recipe === 'personal_assistant' || item.recipe === 'customer_bot' ? (
+        {item.recipe === 'personal_assistant' ||
+        item.recipe === 'customer_bot' ||
+        item.recipe === 'study_assistant' ? (
           <SolutionAction
             analysis={analysis}
             opportunity={item}
@@ -523,6 +525,8 @@ function SolutionAction({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<unknown>(null);
   const existing = builder.solutions.find((item) => item.source?.opportunityId === opportunity.id);
+  // Учебный помощник — готовый инструмент: создаётся сразу и бесплатно, черновик моделью не нужен.
+  const tool = opportunity.recipe === 'study_assistant';
 
   if (!builder.authenticated) {
     return (
@@ -544,7 +548,7 @@ function SolutionAction({
         to={`/solutions/${existing.id}`}
         className={buttonClasses({ variant: 'secondary', size: 'sm', className: ACTION_WRAP })}
       >
-        {t('builder.report.open')}
+        {tool ? t('builder.report.openTool') : t('builder.report.open')}
       </Link>
     );
   }
@@ -555,7 +559,7 @@ function SolutionAction({
         size="sm"
         className={ACTION_WRAP}
         loading={busy}
-        disabled={busy || !builder.quote}
+        disabled={busy || (!tool && !builder.quote)}
         onClick={() => {
           setBusy(true);
           setError(null);
@@ -568,12 +572,15 @@ function SolutionAction({
         }}
       >
         {busy
-          ? t('builder.report.creating')
-          : start
-            ? t('builder.report.start')
-            : t('builder.report.create')}
+          ? t(tool ? 'builder.report.creatingTool' : 'builder.report.creating')
+          : tool
+            ? t('builder.report.createTool')
+            : start
+              ? t('builder.report.start')
+              : t('builder.report.create')}
       </Button>
-      {builder.quote ? (
+      {tool ? <p className="text-[13px] text-subtle">{t('builder.report.toolNote')}</p> : null}
+      {!tool && builder.quote ? (
         <p className="text-[13px] text-subtle">
           {t('builder.report.draftNote', {
             price: priceText(translator, builder.quote.typicalCredits, builder.quote.maxCredits),

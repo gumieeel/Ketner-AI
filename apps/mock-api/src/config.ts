@@ -189,6 +189,12 @@ export const config = {
    * ketner.org открывается главной «Что вы хотите улучшить?»); `DISCOVERY_ENABLED=false` выключает.
    */
   discoveryEnabled: optionalEnv('DISCOVERY_ENABLED') !== 'false',
+  /**
+   * Учебный помощник (Builder, шаблон study_assistant): в галерее, в рекомендациях анализа и при
+   * создании. Выключен по умолчанию, в том числе в production, до решения владельца;
+   * `STUDY_ASSISTANT_ENABLED=true` включает.
+   */
+  studyAssistantEnabled: optionalEnv('STUDY_ASSISTANT_ENABLED') === 'true',
   /** Бюджет и сутки бесплатных анализов (docs/discovery-models.md, раздел 3). */
   discovery: {
     freeDailyUsd: readNumber('DISCOVERY_FREE_DAILY_USD', 5),

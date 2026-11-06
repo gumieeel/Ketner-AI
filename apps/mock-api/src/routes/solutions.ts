@@ -3,7 +3,8 @@
  *
  *   GET    /api/solutions                          помощники пользователя
  *   GET    /api/solutions/draft-quote              цена черновика из возможности
- *   POST   /api/solutions                          пустой помощник `{ name, language }`
+ *   GET    /api/solutions/templates                галерея включённых инструментов
+ *   POST   /api/solutions                          пустой помощник `{ name, language }` или инструмент `{ template, name? }`
  *   POST   /api/solutions/from-opportunity         черновик моделью `{ analysisId, opportunityId, confirm }`
  *   GET    /api/solutions/:id                      настройки, версии, кейсы, прогон, готовность, цена тестов
  *   PUT    /api/solutions/:id/config               сохранить настройки (новая версия, если изменились)
@@ -56,7 +57,7 @@ import type {
   Solution,
   TestRun,
 } from '../builder/types.js';
-import { KIND_BY_TYPE } from '../builder/templates.js';
+import { galleryTemplates, KIND_BY_TYPE } from '../builder/templates.js';
 import {
   answersBodySchema,
   AttemptService,
@@ -457,6 +458,21 @@ export function createSolutionsRouter(deps: SolutionsRouterDeps): Router {
     }),
   );
 
+  // Галерея: только инструменты, которые реализованы и включены на этом сервере.
+  router.get(
+    '/templates',
+    handle(async (_builder, caller, _request, response) => {
+      response.json({
+        templates: galleryTemplates().map((template) => ({
+          id: template.id,
+          kind: template.kind,
+          label: template.label[caller.language],
+          description: template.description[caller.language],
+        })),
+      });
+    }),
+  );
+
   router.get(
     '/draft-quote',
     handle(async (builder, caller, _request, response) => {
@@ -474,10 +490,10 @@ export function createSolutionsRouter(deps: SolutionsRouterDeps): Router {
         return;
       }
       if (limited(actionLimiter, response, caller.userId)) return;
-      const result = await builder.createBlank(
-        { ...caller, language: parsed.data.language },
-        parsed.data.name,
-      );
+      const who = { ...caller, language: parsed.data.language };
+      const result = parsed.data.template
+        ? await builder.createTool(who, parsed.data.template, { name: parsed.data.name })
+        : await builder.createBlank(who, parsed.data.name ?? '');
       if (!result.ok) return fail(response, result);
       response.status(201).json({ solution: publicSolution(result.solution) });
     }),

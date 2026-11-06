@@ -15,9 +15,10 @@ import { useTranslation, type TranslationKey } from '@/i18n';
 import { formatDateTime } from '@/lib/format-date';
 import { ErrorNotice } from '@/pages/analysis/error-notice';
 import { RunwayNote } from './bot-panel';
+import { TemplateGallery } from './template-gallery';
 import { BuilderGate, Page, StatusBadge } from './shared';
 
-/** «Мои помощники»: список, создание с нуля, переход в чат включённого. */
+/** «Мои автоматизации»: список, создание с нуля и из галереи, переход в чат включённого помощника. */
 export function SolutionsListPage() {
   return (
     <BuilderGate>
@@ -84,6 +85,8 @@ function SolutionsList() {
       </form>
       <p className="mt-2 text-[13px] text-subtle">{t('builder.list.fromAnalysis')}</p>
 
+      <TemplateGallery />
+
       {error ? (
         <div className="mt-6">
           <ErrorNotice error={error} redirect="/solutions" />
@@ -115,7 +118,9 @@ function SolutionsList() {
                   <StatusBadge status={item.status} />
                 </div>
                 <p className="mt-1 text-[13px] text-muted">
-                  {t(`builder.type.${item.type}` as TranslationKey)}
+                  {item.template === 'study_assistant'
+                    ? t('study.badge')
+                    : t(`builder.type.${item.type}` as TranslationKey)}
                   {item.today
                     ? ` · ${t('builder.list.today', {
                         replies: item.today.replies,
@@ -145,7 +150,7 @@ function SolutionsList() {
                 >
                   {t('builder.list.openPage')}
                 </a>
-              ) : item.status === 'active' ? (
+              ) : item.kind === 'assistant' && item.status === 'active' ? (
                 <Link
                   to={`/solutions/${item.id}/chat`}
                   className={buttonClasses({
