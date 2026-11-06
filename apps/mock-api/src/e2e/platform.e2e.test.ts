@@ -106,7 +106,7 @@ function fakeProvider(calls: string[]): AIProvider {
       options.systemPrompt ??
       options.messages.find((message) => message.role === 'system')?.content ??
       '';
-    if (system.includes('Извлеки из описания структурированный контекст'))
+    if (system.includes('Извлеки из описания структурированный профиль бизнеса'))
       return JSON.stringify(CONTEXT);
     if (system.includes('найди 3–7 конкретных применений')) return JSON.stringify(DISCOVERY);
     if (system.includes('консультант по внедрению')) return JSON.stringify(PLAN);

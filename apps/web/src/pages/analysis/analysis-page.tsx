@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { useState, type ReactNode } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { buttonClasses } from '@/components/ui/button-classes';
@@ -7,9 +7,7 @@ import {
   continueAnalysis,
   retryAnalysis,
   sameAnswers,
-  saveAnswersDraft,
   type AnalysisView,
-  type Answers,
   type RerunQuote,
   type RetryQuote,
 } from '@/features/discovery/api';
@@ -19,6 +17,7 @@ import { useTranslation, type TranslationKey } from '@/i18n';
 import { cn } from '@/lib/cn';
 import { siteFeatures } from '@/lib/features';
 import { NotFoundPage } from '@/pages/not-found-page';
+import { DiscoveryConversation } from './discovery-conversation';
 import { ErrorNotice } from './error-notice';
 import { QuestionsForm } from './questions-form';
 import { Report } from './report';
@@ -103,7 +102,7 @@ function AnalysisScreen({ id }: { id: string }) {
       ) : null}
 
       {analysis.status === 'needs_answers' ? (
-        <FirstAnswers analysis={analysis} onDone={refresh} />
+        <DiscoveryConversation analysis={analysis} onDone={refresh} />
       ) : null}
 
       {analysis.status === 'failed' ? (
@@ -202,89 +201,6 @@ function ProgressSteps({ analysis }: { analysis: AnalysisView }) {
         </details>
       ) : null}
     </>
-  );
-}
-
-const SAVE_DELAY_MS = 800;
-
-function FirstAnswers({
-  analysis,
-  onDone,
-}: {
-  analysis: AnalysisView;
-  onDone: () => Promise<void>;
-}) {
-  const { t } = useTranslation();
-  const [submitting, setSubmitting] = useState(false);
-  const [error, setError] = useState<unknown>(null);
-  const [saveState, setSaveState] = useState<'idle' | 'saving' | 'saved' | 'failed'>('idle');
-  const timer = useRef<number | null>(null);
-  const latest = useRef<Answers | null>(null);
-
-  const flush = async () => {
-    if (!latest.current) return;
-    const answers = latest.current;
-    latest.current = null;
-    setSaveState('saving');
-    try {
-      await saveAnswersDraft(analysis.id, answers);
-      setSaveState('saved');
-    } catch {
-      setSaveState('failed');
-    }
-  };
-
-  useEffect(
-    () => () => {
-      if (timer.current) window.clearTimeout(timer.current);
-    },
-    [],
-  );
-
-  return (
-    <section aria-labelledby="questions-title" className="mt-10">
-      <h2 id="questions-title" className="text-[20px] font-medium tracking-[-0.01em] text-text">
-        {t('analysis.questions.title')}
-      </h2>
-      <p className="mt-1 mb-6 text-[15px] leading-6 text-muted">{t('analysis.questions.lead')}</p>
-      <QuestionsForm
-        questions={analysis.questions}
-        initial={analysis.answers}
-        submitLabel={t('analysis.questions.submit')}
-        submitting={submitting}
-        onChange={(answers) => {
-          latest.current = answers;
-          if (timer.current) window.clearTimeout(timer.current);
-          timer.current = window.setTimeout(() => void flush(), SAVE_DELAY_MS);
-        }}
-        onSubmit={(answers) => {
-          if (timer.current) window.clearTimeout(timer.current);
-          latest.current = null;
-          setSubmitting(true);
-          setError(null);
-          continueAnalysis(analysis.id, answers)
-            .then(onDone)
-            .catch((caught: unknown) => {
-              setError(caught);
-              setSubmitting(false);
-            });
-        }}
-        footer={() => (
-          <>
-            <p aria-live="polite" className="min-h-5 text-[13px] text-subtle">
-              {saveState === 'saving'
-                ? t('analysis.questions.saving')
-                : saveState === 'saved'
-                  ? t('analysis.questions.saved')
-                  : saveState === 'failed'
-                    ? t('analysis.questions.saveFailed')
-                    : ''}
-            </p>
-            {error ? <ErrorNotice error={error} redirect={`/analyses/${analysis.id}`} /> : null}
-          </>
-        )}
-      />
-    </section>
   );
 }
 

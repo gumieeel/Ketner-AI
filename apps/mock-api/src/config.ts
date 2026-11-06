@@ -186,7 +186,7 @@ export const config = {
   /**
    * Платформа решений (анализ задачи, отчёт о возможностях, планы, Ketner Builder) — в разработке,
    * docs/MIGRATION_PLAN.md. Включена везде, в том числе в production (решение владельца 01.11.2026:
-   * ketner.org открывается главной «Что вы хотите улучшить?»); `DISCOVERY_ENABLED=false` выключает.
+   * ketner.org открывается главной «Расскажите о своём бизнесе»); `DISCOVERY_ENABLED=false` выключает.
    */
   discoveryEnabled: optionalEnv('DISCOVERY_ENABLED') !== 'false',
   /**

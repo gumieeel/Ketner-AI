@@ -11,8 +11,8 @@ export function contextTemplate(inputText: string, language: Language): string {
   const summary = inputText.trim().replace(/\s+/g, ' ').slice(0, 300);
   return JSON.stringify({
     domain: en
-      ? 'Your work (demo analysis without a model)'
-      : 'Ваша работа (демо-анализ без модели)',
+      ? 'Your business (demo analysis without a model)'
+      : 'Ваш бизнес (демо-анализ без модели)',
     summary: summary || (en ? 'No description.' : 'Описание пустое.'),
     goals: [
       {
@@ -42,19 +42,48 @@ export function contextTemplate(inputText: string, language: Language): string {
           },
         ]
       : [],
+    intro: short
+      ? en
+        ? 'Got it. Let’s look at how requests come in now.'
+        : 'Понял. Давайте разберёмся, как сейчас поступают заявки.'
+      : '',
     questions: short
       ? [
           {
             id: 'q1',
-            text: en ? 'Where is your data stored now?' : 'Где сейчас хранятся ваши данные?',
+            text: en
+              ? 'Where do your clients usually write?'
+              : 'Где чаще всего пишут ваши клиенты?',
             reason: en
-              ? 'To check which integrations are needed'
-              : 'Чтобы проверить, какие нужны интеграции',
+              ? 'To choose the channel to automate first'
+              : 'Чтобы выбрать канал, который автоматизировать первым',
             optional: false,
             kind: 'choice',
             options: en
-              ? ['Spreadsheets', 'Email', 'CRM', 'Other']
-              : ['Таблицы', 'Почта', 'CRM', 'Другое'],
+              ? ['WhatsApp', 'Instagram', 'Telegram', 'Website', 'Other channels']
+              : ['WhatsApp', 'Instagram', 'Telegram', 'Сайт', 'Другие каналы'],
+          },
+          {
+            id: 'q2',
+            text: en
+              ? 'What happens after a client leaves a request?'
+              : 'Что происходит после того, как клиент оставляет заявку?',
+            reason: en
+              ? 'To check which integrations are needed'
+              : 'Чтобы проверить, какие нужны интеграции',
+            optional: true,
+            kind: 'choice',
+            options: en
+              ? [
+                  'A manager replies by hand',
+                  'The order goes into a spreadsheet',
+                  'The order goes into a CRM',
+                ]
+              : [
+                  'Менеджер отвечает вручную',
+                  'Заказ записывается в таблицу',
+                  'Заказ попадает в CRM',
+                ],
           },
         ]
       : [],

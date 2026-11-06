@@ -69,10 +69,11 @@ const templateGateway = {
   },
 };
 
-async function start(discoveryEnabled = true) {
+async function start(discoveryEnabled = true, options: { now?: () => Date } = {}) {
   const dir = mkdtempSync(join(tmpdir(), 'ketner-analyses-'));
   const mails: MailMessage[] = [];
   const service = new DiscoveryService({
+    ...(options.now ? { now: options.now } : {}),
     store: new MemoryDiscoveryStore(),
     budget: new MemoryBudgetStore(),
     gateway: templateGateway,
@@ -356,6 +357,100 @@ test('после входа анализ, начатый гостем в это�
     // Гостевой id больше не владелец.
     const asGuest = await fetch(`${app.base}/api/analyses/${id}`, { headers: guestHeaders(guest) });
     assert.equal(asGuest.status, 404);
+  } finally {
+    app.close();
+  }
+});
+
+test('после регистрации список анализов забирает все анализы гостя этого браузера', async () => {
+  const app = await start();
+  try {
+    const guest = 'guest_listclaim0123456789ab';
+    const first = await post(app.base, '/api/analyses', { text: TEXT }, guestHeaders(guest));
+    await app.service.whenIdle();
+    const signup = await signupAndVerify(app.base, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        email: 'list-claim@example.com',
+        password: 'password123',
+        name: 'Owner',
+      }),
+    });
+    const { token } = (await signup.json()) as { token: string };
+    // Анализ не открывали после входа — список сам переносит его в аккаунт.
+    const listed = await fetch(`${app.base}/api/analyses`, {
+      headers: { Authorization: `Bearer ${token}`, 'X-Guest-Id': guest },
+    });
+    const items = ((await listed.json()) as ApiBody).analyses;
+    assert.deepEqual(
+      items.map((item) => item.id),
+      [first.json.analysis.id],
+    );
+    const asGuest = await fetch(`${app.base}/api/analyses`, { headers: guestHeaders(guest) });
+    assert.deepEqual(((await asGuest.json()) as ApiBody).analyses, []);
+  } finally {
+    app.close();
+  }
+});
+
+test('анализ гостя без входа истекает через 30 дней: не читается и не переносится', async () => {
+  let clock = new Date('2026-11-01T10:00:00.000Z');
+  const app = await start(true, { now: () => clock });
+  try {
+    const guest = 'guest_expiring0123456789abc';
+    const created = await post(app.base, '/api/analyses', { text: TEXT }, guestHeaders(guest));
+    const id = created.json.analysis.id as string;
+    await app.service.whenIdle();
+    const fresh = await fetch(`${app.base}/api/analyses/${id}`, { headers: guestHeaders(guest) });
+    assert.equal(fresh.status, 200);
+
+    clock = new Date('2026-12-02T10:00:00.000Z');
+    const expired = await fetch(`${app.base}/api/analyses/${id}`, { headers: guestHeaders(guest) });
+    assert.equal(expired.status, 404);
+    const list = await fetch(`${app.base}/api/analyses`, { headers: guestHeaders(guest) });
+    assert.deepEqual(((await list.json()) as ApiBody).analyses, []);
+
+    const signup = await signupAndVerify(app.base, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: 'late@example.com', password: 'password123', name: 'Late' }),
+    });
+    const { token } = (await signup.json()) as { token: string };
+    const authed = { Authorization: `Bearer ${token}`, 'X-Guest-Id': guest };
+    const late = await fetch(`${app.base}/api/analyses/${id}`, { headers: authed });
+    assert.equal(late.status, 404, 'истёкший анализ гостя не переносится в аккаунт');
+    // Стирание идёт попутно с запросами; принудительный проход ничего нового не находит.
+    await app.service.purgeExpiredGuests(true);
+    assert.equal(await app.service.purgeExpiredGuests(true), 0);
+  } finally {
+    app.close();
+  }
+});
+
+test('перебор гостевых id: после 30 промахов с адреса чтение закрыто, свой опрос не мешает', async () => {
+  const app = await start();
+  try {
+    const guest = 'guest_ownerpolling0123456789';
+    const created = await post(app.base, '/api/analyses', { text: TEXT }, guestHeaders(guest));
+    const id = created.json.analysis.id as string;
+    await app.service.whenIdle();
+    // Свой анализ можно опрашивать сколько угодно часто.
+    for (let i = 0; i < 40; i += 1) {
+      const own = await fetch(`${app.base}/api/analyses/${id}`, { headers: guestHeaders(guest) });
+      assert.equal(own.status, 200);
+    }
+    for (let i = 0; i < 30; i += 1) {
+      const miss = await fetch(`${app.base}/api/analyses/${id}`, {
+        headers: guestHeaders(`guest_guess${String(i).padStart(24, '0')}`),
+      });
+      assert.equal(miss.status, 404);
+    }
+    const blocked = await fetch(`${app.base}/api/analyses/${id}`, {
+      headers: guestHeaders('guest_guessfinal000000000000'),
+    });
+    assert.equal(blocked.status, 429);
+    assert.ok(Number(blocked.headers.get('Retry-After')) >= 1);
   } finally {
     app.close();
   }

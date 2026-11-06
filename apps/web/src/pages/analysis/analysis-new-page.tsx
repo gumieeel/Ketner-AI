@@ -8,40 +8,16 @@ import {
   createAnalysis,
   DiscoveryApiError,
   fetchOffer,
-  newIdempotencyKey,
   type AnalysisMode,
   type Offer,
   type PaidOffer,
 } from '@/features/discovery/api';
-import { clearDraft, readDraft } from '@/features/discovery/draft';
+import { clearDraft, forgetStartKey, readDraft, startKey } from '@/features/discovery/draft';
 import { creditsText, priceText, resetTimeText } from '@/features/discovery/format';
 import { useTranslation, type TranslationKey } from '@/i18n';
 import { siteFeatures } from '@/lib/features';
-import { storage } from '@/lib/storage';
 import { NotFoundPage } from '@/pages/not-found-page';
 import { ErrorNotice } from './error-notice';
-
-const START_KEY = 'discovery.start';
-
-/**
- * Ключ идемпотентности запуска живёт, пока не изменились описание и режим: повторное нажатие,
- * перезагрузка или обрыв сети возвращают уже созданный анализ, а не запускают второй.
- */
-function startKey(text: string, mode: AnalysisMode): string {
-  try {
-    const saved = JSON.parse(storage.get(START_KEY) ?? 'null') as {
-      key?: string;
-      text?: string;
-      mode?: string;
-    } | null;
-    if (saved?.key && saved.text === text && saved.mode === mode) return saved.key;
-  } catch {
-    /* повреждённая запись — новый ключ */
-  }
-  const key = newIdempotencyKey();
-  storage.set(START_KEY, JSON.stringify({ key, text, mode }));
-  return key;
-}
 
 /** Начало анализа: описание с главной, что доступно сейчас и сколько стоит. */
 export function AnalysisNewPage() {
@@ -90,7 +66,7 @@ export function AnalysisNewPage() {
         startKey(draft.text, mode),
       );
       clearDraft();
-      storage.remove(START_KEY);
+      forgetStartKey();
       navigate(`/analyses/${analysis.id}`, { replace: true });
     } catch (caught) {
       setStarting(null);
@@ -103,7 +79,7 @@ export function AnalysisNewPage() {
         fetchOffer(language).then(setOffer, () => undefined);
       }
       // Отказ — новая попытка с новым ключом (сервер не создал анализ).
-      storage.remove(START_KEY);
+      forgetStartKey();
       setError(caught);
     }
   };

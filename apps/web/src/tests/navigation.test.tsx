@@ -1,5 +1,6 @@
 import { fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { useAuth } from '@/features/auth/auth-store';
 import { setSiteFeatures } from '@/lib/features';
 import { installFakeApi } from './fake-api';
 import { renderRoute, resetAuth, resetChat, resetPreferences } from './test-utils';
@@ -72,9 +73,14 @@ describe('навигация платформы решений', () => {
     vi.unstubAllGlobals();
   });
 
-  it('текущий раздел подсвечен в шапке', () => {
+  it('текущий раздел подсвечен в шапке (после входа)', () => {
     setSiteFeatures({ discovery: true });
     installFakeApi();
+    useAuth.setState({
+      status: 'authenticated',
+      token: 'mock-token',
+      user: { id: 'u1', email: 'owner@example.com', name: 'Owner', plan: 'credits' } as never,
+    });
     renderRoute('/solutions');
     const nav = screen.getAllByRole('navigation', { name: 'Навигация' })[0];
     expect(within(nav).getByRole('link', { name: 'Мои автоматизации' })).toHaveAttribute(

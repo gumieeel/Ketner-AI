@@ -97,6 +97,25 @@ export interface OpportunityView {
   priority: number;
 }
 
+export interface SourcedText {
+  text: string;
+  source: 'user' | 'inferred';
+}
+
+/** Профиль бизнеса после разбора описания (этап context). У старых анализов части полей нет. */
+export interface BusinessContext {
+  domain: string;
+  summary: string;
+  /** Реплика перед уточняющими вопросами. */
+  intro?: string;
+  goals?: SourcedText[];
+  tasks?: Array<{ id: string; title: string }>;
+  recurringProcesses?: Array<{ title: string; steps: string[] }>;
+  tools?: SourcedText[];
+  constraints?: SourcedText[];
+  missing?: Array<{ field: string; why: string }>;
+}
+
 export interface AnalysisView {
   id: string;
   status: AnalysisStatus;
@@ -104,7 +123,7 @@ export interface AnalysisView {
   language: Language;
   guest: boolean;
   inputText: string;
-  context: { domain: string; summary: string } | null;
+  context: BusinessContext | null;
   questions: Question[];
   answers: Answers;
   summary: string | null;

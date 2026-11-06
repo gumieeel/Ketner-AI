@@ -126,6 +126,7 @@ export function StandaloneLayout() {
     );
   }
 
+  const signedIn = status === 'authenticated' && Boolean(user);
   const startLabel =
     status === 'authenticated' && user
       ? user.name
@@ -164,18 +165,23 @@ export function StandaloneLayout() {
             <nav aria-label={t('nav.mainNavigation')} className="hidden items-center gap-1 lg:flex">
               {discovery ? (
                 <>
-                  <NavLink to="/analyses" className={desktopNavClass}>
-                    {t('nav.analyses')}
-                  </NavLink>
-                  <NavLink to="/solutions" className={desktopNavClass}>
-                    {t('nav.solutions')}
-                  </NavLink>
-                  <NavLink to="/chat" className={desktopNavClass}>
-                    {t('nav.chat')}
-                  </NavLink>
-                  <NavLink to="/models" className={desktopNavClass}>
-                    {t('nav.models')}
-                  </NavLink>
+                  {/* Главная — Business Discovery: в шапке только то, что помогает начать. */}
+                  <Link to="/#how-it-works" className={navLinkClass}>
+                    {t('nav.howItWorks')}
+                  </Link>
+                  <Link to="/#solutions" className={navLinkClass}>
+                    {t('nav.industrySolutions')}
+                  </Link>
+                  {signedIn ? (
+                    <>
+                      <NavLink to="/analyses" className={desktopNavClass}>
+                        {t('nav.analyses')}
+                      </NavLink>
+                      <NavLink to="/solutions" className={desktopNavClass}>
+                        {t('nav.solutions')}
+                      </NavLink>
+                    </>
+                  ) : null}
                 </>
               ) : (
                 <>
@@ -187,11 +193,7 @@ export function StandaloneLayout() {
                   </a>
                 </>
               )}
-              {discovery ? (
-                <NavLink to="/pricing" className={desktopNavClass}>
-                  {t('nav.pricing')}
-                </NavLink>
-              ) : (
+              {discovery ? null : (
                 <>
                   <Link to="/pricing" className={navLinkClass}>
                     {t('nav.pricing')}
@@ -216,19 +218,28 @@ export function StandaloneLayout() {
                 <div className="mx-1 h-5 w-px bg-stroke" aria-hidden="true" />
               </>
             )}
-            {status === 'authenticated' && user ? (
+            {signedIn ? (
               <BalanceChip />
             ) : (
-              <Link to="/login" className={buttonClasses({ variant: 'outline', size: 'sm' })}>
+              <Link
+                to="/login"
+                className={buttonClasses({
+                  variant: discovery ? 'primary' : 'outline',
+                  size: 'sm',
+                })}
+              >
                 {t('nav.login')}
               </Link>
             )}
-            <Link
-              to={status === 'authenticated' && user ? '/chat' : '/signup'}
-              className={buttonClasses({ variant: 'primary', size: 'sm' })}
-            >
-              {status === 'authenticated' && user ? startLabel : t('nav.signup')}
-            </Link>
+            {/* У Business Discovery гостю в шапке нужен только вход: регистрация — после анализа. */}
+            {discovery && !signedIn ? null : (
+              <Link
+                to={signedIn ? '/chat' : '/signup'}
+                className={buttonClasses({ variant: 'primary', size: 'sm' })}
+              >
+                {signedIn ? startLabel : t('nav.signup')}
+              </Link>
+            )}
           </div>
 
           {/* Mobile Menu Button */}
@@ -291,8 +302,14 @@ export function StandaloneLayout() {
               {discovery
                 ? (
                     [
-                      ['/analyses', 'nav.analyses'],
-                      ['/solutions', 'nav.solutions'],
+                      ['/#how-it-works', 'nav.howItWorks'],
+                      ['/#solutions', 'nav.industrySolutions'],
+                      ...(signedIn
+                        ? ([
+                            ['/analyses', 'nav.analyses'],
+                            ['/solutions', 'nav.solutions'],
+                          ] as const)
+                        : []),
                       ['/chat', 'nav.chat'],
                     ] as const
                   ).map(([to, key]) => (
@@ -300,7 +317,10 @@ export function StandaloneLayout() {
                       key={to}
                       to={to}
                       onClick={() => setMobileMenuOpen(false)}
-                      className={mobileLinkClass}
+                      // Разделы главной (/#…) не подсвечиваются как текущая страница.
+                      className={({ isActive }) =>
+                        mobileLinkClass({ isActive: isActive && !to.includes('#') })
+                      }
                     >
                       {t(key)}
                       <ChevronRightIcon className="size-4 text-subtle transition-transform duration-200 group-hover:translate-x-0.5" />
@@ -337,11 +357,11 @@ export function StandaloneLayout() {
             {/* Блок действий, прижатый к низу с учётом safe-area */}
             <div className="mt-auto flex shrink-0 flex-col gap-4 border-t border-stroke pt-5 pb-[max(1rem,env(safe-area-inset-bottom))]">
               <Link
-                to="/chat"
+                to={discovery ? '/' : '/chat'}
                 onClick={() => setMobileMenuOpen(false)}
                 className={buttonClasses({ variant: 'primary', size: 'lg', fullWidth: true })}
               >
-                {t('nav.goToChat')}
+                {discovery ? t('nav.describeBusiness') : t('nav.goToChat')}
               </Link>
               {status === 'authenticated' && user ? null : (
                 <div className="grid grid-cols-2 gap-2.5">
@@ -393,7 +413,7 @@ export function StandaloneLayout() {
             <div className="col-span-2 flex flex-col gap-4 md:col-span-1">
               <Brand />
               <p className="max-w-[28ch] text-[14px] leading-relaxed text-muted">
-                {t('home.footerTagline')}
+                {discovery ? t('discoveryHome.footerTagline') : t('home.footerTagline')}
               </p>
             </div>
 

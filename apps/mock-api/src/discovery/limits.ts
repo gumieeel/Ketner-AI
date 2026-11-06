@@ -5,6 +5,7 @@
  * гостей и аккаунтов младше 7 дней (защита от множества аккаунтов; старые аккаунты по адресу не
  * ограничиваются — у мобильных операторов сотни людей выходят с одного IP); недоступен с одноразовых
  * почтовых доменов. Любых анализов — не больше 20 в сутки на владельца. Частота — 3 в минуту.
+ * Анализ гостя без входа живёт 30 дней, потом стирается.
  */
 
 import { createHmac } from 'node:crypto';
@@ -17,6 +18,15 @@ export const FREE_PER_IP_PER_DAY = PLATFORM_LIMITS.analyses.freePerIpPerDay;
 export const YOUNG_ACCOUNT_MS = PLATFORM_LIMITS.analyses.youngAccountDays * 24 * 60 * 60 * 1000;
 export const ANALYSES_PER_OWNER_PER_DAY = PLATFORM_LIMITS.analyses.perDay;
 export const CREATES_PER_MINUTE = PLATFORM_LIMITS.analyses.startsPerMinute;
+/** Сколько живёт анализ гостя, не перенесённый в аккаунт. */
+export const GUEST_RETENTION_MS = PLATFORM_LIMITS.analyses.guestRetentionDays * 24 * 60 * 60 * 1000;
+/** Как часто стирать истёкшие анализы гостей. */
+export const GUEST_PURGE_EVERY_MS = 60 * 60 * 1000;
+/**
+ * Промахов гостя в минуту с одного адреса (чужой или несуществующий анализ, пустой список): после
+ * потолка чтение анализов гостями с адреса закрыто до конца окна — так упирается перебор гостевых id.
+ */
+export const GUEST_MISSES_PER_MINUTE_PER_IP = 30;
 
 /** Одноразовые почтовые домены: с них бесплатный анализ недоступен (список пополняется). */
 const DISPOSABLE_DOMAINS = new Set([

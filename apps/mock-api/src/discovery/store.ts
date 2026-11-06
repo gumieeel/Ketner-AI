@@ -27,8 +27,23 @@ export interface DiscoveryStore {
   setOpportunities(ownerId: string, analysisId: string, items: Opportunity[]): Promise<void>;
   opportunities(ownerId: string, analysisId: string): Promise<Opportunity[]>;
   count(filter: AnalysisCountFilter): Promise<number>;
-  /** Перенос анализа гостя этого браузера в аккаунт после входа. */
-  claimGuest(userId: string, guestId: string, analysisId: string): Promise<boolean>;
+  /**
+   * Перенос анализа гостя этого браузера в аккаунт после входа. `createdAfter` — анализ гостя,
+   * созданный раньше, уже истёк и не переносится.
+   */
+  claimGuest(
+    userId: string,
+    guestId: string,
+    analysisId: string,
+    createdAfter?: string,
+  ): Promise<boolean>;
+  /** Перенос всех живых анализов гостя (созданных не раньше `createdAfter`) в аккаунт. */
+  claimAllGuest(userId: string, guestId: string, createdAfter: string): Promise<number>;
+  /**
+   * Стереть анализы гостей, созданные раньше `before` и так и не перенесённые в аккаунт: как
+   * `remove` — содержимое стирается, скрытая запись остаётся для суточных лимитов.
+   */
+  expireGuests(before: string, at: string): Promise<number>;
   /**
    * Удалить: содержимое стирается, возможности удаляются, запись остаётся скрытой — она нужна
    * суточным лимитам (`count` её учитывает). Чужой или уже удалённый — false.
@@ -182,11 +197,12 @@ export class MemoryDiscoveryStore implements DiscoveryStore {
     return true;
   }
 
-  async claimGuest(userId: string, guestId: string, analysisId: string) {
+  async claimGuest(userId: string, guestId: string, analysisId: string, createdAfter?: string) {
     const found = this.analyses.get(analysisId);
     if (!found || this.deleted.has(analysisId)) return false;
     if (found.ownerId === userId) return true;
     if (found.ownerId !== guestId) return false;
+    if (createdAfter !== undefined && found.createdAt < createdAfter) return false;
     this.analyses.set(analysisId, {
       ...found,
       ownerId: userId,
@@ -203,6 +219,25 @@ export class MemoryDiscoveryStore implements DiscoveryStore {
         items.map((item) => ({ ...item, ownerId: userId })),
       );
     return true;
+  }
+
+  async claimAllGuest(userId: string, guestId: string, createdAfter: string) {
+    const ids = [...this.analyses.values()]
+      .filter((item) => item.ownerId === guestId && item.createdAt >= createdAfter)
+      .map((item) => item.id);
+    let claimed = 0;
+    for (const id of ids) {
+      if (await this.claimGuest(userId, guestId, id, createdAfter)) claimed += 1;
+    }
+    return claimed;
+  }
+
+  async expireGuests(before: string, at: string) {
+    const expired = [...this.analyses.values()].filter(
+      (item) => item.guest && item.createdAt < before && !this.deleted.has(item.id),
+    );
+    for (const item of expired) await this.remove(item.ownerId, item.id, at);
+    return expired.length;
   }
 }
 
@@ -531,11 +566,12 @@ export class PostgresDiscoveryStore implements DiscoveryStore {
     return Number(rows[0]?.n ?? 0);
   }
 
-  async claimGuest(userId: string, guestId: string, analysisId: string) {
+  async claimGuest(userId: string, guestId: string, analysisId: string, createdAfter?: string) {
     const rows = await this.db.query<{ user_id: string }>(
       `UPDATE discovery_analyses SET user_id = $1, guest = false, version = version + 1
-       WHERE id = $3 AND user_id = $2 AND ${ALIVE} RETURNING user_id`,
-      [userId, guestId, analysisId],
+       WHERE id = $3 AND user_id = $2 AND ${ALIVE}
+         AND ($4::timestamptz IS NULL OR created_at >= $4::timestamptz) RETURNING user_id`,
+      [userId, guestId, analysisId, createdAfter ?? null],
     );
     if (rows[0]) {
       await this.db.query(
@@ -553,6 +589,44 @@ export class PostgresDiscoveryStore implements DiscoveryStore {
       [analysisId, userId],
     );
     return own.length > 0;
+  }
+
+  async claimAllGuest(userId: string, guestId: string, createdAfter: string) {
+    const rows = await this.db.query<{ id: string }>(
+      `UPDATE discovery_analyses SET user_id = $1, guest = false, version = version + 1
+       WHERE user_id = $2 AND ${ALIVE} AND created_at >= $3::timestamptz RETURNING id`,
+      [userId, guestId, createdAfter],
+    );
+    const ids = rows.map((row) => row.id);
+    if (ids.length === 0) return 0;
+    await this.db.query(
+      `UPDATE discovery_opportunities SET user_id = $1
+       WHERE analysis_id = ANY($3::text[]) AND user_id = $2`,
+      [userId, guestId, ids],
+    );
+    await this.db.query(
+      `UPDATE discovery_plans SET user_id = $1 WHERE analysis_id = ANY($3::text[]) AND user_id = $2`,
+      [userId, guestId, ids],
+    );
+    return ids.length;
+  }
+
+  async expireGuests(before: string, at: string) {
+    const rows = await this.db.query<{ id: string }>(
+      `UPDATE discovery_analyses SET deleted_at = $2::timestamptz, updated_at = $2::timestamptz,
+         input_text = '', context = NULL, questions = '[]'::jsonb, answers = '{}'::jsonb,
+         summary = NULL, coverage = NULL, source = NULL, saved = false, version = version + 1
+       WHERE guest = true AND ${ALIVE} AND created_at < $1::timestamptz RETURNING id`,
+      [before, at],
+    );
+    const ids = rows.map((row) => row.id);
+    if (ids.length > 0) {
+      await this.db.query(
+        `DELETE FROM discovery_opportunities WHERE analysis_id = ANY($1::text[])`,
+        [ids],
+      );
+    }
+    return ids.length;
   }
 
   async remove(ownerId: string, id: string, at: string) {

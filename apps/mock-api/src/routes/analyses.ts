@@ -34,7 +34,12 @@ import type { UsageStore } from '../store/usage-store.js';
 import { usageStore as defaultUsageStore } from '../store/index.js';
 import type { UserStore } from '../store/user-store.js';
 import type { Language } from '../types.js';
-import { CREATES_PER_MINUTE, hashIp, isYoungAccount } from '../discovery/limits.js';
+import {
+  CREATES_PER_MINUTE,
+  GUEST_MISSES_PER_MINUTE_PER_IP,
+  hashIp,
+  isYoungAccount,
+} from '../discovery/limits.js';
 import { getDiscoveryStores, type DiscoveryStores } from '../discovery/runtime.js';
 import {
   answersBodySchema,
@@ -161,6 +166,38 @@ export function createAnalysesRouter(deps: AnalysesRouterDeps): Router {
   const createLimiter = new RateLimiter(60_000, CREATES_PER_MINUTE);
   const actionLimiter = new RateLimiter(60_000, 20);
   const draftLimiter = new RateLimiter(60_000, 60);
+  const guestMissLimiter = new RateLimiter(60_000, GUEST_MISSES_PER_MINUTE_PER_IP);
+
+  /**
+   * Перебор чужих гостевых id: промахи гостя (чужой или несуществующий анализ, пустой список)
+   * считаются по адресу, и после потолка чтение с этого адреса на минуту закрыто. Обычный гость
+   * почти не промахивается, поэтому опрос статуса и общий IP мобильного оператора не страдают.
+   * false — ответ 429 уже отправлен.
+   */
+  const missKey = (caller: DiscoveryCaller) =>
+    caller.guest && caller.ipHash ? `miss:${caller.ipHash}` : null;
+  const allowGuestRead = (
+    request: Request,
+    response: Response,
+    caller: DiscoveryCaller,
+  ): boolean => {
+    const key = missKey(caller);
+    if (!key || !guestMissLimiter.isLimited(key)) return true;
+    response.setHeader('Retry-After', String(guestMissLimiter.retryAfterSec(key)));
+    sendError(
+      response,
+      429,
+      'too_many_requests',
+      languageOf(request) === 'en'
+        ? 'Too many requests. Wait a minute.'
+        : 'Слишком много запросов. Подождите минуту.',
+    );
+    return false;
+  };
+  const recordGuestMiss = (caller: DiscoveryCaller) => {
+    const key = missKey(caller);
+    if (key) guestMissLimiter.record(key);
+  };
   let service: DiscoveryService | null = deps.service ?? null;
 
   const gateway =
@@ -375,7 +412,12 @@ export function createAnalysesRouter(deps: AnalysesRouterDeps): Router {
     if (!ready) return;
     const resolved = resolveCaller(request, response);
     if (!resolved) return;
+    if (!allowGuestRead(request, response, resolved.caller)) return;
+    // Анализы, начатые в этом браузере до входа или регистрации, переходят в аккаунт.
+    if (!resolved.caller.guest)
+      await ready.claimAllGuest(resolved.caller.userId, readGuestId(request));
     const items = await ready.list(resolved.caller.userId);
+    if (items.length === 0) recordGuestMiss(resolved.caller);
     response.json({
       analyses: items.map((item) => ({
         id: item.id,
@@ -395,12 +437,14 @@ export function createAnalysesRouter(deps: AnalysesRouterDeps): Router {
     if (!ready) return;
     const resolved = resolveCaller(request, response);
     if (!resolved) return;
+    if (!allowGuestRead(request, response, resolved.caller)) return;
     const id = String(request.params.id);
     // Анализ, начатый гостем в этом браузере до входа, переходит в аккаунт.
     if (!resolved.caller.guest)
       await ready.claimGuest(resolved.caller.userId, readGuestId(request), id);
     const found = await ready.get(resolved.caller.userId, id);
     if (!found) {
+      recordGuestMiss(resolved.caller);
       sendError(response, 404, 'analysis_not_found', `Анализ ${id} не найден`);
       return;
     }

@@ -14,15 +14,16 @@ async function get(discoveryEnabled: boolean, path: string): Promise<string> {
   }
 }
 
-test('главная: без флага — лендинг агрегатора, с флагом — «Что вы хотите улучшить?»', async () => {
+test('главная: без флага — лендинг агрегатора, с флагом — «Расскажите о своём бизнесе»', async () => {
   const off = await get(false, '/');
   assert.match(off, /<meta name="ketner-features" content="" \/>/);
   assert.match(off, /Все сильные модели/);
-  assert.doesNotMatch(off, /Что вы хотите улучшить/);
+  assert.doesNotMatch(off, /Расскажите о своём бизнесе/);
 
   const on = await get(true, '/');
   assert.match(on, /<meta name="ketner-features" content="discovery" \/>/);
-  assert.match(on, /Что вы хотите улучшить\?/, 'готовая разметка новой главной в #root');
+  assert.match(on, /Расскажите о своём бизнесе/, 'готовая разметка новой главной в #root');
+  assert.match(on, /Проанализировать бизнес/);
   assert.doesNotMatch(on, /Как работают кредиты\?/, 'вопросы и ответы — на /pricing');
 
   // Остальные страницы от флага не зависят, кроме метки.

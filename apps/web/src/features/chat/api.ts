@@ -23,10 +23,29 @@ export function checkSessionInvalid(response: Response): void {
 export function getGuestId(): string {
   let guestId = storage.get(GUEST_ID_KEY);
   if (!guestId) {
-    guestId = `guest_${Math.random().toString(36).substring(2, 11)}_${Date.now().toString(36)}`;
+    guestId = newGuestId();
     storage.set(GUEST_ID_KEY, guestId);
   }
   return guestId;
+}
+
+/**
+ * Гостевой id — единственный ключ к анализам и чатам гостя, поэтому он случайный и длинный
+ * (≈124 бита из криптографического генератора), а не из Math.random и времени: угадать чужой
+ * нельзя. Формат совпадает с проверкой сервера (middleware/guest.ts): `guest_[a-z0-9_]{8,64}`.
+ */
+export function newGuestId(): string {
+  const alphabet = 'abcdefghijklmnopqrstuvwxyz0123456789';
+  let random = '';
+  while (random.length < 24) {
+    const bytes = new Uint8Array(32);
+    crypto.getRandomValues(bytes);
+    // Байты ≥ 252 (= 36 × 7) отбрасываются: все 36 символов равновероятны.
+    for (const byte of bytes) {
+      if (byte < 252 && random.length < 24) random += alphabet[byte % 36];
+    }
+  }
+  return `guest_${random}`;
 }
 
 /** Ошибка API: код и текст приходят от сервера в едином формате. */

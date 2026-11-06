@@ -126,9 +126,9 @@ test('seo: метка возможностей и заголовок главн�
 
   const on = renderIndexHtml(BASE, '/', undefined, { discovery: true });
   assert.match(on, /<meta name="ketner-features" content="discovery" \/>/);
-  assert.match(on, /<title>Ketner AI — найдите, где ИИ поможет/);
-  assert.match(on, /<meta name="description" content="Опишите задачу/);
-  assert.match(on, /помогает найти, где искусственный интеллект/);
+  assert.match(on, /<title>Ketner AI — расскажите о своём бизнесе/);
+  assert.match(on, /<meta name="description" content="Опишите, чем занимается ваша компания/);
+  assert.match(on, /находит, что можно автоматизировать с помощью искусственного интеллекта/);
 
   // Прежний посыл остаётся на странице моделей при любом флаге.
   for (const features of [{ discovery: false }, { discovery: true }]) {

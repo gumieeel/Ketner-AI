@@ -267,8 +267,9 @@
         "youngAccountDays": 7,
         "perDay": 20,
         "startsPerMinute": 3,
-        "maxQuestions": 1,
-        "textChars": 8000
+        "maxQuestions": 3,
+        "textChars": 8000,
+        "guestRetentionDays": 30
       },
       "plans": {
         "freeBriefPerAnalysis": 1,
@@ -305,12 +306,12 @@
       "analysisPaid": {
         "model": "MiMo-V2.6 Pro",
         "typicalCredits": 9,
-        "maxCredits": 28
+        "maxCredits": 29
       },
       "analysisDeep": {
         "model": "Claude Sonnet 5.5",
         "typicalCredits": 79,
-        "maxCredits": 326
+        "maxCredits": 328
       },
       "planPaid": {
         "model": "MiMo-V2.6 Pro",

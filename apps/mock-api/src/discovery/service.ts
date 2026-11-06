@@ -37,6 +37,8 @@ import {
   ANALYSES_PER_OWNER_PER_DAY,
   FREE_PER_IP_PER_DAY,
   FREE_PER_OWNER_PER_DAY,
+  GUEST_PURGE_EVERY_MS,
+  GUEST_RETENTION_MS,
   isDisposableEmail,
 } from './limits.js';
 import {
@@ -134,6 +136,8 @@ export class DiscoveryService {
   private readonly registry: ModelRegistry;
   private readonly now: () => Date;
   private readonly running = new Map<string, Promise<void>>();
+  /** Когда последний раз стирались истёкшие анализы гостей (не чаще раза в `GUEST_PURGE_EVERY_MS`). */
+  private lastGuestPurge = 0;
 
   constructor(private readonly deps: DiscoveryServiceDeps) {
     this.registry = deps.registry ?? modelRegistry;
@@ -446,13 +450,39 @@ export class DiscoveryService {
     return recent.find((item) => item.idempotencyKey === key) ?? null;
   }
 
+  /** С какого момента анализ гостя ещё жив: созданные раньше истекли (`GUEST_RETENTION_MS`). */
+  guestCutoff(): string {
+    return new Date(this.now().getTime() - GUEST_RETENTION_MS).toISOString();
+  }
+
+  private isExpiredGuest(analysis: Analysis): boolean {
+    return analysis.guest && analysis.createdAt < this.guestCutoff();
+  }
+
+  /**
+   * Стереть истёкшие анализы гостей. Вызывается попутно с обычными запросами, не чаще раза в
+   * `GUEST_PURGE_EVERY_MS`: отдельный таймер не нужен, а сбой не мешает самому запросу.
+   */
+  async purgeExpiredGuests(force = false): Promise<number> {
+    const now = this.now().getTime();
+    if (!force && now - this.lastGuestPurge < GUEST_PURGE_EVERY_MS) return 0;
+    this.lastGuestPurge = now;
+    try {
+      return await this.deps.store.expireGuests(this.guestCutoff(), this.now().toISOString());
+    } catch {
+      return 0;
+    }
+  }
+
   /** Анализ владельца; этап, зависший дольше `RUNNING_MS` (сервер перезапустился), считается прерванным. */
   async get(
     ownerId: string,
     id: string,
   ): Promise<{ analysis: Analysis; opportunities: Opportunity[] } | null> {
+    void this.purgeExpiredGuests();
     let analysis = await this.deps.store.get(ownerId, id);
-    if (!analysis) return null;
+    // Анализ гостя, так и не перенесённый в аккаунт, живёт ограниченное время.
+    if (!analysis || this.isExpiredGuest(analysis)) return null;
     if (!this.running.has(id)) {
       const stuck = STAGE_ORDER.find((stage) => {
         const run = analysis?.stages[stage];
@@ -494,13 +524,21 @@ export class DiscoveryService {
     return { analysis, opportunities };
   }
 
-  list(ownerId: string, limit = 50): Promise<Analysis[]> {
-    return this.deps.store.list(ownerId, limit);
+  async list(ownerId: string, limit = 50): Promise<Analysis[]> {
+    void this.purgeExpiredGuests();
+    const items = await this.deps.store.list(ownerId, limit);
+    return items.filter((item) => !this.isExpiredGuest(item));
   }
 
   claimGuest(userId: string, guestId: string | null, id: string): Promise<boolean> {
     if (!guestId) return Promise.resolve(false);
-    return this.deps.store.claimGuest(userId, guestId, id);
+    return this.deps.store.claimGuest(userId, guestId, id, this.guestCutoff());
+  }
+
+  /** После входа или регистрации: все живые анализы гостя этого браузера переходят в аккаунт. */
+  claimAllGuest(userId: string, guestId: string | null): Promise<number> {
+    if (!guestId || guestId === userId) return Promise.resolve(0);
+    return this.deps.store.claimAllGuest(userId, guestId, this.guestCutoff());
   }
 
   /** Цена повторного поиска возможностей после изменения ответов (показывается до запуска). */

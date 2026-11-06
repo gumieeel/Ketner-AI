@@ -253,8 +253,69 @@ async function storeContract(store: DiscoveryStore): Promise<void> {
   );
 }
 
+/** Анализы гостя: перенос всех сразу после входа и стирание истёкших (30 дней без входа). */
+async function guestRetentionContract(store: DiscoveryStore): Promise<void> {
+  const guest = 'guest_abcdefghijklmnopqrstuvwx';
+  const old = '2026-09-01T10:00:00.000Z';
+  const fresh = '2026-10-29T10:00:00.000Z';
+  const cutoff = '2026-10-01T00:00:00.000Z';
+  await store.create(analysis({ id: 'g-old', ownerId: guest, guest: true, createdAt: old }));
+  await store.create(analysis({ id: 'g-new', ownerId: guest, guest: true, createdAt: fresh }));
+  await store.create(analysis({ id: 'g-new2', ownerId: guest, guest: true, createdAt: fresh }));
+  await store.setOpportunities(guest, 'g-new', [opportunity('g-new', guest, 0)]);
+  await store.create(
+    analysis({ id: 'g-other', ownerId: 'guest_zzzzzzzzzzzzzzzzzzzzzzzz', guest: true }),
+  );
+
+  // Истёкший анализ гостя по одному не переносится.
+  assert.equal(await store.claimGuest('carol', guest, 'g-old', cutoff), false);
+
+  // Все живые анализы гостя переходят в аккаунт вместе с возможностями; чужие и истёкшие — нет.
+  assert.equal(await store.claimAllGuest('carol', guest, cutoff), 2);
+  assert.deepEqual((await store.list('carol', 10)).map((item) => [item.id, item.guest]).sort(), [
+    ['g-new', false],
+    ['g-new2', false],
+  ]);
+  assert.equal((await store.opportunities('carol', 'g-new')).length, 1);
+  assert.equal(await store.claimAllGuest('carol', guest, cutoff), 0, 'повтор ничего не меняет');
+
+  // Стирание: только анализы гостей старше срока; перенесённые в аккаунт не трогаются.
+  assert.equal(await store.expireGuests(cutoff, '2026-10-30T12:00:00.000Z'), 1);
+  assert.equal(await store.get(guest, 'g-old'), null);
+  assert.ok(await store.get('carol', 'g-new'));
+  assert.ok(await store.get('guest_zzzzzzzzzzzzzzzzzzzzzzzz', 'g-other'));
+  assert.equal(await store.expireGuests(cutoff, '2026-10-30T12:00:00.000Z'), 0);
+  assert.equal(
+    await store.count({ ownerId: guest, budgetDay: '2026-10-30' }),
+    1,
+    'стёртый анализ гостя по-прежнему учитывается в суточном лимите',
+  );
+}
+
 test('хранилище анализов в памяти: владелец, идемпотентность, версии, перенос гостя', async () => {
   await storeContract(new MemoryDiscoveryStore());
+});
+
+test('хранилище анализов в памяти: анализы гостя переносятся и истекают', async () => {
+  await guestRetentionContract(new MemoryDiscoveryStore());
+});
+
+test('хранилище анализов в Postgres: анализы гостя переносятся и истекают', async (t) => {
+  const sql = await openTestSql();
+  if (!sql) {
+    t.skip('нет PGlite и TEST_DATABASE_URL');
+    return;
+  }
+  try {
+    await runMigrations(sql.db, MIGRATIONS);
+    await guestRetentionContract(new PostgresDiscoveryStore(sql.runner));
+    const wiped = await sql.runner.query<{ input_text: string }>(
+      `SELECT input_text FROM discovery_analyses WHERE id = 'g-old'`,
+    );
+    assert.equal(wiped[0]?.input_text, '', 'текст истёкшего анализа стёрт');
+  } finally {
+    await sql.close();
+  }
 });
 
 test('хранилище анализов в Postgres: та же логика, JSON хранится объектами', async (t) => {

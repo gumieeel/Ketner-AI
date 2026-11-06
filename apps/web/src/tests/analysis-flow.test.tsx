@@ -401,7 +401,7 @@ describe('анализ задачи: начало, вопросы, резуль�
     ).toHaveAttribute('href', '/login?redirect=%2Fanalyses%2Fnew');
 
     fireEvent.click(screen.getByRole('button', { name: 'Начать анализ' }));
-    expect(await screen.findByRole('heading', { name: 'Несколько уточнений' })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: 'Пара уточнений' })).toBeInTheDocument();
     const create = api.calls.find(
       (call) => call.method === 'POST' && call.path === '/api/analyses',
     );
@@ -434,55 +434,124 @@ describe('анализ задачи: начало, вопросы, резуль�
     expect(screen.getAllByRole('link', { name: 'Войти и запустить за кредиты' })).toHaveLength(2);
   });
 
-  it('вопросы: черновик сохраняется на сервере и возвращается после перезагрузки', async () => {
-    const api = installDiscoveryApi({ view: analysis() });
+  it('вопросы по одному, как в разговоре: реплика, цель вопроса, прогресс; черновик на сервере', async () => {
+    const api = installDiscoveryApi({
+      view: analysis({
+        context: {
+          domain: 'Интернет-магазин',
+          summary: '',
+          intro: 'Понял. Давайте разберёмся, как сейчас поступают заявки.',
+        },
+      }),
+    });
     const first = renderRoute('/analyses/a1');
-    const field = await screen.findByRole('textbox', { name: /Где сейчас хранятся заказы/ });
-    expect(screen.getByText('Зачем: От этого зависят интеграции')).toBeInTheDocument();
-    expect(screen.getByText('необязательно')).toBeInTheDocument();
+    expect(
+      await screen.findByText('Понял. Давайте разберёмся, как сейчас поступают заявки.'),
+    ).toBeInTheDocument();
+    expect(screen.getByText('0 из 2')).toBeInTheDocument();
+    expect(
+      screen.getByText('Вопрос 1 из 2 · Зачем: От этого зависят интеграции'),
+    ).toBeInTheDocument();
+    // Второй вопрос ещё не показан: по одному за раз.
+    expect(screen.queryByText('Как вы отвечаете покупателям?')).toBeNull();
 
+    const field = screen.getByRole('textbox', { name: 'Где сейчас хранятся заказы?' });
     fireEvent.change(field, { target: { value: 'В Google Таблицах' } });
-    fireEvent.click(screen.getByRole('radio', { name: 'Мессенджеры' }));
-    await waitFor(() => expect(screen.getByText('Ответы сохранены')).toBeInTheDocument(), {
-      timeout: 3000,
-    });
-    const put = api.calls.filter((call) => call.method === 'PUT').at(-1);
-    expect(put?.body).toEqual({
-      answers: { q1: { value: 'В Google Таблицах' }, q2: { value: 'Мессенджеры' } },
-    });
+    fireEvent.click(screen.getByRole('button', { name: 'Дальше' }));
+
+    expect(await screen.findByText('Вопрос 2 из 2')).toBeInTheDocument();
+    expect(screen.getByText('1 из 2')).toBeInTheDocument();
+    // Ответ остался в разговоре.
+    expect(screen.getByText('В Google Таблицах')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Мессенджеры' }));
+    expect(await screen.findByRole('button', { name: 'Показать результат' })).toBeInTheDocument();
+
+    await waitFor(
+      () =>
+        expect(api.calls.filter((call) => call.method === 'PUT').at(-1)?.body).toEqual({
+          answers: { q1: { value: 'В Google Таблицах' }, q2: { value: 'Мессенджеры' } },
+        }),
+      { timeout: 3000 },
+    );
     // Модель не вызывалась: только черновик.
     expect(api.calls.some((call) => call.path.endsWith('/continue'))).toBe(false);
 
+    // После перезагрузки разговор продолжается с того же места; ответ можно изменить.
     first.unmount();
     renderRoute('/analyses/a1');
-    expect(await screen.findByRole('textbox', { name: /Где сейчас хранятся заказы/ })).toHaveValue(
+    expect(await screen.findByRole('button', { name: 'Показать результат' })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Изменить: Где сейчас хранятся заказы?' }));
+    expect(screen.getByRole('textbox', { name: 'Где сейчас хранятся заказы?' })).toHaveValue(
       'В Google Таблицах',
     );
-    expect(screen.getByRole('radio', { name: 'Мессенджеры' })).toBeChecked();
   });
 
-  it('обязательный вопрос: ответить или пропустить; пропуск можно отменить', async () => {
+  it('результат начинается с профиля бизнеса, проблем и объёма внедрения', async () => {
+    installDiscoveryApi({
+      view: analysis({
+        ...READY_PATCH,
+        context: {
+          domain: 'Интернет-магазин одежды',
+          summary: 'Клиенты пишут в мессенджеры, заказы ведутся в таблице.',
+          tools: [
+            { text: 'WhatsApp', source: 'user' },
+            { text: 'Google Таблицы', source: 'user' },
+          ],
+          recurringProcesses: [
+            {
+              title: 'Заказ',
+              steps: ['Клиент пишет в WhatsApp', 'Менеджер отвечает', 'Заказ в таблицу'],
+            },
+          ],
+        },
+      }),
+    });
+    renderRoute('/analyses/a1');
+
+    const profile = (await screen.findByRole('heading', { name: 'Ваш бизнес' })).closest(
+      'section',
+    )!;
+    expect(within(profile).getByText('Интернет-магазин одежды')).toBeInTheDocument();
+    expect(
+      within(profile).getByText('Клиент пишет в WhatsApp → Менеджер отвечает → Заказ в таблицу'),
+    ).toBeInTheDocument();
+    expect(within(profile).getByText('Google Таблицы')).toBeInTheDocument();
+
+    const problems = screen
+      .getByRole('heading', { name: 'Что отнимает время' })
+      .closest('section')!;
+    expect(within(problems).getByText('Однотипные вопросы')).toBeInTheDocument();
+
+    const scope = screen.getByRole('heading', { name: 'Объём внедрения' }).closest('section')!;
+    expect(
+      within(scope).getByText('Можно сделать сейчас: 1 · Пока не поддерживается: 1'),
+    ).toBeInTheDocument();
+    // Интеграции неподдерживаемой возможности в объём не входят.
+    expect(within(scope).getByText('Внешние интеграции не нужны')).toBeInTheDocument();
+    expect(
+      within(scope).getByText('Небольшой: всё можно запустить без сложных интеграций.'),
+    ).toBeInTheDocument();
+  });
+
+  it('пропуск: необязательный — «Пропустить», обязательный — «Не знаю»; результат по кнопке', async () => {
     const api = installDiscoveryApi({ view: analysis() });
     renderRoute('/analyses/a1');
-    const submit = await screen.findByRole('button', { name: 'Продолжить анализ' });
+    // Реплики модели нет — общая.
+    expect(
+      await screen.findByText(
+        'Понял. Уточню пару деталей, чтобы рекомендации подошли именно вашему бизнесу.',
+      ),
+    ).toBeInTheDocument();
 
-    fireEvent.click(submit);
-    expect(screen.getAllByText('Ответьте на вопрос или пропустите его.').length).toBeGreaterThan(0);
+    fireEvent.click(screen.getByRole('button', { name: 'Не знаю — пропустить' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Пропустить' }));
+    expect(screen.getAllByText('Пропущено')).toHaveLength(2);
     expect(api.calls.some((call) => call.path.endsWith('/continue'))).toBe(false);
 
-    fireEvent.click(
-      screen.getByRole('button', { name: 'Пропустить: Где сейчас хранятся заказы?' }),
-    );
-    expect(screen.queryByRole('textbox', { name: /Где сейчас хранятся заказы/ })).toBeNull();
-    fireEvent.click(screen.getAllByRole('button', { name: 'Ответить' })[0]);
-    fireEvent.click(
-      await screen.findByRole('button', { name: 'Пропустить: Где сейчас хранятся заказы?' }),
-    );
-    fireEvent.click(screen.getByRole('button', { name: 'Продолжить анализ' }));
-
+    fireEvent.click(screen.getByRole('button', { name: 'Показать результат' }));
     expect(await screen.findByRole('heading', { name: 'Где ИИ поможет' })).toBeInTheDocument();
     const sent = api.calls.find((call) => call.path.endsWith('/continue'));
-    expect(sent?.body).toEqual({ answers: { q1: { skipped: true } } });
+    expect(sent?.body).toEqual({ answers: { q1: { skipped: true }, q2: { skipped: true } } });
   });
 
   it('анализ по плану: главная рекомендация с «Приступить к автоматизации», карта областей, сайт', async () => {

@@ -140,8 +140,8 @@ test('схемы терпимы к форме и строги к смыслу', 
       summary: 's',
       questions: Array(5).fill({ id: 'q', text: 't' }),
     }).data?.questions.length,
-    1,
-    'не больше одного уточняющего вопроса',
+    3,
+    'не больше трёх уточняющих вопросов',
   );
   // Неправдоподобные числа — null.
   const task = contextOutputSchema.parse({

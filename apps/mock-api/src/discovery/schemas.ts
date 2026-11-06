@@ -79,6 +79,11 @@ export const questionSchema = z.object({
 export const contextOutputSchema = z.object({
   domain: requiredText(120),
   summary: requiredText(500),
+  /**
+   * Короткая реплика перед уточняющими вопросами («Понял. Давайте разберёмся, как сейчас
+   * поступают заявки.»). Пустая, если вопросов нет или модель её не написала.
+   */
+  intro: text(200).optional(),
   goals: list(sourced(220), 6),
   tasks: list(contextTaskSchema, 8),
   recurringProcesses: list(

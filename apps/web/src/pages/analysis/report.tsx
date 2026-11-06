@@ -25,6 +25,7 @@ import {
   listSolutions,
   type SolutionView,
 } from '@/features/builder/api';
+import { BusinessProfile } from './business-profile';
 import { ErrorNotice } from './error-notice';
 
 const FEASIBILITY_TONE: Record<FeasibilityStatus, BadgeTone> = {
@@ -114,6 +115,8 @@ export function Report({
             })}
       </p>
       <SourceNote analysis={analysis} />
+
+      <BusinessProfile analysis={analysis} />
 
       {main ? (
         <section aria-labelledby="main-title" className="mt-8">
