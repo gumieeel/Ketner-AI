@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { Badge, type BadgeTone } from '@/components/ui/badge';
 import { listRuns, isActiveRun, type RunStatus, type RunSummary } from '@/features/study/api';
 import { POLL_MS } from '@/features/discovery/use-analysis';
+import { OPERATION_LABEL } from '@/features/study/labels';
 import { useTranslation, type TranslationKey } from '@/i18n';
 import { formatDateTime } from '@/lib/format-date';
 import { ErrorNotice } from '@/pages/analysis/error-notice';
@@ -62,9 +63,7 @@ export function RunsPanel({ solutionId }: { solutionId: string }) {
                     {run.title ?? run.subject}
                   </span>
                   <span className="block text-[13px] text-subtle">
-                    {t(
-                      run.operation === 'notes' ? 'study.operation.notes' : 'study.operation.table',
-                    )}
+                    {t(OPERATION_LABEL[run.operation])}
                     {' · '}
                     {run.subject}
                     {' · '}

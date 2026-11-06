@@ -47,14 +47,16 @@ test('каталог: у каждой операции есть шаблон-и�
   }
   assert.deepEqual(
     operationsOf('study_assistant').map((operation) => operation.id),
-    ['notes', 'table'],
+    ['notes', 'table', 'quiz', 'self_check', 'grade'],
   );
-  assert.equal(getOperation('study_assistant', 'quiz'), null);
+  // Проверка ответов — служебная: запускается только из попытки.
+  assert.equal(getOperation('study_assistant', 'grade')?.internal, true);
+  assert.equal(getOperation('study_assistant', 'flashcards'), null);
   assert.equal(getOperation('personal_assistant', 'notes'), null);
 });
 
 test('конспект: схема принимает ответ, отбрасывает неизвестные ссылки и лишние поля', () => {
-  const parsed = notesSchema(refs).parse({
+  const parsed = notesSchema({ refs }).parse({
     title: 'Клетка',
     summary: 'О клетке.',
     sections: [section({ sources: ['s1', 'S9', 'S1'] })],
@@ -67,20 +69,20 @@ test('конспект: схема принимает ответ, отбрасы
 });
 
 test('конспект: раздел без настоящего источника не принимается', () => {
-  const result = notesSchema(refs).safeParse({
+  const result = notesSchema({ refs }).safeParse({
     title: 'Клетка',
     summary: 'О клетке.',
     sections: [section({ sources: ['S7'] })],
   });
   assert.equal(result.success, false);
   assert.equal(
-    notesSchema(refs).safeParse({ title: 'x', summary: 'y', sections: [] }).success,
+    notesSchema({ refs }).safeParse({ title: 'x', summary: 'y', sections: [] }).success,
     false,
   );
 });
 
 test('конспект: длинный текст обрезается, лишние разделы отбрасываются', () => {
-  const parsed = notesSchema(refs).parse({
+  const parsed = notesSchema({ refs }).parse({
     title: 'т'.repeat(500),
     summary: 'О клетке.',
     sections: Array.from({ length: 20 }, () => section()),
@@ -90,7 +92,7 @@ test('конспект: длинный текст обрезается, лишн
 });
 
 test('таблица: число ячеек равно числу колонок, пустая строка не принимается', () => {
-  const schema = tableSchema(refs);
+  const schema = tableSchema({ refs });
   const ok = schema.parse({
     title: 'Термины',
     columns: ['Термин', 'Определение'],

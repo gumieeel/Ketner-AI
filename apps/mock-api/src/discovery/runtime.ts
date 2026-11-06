@@ -16,6 +16,11 @@ import {
   type MaterialStore,
 } from '../builder/tools/material-store.js';
 import { MemoryRunStore, PostgresRunStore, type RunStore } from '../builder/tools/run-store.js';
+import {
+  MemoryAttemptStore,
+  PostgresAttemptStore,
+  type AttemptStore,
+} from '../builder/tools/attempt-store.js';
 
 export interface DiscoveryStores {
   store: DiscoveryStore;
@@ -26,6 +31,8 @@ export interface DiscoveryStores {
   materials: MaterialStore;
   /** Запуски операций инструментов — миграция `0009_solution_runs`. */
   runs: RunStore;
+  /** Попытки прохождения вопросов — миграция `0010_solution_attempts`. */
+  attempts: AttemptStore;
 }
 
 let databaseExpected = false;
@@ -44,6 +51,7 @@ export function attachDiscoveryDriver(runner: SqlRunner): void {
     builder: new PostgresBuilderStore(runner),
     materials: new PostgresMaterialStore(runner),
     runs: new PostgresRunStore(runner),
+    attempts: new PostgresAttemptStore(runner),
   };
 }
 
@@ -53,12 +61,16 @@ export function getDiscoveryStores(): DiscoveryStores | null {
   if (databaseExpected) return null;
   if (!memory) {
     const builder = new MemoryBuilderStore();
+    const runs = new MemoryRunStore((ownerId, id) => builder.getSolution(ownerId, id));
     memory = {
       store: new MemoryDiscoveryStore(),
       budget: new MemoryBudgetStore(),
       builder,
       materials: new MemoryMaterialStore((ownerId, id) => builder.getSolution(ownerId, id)),
-      runs: new MemoryRunStore((ownerId, id) => builder.getSolution(ownerId, id)),
+      runs,
+      attempts: new MemoryAttemptStore((ownerId, solutionId, id) =>
+        runs.get(ownerId, solutionId, id),
+      ),
     };
   }
   return memory;

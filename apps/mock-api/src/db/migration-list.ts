@@ -327,4 +327,33 @@ export const MIGRATIONS: readonly Migration[] = [
         WHERE status IN ('queued', 'running');
     `,
   },
+  {
+    // Попытки прохождения вопросов (тест, самопроверка): ответы, проверка и баллы. Удаляются вместе
+    // с запуском, из которого взяты вопросы. По ним считается прогресс по темам.
+    id: '0010_solution_attempts',
+    sql: `
+      CREATE TABLE solution_attempts (
+        id text PRIMARY KEY,
+        run_id text NOT NULL REFERENCES solution_runs (id) ON DELETE CASCADE,
+        solution_id text NOT NULL REFERENCES solutions (id) ON DELETE CASCADE,
+        user_id text NOT NULL,
+        kind text NOT NULL CHECK (kind IN ('quiz', 'self_check')),
+        status text NOT NULL CHECK (status IN ('in_progress', 'submitted', 'graded')),
+        question_ids jsonb NOT NULL,
+        answers jsonb NOT NULL DEFAULT '{}'::jsonb,
+        results jsonb,
+        score numeric(8, 2),
+        max_score numeric(8, 2) NOT NULL,
+        retry_of text,
+        grade_run_id text,
+        version integer NOT NULL DEFAULT 1,
+        created_at timestamptz NOT NULL DEFAULT now(),
+        updated_at timestamptz NOT NULL DEFAULT now(),
+        submitted_at timestamptz,
+        graded_at timestamptz
+      );
+      CREATE INDEX solution_attempts_owner ON solution_attempts (user_id, solution_id, created_at DESC);
+      CREATE INDEX solution_attempts_run ON solution_attempts (run_id);
+    `,
+  },
 ];

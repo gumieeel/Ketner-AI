@@ -64,6 +64,10 @@ export const routes: RouteObject[] = [
         lazy: lazyPage(() => import('@/pages/solutions/study/run-page'), 'RunPage'),
       },
       {
+        path: 'solutions/:solutionId/attempts/:attemptId',
+        lazy: lazyPage(() => import('@/pages/solutions/study/attempt-views'), 'AttemptPage'),
+      },
+      {
         path: 'solutions/:solutionId/chat',
         lazy: lazyPage(() => import('@/pages/solutions/solution-chat-page'), 'SolutionChatPage'),
       },

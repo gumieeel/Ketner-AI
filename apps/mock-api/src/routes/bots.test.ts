@@ -13,8 +13,7 @@ import type { GatewayRequest, GatewayStreamCallbacks } from '../ai/gateway-types
 import { createApp } from '../app.js';
 import { BuilderService, defaultConfig } from '../builder/service.js';
 import { MemoryBuilderStore } from '../builder/store.js';
-import { MemoryMaterialStore } from '../builder/tools/material-store.js';
-import { MemoryRunStore } from '../builder/tools/run-store.js';
+import { memoryToolStores } from '../testing/builder-fixtures.js';
 import { MemoryBudgetStore } from '../discovery/budget.js';
 import { MemoryDiscoveryStore } from '../discovery/store.js';
 import type { MailMessage } from '../services/mailer.js';
@@ -46,13 +45,12 @@ async function start() {
   const otherMails: MailMessage[] = [];
   const builderStore = new MemoryBuilderStore();
   const discoveryStore = new MemoryDiscoveryStore();
-  const materials = new MemoryMaterialStore((ownerId, id) => builderStore.getSolution(ownerId, id));
+  const tools = memoryToolStores(builderStore);
   const stores = () => ({
     store: discoveryStore,
     budget: new MemoryBudgetStore(),
     builder: builderStore,
-    materials,
-    runs: new MemoryRunStore((ownerId, id) => builderStore.getSolution(ownerId, id)),
+    ...tools,
   });
   const builder = new BuilderService({
     store: builderStore,

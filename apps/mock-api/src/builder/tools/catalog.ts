@@ -3,10 +3,19 @@
  * и умеет исполнитель. Новая операция — модуль с `ToolOperation` и строка в `OPERATIONS`.
  */
 import type { ToolOperation } from './operations.js';
+import { gradeOperation } from './study/grade.js';
 import { notesOperation } from './study/notes.js';
+import { quizOperation } from './study/quiz.js';
+import { selfCheckOperation } from './study/self-check.js';
 import { tableOperation } from './study/table.js';
 
-const OPERATIONS: readonly ToolOperation[] = [notesOperation, tableOperation] as never;
+const OPERATIONS: readonly ToolOperation[] = [
+  notesOperation,
+  tableOperation,
+  quizOperation,
+  selfCheckOperation,
+  gradeOperation,
+] as never;
 
 export function getOperation(template: string, id: string): ToolOperation | null {
   return OPERATIONS.find((item) => item.template === template && item.id === id) ?? null;

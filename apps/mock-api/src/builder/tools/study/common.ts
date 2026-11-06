@@ -23,26 +23,31 @@ export function studyPolicy(maxOutputTokens: number): OperationPolicy {
 
 const id = z.string().trim().min(1).max(100);
 
+/** Выбор документов запуска: без повторов, не больше `runMaterials`. */
+export const materialsField = z
+  .array(
+    z
+      .object({
+        id,
+        sections: z.array(id).min(1).max(LIMITS.materialSections).optional(),
+      })
+      .strict(),
+  )
+  .min(1)
+  .max(LIMITS.runMaterials)
+  .refine(
+    (items) => new Set(items.map((item) => item.id)).size === items.length,
+    'duplicate material',
+  );
+
+export const subjectField = z.string().trim().min(1).max(LIMITS.subjectChars);
+
 /** Вход операций: предмет, пожелания и выбранные материалы. Строго: лишнее — ошибка. */
 export const studyInputSchema = z
   .object({
-    subject: z.string().trim().min(1).max(LIMITS.subjectChars),
+    subject: subjectField,
     focus: z.string().trim().max(LIMITS.focusChars).default(''),
-    materials: z
-      .array(
-        z
-          .object({
-            id,
-            sections: z.array(id).min(1).max(LIMITS.materialSections).optional(),
-          })
-          .strict(),
-      )
-      .min(1)
-      .max(LIMITS.runMaterials)
-      .refine(
-        (items) => new Set(items.map((item) => item.id)).size === items.length,
-        'duplicate material',
-      ),
+    materials: materialsField,
   })
   .strict();
 
@@ -50,7 +55,7 @@ export type StudyInput = z.infer<typeof studyInputSchema>;
 
 export const studyMaterials = (input: StudyInput): MaterialSelection[] => input.materials;
 
-const TAGS = /<\/?\s*(material|user_data|materials)\b[^>]*>/gi;
+const TAGS = /<\/?\s*(material|user_data|materials|user_answer|answers|question)\b[^>]*>/gi;
 
 /** Текст пользователя не может закрыть или открыть разметку данных. */
 export function neutralize(value: string): string {

@@ -35,8 +35,9 @@ import type { BuilderStore } from '../store.js';
 import { getTemplate, KIND_BY_TYPE } from '../templates.js';
 import type { Solution } from '../types.js';
 import { getOperation } from './catalog.js';
+import type { AttemptStore } from './attempt-store.js';
 import type { MaterialStore } from './material-store.js';
-import type { SourceText, ToolOperation } from './operations.js';
+import type { OperationContext, SourceText, ToolOperation } from './operations.js';
 import type { RunFinish, RunQuote, RunStore, ToolRun } from './run-store.js';
 
 const LIMITS = PLATFORM_LIMITS.tools;
@@ -70,9 +71,16 @@ export interface ToolExecutorDeps {
   balanceUsd: (userId: string, plan: TaskCaller['plan']) => number;
   /** Учёт шлюза: списанное за вызовы прерванного запуска. */
   usage: Pick<UsageStore, 'getRunRecords'>;
+  /** Попытки (операции над ними — проверка открытых ответов). */
+  attempts?: AttemptStore;
   registry?: ModelRegistry;
   now?: () => Date;
   providerTimeoutMs?: number;
+}
+
+/** Служебные операции (`internal`) запускает только свой сервис. */
+export interface RunAccess {
+  internal?: boolean;
 }
 
 export interface StartInput {
@@ -235,16 +243,28 @@ export class ToolExecutor {
     return sources;
   }
 
+  /** Прежние результаты владельца в инструменте — для операций над ними. */
+  private context(caller: ToolCaller, solutionId: string): OperationContext {
+    return {
+      userId: caller.userId,
+      solutionId,
+      run: (id) => this.deps.runs.get(caller.userId, solutionId, id),
+      attempt: async (id) =>
+        this.deps.attempts ? this.deps.attempts.get(caller.userId, solutionId, id) : null,
+    };
+  }
+
   private async prepare(
     caller: ToolCaller,
     solutionId: string,
     operationId: string,
     rawInput: unknown,
+    access: RunAccess = {},
   ): Promise<Prepared | ToolError> {
     const solution = await this.tool(caller, solutionId);
     if ('ok' in solution) return solution;
     const operation = getOperation(solution.template, operationId);
-    if (!operation) {
+    if (!operation || (operation.internal && !access.internal)) {
       return this.fail(
         404,
         'unknown_operation',
@@ -263,8 +283,23 @@ export class ToolExecutor {
         'Check the subject, wishes and selected documents.',
       );
     }
-    const input = parsed.data;
-    const sources = await this.sourcesOf(caller, solutionId, operation.materials(input));
+    let input = parsed.data;
+    let selections = operation.materials(input);
+    if (operation.resolve) {
+      const resolved = await operation.resolve(input, this.context(caller, solutionId));
+      if (!resolved.ok) {
+        return this.fail(
+          resolved.status,
+          resolved.code,
+          caller.language,
+          resolved.message.ru,
+          resolved.message.en,
+        );
+      }
+      input = resolved.input;
+      selections = resolved.materials;
+    }
+    const sources = await this.sourcesOf(caller, solutionId, selections);
     if (!Array.isArray(sources)) return sources;
     const inputChars = sources.reduce((sum, source) => sum + source.text.length, 0);
     if (inputChars > LIMITS.runChars) {
@@ -321,8 +356,9 @@ export class ToolExecutor {
     solutionId: string,
     operationId: string,
     input: unknown,
+    access: RunAccess = {},
   ): Promise<{ ok: true; quote: PublicQuote } | ToolError> {
-    const prepared = await this.prepare(caller, solutionId, operationId, input);
+    const prepared = await this.prepare(caller, solutionId, operationId, input, access);
     if ('ok' in prepared) return prepared;
     return { ok: true, quote: publicQuote(prepared.quote) };
   }
@@ -331,7 +367,8 @@ export class ToolExecutor {
     caller: ToolCaller,
     solutionId: string,
     request: StartInput,
-  ): Promise<{ ok: true; run: ToolRun; duplicate: boolean } | ToolError> {
+    access: RunAccess = {},
+  ): Promise<{ ok: true; run: ToolRun; duplicate: boolean; template: string } | ToolError> {
     const language = caller.language;
     // Повтор того же запроса (сеть, двойной клик) — тот же запуск, без второго списания.
     const existing = await this.deps.runs.byKey(caller.userId, request.idempotencyKey);
@@ -348,10 +385,18 @@ export class ToolExecutor {
           'This request key was already used for another run.',
         );
       }
-      return { ok: true, run: existing, duplicate: true };
+      const solution = await this.tool(caller, solutionId);
+      if ('ok' in solution) return solution;
+      return { ok: true, run: existing, duplicate: true, template: solution.template };
     }
 
-    const prepared = await this.prepare(caller, solutionId, request.operation, request.input);
+    const prepared = await this.prepare(
+      caller,
+      solutionId,
+      request.operation,
+      request.input,
+      access,
+    );
     if ('ok' in prepared) return prepared;
     const quote = prepared.quote;
     const needsConfirm = quote.maxCredits > CONFIRM_ABOVE_CREDITS && request.confirm !== true;
@@ -417,7 +462,7 @@ export class ToolExecutor {
     };
     const inserted = await this.deps.runs.insert(run);
     if (inserted.status === 'duplicate') {
-      return { ok: true, run: inserted.run, duplicate: true };
+      return { ok: true, run: inserted.run, duplicate: true, template: prepared.solution.template };
     }
     if (inserted.status === 'busy') {
       return this.fail(
@@ -433,7 +478,7 @@ export class ToolExecutor {
       return this.fail(404, 'not_found', language, 'Решение не найдено.', 'Solution not found.');
     }
     this.schedule(caller, inserted.run);
-    return { ok: true, run: inserted.run, duplicate: false };
+    return { ok: true, run: inserted.run, duplicate: false, template: prepared.solution.template };
   }
 
   private schedule(caller: ToolCaller, run: ToolRun): void {
@@ -508,7 +553,7 @@ export class ToolExecutor {
         language: caller.language,
         systemPrompt: operation.systemPrompt(caller.language),
         userMessage: operation.userMessage(run.input, sources, caller.language),
-        schema: operation.outputSchema(refs),
+        schema: operation.outputSchema({ refs, sources, input: run.input }),
         templateOutput: operation.templateOutput(run.input, sources, caller.language),
         providerTimeoutMs: this.deps.providerTimeoutMs ?? RUN_PROVIDER_TIMEOUT_MS,
       });
@@ -574,23 +619,30 @@ export class ToolExecutor {
     caller: ToolCaller,
     solutionId: string,
     runId: string,
-  ): Promise<{ ok: true; run: ToolRun } | ToolError> {
+    access: RunAccess = {},
+  ): Promise<{ ok: true; run: ToolRun; template: string } | ToolError> {
     const solution = await this.tool(caller, solutionId);
     if ('ok' in solution) return solution;
     await this.expireStale(caller);
     const run = await this.deps.runs.get(caller.userId, solutionId, runId);
-    if (!run) return this.missing(caller.language);
-    return { ok: true, run };
+    // Служебные запуски (проверка ответов) видны только через свою попытку.
+    if (!run || (getOperation(solution.template, run.operation)?.internal && !access.internal)) {
+      return this.missing(caller.language);
+    }
+    return { ok: true, run, template: solution.template };
   }
 
   async list(
     caller: ToolCaller,
     solutionId: string,
-  ): Promise<{ ok: true; runs: ToolRun[] } | ToolError> {
+  ): Promise<{ ok: true; runs: ToolRun[]; template: string } | ToolError> {
     const solution = await this.tool(caller, solutionId);
     if ('ok' in solution) return solution;
     await this.expireStale(caller);
-    return { ok: true, runs: await this.deps.runs.list(caller.userId, solutionId, RUN_HISTORY) };
+    const runs = (await this.deps.runs.list(caller.userId, solutionId, RUN_HISTORY)).filter(
+      (run) => !getOperation(solution.template, run.operation)?.internal,
+    );
+    return { ok: true, runs, template: solution.template };
   }
 
   async remove(
@@ -640,7 +692,8 @@ export function publicQuote(quote: RunQuote): PublicQuote {
 }
 
 /** Запуск для сайта: без служебных полей (жетон, отпечаток, ключ, себестоимость). */
-export function publicRun(run: ToolRun) {
+export function publicRun(run: ToolRun, template?: string) {
+  const operation = template ? getOperation(template, run.operation) : null;
   return {
     id: run.id,
     solutionId: run.solutionId,
@@ -649,7 +702,8 @@ export function publicRun(run: ToolRun) {
     input: run.input,
     sources: run.sources,
     quote: publicQuote(run.quote),
-    result: run.result,
+    // Операция решает, что из результата видно сайту (тест — без ключей ответов).
+    result: run.result !== null && operation?.present ? operation.present(run.result) : run.result,
     resultSchema: run.resultSchema,
     model: run.model,
     chargedCredits: creditsOf(run.creditsUsd),
@@ -661,8 +715,8 @@ export function publicRun(run: ToolRun) {
 }
 
 /** Строка истории: без результата целиком, только заголовок. */
-export function runSummary(run: ToolRun) {
-  const { result, input, sources: _sources, ...rest } = publicRun(run);
+export function runSummary(run: ToolRun, template?: string) {
+  const { result, input, sources: _sources, ...rest } = publicRun(run, template);
   const title =
     result &&
     typeof result === 'object' &&

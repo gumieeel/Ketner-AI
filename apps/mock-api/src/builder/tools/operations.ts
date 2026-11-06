@@ -10,6 +10,8 @@ import type { z } from 'zod';
 import type { ReasoningEffort } from '../../ai/gateway-types.js';
 import type { Language } from '../../types.js';
 import type { TemplateId } from '../templates.js';
+import type { Attempt } from './attempt-store.js';
+import type { ToolRun } from './run-store.js';
 
 /** Часть материала, которую видит модель: под коротким id (`S1`, `S2`…), а не под id из базы. */
 export interface SourceText {
@@ -36,6 +38,25 @@ export interface OperationPolicy {
   reasoningEffort: ReasoningEffort;
 }
 
+/** Что видит схема ответа: известные ссылки, тексты частей (для проверки цитат) и вход запуска. */
+export interface OutputContext<Input = unknown> {
+  refs: ReadonlySet<string>;
+  sources: readonly SourceText[];
+  input: Input;
+}
+
+/** Прежние результаты владельца в этом инструменте: для операций над ними (проверка ответов). */
+export interface OperationContext {
+  userId: string;
+  solutionId: string;
+  run(id: string): Promise<ToolRun | null>;
+  attempt(id: string): Promise<Attempt | null>;
+}
+
+export type ResolveResult<Input> =
+  | { ok: true; input: Input; materials: MaterialSelection[] }
+  | { ok: false; status: number; code: string; message: Record<Language, string> };
+
 export interface ToolOperation<Input = unknown, Output = unknown> {
   /** id внутри шаблона: `notes`, `table`… */
   id: string;
@@ -51,8 +72,20 @@ export interface ToolOperation<Input = unknown, Output = unknown> {
   systemPrompt(language: Language): string;
   /** Сообщение с данными: материалы и пожелания — только внутри разметки данных. */
   userMessage(input: Input, sources: readonly SourceText[], language: Language): string;
-  /** Схема ответа модели; ссылки на источники проверяются по известным `refs`. */
-  outputSchema(refs: ReadonlySet<string>): z.ZodType<Output>;
+  /** Схема ответа модели: ссылки — только на известные части, цитаты — из их текста. */
+  outputSchema(context: OutputContext<Input>): z.ZodType<Output>;
   /** Ответ для demo-режима без ключей моделей (локально, тесты): по настоящим источникам. */
   templateOutput(input: Input, sources: readonly SourceText[], language: Language): string;
+  /**
+   * Служебная операция: запускается только своим сервисом (проверка ответов — из попытки), а не
+   * общим API запусков.
+   */
+  internal?: boolean;
+  /**
+   * Операция над прежними результатами: дополнить вход данными из хранилищ (ответы попытки,
+   * вопросы теста) и выбрать части материалов. Без неё материалы берутся из `materials(input)`.
+   */
+  resolve?(input: Input, context: OperationContext): Promise<ResolveResult<Input>>;
+  /** Результат для сайта: например, без ключей ответов, пока попытка не сдана. */
+  present?(result: Output): unknown;
 }

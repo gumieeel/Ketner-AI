@@ -8,11 +8,13 @@ import {
   quoteRun,
   startRun,
   type MaterialSummary,
+  type QuizFormat,
   type RunQuote,
   type StudyOperation,
   type StudyRunInput,
 } from '@/features/study/api';
 import { MATERIAL_LIMITS } from '@/features/study/extract';
+import { OPERATION_LABEL } from '@/features/study/labels';
 import { useTranslation, type TranslationKey } from '@/i18n';
 import { ErrorNotice } from '@/pages/analysis/error-notice';
 
@@ -23,7 +25,24 @@ const OPERATIONS: ReadonlyArray<{
 }> = [
   { id: 'notes', label: 'study.operation.notes', hint: 'study.operation.notesHint' },
   { id: 'table', label: 'study.operation.table', hint: 'study.operation.tableHint' },
+  { id: 'quiz', label: 'study.operation.quiz', hint: 'study.operation.quizHint' },
+  { id: 'self_check', label: 'study.operation.self_check', hint: 'study.operation.selfCheckHint' },
 ];
+
+const QUIZ_COUNTS = [5, 8, 10, 15] as const;
+const SELF_CHECK_COUNTS = [3, 5, 8] as const;
+const FORMATS: ReadonlyArray<{ id: QuizFormat; label: TranslationKey }> = [
+  { id: 'mixed', label: 'study.create.formatMixed' },
+  { id: 'choice', label: 'study.create.formatChoice' },
+  { id: 'open', label: 'study.create.formatOpen' },
+];
+
+const FOCUS_PLACEHOLDER: Record<StudyOperation, TranslationKey> = {
+  notes: 'study.create.focusNotes',
+  table: 'study.create.focusTable',
+  quiz: 'study.create.focusQuiz',
+  self_check: 'study.create.focusNotes',
+};
 
 /** Выбор частей документа: все или конкретные. */
 type Selection = Record<string, { sections: string[] | null }>;
@@ -43,10 +62,15 @@ export function CreatePanel({
   const navigate = useNavigate();
   const subjectId = useId();
   const focusId = useId();
+  const countId = useId();
   const [materials, setMaterials] = useState<MaterialSummary[]>([]);
   const [operation, setOperation] = useState<StudyOperation>('notes');
   const [subject, setSubject] = useState(defaultSubject);
   const [focus, setFocus] = useState('');
+  const [topic, setTopic] = useState('');
+  const [quizCount, setQuizCount] = useState<number>(8);
+  const [selfCheckCount, setSelfCheckCount] = useState<number>(5);
+  const [format, setFormat] = useState<QuizFormat>('mixed');
   const [selection, setSelection] = useState<Selection>({});
   const [quote, setQuote] = useState<RunQuote | null>(null);
   const [quoteError, setQuoteError] = useState<unknown>(null);
@@ -83,8 +107,15 @@ export function CreatePanel({
     );
     if (!subject.trim() || chosen.length === 0) return null;
     if (chosen.some((item) => 'sections' in item && item.sections?.length === 0)) return null;
-    return { subject: subject.trim(), focus: focus.trim(), materials: chosen };
-  }, [selection, subject, focus]);
+    const base = { subject: subject.trim(), materials: chosen };
+    // Вход — ровно тот, что ждёт операция: лишние поля сервер отклоняет.
+    if (operation === 'self_check') {
+      if (!topic.trim()) return null;
+      return { ...base, topic: topic.trim(), count: selfCheckCount };
+    }
+    if (operation === 'quiz') return { ...base, focus: focus.trim(), count: quizCount, format };
+    return { ...base, focus: focus.trim() };
+  }, [selection, subject, focus, topic, operation, quizCount, selfCheckCount, format]);
 
   const selectedChars = materials.reduce((sum, material) => {
     const choice = selection[material.id];
@@ -167,9 +198,10 @@ export function CreatePanel({
       };
     });
 
-  const operationLabel = t(
-    operation === 'notes' ? 'study.operation.notes' : 'study.operation.table',
-  );
+  const operationLabel = t(OPERATION_LABEL[operation]);
+  const count = operation === 'quiz' ? quizCount : selfCheckCount;
+  const setCount = operation === 'quiz' ? setQuizCount : setSelfCheckCount;
+  const counts = operation === 'quiz' ? QUIZ_COUNTS : SELF_CHECK_COUNTS;
 
   return (
     <section aria-labelledby="create-title" className="mt-10 border-t border-stroke pt-8">
@@ -232,23 +264,86 @@ export function CreatePanel({
                 className="rounded-lg border border-stroke bg-transparent px-3 py-2 text-[15px] font-normal text-text"
               />
             </label>
-            <label
-              htmlFor={focusId}
-              className="flex flex-col gap-1 text-[14px] font-medium text-text"
-            >
-              {t('study.create.focus')}
-              <input
-                id={focusId}
-                value={focus}
-                maxLength={MATERIAL_LIMITS.focusChars}
-                onChange={(event) => setFocus(event.target.value)}
-                placeholder={t(
-                  operation === 'notes' ? 'study.create.focusNotes' : 'study.create.focusTable',
-                )}
-                className="rounded-lg border border-stroke bg-transparent px-3 py-2 text-[15px] font-normal text-text"
-              />
-            </label>
+            {operation === 'self_check' ? (
+              <label
+                htmlFor={focusId}
+                className="flex flex-col gap-1 text-[14px] font-medium text-text"
+              >
+                {t('study.create.topic')}
+                <input
+                  id={focusId}
+                  value={topic}
+                  maxLength={120}
+                  required
+                  onChange={(event) => setTopic(event.target.value)}
+                  placeholder={t('study.create.topicPlaceholder')}
+                  className="rounded-lg border border-stroke bg-transparent px-3 py-2 text-[15px] font-normal text-text"
+                />
+              </label>
+            ) : (
+              <label
+                htmlFor={focusId}
+                className="flex flex-col gap-1 text-[14px] font-medium text-text"
+              >
+                {t('study.create.focus')}
+                <input
+                  id={focusId}
+                  value={focus}
+                  maxLength={MATERIAL_LIMITS.focusChars}
+                  onChange={(event) => setFocus(event.target.value)}
+                  placeholder={t(FOCUS_PLACEHOLDER[operation])}
+                  className="rounded-lg border border-stroke bg-transparent px-3 py-2 text-[15px] font-normal text-text"
+                />
+              </label>
+            )}
           </div>
+
+          {operation === 'quiz' || operation === 'self_check' ? (
+            <div className="flex flex-wrap items-end gap-6">
+              <label
+                htmlFor={countId}
+                className="flex flex-col gap-1 text-[14px] font-medium text-text"
+              >
+                {t('study.create.count')}
+                <select
+                  id={countId}
+                  value={count}
+                  onChange={(event) => setCount(Number(event.target.value))}
+                  className="rounded-lg border border-stroke bg-transparent px-3 py-2 text-[15px] font-normal text-text"
+                >
+                  {counts.map((value) => (
+                    <option key={value} value={value}>
+                      {value}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              {operation === 'quiz' ? (
+                <fieldset className="flex flex-col gap-1">
+                  <legend className="text-[14px] font-medium text-text">
+                    {t('study.create.format')}
+                  </legend>
+                  <div className="mt-1 flex flex-wrap gap-4">
+                    {FORMATS.map((item) => (
+                      <label
+                        key={item.id}
+                        className="flex items-center gap-2 text-[14px] text-text"
+                      >
+                        <input
+                          type="radio"
+                          name="quiz-format"
+                          value={item.id}
+                          checked={format === item.id}
+                          onChange={() => setFormat(item.id)}
+                        />
+                        {t(item.label)}
+                      </label>
+                    ))}
+                  </div>
+                </fieldset>
+              ) : null}
+            </div>
+          ) : null}
 
           <fieldset>
             <legend className="mb-2 text-[14px] font-medium text-text">

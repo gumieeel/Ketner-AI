@@ -23,7 +23,7 @@ import {
 
 export const TABLE_LIMITS = { columns: 8, rows: 40 } as const;
 
-export function tableSchema(refs: ReadonlySet<string>) {
+export function tableSchema({ refs }: { refs: ReadonlySet<string> }) {
   return z
     .object({
       title: requiredModelText(160),

@@ -8,9 +8,7 @@ import type { GatewayRequest, GatewayStreamCallbacks } from '../ai/gateway-types
 import { createApp } from '../app.js';
 import { BuilderService, defaultConfig, draftTemplate } from '../builder/service.js';
 import { MemoryBuilderStore } from '../builder/store.js';
-import { MemoryMaterialStore } from '../builder/tools/material-store.js';
-import { MemoryRunStore } from '../builder/tools/run-store.js';
-import { STUDY_CONFIG, toolSolution } from '../testing/builder-fixtures.js';
+import { memoryToolStores, STUDY_CONFIG, toolSolution } from '../testing/builder-fixtures.js';
 import { MemoryBudgetStore } from '../discovery/budget.js';
 import { DiscoveryService } from '../discovery/service.js';
 import { MemoryDiscoveryStore } from '../discovery/store.js';
@@ -61,9 +59,8 @@ async function start() {
   const store = new MemoryDiscoveryStore();
   const budget = new MemoryBudgetStore();
   const builderStore = new MemoryBuilderStore();
-  const materials = new MemoryMaterialStore((ownerId, id) => builderStore.getSolution(ownerId, id));
-  const runs = new MemoryRunStore((ownerId, id) => builderStore.getSolution(ownerId, id));
-  const stores = () => ({ store, budget, builder: builderStore, materials, runs });
+  const tools = memoryToolStores(builderStore);
+  const stores = () => ({ store, budget, builder: builderStore, ...tools });
   const discovery = new DiscoveryService({
     store,
     budget,
@@ -571,6 +568,208 @@ test('запуски инструмента по HTTP: цена, подтвер�
 
     assert.equal((await call(owner, `/runs/${run.id}`, { method: 'DELETE' })).status, 204);
     assert.equal((await call(owner, `/runs/${run.id}`)).status, 404);
+  } finally {
+    app.close();
+  }
+});
+
+test('тест и проверка по HTTP: ключи скрыты до сдачи, проверка за кредиты с ценой, прогресс; чужой — 404', async () => {
+  const app = await start();
+  try {
+    const owner = await signup(app.base, 'quiz-owner@example.com');
+    const stranger = await signup(app.base, 'quiz-stranger@example.com');
+    const headers = (token: string) => ({
+      Authorization: `Bearer ${token}`,
+      'Content-Type': 'application/json',
+    });
+    const me = (await (
+      await fetch(`${app.base}/api/auth/me`, { headers: headers(owner) })
+    ).json()) as { user: { id: string } };
+    await app.builderStore.createSolution(
+      toolSolution('study-quiz', me.user.id),
+      {
+        solutionId: 'study-quiz',
+        number: 1,
+        config: STUDY_CONFIG,
+        createdAt: new Date().toISOString(),
+      },
+      [],
+    );
+    const call = (token: string, path: string, init: RequestInit = {}) =>
+      fetch(`${app.base}/api/solutions/study-quiz${path}`, { ...init, headers: headers(token) });
+    const json = async <T>(response: Response): Promise<T> => (await response.json()) as T;
+    const waitFor = async <T>(read: () => Promise<T>, done: (value: T) => boolean): Promise<T> => {
+      let value = await read();
+      // Демо-режим шлюза имитирует поток с паузами — ждём до 15 секунд.
+      for (let i = 0; i < 300 && !done(value); i += 1) {
+        await new Promise((resolve) => setTimeout(resolve, 50));
+        value = await read();
+      }
+      return value;
+    };
+
+    const uploaded = await json<{ material: { id: string } }>(
+      await call(owner, '/materials', {
+        method: 'POST',
+        body: JSON.stringify({
+          name: 'Биология.pdf',
+          format: 'pdf',
+          sizeBytes: 9000,
+          sections: [
+            { label: 'Стр. 1', text: 'Клетка — основная единица строения всех живых организмов.' },
+            { label: 'Стр. 2', text: 'Ядро хранит наследственную информацию в молекулах ДНК.' },
+          ],
+        }),
+      }),
+    );
+    const input = {
+      subject: 'Биология',
+      materials: [{ id: uploaded.material.id }],
+      count: 3,
+      format: 'mixed',
+    };
+    const { quote } = await json<{ quote: { maxCredits: number } }>(
+      await call(owner, '/runs/quote', {
+        method: 'POST',
+        body: JSON.stringify({ operation: 'quiz', input }),
+      }),
+    );
+    const started = await call(owner, '/runs', {
+      method: 'POST',
+      body: JSON.stringify({
+        operation: 'quiz',
+        input,
+        idempotencyKey: 'quiz-http-0001',
+        acceptedMaxCredits: quote.maxCredits,
+      }),
+    });
+    assert.equal(started.status, 202);
+    const runId = (await json<{ run: { id: string } }>(started)).run.id;
+    const run = await waitFor(
+      async () =>
+        (
+          await json<{ run: { status: string; result: unknown } }>(
+            await call(owner, `/runs/${runId}`),
+          )
+        ).run,
+      (value) => value.status === 'done' || value.status === 'failed',
+    );
+    assert.equal(run.status, 'done', JSON.stringify(run));
+    // Результат теста для сайта — без ключей.
+    for (const secret of ['correctIndex', 'explanation', 'evidence', 'keyPoints']) {
+      assert.ok(!JSON.stringify(run.result).includes(secret), secret);
+    }
+
+    // Служебная операция через общий API не запускается.
+    const internal = await call(owner, '/runs/quote', {
+      method: 'POST',
+      body: JSON.stringify({ operation: 'grade', input: { attemptId: 'x' } }),
+    });
+    assert.equal(internal.status, 404);
+
+    const created = await call(owner, `/runs/${runId}/attempts`, { method: 'POST', body: '{}' });
+    assert.equal(created.status, 201);
+    const attempt = (
+      await json<{
+        attempt: { id: string; questions: Array<{ id: string; type: string; options?: string[] }> };
+      }>(created)
+    ).attempt;
+    assert.ok(!JSON.stringify(attempt).includes('correctIndex'));
+    const [first, second, third] = attempt.questions;
+    assert.equal(first?.type, 'choice');
+    assert.equal(second?.type, 'open');
+
+    const invalid = await call(owner, `/attempts/${attempt.id}/answers`, {
+      method: 'PUT',
+      body: JSON.stringify({ answers: { q99: { selected: 0 } } }),
+    });
+    assert.equal(invalid.status, 400);
+
+    const submitted = await json<{
+      attempt: {
+        status: string;
+        results: Array<{ verdict: string }>;
+        questions: Array<{ correctIndex?: number }>;
+      };
+    }>(
+      await call(owner, `/attempts/${attempt.id}/submit`, {
+        method: 'POST',
+        body: JSON.stringify({
+          answers: {
+            [first!.id]: { selected: 0 },
+            [second!.id]: { text: 'Ядро хранит наследственную информацию в молекулах ДНК.' },
+            [third!.id]: { selected: 1 },
+          },
+        }),
+      }),
+    );
+    assert.equal(submitted.attempt.status, 'submitted');
+    assert.deepEqual(
+      submitted.attempt.results.map((item) => item.verdict),
+      ['correct', 'pending', 'incorrect'],
+    );
+    assert.equal(submitted.attempt.questions[0]?.correctIndex, 0);
+
+    // Проверка открытого ответа: без принятой цены — 409, с ценой — запуск.
+    const gradeQuote = await json<{ quote: { maxCredits: number } }>(
+      await call(owner, `/attempts/${attempt.id}/grade/quote`, { method: 'POST', body: '{}' }),
+    );
+    const noPrice = await call(owner, `/attempts/${attempt.id}/grade`, {
+      method: 'POST',
+      body: JSON.stringify({ idempotencyKey: 'grade-http-0001', acceptedMaxCredits: 0 }),
+    });
+    assert.equal(noPrice.status, 409);
+    const grading = await call(owner, `/attempts/${attempt.id}/grade`, {
+      method: 'POST',
+      body: JSON.stringify({
+        idempotencyKey: 'grade-http-0002',
+        acceptedMaxCredits: gradeQuote.quote.maxCredits,
+      }),
+    });
+    assert.equal(grading.status, 202);
+    const graded = await waitFor(
+      async () =>
+        (
+          await json<{
+            attempt: { status: string; results: Array<{ verdict: string }>; score: number };
+          }>(await call(owner, `/attempts/${attempt.id}`))
+        ).attempt,
+      (value) => value.status === 'graded',
+    );
+    assert.equal(graded.status, 'graded');
+    assert.equal(graded.results[1]?.verdict, 'correct');
+    assert.equal(graded.score, 2);
+
+    const progress = await json<{
+      progress: {
+        totals: { completed: number; answered: number };
+        topics: unknown[];
+        history: unknown[];
+      };
+    }>(await call(owner, '/progress'));
+    assert.equal(progress.progress.totals.completed, 1);
+    assert.equal(progress.progress.totals.answered, 3);
+    assert.ok(progress.progress.topics.length > 0);
+    assert.equal(progress.progress.history.length, 1);
+    const listed = await json<{ attempts: Array<{ id: string }> }>(
+      await call(owner, `/attempts?runId=${runId}`),
+    );
+    assert.deepEqual(
+      listed.attempts.map((item) => item.id),
+      [attempt.id],
+    );
+
+    // Чужой — 404 везде.
+    for (const [path, init] of [
+      [`/attempts/${attempt.id}`, {}],
+      [`/attempts/${attempt.id}/submit`, { method: 'POST', body: '{}' }],
+      [`/attempts/${attempt.id}/grade/quote`, { method: 'POST', body: '{}' }],
+      [`/runs/${runId}/attempts`, { method: 'POST', body: '{}' }],
+      ['/progress', {}],
+      ['/attempts', {}],
+    ] as const) {
+      assert.equal((await call(stranger, path, init)).status, 404, path);
+    }
   } finally {
     app.close();
   }

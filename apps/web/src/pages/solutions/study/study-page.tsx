@@ -5,11 +5,12 @@ import { useTranslation } from '@/i18n';
 import { Page } from '../shared';
 import { CreatePanel } from './create-panel';
 import { MaterialsPanel } from './materials-panel';
+import { ProgressPanel } from './progress-panel';
 import { RunsPanel } from './runs-panel';
 
 /**
  * Учебный помощник — инструмент со своей страницей, а не чат: материалы, создание конспекта или
- * таблицы с ценой до запуска и история результатов, каждый из которых открывается своей страницей.
+ * таблицы, теста или самопроверки с ценой до запуска, история результатов и прогресс по темам.
  */
 export function StudyAssistantPage({ details }: { details: ToolSolutionDetails }) {
   const { t } = useTranslation();
@@ -32,6 +33,7 @@ export function StudyAssistantPage({ details }: { details: ToolSolutionDetails }
         materialsVersion={materialsVersion}
       />
       <RunsPanel solutionId={solution.id} />
+      <ProgressPanel solutionId={solution.id} />
     </Page>
   );
 }

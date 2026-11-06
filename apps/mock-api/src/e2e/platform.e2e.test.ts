@@ -25,8 +25,7 @@ import { ModelRegistry } from '../ai/model-registry.js';
 import { ProviderManager } from '../ai/providers/provider-factory.js';
 import { BillingService, createBillingLedger } from '../billing/billing-service.js';
 import { MemoryBuilderStore } from '../builder/store.js';
-import { MemoryMaterialStore } from '../builder/tools/material-store.js';
-import { MemoryRunStore } from '../builder/tools/run-store.js';
+import { memoryToolStores } from '../testing/builder-fixtures.js';
 import { MemoryBudgetStore } from '../discovery/budget.js';
 import { MemoryDiscoveryStore } from '../discovery/store.js';
 import { CREDIT_PACKS } from '../services/pricing.js';
@@ -177,8 +176,7 @@ test('сквозной путь: главная → анализ → вопро�
     store: new MemoryDiscoveryStore(),
     budget: new MemoryBudgetStore(),
     builder: builderStore,
-    materials: new MemoryMaterialStore((ownerId, id) => builderStore.getSolution(ownerId, id)),
-    runs: new MemoryRunStore((ownerId, id) => builderStore.getSolution(ownerId, id)),
+    ...memoryToolStores(builderStore),
   };
   const server = await startTestServer(
     {},

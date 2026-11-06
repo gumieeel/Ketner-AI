@@ -157,6 +157,16 @@ function installApi(options: {
         },
       });
     }
+    if (path === '/s1/progress') {
+      return json(200, {
+        progress: {
+          totals: { attempts: 0, completed: 0, answered: 0, earned: 0, pending: 0, accuracy: null },
+          topics: [],
+          recommendations: [{ kind: 'start' }],
+          history: [],
+        },
+      });
+    }
     if (path === '/s1/runs/quote')
       return json(200, { quote: quotes.length > 1 ? quotes.shift() : quotes[0] });
     if (path === '/s1/runs' && method === 'POST') {

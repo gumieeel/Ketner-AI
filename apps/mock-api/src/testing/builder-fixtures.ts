@@ -1,3 +1,7 @@
+import type { MemoryBuilderStore } from '../builder/store.js';
+import { MemoryAttemptStore } from '../builder/tools/attempt-store.js';
+import { MemoryMaterialStore } from '../builder/tools/material-store.js';
+import { MemoryRunStore } from '../builder/tools/run-store.js';
 import type { Solution, SolutionConfig } from '../builder/types.js';
 
 const NOW = '2026-11-05T10:00:00.000Z';
@@ -26,3 +30,16 @@ export const STUDY_CONFIG: SolutionConfig = {
   language: 'ru',
   subject: '',
 };
+
+/** Хранилища инструментов в памяти поверх хранилища Builder: материалы, запуски, попытки. */
+export function memoryToolStores(builder: MemoryBuilderStore) {
+  const solutionOf = (ownerId: string, id: string) => builder.getSolution(ownerId, id);
+  const runs = new MemoryRunStore(solutionOf);
+  return {
+    materials: new MemoryMaterialStore(solutionOf),
+    runs,
+    attempts: new MemoryAttemptStore((ownerId, solutionId, id) =>
+      runs.get(ownerId, solutionId, id),
+    ),
+  };
+}

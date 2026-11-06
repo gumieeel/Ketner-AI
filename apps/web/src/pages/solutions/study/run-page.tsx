@@ -10,16 +10,20 @@ import {
   isActiveRun,
   quoteRun,
   startRun,
+  isQuestionRun,
   type NotesResult,
+  type QuestionSetView,
   type RunQuote,
   type TableResult,
   type ToolRunView,
 } from '@/features/study/api';
 import { POLL_MS } from '@/features/discovery/use-analysis';
+import { OPERATION_LABEL } from '@/features/study/labels';
 import { useTranslation, type TranslationKey } from '@/i18n';
 import { formatDateTime } from '@/lib/format-date';
 import { ErrorNotice } from '@/pages/analysis/error-notice';
 import { BuilderGate, Page } from '../shared';
+import { QuestionsOverview } from './attempt-views';
 import { NotesView, TableView } from './result-views';
 
 /** Результат запуска операции: свой интерфейс конспекта или таблицы, а не сообщение в чате. */
@@ -32,9 +36,11 @@ export function RunPage() {
   );
 }
 
-const OPERATION_LABEL: Record<ToolRunView['operation'], TranslationKey> = {
-  notes: 'study.operation.notes',
-  table: 'study.operation.table',
+const WORKING: Record<ToolRunView['operation'], TranslationKey> = {
+  notes: 'study.run.notesWorking',
+  table: 'study.run.tableWorking',
+  quiz: 'study.run.quizWorking',
+  self_check: 'study.run.quizWorking',
 };
 
 function RunView({ solutionId, runId }: { solutionId: string; runId: string }) {
@@ -111,8 +117,7 @@ function RunView({ solutionId, runId }: { solutionId: string; runId: string }) {
 
       {active ? (
         <p role="status" className="mt-8 flex items-center gap-2 text-[15px] text-muted">
-          <Spinner />{' '}
-          {t(run.operation === 'notes' ? 'study.run.notesWorking' : 'study.run.tableWorking')}
+          <Spinner /> {t(WORKING[run.operation])}
         </p>
       ) : null}
 
@@ -133,6 +138,9 @@ function RunView({ solutionId, runId }: { solutionId: string; runId: string }) {
       ) : null}
       {run.status === 'done' && run.result && run.operation === 'table' ? (
         <TableView table={run.result as TableResult} sources={run.sources} />
+      ) : null}
+      {run.status === 'done' && run.result && isQuestionRun(run.operation) ? (
+        <QuestionsOverview run={run} set={run.result as QuestionSetView} />
       ) : null}
 
       {error ? (

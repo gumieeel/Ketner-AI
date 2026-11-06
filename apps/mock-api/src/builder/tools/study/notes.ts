@@ -19,7 +19,7 @@ import {
   type StudyInput,
 } from './common.js';
 
-export function notesSchema(refs: ReadonlySet<string>) {
+export function notesSchema({ refs }: { refs: ReadonlySet<string> }) {
   return z.object({
     title: requiredModelText(160),
     summary: requiredModelText(1200),

@@ -57,6 +57,12 @@ import type {
   TestRun,
 } from '../builder/types.js';
 import { KIND_BY_TYPE } from '../builder/templates.js';
+import {
+  answersBodySchema,
+  AttemptService,
+  createAttemptBodySchema,
+  gradeBodySchema,
+} from '../builder/tools/attempts.js';
 import { MaterialService } from '../builder/tools/material-service.js';
 import {
   publicRun as publicToolRun,
@@ -111,6 +117,8 @@ export interface BuilderRuntime {
   materials: () => MaterialService | null;
   /** Запуски операций инструментов. */
   tools: () => ToolExecutor | null;
+  /** Попытки прохождения вопросов и прогресс. */
+  attempts: () => AttemptService | null;
 }
 
 /**
@@ -212,10 +220,26 @@ export function createBuilderRuntime(deps: SolutionsRouterDeps): BuilderRuntime 
       gateway,
       balanceUsd,
       usage: usageStore,
+      attempts: ready.attempts,
     });
     return tools;
   };
-  return { builder: getBuilder, bots: getBots, materials: getMaterials, tools: getTools };
+  let attempts: AttemptService | null = null;
+  const getAttempts = (): AttemptService | null => {
+    if (attempts) return attempts;
+    const ready = stores();
+    const executor = getTools();
+    if (!ready || !executor) return null;
+    attempts = new AttemptService({ attempts: ready.attempts, runs: ready.runs, executor });
+    return attempts;
+  };
+  return {
+    builder: getBuilder,
+    bots: getBots,
+    materials: getMaterials,
+    tools: getTools,
+    attempts: getAttempts,
+  };
 }
 
 const charged = (usd: number) => Math.round(usd * CREDITS_PER_USD * 10) / 10;
@@ -774,7 +798,7 @@ export function createSolutionsRouter(deps: SolutionsRouterDeps): Router {
       if (!result.ok) return fail(response, result);
       response
         .status(result.duplicate ? 200 : 202)
-        .json({ run: publicToolRun(result.run), duplicate: result.duplicate });
+        .json({ run: publicToolRun(result.run, result.template), duplicate: result.duplicate });
     }),
   );
 
@@ -785,7 +809,7 @@ export function createSolutionsRouter(deps: SolutionsRouterDeps): Router {
       if (!executor) return;
       const result = await executor.list(caller, String(request.params.id));
       if (!result.ok) return fail(response, result);
-      response.json({ runs: result.runs.map(runSummary) });
+      response.json({ runs: result.runs.map((run) => runSummary(run, result.template)) });
     }),
   );
 
@@ -800,7 +824,7 @@ export function createSolutionsRouter(deps: SolutionsRouterDeps): Router {
         String(request.params.runId),
       );
       if (!result.ok) return fail(response, result);
-      response.json({ run: publicToolRun(result.run) });
+      response.json({ run: publicToolRun(result.run, result.template) });
     }),
   );
 
@@ -817,6 +841,157 @@ export function createSolutionsRouter(deps: SolutionsRouterDeps): Router {
       );
       if (!result.ok) return fail(response, result);
       response.status(204).end();
+    }),
+  );
+
+  // ─── Попытки (тест, самопроверка) и прогресс ────────────────────────────────
+  // Ключи ответов — только после сдачи; проверка открытых ответов — платный запуск с ценой.
+
+  const attemptsOf = (response: Response): AttemptService | null => {
+    const value = runtime.attempts();
+    if (!value)
+      sendError(response, 503, 'builder_unavailable', 'Builder временно недоступен. Чат работает.');
+    return value;
+  };
+
+  router.post(
+    '/:id/runs/:runId/attempts',
+    handle(async (_builder, caller, request, response) => {
+      if (limited(editLimiter, response, caller.userId)) return;
+      const service = attemptsOf(response);
+      if (!service) return;
+      const parsed = createAttemptBodySchema.safeParse(request.body ?? {});
+      if (!parsed.success) {
+        sendError(response, 400, 'invalid_input', 'Неверный запрос попытки');
+        return;
+      }
+      const result = await service.create(
+        caller,
+        String(request.params.id),
+        String(request.params.runId),
+        parsed.data,
+      );
+      if (!result.ok) return fail(response, result);
+      response.status(201).json({ attempt: result.attempt });
+    }),
+  );
+
+  router.get(
+    '/:id/attempts',
+    handle(async (_builder, caller, request, response) => {
+      const service = attemptsOf(response);
+      if (!service) return;
+      const runId = typeof request.query.runId === 'string' ? request.query.runId : undefined;
+      const result = await service.list(caller, String(request.params.id), runId);
+      if (!result.ok) return fail(response, result);
+      response.json({ attempts: result.attempts });
+    }),
+  );
+
+  router.get(
+    '/:id/attempts/:attemptId',
+    handle(async (_builder, caller, request, response) => {
+      const service = attemptsOf(response);
+      if (!service) return;
+      const result = await service.get(
+        caller,
+        String(request.params.id),
+        String(request.params.attemptId),
+      );
+      if (!result.ok) return fail(response, result);
+      response.json({ attempt: result.attempt });
+    }),
+  );
+
+  router.put(
+    '/:id/attempts/:attemptId/answers',
+    handle(async (_builder, caller, request, response) => {
+      if (limited(editLimiter, response, caller.userId)) return;
+      const service = attemptsOf(response);
+      if (!service) return;
+      const parsed = answersBodySchema.safeParse(request.body ?? {});
+      if (!parsed.success) {
+        sendError(response, 400, 'invalid_answers', 'Неверный формат ответов');
+        return;
+      }
+      const result = await service.saveAnswers(
+        caller,
+        String(request.params.id),
+        String(request.params.attemptId),
+        parsed.data.answers,
+      );
+      if (!result.ok) return fail(response, result);
+      response.json({ attempt: result.attempt });
+    }),
+  );
+
+  router.post(
+    '/:id/attempts/:attemptId/submit',
+    handle(async (_builder, caller, request, response) => {
+      const service = attemptsOf(response);
+      if (!service) return;
+      const parsed = answersBodySchema.partial().safeParse(request.body ?? {});
+      if (!parsed.success) {
+        sendError(response, 400, 'invalid_answers', 'Неверный формат ответов');
+        return;
+      }
+      const result = await service.submit(
+        caller,
+        String(request.params.id),
+        String(request.params.attemptId),
+        parsed.data.answers,
+      );
+      if (!result.ok) return fail(response, result);
+      response.json({ attempt: result.attempt });
+    }),
+  );
+
+  router.post(
+    '/:id/attempts/:attemptId/grade/quote',
+    handle(async (_builder, caller, request, response) => {
+      if (limited(editLimiter, response, caller.userId)) return;
+      const service = attemptsOf(response);
+      if (!service) return;
+      const result = await service.gradeQuote(
+        caller,
+        String(request.params.id),
+        String(request.params.attemptId),
+      );
+      if (!result.ok) return fail(response, result);
+      response.json({ quote: result.quote });
+    }),
+  );
+
+  router.post(
+    '/:id/attempts/:attemptId/grade',
+    handle(async (_builder, caller, request, response) => {
+      if (limited(actionLimiter, response, caller.userId)) return;
+      const service = attemptsOf(response);
+      if (!service) return;
+      const parsed = gradeBodySchema.safeParse(request.body ?? {});
+      if (!parsed.success) {
+        sendError(response, 400, 'invalid_input', 'Неверный запрос проверки');
+        return;
+      }
+      const result = await service.grade(
+        caller,
+        String(request.params.id),
+        String(request.params.attemptId),
+        parsed.data,
+      );
+      if (!result.ok) return fail(response, result);
+      response.status(202).json({ attempt: result.attempt });
+    }),
+  );
+
+  router.get(
+    '/:id/progress',
+    handle(async (_builder, caller, request, response) => {
+      const service = attemptsOf(response);
+      if (!service) return;
+      const result = await service.progress(caller, String(request.params.id));
+      if (!result.ok) return fail(response, result);
+      response.json({ progress: result.progress });
     }),
   );
 

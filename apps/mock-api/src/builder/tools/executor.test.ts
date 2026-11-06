@@ -4,230 +4,28 @@
  * списания в шлюзе, идемпотентность, сбои и прерванные запуски.
  */
 import assert from 'node:assert/strict';
-import { mkdtempSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
 import test from 'node:test';
-import { CircuitBreaker } from '../../ai/circuit-breaker.js';
-import { AIGateway } from '../../ai/gateway.js';
-import type {
-  AIProvider,
-  ProviderRequestOptions,
-  ProviderResponse,
-  ProviderStreamCallbacks,
-} from '../../ai/gateway-types.js';
 import { ModelRegistry } from '../../ai/model-registry.js';
-import { ProviderManager } from '../../ai/providers/provider-factory.js';
-import { config } from '../../config.js';
 import {
   callCost,
   CONFIRM_ABOVE_CREDITS,
   STAGE_ATTEMPTS,
   toCreditRange,
 } from '../../discovery/model-policy.js';
-import { memoryCredits, setBalance } from '../../services/credits-fixture.js';
 import { PLATFORM_LIMITS } from '../../services/discovery-limits.js';
-import { UsageStore } from '../../store/usage-store.js';
-import { STUDY_CONFIG, toolSolution } from '../../testing/builder-fixtures.js';
-import { defaultConfig } from '../service.js';
-import { MemoryBuilderStore } from '../store.js';
+import {
+  alice,
+  finished,
+  harness,
+  input,
+  key,
+  NOW,
+  notesJson,
+  start,
+} from '../../testing/tool-harness.js';
 import { getOperation } from './catalog.js';
-import { ToolExecutor, type ToolCaller, RUN_LEASE_MS } from './executor.js';
-import { MemoryMaterialStore } from './material-store.js';
-import { buildMaterial } from './materials.js';
-import { MemoryRunStore, type ToolRun } from './run-store.js';
-
-const NOW = new Date('2026-11-05T10:00:00.000Z');
-
-type Reply =
-  | { text: string; cost?: number }
-  | { error: Error }
-  /** Ответ ждёт, пока тест не отпустит его. */
-  | { wait: Promise<void>; text: string; cost?: number };
-
-interface ProviderCall {
-  model: string;
-  system: string;
-  user: string;
-  maxTokens?: number;
-}
-
-const notesJson = (sources = ['S1']) =>
-  JSON.stringify({
-    title: 'Клетка',
-    summary: 'Строение клетки.',
-    sections: [
-      {
-        heading: 'Ядро',
-        points: ['Ядро хранит ДНК'],
-        keyTerms: [{ term: 'ДНК', definition: 'Носитель наследственности' }],
-        sources,
-      },
-    ],
-  });
-
-function provider(replies: Reply[], calls: ProviderCall[]): AIProvider {
-  return {
-    type: 'openrouter',
-    name: 'FakeOpenRouter',
-    isAvailable: () => true,
-    async generateText() {
-      throw new Error('не используется');
-    },
-    async streamText(options: ProviderRequestOptions, cb: ProviderStreamCallbacks) {
-      calls.push({
-        model: options.model,
-        system: String(
-          options.systemPrompt ?? options.messages.find((m) => m.role === 'system')?.content ?? '',
-        ),
-        user: options.messages
-          .filter((m) => m.role === 'user')
-          .map((m) => m.content)
-          .join('\n'),
-        maxTokens: options.maxTokens,
-      });
-      const reply = replies.shift() ?? { text: notesJson(), cost: 0.002 };
-      if ('error' in reply) throw reply.error;
-      if ('wait' in reply) await reply.wait;
-      cb.onDelta(reply.text);
-      return {
-        content: reply.text,
-        usage: { inputTokens: 3000, outputTokens: 800 },
-        finishReason: 'stop',
-        ...(reply.cost !== undefined ? { cost: reply.cost } : {}),
-      } satisfies ProviderResponse;
-    },
-  } as AIProvider;
-}
-
-async function harness(
-  options: { balanceCredits?: number; replies?: Reply[]; registry?: ModelRegistry } = {},
-) {
-  const builder = new MemoryBuilderStore();
-  const solutionOf = (ownerId: string, id: string) => builder.getSolution(ownerId, id);
-  const materials = new MemoryMaterialStore(solutionOf);
-  const runs = new MemoryRunStore(solutionOf);
-  const usage = new UsageStore(join(mkdtempSync(join(tmpdir(), 'ketner-tools-')), 'usage.json'));
-  const credits = memoryCredits();
-  setBalance(credits, 'alice', 'credits', options.balanceCredits ?? 1000);
-  const calls: ProviderCall[] = [];
-  const providers = new ProviderManager();
-  providers.setProvider('openrouter', provider(options.replies ?? [], calls));
-  const registry = options.registry ?? new ModelRegistry();
-  const gateway = new AIGateway({
-    registry,
-    providers,
-    usageStore: usage,
-    aiConfig: config.ai,
-    circuitBreaker: new CircuitBreaker({ failureThreshold: 50, cooldownMs: 1 }),
-    useMockEngine: false,
-    credits,
-  });
-  let now = NOW;
-  const executor = new ToolExecutor({
-    runs,
-    materials,
-    solutions: builder,
-    gateway,
-    balanceUsd: (userId, plan) => credits.balance(userId, plan).remainingUsd,
-    usage,
-    registry,
-    now: () => now,
-  });
-  const version = (solutionId: string) => ({ solutionId, number: 1, createdAt: NOW.toISOString() });
-  await builder.createSolution(
-    toolSolution('tool', 'alice'),
-    { ...version('tool'), config: STUDY_CONFIG },
-    [],
-  );
-  await builder.createSolution(
-    toolSolution('tool-2', 'alice'),
-    { ...version('tool-2'), config: STUDY_CONFIG },
-    [],
-  );
-  await builder.createSolution(
-    toolSolution('tool-3', 'alice'),
-    { ...version('tool-3'), config: STUDY_CONFIG },
-    [],
-  );
-  await builder.createSolution(
-    { ...toolSolution('assistant', 'alice'), type: 'assistant', template: 'personal_assistant' },
-    { ...version('assistant'), config: defaultConfig('Помощник', 'ru') },
-    [],
-  );
-  const addMaterial = async (solutionId: string, texts: string[], id = `m-${solutionId}`) => {
-    const built = buildMaterial({
-      name: 'Биология.pdf',
-      format: 'pdf',
-      sizeBytes: 1000,
-      sections: texts.map((text, i) => ({ label: `Стр. ${i + 1}`, text })),
-    });
-    assert.ok(built.ok);
-    const { ok: _ok, ...rest } = built;
-    await materials.add({
-      id,
-      solutionId,
-      ownerId: 'alice',
-      createdAt: NOW.toISOString(),
-      ...rest,
-    });
-    return id;
-  };
-  for (const id of ['tool', 'tool-2', 'tool-3']) {
-    await addMaterial(id, ['Клетка — основная единица живого.', 'Ядро хранит ДНК.']);
-  }
-  return {
-    executor,
-    runs,
-    materials,
-    usage,
-    credits,
-    calls,
-    addMaterial,
-    balance: () => credits.balance('alice', 'credits').remainingUsd,
-    setNow: (value: Date) => {
-      now = value;
-    },
-  };
-}
-
-const alice: ToolCaller = {
-  userId: 'alice',
-  plan: 'credits',
-  isVip: false,
-  anonymous: false,
-  language: 'ru',
-};
-const input = (solutionId = 'tool') => ({
-  subject: 'Биология',
-  materials: [{ id: `m-${solutionId}` }],
-});
-
-let keySeq = 0;
-const key = () => `key-${Date.now()}-${(keySeq += 1)}`;
-
-async function start(
-  h: Awaited<ReturnType<typeof harness>>,
-  patch: Partial<Parameters<ToolExecutor['start']>[2]> = {},
-  solutionId = 'tool',
-) {
-  const quote = await h.executor.quote(alice, solutionId, 'notes', input(solutionId));
-  assert.ok(quote.ok, JSON.stringify(quote));
-  return h.executor.start(alice, solutionId, {
-    operation: 'notes',
-    input: input(solutionId),
-    idempotencyKey: key(),
-    acceptedMaxCredits: quote.quote.maxCredits,
-    ...patch,
-  });
-}
-
-async function finished(h: Awaited<ReturnType<typeof harness>>, solutionId: string, runId: string) {
-  await h.executor.whenIdle();
-  const found = await h.executor.get(alice, solutionId, runId);
-  assert.ok(found.ok);
-  return found.run;
-}
+import { type ToolCaller, RUN_LEASE_MS } from './executor.js';
+import { type ToolRun } from './run-store.js';
 
 test('цена до запуска — по настоящему запросу той же формулой, что анализ и Builder', async () => {
   const h = await harness();
@@ -296,7 +94,9 @@ test('цена: слишком много текста, неизвестная �
       }) as never,
       'run_too_large',
     ],
-    [h.executor.quote(alice, 'tool', 'quiz', input()) as never, 'unknown_operation'],
+    [h.executor.quote(alice, 'tool', 'flashcards', input()) as never, 'unknown_operation'],
+    // Проверка ответов — служебная операция: через общий API запусков не запускается.
+    [h.executor.quote(alice, 'tool', 'grade', { attemptId: 'a1' }) as never, 'unknown_operation'],
     [
       h.executor.quote(alice, 'tool', 'notes', { subject: '', materials: [] }) as never,
       'invalid_input',
