@@ -356,4 +356,29 @@ export const MIGRATIONS: readonly Migration[] = [
       CREATE INDEX solution_attempts_run ON solution_attempts (run_id);
     `,
   },
+  {
+    // Совместимость с кодом до 0007 (откат приложения): он вставляет решения без колонки template.
+    // Для его типов шаблон выводится из типа; явно указанный шаблон не меняется. Инструмент,
+    // процесс или неизвестный тип без шаблона по-прежнему отклоняется (NOT NULL) — без подмены
+    // помощником.
+    id: '0011_solution_template_legacy_insert',
+    sql: `
+      CREATE OR REPLACE FUNCTION solutions_legacy_template() RETURNS trigger
+      LANGUAGE plpgsql AS $$
+      BEGIN
+        IF NEW.template IS NULL THEN
+          IF NEW.type = 'assistant' THEN
+            NEW.template := 'personal_assistant';
+          ELSIF NEW.type = 'customer_bot' THEN
+            NEW.template := 'customer_bot';
+          END IF;
+        END IF;
+        RETURN NEW;
+      END;
+      $$;
+      CREATE TRIGGER solutions_legacy_template
+        BEFORE INSERT ON solutions
+        FOR EACH ROW EXECUTE FUNCTION solutions_legacy_template();
+    `,
+  },
 ];

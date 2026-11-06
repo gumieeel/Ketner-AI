@@ -1,4 +1,6 @@
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import test from 'node:test';
 import { runMigrations } from '../db/migrate.js';
 import { MIGRATIONS } from '../db/migration-list.js';
@@ -439,6 +441,226 @@ test('миграция 0007: существующие решения получ�
     );
     // Решение с шаблоном, которого нет в этой версии кода, читается как есть.
     assert.equal((await store.getSolution('alice', 'new-tool'))?.template, 'future_tool');
+  } finally {
+    await sql.close();
+  }
+});
+
+/** INSERT кода до 0007 (main): без колонки template — так вставляет приложение после отката. */
+const LEGACY_INSERT = `INSERT INTO solutions (id, user_id, type, status, name, current_version, active_version,
+  source, version, created_at, updated_at, bot, slug)
+  VALUES ($1, 'alice', $2, 'draft', $1, 1, NULL, 'null'::jsonb, 1, now(), now(), $3::text::jsonb, $4)`;
+
+test('миграция 0011: код до 0007 вставляет помощника и бота без шаблона — шаблон из типа', async (t) => {
+  const sql = await openTestSql();
+  if (!sql) {
+    t.skip('нет PGlite и TEST_DATABASE_URL');
+    return;
+  }
+  try {
+    const result = await runMigrations(sql.db, MIGRATIONS);
+    assert.ok(result.applied.includes('0011_solution_template_legacy_insert'));
+    const store = new PostgresBuilderStore(sql.runner);
+    const templateOf = async (id: string) =>
+      (
+        await sql.runner.query<{ type: string; template: string }>(
+          'SELECT type, template FROM solutions WHERE id = $1',
+          [id],
+        )
+      )[0];
+
+    // Код до 0007: помощник и бот без template.
+    await sql.runner.query(LEGACY_INSERT, ['legacy-assistant', 'assistant', 'null', null]);
+    await sql.runner.query(LEGACY_INSERT, [
+      'legacy-bot',
+      'customer_bot',
+      JSON.stringify({ slug: 'legacy-bot' }),
+      'legacy-bot',
+    ]);
+    assert.deepEqual(await templateOf('legacy-assistant'), {
+      type: 'assistant',
+      template: 'personal_assistant',
+    });
+    assert.deepEqual(await templateOf('legacy-bot'), {
+      type: 'customer_bot',
+      template: 'customer_bot',
+    });
+    // И нынешний код читает их как обычные решения.
+    assert.equal(
+      (await store.getSolution('alice', 'legacy-assistant'))?.template,
+      'personal_assistant',
+    );
+    assert.equal((await store.getSolution('alice', 'legacy-bot'))?.template, 'customer_bot');
+
+    // Явно указанный шаблон не трогается — даже непривычный для типа.
+    await sql.runner.query(
+      `INSERT INTO solutions (id, user_id, type, template, status, name, current_version)
+       VALUES ('explicit', 'alice', 'assistant', 'future_assistant', 'draft', 'x', 1)`,
+    );
+    assert.equal((await templateOf('explicit'))?.template, 'future_assistant');
+
+    // Инструмент, процесс без шаблона — отказ, а не «помощник»; неизвестный тип — отказ CHECK.
+    for (const type of ['tool', 'workflow']) {
+      await assert.rejects(
+        sql.runner.query(LEGACY_INSERT, [`no-template-${type}`, type, 'null', null]),
+        /null value|not-null|template/i,
+        type,
+      );
+    }
+    // Неизвестный тип без шаблона: триггер его не трогает — отказ (NOT NULL срабатывает раньше CHECK).
+    await assert.rejects(
+      sql.runner.query(LEGACY_INSERT, ['bad-type', 'chatbot', 'null', null]),
+      /null value|not-null|check/i,
+    );
+    // Неизвестный тип даже с шаблоном — отказ CHECK.
+    await assert.rejects(
+      sql.runner.query(
+        `INSERT INTO solutions (id, user_id, type, template, status, name, current_version)
+         VALUES ('bad-type-2', 'alice', 'chatbot', 'personal_assistant', 'draft', 'x', 1)`,
+      ),
+      /solutions_type_check|check/i,
+    );
+    await assert.rejects(
+      sql.runner.query(LEGACY_INSERT, ['null-type', null, 'null', null]),
+      /null value|not-null|type/i,
+    );
+    // Обнулить шаблон у существующего решения нельзя (NOT NULL на месте, триггер — только INSERT).
+    await assert.rejects(
+      sql.runner.query(`UPDATE solutions SET template = NULL WHERE id = 'legacy-assistant'`),
+    );
+    const rows = await sql.runner.query<{ id: string }>('SELECT id FROM solutions ORDER BY id');
+    assert.deepEqual(
+      rows.map((row) => row.id),
+      ['explicit', 'legacy-assistant', 'legacy-bot'],
+    );
+
+    // Новый учебный помощник через нынешний код — со своим явным шаблоном.
+    await store.createSolution(
+      {
+        id: 'study',
+        ownerId: 'alice',
+        type: 'tool',
+        template: 'study_assistant',
+        bot: null,
+        status: 'active',
+        name: 'Учебный помощник',
+        currentVersion: 1,
+        activeVersion: 1,
+        source: null,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        version: 1,
+      },
+      {
+        solutionId: 'study',
+        number: 1,
+        config: { tool: 'study_assistant', language: 'ru', subject: '' },
+        createdAt: new Date().toISOString(),
+      },
+      [],
+    );
+    assert.deepEqual(await templateOf('study'), { type: 'tool', template: 'study_assistant' });
+  } finally {
+    await sql.close();
+  }
+});
+
+/** SQL процедуры отката из docs/operations.md — тест выполняет ровно то, что написано в инструкции. */
+function rollbackSql(name: 'park' | 'unpark'): string {
+  const doc = readFileSync(join(import.meta.dirname, '../../../../docs/operations.md'), 'utf8');
+  const match = new RegExp(`<!-- rollback:${name} -->\\s*\`\`\`sql\\n([\\s\\S]*?)\`\`\``).exec(doc);
+  assert.ok(match?.[1], `в docs/operations.md нет блока rollback:${name}`);
+  return match[1];
+}
+
+test('откат кода: инструменты прячутся от старого кода и возвращаются без потерь', async (t) => {
+  const sql = await openTestSql();
+  if (!sql) {
+    t.skip('нет PGlite и TEST_DATABASE_URL');
+    return;
+  }
+  try {
+    await runMigrations(sql.db, MIGRATIONS);
+    const store = new PostgresBuilderStore(sql.runner);
+    const at = new Date().toISOString();
+    const add = (id: string, type: Solution['type'], template: string) =>
+      store.createSolution(
+        {
+          id,
+          ownerId: 'alice',
+          type,
+          template,
+          bot: null,
+          status: 'active',
+          name: id,
+          currentVersion: 1,
+          activeVersion: 1,
+          source: null,
+          createdAt: at,
+          updatedAt: at,
+          version: 1,
+        },
+        {
+          solutionId: id,
+          number: 1,
+          config:
+            type === 'tool'
+              ? { tool: 'study_assistant', language: 'ru', subject: '' }
+              : defaultConfig(id, 'ru'),
+          createdAt: at,
+        },
+        [],
+      );
+    await add('assistant', 'assistant', 'personal_assistant');
+    await add('study', 'tool', 'study_assistant');
+    await sql.runner.query(
+      `INSERT INTO solution_materials (id, solution_id, user_id, name, format, size_bytes, char_count,
+         outline, sections, content_hash)
+       VALUES ('m1', 'study', 'alice', 'Биология.pdf', 'pdf', 10, 5, '[]'::jsonb,
+         '[{"id":"s1","label":"Стр. 1","text":"Ядро"}]'::jsonb, 'h1')`,
+    );
+    // Запросы старого кода (main до 0007): поиск решений только по user_id.
+    const legacyList = async () =>
+      (
+        await sql.runner.query<{ id: string }>(
+          'SELECT id FROM solutions WHERE user_id = $1 ORDER BY id',
+          ['alice'],
+        )
+      ).map((row) => row.id);
+    assert.deepEqual(await legacyList(), ['assistant', 'study']);
+
+    await sql.runner.query(rollbackSql('park'));
+    await sql.runner.query(rollbackSql('park')); // повтор безопасен
+    assert.deepEqual(await legacyList(), ['assistant'], 'старый код видит только помощника');
+    assert.equal(
+      (
+        await sql.runner.query('SELECT id FROM solutions WHERE id = $1 AND user_id = $2', [
+          'study',
+          'alice',
+        ])
+      ).length,
+      0,
+    );
+    assert.equal(await store.getSolution('alice', 'study'), null);
+
+    await sql.runner.query(rollbackSql('unpark'));
+    await sql.runner.query(rollbackSql('unpark')); // повтор безопасен
+    assert.deepEqual(await legacyList(), ['assistant', 'study']);
+    const study = await store.getSolution('alice', 'study');
+    assert.equal(study?.template, 'study_assistant');
+    assert.equal(study?.type, 'tool');
+    const version = await store.getVersion('alice', 'study', 1);
+    assert.ok(version && isToolConfig(version.config));
+    const materials = await sql.runner.query<{ id: string }>(
+      'SELECT id FROM solution_materials WHERE solution_id = $1',
+      ['study'],
+    );
+    assert.deepEqual(
+      materials.map((row) => row.id),
+      ['m1'],
+      'материалы не тронуты',
+    );
+    assert.equal((await store.getSolution('alice', 'assistant'))?.template, 'personal_assistant');
   } finally {
     await sql.close();
   }
