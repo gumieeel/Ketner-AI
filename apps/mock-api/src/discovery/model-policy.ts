@@ -23,6 +23,8 @@ import {
   REPAIR_ECHO_CHARS,
 } from './prompts.js';
 
+import { CATALOG_PROMPT_MAX_CHARS } from '../pricing/catalog.js';
+
 export type AnalysisMode = 'free' | 'paid' | 'deep';
 export type StageName = 'context' | 'discovery' | 'plan';
 
@@ -34,9 +36,11 @@ export const MODEL_BY_MODE: Readonly<Record<AnalysisMode, string>> = {
 };
 
 const OUTPUT_TOKENS: Readonly<Record<AnalysisMode, Readonly<Record<StageName, number>>>> = {
-  free: { context: 2_500, discovery: 4_000, plan: 2_000 },
-  paid: { context: 2_500, discovery: 4_000, plan: 4_000 },
-  deep: { context: 4_000, discovery: 8_000, plan: 6_000 },
+  // Поиск возможностей отвечает ещё и работами по внедрению для сметы (pricing/), поэтому
+  // потолок ответа выше, чем до сметы (было 4 000 / 4 000 / 8 000).
+  free: { context: 2_500, discovery: 5_000, plan: 2_000 },
+  paid: { context: 2_500, discovery: 5_000, plan: 4_000 },
+  deep: { context: 4_000, discovery: 9_500, plan: 6_000 },
 };
 
 const EFFORT: Readonly<Record<AnalysisMode, ReasoningEffort>> = {
@@ -58,7 +62,7 @@ const tokensOf = (chars: number): number => Math.ceil(chars / CHARS_PER_TOKEN_WO
 /** Типичный объём этапа (для строки «≈ N кредитов»): вход и выход в токенах. */
 const TYPICAL_TOKENS: Readonly<Record<StageName, { input: number; output: number }>> = {
   context: { input: 2_500, output: 2_000 },
-  discovery: { input: 4_000, output: 3_500 },
+  discovery: { input: 5_000, output: 4_300 },
   plan: { input: 4_000, output: 3_300 },
 };
 const TYPICAL_RETRY_SHARE = 0.1;
@@ -75,7 +79,9 @@ export interface StagePolicy {
 
 function systemChars(stage: StageName, language: Language): number {
   if (stage === 'context') return contextSystemPrompt(language).length;
-  if (stage === 'discovery') return discoverySystemPrompt(language).length;
+  // Каталог работ меняет администратор: для потолка цены берём его наибольший допустимый размер.
+  if (stage === 'discovery')
+    return discoverySystemPrompt(language, '').length + CATALOG_PROMPT_MAX_CHARS;
   // Бесплатный план — краткий, за кредиты — полный (промпт чуть длиннее, считаем по нему).
   return planSystemPrompt(language, 'full').length;
 }

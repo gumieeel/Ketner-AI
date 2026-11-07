@@ -57,6 +57,8 @@ import { createMetaRouter } from './meta.js';
 import { createStatusRouter } from './status.js';
 import { createTelegramRouter } from './telegram.js';
 import { createAdminRouter } from './admin.js';
+import { createPricingAdminRouter } from './pricing-admin.js';
+import { createRequestsRouter } from './requests.js';
 import { createWebhookRouter } from './webhooks.js';
 import { usageStore as defaultUsageStore, type UsageStore } from '../store/index.js';
 
@@ -410,6 +412,20 @@ export function createApiRouter(deps: ApiDeps): Router {
     createWebhookRouter({
       subscriptionStore: activeSubscriptionStore,
       userStore: activeUserStore,
+    }),
+  );
+  // Сметы и заявки на внедрение: админка — раньше общего /admin (у обоих своя проверка прав).
+  router.use(
+    '/admin/pricing',
+    createPricingAdminRouter({
+      ...(deps.discovery?.stores ? { stores: deps.discovery.stores } : {}),
+    }),
+  );
+  router.use(
+    '/requests',
+    createRequestsRouter({
+      ...(deps.discoveryEnabled !== undefined ? { enabled: deps.discoveryEnabled } : {}),
+      ...(deps.discovery?.stores ? { stores: deps.discovery.stores } : {}),
     }),
   );
   router.use(

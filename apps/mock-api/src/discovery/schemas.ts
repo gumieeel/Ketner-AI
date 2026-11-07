@@ -13,6 +13,8 @@ import { PLATFORM_LIMITS } from '../services/discovery-limits.js';
 import { AREA_IDS, RECIPE_IDS } from './analysis-map.js';
 import { findSiteUrl } from './site-url.js';
 import { CAPABILITY_IDS, isCapabilityReleased } from './capabilities.js';
+import { businessProfileOutputSchema } from './profile.js';
+import { COMPLEXITIES, SOLUTION_TYPES } from '../pricing/catalog.js';
 
 /** Строка: обрезаются пробелы, длина ограничивается обрезкой, а не отказом. */
 const text = (max: number) =>
@@ -95,6 +97,15 @@ export const contextOutputSchema = z.object({
   availableData: list(sourced(220), 6),
   missing: list(z.object({ field: requiredText(80), why: text(220).default('') }), 6),
   questions: list(questionSchema, PLATFORM_LIMITS.analyses.maxQuestions),
+  /**
+   * Структурированный профиль бизнеса (discovery/profile.ts). Модель могла его не вернуть —
+   * тогда его нет, анализ от этого не ломается; человек заполнит профиль сам.
+   */
+  // Пометку «правил человек» ставит только сервер, не модель.
+  profile: businessProfileOutputSchema
+    .transform(({ edited: _edited, ...rest }) => rest)
+    .optional()
+    .catch(undefined),
 });
 
 export type ContextOutput = z.infer<typeof contextOutputSchema>;
@@ -136,6 +147,52 @@ export const opportunityOutputSchema = z.object({
     })
     .default({ taskId: null, automationShare: 'low', benefit: '—' }),
   firstStep: text(220).default(''),
+  /**
+   * Вид решения: помощник (разговор), инструмент (одна операция с входом и результатом) или
+   * процесс (несколько шагов подряд). Незнакомое — null, сервер выведет вид сам.
+   */
+  solutionType: z.enum(SOLUTION_TYPES).nullable().optional().default(null).catch(null),
+  /**
+   * Работы по внедрению — id из каталога работ (pricing/catalog.ts). Часы и деньги модель не
+   * пишет: незнакомый id не отбрасывается здесь, а помечается сметой как требующий проверки.
+   */
+  workItems: z
+    .array(z.unknown())
+    .default([])
+    .catch([])
+    .transform((items) =>
+      items
+        .flatMap((item) => {
+          const parsed = workItemOutputSchema.safeParse(item);
+          return parsed.success ? [parsed.data] : [];
+        })
+        .slice(0, WORK_ITEMS_MAX),
+    ),
+  /** Что неизвестно и влияет на объём работ. */
+  unknowns: list(requiredText(160), 4).catch([]),
+  /** Допущения, на которых держится оценка. */
+  assumptions: list(requiredText(160), 4).catch([]),
+});
+
+/** Работ на одну возможность. */
+export const WORK_ITEMS_MAX = 8;
+
+const workItemOutputSchema = z.object({
+  capability: z
+    .string()
+    .trim()
+    .toLowerCase()
+    .regex(/^[a-z][a-z0-9_]{1,47}$/),
+  quantity: z
+    .number()
+    .optional()
+    .default(1)
+    .catch(1)
+    .transform((value) =>
+      Number.isFinite(value) ? Math.min(20, Math.max(1, Math.round(value))) : 1,
+    ),
+  complexity: z.enum(COMPLEXITIES).nullable().optional().default(null).catch(null),
+  reason: text(160).default('').catch(''),
 });
 
 /** Сколько возможностей просим у модели: меньше — ответ не принимается и идёт повтор. */

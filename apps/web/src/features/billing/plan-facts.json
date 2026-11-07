@@ -305,13 +305,13 @@
       "freeModel": "GPT-6 Luna",
       "analysisPaid": {
         "model": "MiMo-V2.6 Pro",
-        "typicalCredits": 9,
-        "maxCredits": 29
+        "typicalCredits": 10,
+        "maxCredits": 33
       },
       "analysisDeep": {
         "model": "Claude Sonnet 5.5",
-        "typicalCredits": 79,
-        "maxCredits": 328
+        "typicalCredits": 91,
+        "maxCredits": 370
       },
       "planPaid": {
         "model": "MiMo-V2.6 Pro",

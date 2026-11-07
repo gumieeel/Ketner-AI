@@ -88,7 +88,12 @@ function AnalysisScreen({ id }: { id: string }) {
           {t('analysis.result.back')}
         </Link>
         <ResultHeader analysis={analysis} />
-        <Report analysis={analysis} plans={load.plans} onChanged={refresh}>
+        <Report
+          analysis={analysis}
+          plans={load.plans}
+          estimates={load.estimates ?? null}
+          onChanged={refresh}
+        >
           <details className="rounded-xl border border-stroke bg-surface px-5 py-3">
             <summary className="cursor-pointer text-[14px] font-medium text-muted hover:text-text">
               {t('analysis.page.yourTask')}

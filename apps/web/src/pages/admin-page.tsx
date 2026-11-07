@@ -26,6 +26,7 @@ import { useTranslation, type TranslationKey } from '@/i18n';
 import { cn } from '@/lib/cn';
 import type { PlanId } from '@/features/auth/types';
 import { RegistrationsPanel } from './admin/registrations-panel';
+import { Link } from 'react-router-dom';
 
 interface AdminCredits {
   /** Остаток, кредиты. */
@@ -727,6 +728,9 @@ export function AdminPage() {
               {t('admin.title')}
             </h1>
             <Badge tone="brand">Admin</Badge>
+            <Link to="/admin/pricing" className="text-[14px] text-accent hover:underline">
+              {t('adminPricing.title')}
+            </Link>
           </div>
           <p className="mt-2 max-w-[60ch] text-sm leading-6 text-muted">{t('admin.lead')}</p>
         </div>

@@ -41,6 +41,15 @@ import {
   type SolutionView,
 } from '@/features/builder/api';
 import { BusinessProfile } from './business-profile';
+import {
+  CombinedEstimate,
+  Disclaimer,
+  EstimateDetails,
+  EstimateSummary,
+  RequestQuoteButton,
+} from './estimate';
+import { ProfileEditor } from './profile-editor';
+import type { EstimatesBlock, EstimateView } from '@/features/pricing/api';
 import { ErrorNotice } from './error-notice';
 
 const FEASIBILITY_TONE: Record<FeasibilityStatus, BadgeTone> = {
@@ -64,11 +73,14 @@ const START_STEPS = 3;
 export function Report({
   analysis,
   plans,
+  estimates = null,
   onChanged,
   children,
 }: {
   analysis: AnalysisView;
   plans: PlansSummary | null;
+  /** Предварительные сметы внедрения: посчитаны сервером. */
+  estimates?: EstimatesBlock | null;
   onChanged: () => Promise<void>;
   /** Под отчётом в основной колонке: описание задачи, ответы. */
   children?: ReactNode;
@@ -138,6 +150,9 @@ export function Report({
   const featuredId =
     main?.id ?? listed.find((item) => item.feasibilityStatus !== 'not_supported')?.id ?? null;
   const hidden = listed.length - visible.length;
+  const estimateFor = (id: string): EstimateView | null =>
+    estimates?.items.find((item) => item.scopeKey === `opp:${id}`) ?? null;
+  const combined = estimates?.items.find((item) => item.scope === 'combined') ?? null;
 
   return (
     <div className="mt-8 grid gap-6 lg:grid-cols-[minmax(0,1fr)_21rem] lg:items-start">
@@ -167,6 +182,8 @@ export function Report({
                     situation={situation}
                     action={actions.row}
                     moreActions={actions.details}
+                    estimate={estimateFor(item.id)}
+                    analysisId={analysis.id}
                   />
                 );
               })}
@@ -198,6 +215,10 @@ export function Report({
             {t('analysis.report.statusNote')}
           </p>
         </section>
+
+        {combined ? <CombinedEstimate estimate={combined} analysisId={analysis.id} /> : null}
+        {estimates && estimates.items.length > 0 && !combined ? <Disclaimer /> : null}
+        {analysis.context ? <ProfileEditor analysis={analysis} onChanged={onChanged} /> : null}
 
         <SourceNote analysis={analysis} />
         <BusinessProfile analysis={analysis} />
@@ -479,8 +500,13 @@ function OpportunityCard({
   moreActions,
   situation,
   featured = false,
+  estimate = null,
+  analysisId,
 }: {
   item: OpportunityView;
+  /** Предварительная смета этой возможности (null — нет). */
+  estimate?: EstimateView | null;
+  analysisId: string;
   /** Главное действие на виду (у рекомендуемой возможности). */
   action: ReactNode;
   /** Остальные действия — в «Подробнее». */
@@ -546,6 +572,13 @@ function OpportunityCard({
                   })}
                 </li>
               ) : null}
+              {item.solutionType ? (
+                <li>
+                  <Badge tone="neutral">
+                    {t(`estimate.solutionType.${item.solutionType}` as TranslationKey)}
+                  </Badge>
+                </li>
+              ) : null}
               <li>
                 <Badge tone={FEASIBILITY_TONE[item.feasibilityStatus]}>
                   {t(`analysis.feasibility.${item.feasibilityStatus}` as TranslationKey)}
@@ -558,6 +591,15 @@ function OpportunityCard({
                   what: item.feasibility.blockers.map((blocker) => blocker.label).join(', '),
                 })}
               </p>
+            ) : null}
+            {estimate ? (
+              <>
+                <EstimateSummary estimate={estimate} />
+                <div className="mt-3 flex flex-wrap gap-3">
+                  <RequestQuoteButton analysisId={analysisId} estimate={estimate} secondary />
+                </div>
+                <EstimateDetails estimate={estimate} />
+              </>
             ) : null}
           </div>
         </div>

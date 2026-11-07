@@ -180,6 +180,9 @@ export function StandaloneLayout() {
                       <NavLink to="/solutions" className={desktopNavClass}>
                         {t('nav.solutions')}
                       </NavLink>
+                      <NavLink to="/requests" className={desktopNavClass}>
+                        {t('nav.requests')}
+                      </NavLink>
                     </>
                   ) : null}
                 </>
@@ -308,6 +311,7 @@ export function StandaloneLayout() {
                         ? ([
                             ['/analyses', 'nav.analyses'],
                             ['/solutions', 'nav.solutions'],
+                            ['/requests', 'nav.requests'],
                           ] as const)
                         : []),
                       ['/chat', 'nav.chat'],

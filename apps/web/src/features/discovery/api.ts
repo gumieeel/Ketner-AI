@@ -2,6 +2,7 @@ import { getAuthToken } from '@/features/auth/auth-store';
 import { checkSessionInvalid, getGuestId } from '@/features/chat/api';
 import { API_BASE } from '@/lib/api-config';
 import type { Language } from '@/features/preferences/preferences-store';
+import type { BusinessProfileData, EstimatesBlock, SolutionType } from '@/features/pricing/api';
 
 /**
  * Клиент API анализа задач (`/api/analyses`, docs/api.md). Гость работает по гостевому id этого
@@ -88,6 +89,10 @@ export interface OpportunityView {
   successCriteria: string[];
   firstStep: string;
   feasibilityStatus: FeasibilityStatus;
+  /** Вид решения и неизвестные (у анализов до сметы — нет). */
+  solutionType?: SolutionType;
+  unknowns?: string[];
+  assumptions?: string[];
   feasibility: {
     status: FeasibilityStatus;
     blockers: FeasibilityItem[];
@@ -114,6 +119,8 @@ export interface BusinessContext {
   tools?: SourcedText[];
   constraints?: SourcedText[];
   missing?: Array<{ field: string; why: string }>;
+  /** Структурированный профиль бизнеса (модель + правки человека). */
+  profile?: BusinessProfileData;
 }
 
 export interface AnalysisView {
@@ -281,6 +288,8 @@ export interface AnalysisResponse {
   rerun: RerunQuote | null;
   /** Цена повтора упавшего этапа. */
   retry: RetryQuote | null;
+  /** Предварительные сметы внедрения (только у готового анализа; null — недоступны). */
+  estimates?: EstimatesBlock | null;
 }
 
 export function fetchAnalysis(id: string): Promise<AnalysisResponse> {

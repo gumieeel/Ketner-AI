@@ -67,6 +67,28 @@ export interface AdminRouterDeps {
   credits?: CreditService;
 }
 
+/**
+ * Права администратора — только на сервере: ключ `x-admin-key` (сравнение без утечки по времени)
+ * или вход под адресом из ADMIN_EMAILS. Общий для всех админских роутеров.
+ */
+export function requireAdmin(req: Request, res: Response, next: NextFunction): void {
+  const adminKey = req.headers['x-admin-key'];
+  if (typeof adminKey === 'string' && safeEqualStrings(adminKey, config.adminApiKey)) {
+    return next();
+  }
+
+  if (isAdminUser(req.user)) {
+    return next();
+  }
+
+  sendError(res, 403, 'admin_access_denied', 'Требуются права администратора');
+}
+
+/** Кто действует в админке — для журнала: id администратора или вход по ключу. */
+export function adminActorId(req: Request): string {
+  return isAdminUser(req.user) && req.user ? req.user.id : 'admin-key';
+}
+
 export function createAdminRouter({
   registry = modelRegistry,
   usageStore = defaultUsageStore,
@@ -94,20 +116,6 @@ export function createAdminRouter({
       nextExpiresAt: balance.nextExpiresAt,
       usedPct: grantedUsd > 0 ? Math.round((spentMonthUsd / grantedUsd) * 100) : 0,
     };
-  };
-
-  // Middleware проверки прав администратора
-  const requireAdmin = (req: Request, res: Response, next: NextFunction): void => {
-    const adminKey = req.headers['x-admin-key'];
-    if (typeof adminKey === 'string' && safeEqualStrings(adminKey, config.adminApiKey)) {
-      return next();
-    }
-
-    if (isAdminUser(req.user)) {
-      return next();
-    }
-
-    sendError(res, 403, 'admin_access_denied', 'Требуются права администратора');
   };
 
   router.use(requireAdmin);

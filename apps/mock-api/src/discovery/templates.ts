@@ -34,6 +34,21 @@ export function contextTemplate(inputText: string, language: Language): string {
     tools: [],
     constraints: [],
     availableData: [],
+    // Демо: профиль только с тем, что нельзя выдумать, — пустые поля честно пустые.
+    profile: {
+      businessName: null,
+      industry: null,
+      subIndustry: null,
+      city: null,
+      businessModel: null,
+      website: null,
+      teamSize: null,
+      customerChannels: [],
+      existingTools: [],
+      monthlyRequests: null,
+      monthlyOrders: null,
+      additionalContext: null,
+    },
     missing: short
       ? [
           {
@@ -131,6 +146,23 @@ export function discoveryTemplate(language: Language): string {
           benefit: en ? 'Less time per text' : 'Меньше времени на текст',
         },
         firstStep: en ? 'Collect 3 examples of good texts.' : 'Соберите 3 примера удачных текстов.',
+        solutionType: 'assistant',
+        workItems: [
+          {
+            capability: 'ai_message_processing',
+            quantity: 1,
+            complexity: 'medium',
+            reason: en ? 'Drafts from examples' : 'Черновики по примерам',
+          },
+          {
+            capability: 'website_chat_widget',
+            quantity: 1,
+            complexity: 'simple',
+            reason: en ? 'Access from the website' : 'Доступ с сайта',
+          },
+        ],
+        unknowns: [en ? 'How many texts a month' : 'Сколько текстов в месяц'],
+        assumptions: [en ? 'Examples of good texts are available' : 'Есть примеры удачных текстов'],
       },
       {
         title: en ? 'Your own program calls AI' : 'Своя программа обращается к ИИ',
@@ -161,6 +193,23 @@ export function discoveryTemplate(language: Language): string {
           benefit: en ? 'Less manual copying' : 'Меньше ручного копирования',
         },
         firstStep: en ? 'Get an API key.' : 'Получите ключ API.',
+        solutionType: 'workflow',
+        workItems: [
+          {
+            capability: 'webhook_integration',
+            quantity: 1,
+            complexity: 'medium',
+            reason: en ? 'Data exchange with your program' : 'Обмен данными с вашей программой',
+          },
+          {
+            capability: 'google_sheets_integration',
+            quantity: 1,
+            complexity: 'simple',
+            reason: en ? 'Results go to a sheet' : 'Результаты записываются в таблицу',
+          },
+        ],
+        unknowns: [],
+        assumptions: [],
       },
       {
         title: en ? 'Automatic email replies' : 'Автоматические ответы на письма',
@@ -185,6 +234,23 @@ export function discoveryTemplate(language: Language): string {
           benefit: en ? 'Fewer emails to answer by hand' : 'Меньше писем вручную',
         },
         firstStep: '',
+        solutionType: 'workflow',
+        workItems: [
+          {
+            capability: 'email_integration',
+            quantity: 1,
+            complexity: 'medium',
+            reason: en ? 'Replies by email' : 'Ответы по почте',
+          },
+          {
+            capability: 'one_c_integration',
+            quantity: 1,
+            complexity: 'complex',
+            reason: en ? 'Order status from 1C' : 'Статус заказа из 1С',
+          },
+        ],
+        unknowns: [en ? 'Which mail service is used' : 'Какой почтовый сервис используется'],
+        assumptions: [],
       },
     ],
   });

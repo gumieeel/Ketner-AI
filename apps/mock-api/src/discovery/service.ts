@@ -20,6 +20,8 @@ import { galleryTemplates } from '../builder/templates.js';
 import { isCapabilityReleased } from './capabilities.js';
 import { CREDITS_PER_USD, toCredits } from '../services/entitlement.js';
 import type { Language, PlanId } from '../types.js';
+import type { SolutionType } from '../pricing/catalog.js';
+import type { BusinessProfile } from './profile.js';
 import {
   HOLD_MS,
   RUNNING_MS,
@@ -108,6 +110,11 @@ export interface DiscoveryServiceDeps {
   providerTimeoutMs?: number;
   /** Чтение сайта по ссылке из описания (по умолчанию — настоящий запрос с защитой от SSRF). */
   readSite?: (url: string) => Promise<SiteResult>;
+  /**
+   * Каталог работ по внедрению для промпта поиска возможностей — из действующей версии настроек
+   * смет (pricing/service.ts). Нет — каталог по умолчанию.
+   */
+  workCatalog?: (language: Language) => Promise<string>;
 }
 
 export type ServiceError = {
@@ -1403,6 +1410,38 @@ export class DiscoveryService {
   }
 
   /** Все этапы, запущенные в фоне, завершились (для тестов и остановки сервера). */
+  /**
+   * Правка профиля бизнеса человеком (discovery/profile.ts). Модель не вызывается: профиль
+   * влияет на смету только через сигналы объёма и полноты, и смета пересчитывается кодом.
+   */
+  async updateProfile(
+    caller: DiscoveryCaller,
+    id: string,
+    profile: BusinessProfile,
+  ): Promise<Ok<{ analysis: Analysis }> | ServiceError> {
+    const current = await this.deps.store.get(caller.userId, id);
+    if (!current) return notFound(id);
+    if (!current.context) {
+      return {
+        ok: false,
+        status: 409,
+        code: 'profile_not_ready',
+        message: text(
+          current.language,
+          'Профиль появится после разбора описания.',
+          'The profile appears after the description is analyzed.',
+        ),
+      };
+    }
+    const saved = await this.mutate(caller.userId, id, (analysis) =>
+      analysis.context
+        ? { ...analysis, context: { ...analysis.context, profile: { ...profile, edited: true } } }
+        : analysis,
+    );
+    if (!saved) return notFound(id);
+    return { ok: true, analysis: saved };
+  }
+
   async whenIdle(): Promise<void> {
     while (this.running.size > 0) await Promise.allSettled([...this.running.values()]);
   }
@@ -1522,7 +1561,12 @@ export class DiscoveryService {
       });
       const result = await runStructuredTask({
         ...common,
-        systemPrompt: discoverySystemPrompt(started.language),
+        systemPrompt: discoverySystemPrompt(
+          started.language,
+          this.deps.workCatalog
+            ? await this.deps.workCatalog(started.language).catch(() => undefined)
+            : undefined,
+        ),
         userMessage: discoveryUserMessage(started.language, context, answers),
         schema: discoveryOutputSchema,
         templateOutput: discoveryTemplate(started.language),
@@ -1630,6 +1674,10 @@ export class DiscoveryService {
         limitations: item.limitations,
         successCriteria: item.successCriteria,
         firstStep: item.firstStep,
+        solutionType: item.solutionType ?? inferSolutionType(item.recipe, item.requires),
+        workItems: item.workItems,
+        unknowns: item.unknowns,
+        assumptions: item.assumptions,
         feasibilityStatus: feasibility.status,
         feasibility,
         impact: estimateImpact(item, context, analysis.language),
@@ -1705,6 +1753,22 @@ export class DiscoveryService {
     }
     throw new Error(`discovery: не удалось сохранить анализ ${id} — запись постоянно меняется`);
   }
+}
+
+/**
+ * Вид решения, если модель его не назвала: бот и помощники — помощник, расписание и внешние
+ * действия — процесс, работа с документами — инструмент.
+ */
+export function inferSolutionType(
+  recipe: string | null,
+  requires: readonly string[],
+): SolutionType {
+  if (recipe === 'study_assistant') return 'tool';
+  if (recipe) return 'assistant';
+  if (requires.includes('scheduled_runs') || requires.includes('external_actions'))
+    return 'workflow';
+  if (requires.includes('document_text') || requires.includes('document_tools')) return 'tool';
+  return 'assistant';
 }
 
 function planNotFound(id: string): ServiceError {

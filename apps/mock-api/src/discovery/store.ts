@@ -625,6 +625,12 @@ export class PostgresDiscoveryStore implements DiscoveryStore {
         `DELETE FROM discovery_opportunities WHERE analysis_id = ANY($1::text[])`,
         [ids],
       );
+      // Сметы содержат описание бизнеса — стираются вместе с содержимым анализа (заявки хранят
+      // свой снимок и остаются у клиента).
+      await this.db.query(
+        `DELETE FROM implementation_estimates WHERE analysis_id = ANY($1::text[])`,
+        [ids],
+      );
     }
     return ids.length;
   }
@@ -639,6 +645,7 @@ export class PostgresDiscoveryStore implements DiscoveryStore {
     );
     if (!rows[0]) return false;
     await this.db.query(`DELETE FROM discovery_opportunities WHERE analysis_id = $1`, [id]);
+    await this.db.query(`DELETE FROM implementation_estimates WHERE analysis_id = $1`, [id]);
     return true;
   }
 

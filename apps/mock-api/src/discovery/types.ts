@@ -5,6 +5,8 @@ import type { AreaCoverage, AreaId, RecipeId } from './analysis-map.js';
 import type { Impact } from './impact.js';
 import type { AnalysisMode, StageName } from './model-policy.js';
 import type { ContextOutput, Question } from './schemas.js';
+import type { SolutionType } from '../pricing/catalog.js';
+import type { WorkItemInput } from '../pricing/engine.js';
 
 /**
  * Состояние анализа:
@@ -97,6 +99,14 @@ export interface Opportunity {
   limitations: string[];
   successCriteria: string[];
   firstStep: string;
+  /** Вид решения (помощник, инструмент, процесс); у возможностей до сметы — нет. */
+  solutionType?: SolutionType;
+  /** Работы по внедрению из ответа модели (до проверки каталогом); у старых — нет. */
+  workItems?: WorkItemInput[];
+  /** Что неизвестно и влияет на объём работ. */
+  unknowns?: string[];
+  /** Допущения оценки. */
+  assumptions?: string[];
   feasibilityStatus: FeasibilityStatus;
   feasibility: Feasibility;
   impact: Impact;

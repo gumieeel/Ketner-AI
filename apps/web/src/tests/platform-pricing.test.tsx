@@ -29,7 +29,10 @@ describe('страница «Кредиты»: анализ задач, план
     const analysis = within(section).getByText('Анализ задачи').closest('div')!;
     expect(analysis).toHaveTextContent(prices.analysisPaid.model);
     expect(analysis).toHaveTextContent(
-      `≈ ${prices.analysisPaid.typicalCredits}, не больше ${prices.analysisPaid.maxCredits} кредитов`,
+      // Склонение зависит от числа («29 кредитов», «33 кредита») — проверяем числа, а не окончание.
+      new RegExp(
+        `≈ ${prices.analysisPaid.typicalCredits}, не больше ${prices.analysisPaid.maxCredits} кредит(ов|а)?`,
+      ),
     );
     expect(within(section).getByText(`До ${limits.assistants.perUser} помощников`)).toBeVisible();
   });

@@ -72,6 +72,14 @@ export const routes: RouteObject[] = [
         lazy: lazyPage(() => import('@/pages/solutions/solution-chat-page'), 'SolutionChatPage'),
       },
       {
+        path: 'requests',
+        lazy: lazyPage(() => import('@/pages/requests/requests-page'), 'RequestsPage'),
+      },
+      {
+        path: 'requests/:requestId',
+        lazy: lazyPage(() => import('@/pages/requests/requests-page'), 'RequestPage'),
+      },
+      {
         path: 'analyses/new',
         lazy: lazyPage(() => import('@/pages/analysis/analysis-new-page'), 'AnalysisNewPage'),
       },
@@ -201,7 +209,13 @@ export const routes: RouteObject[] = [
     path: 'admin',
     element: <AppShell />,
     errorElement: <RouteErrorPage />,
-    children: [{ index: true, lazy: lazyPage(() => import('@/pages/admin-page'), 'AdminPage') }],
+    children: [
+      { index: true, lazy: lazyPage(() => import('@/pages/admin-page'), 'AdminPage') },
+      {
+        path: 'pricing',
+        lazy: lazyPage(() => import('@/pages/admin/pricing-page'), 'AdminPricingPage'),
+      },
+    ],
   },
   {
     path: '*',

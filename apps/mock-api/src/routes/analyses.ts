@@ -15,6 +15,8 @@
  *   GET  /api/analyses/:id/plans/:planId               план
  *   PATCH /api/analyses/:id/plans/:planId/steps/:stepId статус шага `{ status }`
  *   POST /api/analyses/:id/plans/:planId/retry         повторить упавший план
+ *   PATCH /api/analyses/:id/profile   правка профиля бизнеса (без модели; смета пересчитывается)
+ *   POST /api/analyses/:id/requests   «Запросить точную смету»: заявка со снимком сметы (вход)
  *
  * Доступно гостю с `X-Guest-Id` (весь анализ и отчёт, решение владельца) и вошедшему пользователю.
  * Чужой анализ — 404. Без включённого DISCOVERY_ENABLED маршрутов нет (404).
@@ -50,6 +52,11 @@ import {
 import { chargedCredits, DiscoveryService, type DiscoveryCaller } from '../discovery/service.js';
 import type { Analysis, Opportunity, Plan } from '../discovery/types.js';
 import { CREDITS_PER_USD } from '../services/entitlement.js';
+import { businessProfileEditSchema } from '../discovery/profile.js';
+import { pricingServiceFor } from '../pricing/runtime.js';
+import type { PricingService } from '../pricing/service.js';
+import { publicEstimate, publicRequest } from '../pricing/views.js';
+import { z } from 'zod';
 
 export interface AnalysesRouterDeps {
   ai: AiConfig;
@@ -70,6 +77,19 @@ export interface AnalysesRouterDeps {
 }
 
 const IDEMPOTENCY_KEY = /^[A-Za-z0-9_-]{8,100}$/;
+
+/** Заявка на точную смету: какая смета (`opp:<id>` или `combined`), контакт и пожелания. */
+const requestBodySchema = z.object({
+  scopeKey: z.string().regex(/^(combined|opp:[A-Za-z0-9-]{1,64})$/),
+  message: z.string().trim().max(2000).default(''),
+  contact: z.object({
+    name: z.string().trim().min(1).max(100),
+    phone: z
+      .string()
+      .trim()
+      .regex(/^\+?[0-9 ()-]{6,24}$/),
+  }),
+});
 
 /** Публичный вид анализа: без id владельца, хеша адреса и ключа идемпотентности. */
 export function publicAnalysis(analysis: Analysis, opportunities: Opportunity[] = []) {
@@ -222,6 +242,11 @@ export function createAnalysesRouter(deps: AnalysesRouterDeps): Router {
         hasPurchasedCredits: !caller.guest && (deps.credits?.hasPurchased(caller.userId) ?? false),
         githubConnected: !caller.guest && (deps.githubConnected?.(caller.userId) ?? false),
       }),
+      workCatalog: async (language) => {
+        const pricing = pricingServiceFor(ready);
+        if (!pricing) throw new Error('pricing unavailable');
+        return pricing.catalogPrompt(language);
+      },
       freeDailyUsd: deps.freeDailyUsd ?? config.discovery.freeDailyUsd,
       budgetTimeZone: deps.budgetTimeZone ?? config.discovery.budgetTimeZone,
       ...(deps.now ? { now: deps.now } : {}),
@@ -325,6 +350,31 @@ export function createAnalysesRouter(deps: AnalysesRouterDeps): Router {
         ...(error.details ? { details: error.details } : {}),
       },
     });
+  };
+
+  const requestLimiter = new RateLimiter(60 * 60_000, 10);
+  const profileLimiter = new RateLimiter(60_000, 30);
+
+  /**
+   * Сметы готового анализа для ответа API. Сбой смет не ломает показ анализа: отчёт виден, а
+   * блок смет — нет (null), ошибка — в журнале сервера.
+   */
+  const estimatesBlock = async (analysis: Analysis, opportunities: Opportunity[]) => {
+    if (analysis.status !== 'ready') return null;
+    const pricing: PricingService | null = pricingServiceFor(stores());
+    if (!pricing) return null;
+    try {
+      const rows = await pricing.estimatesFor(analysis, opportunities);
+      if (!rows) return null;
+      const enabled = (await pricing.active()).config.enabled;
+      return {
+        enabled,
+        items: rows.map((row) => publicEstimate(row, enabled)),
+      };
+    } catch (error) {
+      console.error(`[pricing] ${analysis.id}: смета не посчитана`, error);
+      return null;
+    }
   };
 
   router.get('/offer', async (request: Request, response: Response) => {
@@ -470,7 +520,100 @@ export function createAnalysesRouter(deps: AnalysesRouterDeps): Router {
               })),
             }
           : null,
+      // Предварительные сметы внедрения (pricing/): считает сервер, модель цен не пишет.
+      estimates: await estimatesBlock(found.analysis, found.opportunities),
     });
+  });
+
+  router.patch('/:id/profile', async (request: Request, response: Response) => {
+    const ready = withService(response);
+    if (!ready) return;
+    const resolved = resolveCaller(request, response);
+    if (!resolved) return;
+    if (profileLimiter.hit(resolved.caller.userId)) {
+      sendError(
+        response,
+        429,
+        'too_many_requests',
+        'Слишком много запросов подряд. Подождите минуту.',
+      );
+      return;
+    }
+    const parsed = z.object({ profile: businessProfileEditSchema }).safeParse(request.body);
+    if (!parsed.success) {
+      sendError(response, 400, 'validation_failed', 'Профиль заполнен неверно.');
+      return;
+    }
+    const id = String(request.params.id);
+    const result = await ready.updateProfile(resolved.caller, id, parsed.data.profile);
+    if (!result.ok) {
+      sendServiceError(response, result);
+      return;
+    }
+    const opportunities = await ready.get(resolved.caller.userId, id);
+    response.json({
+      analysis: publicAnalysis(result.analysis, opportunities?.opportunities ?? []),
+      estimates: await estimatesBlock(result.analysis, opportunities?.opportunities ?? []),
+    });
+  });
+
+  router.post('/:id/requests', async (request: Request, response: Response) => {
+    const ready = withService(response);
+    if (!ready) return;
+    const resolved = resolveCaller(request, response);
+    if (!resolved) return;
+    if (resolved.caller.guest) {
+      sendError(
+        response,
+        401,
+        'login_required',
+        'Войдите, чтобы отправить заявку: так вы сможете следить за её статусом.',
+      );
+      return;
+    }
+    const pricing = pricingServiceFor(stores());
+    if (!pricing) {
+      sendError(response, 503, 'pricing_unavailable', 'Заявки временно недоступны.');
+      return;
+    }
+    const key = request.header('Idempotency-Key') ?? null;
+    if (key !== null && !IDEMPOTENCY_KEY.test(key)) {
+      sendError(response, 400, 'invalid_idempotency_key', 'Некорректный Idempotency-Key');
+      return;
+    }
+    const parsed = requestBodySchema.safeParse(request.body);
+    if (!parsed.success) {
+      sendError(response, 400, 'validation_failed', 'Укажите имя и телефон для связи.');
+      return;
+    }
+    if (requestLimiter.hit(resolved.caller.userId)) {
+      sendError(response, 429, 'too_many_requests', 'Слишком много заявок. Попробуйте позже.');
+      return;
+    }
+    const id = String(request.params.id);
+    await ready.claimGuest(resolved.caller.userId, readGuestId(request), id);
+    const found = await ready.get(resolved.caller.userId, id);
+    if (!found) {
+      sendError(response, 404, 'analysis_not_found', `Анализ ${id} не найден`);
+      return;
+    }
+    const result = await pricing.createRequest({
+      userId: resolved.caller.userId,
+      email: resolved.email,
+      analysis: found.analysis,
+      opportunities: found.opportunities,
+      scopeKey: parsed.data.scopeKey,
+      message: parsed.data.message,
+      contact: parsed.data.contact,
+      idempotencyKey: key,
+    });
+    if (!result.ok) {
+      sendServiceError(response, result);
+      return;
+    }
+    // Анализ, по которому отправлена заявка, сохраняется в аккаунте.
+    if (!found.analysis.saved) await ready.setSaved(resolved.caller, id, true);
+    response.status(result.duplicate ? 200 : 201).json({ request: publicRequest(result.request) });
   });
 
   router.patch('/:id', async (request: Request, response: Response) => {

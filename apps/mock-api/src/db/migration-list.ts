@@ -381,4 +381,76 @@ export const MIGRATIONS: readonly Migration[] = [
         FOR EACH ROW EXECUTE FUNCTION solutions_legacy_template();
     `,
   },
+  {
+    // Смета внедрения (docs/BUSINESS_DISCOVERY_PRICING_PLAN.md): версии настроек и каталога работ,
+    // сметы анализов со снимком расчёта, заявки на внедрение и журнал действий администраторов.
+    // Только добавление таблиц. RLS включается без политик: сервер работает владельцем таблиц и
+    // его не касается, а прямой доступ ролей anon/authenticated через API Supabase закрыт.
+    id: '0012_implementation_pricing',
+    sql: `
+      CREATE TABLE pricing_versions (
+        version integer PRIMARY KEY CHECK (version > 0),
+        config jsonb NOT NULL,
+        catalog jsonb NOT NULL,
+        note text NOT NULL DEFAULT '',
+        created_by text NOT NULL,
+        created_at timestamptz NOT NULL DEFAULT now()
+      );
+
+      CREATE TABLE implementation_estimates (
+        id text PRIMARY KEY,
+        analysis_id text NOT NULL REFERENCES discovery_analyses (id) ON DELETE CASCADE,
+        generation integer NOT NULL CHECK (generation > 0),
+        scope text NOT NULL CHECK (scope IN ('opportunity', 'combined')),
+        scope_key text NOT NULL,
+        opportunity_ids jsonb NOT NULL,
+        pricing_version integer NOT NULL REFERENCES pricing_versions (version),
+        fingerprint text NOT NULL,
+        data jsonb NOT NULL,
+        created_at timestamptz NOT NULL DEFAULT now()
+      );
+      CREATE UNIQUE INDEX implementation_estimates_scope
+        ON implementation_estimates (analysis_id, generation, scope_key);
+      CREATE INDEX implementation_estimates_created ON implementation_estimates (created_at DESC);
+
+      CREATE TABLE implementation_requests (
+        id text PRIMARY KEY,
+        user_id text NOT NULL,
+        analysis_id text REFERENCES discovery_analyses (id) ON DELETE SET NULL,
+        estimate_id text NOT NULL,
+        scope text NOT NULL CHECK (scope IN ('opportunity', 'combined')),
+        status text NOT NULL CHECK (status IN ('new', 'reviewing', 'clarification_needed',
+          'technical_review', 'proposal_preparing', 'proposal_sent', 'approved', 'in_progress',
+          'testing', 'completed', 'rejected', 'cancelled')),
+        pricing_version integer NOT NULL REFERENCES pricing_versions (version),
+        data jsonb NOT NULL,
+        idempotency_key text,
+        version integer NOT NULL DEFAULT 1,
+        created_at timestamptz NOT NULL DEFAULT now(),
+        updated_at timestamptz NOT NULL DEFAULT now()
+      );
+      CREATE UNIQUE INDEX implementation_requests_idempotency
+        ON implementation_requests (user_id, idempotency_key) WHERE idempotency_key IS NOT NULL;
+      CREATE INDEX implementation_requests_user ON implementation_requests (user_id, created_at DESC);
+      CREATE INDEX implementation_requests_status ON implementation_requests (status, updated_at DESC);
+
+      CREATE TABLE pricing_audit_log (
+        id text PRIMARY KEY,
+        entity_type text NOT NULL CHECK (entity_type IN ('pricing_version', 'estimate', 'request')),
+        entity_id text NOT NULL,
+        actor_id text NOT NULL,
+        action text NOT NULL,
+        previous jsonb,
+        next jsonb,
+        reason text NOT NULL DEFAULT '',
+        created_at timestamptz NOT NULL DEFAULT now()
+      );
+      CREATE INDEX pricing_audit_log_entity ON pricing_audit_log (entity_type, entity_id, created_at);
+
+      ALTER TABLE pricing_versions ENABLE ROW LEVEL SECURITY;
+      ALTER TABLE implementation_estimates ENABLE ROW LEVEL SECURITY;
+      ALTER TABLE implementation_requests ENABLE ROW LEVEL SECURITY;
+      ALTER TABLE pricing_audit_log ENABLE ROW LEVEL SECURITY;
+    `,
+  },
 ];
