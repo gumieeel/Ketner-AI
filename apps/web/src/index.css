@@ -100,6 +100,8 @@
   --animate-code-shake: codeShake 420ms var(--ease-smooth) both;
   --animate-code-wave: codeWave 900ms var(--ease-smooth) infinite;
   --animate-code-success: codeSuccess 520ms var(--ease-spring) both;
+  --animate-code-ring: codeRing 420ms var(--ease-spring) both;
+  --animate-code-digit-clear: codeDigitClear 220ms var(--ease-smooth) both;
   --animate-caret-blink: caret-blink 1s steps(1) infinite;
 }
 
@@ -858,6 +860,31 @@
   }
   100% {
     transform: scale(1);
+  }
+}
+
+/* Кольцо фокуса: перелетая на соседнюю клетку, раздувается в полёте и оседает (как в Family) */
+@keyframes codeRing {
+  0% {
+    transform: scale(1.25);
+  }
+  55% {
+    transform: scale(0.96);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+/* Цифра исчезает, когда красное кольцо проходит её клетку */
+@keyframes codeDigitClear {
+  from {
+    opacity: 1;
+    transform: scale(1);
+  }
+  to {
+    opacity: 0;
+    transform: scale(0.5);
   }
 }
 

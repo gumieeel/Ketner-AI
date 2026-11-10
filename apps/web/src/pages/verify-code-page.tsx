@@ -147,11 +147,12 @@ export function VerifyCodePage({ flow }: { flow: CodeFlow }) {
     } catch (error) {
       handleError(error);
       fail();
-      // Красные цифры видны, пока ряд встряхивается, затем клетки очищаются под новый ввод.
+      // Красные цифры видны, пока красное кольцо пробегает ряд справа налево (~500 мс), затем
+      // клетки очищаются под новый ввод.
       resetTimer.current = window.setTimeout(() => {
         setCode('');
         setCodeStatus('idle');
-      }, 450);
+      }, 600);
     } finally {
       submitting.current = false;
       setLoading(false);

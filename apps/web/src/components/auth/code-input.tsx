@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { cn } from '@/lib/cn';
 
 export type CodeInputStatus = 'idle' | 'verifying' | 'error' | 'success';
@@ -20,14 +20,24 @@ export interface CodeInputProps {
   'aria-describedby'?: string;
 }
 
+/** Положение кольца фокуса вокруг активной клетки (в координатах ряда). */
+interface RingRect {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+}
+
 /**
  * Код из письма — клетка под каждую цифру.
  *
  * Под клетками лежит одно настоящее поле ввода (прозрачное, поверх клеток): так работают вставка
  * кода целиком, автоподстановка из письма на телефоне (`one-time-code`), Backspace и экранные
- * читалки. Клетки только показывают состояние: появляются по очереди, цифра «выпрыгивает»,
- * активная клетка подсвечена и мигает курсором, при ошибке ряд встряхивается, во время проверки
- * клетки бегут волной, при успехе вспыхивают акцентом.
+ * читалки. Клетки только показывают состояние. Анимации — как в OTP-инпуте Family: фокус — это
+ * «кольцо», которое с пружиной перелетает с клетки на клетку при вводе, а цифра выскакивает в
+ * освободившейся клетке; при ошибке кольцо краснеет и обратным перелётом возвращается к первой
+ * клетке, гася цифры по пути, а ряд встряхивается; во время проверки клетки бегут волной, при
+ * успехе вспыхивают акцентом.
  */
 export function CodeInput({
   id,
@@ -44,7 +54,55 @@ export function CodeInput({
 }: CodeInputProps) {
   const [focused, setFocused] = useState(false);
   const [shaking, setShaking] = useState(false);
+  const [ring, setRing] = useState<RingRect | null>(null);
+  // Кольцо появилось сразу на своём месте; последующие перемещения — перелёты с пружиной.
+  const [ringSettled, setRingSettled] = useState(false);
+
+  const rowRef = useRef<HTMLDivElement>(null);
+  const boxRefs = useRef<Array<HTMLDivElement | null>>([]);
+
   const activeIndex = Math.min(value.length, length - 1);
+  // При ошибке кольцо возвращается к первой клетке — как будто ввод начинается заново.
+  const ringIndex = status === 'error' ? 0 : activeIndex;
+  const ringShown = focused && !disabled && (status === 'idle' || status === 'error');
+
+  const measureRing = useCallback(() => {
+    const box = boxRefs.current[ringIndex];
+    if (!box || box.offsetWidth === 0) return;
+    // Кольцо на 4px больше клетки, чтобы целиком накрыть её рамку.
+    setRing((prev) => {
+      const next = {
+        x: box.offsetLeft - 4,
+        y: box.offsetTop - 4,
+        w: box.offsetWidth + 8,
+        h: box.offsetHeight + 8,
+      };
+      return prev && prev.x === next.x && prev.y === next.y && prev.w === next.w && prev.h === next.h
+        ? prev
+        : next;
+    });
+  }, [ringIndex]);
+
+  useLayoutEffect(() => {
+    measureRing();
+  }, [measureRing, value, status, focused]);
+
+  // Клетки меняют размер при ресайзе окна — кольцо следует за активной клеткой.
+  useEffect(() => {
+    const row = rowRef.current;
+    if (!row || typeof ResizeObserver === 'undefined') return;
+    const observer = new ResizeObserver(() => measureRing());
+    observer.observe(row);
+    return () => observer.disconnect();
+  }, [measureRing]);
+
+  // Первый кадр — кольцо на месте без анимации, дальше летает.
+  useEffect(() => {
+    if (ring && !ringSettled) {
+      const frame = requestAnimationFrame(() => setRingSettled(true));
+      return () => cancelAnimationFrame(frame);
+    }
+  }, [ring, ringSettled]);
 
   // Каждая новая ошибка встряхивает ряд заново. Поле при этом не пересоздаётся и не теряет фокус.
   useEffect(() => {
@@ -54,8 +112,9 @@ export function CodeInput({
   return (
     <div className="relative w-full">
       <div
+        ref={rowRef}
         aria-hidden="true"
-        className={cn('flex justify-between gap-2 sm:gap-3', shaking && 'animate-code-shake')}
+        className={cn('relative flex justify-between gap-2 sm:gap-3', shaking && 'animate-code-shake')}
         onAnimationEnd={(event) => {
           if (event.animationName === 'codeShake') setShaking(false);
         }}
@@ -71,6 +130,9 @@ export function CodeInput({
               className="flex-1 animate-code-box-in"
             >
               <div
+                ref={(node) => {
+                  boxRefs.current[index] = node;
+                }}
                 style={{
                   animationDelay:
                     status === 'verifying' || status === 'success' ? `${index * 70}ms` : undefined,
@@ -78,20 +140,28 @@ export function CodeInput({
                 className={cn(
                   'relative grid aspect-square max-h-16 w-full place-items-center rounded-xl border-2 bg-surface',
                   'font-mono text-[26px] font-semibold text-text tabular-nums sm:text-[28px]',
-                  'transition-[border-color,box-shadow,background-color,transform] duration-200 ease-[var(--ease-out-expo)]',
+                  'transition-[border-color,box-shadow,background-color] duration-200 ease-[var(--ease-out-expo)]',
                   digit ? 'border-stroke-strong' : 'border-stroke',
-                  isActive &&
-                    '-translate-y-0.5 border-accent shadow-[0_0_0_4px_var(--accent-soft),0_8px_24px_-12px_var(--accent)]',
-                  status === 'error' && 'border-danger bg-danger-soft text-danger',
                   status === 'verifying' && 'animate-code-wave border-accent/60',
                   status === 'success' && 'animate-code-success border-accent bg-accent-soft',
                   disabled && status === 'idle' && 'opacity-60',
                 )}
               >
                 {digit ? (
-                  <span key={`${index}-${digit}`} className="animate-code-pop">
-                    {digit}
-                  </span>
+                  status === 'error' ? (
+                    // Красное кольцо гасит цифры по очереди, пробегая ряд справа налево.
+                    <span
+                      key={`${index}-${digit}-clear`}
+                      style={{ animationDelay: `${(length - 1 - index) * 55}ms` }}
+                      className="animate-code-digit-clear text-danger"
+                    >
+                      {digit}
+                    </span>
+                  ) : (
+                    <span key={`${index}-${digit}`} className="animate-code-pop">
+                      {digit}
+                    </span>
+                  )
                 ) : isActive ? (
                   <span className="h-7 w-0.5 rounded-full bg-accent animate-caret-blink" />
                 ) : (
@@ -101,6 +171,37 @@ export function CodeInput({
             </div>
           );
         })}
+
+        {/* Летающее кольцо фокуса: один элемент на весь ряд, перелетает с клетки на клетку. */}
+        {ring && (
+          <div
+            aria-hidden="true"
+            className={cn(
+              'pointer-events-none absolute top-0 left-0 z-10 transition-opacity duration-150',
+              ringShown ? 'opacity-100' : 'opacity-0',
+            )}
+            style={{
+              width: ring.w,
+              height: ring.h,
+              transform: `translate(${ring.x}px, ${ring.y}px)`,
+              transition: ringSettled
+                ? 'transform 420ms var(--ease-spring), opacity 150ms ease-out'
+                : 'opacity 150ms ease-out',
+            }}
+          >
+            {/* Пружина перелёта: кольцо раздувается в полёте и оседает на клетке.
+                Ключ перезапускает анимацию на каждом перемещении и смене статуса. */}
+            <div
+              key={`${ringIndex}-${status}`}
+              className={cn(
+                'h-full w-full rounded-[24px] border-2 animate-code-ring',
+                status === 'error'
+                  ? 'border-danger shadow-[0_0_0_4px_var(--danger-soft)]'
+                  : 'border-accent shadow-[0_0_0_4px_var(--accent-soft),0_8px_24px_-12px_var(--accent)]',
+              )}
+            />
+          </div>
+        )}
       </div>
 
       <input
