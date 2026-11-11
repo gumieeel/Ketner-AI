@@ -142,10 +142,10 @@ export function StandaloneLayout() {
 
   return (
     <div className="relative flex min-h-screen flex-col overflow-x-clip bg-canvas text-text selection:bg-accent/20 selection:text-text">
-      {/* Шапка */}
+      {/* Шапка: при первой загрузке мягко опускается из-под верхней кромки */}
       <header
         className={cn(
-          'sticky top-0 z-40 w-full border-b transition-[background-color,border-color,backdrop-filter] duration-300',
+          'animate-site-in sticky top-0 z-40 w-full border-b transition-[background-color,border-color,backdrop-filter] duration-300',
           isLanding ? 'h-[72px] -mb-[72px] md:h-[88px] md:-mb-[88px]' : 'h-16',
           isLanding && !scrolled
             ? 'border-transparent bg-transparent'

@@ -103,6 +103,15 @@
   --animate-code-ring: codeRing 420ms var(--ease-spring) both;
   --animate-code-digit-clear: codeDigitClear 220ms var(--ease-smooth) both;
   --animate-caret-blink: caret-blink 1s steps(1) infinite;
+
+  /* Первое появление сайта: каскадный подъём первого экрана */
+  --animate-site-in: siteIn 420ms var(--ease-out-expo) both;
+  --animate-hero-eyebrow: heroEyebrow 560ms var(--ease-out-expo) both;
+  --animate-hero-headline: heroHeadline 700ms var(--ease-out-expo) both;
+  --animate-hero-rise: heroRise 560ms var(--ease-out-expo) both;
+  --animate-hero-card: heroCard 680ms var(--ease-spring) both;
+  --animate-hero-halo: heroHalo 760ms var(--ease-smooth) both;
+  --animate-hero-chip: heroChip 480ms var(--ease-out-expo) both;
 }
 
 @theme inline {
@@ -912,6 +921,108 @@
   }
   100% {
     transform: translateX(0);
+  }
+}
+
+/* ──────────────── Первое появление сайта ──────────────── */
+
+/* Шапка мягко опускается из-под верхней кромки (играет один раз при загрузке) */
+@keyframes siteIn {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Надзаголовок: разреженный трекинг стягивается к финальному.
+   Финальный трекинг должен совпадать с tracking-[0.18em] в home-page.tsx. */
+@keyframes heroEyebrow {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+    letter-spacing: 0.42em;
+  }
+  60% {
+    opacity: 1;
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+    letter-spacing: 0.18em;
+  }
+}
+
+/* Заголовок «наводит фокус»: поднимается из лёгкого размытия */
+@keyframes heroHeadline {
+  from {
+    opacity: 0;
+    transform: translateY(26px);
+    filter: blur(5px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+    filter: blur(0);
+  }
+}
+
+/* Подзаголовок и нижние строки поднимаются следом */
+@keyframes heroRise {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Карточка-поисковик: главный момент — всплывает с пружиной,
+   скругление «расправляется» из овала в радиус карточки */
+@keyframes heroCard {
+  from {
+    opacity: 0;
+    transform: translateY(34px) scale(0.97);
+    border-radius: 50%;
+  }
+  45% {
+    opacity: 1;
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+    border-radius: var(--radius-3xl);
+  }
+}
+
+/* Ореол «включения» под карточкой: распирает, когда карточка приземлилась, и гаснет */
+@keyframes heroHalo {
+  0%,
+  55% {
+    opacity: 0;
+  }
+  75% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+
+/* Чипы отраслей: каскад с лёгким масштабом */
+@keyframes heroChip {
+  from {
+    opacity: 0;
+    transform: translateY(12px) scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
   }
 }
 
