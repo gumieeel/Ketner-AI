@@ -1782,6 +1782,7 @@ export const ru = {
   'admin.creditsGranted': 'Выдано действующими грантами',
   'admin.creditsPurchased': 'есть купленные',
 
+  'discoveryHome.eyebrow': 'Business Discovery',
   'discoveryHome.title': 'Расскажите о своём бизнесе',
   'discoveryHome.subtitle':
     'Мы проанализируем ваши процессы, найдём возможности для автоматизации и предложим решения, которые помогут вашему бизнесу работать эффективнее.',

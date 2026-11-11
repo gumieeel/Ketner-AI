@@ -1,6 +1,7 @@
 import { useEffect, useId, useLayoutEffect, useRef, useState, type FormEvent } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { Button } from '@/components/ui/button';
+import { SendIcon } from '@/components/icons';
+import { Spinner } from '@/components/ui/spinner';
 import { createAnalysis, DiscoveryApiError } from '@/features/discovery/api';
 import {
   DISCOVERY_TEXT_MAX,
@@ -138,6 +139,10 @@ export function HomePage() {
         aria-labelledby="home-title"
         className="mx-auto flex min-h-[calc(100svh-10rem)] w-full max-w-[46rem] flex-col justify-center px-4 pt-[clamp(1rem,6vh,4rem)] pb-16 sm:px-6"
       >
+        {/* Надзаголовок в духе AWE: моноширинный, разреженный, капсом */}
+        <p className="mb-4 text-center font-mono text-[12px] font-medium tracking-[0.18em] text-subtle uppercase">
+          {t('discoveryHome.eyebrow')}
+        </p>
         <h1
           id="home-title"
           className="text-center text-[clamp(2.125rem,2.6vw+1.35rem,3.5rem)] leading-[1.06] font-[480] tracking-[-0.035em] text-balance text-text"
@@ -151,7 +156,10 @@ export function HomePage() {
         <form onSubmit={(event) => void submit(event)} className="mt-10" noValidate>
           <div
             className={cn(
-              'rounded-2xl border bg-surface shadow-[0_1px_2px_rgb(0_0_0/0.04),0_12px_40px_-12px_rgb(0_0_0/0.12)] transition-colors duration-200 focus-within:border-accent/70',
+              'rounded-3xl border bg-surface shadow-[0_1px_2px_rgb(0_0_0/0.04),0_12px_40px_-12px_rgb(0_0_0/0.12)]',
+              'transition-[border-color,box-shadow] duration-200 ease-out-expo',
+              'hover:border-stroke-strong focus-within:border-accent/70',
+              'focus-within:shadow-[0_0_0_4px_var(--accent-soft),0_12px_40px_-12px_rgb(0_0_0/0.12)]',
               invalid ? 'border-danger/60' : 'border-stroke',
             )}
           >
@@ -201,16 +209,45 @@ export function HomePage() {
                   </>
                 )}
               </p>
-              <Button
+              {/* CTA-пилюля в духе AWE: моноширинный капс-лейбл, при наведении буквы
+                  прокатываются волной слева направо, стрелка подаётся вперёд. */}
+              <button
                 type="submit"
-                size="md"
-                loading={starting}
                 disabled={starting}
                 aria-disabled={!canSubmit || undefined}
-                className={cn('w-full shrink-0 sm:w-auto', !canSubmit && !starting && 'opacity-60')}
+                aria-busy={starting || undefined}
+                className={cn(
+                  'cta-group group inline-flex min-h-12 w-full shrink-0 items-center justify-center gap-2.5 rounded-full bg-action px-6 sm:w-auto',
+                  'font-mono text-[13px] font-semibold tracking-[0.08em] text-action-text uppercase',
+                  '[box-shadow:var(--action-ring)] transition-[background-color,filter] duration-200 ease-out-expo',
+                  'hover:bg-action-hover active:brightness-95 disabled:pointer-events-none',
+                  !canSubmit && !starting && 'opacity-60',
+                )}
               >
-                {starting ? t('discoveryHome.starting') : t('discoveryHome.submit')}
-              </Button>
+                {starting ? (
+                  <>
+                    <Spinner className="size-4 shrink-0" />
+                    <span>{t('discoveryHome.starting')}</span>
+                  </>
+                ) : (
+                  <>
+                    {/* Полное название — для читалок; буквы ниже чисто визуальные. */}
+                    <span className="sr-only normal-case">{t('discoveryHome.submit')}</span>
+                    <span aria-hidden="true" className="pointer-events-none">
+                      {Array.from(t('discoveryHome.submit')).map((letter, index) => (
+                        <span
+                          key={index}
+                          className="cta-letter"
+                          style={{ animationDelay: `${index * 16}ms` }}
+                        >
+                          {letter}
+                        </span>
+                      ))}
+                    </span>
+                    <SendIcon className="text-[15px] transition-transform duration-200 ease-out-expo group-hover:translate-x-1" />
+                  </>
+                )}
+              </button>
             </div>
           </div>
         </form>

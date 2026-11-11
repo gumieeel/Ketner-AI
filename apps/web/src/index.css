@@ -515,6 +515,19 @@
       background-color 200ms var(--ease-out-expo);
   }
 
+  /* ──────────────── CTA-кнопка героя (по мотивам AWE) ──────────────── */
+
+  /* Волна букв: при наведении или фокусе с клавиатуры буквы по очереди
+     сдвигаются вправо и оседают. Задержка каскада — инлайн на каждой букве. */
+  .cta-group:hover:not(:disabled) .cta-letter,
+  .cta-group:focus-visible:not(:disabled) .cta-letter {
+    animation: letterRoll 480ms var(--ease-spring) both;
+  }
+  .cta-letter {
+    display: inline-block;
+    white-space: pre;
+  }
+
   /* Атмосферные пятна и свечение отключены: глубина — от тона, не от размытия */
   .bg-aurora,
   .hero-glow {
@@ -885,6 +898,20 @@
   to {
     opacity: 0;
     transform: scale(0.5);
+  }
+}
+
+/* Волна букв в CTA-кнопке героя (по мотивам AWE): каждая буква сдвигается вправо
+   и возвращается с пружиной, каскад слева направо. Задержка задаётся инлайн. */
+@keyframes letterRoll {
+  0% {
+    transform: translateX(0);
+  }
+  40% {
+    transform: translateX(0.26em);
+  }
+  100% {
+    transform: translateX(0);
   }
 }
 
