@@ -49,6 +49,12 @@ function normalizeBaseUrl(rawUrl: string): string {
   return url || 'http://localhost:8787';
 }
 
+/**
+ * Экземпляры Better Auth на Postgres (адаптер drizzle). Их таблицы создаёт db/sync.ts, а миграции
+ * Better Auth для них запускать нельзя: getMigrations для адаптера без Kysely вызывает process.exit(1).
+ */
+const postgresAuthInstances = new WeakSet<object>();
+
 export function createBetterAuth(options: BetterAuthInstanceOptions = {}) {
   const dbPath = options.dbPath ?? config.authDbFile;
   const isMemory = dbPath === ':memory:';
@@ -230,6 +236,9 @@ export function createBetterAuth(options: BetterAuthInstanceOptions = {}) {
     },
   });
 
+  if (usePostgres && pgDb) {
+    postgresAuthInstances.add(auth);
+  }
   return { auth, db };
 }
 
@@ -267,7 +276,8 @@ export function trustedAuthOrigins(
 export async function initAuthDatabase(
   authInstance: ReturnType<typeof createBetterAuth>['auth'],
 ): Promise<void> {
-  if (DatabaseSyncClass) {
+  // Миграции Better Auth — только для локальной SQLite. На Postgres таблицы создаёт db/sync.ts.
+  if (DatabaseSyncClass && !postgresAuthInstances.has(authInstance)) {
     try {
       const { runMigrations } = await getMigrations(authInstance.options);
       await runMigrations();
