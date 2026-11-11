@@ -202,7 +202,9 @@ psql "…" -X -1 -v ON_ERROR_STOP=1 -f docs/SECURITY_REMEDIATION_ROLLBACK.sql
 
 Откат возвращает права ровно такими, какими они были.
 
-## 8. Ошибки в `main`, найденные попутно (не исправлены — вне задачи)
+## 8. Ошибки в `main`, найденные попутно
+
+Ошибка 1 исправлена в ветке (не в `main`): [NODE_STARTUP_FIX.md](NODE_STARTUP_FIX.md). Ошибка 2 не исправлена.
 
 1. **Сервер не стартует на Node ≥ 22.13 с `DATABASE_URL`.**
    - Причина: `initAuthDatabase` (`auth/better-auth.ts`) при доступном `node:sqlite` вызывает Better Auth `getMigrations`, а тот для адаптера drizzle вызывает `process.exit(1)` (`better-auth/dist/db/get-migration.mjs`) — `try/catch` это не ловит.

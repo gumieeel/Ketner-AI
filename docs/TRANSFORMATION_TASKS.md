@@ -81,7 +81,7 @@ _Вторая редакция (свой исполнитель + Activepieces) 
 | T1.4   | PARTIALLY COMPLETE | Проект хранения и предложение миграций 0013–0017 с проверкой изоляции на одноразовой базе — [PERSISTENCE_DESIGN.md](PERSISTENCE_DESIGN.md); миграции ждут одобрения                              |
 | SEC.1  | PARTIALLY COMPLETE | Права ролей API Supabase: аудит и исправление (`REVOKE` + права по умолчанию), проверено на одноразовом кластере 16.15 — [SECURITY_PRIVILEGE_AUDIT.md](SECURITY_PRIVILEGE_AUDIT.md); ждёт ответов R1–R5 и проверки владельцем; к production не применять |
 | SEC.2  | BLOCKED            | Повтор стендов (`run-security-review.sh`, `persistence-review/run-review.sh`) на PostgreSQL 17 (production — 17.6): двоичные файлы 17 из npm-пакета не разрешено запускать в этой сессии, репозиторий apt.postgresql.org закрыт сетью |
-| FIX.1  | NOT STARTED        | Сервер падает при старте на Node ≥ 22.13 с `DATABASE_URL` (Better Auth `getMigrations` → `process.exit(1)`); блокирует T4.0 (Mastra требует Node ≥ 22.13) |
+| FIX.1  | COMPLETE (в ветке) | Сервер падал при старте на Node ≥ 22.13 с `DATABASE_URL`: Better Auth `getMigrations` → `process.exit(1)` для адаптера drizzle. Исправлено в `auth/better-auth.ts`, тест `auth/better-auth-init.test.ts`, старт проверен на Node 22.23.4 и 24.22.1 — [NODE_STARTUP_FIX.md](NODE_STARTUP_FIX.md); в `main` не переносилось |
 
 Остальные задачи — **NOT STARTED**. Этап 6 и рамки n8n — третья редакция с правками владельца (изоляция клиентов, Private Service, прирост стоимости). Размер: S — до дня, M — 2–4 дня, L — неделя и больше. «Блокирует» — что нельзя начать без этой задачи.
 
