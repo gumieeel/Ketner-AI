@@ -2,7 +2,7 @@
 # Проверка docs/SECURITY_REMEDIATION_PROPOSAL.sql на ОДНОРАЗОВОМ кластере Postgres 16 (не на базе проекта).
 # Модель production (проверено владельцем 2026-11-11, docs/SECURITY_PRIVILEGE_AUDIT.md):
 #   - сервер = роль-владелец таблиц, не суперпользователь, BYPASSRLS (в Supabase — postgres; здесь ketner_backend);
-#   - RLS включён на всех таблицах public, FORCE выключен;
+#   - RLS включён на всех таблицах public (модель событийного триггера rls_auto_enable, R3), FORCE выключен;
 #   - права по умолчанию как в Supabase: всё на новые таблицы, последовательности и функции public
 #     ролям anon, authenticated, service_role.
 # Таблицы создаёт настоящий сервер Ketner (db/sync.ts и миграции 0001–0012).
@@ -59,6 +59,8 @@ ALTER DEFAULT PRIVILEGES FOR ROLE ketner_backend IN SCHEMA public GRANT ALL ON T
 ALTER DEFAULT PRIVILEGES FOR ROLE ketner_backend IN SCHEMA public GRANT ALL ON SEQUENCES TO anon, authenticated, service_role;
 ALTER DEFAULT PRIVILEGES FOR ROLE ketner_backend IN SCHEMA public GRANT ALL ON FUNCTIONS TO anon, authenticated, service_role;
 SQL
+  # Как в production: событийный триггер включает RLS на каждой новой таблице public.
+  $SU -d $db -f "$HERE/rls-auto-enable-model.sql"
 done
 
 start_server() {  # $1 — метка лога, $2 — база
@@ -88,6 +90,13 @@ DUMP() { "$PGBIN/pg_dump" $C -U postgres --schema-only "$1" | grep -Ev '^\\(un)?
 MATRIX() { psql $H -U postgres -d "$1" -q -f "$HERE/privilege-matrix.sql"; }
 PROBE() { psql $H -U postgres -d "$1" -q -f "$HERE/anon-probe.sql"; }
 NORM="node $HERE/normalize-acl.mjs"
+FNPRIV() {  # кто может вызвать функцию: anon, authenticated, PUBLIC, service_role, владелец
+  $SU -d "$1" -tAc "select 'anon=' || has_function_privilege('anon', '$2'::regprocedure, 'EXECUTE')
+    || ' authenticated=' || has_function_privilege('authenticated', '$2'::regprocedure, 'EXECUTE')
+    || ' PUBLIC=' || exists (select 1 from pg_proc p cross join lateral aclexplode(coalesce(p.proacl, acldefault('f', p.proowner))) a where p.oid = '$2'::regprocedure and a.grantee = 0)
+    || ' service_role=' || has_function_privilege('service_role', '$2'::regprocedure, 'EXECUTE')
+    || ' owner=' || has_function_privilege('ketner_backend', '$2'::regprocedure, 'EXECUTE')"
+}
 pass() { echo "PASS  $*"; }
 fail() { echo "FAIL  $*"; }
 
@@ -100,7 +109,7 @@ echo "== 1. Server creates tables (role ketner_backend); production model: RLS o
 start_server create app
 stop_server
 $SU -d app -c "UPDATE ketner_users SET password_hash = 'bbc0bc01b2922db02e7e323650293f89d30adc22edf33a76811707cd06e54bc9' WHERE id = 'demo-user'"
-enable_rls_everywhere app
+echo "RLS by the event trigger: $($SU -d app -tAc "select count(*) filter (where rowsecurity) || ' of ' || count(*) from pg_tables where schemaname='public'") tables"
 start_server before app
 node "$HERE/smoke.mjs" "http://127.0.0.1:$APP_PORT" | sed 's/^/  /'
 stop_server
@@ -133,6 +142,7 @@ echo "== 3. Before remediation (production model)"
 MATRIX app > "$WORK/matrix-before.txt"
 echo "tables: $(wc -l < "$WORK/matrix-before.txt"), RLS on: $(grep -c '|rls=true|' "$WORK/matrix-before.txt"), FORCE: $(grep -c '|force=true|' "$WORK/matrix-before.txt"), anon has privileges on: $(grep -vc '|anon=-|' "$WORK/matrix-before.txt")"
 echo "anon/authenticated (RLS on, no policies): rows hidden, but TRUNCATE works:"; PROBE app | sed 's/^/  /'
+echo "app function solutions_legacy_template() (trigger, migration 0011): $(FNPRIV app 'public.solutions_legacy_template()')"
 CAT app > "$WORK/catalog-before.txt"; SNAP app > "$WORK/data-before.txt"; DUMP app > "$WORK/dump-before.sql"
 
 echo "== 4. Apply remediation as ketner_backend (owner, not superuser), twice"
@@ -154,8 +164,20 @@ r=$($SU -d app -tAc "select has_table_privilege('anon', 'public.future_table', '
 r=$($SU -d app -tAc "select has_table_privilege('service_role', 'public.future_table', 'SELECT')")
 echo "  service_role on the new table: $r (default privileges for service_role untouched)"
 $BACK -d app -c "DROP TABLE public.future_table"
+r=$(FNPRIV app 'public.solutions_legacy_template()')
+[ "$r" = "anon=false authenticated=false PUBLIC=false service_role=true owner=true" ] \
+  && pass "app function: not executable by anon/authenticated/PUBLIC; service_role untouched ($r)" || fail "app function: $r"
+$BACK -d app -c "CREATE SEQUENCE public.future_seq"
+r=$($SU -d app -tAc "select has_sequence_privilege('anon', 'public.future_seq', 'USAGE,SELECT,UPDATE') or has_sequence_privilege('authenticated', 'public.future_seq', 'USAGE,SELECT,UPDATE')")
+[ "$r" = f ] && pass "a sequence created later by the owner gets no anon/authenticated privileges" || fail "new sequence still granted"
+$BACK -d app -c "DROP SEQUENCE public.future_seq"
+$BACK -d app -c "CREATE FUNCTION public.future_fn() RETURNS int LANGUAGE sql AS 'SELECT 1'"
+r=$(FNPRIV app 'public.future_fn()')
+[[ "$r" == "anon=false authenticated=false PUBLIC=false "* ]] \
+  && pass "a function created later by the owner: not executable by anon/authenticated/PUBLIC ($r)" || fail "new function: $r"
+$BACK -d app -c "DROP FUNCTION public.future_fn()"
 echo "default privileges of ketner_backend in public now:"
-$SU -d app -tAc "select defaclobjtype::text || ' ' || defaclacl::text from pg_default_acl where defaclrole = 'ketner_backend'::regrole order by 1" | sed 's/^/  /'
+$SU -d app -tAc "select CASE WHEN defaclnamespace = 0 THEN '* (global)' ELSE defaclnamespace::regnamespace::text END || ' ' || defaclobjtype::text || ' ' || defaclacl::text from pg_default_acl where defaclrole = 'ketner_backend'::regrole order by 1" | sed 's/^/  /'
 
 echo "== 5. Refusals (each must fail and change nothing)"
 $SU -d guard -c "GRANT CREATE ON SCHEMA public TO ketner_restricted"
@@ -183,6 +205,7 @@ echo "catalog raw: $(diff "$WORK/catalog-before.txt" "$WORK/catalog-after.txt" |
 diff <($NORM < "$WORK/catalog-before.txt" | grep -v '^sequence ') <($NORM < "$WORK/catalog-after.txt" | grep -v '^sequence ') \
   && pass "catalog with ACL entries sorted: IDENTICAL (incl. default privileges)" || fail "catalog differs (lines above)"
 diff "$WORK/matrix-before.txt" <(MATRIX app) >/dev/null && pass "privileges + RLS identical to before" || fail "privileges differ"
+echo "app function after rollback: $(FNPRIV app 'public.solutions_legacy_template()')"
 echo "pg_dump --schema-only: lines changed other than GRANT order: $(diff "$WORK/dump-before.sql" "$WORK/dump-after.sql" | grep -E '^[<>]' | grep -vc '^[<>] GRANT ' || true)"
 diff <(sort "$WORK/dump-before.sql") <(sort "$WORK/dump-after.sql") >/dev/null && pass "pg_dump as a set of lines: IDENTICAL" || fail "pg_dump differs"
 SNAP app > "$WORK/data-b2.txt"; MATRIX app > "$WORK/matrix-b2.txt"; CAT app | $NORM > "$WORK/catalog-b2.txt"
@@ -195,7 +218,7 @@ $BACK -d app -1 -f "$PROPOSAL" 2>/dev/null && pass "remediation re-applies clean
 echo "== 8. Full server test suite (role ketner_backend, database with remediation applied)"
 start_server tests tests
 stop_server
-enable_rls_everywhere tests
+echo "tests db, RLS by the event trigger: $($SU -d tests -tAc "select count(*) filter (where rowsecurity) || ' of ' || count(*) from pg_tables where schemaname='public'") tables"
 $BACK -d tests -1 -f "$PROPOSAL"
 echo "tests db: $($SU -d tests -tAc "select count(*) from pg_tables where schemaname='public' and rowsecurity") tables with RLS, anon-privileged: $($SU -d tests -tAc "select count(*) from pg_class c join pg_namespace n on n.oid=c.relnamespace where n.nspname='public' and c.relkind='r' and has_table_privilege('anon', c.oid, 'SELECT')")"
 (cd "$API" && TEST_DATABASE_URL="postgres://ketner_backend@127.0.0.1:$PG_PORT/tests" npm test 2>&1 \
