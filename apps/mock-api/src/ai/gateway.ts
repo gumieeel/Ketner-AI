@@ -18,6 +18,12 @@
  * той модели, которая ответила.
  */
 
+import {
+  isAgentCapable,
+  type AgentCapableProvider,
+  type AgentProviderRequest,
+  type AgentToolCall,
+} from './agent/agent-types.js';
 import { ERROR_MESSAGES, pickAnswer } from './answers.js';
 import { semanticCache, SemanticCache } from './cache.js';
 import { ContextOptimizer } from './context.js';
@@ -400,6 +406,40 @@ export class AIGateway {
   /**
    * Стриминговая генерация ответа через AI Gateway.
    */
+  /**
+   * СПАЙК Mastra (T4.0): один вызов провайдера с инструментами внутри обычного пути шлюза.
+   * Сторож стрима здесь не подключён (в спайке достаточно сигнала отмены) — до переноса в main
+   * нужен тот же сторож, что у streamWithWatchdog.
+   */
+  private async agentPass(
+    provider: AIProvider & AgentCapableProvider,
+    request: Omit<AgentProviderRequest, 'signal'>,
+    hooks: { onDelta: (delta: string) => void; isCancelled: () => boolean; clientSignal: AbortSignal },
+  ): Promise<{ response: ProviderResponse; timedOut: boolean; toolCalls: AgentToolCall[] }> {
+    const result = await provider.streamAgent(
+      { ...request, signal: hooks.clientSignal },
+      {
+        onEvent: (event) => {
+          if (event.kind === 'content') hooks.onDelta(event.text);
+        },
+        isCancelled: hooks.isCancelled,
+      },
+    );
+    return {
+      response: {
+        content: result.content,
+        usage: result.usage,
+        ...(typeof result.cost === 'number' ? { cost: result.cost } : {}),
+        ...(result.model ? { model: result.model } : {}),
+        ...(result.via ? { via: result.via } : {}),
+        // У шага с вызовом инструментов ответ не оборван: для учёта это обычное завершение.
+        finishReason: result.finishReason === 'tool_calls' ? 'stop' : result.finishReason,
+      },
+      timedOut: false,
+      toolCalls: result.toolCalls,
+    };
+  }
+
   async stream(
     req: GatewayRequest,
     callbacks: GatewayStreamCallbacks,
@@ -741,7 +781,8 @@ export class AIGateway {
       // Ответ зависит от файлов проекта и вложений, а ключ кэша — только от текста вопроса:
       // с проектом/вложениями кэш не читаем и не пишем (иначе чужой или устаревший ответ).
       // Служебные запросы (проверка ответа) в кэш не ходят: их результат хранится отдельно.
-      const cacheable = !hasAttachments && !activeWorkspace && !req.task && !req.assistant;
+      const cacheable =
+        !hasAttachments && !activeWorkspace && !req.task && !req.assistant && !req.agentStep;
 
       const cachedHit = cacheable
         ? semanticCache.get(cacheModelKey, language, prompt, userScope, historyHash)
@@ -830,6 +871,8 @@ export class AIGateway {
 
       let usedEngineId: string | undefined;
       let watchdogTimedOut = false;
+      // СПАЙК Mastra: вызовы инструментов последнего шага агента.
+      let agentToolCalls: AgentToolCall[] = [];
       // Общая оценка пользователей по лёгким моделям: при частых дизлайках глубина размышлений
       // простых запросов поднимается на шаг.
       const escalate = this.feedbackStore.shouldEscalateFromLightModel(
@@ -843,6 +886,10 @@ export class AIGateway {
 
           const provider = this.providers.get(candidateModel.provider);
           if (!provider || !provider.isAvailable()) {
+            continue;
+          }
+          // СПАЙК Mastra: шаг агента идёт только через провайдера с вызовом функций.
+          if (req.agentStep && !isAgentCapable(provider)) {
             continue;
           }
 
@@ -898,8 +945,41 @@ export class AIGateway {
                 ]
               : optimizedMessages;
 
+          const onAgentDelta = (delta: string) => {
+            if (firstTokenMs === null) {
+              firstTokenMs = Date.now() - startTime;
+            }
+            callbacks.onDelta(delta);
+          };
           const runPass = (withReasoning: typeof reasoning) =>
-            this.streamWithWatchdog(
+            req.agentStep
+              ? this.agentPass(
+                  provider as AIProvider & AgentCapableProvider,
+                  {
+                    model: engineId,
+                    // Системный промпт — тот же, что строит шлюз (у бота — его настройки целиком);
+                    // диалог — сообщения шага агента со своими вызовами и результатами инструментов.
+                    messages: [
+                      ...(candidateMessages[0]?.role === 'system'
+                        ? [{ role: 'system' as const, content: candidateMessages[0].content }]
+                        : []),
+                      ...req.agentStep.messages.filter((m) => m.role !== 'system'),
+                    ],
+                    tools: req.agentStep.tools,
+                    ...(req.agentStep.toolChoice ? { toolChoice: req.agentStep.toolChoice } : {}),
+                    maxTokens,
+                    ...(withReasoning ? { reasoning: withReasoning } : {}),
+                  },
+                  {
+                    onDelta: onAgentDelta,
+                    isCancelled: combinedIsCancelled,
+                    clientSignal: clientAbortController.signal,
+                  },
+                ).then((agentPass) => {
+                  agentToolCalls = agentPass.toolCalls;
+                  return agentPass;
+                })
+              : this.streamWithWatchdog(
               provider,
               {
                 model: engineId,
@@ -943,7 +1023,10 @@ export class AIGateway {
             streamedResponse = pass.response;
             watchdogTimedOut = pass.timedOut;
 
-            if (streamedResponse && streamedResponse.content.length > 0) {
+            if (
+              streamedResponse &&
+              (streamedResponse.content.length > 0 || agentToolCalls.length > 0)
+            ) {
               if (pass.timedOut) {
                 // Ответ дошёл частично и оборвался по таймауту: пользователю он показан, но
                 // провайдер считается нестабильным.
@@ -1153,6 +1236,7 @@ export class AIGateway {
           reasoningMode,
           costUsd: totalEstimatedCost,
           creditsUsd,
+          ...(req.agentStep ? { toolCalls: agentToolCalls } : {}),
         });
       }
     } catch (error) {

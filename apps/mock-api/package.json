@@ -22,6 +22,7 @@
   "dependencies": {
     "@anthropic-ai/sdk": "0.133.0",
     "@better-auth/infra": "^0.4.12",
+    "@mastra/core": "1.80.0",
     "better-auth": "^1.7.5",
     "cors": "^2.8.6",
     "dodopayments": "2.55.0",

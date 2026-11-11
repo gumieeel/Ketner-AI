@@ -6,6 +6,7 @@
  * Usage Accounting и Fair Use Engine.
  */
 
+import type { AgentMessage, AgentToolCall, AgentToolChoice, AgentToolDefinition } from './agent/agent-types.js';
 import type { PlanId, Language, MessageAttachment, WorkspaceContext } from '../types.js';
 export type { PlanId, Language, MessageAttachment, WorkspaceContext };
 
@@ -466,6 +467,18 @@ export interface GatewayRequest {
     replaceSystemPrompt?: boolean;
   };
   /**
+   * СПАЙК Mastra (T4.0, ветка claude/mastra-spike, в main не идёт): один шаг агента с инструментами.
+   * Выбор модели, запасные, учёт, цена и списание — те же, что у обычного запроса; вызов провайдера —
+   * `streamAgent` с инструментами, а не `streamText`. `messages` выше по-прежнему нужен для проверки
+   * размера и анализа запроса (текстовая копия диалога); провайдер получает системный промпт шлюза и
+   * `agentStep.messages` (без системных сообщений).
+   */
+  agentStep?: {
+    messages: AgentMessage[];
+    tools: AgentToolDefinition[];
+    toolChoice?: AgentToolChoice;
+  };
+  /**
    * Служебный запрос вместо обычного ответа в чате (проверка ответа другой моделью, судья
    * сравнения, ревью кода): заменяет системный промпт чата, не читает и не пишет семантический
    * кэш, не тратит лимит модели и пишется в учёт с `kind: 'review'` и `runId` = id проверки.
@@ -503,6 +516,8 @@ export interface GatewayRequest {
 
 /** Результат завершения генерации (расширенный). */
 export interface GatewayDoneResult {
+  /** СПАЙК Mastra: вызовы инструментов, которые вернула модель на шаге агента (`agentStep`). */
+  toolCalls?: AgentToolCall[];
   inputTokens: number;
   outputTokens: number;
   selectedModel?: { id: string; name: string };
