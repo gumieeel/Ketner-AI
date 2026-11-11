@@ -6,14 +6,14 @@
 | --- | --- |
 | [SECURITY_REMEDIATION_PROPOSAL.sql](SECURITY_REMEDIATION_PROPOSAL.sql) | Исправление: `REVOKE ALL` у `anon`/`authenticated` + `ALTER DEFAULT PRIVILEGES`, с проверками внутри |
 | [SECURITY_REMEDIATION_ROLLBACK.sql](SECURITY_REMEDIATION_ROLLBACK.sql) | Откат: возвращает права ровно такими, какими они были |
-| [security-review/production-readonly-queries.sql](security-review/production-readonly-queries.sql) | Запросы только для чтения к production (Q1–Q7) |
+| [security-review/production-readonly-queries.sql](security-review/production-readonly-queries.sql) | Запросы только для чтения к production (R1–R5), каждый — один `SELECT`, выполнять по одному |
 | [security-review/table-fingerprint.sql](security-review/table-fingerprint.sql) | Отпечаток данных: строки + md5 по каждой таблице (только `SELECT`) |
 | [security-review/verify-restore.sh](security-review/verify-restore.sh) | Восстановление копии в одноразовый кластер и сверка с отпечатком production |
 | [security-review/run-security-review.sh](security-review/run-security-review.sh) | Полная проверка на одноразовом кластере; результат — [security-review/last-run.txt](security-review/last-run.txt) |
 
 ## 1. Итог
 
-- В production RLS включён на **всех** таблицах `public`, а сервер работает ролью-владельцем с BYPASSRLS. Поэтому строки через API Supabase сейчас **не читаются и не вставляются**: политик нет.
+- В production RLS включён на **всех** таблицах `public`, политик и представлений в `public` нет, а сервер работает ролью-владельцем с BYPASSRLS. Поэтому строки через API Supabase сейчас **не читаются и не вставляются** (проверено владельцем 11.11.2026).
 - Лишнее — права `anon` и `authenticated`, которые Supabase выдаёт по умолчанию:
   - **`TRUNCATE`**: на него RLS не действует. Через Data API (PostgREST) `TRUNCATE` не выполнить, поэтому сейчас это вторая линия защиты, а не открытая дыра;
   - права по умолчанию: каждая **новая** таблица снова получит всё. Если её создать без RLS, данные сразу откроются через Data API.
@@ -29,15 +29,15 @@
 | `service_role` — BYPASSRLS; `anon`, `authenticated` — без BYPASSRLS | **Проверено** | То же |
 | Все таблицы `public` принадлежат `postgres`, RLS включён (`relrowsecurity = true`), `FORCE` выключен | **Проверено** | То же |
 | У `anon` и `authenticated` есть `SELECT`, `INSERT`, `TRUNCATE` на каждой таблице | **Проверено** | То же |
-| Полный набор прав ролей API (есть ли ещё `UPDATE`, `DELETE`, `REFERENCES`, `TRIGGER`, `MAINTAIN`) и права `service_role` | Не проверено | Q3 |
-| Политики и представления в `public` | **Не проверено** — в сообщении стоял шаблон «[вставьте результат последнего запроса]» вместо результата | Q5 |
-| Как заданы права по умолчанию (в схеме `public` или глобально; кем) | Не проверено | Q4 |
-| Последовательности и функции в `public` и их права | Не проверено | Q5 |
-| Какие схемы открыты через Data API | Не проверено | Q6 |
-| Версия Postgres (от неё зависит версия `pg_dump` для копии) | Не проверено | Q1 |
-| Точный список таблиц в production (есть ли таблицы вне списка ниже, например `billing_events`) | Не проверено | Q3 |
+| Политики в `public`: нет. Представления в `public`: нет | **Проверено** 11.11.2026 | Владелец проекта |
+| PostgreSQL 17.6 (x86_64-pc-linux-gnu) | **Проверено** 11.11.2026 | Владелец проекта |
+| Полный набор прав ролей API (есть ли ещё `UPDATE`, `DELETE`, `REFERENCES`, `TRIGGER`, `MAINTAIN`), кем выданы, права на колонки, права `service_role` | Не проверено | R1 |
+| Как заданы права по умолчанию (в схеме `public` или глобально; кем) | Не проверено | R2 |
+| Последовательности и функции в `public` и их права | Не проверено | R3 |
+| Какие схемы открыты через Data API | Не проверено | R4 или панель Supabase |
+| Точный список таблиц в production (есть ли таблицы вне списка ниже, например `billing_events`) | Не проверено | R1 |
 
-Пока по пунктам «не проверено» нет ответа, исправление применять нельзя. Выполнить [production-readonly-queries.sql](security-review/production-readonly-queries.sql) — все запросы идут в транзакции `READ ONLY` и откатываются — и прислать результат без строк подключения.
+Пока по пунктам «не проверено» нет ответа, исправление применять нельзя. Выполнить запросы R1–R5 из [production-readonly-queries.sql](security-review/production-readonly-queries.sql) по одному (SQL-редактор Supabase показывает результат только последнего оператора; каждый запрос — один `SELECT`, ничего не меняет) и прислать результаты без строк подключения.
 
 ## 3. Таблицы
 
@@ -92,13 +92,13 @@
 
 Ограничения:
 
-- **Права на отдельные колонки** снимаются вместе с правами на таблицу, а откат их не вернёт. Если такие есть, скрипт сообщает об этом в `NOTICE`; у ролей API в Supabase их обычно нет — проверить по Q3.
+- **Права на отдельные колонки** снимаются вместе с правами на таблицу, а откат их не вернёт. Если такие есть, скрипт сообщает об этом в `NOTICE`; у ролей API в Supabase их обычно нет — проверить по R1 (`column_grants`).
 - **Последовательности и функции** не входят в согласованный объём. На стенде права по умолчанию для них остаются у `anon` (раздел 6).
 - Создание таблицы в Supabase запускает событийный триггер `pgrst_ddl_watch`: PostgREST перечитает схему. Это безвредно.
 
 ## 5. Проверка на одноразовом кластере
 
-[run-security-review.sh](security-review/run-security-review.sh), PostgreSQL 16.15. Модель production:
+[run-security-review.sh](security-review/run-security-review.sh), PostgreSQL 16.15. **Production — PostgreSQL 17.6: прогон на 17 ещё не выполнен** (см. [TRANSFORMATION_TASKS.md](TRANSFORMATION_TASKS.md), SEC.2). Модель production:
 
 - `ketner_backend` — владелец таблиц, не суперпользователь, BYPASSRLS (как `postgres` в Supabase);
 - RLS включён на всех таблицах;
@@ -131,7 +131,7 @@
 
 ## 6. Вне объёма (нужно решение)
 
-1. **Последовательности.** Права по умолчанию Supabase выдают `anon` права `USAGE`/`SELECT`/`UPDATE` на новые последовательности, то есть `setval`. В таблицах Ketner последовательностей на стенде нет (ключи — текст и `uuid`). В production — Q5.
+1. **Последовательности.** Права по умолчанию Supabase выдают `anon` права `USAGE`/`SELECT`/`UPDATE` на новые последовательности, то есть `setval`. В таблицах Ketner последовательностей на стенде нет (ключи — текст и `uuid`). В production — R3.
 2. **Функции.** `EXECUTE` выдаётся `PUBLIC` и `anon` (на стенде: `solutions_legacy_template()` из `0011`). Это триггерная функция, через RPC её не вызвать. Новая `platform_contains_secret(jsonb)` из `0013` была бы вызываема через Data API. Предложение: в будущих миграциях — `REVOKE EXECUTE … FROM PUBLIC, anon, authenticated`.
 3. **Data API.** Если он не нужен (Ketner его не использует), можно убрать схему `public` из открытых в настройках Supabase. Это изменение конфигурации проекта, не базы; решает владелец.
 
@@ -139,7 +139,7 @@
 
 В проекте (Supabase Free plan) **нет резервных копий**. Ни одна миграция — это исправление, `0013`+ и любые другие — не применяется к production без шагов 1–4.
 
-**1. Запросы только для чтения.** Выполнить Q1–Q7 и прислать результат. Версия из Q1 определяет версию `pg_dump`: та же major-версия или новее.
+**1. Запросы только для чтения.** Выполнить R1–R5 по одному и прислать результаты. Production — PostgreSQL 17.6, поэтому `pg_dump` и `pg_restore` версии **17** (или новее), кластер проверки восстановления — тоже 17.
 
 **2. Копия и отпечаток из одного снимка.** Подключение — прямое (`db.<ref>.supabase.co:5432`) или пулер в режиме сессии. Пулер в режиме транзакций (порт 6543) не подходит. Пароль вводится по запросу `psql`/`pg_dump` или через `~/.pgpass`; в команды и чат его не вставлять.
 
@@ -167,10 +167,10 @@ pg_dump "host=… port=5432 dbname=postgres user=postgres sslmode=require" --sna
 COMMIT;
 ```
 
-**3. Проверка восстановления на одноразовом кластере** (та же или более новая major-версия Postgres, что в Q1):
+**3. Проверка восстановления на одноразовом кластере PostgreSQL 17** (как production):
 
 ```
-PGBIN=/usr/lib/postgresql/<версия>/bin bash docs/security-review/verify-restore.sh ketner-<дата>.dump production-fingerprint.txt
+PGBIN=/usr/lib/postgresql/17/bin bash docs/security-review/verify-restore.sh ketner-<дата>.dump production-fingerprint.txt
 ```
 
 Нужно получить `restore: OK` и `PASS restored copy matches production fingerprint`.
@@ -191,7 +191,7 @@ psql "…" -X -1 -v ON_ERROR_STOP=1 -f docs/SECURITY_REMEDIATION_PROPOSAL.sql
 
 **5. Проверка после применения:**
 
-- повторить Q3 и Q4: у `anon`/`authenticated` прав нет; в Q4 для `postgres`/`public`/`r` их тоже нет;
+- повторить R1 и R2: у `anon`/`authenticated` прав нет; в R2 для `postgres`/`public`/`r` их тоже нет;
 - проверить сайт: вход, список решений, чат.
 
 **6. Откат при проблемах:**

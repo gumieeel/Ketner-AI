@@ -79,6 +79,9 @@ _Вторая редакция (свой исполнитель + Activepieces) 
 | T1.3   | PARTIALLY COMPLETE | Четыре автомата и вывод состояний из записей — `platform/lifecycle.ts`, тесты; журнал переходов — с T1.4                                                                                         |
 | T1.5   | PARTIALLY COMPLETE | Риск по последствиям, одобрение отдельно, заранее выданные разрешения для MEDIUM наружу — `platform/risk.ts`, тесты; хранение разрешений и `approval_requests` — позже                           |
 | T1.4   | PARTIALLY COMPLETE | Проект хранения и предложение миграций 0013–0017 с проверкой изоляции на одноразовой базе — [PERSISTENCE_DESIGN.md](PERSISTENCE_DESIGN.md); миграции ждут одобрения                              |
+| SEC.1  | PARTIALLY COMPLETE | Права ролей API Supabase: аудит и исправление (`REVOKE` + права по умолчанию), проверено на одноразовом кластере 16.15 — [SECURITY_PRIVILEGE_AUDIT.md](SECURITY_PRIVILEGE_AUDIT.md); ждёт ответов R1–R5 и проверки владельцем; к production не применять |
+| SEC.2  | BLOCKED            | Повтор стендов (`run-security-review.sh`, `persistence-review/run-review.sh`) на PostgreSQL 17 (production — 17.6): двоичные файлы 17 из npm-пакета не разрешено запускать в этой сессии, репозиторий apt.postgresql.org закрыт сетью |
+| FIX.1  | NOT STARTED        | Сервер падает при старте на Node ≥ 22.13 с `DATABASE_URL` (Better Auth `getMigrations` → `process.exit(1)`); блокирует T4.0 (Mastra требует Node ≥ 22.13) |
 
 Остальные задачи — **NOT STARTED**. Этап 6 и рамки n8n — третья редакция с правками владельца (изоляция клиентов, Private Service, прирост стоимости). Размер: S — до дня, M — 2–4 дня, L — неделя и больше. «Блокирует» — что нельзя начать без этой задачи.
 
