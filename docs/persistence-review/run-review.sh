@@ -36,7 +36,12 @@ GRANT USAGE ON SCHEMA public TO anon, authenticated, service_role, ketner_backen
 ALTER SCHEMA public OWNER TO ketner_backend;
 ALTER DEFAULT PRIVILEGES FOR ROLE ketner_backend IN SCHEMA public
   GRANT ALL ON TABLES TO anon, authenticated, service_role, ketner_backend_bypass, ketner_restricted;
+-- Как в Supabase: EXECUTE на новые функции ролям API (поверх встроенного EXECUTE у PUBLIC).
+ALTER DEFAULT PRIVILEGES FOR ROLE ketner_backend IN SCHEMA public
+  GRANT ALL ON FUNCTIONS TO anon, authenticated, service_role;
 SQL
+  # Как в production (R3): событийный триггер включает RLS на каждой новой таблице public.
+  $SU -d $db -f "$HERE/../security-review/rls-auto-enable-model.sql"
 done
 
 BACK="psql -X -h 127.0.0.1 -p $PORT -U ketner_backend -v ON_ERROR_STOP=1 -q"
@@ -57,6 +62,9 @@ node "$HERE/revocation-race.mjs" "postgres://ketner_backend@127.0.0.1:$PORT/revi
 
 echo "== 4. RLS by role (superuser switches roles)"
 $SU -d review -f "$HERE/rls-roles.sql"
+
+echo "== 4b. Function privileges: only the owner (server) can execute the proposal's functions"
+$SU -d review -f "$HERE/function-privileges.sql"
 
 echo "== 5a. Concurrent duplicates and charges (role ketner_backend)"
 node "$HERE/idempotency-race.mjs" "postgres://ketner_backend@127.0.0.1:$PORT/review" || echo "idempotency-race: FAILURES"

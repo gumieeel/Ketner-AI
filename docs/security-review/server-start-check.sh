@@ -8,7 +8,7 @@ DIR=/var/lib/postgresql/ketner-start-check
 PG_PORT=${PG_PORT:-5438}
 APP_PORT=${APP_PORT:-8898}
 HERE=$(cd "$(dirname "$0")" && pwd)
-API="$HERE/../../apps/mock-api"
+API="${API_DIR:-$HERE/../../apps/mock-api}"
 WORK=$(mktemp -d)
 SU="psql -X -h 127.0.0.1 -p $PG_PORT -U postgres -v ON_ERROR_STOP=1 -q"
 cp -a "$API/data" "$WORK/data-backup" 2>/dev/null || true

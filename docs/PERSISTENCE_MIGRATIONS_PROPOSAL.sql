@@ -31,6 +31,13 @@ CREATE FUNCTION platform_contains_secret(doc jsonb) RETURNS boolean
       OR doc::text ~* 'bearer\s+[a-z0-9._~+/=-]{8,}'
     )
   $$;
+-- Функцию вызывает только сервер (владелец). По умолчанию EXECUTE есть у PUBLIC, а права по умолчанию
+-- Supabase дают его anon/authenticated — через Data API она была бы вызываема. Отзываем.
+REVOKE EXECUTE ON FUNCTION platform_contains_secret(jsonb) FROM PUBLIC;
+DO $$ BEGIN
+  IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'anon') THEN REVOKE EXECUTE ON FUNCTION platform_contains_secret(jsonb) FROM anon; END IF;
+  IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'authenticated') THEN REVOKE EXECUTE ON FUNCTION platform_contains_secret(jsonb) FROM authenticated; END IF;
+END $$;
 
 -- Снимок SolutionSpec у версии решения — отдельной таблицей, существующая solution_versions не
 -- меняется. Нет строки — спецификация выводится из настроек версии (platform/agent-spec.ts).
@@ -330,6 +337,13 @@ BEGIN
   RAISE EXCEPTION '% is append-only', TG_TABLE_NAME;
 END;
 $$;
+-- Функцию вызывает только сервер (владелец). По умолчанию EXECUTE есть у PUBLIC, а права по умолчанию
+-- Supabase дают его anon/authenticated — через Data API она была бы вызываема. Отзываем.
+REVOKE EXECUTE ON FUNCTION platform_append_only() FROM PUBLIC;
+DO $$ BEGIN
+  IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'anon') THEN REVOKE EXECUTE ON FUNCTION platform_append_only() FROM anon; END IF;
+  IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'authenticated') THEN REVOKE EXECUTE ON FUNCTION platform_append_only() FROM authenticated; END IF;
+END $$;
 CREATE TRIGGER authorization_events_append_only
   BEFORE UPDATE ON authorization_events FOR EACH ROW EXECUTE FUNCTION platform_append_only();
 
@@ -415,6 +429,13 @@ BEGIN
   RETURN NEW;
 END;
 $$;
+-- Функцию вызывает только сервер (владелец). По умолчанию EXECUTE есть у PUBLIC, а права по умолчанию
+-- Supabase дают его anon/authenticated — через Data API она была бы вызываема. Отзываем.
+REVOKE EXECUTE ON FUNCTION executions_insert_refs() FROM PUBLIC;
+DO $$ BEGIN
+  IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'anon') THEN REVOKE EXECUTE ON FUNCTION executions_insert_refs() FROM anon; END IF;
+  IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'authenticated') THEN REVOKE EXECUTE ON FUNCTION executions_insert_refs() FROM authenticated; END IF;
+END $$;
 CREATE TRIGGER executions_insert_refs BEFORE INSERT ON executions
   FOR EACH ROW EXECUTE FUNCTION executions_insert_refs();
 CREATE UNIQUE INDEX executions_idempotency ON executions (user_id, idempotency_key) WHERE idempotency_key IS NOT NULL;
@@ -605,6 +626,13 @@ BEGIN
   RETURN NEW;
 END;
 $$;
+-- Функцию вызывает только сервер (владелец). По умолчанию EXECUTE есть у PUBLIC, а права по умолчанию
+-- Supabase дают его anon/authenticated — через Data API она была бы вызываема. Отзываем.
+REVOKE EXECUTE ON FUNCTION execution_effects_guard() FROM PUBLIC;
+DO $$ BEGIN
+  IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'anon') THEN REVOKE EXECUTE ON FUNCTION execution_effects_guard() FROM anon; END IF;
+  IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'authenticated') THEN REVOKE EXECUTE ON FUNCTION execution_effects_guard() FROM authenticated; END IF;
+END $$;
 CREATE TRIGGER execution_effects_guard BEFORE INSERT OR UPDATE ON execution_effects
   FOR EACH ROW EXECUTE FUNCTION execution_effects_guard();
 
