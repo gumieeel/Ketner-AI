@@ -1,0 +1,89 @@
+== Postgres: PostgreSQL 16.15
+== 1. Server creates tables (role ketner_backend); production model: RLS on every table; smoke
+  PASS  GET /api/health  (200)
+  PASS  demo login (reads users)  (200)
+  PASS  create solution (writes solutions, solution_versions, solution_test_cases)  (201 id=40d979cd-ed61-4f4f-9e45-9a140d5d0cd6)
+  PASS  list solutions (reads)  (200)
+  PASS  get solution  (200)
+  PASS  create conversation (writes conversations)  (201)
+  PASS  delete solution (cascade delete)  (204)
+  passed=7 failed=0
+server log, suspicious lines:
+== 2. Backup rehearsal: the production procedure (SECURITY_PRIVILEGE_AUDIT.md, 7) on the disposable database
+fingerprint taken in the dump's snapshot: 40 tables
+  restore cluster: PostgreSQL 16.15
+  dump: 104K; objects listed: 272; tables with data in public: 40
+  restore: OK (no errors)
+  PASS  restored copy matches production fingerprint: 40 tables, row counts + md5 identical
+PASS  live database already differs (concurrent write), the dump and its fingerprint still match each other
+== 3. Before remediation (production model)
+tables: 40, RLS on: 40, FORCE: 0, anon has privileges on: 40
+anon/authenticated (RLS on, no policies): rows hidden, but TRUNCATE works:
+  anon|bot_leads|select ok (0 rows)|truncate ok
+  anon|github_connections|select ok (0 rows)|truncate ok
+  anon|ketner_docs|select ok (0 rows)|truncate ok
+  anon|pricing_versions|select ok (0 rows)|truncate ok
+  anon|session|select ok (0 rows)|truncate ok
+  anon|solutions|select ok (0 rows)|truncate ok
+  authenticated|bot_leads|select ok (0 rows)|truncate ok
+  authenticated|github_connections|select ok (0 rows)|truncate ok
+  authenticated|ketner_docs|select ok (0 rows)|truncate ok
+  authenticated|pricing_versions|select ok (0 rows)|truncate ok
+  authenticated|session|select ok (0 rows)|truncate ok
+  authenticated|solutions|select ok (0 rows)|truncate ok
+== 4. Apply remediation as ketner_backend (owner, not superuser), twice
+state rows recorded: 42 (second run kept the first run's record)
+PASS  anon and authenticated have no privileges on any of 41 tables
+PASS  RLS, FORCE, owner and service_role privileges unchanged
+anon/authenticated after remediation:
+  anon|bot_leads|42501|42501
+  anon|github_connections|42501|42501
+  anon|ketner_docs|42501|42501
+  anon|pricing_versions|42501|42501
+  anon|session|42501|42501
+  anon|solutions|42501|42501
+  authenticated|bot_leads|42501|42501
+  authenticated|github_connections|42501|42501
+  authenticated|ketner_docs|42501|42501
+  authenticated|pricing_versions|42501|42501
+  authenticated|session|42501|42501
+  authenticated|solutions|42501|42501
+PASS  application data unchanged
+PASS  a table created later by the owner gets no anon/authenticated privileges
+  service_role on the new table: t (default privileges for service_role untouched)
+default privileges of ketner_backend in public now:
+  S {anon=rwU/ketner_backend,authenticated=rwU/ketner_backend,service_role=rwU/ketner_backend}
+  f {anon=X/ketner_backend,authenticated=X/ketner_backend,service_role=X/ketner_backend}
+  r {service_role=arwdDxt/ketner_backend}
+== 5. Refusals (each must fail and change nothing)
+  non-owner role: ERROR:  run this as the owner of the application tables; not owned by ketner_restricted: user (owner ketner_backend), session (owner ketner_
+PASS  non-owner run refused, privileges unchanged
+  global default privileges: ERROR:  a new table still receives privileges for: anon (default privileges defined elsewhere, e.g. without IN SCHEMA or by another role)
+PASS  global default privileges detected, whole transaction rolled back
+== 6. Server after remediation: startup (table checks, migrations) + smoke
+  PASS  GET /api/health  (200)
+  PASS  demo login (reads users)  (200)
+  PASS  create solution (writes solutions, solution_versions, solution_test_cases)  (201 id=8f70a607-afa2-4234-ab6f-f6b45389ee9f)
+  PASS  list solutions (reads)  (200)
+  PASS  get solution  (200)
+  PASS  create conversation (writes conversations)  (201)
+  PASS  delete solution (cascade delete)  (204)
+  passed=7 failed=0
+server log, suspicious lines:
+== 7. Rollback, compare with the state before remediation
+catalog raw: 80 changed lines (sequence last_value excluded: smoke test in 6 inserted rows)
+PASS  catalog with ACL entries sorted: IDENTICAL (incl. default privileges)
+PASS  privileges + RLS identical to before
+pg_dump --schema-only: lines changed other than GRANT order: 0
+PASS  pg_dump as a set of lines: IDENTICAL
+PASS  apply + rollback with no traffic in between: data IDENTICAL (40 tables)
+PASS  apply + rollback: catalog IDENTICAL
+PASS  remediation re-applies cleanly after rollback
+== 8. Full server test suite (role ketner_backend, database with remediation applied)
+tests db: 41 tables with RLS, anon-privileged: 0
+ok 326 - PostgreSQL: проект целиком переживает потерю диска и изолирован по владельцу # SKIP PGlite не установлен
+# tests 810
+# pass 809
+# fail 0
+# cancelled 0
+# skipped 1
