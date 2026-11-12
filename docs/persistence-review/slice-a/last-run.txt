@@ -1,0 +1,359 @@
+== Postgres: PostgreSQL 16.15
+== 1. Existing migrations 0001-0012 (real runner), existing data, Slice A (one transaction)
+runner: applied 12 (0001_discovery … 0012_implementation_pricing), already 0
+Slice A applied; new tables: agent_deployments, execution_effects, execution_events, executions, solution_version_specs
+== 2. Existing data, isolation, secrets tripwire, bot scenario, deletion, immutability
+ check 
+-------
+ 
+(1 row)
+
+ check 
+-------
+ 
+(1 row)
+
+ check 
+-------
+ 
+(1 row)
+
+ check 
+-------
+ 
+(1 row)
+
+ check 
+-------
+ 
+(1 row)
+
+ expect_code 
+-------------
+ 
+(1 row)
+
+ expect_code 
+-------------
+ 
+(1 row)
+
+ expect_code 
+-------------
+ 
+(1 row)
+
+ expect_code 
+-------------
+ 
+(1 row)
+
+ expect_code 
+-------------
+ 
+(1 row)
+
+ expect_code 
+-------------
+ 
+(1 row)
+
+ expect_code 
+-------------
+ 
+(1 row)
+
+ expect_code 
+-------------
+ 
+(1 row)
+
+ expect_code 
+-------------
+ 
+(1 row)
+
+ expect_code 
+-------------
+ 
+(1 row)
+
+ expect_code 
+-------------
+ 
+(1 row)
+
+ expect_code 
+-------------
+ 
+(1 row)
+
+ expect_code 
+-------------
+ 
+(1 row)
+
+ expect_code 
+-------------
+ 
+(1 row)
+
+ expect_code 
+-------------
+ 
+(1 row)
+
+ expect_ok 
+-----------
+ 
+(1 row)
+
+ expect_ok 
+-----------
+ 
+(1 row)
+
+ expect_ok 
+-----------
+ 
+(1 row)
+
+ expect_ok 
+-----------
+ 
+(1 row)
+
+ check 
+-------
+ 
+(1 row)
+
+ check 
+-------
+ 
+(1 row)
+
+ expect_code 
+-------------
+ 
+(1 row)
+
+ expect_code 
+-------------
+ 
+(1 row)
+
+ expect_code 
+-------------
+ 
+(1 row)
+
+ expect_code 
+-------------
+ 
+(1 row)
+
+ check 
+-------
+ 
+(1 row)
+
+ check 
+-------
+ 
+(1 row)
+
+ check 
+-------
+ 
+(1 row)
+
+ check 
+-------
+ 
+(1 row)
+
+ expect_code 
+-------------
+ 
+(1 row)
+
+ expect_code 
+-------------
+ 
+(1 row)
+
+ expect_code 
+-------------
+ 
+(1 row)
+
+ expect_code 
+-------------
+ 
+(1 row)
+
+ expect_code 
+-------------
+ 
+(1 row)
+
+ expect_code 
+-------------
+ 
+(1 row)
+
+ expect_code 
+-------------
+ 
+(1 row)
+
+ expect_code 
+-------------
+ 
+(1 row)
+
+     section     |                                        name                                         |                                 outcome                                  
+-----------------+-------------------------------------------------------------------------------------+--------------------------------------------------------------------------
+ 0 existing data | Builder still inserts a solution without new columns                                | PASS
+ 0 existing data | bot conversations, messages, leads unchanged                                        | PASS
+ 0 existing data | only the five Slice A tables are new                                                | PASS
+ 0 existing data | solution_versions unchanged, no new columns, no spec rows                           | PASS
+ 0 existing data | solutions rows unchanged                                                            | PASS
+ 1 isolation     | deploy another tenant agent version                                                 | PASS: 23503 insert or update on table "agent_deployments" violates forei
+ 1 isolation     | effect on another tenant execution                                                  | PASS: 23503 insert or update on table "execution_effects" violates forei
+ 1 isolation     | execution under another tenant solution                                             | PASS: 23503 insert or update on table "executions" violates foreign key 
+ 1 isolation     | execution with another tenant deployment                                            | PASS: 23503 insert or update on table "executions" violates foreign key 
+ 1 isolation     | grant authorization source is not part of Slice A                                   | PASS: 23514 new row for relation "execution_effects" violates check cons
+ 1 isolation     | runtime mastra is not allowed (deployment)                                          | PASS: 23514 new row for relation "agent_deployments" violates check cons
+ 1 isolation     | runtime mastra is not allowed (execution)                                           | PASS: 23514 new row for relation "executions" violates check constraint 
+ 1 isolation     | spec for another tenant solution                                                    | PASS: 23503 insert or update on table "solution_version_specs" violates 
+ 1 isolation     | two open deployments of one agent                                                   | PASS: 23505 duplicate key value violates unique constraint "agent_deploy
+ 1 isolation     | workflow executions are not part of Slice A                                         | PASS: 23514 new row for relation "executions" violates check constraint 
+ 1 isolation     | write into another tenant execution history                                         | PASS: 23503 insert or update on table "execution_events" violates foreig
+ 2 secrets       | API key inside error text                                                           | PASS: 23514 new row for relation "executions" violates check constraint 
+ 2 secrets       | Authorization header in effect result                                               | PASS: 23514 new row for relation "execution_effects" violates check cons
+ 2 secrets       | accessToken (camelCase) in execution context                                        | PASS: 23514 new row for relation "executions" violates check constraint 
+ 2 secrets       | token = sk-live-… in event data                                                     | PASS: 23514 new row for relation "execution_events" violates check const
+ 3 bot scenario  | one bot reply: 4 committed effects, legacy enablement authorizes the reply          | PASS
+ 3 bot scenario  | repeated model step finds the committed effect (no second model call)               | PASS
+ 3 idempotency   | execution without a solution at insert                                              | PASS: 23502 execution x_none must reference a solution
+ 3 idempotency   | retries above the cap                                                               | PASS: 23514 new row for relation "executions" violates check constraint 
+ 3 idempotency   | same channel event twice (idempotency key)                                          | PASS: 23505 duplicate key value violates unique constraint "executions_i
+ 3 idempotency   | stop reason requires a finish time                                                  | PASS: 23514 new row for relation "executions" violates check constraint 
+ 4 deletion      | retention: deleting an execution removes its events and effects                     | PASS
+ 4 deletion      | solution deleted: events and effects kept                                           | PASS
+ 4 deletion      | solution deleted: execution kept with cost, solution and deployment references NULL | PASS
+ 4 deletion      | solution deleted: specs and deployments removed                                     | PASS
+ 5 immutability  | authorization source cannot be rewritten                                            | PASS: 23514 execution effect identity is immutable
+ 5 immutability  | committed effect cannot be reserved again                                           | PASS: 23514 execution effect: committed -> reserved is not allowed
+ 5 immutability  | committed effect result cannot be rewritten                                         | PASS: 23514 execution effect in status committed cannot be modified
+ 5 immutability  | effect cannot start as committed                                                    | PASS: 23514 execution effect must start as reserved or denied
+ 5 immutability  | execution event cannot be edited                                                    | PASS: P0001 execution_events is append-only
+ 5 immutability  | external effect cannot skip dispatch (reserved -> committed)                        | PASS: 23514 execution effect: reserved -> committed is not allowed
+ 5 immutability  | external flag cannot be changed                                                     | PASS: 23514 execution effect identity is immutable
+ 5 immutability  | internal effect cannot be dispatched                                                | PASS: 23514 execution effect: reserved -> dispatched is not allowed
+(38 rows)
+
+ passed | failed 
+--------+--------
+     38 |      0
+(1 row)
+
+== 3. Secret rules: code (platform/secrets.ts) and database (platform_contains_secret) agree
+secret parity: passed=27 failed=0
+== 4. RLS by role
+         role          |    table_name    | rls | select_rows  |                         insert_result                         |                   truncate_result                   
+-----------------------+------------------+-----+--------------+---------------------------------------------------------------+-----------------------------------------------------
+ anon                  | execution_events | on  | no privilege | 42501 permission denied for table execution_events            | 42501 permission denied for table execution_events
+ anon                  | executions       | on  | no privilege | not probed (read only)                                        | 42501 permission denied for table executions
+ anon                  | pricing_versions | on  | 0            | 42501 new row violates row-level security policy for table "p | TRUNCATE allowed (rolled back)
+ anon                  | solutions        | on  | 0            | 42501 new row violates row-level security policy for table "s | 42501 permission denied for table solution_version_
+ authenticated         | execution_events | on  | no privilege | 42501 permission denied for table execution_events            | 42501 permission denied for table execution_events
+ authenticated         | executions       | on  | no privilege | not probed (read only)                                        | 42501 permission denied for table executions
+ authenticated         | pricing_versions | on  | 0            | 42501 new row violates row-level security policy for table "p | TRUNCATE allowed (rolled back)
+ authenticated         | solutions        | on  | 0            | 42501 new row violates row-level security policy for table "s | 42501 permission denied for table solution_version_
+ ketner_backend        | execution_events | on  | 2            | inserted (rolled back)                                        | TRUNCATE allowed (rolled back)
+ ketner_backend        | executions       | on  | 2            | not probed (read only)                                        | TRUNCATE allowed (rolled back)
+ ketner_backend        | pricing_versions | on  | 0            | inserted (rolled back)                                        | TRUNCATE allowed (rolled back)
+ ketner_backend        | solutions        | on  | 3            | inserted (rolled back)                                        | TRUNCATE allowed (rolled back)
+ ketner_backend_bypass | execution_events | on  | 2            | 42501 permission denied for function platform_contains_secret | TRUNCATE allowed (rolled back)
+ ketner_backend_bypass | executions       | on  | 2            | not probed (read only)                                        | TRUNCATE allowed (rolled back)
+ ketner_backend_bypass | pricing_versions | on  | 0            | inserted (rolled back)                                        | TRUNCATE allowed (rolled back)
+ ketner_backend_bypass | solutions        | on  | 3            | inserted (rolled back)                                        | TRUNCATE allowed (rolled back)
+ ketner_restricted     | execution_events | on  | 0            | 42501 new row violates row-level security policy for table "e | TRUNCATE allowed (rolled back)
+ ketner_restricted     | executions       | on  | 0            | not probed (read only)                                        | TRUNCATE allowed (rolled back)
+ ketner_restricted     | pricing_versions | on  | 0            | 42501 new row violates row-level security policy for table "p | TRUNCATE allowed (rolled back)
+ ketner_restricted     | solutions        | on  | 0            | 42501 new row violates row-level security policy for table "s | TRUNCATE allowed (rolled back)
+ service_role          | execution_events | on  | 2            | inserted (rolled back)                                        | TRUNCATE allowed (rolled back)
+ service_role          | executions       | on  | 2            | not probed (read only)                                        | TRUNCATE allowed (rolled back)
+ service_role          | pricing_versions | on  | 0            | inserted (rolled back)                                        | TRUNCATE allowed (rolled back)
+ service_role          | solutions        | on  | 3            | inserted (rolled back)                                        | TRUNCATE allowed (rolled back)
+(24 rows)
+
+        rolname        | superuser | bypassrls | owns_tables 
+-----------------------+-----------+-----------+-------------
+ anon                  | f         | f         | f
+ authenticated         | f         | f         | f
+ authenticator         | f         | f         | f
+ ketner_backend        | f         | f         | t
+ ketner_backend_bypass | f         | t         | f
+ ketner_restricted     | f         | f         | f
+ service_role          | f         | t         | f
+(7 rows)
+
+ table_without_rls | anon_can_select 
+-------------------+-----------------
+(0 rows)
+
+          table_name           |     owner      | relrowsecurity | relforcerowsecurity | policies |                       anon_grants                       |                   service_role_grants                   
+-------------------------------+----------------+----------------+---------------------+----------+---------------------------------------------------------+---------------------------------------------------------
+ agent_deployments             | ketner_backend | t              | f                   |        0 |                                                         | DELETE,INSERT,REFERENCES,SELECT,TRIGGER,TRUNCATE,UPDATE
+ bot_conversations             | ketner_backend | t              | f                   |        0 | DELETE,INSERT,REFERENCES,SELECT,TRIGGER,TRUNCATE,UPDATE | DELETE,INSERT,REFERENCES,SELECT,TRIGGER,TRUNCATE,UPDATE
+ bot_leads                     | ketner_backend | t              | f                   |        0 | DELETE,INSERT,REFERENCES,SELECT,TRIGGER,TRUNCATE,UPDATE | DELETE,INSERT,REFERENCES,SELECT,TRIGGER,TRUNCATE,UPDATE
+ bot_messages                  | ketner_backend | t              | f                   |        0 | DELETE,INSERT,REFERENCES,SELECT,TRIGGER,TRUNCATE,UPDATE | DELETE,INSERT,REFERENCES,SELECT,TRIGGER,TRUNCATE,UPDATE
+ discovery_analyses            | ketner_backend | t              | f                   |        0 | DELETE,INSERT,REFERENCES,SELECT,TRIGGER,TRUNCATE,UPDATE | DELETE,INSERT,REFERENCES,SELECT,TRIGGER,TRUNCATE,UPDATE
+ discovery_budget_days         | ketner_backend | t              | f                   |        0 | DELETE,INSERT,REFERENCES,SELECT,TRIGGER,TRUNCATE,UPDATE | DELETE,INSERT,REFERENCES,SELECT,TRIGGER,TRUNCATE,UPDATE
+ discovery_budget_reservations | ketner_backend | t              | f                   |        0 | DELETE,INSERT,REFERENCES,SELECT,TRIGGER,TRUNCATE,UPDATE | DELETE,INSERT,REFERENCES,SELECT,TRIGGER,TRUNCATE,UPDATE
+ discovery_opportunities       | ketner_backend | t              | f                   |        0 | DELETE,INSERT,REFERENCES,SELECT,TRIGGER,TRUNCATE,UPDATE | DELETE,INSERT,REFERENCES,SELECT,TRIGGER,TRUNCATE,UPDATE
+ discovery_plans               | ketner_backend | t              | f                   |        0 | DELETE,INSERT,REFERENCES,SELECT,TRIGGER,TRUNCATE,UPDATE | DELETE,INSERT,REFERENCES,SELECT,TRIGGER,TRUNCATE,UPDATE
+ execution_effects             | ketner_backend | t              | f                   |        0 |                                                         | DELETE,INSERT,REFERENCES,SELECT,TRIGGER,TRUNCATE,UPDATE
+ execution_events              | ketner_backend | t              | f                   |        0 |                                                         | DELETE,INSERT,REFERENCES,SELECT,TRIGGER,TRUNCATE,UPDATE
+ executions                    | ketner_backend | t              | f                   |        0 |                                                         | DELETE,INSERT,REFERENCES,SELECT,TRIGGER,TRUNCATE,UPDATE
+ implementation_estimates      | ketner_backend | t              | f                   |        0 | DELETE,INSERT,REFERENCES,SELECT,TRIGGER,TRUNCATE,UPDATE | DELETE,INSERT,REFERENCES,SELECT,TRIGGER,TRUNCATE,UPDATE
+ implementation_requests       | ketner_backend | t              | f                   |        0 | DELETE,INSERT,REFERENCES,SELECT,TRIGGER,TRUNCATE,UPDATE | DELETE,INSERT,REFERENCES,SELECT,TRIGGER,TRUNCATE,UPDATE
+ pricing_audit_log             | ketner_backend | t              | f                   |        0 | DELETE,INSERT,REFERENCES,SELECT,TRIGGER,TRUNCATE,UPDATE | DELETE,INSERT,REFERENCES,SELECT,TRIGGER,TRUNCATE,UPDATE
+ pricing_versions              | ketner_backend | t              | f                   |        0 | DELETE,INSERT,REFERENCES,SELECT,TRIGGER,TRUNCATE,UPDATE | DELETE,INSERT,REFERENCES,SELECT,TRIGGER,TRUNCATE,UPDATE
+ schema_migrations             | ketner_backend | t              | f                   |        0 | DELETE,INSERT,REFERENCES,SELECT,TRIGGER,TRUNCATE,UPDATE | DELETE,INSERT,REFERENCES,SELECT,TRIGGER,TRUNCATE,UPDATE
+ solution_attempts             | ketner_backend | t              | f                   |        0 | DELETE,INSERT,REFERENCES,SELECT,TRIGGER,TRUNCATE,UPDATE | DELETE,INSERT,REFERENCES,SELECT,TRIGGER,TRUNCATE,UPDATE
+ solution_materials            | ketner_backend | t              | f                   |        0 | DELETE,INSERT,REFERENCES,SELECT,TRIGGER,TRUNCATE,UPDATE | DELETE,INSERT,REFERENCES,SELECT,TRIGGER,TRUNCATE,UPDATE
+ solution_messages             | ketner_backend | t              | f                   |        0 | DELETE,INSERT,REFERENCES,SELECT,TRIGGER,TRUNCATE,UPDATE | DELETE,INSERT,REFERENCES,SELECT,TRIGGER,TRUNCATE,UPDATE
+ solution_runs                 | ketner_backend | t              | f                   |        0 | DELETE,INSERT,REFERENCES,SELECT,TRIGGER,TRUNCATE,UPDATE | DELETE,INSERT,REFERENCES,SELECT,TRIGGER,TRUNCATE,UPDATE
+ solution_test_cases           | ketner_backend | t              | f                   |        0 | DELETE,INSERT,REFERENCES,SELECT,TRIGGER,TRUNCATE,UPDATE | DELETE,INSERT,REFERENCES,SELECT,TRIGGER,TRUNCATE,UPDATE
+ solution_test_runs            | ketner_backend | t              | f                   |        0 | DELETE,INSERT,REFERENCES,SELECT,TRIGGER,TRUNCATE,UPDATE | DELETE,INSERT,REFERENCES,SELECT,TRIGGER,TRUNCATE,UPDATE
+ solution_threads              | ketner_backend | t              | f                   |        0 | DELETE,INSERT,REFERENCES,SELECT,TRIGGER,TRUNCATE,UPDATE | DELETE,INSERT,REFERENCES,SELECT,TRIGGER,TRUNCATE,UPDATE
+ solution_version_specs        | ketner_backend | t              | f                   |        0 |                                                         | DELETE,INSERT,REFERENCES,SELECT,TRIGGER,TRUNCATE,UPDATE
+ solution_versions             | ketner_backend | t              | f                   |        0 | DELETE,INSERT,REFERENCES,SELECT,TRIGGER,TRUNCATE,UPDATE | DELETE,INSERT,REFERENCES,SELECT,TRIGGER,TRUNCATE,UPDATE
+ solutions                     | ketner_backend | t              | f                   |        0 | DELETE,INSERT,REFERENCES,SELECT,TRIGGER,TRUNCATE,UPDATE | DELETE,INSERT,REFERENCES,SELECT,TRIGGER,TRUNCATE,UPDATE
+(27 rows)
+
+== 4b. Function privileges: only the owner (server) can execute
+functions: passed=17 failed=0
+== 5a. Concurrent duplicates (role ketner_backend)
+passed=4 failed=0
+== 5b. Safe retries: two-phase effects, failures, unknown outcomes, races (role ketner_backend)
+passed=14 failed=0
+== 6. Rollback on a separate database: full state before Slice A vs after rollback
+runner: applied 12 (0001_discovery … 0012_implementation_pricing), already 0
+catalog objects: before=473 with Slice A=650
+catalog: IDENTICAL
+data: IDENTICAL (23 tables)
+pg_dump --schema-only (without \restrict token): IDENTICAL
+Slice A re-applies cleanly after rollback
+== 7. Server test suite against real Postgres (role ketner_backend)
+ok 334 - PostgreSQL: проект целиком переживает потерю диска и изолирован по владельцу # SKIP PGlite не установлен
+# tests 849
+# pass 848
+# fail 0
+# cancelled 0
+# skipped 1
