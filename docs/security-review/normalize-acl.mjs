@@ -10,6 +10,9 @@ const lines = text.split('\n').map((line) => {
     const owner = / owner=(\S+) /.exec(line)?.[1];
     if (owner) line = line.replace(/ acl=-$/, ` acl={=X/${owner},${owner}=X/${owner}}`);
   }
-  return line.replace(/acl=\{([^}]*)\}/g, (_, items) => `acl={${items.split(',').sort().join(',')}}`);
+  return line.replace(
+    /acl=\{([^}]*)\}/g,
+    (_, items) => `acl={${items.split(',').sort().join(',')}}`,
+  );
 });
 process.stdout.write(lines.join('\n'));

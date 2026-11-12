@@ -21,9 +21,12 @@
 > 4. Our backend creating a separate copy of a fixed, staff-authored workflow for each customer, automatically and without an AI model, only to attach that customer's own credentials. The logic is never changed. Is this permitted under the Community License?
 > 5. We understand that AI-generated or AI-modified workflow logic for a specific customer is not permitted under the Community License. If we later want our AI to design workflows for individual customers (always validated by our code against an allow-list of nodes and never edited by the customer), which commercial license covers it, and what are the price and terms?
 > 6. We sell a monthly subscription for "automations". Its value is the business analysis, AI agents and our implementation and support; n8n is one internal component. Is this compatible with the Sustainable Use License, given the "Automation-as-a-service" example in your FAQ?
+> 7. Two of your official pages seem to disagree on end users' own credentials, and items 2 and 4 depend on the answer. Your license FAQ ("Workflow building, credentials and control") says: "End users may connect their own accounts and credentials to automations you have built for them, as long as they cannot access the n8n workflow builder or configure workflow logic themselves", and lists "Use n8n behind the scenes in your own product, where users can use and trigger the automations you built, and even connect their own accounts to them" as allowed. The Sustainable Use License page, as we read it, says that a product's back-end must not use its users' own credentials. [ВСТАВИТЬ ДОСЛОВНУЮ ЦИТАТУ СО СТРАНИЦЫ ЛИЦЕНЗИИ ПЕРЕД ОТПРАВКОЙ.] Which of the two applies to our setup, where customers connect their own accounts to staff-built workflows that run on our self-hosted instance and that customers can neither see nor edit?
 >
 > Thank you,
 > Ketner AI
+
+**Пункт 7 добавлен 12.11.2026.** Цитата FAQ — дословно из снимка документации n8n от 07.11.2026 (раздел FAQ «Workflow building, credentials and control»). Формулировка страницы Sustainable Use License приведена по описанию владельца: из этой сессии `docs.n8n.io` недоступен, дословно не проверено. Перед отправкой вставить точную цитату вместо пометки в квадратных скобках.
 
 ## 2. Activepieces — sales@activepieces.com (не отправлять, пока n8n подходит)
 
