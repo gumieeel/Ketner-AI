@@ -11,6 +11,10 @@
 -- EXECUTE на функции есть только у владельца (docs/SECURITY_PRIVILEGE_AUDIT.md).
 -- Требование к базе: PostgreSQL 15+ (ON DELETE SET NULL со списком колонок); production — 17.6.
 -- Откат — docs/PERSISTENCE_SLICE_A_ROLLBACK.sql.
+--
+-- Каждый раздел ниже самодостаточен (свои RLS и REVOKE) и ДОСЛОВНО совпадает с записью в
+-- apps/mock-api/src/db/migration-list.ts (только в ветке claude/great-euler-rppwsj, до одобрения выката);
+-- совпадение проверяет тест db/slice-a-migrations.test.ts.
 
 -- =================================================================================================
 -- 0013_platform_agent_specs — ключ владения у решений, снимок спецификации, служебные функции
@@ -22,12 +26,12 @@ ALTER TABLE solutions ADD CONSTRAINT solutions_id_user_key UNIQUE (id, user_id);
 -- код очищает метаданные до записи (apps/mock-api/src/platform/secrets.ts — те же правила), а эта
 -- проверка срабатывает, только если правила кода и базы разошлись. Правила:
 --   1) поле с секретным именем (…token, …secret, password, apiKey, privateKey, cookie, …TokenData;
---      без учёта регистра, `_`, `-`) и СТРОКОВЫМ значением от 4 символов — имя поля в JSON-схеме
+--      без учёта регистра, «_», «-») и СТРОКОВЫМ значением от 4 символов — имя поля в JSON-схеме
 --      (значение — объект) и пустая строка не срабатывают;
 --   2) поле authorization со значением вида «Bearer|Basic|Token|Digest <8+ символов>»;
 --   3) известные форматы токенов в любой строке, включая текст; «Bearer» — только с токеном от 20
 --      символов с цифрой, поэтому «The bearer certificate is valid» не срабатывает;
---   отметка об очистке `[redacted]` / `[redacted:<причина>]` секретом не считается.
+--   отметка об очистке «[redacted]» / «[redacted:<причина>]» секретом не считается.
 CREATE FUNCTION platform_contains_secret(doc jsonb) RETURNS boolean
   LANGUAGE sql IMMUTABLE PARALLEL SAFE AS $$
   WITH RECURSIVE walk(key, value, depth) AS (
@@ -99,6 +103,23 @@ CREATE TABLE solution_version_specs (
   FOREIGN KEY (solution_id, user_id) REFERENCES solutions (id, user_id) ON DELETE CASCADE
 );
 
+-- RLS без политик (в production событийный триггер rls_auto_enable включит его и сам; явно — чтобы
+-- поведение не зависело от настройки проекта Supabase). Роли API Supabase прав не получают.
+ALTER TABLE solution_version_specs ENABLE ROW LEVEL SECURITY;
+DO $$
+DECLARE
+  role_name text;
+  table_name text;
+BEGIN
+  FOREACH role_name IN ARRAY ARRAY['anon', 'authenticated'] LOOP
+    IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = role_name) THEN
+      FOREACH table_name IN ARRAY ARRAY['solution_version_specs'] LOOP
+        EXECUTE format('REVOKE ALL ON TABLE %I FROM %I', table_name, role_name);
+      END LOOP;
+    END IF;
+  END LOOP;
+END $$;
+
 -- =================================================================================================
 -- 0014_platform_agent_deployments — включения агента и рантайм
 -- =================================================================================================
@@ -127,6 +148,23 @@ CREATE TABLE agent_deployments (
 );
 CREATE UNIQUE INDEX agent_deployments_open ON agent_deployments (solution_id) WHERE ended_at IS NULL;
 CREATE INDEX agent_deployments_owner ON agent_deployments (user_id, activated_at DESC);
+
+-- RLS без политик (в production событийный триггер rls_auto_enable включит его и сам; явно — чтобы
+-- поведение не зависело от настройки проекта Supabase). Роли API Supabase прав не получают.
+ALTER TABLE agent_deployments ENABLE ROW LEVEL SECURITY;
+DO $$
+DECLARE
+  role_name text;
+  table_name text;
+BEGIN
+  FOREACH role_name IN ARRAY ARRAY['anon', 'authenticated'] LOOP
+    IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = role_name) THEN
+      FOREACH table_name IN ARRAY ARRAY['agent_deployments'] LOOP
+        EXECUTE format('REVOKE ALL ON TABLE %I FROM %I', table_name, role_name);
+      END LOOP;
+    END IF;
+  END LOOP;
+END $$;
 
 -- =================================================================================================
 -- 0015_platform_agent_executions — журнал исполнений агента: исполнение, события, эффекты
@@ -346,14 +384,10 @@ CREATE TRIGGER execution_effects_guard BEFORE INSERT OR UPDATE ON execution_effe
   FOR EACH ROW EXECUTE FUNCTION execution_effects_guard();
 
 -- RLS без политик (в production событийный триггер rls_auto_enable включит его и сам; явно — чтобы
--- поведение не зависело от настройки проекта Supabase).
-ALTER TABLE solution_version_specs ENABLE ROW LEVEL SECURITY;
-ALTER TABLE agent_deployments ENABLE ROW LEVEL SECURITY;
+-- поведение не зависело от настройки проекта Supabase). Роли API Supabase прав не получают.
 ALTER TABLE executions ENABLE ROW LEVEL SECURITY;
 ALTER TABLE execution_events ENABLE ROW LEVEL SECURITY;
 ALTER TABLE execution_effects ENABLE ROW LEVEL SECURITY;
-
--- Роли API Supabase не получают никаких прав на новые таблицы (в базах без этих ролей блок ничего не делает).
 DO $$
 DECLARE
   role_name text;
@@ -361,9 +395,8 @@ DECLARE
 BEGIN
   FOREACH role_name IN ARRAY ARRAY['anon', 'authenticated'] LOOP
     IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = role_name) THEN
-      FOREACH table_name IN ARRAY ARRAY['solution_version_specs', 'agent_deployments', 'executions',
-        'execution_events', 'execution_effects'] LOOP
-        EXECUTE format('REVOKE ALL ON TABLE public.%I FROM %I', table_name, role_name);
+      FOREACH table_name IN ARRAY ARRAY['executions', 'execution_events', 'execution_effects'] LOOP
+        EXECUTE format('REVOKE ALL ON TABLE %I FROM %I', table_name, role_name);
       END LOOP;
     END IF;
   END LOOP;

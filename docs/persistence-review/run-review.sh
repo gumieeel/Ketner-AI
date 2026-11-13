@@ -45,7 +45,7 @@ SQL
 done
 
 BACK="psql -X -h 127.0.0.1 -p $PORT -U ketner_backend -v ON_ERROR_STOP=1 -q"
-MIGRATE() { (cd "$ROOT/apps/mock-api" && npx tsx "$HERE/apply-migrations.mts" "postgres://ketner_backend@127.0.0.1:$PORT/$1"); }
+MIGRATE() { (cd "$ROOT/apps/mock-api" && npx tsx "$HERE/apply-migrations.mts" "postgres://ketner_backend@127.0.0.1:$PORT/$1" 0012_implementation_pricing); }
 PROPOSAL() { $BACK -d "$1" -1 -f "$ROOT/docs/PERSISTENCE_MIGRATIONS_PROPOSAL.sql" -f "$HERE/record-proposal.sql"; }
 
 echo "== 1. Existing migrations 0001-0012, existing data, proposal (role ketner_backend)"

@@ -53,7 +53,7 @@ SQL
   $SU -d $db -f "$ROOT/docs/security-review/rls-auto-enable-model.sql"
 done
 
-MIGRATE() { (cd "$ROOT/apps/mock-api" && npx tsx "$REVIEW/apply-migrations.mts" "$(URL "$1")"); }
+MIGRATE() { (cd "$ROOT/apps/mock-api" && npx tsx "$REVIEW/apply-migrations.mts" "$(URL "$1")" 0012_implementation_pricing); }
 APPLY() { $BACK -d "$1" -1 -f "$SLICE" -f "$HERE/record-slice-a.sql"; }
 
 echo "== 1. Existing migrations 0001-0012 (real runner), existing data, Slice A (one transaction)"
