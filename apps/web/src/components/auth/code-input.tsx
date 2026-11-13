@@ -77,7 +77,11 @@ export function CodeInput({
         w: box.offsetWidth + 8,
         h: box.offsetHeight + 8,
       };
-      return prev && prev.x === next.x && prev.y === next.y && prev.w === next.w && prev.h === next.h
+      return prev &&
+        prev.x === next.x &&
+        prev.y === next.y &&
+        prev.w === next.w &&
+        prev.h === next.h
         ? prev
         : next;
     });
@@ -114,7 +118,10 @@ export function CodeInput({
       <div
         ref={rowRef}
         aria-hidden="true"
-        className={cn('relative flex justify-between gap-2 sm:gap-3', shaking && 'animate-code-shake')}
+        className={cn(
+          'relative flex justify-between gap-2 sm:gap-3',
+          shaking && 'animate-code-shake',
+        )}
         onAnimationEnd={(event) => {
           if (event.animationName === 'codeShake') setShaking(false);
         }}
