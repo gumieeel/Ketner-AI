@@ -1788,6 +1788,7 @@ export const en: Record<TranslationKey, string> = {
   'admin.creditsGranted': 'Granted by active grants',
   'admin.creditsPurchased': 'has purchased',
 
+  'discoveryHome.eyebrow': 'Business Discovery',
   'discoveryHome.title': 'Tell us about your business',
   'discoveryHome.subtitle':
     'We will analyze your processes, find what can be automated and suggest solutions that help your business run more efficiently.',

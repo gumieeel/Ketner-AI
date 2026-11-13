@@ -1,6 +1,7 @@
 import { useEffect, useId, useLayoutEffect, useRef, useState, type FormEvent } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { Button } from '@/components/ui/button';
+import { SendIcon } from '@/components/icons';
+import { Spinner } from '@/components/ui/spinner';
 import { createAnalysis, DiscoveryApiError } from '@/features/discovery/api';
 import {
   DISCOVERY_TEXT_MAX,
@@ -138,79 +139,136 @@ export function HomePage() {
         aria-labelledby="home-title"
         className="mx-auto flex min-h-[calc(100svh-10rem)] w-full max-w-[46rem] flex-col justify-center px-4 pt-[clamp(1rem,6vh,4rem)] pb-16 sm:px-6"
       >
+        {/* Надзаголовок в духе AWE: моноширинный, разреженный, капсом.
+            При появлении трекинг стягивается — финал совпадает с tracking-[0.18em]. */}
+        <p
+          className="mb-4 animate-hero-eyebrow text-center font-mono text-[12px] font-medium tracking-[0.18em] text-subtle uppercase"
+          style={{ animationDelay: '80ms' }}
+        >
+          {t('discoveryHome.eyebrow')}
+        </p>
         <h1
           id="home-title"
-          className="text-center text-[clamp(2.125rem,2.6vw+1.35rem,3.5rem)] leading-[1.06] font-[480] tracking-[-0.035em] text-balance text-text"
+          className="animate-hero-headline text-center text-[clamp(2.125rem,2.6vw+1.35rem,3.5rem)] leading-[1.06] font-[480] tracking-[-0.035em] text-balance text-text"
+          style={{ animationDelay: '160ms' }}
         >
           {t('discoveryHome.title')}
         </h1>
-        <p className="t-lead mx-auto mt-5 max-w-[38rem] text-center text-balance">
+        <p
+          className="t-lead animate-hero-rise mx-auto mt-5 max-w-[38rem] text-center text-balance"
+          style={{ animationDelay: '300ms' }}
+        >
           {t('discoveryHome.subtitle')}
         </p>
 
         <form onSubmit={(event) => void submit(event)} className="mt-10" noValidate>
-          <div
-            className={cn(
-              'rounded-2xl border bg-surface shadow-[0_1px_2px_rgb(0_0_0/0.04),0_12px_40px_-12px_rgb(0_0_0/0.12)] transition-colors duration-200 focus-within:border-accent/70',
-              invalid ? 'border-danger/60' : 'border-stroke',
-            )}
-          >
-            <label htmlFor={fieldId} className="sr-only">
-              {t('discoveryHome.fieldLabel')}
-            </label>
-            <textarea
-              id={fieldId}
-              ref={fieldRef}
-              value={text}
-              onChange={(event) => setText(event.target.value)}
-              onKeyDown={(event) => {
-                if (event.key === 'Enter' && (event.metaKey || event.ctrlKey)) void submit();
+          <div className="relative">
+            {/* Ореол «включения»: вспыхивает, когда карточка приземляется, и гаснет */}
+            <div
+              aria-hidden="true"
+              className="pointer-events-none absolute -inset-2 animate-hero-halo rounded-[40px]"
+              style={{
+                animationDelay: '640ms',
+                boxShadow:
+                  '0 0 0 1px var(--accent-soft), 0 0 40px var(--accent-soft), 0 24px 80px -24px var(--accent-soft)',
               }}
-              rows={5}
-              placeholder={t('discoveryHome.placeholder')}
-              aria-describedby={hintId}
-              aria-invalid={invalid || undefined}
-              className="block max-h-[360px] min-h-[9rem] sm:min-h-[11rem] w-full resize-none bg-transparent px-5 pt-5 pb-2 text-[17px] leading-[1.6] text-text placeholder:text-subtle focus:outline-none"
             />
-            <div className="flex flex-col gap-3 px-3 pb-3 sm:flex-row sm:items-center sm:justify-between sm:pl-5">
-              <p
-                id={hintId}
-                className={cn(
-                  'text-[13px] leading-5',
-                  invalid ? 'text-danger-text' : 'text-subtle',
-                )}
-                role={invalid ? 'alert' : undefined}
-              >
-                {tooLong ? (
-                  t('discoveryHome.tooLong', {
-                    max: DISCOVERY_TEXT_MAX.toLocaleString(language),
-                    over: (text.length - DISCOVERY_TEXT_MAX).toLocaleString(language),
-                  })
-                ) : showShortError ? (
-                  t('discoveryHome.empty')
-                ) : text.length >= DISCOVERY_TEXT_WARN ? (
-                  t('discoveryHome.counter', {
-                    count: text.length.toLocaleString(language),
-                    max: DISCOVERY_TEXT_MAX.toLocaleString(language),
-                  })
-                ) : (
-                  <>
-                    {t('discoveryHome.hint')}
-                    {/* Сочетание клавиш нужно только там, где есть клавиатура. */}
-                    <span className="max-sm:hidden"> {t('discoveryHome.hintShortcut')}</span>
-                  </>
-                )}
-              </p>
-              <Button
-                type="submit"
-                size="md"
-                loading={starting}
-                disabled={starting}
-                aria-disabled={!canSubmit || undefined}
-                className={cn('w-full shrink-0 sm:w-auto', !canSubmit && !starting && 'opacity-60')}
-              >
-                {starting ? t('discoveryHome.starting') : t('discoveryHome.submit')}
-              </Button>
+            <div
+              className={cn(
+                'animate-hero-card relative rounded-3xl border bg-surface shadow-[0_1px_2px_rgb(0_0_0/0.04),0_12px_40px_-12px_rgb(0_0_0/0.12)]',
+                'transition-[border-color,box-shadow] duration-200 ease-out-expo',
+                'hover:border-stroke-strong focus-within:border-accent/70',
+                'focus-within:shadow-[0_0_0_4px_var(--accent-soft),0_12px_40px_-12px_rgb(0_0_0/0.12)]',
+                invalid ? 'border-danger/60' : 'border-stroke',
+              )}
+              style={{ animationDelay: '420ms' }}
+            >
+              <label htmlFor={fieldId} className="sr-only">
+                {t('discoveryHome.fieldLabel')}
+              </label>
+              <textarea
+                id={fieldId}
+                ref={fieldRef}
+                value={text}
+                onChange={(event) => setText(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter' && (event.metaKey || event.ctrlKey)) void submit();
+                }}
+                rows={5}
+                placeholder={t('discoveryHome.placeholder')}
+                aria-describedby={hintId}
+                aria-invalid={invalid || undefined}
+                className="block max-h-[360px] min-h-[9rem] sm:min-h-[11rem] w-full resize-none bg-transparent px-5 pt-5 pb-2 text-[17px] leading-[1.6] text-text placeholder:text-subtle focus:outline-none"
+              />
+              <div className="flex flex-col gap-3 px-3 pb-3 sm:flex-row sm:items-center sm:justify-between sm:pl-5">
+                <p
+                  id={hintId}
+                  className={cn(
+                    'text-[13px] leading-5',
+                    invalid ? 'text-danger-text' : 'text-subtle',
+                  )}
+                  role={invalid ? 'alert' : undefined}
+                >
+                  {tooLong ? (
+                    t('discoveryHome.tooLong', {
+                      max: DISCOVERY_TEXT_MAX.toLocaleString(language),
+                      over: (text.length - DISCOVERY_TEXT_MAX).toLocaleString(language),
+                    })
+                  ) : showShortError ? (
+                    t('discoveryHome.empty')
+                  ) : text.length >= DISCOVERY_TEXT_WARN ? (
+                    t('discoveryHome.counter', {
+                      count: text.length.toLocaleString(language),
+                      max: DISCOVERY_TEXT_MAX.toLocaleString(language),
+                    })
+                  ) : (
+                    <>
+                      {t('discoveryHome.hint')}
+                      {/* Сочетание клавиш нужно только там, где есть клавиатура. */}
+                      <span className="max-sm:hidden"> {t('discoveryHome.hintShortcut')}</span>
+                    </>
+                  )}
+                </p>
+                {/* CTA-пилюля в духе AWE: моноширинный капс-лейбл, при наведении буквы
+                  прокатываются волной слева направо, стрелка подаётся вперёд. */}
+                <button
+                  type="submit"
+                  disabled={starting}
+                  aria-disabled={!canSubmit || undefined}
+                  aria-busy={starting || undefined}
+                  className={cn(
+                    'cta-group group inline-flex min-h-12 w-full shrink-0 items-center justify-center gap-2.5 rounded-full bg-action px-6 sm:w-auto',
+                    'font-mono text-[13px] font-semibold tracking-[0.08em] text-action-text uppercase',
+                    '[box-shadow:var(--action-ring)] transition-[background-color,filter] duration-200 ease-out-expo',
+                    'hover:bg-action-hover active:brightness-95 disabled:pointer-events-none',
+                    !canSubmit && !starting && 'opacity-60',
+                  )}
+                >
+                  {starting ? (
+                    <>
+                      <Spinner className="size-4 shrink-0" />
+                      <span>{t('discoveryHome.starting')}</span>
+                    </>
+                  ) : (
+                    <>
+                      {/* Полное название — для читалок; буквы ниже чисто визуальные. */}
+                      <span className="sr-only normal-case">{t('discoveryHome.submit')}</span>
+                      <span aria-hidden="true" className="pointer-events-none">
+                        {Array.from(t('discoveryHome.submit')).map((letter, index) => (
+                          <span
+                            key={index}
+                            className="cta-letter"
+                            style={{ animationDelay: `${index * 16}ms` }}
+                          >
+                            {letter}
+                          </span>
+                        ))}
+                      </span>
+                      <SendIcon className="text-[15px] transition-transform duration-200 ease-out-expo group-hover:translate-x-1" />
+                    </>
+                  )}
+                </button>
+              </div>
             </div>
           </div>
         </form>
@@ -226,14 +284,15 @@ export function HomePage() {
           aria-label={t('discoveryHome.industriesLabel')}
           className="mt-6 flex flex-wrap justify-center gap-2 lg:-mx-16"
         >
-          {INDUSTRIES.map((item) => (
+          {INDUSTRIES.map((item, index) => (
             <button
               key={item.id}
               type="button"
               aria-pressed={industry?.id === item.id}
               onClick={() => chooseIndustry(item)}
+              style={{ animationDelay: `${620 + index * 45}ms` }}
               className={cn(
-                'inline-flex min-h-10 items-center rounded-full border px-4 text-[14px] transition-colors duration-150 max-md:min-h-11',
+                'animate-hero-chip inline-flex min-h-10 items-center rounded-full border px-4 text-[14px] transition-colors duration-150 max-md:min-h-11',
                 industry?.id === item.id
                   ? 'border-accent bg-accent-soft text-text'
                   : 'border-stroke text-muted hover:border-stroke-strong hover:text-text',
@@ -263,10 +322,16 @@ export function HomePage() {
           </div>
         ) : null}
 
-        <p className="mt-8 text-center text-[15px] leading-6 text-muted">
+        <p
+          className="mt-8 animate-hero-rise text-center text-[15px] leading-6 text-muted"
+          style={{ animationDelay: '860ms' }}
+        >
           {t('discoveryHome.reassurance')}
         </p>
-        <p className="mt-1 text-center text-[13px] leading-5 text-subtle">
+        <p
+          className="mt-1 animate-hero-rise text-center text-[13px] leading-5 text-subtle"
+          style={{ animationDelay: '920ms' }}
+        >
           {t('discoveryHome.freeNote')}
         </p>
       </section>
