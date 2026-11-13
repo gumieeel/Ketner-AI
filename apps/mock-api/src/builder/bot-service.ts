@@ -26,6 +26,8 @@ import type {
   Solution,
 } from './types.js';
 import { isToolConfig } from './types.js';
+import type { BotAgentAnswer, BotAgentInput } from './bot-agent.js';
+import { PlatformUnavailableError } from './bot-platform-error.js';
 
 /** С владельца за один ответ бота не списывается больше, $ (≈ 30 кредитов). */
 export const BOT_REPLY_CAP_USD = 0.03;
@@ -64,8 +66,19 @@ export interface BotServiceDeps {
   owner: (ownerId: string) => BotOwner | null;
   /** Письмо владельцу о новой заявке (ошибка письма заявку не теряет). */
   notifyLead?: (owner: BotOwner, solution: Solution, lead: BotLead) => Promise<void>;
+  /**
+   * Путь платформы (этап D, builder/bot-agent.ts) за флагом BOT_PLATFORM_RUNTIME. Нет или флаг
+   * выключен для решения — прежний путь (builder.answer), без каких-либо изменений.
+   */
+  platform?: {
+    enabled: (solutionId: string) => boolean;
+    answer: (input: BotAgentInput) => Promise<BotAgentAnswer>;
+  };
   now?: () => Date;
 }
+
+/** Ответ модели в общем виде: у прежнего пути `offerContact` нет, у платформы — признак эскалации. */
+type BotAnswer = Awaited<ReturnType<BuilderService['answer']>> & { offerContact?: boolean };
 
 export type BotError = {
   ok: false;
@@ -193,7 +206,7 @@ export class BotService {
       await this.deps.store.createConversation(conversation);
     }
     const history = await this.deps.store.botHistory(solution.id, conversation.id, BOT_HISTORY);
-    await this.save(solution, conversation, {
+    const userMessage = await this.save(solution, conversation, {
       role: 'user',
       content: input.content,
       model: null,
@@ -230,22 +243,23 @@ export class BotService {
       anonymous: false,
       language,
     };
-    const answer = await this.deps.builder.answer(
+    const dialog = [
+      ...history
+        .filter((item) => item.status === 'complete')
+        .map((item) => ({ role: item.role, content: item.content })),
+      { role: 'user' as const, content: input.content },
+    ];
+    const answer = await this.answerBot(
+      solution,
+      config,
+      solution.activeVersion ?? solution.currentVersion,
       caller,
-      null,
       `bot:${conversation.id}`,
-      buildBotInstructions(config, solution.bot),
-      [
-        ...history
-          .filter((item) => item.status === 'complete')
-          .map((item) => ({ role: item.role, content: item.content })),
-        { role: 'user' as const, content: input.content },
-      ],
+      dialog,
       {
-        solutionId: solution.id,
-        maxOutputTokens: BOT_REPLY_TOKENS,
-        maxChargeUsd: BOT_REPLY_CAP_USD,
-        replaceSystemPrompt: true,
+        triggerKind: 'public_page',
+        triggerRef: `conversation:${conversation.id}`,
+        idempotencyKey: `bot_message:${userMessage.id}`,
       },
     );
     if (answer.error || !answer.text.trim()) {
@@ -268,11 +282,60 @@ export class BotService {
       role: 'assistant',
       content: parsed.text,
       model: answer.model,
-      offerContact: parsed.offerContact,
+      offerContact: parsed.offerContact || answer.offerContact === true,
       creditsUsd: answer.creditsUsd,
       status: 'complete',
     });
     return { ok: true, conversationId: conversation.id, message: publicBotMessage(saved) };
+  }
+
+  /**
+   * Ответ бота. Флаг пути платформы выключен (по умолчанию) — ровно прежний вызов builder.answer.
+   * Включён — ядро цикла агента (builder/bot-agent.ts) с тем же промптом, потолками и учётом; если
+   * путь платформы недоступен до первого вызова модели (журнал не записался), ответ идёт прежним путём.
+   */
+  private async answerBot(
+    solution: Solution,
+    config: AssistantConfig,
+    version: number,
+    caller: BuilderCaller,
+    gatewayConversationId: string,
+    messages: Array<{ role: 'user' | 'assistant'; content: string }>,
+    trigger: Pick<BotAgentInput, 'triggerKind' | 'triggerRef' | 'idempotencyKey'>,
+  ): Promise<BotAnswer> {
+    const platform = this.deps.platform;
+    if (platform && solution.bot && platform.enabled(solution.id)) {
+      try {
+        return await platform.answer({
+          caller,
+          solutionId: solution.id,
+          version,
+          config,
+          bot: solution.bot,
+          gatewayConversationId,
+          ...trigger,
+          messages,
+          maxOutputTokens: BOT_REPLY_TOKENS,
+          replyCapUsd: BOT_REPLY_CAP_USD,
+        });
+      } catch (error) {
+        if (!(error instanceof PlatformUnavailableError)) throw error;
+        console.error(`[bot] путь платформы недоступен, ответ прежним путём: ${error.message}`);
+      }
+    }
+    return this.deps.builder.answer(
+      caller,
+      null,
+      gatewayConversationId,
+      buildBotInstructions(config, solution.bot!),
+      messages,
+      {
+        solutionId: solution.id,
+        maxOutputTokens: BOT_REPLY_TOKENS,
+        maxChargeUsd: BOT_REPLY_CAP_USD,
+        replaceSystemPrompt: true,
+      },
+    );
   }
 
   private async save(
@@ -475,18 +538,14 @@ export class BotService {
         ),
       };
     }
-    const answer = await this.deps.builder.answer(
+    const answer = await this.answerBot(
+      solution,
+      version.config,
+      solution.currentVersion,
       { ...caller, language: version.config.language },
-      null,
       `bot:preview:${solution.id}`,
-      buildBotInstructions(version.config, solution.bot),
       messages.slice(-BOT_HISTORY),
-      {
-        solutionId: solution.id,
-        maxOutputTokens: BOT_REPLY_TOKENS,
-        maxChargeUsd: BOT_REPLY_CAP_USD,
-        replaceSystemPrompt: true,
-      },
+      { triggerKind: 'manual', triggerRef: `preview:${solution.id}` },
     );
     if (answer.error) {
       return { ok: false, status: 502, code: answer.error.code, message: answer.error.message };
@@ -495,7 +554,7 @@ export class BotService {
     return {
       ok: true,
       content: parsed.text,
-      offerContact: parsed.offerContact,
+      offerContact: parsed.offerContact || answer.offerContact === true,
       chargedCredits: toCredits(answer.creditsUsd),
       model: answer.model?.name ?? null,
     };

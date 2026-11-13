@@ -63,6 +63,25 @@ function parseEmailList(raw: string | undefined): string[] {
     .filter(Boolean);
 }
 
+/** Флаг пути платформы для ботов: выключен, все боты или перечисленные решения. */
+export type BotPlatformRuntime =
+  { mode: 'off' } | { mode: 'all' } | { mode: 'list'; solutionIds: string[] };
+
+export function parseBotPlatformRuntime(raw: string): BotPlatformRuntime {
+  const value = raw.trim();
+  if (value === '' || value.toLowerCase() === 'off') return { mode: 'off' };
+  if (value.toLowerCase() === 'all') return { mode: 'all' };
+  const solutionIds = value
+    .split(',')
+    .map((id) => id.trim())
+    .filter(Boolean);
+  return solutionIds.length > 0 ? { mode: 'list', solutionIds } : { mode: 'off' };
+}
+
+export function botPlatformEnabled(flag: BotPlatformRuntime, solutionId: string): boolean {
+  return flag.mode === 'all' || (flag.mode === 'list' && flag.solutionIds.includes(solutionId));
+}
+
 /** Необязательная переменная окружения: пустая строка, если не задана. */
 function optionalEnv(name: string): string {
   return process.env[name]?.trim() ?? '';
@@ -195,6 +214,12 @@ export const config = {
    * `STUDY_ASSISTANT_ENABLED=true` включает.
    */
   studyAssistantEnabled: optionalEnv('STUDY_ASSISTANT_ENABLED') === 'true',
+  /**
+   * Бот для клиентов на пути платформы (этап D: ядро цикла агента, журнал исполнений Slice A).
+   * Пусто или `off` — выключено (по умолчанию: все боты отвечают прежним путём); `all` — все боты;
+   * иначе — id решений через запятую. Откат — снова пусто.
+   */
+  botPlatformRuntime: parseBotPlatformRuntime(optionalEnv('BOT_PLATFORM_RUNTIME')),
   /** Бюджет и сутки бесплатных анализов (docs/discovery-models.md, раздел 3). */
   discovery: {
     freeDailyUsd: readNumber('DISCOVERY_FREE_DAILY_USD', 5),

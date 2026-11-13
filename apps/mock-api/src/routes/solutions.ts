@@ -31,7 +31,7 @@
 import { randomUUID } from 'node:crypto';
 import { Router, type Request, type Response } from 'express';
 import { AIGateway } from '../ai/gateway.js';
-import { config, type AiConfig } from '../config.js';
+import { botPlatformEnabled, config, type AiConfig, type BotPlatformRuntime } from '../config.js';
 import { sendError } from '../middleware/errors.js';
 import { RateLimiter } from '../middleware/rate-limit.js';
 import { requireAuth } from '../middleware/auth.js';
@@ -47,6 +47,7 @@ import {
   testCaseBodySchema,
   verdictBodySchema,
 } from '../builder/schemas.js';
+import { BotAgentRuntime } from '../builder/bot-agent.js';
 import { BotService, type BotOwner } from '../builder/bot-service.js';
 import { BuilderService, CHAT_HISTORY, type BuilderCaller } from '../builder/service.js';
 import type {
@@ -88,6 +89,8 @@ import { resolveUserPlan } from '../services/user-plan.js';
 import { siteUrl } from '../seo/pages.js';
 
 export interface SolutionsRouterDeps {
+  /** Флаг пути платформы для ботов (тесты); по умолчанию — config.botPlatformRuntime. */
+  botPlatform?: BotPlatformRuntime;
   ai: AiConfig;
   userStore?: UserStore;
   subscriptionStore?: SubscriptionStore;
@@ -168,11 +171,24 @@ export function createBuilderRuntime(deps: SolutionsRouterDeps): BuilderRuntime 
     const ready = stores();
     const service = getBuilder();
     if (!ready || !service) return null;
+    const botPlatform = deps.botPlatform ?? config.botPlatformRuntime;
+    const journal = ready.journal;
+    const platformRuntime =
+      journal && botPlatform.mode !== 'off' ? new BotAgentRuntime({ gateway, journal }) : null;
     bots = new BotService({
       store: ready.builder,
       builder: service,
       balanceUsd,
       owner,
+      ...(platformRuntime
+        ? {
+            platform: {
+              enabled: (solutionId: string) => botPlatformEnabled(botPlatform, solutionId),
+              answer: (input: Parameters<BotAgentRuntime['answer']>[0]) =>
+                platformRuntime.answer(input),
+            },
+          }
+        : {}),
       ...(deps.mailer
         ? {
             notifyLead: async (target, solution, lead) => {
