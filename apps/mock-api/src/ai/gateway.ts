@@ -73,7 +73,7 @@ import {
 import type { CreditLedger } from '../services/credits.js';
 import { creditService } from '../billing/index.js';
 import { PayloadGuard } from './payload-guard.js';
-import { modelIdentityPrompt } from './model-disclosure.js';
+import { modelDisclosureOnRequestPrompt, modelIdentityPrompt } from './model-disclosure.js';
 import {
   buildAttachmentsBlock,
   buildWorkspaceContextBlock,
@@ -956,7 +956,12 @@ export class AIGateway {
 
           // Модель знает, кто она: строка о модели и её разработчике дописывается к системному
           // промпту той модели цепочки, которая отвечает (запасная называет себя, а не исходную).
-          const identity = modelIdentityPrompt(candidateModel, language);
+          // Бот для клиентов (промпт бота заменяет правила чата) — свою роль берёт из промпта бота,
+          // а модель называет только на прямой вопрос: иначе строка чата перебивала его роль.
+          const identity =
+            req.assistant?.replaceSystemPrompt && !req.task
+              ? modelDisclosureOnRequestPrompt(candidateModel, language)
+              : modelIdentityPrompt(candidateModel, language);
           const candidateMessages =
             identity && optimizedMessages[0]?.role === 'system'
               ? [

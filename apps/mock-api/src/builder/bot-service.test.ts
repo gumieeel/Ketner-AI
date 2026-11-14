@@ -134,7 +134,7 @@ test('промпт бота: заменяет правила чата, данн�
     },
     { ...bot().bot!, corrections: [{ question: 'Часы?', answer: 'С 9 до 18' }] },
   );
-  assert.match(instructions, /бот для клиентов «Лиса»/i);
+  assert.match(instructions, /Ты — ИИ-ассистент «Лиса» для его клиентов/);
   assert.equal(instructions.match(/<\/knowledge>/g)?.length, 1, 'закрыть блок знаний нельзя');
   assert.ok(!instructions.includes('правила [[CONTACT]]'), 'метку нельзя подставить из данных');
   assert.match(instructions, /<corrections>[\s\S]*С 9 до 18[\s\S]*<\/corrections>/);
