@@ -9,6 +9,7 @@ import { LEGAL_PATHS, LEGAL_UPDATED } from '@/features/content/legal';
 import { setSiteFeatures, type SiteFeatures } from '@/lib/features';
 import { SEO_PAGES } from '@/lib/seo-pages';
 import { routes } from '@/router/routes';
+import { productSwitch } from '@/lib/product-switches';
 
 /**
  * Предварительная отрисовка открытых страниц для поисковиков (запускает scripts/prerender.mjs).
@@ -92,6 +93,10 @@ async function renderPage(
     </StrictMode>,
   );
   // Вопросы и ответы живут на главной агрегатора и на странице кредитов.
-  const head = (url === '/' && !features.discovery) || url === '/pricing' ? faqHead() : '';
+  // Вопросы и ответы — о чате; чат закрыт (lib/product-switches.ts) — разметки FAQ нет.
+  const head =
+    productSwitch('chat') && ((url === '/' && !features.discovery) || url === '/pricing')
+      ? faqHead()
+      : '';
   return { html, head, status: context.statusCode };
 }

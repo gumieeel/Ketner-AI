@@ -3,6 +3,12 @@ import test from 'node:test';
 import { readSseEvents, startTestServer, type SseEvent } from '../testing/server.js';
 import { signupAndVerify } from '../testing/signup.js';
 import type { AnswerReview } from '../types.js';
+import { setProductSwitchForTests } from '../product-switches.js';
+
+// Закрытые возможности (product-switches.ts): здесь проверяется их спящий код.
+setProductSwitchForTests('chat', true);
+setProductSwitchForTests('answerReview', true);
+setProductSwitchForTests('modelCompare', true);
 
 interface Account {
   userId: string;

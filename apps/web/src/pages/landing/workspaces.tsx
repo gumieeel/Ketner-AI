@@ -17,11 +17,14 @@ import { Tab, TabList, TabPanel, Tabs } from '@/components/ui/tabs';
 import { useTranslation, type TranslationKey } from '@/i18n';
 import { cn } from '@/lib/cn';
 import { SectionHead } from './section-head';
+import { productSwitch, type ProductFeature } from '@/lib/product-switches';
 
 type SpaceId = 'chat' | 'code' | 'images';
 
 interface Space {
   id: SpaceId;
+  /** Раздел закрыт (lib/product-switches.ts) — карточки нет. */
+  feature: ProductFeature;
   labelKey: TranslationKey;
   descKey: TranslationKey;
   factKeys: readonly TranslationKey[];
@@ -33,6 +36,7 @@ interface Space {
 const SPACES: readonly Space[] = [
   {
     id: 'chat',
+    feature: 'chat',
     labelKey: 'home.spacesChat',
     descKey: 'home.spacesChatDesc',
     factKeys: ['home.spacesChatFact1', 'home.spacesChatFact2', 'home.spacesChatFact3'],
@@ -42,6 +46,7 @@ const SPACES: readonly Space[] = [
   },
   {
     id: 'code',
+    feature: 'code',
     labelKey: 'home.spacesCode',
     descKey: 'home.spacesCodeDesc',
     factKeys: ['home.spacesCodeFact1', 'home.spacesCodeFact2', 'home.spacesCodeFact3'],
@@ -51,6 +56,7 @@ const SPACES: readonly Space[] = [
   },
   {
     id: 'images',
+    feature: 'images',
     labelKey: 'home.spacesImages',
     descKey: 'home.spacesImagesDesc',
     factKeys: ['home.spacesImagesFact1', 'home.spacesImagesFact2', 'home.spacesImagesFact3'],
@@ -201,7 +207,10 @@ const PREVIEWS: Record<SpaceId, ComponentType> = {
 
 export function LandingWorkspaces() {
   const { t } = useTranslation();
-  const [selected, setSelected] = useState<SpaceId>('chat');
+  const spaces = SPACES.filter((space) => productSwitch(space.feature));
+  const [selected, setSelected] = useState<SpaceId>(spaces[0]?.id ?? 'chat');
+  // Все рабочие места закрыты: раздела нет.
+  if (spaces.length === 0) return null;
 
   return (
     <section
@@ -221,7 +230,7 @@ export function LandingWorkspaces() {
           aria-orientation="vertical"
           className="flex w-full flex-row items-stretch gap-1 rounded-xl bg-surface p-1.5 lg:col-span-3 lg:flex-col lg:self-start"
         >
-          {SPACES.map((space) => {
+          {spaces.map((space) => {
             const Icon = space.icon;
             return (
               <Tab
@@ -236,7 +245,7 @@ export function LandingWorkspaces() {
           })}
         </TabList>
 
-        {SPACES.map((space) => {
+        {spaces.map((space) => {
           const Preview = PREVIEWS[space.id];
           return (
             <TabPanel

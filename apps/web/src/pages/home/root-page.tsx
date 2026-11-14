@@ -1,4 +1,5 @@
 import { siteFeatures } from '@/lib/features';
+import { productSwitch } from '@/lib/product-switches';
 import { LandingPage } from '@/pages/landing-page';
 import { HomePage } from './home-page';
 
@@ -7,5 +8,6 @@ import { HomePage } from './home-page';
  * (он же сохранён в ветке archive/home-aggregator-2026-10-30).
  */
 export function RootPage() {
-  return siteFeatures().discovery ? <HomePage /> : <LandingPage />;
+  // Чат закрыт (lib/product-switches.ts): лендинг агрегатора не показывается.
+  return siteFeatures().discovery || !productSwitch('chat') ? <HomePage /> : <LandingPage />;
 }

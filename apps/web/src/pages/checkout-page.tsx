@@ -37,6 +37,7 @@ import { closeGatewayWindow } from './checkout/gateway-window';
 import { OrderSummary } from './checkout/order-summary';
 import { CheckoutSkeleton } from './checkout/parts';
 import { StarsPanel } from './checkout/stars-panel';
+import { appHomePath, productSwitch } from '@/lib/product-switches';
 
 /** Идентификаторы прежних тарифов: ссылки на них остались в письмах и сообщениях бота. */
 const LEGACY_PLAN_IDS: ReadonlySet<string> = new Set([
@@ -161,7 +162,7 @@ export function CheckoutPage() {
 
   // Загрузка инвойса Telegram Stars
   useEffect(() => {
-    if (paymentMethod === 'stars' && !starsInvoice && pack) {
+    if (productSwitch('stars') && paymentMethod === 'stars' && !starsInvoice && pack) {
       setStarsLoading(true);
       createTelegramStarsInvoice(purchaseId)
         .then(({ invoice }) => {
@@ -432,10 +433,10 @@ export function CheckoutPage() {
 
         <div className="flex w-full flex-col gap-3 pt-2 sm:flex-row">
           <Link
-            to="/chat"
+            to={appHomePath()}
             className={buttonClasses({ variant: 'primary', size: 'lg', className: 'flex-1' })}
           >
-            {t('checkout.goToChat')}
+            {productSwitch('chat') ? t('checkout.goToChat') : t('nav.solutions')}
           </Link>
           <Link
             to="/settings"
@@ -529,15 +530,18 @@ export function CheckoutPage() {
                     : t('checkout.tileCryptoDesc')
                 }
               />
-              <MethodTile
-                selected={paymentMethod === 'stars'}
-                onSelect={() => selectMethod('stars')}
-                icon={<StarIcon className="size-[18px] fill-warning" />}
-                iconClassName="bg-warning-soft text-warning ring-warning/25"
-                badge="XTR"
-                title={t('checkout.tileStars')}
-                description={t('checkout.tileStarsDesc')}
-              />
+              {/* Stars закрыты (lib/product-switches.ts): способа оплаты звёздами нет. */}
+              {productSwitch('stars') ? (
+                <MethodTile
+                  selected={paymentMethod === 'stars'}
+                  onSelect={() => selectMethod('stars')}
+                  icon={<StarIcon className="size-[18px] fill-warning" />}
+                  iconClassName="bg-warning-soft text-warning ring-warning/25"
+                  badge="XTR"
+                  title={t('checkout.tileStars')}
+                  description={t('checkout.tileStarsDesc')}
+                />
+              ) : null}
             </div>
           </div>
 
@@ -618,7 +622,7 @@ export function CheckoutPage() {
             />
           )}
 
-          {withdrawalConsent && paymentMethod === 'stars' && (
+          {productSwitch('stars') && withdrawalConsent && paymentMethod === 'stars' && (
             <StarsPanel
               periodNotice={periodNotice}
               starsAmount={starsAmount}

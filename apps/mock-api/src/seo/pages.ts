@@ -10,6 +10,7 @@
 
 import seoPagesData from './seo-pages.json' with { type: 'json' };
 import { CREDIT_PACKS } from '../services/pricing.js';
+import { productSwitch, type ProductFeature } from '../product-switches.js';
 
 export interface SeoPage {
   path: string;
@@ -26,6 +27,8 @@ export interface SeoPage {
   sitemap?: boolean;
   /** Заголовок и описание, когда включена платформа решений (`DISCOVERY_ENABLED`). */
   discovery?: { title: string; description: string };
+  /** Страница закрытой возможности (product-switches.ts): пока закрыта — не открытая страница. */
+  feature?: ProductFeature;
 }
 
 /** Возможности сайта, которые меняют страницы: сервер пишет их в HTML (`ketner-features`). */
@@ -53,7 +56,16 @@ const BRAND = 'Ketner AI';
  * Открытые страницы: индексируются, большинство попадает в sitemap. Данные лежат в seo-pages.json —
  * их же читает сайт (заголовок вкладки, список страниц для предварительной отрисовки).
  */
-export const SEO_PAGES: readonly SeoPage[] = seoPagesData.pages as SeoPage[];
+const ALL_SEO_PAGES = seoPagesData.pages as SeoPage[];
+export const SEO_PAGES: readonly SeoPage[] = ALL_SEO_PAGES.filter(
+  (page) => !page.feature || productSwitch(page.feature),
+);
+/** Страницы закрытых возможностей: отдаются как служебные (200, noindex), в sitemap их нет. */
+const CLOSED_PAGE_PATHS = new Set(
+  ALL_SEO_PAGES.filter((page) => page.feature && !productSwitch(page.feature)).map(
+    (page) => page.path,
+  ),
+);
 
 /**
  * Разделы приложения: существуют, но не для поиска (личные данные, оплата, служебные страницы).
@@ -121,6 +133,7 @@ export function trailingSlashRedirect(rawPath: string): string | null {
 
 export function classifyPath(rawPath: string): PageKind {
   const path = normalizePath(rawPath);
+  if (CLOSED_PAGE_PATHS.has(path)) return 'private';
   if (findSeoPage(path)) return 'public';
   if (PRIVATE_PREFIXES.some((prefix) => path === prefix || path.startsWith(`${prefix}/`)))
     return 'private';
@@ -161,8 +174,12 @@ function jsonLd(value: unknown): string {
 
 /** Описание сервиса для Schema.org: при включённой платформе решений — новое позиционирование. */
 function appDescription(features: SiteFeatures): string {
+  const solutions =
+    'Ketner AI разбирает, как устроены процессы вашего бизнеса, находит, что можно автоматизировать с помощью искусственного интеллекта, проверяет, что реально сделать, и составляет план внедрения.';
+  // Чат закрыт (product-switches.ts): о нём не пишем ни при каком флаге.
+  if (!productSwitch('chat')) return solutions;
   return features.discovery
-    ? 'Ketner AI разбирает, как устроены процессы вашего бизнеса, находит, что можно автоматизировать с помощью искусственного интеллекта, проверяет, что реально сделать, и составляет план внедрения. Плюс чат с нейросетями GPT, Claude, Gemini и Grok.'
+    ? `${solutions} Плюс чат с нейросетями GPT, Claude, Gemini и Grok.`
     : 'ИИ-чат с нейросетями GPT, Claude, Gemini, Grok и DeepSeek без подписки, генерация изображений и ИИ для программирования.';
 }
 
@@ -295,7 +312,7 @@ export function renderIndexHtml(
     `<meta property="og:image" content="${escapeAttr(image)}" />`,
     `<meta property="og:image:width" content="1200" />`,
     `<meta property="og:image:height" content="630" />`,
-    `<meta property="og:image:alt" content="${BRAND}: ${features.discovery ? 'где ИИ поможет в вашей работе' : 'все сильные модели без подписки'}" />`,
+    `<meta property="og:image:alt" content="${BRAND}: ${features.discovery || !productSwitch('chat') ? 'где ИИ поможет в вашей работе' : 'все сильные модели без подписки'}" />`,
     `<meta name="twitter:card" content="summary_large_image" />`,
     `<meta name="twitter:title" content="${escapeAttr(title)}" />`,
     `<meta name="twitter:description" content="${escapeAttr(description)}" />`,

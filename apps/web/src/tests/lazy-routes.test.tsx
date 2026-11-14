@@ -5,6 +5,10 @@ import { ThemeSync } from '@/app/theme-sync';
 import { routes } from '@/router/routes';
 import { installFakeApi } from './fake-api';
 import { resetAuth, resetChat, resetPreferences } from './test-utils';
+import { setProductSwitchesForTests } from '@/lib/product-switches';
+
+// Закрытые возможности (lib/product-switches.ts): здесь проверяется их спящий код.
+setProductSwitchesForTests({ chat: true });
 
 /** Настоящие маршруты приложения, без предзагрузки из test-utils: страница приходит отдельным чанком. */
 function renderAppRoute(path: string) {

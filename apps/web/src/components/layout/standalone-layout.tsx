@@ -15,6 +15,7 @@ import { Brand } from './brand';
 import { LanguageToggle } from './language-toggle';
 import { STAGE_GUTTER } from './stage';
 import { ThemeToggle } from './theme-toggle';
+import { appHomePath, productSwitch } from '@/lib/product-switches';
 
 const navLinkClass =
   'inline-flex h-10 items-center rounded-full px-4 text-[14px] text-muted transition-colors duration-200 hover:bg-surface-2/70 hover:text-text';
@@ -108,7 +109,8 @@ export function StandaloneLayout() {
   const isAuthPage = /^\/(signup(\/verify)?|login(\/verify|\/forgot(\/verify|\/new)?)?)\/?$/.test(
     location.pathname,
   );
-  const discovery = siteFeatures().discovery;
+  // Чат закрыт (lib/product-switches.ts) — главная та же, что у платформы решений, и шапка тоже.
+  const discovery = siteFeatures().discovery || !productSwitch('chat');
   const links = sectionLinks();
   // Прозрачная шапка поверх первого экрана — только у лендинга агрегатора. У главной платформы
   // решений шапка обычная, компактная.
@@ -201,9 +203,11 @@ export function StandaloneLayout() {
                   <Link to="/pricing" className={navLinkClass}>
                     {t('nav.pricing')}
                   </Link>
-                  <Link to="/docs" className={navLinkClass}>
-                    {t('nav.docs')}
-                  </Link>
+                  {productSwitch('chat') ? (
+                    <Link to="/docs" className={navLinkClass}>
+                      {t('nav.docs')}
+                    </Link>
+                  ) : null}
                 </>
               )}
             </nav>
@@ -237,7 +241,7 @@ export function StandaloneLayout() {
             {/* У Business Discovery гостю в шапке нужен только вход: регистрация — после анализа. */}
             {discovery && !signedIn ? null : (
               <Link
-                to={signedIn ? '/chat' : '/signup'}
+                to={signedIn ? appHomePath() : '/signup'}
                 className={buttonClasses({ variant: 'primary', size: 'sm' })}
               >
                 {signedIn ? startLabel : t('nav.signup')}
@@ -314,7 +318,7 @@ export function StandaloneLayout() {
                             ['/requests', 'nav.requests'],
                           ] as const)
                         : []),
-                      ['/chat', 'nav.chat'],
+                      ...(productSwitch('chat') ? ([['/chat', 'nav.chat']] as const) : []),
                     ] as const
                   ).map(([to, key]) => (
                     <NavLink
@@ -347,15 +351,17 @@ export function StandaloneLayout() {
                 {t('nav.pricing')}
                 <ChevronRightIcon className="size-4 text-subtle transition-transform duration-200 group-hover:translate-x-0.5" />
               </NavLink>
-              <NavLink
-                to="/docs"
-                end
-                onClick={() => setMobileMenuOpen(false)}
-                className={mobileLinkClass}
-              >
-                {t('nav.docs')}
-                <ChevronRightIcon className="size-4 text-subtle transition-transform duration-200 group-hover:translate-x-0.5" />
-              </NavLink>
+              {productSwitch('chat') ? (
+                <NavLink
+                  to="/docs"
+                  end
+                  onClick={() => setMobileMenuOpen(false)}
+                  className={mobileLinkClass}
+                >
+                  {t('nav.docs')}
+                  <ChevronRightIcon className="size-4 text-subtle transition-transform duration-200 group-hover:translate-x-0.5" />
+                </NavLink>
+              ) : null}
             </nav>
 
             {/* Блок действий, прижатый к низу с учётом safe-area */}
@@ -438,26 +444,34 @@ export function StandaloneLayout() {
                     </li>
                   </>
                 ) : null}
-                <li>
-                  <Link to="/chat" className={footerLinkClass}>
-                    {t('nav.chat')}
-                  </Link>
-                </li>
-                <li>
-                  <Link to="/code" className={footerLinkClass}>
-                    {t('nav.code')}
-                  </Link>
-                </li>
-                <li>
-                  <Link to="/images" className={footerLinkClass}>
-                    {t('nav.images')}
-                  </Link>
-                </li>
-                <li>
-                  <Link to="/models" className={footerLinkClass}>
-                    {t('home.footerLimits')}
-                  </Link>
-                </li>
+                {productSwitch('chat') ? (
+                  <li>
+                    <Link to="/chat" className={footerLinkClass}>
+                      {t('nav.chat')}
+                    </Link>
+                  </li>
+                ) : null}
+                {productSwitch('code') ? (
+                  <li>
+                    <Link to="/code" className={footerLinkClass}>
+                      {t('nav.code')}
+                    </Link>
+                  </li>
+                ) : null}
+                {productSwitch('images') ? (
+                  <li>
+                    <Link to="/images" className={footerLinkClass}>
+                      {t('nav.images')}
+                    </Link>
+                  </li>
+                ) : null}
+                {productSwitch('chat') ? (
+                  <li>
+                    <Link to="/models" className={footerLinkClass}>
+                      {t('home.footerLimits')}
+                    </Link>
+                  </li>
+                ) : null}
                 <li>
                   <Link to="/pricing" className={footerLinkClass}>
                     {t('nav.pricing')}
@@ -469,16 +483,20 @@ export function StandaloneLayout() {
             <nav aria-label={t('home.footerResources')} className="flex flex-col gap-3">
               <span className={footerHeadClass}>{t('home.footerResources')}</span>
               <ul className="flex flex-col gap-1.5 max-md:gap-0">
-                <li>
-                  <Link to="/docs" className={footerLinkClass}>
-                    {t('nav.docs')}
-                  </Link>
-                </li>
-                <li>
-                  <Link to="/docs/api" className={footerLinkClass}>
-                    {t('nav.apiDocs')}
-                  </Link>
-                </li>
+                {productSwitch('chat') ? (
+                  <li>
+                    <Link to="/docs" className={footerLinkClass}>
+                      {t('nav.docs')}
+                    </Link>
+                  </li>
+                ) : null}
+                {productSwitch('developerApi') ? (
+                  <li>
+                    <Link to="/docs/api" className={footerLinkClass}>
+                      {t('nav.apiDocs')}
+                    </Link>
+                  </li>
+                ) : null}
                 <li>
                   <a href={links.faq} className={footerLinkClass}>
                     {t('footer.faq')}

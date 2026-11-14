@@ -3,6 +3,7 @@ import { CheckIcon } from '@/components/icons';
 import { buttonClasses } from '@/components/ui/button-classes';
 import { useTranslation } from '@/i18n';
 import { useDocumentTitle } from '@/lib/use-document-title';
+import { appHomePath, productSwitch } from '@/lib/product-switches';
 
 /**
  * Страница после успешной оплаты на сайте. Обычно на неё попадают прямо с экрана оплаты
@@ -24,10 +25,10 @@ export function CheckoutSuccessPage() {
       </div>
       <div className="flex w-full flex-col gap-3 pt-2 sm:flex-row">
         <Link
-          to="/chat"
+          to={appHomePath()}
           className={buttonClasses({ variant: 'primary', size: 'lg', className: 'flex-1' })}
         >
-          {t('checkout.goToChat')}
+          {productSwitch('chat') ? t('checkout.goToChat') : t('nav.solutions')}
         </Link>
         <Link
           to="/settings"

@@ -2,6 +2,10 @@ import { fireEvent, screen } from '@testing-library/react';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { useAuth } from '@/features/auth/auth-store';
 import { renderRoute, resetAuth, resetPreferences } from './test-utils';
+import { setProductSwitchesForTests } from '@/lib/product-switches';
+
+// Закрытые возможности (lib/product-switches.ts): здесь проверяется их спящий код.
+setProductSwitchesForTests({ chat: true, code: true, images: true, developerApi: true });
 
 describe('маршрутизация и каркас экранов', () => {
   beforeEach(() => {

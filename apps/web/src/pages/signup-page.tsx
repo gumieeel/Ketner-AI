@@ -20,6 +20,7 @@ import { useAuth } from '@/features/auth/auth-store';
 import { savePendingCode } from '@/features/auth/pending-code';
 import { useTranslation } from '@/i18n';
 import { cn } from '@/lib/cn';
+import { appHomePath } from '@/lib/product-switches';
 
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const MIN_PASSWORD_LENGTH = 8;
@@ -37,7 +38,7 @@ export function SignupPage() {
   const isSafeRedirect = Boolean(
     rawRedirect && rawRedirect.startsWith('/') && !rawRedirect.startsWith('//'),
   );
-  const redirectUrl = isSafeRedirect && rawRedirect ? rawRedirect : '/chat';
+  const redirectUrl = isSafeRedirect && rawRedirect ? rawRedirect : appHomePath();
   const status = useAuth((state) => state.status);
   const signup = useAuth((state) => state.signup);
   const mockOAuth = useAuth((state) => state.mockOAuth);

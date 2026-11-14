@@ -6,6 +6,10 @@ import { useCreditsModal } from '@/features/billing/credits-modal-store';
 import { usePreferences } from '@/features/preferences/preferences-store';
 import { installFakeApi } from './fake-api';
 import { renderRoute, resetAuth, resetChat, resetPreferences } from './test-utils';
+import { setProductSwitchesForTests } from '@/lib/product-switches';
+
+// Закрытые возможности (lib/product-switches.ts): здесь проверяется их спящий код.
+setProductSwitchesForTests({ chat: true });
 
 const COMPOSER = 'Спросите что-нибудь…';
 

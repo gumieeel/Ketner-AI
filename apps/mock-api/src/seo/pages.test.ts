@@ -34,7 +34,10 @@ test('seo: главная содержит разметку Schema.org, закр
 test('seo: классификация адресов', () => {
   assert.equal(classifyPath('/'), 'public');
   assert.equal(classifyPath('/pricing/'), 'public');
-  assert.equal(classifyPath('/docs/plans/pro'), 'public');
+  // Страницы закрытых возможностей (product-switches.ts): служебные, а не 404 и не открытые.
+  for (const closed of ['/models', '/docs', '/docs/plans/pro', '/docs/api']) {
+    assert.equal(classifyPath(closed), 'private', closed);
+  }
   assert.equal(classifyPath('/chat/abc'), 'private');
   assert.equal(classifyPath('/settings'), 'private');
   // Ввод кода из письма и восстановление пароля — служебные страницы, а не 404.
@@ -75,11 +78,15 @@ test('seo: готовая разметка попадает в #root тольк�
   assert.doesNotMatch(hidden, /ld\+json">\{\}/);
 });
 
-test('seo: дубли тарифов в документации ссылаются на /docs и не попадают в sitemap', () => {
-  const html = renderIndexHtml(BASE, '/docs/plans/pro');
-  assert.match(html, /<link rel="canonical" href="https:\/\/ketner\.org\/docs" \/>/);
-  assert.doesNotMatch(html, /BreadcrumbList/);
-  assert.doesNotMatch(sitemapXml(), /docs\/plans/);
+test('seo: страницы закрытых чата и API — noindex, без canonical и не в sitemap', () => {
+  for (const closed of ['/models', '/docs', '/docs/plans/pro', '/docs/api']) {
+    const html = renderIndexHtml(BASE, closed, { html: '<h1>старое</h1>' });
+    assert.match(html, /noindex, nofollow/, closed);
+    assert.doesNotMatch(html, /rel="canonical"/, closed);
+    assert.match(html, /<div id="root"><\/div>/, `${closed}: без готовой разметки`);
+  }
+  assert.doesNotMatch(sitemapXml(), /\/(models|docs)/);
+  assert.ok(!SEO_PAGES.some((page) => page.feature), 'закрытых страниц нет среди открытых');
   for (const page of SEO_PAGES) {
     assert.ok(page.description.length <= 250, `${page.path}: описание длиннее 250 символов`);
     assert.ok(page.title.length <= 75, `${page.path}: заголовок длиннее 75 символов`);
@@ -111,7 +118,7 @@ test('seo: lastmod пишется только для страниц с изве
 
 test('seo: адрес со слэшем в конце ведёт на основной, остальное не трогаем', () => {
   assert.equal(trailingSlashRedirect('/pricing/'), '/pricing');
-  assert.equal(trailingSlashRedirect('/docs/plans/pro/'), '/docs/plans/pro');
+  assert.equal(trailingSlashRedirect('/docs/plans/pro/'), null, 'закрытая страница не открытая');
   assert.equal(trailingSlashRedirect('/pricing'), null);
   assert.equal(trailingSlashRedirect('/'), null);
   assert.equal(trailingSlashRedirect('/chat/'), null, 'закрытые разделы не перенаправляются');
@@ -122,21 +129,16 @@ test('seo: адрес со слэшем в конце ведёт на основ
 test('seo: метка возможностей и заголовок главной зависят от флага платформы решений', () => {
   const off = renderIndexHtml(BASE, '/');
   assert.match(off, /<meta name="ketner-features" content="" \/>/);
-  assert.match(off, /<title>Ketner AI — ChatGPT, Claude, Gemini и Grok/);
+  // Чат закрыт: главная одна и та же при любом флаге, без посыла агрегатора.
+  assert.match(off, /<title>Ketner AI — расскажите о своём бизнесе/);
+  assert.doesNotMatch(off, /ChatGPT|Grok|без подписки/);
 
   const on = renderIndexHtml(BASE, '/', undefined, { discovery: true });
   assert.match(on, /<meta name="ketner-features" content="discovery" \/>/);
   assert.match(on, /<title>Ketner AI — расскажите о своём бизнесе/);
   assert.match(on, /<meta name="description" content="Опишите, чем занимается ваша компания/);
   assert.match(on, /находит, что можно автоматизировать с помощью искусственного интеллекта/);
-
-  // Прежний посыл остаётся на странице моделей при любом флаге.
-  for (const features of [{ discovery: false }, { discovery: true }]) {
-    assert.match(
-      renderIndexHtml(BASE, '/models', undefined, features),
-      /<title>Модели Ketner AI — ChatGPT, Claude, Gemini и Grok в одном чате/,
-    );
-  }
+  assert.doesNotMatch(on, /Плюс чат/);
 });
 
 test('seo: Schema.org главной — пакеты кредитов, а не снятые подписки', () => {

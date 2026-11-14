@@ -10,6 +10,7 @@ import { planBadge } from '@/features/billing/plan-badge';
 import { TRIAL } from '@/features/billing/plans';
 import { useTranslation } from '@/i18n';
 import { useReducedMotion } from '@/lib/use-reduced-motion';
+import { appHomePath } from '@/lib/product-switches';
 
 /**
  * Первый экран на всю высоту окна: слева обещание и два действия, справа — список
@@ -62,7 +63,7 @@ export function LandingHero() {
 
             <div className="mt-10 flex flex-col gap-3 sm:flex-row sm:items-center">
               <Link
-                to="/chat"
+                to={appHomePath()}
                 className={buttonClasses({
                   variant: 'primary',
                   size: 'lg',

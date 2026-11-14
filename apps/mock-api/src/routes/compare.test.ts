@@ -12,6 +12,11 @@ import { setBalance } from '../services/credits-fixture.js';
 import { maxCompareModels, parseCompareModelIds } from '../services/compare-policy.js';
 import { CompareRunStore, type CompareRun } from '../store/compare-run-store.js';
 import { CompareVoteStore } from '../store/compare-vote-store.js';
+import { setProductSwitchForTests } from '../product-switches.js';
+
+// Закрытые возможности (product-switches.ts): здесь проверяется их спящий код.
+setProductSwitchForTests('chat', true);
+setProductSwitchForTests('modelCompare', true);
 
 interface Account {
   token: string;
