@@ -96,7 +96,10 @@ CREATE TABLE solution_version_specs (
   solution_id text NOT NULL,
   version_number integer NOT NULL,
   user_id text NOT NULL,
-  spec jsonb NOT NULL CHECK (spec ->> 'specVersion' = '1'),
+  -- Объект с версией спецификации 1. JSON-строка и массив отклоняются; отсутствие версии — тоже
+  -- (IS NOT DISTINCT FROM не пропускает NULL, в отличие от прежнего сравнения через =).
+  spec jsonb NOT NULL CONSTRAINT solution_version_specs_spec_object
+    CHECK (jsonb_typeof(spec) = 'object' AND (spec ->> 'specVersion') IS NOT DISTINCT FROM '1'),
   created_at timestamptz NOT NULL DEFAULT now(),
   PRIMARY KEY (solution_id, version_number),
   FOREIGN KEY (solution_id, version_number) REFERENCES solution_versions (solution_id, number) ON DELETE CASCADE,
@@ -213,6 +216,11 @@ CREATE TABLE executions (
   CONSTRAINT executions_retry_limit CHECK (retry_count <= max_retries),
   CONSTRAINT executions_timing CHECK (finished_at IS NULL OR started_at IS NULL OR finished_at >= started_at),
   CONSTRAINT executions_finished_reason CHECK (stop_reason IS NULL OR finished_at IS NOT NULL),
+  -- Метаданные — только JSON-объекты: строка с JSON внутри (двойное кодирование) или массив — отказ.
+  CONSTRAINT executions_context_object CHECK (jsonb_typeof(context) = 'object'),
+  CONSTRAINT executions_input_meta_object CHECK (jsonb_typeof(input_meta) = 'object'),
+  CONSTRAINT executions_output_meta_object CHECK (jsonb_typeof(output_meta) = 'object'),
+  CONSTRAINT executions_error_object CHECK (error IS NULL OR jsonb_typeof(error) = 'object'),
   -- Сигнальная проверка (не граница безопасности): код очищает метаданные до записи.
   CONSTRAINT executions_no_secrets CHECK (
     NOT platform_contains_secret(context) AND NOT platform_contains_secret(input_meta)
@@ -256,6 +264,7 @@ CREATE TABLE execution_events (
   created_at timestamptz NOT NULL DEFAULT now(),
   PRIMARY KEY (execution_id, seq),
   FOREIGN KEY (execution_id, user_id) REFERENCES executions (id, user_id) ON DELETE CASCADE,
+  CONSTRAINT execution_events_data_object CHECK (jsonb_typeof(data) = 'object'),
   CONSTRAINT execution_events_no_secrets CHECK (NOT platform_contains_secret(data))
 );
 CREATE TRIGGER execution_events_append_only
@@ -296,6 +305,7 @@ CREATE TABLE execution_effects (
   CONSTRAINT execution_effects_key_retention
     CHECK (dispatched_at IS NULL OR NOT provider_supports_idempotency OR idempotency_expires_at IS NOT NULL),
   CONSTRAINT execution_effects_failure_stage CHECK ((status = 'failed') = (failure_stage IS NOT NULL)),
+  CONSTRAINT execution_effects_result_meta_object CHECK (jsonb_typeof(result_meta) = 'object'),
   CONSTRAINT execution_effects_no_secrets CHECK (NOT platform_contains_secret(result_meta))
 );
 CREATE INDEX execution_effects_owner ON execution_effects (user_id, reserved_at DESC);

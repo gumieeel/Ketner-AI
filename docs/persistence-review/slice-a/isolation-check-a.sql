@@ -15,16 +15,36 @@ BEGIN
   END;
 END;
 $$;
--- Оператор должен пройти (ложный отказ — FAIL); изменения откатываются.
+-- Оператор должен пройти (ложный отказ — FAIL); изменения откатываются. Строка PASS пишется после
+-- отката: внутри блока она откатывалась вместе с оператором, и принятые операторы не попадали в счёт.
 CREATE FUNCTION pg_temp.expect_ok(section text, name text, statement text) RETURNS void LANGUAGE plpgsql AS $$
+DECLARE accepted boolean := false;
 BEGIN
   BEGIN
     EXECUTE statement;
-    INSERT INTO results VALUES (section, name, 'PASS: accepted');
+    accepted := true;
     RAISE EXCEPTION USING ERRCODE = 'P0099';
   EXCEPTION
     WHEN SQLSTATE 'P0099' THEN NULL;
     WHEN OTHERS THEN INSERT INTO results VALUES (section, name, 'FAIL: rejected ' || SQLSTATE || ' ' || left(SQLERRM, 60));
+  END;
+  IF accepted THEN
+    INSERT INTO results VALUES (section, name, 'PASS: accepted');
+  END IF;
+END;
+$$;
+-- Отказ именно этим ограничением (а не любым 23514): имя ограничения из диагностики.
+CREATE FUNCTION pg_temp.expect_constraint(section text, name text, want text, statement text) RETURNS void LANGUAGE plpgsql AS $$
+DECLARE got text;
+BEGIN
+  BEGIN
+    EXECUTE statement;
+    INSERT INTO results VALUES (section, name, 'FAIL: accepted');
+  EXCEPTION WHEN OTHERS THEN
+    GET STACKED DIAGNOSTICS got = CONSTRAINT_NAME;
+    INSERT INTO results VALUES (section, name,
+      CASE WHEN SQLSTATE = '23514' AND got = want THEN 'PASS: ' || got
+           ELSE 'FAIL: wrong reason ' || SQLSTATE || ' ' || coalesce(got, '-') || ' ' || left(SQLERRM, 60) END);
   END;
 END;
 $$;
@@ -241,6 +261,61 @@ SELECT pg_temp.expect_code('5 immutability', 'external flag cannot be changed', 
   $$UPDATE execution_effects SET external = false WHERE execution_id = 'run_e' AND step_key = 'send'$$);
 SELECT pg_temp.expect_code('5 immutability', 'execution event cannot be edited', 'P0001',
   $$UPDATE execution_events SET data = '{}' WHERE execution_id = 'run_e'$$);
+
+-- ---------------------------------------------------------------------------------------------
+-- 6. Форма JSON: в каждом столбце-объекте JSON-строка (двойное кодирование) и массив отклоняются
+-- ---------------------------------------------------------------------------------------------
+SELECT pg_temp.expect_constraint('6 json shape', 'spec: JSON string', 'solution_version_specs_spec_object',
+  $$INSERT INTO solution_version_specs (solution_id, version_number, user_id, spec)
+    VALUES ('sol_b', 1, 'user_b', '"{\"specVersion\":1}"')$$);
+SELECT pg_temp.expect_constraint('6 json shape', 'spec: JSON array', 'solution_version_specs_spec_object',
+  $$INSERT INTO solution_version_specs (solution_id, version_number, user_id, spec)
+    VALUES ('sol_b', 1, 'user_b', '[{"specVersion":1}]')$$);
+SELECT pg_temp.expect_constraint('6 json shape', 'spec: object without specVersion (NULL no longer passes)', 'solution_version_specs_spec_object',
+  $$INSERT INTO solution_version_specs (solution_id, version_number, user_id, spec)
+    VALUES ('sol_b', 1, 'user_b', '{"name":"Без версии"}')$$);
+SELECT pg_temp.expect_constraint('6 json shape', 'spec: specVersion 2', 'solution_version_specs_spec_object',
+  $$INSERT INTO solution_version_specs (solution_id, version_number, user_id, spec)
+    VALUES ('sol_b', 1, 'user_b', '{"specVersion":2}')$$);
+SELECT pg_temp.expect_ok('6 json shape', 'spec: object with specVersion 1 is accepted',
+  $$INSERT INTO solution_version_specs (solution_id, version_number, user_id, spec)
+    VALUES ('sol_b', 1, 'user_b', '{"specVersion":1,"name":"Бот"}')$$);
+
+SELECT pg_temp.expect_constraint('6 json shape', 'executions.' || col || ': JSON ' || kind, 'executions_' || col || '_object',
+  format('UPDATE executions SET %I = %L WHERE id = %L', col, val, 'run_e'))
+FROM (VALUES ('context'), ('input_meta'), ('output_meta'), ('error')) AS c(col),
+     (VALUES ('string', '"{\"steps\":1}"'), ('array', '[{"steps":1}]')) AS v(kind, val);
+SELECT pg_temp.expect_constraint('6 json shape', 'executions.input_meta: JSON string at insert', 'executions_input_meta_object',
+  $$INSERT INTO executions (id, user_id, solution_id, kind, trigger_kind, trigger_ref, status, trace_id, input_meta)
+    VALUES ('x_json', 'user_b', 'sol_b', 'agent', 'manual', 'm', 'running', 't', '"{\"messages\":1}"')$$);
+SELECT pg_temp.expect_ok('6 json shape', 'executions: objects everywhere and error NULL are accepted',
+  $$UPDATE executions SET context = '{}', input_meta = '{"messages":1}', output_meta = '{"steps":2}', error = NULL WHERE id = 'run_e'$$);
+SELECT pg_temp.expect_ok('6 json shape', 'executions: error object is accepted',
+  $$UPDATE executions SET error = '{"code":"reaped_stale_running"}' WHERE id = 'run_e'$$);
+
+SELECT pg_temp.expect_constraint('6 json shape', 'execution_events.data: JSON string', 'execution_events_data_object',
+  $$INSERT INTO execution_events (execution_id, user_id, seq, type, data) VALUES ('run_e', 'user_b', 50, 'cost', '"{\"step\":1}"')$$);
+SELECT pg_temp.expect_constraint('6 json shape', 'execution_events.data: JSON array', 'execution_events_data_object',
+  $$INSERT INTO execution_events (execution_id, user_id, seq, type, data) VALUES ('run_e', 'user_b', 51, 'cost', '[{"step":1}]')$$);
+SELECT pg_temp.expect_ok('6 json shape', 'execution_events.data: object is accepted',
+  $$INSERT INTO execution_events (execution_id, user_id, seq, type, data) VALUES ('run_e', 'user_b', 52, 'cost', '{"step":1}')$$);
+
+SELECT pg_temp.expect_constraint('6 json shape', 'execution_effects.result_meta: JSON string', 'execution_effects_result_meta_object',
+  $$INSERT INTO execution_effects (execution_id, user_id, step_key, action, external, status, authorized_by, result_meta)
+    VALUES ('run_e', 'user_b', 'js', 'knowledge.search', false, 'reserved', 'risk_low', '"{\"matches\":1}"')$$);
+SELECT pg_temp.expect_constraint('6 json shape', 'execution_effects.result_meta: JSON array', 'execution_effects_result_meta_object',
+  $$INSERT INTO execution_effects (execution_id, user_id, step_key, action, external, status, authorized_by, result_meta)
+    VALUES ('run_e', 'user_b', 'ja', 'knowledge.search', false, 'reserved', 'risk_low', '[1]')$$);
+SELECT pg_temp.expect_constraint('6 json shape', 'execution_effects.result_meta: JSON string when committing', 'execution_effects_result_meta_object',
+  $$INSERT INTO execution_effects (execution_id, user_id, step_key, action, external, status, authorized_by)
+    VALUES ('run_e', 'user_b', 'jc', 'knowledge.search', false, 'reserved', 'risk_low');
+    UPDATE execution_effects SET status = 'committed', finished_at = now(), result_meta = '"{\"matches\":1}"'
+    WHERE execution_id = 'run_e' AND step_key = 'jc'$$);
+SELECT pg_temp.expect_ok('6 json shape', 'execution_effects.result_meta: object is accepted when committing',
+  $$INSERT INTO execution_effects (execution_id, user_id, step_key, action, external, status, authorized_by)
+    VALUES ('run_e', 'user_b', 'jo', 'knowledge.search', false, 'reserved', 'risk_low');
+    UPDATE execution_effects SET status = 'committed', finished_at = now(), result_meta = '{"matches":1}'
+    WHERE execution_id = 'run_e' AND step_key = 'jo'$$);
 
 SELECT section, name, outcome FROM results ORDER BY outcome LIKE 'PASS%', section, name;
 SELECT count(*) FILTER (WHERE outcome LIKE 'PASS%') AS passed, count(*) FILTER (WHERE outcome LIKE 'FAIL%') AS failed FROM results;
