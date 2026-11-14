@@ -20,7 +20,7 @@ import type { DocStore } from '../store/doc-store.js';
 import type { CryptoInvoice } from '../types.js';
 import type { ApiKeyRecord } from '../store/api-key-store.js';
 import type { Conversation, Message, Subscription } from '../types.js';
-import type { StoredUser } from '../store/user-store.js';
+import type { StoredUser, UserDbDriver, UserStore } from '../store/user-store.js';
 import {
   sanitizeAttribution,
   SIGNUP_METHODS,
@@ -297,7 +297,11 @@ export function resolveStoredSignupMethod(
   return undefined;
 }
 
-async function loadAndSyncUsers(sql: postgres.Sql): Promise<void> {
+/** Пользователи из ketner_users в память и перенос локальных, которых нет в БД (экспорт — для теста). */
+export async function loadAndSyncUsers(
+  sql: postgres.Sql,
+  store: UserStore = userStore,
+): Promise<void> {
   const rows = await sql<
     {
       id: string;
@@ -346,7 +350,7 @@ async function loadAndSyncUsers(sql: postgres.Sql): Promise<void> {
   }));
 
   // Если локально были зарегистрированы пользователи, которых ещё нет в БД, переносим их в БД
-  const localUsers = userStore.getAllStoredUsers?.() || [];
+  const localUsers = store.getAllStoredUsers?.() || [];
   const dbEmailSet = new Set(dbUsers.map((u) => u.email.toLowerCase()));
 
   for (const localUser of localUsers) {
@@ -354,7 +358,7 @@ async function loadAndSyncUsers(sql: postgres.Sql): Promise<void> {
       try {
         await sql`
           INSERT INTO "ketner_users" (
-            "id", "email", "name", "plan", "password_hash", "salt", "is_vip", "is_admin", "telegram_chat_id", "telegram_username", "created_at", "updated_at, "signup_method", "signup_attribution"
+            "id", "email", "name", "plan", "password_hash", "salt", "is_vip", "is_admin", "telegram_chat_id", "telegram_username", "created_at", "updated_at", "signup_method", "signup_attribution"
           ) VALUES (
             ${localUser.id},
             ${localUser.email},
@@ -380,7 +384,7 @@ async function loadAndSyncUsers(sql: postgres.Sql): Promise<void> {
     }
   }
 
-  userStore.loadExternalUsers?.(dbUsers);
+  store.loadExternalUsers?.(dbUsers);
   console.log(`[db] Пользователи синхронизированы: ${dbUsers.length} аккаунтов загружено в память`);
 }
 
@@ -561,6 +565,83 @@ async function loadAndSyncFeedbacks(sql: postgres.Sql): Promise<void> {
   feedbackStore.loadExternalFeedbacks(dbFeedbacks);
 }
 
+/** Запись пользователей в ketner_users из userStore (экспорт — для теста на настоящем Postgres). */
+export function createUserDbDriver(sql: postgres.Sql): UserDbDriver {
+  return {
+    async onUserCreated(user) {
+      await sql`
+      INSERT INTO "ketner_users" (
+        "id", "email", "name", "plan", "password_hash", "salt", "is_vip", "is_admin", "telegram_chat_id", "telegram_username", "created_at", "updated_at", "signup_method", "signup_attribution"
+      ) VALUES (
+        ${user.id},
+        ${user.email},
+        ${user.name},
+        ${user.plan},
+        ${user.passwordHash},
+        ${user.salt},
+        ${Boolean(user.isVip)},
+        ${Boolean(user.isAdmin)},
+        ${user.telegramChatId ? String(user.telegramChatId) : null},
+        ${user.telegramUsername || null},
+        ${new Date(user.createdAt)},
+        NOW(),
+        ${user.signupMethod ?? null},
+        ${user.signupAttribution ? sql.json(user.signupAttribution as never) : null}
+      ) ON CONFLICT ("email") DO UPDATE SET
+        "name" = EXCLUDED."name",
+        "plan" = EXCLUDED."plan",
+        "password_hash" = EXCLUDED."password_hash",
+        "salt" = EXCLUDED."salt",
+        "is_vip" = EXCLUDED."is_vip",
+        "is_admin" = EXCLUDED."is_admin",
+        "updated_at" = NOW()
+    `;
+    },
+
+    async onPlanUpdated(userId, plan) {
+      await sql`
+      UPDATE "ketner_users"
+      SET "plan" = ${plan}, "updated_at" = NOW()
+      WHERE "id" = ${userId} OR lower("email") = lower(${userId})
+    `;
+    },
+
+    async onVipUpdated(userId, isVip) {
+      await sql`
+      UPDATE "ketner_users"
+      SET "is_vip" = ${isVip}, "updated_at" = NOW()
+      WHERE "id" = ${userId} OR lower("email") = lower(${userId})
+    `;
+    },
+
+    async onAdminUpdated(userId, isAdmin) {
+      await sql`
+      UPDATE "ketner_users"
+      SET "is_admin" = ${isAdmin}, "updated_at" = NOW()
+      WHERE "id" = ${userId} OR lower("email") = lower(${userId})
+    `;
+    },
+
+    async onTelegramUpdated(userId, chatId, username) {
+      await sql`
+      UPDATE "ketner_users"
+      SET "telegram_chat_id" = ${chatId ? String(chatId) : null},
+          "telegram_username" = ${username || null},
+          "updated_at" = NOW()
+      WHERE "id" = ${userId} OR lower("email") = lower(${userId})
+    `;
+    },
+
+    async onPasswordUpdated(userId, salt, passwordHash) {
+      await sql`
+      UPDATE "ketner_users"
+      SET "salt" = ${salt}, "password_hash" = ${passwordHash}, "updated_at" = NOW()
+      WHERE "id" = ${userId} OR lower("email") = lower(${userId})
+    `;
+    },
+  };
+}
+
 function attachDatabaseDrivers(sql: postgres.Sql): void {
   // 1. Conversation driver
   conversationStore.setDbDriver?.({
@@ -686,79 +767,7 @@ function attachDatabaseDrivers(sql: postgres.Sql): void {
   });
 
   // 2. User driver
-  userStore.setDbDriver?.({
-    async onUserCreated(user) {
-      await sql`
-        INSERT INTO "ketner_users" (
-          "id", "email", "name", "plan", "password_hash", "salt", "is_vip", "is_admin", "telegram_chat_id", "telegram_username", "created_at", "updated_at, "signup_method", "signup_attribution"
-        ) VALUES (
-          ${user.id},
-          ${user.email},
-          ${user.name},
-          ${user.plan},
-          ${user.passwordHash},
-          ${user.salt},
-          ${Boolean(user.isVip)},
-          ${Boolean(user.isAdmin)},
-          ${user.telegramChatId ? String(user.telegramChatId) : null},
-          ${user.telegramUsername || null},
-          ${new Date(user.createdAt)},
-          NOW(),
-          ${user.signupMethod ?? null},
-          ${user.signupAttribution ? sql.json(user.signupAttribution as never) : null}
-        ) ON CONFLICT ("email") DO UPDATE SET
-          "name" = EXCLUDED."name",
-          "plan" = EXCLUDED."plan",
-          "password_hash" = EXCLUDED."password_hash",
-          "salt" = EXCLUDED."salt",
-          "is_vip" = EXCLUDED."is_vip",
-          "is_admin" = EXCLUDED."is_admin",
-          "updated_at" = NOW()
-      `;
-    },
-
-    async onPlanUpdated(userId, plan) {
-      await sql`
-        UPDATE "ketner_users"
-        SET "plan" = ${plan}, "updated_at" = NOW()
-        WHERE "id" = ${userId} OR lower("email") = lower(${userId})
-      `;
-    },
-
-    async onVipUpdated(userId, isVip) {
-      await sql`
-        UPDATE "ketner_users"
-        SET "is_vip" = ${isVip}, "updated_at" = NOW()
-        WHERE "id" = ${userId} OR lower("email") = lower(${userId})
-      `;
-    },
-
-    async onAdminUpdated(userId, isAdmin) {
-      await sql`
-        UPDATE "ketner_users"
-        SET "is_admin" = ${isAdmin}, "updated_at" = NOW()
-        WHERE "id" = ${userId} OR lower("email") = lower(${userId})
-      `;
-    },
-
-    async onTelegramUpdated(userId, chatId, username) {
-      await sql`
-        UPDATE "ketner_users"
-        SET "telegram_chat_id" = ${chatId ? String(chatId) : null},
-            "telegram_username" = ${username || null},
-            "updated_at" = NOW()
-        WHERE "id" = ${userId} OR lower("email") = lower(${userId})
-      `;
-    },
-
-    async onPasswordUpdated(userId, salt, passwordHash) {
-      await sql`
-        UPDATE "ketner_users"
-        SET "salt" = ${salt}, "password_hash" = ${passwordHash}, "updated_at" = NOW()
-        WHERE "id" = ${userId} OR lower("email") = lower(${userId})
-      `;
-    },
-  });
+  userStore.setDbDriver?.(createUserDbDriver(sql));
 
   // 3. Subscription driver
   subscriptionStore.setDbDriver?.({

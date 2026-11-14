@@ -486,7 +486,9 @@ describe('кабинет в Telegram (/tg)', () => {
       comment: 'Хотел пакет поменьше',
     });
     expect(screen.getByRole('region', { name: /Заявки на возврат/ })).toBeInTheDocument();
-    expect(app.BackButton!.hide).toHaveBeenCalled();
+    // Кнопку «Назад» прячет очистка эффекта закрытого листа: React выполняет её после отрисовки,
+    // поэтому проверка ждёт вызова, а не проверяет сразу.
+    await waitFor(() => expect(app.BackButton!.hide).toHaveBeenCalled());
   });
 
   it('платежи: после запроса к моделям вернуть оплату нельзя — кабинет объясняет почему', async () => {
