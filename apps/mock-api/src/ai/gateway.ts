@@ -25,7 +25,7 @@ import {
   type AgentToolCall,
 } from './agent/agent-types.js';
 import { ERROR_MESSAGES, pickAnswer } from './answers.js';
-import { semanticCache, SemanticCache } from './cache.js';
+import { SEMANTIC_CACHE_ENABLED, semanticCache, SemanticCache } from './cache.js';
 import { ContextOptimizer } from './context.js';
 import type {
   AIProvider,
@@ -800,8 +800,14 @@ export class AIGateway {
       // Ответ зависит от файлов проекта и вложений, а ключ кэша — только от текста вопроса:
       // с проектом/вложениями кэш не читаем и не пишем (иначе чужой или устаревший ответ).
       // Служебные запросы (проверка ответа) в кэш не ходят: их результат хранится отдельно.
+      // Кэш выключен (ai/cache.ts → SEMANTIC_CACHE_ENABLED): ни чтения, ни записи.
       const cacheable =
-        !hasAttachments && !activeWorkspace && !req.task && !req.assistant && !req.agentStep;
+        SEMANTIC_CACHE_ENABLED &&
+        !hasAttachments &&
+        !activeWorkspace &&
+        !req.task &&
+        !req.assistant &&
+        !req.agentStep;
 
       const cachedHit = cacheable
         ? semanticCache.get(cacheModelKey, language, prompt, userScope, historyHash)
