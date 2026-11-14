@@ -245,8 +245,7 @@ test('чат Ketner и помощник Builder: прежняя строка о 
     isAnonymous: false,
     conversationId: 'chat-1',
     modelId: 'auto',
-    // Уникальный вопрос: семантический кэш чата общий для процесса и не должен отвечать вместо модели.
-    messages: [{ role: 'user', content: `ты кто (${Date.now()}-${Math.random()})` }],
+    messages: [{ role: 'user', content: 'ты кто' }],
     language: 'ru',
     stream: true,
   };

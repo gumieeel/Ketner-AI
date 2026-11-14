@@ -1,10 +1,15 @@
 import { defaultBetterAuth, initAuthDatabase } from './auth/better-auth.js';
+import { removeLegacySemanticCacheFile } from './ai/cache.js';
 import { createApp } from './app.js';
 import { config } from './config.js';
 import { telegramBotService } from './telegram/bot.js';
 import { telegramSupportBotService } from './telegram/support-bot.js';
 import { initDatabaseSync } from './db/sync.js';
 import { userStore } from './store/index.js';
+
+// 0. Семантический кэш ответов выключен: файл прежнего кэша (вопросы и ответы открытым текстом)
+// удаляется при старте.
+removeLegacySemanticCacheFile();
 
 // 1. Синхронизируем базу данных Supabase / PostgreSQL и таблицы
 await initDatabaseSync();

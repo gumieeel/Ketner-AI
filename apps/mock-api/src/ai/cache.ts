@@ -17,8 +17,22 @@ import {
   unlinkSync,
   writeFileSync,
 } from 'node:fs';
-import { dirname } from 'node:path';
+import { dirname, resolve } from 'node:path';
 import type { ResponseSource } from './gateway-types.js';
+
+/**
+ * Семантический кэш ответов ВЫКЛЮЧЕН (решение владельца, 14.11.2026): шлюз его не читает и не пишет.
+ * Переключателя в окружении нет намеренно — включение только правкой кода и ревью. До включения
+ * нужно исправить:
+ *   1. ключ должен покрывать всё, что уходит модели: системный промпт, сводку и всё окно истории
+ *      (сейчас — последние 3 сообщения по 120 символов);
+ *   2. кэш только свой у каждого пользователя (сейчас бесплатные тарифы делят общий пул `shared`);
+ *   3. никакого файла с открытым текстом на диске (и без синхронной перезаписи на каждый ответ);
+ *   4. удаление записей вместе с диалогом и аккаунтом;
+ *   5. попадание в кэш не расходует квоту токенов fair-use;
+ *   6. изоляция в тестах (без общего состояния между прогонами).
+ */
+export const SEMANTIC_CACHE_ENABLED = false;
 
 export interface CacheEntry {
   key: string;
@@ -232,8 +246,32 @@ export class SemanticCache {
   }
 }
 
-export const semanticCache = new SemanticCache(
-  5000,
-  24 * 60 * 60 * 1000,
-  process.env.SEMANTIC_CACHE_PATH ?? 'data/semantic-cache.json',
-);
+/** Экземпляр шлюза: только в памяти, без файла на диске (и не используется, пока кэш выключен). */
+export const semanticCache = new SemanticCache(5000, 24 * 60 * 60 * 1000);
+
+/** Где прежний экземпляр хранил кэш (путь от рабочего каталога процесса). */
+export const LEGACY_SEMANTIC_CACHE_FILE = 'data/semantic-cache.json';
+
+/**
+ * Удаляет файл прежнего кэша и его временную копию, если они остались: в них открытым текстом
+ * лежали вопросы и ответы пользователей. Вызывается при старте сервера. Возвращает удалённые пути.
+ */
+export function removeLegacySemanticCacheFile(
+  path = resolve(process.env.SEMANTIC_CACHE_PATH ?? LEGACY_SEMANTIC_CACHE_FILE),
+): string[] {
+  const removed: string[] = [];
+  for (const file of [path, `${path}.tmp`]) {
+    try {
+      if (existsSync(file)) {
+        unlinkSync(file);
+        removed.push(file);
+      }
+    } catch (error) {
+      console.warn('[semantic-cache] Не удалось удалить файл прежнего кэша:', error);
+    }
+  }
+  if (removed.length > 0) {
+    console.log(`[semantic-cache] Удалён файл прежнего кэша ответов (${removed.length})`);
+  }
+  return removed;
+}
