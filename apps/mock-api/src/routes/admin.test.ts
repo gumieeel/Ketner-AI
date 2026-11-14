@@ -3,6 +3,10 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { config } from '../config.js';
 import { startTestServer, readSseEvents } from '../testing/server.js';
+import { setProductSwitchForTests } from '../product-switches.js';
+
+// Закрытые возможности (product-switches.ts): здесь проверяется их спящий код.
+setProductSwitchForTests('chat', true);
 
 test('admin: проверка доступа по API ключу', async () => {
   const server = await startTestServer();

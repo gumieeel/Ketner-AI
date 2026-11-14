@@ -4,6 +4,7 @@ import { HeroArc } from '@/components/marketing/hero-arc';
 import { buttonClasses } from '@/components/ui/button-classes';
 import { TRIAL } from '@/features/billing/plans';
 import { useTranslation } from '@/i18n';
+import { appHomePath } from '@/lib/product-switches';
 
 /**
  * Финальный призыв: та же сцена, что и первый экран — графит, дуга и мятная кнопка.
@@ -25,7 +26,7 @@ export function LandingFinalCta() {
           </p>
           <div className="mt-10 flex flex-col gap-3 sm:flex-row">
             <Link
-              to="/chat"
+              to={appHomePath()}
               className={buttonClasses({
                 variant: 'primary',
                 size: 'lg',

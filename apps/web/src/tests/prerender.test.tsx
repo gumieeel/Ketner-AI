@@ -1,5 +1,9 @@
 import { PRERENDER_PATHS, render } from '@/entry-prerender';
 import { seoTitleFor } from '@/lib/seo-pages';
+import { setProductSwitchesForTests } from '@/lib/product-switches';
+
+// Закрытые возможности (lib/product-switches.ts): здесь проверяется их спящий код.
+setProductSwitchesForTests({ chat: true });
 
 /**
  * Открытые страницы отрисовываются в HTML при сборке (scripts/prerender.mjs). Если страница начнёт

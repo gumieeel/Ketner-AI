@@ -21,6 +21,7 @@ import { useWorkspace } from './workspace-store';
 import { isSensitivePath } from './file-operations/path-safety';
 import { saveJudge as saveJudgeAnswer, streamJudge } from '@/features/review/api';
 import { useReview } from '@/features/review/review-store';
+import { productSwitch } from '@/lib/product-switches';
 
 export type LoadStatus = 'idle' | 'loading' | 'ready' | 'error';
 
@@ -633,6 +634,11 @@ export const useChat = create<ChatState>((set, get) => {
     clearAttachments: () => set({ attachedFiles: [] }),
 
     loadConversations: async (silent = false) => {
+      // Чат закрыт (lib/product-switches.ts): сервер не спрашиваем, истории в интерфейсе нет.
+      if (!productSwitch('chat')) {
+        set({ conversations: [], conversationsStatus: 'ready' });
+        return;
+      }
       if (!silent) {
         set({ conversationsStatus: 'loading' });
       }

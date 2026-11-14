@@ -13,6 +13,10 @@ import {
   waitFor,
   type ApiErrorBody,
 } from '../testing/server.js';
+import { setProductSwitchForTests } from '../product-switches.js';
+
+// Закрытые возможности (product-switches.ts): здесь проверяется их спящий код.
+setProductSwitchForTests('chat', true);
 
 test('ответ приходит потоком, а потом сохраняется в диалоге', async () => {
   const server = await startTestServer();

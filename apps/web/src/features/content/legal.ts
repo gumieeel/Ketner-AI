@@ -131,7 +131,7 @@ const RU: Record<LegalPageId, LegalContent> = {
       {
         title: '6. Платёжные данные',
         paragraphs: [
-          'Оплата проходит у платёжных провайдеров: звёздами — в Telegram, криптовалютой — через Trybit. Мы получаем от них только сведения о счёте: сумму, пакет, статус и идентификатор платежа. Номера банковских карт, данные кошельков и ключи мы не получаем и не храним.',
+          'Оплата проходит у платёжного провайдера: криптовалютой — через Trybit (оплата звёздами Telegram больше не принимается; по прежним платежам звёздами Telegram передаёт сведения для возвратов). Мы получаем от них только сведения о счёте: сумму, пакет, статус и идентификатор платежа. Номера банковских карт, данные кошельков и ключи мы не получаем и не храним.',
           'Записи о платежах и возвратах хранятся дольше остальных данных — столько, сколько нужно для учёта, возвратов и требований закона.',
         ],
       },
@@ -156,7 +156,7 @@ const RU: Record<LegalPageId, LegalContent> = {
         ],
         items: [
           'Поставщики моделей и инфраструктуры ИИ: OpenRouter и разработчики моделей, Cloudflare и Runware (картинки) — текст запроса и текст из вложений, чтобы получить ответ (раздел 5).',
-          'Платёжные провайдеры: Telegram (оплата звёздами) и Trybit (оплата криптовалютой) — сведения о счёте и пакете кредитов.',
+          'Платёжные провайдеры: Trybit (оплата криптовалютой) — сведения о счёте и пакете кредитов; Telegram — только по прежним платежам звёздами и их возвратам.',
           'Хостинг и база данных: Render, Supabase, Cloudflare.',
           'Google Ads: на сайте работает тег Google, который получает данные о посещении страниц, а после оплаты — сумму и пакет покупки (без имени и почты).',
           'Вход через Google и GitHub — если вы выбрали этот способ.',
@@ -222,7 +222,7 @@ const RU: Record<LegalPageId, LegalContent> = {
       {
         title: '1. Что такое Ketner AI и кто его ведёт',
         paragraphs: [
-          'Ketner AI — онлайн-сервис, который даёт доступ к нескольким моделям искусственного интеллекта: чат, помощник для программирования («Код»), генерация изображений и API. Все возможности оплачиваются кредитами: новому пользователю мы дарим пробные, остальные кредиты покупаются пакетами. Подписки не продаются.',
+          'Ketner AI — онлайн-сервис решений для бизнеса на основе моделей искусственного интеллекта: анализ задачи, создание и проверка решений, боты и агенты, которые отвечают клиентам бизнеса. Работа моделей оплачивается кредитами: новому пользователю мы дарим пробные, остальные кредиты покупаются пакетами. Подписки не продаются. Чат с моделями, помощник для программирования («Код»), генерация изображений и API временно закрыты; ваши данные в них сохранены.',
           operatorParagraph('ru'),
         ],
       },
@@ -306,11 +306,10 @@ const RU: Record<LegalPageId, LegalContent> = {
       {
         title: '1. Способы оплаты',
         items: [
-          'Звёзды Telegram — в боте @Robo_kassa_bot и в его кабинете (вкладка «Кредиты»). Оплата разовая.',
           `Криптовалюта — через платёжный сервис Trybit на странице оформления пакета. Выберите сеть и монету, оплатите по данным виджета; статус обновляется автоматически. За оплату криптовалютой начисляем ещё +${BONUS_PERCENT}% кредитов сверх пакета.`,
         ],
         paragraphs: [
-          'Цены указаны в долларах США; в звёздах Telegram сумма считается по актуальному курсу и показывается перед оплатой. Мы не получаем и не храним реквизиты ваших карт и кошельков.',
+          'Цены указаны в долларах США. Оплата звёздами Telegram больше не принимается. Мы не получаем и не храним реквизиты ваших карт и кошельков.',
         ],
       },
       {
@@ -341,7 +340,7 @@ const RU: Record<LegalPageId, LegalContent> = {
         title: '5. Как оформить возврат',
         items: [
           'Откройте кабинет бота @Robo_kassa_bot → «Платежи» → выберите платёж → «Подать заявку на возврат», или напишите в поддержку. Каждую заявку проверяет администратор, как правило в течение суток.',
-          'Звёзды Telegram после одобрения возвращаются на ваш баланс в Telegram автоматически.',
+          'Прежние платежи звёздами Telegram после одобрения возвращаются на ваш баланс в Telegram автоматически.',
           `Криптовалюта после одобрения отправляется на ваш кошелёк вручную: ту же сумму, в той же монете и сети, не позднее чем через ${REFUND_DAYS} дней после одобрения. Заявку можно подать и письмом на ${SUPPORT_EMAIL} с почты аккаунта, указав платёж. Комиссию сети за возвратный перевод мы берём на себя.`,
         ],
         paragraphs: ['После возврата кредиты этого пакета списываются с баланса.'],
@@ -418,7 +417,7 @@ const EN: Record<LegalPageId, LegalContent> = {
       {
         title: '6. Payment data',
         paragraphs: [
-          'Payments are made with payment providers: Stars in Telegram, cryptocurrency through Trybit. From them we receive only invoice details: the amount, the pack, the status and the payment ID. We do not receive or store bank card numbers, wallet data or keys.',
+          'Payments are made with a payment provider: cryptocurrency through Trybit (Telegram Stars are no longer accepted; for earlier Stars payments Telegram passes the details needed for refunds). From them we receive only invoice details: the amount, the pack, the status and the payment ID. We do not receive or store bank card numbers, wallet data or keys.',
           'Records of payments and refunds are kept longer than other data — as long as needed for accounting, refunds and legal requirements.',
         ],
       },
@@ -443,7 +442,7 @@ const EN: Record<LegalPageId, LegalContent> = {
         ],
         items: [
           'Model and AI infrastructure providers: OpenRouter and model developers, Cloudflare and Runware (pictures) — the request text and the text from attachments, to get a reply (section 5).',
-          'Payment providers: Telegram (payment in Stars) and Trybit (payment in cryptocurrency) — invoice and credit pack details.',
+          'Payment providers: Trybit (payment in cryptocurrency) — invoice and credit pack details; Telegram — only for earlier Stars payments and their refunds.',
           'Hosting and database: Render, Supabase, Cloudflare.',
           'Google Ads: the site runs a Google tag that receives data about page visits and, after payment, the amount and pack purchased (without name or email).',
           'Sign-in with Google and GitHub — if you chose that method.',
@@ -509,7 +508,7 @@ const EN: Record<LegalPageId, LegalContent> = {
       {
         title: '1. What Ketner AI is and who runs it',
         paragraphs: [
-          'Ketner AI is an online service that gives access to several artificial intelligence models: chat, a coding assistant (“Code”), image generation and an API. Everything is paid for in credits: we give a new user trial credits, and further credits are bought in packs. Subscriptions are not sold.',
+          'Ketner AI is an online service of solutions for businesses built on artificial intelligence models: analysing a task, building and testing solutions, and bots and agents that answer the business’s customers. Model work is paid for in credits: we give a new user trial credits, and further credits are bought in packs. Subscriptions are not sold. The model chat, the coding assistant (“Code”), image generation and the API are temporarily closed; your data in them is kept.',
           operatorParagraph('en'),
         ],
       },
@@ -593,11 +592,10 @@ const EN: Record<LegalPageId, LegalContent> = {
       {
         title: '1. Payment methods',
         items: [
-          'Telegram Stars — in the @Robo_kassa_bot bot and its account (the “Credits” tab). Payment is one-time.',
           `Cryptocurrency — through the Trybit payment service on the pack checkout page. Pick the network and coin and pay using the details in the widget; the status updates automatically. When you pay with crypto we add another +${BONUS_PERCENT}% credits on top of the pack.`,
         ],
         paragraphs: [
-          'Prices are in US dollars; in Telegram Stars the amount is calculated at the current rate and shown before you pay. We do not receive or store your card or wallet details.',
+          'Prices are in US dollars. Telegram Stars are no longer accepted. We do not receive or store your card or wallet details.',
         ],
       },
       {
@@ -628,7 +626,7 @@ const EN: Record<LegalPageId, LegalContent> = {
         title: '5. How to request a refund',
         items: [
           'Open the @Robo_kassa_bot account → “Payments” → pick the payment → “Request a refund”, or write to support. An administrator reviews every request, usually within a day.',
-          'Telegram Stars go back to your Telegram balance automatically once approved.',
+          'Earlier Telegram Stars payments go back to your Telegram balance automatically once approved.',
           `Cryptocurrency is sent to your wallet manually once approved: the same amount, in the same coin and network, no later than ${REFUND_DAYS} days after approval. You can also apply by email to ${SUPPORT_EMAIL} from your account email, naming the payment. We pay the network fee for the refund transfer.`,
         ],
         paragraphs: ['After a refund, the credits of this pack are removed from your balance.'],

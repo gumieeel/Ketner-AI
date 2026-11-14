@@ -6,6 +6,10 @@ import { useImages } from '@/features/images/images-store';
 import type { GeneratedImage, ImageCapabilities } from '@/features/images/types';
 import { installFakeApi } from './fake-api';
 import { renderRoute, resetAuth, resetChat, resetPreferences } from './test-utils';
+import { setProductSwitchesForTests } from '@/lib/product-switches';
+
+// Закрытые возможности (lib/product-switches.ts): здесь проверяется их спящий код.
+setProductSwitchesForTests({ chat: true, images: true });
 
 const json = (body: unknown, status = 200): Response =>
   new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } });

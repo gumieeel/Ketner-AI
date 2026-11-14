@@ -25,6 +25,7 @@ import {
   Toggle,
   useMiniApp,
 } from './shared';
+import { appHomePath, productSwitch } from '@/lib/product-switches';
 
 export function HomeTab() {
   const { t, language } = useTranslation();
@@ -52,10 +53,16 @@ export function HomeTab() {
     }
   };
 
+  // Пакеты звёздами — пока Stars открыты (lib/product-switches.ts); иначе — пакет на сайте.
+  const topUp = () => {
+    if (productSwitch('stars')) goTo('plans');
+    else void openSite('/pricing');
+  };
+
   const openChat = async () => {
     setOpening(true);
     try {
-      await openSite('/chat');
+      await openSite(appHomePath());
     } finally {
       setOpening(false);
     }
@@ -80,7 +87,7 @@ export function HomeTab() {
         </p>
         {!user.isVip ? (
           <div className="mt-3 flex flex-col gap-2">
-            <Button className="w-full" onClick={() => goTo('plans')}>
+            <Button className="w-full" onClick={topUp}>
               {t('tg.topUp')}
             </Button>
           </div>
@@ -144,7 +151,7 @@ export function HomeTab() {
         <QuickAction
           icon={<StarIcon className="size-5" />}
           label={t('tg.tabCredits')}
-          onClick={() => goTo('plans')}
+          onClick={topUp}
         />
         <QuickAction
           icon={<FileTextIcon className="size-5" />}

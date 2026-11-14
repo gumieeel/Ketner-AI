@@ -1,3 +1,4 @@
+import { requireFeature } from '../product-switches.js';
 import { Router, type Request, type Response } from 'express';
 import { createMockToken } from '../auth/jwt.js';
 import { requireAuth } from '../middleware/auth.js';
@@ -428,6 +429,8 @@ export function createMiniAppRouter({
   /** Счёт в звёздах на пакет кредитов. */
   router.post(
     '/telegram/miniapp/invoice',
+    // Stars закрыты (product-switches.ts): новых счетов нет; возвраты прежних платежей — работают.
+    requireFeature('stars'),
     requireAuth,
     async (request: Request, response: Response) => {
       const body = (request.body ?? {}) as { packId?: unknown };

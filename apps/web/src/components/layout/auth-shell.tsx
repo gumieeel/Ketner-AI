@@ -6,6 +6,7 @@ import { useTranslation } from '@/i18n';
 import { Brand } from './brand';
 import { LanguageToggle } from './language-toggle';
 import { ThemeToggle } from './theme-toggle';
+import { productSwitch } from '@/lib/product-switches';
 
 export interface AuthShellProps {
   title: string;
@@ -44,11 +45,11 @@ export function AuthShell({ title, subtitle, children, footer, aside }: AuthShel
         <div className="mt-6 flex flex-col items-center gap-1 text-sm">
           {footer ? <div className="flex min-h-11 items-center">{footer}</div> : null}
           <Link
-            to="/chat"
+            to={productSwitch('chat') ? '/chat' : '/'}
             className="inline-flex min-h-11 items-center gap-1.5 rounded-md px-2 text-sm text-muted transition-colors hover:text-text"
           >
             <ArrowLeftIcon className="size-4" />
-            <span>{t('auth.backToChat')}</span>
+            <span>{productSwitch('chat') ? t('auth.backToChat') : t('notFound.home')}</span>
           </Link>
         </div>
       </div>

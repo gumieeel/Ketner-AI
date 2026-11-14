@@ -90,7 +90,7 @@ export const en: Record<TranslationKey, string> = {
 
   'pricing.title': 'Credits',
   'pricing.subtitle':
-    'Pay once and spend credits on chat, images and Ketner Code at the real cost of each request. Purchased credits last {days} days. When credits run out, a free model answers.',
+    'Pay once and spend credits on analysing tasks, building and testing solutions and bot replies at the real cost of each request. Purchased credits last {days} days.',
   'pricing.popular': 'Popular',
   'pricing.compare': 'What changes after your first purchase',
   'pricing.credits.one': '{count} credit',
@@ -347,6 +347,15 @@ export const en: Record<TranslationKey, string> = {
   'common.save': 'Save',
   'common.retry': 'Retry',
 
+  'closed.title.stars': 'Telegram Stars payments are no longer accepted',
+  'closed.title.chat': 'Chat is temporarily unavailable',
+  'closed.title.code': 'Ketner Code is temporarily unavailable',
+  'closed.title.images': 'Image generation is temporarily unavailable',
+  'closed.title.developerApi': 'The developer API is temporarily unavailable',
+  'closed.title.answerReview': 'Answer review is temporarily unavailable',
+  'closed.title.modelCompare': 'Model comparison is temporarily unavailable',
+  'closed.text':
+    'Ketner is now about solutions for businesses: analysing the task, and bots and agents that answer customers. Your data is kept.',
   'notFound.title': 'Page not found',
   'notFound.text': 'The link may be outdated, or there is a typo in the address.',
   'notFound.home': 'Go home',
@@ -1773,7 +1782,7 @@ export const en: Record<TranslationKey, string> = {
   'pricing.buyPack': 'Buy',
   'pricing.trialTitle': '{count} credits on us',
   'pricing.trialText':
-    'For every new user, once, valid for {days} days. Here is how many requests they cover:',
+    'Every new user, once, for {days} days: enough to build and test your first solution.',
   'pricing.trialCta': 'Claim the gift',
   'pricing.colFree': 'No purchases',
   'pricing.colCredits': 'Purchased credits left',

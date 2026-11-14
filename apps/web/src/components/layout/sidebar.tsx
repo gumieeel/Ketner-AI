@@ -34,6 +34,7 @@ import type { TranslationKey } from '@/i18n';
 import { Brand } from './brand';
 import { LanguageToggle } from './language-toggle';
 import { ThemeToggle } from './theme-toggle';
+import { productSwitch } from '@/lib/product-switches';
 
 const GROUP_ORDER: readonly DateGroup[] = ['today', 'yesterday', 'week', 'earlier'];
 
@@ -75,6 +76,8 @@ export function Sidebar() {
   const search = useChat((state) => state.search);
   const setSearch = useChat((state) => state.setSearch);
   const loadConversations = useChat((state) => state.loadConversations);
+  // Чат закрыт (lib/product-switches.ts): ни нового чата, ни поиска, ни истории.
+  const chatOpen = productSwitch('chat');
   const openConversation = useChat((state) => state.openConversation);
   const closeButtonRef = useRef<HTMLButtonElement | null>(null);
   const close = () => setOpen(false);
@@ -159,14 +162,16 @@ export function Sidebar() {
         </div>
 
         <div className="flex shrink-0 flex-col gap-3 p-3">
-          <Link
-            to="/chat"
-            onClick={handleNewChat}
-            className={buttonClasses({ variant: 'primary', size: 'md', fullWidth: true })}
-          >
-            <PlusIcon className="size-4" />
-            <span>{t('nav.newChat')}</span>
-          </Link>
+          {chatOpen ? (
+            <Link
+              to="/chat"
+              onClick={handleNewChat}
+              className={buttonClasses({ variant: 'primary', size: 'md', fullWidth: true })}
+            >
+              <PlusIcon className="size-4" />
+              <span>{t('nav.newChat')}</span>
+            </Link>
+          ) : null}
 
           <nav aria-label={t('nav.mainNavigation')} className="flex flex-col gap-0.5">
             {siteFeatures().discovery ? (
@@ -181,90 +186,104 @@ export function Sidebar() {
                 </NavLink>
               </>
             ) : null}
-            <NavLink to="/code" onClick={close} className={navLinkClasses}>
-              <CodeIcon className="size-4 shrink-0" />
-              <span>{t('nav.code')}</span>
-            </NavLink>
-            <NavLink to="/images" onClick={close} className={navLinkClasses}>
-              <ImageIcon className="size-4 shrink-0" />
-              <span>{t('nav.images')}</span>
-            </NavLink>
+            {productSwitch('code') ? (
+              <NavLink to="/code" onClick={close} className={navLinkClasses}>
+                <CodeIcon className="size-4 shrink-0" />
+                <span>{t('nav.code')}</span>
+              </NavLink>
+            ) : null}
+            {productSwitch('images') ? (
+              <NavLink to="/images" onClick={close} className={navLinkClasses}>
+                <ImageIcon className="size-4 shrink-0" />
+                <span>{t('nav.images')}</span>
+              </NavLink>
+            ) : null}
           </nav>
 
-          <div className="relative">
-            <SearchIcon className="pointer-events-none absolute top-1/2 left-4 size-4 -translate-y-1/2 text-subtle" />
-            <input
-              type="search"
-              name="ketner-chat-search"
-              autoComplete="off"
-              autoCorrect="off"
-              spellCheck={false}
-              data-1p-ignore=""
-              data-lpignore="true"
-              data-form-type="other"
-              value={search}
-              onChange={(event) => setSearch(event.target.value)}
-              aria-label={t('nav.searchChats')}
-              placeholder={t('nav.searchChats')}
-              className="h-10 w-full rounded-full border border-stroke bg-canvas pr-3 pl-10 text-[14px] text-text outline-none transition-[border-color,box-shadow] placeholder:text-subtle focus:border-accent/60 focus:ring-2 focus:ring-accent-soft max-md:h-11"
-            />
+          {chatOpen ? (
+            <div className="relative">
+              <SearchIcon className="pointer-events-none absolute top-1/2 left-4 size-4 -translate-y-1/2 text-subtle" />
+              <input
+                type="search"
+                name="ketner-chat-search"
+                autoComplete="off"
+                autoCorrect="off"
+                spellCheck={false}
+                data-1p-ignore=""
+                data-lpignore="true"
+                data-form-type="other"
+                value={search}
+                onChange={(event) => setSearch(event.target.value)}
+                aria-label={t('nav.searchChats')}
+                placeholder={t('nav.searchChats')}
+                className="h-10 w-full rounded-full border border-stroke bg-canvas pr-3 pl-10 text-[14px] text-text outline-none transition-[border-color,box-shadow] placeholder:text-subtle focus:border-accent/60 focus:ring-2 focus:ring-accent-soft max-md:h-11"
+              />
+            </div>
+          ) : null}
+        </div>
+
+        {chatOpen ? (
+          <div className="flex min-h-0 flex-1 flex-col gap-1 overflow-y-auto px-2 pb-2">
+            {status === 'loading' ? <ConversationsSkeleton /> : null}
+
+            {status === 'error' ? (
+              <div className="rounded-xl border border-danger/30 bg-danger-soft p-3 text-center">
+                <p className="text-xs text-danger">{t('chats.loadError')}</p>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="mt-2"
+                  onClick={() => void loadConversations()}
+                >
+                  {t('common.retry')}
+                </Button>
+              </div>
+            ) : null}
+
+            {status !== 'loading' && status !== 'error' && conversations.length === 0 ? (
+              <div className="px-3 py-4">
+                <p className="text-[13px] font-medium text-text">{t('nav.empty')}</p>
+                <p className="mt-1 text-[13px] leading-5 text-muted">{t('nav.emptyHint')}</p>
+              </div>
+            ) : null}
+
+            {status !== 'loading' &&
+            status !== 'error' &&
+            conversations.length > 0 &&
+            groups.length === 0 ? (
+              <p className="px-3 py-6 text-center text-[13px] text-muted">
+                {t('chat.searchEmpty')}
+              </p>
+            ) : null}
+
+            {groups.map(({ group, items }) => (
+              <section key={group} className="flex flex-col gap-0.5">
+                <span className="px-3 pt-3.5 pb-1 text-[12px] text-subtle">
+                  {t(GROUP_LABELS[group])}
+                </span>
+                {items.map((conversation) => (
+                  <ConversationRow
+                    key={conversation.id}
+                    conversation={conversation}
+                    active={conversation.id === activeId}
+                    showDate={group === 'earlier'}
+                    onNavigate={close}
+                  />
+                ))}
+              </section>
+            ))}
           </div>
-        </div>
-
-        <div className="flex min-h-0 flex-1 flex-col gap-1 overflow-y-auto px-2 pb-2">
-          {status === 'loading' ? <ConversationsSkeleton /> : null}
-
-          {status === 'error' ? (
-            <div className="rounded-xl border border-danger/30 bg-danger-soft p-3 text-center">
-              <p className="text-xs text-danger">{t('chats.loadError')}</p>
-              <Button
-                variant="outline"
-                size="sm"
-                className="mt-2"
-                onClick={() => void loadConversations()}
-              >
-                {t('common.retry')}
-              </Button>
-            </div>
-          ) : null}
-
-          {status !== 'loading' && status !== 'error' && conversations.length === 0 ? (
-            <div className="px-3 py-4">
-              <p className="text-[13px] font-medium text-text">{t('nav.empty')}</p>
-              <p className="mt-1 text-[13px] leading-5 text-muted">{t('nav.emptyHint')}</p>
-            </div>
-          ) : null}
-
-          {status !== 'loading' &&
-          status !== 'error' &&
-          conversations.length > 0 &&
-          groups.length === 0 ? (
-            <p className="px-3 py-6 text-center text-[13px] text-muted">{t('chat.searchEmpty')}</p>
-          ) : null}
-
-          {groups.map(({ group, items }) => (
-            <section key={group} className="flex flex-col gap-0.5">
-              <span className="px-3 pt-3.5 pb-1 text-[12px] text-subtle">
-                {t(GROUP_LABELS[group])}
-              </span>
-              {items.map((conversation) => (
-                <ConversationRow
-                  key={conversation.id}
-                  conversation={conversation}
-                  active={conversation.id === activeId}
-                  showDate={group === 'earlier'}
-                  onNavigate={close}
-                />
-              ))}
-            </section>
-          ))}
-        </div>
+        ) : (
+          <div className="min-h-0 flex-1" />
+        )}
 
         <div className="mt-auto flex shrink-0 flex-col gap-0.5 border-t border-stroke p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
-          <NavLink to="/docs" onClick={close} className={navLinkClasses}>
-            <BookOpenIcon className="size-4 shrink-0" />
-            <span>{t('nav.docs')}</span>
-          </NavLink>
+          {chatOpen ? (
+            <NavLink to="/docs" onClick={close} className={navLinkClasses}>
+              <BookOpenIcon className="size-4 shrink-0" />
+              <span>{t('nav.docs')}</span>
+            </NavLink>
+          ) : null}
           <NavLink to="/pricing" onClick={close} className={navLinkClasses}>
             <SparkleIcon className="size-4 shrink-0" />
             <span>{t('nav.upgrade')}</span>

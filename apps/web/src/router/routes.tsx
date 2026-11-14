@@ -5,6 +5,8 @@ import { StandaloneLayout } from '@/components/layout/standalone-layout';
 import { RootPage } from '@/pages/home/root-page';
 import { LoginPage } from '@/pages/login-page';
 import { NotFoundPage } from '@/pages/not-found-page';
+import { ClosedFeaturePage, FeatureGate } from '@/pages/closed-feature-page';
+import { productSwitch, type ProductFeature } from '@/lib/product-switches';
 import { PricingPage } from '@/pages/pricing-page';
 import { RouteErrorPage } from '@/pages/route-error-page';
 import { SignupPage } from '@/pages/signup-page';
@@ -30,10 +32,32 @@ function lazyLegal(id: LegalPageId): RouteObject['lazy'] {
   };
 }
 
+/**
+ * Страница закрытой возможности (lib/product-switches.ts): проверка при отрисовке, а не при загрузке
+ * маршрута, — тесты спящего кода включают возможность после того, как маршруты уже загружены.
+ */
+function gatedLazy<K extends string>(
+  feature: ProductFeature,
+  load: () => Promise<Record<K, ComponentType>>,
+  name: K,
+): RouteObject['lazy'] {
+  return async () => {
+    const Page: ComponentType = (await load())[name];
+    return {
+      Component: () =>
+        productSwitch(feature) ? <Page /> : <ClosedFeaturePage feature={feature} />,
+    };
+  };
+}
+
 const chatPage = lazyPage(() => import('@/pages/chat-page'), 'ChatPage');
 const codePage = lazyPage(() => import('@/pages/code-page'), 'CodePage');
-const documentationPage = lazyPage(() => import('@/pages/documentation-page'), 'DocumentationPage');
 const apiDocsPage = lazyPage(() => import('@/pages/api-docs-page'), 'ApiDocsPage');
+const gatedDocumentationPage = gatedLazy(
+  'chat',
+  () => import('@/pages/documentation-page'),
+  'DocumentationPage',
+);
 
 /**
  * Маршруты приложения.
@@ -121,15 +145,23 @@ export const routes: RouteObject[] = [
       { path: 'payment-terms', lazy: lazyLegal('payment-terms') },
       { path: 'contacts', lazy: lazyPage(() => import('@/pages/contacts-page'), 'ContactsPage') },
       { path: 'about', lazy: lazyPage(() => import('@/pages/about-page'), 'AboutPage') },
-      { path: 'models', lazy: lazyPage(() => import('@/pages/models-page'), 'ModelsPage') },
+      // Каталог моделей и тарифы чата — о закрытом чате (lib/product-switches.ts).
+      {
+        path: 'models',
+        lazy: gatedLazy('chat', () => import('@/pages/models-page'), 'ModelsPage'),
+      },
       { path: 'status', lazy: lazyPage(() => import('@/pages/status-page'), 'StatusPage') },
       {
         path: 'changelog',
         lazy: lazyPage(() => import('@/pages/changelog-page'), 'ChangelogPage'),
       },
-      { path: 'docs', lazy: documentationPage },
-      { path: 'docs/plans/:planId', lazy: documentationPage },
-      { path: 'docs/api', lazy: apiDocsPage },
+      // Документация — о чате (модели, тарифы, лимиты): закрыта вместе с ним.
+      { path: 'docs', lazy: gatedDocumentationPage },
+      { path: 'docs/plans/:planId', lazy: gatedDocumentationPage },
+      {
+        path: 'docs/api',
+        lazy: gatedLazy('developerApi', () => import('@/pages/api-docs-page'), 'ApiDocsPage'),
+      },
       {
         // Адрес после успешной оплаты на сайте (цель «Покупка» в рекламных кабинетах).
         path: 'checkout/success',
@@ -155,7 +187,11 @@ export const routes: RouteObject[] = [
   },
   {
     path: 'chat',
-    element: <AppShell />,
+    element: (
+      <FeatureGate feature="chat">
+        <AppShell />
+      </FeatureGate>
+    ),
     errorElement: <RouteErrorPage />,
     children: [
       { index: true, lazy: chatPage },
@@ -164,7 +200,11 @@ export const routes: RouteObject[] = [
   },
   {
     path: 'code',
-    element: <AppShell />,
+    element: (
+      <FeatureGate feature="code">
+        <AppShell />
+      </FeatureGate>
+    ),
     errorElement: <RouteErrorPage />,
     children: [
       { index: true, lazy: codePage },
@@ -173,7 +213,11 @@ export const routes: RouteObject[] = [
   },
   {
     path: 'images',
-    element: <AppShell />,
+    element: (
+      <FeatureGate feature="images">
+        <AppShell />
+      </FeatureGate>
+    ),
     errorElement: <RouteErrorPage />,
     children: [{ index: true, lazy: lazyPage(() => import('@/pages/images-page'), 'ImagesPage') }],
   },
@@ -187,13 +231,21 @@ export const routes: RouteObject[] = [
   },
   {
     path: 'api-docs',
-    element: <AppShell />,
+    element: (
+      <FeatureGate feature="developerApi">
+        <AppShell />
+      </FeatureGate>
+    ),
     errorElement: <RouteErrorPage />,
     children: [{ index: true, lazy: apiDocsPage }],
   },
   {
     path: 'developers',
-    element: <AppShell />,
+    element: (
+      <FeatureGate feature="developerApi">
+        <AppShell />
+      </FeatureGate>
+    ),
     errorElement: <RouteErrorPage />,
     children: [{ index: true, lazy: apiDocsPage }],
   },

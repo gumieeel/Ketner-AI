@@ -13,6 +13,10 @@ import {
 } from '@/lib/card-mask';
 import { installFakeApi } from './fake-api';
 import { renderRoute, resetAuth, resetBilling, resetChat, resetPreferences } from './test-utils';
+import { setProductSwitchesForTests } from '@/lib/product-switches';
+
+// Закрытые возможности (lib/product-switches.ts): здесь проверяется их спящий код.
+setProductSwitchesForTests({ chat: true, stars: true });
 
 describe('card-mask: утилиты форматирования и валидации карты', () => {
   it('cleanDigits очищает любые нецифровые символы', () => {
@@ -162,6 +166,20 @@ describe('billing-flow: пакеты кредитов, оформление и �
     // СБП пока убрана: остаются криптовалюта и Telegram Stars.
     expect(screen.queryByRole('button', { name: /СБП/i })).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Telegram Stars/i })).toBeInTheDocument();
+  });
+
+  it('звёзды закрыты: на оформлении только криптовалюта, у пакетов нет цены в звёздах', async () => {
+    setProductSwitchesForTests({ chat: true, stars: false });
+    try {
+      signIn();
+      renderRoute('/checkout/credits-10');
+      acceptWithdrawal();
+      expect(await screen.findByText(/Оплата криптовалютой/i)).toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: /Telegram Stars/i })).not.toBeInTheDocument();
+      expect(screen.queryByText(/⭐/)).not.toBeInTheDocument();
+    } finally {
+      setProductSwitchesForTests({ chat: true, stars: true });
+    }
   });
 
   it('чекаут: криптовалюта показывает виджет Trybit и после оплаты начисляет кредиты', async () => {

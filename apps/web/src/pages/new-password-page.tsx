@@ -11,6 +11,7 @@ import { clearPendingReset, readPendingReset } from '@/features/auth/pending-cod
 import { ApiError } from '@/features/chat/api';
 import { useTranslation } from '@/i18n';
 import { cn } from '@/lib/cn';
+import { appHomePath } from '@/lib/product-switches';
 
 const MIN_PASSWORD_LENGTH = 8;
 
@@ -26,7 +27,7 @@ export function NewPasswordPage() {
   const isSafeRedirect = Boolean(
     rawRedirect && rawRedirect.startsWith('/') && !rawRedirect.startsWith('//'),
   );
-  const redirectUrl = isSafeRedirect && rawRedirect ? rawRedirect : '/chat';
+  const redirectUrl = isSafeRedirect && rawRedirect ? rawRedirect : appHomePath();
   const completePasswordReset = useAuth((state) => state.completePasswordReset);
   const showNotice = useAuthNotice((state) => state.show);
 

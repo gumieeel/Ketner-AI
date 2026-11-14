@@ -1,3 +1,4 @@
+import { productSwitch } from '../product-switches.js';
 import { config } from '../config.js';
 import { LEGACY_PLANS, PLANS } from '../routes/billing.js';
 import type { InvoiceStore } from '../store/invoice-store.js';
@@ -35,6 +36,10 @@ import {
 } from './auth-requests.js';
 import { telegramLinkCodes, type TelegramLinkCodes } from './link-codes.js';
 import { starsRateService, type StarsRateService } from './stars-rate.js';
+
+/** Ответ в боте и в окне оплаты: оплата звёздами закрыта (product-switches.ts). */
+const STARS_CLOSED_TEXT =
+  'Оплата звёздами Telegram больше не принимается. Возвраты по прежним платежам — в кабинете, раздел «Платежи».';
 
 /** Тарифы, которые продаются за звёзды. */
 export const STARS_PLANS = ['plus', 'pro', 'ultra'] as const satisfies readonly PlanId[];
@@ -842,6 +847,8 @@ export class TelegramBotService implements TelegramPaymentsPort {
     invoice: TelegramStarsInvoice,
     recurring = false,
   ): Promise<string | null> {
+    // Stars закрыты (product-switches.ts): новых ссылок на оплату нет.
+    if (!productSwitch('stars')) return null;
     if (invoice.invoiceLink && !recurring) return invoice.invoiceLink;
     const link = await this.callApi<string>(
       'createInvoiceLink',
@@ -853,6 +860,7 @@ export class TelegramBotService implements TelegramPaymentsPort {
   }
 
   async sendStarsInvoice(chatId: number | string, invoice: TelegramStarsInvoice): Promise<unknown> {
+    if (!productSwitch('stars')) throw new Error('Telegram Stars payments are closed');
     return this.callApi('sendInvoice', { chat_id: chatId, ...this.invoiceParams(invoice, false) });
   }
 
@@ -977,7 +985,7 @@ export class TelegramBotService implements TelegramPaymentsPort {
     await this.sendMessage(chatId, lines.filter(Boolean).join('\n'), {
       reply_markup: {
         inline_keyboard: [
-          [{ text: '🚀 Открыть Ketner AI', url: `${this.siteUrl}/chat` }],
+          [{ text: '🚀 Открыть Ketner AI', url: `${this.siteUrl}${this.siteHomePath()}` }],
           [this.openAppButton('📱 Кабинет')],
         ],
       },
@@ -1019,7 +1027,9 @@ export class TelegramBotService implements TelegramPaymentsPort {
       ].join('\n'),
       {
         reply_markup: {
-          inline_keyboard: [[{ text: '🚀 Открыть Ketner AI', url: `${this.siteUrl}/chat` }]],
+          inline_keyboard: [
+            [{ text: '🚀 Открыть Ketner AI', url: `${this.siteUrl}${this.siteHomePath()}` }],
+          ],
         },
       },
     );
@@ -1027,6 +1037,20 @@ export class TelegramBotService implements TelegramPaymentsPort {
   }
 
   // ───────────── тексты и кнопки ─────────────
+
+  /**
+   * «Купить кредиты»: звёздами в кабинете — пока Stars открыты; иначе — пакет на сайте (крипта).
+   */
+  private buyCreditsButton(): Record<string, unknown> {
+    return productSwitch('stars')
+      ? this.openAppButton('⭐ Купить кредиты', 'plans')
+      : { text: '💳 Пополнить на сайте', url: `${this.siteUrl}/pricing` };
+  }
+
+  /** Куда ведёт «Открыть Ketner AI»: чат закрыт (product-switches.ts) — к своим решениям. */
+  private siteHomePath(): string {
+    return productSwitch('chat') ? '/chat' : '/solutions';
+  }
 
   private openAppButton(text = '📱 Открыть Ketner', tab?: string): Record<string, unknown> {
     return { text, web_app: { url: tab ? `${this.miniAppUrl}?tab=${tab}` : this.miniAppUrl } };
@@ -1080,7 +1104,7 @@ export class TelegramBotService implements TelegramPaymentsPort {
       chatId,
       ['📊 <b>Ваши кредиты</b>', '', this.statusLine(user)].join('\n'),
       {
-        reply_markup: { inline_keyboard: [[this.openAppButton('⭐ Купить кредиты', 'plans')]] },
+        reply_markup: { inline_keyboard: [[this.buyCreditsButton()]] },
       },
     );
   }
@@ -1143,6 +1167,15 @@ export class TelegramBotService implements TelegramPaymentsPort {
   async processUpdate(update: TelegramUpdate): Promise<{ handled: boolean; action?: string }> {
     if (update.pre_checkout_query) {
       const q = update.pre_checkout_query;
+      // Stars закрыты (product-switches.ts): оплата по ранее выставленному счёту тоже не принимается.
+      if (!productSwitch('stars')) {
+        await this.callApi('answerPreCheckoutQuery', {
+          pre_checkout_query_id: q.id,
+          ok: false,
+          error_message: STARS_CLOSED_TEXT,
+        });
+        return { handled: true, action: 'pre_checkout_rejected_stars_closed' };
+      }
       const verdict = this.validatePayment(q.currency, q.total_amount, q.invoice_payload);
       await this.callApi('answerPreCheckoutQuery', {
         pre_checkout_query_id: q.id,
@@ -1257,7 +1290,7 @@ export class TelegramBotService implements TelegramPaymentsPort {
         chatId,
         'Подписок больше нет — кредиты покупаются пакетами в кабинете:',
         {
-          reply_markup: { inline_keyboard: [[this.openAppButton('⭐ Купить кредиты', 'plans')]] },
+          reply_markup: { inline_keyboard: [[this.buyCreditsButton()]] },
         },
       );
       return { handled: true, action: 'buy_redirect' };
@@ -1439,6 +1472,10 @@ export class TelegramBotService implements TelegramPaymentsPort {
     chatId: number | string,
     invoiceId: string,
   ): Promise<{ handled: boolean; action?: string }> {
+    if (!productSwitch('stars')) {
+      await this.sendMessage(chatId, STARS_CLOSED_TEXT);
+      return { handled: true, action: 'deep_link_stars_closed' };
+    }
     const invoice = this.deps.invoiceStore.getTelegramStarsInvoice(invoiceId);
     if (!invoice || invoice.status === 'paid') {
       await this.sendMessage(
@@ -1694,12 +1731,7 @@ export class TelegramBotService implements TelegramPaymentsPort {
       await this.sendMessage(user.telegramChatId, text, {
         reply_markup: {
           inline_keyboard: [
-            [
-              this.openAppButton(
-                autoActive ? '📱 Кабинет' : '⭐ Купить кредиты',
-                autoActive ? undefined : 'plans',
-              ),
-            ],
+            [autoActive ? this.openAppButton('📱 Кабинет') : this.buyCreditsButton()],
           ],
         },
       });

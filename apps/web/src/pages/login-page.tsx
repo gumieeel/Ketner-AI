@@ -18,6 +18,7 @@ import { authClient } from '@/features/auth/auth-client';
 import { useAuth } from '@/features/auth/auth-store';
 import { savePendingCode } from '@/features/auth/pending-code';
 import { useTranslation } from '@/i18n';
+import { appHomePath } from '@/lib/product-switches';
 
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const MIN_PASSWORD_LENGTH = 8;
@@ -34,7 +35,7 @@ export function LoginPage() {
   const isSafeRedirect = Boolean(
     rawRedirect && rawRedirect.startsWith('/') && !rawRedirect.startsWith('//'),
   );
-  const redirectUrl = isSafeRedirect && rawRedirect ? rawRedirect : '/chat';
+  const redirectUrl = isSafeRedirect && rawRedirect ? rawRedirect : appHomePath();
   const status = useAuth((state) => state.status);
   const login = useAuth((state) => state.login);
   const mockOAuth = useAuth((state) => state.mockOAuth);
