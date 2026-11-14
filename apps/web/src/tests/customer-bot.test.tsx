@@ -318,3 +318,112 @@ describe('кабинет бота: ссылка, код для сайта, за�
     expect(await screen.findByDisplayValue('С 9 до 20 каждый день.')).toBeVisible();
   });
 });
+
+describe('страница бота: форма заявки и прокрутка', () => {
+  beforeEach(() => {
+    resetPreferences();
+    resetAuth();
+    window.localStorage.clear();
+  });
+  afterEach(() => vi.unstubAllGlobals());
+
+  /** Ответ бота по номеру; `offers` — номера ответов, после которых бот предлагает оставить контакт. */
+  function botReplies(offers: number[]) {
+    let replies = 0;
+    return stubFetch((call) => {
+      if (call.path === '/api/b/lisa-shop') return json(200, { bot: BOT });
+      if (call.path === '/api/b/lisa-shop/messages') {
+        replies += 1;
+        return json(200, {
+          conversationId: 'conv-1',
+          message: {
+            id: `a${replies}`,
+            role: 'assistant',
+            content: `Ответ ${replies}.`,
+            offerContact: offers.includes(replies),
+            status: 'complete',
+            createdAt: '2026-11-01T10:00:00.000Z',
+          },
+        });
+      }
+      if (call.path === '/api/b/lisa-shop/leads') return json(201, { ok: true });
+      return json(404, { error: { code: 'not_found' } });
+    });
+  }
+
+  async function ask(text: string, reply: string) {
+    fireEvent.change(screen.getByLabelText('Ваше сообщение'), { target: { value: text } });
+    fireEvent.click(screen.getByRole('button', { name: 'Отправить' }));
+    expect(await screen.findByText(reply)).toBeVisible();
+  }
+
+  it('в форме — вопрос, после которого её предложили, а не первый; имя и контакт сохраняются', async () => {
+    const calls = botReplies([1, 2]);
+    renderRoute('/b/lisa-shop');
+    await screen.findByRole('heading', { level: 1, name: 'Лиса' });
+
+    await ask('Возите в Астану?', 'Ответ 1.');
+    const form = await screen.findByRole('form', { name: 'Оставьте контакт — вам ответят' });
+    expect(within(form).getByLabelText('Вопрос')).toHaveValue('Возите в Астану?');
+    fireEvent.change(within(form).getByLabelText('Имя'), { target: { value: 'Айгерим' } });
+
+    // Форма открыта, посетитель спрашивает дальше; бот снова предлагает контакт — вопрос новый.
+    await ask('Можно оплатить картой?', 'Ответ 2.');
+    expect(within(form).getByLabelText('Вопрос')).toHaveValue('Можно оплатить картой?');
+    expect(within(form).getByLabelText('Имя')).toHaveValue('Айгерим');
+
+    // Ответ без предложения контакта не меняет вопрос текущего предложения.
+    await ask('Спасибо', 'Ответ 3.');
+    expect(within(form).getByLabelText('Вопрос')).toHaveValue('Можно оплатить картой?');
+
+    fireEvent.change(within(form).getByLabelText('Телефон, мессенджер или почта'), {
+      target: { value: '+7 700 000 00 00' },
+    });
+    fireEvent.click(within(form).getByRole('button', { name: 'Отправить заявку' }));
+    expect(await screen.findByText('Спасибо! Заявка отправлена — с вами свяжутся.')).toBeVisible();
+    expect(calls.find((call) => call.path === '/api/b/lisa-shop/leads')?.body).toMatchObject({
+      name: 'Айгерим',
+      question: 'Можно оплатить картой?',
+    });
+  });
+
+  it('кнопка «Оставить контакт» подставляет последний вопрос; после отмены — следующий', async () => {
+    botReplies([]);
+    renderRoute('/b/lisa-shop');
+    await screen.findByRole('heading', { level: 1, name: 'Лиса' });
+    await ask('Есть доставка?', 'Ответ 1.');
+    fireEvent.click(screen.getByRole('button', { name: 'Оставить контакт' }));
+    let form = await screen.findByRole('form', { name: 'Оставьте контакт — вам ответят' });
+    expect(within(form).getByLabelText('Вопрос')).toHaveValue('Есть доставка?');
+    fireEvent.click(within(form).getByRole('button', { name: 'Отмена' }));
+
+    await ask('Сколько стоит?', 'Ответ 2.');
+    fireEvent.click(screen.getByRole('button', { name: 'Оставить контакт' }));
+    form = await screen.findByRole('form', { name: 'Оставьте контакт — вам ответят' });
+    expect(within(form).getByLabelText('Вопрос')).toHaveValue('Сколько стоит?');
+  });
+
+  it('прокрутка: подписи сообщений для экранных чтецов внутри позиционированной области переписки', async () => {
+    // jsdom не считает раскладку, поэтому сам перерасход высоты здесь не измерить (он проверен в
+    // браузере, см. описание PR). Тест держит условие исправления: подписи sr-only (position:
+    // absolute) лежат внутри области прокрутки, и она — их содержащий блок (relative), иначе они
+    // отсчитываются от страницы и растягивают документ на длину переписки.
+    botReplies([1]);
+    renderRoute('/b/lisa-shop?embed=1');
+    await screen.findByRole('heading', { level: 1, name: 'Лиса' });
+    await ask('Возите в Астану?', 'Ответ 1.');
+    await screen.findByRole('form', { name: 'Оставьте контакт — вам ответят' });
+
+    const main = document.querySelector('main')!;
+    expect(main).toHaveClass('relative', 'overflow-y-auto', 'overscroll-contain', 'min-h-0');
+    const labels = [...document.querySelectorAll('ol .sr-only')];
+    expect(labels.length).toBeGreaterThanOrEqual(3);
+    for (const label of labels) expect(main.contains(label)).toBe(true);
+    // Ничего между подписью и областью прокрутки не задаёт position (иначе проверка выше неполна).
+    for (const label of labels) {
+      for (let node = label.parentElement; node && node !== main; node = node.parentElement) {
+        expect(node.className).not.toMatch(/\b(relative|absolute|fixed|sticky)\b/);
+      }
+    }
+  });
+});

@@ -498,3 +498,42 @@ test('streamAgent: отказ до первого события поднима�
     console.warn = originalWarn;
   }
 });
+
+test('streamAgent: пробелы на границах частей не теряются, даже если поток режется посреди строки и буквы', async () => {
+  // Части ответа как у настоящих моделей: пробел в начале или в конце части, отдельная часть из
+  // пробела или перевода строки. Поток режется по одному байту: посреди JSON и посреди кириллицы.
+  const parts = ['Менеджер', ' ', 'свяжется', ' с', ' вами ', 'завтра.', '\n', 'Хорошего', ' дня!'];
+  const encoder = new TextEncoder();
+  const bytes = encoder.encode(
+    parts.map((part) => `data: ${JSON.stringify(delta(part))}\n\n`).join('') +
+      `data: ${JSON.stringify({ choices: [{ delta: {}, finish_reason: 'stop' }] })}\n\ndata: [DONE]\n\n`,
+  );
+  let offset = 0;
+  const body = new ReadableStream<Uint8Array>({
+    pull(controller) {
+      if (offset < bytes.length) controller.enqueue(bytes.slice(offset, (offset += 1)));
+      else controller.close();
+    },
+  });
+  const provider = new OpenRouterProvider({ apiKey: 'k' });
+  const texts: string[] = [];
+  const result = await withFetch(
+    (async () =>
+      new Response(body, {
+        status: 200,
+        headers: { 'Content-Type': 'text/event-stream' },
+      })) as FetchFn,
+    () =>
+      provider.streamAgent(
+        { model: 'm', messages: [{ role: 'user', content: 'Когда?' }], tools: [], maxTokens: 100 },
+        {
+          onEvent: (event) => {
+            if (event.kind === 'content') texts.push(event.text);
+          },
+          isCancelled: () => false,
+        },
+      ),
+  );
+  assert.equal(result.content, parts.join(''));
+  assert.deepEqual(texts, parts, 'каждая часть — отдельным событием, без обрезки');
+});
