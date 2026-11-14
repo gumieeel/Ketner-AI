@@ -58,6 +58,9 @@ function BotChat({ slug, embed }: { slug: string; embed: boolean }) {
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<TranslationKey | null>(null);
   const [contactOpen, setContactOpen] = useState(false);
+  // Вопрос для формы заявки — сообщение посетителя, после которого форму предложили. `seq` растёт
+  // с каждым новым предложением: открытая форма подставляет новый вопрос, а не первый.
+  const [offer, setOffer] = useState({ seq: 0, question: '' });
   const [leadSent, setLeadSent] = useState(false);
   const endRef = useRef<HTMLDivElement | null>(null);
   const inputId = useId();
@@ -94,6 +97,11 @@ function BotChat({ slug, embed }: { slug: string; embed: boolean }) {
     endRef.current?.scrollIntoView?.({ block: 'end' });
   }, [messages, contactOpen, leadSent]);
 
+  const offerContact = (question: string) => {
+    setOffer((current) => ({ seq: current.seq + 1, question }));
+    setContactOpen(true);
+  };
+
   const send = async (text: string) => {
     const content = text.trim();
     if (!content || sending || !bot) return;
@@ -118,13 +126,13 @@ function BotChat({ slug, embed }: { slug: string; embed: boolean }) {
         ...current.map((item) => (item.id === temporary.id ? { ...item, pending: false } : item)),
         result.message,
       ]);
-      if (result.message.offerContact) setContactOpen(true);
+      if (result.message.offerContact) offerContact(content);
     } catch (caught) {
       setMessages((current) => current.filter((item) => item.id !== temporary.id));
       setDraft(content);
       if (caught instanceof BotApiError && caught.code === 'bot_paused') {
         setBot({ ...bot, status: 'paused' });
-        setContactOpen(true);
+        offerContact(content);
       } else {
         setError(
           caught instanceof BotApiError && caught.status === 0
@@ -154,6 +162,7 @@ function BotChat({ slug, embed }: { slug: string; embed: boolean }) {
     setConversationId(null);
     setMessages([]);
     setContactOpen(false);
+    setOffer((current) => ({ seq: current.seq + 1, question: '' }));
     setLeadSent(false);
     setError(null);
   };
@@ -203,14 +212,20 @@ function BotChat({ slug, embed }: { slug: string; embed: boolean }) {
             variant="outline"
             size="sm"
             className="shrink-0"
-            onClick={() => setContactOpen(true)}
+            onClick={() => offerContact(lastUser)}
           >
             {t('botPage.contactButton')}
           </Button>
         ) : null}
       </header>
 
-      <main className="min-h-0 flex-1 overflow-y-auto">
+      {/*
+        relative: подписи для экранных чтецов в сообщениях (sr-only — position: absolute) иначе
+        отсчитываются от страницы, а не от области переписки, и растягивают документ на всю длину
+        диалога — страницу можно было прокручивать вниз в пустоту. overscroll-contain: прокрутка до
+        конца переписки во фрейме виджета не уходит в страницу сайта.
+      */}
+      <main className="relative min-h-0 flex-1 overflow-y-auto overscroll-contain">
         <div className="mx-auto flex w-full max-w-2xl flex-col gap-3 px-4 py-5">
           {paused ? (
             <p className="rounded-xl border border-warning/25 bg-warning-soft px-4 py-3 text-[14px] leading-6 text-text">
@@ -252,7 +267,8 @@ function BotChat({ slug, embed }: { slug: string; embed: boolean }) {
             ) : (
               <ContactForm
                 t={t}
-                question={lastUser}
+                question={offer.question}
+                offerSeq={offer.seq}
                 onCancel={paused ? null : () => setContactOpen(false)}
                 onSend={async (lead) => {
                   await sendLead(slug, lead, conversationId);
@@ -376,11 +392,14 @@ function Bubble({
 function ContactForm({
   t,
   question,
+  offerSeq,
   onCancel,
   onSend,
 }: {
   t: (key: TranslationKey) => string;
   question: string;
+  /** Номер предложения формы: новое предложение подставляет свой вопрос, имя и контакт остаются. */
+  offerSeq: number;
   onCancel: (() => void) | null;
   onSend: (lead: { name: string; contact: string; question: string }) => Promise<void>;
 }) {
@@ -388,6 +407,11 @@ function ContactForm({
   const [name, setName] = useState('');
   const [contact, setContact] = useState('');
   const [text, setText] = useState(question);
+  const [shownSeq, setShownSeq] = useState(offerSeq);
+  if (shownSeq !== offerSeq) {
+    setShownSeq(offerSeq);
+    setText(question);
+  }
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<TranslationKey | null>(null);
   const field =

@@ -63,8 +63,11 @@ export class StepError extends Error {
 export interface ToolOutcome {
   /** Результат для модели (строка в сообщении `tool`). */
   content: string;
-  /** Инструмент передаёт разговор человеку: цикл останавливается с причиной `escalated`. */
-  escalate?: { reason: string };
+  /**
+   * Инструмент передаёт разговор человеку: цикл останавливается с причиной `escalated`.
+   * `message` — ответ собеседнику, который модель передала в аргументах инструмента.
+   */
+  escalate?: { reason: string; message?: string };
   /** Короткие метаданные для журнала (без содержимого). */
   meta?: Record<string, unknown>;
 }
@@ -194,6 +197,6 @@ export interface LoopResult {
   creditsUsd: number;
   /** Модель последнего успешного шага. */
   model: { id: string; name: string } | null;
-  escalation: { tool: string; reason: string } | null;
+  escalation: { tool: string; reason: string; message?: string } | null;
   error: { code: string; message: string } | null;
 }

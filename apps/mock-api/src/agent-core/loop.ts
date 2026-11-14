@@ -190,7 +190,11 @@ export async function runAgentLoop(run: LoopRun): Promise<LoopResult> {
         result.toolCalls.push({ tool: call.function.name, ok: outcome.ok });
         messages.push(toolMessage(call, outcome.content));
         if (outcome.escalate) {
-          result.escalation = { tool: call.function.name, reason: outcome.escalate.reason };
+          result.escalation = {
+            tool: call.function.name,
+            reason: outcome.escalate.reason,
+            ...(outcome.escalate.message ? { message: outcome.escalate.message } : {}),
+          };
           return await stop('escalated');
         }
         consecutiveFailures = outcome.ok ? 0 : consecutiveFailures + 1;
@@ -251,7 +255,7 @@ async function callTool(
   step: number,
   signal: AbortSignal,
   emit: (event: LoopEvent) => Promise<void>,
-): Promise<{ ok: boolean; content: string; escalate?: { reason: string } }> {
+): Promise<{ ok: boolean; content: string; escalate?: { reason: string; message?: string } }> {
   const name = call.function.name;
   const rejected = async (code: ToolErrorCode, detail: string) => {
     await emit({

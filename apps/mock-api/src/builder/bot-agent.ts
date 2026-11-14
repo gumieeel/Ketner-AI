@@ -92,8 +92,8 @@ const text = (language: Language, ru: string, en: string) => (language === 'en' 
 /** Дописка к промпту бота: только на пути платформы, где у модели есть инструменты. */
 function toolInstructions(language: Language): string {
   return language === 'en'
-    ? `\nTools:\n- knowledge_search: search the owner's knowledge and corrected answers when the answer is not obvious from the data above.\n- offer_contact: when the answer is not in the data, or the customer wants to order, book, talk to a person or complains — call it instead of the ${'[[CONTACT]]'} line, with a short reply to the customer.`
-    : `\nИнструменты:\n- knowledge_search — поиск в знаниях владельца и исправленных ответах, если ответ не очевиден из данных выше.\n- offer_contact — если ответа в данных нет или клиент хочет заказать, записаться, поговорить с человеком или жалуется: вызови его вместо строки ${'[[CONTACT]]'}, с коротким ответом клиенту.`;
+    ? `\nTools:\n- knowledge_search: search the owner's knowledge and corrected answers when the answer is not obvious from the data above.\n- offer_contact: when the answer is not in the data, or the customer wants to order, book, talk to a person or complains — call it instead of the ${'[[CONTACT]]'} line. Always pass reply: ONE sentence to the customer that names their topic in their words and says a staff member will help, e.g. "Delivery to Astana will be confirmed by a manager — leave your contact and you will get a reply." Never reuse the same sentence for different questions.`
+    : `\nИнструменты:\n- knowledge_search — поиск в знаниях владельца и исправленных ответах, если ответ не очевиден из данных выше.\n- offer_contact — если ответа в данных нет или клиент хочет заказать, записаться, поговорить с человеком или жалуется: вызови его вместо строки ${'[[CONTACT]]'}. Всегда передавай reply — ОДНО предложение клиенту, в котором его тема названа его словами и сказано, что поможет сотрудник, например: «Доставку в Астану уточнит менеджер — оставьте контакт, и вам ответят.» Не повторяй одну и ту же фразу для разных вопросов.`;
 }
 
 /** Фрагменты знаний и исправленных ответов, где встречаются слова запроса. */
@@ -157,21 +157,32 @@ export function botTools(config: AssistantConfig, bot: BotSettings): LoopTool[] 
         type: 'object',
         properties: {
           reason: { type: 'string', enum: ['unknown_answer', 'customer_asks_human'] },
+          reply: {
+            type: 'string',
+            maxLength: 300,
+            description:
+              'One sentence to the customer in the conversation language that names their topic and says a staff member will help.',
+          },
         },
-        required: ['reason'],
+        required: ['reason', 'reply'],
         additionalProperties: false,
       },
       parse(input) {
-        const reason = (input as { reason?: unknown } | null)?.reason;
-        return reason === 'unknown_answer' || reason === 'customer_asks_human'
-          ? { ok: true, value: reason }
-          : { ok: false, error: 'reason must be unknown_answer or customer_asks_human' };
+        const args = (input ?? {}) as { reason?: unknown; reply?: unknown };
+        if (args.reason !== 'unknown_answer' && args.reason !== 'customer_asks_human') {
+          return { ok: false, error: 'reason must be unknown_answer or customer_asks_human' };
+        }
+        // Без reply вызов не отклоняется (это стоило бы ещё одного шага модели): тогда — запасная фраза.
+        const reply = typeof args.reply === 'string' ? args.reply.trim().slice(0, 300) : '';
+        return { ok: true, value: { reason: args.reason, reply } };
       },
-      async execute(reason) {
+      async execute(value) {
+        const { reason, reply } = value as { reason: string; reply: string };
         return {
           content: 'The contact form is shown to the customer.',
-          escalate: { reason: reason as string },
-          meta: { reason },
+          escalate: { reason, ...(reply ? { message: reply } : {}) },
+          // Текст ответа в журнал не пишется — только его длина.
+          meta: { reason, replyChars: reply.length },
         };
       },
     },
@@ -445,8 +456,10 @@ export class BotAgentRuntime {
     const answered = result.stopReason === 'answer' || escalated || result.finalStep;
     let answer: BotAgentAnswer;
     if (answered && (result.text.trim() || escalated)) {
+      // Текст шага, иначе ответ из аргументов offer_contact; запасная фраза — только если пусто и там.
       const reply =
         result.text.trim() ||
+        result.escalation?.message?.trim() ||
         text(
           language,
           'Этот вопрос уточнит сотрудник. Оставьте, пожалуйста, контакт — вам ответят.',

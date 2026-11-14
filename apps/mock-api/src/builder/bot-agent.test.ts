@@ -487,3 +487,137 @@ test('этап D: журнал на PostgreSQL — исполнение, соб�
     await sql.close();
   }
 });
+
+// ── Ответ при эскалации: тема вопроса, а не одна фраза на все вопросы ─────────────────────────
+
+const FALLBACK = 'Этот вопрос уточнит сотрудник. Оставьте, пожалуйста, контакт — вам ответят.';
+
+test('эскалация: модель без текста — посетитель видит reply с темой вопроса; разные вопросы — разные ответы', async () => {
+  // Поддельная модель ведёт себя как послушная настоящая: текста нет, тема — в аргументе reply.
+  const topicOf = (question: string) => question.replace(/[?？!.]+$/, '');
+  const env = setup(() => (request) => {
+    const question = [...request.messages].reverse().find((m) => m.role === 'user')!;
+    const reply = `${topicOf(String(question.content))} — уточнит менеджер, оставьте контакт, и вам ответят.`;
+    return {
+      content: '',
+      toolCalls: [toolCall('offer_contact', JSON.stringify({ reason: 'unknown_answer', reply }))],
+    };
+  });
+  const questions = [
+    'Возите в Астану?',
+    'Можно оплатить в рассрочку?',
+    'Есть скидка для пенсионеров?',
+    'Работаете 31 декабря?',
+  ];
+  const replies: string[] = [];
+  for (const [n, question] of questions.entries()) {
+    const result = await env.runtime.answer(
+      input({
+        messages: [{ role: 'user', content: question }],
+        idempotencyKey: `bot_message:e${n}`,
+      }),
+    );
+    assert.equal(result.offerContact, true);
+    assert.equal(result.error, null);
+    assert.ok(result.text.startsWith(topicOf(question)), `ответ называет тему: ${result.text}`);
+    replies.push(result.text);
+  }
+  assert.equal(new Set(replies).size, questions.length, 'четыре разных ответа');
+  assert.ok(!replies.includes(FALLBACK), 'запасная фраза не используется');
+  assert.equal(env.calls.length, questions.length, 'по одному шагу модели на вопрос');
+
+  // Модель получает требование: reply обязателен в схеме инструмента и описан в инструкциях.
+  const request = env.calls[0]!;
+  const offer = request.tools?.find((tool) => tool.function.name === 'offer_contact');
+  assert.deepEqual((offer?.function.parameters as { required?: string[] }).required, [
+    'reason',
+    'reply',
+  ]);
+  const system = request.messages[0]!;
+  assert.ok(system.role === 'system' && system.content.includes('Всегда передавай reply'));
+  assert.ok(system.content.includes('Не повторяй одну и ту же фразу'));
+
+  // В журнал — только длина ответа, не текст.
+  await env.runtime.drain();
+  const effects = [...(env.journal as MemoryExecutionJournal).effects.values()];
+  const toolEffect = effects.find((e) => e.action === 'lead.create')!;
+  assert.equal(toolEffect.resultMeta.replyChars, replies[0]!.length);
+  assert.ok(!JSON.stringify(effects).includes('Астану'));
+});
+
+test('эскалация: текст модели важнее reply; без текста и без reply — запасная фраза', async () => {
+  const withText = setup([
+    (_request, emit) => {
+      emit({ kind: 'content', text: 'Про рассрочку расскажет менеджер.' });
+      return {
+        content: 'Про рассрочку расскажет менеджер.',
+        toolCalls: [
+          toolCall(
+            'offer_contact',
+            '{"reason":"unknown_answer","reply":"Рассрочку уточнит менеджер."}',
+          ),
+        ],
+      };
+    },
+  ]);
+  assert.equal((await withText.runtime.answer(input())).text, 'Про рассрочку расскажет менеджер.');
+
+  const empty = setup([
+    () => ({ content: '', toolCalls: [toolCall('offer_contact', '{"reason":"unknown_answer"}')] }),
+  ]);
+  const result = await empty.runtime.answer(input());
+  assert.equal(
+    result.text,
+    FALLBACK,
+    'запасная фраза — только когда ответа нет ни в тексте, ни в reply',
+  );
+  assert.equal(result.offerContact, true);
+  assert.equal(empty.calls.length, 1, 'вызов без reply не отклоняется и не стоит лишнего шага');
+
+  const blank = setup([
+    () => ({
+      content: '  ',
+      toolCalls: [toolCall('offer_contact', '{"reason":"customer_asks_human","reply":"   "}')],
+    }),
+  ]);
+  assert.equal((await blank.runtime.answer(input())).text, FALLBACK);
+});
+
+// ── Пробелы в тексте ответа на пути платформы ───────────────────────────────────────────────
+
+test('пробелы: части текста склеиваются без потерь — ответ после инструмента, последний шаг, эскалация', async () => {
+  const parts = ['Менеджер', ' ', 'свяжется', ' с', ' вами ', 'завтра.', '\n', 'Хорошего', ' дня!'];
+  const expected = parts.join('');
+  const streamed: Turn = (_request, emit) => {
+    for (const part of parts) emit({ kind: 'content', text: part });
+    return { content: expected };
+  };
+  const search = () => ({
+    toolCalls: [toolCall('knowledge_search', '{"query":"доставка"}', `call_${Math.random()}`)],
+  });
+
+  // 1. Шаг с инструментом, затем ответ.
+  const afterTool = setup([search, streamed]);
+  assert.equal((await afterTool.runtime.answer(input())).text, expected);
+
+  // 2. Последний шаг без инструментов после лимита шагов (toolChoice: 'none').
+  const finalStep = setup(
+    () => (request, emit) => (request.toolChoice === 'none' ? streamed(request, emit) : search()),
+    new MemoryExecutionJournal(),
+    { maxToolCalls: 20 },
+  );
+  const final = await finalStep.runtime.answer(input());
+  assert.equal(final.text, expected);
+  assert.equal(finalStep.calls.at(-1)!.toolChoice, 'none');
+
+  // 3. Эскалация: текст модели в том же шаге, что и вызов offer_contact.
+  const escalation = setup([
+    (request, emit) => ({
+      ...streamed(request, emit),
+      toolCalls: [toolCall('offer_contact', '{"reason":"unknown_answer","reply":"не это"}')],
+    }),
+  ]);
+  const escalated = await escalation.runtime.answer(input());
+  assert.equal(escalated.text, expected);
+  assert.equal(escalated.offerContact, true);
+});
