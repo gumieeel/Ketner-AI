@@ -9,6 +9,13 @@
  *
  * Деньги владельца: каждый шаг модели списывается шлюзом, как ответ бота сейчас; ядро передаёт в шаг
  * остаток потолка ответа, поэтому все шаги одного ответа вместе не дороже `BOT_REPLY_CAP_USD`.
+ * Если прогон упирается в лимит (шаги, вызовы, кредиты, сбои инструментов), ядро делает последний шаг
+ * без инструментов с зарезервированным бюджетом — посетитель получает ответ, а не ошибку (`finalAnswer`).
+ *
+ * Журнал: до ответа — только то, что обязано быть до него: включение агента (кэш в памяти процесса) и
+ * начало исполнения (ключ идемпотентности), а также резерв внешнего действия перед его выполнением.
+ * Всё остальное собирается в памяти и пишется одним пакетом после ответа (`drain()` ждёт записи).
+ * Исполнение, чей пакет не записался, закрывает reaper (platform/execution-reaper.ts).
  */
 
 import { randomUUID } from 'node:crypto';
@@ -21,8 +28,8 @@ import {
   legacyApprovalPolicy,
   type AgentSpec,
 } from '../platform/agent-spec.js';
-import type { ExecutionJournal, TriggerKind } from '../platform/journal.js';
-import { approvalRequirement, isActionId } from '../platform/risk.js';
+import type { ExecutionJournal, JournalBatch, TriggerKind } from '../platform/journal.js';
+import { ACTIONS, approvalRequirement, isActionId } from '../platform/risk.js';
 import type { Language } from '../types.js';
 import { PlatformUnavailableError } from './bot-platform-error.js';
 import { buildBotInstructions } from './bot-prompt.js';
@@ -70,6 +77,15 @@ export { PlatformUnavailableError };
 
 /** Меньше этого остатка новый шаг не начинается (0,5 кредита). */
 const MIN_STEP_BUDGET_USD = 0.0005;
+/** Срок одного вызова инструмента бота. */
+const BOT_TOOL_TIMEOUT_MS = 5_000;
+/** Сколько процесс помнит открытое включение агента, не спрашивая базу. */
+const DEPLOYMENT_CACHE_MS = 5 * 60_000;
+
+/** Внешнее действие (уходит из Ketner): резерв эффекта пишется до выполнения, не откладывается. */
+function isExternalAction(action: string): boolean {
+  return isActionId(action) && ACTIONS[action].consequences.reach === 'external';
+}
 
 const text = (language: Language, ru: string, en: string) => (language === 'en' ? en : ru);
 
@@ -189,7 +205,35 @@ const STATUS_BY_STOP: Record<string, 'succeeded' | 'failed' | 'cancelled' | 'tim
 };
 
 export class BotAgentRuntime {
+  private readonly deployments = new Map<string, { id: string; until: number }>();
+  private readonly pending = new Set<Promise<void>>();
+
   constructor(private readonly deps: BotAgentDeps) {}
+
+  /** Ждёт отложенные записи журнала (тесты, замеры, остановка сервера). */
+  async drain(): Promise<void> {
+    while (this.pending.size > 0) await Promise.allSettled([...this.pending]);
+  }
+
+  /** Включение агента: из памяти процесса, иначе — из журнала (снимок спецификации, открытие). */
+  private async deploymentFor(input: BotAgentInput, spec: AgentSpec): Promise<string> {
+    const key = `${input.caller.userId}:${input.solutionId}:${input.version}`;
+    const cached = this.deployments.get(key);
+    if (cached && cached.until > Date.now()) return cached.id;
+    const { deploymentId } = await this.deps.journal.ensureAgent({
+      userId: input.caller.userId,
+      solutionId: input.solutionId,
+      version: input.version,
+      spec,
+      activatedBy: input.caller.userId,
+    });
+    for (const other of this.deployments.keys()) {
+      if (other.startsWith(`${input.caller.userId}:${input.solutionId}:`))
+        this.deployments.delete(other);
+    }
+    this.deployments.set(key, { id: deploymentId, until: Date.now() + DEPLOYMENT_CACHE_MS });
+    return deploymentId;
+  }
 
   async answer(input: BotAgentInput): Promise<BotAgentAnswer> {
     const { caller, config, bot } = input;
@@ -201,13 +245,7 @@ export class BotAgentRuntime {
     const executionId = `exec_${randomUUID()}`;
     let started: { duplicate: boolean; executionId: string };
     try {
-      const { deploymentId } = await this.deps.journal.ensureAgent({
-        userId: caller.userId,
-        solutionId: input.solutionId,
-        version: input.version,
-        spec,
-        activatedBy: caller.userId,
-      });
+      const deploymentId = await this.deploymentFor(input, spec);
       started = await this.deps.journal.start({
         id: executionId,
         userId: caller.userId,
@@ -271,6 +309,7 @@ export class BotAgentRuntime {
       maxToolCallsPerStep: 4,
       maxConsecutiveFailures: 2,
       timeoutMs: spec.limits.timeoutMs,
+      toolTimeoutMs: BOT_TOOL_TIMEOUT_MS,
       budgetUsd: input.replyCapUsd,
       minStepBudgetUsd: MIN_STEP_BUDGET_USD,
       ...this.deps.limits,
@@ -278,63 +317,94 @@ export class BotAgentRuntime {
 
     const journal = this.deps.journal;
     const userId = caller.userId;
+    // Пакет журнала: собирается во время прогона, пишется после ответа.
+    const batchEffects = new Map<string, JournalBatch['effects'][number] & { open: boolean }>();
+    const batchEvents: JournalBatch['events'] = [];
+    const openEffect = (stepKey: string, action: string, authorizedBy: string, reserved: boolean) =>
+      batchEffects.set(stepKey, {
+        stepKey,
+        action,
+        authorizedBy,
+        ...(action === 'reply.draft' ? { usageRunId: input.solutionId } : {}),
+        reserved,
+        outcome: 'failed',
+        resultMeta: {},
+        open: true,
+      });
+    const closeEffect = (
+      stepKey: string,
+      outcome: 'committed' | 'failed',
+      resultMeta: Record<string, unknown>,
+    ) => {
+      const effect = batchEffects.get(stepKey);
+      if (effect?.open) Object.assign(effect, { outcome, resultMeta, open: false });
+    };
+    const addEvent = (
+      type: JournalBatch['events'][number]['type'],
+      action: string | null,
+      data: Record<string, unknown>,
+    ) => batchEvents.push({ type, action, data });
+
     const onEvent = async (event: LoopEvent): Promise<void> => {
       switch (event.type) {
         case 'step_started':
-          await journal.reserveEffect(
-            executionId,
-            userId,
-            `model-${event.step}`,
-            'reply.draft',
-            'risk_low',
-            input.solutionId,
-          );
+          openEffect(`model-${event.step}`, 'reply.draft', 'risk_low', false);
           return;
         case 'step_finished':
-          await journal.finishEffect(executionId, userId, `model-${event.step}`, 'committed', {
+          closeEffect(`model-${event.step}`, 'committed', {
             toolCalls: event.toolCalls,
             model: event.model,
           });
-          await journal.event(executionId, userId, 'cost', null, {
+          addEvent('cost', null, {
             step: event.step,
             costUsd: event.costUsd,
             creditsUsd: event.creditsUsd,
           });
           return;
         case 'step_failed':
-          await journal.finishEffect(executionId, userId, `model-${event.step}`, 'failed', {
-            code: event.code,
-          });
-          await journal.event(executionId, userId, 'error', null, {
-            step: event.step,
-            code: event.code,
-          });
+          closeEffect(`model-${event.step}`, 'failed', { code: event.code });
+          addEvent('error', null, { step: event.step, code: event.code });
           return;
         case 'tool_denied':
-          await journal.event(executionId, userId, 'authorization', event.action, {
+          addEvent('authorization', event.action, {
             tool: event.tool,
             result: 'denied',
             reason: event.reason,
           });
           return;
-        case 'tool_started':
-          await journal.event(executionId, userId, 'authorization', event.action, {
+        case 'tool_rejected':
+          // Подробность (текст ошибки разбора) — только в журнал; модель получила безопасное сообщение.
+          addEvent('error', null, {
+            step: event.step,
+            tool: event.tool,
+            code: event.code,
+            detail: event.detail,
+          });
+          return;
+        case 'tool_started': {
+          addEvent('authorization', event.action, {
             tool: event.tool,
             result: 'allowed',
             source: event.authorizedBy,
           });
-          await journal.reserveEffect(
-            executionId,
-            userId,
-            `tool-${event.step}-${slug(event.callId)}`,
-            event.action,
-            event.authorizedBy,
-          );
+          const stepKey = `tool-${event.step}-${slug(event.callId)}`;
+          if (isExternalAction(event.action)) {
+            // Внешнее действие: резерв в базе до выполнения (повтор не выполнит его второй раз).
+            await journal.reserveEffect(
+              executionId,
+              userId,
+              stepKey,
+              event.action,
+              event.authorizedBy,
+            );
+            openEffect(stepKey, event.action, event.authorizedBy, true);
+          } else {
+            openEffect(stepKey, event.action, event.authorizedBy, false);
+          }
           return;
+        }
         case 'tool_finished':
-          await journal.finishEffect(
-            executionId,
-            userId,
+          closeEffect(
             `tool-${event.step}-${slug(event.callId)}`,
             event.ok ? 'committed' : 'failed',
             {
@@ -342,11 +412,20 @@ export class BotAgentRuntime {
               ok: event.ok,
               escalate: event.escalate,
               ...(event.meta ?? {}),
+              ...(event.error ? { error: event.error } : {}),
             },
           );
+          if (event.error) {
+            addEvent('error', event.action, {
+              step: event.step,
+              tool: event.tool,
+              code: event.error.code,
+              message: event.error.message,
+            });
+          }
           return;
         case 'stopped':
-          await journal.event(executionId, userId, 'status', null, { stopReason: event.reason });
+          addEvent('status', null, { stopReason: event.reason });
       }
     };
 
@@ -356,33 +435,34 @@ export class BotAgentRuntime {
       step,
       authorize,
       limits,
+      finalAnswer: true,
       onEvent,
       onHookError: (error, event) =>
         log('journal write failed', { executionId, event: event.type, error: String(error) }),
     });
 
     const escalated = result.stopReason === 'escalated';
+    const answered = result.stopReason === 'answer' || escalated || result.finalStep;
     let answer: BotAgentAnswer;
-    if (result.stopReason === 'answer' || escalated) {
+    if (answered && (result.text.trim() || escalated)) {
       const reply =
         result.text.trim() ||
-        (escalated
-          ? text(
-              language,
-              'Этот вопрос уточнит сотрудник. Оставьте, пожалуйста, контакт — вам ответят.',
-              'A staff member will clarify this. Please leave your contact and you will get a reply.',
-            )
-          : '');
+        text(
+          language,
+          'Этот вопрос уточнит сотрудник. Оставьте, пожалуйста, контакт — вам ответят.',
+          'A staff member will clarify this. Please leave your contact and you will get a reply.',
+        );
       answer = {
         text: reply,
         model: result.model,
         error: null,
         costUsd: result.costUsd,
         creditsUsd: result.creditsUsd,
-        offerContact: escalated,
+        // После лимита ответ собран из того, что успели найти: форма контакта — на случай, если его мало.
+        offerContact: escalated || result.finalStep,
       };
     } else {
-      // Лимит шагов, потолок кредитов, сбои инструментов, таймаут, ошибка шлюза: бот предлагает контакт
+      // Ошибка шлюза, таймаут, отмена или лимит без бюджета на последний шаг: бот предлагает контакт
       // (эскалация AgentSpec: credits_exhausted → offer_contact_form), как при ошибке прежнего пути.
       answer = {
         text: '',
@@ -401,28 +481,22 @@ export class BotAgentRuntime {
     if (!answer.error && answer.text) {
       const authorized = authorize('reply.send_in_session');
       if (authorized.allowed) {
-        await journal
-          .reserveEffect(
-            executionId,
-            userId,
-            'reply',
-            'reply.send_in_session',
-            authorized.authorizedBy,
-          )
-          .then(() =>
-            journal.finishEffect(executionId, userId, 'reply', 'committed', {
-              chars: answer.text.length,
-              offerContact: answer.offerContact,
-            }),
-          )
-          .catch((error: unknown) =>
-            log('journal write failed', { executionId, event: 'reply', error: String(error) }),
-          );
+        openEffect('reply', 'reply.send_in_session', authorized.authorizedBy, false);
+        closeEffect('reply', 'committed', {
+          chars: answer.text.length,
+          offerContact: answer.offerContact,
+        });
       }
     }
-    await journal
-      .finish(executionId, userId, {
-        status: STATUS_BY_STOP[result.stopReason] ?? 'failed',
+    const batch: JournalBatch = {
+      // Эффект, не закрытый прогоном (прерванный шаг или вызов), закрывается как `failed`.
+      effects: [...batchEffects.values()].map(({ open, ...effect }) =>
+        open ? { ...effect, outcome: 'failed' as const, resultMeta: { unfinished: true } } : effect,
+      ),
+      events: batchEvents,
+      finish: {
+        status:
+          answered && !answer.error ? 'succeeded' : (STATUS_BY_STOP[result.stopReason] ?? 'failed'),
         stopReason: result.stopReason,
         costUsd: result.costUsd,
         creditsUsd: result.creditsUsd,
@@ -431,12 +505,18 @@ export class BotAgentRuntime {
           toolCalls: result.toolCalls,
           chars: answer.text.length,
           offerContact: answer.offerContact,
+          finalStep: result.finalStep,
         },
         error: answer.error ? { code: answer.error.code } : null,
-      })
+      },
+    };
+    const write = journal
+      .record(executionId, userId, batch)
       .catch((error: unknown) =>
-        log('journal write failed', { executionId, event: 'finish', error: String(error) }),
+        log('journal write failed', { executionId, event: 'record', error: String(error) }),
       );
+    this.pending.add(write);
+    void write.finally(() => this.pending.delete(write));
     return answer;
   }
 }

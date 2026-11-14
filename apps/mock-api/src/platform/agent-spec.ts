@@ -32,6 +32,9 @@ import {
 } from './risk.js';
 
 /** Предел ответа бота в кредитах — из той же константы, что списывает бот. */
+/** Самый длинный срок прогона агента (`limits.timeoutMs`); от него — порог reaper'а. */
+export const AGENT_SPEC_MAX_TIMEOUT_MS = 120_000;
+
 export const BOT_REPLY_CAP_CREDITS = toCredits(BOT_REPLY_CAP_USD);
 
 const exampleSchema = z.strictObject({
@@ -97,7 +100,7 @@ export const agentSpecSchema = z.strictObject({
   limits: z.strictObject({
     maxSteps: z.number().int().min(1).max(20),
     maxToolCalls: z.number().int().min(0).max(20),
-    timeoutMs: z.number().int().min(1_000).max(120_000),
+    timeoutMs: z.number().int().min(1_000).max(AGENT_SPEC_MAX_TIMEOUT_MS),
     /** Суточный потолок расхода; null — без отдельного потолка (личный помощник). */
     dailyCapCredits: z
       .number()

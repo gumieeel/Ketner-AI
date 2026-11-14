@@ -57,7 +57,11 @@ export function createGatewayStep(
       {
         ...withCharge(base, input.maxChargeUsd),
         messages: textTranscript(input.messages),
-        agentStep: { messages: input.messages, tools: input.tools },
+        agentStep: {
+          messages: input.messages,
+          tools: input.tools,
+          ...(input.toolChoice ? { toolChoice: input.toolChoice } : {}),
+        },
         signal: input.signal,
       },
       {

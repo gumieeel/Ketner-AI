@@ -10,7 +10,12 @@
 import { randomUUID } from 'node:crypto';
 import type { SqlRunner } from '../code/postgres-driver.js';
 import type { AgentSpec } from './agent-spec.js';
-import { writeJournalSafely } from './secrets.js';
+import {
+  isSecretTripwire,
+  sanitizeForJournal,
+  TRIPWIRE_PLACEHOLDER,
+  writeJournalSafely,
+} from './secrets.js';
 
 export type ExecutionStatus = 'running' | 'succeeded' | 'failed' | 'cancelled' | 'timed_out';
 export type TriggerKind = 'public_page' | 'manual' | 'chat_message' | 'channel_event' | 'webhook';
@@ -36,6 +41,32 @@ export interface FinishExecution {
   creditsUsd: number;
   outputMeta: Record<string, unknown>;
   error: Record<string, unknown> | null;
+}
+
+/**
+ * Записи исполнения, которые не должны задерживать ответ: пишутся одним пакетом после него
+ * (`ExecutionJournal.record`). Эффекты — уже с итогом; `reserved: true` — эффект был зарезервирован
+ * заранее (`reserveEffect`, внешнее действие), пакет только закрывает его.
+ */
+export interface JournalBatch {
+  effects: Array<{
+    stepKey: string;
+    action: string;
+    authorizedBy: string;
+    usageRunId?: string;
+    reserved: boolean;
+    outcome: 'committed' | 'failed';
+    resultMeta: Record<string, unknown>;
+  }>;
+  events: Array<{ type: EventType; action: string | null; data: Record<string, unknown> }>;
+  finish: FinishExecution;
+}
+
+/** Исполнение, которое reaper закрыл как зависшее. */
+export interface ReapedExecution {
+  id: string;
+  userId: string;
+  startedAt: string;
 }
 
 export interface ExecutionJournal {
@@ -73,8 +104,64 @@ export interface ExecutionJournal {
     resultMeta: Record<string, unknown>,
     resultRef?: string,
   ): Promise<void>;
+  /** Закрывает только исполнение в статусе `running` (закрытое reaper'ом не переписывается). */
   finish(executionId: string, userId: string, input: FinishExecution): Promise<void>;
+  /**
+   * Пакет после ответа: эффекты, события и итог. Postgres — два обращения к базе (эффекты должны
+   * сначала появиться как `reserved`, затем закрыться — так требует триггер `execution_effects_guard`).
+   */
+  record(executionId: string, userId: string, batch: JournalBatch): Promise<void>;
+  /**
+   * Закрывает зависшие исполнения: `running` дольше `olderThanMs` с начала (живой прогон столько не
+   * длится — порог больше срока прогона). Не больше `limit` за вызов; статус `failed`, причина `error`,
+   * ошибка `{ code: 'reaped_stale_running' }`; незакрытые внутренние эффекты — `failed`.
+   */
+  reapStale(input: { olderThanMs: number; limit: number }): Promise<ReapedExecution[]>;
 }
+
+/** Метаданные пакета после очистки; при срабатывании проверки базы — заглушки. */
+function cleanBatch(batch: JournalBatch, placeholder: boolean) {
+  const clean = <T>(value: T) =>
+    placeholder ? TRIPWIRE_PLACEHOLDER : sanitizeForJournal(value).value;
+  const finishMeta = clean({ output: batch.finish.outputMeta, error: batch.finish.error }) as {
+    output?: Record<string, unknown>;
+    error?: Record<string, unknown> | null;
+    redacted?: string;
+  };
+  return {
+    effects: batch.effects.map((effect) => ({ ...effect, resultMeta: clean(effect.resultMeta) })),
+    events: batch.events.map((event) => ({ ...event, data: clean(event.data) })),
+    output: finishMeta.output ?? (finishMeta.redacted ? { redacted: finishMeta.redacted } : {}),
+    error: finishMeta.error ?? null,
+  };
+}
+
+/**
+ * Параметры JSON передаются как `$n::text::jsonb`: строка, объявленная как `jsonb`, драйвер
+ * postgres.js кодирует ещё раз, и в базу попадает JSON-строка вместо объекта.
+ */
+
+/** Повтор записи пакета с заглушками, если сработала сигнальная проверка секретов базы. */
+async function writeBatchSafely(
+  batch: JournalBatch,
+  write: (clean: ReturnType<typeof cleanBatch>) => Promise<void>,
+): Promise<void> {
+  try {
+    await write(cleanBatch(batch, false));
+  } catch (error) {
+    if (!isSecretTripwire(error)) throw error;
+    console.error(
+      '[journal] secret tripwire fired after sanitizing a batch: code and database rules differ',
+      {
+        constraint: (error as { constraint_name?: string }).constraint_name,
+      },
+    );
+    await write(cleanBatch(batch, true));
+  }
+}
+
+/** Код ошибки зависшего исполнения (журнал, панель владельца). */
+export const REAPED_ERROR = { code: 'reaped_stale_running' } as const;
 
 // ─── Память ────────────────────────────────────────────────────────────────────────────────
 
@@ -147,6 +234,7 @@ export class MemoryExecutionJournal implements ExecutionJournal {
       }
     }
     await writeJournalSafely(input.inputMeta, async (inputMeta) => {
+      this.startedAt.set(input.id, Date.now());
       this.executions.set(input.id, {
         ...input,
         inputMeta: inputMeta as Record<string, unknown>,
@@ -216,7 +304,7 @@ export class MemoryExecutionJournal implements ExecutionJournal {
 
   async finish(executionId: string, _userId: string, input: FinishExecution) {
     const execution = this.executions.get(executionId);
-    if (!execution) return;
+    if (!execution || execution.status !== 'running') return;
     await writeJournalSafely({ output: input.outputMeta, error: input.error }, async (clean) => {
       const meta = clean as {
         output?: Record<string, unknown>;
@@ -231,6 +319,60 @@ export class MemoryExecutionJournal implements ExecutionJournal {
       execution.error = meta.error ?? null;
     });
   }
+
+  async record(executionId: string, userId: string, batch: JournalBatch) {
+    for (const effect of batch.effects) {
+      if (!effect.reserved) {
+        await this.reserveEffect(
+          executionId,
+          userId,
+          effect.stepKey,
+          effect.action,
+          effect.authorizedBy,
+          effect.usageRunId,
+        );
+      }
+      await this.finishEffect(
+        executionId,
+        userId,
+        effect.stepKey,
+        effect.outcome,
+        effect.resultMeta,
+      );
+    }
+    for (const event of batch.events) {
+      await this.event(executionId, userId, event.type, event.action, event.data);
+    }
+    await this.finish(executionId, userId, batch.finish);
+  }
+
+  /** Время начала исполнения (память): тесты reaper'а сдвигают его назад. */
+  readonly startedAt = new Map<string, number>();
+
+  async reapStale(input: { olderThanMs: number; limit: number }) {
+    const now = Date.now();
+    const reaped: ReapedExecution[] = [];
+    for (const execution of this.executions.values()) {
+      if (reaped.length >= input.limit) break;
+      const started = this.startedAt.get(execution.id) ?? now;
+      if (execution.status !== 'running' || now - started <= input.olderThanMs) continue;
+      execution.status = 'failed';
+      execution.stopReason = 'error';
+      execution.error = { ...REAPED_ERROR };
+      for (const effect of this.effects.values()) {
+        if (effect.executionId === execution.id && effect.status === 'reserved') {
+          effect.status = 'failed';
+          effect.resultMeta = { reaped: true };
+        }
+      }
+      reaped.push({
+        id: execution.id,
+        userId: execution.userId,
+        startedAt: new Date(started).toISOString(),
+      });
+    }
+    return reaped;
+  }
 }
 
 // ─── Postgres ──────────────────────────────────────────────────────────────────────────────
@@ -241,7 +383,7 @@ export class PostgresExecutionJournal implements ExecutionJournal {
   async ensureAgent(input: Parameters<ExecutionJournal['ensureAgent']>[0]) {
     await this.sql.query(
       `INSERT INTO solution_version_specs (solution_id, version_number, user_id, spec)
-       VALUES ($1, $2, $3, $4::jsonb) ON CONFLICT (solution_id, version_number) DO NOTHING`,
+       VALUES ($1, $2, $3, $4::text::jsonb) ON CONFLICT (solution_id, version_number) DO NOTHING`,
       [input.solutionId, input.version, input.userId, JSON.stringify(input.spec)],
     );
     for (let attempt = 0; attempt < 3; attempt += 1) {
@@ -280,7 +422,7 @@ export class PostgresExecutionJournal implements ExecutionJournal {
       const rows = await this.sql.query<{ id: string }>(
         `INSERT INTO executions (id, user_id, solution_id, solution_version, kind, agent_deployment_id, runtime,
            trigger_kind, trigger_ref, status, started_at, idempotency_key, input_meta, trace_id)
-         VALUES ($1, $2, $3, $4, 'agent', $5, 'agent_gateway', $6, $7, 'running', now(), $8, $9::jsonb, $10)
+         VALUES ($1, $2, $3, $4, 'agent', $5, 'agent_gateway', $6, $7, 'running', now(), $8, $9::text::jsonb, $10)
          ON CONFLICT (user_id, idempotency_key) WHERE idempotency_key IS NOT NULL DO NOTHING
          RETURNING id`,
         [
@@ -318,7 +460,7 @@ export class PostgresExecutionJournal implements ExecutionJournal {
     await writeJournalSafely(data, async (clean) => {
       await this.sql.query(
         `INSERT INTO execution_events (execution_id, user_id, seq, type, action, data)
-         VALUES ($1, $2, (SELECT coalesce(max(seq), 0) + 1 FROM execution_events WHERE execution_id = $1), $3, $4, $5::jsonb)`,
+         VALUES ($1, $2, (SELECT coalesce(max(seq), 0) + 1 FROM execution_events WHERE execution_id = $1), $3, $4, $5::text::jsonb)`,
         [executionId, userId, type, action, JSON.stringify(clean)],
       );
     });
@@ -352,7 +494,7 @@ export class PostgresExecutionJournal implements ExecutionJournal {
     await writeJournalSafely(resultMeta, async (clean) => {
       await this.sql.query(
         `UPDATE execution_effects
-            SET status = $4, finished_at = now(), result_meta = $5::jsonb, result_ref = $6,
+            SET status = $4, finished_at = now(), result_meta = $5::text::jsonb, result_ref = $6,
                 failure_stage = CASE WHEN $4 = 'failed' THEN 'before_dispatch' END
           WHERE execution_id = $1 AND user_id = $2 AND step_key = $3 AND status = 'reserved'`,
         [executionId, userId, stepKey, outcome, JSON.stringify(clean), resultRef ?? null],
@@ -370,8 +512,8 @@ export class PostgresExecutionJournal implements ExecutionJournal {
       await this.sql.query(
         `UPDATE executions
             SET status = $3, stop_reason = $4, finished_at = now(), cost_usd = $5, credits_usd = $6,
-                output_meta = $7::jsonb, error = $8::jsonb, updated_at = now(), version = version + 1
-          WHERE id = $1 AND user_id = $2`,
+                output_meta = $7::text::jsonb, error = $8::text::jsonb, updated_at = now(), version = version + 1
+          WHERE id = $1 AND user_id = $2 AND status = 'running'`,
         [
           executionId,
           userId,
@@ -384,5 +526,117 @@ export class PostgresExecutionJournal implements ExecutionJournal {
         ],
       );
     });
+  }
+
+  async record(executionId: string, userId: string, batch: JournalBatch) {
+    await writeBatchSafely(batch, async (clean) => {
+      const toReserve = clean.effects.filter((effect) => !effect.reserved);
+      // 1. Новые эффекты (как `reserved`) и события — одной командой.
+      if (toReserve.length > 0 || clean.events.length > 0) {
+        await this.sql.query(
+          `WITH reserved AS (
+             INSERT INTO execution_effects (execution_id, user_id, step_key, action, external, status, authorized_by, usage_run_id)
+             SELECT $1, $2, x.step_key, x.action, false, 'reserved', x.authorized_by, x.usage_run_id
+               FROM jsonb_to_recordset($3::text::jsonb) AS x(step_key text, action text, authorized_by text, usage_run_id text)
+             ON CONFLICT (execution_id, step_key) DO NOTHING
+             RETURNING step_key
+           ), appended AS (
+             INSERT INTO execution_events (execution_id, user_id, seq, type, action, data)
+             SELECT $1, $2, base.seq + x.n, x.type, x.action, x.data
+               FROM jsonb_to_recordset($4::text::jsonb) AS x(n integer, type text, action text, data jsonb),
+                    (SELECT coalesce(max(seq), 0) AS seq FROM execution_events WHERE execution_id = $1) AS base
+             RETURNING seq
+           )
+           SELECT (SELECT count(*) FROM reserved) AS effects, (SELECT count(*) FROM appended) AS events`,
+          [
+            executionId,
+            userId,
+            JSON.stringify(
+              toReserve.map((effect) => ({
+                step_key: effect.stepKey,
+                action: effect.action,
+                authorized_by: effect.authorizedBy,
+                usage_run_id: effect.usageRunId ?? null,
+              })),
+            ),
+            JSON.stringify(
+              clean.events.map((event, index) => ({
+                n: index + 1,
+                type: event.type,
+                action: event.action,
+                data: event.data,
+              })),
+            ),
+          ],
+        );
+      }
+      // 2. Итог эффектов и исполнения — одной командой. Закрытое reaper'ом исполнение не переписывается.
+      await this.sql.query(
+        `WITH closed AS (
+           UPDATE execution_effects AS e
+              SET status = x.outcome, finished_at = now(), result_meta = x.result_meta,
+                  failure_stage = CASE WHEN x.outcome = 'failed' THEN 'before_dispatch' END
+             FROM jsonb_to_recordset($3::text::jsonb) AS x(step_key text, outcome text, result_meta jsonb)
+            WHERE e.execution_id = $1 AND e.user_id = $2 AND e.step_key = x.step_key AND e.status = 'reserved'
+           RETURNING e.step_key
+         )
+         UPDATE executions
+            SET status = $4, stop_reason = $5, finished_at = now(), cost_usd = $6, credits_usd = $7,
+                output_meta = $8::text::jsonb, error = $9::text::jsonb, updated_at = now(), version = version + 1
+          WHERE id = $1 AND user_id = $2 AND status = 'running'
+          RETURNING (SELECT count(*) FROM closed) AS effects`,
+        [
+          executionId,
+          userId,
+          JSON.stringify(
+            clean.effects.map((effect) => ({
+              step_key: effect.stepKey,
+              outcome: effect.outcome,
+              result_meta: effect.resultMeta,
+            })),
+          ),
+          batch.finish.status,
+          batch.finish.stopReason,
+          batch.finish.costUsd,
+          batch.finish.creditsUsd,
+          JSON.stringify(clean.output),
+          clean.error ? JSON.stringify(clean.error) : null,
+        ],
+      );
+    });
+  }
+
+  async reapStale(input: { olderThanMs: number; limit: number }) {
+    // Одна команда: выбор (с пропуском заблокированных строк), закрытие эффектов, закрытие исполнений.
+    // Внешние эффекты в статусе `dispatched` не трогаются: их исход неизвестен, их сверяют отдельно.
+    const rows = await this.sql.query<{ id: string; user_id: string; started_at: Date | string }>(
+      `WITH stale AS (
+         SELECT id, user_id FROM executions
+          WHERE status = 'running' AND kind = 'agent' AND runtime = 'agent_gateway'
+            AND started_at < now() - make_interval(secs => $1::double precision / 1000)
+          ORDER BY started_at
+          LIMIT $2
+          FOR UPDATE SKIP LOCKED
+       ), effects AS (
+         UPDATE execution_effects AS e
+            SET status = 'failed', failure_stage = 'before_dispatch', finished_at = now(),
+                result_meta = '{"reaped":true}'::jsonb
+           FROM stale
+          WHERE e.execution_id = stale.id AND e.user_id = stale.user_id AND e.status = 'reserved'
+         RETURNING e.execution_id
+       )
+       UPDATE executions AS x
+          SET status = 'failed', stop_reason = 'error', finished_at = now(),
+              error = $3::text::jsonb, updated_at = now(), version = x.version + 1
+         FROM stale
+        WHERE x.id = stale.id AND x.user_id = stale.user_id AND x.status = 'running'
+       RETURNING x.id, x.user_id, x.started_at, (SELECT count(*) FROM effects) AS effects`,
+      [input.olderThanMs, input.limit, JSON.stringify(REAPED_ERROR)],
+    );
+    return rows.map((row) => ({
+      id: row.id,
+      userId: row.user_id,
+      startedAt: new Date(row.started_at).toISOString(),
+    }));
   }
 }

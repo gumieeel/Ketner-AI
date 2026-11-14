@@ -13,6 +13,7 @@ import type {
   AgentProviderResult,
   AgentStreamEvent,
 } from '../ai/agent/agent-types.js';
+import { TOOL_ERROR_MESSAGES } from '../agent-core/types.js';
 import { CircuitBreaker } from '../ai/circuit-breaker.js';
 import { AIGateway } from '../ai/gateway.js';
 import type { AIProvider, ProviderResponse } from '../ai/gateway-types.js';
@@ -184,7 +185,8 @@ test('этап D: бот ищет в знаниях и отвечает; учё�
   );
   assert.equal(result.creditsUsd, 0.0005);
   assert.equal(Number((before - balance(env)).toFixed(6)), 0.0005);
-  // Журнал Slice A.
+  // Журнал Slice A: пишется пакетом после ответа.
+  await env.runtime.drain();
   const journal = env.journal as MemoryExecutionJournal;
   const [execution] = [...journal.executions.values()];
   assert.equal(execution?.status, 'succeeded');
@@ -233,6 +235,7 @@ test('этап D, обязательный: неизвестный вопрос 
   assert.equal(result.text, 'Это уточнит сотрудник.');
   assert.equal(result.error, null);
   assert.equal(env.calls.length, 1, 'после эскалации модель не вызывается');
+  await env.runtime.drain();
   const [execution] = [...(env.journal as MemoryExecutionJournal).executions.values()];
   assert.deepEqual([execution?.status, execution?.stopReason], ['succeeded', 'escalated']);
 });
@@ -245,49 +248,103 @@ test('этап D, обязательный: сбой инструмента — 
   const result = await env.runtime.answer(input());
   assert.equal(result.text, 'Уточню у сотрудника.');
   const failed = env.calls[1]!.messages.at(-1);
-  assert.ok(failed?.role === 'tool' && failed.content.includes('invalid arguments'));
+  assert.ok(failed?.role === 'tool' && failed.content === TOOL_ERROR_MESSAGES.invalid_arguments);
 });
 
-test('этап D, обязательный: сбои инструмента подряд — остановка, клиенту форма контакта', async () => {
-  const env = setup(() => () => ({ toolCalls: [toolCall('knowledge_search', 'not json')] }));
+/** На шаге без инструментов (`toolChoice: 'none'`, последний ответ после лимита) модель отвечает текстом. */
+const FINAL_TEXT = 'Доставка по Алматы — 1 500 ₸. Остальное уточнит сотрудник.';
+const orFinal =
+  (turn: Turn, cost?: number): Turn =>
+  (request, emit) =>
+    request.toolChoice === 'none'
+      ? answer(FINAL_TEXT, cost ?? 0.0003)(request, emit)
+      : turn(request, emit);
+
+test('этап D, обязательный: сбои инструмента подряд — последний ответ без инструментов, форма контакта', async () => {
+  const env = setup(() =>
+    orFinal(() => ({ toolCalls: [toolCall('knowledge_search', 'not json')] })),
+  );
   const result = await env.runtime.answer(input());
-  assert.equal(result.error?.code, 'failures');
-  assert.equal(result.offerContact, true);
-  assert.equal(env.calls.length, 2);
+  // 3a: после двух сбоев подряд — шаг без инструментов; посетитель получает ответ и форму контакта.
+  assert.deepEqual(
+    { text: result.text, error: result.error, offerContact: result.offerContact },
+    { text: FINAL_TEXT, error: null, offerContact: true },
+  );
+  assert.equal(env.calls.length, 3);
+  assert.equal(env.calls[2]!.toolChoice, 'none');
+  assert.ok(env.calls[2]!.tools && env.calls[2]!.tools.length > 0, 'описания инструментов те же');
+  // 3d: модель видит безопасное сообщение; подробность разбора — только в журнале.
+  const toolMessages = env.calls[2]!.messages.filter((m) => m.role === 'tool');
+  assert.deepEqual(
+    toolMessages.map((m) => m.role === 'tool' && m.content),
+    [TOOL_ERROR_MESSAGES.invalid_json, TOOL_ERROR_MESSAGES.invalid_json],
+  );
+  await env.runtime.drain();
+  const journal = env.journal as MemoryExecutionJournal;
+  const [execution] = [...journal.executions.values()];
+  assert.deepEqual(
+    [execution?.status, execution?.stopReason, execution?.outputMeta.finalStep],
+    ['succeeded', 'failures', true],
+  );
+  const errors = journal.events.filter((e) => e.type === 'error');
+  assert.equal(errors.length, 2);
+  assert.equal(errors[0]!.data.code, 'invalid_json');
+  assert.match(String(errors[0]!.data.detail), /JSON/);
+  assert.ok(!JSON.stringify(env.calls[2]!.messages).includes(String(errors[0]!.data.detail)));
 });
 
-test('этап D, обязательный: лимит шагов — остановка max_steps, списание не больше потолка ответа', async () => {
-  const looping =
-    (n: number): Turn =>
-    () => ({
+test('этап D, обязательный: лимит шагов — последний шаг без инструментов, списание не больше потолка', async () => {
+  const looping = (n: number): Turn =>
+    orFinal(() => ({
       toolCalls: [toolCall('knowledge_search', `{"query":"цены ${n}"}`, `call_${n}`)],
       cost: 0.0004,
-    });
+    }));
   // Лимит шагов AgentSpec бота (6); лимит вызовов инструментов поднят, чтобы сработал именно лимит шагов.
   const env = setup(looping, new MemoryExecutionJournal(), { maxToolCalls: 20 });
   const result = await env.runtime.answer(input());
-  assert.equal(result.error?.code, 'max_steps');
+  assert.equal(result.error, null);
+  assert.equal(result.text, FINAL_TEXT);
   assert.equal(result.offerContact, true);
-  assert.equal(env.calls.length, 6, 'AgentSpec бота: maxSteps = 6');
+  assert.equal(env.calls.length, 6, 'AgentSpec бота: maxSteps = 6, последний шаг входит в лимит');
+  assert.deepEqual(
+    env.calls.map((c) => c.toolChoice ?? 'auto'),
+    ['auto', 'auto', 'auto', 'auto', 'auto', 'none'],
+  );
   assert.equal(env.usage.getByUser(OWNER).length, 6);
   assert.ok(result.creditsUsd <= BOT_REPLY_CAP_USD);
-  // С лимитами AgentSpec как есть раньше срабатывает лимит вызовов инструментов (4).
+  await env.runtime.drain();
+  const [execution] = [...(env.journal as MemoryExecutionJournal).executions.values()];
+  assert.deepEqual([execution?.status, execution?.stopReason], ['succeeded', 'max_steps']);
+  // С лимитами AgentSpec как есть раньше срабатывает лимит вызовов инструментов (4): 5 шагов + последний.
   const defaults = setup(looping);
   const stopped = await defaults.runtime.answer(input());
-  assert.equal(stopped.error?.code, 'max_tool_calls');
-  assert.equal(defaults.calls.length, 5);
+  assert.equal(stopped.text, FINAL_TEXT);
+  assert.equal(defaults.calls.length, 6);
+  await defaults.runtime.drain();
+  const [capped] = [...(defaults.journal as MemoryExecutionJournal).executions.values()];
+  assert.equal(capped?.stopReason, 'max_tool_calls');
 });
 
-test('этап D, обязательный: потолок кредитов на ответ по сумме шагов — 0,03 $ и остановка budget', async () => {
-  const env = setup((n) => () => ({
-    toolCalls: [toolCall('knowledge_search', '{"query":"цены"}', `call_${n}`)],
-    cost: 0.02,
-  }));
+test('этап D, обязательный: потолок кредитов на ответ по сумме шагов — 0,03 $, последний ответ на резерве', async () => {
+  // Шаг дороже трети потолка (0,02 $): после первого шага остаток 0,01 $ меньше резерва — сразу
+  // последний шаг без инструментов на весь остаток. Без резерва (прежнее поведение) владелец платил
+  // те же 0,03 $, а посетитель получал ошибку.
+  const env = setup((n) =>
+    orFinal(
+      () => ({
+        toolCalls: [toolCall('knowledge_search', '{"query":"цены"}', `call_${n}`)],
+        cost: 0.02,
+      }),
+      0.02,
+    ),
+  );
   const before = balance(env);
   const result = await env.runtime.answer(input());
-  assert.equal(result.error?.code, 'budget');
+  assert.equal(result.error, null);
+  assert.equal(result.text, FINAL_TEXT);
   assert.equal(result.offerContact, true);
-  assert.equal(env.calls.length, 2, 'третий шаг не начинается: остаток потолка исчерпан');
+  assert.equal(env.calls.length, 2);
+  assert.equal(env.calls[1]!.toolChoice, 'none');
   const records = env.usage.getByUser(OWNER).slice().reverse();
   assert.deepEqual(
     records.map((r) => [r.estimatedCost, r.creditsUsd]),
@@ -298,6 +355,9 @@ test('этап D, обязательный: потолок кредитов на
   );
   assert.equal(result.creditsUsd, BOT_REPLY_CAP_USD);
   assert.equal(Number((before - balance(env)).toFixed(6)), BOT_REPLY_CAP_USD);
+  await env.runtime.drain();
+  const [execution] = [...(env.journal as MemoryExecutionJournal).executions.values()];
+  assert.deepEqual([execution?.status, execution?.stopReason], ['succeeded', 'budget']);
 });
 
 test('этап D: повтор исполнения с тем же ключом — без вызова модели и без списания', async () => {
@@ -344,6 +404,8 @@ test('этап D: журнал на PostgreSQL — исполнение, соб�
     );
     const result = await env.runtime.answer(input({ idempotencyKey: 'bot_message:pg1' }));
     assert.equal(result.text, '1 500 ₸.');
+    await env.runtime.drain();
+    assert.deepEqual(env.journalErrors, []);
     const [execution] = await sql.runner.query<{
       status: string;
       stop_reason: string;
@@ -389,6 +451,7 @@ test('этап D: журнал на PostgreSQL — исполнение, соб�
     assert.equal(env.calls.length, 2);
     // Новая версия бота: прежнее включение закрывается, открывается новое.
     await env.runtime.answer(input({ version: 2, idempotencyKey: 'bot_message:pg2' }));
+    await env.runtime.drain();
     const deployments = await sql.runner.query<{ agent_version: number; state: string }>(
       `SELECT agent_version, state FROM agent_deployments ORDER BY activated_at, agent_version`,
     );
@@ -399,6 +462,23 @@ test('этап D: журнал на PostgreSQL — исполнение, соб�
         [2, 'active'],
       ],
     );
+    // JSON хранится объектами, а не строками (проверка снимка спецификации работает по полю).
+    const [kinds] = await sql.runner.query<Record<string, string>>(
+      `SELECT (SELECT jsonb_typeof(spec) FROM solution_version_specs LIMIT 1) AS spec,
+              (SELECT spec ->> 'specVersion' FROM solution_version_specs LIMIT 1) AS spec_version,
+              (SELECT jsonb_typeof(input_meta) FROM executions LIMIT 1) AS input_meta,
+              (SELECT jsonb_typeof(output_meta) FROM executions WHERE status = 'succeeded' LIMIT 1) AS output_meta,
+              (SELECT string_agg(DISTINCT jsonb_typeof(data), ',') FROM execution_events) AS event_data,
+              (SELECT string_agg(DISTINCT jsonb_typeof(result_meta), ',') FROM execution_effects) AS result_meta`,
+    );
+    assert.deepEqual(kinds, {
+      spec: 'object',
+      spec_version: '1',
+      input_meta: 'object',
+      output_meta: 'object',
+      event_data: 'object',
+      result_meta: 'object',
+    });
     const [{ specs }] = await sql.runner.query<{ specs: string }>(
       `SELECT count(*) AS specs FROM solution_version_specs`,
     );

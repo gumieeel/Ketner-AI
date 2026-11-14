@@ -6,6 +6,23 @@
 
 import type { AgentMessage, AgentToolCall, AgentToolDefinition } from '../ai/agent/agent-types.js';
 
+/**
+ * Что модель видит вместо ошибки инструмента: закрытый список безопасных сообщений. Текст исключения,
+ * адреса, пути и коды внешних систем модели не передаются (их можно было бы пересказать посетителю);
+ * полная ошибка уходит только в события прогона (`tool_rejected`, `tool_finished.error`) → журнал.
+ */
+export const TOOL_ERROR_MESSAGES = {
+  unknown_tool: 'Error: unknown tool. Use only the listed tools.',
+  not_allowed: 'Error: this action is not allowed for this agent.',
+  invalid_json: 'Error: tool arguments are not valid JSON.',
+  invalid_arguments: 'Error: invalid arguments. Check the tool parameters and try again.',
+  tool_failed: 'Error: the tool failed. Try once more or answer without it.',
+  tool_timeout: 'Error: the tool did not respond in time. Answer without it.',
+  too_many_calls_in_step: 'Error: too many tool calls in one step; this call was not executed.',
+  not_executed: 'Error: the tool call limit was reached; this call was not executed.',
+} as const;
+export type ToolErrorCode = keyof typeof TOOL_ERROR_MESSAGES;
+
 export interface StepInput {
   /** Номер шага, с 1. */
   step: number;
@@ -14,6 +31,8 @@ export interface StepInput {
   /** Остаток потолка списания за весь прогон, $: шаг не может списать больше. */
   maxChargeUsd: number;
   signal: AbortSignal;
+  /** `none` — последний шаг без инструментов (`LoopRun.finalAnswer`): модель обязана ответить текстом. */
+  toolChoice?: 'none';
 }
 
 export interface StepResult {
@@ -77,6 +96,8 @@ export interface LoopLimits {
   /** Сбоев инструментов подряд, после которых прогон останавливается. */
   maxConsecutiveFailures: number;
   timeoutMs: number;
+  /** Срок одного вызова инструмента, мс; по истечении модель получает `tool_timeout`. */
+  toolTimeoutMs?: number;
   /** Потолок списания за прогон, $ (у бота — 30 кредитов на ответ). */
   budgetUsd: number;
   /** Меньше этого остатка шаг не начинается, $. */
@@ -97,7 +118,7 @@ export const STOP_REASONS = [
 export type StopReason = (typeof STOP_REASONS)[number];
 
 export type LoopEvent =
-  | { type: 'step_started'; step: number; maxChargeUsd: number }
+  | { type: 'step_started'; step: number; maxChargeUsd: number; final: boolean }
   | {
       type: 'step_finished';
       step: number;
@@ -108,6 +129,15 @@ export type LoopEvent =
     }
   | { type: 'step_failed'; step: number; code: string }
   | { type: 'tool_denied'; step: number; tool: string; action: string; reason: string }
+  /** Вызов отклонён до выполнения: неизвестный инструмент, неверный JSON или аргументы, лимит. */
+  | {
+      type: 'tool_rejected';
+      step: number;
+      tool: string;
+      callId: string;
+      code: ToolErrorCode;
+      detail: string;
+    }
   | {
       type: 'tool_started';
       step: number;
@@ -125,6 +155,8 @@ export type LoopEvent =
       ok: boolean;
       escalate: boolean;
       meta?: Record<string, unknown>;
+      /** Полная ошибка инструмента — только для журнала; модель видит `TOOL_ERROR_MESSAGES[code]`. */
+      error?: { code: ToolErrorCode; message: string };
     }
   | { type: 'stopped'; reason: StopReason };
 
@@ -140,12 +172,22 @@ export interface LoopRun {
   /** Подготовка сообщений перед шагом (например, сжатие контекста). */
   prepareMessages?: (messages: AgentMessage[], step: number) => AgentMessage[];
   signal?: AbortSignal;
+  /**
+   * Последний ответ без инструментов. Если прогон упирается в `max_steps`, `max_tool_calls`,
+   * `budget` или `failures`, ядро делает ещё один шаг с `toolChoice: 'none'`, чтобы собеседник получил
+   * ответ из уже собранного. Для него резервируется бюджет: со второго шага каждый шаг с инструментами
+   * может списать не больше `остаток − max(minStepBudgetUsd, самый дорогой шаг прогона)`; последний
+   * шаг входит в `maxSteps`. Причина остановки остаётся прежней (`max_steps`, …), `finalStep` = true.
+   */
+  finalAnswer?: boolean;
 }
 
 export interface LoopResult {
   stopReason: StopReason;
   /** Текст последнего шага модели (пустой, если шаг не ответил текстом). */
   text: string;
+  /** Текст получен последним шагом без инструментов после лимита (`LoopRun.finalAnswer`). */
+  finalStep: boolean;
   steps: number;
   toolCalls: Array<{ tool: string; ok: boolean }>;
   costUsd: number;
