@@ -323,3 +323,83 @@ test('3c: память — то же правило; проходы не нак�
   assert.equal(journal.executions.get('exec_live')?.status, 'running');
   assert.equal(journal.effects.get('exec_old:model-1')?.status, 'failed');
 });
+
+// ── Проверка администратором (только чтение) ─────────────────────────────────────────────────
+
+test('listExecutions, Postgres: итог и счётчики по решению, модели шагов по порядку, без trigger_ref и input_meta', async (t) => {
+  await withPostgres(t, async (sql, journal) => {
+    await journal.start({
+      ...start('exec_l1'),
+      triggerRef: 'conversation:conv-secret-1',
+      inputMeta: { messages: 3, lastUserChars: 42 },
+    });
+    const steps = Array.from({ length: 10 }, (_, i) => i + 1);
+    await journal.record('exec_l1', OWNER, {
+      effects: steps.map((n) => ({
+        stepKey: `model-${n}`,
+        action: 'reply.draft',
+        authorizedBy: 'risk_low',
+        reserved: false,
+        outcome: 'committed' as const,
+        resultMeta: { toolCalls: 0, model: `m${n}` },
+      })),
+      events: [],
+      finish: {
+        status: 'succeeded',
+        stopReason: 'max_steps',
+        costUsd: 0.0123,
+        creditsUsd: 0.012,
+        outputMeta: {
+          steps: 10,
+          toolCalls: [{ tool: 'knowledge_search', ok: false }],
+          chars: 57,
+          offerContact: true,
+          finalStep: true,
+          unexpected: 'not exposed',
+        },
+        error: null,
+      },
+    });
+    await journal.start(start('exec_l2'));
+    const [first, second] = await journal.listExecutions('sol-j', 10);
+    assert.equal(first?.id, 'exec_l2', 'новые первыми');
+    assert.deepEqual(
+      [first?.status, first?.stopReason, first?.finishedAt, first?.durationMs],
+      ['running', null, null, null],
+    );
+    assert.deepEqual(
+      {
+        status: second?.status,
+        stopReason: second?.stopReason,
+        steps: second?.steps,
+        toolCalls: second?.toolCalls,
+        finalStep: second?.finalStep,
+        offerContact: second?.offerContact,
+        replyChars: second?.replyChars,
+        costUsd: second?.costUsd,
+        creditsUsd: second?.creditsUsd,
+        models: second?.models,
+      },
+      {
+        status: 'succeeded',
+        stopReason: 'max_steps',
+        steps: 10,
+        toolCalls: [{ tool: 'knowledge_search', ok: false }],
+        finalStep: true,
+        offerContact: true,
+        replyChars: 57,
+        costUsd: 0.0123,
+        creditsUsd: 0.012,
+        models: steps.map((n) => `m${n}`),
+      },
+    );
+    assert.ok((second?.durationMs ?? -1) >= 0);
+    const raw = JSON.stringify(await journal.listExecutions('sol-j', 10));
+    for (const leak of ['conv-secret-1', 'lastUserChars', 'not exposed']) {
+      assert.ok(!raw.includes(leak), `нет «${leak}»`);
+    }
+    assert.equal((await journal.listExecutions('sol-j', 1)).length, 1);
+    assert.deepEqual(await journal.listExecutions('sol-none', 10), []);
+    void sql;
+  });
+});

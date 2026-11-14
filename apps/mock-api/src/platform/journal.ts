@@ -62,6 +62,56 @@ export interface JournalBatch {
   finish: FinishExecution;
 }
 
+/**
+ * Строка проверки для администратора: только итог и счётчики. Ни текста сообщений, ни id диалога
+ * или посетителя (`trigger_ref`, `input_meta`) здесь нет.
+ */
+export interface ExecutionSummary {
+  id: string;
+  solutionVersion: number | null;
+  triggerKind: string;
+  status: ExecutionStatus | 'queued' | 'retrying';
+  stopReason: string | null;
+  startedAt: string | null;
+  finishedAt: string | null;
+  durationMs: number | null;
+  steps: number | null;
+  toolCalls: Array<{ tool: string; ok: boolean }>;
+  finalStep: boolean;
+  offerContact: boolean;
+  replyChars: number | null;
+  costUsd: number;
+  creditsUsd: number;
+  errorCode: string | null;
+  /** Модели шагов по порядку (из эффектов `model-N`). */
+  models: string[];
+}
+
+/** Поля итога из `output_meta`: только известные счётчики, остальное не выдаётся. */
+function summaryFields(output: unknown) {
+  const meta = (output && typeof output === 'object' ? output : {}) as Record<string, unknown>;
+  const toolCalls = Array.isArray(meta.toolCalls)
+    ? meta.toolCalls.flatMap((call) => {
+        const item = call as { tool?: unknown; ok?: unknown } | null;
+        return typeof item?.tool === 'string'
+          ? [{ tool: item.tool.slice(0, 64), ok: item.ok === true }]
+          : [];
+      })
+    : [];
+  return {
+    steps: typeof meta.steps === 'number' ? meta.steps : null,
+    toolCalls,
+    finalStep: meta.finalStep === true,
+    offerContact: meta.offerContact === true,
+    replyChars: typeof meta.chars === 'number' ? meta.chars : null,
+  };
+}
+
+const iso = (value: Date | string | null | undefined) =>
+  value ? new Date(value).toISOString() : null;
+const duration = (started: string | null, finished: string | null) =>
+  started && finished ? Date.parse(finished) - Date.parse(started) : null;
+
 /** Исполнение, которое reaper закрыл как зависшее. */
 export interface ReapedExecution {
   id: string;
@@ -117,6 +167,8 @@ export interface ExecutionJournal {
    * ошибка `{ code: 'reaped_stale_running' }`; незакрытые внутренние эффекты — `failed`.
    */
   reapStale(input: { olderThanMs: number; limit: number }): Promise<ReapedExecution[]>;
+  /** Последние исполнения решения, новые первыми (проверка администратором; только чтение). */
+  listExecutions(solutionId: string, limit: number): Promise<ExecutionSummary[]>;
 }
 
 /** Метаданные пакета после очистки; при срабатывании проверки базы — заглушки. */
@@ -317,7 +369,44 @@ export class MemoryExecutionJournal implements ExecutionJournal {
       execution.creditsUsd = input.creditsUsd;
       execution.outputMeta = meta.output ?? (meta.redacted ? { redacted: meta.redacted } : {});
       execution.error = meta.error ?? null;
+      this.finishedAt.set(executionId, Date.now());
     });
+  }
+
+  /** Время окончания исполнения (память). */
+  readonly finishedAt = new Map<string, number>();
+
+  async listExecutions(solutionId: string, limit: number): Promise<ExecutionSummary[]> {
+    return [...this.executions.values()]
+      .filter((execution) => execution.solutionId === solutionId)
+      .reverse()
+      .slice(0, limit)
+      .map((execution) => {
+        const startedAt = iso(
+          this.startedAt.has(execution.id) ? new Date(this.startedAt.get(execution.id)!) : null,
+        );
+        const finishedAt = iso(
+          this.finishedAt.has(execution.id) ? new Date(this.finishedAt.get(execution.id)!) : null,
+        );
+        const models = [...this.effects.values()]
+          .filter((e) => e.executionId === execution.id && e.stepKey.startsWith('model-'))
+          .flatMap((e) => (typeof e.resultMeta.model === 'string' ? [e.resultMeta.model] : []));
+        return {
+          id: execution.id,
+          solutionVersion: execution.solutionVersion,
+          triggerKind: execution.triggerKind,
+          status: execution.status,
+          stopReason: execution.stopReason,
+          startedAt,
+          finishedAt,
+          durationMs: duration(startedAt, finishedAt),
+          ...summaryFields(execution.outputMeta),
+          costUsd: execution.costUsd,
+          creditsUsd: execution.creditsUsd,
+          errorCode: typeof execution.error?.code === 'string' ? execution.error.code : null,
+          models,
+        };
+      });
   }
 
   async record(executionId: string, userId: string, batch: JournalBatch) {
@@ -638,5 +727,53 @@ export class PostgresExecutionJournal implements ExecutionJournal {
       userId: row.user_id,
       startedAt: new Date(row.started_at).toISOString(),
     }));
+  }
+
+  async listExecutions(solutionId: string, limit: number): Promise<ExecutionSummary[]> {
+    const rows = await this.sql.query<{
+      id: string;
+      solution_version: number | null;
+      trigger_kind: string;
+      status: ExecutionSummary['status'];
+      stop_reason: string | null;
+      started_at: Date | string | null;
+      finished_at: Date | string | null;
+      cost_usd: number | string;
+      credits_usd: number | string;
+      output_meta: unknown;
+      error_code: string | null;
+      models: string[] | null;
+    }>(
+      `SELECT e.id, e.solution_version, e.trigger_kind, e.status, e.stop_reason, e.started_at, e.finished_at,
+              e.cost_usd, e.credits_usd, e.output_meta, e.error ->> 'code' AS error_code,
+              ARRAY(SELECT f.result_meta ->> 'model' FROM execution_effects f
+                     WHERE f.execution_id = e.id AND f.user_id = e.user_id
+                       AND f.step_key LIKE 'model-%' AND f.result_meta ? 'model'
+                     ORDER BY length(f.step_key), f.step_key) AS models
+         FROM executions e
+        WHERE e.solution_id = $1
+        ORDER BY e.created_at DESC, e.id
+        LIMIT $2`,
+      [solutionId, limit],
+    );
+    return rows.map((row) => {
+      const startedAt = iso(row.started_at);
+      const finishedAt = iso(row.finished_at);
+      return {
+        id: row.id,
+        solutionVersion: row.solution_version,
+        triggerKind: row.trigger_kind,
+        status: row.status,
+        stopReason: row.stop_reason,
+        startedAt,
+        finishedAt,
+        durationMs: duration(startedAt, finishedAt),
+        ...summaryFields(row.output_meta),
+        costUsd: Number(row.cost_usd),
+        creditsUsd: Number(row.credits_usd),
+        errorCode: row.error_code,
+        models: (row.models ?? []).filter((model): model is string => typeof model === 'string'),
+      };
+    });
   }
 }
