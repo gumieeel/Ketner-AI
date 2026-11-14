@@ -78,3 +78,22 @@ export function modelIdentityPrompt(
   const alias = info.baseModelName ? ` (в Ketner AI называется «${entry.name}»)` : '';
   return ` Ты — модель ${realName} от ${info.developer}${alias}, доступная через сервис Ketner AI. Если спрашивают, какая ты модель или кто тебя создал, отвечай честно и не называй себя разработкой Ketner AI.`;
 }
+
+/**
+ * Строка о модели для бота, который отвечает от имени бизнеса (`assistant.replaceSystemPrompt`).
+ * Кто он — задаёт промпт бота (роль, имя, бизнес); модель и её разработчика бот сам не называет, но
+ * на прямой вопрос отвечает честно. Ничего не скрывает и не отрицает: лгать или отказываться отвечать
+ * не велено. Как и `modelIdentityPrompt`, не зависит от вопроса — кэш промпта не сбрасывается.
+ */
+export function modelDisclosureOnRequestPrompt(
+  entry: Pick<ModelRegistryEntry, 'providerModelId' | 'name'>,
+  language: Language,
+): string {
+  const info = disclosureOf(entry);
+  if (!info) return '';
+  const realName = info.baseModelName ?? entry.name.replace(/\s*\(Free\)$/, '');
+  if (language === 'en') {
+    return ` If the visitor asks directly which AI model you run on or which company made it, answer truthfully: you run on ${realName} by ${info.developer}, and the bot works on the Ketner AI service. Do not bring this up yourself.`;
+  }
+  return ` Если собеседник прямо спрашивает, на какой модели ИИ ты работаешь или какая компания её создала, ответь честно: ты работаешь на модели ${realName} от ${info.developer}, а бот работает на сервисе Ketner AI. Сам об этом не заговаривай.`;
+}
