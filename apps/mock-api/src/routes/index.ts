@@ -58,6 +58,7 @@ import { createStatusRouter } from './status.js';
 import { createTelegramRouter } from './telegram.js';
 import { createAdminRouter } from './admin.js';
 import { createPricingAdminRouter } from './pricing-admin.js';
+import { createPlatformAdminRouter } from './platform-admin.js';
 import { createRequestsRouter } from './requests.js';
 import { createWebhookRouter } from './webhooks.js';
 import { usageStore as defaultUsageStore, type UsageStore } from '../store/index.js';
@@ -419,6 +420,15 @@ export function createApiRouter(deps: ApiDeps): Router {
     '/admin/pricing',
     createPricingAdminRouter({
       ...(deps.discovery?.stores ? { stores: deps.discovery.stores } : {}),
+    }),
+  );
+  // Проверка пути платформы ботов: последние исполнения решения (только администратор, только чтение).
+  router.use(
+    '/admin/platform',
+    createPlatformAdminRouter({
+      ...(deps.discovery?.stores
+        ? { journal: () => deps.discovery?.stores?.()?.journal ?? null }
+        : {}),
     }),
   );
   router.use(

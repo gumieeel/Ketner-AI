@@ -22,6 +22,11 @@ import {
   type AttemptStore,
 } from '../builder/tools/attempt-store.js';
 import { MemoryPricingStore, PostgresPricingStore, type PricingStore } from '../pricing/store.js';
+import {
+  MemoryExecutionJournal,
+  PostgresExecutionJournal,
+  type ExecutionJournal,
+} from '../platform/journal.js';
 
 export interface DiscoveryStores {
   store: DiscoveryStore;
@@ -39,6 +44,11 @@ export interface DiscoveryStores {
    * сметы и заявки недоступны (503), остальной анализ работает.
    */
   pricing?: PricingStore;
+  /**
+   * Журнал исполнений агентов — Slice A (миграции 0013–0015, только в ветке платформы). Нужен пути
+   * платформы бота (BOT_PLATFORM_RUNTIME); без него боты отвечают прежним путём.
+   */
+  journal?: ExecutionJournal;
 }
 
 let databaseExpected = false;
@@ -59,6 +69,7 @@ export function attachDiscoveryDriver(runner: SqlRunner): void {
     runs: new PostgresRunStore(runner),
     attempts: new PostgresAttemptStore(runner),
     pricing: new PostgresPricingStore(runner),
+    journal: new PostgresExecutionJournal(runner),
   };
 }
 
@@ -79,6 +90,7 @@ export function getDiscoveryStores(): DiscoveryStores | null {
         runs.get(ownerId, solutionId, id),
       ),
       pricing: new MemoryPricingStore(),
+      journal: new MemoryExecutionJournal(),
     };
   }
   return memory;

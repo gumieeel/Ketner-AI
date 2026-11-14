@@ -6,6 +6,14 @@ import { buildBotInstructions, CONTACT_MARKER, parseBotReply, slugFromName } fro
 import { BOT_REPLY_CAP_USD, BotService, type BotOwner } from './bot-service.js';
 import { BuilderService, defaultConfig, type BuilderCaller } from './service.js';
 import { MemoryBuilderStore } from './store.js';
+import { BotAgentRuntime } from './bot-agent.js';
+import { MemoryExecutionJournal } from '../platform/journal.js';
+
+/**
+ * Режим пути ответа: по умолчанию — прежний (builder.answer). bot-service.platform.test.ts запускает
+ * весь этот файл ещё раз с BOT_TEST_PLATFORM=1: бот отвечает через ядро цикла (этап D, T4.5).
+ */
+const PLATFORM = process.env.BOT_TEST_PLATFORM === '1';
 import type { BotLead, Solution } from './types.js';
 
 const NOW = new Date('2026-11-01T12:00:00.000Z');
@@ -84,11 +92,15 @@ async function setup(
     now: () => NOW,
   });
   const leads: BotLead[] = [];
+  const platformRuntime = new BotAgentRuntime({ gateway, journal: new MemoryExecutionJournal() });
   const service = new BotService({
     store,
     builder,
     balanceUsd: () => balance,
     owner: (id) => (id === OWNER.userId ? OWNER : null),
+    ...(PLATFORM
+      ? { platform: { enabled: () => true, answer: (input) => platformRuntime.answer(input) } }
+      : {}),
     notifyLead: async (_owner, _solution, lead) => {
       leads.push(lead);
     },

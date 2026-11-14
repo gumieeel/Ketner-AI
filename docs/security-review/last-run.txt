@@ -1,0 +1,101 @@
+== Postgres: PostgreSQL 16.15
+== 1. Server creates tables (role ketner_backend); production model: RLS on every table; smoke
+RLS by the event trigger: 40 of 40 tables
+  PASS  GET /api/health  (200)
+  PASS  demo login (reads users)  (200)
+  PASS  create solution (writes solutions, solution_versions, solution_test_cases)  (201 id=cf896a8a-13b5-49ff-80a8-f615ba28ed6d)
+  PASS  list solutions (reads)  (200)
+  PASS  get solution  (200)
+  PASS  create conversation (writes conversations)  (201)
+  PASS  delete solution (cascade delete)  (204)
+  passed=7 failed=0
+server log, suspicious lines:
+== 2. Backup rehearsal: the production procedure (SECURITY_PRIVILEGE_AUDIT.md, 7) on the disposable database
+fingerprint taken in the dump's snapshot: 40 tables
+  restore cluster: PostgreSQL 16.15
+  dump: 104K; objects listed: 274; tables with data in public: 40
+  restore: OK (no errors)
+  PASS  restored copy matches production fingerprint: 40 tables, row counts + md5 identical
+PASS  live database already differs (concurrent write), the dump and its fingerprint still match each other
+== 3. Before remediation (production model)
+tables: 40, RLS on: 40, FORCE: 0, anon has privileges on: 40
+anon/authenticated (RLS on, no policies): rows hidden, but TRUNCATE works:
+  anon|bot_leads|select ok (0 rows)|truncate ok
+  anon|github_connections|select ok (0 rows)|truncate ok
+  anon|ketner_docs|select ok (0 rows)|truncate ok
+  anon|pricing_versions|select ok (0 rows)|truncate ok
+  anon|session|select ok (0 rows)|truncate ok
+  anon|solutions|select ok (0 rows)|truncate ok
+  authenticated|bot_leads|select ok (0 rows)|truncate ok
+  authenticated|github_connections|select ok (0 rows)|truncate ok
+  authenticated|ketner_docs|select ok (0 rows)|truncate ok
+  authenticated|pricing_versions|select ok (0 rows)|truncate ok
+  authenticated|session|select ok (0 rows)|truncate ok
+  authenticated|solutions|select ok (0 rows)|truncate ok
+app function solutions_legacy_template() (trigger, migration 0011): anon=true authenticated=true PUBLIC=true service_role=true owner=true
+== 4. Apply remediation as ketner_backend (owner, not superuser), twice
+psql:/home/user/Ketner-AI/docs/SECURITY_REMEDIATION_PROPOSAL.sql:287: NOTICE:  functions outside the list still executable by anon (not changed): rls_auto_enable()
+psql:/home/user/Ketner-AI/docs/SECURITY_REMEDIATION_PROPOSAL.sql:287: NOTICE:  functions outside the list still executable by anon (not changed): rls_auto_enable()
+state rows recorded: 46 (second run kept the first run's record)
+PASS  anon and authenticated have no privileges on any of 41 tables
+PASS  RLS, FORCE, owner and service_role privileges unchanged
+anon/authenticated after remediation:
+  anon|bot_leads|42501|42501
+  anon|github_connections|42501|42501
+  anon|ketner_docs|42501|42501
+  anon|pricing_versions|42501|42501
+  anon|session|42501|42501
+  anon|solutions|42501|42501
+  authenticated|bot_leads|42501|42501
+  authenticated|github_connections|42501|42501
+  authenticated|ketner_docs|42501|42501
+  authenticated|pricing_versions|42501|42501
+  authenticated|session|42501|42501
+  authenticated|solutions|42501|42501
+PASS  application data unchanged
+PASS  a table created later by the owner gets no anon/authenticated privileges
+  service_role on the new table: t (default privileges for service_role untouched)
+PASS  app function: not executable by anon/authenticated/PUBLIC; service_role untouched (anon=false authenticated=false PUBLIC=false service_role=true owner=true)
+PASS  a sequence created later by the owner gets no anon/authenticated privileges
+PASS  a function created later by the owner: not executable by anon/authenticated/PUBLIC (anon=false authenticated=false PUBLIC=false service_role=true owner=true)
+default privileges of ketner_backend in public now:
+  * (global) f {ketner_backend=X/ketner_backend}
+  public S {service_role=rwU/ketner_backend}
+  public f {service_role=X/ketner_backend}
+  public r {service_role=arwdDxt/ketner_backend}
+== 5. Refusals (each must fail and change nothing)
+  non-owner role: ERROR:  run this as the owner of the application tables; not owned by ketner_restricted: user (owner ketner_backend), session (owner ketner_
+PASS  non-owner run refused, privileges unchanged
+  global default privileges: ERROR:  a new table still receives privileges for: anon (default privileges defined elsewhere, e.g. without IN SCHEMA or by another role)
+PASS  global default privileges detected, whole transaction rolled back
+== 6. Server after remediation: startup (table checks, migrations) + smoke
+  PASS  GET /api/health  (200)
+  PASS  demo login (reads users)  (200)
+  PASS  create solution (writes solutions, solution_versions, solution_test_cases)  (201 id=787a2633-dd21-47ef-bd60-67b8c670c9d1)
+  PASS  list solutions (reads)  (200)
+  PASS  get solution  (200)
+  PASS  create conversation (writes conversations)  (201)
+  PASS  delete solution (cascade delete)  (204)
+  passed=7 failed=0
+server log, suspicious lines:
+== 7. Rollback, compare with the state before remediation
+catalog raw: 82 changed lines (sequence lines excluded)
+PASS  catalog with ACL entries sorted: IDENTICAL (incl. default privileges)
+PASS  privileges + RLS identical to before
+app function after rollback: anon=true authenticated=true PUBLIC=true service_role=true owner=true
+pg_dump --schema-only: lines changed other than GRANT order: 0
+PASS  pg_dump as a set of lines: IDENTICAL
+PASS  apply + rollback with no traffic in between: data IDENTICAL (40 tables)
+PASS  apply + rollback: catalog IDENTICAL
+PASS  remediation re-applies cleanly after rollback
+== 8. Full server test suite (role ketner_backend, database with remediation applied)
+tests db, RLS by the event trigger: 40 of 40 tables
+psql:/home/user/Ketner-AI/docs/SECURITY_REMEDIATION_PROPOSAL.sql:287: NOTICE:  functions outside the list still executable by anon (not changed): rls_auto_enable()
+tests db: 41 tables with RLS, anon-privileged: 0
+ok 327 - PostgreSQL: проект целиком переживает потерю диска и изолирован по владельцу # SKIP PGlite не установлен
+# tests 811
+# pass 810
+# fail 0
+# cancelled 0
+# skipped 1
+exit=0
