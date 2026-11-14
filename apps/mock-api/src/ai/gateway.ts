@@ -18,6 +18,12 @@
  * той модели, которая ответила.
  */
 
+import {
+  isAgentCapable,
+  type AgentCapableProvider,
+  type AgentProviderRequest,
+  type AgentToolCall,
+} from './agent/agent-types.js';
 import { ERROR_MESSAGES, pickAnswer } from './answers.js';
 import { semanticCache, SemanticCache } from './cache.js';
 import { ContextOptimizer } from './context.js';
@@ -318,19 +324,14 @@ export class AIGateway {
   }
 
   /**
-   * Один проход стриминга со сторожем: сроки на первый токен, простой и общую длительность
-   * вместо единого таймера, обрывавшего любой длинный ответ.
+   * Сторож одного вызова провайдера: сроки на первый токен, простой и общую длительность вместо
+   * единого таймера, обрывавшего любой длинный ответ. Общий для текстового ответа и шага агента.
    */
-  private async streamWithWatchdog(
-    provider: AIProvider,
-    options: Pick<ProviderRequestOptions, 'model' | 'messages' | 'maxTokens' | 'reasoning'>,
-    hooks: {
-      onDelta: (delta: string) => void;
-      isCancelled: () => boolean;
-      clientSignal: AbortSignal;
-      providerTimeoutMs?: number;
-    },
-  ): Promise<{ response: ProviderResponse; timedOut: boolean }> {
+  private async runWithWatchdog<T>(
+    providerType: string,
+    hooks: { clientSignal: AbortSignal; providerTimeoutMs?: number },
+    call: (signal: AbortSignal, touch: () => void) => Promise<T>,
+  ): Promise<{ result: T; timedOut: boolean }> {
     const attempt = new AbortController();
     const limits: WatchdogLimits = {
       ...DEFAULT_WATCHDOG_LIMITS,
@@ -343,7 +344,7 @@ export class AIGateway {
         : {}),
     };
     const watchdog = createStreamWatchdog(limits, (reason) => {
-      attempt.abort(new Error(`Timeout (${reason}) у провайдера ${provider.type}`));
+      attempt.abort(new Error(`Timeout (${reason}) у провайдера ${providerType}`));
     });
 
     const onClientAbort = (): void => attempt.abort();
@@ -354,21 +355,79 @@ export class AIGateway {
     }
 
     try {
-      const response = await provider.streamText(
-        { ...options, stream: true, signal: attempt.signal },
-        {
-          onDelta: (delta) => {
-            watchdog.touch();
-            hooks.onDelta(delta);
-          },
-          isCancelled: () => hooks.isCancelled() || attempt.signal.aborted,
-        },
-      );
-      return { response, timedOut: watchdog.reason !== null };
+      const result = await call(attempt.signal, () => watchdog.touch());
+      return { result, timedOut: watchdog.reason !== null };
     } finally {
       watchdog.stop();
       hooks.clientSignal.removeEventListener('abort', onClientAbort);
     }
+  }
+
+  /** Текстовый ответ (чат, бот, служебные задачи): `streamText` под сторожем. */
+  private async streamWithWatchdog(
+    provider: AIProvider,
+    options: Pick<ProviderRequestOptions, 'model' | 'messages' | 'maxTokens' | 'reasoning'>,
+    hooks: {
+      onDelta: (delta: string) => void;
+      isCancelled: () => boolean;
+      clientSignal: AbortSignal;
+      providerTimeoutMs?: number;
+    },
+  ): Promise<{ response: ProviderResponse; timedOut: boolean }> {
+    const { result, timedOut } = await this.runWithWatchdog(provider.type, hooks, (signal, touch) =>
+      provider.streamText(
+        { ...options, stream: true, signal },
+        {
+          onDelta: (delta) => {
+            touch();
+            hooks.onDelta(delta);
+          },
+          isCancelled: () => hooks.isCancelled() || signal.aborted,
+        },
+      ),
+    );
+    return { response: result, timedOut };
+  }
+
+  /**
+   * Шаг агента (`GatewayRequest.agentStep`): `streamAgent` с инструментами под тем же сторожем.
+   * Любое событие провайдера (текст, размышления, части вызова инструмента) продлевает сторож.
+   */
+  private async agentPassWithWatchdog(
+    provider: AIProvider & AgentCapableProvider,
+    request: Omit<AgentProviderRequest, 'signal'>,
+    hooks: {
+      onDelta: (delta: string) => void;
+      isCancelled: () => boolean;
+      clientSignal: AbortSignal;
+      providerTimeoutMs?: number;
+    },
+  ): Promise<{ response: ProviderResponse; timedOut: boolean; toolCalls: AgentToolCall[] }> {
+    const { result, timedOut } = await this.runWithWatchdog(provider.type, hooks, (signal, touch) =>
+      provider.streamAgent(
+        { ...request, signal },
+        {
+          onEvent: (event) => {
+            touch();
+            if (event.kind === 'content') hooks.onDelta(event.text);
+          },
+          isCancelled: () => hooks.isCancelled() || signal.aborted,
+        },
+      ),
+    );
+    return {
+      response: {
+        content: result.content,
+        usage: result.usage,
+        ...(typeof result.cost === 'number' ? { cost: result.cost } : {}),
+        ...(result.model ? { model: result.model } : {}),
+        ...(result.via ? { via: result.via } : {}),
+        // Шаг, закончившийся вызовом инструмента, не оборван: для учёта это обычное завершение.
+        finishReason: result.finishReason === 'tool_calls' ? 'stop' : result.finishReason,
+      },
+      timedOut,
+      toolCalls: result.toolCalls,
+    };
   }
 
   /** Расхождение запрошенного и фактического движка — это почти всегда неверный ID модели. */
@@ -741,7 +800,8 @@ export class AIGateway {
       // Ответ зависит от файлов проекта и вложений, а ключ кэша — только от текста вопроса:
       // с проектом/вложениями кэш не читаем и не пишем (иначе чужой или устаревший ответ).
       // Служебные запросы (проверка ответа) в кэш не ходят: их результат хранится отдельно.
-      const cacheable = !hasAttachments && !activeWorkspace && !req.task && !req.assistant;
+      const cacheable =
+        !hasAttachments && !activeWorkspace && !req.task && !req.assistant && !req.agentStep;
 
       const cachedHit = cacheable
         ? semanticCache.get(cacheModelKey, language, prompt, userScope, historyHash)
@@ -830,6 +890,9 @@ export class AIGateway {
 
       let usedEngineId: string | undefined;
       let watchdogTimedOut = false;
+      // Вызовы инструментов, которые вернула модель на шаге агента (`agentStep`).
+      let agentToolCalls: AgentToolCall[] = [];
+      let agentDeltas: string[] = [];
       // Общая оценка пользователей по лёгким моделям: при частых дизлайках глубина размышлений
       // простых запросов поднимается на шаг.
       const escalate = this.feedbackStore.shouldEscalateFromLightModel(
@@ -843,6 +906,10 @@ export class AIGateway {
 
           const provider = this.providers.get(candidateModel.provider);
           if (!provider || !provider.isAvailable()) {
+            continue;
+          }
+          // Шаг агента идёт только через провайдера с вызовом функций; остальные пропускаются.
+          if (req.agentStep && !isAgentCapable(provider)) {
             continue;
           }
 
@@ -898,27 +965,64 @@ export class AIGateway {
                 ]
               : optimizedMessages;
 
+          // Текст шага агента копится и отдаётся только после того, как шаг принят: шаг, оборванный
+          // сторожем, повторяется на следующей модели, и клиент не должен увидеть его обрывок.
+          agentDeltas = [];
+          const onAgentDelta = (delta: string) => {
+            if (firstTokenMs === null) {
+              firstTokenMs = Date.now() - startTime;
+            }
+            agentDeltas.push(delta);
+          };
           const runPass = (withReasoning: typeof reasoning) =>
-            this.streamWithWatchdog(
-              provider,
-              {
-                model: engineId,
-                messages: candidateMessages,
-                maxTokens,
-                reasoning: withReasoning,
-              },
-              {
-                onDelta: (delta) => {
-                  if (firstTokenMs === null) {
-                    firstTokenMs = Date.now() - startTime;
-                  }
-                  callbacks.onDelta(delta);
-                },
-                isCancelled: combinedIsCancelled,
-                clientSignal: clientAbortController.signal,
-                providerTimeoutMs: req.providerTimeoutMs,
-              },
-            );
+            req.agentStep
+              ? this.agentPassWithWatchdog(
+                  provider as AIProvider & AgentCapableProvider,
+                  {
+                    model: engineId,
+                    // Системный промпт — тот же, что строит шлюз (у бота — его настройки целиком);
+                    // диалог — сообщения шага агента со своими вызовами и результатами инструментов.
+                    messages: [
+                      ...(candidateMessages[0]?.role === 'system'
+                        ? [{ role: 'system' as const, content: candidateMessages[0].content }]
+                        : []),
+                      ...req.agentStep.messages.filter((m) => m.role !== 'system'),
+                    ],
+                    tools: req.agentStep.tools,
+                    ...(req.agentStep.toolChoice ? { toolChoice: req.agentStep.toolChoice } : {}),
+                    maxTokens,
+                    ...(withReasoning ? { reasoning: withReasoning } : {}),
+                  },
+                  {
+                    onDelta: onAgentDelta,
+                    isCancelled: combinedIsCancelled,
+                    clientSignal: clientAbortController.signal,
+                    providerTimeoutMs: req.providerTimeoutMs,
+                  },
+                ).then((agentPass) => {
+                  agentToolCalls = agentPass.toolCalls;
+                  return agentPass;
+                })
+              : this.streamWithWatchdog(
+                  provider,
+                  {
+                    model: engineId,
+                    messages: candidateMessages,
+                    maxTokens,
+                    reasoning: withReasoning,
+                  },
+                  {
+                    onDelta: (delta) => {
+                      if (firstTokenMs === null) {
+                        firstTokenMs = Date.now() - startTime;
+                      }
+                      callbacks.onDelta(delta);
+                    },
+                    isCancelled: combinedIsCancelled,
+                    clientSignal: clientAbortController.signal,
+                    providerTimeoutMs: req.providerTimeoutMs,
+                  },
+                );
 
           try {
             usedModel = candidateModel;
@@ -943,7 +1047,16 @@ export class AIGateway {
             streamedResponse = pass.response;
             watchdogTimedOut = pass.timedOut;
 
-            if (streamedResponse && streamedResponse.content.length > 0) {
+            // Шаг агента, оборванный сторожем, не принимается даже частично: аргументы вызова
+            // инструмента могли прийти не целиком. Цепочка переходит к следующей модели.
+            const agentStepTimedOut = Boolean(req.agentStep) && pass.timedOut;
+            if (agentStepTimedOut) {
+              agentToolCalls = [];
+              this.circuitBreaker.recordFailure(breakerKey, new Error('Agent step stalled'));
+            } else if (
+              streamedResponse &&
+              (streamedResponse.content.length > 0 || agentToolCalls.length > 0)
+            ) {
               if (pass.timedOut) {
                 // Ответ дошёл частично и оборвался по таймауту: пользователю он показан, но
                 // провайдер считается нестабильным.
@@ -952,6 +1065,7 @@ export class AIGateway {
                 this.circuitBreaker.recordSuccess(breakerKey);
               }
               this.noteEngineMismatch(engineId, streamedResponse.model);
+              for (const delta of agentDeltas) callbacks.onDelta(delta);
               success = true;
               break;
             } else if (!pass.timedOut && combinedIsCancelled()) {
@@ -1153,6 +1267,7 @@ export class AIGateway {
           reasoningMode,
           costUsd: totalEstimatedCost,
           creditsUsd,
+          ...(req.agentStep ? { toolCalls: agentToolCalls } : {}),
         });
       }
     } catch (error) {
