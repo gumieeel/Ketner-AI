@@ -3,7 +3,8 @@ import type { Language } from '@/features/preferences/preferences-store';
 
 /**
  * Как поставить бота на сайт (docs/SUBSCRIPTION_PRICING_DESIGN.md, раздел 10, P10): короткие шаги
- * для популярных конструкторов. Где конструктор не даёт вставить код на все страницы, советуем
+ * для популярных конструкторов. Конкретные пункты меню — только подтверждённые источниками,
+ * остальное — общими словами; что проверено и где нужен платный тариф — в описании PR. Где конструктор не даёт вставить код на все страницы, советуем
  * кнопку-ссылку на страницу бота — она работает везде.
  */
 export type SiteBuilderId =
@@ -27,11 +28,13 @@ export const INSTALL_GUIDES: readonly InstallGuide[] = [
         'Откройте «Настройки сайта» → «Ещё» → «HTML-код для вставки внутрь HEAD».',
         'Вставьте код и сохраните.',
         'Нажмите «Опубликовать все страницы» — кнопка чата появится на каждой странице.',
+        'Свой код на сайте Tilda — на платном тарифе (Personal или Business).',
       ],
       en: [
         'Open Site Settings → More → HTML code for the HEAD section.',
         'Paste the code and save.',
         'Click Publish all pages: the chat button appears on every page.',
+        'Custom code on a Tilda site needs a paid plan (Personal or Business).',
       ],
     },
   },
@@ -44,11 +47,13 @@ export const INSTALL_GUIDES: readonly InstallGuide[] = [
         'Установите плагин для вставки кода, например WPCode («Плагины» → «Добавить новый»).',
         'В плагине откройте Code Snippets → Header & Footer.',
         'Вставьте код в поле Footer и сохраните.',
+        'Сайт на WordPress.com: плагины и свой код — только на платном тарифе.',
       ],
       en: [
         'Install a code insertion plugin such as WPCode (Plugins → Add New).',
         'In the plugin, open Code Snippets → Header & Footer.',
         'Paste the code into the Footer field and save.',
+        'A site on WordPress.com: plugins and custom code need a paid plan.',
       ],
     },
   },
@@ -78,11 +83,13 @@ export const INSTALL_GUIDES: readonly InstallGuide[] = [
         'Добавьте на страницу блок «Ссылка».',
         'Вставьте в него ссылку на страницу бота и подпишите кнопку, например «Задать вопрос».',
         'Сохраните: по кнопке клиенты попадут в чат с ботом.',
+        'Кнопку чата в углу можно поставить кодом: «Настройки» → «Общие» → «HTML-код», на тарифе Business.',
       ],
       en: [
         'Add a Link block to your page.',
         'Paste the bot page link into it and name the button, for example “Ask a question”.',
         'Save: the button takes customers to the chat with the bot.',
+        'A chat button in the corner needs code: Settings → General → HTML code, on the Business plan.',
       ],
     },
   },
@@ -110,12 +117,12 @@ export const INSTALL_GUIDES: readonly InstallGuide[] = [
     steps: {
       ru: [
         'Google Sites показывает встроенный код только внутри своей рамки, поэтому лучше кнопка.',
-        'Выберите «Вставка» → «Кнопка», вставьте ссылку на страницу бота и подпишите кнопку.',
+        'Добавьте на страницу кнопку (панель «Вставка») со ссылкой на страницу бота и подпишите её.',
         'Опубликуйте сайт.',
       ],
       en: [
         'Google Sites shows embedded code only inside its own frame, so a button works better.',
-        'Choose Insert → Button, paste the bot page link and name the button.',
+        'Add a button to the page (Insert panel) with the bot page link and name it.',
         'Publish the site.',
       ],
     },
@@ -126,14 +133,14 @@ export const INSTALL_GUIDES: readonly InstallGuide[] = [
     method: 'widget',
     steps: {
       ru: [
-        'В бэк-офисе откройте редактор кода темы сайта.',
-        'Откройте файл layouts/layout.liquid и вставьте код прямо перед </body>.',
-        'Сохраните. Не нашли редактор — отправьте инструкцию разработчику (кнопка ниже).',
+        'Код вставляется в шаблон темы сайта, перед </body>, чтобы он был на всех страницах.',
+        'Если не знаете, где это в вашей теме, отправьте инструкцию разработчику (кнопка ниже).',
+        'Или спросите поддержку InSales, куда вставить скрипт на все страницы.',
       ],
       en: [
-        'In the back office, open the site theme code editor.',
-        'Open layouts/layout.liquid and paste the code right before </body>.',
-        'Save. If you cannot find the editor, send the instructions to your developer (button below).',
+        'The code goes into the site theme template, before </body>, so it is on every page.',
+        'If you do not know where that is in your theme, send the instructions to your developer (button below).',
+        'Or ask InSales support where to add a script to every page.',
       ],
     },
   },

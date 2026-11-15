@@ -122,18 +122,25 @@ export function createBotsRouter(deps: BotsRouterDeps): Router {
 
   // Отметка виджета (public/widget.js, navigator.sendBeacon). Ответ всегда 204 и пустой: по нему
   // нельзя узнать, есть ли такой бот. Пишется только адрес сайта, и не чаще раза в 10 минут.
+  // Отметка — подсказка владельцу, а не доказательство: Origin может подставить не браузер. Ни на
+  // что не влияет (тариф, счётчик, доступ). Ответ уже отправлен, поэтому любая ошибка дальше
+  // остаётся здесь и не доходит до общего обработчика ошибок.
   router.post('/:slug/seen', async (request, response) => {
     response.status(204).end();
-    const installs = deps.widgetInstalls;
-    if (!installs) return;
-    const slug = String(request.params.slug).toLowerCase();
-    const origin = siteOrigin(request.get('origin')) ?? siteOrigin(request.get('referer'));
-    // Свой сайт (страница бота, кабинет) — не установка.
-    if (!origin || allowedCorsOrigins().has(origin)) return;
-    if (!installs.needsRecord(slug, origin) || seenPerAddress.hit(address(request))) return;
-    const bots = deps.bots();
-    if (!bots || !(await bots.publicInfo(slug))) return;
-    installs.record(slug, origin);
+    try {
+      const installs = deps.widgetInstalls;
+      if (!installs) return;
+      const slug = String(request.params.slug).toLowerCase();
+      const origin = siteOrigin(request.get('origin')) ?? siteOrigin(request.get('referer'));
+      // Свой сайт (страница бота, кабинет) — не установка.
+      if (!origin || allowedCorsOrigins().has(origin)) return;
+      if (!installs.needsRecord(slug, origin) || seenPerAddress.hit(address(request))) return;
+      const bots = deps.bots();
+      if (!bots || !(await bots.publicInfo(slug))) return;
+      installs.record(slug, origin);
+    } catch (error) {
+      console.error('[bot] отметка виджета не записана:', error);
+    }
   });
 
   router.post('/:slug/leads', async (request, response) => {
