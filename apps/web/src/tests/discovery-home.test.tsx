@@ -7,6 +7,10 @@ import { setSiteFeatures, siteFeatures } from '@/lib/features';
 import { seoTitleFor } from '@/lib/seo-pages';
 import { installFakeApi } from './fake-api';
 import { renderRoute, resetAuth, resetPreferences } from './test-utils';
+import { setProductSwitchesForTests } from '@/lib/product-switches';
+
+// Закрытые возможности (lib/product-switches.ts): здесь проверяется их спящий код.
+setProductSwitchesForTests({ chat: true });
 
 const HOME_TITLE = 'Расскажите о своём бизнесе';
 const SUBMIT = 'Проанализировать бизнес';
@@ -296,9 +300,10 @@ describe('главная — Business Discovery (DISCOVERY_ENABLED)', () => {
     expect(document.getElementById('faq')).not.toBeNull();
   });
 
-  it('заголовок вкладки главной — Business Discovery, у /models — прежний посыл', () => {
+  it('заголовок вкладки главной — Business Discovery; у закрытой /models своего нет', () => {
     expect(seoTitleFor('/')).toMatch(/расскажите о своём бизнесе/);
-    expect(seoTitleFor('/models')).toMatch(/ChatGPT, Claude, Gemini и Grok в одном чате/);
+    // Страница моделей — о закрытом чате (product-switches.ts): её нет в SEO-списке.
+    expect(seoTitleFor('/models')).toBeUndefined();
   });
 });
 
@@ -314,7 +319,8 @@ describe('без платформы решений главная прежняя
     expect(screen.getByRole('heading', { level: 1 })).toHaveAccessibleName(
       'Все сильные модели без подписки',
     );
-    expect(seoTitleFor('/')).toMatch(/ChatGPT, Claude, Gemini и Grok в одном ИИ-чате/);
+    // Заголовок для поиска один: чат закрыт, посыла агрегатора в нём нет (seo-pages.json).
+    expect(seoTitleFor('/')).toMatch(/расскажите о своём бизнесе/);
     view.unmount();
 
     renderRoute('/analyses/new');

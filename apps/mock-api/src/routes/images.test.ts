@@ -3,6 +3,10 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { readJson, startTestServer } from '../testing/server.js';
 import type { AuthSession } from '../types.js';
+import { setProductSwitchForTests } from '../product-switches.js';
+
+// Закрытые возможности (product-switches.ts): здесь проверяется их спящий код.
+setProductSwitchForTests('images', true);
 
 test('images: без входа — 401, с входом — возможности тарифа; чужая или устаревшая ссылка на файл — 403', async (t) => {
   const server = await startTestServer();

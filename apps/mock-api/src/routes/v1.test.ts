@@ -23,6 +23,10 @@ import type { CreditService } from '../services/credits.js';
 import { exhaust, memoryCredits, setBalance } from '../services/credits-fixture.js';
 import { readJson, startTestServer, waitFor, type TestServer } from '../testing/server.js';
 import type { AuthSession } from '../types.js';
+import { setProductSwitchForTests } from '../product-switches.js';
+
+// Закрытые возможности (product-switches.ts): здесь проверяется их спящий код.
+setProductSwitchForTests('developerApi', true);
 
 type Script = (
   request: AgentProviderRequest,

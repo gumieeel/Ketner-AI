@@ -18,6 +18,7 @@ import {
 import type { CodeFlow } from '@/features/auth/types';
 import { ApiError } from '@/features/chat/api';
 import { useTranslation, type TranslationKey } from '@/i18n';
+import { appHomePath } from '@/lib/product-switches';
 
 const CODE_LENGTH = 6;
 
@@ -58,7 +59,7 @@ export function VerifyCodePage({ flow }: { flow: CodeFlow }) {
   const isSafeRedirect = Boolean(
     rawRedirect && rawRedirect.startsWith('/') && !rawRedirect.startsWith('//'),
   );
-  const redirectUrl = isSafeRedirect && rawRedirect ? rawRedirect : '/chat';
+  const redirectUrl = isSafeRedirect && rawRedirect ? rawRedirect : appHomePath();
   const redirectQuery = isSafeRedirect ? `?redirect=${encodeURIComponent(redirectUrl)}` : '';
   const verifyCode = useAuth((state) => state.verifyCode);
   const showNotice = useAuthNotice((state) => state.show);

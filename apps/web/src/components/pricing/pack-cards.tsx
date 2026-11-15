@@ -6,6 +6,7 @@ import { PACKS, type PackFacts } from '@/features/billing/plans';
 import { useTranslation, type TranslationKey } from '@/i18n';
 import { cn } from '@/lib/cn';
 import { formatCredits, pluralForm } from '@/lib/format-date';
+import { productSwitch } from '@/lib/product-switches';
 
 export interface PackCardsProps {
   /** `full` — страница «Кредиты» с примерами и способами оплаты; `compact` — на главной. */
@@ -47,9 +48,12 @@ export function PackCards({ variant = 'compact', className }: PackCardsProps) {
         const popular = pack.id === POPULAR_PACK_ID;
         const best = pack.discountPct > 0 && pack.discountPct === bestDiscount;
         const tabLabel = popular ? t('pricing.popular') : best ? t('pricing.bestValue') : null;
-        const examples = EXAMPLE_MODELS.map((model) =>
-          pack.examples.find((item) => item.model === model),
-        ).filter((item) => item !== undefined);
+        // Примеры — запросы к моделям чата: чат закрыт (lib/product-switches.ts) — примеров нет.
+        const examples = productSwitch('chat')
+          ? EXAMPLE_MODELS.map((model) =>
+              pack.examples.find((item) => item.model === model),
+            ).filter((item) => item !== undefined)
+          : [];
         const middle = examples[1] ?? examples[0];
 
         return (
@@ -97,7 +101,7 @@ export function PackCards({ variant = 'compact', className }: PackCardsProps) {
                   {plural('pricing.credits', pack.credits)}
                 </span>
               </p>
-              {full ? (
+              {full && examples.length > 0 ? (
                 <ul className="flex flex-col gap-0.5 text-[13px] leading-snug text-muted">
                   {examples.map((item) => (
                     <li key={item.model}>
@@ -120,15 +124,17 @@ export function PackCards({ variant = 'compact', className }: PackCardsProps) {
 
             {full ? (
               <ul className="flex flex-col gap-1.5 text-[13px] leading-snug text-muted">
-                <li className="flex items-center gap-2">
-                  <StarIcon
-                    className="size-4 shrink-0 fill-warning text-warning"
-                    aria-hidden="true"
-                  />
-                  <span className="tabular">
-                    {t('pricing.starsPrice', { stars: formatCredits(pack.stars, language) })}
-                  </span>
-                </li>
+                {productSwitch('stars') ? (
+                  <li className="flex items-center gap-2">
+                    <StarIcon
+                      className="size-4 shrink-0 fill-warning text-warning"
+                      aria-hidden="true"
+                    />
+                    <span className="tabular">
+                      {t('pricing.starsPrice', { stars: formatCredits(pack.stars, language) })}
+                    </span>
+                  </li>
+                ) : null}
                 <li className="flex items-center gap-2">
                   <CryptoIcon className="size-4 shrink-0 text-accent" aria-hidden="true" />
                   <span className="tabular">

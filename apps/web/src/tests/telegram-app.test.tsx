@@ -4,6 +4,10 @@ import { TelegramAppPage } from '@/pages/telegram-app-page';
 import type { MiniAppPayment, MiniAppState } from '@/features/telegram/api';
 import type { TelegramWebApp } from '@/features/telegram/webapp';
 import { resetPreferences } from './test-utils';
+import { setProductSwitchesForTests } from '@/lib/product-switches';
+
+// Закрытые возможности (lib/product-switches.ts): здесь проверяется их спящий код.
+setProductSwitchesForTests({ chat: true, stars: true });
 
 const DAY = 864e5;
 const inDays = (days: number) => new Date(Date.now() + days * DAY).toISOString();
@@ -323,6 +327,30 @@ describe('кабинет в Telegram (/tg)', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Пополнить кредиты' }));
     expect(await screen.findByRole('heading', { level: 1, name: 'Кредиты' })).toBeInTheDocument();
     expect(screen.getByText('Пакеты кредитов')).toBeInTheDocument();
+  });
+
+  it('звёзды и чат закрыты: вкладки пакетов нет, пополнение и «открыть» ведут на сайт', async () => {
+    setProductSwitchesForTests({ chat: false, stars: false });
+    try {
+      window.history.replaceState(null, '', '/tg?tab=plans');
+      const app = fakeWebApp();
+      window.Telegram = { WebApp: app };
+      mockApi((url) =>
+        url === '/api/telegram/miniapp/session' ? linkedSession(makeState()) : undefined,
+      );
+      render(<TelegramAppPage />);
+
+      // Ссылка на вкладку пакетов открывает главную.
+      expect(await screen.findByText(/8\s400/, { selector: 'p' })).toBeInTheDocument();
+      expect(screen.queryByRole('tab', { name: 'Кредиты' })).not.toBeInTheDocument();
+      expect(screen.getByRole('tab', { name: 'Платежи' })).toBeInTheDocument();
+
+      fireEvent.click(screen.getByRole('button', { name: 'Пополнить кредиты' }));
+      await waitFor(() => expect(app.openLink).toHaveBeenCalledWith('https://ketner.org/pricing'));
+      expect(screen.queryByText('Пакеты кредитов')).not.toBeInTheDocument();
+    } finally {
+      setProductSwitchesForTests({ chat: true, stars: true });
+    }
   });
 
   it('главная: до первой покупки видно пробные кредиты', async () => {

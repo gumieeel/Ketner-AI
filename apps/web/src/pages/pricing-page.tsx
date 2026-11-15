@@ -12,6 +12,7 @@ import { useTranslation, type TranslationKey } from '@/i18n';
 import { formatCredits, pluralForm } from '@/lib/format-date';
 import { siteFeatures } from '@/lib/features';
 import { LandingFaq } from '@/pages/landing/faq';
+import { appHomePath, productSwitch } from '@/lib/product-switches';
 
 type Localized = { ru: string; en: string };
 type Level = (typeof planFacts.levels)[keyof typeof planFacts.levels];
@@ -181,87 +182,91 @@ export function PricingPage() {
       {/* Анализ задач, планы и помощники — только при включённой платформе решений. */}
       {siteFeatures().discovery ? <PlatformPricing /> : null}
 
-      {/* Что меняется после первой покупки */}
-      <div className="flex w-full flex-col gap-6 text-left">
-        <div className="flex flex-col gap-1.5">
-          <h2 className="t-title text-text">{t('pricing.compare')}</h2>
-          <p className="max-w-[70ch] text-sm text-muted md:text-[15px]">
-            {t('pricing.compareLead')}
-          </p>
-        </div>
+      {/* Что меняется после первой покупки — лимиты чата; чат закрыт (lib/product-switches.ts). */}
+      {productSwitch('chat') ? (
+        <div className="flex w-full flex-col gap-6 text-left">
+          <div className="flex flex-col gap-1.5">
+            <h2 className="t-title text-text">{t('pricing.compare')}</h2>
+            <p className="max-w-[70ch] text-sm text-muted md:text-[15px]">
+              {t('pricing.compareLead')}
+            </p>
+          </div>
 
-        {/* Mobile: каждая строка — отдельная карточка с двумя значениями */}
-        <div className="flex flex-col gap-3 md:hidden">
-          {COMPARISON_ROWS.map((row) => (
-            <div
-              key={row.feature.en}
-              className="flex flex-col gap-2.5 rounded-xl border border-stroke bg-surface p-4"
-            >
-              <span className="text-xs font-medium text-subtle">{row.feature[language]}</span>
-              <div className="flex flex-col gap-1.5 text-sm">
-                <p className="text-muted">
-                  <span className="font-medium text-text">{t('pricing.colFree')}: </span>
-                  {row.free[language]}
-                </p>
-                <p className="text-text">
-                  <span className="font-medium text-accent">{t('pricing.colCredits')}: </span>
-                  {row.credits[language]}
-                </p>
-              </div>
-            </div>
-          ))}
-        </div>
-
-        {/* Desktop table view */}
-        <div
-          data-testid="pricing-table"
-          className="hidden overflow-x-auto rounded-2xl border border-stroke bg-surface shadow-sm md:block"
-        >
-          <table className="w-full border-collapse text-sm">
-            <thead>
-              <tr className="border-b border-stroke bg-surface-2/80 text-[13px]">
-                <th className="sticky left-0 z-20 min-w-[200px] border-r border-stroke bg-surface-2 p-4 text-left font-semibold text-text">
-                  {t('pricing.colFeature')}
-                </th>
-                <th className="min-w-[220px] p-4 text-left font-semibold text-text">
-                  {t('pricing.colFree')}
-                </th>
-                <th className="min-w-[260px] p-4 text-left font-semibold text-accent">
-                  {t('pricing.colCredits')}
-                </th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-stroke/60">
-              {COMPARISON_ROWS.map((row) => (
-                <tr key={row.feature.en} className="transition-colors hover:bg-surface-2/40">
-                  <td className="sticky left-0 z-10 border-r border-stroke bg-surface p-4 font-medium text-text">
-                    {row.feature[language]}
-                  </td>
-                  <td className="p-4 text-[13px] leading-5 text-muted">{row.free[language]}</td>
-                  <td className="bg-accent-soft/40 p-4 text-[13px] leading-5 font-medium text-text">
+          {/* Mobile: каждая строка — отдельная карточка с двумя значениями */}
+          <div className="flex flex-col gap-3 md:hidden">
+            {COMPARISON_ROWS.map((row) => (
+              <div
+                key={row.feature.en}
+                className="flex flex-col gap-2.5 rounded-xl border border-stroke bg-surface p-4"
+              >
+                <span className="text-xs font-medium text-subtle">{row.feature[language]}</span>
+                <div className="flex flex-col gap-1.5 text-sm">
+                  <p className="text-muted">
+                    <span className="font-medium text-text">{t('pricing.colFree')}: </span>
+                    {row.free[language]}
+                  </p>
+                  <p className="text-text">
+                    <span className="font-medium text-accent">{t('pricing.colCredits')}: </span>
                     {row.credits[language]}
-                  </td>
+                  </p>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {/* Desktop table view */}
+          <div
+            data-testid="pricing-table"
+            className="hidden overflow-x-auto rounded-2xl border border-stroke bg-surface shadow-sm md:block"
+          >
+            <table className="w-full border-collapse text-sm">
+              <thead>
+                <tr className="border-b border-stroke bg-surface-2/80 text-[13px]">
+                  <th className="sticky left-0 z-20 min-w-[200px] border-r border-stroke bg-surface-2 p-4 text-left font-semibold text-text">
+                    {t('pricing.colFeature')}
+                  </th>
+                  <th className="min-w-[220px] p-4 text-left font-semibold text-text">
+                    {t('pricing.colFree')}
+                  </th>
+                  <th className="min-w-[260px] p-4 text-left font-semibold text-accent">
+                    {t('pricing.colCredits')}
+                  </th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody className="divide-y divide-stroke/60">
+                {COMPARISON_ROWS.map((row) => (
+                  <tr key={row.feature.en} className="transition-colors hover:bg-surface-2/40">
+                    <td className="sticky left-0 z-10 border-r border-stroke bg-surface p-4 font-medium text-text">
+                      {row.feature[language]}
+                    </td>
+                    <td className="p-4 text-[13px] leading-5 text-muted">{row.free[language]}</td>
+                    <td className="bg-accent-soft/40 p-4 text-[13px] leading-5 font-medium text-text">
+                      {row.credits[language]}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </div>
-      </div>
+      ) : null}
 
       <CreditsExplained />
 
-      {/* Вопросы и ответы — раздел прежней главной агрегатора. */}
-      <LandingFaq />
+      {/* Вопросы и ответы — раздел прежней главной агрегатора, о чате: закрыт вместе с ним. */}
+      {productSwitch('chat') ? <LandingFaq /> : null}
 
       {/* Нижняя сноска */}
       <div className="flex flex-col items-center gap-3 border-t border-stroke pt-8 text-center text-[13px] text-muted">
         <p className="max-w-[70ch] text-balance">{t('pricing.notice')}</p>
-        <Link
-          to="/docs"
-          className="inline-flex min-h-11 items-center gap-1.5 text-sm font-medium text-accent hover:underline"
-        >
-          {t('pricing.docsLink')}
-        </Link>
+        {productSwitch('chat') ? (
+          <Link
+            to="/docs"
+            className="inline-flex min-h-11 items-center gap-1.5 text-sm font-medium text-accent hover:underline"
+          >
+            {t('pricing.docsLink')}
+          </Link>
+        ) : null}
       </div>
     </div>
   );
@@ -289,24 +294,27 @@ function TrialBanner() {
         <p className="max-w-[70ch] text-[14px] leading-relaxed text-muted">
           {t('pricing.trialText', { days: TRIAL.days })}
         </p>
-        <ul className="flex flex-wrap gap-x-5 gap-y-1 text-[13px] text-muted">
-          {TRIAL.examples.map((item) => (
-            <li key={item.model} className="tabular">
-              {t('pricing.creditsExample', {
-                requests: t(
-                  `pricing.requests.${pluralForm(item.requests, language)}` as TranslationKey,
-                  {
-                    count: formatCredits(item.requests, language),
-                  },
-                ),
-                model: item.name,
-              })}
-            </li>
-          ))}
-        </ul>
+        {/* Примеры — запросы к моделям чата; чат закрыт (lib/product-switches.ts). */}
+        {productSwitch('chat') ? (
+          <ul className="flex flex-wrap gap-x-5 gap-y-1 text-[13px] text-muted">
+            {TRIAL.examples.map((item) => (
+              <li key={item.model} className="tabular">
+                {t('pricing.creditsExample', {
+                  requests: t(
+                    `pricing.requests.${pluralForm(item.requests, language)}` as TranslationKey,
+                    {
+                      count: formatCredits(item.requests, language),
+                    },
+                  ),
+                  model: item.name,
+                })}
+              </li>
+            ))}
+          </ul>
+        ) : null}
       </div>
       <Link
-        to={user ? '/chat' : '/signup'}
+        to={user ? appHomePath() : '/signup'}
         className={buttonClasses({ variant: 'outline', className: 'w-full md:w-auto' })}
       >
         {user ? t('landing.cta') : t('pricing.trialCta')}
@@ -386,8 +394,39 @@ const CREDIT_EXPLAINERS: { title: Localized; text: (language: 'ru' | 'en') => st
   },
 ];
 
+/** Как работают кредиты, пока чат закрыт (lib/product-switches.ts): только решения, без моделей чата. */
+const SOLUTION_CREDIT_EXPLAINERS: { title: Localized; text: (language: 'ru' | 'en') => string }[] =
+  [
+    {
+      title: { ru: 'Что такое кредит', en: 'What a credit is' },
+      text: (language) =>
+        language === 'ru'
+          ? 'Кредит — это одна тысячная доллара реальной стоимости работы моделей: столько с нас берёт их поставщик. Каждый запрос списывает ровно свою стоимость.'
+          : 'A credit is a thousandth of a dollar of the real cost of the models’ work: what their provider charges us. Every request is charged exactly its cost.',
+    },
+    {
+      title: { ru: 'На что тратятся', en: 'What they are spent on' },
+      text: (language) =>
+        language === 'ru'
+          ? 'Анализ задач, создание и проверка решений и ответы ваших опубликованных ботов клиентам тратят одни и те же кредиты. Остаток виден в кабинете.'
+          : 'Task analyses, building and testing solutions, and your published bots’ answers to customers all spend the same credits. Your balance is shown in your account.',
+    },
+    {
+      title: {
+        ru: `${PACK_VALID_DAYS} дней без подписки`,
+        en: `${PACK_VALID_DAYS} days, no subscription`,
+      },
+      text: (language) =>
+        language === 'ru'
+          ? `Пакет оплачивается один раз, автосписаний нет. Кредиты действуют ${PACK_VALID_DAYS} дней; первыми тратятся те, что сгорают раньше. Докупить можно в любой момент: новый пакет не отменяет остаток.`
+          : `A pack is paid once, with no automatic charges. Credits are valid for ${PACK_VALID_DAYS} days; the ones that expire sooner are spent first. You can top up any time: a new pack does not cancel your balance.`,
+    },
+  ];
+
 function CreditsExplained() {
   const { language } = useTranslation();
+  const chatOpen = productSwitch('chat');
+  const explainers = chatOpen ? CREDIT_EXPLAINERS : SOLUTION_CREDIT_EXPLAINERS;
   return (
     <section aria-labelledby="credits-explained" className="flex w-full flex-col gap-6 text-left">
       <div className="flex flex-col gap-1.5">
@@ -395,13 +434,17 @@ function CreditsExplained() {
           {language === 'ru' ? 'Как работают кредиты' : 'How credits work'}
         </h2>
         <p className="max-w-[70ch] text-sm text-muted md:text-[15px]">
-          {language === 'ru'
-            ? 'Вы покупаете кредиты один раз и сами решаете, на что их потратить. Каждый запрос списывает свою настоящую стоимость, поэтому дорогих моделей не надо бояться.'
-            : 'You buy credits once and decide what to spend them on. Every request is charged its real cost, so there is nothing to fear in expensive models.'}
+          {chatOpen
+            ? language === 'ru'
+              ? 'Вы покупаете кредиты один раз и сами решаете, на что их потратить. Каждый запрос списывает свою настоящую стоимость, поэтому дорогих моделей не надо бояться.'
+              : 'You buy credits once and decide what to spend them on. Every request is charged its real cost, so there is nothing to fear in expensive models.'
+            : language === 'ru'
+              ? 'Вы покупаете кредиты один раз, и каждый запрос списывает свою настоящую стоимость.'
+              : 'You buy credits once, and every request is charged its real cost.'}
         </p>
       </div>
       <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-        {CREDIT_EXPLAINERS.map((item) => (
+        {explainers.map((item) => (
           <div
             key={item.title.en}
             className="flex flex-col gap-2 rounded-2xl border border-stroke bg-surface p-5"
@@ -411,18 +454,20 @@ function CreditsExplained() {
           </div>
         ))}
       </div>
-      <p className="text-[13px] text-subtle">
-        {language === 'ru'
-          ? 'Цена запроса каждой модели — на странице '
-          : 'The price of every model is on the '}
-        <Link
-          to="/models"
-          className="text-accent underline decoration-accent/40 underline-offset-4 hover:decoration-accent"
-        >
-          {language === 'ru' ? '«Модели»' : 'Models page'}
-        </Link>
-        .
-      </p>
+      {chatOpen ? (
+        <p className="text-[13px] text-subtle">
+          {language === 'ru'
+            ? 'Цена запроса каждой модели — на странице '
+            : 'The price of every model is on the '}
+          <Link
+            to="/models"
+            className="text-accent underline decoration-accent/40 underline-offset-4 hover:decoration-accent"
+          >
+            {language === 'ru' ? '«Модели»' : 'Models page'}
+          </Link>
+          .
+        </p>
+      ) : null}
     </section>
   );
 }

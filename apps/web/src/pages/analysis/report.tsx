@@ -51,6 +51,7 @@ import {
 import { ProfileEditor } from './profile-editor';
 import type { EstimatesBlock, EstimateView } from '@/features/pricing/api';
 import { ErrorNotice } from './error-notice';
+import { productSwitch } from '@/lib/product-switches';
 
 const FEASIBILITY_TONE: Record<FeasibilityStatus, BadgeTone> = {
   ready: 'success',
@@ -678,20 +679,23 @@ function OpportunityCard({
             <Field label={t('analysis.ready.firstStep')}>{item.firstStep}</Field>
           ) : null}
         </dl>
-        <Link
-          to="/chat"
-          state={{
-            prompt: t('analysis.chat.opportunityPrompt', {
-              title: item.title,
-              problem: item.problem,
-              solution: item.solution,
-              situation: situation.slice(0, 600),
-            }),
-          }}
-          className="mt-4 inline-flex min-h-11 items-center text-[14px] text-muted underline underline-offset-4 hover:text-text md:min-h-0"
-        >
-          {t('analysis.chat.discuss')}
-        </Link>
+        {/* Чат закрыт (lib/product-switches.ts): кнопки «обсудить в чате» нет. */}
+        {productSwitch('chat') ? (
+          <Link
+            to="/chat"
+            state={{
+              prompt: t('analysis.chat.opportunityPrompt', {
+                title: item.title,
+                problem: item.problem,
+                solution: item.solution,
+                situation: situation.slice(0, 600),
+              }),
+            }}
+            className="mt-4 inline-flex min-h-11 items-center text-[14px] text-muted underline underline-offset-4 hover:text-text md:min-h-0"
+          >
+            {t('analysis.chat.discuss')}
+          </Link>
+        ) : null}
       </div>
     </li>
   );

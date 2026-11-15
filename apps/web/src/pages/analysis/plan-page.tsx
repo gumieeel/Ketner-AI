@@ -20,6 +20,7 @@ import { cn } from '@/lib/cn';
 import { siteFeatures } from '@/lib/features';
 import { NotFoundPage } from '@/pages/not-found-page';
 import { ErrorNotice } from './error-notice';
+import { productSwitch } from '@/lib/product-switches';
 
 type Load =
   | { state: 'loading' }
@@ -281,23 +282,31 @@ function ReadyPlan({ plan, onChange }: { plan: PlanView; onChange: (plan: PlanVi
         ))}
       </ol>
 
-      <Link
-        to="/chat"
-        state={{
-          prompt: t('analysis.chat.planPrompt', {
-            title: plan.opportunityTitle,
-            steps: plan.steps
-              .map(
-                (step, index) =>
-                  `${index + 1}. ${step.title} — ${t(`analysis.plan.status.${step.status}` as TranslationKey).toLowerCase()}`,
-              )
-              .join('\n'),
-          }),
-        }}
-        className={buttonClasses({ variant: 'outline', size: 'sm', className: 'mt-6 self-start' })}
-      >
-        {t('analysis.chat.discussPlan')}
-      </Link>
+      {/* Чат закрыт (lib/product-switches.ts): кнопки «обсудить в чате» нет. */}
+
+      {productSwitch('chat') ? (
+        <Link
+          to="/chat"
+          state={{
+            prompt: t('analysis.chat.planPrompt', {
+              title: plan.opportunityTitle,
+              steps: plan.steps
+                .map(
+                  (step, index) =>
+                    `${index + 1}. ${step.title} — ${t(`analysis.plan.status.${step.status}` as TranslationKey).toLowerCase()}`,
+                )
+                .join('\n'),
+            }),
+          }}
+          className={buttonClasses({
+            variant: 'outline',
+            size: 'sm',
+            className: 'mt-6 self-start',
+          })}
+        >
+          {t('analysis.chat.discussPlan')}
+        </Link>
+      ) : null}
 
       {plan.successCriteria.length > 0 ? (
         <section className="mt-8">

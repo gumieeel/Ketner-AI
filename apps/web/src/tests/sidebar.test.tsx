@@ -5,6 +5,10 @@ import { useChat } from '@/features/chat/chat-store';
 import type { Message } from '@/features/chat/types';
 import { installFakeApi } from './fake-api';
 import { renderRoute, resetChat, resetPreferences } from './test-utils';
+import { setProductSwitchesForTests } from '@/lib/product-switches';
+
+// Закрытые возможности (lib/product-switches.ts): здесь проверяется их спящий код.
+setProductSwitchesForTests({ chat: true, code: true, images: true });
 
 const DAY_MS = 86_400_000;
 

@@ -21,6 +21,7 @@ import { cn } from '@/lib/cn';
 import planFacts from '@/features/billing/plan-facts.json';
 import { PACK_VALID_DAYS, TRIAL } from '@/features/billing/plans';
 import { maxCompareModels } from '@/features/chat/compare-policy';
+import { appHomePath } from '@/lib/product-switches';
 
 type Localized = { ru: string; en: string };
 
@@ -153,7 +154,7 @@ export function DocumentationPage() {
       {/* Шапка документации */}
       <div className="mb-8 flex flex-col gap-4 border-b border-stroke pb-6">
         <Link
-          to="/chat"
+          to={appHomePath()}
           className="-ml-2 inline-flex min-h-11 items-center gap-1.5 self-start rounded-md px-2 text-sm text-muted transition-colors hover:text-text"
         >
           <ArrowLeftIcon className="size-4" />

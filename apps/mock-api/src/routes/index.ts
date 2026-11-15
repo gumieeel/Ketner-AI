@@ -1,4 +1,5 @@
-import { Router, type Request, type Response } from 'express';
+import { productSwitch, requireFeature, sendFeatureUnavailable } from '../product-switches.js';
+import { Router, type NextFunction, type Request, type Response } from 'express';
 import DodoPayments from 'dodopayments';
 import {
   AUTOMATION_PLAN,
@@ -324,6 +325,20 @@ export function describeService() {
   };
 }
 
+/**
+ * Картинки закрыты (product-switches.ts), но готовые файлы отдаются и удаляются: на них ссылаются
+ * ответы помощников Builder (картинка в чате помощника генерируется сервисом напрямую).
+ */
+function imagesGate(request: Request, response: Response, next: NextFunction): void {
+  const ownFile = request.method === 'GET' && /^\/[^/]+\/file\/?$/.test(request.path);
+  const remove = request.method === 'DELETE' && /^\/[^/]+\/?$/.test(request.path);
+  if (productSwitch('images') || ownFile || remove) {
+    next();
+    return;
+  }
+  sendFeatureUnavailable(response, 'images');
+}
+
 export function createApiRouter(deps: ApiDeps): Router {
   const router = Router();
   const activeUserStore = deps.userStore ?? defaultUserStore;
@@ -388,6 +403,9 @@ export function createApiRouter(deps: ApiDeps): Router {
   );
   // Подписка «Автоматизации» через Dodo Payments (этап E).
   router.use(createAutomationRouter({ service: automation }));
+  // Stars закрыты (product-switches.ts): новых счетов нет — отказ до входа; статус и подтверждение
+  // прежних счетов работают.
+  router.post('/billing/telegram-stars/create-invoice', requireFeature('stars'));
   router.use(
     createBillingRouter({
       subscriptionStore: activeSubscriptionStore,
@@ -446,6 +464,8 @@ export function createApiRouter(deps: ApiDeps): Router {
       userStore: activeUserStore,
     }),
   );
+  // API для разработчиков закрыт (product-switches.ts): новые ключи не выпускаются; список и отзыв — да.
+  router.post('/keys', requireFeature('developerApi'));
   router.use(createApiKeysRouter({ apiKeyStore: deps.apiKeyStore ?? defaultApiKeyStore }));
   const activeGithubStore = deps.githubConnectionStore ?? defaultGithubConnectionStore;
   router.use(
@@ -455,9 +475,12 @@ export function createApiRouter(deps: ApiDeps): Router {
       settings: deps.githubSettings,
     }),
   );
+  // Чат закрыт (product-switches.ts): диалоги остаются в базе, API отвечает 503.
+  router.use('/conversations', requireFeature('chat'));
   router.use(createConversationsRouter(deps.store, deps.userId));
   router.use(
     '/code',
+    requireFeature('code'),
     createCodeRouter({
       userId: deps.userId,
       userStore: activeUserStore,
@@ -480,6 +503,7 @@ export function createApiRouter(deps: ApiDeps): Router {
   );
   router.use(
     '/images',
+    imagesGate,
     createImagesRouter({
       userId: deps.userId,
       userStore: activeUserStore,
@@ -491,6 +515,7 @@ export function createApiRouter(deps: ApiDeps): Router {
   // Сравнение ответов моделей: монтируется раньше /chat, чтобы путь не попал в общий роутер чата.
   router.use(
     '/chat/compare',
+    requireFeature('modelCompare'),
     createCompareRouter({
       ...deps,
       votes: deps.compareVoteStore,
@@ -565,6 +590,7 @@ export function createApiRouter(deps: ApiDeps): Router {
   );
   router.use(
     '/chat/review',
+    requireFeature('answerReview'),
     createReviewRouter({
       ...deps,
       gateway: deps.chatGateway,
@@ -576,6 +602,7 @@ export function createApiRouter(deps: ApiDeps): Router {
   );
   router.use(
     '/chat',
+    requireFeature('chat'),
     createChatRouter({
       ...deps,
       gateway: deps.chatGateway,

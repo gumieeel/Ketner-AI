@@ -3,6 +3,10 @@ import { test } from 'node:test';
 import { readJson, startTestServer } from '../testing/server.js';
 import { codeFor, loginAndVerify, signupAndVerify } from '../testing/signup.js';
 import type { AuthSession, User } from '../types.js';
+import { setProductSwitchForTests } from '../product-switches.js';
+
+// Закрытые возможности (product-switches.ts): здесь проверяется их спящий код.
+setProductSwitchForTests('chat', true);
 
 interface CodeChallenge {
   status: string;

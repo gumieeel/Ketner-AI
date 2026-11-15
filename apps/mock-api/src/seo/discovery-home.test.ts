@@ -14,11 +14,12 @@ async function get(discoveryEnabled: boolean, path: string): Promise<string> {
   }
 }
 
-test('главная: без флага — лендинг агрегатора, с флагом — «Расскажите о своём бизнесе»', async () => {
+test('главная: чат закрыт — «Расскажите о своём бизнесе» при любом флаге, лендинга агрегатора нет', async () => {
+  // Чат закрыт (product-switches.ts): прежний лендинг агрегатора не показывается и без флага.
   const off = await get(false, '/');
   assert.match(off, /<meta name="ketner-features" content="" \/>/);
-  assert.match(off, /Все сильные модели/);
-  assert.doesNotMatch(off, /Расскажите о своём бизнесе/);
+  assert.match(off, /Расскажите о своём бизнесе/);
+  assert.doesNotMatch(off, /Все сильные модели/);
 
   const on = await get(true, '/');
   assert.match(on, /<meta name="ketner-features" content="discovery" \/>/);
@@ -26,7 +27,8 @@ test('главная: без флага — лендинг агрегатора,
   assert.match(on, /Проанализировать бизнес/);
   assert.doesNotMatch(on, /Как работают кредиты\?/, 'вопросы и ответы — на /pricing');
 
-  // Остальные страницы от флага не зависят, кроме метки.
+  // Остальные страницы от флага не зависят, кроме метки. Вопросы о моделях чата закрыты с ним.
   const pricing = await get(true, '/pricing');
-  assert.match(pricing, /Как работают кредиты\?/);
+  assert.match(pricing, /Как работают кредиты</);
+  assert.doesNotMatch(pricing, /Как работают кредиты\?/);
 });

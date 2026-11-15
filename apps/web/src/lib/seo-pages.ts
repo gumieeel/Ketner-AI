@@ -1,5 +1,6 @@
 import seoPagesData from '../../../mock-api/src/seo/seo-pages.json';
 import { siteFeatures, type SiteFeatures } from './features';
+import { productSwitch, type ProductFeature } from './product-switches';
 
 /**
  * Открытые страницы сайта: заголовок и описание для поисковиков.
@@ -16,9 +17,13 @@ export interface SeoPageMeta {
   sitemap?: boolean;
   /** Заголовок и описание при включённой платформе решений (`DISCOVERY_ENABLED`). */
   discovery?: { title: string; description: string };
+  /** Страница закрытой возможности (product-switches.ts): не отрисовывается при сборке. */
+  feature?: ProductFeature;
 }
 
-export const SEO_PAGES: readonly SeoPageMeta[] = seoPagesData.pages;
+export const SEO_PAGES: readonly SeoPageMeta[] = (seoPagesData.pages as SeoPageMeta[]).filter(
+  (page) => !page.feature || productSwitch(page.feature),
+);
 
 export const DEFAULT_TITLE = 'Ketner AI';
 

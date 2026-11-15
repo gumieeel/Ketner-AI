@@ -8,6 +8,10 @@ import { CREDIT_PACKS } from '../services/pricing.js';
 import { readJson, startTestServer } from '../testing/server.js';
 import type { CreditsReport } from '../services/credits.js';
 import type { AuthSession, PlanItem, Subscription } from '../types.js';
+import { setProductSwitchForTests } from '../product-switches.js';
+
+// Закрытые возможности (product-switches.ts): здесь проверяется их спящий код.
+setProductSwitchForTests('stars', true);
 
 test('billing: каталог тарифов GET /api/plans', async (t) => {
   const server = await startTestServer();

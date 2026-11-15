@@ -382,23 +382,21 @@ test('сквозной путь: главная → анализ → вопро�
   assert.match(stream, /event: done/);
   assert.equal((await credits()).balance, before - 3, 'ответ помощника списан как сообщение чата');
 
-  // 8. Обычный чат работает как раньше.
-  const conversation = await json<{ conversation: { id: string } }>(
-    await fetch(`${base}/api/conversations`, {
+  // 8. Общий чат закрыт (product-switches.ts): сервер отказывает, весь путь выше прошёл без него.
+  for (const [path, body] of [
+    ['/api/conversations', { title: 'Проверка' }],
+    ['/api/chat/completions', { modelId: 'auto', messages: [{ role: 'user', content: 'Привет' }] }],
+  ] as const) {
+    const closed = await fetch(`${base}${path}`, {
       method: 'POST',
       headers: auth,
-      body: JSON.stringify({ title: 'Проверка' }),
-    }),
-  );
-  const plainChat = await fetch(`${base}/api/chat/completions`, {
-    method: 'POST',
-    headers: auth,
-    body: JSON.stringify({
-      conversationId: conversation.conversation.id,
-      modelId: 'auto',
-      language: 'ru',
-      messages: [{ role: 'user', content: 'Привет' }],
-    }),
-  });
-  assert.match(await plainChat.text(), /Обычный ответ чата/);
+      body: JSON.stringify(body),
+    });
+    assert.equal(closed.status, 503, path);
+    const error = (await closed.json()) as {
+      error: { code: string; details: { feature: string } };
+    };
+    assert.equal(error.error.code, 'feature_unavailable');
+    assert.equal(error.error.details.feature, 'chat');
+  }
 });

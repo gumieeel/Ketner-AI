@@ -28,6 +28,10 @@ import { StarsRateService } from '../telegram/stars-rate.js';
 import { signInitData, validateInitData } from '../telegram/webapp-auth.js';
 import { readJson, startTestServer, type ApiErrorBody } from '../testing/server.js';
 import type { AuthSession, Subscription, User } from '../types.js';
+import { setProductSwitchForTests } from '../product-switches.js';
+
+// Закрытые возможности (product-switches.ts): здесь проверяется их спящий код.
+setProductSwitchForTests('stars', true);
 
 const TOKEN = '123456:TEST_TOKEN_abcdefghijklmnop';
 const tgHeaders = {
@@ -1545,4 +1549,104 @@ test('бот поддержки: уведомления администрато
   // Администратор сайта в боте поддержки — оператор, а не клиент.
   const result = await support.processUpdate(supportMessage(9931, '/refunds'));
   assert.equal(result.action, 'admin_refunds_list_sent');
+});
+
+// ───────────── звёзды закрыты (product-switches.ts) ─────────────
+
+test('звёзды закрыты: новых счетов и оплат нет, прежняя оплата возвращается как раньше', async (t) => {
+  const h = await harness();
+  t.after(() => h.server.close());
+  // Оплата прошла, пока звёзды принимались.
+  const { buyer, token } = await h.linkedBuyer(7991);
+  const invoice = await h.mini<{ stars: number }>('invoice', { packId: 'credits-5' }, token);
+  const payload = String(h.bot.last('createInvoiceLink')!.body.payload);
+  await h.pay(7991, payload, invoice.body.stars, 'tg-closed');
+  assert.equal(creditsOf(h, buyer.user.id), 2300 + TRIAL_CREDITS);
+
+  setProductSwitchForTests('stars', false);
+  t.after(() => setProductSwitchForTests('stars', true));
+
+  // Сайт и мини-приложение счёт не выставляют: 503 до проверки входа.
+  const site = await fetch(`${h.server.baseUrl}/api/billing/telegram-stars/create-invoice`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${buyer.token}` },
+    body: JSON.stringify({ packId: 'credits-5' }),
+  });
+  assert.equal(site.status, 503);
+  assert.equal((await readJson<ApiErrorBody>(site)).error.code, 'feature_unavailable');
+  const linksBefore = h.bot.all('createInvoiceLink').length;
+  const mini = await h.mini<ApiErrorBody>('invoice', { packId: 'credits-5' }, token);
+  assert.equal(mini.status, 503);
+  assert.equal(mini.body.error.code, 'feature_unavailable');
+  assert.equal(h.bot.all('createInvoiceLink').length, linksBefore, 'ссылка на оплату не создана');
+
+  // Окно оплаты по старому счёту Telegram закрывает отказом.
+  await h.send({
+    pre_checkout_query: {
+      id: 'pcq-closed',
+      from: { id: 7991, first_name: 'Ivan' },
+      currency: 'XTR',
+      total_amount: invoice.body.stars,
+      invoice_payload: payload,
+    },
+  });
+  const answer = h.bot.last('answerPreCheckoutQuery')!;
+  assert.equal(answer.body.pre_checkout_query_id, 'pcq-closed');
+  assert.equal(answer.body.ok, false);
+  assert.match(String(answer.body.error_message), /больше не принимается/);
+
+  // Ссылка на оплату с сайта: объяснение вместо счёта.
+  const invoicesBefore = h.bot.all('sendInvoice').length;
+  await h.message(7992, '/start stars_old');
+  const reply = h.bot
+    .all('sendMessage')
+    .filter((call) => call.body.chat_id === 7992)
+    .map((call) => String(call.body.text));
+  assert.deepEqual(reply.length, 1);
+  assert.match(reply[0]!, /больше не принимается/);
+  assert.equal(h.bot.all('sendInvoice').length, invoicesBefore);
+
+  // Возврат прежнего платежа, оформленный Telegram, снимает кредиты пакета как раньше.
+  await h.send({
+    message: {
+      message_id: 3,
+      date: 0,
+      chat: { id: 7991, type: 'private' },
+      refunded_payment: {
+        currency: 'XTR',
+        total_amount: invoice.body.stars,
+        invoice_payload: payload,
+        telegram_payment_charge_id: 'tg-closed',
+      },
+    },
+  });
+  assert.equal(h.billingService.findPayment('stars:tg-closed')?.status, 'refunded');
+  assert.equal(creditsOf(h, buyer.user.id), TRIAL_CREDITS);
+});
+
+test('звёзды закрыты: возврат по заявке — после одобрения администратора, как раньше', async (t) => {
+  const h = await harness();
+  t.after(() => h.server.close());
+  const { buyer, token } = await h.linkedBuyer(7993);
+  const invoice = await h.mini<{ stars: number }>('invoice', { packId: 'credits-5' }, token);
+  const payload = String(h.bot.last('createInvoiceLink')!.body.payload);
+  await h.pay(7993, payload, invoice.body.stars, 'tg-closed-2');
+
+  setProductSwitchForTests('stars', false);
+  t.after(() => setProductSwitchForTests('stars', true));
+
+  const refund = await h.mini<{ outcome: string } & MiniState>(
+    `payments/${encodeURIComponent('stars:tg-closed-2')}/refund`,
+    { reason: 'Не подошло' },
+    token,
+  );
+  assert.equal(refund.body.outcome, 'requested');
+  assert.equal(h.bot.all('refundStarPayment').length, 0, 'без решения администратора — ничего');
+
+  await h.billingService.decideRefund('stars:tg-closed-2', true);
+  assert.deepEqual(h.bot.last('refundStarPayment')!.body, {
+    user_id: 7993,
+    telegram_payment_charge_id: 'tg-closed-2',
+  });
+  assert.equal(creditsOf(h, buyer.user.id), TRIAL_CREDITS);
 });

@@ -6,6 +6,10 @@ import {
   startTestServer,
   type ApiErrorBody,
 } from '../testing/server.js';
+import { setProductSwitchForTests } from '../product-switches.js';
+
+// Закрытые возможности (product-switches.ts): здесь проверяется их спящий код.
+setProductSwitchForTests('chat', true);
 
 const JSON_HEADERS = { 'Content-Type': 'application/json' };
 

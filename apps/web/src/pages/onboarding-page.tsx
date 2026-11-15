@@ -5,6 +5,7 @@ import { Card } from '@/components/ui/card';
 import { useChat } from '@/features/chat/chat-store';
 import { EXAMPLE_PROMPTS } from '@/features/chat/example-prompts';
 import { useTranslation } from '@/i18n';
+import { appHomePath } from '@/lib/product-switches';
 
 /** Экран нового пользователя: приветствие и примеры запросов. */
 export function OnboardingPage() {
@@ -15,7 +16,7 @@ export function OnboardingPage() {
   // Пример не отправляется сразу: он подставляется в поле ввода нового чата.
   const startWith = (prompt: string): void => {
     setDraft(prompt);
-    navigate('/chat');
+    navigate(appHomePath());
   };
 
   return (
@@ -69,7 +70,7 @@ export function OnboardingPage() {
 
         <div className="relative flex justify-end border-t border-stroke pt-5">
           <Link
-            to="/chat"
+            to={appHomePath()}
             className={buttonClasses({
               variant: 'primary',
               size: 'lg',

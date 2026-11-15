@@ -1,6 +1,10 @@
 import { fireEvent, screen } from '@testing-library/react';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { renderRoute, resetAuth, resetPreferences } from './test-utils';
+import { setProductSwitchesForTests } from '@/lib/product-switches';
+
+// Закрытые возможности (lib/product-switches.ts): здесь проверяется их спящий код.
+setProductSwitchesForTests({ chat: true });
 
 describe('marketing: лендинг, шапка, футер и пакеты кредитов', () => {
   beforeEach(() => {

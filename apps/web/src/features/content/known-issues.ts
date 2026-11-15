@@ -1,4 +1,5 @@
 import type { Language } from '../preferences/preferences-store';
+import { productSwitch, type ProductFeature } from '@/lib/product-switches';
 
 /**
  * Известные ограничения и проблемы: что пока не работает или работает не так, как можно ожидать.
@@ -18,6 +19,8 @@ export interface KnownIssueText {
 
 export interface KnownIssue extends KnownIssueText {
   id: string;
+  /** Пункт о закрытой возможности (lib/product-switches.ts): не показывается, пока она закрыта. */
+  feature?: ProductFeature;
   en: KnownIssueText;
 }
 
@@ -26,9 +29,10 @@ export function knownIssueText(issue: KnownIssue, language: Language): KnownIssu
   return language === 'en' ? issue.en : issue;
 }
 
-export const KNOWN_ISSUES: readonly KnownIssue[] = [
+const ALL_KNOWN_ISSUES: readonly KnownIssue[] = [
   {
     id: 'attachments',
+    feature: 'chat',
     title: 'Модели не видят картинки и PDF из вложений',
     details:
       'Текст из файлов DOCX, XLSX, PPTX и обычных текстовых файлов модель получает. Изображения и PDF пока не передаются, даже моделям, которые умеют работать с картинками.',
@@ -42,6 +46,7 @@ export const KNOWN_ISSUES: readonly KnownIssue[] = [
   },
   {
     id: 'web-search',
+    feature: 'chat',
     title: 'Нет поиска в интернете',
     details:
       'Модели отвечают по своим знаниям и не открывают сайты. О последних новостях, ценах и событиях после даты обучения модели они могут не знать или ошибаться.',
@@ -64,15 +69,16 @@ export const KNOWN_ISSUES: readonly KnownIssue[] = [
   },
   {
     id: 'payment-methods',
-    title: 'Оплата только звёздами Telegram и криптовалютой',
+    title: 'Оплата только криптовалютой',
     details: 'Банковской картой оплатить пока нельзя.',
     en: {
-      title: 'Payment only with Telegram Stars and cryptocurrency',
+      title: 'Payment only with cryptocurrency',
       details: 'You cannot pay by bank card yet.',
     },
   },
   {
     id: 'free-models',
+    feature: 'chat',
     title: 'Без купленных кредитов отвечают бесплатные модели с общим лимитом',
     details:
       'Бесплатные модели ограничены на весь сервис сразу. Когда лимит исчерпан, отвечает Ketner Mini (GPT-6 Luna), а гости без аккаунта получают отказ до сброса лимита.',
@@ -84,6 +90,7 @@ export const KNOWN_ISSUES: readonly KnownIssue[] = [
   },
   {
     id: 'share',
+    feature: 'chat',
     title: 'Кнопка «Поделиться» в чате пока не работает',
     details: 'Публичных ссылок на диалог ещё нет.',
     en: {
@@ -93,6 +100,7 @@ export const KNOWN_ISSUES: readonly KnownIssue[] = [
   },
   {
     id: 'code-commands',
+    feature: 'code',
     title: 'Ketner Code не запускает команды',
     details:
       'Агент читает и правит файлы проекта, но тесты и сборку не запускает: песочница для команд выключена.',
@@ -104,6 +112,7 @@ export const KNOWN_ISSUES: readonly KnownIssue[] = [
   },
   {
     id: 'image-aspects',
+    feature: 'images',
     title: 'Seedream и Nano Banana 2 рисуют только квадратные картинки',
     details: 'Другие пропорции для этих моделей включим после проверки.',
     en: {
@@ -112,3 +121,8 @@ export const KNOWN_ISSUES: readonly KnownIssue[] = [
     },
   },
 ];
+
+/** Пункты о закрытых возможностях не показываются. */
+export const KNOWN_ISSUES: readonly KnownIssue[] = ALL_KNOWN_ISSUES.filter(
+  (issue) => !issue.feature || productSwitch(issue.feature),
+);

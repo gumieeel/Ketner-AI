@@ -1,11 +1,11 @@
 {
-  "$comment": "Открытые страницы сайта для поисковиков: короткое имя (хлебные крошки), заголовок, описание, canonical, sitemap. Читают сервер (seo/pages.ts: HTML, robots.txt, sitemap.xml) и сайт (apps/web: заголовок вкладки при переходах и список страниц для предварительной отрисовки). canonical — адрес, который считается основным для этой страницы (если он другой); sitemap: false — не попадает в sitemap.xml. discovery — заголовок и описание страницы, когда включена платформа решений (DISCOVERY_ENABLED).",
+  "$comment": "Открытые страницы сайта для поисковиков: короткое имя (хлебные крошки), заголовок, описание, canonical, sitemap. Читают сервер (seo/pages.ts: HTML, robots.txt, sitemap.xml) и сайт (apps/web: заголовок вкладки при переходах и список страниц для предварительной отрисовки). canonical — адрес, который считается основным для этой страницы (если он другой); sitemap: false — не попадает в sitemap.xml. discovery — заголовок и описание страницы, когда включена платформа решений (DISCOVERY_ENABLED). Поле feature — страница закрытой возможности (product-switches.ts): пока она закрыта, страницы нет в sitemap, сервер отдаёт её как служебную (noindex).",
   "pages": [
     {
       "path": "/",
       "name": "Главная",
-      "title": "Ketner AI — ChatGPT, Claude, Gemini и Grok в одном ИИ-чате на русском",
-      "description": "Нейросети GPT, Claude, Gemini, Grok и DeepSeek в одном чате на русском языке. Режим Auto сам выбирает модель, генерация картинок, ИИ для кода. Бесплатный тариф, оплата звёздами Telegram и криптовалютой.",
+      "title": "Ketner AI — расскажите о своём бизнесе и узнайте, что автоматизировать",
+      "description": "Опишите, чем занимается ваша компания, как устроены процессы и что отнимает больше всего времени. Ketner найдёт возможности для автоматизации, предложит подходящие AI-решения и план внедрения. Первый анализ — бесплатно и без регистрации.",
       "priority": 1,
       "changefreq": "weekly",
       "discovery": {
@@ -16,8 +16,8 @@
     {
       "path": "/pricing",
       "name": "Тарифы",
-      "title": "Тарифы Ketner AI — ChatGPT, Claude и Gemini по одной подписке",
-      "description": "Бесплатный тариф и подписки Plus $9, Pro $25 и Ultra $49 в месяц: GPT, Claude Opus и Sonnet, Gemini и Grok без отдельных подписок у каждого сервиса. Все лимиты до оплаты. Оплата звёздами Telegram и криптовалютой.",
+      "title": "Тарифы Ketner AI — кредиты на анализ, решения и ботов",
+      "description": "Пакеты кредитов от $5: кредиты тратятся на анализ задач, создание и проверку решений и ответы ботов по реальной стоимости запроса. Подписки нет, пробные кредиты — при регистрации. Оплата криптовалютой.",
       "priority": 0.9,
       "changefreq": "weekly"
     },
@@ -27,7 +27,8 @@
       "title": "Модели Ketner AI — ChatGPT, Claude, Gemini и Grok в одном чате",
       "description": "GPT, Claude, Gemini, Grok, DeepSeek и другие нейросети в одном чате на русском языке: кто разработал каждую модель, сколько стоит запрос в кредитах, как работает режим Auto и во что обошлись бы отдельные подписки.",
       "priority": 0.8,
-      "changefreq": "weekly"
+      "changefreq": "weekly",
+      "feature": "chat"
     },
     {
       "path": "/docs",
@@ -35,7 +36,8 @@
       "title": "Как пользоваться Ketner AI — модели, тарифы и возможности",
       "description": "Справка Ketner AI: какие нейросети доступны на каждом тарифе, режим Auto и режим Max, работа с файлами и проектами, генерация изображений, Ketner Code.",
       "priority": 0.7,
-      "changefreq": "weekly"
+      "changefreq": "weekly",
+      "feature": "chat"
     },
     {
       "path": "/docs/plans/free",
@@ -45,7 +47,8 @@
       "priority": 0.5,
       "changefreq": "monthly",
       "canonical": "/docs",
-      "sitemap": false
+      "sitemap": false,
+      "feature": "chat"
     },
     {
       "path": "/docs/plans/plus",
@@ -55,7 +58,8 @@
       "priority": 0.5,
       "changefreq": "monthly",
       "canonical": "/docs",
-      "sitemap": false
+      "sitemap": false,
+      "feature": "chat"
     },
     {
       "path": "/docs/plans/pro",
@@ -65,7 +69,8 @@
       "priority": 0.5,
       "changefreq": "monthly",
       "canonical": "/docs",
-      "sitemap": false
+      "sitemap": false,
+      "feature": "chat"
     },
     {
       "path": "/docs/plans/ultra",
@@ -75,7 +80,8 @@
       "priority": 0.5,
       "changefreq": "monthly",
       "canonical": "/docs",
-      "sitemap": false
+      "sitemap": false,
+      "feature": "chat"
     },
     {
       "path": "/docs/api",
@@ -83,7 +89,8 @@
       "title": "API Ketner AI — OpenAI-совместимый API для GPT и Claude",
       "description": "OpenAI-совместимый API Ketner AI для CLI, IDE и своих приложений: GPT, Claude, Gemini и другие модели по одному ключу, вызов инструментов и стриминг.",
       "priority": 0.6,
-      "changefreq": "monthly"
+      "changefreq": "monthly",
+      "feature": "developerApi"
     },
     {
       "path": "/about",

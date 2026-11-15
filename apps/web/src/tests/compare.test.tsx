@@ -13,6 +13,10 @@ import { useCompare } from '@/features/chat/compare-store';
 import { DEFAULT_MODELS } from '@/features/chat/model-catalog';
 import { installFakeApi } from './fake-api';
 import { renderRoute, resetAuth, resetChat, resetPreferences } from './test-utils';
+import { setProductSwitchesForTests } from '@/lib/product-switches';
+
+// Закрытые возможности (lib/product-switches.ts): здесь проверяется их спящий код.
+setProductSwitchesForTests({ chat: true, modelCompare: true });
 
 const COMPOSER = 'Спросите что-нибудь…';
 

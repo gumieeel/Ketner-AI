@@ -4,6 +4,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { useCode } from '@/features/code/code-store';
 import type { AgentEvent, CodeCapabilities, CodeProject, ThreadItem } from '@/features/code/types';
 import { renderRoute, resetAuth, resetChat, resetPreferences } from './test-utils';
+import { setProductSwitchesForTests } from '@/lib/product-switches';
+
+// Закрытые возможности (lib/product-switches.ts): здесь проверяется их спящий код.
+setProductSwitchesForTests({ chat: true, code: true });
 
 const CAPABILITIES: CodeCapabilities = {
   plan: 'free',

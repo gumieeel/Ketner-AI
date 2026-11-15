@@ -29,6 +29,7 @@ import { PacksTab } from './telegram-app/packs-tab';
 import { PaymentsTab } from './telegram-app/payments-tab';
 import { ProfileTab } from './telegram-app/profile-tab';
 import { BOT_URL, MiniAppProvider, Panel, type MiniApp, type TabId } from './telegram-app/shared';
+import { productSwitch } from '@/lib/product-switches';
 
 type Screen =
   | { kind: 'loading' }
@@ -67,6 +68,7 @@ function initialTab(app: TelegramWebApp | null): TabId {
   const fromQuery = new URLSearchParams(window.location.search).get('tab');
   const fromStart = app?.initDataUnsafe.start_param;
   const value = fromQuery ?? fromStart ?? 'home';
+  if (value === 'plans' && !productSwitch('stars')) return 'home';
   return TAB_IDS.has(value) ? (value as TabId) : 'home';
 }
 
@@ -256,7 +258,12 @@ function Cabinet({
     [app, token, state, onState, refresh, notify, goTo, openSite],
   );
 
-  const tabs = TABS.filter((item) => item.id !== 'admin' || state.user.isAdmin);
+  // Пакеты в кабинете продаются только звёздами: Stars закрыты (lib/product-switches.ts) — вкладки нет.
+  const tabs = TABS.filter(
+    (item) =>
+      (item.id !== 'admin' || state.user.isAdmin) &&
+      (item.id !== 'plans' || productSwitch('stars')),
+  );
   const name =
     state.user.name || (state.user.telegramUsername ? `@${state.user.telegramUsername}` : '');
   const titles: Record<TabId, string> = {

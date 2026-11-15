@@ -6,6 +6,7 @@ import {
   CodeIcon,
   MenuIcon,
   MessagesIcon,
+  SparkleIcon,
   MoonIcon,
   SettingsIcon,
   SunIcon,
@@ -16,6 +17,7 @@ import { useAuth } from '@/features/auth/auth-store';
 import { usePreferences } from '@/features/preferences/preferences-store';
 import { useTranslation } from '@/i18n';
 import { cn } from '@/lib/cn';
+import { productSwitch } from '@/lib/product-switches';
 
 const itemClass =
   'flex min-h-10 w-full items-center gap-3 rounded-md px-2.5 text-left text-[14px] text-text outline-none transition-colors duration-150 hover:bg-surface-3 focus-visible:bg-surface-3 max-md:min-h-11';
@@ -99,11 +101,22 @@ export function HeaderMenu({
     { id: 'dark', label: t('settings.themeDark'), icon: <MoonIcon className="size-4" /> },
     { id: 'light', label: t('settings.themeLight'), icon: <SunIcon className="size-4" /> },
   ];
+  // Закрытые разделы (lib/product-switches.ts) из меню убраны.
   const links: Array<{ to: string; label: string; icon: ReactNode }> = [
-    { to: '/chat', label: t('nav.chat'), icon: <MessagesIcon className="size-4" /> },
-    { to: '/code', label: t('nav.code'), icon: <CodeIcon className="size-4" /> },
-    { to: '/docs/api', label: t('nav.apiDocs'), icon: <TerminalIcon className="size-4" /> },
-    { to: '/docs', label: t('nav.docs'), icon: <BookOpenIcon className="size-4" /> },
+    ...(productSwitch('chat')
+      ? [{ to: '/chat', label: t('nav.chat'), icon: <MessagesIcon className="size-4" /> }]
+      : [
+          { to: '/solutions', label: t('nav.solutions'), icon: <SparkleIcon className="size-4" /> },
+        ]),
+    ...(productSwitch('code')
+      ? [{ to: '/code', label: t('nav.code'), icon: <CodeIcon className="size-4" /> }]
+      : []),
+    ...(productSwitch('developerApi')
+      ? [{ to: '/docs/api', label: t('nav.apiDocs'), icon: <TerminalIcon className="size-4" /> }]
+      : []),
+    ...(productSwitch('chat')
+      ? [{ to: '/docs', label: t('nav.docs'), icon: <BookOpenIcon className="size-4" /> }]
+      : []),
     signedIn
       ? { to: '/settings', label: t('nav.settings'), icon: <SettingsIcon className="size-4" /> }
       : { to: '/login', label: t('nav.login'), icon: <UserIcon className="size-4" /> },

@@ -1,3 +1,4 @@
+import { requireFeature } from './product-switches.js';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -229,6 +230,7 @@ export function createApp(overrides: Partial<AppDeps> = {}): Express {
   // тела (8 МБ), а авторизация идёт API-ключом, не сессией сайта.
   app.use(
     '/v1',
+    requireFeature('developerApi'),
     createV1Router({
       apiKeyStore: deps.apiKeyStore ?? defaultApiKeyStore,
       userStore: deps.userStore,

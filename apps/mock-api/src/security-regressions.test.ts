@@ -29,6 +29,10 @@ import {
   inlineScriptHashes,
 } from './middleware/security.js';
 import { RateLimiter } from './middleware/rate-limit.js';
+import { setProductSwitchForTests } from './product-switches.js';
+
+// Закрытые возможности (product-switches.ts): здесь проверяется их спящий код.
+setProductSwitchForTests('chat', true);
 
 const ORIGIN = 'http://localhost:9999';
 let server: Server;

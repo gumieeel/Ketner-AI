@@ -12,6 +12,7 @@ import { haptic } from '@/features/telegram/webapp';
 import { usePreferences } from '@/features/preferences/preferences-store';
 import { useTranslation } from '@/i18n';
 import { formatDate, Notice, Panel, SUPPORT_URL, Segmented, Toggle, useMiniApp } from './shared';
+import { appHomePath } from '@/lib/product-switches';
 
 export function ProfileTab({ onUnlinked }: { onUnlinked: () => void }) {
   const { t, language } = useTranslation();
@@ -83,8 +84,8 @@ export function ProfileTab({ onUnlinked }: { onUnlinked: () => void }) {
         </p>
         <Button
           className="w-full gap-2"
-          loading={opening === '/chat'}
-          onClick={() => void open('/chat')}
+          loading={opening === appHomePath()}
+          onClick={() => void open(appHomePath())}
         >
           <MessagesIcon className="size-4" />
           {t('tg.openChat')}

@@ -2,6 +2,7 @@ import { Link } from 'react-router-dom';
 import { ArrowRightIcon } from '@/components/icons';
 import { buttonClasses } from '@/components/ui/button-classes';
 import { useTranslation } from '@/i18n';
+import { appHomePath, productSwitch } from '@/lib/product-switches';
 
 /** Страница 404: крупный номер, пояснение и два пути назад. */
 export function NotFoundPage() {
@@ -44,10 +45,10 @@ export function NotFoundPage() {
             {t('notFound.home')}
           </Link>
           <Link
-            to="/chat"
+            to={appHomePath()}
             className={buttonClasses({ variant: 'outline', size: 'md', className: 'gap-1.5' })}
           >
-            {t('notFound.openChat')}
+            {productSwitch('chat') ? t('notFound.openChat') : t('nav.solutions')}
             <ArrowRightIcon className="size-3.5" />
           </Link>
         </div>
