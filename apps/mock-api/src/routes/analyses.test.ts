@@ -77,7 +77,6 @@ async function start(discoveryEnabled = true, options: { now?: () => Date } = {}
     store: new MemoryDiscoveryStore(),
     budget: new MemoryBudgetStore(),
     gateway: templateGateway,
-    balanceUsd: () => 0,
     userCapabilities: () => ({ hasPurchasedCredits: false, githubConnected: false }),
     freeDailyUsd: 5,
     budgetTimeZone: 'UTC',

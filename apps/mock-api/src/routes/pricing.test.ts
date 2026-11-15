@@ -58,7 +58,6 @@ async function start() {
     store: discoveryStore,
     budget: new MemoryBudgetStore(),
     gateway,
-    balanceUsd: () => 0,
     userCapabilities: () => ({ hasPurchasedCredits: false, githubConnected: false }),
     freeDailyUsd: 5,
     budgetTimeZone: 'UTC',

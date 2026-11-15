@@ -39,7 +39,6 @@ test('флаг выключен для решения: путь платформ
     store,
     discovery: new MemoryDiscoveryStore(),
     gateway,
-    balanceUsd: () => 1,
     now: () => now,
   });
   let platformCalls = 0;

@@ -511,12 +511,18 @@ export class AIGateway {
     // Кредиты: один пул на чат, картинки и Ketner Code. Остаток решает, какая модель ответит: на
     // платную нужно хотя бы на один типичный запрос, а когда кредиты кончились, отвечает бесплатная
     // модель, кредиты не тратятся. Гости кредитов не имеют, они всегда на бесплатной модели.
+    // Бесплатный лимит и тариф (funding) платят не балансом: баланс не ограничивает выбор модели.
+    const funding = req.funding === 'allowance' || req.funding === 'tier' ? req.funding : null;
     const balanceUsd = req.isAnonymous
       ? 0
-      : this.credits.balance(activeUserId, effectivePlan).remainingUsd;
+      : funding
+        ? Number.POSITIVE_INFINITY
+        : this.credits.balance(activeUserId, effectivePlan).remainingUsd;
     const stage: CreditStage = req.isAnonymous ? 'normal' : creditStageOf(balanceUsd);
     // Бесплатный анализ Discovery оплачивает сервис: кредиты не влияют на выбор модели и не списываются.
     const sponsored = req.task?.billing === 'sponsored';
+    /** Баланс не списывается: бесплатный анализ, бесплатный лимит или тариф. */
+    const notFromBalance = sponsored || funding !== null;
 
     // 2. Анализ запроса
     const rawPrompt = [...req.messages].reverse().find((m) => m.role === 'user')?.content ?? '';
@@ -603,7 +609,7 @@ export class AIGateway {
 
       // Не хватает кредитов на запрошенную модель: отвечает та, на которую хватает (в конце лестницы —
       // бесплатная), и это видно в routingReason и selectedModel.
-      const affordable = sponsored
+      const affordable = notFromBalance
         ? { model: requested, reason: null }
         : pickAffordable(requested, {
             balanceUsd,
@@ -1196,7 +1202,10 @@ export class AIGateway {
       // Кредиты списываются по реальной цене ответа провайдера. Бесплатная модель, кэш и шаблонные
       // ответы ничего не стоят; гости кредитов не имеют.
       const creditsUsd =
-        responseSource === 'provider' && !req.isAnonymous && !isFreeModel(usedModel) && !sponsored
+        responseSource === 'provider' &&
+        !req.isAnonymous &&
+        !isFreeModel(usedModel) &&
+        !notFromBalance
           ? this.credits.charge(
               activeUserId,
               chargeCap !== undefined
@@ -1240,6 +1249,7 @@ export class AIGateway {
               : { kind: 'assistant' as const, runId: req.assistant.id }
             : {}),
         ...(sponsored ? { sponsored: true } : {}),
+        ...(funding ? { funding } : {}),
         creditsUsd,
       });
 

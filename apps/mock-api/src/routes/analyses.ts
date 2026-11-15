@@ -57,6 +57,7 @@ import { pricingServiceFor } from '../pricing/runtime.js';
 import type { PricingService } from '../pricing/service.js';
 import { publicEstimate, publicRequest } from '../pricing/views.js';
 import { z } from 'zod';
+import { allowanceOver } from '../billing/build-allowance.js';
 
 export interface AnalysesRouterDeps {
   ai: AiConfig;
@@ -237,7 +238,8 @@ export function createAnalysesRouter(deps: AnalysesRouterDeps): Router {
       store: ready.store,
       budget: ready.budget,
       gateway,
-      balanceUsd: (userId, plan) => deps.credits?.balance(userId, plan).remainingUsd ?? 0,
+      // Платные анализы платит бесплатный лимит создания и проверки (раздел 4 проекта цен).
+      allowance: allowanceOver(stores),
       userCapabilities: (caller) => ({
         hasPurchasedCredits: !caller.guest && (deps.credits?.hasPurchased(caller.userId) ?? false),
         githubConnected: !caller.guest && (deps.githubConnected?.(caller.userId) ?? false),

@@ -88,7 +88,6 @@ async function setup(
     store,
     discovery: new MemoryDiscoveryStore(),
     gateway,
-    balanceUsd: () => balance,
     now: () => NOW,
   });
   const leads: BotLead[] = [];
@@ -116,6 +115,7 @@ async function setup(
     [],
   );
   return {
+    builder,
     store,
     service,
     requests,
@@ -329,7 +329,7 @@ test('заявка: и у выключенного бота, письмо вла
 });
 
 test('настройки и проба: адрес проверяется, проба идёт по текущей версии и не сохраняется', async () => {
-  const { service, store, requests, setBalance } = await setup();
+  const { service, store, requests, setBalance, builder } = await setup();
   await store.createSolution(
     { ...bot(), id: 'bot-2', ownerId: 'owner-2', bot: { ...bot().bot!, slug: 'taken-bot' } },
     {
@@ -374,10 +374,23 @@ test('настройки и проба: адрес проверяется, пр�
   assert.match(requests[0]?.assistant?.instructions ?? '', /С 9 до 18/);
   assert.deepEqual(await service.conversations(OWNER.userId, 'bot-1'), []);
 
+  // P2: пробу платит бесплатный лимит, а не баланс — без купленных кредитов она работает.
+  assert.equal(requests[0]?.funding, 'allowance');
   setBalance(0);
-  const poor = await service.preview(CALLER, 'bot-1', [{ role: 'user', content: 'Цена?' }]);
-  assert.equal(poor.ok, false);
-  if (!poor.ok) assert.equal(poor.status, 402);
+  const free = await service.preview(CALLER, 'bot-1', [{ role: 'user', content: 'Цена?' }]);
+  assert.equal(free.ok, true);
+  // Суточный лимит без тарифа исчерпан — проба отказывает 402 до вызова модели.
+  const before = requests.length;
+  while ((await builder.allowance.reserve(CALLER.userId, 0.001)).ok) {
+    // выбираем лимит до конца
+  }
+  const exhausted = await service.preview(CALLER, 'bot-1', [{ role: 'user', content: 'Цена?' }]);
+  assert.equal(exhausted.ok, false);
+  if (!exhausted.ok) {
+    assert.equal(exhausted.status, 402);
+    assert.equal(exhausted.code, 'build_allowance_exhausted');
+  }
+  assert.equal(requests.length, before, 'модель не вызывалась');
 });
 
 test('«хватит на N дней»: остаток владельца делится на средний расход его ботов', async () => {

@@ -385,3 +385,18 @@ test('стиль: сервер дописывает подсказку к пер
   assert.equal(caps.defaultStyleId, 'none');
   assert.ok(caps.styles.includes('photo') && caps.styles.includes('anime'));
 });
+
+test('картинка в чате своего помощника: платит бесплатный лимит — баланс не списан и не ограничивает модель', async () => {
+  const { service, credits, usage } = setup();
+  setBalance(credits, 'u3', 'plus', 0); // купленного баланса нет
+  const result = await service.generate(
+    { ...caller('plus', 'u3'), funding: 'allowance' },
+    { prompt: 'кот', modelId: 'flux-2-klein' },
+  );
+  // Без баланса выбранная модель не подменяется на schnell: платит лимит, а не кредиты.
+  assert.equal(result.image.modelId, 'flux-2-klein');
+  assert.equal(result.replacedBy, null);
+  assert.ok(result.costUsd > 0, 'цена для расчёта лимита');
+  assert.equal(credits.balance('u3', 'plus').remainingUsd, 0);
+  assert.equal(usage.getByUser('u3')[0]?.creditsUsd, undefined, 'с баланса не списано');
+});

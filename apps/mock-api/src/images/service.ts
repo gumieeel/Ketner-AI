@@ -52,6 +52,11 @@ export interface ImageCaller {
   userId: string;
   plan: string;
   language: 'ru' | 'en';
+  /**
+   * Картинка в чате владельца со своим помощником: платит бесплатный лимит создания и проверки
+   * (резерв и расчёт — у вызывающего кода), баланс не списывается и не ограничивает выбор модели.
+   */
+  funding?: 'allowance';
 }
 
 export interface PublicImage {
@@ -226,7 +231,7 @@ export class ImageService {
     caller: ImageCaller,
     input: { prompt: unknown; modelId?: unknown; aspect?: unknown; style?: unknown },
     signal?: AbortSignal,
-  ): Promise<{ image: PublicImage; replacedBy: string | null }> {
+  ): Promise<{ image: PublicImage; replacedBy: string | null; costUsd: number }> {
     const { language } = caller;
     if (!this.available) {
       throw new ImageServiceError(
@@ -275,7 +280,10 @@ export class ImageService {
 
     // Кредиты общие с чатом и Ketner Code. Не хватает на выбранную модель — рисует запасная из цепочки;
     // кредитов нет совсем — только FLUX.1 schnell в пределах бесплатного суточного лимита.
-    const balanceUsd = this.credits.balance(caller.userId, caller.plan as never).remainingUsd;
+    const balanceUsd =
+      caller.funding === 'allowance'
+        ? Number.POSITIVE_INFINITY
+        : this.credits.balance(caller.userId, caller.plan as never).remainingUsd;
     const picked = this.pickModel(requested, caller, { balanceUsd });
     if (!picked) {
       throw new ImageServiceError(
@@ -394,11 +402,12 @@ export class ImageService {
         costUsd,
         Date.now() - started,
         'success',
-        this.credits.charge(caller.userId, costUsd),
+        caller.funding === 'allowance' ? 0 : this.credits.charge(caller.userId, costUsd),
       );
       return {
         image: this.toPublic(meta),
         replacedBy: model.id !== requested.id ? model.name : null,
+        costUsd,
       };
     } finally {
       this.inFlight.delete(caller.userId);

@@ -27,6 +27,11 @@ import {
   PostgresExecutionJournal,
   type ExecutionJournal,
 } from '../platform/journal.js';
+import {
+  MemoryCounterStore,
+  PostgresCounterStore,
+  type CounterStore,
+} from '../billing/cost-counters.js';
 
 export interface DiscoveryStores {
   store: DiscoveryStore;
@@ -44,6 +49,11 @@ export interface DiscoveryStores {
    * сметы и заявки недоступны (503), остальной анализ работает.
    */
   pricing?: PricingStore;
+  /**
+   * Счётчики бесплатного лимита создания и проверки (billing/cost-counters.ts): строки
+   * `ketner_docs`, миграции нет. Нет — лимит считается в памяти (тесты).
+   */
+  counters?: CounterStore;
   /**
    * Журнал исполнений агентов — Slice A (миграции 0013–0015, только в ветке платформы). Нужен пути
    * платформы бота (BOT_PLATFORM_RUNTIME); без него боты отвечают прежним путём.
@@ -70,6 +80,7 @@ export function attachDiscoveryDriver(runner: SqlRunner): void {
     attempts: new PostgresAttemptStore(runner),
     pricing: new PostgresPricingStore(runner),
     journal: new PostgresExecutionJournal(runner),
+    counters: new PostgresCounterStore(runner),
   };
 }
 
@@ -91,6 +102,7 @@ export function getDiscoveryStores(): DiscoveryStores | null {
       ),
       pricing: new MemoryPricingStore(),
       journal: new MemoryExecutionJournal(),
+      counters: new MemoryCounterStore(),
     };
   }
   return memory;

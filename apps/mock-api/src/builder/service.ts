@@ -25,7 +25,7 @@ import { realModelName } from '../discovery/service.js';
 import type { DiscoveryStore } from '../discovery/store.js';
 import { PLATFORM_LIMITS } from '../services/discovery-limits.js';
 import { toCredits } from '../services/entitlement.js';
-import type { Language, PlanId } from '../types.js';
+import type { Language } from '../types.js';
 import {
   buildAssistantInstructions,
   DRAFT_PAYLOAD_CHARS,
@@ -61,6 +61,19 @@ import type {
   Verdict,
 } from './types.js';
 import { isToolConfig, type StudyToolConfig } from './types.js';
+import {
+  allowanceOver,
+  allowanceRefusal,
+  runAllowanceTask,
+  type AllowanceTicket,
+  type BuildAllowance,
+} from '../billing/build-allowance.js';
+
+/** HTTP-статус отказа бесплатного лимита (402 — исчерпан, 503 — база недоступна). */
+const ALLOWANCE_STATUS: Record<string, number> = {
+  build_allowance_exhausted: 402,
+  allowance_unavailable: 503,
+};
 
 export interface BuilderCaller extends TaskCaller {
   language: Language;
@@ -70,7 +83,11 @@ export interface BuilderServiceDeps {
   store: BuilderStore;
   discovery: DiscoveryStore;
   gateway: Pick<AIGateway, 'stream'>;
-  balanceUsd: (userId: string, plan: PlanId) => number;
+  /**
+   * Бесплатный лимит создания и проверки (docs/SUBSCRIPTION_PRICING_DESIGN.md, раздел 4): черновики,
+   * прогоны проверки и чат владельца со своим помощником. Нет — лимит в памяти (тесты).
+   */
+  allowance?: BuildAllowance;
   registry?: ModelRegistry;
   now?: () => Date;
 }
@@ -184,7 +201,11 @@ export class BuilderService {
   private readonly running = new Map<string, Promise<unknown>>();
   private readonly drafting = new Map<string, Promise<unknown>>();
 
+  /** Бесплатный лимит: им же платит чат владельца со своим помощником (routes/solutions.ts). */
+  readonly allowance: BuildAllowance;
+
   constructor(private readonly deps: BuilderServiceDeps) {
+    this.allowance = deps.allowance ?? allowanceOver(() => ({}));
     this.registry = deps.registry ?? modelRegistry;
     this.now = deps.now ?? (() => new Date());
   }
@@ -274,20 +295,6 @@ export class BuilderService {
       judgeModel: realModelName(JUDGE_MODEL_ID, this.registry),
       capUsd: round6(capUsd),
       ...toCreditRange(typicalUsd, capUsd),
-    };
-  }
-
-  private insufficient(language: Language, maxCredits: number, balanceUsd: number): BuilderError {
-    return {
-      ok: false,
-      status: 402,
-      code: 'insufficient_credits',
-      message: text(
-        language,
-        `Нужно до ${maxCredits} кредитов, на балансе ${toCredits(balanceUsd)}. Пополните баланс.`,
-        `Up to ${maxCredits} credits are needed, the balance is ${toCredits(balanceUsd)}. Top up.`,
-      ),
-      details: { maxCredits, balanceCredits: toCredits(balanceUsd) },
     };
   }
 
@@ -484,9 +491,6 @@ export class BuilderService {
         { model: quote.model },
       );
     }
-    const balance = this.deps.balanceUsd(caller.userId, caller.plan);
-    if (balance < quote.capUsd) return this.insufficient(language, quote.maxCredits, balance);
-
     // Двойной клик: второй запрос ждёт первый и получает того же помощника.
     const key = `${caller.userId}:${opportunity.id}`;
     const inFlight = this.drafting.get(key);
@@ -530,7 +534,8 @@ export class BuilderService {
           : null;
       })
       .filter(Boolean);
-    const result = await runStructuredTask<DraftOutput>({
+    // Черновик платит бесплатный лимит: резерв потолка, вызов, расчёт по факту.
+    const result = await runAllowanceTask<DraftOutput>(this.allowance, {
       gateway: this.deps.gateway,
       caller,
       taskId: `${id}:draft:1`,
@@ -573,7 +578,7 @@ export class BuilderService {
     if (!result.ok) {
       return {
         ok: false,
-        status: 502,
+        status: ALLOWANCE_STATUS[result.code] ?? 502,
         code: result.code,
         message: result.message,
         details: { chargedCredits: toCredits(result.creditsUsd) },
@@ -810,8 +815,19 @@ export class BuilderService {
         cases: quote.cases,
         judgeModel: quote.judgeModel,
       });
-    const balance = this.deps.balanceUsd(caller.userId, caller.plan);
-    if (balance < quote.capUsd) return this.insufficient(language, quote.maxCredits, balance);
+    // Прогон платит бесплатный лимит: резерв потолка всего прогона до старта.
+    const reservation = await this.allowance.reserve(caller.userId, quote.capUsd);
+    if (!reservation.ok) {
+      const refusal = allowanceRefusal(language, reservation);
+      return {
+        ok: false,
+        status: refusal.status,
+        code: refusal.code,
+        message: refusal.message,
+        ...(refusal.details ? { details: refusal.details } : {}),
+      };
+    }
+    const ticket = reservation.ticket;
 
     const run: TestRun = {
       id: randomUUID(),
@@ -837,8 +853,11 @@ export class BuilderService {
       finishedAt: null,
       version: 1,
     };
-    if (!(await this.deps.store.createRun(run))) return notFound(id);
-    const job = this.executeRun(caller, run, view.config, view.cases, view.solution.bot)
+    if (!(await this.deps.store.createRun(run))) {
+      await this.allowance.settle(ticket, 0);
+      return notFound(id);
+    }
+    const job = this.executeRun(caller, run, view.config, view.cases, view.solution.bot, ticket)
       .catch((error: unknown) => console.error(`[builder] прогон ${run.id} упал`, error))
       .finally(() => this.running.delete(run.id));
     this.running.set(run.id, job);
@@ -851,7 +870,26 @@ export class BuilderService {
     config: AssistantConfig,
     cases: readonly TestCase[],
     bot: BotSettings | null,
+    ticket: AllowanceTicket,
   ): Promise<void> {
+    // Фактическая стоимость прогона; до расчёта резерв остаётся по потолку.
+    let spentUsd = ticket.capUsd;
+    try {
+      spentUsd = await this.executeCases(caller, run, config, cases, bot);
+    } finally {
+      await this.allowance.settle(ticket, spentUsd);
+    }
+  }
+
+  /** Кейсы по очереди: ответ и судья. Возвращает фактическую стоимость всех вызовов, $. */
+  private async executeCases(
+    caller: BuilderCaller,
+    run: TestRun,
+    config: AssistantConfig,
+    cases: readonly TestCase[],
+    bot: BotSettings | null,
+  ): Promise<number> {
+    let spentUsd = 0;
     const { instructions, replaceSystemPrompt } = answerInstructions(config, bot);
     for (const item of cases) {
       const caps = this.caseCaps(config, item, bot);
@@ -867,8 +905,10 @@ export class BuilderService {
           maxChargeUsd: caps.answerCapUsd,
           solutionId: run.solutionId,
           replaceSystemPrompt,
+          funding: 'allowance',
         },
       );
+      spentUsd += answer.costUsd;
       // Бот: метка заявки — не текст ответа; судья видит, что клиенту предложена форма.
       if (bot) {
         const parsed = parseBotReply(answer.text);
@@ -893,6 +933,7 @@ export class BuilderService {
         taskId: `${run.id}:judge:${item.id}`,
         conversationId: `builder:test:${run.id}`,
         billing: 'user',
+        funding: 'allowance',
         kind: 'review',
         policy: {
           modelId: JUDGE_MODEL_ID,
@@ -937,12 +978,14 @@ export class BuilderService {
         costUsd: round6(answer.costUsd + judged.costUsd),
         creditsUsd: round6(answer.creditsUsd + judged.creditsUsd),
       });
+      spentUsd += judged.costUsd;
     }
     await this.mutateRun(caller.userId, run.id, (current) => ({
       ...current,
       status: 'done',
       finishedAt: this.now().toISOString(),
     }));
+    return round6(spentUsd);
   }
 
   /** Ответ помощника через общий шлюз: Auto, настройки поверх правил чата. */
@@ -958,6 +1001,8 @@ export class BuilderService {
       solutionId: string;
       /** Бот для клиентов: его промпт заменяет правила чата Ketner. */
       replaceSystemPrompt?: boolean;
+      /** Бесплатный лимит вместо баланса: резерв и расчёт — у вызывающего кода. */
+      funding?: 'allowance' | 'tier';
     },
     onDelta?: (delta: string) => void,
     signal?: AbortSignal,
@@ -988,6 +1033,7 @@ export class BuilderService {
         language: caller.language,
         stream: true,
         ...(signal ? { signal } : {}),
+        ...(options.funding ? { funding: options.funding } : {}),
         assistant: {
           id: options.solutionId,
           instructions,

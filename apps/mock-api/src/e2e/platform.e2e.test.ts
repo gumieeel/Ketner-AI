@@ -35,6 +35,7 @@ import { createUserStore } from '../store/user-store.js';
 import { UsageStore } from '../store/usage-store.js';
 import { FAST_AI, startTestServer } from '../testing/server.js';
 import { signupAndVerify } from '../testing/signup.js';
+import { MemoryCounterStore } from '../billing/cost-counters.js';
 
 const CALL_COST_USD = 0.003;
 
@@ -177,6 +178,8 @@ test('сквозной путь: главная → анализ → вопро�
     budget: new MemoryBudgetStore(),
     builder: builderStore,
     ...memoryToolStores(builderStore),
+    // Счётчики бесплатного лимита — общие для анализов и Builder, как строки Postgres в production.
+    counters: new MemoryCounterStore(),
   };
   const server = await startTestServer(
     {},
@@ -295,6 +298,13 @@ test('сквозной путь: главная → анализ → вопро�
   const auth = { ...guestHeaders, Authorization: `Bearer ${token}` };
   const credits = async () =>
     json<CreditsReport>(await fetch(`${base}/api/usage/credits`, { headers: auth }));
+  // Бесплатный лимит создания и проверки (P2): потрачено за месяц, кредиты лимита.
+  const allowanceSpent = async () =>
+    (
+      await json<{ allowance: { month: { spentCredits: number } } }>(
+        await fetch(`${base}/api/solutions/allowance`, { headers: auth }),
+      )
+    ).allowance.month.spentCredits;
   assert.equal(
     (await credits()).balance,
     TRIAL_CREDITS,
@@ -303,7 +313,7 @@ test('сквозной путь: главная → анализ → вопро�
   const claimed = await getView(auth);
   assert.equal(claimed.analysis.status, 'ready');
 
-  // 5. Подробный план за кредиты: без согласия — цена; с согласием — списание по факту.
+  // 5. Подробный план: без согласия — цена; с согласием — платит бесплатный лимит по факту (P2).
   const paidPath = `${base}/api/analyses/${id}/opportunities/${byTitle('Скрипт через API')}/plan`;
   const unconfirmed = await fetch(paidPath, { method: 'POST', headers: auth, body: '{}' });
   assert.equal(unconfirmed.status, 409);
@@ -318,9 +328,10 @@ test('сквозной путь: главная → анализ → вопро�
     return body.plan.status === 'ready' ? body.plan : null;
   }, 'подробный план');
   assert.equal(fullPlan.kind, 'full');
-  assert.equal(fullPlan.cost.chargedCredits, 3, 'списана цена провайдера: $0.003 = 3 кредита');
-  assert.ok(fullPlan.cost.chargedCredits <= quoted.error.details.maxCredits);
-  assert.equal((await credits()).balance, TRIAL_CREDITS - 3);
+  assert.equal(fullPlan.cost.chargedCredits, 0, 'баланс не списан');
+  assert.equal(await allowanceSpent(), 3, 'в лимите — цена провайдера: $0.003 = 3 кредита');
+  assert.ok((await allowanceSpent()) <= quoted.error.details.maxCredits);
+  assert.equal((await credits()).balance, TRIAL_CREDITS);
   assert.equal(calls.at(-1), 'xiaomi/mimo-v2.6-pro');
 
   // 6. Оплата пакета в тестовом режиме: кредиты добавляются.
@@ -332,10 +343,10 @@ test('сквозной путь: главная → анализ → вопро�
   });
   assert.equal(checkout.status, 200);
   const afterPayment = await credits();
-  assert.equal(afterPayment.balance, TRIAL_CREDITS - 3 + pack.credits);
+  assert.equal(afterPayment.balance, TRIAL_CREDITS + pack.credits);
   assert.equal(afterPayment.purchased, true);
 
-  // 7. Помощник из возможности: черновик за кредиты, проверка, включение, чат.
+  // 7. Помощник из возможности: черновик, проверка, включение, чат — всё из бесплатного лимита.
   const solution = await fetch(`${base}/api/solutions/from-opportunity`, {
     method: 'POST',
     headers: auth,
@@ -369,6 +380,9 @@ test('сквозной путь: главная → анализ → вопро�
     await fetch(`${base}/api/solutions/${solutionId}/threads`, { method: 'POST', headers: auth }),
   );
   const before = (await credits()).balance;
+  const spentBefore = await allowanceSpent();
+  assert.ok(spentBefore > 3, 'черновик и проверка учтены в лимите');
+  assert.equal(before, TRIAL_CREDITS + pack.credits, 'черновик и проверка не тронули баланс');
   const chat = await fetch(
     `${base}/api/solutions/${solutionId}/threads/${thread.thread.id}/messages`,
     {
@@ -380,7 +394,8 @@ test('сквозной путь: главная → анализ → вопро�
   const stream = await chat.text();
   assert.match(stream, /Доставка занимает 3 дня/);
   assert.match(stream, /event: done/);
-  assert.equal((await credits()).balance, before - 3, 'ответ помощника списан как сообщение чата');
+  assert.equal((await credits()).balance, before, 'ответ помощника не списан с баланса');
+  assert.equal(await allowanceSpent(), spentBefore + 3, 'ответ помощника — из бесплатного лимита');
 
   // 8. Общий чат закрыт (product-switches.ts): сервер отказывает, весь путь выше прошёл без него.
   for (const [path, body] of [

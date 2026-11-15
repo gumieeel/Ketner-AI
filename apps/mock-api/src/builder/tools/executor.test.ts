@@ -164,7 +164,7 @@ test('дорогой запуск (выше порога) требует явн�
         : entry,
     ),
   );
-  const h = await harness({ registry, balanceCredits: 1_000_000 });
+  const h = await harness({ registry });
   const quote = await h.executor.quote(alice, 'tool', 'notes', input());
   assert.ok(quote.ok && quote.quote.maxCredits > CONFIRM_ABOVE_CREDITS);
   assert.equal(quote.quote.confirmationRequired, true);
@@ -176,18 +176,31 @@ test('дорогой запуск (выше порога) требует явн�
     idempotencyKey: key(),
     confirm: true,
   });
-  assert.ok(confirmed.ok);
+  // Подтверждение пройдено; дальше решает бесплатный лимит: потолок дороже всего месячного лимита.
+  assert.ok(!confirmed.ok);
+  assert.equal(confirmed.code, 'build_allowance_exhausted');
   await h.executor.whenIdle();
 });
 
-test('не хватает кредитов на потолок — 402, запуск не создаётся, модель не вызывается', async () => {
-  const h = await harness({ balanceCredits: 0 });
+test('бесплатный лимит исчерпан — 402, запуск не создаётся, модель не вызывается', async () => {
+  const h = await harness();
+  await h.exhaustAllowance();
   const result = await start(h);
   assert.ok(!result.ok);
   assert.equal(result.status, 402);
-  assert.equal(result.code, 'insufficient_credits');
+  assert.equal(result.code, 'build_allowance_exhausted');
   assert.equal(h.calls.length, 0);
   assert.deepEqual(await h.runs.list('alice', 'tool', 10), []);
+});
+
+test('без купленного баланса запуск идёт: его платит бесплатный лимит, баланс не трогается', async () => {
+  const h = await harness({ balanceCredits: 0, replies: [{ text: notesJson(), cost: 0.0031 }] });
+  const result = await start(h);
+  assert.ok(result.ok);
+  const run = await finished(h, 'tool', result.run.id);
+  assert.equal(run.status, 'done');
+  assert.equal(h.balance(), 0);
+  assert.equal(await h.allowanceSpentUsd(), 0.003);
 });
 
 test('успешный запуск: результат сохранён, списана фактическая цена провайдера через шлюз', async () => {
@@ -209,8 +222,11 @@ test('успешный запуск: результат сохранён, спи
       ['S2', 'Стр. 2'],
     ],
   );
-  assert.equal(run.creditsUsd, 0.0031);
-  assert.equal(Math.round((before - h.balance()) * 1e6), 3100);
+  // P2: баланс не списывается; бесплатный лимит получает фактическую цену (в кредитах лимита — 3).
+  assert.equal(run.creditsUsd, 0);
+  assert.equal(run.costUsd, 0.0031);
+  assert.equal(h.balance(), before);
+  assert.equal(await h.allowanceSpentUsd(), 0.003);
   assert.equal(run.model?.name, 'MiMo-V2.6 Pro');
   // Шлюз: модель запуска, потолок ответа, запись в учёт как запуск инструмента.
   assert.equal(h.calls.length, 1);
@@ -218,18 +234,22 @@ test('успешный запуск: результат сохранён, спи
   const records = h.usage.getRunRecords('alice', run.id);
   assert.equal(records.length, 1);
   assert.equal(records[0]?.kind, 'tool');
-  assert.equal(records[0]?.creditsUsd, 0.0031);
+  assert.equal(records[0]?.creditsUsd, undefined);
+  assert.equal(records[0]?.funding, 'allowance');
 });
 
-test('списание никогда не больше потолка, даже если провайдер насчитал больше', async () => {
+test('лимит считает не больше потолка, даже если провайдер насчитал больше', async () => {
   const h = await harness({ replies: [{ text: notesJson(), cost: 5 }] });
   const before = h.balance();
   const result = await start(h);
   assert.ok(result.ok);
   const run = await finished(h, 'tool', result.run.id);
   assert.equal(run.status, 'done');
-  assert.equal(run.creditsUsd, run.quote.capUsd);
-  assert.equal(Math.round((before - h.balance()) * 1e6), Math.round(run.quote.capUsd * 1e6));
+  assert.equal(h.balance(), before);
+  assert.equal(
+    Math.round((await h.allowanceSpentUsd()) * 1000),
+    Math.round(run.quote.capUsd * 1000),
+  );
   // Себестоимость в учёте — полная: расхождение видно при сверке.
   assert.ok(run.costUsd >= 5);
 });
@@ -254,8 +274,8 @@ test('ответ не по схеме: одна попытка исправит�
   assert.ok(first && second);
   assert.ok(second.user.length > first.user.length);
   assert.ok(second.user.startsWith(first.user));
-  assert.equal(run.creditsUsd, 0.0025);
-  assert.equal(Math.round((before - h.balance()) * 1e6), 2500);
+  assert.equal(run.costUsd, 0.0025);
+  assert.equal(h.balance(), before);
 });
 
 test('ответ исправлен со второй попытки — результат есть, списано за две попытки', async () => {
@@ -269,7 +289,8 @@ test('ответ исправлен со второй попытки — рез�
   assert.ok(result.ok);
   const run = await finished(h, 'tool', result.run.id);
   assert.equal(run.status, 'done');
-  assert.equal(run.creditsUsd, 0.002);
+  assert.equal(run.costUsd, 0.002);
+  assert.equal(await h.allowanceSpentUsd(), 0.002);
 });
 
 test('сбой провайдера: запуск закрывается ошибкой, кредиты не списаны', async () => {

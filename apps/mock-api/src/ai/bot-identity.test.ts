@@ -109,7 +109,6 @@ async function botService(platform: boolean) {
     store,
     discovery: new MemoryDiscoveryStore(),
     gateway: env.gateway,
-    balanceUsd: () => 1,
     now: () => now,
   });
   const runtime = new BotAgentRuntime({

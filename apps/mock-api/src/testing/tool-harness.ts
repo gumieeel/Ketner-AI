@@ -28,6 +28,8 @@ import { MemoryRunStore } from '../builder/tools/run-store.js';
 import { memoryCredits, setBalance } from '../services/credits-fixture.js';
 import { UsageStore } from '../store/usage-store.js';
 import { STUDY_CONFIG, toolSolution } from './builder-fixtures.js';
+import { BuildAllowance } from '../billing/build-allowance.js';
+import { MemoryCounterStore } from '../billing/cost-counters.js';
 
 export const NOW = new Date('2026-11-05T10:00:00.000Z');
 
@@ -121,12 +123,15 @@ export async function harness(
     credits,
   });
   let now = NOW;
+  // Бесплатный лимит создания и проверки: запуски своего инструмента платит он (P2).
+  const counters = new MemoryCounterStore();
+  const allowance = new BuildAllowance({ counters: () => counters, now: () => now });
   const executor = new ToolExecutor({
     runs,
     materials,
     solutions: builder,
     gateway,
-    balanceUsd: (userId, plan) => credits.balance(userId, plan).remainingUsd,
+    allowance,
     usage,
     attempts,
     registry,
@@ -186,6 +191,17 @@ export async function harness(
     calls,
     addMaterial,
     balance: () => credits.balance('alice', 'credits').remainingUsd,
+    allowance,
+    /** Потрачено из бесплатного лимита alice за месяц, $ (кредиты лимита / 1000). */
+    allowanceSpentUsd: async () => (await allowance.status('alice')).month.spentCredits / 1000,
+    /** Лимит alice за месяц исчерпан целиком. */
+    exhaustAllowance: async () => {
+      const status = await allowance.status('alice');
+      await counters.reserve(
+        [{ key: `acct:alice:${now.toISOString().slice(0, 7)}`, limitUsd: 1e9 }],
+        status.month.limitCredits / 1000,
+      );
+    },
     setNow: (value: Date) => {
       now = value;
     },

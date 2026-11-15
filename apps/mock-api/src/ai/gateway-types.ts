@@ -262,6 +262,11 @@ export interface UsageRecord {
    * себестоимость учтена в суточном бюджете бесплатных анализов (discovery/budget.ts).
    */
   sponsored?: boolean;
+  /**
+   * Кто оплатил вызов вместо баланса (docs/SUBSCRIPTION_PRICING_DESIGN.md, разделы 4–5):
+   * `allowance` — бесплатный лимит создания и проверки, `tier` — объём тарифа.
+   */
+  funding?: 'allowance' | 'tier';
   /** Идентификатор запуска агента (для подсчёта запусков в сутки). */
   runId?: string;
   /** Номер шага внутри запуска агента (0 — отметка о старте запуска). */
@@ -413,6 +418,13 @@ export interface GatewayRequest {
   userPlan: PlanId;
   userEmail?: string;
   isVip?: boolean;
+  /**
+   * Источник оплаты (docs/SUBSCRIPTION_PRICING_DESIGN.md, разделы 4–5). По умолчанию — баланс
+   * кредитов. `allowance` (бесплатный лимит создания и проверки) и `tier` (объём тарифа): баланс не
+   * списывается и не влияет на выбор модели, учёт пишет полную себестоимость с пометкой; лимит
+   * резервирует и рассчитывает вызывающий код.
+   */
+  funding?: 'balance' | 'allowance' | 'tier';
   isAnonymous?: boolean;
   conversationId: string;
   modelId: string;

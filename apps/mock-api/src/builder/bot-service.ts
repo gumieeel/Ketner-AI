@@ -28,6 +28,7 @@ import type {
 import { isToolConfig } from './types.js';
 import type { BotAgentAnswer, BotAgentInput } from './bot-agent.js';
 import { PlatformUnavailableError } from './bot-platform-error.js';
+import { allowanceRefusal } from '../billing/build-allowance.js';
 
 /** С владельца за один ответ бота не списывается больше, $ (≈ 30 кредитов). */
 export const BOT_REPLY_CAP_USD = 0.03;
@@ -302,6 +303,7 @@ export class BotService {
     gatewayConversationId: string,
     messages: Array<{ role: 'user' | 'assistant'; content: string }>,
     trigger: Pick<BotAgentInput, 'triggerKind' | 'triggerRef' | 'idempotencyKey'>,
+    funding?: BotAgentInput['funding'],
   ): Promise<BotAnswer> {
     const platform = this.deps.platform;
     if (platform && solution.bot && platform.enabled(solution.id)) {
@@ -317,6 +319,7 @@ export class BotService {
           messages,
           maxOutputTokens: BOT_REPLY_TOKENS,
           replyCapUsd: BOT_REPLY_CAP_USD,
+          ...(funding ? { funding } : {}),
         });
       } catch (error) {
         if (!(error instanceof PlatformUnavailableError)) throw error;
@@ -334,6 +337,7 @@ export class BotService {
         maxOutputTokens: BOT_REPLY_TOKENS,
         maxChargeUsd: BOT_REPLY_CAP_USD,
         replaceSystemPrompt: true,
+        ...(funding ? { funding } : {}),
       },
     );
   }
@@ -526,27 +530,35 @@ export class BotService {
       solution.currentVersion,
     );
     if (!version || isToolConfig(version.config)) return notFound();
-    if (this.deps.balanceUsd(caller.userId, caller.plan) < BOT_REPLY_CAP_USD) {
+    // Проба «как клиент» платит бесплатный лимит создания и проверки, а не баланс (P2).
+    const allowance = this.deps.builder.allowance;
+    const reservation = await allowance.reserve(caller.userId, BOT_REPLY_CAP_USD);
+    if (!reservation.ok) {
+      const refusal = allowanceRefusal(caller.language, reservation);
       return {
         ok: false,
-        status: 402,
-        code: 'insufficient_credits',
-        message: text(
-          caller.language,
-          'Не хватает кредитов на ответ бота (до 30 кредитов за ответ).',
-          'Not enough credits for a bot reply (up to 30 credits per reply).',
-        ),
+        status: refusal.status,
+        code: refusal.code,
+        message: refusal.message,
       };
     }
-    const answer = await this.answerBot(
-      solution,
-      version.config,
-      solution.currentVersion,
-      { ...caller, language: version.config.language },
-      `bot:preview:${solution.id}`,
-      messages.slice(-BOT_HISTORY),
-      { triggerKind: 'manual', triggerRef: `preview:${solution.id}` },
-    );
+    let spentUsd = BOT_REPLY_CAP_USD;
+    let answer: BotAnswer;
+    try {
+      answer = await this.answerBot(
+        solution,
+        version.config,
+        solution.currentVersion,
+        { ...caller, language: version.config.language },
+        `bot:preview:${solution.id}`,
+        messages.slice(-BOT_HISTORY),
+        { triggerKind: 'manual', triggerRef: `preview:${solution.id}` },
+        'allowance',
+      );
+      spentUsd = answer.costUsd;
+    } finally {
+      await allowance.settle(reservation.ticket, spentUsd);
+    }
     if (answer.error) {
       return { ok: false, status: 502, code: answer.error.code, message: answer.error.message };
     }
