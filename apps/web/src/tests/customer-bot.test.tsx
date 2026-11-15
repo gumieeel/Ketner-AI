@@ -153,6 +153,57 @@ describe('страница бота для клиентов /b/:slug', () => {
   });
 });
 
+/** Бот в кабинете владельца (общие данные тестов кабинета). */
+function botDetails(): SolutionDetails {
+  return {
+    solution: {
+      id: 'b1',
+      type: 'customer_bot',
+      kind: 'assistant',
+      template: 'customer_bot',
+      bot: {
+        slug: 'lisa-shop',
+        greeting: 'Здравствуйте!',
+        quickReplies: [],
+        dailyCapCredits: 1000,
+        corrections: [],
+      },
+      status: 'active',
+      name: 'Лиса',
+      currentVersion: 1,
+      activeVersion: 1,
+      source: null,
+      createdAt: '2026-11-01T10:00:00.000Z',
+      updatedAt: '2026-11-01T10:00:00.000Z',
+    },
+    config: {
+      name: 'Лиса',
+      purpose: '',
+      instructions: '',
+      tone: 'friendly',
+      knowledge: '',
+      examples: [],
+      restrictions: [],
+      language: 'ru',
+    },
+    versions: [{ number: 1, createdAt: '2026-11-01T10:00:00.000Z' }],
+    cases: [],
+    run: null,
+    readiness: { ready: true },
+    testQuote: null,
+  };
+}
+
+function botOverview(): BotOverview {
+  const details = botDetails();
+  return {
+    settings: details.solution.bot!,
+    today: { replies: 3, credits: 7, newLeads: 1 },
+    balance: { credits: 4200, dailyCredits: 600, daysLeft: 7 },
+    publicUrl: 'https://ketner.org/b/lisa-shop',
+  };
+}
+
 describe('кабинет бота: ссылка, код для сайта, заявки, исправление ответа', () => {
   beforeEach(() => {
     resetPreferences();
@@ -170,49 +221,8 @@ describe('кабинет бота: ссылка, код для сайта, за�
   });
 
   it('владелец видит, где живёт бот, заявки и исправляет ответ из диалога', async () => {
-    const details: SolutionDetails = {
-      solution: {
-        id: 'b1',
-        type: 'customer_bot',
-        kind: 'assistant',
-        template: 'customer_bot',
-        bot: {
-          slug: 'lisa-shop',
-          greeting: 'Здравствуйте!',
-          quickReplies: [],
-          dailyCapCredits: 1000,
-          corrections: [],
-        },
-        status: 'active',
-        name: 'Лиса',
-        currentVersion: 1,
-        activeVersion: 1,
-        source: null,
-        createdAt: '2026-11-01T10:00:00.000Z',
-        updatedAt: '2026-11-01T10:00:00.000Z',
-      },
-      config: {
-        name: 'Лиса',
-        purpose: '',
-        instructions: '',
-        tone: 'friendly',
-        knowledge: '',
-        examples: [],
-        restrictions: [],
-        language: 'ru',
-      },
-      versions: [{ number: 1, createdAt: '2026-11-01T10:00:00.000Z' }],
-      cases: [],
-      run: null,
-      readiness: { ready: true },
-      testQuote: null,
-    };
-    let overview: BotOverview = {
-      settings: details.solution.bot!,
-      today: { replies: 3, credits: 7, newLeads: 1 },
-      balance: { credits: 4200, dailyCredits: 600, daysLeft: 7 },
-      publicUrl: 'https://ketner.org/b/lisa-shop',
-    };
+    const details = botDetails();
+    let overview: BotOverview = botOverview();
     const calls = stubFetch((call) => {
       const path = call.path.replace(/^\/api\/solutions/, '');
       if (path === '/b1') return json(200, details);
@@ -316,6 +326,75 @@ describe('кабинет бота: ссылка, код для сайта, за�
     );
     // Исправление сразу видно в настройках страницы.
     expect(await screen.findByDisplayValue('С 9 до 20 каждый день.')).toBeVisible();
+  });
+
+  it('развёртывание: ссылка и QR первыми, шаги под конструктор, письмо разработчику, проверка установки', async () => {
+    const details = botDetails();
+    let overview: BotOverview = { ...botOverview(), install: { sites: [] } };
+    const calls = stubFetch((call) => {
+      const path = call.path.replace(/^\/api\/solutions/, '');
+      if (path === '/b1') return json(200, details);
+      if (path === '/b1/bot') return json(200, overview);
+      if (path === '/b1/leads') return json(200, { leads: [] });
+      if (path === '/b1/conversations') return json(200, { conversations: [] });
+      return json(404, { error: { code: 'not_found', message: '' } });
+    });
+    renderRoute('/solutions/b1');
+
+    const link = await screen.findByText('https://ketner.org/b/lisa-shop');
+    const embed = screen.getByText(
+      '<script src="https://ketner.org/widget.js" data-bot="lisa-shop" async></script>',
+    );
+    // Ссылка и QR — раньше кода для сайта: у многих клиентов сайта нет.
+    expect(link.compareDocumentPosition(embed) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Скачать PNG' })).toBeVisible();
+    const svg = screen.getByRole('link', { name: 'Скачать SVG для печати' });
+    expect(svg).toHaveAttribute('download', 'ketner-bot-lisa-shop.svg');
+    const svgMarkup = decodeURIComponent(svg.getAttribute('href')!.split(',')[1]!);
+    expect(svgMarkup).toMatch(/^<svg xmlns="http:\/\/www\.w3\.org\/2000\/svg"/);
+    expect(svgMarkup).toMatch(/fill="#ffffff"/);
+
+    // Шаги меняются вместе с конструктором; где код не вставить — кнопка-ссылка.
+    const builder = screen.getByLabelText('На чём сделан сайт');
+    expect(screen.getByRole('list', { name: 'Tilda' })).toHaveTextContent(
+      'HTML-код для вставки внутрь HEAD',
+    );
+    fireEvent.change(builder, { target: { value: 'taplink' } });
+    expect(screen.getByText(/кнопка со ссылкой на страницу бота/)).toBeVisible();
+    expect(screen.getByRole('list', { name: 'Taplink' })).toHaveTextContent('блок «Ссылка»');
+    fireEvent.change(builder, { target: { value: 'shopify' } });
+    expect(screen.getByRole('list', { name: 'Shopify' })).toHaveTextContent('layout/theme.liquid');
+
+    // Письмо разработчику: код, куда вставить и как проверить; данных аккаунта нет.
+    const mail = screen.getByRole('link', { name: 'Написать письмо' });
+    const href = mail.getAttribute('href')!;
+    expect(href.startsWith('mailto:?subject=')).toBe(true);
+    const body = decodeURIComponent(href.split('&body=')[1]!);
+    expect(body).toContain('data-bot="lisa-shop"');
+    expect(body).toContain('перед </body>');
+    expect(body).toContain('https://ketner.org/b/lisa-shop');
+    expect(body).not.toContain('owner@example.com');
+    expect(screen.getByRole('button', { name: 'Скопировать текст' })).toBeVisible();
+
+    // Проверка установки: пока не найден; после «Проверить ещё раз» — адрес сайта.
+    expect(screen.getByText(/Пока не найден/)).toBeVisible();
+    overview = {
+      ...overview,
+      install: {
+        sites: [
+          {
+            origin: 'https://shop.example',
+            firstSeenAt: '2026-11-15T10:00:00.000Z',
+            lastSeenAt: '2026-11-15T10:05:00.000Z',
+          },
+        ],
+      },
+    };
+    const before = calls.filter((call) => call.path === '/api/solutions/b1/bot').length;
+    fireEvent.click(screen.getByRole('button', { name: 'Проверить ещё раз' }));
+    expect(await screen.findByText('Виджет найден на shop.example')).toBeVisible();
+    expect(screen.queryByText(/Пока не найден/)).toBeNull();
+    expect(calls.filter((call) => call.path === '/api/solutions/b1/bot').length).toBe(before + 1);
   });
 });
 

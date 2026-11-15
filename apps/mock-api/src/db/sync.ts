@@ -15,6 +15,7 @@ import { invoiceStore } from '../store/invoice-store.js';
 import { billingLedger } from '../billing/index.js';
 import { supportStore, usageStore } from '../store/index.js';
 import { contactStore } from '../store/contact-store.js';
+import { widgetInstallStore } from '../store/widget-install-store.js';
 import { compareVoteStore } from '../store/compare-vote-store.js';
 import type { DocStore } from '../store/doc-store.js';
 import type { CryptoInvoice } from '../types.js';
@@ -1095,6 +1096,7 @@ export async function initDatabaseSync(): Promise<boolean> {
         usageStore,
         contactStore,
         compareVoteStore,
+        widgetInstallStore,
       ] as unknown as Array<DocStore<{ id: string }>>);
     } catch (error) {
       console.error('❌ [db] Журнал платежей не синхронизирован с PostgreSQL:', error);

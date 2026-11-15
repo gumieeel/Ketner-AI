@@ -103,7 +103,7 @@ test('api.md описывает ровно те маршруты Builder, что
 
 test('api.md описывает ровно те маршруты публичной страницы бота, что есть в коде', () => {
   const code = routesOf('/b', createBotsRouter({ bots: () => null, enabled: true }));
-  assert.equal(code.size, 4, `маршрутов бота: ${code.size}`);
+  assert.equal(code.size, 5, `маршрутов бота: ${code.size}`);
   assert.deepEqual(compare(code, documented('Бот для клиентов')), {
     undocumented: [],
     missingInCode: [],

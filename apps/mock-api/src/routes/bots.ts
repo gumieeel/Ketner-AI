@@ -6,6 +6,7 @@
  *   GET  /api/b/:slug/conversations/:conversationId?visitorId=…  история диалога посетителя
  *   POST /api/b/:slug/messages              `{ visitorId, conversationId?, content }` → ответ бота
  *   POST /api/b/:slug/leads                 `{ visitorId, conversationId?, name, contact, question? }`
+ *   POST /api/b/:slug/seen                  виджет открыт на сайте (адрес — из Origin), всегда 204
  *
  * Посетитель — анонимный id из его браузера (`v_…`); чужой диалог по id не открывается. Ответы
  * бота оплачивает владелец, поэтому запросы ограничены по посетителю и адресу, а у бота есть
@@ -18,10 +19,14 @@ import { botLeadBodySchema, botMessageBodySchema, VISITOR_ID } from '../builder/
 import { config } from '../config.js';
 import { sendError } from '../middleware/errors.js';
 import { RateLimiter } from '../middleware/rate-limit.js';
+import { allowedCorsOrigins } from '../middleware/security.js';
+import { siteOrigin, type WidgetInstalls } from '../store/widget-install-store.js';
 
 export interface BotsRouterDeps {
   bots: () => BotService | null;
   enabled?: boolean;
+  /** Где установлен виджет (P10). */
+  widgetInstalls?: WidgetInstalls;
 }
 
 const TEN_MINUTES = 10 * 60_000;
@@ -32,6 +37,7 @@ export function createBotsRouter(deps: BotsRouterDeps): Router {
   const perVisitor = new RateLimiter(TEN_MINUTES, 20);
   const perAddress = new RateLimiter(TEN_MINUTES, 60);
   const leadsPerAddress = new RateLimiter(60 * 60_000, 5);
+  const seenPerAddress = new RateLimiter(TEN_MINUTES, 30);
 
   router.use((request, response, next) => {
     if (!enabled) {
@@ -112,6 +118,22 @@ export function createBotsRouter(deps: BotsRouterDeps): Router {
       return;
     }
     response.json({ conversationId: result.conversationId, message: result.message });
+  });
+
+  // Отметка виджета (public/widget.js, navigator.sendBeacon). Ответ всегда 204 и пустой: по нему
+  // нельзя узнать, есть ли такой бот. Пишется только адрес сайта, и не чаще раза в 10 минут.
+  router.post('/:slug/seen', async (request, response) => {
+    response.status(204).end();
+    const installs = deps.widgetInstalls;
+    if (!installs) return;
+    const slug = String(request.params.slug).toLowerCase();
+    const origin = siteOrigin(request.get('origin')) ?? siteOrigin(request.get('referer'));
+    // Свой сайт (страница бота, кабинет) — не установка.
+    if (!origin || allowedCorsOrigins().has(origin)) return;
+    if (!installs.needsRecord(slug, origin) || seenPerAddress.hit(address(request))) return;
+    const bots = deps.bots();
+    if (!bots || !(await bots.publicInfo(slug))) return;
+    installs.record(slug, origin);
   });
 
   router.post('/:slug/leads', async (request, response) => {
