@@ -431,11 +431,20 @@ export interface BotRunway {
   daysLeft: number | null;
 }
 
+/** Сайт, где открывали виджет бота (P10): адрес сайта и когда его видели. */
+export interface WidgetSiteView {
+  origin: string;
+  firstSeenAt: string;
+  lastSeenAt: string;
+}
+
 export interface BotOverview {
   settings: BotSettings;
   today: BotToday;
   balance: BotRunway;
   publicUrl: string;
+  /** Где установлен виджет; у старого сервера поля нет. */
+  install?: { sites: WidgetSiteView[] };
 }
 
 export interface BotConversationView {

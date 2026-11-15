@@ -1,31 +1,13 @@
 import React, { useMemo } from 'react';
-import qrcode from 'qrcode-generator';
 import { useTranslation } from '@/i18n';
 import { cn } from '@/lib/cn';
+import { qrPath } from '@/lib/qr';
 
 interface QrCodeProps {
   value: string;
   size?: number;
   className?: string;
   badge?: React.ReactNode;
-}
-
-/**
- * Настоящий QR-код (его можно отсканировать кошельком). Уровень коррекции H: значок в центре
- * закрывает часть модулей, а код всё равно читается.
- */
-function qrPath(text: string): { path: string; count: number } {
-  const qr = qrcode(0, 'H');
-  qr.addData(text, 'Byte');
-  qr.make();
-  const count = qr.getModuleCount();
-  let path = '';
-  for (let y = 0; y < count; y++) {
-    for (let x = 0; x < count; x++) {
-      if (qr.isDark(y, x)) path += `M${x} ${y}h1v1h-1z`;
-    }
-  }
-  return { path, count };
 }
 
 export function QrCode({ value, size = 192, className = '', badge }: QrCodeProps) {

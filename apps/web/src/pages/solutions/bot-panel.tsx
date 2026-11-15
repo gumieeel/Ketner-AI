@@ -3,8 +3,6 @@ import { Link } from 'react-router-dom';
 import { buttonClasses } from '@/components/ui/button-classes';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { CopyButton } from '@/components/ui/copy-button';
-import { QrCode } from '@/components/ui/qr-code';
 import { Spinner } from '@/components/ui/spinner';
 import {
   BOT_LIMITS,
@@ -28,6 +26,7 @@ import { useTranslation } from '@/i18n';
 import { cn } from '@/lib/cn';
 import { formatDateTime } from '@/lib/format-date';
 import { ErrorNotice } from '@/pages/analysis/error-notice';
+import { BotLinkAndQr, BotSiteInstall } from './bot-install';
 
 /**
  * Кабинет бота для клиентов (этап B): где живёт бот (ссылка, QR, код для сайта), расход за
@@ -68,7 +67,7 @@ export function BotPanel({ details }: { details: SolutionDetails }) {
   }
   return (
     <>
-      <ShareSection details={details} overview={overview} />
+      <ShareSection details={details} overview={overview} onRefresh={refresh} />
       <PreviewSection id={id} />
       <LeadsSection id={id} />
       <ConversationsSection id={id} overview={overview} onSave={save} />
@@ -105,18 +104,18 @@ const textareaClass =
 
 // ─── Где живёт бот и расход ──────────────────────────────────────────────────
 
-function ShareSection({ details, overview }: { details: SolutionDetails; overview: BotOverview }) {
+function ShareSection({
+  details,
+  overview,
+  onRefresh,
+}: {
+  details: SolutionDetails;
+  overview: BotOverview;
+  onRefresh: () => Promise<void>;
+}) {
   const translator = useTranslation();
   const { t } = translator;
   const status = details.solution.status;
-  const origin = (() => {
-    try {
-      return new URL(overview.publicUrl).origin;
-    } catch {
-      return 'https://ketner.org';
-    }
-  })();
-  const embed = `<script src="${origin}/widget.js" data-bot="${overview.settings.slug}" async></script>`;
   return (
     <Section
       title={t('builder.bot.share.title')}
@@ -127,37 +126,9 @@ function ShareSection({ details, overview }: { details: SolutionDetails; overvie
           {status === 'draft' ? t('builder.bot.share.draft') : t('builder.bot.share.paused')}
         </p>
       ) : null}
-      <div className="mt-5 grid gap-6 sm:grid-cols-[minmax(0,1fr)_auto]">
-        <div className="flex min-w-0 flex-col gap-5">
-          <div>
-            <p className="text-[14px] font-medium text-text">{t('builder.bot.share.link')}</p>
-            <div className="mt-2 flex items-center gap-2">
-              <code className="min-w-0 flex-1 truncate rounded-lg border border-stroke bg-surface px-3 py-2 text-[14px] text-text">
-                {overview.publicUrl}
-              </code>
-              <CopyButton value={overview.publicUrl} label={t('builder.bot.share.copyLink')} />
-            </div>
-          </div>
-          <div>
-            <p className="text-[14px] font-medium text-text">{t('builder.bot.share.embed')}</p>
-            <p className="mt-1 text-[13px] leading-5 text-subtle">
-              {t('builder.bot.share.embedHint')}
-            </p>
-            <div className="mt-2 flex items-start gap-2">
-              <code className="min-w-0 flex-1 rounded-lg border border-stroke bg-surface px-3 py-2 font-mono text-[13px] leading-5 break-all text-text">
-                {embed}
-              </code>
-              <CopyButton value={embed} label={t('builder.bot.share.copyEmbed')} />
-            </div>
-          </div>
-        </div>
-        <figure className="flex flex-col items-start gap-2 sm:items-center">
-          <QrCode value={overview.publicUrl} size={144} />
-          <figcaption className="max-w-[12rem] text-[13px] leading-5 text-subtle sm:text-center">
-            {t('builder.bot.share.qr')}
-          </figcaption>
-        </figure>
-      </div>
+      {/* Ссылка и QR — первыми: у многих клиентов сайта нет (P10). */}
+      <BotLinkAndQr overview={overview} />
+      <BotSiteInstall overview={overview} onCheck={onRefresh} />
 
       <h3 className="mt-8 text-[16px] font-medium text-text">{t('builder.bot.today.title')}</h3>
       <dl className="mt-3 grid grid-cols-3 gap-3">

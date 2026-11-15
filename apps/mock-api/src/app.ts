@@ -105,6 +105,8 @@ export interface AppDeps {
   builder?: ApiDeps['builder'];
   /** Dodo Payments в тестах: клиент, продукт подписки, обязательность подписки. */
   dodo?: ApiDeps['dodo'];
+  /** Где установлен виджет бота (P10). */
+  widgetInstalls?: ApiDeps['widgetInstalls'];
 }
 
 const DEFAULT_BODY_LIMIT = '1mb';

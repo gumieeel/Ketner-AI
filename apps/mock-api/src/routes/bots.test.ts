@@ -21,6 +21,8 @@ import { createConversationStore } from '../store/conversation-store.js';
 import { createSubscriptionStore } from '../store/subscription-store.js';
 import { createUserStore } from '../store/user-store.js';
 import { UsageStore } from '../store/usage-store.js';
+import { DocStore } from '../store/doc-store.js';
+import { WidgetInstalls, type WidgetInstall } from '../store/widget-install-store.js';
 import { isCodeMail, rememberCodeMails, signupAndVerify } from '../testing/signup.js';
 
 const gateway = {
@@ -58,7 +60,9 @@ async function start() {
     gateway,
     balanceUsd: () => 1,
   });
+  const widgetInstalls = new WidgetInstalls(new DocStore<WidgetInstall>('widget_installs'));
   const app = createApp({
+    widgetInstalls,
     store: createConversationStore(join(dir, 'c.json')),
     userStore: createUserStore(join(dir, 'u.json')),
     subscriptionStore: createSubscriptionStore(join(dir, 's.json')),
@@ -78,7 +82,7 @@ async function start() {
   const server: Server = app.listen(0);
   const base = `http://localhost:${(server.address() as { port: number }).port}`;
   rememberCodeMails(base, codeMails);
-  return { base, builderStore, otherMails, close: () => server.close() };
+  return { base, builderStore, otherMails, widgetInstalls, close: () => server.close() };
 }
 
 async function signup(base: string, email: string) {
@@ -299,6 +303,87 @@ test('лимит сообщений посетителя: 21-е за 10 мину
       });
     for (let index = 0; index < 20; index += 1) assert.equal((await send()).status, 200);
     assert.equal((await send()).status, 429);
+  } finally {
+    app.close();
+  }
+});
+
+test('виджет на сайте: отметка с Origin видна владельцу, чужое и своё не записывается', async () => {
+  const app = await start();
+  try {
+    const owner = await signup(app.base, 'widget-owner@example.com');
+    const now = new Date().toISOString();
+    await app.builderStore.createSolution(
+      {
+        id: 'widget-bot',
+        ownerId: owner.userId,
+        type: 'customer_bot',
+        template: 'customer_bot',
+        bot: {
+          slug: 'lisa-widget',
+          greeting: 'Здравствуйте!',
+          quickReplies: [],
+          dailyCapCredits: 1000,
+          corrections: [],
+        },
+        status: 'active',
+        name: 'Лиса',
+        currentVersion: 1,
+        activeVersion: 1,
+        source: null,
+        createdAt: now,
+        updatedAt: now,
+        version: 1,
+      },
+      { solutionId: 'widget-bot', number: 1, config: defaultConfig('Лиса', 'ru'), createdAt: now },
+      [],
+    );
+    const seen = (slug: string, origin?: string) =>
+      fetch(`${app.base}/api/b/${slug}/seen`, {
+        method: 'POST',
+        headers: origin ? { Origin: origin } : {},
+      });
+    const sites = async () => {
+      const response = await fetch(`${app.base}/api/solutions/widget-bot/bot`, {
+        headers: owner.headers,
+      });
+      assert.equal(response.status, 200);
+      const body = (await response.json()) as {
+        publicUrl: string;
+        install: { sites: Array<{ origin: string; lastSeenAt: string }> };
+      };
+      assert.match(body.publicUrl, /\/b\/lisa-widget$/);
+      return body.install.sites.map((site) => site.origin);
+    };
+
+    assert.deepEqual(await sites(), [], 'пока виджет не открывали');
+
+    // Без Origin, со своим сайтом и для несуществующего бота — 204, но ничего не пишется.
+    for (const response of [
+      await seen('lisa-widget'),
+      await seen('lisa-widget', 'https://ketner.org'),
+      await seen('nobody-here', 'https://shop.example'),
+    ]) {
+      assert.equal(response.status, 204);
+      assert.equal(await response.text(), '');
+    }
+    assert.deepEqual(await sites(), []);
+    assert.deepEqual(app.widgetInstalls.sitesFor('nobody-here'), [], 'чужой адрес не заводится');
+
+    const response = await seen('lisa-widget', 'https://shop.example');
+    assert.equal(response.status, 204);
+    // Ответ отдаётся до записи: ждём, пока отметка появится.
+    for (let i = 0; i < 20 && (await sites()).length === 0; i += 1) {
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    }
+    assert.deepEqual(await sites(), ['https://shop.example']);
+
+    // Кабинет чужого бота недоступен — и сайты его тоже.
+    const stranger = await signup(app.base, 'widget-stranger@example.com');
+    const foreign = await fetch(`${app.base}/api/solutions/widget-bot/bot`, {
+      headers: stranger.headers,
+    });
+    assert.equal(foreign.status, 404);
   } finally {
     app.close();
   }

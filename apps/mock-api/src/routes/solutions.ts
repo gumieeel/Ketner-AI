@@ -90,8 +90,11 @@ import type { UserStore } from '../store/user-store.js';
 import type { Mailer } from '../services/mailer.js';
 import { resolveUserPlan } from '../services/user-plan.js';
 import { siteUrl } from '../seo/pages.js';
+import type { WidgetInstalls } from '../store/widget-install-store.js';
 
 export interface SolutionsRouterDeps {
+  /** Где установлен виджет бота (P10): показывается владельцу в кабинете бота. */
+  widgetInstalls?: WidgetInstalls;
   /** Флаг пути платформы для ботов (тесты); по умолчанию — config.botPlatformRuntime. */
   botPlatform?: BotPlatformRuntime;
   ai: AiConfig;
@@ -313,6 +316,12 @@ function ownerLead(item: BotLead) {
 
 export function createSolutionsRouter(deps: SolutionsRouterDeps): Router {
   const router = Router();
+  // Кабинет бота: публичная ссылка и сайты, где найден виджет (P10).
+  const withShare = <T extends { settings: { slug: string } }>(overview: T) => ({
+    ...overview,
+    publicUrl: `${siteUrl()}/b/${overview.settings.slug}`,
+    install: { sites: deps.widgetInstalls?.sitesFor(overview.settings.slug) ?? [] },
+  });
   const enabled = deps.enabled ?? config.discoveryEnabled;
   const stores = deps.stores ?? getDiscoveryStores;
   const usageStore = deps.usageStore ?? defaultUsageStore;
@@ -1279,7 +1288,7 @@ export function createSolutionsRouter(deps: SolutionsRouterDeps): Router {
       if (!bots) return;
       const overview = await bots.overview(caller.userId, String(request.params.id));
       if (!overview) return botNotFound(response);
-      response.json({ ...overview, publicUrl: `${siteUrl()}/b/${overview.settings.slug}` });
+      response.json(withShare(overview));
     }),
   );
 
@@ -1307,7 +1316,7 @@ export function createSolutionsRouter(deps: SolutionsRouterDeps): Router {
       if (!result.ok) return fail(response, result);
       const overview = await bots.overview(caller.userId, String(request.params.id));
       if (!overview) return botNotFound(response);
-      response.json({ ...overview, publicUrl: `${siteUrl()}/b/${overview.settings.slug}` });
+      response.json(withShare(overview));
     }),
   );
 

@@ -8,6 +8,10 @@
  *
  * Кнопка в правом нижнем углу открывает окно чата — страницу ketner.org/b/<адрес>?embed=1 во
  * фрейме. Скрипт ничего не читает со страницы сайта и не ставит cookie; переписка живёт во фрейме.
+ *
+ * Один раз при загрузке виджет отправляет пустую отметку на ketner.org/api/b/<адрес>/seen: браузер
+ * сам добавляет адрес сайта (Origin), и владелец бота видит в кабинете, что виджет установлен.
+ * Ни страница, ни посетитель не передаются.
  */
 (function () {
   'use strict';
@@ -85,8 +89,19 @@
     }
   });
 
+  function seen() {
+    var url = origin + '/api/b/' + encodeURIComponent(slug) + '/seen';
+    try {
+      if (navigator.sendBeacon && navigator.sendBeacon(url)) return;
+      fetch(url, { method: 'POST', mode: 'no-cors', keepalive: true, credentials: 'omit' });
+    } catch (error) {
+      // Отметка не обязательна: виджет работает и без неё.
+    }
+  }
+
   function mount() {
     document.body.appendChild(button);
+    seen();
   }
   if (document.body) mount();
   else document.addEventListener('DOMContentLoaded', mount);

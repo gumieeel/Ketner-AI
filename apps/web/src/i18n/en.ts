@@ -2404,6 +2404,25 @@ export const en: Record<TranslationKey, string> = {
   'builder.bot.share.embed': 'Code for your website',
   'builder.bot.share.embedHint':
     'Paste it before </body>: a chat button with the bot appears in the corner of your site.',
+  'builder.bot.share.downloadPng': 'Download PNG',
+  'builder.bot.share.downloadSvg': 'Download SVG for print',
+  'builder.bot.install.title': 'On your website',
+  'builder.bot.install.lead':
+    'No website? The link and QR code above are enough. Have one? Add a chat button: choose what your site is built with.',
+  'builder.bot.install.builder': 'What your site is built with',
+  'builder.bot.install.linkMethod':
+    'Here a button linking to the bot page works better; no widget code is needed.',
+  'builder.bot.install.developer': 'Send to your developer',
+  'builder.bot.install.developerHint':
+    'The code, where to paste it and how to check it. No account data is included.',
+  'builder.bot.install.email': 'Write an email',
+  'builder.bot.install.copyText': 'Copy text',
+  'builder.bot.install.statusTitle': 'Installation check',
+  'builder.bot.install.found': 'Widget found on {site}',
+  'builder.bot.install.lastSeen': 'last seen {time}',
+  'builder.bot.install.notFound':
+    'Not found yet. Paste the code and open any page of your site: its address appears here.',
+  'builder.bot.install.check': 'Check again',
   'builder.bot.share.copyEmbed': 'Copy code',
   'builder.bot.share.draft':
     'The page starts working once the bot is on. Before that, try it “as a customer” and run the test cases.',

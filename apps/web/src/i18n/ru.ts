@@ -2387,6 +2387,25 @@ export const ru = {
   'builder.bot.share.embed': 'Код для вашего сайта',
   'builder.bot.share.embedHint':
     'Вставьте перед </body>: в углу сайта появится кнопка чата с ботом.',
+  'builder.bot.share.downloadPng': 'Скачать PNG',
+  'builder.bot.share.downloadSvg': 'Скачать SVG для печати',
+  'builder.bot.install.title': 'На вашем сайте',
+  'builder.bot.install.lead':
+    'Сайта нет — хватит ссылки и QR-кода выше. Есть — поставьте кнопку чата: выберите, на чём сделан сайт.',
+  'builder.bot.install.builder': 'На чём сделан сайт',
+  'builder.bot.install.linkMethod':
+    'Здесь удобнее кнопка со ссылкой на страницу бота — код виджета не нужен.',
+  'builder.bot.install.developer': 'Отправить разработчику',
+  'builder.bot.install.developerHint':
+    'Код, куда его вставить и как проверить. Данных вашего аккаунта в тексте нет.',
+  'builder.bot.install.email': 'Написать письмо',
+  'builder.bot.install.copyText': 'Скопировать текст',
+  'builder.bot.install.statusTitle': 'Проверка установки',
+  'builder.bot.install.found': 'Виджет найден на {site}',
+  'builder.bot.install.lastSeen': 'последний раз {time}',
+  'builder.bot.install.notFound':
+    'Пока не найден. Вставьте код и откройте любую страницу сайта — здесь появится его адрес.',
+  'builder.bot.install.check': 'Проверить ещё раз',
   'builder.bot.share.copyEmbed': 'Скопировать код',
   'builder.bot.share.draft':
     'Страница заработает, когда бот будет включён. Перед этим проверьте его «как клиент» и на тест-кейсах.',

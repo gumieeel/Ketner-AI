@@ -68,10 +68,16 @@ import type { TelegramBotService } from '../telegram/bot.js';
 import type { TelegramSupportBotService } from '../telegram/support-bot.js';
 import type { SupportStore } from '../store/support-store.js';
 import type { defaultBetterAuth } from '../auth/better-auth.js';
+import {
+  widgetInstalls as defaultWidgetInstalls,
+  type WidgetInstalls,
+} from '../store/widget-install-store.js';
 
 /** Зависимости роутеров: подменяются в тестах. */
 export interface ApiDeps {
   store: ConversationStore;
+  /** Где установлен виджет бота (P10); в тестах — своё хранилище без файла. */
+  widgetInstalls?: WidgetInstalls;
   userStore?: UserStore;
   subscriptionStore?: SubscriptionStore;
   invoiceStore?: InvoiceStore;
@@ -345,6 +351,7 @@ export function createApiRouter(deps: ApiDeps): Router {
   const activeSubscriptionStore = deps.subscriptionStore ?? defaultSubscriptionStore;
   const activeInvoiceStore = deps.invoiceStore ?? defaultInvoiceStore;
   const activeUsageStore = deps.usageStore ?? defaultUsageStore;
+  const activeWidgetInstalls = deps.widgetInstalls ?? defaultWidgetInstalls;
   // Журнал платежей работает с теми же хранилищами, что и роутеры (в тестах — с временными).
   const activeBilling =
     deps.billingService ??
@@ -559,6 +566,7 @@ export function createApiRouter(deps: ApiDeps): Router {
     '/solutions',
     createSolutionsRouter({
       ai: deps.ai,
+      widgetInstalls: activeWidgetInstalls,
       userStore: activeUserStore,
       subscriptionStore: activeSubscriptionStore,
       usageStore: activeUsageStore,
@@ -585,6 +593,7 @@ export function createApiRouter(deps: ApiDeps): Router {
     '/b',
     createBotsRouter({
       bots: builderRuntime.bots,
+      widgetInstalls: activeWidgetInstalls,
       ...(deps.discoveryEnabled !== undefined ? { enabled: deps.discoveryEnabled } : {}),
     }),
   );
