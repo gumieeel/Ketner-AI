@@ -206,16 +206,23 @@ test('неизвестные и ручная проверка расширяют
   );
   assert.equal(many.uncertaintyBp, 3_000);
   assert.equal(many.confidence, 'low');
-  const whatsapp = estimate(
-    [
-      opp('a', [
-        { capability: 'whatsapp_business_integration', quantity: 1, complexity: null, reason: '' },
-      ]),
-    ],
-    DEFAULT_CATALOG,
-    CONFIG,
-    known,
+  // WhatsApp сейчас «запланировано» (решение владельца 16.11.2026): работы нет — она исключена.
+  const whatsappWork = [
+    opp('a', [
+      { capability: 'whatsapp_business_integration', quantity: 1, complexity: null, reason: '' },
+    ]),
+  ];
+  const planned = estimate(whatsappWork, DEFAULT_CATALOG, CONFIG, known);
+  assert.equal(planned.priceKzt, null);
+  assert.deepEqual(
+    planned.excluded.map((item) => [item.capabilityId, item.reason]),
+    [['whatsapp_business_integration', 'not_offered']],
   );
+  // Механика ручной проверки и внешнего согласования — на работе, которую делает команда.
+  const teamCatalog = DEFAULT_CATALOG.map((item) =>
+    item.id === 'whatsapp_business_integration' ? { ...item, status: 'custom' as const } : item,
+  );
+  const whatsapp = estimate(whatsappWork, teamCatalog, CONFIG, known);
   assert.equal(whatsapp.requiresManualReview, true);
   assert.equal(whatsapp.duration.externalApproval, true);
   assert.deepEqual(whatsapp.unknownDirectCosts, ['Подключение WhatsApp Business']);
@@ -255,7 +262,7 @@ test('выведенные из требований работы: низкая 
   assert.equal(result.technicalVerificationRequired, true);
 });
 
-test('ежемесячные расходы: подписка, прогноз ИИ по цене реестра, неизвестный объём', () => {
+test('ежемесячные расходы: без прежней подписки $15, прогноз ИИ по цене реестра, неизвестный объём', () => {
   const result = estimate(
     [
       opp('a', [
@@ -267,14 +274,13 @@ test('ежемесячные расходы: подписка, прогноз И
     known,
   );
   const withRate = monthlyCosts(result.lines, 600, { ...CONFIG, usdToKztRate: 500 });
-  assert.equal(withRate.recurring[0]!.kind, 'subscription');
-  assert.equal(withRate.recurring[0]!.amount.kzt, 7_500);
+  // Тариф подбирает pricing/delivery.ts по services/tiers.ts; строки подписки $15 больше нет.
+  assert.deepEqual(withRate.recurring, []);
   assert.equal(withRate.usage.status, 'forecast');
   assert.ok(withRate.usage.aiMicroUsd!.min <= withRate.usage.aiMicroUsd!.expected);
   assert.ok(withRate.usage.aiMicroUsd!.expected <= withRate.usage.aiMicroUsd!.max);
   assert.ok(withRate.usage.aiKzt!.expected > 0);
   const noRate = monthlyCosts(result.lines, 600, CONFIG);
-  assert.equal(noRate.recurring[0]!.amount.kzt, null);
   assert.equal(noRate.usage.aiKzt, null);
   const unknown = monthlyCosts(result.lines, null, CONFIG);
   assert.equal(unknown.usage.status, 'volume_unknown');

@@ -14,6 +14,7 @@ import {
   formatKztRange,
   formatUsdCents,
   type Confidence,
+  type Delivery,
   type EstimateView,
   type RequestView,
 } from '@/features/pricing/api';
@@ -28,10 +29,88 @@ const CONFIDENCE_TONE: Record<Confidence, BadgeTone> = {
 };
 
 /**
- * Предварительная стоимость внедрения в карточке возможности: диапазон, срок, уверенность.
- * Все числа посчитаны сервером по каталогу работ и настройкам; здесь ничего не считается.
+ * Карточка возможности: кто её делает (решение владельца 16.11.2026).
+ * - «Сами в Ketner» — без цены в тенге и сроков, с тарифом;
+ * - «Команда» — предварительная стоимость внедрения, срок, уверенность, тариф;
+ * - «Запланировано» — чего в Ketner пока нет, без цены.
+ * Все числа посчитаны сервером; здесь ничего не считается.
  */
 export function EstimateSummary({ estimate }: { estimate: EstimateView }) {
+  const delivery = estimate.delivery;
+  if (delivery.kind === 'self_service') return <SelfServiceSummary delivery={delivery} />;
+  if (delivery.kind === 'planned') return <PlannedSummary delivery={delivery} />;
+  return <TeamSummary estimate={estimate} />;
+}
+
+function SelfServiceSummary({ delivery }: { delivery: Delivery }) {
+  const { t } = useTranslation();
+  return (
+    <div
+      data-testid="estimate-self-service"
+      className="mt-3 rounded-xl border border-stroke bg-surface-2/60 px-4 py-3"
+    >
+      <p className="text-[15px] font-medium text-text">{t('estimate.self.title')}</p>
+      <p className="mt-0.5 text-[14px] leading-6 text-muted">{t('estimate.self.body')}</p>
+      <PriceListNote delivery={delivery} />
+      <TierLine delivery={delivery} />
+    </div>
+  );
+}
+
+function PlannedSummary({ delivery }: { delivery: Delivery }) {
+  const { t } = useTranslation();
+  return (
+    <div
+      data-testid="estimate-planned"
+      className="mt-3 rounded-xl border border-stroke bg-surface-2/60 px-4 py-3"
+    >
+      <p className="text-[15px] font-medium text-text">{t('estimate.planned.title')}</p>
+      <p className="mt-0.5 text-[14px] leading-6 text-muted">
+        {t('estimate.planned.body', { names: delivery.plannedWork.join(', ') })}
+      </p>
+    </div>
+  );
+}
+
+/** Прайс-лист в знаниях помощника: помещается ли в лимит и что делать, если нет. */
+function PriceListNote({ delivery }: { delivery: Delivery }) {
+  const { t, language } = useTranslation();
+  const list = delivery.priceList;
+  if (!list) return null;
+  const params = {
+    limit: list.limitChars.toLocaleString(language === 'ru' ? 'ru-RU' : 'en-US'),
+    positions: list.maxPositions,
+  };
+  return (
+    <p className="mt-1.5 text-[14px] leading-6 text-text">
+      {list.status === 'fits'
+        ? t('estimate.priceList.fits', params)
+        : list.status === 'too_large'
+          ? t('estimate.priceList.tooLarge', params)
+          : t('estimate.priceList.unknown', params)}
+    </p>
+  );
+}
+
+/** Тариф под нагрузку — названия, цены и объёмы приходят с сервера (services/tiers.ts). */
+function TierLine({ delivery }: { delivery: Delivery }) {
+  const { t, language } = useTranslation();
+  const tier = delivery.tier;
+  return (
+    <p className="mt-1.5 text-[13px] leading-5 text-muted">
+      {tier
+        ? t('estimate.tier', {
+            name: tier.name,
+            price: `$${tier.priceUsd}`,
+            requests: tier.monthlyRequests.toLocaleString(language === 'ru' ? 'ru-RU' : 'en-US'),
+          })
+        : t('estimate.tierCustom')}
+      {tier && !delivery.volumeKnown ? ` ${t('estimate.tierVolumeUnknown')}` : ''}
+    </p>
+  );
+}
+
+function TeamSummary({ estimate }: { estimate: EstimateView }) {
   const { t, language } = useTranslation();
   return (
     <div className="mt-3 rounded-xl border border-stroke bg-surface-2/60 px-4 py-3">
@@ -59,6 +138,11 @@ export function EstimateSummary({ estimate }: { estimate: EstimateView }) {
           <Badge tone="outline">{t('estimate.reviewRequired')}</Badge>
         ) : null}
       </div>
+      {estimate.delivery.paidTierRequired ? (
+        <p className="mt-1.5 text-[14px] leading-6 text-text">{t('estimate.team.paidTier')}</p>
+      ) : null}
+      <PriceListNote delivery={estimate.delivery} />
+      <TierLine delivery={estimate.delivery} />
     </div>
   );
 }
@@ -173,14 +257,6 @@ function MonthlyCosts({ estimate }: { estimate: EstimateView }) {
                 ? t('estimate.perMonth', { amount: formatUsdCents(item.amount.usdCents) })
                 : '—'}
           </span>
-          {item.monthlyCredits ? (
-            <span className="text-muted">
-              {' '}
-              {t('estimate.includesCredits', {
-                credits: item.monthlyCredits.toLocaleString('ru-RU'),
-              })}
-            </span>
-          ) : null}
         </li>
       ))}
       <li>

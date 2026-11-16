@@ -2715,6 +2715,22 @@ export const en: Record<TranslationKey, string> = {
 
   // Сметы внедрения, профиль бизнеса, заявки и админка смет.
   'nav.requests': 'Requests',
+  'estimate.self.title': 'You can do this yourself in Ketner',
+  'estimate.self.body':
+    'Everything needed is already in Ketner: no team work, you only pay for a plan.',
+  'estimate.planned.title': 'Planned — no price yet',
+  'estimate.planned.body':
+    'Ketner does not have this yet: {names}. There is no estimate or price until Ketner supports it.',
+  'estimate.team.paidTier': 'Integration work is available on a paid plan only.',
+  'estimate.priceList.fits':
+    "The price list fits in the assistant's knowledge (up to {limit} characters) — you can paste it yourself.",
+  'estimate.priceList.unknown':
+    "You can paste the price list into the assistant's knowledge yourself if it fits in {limit} characters (about {positions} lines). If it is larger, the team prepares it.",
+  'estimate.priceList.tooLarge':
+    "The price list is too large to paste into the assistant's knowledge (over {limit} characters, about {positions} lines). Next step: cut it down to the main items or order catalog preparation from the team.",
+  'estimate.tier': '{name} plan: {price} a month, up to {requests} requests.',
+  'estimate.tierVolumeUnknown': 'Chosen without a request count — add it to the business profile.',
+  'estimate.tierCustom': 'The load is above the largest plan — terms are discussed separately.',
   'estimate.preliminary': 'Preliminary implementation cost',
   'estimate.disabled': 'The Ketner team will calculate the cost',
   'estimate.reviewRequired': 'Technical review required',
@@ -2734,10 +2750,8 @@ export const en: Record<TranslationKey, string> = {
   'estimate.excluded.not_offered': 'not offered yet without review',
   'estimate.excluded.unknown_capability': 'non-standard work',
   'estimate.separately': 'Paid separately',
-  'estimate.recurring.subscription': 'Ketner Automations subscription',
   'estimate.recurring.support': 'Support',
   'estimate.perMonth': '{amount} per month',
-  'estimate.includesCredits': '(includes {credits} credits for AI usage)',
   'estimate.aiUsage': 'AI usage',
   'estimate.forecastRange': 'forecast {range} per month, not an exact bill',
   'estimate.usage.volume_unknown':
@@ -2796,6 +2810,7 @@ export const en: Record<TranslationKey, string> = {
   'profile.teamSize': 'Team size',
   'profile.monthlyRequests': 'Customer requests per month',
   'profile.monthlyOrders': 'Orders per month',
+  'profile.catalogPositions': 'Items in the price list',
   'profile.notSet': 'Not set',
   'profile.save': 'Save',
   'profile.saving': 'Saving…',

@@ -52,7 +52,7 @@ import {
 import { chargedCredits, DiscoveryService, type DiscoveryCaller } from '../discovery/service.js';
 import type { Analysis, Opportunity, Plan } from '../discovery/types.js';
 import { CREDITS_PER_USD } from '../services/entitlement.js';
-import { businessProfileEditSchema } from '../discovery/profile.js';
+import { businessProfileEditSchema, monthlyVolume } from '../discovery/profile.js';
 import { pricingServiceFor } from '../pricing/runtime.js';
 import type { PricingService } from '../pricing/service.js';
 import { publicEstimate, publicRequest } from '../pricing/views.js';
@@ -383,7 +383,17 @@ export function createAnalysesRouter(deps: AnalysesRouterDeps): Router {
       const enabled = (await pricing.active()).config.enabled;
       return {
         enabled,
-        items: rows.map((row) => publicEstimate(row, enabled)),
+        items: rows.map((row) =>
+          publicEstimate(
+            row,
+            enabled,
+            {
+              catalogPositions: analysis.context?.profile?.catalogPositions ?? null,
+              monthlyRequests: monthlyVolume(analysis.context?.profile),
+            },
+            analysis.language,
+          ),
+        ),
       };
     } catch (error) {
       console.error(`[pricing] ${analysis.id}: смета не посчитана`, error);

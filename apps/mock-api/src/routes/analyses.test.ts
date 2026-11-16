@@ -6,6 +6,7 @@ import { join } from 'node:path';
 import test from 'node:test';
 import type { GatewayRequest, GatewayStreamCallbacks } from '../ai/gateway-types.js';
 import { createApp } from '../app.js';
+import { setProductSwitchForTests } from '../product-switches.js';
 import { publicAnalysis } from './analyses.js';
 import { MemoryBudgetStore } from '../discovery/budget.js';
 import { DiscoveryService } from '../discovery/service.js';
@@ -17,6 +18,11 @@ import { createSubscriptionStore } from '../store/subscription-store.js';
 import { createUserStore } from '../store/user-store.js';
 import { UsageStore } from '../store/usage-store.js';
 import { isCodeMail, rememberCodeMails, signupAndVerify } from '../testing/signup.js';
+
+// Возможности «API» и «GitHub» живут в закрытых разделах (product-switches.ts); здесь проверяется
+// механика «нужна настройка», поэтому разделы открыты для этого файла.
+setProductSwitchForTests('developerApi', true);
+setProductSwitchForTests('code', true);
 
 type AnalysisView = ReturnType<typeof publicAnalysis>;
 

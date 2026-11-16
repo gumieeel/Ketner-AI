@@ -59,7 +59,7 @@ const ANALYSIS: AnalysisView = {
       requires: ['text_generation'],
       otherRequirement: null,
       dataNeeded: [],
-      integrationsNeeded: ['WhatsApp'],
+      integrationsNeeded: ['CRM'],
       effort: 'medium',
       effortReason: '',
       risks: [],
@@ -92,40 +92,47 @@ const ESTIMATE: EstimateView = {
   sharedSavingsKzt: null,
   workingDays: { min: 4, max: 9 },
   externalApproval: true,
+  delivery: {
+    kind: 'team',
+    plannedWork: [],
+    teamWork: ['Интеграция с CRM'],
+    priceList: null,
+    paidTierRequired: true,
+    tier: { id: 'growth', name: 'Growth', priceUsd: 29, monthlyRequests: 5000 },
+    volumeKnown: false,
+  },
   confidence: 'medium',
   confidenceReasons: ['unknowns'],
   requiresManualReview: true,
   technicalVerificationRequired: true,
   work: [
     {
-      capabilityId: 'whatsapp_business_integration',
-      name: { ru: 'Подключение WhatsApp Business', en: 'WhatsApp Business connection' },
-      category: 'channel',
+      capabilityId: 'crm_integration',
+      name: { ru: 'Интеграция с CRM', en: 'CRM integration' },
+      category: 'integration',
       complexity: 'medium',
       quantity: 1,
       requiresManualReview: true,
       shared: false,
-      includes: ['Подключение WhatsApp через официальный API'],
+      includes: ['Обмен заказами с CRM через её API'],
       prerequisites: [],
     },
   ],
   projectWork: [{ ru: 'Подготовка и архитектура', en: 'Preparation and architecture' }],
-  excluded: [{ capabilityId: 'one_c_integration', name: 'Интеграция с 1С', reason: 'not_offered' }],
-  unknownDirectCosts: ['Подключение WhatsApp Business'],
+  excluded: [],
+  unknownDirectCosts: ['Интеграция с CRM'],
   assumptions: ['Есть актуальный каталог'],
   unknowns: ['Где хранится каталог'],
-  exclusions: ['Плата провайдеру и Meta за сообщения — отдельно'],
+  exclusions: ['Тариф CRM — отдельно'],
   monthly: {
     usdToKztRate: null,
-    recurring: [
-      { kind: 'subscription', amount: { kzt: null, usdCents: 1500 }, monthlyCredits: 7500 },
-    ],
+    recurring: [],
     usage: {
       status: 'volume_unknown',
       monthlyRequests: null,
       aiUsdCents: null,
       aiKzt: null,
-      externalProviderFees: ['Подключение WhatsApp Business'],
+      externalProviderFees: [],
     },
   },
   calculatedAt: '2026-11-07T10:00:00.000Z',
@@ -147,7 +154,7 @@ const REQUEST: RequestView = {
   updatedAt: '2026-11-07T10:05:00.000Z',
 };
 
-function installApi() {
+function installApi(estimate: EstimateView = ESTIMATE) {
   const calls: Array<{
     method: string;
     path: string;
@@ -172,14 +179,14 @@ function installApi() {
         plans: null,
         rerun: null,
         retry: null,
-        estimates: { enabled: true, items: [ESTIMATE] },
+        estimates: { enabled: true, items: [estimate] },
       });
     }
     if (url.pathname === '/api/analyses/a1/requests' && method === 'POST') {
       return json(201, { request: REQUEST });
     }
     if (url.pathname === '/api/analyses/a1/profile' && method === 'PATCH') {
-      return json(200, { analysis: ANALYSIS, estimates: { enabled: true, items: [ESTIMATE] } });
+      return json(200, { analysis: ANALYSIS, estimates: { enabled: true, items: [estimate] } });
     }
     if (url.pathname === '/api/requests' && method === 'GET')
       return json(200, { requests: [REQUEST] });
@@ -234,10 +241,16 @@ describe('смета внедрения в отчёте и заявка', () => 
 
     fireEvent.click(within(card).getByRole('button', { name: 'Из чего складывается стоимость' }));
     expect(within(card).getByText('В стоимость входит')).toBeVisible();
-    expect(within(card).getByText(/Подключение WhatsApp через официальный API/)).toBeVisible();
-    expect(within(card).getByText(/Интеграция с 1С — пока не делаем без проверки/)).toBeVisible();
+    expect(within(card).getByText(/Обмен заказами с CRM через её API/)).toBeVisible();
     expect(within(card).getByText('Отдельно оплачивается')).toBeVisible();
-    expect(within(card).getByText(/\$15 в месяц/)).toBeVisible();
+    // Работа команды — только на платном тарифе; тариф — с сервера, прежней подписки $15 нет.
+    expect(
+      within(card).getByText('Работа по интеграциям доступна только на платном тарифе.'),
+    ).toBeVisible();
+    expect(
+      within(card).getByText(/Тариф Growth: \$29 в месяц, до 5\s000 обращений\./),
+    ).toBeVisible();
+    expect(card.textContent).not.toMatch(/\$15|7\s500 кредитов/);
     expect(within(card).getByText(/зависит от числа обращений/)).toBeVisible();
     expect(
       within(card).getByText(
@@ -313,5 +326,85 @@ describe('смета внедрения в отчёте и заявка', () => 
     expect(screen.getByText(/не меняется при изменении цен/)).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Отменить заявку' }));
     await waitFor(() => expect(screen.getAllByText('Отменено').length).toBeGreaterThan(0));
+  });
+
+  it('карточка «сами в Ketner»: без цены в тенге, без сроков и без заявки на смету', async () => {
+    installApi({
+      ...ESTIMATE,
+      priceKzt: null,
+      workingDays: null,
+      externalApproval: false,
+      delivery: {
+        kind: 'self_service',
+        plannedWork: [],
+        teamWork: [],
+        priceList: { status: 'unknown', limitChars: 8000, maxPositions: 100, positions: null },
+        paidTierRequired: false,
+        tier: { id: 'start', name: 'Start', priceUsd: 10, monthlyRequests: 1000 },
+        volumeKnown: true,
+      },
+    });
+    renderRoute('/analyses/a1');
+    const card = (
+      await screen.findByRole('heading', { name: 'ИИ-консультант по товарам' })
+    ).closest('li')!;
+    const self = within(card).getByTestId('estimate-self-service');
+    expect(within(self).getByText('Можно сделать самим в Ketner')).toBeInTheDocument();
+    expect(self).toHaveTextContent(/если он помещается в 8\s000 символов \(примерно 100 позиций\)/);
+    expect(self).toHaveTextContent(/Тариф Start: \$10 в месяц, до 1\s000 обращений\./);
+    expect(card.textContent).not.toMatch(/₸|рабочих дней|Предварительная стоимость/);
+    expect(within(card).queryByRole('button', { name: 'Запросить точную смету' })).toBeNull();
+    expect(
+      within(card).queryByRole('button', { name: 'Из чего складывается стоимость' }),
+    ).toBeNull();
+  });
+
+  it('прайс-лист больше лимита знаний: карточка говорит, что вставить нельзя, и называет следующий шаг', async () => {
+    installApi({
+      ...ESTIMATE,
+      delivery: {
+        ...ESTIMATE.delivery,
+        teamWork: ['Подготовка каталога товаров и услуг'],
+        priceList: { status: 'too_large', limitChars: 8000, maxPositions: 100, positions: 1200 },
+        paidTierRequired: true,
+      },
+    });
+    renderRoute('/analyses/a1');
+    const card = (
+      await screen.findByRole('heading', { name: 'ИИ-консультант по товарам' })
+    ).closest('li')!;
+    expect(card).toHaveTextContent(
+      /Прайс-лист слишком большой, чтобы вставить его в знания помощника/,
+    );
+    expect(card).toHaveTextContent(
+      /Следующий шаг: сократите его до основных позиций или закажите подготовку каталога командой\./,
+    );
+  });
+
+  it('«запланировано» (WhatsApp): без цены, без оценки команды и без заявки', async () => {
+    installApi({
+      ...ESTIMATE,
+      priceKzt: null,
+      workingDays: null,
+      externalApproval: false,
+      delivery: {
+        kind: 'planned',
+        plannedWork: ['Подключение WhatsApp Business'],
+        teamWork: [],
+        priceList: null,
+        paidTierRequired: false,
+        tier: null,
+        volumeKnown: false,
+      },
+    });
+    renderRoute('/analyses/a1');
+    const card = (
+      await screen.findByRole('heading', { name: 'ИИ-консультант по товарам' })
+    ).closest('li')!;
+    const planned = within(card).getByTestId('estimate-planned');
+    expect(within(planned).getByText('Запланировано — пока без цены')).toBeInTheDocument();
+    expect(planned).toHaveTextContent(/Этого в Ketner пока нет: Подключение WhatsApp Business\./);
+    expect(card.textContent).not.toMatch(/₸|рабочих дней/);
+    expect(within(card).queryByRole('button', { name: 'Запросить точную смету' })).toBeNull();
   });
 });

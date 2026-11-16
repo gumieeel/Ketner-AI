@@ -26,6 +26,7 @@ const EMPTY: BusinessProfileData = {
   existingTools: [],
   monthlyRequests: null,
   monthlyOrders: null,
+  catalogPositions: null,
   additionalContext: null,
 };
 
@@ -66,6 +67,8 @@ export function ProfileEditor({
     facts.push([t('profile.monthlyRequests'), String(profile.monthlyRequests)]);
   if (profile.monthlyOrders !== null)
     facts.push([t('profile.monthlyOrders'), String(profile.monthlyOrders)]);
+  if (profile.catalogPositions)
+    facts.push([t('profile.catalogPositions'), String(profile.catalogPositions)]);
 
   return (
     <section
@@ -135,6 +138,7 @@ function ProfileForm({
     team: useId(),
     requests: useId(),
     orders: useId(),
+    catalog: useId(),
   };
   const set = <K extends keyof BusinessProfileData>(key: K, next: BusinessProfileData[K]) =>
     setValue((current) => ({ ...current, [key]: next }));
@@ -231,6 +235,14 @@ function ProfileForm({
             inputMode="numeric"
             value={value.monthlyOrders ?? ''}
             onChange={(event) => set('monthlyOrders', number(event.target.value))}
+          />
+        </Label>
+        <Label id={ids.catalog} text={t('profile.catalogPositions')}>
+          <Input
+            id={ids.catalog}
+            inputMode="numeric"
+            value={value.catalogPositions ?? ''}
+            onChange={(event) => set('catalogPositions', number(event.target.value))}
           />
         </Label>
       </div>

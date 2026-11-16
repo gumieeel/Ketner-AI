@@ -1,4 +1,4 @@
-import { fireEvent, screen, waitFor, within } from '@testing-library/react';
+import { fireEvent, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { useAuth } from '@/features/auth/auth-store';
 import { setSiteFeatures } from '@/lib/features';
@@ -9,7 +9,7 @@ const json = (status: number, body: unknown) =>
 
 const PLAN = { priceUsd: 15, monthlyCredits: 7500, trialCredits: 2000, trialDays: 30 };
 
-describe('подписка «Автоматизации» на странице «Кредиты» (этап E)', () => {
+describe('подписка «Автоматизации» на странице «Кредиты»: только управление у тех, у кого она есть', () => {
   const assign = vi.fn();
   beforeEach(() => {
     resetPreferences();
@@ -29,7 +29,7 @@ describe('подписка «Автоматизации» на странице 
     expect(screen.queryByTestId('automation-plan')).toBeNull();
   });
 
-  it('условия видны гостю; после входа кнопка ведёт на оплату Dodo с пробным месяцем', async () => {
+  it('прежнее предложение $15 / 7 500 кредитов не показывается ни гостю, ни аккаунту без подписки', async () => {
     setSiteFeatures({ discovery: true, cardPayments: true });
     const calls: string[] = [];
     vi.stubGlobal('fetch', async (input: RequestInfo | URL, init: RequestInit = {}) => {
@@ -37,21 +37,12 @@ describe('подписка «Автоматизации» на странице 
       calls.push(`${init.method ?? 'GET'} ${path}`);
       if (path === '/api/billing/automation')
         return json(200, { available: true, plan: PLAN, subscription: null });
-      if (path === '/api/billing/automation/checkout')
-        return json(200, { url: 'https://test.checkout.dodopayments.com/cks_1' });
       return json(404, { error: { code: 'not_found' } });
     });
     const guest = renderRoute('/pricing');
-    const card = await screen.findByTestId('automation-plan');
-    expect(
-      within(card).getByRole('heading', { name: 'Автоматизации — $15 в месяц' }),
-    ).toBeVisible();
-    expect(card).toHaveTextContent(/7\s500 кредитов в месяц/);
-    expect(card).toHaveTextContent(/Первые 30 дней бесплатно — 2\s000 кредитов/);
-    expect(within(card).getByRole('link', { name: 'Начать: 30 дней бесплатно' })).toHaveAttribute(
-      'href',
-      '/signup?redirect=%2Fsolutions',
-    );
+    await screen.findByRole('heading', { level: 1 });
+    expect(screen.queryByTestId('automation-plan')).toBeNull();
+    expect(document.body.textContent).not.toMatch(/\$15 в месяц|7\s500 кредитов в месяц/);
     guest.unmount();
 
     useAuth.setState({
@@ -60,13 +51,9 @@ describe('подписка «Автоматизации» на странице 
       user: { id: 'u1', email: 'u1@example.com', name: 'Анна', plan: 'free' } as never,
     });
     renderRoute('/pricing');
-    const start = await screen.findByRole('button', { name: 'Начать: 30 дней бесплатно' });
-    await waitFor(() => expect(start).toBeEnabled());
-    fireEvent.click(start);
-    await waitFor(() =>
-      expect(assign).toHaveBeenCalledWith('https://test.checkout.dodopayments.com/cks_1'),
-    );
-    expect(calls).toContain('POST /api/billing/automation/checkout');
+    await waitFor(() => expect(calls).toContain('GET /api/billing/automation'));
+    expect(screen.queryByTestId('automation-plan')).toBeNull();
+    expect(document.body.textContent).not.toMatch(/\$15 в месяц|7\s500 кредитов в месяц/);
   });
 
   it('подписчику — статус пробного месяца и «Управлять подпиской»', async () => {

@@ -47,6 +47,7 @@ export function contextTemplate(inputText: string, language: Language): string {
       existingTools: [],
       monthlyRequests: null,
       monthlyOrders: null,
+      catalogPositions: null,
       additionalContext: null,
     },
     missing: short

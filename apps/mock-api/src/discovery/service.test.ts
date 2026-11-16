@@ -12,6 +12,12 @@ import {
 import { MemoryDiscoveryStore } from './store.js';
 import { BuildAllowance } from '../billing/build-allowance.js';
 import { MemoryCounterStore } from '../billing/cost-counters.js';
+import { setProductSwitchForTests } from '../product-switches.js';
+
+// Возможности «API» и «GitHub» живут в закрытых разделах (product-switches.ts); здесь проверяется
+// механика «нужна настройка», поэтому разделы открыты для этого файла.
+setProductSwitchForTests('developerApi', true);
+setProductSwitchForTests('code', true);
 
 const SHORT = 'Веду интернет-магазин, много однотипных вопросов от покупателей.';
 const LONG =
@@ -971,4 +977,136 @@ test('план упал: причина, бесплатный повтор с н
   // Бесплатный план этого анализа уже использован: следующий — за кредиты.
   const view = await service.get(user.userId, id);
   assert.equal(service.planOffer(view!.analysis, user).free.available, false);
+});
+
+// ─── Бот для клиентов, когда клиенты пишут в каналы, которых у Ketner нет (решение 16.11.2026) ───
+
+const contextWithChannels = (channels: string[]) =>
+  JSON.stringify({ ...JSON.parse(CONTEXT_NO_QUESTIONS), profile: { customerChannels: channels } });
+
+const MESSENGERS_ONLY = JSON.stringify({
+  summary: 'Клиенты пишут в WhatsApp.',
+  opportunities: [
+    {
+      title: 'Ответы в WhatsApp',
+      area: 'clients',
+      problem: 'Однотипные вопросы в WhatsApp',
+      solution: 'ИИ отвечает в WhatsApp',
+      requires: ['messengers', 'text_generation'],
+      effort: 'high',
+      impact: { taskId: 't1', automationShare: 'high', benefit: 'Меньше ручных ответов' },
+    },
+    {
+      title: 'Черновики ответов',
+      area: 'routine',
+      recipe: 'personal_assistant',
+      problem: 'Однотипные вопросы',
+      solution: 'ИИ пишет черновик, вы проверяете',
+      requires: ['text_generation'],
+      effort: 'low',
+      impact: { taskId: 't1', automationShare: 'medium', benefit: 'Быстрее отвечать' },
+    },
+    {
+      title: 'Автоответы в почте',
+      area: 'clients',
+      problem: 'Однотипные письма',
+      solution: 'ИИ отвечает сам',
+      requires: ['email', 'text_generation'],
+      effort: 'high',
+      impact: { taskId: 't1', automationShare: 'high', benefit: 'Меньше ручных ответов' },
+    },
+  ],
+});
+
+async function readyOpportunities(script: Script) {
+  const { service } = setup({ script });
+  const caller = guest();
+  const created = await create(service, caller, { text: LONG });
+  assert.equal(created.ok, true);
+  if (!created.ok) throw new Error('not created');
+  await service.whenIdle();
+  const view = await service.get(caller.userId, created.analysis.id);
+  assert.equal(view?.analysis.status, 'ready');
+  return [...(view?.opportunities ?? [])].sort((a, b) => a.priority - b.priority);
+}
+
+test('клиенты пишут в WhatsApp, модель предложила только ответы в WhatsApp — сервер добавляет бота по ссылке и QR-коду первым', async () => {
+  const items = await readyOpportunities({
+    context: contextWithChannels(['whatsapp', 'instagram', 'website']),
+    discovery: MESSENGERS_ONLY,
+  });
+  const whatsapp = items.find((item) => item.title === 'Ответы в WhatsApp');
+  assert.equal(whatsapp?.feasibilityStatus, 'not_supported', 'честное «пока не поддерживается»');
+  const bot = items.find((item) => item.recipe === 'customer_bot');
+  assert.ok(bot, 'бот для клиентов добавлен');
+  assert.equal(bot.feasibilityStatus, 'ready');
+  assert.deepEqual(bot.requires, ['customer_bot_page', 'text_generation']);
+  assert.match(bot.solution, /по ссылке, QR-коду и кнопке на сайте/);
+  assert.match(bot.solution, /К WhatsApp, Instagram не подключается/);
+  // Единственное «можно сейчас» для переписки с клиентами — рекомендуемый старт.
+  assert.equal(items[0]?.id, bot.id);
+});
+
+test('бот добавляется при любом неподдерживаемом канале переписки (Telegram, чат маркетплейса), но не при сайте и телефоне', async () => {
+  for (const [channels, expected] of [
+    [['telegram'], /К Telegram не подключается/],
+    [['marketplace'], /К чат маркетплейса не подключается/],
+  ] as const) {
+    const items = await readyOpportunities({
+      context: contextWithChannels([...channels]),
+      discovery: MESSENGERS_ONLY,
+    });
+    const bot = items.find((item) => item.recipe === 'customer_bot');
+    assert.ok(bot, channels.join());
+    assert.match(bot.solution, expected);
+  }
+  const none = await readyOpportunities({
+    context: contextWithChannels(['website', 'phone', 'email', 'offline']),
+    discovery: MESSENGERS_ONLY,
+  });
+  assert.equal(
+    none.some((item) => item.recipe === 'customer_bot'),
+    false,
+  );
+});
+
+test('модель уже предложила бота для клиентов — второй не добавляется; есть другое «можно сейчас» для клиентов — бот не первый', async () => {
+  const withBot = JSON.parse(MESSENGERS_ONLY) as { opportunities: Array<Record<string, unknown>> };
+  withBot.opportunities.push({
+    title: 'Бот для покупателей',
+    area: 'clients',
+    recipe: 'customer_bot',
+    problem: 'Однотипные вопросы',
+    solution: 'Бот по ссылке',
+    requires: ['customer_bot_page', 'text_generation'],
+    effort: 'low',
+    impact: { taskId: 't1', automationShare: 'medium', benefit: 'Меньше ответов' },
+  });
+  const items = await readyOpportunities({
+    context: contextWithChannels(['whatsapp']),
+    discovery: JSON.stringify(withBot),
+  });
+  assert.deepEqual(
+    items.filter((item) => item.recipe === 'customer_bot').map((item) => item.title),
+    ['Бот для покупателей'],
+  );
+
+  const other = JSON.parse(MESSENGERS_ONLY) as { opportunities: Array<Record<string, unknown>> };
+  other.opportunities.push({
+    title: 'Черновики ответов клиентам',
+    area: 'clients',
+    recipe: 'personal_assistant',
+    problem: 'Однотипные вопросы',
+    solution: 'Черновики',
+    requires: ['text_generation'],
+    effort: 'low',
+    impact: { taskId: 't1', automationShare: 'medium', benefit: 'Быстрее отвечать' },
+  });
+  const ranked = await readyOpportunities({
+    context: contextWithChannels(['whatsapp']),
+    discovery: JSON.stringify(other),
+  });
+  const bot = ranked.find((item) => item.recipe === 'customer_bot');
+  assert.ok(bot, 'бот всё равно предложен');
+  assert.notEqual(ranked[0]?.id, bot.id);
 });
