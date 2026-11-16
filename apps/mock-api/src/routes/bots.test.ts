@@ -10,7 +10,10 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
 import type { GatewayRequest, GatewayStreamCallbacks } from '../ai/gateway-types.js';
+import express from 'express';
 import { createApp } from '../app.js';
+import { createBotsRouter } from './bots.js';
+import type { BotService } from '../builder/bot-service.js';
 import { BuilderService, defaultConfig } from '../builder/service.js';
 import { MemoryBuilderStore } from '../builder/store.js';
 import { memoryToolStores } from '../testing/builder-fixtures.js';
@@ -387,4 +390,60 @@ test('виджет на сайте: отметка с Origin видна влад
   } finally {
     app.close();
   }
+});
+
+test('отметка виджета: сбой после ответа 204 не доходит до обработчика ошибок', async (t) => {
+  const handled: unknown[] = [];
+  const logged: unknown[][] = [];
+  const original = console.error;
+  console.error = (...args: unknown[]) => {
+    logged.push(args);
+  };
+  t.after(() => {
+    console.error = original;
+  });
+  let calls = 0;
+  const bots = {
+    async publicInfo() {
+      calls += 1;
+      throw new Error('база недоступна');
+    },
+  } as unknown as BotService;
+  const app = express();
+  app.use(
+    '/api/b',
+    createBotsRouter({
+      bots: () => bots,
+      enabled: true,
+      widgetInstalls: new WidgetInstalls(new DocStore<WidgetInstall>('widget_installs')),
+    }),
+  );
+  app.use(
+    (error: unknown, _request: express.Request, response: express.Response, _next: unknown) => {
+      handled.push(error);
+      response.status(500).end();
+    },
+  );
+  const server = app.listen(0);
+  t.after(() => server.close());
+  const base = `http://localhost:${(server.address() as { port: number }).port}`;
+
+  const response = await fetch(`${base}/api/b/lisa-widget/seen`, {
+    method: 'POST',
+    headers: { Origin: 'https://shop.example' },
+  });
+  assert.equal(response.status, 204);
+  for (let i = 0; i < 50 && logged.length === 0; i += 1) {
+    await new Promise((resolve) => setTimeout(resolve, 10));
+  }
+  assert.equal(calls, 1, 'бот искали');
+  assert.deepEqual(handled, [], 'обработчик ошибок не вызывался');
+  assert.match(String(logged[0]?.[0]), /отметка виджета не записана/);
+
+  // Сервер жив: следующий запрос обрабатывается как обычно.
+  const again = await fetch(`${base}/api/b/lisa-widget/seen`, {
+    method: 'POST',
+    headers: { Origin: 'https://other.example' },
+  });
+  assert.equal(again.status, 204);
 });

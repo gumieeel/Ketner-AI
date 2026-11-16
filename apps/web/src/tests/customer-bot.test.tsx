@@ -392,7 +392,9 @@ describe('кабинет бота: ссылка, код для сайта, за�
     };
     const before = calls.filter((call) => call.path === '/api/solutions/b1/bot').length;
     fireEvent.click(screen.getByRole('button', { name: 'Проверить ещё раз' }));
-    expect(await screen.findByText('Виджет найден на shop.example')).toBeVisible();
+    expect(await screen.findByText('Виджет открывали на shop.example')).toBeVisible();
+    // Отметка — подсказка, а не доказательство: панель так и говорит.
+    expect(screen.getByText(/Это подсказка, а не проверка/)).toBeVisible();
     expect(screen.queryByText(/Пока не найден/)).toBeNull();
     expect(calls.filter((call) => call.path === '/api/solutions/b1/bot').length).toBe(before + 1);
   });
