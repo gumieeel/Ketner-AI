@@ -48,7 +48,25 @@ export interface BuildAllowanceDeps {
   tierOf?: (userId: string) => TierId | null;
   now?: () => Date;
   log?: (message: string, error: unknown) => void;
+  /**
+   * Сигнал администратору: бюджет сервиса на бесплатное создание за сутки прошёл 80%. Не чаще раза
+   * в сутки (отметка в счётчиках переживает перезапуск).
+   */
+  onServiceBudgetHigh?: (status: ServiceBudgetStatus) => void | Promise<void>;
 }
+
+/** Бюджет сервиса на бесплатное создание за текущие сутки UTC. */
+export interface ServiceBudgetStatus {
+  day: string;
+  spentUsd: number;
+  limitUsd: number;
+  /** Доля потраченного, 0–1. */
+  share: number;
+  resetsAt: string;
+}
+
+/** Порог сигнала администратору: доля суточного бюджета сервиса. */
+export const SERVICE_BUDGET_ALERT_SHARE = 0.8;
 
 const monthOf = (date: Date) => date.toISOString().slice(0, 7);
 const dayOf = (date: Date) => date.toISOString().slice(0, 10);
@@ -95,7 +113,10 @@ export class BuildAllowance {
     const cap = Math.max(0, capUsd);
     try {
       const ok = await this.deps.counters().reserve(limits, cap);
-      if (ok) return { ok: true, ticket: { userId, keys: limits.map((l) => l.key), capUsd: cap } };
+      if (ok) {
+        if (limits.some((l) => l.scope === 'service')) await this.checkServiceBudget(at);
+        return { ok: true, ticket: { userId, keys: limits.map((l) => l.key), capUsd: cap } };
+      }
       // Какой лимит не пустил: первый по порядку, где не хватает.
       const spent = await this.deps.counters().spent(limits.map((l) => l.key));
       const blocking =
@@ -139,6 +160,33 @@ export class BuildAllowance {
       keys: this.limits(userId, at).map((limit) => limit.key),
       capUsd: Math.max(0, capUsd),
     };
+  }
+
+  /** Бюджет сервиса на бесплатное создание сегодня (карточка администратора). */
+  async serviceStatus(): Promise<ServiceBudgetStatus> {
+    const at = this.now();
+    const key = `service-day:${dayOf(at)}`;
+    const spentUsd = (await this.deps.counters().spent([key]))[key] ?? 0;
+    return {
+      day: dayOf(at),
+      spentUsd,
+      limitUsd: SERVICE_FREE_BUILD_DAILY_USD,
+      share: spentUsd / SERVICE_FREE_BUILD_DAILY_USD,
+      resetsAt: nextDay(at),
+    };
+  }
+
+  /** После резерва без тарифа: бюджет сервиса прошёл 80% — один сигнал в сутки. Сбой — в лог. */
+  private async checkServiceBudget(at: Date): Promise<void> {
+    if (!this.deps.onServiceBudgetHigh) return;
+    try {
+      const status = await this.serviceStatus();
+      if (status.share < SERVICE_BUDGET_ALERT_SHARE) return;
+      if (!(await this.deps.counters().claim(`service-day-alert:${dayOf(at)}`))) return;
+      await this.deps.onServiceBudgetHigh(status);
+    } catch (error) {
+      this.deps.log?.('[allowance] сигнал о бюджете сервиса не отправлен', error);
+    }
   }
 
   /** Сколько потрачено и сколько можно (для кабинета). */
@@ -263,6 +311,19 @@ export function unlimitedAllowance(): BuildAllowance {
     reserve: async () => true,
     adjust: async () => undefined,
     spent: async (keys) => Object.fromEntries(keys.map((key) => [key, 0])),
+    claim: async () => false,
+    purge: async () => 0,
   };
   return new BuildAllowance({ counters: () => unlimited });
+}
+
+/** Текст сигнала администратору о бюджете сервиса на бесплатное создание. */
+export function budgetAlertText(status: ServiceBudgetStatus): string {
+  const spent = status.spentUsd.toFixed(2);
+  const share = Math.round(status.share * 100);
+  return (
+    `⚠️ Бесплатное создание: за сутки ${status.day} потрачено ${spent} $ из ${status.limitUsd} $ ` +
+    `(${share}%). Когда бюджет кончится, аккаунты без тарифа не смогут создавать и проверять ` +
+    'решения до 00:00 UTC.'
+  );
 }

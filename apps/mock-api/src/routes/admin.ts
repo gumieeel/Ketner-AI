@@ -43,6 +43,7 @@ import {
 } from '../services/signup-attribution.js';
 import { tierEnforced, wouldLimit, type TierUsage } from '../billing/tier-usage.js';
 import { isTierId, TIER_IDS } from '../services/tiers.js';
+import type { BuildAllowance } from '../billing/build-allowance.js';
 
 const SIGNUP_CHANNELS: readonly SignupChannel[] = [
   'paid',
@@ -69,6 +70,8 @@ export interface AdminRouterDeps {
   credits?: CreditService;
   /** Тарифы и счётчик обращений (P3): карточка пользователя, назначение тарифа, сводка. */
   tierUsage?: TierUsage;
+  /** Бесплатный лимит создания (P2): текущий расход суточного бюджета сервиса. */
+  allowance?: BuildAllowance;
 }
 
 /**
@@ -102,6 +105,7 @@ export function createAdminRouter({
   feedbackStore = defaultFeedbackStore,
   credits = defaultCreditService,
   tierUsage,
+  allowance,
 }: AdminRouterDeps = {}): Router {
   const router = Router();
 
@@ -710,6 +714,21 @@ export function createAdminRouter({
   });
 
   // ─── Тарифы аккаунтов (P3, docs/SUBSCRIPTION_PRICING_DESIGN.md, раздел 5) ─────────────────
+
+  /** Бюджет сервиса на бесплатное создание сегодня: сколько потрачено из $3 и когда обновится. */
+  router.get('/free-build-budget', async (_req: Request, res: Response): Promise<void> => {
+    if (!allowance) {
+      sendError(res, 503, 'allowance_unavailable', 'Бесплатный лимит недоступен');
+      return;
+    }
+    try {
+      res.setHeader('Cache-Control', 'no-store');
+      res.json({ budget: await allowance.serviceStatus() });
+    } catch (error) {
+      console.error('[admin] бюджет бесплатного создания не прочитан:', error);
+      sendError(res, 503, 'allowance_unavailable', 'Бюджет не прочитан: база недоступна');
+    }
+  });
 
   /** Сводка: аккаунты с засчитанными обращениями в этом месяце или с назначенным тарифом. */
   router.get('/tiers', async (_req: Request, res: Response): Promise<void> => {

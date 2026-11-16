@@ -78,6 +78,7 @@ import {
 } from '../billing/account-tiers.js';
 import { TierUsage } from '../billing/tier-usage.js';
 import { getDiscoveryStores } from '../discovery/runtime.js';
+import { allowanceOver, budgetAlertText } from '../billing/build-allowance.js';
 
 /** Зависимости роутеров: подменяются в тестах. */
 export interface ApiDeps {
@@ -365,6 +366,17 @@ export function createApiRouter(deps: ApiDeps): Router {
     tiers: activeAccountTiers,
     journal: () => (deps.discovery?.stores?.() ?? getDiscoveryStores())?.journal ?? null,
   });
+  // Бесплатный лимит создания и проверки (P2): один на сервер — Builder, анализы и администратор.
+  // Бюджет сервиса прошёл 80% за сутки — сигнал администраторам (раз в сутки) и строка в логе.
+  const platformStores = () => (deps.discovery?.stores ?? getDiscoveryStores)();
+  const allowance = allowanceOver(platformStores, {
+    tierOf: (userId) => activeAccountTiers.tierOf(userId),
+    onServiceBudgetHigh: async (status) => {
+      const text = budgetAlertText(status);
+      console.warn(`[allowance] ${text}`);
+      await (deps.botService ?? telegramBotService).notifyAdminsText(text);
+    },
+  });
   const activeWidgetInstalls = deps.widgetInstalls ?? defaultWidgetInstalls;
   // Журнал платежей работает с теми же хранилищами, что и роутеры (в тестах — с временными).
   const activeBilling =
@@ -484,6 +496,7 @@ export function createApiRouter(deps: ApiDeps): Router {
       subscriptionStore: activeSubscriptionStore,
       userStore: activeUserStore,
       tierUsage,
+      allowance,
     }),
   );
   // API для разработчиков закрыт (product-switches.ts): новые ключи не выпускаются; список и отзыв — да.
@@ -555,6 +568,7 @@ export function createApiRouter(deps: ApiDeps): Router {
     createAnalysesRouter({
       ai: deps.ai,
       accountTiers: activeAccountTiers,
+      allowance,
       userStore: activeUserStore,
       subscriptionStore: activeSubscriptionStore,
       usageStore: activeUsageStore,
@@ -583,6 +597,7 @@ export function createApiRouter(deps: ApiDeps): Router {
     createSolutionsRouter({
       ai: deps.ai,
       accountTiers: activeAccountTiers,
+      allowance,
       tierUsage,
       widgetInstalls: activeWidgetInstalls,
       userStore: activeUserStore,

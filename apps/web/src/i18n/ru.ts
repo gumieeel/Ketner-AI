@@ -978,6 +978,13 @@ export const ru = {
   'admin.saved': 'Сохранено успешно!',
   'admin.apply': 'Применить изменения',
   'admin.saving': 'Сохранение…',
+  'admin.freeBudget.title': 'Бесплатное создание сегодня (UTC)',
+  'admin.freeBudget.value': '{spent} $ из {limit} $ ({percent}%)',
+  'admin.freeBudget.hint':
+    'Общий бюджет аккаунтов без тарифа на создание и проверку. Обновляется в 00:00 UTC.',
+  'admin.freeBudget.high':
+    'Больше 80%: когда бюджет кончится, аккаунты без тарифа не смогут создавать и проверять решения до 00:00 UTC. Проверьте, нет ли злоупотребления.',
+  'admin.freeBudget.unavailable': 'Бюджет бесплатного создания не прочитан.',
   'admin.tier.title': 'Тариф и обращения',
   'admin.tier.current': 'Тариф',
   'admin.tier.none': 'Не назначен',

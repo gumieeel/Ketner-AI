@@ -26,12 +26,31 @@ export interface CounterStore {
   adjust(keys: readonly string[], deltaUsd: number): Promise<void>;
   /** Потрачено по счётчикам, $; отсутствующий — 0. */
   spent(keys: readonly string[]): Promise<Record<string, number>>;
+  /** Отметка «уже сделано» (сигнал раз в сутки): true — только у первого, кто её поставил. */
+  claim(key: string): Promise<boolean>;
+  /**
+   * Очистка старых строк: суточные счётчики и отметки старше `dayRowsDays` дней, месячные — старше
+   * `monthRowsDays`. Возвращает число удалённых строк.
+   */
+  purge(options: { dayRowsDays: number; monthRowsDays: number }): Promise<number>;
 }
 
 const round6 = (value: number): number => Math.round(value * 1e6) / 1e6;
 
 export class MemoryCounterStore implements CounterStore {
   private readonly values = new Map<string, number>();
+  private readonly claims = new Set<string>();
+
+  async claim(key: string): Promise<boolean> {
+    if (this.claims.has(key)) return false;
+    this.claims.add(key);
+    return true;
+  }
+
+  /** В памяти строк немного и они живут до перезапуска: очистка не нужна. */
+  async purge(): Promise<number> {
+    return 0;
+  }
 
   async reserve(items: readonly CounterLimit[], amountUsd: number): Promise<boolean> {
     const fits = items.every(
@@ -134,6 +153,32 @@ export class PostgresCounterStore implements CounterStore {
     );
   }
 
+  async claim(key: string): Promise<boolean> {
+    await this.ensure();
+    const rows = await this.sql.query<{ id: string }>(
+      `INSERT INTO ketner_docs (namespace, id, data) VALUES ($1, $2, '{"claimed": true}'::jsonb)
+       ON CONFLICT (namespace, id) DO NOTHING RETURNING id`,
+      [COST_COUNTERS_NAMESPACE, key],
+    );
+    return rows.length === 1;
+  }
+
+  async purge(options: { dayRowsDays: number; monthRowsDays: number }): Promise<number> {
+    await this.ensure();
+    const rows = await this.sql.query<{ id: string }>(
+      `DELETE FROM ketner_docs
+       WHERE namespace = $1
+         AND (
+           ((id LIKE 'acct-day:%' OR id LIKE 'service-day:%' OR id LIKE 'service-day-alert:%')
+             AND updated_at < now() - make_interval(days => $2))
+           OR (id LIKE 'acct:%' AND updated_at < now() - make_interval(days => $3))
+         )
+       RETURNING id`,
+      [COST_COUNTERS_NAMESPACE, options.dayRowsDays, options.monthRowsDays],
+    );
+    return rows.length;
+  }
+
   async spent(keys: readonly string[]): Promise<Record<string, number>> {
     if (keys.length === 0) return {};
     await this.ensure();
@@ -145,4 +190,32 @@ export class PostgresCounterStore implements CounterStore {
     const found = new Map(rows.map((row) => [row.id, Number(row.spent)]));
     return Object.fromEntries(keys.map((key) => [key, found.get(key) ?? 0]));
   }
+}
+
+/** Сколько хранить строки счётчиков: суточные — 60 дней, месячные — 400 (тринадцать месяцев). */
+export const COUNTER_RETENTION = { dayRowsDays: 60, monthRowsDays: 400 } as const;
+
+let cleanupStarted = false;
+
+/**
+ * Очистка старых строк счётчиков в Postgres: через минуту после старта и раз в сутки. Миграции нет:
+ * удаляются строки `ketner_docs` пространства `cost_counters`, которые давно не менялись.
+ */
+export function startCounterCleanup(
+  counters: CounterStore,
+  log: (message: string, error?: unknown) => void = (message, error) =>
+    error ? console.error(message, error) : console.info(message),
+): void {
+  if (cleanupStarted || counters instanceof MemoryCounterStore) return;
+  cleanupStarted = true;
+  const run = async () => {
+    try {
+      const removed = await counters.purge(COUNTER_RETENTION);
+      if (removed > 0) log(`[allowance] удалено старых строк счётчиков: ${removed}`);
+    } catch (error) {
+      log('[allowance] очистка счётчиков не прошла', error);
+    }
+  };
+  setTimeout(() => void run(), 60_000).unref();
+  setInterval(() => void run(), 24 * 60 * 60_000).unref();
 }

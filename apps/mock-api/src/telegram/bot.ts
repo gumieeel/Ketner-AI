@@ -575,6 +575,18 @@ export class TelegramBotService implements TelegramPaymentsPort {
     for (const admin of admins) await this.sendMessage(admin.telegramChatId!, text);
   }
 
+  /**
+   * Служебный сигнал администраторам (бюджет бесплатного создания и подобное): в бот поддержки,
+   * без него — в Telegram администраторам, привязавшим аккаунт.
+   */
+  async notifyAdminsText(text: string): Promise<void> {
+    if (await this.adminInbox?.notifyAdmins(text)) return;
+    const admins = this.deps.userStore
+      .list()
+      .filter((candidate) => candidate.isAdmin && candidate.telegramChatId);
+    for (const admin of admins) await this.sendMessage(admin.telegramChatId!, text);
+  }
+
   /** Чат администратора в боте поддержки: туда идут заявки на возврат, оттуда — ответы. */
   private adminInbox: {
     postRefundNotice(ref: string, text: string, actionable: boolean): Promise<boolean>;

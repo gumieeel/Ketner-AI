@@ -102,6 +102,7 @@ import {
   type AccountTiers,
 } from '../billing/account-tiers.js';
 import type { TierUsage } from '../billing/tier-usage.js';
+import { startCounterCleanup } from '../billing/cost-counters.js';
 
 /** Потолок резерва одного ответа в чате владельца со своим помощником, $ (расчёт — по факту). */
 const ASSISTANT_CHAT_CAP_USD = 0.05;
@@ -208,6 +209,8 @@ export function createBuilderRuntime(deps: SolutionsRouterDeps): BuilderRuntime 
       journal && botPlatform.mode !== 'off' ? new BotAgentRuntime({ gateway, journal }) : null;
     // Зависшие исполнения (итог не записался) закрывает reaper; порог больше максимального срока
     // прогона AgentSpec (120 с), поэтому идущий прогон он не трогает. Только для журнала в Postgres.
+    // Старые строки счётчиков бесплатного лимита (только Postgres; раз в сутки).
+    if (ready.counters) startCounterCleanup(ready.counters);
     if (platformRuntime && journal instanceof PostgresExecutionJournal) {
       startExecutionReaper(journal, { maxRunMs: AGENT_SPEC_MAX_TIMEOUT_MS });
     }

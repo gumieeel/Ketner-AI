@@ -28,6 +28,7 @@ import type { PlanId } from '@/features/auth/types';
 import { RegistrationsPanel } from './admin/registrations-panel';
 import { Link } from 'react-router-dom';
 import { AdminTierCard, type AdminTierInfo } from './admin/tier-card';
+import { FreeBudgetPanel } from './admin/free-budget';
 
 interface AdminCredits {
   /** Остаток, кредиты. */
@@ -772,6 +773,9 @@ export function AdminPage() {
           </Button>
         </div>
       </header>
+
+      {/* Бюджет сервиса на бесплатное создание за сутки (P2): с 80% — предупреждение */}
+      <FreeBudgetPanel headers={getHeaders} />
 
       {/* KPI Cards */}
       <section className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">

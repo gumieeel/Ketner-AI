@@ -981,6 +981,13 @@ export const en: Record<TranslationKey, string> = {
   'admin.saved': 'Saved successfully',
   'admin.apply': 'Apply changes',
   'admin.saving': 'Saving…',
+  'admin.freeBudget.title': 'Free building today (UTC)',
+  'admin.freeBudget.value': '{spent} $ of {limit} $ ({percent}%)',
+  'admin.freeBudget.hint':
+    'Shared budget for building and testing by accounts with no tier. Resets at 00:00 UTC.',
+  'admin.freeBudget.high':
+    'Over 80%: once it runs out, accounts with no tier cannot build or test until 00:00 UTC. Check for abuse.',
+  'admin.freeBudget.unavailable': 'Free building budget could not be read.',
   'admin.tier.title': 'Tier and requests',
   'admin.tier.current': 'Tier',
   'admin.tier.none': 'Not assigned',

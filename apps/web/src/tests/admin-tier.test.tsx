@@ -1,5 +1,6 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { FreeBudgetPanel } from '@/pages/admin/free-budget';
 import { AdminTierCard, type AdminTierInfo } from '@/pages/admin/tier-card';
 import { resetPreferences } from './test-utils';
 
@@ -81,5 +82,40 @@ describe('тариф в карточке администратора (P3)', () 
     fireEvent.click(screen.getByRole('button', { name: 'Сохранить тариф' }));
     expect(await screen.findByRole('alert')).toHaveTextContent('база недоступна');
     expect(methods).toEqual(['DELETE']);
+  });
+});
+
+describe('бюджет бесплатного создания на странице администратора (P2)', () => {
+  beforeEach(() => resetPreferences());
+  afterEach(() => vi.unstubAllGlobals());
+
+  const budget = (spentUsd: number) => ({
+    budget: {
+      day: '2026-11-16',
+      spentUsd,
+      limitUsd: 3,
+      share: spentUsd / 3,
+      resetsAt: '2026-11-17T00:00:00.000Z',
+    },
+  });
+
+  it('показывает потраченное из $3; с 80% — предупреждение о злоупотреблении', async () => {
+    vi.stubGlobal('fetch', async () => Response.json(budget(1.2)));
+    const view = render(<FreeBudgetPanel headers={() => ({})} />);
+    expect(await screen.findByText('1.20 $ из 3.00 $ (40%)')).toBeInTheDocument();
+    expect(screen.getByRole('progressbar')).toHaveAttribute('aria-valuenow', '40');
+    expect(screen.queryByText(/Больше 80%/)).toBeNull();
+    view.unmount();
+
+    vi.stubGlobal('fetch', async () => Response.json(budget(2.55)));
+    render(<FreeBudgetPanel headers={() => ({})} />);
+    expect(await screen.findByText('2.55 $ из 3.00 $ (85%)')).toBeInTheDocument();
+    expect(screen.getByText(/Больше 80%/)).toBeInTheDocument();
+  });
+
+  it('сервер не ответил — понятное сообщение, страница не падает', async () => {
+    vi.stubGlobal('fetch', async () => new Response('', { status: 503 }));
+    render(<FreeBudgetPanel headers={() => ({})} />);
+    expect(await screen.findByText('Бюджет бесплатного создания не прочитан.')).toBeInTheDocument();
   });
 });

@@ -519,3 +519,30 @@ test('панель бота: обращения в этом месяце из с
     { tier: 'growth', used: 42, included: 5_000, limit: 5_500, state: 'ok' },
   );
 });
+
+test('счётчик не прочитан: тарифы выключены — ответ как раньше; включены — форма без вызова модели', async (t) => {
+  const tiers = new AccountTiers(new DocStore<AccountTier>('account_tiers'));
+  const broken = {
+    async countRequests() {
+      throw new Error('journal down');
+    },
+  } as unknown as ExecutionJournal;
+  const usage = new TierUsage({ tiers, journal: () => broken });
+  const original = console.error;
+  console.error = () => {};
+  t.after(() => {
+    console.error = original;
+  });
+
+  const off = await setup({ tierUsage: usage });
+  const answered = await off.service.send('lisa-shop', { visitorId: VISITOR, content: 'Цена?' });
+  assert.ok(answered.ok && !answered.message.offerContact, 'посетитель не замечает сбоя счётчика');
+  assert.equal(off.requests.length, 1);
+
+  setTierEnforcedForTests(true);
+  t.after(() => setTierEnforcedForTests(null));
+  const on = await setup({ tierUsage: usage, balance: 10 });
+  const form = await on.service.send('lisa-shop', { visitorId: VISITOR, content: 'Цена?' });
+  assert.ok(form.ok && form.message.offerContact, 'включены: форма заявки, а не ошибка');
+  assert.equal(on.requests.length, 0, 'модель не вызывается');
+});

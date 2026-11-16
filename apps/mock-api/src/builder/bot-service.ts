@@ -239,12 +239,25 @@ export class BotService {
     const usage = await this.deps.store.botUsageSince(solution.id, dayStart(this.now()));
     const overCap = toCredits(usage.creditsUsd) >= solution.bot.dailyCapCredits;
     const tierUsage = this.deps.tierUsage;
-    const decision = tierUsage ? await tierUsage.decision(owner.userId) : null;
+    // Счётчик не прочитан (журнал недоступен): пока тарифы выключены — ответ как раньше; включены —
+    // форма заявки без вызова модели (посетитель не видит ошибку, деньги не тратятся).
+    let decision: TierDecision | null = null;
+    let tierUnknown = false;
+    if (tierUsage) {
+      try {
+        decision = await tierUsage.decision(owner.userId);
+      } catch (error) {
+        tierUnknown = tierEnforced();
+        console.error('[tiers] решение не посчитано:', error);
+      }
+    }
     const tierFunded = decision !== null && tierEnforced();
     if (decision && !tierFunded) tierUsage!.shadow(owner.userId, decision);
-    const blockedByTier = tierFunded && decision.action !== 'answer';
+    const blockedByTier = tierUnknown || (tierFunded && decision?.action !== 'answer');
     const lowBalance =
-      !tierFunded && this.deps.balanceUsd(owner.userId, owner.plan) < BOT_REPLY_CAP_USD;
+      !tierFunded &&
+      !tierUnknown &&
+      this.deps.balanceUsd(owner.userId, owner.plan) < BOT_REPLY_CAP_USD;
     if (overCap || lowBalance || blockedByTier) {
       const saved = await this.save(solution, conversation, {
         role: 'assistant',

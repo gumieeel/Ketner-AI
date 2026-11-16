@@ -1,7 +1,12 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { openTestSql as openSql } from '../testing/sql.js';
-import { MemoryCounterStore, PostgresCounterStore, type CounterStore } from './cost-counters.js';
+import {
+  COUNTER_RETENTION,
+  MemoryCounterStore,
+  PostgresCounterStore,
+  type CounterStore,
+} from './cost-counters.js';
 import {
   BuildAllowance,
   SERVICE_FREE_BUILD_DAILY_USD,
@@ -137,6 +142,8 @@ test('бесплатный лимит: база недоступна — шаг 
       throw new Error('connection refused');
     },
     spent: async () => ({}),
+    claim: async () => false,
+    purge: async () => 0,
   };
   const allowance = new BuildAllowance({
     counters: () => broken,
@@ -148,4 +155,99 @@ test('бесплатный лимит: база недоступна — шаг 
   // Сбой расчёта по факту не бросает: резерв остаётся по потолку, сообщение в логе.
   await allowance.settle({ userId: 'u1', keys: ['k'], capUsd: 0.03 }, 0.01);
   assert.equal(logged.length, 2);
+});
+
+test('бюджет сервиса прошёл 80% — один сигнал администратору в сутки; на следующий день — снова', async () => {
+  const counters = new MemoryCounterStore();
+  let now = new Date('2026-11-15T10:00:00Z');
+  const signals: Array<{ day: string; share: number }> = [];
+  const allowance = new BuildAllowance({
+    counters: () => counters,
+    now: () => now,
+    onServiceBudgetHigh: (status) => {
+      signals.push({ day: status.day, share: Math.round(status.share * 100) / 100 });
+    },
+  });
+  // 4 аккаунта по $0.50 = $2.00 (67%) — сигнала нет.
+  for (let i = 0; i < 4; i += 1) assert.equal((await allowance.reserve(`u${i}`, 0.5)).ok, true);
+  assert.equal(signals.length, 0);
+  // Пятый — $2.50 (83%): сигнал. Шестой — $3.00: второго сигнала в те же сутки нет.
+  assert.equal((await allowance.reserve('u4', 0.5)).ok, true);
+  assert.equal((await allowance.reserve('u5', 0.5)).ok, true);
+  assert.deepEqual(signals, [{ day: '2026-11-15', share: 0.83 }]);
+  assert.deepEqual(await allowance.serviceStatus(), {
+    day: '2026-11-15',
+    spentUsd: 3,
+    limitUsd: 3,
+    share: 1,
+    resetsAt: '2026-11-16T00:00:00.000Z',
+  });
+  now = new Date('2026-11-16T09:00:00Z');
+  for (let i = 0; i < 5; i += 1) await allowance.reserve(`v${i}`, 0.5);
+  assert.deepEqual(
+    signals.map((s) => s.day),
+    ['2026-11-15', '2026-11-16'],
+  );
+});
+
+test('сигнал о бюджете: сбой отправки не мешает резерву', async () => {
+  const counters = new MemoryCounterStore();
+  const logged: string[] = [];
+  const allowance = new BuildAllowance({
+    counters: () => counters,
+    log: (message) => logged.push(message),
+    onServiceBudgetHigh: () => {
+      throw new Error('telegram down');
+    },
+  });
+  for (let i = 0; i < 5; i += 1) assert.equal((await allowance.reserve(`u${i}`, 0.5)).ok, true);
+  assert.deepEqual(logged, ['[allowance] сигнал о бюджете сервиса не отправлен']);
+});
+
+test('счётчики в Postgres: отметка сигнала одна на сутки, старые строки удаляются', async (t) => {
+  const sql = await openSql();
+  if (!sql) {
+    t.skip('нет PGlite и TEST_DATABASE_URL');
+    return;
+  }
+  t.after(() => sql.close());
+  const store = new PostgresCounterStore(sql.runner);
+  // Отметка: из двух одновременных попыток проходит одна; повтор — нет.
+  const claims = await Promise.all([
+    store.claim('service-day-alert:2026-11-15'),
+    store.claim('service-day-alert:2026-11-15'),
+  ]);
+  assert.deepEqual(claims.filter(Boolean).length, 1);
+  assert.equal(await store.claim('service-day-alert:2026-11-15'), false);
+
+  for (const key of [
+    'acct-day:u1:2026-08-01',
+    'service-day:2026-08-01',
+    'acct-day:u1:2026-11-15',
+    'acct:u1:2025-08',
+    'acct:u1:2026-11',
+  ]) {
+    await store.reserve([{ key, limitUsd: 10 }], 0.01);
+  }
+  const age = (key: string, days: number) =>
+    sql.runner.query(
+      `UPDATE ketner_docs SET updated_at = now() - make_interval(days => $2)
+       WHERE namespace = 'cost_counters' AND id = $1`,
+      [key, days],
+    );
+  await age('acct-day:u1:2026-08-01', 106);
+  await age('service-day:2026-08-01', 106);
+  await age('service-day-alert:2026-11-15', 61);
+  await age('acct:u1:2025-08', 460);
+  await age('acct:u1:2026-11', 61);
+  const removed = await store.purge(COUNTER_RETENTION);
+  assert.equal(removed, 4);
+  const left = await sql.runner.query<{ id: string }>(
+    `SELECT id FROM ketner_docs WHERE namespace = 'cost_counters' ORDER BY id`,
+  );
+  assert.deepEqual(
+    left.map((row) => row.id),
+    ['acct-day:u1:2026-11-15', 'acct:u1:2026-11'],
+    'суточные старше 60 дней и месячные старше 400 удалены; свежие и текущий месяц — нет',
+  );
 });

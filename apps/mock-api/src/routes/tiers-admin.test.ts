@@ -131,3 +131,18 @@ test('тарифы — только администратору', async (t) => 
   }
   assert.equal(h.store.get(h.userId), undefined, 'обычный пользователь себе тариф не назначит');
 });
+
+test('бюджет бесплатного создания за сутки: администратору — текущее значение, остальным — нет', async (t) => {
+  const h = await harness();
+  t.after(() => h.server.close());
+  const url = `${h.server.baseUrl}/api/admin/free-build-budget`;
+  const body = await readJson<{
+    budget: { day: string; spentUsd: number; limitUsd: number; share: number; resetsAt: string };
+  }>(await fetch(url, { headers: admin }));
+  assert.equal(body.budget.limitUsd, 3);
+  assert.equal(body.budget.day, new Date().toISOString().slice(0, 10));
+  assert.ok(body.budget.spentUsd >= 0 && body.budget.share >= 0);
+  assert.ok(Date.parse(body.budget.resetsAt) > Date.now());
+  const user = await fetch(url, { headers: { Authorization: `Bearer ${h.token}` } });
+  assert.ok([401, 403].includes(user.status));
+});
