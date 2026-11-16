@@ -96,6 +96,7 @@ import type {
   SiteSource,
   StageRun,
 } from './types.js';
+import { customerBotOffer, unsupportedMessagingChannels } from './customer-bot-offer.js';
 
 /** Кто делает запрос: личность только из сессии или гостевого id (routes/analyses.ts). */
 export interface DiscoveryCaller extends TaskCaller {
@@ -1680,7 +1681,25 @@ export class DiscoveryService {
     const user = this.deps.userCapabilities(caller);
     const createdAt = this.now().toISOString();
     const effortRank = { low: 0, medium: 1, high: 2 } as const;
-    const built = output.opportunities.map((item, position): Opportunity => {
+    // Клиенты пишут в каналы, которых у Ketner нет, а модель не предложила бота для клиентов —
+    // сервер добавляет его сам (customer-bot-offer.ts): «пока не поддерживается» не должно быть
+    // единственным ответом на переписку с клиентами.
+    const channels = unsupportedMessagingChannels(context.profile?.customerChannels);
+    const offersBot = (items: DiscoveryOutput['opportunities']) =>
+      items.some(
+        (item) =>
+          acceptedRecipe(
+            item.recipe,
+            assessFeasibility(item.requires, user, analysis.language, item.otherRequirement).status,
+            item.requires,
+          ) === 'customer_bot',
+      );
+    const serverBot =
+      channels.length > 0 && !offersBot(output.opportunities)
+        ? customerBotOffer(analysis.language, channels)
+        : null;
+    const drafts = serverBot ? [...output.opportunities, serverBot] : output.opportunities;
+    const built = drafts.map((item, position): Opportunity => {
       const feasibility = assessFeasibility(
         item.requires,
         user,
@@ -1722,8 +1741,20 @@ export class DiscoveryService {
     // из них), затем что можно сделать сейчас, по оценке пользы, по сложности, по порядку модели.
     const hours = (item: Opportunity) =>
       item.impact.kind === 'estimate' ? item.impact.hoursPerWeek[1] : 0;
+    // Добавленный сервером бот — рекомендуемый старт, если для переписки с клиентами больше нечего
+    // сделать сейчас (других выполнимых возможностей в области «Клиенты» нет).
+    const botFirst =
+      serverBot !== null &&
+      !built.some(
+        (item, index) =>
+          index < output.opportunities.length &&
+          item.area === 'clients' &&
+          item.feasibilityStatus !== 'not_supported',
+      );
+    const botIndex = serverBot ? built.length - 1 : -1;
     const ranked = [...built].sort(
       (a, b) =>
+        (botFirst ? Number(b.position === botIndex) - Number(a.position === botIndex) : 0) ||
         Number(a.recipe === null) - Number(b.recipe === null) ||
         feasibilityRank(a.feasibilityStatus) - feasibilityRank(b.feasibilityStatus) ||
         hours(b) - hours(a) ||

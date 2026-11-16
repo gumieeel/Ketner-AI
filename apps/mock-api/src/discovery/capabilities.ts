@@ -9,7 +9,14 @@
  * (discovery/feasibility.test.ts); пропала — переведите в `unavailable`.
  */
 
+import { productSwitch } from '../product-switches.js';
 import { rollout, type Rollout } from '../services/rollout.js';
+
+/** Подсказка возможности закрытого раздела (product-switches.ts): чат, Code, картинки, API. */
+const CLOSED_HINT: Record<'ru' | 'en', string> = {
+  ru: 'Этот раздел Ketner сейчас закрыт.',
+  en: 'This Ketner section is closed for now.',
+};
 import type { Language } from '../types.js';
 
 export type CapabilityAvailability =
@@ -37,6 +44,7 @@ export interface Capability {
 
 export const CAPABILITY_IDS = [
   'text_generation',
+  'customer_bot_page',
   'document_text',
   'document_tools',
   'image_generation',
@@ -64,8 +72,25 @@ export const CAPABILITIES: Readonly<Record<CapabilityId, Capability>> = {
   text_generation: {
     id: 'text_generation',
     availability: 'available',
-    label: { ru: 'Тексты и ответы моделей в чате', en: 'Text and answers from chat models' },
-    hint: { ru: 'Доступно в чате Ketner AI.', en: 'Available in Ketner AI chat.' },
+    label: { ru: 'Тексты и ответы ИИ', en: 'AI text and answers' },
+    hint: {
+      ru: 'Помощник или бот для клиентов в разделе «Мои автоматизации».',
+      en: 'An assistant or a customer bot in the My automations section.',
+    },
+  },
+  // Бот для клиентов (рецепт customer_bot): своя страница, ссылка, QR-код, кнопка на сайте.
+  // С мессенджерами не связан: WhatsApp и Instagram к нему не подключаются.
+  customer_bot_page: {
+    id: 'customer_bot_page',
+    availability: 'available',
+    label: {
+      ru: 'Бот для клиентов: своя страница, ссылка, QR-код и кнопка на сайте; заявки владельцу',
+      en: 'Customer bot: its own page, link, QR code and a site button; requests go to the owner',
+    },
+    hint: {
+      ru: 'Работает по ссылке, QR-коду и кнопке на сайте. К WhatsApp и Instagram не подключается.',
+      en: 'Works by link, QR code and site button. Does not connect to WhatsApp or Instagram.',
+    },
   },
   document_text: {
     id: 'document_text',
@@ -74,7 +99,10 @@ export const CAPABILITIES: Readonly<Record<CapabilityId, Capability>> = {
       ru: 'Текст из файлов TXT, DOCX, XLSX, PPTX',
       en: 'Text from TXT, DOCX, XLSX, PPTX files',
     },
-    hint: { ru: 'Приложите файл в чате.', en: 'Attach the file in chat.' },
+    hint: {
+      ru: 'Скопируйте нужный текст в знания помощника.',
+      en: "Copy the text you need into the assistant's knowledge.",
+    },
   },
   // Учебный помощник (Builder): виден только после включения (services/rollout.ts). Выключенный
   // не упоминается вовсе — даже как «пока нет».
@@ -93,68 +121,104 @@ export const CAPABILITIES: Readonly<Record<CapabilityId, Capability>> = {
   },
   image_generation: {
     id: 'image_generation',
-    availability: 'available',
+    get availability() {
+      return productSwitch('images') ? 'available' : 'unavailable';
+    },
     label: { ru: 'Генерация изображений', en: 'Image generation' },
-    hint: { ru: 'Раздел «Изображения».', en: 'The Images section.' },
+    get hint() {
+      return productSwitch('images')
+        ? { ru: 'Раздел «Изображения».', en: 'The Images section.' }
+        : CLOSED_HINT;
+    },
   },
   cross_check: {
     id: 'cross_check',
-    availability: 'available',
+    get availability() {
+      return productSwitch('answerReview') ? 'available' : 'unavailable';
+    },
     label: {
       ru: 'Проверка ответа моделью другой компании',
       en: 'Answer check by a model from another company',
     },
-    hint: {
-      ru: 'Кнопка «Проверить» под ответом в чате.',
-      en: 'The Check button under a chat answer.',
+    get hint() {
+      return productSwitch('answerReview')
+        ? {
+            ru: 'Кнопка «Проверить» под ответом в чате.',
+            en: 'The Check button under a chat answer.',
+          }
+        : CLOSED_HINT;
     },
   },
   model_compare: {
     id: 'model_compare',
-    availability: 'available',
+    get availability() {
+      return productSwitch('modelCompare') ? 'available' : 'unavailable';
+    },
     label: {
       ru: 'Сравнение ответов нескольких моделей',
       en: 'Comparing answers of several models',
     },
-    hint: { ru: 'Кнопка «Сравнить» в чате.', en: 'The Compare button in chat.' },
+    get hint() {
+      return productSwitch('modelCompare')
+        ? { ru: 'Кнопка «Сравнить» в чате.', en: 'The Compare button in chat.' }
+        : CLOSED_HINT;
+    },
   },
   code_agent: {
     id: 'code_agent',
-    availability: 'available',
+    get availability() {
+      return productSwitch('code') ? 'available' : 'unavailable';
+    },
     label: {
       ru: 'Агент Ketner Code: правки кода по задаче',
       en: 'Ketner Code agent: code changes by task',
     },
-    hint: {
-      ru: 'Раздел Ketner Code. Команды и тесты агент не запускает.',
-      en: 'The Ketner Code section. The agent does not run commands or tests.',
+    get hint() {
+      return productSwitch('code')
+        ? {
+            ru: 'Раздел Ketner Code. Команды и тесты агент не запускает.',
+            en: 'The Ketner Code section. The agent does not run commands or tests.',
+          }
+        : CLOSED_HINT;
     },
   },
   api_access: {
     id: 'api_access',
-    availability: 'setup',
+    get availability() {
+      return productSwitch('developerApi') ? 'setup' : 'unavailable';
+    },
     label: {
       ru: 'API для своих программ (формат OpenAI)',
       en: 'API for your own programs (OpenAI format)',
     },
-    hint: {
-      ru: 'Ключ API выдаётся после покупки кредитов.',
-      en: 'An API key is issued after buying credits.',
+    get hint() {
+      return productSwitch('developerApi')
+        ? {
+            ru: 'Ключ API выдаётся после покупки кредитов.',
+            en: 'An API key is issued after buying credits.',
+          }
+        : CLOSED_HINT;
     },
   },
   github_repo: {
     id: 'github_repo',
-    availability: 'integration',
+    get availability() {
+      return productSwitch('code') ? 'integration' : 'unavailable';
+    },
     label: { ru: 'Работа с репозиторием GitHub', en: 'Working with a GitHub repository' },
-    hint: { ru: 'Подключите GitHub в настройках.', en: 'Connect GitHub in settings.' },
+    get hint() {
+      return productSwitch('code')
+        ? { ru: 'Подключите GitHub в настройках.', en: 'Connect GitHub in settings.' }
+        : CLOSED_HINT;
+    },
   },
   pdf_reading: {
     id: 'pdf_reading',
     availability: 'unavailable',
     label: { ru: 'Чтение PDF', en: 'Reading PDF' },
     hint: {
-      ru: 'Пока нет: скопируйте текст из PDF в чат.',
-      en: 'Not yet: copy the text from the PDF into chat.',
+      ru: 'Пока нет: скопируйте текст из PDF в знания помощника.',
+      en: "Not yet: copy the text from the PDF into the assistant's knowledge.",
     },
   },
   vision: {
@@ -195,8 +259,8 @@ export const CAPABILITIES: Readonly<Record<CapabilityId, Capability>> = {
     availability: 'unavailable',
     label: { ru: 'Подключение к почте', en: 'Email connection' },
     hint: {
-      ru: 'Пока нет: вставьте текст письма в чат.',
-      en: 'Not yet: paste the email text into chat.',
+      ru: 'Пока нет: вставьте текст письма в помощника.',
+      en: 'Not yet: paste the email text into an assistant.',
     },
   },
   crm: {
@@ -213,8 +277,8 @@ export const CAPABILITIES: Readonly<Record<CapabilityId, Capability>> = {
       en: 'Spreadsheet sync (Google, Excel online)',
     },
     hint: {
-      ru: 'Пока нет: можно приложить файл XLSX в чате.',
-      en: 'Not yet: you can attach an XLSX file in chat.',
+      ru: 'Пока нет: скопируйте нужные данные в знания помощника.',
+      en: "Not yet: copy the data you need into the assistant's knowledge.",
     },
   },
   messengers: {
