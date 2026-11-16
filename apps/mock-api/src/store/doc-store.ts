@@ -52,6 +52,26 @@ export class DocStore<T extends { id: string }> {
     return structuredClone(doc);
   }
 
+  /**
+   * Запись с ожиданием Postgres: сначала база, потом память и файл. Сбой записи — исключение, и
+   * прежнее значение остаётся (для данных, которые нельзя потерять при перезапуске: тариф аккаунта).
+   */
+  async putDurable(doc: T): Promise<T> {
+    if (this.dbDriver) await this.dbDriver.upsert(this.namespace, structuredClone(doc));
+    this.docs.set(doc.id, structuredClone(doc));
+    this.persist();
+    return structuredClone(doc);
+  }
+
+  /** Удаление с ожиданием Postgres: сначала база, потом память. Сбой — исключение. */
+  async removeDurable(id: string): Promise<boolean> {
+    if (!this.docs.has(id)) return false;
+    if (this.dbDriver) await this.dbDriver.remove(this.namespace, id);
+    this.docs.delete(id);
+    this.persist();
+    return true;
+  }
+
   remove(id: string): boolean {
     const existed = this.docs.delete(id);
     if (existed) {

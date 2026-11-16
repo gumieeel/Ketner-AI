@@ -445,6 +445,15 @@ export interface BotOverview {
   publicUrl: string;
   /** Где установлен виджет; у старого сервера поля нет. */
   install?: { sites: WidgetSiteView[] };
+  /** Обращения в этом месяце по тарифу (P3); у старого сервера поля нет. */
+  requests?: {
+    tier: 'start' | 'growth' | 'business' | 'scale' | null;
+    used: number;
+    included: number | null;
+    limit: number | null;
+    state: 'ok' | 'warning' | 'grace' | 'leads_only' | 'no_tier';
+    periodEnd: string;
+  };
 }
 
 export interface BotConversationView {

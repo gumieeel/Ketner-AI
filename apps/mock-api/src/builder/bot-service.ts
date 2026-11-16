@@ -29,6 +29,19 @@ import { isToolConfig } from './types.js';
 import type { BotAgentAnswer, BotAgentInput } from './bot-agent.js';
 import { PlatformUnavailableError } from './bot-platform-error.js';
 import { allowanceRefusal } from '../billing/build-allowance.js';
+import { tierEnforced, type TierDecision, type TierUsage } from '../billing/tier-usage.js';
+
+/** Строка «Обращений в этом месяце: N из M» для панели бота. */
+function requestsView(decision: TierDecision) {
+  return {
+    tier: decision.tier,
+    used: decision.used,
+    included: decision.included,
+    limit: decision.limit,
+    state: decision.state,
+    periodEnd: decision.periodEnd,
+  };
+}
 
 /** С владельца за один ответ бота не списывается больше, $ (≈ 30 кредитов). */
 export const BOT_REPLY_CAP_USD = 0.03;
@@ -65,6 +78,11 @@ export interface BotServiceDeps {
   balanceUsd: (userId: string, plan: PlanId) => number;
   /** Владелец бота с действующим тарифом (null — аккаунта больше нет). */
   owner: (ownerId: string) => BotOwner | null;
+  /**
+   * Тариф и счётчик обращений (P3). Пока `TIER_ENFORCED = false`, решение только считается и
+   * пишется в лог «как было бы»; ответы оплачивает баланс, как раньше.
+   */
+  tierUsage?: TierUsage;
   /** Письмо владельцу о новой заявке (ошибка письма заявку не теряет). */
   notifyLead?: (owner: BotOwner, solution: Solution, lead: BotLead) => Promise<void>;
   /**
@@ -216,11 +234,31 @@ export class BotService {
       status: 'complete',
     });
 
-    // Деньги владельца: суточный потолок и баланс проверяются до вызова модели.
+    // До вызова модели: суточный потолок бота (по стоимости ответов), тариф и счётчик обращений (P3).
+    // Тарифы выключены — решение только в лог «как было бы», а ответ оплачивает баланс, как раньше.
     const usage = await this.deps.store.botUsageSince(solution.id, dayStart(this.now()));
     const overCap = toCredits(usage.creditsUsd) >= solution.bot.dailyCapCredits;
-    const lowBalance = this.deps.balanceUsd(owner.userId, owner.plan) < BOT_REPLY_CAP_USD;
-    if (overCap || lowBalance) {
+    const tierUsage = this.deps.tierUsage;
+    // Счётчик не прочитан (журнал недоступен): пока тарифы выключены — ответ как раньше; включены —
+    // форма заявки без вызова модели (посетитель не видит ошибку, деньги не тратятся).
+    let decision: TierDecision | null = null;
+    let tierUnknown = false;
+    if (tierUsage) {
+      try {
+        decision = await tierUsage.decision(owner.userId);
+      } catch (error) {
+        tierUnknown = tierEnforced();
+        console.error('[tiers] решение не посчитано:', error);
+      }
+    }
+    const tierFunded = decision !== null && tierEnforced();
+    if (decision && !tierFunded) tierUsage!.shadow(owner.userId, decision);
+    const blockedByTier = tierUnknown || (tierFunded && decision?.action !== 'answer');
+    const lowBalance =
+      !tierFunded &&
+      !tierUnknown &&
+      this.deps.balanceUsd(owner.userId, owner.plan) < BOT_REPLY_CAP_USD;
+    if (overCap || lowBalance || blockedByTier) {
       const saved = await this.save(solution, conversation, {
         role: 'assistant',
         content: text(
@@ -262,7 +300,10 @@ export class BotService {
         triggerRef: `conversation:${conversation.id}`,
         idempotencyKey: `bot_message:${userMessage.id}`,
       },
+      tierFunded ? 'tier' : undefined,
     );
+    // На тарифе баланс не списывается; суточный потолок бота считается по стоимости ответа.
+    const replyCostUsd = tierFunded ? answer.costUsd : answer.creditsUsd;
     if (answer.error || !answer.text.trim()) {
       const saved = await this.save(solution, conversation, {
         role: 'assistant',
@@ -273,7 +314,7 @@ export class BotService {
         ),
         model: answer.model,
         offerContact: true,
-        creditsUsd: answer.creditsUsd,
+        creditsUsd: replyCostUsd,
         status: 'error',
       });
       return { ok: true, conversationId: conversation.id, message: publicBotMessage(saved) };
@@ -284,9 +325,10 @@ export class BotService {
       content: parsed.text,
       model: answer.model,
       offerContact: parsed.offerContact || answer.offerContact === true,
-      creditsUsd: answer.creditsUsd,
+      creditsUsd: replyCostUsd,
       status: 'complete',
     });
+    tierUsage?.noteCounted(owner.userId);
     return { ok: true, conversationId: conversation.id, message: publicBotMessage(saved) };
   }
 
@@ -418,6 +460,10 @@ export class BotService {
         newLeads: await this.deps.store.countNewLeads(ownerId, id),
       },
       balance: await this.runway(ownerId),
+      // Обращения в этом месяце по тарифу (P3); нет сервиса тарифов — поля нет.
+      ...(this.deps.tierUsage
+        ? { requests: requestsView(await this.deps.tierUsage.decision(ownerId)) }
+        : {}),
     };
   }
 

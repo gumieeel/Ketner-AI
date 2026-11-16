@@ -107,6 +107,8 @@ export interface AppDeps {
   dodo?: ApiDeps['dodo'];
   /** Где установлен виджет бота (P10). */
   widgetInstalls?: ApiDeps['widgetInstalls'];
+  /** Тарифы аккаунтов (P3). */
+  accountTiers?: ApiDeps['accountTiers'];
 }
 
 const DEFAULT_BODY_LIMIT = '1mb';

@@ -16,6 +16,7 @@ import {
   TRIPWIRE_PLACEHOLDER,
   writeJournalSafely,
 } from './secrets.js';
+import { COUNTED_REQUEST_SQL, isCountedRequest, type RequestCount } from './request-count.js';
 
 export type ExecutionStatus = 'running' | 'succeeded' | 'failed' | 'cancelled' | 'timed_out';
 export type TriggerKind = 'public_page' | 'manual' | 'chat_message' | 'channel_event' | 'webhook';
@@ -169,6 +170,11 @@ export interface ExecutionJournal {
   reapStale(input: { olderThanMs: number; limit: number }): Promise<ReapedExecution[]>;
   /** Последние исполнения решения, новые первыми (проверка администратором; только чтение). */
   listExecutions(solutionId: string, limit: number): Promise<ExecutionSummary[]>;
+  /**
+   * Засчитанные обращения к тарифу (platform/request-count.ts) с `since` до `until` (ISO, конец не
+   * включается): по одному аккаунту или по всем, у кого они есть.
+   */
+  countRequests(since: string, until: string, userId?: string): Promise<RequestCount[]>;
 }
 
 /** Метаданные пакета после очистки; при срабатывании проверки базы — заглушки. */
@@ -375,6 +381,19 @@ export class MemoryExecutionJournal implements ExecutionJournal {
 
   /** Время окончания исполнения (память). */
   readonly finishedAt = new Map<string, number>();
+
+  async countRequests(since: string, until: string, userId?: string): Promise<RequestCount[]> {
+    const from = Date.parse(since);
+    const to = Date.parse(until);
+    const counts = new Map<string, number>();
+    for (const execution of this.executions.values()) {
+      if (userId && execution.userId !== userId) continue;
+      const at = this.startedAt.get(execution.id) ?? 0;
+      if (at < from || at >= to || !isCountedRequest(execution)) continue;
+      counts.set(execution.userId, (counts.get(execution.userId) ?? 0) + 1);
+    }
+    return [...counts].map(([id, count]) => ({ userId: id, count }));
+  }
 
   async listExecutions(solutionId: string, limit: number): Promise<ExecutionSummary[]> {
     return [...this.executions.values()]
@@ -727,6 +746,18 @@ export class PostgresExecutionJournal implements ExecutionJournal {
       userId: row.user_id,
       startedAt: new Date(row.started_at).toISOString(),
     }));
+  }
+
+  async countRequests(since: string, until: string, userId?: string): Promise<RequestCount[]> {
+    const rows = await this.sql.query<{ user_id: string; count: string | number }>(
+      `SELECT user_id, count(*) AS count FROM executions
+       WHERE created_at >= $1::timestamptz AND created_at < $2::timestamptz
+         AND ($3::text IS NULL OR user_id = $3)
+         AND ${COUNTED_REQUEST_SQL}
+       GROUP BY user_id`,
+      [since, until, userId ?? null],
+    );
+    return rows.map((row) => ({ userId: row.user_id, count: Number(row.count) }));
   }
 
   async listExecutions(solutionId: string, limit: number): Promise<ExecutionSummary[]> {

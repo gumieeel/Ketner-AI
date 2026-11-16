@@ -15,6 +15,10 @@ import { MemoryExecutionJournal } from '../platform/journal.js';
  */
 const PLATFORM = process.env.BOT_TEST_PLATFORM === '1';
 import type { BotLead, Solution } from './types.js';
+import { AccountTiers, type AccountTier } from '../billing/account-tiers.js';
+import { TierUsage, setTierEnforcedForTests } from '../billing/tier-usage.js';
+import type { ExecutionJournal } from '../platform/journal.js';
+import { DocStore } from '../store/doc-store.js';
 
 const NOW = new Date('2026-11-01T12:00:00.000Z');
 const OWNER: BotOwner = {
@@ -61,6 +65,7 @@ async function setup(
     status?: Solution['status'];
     balance?: number;
     reply?: (request: GatewayRequest) => string;
+    tierUsage?: TierUsage;
   } = {},
 ) {
   const store = new MemoryBuilderStore();
@@ -97,6 +102,7 @@ async function setup(
     builder,
     balanceUsd: () => balance,
     owner: (id) => (id === OWNER.userId ? OWNER : null),
+    ...(options.tierUsage ? { tierUsage: options.tierUsage } : {}),
     ...(PLATFORM
       ? { platform: { enabled: () => true, answer: (input) => platformRuntime.answer(input) } }
       : {}),
@@ -421,4 +427,122 @@ test('«хватит на N дней»: остаток владельца дел
     daysLeft: 10,
   });
   assert.equal((await service.overview(OWNER.userId, 'bot-1'))?.balance.daysLeft, 10);
+});
+
+// ─── Тарифы и счётчик обращений (P3) ──────────────────────────────────────────────────────
+
+/** Тарифы и счётчик с заданным числом засчитанных обращений владельца (журнал — подставной). */
+function tierUsageWith(used: () => number, lines: string[] = []) {
+  const tiers = new AccountTiers(new DocStore<AccountTier>('account_tiers'));
+  const journal = {
+    async countRequests() {
+      return [{ userId: OWNER.userId, count: used() }];
+    },
+  } as unknown as ExecutionJournal;
+  return {
+    tiers,
+    usage: new TierUsage({ tiers, journal: () => journal, log: (line) => lines.push(line) }),
+  };
+}
+
+test('тарифы выключены (TIER_ENFORCED = false): ответ идёт как раньше, решение «как было бы» — в лог', async () => {
+  const lines: string[] = [];
+  const { usage } = tierUsageWith(() => 3, lines);
+  const { service, requests } = await setup({ tierUsage: usage });
+  const reply = await service.send('lisa-shop', { visitorId: VISITOR, content: 'Привет' });
+  assert.equal(reply.ok, true);
+  if (reply.ok) assert.equal(reply.message.offerContact === true && !reply.message.content, false);
+  assert.equal(requests.length, 1, 'модель вызвана: тарифы не ограничивают');
+  assert.equal(requests[0]?.funding, undefined, 'платит баланс, как раньше');
+  assert.deepEqual(lines, [
+    `[tiers] shadow user=${OWNER.userId} decision=form_only used=3/0 tier=none`,
+  ]);
+  // Без баланса — как раньше: форма заявки.
+  const poor = await setup({ tierUsage: usage, balance: 0 });
+  const refused = await poor.service.send('lisa-shop', { visitorId: VISITOR, content: 'Привет' });
+  assert.ok(refused.ok && refused.message.offerContact);
+  assert.equal(poor.requests.length, 0);
+});
+
+test('тарифы включены: без тарифа — только форма; на тарифе — ответ без баланса; с 110% — режим заявок', async (t) => {
+  setTierEnforcedForTests(true);
+  t.after(() => setTierEnforcedForTests(null));
+  let used = 0;
+  const { tiers, usage } = tierUsageWith(() => used);
+
+  // Тариф не назначен: посетитель видит форму, модель не вызывается.
+  const none = await setup({ tierUsage: usage, balance: 10 });
+  const form = await none.service.send('lisa-shop', { visitorId: VISITOR, content: 'Цена?' });
+  assert.ok(form.ok && form.message.offerContact);
+  assert.equal(none.requests.length, 0);
+
+  // Тариф Start, обращений мало: ответ модели за счёт тарифа даже при нулевом балансе.
+  await tiers.set(OWNER.userId, 'start', 'admin');
+  const paid = await setup({ tierUsage: usage, balance: 0 });
+  const answered = await paid.service.send('lisa-shop', { visitorId: VISITOR, content: 'Цена?' });
+  assert.ok(answered.ok && !answered.message.offerContact);
+  assert.equal(paid.requests.length, 1);
+  assert.equal(paid.requests[0]?.funding, 'tier', 'баланс не списывается');
+
+  // Льготные 10%: на 1 099 ещё отвечает, с 1 100 — режим заявок. Свежий сервис тарифов —
+  // свой кеш счётчика: значение читается из журнала заново.
+  used = 1_099;
+  const grace = tierUsageWith(() => used);
+  await grace.tiers.set(OWNER.userId, 'start', 'admin');
+  const graceSvc = await setup({ tierUsage: grace.usage, balance: 0 });
+  const graceReply = await graceSvc.service.send('lisa-shop', {
+    visitorId: VISITOR,
+    content: 'Цена?',
+  });
+  assert.ok(graceReply.ok && !graceReply.message.offerContact);
+  assert.equal(graceSvc.requests.length, 1);
+  used = 1_100;
+  const over = tierUsageWith(() => used);
+  await over.tiers.set(OWNER.userId, 'start', 'admin');
+  const leads = await setup({ tierUsage: over.usage, balance: 10 });
+  const leadReply = await leads.service.send('lisa-shop', { visitorId: VISITOR, content: 'Цена?' });
+  assert.ok(leadReply.ok && leadReply.message.offerContact);
+  assert.equal(leads.requests.length, 0, 'режим заявок: модель не вызывается, баланс не тратится');
+});
+
+test('панель бота: обращения в этом месяце из счётчика тарифа', async () => {
+  const { tiers, usage } = tierUsageWith(() => 42);
+  await tiers.set(OWNER.userId, 'growth', 'admin');
+  const { service } = await setup({ tierUsage: usage });
+  const overview = await service.overview(OWNER.userId, 'bot-1');
+  assert.deepEqual(
+    overview && 'requests' in overview
+      ? (({ tier, used, included, limit, state }) => ({ tier, used, included, limit, state }))(
+          overview.requests!,
+        )
+      : null,
+    { tier: 'growth', used: 42, included: 5_000, limit: 5_500, state: 'ok' },
+  );
+});
+
+test('счётчик не прочитан: тарифы выключены — ответ как раньше; включены — форма без вызова модели', async (t) => {
+  const tiers = new AccountTiers(new DocStore<AccountTier>('account_tiers'));
+  const broken = {
+    async countRequests() {
+      throw new Error('journal down');
+    },
+  } as unknown as ExecutionJournal;
+  const usage = new TierUsage({ tiers, journal: () => broken });
+  const original = console.error;
+  console.error = () => {};
+  t.after(() => {
+    console.error = original;
+  });
+
+  const off = await setup({ tierUsage: usage });
+  const answered = await off.service.send('lisa-shop', { visitorId: VISITOR, content: 'Цена?' });
+  assert.ok(answered.ok && !answered.message.offerContact, 'посетитель не замечает сбоя счётчика');
+  assert.equal(off.requests.length, 1);
+
+  setTierEnforcedForTests(true);
+  t.after(() => setTierEnforcedForTests(null));
+  const on = await setup({ tierUsage: usage, balance: 10 });
+  const form = await on.service.send('lisa-shop', { visitorId: VISITOR, content: 'Цена?' });
+  assert.ok(form.ok && form.message.offerContact, 'включены: форма заявки, а не ошибка');
+  assert.equal(on.requests.length, 0, 'модель не вызывается');
 });

@@ -41,6 +41,9 @@ import {
   type SignupChannel,
   type SignupMethod,
 } from '../services/signup-attribution.js';
+import { tierEnforced, wouldLimit, type TierUsage } from '../billing/tier-usage.js';
+import { isTierId, TIER_IDS } from '../services/tiers.js';
+import type { BuildAllowance } from '../billing/build-allowance.js';
 
 const SIGNUP_CHANNELS: readonly SignupChannel[] = [
   'paid',
@@ -65,6 +68,10 @@ export interface AdminRouterDeps {
   circuitBreaker?: CircuitBreaker;
   feedbackStore?: FeedbackStore;
   credits?: CreditService;
+  /** Тарифы и счётчик обращений (P3): карточка пользователя, назначение тарифа, сводка. */
+  tierUsage?: TierUsage;
+  /** Бесплатный лимит создания (P2): текущий расход суточного бюджета сервиса. */
+  allowance?: BuildAllowance;
 }
 
 /**
@@ -97,6 +104,8 @@ export function createAdminRouter({
   circuitBreaker = defaultCircuitBreaker,
   feedbackStore = defaultFeedbackStore,
   credits = defaultCreditService,
+  tierUsage,
+  allowance,
 }: AdminRouterDeps = {}): Router {
   const router = Router();
 
@@ -480,7 +489,7 @@ export function createAdminRouter({
   });
 
   // 9. Детальная карточка пользователя
-  router.get('/users/:id', (req: Request, res: Response): void => {
+  router.get('/users/:id', async (req: Request, res: Response): Promise<void> => {
     const userId = String(req.params.id);
     const user = userStore.findById(userId);
 
@@ -575,6 +584,8 @@ export function createAdminRouter({
         usdToRubRate: CurrencyService.getUsdToRubRate(),
       },
       recentRequests,
+      // Тариф и обращения в этом месяце (P3); «было бы ограничено» — пока TIER_ENFORCED = false.
+      tier: tierUsage ? await tierCard(tierUsage, user.id) : null,
     });
   });
 
@@ -702,5 +713,136 @@ export function createAdminRouter({
     res.status(201).json({ success: true, grant });
   });
 
+  // ─── Тарифы аккаунтов (P3, docs/SUBSCRIPTION_PRICING_DESIGN.md, раздел 5) ─────────────────
+
+  /** Бюджет сервиса на бесплатное создание сегодня: сколько потрачено из $3 и когда обновится. */
+  router.get('/free-build-budget', async (_req: Request, res: Response): Promise<void> => {
+    if (!allowance) {
+      sendError(res, 503, 'allowance_unavailable', 'Бесплатный лимит недоступен');
+      return;
+    }
+    try {
+      res.setHeader('Cache-Control', 'no-store');
+      res.json({ budget: await allowance.serviceStatus() });
+    } catch (error) {
+      console.error('[admin] бюджет бесплатного создания не прочитан:', error);
+      sendError(res, 503, 'allowance_unavailable', 'Бюджет не прочитан: база недоступна');
+    }
+  });
+
+  /** Сводка: аккаунты с засчитанными обращениями в этом месяце или с назначенным тарифом. */
+  router.get('/tiers', async (_req: Request, res: Response): Promise<void> => {
+    if (!tierUsage) {
+      sendError(res, 503, 'tiers_unavailable', 'Тарифы недоступны');
+      return;
+    }
+    const rows = await tierUsage.report();
+    res.setHeader('Cache-Control', 'no-store');
+    res.json({
+      enforced: tierEnforced(),
+      accounts: rows.map((row) => ({
+        ...row,
+        email: userStore.findById(row.userId)?.email ?? null,
+      })),
+    });
+  });
+
+  router.get('/users/:id/tier', async (req: Request, res: Response): Promise<void> => {
+    const user = userStore.findById(String(req.params.id));
+    if (!user || !tierUsage) {
+      sendError(res, user ? 503 : 404, user ? 'tiers_unavailable' : 'user_not_found', 'Нет данных');
+      return;
+    }
+    res.json({ tier: await tierCard(tierUsage, user.id) });
+  });
+
+  router.put('/users/:id/tier', async (req: Request, res: Response): Promise<void> => {
+    const user = userStore.findById(String(req.params.id));
+    if (!user) {
+      sendError(res, 404, 'user_not_found', 'Пользователь не найден');
+      return;
+    }
+    if (!tierUsage) {
+      sendError(res, 503, 'tiers_unavailable', 'Тарифы недоступны');
+      return;
+    }
+    const body = (req.body ?? {}) as { tier?: unknown; note?: unknown };
+    if (!isTierId(body.tier)) {
+      sendError(res, 400, 'invalid_tier', `tier: одно из ${TIER_IDS.join(', ')}`);
+      return;
+    }
+    const note = typeof body.note === 'string' ? body.note.trim().slice(0, 200) : undefined;
+    const actor = adminActor(req);
+    try {
+      await tierUsage.tiers.set(user.id, body.tier, actor, note);
+    } catch (error) {
+      // Запись в Postgres не прошла — тариф не меняется (раздел 5 проекта цен).
+      console.error('[admin] тариф не записан:', error);
+      sendError(
+        res,
+        503,
+        'tier_not_saved',
+        'Тариф не сохранён: база недоступна. Прежний тариф остался.',
+      );
+      return;
+    }
+    console.log(
+      `[admin:audit] ${new Date().toISOString()} | Admin "${actor}" set tier "${body.tier}" for "${user.id}" (${user.email})${note ? `: ${note}` : ''}`,
+    );
+    res.json({ tier: await tierCard(tierUsage, user.id) });
+  });
+
+  router.delete('/users/:id/tier', async (req: Request, res: Response): Promise<void> => {
+    const user = userStore.findById(String(req.params.id));
+    if (!user) {
+      sendError(res, 404, 'user_not_found', 'Пользователь не найден');
+      return;
+    }
+    if (!tierUsage) {
+      sendError(res, 503, 'tiers_unavailable', 'Тарифы недоступны');
+      return;
+    }
+    const actor = adminActor(req);
+    try {
+      await tierUsage.tiers.remove(user.id);
+    } catch (error) {
+      console.error('[admin] тариф не снят:', error);
+      sendError(
+        res,
+        503,
+        'tier_not_saved',
+        'Тариф не снят: база недоступна. Прежний тариф остался.',
+      );
+      return;
+    }
+    console.log(
+      `[admin:audit] ${new Date().toISOString()} | Admin "${actor}" removed tier for "${user.id}" (${user.email})`,
+    );
+    res.json({ tier: await tierCard(tierUsage, user.id) });
+  });
+
   return router;
+}
+
+/** Кто действует: вошедший администратор или ключ администратора. */
+function adminActor(req: Request): string {
+  return req.user
+    ? `${req.user.email} (${req.user.id})`
+    : req.headers['x-admin-key']
+      ? 'admin_key'
+      : 'admin';
+}
+
+/** Тариф и обращения пользователя для карточки администратора. */
+async function tierCard(tierUsage: TierUsage, userId: string) {
+  const decision = await tierUsage.decision(userId);
+  const assigned = tierUsage.tiers.get(userId);
+  return {
+    ...decision,
+    enforced: tierEnforced(),
+    wouldLimit: wouldLimit(decision),
+    setBy: assigned?.setBy ?? null,
+    setAt: assigned?.setAt ?? null,
+    note: assigned?.note ?? null,
+  };
 }

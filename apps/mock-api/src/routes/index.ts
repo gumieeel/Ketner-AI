@@ -72,10 +72,19 @@ import {
   widgetInstalls as defaultWidgetInstalls,
   type WidgetInstalls,
 } from '../store/widget-install-store.js';
+import {
+  accountTiers as defaultAccountTiers,
+  type AccountTiers,
+} from '../billing/account-tiers.js';
+import { TierUsage } from '../billing/tier-usage.js';
+import { getDiscoveryStores } from '../discovery/runtime.js';
+import { allowanceOver, budgetAlertText } from '../billing/build-allowance.js';
 
 /** Зависимости роутеров: подменяются в тестах. */
 export interface ApiDeps {
   store: ConversationStore;
+  /** Тарифы аккаунтов, назначенные администратором (P3); в тестах — своё хранилище без файла. */
+  accountTiers?: AccountTiers;
   /** Где установлен виджет бота (P10); в тестах — своё хранилище без файла. */
   widgetInstalls?: WidgetInstalls;
   userStore?: UserStore;
@@ -351,6 +360,23 @@ export function createApiRouter(deps: ApiDeps): Router {
   const activeSubscriptionStore = deps.subscriptionStore ?? defaultSubscriptionStore;
   const activeInvoiceStore = deps.invoiceStore ?? defaultInvoiceStore;
   const activeUsageStore = deps.usageStore ?? defaultUsageStore;
+  // Тарифы и счётчик обращений (P3): одно хранилище тарифов на сервер; журнал — из хранилищ платформы.
+  const activeAccountTiers = deps.accountTiers ?? defaultAccountTiers;
+  const tierUsage = new TierUsage({
+    tiers: activeAccountTiers,
+    journal: () => (deps.discovery?.stores?.() ?? getDiscoveryStores())?.journal ?? null,
+  });
+  // Бесплатный лимит создания и проверки (P2): один на сервер — Builder, анализы и администратор.
+  // Бюджет сервиса прошёл 80% за сутки — сигнал администраторам (раз в сутки) и строка в логе.
+  const platformStores = () => (deps.discovery?.stores ?? getDiscoveryStores)();
+  const allowance = allowanceOver(platformStores, {
+    tierOf: (userId) => activeAccountTiers.tierOf(userId),
+    onServiceBudgetHigh: async (status) => {
+      const text = budgetAlertText(status);
+      console.warn(`[allowance] ${text}`);
+      await (deps.botService ?? telegramBotService).notifyAdminsText(text);
+    },
+  });
   const activeWidgetInstalls = deps.widgetInstalls ?? defaultWidgetInstalls;
   // Журнал платежей работает с теми же хранилищами, что и роутеры (в тестах — с временными).
   const activeBilling =
@@ -469,6 +495,8 @@ export function createApiRouter(deps: ApiDeps): Router {
       usageStore: activeUsageStore,
       subscriptionStore: activeSubscriptionStore,
       userStore: activeUserStore,
+      tierUsage,
+      allowance,
     }),
   );
   // API для разработчиков закрыт (product-switches.ts): новые ключи не выпускаются; список и отзыв — да.
@@ -539,6 +567,8 @@ export function createApiRouter(deps: ApiDeps): Router {
     '/analyses',
     createAnalysesRouter({
       ai: deps.ai,
+      accountTiers: activeAccountTiers,
+      allowance,
       userStore: activeUserStore,
       subscriptionStore: activeSubscriptionStore,
       usageStore: activeUsageStore,
@@ -566,6 +596,9 @@ export function createApiRouter(deps: ApiDeps): Router {
     '/solutions',
     createSolutionsRouter({
       ai: deps.ai,
+      accountTiers: activeAccountTiers,
+      allowance,
+      tierUsage,
       widgetInstalls: activeWidgetInstalls,
       userStore: activeUserStore,
       subscriptionStore: activeSubscriptionStore,
