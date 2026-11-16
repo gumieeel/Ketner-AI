@@ -91,8 +91,19 @@ import type { Mailer } from '../services/mailer.js';
 import { resolveUserPlan } from '../services/user-plan.js';
 import { siteUrl } from '../seo/pages.js';
 import type { WidgetInstalls } from '../store/widget-install-store.js';
+import {
+  allowanceOver,
+  allowanceRefusal,
+  type BuildAllowance,
+} from '../billing/build-allowance.js';
+import { maxImageCostUsd } from '../images/models.js';
+
+/** Потолок резерва одного ответа в чате владельца со своим помощником, $ (расчёт — по факту). */
+const ASSISTANT_CHAT_CAP_USD = 0.05;
 
 export interface SolutionsRouterDeps {
+  /** Бесплатный лимит создания и проверки (тесты); по умолчанию — над хранилищами платформы. */
+  allowance?: BuildAllowance;
   /** Где установлен виджет бота (P10): показывается владельцу в кабинете бота. */
   widgetInstalls?: WidgetInstalls;
   /** Флаг пути платформы для ботов (тесты); по умолчанию — config.botPlatformRuntime. */
@@ -149,6 +160,9 @@ export function createBuilderRuntime(deps: SolutionsRouterDeps): BuilderRuntime 
   let bots: BotService | null = null;
   const balanceUsd = (userId: string, plan: Parameters<CreditService['balance']>[1]) =>
     deps.credits?.balance(userId, plan).remainingUsd ?? 0;
+  // Бесплатный лимит создания и проверки (раздел 4 проекта цен): общий для Builder, пробы бота и
+  // запусков инструментов. Счётчики — в хранилищах платформы (Postgres или память).
+  const allowance = deps.allowance ?? allowanceOver(stores);
   const getBuilder = (): BuilderService | null => {
     if (builder) return builder;
     const ready = stores();
@@ -157,7 +171,7 @@ export function createBuilderRuntime(deps: SolutionsRouterDeps): BuilderRuntime 
       store: ready.builder,
       discovery: ready.store,
       gateway,
-      balanceUsd,
+      allowance,
     });
     return builder;
   };
@@ -246,7 +260,7 @@ export function createBuilderRuntime(deps: SolutionsRouterDeps): BuilderRuntime 
       materials: ready.materials,
       solutions: ready.builder,
       gateway,
-      balanceUsd,
+      allowance,
       usage: usageStore,
       attempts: ready.attempts,
     });
@@ -511,6 +525,14 @@ export function createSolutionsRouter(deps: SolutionsRouterDeps): Router {
     handle(async (builder, caller, _request, response) => {
       const { capUsd: _cap, ...quote } = builder.draftQuote(caller.language);
       response.json(quote);
+    }),
+  );
+
+  // Бесплатный лимит создания и проверки (P2): сколько потрачено за месяц и сутки и когда обновится.
+  router.get(
+    '/allowance',
+    handle(async (builder, caller, _request, response) => {
+      response.json({ allowance: await builder.allowance.status(caller.userId) });
     }),
   );
 
@@ -1151,6 +1173,23 @@ export function createSolutionsRouter(deps: SolutionsRouterDeps): Router {
         return;
       }
       const content = parsed.data.content;
+      // Чат владельца со своим помощником платит бесплатный лимит (решение владельца 15.11.2026):
+      // резерв до сохранения сообщения, расчёт по факту в конце.
+      const wantsImage = isImageRequest(content);
+      const capUsd = wantsImage ? maxImageCostUsd() : ASSISTANT_CHAT_CAP_USD;
+      const reservation = await builder.allowance.reserve(caller.userId, capUsd);
+      if (!reservation.ok) {
+        const refusal = allowanceRefusal(caller.language, reservation);
+        response.status(refusal.status).json({
+          error: {
+            code: refusal.code,
+            message: refusal.message,
+            ...(refusal.details ? { details: refusal.details } : {}),
+          },
+        });
+        return;
+      }
+      let spentUsd = capUsd;
       const history = await store.listMessages(caller.userId, thread.id, CHAT_HISTORY);
       const now = () => new Date().toISOString();
       await store.addMessage({
@@ -1199,13 +1238,20 @@ export function createSolutionsRouter(deps: SolutionsRouterDeps): Router {
 
       try {
         // Просьба нарисовать — сервису изображений (у него свои модели, модерация и цена).
-        if (isImageRequest(content)) {
+        if (wantsImage) {
           try {
+            spentUsd = 0;
             const result = await images().generate(
-              { userId: caller.userId, plan: caller.plan, language: caller.language },
+              {
+                userId: caller.userId,
+                plan: caller.plan,
+                language: caller.language,
+                funding: 'allowance',
+              },
               { prompt: content },
               controller.signal,
             );
+            spentUsd = result.costUsd;
             const saved = await save({
               content: caller.language === 'en' ? 'Here is the picture.' : 'Готово — вот картинка.',
               model: { id: result.image.modelId, name: result.image.modelName },
@@ -1247,10 +1293,11 @@ export function createSolutionsRouter(deps: SolutionsRouterDeps): Router {
               })),
             { role: 'user' as const, content },
           ],
-          { solutionId: id },
+          { solutionId: id, funding: 'allowance' },
           (delta) => send('delta', { content: delta }),
           controller.signal,
         );
+        spentUsd = answer.costUsd;
         if (answer.error) {
           await save({ content: answer.text, model: answer.model, image: null, status: 'error' });
           send('error', answer.error);
@@ -1266,6 +1313,7 @@ export function createSolutionsRouter(deps: SolutionsRouterDeps): Router {
       } finally {
         response.off('close', onClose);
         response.end();
+        await builder.allowance.settle(reservation.ticket, spentUsd);
       }
     }),
   );

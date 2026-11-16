@@ -32,6 +32,7 @@ import { MemoryDiscoveryStore } from '../discovery/store.js';
 import { contextTemplate, discoveryTemplate, planTemplate } from '../discovery/templates.js';
 import type { Analysis, Opportunity, Plan } from '../discovery/types.js';
 import { UsageStore } from '../store/usage-store.js';
+import { unlimitedAllowance } from '../billing/build-allowance.js';
 
 export interface BenchTask {
   id: string;
@@ -414,7 +415,8 @@ async function main() {
     store: new MemoryDiscoveryStore(),
     budget: new MemoryBudgetStore(),
     gateway,
-    balanceUsd: () => 1000,
+    // Замер: платные анализы подряд не упираются в бесплатный лимит аккаунта.
+    allowance: unlimitedAllowance(),
     userCapabilities: () => ({ hasPurchasedCredits: true, githubConnected: false }),
     freeDailyUsd: 1000,
     budgetTimeZone: 'UTC',

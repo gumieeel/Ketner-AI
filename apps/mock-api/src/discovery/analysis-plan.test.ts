@@ -298,7 +298,6 @@ function setup(readSiteImpl?: (url: string) => Promise<SiteResult>) {
     store: new MemoryDiscoveryStore(),
     budget: new MemoryBudgetStore(),
     gateway,
-    balanceUsd: () => 0,
     userCapabilities: () => ({ hasPurchasedCredits: false, githubConnected: false }),
     freeDailyUsd: 5,
     budgetTimeZone: 'UTC',

@@ -65,7 +65,6 @@ async function start() {
     store,
     budget,
     gateway: templateGateway,
-    balanceUsd: () => 0,
     userCapabilities: () => ({ hasPurchasedCredits: false, githubConnected: false }),
     freeDailyUsd: 5,
     budgetTimeZone: 'UTC',
@@ -74,7 +73,6 @@ async function start() {
     store: builderStore,
     discovery: store,
     gateway: templateGateway,
-    balanceUsd: () => 1,
   });
   const app = createApp({
     store: createConversationStore(join(dir, 'c.json')),

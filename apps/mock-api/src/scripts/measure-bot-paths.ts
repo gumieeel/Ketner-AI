@@ -185,7 +185,6 @@ async function main() {
       store,
       discovery: new MemoryDiscoveryStore(),
       gateway,
-      balanceUsd: () => 1_000,
     });
     const journal = new MemoryExecutionJournal();
     const platform = new BotAgentRuntime({ gateway, journal });

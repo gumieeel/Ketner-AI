@@ -61,7 +61,6 @@ async function start() {
     store: builderStore,
     discovery: discoveryStore,
     gateway,
-    balanceUsd: () => 1,
   });
   const widgetInstalls = new WidgetInstalls(new DocStore<WidgetInstall>('widget_installs'));
   const app = createApp({

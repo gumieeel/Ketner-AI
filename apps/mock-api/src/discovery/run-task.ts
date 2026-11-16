@@ -31,6 +31,11 @@ export interface StructuredTaskInput<T> {
   taskId: string;
   conversationId: string;
   billing: 'user' | 'sponsored';
+  /**
+   * Оплата бесплатным лимитом создания и проверки (billing/build-allowance.ts): баланс не
+   * списывается; резерв и расчёт — у вызывающего кода (`runAllowanceTask`).
+   */
+  funding?: 'allowance';
   /** Вид служебной задачи в учёте: этап анализа или проверка (Builder: черновик, судья). */
   kind?: 'discovery' | 'review' | 'tool';
   policy: StagePolicy;
@@ -100,6 +105,7 @@ async function callOnce(
       strictModel: true,
       ...(input.signal ? { signal: input.signal } : {}),
       providerTimeoutMs: input.providerTimeoutMs ?? 90_000,
+      ...(input.funding ? { funding: input.funding } : {}),
       task: {
         kind: input.kind ?? 'discovery',
         id: input.taskId,

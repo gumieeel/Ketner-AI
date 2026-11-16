@@ -151,3 +151,19 @@ export function imageCostUsd(model: ImageModel, width: number, height: number): 
 
 /** Сколько картинок FLUX.1 schnell в сутки доступно, когда кредиты кончились (как на Free). */
 export const FREE_IMAGES_PER_DAY = 5;
+
+/**
+ * Потолок цены одной картинки, $: самая дорогая модель цепочки, начиная с `startId`, на полутора
+ * мегапикселях (любой формат кадра меньше). Резерв бесплатного лимита перед картинкой в чате помощника.
+ */
+export function maxImageCostUsd(startId: string = DEFAULT_IMAGE_MODEL_ID): number {
+  let cost = 0;
+  const seen = new Set<string>();
+  let model = getImageModel(startId);
+  while (model && !seen.has(model.id)) {
+    seen.add(model.id);
+    cost = Math.max(cost, imageCostUsd(model, 1536, 1024));
+    model = model.fallbackModelId ? getImageModel(model.fallbackModelId) : undefined;
+  }
+  return cost;
+}

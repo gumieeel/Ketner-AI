@@ -6,6 +6,8 @@ import type { Analysis, Opportunity } from '../discovery/types.js';
 import { BuilderService, judgeVerdict, type BuilderCaller } from './service.js';
 import { MemoryBuilderStore } from './store.js';
 import { isToolConfig } from './types.js';
+import { BuildAllowance } from '../billing/build-allowance.js';
+import { MemoryCounterStore } from '../billing/cost-counters.js';
 
 const DRAFT = JSON.stringify({
   name: 'Помощник магазина',
@@ -116,7 +118,7 @@ function opportunity(
   };
 }
 
-async function setup(options: { balanceUsd?: number; failJudgeFor?: string[] } = {}) {
+async function setup(options: { exhausted?: boolean; failJudgeFor?: string[] } = {}) {
   const discovery = new MemoryDiscoveryStore();
   const store = new MemoryBuilderStore();
   const fake = fakeGateway(options);
@@ -125,13 +127,23 @@ async function setup(options: { balanceUsd?: number; failJudgeFor?: string[] } =
     opportunity('o-ok', 'alice', 'ready'),
     opportunity('o-no', 'alice', 'not_supported'),
   ]);
+  // Бесплатный лимит создания и проверки (P2): черновики и прогоны платит он, а не баланс.
+  const counters = new MemoryCounterStore();
+  const allowance = new BuildAllowance({ counters: () => counters });
+  if (options.exhausted) {
+    const status = await allowance.status('alice');
+    await counters.reserve(
+      [{ key: `acct:alice:${new Date().toISOString().slice(0, 7)}`, limitUsd: 1e9 }],
+      status.month.limitCredits / 1000,
+    );
+  }
   const service = new BuilderService({
     store,
     discovery,
     gateway: fake.gateway,
-    balanceUsd: () => options.balanceUsd ?? 10,
+    allowance,
   });
-  return { service, store, requests: fake.requests };
+  return { service, store, requests: fake.requests, allowance };
 }
 
 const alice: BuilderCaller = {
@@ -213,16 +225,32 @@ test('черновик из возможности: цена и согласие
   assert.equal(requests.length, 1, 'повтор не вызывает модель');
 });
 
-test('без баланса на потолок черновика — отказ с суммой', async () => {
-  const { service, requests } = await setup({ balanceUsd: 0 });
+test('бесплатный лимит исчерпан — черновик не создаётся (402), модель не вызывается', async () => {
+  const { service, requests } = await setup({ exhausted: true });
   const result = await service.createFromOpportunity(alice, {
     analysisId: 'an-1',
     opportunityId: 'o-ok',
     confirm: true,
   });
   assert.equal(result.ok, false);
-  if (!result.ok) assert.equal(result.code, 'insufficient_credits');
+  if (!result.ok) {
+    assert.equal(result.status, 402);
+    assert.equal(result.code, 'build_allowance_exhausted');
+  }
   assert.equal(requests.length, 0);
+});
+
+test('черновик платит бесплатный лимит: запрос без списания баланса, факт в лимите', async () => {
+  const { service, requests, allowance } = await setup();
+  const created = await service.createFromOpportunity(alice, {
+    analysisId: 'an-1',
+    opportunityId: 'o-ok',
+    confirm: true,
+  });
+  assert.ok(created.ok);
+  assert.equal(requests[0]?.funding, 'allowance', 'шлюз не списывает баланс');
+  const afterDraft = (await allowance.status('alice')).month.spentCredits;
+  assert.ok(afterDraft >= 0 && afterDraft <= 15, `черновик в лимите: ${afterDraft}`);
 });
 
 test('тесты и включение: только после прохождения всех кейсов текущей версией; правка — новая версия', async () => {

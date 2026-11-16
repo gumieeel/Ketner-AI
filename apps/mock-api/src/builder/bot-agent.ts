@@ -62,6 +62,8 @@ export interface BotAgentInput {
   messages: Array<{ role: 'user' | 'assistant'; content: string }>;
   maxOutputTokens: number;
   replyCapUsd: number;
+  /** Источник оплаты вместо баланса: `allowance` — проба владельца (P2), `tier` — тариф (P3). */
+  funding?: 'allowance' | 'tier';
 }
 
 export interface BotAgentDeps {
@@ -303,6 +305,7 @@ export class BotAgentRuntime {
       modelId: 'auto',
       language,
       stream: true,
+      ...(input.funding ? { funding: input.funding } : {}),
       assistant: {
         id: input.solutionId,
         instructions: buildBotInstructions(config, bot) + toolInstructions(language),

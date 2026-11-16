@@ -144,6 +144,7 @@ export class UsageStore {
     source?: ResponseSource;
     kind?: UsageRecord['kind'];
     sponsored?: boolean;
+    funding?: UsageRecord['funding'];
     runId?: string;
     step?: number;
     creditsUsd?: number;
@@ -167,6 +168,7 @@ export class UsageStore {
       source: params.source ?? 'provider',
       ...(params.kind ? { kind: params.kind } : {}),
       ...(params.sponsored ? { sponsored: true } : {}),
+      ...(params.funding ? { funding: params.funding } : {}),
       ...(params.runId ? { runId: params.runId } : {}),
       ...(params.step !== undefined ? { step: params.step } : {}),
       ...(params.creditsUsd && params.creditsUsd > 0 ? { creditsUsd: params.creditsUsd } : {}),

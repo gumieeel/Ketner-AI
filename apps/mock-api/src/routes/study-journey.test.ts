@@ -117,7 +117,6 @@ async function start(options: StartOptions | string[] = []) {
     store,
     budget,
     gateway,
-    balanceUsd: () => 0,
     userCapabilities: () => ({ hasPurchasedCredits: false, githubConnected: false }),
     freeDailyUsd: 5,
     budgetTimeZone: 'UTC',
@@ -126,7 +125,6 @@ async function start(options: StartOptions | string[] = []) {
     store: builderStore,
     discovery: store,
     gateway,
-    balanceUsd: () => 1,
   });
   const userStore = createUserStore(join(dir, 'u.json'));
   const subscriptionStore = createSubscriptionStore(join(dir, 's.json'));
@@ -579,7 +577,8 @@ test('учебный помощник бесплатен без подписки
       'confirmation_required',
     );
     broke.add(api.userId);
-    const poor = await api.call(`/solutions/${tool.id}/runs`, {
+    // P2: без купленного баланса запуск своего инструмента идёт — его платит бесплатный лимит.
+    const free = await api.call(`/solutions/${tool.id}/runs`, {
       method: 'POST',
       body: JSON.stringify({
         operation: 'notes',
@@ -589,13 +588,9 @@ test('учебный помощник бесплатен без подписки
         confirm: true,
       }),
     });
-    assert.equal(poor.status, 402);
-    assert.equal(
-      ((await poor.json()) as { error: { code: string } }).error.code,
-      'insufficient_credits',
-    );
+    assert.equal(free.status, 202);
     const runs = await api.json<{ runs: unknown[] }>(`/solutions/${tool.id}/runs`);
-    assert.equal(runs.runs.length, 0, 'без цены и без кредитов запусков нет');
+    assert.equal(runs.runs.length, 1, 'без цены запуска нет; с ценой — из бесплатного лимита');
   } finally {
     app.close();
     setRolloutForTests(null);

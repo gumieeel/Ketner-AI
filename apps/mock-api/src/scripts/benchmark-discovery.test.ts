@@ -4,6 +4,7 @@ import { MemoryBudgetStore } from '../discovery/budget.js';
 import { DiscoveryService } from '../discovery/service.js';
 import { MemoryDiscoveryStore } from '../discovery/store.js';
 import { BENCH_TASKS, dryGateway, runTask, summarize } from './benchmark-discovery.js';
+import { unlimitedAllowance } from '../billing/build-allowance.js';
 
 test('замер качества: 20 задач на русском, половина с числами; прогон на шаблонах считает метрики', async () => {
   assert.equal(BENCH_TASKS.length, 20);
@@ -14,7 +15,8 @@ test('замер качества: 20 задач на русском, полов
     store: new MemoryDiscoveryStore(),
     budget: new MemoryBudgetStore(),
     gateway: dryGateway,
-    balanceUsd: () => 1000,
+    // Замер: платные анализы подряд не упираются в бесплатный лимит аккаунта.
+    allowance: unlimitedAllowance(),
     userCapabilities: () => ({ hasPurchasedCredits: true, githubConnected: false }),
     freeDailyUsd: 1000,
     budgetTimeZone: 'UTC',

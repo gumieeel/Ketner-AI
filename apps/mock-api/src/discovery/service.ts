@@ -18,8 +18,8 @@ import { modelRegistry, type ModelRegistry } from '../ai/model-registry.js';
 import { disclosureOf } from '../ai/model-disclosure.js';
 import { galleryTemplates } from '../builder/templates.js';
 import { isCapabilityReleased } from './capabilities.js';
-import { CREDITS_PER_USD, toCredits } from '../services/entitlement.js';
-import type { Language, PlanId } from '../types.js';
+import { CREDITS_PER_USD } from '../services/entitlement.js';
+import type { Language } from '../types.js';
 import type { SolutionType } from '../pricing/catalog.js';
 import type { BusinessProfile } from './profile.js';
 import {
@@ -62,7 +62,18 @@ import {
   planSystemPrompt,
   planUserMessage,
 } from './prompts.js';
-import { runStructuredTask, type TaskCaller } from './run-task.js';
+import {
+  runStructuredTask,
+  type StructuredTaskInput,
+  type StructuredTaskResult,
+  type TaskCaller,
+} from './run-task.js';
+import {
+  allowanceOver,
+  allowanceRefusal,
+  runAllowanceTask,
+  type BuildAllowance,
+} from '../billing/build-allowance.js';
 import {
   contextOutputSchema,
   discoveryOutputSchema,
@@ -99,8 +110,11 @@ export interface DiscoveryServiceDeps {
   store: DiscoveryStore;
   budget: BudgetStore;
   gateway: Pick<AIGateway, 'stream'>;
-  /** Остаток кредитов пользователя, $. */
-  balanceUsd: (userId: string, plan: PlanId) => number;
+  /**
+   * Бесплатный лимит создания и проверки: платные анализы (сверх бесплатного в сутки) платит он,
+   * а не баланс (docs/SUBSCRIPTION_PRICING_DESIGN.md, раздел 4). Нет — лимит в памяти (тесты).
+   */
+  allowance?: BuildAllowance;
   userCapabilities: (caller: DiscoveryCaller) => UserCapabilities;
   freeDailyUsd: number;
   budgetTimeZone: string;
@@ -146,9 +160,22 @@ export class DiscoveryService {
   /** Когда последний раз стирались истёкшие анализы гостей (не чаще раза в `GUEST_PURGE_EVERY_MS`). */
   private lastGuestPurge = 0;
 
+  private readonly allowance: BuildAllowance;
+
   constructor(private readonly deps: DiscoveryServiceDeps) {
+    this.allowance = deps.allowance ?? allowanceOver(() => ({}));
     this.registry = deps.registry ?? modelRegistry;
     this.now = deps.now ?? (() => new Date());
+  }
+
+  /**
+   * Служебная задача анализа: платный этап (`billing: 'user'`) платит бесплатный лимит —
+   * резерв потолка, вызов без списания баланса, расчёт по факту; бесплатный — бюджет анализов.
+   */
+  private task<T>(input: StructuredTaskInput<T>): Promise<StructuredTaskResult<T>> {
+    return input.billing === 'user'
+      ? runAllowanceTask(this.allowance, input)
+      : runStructuredTask(input);
   }
 
   /** Сутки бюджета и квот сейчас. */
@@ -336,7 +363,7 @@ export class DiscoveryService {
       const reserved = await this.deps.budget.reserve(day, this.deps.freeDailyUsd, reservations);
       if (!reserved) return this.freeUnavailable('budget_exhausted', caller, language);
     } else {
-      const check = this.checkPaid(caller, mode, ANALYSIS_STAGES, language, input.confirm);
+      const check = await this.checkPaid(caller, mode, ANALYSIS_STAGES, language, input.confirm);
       if (!check.ok) return check;
     }
 
@@ -398,13 +425,13 @@ export class DiscoveryService {
     return { ok: true, analysis: created.analysis, duplicate: false };
   }
 
-  private checkPaid(
+  private async checkPaid(
     caller: DiscoveryCaller,
     mode: AnalysisMode,
     stages: readonly StageName[],
     language: Language,
     confirm: boolean | undefined,
-  ): { ok: true } | ServiceError {
+  ): Promise<{ ok: true } | ServiceError> {
     if (caller.guest) {
       return {
         ok: false,
@@ -418,21 +445,27 @@ export class DiscoveryService {
       };
     }
     const estimate = estimateStages(mode, stages, language, this.registry);
-    const balance = this.deps.balanceUsd(caller.userId, caller.plan);
-    if (balance < estimate.maxUsd) {
+    // Платный анализ платит бесплатный лимит: до запуска — проверка, что на анализ его хватает.
+    const allowance = await this.allowance.status(caller.userId).catch(() => null);
+    const left = (scope: { spentCredits: number; limitCredits: number } | null | undefined) =>
+      scope ? scope.limitCredits - scope.spentCredits : Number.POSITIVE_INFINITY;
+    if (allowance && Math.min(left(allowance.month), left(allowance.day)) < estimate.maxCredits) {
+      const monthShort = left(allowance.month) < estimate.maxCredits;
+      const refusal = allowanceRefusal(language, {
+        ok: false,
+        code: 'build_allowance_exhausted',
+        scope: monthShort ? 'month' : 'day',
+        resetsAt: monthShort ? allowance.month.resetsAt : allowance.day!.resetsAt,
+      });
       return {
         ok: false,
-        status: 402,
-        code: 'insufficient_credits',
-        message: text(
-          language,
-          `Нужно до ${estimate.maxCredits} кредитов, на балансе ${toCredits(balance)}. Пополните баланс, чтобы запустить анализ.`,
-          `Up to ${estimate.maxCredits} credits are needed, the balance is ${toCredits(balance)}. Top up to run the analysis.`,
-        ),
+        status: refusal.status,
+        code: refusal.code,
+        message: refusal.message,
         details: {
+          ...refusal.details,
           typicalCredits: estimate.typicalCredits,
           maxCredits: estimate.maxCredits,
-          balanceCredits: toCredits(balance),
         },
       };
     }
@@ -745,7 +778,7 @@ export class DiscoveryService {
         },
       };
     }
-    const check = this.checkPaid(caller, current.mode, ['discovery'], language, true);
+    const check = await this.checkPaid(caller, current.mode, ['discovery'], language, true);
     if (!check.ok) return check;
 
     const previous = current.stages.discovery as StageRun;
@@ -809,7 +842,7 @@ export class DiscoveryService {
       ]);
       if (!reserved) return this.freeUnavailable('budget_exhausted', caller, current.language);
     } else {
-      const check = this.checkPaid(caller, current.mode, [stage], current.language, confirm);
+      const check = await this.checkPaid(caller, current.mode, [stage], current.language, confirm);
       if (!check.ok) return check;
     }
 
@@ -1035,9 +1068,9 @@ export class DiscoveryService {
     } else {
       // План за кредиты — всегда с явным согласием: сайт показывает цену и передаёт `confirm`.
       if (caller.guest)
-        return this.checkPaid(caller, mode, ['plan'], language, true) as ServiceError;
+        return (await this.checkPaid(caller, mode, ['plan'], language, true)) as ServiceError;
       if (!input.confirm) return this.paidPlanConfirmation(analysis, caller);
-      const check = this.checkPaid(caller, mode, ['plan'], language, true);
+      const check = await this.checkPaid(caller, mode, ['plan'], language, true);
       if (!check.ok) return check;
     }
 
@@ -1211,7 +1244,7 @@ export class DiscoveryService {
       ]);
       if (!reserved) return this.freePlanUnavailable(analysis, caller);
     } else {
-      const check = this.checkPaid(caller, plan.mode, ['plan'], analysis.language, confirm);
+      const check = await this.checkPaid(caller, plan.mode, ['plan'], analysis.language, confirm);
       if (!check.ok) return check;
     }
     let applied = false;
@@ -1317,7 +1350,7 @@ export class DiscoveryService {
       const answer = analysis.answers[question.id];
       return { question, value: answer && 'value' in answer ? answer.value : null };
     });
-    const result = await runStructuredTask({
+    const result = await this.task({
       gateway: this.deps.gateway,
       caller,
       taskId: run.taskId,
@@ -1507,7 +1540,7 @@ export class DiscoveryService {
 
     if (stage === 'context') {
       const site = await this.siteFor(caller.userId, id, started);
-      const result = await runStructuredTask({
+      const result = await this.task({
         ...common,
         systemPrompt: contextSystemPrompt(started.language),
         userMessage: contextUserMessage(started.inputText, site),
@@ -1559,7 +1592,7 @@ export class DiscoveryService {
         const answer = started.answers[question.id];
         return { question, value: answer && 'value' in answer ? answer.value : null };
       });
-      const result = await runStructuredTask({
+      const result = await this.task({
         ...common,
         systemPrompt: discoverySystemPrompt(
           started.language,

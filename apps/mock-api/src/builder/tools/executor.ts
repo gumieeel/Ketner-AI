@@ -28,7 +28,7 @@ import {
 import { runStructuredTask, type TaskCaller } from '../../discovery/run-task.js';
 import { realModelName } from '../../discovery/service.js';
 import { PLATFORM_LIMITS } from '../../services/discovery-limits.js';
-import { CREDITS_PER_USD, toCredits } from '../../services/entitlement.js';
+import { CREDITS_PER_USD } from '../../services/entitlement.js';
 import type { UsageStore } from '../../store/usage-store.js';
 import type { Language } from '../../types.js';
 import type { BuilderStore } from '../store.js';
@@ -39,6 +39,11 @@ import type { AttemptStore } from './attempt-store.js';
 import type { MaterialStore } from './material-store.js';
 import type { OperationContext, SourceText, ToolOperation } from './operations.js';
 import type { RunFinish, RunQuote, RunStore, ToolRun } from './run-store.js';
+import {
+  allowanceOver,
+  allowanceRefusal,
+  type BuildAllowance,
+} from '../../billing/build-allowance.js';
 
 const LIMITS = PLATFORM_LIMITS.tools;
 
@@ -67,8 +72,11 @@ export interface ToolExecutorDeps {
   materials: MaterialStore;
   solutions: Pick<BuilderStore, 'getSolution'>;
   gateway: Pick<AIGateway, 'stream'>;
-  /** Остаток кредитов пользователя, $. */
-  balanceUsd: (userId: string, plan: TaskCaller['plan']) => number;
+  /**
+   * Бесплатный лимит создания и проверки: запуски своего инструмента владельцем платит он
+   * (docs/SUBSCRIPTION_PRICING_DESIGN.md, раздел 4). Нет — лимит в памяти (тесты).
+   */
+  allowance?: BuildAllowance;
   /** Учёт шлюза: списанное за вызовы прерванного запуска. */
   usage: Pick<UsageStore, 'getRunRecords'>;
   /** Попытки (операции над ними — проверка открытых ответов). */
@@ -151,7 +159,10 @@ export class ToolExecutor {
   /** Запуски, которые идут в этом процессе: их аренду не закрывают как прерванную. */
   private readonly running = new Map<string, Promise<void>>();
 
+  private readonly allowance: BuildAllowance;
+
   constructor(private readonly deps: ToolExecutorDeps) {
+    this.allowance = deps.allowance ?? allowanceOver(() => ({}));
     this.registry = deps.registry ?? modelRegistry;
     this.now = deps.now ?? (() => new Date());
   }
@@ -423,17 +434,20 @@ export class ToolExecutor {
         `At most ${LIMITS.activeRunsPerUser} runs at a time. Wait for one to finish.`,
       );
     }
-    const balance = this.deps.balanceUsd(caller.userId, caller.plan);
-    if (balance < quote.capUsd) {
-      return this.fail(
-        402,
-        'insufficient_credits',
-        language,
-        `Нужно до ${quote.maxCredits} кредитов, на балансе ${toCredits(balance)}. Пополните баланс.`,
-        `Up to ${quote.maxCredits} credits are needed, the balance is ${toCredits(balance)}. Top up.`,
-        { maxCredits: quote.maxCredits, balanceCredits: toCredits(balance) },
-      );
+    // Резерв потолка запуска в бесплатном лимите; расчёт по факту — в конце выполнения.
+    const reservation = await this.allowance.reserve(caller.userId, quote.capUsd);
+    if (!reservation.ok) {
+      const refusal = allowanceRefusal(language, reservation);
+      return {
+        ok: false,
+        status: refusal.status,
+        code: refusal.code,
+        message: refusal.message,
+        ...(refusal.details ? { details: refusal.details } : {}),
+      };
     }
+    // Запуск не создан (повтор, занято, нет решения) — резерв возвращается целиком.
+    const release = () => this.allowance.settle(reservation.ticket, 0);
 
     const now = this.now();
     const run: ToolRun = {
@@ -461,6 +475,7 @@ export class ToolExecutor {
       finishedAt: null,
     };
     const inserted = await this.deps.runs.insert(run);
+    if (inserted.status !== 'created') await release();
     if (inserted.status === 'duplicate') {
       return { ok: true, run: inserted.run, duplicate: true, template: prepared.solution.template };
     }
@@ -503,11 +518,15 @@ export class ToolExecutor {
       startedAt.toISOString(),
     );
     if (!run) return;
-    const finish = (outcome: Omit<RunFinish, 'finishedAt'>) =>
-      this.deps.runs.finish(caller.userId, run.id, token, {
+    // Фактическая стоимость для расчёта бесплатного лимита; до расчёта резерв — по потолку.
+    let spentUsd = run.quote.capUsd;
+    const finish = (outcome: Omit<RunFinish, 'finishedAt'>) => {
+      spentUsd = outcome.costUsd;
+      return this.deps.runs.finish(caller.userId, run.id, token, {
         ...outcome,
         finishedAt: this.now().toISOString(),
       });
+    };
 
     try {
       const solution = await this.deps.solutions.getSolution(caller.userId, run.solutionId);
@@ -542,6 +561,7 @@ export class ToolExecutor {
         taskId: run.id,
         conversationId: `tool:${run.solutionId}`,
         billing: 'user',
+        funding: 'allowance',
         kind: 'tool',
         policy: {
           modelId: run.quote.modelId,
@@ -587,6 +607,11 @@ export class ToolExecutor {
         ...spent,
         error: runError(caller.language, 'internal_error'),
       });
+    } finally {
+      await this.allowance.settle(
+        this.allowance.ticketAt(caller.userId, run.quote.capUsd, new Date(run.createdAt)),
+        spentUsd,
+      );
     }
   }
 

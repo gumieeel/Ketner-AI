@@ -10,6 +10,8 @@ import {
   type DiscoveryCaller,
 } from './service.js';
 import { MemoryDiscoveryStore } from './store.js';
+import { BuildAllowance } from '../billing/build-allowance.js';
+import { MemoryCounterStore } from '../billing/cost-counters.js';
 
 const SHORT = 'Веду интернет-магазин, много однотипных вопросов от покупателей.';
 const LONG =
@@ -137,7 +139,11 @@ function fakeGateway(script: Script) {
           canContinue: false,
           selectedModel: { id: request.modelId, name: request.modelId },
           costUsd: script.costUsd ?? 0.002,
-          creditsUsd: request.task?.billing === 'sponsored' ? 0 : (script.creditsUsd ?? 0.004),
+          // Как настоящий шлюз: бесплатный анализ и бесплатный лимит (funding) баланс не списывают.
+          creditsUsd:
+            request.task?.billing === 'sponsored' || request.funding
+              ? 0
+              : (script.creditsUsd ?? 0.004),
         });
       },
     },
@@ -145,22 +151,32 @@ function fakeGateway(script: Script) {
 }
 
 function setup(
-  options: { script?: Script; freeDailyUsd?: number; balanceUsd?: number; now?: () => Date } = {},
+  options: { script?: Script; freeDailyUsd?: number; exhausted?: string[]; now?: () => Date } = {},
 ) {
   const store = new MemoryDiscoveryStore();
   const budget = new MemoryBudgetStore();
   const fake = fakeGateway(options.script ?? {});
+  // Платные этапы платит бесплатный лимит создания и проверки (P2); `exhausted` — у кого он исчерпан.
+  const counters = new MemoryCounterStore();
+  const allowance = new BuildAllowance({
+    counters: () => counters,
+    ...(options.now ? { now: options.now } : {}),
+  });
+  const month = (options.now?.() ?? new Date()).toISOString().slice(0, 7);
+  for (const userId of options.exhausted ?? []) {
+    void counters.reserve([{ key: `acct:${userId}:${month}`, limitUsd: 1e9 }], 1.5);
+  }
   const service = new DiscoveryService({
     store,
     budget,
     gateway: fake.gateway,
-    balanceUsd: () => options.balanceUsd ?? 0,
+    allowance,
     userCapabilities: () => ({ hasPurchasedCredits: false, githubConnected: false }),
     freeDailyUsd: options.freeDailyUsd ?? 5,
     budgetTimeZone: 'UTC',
     ...(options.now ? { now: options.now } : {}),
   });
-  return { store, budget, service, requests: fake.requests };
+  return { store, budget, service, requests: fake.requests, allowance };
 }
 
 let guestSeq = 0;
@@ -374,8 +390,8 @@ test('бюджет сбрасывается со сменой суток', async
   await service.whenIdle();
 });
 
-test('анализ за кредиты: гостю — вход, без баланса — отказ с суммой, иначе списание по факту', async () => {
-  const poor = setup({ balanceUsd: 0.001 });
+test('анализ сверх бесплатного: гостю — вход, лимит исчерпан — отказ с суммой, иначе платит бесплатный лимит по факту', async () => {
+  const poor = setup({ exhausted: ['poor'] });
   const asGuest = await create(poor.service, guest(), { mode: 'paid' });
   assert.equal(asGuest.ok, false);
   if (!asGuest.ok) assert.equal(asGuest.code, 'login_required');
@@ -383,13 +399,12 @@ test('анализ за кредиты: гостю — вход, без бала
   assert.equal(noMoney.ok, false);
   if (!noMoney.ok) {
     assert.equal(noMoney.status, 402);
-    assert.equal(noMoney.code, 'insufficient_credits');
-    assert.equal(noMoney.details?.balanceCredits, 1);
+    assert.equal(noMoney.code, 'build_allowance_exhausted');
+    assert.ok(Number(noMoney.details?.maxCredits) > 0);
   }
 
   const rich = setup({
-    balanceUsd: 10,
-    script: { context: CONTEXT_NO_QUESTIONS, creditsUsd: 0.0044 },
+    script: { context: CONTEXT_NO_QUESTIONS, costUsd: 0.0044 },
   });
   const caller = account('rich');
   const created = await create(rich.service, caller, { mode: 'paid' });
@@ -398,11 +413,15 @@ test('анализ за кредиты: гостю — вход, без бала
   await rich.service.whenIdle();
   const view = await rich.service.get(caller.userId, created.analysis.id);
   assert.equal(view?.analysis.status, 'ready');
-  // Списано по факту: два вызова по 0.0044 → 8.8 кредита.
-  assert.equal(chargedCredits(view!.analysis), 8.8);
+  // Баланс не списан; бесплатный лимит получил факт: два вызова по 0.0044 → 8.8 кредита (≈ 9).
+  assert.equal(chargedCredits(view!.analysis), 0);
+  assert.equal((await rich.allowance.status(caller.userId)).month.spentCredits, 9);
   assert.ok(
     rich.requests.every(
-      (request) => request.task?.billing === 'user' && request.modelId === 'ketner-pro',
+      (request) =>
+        request.task?.billing === 'user' &&
+        request.funding === 'allowance' &&
+        request.modelId === 'ketner-pro',
     ),
   );
   // Бесплатный бюджет не тронут.
@@ -411,7 +430,6 @@ test('анализ за кредиты: гостю — вход, без бала
 
 test('«Глубокий анализ» на Claude Sonnet 5.5 — только с подтверждением суммы', async () => {
   const { service, requests } = setup({
-    balanceUsd: 10,
     script: { context: CONTEXT_NO_QUESTIONS },
   });
   const caller = account('deep-user');
@@ -552,7 +570,7 @@ test('черновик ответов сохраняется без вызова
 });
 
 test('после отчёта: те же ответы — модель не вызывается; изменённые — повторный поиск за кредиты с согласием', async () => {
-  const { service, budget, requests } = setup({ balanceUsd: 1 });
+  const { service, budget, requests } = setup();
   const caller = account('user-rerun');
   const created = await create(service, caller);
   assert.equal(created.ok, true);
@@ -611,7 +629,9 @@ test('после отчёта: те же ответы — модель не вы
   const after = await service.get(caller.userId, id);
   assert.equal(after?.analysis.status, 'ready');
   assert.deepEqual(after?.analysis.answers.q1, { value: 'В 1С' });
-  assert.equal(chargedCredits(after!.analysis), 4);
+  // P2: повторный поиск платит бесплатный лимит, баланс не списан.
+  assert.equal(chargedCredits(after!.analysis), 0);
+  assert.equal(last?.funding, 'allowance');
   assert.notDeepEqual(
     after?.opportunities.map((item) => item.id),
     firstOpportunityIds,
@@ -637,9 +657,9 @@ test('изменить ответы после отчёта: гостю — вх
   assert.equal(asGuest.ok, false);
   if (!asGuest.ok) assert.equal(asGuest.code, 'login_required');
 
-  // Без баланса — отказ с суммой.
-  const poor = setup({ balanceUsd: 0 });
+  // Бесплатный лимит исчерпан — отказ с суммой.
   const user = account('user-poor');
+  const poor = setup({ exhausted: [user.userId] });
   const made = await create(poor.service, user);
   if (!made.ok) return assert.fail('анализ не создан');
   await poor.service.whenIdle();
@@ -650,10 +670,10 @@ test('изменить ответы после отчёта: гостю — вх
     confirm: true,
   });
   assert.equal(noMoney.ok, false);
-  if (!noMoney.ok) assert.equal(noMoney.code, 'insufficient_credits');
+  if (!noMoney.ok) assert.equal(noMoney.code, 'build_allowance_exhausted');
 
-  // Повторный поиск упал — повтор идёт снова за кредиты, без резерва бесплатного бюджета.
-  const flaky = setup({ balanceUsd: 1, script: {} });
+  // Повторный поиск упал — повтор идёт снова из бесплатного лимита, без резерва бюджета анализов.
+  const flaky = setup({ script: {} });
   const owner = account('user-flaky');
   const analysis = await create(flaky.service, owner);
   if (!analysis.ok) return assert.fail('анализ не создан');
@@ -783,7 +803,7 @@ test('шаги плана: id по порядку, зависимости тол
 });
 
 test('бесплатный анализ: один краткий план бесплатно из резерва, повтор — без модели, другой — за кредиты с согласием', async () => {
-  const { service, budget, requests } = setup({ balanceUsd: 1 });
+  const { service, budget, requests } = setup();
   const visitor = guest();
   const { id, view, byTitle } = await readyAnalysis(service, visitor);
   assert.equal(service.planOffer(view.analysis, visitor).free.available, true);
@@ -878,7 +898,9 @@ test('бесплатный анализ: один краткий план бес
   if (paid.ok) {
     const full = await service.getPlan(user.userId, paid.plan.id);
     assert.equal(full?.kind, 'full');
-    assert.equal(full?.run.creditsUsd, 0.004);
+    // P2: полный план платит бесплатный лимит, баланс не списан.
+    assert.equal(full?.run.creditsUsd, 0);
+    assert.equal(requests.at(-1)?.funding, 'allowance');
   }
   assert.equal((await service.plansOf(user.userId, id)).length, 2);
 });
@@ -912,7 +934,7 @@ test('статус шага плана сохраняется; чужой пла
 });
 
 test('план упал: причина, бесплатный повтор с новым резервом; повторный поиск возможностей заменяет планы', async () => {
-  const { service, budget, requests } = setup({ balanceUsd: 1, script: { failPlan: 1 } });
+  const { service, budget, requests } = setup({ script: { failPlan: 1 } });
   const user = account('user-plan-fail');
   const { id, byTitle } = await readyAnalysis(service, user);
   const created = await service.createPlan({

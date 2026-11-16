@@ -214,6 +214,7 @@ test('проверка открытых ответов: цена и подтве
   assert.ok(!unconfirmed.ok && unconfirmed.code === 'confirmation_required');
 
   const before = h.balance();
+  const allowanceBefore = await h.allowanceSpentUsd();
   const started = await grade(h, attempt.id);
   assert.ok(started.ok, JSON.stringify(started));
   await h.executor.whenIdle();
@@ -228,8 +229,10 @@ test('проверка открытых ответов: цена и подтве
   assert.deepEqual(open.sources, ['S2']);
   assert.equal(graded.attempt.score, 2.5);
   assert.equal(graded.attempt.grade?.status, 'done');
-  assert.equal(graded.attempt.grade?.chargedCredits, 1.2);
-  assert.equal(Math.round((before - h.balance()) * 1e6), 1200);
+  // P2: проверку ответов платит бесплатный лимит, баланс не трогается (в кредитах лимита — 1).
+  assert.equal(graded.attempt.grade?.chargedCredits, 0);
+  assert.equal(h.balance(), before);
+  assert.equal(Math.round(((await h.allowanceSpentUsd()) - allowanceBefore) * 1000), 1);
   // Модель получила только открытый вопрос и только его страницу.
   const call = h.calls.at(-1)!;
   assert.ok(call.user.includes('<question id="q3"'));
