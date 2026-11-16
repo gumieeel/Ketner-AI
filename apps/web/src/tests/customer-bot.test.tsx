@@ -376,10 +376,21 @@ describe('кабинет бота: ссылка, код для сайта, за�
     expect(body).not.toContain('owner@example.com');
     expect(screen.getByRole('button', { name: 'Скопировать текст' })).toBeVisible();
 
+    // Тариф не назначен — строки обращений нет (до включения тарифов владельца это не касается).
+    expect(screen.queryByText(/Обращений посетителей в этом месяце/)).toBeNull();
+
     // Проверка установки: пока не найден; после «Проверить ещё раз» — адрес сайта.
     expect(screen.getByText(/Пока не найден/)).toBeVisible();
     overview = {
       ...overview,
+      requests: {
+        tier: 'growth',
+        used: 42,
+        included: 5_000,
+        limit: 5_500,
+        state: 'ok',
+        periodEnd: '2026-12-01T00:00:00.000Z',
+      },
       install: {
         sites: [
           {
@@ -393,6 +404,7 @@ describe('кабинет бота: ссылка, код для сайта, за�
     const before = calls.filter((call) => call.path === '/api/solutions/b1/bot').length;
     fireEvent.click(screen.getByRole('button', { name: 'Проверить ещё раз' }));
     expect(await screen.findByText('Виджет найден на shop.example')).toBeVisible();
+    expect(screen.getByText(/Обращений посетителей в этом месяце: 42 из 5\s000/)).toBeVisible();
     expect(screen.queryByText(/Пока не найден/)).toBeNull();
     expect(calls.filter((call) => call.path === '/api/solutions/b1/bot').length).toBe(before + 1);
   });

@@ -58,9 +58,15 @@ import type { PricingService } from '../pricing/service.js';
 import { publicEstimate, publicRequest } from '../pricing/views.js';
 import { z } from 'zod';
 import { allowanceOver } from '../billing/build-allowance.js';
+import {
+  accountTiers as defaultAccountTiers,
+  type AccountTiers,
+} from '../billing/account-tiers.js';
 
 export interface AnalysesRouterDeps {
   ai: AiConfig;
+  /** Тарифы аккаунтов (P3): лимит создания по тарифу; по умолчанию — общее хранилище. */
+  accountTiers?: AccountTiers;
   userStore?: UserStore;
   subscriptionStore?: SubscriptionStore;
   usageStore?: UsageStore;
@@ -239,7 +245,9 @@ export function createAnalysesRouter(deps: AnalysesRouterDeps): Router {
       budget: ready.budget,
       gateway,
       // Платные анализы платит бесплатный лимит создания и проверки (раздел 4 проекта цен).
-      allowance: allowanceOver(stores),
+      allowance: allowanceOver(stores, {
+        tierOf: (userId) => (deps.accountTiers ?? defaultAccountTiers).tierOf(userId),
+      }),
       userCapabilities: (caller) => ({
         hasPurchasedCredits: !caller.guest && (deps.credits?.hasPurchased(caller.userId) ?? false),
         githubConnected: !caller.guest && (deps.githubConnected?.(caller.userId) ?? false),

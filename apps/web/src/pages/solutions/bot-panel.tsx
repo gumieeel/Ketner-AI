@@ -150,6 +150,19 @@ function ShareSection({
           amount: creditsText(translator, overview.settings.dailyCapCredits),
         })}
       </p>
+      {overview.requests?.tier && overview.requests.included !== null ? (
+        // Тариф назначен (P3): сколько обращений посетителей засчитано в этом месяце.
+        <p className="mt-3 text-[14px] leading-6 text-text tabular-nums">
+          {t('builder.bot.requests', {
+            used: overview.requests.used.toLocaleString(
+              translator.language === 'en' ? 'en-US' : 'ru-RU',
+            ),
+            included: overview.requests.included.toLocaleString(
+              translator.language === 'en' ? 'en-US' : 'ru-RU',
+            ),
+          })}
+        </p>
+      ) : null}
       <RunwayNote runway={overview.balance} />
     </Section>
   );

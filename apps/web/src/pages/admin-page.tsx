@@ -27,6 +27,7 @@ import { cn } from '@/lib/cn';
 import type { PlanId } from '@/features/auth/types';
 import { RegistrationsPanel } from './admin/registrations-panel';
 import { Link } from 'react-router-dom';
+import { AdminTierCard, type AdminTierInfo } from './admin/tier-card';
 
 interface AdminCredits {
   /** Остаток, кредиты. */
@@ -80,6 +81,8 @@ interface UserSummary {
 }
 
 interface UserDetail {
+  /** Тариф и обращения (P3); старый сервер поля не отдаёт. */
+  tier?: AdminTierInfo | null;
   id: string;
   email: string;
   name: string;
@@ -1281,6 +1284,20 @@ export function AdminPage() {
                     </Button>
                   </div>
                 </div>
+
+                {/* Тариф и обращения (P3): назначение тарифа и «как было бы» до включения */}
+                {detailUser.tier ? (
+                  <div className={cn(SUBTLE_PANEL, 'space-y-3')}>
+                    <PanelTitle>{t('admin.tier.title')}</PanelTitle>
+                    <AdminTierCard
+                      key={`${detailUser.id}:${detailUser.tier.tier ?? 'none'}`}
+                      userId={detailUser.id}
+                      info={detailUser.tier}
+                      headers={getHeaders}
+                      onChanged={() => loadUserDetail(detailUser.id)}
+                    />
+                  </div>
+                ) : null}
 
                 {/* Credits: balance, grants and manual grant */}
                 <div className={cn(SUBTLE_PANEL, 'space-y-3')}>

@@ -97,11 +97,20 @@ import {
   type BuildAllowance,
 } from '../billing/build-allowance.js';
 import { maxImageCostUsd } from '../images/models.js';
+import {
+  accountTiers as defaultAccountTiers,
+  type AccountTiers,
+} from '../billing/account-tiers.js';
+import type { TierUsage } from '../billing/tier-usage.js';
 
 /** Потолок резерва одного ответа в чате владельца со своим помощником, $ (расчёт — по факту). */
 const ASSISTANT_CHAT_CAP_USD = 0.05;
 
 export interface SolutionsRouterDeps {
+  /** Тарифы аккаунтов (P3): лимит создания по тарифу; по умолчанию — общее хранилище. */
+  accountTiers?: AccountTiers;
+  /** Тариф и счётчик обращений для ответов ботов посетителям (P3). */
+  tierUsage?: TierUsage;
   /** Бесплатный лимит создания и проверки (тесты); по умолчанию — над хранилищами платформы. */
   allowance?: BuildAllowance;
   /** Где установлен виджет бота (P10): показывается владельцу в кабинете бота. */
@@ -162,7 +171,9 @@ export function createBuilderRuntime(deps: SolutionsRouterDeps): BuilderRuntime 
     deps.credits?.balance(userId, plan).remainingUsd ?? 0;
   // Бесплатный лимит создания и проверки (раздел 4 проекта цен): общий для Builder, пробы бота и
   // запусков инструментов. Счётчики — в хранилищах платформы (Postgres или память).
-  const allowance = deps.allowance ?? allowanceOver(stores);
+  const tiers = deps.accountTiers ?? defaultAccountTiers;
+  const allowance =
+    deps.allowance ?? allowanceOver(stores, { tierOf: (userId) => tiers.tierOf(userId) });
   const getBuilder = (): BuilderService | null => {
     if (builder) return builder;
     const ready = stores();
@@ -205,6 +216,7 @@ export function createBuilderRuntime(deps: SolutionsRouterDeps): BuilderRuntime 
       builder: service,
       balanceUsd,
       owner,
+      ...(deps.tierUsage ? { tierUsage: deps.tierUsage } : {}),
       ...(platformRuntime
         ? {
             platform: {
