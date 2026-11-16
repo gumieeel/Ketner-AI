@@ -2012,6 +2012,10 @@ export const en: Record<TranslationKey, string> = {
   'analysis.scope.effort.high': 'complex',
   'analysis.scope.integrations': 'Required integrations',
   'analysis.scope.noIntegrations': 'No external integrations needed',
+  'analysis.scope.noIntegrationsForDoable': 'What can be done now needs no external integrations',
+  'analysis.scope.missingIntegrations': 'Not in Ketner yet',
+  'analysis.scope.estimatePartial':
+    '{doable} of {total} can be launched. The rest waits for integrations Ketner does not have yet.',
   'analysis.scope.estimate': 'Estimate',
   'analysis.scope.estimateSmall': 'Small: everything can launch without complex integrations.',
   'analysis.scope.estimateStaged':

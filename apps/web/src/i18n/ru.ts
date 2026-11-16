@@ -2002,6 +2002,11 @@ export const ru = {
   'analysis.scope.effort.high': 'сложные',
   'analysis.scope.integrations': 'Нужные интеграции',
   'analysis.scope.noIntegrations': 'Внешние интеграции не нужны',
+  'analysis.scope.noIntegrationsForDoable':
+    'Для того, что можно сделать сейчас, внешние интеграции не нужны',
+  'analysis.scope.missingIntegrations': 'Пока нет в Ketner',
+  'analysis.scope.estimatePartial':
+    'Можно запустить {doable} из {total}. Остальное ждёт интеграций, которых в Ketner пока нет.',
   'analysis.scope.estimate': 'Оценка',
   'analysis.scope.estimateSmall': 'Небольшой: всё можно запустить без сложных интеграций.',
   'analysis.scope.estimateStaged':
