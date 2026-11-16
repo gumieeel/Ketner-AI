@@ -179,6 +179,7 @@ export function BotSiteInstall({
             {t('builder.bot.install.notFound')}
           </p>
         )}
+        <p className="mt-2 text-[13px] leading-5 text-subtle">{t('builder.bot.install.hint')}</p>
         <Button
           variant="outline"
           size="sm"

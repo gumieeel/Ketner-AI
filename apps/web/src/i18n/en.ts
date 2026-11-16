@@ -2438,7 +2438,9 @@ export const en: Record<TranslationKey, string> = {
   'builder.bot.install.email': 'Write an email',
   'builder.bot.install.copyText': 'Copy text',
   'builder.bot.install.statusTitle': 'Installation check',
-  'builder.bot.install.found': 'Widget found on {site}',
+  'builder.bot.install.found': 'The widget was opened on {site}',
+  'builder.bot.install.hint':
+    'This is a hint, not proof: the browser reports the site address, and it can be forged. It does not affect how the bot works or what you pay.',
   'builder.bot.install.lastSeen': 'last seen {time}',
   'builder.bot.install.notFound':
     'Not found yet. Paste the code and open any page of your site: its address appears here.',

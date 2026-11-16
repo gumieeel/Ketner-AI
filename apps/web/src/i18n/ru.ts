@@ -2421,7 +2421,9 @@ export const ru = {
   'builder.bot.install.email': 'Написать письмо',
   'builder.bot.install.copyText': 'Скопировать текст',
   'builder.bot.install.statusTitle': 'Проверка установки',
-  'builder.bot.install.found': 'Виджет найден на {site}',
+  'builder.bot.install.found': 'Виджет открывали на {site}',
+  'builder.bot.install.hint':
+    'Это подсказка, а не проверка: адрес сайта сообщает браузер, и его можно подделать. На работу бота и оплату он не влияет.',
   'builder.bot.install.lastSeen': 'последний раз {time}',
   'builder.bot.install.notFound':
     'Пока не найден. Вставьте код и откройте любую страницу сайта — здесь появится его адрес.',
