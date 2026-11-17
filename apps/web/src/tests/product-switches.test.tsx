@@ -32,9 +32,9 @@ describe('закрытые возможности на сайте', () => {
     ['/api-docs', 'API для разработчиков временно недоступен'],
     ['/developers', 'API для разработчиков временно недоступен'],
     ['/docs/api', 'API для разработчиков временно недоступен'],
-    ['/models', 'Чат временно недоступен'],
-    ['/docs', 'Чат временно недоступен'],
-    ['/docs/plans/pro', 'Чат временно недоступен'],
+    ['/models', 'Страница «Модели» временно недоступна'],
+    ['/docs', 'Документация временно недоступна'],
+    ['/docs/plans/pro', 'Документация временно недоступна'],
   ])('%s: «временно недоступно» и путь к решениям', async (path, title) => {
     renderRoute(path);
     expect(await screen.findByRole('heading', { level: 1, name: title })).toBeInTheDocument();
@@ -57,9 +57,9 @@ describe('закрытые возможности на сайте', () => {
     }
   });
 
-  it('страница кредитов: без звёзд, без чата и без вопросов о моделях', async () => {
+  it('страница тарифов: без кредитов, звёзд, чата и вопросов о моделях', async () => {
     renderRoute('/pricing');
-    expect(await screen.findByRole('heading', { level: 1, name: 'Кредиты' })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { level: 1, name: 'Тарифы' })).toBeInTheDocument();
     expect(screen.queryByText(/⭐/)).not.toBeInTheDocument();
     expect(screen.queryByText(/звёзд/i)).not.toBeInTheDocument();
     expect(screen.queryByRole('heading', { name: 'Частые вопросы' })).not.toBeInTheDocument();
@@ -67,9 +67,8 @@ describe('закрытые возможности на сайте', () => {
     expect(hrefs).not.toContain('/chat');
     expect(hrefs).not.toContain('/docs');
     expect(hrefs).not.toContain('/models');
-    expect(document.body.textContent).not.toMatch(/Ketner Code|Claude|в чате/);
-    // Пакеты по-прежнему продаются (это меняет отдельная задача).
-    expect(screen.getAllByRole('link', { name: 'Купить' }).length).toBe(5);
+    expect(document.body.textContent).not.toMatch(/Ketner Code|Claude|в чате|кредит/i);
+    expect(screen.queryAllByRole('link', { name: 'Купить' })).toEqual([]);
   });
 
   it('сводка известных ограничений и SEO-страницы — без закрытых разделов', () => {

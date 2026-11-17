@@ -131,7 +131,7 @@ export function PackCards({ variant = 'compact', className }: PackCardsProps) {
                       aria-hidden="true"
                     />
                     <span className="tabular">
-                      {t('pricing.starsPrice', { stars: formatCredits(pack.stars, language) })}
+                      {t('pricing.starsPrice', { stars: formatCredits(pack.stars ?? 0, language) })}
                     </span>
                   </li>
                 ) : null}

@@ -10,7 +10,7 @@ export const en: Record<TranslationKey, string> = {
   'nav.closeSidebar': 'Close chat list',
   'nav.chats': 'Chats',
   'nav.settings': 'Settings',
-  'nav.pricing': 'Credits',
+  'nav.pricing': 'Pricing',
   'nav.login': 'Log in',
   'nav.logout': 'Log out',
   'nav.guest': 'Guest',
@@ -88,9 +88,53 @@ export const en: Record<TranslationKey, string> = {
   'settings.loggedInAs': 'Logged in as',
   'settings.registeredOn': 'Registered on',
 
-  'pricing.title': 'Credits',
+  'pricing.freeTitle': 'Free',
+  'pricing.free.analysis':
+    'Business analysis: what can be automated, what you can do yourself and what needs the team. One analysis a day without signing up.',
+  'pricing.free.build':
+    'Building and testing assistants and customer bots, within the free monthly allowance.',
+  'pricing.free.report':
+    'For team work the report shows a preliminary estimate; for what Ketner already does, the plan that fits.',
+  'pricing.freeCta': 'Analyze your business',
+  'pricing.tiersTitle': 'Plans for running solutions',
+  'pricing.tiersLead':
+    'A solution runs when it is open beyond you: a bot on its own page, by link, QR code or a site button. A plan is per account, priced per month.',
+  'pricing.perMonth': 'a month',
+  'pricing.tier.solutions.one': '{count} active solution',
+  'pricing.tier.solutions.few': '{count} active solutions',
+  'pricing.tier.solutions.many': '{count} active solutions',
+  'pricing.tier.requests': 'Up to {count} requests a month',
+  'pricing.tier.noServices': 'No external services',
+  'pricing.tier.services.one': '{count} external service',
+  'pricing.tier.services.few': '{count} external services',
+  'pricing.tier.services.many': '{count} external services',
+  'pricing.tier.helpWidget': 'The Ketner team installs the site button',
+  'pricing.tier.helpHours': '{hours} h of connection help a month',
+  'pricing.tierHow':
+    'Paying for a plan on the site is coming later. For now the Ketner team connects your plan — write to us.',
+  'pricing.tierCta': 'Get a plan',
+  'pricing.rulesTitle': 'If there are more requests',
+  'pricing.rules.warn': 'At {percent}% of the volume we warn you in advance.',
+  'pricing.rules.grace': 'Another {percent}% over the volume at no extra cost.',
+  'pricing.rules.leads':
+    'After that, until the end of the month the bot does not answer with AI but takes requests, so no customer is lost.',
+  'pricing.rules.consent': 'A higher plan only with your consent. No surprise charges.',
+  'pricing.termsTitle': 'What counts',
+  'pricing.terms.solution': 'Active solution',
+  'pricing.terms.solutionText':
+    'An assistant or bot open beyond you: by link, QR code, a site button or an event.',
+  'pricing.terms.request': 'Request',
+  'pricing.terms.requestText':
+    'A solution answering a visitor or a run on an event. Your own tests in the builder and failures on our side do not count.',
+  'pricing.terms.service': 'External service',
+  'pricing.terms.serviceText':
+    'A connection to a system outside Ketner with your credentials: CRM, spreadsheets, email.',
+  'pricing.teamTitle': 'Team work',
+  'pricing.teamText':
+    'Integrations with your systems are built by the Ketner team, on a paid plan only. The analysis report shows a preliminary estimate; the team gives an exact one after checking the task.',
+  'pricing.title': 'Pricing',
   'pricing.subtitle':
-    'Pay once and spend credits on analysing tasks, building and testing solutions and bot replies at the real cost of each request. Purchased credits last {days} days.',
+    'Business analysis, building and testing assistants and bots are free. You pay only for solutions that run: one plan per account, no surprise charges.',
   'pricing.popular': 'Popular',
   'pricing.compare': 'What changes after your first purchase',
   'pricing.credits.one': '{count} credit',
@@ -105,7 +149,7 @@ export const en: Record<TranslationKey, string> = {
   'pricing.modelsBadge': 'Models',
   'pricing.docsLink': 'More about credits and models in the documentation',
   'pricing.notice':
-    'A pack is paid once: there is no subscription and no auto-renewal. Full refund if no more than 14 days have passed and the pack’s credits are unspent; see Payments and refunds.',
+    'A plan is monthly, per account. Moving to a higher plan happens only with your consent. Payment and refund terms are on the “Payment and refunds” page.',
 
   'docs.title': 'Ketner AI Documentation',
   'docs.subtitle': 'Plans, models and answers to common questions.',
@@ -347,6 +391,8 @@ export const en: Record<TranslationKey, string> = {
   'common.save': 'Save',
   'common.retry': 'Retry',
 
+  'closed.title.docs': 'Documentation is temporarily unavailable',
+  'closed.title.models': 'The Models page is temporarily unavailable',
   'closed.title.stars': 'Telegram Stars payments are no longer accepted',
   'closed.title.chat': 'Chat is temporarily unavailable',
   'closed.title.code': 'Ketner Code is temporarily unavailable',
@@ -561,9 +607,9 @@ export const en: Record<TranslationKey, string> = {
   'pricing.colFeature': 'Feature',
 
   // Вход и регистрация
-  'auth.asideTitle': 'Every AI model. No subscription.',
+  'auth.asideTitle': 'AI agents for your business.',
   'auth.asideLead':
-    'GPT, Claude, Gemini, Grok, DeepSeek and Ketner Mini in one chat. Auto mode picks the right model for you.',
+    'Describe your business — Ketner finds what to automate and helps you build an assistant or a customer bot. Building and testing are free.',
   'auth.showPassword': 'Show',
   'auth.hidePassword': 'Hide',
   'auth.loginFailed': 'Sign-in failed',
@@ -574,11 +620,14 @@ export const en: Record<TranslationKey, string> = {
   'auth.namePlaceholder': 'Alex',
 
   // Настройки
-  'settings.subtitle': 'Profile, appearance and credits',
+  'settings.subtitle': 'Profile, appearance and sign-in',
+  'settings.legacyTitle': 'Previous subscription',
+  'settings.legacyText':
+    'Plus, Pro and Ultra subscriptions are no longer sold. A paid period runs until its end.',
   'settings.navLabel': 'Settings sections',
   'settings.telegramTitle': 'Telegram',
   'settings.telegramDesc':
-    'Passwordless sign-in, the credits dashboard in @Robo_kassa_bot, Stars payments, receipts and notifications.',
+    'Passwordless sign-in, notifications and refunds of earlier payments — in the Ketner bot on Telegram.',
   'settings.telegramConnected': 'Connected',
   'settings.telegramNotLinked': 'Not linked',
   'settings.telegramOpenBot': 'Open the bot',
@@ -587,7 +636,7 @@ export const en: Record<TranslationKey, string> = {
   'settings.telegramConnect': 'Connect Telegram',
   'settings.telegramLinkedAs': 'Linked Telegram:',
   'settings.telegramLinkedHint':
-    'Press “Dashboard” in the bot: credits, receipts and refunds. Sign in to the site with an email code or Google.',
+    'In the bot, tap “Cabinet”: receipts and refunds of earlier payments. On the site, sign in by email with a code or with Google.',
   'settings.telegramLinkTitle': 'How to connect',
   'settings.telegramLinkHint':
     'Click “Connect Telegram”, open the bot and confirm — this page updates by itself.',
@@ -595,10 +644,9 @@ export const en: Record<TranslationKey, string> = {
   'settings.telegramCodeSubmit': 'Connect',
   'settings.telegramCodeLabel': 'Code from the Telegram account',
   'settings.telegramOnlyHint':
-    'This account was created through Telegram: credits and management live in the Ketner AI bot dashboard.',
+    'This account was created through Telegram: sign-in and notifications are in the Ketner AI bot.',
   'settings.telegramClaimFailed': 'Something went wrong. Please try again.',
-  'settings.telegramLinkedDone':
-    'Telegram is linked. The credits dashboard and notifications are in the bot.',
+  'settings.telegramLinkedDone': 'Telegram is connected. Notifications come to the bot.',
   'settings.telegramAccountEmail': 'Telegram account',
   'settings.githubTitle': 'GitHub',
   'settings.githubDesc':
@@ -1758,7 +1806,7 @@ export const en: Record<TranslationKey, string> = {
   'settings.creditsTrialNote':
     'You are on trial credits ({trial}), given once. Buy a pack to continue with the higher request limits.',
   'settings.legacySubscription':
-    'Your previous {plan} subscription is valid until {date}. It will not renew: use credits from then on.',
+    'Your previous {plan} subscription is valid until {date} and will not renew.',
 
   // Telegram-кабинет: кредиты вместо тарифов
   'tg.reasonWrongPack': 'Chose the wrong pack',
@@ -1858,7 +1906,7 @@ export const en: Record<TranslationKey, string> = {
     'The analysis ends not with a list of ideas but with clear steps: what to launch right away and what to prepare.',
   'discoveryHome.pricingTitle': 'Pricing',
   'discoveryHome.pricingLead':
-    'One analysis a day is free. Detailed analyses and automations use credits, with no subscription: you pay only for what you use.',
+    'Analysis, building and testing assistants and bots are free. You pay only for solutions that run: a plan per account from {price} a month.',
   'discoveryHome.pricingLink': 'Pricing details',
   'discoveryHome.faqTitle': 'Questions',
   'discoveryHome.contactsTitle': 'Contacts',

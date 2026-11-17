@@ -69,11 +69,15 @@ const ALL_KNOWN_ISSUES: readonly KnownIssue[] = [
   },
   {
     id: 'payment-methods',
-    title: 'Оплата только криптовалютой',
-    details: 'Банковской картой оплатить пока нельзя.',
+    title: 'Оплаты тарифа на сайте пока нет',
+    details:
+      'Тариф подключает команда Ketner по заявке. Оплата тарифа на сайте, в том числе банковской картой, появится позже.',
+    workaround: 'Напишите нам через форму обратной связи — подключим тариф.',
     en: {
-      title: 'Payment only with cryptocurrency',
-      details: 'You cannot pay by bank card yet.',
+      title: 'You cannot pay for a plan on the site yet',
+      details:
+        'The Ketner team connects a plan on request. Paying for a plan on the site, including by bank card, is coming later.',
+      workaround: 'Write to us through the contact form and we will connect your plan.',
     },
   },
   {

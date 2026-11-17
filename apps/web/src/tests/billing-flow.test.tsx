@@ -1,4 +1,4 @@
-import { fireEvent, screen, waitFor, within } from '@testing-library/react';
+import { fireEvent, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { useAuth } from '@/features/auth/auth-store';
 import { useBilling } from '@/features/billing/billing-store';
@@ -90,49 +90,6 @@ describe('billing-flow: пакеты кредитов, оформление и �
     resetBilling();
   });
 
-  it('страница «Кредиты» показывает пробные кредиты, пять пакетов и сравнение уровней', async () => {
-    signIn();
-    renderRoute('/pricing');
-
-    expect(screen.getByRole('heading', { level: 1, name: 'Кредиты' })).toBeInTheDocument();
-    // Подарок новым пользователям
-    expect(screen.getByTestId('trial-banner')).toHaveTextContent(/200 кредитов в подарок/);
-
-    // Пять пакетов от $5 до $100, у каждого — своя ссылка на оформление
-    const list = screen.getByTestId('pack-list');
-    expect(within(list).getAllByRole('listitem', { name: '' }).length).toBeGreaterThan(0);
-    for (const [id, price] of [
-      ['credits-5', '$5'],
-      ['credits-10', '$10'],
-      ['credits-25', '$25'],
-      ['credits-50', '$50'],
-      ['credits-100', '$100'],
-    ] as const) {
-      const row = screen.getByTestId(`pack-${id}`);
-      expect(within(row).getByText(price)).toBeInTheDocument();
-      expect(within(row).getByRole('link', { name: 'Купить' })).toHaveAttribute(
-        'href',
-        `/checkout/${id}`,
-      );
-    }
-    // Самый большой пакет дешевле всех: скидка 20 % к цене за 1 000 кредитов
-    expect(within(screen.getByTestId('pack-credits-100')).getByText('−20%')).toBeInTheDocument();
-    // Звёзды и бонус за криптовалюту указаны заранее
-    expect(
-      within(screen.getByTestId('pack-credits-10')).getByText(/510 ⭐ в Telegram/),
-    ).toBeInTheDocument();
-    expect(
-      within(screen.getByTestId('pack-credits-10')).getByText(/\+705 кредитов при оплате криптой/),
-    ).toBeInTheDocument();
-
-    // Подписок и закрытых моделей на странице нет
-    const table = screen.getByTestId('pricing-table');
-    expect(within(table).getByText('Без покупок')).toBeInTheDocument();
-    expect(within(table).getByText('Есть купленные кредиты')).toBeInTheDocument();
-    expect(screen.queryByText(/Выбрать план|Текущий план/)).not.toBeInTheDocument();
-    expect(screen.queryByRole('link', { name: /Plus|Ultra/ })).not.toBeInTheDocument();
-  });
-
   it('чекаут: неавторизованный пользователь перенаправляется на регистрацию', async () => {
     resetAuth();
     renderRoute('/checkout/credits-10');
@@ -145,10 +102,10 @@ describe('billing-flow: пакеты кредитов, оформление и �
     ).toBeInTheDocument();
   });
 
-  it('старые адреса оформления тарифов ведут на страницу «Кредиты»', async () => {
+  it('старые адреса оформления тарифов ведут на страницу «Тарифы»', async () => {
     signIn();
     renderRoute('/checkout/pro');
-    expect(await screen.findByRole('heading', { level: 1, name: 'Кредиты' })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { level: 1, name: 'Тарифы' })).toBeInTheDocument();
   });
 
   it('чекаут: по умолчанию криптовалюта, СБП среди способов оплаты нет', async () => {

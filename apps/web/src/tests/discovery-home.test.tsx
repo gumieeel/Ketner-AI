@@ -294,10 +294,10 @@ describe('главная — Business Discovery (DISCOVERY_ENABLED)', () => {
     expect(document.getElementById('savings')).not.toBeNull();
   });
 
-  it('вопросы о кредитах — на /pricing', () => {
+  it('на /pricing — тарифы, а не вопросы о кредитах', () => {
     renderRoute('/pricing');
-    expect(screen.getByText('Как работают кредиты?')).toBeInTheDocument();
-    expect(document.getElementById('faq')).not.toBeNull();
+    expect(screen.getByRole('heading', { level: 1, name: 'Тарифы' })).toBeInTheDocument();
+    expect(screen.queryByText('Как работают кредиты?')).toBeNull();
   });
 
   it('заголовок вкладки главной — Business Discovery; у закрытой /models своего нет', () => {

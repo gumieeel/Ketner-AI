@@ -39,18 +39,11 @@ describe('маршрутизация и каркас экранов', () => {
     expect(screen.getByRole('complementary', { name: 'Чаты' })).toBeInTheDocument();
   });
 
-  it('страница «Кредиты» перечисляет пакеты и ведёт на оформление', () => {
+  it('страница «Тарифы» не продаёт пакеты кредитов', () => {
     renderRoute('/pricing');
 
-    expect(screen.getByRole('heading', { level: 1, name: 'Кредиты' })).toBeInTheDocument();
-    const buyLinks = screen.getAllByRole('link', { name: 'Купить' });
-    expect(buyLinks.map((link) => link.getAttribute('href'))).toEqual([
-      '/checkout/credits-5',
-      '/checkout/credits-10',
-      '/checkout/credits-25',
-      '/checkout/credits-50',
-      '/checkout/credits-100',
-    ]);
+    expect(screen.getByRole('heading', { level: 1, name: 'Тарифы' })).toBeInTheDocument();
+    expect(screen.queryAllByRole('link', { name: 'Купить' })).toEqual([]);
   });
 
   it('страница документации открывается по /docs', () => {

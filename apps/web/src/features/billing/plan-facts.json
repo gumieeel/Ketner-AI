@@ -336,5 +336,59 @@
     "trialCredits": 2000,
     "trialDays": 30,
     "reminderDays": 3
+  },
+  "tiers": {
+    "$comment": "Тарифы на работающие решения (services/tiers.ts). Сверяет plan-facts.test.ts.",
+    "graceRate": 0.1,
+    "warnRate": 0.8,
+    "items": [
+      {
+        "id": "start",
+        "name": "Start",
+        "priceUsd": 10,
+        "activeSolutions": 1,
+        "monthlyRequests": 1000,
+        "externalServices": 0,
+        "integrationHelp": {
+          "kind": "widget_install"
+        }
+      },
+      {
+        "id": "growth",
+        "name": "Growth",
+        "priceUsd": 29,
+        "activeSolutions": 3,
+        "monthlyRequests": 5000,
+        "externalServices": 2,
+        "integrationHelp": {
+          "kind": "hours",
+          "hoursPerMonth": 2
+        }
+      },
+      {
+        "id": "business",
+        "name": "Business",
+        "priceUsd": 89,
+        "activeSolutions": 10,
+        "monthlyRequests": 20000,
+        "externalServices": 5,
+        "integrationHelp": {
+          "kind": "hours",
+          "hoursPerMonth": 4
+        }
+      },
+      {
+        "id": "scale",
+        "name": "Scale",
+        "priceUsd": 235,
+        "activeSolutions": 25,
+        "monthlyRequests": 60000,
+        "externalServices": 15,
+        "integrationHelp": {
+          "kind": "hours",
+          "hoursPerMonth": 4
+        }
+      }
+    ]
   }
 }

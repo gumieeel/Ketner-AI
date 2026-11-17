@@ -17,9 +17,12 @@ const TITLES: Record<ProductFeature, TranslationKey> = {
 /** Адрес закрытой возможности (product-switches.ts): понятное сообщение и путь к решениям. */
 export function ClosedFeaturePage({
   feature,
+  titleKey,
   fullPage = false,
 }: {
   feature: ProductFeature;
+  /** Свой заголовок страницы раздела (например, «Документация»), иначе — заголовок возможности. */
+  titleKey?: TranslationKey;
   /** Вместо всего раздела (без шапки сайта) — на весь экран и со своим <main>. */
   fullPage?: boolean;
 }) {
@@ -35,7 +38,7 @@ export function ClosedFeaturePage({
       }
     >
       <h1 className="text-xl font-semibold tracking-tight text-balance text-text md:text-2xl">
-        {t(TITLES[feature])}
+        {t(titleKey ?? TITLES[feature])}
       </h1>
       <p className="max-w-md text-sm leading-6 text-muted">{t('closed.text')}</p>
       <div className="flex flex-wrap items-center justify-center gap-3 pt-2">

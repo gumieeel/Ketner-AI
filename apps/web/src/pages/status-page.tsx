@@ -17,12 +17,12 @@ interface StatusReport {
 }
 
 const COMPONENT_NAMES: Record<string, string> = {
-  site: 'Сайт и API',
-  database: 'Аккаунты, чаты и история',
-  models: 'Модели: чат, Ketner Code, API',
+  site: 'Сайт',
+  database: 'Аккаунты, анализы и решения',
+  models: 'Модели ИИ для анализа, помощников и ботов',
   images: 'Генерация изображений',
   payments: 'Оплата',
-  telegram: 'Telegram-бот и кабинет',
+  telegram: 'Telegram-бот',
 };
 
 const STATE_LABEL: Record<ComponentState, string> = {

@@ -172,7 +172,7 @@ describe('привязка Telegram на сайте (входа через Teleg
     fireEvent.click(within(section).getByRole('button', { name: 'Подключить' }));
 
     expect(
-      await within(section).findByText(/Telegram подключён\. Кабинет кредитов/),
+      await within(section).findByText(/Telegram подключён\. Уведомления — в боте\./),
     ).toBeInTheDocument();
     expect(within(section).getByText('Подключён')).toBeInTheDocument();
     expect(within(section).getByText('@anna_tg')).toBeInTheDocument();

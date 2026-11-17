@@ -7,7 +7,6 @@ import {
   KeyIcon,
   LogoutIcon,
   MessagesIcon,
-  SparkleIcon,
   SunIcon,
   TelegramIcon,
   UserIcon,
@@ -28,12 +27,11 @@ import { ApiError } from '@/features/chat/api';
 import { isTelegramOnlyEmail, telegramSiteAuth } from '@/features/telegram/site-auth';
 import { useBilling } from '@/features/billing/billing-store';
 import { planBadge } from '@/features/billing/plan-badge';
-import { PACK_VALID_DAYS } from '@/features/billing/plans';
-import { useCredits } from '@/features/usage/credits-store';
+import { productSwitch } from '@/lib/product-switches';
 import { useGithub } from '@/features/github/github-store';
 import { useTranslation } from '@/i18n';
 import { cn } from '@/lib/cn';
-import { formatCredits, formatShortDate } from '@/lib/format-date';
+import { formatShortDate } from '@/lib/format-date';
 
 /** Подсвечивает в навигации раздел, который сейчас в верхней трети экрана. */
 function useActiveSection(ids: readonly string[]): string {
@@ -187,8 +185,8 @@ export function SettingsPage() {
   const billingLoading = useBilling((state) => state.loading);
   const loadSubscription = useBilling((state) => state.loadSubscription);
   const cancel = useBilling((state) => state.cancel);
-  const creditsReport = useCredits((state) => state.report);
-  const refreshCredits = useCredits((state) => state.refresh);
+  // GitHub нужен только чату и Ketner Code (lib/product-switches.ts).
+  const githubOpen = productSwitch('chat') || productSwitch('code');
 
   const githubStatus = useGithub((state) => state.status);
   const githubLoading = useGithub((state) => state.loading);
@@ -200,8 +198,8 @@ export function SettingsPage() {
   const [confirmGithubDisconnect, setConfirmGithubDisconnect] = useState(false);
 
   useEffect(() => {
-    if (user) void loadGithub();
-  }, [user, loadGithub]);
+    if (user && githubOpen) void loadGithub();
+  }, [user, loadGithub, githubOpen]);
 
   const [canceling, setCanceling] = useState(false);
   const [unlinkingTelegram, setUnlinkingTelegram] = useState(false);
@@ -300,10 +298,6 @@ export function SettingsPage() {
     void loadSubscription();
   }, [loadSubscription, user]);
 
-  useEffect(() => {
-    if (user) void refreshCredits('standard');
-  }, [refreshCredits, user]);
-
   // Подписки сняты с продажи: платный уровень остаётся только у прежних подписчиков.
   const isPaid = Boolean(user?.plan && user.plan !== 'free' && user.plan !== 'credits');
   const isCanceled = subscription?.status === 'canceled';
@@ -323,8 +317,8 @@ export function SettingsPage() {
   const sections: Array<{ id: string; label: string; danger?: boolean }> = [
     { id: 'account', label: t('settings.account') },
     { id: 'appearance', label: t('settings.appearance') },
-    { id: 'credits', label: t('settings.credits') },
-    { id: 'github', label: 'GitHub' },
+    ...(isPaid ? [{ id: 'credits', label: t('settings.legacyTitle') }] : []),
+    ...(githubOpen ? [{ id: 'github', label: 'GitHub' }] : []),
     { id: 'telegram', label: 'Telegram' },
     { id: 'support', label: t('settings.support') },
     ...(hasAdminAccess ? [{ id: 'admin', label: 'Admin API' }] : []),
@@ -422,57 +416,21 @@ export function SettingsPage() {
             </div>
           </SettingsSection>
 
-          {/* Кредиты: остаток, срок действия и покупка пакетов */}
-          <SettingsSection
-            id="credits"
-            icon={<CreditCardIcon className="size-5" />}
-            title={t('settings.credits')}
-            description={t('settings.creditsText')}
-            action={
-              <Link
-                to="/pricing"
-                className={cn(buttonClasses({ variant: 'primary', size: 'sm' }), 'gap-1.5')}
-              >
-                <SparkleIcon className="size-3.5" />
-                {t('credits.buy')}
-              </Link>
-            }
-          >
-            <div className="flex flex-wrap items-center gap-2">
-              <Badge tone={planTone}>{planLabel}</Badge>
-              {isPaid ? (
+          {/* Прежняя подписка Plus / Pro / Ultra: доживает срок, здесь — только её отмена. Кредиты
+              клиенту не показываются (docs/SUBSCRIPTION_PRICING_DESIGN.md, задача 0b). */}
+          {isPaid ? (
+            <SettingsSection
+              id="credits"
+              icon={<CreditCardIcon className="size-5" />}
+              title={t('settings.legacyTitle')}
+              description={t('settings.legacyText')}
+            >
+              <div className="flex flex-wrap items-center gap-2">
+                <Badge tone={planTone}>{planLabel}</Badge>
                 <Badge tone={isCanceled ? 'warning' : 'success'}>
                   {isCanceled ? t('settings.statusCanceled') : t('settings.statusActive')}
                 </Badge>
-              ) : null}
-            </div>
-            {!user ? (
-              <Note>{t('settings.creditsSignIn')}</Note>
-            ) : !creditsReport ? (
-              <Skeleton className="h-16 w-full" />
-            ) : (
-              <>
-                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                  <InfoTile label={t('settings.creditsBalance')}>
-                    {formatCredits(creditsReport.balance, language)}
-                  </InfoTile>
-                  <InfoTile label={t('settings.creditsExpiry')}>
-                    {creditsReport.nextExpiresAt && creditsReport.nextExpiring > 0
-                      ? t('settings.creditsExpiryValue', {
-                          count: formatCredits(creditsReport.nextExpiring, language),
-                          date: formatShortDate(creditsReport.nextExpiresAt, language),
-                        })
-                      : '—'}
-                  </InfoTile>
-                </div>
-                <CardText className="text-[13px] leading-5">
-                  {creditsReport.purchased
-                    ? t('settings.creditsPurchasedNote', { days: PACK_VALID_DAYS })
-                    : t('settings.creditsTrialNote', { trial: creditsReport.trialCredits })}
-                </CardText>
-              </>
-            )}
-            {isPaid ? (
+              </div>
               <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-stroke bg-canvas px-3.5 py-3">
                 {!subscription && billingLoading ? (
                   <Skeleton className="h-4 w-56 max-w-full" />
@@ -501,121 +459,125 @@ export function SettingsPage() {
                   </Button>
                 ) : null}
               </div>
-            ) : null}
-          </SettingsSection>
+            </SettingsSection>
+          ) : null}
 
-          {/* GitHub: доступ к репозиториям, включая приватные */}
-          <SettingsSection
-            id="github"
-            icon={<GitHubIcon className="size-5" />}
-            title={t('settings.githubTitle')}
-            description={t('settings.githubDesc')}
-            action={
-              !user ? null : githubStatus?.connected ? (
-                confirmGithubDisconnect ? (
-                  <>
+          {/* GitHub: репозитории для чата и Ketner Code — пока они закрыты, раздела нет. */}
+          {githubOpen ? (
+            <SettingsSection
+              id="github"
+              icon={<GitHubIcon className="size-5" />}
+              title={t('settings.githubTitle')}
+              description={t('settings.githubDesc')}
+              action={
+                !user ? null : githubStatus?.connected ? (
+                  confirmGithubDisconnect ? (
+                    <>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        loading={githubBusy}
+                        onClick={async () => {
+                          await disconnectGithub();
+                          setConfirmGithubDisconnect(false);
+                        }}
+                        className="text-danger hover:border-danger/40 hover:bg-danger-soft"
+                      >
+                        {t('settings.githubDisconnectYes')}
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => setConfirmGithubDisconnect(false)}
+                      >
+                        {t('common.cancel')}
+                      </Button>
+                    </>
+                  ) : (
                     <Button
                       variant="outline"
                       size="sm"
-                      loading={githubBusy}
-                      onClick={async () => {
-                        await disconnectGithub();
-                        setConfirmGithubDisconnect(false);
-                      }}
-                      className="text-danger hover:border-danger/40 hover:bg-danger-soft"
+                      onClick={() => setConfirmGithubDisconnect(true)}
                     >
-                      {t('settings.githubDisconnectYes')}
+                      {t('settings.githubDisconnect')}
                     </Button>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => setConfirmGithubDisconnect(false)}
-                    >
-                      {t('common.cancel')}
-                    </Button>
-                  </>
-                ) : (
+                  )
+                ) : githubStatus?.available ? (
                   <Button
-                    variant="outline"
                     size="sm"
-                    onClick={() => setConfirmGithubDisconnect(true)}
+                    loading={githubBusy}
+                    onClick={() => void connectGithub()}
+                    leftIcon={<GitHubIcon className="size-3.5" />}
                   >
-                    {t('settings.githubDisconnect')}
+                    {t('settings.githubConnect')}
                   </Button>
-                )
-              ) : githubStatus?.available ? (
-                <Button
-                  size="sm"
-                  loading={githubBusy}
-                  onClick={() => void connectGithub()}
-                  leftIcon={<GitHubIcon className="size-3.5" />}
-                >
-                  {t('settings.githubConnect')}
-                </Button>
-              ) : null
-            }
-          >
-            {!user ? (
-              <Note>{t('settings.githubSignIn')}</Note>
-            ) : githubLoading && !githubStatus ? (
-              <Skeleton className="h-16 w-full" />
-            ) : githubStatus?.connected && githubStatus.account ? (
-              <>
-                <div className="flex flex-wrap items-center gap-3">
-                  {githubStatus.account.avatarUrl ? (
-                    <img
-                      src={githubStatus.account.avatarUrl}
-                      alt=""
-                      className="size-9 rounded-full ring-1 ring-stroke"
-                    />
+                ) : null
+              }
+            >
+              {!user ? (
+                <Note>{t('settings.githubSignIn')}</Note>
+              ) : githubLoading && !githubStatus ? (
+                <Skeleton className="h-16 w-full" />
+              ) : githubStatus?.connected && githubStatus.account ? (
+                <>
+                  <div className="flex flex-wrap items-center gap-3">
+                    {githubStatus.account.avatarUrl ? (
+                      <img
+                        src={githubStatus.account.avatarUrl}
+                        alt=""
+                        className="size-9 rounded-full ring-1 ring-stroke"
+                      />
+                    ) : null}
+                    <div className="min-w-0">
+                      <a
+                        href={`https://github.com/${githubStatus.account.login}`}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="font-mono text-[14px] font-semibold text-text hover:text-accent"
+                      >
+                        @{githubStatus.account.login}
+                      </a>
+                      <p className="text-xs text-muted">
+                        {t('settings.githubSince', {
+                          date: formatShortDate(githubStatus.account.connectedAt, language),
+                        })}
+                      </p>
+                    </div>
+                    <Badge tone="success">{t('settings.githubConnected')}</Badge>
+                  </div>
+                  {confirmGithubDisconnect ? (
+                    <Note>{t('settings.githubDisconnectHint')}</Note>
                   ) : null}
-                  <div className="min-w-0">
+                  <Note title={t('settings.githubAccessTitle')}>
+                    {t('settings.githubAccessHint')}{' '}
                     <a
-                      href={`https://github.com/${githubStatus.account.login}`}
+                      href="https://github.com/settings/applications"
                       target="_blank"
                       rel="noreferrer"
-                      className="font-mono text-[14px] font-semibold text-text hover:text-accent"
+                      className="inline-flex items-center gap-1 text-accent hover:underline"
                     >
-                      @{githubStatus.account.login}
+                      {t('settings.githubManage')}
+                      <ExternalLinkIcon className="size-3" />
                     </a>
-                    <p className="text-xs text-muted">
-                      {t('settings.githubSince', {
-                        date: formatShortDate(githubStatus.account.connectedAt, language),
-                      })}
-                    </p>
+                  </Note>
+                </>
+              ) : githubStatus && !githubStatus.available ? (
+                <Note>{t('settings.githubUnavailable')}</Note>
+              ) : (
+                <>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Badge tone="neutral">{t('settings.githubNotConnected')}</Badge>
                   </div>
-                  <Badge tone="success">{t('settings.githubConnected')}</Badge>
-                </div>
-                {confirmGithubDisconnect ? <Note>{t('settings.githubDisconnectHint')}</Note> : null}
-                <Note title={t('settings.githubAccessTitle')}>
-                  {t('settings.githubAccessHint')}{' '}
-                  <a
-                    href="https://github.com/settings/applications"
-                    target="_blank"
-                    rel="noreferrer"
-                    className="inline-flex items-center gap-1 text-accent hover:underline"
-                  >
-                    {t('settings.githubManage')}
-                    <ExternalLinkIcon className="size-3" />
-                  </a>
-                </Note>
-              </>
-            ) : githubStatus && !githubStatus.available ? (
-              <Note>{t('settings.githubUnavailable')}</Note>
-            ) : (
-              <>
-                <div className="flex flex-wrap items-center gap-2">
-                  <Badge tone="neutral">{t('settings.githubNotConnected')}</Badge>
-                </div>
-                <Note title={t('settings.githubWhyTitle')}>{t('settings.githubWhyHint')}</Note>
-              </>
-            )}
-            {githubError ? (
-              <p role="alert" className="text-[13px] text-danger">
-                {githubError}
-              </p>
-            ) : null}
-          </SettingsSection>
+                  <Note title={t('settings.githubWhyTitle')}>{t('settings.githubWhyHint')}</Note>
+                </>
+              )}
+              {githubError ? (
+                <p role="alert" className="text-[13px] text-danger">
+                  {githubError}
+                </p>
+              ) : null}
+            </SettingsSection>
+          ) : null}
 
           {/* Telegram: вход, кабинет подписки, уведомления */}
           <SettingsSection

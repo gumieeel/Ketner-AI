@@ -59,13 +59,11 @@ describe('marketing: лендинг, шапка, футер и пакеты кр
     expect(screen.queryByRole('dialog', { name: 'Навигация' })).not.toBeInTheDocument();
   });
 
-  it('страница /pricing отображает пять пакетов и сравнение уровней', () => {
+  it('страница /pricing — тарифы, без пакетов кредитов', () => {
     renderRoute('/pricing');
 
-    expect(screen.getByRole('heading', { level: 1, name: 'Кредиты' })).toBeInTheDocument();
-    expect(screen.getByTestId('pack-list').children).toHaveLength(5);
-    expect(screen.getByText('Что меняется после первой покупки')).toBeInTheDocument();
-    expect(screen.getByText('Без покупок')).toBeInTheDocument();
-    expect(screen.getByText('Есть купленные кредиты')).toBeInTheDocument();
+    expect(screen.getByRole('heading', { level: 1, name: 'Тарифы' })).toBeInTheDocument();
+    expect(screen.getByTestId('tier-start')).toBeInTheDocument();
+    expect(screen.queryByTestId('pack-list')).toBeNull();
   });
 });

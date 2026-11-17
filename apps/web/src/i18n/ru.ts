@@ -8,7 +8,7 @@ export const ru = {
   'nav.closeSidebar': 'Закрыть список чатов',
   'nav.chats': 'Чаты',
   'nav.settings': 'Настройки',
-  'nav.pricing': 'Кредиты',
+  'nav.pricing': 'Тарифы',
   'nav.login': 'Войти',
   'nav.logout': 'Выйти',
   'nav.guest': 'Гость',
@@ -86,9 +86,53 @@ export const ru = {
   'settings.loggedInAs': 'Вы вошли как',
   'settings.registeredOn': 'Дата регистрации',
 
-  'pricing.title': 'Кредиты',
+  'pricing.freeTitle': 'Бесплатно',
+  'pricing.free.analysis':
+    'Анализ бизнеса: что можно автоматизировать, что сделать сами, а что — с командой. Один анализ в день — без регистрации.',
+  'pricing.free.build':
+    'Создание и проверка помощников и ботов для клиентов — в пределах бесплатного месячного лимита.',
+  'pricing.free.report':
+    'Для работы команды отчёт покажет предварительную оценку; для того, что есть в Ketner, — подходящий тариф.',
+  'pricing.freeCta': 'Проанализировать бизнес',
+  'pricing.tiersTitle': 'Тарифы на работающие решения',
+  'pricing.tiersLead':
+    'Решение работает, когда открыто не только вам: бот на своей странице, по ссылке, QR-коду или кнопке на сайте. Тариф — на аккаунт, цена в месяц.',
+  'pricing.perMonth': 'в месяц',
+  'pricing.tier.solutions.one': '{count} активное решение',
+  'pricing.tier.solutions.few': '{count} активных решения',
+  'pricing.tier.solutions.many': '{count} активных решений',
+  'pricing.tier.requests': 'До {count} обращений в месяц',
+  'pricing.tier.noServices': 'Без внешних сервисов',
+  'pricing.tier.services.one': '{count} внешний сервис',
+  'pricing.tier.services.few': '{count} внешних сервиса',
+  'pricing.tier.services.many': '{count} внешних сервисов',
+  'pricing.tier.helpWidget': 'Установка кнопки на сайт командой Ketner',
+  'pricing.tier.helpHours': '{hours} ч помощи с подключением в месяц',
+  'pricing.tierHow':
+    'Оплата тарифа на сайте появится позже. Сейчас тариф подключает команда Ketner — напишите нам.',
+  'pricing.tierCta': 'Подключить тариф',
+  'pricing.rulesTitle': 'Если обращений больше',
+  'pricing.rules.warn': 'При {percent}% объёма предупредим заранее.',
+  'pricing.rules.grace': 'Ещё {percent}% сверх объёма — без доплаты.',
+  'pricing.rules.leads':
+    'Дальше до конца месяца бот не отвечает с помощью ИИ, а принимает заявки — клиенты не теряются.',
+  'pricing.rules.consent': 'Тариф выше — только с вашего согласия. Неожиданных списаний нет.',
+  'pricing.termsTitle': 'Что считается',
+  'pricing.terms.solution': 'Активное решение',
+  'pricing.terms.solutionText':
+    'Помощник или бот, открытый не только вам: по ссылке, QR-коду, кнопке на сайте или по событию.',
+  'pricing.terms.request': 'Обращение',
+  'pricing.terms.requestText':
+    'Ответ решения посетителю или запуск по событию. Ваши проверки в конструкторе и сбои на нашей стороне не считаются.',
+  'pricing.terms.service': 'Внешний сервис',
+  'pricing.terms.serviceText':
+    'Подключение к системе вне Ketner с вашими учётными данными: CRM, таблицы, почта.',
+  'pricing.teamTitle': 'Работа команды',
+  'pricing.teamText':
+    'Интеграции с вашими системами делает команда Ketner — только на платном тарифе. Предварительную оценку покажет отчёт анализа, точную — команда после проверки задачи.',
+  'pricing.title': 'Тарифы',
   'pricing.subtitle':
-    'Платите один раз и тратьте кредиты на анализ задач, создание и проверку решений и ответы ботов — по реальной стоимости запроса. Купленные кредиты действуют {days} дней.',
+    'Анализ бизнеса, создание и проверка помощников и ботов — бесплатно. Платите только за работающие решения: один тариф на аккаунт, без неожиданных списаний.',
   'pricing.popular': 'Популярный',
   'pricing.compare': 'Что меняется после первой покупки',
   'pricing.credits.one': '{count} кредит',
@@ -103,7 +147,7 @@ export const ru = {
   'pricing.modelsBadge': 'Модели',
   'pricing.docsLink': 'Подробнее о кредитах и моделях в документации',
   'pricing.notice':
-    'Пакет оплачивается один раз: подписки и автопродления нет. Деньги возвращаются полностью, если с оплаты прошло не больше 14 дней и кредиты пакета не потрачены; подробности — на странице «Оплата и возврат».',
+    'Тариф — помесячно на аккаунт. Переход на тариф выше — только с вашего согласия. Условия оплаты и возврата — на странице «Оплата и возврат».',
 
   'docs.title': 'Документация Ketner AI',
   'docs.subtitle': 'Тарифные планы, модели и ответы на частые вопросы.',
@@ -346,6 +390,8 @@ export const ru = {
   'common.save': 'Сохранить',
   'common.retry': 'Повторить',
 
+  'closed.title.docs': 'Документация временно недоступна',
+  'closed.title.models': 'Страница «Модели» временно недоступна',
   'closed.title.stars': 'Оплата звёздами Telegram больше не принимается',
   'closed.title.chat': 'Чат временно недоступен',
   'closed.title.code': 'Ketner Code временно недоступен',
@@ -563,9 +609,9 @@ export const ru = {
   'pricing.colFeature': 'Функция',
 
   // Вход и регистрация
-  'auth.asideTitle': 'Все AI-модели. Без подписки.',
+  'auth.asideTitle': 'ИИ-агенты для вашего бизнеса.',
   'auth.asideLead':
-    'GPT, Claude, Gemini, Grok, DeepSeek и Ketner Mini в одном чате. Режим Auto сам подберёт подходящую модель.',
+    'Опишите бизнес — Ketner найдёт, что автоматизировать, и поможет создать помощника или бота для клиентов. Создание и проверка — бесплатно.',
   'auth.showPassword': 'Показать',
   'auth.hidePassword': 'Скрыть',
   'auth.loginFailed': 'Ошибка входа',
@@ -576,11 +622,14 @@ export const ru = {
   'auth.namePlaceholder': 'Иван',
 
   // Настройки
-  'settings.subtitle': 'Профиль, внешний вид и кредиты',
+  'settings.subtitle': 'Профиль, внешний вид и вход',
+  'settings.legacyTitle': 'Прежняя подписка',
+  'settings.legacyText':
+    'Подписки Plus, Pro и Ultra больше не продаются. Оплаченный период доживает до конца.',
   'settings.navLabel': 'Разделы настроек',
   'settings.telegramTitle': 'Telegram',
   'settings.telegramDesc':
-    'Вход без пароля, кабинет кредитов в боте @Robo_kassa_bot, оплата звёздами, чеки и уведомления.',
+    'Вход без пароля, уведомления и возвраты прежних платежей — в боте Ketner в Telegram.',
   'settings.telegramConnected': 'Подключён',
   'settings.telegramNotLinked': 'Не привязан',
   'settings.telegramOpenBot': 'Открыть бот',
@@ -589,7 +638,7 @@ export const ru = {
   'settings.telegramConnect': 'Подключить Telegram',
   'settings.telegramLinkedAs': 'Привязан Telegram:',
   'settings.telegramLinkedHint':
-    'В боте нажмите «Кабинет»: кредиты, чеки и возвраты. На сайт входите по почте с кодом из письма или через Google.',
+    'В боте нажмите «Кабинет»: чеки и возвраты прежних платежей. На сайт входите по почте с кодом из письма или через Google.',
   'settings.telegramLinkTitle': 'Как подключить',
   'settings.telegramLinkHint':
     'Нажмите «Подключить Telegram», откройте бота и подтвердите — страница обновится сама.',
@@ -597,9 +646,9 @@ export const ru = {
   'settings.telegramCodeSubmit': 'Подключить',
   'settings.telegramCodeLabel': 'Код из кабинета в Telegram',
   'settings.telegramOnlyHint':
-    'Аккаунт создан через Telegram: кредиты и управление — в кабинете бота Ketner AI.',
+    'Аккаунт создан через Telegram: вход и уведомления — в боте Ketner AI.',
   'settings.telegramClaimFailed': 'Не получилось. Попробуйте ещё раз.',
-  'settings.telegramLinkedDone': 'Telegram подключён. Кабинет кредитов и уведомления — в боте.',
+  'settings.telegramLinkedDone': 'Telegram подключён. Уведомления — в боте.',
   'settings.telegramAccountEmail': 'Аккаунт Telegram',
   'settings.githubTitle': 'GitHub',
   'settings.githubDesc':
@@ -1750,8 +1799,7 @@ export const ru = {
     'Купленные кредиты действуют {days} дней, первыми тратятся те, что сгорают раньше. Пока они есть, для вас действуют расширенные лимиты запросов.',
   'settings.creditsTrialNote':
     'Сейчас у вас пробные кредиты ({trial}), их дают один раз. Купите пакет, чтобы продолжить с расширенными лимитами запросов.',
-  'settings.legacySubscription':
-    'Прежняя подписка {plan} действует до {date}. Продлеваться она не будет: дальше пользуйтесь кредитами.',
+  'settings.legacySubscription': 'Прежняя подписка {plan} действует до {date} и не продлится.',
 
   // Telegram-кабинет: кредиты вместо тарифов
   'tg.reasonWrongPack': 'Ошибся пакетом',
@@ -1851,7 +1899,7 @@ export const ru = {
     'Анализ заканчивается не списком идей, а понятными шагами: что запустить сразу и что подготовить.',
   'discoveryHome.pricingTitle': 'Цены',
   'discoveryHome.pricingLead':
-    'Один анализ в день — бесплатно. Подробные анализы и автоматизации — за кредиты, без подписки: платите только за то, чем пользуетесь.',
+    'Анализ, создание и проверка помощников и ботов — бесплатно. Платите только за работающие решения: тариф на аккаунт от {price} в месяц.',
   'discoveryHome.pricingLink': 'Подробнее о ценах',
   'discoveryHome.faqTitle': 'Вопросы',
   'discoveryHome.contactsTitle': 'Контакты',

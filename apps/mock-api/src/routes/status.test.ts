@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import express from 'express';
+import { setProductSwitchForTests } from '../product-switches.js';
 import { createStatusRouter, overallState, type StatusDeps, type StatusReport } from './status.js';
 
 async function getStatus(deps: StatusDeps, times = 1): Promise<StatusReport[]> {
@@ -39,7 +40,25 @@ test('статус: всё работает', async () => {
     report.components.map((c) => c.id),
     ['site', 'database', 'models', 'images', 'payments', 'telegram'],
   );
-  assert.ok(report.components.every((c) => c.state === 'operational'));
+  // Раздел картинок закрыт (product-switches.ts): «отключено», общий статус от этого не страдает.
+  assert.deepEqual(
+    report.components.find((c) => c.id === 'images'),
+    {
+      id: 'images',
+      state: 'unavailable',
+      note: 'Раздел закрыт',
+    },
+  );
+  assert.ok(
+    report.components.filter((c) => c.id !== 'images').every((c) => c.state === 'operational'),
+  );
+});
+
+test('статус: раздел картинок открыт — работает', async (t) => {
+  setProductSwitchForTests('images', true);
+  t.after(() => setProductSwitchForTests('images', false));
+  const [report] = await getStatus(healthy);
+  assert.equal(stateOf(report, 'images'), 'operational');
 });
 
 test('статус: база не отвечает — сбой', async () => {
@@ -48,7 +67,9 @@ test('статус: база не отвечает — сбой', async () => {
   assert.equal(report.state, 'outage');
 });
 
-test('статус: ключ поставщика моделей отклонён — модели и картинки не работают', async () => {
+test('статус: ключ поставщика моделей отклонён — модели и картинки не работают', async (t) => {
+  setProductSwitchForTests('images', true);
+  t.after(() => setProductSwitchForTests('images', false));
   const [report] = await getStatus({ ...healthy, checkModels: async () => 'rejected' });
   assert.equal(stateOf(report, 'models'), 'outage');
   assert.equal(stateOf(report, 'images'), 'degraded');

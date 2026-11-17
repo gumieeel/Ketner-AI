@@ -67,6 +67,18 @@ test('billing: каталог пакетов кредитов GET /api/packs —
   assert.ok(body.packs.every((p) => p.stars > 0 && p.cryptoBonusCredits > 0));
 });
 
+test('billing: оплата звёздами закрыта — в каталоге пакетов нет цены в звёздах', async (t) => {
+  setProductSwitchForTests('stars', false);
+  t.after(() => setProductSwitchForTests('stars', true));
+  const server = await startTestServer();
+  t.after(() => server.close());
+  const body = await readJson<{ packs: Array<Record<string, unknown>> }>(
+    await fetch(`${server.baseUrl}/api/packs`),
+  );
+  assert.ok(body.packs.length > 0);
+  assert.ok(body.packs.every((pack) => !('stars' in pack)));
+});
+
 test('billing: подписок больше нет, оформление пакета кредитов даёт кредиты и открывает полный доступ', async (t) => {
   const server = await startTestServer();
   t.after(() => server.close());

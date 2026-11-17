@@ -1,6 +1,7 @@
 import { Router, type Request, type Response } from 'express';
 import { config } from '../config.js';
 import { defaultCircuitBreaker, type CircuitBreaker } from '../ai/circuit-breaker.js';
+import { productSwitch } from '../product-switches.js';
 
 /**
  * Публичный статус сервиса: `GET /api/status` для страницы /status.
@@ -142,12 +143,15 @@ export function createStatusRouter(deps: StatusDeps = {}): Router {
     }
 
     components.push(
-      features.images
-        ? models === 'rejected' || models === 'unconfigured'
-          ? // Подсказки переводятся и проверяются моделью через того же поставщика.
-            { id: 'images', state: 'degraded', note: 'Не работает проверка подсказок' }
-          : { id: 'images', state: 'operational' }
-        : { id: 'images', state: 'unavailable', note: 'Генерация картинок отключена' },
+      // Раздел картинок закрыт (product-switches.ts) — «отключено», а не «работает».
+      !productSwitch('images')
+        ? { id: 'images', state: 'unavailable', note: 'Раздел закрыт' }
+        : features.images
+          ? models === 'rejected' || models === 'unconfigured'
+            ? // Подсказки переводятся и проверяются моделью через того же поставщика.
+              { id: 'images', state: 'degraded', note: 'Не работает проверка подсказок' }
+            : { id: 'images', state: 'operational' }
+          : { id: 'images', state: 'unavailable', note: 'Генерация картинок отключена' },
     );
     components.push(
       features.crypto || features.telegram

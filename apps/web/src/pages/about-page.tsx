@@ -1,4 +1,5 @@
 import { Link } from 'react-router-dom';
+import { STARTING_PRICE } from '@/features/billing/tiers';
 import { ROADMAP } from '@/features/content/changelog';
 import { SUPPORT_EMAIL } from '@/features/content/legal';
 import { PROJECT, SUPPORT_TELEGRAM_URL } from '@/features/content/project';
@@ -8,9 +9,10 @@ const linkClass = 'text-text underline underline-offset-4 hover:text-accent';
 const TIMELINE: { date: string; text: string }[] = [
   { date: PROJECT.developmentStarted, text: 'Начало разработки.' },
   { date: PROJECT.launched, text: 'Сайт заработал с настоящими моделями — дата запуска.' },
+  { date: PROJECT.paymentsStarted, text: 'Первые платежи на сайте.' },
   {
-    date: PROJECT.paymentsStarted,
-    text: 'Оплата криптовалютой через Trybit на сайте, API и бот для оплаты звёздами.',
+    date: PROJECT.businessPlatform,
+    text: 'Ketner стал платформой ИИ-агентов для бизнеса: анализ, помощники и боты для клиентов. Общий чат, Ketner Code, картинки и API для разработчиков закрыты.',
   },
 ];
 
@@ -23,9 +25,9 @@ export function AboutPage() {
           О проекте
         </h1>
         <p className="text-[17px] leading-8 text-muted">
-          Ketner AI — сервис, в котором модели разных разработчиков (OpenAI, Anthropic, Google, xAI,
-          DeepSeek и других) доступны в одном чате на русском языке, без подписки: вы платите
-          кредитами за свои запросы.
+          Ketner AI — платформа ИИ-агентов для малого и среднего бизнеса. Вы описываете, как
+          работает бизнес, Ketner находит, что можно автоматизировать, и помогает создать помощника
+          или бота для клиентов — без программиста.
         </p>
       </header>
 
@@ -37,13 +39,8 @@ export function AboutPage() {
           представляем их.
         </p>
         <p className="text-[15px] leading-7 text-muted">
-          Собственные модели мы не обучаем. Ваш запрос мы передаём модели выбранного разработчика
-          через OpenRouter или напрямую через API разработчика и возвращаем её ответ. Под ответом в
-          чате видно, какая модель ответила, а полный список с разработчиками — на странице{' '}
-          <Link to="/models" className={linkClass}>
-            «Модели»
-          </Link>
-          .
+          Собственные модели мы не обучаем. Помощники и боты отвечают с помощью моделей разных
+          разработчиков: запрос уходит модели через OpenRouter или напрямую через API разработчика.
         </p>
       </section>
 
@@ -51,20 +48,22 @@ export function AboutPage() {
         <h2 className="text-xl font-semibold tracking-tight">Какую задачу решаем</h2>
         <ul className="flex list-disc flex-col gap-2 pl-5 text-[15px] leading-7 text-muted marker:text-subtle">
           <li>
-            Сильные модели продаются отдельными подписками у каждой компании. В Ketner AI они
-            доступны без подписки: вы покупаете пакет кредитов и тратите их на запросы, а цены
-            указаны на странице{' '}
+            Малому бизнесу трудно понять, что из ИИ ему действительно поможет. Анализ Ketner
+            показывает это на примере вашего бизнеса и честно говорит, чего пока нельзя.
+          </li>
+          <li>
+            Бот для клиентов отвечает на частые вопросы и собирает заявки: на своей странице, по
+            ссылке, QR-коду и кнопке на сайте.
+          </li>
+          <li>
+            Анализ, создание и проверка — бесплатно. Платите только за работающие решения: тариф на
+            аккаунт от {STARTING_PRICE} в месяц, подробности — на странице{' '}
             <Link to="/pricing" className={linkClass}>
-              «Кредиты»
+              «Тарифы»
             </Link>
             .
           </li>
-          <li>
-            Не нужно гадать, какую модель выбрать: режим Auto отдаёт простые вопросы недорогой
-            модели, а сложные — сильной. Выбрать модель вручную тоже можно.
-          </li>
-          <li>Чат, помощник для кода, картинки и API — в одном аккаунте.</li>
-          <li>Разовая оплата пакета кредитов звёздами Telegram или криптовалютой.</li>
+          <li>Интеграции с вашими системами делает команда Ketner — на платном тарифе.</li>
         </ul>
       </section>
 
@@ -72,8 +71,8 @@ export function AboutPage() {
         <h2 className="text-xl font-semibold tracking-tight">Этап разработки</h2>
         <p className="text-[15px] leading-7 text-muted">
           <span className="font-medium text-text">{PROJECT.stage}.</span> Сайт работает с настоящими
-          моделями и принимает оплату, но продукт молодой: функции меняются быстро, часть ещё не
-          готова. Что пока не работает, честно перечислено в разделе{' '}
+          моделями, но продукт молодой: функции меняются быстро, часть ещё не готова. Что пока не
+          работает, честно перечислено в разделе{' '}
           <Link to="/changelog#limitations" className={linkClass}>
             «Известные ограничения»
           </Link>
