@@ -1,0 +1,28 @@
+{
+  "auditReportVersion": 2,
+  "vulnerabilities": {
+    "example-lib": {
+      "name": "example-lib",
+      "severity": "critical",
+      "isDirect": true,
+      "via": [
+        {
+          "source": 1999999,
+          "name": "example-lib",
+          "dependency": "example-lib",
+          "title": "Prototype pollution in example-lib",
+          "url": "https://github.com/advisories/GHSA-xxxx-yyyy-zzzz",
+          "severity": "critical",
+          "range": "<2.0.1"
+        }
+      ],
+      "effects": [],
+      "range": "<2.0.1",
+      "nodes": ["node_modules/example-lib"],
+      "fixAvailable": true
+    }
+  },
+  "metadata": {
+    "vulnerabilities": { "info": 0, "low": 0, "moderate": 0, "high": 0, "critical": 1, "total": 1 }
+  }
+}
