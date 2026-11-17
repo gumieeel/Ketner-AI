@@ -233,6 +233,9 @@ export function HomePage() {
                   прокатываются волной слева направо, стрелка подаётся вперёд. */}
                 <button
                   type="submit"
+                  // Имя кнопки — явно: видимые буквы ниже скрыты от читалок (aria-hidden), а текст
+                  // sr-only учитывают не все проверки доступности.
+                  aria-label={starting ? t('discoveryHome.starting') : t('discoveryHome.submit')}
                   disabled={starting}
                   aria-disabled={!canSubmit || undefined}
                   aria-busy={starting || undefined}

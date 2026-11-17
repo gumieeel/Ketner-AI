@@ -32,3 +32,38 @@ test('главная: чат закрыт — «Расскажите о своё
   assert.match(pricing, /Как работают кредиты</);
   assert.doesNotMatch(pricing, /Как работают кредиты\?/);
 });
+
+test('первый экран главной: стиль раньше скриптов, вводная анимация не повторяется, файлы сжаты', async () => {
+  const html = await get(true, '/');
+  // Стиль блокирует первую отрисовку: он должен идти раньше модуля и его modulepreload.
+  const style = html.search(/<link rel="stylesheet"/);
+  const script = html.search(/<script type="module"/);
+  const preload = html.search(/<link rel="modulepreload"/);
+  assert.ok(style !== -1 && script !== -1, 'в разметке есть стиль и модуль');
+  assert.ok(style < script, 'стиль раньше главного модуля');
+  assert.ok(preload === -1 || style < preload, 'стиль раньше modulepreload');
+
+  const cssPath = html.match(/<link rel="stylesheet"[^>]*href="([^"]+)"/)?.[1];
+  assert.ok(cssPath, 'адрес стиля');
+  const server = createApp({ discoveryEnabled: true }).listen(0);
+  try {
+    const port = (server.address() as { port: number }).port;
+    const plain = await fetch(`http://localhost:${port}${cssPath}`, {
+      headers: { 'Accept-Encoding': 'identity' },
+    });
+    const css = await plain.text();
+    // Для страниц с готовой разметкой вводная анимация героя не начинается заново.
+    assert.match(
+      css,
+      /html\[data-prerendered\] \[class\*=['"]?animate-hero-['"]?\]\{animation:none\}/,
+    );
+    const compressed = await fetch(`http://localhost:${port}${cssPath}`, {
+      headers: { 'Accept-Encoding': 'br, gzip' },
+      // Без распаковки fetch видна сама передача: заголовок ответа сервера.
+    });
+    assert.equal(compressed.headers.get('content-encoding'), 'br');
+    assert.equal(compressed.headers.get('cache-control'), 'public, max-age=31536000, immutable');
+  } finally {
+    server.close();
+  }
+});

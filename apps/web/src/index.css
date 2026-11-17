@@ -1086,3 +1086,14 @@
     scroll-behavior: auto !important;
   }
 }
+
+/* Вводная анимация главной (animate-hero-*) уже сыграла на готовой разметке. React заменяет узлы
+   при запуске, и с fill-mode both она начиналась бы заново с opacity: 0 — первый экран пропадал
+   до конца анимации. Для страниц с готовой разметкой — сразу конечное состояние. Вне @layer:
+   классы animate-* лежат в слое utilities, а стили вне слоёв сильнее любого слоя. */
+html[data-prerendered] [class*='animate-hero-'] {
+  animation: none;
+}
+html[data-prerendered] .animate-hero-halo {
+  opacity: 0;
+}

@@ -58,6 +58,7 @@ import type { SupportStore } from './store/support-store.js';
 
 import type { UsageStore } from './store/usage-store.js';
 import { usageStore as defaultUsageStore } from './store/index.js';
+import { compressedAssets } from './web/compressed-assets.js';
 
 /**
  * Зависимости приложения.
@@ -317,6 +318,20 @@ export function createApp(overrides: Partial<AppDeps> = {}): Express {
       const queryAt = request.originalUrl.indexOf('?');
       response.redirect(301, target + (queryAt === -1 ? '' : request.originalUrl.slice(queryAt)));
     });
+    // Файлы сборки в /assets/ с хешем в имени не меняются: браузер берёт их из кэша год, без
+    // повторной загрузки при каждом входе, и получает сжатыми (web/compressed-assets.ts).
+    // Остальное (иконки, robots) — как раньше.
+    app.use('/assets', compressedAssets(path.join(webDistPath, 'assets')));
+    app.use(
+      '/assets',
+      express.static(path.join(webDistPath, 'assets'), {
+        index: false,
+        dotfiles: 'ignore',
+        immutable: true,
+        maxAge: '365d',
+        fallthrough: false,
+      }),
+    );
     app.use(express.static(webDistPath, { index: false, dotfiles: 'ignore' }));
   }
 

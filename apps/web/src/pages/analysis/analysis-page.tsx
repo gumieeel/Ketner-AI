@@ -176,7 +176,7 @@ function ResultHeader({ analysis }: { analysis: AnalysisView }) {
   const seconds = duration === null ? 0 : Math.max(1, Math.round(duration / 1000));
 
   return (
-    <div className="flex flex-col gap-6 lg:flex-row lg:items-start lg:justify-between">
+    <div className="flex flex-col gap-6 xl:flex-row xl:items-start xl:justify-between">
       <div className="flex gap-5">
         <span
           aria-hidden="true"
@@ -197,7 +197,7 @@ function ResultHeader({ analysis }: { analysis: AnalysisView }) {
         </div>
       </div>
 
-      <dl className="grid shrink-0 grid-cols-2 divide-x divide-stroke rounded-2xl border border-stroke bg-surface px-1 py-4 lg:min-w-[30rem]">
+      <dl className="grid shrink-0 grid-cols-2 divide-x divide-stroke rounded-2xl border border-stroke bg-surface px-1 py-4 xl:min-w-[30rem]">
         <div className="flex gap-3 px-4">
           <CreditsIcon aria-hidden="true" className="mt-0.5 size-6 shrink-0 text-muted" />
           <div>

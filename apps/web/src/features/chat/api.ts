@@ -11,13 +11,25 @@ const GUEST_ID_KEY = 'ketner_guest_id';
  * Сервер не принял Bearer-токен (устарел, сменился ключ при деплое): запрос ушёл как гостевой.
  * Пересверяем сессию: устаревшая сбрасывается, и интерфейс просит войти заново.
  */
-export function checkSessionInvalid(response: Response): void {
+export function checkSessionInvalid(response: Response, now = Date.now()): void {
   if (
     response.headers.get('X-Session-Invalid') === '1' &&
-    useAuth.getState().status === 'authenticated'
+    useAuth.getState().status === 'authenticated' &&
+    now - lastSessionCheck >= SESSION_RECHECK_MS
   ) {
+    // Одновременные ответы делят одну проверку (auth-store), а повторная — не чаще раза в 30 с:
+    // если cookie-сессия жива, а заголовок приходит снова, проверки не идут по кругу.
+    lastSessionCheck = now;
     void useAuth.getState().restoreSession();
   }
+}
+
+const SESSION_RECHECK_MS = 30_000;
+let lastSessionCheck = -Infinity;
+
+/** Только для тестов: сбросить время последней проверки сессии. */
+export function resetSessionCheckForTests(): void {
+  lastSessionCheck = -Infinity;
 }
 
 export function getGuestId(): string {
