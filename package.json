@@ -23,7 +23,9 @@
     "lint:workspaces": "npm run lint --workspaces --if-present",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
-    "test": "npm run test --workspaces --if-present"
+    "test": "npm run test --workspaces --if-present && npm run test:scripts",
+    "test:scripts": "node --test \"scripts/**/*.test.mjs\"",
+    "audit:gate": "node scripts/audit-gate.mjs"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
