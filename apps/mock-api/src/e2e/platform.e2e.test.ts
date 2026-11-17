@@ -36,6 +36,11 @@ import { UsageStore } from '../store/usage-store.js';
 import { FAST_AI, startTestServer } from '../testing/server.js';
 import { signupAndVerify } from '../testing/signup.js';
 import { MemoryCounterStore } from '../billing/cost-counters.js';
+import { setProductSwitchForTests } from '../product-switches.js';
+
+// Возможность «API» живёт в закрытом разделе (product-switches.ts); здесь проверяется путь
+// «нужна настройка», поэтому раздел открыт для этого файла.
+setProductSwitchForTests('developerApi', true);
 
 const CALL_COST_USD = 0.003;
 

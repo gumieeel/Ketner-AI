@@ -526,11 +526,19 @@ describe('анализ задачи: начало, вопросы, резуль�
     expect(
       within(scope).getByText('Можно сделать сейчас: 1 · Пока не поддерживается: 1'),
     ).toBeInTheDocument();
-    // Интеграции неподдерживаемой возможности в объём не входят.
-    expect(within(scope).getByText('Внешние интеграции не нужны')).toBeInTheDocument();
+    // Сводка следует статусам: одна из двух возможностей не поддерживается — «всё можно
+    // запустить» и «интеграции не нужны» было бы неправдой; недостающая интеграция названа.
     expect(
-      within(scope).getByText('Небольшой: всё можно запустить без сложных интеграций.'),
+      within(scope).getByText('Для того, что можно сделать сейчас, внешние интеграции не нужны'),
     ).toBeInTheDocument();
+    expect(within(scope).getByText('Пока нет в Ketner')).toBeInTheDocument();
+    expect(within(scope).getByText('Почта')).toBeInTheDocument();
+    expect(
+      within(scope).getByText(
+        'Можно запустить 1 из 2. Остальное ждёт интеграций, которых в Ketner пока нет.',
+      ),
+    ).toBeInTheDocument();
+    expect(within(scope).queryByText(/всё можно запустить/)).toBeNull();
   });
 
   it('экран результата: итог, время анализа, экономия по числам, «Рекомендуем начать», остальное по кнопке', async () => {

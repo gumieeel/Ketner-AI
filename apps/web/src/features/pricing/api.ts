@@ -24,9 +24,32 @@ export interface Localized {
 }
 
 export interface RecurringCost {
-  kind: 'subscription' | 'support';
+  kind: 'support';
   amount: { kzt: number | null; usdCents: number | null };
-  monthlyCredits?: number;
+}
+
+/**
+ * Кто делает возможность (сервер, pricing/delivery.ts): клиент сам в Ketner, команда или пока
+ * никто («запланировано»). Тариф — из каталога тарифов сервера (services/tiers.ts).
+ */
+export interface Delivery {
+  kind: 'self_service' | 'team' | 'planned';
+  plannedWork: string[];
+  teamWork: string[];
+  priceList: {
+    status: 'fits' | 'too_large' | 'unknown';
+    limitChars: number;
+    maxPositions: number;
+    positions: number | null;
+  } | null;
+  paidTierRequired: boolean;
+  tier: { id: string; name: string; priceUsd: number; monthlyRequests: number } | null;
+  volumeKnown: boolean;
+}
+
+/** Смету и заявку на внедрение показывают только у работы команды. */
+export function isTeamWork(estimate: { delivery: Delivery }): boolean {
+  return estimate.delivery.kind === 'team';
 }
 
 export interface EstimateView {
@@ -42,6 +65,7 @@ export interface EstimateView {
   sharedSavingsKzt: number | null;
   workingDays: { min: number; max: number } | null;
   externalApproval: boolean;
+  delivery: Delivery;
   confidence: Confidence;
   confidenceReasons: string[];
   requiresManualReview: boolean;
@@ -135,6 +159,8 @@ export interface BusinessProfileData {
   existingTools: string[];
   monthlyRequests: number | null;
   monthlyOrders: number | null;
+  /** Позиций в прайс-листе; null — не назван. */
+  catalogPositions?: number | null;
   additionalContext: string | null;
   edited?: boolean;
 }

@@ -5,14 +5,28 @@
  * сроки, уверенность, допущения, неизвестные, исключения, ежемесячные расходы. Не видит: часы и
  * деньги по строкам, ставку, множители, резерв, внутренние заметки, назначенного администратора,
  * фактические затраты — по ним восстанавливается внутренняя экономика.
+ *
+ * Цена в тенге и сроки — только у работы команды (pricing/delivery.ts): то, что клиент делает сам в
+ * Ketner, оплачивается тарифом, а того, чего в Ketner нет, никто не оценивает. Когда сметы выключены
+ * администратором, скрыты и цена, и сроки.
  */
 
+import { deliveryOf, type DeliveryContext } from './delivery.js';
 import { PricingService } from './service.js';
 import type { ImplementationRequest, StoredEstimate } from './types.js';
 
-export function publicEstimate(stored: StoredEstimate, pricingEnabled: boolean) {
+const NO_CONTEXT: DeliveryContext = { catalogPositions: null, monthlyRequests: null };
+
+export function publicEstimate(
+  stored: StoredEstimate,
+  pricingEnabled: boolean,
+  context: DeliveryContext = NO_CONTEXT,
+  language: 'ru' | 'en' = 'ru',
+) {
   const result = stored.result;
-  const showPrice = pricingEnabled && result.priceKzt !== null;
+  const delivery = deliveryOf(result, context, language);
+  const team = delivery.kind === 'team';
+  const showPrice = pricingEnabled && team && result.priceKzt !== null;
   return {
     id: stored.id,
     scope: stored.scope,
@@ -25,10 +39,11 @@ export function publicEstimate(stored: StoredEstimate, pricingEnabled: boolean) 
     pricingDisabled: !pricingEnabled,
     minimumApplied: showPrice ? result.minimumApplied : false,
     sharedSavingsKzt: showPrice ? result.sharedSavingsKzt : null,
-    workingDays: result.priceKzt
+    workingDays: showPrice
       ? { min: result.duration.workingDaysMin, max: result.duration.workingDaysMax }
       : null,
-    externalApproval: result.duration.externalApproval,
+    externalApproval: team && result.duration.externalApproval,
+    delivery,
     confidence: result.confidence,
     confidenceReasons: result.confidenceReasons,
     requiresManualReview: result.requiresManualReview,
@@ -58,7 +73,10 @@ export function publicEstimate(stored: StoredEstimate, pricingEnabled: boolean) 
     exclusions: result.exclusions,
     monthly: {
       usdToKztRate: stored.monthly.usdToKztRate,
-      recurring: stored.monthly.recurring,
+      // Прежняя подписка $15 / 7 500 кредитов больше не показывается (тариф — в `delivery.tier`).
+      recurring: stored.monthly.recurring
+        .filter((cost) => cost.kind === 'support')
+        .map((cost) => ({ kind: cost.kind, amount: cost.amount })),
       usage: {
         status: stored.monthly.usage.status,
         monthlyRequests: stored.monthly.usage.monthlyRequests,

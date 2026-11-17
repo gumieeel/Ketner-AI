@@ -1,7 +1,7 @@
 /**
  * UsageCostEstimationService: ежемесячные расходы отдельно от цены внедрения.
  *
- * - Подписка Ketner «Автоматизации» — действующая цена из billing/automation-subscription.ts.
+ * - Тариф Ketner здесь не считается: его подбирает pricing/delivery.ts по services/tiers.ts.
  * - Поддержка — только если администратор задал цену.
  * - Расход на модели — прогноз: обращения в месяц (со слов человека) × вызовы × токены × цена
  *   модели из реестра шлюза (та же таблица, по которой шлюз считает себестоимость). Без числа
@@ -10,7 +10,6 @@
  */
 
 import { modelRegistry, type ModelRegistry } from '../ai/model-registry.js';
-import { AUTOMATION_PLAN } from '../billing/automation-subscription.js';
 import { OPENROUTER_TOPUP_FEE } from '../services/pricing.js';
 import type { PricingConfig } from './catalog.js';
 import type { Confidence, EstimateLine, Range } from './engine.js';
@@ -24,10 +23,9 @@ export interface MoneyAmount {
 }
 
 export interface RecurringCost {
+  /** Старые сметы хранят ещё и `subscription` (прежняя подписка $15); клиенту она не показывается. */
   kind: 'subscription' | 'support';
   amount: MoneyAmount | { kzt: number; usdCents: null };
-  /** Что это: для подписки — кредиты в месяц. */
-  monthlyCredits?: number;
 }
 
 export interface UsageForecast {
@@ -52,10 +50,6 @@ export interface MonthlyCosts {
 
 const MICRO = 1_000_000;
 
-function usdCentsToKzt(cents: number, rate: number | null): number | null {
-  return rate === null ? null : mulDiv(cents, toMilli(rate), 100_000);
-}
-
 function microToKzt(micro: number, rate: number | null): number | null {
   return rate === null ? null : mulDiv(micro, toMilli(rate), MICRO * 1000);
 }
@@ -68,14 +62,6 @@ export function monthlyCosts(
 ): MonthlyCosts {
   const rate = config.usdToKztRate;
   const recurring: RecurringCost[] = [];
-  if (lines.length > 0) {
-    const cents = AUTOMATION_PLAN.priceUsd * 100;
-    recurring.push({
-      kind: 'subscription',
-      amount: { usdCents: cents, kzt: usdCentsToKzt(cents, rate) },
-      monthlyCredits: AUTOMATION_PLAN.monthlyCredits,
-    });
-  }
   if (config.supportMonthlyKzt !== null && lines.length > 0) {
     recurring.push({ kind: 'support', amount: { kzt: config.supportMonthlyKzt, usdCents: null } });
   }

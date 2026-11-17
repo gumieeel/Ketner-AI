@@ -161,7 +161,7 @@ export function PricingPage() {
 
       {/* Подписка «Автоматизации» (этап E) — при включённой платформе решений. */}
       {siteFeatures().discovery && siteFeatures().cardPayments ? (
-        <AutomationPlan returnPath="/solutions" />
+        <AutomationPlan returnPath="/solutions" subscribersOnly />
       ) : null}
 
       <TrialBanner />

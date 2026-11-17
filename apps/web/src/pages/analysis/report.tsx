@@ -49,7 +49,7 @@ import {
   RequestQuoteButton,
 } from './estimate';
 import { ProfileEditor } from './profile-editor';
-import type { EstimatesBlock, EstimateView } from '@/features/pricing/api';
+import { isTeamWork, type EstimatesBlock, type EstimateView } from '@/features/pricing/api';
 import { ErrorNotice } from './error-notice';
 import { productSwitch } from '@/lib/product-switches';
 
@@ -596,10 +596,14 @@ function OpportunityCard({
             {estimate ? (
               <>
                 <EstimateSummary estimate={estimate} />
-                <div className="mt-3 flex flex-wrap gap-3">
-                  <RequestQuoteButton analysisId={analysisId} estimate={estimate} secondary />
-                </div>
-                <EstimateDetails estimate={estimate} />
+                {isTeamWork(estimate) ? (
+                  <>
+                    <div className="mt-3 flex flex-wrap gap-3">
+                      <RequestQuoteButton analysisId={analysisId} estimate={estimate} secondary />
+                    </div>
+                    <EstimateDetails estimate={estimate} />
+                  </>
+                ) : null}
               </>
             ) : null}
           </div>

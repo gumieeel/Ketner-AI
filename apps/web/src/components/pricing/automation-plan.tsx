@@ -25,9 +25,15 @@ const PLAN = planFacts.automation;
 export function AutomationPlan({
   compact = false,
   returnPath,
+  subscribersOnly = false,
 }: {
   compact?: boolean;
   returnPath?: string;
+  /**
+   * Только для тех, у кого подписка уже есть (управление ею). Прежнее предложение $15 / 7 500
+   * кредитов новым клиентам не показывается (решение владельца 16.11.2026): тарифы — Start…Scale.
+   */
+  subscribersOnly?: boolean;
 }) {
   const { t, language } = useTranslation();
   const location = useLocation();
@@ -100,6 +106,8 @@ export function AutomationPlan({
       </Button>
     );
   }
+
+  if (subscribersOnly && !subscription) return null;
 
   return (
     <section

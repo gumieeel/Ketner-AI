@@ -30,11 +30,45 @@ const TEXT =
   'менеджеры вручную отвечают на одни и те же вопросы о размерах и доставке, принимают заказы и ' +
   'ведут таблицы. Хотелось бы автоматизировать эти процессы.';
 
+/**
+ * Демо-ответ модели плюс вторая работа команды: общая смета считается только по работе команды
+ * (pricing/delivery.ts), а в демо-шаблоне она одна. Возможность «Черновики» клиент делает сам,
+ * «Ответы на письма» с 1С — «запланировано».
+ */
+function teamTemplate(): string {
+  const output = JSON.parse(discoveryTemplate('ru')) as {
+    opportunities: Array<Record<string, unknown> & { workItems: unknown[] }>;
+  };
+  const program = output.opportunities[1]!;
+  program.workItems.push({
+    capability: 'ai_message_processing',
+    quantity: 1,
+    complexity: 'medium',
+    reason: 'ИИ обрабатывает данные',
+  });
+  output.opportunities.push({
+    ...program,
+    title: 'Заказы из CRM',
+    requires: ['text_generation'],
+    solutionType: 'workflow',
+    workItems: [
+      { capability: 'crm_integration', quantity: 1, complexity: 'medium', reason: 'Заказы из CRM' },
+      {
+        capability: 'ai_message_processing',
+        quantity: 1,
+        complexity: 'medium',
+        reason: 'Ответы клиентам',
+      },
+    ],
+  });
+  return JSON.stringify(output);
+}
+
 const gateway = {
   async stream(request: GatewayRequest, callbacks: GatewayStreamCallbacks) {
     const stage = request.task?.id.split(':')[1];
     const input = request.messages[0]?.content ?? '';
-    callbacks.onDelta(stage === 'context' ? contextTemplate(input, 'ru') : discoveryTemplate('ru'));
+    callbacks.onDelta(stage === 'context' ? contextTemplate(input, 'ru') : teamTemplate());
     callbacks.onDone({
       inputTokens: 1,
       outputTokens: 1,
@@ -138,6 +172,34 @@ test('смета: от анализа до заявки, проверки адм
       sharedSavingsKzt: number;
     };
     assert.ok(combined, 'общая смета есть');
+    // Общая смета — только работа команды: без того, что клиент делает сам, и без 1С.
+    const byTitle = (part: string) =>
+      items.find(
+        (item) => item.scopeKey === `opp:${opportunities.find((o) => o.title.includes(part))!.id}`,
+      ) as unknown as {
+        priceKzt: unknown;
+        workingDays: unknown;
+        delivery: { kind: string; paidTierRequired: boolean; tier: { name: string } | null };
+      };
+    const own = byTitle('Черновики');
+    assert.equal(own.delivery.kind, 'self_service');
+    assert.equal(own.priceKzt, null, 'у того, что клиент делает сам, нет цены в тенге');
+    assert.equal(own.workingDays, null);
+    assert.equal(own.delivery.tier?.name, 'Start');
+    const crm = byTitle('CRM');
+    assert.equal(crm.delivery.kind, 'team');
+    assert.equal(crm.delivery.paidTierRequired, true);
+    assert.equal(crm.delivery.tier?.name, 'Growth', 'внешний сервис — от Growth');
+    assert.ok(crm.priceKzt);
+    assert.equal(byTitle('письма').delivery.kind, 'planned');
+    assert.equal(byTitle('письма').priceKzt, null);
+    assert.deepEqual(
+      (combined as unknown as { opportunityIds: string[] }).opportunityIds.sort(),
+      opportunities
+        .filter((o) => o.title.includes('программа') || o.title.includes('CRM'))
+        .map((o) => o.id)
+        .sort(),
+    );
     assert.ok(combined.priceKzt.min <= combined.priceKzt.expected);
     assert.ok(combined.sharedSavingsKzt > 0, 'подготовка и запуск один раз');
     // Возможность с 1С: работа не в цене, нужна проверка.
@@ -194,7 +256,7 @@ test('смета: от анализа до заявки, проверки адм
     const key = { 'Idempotency-Key': 'request-key-0001' };
     const requestBody = {
       scopeKey: 'combined',
-      message: 'Хотим начать с WhatsApp',
+      message: 'Хотим начать с CRM',
       contact: { name: 'Айгерим', phone: '+7 700 123 45 67' },
     };
     const made = await call(
@@ -209,7 +271,7 @@ test('смета: от анализа до заявки, проверки адм
     assert.equal(
       made.json.request.status,
       'technical_review',
-      'с 1С — сразу на техническую проверку',
+      'с CRM — сразу на техническую проверку',
     );
     assert.deepEqual(made.json.request.preliminary.priceKzt, combined.priceKzt);
     assert.equal(made.json.request.contact.email, 'shop-owner@example.com');

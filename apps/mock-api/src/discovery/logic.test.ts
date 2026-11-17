@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import type { GatewayRequest, GatewayStreamCallbacks } from '../ai/gateway-types.js';
 import { assessFeasibility } from './feasibility.js';
+import { setProductSwitchForTests } from '../product-switches.js';
 import { estimateImpact, verifyTaskNumbers } from './impact.js';
 import { hashIp, ipKey, isDisposableEmail, isYoungAccount } from './limits.js';
 import { estimateStages, stagePolicy } from './model-policy.js';
@@ -17,7 +18,16 @@ import {
 
 const NO_EXTRAS = { hasPurchasedCredits: false, githubConnected: false };
 
-test('реализуемость считает код: худший статус из требований, модель статус не задаёт', () => {
+test('реализуемость считает код: худший статус из требований, модель статус не задаёт', (t) => {
+  // Разделы API и Code закрыты: их возможности — «пока не поддерживается».
+  assert.equal(assessFeasibility(['api_access'], NO_EXTRAS, 'ru').status, 'not_supported');
+  assert.equal(assessFeasibility(['github_repo'], NO_EXTRAS, 'ru').status, 'not_supported');
+  setProductSwitchForTests('developerApi', true);
+  setProductSwitchForTests('code', true);
+  t.after(() => {
+    setProductSwitchForTests('developerApi', false);
+    setProductSwitchForTests('code', false);
+  });
   assert.equal(
     assessFeasibility(['text_generation', 'document_text'], NO_EXTRAS, 'ru').status,
     'ready',

@@ -2002,6 +2002,11 @@ export const ru = {
   'analysis.scope.effort.high': 'сложные',
   'analysis.scope.integrations': 'Нужные интеграции',
   'analysis.scope.noIntegrations': 'Внешние интеграции не нужны',
+  'analysis.scope.noIntegrationsForDoable':
+    'Для того, что можно сделать сейчас, внешние интеграции не нужны',
+  'analysis.scope.missingIntegrations': 'Пока нет в Ketner',
+  'analysis.scope.estimatePartial':
+    'Можно запустить {doable} из {total}. Остальное ждёт интеграций, которых в Ketner пока нет.',
   'analysis.scope.estimate': 'Оценка',
   'analysis.scope.estimateSmall': 'Небольшой: всё можно запустить без сложных интеграций.',
   'analysis.scope.estimateStaged':
@@ -2690,6 +2695,22 @@ export const ru = {
 
   // Сметы внедрения, профиль бизнеса, заявки и админка смет.
   'nav.requests': 'Заявки',
+  'estimate.self.title': 'Можно сделать самим в Ketner',
+  'estimate.self.body':
+    'Всё нужное уже есть в Ketner: работа команды не нужна, оплачивается только тариф.',
+  'estimate.planned.title': 'Запланировано — пока без цены',
+  'estimate.planned.body':
+    'Этого в Ketner пока нет: {names}. Оценки и цены не будет, пока Ketner это не поддерживает.',
+  'estimate.team.paidTier': 'Работа по интеграциям доступна только на платном тарифе.',
+  'estimate.priceList.fits':
+    'Прайс-лист помещается в знания помощника (до {limit} символов) — его можно вставить самим.',
+  'estimate.priceList.unknown':
+    'Прайс-лист можно вставить в знания помощника самим, если он помещается в {limit} символов (примерно {positions} позиций). Если больше — его подготовит команда.',
+  'estimate.priceList.tooLarge':
+    'Прайс-лист слишком большой, чтобы вставить его в знания помощника (больше {limit} символов, примерно {positions} позиций). Следующий шаг: сократите его до основных позиций или закажите подготовку каталога командой.',
+  'estimate.tier': 'Тариф {name}: {price} в месяц, до {requests} обращений.',
+  'estimate.tierVolumeUnknown': 'Подобран без числа обращений — укажите его в профиле бизнеса.',
+  'estimate.tierCustom': 'Нагрузка больше самого большого тарифа — условия обсудим отдельно.',
   'estimate.preliminary': 'Предварительная стоимость внедрения',
   'estimate.disabled': 'Стоимость рассчитает команда Ketner',
   'estimate.reviewRequired': 'Требуется техническая проверка',
@@ -2709,10 +2730,8 @@ export const ru = {
   'estimate.excluded.not_offered': 'пока не делаем без проверки',
   'estimate.excluded.unknown_capability': 'нестандартная работа',
   'estimate.separately': 'Отдельно оплачивается',
-  'estimate.recurring.subscription': 'Подписка Ketner «Автоматизации»',
   'estimate.recurring.support': 'Поддержка',
   'estimate.perMonth': '{amount} в месяц',
-  'estimate.includesCredits': '(включает {credits} кредитов на работу ИИ)',
   'estimate.aiUsage': 'Расход на ИИ',
   'estimate.forecastRange': 'прогноз {range} в месяц, не точный счёт',
   'estimate.usage.volume_unknown': 'зависит от числа обращений — укажите его в профиле бизнеса',
@@ -2770,6 +2789,7 @@ export const ru = {
   'profile.teamSize': 'Сотрудников',
   'profile.monthlyRequests': 'Обращений клиентов в месяц',
   'profile.monthlyOrders': 'Заказов в месяц',
+  'profile.catalogPositions': 'Позиций в прайс-листе',
   'profile.notSet': 'Не указано',
   'profile.save': 'Сохранить',
   'profile.saving': 'Сохраняем…',

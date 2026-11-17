@@ -32,6 +32,7 @@ import {
   type ProfileSignals,
   type Range,
 } from './engine.js';
+import { catalogInForce, deliveryOf, type DeliveryContext } from './delivery.js';
 import type { PricingStore } from './store.js';
 import {
   CUSTOMER_CANCELLABLE,
@@ -49,6 +50,9 @@ import { monthlyCosts } from './usage.js';
 
 export type Result<T> =
   ({ ok: true } & T) | { ok: false; status: number; code: string; message: string };
+
+/** Версия правил классификации смет (pricing/delivery.ts). */
+const DELIVERY_RULES = 2;
 
 const fail = (status: number, code: string, message: string) =>
   ({ ok: false, status, code, message }) as const;
@@ -108,7 +112,7 @@ export class PricingService {
   }
 
   async catalogPrompt(language: 'ru' | 'en'): Promise<string> {
-    return catalogForPrompt((await this.active()).catalog, language);
+    return catalogForPrompt(catalogInForce((await this.active()).catalog), language);
   }
 
   // ─── Сметы анализа ─────────────────────────────────────────────────────────
@@ -131,20 +135,26 @@ export class PricingService {
       monthlyRequests: monthlyVolume(profile),
       missing: profileGaps(profile),
     };
+    const delivery: DeliveryContext = {
+      catalogPositions: profile?.catalogPositions ?? null,
+      monthlyRequests: signals.monthlyRequests,
+    };
+    // `rules` — версия правил «сам или команда»: при её смене сметы пересчитываются один раз.
     const fingerprint = createHash('sha256')
-      .update(JSON.stringify({ inputs, signals }))
+      .update(JSON.stringify({ inputs, signals, delivery, rules: DELIVERY_RULES }))
       .digest('hex');
     const latest = await this.deps.store.latestEstimates(analysis.id);
     if (latest.length > 0 && latest[0]!.fingerprint === fingerprint) return latest;
 
     const version = await this.active();
+    const catalog = catalogInForce(version.catalog);
     const language = analysis.language;
     const createdAt = this.now().toISOString();
     const generation = (latest[0]?.generation ?? 0) + 1;
     const titles = Object.fromEntries(opportunities.map((item) => [item.id, item.title]));
     const rows: StoredEstimate[] = [];
     const individual = inputs.map((input) => {
-      const result = estimate([input], version.catalog, version.config, signals, language);
+      const result = estimate([input], catalog, version.config, signals, language);
       rows.push({
         id: randomUUID(),
         analysisId: analysis.id,
@@ -161,13 +171,18 @@ export class PricingService {
       });
       return { input, result };
     });
-    // Общая смета — по возможностям, у которых есть цена; одна такая — общая не нужна.
-    const priced = individual.filter((item) => item.result.priceKzt !== null);
+    // Общая смета — только по работе команды с ценой; одна такая — общая не нужна. То, что клиент
+    // делает сам в Ketner, и то, чего в Ketner пока нет, в неё не входит.
+    const priced = individual.filter(
+      (item) =>
+        item.result.priceKzt !== null &&
+        deliveryOf(item.result, delivery, language).kind === 'team',
+    );
     if (priced.length >= 2) {
       const result = combinedEstimate(
         priced.map((item) => item.input),
         priced.map((item) => item.result),
-        version.catalog,
+        catalog,
         version.config,
         signals,
         language,

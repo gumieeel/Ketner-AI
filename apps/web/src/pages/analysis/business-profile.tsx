@@ -28,7 +28,12 @@ export function BusinessProfile({ analysis }: { analysis: AnalysisView }) {
   const problems = unique(opportunities.map((item) => item.problem)).slice(0, PROBLEMS_SHOWN);
 
   const doable = opportunities.filter((item) => item.feasibilityStatus !== 'not_supported');
+  const blocked = opportunities.filter((item) => item.feasibilityStatus === 'not_supported');
+  // Интеграции того, что можно сделать, и отдельно — тех, без которых остальное не запустить.
   const integrations = unique(doable.flatMap((item) => item.integrationsNeeded));
+  const missingIntegrations = unique(blocked.flatMap((item) => item.integrationsNeeded)).filter(
+    (item) => !integrations.some((needed) => needed.toLowerCase() === item.toLowerCase()),
+  );
   const byStatus = FEASIBILITY_ORDER.map((status) => ({
     status,
     count: opportunities.filter((item) => item.feasibilityStatus === status).length,
@@ -112,13 +117,29 @@ export function BusinessProfile({ analysis }: { analysis: AnalysisView }) {
                   {integrations.length > 0 ? (
                     <Chips items={integrations} />
                   ) : (
-                    <span className="text-text">{t('analysis.scope.noIntegrations')}</span>
+                    <span className="text-text">
+                      {t(
+                        blocked.length > 0
+                          ? 'analysis.scope.noIntegrationsForDoable'
+                          : 'analysis.scope.noIntegrations',
+                      )}
+                    </span>
                   )}
                 </dd>
               </div>
+              {missingIntegrations.length > 0 ? (
+                <div>
+                  <dt className="text-subtle">{t('analysis.scope.missingIntegrations')}</dt>
+                  <dd className="mt-1">
+                    <Chips items={missingIntegrations} />
+                  </dd>
+                </div>
+              ) : null}
               <div>
                 <dt className="text-subtle">{t('analysis.scope.estimate')}</dt>
-                <dd className="text-text">{t(scopeKey(analysis))}</dd>
+                <dd className="text-text">
+                  {t(scopeKey(analysis), { doable: doable.length, total: opportunities.length })}
+                </dd>
               </div>
             </dl>
           </Card>
@@ -137,6 +158,8 @@ function scopeKey(analysis: AnalysisView): TranslationKey {
     (item) => item.feasibilityStatus !== 'not_supported',
   );
   if (doable.length === 0) return 'analysis.scope.estimateNone';
+  // Часть найденного не поддерживается: «всё можно запустить» было бы неправдой.
+  if (doable.length < analysis.opportunities.length) return 'analysis.scope.estimatePartial';
   const quick = doable.filter(
     (item) => item.effort === 'low' && item.integrationsNeeded.length === 0,
   ).length;

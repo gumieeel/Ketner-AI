@@ -102,8 +102,8 @@ export const RECIPES: Readonly<Record<RecipeId, Recipe>> = {
     available: true,
     label: { ru: 'Бот для клиентов', en: 'Customer bot' },
     description: {
-      ru: 'бот на странице Ketner отвечает клиентам бизнеса и собирает заявки',
-      en: "a bot on a Ketner page answers the business's customers and collects requests",
+      ru: 'бот для клиентов бизнеса: своя страница, ссылка, QR-код и кнопка на сайте; отвечает на вопросы и собирает заявки. К WhatsApp и Instagram не подключается',
+      en: "a bot for the business's customers: its own page, link, QR code and a site button; answers questions and collects requests. Does not connect to WhatsApp or Instagram",
     },
   },
   study_assistant: {

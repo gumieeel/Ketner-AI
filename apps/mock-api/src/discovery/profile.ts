@@ -91,6 +91,8 @@ export const businessProfileOutputSchema = z.object({
   /** Обращений клиентов в месяц — только если человек назвал число (или в день/неделю). */
   monthlyRequests: count,
   monthlyOrders: count,
+  /** Позиций в прайс-листе или каталоге — только если человек назвал число. */
+  catalogPositions: count,
   additionalContext: optionalText(1000),
   /** Профиль правил сам человек: его значения — факты, а не выводы модели. */
   edited: z.boolean().optional().catch(undefined),
@@ -111,6 +113,7 @@ export const businessProfileEditSchema = z.object({
   existingTools: z.array(z.string().trim().min(1).max(80)).max(10),
   monthlyRequests: z.number().int().min(0).max(10_000_000).nullable(),
   monthlyOrders: z.number().int().min(0).max(10_000_000).nullable(),
+  catalogPositions: z.number().int().min(0).max(10_000_000).nullable().optional().default(null),
   additionalContext: z.string().trim().max(1000).nullable(),
 });
 
@@ -126,6 +129,7 @@ export const EMPTY_PROFILE: BusinessProfile = {
   existingTools: [],
   monthlyRequests: null,
   monthlyOrders: null,
+  catalogPositions: null,
   additionalContext: null,
 };
 
