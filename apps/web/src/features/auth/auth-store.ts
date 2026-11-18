@@ -142,18 +142,17 @@ function openSession(session: AuthSession): Partial<AuthState> {
 
 const initialSession = readStoredSession();
 
-export const useAuth = create<AuthState>((set, get) => ({
-  user: initialSession.user
-    ? normalizeUser(initialSession.user as unknown as Record<string, unknown>)
-    : null,
-  token: initialSession.token,
-  status: initialSession.token ? 'authenticated' : 'unauthenticated',
-  error: null,
+/**
+ * Одна проверка сессии на всех: её запускают оболочка сайта, рабочая область и ответы сервера с
+ * X-Session-Invalid (по одному на каждый запрос). Без общей проверки устаревший токен в браузере
+ * давал по запросу /api/auth/get-session на каждый ответ — 10–15 подряд при загрузке страницы.
+ */
+let restoring: Promise<void> | null = null;
 
-  clearError: () => set({ error: null }),
-
-  restoreSession: async () => {
+export const useAuth = create<AuthState>((set, get) => {
+  async function restore(): Promise<void> {
     const { token } = get();
+
     // Сервер ответил «нет»: токен отклонён или Better Auth-сессии (cookie) нет. В этом случае
     // сохранённой копии доверять нельзя: иначе интерфейс показывает вошедшего пользователя
     // (с остатком кредитов), а все запросы уходят на сервер как гостевые (чат и проекты просят войти).
@@ -211,90 +210,108 @@ export const useAuth = create<AuthState>((set, get) => ({
 
     saveSession(null);
     set({ user: null, token: null, status: 'unauthenticated' });
-  },
+  }
 
-  login: async (payload: LoginPayload) => {
-    set({ error: null });
-    try {
-      return await apiLogin(payload);
-    } catch (apiError) {
-      const message =
-        apiError instanceof Error ? apiError.message : 'Неверный адрес почты или пароль';
-      set({ error: message });
-      throw apiError;
-    }
-  },
+  return {
+    user: initialSession.user
+      ? normalizeUser(initialSession.user as unknown as Record<string, unknown>)
+      : null,
+    token: initialSession.token,
+    status: initialSession.token ? 'authenticated' : 'unauthenticated',
+    error: null,
 
-  signup: async (payload: SignupPayload) => {
-    set({ error: null });
-    try {
-      return await apiSignup(payload);
-    } catch (apiError) {
-      const message = apiError instanceof Error ? apiError.message : 'Ошибка регистрации';
-      set({ error: message });
-      throw apiError;
-    }
-  },
+    clearError: () => set({ error: null }),
 
-  verifyCode: async (flow: AuthFlow, payload: VerifyCodePayload) => {
-    set({ error: null });
-    try {
-      // Сервер в ответе ставит и cookie-сессию Better Auth этого аккаунта (вместо прежней, если была).
-      set(openSession(await apiVerifyCode(flow, payload)));
-    } catch (apiError) {
-      const message = apiError instanceof Error ? apiError.message : 'Не удалось подтвердить код';
-      set({ error: message });
-      throw apiError;
-    }
-  },
+    restoreSession: () => {
+      restoring ??= restore().finally(() => {
+        restoring = null;
+      });
+      return restoring;
+    },
 
-  completePasswordReset: async (payload: CompletePasswordResetPayload) => {
-    set({ error: null });
-    try {
-      set(openSession(await apiCompletePasswordReset(payload)));
-    } catch (apiError) {
-      const message = apiError instanceof Error ? apiError.message : 'Не удалось сменить пароль';
-      set({ error: message });
-      throw apiError;
-    }
-  },
+    login: async (payload: LoginPayload) => {
+      set({ error: null });
+      try {
+        return await apiLogin(payload);
+      } catch (apiError) {
+        const message =
+          apiError instanceof Error ? apiError.message : 'Неверный адрес почты или пароль';
+        set({ error: message });
+        throw apiError;
+      }
+    },
 
-  mockOAuth: async (provider: 'google' | 'github') => {
-    set({ status: 'loading', error: null });
-    try {
-      const session = await oauthLogin(provider);
-      saveSession(session);
+    signup: async (payload: SignupPayload) => {
+      set({ error: null });
+      try {
+        return await apiSignup(payload);
+      } catch (apiError) {
+        const message = apiError instanceof Error ? apiError.message : 'Ошибка регистрации';
+        set({ error: message });
+        throw apiError;
+      }
+    },
+
+    verifyCode: async (flow: AuthFlow, payload: VerifyCodePayload) => {
+      set({ error: null });
+      try {
+        // Сервер в ответе ставит и cookie-сессию Better Auth этого аккаунта (вместо прежней, если была).
+        set(openSession(await apiVerifyCode(flow, payload)));
+      } catch (apiError) {
+        const message = apiError instanceof Error ? apiError.message : 'Не удалось подтвердить код';
+        set({ error: message });
+        throw apiError;
+      }
+    },
+
+    completePasswordReset: async (payload: CompletePasswordResetPayload) => {
+      set({ error: null });
+      try {
+        set(openSession(await apiCompletePasswordReset(payload)));
+      } catch (apiError) {
+        const message = apiError instanceof Error ? apiError.message : 'Не удалось сменить пароль';
+        set({ error: message });
+        throw apiError;
+      }
+    },
+
+    mockOAuth: async (provider: 'google' | 'github') => {
+      set({ status: 'loading', error: null });
+      try {
+        const session = await oauthLogin(provider);
+        saveSession(session);
+        useCreditsModal.getState().close();
+        set({ user: session.user, token: session.token, status: 'authenticated', error: null });
+      } catch (error) {
+        const message = error instanceof Error ? error.message : 'Ошибка авторизации через соцсеть';
+        set({ status: 'unauthenticated', error: message });
+        throw error;
+      }
+    },
+
+    logout: async () => {
+      const { token } = get();
+      try {
+        await authClient.signOut();
+      } catch {
+        // Игнорируем сетевые ошибки при выходе
+      }
+      saveSession(null);
       useCreditsModal.getState().close();
-      set({ user: session.user, token: session.token, status: 'authenticated', error: null });
-    } catch (error) {
-      const message = error instanceof Error ? error.message : 'Ошибка авторизации через соцсеть';
-      set({ status: 'unauthenticated', error: message });
-      throw error;
-    }
-  },
+      set({ user: null, token: null, status: 'unauthenticated', error: null });
+      if (token) {
+        await apiLogout(token);
+      }
+    },
 
-  logout: async () => {
-    const { token } = get();
-    try {
-      await authClient.signOut();
-    } catch {
-      // Игнорируем сетевые ошибки при выходе
-    }
-    saveSession(null);
-    useCreditsModal.getState().close();
-    set({ user: null, token: null, status: 'unauthenticated', error: null });
-    if (token) {
-      await apiLogout(token);
-    }
-  },
-
-  setUser: (user: User | null) => {
-    set({ user });
-    if (user) {
-      storage.set(USER_KEY, JSON.stringify(user));
-    }
-  },
-}));
+    setUser: (user: User | null) => {
+      set({ user });
+      if (user) {
+        storage.set(USER_KEY, JSON.stringify(user));
+      }
+    },
+  };
+});
 
 /**
  * Читает токен авторизации для сетевых запросов.

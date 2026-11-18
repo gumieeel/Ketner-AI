@@ -52,6 +52,7 @@ import { ProfileEditor } from './profile-editor';
 import { isTeamWork, type EstimatesBlock, type EstimateView } from '@/features/pricing/api';
 import { ErrorNotice } from './error-notice';
 import { productSwitch } from '@/lib/product-switches';
+import { withoutEndPunctuation } from './report-text';
 
 const FEASIBILITY_TONE: Record<FeasibilityStatus, BadgeTone> = {
   ready: 'success',
@@ -156,7 +157,7 @@ export function Report({
   const combined = estimates?.items.find((item) => item.scope === 'combined') ?? null;
 
   return (
-    <div className="mt-8 grid gap-6 lg:grid-cols-[minmax(0,1fr)_21rem] lg:items-start">
+    <div className="mt-8 grid gap-6 xl:grid-cols-[minmax(0,1fr)_21rem] xl:items-start">
       <div className="flex min-w-0 flex-col gap-8">
         <SummaryCard analysis={analysis} />
 
@@ -229,7 +230,7 @@ export function Report({
 
       <aside
         aria-label={t('analysis.result.asideLabel')}
-        className="flex flex-col gap-4 lg:sticky lg:top-24"
+        className="flex flex-col gap-4 xl:sticky xl:top-24"
       >
         <PlanCard analysis={analysis} plans={plans} steps={startWith} />
         <SideCard
@@ -589,7 +590,9 @@ function OpportunityCard({
             {item.feasibilityStatus === 'not_supported' ? (
               <p className="mt-2 text-[14px] leading-6 text-muted">
                 {t('analysis.report.notSupported', {
-                  what: item.feasibility.blockers.map((blocker) => blocker.label).join(', '),
+                  what: item.feasibility.blockers
+                    .map((blocker) => withoutEndPunctuation(blocker.label))
+                    .join(', '),
                 })}
               </p>
             ) : null}

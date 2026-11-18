@@ -2029,7 +2029,7 @@ export const en: Record<TranslationKey, string> = {
     'We worked out how your business runs and found what can be automated with AI.',
   'analysis.result.spent': 'Spent',
   'analysis.result.free': 'Free',
-  'analysis.result.freeNote': 'Daily analysis — no credits charged',
+  'analysis.result.freeNote': 'One analysis a day, free of charge',
   'analysis.result.spentNote': 'The exact amount is charged on completion',
   'analysis.result.duration': 'Analysis time',
   'analysis.result.minSec': '{min} min {sec} s',
@@ -2053,7 +2053,7 @@ export const en: Record<TranslationKey, string> = {
   'analysis.result.toSolutions': 'My solutions',
   'analysis.result.loginToSolutions': 'Log in and go to solutions',
   'analysis.ready.title': 'Opportunities for you',
-  'analysis.ready.free': 'Free analysis — no credits charged.',
+  'analysis.ready.free': 'Your free analysis is ready.',
   'analysis.ready.charged': 'Analysis complete. Charged: {amount}.',
   'analysis.ready.empty':
     'No suitable opportunities were found. Try describing the task in more detail and start a new analysis.',

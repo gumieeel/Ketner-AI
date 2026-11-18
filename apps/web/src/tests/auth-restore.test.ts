@@ -10,6 +10,7 @@ vi.mock('@/features/auth/auth-client', () => ({
 }));
 
 import { useAuth } from '@/features/auth/auth-store';
+import { checkSessionInvalid, resetSessionCheckForTests } from '@/features/chat/api';
 import { storage } from '@/lib/storage';
 
 const ULTRA_USER = {
@@ -134,5 +135,50 @@ describe('ответ с X-Session-Invalid сбрасывает устаревш�
     await fetchConversations();
     await vi.waitFor(() => expect(useAuth.getState().status).toBe('unauthenticated'));
     expect(useAuth.getState().user).toBeNull();
+  });
+});
+
+describe('проверка сессии не повторяется на каждый запрос', () => {
+  beforeEach(() => {
+    getSession.mockReset();
+    resetSessionCheckForTests();
+  });
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    storage.remove('session');
+    storage.remove('user');
+    useAuth.setState({ user: null, token: null, status: 'unauthenticated', error: null });
+  });
+
+  it('одновременные вызовы делят одну проверку: один /api/auth/me и один get-session', async () => {
+    seedStoredSession('stale.jwt.token');
+    stubMe(401);
+    let release: (value: { data: null }) => void = () => {};
+    getSession.mockReturnValue(new Promise((resolve) => (release = resolve)));
+    const calls = Array.from({ length: 12 }, () => useAuth.getState().restoreSession());
+    await vi.waitFor(() => expect(getSession).toHaveBeenCalledTimes(1));
+    release({ data: null });
+    await Promise.all(calls);
+    expect(getSession).toHaveBeenCalledTimes(1);
+    expect(fetch).toHaveBeenCalledTimes(1);
+    expect(useAuth.getState().status).toBe('unauthenticated');
+    // После завершения следующая проверка — снова настоящая.
+    getSession.mockResolvedValue({ data: null });
+    await useAuth.getState().restoreSession();
+    expect(getSession).toHaveBeenCalledTimes(2);
+  });
+
+  it('ответы с X-Session-Invalid: одна проверка на пачку, повтор — не раньше чем через 30 с', async () => {
+    seedStoredSession('stale.jwt.token');
+    stubMe(200);
+    getSession.mockResolvedValue({ data: null });
+    const invalid = () => new Response('{}', { headers: { 'X-Session-Invalid': '1' } });
+    for (let i = 0; i < 15; i += 1) checkSessionInvalid(invalid(), 1_000 + i);
+    await vi.waitFor(() => expect(useAuth.getState().status).toBe('authenticated'));
+    expect(fetch).toHaveBeenCalledTimes(1);
+    checkSessionInvalid(invalid(), 20_000);
+    expect(fetch).toHaveBeenCalledTimes(1);
+    checkSessionInvalid(invalid(), 31_001);
+    await vi.waitFor(() => expect(fetch).toHaveBeenCalledTimes(2));
   });
 });

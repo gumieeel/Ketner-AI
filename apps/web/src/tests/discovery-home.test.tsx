@@ -115,6 +115,8 @@ describe('главная — Business Discovery (DISCOVERY_ENABLED)', () => {
       /^Например: у меня небольшой интернет-магазин одежды\. Клиенты пишут в WhatsApp и Instagram/,
     );
     expect(screen.getByRole('button', { name: SUBMIT })).toBeInTheDocument();
+    // Имя кнопки задано явно, а не только скрытым текстом: видимые буквы — для глаз (aria-hidden).
+    expect(screen.getByRole('button', { name: SUBMIT })).toHaveAttribute('aria-label', SUBMIT);
     expect(
       screen.getByText(
         'Не нужно разбираться в технологиях. Просто расскажите, как работает ваш бизнес.',
