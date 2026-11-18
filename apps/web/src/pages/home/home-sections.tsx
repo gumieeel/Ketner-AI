@@ -5,6 +5,7 @@ import { buttonClasses } from '@/components/ui/button-classes';
 import { HOME_FAQ, HOW_IT_WORKS, IMPLEMENTATION } from '@/features/discovery/home-content';
 import { INDUSTRIES } from '@/features/discovery/industries';
 import { useTranslation, type TranslationKey } from '@/i18n';
+import { STARTING_PRICE } from '@/features/billing/tiers';
 
 /**
  * Разделы ниже первого экрана: как это работает, решения по отраслям, внедрение, цены, вопросы и
@@ -70,6 +71,7 @@ export function HomeSections() {
         id="pricing"
         titleKey="discoveryHome.pricingTitle"
         leadKey="discoveryHome.pricingLead"
+        leadParams={{ price: STARTING_PRICE }}
       >
         <Link to="/pricing" className={buttonClasses({ variant: 'outline', size: 'md' })}>
           {t('discoveryHome.pricingLink')}
@@ -108,11 +110,13 @@ function Section({
   id,
   titleKey,
   leadKey,
+  leadParams,
   children,
 }: {
   id: string;
   titleKey: TranslationKey;
   leadKey?: TranslationKey;
+  leadParams?: Record<string, string | number>;
   children: ReactNode;
 }) {
   const { t } = useTranslation();
@@ -125,7 +129,9 @@ function Section({
         {t(titleKey)}
       </h2>
       {leadKey ? (
-        <p className="mt-3 max-w-[44rem] text-[16px] leading-[1.6] text-muted">{t(leadKey)}</p>
+        <p className="mt-3 max-w-[44rem] text-[16px] leading-[1.6] text-muted">
+          {t(leadKey, leadParams)}
+        </p>
       ) : null}
       <div className="mt-8">{children}</div>
     </section>

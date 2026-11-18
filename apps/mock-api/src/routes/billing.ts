@@ -6,6 +6,7 @@ import { invoiceStore as defaultInvoiceStore, type InvoiceStore } from '../store
 import type { SubscriptionStore } from '../store/subscription-store.js';
 import type { UserStore } from '../store/user-store.js';
 import { packStars, telegramBotService } from '../telegram/bot.js';
+import { productSwitch } from '../product-switches.js';
 import { BillingService, createBillingLedger, planLabel } from '../billing/billing-service.js';
 import { isTrybitCurrency } from '../billing/trybit-currencies.js';
 import type {
@@ -357,8 +358,8 @@ export function createBillingRouter({
   router.use('/billing', requireAuth);
 
   /**
-   * Пакеты кредитов: цена в долларах и звёздах, кредиты, бонус за криптовалюту. Открыт без входа:
-   * страница «Кредиты» и лендинг показывают его всем.
+   * Пакеты кредитов: цена в долларах, кредиты, бонус за криптовалюту; цена в звёздах — только пока
+   * оплата звёздами открыта (product-switches.ts). Открыт без входа.
    */
   router.get('/packs', (_request: Request, response: Response) => {
     const base = CREDIT_PACKS[0];
@@ -367,7 +368,9 @@ export function createBillingRouter({
         id: pack.id,
         priceUsd: pack.priceUsd,
         credits: pack.credits,
-        stars: packStars(pack, telegramBotService.rateService),
+        ...(productSwitch('stars')
+          ? { stars: packStars(pack, telegramBotService.rateService) }
+          : {}),
         cryptoBonusCredits: packCryptoBonusCredits(pack),
         pricePerThousandUsd: Number(packPricePerThousand(pack).toFixed(3)),
         discountPct: Math.round(

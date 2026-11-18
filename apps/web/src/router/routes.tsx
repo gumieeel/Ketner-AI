@@ -1,5 +1,6 @@
 import type { ComponentType } from 'react';
 import type { RouteObject } from 'react-router-dom';
+import type { TranslationKey } from '@/i18n';
 import { AppShell } from '@/components/layout/app-shell';
 import { StandaloneLayout } from '@/components/layout/standalone-layout';
 import { RootPage } from '@/pages/home/root-page';
@@ -42,12 +43,17 @@ function gatedLazy<K extends string>(
   feature: ProductFeature,
   load: () => Promise<Record<K, ComponentType>>,
   name: K,
+  titleKey?: TranslationKey,
 ): RouteObject['lazy'] {
   return async () => {
     const Page: ComponentType = (await load())[name];
     return {
       Component: () =>
-        productSwitch(feature) ? <Page /> : <ClosedFeaturePage feature={feature} />,
+        productSwitch(feature) ? (
+          <Page />
+        ) : (
+          <ClosedFeaturePage feature={feature} {...(titleKey ? { titleKey } : {})} />
+        ),
     };
   };
 }
@@ -59,6 +65,7 @@ const gatedDocumentationPage = gatedLazy(
   'chat',
   () => import('@/pages/documentation-page'),
   'DocumentationPage',
+  'closed.title.docs',
 );
 
 /**
@@ -150,7 +157,12 @@ const appRoutes: RouteObject[] = [
       // Каталог моделей и тарифы чата — о закрытом чате (lib/product-switches.ts).
       {
         path: 'models',
-        lazy: gatedLazy('chat', () => import('@/pages/models-page'), 'ModelsPage'),
+        lazy: gatedLazy(
+          'chat',
+          () => import('@/pages/models-page'),
+          'ModelsPage',
+          'closed.title.models',
+        ),
       },
       { path: 'status', lazy: lazyPage(() => import('@/pages/status-page'), 'StatusPage') },
       {

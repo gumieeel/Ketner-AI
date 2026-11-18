@@ -12,6 +12,8 @@ export const PROJECT = {
   launched: '2 октября 2026 г.',
   /** Оплата Trybit на сайте, API и бот для оплаты звёздами. */
   paymentsStarted: '13 октября 2026 г.',
+  /** Ketner стал платформой ИИ-агентов для бизнеса: чат, Code, картинки и API закрыты. */
+  businessPlatform: '14 ноября 2026 г.',
   supportTelegram: 'ketner_support_bot',
 } as const;
 

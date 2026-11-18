@@ -1,10 +1,11 @@
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest';
 import { LinkWorkspaceModal } from '@/components/chat/link-workspace-modal';
 import { useAuth } from '@/features/auth/auth-store';
 import { useWorkspace } from '@/features/chat/workspace-store';
 import { readGithubReturn, useGithub } from '@/features/github/github-store';
+import { setProductSwitchesForTests } from '@/lib/product-switches';
 import { installFakeApi } from './fake-api';
 import { renderRoute, resetAuth, resetPreferences } from './test-utils';
 
@@ -225,7 +226,19 @@ describe('привязка аккаунта GitHub', () => {
     expect(calls.every((call) => call.url.startsWith('/api/'))).toBe(true);
   });
 
+  it('пока чат и Ketner Code закрыты, раздела GitHub в настройках нет', async () => {
+    signIn();
+    installFakeApi({ github: { connected: true, login: 'octo' } });
+    renderRoute('/settings');
+    expect(await screen.findByRole('heading', { level: 1, name: 'Настройки' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Подключить GitHub' })).toBeNull();
+    expect(screen.queryByRole('link', { name: '@octo' })).toBeNull();
+  });
+
   it('настройки показывают подключённый аккаунт и отключают его', async () => {
+    // Спящий код: GitHub нужен Ketner Code, раздел открыт только для этого теста.
+    setProductSwitchesForTests({ code: true });
+    onTestFinished(() => setProductSwitchesForTests({}));
     signIn();
     installFakeApi({ github: { connected: true, login: 'octo' } });
     renderRoute('/settings');

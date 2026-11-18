@@ -20,7 +20,8 @@ export interface CreditPack {
   id: string;
   priceUsd: number;
   credits: number;
-  stars: number;
+  /** Цена в звёздах — только пока оплата звёздами открыта. */
+  stars?: number;
   /** Дополнительные кредиты при оплате криптовалютой (+15 %). */
   cryptoBonusCredits: number;
   /** Цена за 1 000 кредитов, $. */

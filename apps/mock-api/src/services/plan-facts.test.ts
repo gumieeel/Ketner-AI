@@ -15,6 +15,7 @@ import { draftQuote } from '../builder/service.js';
 import { ANALYSIS_STAGES, estimateStages, type AnalysisMode } from '../discovery/model-policy.js';
 import { realModelName } from '../discovery/service.js';
 import { PLATFORM_LIMITS } from './discovery-limits.js';
+import { GRACE_RATE, TIERS, WARN_RATE } from './tiers.js';
 import {
   CREDIT_PACKS,
   CREDIT_PACK_VALID_DAYS,
@@ -235,4 +236,39 @@ test('подписка «Автоматизации» на сайте совпа
   }
   const facts = JSON.parse(readFileSync(factsPath, 'utf8')) as { automation: unknown };
   assert.deepEqual(facts.automation, AUTOMATION_PLAN, 'billing/automation-subscription.ts');
+});
+
+test('тарифы на сайте совпадают с services/tiers.ts', (t) => {
+  if (!existsSync(factsPath)) {
+    t.skip('исходники сайта недоступны в этом окружении');
+    return;
+  }
+  const facts = JSON.parse(readFileSync(factsPath, 'utf8')) as {
+    tiers: { graceRate: number; warnRate: number; items: unknown[] };
+  };
+  assert.equal(facts.tiers.graceRate, GRACE_RATE);
+  assert.equal(facts.tiers.warnRate, WARN_RATE);
+  // Внутренний бесплатный лимит в кредитах (buildAllowanceCredits) клиенту не показывается.
+  assert.deepEqual(
+    facts.tiers.items,
+    TIERS.map((tier) => ({
+      id: tier.id,
+      name: tier.name,
+      priceUsd: tier.priceUsd,
+      activeSolutions: tier.activeSolutions,
+      monthlyRequests: tier.monthlyRequests,
+      externalServices: tier.externalServices,
+      integrationHelp: tier.integrationHelp,
+    })),
+  );
+});
+
+test('цена «от $N» в описании /pricing для поисковиков — младший тариф из services/tiers.ts', () => {
+  const seo = JSON.parse(
+    readFileSync(resolve(dirname(fileURLToPath(import.meta.url)), '../seo/seo-pages.json'), 'utf8'),
+  ) as { pages: Array<{ path: string; description: string }> };
+  const pricing = seo.pages.find((page) => page.path === '/pricing');
+  const cheapest = Math.min(...TIERS.map((tier) => tier.priceUsd));
+  const description = pricing?.description ?? '';
+  assert.ok(description.includes(`от $${cheapest} в месяц`), description);
 });

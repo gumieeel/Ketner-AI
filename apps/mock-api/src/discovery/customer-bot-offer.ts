@@ -41,12 +41,22 @@ export function unsupportedMessagingChannels(
 
 type DraftOpportunity = DiscoveryOutput['opportunities'][number];
 
+/** «WhatsApp», «WhatsApp и Instagram», «WhatsApp, Instagram и Telegram» (en — «and»). */
+export function joinNames(names: readonly string[], language: Language): string {
+  if (names.length <= 1) return names.join('');
+  const and = language === 'ru' ? ' и ' : ' and ';
+  return `${names.slice(0, -1).join(', ')}${and}${names[names.length - 1]}`;
+}
+
 /** Возможность «бот для клиентов» в том же виде, в каком её вернула бы модель. */
 export function customerBotOffer(
   language: Language,
   channels: ReadonlyArray<(typeof UNSUPPORTED_MESSAGING_CHANNELS)[number]>,
 ): DraftOpportunity {
-  const names = channels.map((channel) => CHANNEL_NAMES[channel][language]).join(', ');
+  const names = joinNames(
+    channels.map((channel) => CHANNEL_NAMES[channel][language]),
+    language,
+  );
   const ru = language === 'ru';
   return {
     title: ru ? 'Бот для клиентов по ссылке и QR-коду' : 'Customer bot by link and QR code',

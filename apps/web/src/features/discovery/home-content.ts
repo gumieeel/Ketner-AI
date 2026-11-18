@@ -1,3 +1,4 @@
+import { STARTING_PRICE } from '@/features/billing/tiers';
 import type { Language } from '@/features/preferences/preferences-store';
 
 /**
@@ -110,8 +111,8 @@ export const HOME_FAQ: readonly HomeQuestion[] = [
     id: 'price',
     q: { ru: 'Сколько это стоит?', en: 'How much does it cost?' },
     a: {
-      ru: 'Один анализ в день — бесплатно. Более подробные анализы и автоматизации — за кредиты, без подписки.',
-      en: 'One analysis a day is free. More detailed analyses and automations use credits, with no subscription.',
+      ru: `Анализ бизнеса, создание и проверка помощников и ботов — бесплатно: один анализ в день без регистрации, создание — в пределах бесплатного лимита. Платите только за работающие решения: тариф на аккаунт от ${STARTING_PRICE} в месяц.`,
+      en: `Business analysis, building and testing assistants and bots are free: one analysis a day without signing up, building within the free allowance. You pay only for solutions that run: a plan per account from ${STARTING_PRICE} a month.`,
     },
   },
   {

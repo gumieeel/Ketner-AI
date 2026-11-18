@@ -1042,7 +1042,7 @@ test('клиенты пишут в WhatsApp, модель предложила �
   assert.equal(bot.feasibilityStatus, 'ready');
   assert.deepEqual(bot.requires, ['customer_bot_page', 'text_generation']);
   assert.match(bot.solution, /по ссылке, QR-коду и кнопке на сайте/);
-  assert.match(bot.solution, /К WhatsApp, Instagram не подключается/);
+  assert.match(bot.solution, /К WhatsApp и Instagram не подключается/);
   // Единственное «можно сейчас» для переписки с клиентами — рекомендуемый старт.
   assert.equal(items[0]?.id, bot.id);
 });
