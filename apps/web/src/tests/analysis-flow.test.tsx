@@ -740,7 +740,7 @@ describe('анализ задачи: начало, вопросы, резуль�
 
     expect(await screen.findByRole('heading', { name: 'Возможности для вас' })).toBeInTheDocument();
     expect(screen.getByText('Бесплатно')).toBeInTheDocument();
-    expect(screen.getByText('Анализ дня — кредиты не списаны')).toBeInTheDocument();
+    expect(screen.getByText('Один анализ в день — без оплаты')).toBeInTheDocument();
     const cards = screen
       .getAllByRole('listitem')
       .filter((item) => within(item).queryByRole('heading'));

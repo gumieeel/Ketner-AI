@@ -2068,7 +2068,7 @@ export const ru = {
     'Мы разобрали, как устроен ваш бизнес, и нашли, что можно автоматизировать с помощью ИИ.',
   'analysis.result.spent': 'Потрачено',
   'analysis.result.free': 'Бесплатно',
-  'analysis.result.freeNote': 'Анализ дня — кредиты не списаны',
+  'analysis.result.freeNote': 'Один анализ в день — без оплаты',
   'analysis.result.spentNote': 'Точная сумма списана после завершения',
   'analysis.result.duration': 'Время анализа',
   'analysis.result.minSec': '{min} мин {sec} сек',
@@ -2092,7 +2092,7 @@ export const ru = {
   'analysis.result.toSolutions': 'Мои решения',
   'analysis.result.loginToSolutions': 'Войти и перейти к решениям',
   'analysis.ready.title': 'Возможности для вас',
-  'analysis.ready.free': 'Бесплатный анализ — кредиты не списаны.',
+  'analysis.ready.free': 'Бесплатный анализ готов.',
   'analysis.ready.charged': 'Анализ завершён. Списано: {amount}.',
   'analysis.ready.empty':
     'Подходящих возможностей не нашлось. Попробуйте описать задачу подробнее и начать новый анализ.',

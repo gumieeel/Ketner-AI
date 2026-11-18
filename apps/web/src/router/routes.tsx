@@ -12,6 +12,8 @@ import { PricingPage } from '@/pages/pricing-page';
 import { RouteErrorPage } from '@/pages/route-error-page';
 import { SignupPage } from '@/pages/signup-page';
 import type { LegalPageId } from '@/features/content/legal';
+import { AdminGate } from '@/pages/admin/admin-gate';
+import { HydrateFallback } from '@/components/layout/hydrate-fallback';
 
 /**
  * Ленивая загрузка страницы: код рабочих разделов (чат, Code, изображения, админка, оплата…)
@@ -72,7 +74,7 @@ const gatedDocumentationPage = gatedLazy(
  * Разделены на три группы: маркетинговые и служебные страницы (StandaloneLayout),
  * рабочая область чата и настроек (AppShell) и 404. Полная карта — docs/screens.md.
  */
-export const routes: RouteObject[] = [
+const appRoutes: RouteObject[] = [
   {
     element: <StandaloneLayout />,
     errorElement: <RouteErrorPage />,
@@ -271,7 +273,11 @@ export const routes: RouteObject[] = [
   },
   {
     path: 'admin',
-    element: <AppShell />,
+    element: (
+      <AdminGate>
+        <AppShell />
+      </AdminGate>
+    ),
     errorElement: <RouteErrorPage />,
     children: [
       { index: true, lazy: lazyPage(() => import('@/pages/admin-page'), 'AdminPage') },
@@ -287,3 +293,8 @@ export const routes: RouteObject[] = [
     children: [{ path: '*', element: <NotFoundPage /> }],
   },
 ];
+
+export const routes: RouteObject[] = appRoutes.map((route) => ({
+  HydrateFallback,
+  ...route,
+}));

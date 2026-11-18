@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react';
 import type { AnalysisView, FeasibilityStatus } from '@/features/discovery/api';
 import { useTranslation, type TranslationKey } from '@/i18n';
+import { distinctProblems } from './report-text';
 
 /** Сколько проблем показать в обзоре: остальные — в карточках возможностей ниже. */
 const PROBLEMS_SHOWN = 5;
@@ -25,7 +26,10 @@ export function BusinessProfile({ analysis }: { analysis: AnalysisView }) {
   const processes = context?.recurringProcesses?.filter((item) => item.steps.length > 0) ?? [];
   const tools = unique((context?.tools ?? []).map((item) => item.text));
   const goals = (context?.goals ?? []).map((item) => item.text);
-  const problems = unique(opportunities.map((item) => item.problem)).slice(0, PROBLEMS_SHOWN);
+  const problems = distinctProblems(opportunities.map((item) => item.problem)).slice(
+    0,
+    PROBLEMS_SHOWN,
+  );
 
   const doable = opportunities.filter((item) => item.feasibilityStatus !== 'not_supported');
   const blocked = opportunities.filter((item) => item.feasibilityStatus === 'not_supported');

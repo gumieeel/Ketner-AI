@@ -34,6 +34,15 @@ const VERSION = {
   catalog: [],
 };
 
+const ADMIN = {
+  id: 'u1',
+  email: 'a@example.com',
+  name: 'A',
+  plan: 'credits',
+  isAdmin: true,
+  createdAt: '2026-01-01T00:00:00.000Z',
+};
+
 function install(status: number) {
   const calls: Array<{ method: string; path: string; body: unknown }> = [];
   vi.stubGlobal('fetch', async (input: RequestInfo | URL, init: RequestInit = {}) => {
@@ -49,6 +58,8 @@ function install(status: number) {
         status: code,
         headers: { 'Content-Type': 'application/json' },
       });
+    // Вход в /admin проверяет сессию (AdminGate): сервер узнаёт администратора.
+    if (url.pathname === '/api/auth/me') return json(200, { user: ADMIN });
     if (status === 403) return json(403, { error: { code: 'admin_access_denied', message: '' } });
     if (url.pathname === '/api/admin/pricing/requests') return json(200, { requests: [] });
     if (url.pathname === '/api/admin/pricing/config' && method === 'GET')
@@ -65,21 +76,11 @@ describe('админка смет', () => {
   beforeEach(() => {
     resetPreferences();
     resetAuth();
-    useAuth.setState({
-      status: 'authenticated',
-      token: 'mock-token',
-      user: {
-        id: 'u1',
-        email: 'a@example.com',
-        name: 'A',
-        plan: 'credits',
-        createdAt: '2026-01-01T00:00:00.000Z',
-      } as never,
-    });
+    useAuth.setState({ status: 'authenticated', token: 'mock-token', user: ADMIN as never });
   });
   afterEach(() => vi.unstubAllGlobals());
 
-  it('без прав — понятный отказ сервера, а не пустая страница', async () => {
+  it('сервер отказал в правах — понятный отказ, а не пустая страница', async () => {
     install(403);
     renderRoute('/admin/pricing');
     expect(await screen.findByText('Нужны права администратора.')).toBeInTheDocument();
