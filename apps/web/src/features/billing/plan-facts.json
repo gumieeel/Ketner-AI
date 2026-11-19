@@ -330,13 +330,6 @@
       }
     }
   },
-  "automation": {
-    "priceUsd": 15,
-    "monthlyCredits": 7500,
-    "trialCredits": 2000,
-    "trialDays": 30,
-    "reminderDays": 3
-  },
   "tiers": {
     "$comment": "Тарифы на работающие решения (services/tiers.ts). Сверяет plan-facts.test.ts.",
     "graceRate": 0.1,

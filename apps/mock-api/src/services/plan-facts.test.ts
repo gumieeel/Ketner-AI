@@ -1,6 +1,5 @@
 import assert from 'node:assert/strict';
 import { setRolloutForTests } from './rollout.js';
-import { AUTOMATION_PLAN } from '../billing/automation-subscription.js';
 import { existsSync, readFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import test from 'node:test';
@@ -229,13 +228,13 @@ test('цена планов на сайте не зависит от включ�
   }
 });
 
-test('подписка «Автоматизации» на сайте совпадает с сервером', (t) => {
+test('прежней подписки «Автоматизации» ($15) на сайте нет', (t) => {
   if (!existsSync(factsPath)) {
     t.skip('исходники сайта недоступны в этом окружении');
     return;
   }
-  const facts = JSON.parse(readFileSync(factsPath, 'utf8')) as { automation: unknown };
-  assert.deepEqual(facts.automation, AUTOMATION_PLAN, 'billing/automation-subscription.ts');
+  const facts = JSON.parse(readFileSync(factsPath, 'utf8')) as Record<string, unknown>;
+  assert.equal('automation' in facts, false);
 });
 
 test('тарифы на сайте совпадают с services/tiers.ts', (t) => {

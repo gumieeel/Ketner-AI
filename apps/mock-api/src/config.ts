@@ -308,8 +308,8 @@ export const config = {
   githubClientSecret: process.env.GITHUB_CLIENT_SECRET || undefined,
 
   /**
-   * Dodo Payments (docs/AUTOMATION_PLAN.md, этап E): подписка «Автоматизации» с пробным месяцем.
-   * Без ключа и продукта оплата картой честно недоступна. Режим по умолчанию — тестовый.
+   * Dodo Payments: ключи остаются для оплаты тарифов картой (P4+). Подписка «Автоматизации»
+   * ($15 в месяц) снята 19.11.2026 — её продукт и обязательность больше не читаются.
    */
   dodo: {
     apiKey: process.env.DODO_PAYMENTS_API_KEY?.trim() || '',
@@ -317,10 +317,6 @@ export const config = {
     environment: (process.env.DODO_PAYMENTS_ENVIRONMENT === 'live_mode'
       ? 'live_mode'
       : 'test_mode') as 'live_mode' | 'test_mode',
-    /** Продукт-подписка $15/мес в кабинете Dodo (`pdt_…`). */
-    productId: process.env.DODO_SUBSCRIPTION_PRODUCT_ID?.trim() || '',
-    /** «Приступить к автоматизации» требует подписку (включать вместе с живым режимом). */
-    required: process.env.AUTOMATION_SUBSCRIPTION_REQUIRED === '1',
   },
 
   /** Telegram Bot для приёма оплаты (Telegram Stars и СБП). */

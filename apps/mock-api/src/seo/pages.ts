@@ -34,16 +34,11 @@ export interface SeoPage {
 /** Возможности сайта, которые меняют страницы: сервер пишет их в HTML (`ketner-features`). */
 export interface SiteFeatures {
   discovery: boolean;
-  /** Оплата картой (подписка «Автоматизации» через Dodo Payments) подключена. */
-  cardPayments?: boolean;
 }
 
 /** Метка для сайта (apps/web/src/lib/features.ts): включённые возможности, через пробел. */
 export function featuresMetaTag(features: SiteFeatures): string {
-  const flags = [
-    ...(features.discovery ? ['discovery'] : []),
-    ...(features.cardPayments ? ['card-payments'] : []),
-  ];
+  const flags = [...(features.discovery ? ['discovery'] : [])];
   return `<meta name="ketner-features" content="${flags.join(' ')}" />`;
 }
 

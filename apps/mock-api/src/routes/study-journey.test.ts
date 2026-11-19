@@ -12,7 +12,6 @@ import { join } from 'node:path';
 import test from 'node:test';
 import type { GatewayRequest, GatewayStreamCallbacks } from '../ai/gateway-types.js';
 import { createApp } from '../app.js';
-import type { DodoClientPort } from '../billing/automation-subscription.js';
 import { BillingService, createBillingLedger } from '../billing/billing-service.js';
 import { BuilderService } from '../builder/service.js';
 import { MemoryBuilderStore } from '../builder/store.js';
@@ -94,18 +93,12 @@ function journeyGateway(planMessages: string[]) {
 
 interface StartOptions {
   planMessages?: string[];
-  /** Подписка «Автоматизации» обязательна (как в продакшене с Dodo), у пользователей её нет. */
-  subscriptionRequired?: boolean;
   /** Пользователи с нулевым балансом кредитов. */
   broke?: Set<string>;
 }
 
 async function start(options: StartOptions | string[] = []) {
-  const {
-    planMessages = [],
-    subscriptionRequired = false,
-    broke,
-  } = Array.isArray(options) ? { planMessages: options } : options;
+  const { planMessages = [], broke } = Array.isArray(options) ? { planMessages: options } : options;
   const dir = mkdtempSync(join(tmpdir(), 'ketner-journey-'));
   const mails: MailMessage[] = [];
   const store = new MemoryDiscoveryStore();
@@ -149,10 +142,6 @@ async function start(options: StartOptions | string[] = []) {
     usageStore,
     billingService: billing,
     discoveryEnabled: true,
-    // Клиент Dodo для проверки подписки не вызывается: важно лишь, что подписка настроена и обязательна.
-    ...(subscriptionRequired
-      ? { dodo: { client: {} as DodoClientPort, productId: 'pdt_automation', required: true } }
-      : {}),
     discovery: {
       service: discovery,
       stores: () => ({ store, budget, builder: builderStore, ...tools }),
@@ -491,17 +480,14 @@ test('учебный помощник из галереи: инструмент 
   }
 });
 
-test('учебный помощник бесплатен без подписки из обеих точек входа; остальное — как раньше', async () => {
+test('создание из обеих точек входа — без подписки (прежняя подписка «Автоматизации» снята); остальное — как раньше', async () => {
   setRolloutForTests({ studyAssistant: true });
   const broke = new Set<string>();
-  const app = await start({ subscriptionRequired: true, broke });
+  const app = await start({ broke });
   try {
     const api = await client(app, 'journey-nosub@example.com');
-    const automation = await api.json<{ available: boolean; subscription: unknown }>(
-      '/billing/automation',
-    );
-    assert.equal(automation.available, true);
-    assert.equal(automation.subscription, null, 'подписки нет');
+    // Прежних адресов подписки нет.
+    assert.equal((await api.call('/billing/automation')).status, 404);
 
     // Галерея: без подписки.
     const fromGallery = await api.call('/solutions', {
@@ -523,25 +509,29 @@ test('учебный помощник бесплатен без подписки
     const tool = ((await fromReport.json()) as { solution: { id: string; type: string } }).solution;
     assert.equal(tool.type, 'tool');
 
-    // Помощник из той же рекомендации и несуществующая возможность — подписка обязательна.
-    for (const opportunityId of [assistant.id, 'missing']) {
-      const gated = await api.call('/solutions/from-opportunity', {
-        method: 'POST',
-        body: JSON.stringify({ analysisId, opportunityId, confirm: true }),
-      });
-      assert.equal(gated.status, 402, opportunityId);
-      assert.equal(
-        ((await gated.json()) as { error: { code: string } }).error.code,
-        'subscription_required',
-      );
-    }
-    // Чужой анализ с рецептом учебного помощника исключения не даёт.
+    // Помощник из той же рекомендации — тоже без подписки; несуществующая и чужая — не найдены.
+    const fromAssistant = await api.call('/solutions/from-opportunity', {
+      method: 'POST',
+      body: JSON.stringify({ analysisId, opportunityId: assistant.id, confirm: true }),
+    });
+    // Подписки больше нет: запрос доходит до модели черновика (здешняя тестовая модель черновик
+    // помощника не пишет — поэтому 502 от модели, а не 402 «нужна подписка»).
+    assert.notEqual(fromAssistant.status, 402);
+    assert.notEqual(
+      ((await fromAssistant.json()) as { error?: { code: string } }).error?.code,
+      'subscription_required',
+    );
+    const missing = await api.call('/solutions/from-opportunity', {
+      method: 'POST',
+      body: JSON.stringify({ analysisId, opportunityId: 'missing', confirm: true }),
+    });
+    assert.equal(missing.status, 404);
     const stranger = await client(app, 'journey-nosub-2@example.com');
     const foreign = await stranger.call('/solutions/from-opportunity', {
       method: 'POST',
       body: JSON.stringify({ analysisId, opportunityId: study.id }),
     });
-    assert.equal(foreign.status, 402);
+    assert.equal(foreign.status, 404, 'чужой анализ — не найден');
 
     // Операции инструмента — по-прежнему за кредиты: цена, подтверждение, баланс.
     const uploaded = await api.json<{ material: { id: string } }>(
@@ -597,9 +587,9 @@ test('учебный помощник бесплатен без подписки
   }
 });
 
-test('учебный помощник выключен: исключение из подписки не открывает создание', async () => {
+test('учебный помощник выключен: из анализа он не создаётся', async () => {
   setRolloutForTests({ studyAssistant: true });
-  const app = await start({ subscriptionRequired: true });
+  const app = await start();
   try {
     const api = await client(app, 'journey-nosub-off@example.com');
     const { analysisId, opportunities } = await report(app, api);

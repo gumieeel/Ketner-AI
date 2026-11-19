@@ -104,8 +104,6 @@ export interface AppDeps {
   /** Подмена частей анализа задач в тестах. */
   discovery?: ApiDeps['discovery'];
   builder?: ApiDeps['builder'];
-  /** Dodo Payments в тестах: клиент, продукт подписки, обязательность подписки. */
-  dodo?: ApiDeps['dodo'];
   /** Где установлен виджет бота (P10). */
   widgetInstalls?: ApiDeps['widgetInstalls'];
   /** Тарифы аккаунтов (P3). */
@@ -339,9 +337,6 @@ export function createApp(overrides: Partial<AppDeps> = {}): Express {
   const pageCache = new Map<string, string>();
   const siteFeatures = {
     discovery: deps.discoveryEnabled ?? config.discoveryEnabled,
-    cardPayments: deps.dodo
-      ? deps.dodo.client !== null && deps.dodo.productId !== ''
-      : config.dodo.apiKey !== '' && config.dodo.productId !== '',
   };
   const sendPage = (request: express.Request, response: express.Response): void => {
     if (!indexHtml) {
