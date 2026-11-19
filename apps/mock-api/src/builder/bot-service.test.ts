@@ -621,7 +621,9 @@ test('тарифы включены: 80% — одно письмо владел�
   );
 });
 
-test('тарифы выключены: писем об объёме нет, даже за пределом', async () => {
+test('тарифы выключены: писем об объёме нет, даже за пределом', async (t) => {
+  setTierEnforcedForTests(false);
+  t.after(() => setTierEnforcedForTests(null));
   const { alerts, sent } = alertsInMemory();
   const over = tierUsageWith(() => 5_000);
   await over.tiers.set(OWNER.userId, 'start', 'admin');
@@ -659,6 +661,8 @@ test('сбой письма об объёме не ломает ответ по�
 test('панель бота: включены ли тарифы — для предупреждения в кабинете', async (t) => {
   const { tiers, usage } = tierUsageWith(() => 820);
   await tiers.set(OWNER.userId, 'start', 'admin');
+  setTierEnforcedForTests(false);
+  t.after(() => setTierEnforcedForTests(null));
   const { service } = await setup({ tierUsage: usage });
   const off = await service.overview(OWNER.userId, 'bot-1');
   assert.equal(off && 'requests' in off ? off.requests?.enforced : null, false);

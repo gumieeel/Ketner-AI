@@ -56,6 +56,7 @@ test('одно письмо каждого вида за период; без в
     },
     log: () => {},
   });
+  setTierEnforcedForTests(false);
   assert.equal(await alerts.check('u1', decide('start', 900, PERIOD_END)), null, 'выключены');
   assert.equal(sent.length, 0);
 
