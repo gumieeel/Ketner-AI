@@ -24,7 +24,7 @@ import type { AccountTiers } from './account-tiers.js';
  * Включены ли тарифы для ответов посетителям. Константа в коде, без переменной окружения: включение —
  * отдельный PR после того, как владелец назначит тариф своему аккаунту (решение 15.11.2026).
  */
-export const TIER_ENFORCED = false;
+export const TIER_ENFORCED = true;
 
 let enforcedOverride: boolean | null = null;
 

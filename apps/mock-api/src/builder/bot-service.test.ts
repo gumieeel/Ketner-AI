@@ -445,7 +445,9 @@ function tierUsageWith(used: () => number, lines: string[] = []) {
   };
 }
 
-test('тарифы выключены (TIER_ENFORCED = false): ответ идёт как раньше, решение «как было бы» — в лог', async () => {
+test('тарифы выключены (TIER_ENFORCED = false): ответ идёт как раньше, решение «как было бы» — в лог', async (t) => {
+  setTierEnforcedForTests(false);
+  t.after(() => setTierEnforcedForTests(null));
   const lines: string[] = [];
   const { usage } = tierUsageWith(() => 3, lines);
   const { service, requests } = await setup({ tierUsage: usage });
@@ -534,6 +536,7 @@ test('счётчик не прочитан: тарифы выключены — 
     console.error = original;
   });
 
+  setTierEnforcedForTests(false);
   const off = await setup({ tierUsage: usage });
   const answered = await off.service.send('lisa-shop', { visitorId: VISITOR, content: 'Цена?' });
   assert.ok(answered.ok && !answered.message.offerContact, 'посетитель не замечает сбоя счётчика');

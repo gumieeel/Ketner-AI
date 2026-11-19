@@ -47,7 +47,7 @@ test('администратор назначает и снимает тариф
   assert.equal(empty.tier.tier, null);
   assert.equal(empty.tier.state, 'no_tier');
   assert.equal(empty.tier.action, 'form_only');
-  assert.equal(empty.tier.enforced, false, 'P3 выходит с TIER_ENFORCED = false');
+  assert.equal(empty.tier.enforced, true, 'тарифы включены (TIER_ENFORCED = true)');
 
   const bad = await fetch(url, { method: 'PUT', headers: admin, body: '{"tier":"pro"}' });
   assert.equal(bad.status, 400);
@@ -77,7 +77,7 @@ test('администратор назначает и снимает тариф
     enforced: boolean;
     accounts: Array<{ userId: string; tier: string }>;
   }>(await fetch(`${h.server.baseUrl}/api/admin/tiers`, { headers: admin }));
-  assert.equal(list.enforced, false);
+  assert.equal(list.enforced, true);
   assert.deepEqual(
     list.accounts.filter((row) => row.userId === h.userId).map((row) => row.tier),
     ['growth'],
