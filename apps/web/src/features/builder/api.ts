@@ -453,6 +453,8 @@ export interface BotOverview {
     limit: number | null;
     state: 'ok' | 'warning' | 'grace' | 'leads_only' | 'no_tier';
     periodEnd: string;
+    /** Тарифы включены (TIER_ENFORCED): ограничения действуют. */
+    enforced?: boolean;
   };
 }
 

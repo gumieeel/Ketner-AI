@@ -19,6 +19,7 @@ import { AccountTiers, type AccountTier } from '../billing/account-tiers.js';
 import { TierUsage, setTierEnforcedForTests } from '../billing/tier-usage.js';
 import type { ExecutionJournal } from '../platform/journal.js';
 import { DocStore } from '../store/doc-store.js';
+import { TierAlerts, type TierAlertKind } from '../billing/tier-alerts.js';
 
 const NOW = new Date('2026-11-01T12:00:00.000Z');
 const OWNER: BotOwner = {
@@ -66,6 +67,7 @@ async function setup(
     balance?: number;
     reply?: (request: GatewayRequest) => string;
     tierUsage?: TierUsage;
+    tierAlerts?: TierAlerts;
   } = {},
 ) {
   const store = new MemoryBuilderStore();
@@ -103,6 +105,7 @@ async function setup(
     balanceUsd: () => balance,
     owner: (id) => (id === OWNER.userId ? OWNER : null),
     ...(options.tierUsage ? { tierUsage: options.tierUsage } : {}),
+    ...(options.tierAlerts ? { tierAlerts: options.tierAlerts } : {}),
     ...(PLATFORM
       ? { platform: { enabled: () => true, answer: (input) => platformRuntime.answer(input) } }
       : {}),
@@ -545,4 +548,127 @@ test('счётчик не прочитан: тарифы выключены — 
   const form = await on.service.send('lisa-shop', { visitorId: VISITOR, content: 'Цена?' });
   assert.ok(form.ok && form.message.offerContact, 'включены: форма заявки, а не ошибка');
   assert.equal(on.requests.length, 0, 'модель не вызывается');
+});
+
+/** Письма об объёме тарифа в памяти: «отправлено» — как claim хранилища счётчиков. */
+function alertsInMemory() {
+  const claimed = new Set<string>();
+  const sent: Array<{ userId: string; kind: TierAlertKind; used: number }> = [];
+  const alerts = new TierAlerts({
+    claim: async (key) => {
+      if (claimed.has(key)) return false;
+      claimed.add(key);
+      return true;
+    },
+    send: async (userId, kind, decision) => {
+      sent.push({ userId, kind, used: decision.used });
+    },
+    log: () => {},
+  });
+  return { alerts, sent };
+}
+
+/** Письмо уходит без ожидания ответа посетителя: даём ему завершиться. */
+const settle = () => new Promise((resolve) => setImmediate(resolve));
+
+test('тарифы включены: 80% — одно письмо владельцу за период, режим заявок — ещё одно', async (t) => {
+  setTierEnforcedForTests(true);
+  t.after(() => setTierEnforcedForTests(null));
+  const { alerts, sent } = alertsInMemory();
+
+  // Start: 1 000 включённых. 798 → ответ → 799: меньше 80%, писем нет.
+  let used = 798;
+  const below = tierUsageWith(() => used);
+  await below.tiers.set(OWNER.userId, 'start', 'admin');
+  const quiet = await setup({ tierUsage: below.usage, tierAlerts: alerts, balance: 0 });
+  await quiet.service.send('lisa-shop', { visitorId: VISITOR, content: 'Цена?' });
+  await settle();
+  assert.equal(sent.length, 0);
+
+  // 799 → ответ → 800 (80%): письмо «предупреждение». Следующие ответы — без писем.
+  used = 799;
+  const at80 = tierUsageWith(() => used);
+  await at80.tiers.set(OWNER.userId, 'start', 'admin');
+  const warned = await setup({ tierUsage: at80.usage, tierAlerts: alerts, balance: 0 });
+  await warned.service.send('lisa-shop', { visitorId: VISITOR, content: 'Цена?' });
+  await warned.service.send('lisa-shop', { visitorId: VISITOR, content: 'А доставка?' });
+  await settle();
+  assert.deepEqual(sent, [{ userId: OWNER.userId, kind: 'warning', used: 800 }]);
+
+  // Льготный объём (1 050) — то же предупреждение, второго письма нет.
+  used = 1_050;
+  const grace = tierUsageWith(() => used);
+  await grace.tiers.set(OWNER.userId, 'start', 'admin');
+  const graceSvc = await setup({ tierUsage: grace.usage, tierAlerts: alerts, balance: 0 });
+  await graceSvc.service.send('lisa-shop', { visitorId: VISITOR, content: 'Цена?' });
+  await settle();
+  assert.equal(sent.length, 1);
+
+  // 1 100 — режим заявок: посетитель видит форму, владелец получает письмо один раз.
+  used = 1_100;
+  const over = tierUsageWith(() => used);
+  await over.tiers.set(OWNER.userId, 'start', 'admin');
+  const leads = await setup({ tierUsage: over.usage, tierAlerts: alerts, balance: 10 });
+  const first = await leads.service.send('lisa-shop', { visitorId: VISITOR, content: 'Цена?' });
+  const second = await leads.service.send('lisa-shop', { visitorId: VISITOR, content: 'Ау?' });
+  await settle();
+  assert.ok(first.ok && first.message.offerContact);
+  assert.ok(second.ok && second.message.offerContact);
+  assert.equal(leads.requests.length, 0);
+  assert.deepEqual(
+    sent.map((item) => item.kind),
+    ['warning', 'leads_only'],
+  );
+});
+
+test('тарифы выключены: писем об объёме нет, даже за пределом', async () => {
+  const { alerts, sent } = alertsInMemory();
+  const over = tierUsageWith(() => 5_000);
+  await over.tiers.set(OWNER.userId, 'start', 'admin');
+  const svc = await setup({ tierUsage: over.usage, tierAlerts: alerts, balance: 10 });
+  await svc.service.send('lisa-shop', { visitorId: VISITOR, content: 'Цена?' });
+  await settle();
+  assert.equal(sent.length, 0);
+});
+
+test('сбой письма об объёме не ломает ответ посетителю', async (t) => {
+  setTierEnforcedForTests(true);
+  t.after(() => setTierEnforcedForTests(null));
+  const errors: unknown[] = [];
+  const original = console.error;
+  console.error = (...args: unknown[]) => errors.push(args);
+  t.after(() => {
+    console.error = original;
+  });
+  const failing = new TierAlerts({
+    claim: async () => true,
+    send: async () => {
+      throw new Error('smtp down');
+    },
+    log: () => {},
+  });
+  const at80 = tierUsageWith(() => 799);
+  await at80.tiers.set(OWNER.userId, 'start', 'admin');
+  const svc = await setup({ tierUsage: at80.usage, tierAlerts: failing, balance: 0 });
+  const reply = await svc.service.send('lisa-shop', { visitorId: VISITOR, content: 'Цена?' });
+  await settle();
+  assert.ok(reply.ok && !reply.message.offerContact, 'посетитель получил ответ');
+  assert.equal(errors.length, 1);
+});
+
+test('панель бота: включены ли тарифы — для предупреждения в кабинете', async (t) => {
+  const { tiers, usage } = tierUsageWith(() => 820);
+  await tiers.set(OWNER.userId, 'start', 'admin');
+  const { service } = await setup({ tierUsage: usage });
+  const off = await service.overview(OWNER.userId, 'bot-1');
+  assert.equal(off && 'requests' in off ? off.requests?.enforced : null, false);
+  setTierEnforcedForTests(true);
+  t.after(() => setTierEnforcedForTests(null));
+  const fresh = tierUsageWith(() => 820);
+  await fresh.tiers.set(OWNER.userId, 'start', 'admin');
+  const on = await (
+    await setup({ tierUsage: fresh.usage })
+  ).service.overview(OWNER.userId, 'bot-1');
+  assert.equal(on && 'requests' in on ? on.requests?.state : null, 'warning');
+  assert.equal(on && 'requests' in on ? on.requests?.enforced : null, true);
 });
