@@ -2734,9 +2734,9 @@ export const en: Record<TranslationKey, string> = {
   'contacts.topicIdeaHint': 'What Ketner AI is missing',
   'contacts.topicIdeaPlaceholder': 'What problem you want to solve and how it could work.',
   'contacts.topicPayment': 'Payments and refunds',
-  'contacts.topicPaymentHint': 'Invoice, credits, refund',
+  'contacts.topicPaymentHint': 'Get a plan, invoice, refund',
   'contacts.topicPaymentPlaceholder':
-    'Account email, credit pack, payment method and time. Do not send a card number.',
+    'Account email and what you need: a plan (which one), a question about an invoice, or a refund for a pack (payment method and time). Do not send a card number.',
   'contacts.topicOther': 'Other',
   'contacts.topicOtherHint': 'A question, data, partnership',
   'contacts.name': 'Name',

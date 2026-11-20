@@ -1,4 +1,5 @@
 import planFacts from '../billing/plan-facts.json';
+import { TIERS, TIER_GRACE_RATE, TIER_WARN_RATE } from '../billing/tiers';
 import type { Language } from '../preferences/preferences-store';
 
 /**
@@ -10,8 +11,13 @@ import type { Language } from '../preferences/preferences-store';
  */
 export const SUPPORT_EMAIL = 'ketner.support@gmail.com';
 
-/** Дата редакции всех трёх документов (ISO). Дату для sitemap берёт entry-prerender.tsx. */
-export const LEGAL_UPDATED = '2026-11-01';
+/** Дата редакции каждого документа (ISO). Дату для sitemap берёт entry-prerender.tsx. */
+export const LEGAL_UPDATED: Record<LegalPageId, string> = {
+  privacy: '2026-11-01',
+  terms: '2026-11-01',
+  // Тарифы вместо пакетов кредитов (задача 0b).
+  'payment-terms': '2026-11-20',
+};
 
 /** Срок полного возврата за непотраченный пакет и срок отказа от договора по закону (ЕС, Великобритания). */
 export const REFUND_DAYS = 14;
@@ -26,7 +32,18 @@ export const OPERATOR: { name: string; country: string } = { name: '', country: 
 // Срок кредитов и бонус за криптовалюту берутся из plan-facts.json: его сверяет с сервером тест.
 const VALID_DAYS = planFacts.packValidDays;
 const TRIAL_DAYS = planFacts.trial.days;
-const BONUS_PERCENT = Math.round(planFacts.cryptoBonusRate * 100);
+const WARN_PERCENT = Math.round(TIER_WARN_RATE * 100);
+const GRACE_PERCENT = Math.round(TIER_GRACE_RATE * 100);
+
+/** «1 активное решение» / «3 активных решения» / «5 активных решений». */
+function solutionsWord(count: number, language: Language): string {
+  if (language === 'en') return count === 1 ? 'active solution' : 'active solutions';
+  const mod10 = count % 10;
+  const mod100 = count % 100;
+  if (mod10 === 1 && mod100 !== 11) return 'активное решение';
+  if (mod10 >= 2 && mod10 <= 4 && (mod100 < 12 || mod100 > 14)) return 'активных решения';
+  return 'активных решений';
+}
 
 export type LegalPageId = 'privacy' | 'terms' | 'payment-terms';
 
@@ -301,43 +318,58 @@ const RU: Record<LegalPageId, LegalContent> = {
   },
   'payment-terms': {
     title: 'Оплата и возврат',
-    lead: 'Как оплатить кредиты Ketner AI, когда они начисляются и как вернуть деньги.',
+    lead: 'Что в Ketner AI бесплатно, как подключается тариф и как вернуть деньги за пакеты кредитов, купленные раньше.',
     sections: [
       {
-        title: '1. Способы оплаты',
+        title: '1. Что бесплатно и что платно',
+        paragraphs: [
+          'Бесплатно: анализ задачи, создание и проверка помощника или бота — в пределах бесплатного лимита. Платно — тариф на работающие решения: ботов и помощников, открытых вашим клиентам. Тариф действует на аккаунт, цены указаны в долларах США за месяц.',
+        ],
+        items: TIERS.map(
+          (tier) =>
+            `${tier.name} — $${tier.priceUsd} в месяц: ${tier.activeSolutions} ${solutionsWord(tier.activeSolutions, 'ru')}, до ${tier.monthlyRequests.toLocaleString('ru-RU')} обращений в месяц.`,
+        ),
+      },
+      {
+        title: '2. Как подключить тариф',
+        paragraphs: [
+          'Оплаты тарифа на сайте пока нет. Тариф подключает команда Ketner по вашей заявке: напишите нам на странице «Контакты» (тема «Оплата и возврат») или на почту ниже. Способ и срок оплаты мы согласуем с вами при подключении. Мы не получаем и не храним реквизиты ваших карт и кошельков.',
+        ],
+      },
+      {
+        title: '3. Без автоматических списаний',
         items: [
-          `Криптовалюта — через платёжный сервис Trybit на странице оформления пакета. Выберите сеть и монету, оплатите по данным виджета; статус обновляется автоматически. За оплату криптовалютой начисляем ещё +${BONUS_PERCENT}% кредитов сверх пакета.`,
-        ],
-        paragraphs: [
-          'Цены указаны в долларах США. Оплата звёздами Telegram больше не принимается. Мы не получаем и не храним реквизиты ваших карт и кошельков.',
-        ],
-      },
-      {
-        title: '2. Когда начисляются кредиты',
-        paragraphs: [
-          `Кредиты начисляются сразу после подтверждения оплаты платёжным провайдером. Услуга цифровая, доступ предоставляется немедленно. Купленные кредиты действуют ${VALID_DAYS} дней; бонус за криптовалюту начисляется отдельно с тем же сроком. Первыми тратятся кредиты, срок которых истекает раньше.`,
+          'Автоматических списаний нет: тариф не продлевается и не меняется на более дорогой без вашего согласия.',
+          `Когда обращений в месяце наберётся ${WARN_PERCENT}% объёма тарифа, мы предупредим вас заранее.`,
+          `Ещё ${GRACE_PERCENT}% сверх объёма — без доплаты. Дальше до конца месяца бот не отвечает с помощью ИИ, а принимает заявки: клиенты не теряются, доплата не начисляется.`,
         ],
       },
       {
-        title: '3. Прежние подписки',
+        title: '4. Пакеты кредитов, купленные раньше',
+        paragraphs: [
+          `Пакеты кредитов больше не продаются (с 20 ноября 2026 г.), оплата звёздами Telegram не принимается. Если вы купили пакет раньше, его кредиты действуют ${VALID_DAYS} дней с даты оплаты, бонус за криптовалюту — с тем же сроком. Для таких пакетов действуют условия возврата ниже.`,
+        ],
+      },
+      {
+        title: '5. Прежние подписки',
         paragraphs: [
           'Подписки Plus, Pro и Ultra больше не продаются, автопродление отключено. Если вы оплатили период раньше, он действует до конца. Если заметили повторное списание, напишите в поддержку: мы его вернём.',
         ],
       },
       {
-        title: '4. Возврат средств',
+        title: '6. Возврат за пакеты кредитов',
         paragraphs: [
-          'Условия ниже действуют для всех покупателей. Если закон вашей страны даёт вам больше прав, действуют они.',
+          'Условия ниже действуют для всех, кто купил пакет. Если закон вашей страны даёт вам больше прав, действуют они.',
         ],
         items: [
           `Непотраченный пакет. Пакет можно вернуть полностью в течение ${REFUND_DAYS} дней после оплаты, пока вы не потратили ни одного кредита из него. Пробные кредиты возврат не закрывают: они тратятся первыми. При возврате снимаются кредиты пакета и бонус за криптовалюту.`,
-          `Потраченные кредиты. Если кредиты пакета уже использовались в чате, коде, изображениях или API либо прошло больше ${REFUND_DAYS} дней, оплата не возвращается: услуга оказана полностью или частично. Исключения — пункты ниже и раздел 6.`,
-          `Отказ от договора по закону. Если вы потребитель в ЕС, ЕЭЗ, Великобритании или другой стране, где закон даёт право отказаться от договора, заключённого дистанционно, это право действует ${REFUND_DAYS} дней с момента оплаты. Перед оплатой мы просим подтвердить, что вы хотите получить кредиты сразу и понимаете: по закону вы теряете право отказа в отношении кредитов, которые уже потратили. Непотраченные кредиты можно вернуть в любом случае по первому правилу выше.`,
-          'Недостатки и сбои. Если кредиты не пришли, платёж списан дважды, услуга не оказана или вас заблокировали без нарушения условий, деньги возвращаются независимо от сроков (раздел 6 этой страницы и пункт 9 соглашения).',
+          `Потраченные кредиты. Если кредиты пакета уже использовались в чате, коде, изображениях или API либо прошло больше ${REFUND_DAYS} дней, оплата не возвращается: услуга оказана полностью или частично. Исключения — пункты ниже и раздел 8.`,
+          `Отказ от договора по закону. Если вы потребитель в ЕС, ЕЭЗ, Великобритании или другой стране, где закон даёт право отказаться от договора, заключённого дистанционно, это право действует ${REFUND_DAYS} дней с момента оплаты. При покупке пакета мы просили подтвердить, что вы хотите получить кредиты сразу и понимаете: по закону вы теряете право отказа в отношении кредитов, которые уже потратили. Непотраченные кредиты можно вернуть в любом случае по первому правилу выше.`,
+          'Недостатки и сбои. Если кредиты не пришли, платёж списан дважды, услуга не оказана или вас заблокировали без нарушения условий, деньги возвращаются независимо от сроков (раздел 8 этой страницы и пункт 9 соглашения).',
         ],
       },
       {
-        title: '5. Как оформить возврат',
+        title: '7. Как оформить возврат',
         items: [
           'Откройте кабинет бота @Robo_kassa_bot → «Платежи» → выберите платёж → «Подать заявку на возврат», или напишите в поддержку. Каждую заявку проверяет администратор, как правило в течение суток.',
           'Прежние платежи звёздами Telegram после одобрения возвращаются на ваш баланс в Telegram автоматически.',
@@ -346,15 +378,15 @@ const RU: Record<LegalPageId, LegalContent> = {
         paragraphs: ['После возврата кредиты этого пакета списываются с баланса.'],
       },
       {
-        title: '6. Если что-то пошло не так',
+        title: '8. Если что-то пошло не так',
         paragraphs: [
-          `Деньги списались, а кредиты не пришли, платёж задвоился или вы потеряли доступ — напишите на ${SUPPORT_EMAIL} и приложите идентификатор платежа. Мы проверим и либо начислим кредиты, либо вернём деньги независимо от срока в разделе 4.`,
+          `Деньги списались, а услуга не предоставлена, платёж задвоился или вы потеряли доступ — напишите на ${SUPPORT_EMAIL} и приложите идентификатор платежа. Мы проверим и либо предоставим оплаченное, либо вернём деньги независимо от срока в разделе 6.`,
         ],
       },
       {
-        title: '7. Налоги и комиссии',
+        title: '9. Налоги и комиссии',
         paragraphs: [
-          'Цена на странице оплаты — итоговая сумма, которую вы платите нам: налоги сверх неё мы не добавляем. Комиссии вашего кошелька, биржи или сети блокчейн при отправке платежа оплачиваете вы.',
+          'Цена тарифа на странице «Тарифы» — итоговая сумма, которую вы платите нам: налоги сверх неё мы не добавляем. Комиссии вашего банка, кошелька, биржи или сети блокчейн при отправке платежа оплачиваете вы.',
         ],
       },
     ],
@@ -587,43 +619,58 @@ const EN: Record<LegalPageId, LegalContent> = {
   },
   'payment-terms': {
     title: 'Payments and Refunds',
-    lead: 'How to pay for Ketner AI credits, when they are credited and how to get your money back.',
+    lead: 'What is free in Ketner AI, how a plan is connected and how to get your money back for credit packs bought earlier.',
     sections: [
       {
-        title: '1. Payment methods',
+        title: '1. What is free and what is paid',
+        paragraphs: [
+          'Free: analysing the task, and building and testing an assistant or bot, within the free allowance. Paid: a plan for working solutions, the bots and assistants open to your customers. A plan applies to the account; prices are in US dollars per month.',
+        ],
+        items: TIERS.map(
+          (tier) =>
+            `${tier.name} — $${tier.priceUsd} per month: ${tier.activeSolutions} ${solutionsWord(tier.activeSolutions, 'en')}, up to ${tier.monthlyRequests.toLocaleString('en-US')} requests per month.`,
+        ),
+      },
+      {
+        title: '2. How to get a plan',
+        paragraphs: [
+          'Paying for a plan on the site is not available yet. The Ketner team connects your plan on request: write to us on the Contacts page (topic “Payments and refunds”) or to the email below. We agree the payment method and date with you when connecting the plan. We do not receive or store your card or wallet details.',
+        ],
+      },
+      {
+        title: '3. No automatic charges',
         items: [
-          `Cryptocurrency — through the Trybit payment service on the pack checkout page. Pick the network and coin and pay using the details in the widget; the status updates automatically. When you pay with crypto we add another +${BONUS_PERCENT}% credits on top of the pack.`,
-        ],
-        paragraphs: [
-          'Prices are in US dollars. Telegram Stars are no longer accepted. We do not receive or store your card or wallet details.',
-        ],
-      },
-      {
-        title: '2. When credits are added',
-        paragraphs: [
-          `Credits are added right after the payment provider confirms the payment. The service is digital and access is given immediately. Purchased credits are valid for ${VALID_DAYS} days; the crypto bonus is added separately with the same validity. Credits that expire sooner are spent first.`,
+          'There are no automatic charges: a plan is not renewed or changed to a more expensive one without your consent.',
+          `When the month’s requests reach ${WARN_PERCENT}% of the plan’s volume, we warn you in advance.`,
+          `A further ${GRACE_PERCENT}% above the volume is free. After that, until the end of the month the bot does not answer with AI but takes requests: no customer is lost and nothing extra is charged.`,
         ],
       },
       {
-        title: '3. Former subscriptions',
+        title: '4. Credit packs bought earlier',
+        paragraphs: [
+          `Credit packs are no longer sold (since November 20, 2026), and Telegram Stars are not accepted. If you bought a pack earlier, its credits are valid for ${VALID_DAYS} days from payment, and the crypto bonus has the same validity. The refund terms below apply to such packs.`,
+        ],
+      },
+      {
+        title: '5. Former subscriptions',
         paragraphs: [
           'The Plus, Pro and Ultra subscriptions are no longer sold and auto-renewal is switched off. If you paid for a period earlier, it stays valid until it ends. If you notice a repeat charge, write to support: we will refund it.',
         ],
       },
       {
-        title: '4. Refunds',
+        title: '6. Refunds for credit packs',
         paragraphs: [
-          'The terms below apply to all buyers. If the law of your country gives you more rights, those rights apply.',
+          'The terms below apply to everyone who bought a pack. If the law of your country gives you more rights, those rights apply.',
         ],
         items: [
           `Unspent pack. You can get a full refund for a pack within ${REFUND_DAYS} days of paying, as long as you have not spent any credit from it. Trial credits do not block a refund: they are spent first. On refund, the pack’s credits and the crypto bonus are removed.`,
-          `Spent credits. If the pack’s credits have already been used in chat, code, images or the API, or more than ${REFUND_DAYS} days have passed, the payment is not refunded: the service has been provided in full or in part. The exceptions are the items below and section 6.`,
-          `Withdrawal by law. If you are a consumer in the EU, EEA, UK or another country where the law gives you the right to withdraw from a contract made at a distance, that right lasts ${REFUND_DAYS} days from payment. Before you pay, we ask you to confirm that you want the credits right away and understand that, under the law, you lose the right to withdraw for credits you have already spent. Unspent credits can be refunded in any case under the first rule above.`,
-          'Faults and failures. If credits did not arrive, you were charged twice, the service was not provided or you were blocked without breaking the terms, the money is refunded regardless of deadlines (section 6 of this page and clause 9 of the Terms).',
+          `Spent credits. If the pack’s credits have already been used in chat, code, images or the API, or more than ${REFUND_DAYS} days have passed, the payment is not refunded: the service has been provided in full or in part. The exceptions are the items below and section 8.`,
+          `Withdrawal by law. If you are a consumer in the EU, EEA, UK or another country where the law gives you the right to withdraw from a contract made at a distance, that right lasts ${REFUND_DAYS} days from payment. When you bought the pack, we asked you to confirm that you wanted the credits right away and understood that, under the law, you lose the right to withdraw for credits you have already spent. Unspent credits can be refunded in any case under the first rule above.`,
+          'Faults and failures. If credits did not arrive, you were charged twice, the service was not provided or you were blocked without breaking the terms, the money is refunded regardless of deadlines (section 8 of this page and clause 9 of the Terms).',
         ],
       },
       {
-        title: '5. How to request a refund',
+        title: '7. How to request a refund',
         items: [
           'Open the @Robo_kassa_bot account → “Payments” → pick the payment → “Request a refund”, or write to support. An administrator reviews every request, usually within a day.',
           'Earlier Telegram Stars payments go back to your Telegram balance automatically once approved.',
@@ -632,15 +679,15 @@ const EN: Record<LegalPageId, LegalContent> = {
         paragraphs: ['After a refund, the credits of this pack are removed from your balance.'],
       },
       {
-        title: '6. If something goes wrong',
+        title: '8. If something goes wrong',
         paragraphs: [
-          `Money was charged but credits did not arrive, a payment was duplicated or you lost access — write to ${SUPPORT_EMAIL} and attach the payment ID. We will check and either add the credits or refund the money, regardless of the deadline in section 4.`,
+          `Money was charged but the service was not provided, a payment was duplicated or you lost access — write to ${SUPPORT_EMAIL} and attach the payment ID. We will check and either provide what you paid for or refund the money, regardless of the deadline in section 6.`,
         ],
       },
       {
-        title: '7. Taxes and fees',
+        title: '9. Taxes and fees',
         paragraphs: [
-          'The price on the checkout page is the total you pay us: we do not add taxes on top of it. Fees charged by your wallet, exchange or blockchain network when you send a payment are paid by you.',
+          'The plan price on the Pricing page is the total you pay us: we do not add taxes on top of it. Fees charged by your bank, wallet, exchange or blockchain network when you send a payment are paid by you.',
         ],
       },
     ],

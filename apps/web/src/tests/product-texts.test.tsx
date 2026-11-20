@@ -67,10 +67,20 @@ describe('тексты о продукте', () => {
     expect(article.textContent).not.toMatch(/без подписки|в одном чате|звёзд|⭐|кредит/i);
   });
 
-  it('«Что нового»: запись о переходе на ИИ-агентов с тарифами из каталога; планы — без чата', () => {
+  it('«Что нового»: последняя запись — тарифы вместо кредитов, условия возврата за пакеты сохранены', () => {
     const [latest] = RELEASES;
-    expect(latest?.title).toBe('Ketner — ИИ-агенты для бизнеса');
+    expect(latest?.date).toBe('2026-11-20');
+    expect(latest?.title).toBe('Тарифы вместо кредитов');
     const text = latest!.items.map((item) => item.text).join(' ');
+    expect(text).toMatch(/Пакеты кредитов больше не продаются/);
+    expect(text).toMatch(/автоматических списаний нет/);
+    expect(text).toMatch(/в течение 14 дней, пока из пакета ничего не потрачено/);
+  });
+
+  it('«Что нового»: запись о переходе на ИИ-агентов с тарифами из каталога; планы — без чата', () => {
+    const release = RELEASES.find((item) => item.date === '2026-11-17');
+    expect(release?.title).toBe('Ketner — ИИ-агенты для бизнеса');
+    const text = release!.items.map((item) => item.text).join(' ');
     for (const tier of TIERS) expect(text).toContain(`${tier.name} — $${tier.priceUsd}`);
     expect(text).toMatch(/Общий чат с моделями, Ketner Code, генерация картинок/);
     expect(text).toMatch(/Оплата звёздами Telegram больше не принимается/);
