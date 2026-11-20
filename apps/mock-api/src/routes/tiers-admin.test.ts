@@ -6,6 +6,9 @@ import { DocStore } from '../store/doc-store.js';
 import { readJson, startTestServer } from '../testing/server.js';
 import { signupAndVerify } from '../testing/signup.js';
 import type { AuthSession } from '../types.js';
+import { getDiscoveryStores } from '../discovery/runtime.js';
+import { defaultConfig } from '../builder/service.js';
+import type { Solution } from '../builder/types.js';
 
 const admin = { 'x-admin-key': config.adminApiKey, 'Content-Type': 'application/json' };
 
@@ -145,4 +148,63 @@ test('бюджет бесплатного создания за сутки: ад
   assert.ok(Date.parse(body.budget.resetsAt) > Date.now());
   const user = await fetch(url, { headers: { Authorization: `Bearer ${h.token}` } });
   assert.ok([401, 403].includes(user.status));
+});
+
+/** Опубликованный бот аккаунта в хранилище платформы (в тестах — общее хранилище в памяти). */
+async function publishBot(ownerId: string, id: string, slug: string, status: Solution['status']) {
+  const at = new Date().toISOString();
+  await getDiscoveryStores()!.builder.createSolution(
+    {
+      id,
+      ownerId,
+      type: 'customer_bot',
+      template: 'customer_bot',
+      status,
+      name: `Бот ${slug}`,
+      currentVersion: 1,
+      activeVersion: status === 'draft' ? null : 1,
+      source: null,
+      version: 1,
+      createdAt: at,
+      updatedAt: at,
+      bot: { slug, greeting: '', quickReplies: [], dailyCapCredits: 1000, corrections: [] },
+    } as Solution,
+    { solutionId: id, number: 1, config: defaultConfig('Бот', 'ru'), createdAt: at },
+    [],
+  );
+}
+
+test('сводка тарифов: опубликованные боты без тарифа видны до включения (?withoutTier=1)', async (t) => {
+  const h = await harness();
+  t.after(() => h.server.close());
+  await publishBot(h.userId, `bot-live-${Date.now()}`, `live-${Date.now()}`, 'active');
+  await publishBot(h.userId, `bot-draft-${Date.now()}`, `draft-${Date.now()}`, 'draft');
+  type Row = {
+    userId: string;
+    tier: string | null;
+    email: string | null;
+    publishedBots: unknown[];
+  };
+  const read = async (query = '') =>
+    (
+      await readJson<{ accounts: Row[] }>(
+        await fetch(`${h.server.baseUrl}/api/admin/tiers${query}`, { headers: admin }),
+      )
+    ).accounts.filter((row) => row.userId === h.userId);
+
+  // Без обращений в этом месяце и без тарифа аккаунт всё равно в сводке: у него опубликованный бот.
+  const [row] = await read();
+  assert.equal(row?.tier, null);
+  assert.equal(row?.publishedBots.length, 1, 'черновик не считается');
+  assert.match(row?.email ?? '', /@example\.com$/);
+  assert.equal((await read('?withoutTier=1')).length, 1);
+
+  // Тариф назначен — в списке «без тарифа» аккаунта нет.
+  await fetch(`${h.server.baseUrl}/api/admin/users/${h.userId}/tier`, {
+    method: 'PUT',
+    headers: admin,
+    body: JSON.stringify({ tier: 'start' }),
+  });
+  assert.equal((await read('?withoutTier=1')).length, 0);
+  assert.equal((await read())[0]?.tier, 'start');
 });
