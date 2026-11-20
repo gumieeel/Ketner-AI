@@ -171,7 +171,8 @@ export class PostgresCounterStore implements CounterStore {
          AND (
            ((id LIKE 'acct-day:%' OR id LIKE 'service-day:%' OR id LIKE 'service-day-alert:%')
              AND updated_at < now() - make_interval(days => $2))
-           OR (id LIKE 'acct:%' AND updated_at < now() - make_interval(days => $3))
+           OR ((id LIKE 'acct:%' OR id LIKE 'tier-alert:%')
+             AND updated_at < now() - make_interval(days => $3))
          )
        RETURNING id`,
       [COST_COUNTERS_NAMESPACE, options.dayRowsDays, options.monthRowsDays],

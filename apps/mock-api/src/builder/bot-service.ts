@@ -29,7 +29,8 @@ import { isToolConfig } from './types.js';
 import type { BotAgentAnswer, BotAgentInput } from './bot-agent.js';
 import { PlatformUnavailableError } from './bot-platform-error.js';
 import { allowanceRefusal } from '../billing/build-allowance.js';
-import { tierEnforced, type TierDecision, type TierUsage } from '../billing/tier-usage.js';
+import type { TierAlerts } from '../billing/tier-alerts.js';
+import { decide, tierEnforced, type TierDecision, type TierUsage } from '../billing/tier-usage.js';
 
 /** Строка «Обращений в этом месяце: N из M» для панели бота. */
 function requestsView(decision: TierDecision) {
@@ -40,6 +41,8 @@ function requestsView(decision: TierDecision) {
     limit: decision.limit,
     state: decision.state,
     periodEnd: decision.periodEnd,
+    // Включены ли тарифы: без них предупреждения в панели не нужны — ограничений ещё нет.
+    enforced: tierEnforced(),
   };
 }
 
@@ -83,6 +86,11 @@ export interface BotServiceDeps {
    * пишется в лог «как было бы»; ответы оплачивает баланс, как раньше.
    */
   tierUsage?: TierUsage;
+  /**
+   * Письма владельцу об объёме тарифа (80% и режим заявок, раз за период). Только при включённых
+   * тарифах; ошибка письма ответ посетителю не задерживает.
+   */
+  tierAlerts?: TierAlerts;
   /** Письмо владельцу о новой заявке (ошибка письма заявку не теряет). */
   notifyLead?: (owner: BotOwner, solution: Solution, lead: BotLead) => Promise<void>;
   /**
@@ -254,6 +262,8 @@ export class BotService {
     const tierFunded = decision !== null && tierEnforced();
     if (decision && !tierFunded) tierUsage!.shadow(owner.userId, decision);
     const blockedByTier = tierUnknown || (tierFunded && decision?.action !== 'answer');
+    // Режим заявок: владелец узнаёт об этом письмом (один раз за период).
+    if (tierFunded && decision?.action === 'leads_only') this.alert(owner.userId, decision);
     const lowBalance =
       !tierFunded &&
       !tierUnknown &&
@@ -329,7 +339,18 @@ export class BotService {
       status: 'complete',
     });
     tierUsage?.noteCounted(owner.userId);
+    // Засчитанный ответ на тарифе: перешли 80% (или в льготный объём) — письмо владельцу один раз.
+    if (tierFunded && decision?.tier) {
+      this.alert(owner.userId, decide(decision.tier, decision.used + 1, decision.periodEnd));
+    }
     return { ok: true, conversationId: conversation.id, message: publicBotMessage(saved) };
+  }
+
+  /** Письмо об объёме тарифа — без ожидания: ответ посетителю не ждёт почту и хранилище. */
+  private alert(userId: string, decision: TierDecision): void {
+    void this.deps.tierAlerts?.check(userId, decision).catch((error: unknown) => {
+      console.error('[tiers] письмо об объёме не отправлено:', error);
+    });
   }
 
   /**

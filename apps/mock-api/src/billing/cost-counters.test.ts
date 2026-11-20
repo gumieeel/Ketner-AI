@@ -219,6 +219,9 @@ test('счётчики в Postgres: отметка сигнала одна на 
   ]);
   assert.deepEqual(claims.filter(Boolean).length, 1);
   assert.equal(await store.claim('service-day-alert:2026-11-15'), false);
+  // Письма владельцу об объёме тарифа (billing/tier-alerts.ts): живут, как месячные строки.
+  assert.equal(await store.claim('tier-alert:u1:2025-09-01:warning'), true);
+  assert.equal(await store.claim('tier-alert:u1:2026-12-01:warning'), true);
 
   for (const key of [
     'acct-day:u1:2026-08-01',
@@ -240,14 +243,16 @@ test('счётчики в Postgres: отметка сигнала одна на 
   await age('service-day-alert:2026-11-15', 61);
   await age('acct:u1:2025-08', 460);
   await age('acct:u1:2026-11', 61);
+  await age('tier-alert:u1:2025-09-01:warning', 430);
+  await age('tier-alert:u1:2026-12-01:warning', 20);
   const removed = await store.purge(COUNTER_RETENTION);
-  assert.equal(removed, 4);
+  assert.equal(removed, 5);
   const left = await sql.runner.query<{ id: string }>(
     `SELECT id FROM ketner_docs WHERE namespace = 'cost_counters' ORDER BY id`,
   );
   assert.deepEqual(
     left.map((row) => row.id),
-    ['acct-day:u1:2026-11-15', 'acct:u1:2026-11'],
+    ['acct-day:u1:2026-11-15', 'acct:u1:2026-11', 'tier-alert:u1:2026-12-01:warning'],
     'суточные старше 60 дней и месячные старше 400 удалены; свежие и текущий месяц — нет',
   );
 });
