@@ -772,7 +772,6 @@ export interface ProviderStatus {
 export type AIErrorCode =
   | 'model_unavailable'
   | 'rate_limited'
-  | 'subscription_required'
   | 'model_not_allowed'
   | 'concurrency_limit'
   | 'provider_error'

@@ -13,8 +13,6 @@
 export interface SiteFeatures {
   /** Платформа решений: главная «Расскажите о своём бизнесе», анализы задач. */
   discovery: boolean;
-  /** Оплата картой подключена: подписка «Автоматизации» (Dodo Payments). */
-  cardPayments?: boolean;
 }
 
 export const FEATURES_META_NAME = 'ketner-features';
@@ -31,7 +29,7 @@ function fromDocument(): SiteFeatures | null {
   const meta = document.querySelector<HTMLMetaElement>(`meta[name="${FEATURES_META_NAME}"]`);
   if (!meta) return null;
   const flags = new Set(meta.content.split(/[\s,]+/).filter(Boolean));
-  return { discovery: flags.has('discovery'), cardPayments: flags.has('card-payments') };
+  return { discovery: flags.has('discovery') };
 }
 
 export function siteFeatures(): SiteFeatures {

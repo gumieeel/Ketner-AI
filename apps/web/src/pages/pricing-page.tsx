@@ -1,5 +1,4 @@
 import { Link } from 'react-router-dom';
-import { AutomationPlan } from '@/components/pricing/automation-plan';
 import { buttonClasses } from '@/components/ui/button-classes';
 import {
   EXTERNAL_SERVICES_LIVE,
@@ -9,7 +8,6 @@ import {
 } from '@/features/billing/tiers';
 import { useTranslation, type TranslationKey } from '@/i18n';
 import { pluralForm } from '@/lib/format-date';
-import { siteFeatures } from '@/lib/features';
 
 /**
  * «Тарифы»: бесплатно — анализ, создание и проверка; платно — тариф на аккаунт за работающие решения
@@ -34,12 +32,6 @@ export function PricingPage() {
           {t('pricing.subtitle')}
         </p>
       </div>
-
-      {/* Прежняя подписка «Автоматизации»: только управление у тех, у кого она есть. Убирается
-          вместе с подпиской задачей 0b. */}
-      {siteFeatures().discovery && siteFeatures().cardPayments ? (
-        <AutomationPlan returnPath="/solutions" subscribersOnly />
-      ) : null}
 
       <FreeSection />
       <TiersSection />
