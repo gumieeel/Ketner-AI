@@ -7,6 +7,8 @@
 
 /** Оплата Telegram Stars (новые счета; возвраты прежних платежей остаются). */
 export const STARS_ENABLED = false;
+/** Продажа пакетов кредитов (задача 0b): платно — тариф, /pricing. */
+export const PACKS_ENABLED = false;
 /** Общий чат с моделями. */
 export const CHAT_ENABLED = false;
 /** Ketner Code. */
@@ -22,6 +24,7 @@ export const MODEL_COMPARE_ENABLED = false;
 
 export const PRODUCT_SWITCHES = {
   stars: STARS_ENABLED,
+  packs: PACKS_ENABLED,
   chat: CHAT_ENABLED,
   code: CODE_ENABLED,
   images: IMAGES_ENABLED,

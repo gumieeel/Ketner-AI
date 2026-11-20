@@ -508,6 +508,9 @@ export function AdminPage() {
 
   // Edit form state
   const [editPlan, setEditPlan] = useState<PlanId>('free');
+  const [savingPlan, setSavingPlan] = useState(false);
+  const [planError, setPlanError] = useState<Problem | null>(null);
+  const [planSaved, setPlanSaved] = useState(false);
   const [editVip, setEditVip] = useState(false);
   const [editAdmin, setEditAdmin] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -646,11 +649,9 @@ export function AdminPage() {
         method: 'PATCH',
         headers: getHeaders(),
         credentials: 'include',
-        body: JSON.stringify({
-          plan: editPlan,
-          isVip: editVip,
-          isAdmin: editAdmin,
-        }),
+        // Прежний план чата сохраняется отдельно (handleSaveLegacyPlan): иначе каждое сохранение
+        // прав заново оформляло бы прежнюю подписку.
+        body: JSON.stringify({ isVip: editVip, isAdmin: editAdmin }),
       });
 
       if (!res.ok) {
@@ -669,6 +670,37 @@ export function AdminPage() {
       setSaveError(toProblem(err, 'admin.errSaveFallback'));
     } finally {
       setSaving(false);
+    }
+  };
+
+  /** Прежний план чата (free / plus / pro / ultra…): не тариф решений, тот — в AdminTierCard. */
+  const handleSaveLegacyPlan = async () => {
+    if (!selectedUserId) return;
+    setSavingPlan(true);
+    setPlanError(null);
+    setPlanSaved(false);
+    try {
+      const res = await fetch(`/api/admin/users/${selectedUserId}`, {
+        method: 'PATCH',
+        headers: getHeaders(),
+        credentials: 'include',
+        body: JSON.stringify({ plan: editPlan }),
+      });
+      if (!res.ok) {
+        const body = (await res.json()) as { error?: { message?: string } };
+        throw new ProblemError(
+          body.error?.message
+            ? { text: body.error.message }
+            : { key: 'admin.errUpdate', vars: { status: res.status } },
+        );
+      }
+      setPlanSaved(true);
+      await loadUserDetail(selectedUserId);
+      await loadUsers();
+    } catch (err: unknown) {
+      setPlanError(toProblem(err, 'admin.errSaveFallback'));
+    } finally {
+      setSavingPlan(false);
     }
   };
 
@@ -1202,7 +1234,7 @@ export function AdminPage() {
                         </dd>
                       </div>
                       <div className="flex items-center justify-between gap-3">
-                        <dt className="shrink-0 text-muted">{t('admin.plan')}</dt>
+                        <dt className="shrink-0 text-muted">{t('admin.legacyPlan')}</dt>
                         <dd>
                           <Badge
                             tone={PLAN_TONES[detailUser.plan] ?? 'brand'}
@@ -1224,23 +1256,8 @@ export function AdminPage() {
                       {isSelf ? <Badge tone="brand">{t('admin.yourAccount')}</Badge> : null}
                     </div>
 
-                    <div className="grid grid-cols-1 gap-3 text-[13px] sm:grid-cols-2">
-                      <label className="flex flex-col gap-1.5">
-                        <span className="text-muted">{t('admin.changePlan')}</span>
-                        <select
-                          value={editPlan}
-                          onChange={(e) => setEditPlan(e.target.value as PlanId)}
-                          className={SELECT_CLASS}
-                        >
-                          {PLAN_OPTIONS.map((plan) => (
-                            <option key={plan} value={plan}>
-                              {plan}
-                            </option>
-                          ))}
-                        </select>
-                      </label>
-
-                      <div className="flex flex-col justify-end">
+                    <div className="grid grid-cols-1 gap-3 text-[13px]">
+                      <div className="flex flex-col">
                         <label className="flex min-h-11 cursor-pointer items-center gap-2.5">
                           <input
                             type="checkbox"
@@ -1302,6 +1319,52 @@ export function AdminPage() {
                     />
                   </div>
                 ) : null}
+
+                {/* Прежний план чата — отдельно от тарифа, чтобы их не путали */}
+                <div className={cn(SUBTLE_PANEL, 'space-y-3')}>
+                  <PanelTitle>{t('admin.legacyPlanTitle')}</PanelTitle>
+                  <p className="text-[13px] leading-5 text-muted">{t('admin.legacyPlanHint')}</p>
+                  <div className="flex flex-col gap-2 sm:flex-row sm:items-end">
+                    <label className="flex flex-1 flex-col gap-1.5 text-[13px]">
+                      <span className="text-muted">{t('admin.changeLegacyPlan')}</span>
+                      <select
+                        value={editPlan}
+                        onChange={(e) => {
+                          setEditPlan(e.target.value as PlanId);
+                          setPlanSaved(false);
+                        }}
+                        className={SELECT_CLASS}
+                      >
+                        {PLAN_OPTIONS.map((plan) => (
+                          <option key={plan} value={plan}>
+                            {plan}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <Button
+                      variant="outline"
+                      onClick={() => void handleSaveLegacyPlan()}
+                      loading={savingPlan}
+                      disabled={editPlan === detailUser.plan}
+                    >
+                      {t('admin.saveLegacyPlan')}
+                    </Button>
+                  </div>
+                  {planError ? (
+                    <p role="alert" className="text-[13px] font-medium text-danger">
+                      {describe(planError)}
+                    </p>
+                  ) : null}
+                  {planSaved ? (
+                    <p
+                      role="status"
+                      className="flex items-center gap-1.5 text-[13px] font-medium text-success"
+                    >
+                      <CheckIcon className="size-3.5" /> {t('admin.saved')}
+                    </p>
+                  ) : null}
+                </div>
 
                 {/* Credits: balance, grants and manual grant */}
                 <div className={cn(SUBTLE_PANEL, 'space-y-3')}>

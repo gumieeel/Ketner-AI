@@ -19,6 +19,7 @@ import { refundDays } from '@/features/telegram/refund-days';
 import { haptic } from '@/features/telegram/webapp';
 import { useTranslation, type TranslationKey } from '@/i18n';
 import { cn } from '@/lib/cn';
+import { productSwitch } from '@/lib/product-switches';
 import { RefundCase } from './refund-case';
 import { hasRefundCase, refundCaseSummary } from './refund-case-utils';
 import {
@@ -65,9 +66,11 @@ export function PaymentsTab() {
           </span>
           <p className="text-[15px] font-medium">{t('tg.paymentsEmpty')}</p>
           <p className="text-[13px] leading-5 text-muted">{t('tg.paymentsEmptyText')}</p>
-          <Button className="mt-1" onClick={() => goTo('plans')}>
-            {t('tg.topUp')}
-          </Button>
+          {productSwitch('stars') && productSwitch('packs') ? (
+            <Button className="mt-1" onClick={() => goTo('plans')}>
+              {t('tg.topUp')}
+            </Button>
+          ) : null}
         </Panel>
       ) : (
         <>

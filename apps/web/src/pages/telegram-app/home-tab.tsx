@@ -70,29 +70,46 @@ export function HomeTab() {
 
   return (
     <div className="flex flex-col gap-4">
-      <Panel aria-labelledby="tg-credits-title">
-        <p id="tg-credits-title" className="text-[13px] text-muted">
-          {t('tg.creditsTitle')}
-        </p>
-        <p className="mt-1 flex items-center gap-2 text-[28px] font-semibold tracking-tight tabular-nums">
-          <CreditsIcon className="size-6 text-accent" aria-hidden="true" />
-          {formatCredits(credits.balance, language)}
-        </p>
-        <p className="mt-1 text-[14px] leading-6 text-muted">
-          {user.isVip
-            ? t('tg.vip')
-            : hasPurchases
-              ? t('tg.creditsText', { days: credits.validDays })
-              : t('tg.creditsTrial', { trial: formatCredits(credits.trialCredits, language) })}
-        </p>
-        {!user.isVip ? (
-          <div className="mt-3 flex flex-col gap-2">
-            <Button className="w-full" onClick={topUp}>
-              {t('tg.topUp')}
-            </Button>
-          </div>
-        ) : null}
-      </Panel>
+      {productSwitch('packs') ? (
+        <Panel aria-labelledby="tg-credits-title">
+          <p id="tg-credits-title" className="text-[13px] text-muted">
+            {t('tg.creditsTitle')}
+          </p>
+          <p className="mt-1 flex items-center gap-2 text-[28px] font-semibold tracking-tight tabular-nums">
+            <CreditsIcon className="size-6 text-accent" aria-hidden="true" />
+            {formatCredits(credits.balance, language)}
+          </p>
+          <p className="mt-1 text-[14px] leading-6 text-muted">
+            {user.isVip
+              ? t('tg.vip')
+              : hasPurchases
+                ? t('tg.creditsText', { days: credits.validDays })
+                : t('tg.creditsTrial', { trial: formatCredits(credits.trialCredits, language) })}
+          </p>
+          {!user.isVip ? (
+            <div className="mt-3 flex flex-col gap-2">
+              <Button className="w-full" onClick={topUp}>
+                {t('tg.topUp')}
+              </Button>
+            </div>
+          ) : null}
+        </Panel>
+      ) : (
+        // Задача 0b: пакеты не продаются и баланс не показывается — платно теперь тариф.
+        <Panel aria-labelledby="tg-tiers-title">
+          <p id="tg-tiers-title" className="text-[13px] text-muted">
+            {t('tg.tiersTitle')}
+          </p>
+          <p className="mt-1 text-[14px] leading-6 text-text">{t('tg.tiersText')}</p>
+          <Button
+            className="mt-3 w-full"
+            variant="outline"
+            onClick={() => void openSite('/pricing')}
+          >
+            {t('tg.tiersOpen')}
+          </Button>
+        </Panel>
+      )}
 
       {!user.isVip && info.running ? (
         <Panel aria-labelledby="tg-legacy-title">

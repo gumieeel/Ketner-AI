@@ -251,24 +251,12 @@ describe('строка кредитов под выбором модели', () 
     expect(pluralForm(2, 'en')).toBe('many');
   });
 
-  it('остаток виден в шапке на любой странице и ведёт на «Кредиты»; на исходе — предупреждение', async () => {
-    let balance = 5000;
-    installFakeApi({ plan: 'credits', credits: () => report(balance) });
+  it('баланса кредитов нет ни в шапке, ни в боковой панели (задача 0b)', async () => {
+    installFakeApi({ plan: 'credits', credits: () => report(5000) });
     loginAs('credits');
-    const first = renderRoute('/models');
-    const chips = await screen.findAllByTestId('balance-chip');
-    expect(chips[0]).toHaveTextContent('5 000');
-    expect(chips[0]).toHaveAttribute('href', '/pricing');
-    expect(chips[0]).toHaveAccessibleName(/^Баланс кредитов: 5\s000\. Открыть «Кредиты»$/);
-    first.unmount();
-
-    balance = 900;
-    useCredits.getState().reset();
     renderRoute('/pricing');
-    await waitFor(() =>
-      expect(screen.getAllByTestId('balance-chip')[0]).toHaveAccessibleName(
-        'Кредиты на исходе: 900. Пополнить',
-      ),
-    );
+    await screen.findByRole('heading', { level: 1 });
+    expect(screen.queryByTestId('balance-chip')).not.toBeInTheDocument();
+    expect(screen.queryByText(/Баланс кредитов/)).not.toBeInTheDocument();
   });
 });

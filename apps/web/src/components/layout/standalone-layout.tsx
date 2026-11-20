@@ -1,5 +1,4 @@
 import { useEffect, useEffectEvent, useLayoutEffect, useRef, useState } from 'react';
-import { BalanceChip } from './balance-chip';
 import { Link, NavLink, Outlet, useLocation } from 'react-router-dom';
 import { ChevronRightIcon, CloseIcon, MenuIcon } from '@/components/icons';
 import { buttonClasses } from '@/components/ui/button-classes';
@@ -225,9 +224,7 @@ export function StandaloneLayout() {
                 <div className="mx-1 h-5 w-px bg-stroke" aria-hidden="true" />
               </>
             )}
-            {signedIn ? (
-              <BalanceChip />
-            ) : (
+            {signedIn ? null : (
               <Link
                 to="/login"
                 className={buttonClasses({
@@ -251,7 +248,6 @@ export function StandaloneLayout() {
 
           {/* Mobile Menu Button */}
           <div className="flex items-center gap-1 lg:hidden">
-            {status === 'authenticated' && user ? <BalanceChip /> : null}
             <IconButton
               label={mobileMenuOpen ? t('nav.closeMenu') : t('nav.openMenu')}
               onClick={() => setMobileMenuOpen(!mobileMenuOpen)}

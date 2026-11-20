@@ -7,7 +7,7 @@ import { resetPreferences } from './test-utils';
 import { setProductSwitchesForTests } from '@/lib/product-switches';
 
 // Закрытые возможности (lib/product-switches.ts): здесь проверяется их спящий код.
-setProductSwitchesForTests({ chat: true, stars: true });
+setProductSwitchesForTests({ packs: true, chat: true, stars: true });
 
 const DAY = 864e5;
 const inDays = (days: number) => new Date(Date.now() + days * DAY).toISOString();
@@ -330,7 +330,7 @@ describe('кабинет в Telegram (/tg)', () => {
   });
 
   it('звёзды и чат закрыты: вкладки пакетов нет, пополнение и «открыть» ведут на сайт', async () => {
-    setProductSwitchesForTests({ chat: false, stars: false });
+    setProductSwitchesForTests({ packs: true, chat: false, stars: false });
     try {
       window.history.replaceState(null, '', '/tg?tab=plans');
       const app = fakeWebApp();
@@ -349,7 +349,27 @@ describe('кабинет в Telegram (/tg)', () => {
       await waitFor(() => expect(app.openLink).toHaveBeenCalledWith('https://ketner.org/pricing'));
       expect(screen.queryByText('Пакеты кредитов')).not.toBeInTheDocument();
     } finally {
-      setProductSwitchesForTests({ chat: true, stars: true });
+      setProductSwitchesForTests({ packs: true, chat: true, stars: true });
+    }
+  });
+
+  it('пакеты не продаются (задача 0b): вместо баланса — тарифы на сайте, в шапке нет остатка', async () => {
+    setProductSwitchesForTests({ chat: false, stars: false, packs: false });
+    try {
+      const app = fakeWebApp();
+      window.Telegram = { WebApp: app };
+      mockApi((url) =>
+        url === '/api/telegram/miniapp/session' ? linkedSession(makeState()) : undefined,
+      );
+      render(<TelegramAppPage />);
+
+      expect(await screen.findByText('Тарифы')).toBeInTheDocument();
+      expect(screen.queryByText(/8\s400/)).not.toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: 'Пополнить кредиты' })).not.toBeInTheDocument();
+      fireEvent.click(screen.getByRole('button', { name: 'Открыть тарифы на сайте' }));
+      await waitFor(() => expect(app.openLink).toHaveBeenCalledWith('https://ketner.org/pricing'));
+    } finally {
+      setProductSwitchesForTests({ packs: true, chat: true, stars: true });
     }
   });
 

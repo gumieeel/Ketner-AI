@@ -431,6 +431,7 @@ export function createMiniAppRouter({
     '/telegram/miniapp/invoice',
     // Stars закрыты (product-switches.ts): новых счетов нет; возвраты прежних платежей — работают.
     requireFeature('stars'),
+    requireFeature('packs'),
     requireAuth,
     async (request: Request, response: Response) => {
       const body = (request.body ?? {}) as { packId?: unknown };

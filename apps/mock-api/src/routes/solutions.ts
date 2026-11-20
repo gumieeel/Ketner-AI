@@ -509,12 +509,8 @@ export function createSolutionsRouter(deps: SolutionsRouterDeps): Router {
               : null,
         })),
       );
-      // Остаток и «хватит на N дней» — когда есть хотя бы один бот (этап C).
-      const runway =
-        bots && items.some((item) => item.type === 'customer_bot')
-          ? await bots.runway(caller.userId)
-          : null;
-      response.json({ solutions, runway });
+      // Остатка кредитов и «хватит на N дней» больше нет (задача 0b): объём — по тарифу.
+      response.json({ solutions });
     }),
   );
 

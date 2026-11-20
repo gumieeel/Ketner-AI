@@ -240,11 +240,8 @@ export async function listSolutions(): Promise<SolutionView[]> {
   return (await listAutomations()).solutions;
 }
 
-/** «Мои автоматизации»: решения и, если есть боты, остаток и «хватит на N дней». */
-export function listAutomations(): Promise<{
-  solutions: SolutionView[];
-  runway: BotRunway | null;
-}> {
+/** «Мои автоматизации»: решения владельца. */
+export function listAutomations(): Promise<{ solutions: SolutionView[] }> {
   return call('');
 }
 
@@ -424,13 +421,6 @@ export async function sendMessage(
 
 // ─── Бот для клиентов: кабинет владельца ─────────────────────────────────────
 
-/** Остаток владельца и «хватит на N дней» при среднем расходе ботов за неделю (этап C). */
-export interface BotRunway {
-  credits: number;
-  dailyCredits: number;
-  daysLeft: number | null;
-}
-
 /** Сайт, где открывали виджет бота (P10): адрес сайта и когда его видели. */
 export interface WidgetSiteView {
   origin: string;
@@ -441,7 +431,6 @@ export interface WidgetSiteView {
 export interface BotOverview {
   settings: BotSettings;
   today: BotToday;
-  balance: BotRunway;
   publicUrl: string;
   /** Где установлен виджет; у старого сервера поля нет. */
   install?: { sites: WidgetSiteView[] };

@@ -38,6 +38,9 @@ import { signupAndVerify } from '../testing/signup.js';
 import { MemoryCounterStore } from '../billing/cost-counters.js';
 import { setProductSwitchForTests } from '../product-switches.js';
 
+// Пакеты кредитов не продаются (задача 0b): тесты ниже проверяют спящий код покупки.
+setProductSwitchForTests('packs', true);
+
 // Возможность «API» живёт в закрытом разделе (product-switches.ts); здесь проверяется путь
 // «нужна настройка», поэтому раздел открыт для этого файла.
 setProductSwitchForTests('developerApi', true);

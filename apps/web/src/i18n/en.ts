@@ -14,7 +14,6 @@ export const en: Record<TranslationKey, string> = {
   'nav.login': 'Log in',
   'nav.logout': 'Log out',
   'nav.guest': 'Guest',
-  'nav.upgrade': 'Buy credits',
   'nav.docs': 'Documentation',
   'nav.apiDocs': 'API & Agents',
   'nav.empty': 'No conversations yet',
@@ -282,8 +281,6 @@ export const en: Record<TranslationKey, string> = {
     'Max mode is on: models think longer and answer deeper, and a request costs more.',
   'chat.maxModeOff':
     'Max mode: models think longer and answer deeper on hard tasks, and a request costs more.',
-  'credits.headerLabel': 'Balance: {count} credits. Open Credits',
-  'credits.headerLow': 'Credits running low: {count}. Top up',
   'credits.balance': 'Credits: {count}',
   'credits.modelPrice': '{model} ≈ {price} cr. per request, enough for about {count}',
   'credits.modelFree': '{model} is free: no credits are spent',
@@ -381,6 +378,7 @@ export const en: Record<TranslationKey, string> = {
 
   'closed.title.docs': 'Documentation is temporarily unavailable',
   'closed.title.models': 'The Models page is temporarily unavailable',
+  'closed.title.packs': 'Credit packs are no longer sold',
   'closed.title.stars': 'Telegram Stars payments are no longer accepted',
   'closed.title.chat': 'Chat is temporarily unavailable',
   'closed.title.code': 'Ketner Code is temporarily unavailable',
@@ -950,7 +948,7 @@ export const en: Record<TranslationKey, string> = {
   'admin.sourceCache': 'Cache',
   'admin.sourceTemplate': 'Templates',
   'admin.requestsShort': '{count} req',
-  'admin.costByPlan': 'Spend by plan',
+  'admin.costByPlan': 'Spend by chat plan',
   'admin.models30dTitle': 'Models, last 30 days',
   'admin.models30dHint':
     'Provider responses only. Cache is the share of cached input tokens; the verdict uses long requests (input above the vendor cache threshold).',
@@ -959,7 +957,7 @@ export const en: Record<TranslationKey, string> = {
   'admin.colAvgTokens': 'Avg in / out',
   'admin.colCached': 'Cache',
   'admin.colAvgCost': 'Cost / request',
-  'admin.colPlanShare': 'Plan share',
+  'admin.colPlanShare': 'Chat plan share',
   'admin.cacheStatus.working': 'working',
   'admin.cacheStatus.not_working': 'not hitting',
   'admin.cacheStatus.no_data': 'not enough data',
@@ -969,8 +967,8 @@ export const en: Record<TranslationKey, string> = {
   // Админ-панель: фильтры и ошибки
   'admin.searchLabel': 'Search users',
   'admin.searchPlaceholder': 'Search by email or name…',
-  'admin.planFilter': 'Filter by plan',
-  'admin.allPlans': 'All plans',
+  'admin.planFilter': 'Filter by legacy chat plan',
+  'admin.allPlans': 'All chat plans',
   'admin.sort': 'Sorted by',
   'admin.sortValue': 'credits used %, descending',
   'admin.accessError': 'Access error',
@@ -986,7 +984,7 @@ export const en: Record<TranslationKey, string> = {
 
   // Админ-панель: таблица
   'admin.colUser': 'User',
-  'admin.colPlan': 'Plan / Role',
+  'admin.colPlan': 'Chat plan / Role',
   'admin.colRequests': 'Requests (today)',
   'admin.colTokens': 'Tokens (today)',
   'admin.colBudget': 'Credits (30 d)',
@@ -1008,10 +1006,14 @@ export const en: Record<TranslationKey, string> = {
   'admin.email': 'Email',
   'admin.name': 'Name',
   'admin.registered': 'Registered',
-  'admin.plan': 'Plan',
+  'admin.legacyPlan': 'Chat plan (legacy)',
   'admin.manage': 'Access control',
   'admin.yourAccount': 'Your account',
-  'admin.changePlan': 'Change plan',
+  'admin.legacyPlanTitle': 'Legacy chat plan',
+  'admin.legacyPlanHint':
+    'This is not the tier. Free, Plus, Pro, Ultra and the rest are legacy chat and subscription plans. Set the account tier in the “Tier and requests” block; it does not need a chat plan change.',
+  'admin.changeLegacyPlan': 'Chat plan',
+  'admin.saveLegacyPlan': 'Save chat plan',
   'admin.vip': 'VIP status (Ultra)',
   'admin.adminRights': 'Administrator rights',
   'admin.saved': 'Saved successfully',
@@ -1806,6 +1808,10 @@ export const en: Record<TranslationKey, string> = {
   'tg.creditsTrial':
     'You are on trial credits ({trial}), given once. A pack unlocks the higher request limits.',
   'tg.topUp': 'Top up credits',
+  'tg.tiersTitle': 'Tiers',
+  'tg.tiersText':
+    'Analysing the task and building and testing a bot are free. You pay for a tier for working solutions, by the number of bots and requests per month.',
+  'tg.tiersOpen': 'Open tiers on the site',
   'tg.legacyTitle': 'Previous subscription',
   'tg.legacyAutoHint':
     'Renews on {date} for {stars} ⭐. Turn it off and there will be no charges: access stays until the end of the term.',
@@ -2513,11 +2519,6 @@ export const en: Record<TranslationKey, string> = {
   'builder.bot.today.leads': 'New requests',
   'builder.bot.today.cap':
     'Daily cap — {amount}. When it is reached or credits run out, the bot does not answer by itself but offers the customer to leave a contact.',
-  'builder.bot.runway.days':
-    'Balance: {amount}. Bots spend {daily} a day on average — enough for about {days} days.',
-  'builder.bot.runway.noSpend':
-    'Balance: {amount}. How many days it lasts will show after the first bot replies.',
-  'builder.bot.runway.topUp': 'Top up',
   'builder.bot.preview.title': 'Try as a customer',
   'builder.bot.preview.lead':
     'Write to the bot as a customer would. The current settings version answers, even before it is on; nothing is saved. A reply costs up to {max} credits.',

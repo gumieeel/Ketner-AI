@@ -5,6 +5,10 @@ import { TRIAL_CREDITS } from '../services/entitlement.js';
 import type { CreditsReport } from '../services/credits.js';
 import { startTestServer } from '../testing/server.js';
 import { signupAndVerify } from '../testing/signup.js';
+import { setProductSwitchForTests } from '../product-switches.js';
+
+// Пакеты кредитов не продаются (задача 0b): тесты ниже проверяют спящий код покупки.
+setProductSwitchForTests('packs', true);
 
 async function register(baseUrl: string, email: string) {
   const response = await signupAndVerify(baseUrl, {

@@ -6,6 +6,7 @@ import { productSwitch, type ProductFeature } from '@/lib/product-switches';
 
 const TITLES: Record<ProductFeature, TranslationKey> = {
   stars: 'closed.title.stars',
+  packs: 'closed.title.packs',
   chat: 'closed.title.chat',
   code: 'closed.title.code',
   images: 'closed.title.images',
@@ -42,7 +43,18 @@ export function ClosedFeaturePage({
       </h1>
       <p className="max-w-md text-sm leading-6 text-muted">{t('closed.text')}</p>
       <div className="flex flex-wrap items-center justify-center gap-3 pt-2">
-        <Link to="/solutions" className={buttonClasses({ variant: 'primary', size: 'md' })}>
+        {feature === 'packs' ? (
+          <Link to="/pricing" className={buttonClasses({ variant: 'primary', size: 'md' })}>
+            {t('nav.pricing')}
+          </Link>
+        ) : null}
+        <Link
+          to="/solutions"
+          className={buttonClasses({
+            variant: feature === 'packs' ? 'outline' : 'primary',
+            size: 'md',
+          })}
+        >
           {t('nav.solutions')}
         </Link>
         <Link to="/" className={buttonClasses({ variant: 'outline', size: 'md' })}>

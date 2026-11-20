@@ -1,5 +1,4 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { BalanceChip } from './balance-chip';
 import { Link, NavLink, useNavigate } from 'react-router-dom';
 import {
   BookOpenIcon,
@@ -15,7 +14,6 @@ import {
   TrashIcon,
   UserIcon,
 } from '@/components/icons';
-import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { buttonClasses } from '@/components/ui/button-classes';
 import { IconButton } from '@/components/ui/icon-button';
@@ -24,7 +22,6 @@ import { StatusDot } from '@/components/ui/status-dot';
 import { useAuth } from '@/features/auth/auth-store';
 import { useChat } from '@/features/chat/chat-store';
 import type { ConversationSummary } from '@/features/chat/types';
-import { planBadge } from '@/features/billing/plan-badge';
 import { usePreferences } from '@/features/preferences/preferences-store';
 import { cn } from '@/lib/cn';
 import { siteFeatures } from '@/lib/features';
@@ -135,7 +132,7 @@ export function Sidebar() {
       <aside
         onTouchStart={handleTouchStart}
         onTouchEnd={handleTouchEnd}
-        aria-label={t('nav.chats')}
+        aria-label={chatOpen ? t('nav.chats') : t('nav.menu')}
         aria-hidden={!open ? undefined : false}
         className={cn(
           'fixed inset-y-0 left-0 z-[calc(var(--z-drawer)+1)] flex w-[min(360px,85vw)] flex-col md:w-[272px]',
@@ -149,11 +146,11 @@ export function Sidebar() {
         <div className="flex h-16 shrink-0 items-center justify-between border-b border-stroke px-4">
           <Brand className="md:hidden" />
           <span className="hidden text-[15px] font-medium text-text md:block">
-            {t('nav.chats')}
+            {chatOpen ? t('nav.chats') : t('nav.menu')}
           </span>
           <IconButton
             ref={closeButtonRef}
-            label={t('nav.closeSidebar')}
+            label={chatOpen ? t('nav.closeSidebar') : t('nav.closeMenu')}
             onClick={close}
             className="md:hidden"
           >
@@ -286,7 +283,7 @@ export function Sidebar() {
           ) : null}
           <NavLink to="/pricing" onClick={close} className={navLinkClasses}>
             <SparkleIcon className="size-4 shrink-0" />
-            <span>{t('nav.upgrade')}</span>
+            <span>{t('nav.pricing')}</span>
           </NavLink>
           <NavLink to="/settings" onClick={close} className={navLinkClasses}>
             <SettingsIcon className="size-4 shrink-0" />
@@ -299,11 +296,6 @@ export function Sidebar() {
             </NavLink>
           ) : null}
 
-          {user ? (
-            <div className="px-1 pt-1">
-              <BalanceChip onNavigate={close} className="w-full justify-start" />
-            </div>
-          ) : null}
           <div className="mt-1.5 flex items-center justify-between gap-2 border-t border-stroke px-1 pt-3">
             {user ? (
               <Link
@@ -318,18 +310,8 @@ export function Sidebar() {
                 >
                   {user.name ? user.name.slice(0, 2).toUpperCase() : 'U'}
                 </span>
-                <span className="min-w-0 flex-1">
-                  <span className="block truncate text-[13px] font-medium text-text">
-                    {user.name}
-                  </span>
-                  <span className="block pt-0.5">
-                    <Badge
-                      tone={planBadge(user.plan, t).tone}
-                      className="px-1.5 py-0 text-[11px] leading-[18px]"
-                    >
-                      {planBadge(user.plan, t).label}
-                    </Badge>
-                  </span>
+                <span className="min-w-0 flex-1 truncate text-[13px] font-medium text-text">
+                  {user.name}
                 </span>
               </Link>
             ) : (

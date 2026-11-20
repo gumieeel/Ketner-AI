@@ -58,7 +58,7 @@ function installApi(options: { templates: TemplateCard[]; solutions?: SolutionVi
     const path = new URL(String(input), 'http://localhost').pathname;
     const method = (init.method ?? 'GET').toUpperCase();
     if (path === '/api/solutions' && method === 'GET') {
-      return json(200, { solutions: options.solutions ?? [], runway: null });
+      return json(200, { solutions: options.solutions ?? [] });
     }
     if (path === '/api/solutions/templates') return json(200, { templates: options.templates });
     if (path === '/api/solutions' && method === 'POST') {

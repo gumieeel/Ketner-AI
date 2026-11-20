@@ -12,7 +12,6 @@ export const ru = {
   'nav.login': 'Войти',
   'nav.logout': 'Выйти',
   'nav.guest': 'Гость',
-  'nav.upgrade': 'Купить кредиты',
   'nav.docs': 'Документация',
   'nav.apiDocs': 'API & Агенты',
   'nav.empty': 'История пока пуста',
@@ -281,8 +280,6 @@ export const ru = {
     'Режим Max включён: модели думают дольше и отвечают глубже, запрос стоит дороже.',
   'chat.maxModeOff':
     'Режим Max: модели думают дольше и отвечают глубже на сложных задачах, запрос стоит дороже.',
-  'credits.headerLabel': 'Баланс кредитов: {count}. Открыть «Кредиты»',
-  'credits.headerLow': 'Кредиты на исходе: {count}. Пополнить',
   'credits.balance': 'Кредиты: {count}',
   'credits.modelPrice': '{model} ≈ {price} кр. за запрос, хватит примерно на {count}',
   'credits.modelFree': '{model} бесплатна: кредиты не тратятся',
@@ -380,6 +377,7 @@ export const ru = {
   'closed.title.docs': 'Документация временно недоступна',
   'closed.title.models': 'Страница «Модели» временно недоступна',
   'closed.title.stars': 'Оплата звёздами Telegram больше не принимается',
+  'closed.title.packs': 'Пакеты кредитов больше не продаются',
   'closed.title.chat': 'Чат временно недоступен',
   'closed.title.code': 'Ketner Code временно недоступен',
   'closed.title.images': 'Генерация картинок временно недоступна',
@@ -947,7 +945,7 @@ export const ru = {
   'admin.sourceCache': 'Кэш',
   'admin.sourceTemplate': 'Шаблоны',
   'admin.requestsShort': '{count} запр.',
-  'admin.costByPlan': 'Расход по тарифам',
+  'admin.costByPlan': 'Расход по планам чата',
   'admin.models30dTitle': 'Модели за 30 дней',
   'admin.models30dHint':
     'Только ответы провайдера. Кэш — доля кэшированных входных токенов; вердикт по длинным запросам (вход от порога кэша вендора).',
@@ -956,7 +954,7 @@ export const ru = {
   'admin.colAvgTokens': 'Вход / выход, ср.',
   'admin.colCached': 'Кэш',
   'admin.colAvgCost': 'Цена запроса',
-  'admin.colPlanShare': 'Доля тарифов',
+  'admin.colPlanShare': 'Доля планов чата',
   'admin.cacheStatus.working': 'работает',
   'admin.cacheStatus.not_working': 'не срабатывает',
   'admin.cacheStatus.no_data': 'мало данных',
@@ -966,8 +964,8 @@ export const ru = {
   // Админ-панель: фильтры и ошибки
   'admin.searchLabel': 'Поиск пользователей',
   'admin.searchPlaceholder': 'Поиск по email или имени…',
-  'admin.planFilter': 'Фильтр по тарифу',
-  'admin.allPlans': 'Все тарифы',
+  'admin.planFilter': 'Фильтр по прежнему плану чата',
+  'admin.allPlans': 'Все планы чата',
   'admin.sort': 'Сортировка',
   'admin.sortValue': '% кредитов, по убыванию',
   'admin.accessError': 'Ошибка доступа',
@@ -983,7 +981,7 @@ export const ru = {
 
   // Админ-панель: таблица
   'admin.colUser': 'Пользователь',
-  'admin.colPlan': 'Тариф / Роль',
+  'admin.colPlan': 'План чата / Роль',
   'admin.colRequests': 'Запросы (сегодня)',
   'admin.colTokens': 'Токены (сегодня)',
   'admin.colBudget': 'Кредиты (30 дн.)',
@@ -1005,10 +1003,14 @@ export const ru = {
   'admin.email': 'Email',
   'admin.name': 'Имя',
   'admin.registered': 'Регистрация',
-  'admin.plan': 'Тариф',
+  'admin.legacyPlan': 'План чата (прежний)',
   'admin.manage': 'Управление правами',
   'admin.yourAccount': 'Ваш аккаунт',
-  'admin.changePlan': 'Сменить тариф',
+  'admin.legacyPlanTitle': 'Прежний план чата',
+  'admin.legacyPlanHint':
+    'Это не тариф. Free, Plus, Pro, Ultra и другие — планы прежнего чата и подписок. Тариф аккаунта назначается в блоке «Тариф и обращения»; для него план чата менять не нужно.',
+  'admin.changeLegacyPlan': 'План чата',
+  'admin.saveLegacyPlan': 'Сохранить план чата',
   'admin.vip': 'VIP статус (Ultra)',
   'admin.adminRights': 'Права администратора',
   'admin.saved': 'Сохранено успешно!',
@@ -1798,6 +1800,10 @@ export const ru = {
   'tg.creditsTrial':
     'Сейчас у вас пробные кредиты ({trial}), их дают один раз. Пакет открывает расширенные лимиты запросов.',
   'tg.topUp': 'Пополнить кредиты',
+  'tg.tiersTitle': 'Тарифы',
+  'tg.tiersText':
+    'Анализ задачи, создание и проверка бота — бесплатно. Платно — тариф на работающие решения: от числа ботов и обращений в месяц.',
+  'tg.tiersOpen': 'Открыть тарифы на сайте',
   'tg.legacyTitle': 'Прежняя подписка',
   'tg.legacyAutoHint':
     'Продлится {date} за {stars} ⭐. Выключите, и списаний не будет: доступ сохранится до конца срока.',
@@ -2495,11 +2501,6 @@ export const ru = {
   'builder.bot.today.leads': 'Новых заявок',
   'builder.bot.today.cap':
     'Потолок в день — {amount}. Когда он достигнут или кредиты кончились, бот не отвечает сам, а предлагает клиенту оставить контакт.',
-  'builder.bot.runway.days':
-    'На балансе {amount}. Боты тратят в среднем {daily} в день — хватит примерно на {days} дн.',
-  'builder.bot.runway.noSpend':
-    'На балансе {amount}. Сколько дней его хватит, станет видно после первых ответов ботов.',
-  'builder.bot.runway.topUp': 'Пополнить',
   'builder.bot.preview.title': 'Проверить как клиент',
   'builder.bot.preview.lead':
     'Напишите боту так, как написал бы клиент. Отвечает текущая версия настроек, даже до включения; переписка не сохраняется. Ответ — до {max} кредитов.',

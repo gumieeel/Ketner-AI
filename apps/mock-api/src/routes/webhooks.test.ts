@@ -6,6 +6,10 @@ import test from 'node:test';
 import { config } from '../config.js';
 import { readJson, startTestServer } from '../testing/server.js';
 import type { AuthSession } from '../types.js';
+import { setProductSwitchForTests } from '../product-switches.js';
+
+// Пакеты кредитов не продаются (задача 0b): тесты ниже проверяют спящий код покупки.
+setProductSwitchForTests('packs', true);
 
 /** Подписывает тело так же, как это делает платёжный провайдер: HMAC-SHA256 по сырым байтам. */
 function signedWebhook(body: unknown, secret: string = config.webhookSecret) {

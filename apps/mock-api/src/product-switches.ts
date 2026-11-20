@@ -12,6 +12,12 @@ import type { NextFunction, Request, Response } from 'express';
 
 /** Оплата Telegram Stars: новые счета не выставляются; возвраты прежних платежей работают. */
 export const STARS_ENABLED = false;
+/**
+ * Продажа пакетов кредитов (задача 0b): новых счетов нет — ни криптовалютой, ни звёздами. Платно —
+ * тариф (services/tiers.ts). Статус и подтверждение уже выставленных счетов и вебхуки оплаты
+ * работают: оплаченный ранее счёт зачисляется.
+ */
+export const PACKS_ENABLED = false;
 /** Общий чат с моделями (`/api/chat`, `/api/conversations`). Диалоги в базе остаются. */
 export const CHAT_ENABLED = false;
 /** Ketner Code (`/api/code`). Проекты в базе остаются. */
@@ -27,6 +33,7 @@ export const MODEL_COMPARE_ENABLED = false;
 
 export const PRODUCT_SWITCHES = {
   stars: STARS_ENABLED,
+  packs: PACKS_ENABLED,
   chat: CHAT_ENABLED,
   code: CODE_ENABLED,
   images: IMAGES_ENABLED,
@@ -56,6 +63,8 @@ export function productSwitch(feature: ProductFeature): boolean {
 
 const MESSAGES: Record<ProductFeature, string> = {
   stars: 'Оплата звёздами Telegram больше не принимается.',
+  packs:
+    'Пакеты кредитов больше не продаются. Платно — тариф на работающие решения: ketner.org/pricing.',
   chat: 'Чат временно недоступен. Ketner сейчас — решения для бизнеса: анализ, боты и агенты.',
   code: 'Ketner Code временно недоступен.',
   images: 'Генерация картинок временно недоступна.',
