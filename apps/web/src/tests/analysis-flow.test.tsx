@@ -389,16 +389,19 @@ describe('анализ задачи: начало, вопросы, резуль�
     ).toBeInTheDocument();
     expect(
       await screen.findByText(
-        'Модель GPT-6 Luna. Кредиты не списываются — один такой анализ в сутки.',
+        'Модель GPT-6 Luna. Один такой анализ в сутки, бесплатный лимит не расходуется.',
       ),
     ).toBeInTheDocument();
-    // Анализ за кредиты: настоящие имена моделей и цена до запуска; гостю — через вход.
-    expect(screen.getByText(/MiMo-V2\.6 Pro/)).toBeInTheDocument();
-    expect(screen.getByText('≈ 9, не больше 27 кредитов')).toBeInTheDocument();
-    expect(screen.getByText('≈ 79, не больше 322 кредита')).toBeInTheDocument();
+    // Расширенный анализ: настоящие имена моделей, без цены в кредитах — входит в бесплатный лимит;
+    // гостю — через вход.
     expect(
-      screen.getAllByRole('link', { name: 'Войти и запустить за кредиты' })[0],
-    ).toHaveAttribute('href', '/login?redirect=%2Fanalyses%2Fnew');
+      screen.getByText('Модель MiMo-V2.6 Pro. Входит в бесплатный лимит.'),
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/кредит/)).toBeNull();
+    expect(screen.getAllByRole('link', { name: 'Войти и запустить' })[0]).toHaveAttribute(
+      'href',
+      '/login?redirect=%2Fanalyses%2Fnew',
+    );
 
     fireEvent.click(screen.getByRole('button', { name: 'Начать анализ' }));
     expect(await screen.findByRole('heading', { name: 'Пара уточнений' })).toBeInTheDocument();
@@ -411,7 +414,7 @@ describe('анализ задачи: начало, вопросы, резуль�
     expect(readDraft()).toBeNull();
   });
 
-  it('бесплатный анализ недоступен: причина, время сброса и анализ за кредиты', async () => {
+  it('бесплатный анализ недоступен: причина, время сброса и расширенный анализ', async () => {
     saveDraft('Веду интернет-магазин, отвечаю покупателям вручную.');
     installDiscoveryApi({
       offer: {
@@ -431,7 +434,7 @@ describe('анализ задачи: начало, вопросы, резуль�
     ).toBeInTheDocument();
     expect(screen.getByText(/Новые станут доступны .*после \d\d:\d\d\./)).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Начать анализ' })).toBeNull();
-    expect(screen.getAllByRole('link', { name: 'Войти и запустить за кредиты' })).toHaveLength(2);
+    expect(screen.getAllByRole('link', { name: 'Войти и запустить' })).toHaveLength(2);
   });
 
   it('вопросы по одному, как в разговоре: реплика, цель вопроса, прогресс; черновик на сервере', async () => {
@@ -767,7 +770,9 @@ describe('анализ задачи: начало, вопросы, резуль�
     fireEvent.change(screen.getByRole('textbox', { name: /Где сейчас хранятся заказы/ }), {
       target: { value: 'В 1С' },
     });
-    expect(screen.getByText(/≈ 2, не больше 7 кредитов · GPT-6 Luna/)).toBeInTheDocument();
+    expect(
+      screen.getByText(/с новыми ответами \(GPT-6 Luna\) входит в бесплатный лимит/),
+    ).toBeInTheDocument();
     expect(update).toBeEnabled();
     fireEvent.click(update);
     await waitFor(() =>
@@ -906,7 +911,7 @@ describe('анализ задачи: начало, вопросы, резуль�
     expect(await screen.findByText('Сделано 1 из 2')).toBeVisible();
   });
 
-  it('бесплатный план использован: следующий — за кредиты с ценой и согласием; гостю — вход', async () => {
+  it('бесплатный план использован: следующий — из бесплатного лимита с согласием; гостю — вход', async () => {
     const paidPlans: PlansSummary = {
       offer: {
         free: { available: false, usedFor: 'o9' },
@@ -921,8 +926,8 @@ describe('анализ задачи: начало, вопросы, резуль�
     const first = renderRoute('/analyses/a1');
     await screen.findByRole('heading', { name: 'Возможности для вас' });
     const card = screen.getByRole('heading', { name: 'Черновики ответов' }).closest('li')!;
-    expect(within(card).getByText('Подробный план: ≈ 5, не больше 15 кредитов')).toBeVisible();
-    fireEvent.click(within(card).getByRole('button', { name: 'Составить план за кредиты' }));
+    expect(within(card).getByText('Подробный план входит в бесплатный лимит.')).toBeVisible();
+    fireEvent.click(within(card).getByRole('button', { name: 'Составить подробный план' }));
     await screen.findByRole('heading', { level: 1, name: 'План: Черновики ответов' });
     expect(api.calls.find((call) => call.path.endsWith('/plan'))?.body).toEqual({ confirm: true });
     first.unmount();
@@ -933,9 +938,10 @@ describe('анализ задачи: начало, вопросы, резуль�
     });
     renderRoute('/analyses/a1');
     await screen.findByRole('heading', { name: 'Возможности для вас' });
-    expect(
-      screen.getAllByRole('link', { name: 'Войти и составить план за кредиты' })[0],
-    ).toHaveAttribute('href', '/login?redirect=%2Fanalyses%2Fa1');
+    expect(screen.getAllByRole('link', { name: 'Войти и составить план' })[0]).toHaveAttribute(
+      'href',
+      '/login?redirect=%2Fanalyses%2Fa1',
+    );
   });
 
   it('составленный план открывается из отчёта', async () => {

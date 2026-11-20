@@ -259,9 +259,7 @@ describe('Builder: помощник — настройки, проверка, в
     renderRoute('/solutions/s1');
     await screen.findByRole('heading', { level: 1, name: CONFIG.name });
     expect(
-      screen.getByText(
-        'Кейсов: 1. Стоимость: ≈ 4, не больше 38 кредитов · проверяет MiMo-V2.6 Pro.',
-      ),
+      screen.getByText('Кейсов: 1. Проверяет MiMo-V2.6 Pro; входит в бесплатный лимит.'),
     ).toBeVisible();
     fireEvent.click(screen.getByRole('button', { name: 'Проверить на тест-кейсах' }));
     expect(await screen.findByText('Не пройден')).toBeVisible();
@@ -296,7 +294,8 @@ describe('Builder: помощник — настройки, проверка, в
     expect(
       await screen.findByText('Ответила модель: MiMo-V2.6 Pro · подобрана автоматически'),
     ).toBeVisible();
-    expect(screen.getByText('Списано за ответ: 2,4 кредита')).toBeVisible();
+    // Цена ответа клиенту не показывается (задача 0b).
+    expect(screen.queryByText(/Списано за ответ/)).toBeNull();
     const list = screen.getByRole('navigation', { name: 'Чаты помощника' });
     await waitFor(() =>
       expect(within(list).getByRole('button')).toHaveTextContent('Сколько ехать заказу?'),

@@ -236,14 +236,19 @@ export function allowanceRefusal(
     month: 'long',
     timeZone: 'UTC',
   }).format(date);
+  // Тексты для клиента без сумм в кредитах (задача 0b): месяц — «обновится 1-го», сутки — завтра.
   const message =
     language === 'en'
       ? refusal.scope === 'service'
         ? `Free building is used up for today across the service. It renews on ${when}.`
-        : `The free limit for building and testing is used up. It renews on ${when}.`
+        : refusal.scope === 'month'
+          ? "This month's free allowance is used up; it renews on the 1st."
+          : "Today's free allowance is used up; it renews tomorrow."
       : refusal.scope === 'service'
         ? `Бесплатное создание на сегодня закончилось у всего сервиса. Оно обновится ${when}.`
-        : `Бесплатный лимит на создание и проверку исчерпан. Он обновится ${when}.`;
+        : refusal.scope === 'month'
+          ? 'Бесплатный лимит на этот месяц исчерпан, обновится 1-го.'
+          : 'Бесплатный лимит на сегодня исчерпан, обновится завтра.';
   return {
     status: 402,
     code: 'build_allowance_exhausted',

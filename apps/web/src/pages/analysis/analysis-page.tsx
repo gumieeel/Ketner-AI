@@ -12,7 +12,6 @@ import {
   type RerunQuote,
   type RetryQuote,
 } from '@/features/discovery/api';
-import { creditsText, priceText } from '@/features/discovery/format';
 import { useAnalysis } from '@/features/discovery/use-analysis';
 import { useTranslation, type TranslationKey } from '@/i18n';
 import { cn } from '@/lib/cn';
@@ -203,12 +202,10 @@ function ResultHeader({ analysis }: { analysis: AnalysisView }) {
           <div>
             <dt className="text-[13px] text-subtle">{t('analysis.result.spent')}</dt>
             <dd className="mt-1 text-[20px] font-medium text-text">
-              {free
-                ? t('analysis.result.free')
-                : `≈ ${creditsText(translator, analysis.cost.chargedCredits)}`}
+              {free ? t('analysis.result.free') : t('analysis.result.allowance')}
             </dd>
             <dd className="mt-1 text-[12px] leading-4 text-subtle">
-              {free ? t('analysis.result.freeNote') : t('analysis.result.spentNote')}
+              {free ? t('analysis.result.freeNote') : t('analysis.result.allowanceNote')}
             </dd>
           </div>
         </div>
@@ -355,7 +352,7 @@ function FailedStage({
           ? t('analysis.failed.retryFree')
           : quote
             ? t('analysis.failed.retryPaid', {
-                price: priceText(translator, quote.typicalCredits, quote.maxCredits),
+                price: t('allowance.included'),
                 model: quote.model,
               })
             : null}
@@ -468,7 +465,7 @@ function AnswersSection({
                 ) : quote ? (
                   <p className="text-[14px] leading-6 text-muted" aria-live="polite">
                     {t('analysis.answers.rerunPrice', {
-                      price: priceText(translator, quote.typicalCredits, quote.maxCredits),
+                      price: t('allowance.included'),
                       model: quote.model,
                     })}
                   </p>

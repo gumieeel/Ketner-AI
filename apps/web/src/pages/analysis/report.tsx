@@ -28,7 +28,6 @@ import {
   type OpportunityView,
   type AreaCoverage,
 } from '@/features/discovery/api';
-import { priceText } from '@/features/discovery/format';
 import { useTranslation, type TranslationKey } from '@/i18n';
 import { cn } from '@/lib/cn';
 import { useAuth } from '@/features/auth/auth-store';
@@ -791,7 +790,7 @@ function PlanAction({
           </Button>
           <p className="text-[13px] text-subtle">
             {t('analysis.plan.paidNote', {
-              price: priceText(translator, paid.typicalCredits, paid.maxCredits),
+              price: t('allowance.included'),
             })}
           </p>
         </>
@@ -908,7 +907,7 @@ function SolutionAction({
       {!tool && builder.quote ? (
         <p className="text-[13px] text-subtle">
           {t('builder.report.draftNote', {
-            price: priceText(translator, builder.quote.typicalCredits, builder.quote.maxCredits),
+            price: t('allowance.included'),
           })}
         </p>
       ) : null}

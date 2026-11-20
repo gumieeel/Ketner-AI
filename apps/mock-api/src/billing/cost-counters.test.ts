@@ -260,3 +260,27 @@ test('счётчики в Postgres: отметка сигнала одна на 
     'суточные старше 60 дней и месячные старше 400 удалены; свежие и текущий месяц — нет',
   );
 });
+
+test('отказ «лимит исчерпан» для клиента: без сумм в кредитах, месяц — обновится 1-го, сутки — завтра', () => {
+  const refusal = (scope: 'month' | 'day') =>
+    ({
+      ok: false,
+      code: 'build_allowance_exhausted',
+      scope,
+      resetsAt: '2026-12-01T00:00:00.000Z',
+    }) as const;
+  const month = allowanceRefusal('ru', refusal('month'));
+  assert.equal(month.status, 402);
+  assert.equal(month.message, 'Бесплатный лимит на этот месяц исчерпан, обновится 1-го.');
+  assert.equal(
+    allowanceRefusal('ru', refusal('day')).message,
+    'Бесплатный лимит на сегодня исчерпан, обновится завтра.',
+  );
+  assert.equal(
+    allowanceRefusal('en', refusal('month')).message,
+    "This month's free allowance is used up; it renews on the 1st.",
+  );
+  for (const scope of ['month', 'day'] as const) {
+    assert.doesNotMatch(allowanceRefusal('ru', refusal(scope)).message, /кредит/);
+  }
+});

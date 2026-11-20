@@ -440,8 +440,8 @@ export class DiscoveryService {
         code: 'login_required',
         message: text(
           language,
-          'Анализ за кредиты доступен после входа в аккаунт.',
-          'Analysis for credits is available after signing in.',
+          'Расширенный анализ доступен после входа в аккаунт.',
+          'Extended analysis is available after signing in.',
         ),
       };
     }
@@ -756,8 +756,8 @@ export class DiscoveryService {
         code: 'login_required',
         message: text(
           language,
-          'Обновить анализ с новыми ответами можно после входа: повторный поиск возможностей идёт за кредиты.',
-          'Sign in to update the analysis with new answers: a repeated search for opportunities costs credits.',
+          'Обновить анализ с новыми ответами можно после входа: повторный поиск возможностей входит в бесплатный лимит.',
+          'Sign in to update the analysis with new answers: a repeated search for opportunities is included in the free allowance.',
         ),
       };
     }

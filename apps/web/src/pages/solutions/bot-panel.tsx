@@ -20,7 +20,6 @@ import {
   type BotSettings,
   type SolutionDetails,
 } from '@/features/builder/api';
-import { creditsText } from '@/features/discovery/format';
 import { TIERS } from '@/features/billing/tiers';
 import { useTranslation } from '@/i18n';
 import { cn } from '@/lib/cn';
@@ -117,10 +116,7 @@ function ShareSection({
   const { t } = translator;
   const status = details.solution.status;
   return (
-    <Section
-      title={t('builder.bot.share.title')}
-      lead={t('builder.bot.lead', { max: BOT_LIMITS.replyMaxCredits })}
-    >
+    <Section title={t('builder.bot.share.title')} lead={t('builder.bot.lead')}>
       {status !== 'active' ? (
         <p className="mt-4 rounded-xl border border-warning/25 bg-warning-soft px-4 py-3 text-[14px] leading-6 text-text">
           {status === 'draft' ? t('builder.bot.share.draft') : t('builder.bot.share.paused')}
@@ -131,11 +127,10 @@ function ShareSection({
       <BotSiteInstall overview={overview} onCheck={onRefresh} />
 
       <h3 className="mt-8 text-[16px] font-medium text-text">{t('builder.bot.today.title')}</h3>
-      <dl className="mt-3 grid grid-cols-3 gap-3">
+      <dl className="mt-3 grid grid-cols-2 gap-3">
         {(
           [
             ['builder.bot.today.replies', String(overview.today.replies)],
-            ['builder.bot.today.credits', creditsText(translator, overview.today.credits)],
             ['builder.bot.today.leads', String(overview.today.newLeads)],
           ] as const
         ).map(([label, value]) => (
@@ -145,11 +140,6 @@ function ShareSection({
           </div>
         ))}
       </dl>
-      <p className="mt-3 text-[13px] leading-5 text-subtle">
-        {t('builder.bot.today.cap', {
-          amount: creditsText(translator, overview.settings.dailyCapCredits),
-        })}
-      </p>
       {overview.requests?.tier && overview.requests.included !== null ? (
         // Тариф назначен (P3): сколько обращений посетителей засчитано в этом месяце.
         <p className="mt-3 text-[14px] leading-6 text-text tabular-nums">
@@ -271,10 +261,7 @@ function PreviewSection({ id }: { id: string }) {
   };
 
   return (
-    <Section
-      title={t('builder.bot.preview.title')}
-      lead={t('builder.bot.preview.lead', { max: BOT_LIMITS.replyMaxCredits })}
-    >
+    <Section title={t('builder.bot.preview.title')} lead={t('builder.bot.preview.lead')}>
       <div className="mt-4 rounded-2xl border border-stroke bg-surface-2/40 p-4">
         <ol className="flex min-h-[6rem] flex-col gap-3" aria-live="polite">
           {items.length === 0 ? (
@@ -294,12 +281,9 @@ function PreviewSection({ id }: { id: string }) {
                 {item.content}
               </p>
               {item.role === 'assistant' ? (
-                <p className="mt-1 text-[12px] text-subtle">
-                  {item.offerContact ? `${t('builder.bot.offerContact')} · ` : ''}
-                  {t('builder.bot.preview.charged', {
-                    amount: creditsText(translator, item.chargedCredits ?? 0),
-                  })}
-                </p>
+                item.offerContact ? (
+                  <p className="mt-1 text-[12px] text-subtle">{t('builder.bot.offerContact')}</p>
+                ) : null
               ) : null}
             </li>
           ))}
@@ -565,11 +549,8 @@ function ConversationMessage({
       >
         {message.content}
       </p>
-      {!user ? (
-        <p className="text-[12px] text-subtle">
-          {message.offerContact ? `${t('builder.bot.offerContact')} · ` : ''}
-          {creditsText(translator, message.chargedCredits)}
-        </p>
+      {!user && message.offerContact ? (
+        <p className="text-[12px] text-subtle">{t('builder.bot.offerContact')}</p>
       ) : null}
       {!user && question && canCorrect && !editing && !saved ? (
         <Button variant="ghost" size="sm" onClick={() => setEditing(true)}>
@@ -645,7 +626,7 @@ function SettingsSection({
   const [settings, setSettings] = useState<BotSettings>(overview.settings);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<unknown>(null);
-  const ids = { slug: useId(), greeting: useId(), cap: useId() };
+  const ids = { slug: useId(), greeting: useId() };
   const changed = JSON.stringify(settings) !== JSON.stringify(overview.settings);
   const update = (patch: Partial<BotSettings>) => {
     onEdit();
@@ -761,28 +742,6 @@ function SettingsSection({
             </Button>
           ) : null}
         </fieldset>
-
-        <div className="flex flex-col gap-1.5">
-          <label htmlFor={ids.cap} className="text-[14px] font-medium text-text">
-            {t('builder.bot.settings.cap')}
-          </label>
-          <p id={`${ids.cap}-hint`} className="text-[13px] leading-5 text-subtle">
-            {t('builder.bot.settings.capHint', { max: BOT_LIMITS.replyMaxCredits })}
-          </p>
-          <input
-            id={ids.cap}
-            aria-describedby={`${ids.cap}-hint`}
-            type="number"
-            inputMode="numeric"
-            required
-            min={BOT_LIMITS.dailyCapMin}
-            max={BOT_LIMITS.dailyCapMax}
-            step={1}
-            value={settings.dailyCapCredits}
-            onChange={(event) => update({ dailyCapCredits: Number(event.target.value) })}
-            className={cn(inputClass, 'sm:max-w-[12rem]')}
-          />
-        </div>
 
         <fieldset className="flex flex-col gap-2">
           <legend className="text-[14px] font-medium text-text">

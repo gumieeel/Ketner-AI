@@ -35,7 +35,6 @@ import {
   type Verdict,
 } from '@/features/builder/api';
 import { DiscoveryApiError } from '@/features/discovery/api';
-import { creditsText, priceText } from '@/features/discovery/format';
 import { POLL_MS } from '@/features/discovery/use-analysis';
 import { useTranslation, type TranslationKey } from '@/i18n';
 import { cn } from '@/lib/cn';
@@ -731,7 +730,7 @@ function RunSection({ details, onAct }: { details: SolutionDetails; onAct: Act }
           <p className="text-[13px] text-subtle">
             {t('builder.run.price', {
               cases: testQuote.cases,
-              price: priceText(translator, testQuote.typicalCredits, testQuote.maxCredits),
+              price: t('allowance.included'),
               judge: testQuote.judgeModel,
             })}
           </p>
@@ -743,10 +742,7 @@ function RunSection({ details, onAct }: { details: SolutionDetails; onAct: Act }
       {run ? (
         <div ref={resultsRef} tabIndex={-1} className="mt-6 outline-none">
           <p className="text-[13px] text-subtle">
-            {t('builder.run.meta', {
-              version: run.versionNumber,
-              amount: creditsText(translator, run.chargedCredits),
-            })}
+            {t('builder.run.meta', { version: run.versionNumber })}
             {run.versionNumber !== solution.currentVersion ? ` · ${t('builder.run.outdated')}` : ''}
           </p>
           <ol className="mt-3 flex flex-col gap-3">

@@ -13,7 +13,6 @@ import {
   type PlanStepStatus,
   type PlanView,
 } from '@/features/discovery/api';
-import { creditsText, priceText } from '@/features/discovery/format';
 import { POLL_MS } from '@/features/discovery/use-analysis';
 import { useTranslation, type TranslationKey } from '@/i18n';
 import { cn } from '@/lib/cn';
@@ -136,9 +135,7 @@ function PlanScreen({ analysisId, planId }: { analysisId: string; planId: string
             t(load.plan.kind === 'brief' ? 'analysis.plan.brief' : 'analysis.plan.full'),
             load.plan.cost.sponsored && load.plan.cost.chargedCredits === 0
               ? t('analysis.plan.free')
-              : t('analysis.plan.charged', {
-                  amount: creditsText(translator, load.plan.cost.chargedCredits),
-                }),
+              : t('analysis.plan.charged'),
             load.plan.model?.name,
           ]
             .filter(Boolean)
@@ -174,7 +171,7 @@ function FailedPlan({
           ? t('analysis.failed.retryFree')
           : quote
             ? t('analysis.failed.retryPaid', {
-                price: priceText(translator, quote.typicalCredits, quote.maxCredits),
+                price: t('allowance.included'),
                 model: quote.model,
               })
             : null}
