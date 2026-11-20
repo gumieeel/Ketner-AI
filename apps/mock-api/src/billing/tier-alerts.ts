@@ -7,9 +7,15 @@
  * Пока тарифы не включены (`TIER_ENFORCED = false`), писем нет: ограничения ещё не действуют, и
  * предупреждать не о чем.
  *
- * «Один раз» — запись в хранилище счётчиков (`claim`, ключ на аккаунт, период и вид письма): после
- * перезапуска сервера письмо не уходит повторно. Ошибка письма или хранилища ответ посетителю не
- * задерживает и не ломает — только строка в логе.
+ * Каналы — почта и Telegram (если владелец привязал Telegram). У каждого канала своя отметка
+ * «отправлено» в хранилище счётчиков (`claim`, ключ на аккаунт, период, вид письма и канал): после
+ * перезапуска сервера предупреждение не уходит повторно, а сбой одного канала не мешает другому.
+ *
+ * Отметка ставится до отправки — она же не даёт двум параллельным ответам отправить письмо дважды.
+ * Отправка не удалась — отметка снимается (`release`), и следующий ответ бота попробует снова.
+ * Канал недоступен (нет адреса, почта не настроена, Telegram не привязан) — отметка не ставится:
+ * предупреждение уйдёт, когда канал появится в этом же периоде. Ошибки не задерживают и не ломают
+ * ответ посетителю — только строка в логе.
  */
 
 import { tierById, type TierId } from '../services/tiers.js';
@@ -25,9 +31,20 @@ export function alertFor(decision: TierDecision): TierAlertKind | null {
   return null;
 }
 
-/** Ключ «уже отправлено»: аккаунт, период (конец месяца) и вид письма. */
-export function alertKey(userId: string, decision: TierDecision, kind: TierAlertKind): string {
-  return `tier-alert:${userId}:${decision.periodEnd.slice(0, 10)}:${kind}`;
+export type TierAlertChannelName = 'email' | 'telegram';
+
+/**
+ * Ключ «уже отправлено»: аккаунт, период (конец месяца), вид письма и канал. У почты ключ без
+ * суффикса — как до появления Telegram, чтобы уже отправленные письма не ушли второй раз.
+ */
+export function alertKey(
+  userId: string,
+  decision: TierDecision,
+  kind: TierAlertKind,
+  channel: TierAlertChannelName = 'email',
+): string {
+  const base = `tier-alert:${userId}:${decision.periodEnd.slice(0, 10)}:${kind}`;
+  return channel === 'email' ? base : `${base}:${channel}`;
 }
 
 export interface TierAlertMail {
@@ -84,27 +101,73 @@ export function alertMail(
   };
 }
 
-export interface TierAlertsDeps {
-  /** Записать «отправлено»; false — уже было. */
-  claim: (key: string) => Promise<boolean>;
-  /** Письмо владельцу; нет адреса — тихо пропустить. */
+/** Сообщение в Telegram: тема жирным, затем строки письма (HTML Telegram, текст экранирован). */
+export function alertTelegramText(mail: TierAlertMail): string {
+  const escape = (value: string) =>
+    value.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  return [`<b>${escape(mail.subject)}</b>`, '', ...mail.lines.map(escape)].join('\n');
+}
+
+export interface TierAlertChannel {
+  name: TierAlertChannelName;
+  /** Есть ли куда отправить сейчас: адрес, настроенная почта, привязанный Telegram. */
+  available: (userId: string) => boolean;
+  /** Отправить; не получилось — исключение (отметка снимется, будет повтор). */
   send: (userId: string, kind: TierAlertKind, decision: TierDecision) => Promise<void>;
+}
+
+export interface TierAlertsDeps {
+  /** Поставить отметку «отправлено»; false — уже стоит (отправлено или отправляется). */
+  claim: (key: string) => Promise<boolean>;
+  /** Снять отметку после неудачной отправки. */
+  release: (key: string) => Promise<void>;
+  channels: readonly TierAlertChannel[];
   log?: (line: string) => void;
 }
 
 export class TierAlerts {
   constructor(private readonly deps: TierAlertsDeps) {}
 
-  /** Решение после ответа (или при отказе в режиме заявок): нужно ли письмо — отправить один раз. */
+  /**
+   * Решение после ответа (или при отказе в режиме заявок): нужно ли предупреждение — отправить один
+   * раз в каждый доступный канал. Возвращает вид, если сейчас ушло хотя бы в один канал.
+   */
   async check(userId: string, decision: TierDecision): Promise<TierAlertKind | null> {
     if (!tierEnforced()) return null;
     const kind = alertFor(decision);
     if (!kind) return null;
-    if (!(await this.deps.claim(alertKey(userId, decision, kind)))) return null;
-    await this.deps.send(userId, kind, decision);
-    (this.deps.log ?? console.info)(
-      `[tiers] alert user=${userId} kind=${kind} used=${decision.used}/${decision.included ?? 0} tier=${decision.tier}`,
+    const results = await Promise.all(
+      this.deps.channels.map((channel) => this.deliver(channel, userId, kind, decision)),
     );
-    return kind;
+    return results.some(Boolean) ? kind : null;
+  }
+
+  private async deliver(
+    channel: TierAlertChannel,
+    userId: string,
+    kind: TierAlertKind,
+    decision: TierDecision,
+  ): Promise<boolean> {
+    const log = this.deps.log ?? console.info;
+    if (!channel.available(userId)) return false;
+    const key = alertKey(userId, decision, kind, channel.name);
+    if (!(await this.deps.claim(key))) return false;
+    try {
+      await channel.send(userId, kind, decision);
+    } catch (error) {
+      log(
+        `[tiers] alert failed user=${userId} kind=${kind} channel=${channel.name}: ${error instanceof Error ? error.message : String(error)}`,
+      );
+      await this.deps.release(key).catch((releaseError: unknown) => {
+        log(
+          `[tiers] alert release failed key=${key}: ${releaseError instanceof Error ? releaseError.message : String(releaseError)}`,
+        );
+      });
+      return false;
+    }
+    log(
+      `[tiers] alert user=${userId} kind=${kind} channel=${channel.name} used=${decision.used}/${decision.included ?? 0} tier=${decision.tier}`,
+    );
+    return true;
   }
 }

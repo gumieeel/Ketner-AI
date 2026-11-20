@@ -30,7 +30,7 @@ import { telegramBotService } from '../telegram/bot.js';
 import type { AIGateway } from '../ai/gateway.js';
 import type { CompareVoteStore } from '../store/compare-vote-store.js';
 import type { RevokedTokenStore } from '../store/revoked-token-store.js';
-import type { Mailer } from '../services/mailer.js';
+import { mailer as defaultMailer, type Mailer } from '../services/mailer.js';
 import { createChatRouter } from './chat.js';
 import { createAnalysesRouter, type AnalysesRouterDeps } from './analyses.js';
 import { createBuilderRuntime, createSolutionsRouter } from './solutions.js';
@@ -341,6 +341,15 @@ function imagesGate(request: Request, response: Response, next: NextFunction): v
   sendFeatureUnavailable(response, 'images');
 }
 
+/**
+ * Почта для писем владельцам (заявки, предупреждения об объёме тарифа). server.ts её не передаёт —
+ * берётся общая из services/mailer.ts, как у входа по коду (routes/auth.ts). Раньше без явной почты
+ * эти письма в production не подключались вовсе.
+ */
+export function ownerMailer(deps: Pick<ApiDeps, 'mailer'>): Mailer {
+  return deps.mailer ?? defaultMailer;
+}
+
 export function createApiRouter(deps: ApiDeps): Router {
   const router = Router();
   const activeUserStore = deps.userStore ?? defaultUserStore;
@@ -383,12 +392,13 @@ export function createApiRouter(deps: ApiDeps): Router {
   // Письмо «кредиты на исходе» (этап C): после списания, один раз на набор начислений. Пока пакеты
   // не продаются (задача 0b), письмо не отправляется: пополнить баланс нечем.
   const notices = activeBilling.ledger.lowCreditNotices;
-  if (productSwitch('packs') && deps.mailer && deps.mailer.kind !== 'none' && notices) {
+  const mailer = ownerMailer(deps);
+  if (productSwitch('packs') && mailer.kind !== 'none' && notices) {
     const notifier = new LowCreditsNotifier({
       credits: activeBilling.credits.store,
       notices,
       users: activeUserStore,
-      mailer: deps.mailer,
+      mailer,
       remindersOff: (userId) => activeBilling.ledger.prefs.get(userId)?.reminders === false,
       siteUrl: siteUrl(),
     });
@@ -582,7 +592,12 @@ export function createApiRouter(deps: ApiDeps): Router {
     ...(deps.chatGateway ? { gateway: deps.chatGateway } : {}),
     ...(deps.discovery?.stores ? { stores: deps.discovery.stores } : {}),
     ...(deps.builder ? { service: deps.builder } : {}),
-    ...(deps.mailer ? { mailer: deps.mailer } : {}),
+    mailer: ownerMailer(deps),
+    ownerTelegram: {
+      canNotify: (userId) => (deps.botService ?? telegramBotService).canNotifyUser(userId),
+      notifyOwner: (userId, text) =>
+        (deps.botService ?? telegramBotService).notifyOwner(userId, text),
+    },
   });
   router.use(
     '/solutions',
