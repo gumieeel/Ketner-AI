@@ -1,9 +1,1 @@
-[
-  {
-    "id": "GHSA-fc5q-39xc-vjpf",
-    "package": "picomatch",
-    "reason": "build-time only (vite / tinyglobby / fdir), not loaded by the server; no patched picomatch release",
-    "added": "2026-11-17",
-    "reviewBy": "2026-12-17"
-  }
-]
+[]

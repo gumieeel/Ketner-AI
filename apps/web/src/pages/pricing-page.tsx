@@ -1,6 +1,11 @@
 import { Link } from 'react-router-dom';
 import { buttonClasses } from '@/components/ui/button-classes';
-import { TIERS, TIER_GRACE_RATE, TIER_WARN_RATE } from '@/features/billing/tiers';
+import {
+  EXTERNAL_SERVICES_LIVE,
+  TIERS,
+  TIER_GRACE_RATE,
+  TIER_WARN_RATE,
+} from '@/features/billing/tiers';
 import { useTranslation, type TranslationKey } from '@/i18n';
 import { pluralForm } from '@/lib/format-date';
 
@@ -117,10 +122,12 @@ function TiersSection() {
               <li>
                 {tier.externalServices === 0
                   ? t('pricing.tier.noServices')
-                  : t(
-                      `pricing.tier.services.${pluralForm(tier.externalServices, language)}` as TranslationKey,
-                      { count: number(tier.externalServices) },
-                    )}
+                  : EXTERNAL_SERVICES_LIVE
+                    ? t(
+                        `pricing.tier.services.${pluralForm(tier.externalServices, language)}` as TranslationKey,
+                        { count: number(tier.externalServices) },
+                      )
+                    : t('pricing.tier.servicesLater', { count: number(tier.externalServices) })}
               </li>
               <li>
                 {tier.integrationHelp.kind === 'widget_install'
@@ -155,7 +162,10 @@ function RulesSection() {
   const terms: Array<[TranslationKey, TranslationKey]> = [
     ['pricing.terms.solution', 'pricing.terms.solutionText'],
     ['pricing.terms.request', 'pricing.terms.requestText'],
-    ['pricing.terms.service', 'pricing.terms.serviceText'],
+    [
+      'pricing.terms.service',
+      EXTERNAL_SERVICES_LIVE ? 'pricing.terms.serviceText' : 'pricing.terms.serviceTextLater',
+    ],
   ];
   return (
     <div className="grid gap-10 md:grid-cols-2">

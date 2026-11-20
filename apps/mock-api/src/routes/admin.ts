@@ -730,13 +730,21 @@ export function createAdminRouter({
     }
   });
 
-  /** Сводка: аккаунты с засчитанными обращениями в этом месяце или с назначенным тарифом. */
-  router.get('/tiers', async (_req: Request, res: Response): Promise<void> => {
+  /**
+   * Сводка: аккаунты с засчитанными обращениями в этом месяце, с тарифом или с опубликованным ботом.
+   * `?withoutTier=1` — только аккаунты с опубликованным ботом и без тарифа: при включённых тарифах
+   * их боты показывают посетителям только форму заявки.
+   */
+  router.get('/tiers', async (req: Request, res: Response): Promise<void> => {
     if (!tierUsage) {
       sendError(res, 503, 'tiers_unavailable', 'Тарифы недоступны');
       return;
     }
-    const rows = await tierUsage.report();
+    const all = await tierUsage.report();
+    const rows =
+      req.query.withoutTier === '1'
+        ? all.filter((row) => row.tier === null && row.publishedBots.length > 0)
+        : all;
     res.setHeader('Cache-Control', 'no-store');
     res.json({
       enforced: tierEnforced(),

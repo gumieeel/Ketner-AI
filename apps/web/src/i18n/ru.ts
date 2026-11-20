@@ -102,6 +102,9 @@ export const ru = {
   'pricing.tier.solutions.few': '{count} активных решения',
   'pricing.tier.solutions.many': '{count} активных решений',
   'pricing.tier.requests': 'До {count} обращений в месяц',
+  'pricing.tier.servicesLater': 'Подключения к внешним сервисам (до {count}) — появятся позже',
+  'pricing.terms.serviceTextLater':
+    'Подключение к системе вне Ketner с вашими учётными данными: CRM, таблицы, почта. Таких подключений пока нет — они появятся позже; сейчас интеграции делает команда Ketner.',
   'pricing.tier.noServices': 'Без внешних сервисов',
   'pricing.tier.services.one': '{count} внешний сервис',
   'pricing.tier.services.few': '{count} внешних сервиса',

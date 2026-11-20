@@ -18,13 +18,14 @@ import {
   type UsageState,
 } from '../services/tiers.js';
 import type { ExecutionJournal } from '../platform/journal.js';
+import type { PublishedBot } from '../builder/store.js';
 import type { AccountTiers } from './account-tiers.js';
 
 /**
  * Включены ли тарифы для ответов посетителям. Константа в коде, без переменной окружения: включение —
  * отдельный PR после того, как владелец назначит тариф своему аккаунту (решение 15.11.2026).
  */
-export const TIER_ENFORCED = false;
+export const TIER_ENFORCED = true;
 
 let enforcedOverride: boolean | null = null;
 
@@ -58,6 +59,11 @@ export interface TierDecision {
 
 export interface TierReportRow extends TierDecision {
   userId: string;
+  /**
+   * Опубликованные боты аккаунта (страница отвечает посетителям). Бот без тарифа при включённых
+   * тарифах показывает только форму заявки — такие аккаунты видны в сводке до включения.
+   */
+  publishedBots: Array<{ solutionId: string; name: string; slug: string }>;
   /** Ответов в этом месяце, которые при включённых тарифах ушли бы в форму заявки. */
   wouldLimit: number;
   setBy: string | null;
@@ -106,6 +112,8 @@ export function wouldLimit(decision: TierDecision): number {
 export interface TierUsageDeps {
   tiers: AccountTiers;
   journal: () => ExecutionJournal | null;
+  /** Опубликованные боты всех аккаунтов (для сводки); нет — сводка без них. */
+  publishedBots?: () => Promise<PublishedBot[]>;
   now?: () => Date;
   log?: (line: string) => void;
 }
@@ -160,13 +168,26 @@ export class TierUsage {
     );
   }
 
-  /** Сводка для администратора: аккаунты с засчитанными обращениями в месяце или с тарифом. */
+  /**
+   * Сводка для администратора: аккаунты с засчитанными обращениями в месяце, с тарифом или с
+   * опубликованным ботом.
+   */
   async report(): Promise<TierReportRow[]> {
     const at = this.now();
     const journal = this.deps.journal();
     const counts = journal ? await journal.countRequests(monthStart(at), monthEnd(at)) : [];
     const used = new Map(counts.map((row) => [row.userId, row.count]));
-    const userIds = new Set([...used.keys(), ...this.deps.tiers.all().map((doc) => doc.id)]);
+    const bots = new Map<string, TierReportRow['publishedBots']>();
+    for (const bot of (await this.deps.publishedBots?.()) ?? []) {
+      const list = bots.get(bot.ownerId) ?? [];
+      list.push({ solutionId: bot.solutionId, name: bot.name, slug: bot.slug });
+      bots.set(bot.ownerId, list);
+    }
+    const userIds = new Set([
+      ...used.keys(),
+      ...this.deps.tiers.all().map((doc) => doc.id),
+      ...bots.keys(),
+    ]);
     return [...userIds]
       .map((userId) => {
         const decision = decide(
@@ -178,6 +199,7 @@ export class TierUsage {
         return {
           userId,
           ...decision,
+          publishedBots: bots.get(userId) ?? [],
           wouldLimit: wouldLimit(decision),
           setBy: assigned?.setBy ?? null,
           setAt: assigned?.setAt ?? null,
