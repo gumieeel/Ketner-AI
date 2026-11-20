@@ -28,6 +28,8 @@ export interface CounterStore {
   spent(keys: readonly string[]): Promise<Record<string, number>>;
   /** Отметка «уже сделано» (сигнал раз в сутки): true — только у первого, кто её поставил. */
   claim(key: string): Promise<boolean>;
+  /** Снять отметку (действие после неё не удалось — следующий может поставить её снова). */
+  release(key: string): Promise<void>;
   /**
    * Очистка старых строк: суточные счётчики и отметки старше `dayRowsDays` дней, месячные — старше
    * `monthRowsDays`. Возвращает число удалённых строк.
@@ -45,6 +47,10 @@ export class MemoryCounterStore implements CounterStore {
     if (this.claims.has(key)) return false;
     this.claims.add(key);
     return true;
+  }
+
+  async release(key: string): Promise<void> {
+    this.claims.delete(key);
   }
 
   /** В памяти строк немного и они живут до перезапуска: очистка не нужна. */
@@ -161,6 +167,14 @@ export class PostgresCounterStore implements CounterStore {
       [COST_COUNTERS_NAMESPACE, key],
     );
     return rows.length === 1;
+  }
+
+  async release(key: string): Promise<void> {
+    await this.ensure();
+    await this.sql.query(`DELETE FROM ketner_docs WHERE namespace = $1 AND id = $2`, [
+      COST_COUNTERS_NAMESPACE,
+      key,
+    ]);
   }
 
   async purge(options: { dayRowsDays: number; monthRowsDays: number }): Promise<number> {
