@@ -4,6 +4,10 @@ import { useAuthNotice } from '@/features/auth/auth-notice';
 import { useAuth } from '@/features/auth/auth-store';
 import { FAKE_SIGNUP_CODE, installFakeApi } from './fake-api';
 import { renderRoute, resetAuth, resetChat, resetPreferences } from './test-utils';
+import { setProductSwitchesForTests } from '@/lib/product-switches';
+
+// Пакеты кредитов не продаются (задача 0b): тест возврата на оформление проверяет спящий код.
+setProductSwitchesForTests({ packs: true });
 
 describe('auth-flow: сценарии авторизации и сессии', () => {
   beforeEach(() => {

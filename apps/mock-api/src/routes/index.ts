@@ -380,9 +380,10 @@ export function createApiRouter(deps: ApiDeps): Router {
           ledger: createBillingLedger(),
         }));
 
-  // Письмо «кредиты на исходе» (этап C): после списания, один раз на набор начислений.
+  // Письмо «кредиты на исходе» (этап C): после списания, один раз на набор начислений. Пока пакеты
+  // не продаются (задача 0b), письмо не отправляется: пополнить баланс нечем.
   const notices = activeBilling.ledger.lowCreditNotices;
-  if (deps.mailer && deps.mailer.kind !== 'none' && notices) {
+  if (productSwitch('packs') && deps.mailer && deps.mailer.kind !== 'none' && notices) {
     const notifier = new LowCreditsNotifier({
       credits: activeBilling.credits.store,
       notices,
@@ -423,10 +424,13 @@ export function createApiRouter(deps: ApiDeps): Router {
         (deps.botService ?? telegramBotService).notifyAdminsAboutContact(message),
     }),
   );
-  // Подписка «Автоматизации» через Dodo Payments (этап E).
-  // Stars закрыты (product-switches.ts): новых счетов нет — отказ до входа; статус и подтверждение
-  // прежних счетов работают.
+  // Stars и пакеты кредитов закрыты (product-switches.ts): новых счетов нет — отказ до входа; статус
+  // и подтверждение прежних счетов и вебхуки оплаты работают.
   router.post('/billing/telegram-stars/create-invoice', requireFeature('stars'));
+  router.post('/billing/telegram-stars/create-invoice', requireFeature('packs'));
+  router.post('/billing/crypto/create-invoice', requireFeature('packs'));
+  router.post('/billing/checkout', requireFeature('packs'));
+  router.get('/packs', requireFeature('packs'));
   router.use(
     createBillingRouter({
       subscriptionStore: activeSubscriptionStore,

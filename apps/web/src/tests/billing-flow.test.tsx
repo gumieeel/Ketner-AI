@@ -16,7 +16,7 @@ import { renderRoute, resetAuth, resetBilling, resetChat, resetPreferences } fro
 import { setProductSwitchesForTests } from '@/lib/product-switches';
 
 // Закрытые возможности (lib/product-switches.ts): здесь проверяется их спящий код.
-setProductSwitchesForTests({ chat: true, stars: true });
+setProductSwitchesForTests({ packs: true, chat: true, stars: true });
 
 describe('card-mask: утилиты форматирования и валидации карты', () => {
   it('cleanDigits очищает любые нецифровые символы', () => {
@@ -126,7 +126,7 @@ describe('billing-flow: пакеты кредитов, оформление и �
   });
 
   it('звёзды закрыты: на оформлении только криптовалюта, у пакетов нет цены в звёздах', async () => {
-    setProductSwitchesForTests({ chat: true, stars: false });
+    setProductSwitchesForTests({ packs: true, chat: true, stars: false });
     try {
       signIn();
       renderRoute('/checkout/credits-10');
@@ -135,7 +135,7 @@ describe('billing-flow: пакеты кредитов, оформление и �
       expect(screen.queryByRole('button', { name: /Telegram Stars/i })).not.toBeInTheDocument();
       expect(screen.queryByText(/⭐/)).not.toBeInTheDocument();
     } finally {
-      setProductSwitchesForTests({ chat: true, stars: true });
+      setProductSwitchesForTests({ packs: true, chat: true, stars: true });
     }
   });
 

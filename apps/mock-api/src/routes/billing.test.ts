@@ -10,6 +10,9 @@ import type { CreditsReport } from '../services/credits.js';
 import type { AuthSession, PlanItem, Subscription } from '../types.js';
 import { setProductSwitchForTests } from '../product-switches.js';
 
+// Пакеты кредитов не продаются (задача 0b): тесты ниже проверяют спящий код покупки.
+setProductSwitchForTests('packs', true);
+
 // Закрытые возможности (product-switches.ts): здесь проверяется их спящий код.
 setProductSwitchForTests('stars', true);
 

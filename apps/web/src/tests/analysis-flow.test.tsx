@@ -700,7 +700,7 @@ describe('анализ задачи: начало, вопросы, резуль�
       });
     vi.stubGlobal('fetch', async (input: RequestInfo | URL, init: RequestInit = {}) => {
       const path = new URL(String(input), 'http://localhost').pathname;
-      if (path === '/api/solutions') return reply(200, { solutions: [], runway: null });
+      if (path === '/api/solutions') return reply(200, { solutions: [] });
       // Цена черновика помощника недоступна — учебному помощнику она и не нужна.
       if (path === '/api/solutions/draft-quote') {
         return reply(503, { error: { code: 'unavailable', message: '' } });

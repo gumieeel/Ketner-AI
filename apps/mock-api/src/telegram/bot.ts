@@ -345,21 +345,25 @@ export class TelegramBotService implements TelegramPaymentsPort {
         this.username = me.username;
         console.log(`🤖 [TelegramBot] Авторизован бот: @${this.username}`);
       }
+      // Пакеты кредитов не продаются (задача 0b): ни баланса, ни покупки в описании бота.
+      const packs = productSwitch('packs');
       await this.callApi('setMyCommands', {
         commands: [
           { command: 'start', description: 'Открыть кабинет Ketner' },
-          { command: 'status', description: 'Мой баланс кредитов' },
+          { command: 'status', description: packs ? 'Мой баланс кредитов' : 'Мой аккаунт' },
           { command: 'paysupport', description: 'Помощь с оплатой и возвраты' },
           { command: 'terms', description: 'Условия оплаты и возврата' },
         ],
       });
       await this.callApi('setMyShortDescription', {
-        short_description:
-          'Ketner AI: кредиты, оплата звёздами, возвраты и вход на сайт без пароля.',
+        short_description: packs
+          ? 'Ketner AI: кредиты, оплата звёздами, возвраты и вход на сайт без пароля.'
+          : 'Ketner AI: боты и агенты для бизнеса. Платежи, возвраты и вход на сайт без пароля.',
       });
       await this.callApi('setMyDescription', {
-        description:
-          'Официальный бот Ketner AI.\n\nНажмите «Начать», затем «Открыть Ketner»: там баланс кредитов, покупка пакетов звёздами, история платежей и возвраты. Аккаунт создаётся или привязывается в одно касание.',
+        description: packs
+          ? 'Официальный бот Ketner AI.\n\nНажмите «Начать», затем «Открыть Ketner»: там баланс кредитов, покупка пакетов звёздами, история платежей и возвраты. Аккаунт создаётся или привязывается в одно касание.'
+          : 'Официальный бот Ketner AI.\n\nНажмите «Начать», затем «Открыть Ketner»: там история платежей и возвраты. Тарифы на работающие решения — на ketner.org/pricing.',
       });
       await this.callApi('setChatMenuButton', {
         menu_button: { type: 'web_app', text: 'Кабинет', web_app: { url: this.miniAppUrl } },
@@ -1052,8 +1056,10 @@ export class TelegramBotService implements TelegramPaymentsPort {
 
   /**
    * «Купить кредиты»: звёздами в кабинете — пока Stars открыты; иначе — пакет на сайте (крипта).
+   * Пакеты не продаются (задача 0b) — «Тарифы» на сайте.
    */
   private buyCreditsButton(): Record<string, unknown> {
+    if (!productSwitch('packs')) return { text: '💼 Тарифы', url: `${this.siteUrl}/pricing` };
     return productSwitch('stars')
       ? this.openAppButton('⭐ Купить кредиты', 'plans')
       : { text: '💳 Пополнить на сайте', url: `${this.siteUrl}/pricing` };
@@ -1073,6 +1079,16 @@ export class TelegramBotService implements TelegramPaymentsPort {
     const end = sub.renewsAt ? Date.parse(sub.renewsAt) : NaN;
     const running = sub.plan !== 'free' && Number.isFinite(end) && end > Date.now();
     const plan: PlanId = user.isVip ? 'ultra' : running ? sub.plan : 'free';
+    if (!productSwitch('packs')) {
+      // Задача 0b: баланс кредитов не показывается — платно теперь тариф на работающие решения.
+      const lines = [`Аккаунт: <b>${escapeHtml(accountLabel(user))}</b>.`];
+      if (running && !user.isVip)
+        lines.push(
+          `Прежняя подписка <b>${planTitle(sub.plan)}</b> действует до <b>${formatDate(sub.renewsAt)}</b>.`,
+        );
+      lines.push('Тарифы на работающие решения — на сайте.');
+      return lines.join('\n');
+    }
     const balance = toCredits(this.billing.credits.balance(user.id, plan).remainingUsd);
     const lines = [`Баланс: <b>${formatCredits(balance)}</b> кредитов.`];
     if (user.isVip) lines.push('Статус VIP: кредиты обновляются сами.');
@@ -1086,18 +1102,23 @@ export class TelegramBotService implements TelegramPaymentsPort {
   async sendStart(chatId: number | string, from?: TelegramFrom): Promise<void> {
     const user = this.resolveUser(chatId);
     const name = escapeHtml(from?.first_name || user?.name || '');
+    const packs = productSwitch('packs');
     const text = user
       ? [
           `👋 ${name ? `${name}, з` : 'З'}дравствуйте!`,
           '',
           this.statusLine(user),
           '',
-          'Покупка кредитов, платежи, возвраты и вход на сайт — в кабинете:',
+          packs
+            ? 'Покупка кредитов, платежи, возвраты и вход на сайт — в кабинете:'
+            : 'Платежи и возвраты — в кабинете:',
         ].join('\n')
       : [
           `👋 ${name ? `${name}, д` : 'Д'}обро пожаловать в Ketner AI!`,
           '',
-          'Все сильные модели в одном месте, платите только за то, что тратите. Чтобы пополнять кредиты здесь, привяжите аккаунт ketner.org: откройте кабинет, введите почту и код из письма.',
+          packs
+            ? 'Все сильные модели в одном месте, платите только за то, что тратите. Чтобы пополнять кредиты здесь, привяжите аккаунт ketner.org: откройте кабинет, введите почту и код из письма.'
+            : 'Ketner — боты и агенты для бизнеса. Чтобы видеть здесь платежи и возвраты, привяжите аккаунт ketner.org: откройте кабинет, введите почту и код из письма.',
           '',
           'Ещё нет аккаунта? Зарегистрируйтесь на ketner.org — по почте или через Google.',
         ].join('\n');
@@ -1114,7 +1135,11 @@ export class TelegramBotService implements TelegramPaymentsPort {
     }
     await this.sendMessage(
       chatId,
-      ['📊 <b>Ваши кредиты</b>', '', this.statusLine(user)].join('\n'),
+      [
+        productSwitch('packs') ? '📊 <b>Ваши кредиты</b>' : '📊 <b>Ваш аккаунт</b>',
+        '',
+        this.statusLine(user),
+      ].join('\n'),
       {
         reply_markup: { inline_keyboard: [[this.buyCreditsButton()]] },
       },
@@ -1300,7 +1325,9 @@ export class TelegramBotService implements TelegramPaymentsPort {
       await this.answerCallbackQuery(cb.id);
       await this.sendMessage(
         chatId,
-        'Подписок больше нет — кредиты покупаются пакетами в кабинете:',
+        productSwitch('packs')
+          ? 'Подписок больше нет — кредиты покупаются пакетами в кабинете:'
+          : 'Подписок и пакетов кредитов больше нет. Платно — тариф на работающие решения:',
         {
           reply_markup: { inline_keyboard: [[this.buyCreditsButton()]] },
         },
@@ -1471,7 +1498,9 @@ export class TelegramBotService implements TelegramPaymentsPort {
     this.linkTelegram(user.id, chatId, from?.username);
     await this.sendMessage(
       chatId,
-      `✅ Telegram привязан к аккаунту <b>${escapeHtml(accountLabel(user))}</b>.\n\n${this.statusLine(user)}`,
+      productSwitch('packs')
+        ? `✅ Telegram привязан к аккаунту <b>${escapeHtml(accountLabel(user))}</b>.\n\n${this.statusLine(user)}`
+        : `✅ Telegram привязан к аккаунту <b>${escapeHtml(accountLabel(user))}</b>.`,
       {
         reply_markup: { inline_keyboard: [[this.openAppButton()]] },
       },

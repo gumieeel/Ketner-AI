@@ -25,6 +25,9 @@ import { readJson, startTestServer, waitFor, type TestServer } from '../testing/
 import type { AuthSession } from '../types.js';
 import { setProductSwitchForTests } from '../product-switches.js';
 
+// Пакеты кредитов не продаются (задача 0b): тесты ниже проверяют спящий код покупки.
+setProductSwitchForTests('packs', true);
+
 // Закрытые возможности (product-switches.ts): здесь проверяется их спящий код.
 setProductSwitchForTests('developerApi', true);
 

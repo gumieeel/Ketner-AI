@@ -6,6 +6,10 @@ import { signupAndVerify } from '../testing/signup.js';
 import assert from 'node:assert/strict';
 import { createHmac } from 'node:crypto';
 import test from 'node:test';
+import { setProductSwitchForTests } from '../product-switches.js';
+
+// Пакеты кредитов не продаются (задача 0b): тесты ниже проверяют спящий код покупки.
+setProductSwitchForTests('packs', true);
 
 process.env.TRYBIT_API_KEY = 'trybit-api-key';
 process.env.TRYBIT_SHOP_ID = 'shop-42';

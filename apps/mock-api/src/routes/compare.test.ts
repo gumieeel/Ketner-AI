@@ -14,6 +14,9 @@ import { CompareRunStore, type CompareRun } from '../store/compare-run-store.js'
 import { CompareVoteStore } from '../store/compare-vote-store.js';
 import { setProductSwitchForTests } from '../product-switches.js';
 
+// Пакеты кредитов не продаются (задача 0b): тесты ниже проверяют спящий код покупки.
+setProductSwitchForTests('packs', true);
+
 // Закрытые возможности (product-switches.ts): здесь проверяется их спящий код.
 setProductSwitchForTests('chat', true);
 setProductSwitchForTests('modelCompare', true);

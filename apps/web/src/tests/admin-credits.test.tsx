@@ -93,11 +93,13 @@ const detail = {
 
 describe('админка: кредиты пользователей', () => {
   const posts: Array<{ url: string; body: Record<string, unknown> }> = [];
+  const patches: Array<Record<string, unknown>> = [];
 
   beforeEach(() => {
     resetAuth();
     resetPreferences();
     posts.length = 0;
+    patches.length = 0;
     useAuth.setState({
       status: 'authenticated',
       token: 'admin-token',
@@ -120,6 +122,10 @@ describe('админка: кредиты пользователей', () => {
         if (url === '/api/admin/users/u1/credits' && init?.method === 'POST') {
           posts.push({ url, body: JSON.parse(String(init.body)) as Record<string, unknown> });
           return json({ success: true }, 201);
+        }
+        if (url === '/api/admin/users/u1' && init?.method === 'PATCH') {
+          patches.push(JSON.parse(String(init.body)) as Record<string, unknown>);
+          return json({ success: true });
         }
         if (url === '/api/admin/users/u1') return json(detail);
         if (url.startsWith('/api/admin/metrics')) return json({ metrics: null });
@@ -191,5 +197,33 @@ describe('админка: кредиты пользователей', () => {
       body: { credits: 1500, days: 7, note: 'подарок' },
     });
     expect(await screen.findByText('Кредиты выданы')).toBeInTheDocument();
+  });
+
+  it('прежний план чата — отдельно от прав и подписан, права сохраняются без плана', async () => {
+    const user = userEvent.setup();
+    render(
+      <MemoryRouter>
+        <AdminPage />
+      </MemoryRouter>,
+    );
+    await user.click(await screen.findByRole('button', { name: /Открыть карточку: Анна/ }));
+    const dialog = await screen.findByRole('dialog');
+    await within(dialog).findByText('Прежний план чата');
+    expect(within(dialog).queryByText('Сменить тариф')).not.toBeInTheDocument();
+    expect(within(dialog).getByText(/Это не тариф/)).toBeInTheDocument();
+    expect(within(dialog).getByText('План чата (прежний)')).toBeInTheDocument();
+
+    // Права: только VIP и администратор — прежняя подписка заново не оформляется.
+    await user.click(within(dialog).getByRole('button', { name: 'Применить изменения' }));
+    await waitFor(() => expect(patches).toHaveLength(1));
+    expect(patches[0]).toEqual({ isVip: false, isAdmin: false });
+
+    // План чата сохраняется своей кнопкой и только если он изменён.
+    const save = within(dialog).getByRole('button', { name: 'Сохранить план чата' });
+    expect(save).toBeDisabled();
+    await user.selectOptions(within(dialog).getByLabelText('План чата'), 'free');
+    await user.click(save);
+    await waitFor(() => expect(patches).toHaveLength(2));
+    expect(patches[1]).toEqual({ plan: 'free' });
   });
 });

@@ -11,9 +11,10 @@ import { readJson, startTestServer, type ApiErrorBody } from './testing/server.j
 import { signupAndVerify } from './testing/signup.js';
 import type { AuthSession } from './types.js';
 
-test('решения владельца 14.11.2026: звёзды, чат, Code, картинки, API, проверка и сравнение закрыты', () => {
+test('решения владельца: звёзды, пакеты кредитов, чат, Code, картинки, API, проверка и сравнение закрыты', () => {
   assert.deepEqual(PRODUCT_SWITCHES, {
     stars: false,
+    packs: false,
     chat: false,
     code: false,
     images: false,
@@ -71,6 +72,9 @@ const CLOSED: ReadonlyArray<readonly [string, string, ProductFeature]> = [
   ['GET', '/v1/usage', 'developerApi'],
   ['POST', '/api/billing/telegram-stars/create-invoice', 'stars'],
   ['POST', '/api/telegram/miniapp/invoice', 'stars'],
+  ['POST', '/api/billing/crypto/create-invoice', 'packs'],
+  ['POST', '/api/billing/checkout', 'packs'],
+  ['GET', '/api/packs', 'packs'],
 ];
 
 test('закрытые возможности: 503 feature_unavailable и гостю, и вошедшему', async (t) => {
@@ -148,4 +152,16 @@ test('платформа решений не закрыта: анализ, ре�
     const body = await readJson<ApiErrorBody>(response);
     assert.notEqual(body.error.code, 'feature_unavailable', `${method} ${path}`);
   }
+});
+
+test('пакеты не продаются: письмо «кредиты на исходе» не подключено, пополнить баланс нечем', async (t) => {
+  const server = await startTestServer();
+  t.after(() => server.close());
+  assert.equal(server.credits.onCharged, null);
+
+  setProductSwitchForTests('packs', true);
+  t.after(() => setProductSwitchForTests('packs', false));
+  const withPacks = await startTestServer();
+  t.after(() => withPacks.close());
+  assert.equal(typeof withPacks.credits.onCharged, 'function');
 });

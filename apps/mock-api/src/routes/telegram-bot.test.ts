@@ -30,6 +30,9 @@ import { readJson, startTestServer, type ApiErrorBody } from '../testing/server.
 import type { AuthSession, Subscription, User } from '../types.js';
 import { setProductSwitchForTests } from '../product-switches.js';
 
+// Пакеты кредитов не продаются (задача 0b): тесты ниже проверяют спящий код покупки.
+setProductSwitchForTests('packs', true);
+
 // Закрытые возможности (product-switches.ts): здесь проверяется их спящий код.
 setProductSwitchForTests('stars', true);
 
@@ -1649,4 +1652,26 @@ test('звёзды закрыты: возврат по заявке — посл
     telegram_payment_charge_id: 'tg-closed-2',
   });
   assert.equal(creditsOf(h, buyer.user.id), TRIAL_CREDITS);
+});
+
+test('пакеты не продаются (задача 0b): в боте нет баланса и покупки кредитов, кнопка ведёт к тарифам', async (t) => {
+  const h = await harness();
+  t.after(() => h.server.close());
+  await h.linkedBuyer(7995);
+  setProductSwitchForTests('packs', false);
+  t.after(() => setProductSwitchForTests('packs', true));
+
+  await h.message(7995, '/status');
+  const status = h.bot.last('sendMessage')!;
+  const text = String(status.body.text);
+  assert.match(text, /Ваш аккаунт/);
+  assert.doesNotMatch(text, /кредит/i);
+  const button = (
+    status.body.reply_markup as { inline_keyboard: Array<Array<{ text: string; url?: string }>> }
+  ).inline_keyboard[0]![0]!;
+  assert.equal(button.text, '💼 Тарифы');
+  assert.match(String(button.url), /\/pricing$/);
+
+  await h.message(7995, '/start');
+  assert.doesNotMatch(String(h.bot.last('sendMessage')!.body.text), /кредит/i);
 });

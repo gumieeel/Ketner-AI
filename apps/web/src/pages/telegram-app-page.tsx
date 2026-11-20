@@ -281,11 +281,13 @@ function Cabinet({
           <h1 className="min-w-0 truncate text-[22px] font-semibold tracking-tight">
             {titles[tab]}
           </h1>
-          <Badge tone={state.user.isVip ? 'ultra' : 'brand'}>
-            {state.user.isVip
-              ? 'VIP'
-              : t('tg.balanceBadge', { count: formatCredits(state.credits.balance, language) })}
-          </Badge>
+          {state.user.isVip ? (
+            <Badge tone="ultra">VIP</Badge>
+          ) : productSwitch('packs') ? (
+            <Badge tone="brand">
+              {t('tg.balanceBadge', { count: formatCredits(state.credits.balance, language) })}
+            </Badge>
+          ) : null}
         </header>
 
         <div role="tabpanel" id={`tg-panel-${tab}`} aria-labelledby={`tg-tab-${tab}`}>

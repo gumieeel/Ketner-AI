@@ -5,7 +5,13 @@ import { renderRoute, resetAuth, resetPreferences } from './test-utils';
 import { setProductSwitchesForTests } from '@/lib/product-switches';
 
 // Закрытые возможности (lib/product-switches.ts): здесь проверяется их спящий код.
-setProductSwitchesForTests({ chat: true, code: true, images: true, developerApi: true });
+setProductSwitchesForTests({
+  packs: true,
+  chat: true,
+  code: true,
+  images: true,
+  developerApi: true,
+});
 
 describe('маршрутизация и каркас экранов', () => {
   beforeEach(() => {

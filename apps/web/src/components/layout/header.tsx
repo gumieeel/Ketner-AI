@@ -9,6 +9,7 @@ import { MaxModeToggle } from '@/components/chat/max-mode-toggle';
 import { CompareToggle } from '@/components/chat/compare-toggle';
 import { useTranslation } from '@/i18n';
 import { cn } from '@/lib/cn';
+import { productSwitch } from '@/lib/product-switches';
 import { Brand } from './brand';
 import { HeaderMenu } from './header-menu';
 import { ThemeToggle } from './theme-toggle';
@@ -30,15 +31,19 @@ export function Header() {
   const openConversation = useChat((state) => state.openConversation);
 
   const inChat = location.pathname.startsWith('/chat');
+  // Пока чат закрыт (lib/product-switches.ts), в боковой панели нет списка чатов — это просто меню.
+  const chatOpen = productSwitch('chat');
+  const openLabel = chatOpen ? 'nav.openSidebar' : 'nav.openMenu';
+  const closeLabel = chatOpen ? 'nav.closeSidebar' : 'nav.closeMenu';
   const title = conversations.find((conversation) => conversation.id === activeId)?.title;
 
   return (
     <header className="sticky top-0 z-[var(--z-header)] flex h-16 shrink-0 items-center gap-2 border-b border-stroke bg-canvas/85 px-3 text-text backdrop-blur-xl md:gap-3 md:px-6">
-      <IconButton label={t('nav.openSidebar')} className="md:hidden" onClick={toggleSidebar}>
+      <IconButton label={t(openLabel)} className="md:hidden" onClick={toggleSidebar}>
         <MenuIcon className="size-4" />
       </IconButton>
       <IconButton
-        label={sidebarDocked ? t('nav.closeSidebar') : t('nav.openSidebar')}
+        label={sidebarDocked ? t(closeLabel) : t(openLabel)}
         aria-pressed={sidebarDocked}
         className={cn('max-md:hidden', sidebarDocked && 'bg-surface-2 text-text')}
         onClick={toggleSidebarDocked}
