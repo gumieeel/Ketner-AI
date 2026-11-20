@@ -245,6 +245,24 @@ export function listAutomations(): Promise<{ solutions: SolutionView[] }> {
   return call('');
 }
 
+/** Бесплатный лимит на создание и проверку (P2): сколько потрачено за месяц и сутки. */
+export interface AllowanceStatus {
+  tier: string | null;
+  month: { spentCredits: number; limitCredits: number; resetsAt: string };
+  day: { spentCredits: number; limitCredits: number; resetsAt: string } | null;
+}
+
+/** Доля месячного бесплатного лимита, %: целое, не больше 100. */
+export function monthPercent(status: AllowanceStatus): number {
+  const { spentCredits, limitCredits } = status.month;
+  if (limitCredits <= 0) return 100;
+  return Math.min(100, Math.floor((spentCredits / limitCredits) * 100));
+}
+
+export async function fetchAllowance(): Promise<AllowanceStatus> {
+  return (await call<{ allowance: AllowanceStatus }>('/allowance')).allowance;
+}
+
 export function fetchDraftQuote(): Promise<{
   model: string;
   typicalCredits: number;

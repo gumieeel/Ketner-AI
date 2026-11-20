@@ -321,9 +321,9 @@ describe('Учебный помощник: тест, самопроверка, �
       target: { value: '10' },
     });
     fireEvent.click(within(form).getByRole('radio', { name: 'С вариантами' }));
-    fireEvent.click(
-      await within(form).findByRole('button', { name: 'Создать: Тест — до 12 кредитов' }),
-    );
+    const createQuiz = within(form).getByRole('button', { name: 'Создать: Тест' });
+    await waitFor(() => expect(createQuiz).toBeEnabled());
+    fireEvent.click(createQuiz);
     await waitFor(() =>
       expect(api.calls.some((call) => call.method === 'POST' && call.path.endsWith('/runs'))).toBe(
         true,
@@ -353,9 +353,9 @@ describe('Учебный помощник: тест, самопроверка, �
     fireEvent.change(within(form).getByRole('textbox', { name: 'Тема для самопроверки' }), {
       target: { value: 'Ядро' },
     });
-    fireEvent.click(
-      await within(form).findByRole('button', { name: /Самопроверка — до 12 кредитов/ }),
-    );
+    const selfCheck = within(form).getByRole('button', { name: 'Создать: Самопроверка' });
+    await waitFor(() => expect(selfCheck).toBeEnabled());
+    fireEvent.click(selfCheck);
     await waitFor(() =>
       expect(api.calls.some((call) => call.method === 'POST' && call.path.endsWith('/runs'))).toBe(
         true,
@@ -447,9 +447,7 @@ describe('Учебный помощник: тест, самопроверка, �
     });
     renderRoute('/solutions/s1/attempts/a1');
     const panel = await screen.findByRole('region', { name: 'Проверка открытых ответов' });
-    fireEvent.click(
-      await within(panel).findByRole('button', { name: 'Проверить ответы — до 12 кредитов' }),
-    );
+    fireEvent.click(await within(panel).findByRole('button', { name: 'Проверить ответы' }));
     await waitFor(() =>
       expect(api.calls.some((call) => call.method === 'POST' && call.path.endsWith('/grade'))).toBe(
         true,
@@ -462,7 +460,7 @@ describe('Учебный помощник: тест, самопроверка, �
       await screen.findByText('Ядро хранит ДНК, а не белки.', {}, { timeout: 8000 }),
     ).toBeVisible();
     expect(screen.getByText(/Не хватает: хранит ДНК/)).toBeVisible();
-    expect(screen.getByText(/Ответы проверены, списано 1,2 кр\./)).toBeVisible();
+    expect(screen.getByText('Ответы проверены.')).toBeVisible();
   });
 
   it('повторить ошибки — новая попытка только по ним', async () => {

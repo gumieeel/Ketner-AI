@@ -1,31 +1,20 @@
 import { Link } from 'react-router-dom';
 import { DiscoveryApiError } from '@/features/discovery/api';
-import { creditsText } from '@/features/discovery/format';
 import { useTranslation } from '@/i18n';
+import { AllowanceLine } from '@/pages/solutions/allowance-line';
 
 /**
- * Понятный отказ API анализа: что случилось и что можно сделать (пополнить, войти). Текст
- * сервера используется, когда он есть: сервер знает точную причину и суммы.
+ * Понятный отказ API анализа: что случилось и что можно сделать (войти). Текст сервера
+ * используется, когда он есть: сервер знает точную причину. Бесплатный лимит исчерпан — под
+ * отказом строка «Бесплатный лимит месяца: использовано N%».
  */
 export function ErrorNotice({ error, redirect }: { error: unknown; redirect: string }) {
-  const translator = useTranslation();
-  const { t } = translator;
+  const { t } = useTranslation();
   const apiError = error instanceof DiscoveryApiError ? error : null;
   const code = apiError?.code ?? 'unknown_error';
-  const details = apiError?.details ?? {};
 
   let message = apiError?.message || t('analysis.error.generic');
   if (code === 'network_error') message = t('analysis.error.network');
-  if (
-    code === 'insufficient_credits' &&
-    typeof details.maxCredits === 'number' &&
-    typeof details.balanceCredits === 'number'
-  ) {
-    message = t('analysis.error.insufficient', {
-      max: creditsText(translator, details.maxCredits),
-      balance: creditsText(translator, details.balanceCredits),
-    });
-  }
   const loginHref = `/login?redirect=${encodeURIComponent(redirect)}`;
 
   return (
@@ -34,14 +23,7 @@ export function ErrorNotice({ error, redirect }: { error: unknown; redirect: str
       className="rounded-xl border border-danger/25 bg-danger-soft px-4 py-3 text-[14px] leading-6 text-text"
     >
       <p>{message}</p>
-      {code === 'insufficient_credits' ? (
-        <Link
-          to="/pricing"
-          className="mt-1 inline-block font-medium text-text underline underline-offset-4"
-        >
-          {t('analysis.error.topUp')}
-        </Link>
-      ) : null}
+      {code === 'build_allowance_exhausted' ? <AllowanceLine className="mt-1" /> : null}
       {code === 'login_required' ? (
         <Link
           to={loginHref}

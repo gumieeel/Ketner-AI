@@ -13,7 +13,7 @@ import {
   type PaidOffer,
 } from '@/features/discovery/api';
 import { clearDraft, forgetStartKey, readDraft, startKey } from '@/features/discovery/draft';
-import { creditsText, priceText, resetTimeText } from '@/features/discovery/format';
+import { resetTimeText } from '@/features/discovery/format';
 import { useTranslation, type TranslationKey } from '@/i18n';
 import { siteFeatures } from '@/lib/features';
 import { NotFoundPage } from '@/pages/not-found-page';
@@ -155,11 +155,7 @@ export function AnalysisNewPage() {
               {t('analysis.new.confirmTitle')}
             </h2>
             <p className="text-[14px] leading-6 text-muted">
-              {t('analysis.new.confirmText', {
-                model: offer.deep.model,
-                typical: `≈ ${creditsText(translator, offer.deep.typicalCredits)}`,
-                max: creditsText(translator, offer.deep.maxCredits),
-              })}
+              {t('analysis.new.confirmText', { model: offer.deep.model })}
             </p>
             <div className="flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
               <Button variant="outline" onClick={() => setConfirmDeep(false)}>
@@ -208,10 +204,7 @@ function PaidOptions({
         <p className="text-[14px] leading-6 text-muted">
           {t(mode === 'paid' ? 'analysis.new.paidNote' : 'analysis.new.deepNote', {
             model: item.model,
-          })}{' '}
-          <span className="text-text">
-            {priceText(translator, item.typicalCredits, item.maxCredits)}
-          </span>
+          })}
         </p>
       </div>
       {item.loginRequired ? (

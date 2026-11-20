@@ -23,7 +23,6 @@ import {
   type ChatThread,
   type SolutionDetails,
 } from '@/features/builder/api';
-import { creditsText } from '@/features/discovery/format';
 import { useTranslation } from '@/i18n';
 import { cn } from '@/lib/cn';
 import { resolveImageUrl } from '@/features/images/api';
@@ -54,7 +53,6 @@ function SolutionChat({ id }: { id: string }) {
   const [draft, setDraft] = useState('');
   const [streaming, setStreaming] = useState<string | null>(null);
   const [sending, setSending] = useState(false);
-  const [lastCharge, setLastCharge] = useState<number | null>(null);
   const [error, setError] = useState<unknown>(null);
   const endRef = useRef<HTMLDivElement | null>(null);
 
@@ -122,7 +120,6 @@ function SolutionChat({ id }: { id: string }) {
       return;
     }
     setDraft('');
-    setLastCharge(null);
     const optimistic: ChatMessage = {
       id: `local-${Date.now()}`,
       threadId: thread,
@@ -137,9 +134,8 @@ function SolutionChat({ id }: { id: string }) {
     setStreaming('');
     await sendMessage(id, thread, content, {
       onDelta: (text) => setStreaming((current) => (current ?? '') + text),
-      onDone: (message, charged) => {
+      onDone: (message) => {
         setMessages((current) => [...current, message]);
-        setLastCharge(charged);
       },
       onError: (caught) => setError(caught),
     });
@@ -266,11 +262,6 @@ function SolutionChat({ id }: { id: string }) {
             <div className="mt-4">
               <ErrorNotice error={error} redirect={`/solutions/${id}/chat`} />
             </div>
-          ) : null}
-          {lastCharge !== null && lastCharge > 0 ? (
-            <p className="mt-3 text-[13px] text-subtle">
-              {t('builder.chat.charged', { amount: creditsText(translator, lastCharge) })}
-            </p>
           ) : null}
 
           <form

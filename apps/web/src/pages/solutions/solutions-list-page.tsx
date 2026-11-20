@@ -9,10 +9,10 @@ import {
   LIMITS,
   type SolutionView,
 } from '@/features/builder/api';
-import { creditsText } from '@/features/discovery/format';
 import { useTranslation, type TranslationKey } from '@/i18n';
 import { formatDateTime } from '@/lib/format-date';
 import { ErrorNotice } from '@/pages/analysis/error-notice';
+import { AllowanceLine } from './allowance-line';
 import { TemplateGallery } from './template-gallery';
 import { BuilderGate, Page, StatusBadge } from './shared';
 
@@ -62,6 +62,7 @@ function SolutionsList() {
   return (
     <Page title={t('builder.list.title')}>
       <p className="t-lead mt-4">{t('builder.list.lead')}</p>
+      <AllowanceLine className="mt-3" />
 
       <form onSubmit={create} className="mt-8 flex flex-col gap-3 sm:flex-row sm:items-end">
         <label className="flex min-w-0 flex-1 flex-col gap-1">
@@ -119,7 +120,6 @@ function SolutionsList() {
                   {item.today
                     ? ` · ${t('builder.list.today', {
                         replies: item.today.replies,
-                        credits: creditsText(translator, item.today.credits),
                         leads: item.today.newLeads,
                       })}`
                     : ''}

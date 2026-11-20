@@ -125,7 +125,12 @@ interface Call {
 
 function installApi(options: {
   quotes?: RunQuote[];
-  startError?: { status: number; code: string; details?: Record<string, unknown> };
+  startError?: {
+    status: number;
+    code: string;
+    message?: string;
+    details?: Record<string, unknown>;
+  };
   runs?: ToolRunView[];
   /** Ответы GET запуска по порядку (последний повторяется). */
   polls?: ToolRunView[];
@@ -174,7 +179,7 @@ function installApi(options: {
         const error = options.startError;
         options.startError = undefined;
         return json(error.status, {
-          error: { code: error.code, message: 'x', details: error.details },
+          error: { code: error.code, message: error.message ?? 'x', details: error.details },
         });
       }
       return json(202, {
@@ -198,6 +203,13 @@ function installApi(options: {
     return json(404, { error: { code: 'not_found', message: '' } });
   });
   return { calls };
+}
+
+/** Кнопка запуска, когда цена получена (без цены та же кнопка неактивна). */
+async function enabledStart(form: HTMLElement, name = 'Создать: Конспект') {
+  const button = within(form).getByRole('button', { name });
+  await waitFor(() => expect(button).toBeEnabled());
+  return button;
 }
 
 async function fillForm() {
@@ -228,12 +240,11 @@ describe('Учебный помощник: конспект и таблица �
     });
     renderRoute('/solutions/s1');
     const form = await fillForm();
-    const start = await within(form).findByRole('button', {
-      name: 'Создать: Конспект — до 9 кредитов',
-    });
+    const start = within(form).getByRole('button', { name: 'Создать: Конспект' });
     expect(
-      within(form).getByText(/Стоимость: ≈ 3, не больше 9 кредитов · MiMo-V2\.6 Pro/),
+      await within(form).findByText('MiMo-V2.6 Pro · входит в бесплатный лимит.'),
     ).toBeVisible();
+    await waitFor(() => expect(start).toBeEnabled());
     fireEvent.click(start);
 
     // Страница результата: свой интерфейс конспекта.
@@ -251,7 +262,8 @@ describe('Учебный помощник: конспект и таблица �
     expect(screen.getByText('Ядро хранит ДНК')).toBeVisible();
     expect(screen.getByText('ДНК')).toBeVisible();
     expect(screen.getByText('Биология.pdf · Стр. 2')).toBeVisible();
-    expect(screen.getByText(/списано 2,4 кр\./)).toBeVisible();
+    expect(screen.getByText(/входит в бесплатный лимит/)).toBeVisible();
+    expect(screen.queryByText(/кр\./)).toBeNull();
     expect(screen.queryByRole('textbox', { name: 'Сообщение помощнику' })).toBeNull();
   });
 
@@ -262,7 +274,7 @@ describe('Учебный помощник: конспект и таблица �
     const form = await fillForm();
     fireEvent.click(within(form).getByText('Выбрать части'));
     fireEvent.click(within(form).getByRole('checkbox', { name: /Стр\. 1/ }));
-    fireEvent.click(await within(form).findByRole('button', { name: /до 9 кредитов/ }));
+    fireEvent.click(await enabledStart(form));
     await waitFor(() =>
       expect(api.calls.some((call) => call.method === 'POST' && call.path.endsWith('/runs'))).toBe(
         true,
@@ -283,10 +295,10 @@ describe('Учебный помощник: конспект и таблица �
     });
     renderRoute('/solutions/s1');
     const form = await fillForm();
-    fireEvent.click(await within(form).findByRole('button', { name: /до 9 кредитов/ }));
+    fireEvent.click(await enabledStart(form));
     const dialog = await screen.findByRole('dialog');
-    expect(within(dialog).getByText(/не больше 12 кредитов/)).toBeVisible();
-    fireEvent.click(within(dialog).getByRole('button', { name: 'Запустить — до 12 кредитов' }));
+    expect(within(dialog).getByText('MiMo-V2.6 Pro · входит в бесплатный лимит.')).toBeVisible();
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Запустить' }));
     await screen.findByRole('heading', { level: 1, name: 'Строение клетки' }, { timeout: 5000 });
     const posts = api.calls.filter((call) => call.method === 'POST' && call.path.endsWith('/runs'));
     expect(posts).toHaveLength(2);
@@ -299,12 +311,12 @@ describe('Учебный помощник: конспект и таблица �
     const api = installApi({ quotes: [{ ...QUOTE, maxCredits: 80, confirmationRequired: true }] });
     renderRoute('/solutions/s1');
     const form = await fillForm();
-    fireEvent.click(await within(form).findByRole('button', { name: /до 80 кредитов/ }));
+    fireEvent.click(await enabledStart(form));
     const dialog = await screen.findByRole('dialog');
     expect(api.calls.some((call) => call.method === 'POST' && call.path.endsWith('/runs'))).toBe(
       false,
     );
-    fireEvent.click(within(dialog).getByRole('button', { name: 'Запустить — до 80 кредитов' }));
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Запустить' }));
     await waitFor(() =>
       expect(
         api.calls.find((call) => call.method === 'POST' && call.path.endsWith('/runs'))?.body,
@@ -312,19 +324,22 @@ describe('Учебный помощник: конспект и таблица �
     );
   });
 
-  it('нехватка кредитов — понятное сообщение с ценой и остатком', async () => {
+  it('бесплатный лимит исчерпан — текст сервера, без суммы в кредитах и «Пополнить баланс»', async () => {
     signIn();
     installApi({
       startError: {
         status: 402,
-        code: 'insufficient_credits',
-        details: { maxCredits: 9, balanceCredits: 2 },
+        code: 'build_allowance_exhausted',
+        message: 'Бесплатный лимит на этот месяц исчерпан, обновится 1-го.',
+        details: { scope: 'month', resetsAt: '2026-12-01T00:00:00.000Z' },
       },
     });
     renderRoute('/solutions/s1');
     const form = await fillForm();
-    fireEvent.click(await within(form).findByRole('button', { name: /до 9 кредитов/ }));
-    expect(await within(form).findByRole('alert')).toHaveTextContent(/9/);
+    fireEvent.click(await enabledStart(form));
+    const alert = await within(form).findByRole('alert');
+    expect(alert).toHaveTextContent('Бесплатный лимит на этот месяц исчерпан, обновится 1-го.');
+    expect(alert).not.toHaveTextContent(/кредит|Пополнить/);
   });
 
   it('таблица — настоящая таблица с источниками и выгрузкой CSV', async () => {
@@ -362,10 +377,10 @@ describe('Учебный помощник: конспект и таблица �
     expect(
       await screen.findByText('Модель дважды ответила не в том формате. Запустите ещё раз.'),
     ).toBeVisible();
-    expect(screen.getByText(/списано 1,5 кр\./)).toBeVisible();
+    expect(screen.getByText(/входит в бесплатный лимит/)).toBeVisible();
     fireEvent.click(screen.getByRole('button', { name: 'Запустить ещё раз' }));
     const dialog = await screen.findByRole('dialog');
-    expect(within(dialog).getByText(/не больше 9 кредитов/)).toBeVisible();
+    expect(within(dialog).getByText('MiMo-V2.6 Pro · входит в бесплатный лимит.')).toBeVisible();
     expect(api.calls.some((call) => call.path.endsWith('/runs/quote'))).toBe(true);
     expect(api.calls.some((call) => call.method === 'POST' && call.path.endsWith('/runs'))).toBe(
       false,
