@@ -103,7 +103,12 @@ import {
 } from '../billing/account-tiers.js';
 import type { TierUsage } from '../billing/tier-usage.js';
 import { startCounterCleanup } from '../billing/cost-counters.js';
-import { alertMail, TierAlerts } from '../billing/tier-alerts.js';
+import {
+  alertMail,
+  alertTelegramText,
+  TierAlerts,
+  type TierAlertChannel,
+} from '../billing/tier-alerts.js';
 import type { CounterStore } from '../billing/cost-counters.js';
 
 /** Потолок резерва одного ответа в чате владельца со своим помощником, $ (расчёт — по факту). */
@@ -132,6 +137,8 @@ export interface SolutionsRouterDeps {
   service?: BuilderService;
   images?: ImageService;
   mailer?: Mailer;
+  /** Сообщения владельцу в Telegram (если привязан): предупреждения об объёме тарифа. */
+  ownerTelegram?: OwnerTelegram;
   /** Общие сервисы Builder и ботов (routes/index.ts создаёт один на оба роутера). */
   runtime?: BuilderRuntime;
 }
@@ -215,8 +222,13 @@ export function createBuilderRuntime(deps: SolutionsRouterDeps): BuilderRuntime 
       balanceUsd,
       owner,
       ...(deps.tierUsage ? { tierUsage: deps.tierUsage } : {}),
-      ...(ready.counters && deps.mailer
-        ? { tierAlerts: tierAlertsFor(ready.counters, deps.mailer, owner) }
+      ...(ready.counters && (deps.mailer || deps.ownerTelegram)
+        ? {
+            tierAlerts: tierAlertsFor(ready.counters, owner, {
+              ...(deps.mailer ? { mailer: deps.mailer } : {}),
+              ...(deps.ownerTelegram ? { telegram: deps.ownerTelegram } : {}),
+            }),
+          }
         : {}),
       ...(platformRuntime
         ? {
@@ -1453,32 +1465,61 @@ export function createSolutionsRouter(deps: SolutionsRouterDeps): Router {
   return router;
 }
 
+/** Сообщения владельцу в Telegram (telegram/bot.ts): только если аккаунт привязан и бот настроен. */
+export interface OwnerTelegram {
+  canNotify(userId: string): boolean;
+  /** Не дошло — исключение. */
+  notifyOwner(userId: string, text: string): Promise<void>;
+}
+
 /**
- * Письма владельцу об объёме тарифа (billing/tier-alerts.ts): «отправлено» хранится в счётчиках
- * платформы (переживает перезапуск), письмо — тем же почтовым ящиком, что и заявки.
+ * Предупреждения владельцу об объёме тарифа (billing/tier-alerts.ts): письмо — тем же почтовым
+ * ящиком, что и заявки, и сообщение в Telegram, если он привязан. «Отправлено» хранится в счётчиках
+ * платформы (переживает перезапуск), у каждого канала своя отметка.
  */
-function tierAlertsFor(
+export function tierAlertsFor(
   counters: CounterStore,
-  mailer: Mailer,
   owner: (ownerId: string) => BotOwner | null,
+  channels: { mailer?: Mailer; telegram?: OwnerTelegram },
 ): TierAlerts {
+  const links = () => ({
+    solutions: `${siteUrl()}/solutions`,
+    contacts: `${siteUrl()}/contacts?topic=payment`,
+  });
+  const list: TierAlertChannel[] = [];
+  const { mailer, telegram } = channels;
+  if (mailer) {
+    list.push({
+      name: 'email',
+      // Почта не настроена (production без SMTP) — отметку не ставим: письмо уйдёт, когда настроят.
+      available: (userId) => mailer.kind !== 'none' && Boolean(owner(userId)?.email),
+      send: async (userId, kind, decision) => {
+        const email = owner(userId)?.email;
+        if (!email) throw new Error('no owner email');
+        const mail = alertMail(kind, decision, links());
+        const escape = (value: string) =>
+          value.replace(/[&<>"]/g, (char) => `&#${char.charCodeAt(0)};`);
+        await mailer.send({
+          to: email,
+          subject: mail.subject,
+          text: mail.lines.join('\n'),
+          html: mail.lines.map((line) => (line ? `<p>${escape(line)}</p>` : '')).join(''),
+        });
+      },
+    });
+  }
+  if (telegram) {
+    list.push({
+      name: 'telegram',
+      available: (userId) => telegram.canNotify(userId),
+      send: async (userId, kind, decision) => {
+        await telegram.notifyOwner(userId, alertTelegramText(alertMail(kind, decision, links())));
+      },
+    });
+  }
   return new TierAlerts({
     claim: (key) => counters.claim(key),
-    send: async (userId, kind, decision) => {
-      const email = owner(userId)?.email;
-      if (!email) return;
-      const mail = alertMail(kind, decision, {
-        solutions: `${siteUrl()}/solutions`,
-        contacts: `${siteUrl()}/contacts?topic=payment`,
-      });
-      const escape = (value: string) =>
-        value.replace(/[&<>"]/g, (char) => `&#${char.charCodeAt(0)};`);
-      await mailer.send({
-        to: email,
-        subject: mail.subject,
-        text: mail.lines.join('\n'),
-        html: mail.lines.map((line) => (line ? `<p>${escape(line)}</p>` : '')).join(''),
-      });
-    },
+    release: (key) => counters.release(key),
+    channels: list,
   });
 }

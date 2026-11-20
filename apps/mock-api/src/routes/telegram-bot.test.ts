@@ -1675,3 +1675,22 @@ test('пакеты не продаются (задача 0b): в боте нет
   await h.message(7995, '/start');
   assert.doesNotMatch(String(h.bot.last('sendMessage')!.body.text), /кредит/i);
 });
+
+test('сообщение владельцу в Telegram: только при привязке; сбой Telegram — исключение', async (t) => {
+  const h = await harness();
+  t.after(() => h.server.close());
+  const { buyer } = await h.linkedBuyer(7996);
+  assert.equal(h.bot.canNotifyUser(buyer.user.id), true);
+  assert.equal(h.bot.canNotifyUser('no-such-user'), false);
+
+  await h.bot.notifyOwner(buyer.user.id, '<b>Ketner: использовано 80%</b>');
+  const sent = h.bot.last('sendMessage')!;
+  assert.equal(String(sent.body.chat_id), '7996');
+  assert.equal(sent.body.text, '<b>Ketner: использовано 80%</b>');
+
+  await assert.rejects(() => h.bot.notifyOwner('no-such-user', 'x'), /не привязан/);
+
+  // Telegram ответил ошибкой (callApi вернул null) — исключение, чтобы предупреждение повторилось.
+  h.bot.callApi = async <T>() => null as T | null;
+  await assert.rejects(() => h.bot.notifyOwner(buyer.user.id, 'x'), /не принял/);
+});

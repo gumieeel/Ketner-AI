@@ -143,6 +143,7 @@ test('бесплатный лимит: база недоступна — шаг 
     },
     spent: async () => ({}),
     claim: async () => false,
+    release: async () => undefined,
     purge: async () => 0,
   };
   const allowance = new BuildAllowance({
@@ -219,6 +220,9 @@ test('счётчики в Postgres: отметка сигнала одна на 
   ]);
   assert.deepEqual(claims.filter(Boolean).length, 1);
   assert.equal(await store.claim('service-day-alert:2026-11-15'), false);
+  // Снятая отметка (действие не удалось) ставится снова.
+  await store.release('service-day-alert:2026-11-15');
+  assert.equal(await store.claim('service-day-alert:2026-11-15'), true);
   // Письма владельцу об объёме тарифа (billing/tier-alerts.ts): живут, как месячные строки.
   assert.equal(await store.claim('tier-alert:u1:2025-09-01:warning'), true);
   assert.equal(await store.claim('tier-alert:u1:2026-12-01:warning'), true);
