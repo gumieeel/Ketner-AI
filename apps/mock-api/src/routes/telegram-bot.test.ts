@@ -957,8 +957,15 @@ test('бот: /start ведёт в кабинет, /paysupport и /terms объ�
     /в течение 14 дней, пока ни один кредит пакета не потрачен/,
   );
   await h.message(7901, '/terms');
-  assert.match(String(h.bot.last('sendMessage')!.body.text), /оплата не возвращается/);
-  assert.match(String(h.bot.last('sendMessage')!.body.text), /Пробные кредиты расходуются первыми/);
+  const terms = String(h.bot.last('sendMessage')!.body.text);
+  assert.match(terms, /оплата не возвращается/);
+  assert.match(terms, /Пробные кредиты расходуются первыми/);
+  // Задача 0b: тарифы вместо пакетов; условия возврата — для пакетов, купленных раньше.
+  assert.match(terms, /Start \$10, Growth \$29, Business \$89, Scale \$235 в месяц/);
+  assert.match(terms, /Автоматических списаний нет/);
+  assert.match(terms, /Пакеты кредитов больше не продаются/);
+  assert.match(terms, /Возвраты за пакеты кредитов/);
+  assert.doesNotMatch(terms, /покупаются пакетами|\+15%|Ketner Code открыты/);
 });
 
 test('напоминания: с автопродлением — о списании, отключённые — не приходят', async (t) => {

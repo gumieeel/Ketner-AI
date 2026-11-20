@@ -83,8 +83,8 @@ describe('правовые страницы и контакты', () => {
   });
 
   it.each([
-    ['/privacy', 'Privacy Policy', 'November 1, 2026'],
-    ['/terms', 'Terms of Service and Public Offer', 'November 1, 2026'],
+    ['/privacy', 'Privacy Policy', 'November 20, 2026'],
+    ['/terms', 'Terms of Service and Public Offer', 'November 20, 2026'],
     ['/payment-terms', 'Payments and Refunds', 'November 20, 2026'],
   ])('%s на английском: заголовок, дата редакции и навигация переведены', (path, title, date) => {
     usePreferences.setState({ language: 'en' });
@@ -122,6 +122,46 @@ describe('правовые страницы и контакты', () => {
     expect(screen.getByText(/Пакеты кредитов больше не продаются/)).toBeInTheDocument();
     // Прежний способ оплаты пакета как действующий на странице не описан.
     expect(screen.queryByText(/на странице оформления пакета/)).not.toBeInTheDocument();
+  });
+
+  it('соглашение: раздел 3 — тарифы и бесплатный лимит, пакеты и подписки больше не продаются', () => {
+    const terms = getLegalDocument('terms', 'ru');
+    const text = (section: number) => {
+      const found = terms.sections[section - 1]!;
+      return [found.title, ...(found.paragraphs ?? []), ...(found.items ?? [])].join(' ');
+    };
+    expect(terms.lead).toMatch(/подключая тариф/);
+    expect(text(1)).toMatch(/Пакеты кредитов и подписки больше не продаются/);
+    expect(text(3)).toMatch(/^3\. Тарифы и бесплатный лимит/);
+    expect(text(3)).toMatch(/Автоматических списаний нет/);
+    expect(text(3)).toMatch(/80% объёма тарифа.*ещё 10%/);
+    expect(text(3)).toMatch(/Кредиты пакетов, купленных до 20 ноября 2026 г\., действуют 365 дней/);
+    expect(text(3)).not.toMatch(/странице «Кредиты»/);
+    // Возврат за тариф — только по странице «Оплата и возврат» (сбои и двойные списания).
+    expect(text(7)).toMatch(/возврат за тариф — по правилам страницы «Оплата и возврат»/);
+    expect(text(9)).toMatch(/за тариф — как при сбое/);
+    expect(getLegalDocument('terms', 'en').sections[2]!.title).toBe(
+      '3. Plans and the free allowance',
+    );
+  });
+
+  it('политика: Google Таблицы — по запросу владельца, drive.file, действует с запуском возможности', () => {
+    for (const language of ['ru', 'en'] as const) {
+      const doc = getLegalDocument('privacy', language);
+      const text = doc.sections
+        .flatMap((section) => [...(section.paragraphs ?? []), ...(section.items ?? [])])
+        .join(' ');
+      expect(text).toMatch(/drive\.file/);
+      expect(text).toMatch(/Limited Use/);
+      expect(text).not.toMatch(
+        /Without purchased credits \(the Free level\)|Без купленных кредитов \(уровень Free\) и после/,
+      );
+    }
+    const ru = getLegalDocument('privacy', 'ru')
+      .sections.flatMap((section) => section.items ?? [])
+      .join(' ');
+    expect(ru).toMatch(/Возможность появится позже: этот пункт начнёт действовать с её запуском/);
+    expect(ru).toMatch(/тариф \(или пакет кредитов — для покупок до 20 ноября 2026 г\.\)/);
   });
 
   it('условия возврата на английском называют окно в 14 дней и право отказа по закону', () => {
