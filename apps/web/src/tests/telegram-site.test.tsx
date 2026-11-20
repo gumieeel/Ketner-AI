@@ -32,6 +32,22 @@ function withTelegram(handler: Handler) {
   return calls;
 }
 
+/**
+ * Опрос бота запускается в эффекте после того, как появилась ссылка «Открыть Telegram». Под
+ * нагрузкой (CI) ссылка уже видна, а эффект ещё не выполнился: сдвиг подставных часов до этого
+ * ничего не запускает, и тест ждёт впустую. Сначала дожидаемся обоих интервалов окна — секундного
+ * счётчика и опроса.
+ */
+async function pollingStarted(): Promise<void> {
+  // waitFor здесь не годится: он сам опрашивает через setInterval, а тот подменён.
+  for (let attempt = 0; attempt < 200 && vi.getTimerCount() < 2; attempt += 1) {
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    });
+  }
+  expect(vi.getTimerCount()).toBe(2);
+}
+
 describe('привязка Telegram на сайте (входа через Telegram нет)', () => {
   beforeEach(() => {
     resetPreferences();
@@ -76,6 +92,7 @@ describe('привязка Telegram на сайте (входа через Teleg
     expect(screen.getByRole('img', { name: /QR/ })).toBeInTheDocument();
     expect(screen.getByText('Ждём подтверждения в Telegram…')).toBeInTheDocument();
 
+    await pollingStarted();
     await act(async () => {
       vi.advanceTimersByTime(2000);
     });
@@ -105,6 +122,7 @@ describe('привязка Telegram на сайте (входа через Teleg
     });
     render(<TelegramAuthDialog token="session-token" onClose={() => undefined} />);
     await screen.findByRole('link', { name: /Открыть Telegram/ });
+    await pollingStarted();
     await act(async () => {
       vi.advanceTimersByTime(2000);
     });
