@@ -2494,6 +2494,15 @@ export const en: Record<TranslationKey, string> = {
     'The page starts working once the bot is on. Before that, try it “as a customer” and run the test cases.',
   'builder.bot.share.paused':
     'The bot is off: the page opens, but instead of replies it offers to leave a contact.',
+  'builder.bot.tier.warning':
+    '{percent}% of the {tier} plan requests are used. Another 10% is free, up to {limit}; after that, until {date}, the bot only takes requests.',
+  'builder.bot.tier.grace':
+    'The plan volume is used up; grace requests continue up to {limit}. After that, until {date}, the bot only takes requests.',
+  'builder.bot.tier.leadsOnly':
+    'The bot only takes requests until {date}: the plan volume and the 10% grace are used up. Answers resume with the new month.',
+  'builder.bot.tier.noTier':
+    'No plan is assigned: the bot does not answer with AI and takes requests instead.',
+  'builder.bot.tier.contact': 'Write to us',
   'builder.bot.requests': 'Visitor requests this month: {used} of {included}',
   'builder.bot.today.title': 'Today',
   'builder.bot.today.replies': 'Replies',
