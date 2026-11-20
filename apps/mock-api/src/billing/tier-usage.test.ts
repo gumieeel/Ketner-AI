@@ -8,9 +8,9 @@ import { TIER_ENFORCED, TierUsage, decide, tierEnforced, wouldLimit } from './ti
 
 const END = '2026-12-01T00:00:00.000Z';
 
-test('P3 выходит с выключенными тарифами (решение владельца 15.11.2026)', () => {
-  assert.equal(TIER_ENFORCED, false);
-  assert.equal(tierEnforced(), false);
+test('тарифы включены (решение владельца 19.11.2026: до 24.11.2026)', () => {
+  assert.equal(TIER_ENFORCED, true);
+  assert.equal(tierEnforced(), true);
 });
 
 test('решение: без тарифа — только форма; с тарифом — ответ до 110%, дальше режим заявок', () => {
