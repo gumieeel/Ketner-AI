@@ -285,6 +285,20 @@ async function botContract(store: BuilderStore): Promise<void> {
     { question: 'q', answer: 'a' },
   ]);
 
+  // Опубликованные боты всех аккаунтов (сводка тарифов): черновик и пауза — не в списке.
+  assert.deepEqual(await store.listPublishedBots(), []);
+  const draft = (await store.getSolution('alice', 'b1'))!;
+  const live = await store.updateSolution(
+    { ...draft, status: 'active', activeVersion: 1 },
+    draft.version,
+  );
+  assert.deepEqual(await store.listPublishedBots(), [
+    { ownerId: 'alice', solutionId: 'b1', name: 'Бот b1', slug: 'lisa' },
+  ]);
+  const paused = await store.updateSolution({ ...live!, status: 'paused' }, live!.version);
+  assert.deepEqual(await store.listPublishedBots(), []);
+  await store.updateSolution({ ...paused!, status: 'active' }, paused!.version);
+
   // Диалоги и сообщения.
   await store.createConversation({
     id: 'c1',

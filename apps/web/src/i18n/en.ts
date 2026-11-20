@@ -104,6 +104,9 @@ export const en: Record<TranslationKey, string> = {
   'pricing.tier.solutions.few': '{count} active solutions',
   'pricing.tier.solutions.many': '{count} active solutions',
   'pricing.tier.requests': 'Up to {count} requests a month',
+  'pricing.tier.servicesLater': 'Connections to external services (up to {count}) — coming later',
+  'pricing.terms.serviceTextLater':
+    'A connection to a system outside Ketner with your credentials: CRM, spreadsheets, email. These connections are not available yet and are coming later; for now the Ketner team builds integrations.',
   'pricing.tier.noServices': 'No external services',
   'pricing.tier.services.one': '{count} external service',
   'pricing.tier.services.few': '{count} external services',

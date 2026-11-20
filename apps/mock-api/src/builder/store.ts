@@ -19,6 +19,14 @@ import type {
   TestRun,
 } from './types.js';
 
+/** Опубликованный бот: чей, какой и по какому адресу. */
+export interface PublishedBot {
+  ownerId: string;
+  solutionId: string;
+  name: string;
+  slug: string;
+}
+
 export interface BuilderStore {
   createSolution(solution: Solution, version: SolutionVersion, cases: TestCase[]): Promise<void>;
   getSolution(ownerId: string, id: string): Promise<Solution | null>;
@@ -52,6 +60,11 @@ export interface BuilderStore {
   // ─── Бот для клиентов (этап B) ─────────────────────────────────────────────
   /** Бот по адресу страницы — без владельца: публичная страница бота. */
   getSolutionBySlug(slug: string): Promise<Solution | null>;
+  /**
+   * Опубликованные боты всех аккаунтов: страница бота отвечает посетителям (тип customer_bot,
+   * статус active, есть включённая версия). Для сводки тарифов администратора.
+   */
+  listPublishedBots(): Promise<PublishedBot[]>;
   slugTaken(slug: string): Promise<boolean>;
   createConversation(conversation: BotConversation): Promise<void>;
   /** Диалог этого бота (публичная сторона знает только бот и id диалога). */
@@ -277,6 +290,24 @@ export class MemoryBuilderStore implements BuilderStore {
 
   async slugTaken(slug: string) {
     return [...this.solutions.values()].some((item) => item.bot?.slug === slug);
+  }
+
+  async listPublishedBots(): Promise<PublishedBot[]> {
+    return [...this.solutions.values()]
+      .filter(
+        (item) =>
+          item.type === 'customer_bot' &&
+          item.status === 'active' &&
+          item.activeVersion !== null &&
+          item.bot,
+      )
+      .map((item) => ({
+        ownerId: item.ownerId,
+        solutionId: item.id,
+        name: item.name,
+        slug: item.bot!.slug,
+      }))
+      .sort((a, b) => a.ownerId.localeCompare(b.ownerId) || a.slug.localeCompare(b.slug));
   }
 
   async createConversation(conversation: BotConversation) {
@@ -913,6 +944,26 @@ export class PostgresBuilderStore implements BuilderStore {
       slug,
     ]);
     return rows.length > 0;
+  }
+
+  async listPublishedBots(): Promise<PublishedBot[]> {
+    const rows = await this.db.query<{
+      id: string;
+      user_id: string;
+      name: string;
+      slug: string;
+    }>(
+      `SELECT id, user_id, name, slug FROM solutions
+       WHERE type = 'customer_bot' AND status = 'active' AND active_version IS NOT NULL
+         AND slug IS NOT NULL
+       ORDER BY user_id, slug`,
+    );
+    return rows.map((row) => ({
+      ownerId: row.user_id,
+      solutionId: row.id,
+      name: row.name,
+      slug: row.slug,
+    }));
   }
 
   async createConversation(conversation: BotConversation) {

@@ -352,6 +352,9 @@ export function createApiRouter(deps: ApiDeps): Router {
   const tierUsage = new TierUsage({
     tiers: activeAccountTiers,
     journal: () => (deps.discovery?.stores?.() ?? getDiscoveryStores())?.journal ?? null,
+    publishedBots: async () =>
+      (await (deps.discovery?.stores?.() ?? getDiscoveryStores())?.builder?.listPublishedBots()) ??
+      [],
   });
   // Бесплатный лимит создания и проверки (P2): один на сервер — Builder, анализы и администратор.
   // Бюджет сервиса прошёл 80% за сутки — сигнал администраторам (раз в сутки) и строка в логе.
