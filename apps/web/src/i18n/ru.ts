@@ -2711,9 +2711,9 @@ export const ru = {
   'contacts.topicIdeaHint': 'Чего не хватает в Ketner AI',
   'contacts.topicIdeaPlaceholder': 'Какую задачу хотите решить и как это могло бы работать.',
   'contacts.topicPayment': 'Оплата и возврат',
-  'contacts.topicPaymentHint': 'Счёт, кредиты, возврат',
+  'contacts.topicPaymentHint': 'Подключить тариф, счёт, возврат',
   'contacts.topicPaymentPlaceholder':
-    'Почта аккаунта, пакет кредитов, способ и время оплаты. Номер карты не присылайте.',
+    'Почта аккаунта и что нужно: подключить тариф (какой), вопрос по счёту или возврат за пакет (способ и время оплаты). Номер карты не присылайте.',
   'contacts.topicOther': 'Другое',
   'contacts.topicOtherHint': 'Вопрос, данные, сотрудничество',
   'contacts.name': 'Имя',

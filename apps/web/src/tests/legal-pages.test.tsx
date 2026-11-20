@@ -7,6 +7,7 @@ import {
   type LegalPageId,
 } from '@/features/content/legal';
 import { KNOWN_ISSUES } from '@/features/content/known-issues';
+import { TIERS } from '@/features/billing/tiers';
 import { usePreferences } from '@/features/preferences/preferences-store';
 import { installFakeApi } from './fake-api';
 import { renderRoute, resetAuth, resetChat, resetPreferences } from './test-utils';
@@ -82,14 +83,14 @@ describe('правовые страницы и контакты', () => {
   });
 
   it.each([
-    ['/privacy', 'Privacy Policy'],
-    ['/terms', 'Terms of Service and Public Offer'],
-    ['/payment-terms', 'Payments and Refunds'],
-  ])('%s на английском: заголовок, дата редакции и навигация переведены', (path, title) => {
+    ['/privacy', 'Privacy Policy', 'November 1, 2026'],
+    ['/terms', 'Terms of Service and Public Offer', 'November 1, 2026'],
+    ['/payment-terms', 'Payments and Refunds', 'November 20, 2026'],
+  ])('%s на английском: заголовок, дата редакции и навигация переведены', (path, title, date) => {
     usePreferences.setState({ language: 'en' });
     renderRoute(path);
     expect(screen.getByRole('heading', { level: 1, name: title })).toBeInTheDocument();
-    expect(screen.getByText('Last updated: November 1, 2026')).toBeInTheDocument();
+    expect(screen.getByText(`Last updated: ${date}`)).toBeInTheDocument();
     const nav = screen.getByRole('navigation', { name: 'Legal information' });
     expect(within(nav).getByRole('link', { name: 'Contacts' })).toBeInTheDocument();
     expect(screen.getByText('Questions:')).toBeInTheDocument();
@@ -103,6 +104,24 @@ describe('правовые страницы и контакты', () => {
     expect(
       screen.getByText(/Комиссию сети за возвратный перевод мы берём на себя/),
     ).toBeInTheDocument();
+  });
+
+  it('оплата и возврат: тарифы из каталога, подключение командой, без автосписаний, пакеты не продаются', () => {
+    renderRoute('/payment-terms');
+    for (const tier of TIERS) {
+      expect(
+        screen.getByText((text) => text.startsWith(`${tier.name} — $${tier.priceUsd} в месяц`)),
+      ).toBeInTheDocument();
+    }
+    expect(screen.getByText(/Start — \$10 в месяц: 1 активное решение/)).toBeInTheDocument();
+    expect(screen.getByText(/Growth — \$29 в месяц: 3 активных решения/)).toBeInTheDocument();
+    expect(
+      screen.getByText(/Оплаты тарифа на сайте пока нет\. Тариф подключает команда Ketner/),
+    ).toBeInTheDocument();
+    expect(screen.getByText(/Автоматических списаний нет/)).toBeInTheDocument();
+    expect(screen.getByText(/Пакеты кредитов больше не продаются/)).toBeInTheDocument();
+    // Прежний способ оплаты пакета как действующий на странице не описан.
+    expect(screen.queryByText(/на странице оформления пакета/)).not.toBeInTheDocument();
   });
 
   it('условия возврата на английском называют окно в 14 дней и право отказа по закону', () => {
