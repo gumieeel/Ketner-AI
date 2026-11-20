@@ -22,6 +22,7 @@ import {
   type SolutionDetails,
 } from '@/features/builder/api';
 import { creditsText } from '@/features/discovery/format';
+import { TIERS } from '@/features/billing/tiers';
 import { useTranslation } from '@/i18n';
 import { cn } from '@/lib/cn';
 import { formatDateTime } from '@/lib/format-date';
@@ -163,8 +164,69 @@ function ShareSection({
           })}
         </p>
       ) : null}
+      {overview.requests ? <TierUsageNotice requests={overview.requests} /> : null}
       <RunwayNote runway={overview.balance} />
     </Section>
+  );
+}
+
+/**
+ * Предупреждение об объёме тарифа (раздел 3 docs/SUBSCRIPTION_PRICING_DESIGN.md): при 80%, в
+ * льготном объёме, в режиме заявок и без тарифа. Только при включённых тарифах — до этого
+ * ограничений нет. Письмо о 80% и о режиме заявок уходит владельцу отдельно (billing/tier-alerts.ts).
+ */
+export function TierUsageNotice({ requests }: { requests: NonNullable<BotOverview['requests']> }) {
+  const translator = useTranslation();
+  const { t, language } = translator;
+  if (!requests.enforced) return null;
+  const locale = language === 'en' ? 'en-US' : 'ru-RU';
+  const number = (value: number) => value.toLocaleString(locale);
+  const lastDay = new Date(Date.parse(requests.periodEnd) - 86_400_000).toLocaleDateString(locale, {
+    day: 'numeric',
+    month: 'long',
+    timeZone: 'UTC',
+  });
+  const tier = TIERS.find((item) => item.id === requests.tier);
+  let text: string | null = null;
+  let danger = false;
+  if (requests.state === 'no_tier') {
+    text = t('builder.bot.tier.noTier');
+    danger = true;
+  } else if (requests.state === 'leads_only') {
+    text = t('builder.bot.tier.leadsOnly', { date: lastDay });
+    danger = true;
+  } else if (requests.state === 'grace' && requests.limit !== null) {
+    text = t('builder.bot.tier.grace', { limit: number(requests.limit), date: lastDay });
+  } else if (requests.state === 'warning' && requests.included) {
+    text = t('builder.bot.tier.warning', {
+      percent: Math.floor((requests.used / requests.included) * 100),
+      tier: tier?.name ?? '',
+      limit: number(requests.limit ?? requests.included),
+      date: lastDay,
+    });
+  }
+  if (!text) return null;
+  return (
+    <div
+      role="status"
+      data-testid="tier-usage-notice"
+      className={cn(
+        'mt-3 flex flex-col gap-2 rounded-xl border px-4 py-3 sm:flex-row sm:items-center sm:justify-between',
+        danger ? 'border-danger/30 bg-danger-soft' : 'border-warning/40 bg-warning-soft',
+      )}
+    >
+      <p className="text-[14px] leading-6 text-text">{text}</p>
+      <Link
+        to="/contacts?topic=payment"
+        className={buttonClasses({
+          variant: danger ? 'primary' : 'outline',
+          size: 'sm',
+          className: 'shrink-0 self-start sm:self-auto',
+        })}
+      >
+        {t('builder.bot.tier.contact')}
+      </Link>
+    </div>
   );
 }
 

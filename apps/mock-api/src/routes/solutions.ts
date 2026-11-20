@@ -103,6 +103,8 @@ import {
 } from '../billing/account-tiers.js';
 import type { TierUsage } from '../billing/tier-usage.js';
 import { startCounterCleanup } from '../billing/cost-counters.js';
+import { alertMail, TierAlerts } from '../billing/tier-alerts.js';
+import type { CounterStore } from '../billing/cost-counters.js';
 
 /** Потолок резерва одного ответа в чате владельца со своим помощником, $ (расчёт — по факту). */
 const ASSISTANT_CHAT_CAP_USD = 0.05;
@@ -220,6 +222,9 @@ export function createBuilderRuntime(deps: SolutionsRouterDeps): BuilderRuntime 
       balanceUsd,
       owner,
       ...(deps.tierUsage ? { tierUsage: deps.tierUsage } : {}),
+      ...(ready.counters && deps.mailer
+        ? { tierAlerts: tierAlertsFor(ready.counters, deps.mailer, owner) }
+        : {}),
       ...(platformRuntime
         ? {
             platform: {
@@ -1471,4 +1476,34 @@ export function createSolutionsRouter(deps: SolutionsRouterDeps): Router {
   );
 
   return router;
+}
+
+/**
+ * Письма владельцу об объёме тарифа (billing/tier-alerts.ts): «отправлено» хранится в счётчиках
+ * платформы (переживает перезапуск), письмо — тем же почтовым ящиком, что и заявки.
+ */
+function tierAlertsFor(
+  counters: CounterStore,
+  mailer: Mailer,
+  owner: (ownerId: string) => BotOwner | null,
+): TierAlerts {
+  return new TierAlerts({
+    claim: (key) => counters.claim(key),
+    send: async (userId, kind, decision) => {
+      const email = owner(userId)?.email;
+      if (!email) return;
+      const mail = alertMail(kind, decision, {
+        solutions: `${siteUrl()}/solutions`,
+        contacts: `${siteUrl()}/contacts?topic=payment`,
+      });
+      const escape = (value: string) =>
+        value.replace(/[&<>"]/g, (char) => `&#${char.charCodeAt(0)};`);
+      await mailer.send({
+        to: email,
+        subject: mail.subject,
+        text: mail.lines.join('\n'),
+        html: mail.lines.map((line) => (line ? `<p>${escape(line)}</p>` : '')).join(''),
+      });
+    },
+  });
 }
