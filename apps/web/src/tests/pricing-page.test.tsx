@@ -36,9 +36,15 @@ describe('страница «Тарифы»', () => {
     expect(start).toHaveTextContent('Установка кнопки на сайт командой Ketner');
     const growth = screen.getByTestId('tier-growth');
     expect(growth).toHaveTextContent('3 активных решения');
-    expect(growth).toHaveTextContent('2 внешних сервиса');
+    // Подключений к внешним сервисам ещё нет (этап F): число — только как «появятся позже».
+    expect(growth).toHaveTextContent('Подключения к внешним сервисам (до 2) — появятся позже');
+    expect(growth).not.toHaveTextContent('2 внешних сервиса');
     expect(growth).toHaveTextContent('2 ч помощи с подключением в месяц');
-    expect(screen.getByTestId('tier-business')).toHaveTextContent('5 внешних сервисов');
+    expect(screen.getByTestId('tier-business')).toHaveTextContent(
+      'Подключения к внешним сервисам (до 5) — появятся позже',
+    );
+    expect(document.body.textContent).not.toMatch(/\d+ внешн(ий|их) сервис/);
+    expect(document.body.textContent).toMatch(/Таких подключений пока нет — они появятся позже/);
   });
 
   it('бесплатно — анализ, создание и проверка; правила объёма — из каталога тарифов', () => {
