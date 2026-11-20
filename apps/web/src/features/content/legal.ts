@@ -13,8 +13,9 @@ export const SUPPORT_EMAIL = 'ketner.support@gmail.com';
 
 /** Дата редакции каждого документа (ISO). Дату для sitemap берёт entry-prerender.tsx. */
 export const LEGAL_UPDATED: Record<LegalPageId, string> = {
-  privacy: '2026-11-01',
-  terms: '2026-11-01',
+  // Тарифы вместо кредитов (задача 0b): соглашение и политика — 20.11.2026.
+  privacy: '2026-11-20',
+  terms: '2026-11-20',
   // Тарифы вместо пакетов кредитов (задача 0b).
   'payment-terms': '2026-11-20',
 };
@@ -31,7 +32,6 @@ export const OPERATOR: { name: string; country: string } = { name: '', country: 
 
 // Срок кредитов и бонус за криптовалюту берутся из plan-facts.json: его сверяет с сервером тест.
 const VALID_DAYS = planFacts.packValidDays;
-const TRIAL_DAYS = planFacts.trial.days;
 const WARN_PERCENT = Math.round(TIER_WARN_RATE * 100);
 const GRACE_PERCENT = Math.round(TIER_GRACE_RATE * 100);
 
@@ -110,8 +110,9 @@ const RU: Record<LegalPageId, LegalContent> = {
           'Данные аккаунта: имя, адрес электронной почты, пароль (хранится только в виде необратимого хеша). При входе через Google или GitHub — имя и почта из этого сервиса.',
           'Данные Telegram, если вы входите через бота или привязываете его: числовой идентификатор чата, имя и @username.',
           'Содержимое работы: ваши сообщения и ответы моделей, вложения, проекты в разделе «Код» и картинки в разделе «Изображения» (подробнее — в разделе 4).',
+          'Данные решений: описание бизнеса и ответы в анализе, настройки и материалы помощников и ботов, переписка ботов с вашими клиентами и заявки, которые клиенты оставляют (имя, контакт, вопрос). Данные своих клиентов, которые получают ваши боты, мы обрабатываем по вашему поручению — чтобы бот работал и заявки доходили до вас.',
           'Сведения об использовании: какие модели вы выбирали, число запросов и токенов, стоимость и время запросов — для лимитов, учёта расходов и защиты от злоупотреблений.',
-          'Платёжные данные: пакет кредитов, сумма, способ и время оплаты, идентификатор счёта у платёжного провайдера (подробнее — в разделе 6).',
+          'Платёжные данные: тариф (или пакет кредитов — для покупок до 20 ноября 2026 г.), сумма, способ и время оплаты, идентификатор счёта у платёжного провайдера (подробнее — в разделе 6).',
           'Технические данные: IP-адрес, тип браузера и устройства, журналы ошибок.',
           'Источник перехода: рекламные метки (utm) из ссылки, по которой вы впервые пришли на сайт, — чтобы понимать, какая реклама работает.',
           'Обращения в поддержку: тема, имя, почта и текст сообщения, которые вы отправляете через форму или в бота.',
@@ -133,7 +134,7 @@ const RU: Record<LegalPageId, LegalContent> = {
           'Если вы привязываете папку или репозиторий, модели передаются нужные для ответа файлы, но в истории чата сохраняется только список файлов, а не их содержимое.',
           'Проекты Ketner Code (файлы, которые вы импортировали или создали) хранятся в базе, пока вы их не удалите.',
           'Сгенерированные картинки хранятся в базе — не больше 300 последних на аккаунт, более старые удаляются. Любую картинку можно удалить самому в разделе «Изображения».',
-          'Чтобы не платить дважды за одинаковый вопрос, ответы на запросы без вложений кэшируются на 24 часа. Пока на балансе есть купленные кредиты, кэш у каждого пользователя свой. Без купленных кредитов (уровень Free) кэш общий: если другой человек задаст такой же вопрос, он может получить тот же ответ. Не пишите без купленных кредитов того, что не хотели бы показать другим.',
+          'Чат с моделями сейчас закрыт. Пока он работал, ответы на запросы без вложений кэшировались на 24 часа: у покупателей кредитов — у каждого свой кэш, без купленных кредитов — общий (другой человек с таким же вопросом мог получить тот же ответ). Новые ответы в кэш сейчас не попадают.',
         ],
       },
       {
@@ -142,13 +143,13 @@ const RU: Record<LegalPageId, LegalContent> = {
           'Ketner AI не обучает собственных моделей. Чтобы получить ответ, мы передаём текст вашего запроса, историю диалога и текст из вложений выбранной модели стороннего разработчика (OpenAI, Anthropic, Google, xAI, DeepSeek и других) через сервис OpenRouter. Какая модель отвечает и кто её разработал — на странице «Модели».',
           'Описание картинки, которую вы просите нарисовать, проверяется лёгкой моделью через OpenRouter и передаётся сервису генерации (Cloudflare, Runware или OpenRouter). Изображения из вложений моделям пока не передаются.',
           'Мы не используем ваши запросы, ответы и файлы для обучения моделей и не продаём их. Как долго запрос хранится у OpenRouter и у разработчика модели и может ли он использоваться для обучения, определяют их собственные политики.',
-          'Без купленных кредитов (уровень Free) и после того, как кредиты кончились, отвечают бесплатные версии моделей. Поставщики бесплатных версий могут сохранять запросы и использовать их для улучшения своих моделей. Не отправляйте в этом режиме пароли, персональные данные других людей и конфиденциальные документы.',
+          'Анализ, решения и боты работают на платных версиях моделей. Бесплатные версии отвечали в чате без купленных кредитов (сейчас чат закрыт); их поставщики могут сохранять запросы и использовать их для улучшения своих моделей.',
         ],
       },
       {
         title: '6. Платёжные данные',
         paragraphs: [
-          'Оплата проходит у платёжного провайдера: криптовалютой — через Trybit (оплата звёздами Telegram больше не принимается; по прежним платежам звёздами Telegram передаёт сведения для возвратов). Мы получаем от них только сведения о счёте: сумму, пакет, статус и идентификатор платежа. Номера банковских карт, данные кошельков и ключи мы не получаем и не храним.',
+          'Оплаты тарифа на сайте пока нет: способ оплаты согласуется, когда команда Ketner подключает тариф. Пакеты кредитов, купленные до 20 ноября 2026 г., оплачивались криптовалютой через Trybit или звёздами Telegram; по этим платежам провайдеры передают сведения для возвратов. От платёжных провайдеров мы получаем только сведения о счёте: сумму, тариф или пакет, статус и идентификатор платежа. Номера банковских карт, данные кошельков и ключи мы не получаем и не храним.',
           'Записи о платежах и возвратах хранятся дольше остальных данных — столько, сколько нужно для учёта, возвратов и требований закона.',
         ],
       },
@@ -158,12 +159,12 @@ const RU: Record<LegalPageId, LegalContent> = {
           'Для пользователей из ЕС, ЕЭЗ и Великобритании в скобках указано правовое основание обработки.',
         ],
         items: [
-          'Чтобы предоставлять Сервис: входить в аккаунт, отвечать на запросы, хранить историю чатов и проектов (исполнение договора с вами).',
-          'Чтобы принимать оплату, начислять кредиты и оформлять возвраты; для прежних подписок — продлевать и отменять их (исполнение договора; хранение платёжных записей — ещё и требование закона).',
-          'Чтобы применять лимиты, учитывать кредиты, предотвращать злоупотребления и обеспечивать безопасность (наш законный интерес — защитить сервис и других пользователей).',
-          'Чтобы отвечать на обращения и присылать служебные уведомления (квитанции, напоминания по прежним подпискам) — их можно отключить в кабинете Telegram (исполнение договора и наш законный интерес).',
+          'Чтобы предоставлять Сервис: входить в аккаунт, проводить анализ, создавать и запускать ваши решения, отвечать вашим клиентам от имени ваших ботов, хранить историю (исполнение договора с вами).',
+          'Чтобы принимать оплату тарифа и оформлять возвраты, в том числе за пакеты кредитов, купленные раньше; прежние подписки — доводить до конца оплаченного срока (исполнение договора; хранение платёжных записей — ещё и требование закона).',
+          'Чтобы применять лимиты, учитывать обращения по тарифу и бесплатный лимит, предотвращать злоупотребления и обеспечивать безопасность (наш законный интерес — защитить сервис и других пользователей).',
+          'Чтобы отвечать на обращения и присылать служебные уведомления: заявки от ваших ботов и предупреждения об объёме тарифа — на почту и в Telegram, если он привязан; квитанции и напоминания по прежним подпискам можно отключить в кабинете Telegram (исполнение договора и наш законный интерес).',
           'Чтобы улучшать Сервис: мы анализируем статистику использования и оценки ответов («нравится» и «не нравится»), а переписку открываем только для разбора обращения или сбоя (наш законный интерес).',
-          'Чтобы оценивать рекламу: сколько людей пришло по объявлению и сколько из них купили кредиты (наш законный интерес; о cookie — в разделе 12).',
+          'Чтобы оценивать рекламу: сколько людей пришло по объявлению и сколько из них стали клиентами (наш законный интерес; о cookie — в разделе 12).',
         ],
       },
       {
@@ -173,9 +174,10 @@ const RU: Record<LegalPageId, LegalContent> = {
         ],
         items: [
           'Поставщики моделей и инфраструктуры ИИ: OpenRouter и разработчики моделей, Cloudflare и Runware (картинки) — текст запроса и текст из вложений, чтобы получить ответ (раздел 5).',
-          'Платёжные провайдеры: Trybit (оплата криптовалютой) — сведения о счёте и пакете кредитов; Telegram — только по прежним платежам звёздами и их возвратам.',
+          'Платёжные провайдеры — по платежам, которые прошли через них: Trybit (криптовалюта) и Telegram (звёзды) — сведения о счёте и пакете по покупкам до 20 ноября 2026 г. и их возвратам.',
           'Хостинг и база данных: Render, Supabase, Cloudflare.',
-          'Google Ads: на сайте работает тег Google, который получает данные о посещении страниц, а после оплаты — сумму и пакет покупки (без имени и почты).',
+          'Google Ads: на сайте работает тег Google, который получает данные о посещении страниц, а после оплаты на сайте — сумму покупки (без имени и почты).',
+          'Google Таблицы — только если вы сами подключите свою таблицу: заявки ваших ботов (дата, бот, имя, контакт, вопрос и ссылка на диалог) записываются в таблицу в вашем Google Диске. Ketner получает доступ только к файлам, которые сам создал или которые вы выбрали (разрешение drive.file), хранит ключ доступа в зашифрованном виде, а отключить таблицу можно в любой момент. Данные из API Google используются по правилам Google API Services User Data Policy, включая требования Limited Use. Возможность появится позже: этот пункт начнёт действовать с её запуском, до этого данные в Google Таблицы не передаются.',
           'Вход через Google и GitHub — если вы выбрали этот способ.',
           'Государственные органы — только по законному требованию.',
         ],
@@ -234,12 +236,12 @@ const RU: Record<LegalPageId, LegalContent> = {
   },
   terms: {
     title: 'Пользовательское соглашение и оферта',
-    lead: 'Условия, на которых Ketner AI предоставляет доступ к сайту ketner.org и сопутствующим сервисам. Регистрируясь или оплачивая кредиты, вы принимаете эти условия.',
+    lead: 'Условия, на которых Ketner AI предоставляет доступ к сайту ketner.org и сопутствующим сервисам. Регистрируясь или подключая тариф, вы принимаете эти условия.',
     sections: [
       {
         title: '1. Что такое Ketner AI и кто его ведёт',
         paragraphs: [
-          'Ketner AI — онлайн-сервис решений для бизнеса на основе моделей искусственного интеллекта: анализ задачи, создание и проверка решений, боты и агенты, которые отвечают клиентам бизнеса. Работа моделей оплачивается кредитами: новому пользователю мы дарим пробные, остальные кредиты покупаются пакетами. Подписки не продаются. Чат с моделями, помощник для программирования («Код»), генерация изображений и API временно закрыты; ваши данные в них сохранены.',
+          'Ketner AI — онлайн-сервис решений для бизнеса на основе моделей искусственного интеллекта: анализ задачи, создание и проверка решений, боты и агенты, которые отвечают клиентам бизнеса. Анализ, создание и проверка бесплатны в пределах бесплатного лимита; платно — тариф на работающие решения (раздел 3). Пакеты кредитов и подписки больше не продаются. Чат с моделями, помощник для программирования («Код»), генерация изображений и API временно закрыты; ваши данные в них сохранены.',
           operatorParagraph('ru'),
         ],
       },
@@ -252,10 +254,13 @@ const RU: Record<LegalPageId, LegalContent> = {
         ],
       },
       {
-        title: '3. Кредиты',
+        title: '3. Тарифы и бесплатный лимит',
         paragraphs: [
-          `Кредиты покупаются пакетами, подписки нет. Состав пакетов, цены и лимиты указаны на странице «Кредиты» и могут обновляться; на уже купленные кредиты изменение цен не действует. Каждый запрос списывает кредиты по его стоимости. Купленные кредиты действуют ${VALID_DAYS} дней со дня покупки и по истечении срока сгорают, пробные кредиты — ${TRIAL_DAYS} дней. Кредиты нельзя обменять на деньги или передать другому пользователю. Подписки Plus, Pro и Ultra больше не продаются; оплаченный ранее период действует до конца.`,
-          'Кредиты зачисляются сразу после оплаты, и с этого момента вы можете ими пользоваться. Условия оплаты, возврата и отказа от договора — на странице «Оплата и возврат», они являются частью этого соглашения.',
+          'Анализ задачи, создание и проверка помощников и ботов бесплатны в пределах бесплатного лимита. Сколько лимита израсходовано и когда он обновится, видно в кабинете; размер лимита может меняться.',
+          'Платно — тариф на работающие решения: ботов и помощников, открытых вашим клиентам. Тариф действует на аккаунт и включает число активных решений и обращений в месяц. Состав тарифов и цены указаны на странице «Тарифы» и могут обновляться; на уже оплаченный период изменение цены не действует.',
+          `Оплаты тарифа на сайте пока нет: тариф подключает команда Ketner по вашей заявке, способ и срок оплаты согласуются при подключении. Автоматических списаний нет: тариф не продлевается и не меняется на более дорогой без вашего согласия. Когда обращений в месяце наберётся ${WARN_PERCENT}% объёма тарифа, мы предупредим; ещё ${GRACE_PERCENT}% сверх объёма — без доплаты; дальше до конца месяца боты не отвечают с помощью ИИ, а принимают заявки.`,
+          `Пакеты кредитов больше не продаются. Кредиты пакетов, купленных до 20 ноября 2026 г., действуют ${VALID_DAYS} дней со дня покупки и по истечении срока сгорают; их нельзя обменять на деньги или передать другому пользователю. Подписки Plus, Pro и Ultra больше не продаются; оплаченный ранее период действует до конца.`,
+          'Условия оплаты, возврата (в том числе за пакеты, купленные раньше) и отказа от договора — на странице «Оплата и возврат», они являются частью этого соглашения.',
         ],
       },
       {
@@ -284,7 +289,7 @@ const RU: Record<LegalPageId, LegalContent> = {
         title: '7. Доступность и изменения',
         paragraphs: [
           'Мы стараемся обеспечить бесперебойную работу, но не гарантируем её абсолютную непрерывность: возможны технические работы и сбои у внешних провайдеров. Набор моделей и функций может меняться.',
-          'Об изменениях этих условий, которые ухудшают ваше положение, мы сообщим на сайте или по почте не менее чем за 14 дней до вступления в силу. Если вы не согласны, перестаньте пользоваться Сервисом и напишите нам: мы вернём стоимость неиспользованных кредитов.',
+          'Об изменениях этих условий, которые ухудшают ваше положение, мы сообщим на сайте или по почте не менее чем за 14 дней до вступления в силу. Если вы не согласны, перестаньте пользоваться Сервисом и напишите нам: мы вернём стоимость неиспользованных кредитов из пакетов, купленных раньше; возврат за тариф — по правилам страницы «Оплата и возврат».',
         ],
       },
       {
@@ -297,7 +302,7 @@ const RU: Record<LegalPageId, LegalContent> = {
       {
         title: '9. Блокировка аккаунта',
         paragraphs: [
-          'За нарушение этих условий мы можем ограничить или заблокировать доступ. Если блокировка произошла без вашей вины, мы вернём оплату за неиспользованные кредиты.',
+          'За нарушение этих условий мы можем ограничить или заблокировать доступ. Если блокировка произошла без вашей вины, мы вернём оплату за неиспользованные кредиты из пакетов, купленных раньше, а за тариф — как при сбое (раздел 8 страницы «Оплата и возврат»).',
         ],
       },
       {
@@ -411,8 +416,9 @@ const EN: Record<LegalPageId, LegalContent> = {
           'Account data: name, email address, password (stored only as an irreversible hash). If you sign in with Google or GitHub, the name and email from that service.',
           'Telegram data, if you sign in through the bot or link it: numeric chat ID, name and @username.',
           'Your content: your messages and the models’ replies, attachments, projects in the Code section and pictures in the Images section (more in section 4).',
+          'Solution data: the business description and answers in an analysis, the settings and materials of assistants and bots, your bots’ conversations with your customers and the requests customers leave (name, contact, question). We process your customers’ data that your bots receive on your behalf — so the bot works and requests reach you.',
           'Usage data: which models you chose, the number of requests and tokens, request cost and time — for limits, cost accounting and abuse protection.',
-          'Payment data: credit pack, amount, method and time of payment, the invoice ID at the payment provider (more in section 6).',
+          'Payment data: the plan (or the credit pack, for purchases before November 20, 2026), amount, method and time of payment, the invoice ID at the payment provider (more in section 6).',
           'Technical data: IP address, browser and device type, error logs.',
           'Referral source: ad tags (utm) from the link you first came to the site through, so we can see which ads work.',
           'Support requests: the topic, name, email and text you send through the form or to the bot.',
@@ -434,7 +440,7 @@ const EN: Record<LegalPageId, LegalContent> = {
           'If you link a folder or repository, the files needed for the reply are passed to the model, but chat history keeps only the list of files, not their contents.',
           'Ketner Code projects (files you imported or created) are kept in the database until you delete them.',
           'Generated pictures are kept in the database — at most the latest 300 per account, older ones are deleted. You can delete any picture yourself in the Images section.',
-          'To avoid paying twice for the same question, replies to requests without attachments are cached for 24 hours. While you have purchased credits on your balance, each user has their own cache. Without purchased credits (the Free level) the cache is shared: if another person asks the same question, they may get the same answer. Do not write anything you would not want to show others when you have no purchased credits.',
+          'The model chat is closed for now. While it ran, replies to requests without attachments were cached for 24 hours: each credit buyer had their own cache, and without purchased credits the cache was shared (another person with the same question could get the same answer). No new replies go into the cache now.',
         ],
       },
       {
@@ -443,13 +449,13 @@ const EN: Record<LegalPageId, LegalContent> = {
           'Ketner AI does not train its own models. To get a reply we send the text of your request, the conversation history and the text from attachments to the selected third-party model (OpenAI, Anthropic, Google, xAI, DeepSeek and others) through the OpenRouter service. Which model answers and who developed it is shown on the Models page.',
           'The description of a picture you ask for is checked by a light model through OpenRouter and passed to the generation service (Cloudflare, Runware or OpenRouter). Images from attachments are not yet passed to models.',
           'We do not use your requests, replies or files to train models and we do not sell them. How long a request is kept at OpenRouter and at the model developer, and whether it may be used for training, is set by their own policies.',
-          'Without purchased credits (the Free level), and after your credits run out, free versions of models answer. The providers of free versions may keep requests and use them to improve their models. Do not send passwords, other people’s personal data or confidential documents in this mode.',
+          'Analyses, solutions and bots run on paid versions of models. Free versions answered in the chat without purchased credits (the chat is closed for now); their providers may keep requests and use them to improve their models.',
         ],
       },
       {
         title: '6. Payment data',
         paragraphs: [
-          'Payments are made with a payment provider: cryptocurrency through Trybit (Telegram Stars are no longer accepted; for earlier Stars payments Telegram passes the details needed for refunds). From them we receive only invoice details: the amount, the pack, the status and the payment ID. We do not receive or store bank card numbers, wallet data or keys.',
+          'Paying for a plan on the site is not available yet: the payment method is agreed when the Ketner team connects your plan. Credit packs bought before November 20, 2026 were paid in cryptocurrency through Trybit or in Telegram Stars; for those payments the providers pass the details needed for refunds. From payment providers we receive only invoice details: the amount, the plan or pack, the status and the payment ID. We do not receive or store bank card numbers, wallet data or keys.',
           'Records of payments and refunds are kept longer than other data — as long as needed for accounting, refunds and legal requirements.',
         ],
       },
@@ -459,12 +465,12 @@ const EN: Record<LegalPageId, LegalContent> = {
           'For users in the EU, EEA and UK, the legal basis for processing is given in brackets.',
         ],
         items: [
-          'To provide the Service: sign you in, answer requests, keep your chat and project history (performance of our contract with you).',
-          'To accept payment, credit your balance and process refunds; for former subscriptions, to renew and cancel them (performance of the contract; keeping payment records is also a legal requirement).',
-          'To apply limits, account for credits, prevent abuse and keep the Service secure (our legitimate interest in protecting the Service and other users).',
-          'To answer your requests and send service notices (receipts, reminders about former subscriptions) — you can turn these off in the Telegram account (performance of the contract and our legitimate interest).',
+          'To provide the Service: sign you in, run analyses, build and run your solutions, answer your customers on behalf of your bots, keep history (performance of our contract with you).',
+          'To accept payment for plans and process refunds, including for credit packs bought earlier; to run former subscriptions until the end of the paid period (performance of the contract; keeping payment records is also a legal requirement).',
+          'To apply limits, count plan requests and the free allowance, prevent abuse and keep the Service secure (our legitimate interest in protecting the Service and other users).',
+          'To answer your requests and send service notices: requests from your bots and plan volume warnings — by email and in Telegram if you linked it; receipts and reminders about former subscriptions can be turned off in the Telegram account (performance of the contract and our legitimate interest).',
           'To improve the Service: we analyse usage statistics and reply ratings (“like” and “dislike”), and we open conversations only to investigate a request or a failure (our legitimate interest).',
-          'To measure advertising: how many people came from an ad and how many of them bought credits (our legitimate interest; for cookies, see section 12).',
+          'To measure advertising: how many people came from an ad and how many of them became customers (our legitimate interest; for cookies, see section 12).',
         ],
       },
       {
@@ -474,9 +480,10 @@ const EN: Record<LegalPageId, LegalContent> = {
         ],
         items: [
           'Model and AI infrastructure providers: OpenRouter and model developers, Cloudflare and Runware (pictures) — the request text and the text from attachments, to get a reply (section 5).',
-          'Payment providers: Trybit (payment in cryptocurrency) — invoice and credit pack details; Telegram — only for earlier Stars payments and their refunds.',
+          'Payment providers, for payments made through them: Trybit (cryptocurrency) and Telegram (Stars) — invoice and pack details for purchases before November 20, 2026 and their refunds.',
           'Hosting and database: Render, Supabase, Cloudflare.',
-          'Google Ads: the site runs a Google tag that receives data about page visits and, after payment, the amount and pack purchased (without name or email).',
+          'Google Ads: the site runs a Google tag that receives data about page visits and, after a payment on the site, the purchase amount (without name or email).',
+          'Google Sheets — only if you connect your own sheet: your bots’ requests (date, bot, name, contact, question and a link to the conversation) are written to a sheet in your Google Drive. Ketner gets access only to files it created or that you picked (the drive.file permission), keeps the access key encrypted, and you can disconnect the sheet at any time. Data from Google APIs is used under the Google API Services User Data Policy, including the Limited Use requirements. This feature is coming later: this item takes effect when it launches, and until then no data is sent to Google Sheets.',
           'Sign-in with Google and GitHub — if you chose that method.',
           'Public authorities — only on a lawful request.',
         ],
@@ -535,12 +542,12 @@ const EN: Record<LegalPageId, LegalContent> = {
   },
   terms: {
     title: 'Terms of Service and Public Offer',
-    lead: 'The terms on which Ketner AI provides access to the ketner.org website and related services. By signing up or paying for credits you accept these terms.',
+    lead: 'The terms on which Ketner AI provides access to the ketner.org website and related services. By signing up or getting a plan you accept these terms.',
     sections: [
       {
         title: '1. What Ketner AI is and who runs it',
         paragraphs: [
-          'Ketner AI is an online service of solutions for businesses built on artificial intelligence models: analysing a task, building and testing solutions, and bots and agents that answer the business’s customers. Model work is paid for in credits: we give a new user trial credits, and further credits are bought in packs. Subscriptions are not sold. The model chat, the coding assistant (“Code”), image generation and the API are temporarily closed; your data in them is kept.',
+          'Ketner AI is an online service of solutions for businesses built on artificial intelligence models: analysing a task, building and testing solutions, and bots and agents that answer the business’s customers. Analysing, building and testing are free within the free allowance; you pay for a plan for working solutions (section 3). Credit packs and subscriptions are no longer sold. The model chat, the coding assistant (“Code”), image generation and the API are temporarily closed; your data in them is kept.',
           operatorParagraph('en'),
         ],
       },
@@ -553,10 +560,13 @@ const EN: Record<LegalPageId, LegalContent> = {
         ],
       },
       {
-        title: '3. Credits',
+        title: '3. Plans and the free allowance',
         paragraphs: [
-          `Credits are bought in packs; there is no subscription. The contents of packs, prices and limits are shown on the Credits page and may be updated; a price change does not affect credits you have already bought. Each request spends credits according to its cost. Purchased credits are valid for ${VALID_DAYS} days from the day of purchase and expire when that period ends; trial credits are valid for ${TRIAL_DAYS} days. Credits cannot be exchanged for money or transferred to another user. The Plus, Pro and Ultra subscriptions are no longer sold; a period paid earlier stays valid until it ends.`,
-          'Credits are added right after payment, and from that moment you can use them. The terms of payment, refunds and withdrawal from the contract are on the Payments and Refunds page and are part of this agreement.',
+          'Analysing a task and building and testing assistants and bots are free within the free allowance. How much of it is used and when it renews is shown in your account; the size of the allowance may change.',
+          'You pay for a plan for working solutions: the bots and assistants open to your customers. A plan applies to the account and includes a number of active solutions and requests per month. The plans and prices are shown on the Pricing page and may be updated; a price change does not affect a period already paid for.',
+          `Paying for a plan on the site is not available yet: the Ketner team connects a plan on your request, and the payment method and date are agreed when connecting. There are no automatic charges: a plan is not renewed or changed to a more expensive one without your consent. When the month’s requests reach ${WARN_PERCENT}% of the plan’s volume, we warn you; a further ${GRACE_PERCENT}% above the volume is free; after that, until the end of the month, bots do not answer with AI but take requests.`,
+          `Credit packs are no longer sold. Credits from packs bought before November 20, 2026 are valid for ${VALID_DAYS} days from the day of purchase and expire when that period ends; they cannot be exchanged for money or transferred to another user. The Plus, Pro and Ultra subscriptions are no longer sold; a period paid earlier stays valid until it ends.`,
+          'The terms of payment, refunds (including for packs bought earlier) and withdrawal from the contract are on the Payments and Refunds page and are part of this agreement.',
         ],
       },
       {
@@ -585,7 +595,7 @@ const EN: Record<LegalPageId, LegalContent> = {
         title: '7. Availability and changes',
         paragraphs: [
           'We try to keep the Service running without interruption but do not guarantee it is always available: maintenance and failures at external providers are possible. The set of models and features may change.',
-          'If we change these terms in a way that makes your position worse, we will tell you on the site or by email at least 14 days before the change takes effect. If you do not agree, stop using the Service and write to us: we will refund the value of your unused credits.',
+          'If we change these terms in a way that makes your position worse, we will tell you on the site or by email at least 14 days before the change takes effect. If you do not agree, stop using the Service and write to us: we will refund the value of your unused credits from packs bought earlier; refunds for a plan follow the Payments and Refunds page.',
         ],
       },
       {
@@ -598,7 +608,7 @@ const EN: Record<LegalPageId, LegalContent> = {
       {
         title: '9. Account suspension',
         paragraphs: [
-          'If you break these terms, we may restrict or block your access. If you are blocked through no fault of your own, we will refund the payment for unused credits.',
+          'If you break these terms, we may restrict or block your access. If you are blocked through no fault of your own, we will refund the payment for unused credits from packs bought earlier, and for a plan as for a failure (section 8 of the Payments and Refunds page).',
         ],
       },
       {
