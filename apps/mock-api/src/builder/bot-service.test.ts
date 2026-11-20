@@ -533,9 +533,18 @@ function alertsInMemory() {
       claimed.add(key);
       return true;
     },
-    send: async (userId, kind, decision) => {
-      sent.push({ userId, kind, used: decision.used });
+    release: async (key) => {
+      claimed.delete(key);
     },
+    channels: [
+      {
+        name: 'email',
+        available: () => true,
+        send: async (userId, kind, decision) => {
+          sent.push({ userId, kind, used: decision.used });
+        },
+      },
+    ],
     log: () => {},
   });
   return { alerts, sent };
@@ -606,7 +615,46 @@ test('тарифы выключены: писем об объёме нет, да
   assert.equal(sent.length, 0);
 });
 
-test('сбой письма об объёме не ломает ответ посетителю', async (t) => {
+test('сбой письма об объёме не ломает ответ посетителю; следующий ответ отправляет его снова', async (t) => {
+  setTierEnforcedForTests(true);
+  t.after(() => setTierEnforcedForTests(null));
+  const claimed = new Set<string>();
+  const logged: string[] = [];
+  let attempts = 0;
+  const flaky = new TierAlerts({
+    claim: async (key) => !claimed.has(key) && Boolean(claimed.add(key)),
+    release: async (key) => {
+      claimed.delete(key);
+    },
+    channels: [
+      {
+        name: 'email',
+        available: () => true,
+        send: async () => {
+          attempts += 1;
+          if (attempts === 1) throw new Error('smtp down');
+        },
+      },
+    ],
+    log: (line) => logged.push(line),
+  });
+  const at80 = tierUsageWith(() => 799);
+  await at80.tiers.set(OWNER.userId, 'start', 'admin');
+  const svc = await setup({ tierUsage: at80.usage, tierAlerts: flaky, balance: 0 });
+  const reply = await svc.service.send('lisa-shop', { visitorId: VISITOR, content: 'Цена?' });
+  await settle();
+  assert.ok(reply.ok && !reply.message.offerContact, 'посетитель получил ответ');
+  assert.equal(attempts, 1);
+  assert.equal(claimed.size, 0, 'отметка снята — письмо не потеряно');
+  assert.ok(logged.some((line) => /alert failed .*channel=email: smtp down/.test(line)));
+
+  await svc.service.send('lisa-shop', { visitorId: VISITOR, content: 'А доставка?' });
+  await settle();
+  assert.equal(attempts, 2, 'следующий ответ отправил письмо');
+  assert.equal(claimed.size, 1);
+});
+
+test('хранилище отметок недоступно: ответ посетителю не ломается, ошибка в логе', async (t) => {
   setTierEnforcedForTests(true);
   t.after(() => setTierEnforcedForTests(null));
   const errors: unknown[] = [];
@@ -615,16 +663,17 @@ test('сбой письма об объёме не ломает ответ по�
   t.after(() => {
     console.error = original;
   });
-  const failing = new TierAlerts({
-    claim: async () => true,
-    send: async () => {
-      throw new Error('smtp down');
+  const broken = new TierAlerts({
+    claim: async () => {
+      throw new Error('connection refused');
     },
+    release: async () => undefined,
+    channels: [{ name: 'email', available: () => true, send: async () => undefined }],
     log: () => {},
   });
   const at80 = tierUsageWith(() => 799);
   await at80.tiers.set(OWNER.userId, 'start', 'admin');
-  const svc = await setup({ tierUsage: at80.usage, tierAlerts: failing, balance: 0 });
+  const svc = await setup({ tierUsage: at80.usage, tierAlerts: broken, balance: 0 });
   const reply = await svc.service.send('lisa-shop', { visitorId: VISITOR, content: 'Цена?' });
   await settle();
   assert.ok(reply.ok && !reply.message.offerContact, 'посетитель получил ответ');

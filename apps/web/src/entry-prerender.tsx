@@ -5,7 +5,7 @@ import { ThemeSync } from '@/app/theme-sync';
 import { AuthProvider } from '@/features/auth/auth-provider';
 import { RELEASES } from '@/features/content/changelog';
 import { FAQ_ITEMS } from '@/features/content/faq';
-import { LEGAL_PATHS, LEGAL_UPDATED } from '@/features/content/legal';
+import { LEGAL_PATHS, LEGAL_UPDATED, type LegalPageId } from '@/features/content/legal';
 import { setSiteFeatures, type SiteFeatures } from '@/lib/features';
 import { SEO_PAGES } from '@/lib/seo-pages';
 import { routes } from '@/router/routes';
@@ -39,7 +39,9 @@ export const PRERENDER_VARIANTS: ReadonlyArray<{
  */
 export const PAGE_LASTMODS: Readonly<Record<string, string>> = {
   '/changelog': RELEASES.map((release) => release.date).reduce((a, b) => (a > b ? a : b)),
-  ...Object.fromEntries(Object.values(LEGAL_PATHS).map((path) => [path, LEGAL_UPDATED])),
+  ...Object.fromEntries(
+    Object.entries(LEGAL_PATHS).map(([id, path]) => [path, LEGAL_UPDATED[id as LegalPageId]]),
+  ),
 };
 
 /** JSON для <script type="application/ld+json">: `<` экранируется, чтобы строка не закрыла тег. */

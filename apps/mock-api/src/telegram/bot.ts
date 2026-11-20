@@ -557,6 +557,24 @@ export class TelegramBotService implements TelegramPaymentsPort {
     });
   }
 
+  /** Можно ли написать владельцу аккаунта: бот настроен и Telegram привязан. */
+  canNotifyUser(userId: string): boolean {
+    return this.isConfigured && Boolean(this.deps.userStore.findById(userId)?.telegramChatId);
+  }
+
+  /**
+   * Служебное сообщение владельцу (предупреждение об объёме тарифа). В отличие от notifyUser — без
+   * настроек квитанций и напоминаний, а сбой — исключение: вызывающий повторит позже.
+   */
+  async notifyOwner(userId: string, text: string): Promise<void> {
+    const chatId = this.deps.userStore.findById(userId)?.telegramChatId;
+    if (!chatId) throw new Error('Telegram не привязан');
+    const sent = await this.sendMessage(chatId, text, {
+      reply_markup: { inline_keyboard: [[this.openAppButton()]] },
+    });
+    if (sent === null) throw new Error('Telegram не принял сообщение');
+  }
+
   async notifyAdminsAboutContact(message: {
     topic?: string;
     name: string;

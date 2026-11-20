@@ -28,7 +28,7 @@ export function LegalPage({ id }: { id: LegalPageId }) {
         </h1>
         <p className="text-[15px] leading-7 text-muted">{doc.lead}</p>
         <p className="text-[13px] text-subtle">
-          {t('legal.updated', { date: formatLegalDate(LEGAL_UPDATED, language) })}
+          {t('legal.updated', { date: formatLegalDate(LEGAL_UPDATED[id], language) })}
         </p>
         <nav aria-label={t('legal.nav')} className="flex flex-wrap gap-x-4 gap-y-1 text-[14px]">
           {LINKS.map((link) => (

@@ -317,6 +317,7 @@ export function unlimitedAllowance(): BuildAllowance {
     adjust: async () => undefined,
     spent: async (keys) => Object.fromEntries(keys.map((key) => [key, 0])),
     claim: async () => false,
+    release: async () => undefined,
     purge: async () => 0,
   };
   return new BuildAllowance({ counters: () => unlimited });
