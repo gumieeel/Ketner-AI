@@ -40,9 +40,11 @@ test('Slice A: записи миграций дословно совпадают
   // Обратные косые черты регулярных выражений не потерялись (String.raw).
   const specs = MIGRATIONS.find((item) => item.id === '0013_platform_agent_specs')!;
   assert.ok(specs.sql.includes(String.raw`'\msk-[A-Za-z0-9]`));
+  // Slice A — три записи подряд; сразу за ними — этап F (0016, db/stage-f-migration.test.ts).
+  const start = MIGRATIONS.findIndex((item) => item.id === '0013_platform_agent_specs');
   assert.deepEqual(
-    MIGRATIONS.slice(-3).map((item) => item.id),
-    [...docSections.keys()],
-    'Slice A — последние записи списка',
+    MIGRATIONS.slice(start, start + 4).map((item) => item.id),
+    [...docSections.keys(), '0016_google_sheets'],
+    'Slice A — записи подряд, перед 0016',
   );
 });
