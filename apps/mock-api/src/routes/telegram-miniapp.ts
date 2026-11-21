@@ -1,20 +1,15 @@
-import { requireFeature } from '../product-switches.js';
+import { sendFeatureUnavailable } from '../product-switches.js';
 import { Router, type Request, type Response } from 'express';
 import { createMockToken } from '../auth/jwt.js';
 import { requireAuth } from '../middleware/auth.js';
 import { sendError } from '../middleware/errors.js';
 import { BillingError, REFUND_POLICY, type PaymentRecord } from '../billing/billing-service.js';
-import {
-  CREDIT_PACK_VALID_DAYS,
-  CREDIT_PACKS,
-  findCreditPack,
-  packPricePerThousand,
-} from '../services/pricing.js';
+import { CREDIT_PACK_VALID_DAYS } from '../services/pricing.js';
 import { toCredits, TRIAL_CREDITS } from '../services/credits.js';
 import type { InvoiceStore } from '../store/invoice-store.js';
 import type { SubscriptionStore } from '../store/subscription-store.js';
 import type { UserStore } from '../store/user-store.js';
-import { packStars, paymentTitle, type TelegramBotService } from '../telegram/bot.js';
+import { paymentTitle, type TelegramBotService } from '../telegram/bot.js';
 import { isTelegramAccountEmail, telegramAccountEmail } from '../telegram/auth-requests.js';
 import { validateInitData, type TelegramWebAppUser } from '../telegram/webapp-auth.js';
 import { EmailLinkCodes, EMAIL_CODE_TTL_MS } from '../telegram/email-link-codes.js';
@@ -157,7 +152,6 @@ export function createMiniAppRouter({
 
   const stateOf = (user: User) => {
     const subscription = subscriptionStore.get(user.id);
-    const rate = botService.rateService.rate;
     const auto = billing.starsSubscriptionOf(user.id);
     return {
       user: {
@@ -186,20 +180,6 @@ export function createMiniAppRouter({
         trialCredits: TRIAL_CREDITS,
         validDays: CREDIT_PACK_VALID_DAYS,
       },
-      packs: CREDIT_PACKS.map((pack) => {
-        // Та же цена, что в счёте: по официальному курсу, но не ниже точки безубыточности.
-        const stars = packStars(pack, botService.rateService);
-        return {
-          id: pack.id,
-          priceUsd: pack.priceUsd,
-          credits: pack.credits,
-          stars,
-          /** Сколько эти звёзды стоят по официальному курсу Telegram. */
-          starsUsd: botService.rateService.toUsd(stars),
-          pricePerThousandUsd: Number(packPricePerThousand(pack).toFixed(3)),
-        };
-      }),
-      rate,
       payments: billing.paymentsOf(user.id).map(paymentView),
       prefs: billing.prefsOf(user.id),
       refundPolicy: { hours: Math.round(REFUND_POLICY.windowMs / 3600_000) },
@@ -426,43 +406,11 @@ export function createMiniAppRouter({
     if (user) response.json(stateOf(user));
   });
 
-  /** Счёт в звёздах на пакет кредитов. */
-  router.post(
-    '/telegram/miniapp/invoice',
-    // Stars закрыты (product-switches.ts): новых счетов нет; возвраты прежних платежей — работают.
-    requireFeature('stars'),
-    requireFeature('packs'),
-    requireAuth,
-    async (request: Request, response: Response) => {
-      const body = (request.body ?? {}) as { packId?: unknown };
-      if (body.packId === undefined) {
-        sendError(
-          response,
-          410,
-          'subscriptions_discontinued',
-          'Подписок больше нет: кредиты покупаются пакетами.',
-        );
-        return;
-      }
-      const pack = findCreditPack(body.packId);
-      if (!pack) {
-        sendError(response, 400, 'invalid_pack', 'Выберите пакет кредитов');
-        return;
-      }
-      const invoice = botService.createStarsPackInvoice(request.user!.id, pack);
-      const link = await botService.createInvoiceLink(invoice);
-      if (!link) {
-        sendError(
-          response,
-          502,
-          'telegram_unavailable',
-          'Telegram не выставил счёт. Попробуйте ещё раз.',
-        );
-        return;
-      }
-      response.json({ invoiceId: invoice.id, stars: invoice.starsAmount, link });
-    },
-  );
+  // Новых счетов нет (пакеты не продаются, звёзды не принимаются): прежний адрес отвечает 503.
+  // Статус уже выставленного счёта — ниже, он работает.
+  router.post('/telegram/miniapp/invoice', (_request: Request, response: Response) => {
+    sendFeatureUnavailable(response, 'stars');
+  });
 
   router.get(
     '/telegram/miniapp/invoice/:id',

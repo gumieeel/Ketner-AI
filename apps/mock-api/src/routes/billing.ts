@@ -5,30 +5,11 @@ import { sendError } from '../middleware/errors.js';
 import { invoiceStore as defaultInvoiceStore, type InvoiceStore } from '../store/index.js';
 import type { SubscriptionStore } from '../store/subscription-store.js';
 import type { UserStore } from '../store/user-store.js';
-import { packStars, telegramBotService } from '../telegram/bot.js';
-import { productSwitch } from '../product-switches.js';
 import { BillingService, createBillingLedger, planLabel } from '../billing/billing-service.js';
-import { isTrybitCurrency } from '../billing/trybit-currencies.js';
-import type {
-  CryptoCurrency,
-  CryptoInvoice,
-  PlanId,
-  PlanItem,
-  TelegramStarsInvoice,
-} from '../types.js';
+import type { CryptoInvoice, PlanItem } from '../types.js';
 import { isVipUser } from '../services/vip.js';
 import { cryptoCloudService } from '../services/cryptocloud.js';
-import {
-  CREDIT_PACK_VALID_DAYS,
-  CREDIT_PACKS,
-  CRYPTO_PACK_BONUS_RATE,
-  findCreditPack,
-  LEGACY_PRICE_USD,
-  PLAN_PRICE_USD,
-  packCryptoBonusCredits,
-  packPricePerThousand,
-} from '../services/pricing.js';
-import { TRIAL_CREDITS } from '../services/entitlement.js';
+import { LEGACY_PRICE_USD, PLAN_PRICE_USD } from '../services/pricing.js';
 
 /** Каталог тарифов. `priceMonthly` везде в долларах США (см. services/pricing.ts). */
 export const PLANS: readonly PlanItem[] = [
@@ -255,21 +236,6 @@ export function createBillingRouter({
     );
   };
 
-  /** Пакет из тела запроса или `null` (ответ с ошибкой уже отправлен). */
-  const packFromBody = (request: Request, response: Response) => {
-    const pack = findCreditPack(request.body?.packId);
-    if (!pack) {
-      sendError(
-        response,
-        400,
-        'invalid_pack',
-        'Выберите пакет кредитов: $5, $10, $25, $50 или $100',
-      );
-      return null;
-    }
-    return pack;
-  };
-
   // Webhook & Postback от CryptoCloud.
   //
   // Доверия к телу запроса нет: (1) подпись — JWT `token`, подписанный ключом проекта;
@@ -357,45 +323,12 @@ export function createBillingRouter({
   // (вебхуки защищаются подписью, см. C6).
   router.use('/billing', requireAuth);
 
-  /**
-   * Пакеты кредитов: цена в долларах, кредиты, бонус за криптовалюту; цена в звёздах — только пока
-   * оплата звёздами открыта (product-switches.ts). Открыт без входа.
-   */
-  router.get('/packs', (_request: Request, response: Response) => {
-    const base = CREDIT_PACKS[0];
-    response.json({
-      packs: CREDIT_PACKS.map((pack) => ({
-        id: pack.id,
-        priceUsd: pack.priceUsd,
-        credits: pack.credits,
-        ...(productSwitch('stars')
-          ? { stars: packStars(pack, telegramBotService.rateService) }
-          : {}),
-        cryptoBonusCredits: packCryptoBonusCredits(pack),
-        pricePerThousandUsd: Number(packPricePerThousand(pack).toFixed(3)),
-        discountPct: Math.round(
-          (1 - packPricePerThousand(pack) / packPricePerThousand(base)) * 100,
-        ),
-      })),
-      trialCredits: TRIAL_CREDITS,
-      cryptoBonusRate: CRYPTO_PACK_BONUS_RATE,
-      validDays: CREDIT_PACK_VALID_DAYS,
-    });
-  });
-
   router.get('/plans', (request: Request, response: Response) => {
     if (request.query.includeLegacy === 'true') {
       response.json({ plans: [...PLANS, ...LEGACY_PLANS] });
       return;
     }
     response.json({ plans: PLANS });
-  });
-
-  /** Счёт в звёздах с ценой по официальному курсу Telegram — её показывает страница оплаты. */
-  const withStarsUsd = (invoice: TelegramStarsInvoice) => ({
-    ...invoice,
-    starsUsd: telegramBotService.rateService.toUsd(invoice.starsAmount),
-    usdPerStar: telegramBotService.rateService.rate.usdPerStar,
   });
 
   router.get('/billing/subscription', (request: Request, response: Response) => {
@@ -411,36 +344,6 @@ export function createBillingRouter({
       };
     }
     response.json({ subscription });
-  });
-
-  router.post('/billing/checkout', (request: Request, response: Response) => {
-    // Оформление без платежа — заглушка для разработки; в production кредиты даёт только оплата.
-    if (
-      rejectMockInProduction(
-        response,
-        'Оформление без оплаты недоступно. Выберите способ оплаты на странице кредитов.',
-      )
-    ) {
-      return;
-    }
-    if (request.body?.packId === undefined) {
-      rejectSubscriptionPurchase(response);
-      return;
-    }
-    const pack = packFromBody(request, response);
-    if (!pack) return;
-    const userId = getUserId(request);
-    const granted = billing.grantPack(userId, pack.id, {
-      id: `mock:${userId}:${Date.now()}`,
-      method: 'stars',
-      amount: pack.priceUsd,
-      currency: 'USD',
-    });
-    response.json({
-      subscription: subscriptionStore.get(userId),
-      user: userStore.findById(userId) ?? { id: userId, plan: 'free' },
-      credit: granted.credit,
-    });
   });
 
   router.post('/billing/cancel', (request: Request, response: Response) => {
@@ -514,37 +417,6 @@ export function createBillingRouter({
   });
 
   // --- Telegram Stars (⭐️ XTR) ---
-
-  router.post(
-    '/billing/telegram-stars/create-invoice',
-    async (request: Request, response: Response) => {
-      const userId = getUserId(request);
-      if (request.body?.packId === undefined) {
-        rejectSubscriptionPurchase(response);
-        return;
-      }
-      const pack = packFromBody(request, response);
-      if (!pack) return;
-
-      // Цена в звёздах — по официальному курсу Telegram Stars, но не ниже точки безубыточности;
-      // сумма фиксируется в счёте.
-      let invoice = activeInvoiceStore.createTelegramStarsInvoice(
-        userId,
-        'free',
-        Math.round(pack.priceUsd * 99),
-        packStars(pack, telegramBotService.rateService),
-        telegramBotService.botUsername || config.telegramBotUsername,
-        pack.id,
-      );
-      // Прямая ссылка на окно оплаты в Telegram; без бота остаётся ссылка на чат с ботом.
-      if (telegramBotService.isConfigured) {
-        const link = await telegramBotService.createInvoiceLink(invoice);
-        if (link) invoice = activeInvoiceStore.getTelegramStarsInvoice(invoice.id) ?? invoice;
-      }
-
-      response.json({ invoice: withStarsUsd(invoice) });
-    },
-  );
 
   router.get(
     '/billing/telegram-stars/status/:invoiceId',
@@ -643,80 +515,6 @@ export function createBillingRouter({
   );
 
   // --- Crypto & CryptoCloud ---
-
-  router.post('/billing/crypto/create-invoice', async (request: Request, response: Response) => {
-    if (request.body?.packId === undefined) {
-      rejectSubscriptionPurchase(response);
-      return;
-    }
-    const pack = packFromBody(request, response);
-    if (!pack) return;
-
-    const userId = getUserId(request);
-    const user = userStore.findById(userId) || userStore.findByEmail(userId);
-    const requestedCurrency: unknown = request.body?.currency ?? 'USDT_TRC20';
-    if (!isTrybitCurrency(requestedCurrency)) {
-      sendError(response, 400, 'invalid_currency', 'Эта криптовалюта или сеть не поддерживается');
-      return;
-    }
-    const currency: CryptoCurrency = requestedCurrency;
-
-    // Оплата криптовалютой — только через Trybit. Без настроенного шлюза счёт не создаём
-    // (в разработке шлюз подменяется заглушкой, enableMockBilling).
-    if (!cryptoCloudService.isConfigured() && !config.enableMockBilling) {
-      sendError(
-        response,
-        501,
-        'payment_method_unavailable',
-        'Оплата криптовалютой временно недоступна',
-      );
-      return;
-    }
-
-    // Цена пакета в долларах — services/pricing.ts → CREDIT_PACKS.
-    const amountUsd = pack.priceUsd;
-    const invoicePlanId: PlanId = 'free';
-    const tempOrderId = `crypto_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
-
-    const cryptocurrency: string = currency;
-
-    let ccResult;
-    try {
-      ccResult = await cryptoCloudService.createInvoice({
-        orderId: tempOrderId,
-        amountUsd,
-        planId: invoicePlanId,
-        userId,
-        userEmail: user?.email,
-        cryptocurrency,
-      });
-    } catch (err) {
-      console.warn('[billing] Ошибка создания счёта Trybit:', err);
-    }
-    if (!ccResult?.invoiceId) {
-      sendError(
-        response,
-        502,
-        'gateway_unavailable',
-        'Trybit не выставил счёт. Попробуйте ещё раз через минуту.',
-      );
-      return;
-    }
-
-    const invoice = activeInvoiceStore.createCryptoInvoice(
-      userId,
-      invoicePlanId,
-      currency,
-      amountUsd,
-      ccResult?.link,
-      ccResult?.invoiceId,
-      tempOrderId,
-      ccResult?.h2h,
-      pack.id,
-    );
-
-    response.json({ invoice });
-  });
 
   router.get('/billing/crypto/status/:invoiceId', async (request: Request, response: Response) => {
     const invoiceId = getParamInvoiceId(request);

@@ -13,8 +13,9 @@ import { createUserStore } from '../store/user-store.js';
 import { createApiKeyStore, type ApiKeyStore } from '../store/api-key-store.js';
 import { createRevokedTokenStore } from '../store/revoked-token-store.js';
 import { UsageStore } from '../store/usage-store.js';
-import { createInvoiceStore } from '../store/invoice-store.js';
+import { createInvoiceStore, type InvoiceStore } from '../store/invoice-store.js';
 import { BillingService, createBillingLedger } from '../billing/billing-service.js';
+import { findCreditPack } from '../services/pricing.js';
 import type { CreditService } from '../services/credits.js';
 import {
   createGithubConnectionStore,
@@ -53,10 +54,28 @@ export interface TestServer {
   githubConnectionStore: GithubConnectionStore;
   googleConnectionStore: GoogleConnectionStore;
   googleVerifierStore: GoogleVerifierStore;
+  /** Платежи и кредиты этого сервера. */
+  billing: BillingService;
+  /** Счета этого сервера: тесты вебхуков и статусов заводят прежние счета напрямую. */
+  invoiceStore: InvoiceStore;
+  /**
+   * Пакет кредитов купленный раньше (пакеты не продаются, задача 0b): начисление как после
+   * оплаты, без маршрутов покупки.
+   */
+  grantPack: (userId: string, packId: string) => ReturnType<BillingService['grantPack']>;
   /** Письма с кодами регистрации, входа и сброса пароля. */
   codeMails: MailMessage[];
   /** Кредиты этого сервера (в памяти): тесты выдают и списывают их напрямую. */
   credits: CreditService;
+}
+
+const packGrants = new Map<string, TestServer['grantPack']>();
+
+/** Начислить пакет пользователю тестового сервера по его адресу (помощники тестов знают только адрес). */
+export function grantPackAt(baseUrl: string, userId: string, packId: string): void {
+  const grant = packGrants.get(baseUrl);
+  if (!grant) throw new Error(`тестовый сервер ${baseUrl} не найден`);
+  grant(userId, packId);
 }
 
 /** Поднимает приложение на свободном порту с временным файлом хранилища. */
@@ -105,6 +124,8 @@ export async function startTestServer(
       usageStore: extra.usageStore ?? testUsageStore,
       ledger: createBillingLedger(),
     });
+  const testInvoiceStore = extra.invoiceStore ?? createInvoiceStore(join(tempDir, 'invoices.json'));
+  let grants = 0;
   const testAi: AiConfig = { ...FAST_AI, ...ai };
   // Тесты не ходят к настоящим моделям, даже если в .env разработчика есть ключ OpenRouter:
   // шаблонный движок включён явно, а не угадывается по нулевым задержкам.
@@ -140,7 +161,7 @@ export async function startTestServer(
     githubConnectionStore: testGithubStore,
     googleConnectionStore: testGoogleStore,
     googleVerifierStore: testGoogleVerifiers,
-    invoiceStore: createInvoiceStore(join(tempDir, 'invoices.json')),
+    invoiceStore: testInvoiceStore,
     supportStore: testSupportStore,
     supportBotService: testSupportBotService,
     ai: testAi,
@@ -157,6 +178,17 @@ export async function startTestServer(
   const address = server.address() as AddressInfo;
   const baseUrl = `http://127.0.0.1:${address.port}`;
   rememberCodeMails(baseUrl, codeMails);
+  const grantPack: TestServer['grantPack'] = (userId, packId) => {
+    grants += 1;
+    return testBilling.grantPack(userId, packId, {
+      id: `test-pack:${userId}:${grants}`,
+      // Как прежнее оформление без оплаты (POST /billing/checkout): без бонуса за криптовалюту.
+      method: 'stars',
+      amount: findCreditPack(packId)?.priceUsd ?? 0,
+      currency: 'USD',
+    });
+  };
+  packGrants.set(baseUrl, grantPack);
   return {
     baseUrl,
     codeMails,
@@ -167,6 +199,9 @@ export async function startTestServer(
     githubConnectionStore: extra.githubConnectionStore ?? testGithubStore,
     googleConnectionStore: extra.googleConnectionStore ?? testGoogleStore,
     googleVerifierStore: extra.googleVerifierStore ?? testGoogleVerifiers,
+    billing: testBilling,
+    invoiceStore: testInvoiceStore,
+    grantPack,
     close: () =>
       new Promise<void>((resolve, reject) => {
         try {

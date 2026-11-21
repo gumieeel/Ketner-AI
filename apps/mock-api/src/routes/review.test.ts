@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { readSseEvents, startTestServer, type SseEvent } from '../testing/server.js';
+import { grantPackAt, readSseEvents, startTestServer, type SseEvent } from '../testing/server.js';
 import { signupAndVerify } from '../testing/signup.js';
 import type { AnswerReview } from '../types.js';
 import { setProductSwitchForTests } from '../product-switches.js';
@@ -27,12 +27,7 @@ async function account(baseUrl: string, email: string, plan: 'credits' | null): 
   const body = (await registered.json()) as { token: string; user: { id: string } };
   const headers = { 'Content-Type': 'application/json', Authorization: `Bearer ${body.token}` };
   if (plan) {
-    const checkout = await fetch(`${baseUrl}/api/billing/checkout`, {
-      method: 'POST',
-      headers,
-      body: JSON.stringify({ packId: 'credits-5' }),
-    });
-    assert.equal(checkout.status, 200);
+    grantPackAt(baseUrl, body.user.id, 'credits-5');
   }
   return { userId: body.user.id, headers };
 }

@@ -106,12 +106,7 @@ async function harness(script: Script): Promise<Harness> {
     });
     const { token, user } = await readJson<AuthSession>(signup);
     if (plan !== 'free') {
-      const checkout = await fetch(`${server.baseUrl}/api/billing/checkout`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ packId: CREDIT_PACKS[0]!.id }),
-      });
-      assert.equal(checkout.status, 200);
+      server.grantPack(user.id, CREDIT_PACKS[0]!.id);
       // Шлюз агента считает кредиты в своём журнале: покупка зеркалится туда же, где её видит сайт.
       credits.grantForPack(
         { id: `harness:${user.id}`, userId: user.id, method: 'stars' },

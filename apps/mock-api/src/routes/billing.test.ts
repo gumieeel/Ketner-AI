@@ -2,7 +2,6 @@ import { signupAndVerify } from '../testing/signup.js';
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { config } from '../config.js';
-import { TRYBIT_CURRENCIES } from '../billing/trybit-currencies.js';
 import { TRIAL_CREDITS } from '../services/entitlement.js';
 import { CREDIT_PACKS } from '../services/pricing.js';
 import { readJson, startTestServer } from '../testing/server.js';
@@ -34,55 +33,35 @@ test('billing: каталог тарифов GET /api/plans', async (t) => {
   assert.equal(plans[3]?.priceMonthly, 49);
 });
 
-test('billing: каталог пакетов кредитов GET /api/packs — публичный, цены и бонус за крипту', async (t) => {
+test('billing: пакеты не продаются — каталог пакетов и выставление счетов отвечают 503', async (t) => {
   const server = await startTestServer();
   t.after(() => server.close());
-
-  const response = await fetch(`${server.baseUrl}/api/packs`);
-  assert.equal(response.status, 200);
-  const body = await readJson<{
-    packs: Array<{
-      id: string;
-      priceUsd: number;
-      credits: number;
-      stars: number;
-      cryptoBonusCredits: number;
-      pricePerThousandUsd: number;
-      discountPct: number;
-    }>;
-    trialCredits: number;
-    cryptoBonusRate: number;
-    validDays: number;
-  }>(response);
-  assert.deepEqual(
-    body.packs.map((p) => [p.id, p.priceUsd, p.credits]),
-    CREDIT_PACKS.map((p) => [p.id, p.priceUsd, p.credits]),
-  );
-  assert.equal(body.trialCredits, TRIAL_CREDITS);
-  assert.equal(body.cryptoBonusRate, 0.15);
-  assert.equal(body.validDays, 365);
-  assert.equal(body.packs[0]?.discountPct, 0);
-  assert.ok(
-    body.packs.every((p, i) => i === 0 || p.discountPct > body.packs[i - 1]!.discountPct),
-    'чем больше пакет, тем выше скидка',
-  );
-  assert.equal(body.packs[4]?.discountPct, 20, 'пакет $100 — скидка 20% к цене пакета $5');
-  assert.ok(body.packs.every((p) => p.stars > 0 && p.cryptoBonusCredits > 0));
+  const { token } = await signup(server.baseUrl, 'closed-packs@example.com');
+  const headers = { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` };
+  for (const [method, path, feature] of [
+    ['GET', '/api/packs', 'packs'],
+    ['POST', '/api/billing/checkout', 'packs'],
+    ['POST', '/api/billing/crypto/create-invoice', 'packs'],
+    ['POST', '/api/billing/telegram-stars/create-invoice', 'stars'],
+  ] as const) {
+    // И без входа, и со входом: ответ до проверки входа.
+    for (const auth of [{}, headers]) {
+      const response = await fetch(`${server.baseUrl}${path}`, {
+        method,
+        headers: auth,
+        body: method === 'POST' ? JSON.stringify({ packId: 'credits-10' }) : undefined,
+      });
+      assert.equal(response.status, 503, `${method} ${path}`);
+      const error = (
+        await readJson<{ error: { code: string; details: { feature: string } } }>(response)
+      ).error;
+      assert.equal(error.code, 'feature_unavailable');
+      assert.equal(error.details.feature, feature);
+    }
+  }
 });
 
-test('billing: оплата звёздами закрыта — в каталоге пакетов нет цены в звёздах', async (t) => {
-  setProductSwitchForTests('stars', false);
-  t.after(() => setProductSwitchForTests('stars', true));
-  const server = await startTestServer();
-  t.after(() => server.close());
-  const body = await readJson<{ packs: Array<Record<string, unknown>> }>(
-    await fetch(`${server.baseUrl}/api/packs`),
-  );
-  assert.ok(body.packs.length > 0);
-  assert.ok(body.packs.every((pack) => !('stars' in pack)));
-});
-
-test('billing: подписок больше нет, оформление пакета кредитов даёт кредиты и открывает полный доступ', async (t) => {
+test('billing: пакет, купленный раньше, даёт кредиты и открывает полный доступ, подписка не меняется', async (t) => {
   const server = await startTestServer();
   t.after(() => server.close());
 
@@ -95,12 +74,6 @@ test('billing: подписок больше нет, оформление пак
   const { token, user } = await readJson<AuthSession>(regRes);
   assert.equal(user.plan, 'free');
   const headers = { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` };
-  const checkout = (body: unknown) =>
-    fetch(`${server.baseUrl}/api/billing/checkout`, {
-      method: 'POST',
-      headers,
-      body: JSON.stringify(body),
-    });
   const report = async () =>
     readJson<CreditsReport>(await fetch(`${server.baseUrl}/api/usage/credits`, { headers }));
 
@@ -114,22 +87,9 @@ test('billing: подписок больше нет, оформление пак
   assert.equal(before.purchased, false);
   assert.equal(before.balance, TRIAL_CREDITS);
 
-  // Подписки сняты с продажи: любой тариф — 410, неизвестный пакет — 400
-  for (const planId of ['plus', 'pro', 'ultra']) {
-    const res = await checkout({ planId });
-    assert.equal(res.status, 410, planId);
-    assert.equal(
-      (await readJson<{ error: { code: string } }>(res)).error.code,
-      'subscriptions_discontinued',
-    );
-  }
-  assert.equal((await checkout({ packId: 'credits-7' })).status, 400);
-  assert.equal((await report()).purchased, false, 'ничего не выдано');
-
-  // Оформляем пакет $10
+  // Пакет $10, купленный до 20.11.2026
   const pack = CREDIT_PACKS[1]!;
-  const checkoutRes = await checkout({ packId: pack.id });
-  assert.equal(checkoutRes.status, 200);
+  server.grantPack(user.id, pack.id);
   const after = await report();
   assert.equal(after.plan, 'credits', 'купленные кредиты открывают полный доступ');
   assert.equal(after.purchased, true);
@@ -144,24 +104,21 @@ test('billing: подписок больше нет, оформление пак
 test('billing: криптовалюта только через Trybit — своих адресов нет, переводы с TxID не принимаются', async (t) => {
   const server = await startTestServer();
   t.after(() => server.close());
-  const { token } = await signup(server.baseUrl, 'crypto_tester@example.com');
+  const { token, id } = await signup(server.baseUrl, 'crypto_tester@example.com');
   const headers = { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` };
 
-  const created = await fetch(`${server.baseUrl}/api/billing/crypto/create-invoice`, {
-    method: 'POST',
-    headers,
-    body: JSON.stringify({ packId: 'credits-5', currency: 'USDT_TRC20' }),
-  });
-  assert.equal(created.status, 200);
-  const { invoice } = await readJson<{
-    invoice: {
-      id: string;
-      amountUsd: number;
-      address: string;
-      qrPayload: string;
-      cryptoCloudInvoiceId?: string;
-    };
-  }>(created);
+  // Счёт, выставленный до 20.11.2026 (новых счетов нет).
+  const invoice = server.invoiceStore.createCryptoInvoice(
+    id,
+    'free',
+    'USDT_TRC20',
+    5,
+    'https://pay.trybit.example/INV-T1',
+    'INV-T1',
+    undefined,
+    undefined,
+    'credits-5',
+  );
   assert.equal(invoice.amountUsd, 5);
   // Счёт выставлен в Trybit; своего кошелька для прямого перевода в нём нет.
   assert.ok(invoice.cryptoCloudInvoiceId);
@@ -222,10 +179,9 @@ test('billing (C5): без входа биллинг недоступен, а з
 
   for (const [method, path] of [
     ['GET', '/api/billing/subscription'],
-    ['POST', '/api/billing/checkout'],
     ['POST', '/api/billing/cancel'],
-    ['POST', '/api/billing/crypto/create-invoice'],
-    ['POST', '/api/billing/telegram-stars/create-invoice'],
+    ['GET', '/api/billing/crypto/status/x'],
+    ['GET', '/api/billing/telegram-stars/status/x'],
   ] as const) {
     const res = await fetch(`${server.baseUrl}${path}`, {
       method,
@@ -247,13 +203,14 @@ test('billing (C5): чужой счёт недоступен ни для ста�
   const owner = await signup(server.baseUrl, 'c5-owner@example.com');
   const stranger = await signup(server.baseUrl, 'c5-stranger@example.com');
 
-  const created = await fetch(`${server.baseUrl}/api/billing/telegram-stars/create-invoice`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${owner.token}` },
-    body: JSON.stringify({ packId: 'credits-5' }),
-  });
-  assert.equal(created.status, 200);
-  const { invoice } = await readJson<{ invoice: { id: string } }>(created);
+  const invoice = server.invoiceStore.createTelegramStarsInvoice(
+    owner.id,
+    'free',
+    495,
+    260,
+    'ketner_test_bot',
+    'credits-5',
+  );
 
   const strangerHeaders = { Authorization: `Bearer ${stranger.token}` };
   const status = await fetch(`${server.baseUrl}/api/billing/telegram-stars/status/${invoice.id}`, {
@@ -289,13 +246,15 @@ test('billing (C5): в production заглушки оплаты выключен
   const user = await signup(server.baseUrl, 'c5-prod@example.com');
   const headers = { 'Content-Type': 'application/json', Authorization: `Bearer ${user.token}` };
 
-  // Счёт Stars создаём заранее (создание счёта не заглушка), затем «включаем production».
-  const created = await fetch(`${server.baseUrl}/api/billing/telegram-stars/create-invoice`, {
-    method: 'POST',
-    headers,
-    body: JSON.stringify({ packId: 'credits-10' }),
-  });
-  const { invoice } = await readJson<{ invoice: { id: string } }>(created);
+  // Счёт Stars, выставленный до 20.11.2026; затем «включаем production».
+  const invoice = server.invoiceStore.createTelegramStarsInvoice(
+    user.id,
+    'free',
+    990,
+    510,
+    'ketner_test_bot',
+    'credits-10',
+  );
 
   const mutable = config as unknown as { enableMockBilling: boolean };
   const previous = mutable.enableMockBilling;
@@ -306,7 +265,7 @@ test('billing (C5): в production заглушки оплаты выключен
       headers,
       body: JSON.stringify({ packId: 'credits-100' }),
     });
-    assert.equal(checkout.status, 501);
+    assert.equal(checkout.status, 503, 'оформления без оплаты больше нет');
 
     const stripe = await fetch(`${server.baseUrl}/api/billing/stripe/create-checkout`, {
       method: 'POST',
@@ -340,120 +299,4 @@ test('billing (C5): в production заглушки оплаты выключен
   );
   assert.equal(report.purchased, false);
   assert.equal(report.granted, TRIAL_CREDITS);
-});
-
-test('billing (C7): без шлюза Trybit в production крипто-счёт не создаётся ни в какой валюте', async (t) => {
-  const server = await startTestServer();
-  t.after(() => server.close());
-  const user = await signup(server.baseUrl, 'c7-prod@example.com');
-  const headers = { 'Content-Type': 'application/json', Authorization: `Bearer ${user.token}` };
-
-  const mutable = config as unknown as {
-    enableMockBilling: boolean;
-    cryptoCloudApiKey?: string;
-    cryptoCloudShopId?: string;
-  };
-  const previous = { ...mutable };
-  mutable.enableMockBilling = false;
-  mutable.cryptoCloudApiKey = '';
-  mutable.cryptoCloudShopId = '';
-  try {
-    for (const currency of ['USDT_TRC20', 'TON', 'BTC']) {
-      const create = await fetch(`${server.baseUrl}/api/billing/crypto/create-invoice`, {
-        method: 'POST',
-        headers,
-        body: JSON.stringify({ packId: 'credits-5', currency }),
-      });
-      assert.equal(create.status, 501, currency);
-    }
-  } finally {
-    Object.assign(mutable, previous);
-  }
-
-  const report = await readJson<CreditsReport>(
-    await fetch(`${server.baseUrl}/api/usage/credits`, { headers }),
-  );
-  assert.equal(report.purchased, false);
-});
-
-test('billing: все валюты и сети Trybit принимаются, незнакомые отклоняются', async (t) => {
-  const server = await startTestServer();
-  t.after(() => server.close());
-  const { token } = await signup(server.baseUrl, 'currencies@example.com');
-  const headers = { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` };
-  const create = (currency: unknown) =>
-    fetch(`${server.baseUrl}/api/billing/crypto/create-invoice`, {
-      method: 'POST',
-      headers,
-      body: JSON.stringify({ packId: 'credits-5', currency }),
-    });
-
-  assert.equal(TRYBIT_CURRENCIES.length, 38);
-  for (const currency of TRYBIT_CURRENCIES)
-    assert.equal((await create(currency)).status, 200, currency);
-  for (const bad of ['DOGE', 'USDT', '', 'usdt_trc20', 42]) {
-    const res = await create(bad);
-    assert.equal(res.status, 400, String(bad));
-    assert.equal((await readJson<{ error: { code: string } }>(res)).error.code, 'invalid_currency');
-  }
-});
-
-test('billing: комиссии Trybit из ответа шлюза попадают в счёт', async (t) => {
-  const server = await startTestServer();
-  t.after(() => server.close());
-  const { token } = await signup(server.baseUrl, 'fees@example.com');
-  const headers = { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` };
-
-  const mutable = config as unknown as { cryptoCloudApiKey?: string; cryptoCloudShopId?: string };
-  const previousConfig = { ...mutable };
-  const realFetch = globalThis.fetch;
-  mutable.cryptoCloudApiKey = 'test-key';
-  mutable.cryptoCloudShopId = 'test-shop';
-  globalThis.fetch = (async (input: string | URL | Request, init?: RequestInit) => {
-    if (String(input).includes('/v2/invoice/create')) {
-      return Response.json({
-        status: 'success',
-        result: {
-          uuid: 'INV-FEES1234',
-          link: 'https://pay.trybit.com/FEES1234',
-          status: 'created',
-          address: 'TFeeTestAddress000000000000000000',
-          amount: 6.4,
-          amount_usd: 6.4,
-          fee_usd: 1.4,
-          service_fee_usd: 0.17,
-          currency: {
-            code: 'USDT',
-            fullcode: 'USDT_TRC20',
-            network: { code: 'TRC20', fullname: 'Tron' },
-          },
-        },
-      });
-    }
-    return realFetch(input, init);
-  }) as typeof fetch;
-  t.after(() => {
-    globalThis.fetch = realFetch;
-    Object.assign(mutable, previousConfig);
-  });
-
-  const res = await fetch(`${server.baseUrl}/api/billing/crypto/create-invoice`, {
-    method: 'POST',
-    headers,
-    body: JSON.stringify({ packId: 'credits-5', currency: 'USDT_TRC20' }),
-  });
-  assert.equal(res.status, 200);
-  const { invoice } = await readJson<{
-    invoice: {
-      amount: number;
-      fees?: { serviceUsd: number; transferUsd: number; payerUsd: number; totalUsd: number };
-    };
-  }>(res);
-  assert.equal(invoice.amount, 6.4);
-  assert.deepEqual(invoice.fees, {
-    serviceUsd: 0.17,
-    transferUsd: 1.4,
-    payerUsd: 1.4,
-    totalUsd: 6.4,
-  });
 });
