@@ -95,8 +95,6 @@
 | `TELEGRAM_SUPPORT_BOT_TOKEN`, `TELEGRAM_SUPPORT_BOT_USERNAME` | Бот поддержки                                                                                                                                                                              | `ketner_support_bot` |
 | `SUPPORT_ADMIN_CHAT_ID`                                       | Chat id оператора поддержки. Задавайте обязательно: иначе права даёт username                                                                                                              | —                    |
 | `SUPPORT_ADMIN_USERNAME`                                      | Username оператора (запасной вариант)                                                                                                                                                      | `gumieeel`           |
-| `STARS_USD_RATE`                                              | Курс цены в звёздах, $ за звезду                                                                                                                                                           | официальный $0.01999 |
-| `STARS_RATE_FEED_URL`                                         | Источник рыночного курса звёзд (для сравнения)                                                                                                                                             | Fragment             |
 
 ## Почта
 

@@ -275,17 +275,8 @@ test('покупатель кредитов имеет доступ ко все�
         name: 'Pro User',
       }),
     });
-    const { token } = (await regRes.json()) as { token: string };
-
-    const checkoutRes = await fetch(`${server.baseUrl}/api/billing/checkout`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${token}`,
-      },
-      body: JSON.stringify({ packId: 'credits-5' }),
-    });
-    assert.equal(checkoutRes.status, 200);
+    const { token, user } = (await regRes.json()) as { token: string; user: { id: string } };
+    server.grantPack(user.id, 'credits-5');
 
     // Создаём диалог от имени покупателя
     const createConvRes = await fetch(`${server.baseUrl}/api/conversations`, {

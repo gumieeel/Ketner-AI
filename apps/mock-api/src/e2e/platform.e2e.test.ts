@@ -33,7 +33,7 @@ import { TRIAL_CREDITS, type CreditsReport } from '../services/credits.js';
 import { createSubscriptionStore } from '../store/subscription-store.js';
 import { createUserStore } from '../store/user-store.js';
 import { UsageStore } from '../store/usage-store.js';
-import { FAST_AI, startTestServer } from '../testing/server.js';
+import { FAST_AI, grantPackAt, startTestServer } from '../testing/server.js';
 import { signupAndVerify } from '../testing/signup.js';
 import { MemoryCounterStore } from '../billing/cost-counters.js';
 import { setProductSwitchForTests } from '../product-switches.js';
@@ -302,7 +302,8 @@ test('сквозной путь: главная → анализ → вопро�
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ email: 'e2e-owner@example.com', password: 'password123', name: 'E2E' }),
   });
-  const { token } = await json<{ token: string }>(signup);
+  const { token, user } = await json<{ token: string; user: { id: string } }>(signup);
+  const userId = user.id;
   const auth = { ...guestHeaders, Authorization: `Bearer ${token}` };
   const credits = async () =>
     json<CreditsReport>(await fetch(`${base}/api/usage/credits`, { headers: auth }));
@@ -342,14 +343,9 @@ test('сквозной путь: главная → анализ → вопро�
   assert.equal((await credits()).balance, TRIAL_CREDITS);
   assert.equal(calls.at(-1), 'xiaomi/mimo-v2.6-pro');
 
-  // 6. Оплата пакета в тестовом режиме: кредиты добавляются.
+  // 6. Пакет, купленный раньше (пакеты не продаются с 20.11.2026): кредиты добавляются.
   const pack = CREDIT_PACKS[0]!;
-  const checkout = await fetch(`${base}/api/billing/checkout`, {
-    method: 'POST',
-    headers: auth,
-    body: JSON.stringify({ packId: pack.id }),
-  });
-  assert.equal(checkout.status, 200);
+  grantPackAt(base, userId, pack.id);
   const afterPayment = await credits();
   assert.equal(afterPayment.balance, TRIAL_CREDITS + pack.credits);
   assert.equal(afterPayment.purchased, true);

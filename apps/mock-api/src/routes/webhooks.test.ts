@@ -147,12 +147,18 @@ test('cryptocloud postback (C6): без валидного токена кред
     const user = await signup(server.baseUrl, 'cc-victim@example.com');
     const auth = { Authorization: `Bearer ${user.token}`, 'Content-Type': 'application/json' };
 
-    const created = await fetch(`${server.baseUrl}/api/billing/crypto/create-invoice`, {
-      method: 'POST',
-      headers: auth,
-      body: JSON.stringify({ packId: 'credits-5', currency: 'USDT_TRC20' }),
-    });
-    const { invoice } = await readJson<{ invoice: { id: string } }>(created);
+    // Счёт, выставленный до 20.11.2026 (новых счетов нет, задача 0b).
+    const invoice = server.invoiceStore.createCryptoInvoice(
+      user.id,
+      'free',
+      'USDT_TRC20',
+      5,
+      'https://pay.trybit.example/INV-1',
+      'INV-1',
+      undefined,
+      undefined,
+      'credits-5',
+    );
 
     for (const token of [undefined, 'garbage', 'a.b.c', config.adminApiKey]) {
       const res = await fetch(`${server.baseUrl}/api/billing/cryptocloud/postback`, {

@@ -238,12 +238,6 @@ export const API_ENDPOINTS = [
   },
   {
     method: 'POST',
-    path: '/api/billing/checkout',
-    status: 'ready',
-    description: 'Оформление подписки (заглушка)',
-  },
-  {
-    method: 'POST',
     path: '/api/billing/cancel',
     status: 'ready',
     description: 'Отмена подписки',
@@ -474,13 +468,19 @@ export function createApiRouter(deps: ApiDeps): Router {
         (deps.botService ?? telegramBotService).notifyAdminsAboutContact(message),
     }),
   );
-  // Stars и пакеты кредитов закрыты (product-switches.ts): новых счетов нет — отказ до входа; статус
-  // и подтверждение прежних счетов и вебхуки оплаты работают.
-  router.post('/billing/telegram-stars/create-invoice', requireFeature('stars'));
-  router.post('/billing/telegram-stars/create-invoice', requireFeature('packs'));
-  router.post('/billing/crypto/create-invoice', requireFeature('packs'));
-  router.post('/billing/checkout', requireFeature('packs'));
-  router.get('/packs', requireFeature('packs'));
+  // Пакеты кредитов не продаются, звёзды не принимаются (задача 0b): кода выставления счетов больше
+  // нет, прежние адреса отвечают 503 с понятным сообщением. Статус и подтверждение уже выставленных
+  // счетов, вебхуки оплаты и возвраты работают.
+  router.post('/billing/telegram-stars/create-invoice', (_request, response) =>
+    sendFeatureUnavailable(response, 'stars'),
+  );
+  for (const [method, path] of [
+    ['post', '/billing/crypto/create-invoice'],
+    ['post', '/billing/checkout'],
+    ['get', '/packs'],
+  ] as const) {
+    router[method](path, (_request, response) => sendFeatureUnavailable(response, 'packs'));
+  }
   router.use(
     createBillingRouter({
       subscriptionStore: activeSubscriptionStore,

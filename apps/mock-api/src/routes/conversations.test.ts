@@ -97,7 +97,7 @@ test('каталог моделей и описание контракта от�
     assert.ok(auth, 'вход описан в контракте');
     assert.equal(auth.status, 'ready');
     const billing = contract.endpoints.find(
-      (endpoint) => endpoint.path === '/api/billing/checkout',
+      (endpoint) => endpoint.path === '/api/billing/subscription',
     );
     assert.ok(billing, 'биллинг описан в контракте');
     assert.equal(billing.status, 'ready');

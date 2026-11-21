@@ -68,12 +68,7 @@ test('GET /api/usage/credits: после покупки пакета урове�
   const server = await startTestServer();
   t.after(() => server.close());
   const user = await register(server.baseUrl, 'credits-buyer@example.com');
-  const checkout = await fetch(`${server.baseUrl}/api/billing/checkout`, {
-    method: 'POST',
-    headers: user.headers,
-    body: JSON.stringify({ packId: 'credits-10' }),
-  });
-  assert.equal(checkout.status, 200);
+  server.grantPack(user.userId, 'credits-10');
   setBalance(server.credits, user.userId, 'credits', 1234);
 
   const get = async (query = '') =>
