@@ -121,6 +121,10 @@ verifier.
   `insertDataOption=INSERT_ROWS` — тоже разрешает `drive.file`.
   - **`RAW`, не `USER_ENTERED`**: поля заполняет посетитель. Строка `=IMPORTXML(...)` или
     `+cmd|...` при `USER_ENTERED` стала бы формулой (formula injection); при `RAW` это просто текст.
+  - Поля посетителя (имя, контакт, вопрос), начинающиеся с `=`, `+`, `-`, `@`, табуляции или
+    возврата каретки, пишутся с апострофом впереди (`google/sheets.ts`, `neutralizeFormula`): `RAW`
+    защищает саму Google Таблицу, апостроф — выгрузку в CSV, открытую в Excel. Обратная сторона:
+    телефон `+7 …` и ник `@…` видны в таблице с апострофом.
 - Сверка: `spreadsheets.values.get` колонки `G` (ID заявки).
 - Проверка корзины: Drive API `files.get?fields=trashed` — `drive.file` даёт метаданные файлов
   приложения.
