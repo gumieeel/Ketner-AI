@@ -1,5 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { TIERS } from '../services/tiers.js';
 import {
   classifyPath,
   isNonCanonicalHost,
@@ -141,18 +142,29 @@ test('seo: метка возможностей и заголовок главн�
   assert.doesNotMatch(on, /Плюс чат/);
 });
 
-test('seo: Schema.org главной — пакеты кредитов, а не снятые подписки', () => {
+test('seo: Schema.org главной — бесплатно и тарифы за месяц; ни пакетов кредитов, ни подписок', () => {
   const html = renderIndexHtml(BASE, '/');
   const json = /<script type="application\/ld\+json">([^<]+)<\/script>/.exec(html)?.[1] ?? '';
   const graph = (JSON.parse(json) as { '@graph': Array<Record<string, unknown>> })['@graph'];
   const app = graph.find((node) => node['@type'] === 'WebApplication') as {
-    offers: Array<{ name: string; price: string }>;
+    offers: Array<{
+      name: string;
+      price: string;
+      priceSpecification?: { unitCode: string; price: string };
+    }>;
   };
   assert.deepEqual(
-    app.offers.map((offer) => offer.price),
-    ['0', '5', '10', '25', '50', '100'],
+    app.offers.map((offer) => [offer.name, offer.price]),
+    [
+      ['Бесплатно: анализ, создание и проверка', '0'],
+      ...TIERS.map((tier) => [`Тариф ${tier.name}`, String(tier.priceUsd)]),
+    ],
   );
-  assert.ok(!app.offers.some((offer) => /Plus|Pro|Ultra/.test(offer.name)));
+  for (const offer of app.offers.slice(1)) {
+    assert.equal(offer.priceSpecification?.unitCode, 'MON', `${offer.name}: цена за месяц`);
+    assert.equal(offer.priceSpecification?.price, offer.price);
+  }
+  assert.ok(!app.offers.some((offer) => /кредит|Plus|Pro|Ultra/.test(offer.name)));
 });
 
 test('seo: раздел анализов закрыт от индексации', () => {
