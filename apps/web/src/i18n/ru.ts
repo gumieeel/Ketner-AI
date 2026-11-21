@@ -2258,6 +2258,32 @@ export const ru = {
   'builder.bot.leads.markNew': 'Вернуть в новые',
   'builder.bot.leads.new': 'Новая',
   'builder.bot.leads.done': 'Обработана',
+  'google.sheet.title': 'Google Таблица',
+  'google.sheet.offer':
+    'Каждая новая заявка любого вашего бота будет дописываться строкой в таблицу «Заявки Ketner» в вашем Google Диске. Ketner получит доступ только к файлам, которые создаст сам.',
+  'google.sheet.connect': 'Записывать заявки в Google Таблицу',
+  'google.sheet.connected': 'Новые заявки записываются в Google Таблицу.',
+  'google.sheet.connectedAs': 'Новые заявки записываются в Google Таблицу ({email}).',
+  'google.sheet.connectedNotice': 'Google Таблица подключена.',
+  'google.sheet.open': 'Открыть таблицу',
+  'google.sheet.disconnect': 'Отключить таблицу',
+  'google.sheet.backfill': 'Дописать пропущенные ({count})',
+  'google.sheet.backfillDone': 'Пропущенные заявки отправлены в таблицу.',
+  'google.sheet.revoked':
+    'Доступ к Google отозван — подключите таблицу снова. Заявки сохраняются в Ketner и ждут подключения.',
+  'google.sheet.reconnect': 'Подключить снова',
+  'google.sheet.missing':
+    'Таблица удалена или в корзине Google Диска. Создать новую? Заявки сохраняются в Ketner и ждут.',
+  'google.sheet.newSheet': 'Создать новую таблицу',
+  'google.sheet.newSheetDone':
+    'Новая таблица создана. Нажмите «Дописать пропущенные», чтобы перенести заявки.',
+  'google.sheet.denied': 'Вы не дали доступ к Google. Таблица не подключена.',
+  'google.sheet.error': 'Не удалось подключить Google Таблицу. Попробуйте ещё раз.',
+  'google.lead.written': 'в таблице',
+  'google.lead.writing': 'записывается в таблицу',
+  'google.lead.failed': 'не записано в таблицу',
+  'google.lead.waiting': 'ждёт подключения таблицы',
+  'google.lead.retry': 'Повторить',
   'builder.bot.conversations.title': 'Диалоги',
   'builder.bot.conversations.lead':
     'Что спрашивают клиенты и что отвечает бот. Неудачный ответ можно исправить — бот запомнит правильный.',

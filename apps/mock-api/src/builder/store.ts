@@ -94,6 +94,8 @@ export interface BuilderStore {
     at: string,
   ): Promise<BotLead | null>;
   countNewLeads(ownerId: string, solutionId: string): Promise<number>;
+  /** Заявка владельца по id (доставка в Google Таблицу, google/delivery.ts). */
+  getLead(ownerId: string, leadId: string): Promise<BotLead | null>;
 }
 
 const clone = <T>(value: T): T => structuredClone(value);
@@ -393,6 +395,11 @@ export class MemoryBuilderStore implements BuilderStore {
     return [...this.leads.values()].filter(
       (item) => item.solutionId === solutionId && item.ownerId === ownerId && item.status === 'new',
     ).length;
+  }
+
+  async getLead(ownerId: string, leadId: string) {
+    const lead = this.leads.get(leadId);
+    return lead && lead.ownerId === ownerId ? clone(lead) : null;
   }
 }
 
@@ -1104,5 +1111,13 @@ export class PostgresBuilderStore implements BuilderStore {
       [solutionId, ownerId],
     );
     return Number(rows[0]?.count ?? 0);
+  }
+
+  async getLead(ownerId: string, leadId: string) {
+    const rows = await this.db.query<LeadRow>(
+      `SELECT ${LEAD_COLUMNS} FROM bot_leads WHERE id = $1 AND user_id = $2`,
+      [leadId, ownerId],
+    );
+    return rows[0] ? toLead(rows[0]) : null;
   }
 }

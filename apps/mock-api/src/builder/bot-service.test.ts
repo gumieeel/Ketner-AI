@@ -68,6 +68,7 @@ async function setup(
     reply?: (request: GatewayRequest) => string;
     tierUsage?: TierUsage;
     tierAlerts?: TierAlerts;
+    onLeadCreated?: (lead: BotLead) => Promise<void>;
   } = {},
 ) {
   const store = new MemoryBuilderStore();
@@ -106,6 +107,7 @@ async function setup(
     owner: (id) => (id === OWNER.userId ? OWNER : null),
     ...(options.tierUsage ? { tierUsage: options.tierUsage } : {}),
     ...(options.tierAlerts ? { tierAlerts: options.tierAlerts } : {}),
+    ...(options.onLeadCreated ? { onLeadCreated: options.onLeadCreated } : {}),
     ...(PLATFORM
       ? { platform: { enabled: () => true, answer: (input) => platformRuntime.answer(input) } }
       : {}),
@@ -335,6 +337,46 @@ test('заявка: и у выключенного бота, письмо вла
     question: '',
   });
   assert.equal(draftLead.ok, false);
+});
+
+test('заявка уходит в запись Google Таблицы (этап F); её сбой заявку не теряет и ответ не задерживает', async () => {
+  const delivered: BotLead[] = [];
+  const ok = await setup({
+    onLeadCreated: async (lead) => {
+      delivered.push(lead);
+    },
+  });
+  const created = await ok.service.createLead('lisa-shop', {
+    visitorId: VISITOR,
+    name: 'Анна',
+    contact: '+7 700 000 00 00',
+    question: 'Букет на завтра',
+  });
+  assert.equal(created.ok, true);
+  assert.equal(delivered.length, 1);
+  assert.equal(delivered[0]?.id, created.ok ? created.leadId : '');
+  assert.equal(delivered[0]?.ownerId, OWNER.userId);
+
+  const errors: unknown[] = [];
+  const originalError = console.error;
+  console.error = (...args: unknown[]) => errors.push(args);
+  try {
+    const failing = await setup({
+      onLeadCreated: () => Promise.reject(new Error('Google недоступен')),
+    });
+    const lead = await failing.service.createLead('lisa-shop', {
+      visitorId: VISITOR,
+      name: 'Борис',
+      contact: 'boris@example.com',
+      question: '',
+    });
+    assert.equal(lead.ok, true);
+    assert.equal(failing.leads.length, 1, 'письмо о заявке ушло');
+    await new Promise((resolve) => setImmediate(resolve));
+    assert.equal(errors.length, 1);
+  } finally {
+    console.error = originalError;
+  }
 });
 
 test('настройки и проба: адрес проверяется, проба идёт по текущей версии и не сохраняется', async () => {

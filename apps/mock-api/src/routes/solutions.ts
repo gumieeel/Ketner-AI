@@ -139,6 +139,8 @@ export interface SolutionsRouterDeps {
   mailer?: Mailer;
   /** Сообщения владельцу в Telegram (если привязан): предупреждения об объёме тарифа. */
   ownerTelegram?: OwnerTelegram;
+  /** Новая заявка бота: запись в Google Таблицу владельца (этап F; выключено переключателем). */
+  onLeadCreated?: (lead: BotLead) => Promise<void>;
   /** Общие сервисы Builder и ботов (routes/index.ts создаёт один на оба роутера). */
   runtime?: BuilderRuntime;
 }
@@ -222,6 +224,7 @@ export function createBuilderRuntime(deps: SolutionsRouterDeps): BuilderRuntime 
       balanceUsd,
       owner,
       ...(deps.tierUsage ? { tierUsage: deps.tierUsage } : {}),
+      ...(deps.onLeadCreated ? { onLeadCreated: deps.onLeadCreated } : {}),
       ...(ready.counters && (deps.mailer || deps.ownerTelegram)
         ? {
             tierAlerts: tierAlertsFor(ready.counters, owner, {
