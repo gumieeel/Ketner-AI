@@ -31,6 +31,9 @@ import type { UserStore } from '../store/user-store.js';
 import { createApiKeysRouter } from './api-keys.js';
 import { createGithubRouter } from './github.js';
 import { createGoogleIntegrationRouter } from './google-integration.js';
+import { createSheetsDelivery, startSheetsSweep } from '../google/delivery-runtime.js';
+import type { SheetsDelivery } from '../google/delivery.js';
+import { googleOAuthSettings } from '../google/oauth.js';
 import { createAuthRouter } from './auth.js';
 import { createBillingRouter } from './billing.js';
 import { createContactRouter } from './contact.js';
@@ -106,6 +109,8 @@ export interface ApiDeps {
   googleFetch?: typeof fetch;
   /** Настройки OAuth Google Таблиц; в тестах подменяются. */
   googleSettings?: () => GoogleOAuthSettings | null;
+  /** Доставка заявок в Google Таблицу; в тестах — своя (обход вызывается вручную). */
+  googleDelivery?: SheetsDelivery;
   /** Платежи, подписки и возвраты. */
   billingService?: BillingService;
   ai: AiConfig;
@@ -393,6 +398,25 @@ export function createApiRouter(deps: ApiDeps): Router {
     },
   });
   const activeWidgetInstalls = deps.widgetInstalls ?? defaultWidgetInstalls;
+  // Доставка заявок в Google Таблицу (этап F, шаг 4): одна на сервер — для ботов и для кабинета.
+  const activeGoogleStore = deps.googleConnectionStore ?? defaultGoogleConnectionStore;
+  const sheetsDelivery =
+    deps.googleDelivery ??
+    createSheetsDelivery({
+      stores: platformStores,
+      connections: activeGoogleStore,
+      settings: deps.googleSettings ?? googleOAuthSettings,
+      siteUrl,
+      ownerEmail: (userId) => activeUserStore.findById(userId)?.email ?? null,
+      mailer: ownerMailer(deps),
+      telegram: {
+        canNotify: (userId) => (deps.botService ?? telegramBotService).canNotifyUser(userId),
+        notifyOwner: (userId, text) =>
+          (deps.botService ?? telegramBotService).notifyOwner(userId, text),
+      },
+      ...(deps.googleFetch ? { fetchImpl: deps.googleFetch } : {}),
+    });
+  if (productSwitch('googleSheets')) startSheetsSweep(sheetsDelivery, platformStores);
   // Журнал платежей работает с теми же хранилищами, что и роутеры (в тестах — с временными).
   const activeBilling =
     deps.billingService ??
@@ -528,13 +552,16 @@ export function createApiRouter(deps: ApiDeps): Router {
       settings: deps.githubSettings,
     }),
   );
-  // Google Таблицы (этап F): выключено переключателем googleSheets — все адреса отвечают 503.
+  // Google Таблицы (этап F): выключено переключателем googleSheets — все адреса отвечают 503,
+  // заявки в таблицу не пишутся, обход не идёт.
   router.use(
     createGoogleIntegrationRouter({
-      store: deps.googleConnectionStore ?? defaultGoogleConnectionStore,
+      store: activeGoogleStore,
       verifiers: deps.googleVerifierStore ?? defaultGoogleVerifierStore,
       fetchImpl: deps.googleFetch,
       settings: deps.googleSettings,
+      delivery: sheetsDelivery,
+      leads: () => platformStores()?.builder ?? null,
     }),
   );
   // Чат закрыт (product-switches.ts): диалоги остаются в базе, API отвечает 503.
@@ -618,6 +645,7 @@ export function createApiRouter(deps: ApiDeps): Router {
     ...(deps.discovery?.stores ? { stores: deps.discovery.stores } : {}),
     ...(deps.builder ? { service: deps.builder } : {}),
     mailer: ownerMailer(deps),
+    onLeadCreated: (lead) => sheetsDelivery.onLeadCreated(lead),
     ownerTelegram: {
       canNotify: (userId) => (deps.botService ?? telegramBotService).canNotifyUser(userId),
       notifyOwner: (userId, text) =>

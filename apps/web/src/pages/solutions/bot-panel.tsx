@@ -26,6 +26,9 @@ import { cn } from '@/lib/cn';
 import { formatDateTime } from '@/lib/format-date';
 import { ErrorNotice } from '@/pages/analysis/error-notice';
 import { BotLinkAndQr, BotSiteInstall } from './bot-install';
+import { GoogleSheetCard } from './google-sheet-card';
+import { googleSheetsApi, type LeadDeliveryState } from '@/features/google/api';
+import { productSwitch } from '@/lib/product-switches';
 
 /**
  * Кабинет бота для клиентов (этап B): где живёт бот (ссылка, QR, код для сайта), расход за
@@ -338,9 +341,27 @@ function LeadsSection({ id }: { id: string }) {
   const { t, language } = useTranslation();
   const [leads, setLeads] = useState<BotLeadView[] | null>(null);
   const [error, setError] = useState<unknown>(null);
+  // Google Таблица (этап F): отметки у заявок — только при открытом переключателе.
+  const sheets = productSwitch('googleSheets');
+  const [deliveries, setDeliveries] = useState<Record<string, LeadDeliveryState>>({});
+  const loadDeliveries = useCallback(() => {
+    if (!sheets) return;
+    googleSheetsApi.deliveries(id).then(setDeliveries, () => setDeliveries({}));
+  }, [id, sheets]);
   useEffect(() => {
     listBotLeads(id).then(setLeads, setError);
-  }, [id]);
+    loadDeliveries();
+  }, [id, loadDeliveries]);
+
+  const retryDelivery = async (leadId: string) => {
+    setError(null);
+    try {
+      const { state } = await googleSheetsApi.retryLead(leadId);
+      if (state) setDeliveries((current) => ({ ...current, [leadId]: state }));
+    } catch (caught) {
+      setError(caught);
+    }
+  };
 
   const toggle = async (lead: BotLeadView) => {
     setError(null);
@@ -354,6 +375,7 @@ function LeadsSection({ id }: { id: string }) {
 
   return (
     <Section title={t('builder.bot.leads.title')}>
+      {sheets ? <GoogleSheetCard onChange={loadDeliveries} /> : null}
       {error ? (
         <div className="mt-4">
           <ErrorNotice error={error} redirect={`/solutions/${id}`} />
@@ -399,12 +421,40 @@ function LeadsSection({ id }: { id: string }) {
                     ? t('builder.bot.leads.markDone')
                     : t('builder.bot.leads.markNew')}
                 </Button>
+                {sheets && deliveries[lead.id] ? (
+                  <LeadDeliveryMark
+                    state={deliveries[lead.id]!}
+                    onRetry={() => void retryDelivery(lead.id)}
+                  />
+                ) : null}
               </div>
             </li>
           ))}
         </ul>
       ) : null}
     </Section>
+  );
+}
+
+const DELIVERY_TONE: Record<LeadDeliveryState, 'neutral' | 'info' | 'danger' | 'warning'> = {
+  written: 'neutral',
+  writing: 'info',
+  failed: 'danger',
+  waiting: 'warning',
+};
+
+/** Отметка «в таблице» / «записывается» / «не записано, повторить» / «ждёт подключения». */
+function LeadDeliveryMark({ state, onRetry }: { state: LeadDeliveryState; onRetry: () => void }) {
+  const { t } = useTranslation();
+  return (
+    <span className="flex items-center gap-2">
+      <Badge tone={DELIVERY_TONE[state]}>{t(`google.lead.${state}`)}</Badge>
+      {state === 'failed' ? (
+        <Button variant="ghost" size="sm" onClick={onRetry}>
+          {t('google.lead.retry')}
+        </Button>
+      ) : null}
+    </span>
   );
 }
 

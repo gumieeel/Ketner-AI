@@ -2275,6 +2275,32 @@ export const en: Record<TranslationKey, string> = {
   'builder.bot.leads.markNew': 'Mark as new',
   'builder.bot.leads.new': 'New',
   'builder.bot.leads.done': 'Handled',
+  'google.sheet.title': 'Google Sheet',
+  'google.sheet.offer':
+    'Each new request from any of your bots will be added as a row to the "Заявки Ketner" sheet in your Google Drive. Ketner gets access only to files it creates itself.',
+  'google.sheet.connect': 'Save requests to a Google Sheet',
+  'google.sheet.connected': 'New requests are saved to your Google Sheet.',
+  'google.sheet.connectedAs': 'New requests are saved to your Google Sheet ({email}).',
+  'google.sheet.connectedNotice': 'Google Sheet connected.',
+  'google.sheet.open': 'Open the sheet',
+  'google.sheet.disconnect': 'Disconnect the sheet',
+  'google.sheet.backfill': 'Add missed requests ({count})',
+  'google.sheet.backfillDone': 'Missed requests were sent to the sheet.',
+  'google.sheet.revoked':
+    'Access to Google was revoked: connect the sheet again. Requests are kept in Ketner and wait for the connection.',
+  'google.sheet.reconnect': 'Connect again',
+  'google.sheet.missing':
+    'The sheet was deleted or is in the Google Drive trash. Create a new one? Requests are kept in Ketner and wait.',
+  'google.sheet.newSheet': 'Create a new sheet',
+  'google.sheet.newSheetDone':
+    'A new sheet was created. Press "Add missed requests" to copy them over.',
+  'google.sheet.denied': 'You did not grant access to Google. The sheet is not connected.',
+  'google.sheet.error': 'Could not connect the Google Sheet. Please try again.',
+  'google.lead.written': 'in the sheet',
+  'google.lead.writing': 'saving to the sheet',
+  'google.lead.failed': 'not saved to the sheet',
+  'google.lead.waiting': 'waiting for the sheet',
+  'google.lead.retry': 'Retry',
   'builder.bot.conversations.title': 'Conversations',
   'builder.bot.conversations.lead':
     'What customers ask and what the bot answers. A poor reply can be corrected — the bot will remember the right one.',

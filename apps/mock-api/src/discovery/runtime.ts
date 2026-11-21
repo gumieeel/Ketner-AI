@@ -8,6 +8,11 @@
 
 import type { SqlRunner } from '../code/postgres-driver.js';
 import { MemoryBudgetStore, PostgresBudgetStore, type BudgetStore } from './budget.js';
+import {
+  MemoryDeliveryJournal,
+  PostgresDeliveryJournal,
+  type DeliveryJournal,
+} from '../google/delivery-journal.js';
 import { MemoryDiscoveryStore, PostgresDiscoveryStore, type DiscoveryStore } from './store.js';
 import { MemoryBuilderStore, PostgresBuilderStore, type BuilderStore } from '../builder/store.js';
 import {
@@ -59,6 +64,11 @@ export interface DiscoveryStores {
    * платформы бота (BOT_PLATFORM_RUNTIME); без него боты отвечают прежним путём.
    */
   journal?: ExecutionJournal;
+  /**
+   * Доставка заявок в Google Таблицу (этап F, google/delivery-journal.ts): те же таблицы журнала,
+   * `kind = 'delivery'` (миграция 0016).
+   */
+  deliveries?: DeliveryJournal;
 }
 
 let databaseExpected = false;
@@ -81,6 +91,7 @@ export function attachDiscoveryDriver(runner: SqlRunner): void {
     pricing: new PostgresPricingStore(runner),
     journal: new PostgresExecutionJournal(runner),
     counters: new PostgresCounterStore(runner),
+    deliveries: new PostgresDeliveryJournal(runner),
   };
 }
 
@@ -103,6 +114,7 @@ export function getDiscoveryStores(): DiscoveryStores | null {
       pricing: new MemoryPricingStore(),
       journal: new MemoryExecutionJournal(),
       counters: new MemoryCounterStore(),
+      deliveries: new MemoryDeliveryJournal(),
     };
   }
   return memory;

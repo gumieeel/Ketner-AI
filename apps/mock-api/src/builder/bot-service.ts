@@ -88,6 +88,11 @@ export interface BotServiceDeps {
    * тарифах; ошибка письма ответ посетителю не задерживает.
    */
   tierAlerts?: TierAlerts;
+  /**
+   * Заявка сохранена: запись в Google Таблицу владельца (этап F, google/delivery.ts). Идёт в фоне —
+   * ответ посетителю её не ждёт, сбой записи заявку не теряет.
+   */
+  onLeadCreated?: (lead: BotLead) => Promise<void>;
   /** Письмо владельцу о новой заявке (ошибка письма заявку не теряет). */
   notifyLead?: (owner: BotOwner, solution: Solution, lead: BotLead) => Promise<void>;
   /**
@@ -450,6 +455,9 @@ export class BotService {
       updatedAt: iso,
     };
     await this.deps.store.createLead(lead);
+    void this.deps.onLeadCreated?.(lead).catch((error: unknown) => {
+      console.error(`[bot] заявка ${lead.id}: запись в таблицу не начата`, error);
+    });
     const owner = this.deps.owner(solution.ownerId);
     if (owner && this.deps.notifyLead) {
       await this.deps.notifyLead(owner, solution, lead).catch((error: unknown) => {
