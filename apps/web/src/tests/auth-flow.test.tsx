@@ -4,10 +4,6 @@ import { useAuthNotice } from '@/features/auth/auth-notice';
 import { useAuth } from '@/features/auth/auth-store';
 import { FAKE_SIGNUP_CODE, installFakeApi } from './fake-api';
 import { renderRoute, resetAuth, resetChat, resetPreferences } from './test-utils';
-import { setProductSwitchesForTests } from '@/lib/product-switches';
-
-// Пакеты кредитов не продаются (задача 0b): тест возврата на оформление проверяет спящий код.
-setProductSwitchesForTests({ packs: true });
 
 describe('auth-flow: сценарии авторизации и сессии', () => {
   beforeEach(() => {
@@ -228,36 +224,6 @@ describe('auth-flow: сценарии авторизации и сессии', (
     await waitFor(() => {
       expect(useAuth.getState().status).toBe('unauthenticated');
       expect(useAuth.getState().user).toBeNull();
-    });
-  });
-
-  it('регистрация с параметром ?redirect=/checkout/credits-10 перенаправляет обратно на чекаут и показывает уведомление', async () => {
-    renderRoute('/signup?redirect=%2Fcheckout%2Fcredits-10');
-
-    expect(
-      screen.getByText('Чтобы купить кредиты, сначала войдите или создайте аккаунт.'),
-    ).toBeInTheDocument();
-
-    const nameInput = screen.getByLabelText(/Имя/i);
-    const emailInput = screen.getByLabelText(/Email/i);
-    const passwordInput = screen.getByLabelText(/Пароль/i);
-    const submitButton = screen.getByRole('button', { name: 'Зарегистрироваться' });
-
-    fireEvent.change(nameInput, { target: { value: 'Покупатель' } });
-    fireEvent.change(emailInput, { target: { value: 'buyer@example.com' } });
-    fireEvent.change(passwordInput, { target: { value: 'secretPassword123' } });
-    fireEvent.click(submitButton);
-
-    fireEvent.change(await screen.findByLabelText('Код из письма'), {
-      target: { value: FAKE_SIGNUP_CODE },
-    });
-
-    await waitFor(() => {
-      expect(useAuth.getState().status).toBe('authenticated');
-      expect(
-        screen.getByRole('heading', { level: 1, name: 'Покупка кредитов' }),
-      ).toBeInTheDocument();
-      expect(screen.getByText('Выбранный пакет')).toBeInTheDocument();
     });
   });
 

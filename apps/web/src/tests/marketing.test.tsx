@@ -29,16 +29,13 @@ describe('marketing: лендинг, шапка, футер и пакеты кр
     // Моделей, которых нет в каталоге, на лендинге быть не должно
     expect(screen.queryByText(/Gemini 3\.8|GPT-4o|Ketner Next/)).toBeNull();
 
-    // Пять пакетов кредитов — заголовки третьего уровня внутри секции «Кредиты»
-    expect(screen.getByRole('heading', { level: 2, name: 'Кредиты' })).toBeInTheDocument();
-    for (const price of ['$5', '$10', '$25', '$50', '$100']) {
-      expect(screen.getByRole('heading', { level: 3, name: price })).toBeInTheDocument();
-    }
+    // Карточек пакетов кредитов нет: пакеты не продаются (задача 0b).
+    expect(screen.queryByRole('heading', { level: 3, name: '$5' })).toBeNull();
     // Подписочных тарифов на лендинге нет
     expect(screen.queryByRole('heading', { level: 3, name: /^(Plus|Pro|Ultra)$/ })).toBeNull();
 
     // FAQ аккордеон
-    expect(screen.getByText('Как работают кредиты?')).toBeInTheDocument();
+    expect(screen.getByText('Сколько стоит Ketner AI?')).toBeInTheDocument();
   });
 
   it('мобильное меню открывается по клику и закрывается по Escape', () => {

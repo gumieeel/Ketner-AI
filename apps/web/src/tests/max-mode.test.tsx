@@ -2,7 +2,6 @@ import { screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { useAuth } from '@/features/auth/auth-store';
-import { useCreditsModal } from '@/features/billing/credits-modal-store';
 import { usePreferences } from '@/features/preferences/preferences-store';
 import { installFakeApi } from './fake-api';
 import { renderRoute, resetAuth, resetChat, resetPreferences } from './test-utils';
@@ -32,7 +31,6 @@ describe('режим Max', () => {
     resetAuth();
     resetPreferences();
     resetChat();
-    useCreditsModal.getState().close();
   });
 
   it('на Free включается без окна покупки и уходит на сервер как reasoningMode: max', async () => {
@@ -45,7 +43,7 @@ describe('режим Max', () => {
     expect(toggle).toHaveAttribute('aria-pressed', 'false');
     expect(toggle).toHaveAccessibleName(/запрос стоит дороже/);
     await user.click(toggle);
-    expect(useCreditsModal.getState().isOpen).toBe(false);
+    expect(screen.queryByRole('dialog')).toBeNull();
     expect(toggle).toHaveAttribute('aria-pressed', 'true');
     expect(usePreferences.getState().maxMode).toBe(true);
     expect(window.localStorage.getItem('ketner.maxMode')).toBe('1');

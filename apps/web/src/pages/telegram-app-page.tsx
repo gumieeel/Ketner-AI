@@ -4,7 +4,6 @@ import {
   FileTextIcon,
   ShieldIcon,
   SparkleIcon,
-  StarIcon,
   TelegramIcon,
   UserIcon,
 } from '@/components/icons';
@@ -20,16 +19,13 @@ import {
 } from '@/features/telegram/webapp';
 import { usePreferences } from '@/features/preferences/preferences-store';
 import { useTranslation, type TranslationKey } from '@/i18n';
-import { formatCredits } from '@/lib/format-date';
 import { cn } from '@/lib/cn';
 import { AdminTab } from './telegram-app/admin-tab';
 import { HomeTab } from './telegram-app/home-tab';
 import { Onboarding } from './telegram-app/onboarding';
-import { PacksTab } from './telegram-app/packs-tab';
 import { PaymentsTab } from './telegram-app/payments-tab';
 import { ProfileTab } from './telegram-app/profile-tab';
 import { BOT_URL, MiniAppProvider, Panel, type MiniApp, type TabId } from './telegram-app/shared';
-import { productSwitch } from '@/lib/product-switches';
 
 type Screen =
   | { kind: 'loading' }
@@ -55,7 +51,6 @@ const TABS: Array<{
   icon: (props: { className?: string }) => ReactNode;
 }> = [
   { id: 'home', label: 'tg.tabHome', icon: SparkleIcon },
-  { id: 'plans', label: 'tg.tabCredits', icon: StarIcon },
   { id: 'payments', label: 'tg.tabPayments', icon: FileTextIcon },
   { id: 'profile', label: 'tg.tabProfile', icon: UserIcon },
   { id: 'admin', label: 'tg.tabAdmin', icon: ShieldIcon },
@@ -63,12 +58,14 @@ const TABS: Array<{
 
 const TAB_IDS = new Set<string>(TABS.map((tab) => tab.id));
 
-/** Вкладка из ссылки бота (`/tg?tab=plans`) или из start_param (`t.me/bot/app?startapp=plans`). */
+/**
+ * Вкладка из ссылки бота (`/tg?tab=payments`) или из start_param (`t.me/bot/app?startapp=payments`).
+ * Вкладки пакетов больше нет (задача 0b): старые ссылки `?tab=plans` открывают главную.
+ */
 function initialTab(app: TelegramWebApp | null): TabId {
   const fromQuery = new URLSearchParams(window.location.search).get('tab');
   const fromStart = app?.initDataUnsafe.start_param;
   const value = fromQuery ?? fromStart ?? 'home';
-  if (value === 'plans' && !productSwitch('stars')) return 'home';
   return TAB_IDS.has(value) ? (value as TabId) : 'home';
 }
 
@@ -192,7 +189,7 @@ function Cabinet({
   onState: (state: MiniAppState) => void;
   onUnlinked: () => void;
 }) {
-  const { t, language } = useTranslation();
+  const { t } = useTranslation();
   const [tab, setTab] = useState<TabId>(() => {
     const first = initialTab(app);
     return first === 'admin' && !state.user.isAdmin ? 'home' : first;
@@ -258,17 +255,11 @@ function Cabinet({
     [app, token, state, onState, refresh, notify, goTo, openSite],
   );
 
-  // Пакеты в кабинете продаются только звёздами: Stars закрыты (lib/product-switches.ts) — вкладки нет.
-  const tabs = TABS.filter(
-    (item) =>
-      (item.id !== 'admin' || state.user.isAdmin) &&
-      (item.id !== 'plans' || productSwitch('stars')),
-  );
+  const tabs = TABS.filter((item) => item.id !== 'admin' || state.user.isAdmin);
   const name =
     state.user.name || (state.user.telegramUsername ? `@${state.user.telegramUsername}` : '');
   const titles: Record<TabId, string> = {
     home: name ? t('tg.hello', { name: name.split(' ')[0] ?? name }) : t('tg.tabHome'),
-    plans: t('tg.packsTitle'),
     payments: t('tg.tabPayments'),
     profile: t('tg.tabProfile'),
     admin: t('tg.adminTitle'),
@@ -281,18 +272,11 @@ function Cabinet({
           <h1 className="min-w-0 truncate text-[22px] font-semibold tracking-tight">
             {titles[tab]}
           </h1>
-          {state.user.isVip ? (
-            <Badge tone="ultra">VIP</Badge>
-          ) : productSwitch('packs') ? (
-            <Badge tone="brand">
-              {t('tg.balanceBadge', { count: formatCredits(state.credits.balance, language) })}
-            </Badge>
-          ) : null}
+          {state.user.isVip ? <Badge tone="ultra">VIP</Badge> : null}
         </header>
 
         <div role="tabpanel" id={`tg-panel-${tab}`} aria-labelledby={`tg-tab-${tab}`}>
           {tab === 'home' ? <HomeTab /> : null}
-          {tab === 'plans' ? <PacksTab /> : null}
           {tab === 'payments' ? <PaymentsTab /> : null}
           {tab === 'profile' ? <ProfileTab onUnlinked={onUnlinked} /> : null}
           {tab === 'admin' && state.user.isAdmin ? <AdminTab /> : null}
@@ -364,9 +348,7 @@ function Cabinet({
                 )}
               >
                 <span className="relative">
-                  <Icon
-                    className={cn('size-[22px]', active && item.id === 'plans' && 'fill-accent/20')}
-                  />
+                  <Icon className="size-[22px]" />
                   {count > 0 ? (
                     <span className="absolute -top-1.5 -right-2.5 min-w-4 rounded-full bg-warning px-1 text-center text-[10px] leading-4 font-semibold text-canvas">
                       {count}

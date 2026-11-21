@@ -7,18 +7,6 @@ export { ApiError };
 /** Прежние подписки (у платежей и автопродления до перехода на кредиты). */
 export type PaidPlanId = Exclude<PlanId, 'free' | 'credits'>;
 
-/** Пакет кредитов в кабинете: цена в звёздах уже посчитана сервером по курсу Telegram. */
-export interface MiniAppPack {
-  id: string;
-  priceUsd: number;
-  credits: number;
-  stars: number;
-  /** Сколько эти звёзды стоят по официальному курсу Telegram, $. */
-  starsUsd: number;
-  /** Цена за 1 000 кредитов, $. */
-  pricePerThousandUsd: number;
-}
-
 export interface MiniAppCredits {
   /** Остаток, кредиты. */
   balance: number;
@@ -89,14 +77,6 @@ export interface MiniAppState {
   } | null;
   /** Остаток кредитов и условия пробных. */
   credits: MiniAppCredits;
-  packs: MiniAppPack[];
-  /** Курс цены в звёздах (официальный Telegram) и рыночный курс Fragment для сравнения. */
-  rate: {
-    usdPerStar: number;
-    source: 'official' | 'config';
-    updatedAt: string;
-    market: { usdPerStar: number; updatedAt: string } | null;
-  };
   payments: MiniAppPayment[];
   prefs: { reminders: boolean; receipts: boolean };
   /** Возврат — в течение стольких часов после оплаты и только без запросов к моделям. */
@@ -169,14 +149,6 @@ export const miniAppApi = {
   linkCode: (initData: string) =>
     call<{ code: string; expiresAt: number }>('/link-code', { body: { initData } }),
   state: (token: string) => call<MiniAppState>('/state', { token }),
-  /** Счёт в звёздах на пакет кредитов. */
-  invoice: (token: string, packId: string) =>
-    call<{ invoiceId: string; link: string; stars: number }>('/invoice', {
-      token,
-      body: { packId },
-    }),
-  invoiceStatus: (token: string, invoiceId: string) =>
-    call<{ status: 'pending' | 'paid' | 'expired' }>(`/invoice/${enc(invoiceId)}`, { token }),
   /** Отключить автопродление прежней подписки (включить его заново нельзя). */
   autoRenew: (token: string, enabled: boolean) =>
     call<MiniAppState>('/auto-renew', { token, body: { enabled } }),
