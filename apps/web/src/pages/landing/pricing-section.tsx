@@ -1,5 +1,4 @@
 import { Link } from 'react-router-dom';
-import { PackCards } from '@/components/pricing/pack-cards';
 import { TRIAL } from '@/features/billing/plans';
 import { useTranslation } from '@/i18n';
 import { SectionHead } from './section-head';
@@ -28,7 +27,6 @@ export function LandingPricingSection() {
           </>
         }
       />
-      <PackCards variant="compact" className="mt-12" />
     </section>
   );
 }

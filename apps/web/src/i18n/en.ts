@@ -47,7 +47,6 @@ export const en: Record<TranslationKey, string> = {
   'auth.nameRequired': 'Please enter your name',
   'auth.loggingIn': 'Logging in...',
   'auth.signingUp': 'Signing up...',
-  'auth.checkoutSignupNotice': 'To buy credits, please sign in or create an account first.',
   'auth.verifyTitle': 'Confirm your email',
   'auth.verifyLoginTitle': 'Sign-in code',
   'auth.noticeSignedUp': 'Sign-up complete. Welcome to Ketner AI!',
@@ -137,19 +136,7 @@ export const en: Record<TranslationKey, string> = {
   'pricing.title': 'Pricing',
   'pricing.subtitle':
     'Business analysis, building and testing assistants and bots are free. You pay only for solutions that run: one plan per account, no surprise charges.',
-  'pricing.popular': 'Popular',
-  'pricing.compare': 'What changes after your first purchase',
-  'pricing.credits.one': '{count} credit',
-  'pricing.credits.few': '{count} credits',
-  'pricing.credits.many': '{count} credits',
-  'pricing.requests.one': '{count} request',
-  'pricing.requests.few': '{count} requests',
-  'pricing.requests.many': '{count} requests',
-  'pricing.creditsExample': '≈ {requests} of {model}',
   'pricing.free': 'Free',
-  'pricing.viewDocs': 'View documentation',
-  'pricing.modelsBadge': 'Models',
-  'pricing.docsLink': 'More about credits and models in the documentation',
   'pricing.notice':
     'A plan is monthly, per account. Moving to a higher plan happens only with your consent. Payment and refund terms are on the “Payment and refunds” page.',
 
@@ -169,58 +156,11 @@ export const en: Record<TranslationKey, string> = {
   'docs.step3Title': 'Receive your answer',
   'docs.step3Desc': 'The answer streams in as the model writes it, and shows which model replied.',
 
-  'checkout.title': 'Buy credits',
-  'checkout.cardNumber': 'Card number',
-  'checkout.expiry': 'Expiry date',
-  'checkout.cvc': 'CVC',
-  'checkout.pay': 'Start subscription',
-  'checkout.processing': 'Processing...',
-  'checkout.success': 'Subscription active',
   'checkout.successTitle': 'Credits added!',
   'checkout.successMessage':
     'The pack is paid. Your credits are on the balance and ready in chat, code and images.',
   'checkout.goToChat': 'Go to chat',
   'checkout.goToSettings': 'Settings',
-  'checkout.cardNumberInvalid': 'Enter a valid 16-digit card number',
-  'checkout.expiryInvalid': 'Enter a valid expiration date (MM/YY)',
-  'checkout.cvcInvalid': 'Enter a 3-digit CVC/CVV code',
-  'checkout.notice': 'Secure checkout: 256-bit SSL encrypted according to PCI-DSS standard.',
-  'checkout.methodTitle': 'Payment method',
-  'checkout.methodSbp': 'SBP (Faster Payments System)',
-  'checkout.methodSbpDesc': 'Pay instantly with QR code via mobile banking app (0% fee)',
-  'checkout.methodCrypto': 'Cryptocurrency',
-  'checkout.methodCryptoDesc': 'USDT (TRC-20, TON), TON, Bitcoin',
-  'checkout.methodStars': 'Telegram Stars ⭐️',
-  'checkout.methodStarsDesc': 'Official Telegram virtual currency. Pay instantly in bot',
-  'checkout.methodCard': 'Credit / Debit Card',
-  'checkout.methodCardDesc': 'MIR, Visa, Mastercard',
-  'checkout.cryptoNetwork': 'Network & Token',
-  'checkout.cryptoAddress': 'Deposit Address',
-  'checkout.cryptoCopyAddress': 'Copy address',
-  'checkout.cryptoCopyAmount': 'Copy amount',
-  'checkout.cryptoCopied': 'Copied!',
-  'checkout.cryptoScanQr': 'Scan QR code in your crypto wallet',
-  'checkout.cryptoConfirm': 'Confirm crypto payment',
-  'checkout.cryptoChecking': 'Checking blockchain transaction...',
-  'checkout.sbpScanQr': 'Scan the QR code in your banking app',
-  'checkout.sbpOpenBank': 'Pay in banking app (SBP)',
-  'checkout.sbpConfirm': 'I have paid via SBP',
-  'checkout.sbpChecking': 'Checking SBP transaction...',
-  'checkout.sbpNotice': 'Transactions processed through NSPK / Faster Payments System.',
-  'checkout.sbpCopySum': 'Copy amount',
-  'checkout.sbpAmountRub': 'Amount in RUB',
-  'checkout.sbpBanksTitle': 'Quick bank launcher',
-  'checkout.starsPayInBot': 'Pay in Telegram (@Robo_kassa_bot)',
-  'checkout.starsQrHint': 'Or scan QR code to open Telegram Bot',
-  'checkout.starsConfirm': 'Confirm Stars payment',
-  'checkout.starsOfficial': 'Official Telegram payment method',
-  'checkout.starsChecking': 'Checking Stars transaction...',
-  'checkout.starsNotice':
-    'The payment is debited instantly from your Telegram balance. Credits are added right after confirmation.',
-  'checkout.starsUsd': '≈ ${usd} at the official Telegram rate',
-  'checkout.starsUsdRate': '≈ ${usd} at the official Telegram rate (1,000 ⭐ = ${per1000})',
-  'checkout.starsDearer':
-    'By card or crypto: {price}. Stars cost more because Telegram keeps about a third of their price.',
   'settings.cancelSubscription': 'Cancel subscription',
   'settings.canceling': 'Canceling...',
   'settings.statusActive': 'Active',
@@ -369,7 +309,6 @@ export const en: Record<TranslationKey, string> = {
   'onboarding.examples': 'Example prompts',
   'onboarding.startWith': 'Open in chat',
 
-  'common.loading': 'Loading…',
   'common.soon': 'Soon',
   'common.mock': 'Active',
   'common.cancel': 'Cancel',
@@ -588,9 +527,6 @@ export const en: Record<TranslationKey, string> = {
   'wsView.back': 'Back to the file list',
 
   // Страница тарифов
-  'pricing.compareLead':
-    'Models, Max mode and images are open to everyone. Buying raises the technical limits and unlocks the API and commands in Ketner Code',
-  'pricing.colFeature': 'Feature',
 
   // Вход и регистрация
   'auth.asideTitle': 'AI agents for your business.',
@@ -727,8 +663,6 @@ export const en: Record<TranslationKey, string> = {
   'tg.tabPayments': 'Payments',
   'tg.tabProfile': 'Profile',
   'tg.tabAdmin': 'Refunds',
-  'tg.vip': 'Full access with no end date.',
-  'tg.vipPlans': 'You have VIP access with no end date — nothing to pay.',
   'tg.until': 'Active until {date} · {days} days left',
   'tg.autoRenew': 'Auto-renewal',
   'tg.autoOffDone': 'Auto-renewal is off. Access stays until the end of the paid term.',
@@ -738,18 +672,6 @@ export const en: Record<TranslationKey, string> = {
   'tg.quickActions': 'Quick actions',
   'tg.openChat': 'Open Ketner AI',
   'tg.support': 'Support',
-  'tg.paymentProcessing': 'Payment received, adding your credits…',
-  'tg.paymentDone': 'Done! Credits added: {credits}.',
-  'tg.paymentLate':
-    'Payment received. Your credits will arrive within a minute — refresh the dashboard.',
-  'tg.paymentFailed': 'The payment did not go through. Please try again.',
-  'tg.refundShort':
-    'Changed your mind? You can get a refund within {days} days, as long as the pack’s credits are unspent.',
-  'tg.rate': 'Stars prices use the official Telegram rate: 1,000 ⭐ = ${per1000}.',
-  'tg.rateMarket': 'Stars are cheaper on Fragment right now: ≈ ${per1000} per 1,000 ⭐.',
-  'tg.starsDearer':
-    'A pack costs more in Stars ({prices} when paying on the site): Telegram keeps part of the Stars’ value.',
-  'tg.payCrypto': 'Pay with crypto on the site: +{bonus}% credits',
   'tg.paymentsTitle': 'Payment history',
   'tg.paymentsEmpty': 'No payments yet',
   'tg.paymentsEmptyText':
@@ -810,9 +732,7 @@ export const en: Record<TranslationKey, string> = {
   'tg.caseProgress': 'Request progress',
   'tg.caseWaiting': 'We’ll reply in the bot, usually within a day',
   'tg.caseNewReply': 'Support replied — open the request',
-  'tg.caseDone': 'Refund approved',
   'tg.caseDoneAuto': 'Refunded automatically',
-  'tg.caseDeclined': 'Refund declined',
   'tg.caseDeclinedNote': 'Support: {note}',
   'tg.caseDeclinedHint': 'Disagree? Write in the request',
   'tg.caseDoneHint': 'Approved by support',
@@ -1148,140 +1068,14 @@ export const en: Record<TranslationKey, string> = {
   'admin.regLanding': 'landed on {path}',
 
   // Оформление: шапка, шаги, способы
-  'checkout.back': 'Back to credits',
-  'checkout.lead': 'Fast and secure payment for a Ketner AI credit pack',
-  'checkout.stepsLabel': 'Checkout steps',
-  'checkout.stepPay': 'Payment',
-  'checkout.stepAccess': 'Access',
-  'checkout.chooseMethod': 'Choose the most convenient method',
-  'checkout.tileCrypto': 'Cryptocurrency',
-  'checkout.tileCryptoBadge': 'Main',
-  'checkout.tileCryptoDesc': '35+ coins and networks · Trybit',
-  'checkout.tileCryptoBonus': '+{bonus} bonus credits',
-  'checkout.cryptoBonusTitle': '+{bonus} bonus credits for paying with crypto',
-  'checkout.cryptoBonusText':
-    'For a {price} pack you get {total} credits instead of {credits}. This is how we share the fee savings: Telegram Stars keeps about 28% of a payment, Trybit about 2%.',
-  'checkout.tileSbp': 'SBP via QR',
-  'checkout.tileSbpBadge': '0% fee',
-  'checkout.tileSbpDesc': 'Any Russian bank · 0% fee',
-  'checkout.tileStars': 'Telegram Stars',
-  'checkout.tileStarsDesc': 'In the official bot',
-  'checkout.statusLabel': 'Status:',
-  'checkout.autoCheck': 'Auto-check every 3 s',
 
   // Оформление: СБП
-  'checkout.sbpTitle': 'Pay with SBP',
-  'checkout.sbpLead': 'Scan the QR code in any Russian bank app, no fee',
-  'checkout.sbpTimer': 'Invoice expires in',
-  'checkout.sbpAmountLabel': 'Amount to be charged',
-  'checkout.sbpGenerating': 'Generating the SBP QR code…',
-  'checkout.sbpHowTitle': 'How to pay from your phone',
-  'checkout.sbpStep1': 'Open your bank app (T-Bank, Sber, Alfa, etc.)',
-  'checkout.sbpStep2': 'Choose “Pay by QR code” and point the camera at the code',
-  'checkout.sbpStep3': 'Check the amount ({amount} ₽) and confirm the payment',
-  'checkout.sbpBanks': 'Supported banks',
-  'checkout.sbpMoreBanks': '+150 more',
-  'checkout.sbpStatus': 'Waiting for the bank transfer',
-  'checkout.sbpCheck': 'Check SBP payment',
-  'checkout.sbpInstant': 'Instant crediting and automatic activation.',
-  'checkout.sbpConfirmFailed': 'Could not confirm the SBP transfer. Try again in a few seconds.',
 
   // Оформление: криптовалюта
-  'checkout.cryptoTitle': 'Pay with crypto',
-  'checkout.cryptoLead':
-    'Pay via Trybit: 35+ coins and networks — USDT, BTC, ETH, TON, SOL and more. The fee is shown before you pay.',
-  'checkout.cryptoInvoiceRetry': 'Issue the invoice again',
-  'checkout.cryptoInvoiceFailed': 'Trybit did not issue an invoice. Please try again in a minute.',
-  'checkout.cryptoTimer': 'Rate locked for',
-  'checkout.cryptoInvoiceNo': 'Invoice #{id}',
-  'checkout.cryptoSecure': 'Secure gateway',
-  'checkout.cryptoDue': 'Total for the pack',
-  'checkout.coinCount': '{count} coins',
-  'checkout.coinSearch': 'Find a coin: USDT, BTC, TON…',
-  'checkout.coinNone': 'This coin is not supported by Trybit.',
-  'checkout.coinMore': 'Show all ({count})',
-  'checkout.coinLess': 'Show less',
-  'checkout.feeTransferTron': 'Tron transfer: +$1.40',
-  'checkout.feeTransferDynamic': 'Transfer fee depends on network load',
-  'checkout.feeTransferNone': 'No transfer fee',
-  'checkout.feeNoExtra': 'Cheaper',
-  'checkout.feeTitle': 'Amount and fees',
-  'checkout.feeExact': 'from the Trybit invoice',
-  'checkout.feeEstimate': 'estimate',
-  'checkout.feePlan': 'Pack',
-  'checkout.feeService': 'Trybit service fee {percent}%',
-  'checkout.feeTransfer': 'Transfer fee',
-  'checkout.feeDynamic': 'by network load',
-  'checkout.feeTrybit': 'Trybit fee',
-  'checkout.feeTotal': 'Total to pay',
-  'checkout.feeNotePayer':
-    'The fee is included in the amount: service {service}, transfer {transfer}.',
-  'checkout.feeNoteMerchant':
-    'The Trybit fee ({service} + {transfer}) is on our side: you pay exactly the pack price.',
-  'checkout.feeNoteEstimate': 'Trybit shows the exact amount once the invoice is created.',
-  'checkout.feeNetwork':
-    'You pay the blockchain network fee for sending from your own wallet — it is not part of the invoice.',
-  'checkout.cryptoStepCurrency': '1. Payment currency',
-  'checkout.cryptoStepCurrencyHint': 'Choose a cryptocurrency',
-  'checkout.cryptoTop': 'Top',
-  'checkout.cryptoStepNetworkHint': 'Choose a network',
-  'checkout.cryptoTronHint': 'Tron Network · Recommended',
-  'checkout.cryptoFast': 'Fast',
-  'checkout.cryptoTonUsdtHint': 'TON Network · Telegram wallet',
-  'checkout.cryptoTonHint': 'Telegram’s native TON network',
-  'checkout.cryptoBtcHint': 'Native Bitcoin network',
-  'checkout.cryptoActive': 'Active',
-  'checkout.receiptEmail': 'Email for the receipt',
-  'checkout.receiptEmailHint': 'Electronic receipt with confirmation',
-  'checkout.receiptSend': 'Send the official payment receipt to this email',
-  'checkout.cryptoOpenGateway': 'Pay in Trybit widget · {amount}',
-  'checkout.cryptoCreatingInvoice': 'Creating the Trybit invoice…',
-  'checkout.cryptoGoToPay': 'Proceed to payment · {amount}',
-  'checkout.cryptoGatewayHint':
-    'The Trybit payment window opens: choose a wallet and coin and send the amount. The window closes on its own and your credits arrive automatically.',
-  'checkout.cryptoGatewayOpened':
-    'The payment window is open. When the payment goes through, it closes on its own and your credits are added automatically.',
-  'checkout.cryptoReopen': 'Open again',
-  'checkout.cryptoGatewayStatus': 'Waiting for payment in the gateway',
-  'checkout.cryptoAmountExact': 'Exact amount to send',
-  'checkout.cryptoMemo': 'Comment (MEMO)',
-  'checkout.cryptoMemoHint':
-    'Be sure to include it in the transfer, otherwise the payment will not be credited.',
-  'checkout.cryptoInlineHint':
-    'Scan the QR in your wallet or copy the address and amount. Send exactly this amount in a single payment.',
-  'checkout.cryptoInlineStatus': 'Waiting for the transfer',
-  'checkout.cryptoGatewayInfo':
-    'The Trybit gateway records the incoming funds and adds your credits automatically.',
-  'checkout.cryptoCheck': 'Check crypto payment',
-  'checkout.cryptoSelectedNetwork': 'Selected network',
-  'checkout.cryptoWrongNetwork':
-    'Warning: sending funds over the wrong network means they are lost for good.',
-  'checkout.cryptoPending':
-    'The network is still processing the payment. Please check again in 1–2 minutes.',
 
   // Оформление: Telegram Stars
-  'checkout.starsTitle': 'Pay with Telegram Stars',
-  'checkout.starsLead': 'Telegram’s official currency, charged instantly',
-  'checkout.starsBadge': 'Official',
-  'checkout.starsPreparing': 'Preparing the bot…',
-  'checkout.starsStatus': 'Waiting for payment in the bot',
-  'checkout.starsSync': 'Synced with Telegram',
-  'checkout.starsPayIn': 'Pay in Telegram (@{bot})',
-  'checkout.starsCheck': 'Check Stars payment',
-  'checkout.starsNotPaid':
-    'The Stars payment hasn’t arrived yet. Open Telegram (@{bot}), pay the invoice and press the check button again.',
-  'checkout.starsCheckFailed': 'Could not check the invoice status. Try again in a few seconds.',
 
   // Оформление: сводка и успех
-  'checkout.fee': 'Processing fee',
-  'checkout.total': 'Total due',
-  'checkout.included': 'What the pack includes',
-  'checkout.perk1': 'Every model, Max mode and answer comparison',
-  'checkout.perk2': 'Chat, images and Ketner Code on one set of credits',
-  'checkout.perk3': 'Higher request limits while credits remain',
-  'checkout.secure': 'Secure TLS 1.3 connection · Instant access',
-  'checkout.accessActivated': 'Access activated',
-  'checkout.paid': 'Paid',
 
   // Документация: страница
   'docPage.navWhat': 'What is Ketner',
@@ -1800,14 +1594,6 @@ export const en: Record<TranslationKey, string> = {
 
   // Telegram-кабинет: кредиты вместо тарифов
   'tg.reasonWrongPack': 'Chose the wrong pack',
-  'tg.tabCredits': 'Credits',
-  'tg.packsTitle': 'Credits',
-  'tg.creditsTitle': 'Credits',
-  'tg.creditsText':
-    'Credits are spent on model requests, images and Ketner Code. Purchased credits are valid for {days} days.',
-  'tg.creditsTrial':
-    'You are on trial credits ({trial}), given once. A pack unlocks the higher request limits.',
-  'tg.topUp': 'Top up credits',
   'tg.tiersTitle': 'Tiers',
   'tg.tiersText':
     'Analysing the task and building and testing a bot are free. You pay for a tier for working solutions, by the number of bots and requests per month.',
@@ -1815,14 +1601,6 @@ export const en: Record<TranslationKey, string> = {
   'tg.legacyTitle': 'Previous subscription',
   'tg.legacyAutoHint':
     'Renews on {date} for {stars} ⭐. Turn it off and there will be no charges: access stays until the end of the term.',
-  'tg.balanceBadge': '{count} cr.',
-  'tg.packsLead':
-    'A pack is a one-time payment, no subscription. Purchased credits are valid for {days} days.',
-  'tg.packsBuy': 'Credit packs',
-  'tg.packsBalance': 'Balance: {count}',
-  'tg.packCredits': '{count} credits',
-  'tg.packPerThousand': '{price} per 1,000 credits',
-  'tg.buyPack': 'Pay {stars} ⭐',
 
   // Главная: кредиты вместо тарифов
   'home.modelsPrice': '≈ {price} cr.',
@@ -1830,39 +1608,10 @@ export const en: Record<TranslationKey, string> = {
   // Кредитные пакеты: страница «Кредиты», оформление, окно покупки
   'credits.buy': 'Buy credits',
   'credits.ofGranted': 'of {granted} granted',
-  'creditsModal.badge': 'Credits',
-  'creditsModal.title': 'Top up credits to continue',
-  'creditsModal.desc':
-    'One payment, no subscription. Every model is open, credits last {days} days, and the bigger the pack, the cheaper a credit.',
-  'creditsModal.allPacks': 'All packs',
-  'creditsModal.payMethods': 'Telegram Stars or crypto: paying with crypto adds +{bonus}% credits',
   'chat.modelPriceFree': 'free',
   'chat.modelPriceCredits': '≈ {price} cr.',
   'chat.modelsGroup': 'Models',
   'chat.creditsRequired': 'Credits needed',
-  'pricing.packsLabel': 'Credit packs',
-  'pricing.packsTitle': 'Packs',
-  'pricing.packsLead':
-    'The bigger the pack, the cheaper a credit. Credits last {days} days, no subscription.',
-  'pricing.bestValue': 'Best value',
-  'pricing.perThousand': '{price} per 1,000 credits',
-  'pricing.starsPrice': '{stars} ⭐ in Telegram',
-  'pricing.cryptoBonus': '+{bonus} credits when paying with crypto',
-  'pricing.buyPack': 'Buy',
-  'pricing.trialTitle': '{count} credits on us',
-  'pricing.trialText':
-    'Every new user, once, for {days} days: enough to build and test your first solution.',
-  'pricing.trialCta': 'Claim the gift',
-  'pricing.colFree': 'No purchases',
-  'pricing.colCredits': 'Purchased credits left',
-  'checkout.stepPack': 'Pack',
-  'checkout.starsPackNotice': '{credits} · valid for {days} days',
-  'checkout.cryptoPackChip': 'Pack: {credits} · {days} days',
-  'checkout.validDays': 'Valid for {days} days',
-  'checkout.creditsAdded': 'Will be added to your balance right after payment',
-  'checkout.selectedPack': 'Selected pack',
-  'checkout.packPrice': 'Pack price',
-  'checkout.cryptoBonusLine': 'Crypto bonus',
   'admin.creditsGranted': 'Granted by active grants',
   'admin.creditsPurchased': 'has purchased',
 
@@ -2707,14 +2456,6 @@ export const en: Record<TranslationKey, string> = {
   'contacts.errorEmail': 'Enter a valid email for the reply',
   'contacts.errorShort': 'Describe your question in more detail (at least 10 characters)',
   // Consent to immediate delivery (right of withdrawal in the EU and UK)
-  'checkout.withdrawalConsent':
-    'I want the credits right after I pay and I understand that, by law, I lose the right to withdraw from the contract for credits I have already spent. Unspent credits can be refunded within {days} days.',
-  'checkout.withdrawalRequired': 'Tick the box above to continue to payment.',
-  'checkout.legalNotice': 'By paying you accept the',
-  'checkout.legalOffer': 'terms',
-  'checkout.legalAnd': 'and the',
-  'checkout.legalRefundTerms': 'payment and refund terms',
-  'checkout.legalRefundNote': 'Refund: within {days} days if the pack’s credits are unspent.',
 
   // Сметы внедрения, профиль бизнеса, заявки и админка смет.
   'nav.requests': 'Requests',

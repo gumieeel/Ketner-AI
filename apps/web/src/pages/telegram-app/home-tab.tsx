@@ -1,7 +1,6 @@
 import { useState } from 'react';
 import {
   ChevronRightIcon,
-  CreditsIcon,
   FileTextIcon,
   MessagesIcon,
   ShieldIcon,
@@ -13,7 +12,6 @@ import { ApiError, miniAppApi } from '@/features/telegram/api';
 import { haptic } from '@/features/telegram/webapp';
 import { legacyPlanName } from '@/features/billing/plan-badge';
 import { useTranslation } from '@/i18n';
-import { formatCredits } from '@/lib/format-date';
 import { cn } from '@/lib/cn';
 import {
   formatDate,
@@ -25,17 +23,16 @@ import {
   Toggle,
   useMiniApp,
 } from './shared';
-import { appHomePath, productSwitch } from '@/lib/product-switches';
+import { appHomePath } from '@/lib/product-switches';
 
 export function HomeTab() {
   const { t, language } = useTranslation();
   const { app, token, state, setState, notify, goTo, openSite } = useMiniApp();
-  const { user, autoRenew, credits, payments } = state;
+  const { user, autoRenew, payments } = state;
   const info = subscriptionInfo(state);
   const [savingAuto, setSavingAuto] = useState(false);
   const [opening, setOpening] = useState(false);
   const pendingRefund = payments.find((payment) => payment.status === 'refund_requested');
-  const hasPurchases = payments.some((payment) => payment.status === 'paid');
   const activeAuto = autoRenew?.status === 'active' ? autoRenew : null;
 
   // Автопродление прежней подписки можно только выключить: новых подписок нет.
@@ -53,12 +50,6 @@ export function HomeTab() {
     }
   };
 
-  // Пакеты звёздами — пока Stars открыты (lib/product-switches.ts); иначе — пакет на сайте.
-  const topUp = () => {
-    if (productSwitch('stars')) goTo('plans');
-    else void openSite('/pricing');
-  };
-
   const openChat = async () => {
     setOpening(true);
     try {
@@ -70,46 +61,16 @@ export function HomeTab() {
 
   return (
     <div className="flex flex-col gap-4">
-      {productSwitch('packs') ? (
-        <Panel aria-labelledby="tg-credits-title">
-          <p id="tg-credits-title" className="text-[13px] text-muted">
-            {t('tg.creditsTitle')}
-          </p>
-          <p className="mt-1 flex items-center gap-2 text-[28px] font-semibold tracking-tight tabular-nums">
-            <CreditsIcon className="size-6 text-accent" aria-hidden="true" />
-            {formatCredits(credits.balance, language)}
-          </p>
-          <p className="mt-1 text-[14px] leading-6 text-muted">
-            {user.isVip
-              ? t('tg.vip')
-              : hasPurchases
-                ? t('tg.creditsText', { days: credits.validDays })
-                : t('tg.creditsTrial', { trial: formatCredits(credits.trialCredits, language) })}
-          </p>
-          {!user.isVip ? (
-            <div className="mt-3 flex flex-col gap-2">
-              <Button className="w-full" onClick={topUp}>
-                {t('tg.topUp')}
-              </Button>
-            </div>
-          ) : null}
-        </Panel>
-      ) : (
-        // Задача 0b: пакеты не продаются и баланс не показывается — платно теперь тариф.
-        <Panel aria-labelledby="tg-tiers-title">
-          <p id="tg-tiers-title" className="text-[13px] text-muted">
-            {t('tg.tiersTitle')}
-          </p>
-          <p className="mt-1 text-[14px] leading-6 text-text">{t('tg.tiersText')}</p>
-          <Button
-            className="mt-3 w-full"
-            variant="outline"
-            onClick={() => void openSite('/pricing')}
-          >
-            {t('tg.tiersOpen')}
-          </Button>
-        </Panel>
-      )}
+      {/* Задача 0b: пакеты не продаются и баланс не показывается — платно теперь тариф. */}
+      <Panel aria-labelledby="tg-tiers-title">
+        <p id="tg-tiers-title" className="text-[13px] text-muted">
+          {t('tg.tiersTitle')}
+        </p>
+        <p className="mt-1 text-[14px] leading-6 text-text">{t('tg.tiersText')}</p>
+        <Button className="mt-3 w-full" variant="outline" onClick={() => void openSite('/pricing')}>
+          {t('tg.tiersOpen')}
+        </Button>
+      </Panel>
 
       {!user.isVip && info.running ? (
         <Panel aria-labelledby="tg-legacy-title">
@@ -167,8 +128,8 @@ export function HomeTab() {
         />
         <QuickAction
           icon={<StarIcon className="size-5" />}
-          label={t('tg.tabCredits')}
-          onClick={topUp}
+          label={t('tg.tiersTitle')}
+          onClick={() => void openSite('/pricing')}
         />
         <QuickAction
           icon={<FileTextIcon className="size-5" />}

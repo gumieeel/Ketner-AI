@@ -47,9 +47,6 @@ export const TRIAL = planFacts.trial;
 /** Сколько действуют купленные кредиты, дней. */
 export const PACK_VALID_DAYS = planFacts.packValidDays;
 
-/** Бонус кредитами при оплате криптовалютой (0.15 = +15 %). */
-export const CRYPTO_BONUS_RATE = planFacts.cryptoBonusRate;
-
 export function getPack(id: string | undefined): PackFacts | undefined {
   if (!id) return undefined;
   return PACKS.find((pack) => pack.id === id);

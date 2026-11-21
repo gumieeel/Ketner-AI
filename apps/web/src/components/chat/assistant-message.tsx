@@ -1,10 +1,11 @@
 import { Suspense, lazy, useMemo } from 'react';
 import { AlertIcon, CreditsIcon, RefreshIcon } from '@/components/icons';
+import { Link } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
+import { buttonClasses } from '@/components/ui/button-classes';
 import { ModelMark } from '@/components/ui/model-mark';
 import { CopyButton } from '@/components/ui/copy-button';
 import { IconButton } from '@/components/ui/icon-button';
-import { useCreditsModal } from '@/features/billing/credits-modal-store';
 import { findModel } from '@/features/chat/model-catalog';
 import { useChat } from '@/features/chat/chat-store';
 import type { Message } from '@/features/chat/types';
@@ -134,13 +135,11 @@ export function AssistantMessage({ message, canRegenerate }: AssistantMessagePro
             <p className="mt-1 text-text/85">{message.error ?? t('chat.errorText')}</p>
             {needsCredits ? (
               <div className="mt-3">
-                <Button
-                  size="sm"
-                  onClick={() => useCreditsModal.getState().open()}
-                  leftIcon={<CreditsIcon className="size-3.5" />}
-                >
+                {/* Пакеты не продаются (задача 0b): окна покупки нет — ведём к тарифам. */}
+                <Link to="/pricing" className={buttonClasses({ size: 'sm' })}>
+                  <CreditsIcon className="size-3.5" />
                   {t('credits.buy')}
-                </Button>
+                </Link>
               </div>
             ) : canRegenerate ? (
               <Button
