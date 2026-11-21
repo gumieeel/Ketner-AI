@@ -3,7 +3,6 @@ import { translate } from '@/i18n';
 import { usePreferences } from '@/features/preferences/preferences-store';
 import { useAuth } from '@/features/auth/auth-store';
 import { reasoningModeFor } from '@/features/chat/reasoning-mode';
-import { useCreditsModal } from '@/features/billing/credits-modal-store';
 import * as api from './api';
 import { ApiError } from './api';
 import { deriveTitle } from './derive-title';
@@ -310,14 +309,6 @@ export const useChat = create<ChatState>((set, get) => {
           onError: ({ code, message }) => {
             flush();
             console.error('[chat] ошибка генерации:', code, message);
-            // Лимиты считает сервер. Когда он отказал аккаунту без купленных кредитов, предлагаем пополнить баланс.
-            const refusedUser = useAuth.getState().user;
-            if (
-              (code === 'rate_limited' || code === 'fair_use_exceeded') &&
-              (!refusedUser || !refusedUser.plan || refusedUser.plan === 'free')
-            ) {
-              useCreditsModal.getState().open();
-            }
             updateAssistant({
               status: 'error',
               error: message || translate(usePreferences.getState().language, 'chat.errorText'),
@@ -373,15 +364,6 @@ export const useChat = create<ChatState>((set, get) => {
           return next;
         });
       } else {
-        if (
-          error instanceof ApiError &&
-          (error.code === 'rate_limited' || error.code === 'fair_use_exceeded')
-        ) {
-          const refusedUser = useAuth.getState().user;
-          if (!refusedUser || !refusedUser.plan || refusedUser.plan === 'free') {
-            useCreditsModal.getState().open();
-          }
-        }
         updateAssistant({ status: 'error', error: describeError(error) });
       }
     } finally {

@@ -19,7 +19,6 @@ import { refundDays } from '@/features/telegram/refund-days';
 import { haptic } from '@/features/telegram/webapp';
 import { useTranslation, type TranslationKey } from '@/i18n';
 import { cn } from '@/lib/cn';
-import { productSwitch } from '@/lib/product-switches';
 import { RefundCase } from './refund-case';
 import { hasRefundCase, refundCaseSummary } from './refund-case-utils';
 import {
@@ -51,7 +50,7 @@ const REASONS: TranslationKey[] = [
 
 export function PaymentsTab() {
   const { t, language } = useTranslation();
-  const { state, goTo } = useMiniApp();
+  const { state } = useMiniApp();
   const [openId, setOpenId] = useState<string | null>(null);
   const { payments, refundPolicy } = state;
   const open = payments.find((payment) => payment.id === openId) ?? null;
@@ -66,11 +65,6 @@ export function PaymentsTab() {
           </span>
           <p className="text-[15px] font-medium">{t('tg.paymentsEmpty')}</p>
           <p className="text-[13px] leading-5 text-muted">{t('tg.paymentsEmptyText')}</p>
-          {productSwitch('stars') && productSwitch('packs') ? (
-            <Button className="mt-1" onClick={() => goTo('plans')}>
-              {t('tg.topUp')}
-            </Button>
-          ) : null}
         </Panel>
       ) : (
         <>

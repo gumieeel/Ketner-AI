@@ -2,7 +2,6 @@ import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { useAuth } from '@/features/auth/auth-store';
-import { useCreditsModal } from '@/features/billing/credits-modal-store';
 import { useChat } from '@/features/chat/chat-store';
 import {
   defaultCompareModelIds,
@@ -88,7 +87,7 @@ describe('сравнение ответов в чате', () => {
     const toggle = await screen.findByRole('button', { name: /^Сравнить:/ });
     expect(toggle).not.toHaveAttribute('aria-pressed', 'true');
     await user.click(toggle);
-    expect(useCreditsModal.getState().isOpen).toBe(false);
+    expect(screen.queryByRole('dialog')).toBeNull();
     expect(useCompare.getState().enabled).toBe(true);
     expect(toggle).toHaveAttribute('aria-pressed', 'true');
 
