@@ -386,6 +386,7 @@ export const en: Record<TranslationKey, string> = {
   'closed.title.developerApi': 'The developer API is temporarily unavailable',
   'closed.title.answerReview': 'Answer review is temporarily unavailable',
   'closed.title.modelCompare': 'Model comparison is temporarily unavailable',
+  'closed.title.googleSheets': 'Saving leads to Google Sheets is not available yet',
   'closed.text':
     'Ketner is now about solutions for businesses: analysing the task, and bots and agents that answer customers. Your data is kept.',
   'notFound.title': 'Page not found',

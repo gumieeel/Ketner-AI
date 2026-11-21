@@ -2,6 +2,10 @@ import { config } from '../config.js';
 import { createRevokedTokenStore } from './revoked-token-store.js';
 import { createApiKeyStore } from './api-key-store.js';
 import { createGithubConnectionStore } from '../github/connection-store.js';
+import { createGoogleConnectionStore } from '../google/connection-store.js';
+import { createGoogleVerifierStore } from '../google/verifier-store.js';
+import { accountErasure } from '../platform/account-erasure.js';
+import { registerAccountErasure } from '../platform/account-erasure-setup.js';
 import { createConversationStore } from './conversation-store.js';
 import { createSubscriptionStore } from './subscription-store.js';
 import { createUserStore } from './user-store.js';
@@ -28,6 +32,20 @@ export const githubConnectionStore = createGithubConnectionStore({
   secret: config.betterAuthSecret,
 });
 export type { GithubConnectionStore } from '../github/connection-store.js';
+
+/**
+ * Подключения Google Таблиц (этап F): только Postgres (миграция 0016), без файла — без базы
+ * подключение живёт до перезапуска. Refresh-токен зашифрован ключом из BETTER_AUTH_SECRET.
+ */
+export const googleConnectionStore = createGoogleConnectionStore({
+  secret: config.betterAuthSecret,
+});
+/** PKCE verifier подключения Google: `ketner_docs`, пространство `google_oauth`. */
+export const googleVerifierStore = createGoogleVerifierStore();
+// Удаление аккаунта: очистка Google — первая регистрация (platform/account-erasure.ts).
+registerAccountErasure(accountErasure, {
+  google: { store: googleConnectionStore, verifiers: googleVerifierStore },
+});
 
 /** Хранилище подписок по умолчанию: файл из `config.subscriptionStoreFile`. */
 export const subscriptionStore = createSubscriptionStore(config.subscriptionStoreFile);

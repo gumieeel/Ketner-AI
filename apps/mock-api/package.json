@@ -17,7 +17,8 @@
     "migrate:push": "drizzle-kit push",
     "db:studio": "drizzle-kit studio",
     "db:test": "tsx src/scripts/test-db.ts",
-    "bench:discovery": "tsx src/scripts/benchmark-discovery.ts"
+    "bench:discovery": "tsx src/scripts/benchmark-discovery.ts",
+    "erase-account": "tsx src/scripts/erase-account.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "0.133.0",

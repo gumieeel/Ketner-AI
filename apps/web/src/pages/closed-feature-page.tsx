@@ -13,6 +13,7 @@ const TITLES: Record<ProductFeature, TranslationKey> = {
   developerApi: 'closed.title.developerApi',
   answerReview: 'closed.title.answerReview',
   modelCompare: 'closed.title.modelCompare',
+  googleSheets: 'closed.title.googleSheets',
 };
 
 /** Адрес закрытой возможности (product-switches.ts): понятное сообщение и путь к решениям. */
