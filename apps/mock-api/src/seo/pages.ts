@@ -9,7 +9,7 @@
  */
 
 import seoPagesData from './seo-pages.json' with { type: 'json' };
-import { CREDIT_PACKS } from '../services/pricing.js';
+import { TIERS } from '../services/tiers.js';
 import { productSwitch, type ProductFeature } from '../product-switches.js';
 
 export interface SeoPage {
@@ -217,20 +217,33 @@ function structuredData(base: string, features: SiteFeatures): string {
       image: `${base}/og-image.png`,
       description: appDescription(features),
       publisher: { '@id': `${base}/#organization` },
-      // Подписок нет с 26.10.2026: бесплатный вход и пакеты кредитов (services/pricing.ts).
+      // Пакеты кредитов не продаются (задача 0b): бесплатно — анализ, создание и проверка; платно —
+      // тарифы на работающие решения, цена за месяц (services/tiers.ts).
       offers: [
-        { name: 'Бесплатно', price: '0' },
-        ...CREDIT_PACKS.map((pack) => ({
-          name: `${pack.credits.toLocaleString('ru-RU')} кредитов`,
-          price: String(pack.priceUsd),
+        {
+          '@type': 'Offer',
+          name: 'Бесплатно: анализ, создание и проверка',
+          price: '0',
+          priceCurrency: 'USD',
+          url: `${base}/pricing`,
+          availability: 'https://schema.org/InStock',
+        },
+        ...TIERS.map((tier) => ({
+          '@type': 'Offer',
+          name: `Тариф ${tier.name}`,
+          price: String(tier.priceUsd),
+          priceCurrency: 'USD',
+          priceSpecification: {
+            '@type': 'UnitPriceSpecification',
+            price: String(tier.priceUsd),
+            priceCurrency: 'USD',
+            unitCode: 'MON',
+            referenceQuantity: { '@type': 'QuantitativeValue', value: 1, unitCode: 'MON' },
+          },
+          url: `${base}/pricing`,
+          availability: 'https://schema.org/InStock',
         })),
-      ].map((offer) => ({
-        '@type': 'Offer',
-        ...offer,
-        priceCurrency: 'USD',
-        url: `${base}/pricing`,
-        availability: 'https://schema.org/InStock',
-      })),
+      ],
     },
   ];
   return jsonLd({ '@context': 'https://schema.org', '@graph': graph });

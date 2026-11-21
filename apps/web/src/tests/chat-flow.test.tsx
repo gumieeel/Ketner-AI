@@ -4,7 +4,6 @@ import userEvent, { type UserEvent } from '@testing-library/user-event';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { useAuth } from '@/features/auth/auth-store';
 import { useChat } from '@/features/chat/chat-store';
-import { useCreditsModal } from '@/features/billing/credits-modal-store';
 import { usePreferences } from '@/features/preferences/preferences-store';
 import type { Message } from '@/features/chat/types';
 import { installFakeApi } from './fake-api';
@@ -282,7 +281,7 @@ describe('чат: отправка, стриминг и управление о�
     expect(usePreferences.getState().chatModelId).toBe('gpt-6.1-sol');
   });
 
-  it('когда на балансе не хватает кредитов, ответ — ошибка с кнопкой покупки, и она открывает пакеты', async () => {
+  it('когда на балансе не хватает кредитов, ответ — ошибка со ссылкой на тарифы (окна покупки пакетов нет)', async () => {
     const api = installFakeApi({ insufficientCredits: true });
     const user = setupChat();
     await screen.findByRole('heading', { level: 2, name: EMPTY_TITLE });
@@ -299,14 +298,11 @@ describe('чат: отправка, стриминг и управление о�
     expect(
       screen.getByText('Не хватает кредитов. Пополните баланс, чтобы продолжить.'),
     ).toBeInTheDocument();
-    expect(useCreditsModal.getState().isOpen).toBe(false);
-
-    await user.click(screen.getByRole('button', { name: 'Купить кредиты' }));
-    const modal = await screen.findByRole('dialog');
-    expect(within(modal).getByText('Пополните кредиты, чтобы продолжить')).toBeInTheDocument();
-    expect(within(modal).getByTestId('modal-pack-credits-5')).toBeInTheDocument();
-    expect(within(modal).getByTestId('modal-pack-credits-25')).toBeInTheDocument();
-    useCreditsModal.getState().close();
+    expect(screen.getByRole('link', { name: 'Купить кредиты' })).toHaveAttribute(
+      'href',
+      '/pricing',
+    );
+    expect(screen.queryByRole('dialog')).toBeNull();
   });
 
   it('дорогие модели в списке не заблокированы, а клик по полю ввода не открывает модалку', async () => {
@@ -396,7 +392,7 @@ describe('чат: отправка, стриминг и управление о�
     expect(await screen.findByText('Готово')).toBeInTheDocument();
   });
 
-  it('когда сервер отказывает бесплатному аккаунту, весь экран затемняется и открывается покупка кредитов', async () => {
+  it('когда сервер отказывает бесплатному аккаунту, ответ — ошибка в чате, окна покупки кредитов нет', async () => {
     installFakeApi({ reply: 'Ответ модели', rateLimitAfter: 1 });
     useAuth.setState({
       user: {
@@ -418,15 +414,11 @@ describe('чат: отправка, стриминг и управление о�
     await waitFor(() => expect(useChat.getState().streaming).toBe(false));
     expect(screen.queryByRole('dialog')).toBeNull();
 
-    // Второе сервер отклоняет (429 rate_limited) — открывается модалка без цифр лимита
+    // Второе сервер отклоняет (429 rate_limited): пакеты не продаются (задача 0b) — окна покупки нет,
+    // в чате — ответ сервера.
     await sendMessage(user, 'Второе сообщение');
-    const modal = await screen.findByRole('dialog');
-    expect(modal).toHaveClass('backdrop-blur-md');
-    expect(within(modal).getByText('Пополните кредиты, чтобы продолжить')).toBeInTheDocument();
-    expect(within(modal).queryByText(/из 3/)).toBeNull();
-
-    await user.click(within(modal).getAllByRole('button', { name: 'Закрыть' })[0]);
-    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+    expect(await screen.findByText(/Сообщения на это время закончились/)).toBeInTheDocument();
+    expect(screen.queryByRole('dialog')).toBeNull();
   });
 
   it('гости без аккаунта отправляют сообщения, клиент их не блокирует', async () => {

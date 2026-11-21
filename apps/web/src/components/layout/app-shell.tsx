@@ -5,7 +5,6 @@ import { useChat } from '@/features/chat/chat-store';
 import { findModel } from '@/features/chat/model-catalog';
 import { usePreferences } from '@/features/preferences/preferences-store';
 import { useTranslation } from '@/i18n';
-import { CreditsModal } from '@/components/chat/credits-modal';
 import { Header } from './header';
 import { Sidebar } from './sidebar';
 
@@ -60,7 +59,6 @@ export function AppShell() {
           <Outlet />
         </main>
       </div>
-      <CreditsModal />
     </div>
   );
 }

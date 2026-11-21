@@ -1,5 +1,6 @@
 import planFacts from '../billing/plan-facts.json';
 import type { Language } from '../preferences/preferences-store';
+import { TIERS } from '../billing/tiers';
 import { REFUND_DAYS } from './legal';
 
 export interface FaqItem {
@@ -16,26 +17,20 @@ function num(value: number, language: Language): string {
 }
 
 // Числа берутся из plan-facts.json: его сверяет с сервером тест plan-facts.test.ts.
-const FIRST_PACK = planFacts.packs[0];
-const LAST_PACK = planFacts.packs[planFacts.packs.length - 1];
-const TRIAL_CREDITS = planFacts.trial.credits;
-const TRIAL_DAYS = planFacts.trial.days;
-const VALID_DAYS = planFacts.packValidDays;
-const BONUS_PERCENT = Math.round(planFacts.cryptoBonusRate * 100);
 const FREE_PER_DAY = planFacts.levels.free.messagesPerDay;
 const CREDITS_PER_DAY = planFacts.levels.credits.messagesPerDay;
 const FREE_IMAGES = Object.values(planFacts.levels.free.imagesPerDay)[0] ?? 0;
 
 export const FAQ_ITEMS: FaqItem[] = [
   {
-    id: 'credits',
+    id: 'pricing',
     q: {
-      ru: 'Как работают кредиты?',
-      en: 'How do credits work?',
+      ru: 'Сколько стоит Ketner AI?',
+      en: 'How much does Ketner AI cost?',
     },
     a: {
-      ru: `Кредиты покупаются пакетами: от $${FIRST_PACK.priceUsd} (${num(FIRST_PACK.credits, 'ru')} кредитов) до $${LAST_PACK.priceUsd} (${num(LAST_PACK.credits, 'ru')}), и чем больше пакет, тем дешевле кредит. Подписки нет: платите один раз и тратите, когда нужно. Кредит — это одна тысячная доллара реальной стоимости запроса, поэтому каждый запрос списывает ровно столько, сколько он стоил: вопрос к Ketner Mini — около 2 кредитов, к Claude Opus — десятки. Чат, картинки и Ketner Code тратят общий баланс. Купленные кредиты действуют ${VALID_DAYS} дней, первыми тратятся те, что сгорают раньше; при оплате криптовалютой добавляем ещё +${BONUS_PERCENT}% кредитов. Новому пользователю дарим ${TRIAL_CREDITS} пробных кредитов на ${TRIAL_DAYS} дней. Цена запроса каждой модели — на странице «Модели».`,
-      en: `Credits are bought in packs: from $${FIRST_PACK.priceUsd} (${num(FIRST_PACK.credits, 'en')} credits) to $${LAST_PACK.priceUsd} (${num(LAST_PACK.credits, 'en')}), and the bigger the pack, the cheaper a credit. There is no subscription: pay once and spend when you need to. A credit is a thousandth of a dollar of the real cost of a request, so every request is charged exactly what it cost: a question to Ketner Mini is about 2 credits, to Claude Opus tens. Chat, images and Ketner Code spend one shared balance. Purchased credits are valid for ${VALID_DAYS} days, and the ones expiring first are spent first; paying with crypto adds another +${BONUS_PERCENT}% credits. A new user gets ${TRIAL_CREDITS} trial credits for ${TRIAL_DAYS} days. The price of every model is on the Models page.`,
+      ru: `Анализ задачи, создание и проверка помощников и ботов — бесплатно, в пределах бесплатного лимита. Платно — тариф на работающие решения: ${TIERS.map((tier) => `${tier.name} — $${tier.priceUsd}`).join(', ')} в месяц, по числу ботов и обращений клиентов. Тариф подключает команда Ketner по заявке, автоматических списаний нет. Пакеты кредитов больше не продаются.`,
+      en: `Analysing the task and building and testing assistants and bots are free, within the free allowance. You pay for a plan for working solutions: ${TIERS.map((tier) => `${tier.name} $${tier.priceUsd}`).join(', ')} per month, by the number of bots and customer requests. The Ketner team connects a plan on request, and there are no automatic charges. Credit packs are no longer sold.`,
     },
   },
   {
@@ -83,25 +78,14 @@ export const FAQ_ITEMS: FaqItem[] = [
     },
   },
   {
-    id: 'diff-chatgpt',
-    q: {
-      ru: 'Чем Ketner AI отличается от ChatGPT Plus?',
-      en: 'How does Ketner AI differ from ChatGPT Plus?',
-    },
-    a: {
-      ru: `ChatGPT Plus стоит $20 в месяц и привязывает вас к одной компании (OpenAI). В Ketner AI подписки нет: вы покупаете кредиты один раз (пакет от $${FIRST_PACK.priceUsd}) и тратите их на GPT, Claude, Gemini, Grok и другие модели в одном окне. Платите только за запросы, а неиспользованные кредиты не сгорают в конце месяца, а действуют ${VALID_DAYS} дней.`,
-      en: `ChatGPT Plus costs $20 a month and ties you to one company (OpenAI). Ketner AI has no subscription: you buy credits once (a pack from $${FIRST_PACK.priceUsd}) and spend them on GPT, Claude, Gemini, Grok and other models in one window. You pay only for requests, and unused credits do not vanish at the end of the month: they last ${VALID_DAYS} days.`,
-    },
-  },
-  {
     id: 'refund',
     q: {
       ru: 'Можно ли вернуть деньги?',
       en: 'Can I get a refund?',
     },
     a: {
-      ru: `Да. В течение ${REFUND_DAYS} дней после оплаты пакет можно вернуть полностью, если вы ещё не потратили его кредиты (пробные кредиты возврат не закрывают). Оформите заявку кнопкой «Подать заявку на возврат» в кабинете бота @Robo_kassa_bot (раздел «Платежи») или напишите в поддержку @ketner_support_bot. Заявку проверяет администратор, обычно в течение суток; после одобрения звёзды возвращаются на баланс Telegram, а криптовалюта — на ваш кошелёк (комиссию сети за возврат платим мы), кредиты пакета списываются. Если кредиты пакета уже тратились или прошло больше ${REFUND_DAYS} дней, оплата не возвращается, кроме случаев сбоя или двойного списания. Права покупателей из ЕС и Великобритании на отказ от договора описаны на странице «Оплата и возврат».`,
-      en: `Yes. Within ${REFUND_DAYS} days of paying you can get a pack refunded in full, if you have not spent its credits yet (trial credits do not block a refund). Use “Request a refund” in the @Robo_kassa_bot account (the “Payments” tab) or message support at @ketner_support_bot. An administrator reviews every request, usually within a day; once approved, Stars go back to your Telegram balance and crypto to your wallet (we pay the network fee for the refund), and the pack’s credits are removed. If the pack’s credits were already used or more than ${REFUND_DAYS} days have passed, the payment is not refunded, except in case of a failure or a double charge. The withdrawal rights of buyers in the EU and UK are described on the Payments and Refunds page.`,
+      ru: `За пакеты кредитов, купленные до 20 ноября 2026 г., — да. В течение ${REFUND_DAYS} дней после оплаты пакет можно вернуть полностью, если вы ещё не потратили его кредиты (пробные кредиты возврат не закрывают). Оформите заявку кнопкой «Подать заявку на возврат» в кабинете бота @Robo_kassa_bot (раздел «Платежи») или напишите в поддержку @ketner_support_bot. Заявку проверяет администратор, обычно в течение суток; после одобрения звёзды возвращаются на баланс Telegram, а криптовалюта — на ваш кошелёк (комиссию сети за возврат платим мы), кредиты пакета списываются. Если кредиты пакета уже тратились или прошло больше ${REFUND_DAYS} дней, оплата не возвращается, кроме случаев сбоя или двойного списания. Права покупателей из ЕС и Великобритании на отказ от договора описаны на странице «Оплата и возврат».`,
+      en: `For credit packs bought before November 20, 2026, yes. Within ${REFUND_DAYS} days of paying you can get a pack refunded in full, if you have not spent its credits yet (trial credits do not block a refund). Use “Request a refund” in the @Robo_kassa_bot account (the “Payments” tab) or message support at @ketner_support_bot. An administrator reviews every request, usually within a day; once approved, Stars go back to your Telegram balance and crypto to your wallet (we pay the network fee for the refund), and the pack’s credits are removed. If the pack’s credits were already used or more than ${REFUND_DAYS} days have passed, the payment is not refunded, except in case of a failure or a double charge. The withdrawal rights of buyers in the EU and UK are described on the Payments and Refunds page.`,
     },
   },
 ];

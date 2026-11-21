@@ -11,7 +11,6 @@ import {
   verifyCode as apiVerifyCode,
 } from './api';
 import { ApiError } from '../chat/api';
-import { useCreditsModal } from '../billing/credits-modal-store';
 import type {
   AuthFlow,
   AuthSession,
@@ -136,7 +135,6 @@ export function normalizeUser(rawUser: Record<string, unknown>): User {
 function openSession(session: AuthSession): Partial<AuthState> {
   const user = normalizeUser(session.user as unknown as Record<string, unknown>);
   saveSession({ user, token: session.token, expiresAt: session.expiresAt });
-  useCreditsModal.getState().close();
   return { user, token: session.token, status: 'authenticated', error: null };
 }
 
@@ -280,7 +278,6 @@ export const useAuth = create<AuthState>((set, get) => {
       try {
         const session = await oauthLogin(provider);
         saveSession(session);
-        useCreditsModal.getState().close();
         set({ user: session.user, token: session.token, status: 'authenticated', error: null });
       } catch (error) {
         const message = error instanceof Error ? error.message : 'Ошибка авторизации через соцсеть';
@@ -297,7 +294,6 @@ export const useAuth = create<AuthState>((set, get) => {
         // Игнорируем сетевые ошибки при выходе
       }
       saveSession(null);
-      useCreditsModal.getState().close();
       set({ user: null, token: null, status: 'unauthenticated', error: null });
       if (token) {
         await apiLogout(token);
