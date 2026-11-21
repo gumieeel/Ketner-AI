@@ -13,7 +13,13 @@ import {
 import type { StoredGithubConnection } from '../github/connection-store.js';
 import { invoiceStore } from '../store/invoice-store.js';
 import { billingLedger } from '../billing/index.js';
-import { supportStore, usageStore } from '../store/index.js';
+import {
+  googleConnectionStore,
+  googleVerifierStore,
+  supportStore,
+  usageStore,
+} from '../store/index.js';
+import { attachGoogleStores } from '../google/db.js';
 import { contactStore } from '../store/contact-store.js';
 import { accountTierStore } from '../billing/account-tiers.js';
 import { widgetInstallStore } from '../store/widget-install-store.js';
@@ -1134,6 +1140,15 @@ export async function initDatabaseSync(): Promise<boolean> {
       );
       setMigrationState({ status: 'ok', result });
       attachDiscoveryDriver(codeRunner);
+      // Подключения Google — таблица из миграции 0016, поэтому после миграций.
+      try {
+        await attachGoogleStores(codeRunner, {
+          connections: googleConnectionStore,
+          verifiers: googleVerifierStore,
+        });
+      } catch (error) {
+        console.error('❌ [db] Подключения Google не загружены из PostgreSQL:', error);
+      }
     } catch (error) {
       setMigrationState({
         status: 'failed',

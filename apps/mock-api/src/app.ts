@@ -46,6 +46,9 @@ import { V1_EXPOSED_HEADERS, createV1Router } from './routes/v1.js';
 import { createGithubCallbackHandler } from './routes/github.js';
 import type { GithubConnectionStore } from './github/connection-store.js';
 import type { GithubOAuthSettings } from './github/oauth.js';
+import type { GoogleConnectionStore } from './google/connection-store.js';
+import type { GoogleOAuthSettings } from './google/oauth.js';
+import type { GoogleVerifierStore } from './google/verifier-store.js';
 import type { InvoiceStore } from './store/invoice-store.js';
 import type { BillingService } from './billing/billing-service.js';
 import type { ConversationStore } from './store/conversation-store.js';
@@ -87,6 +90,14 @@ export interface AppDeps {
   githubFetch?: typeof fetch;
   /** Настройки OAuth GitHub; в тестах подменяются. */
   githubSettings?: () => GithubOAuthSettings | null;
+  /** Подключения Google Таблиц (этап F); в тестах — в памяти. */
+  googleConnectionStore?: GoogleConnectionStore;
+  /** PKCE verifier подключения Google (одноразовые записи); в тестах — в памяти. */
+  googleVerifierStore?: GoogleVerifierStore;
+  /** Запросы к Google (OAuth, Sheets); в тестах подменяется. */
+  googleFetch?: typeof fetch;
+  /** Настройки OAuth Google Таблиц; в тестах подменяются. */
+  googleSettings?: () => GoogleOAuthSettings | null;
   /** Счета на оплату; в тестах — временный файл, чтобы не трогать рабочие данные. */
   invoiceStore?: InvoiceStore;
   /** Платежи, подписки и возвраты. */

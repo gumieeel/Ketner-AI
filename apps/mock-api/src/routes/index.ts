@@ -13,9 +13,16 @@ import {
   userStore as defaultUserStore,
 } from '../store/index.js';
 import type { ApiKeyStore } from '../store/api-key-store.js';
-import { githubConnectionStore as defaultGithubConnectionStore } from '../store/index.js';
+import {
+  githubConnectionStore as defaultGithubConnectionStore,
+  googleConnectionStore as defaultGoogleConnectionStore,
+  googleVerifierStore as defaultGoogleVerifierStore,
+} from '../store/index.js';
 import type { GithubConnectionStore } from '../github/connection-store.js';
 import type { GithubOAuthSettings } from '../github/oauth.js';
+import type { GoogleConnectionStore } from '../google/connection-store.js';
+import type { GoogleOAuthSettings } from '../google/oauth.js';
+import type { GoogleVerifierStore } from '../google/verifier-store.js';
 import { BillingService, createBillingLedger } from '../billing/billing-service.js';
 import { billingService as defaultBillingService } from '../billing/index.js';
 import type { InvoiceStore } from '../store/invoice-store.js';
@@ -23,6 +30,7 @@ import type { SubscriptionStore } from '../store/subscription-store.js';
 import type { UserStore } from '../store/user-store.js';
 import { createApiKeysRouter } from './api-keys.js';
 import { createGithubRouter } from './github.js';
+import { createGoogleIntegrationRouter } from './google-integration.js';
 import { createAuthRouter } from './auth.js';
 import { createBillingRouter } from './billing.js';
 import { createContactRouter } from './contact.js';
@@ -90,6 +98,14 @@ export interface ApiDeps {
   githubFetch?: typeof fetch;
   /** Настройки OAuth GitHub; в тестах подменяются. */
   githubSettings?: () => GithubOAuthSettings | null;
+  /** Подключения Google Таблиц (этап F); в тестах — в памяти. */
+  googleConnectionStore?: GoogleConnectionStore;
+  /** PKCE verifier подключения Google (одноразовые записи); в тестах — в памяти. */
+  googleVerifierStore?: GoogleVerifierStore;
+  /** Запросы к Google (OAuth, Sheets); в тестах подменяется. */
+  googleFetch?: typeof fetch;
+  /** Настройки OAuth Google Таблиц; в тестах подменяются. */
+  googleSettings?: () => GoogleOAuthSettings | null;
   /** Платежи, подписки и возвраты. */
   billingService?: BillingService;
   ai: AiConfig;
@@ -510,6 +526,15 @@ export function createApiRouter(deps: ApiDeps): Router {
       store: activeGithubStore,
       fetchImpl: deps.githubFetch,
       settings: deps.githubSettings,
+    }),
+  );
+  // Google Таблицы (этап F): выключено переключателем googleSheets — все адреса отвечают 503.
+  router.use(
+    createGoogleIntegrationRouter({
+      store: deps.googleConnectionStore ?? defaultGoogleConnectionStore,
+      verifiers: deps.googleVerifierStore ?? defaultGoogleVerifierStore,
+      fetchImpl: deps.googleFetch,
+      settings: deps.googleSettings,
     }),
   );
   // Чат закрыт (product-switches.ts): диалоги остаются в базе, API отвечает 503.

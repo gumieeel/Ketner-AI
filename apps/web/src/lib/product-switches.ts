@@ -21,6 +21,8 @@ export const DEVELOPER_API_ENABLED = false;
 export const ANSWER_REVIEW_ENABLED = false;
 /** Сравнение ответов моделей. */
 export const MODEL_COMPARE_ENABLED = false;
+/** Запись заявок в Google Таблицу (этап F): выключено до проверки на настоящем аккаунте Google. */
+export const GOOGLE_SHEETS_ENABLED = false;
 
 export const PRODUCT_SWITCHES = {
   stars: STARS_ENABLED,
@@ -31,6 +33,7 @@ export const PRODUCT_SWITCHES = {
   developerApi: DEVELOPER_API_ENABLED,
   answerReview: ANSWER_REVIEW_ENABLED,
   modelCompare: MODEL_COMPARE_ENABLED,
+  googleSheets: GOOGLE_SHEETS_ENABLED,
 } as const;
 
 export type ProductFeature = keyof typeof PRODUCT_SWITCHES;

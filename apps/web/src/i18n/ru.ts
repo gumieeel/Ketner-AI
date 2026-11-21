@@ -384,6 +384,7 @@ export const ru = {
   'closed.title.developerApi': 'API для разработчиков временно недоступен',
   'closed.title.answerReview': 'Проверка ответов временно недоступна',
   'closed.title.modelCompare': 'Сравнение моделей временно недоступно',
+  'closed.title.googleSheets': 'Запись заявок в Google Таблицу пока недоступна',
   'closed.text':
     'Сейчас Ketner — это решения для бизнеса: анализ задачи, боты и агенты, которые отвечают клиентам. Ваши данные сохранены.',
   'notFound.title': 'Страница не найдена',
