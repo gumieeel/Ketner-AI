@@ -9,6 +9,9 @@ import {
   createCodeVerifier,
   createGoogleState,
   exchangeGoogleCode,
+  googleDiagnostics,
+  refreshGoogleAccessToken,
+  revokeGoogleToken,
   googleAuthorizeUrl,
   readGoogleState,
   readIdToken,
@@ -275,4 +278,41 @@ test('verifier: одноразовый, только своему пользов
   await store.put({ id: 'n5', userId: 'u2', verifier: 'v5', expiresAt: now + 5000 }, now + 100);
   assert.deepEqual(store.idsOf('u1'), []);
   assert.deepEqual(store.idsOf('u2'), ['n5']);
+});
+
+test('диагностика пилота: коды ответов Google и наличие refresh-токена — без самих токенов', async () => {
+  const lines: string[] = [];
+  const original = googleDiagnostics.log;
+  googleDiagnostics.log = (line) => lines.push(line);
+  try {
+    const ok = fakeTokenEndpoint({ body: grantBody() });
+    await exchangeGoogleCode(SETTINGS, 'code-secret', 'verifier-secret', ok.fetchImpl);
+    const missing = fakeTokenEndpoint({ body: grantBody({ refresh_token: undefined }) });
+    await assert.rejects(() =>
+      exchangeGoogleCode(SETTINGS, 'code-secret', 'verifier-secret', missing.fetchImpl),
+    );
+    const expired = fakeTokenEndpoint({ status: 400, body: { error: 'invalid_grant' } });
+    await assert.rejects(() => refreshGoogleAccessToken(SETTINGS, '1//refresh', expired.fetchImpl));
+    const refreshed = fakeTokenEndpoint({ body: { access_token: 'ya29.new', expires_in: 3599 } });
+    await refreshGoogleAccessToken(SETTINGS, '1//refresh', refreshed.fetchImpl);
+    const revoke = (status: number, body: Record<string, unknown>) =>
+      (async () => Response.json(body, { status })) as unknown as typeof fetch;
+    await revokeGoogleToken('1//refresh', revoke(200, {}));
+    await revokeGoogleToken('1//refresh', revoke(400, { error: 'invalid_token' }));
+  } finally {
+    googleDiagnostics.log = original;
+  }
+  assert.deepEqual(lines, [
+    `обмен кода: HTTP 200, refresh_token: есть, scope: openid ${EMAIL_SCOPE} ${GOOGLE_DRIVE_FILE_SCOPE}`,
+    // Отказ без refresh-токена: строка обмена и отзыв выданного access-токена.
+    `обмен кода: HTTP 200, refresh_token: нет, scope: openid ${EMAIL_SCOPE} ${GOOGLE_DRIVE_FILE_SCOPE}`,
+    'отзыв: HTTP 200',
+    'обновление токена: HTTP 400, ошибка: invalid_grant',
+    'обновление токена: HTTP 200, expires_in: 3599',
+    'отзыв: HTTP 200',
+    'отзыв: HTTP 400, ошибка: invalid_token',
+  ]);
+  for (const secret of ['1//refresh', 'ya29', 'code-secret', 'verifier-secret', 'client-secret']) {
+    assert.ok(!lines.join('\n').includes(secret), secret);
+  }
 });

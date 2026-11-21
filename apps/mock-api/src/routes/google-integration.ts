@@ -1,7 +1,7 @@
 import { Router, type NextFunction, type Request, type Response } from 'express';
 import { requireAuth } from '../middleware/auth.js';
 import { sendError } from '../middleware/errors.js';
-import { productSwitch, sendFeatureUnavailable } from '../product-switches.js';
+import { googleSheetsEnabledFor, sendFeatureUnavailable } from '../product-switches.js';
 import { fallbackReturnTo, safeReturnTo } from '../github/oauth.js';
 import type { GoogleConnection, GoogleConnectionStore } from '../google/connection-store.js';
 import {
@@ -72,8 +72,14 @@ export function createGoogleIntegrationRouter({
   const router = Router();
   const base = '/integrations/google';
 
-  router.use(base, (_request: Request, response: Response, next: NextFunction) => {
-    if (!productSwitch('googleSheets') || !settings()) {
+  // Открыто для всех (переключатель) или только для аккаунтов пилота. Колбэк приходит без входа —
+  // аккаунт берётся из подписанного state.
+  router.use(base, (request: Request, response: Response, next: NextFunction) => {
+    const stateUser =
+      request.path === '/callback' && typeof request.query.state === 'string'
+        ? readGoogleState(request.query.state)?.userId
+        : undefined;
+    if (!googleSheetsEnabledFor(request.user?.id ?? stateUser) || !settings()) {
       sendFeatureUnavailable(response, 'googleSheets');
       return;
     }
@@ -156,6 +162,17 @@ export function createGoogleIntegrationRouter({
       ...publicStatus(store.get(userId)),
       pending: await delivery.pending(userId),
     });
+  });
+
+  // «Проверить снова»: владелец восстановил таблицу из корзины — подключение снова работает с ней.
+  router.post(`${base}/recheck`, requireAuth, async (request: Request, response: Response) => {
+    const userId = request.user!.id;
+    if (!delivery) {
+      response.json({ ...publicStatus(store.get(userId)), pending: 0 });
+      return;
+    }
+    const connection = await delivery.recheck(userId);
+    response.json({ ...publicStatus(connection), pending: await delivery.pending(userId) });
   });
 
   // «Создать новую таблицу» после того, как прежняя удалена или в корзине.

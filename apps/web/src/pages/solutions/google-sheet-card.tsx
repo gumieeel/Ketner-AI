@@ -17,12 +17,21 @@ import { useTranslation } from '@/i18n';
  * Возврат от Google приходит фрагментом адреса (`#google_code=…&google_state=…`): код
  * подтверждается здесь, в той же сессии, и сразу убирается из адреса.
  */
-export function GoogleSheetCard({ onChange }: { onChange: () => void }) {
+export function GoogleSheetCard({
+  onChange,
+  onAvailable,
+}: {
+  onChange: () => void;
+  /** Открыты ли Google Таблицы для аккаунта (сервер ответил не 503). */
+  onAvailable: (available: boolean) => void;
+}) {
   const { t } = useTranslation();
   const [status, setStatus] = useState<GoogleSheetStatus | null>(null);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<{ tone: 'ok' | 'error'; text: string } | null>(null);
   const handledReturn = useRef(false);
+  // Закрыто для аккаунта (503 feature_unavailable): карточки нет.
+  const [closed, setClosed] = useState(false);
 
   const fail = useCallback(
     (error: unknown) => {
@@ -37,10 +46,16 @@ export function GoogleSheetCard({ onChange }: { onChange: () => void }) {
   const load = useCallback(async () => {
     try {
       setStatus(await googleSheetsApi.status());
+      onAvailable(true);
     } catch (error) {
+      if (error instanceof ApiError && error.code === 'feature_unavailable') {
+        setClosed(true);
+        onAvailable(false);
+        return;
+      }
       fail(error);
     }
-  }, [fail]);
+  }, [fail, onAvailable]);
 
   useEffect(() => {
     if (handledReturn.current) return;
@@ -103,6 +118,8 @@ export function GoogleSheetCard({ onChange }: { onChange: () => void }) {
 
   const state = status?.status ?? null;
   const pending = status?.pending ?? 0;
+  // Пока не известно, открыто ли, и для закрытых аккаунтов — ничего не показываем.
+  if (closed || (status === null && !message && !busy)) return null;
 
   return (
     <div className="mt-4 rounded-xl border border-stroke px-5 py-4" data-testid="google-sheet-card">
@@ -195,6 +212,24 @@ export function GoogleSheetCard({ onChange }: { onChange: () => void }) {
               }
             >
               {t('google.sheet.newSheet')}
+            </Button>
+            <Button
+              size="sm"
+              variant="secondary"
+              disabled={busy}
+              onClick={() =>
+                void run(async () => {
+                  const next = await googleSheetsApi.recheck();
+                  setMessage(
+                    next.status === 'connected'
+                      ? { tone: 'ok', text: t('google.sheet.recheckDone') }
+                      : { tone: 'error', text: t('google.sheet.recheckStill') },
+                  );
+                  return next;
+                })
+              }
+            >
+              {t('google.sheet.recheck')}
             </Button>
             <Button
               size="sm"

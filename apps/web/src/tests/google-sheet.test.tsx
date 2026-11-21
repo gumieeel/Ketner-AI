@@ -60,6 +60,15 @@ function cabinet(google: (call: Call) => Response | null) {
   });
 }
 
+const CLOSED_RESPONSE = () =>
+  json(503, {
+    error: {
+      code: 'feature_unavailable',
+      message: 'Запись заявок в Google Таблицу пока недоступна.',
+      details: { feature: 'googleSheets' },
+    },
+  });
+
 const CONNECTED = {
   connected: true,
   status: 'connected',
@@ -88,14 +97,68 @@ describe('Google Таблица в кабинете бота (этап F)', () =
     vi.unstubAllGlobals();
   });
 
-  it('переключатель закрыт: ни карточки, ни запросов к Google', async () => {
-    setProductSwitchesForTests({ googleSheets: false });
-    const calls = cabinet(() => null);
+  it('пилот (шаг 5a): карточку решает сервер — аккаунту из списка статус, остальным 503', async () => {
+    cabinet((call) => {
+      if (call.path === '/api/integrations/google') return json(200, CONNECTED);
+      if (call.path.startsWith('/api/integrations/google/deliveries')) {
+        return json(200, { states: { l1: 'written' } });
+      }
+      return null;
+    });
+    const pilot = renderRoute('/solutions/b1');
+    expect(await screen.findByTestId('google-sheet-card')).toBeVisible();
+    expect(await screen.findByText('в таблице')).toBeVisible();
+    pilot.unmount();
+
+    const calls = cabinet((call) =>
+      call.path === '/api/integrations/google' ? CLOSED_RESPONSE() : null,
+    );
     renderRoute('/solutions/b1');
     expect(await screen.findByText('Анна', { exact: false })).toBeVisible();
+    await waitFor(() =>
+      expect(calls.some((call) => call.path === '/api/integrations/google')).toBe(true),
+    );
     expect(screen.queryByTestId('google-sheet-card')).toBeNull();
     expect(screen.queryByText('Google Таблица')).toBeNull();
-    expect(calls.some((call) => call.path.startsWith('/api/integrations/google'))).toBe(false);
+    expect(calls.some((call) => call.path.includes('/deliveries'))).toBe(false);
+  });
+
+  it('таблица в корзине: «проверить снова» после восстановления возвращает подключение', async () => {
+    setProductSwitchesForTests({ googleSheets: true });
+    let status: Record<string, unknown> = { ...CONNECTED, status: 'sheet_missing', pending: 1 };
+    const calls = cabinet((call) => {
+      if (call.path === '/api/integrations/google') return json(200, status);
+      if (call.path.startsWith('/api/integrations/google/deliveries'))
+        return json(200, { states: {} });
+      if (call.path === '/api/integrations/google/recheck') {
+        status = { ...CONNECTED, pending: 1 };
+        return json(200, status);
+      }
+      return null;
+    });
+    renderRoute('/solutions/b1');
+    fireEvent.click(
+      await screen.findByRole('button', { name: 'Я восстановил таблицу — проверить' }),
+    );
+    expect(await screen.findByText('Таблица снова на месте: заявки пишутся в неё.')).toBeVisible();
+    expect(calls.some((call) => call.path === '/api/integrations/google/recheck')).toBe(true);
+    expect(await screen.findByRole('button', { name: 'Дописать пропущенные (1)' })).toBeVisible();
+  });
+
+  it('закрыто для аккаунта: ни карточки, ни отметок — только один запрос статуса (503)', async () => {
+    setProductSwitchesForTests({ googleSheets: false });
+    const calls = cabinet((call) =>
+      call.path === '/api/integrations/google' ? CLOSED_RESPONSE() : null,
+    );
+    renderRoute('/solutions/b1');
+    expect(await screen.findByText('Анна', { exact: false })).toBeVisible();
+    await waitFor(() =>
+      expect(calls.filter((call) => call.path.startsWith('/api/integrations/google'))).toHaveLength(
+        1,
+      ),
+    );
+    expect(screen.queryByTestId('google-sheet-card')).toBeNull();
+    expect(screen.queryByText('Google Таблица')).toBeNull();
   });
 
   it('не подключено: кнопка ведёт на Google с возвратом на эту страницу', async () => {

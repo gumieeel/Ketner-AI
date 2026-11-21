@@ -28,7 +28,6 @@ import { ErrorNotice } from '@/pages/analysis/error-notice';
 import { BotLinkAndQr, BotSiteInstall } from './bot-install';
 import { GoogleSheetCard } from './google-sheet-card';
 import { googleSheetsApi, type LeadDeliveryState } from '@/features/google/api';
-import { productSwitch } from '@/lib/product-switches';
 
 /**
  * Кабинет бота для клиентов (этап B): где живёт бот (ссылка, QR, код для сайта), расход за
@@ -341,8 +340,9 @@ function LeadsSection({ id }: { id: string }) {
   const { t, language } = useTranslation();
   const [leads, setLeads] = useState<BotLeadView[] | null>(null);
   const [error, setError] = useState<unknown>(null);
-  // Google Таблица (этап F): отметки у заявок — только при открытом переключателе.
-  const sheets = productSwitch('googleSheets');
+  // Google Таблица (этап F): открыта ли для этого аккаунта, решает сервер (переключатель или пилот,
+  // шаг 5a) — карточка узнаёт это первым запросом статуса; 503 — ни карточки, ни отметок.
+  const [sheets, setSheets] = useState(false);
   const [deliveries, setDeliveries] = useState<Record<string, LeadDeliveryState>>({});
   const loadDeliveries = useCallback(() => {
     if (!sheets) return;
@@ -375,7 +375,7 @@ function LeadsSection({ id }: { id: string }) {
 
   return (
     <Section title={t('builder.bot.leads.title')}>
-      {sheets ? <GoogleSheetCard onChange={loadDeliveries} /> : null}
+      <GoogleSheetCard onChange={loadDeliveries} onAvailable={setSheets} />
       {error ? (
         <div className="mt-4">
           <ErrorNotice error={error} redirect={`/solutions/${id}`} />
