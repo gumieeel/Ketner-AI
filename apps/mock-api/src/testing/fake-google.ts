@@ -38,6 +38,20 @@ export interface FakeGoogleGrant {
 
 export interface FakeGoogle {
   fetchImpl: typeof fetch;
+  /** Обновление access-токена: `invalid_grant` — доступ отозван. */
+  refreshError: string | null;
+  refreshCount: number;
+  /** Ответ на запись строки: число — статус, `'throw'` — обрыв после отправки. */
+  appendStatus: number | 'throw';
+  /** Строки, дописанные в таблицы: `spreadsheetId → строки`. */
+  rows: Map<string, string[][]>;
+  appendRequests: Array<{ url: string; authorization: string | null; body: unknown }>;
+  /** Записать строку, но ответить обрывом (неясный исход, строка есть). */
+  appendWritesBeforeThrow: boolean;
+  /** Ответ на чтение колонки «ID заявки». */
+  readStatus: number;
+  trashed: boolean;
+  driveStatus: number;
   /** Следующий ответ token endpoint. */
   grant: FakeGoogleGrant;
   /** Статус ответа на создание таблицы (200 — создать). */
@@ -52,6 +66,15 @@ export interface FakeGoogle {
 export function createFakeGoogle(): FakeGoogle {
   let sheetCounter = 0;
   const fake: FakeGoogle = {
+    refreshError: null,
+    refreshCount: 0,
+    appendStatus: 200,
+    rows: new Map(),
+    appendRequests: [],
+    appendWritesBeforeThrow: false,
+    readStatus: 200,
+    trashed: false,
+    driveStatus: 200,
     grant: {},
     sheetStatus: 200,
     revokeStatus: 200,
@@ -61,7 +84,18 @@ export function createFakeGoogle(): FakeGoogle {
     fetchImpl: (async (input: string | URL | Request, init?: RequestInit) => {
       const url = String(input);
       if (url === 'https://oauth2.googleapis.com/token') {
-        fake.tokenRequests.push(new URLSearchParams(String(init?.body ?? '')));
+        const params = new URLSearchParams(String(init?.body ?? ''));
+        if (params.get('grant_type') === 'refresh_token') {
+          fake.refreshCount += 1;
+          if (fake.refreshError) {
+            return Response.json({ error: fake.refreshError }, { status: 400 });
+          }
+          return Response.json({
+            access_token: `ya29.refreshed-${fake.refreshCount}`,
+            expires_in: 3599,
+          });
+        }
+        fake.tokenRequests.push(params);
         const grant = fake.grant;
         return Response.json({
           access_token: 'ya29.fake-access',
@@ -80,6 +114,40 @@ export function createFakeGoogle(): FakeGoogle {
       if (url === 'https://oauth2.googleapis.com/revoke') {
         fake.revoked.push(new URLSearchParams(String(init?.body ?? '')).get('token') ?? '');
         return new Response('', { status: fake.revokeStatus });
+      }
+      const values =
+        /^https:\/\/sheets\.googleapis\.com\/v4\/spreadsheets\/([^/]+)\/values\/([^?:]+)(:append)?/.exec(
+          url,
+        );
+      if (values) {
+        const spreadsheetId = decodeURIComponent(values[1]!);
+        const headers = new Headers(init?.headers);
+        if (values[3]) {
+          const body = JSON.parse(String(init?.body ?? '{}')) as { values: string[][] };
+          fake.appendRequests.push({ url, authorization: headers.get('authorization'), body });
+          const write = () => {
+            const list = fake.rows.get(spreadsheetId) ?? [];
+            list.push(...body.values);
+            fake.rows.set(spreadsheetId, list);
+            return list.length;
+          };
+          if (fake.appendStatus === 'throw') {
+            if (fake.appendWritesBeforeThrow) write();
+            throw new TypeError('fetch failed');
+          }
+          if (fake.appendStatus !== 200) return new Response('{}', { status: fake.appendStatus });
+          const n = write() + 1;
+          return Response.json({
+            updates: { updatedRange: `'Заявки'!A${n}:G${n}`, updatedRows: 1 },
+          });
+        }
+        if (fake.readStatus !== 200) return new Response('{}', { status: fake.readStatus });
+        const ids = (fake.rows.get(spreadsheetId) ?? []).map((row) => row[6] ?? '');
+        return Response.json({ values: [['ID заявки', ...ids]] });
+      }
+      if (url.startsWith('https://www.googleapis.com/drive/v3/files/')) {
+        if (fake.driveStatus !== 200) return new Response('{}', { status: fake.driveStatus });
+        return Response.json({ trashed: fake.trashed });
       }
       if (url.startsWith('https://sheets.googleapis.com/v4/spreadsheets')) {
         const headers = new Headers(init?.headers);

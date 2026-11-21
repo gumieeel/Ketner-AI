@@ -51,8 +51,19 @@ export interface ConnectGoogleInput {
   sheetErrorCode?: string | null;
 }
 
+export interface GoogleConnectionPatch {
+  status?: Exclude<GoogleConnectionStatus, 'disconnected'>;
+  /** Код сбоя; `null` — сбоя нет. Время сбоя ставится само. */
+  lastErrorCode?: string | null;
+  /** Удачная запись: время ставится само. */
+  ok?: boolean;
+  spreadsheet?: { id: string; url: string };
+}
+
 export interface GoogleConnectionStore {
   get(userId: string): GoogleConnection | undefined;
+  /** Все подключения (обход доставки: ежедневная проверка корзины). */
+  list(): GoogleConnection[];
   /** Расшифрованный refresh-токен; `undefined` — нет подключения, отключено или ключ сменился. */
   refreshTokenOf(userId: string): string | undefined;
   /** Есть ли в строке зашифрованный токен (даже если его уже не расшифровать). */
@@ -60,6 +71,15 @@ export interface GoogleConnectionStore {
   connect(input: ConnectGoogleInput, now?: Date): Promise<GoogleConnection>;
   /** Отключение: токен стирается, статус `disconnected`, таблица и строка остаются. */
   disconnect(userId: string, now?: Date): Promise<GoogleConnection | undefined>;
+  /**
+   * Состояние доставки (этап F, шаг 4): статус, код сбоя, время, таблица. Токен не меняется;
+   * отключённое подключение не трогается. Возвращает прежнее и новое состояние.
+   */
+  update(
+    userId: string,
+    patch: GoogleConnectionPatch,
+    now?: Date,
+  ): Promise<{ before: GoogleConnection; after: GoogleConnection } | undefined>;
   /** Удаление строки целиком (удаление аккаунта). */
   remove(userId: string): Promise<boolean>;
   loadExternal(records: StoredGoogleConnection[]): void;
@@ -87,6 +107,10 @@ export function createGoogleConnectionStore(options: { secret: string }): Google
     get(userId) {
       const record = byUser.get(userId);
       return record ? toPublic(record) : undefined;
+    },
+
+    list() {
+      return [...byUser.values()].map(toPublic);
     },
 
     refreshTokenOf(userId) {
@@ -129,6 +153,27 @@ export function createGoogleConnectionStore(options: { secret: string }): Google
         status: 'disconnected',
         updatedAt: now.toISOString(),
       });
+    },
+
+    async update(userId, patch, now = new Date()) {
+      const record = byUser.get(userId);
+      if (!record || record.status === 'disconnected') return undefined;
+      const at = now.toISOString();
+      const next: StoredGoogleConnection = { ...record, scopes: [...record.scopes], updatedAt: at };
+      if (patch.status) next.status = patch.status;
+      if (patch.lastErrorCode !== undefined) {
+        const code =
+          patch.lastErrorCode && ERROR_CODE.test(patch.lastErrorCode) ? patch.lastErrorCode : null;
+        next.lastErrorCode = code;
+        if (code) next.lastErrorAt = at;
+      }
+      if (patch.ok) next.lastOkAt = at;
+      if (patch.spreadsheet) {
+        next.spreadsheetId = patch.spreadsheet.id;
+        next.spreadsheetUrl = patch.spreadsheet.url;
+      }
+      const after = await write(next);
+      return { before: toPublic(record), after };
     },
 
     async remove(userId) {

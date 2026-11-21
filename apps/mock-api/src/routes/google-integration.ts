@@ -18,6 +18,8 @@ import {
 } from '../google/oauth.js';
 import { GoogleSheetsError, createLeadSpreadsheet } from '../google/sheets.js';
 import type { GoogleVerifierStore } from '../google/verifier-store.js';
+import type { SheetsDelivery } from '../google/delivery.js';
+import type { BuilderStore } from '../builder/store.js';
 
 export interface GoogleIntegrationRouterDeps {
   store: GoogleConnectionStore;
@@ -26,6 +28,10 @@ export interface GoogleIntegrationRouterDeps {
   settings?: () => GoogleOAuthSettings | null;
   fetchImpl?: typeof fetch;
   log?: (message: string) => void;
+  /** Доставка заявок (шаг 4): отметки у заявок, повтор, «дописать пропущенные», новая таблица. */
+  delivery?: SheetsDelivery;
+  /** Заявки бота владельца (для отметок в кабинете). */
+  leads?: () => Pick<BuilderStore, 'listLeads'> | null;
 }
 
 /** Что видит сайт: без токенов и без `sub`. */
@@ -57,6 +63,8 @@ export function createGoogleIntegrationRouter({
   settings: injected,
   fetchImpl: injectedFetch,
   log: injectedLog,
+  delivery,
+  leads,
 }: GoogleIntegrationRouterDeps): Router {
   const settings = injected ?? googleOAuthSettings;
   const fetchImpl = injectedFetch ?? fetch;
@@ -72,8 +80,108 @@ export function createGoogleIntegrationRouter({
     next();
   });
 
-  router.get(base, requireAuth, (request: Request, response: Response) => {
-    response.json(publicStatus(store.get(request.user!.id)));
+  router.get(base, requireAuth, async (request: Request, response: Response) => {
+    const userId = request.user!.id;
+    const connection = store.get(userId);
+    response.json({
+      ...publicStatus(connection),
+      // Сколько заявок не записано: кнопка «дописать пропущенные».
+      pending: connection && delivery ? await delivery.pending(userId) : 0,
+    });
+  });
+
+  // Отметки у заявок бота: «в таблице», «записывается», «не записано», «ждёт подключения».
+  router.get(`${base}/deliveries`, requireAuth, async (request: Request, response: Response) => {
+    const userId = request.user!.id;
+    const solutionId = typeof request.query.solutionId === 'string' ? request.query.solutionId : '';
+    const source = leads?.();
+    if (!solutionId || solutionId.length > 200 || !source || !delivery) {
+      response.json({ states: {} });
+      return;
+    }
+    const list = await source.listLeads(userId, solutionId, 200);
+    response.json({
+      states: await delivery.states(
+        userId,
+        list.map((lead) => lead.id),
+      ),
+    });
+  });
+
+  router.post(
+    `${base}/leads/:leadId/retry`,
+    requireAuth,
+    async (request: Request, response: Response) => {
+      const userId = request.user!.id;
+      const leadId = String(request.params.leadId);
+      if (!delivery || leadId.length > 200) {
+        sendError(response, 404, 'not_found', 'Заявка не найдена');
+        return;
+      }
+      const result = await delivery.retryLead(userId, leadId);
+      if (result === 'not_found') {
+        sendError(response, 404, 'not_found', 'Заявка не найдена');
+        return;
+      }
+      if (result === 'not_connected') {
+        sendError(response, 409, 'google_not_connected', 'Сначала подключите Google Таблицу.');
+        return;
+      }
+      if (result === 'limit') {
+        sendError(
+          response,
+          409,
+          'retry_limit',
+          'Повторов больше нет. Проверьте таблицу и подключение или перенесите заявку вручную.',
+        );
+        return;
+      }
+      response.json({
+        result,
+        state: (await delivery.states(userId, [leadId]))[leadId] ?? null,
+      });
+    },
+  );
+
+  // «Дописать пропущенные»: все незаписанные заявки, по одной.
+  router.post(`${base}/backfill`, requireAuth, async (request: Request, response: Response) => {
+    const userId = request.user!.id;
+    if (store.get(userId)?.status !== 'connected' || !delivery) {
+      sendError(response, 409, 'google_not_connected', 'Сначала подключите Google Таблицу.');
+      return;
+    }
+    const retried = await delivery.backfill(userId);
+    response.json({
+      retried,
+      ...publicStatus(store.get(userId)),
+      pending: await delivery.pending(userId),
+    });
+  });
+
+  // «Создать новую таблицу» после того, как прежняя удалена или в корзине.
+  router.post(`${base}/new-sheet`, requireAuth, async (request: Request, response: Response) => {
+    const userId = request.user!.id;
+    const connection = store.get(userId);
+    if (!connection || connection.status === 'disconnected' || !delivery) {
+      sendError(response, 409, 'google_not_connected', 'Сначала подключите Google Таблицу.');
+      return;
+    }
+    try {
+      response.json(publicStatus(await delivery.newSheet(userId)));
+    } catch (error) {
+      const code = error instanceof GoogleSheetsError ? error.code : 'sheet_not_created';
+      log(`[google] новая таблица для аккаунта ${userId} не создана: ${code}`);
+      sendError(
+        response,
+        code === 'invalid_grant' || code === 'token_unreadable' ? 409 : 502,
+        code === 'invalid_grant' || code === 'token_unreadable'
+          ? 'google_reconnect_required'
+          : 'google_sheet_not_created',
+        code === 'invalid_grant' || code === 'token_unreadable'
+          ? 'Доступ к Google отозван. Подключите таблицу снова.'
+          : 'Google не создал таблицу. Попробуйте ещё раз через минуту.',
+      );
+    }
   });
 
   router.post(`${base}/start`, requireAuth, async (request: Request, response: Response) => {
@@ -185,6 +293,7 @@ export function createGoogleIntegrationRouter({
       }
       throw error;
     }
+    delivery?.forget(userId);
     if (previousToken && previousToken !== grant.refreshToken) {
       if (!(await revokeGoogleToken(previousToken, fetchImpl))) {
         log(`[google] отзыв прежнего доступа аккаунта ${userId} не удался`);
@@ -197,6 +306,7 @@ export function createGoogleIntegrationRouter({
     const userId = request.user!.id;
     const token = store.refreshTokenOf(userId);
     const connection = await store.disconnect(userId);
+    delivery?.forget(userId);
     // Отзыв — по возможности: отключение в Ketner уже состоялось, токен стёрт.
     if (token && !(await revokeGoogleToken(token, fetchImpl))) {
       log(`[google] отзыв доступа при отключении аккаунта ${userId} не удался`);

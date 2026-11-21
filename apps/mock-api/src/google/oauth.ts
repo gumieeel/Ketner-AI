@@ -161,7 +161,8 @@ export type GoogleOAuthErrorCode =
   | 'excess_scope'
   | 'missing_drive_file'
   | 'no_refresh_token'
-  | 'bad_id_token';
+  | 'bad_id_token'
+  | 'invalid_grant';
 
 const MESSAGES: Record<GoogleOAuthErrorCode, string> = {
   unavailable: 'Google не ответил. Попробуйте подключить ещё раз.',
@@ -172,6 +173,7 @@ const MESSAGES: Record<GoogleOAuthErrorCode, string> = {
     'Без разрешения на файлы Ketner не сможет записывать заявки в таблицу. Подключите ещё раз и оставьте это разрешение включённым.',
   no_refresh_token: 'Google не выдал постоянный доступ. Попробуйте подключить ещё раз.',
   bad_id_token: 'Не удалось определить аккаунт Google. Попробуйте подключить ещё раз.',
+  invalid_grant: 'Доступ к Google отозван. Подключите таблицу снова.',
 };
 
 export class GoogleOAuthError extends Error {
@@ -314,6 +316,45 @@ export async function exchangeGoogleCode(
     throw new GoogleOAuthError('bad_id_token');
   }
   return { accessToken, refreshToken, scopes: granted.scopes, identity };
+}
+
+/**
+ * Новый access-токен по refresh-токену (живёт около часа; хранится только в памяти процесса).
+ * `invalid_grant` — доступ отозван или токен недействителен: нужно подключить Google снова.
+ */
+export async function refreshGoogleAccessToken(
+  settings: GoogleOAuthSettings,
+  refreshToken: string,
+  fetchImpl: typeof fetch = fetch,
+): Promise<{ accessToken: string; expiresInSec: number }> {
+  let response: Response;
+  try {
+    response = await fetchImpl(TOKEN_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded', Accept: 'application/json' },
+      body: new URLSearchParams({
+        client_id: settings.clientId,
+        client_secret: settings.clientSecret,
+        refresh_token: refreshToken,
+        grant_type: 'refresh_token',
+      }).toString(),
+      signal: AbortSignal.timeout(15_000),
+    });
+  } catch {
+    throw new GoogleOAuthError('unavailable');
+  }
+  const body = (await response.json().catch(() => ({}))) as {
+    access_token?: unknown;
+    expires_in?: unknown;
+    error?: unknown;
+  };
+  if (body.error === 'invalid_grant') throw new GoogleOAuthError('invalid_grant');
+  if (!response.ok || typeof body.access_token !== 'string' || !body.access_token) {
+    throw new GoogleOAuthError(response.status >= 500 ? 'unavailable' : 'exchange_failed');
+  }
+  const expiresInSec =
+    typeof body.expires_in === 'number' && body.expires_in > 0 ? body.expires_in : 3600;
+  return { accessToken: body.access_token, expiresInSec };
 }
 
 /**

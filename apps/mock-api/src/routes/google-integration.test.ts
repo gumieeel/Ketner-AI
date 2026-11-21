@@ -109,6 +109,7 @@ test('подключение: start → callback → confirm; verifier толь�
     spreadsheetUrl: null,
     lastErrorCode: null,
     connectedAt: null,
+    pending: 0,
   });
 
   const { authorize, state, code } = await startAndCallback(server, owner);
