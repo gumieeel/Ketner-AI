@@ -127,17 +127,29 @@ function cell(value: string): string {
   return value.length > CELL_LIMIT ? `${value.slice(0, CELL_LIMIT - 1)}…` : value;
 }
 
+/** Начала, с которых Excel и LibreOffice читают ячейку CSV как формулу (OWASP «CSV injection»). */
+const FORMULA_START = /^[=+\-@\t\r]/;
+
 /**
- * Строка таблицы в порядке колонок. Значения уходят как есть: запись идёт с `valueInputOption=RAW`,
- * поэтому `=IMPORTXML(…)`, `+cmd|…`, `@…` от посетителя остаются текстом, а не формулой.
+ * Значение от посетителя: если оно начинается как формула — с апострофом впереди. В самой Google
+ * Таблице запись и так идёт с `RAW` (формулой ничего не станет), апостроф нужен для выгрузки: CSV,
+ * открытый в Excel, иначе выполнил бы `=HYPERLINK(…)`, `+cmd|…`, `@SUM(…)`.
+ */
+export function neutralizeFormula(value: string): string {
+  return FORMULA_START.test(value) ? `'${value}` : value;
+}
+
+/**
+ * Строка таблицы в порядке колонок. Запись — с `valueInputOption=RAW`; поля посетителя (имя,
+ * контакт, вопрос) дополнительно обезврежены для выгрузки в CSV (`neutralizeFormula`).
  */
 export function leadRow(input: LeadRowInput): string[] {
   return [
     formatLeadDate(input.createdAt),
     input.botName,
-    input.name,
-    input.contact,
-    input.question,
+    neutralizeFormula(input.name),
+    neutralizeFormula(input.contact),
+    neutralizeFormula(input.question),
     input.dialogUrl,
     input.leadId,
   ].map(cell);
