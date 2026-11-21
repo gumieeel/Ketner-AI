@@ -60,6 +60,8 @@ export const googleSheetsApi = {
     request<GoogleSheetStatus>('/confirm', { method: 'POST', body: { code, state } }),
   disconnect: () => request<GoogleSheetStatus>('/connection', { method: 'DELETE' }),
   newSheet: () => request<GoogleSheetStatus>('/new-sheet', { method: 'POST', body: {} }),
+  /** Таблицу восстановили из корзины — проверить и подключить снова. */
+  recheck: () => request<GoogleSheetStatus>('/recheck', { method: 'POST', body: {} }),
   backfill: () =>
     request<GoogleSheetStatus & { retried: number }>('/backfill', { method: 'POST', body: {} }),
   deliveries: async (solutionId: string) =>

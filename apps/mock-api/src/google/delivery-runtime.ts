@@ -4,7 +4,7 @@
  */
 
 import type { DiscoveryStores } from '../discovery/runtime.js';
-import { productSwitch } from '../product-switches.js';
+import { googleSheetsEnabledFor, googleSheetsEnabledForAnyone } from '../product-switches.js';
 import type { Mailer } from '../services/mailer.js';
 import type { GoogleConnectionStore } from './connection-store.js';
 import { PostgresDeliveryJournal } from './delivery-journal.js';
@@ -57,7 +57,8 @@ export function createSheetsDelivery(deps: SheetsDeliveryRuntimeDeps): SheetsDel
     leads: () => deps.stores()?.builder ?? null,
     connections: deps.connections,
     settings: deps.settings,
-    enabled: () => productSwitch('googleSheets'),
+    enabled: (userId) =>
+      userId === undefined ? googleSheetsEnabledForAnyone() : googleSheetsEnabledFor(userId),
     siteUrl: deps.siteUrl,
     ...(deps.fetchImpl ? { fetchImpl: deps.fetchImpl } : {}),
     ...(deps.now ? { now: deps.now } : {}),

@@ -2292,6 +2292,9 @@ export const en: Record<TranslationKey, string> = {
   'google.sheet.missing':
     'The sheet was deleted or is in the Google Drive trash. Create a new one? Requests are kept in Ketner and wait.',
   'google.sheet.newSheet': 'Create a new sheet',
+  'google.sheet.recheck': 'I restored the sheet — check again',
+  'google.sheet.recheckDone': 'The sheet is back: requests are saved to it.',
+  'google.sheet.recheckStill': 'The sheet is still in the trash or deleted.',
   'google.sheet.newSheetDone':
     'A new sheet was created. Press "Add missed requests" to copy them over.',
   'google.sheet.denied': 'You did not grant access to Google. The sheet is not connected.',

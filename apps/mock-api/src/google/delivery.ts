@@ -53,6 +53,11 @@ const WAITING_CODES = new Set([
 export const RECONCILE_RESOLVER = 'reconcile:sheet_id_column';
 const TOKEN_MARGIN_MS = 60_000;
 const DAY_MS = 24 * 60 * 60_000;
+/**
+ * Перед записью — не в корзине ли таблица, не чаще раза в 10 минут на аккаунт: Sheets API пишет и в
+ * файл из корзины, и без этой проверки заявки уходили бы в корзину до суточной проверки.
+ */
+const TRASH_BEFORE_WRITE_MS = 10 * 60_000;
 
 export interface LeadSource {
   getLead(ownerId: string, leadId: string): Promise<BotLead | null>;
@@ -64,8 +69,11 @@ export interface SheetsDeliveryDeps {
   leads: () => LeadSource | null;
   connections: GoogleConnectionStore;
   settings: () => GoogleOAuthSettings | null;
-  /** Переключатель `googleSheets`. */
-  enabled: () => boolean;
+  /**
+   * Включено ли для аккаунта: переключатель `googleSheets` или пилот. Без аккаунта — есть ли хоть
+   * кто-то, для кого включено (обход).
+   */
+  enabled: (userId?: string) => boolean;
   /** Адрес сайта для ссылки «Диалог». */
   siteUrl: () => string;
   /** Письмо и Telegram владельцу: доступ отозван или таблица пропала (один раз за поломку). */
@@ -98,8 +106,9 @@ export class SheetsDelivery {
     this.log = deps.log ?? ((message) => console.warn(message));
   }
 
-  available(): boolean {
-    return this.deps.enabled() && this.deps.settings() !== null;
+  /** Работает ли доставка (для аккаунта — с учётом пилота). */
+  available(userId?: string): boolean {
+    return this.deps.enabled(userId) && this.deps.settings() !== null;
   }
 
   /** Сбросить access-токен из памяти (отключение, новое подключение). */
@@ -166,10 +175,10 @@ export class SheetsDelivery {
   }
 
   /** Таблица в корзине — `sheet_missing`. Возвращает, можно ли писать. */
-  private async checkTrash(connection: GoogleConnection, force = false): Promise<boolean> {
+  private async checkTrash(connection: GoogleConnection, maxAgeMs = DAY_MS): Promise<boolean> {
     if (!connection.spreadsheetId) return false;
     const last = this.trashCheckedAt.get(connection.userId) ?? 0;
-    if (!force && this.now() - last < DAY_MS) return true;
+    if (this.now() - last < maxAgeMs) return true;
     let token: string;
     try {
       token = await this.accessToken(connection.userId);
@@ -197,7 +206,7 @@ export class SheetsDelivery {
 
   /** Новая заявка: исполнение и попытка сразу. Ошибки — только в лог. */
   async onLeadCreated(lead: BotLead): Promise<void> {
-    if (!this.available()) return;
+    if (!this.available(lead.ownerId)) return;
     const journal = this.deps.journal();
     const connection = this.deps.connections.get(lead.ownerId);
     if (!journal || !connection || connection.status === 'disconnected') return;
@@ -249,6 +258,14 @@ export class SheetsDelivery {
         const access =
           error instanceof AccessError ? error : new AccessError('token_refresh_failed', true);
         await this.failBefore(journal, effect, { code: access.code, retry: access.retry });
+        return;
+      }
+      if (!(await this.checkTrash(connection, TRASH_BEFORE_WRITE_MS))) {
+        const after = this.deps.connections.get(effect.userId);
+        await this.failBefore(journal, effect, {
+          code: after?.lastErrorCode ?? 'sheet_missing',
+          retry: false,
+        });
         return;
       }
       const solution = await source.getSolution(effect.userId, lead.solutionId);
@@ -313,7 +330,7 @@ export class SheetsDelivery {
       .update(effect.userId, { lastErrorCode: code }, new Date(this.now()))
       .catch(() => undefined);
     // После сбоя — не в корзине ли таблица (Sheets API в файл из корзины пишет).
-    await this.checkTrash(connection, true);
+    await this.checkTrash(connection, 0);
   }
 
   /** Неясный исход: есть ли заявка в колонке «ID заявки». */
@@ -357,6 +374,8 @@ export class SheetsDelivery {
     if (!journal) return 0;
     let handled = 0;
     for (const effect of await journal.due(this.now(), limit)) {
+      // Пилот: шаги аккаунтов, для которых Google Таблицы закрыты, не трогаем.
+      if (!this.available(effect.userId)) continue;
       const connection = this.deps.connections.get(effect.userId);
       const connected = connection?.status === 'connected';
       try {
@@ -386,7 +405,9 @@ export class SheetsDelivery {
     }
     // Раз в сутки — не в корзине ли таблицы подключённых аккаунтов.
     for (const connection of this.deps.connections.list()) {
-      if (connection.status === 'connected') await this.checkTrash(connection);
+      if (connection.status === 'connected' && this.available(connection.userId)) {
+        await this.checkTrash(connection);
+      }
     }
     return handled;
   }
@@ -427,7 +448,7 @@ export class SheetsDelivery {
     const journal = this.deps.journal();
     const connection = this.deps.connections.get(userId);
     if (!journal || !connection || connection.status !== 'connected') return 0;
-    if (!(await this.checkTrash(connection, true))) return 0;
+    if (!(await this.checkTrash(connection, 0))) return 0;
     let retried = 0;
     for (const effect of await journal.failed(userId, 500)) {
       if (this.deps.connections.get(userId)?.status !== 'connected') break;
@@ -452,6 +473,37 @@ export class SheetsDelivery {
   async pending(userId: string): Promise<number> {
     const journal = this.deps.journal();
     return journal ? (await journal.failed(userId, 500)).length : 0;
+  }
+
+  /**
+   * «Проверить снова» после `sheet_missing`: владелец восстановил таблицу из корзины — если файл на
+   * месте и не в корзине, подключение снова `connected` (таблица прежняя). Иначе — без изменений.
+   */
+  async recheck(userId: string): Promise<GoogleConnection | undefined> {
+    const connection = this.deps.connections.get(userId);
+    if (!connection || connection.status !== 'sheet_missing' || !connection.spreadsheetId) {
+      return connection;
+    }
+    let token: string;
+    try {
+      token = await this.accessToken(userId);
+    } catch {
+      return this.deps.connections.get(userId);
+    }
+    try {
+      const trashed = await spreadsheetTrashed(token, connection.spreadsheetId, this.fetchImpl);
+      this.trashCheckedAt.set(userId, this.now());
+      if (trashed) return connection;
+    } catch {
+      return connection;
+    }
+    const updated = await this.deps.connections.update(
+      userId,
+      { status: 'connected', lastErrorCode: null },
+      new Date(this.now()),
+    );
+    this.log(`[sheets] подключение ${userId}: таблица снова доступна`);
+    return updated?.after;
   }
 
   /** «Создать новую таблицу» после `sheet_missing`. */

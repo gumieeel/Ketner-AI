@@ -31,7 +31,9 @@ interface Harness {
   leads: Map<string, BotLead>;
 }
 
-async function harness(options: { connect?: boolean; enabled?: boolean } = {}): Promise<Harness> {
+async function harness(
+  options: { connect?: boolean; enabled?: boolean | ((userId?: string) => boolean) } = {},
+): Promise<Harness> {
   const clock = { now: Date.parse('2026-11-21T12:00:00Z') };
   const google = createFakeGoogle();
   const journal = new MemoryDeliveryJournal(() => clock.now);
@@ -52,7 +54,8 @@ async function harness(options: { connect?: boolean; enabled?: boolean } = {}): 
     }),
     connections,
     settings: () => FAKE_GOOGLE_SETTINGS,
-    enabled: () => options.enabled ?? true,
+    enabled: (userId) =>
+      typeof options.enabled === 'function' ? options.enabled(userId) : (options.enabled ?? true),
     siteUrl: () => 'https://ketner.org',
     notifyBroken: async (userId, status) => {
       notified.push([userId, status]);
@@ -335,4 +338,45 @@ test('тексты уведомлений о поломке: без данных
   assert.match(revoked.text, /https:\/\/ketner\.org\/solutions/);
   const missing = brokenConnectionText('sheet_missing', 'https://ketner.org/solutions');
   assert.match(missing.subject, /удалена/);
+});
+
+test('корзина замечается до записи (не чаще раза в 10 минут): заявка ждёт, одно уведомление; «проверить снова» после восстановления', async () => {
+  const h = await harness();
+  await h.lead('lead-1');
+  assert.equal(h.google.rows.get(SHEET)?.length, 1);
+
+  // Владелец отправил таблицу в корзину; через 10 минут после прошлой проверки — новая проверка.
+  h.google.trashed = true;
+  later(h, 11 * 60_000);
+  await h.lead('lead-2');
+  assert.equal(h.google.rows.get(SHEET)?.length, 1, 'в таблицу из корзины не пишем');
+  assert.equal(h.connections.get(OWNER)?.status, 'sheet_missing');
+  assert.equal(h.connections.get(OWNER)?.lastErrorCode, 'trashed');
+  assert.deepEqual(h.notified, [[OWNER, 'sheet_missing']]);
+  assert.deepEqual(await h.delivery.states(OWNER, ['lead-2']), { 'lead-2': 'waiting' });
+
+  // Пока в корзине — «проверить снова» ничего не меняет.
+  assert.equal((await h.delivery.recheck(OWNER))?.status, 'sheet_missing');
+
+  // Восстановил: подключение снова к той же таблице, пропущенные дописываются туда же.
+  h.google.trashed = false;
+  const back = await h.delivery.recheck(OWNER);
+  assert.equal(back?.status, 'connected');
+  assert.equal(back?.spreadsheetId, SHEET);
+  assert.equal(await h.delivery.backfill(OWNER), 1);
+  assert.equal(h.google.rows.get(SHEET)?.length, 2);
+  assert.equal(h.notified.length, 1);
+});
+
+test('пилот: доставка только для аккаунтов, для которых Google Таблицы включены', async () => {
+  const h = await harness({ enabled: (userId) => userId === undefined || userId === 'pilot-only' });
+  await h.lead('lead-1');
+  assert.equal(h.journal.executions.size, 0, 'владелец не в пилоте — в таблицу не пишем');
+
+  // Шаг, оставшийся с прежнего включения, обход не трогает.
+  await h.journal.start({ userId: OWNER, solutionId: 'sol-1', leadId: 'old' });
+  later(h, 60 * 60_000);
+  await h.delivery.sweep();
+  assert.equal((await h.journal.latest(OWNER, 'old'))?.status, 'reserved');
+  assert.equal(h.google.appendRequests.length, 0);
 });

@@ -1,4 +1,9 @@
-import { productSwitch, requireFeature, sendFeatureUnavailable } from '../product-switches.js';
+import {
+  googleSheetsEnabledForAnyone,
+  productSwitch,
+  requireFeature,
+  sendFeatureUnavailable,
+} from '../product-switches.js';
 import { Router, type NextFunction, type Request, type Response } from 'express';
 import { LowCreditsNotifier } from '../services/low-credits-notifier.js';
 import { siteUrl } from '../seo/pages.js';
@@ -410,7 +415,8 @@ export function createApiRouter(deps: ApiDeps): Router {
       },
       ...(deps.googleFetch ? { fetchImpl: deps.googleFetch } : {}),
     });
-  if (productSwitch('googleSheets')) startSheetsSweep(sheetsDelivery, platformStores);
+  // Обход — если Google Таблицы открыты хоть кому-то (переключатель или пилот, шаг 5a).
+  if (googleSheetsEnabledForAnyone()) startSheetsSweep(sheetsDelivery, platformStores);
   // Журнал платежей работает с теми же хранилищами, что и роутеры (в тестах — с временными).
   const activeBilling =
     deps.billingService ??

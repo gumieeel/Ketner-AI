@@ -2275,6 +2275,9 @@ export const ru = {
   'google.sheet.missing':
     'Таблица удалена или в корзине Google Диска. Создать новую? Заявки сохраняются в Ketner и ждут.',
   'google.sheet.newSheet': 'Создать новую таблицу',
+  'google.sheet.recheck': 'Я восстановил таблицу — проверить',
+  'google.sheet.recheckDone': 'Таблица снова на месте: заявки пишутся в неё.',
+  'google.sheet.recheckStill': 'Таблица всё ещё в корзине или удалена.',
   'google.sheet.newSheetDone':
     'Новая таблица создана. Нажмите «Дописать пропущенные», чтобы перенести заявки.',
   'google.sheet.denied': 'Вы не дали доступ к Google. Таблица не подключена.',

@@ -35,6 +35,16 @@ export const MODEL_COMPARE_ENABLED = false;
  * на настоящем аккаунте Google; кроме переключателя нужны GOOGLE_SHEETS_CLIENT_ID / _SECRET.
  */
 export const GOOGLE_SHEETS_ENABLED = false;
+/**
+ * Пилот Google Таблиц (этап F, шаг 5a): аккаунты, для которых запись заявок работает при
+ * выключенном `GOOGLE_SHEETS_ENABLED` — проверка на настоящем аккаунте Google. Остальные получают
+ * 503 и не видят карточку: сайт решает по ответу `GET /api/integrations/google`, поэтому список
+ * живёт только на сервере и в код сайта (открытый) не попадает.
+ */
+export const GOOGLE_SHEETS_PILOT_ACCOUNTS: readonly string[] = [
+  // Владелец
+  'c4b78d88-6aee-4183-bd19-33a40e9ffece',
+];
 
 export const PRODUCT_SWITCHES = {
   stars: STARS_ENABLED,
@@ -79,6 +89,31 @@ const MESSAGES: Record<ProductFeature, string> = {
   modelCompare: 'Сравнение моделей временно недоступно.',
   googleSheets: 'Запись заявок в Google Таблицу пока недоступна.',
 };
+
+let pilotOverride: readonly string[] | null = null;
+
+/** Только для тестов: свой список пилота; `null` — список из кода. */
+export function setGoogleSheetsPilotForTests(accounts: readonly string[] | null): void {
+  if (process.env.NODE_ENV === 'production') {
+    throw new Error('product switches cannot be changed in production');
+  }
+  pilotOverride = accounts;
+}
+
+function pilotAccounts(): readonly string[] {
+  return pilotOverride ?? GOOGLE_SHEETS_PILOT_ACCOUNTS;
+}
+
+/** Google Таблицы для аккаунта: переключатель открыт для всех или аккаунт в пилоте. */
+export function googleSheetsEnabledFor(userId: string | null | undefined): boolean {
+  if (productSwitch('googleSheets')) return true;
+  return Boolean(userId) && pilotAccounts().includes(userId!);
+}
+
+/** Есть ли хоть кто-то, для кого Google Таблицы работают (обход доставки). */
+export function googleSheetsEnabledForAnyone(): boolean {
+  return productSwitch('googleSheets') || pilotAccounts().length > 0;
+}
 
 /** Ответ закрытой возможности: 503 `feature_unavailable` с понятным сообщением. */
 export function sendFeatureUnavailable(response: Response, feature: ProductFeature): void {

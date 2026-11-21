@@ -32,6 +32,22 @@ const TOKEN_URL = 'https://oauth2.googleapis.com/token';
 const REVOKE_URL = 'https://oauth2.googleapis.com/revoke';
 const GOOGLE_ISSUERS = new Set(['https://accounts.google.com', 'accounts.google.com']);
 
+/**
+ * Строки диагностики для пилота (этап F, шаг 5a): что Google ответил на обмен кода, обновление
+ * токена и отзыв — коды ответа, наличие refresh-токена, выданные разрешения. Ни токенов, ни кода,
+ * ни тела ответа целиком. Префикс `[google:diag]` — по нему их ищут в логах Render.
+ */
+export const googleDiagnostics = {
+  log: (line: string): void => {
+    console.log(`[google:diag] ${line}`);
+  },
+};
+
+/** Код ошибки Google (`invalid_grant`, `invalid_token`…) — только безопасные символы. */
+function errorCodeOf(value: unknown): string {
+  return typeof value === 'string' && /^[a-z_]{1,40}$/.test(value) ? value : '-';
+}
+
 export interface GoogleOAuthSettings {
   clientId: string;
   clientSecret: string;
@@ -289,6 +305,9 @@ export async function exchangeGoogleCode(
     error?: unknown;
   };
   if (!response.ok || typeof body.access_token !== 'string' || !body.access_token) {
+    googleDiagnostics.log(
+      `обмен кода: HTTP ${response.status}, ошибка: ${errorCodeOf(body.error)}`,
+    );
     throw new GoogleOAuthError(
       'exchange_failed',
       body.error === 'invalid_grant'
@@ -298,6 +317,10 @@ export async function exchangeGoogleCode(
   }
   const accessToken = body.access_token;
   const refreshToken = typeof body.refresh_token === 'string' ? body.refresh_token : '';
+  googleDiagnostics.log(
+    `обмен кода: HTTP ${response.status}, refresh_token: ${refreshToken ? 'есть' : 'нет'}, ` +
+      `scope: ${typeof body.scope === 'string' ? body.scope : '-'}`,
+  );
   // Отзыв refresh-токена снимает и выданный доступ; без него — отзываем access-токен.
   const revokeGranted = () => revokeGoogleToken(refreshToken || accessToken, fetchImpl);
 
@@ -348,6 +371,12 @@ export async function refreshGoogleAccessToken(
     expires_in?: unknown;
     error?: unknown;
   };
+  const refreshed = response.ok && typeof body.access_token === 'string' && body.access_token;
+  googleDiagnostics.log(
+    refreshed
+      ? `обновление токена: HTTP ${response.status}, expires_in: ${String(body.expires_in ?? '-')}`
+      : `обновление токена: HTTP ${response.status}, ошибка: ${errorCodeOf(body.error)}`,
+  );
   if (body.error === 'invalid_grant') throw new GoogleOAuthError('invalid_grant');
   if (!response.ok || typeof body.access_token !== 'string' || !body.access_token) {
     throw new GoogleOAuthError(response.status >= 500 ? 'unavailable' : 'exchange_failed');
@@ -373,8 +402,13 @@ export async function revokeGoogleToken(
       body: new URLSearchParams({ token }).toString(),
       signal: AbortSignal.timeout(10_000),
     });
+    const body = (await response.json().catch(() => ({}))) as { error?: unknown };
+    googleDiagnostics.log(
+      `отзыв: HTTP ${response.status}${response.ok ? '' : `, ошибка: ${errorCodeOf(body.error)}`}`,
+    );
     return response.ok;
   } catch {
+    googleDiagnostics.log('отзыв: Google не ответил');
     return false;
   }
 }
