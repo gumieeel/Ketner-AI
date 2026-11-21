@@ -1,0 +1,208 @@
+import { Router, type NextFunction, type Request, type Response } from 'express';
+import { requireAuth } from '../middleware/auth.js';
+import { sendError } from '../middleware/errors.js';
+import { productSwitch, sendFeatureUnavailable } from '../product-switches.js';
+import { fallbackReturnTo, safeReturnTo } from '../github/oauth.js';
+import type { GoogleConnection, GoogleConnectionStore } from '../google/connection-store.js';
+import {
+  GoogleOAuthError,
+  createCodeVerifier,
+  createGoogleState,
+  exchangeGoogleCode,
+  googleAuthorizeUrl,
+  googleOAuthSettings,
+  readGoogleState,
+  revokeGoogleToken,
+  withFragment,
+  type GoogleOAuthSettings,
+} from '../google/oauth.js';
+import { GoogleSheetsError, createLeadSpreadsheet } from '../google/sheets.js';
+import type { GoogleVerifierStore } from '../google/verifier-store.js';
+
+export interface GoogleIntegrationRouterDeps {
+  store: GoogleConnectionStore;
+  verifiers: GoogleVerifierStore;
+  /** Подмена настроек OAuth в тестах; по умолчанию — из переменных окружения. */
+  settings?: () => GoogleOAuthSettings | null;
+  fetchImpl?: typeof fetch;
+  log?: (message: string) => void;
+}
+
+/** Что видит сайт: без токенов и без `sub`. */
+function publicStatus(connection: GoogleConnection | undefined) {
+  return {
+    connected: Boolean(connection && connection.status !== 'disconnected'),
+    status: connection?.status ?? null,
+    email: connection?.googleEmail ?? null,
+    spreadsheetUrl: connection?.spreadsheetUrl ?? null,
+    lastErrorCode: connection?.lastErrorCode ?? null,
+    connectedAt: connection?.connectedAt ?? null,
+  };
+}
+
+/**
+ * Подключение Google Таблицы (этап F, шаг 3; docs/STAGE_F_SHEETS.md, раздел 3).
+ *
+ * Поток как у GitHub (routes/github.ts): сессия Ketner — это Bearer-токен сайта, на переходе от
+ * Google её нет. Поэтому колбэк не обменивает код, а возвращает его сайту во фрагменте адреса, и
+ * обмен делает `POST /confirm` в той же сессии, что начала подключение.
+ *
+ * Выключено, пока не включён переключатель `googleSheets` и не заданы
+ * `GOOGLE_SHEETS_CLIENT_ID` / `GOOGLE_SHEETS_CLIENT_SECRET`: все адреса отвечают 503
+ * `feature_unavailable`.
+ */
+export function createGoogleIntegrationRouter({
+  store,
+  verifiers,
+  settings: injected,
+  fetchImpl: injectedFetch,
+  log: injectedLog,
+}: GoogleIntegrationRouterDeps): Router {
+  const settings = injected ?? googleOAuthSettings;
+  const fetchImpl = injectedFetch ?? fetch;
+  const log = injectedLog ?? ((message: string) => console.warn(message));
+  const router = Router();
+  const base = '/integrations/google';
+
+  router.use(base, (_request: Request, response: Response, next: NextFunction) => {
+    if (!productSwitch('googleSheets') || !settings()) {
+      sendFeatureUnavailable(response, 'googleSheets');
+      return;
+    }
+    next();
+  });
+
+  router.get(base, requireAuth, (request: Request, response: Response) => {
+    response.json(publicStatus(store.get(request.user!.id)));
+  });
+
+  router.post(`${base}/start`, requireAuth, async (request: Request, response: Response) => {
+    const oauth = settings()!;
+    const body = (request.body ?? {}) as { returnTo?: unknown };
+    const returnTo = safeReturnTo(body.returnTo) ?? fallbackReturnTo();
+    const { state, nonce, expiresAt } = createGoogleState(request.user!.id, returnTo);
+    const verifier = createCodeVerifier();
+    await verifiers.put({ id: nonce, userId: request.user!.id, verifier, expiresAt });
+    response.json({ url: googleAuthorizeUrl(oauth, state, verifier) });
+  });
+
+  // Колбэк без входа: код и state уходят сайту во фрагменте (в логи сервера и Referer не попадают).
+  router.get(`${base}/callback`, (request: Request, response: Response) => {
+    const rawState = typeof request.query.state === 'string' ? request.query.state : '';
+    const state = rawState ? readGoogleState(rawState) : null;
+    if (!state) {
+      response.redirect(302, withFragment(fallbackReturnTo(), { google_error: 'state' }));
+      return;
+    }
+    const returnTo = safeReturnTo(state.returnTo) ?? fallbackReturnTo();
+    const error = typeof request.query.error === 'string' ? request.query.error : '';
+    const code = typeof request.query.code === 'string' ? request.query.code : '';
+    if (error || !code || code.length > 512) {
+      response.redirect(
+        302,
+        withFragment(returnTo, { google_error: error === 'access_denied' ? 'denied' : 'failed' }),
+      );
+      return;
+    }
+    response.redirect(302, withFragment(returnTo, { google_code: code, google_state: rawState }));
+  });
+
+  router.post(`${base}/confirm`, requireAuth, async (request: Request, response: Response) => {
+    const oauth = settings()!;
+    const userId = request.user!.id;
+    const body = (request.body ?? {}) as { code?: unknown; state?: unknown };
+    if (typeof body.code !== 'string' || typeof body.state !== 'string' || body.code.length > 512) {
+      sendError(
+        response,
+        400,
+        'invalid_request',
+        'Не хватает данных от Google. Подключите ещё раз.',
+      );
+      return;
+    }
+    const state = readGoogleState(body.state);
+    // Код обменивается только в той сессии, что начала подключение, и только один раз.
+    const verifier =
+      state && state.userId === userId ? verifiers.take(state.nonce, userId) : undefined;
+    if (!state || !verifier) {
+      sendError(
+        response,
+        400,
+        'google_state_invalid',
+        'Ссылка подключения устарела, уже использована или открыта в другом аккаунте. Подключите Google ещё раз.',
+      );
+      return;
+    }
+
+    let grant;
+    try {
+      grant = await exchangeGoogleCode(oauth, body.code, verifier, fetchImpl);
+    } catch (error) {
+      if (error instanceof GoogleOAuthError) {
+        sendError(
+          response,
+          error.code === 'unavailable' ? 502 : 400,
+          `google_${error.code}`,
+          error.message,
+        );
+        return;
+      }
+      throw error;
+    }
+
+    // Тот же аккаунт Google — прежняя таблица; другой — новая (к прежней доступа нет).
+    const previous = store.get(userId);
+    const previousToken = store.refreshTokenOf(userId);
+    let spreadsheet =
+      previous && previous.googleSub === grant.identity.sub && previous.spreadsheetId
+        ? { id: previous.spreadsheetId, url: previous.spreadsheetUrl ?? '' }
+        : null;
+    let sheetErrorCode: string | null = null;
+    if (!spreadsheet) {
+      try {
+        spreadsheet = await createLeadSpreadsheet(grant.accessToken, fetchImpl);
+      } catch (error) {
+        sheetErrorCode = error instanceof GoogleSheetsError ? error.code : 'sheet_not_created';
+        log(`[google] таблица заявок для аккаунта ${userId} не создана: ${sheetErrorCode}`);
+      }
+    }
+
+    let saved: GoogleConnection;
+    try {
+      saved = await store.connect({
+        userId,
+        googleSub: grant.identity.sub,
+        googleEmail: grant.identity.email,
+        scopes: grant.scopes,
+        refreshToken: grant.refreshToken,
+        spreadsheet,
+        sheetErrorCode,
+      });
+    } catch (error) {
+      // Не сохранили — не держим доступ: отзываем выданный только что.
+      if (!(await revokeGoogleToken(grant.refreshToken, fetchImpl))) {
+        log(`[google] отзыв несохранённого доступа аккаунта ${userId} не удался`);
+      }
+      throw error;
+    }
+    if (previousToken && previousToken !== grant.refreshToken) {
+      if (!(await revokeGoogleToken(previousToken, fetchImpl))) {
+        log(`[google] отзыв прежнего доступа аккаунта ${userId} не удался`);
+      }
+    }
+    response.json(publicStatus(saved));
+  });
+
+  router.delete(`${base}/connection`, requireAuth, async (request: Request, response: Response) => {
+    const userId = request.user!.id;
+    const token = store.refreshTokenOf(userId);
+    const connection = await store.disconnect(userId);
+    // Отзыв — по возможности: отключение в Ketner уже состоялось, токен стёрт.
+    if (token && !(await revokeGoogleToken(token, fetchImpl))) {
+      log(`[google] отзыв доступа при отключении аккаунта ${userId} не удался`);
+    }
+    response.json(publicStatus(connection));
+  });
+
+  return router;
+}

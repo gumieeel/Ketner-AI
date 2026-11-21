@@ -30,6 +30,11 @@ export const DEVELOPER_API_ENABLED = false;
 export const ANSWER_REVIEW_ENABLED = false;
 /** Сравнение ответов моделей (`/api/chat/compare`). */
 export const MODEL_COMPARE_ENABLED = false;
+/**
+ * Запись заявок в Google Таблицу владельца (этап F, docs/STAGE_F_SHEETS.md). Выключено до проверки
+ * на настоящем аккаунте Google; кроме переключателя нужны GOOGLE_SHEETS_CLIENT_ID / _SECRET.
+ */
+export const GOOGLE_SHEETS_ENABLED = false;
 
 export const PRODUCT_SWITCHES = {
   stars: STARS_ENABLED,
@@ -40,6 +45,7 @@ export const PRODUCT_SWITCHES = {
   developerApi: DEVELOPER_API_ENABLED,
   answerReview: ANSWER_REVIEW_ENABLED,
   modelCompare: MODEL_COMPARE_ENABLED,
+  googleSheets: GOOGLE_SHEETS_ENABLED,
 } as const;
 
 export type ProductFeature = keyof typeof PRODUCT_SWITCHES;
@@ -71,6 +77,7 @@ const MESSAGES: Record<ProductFeature, string> = {
   developerApi: 'API для разработчиков временно недоступен.',
   answerReview: 'Проверка ответов временно недоступна.',
   modelCompare: 'Сравнение моделей временно недоступно.',
+  googleSheets: 'Запись заявок в Google Таблицу пока недоступна.',
 };
 
 /** Ответ закрытой возможности: 503 `feature_unavailable` с понятным сообщением. */

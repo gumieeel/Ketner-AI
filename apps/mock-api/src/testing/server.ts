@@ -20,6 +20,11 @@ import {
   createGithubConnectionStore,
   type GithubConnectionStore,
 } from '../github/connection-store.js';
+import {
+  createGoogleConnectionStore,
+  type GoogleConnectionStore,
+} from '../google/connection-store.js';
+import { createGoogleVerifierStore, type GoogleVerifierStore } from '../google/verifier-store.js';
 import { semanticCache } from '../ai/cache.js';
 import { AIGateway } from '../ai/gateway.js';
 import type { Conversation, Message } from '../types.js';
@@ -46,6 +51,8 @@ export interface TestServer {
   compareVotes: CompareVoteStore;
   apiKeyStore: ApiKeyStore;
   githubConnectionStore: GithubConnectionStore;
+  googleConnectionStore: GoogleConnectionStore;
+  googleVerifierStore: GoogleVerifierStore;
   /** Письма с кодами регистрации, входа и сброса пароля. */
   codeMails: MailMessage[];
   /** Кредиты этого сервера (в памяти): тесты выдают и списывают их напрямую. */
@@ -78,6 +85,8 @@ export async function startTestServer(
 
   const testUsageStore = new UsageStore(usageStoreFile);
   const testApiKeyStore = createApiKeyStore(join(tempDir, 'api-keys.json'));
+  const testGoogleStore = createGoogleConnectionStore({ secret: 'test-google-secret' });
+  const testGoogleVerifiers = createGoogleVerifierStore();
   const testGithubStore = createGithubConnectionStore({
     file: join(tempDir, 'github-connections.json'),
     secret: 'test-github-secret',
@@ -129,6 +138,8 @@ export async function startTestServer(
     usageStore: testUsageStore,
     apiKeyStore: testApiKeyStore,
     githubConnectionStore: testGithubStore,
+    googleConnectionStore: testGoogleStore,
+    googleVerifierStore: testGoogleVerifiers,
     invoiceStore: createInvoiceStore(join(tempDir, 'invoices.json')),
     supportStore: testSupportStore,
     supportBotService: testSupportBotService,
@@ -154,6 +165,8 @@ export async function startTestServer(
     compareVotes: extra.compareVoteStore ?? testCompareVotes,
     apiKeyStore: extra.apiKeyStore ?? testApiKeyStore,
     githubConnectionStore: extra.githubConnectionStore ?? testGithubStore,
+    googleConnectionStore: extra.googleConnectionStore ?? testGoogleStore,
+    googleVerifierStore: extra.googleVerifierStore ?? testGoogleVerifiers,
     close: () =>
       new Promise<void>((resolve, reject) => {
         try {
