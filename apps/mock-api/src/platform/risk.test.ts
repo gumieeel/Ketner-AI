@@ -74,6 +74,7 @@ test('риски словаря выводятся из последствий',
   assert.equal(actionRisk('lead.create'), 'low');
   assert.equal(actionRisk('owner.notify'), 'low');
   assert.equal(actionRisk('record.update'), 'low');
+  assert.equal(actionRisk('sheet.append_row'), 'low');
   assert.equal(actionRisk('record.update_significant'), 'medium');
   assert.equal(actionRisk('message.send'), 'medium');
   assert.equal(actionRisk('reply.send_in_session'), 'medium');
@@ -138,4 +139,22 @@ test('максимальный риск набора', () => {
   assert.equal(maxRisk([]), 'low');
   assert.equal(maxRisk(['low', 'high', 'medium']), 'high');
   assert.equal(maxRisk(['critical', 'low']), 'critical');
+});
+
+test('этап F: строка заявки в таблицу владельца — LOW, выполняется без одобрения, нужна таблица', () => {
+  assert.deepEqual(ACTIONS['sheet.append_row'].consequences, {
+    effect: 'write',
+    reach: 'external',
+    audience: 'single',
+    reversible: true,
+    impact: 'routine',
+  });
+  assert.equal(actionRisk('sheet.append_row'), 'low');
+  assert.equal(approvalRequirement('sheet.append_row'), 'none');
+  assert.deepEqual(ACTIONS['sheet.append_row'].requires, ['spreadsheets_sync']);
+  // Владелец может ужесточить (одобрять каждую строку), но не ослабить.
+  assert.equal(
+    approvalRequirement('sheet.append_row', { alwaysApprove: ['sheet.append_row'] }),
+    'required',
+  );
 });

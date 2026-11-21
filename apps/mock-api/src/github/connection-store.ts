@@ -1,10 +1,10 @@
 /**
  * Привязанные аккаунты GitHub. Токен доступа хранится только на сервере и только в
- * зашифрованном виде (AES-256-GCM, ключ выводится из BETTER_AUTH_SECRET): ни в браузер,
+ * зашифрованном виде (AES-256-GCM, platform/token-crypto.ts, ключ из BETTER_AUTH_SECRET): ни в браузер,
  * ни в ответы API он не попадает.
  */
 
-import { createCipheriv, createDecipheriv, createHash, randomBytes } from 'node:crypto';
+import { openToken, sealToken } from '../platform/token-crypto.js';
 import { mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
 import { dirname } from 'node:path';
 
@@ -38,31 +38,13 @@ export interface GithubConnectionStore {
   setDbDriver(driver: GithubConnectionDbDriver | null): void;
 }
 
-function keyFrom(secret: string): Buffer {
-  return createHash('sha256').update(`ketner:github-token:${secret}`, 'utf8').digest();
-}
-
+/** Токен GitHub: прежний ключ `ketner:github-token:` (platform/token-crypto.ts), формат не менялся. */
 export function encryptToken(token: string, secret: string): string {
-  const iv = randomBytes(12);
-  const cipher = createCipheriv('aes-256-gcm', keyFrom(secret), iv);
-  const body = Buffer.concat([cipher.update(token, 'utf8'), cipher.final()]);
-  const tag = cipher.getAuthTag();
-  return `v1.${iv.toString('base64url')}.${tag.toString('base64url')}.${body.toString('base64url')}`;
+  return sealToken(token, secret, 'github-token');
 }
 
 export function decryptToken(value: string, secret: string): string | undefined {
-  const [version, iv, tag, body] = value.split('.');
-  if (version !== 'v1' || !iv || !tag || !body) return undefined;
-  try {
-    const decipher = createDecipheriv('aes-256-gcm', keyFrom(secret), Buffer.from(iv, 'base64url'));
-    decipher.setAuthTag(Buffer.from(tag, 'base64url'));
-    return Buffer.concat([
-      decipher.update(Buffer.from(body, 'base64url')),
-      decipher.final(),
-    ]).toString('utf8');
-  } catch {
-    return undefined;
-  }
+  return openToken(value, secret, 'github-token');
 }
 
 function toPublic(record: StoredGithubConnection): GithubConnection {

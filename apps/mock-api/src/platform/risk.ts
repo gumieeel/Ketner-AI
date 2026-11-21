@@ -157,6 +157,20 @@ export const ACTIONS = {
     requires: ['crm'],
     description: 'Обычное изменение одной записи во внешней системе (CRM, таблица)',
   },
+  'sheet.append_row': {
+    id: 'sheet.append_row',
+    // Этап F (docs/STAGE_F_SHEETS.md, 5.1): строка заявки в Google Таблицу владельца — внешняя запись
+    // одной обратимой строки. Владелец сам подключил таблицу; данные — из уже сохранённой заявки.
+    consequences: {
+      effect: 'write',
+      reach: 'external',
+      audience: 'single',
+      reversible: true,
+      impact: 'routine',
+    },
+    requires: ['spreadsheets_sync'],
+    description: 'Строка в таблице владельца (одна заявка)',
+  },
   'record.update_significant': {
     id: 'record.update_significant',
     consequences: {
