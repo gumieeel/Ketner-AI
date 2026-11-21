@@ -1,12 +1,10 @@
-import { fireEvent, screen } from '@testing-library/react';
+import { screen } from '@testing-library/react';
 import { beforeEach, describe, expect, it } from 'vitest';
-import { useAuth } from '@/features/auth/auth-store';
-import { renderRoute, resetAuth, resetPreferences } from './test-utils';
+import { renderRoute, resetPreferences } from './test-utils';
 import { setProductSwitchesForTests } from '@/lib/product-switches';
 
 // Закрытые возможности (lib/product-switches.ts): здесь проверяется их спящий код.
 setProductSwitchesForTests({
-  packs: true,
   chat: true,
   code: true,
   images: true,
@@ -91,62 +89,6 @@ describe('маршрутизация и каркас экранов', () => {
     expect(screen.getByRole('complementary', { name: 'Чаты' })).toBeInTheDocument();
     // Переключателей темы два: в шапке и в футере сайдбара.
     expect(screen.getAllByRole('button', { name: /Тема/ }).length).toBeGreaterThan(0);
-  });
-
-  it('оформление показывает выбранный пакет кредитов', () => {
-    useAuth.setState({
-      status: 'authenticated',
-      token: 'mock-token',
-      user: {
-        id: 'test-user',
-        email: 'test@ketner.ai',
-        name: 'Тест',
-        plan: 'free',
-        createdAt: '2026-01-01T00:00:00.000Z',
-      },
-    });
-
-    renderRoute('/checkout/credits-10');
-    fireEvent.click(screen.getByRole('checkbox', { name: /Я хочу получить кредиты сразу/ }));
-
-    expect(screen.getByRole('heading', { level: 1, name: 'Покупка кредитов' })).toBeInTheDocument();
-    expect(screen.getByText('Выбранный пакет')).toBeInTheDocument();
-    expect(screen.getAllByText(/4[\s\u00a0]700 кредитов/).length).toBeGreaterThan(0);
-    expect(
-      screen.getByRole('button', { name: /Подтвердить оплату криптовалютой/i }),
-    ).toBeInTheDocument();
-  });
-
-  it('неавторизованный пользователь при попытке оформления пакета перенаправляется на регистрацию', () => {
-    resetAuth();
-    renderRoute('/checkout/credits-10');
-
-    expect(
-      screen.getByRole('heading', { level: 1, name: 'Создание аккаунта' }),
-    ).toBeInTheDocument();
-    expect(
-      screen.getByText('Чтобы купить кредиты, сначала войдите или создайте аккаунт.'),
-    ).toBeInTheDocument();
-  });
-
-  it('неизвестный тариф на оформлении приводит к экрану «не найдено»', () => {
-    useAuth.setState({
-      status: 'authenticated',
-      token: 'mock-token',
-      user: {
-        id: 'test-user',
-        email: 'test@ketner.ai',
-        name: 'Тест',
-        plan: 'free',
-        createdAt: '2026-01-01T00:00:00.000Z',
-      },
-    });
-
-    renderRoute('/checkout/unknown-plan');
-
-    expect(
-      screen.getByRole('heading', { level: 1, name: 'Страница не найдена' }),
-    ).toBeInTheDocument();
   });
 
   it('неизвестный адрес отдаёт 404', () => {

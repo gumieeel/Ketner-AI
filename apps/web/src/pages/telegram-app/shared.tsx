@@ -9,7 +9,7 @@ export const BOT_URL = 'https://t.me/Robo_kassa_bot';
 export const SUPPORT_URL = 'https://t.me/ketner_support_bot';
 
 /** Вкладка кредитов называется `plans` по-прежнему: на этот id ссылаются кнопки бота. */
-export type TabId = 'home' | 'plans' | 'payments' | 'profile' | 'admin';
+export type TabId = 'home' | 'payments' | 'profile' | 'admin';
 
 export interface MiniApp {
   app: TelegramWebApp;

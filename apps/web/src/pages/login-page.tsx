@@ -1,13 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
-import {
-  AlertIcon,
-  EyeIcon,
-  EyeOffIcon,
-  GitHubIcon,
-  GoogleIcon,
-  SparkleIcon,
-} from '@/components/icons';
+import { AlertIcon, EyeIcon, EyeOffIcon, GitHubIcon, GoogleIcon } from '@/components/icons';
 import { LegalNotice } from '@/components/auth/legal-notice';
 import { AuthShell } from '@/components/layout/auth-shell';
 import { Button } from '@/components/ui/button';
@@ -154,17 +147,6 @@ export function LoginPage() {
       }
     >
       <div className="flex flex-col gap-6">
-        {/* 1. Уведомление об оформлении checkout */}
-        {redirectUrl.startsWith('/checkout') && (
-          <div
-            role="status"
-            className="flex items-center gap-2.5 rounded-xl border border-accent/30 bg-accent-soft p-3 text-[13px] font-medium leading-5 text-text"
-          >
-            <SparkleIcon className="size-4 shrink-0 text-accent" />
-            <span>{t('auth.checkoutSignupNotice')}</span>
-          </div>
-        )}
-
         {/* 2. Серверная ошибка */}
         {serverError && (
           <div

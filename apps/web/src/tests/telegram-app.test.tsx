@@ -7,7 +7,7 @@ import { resetPreferences } from './test-utils';
 import { setProductSwitchesForTests } from '@/lib/product-switches';
 
 // Закрытые возможности (lib/product-switches.ts): здесь проверяется их спящий код.
-setProductSwitchesForTests({ packs: true, chat: true, stars: true });
+setProductSwitchesForTests({ chat: true, stars: true });
 
 const DAY = 864e5;
 const inDays = (days: number) => new Date(Date.now() + days * DAY).toISOString();
@@ -34,49 +34,6 @@ function payment(overrides: Partial<MiniAppPayment> = {}): MiniAppPayment {
 }
 
 /** Пакеты кабинета: цены в звёздах и цена за 1 000 кредитов — как отдаёт сервер. */
-const PACKS: MiniAppState['packs'] = [
-  {
-    id: 'credits-5',
-    priceUsd: 5,
-    credits: 2300,
-    stars: 260,
-    starsUsd: 5.2,
-    pricePerThousandUsd: 2.17,
-  },
-  {
-    id: 'credits-10',
-    priceUsd: 10,
-    credits: 4700,
-    stars: 510,
-    starsUsd: 10.19,
-    pricePerThousandUsd: 2.13,
-  },
-  {
-    id: 'credits-25',
-    priceUsd: 25,
-    credits: 11900,
-    stars: 1260,
-    starsUsd: 25.19,
-    pricePerThousandUsd: 2.1,
-  },
-  {
-    id: 'credits-50',
-    priceUsd: 50,
-    credits: 24300,
-    stars: 2510,
-    starsUsd: 50.18,
-    pricePerThousandUsd: 2.06,
-  },
-  {
-    id: 'credits-100',
-    priceUsd: 100,
-    credits: 57500,
-    stars: 5010,
-    starsUsd: 100.15,
-    pricePerThousandUsd: 1.74,
-  },
-];
-
 function makeState(overrides: Partial<MiniAppState> = {}): MiniAppState {
   return {
     user: {
@@ -93,13 +50,6 @@ function makeState(overrides: Partial<MiniAppState> = {}): MiniAppState {
     subscription: { plan: 'free', status: 'active', renewsAt: null },
     autoRenew: null,
     credits: { balance: 8400, trialCredits: 200, validDays: 365 },
-    packs: PACKS,
-    rate: {
-      usdPerStar: 0.01999,
-      source: 'official',
-      updatedAt: '2026-10-13T00:00:00Z',
-      market: { usdPerStar: 0.0149, updatedAt: '2026-10-12T00:00:00Z' },
-    },
     payments: [payment()],
     prefs: { reminders: true, receipts: true },
     refundPolicy: { hours: 336 },
@@ -226,7 +176,7 @@ describe('кабинет в Telegram (/tg)', () => {
 
     fireEvent.change(screen.getByLabelText('Код из письма'), { target: { value: '12a34 56' } });
     fireEvent.click(screen.getByRole('button', { name: 'Подключить' }));
-    expect(await screen.findByText(/Кредиты тратятся на запросы/)).toBeInTheDocument();
+    expect(await screen.findByText(/Платно — тариф на работающие решения/)).toBeInTheDocument();
     expect(calls.find((call) => call.url.endsWith('/email-verify'))?.body).toEqual({
       initData: app.initData,
       code: '1234 56',
@@ -302,7 +252,7 @@ describe('кабинет в Telegram (/tg)', () => {
     fireEvent.change(screen.getByLabelText('Почта'), { target: { value: 'anna@example.com' } });
     fireEvent.change(screen.getByLabelText('Пароль'), { target: { value: 'secret123' } });
     fireEvent.click(screen.getByRole('button', { name: 'Войти и подключить' }));
-    expect(await screen.findByText(/Кредиты тратятся на запросы/)).toBeInTheDocument();
+    expect(await screen.findByText(/Платно — тариф на работающие решения/)).toBeInTheDocument();
     expect(calls.find((call) => call.url.endsWith('/link'))?.body).toEqual({
       initData: app.initData,
       email: 'anna@example.com',
@@ -310,81 +260,28 @@ describe('кабинет в Telegram (/tg)', () => {
     });
   });
 
-  it('главная: остаток кредитов, срок действия и кнопка пополнения ведёт на вкладку пакетов', async () => {
-    window.Telegram = { WebApp: fakeWebApp() };
-    mockApi((url) =>
-      url === '/api/telegram/miniapp/session' ? linkedSession(makeState()) : undefined,
-    );
-    render(<TelegramAppPage />);
-
-    expect(await screen.findByText(/8\s400/, { selector: 'p' })).toBeInTheDocument();
-    expect(screen.getByText(/Купленные действуют 365 дней/)).toBeInTheDocument();
-    // Прежней подписки нет — блока про неё на главной тоже нет
-    expect(screen.queryByText('Прежняя подписка')).not.toBeInTheDocument();
-    // Остаток виден и в шапке
-    expect(screen.getByText(/8\s400 кр\./)).toBeInTheDocument();
-
-    fireEvent.click(screen.getByRole('button', { name: 'Пополнить кредиты' }));
-    expect(await screen.findByRole('heading', { level: 1, name: 'Кредиты' })).toBeInTheDocument();
-    expect(screen.getByText('Пакеты кредитов')).toBeInTheDocument();
-  });
-
-  it('звёзды и чат закрыты: вкладки пакетов нет, пополнение и «открыть» ведут на сайт', async () => {
-    setProductSwitchesForTests({ packs: true, chat: false, stars: false });
+  it('пакеты не продаются (задача 0b): вместо баланса — тарифы на сайте, вкладки пакетов нет', async () => {
+    setProductSwitchesForTests({ chat: false, stars: false });
     try {
-      window.history.replaceState(null, '', '/tg?tab=plans');
       const app = fakeWebApp();
       window.Telegram = { WebApp: app };
       mockApi((url) =>
         url === '/api/telegram/miniapp/session' ? linkedSession(makeState()) : undefined,
       );
+      // Старая ссылка на вкладку пакетов открывает главную.
+      window.history.replaceState(null, '', '/tg?tab=plans');
       render(<TelegramAppPage />);
 
-      // Ссылка на вкладку пакетов открывает главную.
-      expect(await screen.findByText(/8\s400/, { selector: 'p' })).toBeInTheDocument();
+      expect((await screen.findAllByText('Тарифы')).length).toBeGreaterThan(0);
       expect(screen.queryByRole('tab', { name: 'Кредиты' })).not.toBeInTheDocument();
       expect(screen.getByRole('tab', { name: 'Платежи' })).toBeInTheDocument();
-
-      fireEvent.click(screen.getByRole('button', { name: 'Пополнить кредиты' }));
-      await waitFor(() => expect(app.openLink).toHaveBeenCalledWith('https://ketner.org/pricing'));
-      expect(screen.queryByText('Пакеты кредитов')).not.toBeInTheDocument();
-    } finally {
-      setProductSwitchesForTests({ packs: true, chat: true, stars: true });
-    }
-  });
-
-  it('пакеты не продаются (задача 0b): вместо баланса — тарифы на сайте, в шапке нет остатка', async () => {
-    setProductSwitchesForTests({ chat: false, stars: false, packs: false });
-    try {
-      const app = fakeWebApp();
-      window.Telegram = { WebApp: app };
-      mockApi((url) =>
-        url === '/api/telegram/miniapp/session' ? linkedSession(makeState()) : undefined,
-      );
-      render(<TelegramAppPage />);
-
-      expect(await screen.findByText('Тарифы')).toBeInTheDocument();
       expect(screen.queryByText(/8\s400/)).not.toBeInTheDocument();
       expect(screen.queryByRole('button', { name: 'Пополнить кредиты' })).not.toBeInTheDocument();
       fireEvent.click(screen.getByRole('button', { name: 'Открыть тарифы на сайте' }));
       await waitFor(() => expect(app.openLink).toHaveBeenCalledWith('https://ketner.org/pricing'));
     } finally {
-      setProductSwitchesForTests({ packs: true, chat: true, stars: true });
+      setProductSwitchesForTests({ chat: true, stars: true });
     }
-  });
-
-  it('главная: до первой покупки видно пробные кредиты', async () => {
-    window.Telegram = { WebApp: fakeWebApp() };
-    const state = makeState({
-      user: { ...makeState().user, plan: 'free' },
-      credits: { balance: 200, trialCredits: 200, validDays: 365 },
-      payments: [],
-    });
-    mockApi((url) => (url === '/api/telegram/miniapp/session' ? linkedSession(state) : undefined));
-    render(<TelegramAppPage />);
-
-    expect(await screen.findByText(/Сейчас у вас пробные кредиты \(200\)/)).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Пополнить кредиты' })).toBeInTheDocument();
   });
 
   it('главная: прежняя подписка доживает срок, автопродление только выключается', async () => {
@@ -418,74 +315,6 @@ describe('кабинет в Telegram (/tg)', () => {
       auth: 'Bearer tok',
     });
     expect(await screen.findByText(/Автопродление выключено/)).toBeInTheDocument();
-  });
-
-  it('кредиты: пять пакетов с ценой в звёздах, скидка на большой, оплата открывает счёт Telegram', async () => {
-    const app = fakeWebApp({
-      openInvoice: vi.fn(
-        (_url: string, callback?: (status: 'paid' | 'cancelled' | 'failed' | 'pending') => void) =>
-          callback?.('paid'),
-      ),
-    });
-    window.Telegram = { WebApp: app };
-    const state = makeState();
-    const calls = mockApi((url) => {
-      if (url === '/api/telegram/miniapp/session') return linkedSession(state);
-      if (url === '/api/telegram/miniapp/invoice')
-        return Response.json({ invoiceId: 'stars_9', link: 'https://t.me/$inv', stars: 1260 });
-      if (url === '/api/telegram/miniapp/invoice/stars_9') return Response.json({ status: 'paid' });
-      if (url === '/api/telegram/miniapp/state') return Response.json(state);
-      return undefined;
-    });
-    render(<TelegramAppPage />);
-
-    fireEvent.click(await screen.findByRole('tab', { name: 'Кредиты' }));
-    expect(screen.getAllByRole('article')).toHaveLength(5);
-    // Пакет $100 дешевле всех: −20 % к цене за 1 000 кредитов
-    const big = screen.getByRole('article', { name: /57\s500 кредитов/ });
-    expect(within(big).getByText('−20%')).toBeInTheDocument();
-    expect(within(big).getByText('$1.74 за 1 000 кредитов')).toBeInTheDocument();
-
-    // $25 = 1 260 ⭐ по официальному курсу Telegram, рядом — сколько эти звёзды стоят у Telegram
-    const mid = screen.getByRole('article', { name: /11\s900 кредитов/ });
-    expect(within(mid).getByRole('button', { name: /Оплатить 1\s260 ⭐/ })).toBeInTheDocument();
-    expect(within(mid).getByText('≈ $25.19')).toBeInTheDocument();
-    expect(
-      screen.getByText('Цены в звёздах — по официальному курсу Telegram: 1 000 ⭐ = $19.99.'),
-    ).toBeInTheDocument();
-    // Цена в звёздах как картой (разница только в округлении): пометки «дороже» нет
-    expect(screen.queryByText(/В звёздах пакеты дороже/)).not.toBeInTheDocument();
-    expect(
-      screen.getByText('На Fragment звёзды сейчас дешевле: ≈ $14.90 за 1 000 ⭐.'),
-    ).toBeInTheDocument();
-
-    // Без согласия на мгновенное начисление кредитов кнопка покупки неактивна
-    expect(within(mid).getByRole('button', { name: /Оплатить 1\s260 ⭐/ })).toBeDisabled();
-    fireEvent.click(screen.getByRole('checkbox', { name: /Я хочу получить кредиты сразу/ }));
-    fireEvent.click(within(mid).getByRole('button', { name: /Оплатить 1\s260 ⭐/ }));
-    await waitFor(() =>
-      expect(app.openInvoice).toHaveBeenCalledWith('https://t.me/$inv', expect.any(Function)),
-    );
-    // На сервер уходит только id пакета: цену и кредиты считает сервер
-    expect(calls.find((call) => call.url === '/api/telegram/miniapp/invoice')?.body).toEqual({
-      packId: 'credits-25',
-    });
-    expect(await screen.findByText(/Готово! Начислено кредитов: 11\s900/)).toBeInTheDocument();
-  });
-
-  it('кредиты: оплата криптой открывает сайт на оформлении пакета с бонусом', async () => {
-    const app = fakeWebApp();
-    window.Telegram = { WebApp: app };
-    mockApi((url) =>
-      url === '/api/telegram/miniapp/session' ? linkedSession(makeState()) : undefined,
-    );
-    render(<TelegramAppPage />);
-
-    fireEvent.click(await screen.findByRole('tab', { name: 'Кредиты' }));
-    fireEvent.click(
-      screen.getByRole('button', { name: /Оплатить криптой на сайте: \+15% кредитов/ }),
-    );
-    expect(app.openLink).toHaveBeenCalledWith('https://ketner.org/checkout/credits-10');
   });
 
   it('платежи: возврат звёзд — заявка администратору с причиной', async () => {

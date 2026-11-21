@@ -182,9 +182,10 @@ const appRoutes: RouteObject[] = [
         lazy: lazyPage(() => import('@/pages/checkout-success-page'), 'CheckoutSuccessPage'),
       },
       {
-        // Пакеты кредитов больше не продаются (задача 0b): адрес объясняет это и ведёт к тарифам.
+        // Пакеты кредитов больше не продаются (задача 0b): страницы оформления нет, старые ссылки
+        // из писем и бота показывают объяснение и ведут к тарифам.
         path: 'checkout/:packId',
-        lazy: gatedLazy('packs', () => import('@/pages/checkout-page'), 'CheckoutPage'),
+        element: <ClosedFeaturePage feature="packs" />,
       },
     ],
   },

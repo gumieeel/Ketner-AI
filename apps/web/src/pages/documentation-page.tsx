@@ -11,7 +11,6 @@ import {
   StarIcon,
 } from '@/components/icons';
 import { Callout, DocHeading, DocsLayout, useScrollSpy } from '@/components/docs';
-import { PackCards } from '@/components/pricing/pack-cards';
 import { Badge } from '@/components/ui/badge';
 import { buttonClasses } from '@/components/ui/button-classes';
 import { Card, CardText, CardTitle } from '@/components/ui/card';
@@ -272,8 +271,6 @@ export function DocumentationPage() {
             </Card>
           ))}
         </div>
-
-        <PackCards variant="compact" />
       </section>
 
       {/* 4. Честное использование (Fair Use) */}

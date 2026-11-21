@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import { useAuth } from '../auth/auth-store';
 import { cancelSubscription as apiCancel, fetchSubscription } from './api';
-import type { PlanId, Subscription } from './types';
+import type { Subscription } from './types';
 
 /**
  * Подписка прежней системы. Новые подписки не продаются, но у тех, кто оплатил период раньше,
@@ -13,21 +13,12 @@ interface BillingState {
   error: string | null;
   loadSubscription: () => Promise<void>;
   cancel: () => Promise<void>;
-  setSubscription: (subscription: Subscription | null, userPlan: PlanId) => void;
 }
 
 export const useBilling = create<BillingState>((set) => ({
   subscription: null,
   loading: false,
   error: null,
-
-  setSubscription: (subscription, userPlan) => {
-    set({ subscription, loading: false });
-    const currentUser = useAuth.getState().user;
-    if (currentUser) {
-      useAuth.setState({ user: { ...currentUser, plan: userPlan } });
-    }
-  },
 
   loadSubscription: async () => {
     try {
