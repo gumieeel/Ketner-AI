@@ -32,7 +32,11 @@ interface Harness {
 }
 
 async function harness(
-  options: { connect?: boolean; enabled?: boolean | ((userId?: string) => boolean) } = {},
+  options: {
+    connect?: boolean;
+    enabled?: boolean | ((userId?: string) => boolean);
+    timeZone?: string;
+  } = {},
 ): Promise<Harness> {
   const clock = { now: Date.parse('2026-11-21T12:00:00Z') };
   const google = createFakeGoogle();
@@ -57,6 +61,7 @@ async function harness(
     enabled: (userId) =>
       typeof options.enabled === 'function' ? options.enabled(userId) : (options.enabled ?? true),
     siteUrl: () => 'https://ketner.org',
+    timeZoneOf: () => options.timeZone ?? null,
     notifyBroken: async (userId, status) => {
       notified.push([userId, status]);
     },
@@ -380,4 +385,11 @@ test('пилот: доставка только для аккаунтов, дл�
   await h.delivery.sweep();
   assert.equal((await h.journal.latest(OWNER, 'old'))?.status, 'reserved');
   assert.equal(h.google.appendRequests.length, 0);
+});
+
+test('дата в строке — в часовом поясе владельца, если он известен', async () => {
+  const h = await harness({ timeZone: 'Asia/Qyzylorda' });
+  await h.lead('lead-tz', { createdAt: '2026-11-22T06:35:10.000Z' });
+  const row = (h.google.appendRequests[0]!.body as { values: string[][] }).values[0]!;
+  assert.equal(row[0], '2026-11-22 11:35');
 });

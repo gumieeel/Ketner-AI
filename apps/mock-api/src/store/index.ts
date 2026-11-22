@@ -4,6 +4,7 @@ import { createApiKeyStore } from './api-key-store.js';
 import { createGithubConnectionStore } from '../github/connection-store.js';
 import { createGoogleConnectionStore } from '../google/connection-store.js';
 import { createGoogleVerifierStore } from '../google/verifier-store.js';
+import { createGooglePrefsStore } from '../google/prefs.js';
 import { accountErasure } from '../platform/account-erasure.js';
 import { registerAccountErasure } from '../platform/account-erasure-setup.js';
 import { createConversationStore } from './conversation-store.js';
@@ -42,9 +43,11 @@ export const googleConnectionStore = createGoogleConnectionStore({
 });
 /** PKCE verifier подключения Google: `ketner_docs`, пространство `google_oauth`. */
 export const googleVerifierStore = createGoogleVerifierStore();
+/** Часовой пояс владельца для дат в Google Таблице: `ketner_docs`, пространство `google_prefs`. */
+export const googlePrefsStore = createGooglePrefsStore();
 // Удаление аккаунта: очистка Google — первая регистрация (platform/account-erasure.ts).
 registerAccountErasure(accountErasure, {
-  google: { store: googleConnectionStore, verifiers: googleVerifierStore },
+  google: { store: googleConnectionStore, verifiers: googleVerifierStore, prefs: googlePrefsStore },
 });
 
 /** Хранилище подписок по умолчанию: файл из `config.subscriptionStoreFile`. */

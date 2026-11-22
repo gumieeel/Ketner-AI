@@ -11,6 +11,7 @@
 
 import { createHash, createHmac, randomBytes, timingSafeEqual } from 'node:crypto';
 import { config } from '../config.js';
+import { siteUrl } from '../seo/pages.js';
 
 export const GOOGLE_DRIVE_FILE_SCOPE = 'https://www.googleapis.com/auth/drive.file';
 /** Что Ketner просит у Google. */
@@ -65,7 +66,7 @@ export function googleOAuthSettings(): GoogleOAuthSettings | null {
   if (!clientId || !clientSecret) return null;
   const redirectUri =
     process.env.GOOGLE_SHEETS_REDIRECT_URI?.trim() ||
-    `${trimSlash(config.betterAuthUrl)}/api/integrations/google/callback`;
+    `${trimSlash(siteUrl())}/api/integrations/google/callback`;
   return { clientId, clientSecret, redirectUri };
 }
 
