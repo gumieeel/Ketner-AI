@@ -276,16 +276,27 @@ function BotChat({ slug, embed }: { slug: string; embed: boolean }) {
 
   return (
     <Shell embed={embed}>
-      <header className="flex items-center justify-between gap-3 border-b border-stroke px-4 py-3">
+      <header className="flex items-center justify-between gap-3 border-b max-sm:gap-2 border-stroke px-4 py-3">
         <div className="min-w-0">
-          <h1 className="truncate text-[17px] font-medium text-text">{bot.name}</h1>
-          <p className="text-[12px] text-subtle">{t('botPage.aiNote')}</p>
+          <h1 className="truncate text-[17px] font-medium text-text max-sm:text-[15px]">
+            {bot.name}
+          </h1>
+          {/* Одна строка: на узком экране — короткая пометка, иначе шапка вырастает в три строки. */}
+          <p className="truncate text-[12px] text-subtle">
+            <span className="sm:hidden">{t('botPage.aiNoteShort')}</span>
+            <span className="max-sm:hidden">{t('botPage.aiNote')}</span>
+          </p>
         </div>
         {/* Постоянная кнопка: форма в конце переписки, всегда доступна (и после заявки). */}
         <button
           ref={toggleRef(END)}
           type="button"
-          className={buttonClasses({ variant: 'outline', size: 'sm', className: 'shrink-0' })}
+          // На узком экране кнопка компактнее: имя бота не обрезается.
+          className={buttonClasses({
+            variant: 'outline',
+            size: 'sm',
+            className: 'shrink-0 max-sm:h-9 max-sm:min-h-9 max-sm:px-2.5 max-sm:text-[13px]',
+          })}
           aria-expanded={form?.at === END}
           aria-controls={form?.at === END ? formId(END) : undefined}
           onClick={() => toggleForm(END, lastUser)}

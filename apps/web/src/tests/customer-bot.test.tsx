@@ -573,6 +573,13 @@ describe('страница бота: форма заявки и прокрутк
     renderRoute('/b/lisa-shop?embed=1');
     await screen.findByRole('heading', { level: 1, name: 'Лиса' });
     expect(document.querySelector('[data-embed]')).not.toBeNull();
+    // Узкое окно: пометка об ИИ — короткая и в одну строку, полная — на широком экране.
+    const short = screen.getByText('Отвечает ИИ, может ошибаться');
+    expect(short).toHaveClass('sm:hidden');
+    expect(short.parentElement).toHaveClass('truncate');
+    expect(
+      screen.getByText('Отвечает ИИ — он может ошибаться. Важное уточняйте у сотрудника.'),
+    ).toHaveClass('max-sm:hidden');
     await ask('Возите в Астану?', 'Ответ 1.');
     expect(screen.queryByRole('form')).toBeNull();
     expect(headerButton()).toBeVisible();

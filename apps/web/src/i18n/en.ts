@@ -2366,6 +2366,7 @@ export const en: Record<TranslationKey, string> = {
   'botPage.retry': 'Try again',
   'botPage.aiNote':
     'Answers are written by AI and may contain mistakes. Check important details with staff.',
+  'botPage.aiNoteShort': 'AI replies, may make mistakes',
   'builder.list.title': 'My automations',
   'builder.list.lead':
     'Everything that works for you: customer bots and personal assistants. They are easiest to create from an analysis report; an assistant can also be made from scratch.',
