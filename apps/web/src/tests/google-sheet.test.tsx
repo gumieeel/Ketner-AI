@@ -314,6 +314,40 @@ describe('Google Таблица в кабинете бота (этап F)', () =
     ).toBeVisible();
   });
 
+  it('на экране согласия сняли «Google Диск»: понятная причина и «Подключить снова»', async () => {
+    setProductSwitchesForTests({ googleSheets: true });
+    window.history.replaceState(null, '', '/solutions/b1#google_code=c-2&google_state=s-2');
+    const calls = cabinet((call) => {
+      if (call.path === '/api/integrations/google/confirm') {
+        return json(400, {
+          error: {
+            code: 'google_missing_drive_file',
+            message:
+              'Вы не дали доступ к Google Диску. Нажмите «Подключить снова» и отметьте доступ к файлам.',
+          },
+        });
+      }
+      if (call.path.split('?')[0] === '/api/integrations/google') {
+        return json(200, { ...CONNECTED, connected: false, status: null, pending: 0 });
+      }
+      if (call.path.startsWith('/api/integrations/google/deliveries'))
+        return json(200, { states: {} });
+      if (call.path === '/api/integrations/google/start') {
+        return json(503, { error: { code: 'unavailable', message: 'нет' } });
+      }
+      return null;
+    });
+    renderRoute('/solutions/b1');
+    const reason = await screen.findByText(
+      'Вы не дали доступ к Google Диску. Нажмите «Подключить снова» и отметьте доступ к файлам.',
+    );
+    expect(reason).toHaveAttribute('role', 'alert');
+    fireEvent.click(screen.getByRole('button', { name: 'Подключить снова' }));
+    await waitFor(() =>
+      expect(calls.some((call) => call.path === '/api/integrations/google/start')).toBe(true),
+    );
+  });
+
   /** Поддельный Google Picker: выбирает `pickedId` (null — закрыть окно), запоминает настройки. */
   function fakePicker(pickedId: string | null) {
     const seen: Record<string, string> = {};

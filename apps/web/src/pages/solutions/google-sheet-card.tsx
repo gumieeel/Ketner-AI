@@ -29,13 +29,23 @@ export function GoogleSheetCard({
   const { t, language } = useTranslation();
   const [status, setStatus] = useState<GoogleSheetStatus | null>(null);
   const [busy, setBusy] = useState(false);
-  const [message, setMessage] = useState<{ tone: 'ok' | 'error'; text: string } | null>(null);
+  // `reconnect` — рядом с сообщением кнопка «Подключить снова» (Google не выдал доступ к Диску).
+  const [message, setMessage] = useState<{
+    tone: 'ok' | 'error';
+    text: string;
+    reconnect?: boolean;
+  } | null>(null);
   const handledReturn = useRef(false);
   // Закрыто для аккаунта (503 feature_unavailable): карточки нет.
   const [closed, setClosed] = useState(false);
 
   const fail = useCallback(
     (error: unknown) => {
+      // На экране согласия Google сняли галочку «Google Диск»: сервер отказал и отозвал доступ.
+      if (error instanceof ApiError && error.code === 'google_missing_drive_file') {
+        setMessage({ tone: 'error', text: t('google.sheet.noDriveAccess'), reconnect: true });
+        return;
+      }
       setMessage({
         tone: 'error',
         text: error instanceof ApiError && error.message ? error.message : t('google.sheet.error'),
@@ -337,6 +347,11 @@ export function GoogleSheetCard({
         >
           {message.text}
         </p>
+      ) : null}
+      {message?.reconnect && state !== 'reconnect_required' ? (
+        <Button className="mt-2" size="sm" disabled={busy} onClick={() => void connect()}>
+          {t('google.sheet.reconnect')}
+        </Button>
       ) : null}
     </div>
   );

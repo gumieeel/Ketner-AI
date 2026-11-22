@@ -6,6 +6,8 @@ import { telegramBotService } from './telegram/bot.js';
 import { telegramSupportBotService } from './telegram/support-bot.js';
 import { initDatabaseSync } from './db/sync.js';
 import { userStore } from './store/index.js';
+import { mailer } from './services/mailer.js';
+import { notificationChannelsLine } from './services/notification-channels.js';
 
 // 0. Семантический кэш ответов выключен: файл прежнего кэша (вопросы и ответы открытым текстом)
 // удаляется при старте.
@@ -27,6 +29,8 @@ const app = createApp({
 app.listen(config.port, async () => {
   console.log(`[mock-api] ${config.serviceName} слушает http://127.0.0.1:${config.port}`);
   console.log(`[mock-api] контракт API: http://127.0.0.1:${config.port}/api`);
+  // Почта и Telegram для уведомлений владельцам (заявки, поломки Google Таблицы, объём тарифа).
+  console.log(notificationChannelsLine(mailer.kind, telegramBotService.isConfigured));
 
   if (telegramBotService.isConfigured) {
     try {

@@ -270,7 +270,10 @@ test('без drive.file: отказ с понятным текстом, токе
   assert.equal(response.status, 400);
   const body = await readJson<{ error: { code: string; message: string } }>(response);
   assert.equal(body.error.code, 'google_missing_drive_file');
-  assert.match(body.error.message, /разрешения на файлы/);
+  assert.equal(
+    body.error.message,
+    'Вы не дали доступ к Google Диску. Нажмите «Подключить снова» и отметьте доступ к файлам.',
+  );
   assert.deepEqual(google.revoked, ['1//fake-refresh']);
 });
 

@@ -2298,6 +2298,8 @@ export const en: Record<TranslationKey, string> = {
   'google.sheet.newSheetDone':
     'A new sheet was created. Press "Add missed requests" to copy them over.',
   'google.sheet.denied': 'You did not grant access to Google. The sheet is not connected.',
+  'google.sheet.noDriveAccess':
+    'You did not give access to Google Drive. Press “Connect again” and tick access to files.',
   'google.sheet.previousLost':
     'Ketner can no longer open your previous sheet: after Google access was revoked, the permission for it does not come back. Ketner created a new “Заявки Ketner” sheet, and new requests are saved there. The previous sheet is still in your Google Drive; Ketner did not delete it.',
   'google.sheet.missingNoAccess':
