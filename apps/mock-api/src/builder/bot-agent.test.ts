@@ -507,7 +507,8 @@ test('эскалация: модель без текста — посетите�
     'Возите в Астану?',
     'Можно оплатить в рассрочку?',
     'Есть скидка для пенсионеров?',
-    'Работаете 31 декабря?',
+    // Не из данных владельца: иначе offer_contact сначала вернёт найденное (contact-policy).
+    'Принимаете карты Visa?',
   ];
   const replies: string[] = [];
   for (const [n, question] of questions.entries()) {
@@ -560,12 +561,21 @@ test('эскалация: текст модели важнее reply; без т�
       };
     },
   ]);
-  assert.equal((await withText.runtime.answer(input())).text, 'Про рассрочку расскажет менеджер.');
+  assert.equal(
+    (
+      await withText.runtime.answer(
+        input({ messages: [{ role: 'user', content: 'Есть рассрочка?' }] }),
+      )
+    ).text,
+    'Про рассрочку расскажет менеджер.',
+  );
 
   const empty = setup([
     () => ({ content: '', toolCalls: [toolCall('offer_contact', '{"reason":"unknown_answer"}')] }),
   ]);
-  const result = await empty.runtime.answer(input());
+  const result = await empty.runtime.answer(
+    input({ messages: [{ role: 'user', content: 'Есть рассрочка?' }] }),
+  );
   assert.equal(
     result.text,
     FALLBACK,
@@ -617,7 +627,76 @@ test('пробелы: части текста склеиваются без по
       toolCalls: [toolCall('offer_contact', '{"reason":"unknown_answer","reply":"не это"}')],
     }),
   ]);
-  const escalated = await escalation.runtime.answer(input());
+  const escalated = await escalation.runtime.answer(
+    input({ messages: [{ role: 'user', content: 'Есть рассрочка?' }] }),
+  );
   assert.equal(escalated.text, expected);
   assert.equal(escalated.offerContact, true);
+});
+
+// ── Форма — только когда ответа нет в данных владельца (builder/contact-policy.ts) ────────────
+
+test('форма: ответ есть в данных — offer_contact без поиска возвращает найденное, модель отвечает без формы', async () => {
+  const env = setup([
+    () => ({ content: '', toolCalls: [toolCall('offer_contact', '{"reason":"unknown_answer"}')] }),
+    answer('Доставка по Алматы — 1 500 ₸.'),
+  ]);
+  const result = await env.runtime.answer(
+    input({ messages: [{ role: 'user', content: 'Сколько стоит доставка?' }] }),
+  );
+  assert.equal(result.offerContact, false);
+  assert.equal(result.text, 'Доставка по Алматы — 1 500 ₸.');
+  const toolMessage = env.calls[1]!.messages.at(-1);
+  assert.ok(toolMessage?.role === 'tool' && toolMessage.content.includes('1 500 ₸'));
+});
+
+test('форма: найденное не про то — повторный offer_contact показывает форму; просьба о человеке — сразу', async () => {
+  const insists = setup([
+    () => ({ content: '', toolCalls: [toolCall('offer_contact', '{"reason":"unknown_answer"}')] }),
+    () => ({
+      content: '',
+      toolCalls: [
+        toolCall(
+          'offer_contact',
+          '{"reason":"unknown_answer","reply":"Это уточнит менеджер."}',
+          'call_2',
+        ),
+      ],
+    }),
+  ]);
+  const second = await insists.runtime.answer(
+    input({ messages: [{ role: 'user', content: 'Доставка в субботу будет?' }] }),
+  );
+  assert.equal(second.offerContact, true);
+  assert.equal(insists.calls.length, 2);
+
+  const human = setup([
+    () => ({
+      content: '',
+      toolCalls: [
+        toolCall('offer_contact', '{"reason":"customer_asks_human","reply":"Передам менеджеру."}'),
+      ],
+    }),
+  ]);
+  const asked = await human.runtime.answer(
+    input({ messages: [{ role: 'user', content: 'Хочу заказать доставку, позовите менеджера' }] }),
+  );
+  assert.equal(asked.offerContact, true);
+  assert.equal(human.calls.length, 1, 'просьба о человеке — без проверки данных');
+});
+
+test('промпт: состояние разговора — форма уже была или заявка уже оставлена', async () => {
+  const env = setup([answer('Ок.')]);
+  await env.runtime.answer(
+    input({ contactState: { formShown: true, leadLeft: false }, idempotencyKey: 'bot_message:s1' }),
+  );
+  const system = env.calls[0]!.messages[0]!;
+  assert.ok(system.role === 'system' && system.content.includes('форма заявки уже показана'));
+
+  const after = setup([answer('Ок.')]);
+  await after.runtime.answer(
+    input({ contactState: { formShown: true, leadLeft: true }, idempotencyKey: 'bot_message:s2' }),
+  );
+  const prompt = after.calls[0]!.messages[0]!;
+  assert.ok(prompt.role === 'system' && prompt.content.includes('посетитель уже оставил заявку'));
 });

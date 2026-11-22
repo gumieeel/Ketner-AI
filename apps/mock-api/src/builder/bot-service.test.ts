@@ -740,3 +740,97 @@ test('панель бота: включены ли тарифы — для пр�
   assert.equal(on && 'requests' in on ? on.requests?.state : null, 'warning');
   assert.equal(on && 'requests' in on ? on.requests?.enforced : null, true);
 });
+
+// ── Форма заявки: не больше раза за разговор, на сервере (builder/contact-policy.ts) ──────────
+
+test('форма: показ один раз; дальше — «кнопкой «Оставить заявку»»; снова — только по прямой просьбе; после заявки — нет', async () => {
+  // Модель (прежний путь) каждый раз просит форму меткой [[CONTACT]].
+  const { service, requests } = await setup({
+    reply: () => `Это уточнит сотрудник.\n${CONTACT_MARKER}`,
+  });
+  const say = async (content: string, conversationId?: string) => {
+    const result = await service.send('lisa-shop', {
+      visitorId: VISITOR,
+      content,
+      ...(conversationId ? { conversationId } : {}),
+    });
+    assert.equal(result.ok, true);
+    if (!result.ok) throw new Error('send failed');
+    return result;
+  };
+
+  // 1. Первый раз — форма.
+  const first = await say('Возите в Астану?');
+  assert.equal(first.message.offerContact, true);
+  assert.equal(first.message.content, 'Это уточнит сотрудник.');
+  const conversationId = first.conversationId;
+
+  // 2. Снова «нужен человек» — формы нет, одна фраза про кнопку «Оставить заявку»; промпт знает про форму.
+  const second = await say('А в Караганду?', conversationId);
+  assert.equal(second.message.offerContact, false);
+  assert.equal(
+    second.message.content,
+    'Это уточнит сотрудник.\n\nОставить контакт можно кнопкой «Оставить заявку» — вам ответят.',
+  );
+  assert.match(String(requests[1]!.assistant?.instructions), /форма заявки уже показана/);
+
+  // 3. Посетитель сам просит человека / заказ — форма снова.
+  const third = await say('Хочу заказать, соедините с менеджером', conversationId);
+  assert.equal(third.message.offerContact, true);
+
+  // 4. Посетитель оставил заявку из этого разговора — больше никакой формы.
+  const lead = await service.createLead('lisa-shop', {
+    visitorId: VISITOR,
+    conversationId,
+    name: 'Анна',
+    contact: '+7 700 000 00 00',
+    question: 'Доставка в Караганду',
+  });
+  assert.equal(lead.ok, true);
+  const fourth = await say('Позовите человека, пожалуйста', conversationId);
+  assert.equal(fourth.message.offerContact, false, 'даже по прямой просьбе — заявка уже есть');
+  assert.equal(
+    fourth.message.content,
+    'Это уточнит сотрудник.\n\nВаша заявка уже у владельца — с вами свяжутся.',
+  );
+  assert.match(String(requests.at(-1)!.assistant?.instructions), /посетитель уже оставил заявку/);
+
+  // Новый разговор — снова один показ.
+  const fresh = await say('Возите в Астану?');
+  assert.notEqual(fresh.conversationId, conversationId);
+  assert.equal(fresh.message.offerContact, true);
+});
+
+test('форма: ответ из данных владельца — без формы и без лишней фразы', async () => {
+  const { service } = await setup({ reply: () => 'Доставка по Алматы — 1 500 ₸.' });
+  const result = await service.send('lisa-shop', {
+    visitorId: VISITOR,
+    content: 'Сколько доставка?',
+  });
+  assert.equal(result.ok, true);
+  if (!result.ok) return;
+  assert.equal(result.message.offerContact, false);
+  assert.equal(result.message.content, 'Доставка по Алматы — 1 500 ₸.');
+});
+
+test('форма: ответ сервера без модели (нет баланса) — тоже не больше раза за разговор', async () => {
+  const { service, setBalance, requests } = await setup();
+  setBalance(0);
+  const first = await service.send('lisa-shop', { visitorId: VISITOR, content: 'Привет' });
+  assert.equal(first.ok, true);
+  if (!first.ok) return;
+  assert.equal(first.message.offerContact, true);
+  const second = await service.send('lisa-shop', {
+    visitorId: VISITOR,
+    conversationId: first.conversationId,
+    content: 'Алло?',
+  });
+  assert.equal(second.ok, true);
+  if (!second.ok) return;
+  assert.equal(second.message.offerContact, false);
+  assert.equal(
+    second.message.content,
+    'Сейчас я не могу ответить сам.\n\nОставить контакт можно кнопкой «Оставить заявку» — вам ответят.',
+  );
+  assert.equal(requests.length, 0, 'модель не вызывалась');
+});

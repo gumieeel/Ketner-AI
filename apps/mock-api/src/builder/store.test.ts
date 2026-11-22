@@ -321,6 +321,9 @@ async function botContract(store: BuilderStore): Promise<void> {
   assert.equal(conversation?.messageCount, 4);
   assert.equal(conversation?.updatedAt, '2026-10-31T10:00:04.000Z');
   assert.deepEqual(await store.listConversations('bob', 'b1', 10), []);
+  // Форма заявки уже показывалась (m2x — ответ с offerContact), заявки ещё нет.
+  assert.deepEqual(await store.contactState('b1', 'c1'), { formShown: true, leadLeft: false });
+  assert.deepEqual(await store.contactState('b1', 'nope'), { formShown: false, leadLeft: false });
   const history = await store.botHistory('b1', 'c1', 2);
   assert.deepEqual(
     history.map((item) => item.id),
@@ -352,6 +355,7 @@ async function botContract(store: BuilderStore): Promise<void> {
     updatedAt: NOW,
   });
   assert.equal(await store.countNewLeads('alice', 'b1'), 1);
+  assert.deepEqual(await store.contactState('b1', 'c1'), { formShown: true, leadLeft: true });
   assert.equal((await store.listLeads('alice', 'b1', 10))[0]?.contact, '+7 700 000 00 00');
   assert.deepEqual(await store.listLeads('bob', 'b1', 10), []);
   assert.equal(await store.setLeadStatus('bob', 'b1', 'l1', 'done', NOW), null);

@@ -157,7 +157,8 @@ test('подключение: start → callback → confirm; verifier толь�
   assert.equal(sheet.sheets[0]!.properties.gridProperties.frozenRowCount, 1);
   assert.deepEqual(
     sheet.sheets[0]!.data[0]!.rowData[0]!.values.map((cell) => cell.userEnteredValue.stringValue),
-    [...LEAD_SHEET_COLUMNS],
+    // Часовой пояс владельца не прислан — колонка даты подписана как UTC.
+    ['Дата (UTC)', ...LEAD_SHEET_COLUMNS.slice(1)],
   );
 
   // Хранилище: токен зашифрован и расшифровывается только сервером.
@@ -341,4 +342,36 @@ test('переключатель включён, но клиент Google не �
     assert.equal(body.error.code, 'feature_unavailable');
     assert.equal(body.error.details.feature, 'googleSheets');
   }
+});
+
+test('часовой пояс владельца: из браузера при подключении — таблица в его поясе, колонка «Дата»', async (t) => {
+  const { server, google } = await setup(t);
+  const owner = await signup(server, 'owner');
+  // Кабинет открыт: пояс браузера приходит со статусом; неверный пояс не запоминается.
+  await call(server, owner, 'GET', '?timeZone=Not%2FAZone');
+  assert.equal(server.googlePrefsStore.timeZoneOf(owner.user.id), null);
+  await call(server, owner, 'GET', '?timeZone=Asia%2FQyzylorda');
+  assert.equal(server.googlePrefsStore.timeZoneOf(owner.user.id), 'Asia/Qyzylorda');
+
+  const { state, code } = await startAndCallback(server, owner);
+  const response = await call(server, owner, 'POST', '/confirm', {
+    code,
+    state,
+    timeZone: 'Asia/Almaty',
+  });
+  assert.equal(response.status, 200);
+  assert.equal(server.googlePrefsStore.timeZoneOf(owner.user.id), 'Asia/Almaty');
+  const body = google.sheetsCreated[0]!.body as {
+    properties: { timeZone?: string };
+    sheets: Array<{
+      data: Array<{
+        rowData: Array<{ values: Array<{ userEnteredValue: { stringValue: string } }> }>;
+      }>;
+    }>;
+  };
+  assert.equal(body.properties.timeZone, 'Asia/Almaty');
+  assert.equal(
+    body.sheets[0]!.data[0]!.rowData[0]!.values[0]!.userEnteredValue.stringValue,
+    'Дата',
+  );
 });

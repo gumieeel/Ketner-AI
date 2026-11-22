@@ -11,6 +11,7 @@ import type { AccountErasure } from '../platform/account-erasure.js';
 import type { GoogleConnectionStore } from './connection-store.js';
 import { revokeGoogleToken } from './oauth.js';
 import type { GoogleVerifierStore } from './verifier-store.js';
+import type { GooglePrefsStore } from './prefs.js';
 
 export const GOOGLE_ERASURE_STEP = 'google';
 
@@ -19,6 +20,7 @@ export function registerGoogleErasure(
   deps: {
     store: GoogleConnectionStore;
     verifiers?: GoogleVerifierStore;
+    prefs?: GooglePrefsStore;
     fetchImpl?: typeof fetch;
     log?: (message: string) => void;
   },
@@ -36,6 +38,7 @@ export function registerGoogleErasure(
           what: 'незавершённые подключения (google_oauth)',
           count: deps.verifiers?.idsOf(userId).length ?? 0,
         },
+        { what: 'часовой пояс (google_prefs)', count: deps.prefs?.timeZoneOf(userId) ? 1 : 0 },
       ];
     },
 
@@ -60,11 +63,13 @@ export function registerGoogleErasure(
       for (const id of deps.verifiers?.idsOf(userId) ?? []) {
         if (await deps.verifiers!.docs.removeDurable(id)) verifiers += 1;
       }
+      const prefs = (await deps.prefs?.remove(userId)) ? 1 : 0;
       return {
         items: [
           { what: 'строка google_connections', count: removed ? 1 : 0 },
           { what: 'отзыв доступа Google', count: revoked },
           { what: 'незавершённые подключения (google_oauth)', count: verifiers },
+          { what: 'часовой пояс (google_prefs)', count: prefs },
         ],
         notes,
       };

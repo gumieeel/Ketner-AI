@@ -13,6 +13,7 @@ import {
   type StoredGoogleConnection,
 } from '../google/connection-store.js';
 import { registerGoogleErasure } from '../google/erasure.js';
+import { createGooglePrefsStore } from '../google/prefs.js';
 import { createGoogleVerifierStore } from '../google/verifier-store.js';
 import { DRIVE_FILE, createFakeGoogle } from '../testing/fake-google.js';
 
@@ -99,12 +100,20 @@ test('очистка Google: отзыв доступа, строка удале�
   await verifiers.put({ id: 'n1', userId: 'u1', verifier: 'v', expiresAt: Date.now() + 60_000 });
   const google = createFakeGoogle();
   const registry = new AccountErasure();
-  registerGoogleErasure(registry, { store, verifiers, fetchImpl: google.fetchImpl, log: () => {} });
+  const prefs = createGooglePrefsStore();
+  prefs.rememberTimeZone('u1', 'Asia/Qyzylorda');
+  registerGoogleErasure(registry, {
+    store,
+    verifiers,
+    prefs,
+    fetchImpl: google.fetchImpl,
+    log: () => {},
+  });
 
   const preview = await registry.preview('u1');
   assert.deepEqual(
     preview.steps[0]!.items.map((item) => item.count),
-    [1, 1, 1],
+    [1, 1, 1, 1],
   );
   assert.deepEqual(google.revoked, [], 'сводка не отзывает');
   assert.ok(store.get('u1'));
@@ -113,8 +122,9 @@ test('очистка Google: отзыв доступа, строка удале�
   assert.deepEqual(google.revoked, ['1//to-revoke']);
   assert.deepEqual(
     report.steps[0]!.items.map((item) => item.count),
-    [1, 1, 1],
+    [1, 1, 1, 1],
   );
+  assert.equal(prefs.timeZoneOf('u1'), null, 'часовой пояс удалён');
   assert.deepEqual(report.steps[0]!.notes, []);
   assert.equal(store.get('u1'), undefined);
   assert.deepEqual(verifiers.idsOf('u1'), []);
@@ -138,7 +148,7 @@ test('очистка Google: отзыв не удался — строка в л
   assert.equal(store.get('u1'), undefined);
   assert.deepEqual(
     report.steps[0]!.items.map((item) => item.count),
-    [1, 0, 0],
+    [1, 0, 0, 0],
   );
   assert.match(report.steps[0]!.notes[0]!, /не подтвердил отзыв/);
   assert.equal(logs.length, 1);

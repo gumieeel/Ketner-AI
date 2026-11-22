@@ -7,12 +7,14 @@
 import type { GoogleConnectionStore } from '../google/connection-store.js';
 import { registerGoogleErasure } from '../google/erasure.js';
 import type { GoogleVerifierStore } from '../google/verifier-store.js';
+import type { GooglePrefsStore } from '../google/prefs.js';
 import type { AccountErasure } from './account-erasure.js';
 
 export interface AccountErasureDeps {
   google: {
     store: GoogleConnectionStore;
     verifiers?: GoogleVerifierStore;
+    prefs?: GooglePrefsStore;
     fetchImpl?: typeof fetch;
     log?: (message: string) => void;
   };

@@ -51,15 +51,38 @@ async function request<T>(
   return body as T;
 }
 
+/** Часовой пояс браузера (IANA, `Asia/Qyzylorda`) или undefined. */
+export function browserTimeZone(): string | undefined {
+  try {
+    return Intl.DateTimeFormat().resolvedOptions().timeZone || undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 export const googleSheetsApi = {
-  status: () => request<GoogleSheetStatus>(''),
+  /** Статус; заодно сервер запоминает часовой пояс браузера для дат в таблице. */
+  status: () => {
+    const timeZone = browserTimeZone();
+    return request<GoogleSheetStatus>(timeZone ? `?timeZone=${encodeURIComponent(timeZone)}` : '');
+  },
   /** Адрес Google для согласия; после него человек вернётся на `returnTo`. */
   start: (returnTo: string) =>
-    request<{ url: string }>('/start', { method: 'POST', body: { returnTo } }),
+    request<{ url: string }>('/start', {
+      method: 'POST',
+      body: { returnTo, timeZone: browserTimeZone() },
+    }),
   confirm: (code: string, state: string) =>
-    request<GoogleSheetStatus>('/confirm', { method: 'POST', body: { code, state } }),
+    request<GoogleSheetStatus>('/confirm', {
+      method: 'POST',
+      body: { code, state, timeZone: browserTimeZone() },
+    }),
   disconnect: () => request<GoogleSheetStatus>('/connection', { method: 'DELETE' }),
-  newSheet: () => request<GoogleSheetStatus>('/new-sheet', { method: 'POST', body: {} }),
+  newSheet: () =>
+    request<GoogleSheetStatus>('/new-sheet', {
+      method: 'POST',
+      body: { timeZone: browserTimeZone() },
+    }),
   /** Таблицу восстановили из корзины — проверить и подключить снова. */
   recheck: () => request<GoogleSheetStatus>('/recheck', { method: 'POST', body: {} }),
   backfill: () =>

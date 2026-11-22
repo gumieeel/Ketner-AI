@@ -26,6 +26,7 @@ import {
   type GoogleConnectionStore,
 } from '../google/connection-store.js';
 import { createGoogleVerifierStore, type GoogleVerifierStore } from '../google/verifier-store.js';
+import { createGooglePrefsStore, type GooglePrefsStore } from '../google/prefs.js';
 import { semanticCache } from '../ai/cache.js';
 import { AIGateway } from '../ai/gateway.js';
 import type { Conversation, Message } from '../types.js';
@@ -54,6 +55,7 @@ export interface TestServer {
   githubConnectionStore: GithubConnectionStore;
   googleConnectionStore: GoogleConnectionStore;
   googleVerifierStore: GoogleVerifierStore;
+  googlePrefsStore: GooglePrefsStore;
   /** Платежи и кредиты этого сервера. */
   billing: BillingService;
   /** Счета этого сервера: тесты вебхуков и статусов заводят прежние счета напрямую. */
@@ -106,6 +108,7 @@ export async function startTestServer(
   const testApiKeyStore = createApiKeyStore(join(tempDir, 'api-keys.json'));
   const testGoogleStore = createGoogleConnectionStore({ secret: 'test-google-secret' });
   const testGoogleVerifiers = createGoogleVerifierStore();
+  const testGooglePrefs = createGooglePrefsStore();
   const testGithubStore = createGithubConnectionStore({
     file: join(tempDir, 'github-connections.json'),
     secret: 'test-github-secret',
@@ -161,6 +164,7 @@ export async function startTestServer(
     githubConnectionStore: testGithubStore,
     googleConnectionStore: testGoogleStore,
     googleVerifierStore: testGoogleVerifiers,
+    googlePrefsStore: testGooglePrefs,
     invoiceStore: testInvoiceStore,
     supportStore: testSupportStore,
     supportBotService: testSupportBotService,
@@ -199,6 +203,7 @@ export async function startTestServer(
     githubConnectionStore: extra.githubConnectionStore ?? testGithubStore,
     googleConnectionStore: extra.googleConnectionStore ?? testGoogleStore,
     googleVerifierStore: extra.googleVerifierStore ?? testGoogleVerifiers,
+    googlePrefsStore: extra.googlePrefsStore ?? testGooglePrefs,
     billing: testBilling,
     invoiceStore: testInvoiceStore,
     grantPack,

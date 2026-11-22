@@ -10,6 +10,7 @@ import {
   createGoogleState,
   exchangeGoogleCode,
   googleDiagnostics,
+  googleOAuthSettings,
   refreshGoogleAccessToken,
   revokeGoogleToken,
   googleAuthorizeUrl,
@@ -314,5 +315,29 @@ test('диагностика пилота: коды ответов Google и н�
   ]);
   for (const secret of ['1//refresh', 'ya29', 'code-secret', 'verifier-secret', 'client-secret']) {
     assert.ok(!lines.join('\n').includes(secret), secret);
+  }
+});
+
+test('адрес колбэка по умолчанию — адрес сайта (https://ketner.org), а не BETTER_AUTH_URL', () => {
+  const saved = { ...process.env };
+  try {
+    process.env.GOOGLE_SHEETS_CLIENT_ID = 'id';
+    process.env.GOOGLE_SHEETS_CLIENT_SECRET = 'secret';
+    delete process.env.GOOGLE_SHEETS_REDIRECT_URI;
+    delete process.env.SITE_URL;
+    delete process.env.WEB_APP_URL;
+    assert.equal(
+      googleOAuthSettings()?.redirectUri,
+      'https://ketner.org/api/integrations/google/callback',
+    );
+    process.env.SITE_URL = 'https://ketner.org/';
+    assert.equal(
+      googleOAuthSettings()?.redirectUri,
+      'https://ketner.org/api/integrations/google/callback',
+    );
+    process.env.GOOGLE_SHEETS_REDIRECT_URI = 'https://other.example/cb';
+    assert.equal(googleOAuthSettings()?.redirectUri, 'https://other.example/cb');
+  } finally {
+    process.env = saved;
   }
 });

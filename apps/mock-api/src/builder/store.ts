@@ -18,6 +18,7 @@ import type {
   TestCase,
   TestRun,
 } from './types.js';
+import type { ContactState } from './contact-policy.js';
 
 /** Опубликованный бот: чей, какой и по какому адресу. */
 export interface PublishedBot {
@@ -73,6 +74,8 @@ export interface BuilderStore {
   addBotMessage(message: BotMessage): Promise<void>;
   /** Последние `limit` сообщений диалога (старые — первыми). */
   botHistory(solutionId: string, conversationId: string, limit: number): Promise<BotMessage[]>;
+  /** Показывалась ли в разговоре форма заявки и оставлена ли заявка (builder/contact-policy.ts). */
+  contactState(solutionId: string, conversationId: string): Promise<ContactState>;
   listConversations(ownerId: string, solutionId: string, limit: number): Promise<BotConversation[]>;
   listBotMessages(
     ownerId: string,
@@ -328,6 +331,21 @@ export class MemoryBuilderStore implements BuilderStore {
       conversation.messageCount += 1;
       conversation.updatedAt = message.createdAt;
     }
+  }
+
+  async contactState(solutionId: string, conversationId: string): Promise<ContactState> {
+    return {
+      formShown: this.botMessages.some(
+        (item) =>
+          item.solutionId === solutionId &&
+          item.conversationId === conversationId &&
+          item.role === 'assistant' &&
+          item.offerContact,
+      ),
+      leadLeft: [...this.leads.values()].some(
+        (item) => item.solutionId === solutionId && item.conversationId === conversationId,
+      ),
+    };
   }
 
   async botHistory(solutionId: string, conversationId: string, limit: number) {
@@ -1019,6 +1037,19 @@ export class PostgresBuilderStore implements BuilderStore {
        WHERE id = $1`,
       [message.conversationId, message.createdAt],
     );
+  }
+
+  async contactState(solutionId: string, conversationId: string): Promise<ContactState> {
+    const rows = await this.db.query<{ form_shown: boolean; lead_left: boolean }>(
+      `SELECT
+         EXISTS (SELECT 1 FROM bot_messages
+                  WHERE conversation_id = $1 AND solution_id = $2 AND role = 'assistant'
+                    AND data ->> 'offerContact' = 'true') AS form_shown,
+         EXISTS (SELECT 1 FROM bot_leads
+                  WHERE conversation_id = $1 AND solution_id = $2) AS lead_left`,
+      [conversationId, solutionId],
+    );
+    return { formShown: rows[0]?.form_shown === true, leadLeft: rows[0]?.lead_left === true };
   }
 
   async botHistory(solutionId: string, conversationId: string, limit: number) {
