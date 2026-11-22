@@ -177,12 +177,33 @@ function cell(value: string): string {
 const FORMULA_START = /^[=+\-@\t\r]/;
 
 /**
- * Значение от посетителя: если оно начинается как формула — с апострофом впереди. В самой Google
+ * Значение от посетителя: если оно начинается как формула — с апострофом впереди, кроме значений,
+ * которые целиком — номер телефона или ник (`isPhoneNumber`, `isHandle`). В самой Google
  * Таблице запись и так идёт с `RAW` (формулой ничего не станет), апостроф нужен для выгрузки: CSV,
  * открытый в Excel, иначе выполнил бы `=HYPERLINK(…)`, `+cmd|…`, `@SUM(…)`.
  */
 export function neutralizeFormula(value: string): string {
-  return FORMULA_START.test(value) ? `'${value}` : value;
+  if (!FORMULA_START.test(value) || isPhoneNumber(value) || isHandle(value)) return value;
+  return `'${value}`;
+}
+
+/** Только телефон: необязательный «+» впереди, дальше цифры, пробелы, скобки, точки и дефисы. */
+const PHONE = /^\+?[0-9 ().-]+$/;
+
+/**
+ * Значение — только номер телефона (не меньше 5 цифр). Такой строке апостроф не нужен: Excel
+ * прочитает её в худшем случае как число или выражение без функций, вызвать ничего не может, а
+ * апостроф был бы виден в таблице ('+7 …).
+ */
+export function isPhoneNumber(value: string): boolean {
+  return PHONE.test(value) && (value.match(/[0-9]/g)?.length ?? 0) >= 5;
+}
+
+/** Только ник: «@» и 3–32 латинские буквы, цифры, подчёркивания или точки (как в Telegram). */
+const HANDLE = /^@[A-Za-z0-9_.]{3,32}$/;
+
+export function isHandle(value: string): boolean {
+  return HANDLE.test(value);
 }
 
 /**
