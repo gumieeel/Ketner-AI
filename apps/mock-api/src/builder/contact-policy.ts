@@ -3,7 +3,7 @@
  *
  * 1. Сначала ответ по данным владельца; форма — только когда действительно нужен человек.
  * 2. Не больше одного раза за разговор. Дальше, если снова нужен человек, — одно предложение,
- *    что контакт можно оставить в форме выше; новой формы нет.
+ *    что контакт можно оставить кнопкой «Оставить заявку» (форма свёрнута); новой формы нет.
  * 3. Снова — только когда посетитель сам просит человека, хочет заказать или записаться.
  * 4. Никогда после того, как посетитель уже оставил заявку в этом разговоре: заявка уже у владельца.
  *
@@ -22,7 +22,7 @@ export interface ContactState {
 
 export const NO_CONTACT_STATE: ContactState = { formShown: false, leadLeft: false };
 
-export type ContactNote = 'form_above' | 'lead_sent';
+export type ContactNote = 'use_button' | 'lead_sent';
 
 export interface ContactDecision {
   offerContact: boolean;
@@ -54,7 +54,7 @@ export function decideContact(
   if (!state.formShown || asksForPersonOrOrder(visitorText)) {
     return { offerContact: true, note: null };
   }
-  return { offerContact: false, note: 'form_above' };
+  return { offerContact: false, note: 'use_button' };
 }
 
 export function contactNoteText(note: ContactNote, language: Language): string {
@@ -64,8 +64,8 @@ export function contactNoteText(note: ContactNote, language: Language): string {
       : 'Ваша заявка уже у владельца — с вами свяжутся.';
   }
   return language === 'en'
-    ? 'You can leave your contact in the form above, and you will get a reply.'
-    : 'Оставить контакт можно в форме выше — вам ответят.';
+    ? 'You can leave your contact with the "Leave a request" button, and you will get a reply.'
+    : 'Оставить контакт можно кнопкой «Оставить заявку» — вам ответят.';
 }
 
 /** Ответ бота с одной фразой вместо новой формы (без повтора, если модель уже так сказала). */
@@ -97,8 +97,8 @@ export function contactStateInstructions(
   }
   if (state.formShown) {
     return en
-      ? `\nThis conversation: the contact form has already been shown. Do not offer it again (${marker}) unless the customer asks for a person or wants to order or book; if a person is needed, say in one sentence that the contact can be left in the form above.`
-      : `\nЭтот разговор: форма заявки уже показана. Не предлагай её снова (${marker}), если посетитель сам не просит человека, заказ или запись; если нужен человек — одним предложением скажи, что контакт можно оставить в форме выше.`;
+      ? `\nThis conversation: the contact form has already been shown. Do not offer it again (${marker}) unless the customer asks for a person or wants to order or book; if a person is needed, say in one sentence that the contact can be left with the "Leave a request" button.`
+      : `\nЭтот разговор: форма заявки уже показана. Не предлагай её снова (${marker}), если посетитель сам не просит человека, заказ или запись; если нужен человек — одним предложением скажи, что контакт можно оставить кнопкой «Оставить заявку».`;
   }
   return '';
 }
