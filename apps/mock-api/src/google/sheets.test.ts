@@ -1,6 +1,13 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { CELL_LIMIT, LEAD_SHEET_COLUMNS, leadRow, neutralizeFormula } from './sheets.js';
+import {
+  CELL_LIMIT,
+  LEAD_SHEET_COLUMNS,
+  isHandle,
+  isPhoneNumber,
+  leadRow,
+  neutralizeFormula,
+} from './sheets.js';
 
 test('значения посетителя, похожие на формулу, получают апостроф: = + - @ табуляция, возврат каретки', () => {
   for (const value of [
@@ -17,10 +24,6 @@ test('значения посетителя, похожие на формулу,
   for (const value of ['Анна', 'anna@example.com', 'Цена 1+1?', ' =1+1', '8 900 000-00-00', '']) {
     assert.equal(neutralizeFormula(value), value, JSON.stringify(value));
   }
-  // Обратная сторона правила: телефон с «+» и ник Telegram с «@» тоже получают апостроф и так
-  // видны в таблице ('+7 900 …, '@anna_tg).
-  assert.equal(neutralizeFormula('+7 900 000-00-00'), "'+7 900 000-00-00");
-  assert.equal(neutralizeFormula('@anna_tg'), "'@anna_tg");
 });
 
 test('строка таблицы: обезврежены только поля посетителя; RAW-порядок колонок, ID заявки последней', () => {
@@ -58,4 +61,42 @@ test('апостроф учитывается в пределе ячейки', (
   assert.equal(row[4]!.length, CELL_LIMIT);
   assert.ok(row[4]!.startsWith("'="));
   assert.ok(row[4]!.endsWith('…'));
+});
+
+test('телефон целиком и ник целиком — без апострофа; похожее на них с формулой — с апострофом', () => {
+  // Только телефон: необязательный «+», цифры, пробелы, скобки, точки, дефисы; не меньше 5 цифр.
+  for (const phone of [
+    '+7 (701) 123-45-67',
+    '+7 900 000-00-00',
+    '+77011234567',
+    '8 (701) 123.45.67',
+    '-12345',
+    '+1 (555) 010-9999',
+  ]) {
+    assert.equal(isPhoneNumber(phone), true, phone);
+    assert.equal(neutralizeFormula(phone), phone, phone);
+  }
+  // Только ник: «@» и 3–32 латинские буквы, цифры, «_» или «.».
+  for (const handle of ['@ivan_23', '@anna.tg', '@abc', `@${'a'.repeat(32)}`]) {
+    assert.equal(isHandle(handle), true, handle);
+    assert.equal(neutralizeFormula(handle), handle, handle);
+  }
+  // Всё остальное, что начинается с = + - @ табуляции или CR, — с апострофом.
+  for (const risky of [
+    '+SUM(1)',
+    '@SUM(1)',
+    '-1+1',
+    '+1234',
+    '+7 900 *2',
+    '@ab',
+    `@${'a'.repeat(33)}`,
+    '@ivan 23',
+    '@иван',
+    '+7 (701) 123-45-67 =1+1',
+    '=7 (701) 123-45-67',
+    '\t+77011234567',
+    '\r@ivan_23',
+  ]) {
+    assert.equal(neutralizeFormula(risky), `'${risky}`, JSON.stringify(risky));
+  }
 });
